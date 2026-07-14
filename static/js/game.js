@@ -1040,6 +1040,7 @@ const GAME_TITLE = 'Garden of Thorn 荆棘花园';
 Object.entries(I18N).forEach(([lang, dict]) => {
     const fallback = (zh, en) => lang === 'zh' ? zh : en;
     dict.default_status = GAME_TITLE;
+    dict.login_forbidden_nickname = dict.login_forbidden_nickname || fallback('昵称中包含违禁词', 'The nickname contains prohibited text.');
     dict.tutorial_hint_play_fusioned = dict.tutorial_hint_play_fusioned || fallback('聚变后的攻击牌已经准备好了。当前能量足够，把它打出看看强化后的伤害。', 'The fused attack is ready. You have enough E now; play it to see the boosted damage.');
     dict.target_pick_hint = dict.target_pick_hint || fallback('点击一个高亮的玩家区域以选择目标', 'Click one highlighted player area to choose the target.');
     dict.waiting_opponent_counter = dict.waiting_opponent_counter || dict.waiting_response || 'Waiting for response';
@@ -1466,6 +1467,10 @@ Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Commun
 Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组', mod_beta_warning: '测试中，不推荐使用' });
 Object.assign(I18N.fr, { mod_beta_warning: 'En test, déconseillé' });
 Object.assign(I18N.ja, { mod_beta_warning: 'テスト中、非推奨' });
+Object.assign(I18N.en, { content_temporarily_disabled: 'Temporarily disabled', content_disabled_reason: 'Reason: {0}' });
+Object.assign(I18N.zh, { content_temporarily_disabled: '临时停用', content_disabled_reason: '原因：{0}' });
+Object.assign(I18N.fr, { content_temporarily_disabled: 'Temporairement désactivé', content_disabled_reason: 'Raison : {0}' });
+Object.assign(I18N.ja, { content_temporarily_disabled: '一時停止中', content_disabled_reason: '理由：{0}' });
 Object.assign(I18N.en, {
     community_current: 'Current community mod', community_disabled: 'Disabled', community_disable: 'Disable community mod',
     community_upload_hint: 'Sign in to upload. The file is sent directly to the community mod store.',
@@ -3688,6 +3693,7 @@ function translateLoginReason(reason) {
         return UI.login_invalid_nickname;
     }
     if (reason === 'Nickname already exists') return UI.login_nickname_exists;
+    if (reason === '昵称中包含违禁词') return UI.login_forbidden_nickname || reason;
     if (reason === 'Admin nickname reserved') return UI.login_admin_reserved;
     if (reason === '此昵称被管理员占用') return UI.login_admin_reserved;
     if (reason === 'Account session expired') return UI.account_need_login;
@@ -5884,6 +5890,7 @@ const OFFICIAL_MOD_DISPLAY_ORDER = [
     'Void Card Addition.gtnmod',
     'Hel Cards Addition.gtnmod',
     'Sewers Cards Addition.gtnmod',
+    'Arctic Cards Addition.gtnmod',
 ];
 
 const OFFICIAL_MOD_DISPLAY_ALIASES = [
@@ -5896,13 +5903,14 @@ const OFFICIAL_MOD_DISPLAY_ALIASES = [
     ['void card addition.gtnmod', 'void card addition', 'void cards addition', 'void cards'],
     ['hel cards addition.gtnmod', 'hel cards addition', 'hel cards'],
     ['sewers cards addition.gtnmod', 'sewers cards addition', 'sewers cards'],
+    ['arctic cards addition.gtnmod', 'arctic cards addition', 'arctic cards'],
 ];
 
 const OFFICIAL_MOD_SHORT_NAMES = {
-    zh: ['原版', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界', '管道'],
-    en: ['Vanilla', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel', 'Sewers'],
-    fr: ['Vanille', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel', 'Égouts'],
-    ja: ['原版', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界', '下水道'],
+    zh: ['原版', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界', '管道', '极地'],
+    en: ['Vanilla', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel', 'Sewers', 'Arctic'],
+    fr: ['Vanille', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel', 'Égouts', 'Arctique'],
+    ja: ['原版', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界', '下水道', '極地'],
 };
 
 function normalizeModDisplayIdentity(value) {
@@ -6037,22 +6045,36 @@ function getGalleryCardModLabel(cd) {
     }, cd.source_mod_filename || cd.source_mod_name || 'Unknown');
 }
 
+function getGalleryCardModMemberships(cd) {
+    const shared = Array.isArray(cd && cd.source_mod_memberships) ? cd.source_mod_memberships : [];
+    if (shared.length) {
+        return shared.map(item => ({
+            key: String(item.key || (item.is_vanilla ? 'vanilla' : item.filename || item.name_en || item.name || 'unknown')),
+            label: localizedModNameFromFields(item, item.filename || item.name || 'Unknown'),
+            filename: item.is_vanilla ? VANILLA_MOD_FILENAME : String(item.filename || item.key || ''),
+            sortName: item.is_vanilla ? '000' : String(item.name_en || item.sort_name || item.name || item.filename || '').toLowerCase(),
+            isVanilla: !!item.is_vanilla,
+            isCommunity: !!item.is_community,
+        }));
+    }
+    return [{
+        key: getGalleryCardModKey(cd),
+        label: getGalleryCardModLabel(cd),
+        filename: cd.source_mod_is_vanilla ? VANILLA_MOD_FILENAME : String(cd.source_mod_filename || getGalleryCardModKey(cd)),
+        sortName: cd.source_mod_is_vanilla ? '000' : String(cd.source_mod_name_en || cd.source_mod_sort_name || cd.source_mod_name || cd.source_mod_filename || '').toLowerCase(),
+        isVanilla: !!cd.source_mod_is_vanilla,
+        isCommunity: !!cd.source_mod_is_community,
+    }];
+}
+
 function getGalleryModOptions() {
     const map = new Map();
     Object.values(getGalleryCardDefs()).filter(isPublicCardDef).forEach(cd => {
-        const key = getGalleryCardModKey(cd);
-        if (!map.has(key)) {
-            map.set(key, {
-                key,
-                label: getGalleryCardModLabel(cd),
-                filename: cd.source_mod_is_vanilla ? VANILLA_MOD_FILENAME : String(cd.source_mod_filename || key),
-                sortName: cd.source_mod_is_vanilla ? '000' : String(cd.source_mod_name_en || cd.source_mod_sort_name || cd.source_mod_name || cd.source_mod_filename || key).toLowerCase(),
-                isVanilla: !!cd.source_mod_is_vanilla,
-                isCommunity: !!cd.source_mod_is_community,
-                count: 0,
-            });
-        }
-        map.get(key).count += 1;
+        getGalleryCardModMemberships(cd).forEach(membership => {
+            const key = membership.key;
+            if (!map.has(key)) map.set(key, { ...membership, count: 0 });
+            map.get(key).count += 1;
+        });
     });
     return sortModsForDisplay([...map.values()]);
 }
@@ -6178,7 +6200,7 @@ function renderCardGallery() {
         .filter(id => {
             const cd = defs[id];
             if (!cd) return false;
-            if (!gallerySelectedModKeys.has(getGalleryCardModKey(cd))) return false;
+            if (!getGalleryCardModMemberships(cd).some(item => gallerySelectedModKeys.has(item.key))) return false;
             if (!gallerySelectedTypeKeys.has(cd.card_type)) return false;
             return !q || cardSearchText(id, defs).includes(q);
         })
@@ -6233,6 +6255,13 @@ function renderCardGallery() {
                 wrap.title = getCardName(cd);
                 const cardEl = createCardElement(cardDict, { small: false, disableIntro: true });
                 wrap.appendChild(cardEl);
+                if (cd.temporarily_disabled) {
+                    wrap.classList.add('temporarily-disabled');
+                    const badge = createTemporaryDisableBadge(cd.temporary_disable_reason || '');
+                    badge.classList.add('gallery-card-disabled-badge');
+                    wrap.appendChild(badge);
+                    wrap.title = badge.title;
+                }
                 const openIntro = (event) => {
                     if (event) {
                         event.preventDefault();
@@ -6451,7 +6480,7 @@ const STATUS_ICON_KEYS = new Set([
     'invincible', 'luck', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
     'root_status', 'shield', 'sluggish', 'sponge', 'stagnation', 'status_immune',
     'stunned', 'toxic_poison', 'toxic', 'triangle', 'turn_heal', 'turn_magic',
-    'unable_counter', 'blazing_fire',
+    'unable_counter', 'blazing_fire', 'frost',
     'untargetable', 'weakness'
 ]);
 
@@ -6673,6 +6702,7 @@ function achievementDisplayColor(item = {}) {
         mode: '#4f86c6',
         social: '#b48a31',
         hidden: '#7257a8',
+        easter_egg: '#d05fa0',
     }[type] || '#5aa469';
 }
 
@@ -6699,6 +6729,7 @@ function showNextAchievementToast() {
     const toast = ensureAchievementToastElement();
     const text = achievementToastText(item);
     toast.style.setProperty('--achievement-color', achievementDisplayColor(item));
+    toast.classList.toggle('achievement-type-easter-egg', String(item.type || '') === 'easter_egg');
     const kicker = toast.querySelector('.achievement-toast-kicker');
     const name = toast.querySelector('.achievement-toast-name');
     const desc = toast.querySelector('.achievement-toast-desc');
@@ -8274,7 +8305,12 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     const mimicDiscount = Number(cardDict.mimic_discount || 0);
     const flags = new Set([...normalizeFlagList(cardDef.flags || []), ...normalizeFlagList(cardDict.instance_flags || [])]);
     normalizeFlagList(cardDict.disabled_flags || []).forEach(flag => flags.delete(flag));
-    const playedThisTurn = ownerState && ownerState.cards_played_this_turn ? ownerState.cards_played_this_turn : null;
+    const ownerId = normalizePlayerId(ownerState && ownerState.player_id);
+    const currentPlayerId = normalizePlayerId(gameState && gameState.current_player);
+    const isOwnersActiveTurn = ownerId == null || currentPlayerId == null || ownerId === currentPlayerId;
+    const playedThisTurn = isOwnersActiveTurn && ownerState && ownerState.cards_played_this_turn
+        ? ownerState.cards_played_this_turn
+        : null;
     const dup = playedThisTurn
         ? getCardLocalIds(cardDict, cardDef).reduce((sum, id) => sum + Number(playedThisTurn[id] || 0), 0)
         : 0;
@@ -8288,6 +8324,13 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Bamboo', 'jungle:bamboo'])) {
         const hand = Array.isArray(ownerState && ownerState.hand) ? ownerState.hand : [];
         extraE -= hand.filter(c => c && c !== cardDict && cardMatchesAnyLocalId(c, getCardDef(c.def_id || ''), ['Bamboo', 'jungle:bamboo'])).length;
+    }
+    if (ownerState && !isStatusImmune(ownerState)) {
+        const custom = ownerState.custom_statuses && typeof ownerState.custom_statuses === 'object'
+            ? ownerState.custom_statuses
+            : {};
+        const frost = Math.max(0, Number(custom['arctic:frost'] || custom.frost || custom['霜冻'] || 0));
+        extraE += Math.floor(frost / 10);
     }
     const totalE = Math.max(0, effectiveBaseE + extraE);
     const totalM = Math.max(0, baseM + Math.max(0, tempMagicHeavyValue) - Math.max(0, magicSwiftValue));
@@ -10488,6 +10531,19 @@ function collectCardIntroTerms(cardDict) {
         (cardDef.flags || []).join(' '),
         (cardDef.tags || []).join(' '),
     ].filter(Boolean).join(' ');
+    Object.entries(CUSTOM_TAG_DEFS || {}).forEach(([id, def]) => {
+        const names = [id, def && def.name_cn, def && def.name_en, def && def.name]
+            .filter(Boolean)
+            .map(value => String(value));
+        if (names.some(name => rawText.includes(name))) addFlagIntroItem(items, seen, id);
+    });
+    Object.entries(CUSTOM_STATUS_DEFS || {}).forEach(([id, def]) => {
+        const names = [id, def && def.name_cn, def && def.name_en, def && def.name]
+            .filter(Boolean)
+            .map(value => String(value));
+        if (!names.some(name => rawText.includes(name)) || seen.has(`status:${id}`)) return;
+        addTermIntroItem(items, seen, `status:${id}`, getStatusIntroItem({ key: id, customDef: def }));
+    });
     const probes = [
         [/(\[\[icon:D\]\]|\d+\s*D|物理伤害|physical damage)/i, 'D'],
         [/(装备护甲|equipment armor)/i, 'equipment_armor'],
@@ -10547,6 +10603,7 @@ function collectCardIntroTerms(cardDict) {
         [/无法反制|Unable to Counter|unable_counter|ocean:unable_counter/i, 'unable_counter'],
         [/幸运|Luck|hel:luck/i, 'luck'],
         [/烈火|Blazing Fire|hel:blazing_fire/i, 'blazing_fire'],
+        [/霜冻|Frost|arctic:frost/i, 'arctic:frost'],
     ];
     statusProbes.forEach(([re, key]) => {
         if (!re.test(rawText) || seen.has(`status:${key}`)) return;
@@ -11575,11 +11632,20 @@ function connectSocket(serverUrl) {
     bindSocketEvent('account_warning', (data = {}) => {
         if (!currentAccount) return;
         const warning = {
+            id: data.id || null,
             message: data.message || '请注意游戏内行为',
             expires_at: data.expires_at || '',
-            created_at: new Date().toISOString(),
+            created_at: data.created_at || new Date().toISOString(),
         };
-        currentAccount.warnings = [warning].concat(activeAccountWarnings()).slice(0, 3);
+        const existing = activeAccountWarnings().filter(item => !warning.id || String(item.id || '') !== String(warning.id));
+        currentAccount.warnings = [warning].concat(existing).slice(0, 3);
+        cacheAccount(currentAccount);
+        renderAccountWarningBanner();
+    });
+    bindSocketEvent('account_warning_removed', (data = {}) => {
+        if (!currentAccount) return;
+        const warningId = String(data.id || '');
+        currentAccount.warnings = activeAccountWarnings().filter(item => !warningId || String(item.id || '') !== warningId);
         cacheAccount(currentAccount);
         renderAccountWarningBanner();
     });
@@ -12809,6 +12875,7 @@ function achievementTypeLabel(type) {
             mode: 'Mode',
             social: 'Social',
             hidden: 'Hidden',
+            easter_egg: 'Easter Egg',
         }[type] || type || '';
     }
     return {
@@ -12817,6 +12884,7 @@ function achievementTypeLabel(type) {
         mode: '模式',
         social: '社交',
         hidden: '隐藏',
+        easter_egg: '彩蛋',
     }[type] || type || '';
 }
 
@@ -12971,7 +13039,7 @@ function renderAchievementCenter() {
         const pct = item.unlocked ? 100 : Math.max(0, Math.min(100, progress / target * 100));
         const color = achievementDisplayColor(item);
         return `
-            <div class="achievement-item ${item.unlocked ? 'unlocked' : ''} ${item.hidden ? 'is-hidden' : ''}" style="--achievement-color:${escapeHtml(color)}">
+            <div class="achievement-item ${item.unlocked ? 'unlocked' : ''} ${item.hidden ? 'is-hidden' : ''} ${item.type === 'easter_egg' ? 'achievement-type-easter-egg' : ''}" style="--achievement-color:${escapeHtml(color)}">
                 <div class="achievement-main">
                     <div class="achievement-head">
                         <span class="achievement-type">${escapeHtml(achievementTypeLabel(item.type))}</span>
@@ -19197,9 +19265,12 @@ function renderClassicEquipmentList(player) {
         const layerValue = Math.max(0, Number(customVars.layers || customVars.layer || 0));
         const rootLayerValue = Math.max(0, Number(customVars.jungle_root_layers || 0));
         const topParts = [];
-        if (targetSuffix) topParts.push(targetSuffix);
-        if (layerValue > 0) topParts.push(String(layerValue));
+        if (layerValue > 0) {
+            const layerLabel = lt({ zh: '层数', en: 'Layers', fr: 'Couches', ja: '層数' });
+            topParts.push(`${layerLabel}:${layerValue}`);
+        }
         if (rootLayerValue > 0) topParts.push(`树根:${rootLayerValue}`);
+        if (targetSuffix) topParts.push(targetSuffix);
         const angle = total ? (index / total) * 360 : 0;
         const orbitDelay = -((Date.now() / 1000) % 15).toFixed(2);
         const spinDelay = -((Date.now() / 1000) % 13).toFixed(2);
@@ -20233,6 +20304,7 @@ function renderStatusTags(containerId, playerData) {
     if (p.fire > 0) tags.push({ key: 'fire', name: UI.status_fire, abbr: 'F', val: p.fire, fg: COLORS.fire, bg: COLORS.fire_bg });
     if (p.toxic > 0) tags.push({ key: 'toxic', name: UI.status_toxic, abbr: 'T', val: p.toxic, fg: '#6C3483', bg: '#F4ECF7' });
     if (p.triangle_stacks > 0) tags.push({ key: 'triangle', name: UI.status_triangle, abbr: '△', val: p.triangle_stacks, fg: COLORS.non_stack, bg: COLORS.non_stack_bg });
+    if (p.dodge > 0) tags.push({ key: 'dodge', name: UI.status_dodge || '闪避', abbr: 'Ddg', val: p.dodge, fg: COLORS.guard, bg: COLORS.guard_bg });
     let nazarStacks = customCount('nazar', '邪眼', 'Nazar');
     if (p.nazar_active) nazarStacks += Math.max(0, 2 - Math.max(0, Number(p.nazar_big_hits || 0)));
     if (nazarStacks > 0) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: currentLang === 'zh' ? '邪眼' : 'Nz', val: nazarStacks, fg: COLORS.magic_text, bg: COLORS.magic_bg });
@@ -21030,6 +21102,7 @@ function shouldMaskRenderedBarRegion(region) {
     if (!region) return false;
     const blindLevel = getOwnBlindLevel();
     if (blindLevel < 2) return false;
+    if (region.id === 'classic-fighter-self') return true;
     const pid = normalizePlayerId(region.dataset && region.dataset.playerId);
     const selfId = normalizePlayerId(gameState && gameState.your_id);
     if (pid == null || selfId == null) return false;
@@ -21737,6 +21810,7 @@ function equipmentChoosesTargetOnTrigger(cardDef) {
 function equipmentTriggerForbidsSelfTarget(cardDef) {
     if (!cardDef || cardDef.card_type !== 'root') return false;
     if (cardHasSelfOnlyFlag({}, cardDef)) return false;
+    if (cardDef.v2_resource && cardDef.v2_resource.trigger_allow_self) return false;
     return getEquipmentTriggerPayloads(cardDef).some(effectTreeUsesEventTarget);
 }
 
@@ -23771,7 +23845,46 @@ function cardChoiceIdentity(card) {
         Number(card.held_turns || 0),
         Number(card.return_to_hand_turns || 0),
         Number(card.mimic_discount || 0),
+        Number(card.swift_value || 0),
+        Number(card.magic_swift_value || 0),
+        Number(card.power_value || 0),
+        Number(card.temp_swift_value || 0),
+        Number(card.temp_heavy_value || 0),
+        Number(card.temp_magic_heavy_value || 0),
+        Number(card.charge_value || 0),
+        Number(card.hand_blind_turns || 0),
+        Number(card.extra_hits || 0),
+        sortList(card.setup_modifiers),
     ].join('|');
+}
+
+function shuffledCardChoiceGroups(cards) {
+    const groups = new Map();
+    (Array.isArray(cards) ? cards : []).forEach(card => {
+        const key = cardChoiceIdentity(card);
+        const group = groups.get(key) || [];
+        group.push(card);
+        groups.set(key, group);
+    });
+    const result = Array.from(groups.values());
+    for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+}
+
+function isCompassChoiceCard(card, cardDef) {
+    return cardMatchesAnyLocalId(card || {}, cardDef, ['Compass'])
+        || !!(cardDef && (cardDef.name_cn === '指南针' || cardDef.name_en === 'Compass'));
+}
+
+function compassDeckChoiceOptions(cards) {
+    const groups = shuffledCardChoiceGroups(cards);
+    const options = groups.map(group => cardChoiceOption(group[0], {
+        detail: `x${group.length}`,
+    }));
+    return { groups, options };
 }
 
 function dedupeCardCombos(combos) {
@@ -24709,9 +24822,12 @@ async function showChoiceUI(data) {
             choiceResult = { cancelled: true };
         }
         else {
-            const options = deck.map(c => cardChoiceOption(c));
+            const compassChoice = isCompassChoiceCard(cardDict, cardDef);
+            const grouped = compassChoice ? compassDeckChoiceOptions(deck) : null;
+            const options = grouped ? grouped.options : deck.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_deck_for.replace('{0}', cardName)), options, choicePromptConfig);
-            if (sel >= 0 && sel < deck.length) choiceResult = { target_instance_id: deck[sel].instance_id, target_def_id: deck[sel].def_id };
+            const selected = grouped ? (grouped.groups[sel] || [])[0] : deck[sel];
+            if (sel >= 0 && selected) choiceResult = { target_instance_id: selected.instance_id, target_def_id: selected.def_id };
         }
     } else if (choiceType === 'choose_card_from_discard') {
         const discard = ((gameState.you || {}).discard || []).filter(c => !cardHasSublimeFlag(c));
@@ -24835,9 +24951,12 @@ async function showChoiceUI(data) {
             choiceResult = { cancelled: true };
         }
         else {
-            const options = deck.map(c => cardChoiceOption(c));
+            const compassChoice = isCompassChoiceCard(cardDict, cardDef);
+            const grouped = compassChoice ? compassDeckChoiceOptions(deck) : null;
+            const options = grouped ? grouped.options : deck.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_deck_for.replace('{0}', cardName)), options, choicePromptConfig);
-            if (sel >= 0 && sel < deck.length) choiceResult = { target_instance_id: deck[sel].instance_id };
+            const selected = grouped ? (grouped.groups[sel] || [])[0] : deck[sel];
+            if (sel >= 0 && selected) choiceResult = { target_instance_id: selected.instance_id };
         }
     } else if (choiceType === 'choose_from_discard') {
         const discard = (choiceTargetData().discard || []).filter(c => !cardHasSublimeFlag(c));
@@ -25719,6 +25838,7 @@ const FALLBACK_DEFAULT_DISABLED_MODS = [
     'Void Card Addition.gtnmod',
     'Hel Cards Addition.gtnmod',
     'Sewers Cards Addition.gtnmod',
+    'Arctic Cards Addition.gtnmod',
 ];
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 const COMMUNITY_JSON_MAX_BYTES = 150 * 1024;
@@ -25966,6 +26086,12 @@ const BETA_TESTING_MOD_IDS = new Set([
     'Hel Cards Addition.gtnmod',
     'hel',
     'Hel Cards Addition',
+    'Sewers Cards Addition.gtnmod',
+    'sewers',
+    'Sewers Cards Addition',
+    'Arctic Cards Addition.gtnmod',
+    'arctic',
+    'Arctic Cards Addition',
 ]);
 
 function isBetaTestingMod(mod) {
@@ -25993,6 +26119,17 @@ function createModBetaWarningBadge() {
     text.className = 'mod-beta-warning-text';
     text.textContent = label;
     badge.appendChild(text);
+    return badge;
+}
+
+function createTemporaryDisableBadge(reason = '') {
+    const label = UI.content_temporarily_disabled || '临时停用';
+    const badge = document.createElement('span');
+    badge.className = 'content-disabled-badge';
+    badge.textContent = label;
+    const detail = reason ? tf('content_disabled_reason', reason) : label;
+    badge.title = detail;
+    badge.setAttribute('aria-label', detail);
     return badge;
 }
 
@@ -26040,6 +26177,10 @@ function renderOfficialModList() {
         }
         if (isBetaTestingMod(mod)) {
             main.appendChild(createModBetaWarningBadge());
+        }
+        if (mod.temporarily_disabled) {
+            item.classList.add('temporarily-disabled');
+            main.appendChild(createTemporaryDisableBadge(mod.temporary_disable_reason || ''));
         }
         item.appendChild(main);
         const details = document.createElement('div');

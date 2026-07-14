@@ -43,7 +43,7 @@ async function api(path, options = {}) {
 }
 
 function appendColoredText(parent, text) {
-  const pattern = /(\/?(?:help|player|account|game|lobby|moderation|data|server)\b|\[(?:error|warning|security|admin|deploy|player|perf)\]|错误|失败|警告|参数错误|未知命令|ID:[A-Z0-9-]+|#[0-9]+|\b\d+(?:\.\d+)?(?:ms|秒|%)?\b|\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})/gi;
+  const pattern = /(\/?(?:help|player|account|game|lobby|moderation|content|data|server)\b|\[(?:error|warning|security|admin|deploy|player|perf)\]|错误|失败|警告|参数错误|未知命令|ID:[A-Z0-9-]+|#[0-9]+|\b\d+(?:\.\d+)?(?:ms|秒|%)?\b|\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})/gi;
   let last = 0;
   for (const match of text.matchAll(pattern)) {
     if (match.index > last) {

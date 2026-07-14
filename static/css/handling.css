@@ -91,6 +91,10 @@ input:focus, select:focus, textarea:focus {
   color: var(--danger);
 }
 .result.ok { color: var(--ok); }
+.page-result {
+  min-height: 1.25rem;
+  margin: 0 0 8px;
+}
 .app { padding: 14px; }
 .topbar {
   display: flex;
@@ -112,9 +116,13 @@ input:focus, select:focus, textarea:focus {
 }
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   margin-bottom: 10px;
+}
+
+.layout.no-right {
+  grid-template-columns: 320px minmax(360px, 1fr);
 }
 .tab {
   border: 1px solid var(--line);
@@ -315,6 +323,31 @@ input:focus, select:focus, textarea:focus {
 .ip-related {
   margin-top: 4px;
 }
+
+.record-editor {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.record-editor label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.record-editor textarea {
+  min-height: 84px;
+}
+
+.record-duration-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .json-details summary {
   cursor: pointer;
   color: var(--muted);
@@ -400,6 +433,7 @@ pre {
   padding: 3px;
 }
 @media (max-width: 980px) {
-  .layout { grid-template-columns: 1fr; }
+  .layout,
+  .layout.no-right { grid-template-columns: 1fr; }
   .list, .detail { max-height: none; }
 }

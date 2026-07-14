@@ -4,14 +4,17 @@ let currentTab = 'reports';
 let reports = [];
 let users = [];
 let ipBans = [];
+let moderationRecords = [];
 let selectedReportId = null;
 let selectedReport = null;
 let selectedUserId = null;
+let selectedModerationKey = '';
 let selectedDuration = 0;
 let durationTarget = 'moderation';
 let reportsRequestInFlight = false;
 let usersRequestInFlight = false;
 let ipBansRequestInFlight = false;
+let moderationRequestInFlight = false;
 let reportsLoadedOnce = false;
 const HANDLING_FETCH_TIMEOUT_MS = 5000;
 
@@ -146,8 +149,17 @@ function switchTab(tab) {
   $('reports-tools').classList.toggle('hidden', tab !== 'reports');
   $('users-tools').classList.toggle('hidden', tab !== 'users');
   $('ip-tools').classList.toggle('hidden', tab !== 'ip');
-  const summaryText = tab === 'reports' ? `举报 ${reports.length}` : (tab === 'users' ? `玩家 ${users.length}` : `IP封禁 ${ipBans.length}`);
+  $('moderation-tools').classList.toggle('hidden', tab !== 'moderation');
+  const hideActionPanel = tab === 'moderation' || tab === 'ip';
+  $('handling-actions').classList.toggle('hidden', hideActionPanel);
+  $('handling-layout').classList.toggle('no-right', hideActionPanel);
+  const summaryText = tab === 'reports'
+    ? `举报 ${reports.length}`
+    : (tab === 'users'
+      ? `玩家 ${users.length}`
+      : (tab === 'moderation' ? `处罚 ${moderationRecords.length}` : `IP封禁 ${ipBans.length}`));
   setText('summary', `${summaryText}，点击刷新读取`);
+  clearDetail();
   renderList();
   if (tab === 'reports' && !reportsLoadedOnce) {
     refreshCurrent().catch(() => null);
@@ -194,12 +206,28 @@ async function loadIpBans() {
   }
 }
 
+async function loadModerationRecords() {
+  if (!handlingPageVisible() || moderationRequestInFlight) return;
+  moderationRequestInFlight = true;
+  const kind = $('moderation-filter').value || 'all';
+  try {
+    const data = await api(`/api/handling/moderation?kind=${encodeURIComponent(kind)}&limit=40`);
+    moderationRecords = data.items || [];
+    const counts = data.counts || {};
+    setText('summary', `处罚 ${moderationRecords.length}/${data.total || moderationRecords.length} · 封禁 ${counts.account_ban || 0} · 警告 ${counts.warning || 0}`);
+  } finally {
+    moderationRequestInFlight = false;
+  }
+}
+
 async function refreshCurrent() {
   try {
     if (currentTab === 'reports') {
       await loadReports();
     } else if (currentTab === 'users') {
       await loadUsers();
+    } else if (currentTab === 'moderation') {
+      await loadModerationRecords();
     } else {
       await loadIpBans();
     }
@@ -212,9 +240,15 @@ async function refreshCurrent() {
 function renderList() {
   const list = $('list');
   list.textContent = '';
-  const items = currentTab === 'reports' ? reports : (currentTab === 'users' ? users : ipBans);
+  const items = currentTab === 'reports'
+    ? reports
+    : (currentTab === 'users' ? users : (currentTab === 'moderation' ? moderationRecords : ipBans));
   if (!items.length) {
-    const emptyText = currentTab === 'reports' ? '暂无举报' : (currentTab === 'users' ? '暂无玩家，输入条件后点击搜索' : '暂无 IP 封禁');
+    const emptyText = currentTab === 'reports'
+      ? '暂无举报'
+      : (currentTab === 'users'
+        ? '暂无玩家，输入条件后点击搜索'
+        : (currentTab === 'moderation' ? '暂无有效处罚' : '暂无 IP 封禁'));
     list.appendChild(el('div', 'list-item muted', emptyText));
     return;
   }
@@ -242,6 +276,17 @@ function renderList() {
       row.appendChild(el('div', 'mono muted', `ID:${item.player_id || '-'} 注册顺序:${item.id || '-'}`));
       row.appendChild(el('div', 'muted', `${item.online ? '在线' : '离线'} · 上次 ${fmtTime(item.last_login_at)}`));
       row.addEventListener('click', () => renderUserDetail(item));
+    } else if (currentTab === 'moderation') {
+      if (item.key === selectedModerationKey) row.classList.add('active');
+      const isWarning = item.kind === 'warning';
+      const title = el('div', 'list-title');
+      title.appendChild(el('strong', '', item.username || `用户 #${item.user_id || '-'}`));
+      title.appendChild(el('span', isWarning ? 'badge pending' : 'badge danger-badge', isWarning ? '警告' : '账号封禁'));
+      row.appendChild(title);
+      row.appendChild(el('div', 'report-list-reason', item.reason || (isWarning ? '请注意游戏内行为' : '未填写原因')));
+      const remaining = item.permanent ? '永久' : `剩余 ${fmtDuration(item.remaining_seconds || 0)}`;
+      row.appendChild(el('div', 'muted', `${remaining} · ${fmtTime(item.created_at)}`));
+      row.addEventListener('click', () => renderModerationDetail(item));
     } else {
       const title = el('div', 'list-title');
       title.appendChild(el('strong', 'mono', item.ip));
@@ -497,6 +542,7 @@ function findIpInEvidence(data) {
 }
 
 function renderIpDetail(item) {
+  selectedDuration = item.expires_at ? secondsUntil(item.expires_at) : 0;
   $('empty').classList.add('hidden');
   const detail = $('detail');
   detail.classList.remove('hidden');
@@ -508,9 +554,167 @@ function renderIpDetail(item) {
   addKv(detail, '封禁人', item.banned_by || '-');
   addKv(detail, '创建时间', fmtTime(item.created_at), true);
   addKv(detail, '到期时间', item.expires_at ? fmtTime(item.expires_at) : '永久', true);
-  const btn = el('button', 'btn danger', '解除 IP 封禁');
-  btn.addEventListener('click', () => unbanIp(item.ip));
-  detail.appendChild(btn);
+  appendRecordEditor(detail, {
+    reason: item.reason,
+    remaining_seconds: item.expires_at ? secondsUntil(item.expires_at) : 0,
+    permanent: !item.expires_at,
+  }, {
+    durationMode: 'ip-record',
+    saveText: '保存 IP 封禁',
+    endText: '解除 IP 封禁',
+    onSave: (reason, duration) => updateIpBan(item.ip, reason, duration),
+    onEnd: () => unbanIp(item.ip),
+  });
+}
+
+function secondsUntil(value) {
+  if (!value) return 0;
+  const expires = new Date(String(value).replace('Z', '+00:00')).getTime();
+  if (!Number.isFinite(expires)) return 0;
+  return Math.max(1, Math.ceil((expires - Date.now()) / 1000));
+}
+
+function appendRecordEditor(parent, item, options = {}) {
+  const editor = el('div', 'record-editor');
+  editor.appendChild(el('label', '', '内容 / 原因'));
+  const reason = document.createElement('textarea');
+  reason.id = 'record-edit-reason';
+  reason.rows = 4;
+  reason.value = item.reason || '';
+  reason.placeholder = '填写玩家可见的说明';
+  editor.appendChild(reason);
+  editor.appendChild(el('label', '', '剩余时长'));
+  const durationRow = el('div', 'record-duration-row');
+  const durationButton = el('button', 'btn', '修改时长');
+  const durationLabel = el('span', 'mono muted', item.permanent ? '永久' : fmtDuration(item.remaining_seconds || 0));
+  durationLabel.id = 'record-duration-label';
+  durationButton.addEventListener('click', () => {
+    openDurationModal(options.durationMode || 'record');
+  });
+  durationRow.appendChild(durationButton);
+  durationRow.appendChild(durationLabel);
+  editor.appendChild(durationRow);
+  const actions = el('div', 'inline-actions');
+  const save = el('button', 'btn primary', options.saveText || '保存修改');
+  save.addEventListener('click', () => options.onSave && options.onSave(reason.value.trim(), selectedDuration));
+  actions.appendChild(save);
+  if (options.onEnd) {
+    const end = el('button', 'btn danger', options.endText || '结束处罚');
+    end.addEventListener('click', () => options.onEnd());
+    actions.appendChild(end);
+  }
+  editor.appendChild(actions);
+  parent.appendChild(editor);
+}
+
+function renderModerationDetail(item) {
+  selectedModerationKey = item.key || '';
+  selectedDuration = item.permanent ? 0 : Math.max(1, Number(item.remaining_seconds) || secondsUntil(item.expires_at));
+  renderList();
+  setText('action-result', '');
+  $('empty').classList.add('hidden');
+  const detail = $('detail');
+  detail.classList.remove('hidden');
+  detail.textContent = '';
+  const isWarning = item.kind === 'warning';
+  detail.appendChild(el('h2', '', isWarning ? '有效警告' : '账号封禁'));
+  addKv(detail, '玩家', item.username || `用户 #${item.user_id || '-'}`);
+  addKv(detail, '玩家ID', item.player_id || '-', true);
+  addKv(detail, '创建时间', fmtTime(item.created_at), true);
+  addKv(detail, '到期时间', item.permanent ? '永久' : fmtTime(item.expires_at), true);
+  if (isWarning) {
+    addKv(detail, '处理人', item.admin_username || '-');
+    if (item.related_report_id) addKv(detail, '关联举报', `#${item.related_report_id}`, true);
+  }
+  const links = el('div', 'inline-actions');
+  if (item.user_id || item.username) {
+    const user = el('button', 'btn small', '查看玩家');
+    user.addEventListener('click', () => searchUser(item.user_id || item.username));
+    links.appendChild(user);
+  }
+  if (item.related_report_id) {
+    const report = el('button', 'btn small', '查看关联举报');
+    report.addEventListener('click', () => openReport(item.related_report_id));
+    links.appendChild(report);
+  }
+  if (links.childNodes.length) detail.appendChild(links);
+  appendRecordEditor(detail, item, {
+    durationMode: isWarning ? 'warning' : 'account-ban-record',
+    saveText: '保存修改',
+    endText: isWarning ? '结束警告' : '解除封禁',
+    onSave: (reason, duration) => isWarning
+      ? updateWarning(item.id, reason, duration, true)
+      : updateAccountBan(item.user_id, reason, duration),
+    onEnd: () => isWarning ? updateWarning(item.id, item.reason || '', 0, false) : endAccountBan(item.user_id),
+  });
+}
+
+async function openReport(reportId) {
+  $('status-filter').value = 'all';
+  switchTab('reports');
+  await loadReports();
+  renderList();
+  await selectReport(reportId);
+}
+
+async function updateWarning(warningId, reason, duration, active) {
+  try {
+    await api(`/api/handling/warnings/${encodeURIComponent(warningId)}`, {
+      method: active ? 'PATCH' : 'DELETE',
+      body: JSON.stringify({ reason, duration_seconds: duration, active }),
+    });
+    $('action-result').className = 'result ok';
+    setText('action-result', active ? '警告已更新' : '警告已结束');
+    await loadModerationRecords();
+    renderList();
+    clearDetail();
+  } catch (e) {
+    $('action-result').className = 'result';
+    setText('action-result', e.message);
+  }
+}
+
+async function updateAccountBan(userId, reason, duration) {
+  try {
+    await api(`/api/handling/users/${encodeURIComponent(userId)}/ban`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason, duration_seconds: duration }),
+    });
+    $('action-result').className = 'result ok';
+    setText('action-result', '账号封禁已更新');
+    await loadModerationRecords();
+    renderList();
+    const updated = moderationRecords.find((entry) => entry.kind === 'account_ban' && Number(entry.user_id) === Number(userId));
+    if (updated) renderModerationDetail(updated);
+  } catch (e) {
+    $('action-result').className = 'result';
+    setText('action-result', e.message);
+  }
+}
+
+async function endAccountBan(userId) {
+  const result = await setUserBan(userId, false);
+  if (!result) return;
+  await loadModerationRecords();
+  renderList();
+  clearDetail();
+}
+
+async function updateIpBan(ip, reason, duration) {
+  try {
+    const data = await api(`/api/handling/ip-bans/${encodeURIComponent(ip)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason, duration_seconds: duration }),
+    });
+    $('action-result').className = 'result ok';
+    setText('action-result', 'IP 封禁已更新');
+    await loadIpBans();
+    renderList();
+    if (data.ip_ban) renderIpDetail(data.ip_ban);
+  } catch (e) {
+    $('action-result').className = 'result';
+    setText('action-result', e.message);
+  }
 }
 
 function renderUserDetail(user) {
@@ -588,7 +792,8 @@ async function setUserBan(userId, banned) {
     const idx = users.findIndex((item) => item.id === userId);
     if (idx >= 0 && data.user) users[idx] = { ...users[idx], ...data.user };
     renderList();
-    if (data.user) renderUserDetail(data.user);
+    if (data.user && currentTab === 'users') renderUserDetail(data.user);
+    return data;
   } catch (e) {
     $('action-result').className = 'result';
     setText('action-result', e.message);
@@ -693,6 +898,7 @@ function setupDurationPicker() {
   $('duration-close').addEventListener('click', closeDurationModal);
   $('duration-apply').addEventListener('click', () => {
     selectedDuration = Number($('duration-seconds').value) || 0;
+    if (durationTarget === 'warning' && selectedDuration <= 0) selectedDuration = 3600;
     updateDurationLabel();
     closeDurationModal();
   });
@@ -701,6 +907,7 @@ function setupDurationPicker() {
 function openDurationModal(target = 'moderation') {
   durationTarget = target;
   setDuration(selectedDuration, true);
+  $('duration-permanent').classList.toggle('hidden', target === 'warning');
   $('duration-modal').classList.remove('hidden');
   $('duration-modal').setAttribute('aria-hidden', 'false');
 }
@@ -737,6 +944,8 @@ function setDuration(total, syncWheels = false) {
 
 function updateDurationLabel() {
   setText('duration-label', fmtDuration(selectedDuration));
+  const recordLabel = $('record-duration-label');
+  if (recordLabel) recordLabel.textContent = fmtDuration(selectedDuration);
 }
 
 function bind() {
@@ -750,6 +959,11 @@ function bind() {
   $('status-filter').addEventListener('change', () => {
     setText('summary', '筛选已更改，点击刷新读取');
     reports = [];
+    renderList();
+  });
+  $('moderation-filter').addEventListener('change', () => {
+    setText('summary', '筛选已更改，点击刷新读取');
+    moderationRecords = [];
     renderList();
   });
   document.querySelectorAll('.tab').forEach((btn) => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
@@ -779,11 +993,7 @@ async function loadUsersThenRender() {
 }
 
 async function searchUser(query) {
-  currentTab = 'users';
-  document.querySelectorAll('.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === 'users'));
-  $('reports-tools').classList.add('hidden');
-  $('users-tools').classList.remove('hidden');
-  $('ip-tools').classList.add('hidden');
+  switchTab('users');
   $('user-query').value = text(query);
   await loadUsersThenRender();
 }

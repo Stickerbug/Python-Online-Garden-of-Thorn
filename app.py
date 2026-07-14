@@ -35,7 +35,7 @@ from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
 from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
-    create_random_weighted_deck_def_ids,
+    create_random_weighted_deck_def_ids, ALL_MOD_SHARED_CARD_IDS,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
     normalize_card_flag, normalize_card_flags,
@@ -86,6 +86,7 @@ from db import (
     change_username,
     change_user_password,
     cleanup_expired_friend_requests_once,
+    cleanup_expired_content_disables_once,
     cleanup_old_dm_messages_once,
     create_report_entry,
     create_remember_token,
@@ -115,6 +116,7 @@ from db import (
     get_user_achievement_center,
     is_user_muted_db,
     list_friends,
+    list_content_disables,
     list_lobby_chat_entries,
     list_dm_threads,
     list_feedback_threads,
@@ -123,6 +125,7 @@ from db import (
     list_card_draft_stats,
     list_opening_event_stats,
     list_ip_bans,
+    list_active_moderation_records,
     list_user_recent_ips,
     list_reports,
     list_user_roles,
@@ -163,9 +166,14 @@ from db import (
     set_user_mute,
     spend_user_thorn_dew,
     soft_delete_user,
+    upsert_content_disable,
+    deactivate_content_disable,
     update_user_skin,
     update_user_social_settings,
     update_feedback_status,
+    update_active_ip_ban,
+    update_active_user_ban,
+    update_user_warning,
     verify_remember_token,
     verify_user,
 )
@@ -175,6 +183,7 @@ from moderation import (
     VALID_REPORT_ACTIONS,
     VALID_REPORT_OBJECT_TYPES,
     check_message_risk,
+    check_nickname_risk,
     normalize_message,
     report_category_allowed,
 )
@@ -290,7 +299,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260714-card-effect-size-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260714-turn-cost-display-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -486,7 +495,12 @@ _next_room_id = 0
 _COMMUNITY_API_RATE: dict = {}
 PENDING_AFK_CHECKS: dict = {}
 SERVER_STARTED_AT = time.time()
-RECONNECT_TIMEOUT_SECONDS = int(os.environ.get('RECONNECT_TIMEOUT_SECONDS', '120'))
+RECONNECT_TIMEOUT_SEQUENCE = tuple(
+    max(0, int(value.strip()))
+    for value in os.environ.get('RECONNECT_TIMEOUT_SEQUENCE', '120,60,30,20,10,5').split(',')
+    if value.strip()
+) or (120, 60, 30, 20, 10, 5)
+RECONNECT_TIMEOUT_SECONDS = int(RECONNECT_TIMEOUT_SEQUENCE[0])
 BOTH_DISCONNECTED_CLEANUP_SECONDS = int(os.environ.get('BOTH_DISCONNECTED_CLEANUP_SECONDS', '60'))
 GAME_OVER_CLEANUP_SECONDS = int(os.environ.get('GAME_OVER_CLEANUP_SECONDS', '300'))
 LOBBY_IDLE_TIMEOUT_SECONDS = int(os.environ.get('LOBBY_IDLE_TIMEOUT_SECONDS', '600'))
@@ -846,6 +860,8 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                     user_flags.append('flag_armor_20')
                 if bool(getattr(ps, 'achievement_self_caused_death', False)):
                     user_flags.append('flag_self_caused_death')
+                if int((getattr(ps, 'custom_vars', {}) or {}).get('achievement_creative_mode_mana_pool', 0) or 0) > 0:
+                    user_flags.append('flag_creative_mode_mana_pool')
                 if is_winner and mode == '1v1':
                     enemies = [eid for eid in range(len(engine.players)) if eid != pidx]
                     if any(int(getattr(engine.players[eid], 'health', 1) or 0) == 0 for eid in enemies):
@@ -923,6 +939,7 @@ LIVE_ACHIEVEMENT_FLAGS = {
     'flag_max_equipment_5',
     'flag_armor_20',
     'flag_self_caused_death',
+    'flag_creative_mode_mana_pool',
 }
 
 
@@ -986,6 +1003,8 @@ def build_live_achievement_flags(room):
                 user_flags.append('flag_armor_20')
             if bool(getattr(ps, 'achievement_self_caused_death', False)):
                 user_flags.append('flag_self_caused_death')
+            if int((getattr(ps, 'custom_vars', {}) or {}).get('achievement_creative_mode_mana_pool', 0) or 0) > 0:
+                user_flags.append('flag_creative_mode_mana_pool')
             if user_flags:
                 flags[str(int(uid))] = user_flags
     except Exception as exc:
@@ -1862,7 +1881,7 @@ class GameRoom:
             self.engine = GameEngineInfiniteFire()
         else:
             self.engine = GameEngine()
-        self.engine.allowed_card_ids = set(allowed_card_ids) if allowed_card_ids is not None else None
+        self.engine.allowed_card_ids = apply_runtime_content_filter(allowed_card_ids, mode) if allowed_card_ids is not None else None
         self.spectators = []
         self.disconnected_players = {}
         # Durable per-slot metadata. Socket.IO sid changes on reconnect; this
@@ -1870,6 +1889,7 @@ class GameRoom:
         # degrading to "?" / "P1" if the online player row is deleted first.
         self.player_profiles = {}
         self.reconnect_timers = {}
+        self.disconnect_attempt_counts = [0 for _ in self.player_sids]
         self.disconnect_timeout_defeated = set()
         self._rematch_votes = set()
         self._returned_lobby_sids = set()
@@ -1901,6 +1921,16 @@ class GameRoom:
         if sid in self.player_sids:
             return self.player_sids.index(sid)
         return -1
+
+    def allocate_reconnect_timeout(self, player_index):
+        if player_index < 0:
+            return 0, 0
+        while len(self.disconnect_attempt_counts) <= player_index:
+            self.disconnect_attempt_counts.append(0)
+        attempt = max(0, int(self.disconnect_attempt_counts[player_index] or 0)) + 1
+        self.disconnect_attempt_counts[player_index] = attempt
+        timeout = RECONNECT_TIMEOUT_SEQUENCE[attempt - 1] if attempt <= len(RECONNECT_TIMEOUT_SEQUENCE) else 0
+        return attempt, int(timeout)
 
     def store_player_profile(self, sid, player_index=None, source=None):
         if player_index is None:
@@ -1953,18 +1983,33 @@ def room_mod_payload(room):
     }
 
 
-def apply_v2_loadout_to_engine(engine, player_meta=None):
+def apply_v2_loadout_to_engine(engine, player_meta=None, runtime_mode=None):
     player_meta = player_meta or {}
-    engine.v2_ui_components = dict(player_meta.get('v2_ui_components') or {})
     engine.v2_loadout = player_meta.get('v2_loadout')
     registries = {}
     v2_loadout = engine.v2_loadout
     if v2_loadout is not None:
         registries = getattr(v2_loadout, 'registries', {}) or {}
-    engine.v2_tag_defs = dict(registries.get('tags') or {})
-    engine.v2_status_defs = dict(registries.get('statuses') or {})
-    engine.v2_opening_event_defs = dict(registries.get('opening_events') or {})
-    engine.v2_event_hooks = list(getattr(v2_loadout, 'event_hooks', []) or []) if v2_loadout is not None else []
+    event_hooks = list(getattr(v2_loadout, 'event_hooks', []) or []) if v2_loadout is not None else []
+    disabled_mod_files = runtime_disabled_content(runtime_mode)['mods']
+    disabled_mod_ids = set()
+    if disabled_mod_files:
+        for mod in load_all_mods():
+            if mod.filename not in disabled_mod_files:
+                continue
+            manifest = getattr(mod, 'manifest', None)
+            disabled_mod_ids.add(str(getattr(manifest, 'id', '') or '').strip())
+        event_hooks = [hook for hook in event_hooks if str(hook.get('_mod_id') or '') not in disabled_mod_ids]
+    def enabled_registry(source):
+        return {
+            key: value for key, value in dict(source or {}).items()
+            if str((value or {}).get('_mod_id') or '') not in disabled_mod_ids
+        }
+    engine.v2_ui_components = enabled_registry(player_meta.get('v2_ui_components') or {})
+    engine.v2_tag_defs = enabled_registry(registries.get('tags') or {})
+    engine.v2_status_defs = enabled_registry(registries.get('statuses') or {})
+    engine.v2_opening_event_defs = enabled_registry(registries.get('opening_events') or {})
+    engine.v2_event_hooks = event_hooks
 
 
 def v2_registry_payload(v2_loadout):
@@ -2338,6 +2383,13 @@ def _room_disconnected_teams(room):
     return teams_seen
 
 
+def _disconnect_info_timeout(dc_info):
+    try:
+        return max(0.0, float((dc_info or {}).get('reconnect_timeout', RECONNECT_TIMEOUT_SECONDS)))
+    except (TypeError, ValueError):
+        return float(RECONNECT_TIMEOUT_SECONDS)
+
+
 def _room_timed_out_disconnected_teams(room, now=None):
     """Return teams whose blocking player has been disconnected for the full timeout."""
     now = now or time.time()
@@ -2355,7 +2407,7 @@ def _room_timed_out_disconnected_teams(room, now=None):
             disconnected_at = float(dc_info.get('disconnect_time') or now)
         except Exception:
             disconnected_at = now
-        if now - disconnected_at < RECONNECT_TIMEOUT_SECONDS:
+        if now - disconnected_at < _disconnect_info_timeout(dc_info):
             continue
         team = _room_team_for_player(room, pidx)
         if team >= 0:
@@ -2381,21 +2433,23 @@ def _room_disconnect_state_payload(room, viewer_sid=None):
             disconnected_at = float(dc_info.get('disconnect_time') or now)
         except Exception:
             disconnected_at = now
-        remaining = int(math.ceil(max(0.0, RECONNECT_TIMEOUT_SECONDS - (now - disconnected_at))))
+        timeout = _disconnect_info_timeout(dc_info)
+        remaining = int(math.ceil(max(0.0, timeout - (now - disconnected_at))))
         entries.append({
             'sid': dc_sid,
             'player_index': pidx,
             'nickname': dc_info.get('nickname') or room_player_nickname(room, dc_sid, f'P{pidx + 1}'),
             'disconnect_time': disconnected_at,
             'remaining': remaining,
-            'timeout': RECONNECT_TIMEOUT_SECONDS,
+            'timeout': int(timeout),
+            'attempt': int(dc_info.get('disconnect_attempt', 1) or 1),
         })
     entries.sort(key=lambda item: (item.get('remaining', 0), item.get('player_index', 999)))
     return {
         'disconnect_state': {
             'active': bool(entries),
             'players': entries,
-            'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
+            'reconnect_timeout': min((entry['timeout'] for entry in entries), default=RECONNECT_TIMEOUT_SECONDS),
             'wait_forever': False,
         }
     }
@@ -2415,19 +2469,25 @@ def _start_reconnect_timer_for_disconnected_player(room, old_sid, notify=True):
         return False
     if old_sid in getattr(room, 'reconnect_timers', {}):
         return False
+    if 'reconnect_timeout' not in dc_info:
+        attempt, timeout = room.allocate_reconnect_timeout(pidx)
+        dc_info['disconnect_attempt'] = attempt
+        dc_info['reconnect_timeout'] = timeout
+    timeout = _disconnect_info_timeout(dc_info)
     dc_info['disconnect_time'] = time.time()
     room.disconnected_players[old_sid] = dict(dc_info)
-    timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room.room_id, old_sid])
+    timer = threading.Timer(timeout, reconnect_timeout, args=[room.room_id, old_sid])
     room.reconnect_timers[old_sid] = timer
     timer.daemon = True
     timer.start()
-    if notify:
+    if notify and timeout > 0:
         nickname = dc_info.get('nickname') or room_player_nickname(room, old_sid, f'P{pidx + 1}')
         for other_sid in getattr(room, 'player_sids', []) or []:
             if other_sid != old_sid and other_sid in players:
                 try:
                     socketio.emit('opponent_disconnected', {
-                        'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
+                        'reconnect_timeout': int(timeout),
+                        'disconnect_attempt': int(dc_info.get('disconnect_attempt', 1) or 1),
                         'wait_forever': False,
                         'opponent_nickname': nickname,
                     }, room=other_sid)
@@ -3522,6 +3582,12 @@ def _friend_request_cleanup_worker():
             ok, error = cleanup_expired_friend_requests_once(force=True)
             if not ok and error:
                 admin_event('db', f'friend request cleanup skipped: {error}')
+            expired_count, disable_error = cleanup_expired_content_disables_once()
+            if disable_error:
+                admin_event('db', f'content disable cleanup skipped: {disable_error}')
+            elif expired_count:
+                invalidate_content_disable_cache()
+                admin_event('admin', f'expired content disables cleared: {expired_count}')
         except Exception as exc:
             admin_event('error', f'friend request cleanup worker error: {exc}')
 
@@ -3651,10 +3717,16 @@ def _pending_interaction_watchdog_worker():
                         pending_emits.append(('state', room))
                     for old_sid, dc_info in list((getattr(room, 'disconnected_players', {}) or {}).items()):
                         try:
+                            disconnected_pidx = int(dc_info.get('player_index', -1))
+                        except Exception:
+                            disconnected_pidx = -1
+                        if getattr(room, 'mode', None) == '2v2' and _room_player_dead(room, disconnected_pidx):
+                            continue
+                        try:
                             disconnected_at = float(dc_info.get('disconnect_time') or now)
                         except Exception:
                             disconnected_at = now
-                        if now - disconnected_at >= RECONNECT_TIMEOUT_SECONDS:
+                        if now - disconnected_at >= _disconnect_info_timeout(dc_info):
                             admin_event('warning', f'reconnect_timeout watchdog room={room.room_id} sid={old_sid}', room_id=room.room_id)
                             pending_emits.append(('reconnect_timeout', room.room_id, old_sid))
             for item in pending_emits:
@@ -4124,6 +4196,8 @@ def _auto_confirm_opening_reveal_locked(room, pidx):
 
 def _auto_submit_event_sub_choice_locked(room, pidx):
     engine = room.engine
+    if bool(getattr(engine, 'player_ready', [False] * len(room.player_sids))[pidx]):
+        return False
     if not engine.needs_sub_choice(pidx):
         return False
     sub_choice = _default_event_sub_choice(engine, pidx)
@@ -5240,14 +5314,100 @@ def resolve_community_loadout(data):
     return fields, loaded_mods
 
 
+CONTENT_DISABLE_SCOPES = ('all', '1v1', '2v2', 'urf', 'random_deck', 'solo', 'tutorial')
+CONTENT_DISABLE_CACHE_SECONDS = 5.0
+CONTENT_DISABLE_FORCE_CARD_IDS = frozenset(BUILTIN_SETUP_CARD_IDS | {'Sewage'})
+_CONTENT_DISABLE_CACHE = {'ts': 0.0, 'rows': []}
+_CONTENT_DISABLE_CACHE_LOCK = threading.Lock()
+
+
+def invalidate_content_disable_cache():
+    with _CONTENT_DISABLE_CACHE_LOCK:
+        _CONTENT_DISABLE_CACHE['ts'] = 0.0
+        _CONTENT_DISABLE_CACHE['rows'] = []
+
+
+def active_content_disables(mode=None, force=False):
+    if not DB_AVAILABLE:
+        return []
+    now = time.time()
+    with _CONTENT_DISABLE_CACHE_LOCK:
+        if force or now - float(_CONTENT_DISABLE_CACHE.get('ts') or 0) >= CONTENT_DISABLE_CACHE_SECONDS:
+            try:
+                _CONTENT_DISABLE_CACHE['rows'] = list_content_disables()
+                _CONTENT_DISABLE_CACHE['ts'] = now
+            except Exception as exc:
+                admin_event('error', f'content disable load failed: {exc}')
+        rows = [dict(row) for row in (_CONTENT_DISABLE_CACHE.get('rows') or [])]
+    scope = str(mode or '').strip().lower()
+    if scope == 'any':
+        return rows
+    if not scope:
+        return [row for row in rows if row.get('scope_mode') == 'all']
+    return [row for row in rows if row.get('scope_mode') in ('all', scope)]
+
+
+def runtime_disabled_content(mode=None):
+    rows = active_content_disables(mode)
+    return {
+        'rows': rows,
+        'cards': {str(row.get('content_id')) for row in rows if row.get('content_type') == 'card'},
+        'mods': {str(row.get('content_id')) for row in rows if row.get('content_type') == 'mod'},
+    }
+
+
+def runtime_disabled_mod_card_ids(mod_filenames):
+    disabled = set(mod_filenames or [])
+    result = set()
+    if not disabled:
+        return result
+    for mod in load_all_mods():
+        if mod.filename not in disabled:
+            continue
+        result.update(
+            card.id for card in mod.cards
+            if card.id in CARD_DEFS and card.id not in ALL_MOD_SHARED_CARD_IDS
+        )
+    return result
+
+
+def apply_runtime_content_filter(card_ids, mode=None):
+    allowed = set(card_ids or [])
+    disabled = runtime_disabled_content(mode)
+    allowed.difference_update(disabled['cards'])
+    allowed.difference_update(runtime_disabled_mod_card_ids(disabled['mods']))
+    if VANILLA_MOD_FILENAME in disabled['mods']:
+        allowed.difference_update(BUILTIN_SETUP_CARD_IDS)
+    return allowed
+
+
+def runtime_card_pool_issue(card_ids, mode='1v1'):
+    if mode not in ('1v1', '2v2', 'random_deck'):
+        return ''
+    counts = {card_type: 0 for card_type in REQUIRED_CARD_TYPES}
+    for card_id in set(card_ids or []):
+        card_def = CARD_DEFS.get(card_id)
+        if not card_def or card_def.card_type not in counts:
+            continue
+        counts[card_def.card_type] += max(0, int(getattr(card_def, 'count', 0) or 0))
+    missing = [
+        f'{card_type} {counts.get(card_type, 0)}/{required}'
+        for card_type, required in DRAFT_RATIO.items()
+        if counts.get(card_type, 0) < required
+    ]
+    return '临时停用后牌池不足：' + '，'.join(missing) if missing else ''
+
+
 def get_enabled_mod_card_type_counts(disabled_mods=None):
     disabled = set(normalize_disabled_mods(disabled_mods))
     counts = {card_type: 0 for card_type in REQUIRED_CARD_TYPES}
+    has_enabled_mod = False
     for mod in load_all_mods():
         if mod.errors:
             continue
         if mod.filename in disabled:
             continue
+        has_enabled_mod = True
         if getattr(mod, 'format_version', 1) == 2:
             for card in getattr(mod, 'registries', {}).get('cards', []) or []:
                 data = card.to_dict() if hasattr(card, 'to_dict') else dict(card or {})
@@ -5258,6 +5418,8 @@ def get_enabled_mod_card_type_counts(disabled_mods=None):
             for card in mod.cards:
                 if card.id in CARD_DEFS and card.count > 0 and card.card_type in counts:
                     counts[card.card_type] += 1
+    if has_enabled_mod and 'Sewage' in ALL_MOD_SHARED_CARD_IDS and 'Sewage' in CARD_DEFS:
+        counts['bloom'] += 1
     return counts
 
 
@@ -5286,6 +5448,8 @@ def get_allowed_card_ids(disabled_mods=None):
         for card in mod.cards:
             if card.id in CARD_DEFS:
                 allowed.add(card.id)
+    if len(allowed) > 1:
+        allowed.update(card_id for card_id in ALL_MOD_SHARED_CARD_IDS if card_id in CARD_DEFS)
     return allowed
 
 
@@ -5311,6 +5475,30 @@ def get_card_mod_sources(disabled_mods=None):
                     'is_vanilla': mod.filename == VANILLA_MOD_FILENAME,
                 }
     return sources
+
+
+def get_all_mod_shared_card_memberships():
+    memberships = {card_id: [] for card_id in ALL_MOD_SHARED_CARD_IDS}
+    for mod in sort_mods_for_display(load_all_mods()):
+        if mod.errors:
+            continue
+        info = mod.info
+        mod_name = info.name if info and info.name else mod.filename
+        mod_name_cn = info.name_cn if info and getattr(info, 'name_cn', '') else mod_name
+        mod_name_en = info.name_en if info and getattr(info, 'name_en', '') else mod_name
+        entry = {
+            'key': 'vanilla' if mod.filename == VANILLA_MOD_FILENAME else mod.filename,
+            'filename': mod.filename,
+            'name': mod_name,
+            'name_cn': mod_name_cn,
+            'name_en': mod_name_en,
+            'sort_name': mod_name or mod.filename,
+            'is_vanilla': mod.filename == VANILLA_MOD_FILENAME,
+            'is_community': False,
+        }
+        for card_id in memberships:
+            memberships[card_id].append(dict(entry))
+    return memberships
 
 
 def _v2_int(value, default=0):
@@ -5399,20 +5587,25 @@ def register_v2_loadout_cards(v2_loadout):
     return registered
 
 
-def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='', community_mods=None):
+def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='', community_mods=None, runtime_mode=None):
     mods = load_all_mods()
     disabled = set(normalize_disabled_mods(disabled_mods))
     counts = {card_type: 0 for card_type in REQUIRED_CARD_TYPES}
+    has_enabled_official_mod = False
     for mod in mods:
         if mod.errors or mod.filename in disabled:
             continue
+        has_enabled_official_mod = True
         for card in mod.cards:
             if card.id in CARD_DEFS and card.count > 0 and card.card_type in counts:
                 counts[card.card_type] += 1
+    if has_enabled_official_mod and 'Sewage' in ALL_MOD_SHARED_CARD_IDS and 'Sewage' in CARD_DEFS:
+        counts['bloom'] += 1
     if not all(counts.get(card_type, 0) > 0 for card_type in REQUIRED_CARD_TYPES):
         disabled.discard(VANILLA_MOD_FILENAME)
     disabled = sorted(disabled)
     disabled_set = set(disabled)
+    runtime_disabled = runtime_disabled_content(runtime_mode)
     import hashlib as _hl
     _h = _hl.sha256()
     active_mods = []
@@ -5457,6 +5650,9 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
     v2_card_ids = register_v2_loadout_cards(v2_loadout)
     for card_id in v2_card_ids:
         allowed_card_ids.add(card_id)
+    if active_mods:
+        allowed_card_ids.update(card_id for card_id in ALL_MOD_SHARED_CARD_IDS if card_id in CARD_DEFS)
+    allowed_card_ids = apply_runtime_content_filter(allowed_card_ids, runtime_mode)
     if v2_loadout.warnings:
         for warning in v2_loadout.warnings:
             print(f'[v2 loadout] {warning}')
@@ -5478,6 +5674,7 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
         'v2_opening_event_defs': dict(v2_loadout.registries.get('opening_events') or {}),
         'mods_list': active_mods,
         'allowed_card_ids': allowed_card_ids,
+        'runtime_disabled_content': runtime_disabled['rows'],
     }
 
 
@@ -5522,6 +5719,7 @@ def resolve_mod_loadout_payload(data):
         (data or {}).get('disabled_mods', []),
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
+        runtime_mode=(data or {}).get('_runtime_mode') or (data or {}).get('mode'),
     )
     return community_fields, loadout
 
@@ -6936,6 +7134,29 @@ ADMIN_COMMAND_TREE = {
             'suspicious': {'summary': '查看可疑安全事件', 'usage': 'moderation suspicious [数量]'},
         },
     },
+    'content': {
+        'summary': '临时停用卡牌或模组',
+        'usage': 'content <disable|enable|disabled> ...',
+        'children': {
+            'disable': {
+                'summary': '停用卡牌或模组（仅影响新对局）',
+                'usage': 'content disable <card|mod> <对象> [duration=1h] [mode=all] [reason=原因] [force]',
+            },
+            'enable': {
+                'summary': '恢复卡牌或模组',
+                'usage': 'content enable <card|mod> <对象> [mode=all|all-scopes]',
+            },
+            'disabled': {
+                'summary': '查看或修改停用项',
+                'usage': 'content disabled <list|show|edit> ...',
+                'children': {
+                    'list': {'summary': '列出停用项', 'usage': 'content disabled list [card|mod|all] [active|all]'},
+                    'show': {'summary': '查看停用详情', 'usage': 'content disabled show <card|mod> <对象>'},
+                    'edit': {'summary': '修改原因、期限或范围', 'usage': 'content disabled edit <card|mod> <对象> [from=原范围] [duration=1h] [mode=新范围] [reason=原因]'},
+                },
+            },
+        },
+    },
     'data': {
         'summary': '统计、回放与数据库维护',
         'usage': 'data <summary|draftstats|rating|rebuildstats|dewbackfill|achievementbackfill> ...',
@@ -7201,6 +7422,18 @@ def _translate_structured_admin_command(parts):
         if action == 'list':
             return _quote_admin_parts(['achievementlist', *args]), None
         return None, render_admin_help(['account', 'achievement'])
+    if cmd == 'content':
+        if sub == 'disable':
+            return _quote_admin_parts(['contentdisable', *rest]), None
+        if sub == 'enable':
+            return _quote_admin_parts(['contentenable', *rest]), None
+        if sub == 'disabled':
+            action = str(rest[0] if rest else '').lower()
+            args = rest[1:]
+            if action in ('list', 'show', 'edit'):
+                return _quote_admin_parts([f'content{action}', *args]), None
+            return None, render_admin_help(['content', 'disabled'])
+        return None, render_admin_help(['content'])
     if cmd == 'account' and sub == 'rating':
         action = str(rest[0] if rest else '').lower()
         args = rest[1:]
@@ -8361,6 +8594,140 @@ def send_system_broadcast(message):
     return sent
 
 
+def _resolve_content_card(token):
+    query = str(token or '').strip().casefold()
+    matches = []
+    for card_id, card_def in CARD_DEFS.items():
+        values = {
+            str(card_id).strip().casefold(),
+            str(getattr(card_def, 'name_cn', '') or '').strip().casefold(),
+            str(getattr(card_def, 'name_en', '') or '').strip().casefold(),
+        }
+        if query in values:
+            matches.append((card_id, card_def))
+    if not matches:
+        return None, f'找不到卡牌：{token}'
+    ids = {item[0] for item in matches}
+    if len(ids) > 1:
+        return None, '卡牌名称不唯一，请改用 ID：' + '、'.join(sorted(ids))
+    return matches[0], None
+
+
+def _resolve_content_mod(token):
+    query = str(token or '').strip().casefold()
+    matches = []
+    for mod in load_all_mods():
+        info = getattr(mod, 'info', None)
+        manifest = getattr(mod, 'manifest', None)
+        values = {
+            str(mod.filename or '').strip().casefold(),
+            str(getattr(info, 'id', '') or '').strip().casefold(),
+            str(getattr(manifest, 'id', '') or '').strip().casefold(),
+            str(getattr(info, 'name', '') or '').strip().casefold(),
+            str(getattr(info, 'name_cn', '') or '').strip().casefold(),
+            str(getattr(info, 'name_en', '') or '').strip().casefold(),
+        }
+        if query in values:
+            matches.append(mod)
+    filenames = {mod.filename for mod in matches}
+    if not matches:
+        return None, f'找不到模组：{token}'
+    if len(filenames) > 1:
+        return None, '模组名称不唯一，请改用文件名：' + '、'.join(sorted(filenames))
+    return matches[0], None
+
+
+def _parse_content_duration(value):
+    text = str(value or '').strip().lower()
+    if text in ('', '0', 'permanent', 'forever', 'manual', '永久'):
+        return None
+    match = re.fullmatch(r'(\d+)(s|m|h|d|w)?', text)
+    if not match:
+        raise ValueError('时长格式应为 30m、2h、7d、1w 或 permanent')
+    number = int(match.group(1))
+    multiplier = {'s': 1, 'm': 60, 'h': 3600, 'd': 86400, 'w': 604800, None: 1}[match.group(2)]
+    seconds = number * multiplier
+    if seconds <= 0 or seconds > 10 * 365 * 86400:
+        raise ValueError('时长必须大于0且不超过10年')
+    return seconds
+
+
+def _parse_content_options(tokens, default_scope='all'):
+    options = {'scope': default_scope, 'source_scope': '', 'duration': None, 'reason': '', 'force': False, 'provided': set()}
+    reason_parts = []
+    for token in tokens:
+        text = str(token or '').strip()
+        lower = text.lower()
+        if lower == 'force':
+            options['force'] = True
+        elif lower.startswith('mode='):
+            options['scope'] = lower.split('=', 1)[1] or 'all'
+            options['provided'].add('scope')
+        elif lower.startswith('from='):
+            options['source_scope'] = lower.split('=', 1)[1] or 'all'
+        elif lower.startswith('duration='):
+            options['duration'] = _parse_content_duration(lower.split('=', 1)[1])
+            options['provided'].add('duration')
+        elif lower.startswith('reason='):
+            reason_parts.append(text.split('=', 1)[1])
+            options['provided'].add('reason')
+        elif re.fullmatch(r'\d+(?:s|m|h|d|w)', lower) or lower in ('permanent', 'forever', '永久'):
+            options['duration'] = _parse_content_duration(lower)
+            options['provided'].add('duration')
+        else:
+            reason_parts.append(text)
+            options['provided'].add('reason')
+    if options['scope'] not in CONTENT_DISABLE_SCOPES and options['scope'] != 'all-scopes':
+        raise ValueError('mode 必须是 ' + '、'.join(CONTENT_DISABLE_SCOPES))
+    if options['source_scope'] and options['source_scope'] not in CONTENT_DISABLE_SCOPES:
+        raise ValueError('from 必须是 ' + '、'.join(CONTENT_DISABLE_SCOPES))
+    options['reason'] = ' '.join(part for part in reason_parts if part).strip()
+    return options
+
+
+def _content_object(kind, token):
+    kind = str(kind or '').lower()
+    if kind == 'card':
+        resolved, error = _resolve_content_card(token)
+        if error:
+            return None, error
+        card_id, card_def = resolved
+        return {
+            'kind': 'card', 'id': card_id,
+            'label': f'{card_def.name_cn}/{card_def.name_en} ({card_id})',
+            'requires_force': card_id in CONTENT_DISABLE_FORCE_CARD_IDS,
+        }, None
+    if kind == 'mod':
+        mod, error = _resolve_content_mod(token)
+        if error:
+            return None, error
+        info = getattr(mod, 'info', None)
+        label = getattr(info, 'name_cn', '') or getattr(info, 'name', '') or mod.filename
+        return {
+            'kind': 'mod', 'id': mod.filename,
+            'label': f'{label} ({mod.filename})',
+            'requires_force': mod.filename == VANILLA_MOD_FILENAME,
+        }, None
+    return None, '类型必须是 card 或 mod'
+
+
+def _format_content_disable(row):
+    active = bool(row.get('active'))
+    expires = row.get('expires_at') or '手动恢复前'
+    expired = False
+    if active and row.get('expires_at'):
+        try:
+            expired = datetime.fromisoformat(str(row['expires_at']).replace('Z', '+00:00')).timestamp() <= time.time()
+        except Exception:
+            expired = False
+    state_label = '已过期' if expired else ('停用' if active else '已恢复')
+    return (
+        f"#{row.get('id')} [{state_label}] {row.get('content_type')} "
+        f"{row.get('content_id')} mode={row.get('scope_mode')} 到期={expires}\n"
+        f"原因：{row.get('reason') or '未填写'} | 操作者：{row.get('disabled_by') or '-'} | 更新：{row.get('updated_at') or '-'}"
+    )
+
+
 def execute_admin_command(line, _internal=False):
     raw = (line or '').strip()
     if not raw:
@@ -8389,6 +8756,104 @@ def execute_admin_command(line, _internal=False):
         return execute_admin_command(translated, _internal=True)
     if cmd == 'clear':
         return {'success': True, 'output': '', 'clear': True}
+    if cmd in ('contentdisable', 'contentenable', 'contentshow', 'contentedit'):
+        if len(parts) < 3:
+            usage = {
+                'contentdisable': 'content disable <card|mod> <对象> [duration=1h] [mode=all] [reason=原因] [force]',
+                'contentenable': 'content enable <card|mod> <对象> [mode=all|all-scopes]',
+                'contentshow': 'content disabled show <card|mod> <对象>',
+                'contentedit': 'content disabled edit <card|mod> <对象> [duration=1h] [mode=all] [reason=原因]',
+            }[cmd]
+            return {'success': False, 'output': command_error(raw, len(raw), usage)}
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        obj, error = _content_object(parts[1], parts[2])
+        if error:
+            return {'success': False, 'output': error}
+        try:
+            options = _parse_content_options(parts[3:])
+        except ValueError as exc:
+            return {'success': False, 'output': str(exc)}
+        if cmd == 'contentshow':
+            rows = [
+                row for row in list_content_disables(include_inactive=True)
+                if row.get('content_type') == obj['kind'] and row.get('content_id') == obj['id']
+            ]
+            return {'success': True, 'output': '\n\n'.join(_format_content_disable(row) for row in rows) or f'{obj["label"]} 没有停用记录。'}
+        if cmd == 'contentenable':
+            scope = options['scope'] if 'scope' in options['provided'] else 'all-scopes'
+            count = deactivate_content_disable(obj['kind'], obj['id'], scope)
+            invalidate_content_disable_cache()
+            admin_event('admin', f'content enabled type={obj["kind"]} id={obj["id"]} scope={scope} count={count}')
+            return {'success': count > 0, 'output': f'已恢复 {obj["label"]}，停用记录 {count} 条。' if count else '没有匹配的生效中停用记录。'}
+        existing_rows = [
+            row for row in list_content_disables(include_inactive=False)
+            if row.get('content_type') == obj['kind'] and row.get('content_id') == obj['id']
+        ]
+        if cmd == 'contentdisable' and obj['requires_force'] and not options['force']:
+            return {'success': False, 'output': (
+                f'{obj["label"]} 是开局流程或基础牌池依赖。\n'
+                '确认仍要停用时，在命令末尾加 force。'
+            )}
+        if cmd == 'contentdisable' and not options['force']:
+            check_modes = ('1v1', '2v2', 'random_deck') if options['scope'] == 'all' else (options['scope'],)
+            pool_errors = []
+            for check_mode in check_modes:
+                if check_mode not in ('1v1', '2v2', 'random_deck'):
+                    continue
+                candidate = set(build_mod_loadout([], runtime_mode=check_mode)['allowed_card_ids'])
+                if obj['kind'] == 'card':
+                    candidate.discard(obj['id'])
+                else:
+                    candidate.difference_update(runtime_disabled_mod_card_ids({obj['id']}))
+                    if obj['id'] == VANILLA_MOD_FILENAME:
+                        candidate.difference_update(BUILTIN_SETUP_CARD_IDS)
+                issue = runtime_card_pool_issue(candidate, check_mode)
+                if issue:
+                    pool_errors.append(f'{check_mode}: {issue}')
+            if pool_errors:
+                return {'success': False, 'output': '\n'.join(pool_errors) + '\n确认仍要停用时，在命令末尾加 force。'}
+        if cmd == 'contentedit':
+            source_scope = options['source_scope'] or (options['scope'] if 'scope' in options['provided'] else 'all')
+            existing = next((row for row in existing_rows if row.get('scope_mode') == source_scope), None)
+            if existing is None and len(existing_rows) == 1 and not options['source_scope']:
+                existing = existing_rows[0]
+                source_scope = existing.get('scope_mode') or 'all'
+            if existing is None:
+                return {'success': False, 'output': '找不到要修改的生效中停用记录，请先使用 content disabled show 查看范围。'}
+            reason = options['reason'] if 'reason' in options['provided'] else existing.get('reason', '')
+            duration = options['duration']
+            if 'duration' not in options['provided'] and existing.get('expires_at'):
+                try:
+                    expires = datetime.fromisoformat(str(existing['expires_at']).replace('Z', '+00:00'))
+                    duration = max(1, int(expires.timestamp() - time.time()))
+                except Exception:
+                    duration = None
+            target_scope = options['scope'] if 'scope' in options['provided'] else source_scope
+            if target_scope != source_scope:
+                deactivate_content_disable(obj['kind'], obj['id'], source_scope)
+        else:
+            reason = options['reason'] or '临时安全停用'
+            duration = options['duration']
+            target_scope = options['scope']
+        actor = str(session.get('username') or 'adminconsole')
+        row = upsert_content_disable(
+            obj['kind'], obj['id'], target_scope,
+            reason=reason, disabled_by=actor, duration_seconds=duration,
+        )
+        invalidate_content_disable_cache()
+        action_label = '修改停用' if cmd == 'contentedit' else '停用'
+        admin_event('admin', f'content {action_label} type={obj["kind"]} id={obj["id"]} scope={target_scope} reason={reason}')
+        return {'success': True, 'output': f'已{action_label}（仅影响之后创建的对局）：\n{obj["label"]}\n{_format_content_disable(row)}'}
+    if cmd == 'contentlist':
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        kind = str(parts[1] if len(parts) > 1 else 'all').lower()
+        state = str(parts[2] if len(parts) > 2 else 'active').lower()
+        if kind not in ('all', 'card', 'mod') or state not in ('active', 'all'):
+            return {'success': False, 'output': command_error(raw, len(raw), 'content disabled list [card|mod|all] [active|all]')}
+        rows = list_content_disables('' if kind == 'all' else kind, include_inactive=state == 'all')
+        return {'success': True, 'output': '\n\n'.join(_format_content_disable(row) for row in rows) or '当前没有匹配的停用项。'}
     if cmd in ('gitpull', 'pullmain', 'updatecode'):
         result = run_admin_git_pull_main()
         admin_event('admin' if result.get('success') else 'error', f"gitpull: {result.get('output', '')[:240]}")
@@ -9371,6 +9836,14 @@ def admin_completions(line):
             pass
         return sorted(value for value in values if value)
 
+    def mod_values():
+        values = []
+        for mod in sort_mods_for_display(load_all_mods()):
+            info = getattr(mod, 'info', None)
+            mod_id = str(getattr(info, 'id', '') or '').strip()
+            values.append(mod_id if mod_id and ' ' not in mod_id else shlex.quote(mod.filename))
+        return values
+
     public_roots = [name for name, meta in ADMIN_COMMAND_TREE.items() if not meta.get('hidden')]
     if position == 0:
         return filtered(public_roots)
@@ -9479,6 +9952,35 @@ def admin_completions(line):
 
     if cmd == 'lobby' and sub == 'chat' and position == 2:
         return filtered(['50', '100', '300'])
+    if cmd == 'content':
+        if sub in ('disable', 'enable'):
+            if position == 2:
+                return filtered(['card', 'mod'])
+            if position == 3 and len(parts) > 2:
+                return card_values()[:40] if parts[2].lower() == 'card' else filtered(mod_values())
+            if position >= 4:
+                values = ['mode=all', 'mode=1v1', 'mode=2v2', 'mode=urf', 'mode=random_deck', 'mode=solo']
+                if sub == 'disable':
+                    values += ['duration=30m', 'duration=2h', 'duration=1d', 'duration=7d', 'duration=permanent', 'reason=', 'force']
+                else:
+                    values += ['mode=all-scopes']
+                return filtered(values)
+        if sub == 'disabled':
+            if position == 2:
+                return filtered(['list', 'show', 'edit'])
+            action = parts[2].lower() if len(parts) > 2 else ''
+            if action == 'list':
+                if position == 3:
+                    return filtered(['all', 'card', 'mod'])
+                if position == 4:
+                    return filtered(['active', 'all'])
+            if action in ('show', 'edit'):
+                if position == 3:
+                    return filtered(['card', 'mod'])
+                if position == 4 and len(parts) > 3:
+                    return card_values()[:40] if parts[3].lower() == 'card' else filtered(mod_values())
+                if action == 'edit' and position >= 5:
+                    return filtered(['from=all', 'from=1v1', 'from=2v2', 'mode=all', 'mode=1v1', 'mode=2v2', 'mode=urf', 'mode=random_deck', 'mode=solo', 'duration=30m', 'duration=2h', 'duration=1d', 'duration=7d', 'duration=permanent', 'reason='])
     if cmd == 'moderation':
         if sub == 'mute' and position == 2:
             return filtered(online_values())
@@ -10438,7 +10940,9 @@ def start_game(room):
             room.engine.log = []
         if hasattr(room.engine, '_log_compaction_floor'):
             room.engine._log_compaction_floor = 0
-        room.engine.start_game()
+        if room.engine.start_game() is False:
+            admin_event('warning', f'ignored duplicate game start room={room.room_id}', room_id=room.room_id)
+            return
         room.started_at = time.time()
         admin_event('game', f'room {room.room_id} started mode={room.mode}')
         record_room_replay_keyframe(room, 'game_start')
@@ -10540,7 +11044,8 @@ def _reset_player_for_solo(ps, deck_entries, is_first):
 def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=None, player_names=None, start_label='单人训练场开始', loadout=None):
     engine = GameEngine()
     if loadout is not None:
-        apply_v2_loadout_to_engine(engine, loadout)
+        apply_v2_loadout_to_engine(engine, loadout, 'solo')
+        engine.allowed_card_ids = set(loadout.get('allowed_card_ids') or []) or None
     engine.player_names = list(player_names) if player_names else ['Player A', 'Player B']
     engine.phase = 'playing'
     force_first = [idx for idx, event_id in enumerate((event0, event1)) if event_id == 7]
@@ -10554,6 +11059,9 @@ def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=N
     engine.pending_choice = None
     _reset_player_for_solo(engine.players[0], deck0, engine.first_player == 0)
     _reset_player_for_solo(engine.players[1], deck1, engine.first_player == 1)
+    if engine.allowed_card_ids is not None:
+        for ps in engine.players:
+            ps.deck = [card for card in ps.deck if card.def_id in engine.allowed_card_ids]
     for i in range(2):
         if engine.opening_event_picks[i] is not None:
             engine._apply_opening_event(i)
@@ -11085,6 +11593,8 @@ def reconnect_timeout(room_id, old_sid):
             record_room_replay_action(room, 'disconnect_timeout', int(dc_info.get('player_index', -1)), {
                 'nickname': dc_info.get('nickname', '?'),
                 'game_over': ended,
+                'disconnect_attempt': int(dc_info.get('disconnect_attempt', 1) or 1),
+                'reconnect_timeout': int(_disconnect_info_timeout(dc_info)),
             })
             if room.mode == '2v2':
                 if ended:
@@ -11591,7 +12101,7 @@ def handling_users():
     return jsonify({'success': True, **data})
 
 
-@app.route('/api/handling/users/<int:user_id>/ban', methods=['POST'])
+@app.route('/api/handling/users/<int:user_id>/ban', methods=['POST', 'PATCH'])
 def handling_user_ban(user_id):
     if not DB_AVAILABLE:
         return db_unavailable_response()
@@ -11602,6 +12112,13 @@ def handling_user_ban(user_id):
         duration_seconds = validate_int(data.get('duration_seconds', 0), default=0, minimum=0, maximum=60 * 60 * 24 * 1000, name='duration_seconds')
     except ValueError as exc:
         return _json_error(str(exc), 400)
+    if request.method == 'PATCH':
+        user, error = update_active_user_ban(user_id, reason, duration_seconds=duration_seconds or None)
+        if error:
+            return _json_error(error, 400)
+        clear_leaderboard_cache()
+        admin_event('moderation', f'handling updated user ban {user.get("username") if user else user_id}: {reason or "-"}')
+        return jsonify({'success': True, 'user': user, 'kicked': 0})
     user, error = admin_set_user_ban(user_id, banned, reason, duration_seconds=duration_seconds or None)
     if error:
         return _json_error(error, 400)
@@ -11619,6 +12136,66 @@ def handling_user_ban(user_id):
             broadcast_lobby()
     admin_event('moderation', f'handling {"banned" if banned else "unbanned"} user {user.get("username") if user else user_id}: {reason or "-"}')
     return jsonify({'success': True, 'user': user, 'kicked': len(kicked)})
+
+
+@app.route('/api/handling/moderation')
+def handling_moderation_records():
+    started = time.perf_counter()
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        kind = validate_str(request.args.get('kind', 'all'), min_len=1, max_len=20, pattern=r'[A-Za-z_]+', name='kind')
+        data = list_active_moderation_records(
+            kind=kind,
+            limit=validate_int(request.args.get('limit', 40), default=40, minimum=1, maximum=50, name='limit'),
+            offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
+        )
+        log_admin_api_timing(
+            '/api/handling/moderation',
+            (time.perf_counter() - started) * 1000,
+            rows=len(data.get('items') or []),
+            total=data.get('total'),
+            limit=data.get('limit'),
+        )
+        return jsonify({'success': True, **data})
+    except Exception as exc:
+        admin_event('error', f'handling moderation query failed: {exc}')
+        log_admin_api_timing('/api/handling/moderation', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
+        return jsonify({'success': False, 'error': '处罚记录暂时不可用'}), 500
+
+
+@app.route('/api/handling/warnings/<int:warning_id>', methods=['PATCH', 'DELETE'])
+def handling_update_warning(warning_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    active = request.method != 'DELETE' and bool(data.get('active', True))
+    try:
+        reason = validate_str(data.get('reason', ''), max_len=500, name='reason', truncate=True)
+        duration_seconds = validate_int(
+            data.get('duration_seconds', 3600),
+            default=3600,
+            minimum=0,
+            maximum=60 * 60 * 24 * 1000,
+            name='duration_seconds',
+        )
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+    item, error = update_user_warning(warning_id, reason, duration_seconds, active=active)
+    if error:
+        return _json_error(error, 400)
+    payload = {
+        'id': item.get('id'),
+        'message': item.get('reason') or '请注意游戏内行为',
+        'expires_at': item.get('expires_at'),
+        'created_at': item.get('created_at'),
+    }
+    with _lock:
+        target_sids = list(_online_sids_for_user(item.get('user_id'), item.get('username') or ''))
+    for sid in target_sids:
+        socketio.emit('account_warning' if active else 'account_warning_removed', payload, room=sid)
+    admin_event('moderation', f'handling {"updated" if active else "ended"} warning #{warning_id}: {reason or "-"}')
+    return jsonify({'success': True, 'warning': item})
 
 
 @app.route('/api/handling/ip-bans')
@@ -11671,10 +12248,22 @@ def handling_set_ip_ban():
     return jsonify({'success': True, 'ip_ban': row, 'kicked': len(kicked)})
 
 
-@app.route('/api/handling/ip-bans/<path:ip>', methods=['DELETE'])
+@app.route('/api/handling/ip-bans/<path:ip>', methods=['PATCH', 'DELETE'])
 def handling_unban_ip(ip):
     if not DB_AVAILABLE:
         return db_unavailable_response()
+    if request.method == 'PATCH':
+        data = request.get_json(silent=True) or {}
+        try:
+            reason = validate_str(data.get('reason', ''), max_len=300, name='reason', truncate=True)
+            duration_seconds = validate_int(data.get('duration_seconds', 0), default=0, minimum=0, maximum=60 * 60 * 24 * 1000, name='duration_seconds')
+        except ValueError as exc:
+            return _json_error(str(exc), 400)
+        row, error = update_active_ip_ban(ip, reason, duration_seconds=duration_seconds or None)
+        if error:
+            return _json_error(error, 400)
+        admin_event('moderation', f'handling updated ip ban {ip}: {reason or "-"}')
+        return jsonify({'success': True, 'ip_ban': row, 'kicked': 0})
     row, error = set_ip_ban(ip, False)
     if error:
         return _json_error(error, 400)
@@ -13101,13 +13690,16 @@ def api_cards():
     except Exception as exc:
         return _json_error(str(exc), 400)
     include_all_mods = str(request.args.get('include_all_mods', '')).strip().lower() in {'1', 'true', 'yes', 'all'}
+    runtime_mode = str(request.args.get('mode', '') or '').strip().lower() or None
     loadout = build_mod_loadout(
         disabled_mods,
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
+        runtime_mode=runtime_mode,
     )
     allowed_card_ids = set(CARD_DEFS.keys()) if include_all_mods else loadout['allowed_card_ids']
     card_mod_sources = get_card_mod_sources([])
+    shared_card_memberships = get_all_mod_shared_card_memberships()
     if community_mod:
         selected_hashes = {
             str(entry.get('sha256') or '').strip().lower()
@@ -13124,13 +13716,27 @@ def api_cards():
                     'is_community': True,
                 }
     result = {}
+    disable_rows = active_content_disables('any')
     for def_id, card_def in CARD_DEFS.items():
         source = card_mod_sources.get(def_id, {})
+        card_disable_rows = [
+            row for row in disable_rows
+            if (row.get('content_type') == 'card' and row.get('content_id') == def_id)
+            or (
+                def_id not in ALL_MOD_SHARED_CARD_IDS
+                and row.get('content_type') == 'mod'
+                and row.get('content_id') == source.get('filename')
+            )
+        ]
         image_url = str(getattr(card_def, 'image_url', '') or getattr(card_def, 'image', '') or '')
         upgraded_image_url = str(getattr(card_def, 'upgraded_image_url', '') or getattr(card_def, 'upgraded_image', '') or '')
         card_payload = {
             'id': card_def.id,
             'visible_in_current_loadout': def_id in allowed_card_ids,
+            'temporarily_disabled': bool(card_disable_rows),
+            'temporary_disable_reason': next((row.get('reason') for row in card_disable_rows if row.get('reason')), ''),
+            'temporary_disable_until': next((row.get('expires_at') for row in card_disable_rows if row.get('expires_at')), None),
+            'temporary_disable_scopes': sorted({str(row.get('scope_mode') or 'all') for row in card_disable_rows}),
             'name_en': card_def.name_en,
             'name_cn': card_def.name_cn,
             'source_mod_filename': source.get('filename', ''),
@@ -13140,6 +13746,7 @@ def api_cards():
             'source_mod_sort_name': source.get('sort_name', ''),
             'source_mod_is_vanilla': bool(source.get('is_vanilla', False)),
             'source_mod_is_community': bool(source.get('is_community', False)),
+            'source_mod_memberships': shared_card_memberships.get(def_id, []),
             'cost_e': card_def.cost_e,
             'cost_m': card_def.cost_m,
             'card_type': card_def.card_type,
@@ -13215,22 +13822,49 @@ def api_opening_events():
 @app.route('/api/mods')
 def api_mods():
     mods = load_all_mods()
+    runtime_rows = active_content_disables('any')
+    runtime_mod_rows = {}
+    for row in runtime_rows:
+        if row.get('content_type') == 'mod':
+            runtime_mod_rows.setdefault(str(row.get('content_id')), []).append(row)
+    shared_payloads = {}
+    for mod in mods:
+        for card in mod.to_dict(include_validation=False).get('cards', []) or []:
+            card_id = str(card.get('legacy_id') or card.get('id') or '')
+            if card_id in ALL_MOD_SHARED_CARD_IDS and card_id not in shared_payloads:
+                shared_payloads[card_id] = copy.deepcopy(card)
     result = []
     for mod in mods:
         d = mod.to_dict(include_validation=True)
         d['filename'] = mod.filename
         d['is_vanilla'] = mod.filename == VANILLA_MOD_FILENAME
+        runtime_disable = runtime_mod_rows.get(mod.filename, [])
+        d['temporarily_disabled'] = bool(runtime_disable)
+        d['temporary_disable_reason'] = next((row.get('reason') for row in runtime_disable if row.get('reason')), '')
+        d['temporary_disable_until'] = next((row.get('expires_at') for row in runtime_disable if row.get('expires_at')), None)
+        d['temporary_disable_scopes'] = sorted({str(row.get('scope_mode') or 'all') for row in runtime_disable})
+        cards = list(d.get('cards') or [])
+        existing_ids = {str(card.get('legacy_id') or card.get('id') or '') for card in cards}
+        shared_ids = []
+        for card_id in ALL_MOD_SHARED_CARD_IDS:
+            if card_id not in existing_ids and card_id in shared_payloads:
+                cards.append(copy.deepcopy(shared_payloads[card_id]))
+            if card_id in shared_payloads:
+                shared_ids.append(card_id)
+        d['cards'] = cards
+        d['cards_count'] = len(cards)
+        d['shared_card_ids'] = sorted(shared_ids)
         if getattr(mod, 'format_version', 1) == 2:
             d['content_hash'] = getattr(mod, 'content_hash', '') or getattr(mod, 'validation_hash', '')
             if hasattr(mod, 'resource_counts'):
                 d['resource_counts'] = mod.resource_counts()
             d['card_type_counts'] = {
-                card_type: sum(1 for card in mod.cards if card.card_type == card_type and card.count > 0)
+                card_type: sum(1 for card in cards if str(card.get('card_type') or '') == card_type and int(card.get('count', 0) or 0) > 0)
                 for card_type in REQUIRED_CARD_TYPES
             }
         else:
             d['card_type_counts'] = {
-                card_type: sum(1 for card in mod.cards if card.card_type == card_type and card.count > 0)
+                card_type: sum(1 for card in cards if str(card.get('card_type') or '') == card_type and int(card.get('count', 0) or 0) > 0)
                 for card_type in REQUIRED_CARD_TYPES
             }
         result.append(d)
@@ -13882,6 +14516,9 @@ def on_login(data):
         if not special_profile and not validate_nickname(name):
             emit('login_fail', {'reason': 'Invalid nickname. Use 1-16 display-width characters; avoid pure numbers, pure symbols, or repeated -/_.'})
             return
+        if not special_profile and check_nickname_risk(name, guest=True).get('blocked'):
+            emit('login_fail', {'reason': '昵称中包含违禁词'})
+            return
         if not special_profile and DB_AVAILABLE and get_user_by_username(name):
             emit('login_fail', {'reason': 'Registered nickname reserved'})
             return
@@ -13917,6 +14554,7 @@ def on_login(data):
             disabled_mods,
             community_mod=community_mod,
             community_hash=community_fields.get('community_mod_hash', ''),
+            runtime_mode=preferred_mode,
         )
     except Exception as exc:
         emit('login_fail', {'reason': f'社区模组加载失败: {exc}'})
@@ -14178,6 +14816,9 @@ def on_update_mod_settings(data):
             })
             return
         current_disabled_mods = list(player.get('disabled_mods', []))
+        runtime_mode = player.get('mode', '1v1')
+    data = dict(data or {})
+    data['_runtime_mode'] = runtime_mode
     try:
         community_fields, loadout = resolve_mod_loadout_payload(data)
     except Exception as exc:
@@ -14446,8 +15087,14 @@ def on_accept_team_match(data):
         first_sid = all_sids[0]
         if first_sid in players and players[first_sid].get('allowed_card_ids'):
             allowed = players[first_sid]['allowed_card_ids']
+        if allowed is not None:
+            allowed = apply_runtime_content_filter(allowed, '2v2')
+            pool_issue = runtime_card_pool_issue(allowed, '2v2')
+            if pool_issue:
+                emit_match_start_failed(all_sids, pool_issue, reason='content_temporarily_disabled')
+                return
         room = GameRoom(room_id, all_sids, allowed, mode='2v2', beta_mode=bool(players[first_sid].get('beta_mode', False)))
-        apply_v2_loadout_to_engine(room.engine, players.get(first_sid, {}))
+        apply_v2_loadout_to_engine(room.engine, players.get(first_sid, {}), room.mode)
         rooms[room_id] = room
         admin_event('game', f"room {room_id} created mode=2v2: {' / '.join(players[s]['nickname'] for s in all_sids)}")
         for s in all_sids:
@@ -14514,8 +15161,12 @@ def on_disconnect():
                 if pidx >= 0 and room.engine.phase not in ('game_over',):
                     profile = room.store_player_profile(sid, pidx, player)
                     profile['disconnect_time'] = time.time()
-                    room.disconnected_players[sid] = dict(profile)
                     dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
+                    if not dead_2v2_player:
+                        disconnect_attempt, reconnect_timeout_seconds = room.allocate_reconnect_timeout(pidx)
+                        profile['disconnect_attempt'] = disconnect_attempt
+                        profile['reconnect_timeout'] = reconnect_timeout_seconds
+                    room.disconnected_players[sid] = dict(profile)
                     current_phase = getattr(room.engine, 'phase', '')
                     pregame_disconnect = current_phase in ('draft', 'event_select', 'event_reveal')
                     unblocked_pending = False
@@ -14523,30 +15174,26 @@ def on_disconnect():
                         unblocked_pending = _resolve_disconnect_blockers(room, pidx)
                     admin_event(
                         'player',
-                        f'{nickname} disconnect flow room={room_id} phase={current_phase} pregame={pregame_disconnect} dead_2v2={dead_2v2_player}',
+                        f'{nickname} disconnect flow room={room_id} phase={current_phase} pregame={pregame_disconnect} '
+                        f'dead_2v2={dead_2v2_player} attempt={profile.get("disconnect_attempt", 0)} '
+                        f'timeout={profile.get("reconnect_timeout", 0)}',
                         sid=sid,
                         room_id=room_id,
                     )
                     if not dead_2v2_player:
-                        for other_sid in room.player_sids:
-                            if other_sid != sid and other_sid in players:
-                                pending_emits.append(('opponent_disconnected', {
-                                    'reconnect_timeout': RECONNECT_TIMEOUT_SECONDS,
-                                    'wait_forever': False,
-                                    'opponent_nickname': nickname,
-                                }, other_sid))
-                        timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), reconnect_timeout, args=[room_id, sid])
+                        if reconnect_timeout_seconds > 0:
+                            for other_sid in room.player_sids:
+                                if other_sid != sid and other_sid in players:
+                                    pending_emits.append(('opponent_disconnected', {
+                                        'reconnect_timeout': reconnect_timeout_seconds,
+                                        'disconnect_attempt': disconnect_attempt,
+                                        'wait_forever': False,
+                                        'opponent_nickname': nickname,
+                                    }, other_sid))
+                        timer = threading.Timer(float(reconnect_timeout_seconds), reconnect_timeout, args=[room_id, sid])
                         room.reconnect_timers[sid] = timer
                         timer.daemon = True
                         timer.start()
-                        both_dc = _room_all_blocking_players_disconnected(room)
-                        if both_dc:
-                            for t in room.reconnect_timers.values():
-                                t.cancel()
-                            room.reconnect_timers.clear()
-                            room.both_dc_timer = threading.Timer(float(RECONNECT_TIMEOUT_SECONDS), both_disconnected_cleanup, args=[room_id])
-                            room.both_dc_timer.daemon = True
-                            room.both_dc_timer.start()
                     del players[sid]
                     if dead_2v2_player or unblocked_pending:
                         pending_emits.append(('broadcast_game_state', room, None))
@@ -14939,8 +15586,13 @@ def on_accept_invite(data):
         room_id = _next_room_id
         _next_room_id += 1
         allowed_card_ids = inviter.get('allowed_card_ids') or get_allowed_card_ids(inviter.get('disabled_mods', []))
+        allowed_card_ids = apply_runtime_content_filter(allowed_card_ids, inviter.get('mode', '1v1'))
+        pool_issue = runtime_card_pool_issue(allowed_card_ids, inviter.get('mode', '1v1'))
+        if pool_issue:
+            emit_match_start_failed([inviter_sid, sid], pool_issue, reason='content_temporarily_disabled')
+            return
         room = GameRoom(room_id, [inviter_sid, sid], allowed_card_ids, mode=inviter.get('mode', '1v1'), beta_mode=bool(inviter.get('beta_mode', False)))
-        apply_v2_loadout_to_engine(room.engine, inviter)
+        apply_v2_loadout_to_engine(room.engine, inviter, room.mode)
         rooms[room_id] = room
         admin_event('game', f"room {room_id} created mode={room.mode}: {inviter['nickname']} vs {accepter['nickname']}")
         inviter['room_id'] = room_id
@@ -15468,6 +16120,11 @@ def on_submit_event_sub_choice(data):
         if pidx < 0:
             return
         engine = room.engine
+        if getattr(engine, 'phase', None) not in ('event_select', 'event_reveal', 'draft'):
+            return
+        if bool(getattr(engine, 'player_ready', [False] * len(room.player_sids))[pidx]):
+            schedule_pregame_state(room, pidx)
+            return
         if str(engine.opening_event_picks[pidx]) == '5':
             raw_ids = []
             if isinstance(sub_choice, dict):
@@ -15549,6 +16206,7 @@ def on_solo_start(data):
             disabled_mods,
             community_mod=community_mod,
             community_hash=community_fields.get('community_mod_hash', ''),
+            runtime_mode='solo',
         )
     except Exception as exc:
         emit('server_error', {'message': f'社区模组加载失败: {exc}'})
@@ -15590,6 +16248,7 @@ def on_tutorial_start(data=None):
         'Stinger', 'Fire', 'Disc', 'Bubble', 'Mine',
         'Basic', 'Bone', 'Mark', 'Sewage', 'MagicBubble',
     ]
+    tutorial_allowed = apply_runtime_content_filter(CARD_DEFS.keys(), 'tutorial')
     with _lock:
         tutorial_sessions.add(sid)
         solo_sessions[sid] = create_solo_engine(
@@ -15603,6 +16262,9 @@ def on_tutorial_start(data=None):
             start_label='新手教程开始',
         )
         engine = solo_sessions[sid]
+        engine.allowed_card_ids = tutorial_allowed
+        for ps in engine.players:
+            ps.deck = [card for card in ps.deck if card.def_id in tutorial_allowed]
         if sid in players:
             players[sid]['status'] = 'tutorial'
         socketio.emit('game_phase', {'phase': 'playing', 'solo': True, 'tutorial': True}, room=sid)
@@ -16722,6 +17384,16 @@ def on_rematch(data=None):
                             'total': len(room.player_sids),
                         }, room=other_sid)
             if len(room._rematch_votes) == len(room.player_sids):
+                stored_allowed = set()
+                if room.player_sids and room.player_sids[0] in players:
+                    stored_allowed = set(players[room.player_sids[0]].get('allowed_card_ids', []))
+                next_allowed = apply_runtime_content_filter(stored_allowed, room.mode) if stored_allowed else None
+                pool_issue = runtime_card_pool_issue(next_allowed, room.mode) if next_allowed is not None else ''
+                if pool_issue:
+                    room._rematch_votes = set()
+                    emit_match_start_failed(room.player_sids, pool_issue, reason='content_temporarily_disabled')
+                    emit_rematch_state(room)
+                    return
                 room._rematch_votes = set()
                 room._returned_lobby_sids = set()
                 room._returned_lobby_names = {}
@@ -16739,12 +17411,13 @@ def on_rematch(data=None):
                 room.started_at = None
                 room.pregame_deadlines = {}
                 room.pregame_state_last_resend = 0.0
+                room.disconnect_attempt_counts = [0 for _ in room.player_sids]
                 room.chat_history = []
                 room.chat_sequence = 0
                 reset_room_replay(room)
                 if room.player_sids and room.player_sids[0] in players:
-                    room.engine.allowed_card_ids = set(players[room.player_sids[0]].get('allowed_card_ids', [])) or None
-                    apply_v2_loadout_to_engine(room.engine, players[room.player_sids[0]])
+                    room.engine.allowed_card_ids = next_allowed
+                    apply_v2_loadout_to_engine(room.engine, players[room.player_sids[0]], room.mode)
                 names = []
                 for pidx, psid in enumerate(room.player_sids):
                     names.append(room_player_nickname(room, psid, f'Player {pidx + 1}'))

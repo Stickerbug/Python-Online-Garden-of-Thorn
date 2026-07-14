@@ -31,6 +31,10 @@ ACTION_BY_LEVEL = {
     4: 'reject_mute',
 }
 
+NICKNAME_BLOCK_LEVEL = 3
+GUEST_NICKNAME_BLOCK_LEVEL = 2
+NICKNAME_ALWAYS_BLOCK_CATEGORIES = {'sexual', 'political'}
+
 _CONTROL_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
 _REPEAT_RE = re.compile(r'(.)\1{2,}')
 
@@ -209,6 +213,7 @@ def check_message_risk(text):
             action = _rule_action(rule, level)
         matched.append({
             'id': str(rule.get('id') or rule.get('pattern') or 'rule')[:120],
+            'category': str(rule.get('category') or '').strip().lower()[:80],
             'level': level,
             'action': _rule_action(rule, level),
             'matches': [str(term)[:80] for term in matched_terms[:5]],
@@ -222,6 +227,27 @@ def check_message_risk(text):
         'sanitized_text': sanitized,
         'normalized_message': normalized,
         'checked_at': int(time.time()),
+    }
+
+
+def check_nickname_risk(text, guest=False):
+    """Apply the shared chat rules with stricter, nickname-specific thresholds."""
+    result = check_message_risk(text)
+    threshold = GUEST_NICKNAME_BLOCK_LEVEL if guest else NICKNAME_BLOCK_LEVEL
+    matched_categories = {
+        str(item.get('category') or '').strip().lower()
+        for item in result.get('matched_rules') or []
+        if isinstance(item, dict)
+    }
+    blocked = (
+        int(result.get('risk_level') or 0) >= threshold
+        or bool(matched_categories & NICKNAME_ALWAYS_BLOCK_CATEGORIES)
+    )
+    return {
+        **result,
+        'blocked': blocked,
+        'threshold': threshold,
+        'matched_categories': sorted(category for category in matched_categories if category),
     }
 
 

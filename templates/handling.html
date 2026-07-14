@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>举报处理</title>
-<link rel="stylesheet" href="/static/css/handling.css?v=6">
+  <link rel="stylesheet" href="/static/css/handling.css?v=8">
 </head>
 <body>
 <div id="login" class="login-view">
@@ -28,12 +28,14 @@
       <button id="logout" class="btn danger">退出</button>
     </div>
   </header>
+  <div id="action-result" class="result page-result" aria-live="polite"></div>
 
-  <section class="layout">
+  <section id="handling-layout" class="layout">
     <aside class="left panel">
       <div class="tabs" role="tablist">
         <button class="tab active" data-tab="reports">举报</button>
         <button class="tab" data-tab="users">玩家</button>
+        <button class="tab" data-tab="moderation">处罚</button>
         <button class="tab" data-tab="ip">IP封禁</button>
       </div>
       <div id="reports-tools" class="tools">
@@ -56,15 +58,23 @@
         <button id="ip-duration" class="btn">时长</button>
         <button id="ban-ip" class="btn danger">封禁IP</button>
       </div>
+      <div id="moderation-tools" class="tools hidden">
+        <select id="moderation-filter">
+          <option value="all">全部有效处罚</option>
+          <option value="account_ban">账号封禁</option>
+          <option value="warning">警告</option>
+        </select>
+        <div class="hint">只在打开或手动刷新时读取，最多返回 40 条。</div>
+      </div>
       <div id="list" class="list"></div>
     </aside>
 
     <section class="center panel">
-      <div id="empty" class="empty">选择一条举报、玩家或 IP 记录。</div>
+      <div id="empty" class="empty">选择一条举报、玩家、处罚或 IP 记录。</div>
       <article id="detail" class="detail hidden"></article>
     </section>
 
-    <aside class="right panel">
+    <aside id="handling-actions" class="right panel">
       <h2>处理</h2>
       <label>举报结论</label>
       <select id="resolve-action">
@@ -110,7 +120,6 @@
       <label>备注</label>
       <textarea id="note" rows="6" placeholder="处理说明"></textarea>
       <button id="resolve" class="btn primary">提交处理</button>
-      <div id="action-result" class="result"></div>
     </aside>
   </section>
 </main>
@@ -138,6 +147,6 @@
   </div>
 </div>
 
-<script src="/static/js/handling.js?v=6"></script>
+<script src="/static/js/handling.js?v=8"></script>
 </body>
 </html>

@@ -232,6 +232,9 @@ class GameEngineInfiniteFire(GameEngine):
         self.start_game()
 
     def start_game(self):
+        if self._game_start_applied:
+            return False
+        self._game_start_applied = True
         self.phase = 'playing'
         self._build_infinite_pool()
         self.first_player = random.randint(0, 1)
@@ -286,6 +289,7 @@ class GameEngineInfiniteFire(GameEngine):
         if self.game_over:
             return
         self._start_player_turn(self.first_player)
+        return True
 
     def _start_draw_phase(self):
         for i in range(2):
@@ -365,7 +369,7 @@ class GameEngineInfiniteFire(GameEngine):
                     opp_id, eq.card_instance, 'enemy_turn_start', None,
                     {'source_id': opp_id, 'target_id': player_id}):
                 continue
-            if eq.def_id == 'Corruption' and not eq.corruption_active:
+            if self._equipment_is(eq, 'Corruption', 'vanilla:corruption') and not eq.corruption_active:
                 eq.corruption_active = True
                 self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)

@@ -279,7 +279,7 @@ OPENING_EVENT_I18N = {
     },
     10: {
         'name': _t('魔力加速', 'Magic Acceleration', 'Accélération magique', 'Aceleração Mágica', 'Ускорение магии', '魔力加速'),
-        'desc': _t('每打出2张牌回复1[[icon:M]]', 'Recover 1[[icon:M]] for every 2 cards you play', 'Récupérez 1[[icon:M]] toutes les 2 cartes jouées', 'Recupere 1[[icon:M]] a cada 2 cartas jogadas', 'Восстанавливайте 1[[icon:M]] за каждые 2 сыгранные карты', 'カードを2枚使用するたびに1[[icon:M]]回復'),
+        'desc': _t('每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'Recover 1[[icon:M]] for every 2 cards you play that cost no [[icon:M]]', 'Récupérez 1[[icon:M]] toutes les 2 cartes jouées ne coûtant aucun [[icon:M]]', 'Recupere 1[[icon:M]] a cada 2 cartas jogadas que não custem [[icon:M]]', 'Восстанавливайте 1[[icon:M]] за каждые 2 сыгранные карты без затрат [[icon:M]]', '[[icon:M]]を消費しないカードを2枚使用するたびに1[[icon:M]]回復'),
     },
     11: {
         'name': _t('花序编排', 'Floral Arrangement', 'Arrangement floral', 'Arranjo Floral', 'Цветочная композиция', '花序編成'),

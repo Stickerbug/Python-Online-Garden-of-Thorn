@@ -1481,7 +1481,7 @@ class LocalSoloEngine {
         } else if (eventId === 10) {
             ps.custom_vars.setup_magic_acceleration = 1;
             ps.custom_vars.setup_magic_acceleration_play_count = 0;
-            this.logMsg(`${this.pn(playerId)}【魔力加速】：每打出2张牌回复1M`);
+            this.logMsg(`${this.pn(playerId)}【魔力加速】：每打出2张不消耗M的牌回复1M`);
         } else if (eventId === 11) {
             const selectedDefIds = (sub.topdeck_def_ids || sub.def_ids || []).slice(0, 3);
             const moved = [];
@@ -1629,7 +1629,7 @@ class LocalSoloEngine {
                     source_id: oppId,
                     target_id: playerId,
                 });
-            } else if (eq.def_id === 'Corruption' && !eq.corruption_active) {
+            } else if (this.cardIs(eq.card_instance || eq, 'Corruption', 'vanilla:corruption') && !eq.corruption_active) {
                 eq.corruption_active = true;
                 this.logMsg(`${this.pn(oppId)}的腐化效果激活`);
             }
@@ -4608,6 +4608,7 @@ class LocalSoloEngine {
             target_player_id: targetId,
             original_choice: { target_player_id: targetId },
             already_paid: true,
+            keep_paid: true,
         };
     }
 
@@ -5293,6 +5294,12 @@ class LocalSoloEngine {
     applyMagicAccelerationAfterPlay(playerId, card = null) {
         const ps = this.players[playerId];
         if (toInt(ps.custom_vars.setup_magic_acceleration, 0) <= 0) return;
+        if (card && toInt(card.cost_m, 0) > 0) {
+            delete ps.custom_vars.setup_magic_acceleration_last_before;
+            delete ps.custom_vars.setup_magic_acceleration_last_gain;
+            ps.custom_vars.setup_magic_acceleration_last_instance_id = -1;
+            return;
+        }
         const previousCount = Math.abs(toInt(ps.custom_vars.setup_magic_acceleration_play_count, 0)) % 2;
         let nextCount = previousCount + 1;
         let gained = 0;
@@ -5335,7 +5342,7 @@ class LocalSoloEngine {
         let count = 0;
         this.players.forEach(ps => {
             ps.equipment.forEach(eq => {
-                if (eq.def_id === 'Corruption' && eq.corruption_active) count += 1;
+                if (this.cardIs(eq.card_instance || eq, 'Corruption', 'vanilla:corruption') && eq.corruption_active) count += 1;
             });
         });
         return count;
@@ -5560,7 +5567,7 @@ class LocalSoloEngine {
                                 damage_tag: 'gtn:battery',
                             });
                             if (dealt > 0) {
-                                this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成3电伤`);
+                                this.logMsg(`${this.pn(targetId)}的电池效果：对${this.pn(attackerId)}造成${dealt}电伤`);
                             } else {
                                 this.logMsg(`${this.pn(targetId)}的电池触发，但${this.pn(attackerId)}未受到电伤`);
                             }
@@ -6105,7 +6112,7 @@ class LocalSoloEngine {
                 }
             }
             if (this.pending_choice.choice_type !== 'magic_salt_reflect') {
-                const keepPaidChoice = this.pending_choice.choice_type === 'choose_ocean_sapphire';
+                const keepPaidChoice = !!this.pending_choice.keep_paid || this.pending_choice.choice_type === 'choose_ocean_sapphire';
                 if (keepPaidChoice) {
                     this.pending_choice.play_log_marker = playLogMarker;
                 } else {

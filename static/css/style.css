@@ -1305,6 +1305,27 @@ body {
   color: var(--text-muted);
 }
 
+.achievement-item.achievement-type-easter-egg {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
+    linear-gradient(100deg, #ed5b76, #ee9a3a, #d9bd32, #53a86e, #4f91d8, #7968ca, #cf62b5) border-box;
+  border-left-width: 5px;
+}
+
+.achievement-type-easter-egg .achievement-type,
+.achievement-type-easter-egg .achievement-toast-kicker,
+.achievement-type-easter-egg .achievement-toast-name {
+  color: transparent;
+  background: linear-gradient(90deg, #df4869, #d88328, #9d8e18, #278657, #347abc, #6650b9, #b6459b);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.achievement-type-easter-egg .achievement-progress-fill {
+  background: linear-gradient(90deg, #ed5b76, #ee9a3a, #d9bd32, #53a86e, #4f91d8, #7968ca, #cf62b5);
+}
+
 .thorn-dew-card {
   border: 1px solid color-mix(in srgb, #5aa469 34%, var(--border-light));
   border-radius: var(--radius-sm);
@@ -6497,6 +6518,41 @@ body {
 .armor-meter-value {
   min-width: 1.2em;
   text-align: center;
+}
+
+.content-disabled-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 1px 7px;
+    border: 1px solid #b64141;
+    border-radius: 4px;
+    color: #922f2f;
+    background: #fff3f3;
+    font: 600 12px/1.2 system-ui, sans-serif;
+}
+
+[data-theme="dark"] .content-disabled-badge {
+    color: #ffb8b8;
+    background: #3a2020;
+    border-color: #d86b6b;
+}
+
+.settings-mod-item.temporarily-disabled .settings-mod-item-main > label {
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+}
+
+.gallery-card-tile.temporarily-disabled {
+    position: relative;
+}
+
+.gallery-card-disabled-badge {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    z-index: 3;
+    pointer-events: none;
 }
 
 .crit-meter {
@@ -12256,6 +12312,14 @@ html.blind-level-4 .card-prediction-part.magic {
 .game-prompt-option.selected {
   background: rgba(46, 204, 113, 0.14);
   border-color: rgba(46, 204, 113, 0.7);
+}
+
+.achievement-toast.achievement-type-easter-egg {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
+    linear-gradient(100deg, #ed5b76, #ee9a3a, #d9bd32, #53a86e, #4f91d8, #7968ca, #cf62b5) border-box;
+  border-left-width: 6px;
 }
 
 .game-prompt-option.choice-option-suit {

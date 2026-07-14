@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from werkzeug.security import check_password_hash, generate_password_hash
+from moderation import check_nickname_risk
 
 
 DEFAULT_DB_PATH = '/var/lib/gtn/gtn.sqlite3'
@@ -49,6 +50,7 @@ ACHIEVEMENT_TYPES = {
     'mode': {'color': '#5278b8'},
     'social': {'color': '#b08a33'},
     'hidden': {'color': '#7257a8'},
+    'easter_egg': {'color': '#d05fa0'},
 }
 ACHIEVEMENT_DEFS = [
     {'id': 'games_10', 'series': 'games', 'type': 'milestone', 'name_cn': '园丁之路 I', 'name_en': 'Gardener Path I', 'description_cn': '完成10场有效对局。', 'description_en': 'Complete 10 valid matches.', 'target': 10, 'metric': 'games_played', 'reward_dew': 200},
@@ -78,6 +80,18 @@ ACHIEVEMENT_DEFS = [
     {'id': 'wins_100', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 IV', 'name_en': 'Blooming Wins IV', 'description_cn': '赢得100场有效对局。', 'description_en': 'Win 100 valid matches.', 'target': 100, 'metric': 'wins', 'reward_dew': 1100},
     {'id': 'wins_200', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 V', 'name_en': 'Blooming Wins V', 'description_cn': '赢得200场有效对局。', 'description_en': 'Win 200 valid matches.', 'target': 200, 'metric': 'wins', 'reward_dew': 1800},
     {'id': 'wins_500', 'series': 'wins', 'type': 'milestone', 'name_cn': '胜利花枝 VI', 'name_en': 'Blooming Wins VI', 'description_cn': '赢得500场有效对局。', 'description_en': 'Win 500 valid matches.', 'target': 500, 'metric': 'wins', 'reward_dew': 3000},
+    {'id': 'losses_10', 'series': 'losses', 'type': 'milestone', 'name_cn': '安慰奖 I', 'name_en': 'Consolation Prize I', 'description_cn': '累计经历10场失败。', 'description_en': 'Accumulate 10 losses.', 'target': 10, 'metric': 'losses', 'reward_dew': 120},
+    {'id': 'losses_20', 'series': 'losses', 'type': 'milestone', 'name_cn': '安慰奖 II', 'name_en': 'Consolation Prize II', 'description_cn': '累计经历20场失败。', 'description_en': 'Accumulate 20 losses.', 'target': 20, 'metric': 'losses', 'reward_dew': 200},
+    {'id': 'losses_50', 'series': 'losses', 'type': 'milestone', 'name_cn': '安慰奖 III', 'name_en': 'Consolation Prize III', 'description_cn': '累计经历50场失败。', 'description_en': 'Accumulate 50 losses.', 'target': 50, 'metric': 'losses', 'reward_dew': 350},
+    {'id': 'losses_100', 'series': 'losses', 'type': 'milestone', 'name_cn': '安慰奖 IV', 'name_en': 'Consolation Prize IV', 'description_cn': '累计经历100场失败。', 'description_en': 'Accumulate 100 losses.', 'target': 100, 'metric': 'losses', 'reward_dew': 550},
+    {'id': 'losses_200', 'series': 'losses', 'type': 'milestone', 'name_cn': '安慰奖 V', 'name_en': 'Consolation Prize V', 'description_cn': '累计经历200场失败。', 'description_en': 'Accumulate 200 losses.', 'target': 200, 'metric': 'losses', 'reward_dew': 900},
+    {'id': 'losses_500', 'series': 'losses', 'type': 'milestone', 'name_cn': '安慰奖 VI', 'name_en': 'Consolation Prize VI', 'description_cn': '累计经历500场失败。', 'description_en': 'Accumulate 500 losses.', 'target': 500, 'metric': 'losses', 'reward_dew': 1500},
+    {'id': 'draws_1', 'series': 'draws', 'type': 'milestone', 'name_cn': '五五开 I', 'name_en': 'Evenly Matched I', 'description_cn': '达成1场平局。', 'description_en': 'Finish 1 match in a draw.', 'target': 1, 'metric': 'draws', 'reward_dew': 100},
+    {'id': 'draws_5', 'series': 'draws', 'type': 'milestone', 'name_cn': '五五开 II', 'name_en': 'Evenly Matched II', 'description_cn': '累计达成5场平局。', 'description_en': 'Accumulate 5 draws.', 'target': 5, 'metric': 'draws', 'reward_dew': 250},
+    {'id': 'draws_10', 'series': 'draws', 'type': 'milestone', 'name_cn': '五五开 III', 'name_en': 'Evenly Matched III', 'description_cn': '累计达成10场平局。', 'description_en': 'Accumulate 10 draws.', 'target': 10, 'metric': 'draws', 'reward_dew': 400},
+    {'id': 'draws_20', 'series': 'draws', 'type': 'milestone', 'name_cn': '五五开 IV', 'name_en': 'Evenly Matched IV', 'description_cn': '累计达成20场平局。', 'description_en': 'Accumulate 20 draws.', 'target': 20, 'metric': 'draws', 'reward_dew': 650},
+    {'id': 'draws_50', 'series': 'draws', 'type': 'milestone', 'name_cn': '五五开 V', 'name_en': 'Evenly Matched V', 'description_cn': '累计达成50场平局。', 'description_en': 'Accumulate 50 draws.', 'target': 50, 'metric': 'draws', 'reward_dew': 1100},
+    {'id': 'draws_100', 'series': 'draws', 'type': 'milestone', 'name_cn': '五五开 VI', 'name_en': 'Evenly Matched VI', 'description_cn': '累计达成100场平局。', 'description_en': 'Accumulate 100 draws.', 'target': 100, 'metric': 'draws', 'reward_dew': 1800},
     {'id': 'first_win', 'type': 'battle', 'name_cn': '第一朵花', 'name_en': 'First Bloom', 'description_cn': '赢得第一场有效对局。', 'description_en': 'Win your first valid match.', 'target': 1, 'metric': 'wins', 'reward_dew': 150},
     {'id': 'first_1v1_win', 'type': 'mode', 'name_cn': '单挑胜者', 'name_en': 'Duel Winner', 'description_cn': '赢得一场1v1对局。', 'description_en': 'Win a 1v1 match.', 'target': 1, 'metric': 'mode_1v1_win', 'reward_dew': 200},
     {'id': 'first_2v2_win', 'type': 'mode', 'name_cn': '共同花园', 'name_en': 'Shared Garden', 'description_cn': '赢得一场2v2对局。', 'description_en': 'Win a 2v2 match.', 'target': 1, 'metric': 'mode_2v2_win', 'reward_dew': 250},
@@ -113,6 +127,7 @@ ACHIEVEMENT_DEFS = [
     {'id': 'calculated_finish', 'type': 'hidden', 'hidden': True, 'name_cn': '精打细算', 'name_en': 'Calculated Finish', 'description_cn': '1v1中，对手死亡时自己的E和M均为0。', 'description_en': 'In 1v1, win while your E and M are both 0 when the opponent dies.', 'target': 1, 'metric': 'flag_1v1_zero_resources_win', 'reward_dew': 750},
     {'id': 'enemy_6_statuses', 'type': 'hidden', 'hidden': True, 'name_cn': '狂乱的鸡尾酒', 'name_en': 'Mad Cocktail', 'description_cn': '使一名敌方玩家同时拥有6个或更多不同状态。', 'description_en': 'Make an enemy have 6 or more different statuses at once.', 'target': 1, 'metric': 'flag_enemy_6_statuses', 'reward_dew': 700},
     {'id': 'solo_status_25', 'type': 'hidden', 'hidden': True, 'name_cn': '为什么会变成这样呢？', 'name_en': 'How Did It Come to This?', 'description_cn': '在单人训练场，使双方玩家状态总数为25或更多。', 'description_en': 'In Solo Training, make both players have 25 or more total status types.', 'target': 1, 'metric': 'flag_solo_status_25', 'reward_dew': 600},
+    {'id': 'creative_mode_mana_pool', 'type': 'easter_egg', 'hidden': True, 'invisible_until_unlocked': True, 'name_cn': '创造魔力池', 'name_en': 'Creative Mode Mana Pool', 'description_cn': '选择魔力加速配装后，在对局中使用拟态复制一张带有共生的拟态。', 'description_en': 'After choosing Magic Acceleration, use Mimic to copy a Mimic with Symbiosis.', 'target': 1, 'metric': 'flag_creative_mode_mana_pool', 'reward_dew': 800},
 ]
 ACHIEVEMENT_DEF_MAP = {item['id']: item for item in ACHIEVEMENT_DEFS}
 _DM_MARK_READ_LAST_AT = {}
@@ -539,6 +554,7 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_stats ON users(games_played, wins, losses, draws)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_season_gr ON users(gr_season_id, season_gr, season_ranked_games)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_total_gr ON users(total_gr, total_ranked_games)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_users_active_ban ON users(banned, ban_until)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS user_ip_events (
@@ -990,6 +1006,7 @@ def init_db():
             '''
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_moderation_actions_target ON moderation_actions(target_user_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_moderation_actions_active ON moderation_actions(action_type, expires_at)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS ip_bans (
@@ -1117,7 +1134,137 @@ def init_db():
             '''
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_messages_thread ON feedback_messages(thread_id, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS content_disables (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content_type TEXT NOT NULL,
+                content_id TEXT NOT NULL,
+                scope_mode TEXT NOT NULL DEFAULT 'all',
+                reason TEXT NOT NULL DEFAULT '',
+                disabled_by TEXT NOT NULL DEFAULT 'adminconsole',
+                disabled_at TEXT NOT NULL,
+                expires_at TEXT,
+                updated_at TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(content_type, content_id, scope_mode)
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_content_disables_active '
+            'ON content_disables(active, content_type, scope_mode, expires_at)'
+        )
         conn.commit()
+
+
+def _content_disable_row(row):
+    return dict(row) if row is not None else None
+
+
+def list_content_disables(content_type='', include_inactive=False):
+    kind = str(content_type or '').strip().lower()
+    if kind and kind not in ('card', 'mod'):
+        raise ValueError('content_type must be card or mod')
+    clauses = []
+    params = []
+    if kind:
+        clauses.append('content_type = ?')
+        params.append(kind)
+    if not include_inactive:
+        clauses.append('active = 1')
+        clauses.append('(expires_at IS NULL OR expires_at > ?)')
+        params.append(utc_iso(utc_now_dt()))
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ''
+    started = time.perf_counter()
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            f'''SELECT * FROM content_disables {where}
+                ORDER BY active DESC, content_type, content_id, scope_mode''',
+            params,
+        ).fetchall()
+    db_slow_log('content', (time.perf_counter() - started) * 1000, 'content_disable_list')
+    return [_content_disable_row(row) for row in rows]
+
+
+def get_content_disable(content_type, content_id, scope_mode='all'):
+    with get_db_connection() as conn:
+        row = conn.execute(
+            '''SELECT * FROM content_disables
+               WHERE content_type = ? AND content_id = ? AND scope_mode = ?''',
+            (str(content_type).lower(), str(content_id), str(scope_mode).lower()),
+        ).fetchone()
+    return _content_disable_row(row)
+
+
+def upsert_content_disable(content_type, content_id, scope_mode='all', reason='', disabled_by='adminconsole', duration_seconds=None):
+    kind = str(content_type or '').strip().lower()
+    scope = str(scope_mode or 'all').strip().lower()
+    if kind not in ('card', 'mod'):
+        raise ValueError('content_type must be card or mod')
+    if not str(content_id or '').strip():
+        raise ValueError('content_id is required')
+    now = utc_iso(utc_now_dt())
+    expires_at = None
+    if duration_seconds is not None:
+        seconds = int(duration_seconds)
+        if seconds > 0:
+            expires_at = utc_iso(utc_now_dt() + timedelta(seconds=seconds))
+    with get_db_connection() as conn:
+        conn.execute(
+            '''
+            INSERT INTO content_disables
+                (content_type, content_id, scope_mode, reason, disabled_by,
+                 disabled_at, expires_at, updated_at, active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ON CONFLICT(content_type, content_id, scope_mode) DO UPDATE SET
+                reason = excluded.reason,
+                disabled_by = excluded.disabled_by,
+                disabled_at = excluded.disabled_at,
+                expires_at = excluded.expires_at,
+                updated_at = excluded.updated_at,
+                active = 1
+            ''',
+            (kind, str(content_id), scope, str(reason or ''), str(disabled_by or 'adminconsole'),
+             now, expires_at, now),
+        )
+        conn.commit()
+    return get_content_disable(kind, str(content_id), scope)
+
+
+def deactivate_content_disable(content_type, content_id, scope_mode=None):
+    kind = str(content_type or '').strip().lower()
+    now = utc_iso(utc_now_dt())
+    clauses = ['content_type = ?', 'content_id = ?', 'active = 1']
+    params = [kind, str(content_id)]
+    if scope_mode and str(scope_mode).lower() != 'all-scopes':
+        clauses.append('scope_mode = ?')
+        params.append(str(scope_mode).lower())
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            f"UPDATE content_disables SET active = 0, updated_at = ? WHERE {' AND '.join(clauses)}",
+            [now, *params],
+        )
+        conn.commit()
+        return int(cursor.rowcount or 0)
+
+
+def cleanup_expired_content_disables_once():
+    now = utc_iso(utc_now_dt())
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.execute(
+                '''UPDATE content_disables SET active = 0, updated_at = ?
+                   WHERE active = 1 AND expires_at IS NOT NULL AND expires_at <= ?''',
+                (now, now),
+            )
+            conn.commit()
+            return int(cursor.rowcount or 0), None
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            print(f'[db] skip expired content disable cleanup: {exc}', flush=True)
+            return 0, str(exc)
+        raise
 
 
 def _display_width(s):
@@ -1180,6 +1327,8 @@ def validate_username(username):
         return False, '用户名不能全为符号'
     if re.search(r'[\-_]{2,}', name):
         return False, '- 和 _ 不能连续出现'
+    if check_nickname_risk(name, guest=False).get('blocked'):
+        return False, '昵称中包含违禁词'
     return True, ''
 
 
@@ -1958,15 +2107,17 @@ def get_user_achievement_center(user_id, lang='zh'):
                     (uid,),
                 ).fetchall()
                 row_map = {row['achievement_id']: row for row in rows}
-        items = [
-            _achievement_public_payload(
+        items = []
+        for defn in ACHIEVEMENT_DEFS:
+            payload = _achievement_public_payload(
                 defn,
                 row_map.get(defn['id']),
                 lang=lang,
                 progress_override=cumulative_metrics.get(str(defn.get('metric') or '')),
             )
-            for defn in ACHIEVEMENT_DEFS
-        ]
+            if (defn.get('invisible_until_unlocked') or defn.get('type') == 'easter_egg') and not payload.get('unlocked'):
+                continue
+            items.append(payload)
         items.sort(key=lambda item: (item['type'] == 'hidden', not item['unlocked'], item['type'], item.get('series') or item['id'], item['id']))
         return {
             'achievements': items,
@@ -2883,6 +3034,32 @@ def admin_set_user_ban(identifier, banned=True, reason='', duration_seconds=None
         return row_to_user(row), None
 
 
+def update_active_user_ban(identifier, reason='', duration_seconds=None):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    if not bool(user.get('banned')):
+        return None, '该账号当前未被封禁'
+    reason_text = str(reason or '').strip()[:200]
+    ban_until = None
+    if duration_seconds is not None:
+        try:
+            duration = int(duration_seconds)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration > 0:
+            duration = min(duration, 60 * 60 * 24 * 1000)
+            ban_until = utc_iso(utc_now_dt() + timedelta(seconds=duration))
+    with get_db_connection() as conn:
+        conn.execute(
+            'UPDATE users SET ban_reason = ?, ban_until = ? WHERE id = ? AND banned = 1',
+            (reason_text, ban_until, user['id']),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        return row_to_user(row), None
+
+
 def _row_to_ip_ban(row):
     if row is None:
         return None
@@ -2939,6 +3116,33 @@ def set_ip_ban(ip, banned=True, reason='', duration_seconds=None, banned_by=''):
             )
         else:
             conn.execute('UPDATE ip_bans SET active = 0 WHERE ip = ?', (token,))
+        conn.commit()
+        row = conn.execute('SELECT * FROM ip_bans WHERE ip = ?', (token,)).fetchone()
+        return _row_to_ip_ban(row), None
+
+
+def update_active_ip_ban(ip, reason='', duration_seconds=None):
+    token = str(ip or '').strip()[:80]
+    if not token:
+        return None, 'IP 不能为空'
+    expires_at = None
+    if duration_seconds is not None:
+        try:
+            duration = int(duration_seconds)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration > 0:
+            duration = min(duration, 60 * 60 * 24 * 1000)
+            expires_at = utc_iso(utc_now_dt() + timedelta(seconds=duration))
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM ip_bans WHERE ip = ?', (token,)).fetchone()
+        row = _clear_expired_ip_ban(conn, row)
+        if row is None or not bool(row['active']):
+            return None, '该 IP 当前未被封禁'
+        conn.execute(
+            'UPDATE ip_bans SET reason = ?, expires_at = ? WHERE ip = ? AND active = 1',
+            (str(reason or '').strip()[:300], expires_at, token),
+        )
         conn.commit()
         row = conn.execute('SELECT * FROM ip_bans WHERE ip = ?', (token,)).fetchone()
         return _row_to_ip_ban(row), None
@@ -3614,6 +3818,155 @@ def get_active_user_warnings(user_id, limit=3):
             }
             for row in rows
         ]
+
+
+def list_active_moderation_records(kind='all', limit=50, offset=0):
+    kind = str(kind or 'all').strip().lower()
+    if kind not in {'all', 'account_ban', 'warning'}:
+        kind = 'all'
+    limit = max(1, min(int(limit or 50), 100))
+    offset = max(0, int(offset or 0))
+    now = utc_now()
+    items = []
+    with get_db_connection() as conn:
+        total_bans = 0
+        total_warnings = 0
+        if kind in {'all', 'account_ban'}:
+            total_bans = int(conn.execute(
+                '''
+                SELECT COUNT(*) FROM users
+                WHERE banned = 1 AND (ban_until IS NULL OR ban_until > ?)
+                ''',
+                (now,),
+            ).fetchone()[0])
+            rows = conn.execute(
+                '''
+                SELECT id, username, player_id, ban_reason, banned_at, ban_until
+                FROM users
+                WHERE banned = 1 AND (ban_until IS NULL OR ban_until > ?)
+                ORDER BY COALESCE(banned_at, created_at) DESC, id DESC
+                LIMIT ?
+                ''',
+                (now, limit + offset),
+            ).fetchall()
+            for row in rows:
+                items.append({
+                    'key': f'account_ban:{row["id"]}',
+                    'kind': 'account_ban',
+                    'id': int(row['id']),
+                    'user_id': int(row['id']),
+                    'username': row['username'] or '',
+                    'player_id': row['player_id'] or '',
+                    'reason': row['ban_reason'] or '',
+                    'created_at': row['banned_at'],
+                    'expires_at': row['ban_until'],
+                    'remaining_seconds': _remaining_seconds_until(row['ban_until']),
+                    'permanent': row['ban_until'] is None,
+                    'related_report_id': None,
+                })
+        if kind in {'all', 'warning'}:
+            total_warnings = int(conn.execute(
+                '''
+                SELECT COUNT(*) FROM moderation_actions
+                WHERE action_type = 'warn' AND expires_at IS NOT NULL AND expires_at > ?
+                ''',
+                (now,),
+            ).fetchone()[0])
+            rows = conn.execute(
+                '''
+                SELECT ma.*, u.username AS current_username, u.player_id
+                FROM moderation_actions AS ma
+                LEFT JOIN users AS u ON u.id = ma.target_user_id
+                WHERE ma.action_type = 'warn' AND ma.expires_at IS NOT NULL AND ma.expires_at > ?
+                ORDER BY ma.created_at DESC, ma.id DESC
+                LIMIT ?
+                ''',
+                (now, limit + offset),
+            ).fetchall()
+            for row in rows:
+                items.append({
+                    'key': f'warning:{row["id"]}',
+                    'kind': 'warning',
+                    'id': int(row['id']),
+                    'user_id': row['target_user_id'],
+                    'username': row['current_username'] or row['target_username'] or '',
+                    'player_id': row['player_id'] or '',
+                    'reason': row['reason'] or '',
+                    'created_at': row['created_at'],
+                    'expires_at': row['expires_at'],
+                    'remaining_seconds': _remaining_seconds_until(row['expires_at']),
+                    'permanent': False,
+                    'admin_username': row['admin_username'] or '',
+                    'related_report_id': row['related_report_id'],
+                })
+    items.sort(key=lambda item: (str(item.get('created_at') or ''), str(item.get('key') or '')), reverse=True)
+    total = total_bans + total_warnings
+    return {
+        'items': items[offset:offset + limit],
+        'total': total,
+        'counts': {'account_ban': total_bans, 'warning': total_warnings},
+        'limit': limit,
+        'offset': offset,
+        'has_more': offset + limit < total,
+    }
+
+
+def update_user_warning(action_id, reason='', duration_seconds=3600, active=True):
+    try:
+        action_id = int(action_id)
+    except (TypeError, ValueError):
+        return None, '警告不存在'
+    reason_text = str(reason or '').strip()[:500]
+    now_dt = utc_now_dt()
+    try:
+        duration = int(duration_seconds or 0)
+    except (TypeError, ValueError):
+        duration = 0
+    duration = max(0, min(duration, 60 * 60 * 24 * 1000))
+    if active and duration <= 0:
+        return None, '警告必须设置有效时长'
+    expires_at = utc_iso(now_dt + timedelta(seconds=duration)) if active else utc_iso(now_dt)
+    with get_db_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM moderation_actions WHERE id = ? AND action_type = 'warn'",
+            (action_id,),
+        ).fetchone()
+        if row is None:
+            return None, '警告不存在'
+        conn.execute(
+            '''
+            UPDATE moderation_actions
+            SET reason = ?, duration_seconds = ?, expires_at = ?
+            WHERE id = ? AND action_type = 'warn'
+            ''',
+            (reason_text, duration, expires_at, action_id),
+        )
+        conn.commit()
+        row = conn.execute(
+            '''
+            SELECT ma.*, u.username AS current_username, u.player_id
+            FROM moderation_actions AS ma
+            LEFT JOIN users AS u ON u.id = ma.target_user_id
+            WHERE ma.id = ?
+            ''',
+            (action_id,),
+        ).fetchone()
+        return {
+            'key': f'warning:{row["id"]}',
+            'kind': 'warning',
+            'id': int(row['id']),
+            'user_id': row['target_user_id'],
+            'username': row['current_username'] or row['target_username'] or '',
+            'player_id': row['player_id'] or '',
+            'reason': row['reason'] or '',
+            'created_at': row['created_at'],
+            'expires_at': row['expires_at'],
+            'remaining_seconds': _remaining_seconds_until(row['expires_at']),
+            'permanent': False,
+            'admin_username': row['admin_username'] or '',
+            'related_report_id': row['related_report_id'],
+            'active': bool(active),
+        }, None
 
 
 def _role_row_to_profile(user_row, role_row):

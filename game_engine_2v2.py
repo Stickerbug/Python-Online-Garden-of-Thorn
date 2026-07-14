@@ -27,6 +27,7 @@ class GameEngine2v2(GameEngine):
         self.turn_index: int = 0
         self.round_num: int = 0
         self.phase: str = 'waiting'
+        self._game_start_applied: bool = False
         self.log: List[str] = []
         self.draft_pool: List[CardInstance] = []
         self.allowed_card_ids: Optional[Set[str]] = None
@@ -312,6 +313,9 @@ class GameEngine2v2(GameEngine):
         return {random.choice(team_picks[winner_team])}
 
     def start_game(self):
+        if self._game_start_applied:
+            return False
+        self._game_start_applied = True
         self.phase = 'playing'
         force_first = sorted(self._effective_first_pressure_players())
         self._first_pressure_effective_players = set(force_first)
@@ -365,6 +369,7 @@ class GameEngine2v2(GameEngine):
         self.log_msg(f"回合顺序：{' → '.join(self.pn(p) for p in self.turn_order)}")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._start_player_turn(self.first_player)
+        return True
 
     def _apply_opening_event(self, player_id: int):
         if self.opening_event_picks[player_id] == 7:
@@ -470,6 +475,13 @@ class GameEngine2v2(GameEngine):
             if ps.bleed == 0:
                 self.log_msg(f"{self.pn(player_id)}的流血效果消失")
         self._decay_end_turn_layer_statuses(player_id)
+        frost = self._arctic_frost_value(player_id)
+        if frost > 0:
+            self._arctic_set_frost_value(player_id, frost // 2)
+            if self._arctic_frost_value(player_id) <= 0:
+                self.log_msg(f"{self.pn(player_id)}的霜冻效果消失")
+        ps.custom_vars.pop('arctic_snowballs', None)
+        ps.custom_vars.pop('arctic_ready_queue', None)
         # Track M gained this turn for next turn's check
         ps.m_gained_last_turn = ps.m_gained_this_turn
         ps.m_gained_this_turn = False
@@ -673,8 +685,8 @@ class GameEngine2v2(GameEngine):
         opp = self.players[target_id] if target_id >= 0 else None
         if eq.def_id == 'Leaf':
             if opp:
-                self.deal_attack_damage(target_id, 8)
-                self.log_msg(f"{self.pn(player_id)}触发叶子！对{self.pn(target_id)}造成8D")
+                dealt = self.deal_attack_damage(target_id, 8, attacker_id=player_id)
+                self.log_msg(f"{self.pn(player_id)}触发叶子！对{self.pn(target_id)}造成{dealt}D")
         elif eq.def_id == 'Mark':
             if opp:
                 if self._status_application_blocked(target_id, 'skip_turn'):
@@ -683,8 +695,8 @@ class GameEngine2v2(GameEngine):
                 self.log_msg(f"{self.pn(player_id)}触发标记！{self.pn(target_id)}+1层眩晕")
         elif eq.def_id == 'Mine':
             if opp:
-                self.deal_attack_damage(target_id, 20)
-                self.log_msg(f"{self.pn(player_id)}触发地雷！对{self.pn(target_id)}造成20D")
+                dealt = self.deal_attack_damage(target_id, 20, attacker_id=player_id)
+                self.log_msg(f"{self.pn(player_id)}触发地雷！对{self.pn(target_id)}造成{dealt}D")
 
 
     def get_counter_cards(self, player_id: int, trigger_type: str) -> List[CardInstance]:
@@ -1499,7 +1511,7 @@ class GameEngine2v2(GameEngine):
                         eid, eq.card_instance, 'enemy_turn_start', None,
                         {'source_id': eid, 'target_id': player_id}):
                     continue
-                if eq.def_id == 'Corruption' and not eq.corruption_active:
+                if self._equipment_is(eq, 'Corruption', 'vanilla:corruption') and not eq.corruption_active:
                     eq.corruption_active = True
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
@@ -1636,7 +1648,7 @@ class GameEngine2v2(GameEngine):
                         eid, eq.card_instance, 'enemy_turn_start', None,
                         {'source_id': eid, 'target_id': player_id}):
                     continue
-                if eq.def_id == 'Corruption' and not eq.corruption_active:
+                if self._equipment_is(eq, 'Corruption', 'vanilla:corruption') and not eq.corruption_active:
                     eq.corruption_active = True
                     self.log_msg(f"{self.pn(eid)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
@@ -1853,7 +1865,7 @@ class GameEngine2v2(GameEngine):
                                 damage_tag=DAMAGE_TAG_BATTERY,
                             )
                             if dealt > 0:
-                                self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成3电伤")
+                                self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成{dealt}电伤")
                             else:
                                 self.log_msg(f"{self.pn(target_id)}的电池触发，但{self.pn(attacker_id)}未受到电伤")
                         elif self._card_is(eq.card_instance, 'MagicBattery', 'vanilla:magicbattery'):

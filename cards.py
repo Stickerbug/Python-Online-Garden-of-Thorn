@@ -503,7 +503,7 @@ _reg(CardDef('Nazar', 'Nazar', '邪眼护符', 5, 0, 'guard', 3, 'Common',
              '邪眼的力量似乎为你减免了大部分伤害。', '使自己获得2层邪眼  响应：被作为攻击牌目标',
              response_trigger='thorn'))
 
-_reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 1, 0, 'guard', 3, 'Common',
+_reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 2, 0, 'guard', 3, 'Common',
              '有魔力的护符，让敌方的低耗技能化为虚无。', '使自己获得2层魔法邪眼  响应：敌方使用技能牌',
              response_trigger='bloom'))
 
@@ -519,6 +519,7 @@ _reg(CardDef('MagicBubble', 'Magic Bubble', '魔法泡泡', 0, 4, 'guard', 3, 'C
 
 DRAFT_RATIO = {'thorn': 6, 'bloom': 4, 'root': 3, 'guard': 2}
 DRAFT_REROLLS = 3
+ALL_MOD_SHARED_CARD_IDS = frozenset({'Sewage'})
 FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS = {
     # Keep Sewage at a fixed 14% within the Bloom draft pool.
     # The weight is adjusted when extra Bloom mod cards enter the draft pool.
@@ -619,6 +620,7 @@ def generate_draft_options(pool: List[CardInstance], card_type: str, count: int 
 
 def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids: Optional[Set[str]] = None) -> List[str]:
     by_type: Dict[str, Tuple[List[str], List[float]]] = {}
+    effective_weights = _effective_draft_weights(allowed_def_ids)
     for def_id, card_def in CARD_DEFS.items():
         if def_id == ERROR_CARD_ID:
             continue
@@ -626,10 +628,7 @@ def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids:
             continue
         if 'team_limited' in normalize_card_flags(getattr(card_def, 'flags', set()) or set()):
             continue
-        try:
-            weight_value = max(0.0, float(getattr(card_def, 'count', 0) or 0))
-        except (TypeError, ValueError):
-            weight_value = 0.0
+        weight_value = max(0.0, float(effective_weights.get(def_id, 0.0) or 0.0))
         if weight_value <= 0:
             continue
         ids, weights = by_type.setdefault(card_def.card_type, ([], []))
@@ -640,7 +639,12 @@ def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids:
         ids, weights = by_type.get(card_type, ([], []))
         if not ids:
             continue
-        picked.extend(random.choices(ids, weights=weights, k=max(0, int(quota or 0))))
+        quota = max(0, int(quota or 0))
+        if card_type == 'bloom' and 'Sewage' in ids and quota > 0:
+            picked.append('Sewage')
+            quota -= 1
+        if quota > 0:
+            picked.extend(random.choices(ids, weights=weights, k=quota))
     if not picked:
         return []
     target_count = max(0, int(count or 0))
