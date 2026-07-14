@@ -18,6 +18,7 @@ from mod_spec_v2 import (
     sha256_json,
     split_resource_id,
 )
+from mod_i18n import locale_validation_warnings, normalize_locales, placeholder_mismatches
 
 
 MAX_CARDS = 300
@@ -81,6 +82,9 @@ def validate_mod_v2(data: Any, source: str = "", *, allow_reserved_namespaces: b
     normalized["patches"] = _validate_patches(normalized.get("patches"), mod_id, errors, warnings)
     normalized["compatibility"] = _validate_compatibility(normalized.get("compatibility"), mod_id, errors, warnings)
     normalized["event_hooks"] = _validate_event_hooks(normalized.get("event_hooks"), errors, warnings)
+    normalized["locales"] = normalize_locales(normalized.get("locales"))
+    warnings.extend(locale_validation_warnings(normalized))
+    warnings.extend(placeholder_mismatches(normalized))
 
     for key in list(normalized.keys()):
         if key not in {
@@ -93,6 +97,7 @@ def validate_mod_v2(data: Any, source: str = "", *, allow_reserved_namespaces: b
             "workspace_json",
             "editor",
             "metadata",
+            "locales",
         }:
             warnings.append(f"未知顶层字段 {key} 已保留但不会在第一阶段执行")
 

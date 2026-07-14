@@ -43,6 +43,7 @@ from cards import (
 from mod_loader import (
     GAME_VERSION,
     get_mod_asset,
+    invalidate_mod_cache,
     load_all_mods,
     merge_mod_cards_to_card_defs,
     mod_display_order_key,
@@ -267,6 +268,9 @@ def reload_mod_card_defs(force=False):
     signature = current_mods_signature()
     if not force and signature == _MODS_SIGNATURE:
         return []
+    # File signatures and parsed-package caches are independent. Clear both so
+    # replaced locale documents are visible without restarting the process.
+    invalidate_mod_cache()
     CARD_DEFS.clear()
     CARD_DEFS.update(copy.deepcopy(BASE_CARD_DEFS))
     COMMUNITY_CARD_SOURCES.clear()
@@ -299,7 +303,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260714-turn-cost-display-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260714-mod-i18n-log-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -1056,8 +1060,10 @@ def emit_achievement_unlocks(room, achievement_result):
                 'id': item.get('id') or '',
                 'name_cn': item.get('name_cn') or item.get('id') or '',
                 'name_en': item.get('name_en') or item.get('name_cn') or item.get('id') or '',
+                'name_i18n': dict(item.get('name_i18n') or {}),
                 'description_cn': item.get('description_cn') or '',
                 'description_en': item.get('description_en') or item.get('description_cn') or '',
+                'description_i18n': dict(item.get('description_i18n') or {}),
                 'type': item.get('type') or ('hidden' if item.get('hidden') else ''),
                 'type_color': item.get('type_color') or item.get('color') or '',
                 'hidden': bool(item.get('hidden')),
@@ -1087,8 +1093,10 @@ def _format_achievement_unlocked_items(unlocked):
             'id': item.get('id') or '',
             'name_cn': item.get('name_cn') or item.get('id') or '',
             'name_en': item.get('name_en') or item.get('name_cn') or item.get('id') or '',
+            'name_i18n': dict(item.get('name_i18n') or {}),
             'description_cn': item.get('description_cn') or '',
             'description_en': item.get('description_en') or item.get('description_cn') or '',
+            'description_i18n': dict(item.get('description_i18n') or {}),
             'type': item.get('type') or ('hidden' if item.get('hidden') else ''),
             'type_color': item.get('type_color') or item.get('color') or '',
             'hidden': bool(item.get('hidden')),
@@ -2031,6 +2039,8 @@ def v2_opening_event_payload(resource):
     name_en = str(resource.get('name_en') or resource.get('name') or name_cn)
     desc_cn = str(resource.get('description_cn') or resource.get('description') or resource.get('desc_cn') or resource.get('desc') or '')
     desc_en = str(resource.get('description_en') or resource.get('desc_en') or desc_cn)
+    name_i18n = resource.get('name_i18n') if isinstance(resource.get('name_i18n'), dict) else {'zh': name_cn, 'en': name_en}
+    desc_i18n = resource.get('description_i18n') if isinstance(resource.get('description_i18n'), dict) else {'zh': desc_cn, 'en': desc_en}
     try:
         position = int(resource.get('position', 2))
     except Exception:
@@ -2040,12 +2050,12 @@ def v2_opening_event_payload(resource):
         'name': name_cn,
         'name_cn': name_cn,
         'name_en': name_en,
-        'name_i18n': {'zh': name_cn, 'en': name_en},
+        'name_i18n': name_i18n,
         'desc': desc_cn,
         'description': desc_cn,
         'desc_cn': desc_cn,
         'desc_en': desc_en,
-        'desc_i18n': {'zh': desc_cn, 'en': desc_en},
+        'desc_i18n': desc_i18n,
         'position': position,
         'weight': resource.get('weight', 1),
         'v2': True,
@@ -5463,6 +5473,7 @@ def get_card_mod_sources(disabled_mods=None):
         mod_name = info.name if info and info.name else mod.filename
         mod_name_cn = info.name_cn if info and getattr(info, 'name_cn', '') else mod_name
         mod_name_en = info.name_en if info and getattr(info, 'name_en', '') else mod_name
+        mod_name_i18n = copy.deepcopy(getattr(info, 'name_i18n', {}) or {}) if info else {}
         mod_sort_name = mod_name or mod.filename
         for card in mod.cards:
             if card.id in CARD_DEFS:
@@ -5471,6 +5482,7 @@ def get_card_mod_sources(disabled_mods=None):
                     'name': mod_name,
                     'name_cn': mod_name_cn,
                     'name_en': mod_name_en,
+                    'name_i18n': mod_name_i18n,
                     'sort_name': mod_sort_name,
                     'is_vanilla': mod.filename == VANILLA_MOD_FILENAME,
                 }
@@ -5486,12 +5498,14 @@ def get_all_mod_shared_card_memberships():
         mod_name = info.name if info and info.name else mod.filename
         mod_name_cn = info.name_cn if info and getattr(info, 'name_cn', '') else mod_name
         mod_name_en = info.name_en if info and getattr(info, 'name_en', '') else mod_name
+        mod_name_i18n = copy.deepcopy(getattr(info, 'name_i18n', {}) or {}) if info else {}
         entry = {
             'key': 'vanilla' if mod.filename == VANILLA_MOD_FILENAME else mod.filename,
             'filename': mod.filename,
             'name': mod_name,
             'name_cn': mod_name_cn,
             'name_en': mod_name_en,
+            'name_i18n': mod_name_i18n,
             'sort_name': mod_name or mod.filename,
             'is_vanilla': mod.filename == VANILLA_MOD_FILENAME,
             'is_community': False,
@@ -5555,15 +5569,21 @@ def register_v2_loadout_cards(v2_loadout):
             quality=str(resource.get('quality') or 'Common'),
             description=str(resource.get('description') or resource.get('description_cn') or ''),
             effect_text=str(resource.get('effect_text') or resource.get('effect_text_cn') or ''),
+            name_i18n=dict(resource.get('name_i18n') or {}) if isinstance(resource.get('name_i18n'), dict) else {},
+            description_i18n=dict(resource.get('description_i18n') or {}) if isinstance(resource.get('description_i18n'), dict) else {},
+            effect_text_i18n=dict(resource.get('effect_text_i18n') or {}) if isinstance(resource.get('effect_text_i18n'), dict) else {},
             flags=flags,
             trigger_cost_e=_v2_int(resource.get('trigger_cost_e', -1), -1),
             trigger_cost_m=_v2_int(resource.get('trigger_cost_m', 0), 0),
             trigger_effect_text=str(resource.get('trigger_effect_text') or ''),
+            trigger_effect_text_i18n=dict(resource.get('trigger_effect_text_i18n') or {}) if isinstance(resource.get('trigger_effect_text_i18n'), dict) else {},
             response_trigger=str(resource.get('response_trigger') or ''),
             effects=[],
             scripts={},
             response_title=str(resource.get('response_title') or ''),
             response_content=str(resource.get('response_content') or ''),
+            response_title_i18n=dict(resource.get('response_title_i18n') or {}) if isinstance(resource.get('response_title_i18n'), dict) else {},
+            response_content_i18n=dict(resource.get('response_content_i18n') or {}) if isinstance(resource.get('response_content_i18n'), dict) else {},
             v2_events=resource.get('events') if isinstance(resource.get('events'), dict) else {},
             v2_resource=dict(resource),
             v2_mod_id=str(resource.get('_mod_id') or ''),
@@ -11765,6 +11785,7 @@ def api_card_exporter_cards():
             'source_mod_name': source.get('name', ''),
             'source_mod_name_cn': source.get('name_cn', ''),
             'source_mod_name_en': source.get('name_en', ''),
+            'source_mod_name_i18n': source.get('name_i18n', {}),
             'source_mod_sort_name': source.get('sort_name', ''),
             'source_mod_is_vanilla': bool(source.get('is_vanilla', False)),
             'cost_e': card_def.cost_e,
@@ -11784,6 +11805,12 @@ def api_card_exporter_cards():
             'upgraded_image': upgraded_image_url,
             'upgraded_image_url': upgraded_image_url,
             'ui_effect_size': getattr(card_def, 'ui_effect_size', ''),
+            'name_i18n': getattr(card_def, 'name_i18n', {}) or {},
+            'description_i18n': getattr(card_def, 'description_i18n', {}) or {},
+            'effect_text_i18n': getattr(card_def, 'effect_text_i18n', {}) or {},
+            'trigger_effect_text_i18n': getattr(card_def, 'trigger_effect_text_i18n', {}) or {},
+            'response_title_i18n': getattr(card_def, 'response_title_i18n', {}) or {},
+            'response_content_i18n': getattr(card_def, 'response_content_i18n', {}) or {},
         }
         payload.update(card_text(def_id, payload))
         cards.append(payload)
@@ -13743,6 +13770,7 @@ def api_cards():
             'source_mod_name': source.get('name', ''),
             'source_mod_name_cn': source.get('name_cn', ''),
             'source_mod_name_en': source.get('name_en', ''),
+            'source_mod_name_i18n': source.get('name_i18n', {}),
             'source_mod_sort_name': source.get('sort_name', ''),
             'source_mod_is_vanilla': bool(source.get('is_vanilla', False)),
             'source_mod_is_community': bool(source.get('is_community', False)),
@@ -13777,6 +13805,12 @@ def api_cards():
             'upgraded_image': upgraded_image_url,
             'upgraded_image_url': upgraded_image_url,
             'ui_effect_size': getattr(card_def, 'ui_effect_size', ''),
+            'name_i18n': getattr(card_def, 'name_i18n', {}) or {},
+            'description_i18n': getattr(card_def, 'description_i18n', {}) or {},
+            'effect_text_i18n': getattr(card_def, 'effect_text_i18n', {}) or {},
+            'trigger_effect_text_i18n': getattr(card_def, 'trigger_effect_text_i18n', {}) or {},
+            'response_title_i18n': getattr(card_def, 'response_title_i18n', {}) or {},
+            'response_content_i18n': getattr(card_def, 'response_content_i18n', {}) or {},
         }
         if getattr(card_def, 'v2_mod_id', ''):
             card_payload['v2_mod_id'] = getattr(card_def, 'v2_mod_id', '')

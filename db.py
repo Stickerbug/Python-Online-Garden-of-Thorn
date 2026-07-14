@@ -127,8 +127,37 @@ ACHIEVEMENT_DEFS = [
     {'id': 'calculated_finish', 'type': 'hidden', 'hidden': True, 'name_cn': '精打细算', 'name_en': 'Calculated Finish', 'description_cn': '1v1中，对手死亡时自己的E和M均为0。', 'description_en': 'In 1v1, win while your E and M are both 0 when the opponent dies.', 'target': 1, 'metric': 'flag_1v1_zero_resources_win', 'reward_dew': 750},
     {'id': 'enemy_6_statuses', 'type': 'hidden', 'hidden': True, 'name_cn': '狂乱的鸡尾酒', 'name_en': 'Mad Cocktail', 'description_cn': '使一名敌方玩家同时拥有6个或更多不同状态。', 'description_en': 'Make an enemy have 6 or more different statuses at once.', 'target': 1, 'metric': 'flag_enemy_6_statuses', 'reward_dew': 700},
     {'id': 'solo_status_25', 'type': 'hidden', 'hidden': True, 'name_cn': '为什么会变成这样呢？', 'name_en': 'How Did It Come to This?', 'description_cn': '在单人训练场，使双方玩家状态总数为25或更多。', 'description_en': 'In Solo Training, make both players have 25 or more total status types.', 'target': 1, 'metric': 'flag_solo_status_25', 'reward_dew': 600},
-    {'id': 'creative_mode_mana_pool', 'type': 'easter_egg', 'hidden': True, 'invisible_until_unlocked': True, 'name_cn': '创造魔力池', 'name_en': 'Creative Mode Mana Pool', 'description_cn': '选择魔力加速配装后，在对局中使用拟态复制一张带有共生的拟态。', 'description_en': 'After choosing Magic Acceleration, use Mimic to copy a Mimic with Symbiosis.', 'target': 1, 'metric': 'flag_creative_mode_mana_pool', 'reward_dew': 800},
+    {'id': 'creative_mode_mana_pool', 'type': 'easter_egg', 'hidden': True, 'invisible_until_unlocked': True, 'name_cn': '永恒魔力池', 'name_en': 'The Everlasting Guilty Pool', 'description_cn': '选择魔力加速配装后，在对局中使用拟态复制一张带有共生的拟态。', 'description_en': 'After choosing Magic Acceleration, use Mimic to copy a Mimic with Symbiosis.', 'target': 1, 'metric': 'flag_creative_mode_mana_pool', 'reward_dew': 800},
 ]
+
+
+def _load_achievement_i18n():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'achievement_i18n.json')
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        return
+    entries = payload.get('achievements') if isinstance(payload, dict) else {}
+    if not isinstance(entries, dict):
+        return
+    for item in ACHIEVEMENT_DEFS:
+        localized = entries.get(str(item.get('id') or ''))
+        if not isinstance(localized, dict):
+            continue
+        names = localized.get('name') if isinstance(localized.get('name'), dict) else {}
+        descriptions = localized.get('description') if isinstance(localized.get('description'), dict) else {}
+        item['name_i18n'] = {
+            lang: str(names.get(lang) or names.get('en') or names.get('zh') or item.get('name_en') or item.get('name_cn') or item.get('id') or '')
+            for lang in ('zh', 'en', 'fr', 'ja')
+        }
+        item['description_i18n'] = {
+            lang: str(descriptions.get(lang) or descriptions.get('en') or descriptions.get('zh') or item.get('description_en') or item.get('description_cn') or '')
+            for lang in ('zh', 'en', 'fr', 'ja')
+        }
+
+
+_load_achievement_i18n()
 ACHIEVEMENT_DEF_MAP = {item['id']: item for item in ACHIEVEMENT_DEFS}
 _DM_MARK_READ_LAST_AT = {}
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
@@ -2015,6 +2044,24 @@ def backfill_match_thorn_dew_from_matches(dry_run=True, limit=None):
     return result
 
 
+def _achievement_localized_text(defn, field, lang='zh'):
+    language = str(lang or 'zh').lower()
+    if language not in {'zh', 'en', 'fr', 'ja'}:
+        language = 'zh'
+    values = defn.get(f'{field}_i18n') if isinstance(defn.get(f'{field}_i18n'), dict) else {}
+    legacy_key = f'{field}_{"cn" if language == "zh" else language}'
+    return str(
+        values.get(language)
+        or defn.get(legacy_key)
+        or values.get('en')
+        or defn.get(f'{field}_en')
+        or values.get('zh')
+        or defn.get(f'{field}_cn')
+        or (defn.get('id') if field == 'name' else '')
+        or ''
+    )
+
+
 def _achievement_public_payload(defn, row=None, lang='zh', progress_override=None):
     target = int(defn.get('target') or 1)
     row_progress = int(row['progress'] or 0) if row else 0
@@ -2028,7 +2075,6 @@ def _achievement_public_payload(defn, row=None, lang='zh', progress_override=Non
     progress = row_progress
     type_key = str(defn.get('type') or 'milestone')
     if hidden and not unlocked:
-        suffix = 'cn' if lang == 'zh' else 'en'
         return {
             'id': defn['id'],
             'hidden': True,
@@ -2036,15 +2082,14 @@ def _achievement_public_payload(defn, row=None, lang='zh', progress_override=Non
             'type': 'hidden',
             'type_color': ACHIEVEMENT_TYPES['hidden']['color'],
             'series': defn.get('series') or '',
-            'name': defn.get(f'name_{suffix}') or defn.get('name_cn') or defn['id'],
+            'name': _achievement_localized_text(defn, 'name', lang),
             'description': '？',
-            'true_description': defn.get(f'description_{suffix}') or defn.get('description_cn') or '',
+            'true_description': _achievement_localized_text(defn, 'description', lang),
             'progress': 0,
             'target': 1,
             'reward_dew': int(defn.get('reward_dew') or 0),
             'unlocked_at': None,
         }
-    suffix = 'cn' if lang == 'zh' else 'en'
     return {
         'id': defn['id'],
         'hidden': hidden,
@@ -2052,9 +2097,9 @@ def _achievement_public_payload(defn, row=None, lang='zh', progress_override=Non
         'type': type_key,
         'type_color': ACHIEVEMENT_TYPES.get(type_key, ACHIEVEMENT_TYPES['milestone'])['color'],
         'series': defn.get('series') or '',
-        'name': defn.get(f'name_{suffix}') or defn.get('name_cn') or defn['id'],
-        'description': defn.get(f'description_{suffix}') or defn.get('description_cn') or '',
-        'true_description': defn.get(f'description_{suffix}') or defn.get('description_cn') or '',
+        'name': _achievement_localized_text(defn, 'name', lang),
+        'description': _achievement_localized_text(defn, 'description', lang),
+        'true_description': _achievement_localized_text(defn, 'description', lang),
         'progress': min(progress, target),
         'target': target,
         'reward_dew': int(defn.get('reward_dew') or 0),
@@ -2206,8 +2251,10 @@ def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=N
         'id': defn['id'],
         'name_cn': defn.get('name_cn'),
         'name_en': defn.get('name_en'),
+        'name_i18n': dict(defn.get('name_i18n') or {}),
         'description_cn': defn.get('description_cn') or '',
         'description_en': defn.get('description_en') or '',
+        'description_i18n': dict(defn.get('description_i18n') or {}),
         'type': defn.get('type') or ('hidden' if defn.get('hidden') else 'milestone'),
         'type_color': ACHIEVEMENT_TYPES.get(
             defn.get('type') or ('hidden' if defn.get('hidden') else 'milestone'),

@@ -1,0 +1,1061 @@
+{
+  "schema_version": 1,
+  "languages": [
+    "zh",
+    "en",
+    "fr",
+    "ja"
+  ],
+  "achievements": {
+    "games_10": {
+      "name": {
+        "zh": "园丁之路 I",
+        "en": "Gardener Path I",
+        "fr": "Chemin du jardinier I",
+        "ja": "庭師の道 I"
+      },
+      "description": {
+        "zh": "完成10场有效对局。",
+        "en": "Complete 10 valid matches.",
+        "fr": "Terminez 10 matchs valides.",
+        "ja": "有効なマッチを 10 回完了します。"
+      }
+    },
+    "games_20": {
+      "name": {
+        "zh": "园丁之路 II",
+        "en": "Gardener Path II",
+        "fr": "Chemin du jardinier II",
+        "ja": "庭師の道 II"
+      },
+      "description": {
+        "zh": "完成20场有效对局。",
+        "en": "Complete 20 valid matches.",
+        "fr": "Terminez 20 matchs valides.",
+        "ja": "有効なマッチを 20 回完了します。"
+      }
+    },
+    "games_50": {
+      "name": {
+        "zh": "园丁之路 III",
+        "en": "Gardener Path III",
+        "fr": "Chemin du jardinier III",
+        "ja": "庭師の道Ⅲ"
+      },
+      "description": {
+        "zh": "完成50场有效对局。",
+        "en": "Complete 50 valid matches.",
+        "fr": "Terminez 50 matchs valides.",
+        "ja": "有効なマッチを 50 回完了します。"
+      }
+    },
+    "games_100": {
+      "name": {
+        "zh": "园丁之路 IV",
+        "en": "Gardener Path IV",
+        "fr": "Voie du jardinier IV",
+        "ja": "庭師の道 IV"
+      },
+      "description": {
+        "zh": "完成100场有效对局。",
+        "en": "Complete 100 valid matches.",
+        "fr": "Terminez 100 correspondances valides.",
+        "ja": "有効な一致を 100 回完了します。"
+      }
+    },
+    "games_200": {
+      "name": {
+        "zh": "园丁之路 V",
+        "en": "Gardener Path V",
+        "fr": "Chemin du jardinier V",
+        "ja": "庭師の道 V"
+      },
+      "description": {
+        "zh": "完成200场有效对局。",
+        "en": "Complete 200 valid matches.",
+        "fr": "Terminez 200 parties valides.",
+        "ja": "有効なゲームを 200 回クリアする。"
+      }
+    },
+    "games_500": {
+      "name": {
+        "zh": "园丁之路 VI",
+        "en": "Gardener Path VI",
+        "fr": "Chemin du jardinier VI",
+        "ja": "庭師の道 VI"
+      },
+      "description": {
+        "zh": "完成500场有效对局。",
+        "en": "Complete 500 valid matches.",
+        "fr": "Terminez 500 parties valides.",
+        "ja": "有効なゲームを 500 回クリアする。"
+      }
+    },
+    "games_1000": {
+      "name": {
+        "zh": "园丁之路 VII",
+        "en": "Gardener Path VII",
+        "fr": "Chemin du jardinier VII",
+        "ja": "庭師の道 VII"
+      },
+      "description": {
+        "zh": "完成1000场有效对局。",
+        "en": "Complete 1000 valid matches.",
+        "fr": "Terminez 1 000 parties valides.",
+        "ja": "有効なゲームを 1,000 回クリアする。"
+      }
+    },
+    "cards_played_100": {
+      "name": {
+        "zh": "花牌流转 I",
+        "en": "Cards in Motion I",
+        "fr": "Carte de fleurs circulation I",
+        "ja": "フラワーカード流通Ⅰ"
+      },
+      "description": {
+        "zh": "累计成功打出100张牌，无论其打出后进入何处。",
+        "en": "Successfully play 100 cards, regardless of where they go afterward.",
+        "fr": "Au total, 100 cartes sont jouées avec succès, quel que soit l'endroit où elles vont après avoir été jouées.",
+        "ja": "プレイされた後のカードの位置に関係なく、合計 100 枚のカードが正常にプレイされます。"
+      }
+    },
+    "cards_played_500": {
+      "name": {
+        "zh": "花牌流转 II",
+        "en": "Cards in Motion II",
+        "fr": "Carte de fleurs circulation II",
+        "ja": "花カード循環Ⅱ"
+      },
+      "description": {
+        "zh": "累计成功打出500张牌，无论其打出后进入何处。",
+        "en": "Successfully play 500 cards, regardless of where they go afterward.",
+        "fr": "Au total, 500 cartes ont été jouées avec succès, quel que soit l'endroit où elles vont après avoir été jouées.",
+        "ja": "プレイされた後のカードがどこに行くかに関係なく、合計 500 枚のカードが正常にプレイされました。"
+      }
+    },
+    "cards_played_1000": {
+      "name": {
+        "zh": "花牌流转 III",
+        "en": "Cards in Motion III",
+        "fr": "Carte de fleurs circulation III",
+        "ja": "花カード循環Ⅲ"
+      },
+      "description": {
+        "zh": "累计成功打出1000张牌，无论其打出后进入何处。",
+        "en": "Successfully play 1,000 cards, regardless of where they go afterward.",
+        "fr": "Au total, 1 000 cartes sont jouées avec succès, quel que soit l'endroit où elles vont après avoir été jouées.",
+        "ja": "プレイされた後のカードがどこにあるかに関係なく、合計 1000 枚のカードが正常にプレイされます。"
+      }
+    },
+    "cards_played_2000": {
+      "name": {
+        "zh": "花牌流转 IV",
+        "en": "Cards in Motion IV",
+        "fr": "Carte de fleurs circulation IV",
+        "ja": "フラワーカード循環Ⅳ"
+      },
+      "description": {
+        "zh": "累计成功打出2000张牌，无论其打出后进入何处。",
+        "en": "Successfully play 2,000 cards, regardless of where they go afterward.",
+        "fr": "Au total, 2 000 cartes ont été jouées avec succès, quel que soit l'endroit où elles vont après avoir été jouées.",
+        "ja": "プレイされた後のカードがどこに行くかに関係なく、合計 2000 枚のカードが正常にプレイされました。"
+      }
+    },
+    "cards_played_5000": {
+      "name": {
+        "zh": "花牌流转 V",
+        "en": "Cards in Motion V",
+        "fr": "Carte de fleurs circulation V",
+        "ja": "花カード循環V"
+      },
+      "description": {
+        "zh": "累计成功打出5000张牌，无论其打出后进入何处。",
+        "en": "Successfully play 5,000 cards, regardless of where they go afterward.",
+        "fr": "Au total, 5 000 cartes ont été jouées avec succès, quel que soit l'endroit où elles vont après avoir été jouées.",
+        "ja": "プレイされた後のカードがどこに行くかに関係なく、合計 5000 枚のカードが正常にプレイされました。"
+      }
+    },
+    "cards_played_10000": {
+      "name": {
+        "zh": "花牌流转 VI",
+        "en": "Cards in Motion VI",
+        "fr": "Carte de fleurs circulation VI",
+        "ja": "花カード流通Ⅵ"
+      },
+      "description": {
+        "zh": "累计成功打出10000张牌，无论其打出后进入何处。",
+        "en": "Successfully play 10,000 cards, regardless of where they go afterward.",
+        "fr": "Au total, 10 000 cartes ont été jouées avec succès, quel que soit l'endroit où elles vont après avoir été jouées.",
+        "ja": "プレイされた後のカードがどこに行くかに関係なく、合計 10,000 枚のカードが正常にプレイされました。"
+      }
+    },
+    "cards_played_20000": {
+      "name": {
+        "zh": "花牌流转 VII",
+        "en": "Cards in Motion VII",
+        "fr": "Carte de fleurs circulation VII",
+        "ja": "フラワーカード流通VII"
+      },
+      "description": {
+        "zh": "累计成功打出20000张牌，无论其打出后进入何处。",
+        "en": "Successfully play 20,000 cards, regardless of where they go afterward.",
+        "fr": "Au total, 20 000 cartes ont été jouées avec succès, quel que soit l'endroit où elles vont après avoir été jouées.",
+        "ja": "プレイされた後のカードがどこに行くかに関係なく、合計 20,000 枚のカードが正常にプレイされました。"
+      }
+    },
+    "dodge_damage_100": {
+      "name": {
+        "zh": "万花丛中过，片叶不沾身 I",
+        "en": "Through the Flowers Untouched I",
+        "fr": "En marchant à travers des milliers de fleurs, pas une seule feuille ne me touche.",
+        "ja": "何千もの花々の中を歩いても、葉一枚も触れられない"
+      },
+      "description": {
+        "zh": "累计通过闪避免除100点物理伤害。",
+        "en": "Prevent 100 physical damage with Dodge.",
+        "fr": "Un total de 100 points de dégâts physiques sont éliminés grâce à l'esquive.",
+        "ja": "合計 100 ポイントの物理ダメージは回避によって除去されます。"
+      }
+    },
+    "dodge_damage_250": {
+      "name": {
+        "zh": "万花丛中过，片叶不沾身 II",
+        "en": "Through the Flowers Untouched II",
+        "fr": "En marchant à travers des milliers de fleurs, pas une seule feuille ne me touche II",
+        "ja": "千の花を越えても 葉一枚触れず II"
+      },
+      "description": {
+        "zh": "累计通过闪避免除250点物理伤害。",
+        "en": "Prevent 250 physical damage with Dodge.",
+        "fr": "Un total de 250 points de dégâts physiques sont éliminés grâce à l'esquive.",
+        "ja": "合計 250 ポイントの物理ダメージは回避によって除去されます。"
+      }
+    },
+    "dodge_damage_500": {
+      "name": {
+        "zh": "万花丛中过，片叶不沾身 III",
+        "en": "Through the Flowers Untouched III",
+        "fr": "Marchant parmi des milliers de fleurs, pas une seule feuille ne me touche III",
+        "ja": "千の花の間を歩いても、葉一枚も触れられない III"
+      },
+      "description": {
+        "zh": "累计通过闪避免除500点物理伤害。",
+        "en": "Prevent 500 physical damage with Dodge.",
+        "fr": "Un total de 500 points de dégâts physiques sont éliminés grâce à l'esquive.",
+        "ja": "合計 500 ポイントの物理ダメージは回避によって除去されます。"
+      }
+    },
+    "dodge_damage_1000": {
+      "name": {
+        "zh": "万花丛中过，片叶不沾身 IV",
+        "en": "Through the Flowers Untouched IV",
+        "fr": "J'ai traversé des milliers de fleurs, pas une seule feuille n'a touché mon corps IV",
+        "ja": "何千もの花をくぐったが、葉一枚も体に触れなかった IV"
+      },
+      "description": {
+        "zh": "累计通过闪避免除1000点物理伤害。",
+        "en": "Prevent 1,000 physical damage with Dodge.",
+        "fr": "Un total de 1 000 points de dégâts physiques sont éliminés grâce à l'esquive.",
+        "ja": "合計 1000 ポイントの物理ダメージは回避によって除去されます。"
+      }
+    },
+    "dodge_damage_2000": {
+      "name": {
+        "zh": "万花丛中过，片叶不沾身 V",
+        "en": "Through the Flowers Untouched V",
+        "fr": "J'ai traversé des milliers de fleurs, pas une seule feuille n'a touché mon corps V",
+        "ja": "何千もの花をくぐったが、葉一枚も体に触れなかった V"
+      },
+      "description": {
+        "zh": "累计通过闪避免除2000点物理伤害。",
+        "en": "Prevent 2,000 physical damage with Dodge.",
+        "fr": "Un total de 2 000 points de dégâts physiques sont éliminés grâce à l'esquive.",
+        "ja": "合計 2000 ポイントの物理ダメージは回避によって除去されます。"
+      }
+    },
+    "dodge_damage_5000": {
+      "name": {
+        "zh": "万花丛中过，片叶不沾身 VI",
+        "en": "Through the Flowers Untouched VI",
+        "fr": "En marchant à travers des milliers de fleurs, pas une seule feuille ne me touche VI",
+        "ja": "何千もの花の間を歩いても、一枚の葉も私に触れません VI"
+      },
+      "description": {
+        "zh": "累计通过闪避免除5000点物理伤害。",
+        "en": "Prevent 5,000 physical damage with Dodge.",
+        "fr": "Un total de 5 000 points de dégâts physiques sont éliminés grâce à l'esquive.",
+        "ja": "合計 5000 ポイントの物理ダメージは回避によって除去されます。"
+      }
+    },
+    "dodge_damage_10000": {
+      "name": {
+        "zh": "万花丛中过，片叶不沾身 VII",
+        "en": "Through the Flowers Untouched VII",
+        "fr": "Marchant parmi des milliers de fleurs, pas une seule feuille ne me touche VII",
+        "ja": "千の花の間を歩いても、葉一枚も触れられない VII"
+      },
+      "description": {
+        "zh": "累计通过闪避免除10000点物理伤害。",
+        "en": "Prevent 10,000 physical damage with Dodge.",
+        "fr": "Un total de 10 000 points de dégâts physiques sont éliminés grâce à l'esquive.",
+        "ja": "合計 10,000 ポイントの物理ダメージは回避によって除去されます。"
+      }
+    },
+    "wins_10": {
+      "name": {
+        "zh": "胜利花枝 I",
+        "en": "Blooming Wins I",
+        "fr": "Branche de fleur de victoire I",
+        "ja": "勝利の花の枝I"
+      },
+      "description": {
+        "zh": "赢得10场有效对局。",
+        "en": "Win 10 valid matches.",
+        "fr": "Gagnez 10 jeux valides.",
+        "ja": "有効なゲームで 10 回勝利する。"
+      }
+    },
+    "wins_20": {
+      "name": {
+        "zh": "胜利花枝 II",
+        "en": "Blooming Wins II",
+        "fr": "Branche de fleur de victoire II",
+        "ja": "勝利の花の枝 II"
+      },
+      "description": {
+        "zh": "赢得20场有效对局。",
+        "en": "Win 20 valid matches.",
+        "fr": "Gagnez 20 jeux valides.",
+        "ja": "有効なゲームで 20 勝する。"
+      }
+    },
+    "wins_50": {
+      "name": {
+        "zh": "胜利花枝 III",
+        "en": "Blooming Wins III",
+        "fr": "Branche de fleur de victoire III",
+        "ja": "勝利の花の枝III"
+      },
+      "description": {
+        "zh": "赢得50场有效对局。",
+        "en": "Win 50 valid matches.",
+        "fr": "Gagnez 50 jeux valides.",
+        "ja": "有効なゲームで 50 勝する。"
+      }
+    },
+    "wins_100": {
+      "name": {
+        "zh": "胜利花枝 IV",
+        "en": "Blooming Wins IV",
+        "fr": "Branche de fleur de victoire IV",
+        "ja": "勝利の花の枝IV"
+      },
+      "description": {
+        "zh": "赢得100场有效对局。",
+        "en": "Win 100 valid matches.",
+        "fr": "Gagnez 100 jeux valides.",
+        "ja": "有効なゲームで 100 勝する。"
+      }
+    },
+    "wins_200": {
+      "name": {
+        "zh": "胜利花枝 V",
+        "en": "Blooming Wins V",
+        "fr": "Branche de fleur de victoire V",
+        "ja": "勝利の花の枝V"
+      },
+      "description": {
+        "zh": "赢得200场有效对局。",
+        "en": "Win 200 valid matches.",
+        "fr": "Gagnez 200 jeux valides.",
+        "ja": "有効なゲームで 200 勝する。"
+      }
+    },
+    "wins_500": {
+      "name": {
+        "zh": "胜利花枝 VI",
+        "en": "Blooming Wins VI",
+        "fr": "Branche de fleur de victoire VI",
+        "ja": "勝利の花の枝 VI"
+      },
+      "description": {
+        "zh": "赢得500场有效对局。",
+        "en": "Win 500 valid matches.",
+        "fr": "Gagnez 500 jeux valides.",
+        "ja": "有効なゲームで 500 勝する。"
+      }
+    },
+    "losses_10": {
+      "name": {
+        "zh": "安慰奖 I",
+        "en": "Consolation Prize I",
+        "fr": "Prix ​​de consolation I",
+        "ja": "残念賞Ⅰ"
+      },
+      "description": {
+        "zh": "累计经历10场失败。",
+        "en": "Accumulate 10 losses.",
+        "fr": "A connu 10 échecs au total.",
+        "ja": "合計10回の失敗を経験。"
+      }
+    },
+    "losses_20": {
+      "name": {
+        "zh": "安慰奖 II",
+        "en": "Consolation Prize II",
+        "fr": "Prix ​​de consolation II",
+        "ja": "残念賞Ⅱ"
+      },
+      "description": {
+        "zh": "累计经历20场失败。",
+        "en": "Accumulate 20 losses.",
+        "fr": "A connu 20 échecs au total.",
+        "ja": "合計20回の失敗を経験。"
+      }
+    },
+    "losses_50": {
+      "name": {
+        "zh": "安慰奖 III",
+        "en": "Consolation Prize III",
+        "fr": "Prix ​​de consolation III",
+        "ja": "残念賞Ⅲ"
+      },
+      "description": {
+        "zh": "累计经历50场失败。",
+        "en": "Accumulate 50 losses.",
+        "fr": "A connu 50 échecs au total.",
+        "ja": "合計50回の失敗を経験。"
+      }
+    },
+    "losses_100": {
+      "name": {
+        "zh": "安慰奖 IV",
+        "en": "Consolation Prize IV",
+        "fr": "Prix ​​de consolation IV",
+        "ja": "残念賞Ⅳ"
+      },
+      "description": {
+        "zh": "累计经历100场失败。",
+        "en": "Accumulate 100 losses.",
+        "fr": "A connu 100 échecs au total.",
+        "ja": "通算100回の失敗を経験。"
+      }
+    },
+    "losses_200": {
+      "name": {
+        "zh": "安慰奖 V",
+        "en": "Consolation Prize V",
+        "fr": "Prix ​​de consolation V",
+        "ja": "残念賞V"
+      },
+      "description": {
+        "zh": "累计经历200场失败。",
+        "en": "Accumulate 200 losses.",
+        "fr": "A connu un total de 200 échecs.",
+        "ja": "合計200回の失敗を経験。"
+      }
+    },
+    "losses_500": {
+      "name": {
+        "zh": "安慰奖 VI",
+        "en": "Consolation Prize VI",
+        "fr": "Prix ​​de consolation VI",
+        "ja": "残念賞Ⅵ"
+      },
+      "description": {
+        "zh": "累计经历500场失败。",
+        "en": "Accumulate 500 losses.",
+        "fr": "A connu un total de 500 échecs.",
+        "ja": "累計500回の失敗を経験。"
+      }
+    },
+    "draws_1": {
+      "name": {
+        "zh": "五五开 I",
+        "en": "Evenly Matched I",
+        "fr": "50/50 je",
+        "ja": "50/50 私"
+      },
+      "description": {
+        "zh": "达成1场平局。",
+        "en": "Finish 1 match in a draw.",
+        "fr": "1 match nul a été réalisé.",
+        "ja": "1引き分けを達成した。"
+      }
+    },
+    "draws_5": {
+      "name": {
+        "zh": "五五开 II",
+        "en": "Evenly Matched II",
+        "fr": "50/50 II",
+        "ja": "50/50 II"
+      },
+      "description": {
+        "zh": "累计达成5场平局。",
+        "en": "Accumulate 5 draws.",
+        "fr": "Au total, 5 nuls ont été réalisés.",
+        "ja": "合計5回の引き分けが達成されました。"
+      }
+    },
+    "draws_10": {
+      "name": {
+        "zh": "五五开 III",
+        "en": "Evenly Matched III",
+        "fr": "50/50 III",
+        "ja": "50/50 Ⅲ"
+      },
+      "description": {
+        "zh": "累计达成10场平局。",
+        "en": "Accumulate 10 draws.",
+        "fr": "Au total, 10 tirages ont été réalisés.",
+        "ja": "合計10回の引き分けが達成されました。"
+      }
+    },
+    "draws_20": {
+      "name": {
+        "zh": "五五开 IV",
+        "en": "Evenly Matched IV",
+        "fr": "50/50 IV",
+        "ja": "50/50 IV"
+      },
+      "description": {
+        "zh": "累计达成20场平局。",
+        "en": "Accumulate 20 draws.",
+        "fr": "Au total, 20 tirages ont été réalisés.",
+        "ja": "合計20回の引き分けが達成されました。"
+      }
+    },
+    "draws_50": {
+      "name": {
+        "zh": "五五开 V",
+        "en": "Evenly Matched V",
+        "fr": "50-50 V",
+        "ja": "50-50V"
+      },
+      "description": {
+        "zh": "累计达成50场平局。",
+        "en": "Accumulate 50 draws.",
+        "fr": "Au total, 50 tirages ont été réalisés.",
+        "ja": "合計50回の引き分けが達成されました。"
+      }
+    },
+    "draws_100": {
+      "name": {
+        "zh": "五五开 VI",
+        "en": "Evenly Matched VI",
+        "fr": "50/50VI",
+        "ja": "50/50 VI"
+      },
+      "description": {
+        "zh": "累计达成100场平局。",
+        "en": "Accumulate 100 draws.",
+        "fr": "Au total, 100 tirages ont été réalisés.",
+        "ja": "合計100回の引き分けを達成しました。"
+      }
+    },
+    "first_win": {
+      "name": {
+        "zh": "第一朵花",
+        "en": "First Bloom",
+        "fr": "première fleur",
+        "ja": "最初の花"
+      },
+      "description": {
+        "zh": "赢得第一场有效对局。",
+        "en": "Win your first valid match.",
+        "fr": "Gagnez votre premier match valide.",
+        "ja": "最初の有効な試合に勝ちます。"
+      }
+    },
+    "first_1v1_win": {
+      "name": {
+        "zh": "单挑胜者",
+        "en": "Duel Winner",
+        "fr": "Vainqueur en face-à-face",
+        "ja": "直接対決の勝者"
+      },
+      "description": {
+        "zh": "赢得一场1v1对局。",
+        "en": "Win a 1v1 match.",
+        "fr": "Gagnez un match 1v1.",
+        "ja": "1対1の試合に勝つ。"
+      }
+    },
+    "first_2v2_win": {
+      "name": {
+        "zh": "共同花园",
+        "en": "Shared Garden",
+        "fr": "jardin commun",
+        "ja": "共通の庭"
+      },
+      "description": {
+        "zh": "赢得一场2v2对局。",
+        "en": "Win a 2v2 match.",
+        "fr": "Gagnez un match 2v2.",
+        "ja": "2対2の試合に勝つ。"
+      }
+    },
+    "first_random_deck_win": {
+      "name": {
+        "zh": "随机也赢",
+        "en": "Random Winner",
+        "fr": "Gagner par hasard",
+        "ja": "偶然に勝つ"
+      },
+      "description": {
+        "zh": "赢得一场随机卡组对局。",
+        "en": "Win a Random Deck match.",
+        "fr": "Gagnez un match de deck aléatoire.",
+        "ja": "ランダムなデッキマッチで勝利する。"
+      }
+    },
+    "first_urf_win": {
+      "name": {
+        "zh": "火力压制",
+        "en": "Firepower Victory",
+        "fr": "tir de suppression",
+        "ja": "鎮圧射撃"
+      },
+      "description": {
+        "zh": "赢得一场无限火力对局。",
+        "en": "Win an Infinite Fire match.",
+        "fr": "Gagnez un match avec une puissance de feu illimitée.",
+        "ja": "無制限の火力で試合に勝利しましょう。"
+      }
+    },
+    "backwater_win": {
+      "name": {
+        "zh": "背水一战",
+        "en": "Last Stand",
+        "fr": "Un dernier combat",
+        "ja": "最後の抵抗"
+      },
+      "description": {
+        "zh": "1v1中，在无敌时击败对手。",
+        "en": "In 1v1, defeat your opponent while invincible.",
+        "fr": "En 1v1, battez l'adversaire lorsque vous êtes invincible.",
+        "ja": "1vs1では無敵状態で相手を倒す。"
+      }
+    },
+    "revive_leaf_win": {
+      "name": {
+        "zh": "复苏之叶",
+        "en": "Leaf of Revival",
+        "fr": "Feuilles de résurgence",
+        "ja": "復活の葉"
+      },
+      "description": {
+        "zh": "用世界树之叶复活玩家，并最终获胜。",
+        "en": "Revive a player with Yggdrasil and win.",
+        "fr": "Utilisez la feuille de l'arbre du monde pour ressusciter le joueur et finalement gagner.",
+        "ja": "世界樹の葉を使ってプレイヤーを復活させ、最終的に勝利します。"
+      }
+    },
+    "no_thorn_win": {
+      "name": {
+        "zh": "不靠攻击",
+        "en": "No Thorns Needed",
+        "fr": "Ne pas compter sur l'attaque",
+        "ja": "攻撃に頼らない"
+      },
+      "description": {
+        "zh": "赢得一局，自己全局没有打出Thorn牌，且对方没有投降。",
+        "en": "Win a match without playing Thorn cards and without the opponent surrendering.",
+        "fr": "Gagnez une manche sans jouer la carte Thorn et l'adversaire ne se rend pas.",
+        "ja": "ソーンカードをプレイせずにラウンドに勝利し、対戦相手は降伏しません。"
+      }
+    },
+    "one_hp_win": {
+      "name": {
+        "zh": "起死回生",
+        "en": "Back from the Brink",
+        "fr": "renaître",
+        "ja": "生き返る"
+      },
+      "description": {
+        "zh": "本局中曾经H降到5或以下，且没有触发过无敌，最后赢得对局。",
+        "en": "Drop to 5 H or lower during a match without triggering invincibility, then win.",
+        "fr": "Dans ce jeu, H est tombé à 5 ou moins sans déclencher l'invincibilité et a finalement remporté la partie.",
+        "ja": "この試合ではHが無敵発動せずに5以下まで下がり、ようやく勝利しました。"
+      }
+    },
+    "last_one_win": {
+      "name": {
+        "zh": "最后一人",
+        "en": "Last One Standing",
+        "fr": "dernière personne",
+        "ja": "最後の人"
+      },
+      "description": {
+        "zh": "2v2中，队友前6回合阵亡后最终获胜。",
+        "en": "In 2v2, win after your teammate is defeated within the first 6 rounds.",
+        "fr": "En 2v2, le coéquipier gagne finalement après avoir été tué lors des 6 premiers rounds.",
+        "ja": "2v2 では、チームメイトが最初の 6 ラウンドで倒された後、最終的に勝利します。"
+      }
+    },
+    "fire_30": {
+      "name": {
+        "zh": "烧开水",
+        "en": "Boiling Point",
+        "fr": "faire bouillir de l'eau",
+        "ja": "水を沸騰させる"
+      },
+      "description": {
+        "zh": "使一名敌方玩家拥有30或更多层灼烧。",
+        "en": "Make an enemy have 30 or more Fire.",
+        "fr": "Permet à un joueur ennemi d'avoir 30 piles ou plus de Brûlure.",
+        "ja": "敵プレイヤーに 30 スタック以上のバーンを持たせます。"
+      }
+    },
+    "poison_30": {
+      "name": {
+        "zh": "绝命毒师",
+        "en": "Poison Master",
+        "fr": "briser le mauvais",
+        "ja": "ブレイキングバッド"
+      },
+      "description": {
+        "zh": "使一名敌方玩家拥有30或更多层中毒。",
+        "en": "Make an enemy have 30 or more Poison.",
+        "fr": "Permet à un joueur ennemi d'avoir 30 piles ou plus de Poison.",
+        "ja": "敵プレイヤーに 30 スタック以上の毒を持たせます。"
+      }
+    },
+    "one_hit_60": {
+      "name": {
+        "zh": "一击必杀",
+        "en": "One-Hit Strike",
+        "fr": "Tuer d'un seul coup",
+        "ja": "一撃で倒す"
+      },
+      "description": {
+        "zh": "一击造成60点或更多实际伤害。",
+        "en": "Deal 60 or more actual damage in one hit.",
+        "fr": "Infliger 60 dégâts réels ou plus en un seul coup.",
+        "ja": "一撃で60以上の実ダメージを与える。"
+      }
+    },
+    "self_caused_death": {
+      "name": {
+        "zh": "自刎归天",
+        "en": "Self-Made End",
+        "fr": "s'est suicidé et est mort",
+        "ja": "自殺して亡くなった"
+      },
+      "description": {
+        "zh": "因自己出牌导致的反伤或效果伤害死亡。",
+        "en": "Die from reflected or effect damage caused by your own play.",
+        "fr": "Mort due à une contre-blessure ou à des dégâts d'effet causés par ses propres cartes.",
+        "ja": "自身のカードによる反撃や効果ダメージによる死亡。"
+      }
+    },
+    "blitz_win": {
+      "name": {
+        "zh": "闪电战",
+        "en": "Blitz",
+        "fr": "Guerre éclair",
+        "ja": "電撃戦"
+      },
+      "description": {
+        "zh": "在4回合内结束战斗并获胜。",
+        "en": "Win within 4 rounds.",
+        "fr": "Terminez la bataille en 4 tours et gagnez.",
+        "ja": "4ラウンド以内に戦闘を終わらせて勝利します。"
+      }
+    },
+    "a_plus_win": {
+      "name": {
+        "zh": "A+",
+        "en": "A+",
+        "fr": "A+",
+        "ja": "A+"
+      },
+      "description": {
+        "zh": "获胜时H大于等于开局时H。",
+        "en": "Win with H at least equal to your starting H.",
+        "fr": "H en cas de gain est supérieur ou égal à H au départ.",
+        "ja": "勝利時のHは始動時のH以上です。"
+      }
+    },
+    "first_five_rounds_clean": {
+      "name": {
+        "zh": "完美潇洒的花花",
+        "en": "Graceful Flower",
+        "fr": "Fleurs parfaites et chics",
+        "ja": "完璧でシックな花"
+      },
+      "description": {
+        "zh": "对局前5回合H没有降低，并最终获胜。",
+        "en": "Win after keeping your H from dropping during the first 5 rounds.",
+        "fr": "H n'a pas diminué au cours des 5 premiers tours du jeu et a finalement gagné.",
+        "ja": "Ｈさんは最初の５ラウンドまで衰えることなく、最終的に勝利を収めた。"
+      }
+    },
+    "fifteen_cards_turn": {
+      "name": {
+        "zh": "无限？",
+        "en": "Infinite?",
+        "fr": "illimité?",
+        "ja": "無制限？"
+      },
+      "description": {
+        "zh": "一回合内打出15张或更多牌。",
+        "en": "Play 15 or more cards in one turn.",
+        "fr": "Jouez 15 cartes ou plus en un seul tour.",
+        "ja": "1 ラウンドで 15 枚以上のカードをプレイします。"
+      }
+    },
+    "fifteen_e_turn": {
+      "name": {
+        "zh": "永恒",
+        "en": "Eternity",
+        "fr": "éternel",
+        "ja": "永遠の"
+      },
+      "description": {
+        "zh": "一回合内回复15点或更多E。",
+        "en": "Gain 15 or more E in one turn.",
+        "fr": "Récupérez 15 points E ou plus en un tour.",
+        "ja": "1ターンにEポイントを15以上回復する。"
+      }
+    },
+    "same_card_10": {
+      "name": {
+        "zh": "钟爱",
+        "en": "Favorite",
+        "fr": "Aimer",
+        "ja": "好きになる"
+      },
+      "description": {
+        "zh": "在一局游戏中，使同一张卡牌进入弃牌堆7次或更多。",
+        "en": "Make the same card instance enter the discard pile 7 or more times in one match.",
+        "fr": "Mettez la même carte dans la pile de défausse 7 fois ou plus au cours d'une partie.",
+        "ja": "ゲーム中に同じカードを 7 回以上捨て札に置きます。"
+      }
+    },
+    "heal_100": {
+      "name": {
+        "zh": "重生",
+        "en": "Rebirth",
+        "fr": "renaissance",
+        "ja": "再生"
+      },
+      "description": {
+        "zh": "在一局中累计回复100点或更多H。",
+        "en": "Heal 100 or more H in one match.",
+        "fr": "Récupérez 100 points H ou plus au total en un seul tour.",
+        "ja": "1ラウンドでHポイントを合計100以上回復する"
+      }
+    },
+    "same_name_streak_5": {
+      "name": {
+        "zh": "重影",
+        "en": "Afterimage",
+        "fr": "fantôme",
+        "ja": "ゴースティング"
+      },
+      "description": {
+        "zh": "连续打出5张除轻以外的同名卡牌。",
+        "en": "Play 5 cards with the same name in a row, excluding Light.",
+        "fr": "Jouez 5 cartes consécutives du même nom sauf la lumière.",
+        "ja": "ライトを除く同じ名前のカードを5枚連続してプレイします。"
+      }
+    },
+    "perfect_zero_win_5": {
+      "name": {
+        "zh": "完美击杀",
+        "en": "Perfect Kill",
+        "fr": "tuerie parfaite",
+        "ja": "完璧な殺し"
+      },
+      "description": {
+        "zh": "1v1中，使敌方H正好等于0获胜5次。",
+        "en": "In 1v1, win with the enemy H exactly 0 five times.",
+        "fr": "En 1v1, faites en sorte que le H de l'ennemi soit exactement égal à 0 et gagnez 5 fois.",
+        "ja": "1vs1で敵のHをちょうど0にして5回勝利する。"
+      }
+    },
+    "scrap_destroyer": {
+      "name": {
+        "zh": "破铜烂铁",
+        "en": "Scrap Breaker",
+        "fr": "ferraille",
+        "ja": "金属くず"
+      },
+      "description": {
+        "zh": "1局内摧毁7个或更多装备。",
+        "en": "Destroy 7 or more equipment in one match.",
+        "fr": "Détruisez 7 équipements ou plus en 1 tour.",
+        "ja": "1ラウンドで7つ以上の装備を破壊する。"
+      }
+    },
+    "early_prevention": {
+      "name": {
+        "zh": "防微杜渐",
+        "en": "Early Prevention",
+        "fr": "Empêcher le moindre changement",
+        "ja": "わずかな変化も防ぐ"
+      },
+      "description": {
+        "zh": "一局内反制6次或更多。",
+        "en": "Counter 6 or more times in one match.",
+        "fr": "Contre-attaquez 6 fois ou plus en un tour.",
+        "ja": "1ラウンド中に6回以上反撃する。"
+      }
+    },
+    "poison_fire_dual": {
+      "name": {
+        "zh": "毒火双修",
+        "en": "Poison and Fire",
+        "fr": "Double culture du poison et du feu",
+        "ja": "毒と火の二重栽培"
+      },
+      "description": {
+        "zh": "使一名敌方玩家同时拥有至少15层中毒和15层灼烧。",
+        "en": "Make an enemy have at least 15 Poison and 15 Fire at the same time.",
+        "fr": "Permet à un joueur ennemi d'avoir au moins 15 charges de poison et 15 charges de brûlure en même temps.",
+        "ja": "敵プレイヤーに少なくとも 15 スタックの毒と 15 スタックの火傷を同時に与えます。"
+      }
+    },
+    "barren_field": {
+      "name": {
+        "zh": "寸草不生",
+        "en": "Barren Field",
+        "fr": "Pas un brin d'herbe ne pousse",
+        "ja": "草一枚も生えてない"
+      },
+      "description": {
+        "zh": "使一名敌方玩家的手牌、抽牌堆、弃牌堆合计为10张或更少。",
+        "en": "Make an enemy have 10 or fewer cards total in hand, deck, and discard.",
+        "fr": "Faites en sorte que la main, la pioche et la défausse d'un joueur ennemi totalisent 10 cartes ou moins.",
+        "ja": "敵プレイヤーの手札、山札、捨て札を合計10枚以下にする。"
+      }
+    },
+    "team_double_resources": {
+      "name": {
+        "zh": "彼竭我盈",
+        "en": "Their Exhaustion, Our Fullness",
+        "fr": "Il est épuisé et je suis rassasié",
+        "ja": "彼は疲れ果てていて、私はお腹いっぱいです"
+      },
+      "description": {
+        "zh": "非2v2双人对局中，自己的H、E、M曾同时达到对手的2倍或更多。",
+        "en": "In a non-2v2 two-player match, have your H, E, and M simultaneously reach at least twice your opponent’s values at any moment.",
+        "fr": "Dans une partie à deux joueurs non 2v2, vos H, E et M ont atteint au moins deux fois ceux de votre adversaire en même temps.",
+        "ja": "2 対 2 以外の 2 人用ゲームで、自分の H、E、M が同時に相手の 2 倍以上に到達しました。"
+      }
+    },
+    "enemy_attack_blocked_5": {
+      "name": {
+        "zh": "转攻为守",
+        "en": "Turn Attack to Defense",
+        "fr": "Passer de l'attaque à la défense",
+        "ja": "攻撃から守備への切り替え"
+      },
+      "description": {
+        "zh": "单局累计使一名敌方玩家获得过5或更多层禁攻。",
+        "en": "In one match, make an enemy gain 5 or more total Attack Blocked layers.",
+        "fr": "En un seul tour, un joueur ennemi a reçu 5 niveaux de bannissement ou plus.",
+        "ja": "1 ラウンドで、敵プレイヤーが 5 レベル以上の禁止処分を受けた。"
+      }
+    },
+    "untargetable_3": {
+      "name": {
+        "zh": "遁迹匿影",
+        "en": "Vanish into Shadow",
+        "fr": "S'échapper et disparaître",
+        "ja": "逃げて消える"
+      },
+      "description": {
+        "zh": "单局累计获得过3或更多层不可选中。",
+        "en": "In one match, gain 3 or more total Untargetable layers.",
+        "fr": "Ceux qui ont accumulé 3 niveaux ou plus en un seul tour ne peuvent pas être sélectionnés.",
+        "ja": "1ラウンドで3レベル以上貯まった方は選択できません。"
+      }
+    },
+    "over_defense": {
+      "name": {
+        "zh": "过度防御",
+        "en": "Over Defense",
+        "fr": "trop défensif",
+        "ja": "過度に防御的"
+      },
+      "description": {
+        "zh": "对局中，自己曾经拥有20或更多层护甲。",
+        "en": "Have 20 or more Armor at any point in a match.",
+        "fr": "Pendant le jeu, vous aviez autrefois 20 couches d’armure ou plus.",
+        "ja": "ゲーム中、かつては 20 層以上の鎧を着ていました。"
+      }
+    },
+    "deep_roots": {
+      "name": {
+        "zh": "根系发达",
+        "en": "Deep Roots",
+        "fr": "Système racinaire bien développé",
+        "ja": "よく発達したルートシステム"
+      },
+      "description": {
+        "zh": "同时装备4个或更多装备。",
+        "en": "Have 4 or more equipment at the same time.",
+        "fr": "Équipez 4 pièces d'équipement ou plus en même temps.",
+        "ja": "4つ以上の装備を同時に装備します。"
+      }
+    },
+    "calculated_finish": {
+      "name": {
+        "zh": "精打细算",
+        "en": "Calculated Finish",
+        "fr": "budgétiser judicieusement",
+        "ja": "賢く予算を立てる"
+      },
+      "description": {
+        "zh": "1v1中，对手死亡时自己的E和M均为0。",
+        "en": "In 1v1, win while your E and M are both 0 when the opponent dies.",
+        "fr": "En 1v1, votre E et votre M sont tous deux à 0 lorsque votre adversaire meurt.",
+        "ja": "1対1では、相手が死亡するとEとMは両方とも0になります。"
+      }
+    },
+    "enemy_6_statuses": {
+      "name": {
+        "zh": "狂乱的鸡尾酒",
+        "en": "Mad Cocktail",
+        "fr": "cocktail fou",
+        "ja": "クレイジーカクテル"
+      },
+      "description": {
+        "zh": "使一名敌方玩家同时拥有6个或更多不同状态。",
+        "en": "Make an enemy have 6 or more different statuses at once.",
+        "fr": "Permet à un joueur ennemi d'avoir 6 états différents ou plus en même temps.",
+        "ja": "敵プレイヤーに同時に 6 つ以上の異なる状態を与えます。"
+      }
+    },
+    "solo_status_25": {
+      "name": {
+        "zh": "为什么会变成这样呢？",
+        "en": "How Did It Come to This?",
+        "fr": "Pourquoi cela arrive-t-il ?",
+        "ja": "なぜこのようなことが起こるのでしょうか?"
+      },
+      "description": {
+        "zh": "在单人训练场，使双方玩家状态总数为25或更多。",
+        "en": "In Solo Training, make both players have 25 or more total status types.",
+        "fr": "Sur le terrain d'entraînement solo, faites en sorte que le statut total des deux joueurs soit de 25 ou plus.",
+        "ja": "1人用練習場で、お互いのステータスの合計を25以上にする。"
+      }
+    },
+    "creative_mode_mana_pool": {
+      "name": {
+        "zh": "永恒魔力池",
+        "en": "The Everlasting Guilty Pool",
+        "fr": "Le Bassin éternel de la culpabilité",
+        "ja": "永遠なる罪の魔力池"
+      },
+      "description": {
+        "zh": "选择魔力加速配装后，在对局中使用拟态复制一张带有共生的拟态。",
+        "en": "After choosing Magic Acceleration, use Mimic to copy a Mimic with Symbiosis.",
+        "fr": "Après avoir sélectionné l'équipement d'accélération magique, utilisez Mimic pour copier un Mimic avec Symbiosis pendant la partie.",
+        "ja": "魔法加速装備を選択した後、ゲーム中にミミックを使用して共生を持つミミックをコピーします。"
+      }
+    }
+  }
+}

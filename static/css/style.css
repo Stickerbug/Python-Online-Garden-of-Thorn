@@ -7492,8 +7492,8 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 .card.card-yggdrasil {
-  --card-effect-font-scale: 7.15cqi;
-  --card-effect-line-height: 1.12;
+  --card-effect-font-scale: 6.8cqi;
+  --card-effect-line-height: 1.14;
   --card-effect-padding-y: 2.5cqi;
   --card-effect-padding-bottom: 1.2cqi;
 }
@@ -7503,6 +7503,27 @@ html.blind-level-4 .card-prediction-part.magic {
   --card-effect-line-height: 1.25;
   --card-effect-padding-y: 5.5cqi;
   --card-effect-padding-bottom: 2.4cqi;
+}
+
+.card.card-mimic-compact {
+  --card-effect-font-scale: 8.15cqi;
+  --card-effect-line-height: 1.2;
+  --card-effect-padding-y: 4.5cqi;
+  --card-effect-padding-bottom: 2cqi;
+}
+
+.card.card-magic-coral-compact {
+  --card-effect-font-scale: 8.35cqi;
+  --card-effect-line-height: 1.22;
+  --card-effect-padding-y: 4.2cqi;
+  --card-effect-padding-bottom: 2cqi;
+}
+
+.card.card-nuke-compact {
+  --card-effect-font-scale: 7.15cqi;
+  --card-effect-line-height: 1.28;
+  --card-effect-padding-y: 2.5cqi;
+  --card-effect-padding-bottom: 1.2cqi;
 }
 
 .card.card-effect-slightly-small.card-light-bulb,
@@ -7734,6 +7755,14 @@ html.blind-level-4 .card-prediction-part.magic {
 
 .card-token.tag-ocean-blinded {
   color: #2C3E50;
+}
+
+.card-token.tag-sewers-confusion {
+  color: #5D55A5;
+}
+
+.card-token.tag-arctic-ready {
+  color: #3F83B8;
 }
 
 .card-token.tag-wide-strike {
@@ -8243,6 +8272,10 @@ html.blind-level-4 .card-prediction-part.magic {
   color: #63B85C;
 }
 
+.card-token.status-frost {
+  color: #4E9DCC;
+}
+
 .card-token.status-crit {
   color: #D4AC0D;
 }
@@ -8551,9 +8584,9 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 .card-flag.custom {
-  color: #111;
-  background: #fff;
-  border-color: #111;
+  color: var(--custom-tag-color, #111);
+  background: color-mix(in srgb, var(--custom-tag-color, #111) 15%, var(--bg-card, #fff));
+  border-color: color-mix(in srgb, var(--custom-tag-color, #111) 34%, transparent);
 }
 
 .card-flag.fusion-layer {

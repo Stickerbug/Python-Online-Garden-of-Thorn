@@ -295,15 +295,24 @@ def _fill(field):
 
 
 def card_text(card_id, fallback):
+    runtime_i18n = {
+        'name': fallback.get('name_i18n') if isinstance(fallback.get('name_i18n'), dict) else {},
+        'desc': fallback.get('description_i18n') if isinstance(fallback.get('description_i18n'), dict) else {},
+        'effect': fallback.get('effect_text_i18n') if isinstance(fallback.get('effect_text_i18n'), dict) else {},
+        'trigger': fallback.get('trigger_effect_text_i18n') if isinstance(fallback.get('trigger_effect_text_i18n'), dict) else {},
+    }
     data = CARD_I18N.get(card_id)
     if not data:
         out = dict(fallback)
-        name = _fill({
+        name = _fill(runtime_i18n['name'] or {
             'zh': fallback.get('name_cn') or fallback.get('name_en') or card_id_to_english(card_id),
             'en': fallback.get('name_en') or card_id_to_english(card_id),
         })
         out['name_en'] = name['en']
         out['name_i18n'] = name
+        out['description_i18n'] = _fill(runtime_i18n['desc'] or {'zh': fallback.get('description', '')})
+        out['effect_text_i18n'] = _fill(runtime_i18n['effect'] or {'zh': fallback.get('effect_text', '')})
+        out['trigger_effect_text_i18n'] = _fill(runtime_i18n['trigger'] or {'zh': fallback.get('trigger_effect_text', '')})
         return out
     name = _fill(data.get('name', {}))
     name['en'] = fallback.get('name_en') or name.get('en') or card_id_to_english(card_id)
@@ -321,6 +330,20 @@ def card_text(card_id, fallback):
     }))
     if fallback.get('trigger_effect_text'):
         trigger['zh'] = fallback.get('trigger_effect_text')
+    # Embedded package locales describe the current card revision. The global
+    # table contains useful legacy fallbacks, but must not overwrite newer mod
+    # text after balance or rules changes.
+    for lang in LANGS:
+        if lang == 'zh':
+            continue
+        if runtime_i18n['name'].get(lang):
+            name[lang] = runtime_i18n['name'][lang]
+        if runtime_i18n['desc'].get(lang):
+            desc[lang] = runtime_i18n['desc'][lang]
+        if runtime_i18n['effect'].get(lang):
+            effect[lang] = runtime_i18n['effect'][lang]
+        if runtime_i18n['trigger'].get(lang):
+            trigger[lang] = runtime_i18n['trigger'][lang]
     return {
         'name_i18n': name,
         'description_i18n': desc,

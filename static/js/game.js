@@ -2607,6 +2607,21 @@ const CARD_FLAG_ALIASES = {
     tag_preserve_fission: '',
     'ocean:preserve_fission': '',
     'tag_ocean:preserve_fission': '',
+    'tag_arctic:ready': 'arctic:ready',
+    'flag_arctic:ready': 'arctic:ready',
+    'tag-arctic:ready': 'arctic:ready',
+    'tag_arctic:ricochet_3': 'arctic:ricochet_3',
+    'flag_arctic:ricochet_3': 'arctic:ricochet_3',
+    'tag-arctic:ricochet_3': 'arctic:ricochet_3',
+    no_target: 'self_only',
+    'hel:no_target': 'self_only',
+    'tag_hel:no_target': 'self_only',
+    'flag_hel:no_target': 'self_only',
+    'tag-hel:no_target': 'self_only',
+    confusion: 'sewers:confusion',
+    'tag_sewers:confusion': 'sewers:confusion',
+    'flag_sewers:confusion': 'sewers:confusion',
+    'tag-sewers:confusion': 'sewers:confusion',
 };
 
 const _VANILLA_FLAGS = new Set([
@@ -2622,7 +2637,9 @@ function normalizeCardFlag(flag) {
     const text = String(flag == null ? '' : flag).trim();
     if (!text) return '';
     const lower = text.toLowerCase();
-    if (CARD_FLAG_ALIASES[lower]) return CARD_FLAG_ALIASES[lower];
+    if (Object.prototype.hasOwnProperty.call(CARD_FLAG_ALIASES, lower)) {
+        return CARD_FLAG_ALIASES[lower];
+    }
     // Auto-strip namespace prefix for known vanilla flags (e.g. "factory:rebound" -> "rebound")
     if (lower.includes(':')) {
         const local = lower.split(':').pop();
@@ -2740,8 +2757,11 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-charge', re: /^(?:电荷|Charge)(?::[+-]?\d+)?/i },
     { cls: 'tag-floating', re: /^(?:漂浮|Floating)/i },
     { cls: 'tag-ocean-blinded', re: /^(?:蒙蔽|Obscured)/i },
+    { cls: 'tag-sewers-confusion', re: /^(?:迷惑|Confusion)/i },
+    { cls: 'tag-arctic-ready', re: /^(?:蓄势待发|Ready)/i },
     { cls: 'tag-wide-strike', re: /^(?:广域打击|Wide Strike)/i },
     { cls: 'tag-self-target', re: /^(?:自刃|Self-cut)/i },
+    { cls: 'status-frost', re: /^(?:[+-]?\d+层霜冻|霜冻[:：]?[+-]?\d+层?|霜冻|Frost)/i },
     { cls: 'status-blood-debt', re: /^(?:[+-]?\d+层血债|血债[:：]?[+-]?\d+层?)/i },
     { cls: 'status-unable-counter', re: /^(?:[+-]?\d+层无法反制|无法反制[:：]?[+-]?\d+层?)/i },
     { cls: 'status-luck', re: /^(?:[+-]?\d+层幸运|幸运[:：]?[+-]?\d+层?|幸运)/i },
@@ -3126,6 +3146,10 @@ function extractInlineUnitPrefix(sourceText, iconStart, iconKey) {
     const match = before.match(pattern);
     if (!match || !match[0]) return null;
     const text = match[0];
+    // A formula can contain an earlier icon marker, for example
+    // (current [[icon:H]] x 8%)[[icon:D]]. Removing that whole source prefix
+    // from the already-rendered HTML would cut through the first icon's tags.
+    if (text.includes('[[')) return null;
     return {
         text,
         htmlLength: escapeHtml(text).length,
@@ -3353,6 +3377,8 @@ function getCardTextTokenTermKey(cls, text = '') {
         'tag-charge': 'flag:charge',
         'tag-floating': 'flag:floating',
         'tag-ocean-blinded': 'flag:ocean_blinded',
+        'tag-sewers-confusion': 'flag:sewers:confusion',
+        'tag-arctic-ready': 'flag:arctic:ready',
         'tag-wide-strike': 'flag:wide_strike',
         'tag-self-target': 'flag:self_target',
     };
@@ -3387,6 +3413,7 @@ function getCardTextTokenTermKey(cls, text = '') {
         'status-untargetable': 'status:untargetable',
         'status-magic-nazar': 'status:magic_nazar',
         'status-blood-debt': 'status:blood_debt',
+        'status-frost': 'status:arctic:frost',
     };
     if (statusMap[cls]) return statusMap[cls];
     if (cls === 'toxic') return 'term:toxic';
@@ -3470,6 +3497,46 @@ Object.assign(LOG_TEXT.ja, {
     team_win: 'チーム{team}の勝利。',
     disconnect_loss: '{p}の切断が長すぎました。{winner}の勝利。',
     team_disconnect_loss: '{p}の切断が長すぎました。チーム{team}の勝利。',
+});
+
+Object.assign(LOG_TEXT.en, {
+    compact_damage: '{p} takes {damage} (H={h})',
+    gain_resource: '{p} gains {n}{resource}',
+    recover_resource: '{p} recovers {n}{resource}',
+    draw_and_recover: '{p} draws {n} cards and recovers {amount}{resource}',
+    gain_status: '{p} gains {n} {status}',
+    apply_status: '{p} applies {n} {status} to {target}',
+    status_reduced: "{p}'s {status} decreases by {n}",
+    skip_turn: '{p} skips this turn due to {reason}.',
+    equip_self: '{p} equips {card}',
+    equip_target: '{p} equips {card} to {target}',
+    trigger_card: "{p}'s {card} triggers: {detail}",
+});
+Object.assign(LOG_TEXT.fr, {
+    compact_damage: '{p} subit {damage} (H={h})',
+    gain_resource: '{p} gagne {n}{resource}',
+    recover_resource: '{p} récupère {n}{resource}',
+    draw_and_recover: '{p} pioche {n} cartes et récupère {amount}{resource}',
+    gain_status: '{p} gagne {n} {status}',
+    apply_status: '{p} applique {n} {status} à {target}',
+    status_reduced: 'Les charges de {status} de {p} diminuent de {n}',
+    skip_turn: '{p} passe ce tour à cause de {reason}.',
+    equip_self: '{p} équipe {card}',
+    equip_target: '{p} équipe {card} sur {target}',
+    trigger_card: '{card} de {p} se déclenche : {detail}',
+});
+Object.assign(LOG_TEXT.ja, {
+    compact_damage: '{p}が{damage}を受ける（H={h}）',
+    gain_resource: '{p}が{n}{resource}を得る',
+    recover_resource: '{p}が{n}{resource}回復',
+    draw_and_recover: '{p}が{n}枚引き、{amount}{resource}回復',
+    gain_status: '{p}が{status}を{n}層得る',
+    apply_status: '{p}が{target}に{status}を{n}層付与',
+    status_reduced: '{p}の{status}が{n}層減少',
+    skip_turn: '{p}は{reason}によりこのターンをスキップ。',
+    equip_self: '{p}が{card}を装備',
+    equip_target: '{p}が{target}に{card}を装備',
+    trigger_card: '{p}の{card}が発動：{detail}',
 });
 
 Object.assign(LOG_TEXT.en, { battery_counter: 'Battery counter' });
@@ -3571,18 +3638,33 @@ function localizedCardTypeFromCn(typeName) {
 }
 
 function localizeKnownLogText(line) {
-    let out = localizePlayerNameInText(line);
+    let out = String(line || '');
     const cardNames = Object.values(CARD_DEFS)
         .filter(cd => cd && cd.name_cn)
         .sort((a, b) => String(b.name_cn).length - String(a.name_cn).length);
     for (const cd of cardNames) {
-        out = out.replaceAll(cd.name_cn, getCardName(cd));
+        out = replaceBattleLogTextOutsidePlayerNames(out, cd.name_cn, getCardName(cd));
+    }
+    const termLib = getTermIntroLibrary();
+    const statusTerms = [
+        ['状态免疫', 'status_immune'], ['魔力回合回复', 'turn_magic'], ['回合回复', 'turn_heal'],
+        ['魔力封锁', 'magic_blocked'], ['无法反制', 'unable_counter'], ['装备护甲', 'equip_protect'],
+        ['不可选中', 'untargetable'], ['无法选中', 'untargetable'], ['中毒', 'P'], ['灼烧', 'F'],
+        ['剧毒', 'toxic'], ['失明', 'blind'], ['迟缓', 'sluggish'], ['超载', 'overload'],
+        ['预知', 'foresight'], ['滞留', 'stagnation'], ['虚弱', 'weakness'], ['易损', 'fragile'],
+        ['流血', 'bleed'], ['破损', 'fracture'], ['护盾', 'shield'], ['眩晕', 'stunned'],
+        ['护甲', 'A'], ['闪避', 'dodge'], ['禁疗', 'heal_block'], ['禁攻', 'attack_blocked'], ['血债', 'blood_debt'],
+        ['幸运', 'luck'], ['烈火', 'blazing_fire'], ['霜冻', 'frost'],
+    ];
+    for (const [source, key] of statusTerms) {
+        const localized = termLib[key] && String(termLib[key].label || '').replace(/^[HEMPF]\s*[:：]\s*/i, '');
+        if (localized) out = replaceBattleLogTextOutsidePlayerNames(out, source, localized);
     }
     const pairs = LOG_FALLBACK_REPLACE[currentLang] || [];
     for (const [from, to] of pairs) {
-        out = out.replaceAll(from, to);
+        out = replaceBattleLogTextOutsidePlayerNames(out, from, to);
     }
-    return localizeDamageSource(out);
+    return localizeDamageSource(localizePlayerNameInText(out));
 }
 
 function localizeDamageSource(source) {
@@ -3624,6 +3706,49 @@ function translateLogLine(line) {
     if ((m = line.match(/^(.+)\u4f7f\u7528\u8fa3\u6912\uff0c\u5f031\u5f20\u5e76\u62bd1\u5f20\u724c$/))) return fmtLog('chilli_discard_draw', { p: lp(m[1]) });
     if ((m = line.match(/^(.+)\u4f7f\u7528\u8fa3\u6912\uff0c\u62bd1\u5f20\u724c$/))) return fmtLog('chilli_draw', { p: lp(m[1]) });
     if ((m = line.match(/^(.+)\u56de\u590d(\d+)E$/))) return fmtLog('recover_e', { p: lp(m[1]), n: m[2] });
+    // Engines compact repeated effects before sending the log. Translate the
+    // final compact wire format too, so every game mode shares one renderer.
+    if ((m = line.match(/^(.+?)受到(.+?)[（(]H=([^）)]+)[）)]$/)) && !/[点傷伤害]/.test(m[2])) {
+        return fmtLog('compact_damage', { p: lp(m[1]), damage: localizeDamageSource(m[2]), h: m[3] });
+    }
+    if ((m = line.match(/^(.+?)抽(\d+)张牌[，,]\s*回复(\d+)([HEM])(?:\s*×(\d+))?$/))) {
+        const repeat = Number(m[5] || 1) > 1 ? ` ×${m[5]}` : '';
+        return `${fmtLog('draw_and_recover', { p: lp(m[1]), n: m[2], amount: m[3], resource: m[4] })}${repeat}`;
+    }
+    if ((m = line.match(/^(.+?)(获得|回复)(\d+)(H|E|M|护甲|闪避)(?:\s*×(\d+))?$/))) {
+        const key = m[2] === '回复' ? 'recover_resource' : 'gain_resource';
+        const repeat = Number(m[5] || 1) > 1 ? ` ×${m[5]}` : '';
+        return `${fmtLog(key, { p: lp(m[1]), n: m[3], resource: localizeKnownLogText(m[4]) })}${repeat}`;
+    }
+    if ((m = line.match(/^(.+?)(?:获得|\+)(\d+)层(.+?)(?:\s*×(\d+))?$/))) {
+        const repeat = Number(m[4] || 1) > 1 ? ` ×${m[4]}` : '';
+        return `${fmtLog('gain_status', { p: lp(m[1]), n: m[2], status: localizeKnownLogText(m[3]) })}${repeat}`;
+    }
+    if ((m = line.match(/^(.+?)对(.+?)施加(\d+)层(.+?)(?:\s*×(\d+))?$/))) {
+        const repeat = Number(m[5] || 1) > 1 ? ` ×${m[5]}` : '';
+        return `${fmtLog('apply_status', { p: lp(m[1]), target: lp(m[2]), n: m[3], status: localizeKnownLogText(m[4]) })}${repeat}`;
+    }
+    if ((m = line.match(/^(.+?)的(.+?)(?:减少|-)(\d+)层?$/))) {
+        return fmtLog('status_reduced', { p: lp(m[1]), status: localizeKnownLogText(m[2]), n: m[3] });
+    }
+    if ((m = line.match(/^(.+?)被(.+?)[，,]\s*跳过本回合[！!]?$/))) {
+        return fmtLog('skip_turn', { p: lp(m[1]), reason: localizeKnownLogText(m[2]) });
+    }
+    if ((m = line.match(/^(.+?)使用并给(.+?)装备了([^，,]+)(?:[，,]\s*(.+))?$/))) {
+        const base = fmtLog('equip_target', { p: lp(m[1]), target: lp(m[2]), card: localizedCardNameFromAny(m[3]) });
+        return m[4] ? `${base}: ${localizeKnownLogText(m[4])}` : base;
+    }
+    if ((m = line.match(/^(.+?)使用并装备了([^，,]+)(?:[，,]\s*(.+))?$/))) {
+        const base = fmtLog('equip_self', { p: lp(m[1]), card: localizedCardNameFromAny(m[2]) });
+        return m[3] ? `${base}: ${localizeKnownLogText(m[3])}` : base;
+    }
+    if ((m = line.match(/^(.+?)的([^，,:：]+?)触发[！!]?(?:[，,:：]\s*(.+))?$/))) {
+        return fmtLog('trigger_card', {
+            p: lp(m[1]),
+            card: localizedCardNameFromAny(m[2]),
+            detail: localizeKnownLogText(m[3] || ''),
+        });
+    }
     if ((m = line.match(/^(.+)\u53d7\u5230(\d+)\u70b9(.+)\u4f24\u5bb3\uff08H=(-?\d+)\uff09$/))) return fmtLog('take_damage', { p: lp(m[1]), n: m[2], source: localizeDamageSource(m[3]), h: m[4] });
     if ((m = line.match(/^(.+)\u53d7\u5230(\d+)\u70b9\u4f24\u5bb3\uff08H=(-?\d+)\uff09$/))) return fmtLog('take_damage', { p: lp(m[1]), n: m[2], source: '', h: m[3] });
     if ((m = line.match(/^(.+)\u4f7f\u7528(.+)\uff01\u9020\u6210(\d+)\u4f24\u5bb3$/))) return fmtLog('use_deal', { p: lp(m[1]), card: localizedCardNameFromAny(m[2]), n: m[3] });
@@ -4678,9 +4803,13 @@ function updateStaticText() {
     if (achievementsTitle) achievementsTitle.textContent = UI.achievements_title || '成就与荆露';
     document.querySelectorAll('[data-achievement-tab]').forEach(btn => {
         const tab = btn.dataset.achievementTab || '';
-        const zhLabels = { dew: '荆露', daily: '签到', achievements: '成就', tasks: '每日任务' };
-        const enLabels = { dew: 'Thorn Dew', daily: 'Check-in', achievements: 'Achievements', tasks: 'Daily Tasks' };
-        btn.textContent = (currentLang === 'zh' ? zhLabels[tab] : enLabels[tab]) || btn.textContent;
+        const labels = {
+            dew: lt({ zh: '荆露', en: 'Thorn Dew', fr: 'Rosée d’épines', ja: 'ソーンデュー' }),
+            daily: lt({ zh: '签到', en: 'Check-in', fr: 'Connexion', ja: 'ログインボーナス' }),
+            achievements: lt({ zh: '成就', en: 'Achievements', fr: 'Succès', ja: '実績' }),
+            tasks: lt({ zh: '每日任务', en: 'Daily Tasks', fr: 'Missions quotidiennes', ja: 'デイリー任務' }),
+        };
+        btn.textContent = labels[tab] || btn.textContent;
     });
     const changelogTitle = $('changelog-popover-title');
     if (changelogTitle) changelogTitle.textContent = UI.about_changelog || '更新日志';
@@ -5814,8 +5943,51 @@ function getCustomStatusDef(statusId) {
     return (CUSTOM_STATUS_DEFS && CUSTOM_STATUS_DEFS[statusId]) || null;
 }
 
+const CORE_REGISTRY_I18N = {
+    'arctic:ready': {
+        name: { zh: '蓄势待发', en: 'Ready', fr: 'Prêt', ja: '準備万端' },
+        description: {
+            zh: '自己回合开始时，若此牌满足打出条件，则自动打出。',
+            en: 'At the start of your turn, automatically play this card if its play conditions are met.',
+            fr: 'Au début de votre tour, jouez automatiquement cette carte si ses conditions d’utilisation sont remplies.',
+            ja: '自分のターン開始時、使用条件を満たしていればこのカードを自動で使用します。',
+        },
+    },
+    'arctic:ricochet_3': {
+        name: { zh: '弹射:3', en: 'Ricochet:3', fr: 'Ricochet:3', ja: '跳弾:3' },
+        description: {
+            zh: '效果结算后，随机选择一个不同于原目标的可选中目标，使该效果额外结算1次；重复3次，额外目标可以重复。',
+            en: 'After resolving, repeat the effect 3 times. Each time, randomly choose a selectable target other than the original target; repeated extra targets are allowed.',
+            fr: 'Après la résolution, répétez l’effet 3 fois. À chaque fois, choisissez au hasard une cible sélectionnable autre que la cible initiale ; une même cible supplémentaire peut être choisie plusieurs fois.',
+            ja: '効果解決後、元の対象以外から選択可能な対象をランダムに選び、効果を追加で1回解決します。これを3回繰り返し、追加対象は重複できます。',
+        },
+    },
+    'sewers:confusion': {
+        name: { zh: '迷惑', en: 'Misdirection', fr: 'Diversion', ja: '攪乱' },
+        description: {
+            zh: '反制窗口中，此牌显示为所选模组卡池中攻击伤害最接近的另一张牌；实际效果与战斗日志不变。',
+            en: 'In response windows, this card appears as another enabled card with the closest attack damage. Its actual effect and battle-log entry are unchanged.',
+            fr: 'Dans la fenêtre de réponse, cette carte apparaît comme une autre carte activée dont les dégâts d’attaque sont les plus proches. Son effet réel et le journal de combat restent inchangés.',
+            ja: '反制ウィンドウでは、有効なカードプール内で攻撃ダメージが最も近い別カードとして表示されます。実際の効果と戦闘ログは変わりません。',
+        },
+    },
+    'arctic:frost': {
+        name: { zh: '霜冻', en: 'Frost', fr: 'Gel', ja: '凍結' },
+        description: {
+            zh: '上限60层；每有10层，卡牌E花费+1。自己回合结束时，层数向下取整减半。',
+            en: 'Maximum 60 stacks. Card E costs increase by 1 for every 10 stacks. At the end of your turn, halve the stacks rounded down.',
+            fr: 'Maximum 60 charges. Le coût E des cartes augmente de 1 par tranche de 10 charges. À la fin de votre tour, divisez les charges par deux en arrondissant à l’inférieur.',
+            ja: '上限60層。10層ごとにカードのEコストが1増えます。自分のターン終了時、層数を切り捨てで半減します。',
+        },
+    },
+};
+
 function getRegistryText(def, field, fallback = '') {
     if (!def) return fallback;
+    const core = CORE_REGISTRY_I18N[String(def.id || '')];
+    if (core && core[field] && core[field][currentLang]) return core[field][currentLang];
+    const dict = def[`${field}_i18n`];
+    if (dict && typeof dict === 'object' && dict[currentLang]) return dict[currentLang];
     const langKey = `${field}_${currentLang}`;
     const cnKey = `${field}_cn`;
     const enKey = `${field}_en`;
@@ -5836,7 +6008,7 @@ function customTagHtml(flag, text = null) {
     const label = text || getRegistryText(def, 'name', normalized);
     const color = safeRegistryColor(def && def.color, '#2C3E50');
     const icon = def && def.icon ? `${escapeHtml(def.icon)} ` : '';
-    return `<span class="card-flag custom" style="color:${color};border-color:${color};background:#fff">${icon}${escapeHtml(label)}</span>`;
+    return `<span class="card-flag custom" style="--custom-tag-color:${color};color:${color};border-color:${color}">${icon}${escapeHtml(label)}</span>`;
 }
 
 function makeGalleryFlagHtml(flag) {
@@ -5968,6 +6140,8 @@ function isVisibleLoadoutCardDef(cd) {
 
 function localizedModNameFromFields(obj, fallback = '') {
     if (!obj) return fallback;
+    const dict = obj.name_i18n || obj.source_mod_name_i18n || {};
+    if (dict[currentLang]) return dict[currentLang];
     const zhName = obj.name_cn || obj.source_mod_name_cn;
     const enName = obj.name_en || obj.source_mod_name_en || obj.name || obj.source_mod_name;
     if (currentLang === 'zh' && zhName) return zhName;
@@ -5976,10 +6150,30 @@ function localizedModNameFromFields(obj, fallback = '') {
 
 function localizedModDescriptionFromFields(obj, fallback = '') {
     if (!obj) return fallback;
+    const dict = obj.description_i18n || {};
+    if (dict[currentLang]) return dict[currentLang];
     const zhText = obj.description_cn;
     const enText = obj.description_en || obj.description;
     if (currentLang === 'zh' && zhText) return zhText;
     return enText || zhText || fallback || '';
+}
+
+function getGalleryCardSortMembership(cd) {
+    const memberships = getGalleryCardModMemberships(cd);
+    if (!memberships.length) return null;
+    const selected = gallerySelectedModKeys instanceof Set
+        ? memberships.filter(item => gallerySelectedModKeys.has(item.key))
+        : [];
+    const candidates = selected.length ? selected : memberships;
+    return [...candidates].sort((a, b) => {
+        const rankA = getOfficialModDisplayRank(a);
+        const rankB = getOfficialModDisplayRank(b);
+        if (rankA !== rankB) return rankA - rankB;
+        return String(a.sortName || a.label || a.filename || '').localeCompare(
+            String(b.sortName || b.label || b.filename || ''),
+            'en'
+        );
+    })[0] || null;
 }
 
 function compareGalleryCards(a, b) {
@@ -5989,15 +6183,17 @@ function compareGalleryCards(a, b) {
     if (!ca && !cb) return String(a || '').localeCompare(String(b || ''), 'en');
     if (!ca) return 1;
     if (!cb) return -1;
-    const va = ca.source_mod_is_vanilla ? 0 : 1;
-    const vb = cb.source_mod_is_vanilla ? 0 : 1;
+    const membershipA = getGalleryCardSortMembership(ca);
+    const membershipB = getGalleryCardSortMembership(cb);
+    const va = membershipA ? (membershipA.isVanilla ? 0 : 1) : (ca.source_mod_is_vanilla ? 0 : 1);
+    const vb = membershipB ? (membershipB.isVanilla ? 0 : 1) : (cb.source_mod_is_vanilla ? 0 : 1);
     if (va !== vb) return va - vb;
     if (va !== 0) {
-        const rankA = getOfficialModDisplayRank(ca.source_mod_filename || ca.source_mod_name_en || ca.source_mod_sort_name || ca.source_mod_name);
-        const rankB = getOfficialModDisplayRank(cb.source_mod_filename || cb.source_mod_name_en || cb.source_mod_sort_name || cb.source_mod_name);
+        const rankA = getOfficialModDisplayRank(membershipA || ca.source_mod_filename || ca.source_mod_name_en || ca.source_mod_sort_name || ca.source_mod_name);
+        const rankB = getOfficialModDisplayRank(membershipB || cb.source_mod_filename || cb.source_mod_name_en || cb.source_mod_sort_name || cb.source_mod_name);
         if (rankA !== rankB) return rankA - rankB;
-        const ma = String(ca.source_mod_name_en || ca.source_mod_sort_name || ca.source_mod_name || ca.source_mod_filename || '').toLowerCase();
-        const mb = String(cb.source_mod_name_en || cb.source_mod_sort_name || cb.source_mod_name || cb.source_mod_filename || '').toLowerCase();
+        const ma = String((membershipA && (membershipA.sortName || membershipA.label || membershipA.filename)) || ca.source_mod_name_en || ca.source_mod_sort_name || ca.source_mod_name || ca.source_mod_filename || '').toLowerCase();
+        const mb = String((membershipB && (membershipB.sortName || membershipB.label || membershipB.filename)) || cb.source_mod_name_en || cb.source_mod_sort_name || cb.source_mod_name || cb.source_mod_filename || '').toLowerCase();
         const modCmp = ma.localeCompare(mb, 'en');
         if (modCmp) return modCmp;
     }
@@ -6040,6 +6236,7 @@ function getGalleryCardModLabel(cd) {
     return localizedModNameFromFields({
         name_cn: cd.source_mod_name_cn,
         name_en: cd.source_mod_name_en,
+        name_i18n: cd.source_mod_name_i18n,
         name: cd.source_mod_name,
         filename: cd.source_mod_filename,
     }, cd.source_mod_filename || cd.source_mod_name || 'Unknown');
@@ -6450,6 +6647,26 @@ function getAllStatusDefs() {
         { key: 'jungle:turn_magic_turns', iconKey: 'turn_magic', label: '魔力回合回复', desc: '魔力回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:M]]，然后X-1；X为0时移除。', color: COLORS.magic, source: 'vanilla' },
         { key: 'jungle:toxic_poison', iconKey: 'toxic_poison', label: '剧毒', desc: '中毒结算后，对自己施加等同于剧毒层数的[[icon:P]]；不自动减少。', color: '#5E8C31', source: 'vanilla' },
     ];
+    const statusTermAliases = {
+        poison: 'P', fire: 'F', toxic: 'toxic', triangle: 'triangle', nazar: 'nazar',
+        magic_nazar: 'magic_nazar', equip_protect: 'equip_protect', invincible: 'invincible',
+        dodge: 'dodge', status_immune: 'status_immune', stunned: 'stunned',
+        attack_blocked: 'attack_blocked', attack_only: 'attack_only', untargetable: 'untargetable',
+        bandage: 'bandage', sponge: 'sponge', sluggish: 'sluggish', overload: 'overload',
+        foresight: 'foresight', fracture: 'fracture', stagnation: 'stagnation', blind: 'blind',
+        heal_block: 'heal_block', weakness: 'weakness', bleed: 'bleed', fragment: 'fragment',
+        magic_blocked: 'magic_blocked', root_status: 'root_status', blood_debt: 'blood_debt',
+        unable_counter: 'unable_counter', luck: 'luck', blazing_fire: 'blazing_fire',
+        'jungle:fragile': 'fragile', 'jungle:shield': 'shield',
+        'jungle:turn_heal_turns': 'turn_heal', 'jungle:turn_magic_turns': 'turn_magic',
+        'jungle:toxic_poison': 'toxic_poison',
+    };
+    for (const status of builtInList) {
+        const term = termLib[statusTermAliases[status.key] || status.key];
+        if (!term) continue;
+        if (term.label) status.label = term.label;
+        if (term.desc) status.desc = term.desc;
+    }
     builtInList.forEach(s => result.set(s.key, { ...s, source: s.source || 'vanilla' }));
     if (CUSTOM_STATUS_DEFS && typeof CUSTOM_STATUS_DEFS === 'object') {
         Object.entries(CUSTOM_STATUS_DEFS).forEach(([id, def]) => {
@@ -6686,10 +6903,11 @@ function clearActionToast() {
 }
 
 function achievementToastText(item = {}) {
-    const zh = currentLang === 'zh';
+    const names = item.name_i18n && typeof item.name_i18n === 'object' ? item.name_i18n : {};
+    const descriptions = item.description_i18n && typeof item.description_i18n === 'object' ? item.description_i18n : {};
     return {
-        name: zh ? (item.name_cn || item.name || item.id || '') : (item.name_en || item.name_cn || item.name || item.id || ''),
-        description: zh ? (item.description_cn || item.description || '') : (item.description_en || item.description_cn || item.description || ''),
+        name: names[currentLang] || names.en || names.zh || (currentLang === 'zh' ? item.name_cn : item.name_en) || item.name_cn || item.name || item.id || '',
+        description: descriptions[currentLang] || descriptions.en || descriptions.zh || (currentLang === 'zh' ? item.description_cn : item.description_en) || item.description_cn || item.description || '',
     };
 }
 
@@ -6733,7 +6951,7 @@ function showNextAchievementToast() {
     const kicker = toast.querySelector('.achievement-toast-kicker');
     const name = toast.querySelector('.achievement-toast-name');
     const desc = toast.querySelector('.achievement-toast-desc');
-    if (kicker) kicker.textContent = currentLang === 'zh' ? '成就已完成！' : 'Achievement Unlocked!';
+    if (kicker) kicker.textContent = lt({ zh: '成就已完成！', en: 'Achievement Unlocked!', fr: 'Succès déverrouillé !', ja: '実績を解除！' });
     if (name) name.textContent = text.name || 'Achievement';
     if (desc) desc.textContent = text.description || (item.hidden ? '?' : '');
     if (achievementToastTimer) {
@@ -7847,7 +8065,7 @@ function escapeClassToken(value) {
     return String(value || 'default').replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-const DATA_CACHE_VERSION = 'v9';
+const DATA_CACHE_VERSION = 'v10';
 const loadedCommunityFontSubsets = new Set();
 const communityFontFaceUrls = new Set();
 
@@ -8474,6 +8692,94 @@ function getCardEffectTextForInstance(cardDict, cardDef) {
     return text;
 }
 
+const pendingCardEffectFits = new Set();
+let pendingCardEffectFitFrame = 0;
+
+function resetCardEffectAutoFit(effectEl) {
+    if (!effectEl) return;
+    effectEl.style.removeProperty('font-size');
+    effectEl.style.removeProperty('padding-top');
+    effectEl.style.removeProperty('padding-bottom');
+    effectEl.style.removeProperty('padding-left');
+    effectEl.style.removeProperty('padding-right');
+}
+
+function fitCardEffectText(cardEl) {
+    if (!cardEl || !cardEl.isConnected || cardEl.classList.contains('card-facedown')) return;
+    const effectEl = cardEl.querySelector(':scope > .card-effect');
+    if (!effectEl) return;
+
+    resetCardEffectAutoFit(effectEl);
+    cardEl.dataset.effectFitScale = '1';
+    const cardRect = cardEl.getBoundingClientRect();
+    if (cardRect.width < 20 || cardRect.height < 20 || effectEl.getClientRects().length === 0) return;
+
+    const baseStyle = getComputedStyle(effectEl);
+    const baseFontSize = parseFloat(baseStyle.fontSize) || 1;
+    const baseLineHeight = parseFloat(baseStyle.lineHeight) || (baseFontSize * 1.2);
+    const basePadding = {
+        top: parseFloat(baseStyle.paddingTop) || 0,
+        right: parseFloat(baseStyle.paddingRight) || 0,
+        bottom: parseFloat(baseStyle.paddingBottom) || 0,
+        left: parseFloat(baseStyle.paddingLeft) || 0,
+    };
+    const hasAttackPrediction = cardEl.classList.contains('card-effect-fit-prediction');
+    const predictionHeightLimit = hasAttackPrediction ? baseLineHeight * 3.7 : Infinity;
+    const minimumScale = 0.6;
+    let scale = 1;
+
+    for (let pass = 0; pass < 14; pass++) {
+        const style = getComputedStyle(effectEl);
+        const paddingY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+        const naturalTextHeight = Math.max(0, effectEl.scrollHeight - paddingY);
+        const overflowed = effectEl.scrollHeight > effectEl.clientHeight + 0.75;
+        const nextEl = effectEl.nextElementSibling;
+        const effectRect = effectEl.getBoundingClientRect();
+        const nextTop = nextEl
+            ? nextEl.getBoundingClientRect().top
+            : cardEl.getBoundingClientRect().bottom;
+        const spareGap = Math.max(0, nextTop - effectRect.bottom);
+        const needsBreathingRoom = spareGap + 0.5 < baseLineHeight * 0.18;
+        const predictionTooTall = naturalTextHeight > predictionHeightLimit + 0.5;
+        if (!overflowed && !needsBreathingRoom && !predictionTooTall) break;
+        if (scale <= minimumScale + 0.001) break;
+
+        let nextScale = scale - 0.04;
+        if (predictionTooTall && naturalTextHeight > 0) {
+            nextScale = Math.min(nextScale, scale * predictionHeightLimit / naturalTextHeight * 0.985);
+        }
+        scale = Math.max(minimumScale, nextScale);
+        effectEl.style.fontSize = `${baseFontSize * scale}px`;
+        effectEl.style.paddingTop = `${basePadding.top * scale}px`;
+        effectEl.style.paddingRight = `${basePadding.right * scale}px`;
+        effectEl.style.paddingBottom = `${basePadding.bottom * scale}px`;
+        effectEl.style.paddingLeft = `${basePadding.left * scale}px`;
+        cardEl.dataset.effectFitScale = scale.toFixed(3);
+    }
+}
+
+function scheduleCardEffectFit(cardEl) {
+    if (!cardEl) return;
+    pendingCardEffectFits.add(cardEl);
+    if (pendingCardEffectFitFrame) return;
+    pendingCardEffectFitFrame = requestAnimationFrame(() => {
+        pendingCardEffectFitFrame = 0;
+        const cards = Array.from(pendingCardEffectFits);
+        pendingCardEffectFits.clear();
+        cards.forEach(fitCardEffectText);
+    });
+}
+
+function scheduleVisibleCardEffectFits() {
+    document.querySelectorAll('.card:not(.card-facedown)').forEach(scheduleCardEffectFit);
+}
+
+let cardEffectFitResizeTimer = 0;
+window.addEventListener('resize', () => {
+    clearTimeout(cardEffectFitResizeTimer);
+    cardEffectFitResizeTimer = window.setTimeout(scheduleVisibleCardEffectFits, 80);
+}, { passive: true });
+
 function createCardElement(cardDict, options = {}) {
     const { faceDown = false, small = false, draggable = false, onClick = null, showAllFlags = false, disableIntro = false } = options;
     const el = document.createElement('div');
@@ -8518,6 +8824,15 @@ function createCardElement(cardDict, options = {}) {
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Mimic', 'Leaf', 'Dizzy'])
         || ['拟态', '叶子', '眩晕'].includes(cardDef.name_cn)) {
         el.classList.add('card-effect-gentle-small');
+    }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['Mimic']) || cardDef.name_cn === '拟态') {
+        el.classList.add('card-mimic-compact');
+    }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['MagicCoral']) || cardDef.name_cn === '魔法珊瑚') {
+        el.classList.add('card-magic-coral-compact');
+    }
+    if (cardMatchesAnyLocalId(cardDict, cardDef, ['Nuke']) || cardDef.name_cn === '核弹') {
+        el.classList.add('card-nuke-compact');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['LightBulb', 'sewers:light_bulb']) || cardDef.name_cn === '灯泡') {
         el.classList.add('card-light-bulb');
@@ -8663,6 +8978,9 @@ function createCardElement(cardDict, options = {}) {
         ownerState: predictionOptions.ownerState || cardOwnerState,
         attackerState: predictionOptions.attackerState || cardOwnerState,
     });
+    if (cardDef.card_type === 'thorn' && predictionHtml) {
+        el.classList.add('card-effect-fit-prediction');
+    }
     const displayCostE = isVoidPlaceholderCard(cardDict, cardDef) ? '?' : totalE;
     const displayCostM = isVoidPlaceholderCard(cardDict, cardDef) ? '?' : totalM;
     const bottomHtml = (predictionHtml || flagsHtml)
@@ -8684,6 +9002,7 @@ function createCardElement(cardDict, options = {}) {
         ${bottomHtml}
     `;
     bindInlineCardChips(el);
+    scheduleCardEffectFit(el);
     if (draggable) {
         el.classList.add('card-draggable');
         el.addEventListener('mousedown', (e) => startCardDrag(e, el));
@@ -9943,6 +10262,30 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             }
             return;
         }
+        if (op === 'arctic_nuke') {
+            const ownerState = options.ownerState || options.attackerState || {};
+            const targetState = options.targetState || {};
+            const card = options.cardDict || {};
+            const spend = Math.max(0, Math.floor(Number(ownerState.elixir || 0) - Number(options.cardCostE || 0)));
+            const percent = Math.max(0, Number(params.health_percent ?? 0.08));
+            const minimum = Math.max(0, Math.ceil(Number(params.minimum ?? 2)));
+            const fission = Math.max(1, Math.floor(Number(card.fission_level || (Number(card.fission_count || 0) + 1) || 1)));
+            const fusion = Math.max(1, Math.floor(Number(card.fusion_level || card.fusion_multiplier || 1)));
+            const repeats = fission + Math.max(0, Math.floor(Number(card.extra_hits || 0)));
+            const bonus = Math.max(0, Math.floor(Number(card.bonus_damage || 0)));
+            let health = Math.max(0, Number(targetState.health || 0));
+            for (let i = 0; i < spend && health > 0; i++) {
+                for (let hit = 0; hit < repeats && health > 0; hit++) {
+                    const base = Math.max(minimum, Math.ceil(health * percent));
+                    const amount = Math.ceil((base + bonus) * fusion / fission);
+                    prediction.target.damageHits.push(amount);
+                    health = Math.max(0, health - amount);
+                }
+            }
+            localContext.lastDamage = prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+            localContext.lastPositiveHits = prediction.target.damageHits.filter(value => Number(value || 0) > 0).length;
+            return;
+        }
         if (op !== 'direct_damage' && op !== 'deal_direct_damage' && op !== 'deal_damage' && op !== 'damage') return;
         if (!effectTargetIsPredictionTarget(params.target || 'target')) return;
         const isElectric = stepLooksLikeElectricDamage(params);
@@ -10062,6 +10405,8 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
         ownerState: attackerState,
         attackerState,
         targetState,
+        cardDict,
+        cardCostE: getCardDisplayCosts(cardDict, cardDef, attackerState).totalE,
         cardCostM: getCardDisplayCosts(cardDict, cardDef, attackerState).totalM,
     });
     collectSelfPredictionFromV2Steps(result, steps, attackerState, positiveHitCount);
@@ -10656,9 +11001,11 @@ function getStatusIntroItem(statusInfo) {
     const customDef = (statusInfo && statusInfo.customDef) || getCustomStatusDef(key);
     if (customDef) {
         return {
+            key,
             label: getRegistryText(customDef, 'name', key),
             desc: getRegistryText(customDef, 'description', '由模组定义的自定义状态。'),
             color: safeRegistryColor(customDef.color, statusInfo.fg || COLORS.text_primary),
+            iconKey: normalizeStatusIconKey(customDef.icon || key),
         };
     }
     const builtIns = {
@@ -12720,6 +13067,32 @@ function thornDewDeltaText(tx) {
     return String(total);
 }
 
+function thornDewTransactionReason(tx = {}) {
+    const sourceType = String(tx.source_type || '');
+    const raw = String(tx.reason || sourceType || '');
+    if (sourceType === 'achievement') {
+        const achievementId = String(tx.source_id || '').split(':topup:')[0];
+        const item = (achievementCenter?.achievements || []).find(entry => String(entry.id || '') === achievementId);
+        const name = item?.name || achievementId;
+        return lt({ zh: `成就：${name}`, en: `Achievement: ${name}`, fr: `Succès : ${name}`, ja: `実績：${name}` });
+    }
+    if (sourceType === 'daily_checkin') {
+        const streak = (raw.match(/第\s*(\d+)\s*天/) || [])[1];
+        return streak
+            ? lt({ zh: `每日签到 第${streak}天`, en: `Daily check-in, day ${streak}`, fr: `Connexion quotidienne, jour ${streak}`, ja: `ログインボーナス ${streak}日目` })
+            : lt({ zh: '每日签到', en: 'Daily check-in', fr: 'Connexion quotidienne', ja: 'ログインボーナス' });
+    }
+    if (sourceType === 'match_reward') {
+        const mode = (raw.match(/有效对局奖励\s+(\S+)/) || [])[1] || '';
+        const result = raw.includes('平局')
+            ? lt({ zh: '平局', en: 'Draw', fr: 'Nul', ja: '引分' })
+            : (raw.includes('胜利') ? lt({ zh: '胜利', en: 'Win', fr: 'Victoire', ja: '勝利' }) : '');
+        const multiplier = (raw.match(/×[\d.]+/) || [])[0] || '';
+        return [lt({ zh: '有效对局奖励', en: 'Valid match reward', fr: 'Récompense de partie valide', ja: '有効対戦報酬' }), mode, result, multiplier].filter(Boolean).join(' ');
+    }
+    return raw;
+}
+
 function thornDewCenterHtml(user) {
     const free = Math.max(0, Number(user?.thorn_dew_free || 0) || 0);
     const paid = Math.max(0, Number(user?.thorn_dew_paid || 0) || 0);
@@ -12730,17 +13103,17 @@ function thornDewCenterHtml(user) {
         ? txs.map(tx => `
             <div class="thorn-dew-tx">
                 <span class="${(Number(tx.free_delta || 0) + Number(tx.paid_delta || 0)) >= 0 ? 'gain' : 'spend'}">${escapeHtml(thornDewDeltaText(tx))}</span>
-                <span>${escapeHtml(tx.reason || tx.source_type || '')}</span>
+                <span>${escapeHtml(thornDewTransactionReason(tx))}</span>
             </div>
         `).join('')
-        : `<div class="account-replay-sub">${escapeHtml(currentLang === 'zh' ? '暂无荆露记录' : 'No Thorn Dew records yet')}</div>`;
+        : `<div class="account-replay-sub">${escapeHtml(lt({ zh: '暂无荆露记录', en: 'No Thorn Dew records yet', fr: 'Aucun historique de Rosée d’épines', ja: 'ソーンデューの履歴はありません' }))}</div>`;
     return `
         <div class="thorn-dew-card">
             <div class="thorn-dew-head">
                 <div>
                     <div class="thorn-dew-title">${escapeHtml(UI.thorn_dew || '荆露')}</div>
                     <div class="thorn-dew-balance">${escapeHtml(total)}</div>
-                    <div class="thorn-dew-sub">${escapeHtml(currentLang === 'zh' ? '可用于未来兑换内容' : 'Available for future rewards')}</div>
+                    <div class="thorn-dew-sub">${escapeHtml(lt({ zh: '可用于未来兑换内容', en: 'Available for future rewards', fr: 'Utilisable pour de futures récompenses', ja: '今後の報酬交換に使用できます' }))}</div>
                 </div>
             </div>
             <div class="thorn-dew-tx-list">${txHtml}</div>
@@ -12758,28 +13131,32 @@ function thornDewCheckinHtml() {
     const reward = Math.max(0, Number(center.next_checkin_reward || rewards[(streak - 1) % rewards.length] || 40) || 40);
     const dayIndex = (Math.max(1, streak) - 1) % rewards.length;
     const pct = checked ? 100 : Math.max(8, Math.min(96, dayIndex / Math.max(1, rewards.length - 1) * 100));
-    const dayLabel = currentLang === 'zh' ? `连续第 ${streak} 天` : `Streak day ${streak}`;
+    const dayLabel = lt({ zh: `连续第 ${streak} 天`, en: `Streak day ${streak}`, fr: `${streak} jour(s) consécutif(s)`, ja: `${streak}日連続` });
     return `
         <div class="thorn-dew-card">
             <div class="thorn-dew-head">
                 <div>
-                    <div class="thorn-dew-title">${escapeHtml(currentLang === 'zh' ? '签到' : 'Check-in')}</div>
+                    <div class="thorn-dew-title">${escapeHtml(lt({ zh: '签到', en: 'Check-in', fr: 'Connexion', ja: 'ログインボーナス' }))}</div>
                     <div class="thorn-dew-sub">${escapeHtml(dayLabel)}</div>
                 </div>
                 <button id="btn-thorn-dew-checkin-daily" class="btn btn-primary" type="button" ${checked || thornDewLoading ? 'disabled' : ''}>
-                    ${escapeHtml(checked ? (currentLang === 'zh' ? '今日已签到' : 'Checked In') : (currentLang === 'zh' ? `签到 +${reward}` : `Check In +${reward}`))}
+                    ${escapeHtml(checked
+                        ? lt({ zh: '今日已签到', en: 'Checked In', fr: 'Déjà récupéré', ja: '受取済み' })
+                        : lt({ zh: `签到 +${reward}`, en: `Check In +${reward}`, fr: `Récupérer +${reward}`, ja: `受け取る +${reward}` }))}
                 </button>
             </div>
             <div class="thorn-dew-progress-wrap">
                 <div class="thorn-dew-progress-meta">
-                    <span>${escapeHtml(currentLang === 'zh' ? `今天可获得 ${reward} 荆露` : `Today: ${reward} Thorn Dew`)}</span>
-                    <span>${escapeHtml(checked ? (currentLang === 'zh' ? '已完成' : 'Done') : (currentLang === 'zh' ? '待领取' : 'Ready'))}</span>
+                    <span>${escapeHtml(lt({ zh: `今天可获得 ${reward} 荆露`, en: `Today: ${reward} Thorn Dew`, fr: `Aujourd’hui : ${reward} Rosée d’épines`, ja: `本日：ソーンデュー ${reward}` }))}</span>
+                    <span>${escapeHtml(checked
+                        ? lt({ zh: '已完成', en: 'Done', fr: 'Terminé', ja: '完了' })
+                        : lt({ zh: '待领取', en: 'Ready', fr: 'Disponible', ja: '受取可能' }))}</span>
                 </div>
                 <div class="thorn-dew-progress"><div class="thorn-dew-progress-fill" style="width:${pct.toFixed(1)}%"></div></div>
                 <div class="thorn-dew-reward-track">
                     ${rewards.map((value, idx) => `
                         <div class="thorn-dew-day ${idx === dayIndex ? 'is-current' : ''}">
-                            <div>${escapeHtml(currentLang === 'zh' ? `第${idx + 1}天` : `D${idx + 1}`)}</div>
+                            <div>${escapeHtml(lt({ zh: `第${idx + 1}天`, en: `D${idx + 1}`, fr: `J${idx + 1}`, ja: `${idx + 1}日目` }))}</div>
                             <div>+${escapeHtml(value)}</div>
                         </div>
                     `).join('')}
@@ -12802,20 +13179,20 @@ function thornDewDailyTasksHtml() {
     ];
     const lines = [
         [
-            currentLang === 'zh' ? '有效对局' : 'Valid Matches',
+            lt({ zh: '有效对局', en: 'Valid Matches', fr: 'Parties valides', ja: '有効な対戦' }),
             rows.map(([label, value]) => `${label} +${value}`).join(currentLang === 'zh' ? '　' : ' / '),
         ],
         [
-            currentLang === 'zh' ? '胜场奖励' : 'Result Bonus',
-            currentLang === 'zh' ? `胜利 +${winBonus}　平局 +${drawBonus}` : `Win +${winBonus} / Draw +${drawBonus}`,
+            lt({ zh: '胜场奖励', en: 'Result Bonus', fr: 'Bonus de résultat', ja: '結果ボーナス' }),
+            lt({ zh: `胜利 +${winBonus}　平局 +${drawBonus}`, en: `Win +${winBonus} / Draw +${drawBonus}`, fr: `Victoire +${winBonus} / Nul +${drawBonus}`, ja: `勝利 +${winBonus} / 引分 +${drawBonus}` }),
         ],
         [
-            currentLang === 'zh' ? '每日节奏' : 'Daily Pace',
-            currentLang === 'zh' ? '每天前10局完整获得，之后奖励逐步降低' : 'First 10 matches each day give full rewards; later rewards scale down',
+            lt({ zh: '每日节奏', en: 'Daily Pace', fr: 'Rythme quotidien', ja: 'デイリー進行' }),
+            lt({ zh: '每天前10局完整获得，之后奖励逐步降低', en: 'First 10 matches each day give full rewards; later rewards scale down', fr: 'Les 10 premières parties quotidiennes donnent la récompense complète, puis elle diminue progressivement', ja: '毎日最初の10戦は満額、その後は報酬が徐々に減少します' }),
         ],
         [
-            currentLang === 'zh' ? '即将开放' : 'Coming Soon',
-            currentLang === 'zh' ? '更多每日任务和限时加成会继续加入' : 'More daily tasks and limited boosts will arrive later',
+            lt({ zh: '即将开放', en: 'Coming Soon', fr: 'Bientôt disponible', ja: '近日公開' }),
+            lt({ zh: '更多每日任务和限时加成会继续加入', en: 'More daily tasks and limited boosts will arrive later', fr: 'D’autres missions quotidiennes et bonus temporaires seront ajoutés', ja: 'デイリー任務と期間限定ボーナスを今後追加します' }),
         ],
     ];
     return `
@@ -12857,7 +13234,7 @@ async function onThornDewCheckin() {
             currentAccount = data.user;
             cacheAccount(currentAccount);
         }
-        setAccountError(currentLang === 'zh' ? '签到成功' : 'Checked in');
+        setAccountError(lt({ zh: '签到成功', en: 'Checked in', fr: 'Récompense récupérée', ja: '受け取りました' }));
     } catch (err) {
         setAccountError(err.message || UI.account_error);
     } finally {
@@ -12868,28 +13245,18 @@ async function onThornDewCheckin() {
 }
 
 function achievementTypeLabel(type) {
-    if (currentLang !== 'zh') {
-        return {
-            milestone: 'Milestone',
-            battle: 'Battle',
-            mode: 'Mode',
-            social: 'Social',
-            hidden: 'Hidden',
-            easter_egg: 'Easter Egg',
-        }[type] || type || '';
-    }
     return {
-        milestone: '里程碑',
-        battle: '战斗',
-        mode: '模式',
-        social: '社交',
-        hidden: '隐藏',
-        easter_egg: '彩蛋',
+        milestone: lt({ zh: '里程碑', en: 'Milestone', fr: 'Étape', ja: 'マイルストーン' }),
+        battle: lt({ zh: '战斗', en: 'Battle', fr: 'Combat', ja: 'バトル' }),
+        mode: lt({ zh: '模式', en: 'Mode', fr: 'Mode', ja: 'モード' }),
+        social: lt({ zh: '社交', en: 'Social', fr: 'Social', ja: 'ソーシャル' }),
+        hidden: lt({ zh: '隐藏', en: 'Hidden', fr: 'Caché', ja: '隠し' }),
+        easter_egg: lt({ zh: '彩蛋', en: 'Easter Egg', fr: 'Secret', ja: 'イースターエッグ' }),
     }[type] || type || '';
 }
 
 function formatAchievementUnlockedTime(value) {
-    if (!value) return currentLang === 'zh' ? '已完成' : 'Done';
+    if (!value) return lt({ zh: '已完成', en: 'Done', fr: 'Terminé', ja: '達成済み' });
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value || '');
     const locale = currentLang === 'zh'
@@ -12960,12 +13327,18 @@ function groupAchievementItems(items) {
         const nextTarget = Number(next.target || top.target || 1) || 1;
         const topTarget = Number(top.target || next.target || 1) || 1;
         const stageText = unlockedCount >= group.length
-            ? (currentLang === 'zh'
-                ? `全部阶段完成，最高进度 ${progress}/${topTarget}`
-                : `All stages complete, best progress ${progress}/${topTarget}`)
-            : (currentLang === 'zh'
-                ? `阶段 ${unlockedCount}/${group.length}，下一阶段 ${Math.min(progress, nextTarget)}/${nextTarget}`
-                : `Stage ${unlockedCount}/${group.length}, next stage ${Math.min(progress, nextTarget)}/${nextTarget}`);
+            ? lt({
+                zh: `全部阶段完成，最高进度 ${progress}/${topTarget}`,
+                en: `All stages complete, best progress ${progress}/${topTarget}`,
+                fr: `Toutes les étapes sont terminées, meilleure progression ${progress}/${topTarget}`,
+                ja: `全段階達成、最高進捗 ${progress}/${topTarget}`,
+            })
+            : lt({
+                zh: `阶段 ${unlockedCount}/${group.length}，下一阶段 ${Math.min(progress, nextTarget)}/${nextTarget}`,
+                en: `Stage ${unlockedCount}/${group.length}, next stage ${Math.min(progress, nextTarget)}/${nextTarget}`,
+                fr: `Étape ${unlockedCount}/${group.length}, prochaine ${Math.min(progress, nextTarget)}/${nextTarget}`,
+                ja: `段階 ${unlockedCount}/${group.length}、次 ${Math.min(progress, nextTarget)}/${nextTarget}`,
+            });
         output.push({
             ...next,
             id: `series:${series}`,
@@ -13083,9 +13456,12 @@ async function loadAchievementCenter(force = false) {
     } catch (err) {
         const rawMessage = String(err?.message || '').trim();
         if (!rawMessage || rawMessage === (UI.account_error || '账号错误')) {
-            achievementLoadError = currentLang === 'zh'
-                ? '成就加载失败，请重新登录或稍后再试'
-                : 'Achievements failed to load. Please sign in again or try later.';
+            achievementLoadError = lt({
+                zh: '成就加载失败，请重新登录或稍后再试',
+                en: 'Achievements failed to load. Please sign in again or try later.',
+                fr: 'Échec du chargement des succès. Reconnectez-vous ou réessayez plus tard.',
+                ja: '実績を読み込めませんでした。再ログインするか、後でもう一度お試しください。',
+            });
         } else {
             achievementLoadError = rawMessage;
         }
@@ -20374,11 +20750,11 @@ function renderStatusTags(containerId, playerData) {
             const def = getCustomStatusDef(name);
             if (def && def.visible === false) return;
             const label = def ? getRegistryText(def, 'name', name) : name;
-            const icon = def && def.icon ? `${def.icon} ` : '';
             const color = safeRegistryColor(def && def.color, '#1F618D');
             tags.push({
                 key: name,
-                name: `${icon}${label}`,
+                iconKey: normalizeStatusIconKey((def && def.icon) || name),
+                name: label,
                 abbr: String(label).slice(0, 3),
                 val: count,
                 fg: color,
@@ -20619,6 +20995,13 @@ function getActionLimitStatusValue(playerData, ...keys) {
 
 function isStatusImmune(playerData = {}) {
     return getActionLimitStatusValue(playerData, 'status_immune', 'immune', '状态免疫') > 0;
+}
+
+function isPlayerUntargetable(playerData = {}) {
+    // Blindness masks visible values with "?" in several views.  JavaScript treats
+    // that string as truthy, so only a real positive stack count may block targeting.
+    return getActionLimitStatusValue(playerData, 'untargetable', '不可选中', '无法选中') > 0
+        && !isStatusImmune(playerData);
 }
 
 function getCannotPlayReason(cardDict) {
@@ -21686,7 +22069,7 @@ function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candida
         const stateData = getPlayerDataById(targetId) || data || {};
         const alive = (stateData && Number(stateData.health || 0) > 0);
         if (aliveOnly && !alive) return;
-        if (targetId !== normalizePlayerId(gameState.your_id) && stateData && stateData.untargetable && !isStatusImmune(stateData)) return;
+        if (targetId !== normalizePlayerId(gameState.your_id) && isPlayerUntargetable(stateData)) return;
         out.push({
             id: targetId,
             group,
@@ -22388,6 +22771,25 @@ function isInsideBattleLogProtectedRange(index, length, ranges) {
     return (ranges || []).some(range => start < range.end && end > range.start);
 }
 
+function replaceBattleLogTextOutsidePlayerNames(text, from, to) {
+    const raw = String(text || '');
+    const needle = String(from || '');
+    if (!needle || !raw.includes(needle) || needle === String(to || '')) return raw;
+    const protectedRanges = getBattleLogProtectedPlayerRanges(raw);
+    const indexes = [];
+    let index = raw.indexOf(needle);
+    while (index >= 0) {
+        if (!isInsideBattleLogProtectedRange(index, needle.length, protectedRanges)) indexes.push(index);
+        index = raw.indexOf(needle, index + Math.max(1, needle.length));
+    }
+    let result = raw;
+    for (let i = indexes.length - 1; i >= 0; i -= 1) {
+        const start = indexes[i];
+        result = result.slice(0, start) + String(to || '') + result.slice(start + needle.length);
+    }
+    return result;
+}
+
 function appendBattleLogTextWithCardChips(parent, text) {
     if (!parent) return false;
     const raw = String(text || '');
@@ -22541,7 +22943,8 @@ function createBattleLogElement(entry) {
         renderBattleCounterLogChipLine(el, entry);
         return el;
     }
-    if (renderBattleLogInlineCardLine(el, line) || (displayLine !== line && renderBattleLogInlineCardLine(el, displayLine))) {
+    const localizedInlineLine = currentLang === 'zh' ? line : displayLine;
+    if (renderBattleLogInlineCardLine(el, localizedInlineLine)) {
         bindInlineCardChips(el, { interactive: true });
         return el;
     }
@@ -23927,7 +24330,7 @@ async function onPlayCard(cardInstanceId, options = {}) {
     if (cardDef && cardDef.card_type === 'thorn' && gameState && gameState.mode !== '2v2') {
         const opponent = gameState.opponent || {};
         const flags = getEffectiveCardFlagSets(cardDict || {}, cardDef || {}).effective;
-        if (!flags.has('self_target') && !flags.has('wide_strike') && opponent.untargetable && !isStatusImmune(opponent)) {
+        if (!flags.has('self_target') && !flags.has('wide_strike') && isPlayerUntargetable(opponent)) {
             flashStatus(UI.no_selectable_player || '没有可选中的玩家', 2200, 'error');
             return;
         }
@@ -24200,10 +24603,13 @@ function showResponseUI(data) {
         if (cardDef.id === 'Sewage' || cardDef.id === 'MagicSewage') triggerDesc += UI.enemy_destroy_equip;
     }
     const responseWindowDef = cardCosts.map(item => item.ccDef).find(cd => cd && (cd.response_title || cd.response_content));
-    if (responseWindowDef && responseWindowDef.response_title) {
+    const localizedResponseTitle = responseWindowDef
+        ? getLocalizedCardText(responseWindowDef, 'response_title_i18n', 'response_title')
+        : '';
+    if (localizedResponseTitle) {
         const title = document.createElement('div');
         title.className = 'response-label response-title';
-        title.textContent = responseWindowDef.response_title;
+        title.textContent = localizedResponseTitle;
         container.appendChild(title);
     }
     const label = document.createElement('div');
@@ -24218,10 +24624,13 @@ function showResponseUI(data) {
     const baseEffectPrediction = getResponseBaseEffectPrediction(data, cardDict, noCounterPrediction);
     if (!hideResponsePrediction) appendResponseEffectPreview(label, baseEffectPrediction);
     container.appendChild(label);
-    if (responseWindowDef && responseWindowDef.response_content) {
+    const localizedResponseContent = responseWindowDef
+        ? getLocalizedCardText(responseWindowDef, 'response_content_i18n', 'response_content')
+        : '';
+    if (localizedResponseContent) {
         const content = document.createElement('div');
         content.className = 'response-label response-content';
-        content.textContent = responseWindowDef.response_content;
+        content.textContent = localizedResponseContent;
         container.appendChild(content);
     }
     const btnRow = document.createElement('div');

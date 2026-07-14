@@ -9,6 +9,7 @@ import posixpath
 import zipfile
 from typing import Dict, List, Optional, Any
 from mod_validator_v2 import validate_mod_v2
+from mod_i18n import SUPPORTED_LANGUAGES, apply_mod_locales, normalize_locale_code
 from cards import normalize_card_flag, normalize_card_flags
 
 def _get_base_dir():
@@ -212,6 +213,22 @@ def _find_gtnmod_main_file(zf: zipfile.ZipFile) -> str:
     return ''
 
 
+def _read_gtnmod_locales(zf: zipfile.ZipFile) -> Dict[str, dict]:
+    member_lookup = {_safe_zip_member(name).lower(): _safe_zip_member(name) for name in zf.namelist()}
+    locales: Dict[str, dict] = {}
+    for lang in SUPPORTED_LANGUAGES:
+        member = member_lookup.get(f'locales/{lang}.json')
+        if not member:
+            continue
+        try:
+            document = json.loads(zf.read(member).decode('utf-8-sig'))
+        except Exception:
+            continue
+        if isinstance(document, dict):
+            locales[lang] = document
+    return locales
+
+
 def _candidate_asset_names(card: dict) -> List[str]:
     raw_ids = []
     for key in ('legacy_id', 'runtime_id', 'id', 'name_en'):
@@ -354,6 +371,12 @@ class ModCard:
         self.fission_level = max(1, int(data.get('fission_level', data.get('fission_count', 0) + 1) or 1))
         self.fusion_level = max(1, int(data.get('fusion_level', data.get('fusion_multiplier', 1)) or 1))
         self.ui_effect_size = str(data.get('ui_effect_size', '') or '').strip()
+        self.name_i18n = copy.deepcopy(data.get('name_i18n', {})) if isinstance(data.get('name_i18n'), dict) else {}
+        self.description_i18n = copy.deepcopy(data.get('description_i18n', {})) if isinstance(data.get('description_i18n'), dict) else {}
+        self.effect_text_i18n = copy.deepcopy(data.get('effect_text_i18n', {})) if isinstance(data.get('effect_text_i18n'), dict) else {}
+        self.trigger_effect_text_i18n = copy.deepcopy(data.get('trigger_effect_text_i18n', {})) if isinstance(data.get('trigger_effect_text_i18n'), dict) else {}
+        self.response_title_i18n = copy.deepcopy(data.get('response_title_i18n', {})) if isinstance(data.get('response_title_i18n'), dict) else {}
+        self.response_content_i18n = copy.deepcopy(data.get('response_content_i18n', {})) if isinstance(data.get('response_content_i18n'), dict) else {}
 
     def to_dict(self) -> dict:
         return {
@@ -387,6 +410,12 @@ class ModCard:
             'fission_level': self.fission_level,
             'fusion_level': self.fusion_level,
             'ui_effect_size': self.ui_effect_size,
+            'name_i18n': self.name_i18n,
+            'description_i18n': self.description_i18n,
+            'effect_text_i18n': self.effect_text_i18n,
+            'trigger_effect_text_i18n': self.trigger_effect_text_i18n,
+            'response_title_i18n': self.response_title_i18n,
+            'response_content_i18n': self.response_content_i18n,
         }
 
     def to_card_def(self):
@@ -426,6 +455,12 @@ class ModCard:
             hits=self.hits,
             trigger_cost_m=self.trigger_cost_m,
             ui_effect_size=self.ui_effect_size,
+            name_i18n=self.name_i18n,
+            description_i18n=self.description_i18n,
+            effect_text_i18n=self.effect_text_i18n,
+            trigger_effect_text_i18n=self.trigger_effect_text_i18n,
+            response_title_i18n=self.response_title_i18n,
+            response_content_i18n=self.response_content_i18n,
         )
 
 
@@ -476,6 +511,8 @@ class ModInfo:
         self.description_cn = data.get('description_cn', '') or data.get('description', '')
         self.description_en = data.get('description_en', '') or data.get('description', '')
         self.game_version = data.get('game_version', '')
+        self.name_i18n = copy.deepcopy(data.get('name_i18n', {})) if isinstance(data.get('name_i18n'), dict) else {}
+        self.description_i18n = copy.deepcopy(data.get('description_i18n', {})) if isinstance(data.get('description_i18n'), dict) else {}
 
     def to_dict(self) -> dict:
         return {
@@ -484,6 +521,7 @@ class ModInfo:
             'author': self.author, 'description': self.description,
             'description_cn': self.description_cn, 'description_en': self.description_en,
             'game_version': self.game_version,
+            'name_i18n': self.name_i18n, 'description_i18n': self.description_i18n,
         }
 
 
@@ -558,6 +596,7 @@ class V2Mod(Mod):
         self.compatibility: List[dict] = []
         self.event_hooks: List[dict] = []
         self.content_hash = ''
+        self.locales: Dict[str, dict] = {}
 
     def resource_counts(self) -> dict:
         return {key: len(value) for key, value in self.registries.items()}
@@ -574,6 +613,7 @@ class V2Mod(Mod):
             'compatibility': self.compatibility,
             'event_hooks': self.event_hooks,
             'content_hash': self.content_hash,
+            'locales': copy.deepcopy(self.locales),
             'resource_counts': self.resource_counts(),
             'editor': self.editor,
             'info': self.info.to_dict() if self.info else {},
@@ -652,8 +692,9 @@ def load_v2_mod_from_data(data: dict, source: str = "memory", allow_reserved_nam
     if not isinstance(data, dict):
         mod.errors.append('模组根节点必须是对象')
         return mod
+    localized_data = apply_mod_locales(data)
     validation = validate_mod_v2(
-        data,
+        localized_data,
         source=mod.filename,
         allow_reserved_namespaces=allow_reserved_namespaces,
     )
@@ -664,6 +705,7 @@ def load_v2_mod_from_data(data: dict, source: str = "memory", allow_reserved_nam
     normalized = validation.normalized if validation.normalized else copy.deepcopy(data)
     mod.editor = normalized.get('editor', {}) if isinstance(normalized.get('editor', {}), dict) else {}
     manifest_data = normalized.get('manifest') if isinstance(normalized.get('manifest'), dict) else {}
+    mod.locales = copy.deepcopy(normalized.get('locales', {})) if isinstance(normalized.get('locales'), dict) else {}
     mod.manifest = V2Manifest(manifest_data)
     if manifest_data:
         mod.info = ModInfo({
@@ -676,6 +718,8 @@ def load_v2_mod_from_data(data: dict, source: str = "memory", allow_reserved_nam
             'description_cn': manifest_data.get('description_cn', '') or manifest_data.get('description', ''),
             'description_en': manifest_data.get('description_en', '') or manifest_data.get('description', ''),
             'game_version': manifest_data.get('api_version', ''),
+            'name_i18n': manifest_data.get('name_i18n', {}),
+            'description_i18n': manifest_data.get('description_i18n', {}),
         })
     registries = normalized.get('registries') if isinstance(normalized.get('registries'), dict) else {}
     for key, resources in registries.items():
@@ -720,6 +764,9 @@ def load_mod(filepath: str) -> Mod:
                     mod.errors.append('GTNMOD包缺少根目录 mod.json')
                     return mod
                 data = json.loads(zf.read(main_file).decode('utf-8-sig'))
+                package_locales = _read_gtnmod_locales(zf)
+                inline_locales = data.get('locales') if isinstance(data.get('locales'), dict) else {}
+                data['locales'] = {**inline_locales, **package_locales}
                 data = _attach_gtnmod_asset_urls(data, filepath, zf)
         else:
             with open(filepath, 'r', encoding='utf-8') as f:

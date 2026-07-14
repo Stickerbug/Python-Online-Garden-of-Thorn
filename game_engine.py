@@ -3458,12 +3458,12 @@ class GameEngine:
             'name': name_cn,
             'name_cn': name_cn,
             'name_en': name_en,
-            'name_i18n': {'zh': name_cn, 'en': name_en},
+            'name_i18n': dict(resource.get('name_i18n') or {'zh': name_cn, 'en': name_en}),
             'desc': desc_cn,
             'description': desc_cn,
             'desc_cn': desc_cn,
             'desc_en': desc_en,
-            'desc_i18n': {'zh': desc_cn, 'en': desc_en},
+            'desc_i18n': dict(resource.get('description_i18n') or {'zh': desc_cn, 'en': desc_en}),
             'position': position,
             'weight': weight,
             'v2': True,
@@ -13366,7 +13366,7 @@ class GameEngine:
         for _ in range(repeats):
             candidates = [
                 tid for tid in range(len(self.players))
-                if tid != target_id and self._target_can_be_selected(player_id, tid, allow_self=True)
+                if self._target_can_be_selected(player_id, tid, allow_self=True)
             ]
             if not candidates:
                 break
@@ -13384,33 +13384,34 @@ class GameEngine:
         targets = self._wide_strike_target_ids(player_id, card)
         if not targets:
             return
+        player = self.players[player_id]
+        spent_elixir = max(0, int(getattr(player, 'elixir', 0) or 0))
+        player.elixir = 0
+        if spent_elixir <= 0:
+            return
         repeats = max(
             1,
             clamp_card_layer(getattr(card, 'fission_level', 1))
             + clamp_card_extra_hits(getattr(card, 'extra_hits', 0)),
         )
-        amount = self._modified_attack_damage(self._eval_int(player_id, params.get('amount', 8), card, 8), card)
+        percent = max(0.0, float(params.get('health_percent', 0.08) or 0.08))
+        minimum = max(0, self._eval_int(player_id, params.get('minimum', 2), card, 2))
         self._game_over_defer_depth += 1
         try:
-            for _ in range(repeats):
-                for target_id in targets:
-                    if not self._valid_player_id(target_id) or self.players[target_id].health <= 0:
-                        continue
-                    dealt = self.deal_attack_damage(
-                        target_id,
-                        amount,
-                        1,
-                        attacker_id=player_id,
-                        source_card=card,
-                    )
-                    if dealt > 0:
-                        self.players[target_id].poison += 8
-                        self.players[target_id].fire += 2
-                        self._normalize_status_value(self.players[target_id], 'poison')
-                        self._normalize_status_value(self.players[target_id], 'fire')
-                        self._note_achievement_status_peak(target_id)
-            for target_id in targets:
-                self._arctic_set_frost_value(target_id, 0)
+            for _ in range(spent_elixir):
+                for _ in range(repeats):
+                    for target_id in targets:
+                        if not self._valid_player_id(target_id) or self.players[target_id].health <= 0:
+                            continue
+                        base_amount = max(minimum, int(math.ceil(self.players[target_id].health * percent)))
+                        amount = self._modified_attack_damage(base_amount, card)
+                        self.deal_attack_damage(
+                            target_id,
+                            amount,
+                            1,
+                            attacker_id=player_id,
+                            source_card=card,
+                        )
         finally:
             self._game_over_defer_depth -= 1
         card.fission_level = 1

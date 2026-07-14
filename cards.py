@@ -152,6 +152,12 @@ class CardDef:
     hits: int = 1
     trigger_cost_m: int = 0
     ui_effect_size: str = ''
+    name_i18n: Dict[str, str] = field(default_factory=dict)
+    description_i18n: Dict[str, str] = field(default_factory=dict)
+    effect_text_i18n: Dict[str, str] = field(default_factory=dict)
+    trigger_effect_text_i18n: Dict[str, str] = field(default_factory=dict)
+    response_title_i18n: Dict[str, str] = field(default_factory=dict)
+    response_content_i18n: Dict[str, str] = field(default_factory=dict)
 
     @property
     def display_name(self) -> str:
