@@ -31,6 +31,7 @@ class GameEngine2v2(GameEngine):
         self.log: List[str] = []
         self.draft_pool: List[CardInstance] = []
         self.allowed_card_ids: Optional[Set[str]] = None
+        self.available_builtin_setup_card_ids: Set[str] = set(self.BUILTIN_SETUP_CARD_IDS)
         self.draft_options: List[List[CardInstance]] = [[], [], [], []]
         self.draft_picks: List[List[str]] = [[], [], [], []]
         self.draft_rerolls: List[int] = [DRAFT_REROLLS] * 4
@@ -116,17 +117,7 @@ class GameEngine2v2(GameEngine):
         return self.team_of(player_id) != self.team_of(other_id)
 
     def _refresh_hand_limit_bonuses(self):
-        for ps in self.players:
-            ps.extra_hand_limit_bonus = 0
-            ps.external_zero_e_ignore_hand_limit = False
-        for owner_id, owner_state in enumerate(self.players):
-            for eq in owner_state.equipment:
-                target_id = getattr(eq, 'effect_target', owner_id)
-                if target_id != owner_id and 0 <= target_id < len(self.players):
-                    if self._equipment_is(eq, 'GoldenLeaf', 'vanilla:goldenleaf'):
-                        self.players[target_id].extra_hand_limit_bonus += 1
-                    if self._equipment_is(eq, 'MagicGoldenLeaf', 'vanilla:magicgoldenleaf'):
-                        self.players[target_id].external_zero_e_ignore_hand_limit = True
+        super()._refresh_hand_limit_bonuses()
 
 
 
@@ -136,6 +127,7 @@ class GameEngine2v2(GameEngine):
         teammate_id = self.get_teammate(for_player)
         enemy_ids = self.get_all_enemies(for_player)
         goggles_targets = self._goggles_view_targets_for(for_player)
+        antennae_targets = self._antennae_view_targets_for(for_player)
 
         opp_data_list = []
         for eid in enemy_ids:
@@ -145,7 +137,7 @@ class GameEngine2v2(GameEngine):
             ed['discard_count'] = len([c for c in self.players[eid].discard if c.def_id != ERROR_CARD_ID])
             ed['exile_count'] = len([c for c in self.players[eid].exile if c.def_id != ERROR_CARD_ID])
             reveal_target = getattr(self, '_antennae_reveal_targets', [None] * self.num_players)[for_player]
-            if self._antennae_reveal[for_player] and reveal_target == eid:
+            if eid in antennae_targets or (self._antennae_reveal[for_player] and reveal_target == eid):
                 ed['revealed_hand'] = self._visible_card_dicts(self.players[eid].hand, for_player, eid)
             revealed_tag_cards = [
                 c.to_dict()
@@ -183,6 +175,15 @@ class GameEngine2v2(GameEngine):
                     if card.def_id != ERROR_CARD_ID
                 ]
                 teammate_data['hand_hidden_by_blind'] = True
+            if teammate_id in antennae_targets:
+                revealed_hand = self._visible_card_dicts(
+                    self.players[teammate_id].hand,
+                    for_player,
+                    teammate_id,
+                )
+                teammate_data['hand'] = revealed_hand
+                teammate_data['revealed_hand'] = revealed_hand
+                teammate_data.pop('hand_hidden_by_blind', None)
             if self.pending_choice and self.pending_choice.get('player_id') == for_player:
                 ct = self.pending_choice.get('choice_type', '')
                 target_id = self.pending_choice.get('target_player_id')
@@ -640,6 +641,8 @@ class GameEngine2v2(GameEngine):
             counter_removed = responder.remove_hand_card(card_instance_id)
             if counter_removed is None:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+            if self._card_is(card, 'Broccoli', 'sewers:broccoli'):
+                card._sewers_was_countered_this_play = True
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}{self._card_log_marker(counter_removed)}进行反制！")
             self._note_achievement_counter_success(responder_id)
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
@@ -757,7 +760,19 @@ class GameEngine2v2(GameEngine):
         except (TypeError, ValueError):
             return default
 
+    def _is_locked_card_resolution_target(self, player_id: int, target_id) -> bool:
+        snapshot = getattr(self, '_card_resolution_target_snapshot', None)
+        return bool(
+            isinstance(snapshot, dict)
+            and int(getattr(self, '_card_resolution_depth', 0) or 0) > 0
+            and snapshot.get('player_id') == player_id
+            and snapshot.get('selected_target') == target_id
+            and self._is_valid_player_id(target_id)
+        )
+
     def _is_valid_enemy_target(self, player_id: int, target_id) -> bool:
+        if self._is_locked_card_resolution_target(player_id, target_id):
+            return self.is_enemy(player_id, target_id)
         return (
             self._is_valid_player_id(target_id)
             and self.is_enemy(player_id, target_id)
@@ -766,6 +781,8 @@ class GameEngine2v2(GameEngine):
         )
 
     def _is_valid_attack_target(self, player_id: int, target_id) -> bool:
+        if self._is_locked_card_resolution_target(player_id, target_id):
+            return True
         return (
             self._is_valid_player_id(target_id)
             and target_id != player_id
@@ -774,6 +791,8 @@ class GameEngine2v2(GameEngine):
         )
 
     def _is_valid_effect_target(self, player_id: int, target_id) -> bool:
+        if self._is_locked_card_resolution_target(player_id, target_id):
+            return True
         return (
             self._is_valid_player_id(target_id)
             and self.players[target_id].health > 0
@@ -785,6 +804,11 @@ class GameEngine2v2(GameEngine):
 
     def _card_requires_target(self, card: CardInstance) -> bool:
         if 'wide_strike' in self._effective_card_flags(card):
+            return False
+        # Sapphire selects both its future target and the card to exile in one
+        # combined V2 choice. Requiring a normal target first makes it
+        # unplayable in the 2v2 engine.
+        if self._card_is(card, 'Sapphire', 'ocean:sapphire'):
             return False
         if card.card_type == 'guard':
             return False
@@ -895,6 +919,29 @@ class GameEngine2v2(GameEngine):
             return result
         finally:
             self._active_choice = None
+
+    def _finalize_deferred_card_deaths(self, alive_before=None):
+        alive_before = list(alive_before or [])
+        eligible = {
+            player_id for player_id in range(len(self.players))
+            if player_id < len(alive_before) and bool(alive_before[player_id])
+        }
+        processed = set()
+        while True:
+            player_id = next(
+                (
+                    candidate for candidate in sorted(eligible - processed)
+                    if self.players[candidate].health <= 0
+                ),
+                None,
+            )
+            if player_id is None:
+                break
+            processed.add(player_id)
+            ps = self.players[player_id]
+            self._check_yggdrasil(player_id)
+            if ps.health <= 0:
+                self._on_player_death(player_id)
 
     def _magic_nazar_counter_player_ids(self, player_id: int, card: Optional[CardInstance] = None,
                                         choice: Optional[dict] = None) -> List[int]:
@@ -1051,15 +1098,34 @@ class GameEngine2v2(GameEngine):
         choice, forced_target_id = self._sewers_apply_forced_target_choice(player_id, card, choice)
         if forced_target_id is not None:
             target_player_id = forced_target_id
+        auto_choice_mode = getattr(self, '_auto_resolve_choices_for', None) == player_id
+        auto_no_cost = getattr(self, '_auto_play_no_cost_for', None) == player_id
+        if auto_choice_mode and self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
+            choice_request = self._get_choice_request(card, choice)
+            preview_pending = {
+                'card': card.to_dict(),
+                'player_id': player_id,
+                'choice_type': self._choice_type_for_effect(choice_request, card),
+                'choice_params': self._effect_params(choice_request),
+                'target_player_id': target_player_id if target_player_id >= 0 else None,
+                'original_choice': dict(choice) if isinstance(choice, dict) else None,
+            }
+            generated_choice = self._default_choice_for_pending(preview_pending)
+            if isinstance(generated_choice, dict):
+                choice = {**(choice or {}), **generated_choice}
+                generated_target = self._choice_target_from_choice(generated_choice, target_player_id)
+                if generated_target >= 0:
+                    target_player_id = generated_target
+        requires_target = self._card_requires_target(card) and not self._ocean_spikeball_should_boost(player_id, card)
         if ('self_only' in card.flags and card.card_type != 'thorn') or card.card_type == 'guard':
             target_player_id = player_id
-        elif (self._card_requires_target(card)
+        elif (requires_target
               and card.card_type == 'thorn'
               and target_player_id == player_id
               and 'self_target' not in self._effective_card_flags(card)
               and forced_target_id is None):
             return {'success': False, 'error': '攻击牌不能选择自己作为目标'}
-        elif (self._card_requires_target(card)
+        elif (requires_target
               and card.card_type == 'thorn'
               and not (
                   self._is_valid_attack_target(player_id, target_player_id)
@@ -1074,7 +1140,7 @@ class GameEngine2v2(GameEngine):
                   )
               )):
             return {'success': False, 'error': '没有可选中的玩家'}
-        elif self._card_requires_target(card):
+        elif requires_target:
             allow_dead_target = self._card_is(card, 'Yggdrasil', 'vanilla:yggdrasil')
             if allow_dead_target:
                 if (not self._is_valid_player_id(target_player_id)
@@ -1095,11 +1161,12 @@ class GameEngine2v2(GameEngine):
             choice['target_id'] = target_player_id
         if self.game_over:
             return {'success': False, 'error': '娓告垙宸茬粡缁撴潫'}
-        if self.current_player != player_id:
+        if self.current_player != player_id and getattr(self, '_allow_out_of_turn_auto_play_for', None) != player_id:
             return {'success': False, 'error': '涓嶆槸浣犵殑鍥炲悎'}
         can, reason = self.can_play_card(player_id, card)
         if not can:
-            return {'success': False, 'error': reason}
+            if not (auto_no_cost and ('能量不足' in reason or '魔力不足' in reason)):
+                return {'success': False, 'error': reason}
         if target_player_id != player_id and self.is_ally(player_id, target_player_id) and self.players[target_player_id].health > 0:
             if not (choice and choice.get('_ally_approved')):
                 self.pending_ally_request = {
@@ -1118,18 +1185,24 @@ class GameEngine2v2(GameEngine):
             self._run_v2_play_hook('before_play_card', player_id, card, choice)
             if getattr(self, 'pending_v2_ui', None) is not None:
                 return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
+        self._prepare_ocean_spikeball_for_play(player_id, card)
         extra_e = self._get_extra_e_for_card(player_id, card)
-        total_e = max(0, int(card.cost_e + extra_e))
+        total_e = 0 if auto_no_cost else max(0, int(card.cost_e + extra_e))
+        total_m = 0 if auto_no_cost else int(card.cost_m)
         card._paid_e_this_play = int(total_e)
+        card._paid_m_this_play = int(total_m)
         self._spend_resource(player_id, 'elixir', total_e, card)
-        self._spend_resource(player_id, 'magic', card.cost_m, card)
+        self._spend_resource(player_id, 'magic', total_m, card)
         ps.remove_hand_card(card_instance_id)
         ps.cards_played_this_turn[card.def_id] = ps.cards_played_this_turn.get(card.def_id, 0) + 1
         if getattr(card, 'card_type', '') == 'thorn':
             ps.achievement_played_thorn = True
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
         self._apply_magic_acceleration_after_play(player_id, card)
+        self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
         self._sewers_trigger_vampire_fangs(player_id, card, choice)
+        if self._card_is(card, 'Broccoli', 'sewers:broccoli'):
+            card._sewers_was_countered_this_play = False
         self._active_choice = choice if isinstance(choice, dict) else {}
         try:
             if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
@@ -1211,7 +1284,7 @@ class GameEngine2v2(GameEngine):
         self._run_v2_after_damage_hooks(damage_context, actual)
         if not getattr(self, '_defer_turn_start_death_checks', False):
             self._check_yggdrasil(player_id)
-            if ps.health <= 0:
+            if ps.health <= 0 and self._game_over_defer_depth <= 0:
                 self._on_player_death(player_id)
             self._check_game_over()
         return actual
@@ -1403,6 +1476,7 @@ class GameEngine2v2(GameEngine):
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
         ps = self.players[player_id]
+        self._activate_pending_corruption()
         self._sewers_clear_light_bulb_at_turn_start(player_id)
         self._antennae_reveal[player_id] = None
         if hasattr(self, '_antennae_reveal_targets'):
@@ -1412,6 +1486,7 @@ class GameEngine2v2(GameEngine):
         ps.cards_played_this_turn_instance_ids = []
         ps.magic_battery_m_this_turn = 0
         ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
+        self._reset_turn_damage_counters()
         self._run_v2_event_hooks('turn_start', {
             'source_player': player_id,
             'target_player': player_id,
@@ -1434,6 +1509,7 @@ class GameEngine2v2(GameEngine):
         if ps.shovel_active:
             ps.shovel_active = False
         self._clear_turn_start_action_statuses(player_id)
+        self._run_timed_effects_for_turn(player_id, 'after_status_clear')
         early_owner_turn_start_equipment = self._run_owner_turn_start_action_status_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
@@ -1500,20 +1576,21 @@ class GameEngine2v2(GameEngine):
         for owner_state in self.players:
             for eq in getattr(owner_state, 'equipment', []):
                 eq.uses_this_turn = 0
-        for owner_id, owner_state in enumerate(self.players):
-            for eq in list(owner_state.equipment):
-                if self._has_card_event(eq.card_def, 'any_turn_start'):
-                    self._run_card_event(owner_id, eq.card_instance, 'any_turn_start', None,
-                                         {'source_id': owner_id, 'target_id': player_id})
+        self._turn_start_skipped_player_id = player_id if turn_will_be_skipped else None
+        try:
+            for owner_id, owner_state in enumerate(self.players):
+                for eq in list(owner_state.equipment):
+                    if self._has_card_event(eq.card_def, 'any_turn_start'):
+                        self._run_card_event(owner_id, eq.card_instance, 'any_turn_start', None,
+                                             {'source_id': owner_id, 'target_id': player_id})
+        finally:
+            self._turn_start_skipped_player_id = None
         for eid in self.get_all_enemies(player_id):
             for eq in list(self.players[eid].equipment):
                 if self._has_card_event(eq.card_def, 'enemy_turn_start') and self._run_card_event(
                         eid, eq.card_instance, 'enemy_turn_start', None,
                         {'source_id': eid, 'target_id': player_id}):
                     continue
-                if self._equipment_is(eq, 'Corruption', 'vanilla:corruption') and not eq.corruption_active:
-                    eq.corruption_active = True
-                    self.log_msg(f"{self.pn(eid)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -1637,20 +1714,21 @@ class GameEngine2v2(GameEngine):
         for owner_state in self.players:
             for eq in getattr(owner_state, 'equipment', []):
                 eq.uses_this_turn = 0
-        for owner_id, owner_state in enumerate(self.players):
-            for eq in list(owner_state.equipment):
-                if self._has_card_event(eq.card_def, 'any_turn_start'):
-                    self._run_card_event(owner_id, eq.card_instance, 'any_turn_start', None,
-                                         {'source_id': owner_id, 'target_id': player_id})
+        self._turn_start_skipped_player_id = player_id if turn_will_be_skipped else None
+        try:
+            for owner_id, owner_state in enumerate(self.players):
+                for eq in list(owner_state.equipment):
+                    if self._has_card_event(eq.card_def, 'any_turn_start'):
+                        self._run_card_event(owner_id, eq.card_instance, 'any_turn_start', None,
+                                             {'source_id': owner_id, 'target_id': player_id})
+        finally:
+            self._turn_start_skipped_player_id = None
         for eid in self.get_all_enemies(player_id):
             for eq in list(self.players[eid].equipment):
                 if self._has_card_event(eq.card_def, 'enemy_turn_start') and self._run_card_event(
                         eid, eq.card_instance, 'enemy_turn_start', None,
                         {'source_id': eid, 'target_id': player_id}):
                     continue
-                if self._equipment_is(eq, 'Corruption', 'vanilla:corruption') and not eq.corruption_active:
-                    eq.corruption_active = True
-                    self.log_msg(f"{self.pn(eid)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -1730,7 +1808,8 @@ class GameEngine2v2(GameEngine):
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
                            is_battery: bool = False, is_precision: bool = False,
-                           attacker_id: int = -1, source_card=None) -> int:
+                           attacker_id: int = -1, source_card=None,
+                           ignore_untargetable: bool = False) -> int:
         hits = clamp_damage_hits(hits)
         if source_card is not None:
             self._clamp_card_layers(source_card)
@@ -1739,7 +1818,7 @@ class GameEngine2v2(GameEngine):
         ps = self.players[target_id]
         if attacker_id < 0:
             attacker_id = self._last_attacker.get(target_id, -1)
-        if ps.untargetable and not is_battery and not self._is_status_immune(target_id):
+        if ps.untargetable and not is_battery and not ignore_untargetable and not self._is_status_immune(target_id):
             self.log_msg(f"{self.pn(target_id)}无法被攻击选中")
             return 0
         total_dealt = 0
@@ -1769,10 +1848,10 @@ class GameEngine2v2(GameEngine):
             power = 0
             if source_card is not None:
                 try:
-                    power = max(0, int(getattr(source_card, 'power_value', 0) or 0))
+                    power = int(getattr(source_card, 'power_value', 0) or 0)
                 except Exception:
                     power = 0
-            dmg = amount + int(math.ceil(power / max(1, int(hits or 1))))
+            dmg = max(0, amount + int(math.ceil(power / max(1, int(hits or 1)))))
             if 0 <= attacker_id < len(self.players):
                 try:
                     puppeteer_multiplier = float((getattr(self.players[attacker_id], 'custom_vars', {}) or {}).get('void_puppeteer_damage_multiplier', 1.0) or 1.0)
@@ -1851,12 +1930,7 @@ class GameEngine2v2(GameEngine):
             try:
                 self._check_yggdrasil(target_id)
                 if dmg > 0 and not is_battery:
-                    target_equipment = [
-                        (owner_id, eq)
-                        for owner_id, owner_state in enumerate(self.players)
-                        for eq in list(owner_state.equipment)
-                        if getattr(eq, 'effect_target', owner_id) == target_id
-                    ]
+                    target_equipment = list(self._iter_equipment_targeting_player(target_id))
                     for owner_id, eq in target_equipment:
                         if self._card_is(eq.card_instance, 'Battery', 'vanilla:battery') and attacker_id >= 0:
                             dealt = self._deal_direct_damage(
@@ -1891,10 +1965,10 @@ class GameEngine2v2(GameEngine):
                             continue
             finally:
                 self._game_over_defer_depth -= 1
-            if ps.health <= 0:
+            if ps.health <= 0 and self._game_over_defer_depth <= 0:
                 self._on_player_death(target_id)
             self._check_game_over()
-            if self.game_over or ps.health <= 0:
+            if self.game_over or (ps.health <= 0 and self._game_over_defer_depth <= 0):
                 break
         return total_dealt
 

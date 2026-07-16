@@ -809,7 +809,7 @@ I18N.zh = { ...I18N.en,
     status_equip_protect: '装备保护', status_invincible: '无敌', status_immune: '状态免疫', status_stunned: '眩晕', status_attack_blocked: '禁攻', status_attack_only: '仅攻击',
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
-    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不可叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸附', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_temp_magic_heavy: '暂时魔力沉重', flag_floating: '漂浮', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
+    flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸附', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_temp_magic_heavy: '暂时魔力沉重', flag_floating: '漂浮', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌', opening_sequence_title: '花序编排', opening_sequence_message: '按选择顺序移至抽牌堆顶，最先选择的牌最先抽取。',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
@@ -853,7 +853,7 @@ I18N.zh = { ...I18N.en,
     error_attack_blocked: '本回合无法使用攻击牌',
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
-    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不可叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸附', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_temp_magic_heavy: '暂时魔力沉重', tag_floating: '漂浮', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷', tag_wide_strike: '广域打击', tag_self_target: '自刃', tag_charge: '电荷', tag_ocean_blinded: '蒙蔽',
+    tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸附', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_temp_magic_heavy: '暂时魔力沉重', tag_floating: '漂浮', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷', tag_wide_strike: '广域打击', tag_self_target: '自刃', tag_charge: '电荷', tag_ocean_blinded: '蒙蔽',
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
@@ -1158,7 +1158,7 @@ Object.assign(I18N.zh, {
     gallery_back_rules: '返回介绍', gallery_explanation: '说明',
     tag_desc_precision: '精准攻击被闪避时不会完全失效，而是改为造成一半伤害。',
     tag_desc_exile: '此牌打出或结算后进入放逐区，而不是弃牌堆。',
-    tag_desc_non_stackable: '同类效果不会重复叠加；多个副本只用于在部分装备离场后保留后续副本。',
+    tag_desc_non_stackable: '可以装备多张；全场同名装备中，只有最早装备的一张生效。其离场后，下一张开始生效。',
     tag_desc_indestructible: '此牌作为装备时不能被普通摧毁效果破坏。',
     tag_desc_sprout: '此牌进入手牌时触发对应的萌芽效果。',
     tag_desc_symbiosis: '此牌不受同名卡连续使用费用惩罚。',
@@ -1227,7 +1227,7 @@ Object.assign(I18N.en, {
     tutorial_retry: 'Retry Tutorial',
     tag_desc_precision: 'Attack keyword. A Precision attack does not fully fail when dodged; it deals half damage instead.',
     tag_desc_exile: 'Resolution keyword. This card goes to exile after being played or resolved instead of going to the discard pile.',
-    tag_desc_non_stackable: 'Equipment keyword. Multiple copies may be equipped, but the same effect does not stack; spare copies mainly keep the effect available after one copy is destroyed.',
+    tag_desc_non_stackable: 'Multiple copies may be equipped. Across the match, only the earliest equipped copy with the same name is active; the next copy activates when it leaves.',
     tag_desc_indestructible: 'Equipment keyword. This equipment cannot be destroyed by destroy effects and also remains when its owner is defeated.',
     tag_desc_sprout: 'Draw keyword. When drawn, this card draws extra cards; hand limit and overflow rules still apply.',
     tag_desc_symbiosis: 'Cost keyword. This card ignores same-name card cost penalties.',
@@ -1357,7 +1357,7 @@ Object.assign(I18N.ja, {
 Object.assign(I18N.fr, {
     tag_desc_precision: 'Mot-clé d’attaque. Une attaque Précision esquivée inflige la moitié des dégâts au lieu d’échouer entièrement.',
     tag_desc_exile: 'Mot-clé de résolution. Cette carte va dans l’exil après avoir été jouée ou résolue, au lieu de la défausse.',
-    tag_desc_non_stackable: 'Mot-clé d’équipement. Plusieurs copies peuvent être équipées, mais le même effet ne se cumule pas ; les copies restantes servent surtout si une copie est détruite.',
+    tag_desc_non_stackable: 'Plusieurs exemplaires peuvent être équipés. Dans toute la partie, seul le premier équipement du même nom agit ; le suivant s’active lorsqu’il quitte le jeu.',
     tag_desc_indestructible: 'Mot-clé d’équipement. Cet équipement ne peut pas être détruit par les effets de destruction et reste aussi quand son propriétaire est vaincu.',
     tag_desc_sprout: 'Mot-clé de pioche. Quand cette carte est piochée, elle pioche des cartes supplémentaires ; les limites de main restent applicables.',
     tag_desc_symbiosis: 'Mot-clé de coût. Cette carte ignore les pénalités de coût des cartes de même nom.',
@@ -1397,7 +1397,7 @@ Object.assign(I18N.fr, {
 Object.assign(I18N.ja, {
     tag_desc_precision: '攻撃キーワード。精密攻撃が回避された場合、完全に失敗せず半分のダメージを与えます。',
     tag_desc_exile: '解決先キーワード。このカードはプレイまたは解決後、捨て札ではなく追放領域へ行きます。',
-    tag_desc_non_stackable: '装備キーワード。複数装備できますが、同じ効果は重複しません。主に一つが破壊された後も効果を残すための予備です。',
+    tag_desc_non_stackable: '複数装備できます。対戦全体で同名のうち最も早く装備された1枚だけが有効で、離れた後は次の1枚が有効になります。',
     tag_desc_indestructible: '装備キーワード。この装備は破壊効果で破壊されず、持ち主が倒れても残ります。',
     tag_desc_sprout: 'ドローキーワード。引いたとき追加でカードを引きます。手札上限やあふれ処理は通常通りです。',
     tag_desc_symbiosis: 'コストキーワード。同名カード連続使用による費用ペナルティを受けません。',
@@ -2539,6 +2539,7 @@ const CARD_FLAG_ALIASES = {
     'troll_cards:swift': 'swift',
     精准: 'precision',
     放逐: 'exile',
+    不叠加: 'non_stackable',
     不可叠加: 'non_stackable',
     不可摧毁: 'indestructible',
     萌芽: 'sprout',
@@ -2613,6 +2614,9 @@ const CARD_FLAG_ALIASES = {
     'tag_arctic:ricochet_3': 'arctic:ricochet_3',
     'flag_arctic:ricochet_3': 'arctic:ricochet_3',
     'tag-arctic:ricochet_3': 'arctic:ricochet_3',
+    'tag_arctic:ricochet_4': 'arctic:ricochet_4',
+    'flag_arctic:ricochet_4': 'arctic:ricochet_4',
+    'tag-arctic:ricochet_4': 'arctic:ricochet_4',
     no_target: 'self_only',
     'hel:no_target': 'self_only',
     'tag_hel:no_target': 'self_only',
@@ -2732,7 +2736,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-team-limited', re: /^(?:队伍限定|Team Limited)/i },
     { cls: 'tag-team-unique', re: /^(?:队伍独一|Team Unique)/i },
     { cls: 'tag-infinite-exclude', re: /^(?:无限火力移除|Removed from Infinite Fire)/i },
-    { cls: 'tag-non-stackable', re: /^(?:不可叠加|Non-stack(?:able)?)/i },
+    { cls: 'tag-non-stackable', re: /^(?:不(?:可)?叠加|Non-stack(?:able)?)/i },
     { cls: 'tag-indestructible', re: /^(?:不可摧毁|Indestructible)/i },
     { cls: 'tag-uncancellable', re: /^(?:不可取消|Uncancellable)/i },
     { cls: 'tag-self-only', re: /^(?:不选择目标|No target)/i },
@@ -2789,7 +2793,6 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'status-stunned', re: /^(?:[+-]?\d+层眩晕|眩晕[:：]?[+-]?\d+层?)/i },
     { cls: 'status-invincible', re: /^(?:[+-]?\d+层无敌|无敌[:：]?[+-]?\d+层?|无敌)/i },
     { cls: 'status-bandage', re: /^(?:[+-]?\d+层绷带|绷带[:：]?[+-]?\d+层?|绷带)/i },
-    { cls: 'status-sponge', re: /^(?:[+-]?\d+层海绵|海绵[:：]?[+-]?\d+层?|海绵)/i },
     { cls: 'status-attack-blocked', re: /^(?:[+-]?\d+层(?:禁攻|禁止攻击|attack_blocked)|(?:禁攻|禁止攻击|attack_blocked)[:：]?[+-]?\d+层?)/i },
     { cls: 'status-attack-only', re: /^(?:[+-]?\d+层仅攻击|仅攻击[:：]?[+-]?\d+层?)/i },
     { cls: 'magic', re: /^(?:[+-]?\d+层魔力封锁|魔力封锁[:：]?[+-]?\d+层?)/i },
@@ -2948,6 +2951,8 @@ function getInlineIconUrl(iconKey) {
         hand_limit: 'total-pile',
         total_pile: 'total-pile',
         'total-pile': 'total-pile',
+        crit: 'critical',
+        critical: 'critical',
     };
     if (uiIcons[key]) return `/static/assets/ui-icons/${uiIcons[key]}.svg`;
     const statusIcons = {
@@ -2970,7 +2975,6 @@ function getInlineIconUrl(iconKey) {
         attack_only: 'attack_only',
         untargetable: 'untargetable',
         bandage: 'bandage',
-        sponge: 'sponge',
         sluggish: 'sluggish',
         overload: 'overload',
         foresight: 'foresight',
@@ -3088,7 +3092,6 @@ function getCardTextTokenIconKey(cls, rawText = '') {
         'status-stunned': 'stunned',
         'status-invincible': 'invincible',
         'status-bandage': 'bandage',
-        'status-sponge': 'sponge',
         'status-attack-blocked': 'attack_blocked',
         'status-attack-only': 'attack_only',
         'status-untargetable': 'untargetable',
@@ -3407,7 +3410,6 @@ function getCardTextTokenTermKey(cls, text = '') {
         'status-stunned': 'status:stunned',
         'status-invincible': 'status:invincible',
         'status-bandage': 'status:bandage',
-        'status-sponge': 'status:sponge',
         'status-attack-blocked': 'status:attack_blocked',
         'status-attack-only': 'status:attack_only',
         'status-untargetable': 'status:untargetable',
@@ -3432,6 +3434,36 @@ function getLocalizedEventText(ev, field) {
     const dictKey = field === 'name' ? 'name_i18n' : 'desc_i18n';
     const dict = ev[dictKey] || {};
     return dict[currentLang] || dict.en || dict.zh || ev[field] || '';
+}
+
+const BUILTIN_OPENING_EVENT_ICONS = Object.freeze({
+    '1': '/static/assets/opening-events/health-boost.svg',
+    '2': '/static/assets/opening-events/magic-conversion.svg',
+    '3': '/static/assets/opening-events/baptism-of-light.svg',
+    '4': '/static/assets/opening-events/flame-omen.svg',
+    '5': '/static/assets/opening-events/fate-lottery.svg',
+    '6': '/static/assets/opening-events/energy-surging.svg',
+    '7': '/static/assets/opening-events/first-move-pressure.svg',
+    '8': '/static/assets/opening-events/surviving-against-all-odds.svg',
+    '9': '/static/assets/opening-events/multi-petal.svg',
+    '10': '/static/assets/opening-events/magic-acceleration.svg',
+    '11': '/static/assets/opening-events/inflorescence-arrangement.svg',
+});
+
+function getOpeningEventIconUrl(eventOrId) {
+    const ev = eventOrId && typeof eventOrId === 'object' ? eventOrId : null;
+    const explicit = String((ev && (ev.icon_url || ev.icon)) || '').trim();
+    if (/^(?:\/static\/|https?:\/\/)/i.test(explicit)) return explicit;
+    const eventId = ev ? ev.id : eventOrId;
+    return BUILTIN_OPENING_EVENT_ICONS[String(eventId)] || '';
+}
+
+function renderOpeningEventIconHtml(eventOrId, extraClass = '') {
+    const url = getOpeningEventIconUrl(eventOrId);
+    if (!url) return '';
+    const safeExtraClass = String(extraClass || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    const className = `opening-event-icon${safeExtraClass ? ` ${safeExtraClass}` : ''}`;
+    return `<img class="${className}" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy">`;
 }
 
 const LOG_TEXT = {
@@ -5307,6 +5339,38 @@ function shouldIgnoreLobbyUpdateWhileInMatch() {
     ].includes(activeViewId || '');
 }
 
+function canUseLobbyInvitationUi() {
+    return phase === 'lobby'
+        && activeViewId === 'view-lobby'
+        && !soloMode
+        && !replayMode
+        && !isSpectating;
+}
+
+function dismissLobbyInvitationModal() {
+    const inviteControlIds = [
+        'invite-accept', 'invite-decline',
+        'team-accept', 'team-decline',
+        'match-accept', 'match-decline',
+        'invite-confirm-ok', 'invite-confirm-cancel',
+    ];
+    if (inviteControlIds.some(id => !!$(id))) hideModal();
+}
+
+function rejectLobbyInvitationOutsideLobby(eventName, data = {}) {
+    if (canUseLobbyInvitationUi()) return false;
+    debugLog(`[client] ignored ${eventName} outside lobby phase=${phase} view=${activeViewId}`);
+    if (!socket || !socket.connected) return true;
+    if (eventName === 'invite_received' && data.inviter_sid) {
+        socket.emit('decline_invite', { inviter_sid: data.inviter_sid });
+    } else if (eventName === 'team_invite' && data.from_sid) {
+        socket.emit('decline_team', { from_sid: data.from_sid });
+    } else if (eventName === 'team_match_invite' && data.from_leader) {
+        socket.emit('decline_team_match', { from_leader: data.from_leader });
+    }
+    return true;
+}
+
 function clearNetworkMatchStateForLobby() {
     if (soloMode || replayMode) return;
     clearActiveMatchRoute('lobby');
@@ -5956,10 +6020,19 @@ const CORE_REGISTRY_I18N = {
     'arctic:ricochet_3': {
         name: { zh: '弹射:3', en: 'Ricochet:3', fr: 'Ricochet:3', ja: '跳弾:3' },
         description: {
-            zh: '效果结算后，随机选择一个不同于原目标的可选中目标，使该效果额外结算1次；重复3次，额外目标可以重复。',
-            en: 'After resolving, repeat the effect 3 times. Each time, randomly choose a selectable target other than the original target; repeated extra targets are allowed.',
-            fr: 'Après la résolution, répétez l’effet 3 fois. À chaque fois, choisissez au hasard une cible sélectionnable autre que la cible initiale ; une même cible supplémentaire peut être choisie plusieurs fois.',
-            ja: '効果解決後、元の対象以外から選択可能な対象をランダムに選び、効果を追加で1回解決します。これを3回繰り返し、追加対象は重複できます。',
+            zh: '效果结算后，随机选择一个不同于上次目标的可选中目标，使该效果额外结算1次；重复3次。',
+            en: 'After resolving, repeat the effect 3 times. Each time, randomly choose a selectable target other than the previous target.',
+            fr: 'Après la résolution, répétez l’effet 3 fois. À chaque fois, choisissez au hasard une cible sélectionnable différente de la cible précédente.',
+            ja: '効果解決後、直前の対象以外から選択可能な対象をランダムに選び、効果を追加で1回解決します。これを3回繰り返します。',
+        },
+    },
+    'arctic:ricochet_4': {
+        name: { zh: '弹射:4', en: 'Ricochet:4', fr: 'Ricochet:4', ja: '跳弾:4' },
+        description: {
+            zh: '效果结算后，随机选择一个不同于上次目标的可选中目标，使该效果额外结算1次；重复4次。',
+            en: 'After resolving, repeat the effect 4 times. Each time, randomly choose a selectable target other than the previous target.',
+            fr: 'Après la résolution, répétez l’effet 4 fois. À chaque fois, choisissez au hasard une cible sélectionnable différente de la cible précédente.',
+            ja: '効果解決後、直前の対象以外から選択可能な対象をランダムに選び、効果を追加で1回解決します。これを4回繰り返します。',
         },
     },
     'sewers:confusion': {
@@ -6063,6 +6136,7 @@ const OFFICIAL_MOD_DISPLAY_ORDER = [
     'Hel Cards Addition.gtnmod',
     'Sewers Cards Addition.gtnmod',
     'Arctic Cards Addition.gtnmod',
+    'Jurassic Cards Addition.gtnmod',
 ];
 
 const OFFICIAL_MOD_DISPLAY_ALIASES = [
@@ -6076,13 +6150,14 @@ const OFFICIAL_MOD_DISPLAY_ALIASES = [
     ['hel cards addition.gtnmod', 'hel cards addition', 'hel cards'],
     ['sewers cards addition.gtnmod', 'sewers cards addition', 'sewers cards'],
     ['arctic cards addition.gtnmod', 'arctic cards addition', 'arctic cards'],
+    ['jurassic cards addition.gtnmod', 'jurassic cards addition', 'jurassic cards'],
 ];
 
 const OFFICIAL_MOD_SHORT_NAMES = {
-    zh: ['原版', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界', '管道', '极地'],
-    en: ['Vanilla', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel', 'Sewers', 'Arctic'],
-    fr: ['Vanille', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel', 'Égouts', 'Arctique'],
-    ja: ['原版', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界', '下水道', '極地'],
+    zh: ['原版', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界', '管道', '极地', '侏罗'],
+    en: ['Vanilla', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel', 'Sewers', 'Arctic', 'Jurassic'],
+    fr: ['Vanille', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel', 'Égouts', 'Arctique', 'Jurassique'],
+    ja: ['原版', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界', '下水道', '極地', 'ジュラ紀'],
 };
 
 function normalizeModDisplayIdentity(value) {
@@ -6560,7 +6635,13 @@ function renderOpeningEventGallery(list, detail, q) {
         const id = `event:${ev.id}`;
         const row = document.createElement('div');
         row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
-        row.innerHTML = `<div class="gallery-row-title">${getLocalizedEventText(ev, 'name') || '?'}</div><div class="gallery-row-meta">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>`;
+        row.innerHTML = `<div class="gallery-opening-event-row">
+            ${renderOpeningEventIconHtml(ev, 'gallery-opening-event-icon')}
+            <div class="gallery-opening-event-copy">
+                <div class="gallery-row-title">${getLocalizedEventText(ev, 'name') || '?'}</div>
+                <div class="gallery-row-meta">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>
+            </div>
+        </div>`;
         row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
         bindInlineCardChips(row, { interactive: true });
         list.appendChild(row);
@@ -6572,10 +6653,13 @@ function renderOpeningEventGallery(list, detail, q) {
         return;
     }
     gallerySelectedId = `event:${ev.id}`;
-    detail.innerHTML = `<div class="gallery-simple-detail">
-        <h3>${getLocalizedEventText(ev, 'name') || '?'}</h3>
-        <p><b>ID：</b>${ev.id}</p>
-        <p>${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</p>
+    detail.innerHTML = `<div class="gallery-simple-detail gallery-opening-event-detail">
+        ${renderOpeningEventIconHtml(ev, 'gallery-opening-event-detail-icon')}
+        <div class="gallery-opening-event-detail-copy">
+            <h3>${getLocalizedEventText(ev, 'name') || '?'}</h3>
+            <p><b>ID：</b>${ev.id}</p>
+            <p>${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</p>
+        </div>
     </div>`;
     bindInlineCardChips(detail, { interactive: true });
 }
@@ -6624,7 +6708,6 @@ function getAllStatusDefs() {
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
         { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害后无敌直到自己下个回合结束，然后死亡。', color: '#1E8449' },
-        { key: 'sponge', label: UI.status_sponge, desc: '海绵相关的临时状态，会影响下一次结算。', color: '#6C3483' },
         { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -6652,7 +6735,7 @@ function getAllStatusDefs() {
         magic_nazar: 'magic_nazar', equip_protect: 'equip_protect', invincible: 'invincible',
         dodge: 'dodge', status_immune: 'status_immune', stunned: 'stunned',
         attack_blocked: 'attack_blocked', attack_only: 'attack_only', untargetable: 'untargetable',
-        bandage: 'bandage', sponge: 'sponge', sluggish: 'sluggish', overload: 'overload',
+        bandage: 'bandage', sluggish: 'sluggish', overload: 'overload',
         foresight: 'foresight', fracture: 'fracture', stagnation: 'stagnation', blind: 'blind',
         heal_block: 'heal_block', weakness: 'weakness', bleed: 'bleed', fragment: 'fragment',
         magic_blocked: 'magic_blocked', root_status: 'root_status', blood_debt: 'blood_debt',
@@ -6695,7 +6778,7 @@ const STATUS_ICON_KEYS = new Set([
     'armor', 'attack_blocked', 'attack_only', 'bandage', 'bleed', 'blind', 'blood_debt', 'dodge', 'equip_protect',
     'fire', 'foresight', 'fracture', 'fragile', 'fragment', 'heal_block',
     'invincible', 'luck', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
-    'root_status', 'shield', 'sluggish', 'sponge', 'stagnation', 'status_immune',
+    'root_status', 'shield', 'sluggish', 'stagnation', 'status_immune',
     'stunned', 'toxic_poison', 'toxic', 'triangle', 'turn_heal', 'turn_magic',
     'unable_counter', 'blazing_fire', 'frost',
     'untargetable', 'weakness'
@@ -8916,6 +8999,7 @@ function createCardElement(cardDict, options = {}) {
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
+    const chargeValue = Number(cardDict.charge_value || 0);
     const copyCount = Number(cardDef.copy_count || 0);
     el.style.setProperty('--card-frame-color', displayTypeColor);
     el.dataset.instanceId = cardDict.instance_id;
@@ -8927,8 +9011,9 @@ function createCardElement(cardDict, options = {}) {
         if (flag === 'temp_heavy' && tempHeavyValue > 0) continue;
         if (flag === 'magic_swift' && magicSwiftValue > 0) continue;
         if (flag === 'temp_magic_heavy' && tempMagicHeavyValue > 0) continue;
-        if (flag === 'power' && powerValue > 0) continue;
+        if (flag === 'power' && powerValue !== 0) continue;
         if (flag === 'copy' && copyCount > 0) continue;
+        if (flag === 'charge' && chargeValue > 0) continue;
         if (!shouldDisplayCardFlag(flag, { showSystemFlags: showAllFlags })) continue;
         const custom = getCustomTagDef(flag);
         if (custom) {
@@ -8964,11 +9049,14 @@ function createCardElement(cardDict, options = {}) {
     if (!blinded && tempMagicHeavyValue > 0) {
         flagsHtml += `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_temp_magic_heavy || '暂时魔力沉重')}: ${tempMagicHeavyValue}</span>`;
     }
-    if (!blinded && powerValue > 0) {
+    if (!blinded && powerValue !== 0) {
         flagsHtml += `<span class="card-flag power">${escapeHtml(UI.tag_power || 'Power')}: ${powerValue}</span>`;
     }
     if (!blinded && copyCount > 0) {
         flagsHtml += `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}: ${copyCount}</span>`;
+    }
+    if (!blinded && chargeValue > 0) {
+        flagsHtml += cardFlagHtml('charge', `${UI.tag_charge || '电荷'}: ${chargeValue}`);
     }
     if (!blinded) {
         flagsHtml += equipmentCounterFlagHtml(cardDict);
@@ -9073,6 +9161,15 @@ function cardHasSublimeFlag(cardDict, cardDef = null) {
 function cardHasWideStrikeFlag(cardDict, cardDef = null) {
     const resolvedDef = cardDef || getCardDef(cardDict && cardDict.def_id);
     const { effective } = getEffectiveCardFlagSets(cardDict || {}, resolvedDef || {});
+    if (cardMatchesAnyLocalId(cardDict || {}, resolvedDef || {}, ['Spikeball', 'ocean:spikeball'])) {
+        const hand = Array.isArray(gameState && gameState.you && gameState.you.hand) ? gameState.you.hand : [];
+        const instanceId = cardDict && cardDict.instance_id;
+        if (instanceId != null
+            && hand.length < 4
+            && hand.some(card => String(card && card.instance_id) === String(instanceId))) {
+            return true;
+        }
+    }
     return effective.has('wide_strike') || effective.has('tag_wide_strike') || effective.has('ocean:wide_strike') || effective.has('tag_ocean:wide_strike');
 }
 
@@ -9081,7 +9178,11 @@ function shouldDisplayCardFlag(flag, options = {}) {
     if (!normalized) return false;
     if (normalized === 'ocean_no_auto') return !!options.showSystemFlags;
     if (normalized === 'infinite_exclude') return !!options.showSystemFlags;
-    if (normalized === 'ocean_spikeball_boosted') return !!options.showSystemFlags;
+    if ([
+        'ocean_spikeball_boosted',
+        'ocean_spikeball_added_precision',
+        'ocean_spikeball_added_wide_strike',
+    ].includes(normalized)) return !!options.showSystemFlags;
     if (normalized === 'multi_petal_fission') return !!options.showSystemFlags;
     return true;
 }
@@ -9144,7 +9245,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         if (flag === 'temp_heavy' && tempHeavyValue > 0) return;
         if (flag === 'magic_swift' && magicSwiftValue > 0) return;
         if (flag === 'temp_magic_heavy' && tempMagicHeavyValue > 0) return;
-        if (flag === 'power' && powerValue > 0) return;
+        if (flag === 'power' && powerValue !== 0) return;
         if (flag === 'copy' && copyCount > 0) return;
         if (flag === 'charge' && chargeValue > 0) return;
         if (base.has(flag)) return;
@@ -9173,7 +9274,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     if (tempMagicHeavyValue > 0) {
         parts.push(cardFlagHtml('temp_magic_heavy', `${UI.tag_temp_magic_heavy || '暂时魔力沉重'}: ${tempMagicHeavyValue}`));
     }
-    if (powerValue > 0) {
+    if (powerValue !== 0) {
         parts.push(cardFlagHtml('power', `${UI.tag_power || 'Power'}: ${powerValue}`));
     }
     if (copyCount > 0) {
@@ -9513,6 +9614,8 @@ const ATTACK_DAMAGE_FALLBACKS = {
     Glass: { amount: 5, hits: 1 },
     MagicGlass: { amount: 1, hits: 3 },
     Tomato: { amount: 8, hits: 1 },
+    PrivetBerry: { amount: 0, hits: 1 },
+    MechaMissile: { amount: 6, hits: 1 },
 };
 
 function firstNumericEffectValue(value) {
@@ -9621,7 +9724,7 @@ function getClawDamageHits(cardDict, attackerState, targetState, info) {
     const fission = clampClientCardLayer(cardDict.fission_level || 1);
     const baseHits = clampClientDamageSegments(Math.round(Number((info && info.hits) || 1)) + clampClientExtraHits(cardDict.extra_hits || 0));
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
-    const power = Math.max(0, Number(cardDict.power_value || 0));
+    const power = Number(cardDict.power_value || 0);
     const totalSegments = clampClientDamageSegments(baseHits * fission);
     const powerPerSegment = Math.ceil(power / totalSegments);
     const maxHealth = readPlayerHealthValue(targetState, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
@@ -9629,16 +9732,37 @@ function getClawDamageHits(cardDict, attackerState, targetState, info) {
     if (!maxHealth) {
         const amount = Number((info && info.amount) || 5) + bonus;
         const perHit = Math.ceil(amount * fusion / fission) + powerPerSegment;
-        return Array.from({ length: totalSegments }, () => perHit);
+        return Array.from({ length: totalSegments }, () => Math.max(0, perHit));
     }
     const hits = [];
     for (let i = 0; i < totalSegments; i++) {
         const base = health >= maxHealth / 2 ? 10 : 5;
         const dealt = Math.ceil((base + bonus) * fusion / fission) + powerPerSegment;
-        hits.push(dealt);
-        health = Math.max(0, health - dealt);
+        hits.push(Math.max(0, dealt));
+        health = Math.max(0, health - Math.max(0, dealt));
     }
     return hits;
+}
+
+function countVisibleStatusesForPrediction(playerState = {}) {
+    const fields = [
+        'poison', 'fire', 'toxic', 'dodge', 'armor', 'sluggish', 'overload', 'foresight',
+        'fracture', 'stagnation', 'blind', 'heal_block', 'weakness', 'bleed',
+        'fragment_stacks', 'skip_turn', 'attack_blocked',
+    ];
+    let count = fields.reduce((total, key) => total + (Number(playerState && playerState[key]) > 0 ? 1 : 0), 0);
+    const custom = playerState && playerState.custom_statuses && typeof playerState.custom_statuses === 'object'
+        ? playerState.custom_statuses
+        : {};
+    Object.values(custom).forEach(value => {
+        if (Number(value) > 0) count += 1;
+    });
+    return count;
+}
+
+function countCardsPlayedThisTurnForPrediction(playerState = {}) {
+    return Object.values((playerState && playerState.cards_played_this_turn) || {})
+        .reduce((total, value) => total + Math.max(0, Number(value) || 0), 0);
 }
 
 function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {}) {
@@ -9656,10 +9780,77 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
             amount: maxHealth > 0 && health <= maxHealth * 0.4 ? 16 : 8,
         };
     }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Spikeball', 'ocean:spikeball'])) {
+        const hand = Array.isArray(attackerState && attackerState.hand) ? attackerState.hand : [];
+        const instanceId = cardDict && cardDict.instance_id;
+        const cardIsStillInHand = instanceId != null
+            && hand.some(card => String(card && card.instance_id) === String(instanceId));
+        const flags = getEffectiveCardFlagSets(cardDict || {}, cardDef || {}).effective;
+        const boosted = flags.has('ocean_spikeball_boosted') || (cardIsStillInHand && hand.length < 4);
+        info = {
+            ...info,
+            amount: boosted ? 20 : 6,
+        };
+    }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Trident', 'ocean:trident'])) {
+        const tagCount = getEffectiveCardFlagSets(cardDict || {}, cardDef || {}).effective.size;
+        info = {
+            ...info,
+            amount: 21 + countVisibleStatusesForPrediction(targetState) * 5 + tagCount * 5,
+        };
+    }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['PrivetBerry', 'desert_cards_addition:privet_berry'])) {
+        info = {
+            ...info,
+            amount: Math.max(0, Number(targetState && targetState.poison) || 0),
+        };
+    }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['MechaMissile', 'factory:mechamissile'])) {
+        const targetHand = Array.isArray(targetState && targetState.hand) ? targetState.hand : [];
+        const counterCount = targetHand.reduce((count, targetCard) => {
+            const targetDef = getCardDef((targetCard && targetCard.def_id) || '');
+            return count + (targetDef && targetDef.card_type === 'guard' ? 1 : 0);
+        }, 0);
+        info = {
+            ...info,
+            amount: 6 + counterCount * 6,
+        };
+    }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Relativity', 'void:relativity'])) {
+        info = {
+            ...info,
+            amount: 6 + 4 * countCardsPlayedThisTurnForPrediction(attackerState),
+        };
+    }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['MagicRelativity', 'void:magic_relativity'])) {
+        info = {
+            ...info,
+            amount: Math.max(0, 28 - 5 * countCardsPlayedThisTurnForPrediction(attackerState)),
+        };
+    }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['MagicWing', 'void:magic_wing'])) {
+        const { totalM } = getCardDisplayCosts(cardDict || {}, cardDef || {}, attackerState || {});
+        const magic = readPlayerHealthValue(attackerState, ['magic', 'm'], 0);
+        const extraSpend = Math.min(4, Math.max(0, magic - Math.max(0, Number(totalM) || 0)));
+        info = {
+            ...info,
+            amount: 4,
+            hits: 1 + extraSpend,
+        };
+    }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Scythe', 'void:scythe'])) {
+        const handCount = Array.isArray(attackerState && attackerState.hand)
+            ? attackerState.hand.length
+            : Math.max(0, Number(attackerState && attackerState.hand_count) || 0);
+        info = {
+            ...info,
+            amount: Math.max(0, 40 - 5 * Math.max(0, handCount - 1)),
+        };
+    }
     const fusion = clampClientCardLayer(cardDict.fusion_level || 1);
     const fission = clampClientCardLayer(cardDict.fission_level || 1);
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
-    const power = Math.max(0, Number(cardDict.power_value || 0));
+    const power = Number(cardDict.power_value || 0);
     if (info.triangle) {
         const attackerImmune = isPredictionStatusImmune(attackerState);
         const startStacks = attackerImmune ? 0 : Math.max(0, Number(attackerState.triangle_stacks || 0));
@@ -9667,7 +9858,7 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
         for (let i = 0; i < clampClientDamageSegments(fission); i++) {
             const stack = Math.min(4, startStacks + i);
             const amount = Number(info.amount || 0) + 3 * stack + bonus;
-            hits.push(Math.ceil(amount * fusion / fission) + Math.ceil(power / fission));
+            hits.push(Math.max(0, Math.ceil(amount * fusion / fission) + Math.ceil(power / fission)));
         }
         return hits;
     }
@@ -9677,7 +9868,7 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     const amount = Number(info.amount || 0) + bonus;
     const perHit = Math.ceil(amount * fusion / fission);
     const powerPerSegment = Math.ceil(power / Math.max(1, totalHits));
-    return Array.from({ length: totalHits }, () => perHit + powerPerSegment);
+    return Array.from({ length: totalHits }, () => Math.max(0, perHit + powerPerSegment));
 }
 
 function getActualAttackDamageText(cardDict, attackerState = {}, targetState = {}) {
@@ -10238,22 +10429,26 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             return;
         }
         if (op === 'void_magic_wing_damage') {
+            if (options.skipPhysicalDamage) return;
             const base = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.base ?? 4, localContext)));
             const per = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.per ?? 4, localContext)));
+            const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount ?? per ?? base, localContext)));
             const extraLimit = Math.max(0, Math.floor(evalPredictionNumberExpr(params.extra_limit ?? 4, localContext)));
             const ownerState = options.ownerState || options.attackerState || {};
             const cardCostM = Math.max(0, Number(options.cardCostM || 0));
             const availableMagic = Math.max(0, Number(ownerState.magic || ownerState.m || 0) - cardCostM);
             const spend = Math.min(extraLimit, availableMagic);
-            const amount = base + spend * per;
             if (amount > 0) {
-                prediction.target.damageHits.push(amount);
+                for (let index = 0; index < 1 + spend; index += 1) {
+                    prediction.target.damageHits.push(amount);
+                }
                 localContext.lastDamage = amount;
-                localContext.lastPositiveHits = 1;
+                localContext.lastPositiveHits = 1 + spend;
             }
             return;
         }
         if (op === 'void_antimatter_damage') {
+            if (options.skipPhysicalDamage) return;
             const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount ?? 10, localContext)));
             if (amount > 0) {
                 prediction.target.damageHits.push(amount);
@@ -10262,7 +10457,34 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             }
             return;
         }
+        if (op === 'void_turn_count_damage' || op === 'void_magic_relativity_damage_end') {
+            if (options.skipPhysicalDamage) return;
+            const ownerState = options.ownerState || options.attackerState || {};
+            const playedCount = countCardsPlayedThisTurnForPrediction(ownerState);
+            const base = evalPredictionNumberExpr(params.base ?? (op === 'void_turn_count_damage' ? 6 : 28), localContext);
+            const per = evalPredictionNumberExpr(params.per ?? (op === 'void_turn_count_damage' ? 4 : -5), localContext);
+            const amount = Math.max(0, Math.ceil(base + per * playedCount));
+            if (amount > 0) prediction.target.damageHits.push(amount);
+            localContext.lastDamage = amount;
+            localContext.lastPositiveHits = amount > 0 ? 1 : 0;
+            return;
+        }
+        if (op === 'void_scythe_damage') {
+            if (options.skipPhysicalDamage) return;
+            const ownerState = options.ownerState || options.attackerState || {};
+            const handCount = Array.isArray(ownerState.hand)
+                ? ownerState.hand.length
+                : Math.max(0, Number(ownerState.hand_count) || 0);
+            const base = evalPredictionNumberExpr(params.base ?? 40, localContext);
+            const per = evalPredictionNumberExpr(params.per_hand ?? 5, localContext);
+            const amount = Math.max(0, Math.ceil(base - per * Math.max(0, handCount - 1)));
+            if (amount > 0) prediction.target.damageHits.push(amount);
+            localContext.lastDamage = amount;
+            localContext.lastPositiveHits = amount > 0 ? 1 : 0;
+            return;
+        }
         if (op === 'arctic_nuke') {
+            if (options.skipPhysicalDamage) return;
             const ownerState = options.ownerState || options.attackerState || {};
             const targetState = options.targetState || {};
             const card = options.cardDict || {};
@@ -10401,7 +10623,7 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     const onPlay = cardDef.v2_events && cardDef.v2_events.on_play;
     const steps = onPlay && (onPlay.steps || onPlay);
     collectTargetPredictionFromV2Steps(result, steps, null, {
-        skipPhysicalDamage: cardDef.card_type === 'thorn',
+        skipPhysicalDamage: cardDef.card_type === 'thorn' && result.target.damageHits.length > 0,
         ownerState: attackerState,
         attackerState,
         targetState,
@@ -10684,7 +10906,7 @@ function getTermIntroLibrary() {
         D: { label: lt({ zh: 'D：物理伤害(Damage)', en: 'D: Physical Damage', fr: 'D : dégâts physiques', ja: 'D：物理ダメージ' }), desc: lt({ zh: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', en: 'Affected by armor, equipment, dodges, and counters. Effects such as Toxic or Fang healing only trigger when damage is actually dealt.', fr: 'Affecté par l’armure, les équipements, l’esquive et les contres. Toxic ou le soin de Fang ne se déclenchent que si des dégâts sont réellement infligés.', ja: '護甲、装備、回避、反制の影響を受けます。実際にダメージを与えた時だけ淬毒や牙の回復などが発動します。' }), color: COLORS.damage },
         electric_damage: { label: lt({ zh: '电伤：电击伤害(Electric Damage)', en: 'Electric Damage', fr: 'Dégâts électriques', ja: '電撃ダメージ' }), desc: `${lt({ zh: '一种类似于物理伤害的魔法伤害。', en: 'A kind of magic damage that behaves similarly to physical damage. ', fr: 'Un type de dégâts magiques qui se comporte comme des dégâts physiques. ', ja: '物理ダメージに近い挙動をする魔法ダメージです。' })}${magicDamageDesc}`, color: COLORS.damage },
         magic_damage: { label: lt({ zh: '魔法伤害(Magic Damage)', en: 'Magic Damage', fr: 'Dégâts magiques', ja: '魔法ダメージ' }), desc: magicDamageDesc, color: COLORS.magic },
-        crit: { label: lt({ zh: '暴击', en: 'Critical', fr: 'Critique', ja: 'クリティカル' }), desc: lt({ zh: '使一次物理伤害乘以暴击倍率。初始暴击倍率为×1.5，部分效果可以提高倍率。', en: 'Multiplies one physical damage hit by the critical multiplier. The base multiplier is ×1.5, and some effects can raise it.', fr: 'Multiplie un coup de dégâts physiques par le multiplicateur critique. Le multiplicateur de base est ×1,5, certains effets peuvent l’augmenter.', ja: '1回の物理ダメージに暴击倍率を掛けます。基本倍率は×1.5で、一部効果で上昇します。' }), color: '#D4AC0D' },
+        crit: { label: lt({ zh: '暴击', en: 'Critical', fr: 'Critique', ja: 'クリティカル' }), desc: lt({ zh: '使一次物理伤害乘以暴击倍率。初始暴击倍率为×1.5，部分效果可以提高倍率。', en: 'Multiplies one physical damage hit by the critical multiplier. The base multiplier is ×1.5, and some effects can raise it.', fr: 'Multiplie un coup de dégâts physiques par le multiplicateur critique. Le multiplicateur de base est ×1,5, certains effets peuvent l’augmenter.', ja: '1回の物理ダメージに暴击倍率を掛けます。基本倍率は×1.5で、一部効果で上昇します。' }), color: '#D4AC0D', iconKey: 'critical' },
         A: { label: lt({ zh: 'A：护甲(Armor)', en: 'A: Armor', fr: 'A : armure', ja: 'A：護甲' }), desc: lt({ zh: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。护甲不是状态，不受状态免疫影响。', en: 'Reduces D. It does not reduce magic damage from Poison, Burn, or similar states. Armor is not a status and is not affected by Status Immune.', fr: 'Réduit D. Ne réduit pas les dégâts magiques du Poison, de la Brûlure ou des états similaires. L’armure n’est pas un statut et n’est pas affectée par l’immunité aux statuts.', ja: 'D を軽減します。中毒、灼烧などの魔法ダメージは軽減しません。護甲は状態ではなく、状態免疫の影響を受けません。' }), color: COLORS.armor_text },
         P: { label: lt({ zh: 'P：中毒(Poison)', en: 'P: Poison', fr: 'P : poison', ja: 'P：毒' }), desc: lt({ zh: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', en: 'At your turn start, take magic damage equal to current P. If you survive, P halves rounded down, e.g. 10P→5P, 5P→2P.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au P actuel. Si vous survivez, P est divisé par deux arrondi à l’inférieur, ex. 10P→5P, 5P→2P.', ja: '自分のターン開始時、現在の P と同じ魔法ダメージを受けます。生存していれば P は切り捨てで半減します。例：10P→5P、5P→2P。' }), color: COLORS.poison },
         F: { label: lt({ zh: 'F：灼烧(Fire)', en: 'F: Burn', fr: 'F : brûlure', ja: 'F：火傷' }), desc: lt({ zh: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 10 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', en: 'At your turn start, take magic damage equal to current F. Burn stacks do not decrease. From round 10 onward, all players gain 1 Burn at each turn start.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au F actuel. Les charges de Brûlure ne diminuent pas. À partir du tour 10, tous les joueurs gagnent 1 Brûlure au début de chaque tour.', ja: '自分のターン開始時、現在の F と同じ魔法ダメージを受けます。火傷は減少しません。10ラウンド以降、各ターン開始時に全員へ火傷1層を付与します。' }), color: COLORS.fire },
@@ -10743,6 +10965,7 @@ function getTermIntroIconKey(key, item = null) {
     if (rawKey === 'M' || rawKey === 'magic') return 'M';
     if (rawKey === 'D') return 'damage';
     if (rawKey === 'A' || rawKey === 'armor') return 'armor';
+    if (rawKey === 'crit' || rawKey === 'critical') return 'critical';
     if (rawKey === 'electric_damage') return 'electric_damage';
     if (rawKey === 'P') return 'poison';
     if (rawKey === 'F') return 'fire';
@@ -10764,7 +10987,7 @@ function getIntroFlagDescription(flag, custom = null) {
     const desc = {
         precision: lt({ zh: '攻击被闪避时不会完全失效，而是把实际伤害变为原来的一半，向上取整。', en: 'If dodged, the attack is not fully negated; actual damage becomes half, rounded up.', fr: 'Si l’attaque est esquivée, elle n’est pas annulée : les dégâts réels sont divisés par deux, arrondis au supérieur.', ja: '回避されても完全には無効化されず、実ダメージが半分（切り上げ）になります。' }),
         exile: lt({ zh: '结算后进入放逐区，而不是弃牌堆；不会再被抽到。', en: 'After resolving, goes to exile instead of discard and cannot be drawn again.', fr: 'Après résolution, va en exil au lieu de la défausse et ne peut plus être piochée.', ja: '解決後、弃牌堆ではなく放逐へ行き、再び引けません。' }),
-        non_stackable: lt({ zh: '可以装备多张，但同类效果只算一份；一张被摧毁后，剩下的还能继续发挥作用。', en: 'Multiple copies can be equipped, but the same effect counts only once. If one is destroyed, another copy can continue working.', fr: 'Plusieurs copies peuvent être équipées, mais l’effet identique ne compte qu’une fois. Si l’une est détruite, une autre peut continuer à agir.', ja: '複数装備できますが同種効果は1つ分だけです。1つ破壊されても残りが働きます。' }),
+        non_stackable: lt({ zh: '可以装备多张；全场同名装备中，只有最早装备的一张生效。其离场后，下一张开始生效。', en: 'Multiple copies may be equipped. Across the entire match, only the earliest equipped copy with the same name is active; the next copy activates when it leaves.', fr: 'Plusieurs exemplaires peuvent être équipés. Dans toute la partie, seul le premier équipement du même nom agit ; le suivant s’active lorsqu’il quitte le jeu.', ja: '複数装備できます。対戦全体で同名のうち最も早く装備された1枚だけが有効で、離れた後は次の1枚が有効になります。' }),
         indestructible: lt({ zh: '作为装备时不会被摧毁效果破坏；玩家死亡时也不会被清除。', en: 'As equipment, cannot be destroyed by destroy effects and is not cleared when the player dies.', fr: 'En tant qu’équipement, ne peut pas être détruit par les effets de destruction et n’est pas retiré à la mort du joueur.', ja: '装備中、破壊効果で破壊されず、プレイヤー死亡時にも消えません。' }),
         sprout: lt({ zh: '抽到时会额外抽牌。手牌满时仍然会爆牌。', en: 'When drawn, draws extra cards. Hand overflow can still happen.', fr: 'Quand elle est piochée, pioche des cartes supplémentaires. La main peut quand même déborder.', ja: '引いた時、追加でカードを引きます。手札超過は起こります。' }),
         symbiosis: lt({ zh: '同一回合重复使用同名卡时，不会受到同名卡费用惩罚。', en: 'Ignores the extra E cost from playing the same card name repeatedly in one turn.', fr: 'Ignore le coût E supplémentaire lié aux cartes de même nom jouées plusieurs fois dans le même tour.', ja: '同一ターンの同名カード追加Eコストを無視します。' }),
@@ -11027,7 +11250,6 @@ function getStatusIntroItem(statusInfo) {
         magic_blocked: { label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
         bandage: { label: UI.status_bandage, desc: '受到致命伤害后无敌直到自己下个回合结束，然后死亡。', color: '#1E8449' },
-        sponge: { label: UI.status_sponge, desc: '表示海绵的存在。', color: '#6C3483' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -11393,7 +11615,8 @@ function showTermIntroForStandaloneItem(item, sourceEl = null, titleText = '') {
     const title = overlay.querySelector('#term-intro-title');
     const list = overlay.querySelector('#term-intro-list');
     const color = item.color || COLORS.text_primary;
-    const statusIcon = renderStatusIconHtml(item.key || '', item.label || item.key || '', item.iconKey || '', 'tag');
+    const statusIcon = renderStatusIconHtml(item.key || '', item.label || item.key || '', item.iconKey || '', 'tag')
+        || renderInlineIconHtml(item.iconKey || getTermIntroIconKey(item.key || '', item), item.label || item.key || '');
     cardSlot.innerHTML = `
         <div class="term-intro-status-card" style="--term-color:${escapeHtml(color)}">
             <span class="status-tag term-intro-status-tag" style="color:${escapeHtml(color)};background:${escapeHtml(COLORS.bg_card || '#fff')};border-color:${escapeHtml(color)}">${statusIcon}<span class="status-tag-text">${escapeHtml(item.label || item.key || '')}</span></span>
@@ -12088,6 +12311,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('invite_received', (data) => {
         debugLog('[client] invite_received:', data);
+        if (rejectLobbyInvitationOutsideLobby('invite_received', data)) return;
         playInviteAudio();
         const grPreview = renderInviteGrPreview(data.gr_preview || data);
         showModal(`
@@ -12118,6 +12342,7 @@ function connectSocket(serverUrl) {
         if (data.text) flashStatus(data.text, 4200, 'neutral');
     });
     bindSocketEvent('invite_confirm_required', (data = {}) => {
+        if (rejectLobbyInvitationOutsideLobby('invite_confirm_required', data)) return;
         showInviteConfirmModal({
             title: currentLang === 'zh' ? '确认邀请' : 'Confirm Invite',
             message: currentLang === 'zh'
@@ -12132,6 +12357,7 @@ function connectSocket(serverUrl) {
         });
     });
     bindSocketEvent('team_invite', (data) => {
+        if (rejectLobbyInvitationOutsideLobby('team_invite', data)) return;
         playInviteAudio();
         showModal(`
             <h3>${UI.form_team}</h3>
@@ -12161,6 +12387,7 @@ function connectSocket(serverUrl) {
         flashStatus(UI.team_declined_msg, 2000);
     });
     bindSocketEvent('team_match_invite', (data) => {
+        if (rejectLobbyInvitationOutsideLobby('team_match_invite', data)) return;
         playInviteAudio();
         const grPreview = renderInviteGrPreview(data.gr_preview || data);
         showModal(`
@@ -12182,6 +12409,7 @@ function connectSocket(serverUrl) {
         };
     });
     bindSocketEvent('team_match_confirm_required', (data = {}) => {
+        if (rejectLobbyInvitationOutsideLobby('team_match_confirm_required', data)) return;
         const targetNames = Array.isArray(data.target_team) ? data.target_team.join(' & ') : '?';
         showInviteConfirmModal({
             title: UI.invite_team || '邀请队伍',
@@ -12205,6 +12433,7 @@ function connectSocket(serverUrl) {
     bindSocketEvent('game_phase', (data) => {
         debugLog('[client] game_phase:', data.phase);
         const nextPhase = data.phase;
+        if (nextPhase !== 'lobby') dismissLobbyInvitationModal();
         if (!data.solo) soloMode = false;
         if (nextPhase === 'lobby' && transientMatchRecovery) {
             debugLog('[client] ignored lobby phase while restoring active match');
@@ -17256,6 +17485,18 @@ function renderSoloEventSelects() {
     buildOptions($('solo-event-b'), soloEventB);
     if ($('solo-event-a')) $('solo-event-a').value = soloEventA;
     if ($('solo-event-b')) $('solo-event-b').value = soloEventB;
+    updateSoloEventIcon('a', soloEventA);
+    updateSoloEventIcon('b', soloEventB);
+}
+
+function updateSoloEventIcon(side, eventId) {
+    const icon = $(`solo-event-${side}-icon`);
+    if (!icon) return;
+    const event = openingEvents.find(ev => String(ev && ev.id) === String(eventId));
+    const url = getOpeningEventIconUrl(event || eventId);
+    icon.classList.toggle('hidden', !url);
+    if (url) icon.src = url;
+    else icon.removeAttribute('src');
 }
 
 function renderSoloBuilder() {
@@ -18417,7 +18658,10 @@ function renderEventSelect(data) {
 
         card.innerHTML = `
             <div class="event-header" style="background:${bc}"><span>${i + 1}. ${getLocalizedEventText(ev, 'name') || '?'}</span></div>
-            <div class="event-desc">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>
+            <div class="event-card-body">
+                ${renderOpeningEventIconHtml(ev)}
+                <div class="event-desc">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>
+            </div>
         `;
         bindInlineCardChips(card);
         card.onclick = () => onEventSelect(ev.id);
@@ -18478,9 +18722,14 @@ function renderEventReveal(data) {
         const playerName = item.player_name || `P${(item.player_id || 0) + 1}`;
         card.innerHTML = `
             <div class="event-header" style="background:${bc}"><span>${escapeHtml(playerName)}</span></div>
-            <div class="event-desc"><b>${escapeHtml(getLocalizedEventText(ev, 'name') || '?')}</b></div>
-            <div class="event-desc">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>
-            <div class="event-desc">${item.ready ? (UI.status_drafting || '选牌中') : (UI.waiting_opponent || '等待')}</div>
+            <div class="event-card-body">
+                ${renderOpeningEventIconHtml(ev)}
+                <div class="event-card-copy">
+                    <div class="event-desc event-reveal-name"><b>${escapeHtml(getLocalizedEventText(ev, 'name') || '?')}</b></div>
+                    <div class="event-desc">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>
+                </div>
+            </div>
+            <div class="event-desc event-reveal-status">${item.ready ? (UI.status_drafting || '选牌中') : (UI.waiting_opponent || '等待')}</div>
         `;
         bindInlineCardChips(card);
         eventsRow.appendChild(card);
@@ -19066,12 +19315,15 @@ function getPredictionTargetChoices() {
     return getDefaultEnemyIdsForPredictionOwner(ownerState)
         .map(id => {
             const player = getPredictionPlayerById(id);
+            const alive = isPlayerAliveForTargeting(player);
             return {
                 id,
                 name: getPlayerNameById(id),
-                health: Number(player && player.health || 0),
-                maxHealth: Number(player && player.max_health || player.base_max_health || 0),
-                alive: Number(player && player.health || 0) > 0,
+                health: Number.isFinite(Number(player && player.health)) ? Number(player.health) : null,
+                maxHealth: Number.isFinite(Number(player && (player.max_health ?? player.base_max_health)))
+                    ? Number(player.max_health ?? player.base_max_health)
+                    : null,
+                alive,
             };
         })
         .filter(choice => choice.alive);
@@ -19417,7 +19669,7 @@ function normalizeBattlePlayer(gs, raw, slot) {
         discardCount: Number(data.discard_count != null ? data.discard_count : (Array.isArray(data.discard) ? data.discard.length : 0)),
         exileCount: Number(data.exile_count != null ? data.exile_count : (Array.isArray(data.exile) ? data.exile.length : 0)),
         isCurrent: normalizePlayerId(gs.current_player) === id,
-        isDefeated: Number(data.health || 0) <= 0,
+        isDefeated: !isPlayerAliveForTargeting(data),
         raw: data,
     };
 }
@@ -19566,7 +19818,7 @@ function renderMiniPlayerSkin(containerId, playerData = {}, id = null) {
     el.innerHTML = renderSkinAvatar(data.skin || DEFAULT_SKIN_CONFIG, {
         playerId: pid,
         look: resolveSkinLookForPlayer(pid, data.skin_look),
-        defeated: Number(data.health || 0) <= 0 || !!data.isDefeated || !!data.is_defeated,
+        defeated: !isPlayerAliveForTargeting(data),
         defeatedSeed: `${pid ?? ''}:${data.name || data.player_name || ''}`,
         corrupted,
         animateCorruption: shouldAnimateSkinCorruption(pid, corrupted, containerId || 'mini'),
@@ -19855,8 +20107,10 @@ function applyClassicResourcePreview(card = null, ownerState = null) {
 
 function getClassicPlayRole(card) {
     const type = card && card.card_type;
-    if (type === 'thorn') return 'enemy';
     const cardDef = card && (card.cardDef || getCardDef(card.def_id || ''));
+    if (type === 'thorn') {
+        return cardNeedsPlayerTarget(cardDef, card && (card.raw || card)) ? 'target' : 'enemy';
+    }
     if (type === 'root') {
         return cardNeedsPlayerTarget(cardDef, card && (card.raw || card)) ? 'target' : 'equip';
     }
@@ -20086,7 +20340,7 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
                 <span class="armor-meter-value">${escapeHtml(String(armorValue))}</span>
             </button>
             <button class="crit-meter classic-crit-meter${critVisible ? '' : ' hidden'}${armorValue > 0 && !masks.maskResources ? '' : ' is-solo'}" type="button" data-term-key="term:crit" data-term-label="${escapeHtml(critLabel)}" data-term-color="#D4AC0D" title="${escapeHtml(critLabel)}: ${escapeHtml(formatCritMultiplier(critMultiplier))}">
-                <span class="crit-meter-label">${escapeHtml(critLabel)}</span>
+                <img class="crit-meter-icon" src="/static/assets/ui-icons/critical.svg" alt="" aria-hidden="true">
                 <span class="crit-meter-value">${escapeHtml(formatCritMultiplier(critMultiplier))}</span>
             </button>
         </div>
@@ -20548,7 +20802,7 @@ function renderPlayerBars(containerId, playerData) {
         crit.dataset.termLabel = critLabel;
         crit.dataset.termColor = '#D4AC0D';
         crit.innerHTML = `
-            <span class="crit-meter-label">${escapeHtml(critLabel)}</span>
+            <img class="crit-meter-icon" src="/static/assets/ui-icons/critical.svg" alt="" aria-hidden="true">
             <span class="crit-meter-value"></span>
         `;
         container.appendChild(crit);
@@ -20703,7 +20957,6 @@ function renderStatusTags(containerId, playerData) {
     if (magicBlocked > 0) tags.push({ key: 'magic_blocked', name: '魔力封锁', abbr: '封M', val: magicBlocked, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     if (Number(p.untargetable || 0) > 0) tags.push({ key: 'untargetable', name: UI.status_untargetable, abbr: 'Unt', val: Number(p.untargetable || 0), fg: '#1A5276', bg: '#EBF5FB' });
     if (p.bandage_active) tags.push({ key: 'bandage', name: UI.status_bandage, abbr: 'Bdg', val: '', fg: '#1E8449', bg: '#E8F8F5' });
-    if (p.sponge_active) tags.push({ key: 'sponge', name: UI.status_sponge, abbr: 'Spg', val: '', fg: '#6C3483', bg: '#F4ECF7' });
     if (p.sluggish > 0) tags.push({ key: 'sluggish', name: UI.status_sluggish, abbr: 'Slg', val: p.sluggish, fg: '#E67E22', bg: '#FEF5E7' });
     if (p.overload > 0) tags.push({ key: 'overload', name: UI.status_overload, abbr: 'Ovl', val: p.overload, fg: '#C0392B', bg: '#FDEDEC' });
     if (p.foresight > 0) tags.push({ key: 'foresight', name: UI.status_foresight, abbr: 'Fsi', val: p.foresight, fg: '#2980B9', bg: '#EBF5FB' });
@@ -21039,10 +21292,11 @@ function getEnemyTargetOptions() {
     const opponents = [gameState.opponent || {}, gameState.opponent2 || {}];
     return ids.map((id, i) => {
         const data = opponents[i] || {};
+        const alive = isPlayerAliveForTargeting(data);
         return {
             id,
-            label: `${localizeCanonicalPlayerName(names[i] || (UI.opponent + (i + 1)))} H:${data.health || 0}/${data.max_health || 0}`,
-            alive: (data.health || 0) > 0
+            label: `${localizeCanonicalPlayerName(names[i] || (UI.opponent + (i + 1)))} H:${formatTargetResourceValue(data.health)}/${formatTargetResourceValue(data.max_health)}`,
+            alive,
         };
     }).filter(x => x.alive);
 }
@@ -21101,6 +21355,25 @@ function getPlayerDataById(id) {
     if (enemyIndex === 0) return gameState.opponent || {};
     if (enemyIndex === 1) return gameState.opponent2 || {};
     return {};
+}
+
+function formatTargetResourceValue(value) {
+    if (value === null || value === undefined || value === '') return '?';
+    return Number.isFinite(Number(value)) ? String(value) : '?';
+}
+
+function isPlayerAliveForTargeting(playerData = {}) {
+    const data = playerData || {};
+    const defeated = data.is_defeated ?? data.isDefeated ?? data.defeated ?? data.dead;
+    if (defeated === true || defeated === 1 || defeated === '1') return false;
+    const alive = data.is_alive ?? data.isAlive ?? data.alive;
+    if (alive === false || alive === 0 || alive === '0') return false;
+    const rawHealth = data.health;
+    if (rawHealth === null || rawHealth === undefined || rawHealth === '') return true;
+    const health = Number(rawHealth);
+    // Blindness intentionally replaces visible resources with "?". Unknown H
+    // must remain targetable; only an explicit death marker or numeric 0 is dead.
+    return !Number.isFinite(health) || health > 0;
 }
 
 function syncPlayerRegionTargets(gs) {
@@ -22067,13 +22340,13 @@ function getPlayerTargetOptions({ includeSelf = false, aliveOnly = true, candida
         if (forcedTargetId == null && !includeSelf && targetId === normalizePlayerId(gameState.your_id)) return;
         if (forcedTargetId == null && !targetCandidateAllows(role, candidates)) return;
         const stateData = getPlayerDataById(targetId) || data || {};
-        const alive = (stateData && Number(stateData.health || 0) > 0);
+        const alive = isPlayerAliveForTargeting(stateData);
         if (aliveOnly && !alive) return;
         if (targetId !== normalizePlayerId(gameState.your_id) && isPlayerUntargetable(stateData)) return;
         out.push({
             id: targetId,
             group,
-            label: `${group} ${getPlayerNameById(targetId)} H:${stateData ? (stateData.health || 0) : 0}/${stateData ? (stateData.max_health || 0) : 0}`,
+            label: `${group} ${getPlayerNameById(targetId)} H:${formatTargetResourceValue(stateData.health)}/${formatTargetResourceValue(stateData.max_health)}`,
             alive
         });
     };
@@ -27754,8 +28027,8 @@ async function init() {
     $('solo-card-search').addEventListener('input', renderSoloBuilder);
     $('btn-solo-clear-a').addEventListener('click', (e) => { e.stopPropagation(); clearSoloDeck('a'); });
     $('btn-solo-clear-b').addEventListener('click', (e) => { e.stopPropagation(); clearSoloDeck('b'); });
-    $('solo-event-a').addEventListener('change', (e) => { soloEventA = e.target.value; });
-    $('solo-event-b').addEventListener('change', (e) => { soloEventB = e.target.value; });
+    $('solo-event-a').addEventListener('change', (e) => { soloEventA = e.target.value; updateSoloEventIcon('a', soloEventA); });
+    $('solo-event-b').addEventListener('change', (e) => { soloEventB = e.target.value; updateSoloEventIcon('b', soloEventB); });
     $('btn-solo-load').addEventListener('click', () => { loadSoloDecks(true); renderSoloBuilder(); });
     $('btn-solo-save').addEventListener('click', saveSoloDecks);
     $('btn-solo-start').addEventListener('click', startSoloTraining);

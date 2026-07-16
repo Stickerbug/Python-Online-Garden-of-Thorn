@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: none;
+        stroke: #fcfce8;
+      }
+
+      .st0, .st1, .st2 {
+        stroke-miterlimit: 10;
+      }
+
+      .st0, .st2 {
+        stroke-width: 5px;
+      }
+
+      .st1 {
+        fill: #f3ef7a;
+        stroke: #eae125;
+        stroke-width: 10px;
+      }
+
+      .st2 {
+        fill: #fff;
+        stroke: #f7f8f8;
+      }
+    </style>
+  </defs>
+  <circle class="st1" cx="141.73" cy="141.73" r="106.3"/>
+  <rect class="st2" x="125.78" y="99.31" width="56.57" height="90.51" rx="5.67" ry="5.67" transform="translate(-.78 .84) rotate(-.31)"/>
+  <line class="st0" x1="141.73" y1="90.05" x2="141.73" y2="70.9"/>
+  <line class="st0" x1="90.54" y1="104.56" x2="79.54" y2="88.89"/>
+  <line class="st0" x1="192.92" y1="104.56" x2="203.93" y2="88.89"/>
+  <rect class="st2" x="106.13" y="110.5" width="56.57" height="90.51" rx="5.67" ry="5.67" transform="translate(-.84 .73) rotate(-.31)"/>
+  <rect class="st2" x="86.58" y="121.94" width="56.57" height="90.51" rx="5.67" ry="5.67" transform="translate(-.9 .63) rotate(-.31)"/>
+</svg>

@@ -814,6 +814,7 @@ def init_db():
             '''
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_match_replays_created_at ON match_replays(created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_match_replays_match_id ON match_replays(match_id, id DESC)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_match_replays_mode ON match_replays(mode)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_dependencies_replay_id ON replay_dependencies(replay_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_dependencies_hash ON replay_dependencies(dep_type, dep_hash)')
@@ -2457,18 +2458,269 @@ def process_live_achievement_flags(flags_by_user):
     return {'unlocked': unlocked, 'skipped': None}
 
 
+CARDS_PLAYED_BACKFILL_VERSION = 1
+CARDS_PLAYED_BACKFILL_FALLBACK = 15
+
+
+def _summary_cards_played_by_player(summary, player_ids):
+    counts = [None] * len(player_ids)
+    raw_counts = summary.get('cards_played_by_player')
+    if isinstance(raw_counts, list):
+        for index in range(min(len(counts), len(raw_counts))):
+            try:
+                counts[index] = max(0, int(raw_counts[index] or 0))
+            except (TypeError, ValueError):
+                pass
+    metric_deltas = summary.get('achievement_metric_deltas_by_user')
+    if not isinstance(metric_deltas, dict):
+        metric_deltas = {}
+    for index, uid in enumerate(player_ids):
+        if counts[index] is not None or uid is None:
+            continue
+        user_metrics = metric_deltas.get(str(uid)) or metric_deltas.get(uid) or {}
+        if not isinstance(user_metrics, dict) or 'cards_played_total' not in user_metrics:
+            continue
+        try:
+            counts[index] = max(0, int(user_metrics.get('cards_played_total') or 0))
+        except (TypeError, ValueError):
+            pass
+    return counts
+
+
+def _apply_cards_played_backfill_match(match_id, summary, counts, sources, player_ids):
+    now = utc_now()
+    unlocked = []
+    metric_deltas = summary.get('achievement_metric_deltas_by_user')
+    if not isinstance(metric_deltas, dict):
+        metric_deltas = {}
+    metric_deltas = {str(key): dict(value) for key, value in metric_deltas.items() if isinstance(value, dict)}
+    totals_by_user = {}
+    for index, uid in enumerate(player_ids):
+        if uid is None or index >= len(counts):
+            continue
+        totals_by_user[int(uid)] = totals_by_user.get(int(uid), 0) + max(0, int(counts[index] or 0))
+    for uid, count in totals_by_user.items():
+        user_metrics = metric_deltas.setdefault(str(uid), {})
+        user_metrics['cards_played_total'] = count
+    summary['achievement_metric_deltas_by_user'] = metric_deltas
+    summary['cards_played_by_player'] = [max(0, int(value or 0)) for value in counts]
+    summary['player_ids'] = list(player_ids)
+    summary['cards_played_backfill'] = {
+        'version': CARDS_PLAYED_BACKFILL_VERSION,
+        'fallback_per_player': CARDS_PLAYED_BACKFILL_FALLBACK,
+        'processed_at': now,
+        'counts_by_player': list(summary['cards_played_by_player']),
+        'sources_by_player': list(sources),
+    }
+
+    with get_db_connection() as conn:
+        for uid, count in totals_by_user.items():
+            if not _record_achievement_match_event_conn(conn, match_id, uid, 'metric:cards_played_total', now):
+                continue
+            for defn in ACHIEVEMENT_DEFS:
+                if defn.get('metric') != 'cards_played_total':
+                    continue
+                existing = conn.execute(
+                    'SELECT progress, unlocked FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
+                    (uid, defn['id']),
+                ).fetchone()
+                if existing is not None and int(existing['unlocked'] or 0):
+                    continue
+                current = int(existing['progress'] or 0) if existing else 0
+                item = _update_achievement_progress_conn(conn, uid, defn, current + count, now)
+                if item:
+                    unlocked.append({'user_id': uid, **item})
+        conn.execute(
+            'UPDATE matches SET summary_json = ? WHERE id = ?',
+            (json.dumps(summary, ensure_ascii=False), int(match_id)),
+        )
+        conn.commit()
+    return unlocked
+
+
+def backfill_cards_played_achievements_from_matches(dry_run=True, limit=None):
+    result = {
+        'dry_run': bool(dry_run),
+        'matches_seen': 0,
+        'matches_compensated': 0,
+        'players_compensated': 0,
+        'cards_total': 0,
+        'summary_players': 0,
+        'replay_players': 0,
+        'fallback_players': 0,
+        'fallback_cards': 0,
+        'already_processed_players': 0,
+        'unmatched_player_slots': 0,
+        'recovered_player_refs': 0,
+        'unlocked': 0,
+        'would_unlock': 0,
+        'reward_dew_awarded': 0,
+        'would_reward_dew': 0,
+        'errors': [],
+        'examples': [],
+    }
+    preview_deltas_by_user = {}
+    query = 'SELECT * FROM matches ORDER BY id ASC'
+    params = ()
+    if limit is not None:
+        try:
+            query += ' LIMIT ?'
+            params = (max(1, int(limit)),)
+        except (TypeError, ValueError):
+            pass
+
+    from replay_core import recover_cards_played_from_replay_blob
+
+    with get_db_connection() as conn:
+        user_columns = {row['name'] for row in conn.execute('PRAGMA table_info(users)').fetchall()}
+        user_where = 'WHERE deleted_at IS NULL' if 'deleted_at' in user_columns else ''
+        user_rows = conn.execute(f'SELECT id, username FROM users {user_where}').fetchall()
+        user_ids = {int(row['id']) for row in user_rows}
+        username_key_to_id = {}
+        for user_row in user_rows:
+            key = normalize_username_key(user_row['username'])
+            if key and key not in username_key_to_id:
+                username_key_to_id[key] = int(user_row['id'])
+        processed_events = {
+            (int(row['match_id']), int(row['user_id']))
+            for row in conn.execute(
+                "SELECT match_id, user_id FROM achievement_match_events WHERE achievement_id = 'metric:cards_played_total'"
+            ).fetchall()
+        }
+        rows = conn.execute(query, params).fetchall()
+
+    for row in rows:
+        result['matches_seen'] += 1
+        match_id = int(row['id'])
+        summary = _safe_json_loads(row['summary_json'], {})
+        if not isinstance(summary, dict):
+            summary = {}
+        raw_result = str(row['result'] or summary.get('result') or '').strip().lower()
+        if raw_result not in ('win', 'draw', 'finished'):
+            continue
+        player_ids, recovered = _match_player_ids_for_stats(
+            None,
+            row,
+            user_ids,
+            username_key_to_id,
+        )
+        result['recovered_player_refs'] += recovered
+        if not player_ids or not any(uid in user_ids for uid in player_ids):
+            continue
+
+        already_processed = {
+            uid for uid in player_ids
+            if uid is not None and (match_id, int(uid)) in processed_events
+        }
+        result['already_processed_players'] += len(already_processed)
+        pending_indices = [
+            index for index, uid in enumerate(player_ids)
+            if uid is not None and uid in user_ids and uid not in already_processed
+        ]
+        if not pending_indices:
+            continue
+
+        counts = _summary_cards_played_by_player(summary, player_ids)
+        sources = ['summary' if value is not None else '' for value in counts]
+        missing_indices = [index for index in pending_indices if counts[index] is None]
+        replay_result = None
+        replay_blob = None
+        if missing_indices:
+            with get_db_connection() as conn:
+                replay_row = conn.execute(
+                    'SELECT replay_blob FROM match_replays WHERE match_id = ? ORDER BY id DESC LIMIT 1',
+                    (match_id,),
+                ).fetchone()
+                replay_blob = replay_row['replay_blob'] if replay_row is not None else None
+        if missing_indices and replay_blob is not None:
+            replay_result = recover_cards_played_from_replay_blob(replay_blob, len(player_ids))
+            replay_counts = replay_result.get('counts') if replay_result.get('exact') else []
+            if isinstance(replay_counts, list) and len(replay_counts) >= len(player_ids):
+                for index in missing_indices:
+                    counts[index] = max(0, int(replay_counts[index] or 0))
+                    sources[index] = str(replay_result.get('source') or 'replay_state')
+
+        for index in pending_indices:
+            if counts[index] is None:
+                counts[index] = CARDS_PLAYED_BACKFILL_FALLBACK
+                sources[index] = 'fallback_15'
+        for index in range(len(counts)):
+            if counts[index] is None:
+                counts[index] = 0
+                sources[index] = 'unregistered'
+
+        pending_cards = sum(max(0, int(counts[index] or 0)) for index in pending_indices)
+        if pending_cards <= 0:
+            continue
+        match_totals_by_user = {}
+        for index in pending_indices:
+            uid = int(player_ids[index])
+            match_totals_by_user[uid] = match_totals_by_user.get(uid, 0) + max(0, int(counts[index] or 0))
+        for uid, count in match_totals_by_user.items():
+            preview_deltas_by_user[uid] = preview_deltas_by_user.get(uid, 0) + count
+        result['matches_compensated'] += 1
+        result['players_compensated'] += len(pending_indices)
+        result['cards_total'] += pending_cards
+        for index in pending_indices:
+            source = sources[index]
+            if source == 'summary':
+                result['summary_players'] += 1
+            elif source == 'fallback_15':
+                result['fallback_players'] += 1
+                result['fallback_cards'] += max(0, int(counts[index] or 0))
+            else:
+                result['replay_players'] += 1
+        result['unmatched_player_slots'] += sum(1 for uid in player_ids if uid is None)
+
+        if len(result['examples']) < 8:
+            result['examples'].append({
+                'match_id': match_id,
+                'counts': [counts[index] for index in pending_indices],
+                'sources': [sources[index] for index in pending_indices],
+                'replay_reason': (replay_result or {}).get('reason', ''),
+            })
+        if dry_run:
+            continue
+        try:
+            unlocked = _apply_cards_played_backfill_match(match_id, summary, counts, sources, player_ids)
+            result['unlocked'] += len(unlocked)
+            result['reward_dew_awarded'] += sum(max(0, int(item.get('reward_dew') or 0)) for item in unlocked)
+            processed_events.update((match_id, int(player_ids[index])) for index in pending_indices)
+        except Exception as exc:
+            result['errors'].append({'match_id': match_id, 'error': str(exc)})
+    if dry_run and preview_deltas_by_user:
+        with get_db_connection() as conn:
+            for uid, delta in preview_deltas_by_user.items():
+                for defn in ACHIEVEMENT_DEFS:
+                    if defn.get('metric') != 'cards_played_total':
+                        continue
+                    row = conn.execute(
+                        'SELECT progress, unlocked FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
+                        (uid, defn['id']),
+                    ).fetchone()
+                    if row is not None and int(row['unlocked'] or 0):
+                        continue
+                    current = int(row['progress'] or 0) if row is not None else 0
+                    if current + delta >= int(defn.get('target') or 1):
+                        result['would_unlock'] += 1
+                        result['would_reward_dew'] += max(0, int(defn.get('reward_dew') or 0))
+    return result
+
+
 def backfill_achievements_from_matches(dry_run=True, limit=None):
+    cards_played_result = backfill_cards_played_achievements_from_matches(dry_run=dry_run, limit=limit)
     result = {
         'dry_run': bool(dry_run),
         'matches_seen': 0,
         'matches_with_flags': 0,
         'flag_events_seen': 0,
         'metric_delta_total': 0,
-        'unlocked': 0,
+        'unlocked': int(cards_played_result.get('unlocked', 0) or 0),
         'skipped_no_flags': 0,
         'skipped_errors': 0,
         'incremental_flags_skipped': 0,
         'examples': [],
+        'cards_played_backfill': cards_played_result,
     }
     query = 'SELECT id, summary_json FROM matches ORDER BY id ASC'
     params = ()

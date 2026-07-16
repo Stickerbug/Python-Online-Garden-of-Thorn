@@ -312,6 +312,7 @@ class GameEngineInfiniteFire(GameEngine):
 
     def _apply_turn_start_effects(self, player_id: int):
         ps = self.players[player_id]
+        self._activate_pending_corruption()
         opp_id = 1 - player_id
         opp = self.players[opp_id]
         self._save_turn_start_snapshot(player_id)
@@ -369,9 +370,6 @@ class GameEngineInfiniteFire(GameEngine):
                     opp_id, eq.card_instance, 'enemy_turn_start', None,
                     {'source_id': opp_id, 'target_id': player_id}):
                 continue
-            if self._equipment_is(eq, 'Corruption', 'vanilla:corruption') and not eq.corruption_active:
-                eq.corruption_active = True
-                self.log_msg(f"{self.pn(opp_id)}的腐化效果激活")
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return

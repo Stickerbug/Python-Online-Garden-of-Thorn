@@ -3890,6 +3890,24 @@ body {
   line-height: 1.4;
 }
 
+.gallery-opening-event-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.gallery-opening-event-copy {
+  min-width: 0;
+}
+
+.gallery-opening-event-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  object-fit: contain;
+}
+
 .gallery-card-row.active,
 .gallery-card-row:hover {
   border-color: var(--magic);
@@ -4099,6 +4117,23 @@ body {
 .gallery-simple-detail p {
   color: var(--text-secondary);
   line-height: 1.75;
+}
+
+.gallery-opening-event-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.gallery-opening-event-detail-icon {
+  width: 104px;
+  height: 104px;
+  flex: 0 0 104px;
+  object-fit: contain;
+}
+
+.gallery-opening-event-detail-copy {
+  min-width: 0;
 }
 
 @media (max-width: 1180px) and (min-width: 901px) {
@@ -5313,6 +5348,20 @@ body {
   gap: 6px;
 }
 
+.solo-event-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.solo-event-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  object-fit: contain;
+}
+
 .solo-event-panel label {
   color: var(--text-secondary);
   font-size: 12px;
@@ -5320,6 +5369,8 @@ body {
 }
 
 .solo-event-panel select {
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 10px 12px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -6046,6 +6097,34 @@ body {
   overflow: hidden;
 }
 
+.event-card-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+  padding: 8px 12px;
+  flex: 1;
+}
+
+.event-card-body > .opening-event-icon {
+  width: clamp(48px, 6vw, 66px);
+  height: clamp(48px, 6vw, 66px);
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.event-card-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.event-card-body > .event-desc,
+.event-card-copy > .event-desc {
+  padding: 0;
+}
+
 .event-card:hover {
   border-color: var(--bloom);
 }
@@ -6574,6 +6653,13 @@ body {
   cursor: pointer;
   user-select: none;
   box-shadow: 0 1px 2px rgba(35, 45, 45, 0.12);
+}
+
+.crit-meter-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  object-fit: contain;
 }
 
 .crit-meter:active,
@@ -11199,6 +11285,16 @@ html.blind-level-4 .card-prediction-part.magic {
 .event-reveal-card .event-desc {
   font-size: 13px;
   line-height: 1.28;
+}
+
+.event-reveal-card .event-card-body {
+  align-items: flex-start;
+  padding-bottom: 4px;
+}
+
+.event-reveal-card .event-reveal-status {
+  flex: 0 0 auto;
+  padding-top: 2px;
 }
 
 .event-reveal-card .event-desc b {

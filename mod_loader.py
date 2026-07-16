@@ -35,6 +35,7 @@ OFFICIAL_MOD_DISPLAY_ORDER = (
     'Hel Cards Addition.gtnmod',
     'Sewers Cards Addition.gtnmod',
     'Arctic Cards Addition.gtnmod',
+    'Jurassic Cards Addition.gtnmod',
 )
 _OFFICIAL_MOD_DISPLAY_RANK = {
     filename.casefold(): index for index, filename in enumerate(OFFICIAL_MOD_DISPLAY_ORDER)

@@ -74,6 +74,12 @@ ADVANCED_ATOMIC_OPS = {
     "ocean_charge_self_damage",
     "sewers_lotus_heal", "sewers_activate_light_bulb",
     "sewers_broccoli_attack", "sewers_blood_rose",
+    "jurassic_magic_soil_on_equip", "jurassic_random_deck_to_hand",
+    "jurassic_magic_fang", "jurassic_blood_turn_start",
+    "jurassic_add_power_to_hand", "jurassic_oil_turn_start",
+    "jurassic_magic_rock", "jurassic_amulet", "jurassic_acid",
+    "jurassic_torch", "jurassic_magic_torch", "jurassic_pyrite_draw",
+    "jurassic_antler",
 }
 
 ATOMIC_OP_ALIASES = {

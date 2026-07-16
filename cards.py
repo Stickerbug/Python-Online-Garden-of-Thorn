@@ -311,7 +311,7 @@ class CardInstance:
             disabled_flags=normalize_card_flags(d.get('disabled_flags', [])),
             swift_value=max(0, int(d.get('swift_value', 0))),
             magic_swift_value=max(0, int(d.get('magic_swift_value', 0))),
-            power_value=max(0, int(d.get('power_value', 0))),
+            power_value=int(d.get('power_value', 0)),
             temp_swift_value=max(0, int(d.get('temp_swift_value', 0))),
             temp_heavy_value=max(0, int(d.get('temp_heavy_value', 0))),
             temp_magic_heavy_value=max(0, int(d.get('temp_magic_heavy_value', 0))),
@@ -459,7 +459,7 @@ _reg(CardDef('Yucca', 'Yucca', '丝兰', 4, 0, 'root', 5, 'Common',
              '在平缓的回合后积蓄更多生机。', '自己回合开始时+3H；若上个自己的回合造成的实际伤害低于10D，则额外+7H'))
 
 _reg(CardDef('Disc', 'Disc', '圆盘', 3, 0, 'root', 3, 'Common',
-             '坚实的护盾，减免来袭的伤害。', '+2A', flags={'non_stackable'}))
+             '坚实的护盾，减免来袭的伤害。', '+2A'))
 
 _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
              '受击时会漏电。', '目标受到D时，对攻击者造成3电伤'))
@@ -491,7 +491,7 @@ _reg(CardDef('Cancer', 'Cancer', '癌细胞', 4, 0, 'root', 2, 'Common',
              '无法根除的恶性细胞。', '对目标施加1层淬毒', flags={'indestructible'}))
 
 _reg(CardDef('Corruption', 'Corruption', '腐化', 0, 0, 'root', 2, 'Common',
-             '伤敌一千，自损八百。', '自下个敌方回合开始，全场所有伤害变为1.5倍（向上取整）', flags={'indestructible', 'self_only'}))
+             '伤敌一千，自损八百。', '自下个回合开始，全场所有伤害变为1.5倍（向上取整）', flags={'indestructible', 'self_only'}))
 
 _reg(CardDef('Mark', 'Mark', '标记', 4, 0, 'root', 3, 'Common',
              '你被标记了！', '使目标+1层眩晕',

@@ -635,6 +635,177 @@ def _decode_replay_blob(blob):
     return json.loads(raw.decode('utf-8'))
 
 
+def _replay_private_card_play_counters(state):
+    counters = {}
+    cumulative = {}
+
+    def collect(player, fallback_index=None):
+        if not isinstance(player, dict):
+            return
+        try:
+            player_index = int(player.get('player_id', fallback_index))
+        except (TypeError, ValueError):
+            return
+        if player_index < 0:
+            return
+        played = player.get('cards_played_this_turn')
+        if isinstance(played, dict):
+            total = 0
+            for value in played.values():
+                try:
+                    total += max(0, int(value or 0))
+                except (TypeError, ValueError):
+                    continue
+            counters[player_index] = total
+        if 'achievement_total_card_plays' in player:
+            try:
+                cumulative[player_index] = max(0, int(player.get('achievement_total_card_plays') or 0))
+            except (TypeError, ValueError):
+                pass
+
+    def collect_view(view, fallback_index=None):
+        if not isinstance(view, dict):
+            return
+        players = view.get('spectate_players')
+        if isinstance(players, list):
+            for index, player in enumerate(players):
+                collect(player, index)
+        collect(view.get('you'), view.get('your_id', fallback_index))
+
+    collect_view(state)
+    perspectives = state.get('perspectives') if isinstance(state, dict) else None
+    if isinstance(perspectives, list):
+        for index, perspective in enumerate(perspectives):
+            collect_view(perspective, index)
+    return counters, cumulative
+
+
+def recover_cards_played_from_replay_blob(blob, player_count=0):
+    """Recover per-player card uses from a stored replay without expanding its full timeline."""
+    try:
+        replay = _decode_replay_blob(blob)
+    except Exception as exc:
+        return {'exact': False, 'counts': [], 'source': 'unrecoverable', 'reason': f'decode:{exc}'}
+    if not isinstance(replay, dict):
+        return {'exact': False, 'counts': [], 'source': 'unrecoverable', 'reason': 'invalid_replay'}
+
+    meta = replay.get('meta') if isinstance(replay.get('meta'), dict) else {}
+    try:
+        expected_players = max(0, int(player_count or 0))
+    except (TypeError, ValueError):
+        expected_players = 0
+    if expected_players <= 0:
+        players = meta.get('players') if isinstance(meta.get('players'), list) else []
+        expected_players = len(players)
+    if expected_players <= 0:
+        return {'exact': False, 'counts': [], 'source': 'unrecoverable', 'reason': 'no_players'}
+
+    refs = _build_timeline_index(replay)
+    materialized_state = {}
+    round_counters = {}
+    response_counts = [0] * expected_players
+    final_cumulative = None
+    saw_game_over = False
+    saw_private_counters = False
+    incomplete_private_state = bool(meta.get('truncated'))
+
+    keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
+    actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
+    for ref in refs:
+        kind = ref.get('kind')
+        if kind == 'setup':
+            continue
+        source = None
+        if kind == 'frame':
+            source_index = _safe_int(ref.get('source_index'), -1)
+            if 0 <= source_index < len(keyframes):
+                source = keyframes[source_index]
+        elif kind == 'action':
+            source_index = _safe_int(ref.get('source_index'), -1)
+            if 0 <= source_index < len(actions):
+                source = actions[source_index]
+        if not isinstance(source, dict):
+            continue
+
+        frame_state = source.get('state')
+        if isinstance(frame_state, dict) and frame_state:
+            if frame_state.get('truncated'):
+                incomplete_private_state = True
+            materialized_state = _merge_replay_frame_state(materialized_state, frame_state)
+            counters, cumulative = _replay_private_card_play_counters(materialized_state)
+            try:
+                round_num = int(materialized_state.get('round_num', source.get('round', 0)) or 0)
+            except (TypeError, ValueError):
+                round_num = 0
+            if round_num > 0 and counters:
+                saw_private_counters = True
+                round_counters.setdefault(round_num, {}).update(counters)
+
+            action_type = str(source.get('type') or '') if kind == 'action' else ''
+            is_game_over = action_type == 'game_over' or bool(materialized_state.get('game_over'))
+            if is_game_over:
+                saw_game_over = True
+                if all(index in cumulative for index in range(expected_players)):
+                    final_cumulative = [cumulative[index] for index in range(expected_players)]
+
+        if kind != 'action':
+            continue
+        action_type = str(source.get('type') or '')
+        if action_type == 'game_over':
+            saw_game_over = True
+        if action_type != 'response':
+            continue
+        payload = source.get('payload') if isinstance(source.get('payload'), dict) else {}
+        card_instance_id = payload.get('card_instance_id')
+        if card_instance_id in (None, '', 0, '0'):
+            continue
+        actor = _safe_int(source.get('actor'), -1)
+        if 0 <= actor < expected_players:
+            response_counts[actor] += 1
+
+    if final_cumulative is not None and not bool(meta.get('truncated')):
+        return {
+            'exact': True,
+            'counts': final_cumulative,
+            'source': 'replay_total',
+            'reason': '',
+        }
+
+    complete_rounds = bool(round_counters) and all(
+        all(index in counters for index in range(expected_players))
+        for counters in round_counters.values()
+    )
+    if saw_game_over and saw_private_counters and complete_rounds and not incomplete_private_state:
+        counts = [0] * expected_players
+        for counters in round_counters.values():
+            for index in range(expected_players):
+                counts[index] += max(0, int(counters.get(index, 0) or 0))
+        for index, count in enumerate(response_counts):
+            counts[index] += count
+        return {
+            'exact': True,
+            'counts': counts,
+            'source': 'replay_state',
+            'reason': '',
+        }
+
+    reasons = []
+    if not saw_game_over:
+        reasons.append('no_game_over')
+    if not saw_private_counters:
+        reasons.append('no_private_counters')
+    if incomplete_private_state:
+        reasons.append('truncated')
+    if round_counters and not complete_rounds:
+        reasons.append('incomplete_players')
+    return {
+        'exact': False,
+        'counts': [],
+        'source': 'unrecoverable',
+        'reason': ','.join(reasons) or 'incomplete_replay',
+    }
+
+
 def _row_get(row, key, default=None):
     try:
         if key in row.keys():

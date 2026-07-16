@@ -224,7 +224,7 @@ RETIRED_OFFICIAL_MOD_FILENAMES = {
 DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
     VANILLA_MOD_FILENAME,
 }
-BUILTIN_SETUP_CARD_IDS = {'ManaOrb', 'Light', 'Dust', 'Yggdrasil'}
+BUILTIN_SETUP_CARD_IDS = set(GameEngine.BUILTIN_SETUP_CARD_IDS)
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 PVP_MODES = ('1v1', '2v2', 'urf', 'random_deck')
 DUEL_INVITE_MODES = ('1v1', 'urf', 'random_deck')
@@ -303,7 +303,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260714-mod-i18n-log-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260716-blind-targeting-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -1890,6 +1890,7 @@ class GameRoom:
         else:
             self.engine = GameEngine()
         self.engine.allowed_card_ids = apply_runtime_content_filter(allowed_card_ids, mode) if allowed_card_ids is not None else None
+        self.engine.available_builtin_setup_card_ids = apply_runtime_content_filter(BUILTIN_SETUP_CARD_IDS, mode)
         self.spectators = []
         self.disconnected_players = {}
         # Durable per-slot metadata. Socket.IO sid changes on reconnect; this
@@ -3265,6 +3266,45 @@ def room_allows_guest_spectators(room):
 
 def player_accepts_game_invites(player):
     return bool(player) and player.get('accept_game_invites', True) is not False
+
+
+def player_is_lobby_match_available(sid):
+    """Return whether a connected player is genuinely free for a lobby invite.
+
+    Status and room membership can briefly arrive out of order during reconnects,
+    so invitation checks must not rely on the public lobby status alone.
+    Callers hold ``_lock`` while using this helper.
+    """
+    player = players.get(sid)
+    if not player or player.get('status') != 'lobby':
+        return False
+    if player.get('room_id') is not None or player.get('spectating_room') is not None:
+        return False
+    if sid in solo_sessions or sid in tutorial_sessions:
+        return False
+    for room in rooms.values():
+        if sid not in (getattr(room, 'player_sids', []) or []):
+            continue
+        if getattr(getattr(room, 'engine', None), 'phase', '') != 'game_over':
+            return False
+    return True
+
+
+def clear_pending_match_invites_for_sids_locked(sids):
+    participant_sids = {sid for sid in (sids or []) if sid}
+    if not participant_sids:
+        return
+    team_leaders = set(participant_sids)
+    for sid in participant_sids:
+        team = teams.get(sid)
+        if team and team.get('leader'):
+            team_leaders.add(team['leader'])
+    for inviter_sid, target_sid in list(invites.items()):
+        if inviter_sid in participant_sids or target_sid in participant_sids:
+            del invites[inviter_sid]
+    for match_key in list(pending_team_matches):
+        if any(leader_sid in team_leaders for leader_sid in match_key):
+            del pending_team_matches[match_key]
 
 
 def is_admin_player_secret(raw):
@@ -7930,6 +7970,7 @@ def admin_dew_backfill_output(result):
 
 def admin_achievement_backfill_output(result):
     dry_run = bool(result.get('dry_run'))
+    cards = result.get('cards_played_backfill') or {}
     lines = [
         '成就历史补发预览' if dry_run else '成就历史补发已完成',
         f"扫描对局：{result.get('matches_seen', 0)}",
@@ -7940,6 +7981,26 @@ def admin_achievement_backfill_output(result):
         f"跳过累计型隐藏成就事件：{result.get('incremental_flags_skipped', 0)}",
         f"错误：{result.get('skipped_errors', 0)}",
     ]
+    if cards:
+        lines.extend([
+            '',
+            '花牌流转补偿：',
+            f"  补偿对局/玩家：{cards.get('matches_compensated', 0)}/{cards.get('players_compensated', 0)}",
+            f"  恢复或补偿进度：{cards.get('cards_total', 0)}张",
+            f"  摘要精确恢复：{cards.get('summary_players', 0)}人次",
+            f"  回放精确恢复：{cards.get('replay_players', 0)}人次",
+            f"  无法恢复按15张补偿：{cards.get('fallback_players', 0)}人次，共{cards.get('fallback_cards', 0)}张",
+            f"  已处理跳过：{cards.get('already_processed_players', 0)}人次",
+            f"  恢复历史账号引用：{cards.get('recovered_player_refs', 0)}处",
+            (
+                f"  预计解锁/奖励：{cards.get('would_unlock', 0)}项/{cards.get('would_reward_dew', 0)}荆露"
+                if dry_run else
+                f"  实际解锁/奖励：{cards.get('unlocked', 0)}项/{cards.get('reward_dew_awarded', 0)}荆露"
+            ),
+        ])
+        card_errors = cards.get('errors') or []
+        if card_errors:
+            lines.append(f"  花牌流转补偿错误：{len(card_errors)}条")
     examples = result.get('examples') or []
     if examples:
         lines.append('')
@@ -9235,9 +9296,12 @@ def execute_admin_command(line, _internal=False):
         if sub in ('confirm', '确认'):
             try:
                 result = backfill_achievements_from_matches(dry_run=False)
+                cards = result.get('cards_played_backfill') or {}
                 admin_event(
                     'admin',
-                    f"achievement backfill confirmed matches={result.get('matches_with_flags', 0)} unlocked={result.get('unlocked', 0)}"
+                    f"achievement backfill confirmed matches={result.get('matches_with_flags', 0)} "
+                    f"unlocked={result.get('unlocked', 0)} cards_recovered={cards.get('cards_total', 0)} "
+                    f"fallback_players={cards.get('fallback_players', 0)}"
                 )
                 return {'success': True, 'output': admin_achievement_backfill_output(result)}
             except Exception as exc:
@@ -11063,6 +11127,7 @@ def _reset_player_for_solo(ps, deck_entries, is_first):
 
 def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=None, player_names=None, start_label='单人训练场开始', loadout=None):
     engine = GameEngine()
+    engine.available_builtin_setup_card_ids = apply_runtime_content_filter(BUILTIN_SETUP_CARD_IDS, 'solo')
     if loadout is not None:
         apply_v2_loadout_to_engine(engine, loadout, 'solo')
         engine.allowed_card_ids = set(loadout.get('allowed_card_ids') or []) or None
@@ -14779,7 +14844,8 @@ def on_form_team(data):
     with _lock:
         if sid not in players or target_sid not in players:
             return
-        if players[sid]['status'] != 'lobby' or players[target_sid]['status'] != 'lobby':
+        if not player_is_lobby_match_available(sid) or not player_is_lobby_match_available(target_sid):
+            emit('server_error', {'message': '只有大厅中的玩家可以组队'})
             return
         if not player_accepts_game_invites(players[target_sid]):
             emit('server_error', {'message': '该玩家已关闭对局邀请', 'reason': 'game_invites_disabled'})
@@ -14932,7 +14998,8 @@ def on_accept_team(data):
     with _lock:
         if sid not in players or leader_sid not in players:
             return
-        if players[sid]['status'] != 'lobby' or players[leader_sid]['status'] != 'lobby':
+        if not player_is_lobby_match_available(sid) or not player_is_lobby_match_available(leader_sid):
+            emit('server_error', {'message': '组队邀请已失效'})
             return
         if pending_loadout:
             community_fields, loadout = pending_loadout
@@ -14945,6 +15012,7 @@ def on_accept_team(data):
             return
         if sid in teams or leader_sid in teams:
             return
+        clear_pending_match_invites_for_sids_locked([leader_sid, sid])
         team_id = f"team_{leader_sid}"
         teams[leader_sid] = {'members': [leader_sid, sid], 'leader': leader_sid}
         teams[sid] = teams[leader_sid]
@@ -15016,13 +15084,16 @@ def on_invite_team(data):
             return
         my_team = teams[sid]
         target_team = teams[target_team_leader]
+        all_invite_sids = list(my_team['members']) + list(target_team['members'])
+        if any(not player_is_lobby_match_available(member_sid) for member_sid in all_invite_sids):
+            emit('server_error', {'message': '只有全部位于大厅时才能邀请队伍'})
+            return
         if any(
             member_sid in players and not player_accepts_game_invites(players[member_sid])
             for member_sid in target_team['members']
         ):
             emit('server_error', {'message': '对方队伍中有玩家已关闭对局邀请', 'reason': 'game_invites_disabled'})
             return
-        all_invite_sids = list(my_team['members']) + list(target_team['members'])
         if not same_runtime_scope_sids(all_invite_sids):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
@@ -15097,9 +15168,10 @@ def on_accept_team_match(data):
         match_key = (min(my_team['leader'], other_team['leader']),
                      max(my_team['leader'], other_team['leader']))
         all_sids = other_team['members'] + my_team['members']
-        for s in all_sids:
-            if s not in players or players[s]['status'] != 'lobby':
-                return
+        if any(not player_is_lobby_match_available(player_sid) for player_sid in all_sids):
+            pending_team_matches.pop(match_key, None)
+            emit_match_start_failed(all_sids, '队伍邀请已失效：有玩家已离开大厅')
+            return
         pending_team_matches.pop(match_key, None)
         if not same_runtime_scope_sids(all_sids):
             emit_match_start_failed(all_sids, runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
@@ -15127,6 +15199,7 @@ def on_accept_team_match(data):
             if pool_issue:
                 emit_match_start_failed(all_sids, pool_issue, reason='content_temporarily_disabled')
                 return
+        clear_pending_match_invites_for_sids_locked(all_sids)
         room = GameRoom(room_id, all_sids, allowed, mode='2v2', beta_mode=bool(players[first_sid].get('beta_mode', False)))
         apply_v2_loadout_to_engine(room.engine, players.get(first_sid, {}), room.mode)
         rooms[room_id] = room
@@ -15487,14 +15560,17 @@ def on_invite(data):
             return
         if sid in invites:
             return
+        inviter = players[sid]
+        if not player_is_lobby_match_available(sid):
+            emit('server_error', {'message': '只有大厅中的玩家可以发送邀请'})
+            return
         target = players[target_sid]
-        if target['status'] != 'lobby':
+        if not player_is_lobby_match_available(target_sid):
             emit('server_error', {'message': '目标玩家不在大厅'})
             return
         if not player_accepts_game_invites(target):
             emit('server_error', {'message': '该玩家已关闭对局邀请', 'reason': 'game_invites_disabled'})
             return
-        inviter = players[sid]
         if not same_runtime_scope_players(inviter, target):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
@@ -15539,7 +15615,10 @@ def on_invite(data):
             return
         inviter = players[sid]
         target = players[target_sid]
-        if target.get('status') != 'lobby':
+        if not player_is_lobby_match_available(sid):
+            emit('server_error', {'message': '只有大厅中的玩家可以发送邀请'})
+            return
+        if not player_is_lobby_match_available(target_sid):
             emit('server_error', {'message': '目标玩家不在大厅'})
             return
         if not player_accepts_game_invites(target):
@@ -15605,7 +15684,8 @@ def on_accept_invite(data):
         del invites[inviter_sid]
         inviter = players[inviter_sid]
         accepter = players[sid]
-        if inviter['status'] != 'lobby' or accepter['status'] != 'lobby':
+        if not player_is_lobby_match_available(inviter_sid) or not player_is_lobby_match_available(sid):
+            emit('server_error', {'message': '邀请已失效：有玩家已离开大厅'})
             return
         if pending_loadout:
             community_fields, loadout = pending_loadout
@@ -15625,6 +15705,7 @@ def on_accept_invite(data):
         if pool_issue:
             emit_match_start_failed([inviter_sid, sid], pool_issue, reason='content_temporarily_disabled')
             return
+        clear_pending_match_invites_for_sids_locked([inviter_sid, sid])
         room = GameRoom(room_id, [inviter_sid, sid], allowed_card_ids, mode=inviter.get('mode', '1v1'), beta_mode=bool(inviter.get('beta_mode', False)))
         apply_v2_loadout_to_engine(room.engine, inviter, room.mode)
         rooms[room_id] = room
@@ -16256,6 +16337,7 @@ def on_solo_start(data):
         emit('server_error', {'message': '训练场牌组中包含当前未启用的卡牌'})
         return
     with _lock:
+        clear_pending_match_invites_for_sids_locked([sid])
         tutorial_sessions.discard(sid)
         solo_sessions[sid] = create_solo_engine(deck0, deck1, event0, event1, sub0, sub1, loadout=loadout)
         if sid in players:
@@ -16284,6 +16366,7 @@ def on_tutorial_start(data=None):
     ]
     tutorial_allowed = apply_runtime_content_filter(CARD_DEFS.keys(), 'tutorial')
     with _lock:
+        clear_pending_match_invites_for_sids_locked([sid])
         tutorial_sessions.add(sid)
         solo_sessions[sid] = create_solo_engine(
             deck0,
@@ -17439,6 +17522,7 @@ def on_rematch(data=None):
                     room.engine = GameEngineInfiniteFire()
                 else:
                     room.engine = GameEngine()
+                room.engine.available_builtin_setup_card_ids = apply_runtime_content_filter(BUILTIN_SETUP_CARD_IDS, room.mode)
                 room._history_recorded = False
                 room.match_seq = int(getattr(room, 'match_seq', 1) or 1) + 1
                 room.created_at = time.time()
