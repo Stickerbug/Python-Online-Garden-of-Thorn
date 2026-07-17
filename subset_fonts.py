@@ -288,8 +288,6 @@ def main():
             '  Demi 缺失、可由 Regular 子集补充的中日韩字形: '
             f'{len(demi_cjk_chars)} 个字符'
         )
-        if any(ord(ch) == 0x51A5 for ch in demi_cjk_chars):
-            print('  [确认] “冥”(U+51A5) 将由 Regular 子集补充')
     else:
         print('  [跳过] 无法检查 Demi 中日韩缺失字形')
 

@@ -139,6 +139,12 @@ def _validate_manifest(value: Any, errors: List[str], warnings: List[str], *, al
         errors.append(f"manifest.api_version 必须兼容 2.x，当前为 {api_version}")
     manifest["api_version"] = api_version or API_VERSION
 
+    category = str(manifest.get("category") or "official").strip().lower()
+    if category not in {"official", "entertainment"}:
+        warnings.append(f"未知 manifest.category: {category}，已按 official 处理")
+        category = "official"
+    manifest["category"] = category
+
     capabilities = manifest.get("capabilities", [])
     if capabilities is None:
         capabilities = []

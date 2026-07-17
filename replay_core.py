@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import struct
 import zlib
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
@@ -10,16 +11,18 @@ from db import DB_PATH, get_db_connection, utc_now
 
 
 REPLAY_VERSION = 2
+REPLAY_DOWNLOAD_MAGIC = b'GTNRPL1\n'
 DEFAULT_RETENTION_DAYS = int(os.environ.get('GTN_REPLAY_RETENTION_DAYS', '90') or 90)
 CLEANUP_HOUR = int(os.environ.get('GTN_CLEANUP_HOUR', '4') or 4)
 CLEANUP_MINUTE = int(os.environ.get('GTN_CLEANUP_MINUTE', '30') or 30)
 MAX_REPLAY_COMPRESSED_BYTES = int(os.environ.get('GTN_REPLAY_MAX_COMPRESSED_BYTES', '4000000') or 4000000)
 MAX_REPLAY_STORED_ACTIONS = int(os.environ.get('GTN_REPLAY_MAX_STORED_ACTIONS', '900') or 900)
-REPLAY_ITEM_COLUMNS = '''
-    id, match_id, created_at, mode, player_names_json, winner_name, winner_index,
-    round_num, duration_ms, replay_version, replay_sha256, replay_size,
-    mod_source, mod_hash, community_mod_name
-'''
+REPLAY_ITEM_FIELDS = (
+    'id', 'match_id', 'created_at', 'mode', 'player_names_json', 'winner_name', 'winner_index',
+    'round_num', 'duration_ms', 'replay_version', 'replay_sha256', 'replay_size',
+    'mod_source', 'mod_hash', 'community_mod_name',
+)
+REPLAY_ITEM_COLUMNS = ', '.join(REPLAY_ITEM_FIELDS)
 _TIMELINE_CACHE = OrderedDict()
 _TIMELINE_CACHE_MAX = 4
 _REPLAY_SETUP_ACTION_TYPES = {
@@ -150,6 +153,23 @@ def _cutoff_iso(retention_days=None):
 
 def _row_dict(row):
     return dict(row) if row is not None else None
+
+
+def normalize_replay_id(value):
+    text = str(value or '').strip().upper()
+    if text.startswith('R-'):
+        text = text[2:]
+    if not text.isdigit() or int(text) <= 0:
+        raise ValueError('回放 ID 格式无效')
+    return int(text)
+
+
+def format_replay_id(value):
+    return f'R-{normalize_replay_id(value)}'
+
+
+def _qualified_replay_columns(alias='r'):
+    return ', '.join(f'{alias}.{field}' for field in REPLAY_ITEM_FIELDS)
 
 
 def _card_defs_snapshot(card_defs):
@@ -404,6 +424,14 @@ def storage_summary(retention_days=None):
             'SELECT COUNT(*) AS count, COALESCE(SUM(replay_size), 0) AS bytes FROM match_replays WHERE created_at < ?',
             (cutoff,),
         ).fetchone()
+        holds = conn.execute(
+            '''
+            SELECT COUNT(*) AS count
+            FROM replay_holds
+            WHERE expires_at IS NULL OR expires_at > ?
+            ''',
+            (utc_now(),),
+        ).fetchone()
         mods = conn.execute(
             '''
             SELECT COUNT(*) AS count, COALESCE(SUM(json_size), 0) AS bytes
@@ -449,6 +477,7 @@ def storage_summary(retention_days=None):
             'retention_days': days,
             'oldest_created_at': replay['oldest_created_at'],
             'newest_created_at': replay['newest_created_at'],
+            'held_count': int(holds['count'] or 0),
         },
         'mod_blobs': {
             'community_count': mods['count'],
@@ -551,12 +580,39 @@ def _orphan_blob_preview_after_replay_delete(conn, replay_ids):
 
 def cleanup_old_replays(retention_days=None, dry_run=False):
     cutoff = _cutoff_iso(retention_days)
+    now = utc_now()
     with get_db_connection() as conn:
-        rows = conn.execute('SELECT id, replay_size FROM match_replays WHERE created_at < ?', (cutoff,)).fetchall()
+        protected_count = conn.execute(
+            '''
+            SELECT COUNT(*) AS count
+            FROM match_replays r
+            WHERE r.created_at < ?
+              AND EXISTS (
+                  SELECT 1 FROM replay_holds h
+                  WHERE h.replay_id = r.id
+                    AND (h.expires_at IS NULL OR h.expires_at > ?)
+              )
+            ''',
+            (cutoff, now),
+        ).fetchone()['count']
+        rows = conn.execute(
+            '''
+            SELECT r.id, r.replay_size
+            FROM match_replays r
+            WHERE r.created_at < ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM replay_holds h
+                  WHERE h.replay_id = r.id
+                    AND (h.expires_at IS NULL OR h.expires_at > ?)
+              )
+            ''',
+            (cutoff, now),
+        ).fetchall()
         replay_ids = [row['id'] for row in rows]
         result = {
             'deleted_replays': len(rows),
             'deleted_replay_bytes': sum(int(row['replay_size'] or 0) for row in rows),
+            'protected_replays': int(protected_count or 0),
             'deleted_mod_blobs': 0,
             'deleted_mod_blob_bytes': 0,
             'deleted_card_snapshots': 0,
@@ -567,6 +623,7 @@ def cleanup_old_replays(retention_days=None, dry_run=False):
             result.update(_orphan_blob_preview_after_replay_delete(conn, replay_ids))
             return result
         else:
+            conn.execute('DELETE FROM replay_holds WHERE expires_at IS NOT NULL AND expires_at <= ?', (now,))
             ids = [(replay_id,) for replay_id in replay_ids]
             conn.executemany('DELETE FROM replay_dependencies WHERE replay_id = ?', ids)
             conn.executemany('DELETE FROM match_replays WHERE id = ?', ids)
@@ -588,7 +645,15 @@ def vacuum_db():
     return {'vacuum': True}
 
 
-def list_replays(limit=50, offset=0, mode='', player='', mod_source='', retention_days=None):
+def list_replays(
+    limit=50,
+    offset=0,
+    mode='',
+    player='',
+    mod_source='',
+    retention_days=None,
+    player_user_id=None,
+):
     safe_limit = max(1, min(int(limit or 50), 100))
     safe_offset = max(0, int(offset or 0))
     cutoff = _cutoff_iso(retention_days)
@@ -600,6 +665,22 @@ def list_replays(limit=50, offset=0, mode='', player='', mod_source='', retentio
     if player:
         where.append('player_names_json LIKE ?')
         params.append(f'%{str(player).strip()}%')
+    if player_user_id not in (None, ''):
+        try:
+            safe_user_id = int(player_user_id)
+        except (TypeError, ValueError):
+            safe_user_id = 0
+        if safe_user_id > 0:
+            where.append(
+                '''
+                EXISTS (
+                    SELECT 1 FROM matches m
+                    WHERE m.id = match_replays.match_id
+                      AND (',' || TRIM(REPLACE(COALESCE(m.player_ids_json, ''), ' ', ''), '[]') || ',') LIKE ?
+                )
+                '''
+            )
+            params.append(f'%,{safe_user_id},%')
     if mod_source:
         where.append('COALESCE(mod_source, ?) = ?')
         params.extend(['official', str(mod_source)])
@@ -848,11 +929,194 @@ def _replay_row_to_item(row):
 
 
 def get_replay(replay_id):
+    replay_id = normalize_replay_id(replay_id)
     with get_db_connection() as conn:
-        row = conn.execute(f'SELECT {REPLAY_ITEM_COLUMNS} FROM match_replays WHERE id = ?', (int(replay_id),)).fetchone()
+        row = conn.execute(f'SELECT {REPLAY_ITEM_COLUMNS} FROM match_replays WHERE id = ?', (replay_id,)).fetchone()
     if row is None:
         return None
     return _replay_row_to_item(row)
+
+
+def build_replay_download_package(replay_id):
+    """Return the stored replay blob in a lightweight, versioned envelope.
+
+    The replay blob stays zlib-compressed exactly as stored in SQLite. This
+    keeps download requests cheap and leaves timeline reconstruction to the
+    local exporter.
+    """
+    replay_id = normalize_replay_id(replay_id)
+    with get_db_connection() as conn:
+        row = conn.execute(
+            '''
+            SELECT id, match_id, created_at, mode, player_names_json,
+                   replay_version, replay_sha256, replay_size, replay_blob
+            FROM match_replays WHERE id = ?
+            ''',
+            (replay_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    try:
+        players = json.loads(row['player_names_json'] or '[]')
+    except Exception:
+        players = []
+    blob = bytes(row['replay_blob'] or b'')
+    header = {
+        'format': 'gtn-replay',
+        'format_version': 1,
+        'encoding': 'zlib-json',
+        'replay_id': int(row['id']),
+        'match_id': row['match_id'],
+        'created_at': row['created_at'],
+        'mode': row['mode'],
+        'players': players,
+        'replay_version': row['replay_version'],
+        'replay_sha256': row['replay_sha256'],
+        'replay_size': len(blob),
+    }
+    header_raw = json.dumps(header, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+    payload = REPLAY_DOWNLOAD_MAGIC + struct.pack('>I', len(header_raw)) + header_raw + blob
+    return {
+        'replay_id': replay_id,
+        'filename': f'GTN-{format_replay_id(replay_id)}.gtnreplay',
+        'payload': payload,
+        'sha256': row['replay_sha256'],
+    }
+
+
+def replay_visible_to_user(replay_id, user_id, username=''):
+    replay_id = normalize_replay_id(replay_id)
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return False
+    with get_db_connection() as conn:
+        row = conn.execute(
+            f'''
+            SELECT {_qualified_replay_columns('r')}, m.player_ids_json
+            FROM match_replays r
+            LEFT JOIN matches m ON m.id = r.match_id
+            WHERE r.id = ?
+            ''',
+            (replay_id,),
+        ).fetchone()
+    if row is None:
+        return False
+    try:
+        player_ids = json.loads(row['player_ids_json'] or '[]')
+    except Exception:
+        player_ids = []
+    has_account_ids = False
+    for value in player_ids if isinstance(player_ids, list) else []:
+        try:
+            stored_user_id = int(value)
+            if stored_user_id <= 0:
+                continue
+            has_account_ids = True
+            if stored_user_id == user_id:
+                return True
+        except (TypeError, ValueError):
+            continue
+    if has_account_ids:
+        return False
+    expected_name = str(username or '').strip().casefold()
+    if not expected_name:
+        return False
+    return any(str(name or '').strip().casefold() == expected_name for name in _replay_row_to_item(row).get('players', []))
+
+
+def replay_hold_info(replay_id):
+    replay_id = normalize_replay_id(replay_id)
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM replay_holds WHERE replay_id = ?', (replay_id,)).fetchone()
+    return _row_dict(row)
+
+
+def hold_replay(replay_id, days=180, reason='', created_by='adminconsole'):
+    replay_id = normalize_replay_id(replay_id)
+    if days is None:
+        expires_at = None
+    else:
+        safe_days = max(1, min(int(days), 3650))
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(days=safe_days)
+        ).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+    now = utc_now()
+    with get_db_connection() as conn:
+        exists = conn.execute('SELECT 1 FROM match_replays WHERE id = ?', (replay_id,)).fetchone()
+        if exists is None:
+            return None
+        conn.execute(
+            '''
+            INSERT INTO replay_holds (replay_id, reason, created_by, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(replay_id) DO UPDATE SET
+                reason = excluded.reason,
+                created_by = excluded.created_by,
+                created_at = excluded.created_at,
+                expires_at = excluded.expires_at
+            ''',
+            (replay_id, str(reason or '')[:300], str(created_by or '')[:80], now, expires_at),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM replay_holds WHERE replay_id = ?', (replay_id,)).fetchone()
+    return _row_dict(row)
+
+
+def release_replay_hold(replay_id):
+    replay_id = normalize_replay_id(replay_id)
+    with get_db_connection() as conn:
+        cur = conn.execute('DELETE FROM replay_holds WHERE replay_id = ?', (replay_id,))
+        conn.commit()
+        return int(cur.rowcount or 0) > 0
+
+
+def get_replay_admin_detail(replay_id):
+    replay_id = normalize_replay_id(replay_id)
+    item = get_replay(replay_id)
+    if not item:
+        return None
+    with get_db_connection() as conn:
+        match = conn.execute(
+            '''
+            SELECT player_ids_json, result, summary_json
+            FROM matches WHERE id = ?
+            ''',
+            (item.get('match_id'),),
+        ).fetchone()
+        hold = conn.execute('SELECT * FROM replay_holds WHERE replay_id = ?', (replay_id,)).fetchone()
+    try:
+        item['player_ids'] = json.loads(match['player_ids_json'] or '[]') if match is not None else []
+    except Exception:
+        item['player_ids'] = []
+    item['result'] = match['result'] if match is not None else ''
+    item['hold'] = _row_dict(hold)
+    return item
+
+
+def export_replay_json_file(replay_id, output_dir):
+    replay_id = normalize_replay_id(replay_id)
+    with get_db_connection() as conn:
+        row = conn.execute(
+            'SELECT replay_blob, replay_sha256 FROM match_replays WHERE id = ?',
+            (replay_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    replay = _decode_replay_blob(row['replay_blob'])
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.abspath(os.path.join(output_dir, f'replay-{format_replay_id(replay_id)}.json'))
+    temp_path = f'{output_path}.tmp'
+    with open(temp_path, 'w', encoding='utf-8', newline='\n') as handle:
+        json.dump(replay, handle, ensure_ascii=False, indent=2)
+        handle.write('\n')
+    os.replace(temp_path, output_path)
+    return {
+        'replay_id': replay_id,
+        'path': output_path,
+        'bytes': os.path.getsize(output_path),
+        'sha256': row['replay_sha256'],
+    }
 
 
 def _safe_int(value, default=0):

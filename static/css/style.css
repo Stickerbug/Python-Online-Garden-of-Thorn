@@ -548,6 +548,7 @@ body {
 .btn-settings::before,
 .btn-view-deck::before,
 .btn-view-discard::before,
+.btn-view-exile::before,
 .btn-surrender::before,
 .btn-switch-perspective::before,
 .btn-leave-spectate::before,
@@ -3888,6 +3889,42 @@ body {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.feedback-replay-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.feedback-replay-preview.hidden {
+  display: none;
+}
+
+.feedback-replay-preview-main {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback-replay-preview strong {
+  color: var(--text-primary);
+}
+
+.account-replay-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
 }
 
 .gallery-opening-event-row {
@@ -8366,6 +8403,14 @@ html.blind-level-4 .card-prediction-part.magic {
   color: #D4AC0D;
 }
 
+.card-token.status-magic-blocked {
+  color: var(--color-magic);
+}
+
+.card-token.status-blazing-fire {
+  color: #FF5D2E;
+}
+
 .card-token.status-immune {
   color: #16A085;
 }
@@ -10290,6 +10335,37 @@ html.blind-level-4 .card-prediction-part.magic {
   display: none;
 }
 
+.gameover-replay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.gameover-replay.hidden {
+  display: none;
+}
+
+.gameover-replay-copy {
+  min-width: 88px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.gameover-replay-copy:hover,
+.gameover-replay-copy:focus-visible {
+  border-color: var(--bloom);
+  color: var(--bloom);
+}
+
 .gameover-gr-title {
   margin-bottom: 6px;
   font-weight: 700;
@@ -11604,6 +11680,16 @@ html.blind-level-4 .card-prediction-part.magic {
   overflow-y: auto;
 }
 
+.view-deck-modal .pile-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 50px);
+  justify-content: center;
+  align-items: start;
+  gap: 14px 10px;
+  padding: 10px 18px 16px;
+  overflow-x: hidden;
+}
+
 .view-deck-modal .deck-total {
   font-weight: 700;
   margin-bottom: 8px;
@@ -11639,6 +11725,56 @@ html.blind-level-4 .card-prediction-part.magic {
 .view-deck-modal .deck-entry-count {
   margin-left: 0;
   flex: 0 0 auto;
+}
+
+.view-deck-modal .pile-tile-entry {
+  position: relative;
+  display: grid;
+  grid-template-rows: 70px auto;
+  place-items: center;
+  width: 50px;
+  min-width: 0;
+  padding: 0;
+  gap: 3px;
+  overflow: visible;
+}
+
+.view-deck-modal .pile-tile-entry .classic-card-tile {
+  margin: 0;
+}
+
+.view-deck-modal .pile-tile-order {
+  min-height: 12px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-secondary);
+}
+
+.view-deck-modal .pile-tile-count {
+  position: absolute;
+  z-index: 8;
+  top: -8px;
+  right: -10px;
+  min-width: 24px;
+  padding: 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+  border-radius: 5px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  transform: rotate(30deg);
+  transform-origin: center;
+  box-shadow: 0 2px 5px rgba(22, 28, 38, 0.16);
+  pointer-events: none;
+}
+
+.view-deck-modal .pile-tile-empty {
+  grid-column: 1 / -1;
+  justify-content: center;
+  min-height: 70px;
 }
 
 /* Reorder deck drag UI */
@@ -13103,6 +13239,7 @@ html.blind-level-4 .card-prediction-part.magic {
 .btn-end-turn,
 .btn-view-deck,
 .btn-view-discard,
+.btn-view-exile,
 .btn-prediction-target,
 .btn-surrender,
 .btn-switch-perspective,
@@ -13122,6 +13259,7 @@ html.blind-level-4 .card-prediction-part.magic {
 
 .btn-view-deck,
 .btn-view-discard,
+.btn-view-exile,
 .btn-prediction-target,
 .btn-surrender,
 .btn-switch-perspective,
@@ -13135,6 +13273,7 @@ html.blind-level-4 .card-prediction-part.magic {
 
 .btn-view-deck::before { --ui-icon-url: url("/static/assets/ui-icons/draw-pile.svg"); }
 .btn-view-discard::before { --ui-icon-url: url("/static/assets/ui-icons/discard-pile.svg"); }
+.btn-view-exile::before { --ui-icon-url: url("/static/assets/ui-icons/exile-pile.svg"); }
 .btn-surrender::before { --ui-icon-url: url("/static/assets/ui-icons/surrender.svg"); }
 .btn-switch-perspective::before { --ui-icon-url: url("/static/assets/ui-icons/replay.svg"); }
 .btn-leave-spectate::before { --ui-icon-url: url("/static/assets/ui-icons/surrender.svg"); }
@@ -13146,12 +13285,14 @@ html.blind-level-4 .card-prediction-part.magic {
 
 .btn-view-deck::before,
 .btn-view-discard::before,
+.btn-view-exile::before,
 #btn-urf-replace::before,
 #btn-urf-sell::before,
 #btn-solo-edit::before,
 #btn-solo-next-draw::before,
 #classic-view-deck::before,
 #classic-view-discard::before,
+#classic-view-exile::before,
 #classic-urf-replace::before,
 #classic-urf-sell::before,
 #classic-solo-edit::before,
@@ -13172,6 +13313,7 @@ html.blind-level-4 .card-prediction-part.magic {
 @media (max-width: 720px) {
   .controls-group .btn-view-deck,
   .controls-group .btn-view-discard,
+  .controls-group .btn-view-exile,
   .controls-group .btn-prediction-target,
   .controls-group .btn-surrender,
   .controls-group .btn-switch-perspective,
@@ -13190,6 +13332,7 @@ html.blind-level-4 .card-prediction-part.magic {
 
   .controls-group .btn-view-deck::before,
   .controls-group .btn-view-discard::before,
+  .controls-group .btn-view-exile::before,
   .controls-group .btn-prediction-target::before,
   .controls-group .btn-surrender::before,
   .controls-group .btn-switch-perspective::before,
@@ -15834,6 +15977,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 #classic-view-deck::before { --ui-icon-url: url("/static/assets/ui-icons/draw-pile.svg"); }
 #classic-view-discard::before { --ui-icon-url: url("/static/assets/ui-icons/discard-pile.svg"); }
+#classic-view-exile::before { --ui-icon-url: url("/static/assets/ui-icons/exile-pile.svg"); }
 #classic-switch-perspective::before { --ui-icon-url: url("/static/assets/ui-icons/replay.svg"); }
 #classic-leave-spectate::before { --ui-icon-url: url("/static/assets/ui-icons/surrender.svg"); }
 #classic-urf-replace::before { --ui-icon-url: url("/static/assets/ui-icons/reload.svg"); }
@@ -15850,6 +15994,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 #classic-view-deck,
 #classic-view-discard,
+#classic-view-exile,
 #classic-solo-next-draw,
 #classic-leave-spectate,
 #classic-urf-replace {
@@ -15860,6 +16005,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
 
 #classic-view-deck:not(:disabled):hover,
 #classic-view-discard:not(:disabled):hover,
+#classic-view-exile:not(:disabled):hover,
 #classic-solo-next-draw:not(:disabled):hover,
 #classic-leave-spectate:not(:disabled):hover,
 #classic-urf-replace:not(:disabled):hover {
@@ -17474,6 +17620,7 @@ button.armor-meter:focus-visible {
   .btn-end-turn,
   .btn-view-deck,
   .btn-view-discard,
+  .btn-view-exile,
   .btn-surrender,
   .btn-switch-perspective,
   .btn-leave-spectate {
@@ -18086,6 +18233,7 @@ button.armor-meter:focus-visible {
   .btn-end-turn,
   .btn-view-deck,
   .btn-view-discard,
+  .btn-view-exile,
   .btn-surrender,
   .btn-switch-perspective,
   .btn-leave-spectate,
@@ -18264,6 +18412,7 @@ button.armor-meter:focus-visible {
 
   .controls-group .btn-view-deck,
   .controls-group .btn-view-discard,
+  .controls-group .btn-view-exile,
   .controls-group .btn-prediction-target,
   .controls-group .btn-switch-perspective,
   .controls-group .btn-leave-spectate,
@@ -18294,6 +18443,7 @@ button.armor-meter:focus-visible {
 
   .controls-group .btn-view-deck::before,
   .controls-group .btn-view-discard::before,
+  .controls-group .btn-view-exile::before,
   .controls-group .btn-prediction-target::before,
   .controls-group .btn-switch-perspective::before,
   .controls-group .btn-leave-spectate::before,
@@ -18312,6 +18462,7 @@ button.armor-meter:focus-visible {
 @media (max-width: 420px), (max-height: 520px) {
   .controls-group .btn-view-deck,
   .controls-group .btn-view-discard,
+  .controls-group .btn-view-exile,
   .controls-group .btn-prediction-target,
   .controls-group .btn-switch-perspective,
   .controls-group .btn-leave-spectate,
@@ -18330,6 +18481,7 @@ button.armor-meter:focus-visible {
 
   .controls-group .btn-view-deck::before,
   .controls-group .btn-view-discard::before,
+  .controls-group .btn-view-exile::before,
   .controls-group .btn-prediction-target::before,
   .controls-group .btn-switch-perspective::before,
   .controls-group .btn-leave-spectate::before,

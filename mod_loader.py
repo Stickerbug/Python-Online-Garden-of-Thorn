@@ -36,10 +36,28 @@ OFFICIAL_MOD_DISPLAY_ORDER = (
     'Sewers Cards Addition.gtnmod',
     'Arctic Cards Addition.gtnmod',
     'Jurassic Cards Addition.gtnmod',
+    'Bio Cards Addition.gtnmod',
 )
 _OFFICIAL_MOD_DISPLAY_RANK = {
     filename.casefold(): index for index, filename in enumerate(OFFICIAL_MOD_DISPLAY_ORDER)
 }
+MOD_CATEGORY_OFFICIAL = 'official'
+MOD_CATEGORY_ENTERTAINMENT = 'entertainment'
+VALID_MOD_CATEGORIES = {MOD_CATEGORY_OFFICIAL, MOD_CATEGORY_ENTERTAINMENT}
+
+
+def normalize_mod_category(value):
+    category = str(value or '').strip().lower()
+    return category if category in VALID_MOD_CATEGORIES else MOD_CATEGORY_OFFICIAL
+
+
+def mod_category(value):
+    info = getattr(value, 'info', None)
+    manifest = getattr(value, 'manifest', None)
+    raw = getattr(info, 'category', '') if info is not None else ''
+    if not raw and manifest is not None:
+        raw = getattr(manifest, 'category', '')
+    return normalize_mod_category(raw)
 
 
 def mod_display_order_key(value):
@@ -512,6 +530,7 @@ class ModInfo:
         self.description_cn = data.get('description_cn', '') or data.get('description', '')
         self.description_en = data.get('description_en', '') or data.get('description', '')
         self.game_version = data.get('game_version', '')
+        self.category = normalize_mod_category(data.get('category'))
         self.name_i18n = copy.deepcopy(data.get('name_i18n', {})) if isinstance(data.get('name_i18n'), dict) else {}
         self.description_i18n = copy.deepcopy(data.get('description_i18n', {})) if isinstance(data.get('description_i18n'), dict) else {}
 
@@ -522,6 +541,7 @@ class ModInfo:
             'author': self.author, 'description': self.description,
             'description_cn': self.description_cn, 'description_en': self.description_en,
             'game_version': self.game_version,
+            'category': self.category,
             'name_i18n': self.name_i18n, 'description_i18n': self.description_i18n,
         }
 
@@ -572,6 +592,7 @@ class V2Manifest:
         self.api_version = self.data.get('api_version', '')
         self.author = self.data.get('author', '')
         self.description = self.data.get('description', '')
+        self.category = normalize_mod_category(self.data.get('category'))
 
     def to_dict(self) -> dict:
         return dict(self.data)
@@ -721,6 +742,7 @@ def load_v2_mod_from_data(data: dict, source: str = "memory", allow_reserved_nam
             'game_version': manifest_data.get('api_version', ''),
             'name_i18n': manifest_data.get('name_i18n', {}),
             'description_i18n': manifest_data.get('description_i18n', {}),
+            'category': manifest_data.get('category', MOD_CATEGORY_OFFICIAL),
         })
     registries = normalized.get('registries') if isinstance(normalized.get('registries'), dict) else {}
     for key, resources in registries.items():

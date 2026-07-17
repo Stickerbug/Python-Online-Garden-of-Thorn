@@ -820,6 +820,19 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_dependencies_hash ON replay_dependencies(dep_type, dep_hash)')
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS replay_holds (
+                replay_id INTEGER PRIMARY KEY,
+                reason TEXT,
+                created_by TEXT,
+                created_at TEXT NOT NULL,
+                expires_at TEXT,
+                FOREIGN KEY(replay_id) REFERENCES match_replays(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_replay_holds_expires ON replay_holds(expires_at)')
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS card_draft_stats (
                 mode TEXT NOT NULL,
                 card_id TEXT NOT NULL,
@@ -1131,6 +1144,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS feedback_threads (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
+                replay_id INTEGER,
                 category TEXT,
                 title TEXT,
                 status TEXT DEFAULT 'open',
@@ -1143,8 +1157,14 @@ def init_db():
             )
             '''
         )
+        feedback_thread_columns = {
+            row['name'] for row in conn.execute('PRAGMA table_info(feedback_threads)').fetchall()
+        }
+        if 'replay_id' not in feedback_thread_columns:
+            conn.execute('ALTER TABLE feedback_threads ADD COLUMN replay_id INTEGER')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_threads_user ON feedback_threads(user_id, updated_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_threads_status ON feedback_threads(status, updated_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_threads_replay ON feedback_threads(replay_id, updated_at)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS feedback_messages (
@@ -6373,7 +6393,7 @@ def send_dm_message(sender_user_id, target_identifier=None, target_user_id=None,
         return data, None
 
 
-FEEDBACK_CATEGORIES = {'bug', 'suggestion', 'account', 'report', 'other'}
+FEEDBACK_CATEGORIES = {'bug', 'suggestion', 'account', 'report', 'appeal', 'other'}
 FEEDBACK_STATUSES = {'open', 'pending', 'closed'}
 
 
@@ -6448,6 +6468,7 @@ def _feedback_thread_to_dict(conn, row, viewer_user_id=None, staff_view=False):
     return {
         'id': row['id'],
         'user_id': row['user_id'],
+        'replay_id': row['replay_id'] if 'replay_id' in row.keys() else None,
         'user': owner,
         'category': row['category'] or 'other',
         'title': row['title'] or '',
@@ -6599,7 +6620,16 @@ def get_feedback_messages(user_id, thread_id, mark_read=True, limit=100):
         }, None
 
 
-def send_feedback_message(user_id, text, thread_id=None, category='other', title='', normalized_message='', risk_level=0):
+def send_feedback_message(
+    user_id,
+    text,
+    thread_id=None,
+    category='other',
+    title='',
+    normalized_message='',
+    risk_level=0,
+    replay_id=None,
+):
     try:
         uid = int(user_id)
     except (TypeError, ValueError):
@@ -6633,10 +6663,12 @@ def send_feedback_message(user_id, text, thread_id=None, category='other', title
             safe_title = str(title or '').strip()[:80] or message[:40]
             cur = conn.execute(
                 '''
-                INSERT INTO feedback_threads (user_id, category, title, status, created_at, updated_at, user_read_at)
-                VALUES (?, ?, ?, 'open', ?, ?, ?)
+                INSERT INTO feedback_threads (
+                    user_id, replay_id, category, title, status, created_at, updated_at, user_read_at
+                )
+                VALUES (?, ?, ?, ?, 'open', ?, ?, ?)
                 ''',
-                (uid, category_key, safe_title, now, now, now),
+                (uid, int(replay_id) if replay_id not in (None, '') else None, category_key, safe_title, now, now, now),
             )
             thread = conn.execute('SELECT * FROM feedback_threads WHERE id = ?', (cur.lastrowid,)).fetchone()
         sender_name = str(user['username'] or '')[:80]

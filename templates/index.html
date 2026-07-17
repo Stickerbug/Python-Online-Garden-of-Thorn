@@ -294,15 +294,18 @@
             <option value="suggestion">建议</option>
             <option value="account">账号问题</option>
             <option value="report">举报/纠纷</option>
+            <option value="appeal">对局申诉</option>
             <option value="other">其他</option>
           </select>
           <input id="feedback-title-input" type="text" maxlength="80" placeholder="标题">
+          <input id="feedback-replay-id" class="hidden" type="text" maxlength="24" inputmode="numeric" placeholder="回放 ID，例如 R-12345">
           <select id="feedback-status-select" class="hidden" aria-label="反馈状态">
             <option value="open">未处理</option>
             <option value="pending">已回复</option>
             <option value="closed">已关闭</option>
           </select>
         </div>
+        <div id="feedback-replay-preview" class="feedback-replay-preview hidden"></div>
         <div id="feedback-message-list" class="feedback-message-list"></div>
         <div class="feedback-input-row">
           <textarea id="feedback-message-input" maxlength="200" rows="3" placeholder="输入反馈内容..."></textarea>
@@ -613,6 +616,7 @@
       <button id="classic-switch-perspective" class="classic-mini-btn hidden" type="button">Switch</button>
       <button id="classic-view-deck" class="classic-mini-btn" type="button">查看抽牌堆</button>
       <button id="classic-view-discard" class="classic-mini-btn" type="button">查看弃牌堆</button>
+      <button id="classic-view-exile" class="classic-mini-btn" type="button">查看放逐区</button>
       <button id="classic-leave-spectate" class="classic-mini-btn hidden" type="button">退出</button>
       <button id="classic-urf-replace" class="classic-mini-btn hidden" type="button">替换手牌</button>
       <button id="classic-urf-sell" class="classic-mini-btn hidden" type="button">售卖装备</button>
@@ -701,6 +705,7 @@
         <button id="btn-end-turn" class="btn btn-danger btn-end-turn">结束回合</button>
         <button id="btn-view-deck" class="btn btn-magic btn-view-deck">查看抽牌堆</button>
         <button id="btn-view-discard" class="btn btn-magic btn-view-discard">查看弃牌堆</button>
+        <button id="btn-view-exile" class="btn btn-magic btn-view-exile">查看放逐区</button>
         <button id="btn-urf-replace" class="btn btn-magic hidden">替换手牌</button>
         <button id="btn-urf-sell" class="btn btn-bloom hidden">售卖装备</button>
         <button id="btn-solo-next-draw" class="btn btn-magic hidden">设置下次抽牌</button>
@@ -712,6 +717,7 @@
         <button id="btn-switch-perspective" class="btn btn-secondary btn-switch-perspective">Switch</button>
         <button id="btn-spectate-view-deck" class="btn btn-magic btn-view-deck">Draw Deck</button>
         <button id="btn-spectate-view-discard" class="btn btn-magic btn-view-discard">Discard</button>
+        <button id="btn-spectate-view-exile" class="btn btn-magic btn-view-exile">Exile</button>
         <button id="btn-leave-spectate" class="btn btn-danger btn-leave-spectate">Leave</button>
       </div>
     </div>
@@ -725,6 +731,10 @@
 <h1 id="gameover-title" class="gameover-text"></h1>
 <div id="gameover-message" class="gameover-message hidden"></div>
 <div id="gameover-gr" class="gameover-gr hidden"></div>
+<div id="gameover-replay" class="gameover-replay hidden">
+  <span id="gameover-replay-label">回放 ID</span>
+  <button id="btn-copy-gameover-replay" class="gameover-replay-copy" type="button"></button>
+</div>
 <div id="gameover-log" class="gameover-log"></div>
 <div class="gameover-buttons">
 <button id="btn-rematch" class="btn btn-bloom">再来一局</button>
@@ -810,11 +820,17 @@
 <h4 id="settings-section-mods">模组</h4>
 <div class="settings-tabs settings-subtabs settings-mod-source-tabs">
 <button id="settings-mod-tab-official" class="settings-tab active" type="button"><span id="settings-label-official-mods">官方模组</span></button>
+<button id="settings-mod-tab-entertainment" class="settings-tab" type="button"><span id="settings-label-entertainment-mods">娱乐模组</span></button>
 <button id="settings-mod-tab-community" class="settings-tab" type="button"><span id="settings-label-community-mods">社区模组</span></button>
 </div>
 <div id="settings-official-mods" class="settings-mod-section-body">
 <div id="settings-mods-list" class="settings-mods-list"></div>
 <p id="settings-no-mods" class="info-text">未找到模组文件</p>
+</div>
+<div id="settings-entertainment-mods" class="settings-mod-section-body hidden">
+<p id="settings-entertainment-note" class="info-text settings-entertainment-note">启用任一娱乐模组后，对局不计花阶分。</p>
+<div id="settings-entertainment-mods-list" class="settings-mods-list"></div>
+<p id="settings-no-entertainment-mods" class="info-text">暂无娱乐模组</p>
 </div>
 <div id="settings-community-mods" class="settings-community-mods settings-mod-section-body hidden">
 <div id="settings-community-current" class="community-current-card">
@@ -1041,7 +1057,7 @@
   setText('.boot-sub', t.bootSub); setText('#boot-step', t.bootStep); setText('#view-login .subtitle', t.subtitle); setText('label[for="input-nickname"]', t.nickname); setPlaceholder('#input-nickname', t.nicknamePlaceholder);
   setText('#btn-connect', t.enterLobby); setText('#btn-solo-training', t.soloTraining); setText('#btn-open-settings', t.settings); setText('#btn-card-gallery', window.__bootLang === 'zh' ? '图鉴' : 'Gallery'); setText('#btn-replays-top', window.__bootLang === 'zh' ? '回放' : 'Replays'); setText('#solo-title', t.soloTraining); setText('#btn-solo-load', t.loadLast); setText('#btn-solo-save', t.saveDecks); setText('#btn-solo-start', t.startTraining); setText('#btn-solo-back', t.back); setPlaceholder('#solo-card-search', t.searchCards); setText('#solo-deck-a-title', t.soloDeckA); setText('#solo-deck-b-title', t.soloDeckB); setText('#solo-event-a-label', t.soloEventA); setText('#solo-event-b-label', t.soloEventB);
   setText('#view-lobby .lobby-header h2', t.lobby); setText('#view-lobby .lobby-left .lobby-section:first-child h3', t.onlinePlayers); setText('#lobby-online-count', t.onlineCount); setText('#view-lobby .lobby-left .lobby-section:last-child h3', t.ongoingGames); setText('#view-lobby .lobby-right .lobby-section h3', t.chat); setPlaceholder('#lobby-chat-input', t.messagePlaceholder); setText('#btn-lobby-chat-send', t.send); setText('#btn-lobby-back', t.backHome);
-  setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); setText('#battle-log .log-header', t.battleLog); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-view-discard', t.viewDiscard); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-prediction-target', t.predictionTarget || '修改预测目标'); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-spectate-view-deck', t.viewDeck); setText('#btn-spectate-view-discard', t.viewDiscard); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
+  setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); setText('#battle-log .log-header', t.battleLog); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-view-discard', t.viewDiscard); setText('#btn-view-exile', t.viewExile); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-prediction-target', t.predictionTarget || '修改预测目标'); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-spectate-view-deck', t.viewDeck); setText('#btn-spectate-view-discard', t.viewDiscard); setText('#btn-spectate-view-exile', t.viewExile); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
   setText('#btn-rematch', t.rematch); setText('#btn-return-lobby', t.returnLobby); setText('#btn-report-match', (window.__bootLang === 'zh' ? '举报本局' : 'Report Match')); setText('#view-mod-editor h2', t.modEditor); setPlaceholder('#mod-editor-area', t.modPlaceholder); setText('#btn-mod-load', t.loadMod); setText('#btn-mod-save', t.save); setText('#btn-mod-validate', t.validateJson); setText('#btn-mod-back', t.back);
   setText('#settings-title', t.settings); setText('#settings-tab-appearance', t.appearance); setText('#settings-tab-server', t.server); setText('#settings-tab-mods', t.mods); setText('#settings-tab-audio', t.audio); setText('#settings-section-appearance', t.appearance); setText('#settings-label-theme', t.theme); setText('#settings-theme-select option[value=\"light\"]', t.light); setText('#settings-theme-select option[value=\"dark\"]', t.dark); setText('#settings-label-ui-style', t.uiStyle); setText('#settings-ui-style-select option[value=\"minimal\"]', t.minimal); setText('#settings-ui-style-select option[value=\"classic\"]', t.classic); setText('#settings-label-lang', t.language); setText('#settings-label-landscape-mode', t.landscapeMode); setText('#settings-section-server', t.server); setText('#settings-label-server', t.address); setPlaceholder('#settings-server-input', t.serverPlaceholder); setText('#settings-section-mods', t.mods); setText('#settings-section-audio', t.audio); setText('#settings-no-mods', t.noMods); setText('#btn-settings-close', t.ok); setText('#game-prompt-cancel', t.cancel); setText('.rotate-text', t.rotatePrompt); setText('.rotate-text-en', t.rotateSub); setText('#btn-dismiss-rotate', t.continueEnter);
   const app = document.getElementById('app'); if (app) app.style.visibility = 'visible';

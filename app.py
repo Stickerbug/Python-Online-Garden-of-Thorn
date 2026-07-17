@@ -46,6 +46,7 @@ from mod_loader import (
     invalidate_mod_cache,
     load_all_mods,
     merge_mod_cards_to_card_defs,
+    mod_category,
     mod_display_order_key,
     sort_mods_for_display,
 )
@@ -189,14 +190,22 @@ from moderation import (
     report_category_allowed,
 )
 from replay_core import (
+    build_replay_download_package,
     CLEANUP_HOUR,
     CLEANUP_MINUTE,
     DEFAULT_RETENTION_DAYS,
     checkpoint_db,
     cleanup_old_replays,
     cleanup_orphan_replay_blobs,
+    export_replay_json_file,
+    format_replay_id,
     get_replay,
+    get_replay_admin_detail,
+    hold_replay,
     list_replays,
+    normalize_replay_id,
+    release_replay_hold,
+    replay_visible_to_user,
     replay_timeline,
     save_replay_snapshot,
     storage_summary,
@@ -303,7 +312,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260716-blind-targeting-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260717-replay-video-export-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -433,10 +442,16 @@ class TrackedLock:
         self._lock = threading.Lock()
         self._meta_lock = threading.Lock()
         self._owner = None
+        self._depth = 0
         self._acquired_at = None
         self._stack = None
 
     def acquire(self, *args, **kwargs):
+        owner = threading.get_ident()
+        with self._meta_lock:
+            if self._owner == owner and self._acquired_at is not None:
+                self._depth += 1
+                return True
         acquired = self._lock.acquire(*args, **kwargs)
         if acquired:
             try:
@@ -444,14 +459,22 @@ class TrackedLock:
             except Exception:
                 stack = []
             with self._meta_lock:
-                self._owner = threading.get_ident()
+                self._owner = owner
+                self._depth = 1
                 self._acquired_at = time.time()
                 self._stack = stack
         return acquired
 
     def release(self):
+        owner = threading.get_ident()
         with self._meta_lock:
+            if self._owner == owner and self._depth > 1:
+                self._depth -= 1
+                return
+            if self._owner is not None and self._owner != owner:
+                raise RuntimeError(f'{self.name} lock released by non-owner')
             self._owner = None
+            self._depth = 0
             self._acquired_at = None
             self._stack = None
         return self._lock.release()
@@ -472,6 +495,7 @@ class TrackedLock:
                 'name': self.name,
                 'busy': acquired_at is not None,
                 'owner': self._owner,
+                'depth': self._depth,
                 'held_seconds': round(max(0, time.time() - acquired_at), 3) if acquired_at else 0,
                 'stack': stack[-8:],
             }
@@ -1237,6 +1261,7 @@ def admin_match_record(room, result='finished'):
         community_mod_url = first_meta.get('community_mod_url', '')
         community_mod_name = first_meta.get('community_mod_name', '')
         community_mods = first_meta.get('community_mods', []) if isinstance(first_meta.get('community_mods', []), list) else []
+        entertainment_mods = list(first_meta.get('entertainment_mods', []) or [])
         valid_for_ranking, ranking_invalid_reason = is_room_valid_for_ranking(room, result)
         history_entry = {
             'time': iso_now(),
@@ -1253,6 +1278,7 @@ def admin_match_record(room, result='finished'):
             'duration_seconds': duration_seconds,
             'valid_for_ranking': valid_for_ranking,
             'ranking_invalid_reason': ranking_invalid_reason,
+            'entertainment_mods': entertainment_mods,
         }
         MATCH_HISTORY.appendleft(history_entry)
         summary = {
@@ -1274,6 +1300,7 @@ def admin_match_record(room, result='finished'):
             'community_mod_url': community_mod_url,
             'community_mod_name': community_mod_name,
             'community_mods': community_mods,
+            'entertainment_mods': entertainment_mods,
             'valid_for_ranking': valid_for_ranking,
             'ranking_invalid_reason': ranking_invalid_reason,
             'valid_action_counts': getattr(room, '_valid_action_counts', {}) or {},
@@ -1340,17 +1367,21 @@ def admin_match_record(room, result='finished'):
         if DB_AVAILABLE:
             try:
                 match_id = save_match_summary(summary)
+                summary['match_id'] = int(match_id)
                 try:
                     dew_result = award_match_thorn_dew(match_id, summary)
                     summary['thorn_dew_result'] = dew_result
                 except Exception as dew_exc:
                     admin_event('error', f'failed to award thorn dew: {dew_exc}')
-                save_replay_snapshot(
+                replay_id = save_replay_snapshot(
                     match_id,
                     {**summary, 'replay': replay_data, 'community_mod_snapshots': community_snapshots},
                     card_defs=CARD_DEFS,
                     game_version=GAME_VERSION,
                 )
+                summary['replay_id'] = int(replay_id)
+                history_entry['match_id'] = int(match_id)
+                history_entry['replay_id'] = int(replay_id)
                 should_score_gr = bool(valid_for_ranking and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'))
                 if should_score_gr:
                     increment_user_stats(registered_user_ids, stats_winner_user_ids, stats_result)
@@ -1503,17 +1534,24 @@ def db_unavailable_response():
 
 
 def replay_api_allowed():
-    return bool(is_admin_authenticated() or session.get('user_id'))
+    return bool(is_admin_authenticated() or is_admin_console_authenticated() or session.get('user_id'))
 
 
 def replay_admin_context_requested():
-    return is_admin_authenticated() and str(request.args.get('admin', '')).lower() in ('1', 'true', 'yes')
+    requested = str(request.args.get('admin', '')).lower() in ('1', 'true', 'yes')
+    return requested and bool(is_admin_authenticated() or is_admin_console_authenticated())
 
 
 def replay_item_visible_to_current_user(item, admin_context=False):
-    if admin_context:
+    user_id = session.get('user_id')
+    if admin_context or is_admin_console_authenticated() or (user_id and feedback_is_staff(user_id)):
         return True
     username = str(session.get('username') or '').lower()
+    if user_id and (item or {}).get('id'):
+        try:
+            return replay_visible_to_user(item.get('id'), user_id, username)
+        except Exception:
+            pass
     if not username:
         return False
     return any(str(name or '').lower() == username for name in (item or {}).get('players', []))
@@ -1983,6 +2021,7 @@ def room_mod_payload(room):
         'v2_loadout_hash': first.get('v2_loadout_hash', ''),
         'v2_load_order': list(first.get('v2_load_order', [])),
         'mods_list': list(first.get('mods_list', [])),
+        'entertainment_mods': list(first.get('entertainment_mods', [])),
         'mod_source': first.get('mod_source', 'official'),
         'community_mod_url': first.get('community_mod_url', ''),
         'community_mod_hash': first.get('community_mod_hash', ''),
@@ -3222,6 +3261,7 @@ def make_room_player_profile(source=None, sid=None, player_index=-1, room=None):
         'mod_source': source.get('mod_source', 'official'),
         'disabled_mods': list(source.get('disabled_mods', []) or []),
         'mods_list': list(source.get('mods_list', []) or []),
+        'entertainment_mods': list(source.get('entertainment_mods', []) or []),
         'community_mod_hash': source.get('community_mod_hash', ''),
         'community_mod_url': source.get('community_mod_url', ''),
         'community_mod_name': source.get('community_mod_name', ''),
@@ -4817,8 +4857,18 @@ def _room_action_precheck(engine, pidx, *, event_name):
     if event_name in ('play_card', 'use_trigger', 'end_turn'):
         if getattr(engine, 'phase', None) != 'action':
             return 'NOT_ACTION_PHASE'
-        if getattr(engine, 'current_player', None) != pidx:
-            return 'NOT_YOUR_TURN'
+        current_player = getattr(engine, 'current_player', None)
+        if current_player != pidx:
+            friendly_trigger = False
+            if event_name == 'use_trigger':
+                is_ally = getattr(engine, 'is_ally', None)
+                if callable(is_ally):
+                    try:
+                        friendly_trigger = bool(is_ally(current_player, pidx))
+                    except Exception:
+                        friendly_trigger = False
+            if not friendly_trigger:
+                return 'NOT_YOUR_TURN'
     return None
 
 
@@ -4990,6 +5040,8 @@ def is_room_valid_for_ranking(room, result='finished'):
     participant_meta = [room_player_profile(room, psid) for psid in getattr(room, 'player_sids', [])]
     if not participant_meta or not any(meta.get('is_registered_user') for meta in participant_meta):
         return False, 'no_registered_player'
+    if any(meta.get('entertainment_mods') for meta in participant_meta):
+        return False, 'entertainment_mod'
     started_ts = getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())
     if time.time() - started_ts < RANKING_MIN_DURATION_SECONDS:
         return False, 'too_short'
@@ -5669,6 +5721,7 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
     import hashlib as _hl
     _h = _hl.sha256()
     active_mods = []
+    entertainment_mods = []
     allowed_card_ids = {ERROR_CARD_ID}
     if VANILLA_MOD_FILENAME not in disabled_set:
         allowed_card_ids.update(BUILTIN_SETUP_CARD_IDS)
@@ -5677,6 +5730,8 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
         if mod.filename in disabled_set or mod.errors:
             continue
         active_mods.append(mod.info.name if mod.info else mod.filename)
+        if mod_category(mod) == 'entertainment':
+            entertainment_mods.append(mod.filename)
         _h.update(f'{mod.filename}:{mod.validation_hash or ""}'.encode('utf-8'))
         if getattr(mod, 'format_version', 1) == 2:
             v2_mods.append(mod)
@@ -5733,6 +5788,7 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
         'v2_status_defs': dict(v2_loadout.registries.get('statuses') or {}),
         'v2_opening_event_defs': dict(v2_loadout.registries.get('opening_events') or {}),
         'mods_list': active_mods,
+        'entertainment_mods': sorted(entertainment_mods),
         'allowed_card_ids': allowed_card_ids,
         'runtime_disabled_content': runtime_disabled['rows'],
     }
@@ -5752,6 +5808,7 @@ def apply_mod_loadout_to_player(player, loadout, community_fields=None):
     player['v2_status_defs'] = loadout.get('v2_status_defs', {})
     player['v2_opening_event_defs'] = loadout.get('v2_opening_event_defs', {})
     player['mods_list'] = loadout['mods_list']
+    player['entertainment_mods'] = list(loadout.get('entertainment_mods', []))
     player['allowed_card_ids'] = loadout['allowed_card_ids']
     player['mod_source'] = community_fields.get('mod_source', 'official')
     player['community_mod_url'] = community_fields.get('community_mod_url', '')
@@ -5801,6 +5858,7 @@ def player_mod_match_payload(player):
         'community_mod_name': player.get('community_mod_name', '') or '',
         'loadout_hash': player_loadout_hash(player),
         'mods_list': list(player.get('mods_list', []) or []),
+        'entertainment_mods': list(player.get('entertainment_mods', []) or []),
     }
 
 
@@ -7217,6 +7275,17 @@ ADMIN_COMMAND_TREE = {
             },
         },
     },
+    'replay': {
+        'summary': '按回放 ID 查询和保留对局回放',
+        'usage': 'replay <get|open|export|hold|release> ...',
+        'children': {
+            'get': {'summary': '查看回放摘要', 'usage': 'replay get <R-回放ID>'},
+            'open': {'summary': '显示回放接口地址', 'usage': 'replay open <R-回放ID>'},
+            'export': {'summary': '导出完整回放 JSON 到事故目录', 'usage': 'replay export <R-回放ID>'},
+            'hold': {'summary': '延长回放保存期限', 'usage': 'replay hold <R-回放ID> [天数|permanent] [原因]'},
+            'release': {'summary': '解除回放保留', 'usage': 'replay release <R-回放ID>'},
+        },
+    },
     'data': {
         'summary': '统计、回放与数据库维护',
         'usage': 'data <summary|draftstats|rating|rebuildstats|dewbackfill|achievementbackfill> ...',
@@ -7471,6 +7540,11 @@ def _translate_structured_admin_command(parts):
         ('data', 'rebuildstats'): ['rebuildstats', *rest],
         ('data', 'dewbackfill'): ['dewbackfill', *rest],
         ('data', 'achievementbackfill'): ['achievementbackfill', *rest],
+        ('replay', 'get'): ['replayget', *rest],
+        ('replay', 'open'): ['replayopen', *rest],
+        ('replay', 'export'): ['replayexport', *rest],
+        ('replay', 'hold'): ['replayhold', *rest],
+        ('replay', 'release'): ['replayrelease', *rest],
     }
     if not sub:
         return None, render_admin_help([cmd])
@@ -7822,6 +7896,12 @@ def gr_preview_payload_for_sids(mode, sids, viewer_sid):
     for psid in sids or []:
         player = players.get(psid) or {}
         user_ids.append(player.get('user_id') if player.get('is_registered_user') else None)
+    if any((players.get(psid) or {}).get('entertainment_mods') for psid in sids or []):
+        return {
+            'applied': False,
+            'reason': 'entertainment_mod',
+            'text': '本局使用娱乐模组，不计花阶分',
+        }
     viewer = players.get(viewer_sid) or {}
     viewer_user_id = viewer.get('user_id') if viewer.get('is_registered_user') else None
     try:
@@ -8809,6 +8889,30 @@ def _format_content_disable(row):
     )
 
 
+def _format_replay_admin_detail(item):
+    if not item:
+        return '回放不存在或已被清理。'
+    players = list(item.get('players') or [])
+    player_ids = list(item.get('player_ids') or [])
+    participants = []
+    for index, name in enumerate(players):
+        uid = player_ids[index] if index < len(player_ids) else None
+        participants.append(f'{name} (uid={uid})' if uid not in (None, '') else str(name))
+    hold = item.get('hold') or {}
+    hold_text = '无'
+    if hold:
+        hold_text = hold.get('expires_at') or '永久'
+        if hold.get('reason'):
+            hold_text += f"，原因={hold.get('reason')}"
+    return '\n'.join([
+        f"{format_replay_id(item.get('id'))} | match={item.get('match_id')} | {item.get('mode') or '-'} | {item.get('created_at') or '-'}",
+        f"玩家：{' / '.join(participants) or '-'}",
+        f"结果：{item.get('result') or '-'} | 胜者={item.get('winner_name') or '-'} | 回合={item.get('round_num') or 0} | 时长={int(item.get('duration_ms') or 0) / 1000:.1f}s",
+        f"模组：{item.get('mod_source') or 'official'} {item.get('community_mod_name') or ''}".rstrip(),
+        f"大小：{item.get('replay_size') or 0} bytes | 保留：{hold_text}",
+    ])
+
+
 def execute_admin_command(line, _internal=False):
     raw = (line or '').strip()
     if not raw:
@@ -8837,6 +8941,62 @@ def execute_admin_command(line, _internal=False):
         return execute_admin_command(translated, _internal=True)
     if cmd == 'clear':
         return {'success': True, 'output': '', 'clear': True}
+    if cmd in ('replayget', 'replayopen', 'replayexport', 'replayhold', 'replayrelease'):
+        usage = {
+            'replayget': 'replay get <R-回放ID>',
+            'replayopen': 'replay open <R-回放ID>',
+            'replayexport': 'replay export <R-回放ID>',
+            'replayhold': 'replay hold <R-回放ID> [天数|permanent] [原因]',
+            'replayrelease': 'replay release <R-回放ID>',
+        }[cmd]
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), usage)}
+        try:
+            replay_id = normalize_replay_id(parts[1])
+        except ValueError as exc:
+            return {'success': False, 'output': str(exc)}
+        detail = get_replay_admin_detail(replay_id)
+        if not detail:
+            return {'success': False, 'output': '回放不存在或已被清理。'}
+        if cmd == 'replayget':
+            return {'success': True, 'output': _format_replay_admin_detail(detail)}
+        if cmd == 'replayopen':
+            output = _format_replay_admin_detail(detail)
+            output += f'\n摘要接口：/api/replays/{replay_id}?admin=1'
+            output += f'\n时间线接口：/api/replays/{replay_id}/timeline?admin=1'
+            return {'success': True, 'output': output}
+        actor = str(session.get('username') or 'adminconsole')
+        if cmd == 'replayexport':
+            default_dir = '/root/gtn-incidents' if os.name != 'nt' else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', 'replay-exports')
+            result = export_replay_json_file(replay_id, os.environ.get('GTN_REPLAY_EXPORT_DIR') or default_dir)
+            admin_event('admin', f'replay {replay_id} exported path={result.get("path") if result else "-"}')
+            return {
+                'success': bool(result),
+                'output': (
+                    f"已导出 {format_replay_id(replay_id)}\n{result.get('path')}\n"
+                    f"{result.get('bytes')} bytes | sha256={result.get('sha256')}"
+                ) if result else '回放导出失败。',
+            }
+        if cmd == 'replayrelease':
+            released = release_replay_hold(replay_id)
+            admin_event('admin', f'replay {replay_id} hold released={released}')
+            return {'success': True, 'output': f'{format_replay_id(replay_id)} ' + ('已解除保留。' if released else '原本没有保留记录。')}
+        duration = str(parts[2] if len(parts) >= 3 else '180').strip().lower()
+        if duration in ('permanent', 'forever', '永久'):
+            days = None
+        else:
+            duration = duration[:-1] if duration.endswith('d') else duration
+            try:
+                days = max(1, min(int(duration), 3650))
+            except ValueError:
+                return {'success': False, 'output': '保留期限应为天数或 permanent。'}
+        reason = ' '.join(parts[3:]).strip() or '管理员保留'
+        hold = hold_replay(replay_id, days=days, reason=reason, created_by=actor)
+        admin_event('admin', f'replay {replay_id} held until={(hold or {}).get("expires_at") or "permanent"}')
+        return {
+            'success': bool(hold),
+            'output': f"已保留 {format_replay_id(replay_id)} 至 {(hold or {}).get('expires_at') or '永久'}。",
+        }
     if cmd in ('contentdisable', 'contentenable', 'contentshow', 'contentedit'):
         if len(parts) < 3:
             usage = {
@@ -12520,6 +12680,7 @@ def health_full():
         'global_lock_busy': global_lock_busy,
         'global_lock_held_seconds': global_lock_snapshot.get('held_seconds', 0),
         'global_lock_owner': global_lock_snapshot.get('owner'),
+        'global_lock_depth': global_lock_snapshot.get('depth', 0),
         'global_lock_stack': global_lock_snapshot.get('stack', []),
         'room_count': room_count,
         'player_count': player_count,
@@ -12936,14 +13097,17 @@ def api_replays():
         if not admin_context and not session.get('user_id'):
             return jsonify({'success': False, 'error': 'unauthorized'}), 401
         player_filter = request.args.get('player', '')
+        player_user_id = None
         if not admin_context:
-            player_filter = session.get('username') or ''
+            player_filter = ''
+            player_user_id = session.get('user_id')
         data = list_replays(
             limit=request.args.get('limit', 50),
             offset=request.args.get('offset', 0),
             mode=request.args.get('mode', ''),
             player=player_filter,
             mod_source=request.args.get('mod_source', ''),
+            player_user_id=player_user_id,
         )
         if not admin_context:
             data['items'] = [item for item in data.get('items', []) if replay_item_visible_to_current_user(item)]
@@ -12968,6 +13132,40 @@ def api_replay_detail(replay_id):
     if not replay_item_visible_to_current_user(item, admin_context=admin_context):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
     return jsonify({'success': True, 'replay': item})
+
+
+@app.route('/api/replays/<int:replay_id>/download')
+def api_replay_download(replay_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    if not replay_api_allowed():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    admin_context = replay_admin_context_requested()
+    if not admin_context and not session.get('user_id'):
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    item = get_replay(replay_id)
+    if not item:
+        return jsonify({'success': False, 'error': '回放不存在'}), 404
+    if not replay_item_visible_to_current_user(item, admin_context=admin_context):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
+    try:
+        package = build_replay_download_package(replay_id)
+    except Exception as exc:
+        admin_event('error', f'replay download failed replay_id={replay_id}: {exc}')
+        return jsonify({'success': False, 'error': '回放下载失败'}), 500
+    if not package:
+        return jsonify({'success': False, 'error': '回放不存在'}), 404
+    response = send_file(
+        io.BytesIO(package['payload']),
+        mimetype='application/vnd.gtn.replay',
+        as_attachment=True,
+        download_name=package['filename'],
+        max_age=0,
+    )
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-GTN-Replay-SHA256'] = str(package.get('sha256') or '')
+    return response
 
 
 @app.route('/api/replays/<int:replay_id>/timeline')
@@ -13589,6 +13787,20 @@ def api_feedback_send():
         if not rate_limiter(f'feedback:{user_id}:minute', limit=8, window=60):
             return jsonify({'success': False, 'error': '发送过快'}), 429
     data = request.get_json(silent=True) or {}
+    thread_id = data.get('thread_id')
+    category = str(data.get('category', 'other') or 'other').strip().lower()
+    replay_id = None
+    if thread_id in (None, ''):
+        raw_replay_id = data.get('replay_id')
+        if category == 'appeal' and raw_replay_id in (None, ''):
+            return jsonify({'success': False, 'error': '对局申诉需要填写回放 ID'}), 400
+        if raw_replay_id not in (None, ''):
+            try:
+                replay_id = normalize_replay_id(raw_replay_id)
+            except ValueError as exc:
+                return jsonify({'success': False, 'error': str(exc)}), 400
+            if not feedback_is_staff(user_id) and not replay_visible_to_user(replay_id, user_id, user):
+                return jsonify({'success': False, 'error': '回放不存在，或你不是该局参与者'}), 403
     try:
         text, chat_risk = _validate_chat_text_for_sender(data.get('text', ''), exempt=exempt)
     except ValueError as exc:
@@ -13606,16 +13818,28 @@ def api_feedback_send():
         result, error = send_feedback_message(
             user_id,
             text,
-            thread_id=data.get('thread_id'),
-            category=data.get('category', 'other'),
-            title=data.get('title', ''),
+            thread_id=thread_id,
+            category=category,
+            title=data.get('title', '') or (f'对局申诉 {format_replay_id(replay_id)}' if replay_id else ''),
             normalized_message=chat_risk.get('normalized_message') or normalize_message(text),
             risk_level=risk_level,
+            replay_id=replay_id,
         )
     except sqlite3.OperationalError as exc:
         return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
+    if replay_id:
+        try:
+            thread = (result or {}).get('thread') or {}
+            hold_replay(
+                replay_id,
+                days=180,
+                reason=f'feedback:{thread.get("id") or "appeal"}',
+                created_by=f'user:{user_id}',
+            )
+        except Exception as exc:
+            admin_event('error', f'failed to hold appealed replay {replay_id}: {exc}', user_id=user_id)
     return jsonify({'success': True, **(result or {})})
 
 
@@ -13937,6 +14161,7 @@ def api_mods():
         d = mod.to_dict(include_validation=True)
         d['filename'] = mod.filename
         d['is_vanilla'] = mod.filename == VANILLA_MOD_FILENAME
+        d['category'] = mod_category(mod)
         runtime_disable = runtime_mod_rows.get(mod.filename, [])
         d['temporarily_disabled'] = bool(runtime_disable)
         d['temporary_disable_reason'] = next((row.get('reason') for row in runtime_disable if row.get('reason')), '')
@@ -14728,6 +14953,7 @@ def on_login(data):
             'v2_ui_components': loadout.get('v2_ui_components', {}),
             'v2_loadout': loadout.get('v2_loadout'),
             'mods_list': loadout['mods_list'],
+            'entertainment_mods': list(loadout.get('entertainment_mods', [])),
             'disabled_mods': loadout['disabled_mods'],
             'allowed_card_ids': loadout['allowed_card_ids'],
             'mode': preferred_mode,
@@ -14969,6 +15195,7 @@ def on_update_mod_settings(data):
             'v2_loadout_hash': loadout.get('v2_loadout_hash', ''),
             'v2_load_order': loadout.get('v2_load_order', []),
             'mods_list': loadout['mods_list'],
+            'entertainment_mods': list(loadout.get('entertainment_mods', [])),
             'mod_source': player['mod_source'],
             'community_mod_hash': player['community_mod_hash'],
             'community_mod_name': player['community_mod_name'],
@@ -15372,6 +15599,9 @@ def on_reconnect_accept(data):
     except ValueError as exc:
         _security_illegal(sid, 'reconnect_accept', str(exc))
         return
+    room = None
+    pidx = -1
+    other_sids = []
     with _lock:
         if sid not in players:
             return
@@ -15425,12 +15655,17 @@ def on_reconnect_accept(data):
         player['status'] = 'in_game'
         player['skin_look'] = normalize_skin_look(dc_info.get('skin_look'))
         player.update(special_public_fields(dc_info))
-        join_room(room_id)
-        for other_sid in room.player_sids:
-            if other_sid != sid and other_sid in players:
-                socketio.emit('opponent_reconnected', {}, room=other_sid)
-        send_game_state_to(room, pidx)
-        emit_pending_interaction_after_state_change(room, reason='player_reconnected')
+        other_sids = [
+            other_sid for other_sid in room.player_sids
+            if other_sid != sid and other_sid in players
+        ]
+    # Socket emits and pending-interaction recovery can yield or acquire the
+    # global lock again. Keep them outside the state-mutation critical section.
+    join_room(room_id)
+    for other_sid in other_sids:
+        socketio.emit('opponent_reconnected', {}, room=other_sid)
+    send_game_state_to(room, pidx)
+    emit_pending_interaction_after_state_change(room, reason='player_reconnected')
     broadcast_lobby()
 
 

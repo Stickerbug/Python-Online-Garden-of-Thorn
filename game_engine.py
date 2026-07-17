@@ -722,10 +722,11 @@ class GameEngine:
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将5张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
         11: {'id': 11, 'name': '花序编排', 'desc': '选择自己牌库中的3张牌，按选择顺序移至抽牌堆顶', 'position': 2},
+        12: {'id': 12, 'name': '众生平等', 'desc': '自己回合开始时，自己对包括自己在内的所有可选中玩家分别造成5[[icon:D]]', 'position': 3},
     }
     OPENING_EVENT_ORDER = {
         1: 10, 2: 20, 3: 30, 8: 40,
-        9: 45, 10: 48, 4: 50, 5: 60, 11: 65, 6: 70, 7: 80,
+        9: 45, 10: 48, 12: 49, 4: 50, 5: 60, 11: 65, 6: 70, 7: 80,
     }
     OPENING_EVENT_COLORS = {
         1: '#3FA66B',
@@ -739,6 +740,7 @@ class GameEngine:
         9: '#B86AA2',
         10: '#4E8FCF',
         11: '#6F8F5B',
+        12: '#A34F5E',
     }
     MAGIC_CARD_POOL = ['MagicBone', 'MagicStinger', 'MagicSewage', 'MagicNazar', 'MagicBubble']
 
@@ -1697,6 +1699,7 @@ class GameEngine:
                 int(amount),
             )
         self._trigger_v2_damage_status_events(target_id, source_id, amount)
+        self._bio_after_damage_hit(target_id, amount)
 
     def _record_dodge_damage_prevented(self, target_id: int, amount: int):
         if not (0 <= target_id < len(self.players)):
@@ -2471,7 +2474,7 @@ class GameEngine:
     def _parse_post_use_detail_count_log(self, text: str):
         patterns = [
             r'(.+)的唯一牌(.+?)多余副本被放逐(?: ×(\d+))?',
-            r'(.+)的(.+?)(因回转回到手中|因虚无被放逐|被放逐|移入弃牌堆)(?: ×(\d+))?',
+            r'(.+)的(.+?)(因回转回到手中|立即回到手中|因虚无被放逐|因队伍独一被放逐|因漂浮洗入抽牌堆|被放逐|移入弃牌堆)(?: ×(\d+))?',
             r'(.+?)(被放逐|移入弃牌堆)(?: ×(\d+))?',
             r'(.+)放逐了(.+?)(?: ×(\d+))?',
         ]
@@ -4095,6 +4098,45 @@ class GameEngine:
             if moved:
                 ps.deck[0:0] = moved
             self.log_msg(f"{self.pn(player_id)}【花序编排】：{len(moved)}张牌移至抽牌堆顶")
+        elif event_id == 12:
+            self.log_msg(f"{self.pn(player_id)}【众生平等】：自己回合开始时，自己对包括自己在内的所有可选中玩家分别造成5D")
+
+    def _apply_equal_suffering_turn_start(self, player_id: int):
+        if not self._valid_player_id(player_id):
+            return
+        picks = getattr(self, 'opening_event_picks', []) or []
+        if player_id >= len(picks) or str(picks[player_id]) != '12':
+            return
+        alive_before = [player.health > 0 for player in self.players]
+        self._equal_suffering_alive_before = alive_before
+        self._game_over_defer_depth += 1
+        try:
+            self.log_msg(f"{self.pn(player_id)}的众生平等生效")
+            for target_id, target in enumerate(self.players):
+                if target.health <= 0:
+                    continue
+                if bool(getattr(target, 'untargetable', 0)) and not self._is_status_immune(target_id):
+                    continue
+                self.deal_attack_damage(
+                    target_id,
+                    5,
+                    attacker_id=player_id,
+                    source_card=None,
+                )
+        finally:
+            self._game_over_defer_depth = max(0, self._game_over_defer_depth - 1)
+
+    def _finalize_equal_suffering_turn_start(self):
+        alive_before = getattr(self, '_equal_suffering_alive_before', None)
+        if not isinstance(alive_before, list):
+            return
+        self._equal_suffering_alive_before = None
+        self._game_over_defer_depth += 1
+        try:
+            self._finalize_deferred_card_deaths(alive_before)
+        finally:
+            self._game_over_defer_depth = max(0, self._game_over_defer_depth - 1)
+        self._check_game_over()
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
         if event_id is None:
@@ -4141,11 +4183,18 @@ class GameEngine:
         self.current_player = player_id
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
+        self._bio_turn_start_setup(player_id)
         self._apply_turn_start_effects(player_id)
         if self.game_over:
             return
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
+        if self._bio_queue_dna_turn_start(player_id, '_bio_continue_start_player_turn'):
+            return
+        self._bio_continue_start_player_turn(player_id)
+
+    def _bio_continue_start_player_turn(self, player_id: int):
+        ps = self.players[player_id]
         if getattr(self, '_skip_current_turn_after_start', False):
             self._skip_current_turn_after_start = False
             self.log_msg(f"{self.pn(player_id)}被魔法珊瑚影响，跳过本回合行动")
@@ -4169,6 +4218,10 @@ class GameEngine:
                 self._check_game_over()
                 return
         self._enter_player_action_phase(player_id)
+
+    def _bio_enter_player_action_phase(self, player_id: int):
+        if not self.game_over and self._valid_player_id(player_id) and self.players[player_id].health > 0:
+            self._enter_player_action_phase(player_id)
 
     def _enter_player_action_phase(self, player_id: int):
         self.phase = 'action'
@@ -4425,6 +4478,14 @@ class GameEngine:
         if getattr(self, 'pending_v2_ui', None):
             return 0
         if actual <= 0:
+            return 0
+        if self._bio_indictment_converts_damage(
+            player_id,
+            actual,
+            resolved_damage_type,
+            resolved_damage_tag,
+            getattr(self, '_active_v2_card', None),
+        ):
             return 0
         actual = self._apply_universal_damage_shields(player_id, actual, source_id, source, resolved_damage_type)
         if actual <= 0:
@@ -4847,6 +4908,16 @@ class GameEngine:
             amount += self._damage_dealt_equipment_flat_bonus(source_id)
         return amount
 
+    def _apply_attack_damage_halving(self, target_id: int, amount: int, precision_dodged: bool = False) -> int:
+        """Apply a single precision-dodge/counter halving after outgoing damage modifiers."""
+        amount = max(0, int(amount or 0))
+        if not (self.halve_next_attack or precision_dodged):
+            return amount
+        reduced = int(math.ceil(amount / 2))
+        if precision_dodged:
+            self._record_dodge_damage_prevented(target_id, amount - reduced)
+        return reduced
+
     def _apply_late_round_fire_pressure(self):
         if self.round_num < LATE_ROUND_FIRE_START:
             return
@@ -5003,8 +5074,13 @@ class GameEngine:
             ]
             if len(selectable_others) < 2:
                 return False, "至少需要2张其他手牌"
+        if self._card_is(card, 'RansomMoney', 'bio:ransom_money'):
+            if not any(self._card_selectable_by_action(c) for c in ps.exile):
+                return False, "放逐区没有可选择的牌"
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = max(0, card.cost_e + extra_e)
+        if self._bio_blood_knife_active(player_id):
+            total_e = 0
         if total_e > ps.elixir:
             return False, f"能量不足（需要{total_e}E，当前{ps.elixir}E）"
         if card.cost_m > ps.magic:
@@ -5340,6 +5416,17 @@ class GameEngine:
                                 alive_required: bool = True) -> bool:
         if not (0 <= target_id < len(self.players)):
             return False
+        if 0 <= player_id < len(self.players):
+            blocked_targets = (getattr(self.players[player_id], 'custom_vars', {}) or {}).get(
+                'bio_job_application_active', []
+            )
+            if not isinstance(blocked_targets, list):
+                blocked_targets = [blocked_targets]
+            try:
+                if target_id in {int(pid) for pid in blocked_targets}:
+                    return False
+            except Exception:
+                pass
         if target_id == player_id:
             return bool(allow_self)
         target = self.players[target_id]
@@ -5513,6 +5600,8 @@ class GameEngine:
             return {'confirmed': True, 'accepted': True, **choice}
         if choice_type == 'hel_card_suit':
             return {'hel_suit': random.choice(['heart', 'diamond', 'spade', 'club']), **choice}
+        if choice_type == 'bio_blood_sugar_mode':
+            return {'bio_blood_sugar_mode': random.choice(['electric_target', 'physical_target']), **choice}
         if choice_type == 'choose_ocean_sapphire':
             chosen_target = self._default_auto_target_choice(player_id, allow_self=False)
             selected = self._first_selectable_card_from_zone(player_id, player_id, 'hand', card)
@@ -5647,6 +5736,7 @@ class GameEngine:
             'target_player_id': response_target_id,
             'original_choice': choice,
             'is_precision': 'precision' in card.flags,
+            'bio_pre_play_snapshot': getattr(card, '_bio_pre_play_snapshot', None),
         }
         return {'success': True, 'needs_response': True, 'card': card.to_dict()}
 
@@ -5691,6 +5781,12 @@ class GameEngine:
                 allow_self=('self_target' in card_flags or forced_target_id == target_id),
             ):
                 return {'success': False, 'error': '没有可选中的玩家'}
+            # Preserve the attack target across a later card/equipment picker.
+            # Picker payloads also carry target_player_id for the zone owner.
+            choice = dict(choice or {})
+            choice['target_player'] = target_id
+            choice['target_player_id'] = target_id
+            choice['target_id'] = target_id
         elif 'wide_strike' not in card_flags and (self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card)):
             target_id = self._choice_target_from_choice(choice, -1)
             allow_dead_target = self._card_is(card, 'Yggdrasil', 'vanilla:yggdrasil')
@@ -5717,6 +5813,7 @@ class GameEngine:
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = 0 if auto_no_cost else max(0, card.cost_e + extra_e)
         total_m = 0 if auto_no_cost else int(card.cost_m)
+        total_e = self._bio_replace_paid_e_cost(player_id, card, total_e, auto_no_cost)
         card._paid_e_this_play = int(total_e)
         card._paid_m_this_play = int(total_m)
         ps.custom_vars['void_current_previous_def_id'] = str(ps.custom_vars.get('void_last_played_def_id', '') or '')
@@ -5730,6 +5827,8 @@ class GameEngine:
         if card_removed is None:
             return {'success': False, 'error': '移出手牌失败'}
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
+        card._bio_pre_play_snapshot = card.to_dict()
+        self._bio_after_card_payment(player_id, card)
         self._apply_magic_acceleration_after_play(player_id, card)
         self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
         self._sewers_trigger_vampire_fangs(player_id, card, choice)
@@ -5874,6 +5973,8 @@ class GameEngine:
         self.pending_response = None
         player_id = pending['player_id']
         card = CardInstance.from_dict(pending['card'])
+        if isinstance(pending.get('bio_pre_play_snapshot'), dict):
+            card._bio_pre_play_snapshot = dict(pending.get('bio_pre_play_snapshot') or {})
         choice = pending.get('original_choice')
         if card_instance_id is not None:
             responder = self.players[responder_id]
@@ -5950,6 +6051,7 @@ class GameEngine:
 
     def _after_response_result(self, player_id: int, result: dict) -> dict:
         self._enforce_unique_cards_for_all()
+        self._bio_drain_auto_play_queue()
         if (
             not self.game_over
             and self.phase == 'action'
@@ -6227,6 +6329,10 @@ class GameEngine:
             return {'success': False, 'error': '没有待选择操作'}
         pending = self.pending_choice
         choice_type = pending.get('choice_type', '')
+        if pending.get('bio_dna_turn_start'):
+            if int(pending.get('player_id', -1)) != int(player_id):
+                return {'success': False, 'error': '不是你的选择操作'}
+            return self._bio_resolve_dna_choice(player_id, pending, choice)
         # Handle foresight_replace choice
         if choice_type == 'foresight_replace':
             self.pending_choice = None
@@ -6376,10 +6482,14 @@ class GameEngine:
             return {'success': False, 'cancelled': True, 'error': '选择已取消'}
         if isinstance(choice, dict):
             original_choice = pending.get('original_choice') if isinstance(pending.get('original_choice'), dict) else {}
-            for key in ('target_player', 'target_player_id', 'target_id'):
-                if key not in choice and key in original_choice:
-                    choice[key] = original_choice[key]
-            if 'target_player_id' not in choice and pending.get('target_player_id') is not None:
+            original_target_id = self._choice_target_from_choice(original_choice, -1)
+            if original_target_id >= 0:
+                # A sub-choice may identify the owner of the displayed zone as
+                # target_player_id. It must not replace the card's effect target.
+                choice['target_player'] = original_target_id
+                choice['target_player_id'] = original_target_id
+                choice['target_id'] = original_target_id
+            elif 'target_player_id' not in choice and pending.get('target_player_id') is not None:
                 choice['target_player_id'] = pending.get('target_player_id')
         choice, _ = self._sewers_apply_forced_target_choice(player_id, card, choice)
         self._run_v2_play_hook('before_play_card', player_id, card, choice)
@@ -6389,6 +6499,7 @@ class GameEngine:
             dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
             extra_e = self._get_extra_e_for_card(player_id, card)
             total_e = max(0, card.cost_e + extra_e)
+            total_e = self._bio_replace_paid_e_cost(player_id, card, total_e, False)
             card._paid_e_this_play = int(total_e)
             card._paid_m_this_play = int(card.cost_m)
             self._spend_resource(player_id, 'elixir', total_e, card)
@@ -6400,6 +6511,8 @@ class GameEngine:
             if hand_card:
                 ps.remove_hand_card(card.instance_id)
             ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', 0) or 0))
+            card._bio_pre_play_snapshot = card.to_dict()
+            self._bio_after_card_payment(player_id, card)
             self._apply_magic_acceleration_after_play(player_id, card)
             self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
             self._sewers_trigger_vampire_fangs(player_id, card, choice)
@@ -8214,6 +8327,426 @@ class GameEngine:
         tied = [pid for pid in candidates if int(getattr(self.players[pid], 'health', 0) or 0) == lowest_health]
         return random.choice(tied)
 
+    def _bio_status_value(self, player_id: int, name: str) -> int:
+        aliases = {
+            'debt': ('bio:debt', 'debt', '负债'),
+            'extra_healing': ('bio:extra_healing', 'extra_healing', '额外回复'),
+        }
+        return self._custom_status_value(player_id, *aliases.get(name, (name,)))
+
+    def _bio_set_status_value(self, player_id: int, name: str, value: int):
+        aliases = {
+            'debt': ('bio:debt', 'debt', '负债'),
+            'extra_healing': ('bio:extra_healing', 'extra_healing', '额外回复'),
+        }
+        keys = aliases.get(name, (name,))
+        self._set_custom_status_alias_group(player_id, keys[0], keys, max(0, int(value or 0)))
+
+    def _bio_add_status_value(self, player_id: int, name: str, amount: int):
+        self._bio_set_status_value(player_id, name, self._bio_status_value(player_id, name) + int(amount or 0))
+
+    def _bio_active_equipment_targeting(self, target_id: int, *ids: str):
+        for owner_id, eq in self._iter_equipment_targeting_player(target_id):
+            if self._equipment_is(eq, *ids):
+                yield owner_id, eq
+
+    def _bio_blood_knife_active(self, player_id: int) -> bool:
+        if not self._valid_player_id(player_id):
+            return False
+        return bool((getattr(self.players[player_id], 'custom_vars', {}) or {}).get('bio_blood_knife_active'))
+
+    def _bio_is_magic_card(self, card: Optional[CardInstance]) -> bool:
+        if card is None:
+            return False
+        values = self._card_local_id_values(card)
+        values.update({
+            str(getattr(card, 'name_en', '') or ''),
+            str(getattr(getattr(card, 'card_def', None), 'name_en', '') or ''),
+        })
+        return any(
+            value.strip().lower().replace('_', ' ').replace('-', ' ').startswith('magic ')
+            or value.strip().lower().replace('_', '').replace('-', '').startswith('magic')
+            for value in values
+            if value
+        )
+
+    def _bio_replace_paid_e_cost(self, player_id: int, card: CardInstance, total_e: int,
+                                 auto_no_cost: bool = False) -> int:
+        total_e = max(0, int(total_e or 0))
+        replaced = total_e if not auto_no_cost and self._bio_blood_knife_active(player_id) else 0
+        card._bio_replaced_e_cost_this_play = replaced
+        return 0 if replaced > 0 else total_e
+
+    def _bio_after_card_payment(self, player_id: int, card: CardInstance):
+        if not self._valid_player_id(player_id):
+            return
+        ps = self.players[player_id]
+        replaced_e = max(0, int(getattr(card, '_bio_replaced_e_cost_this_play', 0) or 0))
+        if replaced_e > 0:
+            dealt = self.deal_attack_damage(
+                player_id,
+                3,
+                replaced_e,
+                attacker_id=player_id,
+                source_card=card,
+                ignore_untargetable=True,
+            )
+            self.log_msg(f"{self.pn(player_id)}的血刃将{replaced_e}E替换为{dealt}D")
+
+        paid_e = max(0, int(getattr(card, '_paid_e_this_play', 0) or 0))
+        paid_m = max(0, int(getattr(card, '_paid_m_this_play', 0) or 0))
+        for _, eq in list(self._bio_active_equipment_targeting(player_id, 'Chloroplast', 'bio:chloroplast')):
+            if paid_e > 0:
+                self._add_custom_status_value(player_id, 'jungle:shield', paid_e)
+                self.log_msg(f"{self.pn(player_id)}的叶绿体使其获得{paid_e}层护盾")
+        for _, eq in list(self._bio_active_equipment_targeting(player_id, 'BloodChloroplast', 'bio:blood_chloroplast')):
+            shield = paid_e + paid_m
+            if shield > 0:
+                self._add_custom_status_value(player_id, 'jungle:shield', shield)
+                self.log_msg(f"{self.pn(player_id)}的血叶绿体使其获得{shield}层护盾")
+            self.deal_attack_damage(
+                player_id,
+                2,
+                1,
+                attacker_id=player_id,
+                source_card=eq.card_instance,
+                ignore_untargetable=True,
+            )
+
+        if bool(ps.custom_vars.get('bio_blood_chromosome_active')):
+            played_count = int(ps.cards_played_this_turn.get(card.def_id, 0) or 0)
+            if played_count >= 2 and not self._bio_is_magic_card(card):
+                dealt = self.deal_attack_damage(
+                    player_id,
+                    3,
+                    1,
+                    attacker_id=player_id,
+                    source_card=card,
+                    ignore_untargetable=True,
+                )
+                ps.gain_elixir(1)
+                self.log_msg(f"{self.pn(player_id)}的血染色体使其受到{dealt}D并回复1E")
+
+    def _bio_apply_debt_after_recovery(self, player_id: int):
+        debt = self._bio_status_value(player_id, 'debt')
+        if debt <= 0:
+            return
+        ps = self.players[player_id]
+        lost = 0
+        if not self._is_status_immune(player_id):
+            lost = min(1, max(0, int(ps.elixir or 0)))
+            ps.elixir = max(0, int(ps.elixir or 0) - lost)
+        self._bio_set_status_value(player_id, 'debt', debt - 1)
+        if lost > 0:
+            self.log_msg(f"{self.pn(player_id)}的负债使其失去1E")
+
+    def _bio_turn_start_setup(self, player_id: int):
+        if not self._valid_player_id(player_id):
+            return
+        ps = self.players[player_id]
+        pending = ps.custom_vars.pop('bio_job_application_pending', [])
+        if not isinstance(pending, list):
+            pending = [pending]
+        ps.custom_vars['bio_job_application_active'] = [
+            int(pid) for pid in pending
+            if str(pid).lstrip('-').isdigit() and self._valid_player_id(int(pid))
+        ]
+        ps.custom_vars['bio_opal_used_this_turn'] = False
+
+    def _bio_turn_end_cleanup(self, player_id: int):
+        if not self._valid_player_id(player_id):
+            return
+        ps = self.players[player_id]
+        for key in (
+            'bio_blood_knife_active',
+            'bio_blood_chromosome_active',
+            'bio_job_application_active',
+            'bio_opal_used_this_turn',
+        ):
+            ps.custom_vars.pop(key, None)
+
+    def _bio_after_damage_hit(self, target_id: int, amount: int):
+        if amount <= 0 or not self._valid_player_id(target_id) or self.current_player != target_id:
+            return
+        ps = self.players[target_id]
+        for _, eq in list(self._bio_active_equipment_targeting(target_id, 'RNA', 'bio:rna')):
+            candidates = [card for card in ps.hand if int(getattr(card, 'cost_e', 0) or 0) > 0]
+            if not candidates:
+                continue
+            selected = random.choice(candidates)
+            selected.temp_swift_value = max(0, int(getattr(selected, 'temp_swift_value', 0) or 0)) + 1
+            selected.instance_flags.add('temp_swift')
+            self.log_msg(f"{self.pn(target_id)}的RNA使{selected.name_cn}获得1层暂时迅捷")
+        for _, eq in list(self._bio_active_equipment_targeting(target_id, 'MagicRNA', 'bio:magic_rna')):
+            candidates = [card for card in ps.hand if int(getattr(card, 'cost_m', 0) or 0) > 0]
+            if not candidates:
+                continue
+            selected = random.choice(candidates)
+            selected.magic_swift_value = max(0, int(getattr(selected, 'magic_swift_value', 0) or 0)) + 2
+            selected.instance_flags.add('magic_swift')
+            self.log_msg(f"{self.pn(target_id)}的魔法RNA使{selected.name_cn}获得2层魔力迅捷")
+
+    def _bio_dna_candidates_for_card(self, card: CardInstance) -> List[str]:
+        if card is None or not self._card_selectable_by_action(card):
+            return []
+        current_e = max(0, int(getattr(card, 'cost_e', 0) or 0))
+        if current_e > 4:
+            return []
+        result = []
+        for card_id, card_def in CARD_DEFS.items():
+            if not self._card_allowed(card_id) or card_id == ERROR_CARD_ID:
+                continue
+            candidate = CardInstance(card_id)
+            if not self._card_selectable_by_action(candidate):
+                continue
+            if int(getattr(card_def, 'cost_e', 0) or 0) != current_e + 1:
+                continue
+            weight = max(0, int(getattr(card_def, 'count', 0) or 0))
+            result.extend([card_id] * weight)
+        return result
+
+    def _bio_queue_dna_turn_start(self, player_id: int, resume_handler: str) -> bool:
+        if not self._valid_player_id(player_id):
+            return False
+        ps = self.players[player_id]
+        queue = []
+        for owner_id, eq in self._bio_active_equipment_targeting(player_id, 'DNA', 'bio:dna'):
+            if any(self._bio_dna_candidates_for_card(hand_card) for hand_card in ps.hand):
+                queue.append({
+                    'owner_id': owner_id,
+                    'equipment_instance_id': getattr(eq.card_instance, 'instance_id', None),
+                    'card': eq.card_instance.to_dict(),
+                })
+        if not queue:
+            return False
+        self.custom_vars['bio_dna_turn_queue'] = queue
+        self.custom_vars['bio_dna_resume_handler'] = str(resume_handler or '')
+        return self._bio_queue_next_dna_choice(player_id)
+
+    def _bio_queue_next_dna_choice(self, player_id: int) -> bool:
+        queue = self.custom_vars.get('bio_dna_turn_queue')
+        if not isinstance(queue, list):
+            return False
+        ps = self.players[player_id]
+        while queue:
+            entry = queue.pop(0)
+            eligible = [card for card in ps.hand if self._bio_dna_candidates_for_card(card)]
+            if not eligible:
+                continue
+            self.pending_choice = {
+                'player_id': player_id,
+                'choice_type': 'choose_card_from_hand',
+                'choice_params': {
+                    'cancellable': False,
+                    'title': 'DNA：选择要变换的手牌',
+                    'message': '选择1张当前E消耗不超过4E的手牌',
+                },
+                'card': entry.get('card'),
+                'hand_cards': [card.to_dict() for card in eligible],
+                'target_player_id': player_id,
+                'bio_dna_turn_start': True,
+            }
+            return True
+        self.custom_vars.pop('bio_dna_turn_queue', None)
+        return False
+
+    def _bio_finish_dna_turn_start(self, player_id: int):
+        resume_handler = str(self.custom_vars.pop('bio_dna_resume_handler', '') or '')
+        if resume_handler:
+            handler = getattr(self, resume_handler, None)
+            if callable(handler):
+                handler(player_id)
+
+    def _bio_resolve_dna_choice(self, player_id: int, pending: dict, choice: Optional[dict]) -> dict:
+        self.pending_choice = None
+        selected = None
+        try:
+            selected = self.players[player_id].find_hand_card(int((choice or {}).get('target_instance_id')))
+        except Exception:
+            selected = None
+        candidates = self._bio_dna_candidates_for_card(selected) if selected is not None else []
+        if selected is not None and candidates:
+            replacement = CardInstance(random.choice(candidates))
+            replacement.instance_id = selected.instance_id
+            replacement.temp_swift_value = max(0, int(getattr(replacement, 'temp_swift_value', 0) or 0)) + 1
+            replacement.instance_flags.add('temp_swift')
+            ps = self.players[player_id]
+            index = ps.hand.index(selected)
+            ps.hand[index] = replacement
+            self.log_msg(f"{self.pn(player_id)}的DNA将{selected.name_cn}变换为{replacement.name_cn}并使其获得1层暂时迅捷")
+        if self._bio_queue_next_dna_choice(player_id):
+            return {'success': True, 'needs_choice': True}
+        self._bio_finish_dna_turn_start(player_id)
+        return {'success': True}
+
+    def _bio_queue_auto_play(self, player_id: int, card: CardInstance, choice: Optional[dict],
+                             no_cost: bool = False, source: str = ''):
+        if not self._valid_player_id(player_id) or card is None:
+            return
+        ps = self.players[player_id]
+        if ps.find_hand_card(card.instance_id) is None:
+            ps.add_to_hand(card)
+        queue = self.custom_vars.setdefault('bio_auto_play_queue', [])
+        if not isinstance(queue, list):
+            queue = []
+            self.custom_vars['bio_auto_play_queue'] = queue
+        queue.append({
+            'player_id': player_id,
+            'instance_id': int(card.instance_id),
+            'choice': dict(choice or {}),
+            'no_cost': bool(no_cost),
+            'source': str(source or ''),
+        })
+
+    def _bio_drain_auto_play_queue(self):
+        if getattr(self, '_bio_draining_auto_play', False):
+            return
+        if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
+        queue = self.custom_vars.get('bio_auto_play_queue')
+        if not isinstance(queue, list) or not queue:
+            self.custom_vars.pop('bio_auto_play_queue', None)
+            return
+        self._bio_draining_auto_play = True
+        try:
+            while queue and not self.game_over:
+                if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+                    break
+                entry = queue.pop(0)
+                player_id = int(entry.get('player_id', -1))
+                if not self._valid_player_id(player_id) or self.players[player_id].health <= 0:
+                    continue
+                card = self.players[player_id].find_hand_card(entry.get('instance_id'))
+                if card is None:
+                    continue
+                previous_auto_actor = getattr(self, '_allow_out_of_turn_auto_play_for', None)
+                previous_auto_choice = getattr(self, '_auto_resolve_choices_for', None)
+                previous_no_cost = getattr(self, '_auto_play_no_cost_for', None)
+                self._allow_out_of_turn_auto_play_for = player_id
+                self._auto_resolve_choices_for = player_id
+                self._auto_play_no_cost_for = player_id if entry.get('no_cost') else previous_no_cost
+                try:
+                    if hasattr(self, 'num_players'):
+                        target_id = self._choice_target_from_choice(entry.get('choice'), -1)
+                        result = self.play_card(player_id, card.instance_id, target_player_id=target_id, choice=entry.get('choice'))
+                    else:
+                        result = self.play_card(player_id, card.instance_id, entry.get('choice'))
+                finally:
+                    self._allow_out_of_turn_auto_play_for = previous_auto_actor
+                    self._auto_resolve_choices_for = previous_auto_choice
+                    self._auto_play_no_cost_for = previous_no_cost
+                if isinstance(result, dict) and (
+                    result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui')
+                ):
+                    break
+            if not queue:
+                self.custom_vars.pop('bio_auto_play_queue', None)
+        finally:
+            self._bio_draining_auto_play = False
+
+    def _bio_after_card_used(self, player_id: int, card: CardInstance, target_id: int,
+                             choice: Optional[dict]):
+        if not self._valid_player_id(player_id) or card is None:
+            return
+        ps = self.players[player_id]
+        flags = self._effective_card_flags(card)
+        card_type = getattr(card, 'card_type', '')
+        paid_e = max(0, int(getattr(card, '_paid_e_this_play', 0) or 0))
+        if (
+            card_type in ('thorn', 'bloom')
+            and 'exile' not in flags
+            and 'unique' not in flags
+            and paid_e > 0
+            and 'bio_magic_cancer_copy' not in (getattr(card, 'setup_modifiers', set()) or set())
+        ):
+            cancers = list(self._bio_active_equipment_targeting(player_id, 'MagicCancer', 'bio:magic_cancer'))
+            for _, eq in cancers:
+                cost_m = paid_e * 2
+                if ps.magic < cost_m:
+                    continue
+                ps.magic -= cost_m
+                snapshot = getattr(card, '_bio_pre_play_snapshot', None)
+                copy_card = fresh_card_copy_from_dict(snapshot if isinstance(snapshot, dict) else card.to_dict(), card.def_id)
+                copy_card.setup_modifiers.add('bio_magic_cancer_copy')
+                self._bio_queue_auto_play(player_id, copy_card, choice, no_cost=True, source='magic_cancer')
+                self.log_msg(f"{self.pn(player_id)}的魔法癌细胞消耗{cost_m}M，额外打出{card.name_cn}")
+
+        if card_type == 'thorn' and not bool(ps.custom_vars.get('bio_opal_used_this_turn')):
+            opals = list(self._bio_active_equipment_targeting(player_id, 'Opal', 'bio:opal'))
+            if opals:
+                ps.custom_vars['bio_opal_used_this_turn'] = True
+                top_index = next((i for i, c in enumerate(ps.deck) if getattr(c, 'card_type', '') == 'thorn'), -1)
+                queued = None
+                if top_index >= 0:
+                    candidate = ps.deck[top_index]
+                    previous_temp_swift = max(0, int(getattr(candidate, 'temp_swift_value', 0) or 0))
+                    had_temp_swift_flag = 'temp_swift' in getattr(candidate, 'instance_flags', set())
+                    candidate.temp_swift_value = max(0, int(getattr(candidate, 'temp_swift_value', 0) or 0)) + 1
+                    candidate.instance_flags.add('temp_swift')
+                    can_auto_play, _ = self.can_play_card(player_id, candidate)
+                    if can_auto_play:
+                        queued = ps.deck.pop(top_index)
+                    else:
+                        candidate.temp_swift_value = previous_temp_swift
+                        if not had_temp_swift_flag:
+                            candidate.instance_flags.discard('temp_swift')
+                if queued is None and 'Light' in CARD_DEFS:
+                    queued = CardInstance('Light')
+                    queued.instance_flags.add('exile')
+                if queued is not None:
+                    auto_target = self._default_auto_target_choice(
+                        player_id,
+                        allow_self='self_target' in self._effective_card_flags(queued),
+                    )
+                    auto_choice = dict(choice or {})
+                    if auto_target >= 0:
+                        auto_choice.update({
+                            'target_player': auto_target,
+                            'target_player_id': auto_target,
+                            'target_id': auto_target,
+                        })
+                    self._bio_queue_auto_play(player_id, queued, auto_choice, no_cost=False, source='opal')
+                    self.log_msg(f"{self.pn(player_id)}的蛋白石自动打出{queued.name_cn}")
+        self._bio_drain_auto_play_queue()
+
+    def _bio_indictment_converts_damage(self, target_id: int, amount: int,
+                                        damage_type: Optional[str], damage_tag: Optional[str],
+                                        source_card: Optional[CardInstance] = None) -> bool:
+        amount = max(0, int(amount or 0))
+        if amount <= 0 or not self._valid_player_id(target_id):
+            return False
+        source_card = source_card or getattr(self, '_active_v2_card', None)
+        if source_card is None or int(getattr(source_card, '_bio_indictment_target_id', -1) or -1) != target_id:
+            return False
+        is_physical = damage_type == DAMAGE_TYPE_PHYSICAL
+        is_electric = str(damage_tag or '') in (DAMAGE_TAG_BATTERY, 'electric', '电伤')
+        if not (is_physical or is_electric):
+            return False
+        self._add_custom_status_value(target_id, 'jungle:shield', amount)
+        self.log_msg(f"{self.pn(target_id)}的起诉书将{amount}点伤害转化为{amount}层护盾")
+        return True
+
+    def _bio_atomic_targets(self, player_id: int, card: Optional[CardInstance], target='target') -> List[int]:
+        if card is not None and 'wide_strike' in self._effective_card_flags(card):
+            return self._wide_strike_target_ids(player_id, card)
+        return self._resolve_targets(player_id, target)
+
+    def _bio_begin_segmented_power(self, card: Optional[CardInstance], hits_per_fission: int = 1) -> int:
+        """Distribute Power across all physical segments emitted by one Bio effect."""
+        if card is None:
+            return 0
+        original_power = int(getattr(card, 'power_value', 0) or 0)
+        fission_level = max(1, int(getattr(card, 'fission_level', 1) or 1))
+        segment_count = max(1, fission_level * max(1, int(hits_per_fission or 1)))
+        if original_power != 0 and segment_count > 1:
+            card.power_value = int(math.ceil(original_power / segment_count))
+        return original_power
+
+    @staticmethod
+    def _bio_restore_segmented_power(card: Optional[CardInstance], original_power: int):
+        if card is not None:
+            card.power_value = int(original_power or 0)
+
     def _jurassic_active_equipment_targeting(self, target_id: int, *ids: str):
         for owner_id, eq in self._iter_equipment_targeting_player(target_id):
             if self._equipment_is(eq, *ids):
@@ -8223,6 +8756,9 @@ class GameEngine:
         amount = max(0, int(amount or 0))
         if amount <= 0:
             return 0
+        extra_healing = self._bio_status_value(player_id, 'extra_healing')
+        if extra_healing > 0 and not self._is_status_immune(player_id):
+            amount += extra_healing
         tooth = next(self._jurassic_active_equipment_targeting(player_id, 'Tooth', 'jurassic:tooth'), None)
         if tooth is None:
             return amount
@@ -8244,6 +8780,13 @@ class GameEngine:
         amount = max(0, int(amount or 0))
         if amount <= 0:
             return 0
+        if amount > 1:
+            magic_dna = list(self._bio_active_equipment_targeting(player_id, 'MagicDNA', 'bio:magic_dna'))
+            if magic_dna:
+                gained_e = 2 * len(magic_dna)
+                self.players[player_id].gain_elixir(gained_e)
+                self.log_msg(f"{self.pn(player_id)}的魔法DNA阻止{amount}M回复并回复{gained_e}E")
+                return 0
         tooth = next(self._jurassic_active_equipment_targeting(player_id, 'MagicTooth', 'jurassic:magic_tooth'), None)
         if tooth is None:
             return amount
@@ -8503,6 +9046,7 @@ class GameEngine:
         ):
             self._clear_invincible_state(player_id)
             self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
+        self._bio_turn_end_cleanup(player_id)
         self._save_last_turn_damage_snapshot(player_id)
         if player_id == self.first_player:
             other = 1 - self.first_player
@@ -9085,6 +9629,23 @@ class GameEngine:
                     yield from self._walk_choice_effects(direct_nested)
 
     def _get_choice_request(self, card: CardInstance, choice: Optional[dict] = None):
+        if self._card_is(card, 'BloodSugar', 'bio:blood_sugar'):
+            target_id = self._choice_target_from_choice(choice, -1)
+            mode = str((choice or {}).get('bio_blood_sugar_mode') or '') if isinstance(choice, dict) else ''
+            if target_id >= 0 and mode not in ('electric_target', 'physical_target'):
+                return {
+                    'type': 'request_confirm',
+                    'params': {
+                        'choice_type': 'bio_blood_sugar_mode',
+                        'title': '血糖：选择伤害类型',
+                        'options': ['electric_target', 'physical_target'],
+                        'labels': [
+                            '对目标造成电伤，对自己造成物理伤害',
+                            '对目标造成物理伤害，对自己造成电伤',
+                        ],
+                        'cancellable': False,
+                    },
+                }
         if self._card_is(card, 'PokerCard', 'hel:poker_card'):
             suit = str((choice or {}).get('hel_suit') or '') if isinstance(choice, dict) else ''
             if suit not in ('heart', 'diamond', 'spade', 'club'):
@@ -10612,6 +11173,8 @@ class GameEngine:
         context = {
             'source_id': source_id,
             'target_id': source_id if target_id is None else target_id,
+            'event_card': event_card,
+            'event_choice': dict(choice or {}) if isinstance(choice, dict) else {},
             'event_card_instance_id': event_card_id,
             'event_card_def_id': getattr(event_card, 'def_id', ''),
             'event_card_type': getattr(event_card, 'card_type', getattr(getattr(event_card, 'card_def', None), 'card_type', '')),
@@ -10636,6 +11199,7 @@ class GameEngine:
             self._run_card_event(owner_id, listener_card, event_name, choice, listener_context)
         if event_name == 'card_used' and event_card is not None:
             self._arctic_trigger_snowballs_after_play(card_user_id, event_card)
+            self._bio_after_card_used(card_user_id, event_card, int(context.get('target_id', card_user_id)), choice)
 
     def _has_fatal_prevention(self, player_id: int) -> bool:
         if not (0 <= player_id < len(self.players)):
@@ -11210,6 +11774,7 @@ class GameEngine:
                     opp_id, eq.card_instance, 'enemy_turn_start', None,
                     {'source_id': opp_id, 'target_id': player_id}):
                 continue
+        self._apply_equal_suffering_turn_start(player_id)
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -11238,6 +11803,7 @@ class GameEngine:
                 elixir_recovery += 1
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
+            self._bio_apply_debt_after_recovery(player_id)
         # Overload: deduct E at turn start, then clear
         if ps.overload > 0:
             if not self._is_status_immune(player_id):
@@ -11282,6 +11848,7 @@ class GameEngine:
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
         self._defer_turn_start_death_checks = False
+        self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
             self._check_yggdrasil(player_id)
             self._check_game_over()
@@ -11333,6 +11900,7 @@ class GameEngine:
                     opp_id, eq.card_instance, 'enemy_turn_start', None,
                     {'source_id': opp_id, 'target_id': player_id}):
                 continue
+        self._apply_equal_suffering_turn_start(player_id)
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -11368,6 +11936,7 @@ class GameEngine:
                 elixir_recovery += 1
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
+            self._bio_apply_debt_after_recovery(player_id)
         if ps.overload > 0:
             if not self._is_status_immune(player_id):
                 deduct = min(ps.overload, ps.elixir)
@@ -11407,6 +11976,7 @@ class GameEngine:
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
         self._defer_turn_start_death_checks = False
+        self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
             self._check_yggdrasil(player_id)
             self._check_game_over()
@@ -11434,6 +12004,8 @@ class GameEngine:
             if ps.health <= 0:
                 self._check_game_over()
                 return
+        if self._bio_queue_dna_turn_start(player_id, '_bio_enter_player_action_phase'):
+            return
         self._enter_player_action_phase(player_id)
 
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
@@ -11480,7 +12052,13 @@ class GameEngine:
             if ps.invincible and not immune:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
                 continue
-            if amount <= 0 and hits <= 1:
+            source_power = 0
+            if source_card is not None:
+                try:
+                    source_power = int(getattr(source_card, 'power_value', 0) or 0)
+                except Exception:
+                    source_power = 0
+            if amount <= 0 and source_power <= 0 and hits <= 1:
                 break
             if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
                 try:
@@ -11509,25 +12087,10 @@ class GameEngine:
                     puppeteer_multiplier = 1.0
                 if puppeteer_multiplier != 1.0:
                     dmg = int(math.ceil(dmg * puppeteer_multiplier))
-            if self.halve_next_attack:
-                reduced_dmg = math.ceil(dmg / 2)
-                if precision_dodged:
-                    self._record_dodge_damage_prevented(target_id, dmg - reduced_dmg)
-                dmg = reduced_dmg
-            elif precision_dodged:
-                reduced_dmg = math.ceil(dmg / 2)
-                self._record_dodge_damage_prevented(target_id, dmg - reduced_dmg)
-                dmg = reduced_dmg
             dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
             if plank_blocks_attack:
                 dmg = 0
-            nazar_stacks = 0 if immune else self._nazar_status_value(target_id)
-            if dmg > 0 and nazar_stacks > 0:
-                original_dmg = dmg
-                dmg = max(1, dmg - 9)
-                if original_dmg >= 10:
-                    self._set_nazar_status_value(target_id, nazar_stacks - 1)
             damage_context = self._v2_damage_context(
                 target_id,
                 dmg,
@@ -11548,6 +12111,13 @@ class GameEngine:
                 reduction = min(0.6, 0.2 * attacker_state.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
             dmg, _hel_crit = self._hel_apply_lucky_crit_to_damage(attacker_id, dmg, source_card)
+            dmg = self._apply_attack_damage_halving(target_id, dmg, precision_dodged)
+            nazar_stacks = 0 if immune else self._nazar_status_value(target_id)
+            if dmg > 0 and nazar_stacks > 0:
+                original_dmg = dmg
+                dmg = max(1, dmg - 9)
+                if original_dmg >= 10:
+                    self._set_nazar_status_value(target_id, nazar_stacks - 1)
             if immune:
                 root_armor = 0
                 fragile = 0
@@ -11556,6 +12126,14 @@ class GameEngine:
                 fragile = self._custom_status_value(target_id, 'jungle:fragile', 'fragile')
             effective_armor = int(ps.armor) + root_armor - fragile
             dmg = max(0, dmg - effective_armor)
+            if self._bio_indictment_converts_damage(
+                target_id,
+                dmg,
+                DAMAGE_TYPE_PHYSICAL,
+                DAMAGE_TAG_PHYSICAL,
+                source_card,
+            ):
+                continue
             if ps.sponge_active and dmg > 0 and not immune:
                 converted = min(10, dmg // 2)
                 ps.poison += converted
@@ -14028,6 +14606,207 @@ class GameEngine:
         amount = self._modified_attack_damage(self._eval_int(player_id, params.get('amount', 6), card, 6), card)
         self.deal_attack_damage(target_id, amount, repeats, attacker_id=player_id, source_card=card)
 
+    def _atomic_bio_activate_blood_knife(self, player_id, card, params, log, choice, context):
+        self.players[player_id].custom_vars['bio_blood_knife_active'] = True
+        self.log_msg(log or f"{self.pn(player_id)}本回合以3D替换每1E消耗")
+
+    def _atomic_bio_activate_blood_chromosome(self, player_id, card, params, log, choice, context):
+        self.players[player_id].custom_vars['bio_blood_chromosome_active'] = True
+        self.log_msg(log or f"{self.pn(player_id)}的血染色体效果在本回合生效")
+
+    def _atomic_bio_add_extra_healing(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
+        self._bio_add_status_value(target_id, 'extra_healing', amount)
+        self.log_msg(log or f"{self.pn(target_id)}获得{amount}层额外回复")
+
+    def _atomic_bio_job_application(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        pending = self.players[target_id].custom_vars.setdefault('bio_job_application_pending', [])
+        if not isinstance(pending, list):
+            pending = []
+            self.players[target_id].custom_vars['bio_job_application_pending'] = pending
+        if player_id not in pending:
+            pending.append(player_id)
+        self.log_msg(log or f"{self.pn(target_id)}下个回合无法指向{self.pn(player_id)}")
+
+    def _atomic_bio_indictment_response(self, player_id, card, params, log, choice, context):
+        original_card = context.get('original_card') if isinstance(context, dict) else None
+        if original_card is None:
+            return
+        original_card._bio_indictment_target_id = player_id
+        self.log_msg(log or f"{self.pn(player_id)}的起诉书将所响应攻击牌的伤害转化为护盾")
+
+    def _atomic_bio_ransom_money(self, player_id, card, params, log, choice, context):
+        ps = self.players[player_id]
+        selected = None
+        try:
+            selected_id = int((choice or {}).get('target_instance_id'))
+            selected = next((c for c in ps.exile if c.instance_id == selected_id), None)
+        except Exception:
+            selected = None
+        if selected is None or not self._card_selectable_by_action(selected):
+            return
+        self.deal_attack_damage(
+            player_id,
+            5,
+            1,
+            attacker_id=player_id,
+            source_card=card,
+            ignore_untargetable=True,
+        )
+        ps.exile.remove(selected)
+        self._discard_card(ps, selected)
+        self.log_msg(log or f"{self.pn(player_id)}将{selected.name_cn}从放逐区加入弃牌堆")
+
+    def _atomic_bio_high_yield_bond(self, player_id, card, params, log, choice, context):
+        dealt = self.deal_attack_damage(
+            player_id,
+            25,
+            1,
+            attacker_id=player_id,
+            source_card=card,
+            ignore_untargetable=True,
+        )
+        self._bio_add_status_value(player_id, 'debt', 10)
+        before = int(self.players[player_id].elixir)
+        self.players[player_id].gain_elixir(10)
+        gained = max(0, int(self.players[player_id].elixir) - before)
+        self.log_msg(log or f"{self.pn(player_id)}受到{dealt}D、获得10层负债并回复{gained}E")
+
+    def _atomic_bio_antibody_attack(self, player_id, card, params, log, choice, context):
+        amount = self._modified_attack_damage(0, card)
+        original_power = self._bio_begin_segmented_power(card)
+        try:
+            for target_id in self._bio_atomic_targets(player_id, card, params.get('target', 'target')):
+                dealt = self.deal_attack_damage(
+                    target_id,
+                    amount,
+                    1,
+                    attacker_id=player_id,
+                    source_card=card,
+                )
+                if dealt > 0:
+                    self._add_custom_status_value(target_id, 'jungle:fragile', 1)
+                    self.log_msg(log or f"{self.pn(target_id)}获得1层易损")
+        finally:
+            self._bio_restore_segmented_power(card, original_power)
+
+    def _bio_add_charge_to_cards(self, target_id: int, cards: List[CardInstance], amount: int = 1):
+        if not self._valid_player_id(target_id):
+            return
+        cards = [c for c in cards if c in self.players[target_id].hand]
+        for hand_card in cards:
+            hand_card.charge_value = max(0, int(getattr(hand_card, 'charge_value', 0) or 0) + amount)
+            hand_card.instance_flags.add('charge')
+        if cards:
+            self.log_msg(f"{self.pn(target_id)}的{len(cards)}张手牌获得{amount}层电荷")
+
+    def _atomic_bio_electron_missile(self, player_id, card, params, log, choice, context):
+        amount = self._modified_attack_damage(self._eval_int(player_id, params.get('amount', 3), card, 3), card)
+        original_power = self._bio_begin_segmented_power(card)
+        try:
+            for target_id in self._bio_atomic_targets(player_id, card, params.get('target', 'target')):
+                dealt = self.deal_attack_damage(target_id, amount, 1, attacker_id=player_id, source_card=card)
+                if dealt > 0:
+                    cards = list(self.players[target_id].hand)
+                    max_cards = params.get('max_cards')
+                    if max_cards is not None:
+                        max_cards = max(0, self._eval_int(player_id, max_cards, card, 0))
+                        if len(cards) > max_cards:
+                            cards = random.sample(cards, max_cards)
+                    self._bio_add_charge_to_cards(target_id, cards, 1)
+        finally:
+            self._bio_restore_segmented_power(card, original_power)
+
+    def _atomic_bio_sugar_attack(self, player_id, card, params, log, choice, context):
+        base_hits = self._eval_int(player_id, params.get('hits', 3), card, 3)
+        hits = self._card_total_hits(card, base_hits)
+        amount = self._modified_attack_damage(self._eval_int(player_id, params.get('amount', 4), card, 4), card)
+        original_power = self._bio_begin_segmented_power(card, hits)
+        try:
+            for target_id in self._bio_atomic_targets(player_id, card, params.get('target', 'target')):
+                for _ in range(hits):
+                    dealt = self.deal_attack_damage(target_id, amount, 1, attacker_id=player_id, source_card=card)
+                    if dealt > 0:
+                        self.players[target_id].heal(4)
+        finally:
+            self._bio_restore_segmented_power(card, original_power)
+
+    def _atomic_bio_blood_sugar_attack(self, player_id, card, params, log, choice, context):
+        hits = self._card_total_hits(card, self._eval_int(player_id, params.get('hits', 5), card, 5))
+        mode = str((choice or {}).get('bio_blood_sugar_mode') or 'electric_target')
+        original_power = self._bio_begin_segmented_power(card, hits)
+        try:
+            for target_id in self._bio_atomic_targets(player_id, card, params.get('target', 'target')):
+                groups = (
+                    ((target_id, 'electric'), (player_id, 'physical'))
+                    if mode == 'electric_target'
+                    else ((target_id, 'physical'), (player_id, 'electric'))
+                )
+                for damaged_id, damage_kind in groups:
+                    for _ in range(hits):
+                        if damage_kind == 'electric':
+                            dealt = self._deal_direct_damage(
+                                damaged_id,
+                                1,
+                                '血糖电伤',
+                                player_id,
+                                damage_type=DAMAGE_TYPE_MAGIC,
+                                damage_tag=DAMAGE_TAG_BATTERY,
+                            )
+                        else:
+                            dealt = self.deal_attack_damage(
+                                damaged_id,
+                                self._modified_attack_damage(1, card),
+                                1,
+                                attacker_id=player_id,
+                                source_card=card,
+                                ignore_untargetable=(damaged_id == player_id),
+                            )
+                        if dealt > 0:
+                            self.players[damaged_id].heal(2)
+        finally:
+            self._bio_restore_segmented_power(card, original_power)
+
+    def _atomic_bio_diamond_attack(self, player_id, card, params, log, choice, context):
+        amount = self._modified_attack_damage(self._eval_int(player_id, params.get('amount', 10), card, 10), card)
+        dealt_any = False
+        original_power = self._bio_begin_segmented_power(card)
+        try:
+            for target_id in self._bio_atomic_targets(player_id, card, params.get('target', 'target')):
+                dealt = self.deal_attack_damage(target_id, amount, 1, attacker_id=player_id, source_card=card)
+                dealt_any = dealt_any or dealt > 0
+        finally:
+            self._bio_restore_segmented_power(card, original_power)
+        if not dealt_any or 'bio_diamond_copy' in (getattr(card, 'setup_modifiers', set()) or set()):
+            return
+        snapshot = getattr(card, '_bio_pre_play_snapshot', None)
+        copied = fresh_card_copy_from_dict(snapshot if isinstance(snapshot, dict) else card.to_dict(), card.def_id)
+        copied.setup_modifiers.add('bio_diamond_copy')
+        copied.instance_flags.update({'wide_strike', 'self_target'})
+        copied.fission_level = 3
+        copied.fission_count = 2
+        self._bio_queue_auto_play(player_id, copied, choice, no_cost=True, source='diamond')
+        self.log_msg(log or f"{self.pn(player_id)}的钻石额外打出一张复制")
+
+    def _atomic_bio_blood_diamond_attack(self, player_id, card, params, log, choice, context):
+        amount = self._modified_attack_damage(self._eval_int(player_id, params.get('amount', 12), card, 12), card)
+        original_power = self._bio_begin_segmented_power(card)
+        try:
+            for target_id in self._bio_atomic_targets(player_id, card, params.get('target', 'target')):
+                dealt = self.deal_attack_damage(target_id, amount, 1, attacker_id=player_id, source_card=card)
+                if dealt > 0:
+                    self.players[target_id].bleed = max(0, int(self.players[target_id].bleed or 0)) + 2
+                    self._note_achievement_status_peak(target_id)
+                    self.log_msg(log or f"{self.pn(target_id)}获得2层流血")
+        finally:
+            self._bio_restore_segmented_power(card, original_power)
+
     def _atomic_arctic_apply_frost(self, player_id, card, params, log, choice, context):
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         for target_id in self._resolve_targets(player_id, params.get('target', 'target')):
@@ -14144,8 +14923,15 @@ class GameEngine:
         if not self._valid_player_id(target_id):
             return
         player = self.players[player_id]
-        spent_elixir = max(0, int(getattr(player, 'elixir', 0) or 0))
-        player.elixir = 0
+        # Normal cost modifiers (same-name cost, Frost, temporary Heavy, etc.)
+        # are paid before on_play runs.  They are still part of the Nuke's
+        # "consume all E", so include them instead of producing zero hits when
+        # they happened to consume the player's last E.
+        paid_elixir = max(0, int(getattr(card, '_paid_e_this_play', 0) or 0))
+        remaining_elixir = max(0, int(getattr(player, 'elixir', 0) or 0))
+        spent_elixir = paid_elixir + remaining_elixir
+        if remaining_elixir > 0:
+            self._spend_resource(player_id, 'elixir', remaining_elixir, card)
         if spent_elixir <= 0:
             return
         repeats = max(

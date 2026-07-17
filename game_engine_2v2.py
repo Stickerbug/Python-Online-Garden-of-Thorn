@@ -502,6 +502,7 @@ class GameEngine2v2(GameEngine):
         ):
             self._clear_invincible_state(player_id)
             self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
+        self._bio_turn_end_cleanup(player_id)
         self._save_last_turn_damage_snapshot(player_id)
         self._advance_turn()
 
@@ -879,11 +880,18 @@ class GameEngine2v2(GameEngine):
             self._advance_turn()
             return
         self._skip_current_turn_after_start = False
+        self._bio_turn_start_setup(player_id)
         self._apply_turn_start_effects_2v2(player_id)
         if self.game_over:
             return
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
+        if self._bio_queue_dna_turn_start(player_id, '_bio_continue_start_player_turn'):
+            return
+        self._bio_continue_start_player_turn(player_id)
+
+    def _bio_continue_start_player_turn(self, player_id: int):
+        ps = self.players[player_id]
         if getattr(self, '_skip_current_turn_after_start', False):
             self._skip_current_turn_after_start = False
             self._end_player_turn(player_id)
@@ -1045,6 +1053,7 @@ class GameEngine2v2(GameEngine):
             'original_choice': choice,
             'counter_cards': counter_cards,
             'is_precision': 'precision' in flags,
+            'bio_pre_play_snapshot': getattr(card, '_bio_pre_play_snapshot', None),
         }
 
     def _equipment_destroy_response_player_ids(self, player_id: int, card: Optional[CardInstance], choice: Optional[dict] = None) -> List[int]:
@@ -1189,6 +1198,7 @@ class GameEngine2v2(GameEngine):
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = 0 if auto_no_cost else max(0, int(card.cost_e + extra_e))
         total_m = 0 if auto_no_cost else int(card.cost_m)
+        total_e = self._bio_replace_paid_e_cost(player_id, card, total_e, auto_no_cost)
         card._paid_e_this_play = int(total_e)
         card._paid_m_this_play = int(total_m)
         self._spend_resource(player_id, 'elixir', total_e, card)
@@ -1198,6 +1208,8 @@ class GameEngine2v2(GameEngine):
         if getattr(card, 'card_type', '') == 'thorn':
             ps.achievement_played_thorn = True
         ps.cards_played_this_turn_instance_ids.append(int(getattr(card, 'instance_id', card_instance_id) or card_instance_id))
+        card._bio_pre_play_snapshot = card.to_dict()
+        self._bio_after_card_payment(player_id, card)
         self._apply_magic_acceleration_after_play(player_id, card)
         self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
         self._sewers_trigger_vampire_fangs(player_id, card, choice)
@@ -1272,6 +1284,14 @@ class GameEngine2v2(GameEngine):
         if getattr(self, 'pending_v2_ui', None):
             return 0
         if actual <= 0:
+            return 0
+        if self._bio_indictment_converts_damage(
+            player_id,
+            actual,
+            resolved_damage_type,
+            resolved_damage_tag,
+            getattr(self, '_active_v2_card', None),
+        ):
             return 0
         actual = self._apply_universal_damage_shields(player_id, actual, source_id, source, resolved_damage_type)
         if actual <= 0:
@@ -1566,6 +1586,7 @@ class GameEngine2v2(GameEngine):
                 elixir_recovery += 1
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
+            self._bio_apply_debt_after_recovery(player_id)
             # Overload: deduct E at turn start, then clear
             if ps.overload > 0:
                 if not self._is_status_immune(player_id):
@@ -1591,6 +1612,7 @@ class GameEngine2v2(GameEngine):
                         eid, eq.card_instance, 'enemy_turn_start', None,
                         {'source_id': eid, 'target_id': player_id}):
                     continue
+        self._apply_equal_suffering_turn_start(player_id)
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -1645,6 +1667,7 @@ class GameEngine2v2(GameEngine):
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
         self._defer_turn_start_death_checks = False
+        self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
             self._check_yggdrasil(player_id)
             if ps.health <= 0:
@@ -1705,6 +1728,7 @@ class GameEngine2v2(GameEngine):
                 elixir_recovery += 1
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
+            self._bio_apply_debt_after_recovery(player_id)
             if ps.overload > 0:
                 if not self._is_status_immune(player_id):
                     deduct = min(ps.overload, ps.elixir)
@@ -1729,6 +1753,7 @@ class GameEngine2v2(GameEngine):
                         eid, eq.card_instance, 'enemy_turn_start', None,
                         {'source_id': eid, 'target_id': player_id}):
                     continue
+        self._apply_equal_suffering_turn_start(player_id)
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -1783,6 +1808,7 @@ class GameEngine2v2(GameEngine):
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
         self._defer_turn_start_death_checks = False
+        self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
             self._check_yggdrasil(player_id)
             if ps.health <= 0:
@@ -1803,6 +1829,8 @@ class GameEngine2v2(GameEngine):
             return
         if ps.health <= 0:
             self._advance_turn()
+            return
+        if self._bio_queue_dna_turn_start(player_id, '_bio_enter_player_action_phase'):
             return
         self._enter_player_action_phase(player_id)
 
@@ -1833,9 +1861,11 @@ class GameEngine2v2(GameEngine):
                 ps.dodge -= 1
                 if not is_precision:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击")
+                    self._record_dodge_damage_prevented(target_id, amount)
                     continue
                 precision_dodged = True
-                self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
+                if not getattr(self, '_suppress_next_precision_dodge_log', False):
+                    self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
             if ps.invincible and not immune:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
                 continue
@@ -1853,26 +1883,20 @@ class GameEngine2v2(GameEngine):
                     power = 0
             dmg = max(0, amount + int(math.ceil(power / max(1, int(hits or 1)))))
             if 0 <= attacker_id < len(self.players):
+                multiplier = float(getattr(self.players[attacker_id], 'damage_multiplier', 1.0) or 1.0)
+                if multiplier != 1.0:
+                    dmg = int(math.ceil(dmg * multiplier))
+                    self.players[attacker_id].damage_multiplier = 1.0
                 try:
                     puppeteer_multiplier = float((getattr(self.players[attacker_id], 'custom_vars', {}) or {}).get('void_puppeteer_damage_multiplier', 1.0) or 1.0)
                 except Exception:
                     puppeteer_multiplier = 1.0
                 if puppeteer_multiplier != 1.0:
                     dmg = int(math.ceil(dmg * puppeteer_multiplier))
-            if self.halve_next_attack:
-                dmg = math.ceil(dmg / 2)
-            elif precision_dodged:
-                dmg = math.ceil(dmg / 2)
             dmg = self._apply_corruption_multiplier_to_damage(dmg, log=False)
             dmg = self._apply_damage_dealt_equipment_multiplier(dmg, attacker_id)
             if plank_blocks_attack:
                 dmg = 0
-            nazar_stacks = 0 if immune else self._nazar_status_value(target_id)
-            if dmg > 0 and nazar_stacks > 0:
-                original_dmg = dmg
-                dmg = max(1, dmg - 9)
-                if original_dmg >= 10:
-                    self._set_nazar_status_value(target_id, nazar_stacks - 1)
             damage_context = self._v2_damage_context(
                 target_id,
                 dmg,
@@ -1892,6 +1916,14 @@ class GameEngine2v2(GameEngine):
             if dmg > 0 and attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
                 reduction = min(0.6, 0.2 * attacker_state.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
+            dmg, _hel_crit = self._hel_apply_lucky_crit_to_damage(attacker_id, dmg, source_card)
+            dmg = self._apply_attack_damage_halving(target_id, dmg, precision_dodged)
+            nazar_stacks = 0 if immune else self._nazar_status_value(target_id)
+            if dmg > 0 and nazar_stacks > 0:
+                original_dmg = dmg
+                dmg = max(1, dmg - 9)
+                if original_dmg >= 10:
+                    self._set_nazar_status_value(target_id, nazar_stacks - 1)
             if immune:
                 root_armor = 0
                 fragile = 0
@@ -1900,6 +1932,14 @@ class GameEngine2v2(GameEngine):
                 fragile = self._custom_status_value(target_id, 'jungle:fragile', 'fragile')
             effective_armor = int(ps.armor) + root_armor - fragile
             dmg = max(0, dmg - effective_armor)
+            if self._bio_indictment_converts_damage(
+                target_id,
+                dmg,
+                DAMAGE_TYPE_PHYSICAL,
+                DAMAGE_TAG_PHYSICAL,
+                source_card,
+            ):
+                continue
             if ps.sponge_active and dmg > 0 and not immune:
                 converted = min(10, dmg // 2)
                 ps.poison += converted

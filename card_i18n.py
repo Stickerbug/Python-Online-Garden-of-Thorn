@@ -285,6 +285,10 @@ OPENING_EVENT_I18N = {
         'name': _t('花序编排', 'Floral Arrangement', 'Arrangement floral', 'Arranjo Floral', 'Цветочная композиция', '花序編成'),
         'desc': _t('选择自己牌库中的3张牌，按选择顺序移至抽牌堆顶', 'Choose 3 cards from your deck and move them to the top in the chosen order', 'Choisissez 3 cartes de votre deck et placez-les au-dessus dans l’ordre choisi', 'Escolha 3 cartas do seu deck e mova-as para o topo na ordem escolhida', 'Выберите 3 карты из своей колоды и положите их наверх в выбранном порядке', '自分の山札から3枚を選び、選んだ順に山札の一番上へ移す'),
     },
+    12: {
+        'name': _t('众生平等', 'Equal Suffering', 'Souffrance égale', 'Sofrimento Igual', 'Равное страдание', '等しき苦痛'),
+        'desc': _t('自己回合开始时，自己对包括自己在内的所有可选中玩家分别造成5[[icon:D]]', 'At the start of your turn, you deal 5[[icon:D]] to each targetable player, including yourself', 'Au début de votre tour, vous infligez 5[[icon:D]] à chaque joueur pouvant être ciblé, vous y compris', 'No início do seu turno, você causa 5[[icon:D]] a cada jogador que possa ser alvo, incluindo você', 'В начале своего хода вы наносите 5[[icon:D]] каждому доступному для выбора игроку, включая себя', '自分のターン開始時、自分を含む選択可能な各プレイヤーに、自分が5[[icon:D]]を与える'),
+    },
 }
 
 

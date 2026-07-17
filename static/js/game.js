@@ -692,7 +692,7 @@ const I18N = {
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
         flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_temp_magic_heavy: 'Temporary Magic Heavy', flag_floating: 'Floating', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_sublime: 'Sublime', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift', flag_wide_strike: 'Wide Strike', flag_self_target: 'Self-target', flag_charge: 'Charge', flag_ocean_blinded: 'Obscured',
         tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_temp_magic_heavy: 'Temporary Magic Heavy', tag_floating: 'Floating', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift', tag_wide_strike: 'Wide Strike', tag_self_target: 'Self-target', tag_charge: 'Charge', tag_ocean_blinded: 'Obscured',
-        gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
+        gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_statuses: 'States', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card', opening_sequence_title: 'Floral Arrangement', opening_sequence_message: 'Move cards to the top in selection order. The first selected card is drawn first.',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
@@ -1277,7 +1277,7 @@ Object.assign(I18N.fr, {
     rules_examples_text: '{stinger} est une attaque Précision ; {sewage} détruit les équipements ; {bubble} répond à une attaque et donne Esquive.',
     rules_skip_confirm_title: 'Notice',
     rules_skip_confirm_msg: 'Passer la présentation du jeu ?\nVous pourrez la rouvrir dans À propos > Règles.',
-    gallery_title: 'Encyclopédie', gallery_cards: 'Cartes', gallery_tags: 'Tags', gallery_events: 'Événements de départ',
+    gallery_title: 'Encyclopédie', gallery_cards: 'Cartes', gallery_tags: 'Tags', gallery_events: 'Événements de départ', gallery_statuses: 'États',
     gallery_search: 'Rechercher', gallery_no_items: 'Aucune entrée.', gallery_cards_with_tag: 'Cartes avec ce tag',
     gallery_card_count: '{0} cartes', gallery_type: 'Type', gallery_cost: 'Coût', gallery_tags_label: 'Tags',
     gallery_description: 'Description', gallery_effect: 'Effet', gallery_trigger: 'Déclenchement',
@@ -1331,7 +1331,7 @@ Object.assign(I18N.ja, {
     rules_examples_text: '{stinger} は精密攻撃です。{sewage} は装備を破壊します。{bubble} は攻撃に反応して回避を得ます。',
     rules_skip_confirm_title: '確認',
     rules_skip_confirm_msg: 'ゲーム紹介をスキップしますか？\n概要 > 遊び方 から再度開けます。',
-    gallery_title: '図鑑', gallery_cards: 'カード', gallery_tags: 'タグ', gallery_events: '開局イベント',
+    gallery_title: '図鑑', gallery_cards: 'カード', gallery_tags: 'タグ', gallery_events: '開局イベント', gallery_statuses: '状態',
     gallery_search: '検索', gallery_no_items: '項目がありません。', gallery_cards_with_tag: 'このタグを持つカード',
     gallery_card_count: '{0}枚のカード', gallery_type: 'タイプ', gallery_cost: 'コスト', gallery_tags_label: 'タグ',
     gallery_description: '説明', gallery_effect: '効果', gallery_trigger: '発動',
@@ -1463,10 +1463,14 @@ Object.assign(I18N.en, { settings_landscape_mode: 'Enable landscape mode' });
 Object.assign(I18N.zh, { settings_landscape_mode: '开启横屏模式' });
 Object.assign(I18N.fr, { settings_landscape_mode: 'Activer le mode paysage' });
 Object.assign(I18N.ja, { settings_landscape_mode: '横画面モードを有効化' });
-Object.assign(I18N.en, { official_mods: 'Official Mods', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found', mod_beta_warning: 'In testing, not recommended' });
-Object.assign(I18N.zh, { official_mods: '官方模组', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组', mod_beta_warning: '测试中，不推荐使用' });
-Object.assign(I18N.fr, { mod_beta_warning: 'En test, déconseillé' });
-Object.assign(I18N.ja, { mod_beta_warning: 'テスト中、非推奨' });
+Object.assign(I18N.en, { official_mods: 'Official Mods', entertainment_mods: 'Entertainment Mods', entertainment_mods_note: 'Matches using any entertainment mod do not affect Garden Rating.', no_entertainment_mods: 'No entertainment mods yet', gr_unranked_entertainment: 'This match used an entertainment mod and did not affect GR.', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found', mod_beta_warning: 'In testing, not recommended' });
+Object.assign(I18N.zh, { official_mods: '官方模组', entertainment_mods: '娱乐模组', entertainment_mods_note: '启用任一娱乐模组后，对局不计花阶分。', no_entertainment_mods: '暂无娱乐模组', gr_unranked_entertainment: '本局使用了娱乐模组，不计入花阶分。', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组', mod_beta_warning: '测试中，不推荐使用' });
+Object.assign(I18N.fr, { entertainment_mods: 'Mods détente', entertainment_mods_note: 'Les parties utilisant un mod détente ne modifient pas le Garden Rating.', no_entertainment_mods: 'Aucun mod détente', gr_unranked_entertainment: 'Cette partie utilisait un mod détente et n’a pas modifié le GR.', mod_beta_warning: 'En test, déconseillé' });
+Object.assign(I18N.ja, { entertainment_mods: 'エンタメMod', entertainment_mods_note: 'エンタメModを使用した対局はGarden Ratingに影響しません。', no_entertainment_mods: 'エンタメModはまだありません', gr_unranked_entertainment: 'エンタメModを使用したため、この対局はGRに影響しません。', mod_beta_warning: 'テスト中、非推奨' });
+Object.assign(I18N.en, { replay_download: 'Download' });
+Object.assign(I18N.zh, { replay_download: '下载' });
+Object.assign(I18N.fr, { replay_download: 'Télécharger' });
+Object.assign(I18N.ja, { replay_download: 'ダウンロード' });
 Object.assign(I18N.en, { content_temporarily_disabled: 'Temporarily disabled', content_disabled_reason: 'Reason: {0}' });
 Object.assign(I18N.zh, { content_temporarily_disabled: '临时停用', content_disabled_reason: '原因：{0}' });
 Object.assign(I18N.fr, { content_temporarily_disabled: 'Temporairement désactivé', content_disabled_reason: 'Raison : {0}' });
@@ -1679,35 +1683,47 @@ Object.assign(I18N.ja, {
 });
 Object.assign(I18N.en, {
     account_replays: 'Recent Replays', replay_viewer: 'Replay Viewer', replay_view: 'View',
+    replay_id: 'Replay ID', replay_copy: 'Copy', replay_copied: 'Replay ID copied',
     replay_empty: 'No replay in the last 90 days.', replay_loading: 'Loading replays...',
     replay_load_failed: 'Failed to load replay', replay_prev: 'Prev', replay_play: 'Play',
     replay_pause: 'Pause', replay_next: 'Next', replay_instant: 'Instant',
     replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.',
-    replay_loading_progress: 'Loaded {0}/{1} frames', replay_prepare: 'Preparing replay...'
+    replay_loading_progress: 'Loaded {0}/{1} frames', replay_prepare: 'Preparing replay...',
+    feedback_appeal: 'Match Appeal', feedback_replay_id: 'Replay ID',
+    feedback_replay_placeholder: 'Replay ID, e.g. R-12345'
 });
 Object.assign(I18N.zh, {
     account_replays: '最近回放', replay_viewer: '回放查看器', replay_view: '查看',
+    replay_id: '回放 ID', replay_copy: '复制', replay_copied: '已复制回放 ID',
     replay_empty: '最近90天暂无回放。', replay_loading: '正在读取回放...',
     replay_load_failed: '回放加载失败', replay_prev: '上一步', replay_play: '播放',
     replay_pause: '暂停', replay_next: '下一步', replay_instant: '立即',
     replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。',
-    replay_loading_progress: '已加载 {0}/{1} 帧', replay_prepare: '正在准备回放...'
+    replay_loading_progress: '已加载 {0}/{1} 帧', replay_prepare: '正在准备回放...',
+    feedback_appeal: '对局申诉', feedback_replay_id: '回放 ID',
+    feedback_replay_placeholder: '回放 ID，例如 R-12345'
 });
 Object.assign(I18N.fr, {
     account_replays: 'Replays récents', replay_viewer: 'Lecteur de replay', replay_view: 'Voir',
+    replay_id: 'ID du replay', replay_copy: 'Copier', replay_copied: 'ID du replay copié',
     replay_empty: 'Aucun replay sur 90 jours.', replay_loading: 'Chargement...',
     replay_load_failed: 'Échec du replay', replay_prev: 'Préc.', replay_play: 'Lire',
     replay_pause: 'Pause', replay_next: 'Suiv.', replay_instant: 'Instant',
     replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.',
-    replay_loading_progress: '{0}/{1} frames chargées', replay_prepare: 'Préparation du replay...'
+    replay_loading_progress: '{0}/{1} frames chargées', replay_prepare: 'Préparation du replay...',
+    feedback_appeal: 'Contestation de partie', feedback_replay_id: 'ID du replay',
+    feedback_replay_placeholder: 'ID du replay, ex. R-12345'
 });
 Object.assign(I18N.ja, {
     account_replays: '最近のリプレイ', replay_viewer: 'リプレイビューア', replay_view: '表示',
+    replay_id: 'リプレイID', replay_copy: 'コピー', replay_copied: 'リプレイIDをコピーしました',
     replay_empty: '90日以内のリプレイはありません。', replay_loading: '読み込み中...',
     replay_load_failed: 'リプレイ読み込み失敗', replay_prev: '前へ', replay_play: '再生',
     replay_pause: '一時停止', replay_next: '次へ', replay_instant: '即時',
     replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。',
-    replay_loading_progress: '{0}/{1}フレーム読込済み', replay_prepare: 'リプレイ準備中...'
+    replay_loading_progress: '{0}/{1}フレーム読込済み', replay_prepare: 'リプレイ準備中...',
+    feedback_appeal: '対戦の異議申立て', feedback_replay_id: 'リプレイID',
+    feedback_replay_placeholder: 'リプレイID（例 R-12345）'
 });
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.zh, { admin_prefix: '\u7ba1\u7406\u5458', login_admin_reserved: '\u6b64\u6635\u79f0\u88ab\u7ba1\u7406\u5458\u5360\u7528' });
@@ -2123,6 +2139,35 @@ Object.assign(I18N.ja, {
     report_success: '通報を送信しました',
     report_login_required: '通報するにはアカウントでログインしてください。',
     report_error: '通報失敗: {0}',
+});
+
+// Keep player-facing keyword names canonical in every supported language.
+// French and Japanese inherit the English table, so newer keywords must be
+// overridden explicitly instead of silently falling back to English.
+Object.assign(I18N.fr, {
+    flag_attract: 'Attraction', flag_void: 'Vide', flag_self_only: 'Sans cible', flag_uncancellable: 'Non annulable',
+    flag_infinite_exclude: 'Retiré d’Infinite Fire', flag_rebound: 'Retour', flag_temp_swift: 'Rapidité temporaire',
+    flag_temp_heavy: 'Lourdeur temporaire', flag_temp_magic_heavy: 'Lourdeur magique temporaire', flag_floating: 'Flottement',
+    flag_sublime: 'Sublime', flag_team_limited: 'Limité à l’équipe', flag_team_unique: 'Unique d’équipe',
+    flag_power: 'Puissance', flag_magic_swift: 'Rapidité magique', flag_wide_strike: 'Frappe large',
+    flag_self_target: 'Auto-ciblage', flag_charge: 'Charge', flag_ocean_blinded: 'Obscurci',
+    tag_temp_swift: 'Rapidité temporaire', tag_temp_heavy: 'Lourdeur temporaire',
+    tag_temp_magic_heavy: 'Lourdeur magique temporaire', tag_floating: 'Flottement', tag_sublime: 'Sublime',
+    tag_team_limited: 'Limité à l’équipe', tag_team_unique: 'Unique d’équipe', tag_power: 'Puissance',
+    tag_magic_swift: 'Rapidité magique', tag_wide_strike: 'Frappe large', tag_self_target: 'Auto-ciblage',
+    tag_charge: 'Charge', tag_ocean_blinded: 'Obscurci',
+});
+Object.assign(I18N.ja, {
+    flag_attract: '誘引', flag_void: '虚無', flag_self_only: '対象選択なし', flag_uncancellable: 'キャンセル不可',
+    flag_infinite_exclude: 'Infinite Fireから削除', flag_rebound: '回転', flag_temp_swift: '一時迅捷',
+    flag_temp_heavy: '一時鈍重', flag_temp_magic_heavy: '一時魔力鈍重', flag_floating: '浮遊',
+    flag_sublime: '崇高', flag_team_limited: 'チーム限定', flag_team_unique: 'チーム唯一',
+    flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '広域打撃',
+    flag_self_target: '自刃', flag_charge: '電荷', flag_ocean_blinded: '蒙蔽',
+    tag_temp_swift: '一時迅捷', tag_temp_heavy: '一時鈍重', tag_temp_magic_heavy: '一時魔力鈍重',
+    tag_floating: '浮遊', tag_sublime: '崇高', tag_team_limited: 'チーム限定', tag_team_unique: 'チーム唯一',
+    tag_power: '威力', tag_magic_swift: '魔力迅捷', tag_wide_strike: '広域打撃', tag_self_target: '自刃',
+    tag_charge: '電荷', tag_ocean_blinded: '蒙蔽',
 });
 
 const SUPPORTED_LANGS = new Set(['zh', 'en', 'fr', 'ja']);
@@ -2555,6 +2600,9 @@ const CARD_FLAG_ALIASES = {
     副本: 'copy',
     唯一: 'unique',
     迅捷: 'swift',
+    swiftness: 'swift',
+    temporary_swiftness: 'temp_swift',
+    magic_swiftness: 'magic_swift',
     暂时迅捷: 'temp_swift',
     暂时沉重: 'temp_heavy',
     暂时魔力沉重: 'temp_magic_heavy',
@@ -2654,7 +2702,9 @@ function normalizeCardFlag(flag) {
 
 function getCardName(cardDef) {
     if (!cardDef) return '?';
-    return getLocalizedCardText(cardDef, 'name_i18n', currentLang === 'zh' ? 'name_cn' : 'name_en');
+    const name = getLocalizedCardText(cardDef, 'name_i18n', currentLang === 'zh' ? 'name_cn' : 'name_en');
+    if (currentLang !== 'fr') return name;
+    return String(name || '').replace(/[A-Za-zÀ-ÖØ-öø-ÿŒœ]/u, letter => letter.toLocaleUpperCase('fr-FR'));
 }
 
 function formatCardIdForDisplay(cardId) {
@@ -2676,7 +2726,7 @@ function getEnglishCardName(cardDef) {
 function shouldShowEnglishCardName(cardDef, localizedName = '') {
     if (currentLang === 'en' || !showEnglishCardNames) return false;
     const englishName = getEnglishCardName(cardDef);
-    return !!englishName && englishName !== localizedName;
+    return !!englishName;
 }
 
 function getCardTypeLabel(cardType) {
@@ -2795,7 +2845,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'status-bandage', re: /^(?:[+-]?\d+层绷带|绷带[:：]?[+-]?\d+层?|绷带)/i },
     { cls: 'status-attack-blocked', re: /^(?:[+-]?\d+层(?:禁攻|禁止攻击|attack_blocked)|(?:禁攻|禁止攻击|attack_blocked)[:：]?[+-]?\d+层?)/i },
     { cls: 'status-attack-only', re: /^(?:[+-]?\d+层仅攻击|仅攻击[:：]?[+-]?\d+层?)/i },
-    { cls: 'magic', re: /^(?:[+-]?\d+层魔力封锁|魔力封锁[:：]?[+-]?\d+层?)/i },
+    { cls: 'status-magic-blocked', re: /^(?:[+-]?\d+层魔力封锁|魔力封锁[:：]?[+-]?\d+层?)/i },
     { cls: 'status-untargetable', re: /^(?:[+-]?\d+层无法选中|无法选中[:：]?[+-]?\d+层?)/i },
     { cls: 'status-magic-nazar', re: /^(?:[+-]?\d+层魔法邪眼|魔法邪眼[:：]?[+-]?\d+层?)/i },
     { cls: 'equipment-armor', re: /^(?:[+-]?\d+层装备护甲|装备护甲[:：]?[+-]?\d+层?|装备护甲|Equipment Armor)/i },
@@ -2810,6 +2860,125 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'elixir', re: /^[+-]?\d+E(?![A-Za-z0-9])/ },
     { cls: 'magic', re: /^[+-]?\d+M(?![A-Za-z0-9])/ },
 ];
+
+const CARD_TEXT_LOCALIZED_FLAG_SPECS = [
+    ['team_limited', 'tag-team-limited'], ['team_unique', 'tag-team-unique'],
+    ['infinite_exclude', 'tag-infinite-exclude'], ['non_stackable', 'tag-non-stackable'],
+    ['indestructible', 'tag-indestructible'], ['uncancellable', 'tag-uncancellable'],
+    ['self_only', 'tag-self-only'], ['magic_swift', 'tag-magic-swift'],
+    ['temp_swift', 'tag-temp-swift'], ['temp_heavy', 'tag-temp-heavy'],
+    ['temp_magic_heavy', 'tag-temp-magic-heavy'], ['precision', 'tag-precision'],
+    ['exile', 'tag-exile'], ['sprout', 'tag-sprout'], ['symbiosis', 'tag-symbiosis'],
+    ['attract', 'tag-attract'], ['void', 'tag-void'], ['rebound', 'tag-rebound'],
+    ['copy', 'tag-copy'], ['unique', 'tag-unique'], ['swift', 'tag-swift'],
+    ['stealth', 'tag-stealth'], ['revealed', 'tag-revealed'], ['sublime', 'tag-sublime'],
+    ['power', 'tag-power'], ['charge', 'tag-charge'], ['floating', 'tag-floating'],
+    ['ocean_blinded', 'tag-ocean-blinded'], ['wide_strike', 'tag-wide-strike'],
+    ['self_target', 'tag-self-target'], ['sewers:confusion', 'tag-sewers-confusion'],
+    ['arctic:ready', 'tag-arctic-ready'], ['arctic:ricochet_3', 'tag-arctic-ricochet'],
+    ['arctic:ricochet_4', 'tag-arctic-ricochet'],
+];
+
+const CARD_TEXT_LOCALIZED_STATUS_SPECS = [
+    ['toxic', 'toxic'], ['triangle', 'status-triangle'], ['nazar', 'status-nazar'],
+    ['magic_nazar', 'status-magic-nazar'], ['invincible', 'status-invincible'],
+    ['dodge', 'status-dodge'], ['status_immune', 'status-immune'], ['stunned', 'status-stunned'],
+    ['attack_blocked', 'status-attack-blocked'], ['attack_only', 'status-attack-only'],
+    ['magic_blocked', 'status-magic-blocked'], ['untargetable', 'status-untargetable'],
+    ['bandage', 'status-bandage'], ['sluggish', 'status-sluggish'], ['overload', 'status-overload'],
+    ['foresight', 'status-foresight'], ['fracture', 'status-fracture'],
+    ['stagnation', 'status-stagnation'], ['blind', 'status-blind'],
+    ['fragile', 'status-fragile'], ['shield', 'status-shield'],
+    ['turn_heal', 'status-turn-heal'], ['turn_magic', 'status-turn-magic'],
+    ['root_status', 'status-root'], ['toxic_poison', 'status-toxic-poison'],
+    ['heal_block', 'status-heal-block'], ['weakness', 'status-weakness'],
+    ['bleed', 'status-bleed'], ['fragment', 'status-fragment'],
+    ['blood_debt', 'status-blood-debt'], ['unable_counter', 'status-unable-counter'],
+    ['luck', 'status-luck'], ['blazing_fire', 'status-blazing-fire'],
+    ['arctic:frost', 'status-frost'], ['crit', 'status-crit'],
+    ['equipment_armor', 'equipment-armor'],
+];
+
+const CARD_TEXT_LOCALIZED_STATUS_ALIASES = {
+    en: {
+        stunned: ['Stun'], blind: ['Blindness'], sluggish: ['Slowness', 'Slow'],
+        fragile: ['Vulnerable', 'Vulnerability'], shield: ['Shields'], bleed: ['Bleeds', 'Bleeding'],
+        'arctic:frost': ['Frost'], luck: ['Luck'], crit: ['Critical Hit', 'Critical Strike'],
+        status_immune: ['Status Immunity'], untargetable: ['Unselectable'],
+    },
+    fr: {
+        stunned: ['Étourdissement'], blind: ['Aveuglement'], fragile: ['Vulnérabilité'],
+        shield: ['Boucliers'], bleed: ['Saignements'], 'arctic:frost': ['Givre'],
+        luck: ['Chance'], crit: ['Coup critique'], status_immune: ['Immunité aux états'],
+    },
+    ja: {
+        stunned: ['スタン'], blind: ['盲目', '盲目状態'], fragile: ['脆弱', '脆弱性'],
+        shield: ['シールド'], bleed: ['出血'], 'arctic:frost': ['霜', '凍結'],
+        luck: ['幸運', '運'], crit: ['クリティカルヒット'],
+    },
+};
+
+let cardTextLocalizedRuleCache = { signature: '', rules: [] };
+
+function escapeCardTextRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildLocalizedCardTextRule(label, meta) {
+    const clean = String(label || '').trim();
+    if (!clean || /^[-_a-z0-9]+(?::[-_a-z0-9]+)*$/i.test(clean) && clean.includes('_')) return null;
+    const escaped = escapeCardTextRegExp(clean);
+    const amountPrefix = String.raw`(?:[+-]?\d+\s*(?:(?:stacks?|layers?)\s+(?:of\s+)?|(?:charges?|couches?)\s+de\s+|[层層]\s*(?:の\s*)?)?)?`;
+    const amountSuffix = String.raw`(?:(?:\s*[:：]\s*|\s+)[+-]?\d+(?:[;；][+-]?\d+)?\s*(?:stacks?|layers?|charges?|couches?|层|層)?)?`;
+    const boundary = String.raw`(?=$|[\s,.;:：，。；、!！?？()（）+\-×x=<>≤≥\[\]]|[をがには])`;
+    return {
+        ...meta,
+        re: new RegExp(`^${amountPrefix}${escaped}${amountSuffix}${boundary}`, 'iu'),
+    };
+}
+
+function getLocalizedCardTextTokenRules() {
+    const signature = `${currentLang}|${Object.keys(CUSTOM_TAG_DEFS || {}).sort().join(',')}|${Object.keys(CUSTOM_STATUS_DEFS || {}).sort().join(',')}`;
+    if (cardTextLocalizedRuleCache.signature === signature) return cardTextLocalizedRuleCache.rules;
+    const rules = [];
+    const seen = new Set();
+    const addRule = (label, meta) => {
+        const key = `${String(label || '').trim().toLocaleLowerCase()}|${meta.cls}`;
+        if (!String(label || '').trim() || seen.has(key)) return;
+        const rule = buildLocalizedCardTextRule(label, meta);
+        if (!rule) return;
+        seen.add(key);
+        rules.push(rule);
+    };
+    const termLibrary = getTermIntroLibrary();
+    CARD_TEXT_LOCALIZED_FLAG_SPECS.forEach(([flag, cls]) => {
+        const custom = getCustomTagDef(flag);
+        const term = termLibrary[flag];
+        const label = custom ? getRegistryText(custom, 'name', flag) : ((term && term.label) || getFlagLabel(flag));
+        const style = CARD_FLAG_STYLES[flag];
+        const color = (style && style.fg) || safeRegistryColor(custom && custom.color, (term && term.color) || '');
+        addRule(label, { cls, termKey: `flag:${flag}`, color });
+    });
+    CARD_TEXT_LOCALIZED_STATUS_SPECS.forEach(([statusKey, cls]) => {
+        let item;
+        if (statusKey === 'crit' || statusKey === 'equipment_armor') {
+            item = termLibrary[statusKey] || termLibrary[statusKey === 'equipment_armor' ? 'equipment_armor' : 'crit'];
+        } else {
+            item = getStatusIntroItem({ key: statusKey });
+        }
+        if (!item) return;
+        const termKey = statusKey === 'crit' || statusKey === 'equipment_armor'
+            ? `term:${statusKey}`
+            : `status:${statusKey}`;
+        const meta = { cls, termKey, color: item.color || '' };
+        addRule(item.label, meta);
+        const aliases = (CARD_TEXT_LOCALIZED_STATUS_ALIASES[currentLang] || {})[statusKey] || [];
+        aliases.forEach(alias => addRule(alias, meta));
+    });
+    rules.sort((a, b) => String(b.re.source).length - String(a.re.source).length);
+    cardTextLocalizedRuleCache = { signature, rules };
+    return rules;
+}
 
 function buildInlineCardDict(defId, modifierText = '') {
     const resolvedDefId = findCardDefIdByAnyName(defId) || defId;
@@ -3097,6 +3266,13 @@ function getCardTextTokenIconKey(cls, rawText = '') {
         'status-untargetable': 'untargetable',
         'status-magic-nazar': 'magic_nazar',
         'status-blood-debt': 'blood_debt',
+        'status-unable-counter': 'unable_counter',
+        'status-magic-blocked': 'magic_blocked',
+        'status-luck': 'luck',
+        'status-blazing-fire': 'blazing_fire',
+        'status-frost': 'frost',
+        'status-crit': 'critical',
+        'equipment-armor': 'equip_protect',
         toxic: 'toxic',
         fire: 'fire',
         poison: 'poison',
@@ -3104,11 +3280,12 @@ function getCardTextTokenIconKey(cls, rawText = '') {
     return statusMap[cls] || '';
 }
 
-function renderCardTextTokenHtml(cls, rawText = '', termAttr = '') {
+function renderCardTextTokenHtml(cls, rawText = '', termAttr = '', color = '') {
     const text = String(rawText || '');
     const iconKey = getCardTextTokenIconKey(cls, text);
     const iconHtml = renderInlineIconHtml(iconKey, text);
-    return `<span class="card-token ${cls}"${termAttr}>${escapeHtml(text)}${iconHtml}</span>`;
+    const style = color ? ` style="color:${escapeHtml(color)}"` : '';
+    return `<span class="card-token ${cls}"${termAttr}${style}>${escapeHtml(text)}${iconHtml}</span>`;
 }
 
 function extractInlineUnitPrefix(sourceText, iconStart, iconKey) {
@@ -3215,6 +3392,7 @@ function bindInlineCardChips(root, options = {}) {
 
 function colorizeCardText(value) {
     const text = String(value || '')
+        .replace(/\bSwiftness\b/gi, 'Swift')
         .replace(/(?:魔法球|Mana\s*Orb)（萌芽、共生）|(?:魔法球|Mana\s*Orb)\(\s*萌芽\s*[+＋、,，]\s*共生\s*\)|\[(?:魔法球|Mana\s*Orb)\]\s*\[\s*萌芽\s*[+＋、,，]\s*共生\s*\]/gi, '[[card:ManaOrb|flag=sprout|flag=symbiosis]]')
         .replace(/(?:轻|Light)（萌芽、共生）|(?:轻|Light)\(\s*萌芽\s*[+＋、,，]\s*共生\s*\)|\[(?:轻|Light)\]\s*\[\s*萌芽\s*[+＋、,，]\s*共生\s*\]/gi, '[[card:Light|flag=sprout|flag=symbiosis]]');
     let html = '';
@@ -3257,11 +3435,18 @@ function colorizeCardText(value) {
         const statusMarker = rest.match(/^\[\[status:([^\]\r\n]+)\]\]/i);
         if (statusMarker && statusMarker[1]) {
             const statusKey = statusMarker[1].trim();
+            const termLibrary = getTermIntroLibrary();
             const statusDef = getAllStatusDefs().get(statusKey) || getAllStatusDefs().get(statusKey.replace(/^.*:/, ''));
-            const label = statusDef ? statusDef.label : statusKey;
-            const color = statusDef ? statusDef.color : '';
+            const statusItem = statusKey === 'crit' || statusKey === 'equipment_armor'
+                ? termLibrary[statusKey]
+                : getStatusIntroItem({ ...(statusDef || {}), key: statusKey, customDef: statusDef && statusDef.customDef });
+            const label = statusItem ? statusItem.label : (statusDef ? statusDef.label : statusKey);
+            const color = statusItem ? statusItem.color : (statusDef ? statusDef.color : '');
             const style = color ? ` style="color:${escapeHtml(color)}"` : '';
-            html += `<span class="card-token status-inline" data-term-key="status:${escapeHtml(statusKey)}"${style}>${escapeHtml(label)}</span>`;
+            const markerTermKey = statusKey === 'crit' || statusKey === 'equipment_armor'
+                ? `term:${statusKey}`
+                : `status:${statusKey}`;
+            html += `<span class="card-token status-inline" data-term-key="${escapeHtml(markerTermKey)}"${style}>${escapeHtml(label)}</span>`;
             i += statusMarker[0].length;
             continue;
         }
@@ -3279,10 +3464,19 @@ function colorizeCardText(value) {
                 break;
             }
         }
+        if (!matched) {
+            for (const rule of getLocalizedCardTextTokenRules()) {
+                const m = rest.match(rule.re);
+                if (m && m[0]) {
+                    matched = { cls: rule.cls, text: m[0], termKey: rule.termKey, color: rule.color };
+                    break;
+                }
+            }
+        }
         if (matched) {
-            const termKey = getCardTextTokenTermKey(matched.cls, matched.text);
+            const termKey = matched.termKey || getCardTextTokenTermKey(matched.cls, matched.text);
             const termAttr = termKey ? ` data-term-key="${escapeHtml(termKey)}"` : '';
-            html += renderCardTextTokenHtml(matched.cls, matched.text, termAttr);
+            html += renderCardTextTokenHtml(matched.cls, matched.text, termAttr, matched.color || '');
             i += matched.text.length;
         } else {
             html += escapeHtml(text[i]);
@@ -3416,6 +3610,12 @@ function getCardTextTokenTermKey(cls, text = '') {
         'status-magic-nazar': 'status:magic_nazar',
         'status-blood-debt': 'status:blood_debt',
         'status-frost': 'status:arctic:frost',
+        'status-unable-counter': 'status:unable_counter',
+        'status-magic-blocked': 'status:magic_blocked',
+        'status-luck': 'status:luck',
+        'status-blazing-fire': 'status:blazing_fire',
+        'status-crit': 'term:crit',
+        'equipment-armor': 'term:equipment_armor',
     };
     if (statusMap[cls]) return statusMap[cls];
     if (cls === 'toxic') return 'term:toxic';
@@ -3448,6 +3648,7 @@ const BUILTIN_OPENING_EVENT_ICONS = Object.freeze({
     '9': '/static/assets/opening-events/multi-petal.svg',
     '10': '/static/assets/opening-events/magic-acceleration.svg',
     '11': '/static/assets/opening-events/inflorescence-arrangement.svg',
+    '12': '/static/assets/ui-icons/damage.svg',
 });
 
 function getOpeningEventIconUrl(eventOrId) {
@@ -3542,7 +3743,13 @@ Object.assign(LOG_TEXT.en, {
     skip_turn: '{p} skips this turn due to {reason}.',
     equip_self: '{p} equips {card}',
     equip_target: '{p} equips {card} to {target}',
+    use_detail: '{p} uses {card}, {detail}',
     trigger_card: "{p}'s {card} triggers: {detail}",
+    destroy_equipment: "{p} destroys {target}'s {card}",
+    gain_equipment: '{p} gains equipment {card}',
+    equipment_removed: "{p}'s {card} {detail}",
+    equipment_destroyed: '{card} is destroyed',
+    card_rejected: '{target} refuses to let {p} use {card}',
 });
 Object.assign(LOG_TEXT.fr, {
     compact_damage: '{p} subit {damage} (H={h})',
@@ -3555,7 +3762,13 @@ Object.assign(LOG_TEXT.fr, {
     skip_turn: '{p} passe ce tour à cause de {reason}.',
     equip_self: '{p} équipe {card}',
     equip_target: '{p} équipe {card} sur {target}',
+    use_detail: '{p} joue {card}, {detail}',
     trigger_card: '{card} de {p} se déclenche : {detail}',
+    destroy_equipment: '{p} détruit {card} de {target}',
+    gain_equipment: '{p} obtient l’équipement {card}',
+    equipment_removed: '{card} de {p} {detail}',
+    equipment_destroyed: '{card} est détruit',
+    card_rejected: '{target} refuse que {p} utilise {card}',
 });
 Object.assign(LOG_TEXT.ja, {
     compact_damage: '{p}が{damage}を受ける（H={h}）',
@@ -3568,8 +3781,84 @@ Object.assign(LOG_TEXT.ja, {
     skip_turn: '{p}は{reason}によりこのターンをスキップ。',
     equip_self: '{p}が{card}を装備',
     equip_target: '{p}が{target}に{card}を装備',
+    use_detail: '{p}が{card}を使用：{detail}',
     trigger_card: '{p}の{card}が発動：{detail}',
+    destroy_equipment: '{p}が{target}の{card}を破壊',
+    gain_equipment: '{p}が装備{card}を獲得',
+    equipment_removed: '{p}の{card}{detail}',
+    equipment_destroyed: '{card}が破壊された',
+    card_rejected: '{target}が{p}による{card}の使用を拒否',
 });
+
+Object.assign(LOG_TEXT.zh || (LOG_TEXT.zh = {}), {
+    equip: '{p}装备了{card}',
+    equip_self: '{p}使用并装备了{card}',
+    equip_target: '{p}使用并给{target}装备了{card}',
+    use_detail: '{p}使用{card}，{detail}',
+    trigger_card: '{p}的{card}触发：{detail}',
+    destroy_equipment: '{p}摧毁了{target}的{card}',
+    gain_equipment: '{p}获得装备{card}',
+    equipment_removed: '{p}的{card}{detail}',
+    equipment_destroyed: '{card}被摧毁',
+    card_rejected: '{target}拒绝{p}对其使用{card}',
+});
+
+Object.assign(LOG_TEXT.zh || (LOG_TEXT.zh = {}), {
+    post_rebound: '{p}的{card}因回转回到手中',
+    post_immediate_return: '{p}的{card}立即回到手中',
+    post_void_exile: '{p}的{card}因虚无被放逐',
+    post_team_unique_exile: '{p}的{card}因队伍独一被放逐',
+    post_unique_extra_exile: '{p}的唯一牌{card}多余副本被放逐',
+    post_actor_exile: '{p}放逐了{card}',
+    post_exile: '{p}的{card}被放逐', post_exile_plain: '{card}被放逐',
+    post_discard: '{p}的{card}移入弃牌堆', post_discard_plain: '{card}移入弃牌堆',
+    post_floating: '{p}的{card}因漂浮洗入抽牌堆',
+});
+Object.assign(LOG_TEXT.en, {
+    post_rebound: "{p}'s {card} returns to hand via Rebound",
+    post_immediate_return: "{p}'s {card} immediately returns to hand",
+    post_void_exile: "{p}'s {card} is exiled by Void",
+    post_team_unique_exile: "{p}'s extra Team Unique {card} is exiled",
+    post_unique_extra_exile: "Extra copies of {p}'s Unique {card} are exiled",
+    post_actor_exile: '{p} exiles {card}',
+    post_exile: "{p}'s {card} is exiled", post_exile_plain: '{card} is exiled',
+    post_discard: "{p}'s {card} moves to the discard pile", post_discard_plain: '{card} moves to the discard pile',
+    post_floating: "{p}'s {card} is shuffled into the deck by Floating",
+});
+Object.assign(LOG_TEXT.fr, {
+    post_rebound: 'Le {card} de {p} revient en main grâce à Retour',
+    post_immediate_return: 'Le {card} de {p} revient immédiatement en main',
+    post_void_exile: 'Le {card} de {p} est exilé par Vide',
+    post_team_unique_exile: 'Le {card} supplémentaire de {p} avec Unique d’équipe est exilé',
+    post_unique_extra_exile: 'Les copies supplémentaires de la carte Unique {card} de {p} sont exilées',
+    post_actor_exile: '{p} exile {card}',
+    post_exile: 'Le {card} de {p} est exilé', post_exile_plain: '{card} est exilé',
+    post_discard: 'Le {card} de {p} va dans la défausse', post_discard_plain: '{card} va dans la défausse',
+    post_floating: 'Le {card} de {p} est mélangé dans le deck grâce à Flottement',
+});
+Object.assign(LOG_TEXT.ja, {
+    post_rebound: '{p}の{card}が回転により手札へ戻る',
+    post_immediate_return: '{p}の{card}が即座に手札へ戻る',
+    post_void_exile: '{p}の{card}が虚無により追放される',
+    post_team_unique_exile: '{p}の余分なチーム唯一カード{card}が追放される',
+    post_unique_extra_exile: '{p}の唯一カード{card}の余分な複製が追放される',
+    post_actor_exile: '{p}が{card}を追放',
+    post_exile: '{p}の{card}が追放される', post_exile_plain: '{card}が追放される',
+    post_discard: '{p}の{card}が捨て札へ移動', post_discard_plain: '{card}が捨て札へ移動',
+    post_floating: '{p}の{card}が浮遊によりデッキへ戻る',
+});
+
+const BATTLE_POST_USE_LOG_KEYS = {
+    '因回转回到手中': 'post_rebound',
+    '立即回到手中': 'post_immediate_return',
+    '因虚无被放逐': 'post_void_exile',
+    '因队伍独一被放逐': 'post_team_unique_exile',
+    '唯一牌多余副本被放逐': 'post_unique_extra_exile',
+    '放逐了': 'post_actor_exile',
+    '被放逐': 'post_exile',
+    '移入弃牌堆': 'post_discard',
+    '因漂浮洗入抽牌堆': 'post_floating',
+};
 
 Object.assign(LOG_TEXT.en, { battery_counter: 'Battery counter' });
 Object.assign(LOG_TEXT.zh || (LOG_TEXT.zh = {}), { battery_counter: '\u7535\u6c60\u53cd\u4f24' });
@@ -3630,6 +3919,32 @@ function fmtLog(key, values = {}) {
     return template ? template.replace(/\{(\w+)\}/g, (_, k) => values[k] ?? '') : null;
 }
 
+function getBattlePostUseTemplateParts(entry, localizeCard = false) {
+    const action = String(entry && entry.action || '');
+    const baseKey = BATTLE_POST_USE_LOG_KEYS[action];
+    if (!baseKey) return null;
+    const table = LOG_TEXT[currentLang] || LOG_TEXT.en;
+    const actor = localizePlayerNameInText(entry && entry.actor || '');
+    const key = !actor && table[`${baseKey}_plain`] ? `${baseKey}_plain` : baseKey;
+    const template = table[key] || (LOG_TEXT.zh && LOG_TEXT.zh[key]);
+    if (!template) return null;
+    const cardValue = localizeCard ? localizedCardNameFromAny(entry && entry.card || '') : '\u0000';
+    const rendered = template.replace(/\{p\}/g, actor).replace(/\{card\}/g, cardValue);
+    if (localizeCard) return { before: rendered, after: '' };
+    const parts = rendered.split('\u0000');
+    return {
+        before: parts[0] || '',
+        after: parts.length > 1 ? parts.slice(1).join('') : '',
+    };
+}
+
+function formatLocalizedBattlePostUseLog(entry) {
+    const parts = getBattlePostUseTemplateParts(entry, true);
+    if (!parts) return '';
+    const count = Math.max(1, Number(entry && entry.count || 1));
+    return `${parts.before}${count > 1 ? ` ×${count}` : ''}`;
+}
+
 function localizedCardNameFromAny(name) {
     for (const cd of Object.values(CARD_DEFS)) {
         if (!cd) continue;
@@ -3679,19 +3994,25 @@ function localizeKnownLogText(line) {
     }
     const termLib = getTermIntroLibrary();
     const statusTerms = [
-        ['状态免疫', 'status_immune'], ['魔力回合回复', 'turn_magic'], ['回合回复', 'turn_heal'],
-        ['魔力封锁', 'magic_blocked'], ['无法反制', 'unable_counter'], ['装备护甲', 'equip_protect'],
-        ['不可选中', 'untargetable'], ['无法选中', 'untargetable'], ['中毒', 'P'], ['灼烧', 'F'],
-        ['剧毒', 'toxic'], ['失明', 'blind'], ['迟缓', 'sluggish'], ['超载', 'overload'],
+        ['魔力回合回复', 'turn_magic'], ['状态免疫', 'status_immune'], ['魔力封锁', 'magic_blocked'],
+        ['无法反制', 'unable_counter'], ['不可选中', 'untargetable'], ['无法选中', 'untargetable'],
+        ['回合回复', 'turn_heal'], ['魔法邪眼', 'magic_nazar'], ['剧毒', 'toxic_poison'],
+        ['淬毒', 'toxic'], ['失明', 'blind'], ['迟缓', 'sluggish'], ['超载', 'overload'],
         ['预知', 'foresight'], ['滞留', 'stagnation'], ['虚弱', 'weakness'], ['易损', 'fragile'],
         ['流血', 'bleed'], ['破损', 'fracture'], ['护盾', 'shield'], ['眩晕', 'stunned'],
-        ['护甲', 'A'], ['闪避', 'dodge'], ['禁疗', 'heal_block'], ['禁攻', 'attack_blocked'], ['血债', 'blood_debt'],
-        ['幸运', 'luck'], ['烈火', 'blazing_fire'], ['霜冻', 'frost'],
+        ['闪避', 'dodge'], ['禁疗', 'heal_block'], ['禁攻', 'attack_blocked'], ['血债', 'blood_debt'],
+        ['幸运', 'luck'], ['烈火', 'blazing_fire'], ['霜冻', 'arctic:frost'], ['碎片', 'fragment'],
+        ['无敌', 'invincible'], ['绷带', 'bandage'], ['邪眼', 'nazar'], ['树根', 'root_status'],
+        ['暴击', 'crit'],
     ];
     for (const [source, key] of statusTerms) {
-        const localized = termLib[key] && String(termLib[key].label || '').replace(/^[HEMPF]\s*[:：]\s*/i, '');
-        if (localized) out = replaceBattleLogTextOutsidePlayerNames(out, source, localized);
+        out = replaceBattleLogTextOutsidePlayerNames(out, source, `[[status:${key}]]`);
     }
+    const equipmentArmorLabel = termLib.equipment_armor && termLib.equipment_armor.label;
+    if (equipmentArmorLabel) out = replaceBattleLogTextOutsidePlayerNames(out, '装备护甲', equipmentArmorLabel);
+    out = replaceBattleLogTextOutsidePlayerNames(out, '中毒', '[[icon:P]]');
+    out = replaceBattleLogTextOutsidePlayerNames(out, '灼烧', '[[icon:F]]');
+    out = replaceBattleLogTextOutsidePlayerNames(out, '护甲', '[[icon:A]]');
     const pairs = LOG_FALLBACK_REPLACE[currentLang] || [];
     for (const [from, to] of pairs) {
         out = replaceBattleLogTextOutsidePlayerNames(out, from, to);
@@ -3717,6 +4038,11 @@ function translateLogLine(line) {
     }
     let m;
     const lp = localizeCanonicalPlayerName;
+    const postUse = parseBattlePostUseLogForCompact(line);
+    if (postUse) {
+        const localizedPostUse = formatLocalizedBattlePostUseLog(postUse);
+        if (localizedPostUse) return localizedPostUse;
+    }
     if ((m = line.match(/^\u6e38\u620f\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('game_start', { p: lp(m[1]) });
     if ((m = line.match(/^\u5355\u4eba\u8bad\u7ec3\u573a\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('solo_start', { p: lp(m[1]) }) || tf('training_start', lp(m[1]));
     if ((m = line.match(/^\u65b0\u624b\u6559\u7a0b\u5f00\u59cb\uff01(.+)\u5148\u624b\u3002?$/))) return fmtLog('tutorial_start', { p: lp(m[1]) });
@@ -3920,7 +4246,7 @@ const dmMessageLastFetchAt = new Map();
 let dmThreadsLastFetchAt = 0;
 const dmFailureBackoff = { threads: 0, messages: new Map() };
 const socialEndpointRequestTimes = new Map();
-let feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [] };
+let feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [], thread: null, replay: null };
 let activeFeedbackTab = 'send';
 let activeFeedbackThreadId = null;
 let activeFeedbackStaffView = false;
@@ -4571,8 +4897,10 @@ function updateCompactUiText() {
     setCompactButtonText('btn-end-turn', 'end_turn', 'compact_end_turn');
     setCompactButtonText('btn-view-deck', 'view_draw_deck', 'compact_view_draw_deck');
     setCompactButtonText('btn-view-discard', 'view_discard', 'compact_view_discard');
+    setCompactButtonText('btn-view-exile', 'view_exile', 'compact_view_exile');
     setCompactButtonText('btn-spectate-view-deck', 'view_draw_deck', 'compact_view_draw_deck');
     setCompactButtonText('btn-spectate-view-discard', 'view_discard', 'compact_view_discard');
+    setCompactButtonText('btn-spectate-view-exile', 'view_exile', 'compact_view_exile');
     setCompactButtonText('btn-urf-replace', 'urf_replace', 'compact_urf_replace');
     setCompactButtonText('btn-urf-sell', 'urf_sell', 'compact_urf_sell');
     setCompactButtonText('btn-solo-next-draw', 'set_next_draw', 'compact_set_next_draw');
@@ -4580,6 +4908,7 @@ function updateCompactUiText() {
     setCompactButtonText('btn-prediction-target', 'prediction_target_button', 'prediction_target_button');
     setCompactButtonText('classic-view-deck', 'view_draw_deck', 'compact_view_draw_deck');
     setCompactButtonText('classic-view-discard', 'view_discard', 'compact_view_discard');
+    setCompactButtonText('classic-view-exile', 'view_exile', 'compact_view_exile');
     setCompactButtonText('classic-switch-perspective', 'switch_perspective', 'switch_perspective');
     setCompactButtonText('classic-urf-replace', 'urf_replace', 'compact_urf_replace');
     setCompactButtonText('classic-urf-sell', 'urf_sell', 'compact_urf_sell');
@@ -4689,6 +5018,12 @@ function updateStaticText() {
     if (feedbackSendTab) feedbackSendTab.textContent = UI.feedback_send;
     const feedbackStaffTab = $('feedback-tab-staff');
     if (feedbackStaffTab) feedbackStaffTab.textContent = UI.feedback_staff;
+    const feedbackAppealOption = document.querySelector('#feedback-category option[value="appeal"]');
+    if (feedbackAppealOption) feedbackAppealOption.textContent = UI.feedback_appeal || '对局申诉';
+    const feedbackReplayInput = $('feedback-replay-id');
+    if (feedbackReplayInput) feedbackReplayInput.placeholder = UI.feedback_replay_placeholder || '回放 ID，例如 R-12345';
+    const gameoverReplayLabel = $('gameover-replay-label');
+    if (gameoverReplayLabel) gameoverReplayLabel.textContent = UI.replay_id || '回放 ID';
     const settingsAudio = $('settings-section-audio');
     if (settingsAudio) settingsAudio.textContent = UI.settings_audio || '音频';
     const audioEnabledLabel = $('settings-label-audio-enabled');
@@ -4723,6 +5058,12 @@ function updateStaticText() {
     if (allowGuestSpectatorsLabel) allowGuestSpectatorsLabel.textContent = UI.social_allow_guest_spectators;
     const settingsOfficialMods = $('settings-label-official-mods');
     if (settingsOfficialMods) settingsOfficialMods.textContent = UI.official_mods;
+    const settingsEntertainmentMods = $('settings-label-entertainment-mods');
+    if (settingsEntertainmentMods) settingsEntertainmentMods.textContent = UI.entertainment_mods;
+    const entertainmentModsNote = $('settings-entertainment-note');
+    if (entertainmentModsNote) entertainmentModsNote.textContent = UI.entertainment_mods_note;
+    const noEntertainmentMods = $('settings-no-entertainment-mods');
+    if (noEntertainmentMods) noEntertainmentMods.textContent = UI.no_entertainment_mods;
     const settingsCommunityMods = $('settings-label-community-mods');
     if (settingsCommunityMods) settingsCommunityMods.textContent = UI.community_mods;
     const noCommunityMods = $('settings-no-community-mods');
@@ -4789,6 +5130,8 @@ function updateStaticText() {
     if (galleryTabTags) galleryTabTags.textContent = UI.gallery_tags;
     const galleryTabEvents = $('gallery-tab-events');
     if (galleryTabEvents) galleryTabEvents.textContent = UI.gallery_events;
+    const galleryTabStatuses = $('gallery-tab-statuses');
+    if (galleryTabStatuses) galleryTabStatuses.textContent = UI.gallery_statuses;
     const gallerySearch = $('gallery-search');
     if (gallerySearch) gallerySearch.placeholder = UI.gallery_search;
     const btnOpenRules = $('btn-open-rules');
@@ -5046,14 +5389,20 @@ function updateStaticText() {
     if (btnViewDeck) btnViewDeck.textContent = UI.view_draw_deck || UI.view_deck;
     const btnViewDiscard = $('btn-view-discard');
     if (btnViewDiscard) btnViewDiscard.textContent = UI.view_discard;
+    const btnViewExile = $('btn-view-exile');
+    if (btnViewExile) btnViewExile.textContent = UI.view_exile;
     const btnSpectateViewDeck = $('btn-spectate-view-deck');
     if (btnSpectateViewDeck) btnSpectateViewDeck.textContent = UI.view_draw_deck || UI.view_deck;
     const btnSpectateViewDiscard = $('btn-spectate-view-discard');
     if (btnSpectateViewDiscard) btnSpectateViewDiscard.textContent = UI.view_discard;
+    const btnSpectateViewExile = $('btn-spectate-view-exile');
+    if (btnSpectateViewExile) btnSpectateViewExile.textContent = UI.view_exile;
     const classicViewDeck = $('classic-view-deck');
     if (classicViewDeck) classicViewDeck.textContent = UI.view_draw_deck || UI.view_deck;
     const classicViewDiscard = $('classic-view-discard');
     if (classicViewDiscard) classicViewDiscard.textContent = UI.view_discard;
+    const classicViewExile = $('classic-view-exile');
+    if (classicViewExile) classicViewExile.textContent = UI.view_exile;
     const classicSwitchPerspective = $('classic-switch-perspective');
     if (classicSwitchPerspective && !classicSwitchPerspective.dataset.dynamic) classicSwitchPerspective.textContent = UI.switch_perspective;
     const btnEndTurn = $('btn-end-turn');
@@ -6137,6 +6486,7 @@ const OFFICIAL_MOD_DISPLAY_ORDER = [
     'Sewers Cards Addition.gtnmod',
     'Arctic Cards Addition.gtnmod',
     'Jurassic Cards Addition.gtnmod',
+    'Bio Cards Addition.gtnmod',
 ];
 
 const OFFICIAL_MOD_DISPLAY_ALIASES = [
@@ -6151,13 +6501,14 @@ const OFFICIAL_MOD_DISPLAY_ALIASES = [
     ['sewers cards addition.gtnmod', 'sewers cards addition', 'sewers cards'],
     ['arctic cards addition.gtnmod', 'arctic cards addition', 'arctic cards'],
     ['jurassic cards addition.gtnmod', 'jurassic cards addition', 'jurassic cards'],
+    ['bio cards addition.gtnmod', 'bio cards addition', 'bio cards'],
 ];
 
 const OFFICIAL_MOD_SHORT_NAMES = {
-    zh: ['原版', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界', '管道', '极地', '侏罗'],
-    en: ['Vanilla', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel', 'Sewers', 'Arctic', 'Jurassic'],
-    fr: ['Vanille', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel', 'Égouts', 'Arctique', 'Jurassique'],
-    ja: ['原版', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界', '下水道', '極地', 'ジュラ紀'],
+    zh: ['原版', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界', '管道', '极地', '侏罗', '生化'],
+    en: ['Vanilla', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel', 'Sewers', 'Arctic', 'Jurassic', 'Bio'],
+    fr: ['Vanille', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel', 'Égouts', 'Arctique', 'Jurassique', 'Bio'],
+    ja: ['原版', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界', '下水道', '極地', 'ジュラ紀', '生化'],
 };
 
 function normalizeModDisplayIdentity(value) {
@@ -6780,7 +7131,7 @@ const STATUS_ICON_KEYS = new Set([
     'invincible', 'luck', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
     'root_status', 'shield', 'sluggish', 'stagnation', 'status_immune',
     'stunned', 'toxic_poison', 'toxic', 'triangle', 'turn_heal', 'turn_magic',
-    'unable_counter', 'blazing_fire', 'frost',
+    'unable_counter', 'blazing_fire', 'frost', 'debt', 'extra_healing',
     'untargetable', 'weakness'
 ]);
 
@@ -10091,21 +10442,21 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
             hits.push(0);
             return;
         }
-        if (precisionDodged) dmg = Math.ceil(dmg / 2);
         if (dizzyMult > 1) dmg = Math.ceil(dmg * dizzyMult);
         if (corruptionMult > 1) dmg = Math.ceil(dmg * corruptionMult);
         if (cutterBonus > 0) dmg += cutterBonus * 2;
         if (plankBlocks) dmg = 0;
+        if (weakness > 0) {
+            const reduction = Math.min(0.6, 0.2 * weakness);
+            dmg = Math.max(1, Math.floor(dmg * (1 - reduction)));
+        }
+        if (precisionDodged) dmg = Math.ceil(dmg / 2);
         if (nazarStacks > 0) {
             const original = dmg;
             dmg = Math.max(1, dmg - 9);
             if (original >= 10) {
                 nazarStacks = Math.max(0, nazarStacks - 1);
             }
-        }
-        if (weakness > 0) {
-            const reduction = Math.min(0.6, 0.2 * weakness);
-            dmg = Math.max(1, Math.floor(dmg * (1 - reduction)));
         }
         dmg = Math.max(0, dmg - armor - rootArmor + fragile);
         if (sponge && dmg > 0) {
@@ -10488,7 +10839,9 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             const ownerState = options.ownerState || options.attackerState || {};
             const targetState = options.targetState || {};
             const card = options.cardDict || {};
-            const spend = Math.max(0, Math.floor(Number(ownerState.elixir || 0) - Number(options.cardCostE || 0)));
+            // The actual E cost is part of "consume all E". The server pays
+            // that cost before resolving this effect, then consumes the rest.
+            const spend = Math.max(0, Math.floor(Number(ownerState.elixir || 0)));
             const percent = Math.max(0, Number(params.health_percent ?? 0.08));
             const minimum = Math.max(0, Math.ceil(Number(params.minimum ?? 2)));
             const fission = Math.max(1, Math.floor(Number(card.fission_level || (Number(card.fission_count || 0) + 1) || 1)));
@@ -12846,7 +13199,7 @@ function connectSocket(serverUrl) {
         if (data && data.ok) {
             if (Array.isArray(data.disabled_mods)) {
                 localStorage.setItem('gtn_disabled_mods', JSON.stringify(data.disabled_mods));
-                renderModsList();
+                renderOfficialModList();
             }
             showActionToast(UI.save_success, 1600, 'success');
             await refreshCardsAfterModSettingsConfirmed();
@@ -12854,7 +13207,7 @@ function connectSocket(serverUrl) {
         }
         if (data && Array.isArray(data.disabled_mods)) {
             localStorage.setItem('gtn_disabled_mods', JSON.stringify(data.disabled_mods));
-            renderModsList();
+            renderOfficialModList();
             await refreshCardsAfterModSettingsConfirmed();
         }
         flashStatus(UI.save_failed.replace('{0}', (data && data.reason) || UI.operation_failed), 3200, 'error');
@@ -14717,18 +15070,23 @@ function renderAccountReplayList() {
         return;
     }
     list.innerHTML = accountReplayItems.map((item) => {
+        const replayRef = `R-${Number(item.id)}`;
         const players = Array.isArray(item.players) ? item.players.join(' / ') : '';
         const winner = item.winner_name ? tf('replay_winner', item.winner_name) : '';
         const round = tf('replay_round', item.round_num || 0);
         const timeText = formatCommunityTime(item.created_at);
-        const subtitle = [timeText, item.mode || '', round, winner].filter(Boolean).join(' · ');
+        const subtitle = [replayRef, timeText, item.mode || '', round, winner].filter(Boolean).join(' · ');
         return `
             <div class="account-replay-item">
                 <div>
                     <div class="account-replay-main">${escapeHtml(players || item.mode || '-')}</div>
                     <div class="account-replay-sub">${escapeHtml(subtitle)}</div>
                 </div>
-                <button class="mini-btn" type="button" data-account-replay-view="${escapeHtml(item.id)}">${escapeHtml(UI.replay_view)}</button>
+                <div class="account-replay-actions">
+                    <button class="mini-btn" type="button" data-copy-text="${escapeHtml(replayRef)}" title="${escapeHtml(UI.replay_copy || '复制')}">${escapeHtml(replayRef)}</button>
+                    <button class="mini-btn" type="button" data-account-replay-download="${escapeHtml(item.id)}">${escapeHtml(UI.replay_download || '下载')}</button>
+                    <button class="mini-btn" type="button" data-account-replay-view="${escapeHtml(item.id)}">${escapeHtml(UI.replay_view)}</button>
+                </div>
             </div>
         `;
     }).join('');
@@ -15094,7 +15452,7 @@ function renderAccountState() {
     updateCommunityUploadState();
     renderCommunityModList();
     if (!currentAccount) {
-        feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [] };
+        feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [], thread: null, replay: null };
         activeFeedbackThreadId = null;
         updateFeedbackBadge();
     }
@@ -16302,7 +16660,7 @@ function feedbackStaffGroups(items = []) {
 
 async function loadFeedbackSummary() {
     if (!currentAccount) {
-        feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [] };
+        feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [], thread: null, replay: null };
         updateFeedbackBadge();
         return;
     }
@@ -16333,10 +16691,11 @@ function renderFeedbackThreads() {
         const user = item.user || {};
         const title = item.title || item.last_message || `#${item.id}`;
         const status = feedbackStatusLabel(item.status);
+        const replayRef = Number(item.replay_id) > 0 ? `R-${Number(item.replay_id)}` : '';
         return `
           <button class="feedback-thread-item${active ? ' active' : ''}" type="button" data-feedback-thread="${escapeHtml(item.id)}">
             <span class="feedback-thread-title">${item.unread ? '<span class="feedback-dot"></span>' : ''}${escapeHtml(title)}</span>
-            <span class="feedback-thread-meta">${escapeHtml(activeFeedbackStaffView ? `${user.username || '-'} · ${status}` : status)} · ${escapeHtml(formatDateTimeShort(item.updated_at || item.created_at || ''))}</span>
+            <span class="feedback-thread-meta">${escapeHtml([activeFeedbackStaffView ? `${user.username || '-'} · ${status}` : status, replayRef, formatDateTimeShort(item.updated_at || item.created_at || '')].filter(Boolean).join(' · '))}</span>
             <span class="feedback-thread-preview">${escapeHtml(item.last_message || '')}</span>
           </button>`;
     };
@@ -16401,6 +16760,205 @@ function renderFeedbackMessages() {
     list.scrollTop = list.scrollHeight;
 }
 
+function ensureReplayVideoExportStyle() {
+    if ($('gtn-replay-video-export-style')) return;
+    const style = document.createElement('style');
+    style.id = 'gtn-replay-video-export-style';
+    style.textContent = `
+        html.replay-video-export,
+        html.replay-video-export body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden !important;
+            background: var(--page-bg, #f5f5f3);
+        }
+        html.replay-video-export #account-replay-playback-bar,
+        html.replay-video-export #account-replay-modal,
+        html.replay-video-export #boot-loader,
+        html.replay-video-export .top-action-buttons,
+        html.replay-video-export .controls-bar,
+        html.replay-video-export .classic-controls,
+        html.replay-video-export .game-chat-input-row,
+        html.replay-video-export .battle-chat-input-row {
+            display: none !important;
+        }
+        html.replay-video-export.hide-export-cursor,
+        html.replay-video-export.hide-export-cursor * {
+            cursor: none !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+async function loadReplayForVideoExport(payload, options = {}) {
+    const replayPayload = payload && typeof payload === 'object' ? payload : {};
+    const timeline = Array.isArray(replayPayload.timeline) ? replayPayload.timeline.filter(Boolean) : [];
+    if (!timeline.length) throw new Error('Replay timeline is empty');
+    stopAccountReplayPlayback();
+    accountReplayLoadToken += 1;
+    accountReplayReturnContext = null;
+    accountReplayFrameFetches.clear();
+    accountReplayTimeline = timeline;
+    accountReplayTotalFrames = timeline.length;
+    accountReplayFrameIndex = 0;
+    accountReplayPerspective = Math.max(0, Number(options.perspective) || 0);
+    accountReplayLoading = false;
+    accountReplayControlsCollapsed = true;
+    const replayInfo = replayPayload.replay && typeof replayPayload.replay === 'object' ? replayPayload.replay : {};
+    accountReplayData = {
+        id: replayInfo.id || replayPayload.replay_id || 'local',
+        meta: replayInfo.meta || replayPayload.meta || {},
+        rules: replayInfo.rules || replayPayload.rules || {},
+    };
+
+    const lang = normalizeLang(options.lang || currentLang || 'zh');
+    currentLang = lang;
+    localStorage.setItem('gtn_lang', lang);
+    applyLang();
+    applyTheme(options.theme === 'dark' ? 'dark' : 'light');
+    applyUiStyle(options.ui_style === 'classic' ? 'classic' : 'minimal');
+    showCardImages = true;
+    localStorage.setItem('gtn_show_card_images', '1');
+    showEnglishCardNames = options.show_english_names !== false;
+    localStorage.setItem('gtn_show_english_card_names', showEnglishCardNames ? '1' : '0');
+    try {
+        const defs = await fetchGalleryCardDefs({ force: true });
+        if (defs && Object.keys(defs).length) CARD_DEFS = defs;
+    } catch (error) {
+        console.warn('[replay-export] failed to load all bundled card definitions', error);
+    }
+
+    replayMode = true;
+    isSpectating = true;
+    playerId = -1;
+    spectatePerspective = accountReplayPerspective;
+    activeSpectateRoomId = null;
+    pendingSpectateRoomId = null;
+    ensureReplayVideoExportStyle();
+    document.documentElement.classList.add('replay-video-export');
+    document.documentElement.classList.toggle('hide-export-cursor', options.hide_cursor !== false);
+    const appRoot = $('app');
+    if (appRoot) appRoot.style.visibility = 'visible';
+    const bootLoaderEl = $('boot-loader');
+    if (bootLoaderEl) bootLoaderEl.classList.add('hidden');
+    const replayModal = $('account-replay-modal');
+    if (replayModal) replayModal.classList.add('hidden');
+    showView('view-game');
+    renderAccountReplayFrame();
+    const playbackBar = $('account-replay-playback-bar');
+    if (playbackBar) playbackBar.classList.add('hidden');
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    return {
+        frame_count: timeline.length,
+        players: collectReplayPlayers(getReplaySnapshot(timeline[0])).map(player => player.name || ''),
+        meta: accountReplayData.meta,
+    };
+}
+
+window.GTNReplayVideoBridge = {
+    version: 1,
+    async load(payload, options = {}) {
+        return loadReplayForVideoExport(payload, options);
+    },
+    async loadFromUrl(url, options = {}) {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Replay file HTTP ${response.status}`);
+        return loadReplayForVideoExport(await response.json(), options);
+    },
+    showFrame(index) {
+        const maxIndex = Math.max(0, accountReplayTimeline.length - 1);
+        accountReplayFrameIndex = Math.max(0, Math.min(maxIndex, Number(index) || 0));
+        renderAccountReplayFrame();
+        const playbackBar = $('account-replay-playback-bar');
+        if (playbackBar) playbackBar.classList.add('hidden');
+        const frame = accountReplayTimeline[accountReplayFrameIndex] || {};
+        return {
+            index: accountReplayFrameIndex,
+            t: Number(frame.t) || 0,
+            phase: frame.phase || '',
+            round: frame.round || 0,
+            action: replayActionLabel(frame),
+        };
+    },
+    setPerspective(index) {
+        accountReplayPerspective = Math.max(0, Number(index) || 0);
+        spectatePerspective = accountReplayPerspective;
+        return this.showFrame(accountReplayFrameIndex);
+    },
+    info() {
+        return {
+            frame_count: accountReplayTimeline.length,
+            frame_index: accountReplayFrameIndex,
+            perspective: accountReplayPerspective,
+            ready: replayMode && accountReplayTimeline.length > 0,
+        };
+    },
+};
+
+function normalizedFeedbackReplayId(value) {
+    const text = String(value || '').trim().toUpperCase().replace(/^R-/, '');
+    if (!/^\d+$/.test(text) || Number(text) <= 0) return null;
+    return Number(text);
+}
+
+function renderFeedbackReplayPreview() {
+    const box = $('feedback-replay-preview');
+    if (!box) return;
+    const threadReplayId = Number(feedbackState.thread && feedbackState.thread.replay_id || 0);
+    const replay = feedbackState.replay;
+    const replayId = Number(replay && replay.id || threadReplayId || 0);
+    if (!(replayId > 0)) {
+        box.innerHTML = '';
+        box.classList.add('hidden');
+        return;
+    }
+    const replayRef = `R-${replayId}`;
+    const players = replay && Array.isArray(replay.players) ? replay.players.join(' / ') : '';
+    const detail = replay
+        ? [formatCommunityTime(replay.created_at), replay.mode, players].filter(Boolean).join(' · ')
+        : (currentLang === 'zh' ? '回放不存在或已过期' : 'Replay unavailable or expired');
+    box.innerHTML = `
+        <div class="feedback-replay-preview-main"><strong>${escapeHtml(replayRef)}</strong>${detail ? ` · ${escapeHtml(detail)}` : ''}</div>
+        ${replay ? `<button class="mini-btn" type="button" data-feedback-replay-open="${escapeHtml(replayId)}">${escapeHtml(UI.replay_view || '查看')}</button>` : ''}
+    `;
+    box.classList.remove('hidden');
+}
+
+async function loadFeedbackReplayPreview(replayId, showError = false) {
+    const normalized = normalizedFeedbackReplayId(replayId);
+    feedbackState.replay = null;
+    if (!normalized) {
+        renderFeedbackReplayPreview();
+        return false;
+    }
+    try {
+        const data = await authRequest(`/api/replays/${encodeURIComponent(normalized)}`);
+        feedbackState.replay = data.replay || null;
+        renderFeedbackReplayPreview();
+        return !!feedbackState.replay;
+    } catch (err) {
+        renderFeedbackReplayPreview();
+        if (showError) {
+            const errorBox = $('feedback-error');
+            if (errorBox) errorBox.textContent = err.message || UI.replay_load_failed;
+        }
+        return false;
+    }
+}
+
+function updateFeedbackReplayField() {
+    const category = $('feedback-category');
+    const input = $('feedback-replay-id');
+    const creatingAppeal = !activeFeedbackThreadId
+        && !activeFeedbackStaffView
+        && category
+        && category.value === 'appeal';
+    if (input) input.classList.toggle('hidden', !creatingAppeal);
+    if (!activeFeedbackThreadId && !creatingAppeal) feedbackState.replay = null;
+    renderFeedbackReplayPreview();
+}
+
 function renderFeedbackModal() {
     const staffTab = $('feedback-tab-staff');
     if (staffTab) staffTab.classList.toggle('hidden', !feedbackState.is_staff);
@@ -16414,6 +16972,7 @@ function renderFeedbackModal() {
     if (category) category.classList.toggle('hidden', activeFeedbackStaffView || !!activeFeedbackThreadId);
     if (titleInput) titleInput.classList.toggle('hidden', activeFeedbackStaffView || !!activeFeedbackThreadId);
     if (statusSelect) statusSelect.classList.toggle('hidden', !activeFeedbackStaffView || !activeFeedbackThreadId);
+    updateFeedbackReplayField();
     renderFeedbackThreads();
     renderFeedbackMessages();
     updateFeedbackBadge();
@@ -16423,6 +16982,8 @@ async function loadFeedbackThreads(staffView = false) {
     if (!currentAccount) {
         feedbackState.threads = [];
         feedbackState.messages = [];
+        feedbackState.thread = null;
+        feedbackState.replay = null;
         renderFeedbackModal();
         return;
     }
@@ -16465,9 +17026,12 @@ async function openFeedbackThread(threadId) {
         feedbackState.unread_count = Number(data.unread_count || 0);
         feedbackState.messages = Array.isArray(data.messages) ? data.messages : [];
         const thread = data.thread || {};
+        feedbackState.thread = thread;
+        feedbackState.replay = null;
         const statusSelect = $('feedback-status-select');
         if (statusSelect && thread.status) statusSelect.value = thread.status;
         renderFeedbackModal();
+        if (thread.replay_id) await loadFeedbackReplayPreview(thread.replay_id);
     } catch (err) {
         const box = $('feedback-error');
         if (box) box.textContent = err.message || UI.account_error;
@@ -16489,6 +17053,7 @@ async function sendFeedbackMessage() {
     else {
         payload.category = $('feedback-category')?.value || 'other';
         payload.title = ($('feedback-title-input')?.value || '').trim();
+        if (payload.category === 'appeal') payload.replay_id = ($('feedback-replay-id')?.value || '').trim();
     }
     try {
         const data = await authRequest('/api/feedback/send', payload, { timeoutMs: 7000 });
@@ -16497,6 +17062,7 @@ async function sendFeedbackMessage() {
         feedbackState.is_staff = !!data.is_staff;
         feedbackState.unread_count = Number(data.unread_count || 0);
         feedbackState.messages = Array.isArray(data.messages) ? data.messages : [];
+        feedbackState.thread = data.thread || feedbackState.thread;
         await loadFeedbackThreads(activeFeedbackStaffView);
         if (activeFeedbackThreadId) await openFeedbackThread(activeFeedbackThreadId);
         if (box) box.textContent = UI.feedback_sent || '反馈已发送';
@@ -19394,8 +19960,10 @@ function updateModeSpecificControls(gs) {
     const soloEditBtn = $('btn-solo-edit');
     const viewDeckBtn = $('btn-view-deck');
     const viewDiscardBtn = $('btn-view-discard');
+    const viewExileBtn = $('btn-view-exile');
     const spectateViewDeckBtn = $('btn-spectate-view-deck');
     const spectateViewDiscardBtn = $('btn-spectate-view-discard');
+    const spectateViewExileBtn = $('btn-spectate-view-exile');
     const urfReplaceBtn = $('btn-urf-replace');
     const urfSellBtn = $('btn-urf-sell');
     const surrenderBtn = $('btn-surrender');
@@ -19437,6 +20005,11 @@ function updateModeSpecificControls(gs) {
         viewDiscardBtn.classList.toggle('hidden', !showViewDiscard);
         viewDiscardBtn.style.display = showViewDiscard ? '' : 'none';
     }
+    if (viewExileBtn) {
+        const showViewExile = gs?.mode !== 'urf';
+        viewExileBtn.classList.toggle('hidden', !showViewExile);
+        viewExileBtn.style.display = showViewExile ? '' : 'none';
+    }
     if (spectateViewDeckBtn) {
         const showSpectateViewDeck = activeSpectating && gs?.mode !== 'urf';
         spectateViewDeckBtn.classList.toggle('hidden', !showSpectateViewDeck);
@@ -19446,6 +20019,11 @@ function updateModeSpecificControls(gs) {
         const showSpectateViewDiscard = activeSpectating && gs?.mode !== 'urf';
         spectateViewDiscardBtn.classList.toggle('hidden', !showSpectateViewDiscard);
         spectateViewDiscardBtn.style.display = showSpectateViewDiscard ? '' : 'none';
+    }
+    if (spectateViewExileBtn) {
+        const showSpectateViewExile = activeSpectating && gs?.mode !== 'urf';
+        spectateViewExileBtn.classList.toggle('hidden', !showSpectateViewExile);
+        spectateViewExileBtn.style.display = showSpectateViewExile ? '' : 'none';
     }
     if (urfReplaceBtn) {
         const show = gs?.mode === 'urf' && !readonlyBattle && !gameOver;
@@ -19544,6 +20122,10 @@ function updateClassicExtraControls(gs) {
     })) visibleCount += 1;
     if (setClassicControlButton('classic-view-discard', !isUrf, {
         text: UI.view_discard,
+        disabled: false,
+    })) visibleCount += 1;
+    if (setClassicControlButton('classic-view-exile', !isUrf, {
+        text: UI.view_exile,
         disabled: false,
     })) visibleCount += 1;
     if (setClassicControlButton('classic-leave-spectate', isReadOnlyBattle, {
@@ -22919,6 +23501,137 @@ function renderBattleCounterLogChipLine(el, entry) {
     if (parts.after) appendColorizedLogText(el, parts.after);
 }
 
+function renderBattlePostUseLogChipLine(el, entry) {
+    const cardDict = (entry && entry.cardDict && typeof entry.cardDict === 'object')
+        ? entry.cardDict
+        : null;
+    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(entry && entry.card);
+    const parts = getBattlePostUseTemplateParts(entry, false);
+    if (!defId || !parts) {
+        const fallback = formatLocalizedBattlePostUseLog(entry)
+            || translateLogLine(stripBattleLogCardMarkers(entry && entry.text ? entry.text : ''));
+        el.innerHTML = colorizeBattleLogText(fallback);
+        bindInlineCardChips(el, { interactive: true });
+        return;
+    }
+    appendColorizedLogText(el, parts.before);
+    const chip = createCardChoiceChip({ ...(cardDict || {}), def_id: defId }, { hideInstanceOnlyFlags: false });
+    chip.classList.add('battle-log-card-chip');
+    el.appendChild(chip);
+    if (parts.after) appendColorizedLogText(el, parts.after);
+    const count = Math.max(1, Number(entry && entry.count || 1));
+    if (count > 1) {
+        const countSpan = document.createElement('span');
+        countSpan.className = 'battle-log-card-count';
+        countSpan.textContent = ` ×${count}`;
+        el.appendChild(countSpan);
+    }
+}
+
+function battleCardActionTemplate(entry) {
+    const table = LOG_TEXT[currentLang] || LOG_TEXT.en;
+    const subtype = String(entry && entry.subtype || '');
+    if (subtype === 'use_detail') return table.use_detail || '{p} uses {card}, {detail}';
+    if (subtype === 'use_equip_target') return table.equip_target || '{p} equips {card} to {target}';
+    if (subtype === 'use_equip_self') return table.equip_self || '{p} equips {card}';
+    if (subtype === 'equip') return table.equip || '{p} equips {card}';
+    if (subtype === 'trigger') return table.trigger_card || "{p}'s {card} triggers: {detail}";
+    if (subtype === 'destroy_equipment') return table.destroy_equipment || "{p} destroys {target}'s {card}";
+    if (subtype === 'gain_equipment') return table.gain_equipment || '{p} gains equipment {card}';
+    if (subtype === 'equipment_removed') return table.equipment_removed || "{p}'s {card} {detail}";
+    if (subtype === 'equipment_destroyed') return table.equipment_destroyed || '{card} is destroyed';
+    if (subtype === 'card_rejected') return table.card_rejected || '{target} refuses to let {p} use {card}';
+    return table.use_detail || '{p} uses {card}, {detail}';
+}
+
+function localizedBattleCardActionDetail(entry) {
+    const detail = String(entry && entry.detail || '').trim();
+    if (!detail || currentLang === 'zh') return detail;
+    const fixed = {
+        '因死亡被摧毁': {
+            en: 'is destroyed on death',
+            fr: 'est détruit à la mort',
+            ja: 'は死亡により破壊された',
+        },
+        '因目标死亡移出装备区': {
+            en: 'leaves the equipment area because its target died',
+            fr: "quitte la zone d’équipement car sa cible est morte",
+            ja: 'は対象の死亡により装備欄から除外された',
+        },
+    };
+    if (fixed[detail] && fixed[detail][currentLang]) return fixed[detail][currentLang];
+    let match;
+    if ((match = detail.match(/^装备护甲抵消了摧毁[（(]剩余(\d+)[）)]$/))) {
+        if (currentLang === 'fr') return `l’armure d’équipement empêche la destruction (${match[1]} restante)`;
+        if (currentLang === 'ja') return `装備装甲が破壊を防いだ（残り${match[1]}）`;
+        return `Equipment Armor prevents destruction (${match[1]} left)`;
+    }
+    if ((match = detail.match(/^但(.+?)未受到电伤$/))) {
+        const player = localizePlayerNameInText(match[1]);
+        if (currentLang === 'fr') return `mais ${player} ne subit aucun dégât électrique`;
+        if (currentLang === 'ja') return `しかし${player}は電撃ダメージを受けなかった`;
+        return `but ${player} takes no electric damage`;
+    }
+    if ((match = detail.match(/^(.+?)去除(\d+)层中毒[，,]\s*受到(\d+)点物理伤害$/))) {
+        const player = localizePlayerNameInText(match[1]);
+        if (currentLang === 'fr') return `${player} retire ${match[2]} Poison et subit ${match[3]} dégâts physiques`;
+        if (currentLang === 'ja') return `${player}の毒が${match[2]}層減少し、${match[3]}物理ダメージを受ける`;
+        return `${player} removes ${match[2]} Poison and takes ${match[3]} physical damage`;
+    }
+    if (detail === '状态免疫失效') {
+        if (currentLang === 'fr') return 'Immunité aux états prend fin';
+        if (currentLang === 'ja') return '状態免疫が終了';
+        return 'Status Immunity ends';
+    }
+    return translateLogLine(detail);
+}
+
+function appendLocalizedBattleCardActionDetail(parent, entry) {
+    const detail = localizedBattleCardActionDetail(entry);
+    if (!detail) return;
+    appendBattleLogTextWithCardChips(parent, detail);
+}
+
+function renderBattleCardActionLogChipLine(el, entry) {
+    const cardDict = (entry && entry.cardDict && typeof entry.cardDict === 'object') ? entry.cardDict : null;
+    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(entry && entry.card);
+    if (!defId) {
+        const fallback = translateLogLine(formatBattleCardActionLogForCompact(entry));
+        el.innerHTML = colorizeBattleLogText(fallback);
+        bindInlineCardChips(el, { interactive: true });
+        return;
+    }
+    const template = battleCardActionTemplate(entry)
+        .replaceAll('{p}', localizePlayerNameInText(entry.actor || ''))
+        .replaceAll('{target}', localizePlayerNameInText(entry.target || ''));
+    const tokens = template.split(/(\{card\}|\{detail\})/g);
+    let renderedCard = false;
+    let renderedDetail = false;
+    tokens.forEach(token => {
+        if (!token) return;
+        if (token === '{card}') {
+            const chip = createCardChoiceChip({ ...(cardDict || {}), def_id: defId }, { hideInstanceOnlyFlags: false });
+            chip.classList.add('battle-log-card-chip');
+            el.appendChild(chip);
+            renderedCard = true;
+            return;
+        }
+        if (token === '{detail}') {
+            appendLocalizedBattleCardActionDetail(el, entry);
+            renderedDetail = true;
+            return;
+        }
+        appendColorizedLogText(el, token);
+    });
+    if (!renderedCard) appendBattleLogCardChip(el, entry.card, cardDict);
+    if (entry.detail && !renderedDetail) {
+        appendColorizedLogText(el, currentLang === 'ja' ? '：' : (currentLang === 'zh' ? '，' : ': '));
+        appendLocalizedBattleCardActionDetail(el, entry);
+    }
+    const count = Math.max(1, Number(entry && entry.count || 1));
+    if (count > 1) appendColorizedLogText(el, ` ×${count}`);
+}
+
 function appendColorizedLogText(parent, text) {
     if (!parent || !text) return;
     const span = document.createElement('span');
@@ -23197,6 +23910,10 @@ function createBattleLogElement(entry) {
         }
         return el;
     }
+    if (!entry.kind) {
+        const cardAction = parseBattleCardActionLogForCompact(entry.text || '');
+        if (cardAction) entry = { ...entry, kind: 'card_action', ...cardAction };
+    }
     const line = stripBattleLogCardMarkers(entry.text || '');
     const displayLine = translateLogLine(line);
     const styleLine = String(displayLine || line).toLowerCase();
@@ -23214,6 +23931,14 @@ function createBattleLogElement(entry) {
     }
     if (entry && entry.kind === 'counter') {
         renderBattleCounterLogChipLine(el, entry);
+        return el;
+    }
+    if (entry && entry.kind === 'post_use') {
+        renderBattlePostUseLogChipLine(el, entry);
+        return el;
+    }
+    if (entry && entry.kind === 'card_action') {
+        renderBattleCardActionLogChipLine(el, entry);
         return el;
     }
     const localizedInlineLine = currentLang === 'zh' ? line : displayLine;
@@ -23365,15 +24090,18 @@ function parseBattleUseLogForCompact(line) {
     const cardDict = decodeBattleLogCardMarker(rawLine);
     const cleanLine = stripBattleLogCardMarkers(rawLine);
     if (/进行反制[！!]?(?:\s*×\d+)?$/.test(cleanLine)) return null;
-    const match = cleanLine.match(/^(.+?)使用了?([^，]+?)(?: ×(\d+))?$/);
+    const match = cleanLine.match(/^(.+?)使用了?([^，,！!:：]+?)(?: ×(\d+))?$/);
     if (!match) return null;
     const cardText = String(match[2] || '').trim();
     if (/^并(?:给.+?装备了|装备了)/.test(cardText)) return null;
+    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(cardText);
+    if (!defId) return null;
+    const resolvedCardDict = cardDict || { def_id: defId };
     return {
         actor: match[1],
         card: cardText,
-        cardDict,
-        cardSignature: battleLogCardSignature(cardDict, cardText),
+        cardDict: resolvedCardDict,
+        cardSignature: battleLogCardSignature(resolvedCardDict, cardText),
         count: Math.max(1, Number(match[3] || 1)),
         cards: [{
             card: cardText,
@@ -23408,6 +24136,114 @@ function parseBattleCounterLogForCompact(line) {
             count,
         }],
     };
+}
+
+function buildBattleCardActionEntry(subtype, values, rawCardDict = null) {
+    const cardText = String(values && values.card || '').trim();
+    const defId = (rawCardDict && rawCardDict.def_id) || findCardDefIdByAnyName(cardText);
+    if (!defId) return null;
+    const cardDict = rawCardDict || { def_id: defId };
+    return {
+        subtype,
+        actor: String(values.actor || ''),
+        target: String(values.target || ''),
+        card: cardText,
+        detail: String(values.detail || '').trim(),
+        cardDict,
+        cardSignature: battleLogCardSignature(cardDict, cardText),
+        count: Math.max(1, Number(values.count || 1)),
+    };
+}
+
+function parseBattleCardActionLogForCompact(line) {
+    const rawLine = String(line || '');
+    const rawCardDict = decodeBattleLogCardMarker(rawLine);
+    const cleanLine = stripBattleLogCardMarkers(rawLine).trim();
+    let match;
+    if ((match = cleanLine.match(/^(.+?)使用(?:了)?并给(.+?)装备了([^，,！!]+)(?:[，,！!:：]\s*(.+))?$/))) {
+        return buildBattleCardActionEntry('use_equip_target', {
+            actor: match[1], target: match[2], card: match[3], detail: match[4],
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)使用(?:了)?并装备了([^，,！!]+)(?:[，,！!:：]\s*(.+))?$/))) {
+        return buildBattleCardActionEntry('use_equip_self', {
+            actor: match[1], card: match[2], detail: match[3],
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)装备了([^，,！!]+)(?:[，,！!:：]\s*(.+))?$/))) {
+        return buildBattleCardActionEntry('equip', {
+            actor: match[1], card: match[2], detail: match[3],
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)的([^，,:：！!]+?)触发(?:[，,:：！!]\s*(.*))?$/))) {
+        return buildBattleCardActionEntry('trigger', {
+            actor: match[1], card: match[2], detail: match[3],
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)触发([^，,:：！!]+?)(?:[，,:：！!]\s*(.*))?$/))) {
+        return buildBattleCardActionEntry('trigger', {
+            actor: match[1], card: match[2], detail: match[3],
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)摧毁了?(.+?)的([^，,！!]+)(?:[，,！!:：]\s*(.+))?$/))) {
+        return buildBattleCardActionEntry('destroy_equipment', {
+            actor: match[1], target: match[2], card: match[3], detail: match[4],
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)获得装备([^，,！!]+)(?:[，,！!:：]\s*(.+))?$/))) {
+        return buildBattleCardActionEntry('gain_equipment', {
+            actor: match[1], card: match[2], detail: match[3],
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)的([^，,！!]+?)(因死亡被摧毁|因目标死亡移出装备区)(?:[，,！!:：]\s*(.+))?$/))) {
+        return buildBattleCardActionEntry('equipment_removed', {
+            actor: match[1], card: match[2], detail: `${match[3]}${match[4] ? `，${match[4]}` : ''}`,
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)的([^，,！!]+?)(装备护甲抵消了摧毁(?:[（(].+[）)])?)(?:[，,！!:：]\s*(.+))?$/))) {
+        return buildBattleCardActionEntry('equipment_removed', {
+            actor: match[1], card: match[2], detail: `${match[3]}${match[4] ? `，${match[4]}` : ''}`,
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^([^，,！!]+?)被摧毁(?:[，,:：！!]\s*(.*))?$/))) {
+        return buildBattleCardActionEntry('equipment_destroyed', {
+            card: match[1], detail: match[2],
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)拒绝(.+?)对其使用([^，,！!]+)(?:[，,！!:：]\s*(.+))?$/))) {
+        return buildBattleCardActionEntry('card_rejected', {
+            actor: match[2], target: match[1], card: match[3], detail: match[4],
+        }, rawCardDict);
+    }
+    if ((match = cleanLine.match(/^(.+?)使用(?:了)?([^，,！!:：]+)[，,！!:：]\s*(.+)$/))) {
+        return buildBattleCardActionEntry('use_detail', {
+            actor: match[1], card: match[2], detail: match[3],
+        }, rawCardDict);
+    }
+    return null;
+}
+
+function formatBattleCardActionLogForCompact(entry) {
+    if (!entry) return '';
+    const detail = entry.detail ? `，${entry.detail}` : '';
+    if (entry.subtype === 'use_equip_target') return `${entry.actor}使用并给${entry.target}装备了${entry.card}${detail}`;
+    if (entry.subtype === 'use_equip_self') return `${entry.actor}使用并装备了${entry.card}${detail}`;
+    if (entry.subtype === 'equip') return `${entry.actor}装备了${entry.card}${detail}`;
+    if (entry.subtype === 'trigger') return `${entry.actor}的${entry.card}触发${detail}`;
+    if (entry.subtype === 'destroy_equipment') return `${entry.actor}摧毁了${entry.target}的${entry.card}${detail}`;
+    if (entry.subtype === 'gain_equipment') return `${entry.actor}获得装备${entry.card}${detail}`;
+    if (entry.subtype === 'equipment_removed') return `${entry.actor}的${entry.card}${entry.detail || ''}`;
+    if (entry.subtype === 'equipment_destroyed') return `${entry.card}被摧毁${detail}`;
+    if (entry.subtype === 'card_rejected') return `${entry.target}拒绝${entry.actor}对其使用${entry.card}${detail}`;
+    return `${entry.actor}使用${entry.card}${detail}`;
+}
+
+function mergeBattleCardActionForCompact(target, source) {
+    if (!target || !source) return false;
+    const keys = ['subtype', 'actor', 'target', 'card', 'detail', 'cardSignature'];
+    if (keys.some(key => String(target[key] || '') !== String(source[key] || ''))) return false;
+    target.count = Math.max(1, Number(target.count || 1)) + Math.max(1, Number(source.count || 1));
+    return true;
 }
 
 function mergeBattleCounterForCompact(target, source) {
@@ -23477,7 +24313,31 @@ function parseBattlePostUseLogForCompact(line) {
     const rawLine = String(line || '');
     const cardDict = decodeBattleLogCardMarker(rawLine);
     const cleanLine = stripBattleLogCardMarkers(rawLine);
-    let match = cleanLine.match(/^(.+?)的(.+?)(因回转回到手中|因虚无被放逐|因队伍独一被放逐|被放逐|移入弃牌堆)(?: ×(\d+))?$/);
+    let uniqueMatch = cleanLine.match(/^(.+?)的唯一牌(.+?)多余副本被放逐(?: ×(\d+))?$/);
+    if (uniqueMatch) {
+        const cardText = String(uniqueMatch[2] || '').trim();
+        return {
+            actor: String(uniqueMatch[1] || ''),
+            card: cardText,
+            cardDict: resolvedCardDict,
+            cardSignature: battleLogCardSignature(resolvedCardDict, cardText),
+            action: '唯一牌多余副本被放逐',
+            count: Math.max(1, Number(uniqueMatch[3] || 1)),
+        };
+    }
+    let actorExileMatch = cleanLine.match(/^(.+?)放逐了(.+?)(?: ×(\d+))?$/);
+    if (actorExileMatch) {
+        const cardText = String(actorExileMatch[2] || '').trim();
+        return {
+            actor: String(actorExileMatch[1] || ''),
+            card: cardText,
+            cardDict,
+            cardSignature: battleLogCardSignature(cardDict, cardText),
+            action: '放逐了',
+            count: Math.max(1, Number(actorExileMatch[3] || 1)),
+        };
+    }
+    let match = cleanLine.match(/^(.+?)的(.+?)(因回转回到手中|立即回到手中|因虚无被放逐|因队伍独一被放逐|因漂浮洗入抽牌堆|被放逐|移入弃牌堆)(?: ×(\d+))?$/);
     if (!match) {
         match = cleanLine.match(/^(.+?)(被放逐|移入弃牌堆)(?: ×(\d+))?$/);
         if (!match) return null;
@@ -23512,6 +24372,12 @@ function mergeBattlePostUseForCompact(target, source) {
 function formatBattlePostUseLogForCompact(entry) {
     if (!entry) return '';
     const countText = Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : '';
+    if (entry.action === '唯一牌多余副本被放逐') {
+        return `${entry.actor}的唯一牌${entry.card}多余副本被放逐${countText}`;
+    }
+    if (entry.action === '放逐了') {
+        return `${entry.actor}放逐了${entry.card}${countText}`;
+    }
     return entry.actor
         ? `${entry.actor}的${entry.card}${entry.action}${countText}`
         : `${entry.card}${entry.action}${countText}`;
@@ -23618,6 +24484,16 @@ function compactBattleLogLinesForDisplay(log) {
             output.push({ kind: 'post_use', ...postUse, rawStart: rawIndex, rawEnd: rawIndex, groupActor: group ? group.actor : '' });
             return;
         }
+        const cardAction = parseBattleCardActionLogForCompact(line);
+        if (cardAction) {
+            const last = output[output.length - 1];
+            if (last && last.kind === 'card_action' && mergeBattleCardActionForCompact(last, cardAction)) {
+                last.rawEnd = rawIndex;
+                return;
+            }
+            output.push({ kind: 'card_action', ...cardAction, rawStart: rawIndex, rawEnd: rawIndex });
+            return;
+        }
         output.push({ kind: 'raw', text: stripBattleLogCardMarkers(line), rawStart: rawIndex, rawEnd: rawIndex });
     });
     return output.map(entry => {
@@ -23625,6 +24501,7 @@ function compactBattleLogLinesForDisplay(log) {
         if (entry.kind === 'counter') return formatBattleCounterLogForCompact(entry);
         if (entry.kind === 'damage') return formatBattleDamageLogForCompact(entry);
         if (entry.kind === 'post_use') return formatBattlePostUseLogForCompact(entry);
+        if (entry.kind === 'card_action') return formatBattleCardActionLogForCompact(entry);
         return entry.text || '';
     });
 }
@@ -23707,6 +24584,16 @@ function compactBattleLogEntriesForDisplay(log) {
             output.push({ kind: 'post_use', ...postUse, rawStart: rawIndex, rawEnd: rawIndex, groupActor: group ? group.actor : '' });
             return;
         }
+        const cardAction = parseBattleCardActionLogForCompact(line);
+        if (cardAction) {
+            const last = output[output.length - 1];
+            if (last && last.kind === 'card_action' && mergeBattleCardActionForCompact(last, cardAction)) {
+                last.rawEnd = rawIndex;
+                return;
+            }
+            output.push({ kind: 'card_action', ...cardAction, rawStart: rawIndex, rawEnd: rawIndex });
+            return;
+        }
         const last = output[output.length - 1];
         if (last && last.kind === 'raw' && last.text === line) {
             last.count = Number(last.count || 1) + 1;
@@ -23725,11 +24612,16 @@ function compactBattleLogEntriesForDisplay(log) {
                     ? formatBattleDamageLogForCompact(entry)
                     : (entry.kind === 'post_use'
                         ? formatBattlePostUseLogForCompact(entry)
-                        : `${entry.text || ''}${Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : ''}`))),
+                        : (entry.kind === 'card_action'
+                            ? formatBattleCardActionLogForCompact(entry)
+                            : `${entry.text || ''}${Number(entry.count || 1) > 1 ? ` ×${Number(entry.count || 1)}` : ''}`)))),
         kind: entry.kind,
         actor: entry.actor,
         card: entry.card,
         action: entry.action,
+        subtype: entry.subtype,
+        target: entry.target,
+        detail: entry.detail,
         cards: entry.cards,
         cardDict: entry.cardDict,
         cardSignature: entry.cardSignature,
@@ -25448,6 +26340,21 @@ async function showChoiceUI(data) {
             suit: suits[i] || suits[0],
         })), choicePromptConfig);
         if (sel >= 0 && sel < suits.length) choiceResult = { hel_suit: suits[sel] };
+    } else if (choiceType === 'bio_blood_sugar_mode') {
+        const modes = Array.isArray(choiceParams.options) && choiceParams.options.length
+            ? choiceParams.options
+            : ['electric_target', 'physical_target'];
+        const labels = Array.isArray(choiceParams.labels) && choiceParams.labels.length
+            ? choiceParams.labels
+            : [
+                '对目标造成电伤，对自己造成物理伤害',
+                '对目标造成物理伤害，对自己造成电伤',
+            ];
+        const sel = await simpleChoice(choiceTitle('血糖：选择伤害类型'), labels.map((label, i) => ({
+            text: label,
+            value: modes[i] || modes[0],
+        })), choicePromptConfig);
+        if (sel >= 0 && sel < modes.length) choiceResult = { bio_blood_sugar_mode: modes[sel] };
     } else if (choiceType === 'choose_ocean_sapphire') {
         const targetId = await choosePlayerTarget(choiceTitle(UI.choose_target || UI.select_target || 'Choose target'), {
             includeSelf: true,
@@ -25932,9 +26839,11 @@ function renderGameOverGr(gs = {}) {
     if (!gr) return;
     if (!gr.applied) {
         const reason = gr.reason || summary.ranking_invalid_reason || '';
-        const text = currentLang === 'zh'
-            ? `本局不计入花阶分${reason ? `（${reason}）` : ''}`
-            : `This match did not affect GR${reason ? ` (${reason})` : ''}`;
+        const text = reason === 'entertainment_mod'
+            ? UI.gr_unranked_entertainment
+            : (currentLang === 'zh'
+                ? `本局不计入花阶分${reason ? `（${reason}）` : ''}`
+                : `This match did not affect GR${reason ? ` (${reason})` : ''}`);
         box.innerHTML = `<div class="gameover-gr-title">${escapeHtml(title)}</div><div class="gameover-gr-muted">${escapeHtml(text)}</div>`;
         box.classList.remove('hidden');
         return;
@@ -26009,6 +26918,18 @@ function renderGameOver(data) {
         message.classList.toggle('hidden', !tutorialMessage);
     }
     renderGameOverGr(gs);
+    const replayBox = $('gameover-replay');
+    const replayCopy = $('btn-copy-gameover-replay');
+    const replayId = Number((gs.match_summary || gs.summary || {}).replay_id || gs.replay_id || 0);
+    if (replayBox) replayBox.classList.toggle('hidden', !(replayId > 0) || isTutorialGameOver || soloMode);
+    if (replayCopy) {
+        const replayRef = replayId > 0 ? `R-${replayId}` : '';
+        replayCopy.textContent = replayRef;
+        replayCopy.title = UI.replay_copy || '复制';
+        replayCopy.onclick = replayRef ? (async () => {
+            if (await copyPlainText(replayRef)) flashStatus(UI.replay_copied || '已复制回放 ID', 1800);
+        }) : null;
+    }
     const logContainer = $('gameover-log');
     if (logContainer) {
         logContainer.innerHTML = '';
@@ -26227,7 +27148,9 @@ function getPileViewerPlayers(pileType = 'deck') {
         players.push(player);
     };
     addPlayer(self);
-    const orderedKey = pileType === 'discard' ? 'discard_ordered' : 'deck_ordered';
+    const orderedKey = pileType === 'discard'
+        ? 'discard_ordered'
+        : (pileType === 'deck' ? 'deck_ordered' : 'exile_ordered');
     [gameState.you, gameState.teammate, gameState.opponent, gameState.opponent2]
         .forEach(player => {
             if (player && Array.isArray(player[orderedKey])) addPlayer(player);
@@ -26288,6 +27211,10 @@ function onViewDiscard() {
     onViewPile('discard');
 }
 
+function onViewExile() {
+    onViewPile('exile');
+}
+
 function onViewPile(pileType = 'deck') {
     if (gameState && gameState.mode === 'urf') {
         return;
@@ -26295,9 +27222,6 @@ function onViewPile(pileType = 'deck') {
     const isDeckPile = pileType === 'deck';
     const isDiscardPile = pileType === 'discard';
     const isExilePile = pileType === 'exile';
-    if (isExilePile) {
-        return;
-    }
     if (isDeckPile && tutorialMode) {
         tutorialDeckViewed = true;
         hideTutorialOverlay();
@@ -26337,7 +27261,8 @@ function onViewPile(pileType = 'deck') {
         const selfId = normalizePlayerId(gameState && gameState.your_id);
         const isSelf = pid != null && selfId != null && pid === selfId;
         const pile = getPileFromPlayer(pilePlayer, pileType);
-        const hasOrderedDeck = isDeckPile && !!(pilePlayer && pilePlayer.deck_ordered);
+        const orderedKey = isDeckPile ? 'deck_ordered' : (isDiscardPile ? 'discard_ordered' : 'exile_ordered');
+        const hasVisibleOrder = !!(pilePlayer && Array.isArray(pilePlayer[orderedKey]));
         const blindPile = isDeckPile
             ? (isSelf && shouldMaskOwnDrawDeck())
             : ((isDiscardPile || isExilePile) && isSelf && shouldMaskOwnDiscardPile());
@@ -26352,35 +27277,29 @@ function onViewPile(pileType = 'deck') {
         total.textContent = totalTemplate.replace('{0}', blindPile ? '?' : pile.length);
         content.appendChild(total);
         const list = document.createElement('div');
-        list.className = 'deck-list';
+        list.className = 'deck-list pile-tile-grid';
         if (blindPile) {
             const row = document.createElement('div');
-            row.className = 'deck-entry deck-entry-blinded';
-            const unknown = document.createElement('span');
-            unknown.className = 'choice-card-token choice-card-blinded';
-            const unknownName = document.createElement('span');
-            unknownName.className = 'choice-card-name';
-            unknownName.textContent = '?';
-            unknown.appendChild(unknownName);
-            row.appendChild(unknown);
+            row.className = 'deck-entry pile-tile-entry deck-entry-blinded';
+            row.appendChild(createClassicCardTile({}, { faceDown: true }));
             list.appendChild(row);
         } else if (!pile.length) {
             const row = document.createElement('div');
-            row.className = 'deck-entry deck-entry-empty';
+            row.className = 'deck-entry deck-entry-empty pile-tile-empty';
             const empty = document.createElement('span');
             empty.className = 'choice-option-detail';
             empty.textContent = emptyText;
             row.appendChild(empty);
             list.appendChild(row);
-        } else if (hasOrderedDeck) {
-            // Goggles: show deck in order (top to bottom)
+        } else if (hasVisibleOrder) {
+            // Ordered visibility: show cards from top/first to bottom/last.
             pile.forEach((c, idx) => {
                 const row = document.createElement('div');
-                row.className = 'deck-entry';
+                row.className = 'deck-entry pile-tile-entry pile-tile-ordered';
                 const numEl = document.createElement('span');
-                numEl.className = 'choice-option-detail deck-entry-count';
+                numEl.className = 'choice-option-detail deck-entry-count pile-tile-order';
                 numEl.textContent = `#${idx + 1}`;
-                row.appendChild(createCardChoiceChip(c));
+                row.appendChild(createClassicCardTile(c, { ownerState: pilePlayer }));
                 row.appendChild(numEl);
                 list.appendChild(row);
             });
@@ -26399,11 +27318,11 @@ function onViewPile(pileType = 'deck') {
                 return (ad ? getCardName(ad) : a.card.def_id || '').localeCompare(bd ? getCardName(bd) : b.card.def_id || '');
             }).forEach(({ card, count }) => {
                 const row = document.createElement('div');
-                row.className = 'deck-entry';
-                row.appendChild(createCardChoiceChip(card));
+                row.className = 'deck-entry pile-tile-entry pile-tile-grouped';
+                row.appendChild(createClassicCardTile(card, { ownerState: pilePlayer }));
                 const countEl = document.createElement('span');
-                countEl.className = 'choice-option-detail deck-entry-count';
-                countEl.textContent = `x${count}`;
+                countEl.className = 'choice-option-detail deck-entry-count pile-tile-count';
+                countEl.textContent = `×${count}`;
                 row.appendChild(countEl);
                 list.appendChild(row);
             });
@@ -26500,7 +27419,7 @@ let settingsMods = [];
 let settingsCommunityMods = [];
 let settingsAllowServerEdit = true;
 let settingsActiveTab = 'appearance';
-let settingsActiveModTab = ['official', 'community'].includes(localStorage.getItem('gtn_settings_mod_tab'))
+let settingsActiveModTab = ['official', 'entertainment', 'community'].includes(localStorage.getItem('gtn_settings_mod_tab'))
     ? localStorage.getItem('gtn_settings_mod_tab')
     : 'official';
 const VANILLA_MOD_FILENAME = 'Vanilla Cards.gtnmod';
@@ -26576,6 +27495,13 @@ function getModLoginPayload() {
     return { disabled_mods: getDisabledMods(), ...getCommunityModSelection() };
 }
 
+function getBundledModCheckboxes() {
+    return Array.from(document.querySelectorAll(
+        '#settings-official-mods input[type="checkbox"][data-filename], ' +
+        '#settings-entertainment-mods input[type="checkbox"][data-filename]'
+    ));
+}
+
 async function applyPeerModSettings(peerMods = {}) {
     const disabled = Array.isArray(peerMods.disabled_mods)
         ? peerMods.disabled_mods.map(item => String(item || '')).filter(Boolean)
@@ -26597,8 +27523,7 @@ async function applyPeerModSettings(peerMods = {}) {
 }
 
 function syncCurrentSettingsModSelectionToLocal() {
-    const listEl = $('settings-mods-list');
-    const checkboxes = listEl ? Array.from(listEl.querySelectorAll('input[type="checkbox"][data-filename]')) : [];
+    const checkboxes = getBundledModCheckboxes();
     if (!checkboxes.length) return getDisabledMods();
     let disabled = [];
     checkboxes.forEach(cb => {
@@ -26760,20 +27685,18 @@ function createSettingsModCaret(kind, key, expanded) {
 }
 
 const BETA_TESTING_MOD_IDS = new Set([
-    'Ocean Cards Addition.gtnmod',
-    'ocean',
     'Void Card Addition.gtnmod',
     'void',
     'Void Card Addition',
-    'Hel Cards Addition.gtnmod',
-    'hel',
-    'Hel Cards Addition',
-    'Sewers Cards Addition.gtnmod',
-    'sewers',
-    'Sewers Cards Addition',
     'Arctic Cards Addition.gtnmod',
     'arctic',
     'Arctic Cards Addition',
+    'Jurassic Cards Addition.gtnmod',
+    'jurassic',
+    'Jurassic Cards Addition',
+    'Bio Cards Addition.gtnmod',
+    'bio',
+    'Bio Cards Addition',
 ]);
 
 function isBetaTestingMod(mod) {
@@ -26815,35 +27738,47 @@ function createTemporaryDisableBadge(reason = '') {
     return badge;
 }
 
-function renderOfficialModList() {
-    const listEl = $('settings-mods-list');
-    const noModsEl = $('settings-no-mods');
+function bundledModCategory(mod) {
+    const category = String(mod?.category || mod?.manifest?.category || mod?.info?.category || '').trim().toLowerCase();
+    return category === 'entertainment' ? 'entertainment' : 'official';
+}
+
+function renderBundledModList(category) {
+    const entertainment = category === 'entertainment';
+    const listEl = $(entertainment ? 'settings-entertainment-mods-list' : 'settings-mods-list');
+    const noModsEl = $(entertainment ? 'settings-no-entertainment-mods' : 'settings-no-mods');
     if (!listEl) return;
     listEl.innerHTML = '';
-    if (settingsMods.length === 0) {
+    const categoryMods = sortModsForDisplay(settingsMods).filter(mod => bundledModCategory(mod) === category);
+    if (categoryMods.length === 0) {
         if (noModsEl) noModsEl.style.display = '';
         return;
     }
     if (noModsEl) noModsEl.style.display = 'none';
     const disabled = getDisabledMods();
-    sortModsForDisplay(settingsMods).forEach((mod, i) => {
+    categoryMods.forEach((mod, i) => {
         const info = mod.info || {};
         const name = localizedModNameFromFields(info, mod.filename || tf('mod_default_name', i + 1));
         const version = info.version || '';
         const filename = mod.filename || '';
         const errors = Array.isArray(mod.errors) ? mod.errors.filter(Boolean) : [];
-        const expanded = isSettingsModDetailOpen('official', filename || name);
+        const expanded = isSettingsModDetailOpen(category, filename || name);
         const item = document.createElement('div');
         item.className = 'settings-mod-item settings-mod-card';
         if (errors.length) item.classList.add('mod-error');
         if (expanded) item.classList.add('mod-expanded');
-        item.appendChild(createSettingsModCaret('official', filename || name, expanded));
+        item.appendChild(createSettingsModCaret(category, filename || name, expanded));
         const cb = document.createElement('input');
         cb.type = 'checkbox';
-        cb.id = `mod-cb-${i}`;
+        cb.id = `mod-cb-${category}-${i}`;
         cb.checked = !errors.length && !disabled.includes(filename);
         cb.disabled = errors.length > 0;
         cb.dataset.filename = filename;
+        cb.addEventListener('change', () => {
+            // Keep the in-progress selection authoritative. Any list rerender
+            // before the settings panel closes must not restore stale storage.
+            syncCurrentSettingsModSelectionToLocal();
+        });
         item.appendChild(cb);
         const main = document.createElement('div');
         main.className = 'settings-mod-item-main';
@@ -26901,16 +27836,21 @@ function renderOfficialModList() {
     });
 }
 
+function renderOfficialModList() {
+    renderBundledModList('official');
+    renderBundledModList('entertainment');
+}
+
 function setSettingsModSourceTab(tab) {
     if (tab === 'community' && !hiddenFeaturesEnabled()) tab = 'official';
-    settingsActiveModTab = tab === 'community' ? 'community' : 'official';
+    settingsActiveModTab = ['official', 'entertainment', 'community'].includes(tab) ? tab : 'official';
     localStorage.setItem('gtn_settings_mod_tab', settingsActiveModTab);
     renderModSourceControls();
 }
 
 function renderModSourceTabs() {
     const hidden = hiddenFeaturesEnabled();
-    ['official', 'community'].forEach(kind => {
+    ['official', 'entertainment', 'community'].forEach(kind => {
         const btn = $(`settings-mod-tab-${kind}`);
         if (!btn) return;
         const active = settingsActiveModTab === kind;
@@ -26923,12 +27863,14 @@ function renderModSourceTabs() {
 
 function renderModSourceControls() {
     const officialBox = $('settings-official-mods');
+    const entertainmentBox = $('settings-entertainment-mods');
     const communityBox = $('settings-community-mods');
     const hidden = hiddenFeaturesEnabled();
     // Force official tab when hidden features disabled
     if (!hidden && settingsActiveModTab === 'community') settingsActiveModTab = 'official';
     renderModSourceTabs();
     if (officialBox) officialBox.classList.toggle('hidden', settingsActiveModTab !== 'official');
+    if (entertainmentBox) entertainmentBox.classList.toggle('hidden', settingsActiveModTab !== 'entertainment');
     if (communityBox) communityBox.classList.toggle('hidden', settingsActiveModTab !== 'community' || !hidden);
     renderCommunityCurrent();
 }
@@ -27466,9 +28408,8 @@ function coerceValidDisabledMods(disabled) {
 }
 
 async function saveDisabledMods() {
-    const listEl = $('settings-mods-list');
-    if (!listEl) return;
-    const checkboxes = listEl.querySelectorAll('input[type="checkbox"]');
+    const checkboxes = getBundledModCheckboxes();
+    if (!checkboxes.length) return;
     let disabled = [];
     checkboxes.forEach(cb => {
         if (!cb.checked && cb.dataset.filename) {
@@ -27498,10 +28439,10 @@ async function saveDisabledMods() {
         localStorage.removeItem('gtn_server');
         serverInput.value = '';
     }
-    await refreshCardsAfterModSettingsConfirmed();
     if (socket && socket.connected && phase === 'lobby') {
         socket.emit('update_mod_settings', { disabled_mods: disabled, ...getCommunityModSelection() });
     } else {
+        await refreshCardsAfterModSettingsConfirmed();
         showActionToast(UI.save_success, 1600, 'success');
         if (phase === 'lobby') {
             console.warn('Saved mod settings locally, but socket is not connected; server loadout will update after re-entering the lobby.');
@@ -27671,10 +28612,24 @@ async function init() {
             activeFeedbackTab = btn.dataset.feedbackTab || 'send';
             activeFeedbackThreadId = null;
             feedbackState.messages = [];
+            feedbackState.thread = null;
+            feedbackState.replay = null;
             await loadFeedbackThreads(activeFeedbackTab === 'staff');
         });
     });
     if ($('btn-feedback-send')) $('btn-feedback-send').addEventListener('click', sendFeedbackMessage);
+    if ($('feedback-category')) $('feedback-category').addEventListener('change', updateFeedbackReplayField);
+    if ($('feedback-replay-id')) {
+        $('feedback-replay-id').addEventListener('change', () => {
+            loadFeedbackReplayPreview($('feedback-replay-id').value, true);
+        });
+    }
+    if ($('feedback-replay-preview')) {
+        $('feedback-replay-preview').addEventListener('click', (event) => {
+            const button = event.target.closest('[data-feedback-replay-open]');
+            if (button) openAccountReplay(button.dataset.feedbackReplayOpen);
+        });
+    }
     if ($('feedback-message-input')) {
         $('feedback-message-input').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -27802,6 +28757,20 @@ async function init() {
         });
     });
     document.addEventListener('click', (event) => {
+        const downloadButton = event.target.closest('[data-account-replay-download]');
+        if (downloadButton) {
+            event.preventDefault();
+            const replayId = Number(downloadButton.dataset.accountReplayDownload) || 0;
+            if (replayId > 0) {
+                const link = document.createElement('a');
+                link.href = `/api/replays/${encodeURIComponent(replayId)}/download`;
+                link.download = `GTN-R-${replayId}.gtnreplay`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            }
+            return;
+        }
         const replayButton = event.target.closest('[data-account-replay-view]');
         if (replayButton) {
             event.preventDefault();
@@ -27881,6 +28850,7 @@ async function init() {
         if (input) input.addEventListener('change', saveSocialSettings);
     });
     if ($('settings-mod-tab-official')) $('settings-mod-tab-official').addEventListener('click', () => setSettingsModSourceTab('official'));
+    if ($('settings-mod-tab-entertainment')) $('settings-mod-tab-entertainment').addEventListener('click', () => setSettingsModSourceTab('entertainment'));
     if ($('settings-mod-tab-community')) $('settings-mod-tab-community').addEventListener('click', () => setSettingsModSourceTab('community'));
     if ($('btn-community-refresh')) $('btn-community-refresh').addEventListener('click', loadSettingsCommunityMods);
     if ($('btn-community-disable')) $('btn-community-disable').addEventListener('click', clearCommunityModSelection);
@@ -27984,8 +28954,10 @@ async function init() {
     const handleSoloPauseEdit = () => { if (socket || isLocalSoloRuntimeActive()) emitSoloEvent('solo_pause', {}); else showSoloTraining(); };
     $('btn-view-deck').addEventListener('click', onViewDeck);
     if ($('btn-view-discard')) $('btn-view-discard').addEventListener('click', onViewDiscard);
+    if ($('btn-view-exile')) $('btn-view-exile').addEventListener('click', onViewExile);
     if ($('btn-spectate-view-deck')) $('btn-spectate-view-deck').addEventListener('click', onViewDeck);
     if ($('btn-spectate-view-discard')) $('btn-spectate-view-discard').addEventListener('click', onViewDiscard);
+    if ($('btn-spectate-view-exile')) $('btn-spectate-view-exile').addEventListener('click', onViewExile);
     if ($('btn-switch-perspective')) {
         $('btn-switch-perspective').addEventListener('click', () => {
             if (replayMode) {
@@ -27997,6 +28969,7 @@ async function init() {
     }
     if ($('classic-view-deck')) $('classic-view-deck').addEventListener('click', onViewDeck);
     if ($('classic-view-discard')) $('classic-view-discard').addEventListener('click', onViewDiscard);
+    if ($('classic-view-exile')) $('classic-view-exile').addEventListener('click', onViewExile);
     if ($('classic-switch-perspective')) {
         $('classic-switch-perspective').addEventListener('click', () => {
             if (replayMode) {
