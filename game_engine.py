@@ -5340,8 +5340,9 @@ class GameEngine:
         ps = self.players[player_id]
         played_count = ps.cards_played_this_turn.get(card.def_id, 1)
         paid_e = max(0, int(getattr(card, '_paid_e_this_play', 0) or 0))
+        paid_m = max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0))
         ps.elixir += paid_e
-        ps.magic += card.cost_m
+        ps.magic += paid_m
         remaining_count = max(0, played_count - 1)
         if remaining_count > 0:
             ps.cards_played_this_turn[card.def_id] = remaining_count
@@ -5677,6 +5678,9 @@ class GameEngine:
             'original_choice': dict(choice) if isinstance(choice, dict) else None,
             'already_paid': bool(already_paid),
         }
+        if already_paid:
+            self.pending_choice['paid_e'] = max(0, int(getattr(card, '_paid_e_this_play', 0) or 0))
+            self.pending_choice['paid_m'] = max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0))
         if choice_target_id is not None:
             self.pending_choice['target_player_id'] = choice_target_id
             if choice_type in ('choose_from_enemy_hand', 'choose_card_from_hand') and 0 <= choice_target_id < len(self.players):
@@ -5801,7 +5805,11 @@ class GameEngine:
         if not can_play:
             if not (auto_no_cost and ('能量不足' in reason or '魔力不足' in reason)):
                 return {'success': False, 'error': reason}
-        if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
+        if (
+            self._card_needs_choice(card)
+            and not self._choice_satisfies_request(card, choice)
+            and not self._card_is(card, 'Sapphire', 'ocean:sapphire')
+        ):
             queued = self._queue_card_choice(player_id, card, choice, already_paid=False)
             if queued:
                 return queued
@@ -6472,6 +6480,11 @@ class GameEngine:
                 self.pending_choice = pending
                 return {'success': False, 'error': '此选择不能取消'}
             if pending.get('already_paid'):
+                try:
+                    card._paid_e_this_play = int(pending.get('paid_e', getattr(card, '_paid_e_this_play', 0)) or 0)
+                    card._paid_m_this_play = int(pending.get('paid_m', getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0))) or 0)
+                except Exception:
+                    pass
                 self._undo_pending_choice_play_side_effects(
                     player_id,
                     card,
@@ -8125,9 +8138,10 @@ class GameEngine:
         if choice and 'target_instance_id' in choice:
             eq = opp.find_equipment(choice['target_instance_id'])
             if eq and 'indestructible' not in eq.card_instance.flags:
+                eq_name = eq.card_def.name_cn
                 destroyed = self._destroy_equipment(1 - player_id, eq, source_id=player_id)
                 if destroyed:
-                    self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq.card_def.name_cn}")
+                    self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq_name}")
                 else:
                     self.log_msg(f"{self.pn(player_id)}使用污水，但装备保护抵消了摧毁")
             else:
@@ -8136,9 +8150,10 @@ class GameEngine:
             destroyable = [e for e in opp.equipment if 'indestructible' not in e.card_instance.flags]
             if destroyable:
                 eq = destroyable[0]
+                eq_name = eq.card_def.name_cn
                 destroyed = self._destroy_equipment(1 - player_id, eq, source_id=player_id)
                 if destroyed:
-                    self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq.card_def.name_cn}")
+                    self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq_name}")
                 else:
                     self.log_msg(f"{self.pn(player_id)}使用污水，但装备保护抵消了摧毁")
             else:
@@ -8150,12 +8165,13 @@ class GameEngine:
             p = self.players[pid]
             to_destroy = [e for e in p.equipment if 'indestructible' not in e.card_instance.flags]
             for eq in to_destroy:
+                eq_name = eq.card_def.name_cn
                 destroyed = self._destroy_equipment(pid, eq, source_id=player_id)
                 if destroyed:
                     destroyed_count += 1
-                    self.log_msg(f"魔法污水摧毁了{self.pn(pid)}的{eq.card_def.name_cn}")
+                    self.log_msg(f"魔法污水摧毁了{self.pn(pid)}的{eq_name}")
                 else:
-                    self.log_msg(f"魔法污水试图摧毁{self.pn(pid)}的{eq.card_def.name_cn}，但装备保护抵消了")
+                    self.log_msg(f"魔法污水试图摧毁{self.pn(pid)}的{eq_name}，但装备保护抵消了")
         if destroyed_count > 0:
             self.players[player_id].gain_elixir(destroyed_count)
             self.log_msg(f"{self.pn(player_id)}回复{destroyed_count}E")
@@ -12386,6 +12402,7 @@ class GameEngine:
             equip_owner_id = player_id
         equip_owner = self.players[equip_owner_id]
         reset_card_after_play(card)
+        force_exile_after_auto_play = 'ocean_no_auto' in getattr(card, 'instance_flags', set()) and 'exile' in card.flags
         if (card.card_type == 'root' and not script_controls_play) or placed_as_equipment:
             eq = self._find_equipment_for_card(equip_owner_id, card)
             if eq is None:
@@ -12414,6 +12431,11 @@ class GameEngine:
                 delattr(card, '_placed_as_equipment')
             if hasattr(card, '_placed_as_equipment_owner'):
                 delattr(card, '_placed_as_equipment_owner')
+        elif force_exile_after_auto_play:
+            card.instance_flags.discard('return_to_hand')
+            owner_id, zone_name, _ = self._find_card_location(card)
+            if owner_id is None or zone_name is None:
+                self._put_card_in_exile(ps.player_id, card)
         elif 'return_to_hand' in card.instance_flags:
             card.instance_flags.discard('return_to_hand')
             ps.add_to_hand(card)
@@ -13441,7 +13463,7 @@ class GameEngine:
             return
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if 0 <= target_id < len(self.players):
-            amount = self._eval_int(player_id, params.get('amount', 18), card, 18)
+            amount = self._eval_int(player_id, params.get('amount', 16), card, 16)
             if self._status_application_blocked(target_id, 'poison'):
                 self._destroy_equipment(player_id, eq, check_protection=False)
                 return
@@ -14788,7 +14810,7 @@ class GameEngine:
         snapshot = getattr(card, '_bio_pre_play_snapshot', None)
         copied = fresh_card_copy_from_dict(snapshot if isinstance(snapshot, dict) else card.to_dict(), card.def_id)
         copied.setup_modifiers.add('bio_diamond_copy')
-        copied.instance_flags.update({'wide_strike', 'self_target'})
+        copied.instance_flags.update({'wide_strike', 'self_target', 'exile'})
         copied.fission_level = 3
         copied.fission_count = 2
         self._bio_queue_auto_play(player_id, copied, choice, no_cost=True, source='diamond')

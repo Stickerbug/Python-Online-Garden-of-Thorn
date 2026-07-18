@@ -5543,6 +5543,12 @@ body {
   padding: 5px 8px;
 }
 
+.solo-shuffle-btn {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border-color));
+}
+
 .solo-deck-list {
   padding: 10px;
   display: flex;
@@ -7062,6 +7068,115 @@ body {
 .card-play-flash.card-play-flash-targeted {
   animation: cardPlayTargetFlash 500ms cubic-bezier(.17,.78,.18,1) forwards;
   transform-origin: 50% 50%;
+}
+
+.virtual-play-cursor {
+  position: fixed;
+  z-index: 4605;
+  width: 34px;
+  height: 34px;
+  margin-left: -4px;
+  margin-top: -3px;
+  pointer-events: none;
+  transform-origin: 5px 3px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.22));
+  animation: virtualCursorPlay 680ms cubic-bezier(.18,.84,.2,1) forwards;
+}
+
+.virtual-play-cursor svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.virtual-play-cursor .cursor-shadow {
+  fill: #111;
+  opacity: 0.9;
+  transform: translate(1px, 1px);
+}
+
+.virtual-play-cursor .cursor-fill {
+  fill: #fff;
+  stroke: #111;
+  stroke-width: 1.35;
+  stroke-linejoin: round;
+}
+
+.virtual-play-card.card {
+  position: fixed;
+  z-index: 4600;
+  pointer-events: none;
+  margin: 0;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+  transform-origin: 50% 50%;
+  animation: virtualCardDragPlay 680ms cubic-bezier(.18,.84,.2,1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+.virtual-play-source {
+  opacity: 0.34 !important;
+}
+
+.virtual-play-target {
+  animation: virtualTargetCue 680ms cubic-bezier(.18,.84,.2,1) both;
+}
+
+@keyframes virtualCursorPlay {
+  0% {
+    opacity: 0;
+    transform: translate3d(-18px, 16px, 0) scale(0.96);
+  }
+  10% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  22% {
+    transform: translate3d(0, 0, 0) scale(0.92);
+  }
+  76% {
+    opacity: 1;
+    transform: translate3d(var(--gesture-cursor-dx), var(--gesture-cursor-dy), 0) scale(0.92);
+  }
+  88% {
+    opacity: 1;
+    transform: translate3d(var(--gesture-cursor-dx), var(--gesture-cursor-dy), 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--gesture-cursor-dx) + 10px), calc(var(--gesture-cursor-dy) + 8px), 0) scale(1);
+  }
+}
+
+@keyframes virtualCardDragPlay {
+  0%, 18% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+    filter: brightness(1);
+  }
+  22% {
+    opacity: 0.98;
+    transform: translate3d(0, -10px, 0) scale(1.06) rotate(-1deg);
+    filter: brightness(1.04);
+  }
+  76% {
+    opacity: 0.98;
+    transform: translate3d(var(--gesture-card-dx), var(--gesture-card-dy), 0) scale(0.72) rotate(3deg);
+    filter: brightness(1.12);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--gesture-card-dx), var(--gesture-card-dy), 0) scale(0.58) rotate(3deg);
+    filter: brightness(1.18);
+  }
+}
+
+@keyframes virtualTargetCue {
+  0%, 55%, 100% {
+    filter: brightness(1);
+  }
+  74% {
+    filter: brightness(1.08);
+  }
 }
 
 .card-impact-burst {
@@ -11890,6 +12005,32 @@ html.blind-level-4 .card-prediction-part.magic {
   background: rgba(255, 71, 87, 0.25);
 }
 
+body.spectate-disconnect-modal-active #btn-leave-spectate:not(.hidden),
+body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 2055;
+  display: inline-flex !important;
+  pointer-events: auto;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+body.spectate-disconnect-modal-active #btn-leave-spectate:not(.hidden) {
+  min-height: 40px;
+}
+
+body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
+  min-height: 38px;
+}
+
+.dc-leave-spectate {
+  margin-top: 2px;
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
 .conversion-modal .conversion-entry {
   display: flex;
   align-items: center;
@@ -13244,6 +13385,7 @@ html.blind-level-4 .card-prediction-part.magic {
 .btn-surrender,
 .btn-switch-perspective,
 .btn-leave-spectate,
+#btn-draft-reroll,
 #btn-urf-replace,
 #btn-urf-sell,
 #btn-solo-next-draw,
@@ -13264,6 +13406,7 @@ html.blind-level-4 .card-prediction-part.magic {
 .btn-surrender,
 .btn-switch-perspective,
 .btn-leave-spectate,
+#btn-draft-reroll,
 #btn-urf-replace,
 #btn-urf-sell,
 #btn-solo-next-draw,
@@ -13278,6 +13421,7 @@ html.blind-level-4 .card-prediction-part.magic {
 .btn-switch-perspective::before { --ui-icon-url: url("/static/assets/ui-icons/replay.svg"); }
 .btn-leave-spectate::before { --ui-icon-url: url("/static/assets/ui-icons/surrender.svg"); }
 .btn-prediction-target::before { --ui-icon-url: url("/static/assets/ui-icons/rank.svg"); }
+#btn-draft-reroll::before { --ui-icon-url: url("/static/assets/ui-icons/reload.svg"); }
 #btn-urf-replace::before { --ui-icon-url: url("/static/assets/ui-icons/reload.svg"); }
 #btn-urf-sell::before { --ui-icon-url: url("/static/assets/ui-icons/sell-equipment.svg"); }
 #btn-solo-next-draw::before { --ui-icon-url: url("/static/assets/ui-icons/draw-pile.svg"); }
@@ -13286,6 +13430,7 @@ html.blind-level-4 .card-prediction-part.magic {
 .btn-view-deck::before,
 .btn-view-discard::before,
 .btn-view-exile::before,
+#btn-draft-reroll::before,
 #btn-urf-replace::before,
 #btn-urf-sell::before,
 #btn-solo-edit::before,
@@ -13299,6 +13444,12 @@ html.blind-level-4 .card-prediction-part.magic {
 #classic-solo-next-draw::before {
   width: 1.55em;
   height: 1.55em;
+}
+
+#btn-draft-reroll {
+  min-height: 42px;
+  padding: 10px 22px;
+  gap: 8px;
 }
 
 .btn-end-turn {

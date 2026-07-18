@@ -704,9 +704,9 @@ const I18N = {
         settings_audio_enabled: 'Enable audio', settings_volume_master: 'Master volume', settings_volume_music: 'Music', settings_volume_menu_music: 'Home/Lobby music', settings_volume_battle_music: 'Battle music', settings_volume_ui: 'Buttons', settings_volume_sfx: 'Effects', settings_audio_test: 'Test sound', settings_audio_hint: 'Music starts after your first click or key press.', music_notice_title: 'Music Added', music_notice_message: 'This version adds home-screen music. If you need less noise, please lower your device volume first.',
         no_games: 'No ongoing games', back_to_home: 'Back to Home', settings_btn: 'Settings', settings_server: 'Server', settings_server_addr: 'Address', not_your_turn: 'Not your turn',
         counter_insufficient: 'Tip: counter cards are not affordable', default_status: 'Garden of Thorn', game_loading: 'Loading...', server_no_response: 'Server is not responding. Check the connection or refresh.',
-        spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck',
+        spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck', shuffle_deck: 'Shuffle',
         solo_deck_a: 'Your Deck', solo_deck_b: 'Opponent Deck', search_cards: 'Search cards', pause_edit: 'Pause & Edit', set_next_draw: 'Set Next Draw', solo_saved: 'Training decks saved',
-        solo_need_15: 'Both decks must contain exactly 15 cards', solo_event_a: 'Your opening event', solo_event_b: 'Opponent opening event', no_event: 'None', edit_tags: 'Edit Tags',
+        solo_need_15: 'Both training decks must contain 0-100 cards', solo_event_a: 'Your opening event', solo_event_b: 'Opponent opening event', no_event: 'None', edit_tags: 'Edit Tags',
         login_need_nickname: 'Please enter a nickname', login_name_too_long: 'Nickname too long (max 8 CJK or 16 Latin chars)', login_name_not_numbers: 'Nickname cannot be only numbers',
         login_name_not_symbols: 'Nickname cannot be only symbols', login_name_no_repeat_symbols: '- and _ cannot appear consecutively',
         operation_failed: 'Operation failed', server_not_connected: 'Not connected to server', no_mod_files: 'No mod files found', load_success: 'Loaded', load_failed: 'Load failed', save_success: 'Saved', save_failed: 'Save failed: {0}',
@@ -822,8 +822,8 @@ I18N.zh = { ...I18N.en,
     counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
     spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天',
     lobby_phase_event_select: '配装选择', lobby_phase_draw: '抽牌',
-    solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', clear_deck: '清空牌组', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
-    search_cards: '搜索卡牌', pause_edit: '暂停并编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练牌组已保存', solo_need_15: '双方牌组都必须正好为 15 张',
+    solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', clear_deck: '清空牌组', shuffle_deck: '打乱顺序', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
+    search_cards: '搜索卡牌', pause_edit: '暂停并编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练牌组已保存', solo_need_15: '双方训练场牌组都必须为 0-100 张',
     solo_event_a: '你的配装倾向', solo_event_b: '对方配装倾向', no_event: '无', edit_tags: '编辑标签',
     login_need_nickname: '请输入昵称', login_name_too_long: '昵称过长（最多 8 个中文或 16 个拉丁字符）', login_name_not_numbers: '昵称不能全为数字', login_name_not_symbols: '昵称不能全为符号', login_name_no_repeat_symbols: '- 和 _ 不能连续出现',
         operation_failed: '操作失败', server_not_connected: '未连接到服务器', no_mod_files: '未找到模组文件', load_success: '加载成功', load_failed: '加载失败', save_success: '保存成功', save_failed: '保存失败：{0}',
@@ -935,9 +935,9 @@ I18N.fr = { ...I18N.en,
     not_your_turn: "Ce n'est pas votre tour", counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
     game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
     spectator_prefix: 'Spectateur', lobby_title: 'Salon', online_count: 'En ligne: {0}', chat_title: 'Chat',
-    solo_training: 'Entraînement solo', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer', clear_deck: 'Vider deck',
+    solo_training: 'Entraînement solo', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer', clear_deck: 'Vider deck', shuffle_deck: 'Mélanger',
     solo_deck_a: 'Votre deck', solo_deck_b: 'Deck adverse', search_cards: 'Chercher cartes', pause_edit: 'Pause édition',
-    set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks doivent avoir exactement 15 cartes',
+    set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks d’entraînement doivent contenir 0 à 100 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
     tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Sans cible', tag_uncancellable: 'Non annulable', tag_rebound: 'Retour', tag_copy: 'Copie', tag_unique: 'Unique', tag_swift: 'Rapidité', tag_stealth: 'Furtif', tag_revealed: 'Révélé', tag_infinite_exclude: 'Retiré d’Infinite Fire',
@@ -1008,9 +1008,9 @@ I18N.ja = { ...I18N.en,
     not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
     game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
     spectator_prefix: '観戦', lobby_title: 'ロビー', online_count: 'オンライン: {0}', chat_title: 'チャット',
-    solo_training: 'ソロ練習場', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始', clear_deck: 'デッキを空にする',
+    solo_training: 'ソロ練習場', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始', clear_deck: 'デッキを空にする', shuffle_deck: 'シャッフル',
     solo_deck_a: '自分のデッキ', solo_deck_b: '相手デッキ', search_cards: 'カード検索', pause_edit: '中断して編集',
-    set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '両方のデッキは15枚ちょうど必要です',
+    set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '練習デッキは両方とも0〜100枚にしてください',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
     tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '対象選択なし', tag_uncancellable: 'キャンセル不可', tag_copy: '複製', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隠密', tag_revealed: '公開', tag_infinite_exclude: 'Infinite Fireから削除', tag_rebound: '回転',
@@ -2081,6 +2081,7 @@ Object.assign(I18N.en, {
     report_category_bug_abuse: 'Bug abuse',
     report_category_abnormal_match: 'Abnormal match',
     report_category_other: 'Other',
+    settings_play_gesture_animation: 'Show play gesture demo',
 });
 Object.assign(I18N.zh, {
     report: '举报',
@@ -2109,6 +2110,7 @@ Object.assign(I18N.zh, {
     report_category_bug_abuse: '利用漏洞',
     report_category_abnormal_match: '异常对局',
     report_category_other: '其他',
+    settings_play_gesture_animation: '显示出牌操作演示',
 });
 Object.assign(I18N.fr, {
     report: 'Signaler',
@@ -2124,6 +2126,7 @@ Object.assign(I18N.fr, {
     report_success: 'Signalement envoye',
     report_login_required: 'Connectez-vous a un compte pour signaler.',
     report_error: 'Signalement echoue : {0}',
+    settings_play_gesture_animation: 'Afficher le geste de jeu',
 });
 Object.assign(I18N.ja, {
     report: '通報',
@@ -2139,6 +2142,7 @@ Object.assign(I18N.ja, {
     report_success: '通報を送信しました',
     report_login_required: '通報するにはアカウントでログインしてください。',
     report_error: '通報失敗: {0}',
+    settings_play_gesture_animation: 'カード操作デモを表示',
 });
 
 // Keep player-facing keyword names canonical in every supported language.
@@ -2179,6 +2183,7 @@ if (localStorage.getItem('gtn_lang') !== currentLang) localStorage.setItem('gtn_
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
 let showCardImages = localStorage.getItem('gtn_show_card_images') !== '0';
 let landscapeModeEnabled = localStorage.getItem('gtn_landscape_mode') === '1';
+let playGestureAnimationEnabled = localStorage.getItem('gtn_play_gesture_animation') === '1';
 document.documentElement.classList.toggle('landscape-mode-enabled', landscapeModeEnabled);
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
 const HIDDEN_FEATURES_KEY = 'gtn_hidden_features_enabled';
@@ -3023,11 +3028,17 @@ function buildInlineCardDict(defId, modifierText = '') {
                 return;
             }
             if (key === 'fusion') {
-                if (numberValue > 1) cardDict.fusion = numberValue;
+                if (numberValue > 1) {
+                    cardDict.fusion = numberValue;
+                    cardDict.fusion_level = numberValue;
+                }
                 return;
             }
             if (key === 'fission') {
-                if (numberValue > 1) cardDict.fission = numberValue;
+                if (numberValue > 1) {
+                    cardDict.fission = numberValue;
+                    cardDict.fission_level = numberValue;
+                }
                 return;
             }
             if (key === 'tomato' || key === 'held_turns') {
@@ -4311,6 +4322,7 @@ let settingsCommunityModsLoadedAt = 0;
 let settingsLoadSeq = 0;
 let activeCardDataCacheKey = '';
 let activeOpeningEventsCacheKey = '';
+const publicDataRequests = new Map();
 let gameState = {};
 let predictionTargetOverrideId = null;
 let activeV2UiRequestId = null;
@@ -4460,6 +4472,8 @@ function activeMatchRouteLoginPayload() {
 let matchTransitionGuardUntil = 0;
 let allowLobbyTransitionUntil = 0;
 let soloMode = false;
+const SOLO_TRAINING_MIN_DECK_SIZE = 0;
+const SOLO_TRAINING_MAX_DECK_SIZE = 100;
 let soloDeckA = [];
 let soloDeckB = [];
 let soloTargetDeck = 'a';
@@ -4776,6 +4790,17 @@ function applyLandscapeMode(value) {
     updateClassicMobileCanvas();
 }
 
+function updatePlayGestureAnimationInput() {
+    const input = $('settings-play-gesture-animation');
+    if (input) input.checked = !!playGestureAnimationEnabled;
+}
+
+function applyPlayGestureAnimation(value) {
+    playGestureAnimationEnabled = !!value;
+    localStorage.setItem('gtn_play_gesture_animation', playGestureAnimationEnabled ? '1' : '0');
+    updatePlayGestureAnimationInput();
+}
+
 function isBattleTextInputFocused() {
     const el = document.activeElement;
     if (!el) return false;
@@ -5086,10 +5111,13 @@ function updateStaticText() {
     if (settingsEnglishNameLabel) settingsEnglishNameLabel.textContent = UI.settings_show_english_card_names;
     const settingsCardImagesLabel = $('settings-label-show-card-images');
     if (settingsCardImagesLabel) settingsCardImagesLabel.textContent = UI.settings_show_card_images;
+    const settingsPlayGestureLabel = $('settings-label-play-gesture-animation');
+    if (settingsPlayGestureLabel) settingsPlayGestureLabel.textContent = UI.settings_play_gesture_animation || '显示出牌操作演示';
     const settingsLandscapeModeLabel = $('settings-label-landscape-mode');
     if (settingsLandscapeModeLabel) settingsLandscapeModeLabel.textContent = UI.settings_landscape_mode;
     updateEnglishNameSettingVisibility();
     updateCardImageSettingInput();
+    updatePlayGestureAnimationInput();
     updateLandscapeModeInput();
     const themeSelect = $('settings-theme-select');
     if (themeSelect) {
@@ -5433,6 +5461,10 @@ function updateStaticText() {
     if (btnSoloClearA) btnSoloClearA.textContent = UI.clear_deck || '清空牌组';
     const btnSoloClearB = $('btn-solo-clear-b');
     if (btnSoloClearB) btnSoloClearB.textContent = UI.clear_deck || '清空牌组';
+    const btnSoloShuffleA = $('btn-solo-shuffle-a');
+    if (btnSoloShuffleA) btnSoloShuffleA.textContent = UI.shuffle_deck || '打乱顺序';
+    const btnSoloShuffleB = $('btn-solo-shuffle-b');
+    if (btnSoloShuffleB) btnSoloShuffleB.textContent = UI.shuffle_deck || '打乱顺序';
     const soloSearch = $('solo-card-search');
     if (soloSearch) soloSearch.placeholder = UI.search_cards;
     const soloDeckATitle = $('solo-deck-a-title');
@@ -7138,6 +7170,7 @@ const STATUS_ICON_KEYS = new Set([
 function normalizeStatusIconKey(key) {
     const raw = String(key || '').trim();
     if (!raw) return '';
+    if (raw === 'arctic:frost' || raw === '霜冻') return 'frost';
     if (raw === 'jungle:fragile') return 'fragile';
     if (raw === 'jungle:shield') return 'shield';
     if (raw === 'jungle:root_status' || raw === 'jungle:root') return 'root_status';
@@ -8223,12 +8256,29 @@ function hideModal() {
     activeV2UiRequestId = null;
     const modal = $('modal');
     const content = $('modal-content');
+    if (content && content.querySelector && content.querySelector('#dc-countdown')) {
+        setSpectateDisconnectModalActive(false);
+    }
     if (content) content.className = 'modal-inner';
     if (modal) { modal.classList.add('hidden'); modal.classList.remove('active'); }
     if (tutorialMode) {
         showTutorialOverlay();
         setTimeout(updateTutorialOverlay, 60);
     }
+}
+
+function setSpectateDisconnectModalActive(active) {
+    document.body.classList.toggle('spectate-disconnect-modal-active', !!active);
+}
+
+function leaveSpectateAction() {
+    if (replayMode) {
+        closeAccountReplayModal();
+        return;
+    }
+    clearOpponentDisconnectModal();
+    clearActiveMatchRoute('leave_spectate');
+    if (socket) socket.emit('leave_spectate', {});
 }
 
 function closeAfkCheckOverlay() {
@@ -8609,6 +8659,22 @@ function cardDataMatchesCurrentMods() {
     return !!activeCardDataCacheKey && activeCardDataCacheKey === getDataCacheKey('cards');
 }
 
+function fetchPublicDataJson(url) {
+    const key = String(url || '');
+    const existing = publicDataRequests.get(key);
+    if (existing) return existing;
+    const promise = fetch(key, { cache: 'default', credentials: 'same-origin' })
+        .then(resp => {
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        })
+        .finally(() => {
+            if (publicDataRequests.get(key) === promise) publicDataRequests.delete(key);
+        });
+    publicDataRequests.set(key, promise);
+    return promise;
+}
+
 async function ensureCardDataForCurrentMods() {
     if (cardDataMatchesCurrentMods()) return;
     await fetchCardDefs({ useCache: false });
@@ -8689,9 +8755,7 @@ async function fetchCardDefs(options = {}) {
 async function refreshCardDefsFromServer({ silent = false } = {}) {
     try {
         if (!silent) bootLoader.step(UI.init_cards_mods, 60);
-        const resp = await fetch(`/api/cards?${buildModQueryString()}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const nextDefs = await resp.json();
+        const nextDefs = await fetchPublicDataJson(`/api/cards?${buildModQueryString()}`);
         CARD_DEFS = nextDefs || {};
         markActiveDataCacheKey('cards');
         writeDataCache('cards', CARD_DEFS);
@@ -8720,9 +8784,7 @@ function buildGalleryModQueryString() {
 
 async function fetchGalleryCardDefs({ force = false } = {}) {
     if (!force && GALLERY_CARD_DEFS && Object.keys(GALLERY_CARD_DEFS).length) return GALLERY_CARD_DEFS;
-    const resp = await fetch(`/api/cards?${buildGalleryModQueryString()}`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const nextDefs = await resp.json();
+    const nextDefs = await fetchPublicDataJson(`/api/cards?${buildGalleryModQueryString()}`);
     GALLERY_CARD_DEFS = nextDefs && typeof nextDefs === 'object' ? nextDefs : {};
     return GALLERY_CARD_DEFS;
 }
@@ -8736,9 +8798,7 @@ function getGalleryOpeningEvents() {
 
 async function fetchGalleryOpeningEvents({ force = false } = {}) {
     if (!force && Array.isArray(GALLERY_OPENING_EVENTS) && GALLERY_OPENING_EVENTS.length) return GALLERY_OPENING_EVENTS;
-    const resp = await fetch(`/api/opening-events?${buildGalleryModQueryString()}`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
+    const data = await fetchPublicDataJson(`/api/opening-events?${buildGalleryModQueryString()}`);
     GALLERY_OPENING_EVENTS = Array.isArray(data.events) ? data.events : [];
     return GALLERY_OPENING_EVENTS;
 }
@@ -8783,9 +8843,7 @@ async function fetchOpeningEvents(options = {}) {
 async function refreshOpeningEventsFromServer({ silent = false } = {}) {
     try {
         if (!silent) bootLoader.step(UI.init_opening_events, 78);
-        const resp = await fetch(`/api/opening-events?${buildModQueryString()}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const data = await fetchPublicDataJson(`/api/opening-events?${buildModQueryString()}`);
         openingEvents = data.events || [];
         openingEventMagicPool = data.magic_pool || [];
         setCustomRegistries(data.custom_tags || [], data.custom_statuses || []);
@@ -17356,6 +17414,9 @@ function handleLocalSoloState(data) {
         if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
         if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
     }
+    if (data.pending_choice == null && choicePending) {
+        invalidateChoiceRequest();
+    }
     const keepOptimisticForState = !!optimisticResourceOverride;
     clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
     if (phase === 'game_over') {
@@ -17448,6 +17509,23 @@ function emitSoloEvent(eventName, payload = {}) {
 function emitModeEvent(soloEventName, onlineEventName, payload = {}) {
     if (soloMode) emitSoloEvent(soloEventName, payload);
     else if (socket) socket.emit(onlineEventName, payload);
+}
+
+function handleSoloHistoryShortcut(event) {
+    if (!event || !event.ctrlKey || event.altKey || event.metaKey) return false;
+    if (!soloMode || replayMode || isSpectating || tutorialMode) return false;
+    if (!gameState || !gameState.solo || gameState.phase === 'game_over') return false;
+    if (isTypingKeyboardTarget(event.target)) return false;
+    const key = String(event.key || '').toLowerCase();
+    if (key !== 'z' && key !== 'y') return false;
+    event.preventDefault();
+    event.stopPropagation();
+    if (key === 'z' && !event.shiftKey) {
+        emitSoloEvent('solo_undo', {});
+    } else {
+        emitSoloEvent('solo_redo', {});
+    }
+    return true;
 }
 
 async function showSoloTraining() {
@@ -18090,7 +18168,7 @@ function renderSoloBuilder() {
 function renderSoloDeck(which, deck) {
     const el = $(which === 'a' ? 'solo-deck-a' : 'solo-deck-b');
     const count = $(which === 'a' ? 'solo-deck-a-count' : 'solo-deck-b-count');
-    if (count) count.textContent = `${deck.length}/15`;
+    if (count) count.textContent = `${deck.length}/${SOLO_TRAINING_MAX_DECK_SIZE}`;
     if (!el) return;
     const panel = el.closest('.solo-deck-panel');
     el.innerHTML = '';
@@ -18160,9 +18238,24 @@ function clearSoloDeck(which) {
     renderSoloBuilder();
 }
 
+function shuffleSoloDeck(which) {
+    const deck = which === 'a' ? soloDeckA : soloDeckB;
+    if (!Array.isArray(deck) || deck.length < 2) {
+        soloTargetDeck = which;
+        renderSoloBuilder();
+        return;
+    }
+    for (let i = deck.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    soloTargetDeck = which;
+    renderSoloBuilder();
+}
+
 function addSoloCard(defId) {
     const deck = soloTargetDeck === 'a' ? soloDeckA : soloDeckB;
-    if (deck.length >= 15) return;
+    if (deck.length >= SOLO_TRAINING_MAX_DECK_SIZE) return;
     deck.push({ def_id: defId, instance_flags: [], disabled_flags: [] });
     renderSoloBuilder();
 }
@@ -18396,6 +18489,7 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
         return await showFatedDrawChoice();
     }
     if (eventId === 8) {
+        if (!deck.length) return null;
         const sourceOptions = deck.map((entry, idx) => cardChoiceOption(entry, { detail: `#${idx + 1}` }));
         const sourceSel = await gamePrompt(`${label} ${UI.choose_yggdrasil_card}`, sourceOptions, { cancellable: false });
         if (sourceSel < 0) return false;
@@ -18408,7 +18502,12 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
 }
 
 async function startSoloTraining() {
-    if (soloDeckA.length !== 15 || soloDeckB.length !== 15) {
+    if (
+        soloDeckA.length < SOLO_TRAINING_MIN_DECK_SIZE
+        || soloDeckB.length < SOLO_TRAINING_MIN_DECK_SIZE
+        || soloDeckA.length > SOLO_TRAINING_MAX_DECK_SIZE
+        || soloDeckB.length > SOLO_TRAINING_MAX_DECK_SIZE
+    ) {
         gameAlert(UI.notice, UI.solo_need_15);
         return;
     }
@@ -20204,12 +20303,13 @@ function setPileInfoText(el, info) {
 
 function getBattlePlayerId(gs, slot) {
     if (!gs) return null;
-    if (slot === 'self') return normalizePlayerId(gs.your_id);
+    const perspectiveId = getBattlePerspectivePlayerId(gs);
+    if (slot === 'self') return perspectiveId;
     if (slot === 'ally') return normalizePlayerId(gs.teammate_id);
     if (slot === 'enemy2') return normalizePlayerId((gs.enemy_ids || [])[1]);
     if (slot === 'enemy') {
         if (gs.mode === '2v2') return normalizePlayerId((gs.enemy_ids || [])[0]);
-        const yourId = normalizePlayerId(gs.your_id);
+        const yourId = perspectiveId;
         if (yourId == null) return null;
         return yourId === 1 ? 0 : 1;
     }
@@ -21216,7 +21316,7 @@ function renderGame(data) {
         if (oppLabel) oppLabel.textContent = `${localizeCanonicalPlayerName(gs.opponent_name || UI.opponent)} - ${oppResult}`;
     }
 
-    const yourPlayerId = normalizePlayerId(gs.your_id);
+    const yourPlayerId = getBattlePerspectivePlayerId(gs);
     const enemyIdsForSkin = Array.isArray(gs.enemy_ids) ? gs.enemy_ids.map(normalizePlayerId) : [];
     const opponentSkinId = is2v2 ? enemyIdsForSkin[0] : (yourPlayerId === 1 ? 0 : 1);
     renderMiniPlayerSkin('opp-skin', opp, opponentSkinId);
@@ -21571,6 +21671,7 @@ function renderStatusTags(containerId, playerData) {
         { keys: ['ocean:unable_counter', 'unable_counter', '无法反制'], iconKey: 'unable_counter', name: '无法反制', abbr: '反制封锁', fg: '#536878', bg: '#EEF2F3', title: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。' },
         { keys: ['hel:luck', 'luck', '幸运'], iconKey: 'luck', name: '幸运', abbr: '幸运', fg: '#63B85C', bg: '#ECF8EA', title: '即将造成一段D时，若幸运层数不少于该段减伤前伤害，则消耗等量幸运，使该段伤害暴击。' },
         { keys: ['hel:blazing_fire', 'blazing_fire', '烈火'], iconKey: 'blazing_fire', name: '烈火', abbr: '烈火', fg: '#FF5D2E', bg: '#FFF0EA', title: '自己回合开始时，对自己施加等同于烈火层数的F；不自动减少。' },
+        { keys: ['arctic:frost', 'frost', '霜冻'], iconKey: 'frost', name: '霜冻', abbr: '霜冻', fg: '#4E9DCC', bg: '#EAF7FC', title: '上限60层；每有10层，卡牌E花费+1。自己回合结束时，层数向下取整减半。' },
     ];
     jungleStatusDisplay.forEach((info) => {
         const count = customStatusSum(...info.keys);
@@ -21895,6 +21996,16 @@ function normalizePlayerId(id) {
     return Number.isInteger(value) ? value : null;
 }
 
+function getBattlePerspectivePlayerId(gs = gameState) {
+    if (!gs) return normalizePlayerId(playerId);
+    const spectateId = normalizePlayerId(gs.spectate_perspective);
+    if ((gs.spectating || gs.replay_mode || isSpectating || replayMode) && spectateId != null) return spectateId;
+    const stateId = normalizePlayerId(gs.your_id);
+    if (stateId != null && stateId >= 0) return stateId;
+    if (spectateId != null) return spectateId;
+    return normalizePlayerId(playerId);
+}
+
 function getPlayerNameById(id) {
     id = normalizePlayerId(id);
     const fallback = id == null ? '?' : `P${id + 1}`;
@@ -21909,9 +22020,10 @@ function getPlayerNameById(id) {
     if (directName) return localizeCanonicalPlayerName(directName);
     const nameList = Array.isArray(gameState.player_names) ? gameState.player_names : [];
     if (nameList[id]) return localizeCanonicalPlayerName(nameList[id]);
-    if (id === normalizePlayerId(gameState.your_id)) return localizeCanonicalPlayerName(gameState.your_name || UI.you);
+    if (id === getBattlePerspectivePlayerId(gameState)) return localizeCanonicalPlayerName(gameState.your_name || UI.you);
     if (id === normalizePlayerId(gameState.teammate_id)) return localizeCanonicalPlayerName(gameState.teammate_name || UI.teammate);
-    const oneVsOneOpponentId = gameState.your_id != null ? 1 - normalizePlayerId(gameState.your_id) : null;
+    const perspectiveId = getBattlePerspectivePlayerId(gameState);
+    const oneVsOneOpponentId = perspectiveId != null ? 1 - perspectiveId : null;
     if ((!Array.isArray(gameState.enemy_ids) || !gameState.enemy_ids.length) && id === oneVsOneOpponentId) {
         return localizeCanonicalPlayerName(gameState.opponent_name || UI.opponent);
     }
@@ -21927,9 +22039,10 @@ function getPlayerDataById(id) {
         const spectatePlayer = gameState.spectate_players.find(p => normalizePlayerId(p && p.player_id) === id);
         if (spectatePlayer) return spectatePlayer;
     }
-    if (id === normalizePlayerId(gameState.your_id)) return gameState.you || {};
+    if (id === getBattlePerspectivePlayerId(gameState)) return gameState.you || {};
     if (id === normalizePlayerId(gameState.teammate_id)) return gameState.teammate || {};
-    const oneVsOneOpponentId = gameState.your_id != null ? 1 - normalizePlayerId(gameState.your_id) : null;
+    const perspectiveId = getBattlePerspectivePlayerId(gameState);
+    const oneVsOneOpponentId = perspectiveId != null ? 1 - perspectiveId : null;
     if ((!Array.isArray(gameState.enemy_ids) || !gameState.enemy_ids.length) && id === oneVsOneOpponentId) {
         return gameState.opponent || {};
     }
@@ -21977,17 +22090,19 @@ function syncPlayerRegionTargets(gs) {
         });
     };
     if (useClassicRefs) {
-        assign('#classic-fighter-self .player-avatar', gs.your_id);
+        const perspectiveId = getBattlePerspectivePlayerId(gs);
+        assign('#classic-fighter-self .player-avatar', perspectiveId);
         const is2v2 = isClassic2v2State(gs);
-        assign('#classic-fighter-enemy .player-avatar', is2v2 ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+        assign('#classic-fighter-enemy .player-avatar', is2v2 ? (gs.enemy_ids || [])[0] : (perspectiveId === 1 ? 0 : 1));
         if (is2v2) {
             assign('#classic-fighter-enemy-2 .player-avatar', (gs.enemy_ids || [])[1]);
             assign('#classic-fighter-ally .player-avatar', gs.teammate_id);
         }
         return;
     }
-    assign('.player-section', gs.your_id);
-    assign('.opp-half.opp-left', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (normalizePlayerId(gs.your_id) === 1 ? 0 : 1));
+    const perspectiveId = getBattlePerspectivePlayerId(gs);
+    assign('.player-section', perspectiveId);
+    assign('.opp-half.opp-left', gs.mode === '2v2' ? (gs.enemy_ids || [])[0] : (perspectiveId === 1 ? 0 : 1));
     if (gs.mode === '2v2') {
         assign('#opp2-half', (gs.enemy_ids || [])[1]);
         assign('#teammate-sidebar', gs.teammate_id);
@@ -22609,7 +22724,8 @@ function getStatePlayerDisplayNames(gs, ref) {
         const p = gs.spectate_players.find(item => normalizePlayerId(item && item.player_id) === id);
         if (p && p.name) names.add(String(p.name));
     }
-    if (id === normalizePlayerId(gs.your_id) && gs.your_name) names.add(String(gs.your_name));
+    const perspectiveId = getBattlePerspectivePlayerId(gs);
+    if (id === perspectiveId && gs.your_name) names.add(String(gs.your_name));
     if (id === normalizePlayerId(gs.teammate_id) && gs.teammate_name) names.add(String(gs.teammate_name));
     if (gs.mode === '2v2') {
         const enemyIndex = (gs.enemy_ids || []).map(normalizePlayerId).indexOf(id);
@@ -22617,8 +22733,7 @@ function getStatePlayerDisplayNames(gs, ref) {
             names.add(String((gs.opponent_names || [])[enemyIndex]));
         }
     } else {
-        const yourId = normalizePlayerId(gs.your_id);
-        if (id !== yourId && gs.opponent_name) names.add(String(gs.opponent_name));
+        if (id !== perspectiveId && gs.opponent_name) names.add(String(gs.opponent_name));
     }
     if (gs[`player${id + 1}_name`]) names.add(String(gs[`player${id + 1}_name`]));
     return names;
@@ -25326,18 +25441,88 @@ function animatePlayedCard(cardInstanceId, options = {}) {
             }, 310);
         }
     }
-    document.body.appendChild(flash);
+    const startDelay = Math.max(0, Number(options.startDelay || 0));
+    const appendFlash = () => document.body.appendChild(flash);
+    if (startDelay > 0) setTimeout(appendFlash, startDelay);
+    else appendFlash();
     if (options.shatterAfter) {
-        lockCardAnimation(targeted ? 980 : 900);
+        lockCardAnimation(startDelay + (targeted ? 980 : 900));
         setTimeout(() => {
             animateCardShatterFromElement(flash);
             flash.remove();
-        }, targeted ? 420 : 340);
-        setTimeout(() => flash.remove(), targeted ? 900 : 760);
+        }, startDelay + (targeted ? 420 : 340));
+        setTimeout(() => flash.remove(), startDelay + (targeted ? 900 : 760));
     } else {
-        lockCardAnimation(targeted ? 500 : 360);
-        setTimeout(() => flash.remove(), targeted ? 560 : 420);
+        lockCardAnimation(startDelay + (targeted ? 500 : 360));
+        setTimeout(() => flash.remove(), startDelay + (targeted ? 560 : 420));
     }
+}
+
+function getPlayGestureFallbackTarget() {
+    return $('play-zone')
+        || $('classic-stage')
+        || document.querySelector('.battle-field')
+        || document.body;
+}
+
+function createVirtualWindowsCursor() {
+    const cursor = document.createElement('div');
+    cursor.className = 'virtual-play-cursor';
+    cursor.innerHTML = `
+        <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+            <path class="cursor-shadow" d="M6 3 L6 25 L12.2 19.4 L15.9 28 L19.2 26.6 L15.6 18.2 L24 18.2 Z"></path>
+            <path class="cursor-fill" d="M5 2 L5 24 L11.2 18.4 L14.9 27 L18.2 25.6 L14.6 17.2 L23 17.2 Z"></path>
+        </svg>
+    `;
+    return cursor;
+}
+
+function animateVirtualPlayGesture(cardInstanceId, options = {}) {
+    if (!playGestureAnimationEnabled || isSpectating || replayMode) return 0;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
+    const source = document.querySelector(`#you-hand .card[data-instance-id="${cardInstanceId}"], .classic-hand .card[data-instance-id="${cardInstanceId}"], .card[data-instance-id="${cardInstanceId}"]`);
+    if (!source) return 0;
+    const sourceRect = source.getBoundingClientRect();
+    if (!sourceRect || sourceRect.width <= 2 || sourceRect.height <= 2) return 0;
+    const targetEl = options.targetElement || getPlayGestureFallbackTarget();
+    const targetRect = targetEl && targetEl.getBoundingClientRect ? targetEl.getBoundingClientRect() : null;
+    const targetX = targetRect && targetRect.width > 0
+        ? targetRect.left + targetRect.width * 0.5
+        : window.innerWidth * 0.5;
+    const targetY = targetRect && targetRect.height > 0
+        ? targetRect.top + targetRect.height * 0.5
+        : window.innerHeight * 0.42;
+    const startX = sourceRect.left + sourceRect.width * 0.58;
+    const startY = sourceRect.top + sourceRect.height * 0.5;
+    const cardStartX = sourceRect.left;
+    const cardStartY = sourceRect.top;
+    const cardEndX = targetX - sourceRect.width * 0.5;
+    const cardEndY = targetY - sourceRect.height * 0.5;
+    const cursor = createVirtualWindowsCursor();
+    const clone = source.cloneNode(true);
+    clone.classList.add('virtual-play-card');
+    clone.style.left = `${cardStartX}px`;
+    clone.style.top = `${cardStartY}px`;
+    clone.style.width = `${sourceRect.width}px`;
+    clone.style.height = `${sourceRect.height}px`;
+    clone.style.setProperty('--gesture-card-dx', `${cardEndX - cardStartX}px`);
+    clone.style.setProperty('--gesture-card-dy', `${cardEndY - cardStartY}px`);
+    cursor.style.left = `${startX}px`;
+    cursor.style.top = `${startY}px`;
+    cursor.style.setProperty('--gesture-cursor-dx', `${targetX - startX}px`);
+    cursor.style.setProperty('--gesture-cursor-dy', `${targetY - startY}px`);
+    document.body.append(clone, cursor);
+    source.classList.add('virtual-play-source');
+    const canMarkTarget = targetEl && targetEl.classList && targetEl !== document.body && targetEl !== document.documentElement;
+    if (canMarkTarget) targetEl.classList.add('virtual-play-target');
+    const duration = 680;
+    setTimeout(() => {
+        clone.remove();
+        cursor.remove();
+        source.classList.remove('virtual-play-source');
+        if (canMarkTarget) targetEl.classList.remove('virtual-play-target');
+    }, duration + 80);
+    return duration;
 }
 
 function animateFusionMerge(fusionCardId, targetIds = [], options = {}) {
@@ -25523,12 +25708,17 @@ async function onPlayCard(cardInstanceId, options = {}) {
     const optimisticCost = getOptimisticResourceCost(cardDict, gameState && gameState.you);
     const optimisticResources = buildOptimisticResourceOverride(cardDict, gameState && gameState.you, optimisticCost);
     queueLocalResourceCost(cardDict, gameState && gameState.you, { shownOptimistically: !!optimisticResources });
+    const playedTargetElement = getClassicPlayedCardAnimationTarget(cardDict, cardDef, targetPlayerId);
+    const playGestureDelay = animateVirtualPlayGesture(cardInstanceId, {
+        targetElement: playedTargetElement,
+    });
     if (cardDict.def_id === 'Fusion' && choice && Array.isArray(choice.target_instance_ids)) {
-        animateFusionMerge(cardInstanceId, choice.target_instance_ids, { startDelay: 300 });
+        animateFusionMerge(cardInstanceId, choice.target_instance_ids, { startDelay: playGestureDelay || 300 });
     } else {
         animatePlayedCard(cardInstanceId, {
             shatterAfter: shouldShatterAfterPlay,
-            targetElement: getClassicPlayedCardAnimationTarget(cardDict, cardDef, targetPlayerId),
+            targetElement: playedTargetElement,
+            startDelay: playGestureDelay,
         });
     }
     pendingPlayCard = cardDict;
@@ -27003,6 +27193,10 @@ function renderGameOver(data) {
 function showOpponentDCWaiting(data) {
     const timeout = data.reconnect_timeout || 120;
     const oppName = data.opponent_nickname || '?';
+    const spectateDcModal = !!(isSpectating || (gameState && gameState.spectating));
+    const leaveSpectateHtml = spectateDcModal
+        ? `<button id="dc-leave-spectate" class="btn btn-danger btn-leave-spectate dc-leave-spectate" type="button">${UI.leave_spectate || '退出观战'}</button>`
+        : '';
     if (window._opponentDcTimerId) {
         clearInterval(window._opponentDcTimerId);
         window._opponentDcTimerId = null;
@@ -27012,8 +27206,12 @@ function showOpponentDCWaiting(data) {
             <div class="disconnect-modal">
                 <h3>${UI.opponent_disconnected}</h3>
                 <p id="dc-countdown" class="disconnect-countdown">${oppName}</p>
+                ${leaveSpectateHtml}
             </div>
         `);
+        setSpectateDisconnectModalActive(spectateDcModal);
+        const leaveBtn = $('dc-leave-spectate');
+        if (leaveBtn) leaveBtn.addEventListener('click', leaveSpectateAction);
         return;
     }
     let remaining = timeout;
@@ -27021,8 +27219,12 @@ function showOpponentDCWaiting(data) {
         <div class="disconnect-modal">
             <h3>${UI.opponent_disconnected}</h3>
             <p id="dc-countdown" class="disconnect-countdown">${oppName} ${remaining}s</p>
+            ${leaveSpectateHtml}
         </div>
     `);
+    setSpectateDisconnectModalActive(spectateDcModal);
+    const leaveBtn = $('dc-leave-spectate');
+    if (leaveBtn) leaveBtn.addEventListener('click', leaveSpectateAction);
     window._opponentDcTimerId = setInterval(() => {
         remaining--;
         const el = $('dc-countdown');
@@ -27030,6 +27232,7 @@ function showOpponentDCWaiting(data) {
         if (remaining <= 0) {
             clearInterval(window._opponentDcTimerId);
             window._opponentDcTimerId = null;
+            setSpectateDisconnectModalActive(false);
             hideModal();
         }
     }, 1000);
@@ -27042,6 +27245,7 @@ function clearOpponentDisconnectModal() {
     }
     const dcEl = $('dc-countdown');
     if (dcEl) hideModal();
+    setSpectateDisconnectModalActive(false);
 }
 
 function syncOpponentDisconnectModalFromState(state) {
@@ -27621,7 +27825,7 @@ async function loadSettingsMods() {
     if (!listEl) return;
     const seq = ++settingsLoadSeq;
     const panel = $('settings-panel');
-    const cacheFresh = settingsModsLoadedAt && Date.now() - settingsModsLoadedAt < 30 * 1000;
+    const cacheFresh = settingsModsLoadedAt && Date.now() - settingsModsLoadedAt < 5 * 60 * 1000;
     if (Array.isArray(settingsMods) && settingsMods.length && cacheFresh) {
         renderOfficialModList();
         renderModSourceControls();
@@ -27630,8 +27834,7 @@ async function loadSettingsMods() {
     }
     try {
         if (!settingsModsLoadPromise) {
-            settingsModsLoadPromise = fetch('/api/mods')
-                .then(resp => resp.json())
+            settingsModsLoadPromise = fetchPublicDataJson('/api/mods?summary=1')
                 .finally(() => {
                     settingsModsLoadPromise = null;
                 });
@@ -28460,8 +28663,7 @@ function initModEditor() {
     if (loadBtn) {
         loadBtn.onclick = async () => {
             try {
-                const resp = await fetch('/api/mods');
-                const mods = await resp.json();
+                const mods = await fetchPublicDataJson('/api/mods');
                 if (editorArea) editorArea.value = JSON.stringify(mods, null, 2);
                 if (statusEl) statusEl.textContent = UI.load_success;
             } catch (e) {
@@ -28886,6 +29088,11 @@ async function init() {
         cardImagesToggle.checked = showCardImages;
         cardImagesToggle.addEventListener('change', (e) => applyShowCardImages(e.target.checked));
     }
+    const playGestureToggle = $('settings-play-gesture-animation');
+    if (playGestureToggle) {
+        playGestureToggle.checked = playGestureAnimationEnabled;
+        playGestureToggle.addEventListener('change', (e) => applyPlayGestureAnimation(e.target.checked));
+    }
     const landscapeModeToggle = $('settings-landscape-mode');
     if (landscapeModeToggle) {
         landscapeModeToggle.checked = landscapeModeEnabled;
@@ -28913,6 +29120,7 @@ async function init() {
     document.addEventListener('mousemove', onClassicAimPointerMove);
     document.addEventListener('pointermove', onClassicAimPointerMove);
     document.addEventListener('keydown', (event) => {
+        if (handleSoloHistoryShortcut(event)) return;
         if (event.code === 'Backquote' || event.key === '`') {
             if (!isSpectating && !replayMode && !isTypingKeyboardTarget(event.target)) classicBackquoteHeld = true;
             return;
@@ -28980,14 +29188,7 @@ async function init() {
         });
     }
     if ($('classic-leave-spectate')) {
-        $('classic-leave-spectate').addEventListener('click', () => {
-            if (replayMode) {
-                closeAccountReplayModal();
-                return;
-            }
-            clearActiveMatchRoute('leave_spectate');
-            if (socket) socket.emit('leave_spectate', {});
-        });
+        $('classic-leave-spectate').addEventListener('click', leaveSpectateAction);
     }
     if ($('btn-urf-replace')) $('btn-urf-replace').addEventListener('click', onUrfReplaceCard);
     if ($('classic-urf-replace')) $('classic-urf-replace').addEventListener('click', onUrfReplaceCard);
@@ -29000,6 +29201,10 @@ async function init() {
     $('solo-card-search').addEventListener('input', renderSoloBuilder);
     $('btn-solo-clear-a').addEventListener('click', (e) => { e.stopPropagation(); clearSoloDeck('a'); });
     $('btn-solo-clear-b').addEventListener('click', (e) => { e.stopPropagation(); clearSoloDeck('b'); });
+    const soloShuffleA = $('btn-solo-shuffle-a');
+    if (soloShuffleA) soloShuffleA.addEventListener('click', (e) => { e.stopPropagation(); shuffleSoloDeck('a'); });
+    const soloShuffleB = $('btn-solo-shuffle-b');
+    if (soloShuffleB) soloShuffleB.addEventListener('click', (e) => { e.stopPropagation(); shuffleSoloDeck('b'); });
     $('solo-event-a').addEventListener('change', (e) => { soloEventA = e.target.value; updateSoloEventIcon('a', soloEventA); });
     $('solo-event-b').addEventListener('change', (e) => { soloEventB = e.target.value; updateSoloEventIcon('b', soloEventB); });
     $('btn-solo-load').addEventListener('click', () => { loadSoloDecks(true); renderSoloBuilder(); });
@@ -29028,14 +29233,7 @@ async function init() {
         showView('view-lobby');
         phase = 'lobby';
     });
-    $('btn-leave-spectate').addEventListener('click', () => {
-        if (replayMode) {
-            closeAccountReplayModal();
-            return;
-        }
-        clearActiveMatchRoute('leave_spectate');
-        if (socket) socket.emit('leave_spectate', {});
-    });
+    $('btn-leave-spectate').addEventListener('click', leaveSpectateAction);
     $('btn-lobby-chat-send').addEventListener('click', onLobbyChatSend);
     $('lobby-chat-input').addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && lobbyMentionMenu) lobbyMentionMenu.classList.add('hidden');

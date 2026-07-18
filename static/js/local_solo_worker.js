@@ -14,7 +14,8 @@ const INITIAL_ELIXIR = 5;
 const INITIAL_MAGIC = 0;
 const INITIAL_HAND_SIZE = 5;
 const FIRST_PLAYER_HAND_SIZE = 4;
-const DECK_SIZE = 15;
+const SOLO_TRAINING_MIN_DECK_SIZE = 0;
+const SOLO_TRAINING_MAX_DECK_SIZE = 100;
 const ERROR_CARD_ID = 'Error';
 const MOD_RUNTIME_ERROR_MESSAGE = '模组执行出现了一个意外错误。请联系管理员。';
 const CORRUPTION_DAMAGE_MULTIPLIER = 1.5;
@@ -1975,6 +1976,10 @@ class LocalSoloEngine {
             original_choice: choice && typeof choice === 'object' ? { ...choice } : null,
             already_paid: !!alreadyPaid,
         };
+        if (alreadyPaid) {
+            this.pending_choice.paid_e = Math.max(0, toInt(card._paid_e_this_play, 0));
+            this.pending_choice.paid_m = Math.max(0, toInt(card._paid_m_this_play ?? card.cost_m, 0));
+        }
         if (targetId != null) {
             this.pending_choice.target_player_id = targetId;
             if (['choose_from_enemy_hand', 'choose_card_from_hand'].includes(choiceType) && this.players[targetId]) {
@@ -4312,6 +4317,41 @@ class LocalSoloEngine {
         if (log) this.logMsg(log);
     }
 
+    effect_bio_diamond_attack(playerId, card, params, log, choice) {
+        const amount = this.modifiedAttackDamage(this.evalInt(playerId, params.amount ?? 10, card, 10), card);
+        const targets = card && card.flags && card.flags.has('wide_strike')
+            ? this.wideStrikeTargetIds(playerId, card)
+            : [this.resolveTarget(playerId, params.target || 'target')].filter(tid => tid >= 0 && tid < this.players.length);
+        let dealtAny = false;
+        targets.forEach(targetId => {
+            const dealt = this.dealAttackDamage(targetId, amount, 1, card && card.flags && card.flags.has('precision'), playerId, card);
+            if (dealt > 0) dealtAny = true;
+        });
+        if (!dealtAny || !card || card.setup_modifiers.has('bio_diamond_copy')) return;
+        const copied = card.copy();
+        copied.instance_id = randintId();
+        copied.setup_modifiers.add('bio_diamond_copy');
+        ['wide_strike', 'self_target', 'exile'].forEach(flag => copied.instance_flags.add(flag));
+        copied.fission_level = 3;
+        copied.fission_count = 2;
+        const ps = this.players[playerId];
+        ps.addToHand(copied, { triggerEnterHand: false });
+        const previousAutoActor = this.allowOutOfTurnAutoPlayFor;
+        const previousAutoChoice = this._auto_resolve_choices_for;
+        const previousAutoNoCost = this._auto_play_no_cost_for;
+        this.allowOutOfTurnAutoPlayFor = playerId;
+        this._auto_resolve_choices_for = playerId;
+        this._auto_play_no_cost_for = playerId;
+        try {
+            this.playCard(playerId, copied.instance_id, choice || {});
+        } finally {
+            this.allowOutOfTurnAutoPlayFor = previousAutoActor;
+            this._auto_resolve_choices_for = previousAutoChoice;
+            this._auto_play_no_cost_for = previousAutoNoCost;
+        }
+        this.logMsg(log || `${this.pn(playerId)}的钻石额外打出一张复制`);
+    }
+
     effect_direct_damage(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'enemy');
         const amount = this.evalInt(playerId, params.amount ?? 1, card, 1);
@@ -5023,7 +5063,7 @@ class LocalSoloEngine {
 
     logDestroyedEquipment(actorId, ownerId, eq, customLog) {
         if (!eq) return;
-        const eqName = cardName(eq.def_id || (eq.card_instance && eq.card_instance.def_id));
+        const eqName = eq._destroy_log_name || cardName(eq.def_id || (eq.card_instance && eq.card_instance.def_id));
         this.logMsg(customLog || `${this.pn(actorId)}摧毁了${this.pn(ownerId)}的${eqName}`);
     }
 
@@ -5075,7 +5115,11 @@ class LocalSoloEngine {
         const choiceCard = this.resolveCardRef(playerId, params.card || { ref: 'selected_card' }, card);
         if (choiceCard) eq = this.players[targetId].equipment.find(item => item.card_instance === choiceCard || item.card_instance.instance_id === choiceCard.instance_id);
         if (!eq) eq = this.players[targetId].equipment.find(item => !item.card_instance.flags.has('indestructible'));
-        if (eq && this.destroyEquipment(targetId, eq)) this.logDestroyedEquipment(playerId, targetId, eq, log);
+        if (eq) {
+            eq._destroy_log_name = cardName(eq.def_id || (eq.card_instance && eq.card_instance.def_id));
+            if (this.destroyEquipment(targetId, eq)) this.logDestroyedEquipment(playerId, targetId, eq, log);
+            delete eq._destroy_log_name;
+        }
     }
 
     effect_destroy_self_equipment(playerId, card) {
@@ -5508,6 +5552,22 @@ class LocalSoloEngine {
         card._sewers_was_countered_this_play = false;
         this.dealAttackDamage(targetId, 10, 1, false, playerId, card);
         if (wasCountered) this.dealAttackDamage(targetId, 3, 2, false, playerId, card);
+    }
+
+    effect_sewers_blood_rose(playerId, card, params) {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const target = this.players[targetId];
+        if (!target) return;
+        const dealt = this.dealAttackDamage(targetId, 3, 1, false, playerId, card);
+        const actualDamage = Math.max(0, toInt(dealt, 0));
+        if (actualDamage > 0) {
+            this.registerTimedEffect(playerId, targetId, 'target_turn_start_after_status_clear', 1, [
+                { type: 'add_status', params: { target: 'target', status: 'blind', amount: 3 } },
+                { type: 'shuffle_hand', params: { target: 'target' } },
+            ], card);
+        }
+        const healed = target.heal(actualDamage * 5);
+        if (healed > 0) this.logMsg(`${this.pn(targetId)}回复${healed}H`);
     }
 
     effect_delayed_blind_next_turn(playerId, card, params, log) {
@@ -6379,10 +6439,11 @@ class LocalSoloEngine {
     destroyEquipment(ownerId, eq) {
         const ps = this.players[ownerId];
         if (!eq || !ps.equipment.includes(eq)) return false;
+        eq._destroy_log_name = eq._destroy_log_name || cardName(eq.def_id || (eq.card_instance && eq.card_instance.def_id));
         if (eq.card_instance && eq.card_instance.flags && eq.card_instance.flags.has('indestructible')) return false;
         if (toInt(eq.armor, 0) > 0) {
             eq.armor = Math.max(0, toInt(eq.armor, 0) - 1);
-            this.logMsg(`${this.pn(ownerId)}的${cardName(eq.def_id)}装备护甲抵消了摧毁（剩余${eq.armor}）`);
+            this.logMsg(`${this.pn(ownerId)}的${eq._destroy_log_name}装备护甲抵消了摧毁（剩余${eq.armor}）`);
             return false;
         }
         if (ps.equipment_protection > 0) {
@@ -6641,7 +6702,11 @@ class LocalSoloEngine {
         const [canPlay, reason] = this.canPlayCard(playerId, card);
         const autoNoCost = this._auto_play_no_cost_for === playerId;
         if (!canPlay && !(autoNoCost && (String(reason).includes('能量不足') || String(reason).includes('魔力不足')))) return { success: false, error: reason };
-        if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
+        if (
+            this.cardNeedsChoice(card)
+            && !this.choiceSatisfiesRequest(card, choice)
+            && !this.cardIs(card, 'Sapphire', 'ocean:sapphire')
+        ) {
             const queued = this.queueCardChoice(playerId, card, choice, false);
             if (queued) return queued;
         }
@@ -6813,12 +6878,18 @@ class LocalSoloEngine {
             && scriptEffectsFrom(playScripts[key]).length > 0
         );
         this.resetCardAfterPlay(card);
+        const forceExileAfterAutoPlay = card.instance_flags.has('ocean_no_auto') && card.flags.has('exile');
         if ((card.card_type === 'root' && !scriptControlsPlay) || card._placed_as_equipment) {
             if (!this.findEquipmentForCard(equipOwnerId, card)) {
                 const eq = new LocalEquipment(card, equipOwnerId);
                 this.players[equipOwnerId].equipment.push(eq);
                 this.logMsg(`${this.pn(equipOwnerId)}装备了${cardName(card.def_id)}`);
             }
+        } else if (forceExileAfterAutoPlay) {
+            card.instance_flags.delete('return_to_hand');
+            const loc = this.findCardLocation(card);
+            if (!loc) this.putCardInExile(playerId, card);
+            this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}被放逐`);
         } else if (card.flags.has('rebound')) {
             ps.addToHand(card);
             this.logMsg(`${this.pn(playerId)}的${cardName(card.def_id)}因回转回到手中`);
@@ -6944,13 +7015,15 @@ class LocalSoloEngine {
                 return { success: false, error: '此选择不能取消' };
             }
             if (pending.already_paid) {
+                card._paid_e_this_play = Math.max(0, toInt(pending.paid_e ?? card._paid_e_this_play, 0));
+                card._paid_m_this_play = Math.max(0, toInt(pending.paid_m ?? card._paid_m_this_play ?? card.cost_m, 0));
                 this.undoMagicAccelerationAfterPendingChoice(playerId, card);
                 const marker = Number.isInteger(pending.play_log_marker) ? pending.play_log_marker : -1;
                 const expected = `${this.pn(playerId)}使用了${cardName(card.def_id)}`;
                 if (marker >= 0 && this.log[marker] === expected) this.log.splice(marker, 1);
                 if (!ps.findHandCard(card.instance_id)) ps.hand.unshift(card);
                 ps.elixir += this.paidEForRefund(playerId, card);
-                ps.magic += card.cost_m;
+                ps.magic += Math.max(0, toInt(card._paid_m_this_play ?? card.cost_m, 0));
                 ps.cards_played_this_turn[card.def_id] = Math.max(0, toInt(ps.cards_played_this_turn[card.def_id], 1) - 1);
             } else if (!ps.findHandCard(card.instance_id)) {
                 ps.hand.unshift(card);
@@ -7299,8 +7372,13 @@ function startLocalGame(message) {
     const tutorial = message.type === 'tutorial_start';
     const deck0 = tutorial ? TUTORIAL_DECKS[0] : (payload.deck0 || []);
     const deck1 = tutorial ? TUTORIAL_DECKS[1] : (payload.deck1 || []);
-    if (!tutorial && (deck0.length !== DECK_SIZE || deck1.length !== DECK_SIZE)) {
-        emit('server_error', { message: '训练场牌组必须各为15张' });
+    if (!tutorial && (
+        deck0.length < SOLO_TRAINING_MIN_DECK_SIZE
+        || deck1.length < SOLO_TRAINING_MIN_DECK_SIZE
+        || deck0.length > SOLO_TRAINING_MAX_DECK_SIZE
+        || deck1.length > SOLO_TRAINING_MAX_DECK_SIZE
+    )) {
+        emit('server_error', { message: '训练场牌组必须各为0-100张' });
         return;
     }
     engine = new LocalSoloEngine(

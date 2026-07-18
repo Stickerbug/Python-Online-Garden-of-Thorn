@@ -994,6 +994,29 @@ class GameEngine2v2(GameEngine):
             target_id = self._selected_effect_target(player_id, choice)
         return [target_id] if self._is_valid_player_id(target_id) else []
 
+    def _wide_strike_target_ids(self, player_id: int, card: Optional[CardInstance]) -> List[int]:
+        snapshot = getattr(self, '_card_resolution_target_snapshot', None)
+        if (
+            isinstance(snapshot, dict)
+            and int(getattr(self, '_card_resolution_depth', 0) or 0) > 0
+            and snapshot.get('player_id') == player_id
+            and snapshot.get('card_instance_id') == getattr(card, 'instance_id', None)
+            and isinstance(snapshot.get('wide_targets'), list)
+        ):
+            return [
+                int(target_id) for target_id in snapshot['wide_targets']
+                if isinstance(target_id, int) and 0 <= target_id < len(self.players)
+            ]
+        flags = self._effective_card_flags(card)
+        allow_self = 'self_target' in flags
+        targets: List[int] = []
+        for target_id in range(len(self.players)):
+            if target_id == player_id and not allow_self:
+                continue
+            if self._is_valid_effect_target(player_id, target_id):
+                targets.append(target_id)
+        return targets
+
     def _build_pending_response_for_card(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> Optional[dict]:
         flags = self._effective_card_flags(card)
         if self._card_blocks_response(card):
@@ -1186,7 +1209,11 @@ class GameEngine2v2(GameEngine):
                     'choice': dict(choice or {}),
                 }
                 return {'success': True, 'needs_ally_consent': True, 'card': card.to_dict(), 'target_player_id': target_player_id}
-        if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
+        if (
+            self._card_needs_choice(card)
+            and not self._choice_satisfies_request(card, choice)
+            and not self._card_is(card, 'Sapphire', 'ocean:sapphire')
+        ):
             queued = self._queue_card_choice(player_id, card, choice, already_paid=False)
             if queued:
                 return queued

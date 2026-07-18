@@ -24,7 +24,7 @@ import subprocess
 import sqlite3
 import traceback
 from functools import wraps
-from collections import deque
+from collections import deque, OrderedDict
 from datetime import datetime, timedelta, timezone
 
 from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g
@@ -253,6 +253,77 @@ except Exception as e:
 
 _MODS_SIGNATURE = None
 COMMUNITY_CARD_SOURCES = {}
+
+_PUBLIC_DATA_CACHE_SECONDS = 300.0
+_PUBLIC_DATA_CACHE_MAX_ENTRIES = 16
+_PUBLIC_DATA_CACHE = OrderedDict()
+_PUBLIC_DATA_CACHE_LOCK = threading.Lock()
+
+
+def _public_data_query_key():
+    return tuple(
+        (key, tuple(request.args.getlist(key)))
+        for key in sorted(request.args.keys())
+    )
+
+
+def _public_data_disable_key(rows):
+    return tuple(sorted(
+        (
+            str(row.get('content_type') or ''),
+            str(row.get('content_id') or ''),
+            str(row.get('scope_mode') or ''),
+            str(row.get('expires_at') or ''),
+            str(row.get('reason') or ''),
+        )
+        for row in (rows or [])
+    ))
+
+
+def _public_data_cache_get(namespace, key):
+    full_key = (namespace, key)
+    now = time.monotonic()
+    with _PUBLIC_DATA_CACHE_LOCK:
+        entry = _PUBLIC_DATA_CACHE.get(full_key)
+        if entry is None or now - float(entry.get('at') or 0) >= _PUBLIC_DATA_CACHE_SECONDS:
+            if entry is not None:
+                _PUBLIC_DATA_CACHE.pop(full_key, None)
+            return None
+        _PUBLIC_DATA_CACHE.move_to_end(full_key)
+        cached = dict(entry)
+    etag = str(cached.get('etag') or '')
+    if etag and request.if_none_match.contains(etag):
+        response = app.response_class(status=304)
+    else:
+        response = app.response_class(cached.get('body') or b'{}', mimetype='application/json')
+    if etag:
+        response.set_etag(etag)
+    response.headers['Cache-Control'] = 'private, max-age=60, stale-while-revalidate=300'
+    response.headers['X-GTN-Data-Cache'] = 'hit'
+    return response
+
+
+def _public_data_cache_put(namespace, key, payload):
+    body = app.json.dumps(payload, separators=(',', ':')).encode('utf-8')
+    etag = hashlib.sha256(body).hexdigest()
+    full_key = (namespace, key)
+    with _PUBLIC_DATA_CACHE_LOCK:
+        _PUBLIC_DATA_CACHE[full_key] = {
+            'at': time.monotonic(),
+            'body': body,
+            'etag': etag,
+        }
+        _PUBLIC_DATA_CACHE.move_to_end(full_key)
+        while len(_PUBLIC_DATA_CACHE) > _PUBLIC_DATA_CACHE_MAX_ENTRIES:
+            _PUBLIC_DATA_CACHE.popitem(last=False)
+    if request.if_none_match.contains(etag):
+        response = app.response_class(status=304)
+    else:
+        response = app.response_class(body, mimetype='application/json')
+    response.set_etag(etag)
+    response.headers['Cache-Control'] = 'private, max-age=60, stale-while-revalidate=300'
+    response.headers['X-GTN-Data-Cache'] = 'miss'
+    return response
 
 
 def current_mods_signature():
@@ -711,6 +782,7 @@ rooms = {}
 invites = {}
 solo_sessions = {}
 tutorial_sessions = set()
+SOLO_HISTORY_LIMIT = 100
 teams = {}
 pending_team_matches = {}
 v2_ui_timers = {}
@@ -1557,12 +1629,58 @@ def replay_item_visible_to_current_user(item, admin_context=False):
     return any(str(name or '').lower() == username for name in (item or {}).get('players', []))
 
 
+def _replay_download_rate_limit_response(replay_id, item=None, admin_context=False):
+    ip = _client_ip()
+    user_id = session.get('user_id')
+    is_admin_download = bool(admin_context or is_admin_authenticated() or is_admin_console_authenticated())
+    replay_size = 0
+    try:
+        replay_size = int((item or {}).get('replay_size') or 0)
+    except Exception:
+        replay_size = 0
+    if REPLAY_DOWNLOAD_MAX_BYTES and replay_size > REPLAY_DOWNLOAD_MAX_BYTES and not is_admin_download:
+        admin_event(
+            'warning',
+            f'replay_download_blocked_large replay_id={replay_id} size={replay_size} ip={ip} user_id={user_id}',
+            user_id=user_id,
+        )
+        return jsonify({'success': False, 'error': '回放文件过大，请联系管理员下载'}), 413
+
+    actor_key = f'user:{user_id}' if user_id else f'ip:{ip}'
+    repeat_window = 5 if is_admin_download else REPLAY_DOWNLOAD_REPEAT_SECONDS
+    limits = [
+        (f'replay-download:repeat:{actor_key}:{replay_id}', 1, repeat_window),
+        (f'replay-download:ip-minute:{ip}', 20 if is_admin_download else REPLAY_DOWNLOAD_IP_PER_MINUTE, 60),
+        (f'replay-download:ip-hour:{ip}', 200 if is_admin_download else REPLAY_DOWNLOAD_IP_PER_HOUR, 3600),
+    ]
+    if user_id:
+        limits.extend([
+            (f'replay-download:user-minute:{user_id}', 20 if is_admin_download else REPLAY_DOWNLOAD_USER_PER_MINUTE, 60),
+            (f'replay-download:user-hour:{user_id}', 200 if is_admin_download else REPLAY_DOWNLOAD_USER_PER_HOUR, 3600),
+        ])
+    for key, limit, window in limits:
+        if not rate_limiter(key, limit=limit, window=window):
+            admin_event(
+                'warning',
+                f'replay_download_rate_limited replay_id={replay_id} key={key} limit={limit}/{window}s ip={ip} user_id={user_id}',
+                user_id=user_id,
+            )
+            return jsonify({'success': False, 'error': '下载过于频繁，请稍后再试'}), 429
+    return None
+
+
 REPLAY_MAX_ACTIONS = int(os.environ.get('GTN_REPLAY_MAX_ACTIONS', '1500') or 1500)
 REPLAY_MAX_STATE_BYTES = int(os.environ.get('GTN_REPLAY_MAX_STATE_BYTES', '750000') or 750000)
 REPLAY_MAX_FULL_STATE_FRAMES = int(os.environ.get('GTN_REPLAY_MAX_FULL_STATE_FRAMES', '260') or 260)
 REPLAY_MAX_TOTAL_STATE_BYTES = int(os.environ.get('GTN_REPLAY_MAX_TOTAL_STATE_BYTES', '18000000') or 18000000)
 REPLAY_COMPACT_STATE_INTERVAL = max(1, int(os.environ.get('GTN_REPLAY_COMPACT_STATE_INTERVAL', '8') or 8))
 REPLAY_FULL_STATE_INTERVAL = max(20, int(os.environ.get('GTN_REPLAY_FULL_STATE_INTERVAL', '80') or 80))
+REPLAY_DOWNLOAD_USER_PER_MINUTE = max(1, int(os.environ.get('GTN_REPLAY_DOWNLOAD_USER_PER_MINUTE', '3') or 3))
+REPLAY_DOWNLOAD_USER_PER_HOUR = max(1, int(os.environ.get('GTN_REPLAY_DOWNLOAD_USER_PER_HOUR', '30') or 30))
+REPLAY_DOWNLOAD_IP_PER_MINUTE = max(1, int(os.environ.get('GTN_REPLAY_DOWNLOAD_IP_PER_MINUTE', '5') or 5))
+REPLAY_DOWNLOAD_IP_PER_HOUR = max(1, int(os.environ.get('GTN_REPLAY_DOWNLOAD_IP_PER_HOUR', '50') or 50))
+REPLAY_DOWNLOAD_REPEAT_SECONDS = max(1, int(os.environ.get('GTN_REPLAY_DOWNLOAD_REPEAT_SECONDS', '30') or 30))
+REPLAY_DOWNLOAD_MAX_BYTES = max(0, int(os.environ.get('GTN_REPLAY_DOWNLOAD_MAX_BYTES', str(20 * 1024 * 1024)) or 0))
 _REPLAY_DELTA_UNCHANGED = object()
 
 
@@ -4623,6 +4741,8 @@ SOCKET_EVENT_LIMITS = {
     'solo_use_trigger': (60, 60),
     'solo_end_turn': (60, 60),
     'solo_set_next_draw': (20, 60),
+    'solo_undo': (30, 60),
+    'solo_redo': (30, 60),
     'solo_pause': (12, 60),
     'skin_look': (80, 10),
 }
@@ -4964,10 +5084,17 @@ def validate_tag_id_list(value, *, name='tags', maximum=12):
         for item in value
     ]
 
+SOLO_TRAINING_MIN_DECK_SIZE = 0
+SOLO_TRAINING_MAX_DECK_SIZE = 100
+
 
 def validate_solo_deck_entries(value, *, name='deck'):
-    if not isinstance(value, list) or len(value) != DECK_SIZE:
-        raise ValueError(f'{name} must contain {DECK_SIZE} cards')
+    if (
+        not isinstance(value, list)
+        or len(value) < SOLO_TRAINING_MIN_DECK_SIZE
+        or len(value) > SOLO_TRAINING_MAX_DECK_SIZE
+    ):
+        raise ValueError(f'{name} must contain {SOLO_TRAINING_MIN_DECK_SIZE}-{SOLO_TRAINING_MAX_DECK_SIZE} cards')
     clean = []
     for index, entry in enumerate(value):
         if isinstance(entry, dict):
@@ -11327,7 +11454,95 @@ def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=N
     engine.log_msg(f"{start_label}！{engine.pn(engine.first_player)}先手。")
     engine.log_msg(f"=== 第{engine.round_num}回合 ===")
     engine._start_player_turn(engine.first_player)
+    init_solo_history(engine)
     return engine
+
+
+def init_solo_history(engine):
+    if engine is None:
+        return
+    engine._solo_undo_stack = deque(maxlen=SOLO_HISTORY_LIMIT)
+    engine._solo_redo_stack = deque(maxlen=SOLO_HISTORY_LIMIT)
+
+
+def _solo_history_enabled(sid):
+    return sid not in tutorial_sessions
+
+
+def _solo_engine_snapshot(engine):
+    if engine is None:
+        return None
+    saved = {}
+    for attr in ('_solo_undo_stack', '_solo_redo_stack'):
+        if hasattr(engine, attr):
+            saved[attr] = getattr(engine, attr)
+            try:
+                delattr(engine, attr)
+            except Exception:
+                pass
+    try:
+        return copy.deepcopy(engine)
+    finally:
+        for attr, value in saved.items():
+            setattr(engine, attr, value)
+
+
+def _solo_capture_undo_snapshot(sid, engine):
+    if not _solo_history_enabled(sid):
+        return None
+    if not hasattr(engine, '_solo_undo_stack') or not hasattr(engine, '_solo_redo_stack'):
+        init_solo_history(engine)
+    return _solo_engine_snapshot(engine)
+
+
+def _solo_commit_undo_snapshot(engine, snapshot):
+    if engine is None or snapshot is None:
+        return
+    if not hasattr(engine, '_solo_undo_stack') or not hasattr(engine, '_solo_redo_stack'):
+        init_solo_history(engine)
+    engine._solo_undo_stack.append(snapshot)
+    engine._solo_redo_stack.clear()
+
+
+def _solo_restore_snapshot(engine, snapshot):
+    if engine is None or snapshot is None:
+        return False
+    undo_stack = getattr(engine, '_solo_undo_stack', deque(maxlen=SOLO_HISTORY_LIMIT))
+    redo_stack = getattr(engine, '_solo_redo_stack', deque(maxlen=SOLO_HISTORY_LIMIT))
+    restored = copy.deepcopy(snapshot)
+    engine.__dict__.clear()
+    engine.__dict__.update(restored.__dict__)
+    engine._solo_undo_stack = undo_stack
+    engine._solo_redo_stack = redo_stack
+    try:
+        engine._bind_player_callbacks()
+    except Exception as exc:
+        admin_event('error', f'solo restore callbacks failed: {exc}')
+    return True
+
+
+def _solo_emit_pending_after_state(sid, engine):
+    if not engine or getattr(engine, 'game_over', False):
+        return
+    pending = getattr(engine, 'pending_response', None)
+    if pending:
+        try:
+            pending_player = int(pending.get('player_id', getattr(engine, 'current_player', 0)))
+            emit_solo_response_request(sid, engine, pending_player, pending.get('card') or {})
+        except Exception as exc:
+            admin_event('error', f'solo pending response emit failed: {exc}')
+        return
+    pending_v2 = getattr(engine, 'pending_v2_ui', None)
+    if pending_v2:
+        try:
+            emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
+        except Exception as exc:
+            admin_event('error', f'solo pending v2 emit failed: {exc}')
+
+
+def send_solo_state_with_pending(sid, perspective=None):
+    send_solo_state(sid, perspective)
+    _solo_emit_pending_after_state(sid, solo_sessions.get(sid))
 
 
 def send_solo_state(sid, perspective=None):
@@ -13148,6 +13363,9 @@ def api_replay_download(replay_id):
         return jsonify({'success': False, 'error': '回放不存在'}), 404
     if not replay_item_visible_to_current_user(item, admin_context=admin_context):
         return jsonify({'success': False, 'error': 'forbidden'}), 403
+    limited_response = _replay_download_rate_limit_response(replay_id, item=item, admin_context=admin_context)
+    if limited_response is not None:
+        return limited_response
     try:
         package = build_replay_download_package(replay_id)
     except Exception as exc:
@@ -14000,6 +14218,15 @@ def api_cards():
         reload_mod_card_defs()
     except Exception as exc:
         admin_event('error', f'failed to reload mod card defs: {exc}')
+    disable_rows = active_content_disables('any')
+    cache_key = (
+        current_mods_signature(),
+        _public_data_query_key(),
+        _public_data_disable_key(disable_rows),
+    )
+    cached_response = _public_data_cache_get('cards', cache_key)
+    if cached_response is not None:
+        return cached_response
     disabled_mods = request.args.get('disabled_mods', '')
     try:
         community_fields, community_mod = resolve_community_loadout(request.args)
@@ -14032,7 +14259,6 @@ def api_cards():
                     'is_community': True,
                 }
     result = {}
-    disable_rows = active_content_disables('any')
     for def_id, card_def in CARD_DEFS.items():
         source = card_mod_sources.get(def_id, {})
         card_disable_rows = [
@@ -14106,7 +14332,7 @@ def api_cards():
             card_payload['v2_resource'] = getattr(card_def, 'v2_resource', {}) or {}
         card_payload.update(card_text(def_id, card_payload))
         result[def_id] = card_payload
-    return jsonify(result)
+    return _public_data_cache_put('cards', cache_key, result)
 
 
 @app.route('/api/opening-events')
@@ -14115,6 +14341,10 @@ def api_opening_events():
         reload_mod_card_defs()
     except Exception as exc:
         admin_event('error', f'failed to reload mod card defs: {exc}')
+    cache_key = (current_mods_signature(), _public_data_query_key())
+    cached_response = _public_data_cache_get('opening_events', cache_key)
+    if cached_response is not None:
+        return cached_response
     try:
         community_fields, community_mod = resolve_community_loadout(request.args)
     except Exception as exc:
@@ -14135,7 +14365,7 @@ def api_opening_events():
         if payload:
             events.append(payload)
     registry_payload = v2_registry_payload(loadout.get('v2_loadout'))
-    return jsonify({
+    return _public_data_cache_put('opening_events', cache_key, {
         'events': events,
         'magic_pool': [],
         **registry_payload,
@@ -14144,8 +14374,17 @@ def api_opening_events():
 
 @app.route('/api/mods')
 def api_mods():
-    mods = load_all_mods()
+    summary_only = str(request.args.get('summary', '')).strip().lower() in {'1', 'true', 'yes'}
     runtime_rows = active_content_disables('any')
+    cache_key = (
+        current_mods_signature(),
+        _public_data_query_key(),
+        _public_data_disable_key(runtime_rows),
+    )
+    cached_response = _public_data_cache_get('mods', cache_key)
+    if cached_response is not None:
+        return cached_response
+    mods = load_all_mods()
     runtime_mod_rows = {}
     for row in runtime_rows:
         if row.get('content_type') == 'mod':
@@ -14191,8 +14430,18 @@ def api_mods():
                 card_type: sum(1 for card in cards if str(card.get('card_type') or '') == card_type and int(card.get('count', 0) or 0) > 0)
                 for card_type in REQUIRED_CARD_TYPES
             }
+        if summary_only:
+            summary_keys = {
+                'format_version', 'info', 'manifest', 'errors', 'warnings',
+                'validation_hash', 'content_hash', 'resource_counts', 'filename',
+                'is_vanilla', 'category', 'temporarily_disabled',
+                'temporary_disable_reason', 'temporary_disable_until',
+                'temporary_disable_scopes', 'cards_count', 'shared_card_ids',
+                'card_type_counts',
+            }
+            d = {key: value for key, value in d.items() if key in summary_keys}
         result.append(d)
-    return jsonify(result)
+    return _public_data_cache_put('mods', cache_key, result)
 
 
 @app.route('/api/community-mods')
@@ -16547,7 +16796,7 @@ def on_solo_start(data):
         sub1 = validate_choice_payload(data.get('sub1'))
     except ValueError as exc:
         _security_illegal(sid, 'solo_start', str(exc))
-        emit('server_error', {'message': '训练场牌组必须各为15张'})
+        emit('server_error', {'message': '训练场牌组必须各为0-100张'})
         return
     disabled_mods = ensure_valid_disabled_mods(normalize_disabled_mods_with_default(data.get('disabled_mods') if data else None))
     try:
@@ -16702,8 +16951,10 @@ def on_solo_play_card(data):
             choice.setdefault('target_player', target_player_id)
             choice.setdefault('target_player_id', target_player_id)
             choice.setdefault('target_id', target_player_id)
+        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         result = engine.play_card(pidx, card_instance_id, choice)
         if result.get('needs_response'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             if sid in tutorial_sessions and pidx == 0:
                 engine.handle_response(1, None)
                 send_solo_state(sid, 0)
@@ -16711,12 +16962,15 @@ def on_solo_play_card(data):
             send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pidx)
             emit_solo_response_request(sid, engine, pidx, result['card'])
         elif result.get('needs_choice'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
             socketio.emit('choice_request', build_choice_request_payload(result), room=sid)
         elif result.get('needs_v2_ui'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
             emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
         elif result.get('success'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
@@ -16738,10 +16992,14 @@ def on_solo_response(data):
         engine = solo_sessions.get(sid)
         if not engine:
             return
-        responder = 1 - engine.pending_response['player_id'] if engine.pending_response else engine.current_player
+        had_pending_response = bool(getattr(engine, 'pending_response', None))
+        responder = 1 - engine.pending_response['player_id'] if had_pending_response else engine.current_player
         if sid in tutorial_sessions and responder != 0:
             card_instance_id = None
+        undo_snapshot = _solo_capture_undo_snapshot(sid, engine) if had_pending_response else None
         engine.handle_response(responder, card_instance_id)
+        if had_pending_response:
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
         pending = getattr(engine, 'pending_response', None)
         if pending:
             pending_player = int(pending.get('player_id', engine.current_player))
@@ -16780,8 +17038,10 @@ def on_solo_resolve_choice(data):
             send_solo_state(sid)
             return
         pidx = engine.pending_choice.get('player_id', engine.current_player) if engine.pending_choice else engine.current_player
+        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         result = engine.resolve_choice(pidx, choice)
         if result.get('needs_response'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             if sid in tutorial_sessions and pidx == 0:
                 engine.handle_response(1, None)
                 send_solo_state(sid, 0)
@@ -16789,12 +17049,15 @@ def on_solo_resolve_choice(data):
             send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pidx)
             emit_solo_response_request(sid, engine, pidx, result['card'])
         elif result.get('needs_choice'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
             socketio.emit('choice_request', build_choice_request_payload(result), room=sid)
         elif result.get('needs_v2_ui'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
             emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
         else:
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
 
 
@@ -16824,11 +17087,14 @@ def on_solo_v2_ui_response(data):
             return
         pidx = int(pending.get('player_id', engine.current_player))
         _cancel_v2_ui_timeout(('solo', sid), request_id)
+        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         result = engine.handle_v2_ui_response(pidx, request_id, clean_data)
         if result.get('needs_v2_ui'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
             emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
         elif result.get('success'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
@@ -16851,10 +17117,13 @@ def on_solo_use_trigger(data):
         engine = solo_sessions.get(sid)
         if not engine:
             return
+        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         result = engine.use_trigger(engine.current_player, equipment_instance_id, target_player_id=target_player_id)
+        if result.get('success') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
         if not result.get('success'):
             emit('server_error', {'message': result.get('error', 'Operation failed')})
-        send_solo_state(sid)
+        send_solo_state_with_pending(sid)
 
 
 @socketio.on('solo_end_turn')
@@ -16867,7 +17136,10 @@ def on_solo_end_turn(data=None):
         engine = solo_sessions.get(sid)
         if not engine:
             return
+        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         result = engine.end_turn(engine.current_player)
+        if result.get('success'):
+            _solo_commit_undo_snapshot(engine, undo_snapshot)
         if not result.get('success'):
             emit('server_error', {'message': result.get('error', 'Operation failed')})
         send_solo_state(sid)
@@ -16903,10 +17175,12 @@ def on_solo_set_next_draw(data):
         if not picked:
             emit('server_error', {'message': '设置失败：牌堆中没有这些牌'})
             return
+        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         for c in reversed(picked):
             ps.deck.insert(0, c)
         names = '、'.join([c.name_cn for c in picked])
         engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 设置下次抽牌：{names}")
+        _solo_commit_undo_snapshot(engine, undo_snapshot)
         send_solo_state(sid)
         return
         idx = next((i for i, c in enumerate(ps.deck) if c.def_id == def_id), -1)
@@ -16917,6 +17191,60 @@ def on_solo_set_next_draw(data):
         ps.deck.insert(0, card)
         engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 设置下次抽牌：{card.name_cn}")
         send_solo_state(sid)
+
+
+@socketio.on('solo_undo')
+def on_solo_undo(data=None):
+    sid = request.sid
+    data = socket_guard('solo_undo', data, require_player=False, allow_empty=True)
+    if data is None:
+        return
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine:
+            emit('server_error', {'message': '训练场尚未开始'})
+            return
+        if sid in tutorial_sessions:
+            emit('server_error', {'message': '新手教程不能撤销'})
+            return
+        if not hasattr(engine, '_solo_undo_stack') or not hasattr(engine, '_solo_redo_stack'):
+            init_solo_history(engine)
+        if not engine._solo_undo_stack:
+            emit('server_error', {'message': '没有可撤销操作'})
+            return
+        current = _solo_engine_snapshot(engine)
+        snapshot = engine._solo_undo_stack.pop()
+        if current is not None:
+            engine._solo_redo_stack.append(current)
+        _solo_restore_snapshot(engine, snapshot)
+        send_solo_state_with_pending(sid)
+
+
+@socketio.on('solo_redo')
+def on_solo_redo(data=None):
+    sid = request.sid
+    data = socket_guard('solo_redo', data, require_player=False, allow_empty=True)
+    if data is None:
+        return
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine:
+            emit('server_error', {'message': '训练场尚未开始'})
+            return
+        if sid in tutorial_sessions:
+            emit('server_error', {'message': '新手教程不能重做'})
+            return
+        if not hasattr(engine, '_solo_undo_stack') or not hasattr(engine, '_solo_redo_stack'):
+            init_solo_history(engine)
+        if not engine._solo_redo_stack:
+            emit('server_error', {'message': '没有可重做操作'})
+            return
+        current = _solo_engine_snapshot(engine)
+        snapshot = engine._solo_redo_stack.pop()
+        if current is not None:
+            engine._solo_undo_stack.append(current)
+        _solo_restore_snapshot(engine, snapshot)
+        send_solo_state_with_pending(sid)
 
 
 @socketio.on('solo_pause')
