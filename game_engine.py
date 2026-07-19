@@ -17,9 +17,10 @@ from cards import (
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
 from damage_types import (
-    DAMAGE_TAG_BATTERY, DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
+    DAMAGE_TAG_BATTERY, DAMAGE_TAG_BLEED, DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_FRACTURE,
+    DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
     DAMAGE_TYPE_MAGIC, DAMAGE_TYPE_PHYSICAL, damage_type_tag, infer_damage_type,
-    status_damage_tag,
+    is_status_damage_tag, status_damage_tag,
 )
 
 CORRUPTION_DAMAGE_MULTIPLIER = 1.5
@@ -4464,6 +4465,7 @@ class GameEngine:
             actual,
             source_id,
             include_flat_bonus=(resolved_damage_type == DAMAGE_TYPE_PHYSICAL and resolved_damage_tag == DAMAGE_TAG_PHYSICAL),
+            include_dizzy_multiplier=not is_status_damage_tag(resolved_damage_tag),
         )
         damage_context = self._v2_damage_context(
             player_id,
@@ -4658,15 +4660,20 @@ class GameEngine:
             crit_damage += 3
         if getattr(source_card, '_hel_card_suit', '') == 'diamond':
             crit_damage += 6
-        if 'hel:domino' in (getattr(source_card, 'def_id', ''), getattr(source_card, 'runtime_id', '')) or getattr(source_card, 'def_id', '') == 'Domino':
-            crit_damage = int(math.ceil(crit_damage * 2))
-            source_card.instance_flags.add('precision')
         try:
             self._hel_current_crit_hits = int(getattr(self, '_hel_current_crit_hits', 0) or 0) + 1
             self._hel_last_hit_was_crit = True
         except Exception:
             pass
         return crit_damage, True
+
+    def _hel_apply_domino_final_damage(self, dmg: int, source_card: Optional[CardInstance], was_crit: bool) -> int:
+        if dmg <= 0 or not was_crit or source_card is None:
+            return max(0, int(dmg or 0))
+        if not self._card_is(source_card, 'Domino', 'hel:domino'):
+            return max(0, int(dmg or 0))
+        source_card.instance_flags.add('precision')
+        return max(0, int(math.ceil(int(dmg) * 2)))
 
     def _hel_apply_blazing_fire_turn_start(self, player_id: int):
         stacks = self._custom_status_value(player_id, *self._hel_blazing_fire_keys())
@@ -4899,8 +4906,10 @@ class GameEngine:
                     bonus += 2
         return bonus
 
-    def _apply_damage_dealt_equipment_multiplier(self, amount: int, source_id: Optional[int], include_flat_bonus: bool = True) -> int:
-        multiplier = self._damage_dealt_equipment_multiplier(source_id)
+    def _apply_damage_dealt_equipment_multiplier(self, amount: int, source_id: Optional[int],
+                                                   include_flat_bonus: bool = True,
+                                                   include_dizzy_multiplier: bool = True) -> int:
+        multiplier = self._damage_dealt_equipment_multiplier(source_id) if include_dizzy_multiplier else 1.0
         amount = max(0, int(amount or 0))
         if multiplier > 1:
             amount = max(0, int(math.ceil(float(amount or 0) * multiplier)))
@@ -12155,6 +12164,7 @@ class GameEngine:
                 ps.poison += converted
                 dmg = 0
             dmg = self._apply_universal_damage_shields(target_id, dmg, attacker_id, '攻击', DAMAGE_TYPE_PHYSICAL)
+            dmg = self._hel_apply_domino_final_damage(dmg, source_card, _hel_crit)
             if (
                 dmg > 0
                 and getattr(self, '_prediction_capture_target_id', None) == target_id
@@ -12388,12 +12398,12 @@ class GameEngine:
         if ps.fracture > 0 and not self._is_status_immune(player_id):
             frac_dmg = ps.fracture
             self._deal_direct_damage(player_id, frac_dmg, '破损', player_id,
-                                     damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_DIRECT)
+                                     damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FRACTURE)
         # Bleed: take damage when playing attack card
         if ps.bleed > 0 and card.card_type == 'thorn' and not self._is_status_immune(player_id):
             bleed_dmg = ps.bleed
             self._deal_direct_damage(player_id, bleed_dmg, '流血', player_id,
-                                     damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_DIRECT)
+                                     damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_BLEED)
         placed_as_equipment = bool(getattr(card, '_placed_as_equipment', False))
         script_controls_play = self._card_has_script(card.card_def)
         explicit_equip_owner = hasattr(card, '_placed_as_equipment_owner')

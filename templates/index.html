@@ -13,19 +13,27 @@
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
   const betaExactKeys = new Set(['gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled', 'gtn_landscape_mode']);
   const betaKey = (key) => window.__GTN_BETA_MODE__ && betaExactKeys.has(key) ? `gtn_beta_${key.slice(4)}` : key;
+  const storage = {
+    getItem(key) {
+      try { return window.localStorage.getItem(key); } catch (_) { return null; }
+    },
+    setItem(key, value) {
+      try { window.localStorage.setItem(key, value); } catch (_) {}
+    },
+  };
   const supportedLangs = new Set(['zh', 'en', 'fr', 'ja']);
-  let lang = localStorage.getItem(betaKey('gtn_lang')) || 'zh';
+  let lang = storage.getItem(betaKey('gtn_lang')) || 'zh';
   if (!supportedLangs.has(lang)) {
     lang = 'zh';
-    localStorage.setItem(betaKey('gtn_lang'), lang);
+    storage.setItem(betaKey('gtn_lang'), lang);
   }
   const migrationKey = betaKey('gtn_ui_style_v2_migrated');
   const uiStyleKey = betaKey('gtn_ui_style');
-  let uiStyle = localStorage.getItem(uiStyleKey) || 'minimal';
-  if (!localStorage.getItem(migrationKey) && uiStyle === 'classic') {
+  let uiStyle = storage.getItem(uiStyleKey) || 'minimal';
+  if (!storage.getItem(migrationKey) && uiStyle === 'classic') {
     uiStyle = 'minimal';
-    localStorage.setItem(uiStyleKey, 'minimal');
-    localStorage.setItem(migrationKey, '1');
+    storage.setItem(uiStyleKey, 'minimal');
+    storage.setItem(migrationKey, '1');
   }
   if (uiStyle !== 'classic') uiStyle = 'minimal';
   document.documentElement.setAttribute('lang', lang);

@@ -4,7 +4,7 @@ from typing import List, Dict, Optional, Tuple, Set
 from game_engine import GameEngine, PlayerState, EquipmentInstance
 from damage_types import (
     DAMAGE_TAG_BATTERY, DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
-    DAMAGE_TYPE_MAGIC, DAMAGE_TYPE_PHYSICAL, infer_damage_type, status_damage_tag,
+    DAMAGE_TYPE_MAGIC, DAMAGE_TYPE_PHYSICAL, infer_damage_type, is_status_damage_tag, status_damage_tag,
 )
 from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DRAFT_REROLLS,
@@ -1297,6 +1297,7 @@ class GameEngine2v2(GameEngine):
             actual,
             source_id,
             include_flat_bonus=(resolved_damage_type == DAMAGE_TYPE_PHYSICAL and resolved_damage_tag == DAMAGE_TAG_PHYSICAL),
+            include_dizzy_multiplier=not is_status_damage_tag(resolved_damage_tag),
         )
         damage_context = self._v2_damage_context(
             player_id,
@@ -1972,6 +1973,7 @@ class GameEngine2v2(GameEngine):
                 ps.poison += converted
                 dmg = 0
             dmg = self._apply_universal_damage_shields(target_id, dmg, attacker_id, '攻击', DAMAGE_TYPE_PHYSICAL)
+            dmg = self._hel_apply_domino_final_damage(dmg, source_card, _hel_crit)
             if (
                 dmg > 0
                 and getattr(self, '_prediction_capture_target_id', None) == target_id

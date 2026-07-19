@@ -12,6 +12,8 @@ DAMAGE_TAG_MAGIC = "gtn:magic"
 DAMAGE_TAG_DIRECT = "gtn:direct"
 DAMAGE_TAG_POISON = "gtn:poison"
 DAMAGE_TAG_FIRE = "gtn:fire"
+DAMAGE_TAG_FRACTURE = "gtn:fracture"
+DAMAGE_TAG_BLEED = "gtn:bleed"
 DAMAGE_TAG_BATTERY = "gtn:battery"
 
 _MAGIC_SOURCE_TEXT = {
@@ -19,19 +21,28 @@ _MAGIC_SOURCE_TEXT = {
     "fire",
     "burn",
     "battery",
+    "fracture",
+    "bleed",
+    "bleeding",
     "\u4e2d\u6bd2",
     "\u707c\u70e7",
+    "\u7834\u635f",
+    "\u6d41\u8840",
     "\u7535\u6c60",
     "\u96fb\u6c60",
     "\u7535\u6c60\u7535\u51fb",
     "\u96fb\u6c60\u96fb\u64ca",
     DAMAGE_TAG_POISON,
     DAMAGE_TAG_FIRE,
+    DAMAGE_TAG_FRACTURE,
+    DAMAGE_TAG_BLEED,
     DAMAGE_TAG_BATTERY,
 }
 
 _FIRE_SOURCE_TEXT = {"fire", "burn", "\u707c\u70e7", DAMAGE_TAG_FIRE}
 _POISON_SOURCE_TEXT = {"poison", "\u4e2d\u6bd2", DAMAGE_TAG_POISON}
+_FRACTURE_SOURCE_TEXT = {"fracture", "\u7834\u635f", DAMAGE_TAG_FRACTURE}
+_BLEED_SOURCE_TEXT = {"bleed", "bleeding", "\u6d41\u8840", DAMAGE_TAG_BLEED}
 _BATTERY_SOURCE_TEXT = {
     "battery",
     "\u7535\u6c60",
@@ -70,9 +81,22 @@ def status_damage_tag(source: str = "", damage_tag: str = "") -> str:
         return DAMAGE_TAG_FIRE
     if lowered.intersection(_POISON_SOURCE_TEXT) or values.intersection(_POISON_SOURCE_TEXT):
         return DAMAGE_TAG_POISON
+    if lowered.intersection(_FRACTURE_SOURCE_TEXT) or values.intersection(_FRACTURE_SOURCE_TEXT):
+        return DAMAGE_TAG_FRACTURE
+    if lowered.intersection(_BLEED_SOURCE_TEXT) or values.intersection(_BLEED_SOURCE_TEXT):
+        return DAMAGE_TAG_BLEED
     if lowered.intersection(_BATTERY_SOURCE_TEXT) or values.intersection(_BATTERY_SOURCE_TEXT):
         return DAMAGE_TAG_BATTERY
     return DAMAGE_TAG_MAGIC
+
+
+def is_status_damage_tag(damage_tag: str = "") -> bool:
+    return str(damage_tag or "").strip().lower() in {
+        DAMAGE_TAG_POISON,
+        DAMAGE_TAG_FIRE,
+        DAMAGE_TAG_FRACTURE,
+        DAMAGE_TAG_BLEED,
+    }
 
 
 def damage_type_tag(damage_type: str) -> str:

@@ -55,6 +55,95 @@ function gtnBetaStorageKey(key) {
     return key;
 }
 
+const gtnStorageMemory = new Map();
+let gtnPersistentStorage = null;
+let gtnPersistentStorageWritable = false;
+const GTN_COOKIE_FALLBACK_KEYS = new Set(['gtn_disabled_mods', 'gtn_beta_disabled_mods']);
+
+function readStorageFallbackCookie(key) {
+    if (!GTN_COOKIE_FALLBACK_KEYS.has(key) || typeof document === 'undefined') return null;
+    try {
+        const prefix = `${encodeURIComponent(key)}=`;
+        const part = String(document.cookie || '').split('; ').find(item => item.startsWith(prefix));
+        return part ? decodeURIComponent(part.slice(prefix.length)) : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeStorageFallbackCookie(key, value) {
+    if (!GTN_COOKIE_FALLBACK_KEYS.has(key) || typeof document === 'undefined') return;
+    try {
+        document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}; Max-Age=31536000; Path=/; SameSite=Lax`;
+    } catch (_) {}
+}
+
+function removeStorageFallbackCookie(key) {
+    if (!GTN_COOKIE_FALLBACK_KEYS.has(key) || typeof document === 'undefined') return;
+    try {
+        document.cookie = `${encodeURIComponent(key)}=; Max-Age=0; Path=/; SameSite=Lax`;
+    } catch (_) {}
+}
+
+try {
+    gtnPersistentStorage = window.localStorage;
+    const probeKey = gtnBetaStorageKey('__gtn_storage_probe__');
+    gtnPersistentStorage.setItem(probeKey, '1');
+    gtnPersistentStorage.removeItem(probeKey);
+    gtnPersistentStorageWritable = true;
+} catch (error) {
+    console.warn('[storage] persistent local storage is unavailable; using an in-memory fallback', error);
+}
+
+// Keep browser privacy restrictions from breaking gameplay. Account-backed
+// settings are still sent to the server; guest settings remain available for
+// the lifetime of this page when persistent storage is unavailable.
+const localStorage = Object.freeze({
+    getItem(key) {
+        const mapped = String(gtnBetaStorageKey(key));
+        if (gtnStorageMemory.has(mapped)) return gtnStorageMemory.get(mapped);
+        if (gtnPersistentStorage) {
+            try {
+                const stored = gtnPersistentStorage.getItem(mapped);
+                if (stored != null) return stored;
+            } catch (_) {}
+        }
+        return readStorageFallbackCookie(mapped);
+    },
+    setItem(key, value) {
+        const mapped = String(gtnBetaStorageKey(key));
+        const text = String(value);
+        gtnStorageMemory.set(mapped, text);
+        if (!gtnPersistentStorage || !gtnPersistentStorageWritable) {
+            writeStorageFallbackCookie(mapped, text);
+            return;
+        }
+        try {
+            gtnPersistentStorage.setItem(mapped, text);
+        } catch (error) {
+            gtnPersistentStorageWritable = false;
+            writeStorageFallbackCookie(mapped, text);
+            console.warn('[storage] persistent write failed; continuing with in-memory storage', error);
+        }
+    },
+    removeItem(key) {
+        const mapped = String(gtnBetaStorageKey(key));
+        gtnStorageMemory.delete(mapped);
+        removeStorageFallbackCookie(mapped);
+        if (gtnPersistentStorage && gtnPersistentStorageWritable) {
+            try {
+                gtnPersistentStorage.removeItem(mapped);
+            } catch (error) {
+                gtnPersistentStorageWritable = false;
+                console.warn('[storage] persistent remove failed; continuing with in-memory storage', error);
+            }
+        }
+    },
+    isPersistent() {
+        return !!gtnPersistentStorageWritable;
+    },
+});
+
 function clampClientCardLayer(value) {
     const n = Math.floor(Number(value));
     if (!Number.isFinite(n)) return 1;
@@ -72,19 +161,6 @@ function clampClientDamageSegments(value) {
     if (!Number.isFinite(n)) return 1;
     return Math.min(MAX_CLIENT_DAMAGE_SEGMENTS, Math.max(1, n));
 }
-(() => {
-    if (!GTN_BETA_MODE || !window.localStorage) return;
-    const proto = Object.getPrototypeOf(window.localStorage);
-    if (!proto || proto.__gtnBetaStoragePatched) return;
-    const rawGet = proto.getItem;
-    const rawSet = proto.setItem;
-    const rawRemove = proto.removeItem;
-    proto.getItem = function(key) { return rawGet.call(this, gtnBetaStorageKey(key)); };
-    proto.setItem = function(key, value) { return rawSet.call(this, gtnBetaStorageKey(key), value); };
-    proto.removeItem = function(key) { return rawRemove.call(this, gtnBetaStorageKey(key)); };
-    Object.defineProperty(proto, '__gtnBetaStoragePatched', { value: true });
-})();
-
 const AUDIO_DEFAULTS = Object.freeze({
     enabled: true,
     master: 80,
@@ -310,6 +386,7 @@ function acknowledgeMusicNoticeAndPlay() {
 }
 
 function maybeShowMusicNotice() {
+    if (window.__GTN_REPLAY_VIDEO_EXPORT__) return false;
     if (!shouldShowMusicNotice()) return false;
     gameAlert(
         UI.music_notice_title || UI.notice || '提示',
@@ -1123,6 +1200,114 @@ Object.assign(I18N.ja, { tutorial_hint_free: '基本操作は確認できまし�
 Object.assign(I18N.zh, { waiting_opponent_counter: '等待对方反制' });
 Object.assign(I18N.fr, { waiting_opponent_counter: 'En attente du contre adverse' });
 Object.assign(I18N.ja, { waiting_opponent_counter: 'Waiting for opponent counter' });
+Object.assign(I18N.zh, {
+    tutorial_intro: '这次引导会带你完成一次真实的短对局。两套界面的规则完全相同，提示只会指出下一步，不会锁住其他操作。',
+    tutorial_action_drag: '操作：将高亮牌拖到战场中央。',
+    tutorial_action_touch: '操作：点击高亮牌，再点击确认打出。',
+    tutorial_action_classic: '操作：点击高亮牌，再按界面提示点击玩家头像或战场中央。',
+    tutorial_step_deck: '先查看抽牌堆。你可以在这里确认接下来可能抽到的牌；弃牌堆和放逐区也使用相邻的按钮查看。',
+    tutorial_step_attack: '打出“基本”。攻击牌用于伤害敌方；在 1v1 中，普通攻击只会选择对手。',
+    tutorial_step_attack_target: '点击对手的头像，完成这张攻击牌的目标选择。',
+    tutorial_step_heal: '打出“玫瑰”，然后选择自己。技能牌可以帮助自己，也可以作用于其他可选目标。',
+    tutorial_step_heal_target: '点击自己的头像。这次必须让玫瑰回复你自己。',
+    tutorial_step_equip: '打出“叶子”，然后选择自己。装备会留在使用者的装备区，箭头表示它实际影响的玩家。',
+    tutorial_step_equip_target: '点击自己的头像，让叶子作用于自己。',
+    tutorial_step_end: '本回合的基础操作已完成。点击“结束回合”，观察对手行动。',
+    tutorial_step_enemy: '正在等待练习对手行动。留意战斗日志以及双方 H、E、M 的变化。',
+    tutorial_step_counter: '对手正在攻击。选择“泡泡”进行反制；反制牌只会在符合响应条件时出现。',
+    tutorial_step_counter_wait: '保留手中的“泡泡”，结束回合。对手攻击时会弹出反制窗口。',
+    tutorial_step_trigger: '叶子已经可以触发。点击装备区的叶子，再选择对手，体验装备的主动触发。',
+    tutorial_step_trigger_target: '点击对手头像，确认叶子的触发目标。',
+    tutorial_step_trigger_wait: '叶子需要装备满一回合才能触发。先结束回合，稍后再回来触发它。',
+    tutorial_step_fission: '打出“裂变”，并在选择窗口中选择“三角形”。裂变会把一次攻击拆成更多段。',
+    tutorial_step_fissioned: '打出刚刚裂变过的攻击牌，观察多段伤害和每段命中产生的效果。',
+    tutorial_step_fusion: '打出“聚变”，选择两张“基本”。聚变会把同名攻击牌合并为一张更强的牌。',
+    tutorial_step_fusioned: '打出聚变后的攻击牌，完成最后一步。',
+    tutorial_step_wait_card: '需要的教学牌还在抽牌堆中。结束当前回合，等待下一次抽牌。',
+    tutorial_complete_title: '新手教程完成',
+    tutorial_complete_message: '你已经完成查看牌堆、目标选择、攻击、回复、装备、反制、触发、裂变和聚变。现在可以开始正式对局了。',
+});
+Object.assign(I18N.en, {
+    tutorial_intro: 'This guided match covers the real core flow. Both interfaces use the same rules; hints point to the next action without locking other controls.',
+    tutorial_action_drag: 'Action: drag the highlighted card into the center of the battlefield. ',
+    tutorial_action_touch: 'Action: tap the highlighted card, then confirm the play. ',
+    tutorial_action_classic: 'Action: select the highlighted card, then follow the board prompt to click an avatar or the center. ',
+    tutorial_step_deck: 'Open the draw deck first. This shows what you may draw next; the nearby buttons open the discard and exile piles.',
+    tutorial_step_attack: 'Play Basic. Attack cards damage enemies; in 1v1 a normal attack can only target the opponent.',
+    tutorial_step_attack_target: 'Click the opponent avatar to choose the attack target.',
+    tutorial_step_heal: 'Play Rose and choose yourself. Skill cards can help you or affect another selectable player.',
+    tutorial_step_heal_target: 'Click your own avatar so Rose heals you.',
+    tutorial_step_equip: 'Play Leaf and choose yourself. Equipment stays in its user’s equipment area; an arrow shows who it affects.',
+    tutorial_step_equip_target: 'Click your own avatar so Leaf affects you.',
+    tutorial_step_end: 'The basic actions for this turn are complete. End your turn and watch the opponent.',
+    tutorial_step_enemy: 'Wait for the practice opponent. Watch the battle log and both players’ H, E, and M.',
+    tutorial_step_counter: 'The opponent is attacking. Use Bubble; Guard cards only appear when their response condition is met.',
+    tutorial_step_counter_wait: 'Keep Bubble in hand and end your turn. The response panel appears when the opponent attacks.',
+    tutorial_step_trigger: 'Leaf can now be triggered. Select it in the equipment area, then choose the opponent.',
+    tutorial_step_trigger_target: 'Click the opponent avatar to confirm the trigger target.',
+    tutorial_step_trigger_wait: 'Leaf must remain equipped for a round before it can trigger. End the turn and return to it later.',
+    tutorial_step_fission: 'Play Fission and choose Triangle. Fission splits one attack into more hits.',
+    tutorial_step_fissioned: 'Play the attack you just split and observe its multiple hits.',
+    tutorial_step_fusion: 'Play Fusion and select two Basic cards. Fusion combines same-name attacks into a stronger card.',
+    tutorial_step_fusioned: 'Play the fused attack to finish the tutorial.',
+    tutorial_step_wait_card: 'The required tutorial card is still in your draw deck. End the turn and wait for the next draw.',
+    tutorial_complete_title: 'Tutorial Complete',
+    tutorial_complete_message: 'You have used piles, targets, attacks, healing, equipment, counters, triggers, Fission, and Fusion. You are ready for a match.',
+});
+Object.assign(I18N.fr, {
+    tutorial_intro: 'Ce match guidé présente le déroulement réel. Les deux interfaces suivent les mêmes règles et les indications ne bloquent pas les autres commandes.',
+    tutorial_action_drag: 'Action : faites glisser la carte en surbrillance au centre du terrain. ',
+    tutorial_action_touch: 'Action : touchez la carte en surbrillance, puis confirmez. ',
+    tutorial_action_classic: 'Action : sélectionnez la carte en surbrillance, puis cliquez sur l’avatar ou le centre indiqué. ',
+    tutorial_step_deck: 'Ouvrez d’abord la pioche pour voir les prochaines cartes possibles.',
+    tutorial_step_attack: 'Jouez Basic. En 1v1, une attaque normale cible l’adversaire.',
+    tutorial_step_attack_target: 'Cliquez sur l’avatar adverse pour choisir la cible.',
+    tutorial_step_heal: 'Jouez Rose et choisissez-vous comme cible.',
+    tutorial_step_heal_target: 'Cliquez sur votre avatar pour vous soigner.',
+    tutorial_step_equip: 'Jouez Leaf et choisissez-vous. L’équipement reste chez son utilisateur et la flèche indique sa cible.',
+    tutorial_step_equip_target: 'Cliquez sur votre avatar pour recevoir l’effet de Leaf.',
+    tutorial_step_end: 'Terminez votre tour et observez l’adversaire.',
+    tutorial_step_enemy: 'Observez le journal de combat et les valeurs H, E et M.',
+    tutorial_step_counter: 'L’adversaire attaque. Utilisez Bubble dans la fenêtre de contre.',
+    tutorial_step_counter_wait: 'Gardez Bubble puis terminez le tour. La fenêtre de contre apparaîtra lors de l’attaque adverse.',
+    tutorial_step_trigger: 'Leaf peut être déclenchée. Cliquez sur son icône puis choisissez l’adversaire.',
+    tutorial_step_trigger_target: 'Cliquez sur l’avatar adverse pour confirmer la cible.',
+    tutorial_step_trigger_wait: 'Leaf doit rester équipée un tour. Terminez le tour puis revenez-y.',
+    tutorial_step_fission: 'Jouez Fission et choisissez Triangle.',
+    tutorial_step_fissioned: 'Jouez l’attaque divisée et observez ses impacts.',
+    tutorial_step_fusion: 'Jouez Fusion et choisissez deux cartes Basic.',
+    tutorial_step_fusioned: 'Jouez l’attaque fusionnée pour terminer.',
+    tutorial_step_wait_card: 'La carte nécessaire est encore dans la pioche. Terminez le tour pour continuer.',
+    tutorial_complete_title: 'Tutoriel terminé',
+    tutorial_complete_message: 'Vous avez utilisé les piles, les cibles, les attaques, les soins, les équipements, les contres, Fission et Fusion.',
+});
+Object.assign(I18N.ja, {
+    tutorial_intro: '実際の短い対局で基本操作を確認します。どちらのUIも同じルールで、案内は他の操作を妨げません。',
+    tutorial_action_drag: '操作：強調表示されたカードを戦場中央へドラッグします。',
+    tutorial_action_touch: '操作：強調表示されたカードを押し、使用を確定します。',
+    tutorial_action_classic: '操作：強調表示されたカードを選び、案内された顔または戦場中央を押します。',
+    tutorial_step_deck: 'まず山札を開き、次に引く可能性のあるカードを確認します。',
+    tutorial_step_attack: '「基本」を使います。1v1の通常攻撃は相手を対象にします。',
+    tutorial_step_attack_target: '相手の顔を押して対象を決めます。',
+    tutorial_step_heal: '「ローズ」を使い、自分を対象にします。',
+    tutorial_step_heal_target: '自分の顔を押して、自分を回復します。',
+    tutorial_step_equip: '「葉」を使い、自分を対象にします。装備は使用者の装備欄に残り、矢印が効果対象を示します。',
+    tutorial_step_equip_target: '自分の顔を押して、葉の対象を自分にします。',
+    tutorial_step_end: '基本操作が終わりました。ターンを終了して相手を観察します。',
+    tutorial_step_enemy: '戦闘ログと双方のH・E・Mを確認しましょう。',
+    tutorial_step_counter: '相手が攻撃しています。「バブル」でカウンターします。',
+    tutorial_step_counter_wait: 'バブルを残してターンを終了します。相手の攻撃時にカウンター画面が開きます。',
+    tutorial_step_trigger: '葉を発動できます。装備欄の葉を押して相手を選びます。',
+    tutorial_step_trigger_target: '相手の顔を押して発動対象を決めます。',
+    tutorial_step_trigger_wait: '葉は1ターン装備されると発動できます。いったんターンを終了してください。',
+    tutorial_step_fission: '「分裂」を使い、「三角形」を選びます。',
+    tutorial_step_fissioned: '分裂した攻撃カードを使い、複数回の命中を確認します。',
+    tutorial_step_fusion: '「融合」を使い、2枚の「基本」を選びます。',
+    tutorial_step_fusioned: '融合した攻撃カードを使って完了します。',
+    tutorial_step_wait_card: '必要なカードは山札にあります。ターンを終了して次のドローを待ちます。',
+    tutorial_complete_title: 'チュートリアル完了',
+    tutorial_complete_message: '山札、対象選択、攻撃、回復、装備、カウンター、発動、分裂、融合を確認しました。',
+});
 
 Object.assign(I18N.zh, {
     about_title: '关于', about_gameplay: '游戏玩法', about_credits: '致谢', about_changelog: '更新日志', about_contact: '联系方式',
@@ -4324,6 +4509,37 @@ let activeCardDataCacheKey = '';
 let activeOpeningEventsCacheKey = '';
 const publicDataRequests = new Map();
 let gameState = {};
+let lastGameStateResyncRequestAt = 0;
+let gameStateResyncTimer = null;
+let gameStateResyncNeeded = false;
+
+function isCompleteBattleStatePayload(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (!['action', 'draw', 'game_over'].includes(String(data.phase || ''))) return true;
+    if (!data.you || typeof data.you !== 'object' || !data.opponent || typeof data.opponent !== 'object') return false;
+    if (data.mode === '2v2' && (!data.teammate || !data.opponent2)) return false;
+    return true;
+}
+
+function requestFullGameState(reason = 'incomplete_state') {
+    if (!socket || !socket.connected) return;
+    const now = performance.now();
+    if (now - lastGameStateResyncRequestAt >= 2500) {
+        lastGameStateResyncRequestAt = now;
+        debugLog('[client] requesting full game state:', reason);
+        socket.emit('request_game_state', {});
+    }
+    if (gameStateResyncTimer) return;
+    gameStateResyncTimer = setTimeout(() => {
+        gameStateResyncTimer = null;
+        if (gameStateResyncNeeded) requestFullGameState('incomplete_state_retry');
+    }, 5000);
+}
+
+function clearGameStateResyncTimer() {
+    if (gameStateResyncTimer) clearTimeout(gameStateResyncTimer);
+    gameStateResyncTimer = null;
+}
 let predictionTargetOverrideId = null;
 let activeV2UiRequestId = null;
 let draftState = {};
@@ -4489,19 +4705,14 @@ let tutorialMode = false;
 let pendingTutorialStart = false;
 let tutorialReturnTarget = 'home';
 let tutorialBotTimer = null;
-let tutorialLastLogTotal = 0;
 let tutorialDeckViewed = false;
-let tutorialCounterSeen = false;
 let tutorialIntroActive = false;
 let tutorialIntroShown = false;
-let tutorialTargetHintSeen = false;
-let tutorialTriggerHintSeen = false;
 let tutorialOverlayStartTimer = null;
 let tutorialIntroTimer = null;
-let tutorialStrictFocus = false;
-let tutorialEndHintCount = 0;
-let tutorialEndHintKey = '';
 let tutorialOverlayRefreshTimer = null;
+let tutorialCompletionShown = false;
+let tutorialPendingTargetDefId = '';
 let suppressSoloPausedHandler = false;
 let cardAnimationLockUntil = 0;
 let cardAnimationUnlockTimer = null;
@@ -4714,6 +4925,7 @@ function gamePrompt(title, options, config = {}) {
     return new Promise((resolve) => {
         const el = $('game-prompt');
         if (!el) { resolve(-1); return; }
+        if (tutorialMode) hideTutorialOverlay();
         cleanupGamePromptTransientButtons();
         const cancellable = config.cancellable !== false;
         $('game-prompt-title').textContent = title || '';
@@ -4730,6 +4942,12 @@ function gamePrompt(title, options, config = {}) {
         msgEl.textContent = message;
         msgEl.classList.toggle('hidden', !message);
         optsEl.innerHTML = '';
+        const finish = (value) => {
+            removeFloatingCardPreview();
+            el.classList.remove('active');
+            if (tutorialMode) scheduleTutorialOverlayRefresh(120);
+            resolve(value);
+        };
         options.forEach((opt, i) => {
             const div = document.createElement('div');
             div.className = 'game-prompt-option';
@@ -4741,9 +4959,7 @@ function gamePrompt(title, options, config = {}) {
             renderChoiceOptionContent(div, opt, i, config);
             div.onclick = () => {
                 if (disabled) return;
-                removeFloatingCardPreview();
-                el.classList.remove('active');
-                resolve(i);
+                finish(i);
             };
             optsEl.appendChild(div);
         });
@@ -4753,7 +4969,7 @@ function gamePrompt(title, options, config = {}) {
         cancelBtn.classList.add('btn-secondary');
         cancelBtn.classList.toggle('hidden', !cancellable);
         cancelBtn.style.display = cancellable ? '' : 'none';
-        cancelBtn.onclick = () => { removeFloatingCardPreview(); el.classList.remove('active'); resolve(-1); };
+        cancelBtn.onclick = () => finish(-1);
         el.classList.add('active');
     });
 }
@@ -7743,6 +7959,7 @@ function clearSelectedPlayCard(options = {}) {
     if (bar) bar.classList.add('hidden');
     updateMinimalPlayCancelZone();
     if (!options.skipRender && shouldUseClassicBattle(gameState)) renderClassicBattle(gameState);
+    if (tutorialMode) scheduleTutorialOverlayRefresh(40);
 }
 
 function isMinimalTargetSelectionActive() {
@@ -8105,9 +8322,11 @@ async function selectClassicPlayCard(cardInstanceId, event = null) {
     renderClassicBattle(gameState);
     syncPlayerRegionTargets(gameState);
     scheduleClassicAimCurveUpdate();
+    if (tutorialMode) scheduleTutorialOverlayRefresh(30);
     const touchTargetOptions = isTouchPlayMode() ? getClassicTouchCardTargetOptions(cardDict, cardDef) : null;
     if (touchTargetOptions) {
         classicTargetPickInFlight = true;
+        if (tutorialMode) tutorialPendingTargetDefId = cardDict.def_id || '';
         try {
             const targets = getPlayerTargetOptions(touchTargetOptions);
             if (!targets.length) {
@@ -8124,6 +8343,7 @@ async function selectClassicPlayCard(cardInstanceId, event = null) {
             if (id != null) await onPlayCard(id, { confirmed: true, targetPlayerId: targetId });
             return true;
         } finally {
+            if (tutorialMode) tutorialPendingTargetDefId = '';
             classicTargetPickInFlight = false;
         }
     }
@@ -8164,6 +8384,7 @@ async function selectClassicTriggerEquipment(cardInst, cardDef, event = null) {
     renderClassicBattle(gameState);
     syncPlayerRegionTargets(gameState);
     scheduleClassicAimCurveUpdate();
+    if (tutorialMode) scheduleTutorialOverlayRefresh(30);
     if (isTouchPlayMode()) {
         classicTargetPickInFlight = true;
         try {
@@ -8244,6 +8465,7 @@ function getClassicPlayedCardAnimationTarget(cardDict, cardDef, targetPlayerId =
 
 function showModal(html) {
     removeFloatingCardPreview();
+    if (tutorialMode) hideTutorialOverlay();
     const content = $('modal-content');
     const modal = $('modal');
     if (content) content.className = 'modal-inner';
@@ -13046,6 +13268,26 @@ function connectSocket(serverUrl) {
             debugLog('[client] ignored spectate state for inactive room=', data.room_id, 'active=', activeSpectateRoomId);
             return;
         }
+        if (!isCompleteBattleStatePayload(data)) {
+            gameStateResyncNeeded = true;
+            console.warn('[client] incomplete battle state ignored; requesting a full snapshot', {
+                room_id: data && data.room_id,
+                phase: data && data.phase,
+                mode: data && data.mode,
+                spectating: !!(data && data.spectating),
+            });
+            requestFullGameState('incomplete_state_update');
+            const sameMatch = gameState && (
+                (data && data.match_key && gameState.match_key === data.match_key)
+                || (data && data.room_id != null && Number(gameState.room_id) === Number(data.room_id))
+            );
+            if (sameMatch && isCompleteBattleStatePayload(gameState)) return;
+            showView('view-game');
+            updateStatus(UI.game_loading || '加载中...');
+            return;
+        }
+        gameStateResyncNeeded = false;
+        clearGameStateResyncTimer();
         clearTransientMatchRecovery('state_update');
         const previousGameState = gameState;
         data = preserveGameOverLogState(data, previousGameState);
@@ -13188,6 +13430,7 @@ function connectSocket(serverUrl) {
         responsePending = true;
         responseData = data;
         showResponseUI(data);
+        if (tutorialMode) scheduleTutorialOverlayRefresh(30);
     });
     bindSocketEvent('ally_consent_request', (data) => {
         showAllyConsentUI(data);
@@ -15236,42 +15479,67 @@ function renderAccountReplayFrame() {
     if (!frame) {
         if (output) output.textContent = accountReplayLoading ? (UI.replay_loading || UI.replay_prepare) : UI.replay_frame_empty;
         renderAccountReplayPlaybackBar();
-        return;
+        return false;
     }
-    const replayState = buildReplaySpectateState(frame, accountReplayPerspective);
-    replayMode = true;
-    isSpectating = true;
-    playerId = -1;
-    spectatePerspective = accountReplayPerspective;
-    gameState = replayState;
-    phase = replayState.phase || 'action';
-    syncBattleLogMatch(replayState);
-    renderGame(replayState);
-    if (frame.phase === 'setup_summary' || frame.setup_summary) {
-        renderReplaySetupOverlay(frame);
-    } else {
+    try {
+        const replayState = buildReplaySpectateState(frame, accountReplayPerspective);
+        replayMode = true;
+        isSpectating = true;
+        playerId = -1;
+        spectatePerspective = accountReplayPerspective;
+        gameState = replayState;
+        phase = replayState.phase || 'action';
+        syncBattleLogMatch(replayState);
+        renderGame(replayState);
+        if (frame.phase === 'setup_summary' || frame.setup_summary) {
+            renderReplaySetupOverlay(frame);
+        } else {
+            hideReplaySetupOverlay();
+        }
+        renderAccountReplayPlaybackBar();
+        const meta = $('account-replay-meta');
+        if (meta) meta.textContent = replayActionLabel(frame);
+        renderReplayPerspectiveButtons($('account-replay-perspectives'), getReplaySnapshot(frame));
+        if (output) {
+            output.innerHTML = `
+                <div class="account-replay-empty">
+                    ${escapeHtml(replayActionLabel(frame) || UI.replay_viewer)}
+                </div>
+            `;
+        }
+        return true;
+    } catch (err) {
+        console.error('[replay] frame render failed', {
+            replay_id: accountReplayData && accountReplayData.id,
+            frame_index: accountReplayFrameIndex,
+            error: err,
+        });
+        stopAccountReplayPlayback();
+        accountReplayLoading = false;
+        replayMode = false;
         hideReplaySetupOverlay();
-    }
-    renderAccountReplayPlaybackBar();
-    const meta = $('account-replay-meta');
-    if (meta) meta.textContent = replayActionLabel(frame);
-    renderReplayPerspectiveButtons($('account-replay-perspectives'), getReplaySnapshot(frame));
-    if (output) {
-        output.innerHTML = `
-            <div class="account-replay-empty">
-                ${escapeHtml(replayActionLabel(frame) || UI.replay_viewer)}
-            </div>
-        `;
+        const bar = $('account-replay-playback-bar');
+        if (bar) bar.classList.add('hidden');
+        const modal = $('account-replay-modal');
+        if (modal) modal.classList.remove('hidden');
+        if (output) {
+            output.innerHTML = `
+                <div class="account-replay-empty">
+                    ${escapeHtml(`${UI.replay_load_failed}: ${err && err.message ? err.message : ''}`)}
+                </div>
+            `;
+        }
+        return false;
     }
 }
 
 async function stepAccountReplay(delta) {
-    if (!accountReplayTimeline.length && !accountReplayTotalFrames) return;
+    if (!accountReplayTimeline.length && !accountReplayTotalFrames) return false;
     accountReplayFrameIndex = Math.max(0, Math.min((accountReplayTotalFrames || accountReplayTimeline.length) - 1, accountReplayFrameIndex + delta));
     if (!accountReplayTimeline[accountReplayFrameIndex]) {
         await ensureAccountReplayFrame(accountReplayFrameIndex);
     }
-    renderAccountReplayFrame();
+    return renderAccountReplayFrame();
 }
 
 function switchAccountReplayPerspective() {
@@ -15305,8 +15573,7 @@ async function playAccountReplay() {
     if (!next) return;
     const delay = Math.max(80, ((Number(next.t) || 0) - (Number(current.t) || 0)) / Number(accountReplaySpeed || 1));
     accountReplayTimer = setTimeout(async () => {
-        await stepAccountReplay(1);
-        playAccountReplay();
+        if (await stepAccountReplay(1)) playAccountReplay();
     }, delay);
 }
 
@@ -15346,9 +15613,9 @@ async function openAccountReplay(replayId) {
         await fetchAccountReplayFrames(replayId, 0, 24);
         if (loadToken !== accountReplayLoadToken) return;
         replayMode = true;
-        if (modal) modal.classList.add('hidden');
         ensureAccountReplayPlaybackBar();
-        renderAccountReplayFrame();
+        if (!renderAccountReplayFrame()) return;
+        if (modal) modal.classList.add('hidden');
         continueAccountReplayLoading(replayId, accountReplayTimeline.filter(Boolean).length, loadToken).catch((err) => {
             if (loadToken !== accountReplayLoadToken) return;
             accountReplayLoading = false;
@@ -16845,13 +17112,746 @@ function ensureReplayVideoExportStyle() {
         html.replay-video-export.hide-export-cursor * {
             cursor: none !important;
         }
+        html.replay-video-export .replay-export-cursor {
+            animation: none !important;
+            opacity: 1 !important;
+            width: 32px;
+            height: 32px;
+            will-change: left, top, transform;
+        }
+        html.replay-video-export .replay-export-drag-card {
+            animation: none !important;
+            opacity: 1;
+            will-change: left, top, transform, opacity;
+        }
+        html.replay-video-export .replay-export-click-ripple {
+            position: fixed;
+            z-index: 4604;
+            width: 12px;
+            height: 12px;
+            margin: -6px 0 0 -6px;
+            border: 2px solid rgba(40, 112, 210, 0.72);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: replayExportClickRipple 320ms ease-out forwards;
+        }
+        @keyframes replayExportClickRipple {
+            from { opacity: .85; transform: scale(.45); }
+            to { opacity: 0; transform: scale(2.2); }
+        }
     `;
     document.head.appendChild(style);
 }
 
+let replayVideoExportTransitionToken = 0;
+let replayVideoExportCursor = null;
+let replayVideoExportCursorPoint = null;
+
+function clampReplayExportNumber(value, min, max) {
+    return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
+function replayExportSeed(value) {
+    const text = String(value || '0');
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function replayExportRandom(seed) {
+    let state = seed >>> 0;
+    return () => {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        return state / 0x100000000;
+    };
+}
+
+function getReplayExportElementPoint(element, xRatio = 0.5, yRatio = 0.5) {
+    if (!element || typeof element.getBoundingClientRect !== 'function') return null;
+    const rect = element.getBoundingClientRect();
+    if (!rect || rect.width <= 1 || rect.height <= 1) return null;
+    return {
+        x: rect.left + rect.width * xRatio,
+        y: rect.top + rect.height * yRatio,
+    };
+}
+
+function ensureReplayExportCursor() {
+    if (replayVideoExportCursor && replayVideoExportCursor.isConnected) return replayVideoExportCursor;
+    replayVideoExportCursor = createVirtualWindowsCursor();
+    replayVideoExportCursor.classList.add('replay-export-cursor');
+    replayVideoExportCursorPoint = replayVideoExportCursorPoint || {
+        x: Math.round(window.innerWidth * 0.76),
+        y: Math.round(window.innerHeight * 0.82),
+    };
+    replayVideoExportCursor.style.left = `${replayVideoExportCursorPoint.x}px`;
+    replayVideoExportCursor.style.top = `${replayVideoExportCursorPoint.y}px`;
+    document.body.appendChild(replayVideoExportCursor);
+    return replayVideoExportCursor;
+}
+
+function buildReplayExportCurveFrames(from, to, seed) {
+    const random = replayExportRandom(seed);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const normalX = -dy / distance;
+    const normalY = dx / distance;
+    const bend = Math.min(130, Math.max(22, distance * (0.10 + random() * 0.10))) * (random() > 0.5 ? 1 : -1);
+    const c1 = {
+        x: from.x + dx * (0.24 + random() * 0.10) + normalX * bend,
+        y: from.y + dy * (0.24 + random() * 0.10) + normalY * bend,
+    };
+    const c2 = {
+        x: from.x + dx * (0.68 + random() * 0.10) - normalX * bend * 0.32,
+        y: from.y + dy * (0.68 + random() * 0.10) - normalY * bend * 0.32,
+    };
+    const frames = [];
+    const count = 9;
+    for (let index = 0; index < count; index++) {
+        const t = index / (count - 1);
+        const mt = 1 - t;
+        frames.push({
+            left: `${mt * mt * mt * from.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * to.x}px`,
+            top: `${mt * mt * mt * from.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * to.y}px`,
+        });
+    }
+    return frames;
+}
+
+function moveReplayExportCursor(to, duration, options = {}) {
+    if (!to) return 0;
+    const cursor = ensureReplayExportCursor();
+    const from = replayVideoExportCursorPoint || to;
+    const delay = Math.max(0, Number(options.delay || 0));
+    const moveDuration = Math.max(80, Number(duration || 0));
+    const frames = buildReplayExportCurveFrames(from, to, replayExportSeed(options.seed));
+    cursor.animate(frames, {
+        duration: moveDuration,
+        delay,
+        easing: 'cubic-bezier(.22,.72,.18,1)',
+        fill: 'forwards',
+    });
+    replayVideoExportCursorPoint = { x: to.x, y: to.y };
+    setTimeout(() => {
+        if (!cursor.isConnected) return;
+        cursor.style.left = `${to.x}px`;
+        cursor.style.top = `${to.y}px`;
+    }, delay + moveDuration);
+    return delay + moveDuration;
+}
+
+function clickReplayExportCursor(options = {}) {
+    const cursor = ensureReplayExportCursor();
+    const delay = Math.max(0, Number(options.delay || 0));
+    setTimeout(() => {
+        if (!cursor.isConnected) return;
+        cursor.animate([
+            { transform: 'scale(1)' },
+            { transform: 'scale(.82)' },
+            { transform: 'scale(1)' },
+        ], { duration: 150, easing: 'ease-out' });
+        const ripple = document.createElement('div');
+        ripple.className = 'replay-export-click-ripple';
+        ripple.style.left = `${replayVideoExportCursorPoint.x}px`;
+        ripple.style.top = `${replayVideoExportCursorPoint.y}px`;
+        document.body.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 380);
+    }, delay);
+    return delay + 170;
+}
+
+function getReplayExportPlayers(state) {
+    if (!state || typeof state !== 'object') return [];
+    if (Array.isArray(state.spectate_players) && state.spectate_players.length) {
+        return state.spectate_players.filter(Boolean);
+    }
+    return [state.you, state.teammate, state.opponent, state.opponent2].filter(Boolean);
+}
+
+function getReplayExportPlayer(state, id) {
+    const pid = normalizePlayerId(id);
+    if (pid == null) return null;
+    return getReplayExportPlayers(state).find((player, index) => {
+        const playerId = normalizePlayerId(player && player.player_id);
+        return (playerId == null ? index : playerId) === pid;
+    }) || null;
+}
+
+function replayExportCardSelector(instanceId) {
+    const escaped = window.CSS && typeof window.CSS.escape === 'function'
+        ? window.CSS.escape(String(instanceId))
+        : String(instanceId).replace(/["\\]/g, '\\$&');
+    return `[data-instance-id="${escaped}"]`;
+}
+
+function findReplayExportCardElement(instanceId) {
+    if (instanceId == null || instanceId === '') return null;
+    const candidates = Array.from(document.querySelectorAll(replayExportCardSelector(instanceId)))
+        .filter(isVisibleTargetRegion);
+    if (!candidates.length) return null;
+    const score = element => {
+        let value = 0;
+        if (element.closest('#you-hand, #classic-hand-fan, #opp-hand, #opp2-hand, #teammate-hand')) value += 100;
+        if (element.classList.contains('card') || element.classList.contains('classic-hand-card')) value += 40;
+        const rect = element.getBoundingClientRect();
+        value += Math.min(30, (rect.width * rect.height) / 1000);
+        return value;
+    };
+    return candidates.sort((left, right) => score(right) - score(left))[0] || null;
+}
+
+function getReplayExportActionCardId(frame, previousState) {
+    const action = frame && frame.action && typeof frame.action === 'object' ? frame.action : {};
+    const payload = action.payload && typeof action.payload === 'object' ? action.payload : {};
+    if (payload.card_instance_id != null && payload.card_instance_id !== '') return payload.card_instance_id;
+    // Old replays sometimes only stored a definition id. Do not guess which
+    // physical card was used: the current engine and the historical hand may
+    // no longer agree.
+    return null;
+}
+
+function getReplayExportActionTarget(frame) {
+    const action = frame && frame.action && typeof frame.action === 'object' ? frame.action : {};
+    const payload = action.payload && typeof action.payload === 'object' ? action.payload : {};
+    const choice = payload.choice && typeof payload.choice === 'object' ? payload.choice : {};
+    const result = payload.result && typeof payload.result === 'object' ? payload.result : {};
+    const candidates = [
+        payload.target_player_id,
+        choice.target_player_id,
+        choice.target_player,
+        choice.target_id,
+        result.target_player_id,
+        result.target_player,
+        result.target_id,
+    ];
+    for (const candidate of candidates) {
+        const id = normalizePlayerId(candidate);
+        if (id != null && id >= 0) return id;
+    }
+    return null;
+}
+
+function getReplayExportResponseSnapshot(previousFrame, nextFrame) {
+    const previousAction = previousFrame && previousFrame.action && typeof previousFrame.action === 'object'
+        ? previousFrame.action
+        : {};
+    const payload = previousAction.payload && typeof previousAction.payload === 'object'
+        ? previousAction.payload
+        : {};
+    const requests = Array.isArray(payload.response_requests) ? payload.response_requests : [];
+    const responderId = normalizePlayerId(nextFrame && nextFrame.action && nextFrame.action.actor);
+    if (responderId == null) return null;
+    const entry = requests.find(item => normalizePlayerId(item && item.responder_id) === responderId);
+    const data = entry && entry.data && typeof entry.data === 'object' ? entry.data : null;
+    return data && Array.isArray(data.counter_cards) && data.counter_cards.length ? data : null;
+}
+
+function hideReplayExportInteractionPanels() {
+    if (responseTimerId) {
+        clearInterval(responseTimerId);
+        responseTimerId = null;
+    }
+    if (allyConsentTimerId) {
+        clearInterval(allyConsentTimerId);
+        allyConsentTimerId = null;
+    }
+    const responsePanel = $('response-panel');
+    if (responsePanel) {
+        responsePanel.classList.add('hidden');
+        responsePanel.classList.remove('visible', 'magic-salt-response-panel');
+        responsePanel.innerHTML = '';
+    }
+    const prompt = $('game-prompt');
+    if (prompt) prompt.classList.remove('active');
+    const modal = $('modal');
+    const modalContent = $('modal-content');
+    if (modal && modalContent && modalContent.classList.contains('v2-ui-modal')) {
+        modal.classList.remove('active');
+        modal.classList.add('hidden');
+    }
+    document.querySelectorAll('.target-pickable, .target-picked').forEach(element => {
+        element.classList.remove('target-pickable', 'target-picked');
+    });
+}
+
+function showReplayExportResponseWindow(previousFrame, nextFrame) {
+    const data = getReplayExportResponseSnapshot(previousFrame, nextFrame);
+    if (!data) return null;
+    const responderId = normalizePlayerId(nextFrame && nextFrame.action && nextFrame.action.actor);
+    const savedState = gameState;
+    const savedSpectating = isSpectating;
+    const savedPlayerId = playerId;
+    try {
+        gameState = buildReplaySpectateState(previousFrame, responderId == null ? accountReplayPerspective : responderId);
+        isSpectating = false;
+        playerId = responderId == null ? -1 : responderId;
+        showResponseUI(data);
+        if (responseTimerId) {
+            clearInterval(responseTimerId);
+            responseTimerId = null;
+        }
+    } finally {
+        gameState = savedState;
+        isSpectating = savedSpectating;
+        playerId = savedPlayerId;
+    }
+    const selectedId = getReplayExportActionCardId(nextFrame, null);
+    if (selectedId == null) return $('pass-btn');
+    return Array.from(document.querySelectorAll('#response-panel .counter-card-btn')).find(button => {
+        return String(button.dataset.cardInstanceId || '') === String(selectedId);
+    }) || null;
+}
+
+function getReplayExportPendingChoice(previousState, previousFrame) {
+    const pending = previousState && previousState.pending_choice;
+    if (pending && typeof pending === 'object') return pending;
+    const action = previousFrame && previousFrame.action && typeof previousFrame.action === 'object'
+        ? previousFrame.action
+        : {};
+    const payload = action.payload && typeof action.payload === 'object' ? action.payload : {};
+    const recorded = payload.choice_request && typeof payload.choice_request === 'object'
+        ? payload.choice_request
+        : null;
+    if (recorded && recorded.choice_type) return recorded;
+    const result = payload.result && typeof payload.result === 'object' ? payload.result : {};
+    return result.choice_type ? result : null;
+}
+
+function getReplayExportChoiceCards(pending) {
+    if (!pending) return [];
+    for (const key of ['hand_cards', 'deck_cards', 'discard_cards', 'exile_cards', 'equipment_cards', 'top_cards']) {
+        if (Array.isArray(pending[key]) && pending[key].length) return pending[key];
+    }
+    return [];
+}
+
+function getReplayExportChoiceSelectedIds(nextFrame) {
+    const action = nextFrame && nextFrame.action && typeof nextFrame.action === 'object' ? nextFrame.action : {};
+    const payload = action.payload && typeof action.payload === 'object' ? action.payload : {};
+    const choice = payload.choice && typeof payload.choice === 'object' ? payload.choice : {};
+    const values = [
+        choice.target_instance_id,
+        ...(Array.isArray(choice.target_instance_ids) ? choice.target_instance_ids : []),
+        ...(Array.isArray(choice.selected_instance_ids) ? choice.selected_instance_ids : []),
+    ];
+    return values.filter(value => value != null && value !== '').map(String);
+}
+
+function showReplayExportChoiceWindow(previousState, previousFrame, nextFrame) {
+    const pending = getReplayExportPendingChoice(previousState, previousFrame);
+    if (!pending) return null;
+    const choiceType = String(pending.choice_type || '');
+    const actionChoice = nextFrame && nextFrame.action && nextFrame.action.payload && nextFrame.action.payload.choice || {};
+    if (choiceType === 'choose_target') {
+        const targetId = normalizePlayerId(
+            actionChoice.target_player_id ?? actionChoice.target_player ?? actionChoice.target_id
+        );
+        const target = targetId == null ? null : getPlayerRegionById(targetId);
+        if (target) target.classList.add('target-pickable', 'target-picked');
+        return target;
+    }
+
+    const cards = getReplayExportChoiceCards(pending);
+    const params = pending.choice_params && typeof pending.choice_params === 'object' ? pending.choice_params : {};
+    const explicitOptions = Array.isArray(params.options) ? params.options : [];
+    if (!cards.length && !explicitOptions.length) return null;
+    const options = cards.length
+        ? cards.map(card => cardChoiceOption(card))
+        : explicitOptions.map((value, index) => ({
+            text: Array.isArray(params.labels) && params.labels[index] ? params.labels[index] : String(value),
+            value,
+        }));
+    gamePrompt(params.title || UI.choose_target || UI.notice || 'Choose', options, {
+        cancellable: params.cancellable !== false,
+        message: params.content || params.message || '',
+    });
+    const optionElements = Array.from(document.querySelectorAll('#game-prompt-options .game-prompt-option'));
+    if (!optionElements.length) return null;
+    const selectedIds = getReplayExportChoiceSelectedIds(nextFrame);
+    if (cards.length && selectedIds.length) {
+        const selectedIndex = cards.findIndex(card => selectedIds.includes(String(card && card.instance_id)));
+        if (selectedIndex >= 0) return optionElements[selectedIndex] || null;
+    }
+    const selectedValue = actionChoice.hel_suit ?? actionChoice.bio_blood_sugar_mode ?? actionChoice.value;
+    if (selectedValue != null && explicitOptions.length) {
+        const selectedIndex = explicitOptions.findIndex(value => String(value) === String(selectedValue));
+        if (selectedIndex >= 0) return optionElements[selectedIndex] || null;
+    }
+    return null;
+}
+
+function showReplayExportV2Window(previousFrame, nextFrame) {
+    const previousAction = previousFrame && previousFrame.action && typeof previousFrame.action === 'object'
+        ? previousFrame.action
+        : {};
+    const previousPayload = previousAction.payload && typeof previousAction.payload === 'object'
+        ? previousAction.payload
+        : {};
+    const request = previousPayload.v2_ui_request && typeof previousPayload.v2_ui_request === 'object'
+        ? previousPayload.v2_ui_request
+        : null;
+    if (!request) return null;
+    const savedSpectating = isSpectating;
+    try {
+        isSpectating = false;
+        showV2UiRequest(request);
+    } finally {
+        isSpectating = savedSpectating;
+    }
+    const actionPayload = nextFrame && nextFrame.action && nextFrame.action.payload || {};
+    const buttonId = String(actionPayload.button || '');
+    const buttons = Array.isArray(request.component && request.component.buttons)
+        ? request.component.buttons
+        : [];
+    const buttonIndex = buttons.findIndex(button => String(button && button.id || '') === buttonId);
+    const rendered = Array.from(document.querySelectorAll('#modal-content.v2-ui-modal .v2-ui-buttons .btn'));
+    if (buttonIndex >= 0) return rendered[buttonIndex] || null;
+    return rendered.find(button => String(button.textContent || '').trim() === buttonId) || null;
+}
+
+function showReplayExportAllyConsentWindow(previousFrame, nextFrame) {
+    const previousAction = previousFrame && previousFrame.action && typeof previousFrame.action === 'object'
+        ? previousFrame.action
+        : {};
+    const previousPayload = previousAction.payload && typeof previousAction.payload === 'object'
+        ? previousAction.payload
+        : {};
+    const request = previousPayload.ally_consent_request && typeof previousPayload.ally_consent_request === 'object'
+        ? previousPayload.ally_consent_request
+        : null;
+    if (!request) return null;
+    const savedSpectating = isSpectating;
+    try {
+        isSpectating = false;
+        showAllyConsentUI(request);
+        if (allyConsentTimerId) {
+            clearInterval(allyConsentTimerId);
+            allyConsentTimerId = null;
+        }
+    } finally {
+        isSpectating = savedSpectating;
+    }
+    const accepted = !!(nextFrame && nextFrame.action && nextFrame.action.payload && nextFrame.action.payload.accepted);
+    const buttons = Array.from(document.querySelectorAll('#response-panel .response-btn-row .btn'));
+    return accepted ? (buttons[0] || null) : (buttons[1] || null);
+}
+
+function animateReplayExportDragCard(source, target, duration, delay, seed) {
+    if (!source || !target) return 0;
+    const sourceRect = source.getBoundingClientRect();
+    if (!sourceRect || sourceRect.width <= 2 || sourceRect.height <= 2) return 0;
+    const targetPoint = getReplayExportElementPoint(target, 0.5, 0.5);
+    if (!targetPoint) return 0;
+    setTimeout(() => {
+        const clone = source.cloneNode(true);
+        clone.classList.add('virtual-play-card', 'replay-export-drag-card');
+        clone.style.left = `${sourceRect.left}px`;
+        clone.style.top = `${sourceRect.top}px`;
+        clone.style.width = `${sourceRect.width}px`;
+        clone.style.height = `${sourceRect.height}px`;
+        document.body.appendChild(clone);
+        source.classList.add('virtual-play-source');
+        const from = { x: sourceRect.left, y: sourceRect.top };
+        const to = { x: targetPoint.x - sourceRect.width / 2, y: targetPoint.y - sourceRect.height / 2 };
+        clone.animate(buildReplayExportCurveFrames(from, to, replayExportSeed(seed)), {
+            duration,
+            easing: 'cubic-bezier(.18,.78,.18,1)',
+            fill: 'forwards',
+        });
+        setTimeout(() => {
+            clone.remove();
+            source.classList.remove('virtual-play-source');
+        }, duration + 80);
+    }, delay);
+    return delay + duration;
+}
+
+function scheduleReplayExportCardGesture(cardElement, targetElement, budgetMs, delay, seed) {
+    if (!cardElement || budgetMs < 320) return 0;
+    const playTarget = getPlayGestureFallbackTarget();
+    const sourcePoint = getReplayExportElementPoint(cardElement, 0.58, 0.48);
+    const playPoint = getReplayExportElementPoint(playTarget, 0.5, 0.43);
+    if (!sourcePoint || !playPoint) return 0;
+    const moveToCard = Math.max(140, Math.round(budgetMs * 0.27));
+    const dragDuration = Math.max(180, Math.round(budgetMs * 0.40));
+    const targetDuration = targetElement ? Math.max(140, Math.round(budgetMs * 0.23)) : 0;
+    let cursorDelay = delay;
+    moveReplayExportCursor(sourcePoint, moveToCard, { delay: cursorDelay, seed: `${seed}:source` });
+    cursorDelay += moveToCard;
+    clickReplayExportCursor({ delay: cursorDelay });
+    cursorDelay += 110;
+    animateReplayExportDragCard(cardElement, playTarget, dragDuration, cursorDelay, `${seed}:drag`);
+    moveReplayExportCursor(playPoint, dragDuration, { delay: cursorDelay, seed: `${seed}:play` });
+    cursorDelay += dragDuration;
+    if (targetElement) {
+        const targetPoint = getReplayExportElementPoint(targetElement, 0.5, 0.5);
+        if (targetPoint) {
+            targetElement.classList.add('virtual-play-target');
+            moveReplayExportCursor(targetPoint, targetDuration, { delay: cursorDelay, seed: `${seed}:target` });
+            cursorDelay += targetDuration;
+            clickReplayExportCursor({ delay: cursorDelay });
+            setTimeout(() => targetElement.classList.remove('virtual-play-target'), cursorDelay + 260);
+            cursorDelay += 120;
+        }
+    }
+    return Math.max(0, cursorDelay - delay);
+}
+
+function queueReplayExportExileAnimations(previousState, nextState) {
+    const previousPlayers = getReplayExportPlayers(previousState);
+    const nextPlayers = getReplayExportPlayers(nextState);
+    const nextById = new Map(nextPlayers.map((player, index) => [normalizePlayerId(player.player_id) ?? index, player]));
+    let offset = 0;
+    previousPlayers.forEach((player, index) => {
+        const id = normalizePlayerId(player.player_id) ?? index;
+        const nextPlayer = nextById.get(id) || {};
+        getNewlyExiledHandCards(player, nextPlayer).forEach(card => {
+            const element = findReplayExportCardElement(card && card.instance_id);
+            if (!element) return;
+            animateCardShatterFromElement(element, offset * 55);
+            offset += 1;
+        });
+    });
+}
+
+function animateReplayExportDraws(previousState, nextState) {
+    const previousPlayers = getReplayExportPlayers(previousState);
+    const previousById = new Map(previousPlayers.map((player, index) => [normalizePlayerId(player.player_id) ?? index, player]));
+    let drawIndex = 0;
+    getReplayExportPlayers(nextState).forEach((player, index) => {
+        const id = normalizePlayerId(player.player_id) ?? index;
+        const previous = previousById.get(id) || {};
+        const previousIds = new Set(((previous.hand) || []).map(cardInstanceKey).filter(Boolean));
+        ((player.hand) || []).forEach(card => {
+            const key = cardInstanceKey(card);
+            if (!key || previousIds.has(key)) return;
+            const element = findReplayExportCardElement(card.instance_id);
+            if (element) animateDrawnCard(element, drawIndex++);
+        });
+    });
+}
+
+function prepareReplayTimelineForVideoExport(sourceTimeline) {
+    const timeline = Array.isArray(sourceTimeline)
+        ? sourceTimeline.filter(Boolean).map(frame => cloneReplayJson(frame))
+        : [];
+    if (!timeline.length) return { timeline: [], skipped: 0 };
+    const gameplayActions = new Set([
+        'play_card',
+        'response',
+        'resolve_choice',
+        'use_trigger',
+        'end_turn',
+        'v2_ui_response',
+        'ally_consent_response',
+        'urf_replace_card',
+        'urf_sell_equipment',
+    ]);
+    let firstActionIndex = timeline.findIndex(frame => {
+        const actionType = String(frame && frame.action && frame.action.type || '');
+        return gameplayActions.has(actionType);
+    });
+    if (firstActionIndex < 0) {
+        firstActionIndex = timeline.findIndex(frame => String(frame && frame.phase || '') === 'action');
+    }
+    if (firstActionIndex < 0) return { timeline, skipped: 0 };
+
+    // Keep the state immediately before the first action so the first played
+    // card can still be dragged from the recorded hand, but do not show the
+    // setup summary overlay or its potentially very long waiting time.
+    const sourceIndex = Math.max(0, firstActionIndex - 1);
+    const prepared = timeline.slice(sourceIndex);
+    const introMs = 900;
+    const originalFirstActionTime = Number(timeline[firstActionIndex] && timeline[firstActionIndex].t || 0);
+    const sourceFrame = prepared[0] || {};
+    delete sourceFrame.setup_summary;
+    sourceFrame.phase = 'action';
+    sourceFrame.round = Math.max(1, Number(timeline[firstActionIndex] && timeline[firstActionIndex].round || sourceFrame.round || 1));
+    sourceFrame.t = 0;
+    sourceFrame.label = '';
+    const sourceState = getReplaySnapshot(sourceFrame);
+    if (sourceState && typeof sourceState === 'object') {
+        sourceState.phase = 'action';
+        sourceState.round_num = Math.max(1, Number(sourceState.round_num || sourceFrame.round || 1));
+        if (Array.isArray(sourceState.perspectives)) {
+            sourceState.perspectives.forEach(perspective => {
+                if (!perspective || typeof perspective !== 'object') return;
+                perspective.phase = 'action';
+                perspective.round_num = Math.max(1, Number(perspective.round_num || sourceFrame.round || 1));
+            });
+        }
+    }
+    prepared.forEach((frame, index) => {
+        frame.i = index;
+        if (index === 0) return;
+        frame.t = Math.max(introMs, Number(frame.t || 0) - originalFirstActionTime + introMs);
+    });
+    return { timeline: prepared, skipped: sourceIndex };
+}
+
+function getReplayExportStateAnimationDuration(previousState, nextState) {
+    let maxHitCount = 0;
+    try {
+        getDamageLogEventsByPlayer(previousState, nextState).forEach(hits => {
+            maxHitCount = Math.max(maxHitCount, Array.isArray(hits) ? hits.length : 0);
+        });
+    } catch (_) {}
+    return 1550 + Math.max(0, maxHitCount - 1) * Number(COMBAT_HIT_STEP_MS || 180);
+}
+
+function showReplayVideoExportFrame(index) {
+    const maxIndex = Math.max(0, accountReplayTimeline.length - 1);
+    accountReplayFrameIndex = Math.max(0, Math.min(maxIndex, Number(index) || 0));
+    hideReplayExportInteractionPanels();
+    renderAccountReplayFrame();
+    const playbackBar = $('account-replay-playback-bar');
+    if (playbackBar) playbackBar.classList.add('hidden');
+    const frame = accountReplayTimeline[accountReplayFrameIndex] || {};
+    return {
+        index: accountReplayFrameIndex,
+        t: Number(frame.t) || 0,
+        phase: frame.phase || '',
+        round: frame.round || 0,
+        action: replayActionLabel(frame),
+    };
+}
+
+function startReplayVideoExportTransition(index, options = {}) {
+    const maxIndex = Math.max(0, accountReplayTimeline.length - 1);
+    const nextIndex = Math.max(0, Math.min(maxIndex, Number(index) || 0));
+    if (nextIndex <= 0 || options.animate === false) {
+        showReplayVideoExportFrame(nextIndex);
+        return { duration_ms: 0, gesture_ms: 0 };
+    }
+    const token = ++replayVideoExportTransitionToken;
+    const previousFrame = accountReplayTimeline[nextIndex - 1] || {};
+    const nextFrame = accountReplayTimeline[nextIndex] || {};
+    const previousState = buildReplaySpectateState(previousFrame, accountReplayPerspective);
+    const nextState = buildReplaySpectateState(nextFrame, accountReplayPerspective);
+    if (accountReplayFrameIndex !== nextIndex - 1) showReplayVideoExportFrame(nextIndex - 1);
+
+    const action = nextFrame.action && typeof nextFrame.action === 'object' ? nextFrame.action : {};
+    const payload = action.payload && typeof action.payload === 'object' ? action.payload : {};
+    const actionType = String(action.type || '');
+    const isCardAction = actionType === 'play_card' || actionType === 'response';
+    const cardInstanceId = isCardAction ? getReplayExportActionCardId(nextFrame, previousState) : null;
+    const cardElement = findReplayExportCardElement(cardInstanceId);
+    const targetId = getReplayExportActionTarget(nextFrame);
+    const targetElement = targetId == null ? null : getPlayerRegionById(targetId);
+
+    let interactionTarget = null;
+    if (actionType === 'response') {
+        // Exact candidate cards are available only in new replay payloads.
+        // Missing historical data is deliberately skipped instead of being
+        // reconstructed through the current rules engine.
+        interactionTarget = showReplayExportResponseWindow(previousFrame, nextFrame);
+    } else if (actionType === 'resolve_choice') {
+        interactionTarget = showReplayExportChoiceWindow(previousState, previousFrame, nextFrame);
+    } else if (actionType === 'end_turn') {
+        interactionTarget = currentUiStyle === 'classic' ? $('classic-end-turn') : $('btn-end-turn');
+    } else if (actionType === 'use_trigger') {
+        interactionTarget = findReplayExportCardElement(payload.equipment_instance_id);
+    } else if (actionType === 'v2_ui_response') {
+        interactionTarget = showReplayExportV2Window(previousFrame, nextFrame);
+    } else if (actionType === 'ally_consent_response') {
+        interactionTarget = showReplayExportAllyConsentWindow(previousFrame, nextFrame);
+    }
+
+    const recordedIntervalMs = Math.max(0, (Number(nextFrame.t) || 0) - (Number(previousFrame.t) || 0));
+    const preserveTiming = options.preserve_timing !== false;
+    const stateAnimationMs = getReplayExportStateAnimationDuration(previousState, nextState);
+    const naturalGestureMs = actionType === 'play_card' && cardElement
+        ? 1750
+        : (interactionTarget ? 620 : 0);
+    const naturalActiveMs = stateAnimationMs + naturalGestureMs;
+    const durationMs = preserveTiming ? recordedIntervalMs : naturalActiveMs;
+    const activeBudgetMs = preserveTiming ? Math.min(durationMs, naturalActiveMs) : naturalActiveMs;
+    const activeStartMs = Math.max(0, durationMs - activeBudgetMs);
+    const stateBudgetMs = Math.min(stateAnimationMs, Math.max(0, activeBudgetMs * (naturalGestureMs ? 0.56 : 1)));
+    const gestureBudgetMs = Math.max(0, activeBudgetMs - stateBudgetMs);
+
+    let gestureMs = 0;
+    if (options.simulate_player_input !== false) {
+        if (actionType === 'play_card' && cardElement) {
+            gestureMs = scheduleReplayExportCardGesture(
+                cardElement,
+                targetElement,
+                gestureBudgetMs,
+                activeStartMs,
+                `${nextIndex}:${actionType}:${cardInstanceId}`,
+            );
+        } else if (interactionTarget && gestureBudgetMs >= 120) {
+            const point = getReplayExportElementPoint(interactionTarget, 0.5, 0.5);
+            if (point) {
+                const hasSecondTarget = actionType === 'use_trigger' && !!targetElement;
+                const moveMs = Math.max(100, Math.round((gestureBudgetMs - 150) * (hasSecondTarget ? 0.48 : 1)));
+                moveReplayExportCursor(point, moveMs, {
+                    delay: activeStartMs,
+                    seed: `${nextIndex}:${actionType}:interaction`,
+                });
+                clickReplayExportCursor({ delay: activeStartMs + moveMs });
+                gestureMs = moveMs + 150;
+                if (hasSecondTarget) {
+                    const targetPoint = getReplayExportElementPoint(targetElement, 0.5, 0.5);
+                    if (targetPoint) {
+                        const targetMoveMs = Math.max(100, gestureBudgetMs - gestureMs - 100);
+                        targetElement.classList.add('virtual-play-target');
+                        moveReplayExportCursor(targetPoint, targetMoveMs, {
+                            delay: activeStartMs + gestureMs,
+                            seed: `${nextIndex}:${actionType}:target`,
+                        });
+                        clickReplayExportCursor({ delay: activeStartMs + gestureMs + targetMoveMs });
+                        gestureMs += targetMoveMs + 100;
+                        setTimeout(() => targetElement.classList.remove('virtual-play-target'), activeStartMs + gestureMs + 180);
+                    }
+                }
+            }
+        }
+    }
+
+    const settleDelay = Math.min(durationMs, activeStartMs + Math.max(0, gestureMs));
+    setTimeout(() => {
+        if (token !== replayVideoExportTransitionToken) return;
+        if (isCardAction && cardElement) {
+            animatePlayedCard(cardInstanceId, {
+                sourceElement: cardElement,
+                targetElement,
+            });
+        } else if (actionType === 'response' && interactionTarget && cardInstanceId != null) {
+            animatePlayedCard(cardInstanceId, {
+                sourceElement: interactionTarget,
+                targetElement,
+            });
+        }
+        queueReplayExportExileAnimations(previousState, nextState);
+        showReplayVideoExportFrame(nextIndex);
+        showStateDeltas(previousState, nextState);
+        requestAnimationFrame(() => requestAnimationFrame(() => animateReplayExportDraws(previousState, nextState)));
+    }, settleDelay);
+
+    return {
+        duration_ms: durationMs,
+        active_start_ms: activeStartMs,
+        recorded_interval_ms: recordedIntervalMs,
+        preserved_timing: preserveTiming,
+        gesture_ms: gestureMs,
+        action_type: actionType,
+        card_instance_id: cardInstanceId,
+        card_element_found: !!cardElement,
+        visible_card_elements: document.querySelectorAll('[data-instance-id]').length,
+        target_player_id: targetId,
+        exact_interaction_snapshot: !!interactionTarget,
+    };
+}
+
 async function loadReplayForVideoExport(payload, options = {}) {
     const replayPayload = payload && typeof payload === 'object' ? payload : {};
-    const timeline = Array.isArray(replayPayload.timeline) ? replayPayload.timeline.filter(Boolean) : [];
+    const preparedTimeline = prepareReplayTimelineForVideoExport(replayPayload.timeline);
+    const timeline = preparedTimeline.timeline;
     if (!timeline.length) throw new Error('Replay timeline is empty');
     stopAccountReplayPlayback();
     accountReplayLoadToken += 1;
@@ -16873,6 +17873,8 @@ async function loadReplayForVideoExport(payload, options = {}) {
     const lang = normalizeLang(options.lang || currentLang || 'zh');
     currentLang = lang;
     localStorage.setItem('gtn_lang', lang);
+    localStorage.setItem('gtn_seen_intro', '1');
+    localStorage.setItem(MUSIC_NOTICE_KEY, '1');
     applyLang();
     applyTheme(options.theme === 'dark' ? 'dark' : 'light');
     applyUiStyle(options.ui_style === 'classic' ? 'classic' : 'minimal');
@@ -16893,6 +17895,9 @@ async function loadReplayForVideoExport(payload, options = {}) {
     spectatePerspective = accountReplayPerspective;
     activeSpectateRoomId = null;
     pendingSpectateRoomId = null;
+    if (replayVideoExportCursor && replayVideoExportCursor.isConnected) replayVideoExportCursor.remove();
+    replayVideoExportCursor = null;
+    replayVideoExportCursorPoint = null;
     ensureReplayVideoExportStyle();
     document.documentElement.classList.add('replay-video-export');
     document.documentElement.classList.toggle('hide-export-cursor', options.hide_cursor !== false);
@@ -16903,19 +17908,25 @@ async function loadReplayForVideoExport(payload, options = {}) {
     const replayModal = $('account-replay-modal');
     if (replayModal) replayModal.classList.add('hidden');
     showView('view-game');
-    renderAccountReplayFrame();
+    const startupModal = $('modal');
+    if (startupModal) {
+        startupModal.classList.remove('active');
+        startupModal.classList.add('hidden');
+    }
+    if (!renderAccountReplayFrame()) throw new Error('Replay frame render failed');
     const playbackBar = $('account-replay-playback-bar');
     if (playbackBar) playbackBar.classList.add('hidden');
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
     return {
         frame_count: timeline.length,
+        skipped_setup_frames: preparedTimeline.skipped,
         players: collectReplayPlayers(getReplaySnapshot(timeline[0])).map(player => player.name || ''),
         meta: accountReplayData.meta,
     };
 }
 
 window.GTNReplayVideoBridge = {
-    version: 1,
+    version: 4,
     async load(payload, options = {}) {
         return loadReplayForVideoExport(payload, options);
     },
@@ -16925,19 +17936,11 @@ window.GTNReplayVideoBridge = {
         return loadReplayForVideoExport(await response.json(), options);
     },
     showFrame(index) {
-        const maxIndex = Math.max(0, accountReplayTimeline.length - 1);
-        accountReplayFrameIndex = Math.max(0, Math.min(maxIndex, Number(index) || 0));
-        renderAccountReplayFrame();
-        const playbackBar = $('account-replay-playback-bar');
-        if (playbackBar) playbackBar.classList.add('hidden');
-        const frame = accountReplayTimeline[accountReplayFrameIndex] || {};
-        return {
-            index: accountReplayFrameIndex,
-            t: Number(frame.t) || 0,
-            phase: frame.phase || '',
-            round: frame.round || 0,
-            action: replayActionLabel(frame),
-        };
+        replayVideoExportTransitionToken += 1;
+        return showReplayVideoExportFrame(index);
+    },
+    startTransition(index, options = {}) {
+        return startReplayVideoExportTransition(index, options);
     },
     setPerspective(index) {
         accountReplayPerspective = Math.max(0, Number(index) || 0);
@@ -17592,17 +18595,13 @@ function startTutorial(returnTarget = 'home') {
     stopLocalSoloRuntime();
     tutorialReturnTarget = returnTarget;
     if (returnTarget === 'home') localStorage.setItem('gtn_seen_intro', '1');
-    tutorialLastLogTotal = 0;
     tutorialDeckViewed = false;
-    tutorialCounterSeen = false;
     tutorialIntroActive = false;
     tutorialIntroShown = false;
-    tutorialTargetHintSeen = false;
-    tutorialTriggerHintSeen = false;
     if (tutorialOverlayStartTimer) { clearTimeout(tutorialOverlayStartTimer); tutorialOverlayStartTimer = null; }
     if (tutorialIntroTimer) { clearTimeout(tutorialIntroTimer); tutorialIntroTimer = null; }
-    tutorialEndHintCount = 0;
-    tutorialEndHintKey = '';
+    tutorialCompletionShown = false;
+    tutorialPendingTargetDefId = '';
     pendingTutorialStart = false;
     closeAbout();
     hideModal();
@@ -17640,6 +18639,7 @@ function showTutorialOverlay() {
             <div class="tutorial-card">
                 <div class="tutorial-kicker"></div>
                 <div class="tutorial-text"></div>
+                <div class="tutorial-progress" aria-hidden="true"><span class="tutorial-progress-fill"></span></div>
             </div>
             <div class="tutorial-arrow" aria-hidden="true"></div>
         `;
@@ -17675,21 +18675,190 @@ function scheduleTutorialOverlayStart() {
 function hideTutorialOverlay() {
     const overlay = $('tutorial-overlay');
     if (overlay) overlay.classList.add('hidden');
-    tutorialStrictFocus = false;
-    tutorialEndHintCount = 0;
-    tutorialEndHintKey = '';
 }
 
-function onTutorialGuardClick(e) {
-    if (!tutorialMode || !tutorialStrictFocus) return;
-    const target = e.target;
-    if (!(target instanceof Element)) return;
-    if (target.closest('.tutorial-highlight, #btn-tutorial-skip, .target-pickable, [data-player-target-region].target-pickable')) return;
-    e.preventDefault();
-    e.stopPropagation();
+const TUTORIAL_OBJECTIVES = [
+    { key: 'deck_viewed', textKey: 'tutorial_step_deck', anchor: 'deck' },
+    { key: 'attack_played', textKey: 'tutorial_step_attack', anchor: 'attack' },
+    { key: 'healed_self', textKey: 'tutorial_step_heal', anchor: 'heal' },
+    { key: 'equipped_self', textKey: 'tutorial_step_equip', anchor: 'equip' },
+    { key: 'turn_ended', textKey: 'tutorial_step_end', anchor: 'end' },
+    { key: 'counter_used', textKey: 'tutorial_step_counter_wait', anchor: 'end' },
+    { key: 'trigger_used', textKey: 'tutorial_step_trigger', anchor: 'trigger' },
+    { key: 'fission_applied', textKey: 'tutorial_step_fission', anchor: 'fission' },
+    { key: 'fissioned_attack_played', textKey: 'tutorial_step_fissioned', anchor: 'fissioned' },
+    { key: 'fusion_applied', textKey: 'tutorial_step_fusion', anchor: 'fusion' },
+    { key: 'fusioned_attack_played', textKey: 'tutorial_step_fusioned', anchor: 'fusioned' },
+];
+
+function isTutorialObjectiveComplete(key) {
+    if (key === 'deck_viewed') return tutorialDeckViewed;
+    const progress = (gameState && gameState.tutorial_progress) || {};
+    return progress[key] === true;
 }
 
-document.addEventListener('click', onTutorialGuardClick, true);
+function getTutorialCompletedCount() {
+    return TUTORIAL_OBJECTIVES.reduce((count, objective) => count + (isTutorialObjectiveComplete(objective.key) ? 1 : 0), 0);
+}
+
+function getFirstIncompleteTutorialObjective() {
+    return TUTORIAL_OBJECTIVES.find(objective => !isTutorialObjectiveComplete(objective.key)) || null;
+}
+
+function getVisibleTutorialElement(selectors) {
+    for (const selector of selectors) {
+        const items = Array.from(document.querySelectorAll(selector));
+        const visible = items.find(item => isVisibleTargetRegion(item));
+        if (visible) return visible;
+    }
+    return null;
+}
+
+function getTutorialHandCard(predicate, playableFirst = true) {
+    const hand = (gameState && gameState.you && gameState.you.hand) || [];
+    const matches = hand.filter(card => {
+        const cardDef = getCardDef(card.def_id);
+        return !!cardDef && predicate(card, cardDef);
+    });
+    if (!playableFirst) return matches[0] || null;
+    return matches.find(card => canPlayCard(card)) || matches[0] || null;
+}
+
+function getTutorialCardElement(card) {
+    if (!card || card.instance_id == null) return null;
+    const id = String(card.instance_id);
+    return getVisibleTutorialElement([
+        `#classic-hand-fan .classic-hand-card[data-instance-id="${id}"]`,
+        `#you-hand .card[data-instance-id="${id}"]`,
+    ]);
+}
+
+function getTutorialSelectedCard() {
+    if (selectedPlayCardId == null) return null;
+    const hand = (gameState && gameState.you && gameState.you.hand) || [];
+    return hand.find(card => String(card.instance_id) === String(selectedPlayCardId)) || null;
+}
+
+function getTutorialPlayerAnchor(kind) {
+    if (!gameState) return null;
+    const selfId = normalizePlayerId(gameState.your_id);
+    const opponentId = Array.isArray(gameState.enemy_ids) && gameState.enemy_ids.length
+        ? normalizePlayerId(gameState.enemy_ids[0])
+        : (selfId == null ? null : 1 - selfId);
+    return getPlayerRegionById(kind === 'self' ? selfId : opponentId);
+}
+
+function tutorialCardForAnchor(anchor) {
+    if (anchor === 'attack') {
+        return getTutorialHandCard((card, def) => def.card_type === 'thorn' && card.def_id === 'Basic')
+            || getTutorialHandCard((card, def) => def.card_type === 'thorn');
+    }
+    if (anchor === 'heal') return getTutorialHandCard(card => card.def_id === 'Rose');
+    if (anchor === 'equip') return getTutorialHandCard(card => card.def_id === 'Leaf');
+    if (anchor === 'fission') return getTutorialHandCard(card => card.def_id === 'Fission');
+    if (anchor === 'fissioned') {
+        return getTutorialHandCard((card, def) => def.card_type === 'thorn' && Number(card.fission_level || 1) > 1);
+    }
+    if (anchor === 'fusion') return getTutorialHandCard(card => card.def_id === 'Fusion');
+    if (anchor === 'fusioned') {
+        return getTutorialHandCard((card, def) => def.card_type === 'thorn' && Number(card.fusion_level || 1) > 1);
+    }
+    return null;
+}
+
+function getTutorialAnchorElement(anchor) {
+    if (anchor === 'deck') return getVisibleTutorialElement(['#classic-view-deck', '#btn-view-deck']);
+    if (anchor === 'end') return getVisibleTutorialElement(['#classic-end-turn', '#btn-end-turn']);
+    if (anchor === 'response') return getVisibleTutorialElement(['#response-panel.visible', '#response-panel:not(.hidden)']);
+    if (anchor === 'trigger') {
+        return getVisibleTutorialElement([
+            '.classic-equip-chip.is-triggerable:not(.is-trigger-unavailable)',
+            '.btn-equip-trigger:not(:disabled)',
+        ]);
+    }
+    if (anchor === 'self' || anchor === 'opponent') return getTutorialPlayerAnchor(anchor);
+    return getTutorialCardElement(tutorialCardForAnchor(anchor));
+}
+
+function getTutorialPresentation() {
+    const myTurn = !!(gameState && gameState.current_player === 0 && gameState.phase === 'action');
+    const enemyTurn = !!(gameState && gameState.current_player === 1 && gameState.phase === 'action');
+    const objective = getFirstIncompleteTutorialObjective();
+    if (!objective) return { complete: true };
+
+    if (responsePending) {
+        return {
+            objective,
+            text: UI.tutorial_step_counter,
+            anchor: 'response',
+        };
+    }
+    if (enemyTurn) {
+        return { objective, text: UI.tutorial_step_enemy, anchor: '' };
+    }
+
+    const selected = getTutorialSelectedCard();
+    const selectedDef = selected && selected.def_id;
+    if (selected) {
+        if (objective.key === 'attack_played' && getCardDef(selectedDef)?.card_type === 'thorn') {
+            return { objective, text: UI.tutorial_step_attack_target, anchor: 'opponent' };
+        }
+        if (objective.key === 'healed_self' && selectedDef === 'Rose') {
+            return { objective, text: UI.tutorial_step_heal_target, anchor: 'self' };
+        }
+        if (objective.key === 'equipped_self' && selectedDef === 'Leaf') {
+            return { objective, text: UI.tutorial_step_equip_target, anchor: 'self' };
+        }
+        if (
+            (objective.key === 'fissioned_attack_played' || objective.key === 'fusioned_attack_played')
+            && getCardDef(selectedDef)?.card_type === 'thorn'
+        ) {
+            return { objective, text: UI.tutorial_step_attack_target, anchor: 'opponent' };
+        }
+    }
+    if (classicSelectedTriggerEquipmentId != null && objective.key === 'trigger_used') {
+        return { objective, text: UI.tutorial_step_trigger_target, anchor: 'opponent' };
+    }
+
+    if (!myTurn && objective.key !== 'deck_viewed') {
+        return { objective, text: UI.tutorial_step_enemy, anchor: '' };
+    }
+    if (objective.key === 'counter_used') {
+        return { objective, text: UI.tutorial_step_counter_wait, anchor: 'end' };
+    }
+    if (objective.key === 'trigger_used') {
+        const trigger = getTutorialAnchorElement('trigger');
+        return trigger
+            ? { objective, text: UI.tutorial_step_trigger, anchor: 'trigger', element: trigger }
+            : { objective, text: UI.tutorial_step_trigger_wait, anchor: 'end' };
+    }
+    const card = tutorialCardForAnchor(objective.anchor);
+    if (['attack', 'heal', 'equip', 'fission', 'fissioned', 'fusion', 'fusioned'].includes(objective.anchor) && !card) {
+        return { objective, text: UI.tutorial_step_wait_card, anchor: 'end' };
+    }
+    const cardAnchors = ['attack', 'heal', 'equip', 'fission', 'fissioned', 'fusion', 'fusioned'];
+    let text = UI[objective.textKey];
+    if (cardAnchors.includes(objective.anchor)) {
+        const action = shouldUseClassicBattle(gameState)
+            ? UI.tutorial_action_classic
+            : (isTouchPlayMode() ? UI.tutorial_action_touch : UI.tutorial_action_drag);
+        text = `${action || ''}${text || ''}`;
+    }
+    return { objective, text, anchor: objective.anchor };
+}
+
+function isTutorialOverlaySuspended() {
+    return !!document.querySelector('#modal.active, .game-alert.active, .game-prompt.active, .target-pick-board-hint');
+}
+
+function completeTutorial() {
+    if (tutorialCompletionShown || !tutorialMode) return;
+    tutorialCompletionShown = true;
+    hideTutorialOverlay();
+    gameAlert(UI.tutorial_complete_title, UI.tutorial_complete_message, [
+        { text: UI.ok, cls: 'btn-primary', action: skipTutorial },
+    ]);
+}
 
 function updateTutorialOverlay() {
     if (!tutorialMode) return;
@@ -17697,137 +18866,42 @@ function updateTutorialOverlay() {
     if (!overlay) return;
     document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
     document.querySelectorAll('.tutorial-card-target').forEach(el => el.classList.remove('tutorial-card-target'));
+    if (isTutorialOverlaySuspended()) {
+        overlay.classList.add('hidden');
+        return;
+    }
+    overlay.classList.remove('hidden');
     const kicker = overlay.querySelector('.tutorial-kicker');
     const text = overlay.querySelector('.tutorial-text');
     const arrow = overlay.querySelector('.tutorial-arrow');
     const shield = overlay.querySelector('.tutorial-click-shield');
+    const progressBar = overlay.querySelector('.tutorial-progress-fill');
     if (tutorialIntroActive) {
         if (shield) shield.classList.add('hidden');
         if (kicker) kicker.textContent = UI.tutorial_start;
         if (text) text.textContent = UI.tutorial_intro || '现在，让我们开始新手教程吧！';
-        if (arrow) positionTutorialArrow(arrow, '');
+        if (progressBar) progressBar.style.width = '0%';
+        if (arrow) positionTutorialArrow(arrow, null);
         return;
     }
-    const myTurn = gameState && gameState.current_player === 0 && gameState.phase === 'action';
-    const enemyTurn = gameState && gameState.current_player === 1 && gameState.phase === 'action';
-    const playedThisTurn = Object.values((gameState && gameState.you && gameState.you.cards_played_this_turn) || {})
-        .reduce((sum, n) => sum + Number(n || 0), 0);
-    const hand = (gameState && gameState.you && gameState.you.hand) || [];
-    const hasPlayableType = (type) => hand.some(c => {
-        const cd = getCardDef(c.def_id);
-        return cd && cd.card_type === type && canPlayCard(c);
-    });
-    const hasFissionTarget = hand.some(c => {
-        const cd = getCardDef(c.def_id);
-        return cd && cd.card_type === 'thorn';
-    });
-    const attackCounts = {};
-    hand.forEach(c => {
-        const cd = getCardDef(c.def_id);
-        if (cd && cd.card_type === 'thorn') attackCounts[c.def_id] = (attackCounts[c.def_id] || 0) + 1;
-    });
-    const hasFusionTargets = Object.values(attackCounts).some(n => n >= 2);
-    const hasFission = hasFissionTarget && hand.some(c => c.def_id === 'Fission' && canPlayCard(c));
-    const hasFusion = hasFusionTargets && hand.some(c => c.def_id === 'Fusion' && canPlayCard(c));
-    const hasCounter = hand.some(c => {
-        const cd = getCardDef(c.def_id);
-        return cd && cd.card_type === 'guard';
-    });
-    const hasFissionedAttack = hand.some(c => {
-        const cd = getCardDef(c.def_id);
-        return cd && cd.card_type === 'thorn' && Number(c.fission_level || 1) > 1 && canPlayCard(c);
-    });
-    const hasFusionedAttack = hand.some(c => {
-        const cd = getCardDef(c.def_id);
-        return cd && cd.card_type === 'thorn' && Number(c.fusion_level || 1) > 1 && canPlayCard(c);
-    });
-    const hasEnhancedAttack = hasFissionedAttack || hasFusionedAttack;
-    const hasTargetCard = hand.some(c => {
-        const cd = getCardDef(c.def_id);
-        return cd && cd.card_type !== 'thorn' && canPlayCard(c) && cardNeedsPlayerTarget(cd, c);
-    });
-    const triggerButton = document.querySelector('.btn-equip-trigger:not(:disabled)');
-    const shouldShowDeckHint = !!(gameState && myTurn && !tutorialDeckViewed);
-    const shouldShowCounterHint = !!responsePending;
-    const shouldShowTriggerHint = !!(myTurn && !tutorialTriggerHintSeen && triggerButton && !shouldShowCounterHint && !shouldShowDeckHint);
-    const shouldShowTargetHint = !!(myTurn && !tutorialTargetHintSeen && hasTargetCard && playedThisTurn === 0 && !shouldShowCounterHint && !shouldShowDeckHint && !shouldShowTriggerHint);
-    const endHintCandidate = !!(!enemyTurn && myTurn && playedThisTurn > 0 && !hasEnhancedAttack);
-    if (endHintCandidate) {
-        const key = `${gameState.round_num || 0}:${gameState.current_player || 0}`;
-        if (tutorialEndHintKey !== key) {
-            tutorialEndHintKey = key;
-            tutorialEndHintCount += 1;
-        }
+    if (shield) shield.classList.add('hidden');
+    const completed = getTutorialCompletedCount();
+    const total = TUTORIAL_OBJECTIVES.length;
+    if (progressBar) progressBar.style.width = `${Math.round((completed / total) * 100)}%`;
+    const presentation = getTutorialPresentation();
+    if (presentation.complete) {
+        completeTutorial();
+        return;
     }
-    const shouldShowEndHint = endHintCandidate && tutorialEndHintCount <= 2;
-    const shouldFocusEndHint = shouldShowEndHint && tutorialEndHintCount <= 1;
-    const strictFocus = shouldShowCounterHint || shouldShowDeckHint || shouldShowTriggerHint || shouldFocusEndHint;
-    tutorialStrictFocus = strictFocus;
-    if (shield) shield.classList.toggle('hidden', !strictFocus);
-    if (shouldShowCounterHint) tutorialCounterSeen = true;
-    if (shouldShowTriggerHint) tutorialTriggerHintSeen = true;
-    if (kicker) kicker.textContent = UI.tutorial_start;
-    if (text) {
-        text.textContent = shouldShowCounterHint
-            ? UI.tutorial_hint_counter
-            : enemyTurn
-            ? UI.tutorial_hint_enemy
-            : shouldShowDeckHint
-                ? (UI.tutorial_hint_ui || UI.tutorial_hint_deck)
-                : shouldShowTriggerHint
-                    ? UI.tutorial_hint_trigger
-                : shouldShowTargetHint
-                    ? UI.tutorial_hint_target
-                : (myTurn && hasFissionedAttack)
-                    ? UI.tutorial_hint_play_fissioned
-                    : (myTurn && hasFusionedAttack)
-                    ? UI.tutorial_hint_play_fusioned
-                : shouldShowEndHint
-                    ? UI.tutorial_hint_end
-                    : (myTurn && (gameState.round_num || 0) <= 1)
-                    ? UI.tutorial_hint_play
-                    : (myTurn && hasFission)
-                    ? UI.tutorial_hint_fission
-                    : (myTurn && hasFusion)
-                        ? UI.tutorial_hint_fusion
-                        : (myTurn && hasPlayableType('root'))
-                            ? UI.tutorial_hint_root
-                            : (myTurn && hasPlayableType('bloom'))
-                                ? UI.tutorial_hint_bloom
-                    : (tutorialDeckViewed && !tutorialCounterSeen && hasCounter)
-                        ? UI.tutorial_hint_continue
-                        : UI.tutorial_hint_free;
+    const objectiveIndex = Math.max(0, TUTORIAL_OBJECTIVES.indexOf(presentation.objective));
+    if (kicker) kicker.textContent = `${UI.tutorial_start} · ${objectiveIndex + 1}/${total}`;
+    if (text) text.textContent = presentation.text || UI.tutorial_hint_free;
+    const target = presentation.element || getTutorialAnchorElement(presentation.anchor);
+    if (target) {
+        target.classList.add('tutorial-highlight');
+        if (target.matches('.card, .classic-hand-card')) target.classList.add('tutorial-card-target');
     }
-    if (arrow) {
-        let arrowMode = '';
-        if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && shouldShowTargetHint) {
-            arrowMode = 'target';
-        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && !shouldShowTriggerHint && myTurn && hasFissionedAttack) {
-            arrowMode = 'fissioned';
-        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && !shouldShowTriggerHint && myTurn && hasFusionedAttack) {
-            arrowMode = 'fusioned';
-        } else if (!enemyTurn && !shouldShowCounterHint && !shouldShowDeckHint && !shouldShowTriggerHint && myTurn && playedThisTurn === 0) {
-            if ((gameState.round_num || 0) <= 1) arrowMode = 'play';
-            else if (hasFission) arrowMode = 'fission';
-            else if (hasFusion) arrowMode = 'fusion';
-            else if (hasPlayableType('root')) arrowMode = 'root';
-            else if (hasPlayableType('bloom')) arrowMode = 'bloom';
-            else arrowMode = 'play';
-        }
-        positionTutorialArrow(arrow, arrowMode);
-    }
-    if (shouldShowCounterHint) {
-        const panel = $('response-panel');
-        if (panel) panel.classList.add('tutorial-highlight');
-    } else if (!enemyTurn && shouldShowDeckHint) {
-        const btn = $('btn-view-deck');
-        if (btn) btn.classList.add('tutorial-highlight');
-    } else if (!enemyTurn && shouldShowTriggerHint && triggerButton) {
-        triggerButton.classList.add('tutorial-highlight');
-    } else if (shouldFocusEndHint) {
-        const btn = $('btn-end-turn');
-        if (btn) btn.classList.add('tutorial-highlight');
-    }
+    if (arrow) positionTutorialArrow(arrow, target);
 }
 
 function scheduleTutorialOverlayRefresh(delay = 320) {
@@ -17839,46 +18913,25 @@ function scheduleTutorialOverlayRefresh(delay = 320) {
     }, delay);
 }
 
-function positionTutorialArrow(arrow, mode) {
+function positionTutorialArrow(arrow, target) {
     if (arrow) arrow.classList.remove('active');
     if (arrow) {
         arrow.style.removeProperty('--tutorial-arrow-x');
         arrow.style.removeProperty('--tutorial-arrow-top');
         arrow.style.removeProperty('--tutorial-arrow-h');
+        arrow.style.removeProperty('--tutorial-arrow-rotate');
     }
-    if (!mode) {
-        return;
-    }
-    if (mode) {
-        const cards = [...document.querySelectorAll('#you-hand .card.card-draggable:not(.card-disabled)')];
-        const playable = cards.find(el => {
-            const id = Number(el.dataset.instanceId);
-            const hand = (gameState && gameState.you && gameState.you.hand) || [];
-            const card = hand.find(c => c.instance_id === id);
-            const cd = card ? getCardDef(card.def_id) : null;
-            if (!card || !cd) return false;
-            if (mode === 'fission') return card.def_id === 'Fission';
-            if (mode === 'fissioned') return cd.card_type === 'thorn' && Number(card.fission_level || 1) > 1;
-            if (mode === 'fusion') return card.def_id === 'Fusion';
-            if (mode === 'fusioned') return cd.card_type === 'thorn' && Number(card.fusion_level || 1) > 1;
-            if (mode === 'target') return cd.card_type !== 'thorn' && cardNeedsPlayerTarget(cd, card);
-            if (mode === 'root') return cd.card_type === 'root';
-            if (mode === 'bloom') return cd.card_type === 'bloom';
-            return cd.card_type === 'thorn';
-        }) || cards[0] || document.querySelector('#you-hand .card:not(.card-disabled)');
-        if (playable) {
-            playable.classList.add('tutorial-card-target');
-            const rect = playable.getBoundingClientRect();
-            const arrowHeight = Math.min(74, Math.max(52, rect.height * 0.86));
-            const overlap = Math.min(10, rect.height * 0.16);
-            const top = Math.max(8, rect.top - arrowHeight + overlap);
-            arrow.style.setProperty('--tutorial-arrow-x', `${rect.left + rect.width / 2}px`);
-            arrow.style.setProperty('--tutorial-arrow-top', `${top}px`);
-            arrow.style.setProperty('--tutorial-arrow-h', `${arrowHeight}px`);
-            arrow.classList.add('active');
-        }
-        return;
-    }
+    if (!arrow || !target || !isVisibleTargetRegion(target)) return;
+    const rect = target.getBoundingClientRect();
+    const arrowHeight = Math.min(62, Math.max(42, rect.height * 0.48));
+    const roomBelow = window.innerHeight - rect.bottom;
+    const placeBelow = roomBelow >= arrowHeight + 8;
+    const top = placeBelow ? Math.max(4, rect.bottom - 2) : Math.max(4, rect.top - arrowHeight + 2);
+    arrow.style.setProperty('--tutorial-arrow-x', `${rect.left + rect.width / 2}px`);
+    arrow.style.setProperty('--tutorial-arrow-top', `${top}px`);
+    arrow.style.setProperty('--tutorial-arrow-h', `${arrowHeight}px`);
+    arrow.style.setProperty('--tutorial-arrow-rotate', placeBelow ? '0deg' : '180deg');
+    arrow.classList.add('active');
 }
 
 function stopTutorialUiForGameOver() {
@@ -17901,14 +18954,10 @@ function stopTutorialUiForGameOver() {
     tutorialMode = false;
     pendingTutorialStart = false;
     tutorialDeckViewed = false;
-    tutorialCounterSeen = false;
     tutorialIntroActive = false;
     tutorialIntroShown = false;
-    tutorialTargetHintSeen = false;
-    tutorialTriggerHintSeen = false;
-    tutorialStrictFocus = false;
-    tutorialEndHintCount = 0;
-    tutorialEndHintKey = '';
+    tutorialCompletionShown = false;
+    tutorialPendingTargetDefId = '';
     hideTutorialOverlay();
     document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
     document.querySelectorAll('.tutorial-card-target').forEach(el => el.classList.remove('tutorial-card-target'));
@@ -17932,12 +18981,10 @@ function finishTutorialReturn() {
     tutorialMode = false;
     pendingTutorialStart = false;
     tutorialDeckViewed = false;
-    tutorialCounterSeen = false;
     tutorialIntroActive = false;
     tutorialIntroShown = false;
-    tutorialTargetHintSeen = false;
-    tutorialTriggerHintSeen = false;
-    tutorialStrictFocus = false;
+    tutorialCompletionShown = false;
+    tutorialPendingTargetDefId = '';
     if (tutorialOverlayStartTimer) { clearTimeout(tutorialOverlayStartTimer); tutorialOverlayStartTimer = null; }
     if (tutorialIntroTimer) { clearTimeout(tutorialIntroTimer); tutorialIntroTimer = null; }
     if (tutorialOverlayRefreshTimer) { clearTimeout(tutorialOverlayRefreshTimer); tutorialOverlayRefreshTimer = null; }
@@ -22152,6 +23199,7 @@ function choosePlayerTargetOnBoard(title, targets) {
     if (!regions.length) return Promise.resolve(null);
     return new Promise(resolve => {
         if (targetPickCleanup) targetPickCleanup();
+        if (tutorialMode) hideTutorialOverlay();
         let settled = false;
         let outsideEnabled = false;
         const validIds = new Set(targets.map(target => String(normalizePlayerId(target.id))).filter(id => id !== 'null'));
@@ -22160,7 +23208,11 @@ function choosePlayerTargetOnBoard(title, targets) {
         const hint = tutorialMode ? document.createElement('div') : null;
         if (hint) {
             hint.className = 'target-pick-board-hint';
-            hint.textContent = UI.target_pick_hint || title || UI.choose_target || '点击一个高亮的玩家区域以选择目标';
+            hint.textContent = tutorialPendingTargetDefId === 'Rose'
+                ? UI.tutorial_step_heal_target
+                : (tutorialPendingTargetDefId === 'Leaf'
+                    ? UI.tutorial_step_equip_target
+                    : (UI.target_pick_hint || title || UI.choose_target || '点击一个高亮的玩家区域以选择目标'));
             document.body.appendChild(hint);
         }
         const finish = (value) => {
@@ -22178,6 +23230,10 @@ function choosePlayerTargetOnBoard(title, targets) {
             if (hint) hint.remove();
             if (tutorialShield) tutorialShield.classList.remove('hidden');
             if (targetPickCleanup === finishCancel) targetPickCleanup = null;
+            if (tutorialMode) {
+                showTutorialOverlay();
+                scheduleTutorialOverlayRefresh(60);
+            }
             resolve(value);
         };
         const finishCancel = () => finish(-1);
@@ -23529,9 +24585,9 @@ function renderBattleUseLogChipLine(el, entry) {
             count: entry && entry.count,
         }];
     const usableCards = cards.map(card => {
-        const cardDict = (card && card.cardDict && typeof card.cardDict === 'object') ? card.cardDict : null;
-        const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(card && card.card);
-        return { ...card, cardDict, defId };
+        const rawCardDict = (card && card.cardDict && typeof card.cardDict === 'object') ? card.cardDict : null;
+        const resolved = resolveBattleLogCardReference(card && card.card, rawCardDict);
+        return { ...card, cardDict: resolved.cardDict, defId: resolved.defId };
     }).filter(card => card.defId);
     if (!usableCards.length) {
         el.innerHTML = colorizeBattleLogText(stripBattleLogCardMarkers(entry && entry.text ? entry.text : ''));
@@ -23589,9 +24645,9 @@ function renderBattleCounterLogChipLine(el, entry) {
             count: entry && entry.count,
         }];
     const usableCards = cards.map(card => {
-        const cardDict = (card && card.cardDict && typeof card.cardDict === 'object') ? card.cardDict : null;
-        const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(card && card.card);
-        return { ...card, cardDict, defId };
+        const rawCardDict = (card && card.cardDict && typeof card.cardDict === 'object') ? card.cardDict : null;
+        const resolved = resolveBattleLogCardReference(card && card.card, rawCardDict);
+        return { ...card, cardDict: resolved.cardDict, defId: resolved.defId };
     }).filter(card => card.defId);
     if (!usableCards.length) {
         el.innerHTML = colorizeBattleLogText(stripBattleLogCardMarkers(entry && entry.text ? entry.text : ''));
@@ -23617,10 +24673,11 @@ function renderBattleCounterLogChipLine(el, entry) {
 }
 
 function renderBattlePostUseLogChipLine(el, entry) {
-    const cardDict = (entry && entry.cardDict && typeof entry.cardDict === 'object')
+    const rawCardDict = (entry && entry.cardDict && typeof entry.cardDict === 'object')
         ? entry.cardDict
         : null;
-    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(entry && entry.card);
+    const resolved = resolveBattleLogCardReference(entry && entry.card, rawCardDict);
+    const { defId, cardDict } = resolved;
     const parts = getBattlePostUseTemplateParts(entry, false);
     if (!defId || !parts) {
         const fallback = formatLocalizedBattlePostUseLog(entry)
@@ -23708,8 +24765,9 @@ function appendLocalizedBattleCardActionDetail(parent, entry) {
 }
 
 function renderBattleCardActionLogChipLine(el, entry) {
-    const cardDict = (entry && entry.cardDict && typeof entry.cardDict === 'object') ? entry.cardDict : null;
-    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(entry && entry.card);
+    const rawCardDict = (entry && entry.cardDict && typeof entry.cardDict === 'object') ? entry.cardDict : null;
+    const resolved = resolveBattleLogCardReference(entry && entry.card, rawCardDict);
+    const { defId, cardDict } = resolved;
     if (!defId) {
         const fallback = translateLogLine(formatBattleCardActionLogForCompact(entry));
         el.innerHTML = colorizeBattleLogText(fallback);
@@ -23758,13 +24816,12 @@ function appendColorizedLogText(parent, text) {
 function appendBattleLogCardChip(parent, cardText, cardDict = null) {
     if (!parent) return false;
     const rawCardText = stripBattleLogCardMarkers(cardText || '').trim();
-    const lookupText = rawCardText
-        .replace(/\s*[（(]\s*→[^）)]*[）)]\s*$/u, '')
-        .trim();
+    const lookupText = normalizeBattleLogCardLookupText(rawCardText);
     const suffix = lookupText && lookupText !== rawCardText ? rawCardText.slice(rawCardText.indexOf(lookupText) + lookupText.length) : '';
-    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(lookupText || rawCardText);
+    const resolved = resolveBattleLogCardReference(lookupText || rawCardText, cardDict);
+    const { defId, cardDict: resolvedCardDict } = resolved;
     if (!defId) return false;
-    const chip = createCardChoiceChip({ ...(cardDict || {}), def_id: defId }, { hideInstanceOnlyFlags: false });
+    const chip = createCardChoiceChip({ ...(resolvedCardDict || {}), def_id: defId }, { hideInstanceOnlyFlags: false });
     chip.classList.add('battle-log-card-chip');
     parent.appendChild(chip);
     if (suffix) appendColorizedLogText(parent, suffix);
@@ -23975,9 +25032,10 @@ function renderBattleLogInlineCardLine(el, text) {
         const match = line.match(pattern);
         if (!match) continue;
         const cardText = String(match[2] || '').trim();
-        if (!((cardDict && cardDict.def_id) || findCardDefIdByAnyName(cardText))) continue;
+        const resolved = resolveBattleLogCardReference(cardText, cardDict);
+        if (!resolved.defId) continue;
         appendColorizedLogText(el, match[1]);
-        appendBattleLogCardChip(el, cardText, cardDict);
+        appendBattleLogCardChip(el, cardText, resolved.cardDict);
         appendColorizedLogText(el, match[3] || '');
         return true;
     }
@@ -24180,6 +25238,41 @@ function decodeBattleLogCardMarker(text) {
     }
 }
 
+function normalizeBattleLogCardLookupText(cardText) {
+    return stripBattleLogCardMarkers(cardText || '')
+        .trim()
+        .replace(/\s*[（(]\s*→[^）)]*[）)]\s*$/u, '')
+        .trim();
+}
+
+function resolveBattleLogCardReference(cardText, rawCardDict = null) {
+    const lookupText = normalizeBattleLogCardLookupText(cardText);
+    const textDefId = findCardDefIdByAnyName(lookupText);
+    const markerRawId = rawCardDict && rawCardDict.def_id
+        ? String(rawCardDict.def_id)
+        : '';
+    const markerDefId = markerRawId
+        ? (findCardDefIdByAnyName(markerRawId) || markerRawId)
+        : null;
+
+    // A marker describes the card that originally produced the log line. Log
+    // compaction can append another explicit card name (for example Sewage
+    // destroying Mine), so it must not override that explicit name.
+    if (textDefId) {
+        const cardDict = rawCardDict && markerDefId === textDefId
+            ? { ...rawCardDict, def_id: textDefId }
+            : { def_id: textDefId };
+        return { defId: textDefId, cardDict };
+    }
+    if (markerDefId) {
+        return {
+            defId: markerDefId,
+            cardDict: { ...(rawCardDict || {}), def_id: markerDefId },
+        };
+    }
+    return { defId: null, cardDict: null };
+}
+
 function battleLogCardSignature(cardDict, fallbackName = '') {
     if (!cardDict || typeof cardDict !== 'object') return String(fallbackName || '');
     const keys = [
@@ -24209,9 +25302,9 @@ function parseBattleUseLogForCompact(line) {
     if (!match) return null;
     const cardText = String(match[2] || '').trim();
     if (/^并(?:给.+?装备了|装备了)/.test(cardText)) return null;
-    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(cardText);
+    const resolved = resolveBattleLogCardReference(cardText, cardDict);
+    const { defId, cardDict: resolvedCardDict } = resolved;
     if (!defId) return null;
-    const resolvedCardDict = cardDict || { def_id: defId };
     return {
         actor: match[1],
         card: cardText,
@@ -24220,8 +25313,8 @@ function parseBattleUseLogForCompact(line) {
         count: Math.max(1, Number(match[3] || 1)),
         cards: [{
             card: cardText,
-            cardDict,
-            cardSignature: battleLogCardSignature(cardDict, cardText),
+            cardDict: resolvedCardDict,
+            cardSignature: battleLogCardSignature(resolvedCardDict, cardText),
             count: Math.max(1, Number(match[3] || 1)),
         }],
     };
@@ -24234,9 +25327,9 @@ function parseBattleCounterLogForCompact(line) {
     const match = cleanLine.match(/^(.+?)使用了?(.+?)进行反制[！!]?(?:\s*×(\d+))?$/);
     if (!match) return null;
     const cardText = String(match[2] || '').trim();
-    const defId = (cardDict && cardDict.def_id) || findCardDefIdByAnyName(cardText);
+    const resolved = resolveBattleLogCardReference(cardText, cardDict);
+    const { defId, cardDict: resolvedCardDict } = resolved;
     if (!defId) return null;
-    const resolvedCardDict = cardDict || { def_id: defId };
     const count = Math.max(1, Number(match[3] || 1));
     return {
         actor: String(match[1] || ''),
@@ -24255,9 +25348,9 @@ function parseBattleCounterLogForCompact(line) {
 
 function buildBattleCardActionEntry(subtype, values, rawCardDict = null) {
     const cardText = String(values && values.card || '').trim();
-    const defId = (rawCardDict && rawCardDict.def_id) || findCardDefIdByAnyName(cardText);
+    const resolved = resolveBattleLogCardReference(cardText, rawCardDict);
+    const { defId, cardDict } = resolved;
     if (!defId) return null;
-    const cardDict = rawCardDict || { def_id: defId };
     return {
         subtype,
         actor: String(values.actor || ''),
@@ -24300,6 +25393,11 @@ function parseBattleCardActionLogForCompact(line) {
             actor: match[1], card: match[2], detail: match[3],
         }, rawCardDict);
     }
+    if ((match = cleanLine.match(/^(.+?)使用(?:了)?([^，,！!:：]+)[，,！!:：]\s*(.+)$/))) {
+        return buildBattleCardActionEntry('use_detail', {
+            actor: match[1], card: match[2], detail: match[3],
+        }, rawCardDict);
+    }
     if ((match = cleanLine.match(/^(.+?)摧毁了?(.+?)的([^，,！!]+)(?:[，,！!:：]\s*(.+))?$/))) {
         return buildBattleCardActionEntry('destroy_equipment', {
             actor: match[1], target: match[2], card: match[3], detail: match[4],
@@ -24328,11 +25426,6 @@ function parseBattleCardActionLogForCompact(line) {
     if ((match = cleanLine.match(/^(.+?)拒绝(.+?)对其使用([^，,！!]+)(?:[，,！!:：]\s*(.+))?$/))) {
         return buildBattleCardActionEntry('card_rejected', {
             actor: match[2], target: match[1], card: match[3], detail: match[4],
-        }, rawCardDict);
-    }
-    if ((match = cleanLine.match(/^(.+?)使用(?:了)?([^，,！!:：]+)[，,！!:：]\s*(.+)$/))) {
-        return buildBattleCardActionEntry('use_detail', {
-            actor: match[1], card: match[2], detail: match[3],
         }, rawCardDict);
     }
     return null;
@@ -24431,6 +25524,7 @@ function parseBattlePostUseLogForCompact(line) {
     let uniqueMatch = cleanLine.match(/^(.+?)的唯一牌(.+?)多余副本被放逐(?: ×(\d+))?$/);
     if (uniqueMatch) {
         const cardText = String(uniqueMatch[2] || '').trim();
+        const resolvedCardDict = resolveBattleLogCardReference(cardText, cardDict).cardDict;
         return {
             actor: String(uniqueMatch[1] || ''),
             card: cardText,
@@ -24443,11 +25537,12 @@ function parseBattlePostUseLogForCompact(line) {
     let actorExileMatch = cleanLine.match(/^(.+?)放逐了(.+?)(?: ×(\d+))?$/);
     if (actorExileMatch) {
         const cardText = String(actorExileMatch[2] || '').trim();
+        const resolvedCardDict = resolveBattleLogCardReference(cardText, cardDict).cardDict;
         return {
             actor: String(actorExileMatch[1] || ''),
             card: cardText,
-            cardDict,
-            cardSignature: battleLogCardSignature(cardDict, cardText),
+            cardDict: resolvedCardDict,
+            cardSignature: battleLogCardSignature(resolvedCardDict, cardText),
             action: '放逐了',
             count: Math.max(1, Number(actorExileMatch[3] || 1)),
         };
@@ -24457,21 +25552,23 @@ function parseBattlePostUseLogForCompact(line) {
         match = cleanLine.match(/^(.+?)(被放逐|移入弃牌堆)(?: ×(\d+))?$/);
         if (!match) return null;
         const cardText = String(match[1] || '').trim();
+        const resolvedCardDict = resolveBattleLogCardReference(cardText, cardDict).cardDict;
         return {
             actor: '',
             card: cardText,
-            cardDict,
-            cardSignature: battleLogCardSignature(cardDict, cardText),
+            cardDict: resolvedCardDict,
+            cardSignature: battleLogCardSignature(resolvedCardDict, cardText),
             action: String(match[2] || ''),
             count: Math.max(1, Number(match[3] || 1)),
         };
     }
     const cardText = String(match[2] || '').trim();
+    const resolvedCardDict = resolveBattleLogCardReference(cardText, cardDict).cardDict;
     return {
         actor: String(match[1] || ''),
         card: cardText,
-        cardDict,
-        cardSignature: battleLogCardSignature(cardDict, cardText),
+        cardDict: resolvedCardDict,
+        cardSignature: battleLogCardSignature(resolvedCardDict, cardText),
         action: String(match[3] || ''),
         count: Math.max(1, Number(match[4] || 1)),
     };
@@ -25343,8 +26440,9 @@ function animateDrawnCard(cardEl, index = 0) {
     const finalY = finalRect.top + finalRect.height / 2;
     const dx = source.x - finalX;
     const dy = source.y - finalY;
-    const delay = Math.min(index * 42, 126);
-    const duration = 230;
+    const exportingReplayVideo = document.documentElement.classList.contains('replay-video-export');
+    const delay = Math.min(index * (exportingReplayVideo ? 75 : 42), exportingReplayVideo ? 225 : 126);
+    const duration = exportingReplayVideo ? 480 : 230;
     cardEl.classList.add('hand-card-animating');
     cardEl.style.transition = 'none';
     cardEl.style.opacity = '0';
@@ -25413,7 +26511,9 @@ function animateHandLayoutChanges(container, oldRects, hand) {
 }
 
 function animatePlayedCard(cardInstanceId, options = {}) {
-    const cardEl = document.querySelector(`.card[data-instance-id="${cardInstanceId}"]`);
+    const cardEl = options.sourceElement || document.querySelector(
+        `.card[data-instance-id="${cardInstanceId}"], .classic-hand-card[data-instance-id="${cardInstanceId}"], [data-instance-id="${cardInstanceId}"]`
+    );
     if (!cardEl) return;
     const rect = cardEl.getBoundingClientRect();
     const flash = cardEl.cloneNode(true);
@@ -25459,28 +26559,36 @@ function animatePlayedCard(cardInstanceId, options = {}) {
 }
 
 function getPlayGestureFallbackTarget() {
-    return $('play-zone')
-        || $('classic-stage')
-        || document.querySelector('.battle-field')
-        || document.body;
+    const candidates = [
+        $('play-zone'),
+        $('classic-stage'),
+        document.querySelector('.battle-field'),
+    ].filter(Boolean);
+    return candidates.find(element => {
+        if (!isVisibleTargetRegion(element)) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 2 && rect.height > 2;
+    }) || document.body;
 }
 
 function createVirtualWindowsCursor() {
     const cursor = document.createElement('div');
     cursor.className = 'virtual-play-cursor';
     cursor.innerHTML = `
-        <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-            <path class="cursor-shadow" d="M6 3 L6 25 L12.2 19.4 L15.9 28 L19.2 26.6 L15.6 18.2 L24 18.2 Z"></path>
-            <path class="cursor-fill" d="M5 2 L5 24 L11.2 18.4 L14.9 27 L18.2 25.6 L14.6 17.2 L23 17.2 Z"></path>
-        </svg>
+        <img class="virtual-play-cursor-image"
+             src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABbklEQVR42u3XvUrDUBTA8ZvY4nQz+IHiSwgOKr6D4hM4KL6AbyVOgsUM2qFbXSQUcSgOtaWRghRCIKYhud7TkGpsbBtxOAfOH0pDspxfbm5DhRDSNStre4Ju0hXCuieMkK7SEUakAMKILwBRRB5AEDENIIYoBhBC/A4ggpgNIICYD4hj1Ij5ACgcxVgRiwGgj3CEEbE4ABoOPWyIcgBoMHjHhCgPgHq9NyyIvwGSJFGdThcDojwAho+iSIVhqNrtlzECEyDx/aDwZTb7gwQAw+tzfu22/hNwZyytHqJ+kWXD62d6V3+3vgNeu3241kILyA+vM6yb5sPj5Jkfr4I+h3AVpBsEYTb85NckPZbP2fBQumHRrQJsQNmvLm/uT13Sd7zRaOb3As5VKM6sbmzBKmTDe56nbLsOq+AQ+s9s2Y7zpC6vrtXp+YU6Oj5RZmV9m8z4ei8caETNMFfO9PGO4DiO4ziO4ziO4ziO+48+AdHgEdYRiWfwAAAAAElFTkSuQmCC"
+             alt="">
     `;
     return cursor;
 }
 
 function animateVirtualPlayGesture(cardInstanceId, options = {}) {
-    if (!playGestureAnimationEnabled || isSpectating || replayMode) return 0;
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
-    const source = document.querySelector(`#you-hand .card[data-instance-id="${cardInstanceId}"], .classic-hand .card[data-instance-id="${cardInstanceId}"], .card[data-instance-id="${cardInstanceId}"]`);
+    const force = !!options.force;
+    if (!force && (!playGestureAnimationEnabled || isSpectating || replayMode)) return 0;
+    if (!force && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
+    const source = options.sourceElement || document.querySelector(
+        `#you-hand .card[data-instance-id="${cardInstanceId}"], #classic-hand-fan [data-instance-id="${cardInstanceId}"], .card[data-instance-id="${cardInstanceId}"], [data-instance-id="${cardInstanceId}"]`
+    );
     if (!source) return 0;
     const sourceRect = source.getBoundingClientRect();
     if (!sourceRect || sourceRect.width <= 2 || sourceRect.height <= 2) return 0;
@@ -25693,11 +26801,15 @@ async function onPlayCard(cardInstanceId, options = {}) {
     } else if (cardHasSelfOnlyFlag(cardDict, cardDef) && (!cardDef || cardDef.card_type !== 'thorn')) {
         targetPlayerId = normalizePlayerId(gameState.your_id);
     } else if (cardNeedsPlayerTarget(cardDef, cardDict) && targetPlayerId < 0) {
-        if (tutorialMode) tutorialTargetHintSeen = true;
-        targetPlayerId = await choosePlayerTarget(
-            UI.choose_target || UI.select_target || 'Choose target',
-            getCardTargetPickOptions(cardDef, cardDict),
-        );
+        if (tutorialMode) tutorialPendingTargetDefId = cardDict.def_id || '';
+        try {
+            targetPlayerId = await choosePlayerTarget(
+                UI.choose_target || UI.select_target || 'Choose target',
+                getCardTargetPickOptions(cardDef, cardDict),
+            );
+        } finally {
+            tutorialPendingTargetDefId = '';
+        }
         if (targetPlayerId < 0) return;
     }
     const choice = await getCardChoice(cardDict, targetPlayerId);
@@ -25819,6 +26931,7 @@ function multiChoice(title, options, config = {}) {
         const el = $('game-prompt');
         if (!el) { resolve([]); return; }
         if (!options.length) { resolve([]); return; }
+        if (tutorialMode) hideTutorialOverlay();
         cleanupGamePromptTransientButtons();
         const min = Number(config.min ?? config.min_count ?? 1);
         const max = Number(config.max || config.max_count || options.length);
@@ -25866,6 +26979,7 @@ function multiChoice(title, options, config = {}) {
             removeFloatingCardPreview();
             el.classList.remove('active');
             cleanupGamePromptTransientButtons();
+            if (tutorialMode) scheduleTutorialOverlayRefresh(120);
             resolve(value);
         };
         confirmBtn.onclick = () => {
@@ -25994,6 +27108,7 @@ function showResponseUI(data) {
         if (!ccDef) return;
         const btn = document.createElement('button');
         btn.className = 'btn counter-card-btn ' + (canAffordAny ? 'btn-primary' : 'btn-counter-disabled');
+        btn.dataset.cardInstanceId = String(cc.instance_id || '');
         btn.appendChild(createCardChoiceChip(cc));
         if (count > 1) {
             const countEl = document.createElement('span');
@@ -26044,7 +27159,6 @@ function onRespond(cardInstanceId) {
     removeFloatingCardPreview();
     if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
     responsePending = false;
-    if (tutorialMode) tutorialCounterSeen = true;
     if (cardInstanceId != null) {
         const hand = (gameState.you || {}).hand || [];
         const cardDict = hand.find(c => c.instance_id === cardInstanceId);
@@ -28627,15 +29741,9 @@ async function saveDisabledMods() {
         });
         showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
     }
-    try {
-        localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
-    } catch (err) {
-        const message = currentLang === 'zh'
-            ? '浏览器禁止本地存储，无法保存模组设置。请检查隐私模式或站点存储权限。'
-            : 'The browser blocked local storage, so mod settings could not be saved. Check private mode or site storage permissions.';
-        flashStatus(message, 4200, 'error');
-        console.warn('Failed to persist disabled mods:', err);
-        return;
+    localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+    if (!localStorage.isPersistent()) {
+        console.info('[storage] mod selection is using session memory; server synchronization will continue normally');
     }
     const serverInput = $('settings-server-input');
     if (serverInput && settingsAllowServerEdit) {
@@ -29279,7 +30387,7 @@ async function init() {
     if (hasSeenIntro) {
         window.setTimeout(maybeShowMusicNotice, 180);
     }
-    if (!hasSeenIntro) {
+    if (!hasSeenIntro && !window.__GTN_REPLAY_VIDEO_EXPORT__) {
         setTimeout(() => openRulesModal({ firstVisit: true }), 250);
     }
 }

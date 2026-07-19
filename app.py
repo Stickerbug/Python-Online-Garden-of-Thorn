@@ -383,7 +383,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260718-font-refresh-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260719-tutorial-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -4715,6 +4715,7 @@ SOCKET_EVENT_LIMITS = {
     'draft_reroll': (8, 60),
     'select_opening_event': (10, 60),
     'request_pregame_state': (12, 60),
+    'request_game_state': (20, 60),
     'play_card': (30, 30),
     'response': (30, 30),
     'ally_consent_response': (20, 30),
@@ -4757,6 +4758,7 @@ SOFT_REJECT_EVENT_NAMES = {
     'use_trigger',
     'end_turn',
     'ally_consent_response',
+    'request_game_state',
 }
 SOFT_REJECT_CODES = {
     'WAITING_FOR_RESPONSE',
@@ -11299,6 +11301,37 @@ def on_request_pregame_state(data=None):
     schedule_pregame_state(room, pidx, allow_sub_choice=True)
 
 
+@socketio.on('request_game_state')
+@measure_socket_action('request_game_state')
+def on_request_game_state(data=None):
+    sid = request.sid
+    data = socket_guard('request_game_state', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    room = None
+    pidx = -1
+    spectating = False
+    with _lock:
+        player = players.get(sid)
+        if not player:
+            return
+        room_id = player.get('room_id')
+        if room_id is not None:
+            room = rooms.get(room_id)
+            if room is not None:
+                pidx = room.player_index(sid)
+        if room is None:
+            spectate_room_id = player.get('spectating_room')
+            room = rooms.get(spectate_room_id)
+            spectating = room is not None and sid in (getattr(room, 'spectators', []) or [])
+    if room is None:
+        return
+    if spectating:
+        send_spectate_state_to(room, sid)
+    elif pidx >= 0:
+        send_game_state_to(room, pidx)
+
+
 def start_game(room):
     try:
         if getattr(room.engine, 'phase', None) not in ('event_select', 'event_reveal', 'draft'):
@@ -11545,6 +11578,95 @@ def send_solo_state_with_pending(sid, perspective=None):
     _solo_emit_pending_after_state(sid, solo_sessions.get(sid))
 
 
+TUTORIAL_PROGRESS_KEYS = (
+    'attack_played',
+    'healed_self',
+    'equipped_self',
+    'turn_ended',
+    'counter_used',
+    'trigger_used',
+    'fission_applied',
+    'fissioned_attack_played',
+    'fusion_applied',
+    'fusioned_attack_played',
+)
+
+
+def _tutorial_progress(engine):
+    progress = getattr(engine, 'tutorial_progress', None)
+    if not isinstance(progress, dict):
+        progress = {}
+        engine.tutorial_progress = progress
+    for key in TUTORIAL_PROGRESS_KEYS:
+        progress[key] = bool(progress.get(key, False))
+    return progress
+
+
+def _tutorial_mark(engine, key):
+    if key in TUTORIAL_PROGRESS_KEYS:
+        _tutorial_progress(engine)[key] = True
+
+
+def _tutorial_refresh_progress(engine):
+    progress = _tutorial_progress(engine)
+    if not getattr(engine, 'players', None):
+        return progress
+    for card in list(getattr(engine.players[0], 'hand', []) or []):
+        if getattr(card, 'card_type', '') != 'thorn':
+            continue
+        if int(getattr(card, 'fission_level', 1) or 1) > 1:
+            progress['fission_applied'] = True
+        if int(getattr(card, 'fusion_level', 1) or 1) > 1:
+            progress['fusion_applied'] = True
+    return progress
+
+
+def _tutorial_card_before_action(engine, player_id, card_instance_id):
+    if not engine or not (0 <= player_id < len(getattr(engine, 'players', []) or [])):
+        return None
+    card = engine.players[player_id].find_hand_card(card_instance_id)
+    return card.to_dict() if card is not None else None
+
+
+def _tutorial_choice_target(choice, default=-1):
+    if not isinstance(choice, dict):
+        return default
+    for key in ('target_player_id', 'target_player', 'target_id'):
+        try:
+            if choice.get(key) is not None:
+                return int(choice.get(key))
+        except (TypeError, ValueError):
+            continue
+    return default
+
+
+def _tutorial_note_card_action(engine, player_id, card_before, choice, result):
+    if player_id != 0 or not isinstance(card_before, dict) or not isinstance(result, dict):
+        return
+    if not (
+        result.get('success')
+        or result.get('needs_response')
+        or result.get('needs_choice')
+        or result.get('needs_v2_ui')
+    ):
+        return
+    def_id = str(card_before.get('def_id', '') or '')
+    card_def = CARD_DEFS.get(def_id)
+    card_type = getattr(card_def, 'card_type', '') if card_def else ''
+    target_id = _tutorial_choice_target(choice)
+    if card_type == 'thorn':
+        _tutorial_mark(engine, 'attack_played')
+        if int(card_before.get('fission_level', 1) or 1) > 1:
+            _tutorial_mark(engine, 'fissioned_attack_played')
+        if int(card_before.get('fusion_level', 1) or 1) > 1:
+            _tutorial_mark(engine, 'fusioned_attack_played')
+    if def_id == 'Rose' and target_id == 0:
+        _tutorial_mark(engine, 'healed_self')
+    if def_id == 'Leaf' and target_id == 0:
+        _tutorial_mark(engine, 'equipped_self')
+    _tutorial_refresh_progress(engine)
+
+
 def send_solo_state(sid, perspective=None):
     engine = solo_sessions.get(sid)
     if not engine:
@@ -11559,6 +11681,8 @@ def send_solo_state(sid, perspective=None):
         state['your_name'] = '你'
         state['opponent_name'] = '练习对手'
         state['tutorial'] = True
+        state['tutorial_progress'] = dict(_tutorial_refresh_progress(engine))
+        state['tutorial_step_total'] = len(TUTORIAL_PROGRESS_KEYS) + 1
     else:
         state['your_name'] = 'Player A' if perspective == 0 else 'Player B'
         state['opponent_name'] = 'Player B' if perspective == 0 else 'Player A'
@@ -11719,6 +11843,92 @@ def emit_pending_response_requests(room, only_player_index=None):
         ), room=responder_sid)
         sent += 1
     return sent
+
+
+def build_replay_pending_response_requests(room):
+    """Capture the response windows players saw without emitting anything."""
+    engine = room.engine
+    pending = getattr(engine, 'pending_response', None)
+    if not pending:
+        return []
+    played_card = pending.get('card') or {}
+    try:
+        player_id = int(pending.get('player_id', -1))
+    except Exception:
+        player_id = -1
+    requests = []
+    if room.mode == '2v2':
+        by_responder = {}
+        for counter_card in pending.get('counter_cards', []) or []:
+            if not isinstance(counter_card, dict):
+                continue
+            try:
+                responder_id = int(counter_card.get('responder_id', -1))
+            except Exception:
+                continue
+            if responder_id >= 0:
+                by_responder.setdefault(responder_id, []).append(counter_card)
+        for responder_id, counter_cards in by_responder.items():
+            requests.append({
+                'responder_id': responder_id,
+                'data': build_response_request_payload(
+                    engine,
+                    responder_id,
+                    played_card,
+                    player_id,
+                    counter_cards,
+                    pending.get('target_player_id'),
+                ),
+            })
+        return requests
+
+    responder_id = 1 - player_id
+    if responder_id < 0:
+        return []
+    counter_cards = []
+    seen_instances = set()
+    for trigger_type in _response_trigger_types_for_card(engine, played_card):
+        for counter_card in engine.get_counter_cards(responder_id, trigger_type):
+            key = getattr(counter_card, 'instance_id', None)
+            if key in seen_instances:
+                continue
+            seen_instances.add(key)
+            counter_cards.append(counter_card)
+    requests.append({
+        'responder_id': responder_id,
+        'data': build_response_request_payload(
+            engine,
+            responder_id,
+            played_card,
+            player_id,
+            counter_cards,
+            pending.get('target_player_id', responder_id),
+        ),
+    })
+    return requests
+
+
+def enrich_replay_interaction_payload(room, payload, result=None):
+    """Attach exact client-visible interaction data for future replay export."""
+    data = dict(payload or {})
+    result = result if isinstance(result, dict) else {}
+    engine = getattr(room, 'engine', None)
+    if result.get('needs_response') or getattr(engine, 'pending_response', None):
+        try:
+            data['response_requests'] = build_replay_pending_response_requests(room)
+        except Exception as exc:
+            admin_event('error', f'replay response window capture failed: {exc}')
+    pending_choice = getattr(engine, 'pending_choice', None) if engine is not None else None
+    choice_source = pending_choice or (result if result.get('choice_type') or result.get('needs_choice') else None)
+    if choice_source:
+        try:
+            data['choice_request'] = build_choice_request_payload(choice_source)
+        except Exception as exc:
+            admin_event('error', f'replay choice window capture failed: {exc}')
+    pending_v2 = getattr(engine, 'pending_v2_ui', None) if engine is not None else None
+    if pending_v2:
+        data['v2_ui_request'] = _replay_json_safe(pending_v2)
+    return data
 
 
 def _pending_response_responder_ids(room, pending):
@@ -11906,16 +12116,22 @@ def broadcast_spectate_state(room):
     for spid in room.spectators:
         if spid not in players:
             continue
-        perspective = players[spid].get('spectate_perspective', 0)
-        state = build_spectate_state(room, perspective=perspective)
-        state['your_id'] = -1
-        state['spectating'] = True
-        if room.engine.phase == 'game_over' or room.engine.game_over:
-            state['match_summary'] = getattr(room, '_match_summary', None)
-        state['room_chat_history'] = room_chat_history_for_sid(room, spid, spectator=True)
-        for i, psid in enumerate(room.player_sids):
-            state[f'player{i + 1}_name'] = room_player_nickname(room, psid, '?')
-        socketio.emit('state_update', state, room=spid)
+        send_spectate_state_to(room, spid)
+
+
+def send_spectate_state_to(room, sid):
+    if sid not in players:
+        return
+    perspective = players[sid].get('spectate_perspective', 0)
+    state = build_spectate_state(room, perspective=perspective)
+    state['your_id'] = -1
+    state['spectating'] = True
+    if room.engine.phase == 'game_over' or room.engine.game_over:
+        state['match_summary'] = getattr(room, '_match_summary', None)
+    state['room_chat_history'] = room_chat_history_for_sid(room, sid, spectator=True)
+    for i, psid in enumerate(room.player_sids):
+        state[f'player{i + 1}_name'] = room_player_nickname(room, psid, '?')
+    socketio.emit('state_update', state, room=sid)
 
 
 def redact_error_cards_from_player_payload(payload):
@@ -16839,9 +17055,9 @@ def on_tutorial_start(data=None):
     if reject_new_match_if_draining([sid], 'tutorial_start'):
         return
     deck0 = [
-        'Basic', 'Rose', 'Leaf', 'Bone', 'Bubble',
-        'Fission', 'Triangle', 'Sewage', 'Fusion', 'Basic',
-        'Basic', 'Fire', 'Yggdrasil', 'Yucca', 'MagicBubble',
+        'Basic', 'Rose', 'Leaf', 'Bubble', 'Bone',
+        'Fission', 'Triangle', 'Basic', 'Basic', 'Fusion',
+        'Rose', 'Leaf', 'Basic', 'Bone', 'Bubble',
     ]
     deck1 = [
         'Basic', 'Battery', 'Leaf', 'Basic', 'Bone',
@@ -16863,6 +17079,9 @@ def on_tutorial_start(data=None):
             start_label='新手教程开始',
         )
         engine = solo_sessions[sid]
+        engine.tutorial_progress = {key: False for key in TUTORIAL_PROGRESS_KEYS}
+        engine.players[0].health = min(int(engine.players[0].max_health), 90)
+        engine.players[0].elixir = max(int(engine.players[0].elixir), 5)
         engine.allowed_card_ids = tutorial_allowed
         for ps in engine.players:
             ps.deck = [card for card in ps.deck if card.def_id in tutorial_allowed]
@@ -16951,8 +17170,11 @@ def on_solo_play_card(data):
             choice.setdefault('target_player', target_player_id)
             choice.setdefault('target_player_id', target_player_id)
             choice.setdefault('target_id', target_player_id)
+        tutorial_card_before = _tutorial_card_before_action(engine, pidx, card_instance_id) if sid in tutorial_sessions else None
         undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         result = engine.play_card(pidx, card_instance_id, choice)
+        if sid in tutorial_sessions:
+            _tutorial_note_card_action(engine, pidx, tutorial_card_before, choice, result)
         if result.get('needs_response'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
             if sid in tutorial_sessions and pidx == 0:
@@ -16996,8 +17218,22 @@ def on_solo_response(data):
         responder = 1 - engine.pending_response['player_id'] if had_pending_response else engine.current_player
         if sid in tutorial_sessions and responder != 0:
             card_instance_id = None
+        tutorial_counter = (
+            _tutorial_card_before_action(engine, responder, card_instance_id)
+            if sid in tutorial_sessions and card_instance_id is not None
+            else None
+        )
         undo_snapshot = _solo_capture_undo_snapshot(sid, engine) if had_pending_response else None
-        engine.handle_response(responder, card_instance_id)
+        response_result = engine.handle_response(responder, card_instance_id)
+        if (
+            sid in tutorial_sessions
+            and responder == 0
+            and isinstance(tutorial_counter, dict)
+            and tutorial_counter.get('def_id') == 'Bubble'
+            and isinstance(response_result, dict)
+            and response_result.get('success')
+        ):
+            _tutorial_mark(engine, 'counter_used')
         if had_pending_response:
             _solo_commit_undo_snapshot(engine, undo_snapshot)
         pending = getattr(engine, 'pending_response', None)
@@ -17040,6 +17276,8 @@ def on_solo_resolve_choice(data):
         pidx = engine.pending_choice.get('player_id', engine.current_player) if engine.pending_choice else engine.current_player
         undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         result = engine.resolve_choice(pidx, choice)
+        if sid in tutorial_sessions and pidx == 0 and result.get('success'):
+            _tutorial_refresh_progress(engine)
         if result.get('needs_response'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
             if sid in tutorial_sessions and pidx == 0:
@@ -17117,8 +17355,16 @@ def on_solo_use_trigger(data):
         engine = solo_sessions.get(sid)
         if not engine:
             return
+        tutorial_equipment_def_id = ''
+        if sid in tutorial_sessions and engine.current_player == 0:
+            for eq in list(getattr(engine.players[0], 'equipment', []) or []):
+                if int(getattr(eq.card_instance, 'instance_id', -1)) == equipment_instance_id:
+                    tutorial_equipment_def_id = str(getattr(eq.card_instance, 'def_id', '') or '')
+                    break
         undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         result = engine.use_trigger(engine.current_player, equipment_instance_id, target_player_id=target_player_id)
+        if sid in tutorial_sessions and tutorial_equipment_def_id == 'Leaf' and result.get('success'):
+            _tutorial_mark(engine, 'trigger_used')
         if result.get('success') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
         if not result.get('success'):
@@ -17136,8 +17382,11 @@ def on_solo_end_turn(data=None):
         engine = solo_sessions.get(sid)
         if not engine:
             return
+        tutorial_player_id = engine.current_player
         undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
         result = engine.end_turn(engine.current_player)
+        if sid in tutorial_sessions and tutorial_player_id == 0 and result.get('success'):
+            _tutorial_mark(engine, 'turn_ended')
         if result.get('success'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
         if not result.get('success'):
@@ -17339,13 +17588,21 @@ def on_play_card(data):
     if completed_play_for_timer:
         record_valid_player_action(room, pidx, 'play_card')
     if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_v2_ui'):
-        record_room_replay_action(room, 'play_card', pidx, {
+        replay_action_payload = {
             'card_instance_id': card_instance_id,
             'def_id': replay_def_id,
             'target_player_id': target_player_id,
             'choice': choice,
             'result': result,
-        })
+        }
+        if result.get('needs_ally_consent'):
+            replay_action_payload['ally_consent_request'] = {
+                'card': result.get('card') or {},
+                'from_player': pidx,
+                'from_name': player_name,
+            }
+        replay_action_payload = enrich_replay_interaction_payload(room, replay_action_payload, result)
+        record_room_replay_action(room, 'play_card', pidx, replay_action_payload)
     if result.get('needs_ally_consent'):
         broadcast_game_state(room)
         target_pidx = result.get('target_player_id')
@@ -17431,7 +17688,10 @@ def on_response(data):
         busy_lock.release()
     if card_instance_id:
         record_valid_player_action(room, pidx, 'response')
-    record_room_replay_action(room, 'response', pidx, {'card_instance_id': card_instance_id, 'def_id': replay_def_id})
+    record_room_replay_action(room, 'response', pidx, enrich_replay_interaction_payload(room, {
+        'card_instance_id': card_instance_id,
+        'def_id': replay_def_id,
+    }))
     with _lock:
         _sync_room_action_timer_after_state_change(room)
     emit_turn_timer_update(room)
@@ -17474,10 +17734,10 @@ def on_ally_consent_response(data):
     finally:
         busy_lock.release()
     if result.get('success') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui') or not accepted:
-        record_room_replay_action(room, 'ally_consent_response', pidx, {
+        record_room_replay_action(room, 'ally_consent_response', pidx, enrich_replay_interaction_payload(room, {
             'accepted': accepted,
             'result': result,
-        })
+        }, result))
     with _lock:
         _sync_room_action_timer_after_state_change(room)
     emit_turn_timer_update(room)
@@ -17548,7 +17808,10 @@ def on_resolve_choice(data):
         busy_lock.release()
     if not result.get('cancelled'):
         record_valid_player_action(room, pidx, 'resolve_choice')
-    record_room_replay_action(room, 'resolve_choice', pidx, {'choice': choice, 'result': result})
+    record_room_replay_action(room, 'resolve_choice', pidx, enrich_replay_interaction_payload(room, {
+        'choice': choice,
+        'result': result,
+    }, result))
     with _lock:
         _sync_room_action_timer_after_state_change(room)
     if result.get('needs_response'):
@@ -17627,12 +17890,12 @@ def on_v2_ui_response(data):
         _stamp_pending_interactions(room)
     finally:
         busy_lock.release()
-    record_room_replay_action(room, 'v2_ui_response', pidx, {
+    record_room_replay_action(room, 'v2_ui_response', pidx, enrich_replay_interaction_payload(room, {
         'request_id': request_id,
         'button': button,
         'values': values,
         'result': result,
-    })
+    }, result))
     with _lock:
         _sync_room_action_timer_after_state_change(room)
     emit_turn_timer_update(room)
@@ -17698,12 +17961,24 @@ def on_use_trigger(data):
         busy_lock.release()
     if result.get('success') or result.get('needs_ally_consent') or result.get('needs_choice') or result.get('needs_response') or result.get('needs_v2_ui'):
         record_valid_player_action(room, pidx, 'use_trigger')
-        record_room_replay_action(room, 'use_trigger', pidx, {
+        trigger_replay_payload = {
             'equipment_instance_id': equipment_instance_id,
             'def_id': replay_def_id,
             'target_player_id': target_player_id,
             'result': result,
-        })
+        }
+        if result.get('needs_ally_consent'):
+            trigger_replay_payload['ally_consent_request'] = {
+                'card': result.get('card') or {},
+                'from_player': pidx,
+                'from_name': player_name,
+            }
+        record_room_replay_action(
+            room,
+            'use_trigger',
+            pidx,
+            enrich_replay_interaction_payload(room, trigger_replay_payload, result),
+        )
         with _lock:
             _sync_room_action_timer_after_state_change(room)
         emit_turn_timer_update(room)

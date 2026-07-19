@@ -7073,33 +7073,19 @@ body {
 .virtual-play-cursor {
   position: fixed;
   z-index: 4605;
-  width: 34px;
-  height: 34px;
-  margin-left: -4px;
-  margin-top: -3px;
+  width: 32px;
+  height: 32px;
+  margin: 0;
   pointer-events: none;
-  transform-origin: 5px 3px;
-  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.22));
+  transform-origin: 0 0;
   animation: virtualCursorPlay 680ms cubic-bezier(.18,.84,.2,1) forwards;
 }
 
-.virtual-play-cursor svg {
+.virtual-play-cursor-image {
   display: block;
   width: 100%;
   height: 100%;
-}
-
-.virtual-play-cursor .cursor-shadow {
-  fill: #111;
-  opacity: 0.9;
-  transform: translate(1px, 1px);
-}
-
-.virtual-play-cursor .cursor-fill {
-  fill: #fff;
-  stroke: #111;
-  stroke-width: 1.35;
-  stroke-linejoin: round;
+  object-fit: contain;
 }
 
 .virtual-play-card.card {
@@ -9685,7 +9671,7 @@ html.blind-level-4 .card-prediction-part.magic {
 .tutorial-overlay {
   position: fixed;
   inset: 0;
-  z-index: 3600;
+  z-index: 3700;
   pointer-events: none;
 }
 
@@ -9755,13 +9741,28 @@ html.blind-level-4 .card-prediction-part.magic {
   line-height: 1.45;
 }
 
+.tutorial-progress {
+  height: 4px;
+  margin-top: 9px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--border-color) 58%, transparent);
+}
+
+.tutorial-progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--bloom);
+  transition: width 220ms ease-out;
+}
+
 .tutorial-arrow {
   position: fixed;
   left: var(--tutorial-arrow-x, 50%);
   top: var(--tutorial-arrow-top, 55%);
   width: 22px;
   height: var(--tutorial-arrow-h, 58px);
-  transform: translateX(-50%);
+  transform: translateX(-50%) rotate(var(--tutorial-arrow-rotate, 0deg));
   opacity: 0;
   z-index: 3;
   pointer-events: none;
@@ -9783,8 +9784,8 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 @keyframes tutorialArrowPulse {
-  0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.72; }
-  50% { transform: translateX(-50%) translateY(-6px); opacity: 1; }
+  0%, 100% { transform: translateX(-50%) rotate(var(--tutorial-arrow-rotate, 0deg)) translateY(0); opacity: 0.72; }
+  50% { transform: translateX(-50%) rotate(var(--tutorial-arrow-rotate, 0deg)) translateY(-6px); opacity: 1; }
 }
 
 .game-container.mode-tutorial .battle-log {
