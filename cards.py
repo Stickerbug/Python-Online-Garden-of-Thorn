@@ -481,7 +481,7 @@ _reg(CardDef('Powder', 'Powder', '粉末', 4, 0, 'root', 5, 'Common',
 _reg(CardDef('GoldenLeaf', 'Golden Leaf', '黄金叶', 3, 0, 'root', 5, 'Common',
              '这闪亮的叶子能为你带来额外的抽牌机会。', '手牌爆牌上限+1；自己回合开始时多抽一张牌'))
 
-_reg(CardDef('MagicGoldenLeaf', 'Magic Golden Leaf', '魔法黄金叶', 0, 6, 'root', 3, 'Epic',
+_reg(CardDef('MagicGoldenLeaf', 'Magic Golden Leaf', '魔法黄金叶', 0, 1, 'root', 3, 'Epic',
              '闪耀的叶片将魔力收束成更大的空间。', '装备存在时，目标手中所有0E卡牌不占用手牌上限'))
 
 _reg(CardDef('Pincer', 'Pincer', '螫针', 4, 0, 'root', 3, 'Common',

@@ -596,6 +596,18 @@ class PlayerState:
             else:
                 break
 
+    def enforce_hand_limit(self) -> List[CardInstance]:
+        """Discard existing overflow after a persistent hand-limit rule changes."""
+        overflow = []
+        while self.rule_hand_size() > self.hand_limit() and self.hand:
+            non_attract = [c for c in self.hand if 'attract' not in getattr(c, 'flags', set())]
+            overflow_card = non_attract[-1] if non_attract else self.hand[-1]
+            self.hand.remove(overflow_card)
+            reset_card_for_discard(overflow_card)
+            self.discard.append(overflow_card)
+            overflow.append(overflow_card)
+        return overflow
+
     def draw_cards(self, count: int) -> List[CardInstance]:
         drawn = []
         sprout_queue = []
@@ -3173,6 +3185,8 @@ class GameEngine:
                         self.players[target_id].external_zero_e_ignore_hand_limit = True
                 if 0 <= target_id < len(self.players) and self._equipment_is(eq, 'hel:bugatti', 'Bugatti'):
                     self.players[target_id].extra_hand_limit_bonus -= 1
+        for ps in getattr(self, 'players', []):
+            ps.enforce_hand_limit()
 
     def _player_zero_e_cards_ignore_hand_limit(self, player_id: int) -> bool:
         if not (0 <= player_id < len(getattr(self, 'players', []))):
@@ -4918,10 +4932,19 @@ class GameEngine:
         return amount
 
     def _apply_attack_damage_halving(self, target_id: int, amount: int, precision_dodged: bool = False) -> int:
-        """Apply a single precision-dodge/counter halving after outgoing damage modifiers."""
+        """Apply one precision-dodge/counter halving after outgoing damage modifiers."""
         amount = max(0, int(amount or 0))
-        if not (self.halve_next_attack or precision_dodged):
+        counter_target = getattr(self, '_halve_next_attack_target_id', None)
+        counter_halving = bool(self.halve_next_attack) and (
+            counter_target is None or counter_target == target_id
+        )
+        if not (counter_halving or precision_dodged):
             return amount
+        if counter_halving:
+            # Bubble only halves the first hit against its responder. A fission
+            # attack must not inherit the counter reduction on every later hit.
+            self.halve_next_attack = False
+            self._halve_next_attack_target_id = None
         reduced = int(math.ceil(amount / 2))
         if precision_dodged:
             self._record_dodge_damage_prevented(target_id, amount - reduced)
@@ -6040,7 +6063,9 @@ class GameEngine:
                     if self._is_status_immune(responder_id):
                         return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
                     if is_precision:
-                        self._execute_card_effect_half_damage(player_id, card, choice)
+                        self._execute_card_effect_half_damage(
+                            player_id, card, choice, dodge_target_id=responder_id
+                        )
                         if not self._is_status_immune(responder_id):
                             responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                         return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
@@ -6315,14 +6340,18 @@ class GameEngine:
                 hand_card.instance_flags.add('power')
 
 
-    def _execute_card_effect_half_damage(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> dict:
+    def _execute_card_effect_half_damage(self, player_id: int, card: CardInstance,
+                                         choice: Optional[dict] = None,
+                                         dodge_target_id: Optional[int] = None) -> dict:
         self.log_msg(f"{self.pn(player_id)}的精准牌被闪避反制，伤害减半！")
         self.halve_next_attack = True
+        self._halve_next_attack_target_id = dodge_target_id
         self._suppress_next_precision_dodge_log = True
         try:
             result = self._execute_card_effect(player_id, card, choice)
         finally:
             self.halve_next_attack = False
+            self._halve_next_attack_target_id = None
             self._suppress_next_precision_dodge_log = False
         return result
 

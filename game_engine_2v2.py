@@ -655,7 +655,9 @@ class GameEngine2v2(GameEngine):
                     if self._is_status_immune(responder_id):
                         return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
                     if is_precision:
-                        self._execute_card_effect_half_damage(player_id, card, choice)
+                        self._execute_card_effect_half_damage(
+                            player_id, card, choice, dodge_target_id=responder_id
+                        )
                         if not self._is_status_immune(responder_id):
                             responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
                         return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})

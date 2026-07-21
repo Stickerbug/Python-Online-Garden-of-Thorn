@@ -731,7 +731,7 @@ const I18N = {
         select_event: 'Select Event', waiting_opponent: 'Waiting for opponent', play_card: 'Play', end_turn: 'End Turn',
         surrender: 'Surrender', view_deck: 'View Deck', counter: 'Counter', no_counter: 'Pass', waiting_response: 'Waiting for response',
         victory: 'Victory', defeat: 'Defeat', draw: 'Draw', rematch: 'Rematch', connecting: 'Connecting...', disconnected: 'Disconnected',
-        login_failed: 'Login Failed', nickname: 'Nickname', enter_lobby: 'Enter Lobby', online_players: 'Online Players',
+        login_failed: 'Login Failed', nickname: 'Nickname', enter_lobby: 'Multiplayer', story_mode: 'Story Mode', online_players: 'Online Players',
         no_other_players: 'No other players', invite_sent: 'Invite sent', invite_received: 'Invite received', invite_message: 'invites you to a match',
         invite_declined: 'Invite declined', ongoing_games: 'Ongoing Games', spectate: 'Spectate', draft_info: 'Draft', draft_complete: 'Draft Complete',
         draft_waiting: 'Waiting for opponent to finish drafting', draft_cost: 'Cost', select_this_event: 'Select This Event',
@@ -748,6 +748,8 @@ const I18N = {
         classic_target_enemy: 'Click opponent to play',
         classic_target_any: 'Click a target to play',
         classic_target_self: 'Click yourself to play',
+        classic_play_self_anywhere: 'Click anywhere to play on yourself',
+        classic_play_anywhere: 'Click anywhere to play',
         classic_equip_stage: 'Click your side to equip',
         cannot_play: 'Cannot Play', enemy_attack: 'Enemy Attack', enemy_skill: 'Enemy Skill', enemy_destroy_equip: ', destroys equipment',
         use_card: 'Use', insufficient_resources: 'Insufficient resources', choose_attack_for: 'Choose an attack for {0}', choose_equip_for: 'Choose equipment',
@@ -853,7 +855,7 @@ I18N.zh = { ...I18N.en,
     draft_phase: '选牌阶段', draft_reroll: '刷新', draft_selected: '已选择', select_event: '选择配装倾向', waiting_opponent: '等待对方',
     play_card: '打出', end_turn: '结束回合', surrender: '投降', view_deck: '查看牌堆', counter: '反制', no_counter: '不反制', waiting_response: '等待响应',
     victory: '胜利', defeat: '失败', draw: '平局', rematch: '再来一局', connecting: '连接中...', disconnected: '已断开连接',
-    login_failed: '登录失败', nickname: '昵称', enter_lobby: '进入大厅', online_players: '在线玩家', no_other_players: '暂无其他玩家',
+    login_failed: '登录失败', nickname: '昵称', enter_lobby: '多人游戏', story_mode: '故事模式', online_players: '在线玩家', no_other_players: '暂无其他玩家',
     invite_sent: '邀请已发送', invite_received: '收到邀请', invite_message: '邀请你进行对战', invite_declined: '邀请被拒绝',
     ongoing_games: '进行中的对局', spectate: '观战', draft_info: '选牌', draft_complete: '选牌完成', draft_waiting: '等待对方完成选牌',
     draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对方选择事件', event_reroll: '刷新', status_event_select: '选择配装', status_drafting: '选牌中', status_sub_choice: '配装处理', status_ready: '已完成',
@@ -870,6 +872,8 @@ I18N.zh = { ...I18N.en,
     classic_target_enemy: '点击对手使用',
     classic_target_any: '点击目标使用',
     classic_target_self: '点击自己使用',
+    classic_play_self_anywhere: '点击场地任意位置对自己使用',
+    classic_play_anywhere: '点击场地任意位置打出',
     classic_equip_stage: '点击己方装备',
     use_card: '使用', insufficient_resources: '资源不足', choose_attack_for: '为 {0} 选择攻击牌', choose_equip_for: '选择装备牌',
     choose_discard_for: '为 {0} 选择弃牌', choose_from_deck_for: '从牌堆选择', choose_from_discard_for: '为 {0} 从弃牌堆选择', choose_hand_for: '为 {0} 从手牌选择',
@@ -973,7 +977,7 @@ I18N.fr = { ...I18N.en,
     draft_phase: 'Phase de Draft', draft_reroll: 'Relancer', draft_selected: 'Sélectionné', select_event: "Choisir Événement", waiting_opponent: "En attente de l'adversaire",
     play_card: 'Jouer', end_turn: 'Fin du Tour', surrender: 'Abandonner', view_deck: 'Voir le Deck', counter: 'Contre', no_counter: 'Pas de Contre', waiting_response: 'En attente de réponse',
     victory: 'Victoire', defeat: 'Défaite', draw: 'Égalité', rematch: 'Rejouer', connecting: 'Connexion...', disconnected: 'Déconnecté',
-    login_failed: 'Échec de connexion', nickname: 'Pseudo', enter_lobby: 'Entrer dans le Salon', online_players: 'Joueurs en ligne', no_other_players: 'Aucun autre joueur',
+    login_failed: 'Échec de connexion', nickname: 'Pseudo', enter_lobby: 'Multijoueur', story_mode: 'Mode histoire', online_players: 'Joueurs en ligne', no_other_players: 'Aucun autre joueur',
     invite_sent: 'Invitation envoyée', invite_received: 'Invitation reçue', invite_message: 'vous invite à jouer', invite_declined: 'Invitation refusée',
     ongoing_games: 'Parties en cours', spectate: 'Observer', draft_info: 'Draft', draft_complete: 'Draft terminé', draft_waiting: "En attente de l'adversaire",
     draft_cost: 'Coût', select_this_event: 'Choisir cet événement', event_selected: 'Événement choisi', event_waiting: "En attente du choix de l'adversaire",
@@ -1046,7 +1050,7 @@ I18N.ja = { ...I18N.en,
     draft_phase: 'ドラフトフェイズ', draft_reroll: 'リロール', draft_selected: '選択済み', select_event: 'イベント選択', waiting_opponent: '相手を待っています',
     play_card: 'プレイ', end_turn: 'ターン終了', surrender: '降参', view_deck: 'デッキ確認', counter: 'カウンター', no_counter: 'カウンターなし', waiting_response: '応答待ち',
     victory: '勝利', defeat: '敗北', draw: '引き分け', rematch: '再戦', connecting: '接続中...', disconnected: '切断されました',
-    login_failed: 'ログイン失敗', nickname: 'ニックネーム', enter_lobby: 'ロビーに入る', online_players: 'オンラインプレイヤー', no_other_players: '他のプレイヤーはいません',
+    login_failed: 'ログイン失敗', nickname: 'ニックネーム', enter_lobby: 'マルチプレイ', story_mode: 'ストーリーモード', online_players: 'オンラインプレイヤー', no_other_players: '他のプレイヤーはいません',
     invite_sent: '招待を送信しました', invite_received: '招待を受信しました', invite_message: 'が対戦に招待しています', invite_declined: '招待が拒否されました',
     ongoing_games: '進行中の対戦', spectate: '観戦', draft_info: 'ドラフト', draft_complete: 'ドラフト完了', draft_waiting: '相手のドラフト完了を待っています',
     draft_cost: 'コスト', select_this_event: 'このイベントを選択', event_selected: 'イベント選択済み', event_waiting: '相手のイベント選択を待っています',
@@ -2373,7 +2377,11 @@ document.documentElement.classList.toggle('landscape-mode-enabled', landscapeMod
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
 const HIDDEN_FEATURES_KEY = 'gtn_hidden_features_enabled';
 function hiddenFeaturesEnabled() {
-    return localStorage.getItem(HIDDEN_FEATURES_KEY) === '1';
+    try {
+        return localStorage.getItem(HIDDEN_FEATURES_KEY) === '1';
+    } catch (_) {
+        return false;
+    }
 }
 function migrateStoredUiStyle() {
     let stored = localStorage.getItem('gtn_ui_style') || 'minimal';
@@ -4729,6 +4737,7 @@ let classicSelectedTriggerEquipmentId = null;
 let classicAimPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 let classicAimHoverTarget = '';
 let classicAimFrame = 0;
+let classicCursorCard = null;
 let classicHoverPreviewTimer = null;
 let classicHoverInfoEl = null;
 let classicHoveredCardId = null;
@@ -5406,6 +5415,8 @@ function updateStaticText() {
     if (btnLobbySettings) btnLobbySettings.textContent = UI.settings_btn;
     const btnConnect = $('btn-connect');
     if (btnConnect) btnConnect.textContent = UI.enter_lobby;
+    const btnStoryMode = $('btn-story-mode');
+    if (btnStoryMode) btnStoryMode.textContent = UI.story_mode || '故事模式';
     const btnSoloTraining = $('btn-solo-training');
     if (btnSoloTraining) btnSoloTraining.textContent = UI.solo_training;
     setIconButtonLabel('btn-open-settings', UI.settings_btn || UI.settings || '设置');
@@ -6457,15 +6468,52 @@ function closeAbout() {
     if (panel) panel.classList.add('hidden');
 }
 
+function updateStoryEntryAvailability() {
+    const button = $('btn-story-mode');
+    if (!button) return;
+    const row = $('story-mode-entry-row');
+    const visible = hiddenFeaturesEnabled();
+    const authenticated = !!currentAccount;
+    if (row) row.classList.toggle('hidden', !visible);
+    else button.classList.toggle('hidden', !visible);
+    button.disabled = !authenticated;
+    button.setAttribute('aria-disabled', authenticated ? 'false' : 'true');
+    button.title = authenticated
+        ? ''
+        : lt({
+            zh: '故事模式仅限登录账号',
+            en: 'Sign in to enter Story Mode',
+            fr: 'Connectez-vous pour accéder au mode histoire',
+            ja: 'ストーリーモードはログインが必要です',
+        });
+}
+
+function openStoryMode() {
+    if (!currentAccount) {
+        flashStatus(lt({
+            zh: '请先登录账号',
+            en: 'Please sign in first',
+            fr: 'Veuillez d’abord vous connecter',
+            ja: '先にログインしてください',
+        }), 1800);
+        return;
+    }
+    window.location.assign('/story');
+}
+
 function setHiddenFeaturesEnabled(enabled) {
-    if (enabled) {
-        localStorage.setItem(HIDDEN_FEATURES_KEY, '1');
-    } else {
-        localStorage.removeItem(HIDDEN_FEATURES_KEY);
+    try {
+        if (enabled) localStorage.setItem(HIDDEN_FEATURES_KEY, '1');
+        else localStorage.removeItem(HIDDEN_FEATURES_KEY);
+    } catch (_) {
+        enabled = false;
+    }
+    if (!enabled) {
         if (currentUiStyle === 'classic') applyUiStyle('minimal');
         else updateUiStyleAvailability();
     }
     updateUiStyleAvailability();
+    updateStoryEntryAvailability();
 }
 
 function promptHiddenFeatureUnlock() {
@@ -7932,6 +7980,7 @@ function ensureMobilePlayConfirm() {
 }
 
 function clearSelectedPlayCard(options = {}) {
+    destroyClassicCursorCard();
     selectedPlayCardId = null;
     classicSelectedTriggerEquipmentId = null;
     classicTargetPickInFlight = false;
@@ -8018,6 +8067,94 @@ function getSelectedClassicTriggerEquipment() {
 function isClassicSelfOnlyCard(card) {
     if (!card) return false;
     return cardHasSelfOnlyFlag(card.raw || card, card.cardDef || getCardDef(card.def_id || ''));
+}
+
+function classicCursorCardMode(card) {
+    if (!card) return '';
+    const raw = card.raw || card;
+    const cardDef = card.cardDef || getCardDef(card.def_id || raw.def_id || '');
+    if (!cardDef) return '';
+    if (cardHasWideStrikeFlag(raw, cardDef)) return 'untargeted';
+    if (cardHasSelfOnlyFlag(raw, cardDef)) return cardDef.card_type === 'thorn' ? 'untargeted' : 'self';
+    return '';
+}
+
+function destroyClassicCursorCard() {
+    if (!classicCursorCard) return;
+    if (classicCursorCard.timer) clearTimeout(classicCursorCard.timer);
+    classicCursorCard.source?.classList.remove('has-cursor-follower');
+    classicCursorCard.element?.remove();
+    classicCursorCard = null;
+}
+
+function positionClassicCursorCard(clientX, clientY, immediate = false) {
+    if (!classicCursorCard || classicCursorCard.returning) return;
+    const { element, width, height } = classicCursorCard;
+    if (immediate) element.classList.add('is-immediate');
+    element.style.transform = `translate3d(${clientX - width / 2}px, ${clientY - height / 2}px, 0)`;
+    if (immediate) {
+        void element.offsetWidth;
+        element.classList.remove('is-immediate');
+    }
+}
+
+function syncClassicCursorCard() {
+    const card = getSelectedClassicCard();
+    if (!card || !classicCursorCardMode(card) || !shouldUseClassicBattle(gameState)) {
+        destroyClassicCursorCard();
+        return;
+    }
+    const source = document.querySelector(`.classic-hand-card[data-instance-id="${CSS.escape(String(card.instance_id))}"]`);
+    const cardElement = source && (source.querySelector('.classic-fan-card-inner.card') || source.querySelector('.card'));
+    if (!source || !cardElement) {
+        destroyClassicCursorCard();
+        return;
+    }
+    if (classicCursorCard?.cardId === String(card.instance_id) && classicCursorCard.source === source) return;
+    destroyClassicCursorCard();
+    const rect = cardElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const follower = document.createElement('div');
+    follower.className = 'classic-cursor-card';
+    follower.setAttribute('aria-hidden', 'true');
+    follower.style.width = `${rect.width}px`;
+    follower.style.height = `${rect.height}px`;
+    const visual = cardElement.cloneNode(true);
+    visual.removeAttribute('id');
+    visual.removeAttribute('tabindex');
+    visual.disabled = true;
+    follower.append(visual);
+    $('battle-classic')?.append(follower);
+    source.classList.add('has-cursor-follower');
+    classicCursorCard = {
+        cardId: String(card.instance_id),
+        element: follower,
+        source,
+        width: rect.width,
+        height: rect.height,
+        originX: rect.left + rect.width / 2,
+        originY: rect.top + rect.height / 2,
+        returning: false,
+        timer: 0,
+    };
+    positionClassicCursorCard(classicCursorCard.originX, classicCursorCard.originY, true);
+    requestAnimationFrame(() => positionClassicCursorCard(classicAimPointer.x, classicAimPointer.y));
+}
+
+function returnClassicCursorCard(onReturned) {
+    if (!classicCursorCard) {
+        onReturned?.();
+        return;
+    }
+    const motion = classicCursorCard;
+    if (motion.returning) return;
+    motion.returning = true;
+    motion.element.classList.add('is-returning');
+    motion.element.style.transform = `translate3d(${motion.originX - motion.width / 2}px, ${motion.originY - motion.height / 2}px, 0)`;
+    motion.timer = setTimeout(() => {
+        if (classicCursorCard === motion) destroyClassicCursorCard();
+        onReturned?.();
+    }, 190);
 }
 
 function ensureClassicAimLayer() {
@@ -8148,7 +8285,7 @@ function updateClassicAimHoverTarget() {
     let hoverId = '';
     const selected = getSelectedClassicCard();
     const selectedEquipment = getSelectedClassicTriggerEquipment();
-    if (!selectedEquipment && isClassicSelfOnlyCard(selected)) {
+    if (!selectedEquipment && classicCursorCardMode(selected)) {
         document.querySelectorAll('.classic-fighter.is-aim-hover').forEach(item => item.classList.remove('is-aim-hover'));
         classicAimHoverTarget = '';
         return;
@@ -8175,9 +8312,9 @@ function updateClassicAimCurve() {
     const root = $('battle-classic');
     const selected = getSelectedClassicCard();
     const selectedEquipment = getSelectedClassicTriggerEquipment();
-    const selfOnly = isClassicSelfOnlyCard(selected);
+    const cursorMode = classicCursorCardMode(selected);
     const svg = ensureClassicAimLayer();
-    if (!root || !svg || (!selected && !selectedEquipment) || (!selectedEquipment && selfOnly) || !shouldUseClassicBattle(gameState)) {
+    if (!root || !svg || (!selected && !selectedEquipment) || (!selectedEquipment && cursorMode) || !shouldUseClassicBattle(gameState)) {
         if (svg) svg.classList.add('hidden');
         return;
     }
@@ -8214,13 +8351,16 @@ function scheduleClassicAimCurveUpdate() {
 
 function onClassicAimPointerMove(event) {
     classicAimPointer = { x: event.clientX, y: event.clientY };
+    positionClassicCursorCard(event.clientX, event.clientY);
     if ((selectedPlayCardId != null || classicSelectedTriggerEquipmentId != null) && shouldUseClassicBattle(gameState)) scheduleClassicAimCurveUpdate();
 }
 
 function cancelClassicSelection(event) {
     if (!shouldUseClassicBattle(gameState) || (selectedPlayCardId == null && classicSelectedTriggerEquipmentId == null)) return false;
     if (event) event.preventDefault();
-    clearSelectedPlayCard();
+    const selected = getSelectedClassicCard();
+    if (selected && classicCursorCardMode(selected)) returnClassicCursorCard(() => clearSelectedPlayCard());
+    else clearSelectedPlayCard();
     return true;
 }
 
@@ -8448,6 +8588,33 @@ function classicCanAutoPlaySelfOnlyFromEvent(event) {
     const hand = $('classic-hand-fan');
     const handRect = hand ? hand.getBoundingClientRect() : null;
     return !handRect || event.clientY < handRect.top;
+}
+
+function handleClassicCursorCardClick(event) {
+    if (!shouldUseClassicBattle(gameState) || selectedPlayCardId == null || isActionBusy()) return;
+    const selected = getSelectedClassicCard();
+    const cursorMode = classicCursorCardMode(selected);
+    if (!selected || !cursorMode) return;
+    if (classicCursorCard?.returning) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+    }
+    if (event.target && event.target.closest && event.target.closest('.game-prompt-option, .game-prompt-transient-btn, button, input, textarea, select')) {
+        return;
+    }
+    const hand = event.target && event.target.closest ? event.target.closest('#classic-hand-fan') : null;
+    if (hand) {
+        if (!event.target.closest('.classic-hand-card')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            returnClassicCursorCard(() => clearSelectedPlayCard());
+        }
+        return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    classicPlaySelectedCard(cursorMode === 'self' ? 'classic-fighter-self' : 'classic-play-lane');
 }
 
 function getClassicPlayedCardAnimationTarget(cardDict, cardDef, targetPlayerId = -1) {
@@ -13497,13 +13664,38 @@ function connectSocket(serverUrl) {
         }
     });
     bindSocketEvent('mod_settings_updated', async (data) => {
+        const requestId = String((data && data.request_id) || '');
+        const pending = requestId ? pendingModSettingsRequests.get(requestId) : null;
+        if (pending) {
+            clearTimeout(pending.timer);
+            pendingModSettingsRequests.delete(requestId);
+        }
         if (data && data.ok) {
             if (Array.isArray(data.disabled_mods)) {
                 localStorage.setItem('gtn_disabled_mods', JSON.stringify(data.disabled_mods));
                 renderOfficialModList();
             }
-            showActionToast(UI.save_success, 1600, 'success');
-            await refreshCardsAfterModSettingsConfirmed();
+            const refreshed = await refreshCardsAfterModSettingsConfirmed();
+            const adjusted = Array.isArray(data.details && data.details.forced_enabled_mods)
+                ? data.details.forced_enabled_mods.filter(Boolean)
+                : [];
+            if (!refreshed) {
+                flashStatus(formatModSettingsResultMessage({
+                    code: 'MOD_SETTINGS_LOCAL_REFRESH_FAILED',
+                    stage: 'client_refresh',
+                    request_id: requestId,
+                    reason: currentLang === 'zh'
+                        ? '服务器已保存，但本地卡牌数据刷新失败；请重新进入大厅或刷新页面。'
+                        : 'Saved on the server, but local card data could not be refreshed. Re-enter the lobby or reload.',
+                }), 6000, 'error');
+            } else if (adjusted.length) {
+                showActionToast(currentLang === 'zh'
+                    ? `已保存；为保证牌池可用，已自动启用：${adjusted.join('、')}`
+                    : `Saved; automatically enabled for a valid card pool: ${adjusted.join(', ')}`, 4200, 'success');
+            } else {
+                showActionToast(UI.save_success, 1600, 'success');
+            }
+            if (pending) pending.resolve(data);
             return;
         }
         if (data && Array.isArray(data.disabled_mods)) {
@@ -13511,7 +13703,14 @@ function connectSocket(serverUrl) {
             renderOfficialModList();
             await refreshCardsAfterModSettingsConfirmed();
         }
-        flashStatus(UI.save_failed.replace('{0}', (data && data.reason) || UI.operation_failed), 3200, 'error');
+        const message = formatModSettingsResultMessage(data);
+        flashStatus(message, 6000, 'error');
+        if (pending) {
+            const error = new Error(message);
+            error.modSettingsNotified = true;
+            error.modSettingsData = data;
+            pending.reject(error);
+        }
     });
     bindSocketEvent('mod_mismatch', (data = {}) => {
         const message = UI.mod_mismatch_msg || '模组不一致，无法开始对局';
@@ -15757,6 +15956,7 @@ function renderAccountState() {
     }
     const btnConnect = $('btn-connect');
     if (btnConnect) btnConnect.textContent = UI.enter_lobby;
+    updateStoryEntryAvailability();
     updateTopActionButtons(activeViewId);
     const guestDivider = $('guest-divider-label')?.closest('.login-divider');
     if (guestDivider) guestDivider.classList.toggle('hidden', !!currentAccount);
@@ -21886,7 +22086,9 @@ function cardEffectTargetsEnemy(cardDef) {
 
 function getClassicPlayHint(card) {
     if (!card) return UI.classic_select_card || UI.your_turn;
-    if (isClassicSelfOnlyCard(card)) return UI.classic_target_self || UI.classic_play_center || UI.drag_to_play;
+    const cursorMode = classicCursorCardMode(card);
+    if (cursorMode === 'self') return UI.classic_play_self_anywhere || UI.classic_play_center || UI.drag_to_play;
+    if (cursorMode === 'untargeted') return UI.classic_play_anywhere || UI.classic_play_center || UI.drag_to_play;
     const role = getClassicPlayRole(card);
     if (role === 'enemy') return UI.classic_target_enemy || UI.drag_to_play;
     if (role === 'target') return UI.classic_target_any || UI.target_pick_hint || UI.drag_to_play;
@@ -21900,9 +22102,9 @@ function renderClassicPlayLane(vm) {
     if (!lane) return;
     const selected = vm && vm.selectedCard;
     const role = getClassicPlayRole(selected);
-    const selfOnly = isClassicSelfOnlyCard(selected);
-    lane.classList.toggle('is-armed', !!selected && !selfOnly && role === 'stage');
-    lane.classList.toggle('is-aim-passive', !!selected && !selfOnly && role !== 'stage');
+    const cursorMode = classicCursorCardMode(selected);
+    lane.classList.toggle('is-armed', !!selected && !cursorMode && role === 'stage');
+    lane.classList.toggle('is-aim-passive', !!selected && !cursorMode && role !== 'stage');
     lane.classList.toggle('is-self-only', false);
     lane.classList.toggle('is-equip-role', role === 'equip');
     lane.classList.toggle('is-self-role', role === 'self');
@@ -22038,9 +22240,10 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
     const critLabel = (getTermIntroLibrary().crit || {}).label || (currentLang === 'zh' ? '暴击' : 'Critical');
     const role = getClassicPlayRole(selectedCard);
     const selfOnly = isClassicSelfOnlyCard(selectedCard);
-    const isAnyTarget = !!selectedCard && !selfOnly && role === 'target' && classicCardCanTargetPlayer(selectedCard, player.id);
-    const isHardTarget = !!selectedCard && !selfOnly && (isAnyTarget || role === side || (role === 'enemy' && side === 'enemy') || (role === 'self' && side === 'self'));
-    const isSelfOnlyTarget = !!selectedCard && selfOnly && side === 'self';
+    const cursorMode = classicCursorCardMode(selectedCard);
+    const isAnyTarget = !!selectedCard && !cursorMode && !selfOnly && role === 'target' && classicCardCanTargetPlayer(selectedCard, player.id);
+    const isHardTarget = !!selectedCard && !cursorMode && !selfOnly && (isAnyTarget || role === side || (role === 'enemy' && side === 'enemy') || (role === 'self' && side === 'self'));
+    const isSelfOnlyTarget = false;
     const isSoftTarget = (!!selectedCard && !selfOnly && role === 'equip' && side === 'self') || isSelfOnlyTarget;
     container.classList.toggle('is-current', !!player.isCurrent);
     container.classList.toggle('is-defeated', !!player.isDefeated);
@@ -22191,6 +22394,7 @@ function renderClassicBattle(gs) {
     const oldContainer = document.querySelector('.game-container');
     if (!root || !oldContainer) return false;
     if (!shouldUseClassicBattle(gs)) {
+        destroyClassicCursorCard();
         root.classList.add('hidden');
         root.setAttribute('aria-hidden', 'true');
         oldContainer.classList.remove('classic-battle-hidden');
@@ -22209,13 +22413,15 @@ function renderClassicBattle(gs) {
         const resourcePreviewCard = getClassicResourcePreviewCard(vm);
         const selectedRole = getClassicPlayRole(selected);
         const selectedSelfOnly = isClassicSelfOnlyCard(selected);
+        const selectedCursorMode = classicCursorCardMode(selected);
         const missingResource = !!resourcePreviewCard && ((Number(resourcePreviewCard.cost_e || 0) > Number(vm.self.e || 0)) || (Number(resourcePreviewCard.cost_m || 0) > Number(vm.self.m || 0)));
         root.classList.toggle('has-selected-card', !!selected);
         root.classList.toggle('has-resource-preview', !!resourcePreviewCard);
         root.classList.toggle('has-missing-resource', missingResource);
         root.classList.toggle('is-aiming', !!selected || !!selectedEquipment);
-        root.classList.toggle('is-self-only-aim', !!selected && selectedSelfOnly);
-        root.classList.toggle('is-target-aim', (!!selected && !selectedSelfOnly) || !!selectedEquipment);
+        root.classList.toggle('is-self-only-aim', !!selected && selectedCursorMode === 'self');
+        root.classList.toggle('is-target-aim', (!!selected && !selectedCursorMode && !selectedSelfOnly) || !!selectedEquipment);
+        root.classList.toggle('is-cursor-card-aim', !!selectedCursorMode);
         root.classList.toggle('is-2v2', is2v2);
         root.dataset.selectedRole = selected ? selectedRole : '';
         $('classic-mode').textContent = vm.turn.modeText || '1v1';
@@ -22255,6 +22461,7 @@ function renderClassicBattle(gs) {
         }
         renderClassicPlayLane(vm);
         renderClassicHand(vm);
+        syncClassicCursorCard();
         renderClassicLog(vm);
         if (selected) scheduleClassicAimCurveUpdate();
         else {
@@ -22271,6 +22478,7 @@ function renderClassicBattle(gs) {
         return true;
     } catch (error) {
         console.error('[classic-ui] render failed', error);
+        destroyClassicCursorCard();
         root.classList.add('hidden');
         root.setAttribute('aria-hidden', 'true');
         oldContainer.classList.remove('classic-battle-hidden');
@@ -29218,8 +29426,10 @@ async function refreshCardsAfterModSettingsConfirmed() {
         loadSoloDecks(false);
         renderSoloBuilder();
         refreshCardDataViews();
+        return true;
     } catch (e) {
         console.warn('Failed to refresh card data after mod settings update:', e);
+        return false;
     }
 }
 
@@ -29724,9 +29934,75 @@ function coerceValidDisabledMods(disabled) {
     return { disabled: Array.from(new Set(next)), forcedVanilla };
 }
 
+let modSettingsRequestSeq = 0;
+const pendingModSettingsRequests = new Map();
+
+function formatModSettingsResultMessage(data = {}) {
+    const code = String(data.code || 'MOD_SETTINGS_UNKNOWN_ERROR');
+    const stage = String(data.stage || 'unknown');
+    let reason = String(data.reason || '').trim();
+    if (reason === 'mod_settings_only_lobby') {
+        reason = currentLang === 'zh' ? '只能在大厅中更改模组设置。' : 'Mod settings can only be changed in the lobby.';
+    }
+    if (!reason) reason = UI.operation_failed || '操作失败';
+    const requestId = String(data.request_id || '').trim();
+    if (currentLang === 'zh') {
+        const parts = [`阶段：${stage}`, `代码：${code}`];
+        if (requestId) parts.push(`请求：${requestId}`);
+        return `模组设置保存失败：${reason}（${parts.join('；')}）`;
+    }
+    const parts = [`stage=${stage}`, `code=${code}`];
+    if (requestId) parts.push(`request=${requestId}`);
+    return `Failed to save mod settings: ${reason} (${parts.join('; ')})`;
+}
+
+function requestModSettingsUpdate(payload) {
+    if (!socket || !socket.connected) {
+        return Promise.reject(new Error(currentLang === 'zh'
+            ? '模组设置仅保存到本机：当前未连接服务器。'
+            : 'Mod settings were only saved locally because the server is disconnected.'));
+    }
+    const requestId = `mods-${Date.now().toString(36)}-${(++modSettingsRequestSeq).toString(36)}`;
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            pendingModSettingsRequests.delete(requestId);
+            const message = formatModSettingsResultMessage({
+                code: 'MOD_SETTINGS_TIMEOUT',
+                stage: 'transport',
+                request_id: requestId,
+                reason: currentLang === 'zh'
+                    ? '服务器在10秒内没有返回结果；本地选择已保留，请检查连接后重试。'
+                    : 'The server did not respond within 10 seconds. Your local selection was kept; check the connection and retry.',
+            });
+            reject(new Error(message));
+        }, 10000);
+        pendingModSettingsRequests.set(requestId, { resolve, reject, timer });
+        try {
+            socket.emit('update_mod_settings', { ...payload, request_id: requestId });
+        } catch (error) {
+            clearTimeout(timer);
+            pendingModSettingsRequests.delete(requestId);
+            reject(new Error(formatModSettingsResultMessage({
+                code: 'MOD_SETTINGS_SEND_FAILED',
+                stage: 'transport',
+                request_id: requestId,
+                reason: error && error.message ? error.message : String(error),
+            })));
+        }
+    });
+}
+
 async function saveDisabledMods() {
     const checkboxes = getBundledModCheckboxes();
-    if (!checkboxes.length) return;
+    if (!checkboxes.length) {
+        throw new Error(formatModSettingsResultMessage({
+            code: 'MOD_SETTINGS_LIST_NOT_READY',
+            stage: 'collect',
+            reason: currentLang === 'zh'
+                ? '模组列表尚未加载，请重新打开设置后再试。'
+                : 'The mod list is not ready. Reopen Settings and try again.',
+        }));
+    }
     let disabled = [];
     checkboxes.forEach(cb => {
         if (!cb.checked && cb.dataset.filename) {
@@ -29751,13 +30027,23 @@ async function saveDisabledMods() {
         serverInput.value = '';
     }
     if (socket && socket.connected && phase === 'lobby') {
-        socket.emit('update_mod_settings', { disabled_mods: disabled, ...getCommunityModSelection() });
+        return requestModSettingsUpdate({ disabled_mods: disabled, ...getCommunityModSelection() });
     } else {
-        await refreshCardsAfterModSettingsConfirmed();
+        const refreshed = await refreshCardsAfterModSettingsConfirmed();
+        if (!refreshed) {
+            throw new Error(formatModSettingsResultMessage({
+                code: 'MOD_SETTINGS_LOCAL_REFRESH_FAILED',
+                stage: 'client_refresh',
+                reason: currentLang === 'zh'
+                    ? '模组选择已保存到本机，但卡牌数据刷新失败。'
+                    : 'The selection was saved locally, but card data could not be refreshed.',
+            }));
+        }
         showActionToast(UI.save_success, 1600, 'success');
         if (phase === 'lobby') {
             console.warn('Saved mod settings locally, but socket is not connected; server loadout will update after re-entering the lobby.');
         }
+        return { ok: true, local_only: true, disabled_mods: disabled };
     }
 }
 
@@ -29846,6 +30132,7 @@ async function init() {
     };
     bindClickOnce('btn-solo-training', showSoloTraining);
     bindClickOnce('btn-connect', onLogin);
+    bindClickOnce('btn-story-mode', openStoryMode);
     bindClickOnce('btn-open-settings', openSettings);
     bindClickOnce('btn-card-gallery', () => showCardGallery());
     bindClickOnce('btn-open-about', openAbout);
@@ -29874,6 +30161,20 @@ async function init() {
     await fetchCardDefs({ useCache: true, background: true });
     await fetchOpeningEvents({ useCache: true, background: true });
     await refreshAuthMe();
+    try {
+        const pageUrl = new URL(window.location.href);
+        if (pageUrl.searchParams.get('story') === 'login_required') {
+            const error = $('login-error');
+            if (error) error.textContent = lt({
+                zh: '故事模式仅限登录账号，请先登录。',
+                en: 'Story Mode requires an account. Please sign in first.',
+                fr: 'Le mode histoire nécessite un compte. Connectez-vous d’abord.',
+                ja: 'ストーリーモードにはアカウントが必要です。先にログインしてください。',
+            });
+            pageUrl.searchParams.delete('story');
+            window.history.replaceState({}, '', `${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);
+        }
+    } catch (_) {}
     bootLoader.step(UI.init_bindings, 90);
     debugLog('[INIT] card definitions loaded, count=', Object.keys(CARD_DEFS).length);
     bindClickOnce('btn-connect', onLogin);
@@ -30145,7 +30446,9 @@ async function init() {
         closeSettings();
         saveDisabledMods().catch((err) => {
             console.warn('Failed to save settings on close:', err);
-            flashStatus(UI.operation_failed || '操作失败', 1800, 'error');
+            if (!err || !err.modSettingsNotified) {
+                flashStatus((err && err.message) || UI.operation_failed || '操作失败', 6000, 'error');
+            }
         });
     });
     if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', () => openSettings({ hideServer: true }));
@@ -30225,6 +30528,8 @@ async function init() {
     if ($('classic-end-turn')) $('classic-end-turn').addEventListener('click', onEndTurn);
     if ($('classic-surrender')) $('classic-surrender').addEventListener('click', onSurrender);
     if ($('classic-settings')) $('classic-settings').addEventListener('click', () => openSettings({ hideServer: true }));
+    if ($('battle-classic')) $('battle-classic').addEventListener('click', handleClassicCursorCardClick, true);
+    if ($('game-prompt')) $('game-prompt').addEventListener('click', handleClassicCursorCardClick, true);
     document.addEventListener('mousemove', onClassicAimPointerMove);
     document.addEventListener('pointermove', onClassicAimPointerMove);
     document.addEventListener('keydown', (event) => {

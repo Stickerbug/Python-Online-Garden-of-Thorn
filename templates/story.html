@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh-CN" data-ui-style="classic">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>故事模式 | Garden of Thorn</title>
+  <link rel="stylesheet" href="/static/css/story.css?v={{ static_version }}">
+  <script>
+    (() => {
+      let theme = 'light';
+      try { theme = localStorage.getItem('gtn_theme') || 'light'; } catch (_) {}
+      document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+    })();
+  </script>
+</head>
+<body>
+  <div id="story-app" class="story-app">
+    <header class="story-header">
+      <a id="story-back" class="story-icon-command" href="/" aria-label="返回" title="返回">‹</a>
+      <div class="story-heading">
+        <h1 id="story-title">故事模式</h1>
+        <span id="story-subtitle">Garden of Thorn</span>
+      </div>
+      <div class="story-header-actions">
+        <div class="story-account">
+          <span id="story-account-label">玩家</span>
+          <strong>{{ account.display_name }}</strong>
+        </div>
+        {% if story_dev_tools %}
+        <button id="story-dev-toggle" class="story-dev-toggle" type="button" aria-expanded="false" aria-controls="story-dev-panel">开发人员模式</button>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if story_dev_tools %}
+    <aside id="story-dev-panel" class="story-dev-panel hidden" aria-labelledby="story-dev-title">
+      <div class="story-dev-heading">
+        <strong id="story-dev-title">开发人员模式</strong>
+        <button id="story-dev-close" class="story-dev-close" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="story-dev-section">
+        <span id="story-dev-jump-label" class="story-dev-section-title">关卡跳转</span>
+        <div class="story-dev-field-row">
+          <label><span id="story-dev-floor-label">层数</span><select id="story-dev-floor"></select></label>
+          <label><span id="story-dev-node-label">房间</span><select id="story-dev-node"></select></label>
+        </div>
+        <button id="story-dev-jump" class="story-command story-command-primary" type="button">跳转</button>
+      </div>
+      <div class="story-dev-section">
+        <span id="story-dev-values-label" class="story-dev-section-title">数值设置</span>
+        <div class="story-dev-value-grid">
+          <label><span>H</span><input id="story-dev-health" type="number" min="0" max="999999" step="1" inputmode="numeric"></label>
+          <label><span>E</span><input id="story-dev-elixir" type="number" min="0" max="9999" step="1" inputmode="numeric"></label>
+          <label><span>M</span><input id="story-dev-magic" type="number" min="0" max="9999" step="1" inputmode="numeric"></label>
+          <label><span id="story-dev-gold-label">荆露</span><input id="story-dev-gold" type="number" min="0" max="999999999" step="1" inputmode="numeric"></label>
+        </div>
+        <button id="story-dev-apply" class="story-command story-command-primary" type="button">应用数值</button>
+      </div>
+      <button id="story-reset-map" class="story-command story-command-danger story-dev-reset" type="button" data-development-action="reset-map">重置地图</button>
+    </aside>
+    {% endif %}
+
+    <main class="story-main">
+      <section id="story-loading" class="story-loading" aria-live="polite">
+        <span class="story-spinner" aria-hidden="true"></span>
+        <span id="story-loading-label">载入旅程</span>
+      </section>
+
+      <section id="story-empty" class="story-empty hidden">
+        <div class="story-empty-mark" aria-hidden="true">I</div>
+        <h2 id="story-empty-title">一段新的旅程</h2>
+        <button id="story-start" class="story-command story-command-primary" type="button">开始</button>
+      </section>
+
+      <section id="story-blessing" class="story-choice-screen hidden">
+        <div class="story-choice-heading">
+          <span id="story-blessing-kicker">第 1 层</span>
+          <h2 id="story-blessing-title">选择初始赐福</h2>
+          <p id="story-blessing-copy">本次旅程只能选择一项。</p>
+        </div>
+        <div id="story-blessing-options" class="story-choice-grid"></div>
+      </section>
+
+      <section id="story-run" class="story-run hidden">
+        <aside class="story-run-sidebar">
+          <div class="story-run-stage">
+            <span id="story-stage-label">阶段</span>
+            <strong id="story-stage-value">1</strong>
+          </div>
+          <div class="story-run-biome">
+            <span id="story-biome-label">区域</span>
+            <strong id="story-biome-value">花园</strong>
+          </div>
+          <dl class="story-player-summary">
+            <div><dt>H</dt><dd id="story-health-value">--</dd></div>
+            <div><dt>E</dt><dd id="story-elixir-value">--</dd></div>
+            <div><dt>M</dt><dd id="story-magic-value">--</dd></div>
+            <div><dt id="story-gold-label">荆露</dt><dd id="story-gold-value">0</dd></div>
+          </dl>
+          <div class="story-current-room">
+            <span id="story-floor-value">第 1 层</span>
+            <strong id="story-room-value">赐福</strong>
+          </div>
+        </aside>
+
+        <section class="story-map-panel" aria-labelledby="story-map-title">
+          <div class="story-map-heading">
+            <h2 id="story-map-title">路线</h2>
+            <div id="story-map-legend" class="story-map-legend"></div>
+          </div>
+          <div class="story-map-scroll">
+            <svg id="story-map" class="story-map" viewBox="0 0 760 1040" role="img" aria-label="故事路线"></svg>
+          </div>
+        </section>
+      </section>
+
+      <section id="story-combat" class="story-combat hidden" aria-label="战斗">
+        <div class="story-classic-bg" aria-hidden="true"></div>
+        <div class="story-round" id="story-round">R1</div>
+        <div class="story-phase" id="story-phase">玩家回合</div>
+        <div class="story-resource-rail" aria-label="玩家资源">
+          <div class="story-resource-block">
+            <div id="story-combat-player-elixir" class="story-resource-orbs story-resource-orbs-e" title="E"></div>
+          </div>
+          <div class="story-resource-block">
+            <div id="story-combat-player-magic" class="story-resource-orbs story-resource-orbs-m" title="M"></div>
+          </div>
+        </div>
+        <div class="story-arena">
+          <article id="story-player-target" class="story-actor story-actor-player">
+            <div class="story-actor-name">{{ account.display_name }}</div>
+            <div class="story-fighter-resources">
+              <div class="story-stat-strip story-stat-e">
+                <img src="/static/assets/ui-icons/elixir.svg" alt="" aria-hidden="true">
+                <div class="story-stat-track"><div id="story-combat-player-elixir-fill" class="story-stat-fill"></div></div>
+                <span id="story-combat-player-elixir-text">0/0</span>
+              </div>
+              <div class="story-stat-strip story-stat-m">
+                <img src="/static/assets/ui-icons/magic.svg" alt="" aria-hidden="true">
+                <div class="story-stat-track"><div id="story-combat-player-magic-fill" class="story-stat-fill"></div></div>
+                <span id="story-combat-player-magic-text">0/0</span>
+              </div>
+            </div>
+            <div id="story-player-portrait" class="story-portrait story-player-portrait" aria-label="玩家"></div>
+            <div class="story-health-wrap">
+              <img src="/static/assets/ui-icons/hit-point.svg" alt="" aria-hidden="true">
+              <div class="story-health-body">
+                <div class="story-health-track"><div id="story-combat-player-health-fill" class="story-health-fill"></div></div>
+                <b id="story-combat-player-health">--</b>
+              </div>
+            </div>
+            <div class="story-fighter-piles" aria-label="牌堆数量">
+              <span class="story-icon-counter"><img src="/static/assets/ui-icons/total-pile.svg" alt="" aria-hidden="true"><b id="story-hand-count">0</b></span>
+              <span class="story-icon-counter"><img src="/static/assets/ui-icons/draw-pile.svg" alt="" aria-hidden="true"><b id="story-draw-pile-count">0</b></span>
+              <span class="story-icon-counter"><img src="/static/assets/ui-icons/discard-pile.svg" alt="" aria-hidden="true"><b id="story-discard-pile-count">0</b></span>
+              <span class="story-icon-counter"><img src="/static/assets/ui-icons/exile-pile.svg" alt="" aria-hidden="true"><b id="story-exile-pile-count">0</b></span>
+            </div>
+            <div id="story-player-effects" class="story-effect-list"></div>
+          </article>
+          <div id="story-play-lane" class="story-play-lane" aria-live="polite">
+            <span id="story-play-hint"></span>
+          </div>
+          <div id="story-enemy-group" class="story-enemy-group">
+            <article id="story-enemy-target" class="story-actor story-actor-enemy">
+              <div class="story-actor-name" id="story-enemy-name">敌人</div>
+              <div class="story-portrait story-enemy-placeholder" aria-label="敌人图片待补全">?</div>
+              <div class="story-health-wrap">
+                <img src="/static/assets/ui-icons/hit-point.svg" alt="" aria-hidden="true">
+                <div class="story-health-body">
+                  <div class="story-health-track"><div id="story-enemy-health-fill" class="story-health-fill"></div></div>
+                  <b id="story-enemy-health">--</b>
+                </div>
+              </div>
+              <div id="story-enemy-effects" class="story-effect-list"></div>
+              <div class="story-intent">
+                <span id="story-intent-label">意图</span>
+                <strong id="story-enemy-intent">--</strong>
+              </div>
+            </article>
+          </div>
+        </div>
+        <svg id="story-aim-layer" class="story-aim-layer hidden" aria-hidden="true">
+          <defs>
+            <marker id="story-arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M1,1 L9,5 L1,9 Z"></path>
+            </marker>
+          </defs>
+          <path id="story-aim-outline" class="story-aim-outline"></path>
+          <path id="story-aim-path" class="story-aim-path" marker-end="url(#story-arrowhead)"></path>
+          <circle id="story-aim-tip" class="story-aim-tip" r="5"></circle>
+        </svg>
+        <div class="story-hand" id="story-hand" aria-label="手牌"></div>
+        <div class="story-combat-controls">
+          <button class="story-command story-pile-command" id="story-draw-pile" type="button" aria-label="查看抽牌堆" title="查看抽牌堆">
+            <img src="/static/assets/ui-icons/draw-pile.svg" alt="" aria-hidden="true"><span id="story-draw-pile-label">查看抽牌堆</span>
+          </button>
+          <button class="story-command story-pile-command" id="story-discard-pile" type="button" aria-label="查看弃牌堆" title="查看弃牌堆">
+            <img src="/static/assets/ui-icons/discard-pile.svg" alt="" aria-hidden="true"><span id="story-discard-pile-label">查看弃牌堆</span>
+          </button>
+          <button class="story-command story-pile-command" id="story-exile-pile" type="button" aria-label="查看放逐区" title="查看放逐区">
+            <img src="/static/assets/ui-icons/exile-pile.svg" alt="" aria-hidden="true"><span id="story-exile-pile-label">查看放逐区</span>
+          </button>
+          <button class="story-command story-command-primary" id="story-end-turn" type="button">结束回合</button>
+        </div>
+      </section>
+
+      <section id="story-room" class="story-choice-screen hidden">
+        <div class="story-choice-heading">
+          <span id="story-room-kicker">房间</span>
+          <h2 id="story-room-title">选择</h2>
+          <p id="story-room-copy"></p>
+        </div>
+        <div id="story-room-options" class="story-choice-grid story-choice-grid-wide"></div>
+      </section>
+
+      <section id="story-reward" class="story-choice-screen hidden">
+        <div class="story-choice-heading">
+          <span id="story-reward-kicker">战斗胜利</span>
+          <h2 id="story-reward-title">选择一张牌</h2>
+          <p id="story-reward-copy"></p>
+        </div>
+        <div id="story-reward-options" class="story-choice-grid story-card-choice-grid"></div>
+        <button id="story-reward-skip" class="story-command" type="button">跳过</button>
+      </section>
+
+      <section id="story-terminal" class="story-empty hidden">
+        <div id="story-terminal-mark" class="story-empty-mark" aria-hidden="true">✓</div>
+        <h2 id="story-terminal-title">旅程完成</h2>
+        <p id="story-terminal-copy" class="story-terminal-copy"></p>
+        <button id="story-terminal-new" class="story-command story-command-primary" type="button">开始新旅程</button>
+      </section>
+    </main>
+
+    <dialog id="story-pile-dialog" class="story-dialog story-pile-dialog">
+      <form method="dialog">
+        <h3 id="story-pile-title">牌堆</h3>
+        <p id="story-pile-total" class="story-pile-total"></p>
+        <div id="story-pile-grid" class="story-pile-grid"></div>
+        <div class="story-dialog-actions">
+          <button id="story-pile-close" class="story-command story-command-danger" value="cancel">关闭</button>
+        </div>
+      </form>
+    </dialog>
+
+    {% if story_dev_tools %}
+    <dialog id="story-reset-dialog" class="story-dialog">
+      <form method="dialog">
+        <h2 id="story-reset-title">重置地图？</h2>
+        <p id="story-reset-message">将重新生成路线并返回第一层。</p>
+        <div class="story-dialog-actions">
+          <button id="story-reset-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-reset-confirm" class="story-command story-command-primary" value="confirm">确定</button>
+        </div>
+      </form>
+    </dialog>
+    {% endif %}
+
+    <div id="story-toast" class="story-toast hidden" role="status" aria-live="polite"></div>
+  </div>
+  <script>
+    window.__STORY_ACCOUNT__ = {{ account|tojson }};
+    window.__STORY_DEV_TOOLS__ = {{ story_dev_tools|tojson }};
+  </script>
+  <script src="/static/js/story.js?v={{ static_version }}" defer></script>
+</body>
+</html>

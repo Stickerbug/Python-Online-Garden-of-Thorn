@@ -27,7 +27,7 @@ from functools import wraps
 from collections import deque, OrderedDict
 from datetime import datetime, timedelta, timezone
 
-from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g
+from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash
 from game_engine import GameEngine
@@ -55,6 +55,9 @@ from mod_spec_v2 import sha256_json
 from font_subsets import ensure_community_font_subset
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
 from runtime_errors import set_mod_runtime_error_logger
+from story_content import story_content_payload
+from story_engine import StoryActionError, apply_story_action
+from story_mode import STORY_CONTENT_VERSION, build_initial_story_state
 from r2_mods import (
     R2ConfigError,
     create_presigned_mod_upload,
@@ -71,6 +74,7 @@ from r2_mods import (
 )
 from db import (
     DB_PATH,
+    abandon_story_run,
     add_user_play_seconds,
     admin_change_username,
     admin_clear_user_role,
@@ -90,6 +94,8 @@ from db import (
     cleanup_expired_friend_requests_once,
     cleanup_expired_content_disables_once,
     cleanup_old_dm_messages_once,
+    commit_story_run_action,
+    create_story_run,
     create_report_entry,
     create_remember_token,
     create_user,
@@ -103,6 +109,8 @@ from db import (
     get_dm_messages,
     get_feedback_messages,
     get_admin_user_detail,
+    get_active_story_run,
+    get_story_run_action,
     get_chat_message_with_context,
     get_db_connection,
     get_leaderboard_rank,
@@ -154,6 +162,7 @@ from db import (
     rebuild_user_stats_from_matches,
     rebuild_user_play_seconds_from_matches,
     remove_friend,
+    reset_story_run_map,
     revoke_remember_token,
     resolve_report_entry,
     respond_friend_request,
@@ -383,9 +392,10 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260719-tutorial-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260721-story-no-log-mod-errors-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
+STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
 GTN_DRAINING_ENV = os.environ.get('GTN_DRAINING', '').strip().lower()
 _DRAIN_OVERRIDE = None
@@ -4710,7 +4720,7 @@ SOCKET_EVENT_LIMITS = {
     'reconnect_accept': (8, 60),
     'reconnect_decline': (8, 60),
     'set_mode': (20, 60),
-    'update_mod_settings': (10, 60),
+    'update_mod_settings': (30, 60),
     'draft_pick': (40, 60),
     'draft_reroll': (8, 60),
     'select_opening_event': (10, 60),
@@ -5017,6 +5027,39 @@ def _socket_rate_allowed(sid, event_name, *, exempt=False):
     return True
 
 
+def _mod_settings_result_payload(
+    *,
+    ok,
+    code,
+    stage,
+    reason,
+    request_id='',
+    disabled_mods=None,
+    requested_disabled_mods=None,
+    details=None,
+    **extra,
+):
+    payload = {
+        'ok': bool(ok),
+        'code': str(code or ''),
+        'stage': str(stage or ''),
+        'reason': str(reason or ''),
+        'request_id': str(request_id or '')[:64],
+        'disabled_mods': list(disabled_mods or []),
+        'requested_disabled_mods': list(requested_disabled_mods or []),
+    }
+    if isinstance(details, dict) and details:
+        payload['details'] = details
+    payload.update(extra)
+    return payload
+
+
+def _emit_mod_settings_result(sid, **kwargs):
+    payload = _mod_settings_result_payload(**kwargs)
+    socketio.emit('mod_settings_updated', payload, room=sid)
+    return payload
+
+
 def socket_guard(event_name, data=None, *, require_player=True, allow_empty=False, emit_error=True):
     sid = request.sid
     if data is None:
@@ -5025,15 +5068,26 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
         payload = data
     else:
         _security_illegal(sid, event_name, '参数格式错误', emit_error=emit_error, extra={'data_type': type(data).__name__})
+        if event_name == 'update_mod_settings':
+            _emit_mod_settings_result(
+                sid,
+                ok=False,
+                code='MOD_SETTINGS_INVALID_PAYLOAD',
+                stage='guard',
+                reason='模组设置数据格式错误，请刷新页面后重试。',
+            )
+            return None
         return None
     player = _security_player_for_sid(sid)
     if require_player and sid not in players:
         if event_name == 'update_mod_settings':
-            emit('mod_settings_updated', {
-                'ok': False,
-                'reason': '连接已失效，请重新进入大厅后再保存模组设置。',
-                'disabled_mods': [],
-            })
+            _emit_mod_settings_result(
+                sid,
+                ok=False,
+                code='MOD_SETTINGS_SESSION_EXPIRED',
+                stage='guard',
+                reason='连接已失效，请重新进入大厅后再保存模组设置。',
+            )
             return None
         _security_illegal(sid, event_name, '玩家未登录', emit_error=emit_error)
         return None
@@ -5043,11 +5097,17 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
     exempt = is_chat_limit_exempt(player) if event_name == 'chat' else bool(player.get('is_admin_player'))
     if not _socket_rate_allowed(sid, event_name, exempt=exempt):
         if event_name == 'update_mod_settings':
-            emit('mod_settings_updated', {
-                'ok': False,
-                'reason': '模组设置操作过于频繁，请稍后再试。',
-                'disabled_mods': player.get('disabled_mods', []) if player else [],
-            })
+            payload = payload if isinstance(payload, dict) else {}
+            _emit_mod_settings_result(
+                sid,
+                ok=False,
+                code='MOD_SETTINGS_RATE_LIMITED',
+                stage='guard',
+                reason='模组设置操作过于频繁，请稍后再试。',
+                request_id=payload.get('request_id'),
+                disabled_mods=player.get('disabled_mods', []) if player else [],
+                requested_disabled_mods=normalize_disabled_mods(payload.get('disabled_mods')),
+            )
             return None
         if event_name in SOFT_REJECT_EVENT_NAMES:
             soft_reject(sid, event_name, 'ACTION_TOO_FAST')
@@ -12369,6 +12429,200 @@ def index():
     )
 
 
+@app.route('/story')
+def story_page():
+    user = _current_account_user()
+    if not user:
+        return redirect('/?story=login_required')
+    return render_template(
+        'story.html',
+        static_version=GTN_STATIC_VERSION,
+        account={
+            'id': user.get('id'),
+            'username': user.get('username'),
+            'display_name': user.get('display_name') or user.get('username'),
+            'skin': public_skin_config(user.get('skin')),
+        },
+        story_dev_tools=STORY_DEV_TOOLS_ENABLED,
+    )
+
+
+@app.route('/api/story/run', methods=['GET'])
+def api_story_run_get():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    try:
+        run = get_active_story_run(user_id)
+        return jsonify({'success': True, 'run': run})
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+
+
+@app.route('/api/story/run', methods=['POST'])
+def api_story_run_create():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    try:
+        existing = get_active_story_run(user_id)
+        if existing:
+            return jsonify({'success': True, 'created': False, 'run': existing})
+        seed = secrets.token_hex(16)
+        state = build_initial_story_state(seed)
+        run, created = create_story_run(user_id, seed, STORY_CONTENT_VERSION, state)
+        return jsonify({'success': True, 'created': created, 'run': run})
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+
+
+@app.route('/api/story/content', methods=['GET'])
+def api_story_content_get():
+    _, _, error = _require_account_json()
+    if error:
+        return error
+    return jsonify({
+        'success': True,
+        'content_version': STORY_CONTENT_VERSION,
+        'content': story_content_payload(CARD_DEFS),
+    })
+
+
+@app.route('/api/story/run/action', methods=['POST'])
+def api_story_run_action():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    run_id = str(data.get('run_id') or '').strip()
+    action_id = str(data.get('action_id') or '').strip()
+    action_type = str(data.get('action_type') or '').strip().lower()
+    payload = data.get('payload') or {}
+    try:
+        expected_version = int(data.get('state_version'))
+    except (TypeError, ValueError):
+        return _json_error('故事状态版本无效', 400, code='INVALID_STATE_VERSION')
+    if not run_id or len(run_id) > 64:
+        return _json_error('故事旅程编号无效', 400, code='INVALID_RUN_ID')
+    if not action_id or len(action_id) > 96:
+        return _json_error('故事操作编号无效', 400, code='INVALID_ACTION_ID')
+    if not action_type or len(action_type) > 64:
+        return _json_error('故事操作类型无效', 400, code='INVALID_ACTION_TYPE')
+    if not isinstance(payload, dict):
+        return _json_error('故事操作参数无效', 400, code='INVALID_ACTION_PAYLOAD')
+    if action_type.startswith('dev_') and not STORY_DEV_TOOLS_ENABLED:
+        return _json_error('未找到此功能', 404, code='DEV_TOOLS_DISABLED')
+
+    try:
+        if get_story_run_action(user_id, run_id, action_id):
+            current = get_active_story_run(user_id)
+            return jsonify({
+                'success': True,
+                'duplicate': True,
+                'run': current,
+                'events': [],
+            })
+
+        run = get_active_story_run(user_id)
+        if not run or run.get('id') != run_id:
+            return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
+        if int(run.get('state_version') or 0) != expected_version:
+            return _json_error(
+                '故事状态已更新',
+                409,
+                code='STATE_VERSION_OLD',
+                run=run,
+            )
+
+        next_state, events = apply_story_action(
+            run.get('state') or {},
+            action_type,
+            payload,
+            run.get('seed') or '',
+        )
+        updated, outcome = commit_story_run_action(
+            user_id,
+            run_id,
+            expected_version,
+            action_id,
+            action_type,
+            payload,
+            next_state,
+        )
+        if outcome == 'not_found':
+            return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
+        if outcome == 'version':
+            return _json_error(
+                '故事状态已更新',
+                409,
+                code='STATE_VERSION_OLD',
+                run=updated,
+            )
+        return jsonify({
+            'success': True,
+            'duplicate': outcome == 'duplicate',
+            'run': updated,
+            'events': [] if outcome == 'duplicate' else events,
+        })
+    except StoryActionError as exc:
+        current = get_active_story_run(user_id)
+        return _json_error(exc.message, 400, code=exc.code, run=current)
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error(
+                '故事记录暂时不可用，请稍后重试',
+                503,
+                code='DATABASE_BUSY',
+            )
+        raise
+
+
+@app.route('/api/story/run/abandon', methods=['POST'])
+def api_story_run_abandon():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    try:
+        abandoned = abandon_story_run(user_id, data.get('run_id'))
+        return jsonify({'success': True, 'abandoned': abandoned})
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+
+
+@app.route('/api/story/run/reset-map', methods=['POST'])
+def api_story_run_reset_map():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    if not STORY_DEV_TOOLS_ENABLED:
+        return _json_error('未找到此功能', 404)
+    data = request.get_json(silent=True) or {}
+    try:
+        seed = secrets.token_hex(16)
+        state = build_initial_story_state(seed)
+        run = reset_story_run_map(
+            user_id,
+            seed,
+            STORY_CONTENT_VERSION,
+            state,
+            run_id=data.get('run_id'),
+        )
+        if run is None:
+            return _json_error('没有进行中的故事旅程', 404)
+        return jsonify({'success': True, 'run': run})
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+
+
 def beta_entry_response():
     if is_beta_authenticated():
         return render_template(
@@ -15590,83 +15844,174 @@ def on_update_mod_settings(data):
     data = socket_guard('update_mod_settings', data, require_player=False, allow_empty=True)
     if data is None:
         return
-    with _lock:
-        if sid not in players:
-            emit('mod_settings_updated', {
-                'ok': False,
-                'reason': '连接已失效，请重新进入大厅后再保存模组设置。',
-                'disabled_mods': [],
-            })
-            return
-        player = players[sid]
-        if player.get('status') not in ('lobby', 'reconnecting'):
-            emit('mod_settings_updated', {
-                'ok': False,
-                'reason': 'mod_settings_only_lobby',
-                'disabled_mods': player.get('disabled_mods', []),
-            })
-            return
-        current_disabled_mods = list(player.get('disabled_mods', []))
-        runtime_mode = player.get('mode', '1v1')
     data = dict(data or {})
+    request_id = str(data.get('request_id') or '')[:64]
+    requested_disabled_mods = normalize_disabled_mods(data.get('disabled_mods'))
+
+    with _lock:
+        player = players.get(sid)
+        current_disabled_mods = list(player.get('disabled_mods', [])) if player else []
+        runtime_mode = player.get('mode', '1v1') if player else '1v1'
+        player_status = player.get('status') if player else ''
+        user_id = player.get('user_id') if player else None
+
+    if not player:
+        return _emit_mod_settings_result(
+            sid,
+            ok=False,
+            code='MOD_SETTINGS_SESSION_EXPIRED',
+            stage='session',
+            reason='连接已失效，请重新进入大厅后再保存模组设置。',
+            request_id=request_id,
+            disabled_mods=current_disabled_mods,
+            requested_disabled_mods=requested_disabled_mods,
+        )
+    if player_status not in ('lobby', 'reconnecting'):
+        return _emit_mod_settings_result(
+            sid,
+            ok=False,
+            code='MOD_SETTINGS_NOT_IN_LOBBY',
+            stage='state',
+            reason='只能在大厅中更改模组设置，请先返回大厅。',
+            request_id=request_id,
+            disabled_mods=current_disabled_mods,
+            requested_disabled_mods=requested_disabled_mods,
+            details={'player_status': player_status},
+        )
+
     data['_runtime_mode'] = runtime_mode
     try:
         community_fields, loadout = resolve_mod_loadout_payload(data)
     except Exception as exc:
-        emit('mod_settings_updated', {
-            'ok': False,
-            'reason': str(exc),
-            'disabled_mods': current_disabled_mods,
-        })
-        return
+        admin_event(
+            'error',
+            f'mod_settings_update_failed code=MOD_SETTINGS_BUILD_FAILED stage=build '
+            f'request_id={request_id or "-"} sid={sid} user_id={user_id or "-"} '
+            f'error={type(exc).__name__}: {exc}',
+        )
+        return _emit_mod_settings_result(
+            sid,
+            ok=False,
+            code='MOD_SETTINGS_BUILD_FAILED',
+            stage='build',
+            reason=f'无法生成所选模组组合：{exc}',
+            request_id=request_id,
+            disabled_mods=current_disabled_mods,
+            requested_disabled_mods=requested_disabled_mods,
+            details={'exception_type': type(exc).__name__},
+        )
+
+    known_mod_filenames = {
+        str(getattr(mod, 'filename', '') or '')
+        for mod in load_all_mods()
+        if getattr(mod, 'filename', None)
+    }
+    forced_enabled_mods = sorted(set(requested_disabled_mods) - set(loadout['disabled_mods']))
+    unknown_mods = sorted(set(requested_disabled_mods) - known_mod_filenames)
+    team_notifications = []
+    apply_error = None
+    result_payload = None
+
     with _lock:
-        if sid not in players:
-            emit('mod_settings_updated', {
-                'ok': False,
-                'reason': '连接已失效，请重新进入大厅后再保存模组设置。',
-                'disabled_mods': current_disabled_mods,
-            })
-            return
-        player = players[sid]
-        if player.get('status') not in ('lobby', 'reconnecting'):
-            emit('mod_settings_updated', {
-                'ok': False,
-                'reason': 'mod_settings_only_lobby',
-                'disabled_mods': player.get('disabled_mods', []),
-            })
-            return
-        old_hash = player_loadout_hash(player)
-        apply_mod_loadout_to_player(player, loadout, community_fields)
-        invites.pop(sid, None)
-        for inviter_sid, target_sid in list(invites.items()):
-            if target_sid == sid:
-                del invites[inviter_sid]
-        if sid in teams and old_hash != loadout['loadout_hash']:
-            team = teams[sid]
-            leader = team['leader']
-            members = list(team['members'])
-            for key in list(pending_team_matches):
-                if key[0] == leader or key[1] == leader:
-                    del pending_team_matches[key]
-            for member_sid in members:
-                if member_sid in teams:
-                    del teams[member_sid]
-                if member_sid in players:
-                    socketio.emit('team_disbanded', {}, room=member_sid)
-        emit('mod_settings_updated', {
-            'ok': True,
-            'disabled_mods': loadout['disabled_mods'],
-            'loadout_hash': loadout['loadout_hash'],
-            'v2_loadout_hash': loadout.get('v2_loadout_hash', ''),
-            'v2_load_order': loadout.get('v2_load_order', []),
-            'mods_list': loadout['mods_list'],
-            'entertainment_mods': list(loadout.get('entertainment_mods', [])),
-            'mod_source': player['mod_source'],
-            'community_mod_hash': player['community_mod_hash'],
-            'community_mod_name': player['community_mod_name'],
-            'community_mods': player.get('community_mods', []),
-        })
+        player = players.get(sid)
+        if not player:
+            result_payload = _mod_settings_result_payload(
+                ok=False,
+                code='MOD_SETTINGS_SESSION_EXPIRED',
+                stage='apply',
+                reason='保存过程中连接已失效，请重新进入大厅后再试。',
+                request_id=request_id,
+                disabled_mods=current_disabled_mods,
+                requested_disabled_mods=requested_disabled_mods,
+            )
+        elif player.get('status') not in ('lobby', 'reconnecting'):
+            result_payload = _mod_settings_result_payload(
+                ok=False,
+                code='MOD_SETTINGS_STATE_CHANGED',
+                stage='apply',
+                reason='保存过程中玩家状态发生变化，请返回大厅后重试。',
+                request_id=request_id,
+                disabled_mods=player.get('disabled_mods', []),
+                requested_disabled_mods=requested_disabled_mods,
+                details={'player_status': player.get('status')},
+            )
+        else:
+            old_hash = player_loadout_hash(player)
+            try:
+                apply_mod_loadout_to_player(player, loadout, community_fields)
+            except Exception as exc:
+                apply_error = exc
+                result_payload = _mod_settings_result_payload(
+                    ok=False,
+                    code='MOD_SETTINGS_APPLY_FAILED',
+                    stage='apply',
+                    reason=f'模组组合已生成，但应用到玩家失败：{exc}',
+                    request_id=request_id,
+                    disabled_mods=current_disabled_mods,
+                    requested_disabled_mods=requested_disabled_mods,
+                    details={'exception_type': type(exc).__name__},
+                )
+            else:
+                invites.pop(sid, None)
+                for inviter_sid, target_sid in list(invites.items()):
+                    if target_sid == sid:
+                        del invites[inviter_sid]
+                if sid in teams and old_hash != loadout['loadout_hash']:
+                    team = teams[sid]
+                    leader = team['leader']
+                    members = list(team['members'])
+                    for key in list(pending_team_matches):
+                        if key[0] == leader or key[1] == leader:
+                            del pending_team_matches[key]
+                    for member_sid in members:
+                        if member_sid in teams:
+                            del teams[member_sid]
+                        if member_sid in players:
+                            team_notifications.append(member_sid)
+                result_payload = _mod_settings_result_payload(
+                    ok=True,
+                    code='MOD_SETTINGS_UPDATED',
+                    stage='complete',
+                    reason='',
+                    request_id=request_id,
+                    disabled_mods=loadout['disabled_mods'],
+                    requested_disabled_mods=requested_disabled_mods,
+                    details={
+                        'requested_count': len(requested_disabled_mods),
+                        'applied_count': len(loadout['disabled_mods']),
+                        'forced_enabled_mods': forced_enabled_mods,
+                        'unknown_mods': unknown_mods,
+                    },
+                    loadout_hash=loadout['loadout_hash'],
+                    v2_loadout_hash=loadout.get('v2_loadout_hash', ''),
+                    v2_load_order=loadout.get('v2_load_order', []),
+                    mods_list=loadout['mods_list'],
+                    entertainment_mods=list(loadout.get('entertainment_mods', [])),
+                    mod_source=player['mod_source'],
+                    community_mod_hash=player['community_mod_hash'],
+                    community_mod_name=player['community_mod_name'],
+                    community_mods=player.get('community_mods', []),
+                )
+
+    if apply_error is not None:
+        admin_event(
+            'error',
+            f'mod_settings_update_failed code=MOD_SETTINGS_APPLY_FAILED stage=apply '
+            f'request_id={request_id or "-"} sid={sid} user_id={user_id or "-"} '
+            f'error={type(apply_error).__name__}: {apply_error}',
+        )
+    if result_payload.get('ok') and forced_enabled_mods:
+        admin_event(
+            'player',
+            f'mod_settings_adjusted request_id={request_id or "-"} sid={sid} '
+            f'user_id={user_id or "-"} forced_enabled={forced_enabled_mods}',
+        )
+    for member_sid in team_notifications:
+        socketio.emit('team_disbanded', {}, room=member_sid)
+    socketio.emit('mod_settings_updated', result_payload, room=sid)
+    if result_payload.get('ok'):
         broadcast_lobby()
+    return result_payload
 
 
 @socketio.on('accept_team')

@@ -6,6 +6,7 @@ import secrets
 import re
 import sqlite3
 import time
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -1205,7 +1206,248 @@ def init_db():
             'CREATE INDEX IF NOT EXISTS idx_content_disables_active '
             'ON content_disables(active, content_type, scope_mode, expires_at)'
         )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_runs (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                seed TEXT NOT NULL,
+                content_version TEXT NOT NULL,
+                state_version INTEGER NOT NULL DEFAULT 1,
+                state_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_runs_user_updated '
+            'ON story_runs(user_id, updated_at DESC)'
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_story_runs_one_active "
+            "ON story_runs(user_id) WHERE status = 'active'"
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_run_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                sequence INTEGER NOT NULL,
+                action_id TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                payload_json TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(run_id) REFERENCES story_runs(id) ON DELETE CASCADE,
+                UNIQUE(run_id, action_id),
+                UNIQUE(run_id, sequence)
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_run_actions_run '
+            'ON story_run_actions(run_id, sequence)'
+        )
         conn.commit()
+
+
+def _story_run_payload(row):
+    if row is None:
+        return None
+    payload = dict(row)
+    try:
+        payload['state'] = json.loads(payload.pop('state_json') or '{}')
+    except (TypeError, ValueError, json.JSONDecodeError):
+        payload['state'] = {}
+        payload.pop('state_json', None)
+    return payload
+
+
+def get_active_story_run(user_id):
+    with closing(get_db_connection()) as conn:
+        row = conn.execute(
+            '''SELECT * FROM story_runs
+               WHERE user_id = ? AND status = 'active'
+               ORDER BY updated_at DESC LIMIT 1''',
+            (int(user_id),),
+        ).fetchone()
+    return _story_run_payload(row)
+
+
+def get_story_run_action(user_id, run_id, action_id):
+    user_id = int(user_id)
+    run_id = str(run_id or '').strip()
+    action_id = str(action_id or '').strip()
+    if not run_id or not action_id:
+        return None
+    with closing(get_db_connection()) as conn:
+        row = conn.execute(
+            '''SELECT a.* FROM story_run_actions a
+               JOIN story_runs r ON r.id = a.run_id
+               WHERE a.run_id = ? AND a.action_id = ? AND r.user_id = ?
+               LIMIT 1''',
+            (run_id, action_id, user_id),
+        ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def commit_story_run_action(
+    user_id,
+    run_id,
+    expected_state_version,
+    action_id,
+    action_type,
+    action_payload,
+    next_state,
+):
+    """Persist one story action exactly once with optimistic concurrency."""
+    user_id = int(user_id)
+    run_id = str(run_id or '').strip()
+    action_id = str(action_id or '').strip()
+    action_type = str(action_type or '').strip()
+    expected_state_version = int(expected_state_version)
+    now = utc_iso(utc_now_dt())
+    payload_json = json.dumps(
+        action_payload or {}, ensure_ascii=False, separators=(',', ':'),
+    )
+    state_json = json.dumps(
+        next_state or {}, ensure_ascii=False, separators=(',', ':'),
+    )
+
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute(
+            '''SELECT * FROM story_runs
+               WHERE id = ? AND user_id = ? AND status = 'active' LIMIT 1''',
+            (run_id, user_id),
+        ).fetchone()
+        if row is None:
+            conn.rollback()
+            return None, 'not_found'
+
+        duplicate = conn.execute(
+            '''SELECT id FROM story_run_actions
+               WHERE run_id = ? AND action_id = ? LIMIT 1''',
+            (run_id, action_id),
+        ).fetchone()
+        if duplicate is not None:
+            conn.rollback()
+            return _story_run_payload(row), 'duplicate'
+
+        if int(row['state_version']) != expected_state_version:
+            conn.rollback()
+            return _story_run_payload(row), 'version'
+
+        sequence_row = conn.execute(
+            'SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence '
+            'FROM story_run_actions WHERE run_id = ?',
+            (run_id,),
+        ).fetchone()
+        sequence = int(sequence_row['next_sequence'])
+        conn.execute(
+            '''INSERT INTO story_run_actions
+               (run_id, sequence, action_id, action_type, payload_json, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)''',
+            (run_id, sequence, action_id, action_type, payload_json, now),
+        )
+        conn.execute(
+            '''UPDATE story_runs
+               SET state_json = ?, state_version = state_version + 1, updated_at = ?
+               WHERE id = ? AND user_id = ? AND status = 'active' ''',
+            (state_json, now, run_id, user_id),
+        )
+        conn.commit()
+        updated = conn.execute(
+            'SELECT * FROM story_runs WHERE id = ?', (run_id,),
+        ).fetchone()
+    return _story_run_payload(updated), 'committed'
+
+
+def create_story_run(user_id, seed, content_version, state):
+    user_id = int(user_id)
+    now = utc_iso(utc_now_dt())
+    run_id = secrets.token_hex(16)
+    state_json = json.dumps(state or {}, ensure_ascii=False, separators=(',', ':'))
+    with closing(get_db_connection()) as conn:
+        existing = conn.execute(
+            "SELECT * FROM story_runs WHERE user_id = ? AND status = 'active' LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if existing is not None:
+            return _story_run_payload(existing), False
+        try:
+            conn.execute(
+                '''INSERT INTO story_runs
+                   (id, user_id, status, seed, content_version, state_version,
+                    state_json, created_at, updated_at)
+                   VALUES (?, ?, 'active', ?, ?, 1, ?, ?, ?)''',
+                (run_id, user_id, str(seed), str(content_version), state_json, now, now),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            # Two tabs may start a run simultaneously; the existing run wins.
+            conn.rollback()
+            existing = conn.execute(
+                "SELECT * FROM story_runs WHERE user_id = ? AND status = 'active' LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            if existing is None:
+                raise
+            return _story_run_payload(existing), False
+        row = conn.execute('SELECT * FROM story_runs WHERE id = ?', (run_id,)).fetchone()
+    return _story_run_payload(row), True
+
+
+def abandon_story_run(user_id, run_id=None):
+    user_id = int(user_id)
+    now = utc_iso(utc_now_dt())
+    clauses = ["user_id = ?", "status = 'active'"]
+    params = [user_id]
+    if run_id:
+        clauses.append('id = ?')
+        params.append(str(run_id))
+    with closing(get_db_connection()) as conn:
+        cursor = conn.execute(
+            f"UPDATE story_runs SET status = 'abandoned', updated_at = ?, completed_at = ? "
+            f"WHERE {' AND '.join(clauses)}",
+            (now, now, *params),
+        )
+        conn.commit()
+    return bool(cursor.rowcount)
+
+
+def reset_story_run_map(user_id, seed, content_version, state, run_id=None):
+    user_id = int(user_id)
+    now = utc_iso(utc_now_dt())
+    clauses = ["user_id = ?", "status = 'active'"]
+    params = [user_id]
+    if run_id:
+        clauses.append('id = ?')
+        params.append(str(run_id))
+    state_json = json.dumps(state or {}, ensure_ascii=False, separators=(',', ':'))
+    with closing(get_db_connection()) as conn:
+        row = conn.execute(
+            f"SELECT id FROM story_runs WHERE {' AND '.join(clauses)} "
+            'ORDER BY updated_at DESC LIMIT 1',
+            params,
+        ).fetchone()
+        if row is None:
+            return None
+        active_run_id = row['id']
+        conn.execute('DELETE FROM story_run_actions WHERE run_id = ?', (active_run_id,))
+        conn.execute(
+            '''UPDATE story_runs
+               SET seed = ?, content_version = ?, state_version = state_version + 1,
+                   state_json = ?, updated_at = ?, completed_at = NULL
+               WHERE id = ? AND user_id = ? AND status = 'active' ''',
+            (str(seed), str(content_version), state_json, now, active_run_id, user_id),
+        )
+        conn.commit()
+        updated = conn.execute('SELECT * FROM story_runs WHERE id = ?', (active_run_id,)).fetchone()
+    return _story_run_payload(updated)
 
 
 def _content_disable_row(row):
@@ -2936,6 +3178,7 @@ def list_leaderboard(min_games=None, limit=50, scope='season'):
             WHERE deleted_at IS NULL
               AND COALESCE(banned, 0) = 0
               AND COALESCE({games_col}, 0) >= ?
+              AND COALESCE(games_played, 0) >= ?
               {season_filter}
               ORDER BY
                 COALESCE({gr_col}, ?) DESC,
@@ -2944,7 +3187,7 @@ def list_leaderboard(min_games=None, limit=50, scope='season'):
                 username_lower ASC
             LIMIT ?
             ''',
-            (*params[:-1], GR_INITIAL, params[-1]),
+            (params[0], min_games, *params[1:-1], GR_INITIAL, params[-1]),
         ).fetchall()
         conn.commit()
     return [_leaderboard_payload(row, scope=scope) for row in rows]
@@ -2977,9 +3220,10 @@ def get_leaderboard_rank(user_id, min_games=None, scope='season'):
               AND deleted_at IS NULL
               AND COALESCE(banned, 0) = 0
               AND COALESCE({games_col}, 0) >= ?
+              AND COALESCE(games_played, 0) >= ?
               {season_filter}
             ''',
-            row_params,
+            (row_params[0], row_params[1], min_games, *row_params[2:]),
         ).fetchone()
         if row is None:
             conn.commit()
@@ -2991,6 +3235,7 @@ def get_leaderboard_rank(user_id, min_games=None, scope='season'):
             WHERE deleted_at IS NULL
               AND COALESCE(banned, 0) = 0
               AND COALESCE({games_col}, 0) >= ?
+              AND COALESCE(games_played, 0) >= ?
               {season_filter}
             ORDER BY
               COALESCE({gr_col}, ?) DESC,
@@ -2998,7 +3243,7 @@ def get_leaderboard_rank(user_id, min_games=None, scope='season'):
               wins DESC,
               username_lower ASC
             ''',
-            (*rank_params, GR_INITIAL),
+            (rank_params[0], min_games, *rank_params[1:], GR_INITIAL),
         ).fetchall()
         rank = 0
         for idx, ranked in enumerate(ranked_rows, start=1):

@@ -5318,16 +5318,22 @@ body {
   text-align: center;
 }
 
-#btn-connect {
+#btn-connect,
+#btn-story-mode,
+#btn-solo-training {
   width: 100%;
+  min-height: 48px;
   padding: 12px;
   font-size: 15px;
   font-weight: 700;
   font-family: var(--font-main);
+  border-radius: var(--radius-lg);
+}
+
+#btn-connect {
   background: var(--bloom);
   color: #fff;
   border: 1px solid var(--bloom);
-  border-radius: var(--radius-lg);
   cursor: pointer;
   transition: background var(--transition-fast);
 }
@@ -5336,13 +5342,15 @@ body {
   background: #1dd1a1;
 }
 
-#btn-solo-training {
-  width: 100%;
-  padding: 12px;
-  font-size: 15px;
-  font-weight: 700;
-  font-family: var(--font-main);
-  border-radius: var(--radius-lg);
+#btn-story-mode {
+  color: #fff;
+  border-color: #9a661c;
+  background: #b77b25;
+}
+
+#btn-story-mode:hover:not(:disabled) {
+  border-color: #aa7424;
+  background: #c68b34;
 }
 
 .solo-container {
@@ -13150,7 +13158,9 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
   width: min(360px, calc(100vw - 40px));
 }
 
-#btn-connect {
+#btn-connect,
+#btn-story-mode,
+#btn-solo-training {
   min-height: 48px;
   font-size: 15px;
   font-weight: 700;
@@ -13720,6 +13730,8 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
   }
 
   #btn-connect,
+  #btn-story-mode,
+  #btn-solo-training,
   .login-form .btn-settings {
     min-height: 40px;
     padding: 8px 10px;
@@ -19215,4 +19227,45 @@ html.battle-mobile-input-focus.minimal-mobile-canvas[data-ui-style="minimal"] #v
 .card.card-assembler .card-effect .inline-card-chip.choice-card-token {
   --chip-name-pad-x: 0.32em;
   --chip-max-width: 11.5em;
+}
+
+/* Intrinsically untargeted classic cards follow the pointer; the hand slot stays as the return point. */
+.classic-hand-card.has-cursor-follower {
+  pointer-events: none;
+}
+
+.classic-hand-card.has-cursor-follower::after {
+  display: none;
+}
+
+.classic-hand-card.has-cursor-follower .classic-fan-card-inner.card {
+  opacity: 0;
+}
+
+.classic-cursor-card {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1005;
+  pointer-events: none;
+  transform-origin: center;
+  transition: transform 86ms cubic-bezier(.18, .7, .28, 1);
+  will-change: transform;
+}
+
+.classic-cursor-card.is-immediate {
+  transition: none;
+}
+
+.classic-cursor-card.is-returning {
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(.22, .82, .28, 1);
+}
+
+.classic-cursor-card .classic-fan-card-inner.card {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  transform: none !important;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .3));
 }
