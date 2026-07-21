@@ -82,9 +82,8 @@ def _card_values(card):
 def _draw_cards(state, count, seed, events):
     combat = state['combat']
     drawn = []
+    overflowed = []
     for _ in range(max(0, int(count))):
-        if len(combat['hand']) >= STORY_RULES['hand_limit']:
-            break
         if not combat['draw_pile']:
             if not combat['discard_pile']:
                 break
@@ -92,42 +91,141 @@ def _draw_cards(state, count, seed, events):
             combat['discard_pile'] = []
             _rng(state, seed, 'reshuffle').shuffle(combat['draw_pile'])
         card = combat['draw_pile'].pop()
-        combat['hand'].append(card)
-        drawn.append(card['instance_id'])
+        if len(combat['hand']) >= int(STORY_RULES['hand_limit']):
+            combat['discard_pile'].append(card)
+            overflowed.append(card['instance_id'])
+        else:
+            combat['hand'].append(card)
+            drawn.append(card['instance_id'])
     if drawn:
         events.append({'type': 'draw', 'count': len(drawn), 'card_instance_ids': drawn})
+    if overflowed:
+        events.append({
+            'type': 'hand_overflow',
+            'count': len(overflowed),
+            'card_instance_ids': overflowed,
+            'hand_limit': int(STORY_RULES['hand_limit']),
+        })
 
 
-def _enemy_intent(enemy):
+def _damage_hits(amount, hits, power=0, weak=0, vulnerable=0, shield=0):
+    """Simulate physical damage exactly as combat resolution applies it."""
+    remaining_shield = max(0, int(shield))
+    values = []
+    for _ in range(max(1, int(hits))):
+        value = max(0, int(amount) + int(power))
+        if int(weak) > 0:
+            value = math.floor(value * 0.75)
+        if int(vulnerable) > 0:
+            value = math.floor(value * 1.5)
+        blocked = min(remaining_shield, value)
+        remaining_shield -= blocked
+        values.append(value - blocked)
+    return values, remaining_shield
+
+
+def _damage_summary(values):
+    values = [max(0, int(value)) for value in values]
+    if not values:
+        return '0D'
+    if len(values) > 1 and len(set(values)) == 1:
+        return f'{values[0]}D×{len(values)}'
+    if len(values) == 1:
+        return f'{values[0]}D'
+    return f"({' + '.join(str(value) for value in values)})D"
+
+
+def _enemy_intent(state, enemy):
     definition = STORY_ENEMIES[enemy['def_id']]
     move = definition['moves'][int(enemy.get('move_index') or 0) % len(definition['moves'])]
     parts = []
-    power = int(enemy.get('power') or 0)
+    simulated_power = int(enemy.get('power') or 0)
+    simulated_weak = int(enemy.get('weak') or 0)
+    simulated_vulnerable = int(state.get('combat', {}).get('vulnerable') or 0)
+    simulated_shield = int(state.get('combat', {}).get('shield') or 0)
     for effect in move['effects']:
         effect_type = effect['type']
         amount = int(effect.get('amount') or 0)
         hits = int(effect.get('hits') or 1)
         if effect_type == 'damage':
-            value = max(0, amount + power)
-            parts.append(f'{value}D' + (f'×{hits}' if hits > 1 else ''))
+            values, simulated_shield = _damage_hits(
+                amount,
+                hits,
+                power=simulated_power,
+                weak=simulated_weak,
+                vulnerable=simulated_vulnerable,
+                shield=simulated_shield,
+            )
+            parts.append(_damage_summary(values))
         elif effect_type == 'self_damage':
             parts.append(f'自身受到{amount}D')
         elif effect_type == 'gain_power':
+            simulated_power += amount
             parts.append(f'获得{amount}层力量')
         elif effect_type == 'gain_shield':
             parts.append(f'获得{amount}层护盾')
         elif effect_type == 'player_status':
             label = {'vulnerable': '易损', 'weak': '虚弱'}.get(effect.get('status'), effect.get('status'))
             parts.append(f'施加{amount}层{label}')
+            if effect.get('status') == 'vulnerable':
+                simulated_vulnerable += amount
     return {
         'name': move['name'],
         'summary': '；'.join(parts),
     }
 
 
-def _refresh_intents(combat):
+def _card_damage_prediction(state, card, enemy):
+    values = _card_values(card)
+    if values.get('type') != 'thorn' or not enemy:
+        return None
+    combat = state['combat']
+    simulated_power = int(combat.get('power') or 0)
+    simulated_weak = int(combat.get('weak') or 0)
+    simulated_vulnerable = int(enemy.get('vulnerable') or 0)
+    simulated_shield = int(enemy.get('shield') or 0)
+    predicted_hits = []
+    for effect in values.get('effects') or ():
+        effect_type = effect.get('type')
+        amount = int(effect.get('amount') or 0)
+        if effect_type == 'damage':
+            hit_values, simulated_shield = _damage_hits(
+                amount,
+                int(effect.get('hits') or 1),
+                power=simulated_power,
+                weak=simulated_weak,
+                vulnerable=simulated_vulnerable,
+                shield=simulated_shield,
+            )
+            predicted_hits.extend(hit_values)
+        elif effect_type == 'power':
+            simulated_power += amount
+        elif effect_type == 'enemy_status' and effect.get('status') == 'vulnerable':
+            simulated_vulnerable += amount
+    if not predicted_hits:
+        return None
+    return {
+        'total': sum(predicted_hits),
+        'hits': predicted_hits,
+        'summary': _damage_summary(predicted_hits),
+    }
+
+
+def _refresh_combat_projections(state):
+    combat = state.get('combat')
+    if not isinstance(combat, dict):
+        return
+    living_enemy = next(
+        (enemy for enemy in combat.get('enemies', []) if int(enemy.get('health') or 0) > 0),
+        None,
+    )
+    combat['damage_predictions'] = {
+        card['instance_id']: prediction
+        for card in combat.get('hand', [])
+        if (prediction := _card_damage_prediction(state, card, living_enemy)) is not None
+    }
     for enemy in combat.get('enemies', []):
-        enemy['intent'] = _enemy_intent(enemy)
+        enemy['intent'] = _enemy_intent(state, enemy)
 
 
 def _start_combat(state, node, seed, events):
@@ -172,7 +270,7 @@ def _start_combat(state, node, seed, events):
     state['phase'] = 'combat'
     draw_count = STORY_RULES['draw_per_turn'] + int(state['player'].get('opening_draw_bonus') or 0)
     _draw_cards(state, draw_count, seed, events)
-    _refresh_intents(state['combat'])
+    _refresh_combat_projections(state)
     events.append({'type': 'combat_start', 'enemy_id': enemy_id})
 
 
@@ -180,13 +278,18 @@ def _player_damage(state, amount, hits, events, source, attacker_id=None):
     combat = state['combat']
     total = 0
     history = []
-    for _ in range(max(1, hits)):
+    predicted, _ = _damage_hits(
+        amount,
+        hits,
+        vulnerable=combat.get('vulnerable'),
+        shield=combat.get('shield'),
+    )
+    for dealt in predicted:
         value = max(0, int(amount))
         if int(combat.get('vulnerable') or 0) > 0:
             value = math.floor(value * 1.5)
-        blocked = min(int(combat.get('shield') or 0), value)
-        combat['shield'] = int(combat.get('shield') or 0) - blocked
-        dealt = value - blocked
+        blocked = value - dealt
+        combat['shield'] = max(0, int(combat.get('shield') or 0) - blocked)
         before = int(state['player']['health'])
         state['player']['health'] = max(0, before - dealt)
         total += dealt
@@ -205,15 +308,22 @@ def _enemy_damage(state, enemy, amount, hits, events, source):
     combat = state['combat']
     total = 0
     history = []
-    for _ in range(max(1, hits)):
+    predicted, _ = _damage_hits(
+        amount,
+        hits,
+        power=combat.get('power'),
+        weak=combat.get('weak'),
+        vulnerable=enemy.get('vulnerable'),
+        shield=enemy.get('shield'),
+    )
+    for dealt in predicted:
         value = max(0, int(amount) + int(combat.get('power') or 0))
         if int(combat.get('weak') or 0) > 0:
             value = math.floor(value * 0.75)
         if int(enemy.get('vulnerable') or 0) > 0:
             value = math.floor(value * 1.5)
-        blocked = min(int(enemy.get('shield') or 0), value)
-        enemy['shield'] = int(enemy.get('shield') or 0) - blocked
-        dealt = value - blocked
+        blocked = value - dealt
+        enemy['shield'] = max(0, int(enemy.get('shield') or 0) - blocked)
         before = int(enemy['health'])
         enemy['health'] = max(0, before - dealt)
         total += dealt
@@ -368,7 +478,7 @@ def _enemy_turn(state, seed, events):
     combat['elixir'] = int(state['player']['max_elixir'])
     combat['magic'] = int(state['player']['magic'])
     _draw_cards(state, STORY_RULES['draw_per_turn'], seed, events)
-    _refresh_intents(combat)
+    _refresh_combat_projections(state)
 
 
 def _end_turn(state, seed, events):
@@ -633,5 +743,6 @@ def apply_story_action(source_state, action_type, payload, seed):
     if not handler:
         _fail('UNKNOWN_ACTION', '未知故事操作')
     handler()
+    _refresh_combat_projections(state)
     state['last_events'] = events[-20:]
     return state, events

@@ -392,7 +392,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260721-story-no-log-mod-errors-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260721-plank-attack-only-7'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -4319,6 +4319,13 @@ def emit_pregame_timer_update(room, pidx, status=None):
 
 def _default_event_sub_choice(engine, pidx):
     event_id = str(getattr(engine, 'opening_event_picks', [None])[pidx])
+    if event_id == '3':
+        candidates = list(getattr(engine, 'draft_picks', [[]])[pidx] or [])
+        selected = [
+            str(def_id) for def_id in candidates
+            if engine._opening_light_source_allowed(str(def_id))
+        ][:5]
+        return {'convert_def_ids': selected}
     if event_id == '5':
         for def_id in list(engine.fated_draw_pool_defs() if hasattr(engine, 'fated_draw_pool_defs') else []):
             if engine._card_allowed_for_fated_draw(str(def_id)):
@@ -4412,9 +4419,53 @@ def _auto_confirm_opening_reveal_locked(room, pidx):
     return True
 
 
+def _event_sub_choice_sequence_issue(engine, pidx):
+    player_count = len(getattr(engine, 'players', []) or [])
+    if pidx < 0 or pidx >= player_count:
+        return 'invalid_player'
+    if getattr(engine, 'phase', None) != 'draft':
+        return 'not_draft_phase'
+    if getattr(engine, 'opening_event_picks', [None] * player_count)[pidx] is None:
+        return 'opening_event_missing'
+    if not bool(getattr(engine, 'player_draft_started', [False] * player_count)[pidx]):
+        return 'draft_not_started'
+    picks = getattr(engine, 'draft_picks', [[] for _ in range(player_count)])[pidx]
+    target = engine.draft_target_count(pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
+    if len(picks) != target:
+        return 'draft_incomplete'
+    requires = getattr(engine, 'opening_event_requires_sub_choice', None)
+    if not callable(requires) or not requires(pidx):
+        return 'event_has_no_sub_choice'
+    if bool(getattr(engine, 'player_ready', [False] * player_count)[pidx]):
+        return 'already_ready'
+    return None
+
+
+def _pregame_security_details(engine, pidx, reason):
+    player_count = len(getattr(engine, 'players', []) or [])
+    picks = getattr(engine, 'draft_picks', [[] for _ in range(player_count)])
+    event_picks = getattr(engine, 'opening_event_picks', [None] * player_count)
+    started = getattr(engine, 'player_draft_started', [False] * player_count)
+    ready = getattr(engine, 'player_ready', [False] * player_count)
+    target = None
+    if 0 <= pidx < player_count and hasattr(engine, 'draft_target_count'):
+        target = engine.draft_target_count(pidx)
+    return {
+        'hard_illegal': False,
+        'reason': reason,
+        'pidx': pidx,
+        'phase': getattr(engine, 'phase', None),
+        'event_id': event_picks[pidx] if 0 <= pidx < len(event_picks) else None,
+        'draft_started': bool(started[pidx]) if 0 <= pidx < len(started) else False,
+        'draft_count': len(picks[pidx]) if 0 <= pidx < len(picks) else None,
+        'draft_target': target,
+        'ready': bool(ready[pidx]) if 0 <= pidx < len(ready) else False,
+    }
+
+
 def _auto_submit_event_sub_choice_locked(room, pidx):
     engine = room.engine
-    if bool(getattr(engine, 'player_ready', [False] * len(room.player_sids))[pidx]):
+    if _event_sub_choice_sequence_issue(engine, pidx) is not None:
         return False
     if not engine.needs_sub_choice(pidx):
         return False
@@ -4724,6 +4775,9 @@ SOCKET_EVENT_LIMITS = {
     'draft_pick': (40, 60),
     'draft_reroll': (8, 60),
     'select_opening_event': (10, 60),
+    'confirm_opening_reveal': (12, 60),
+    'submit_event_sub_choice': (12, 60),
+    'reroll_opening_event': (8, 60),
     'request_pregame_state': (12, 60),
     'request_game_state': (20, 60),
     'play_card': (30, 30),
@@ -4769,6 +4823,10 @@ SOFT_REJECT_EVENT_NAMES = {
     'end_turn',
     'ally_consent_response',
     'request_game_state',
+    'draft_pick',
+    'select_opening_event',
+    'confirm_opening_reveal',
+    'submit_event_sub_choice',
 }
 SOFT_REJECT_CODES = {
     'WAITING_FOR_RESPONSE',
@@ -4786,6 +4844,7 @@ SOFT_REJECT_CODES = {
     'CARD_NOT_PLAYABLE_NOW',
     'TRIGGER_NOT_PLAYABLE_NOW',
     'END_TURN_NOT_ALLOWED_NOW',
+    'PREGAME_SEQUENCE_INVALID',
 }
 SOFT_REJECT_MESSAGES = {
     'WAITING_FOR_RESPONSE': '正在等待反制响应',
@@ -4803,6 +4862,7 @@ SOFT_REJECT_MESSAGES = {
     'CARD_NOT_PLAYABLE_NOW': '这张牌现在不能打出',
     'TRIGGER_NOT_PLAYABLE_NOW': '这个装备现在不能触发',
     'END_TURN_NOT_ALLOWED_NOW': '当前不能结束回合',
+    'PREGAME_SEQUENCE_INVALID': '配装或选牌阶段已更新，请按当前界面操作',
 }
 
 
@@ -11396,6 +11456,18 @@ def start_game(room):
     try:
         if getattr(room.engine, 'phase', None) not in ('event_select', 'event_reveal', 'draft'):
             return
+        validator = getattr(room.engine, 'validate_pregame_ready', None)
+        if callable(validator):
+            valid, reason, details = validator()
+            if not valid:
+                admin_event(
+                    'warning',
+                    f'blocked invalid pregame start room={room.room_id} reason={reason} details={details}',
+                    room_id=room.room_id,
+                )
+                for pidx in range(len(getattr(room, 'player_sids', []) or [])):
+                    schedule_pregame_state(room, pidx, allow_sub_choice=True)
+                return
         for sid in getattr(room, 'player_sids', []) or []:
             if sid in players:
                 players[sid]['status'] = 'in_game'
@@ -11432,7 +11504,8 @@ def start_random_deck_room(room):
     room.engine.draft_picks = [list(deck_def_ids), list(deck_def_ids)]
     room.engine.player_ready = [True, True]
     room.engine.player_draft_started = [True, True]
-    room.engine.start_game()
+    if room.engine.start_game(skip_pregame_validation=True) is False:
+        raise RuntimeError('随机卡组引擎启动失败')
     room.started_at = time.time()
     admin_event('game', f'room {room.room_id} started mode={room.mode} random_deck={deck_def_ids}')
     record_room_replay_keyframe(room, 'game_start')
@@ -17190,11 +17263,10 @@ def on_select_opening_event(data):
         if success:
             enqueue_opening_event_pick(room.mode, option_ids, event_id)
             _reset_pregame_deadline(room, pidx, 'event_select')
-            if sub_choice:
-                engine.opening_event_sub_choices[pidx] = sub_choice
             record_room_replay_action(room, 'select_opening_event', pidx, {
                 'event_id': event_id,
-                'sub_choice': sub_choice,
+                # Setup choices are accepted only after this player finishes drafting.
+                'sub_choice': None,
             })
             if all(pick is not None for pick in engine.opening_event_picks):
                 record_room_replay_keyframe(room, 'event_reveal')
@@ -17267,7 +17339,17 @@ def on_submit_event_sub_choice(data):
     data = socket_guard('submit_event_sub_choice', data, require_player=True)
     if data is None:
         return
-    sub_choice = validate_choice_payload(data.get('sub_choice'))
+    try:
+        sub_choice = validate_choice_payload(data.get('sub_choice'))
+    except ValueError as exc:
+        _security_illegal(sid, 'submit_event_sub_choice', str(exc))
+        return
+    room = None
+    pidx = -1
+    reject_reason = None
+    resend_only = False
+    should_start = False
+    status_targets = []
     with _lock:
         if sid not in players:
             return
@@ -17280,12 +17362,21 @@ def on_submit_event_sub_choice(data):
         if pidx < 0:
             return
         engine = room.engine
-        if getattr(engine, 'phase', None) not in ('event_select', 'event_reveal', 'draft'):
-            return
-        if bool(getattr(engine, 'player_ready', [False] * len(room.player_sids))[pidx]):
-            schedule_pregame_state(room, pidx)
-            return
-        if str(engine.opening_event_picks[pidx]) == '5':
+        reject_reason = _event_sub_choice_sequence_issue(engine, pidx)
+        if reject_reason is None and str(engine.opening_event_picks[pidx]) == '3':
+            raw_ids = []
+            if isinstance(sub_choice, dict):
+                raw_ids = list(sub_choice.get('convert_def_ids') or sub_choice.get('def_ids') or [])
+            remaining = [str(def_id) for def_id in list(engine.draft_picks[pidx] or [])]
+            valid_ids = []
+            for def_id in raw_ids[:5]:
+                def_id = str(def_id)
+                if def_id not in remaining or not engine._opening_light_source_allowed(def_id):
+                    continue
+                remaining.remove(def_id)
+                valid_ids.append(def_id)
+            sub_choice = {'convert_def_ids': valid_ids}
+        if reject_reason is None and str(engine.opening_event_picks[pidx]) == '5':
             raw_ids = []
             if isinstance(sub_choice, dict):
                 raw_ids = list(sub_choice.get('add_def_ids') or sub_choice.get('def_ids') or [])
@@ -17294,10 +17385,10 @@ def on_submit_event_sub_choice(data):
                 if engine._card_allowed_for_fated_draw(str(def_id)):
                     valid_ids.append(str(def_id))
             if len(valid_ids) != 1:
-                schedule_pregame_state(room, pidx, allow_sub_choice=True)
-                return
-            sub_choice = {'add_def_ids': valid_ids}
-        if str(engine.opening_event_picks[pidx]) == '11':
+                resend_only = True
+            else:
+                sub_choice = {'add_def_ids': valid_ids}
+        if reject_reason is None and not resend_only and str(engine.opening_event_picks[pidx]) == '11':
             raw_ids = []
             if isinstance(sub_choice, dict):
                 raw_ids = list(sub_choice.get('topdeck_def_ids') or sub_choice.get('def_ids') or [])
@@ -17312,32 +17403,53 @@ def on_submit_event_sub_choice(data):
                 remaining.remove(def_id)
                 valid_ids.append(def_id)
             if len(valid_ids) != required or len(raw_ids) != required:
-                schedule_pregame_state(room, pidx, allow_sub_choice=True)
-                return
-            sub_choice = {'topdeck_def_ids': valid_ids}
-        event_id_text = str(engine.opening_event_picks[pidx])
-        # Built-in setup sub-choices are "choose up to N" or have an engine fallback.
-        # An empty/null payload is therefore a valid confirmation for them, not a
-        # reason to keep the player stuck in the sub-choice UI.
-        if sub_choice is None and event_id_text in ('2', '3', '5', '8', '11'):
-            sub_choice = {}
-        if sub_choice is None and engine.needs_sub_choice(pidx):
-            schedule_pregame_state(room, pidx, allow_sub_choice=True)
-            return
-        engine.opening_event_sub_choices[pidx] = sub_choice or {}
-        _reset_pregame_deadline(room, pidx, 'sub_choice')
-        record_room_replay_action(room, 'submit_event_sub_choice', pidx, {
-            'event_id': engine.opening_event_picks[pidx],
-            'sub_choice': sub_choice or {},
-        })
-        # Mark this player as ready
-        engine.player_ready[pidx] = True
-        # Check if all players are ready
-        if all(engine.player_ready[pi] for pi in range(len(room.player_sids))):
-            schedule_start_game(room)
-        else:
-            schedule_pregame_state(room, pidx)
-            schedule_pregame_status_update(room, targets=[pi for pi in range(len(room.player_sids)) if pi != pidx])
+                resend_only = True
+            else:
+                sub_choice = {'topdeck_def_ids': valid_ids}
+        if reject_reason is None and not resend_only:
+            event_id_text = str(engine.opening_event_picks[pidx])
+            # Built-in setup choices allow an explicit empty confirmation.
+            if sub_choice is None and event_id_text in ('2', '3', '5', '8', '11'):
+                sub_choice = {}
+            if sub_choice is None and engine.needs_sub_choice(pidx):
+                resend_only = True
+            else:
+                engine.opening_event_sub_choices[pidx] = sub_choice or {}
+                _reset_pregame_deadline(room, pidx, 'sub_choice')
+                record_room_replay_action(room, 'submit_event_sub_choice', pidx, {
+                    'event_id': engine.opening_event_picks[pidx],
+                    'sub_choice': sub_choice or {},
+                })
+                engine.player_ready[pidx] = True
+                should_start = all(engine.player_ready[pi] for pi in range(len(room.player_sids)))
+                status_targets = [pi for pi in range(len(room.player_sids)) if pi != pidx]
+
+    if reject_reason is not None:
+        details = _pregame_security_details(room.engine, pidx, reject_reason)
+        _security_record(
+            'pregame_sequence',
+            f'rejected out-of-order event sub-choice room={room.room_id} reason={reject_reason}',
+            sid=sid,
+            severity='high',
+            extra=details,
+        )
+        soft_reject(
+            sid,
+            'submit_event_sub_choice',
+            'PREGAME_SEQUENCE_INVALID',
+            room=room,
+            pidx=pidx,
+        )
+        schedule_pregame_state(room, pidx, allow_sub_choice=True)
+        return
+    if resend_only:
+        schedule_pregame_state(room, pidx, allow_sub_choice=True)
+        return
+    if should_start:
+        schedule_start_game(room)
+    else:
+        schedule_pregame_state(room, pidx)
+        schedule_pregame_status_update(room, targets=status_targets)
 
 
 @socketio.on('solo_start')

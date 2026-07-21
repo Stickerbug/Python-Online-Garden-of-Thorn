@@ -251,6 +251,16 @@ class GameEngine2v2(GameEngine):
     def start_draft_for_player(self, player_id: int):
         """Initialize draft for a specific player after they select their event.
         Called independently per player - no need to wait for others."""
+        if player_id < 0 or player_id >= len(self.players):
+            return False
+        if self.phase not in ('event_select', 'event_reveal', 'draft'):
+            return False
+        if self.player_draft_started[player_id]:
+            return False
+        if self.opening_event_picks[player_id] is None:
+            return False
+        if not all(pick is not None for pick in self.opening_event_picks):
+            return False
         # Initialize draft pool and type order on first call
         if not self.draft_pool:
             self.draft_pool = build_draft_pool(self.allowed_card_ids)
@@ -262,10 +272,10 @@ class GameEngine2v2(GameEngine):
         if not self.draft_picks[player_id]:
             self.draft_picks[player_id] = []
         self.player_draft_started[player_id] = True
+        self.phase = 'draft'
         # Generate draft options for this player
         self._generate_draft_options_for_player(player_id)
-        # Update global phase
-        self.phase = 'draft'
+        return True
 
     def start_draft(self):
         self.phase = 'draft'
@@ -285,6 +295,8 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '无效玩家'}
         if self.phase != 'draft':
             return {'success': False, 'error': '不在选牌阶段'}
+        if not self.player_draft_started[player_id]:
+            return {'success': False, 'error': '该玩家尚未开始选牌'}
         options = self.draft_options[player_id]
         found = None
         for c in options:
@@ -313,9 +325,14 @@ class GameEngine2v2(GameEngine):
             return set()
         return {random.choice(team_picks[winner_team])}
 
-    def start_game(self):
+    def start_game(self, *, skip_pregame_validation: bool = False):
         if self._game_start_applied:
             return False
+        if not skip_pregame_validation:
+            valid, reason, details = self.validate_pregame_ready()
+            if not valid:
+                self._last_pregame_validation_error = {'reason': reason, 'details': details}
+                return False
         self._game_start_applied = True
         self.phase = 'playing'
         force_first = sorted(self._effective_first_pressure_players())
@@ -502,6 +519,7 @@ class GameEngine2v2(GameEngine):
         ):
             self._clear_invincible_state(player_id)
             self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
+        self._decay_ocean_card_charge_turn_end(player_id)
         self._bio_turn_end_cleanup(player_id)
         self._save_last_turn_damage_snapshot(player_id)
         self._advance_turn()
@@ -724,6 +742,8 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '无效玩家'}
         if self.phase != 'draft':
             return {'success': False, 'error': '不在选牌阶段'}
+        if not self.player_draft_started[player_id]:
+            return {'success': False, 'error': '该玩家尚未开始选牌'}
         if self.draft_rerolls[player_id] <= 0:
             return {'success': False, 'error': '没有重选次数'}
         self.draft_rerolls[player_id] -= 1
@@ -731,7 +751,13 @@ class GameEngine2v2(GameEngine):
         return {'success': True, 'rerolls_left': self.draft_rerolls[player_id]}
 
     def _generate_draft_options_for_player(self, player_id: int):
+        if player_id < 0 or player_id >= len(self.players):
+            return
+        if self.phase != 'draft' or not self.player_draft_started[player_id]:
+            return
         if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
+            return
+        if len(self.draft_type_order) <= len(self.draft_picks[player_id]):
             return
         card_type = self.draft_type_order[len(self.draft_picks[player_id])]
         self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
@@ -1227,7 +1253,6 @@ class GameEngine2v2(GameEngine):
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = 0 if auto_no_cost else max(0, int(card.cost_e + extra_e))
         total_m = 0 if auto_no_cost else int(card.cost_m)
-        total_e = self._bio_replace_paid_e_cost(player_id, card, total_e, auto_no_cost)
         card._paid_e_this_play = int(total_e)
         card._paid_m_this_play = int(total_m)
         self._spend_resource(player_id, 'elixir', total_e, card)
@@ -1901,7 +1926,10 @@ class GameEngine2v2(GameEngine):
                 continue
             if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
                 try:
-                    if int(getattr(source_card, 'cost_e', 0) or 0) <= 1:
+                    if (
+                        getattr(source_card, 'card_type', '') == 'thorn'
+                        and int(getattr(source_card, 'cost_e', 0) or 0) <= 1
+                    ):
                         plank_blocks_attack = True
                 except Exception:
                     pass

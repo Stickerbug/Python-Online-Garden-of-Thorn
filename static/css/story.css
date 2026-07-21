@@ -1221,6 +1221,25 @@ a { font: inherit; }
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
+.story-card-damage-prediction {
+  min-height: 12cqi;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2cqi;
+  padding: 1.4cqi 3cqi 3.4cqi;
+  color: var(--thorn);
+  font-family: var(--font-main);
+  font-size: 6.8cqi;
+  line-height: 1;
+  white-space: nowrap;
+}
+.story-card-damage-prediction strong {
+  font-family: var(--font-card);
+  font-size: 8.6cqi;
+  font-weight: 700;
+}
 .story-card-note {
   position: absolute;
   right: 5px;
@@ -1740,7 +1759,6 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   --story-avatar-width: clamp(64px, 7.56vw, 116px);
   --story-fighter-scale: .91;
   --story-hp-width: 160px;
-  --story-resource-width: 260px;
   --story-name-max-width: 260px;
   display: grid;
   justify-items: center;
@@ -1764,42 +1782,6 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   text-align: center;
   transform: translateY(3px);
 }
-
-.story-fighter-resources {
-  width: var(--story-resource-width);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  justify-self: center;
-  gap: 3px;
-  transform: translateY(3px);
-}
-
-.story-stat-strip {
-  min-height: 22px;
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) max-content;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 4px;
-  border: 1px solid var(--story-line-soft);
-  border-radius: 4px;
-  color: #243042;
-  background: rgba(255, 255, 255, .92);
-  font-size: 11px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-}
-.story-stat-strip img { width: 17px; height: 17px; object-fit: contain; filter: drop-shadow(0 1px 1px rgba(36, 48, 66, .14)); }
-.story-stat-strip span { justify-self: center; font-size: 9px; line-height: 1; }
-.story-stat-track {
-  height: 13px;
-  overflow: hidden;
-  border: 2px solid rgba(72, 24, 24, .28);
-  border-radius: 4px;
-  background: #f0e3e3;
-}
-.story-stat-fill { width: 0; height: 100%; border-radius: 1px; background: #f1c40f; transition: width 250ms ease; }
-.story-stat-m .story-stat-fill { background: var(--magic); }
 
 .story-portrait {
   width: var(--story-avatar-width);
@@ -2038,7 +2020,6 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 @media (max-width: 980px), (max-height: 620px) {
   .story-actor { --story-fighter-scale: .78; }
-  .story-fighter-resources { width: 220px; }
   .story-health-wrap { width: 142px; }
   .story-icon-counter { min-width: 34px; padding: 1px 3px; font-size: 10px; }
   .story-icon-counter img { width: 14px; height: 14px; }

@@ -261,6 +261,7 @@ VALID_LOGIC_OPS = {
     "jurassic_magic_fang",
     "jurassic_blood_turn_start",
     "jurassic_add_power_to_hand",
+    "jurassic_clear_self_power",
     "jurassic_oil_turn_start",
     "jurassic_magic_rock",
     "jurassic_amulet",

@@ -16763,22 +16763,22 @@ html[data-ui-style="minimal"] .btn-end-turn {
 .battle-classic.is-2v2 #classic-fighter-enemy {
   position: static;
   transform: translateY(clamp(-12px, -1.4vh, -4px)) scale(var(--classic-fighter-scale));
-  grid-column: 1;
+  grid-column: 3;
   grid-row: 1;
 }
 
 .battle-classic.is-2v2 #classic-fighter-enemy-2 {
   position: static;
-  transform: translateY(clamp(-12px, -1.4vh, -4px)) scale(var(--classic-fighter-scale));
+  transform: translateY(clamp(58px, 8.8vh, 104px)) scale(var(--classic-fighter-scale));
   grid-column: 3;
-  grid-row: 1;
+  grid-row: 2;
 }
 
 .battle-classic.is-2v2 #classic-fighter-ally {
   position: static;
-  transform: translateY(clamp(58px, 8.8vh, 104px)) scale(var(--classic-fighter-scale));
-  grid-column: 3;
-  grid-row: 2;
+  transform: translateY(clamp(-12px, -1.4vh, -4px)) scale(var(--classic-fighter-scale));
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .classic-stage::after {
@@ -17686,11 +17686,11 @@ button.armor-meter:focus-visible {
     padding: 0;
   }
   .battle-classic.is-2v2 #classic-fighter-self,
-  .battle-classic.is-2v2 #classic-fighter-ally {
+  .battle-classic.is-2v2 #classic-fighter-enemy-2 {
     transform: translateY(clamp(36px, 7vh, 60px)) scale(var(--classic-fighter-scale));
   }
-  .battle-classic.is-2v2 #classic-fighter-enemy,
-  .battle-classic.is-2v2 #classic-fighter-enemy-2 {
+  .battle-classic.is-2v2 #classic-fighter-ally,
+  .battle-classic.is-2v2 #classic-fighter-enemy {
     transform: translateY(clamp(-10px, -1.2vh, -4px)) scale(var(--classic-fighter-scale));
   }
 }

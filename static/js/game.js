@@ -6279,6 +6279,32 @@ const CHANGELOG_CACHE_KEY = 'gtn_changelog_cache_v1';
 const CHANGELOG_READ_VERSION_KEY = 'gtn_changelog_read_version_v1';
 const CHANGELOG_READ_DATE_KEY = 'gtn_changelog_read_latest_date_v1';
 const CHANGELOG_BOOT_VERSION_KEY = 'gtn_changelog_boot_version_v1';
+const changelogReadMemory = new Map();
+
+function readChangelogMarker(key) {
+    if (changelogReadMemory.has(key)) return String(changelogReadMemory.get(key) || '');
+    let value = '';
+    try { value = String(localStorage.getItem(key) || ''); } catch (_) {}
+    if (!value) {
+        try {
+            const prefix = `${encodeURIComponent(key)}=`;
+            const part = String(document.cookie || '').split('; ')
+                .find(item => item.startsWith(prefix));
+            if (part) value = decodeURIComponent(part.slice(prefix.length));
+        } catch (_) {}
+    }
+    changelogReadMemory.set(key, value);
+    return value;
+}
+
+function writeChangelogMarker(key, value) {
+    const text = String(value || '');
+    changelogReadMemory.set(key, text);
+    try { localStorage.setItem(key, text); } catch (_) {}
+    try {
+        document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(text)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+    } catch (_) {}
+}
 
 function currentChangelogCacheVersion() {
     return String(window.__GTN_CHANGELOG_VERSION__ || window.__GTN_STATIC_VERSION__ || window.__GTN_APP_VERSION__ || window.__GTN_INSTANCE_ID__ || 'dev');
@@ -6328,9 +6354,9 @@ function renderChangelogItems(items) {
 function getChangelogUnreadCount(cache = changelogCache) {
     if (!cache || !Array.isArray(cache.items) || !cache.items.length) return 0;
     const serverVersion = String(cache.serverVersion || '');
-    const readVersion = String(localStorage.getItem(CHANGELOG_READ_VERSION_KEY) || '');
+    const readVersion = readChangelogMarker(CHANGELOG_READ_VERSION_KEY);
     if (serverVersion && readVersion === serverVersion) return 0;
-    const readDate = String(localStorage.getItem(CHANGELOG_READ_DATE_KEY) || '');
+    const readDate = readChangelogMarker(CHANGELOG_READ_DATE_KEY);
     if (!readDate) return Math.min(cache.items.length, 99);
     const newerCount = cache.items.filter(item => String(item && item.date || '') > readDate).length;
     return Math.min(Math.max(newerCount, serverVersion ? 1 : 0), 99);
@@ -6356,10 +6382,8 @@ function isChangelogPopoverOpen() {
 
 function markChangelogRead() {
     if (!changelogCache || !Array.isArray(changelogCache.items) || !changelogCache.items.length) return;
-    try {
-        localStorage.setItem(CHANGELOG_READ_VERSION_KEY, String(changelogCache.serverVersion || ''));
-        localStorage.setItem(CHANGELOG_READ_DATE_KEY, String(changelogCache.items[0] && changelogCache.items[0].date || ''));
-    } catch (_) {}
+    writeChangelogMarker(CHANGELOG_READ_VERSION_KEY, changelogCache.serverVersion || '');
+    writeChangelogMarker(CHANGELOG_READ_DATE_KEY, changelogCache.items[0] && changelogCache.items[0].date || '');
     updateChangelogBadge();
 }
 
@@ -6428,9 +6452,9 @@ function initChangelogBadge() {
     loadCachedChangelog();
     updateChangelogBadge();
     const cacheVersion = currentChangelogCacheVersion();
-    const lastBootVersion = String(localStorage.getItem(CHANGELOG_BOOT_VERSION_KEY) || '');
+    const lastBootVersion = readChangelogMarker(CHANGELOG_BOOT_VERSION_KEY);
     if (cacheVersion && lastBootVersion !== cacheVersion) {
-        try { localStorage.setItem(CHANGELOG_BOOT_VERSION_KEY, cacheVersion); } catch (_) {}
+        writeChangelogMarker(CHANGELOG_BOOT_VERSION_KEY, cacheVersion);
         loadChangelog(true, { silent: true });
     }
 }
@@ -10864,6 +10888,7 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     let shield = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:shield', 'shield');
     const weakness = attackerImmune ? 0 : Math.max(0, Number(attackerState && attackerState.weakness || 0));
     const plankBlocks = predictionPlayerHasEquipment(targetState, 'Plank', 'jungle:plank')
+        && String(cardDict && cardDict.card_type || cardDef && cardDef.card_type || '').toLowerCase() === 'thorn'
         && Number(cardDict && cardDict.cost_e || cardDef && cardDef.cost_e || 0) <= 1;
     let nazarStacks = immune ? 0 : getPredictionCustomStatusValue(targetState, 'nazar', '邪眼', 'Nazar');
     if (!immune && targetState && targetState.nazar_active) {
@@ -11295,13 +11320,16 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             const fusion = Math.max(1, Math.floor(Number(card.fusion_level || card.fusion_multiplier || 1)));
             const repeats = fission + Math.max(0, Math.floor(Number(card.extra_hits || 0)));
             const bonus = Math.max(0, Math.floor(Number(card.bonus_damage || 0)));
+            const power = Math.floor(Number(card.power_value || 0));
             let health = Math.max(0, Number(targetState.health || 0));
+            let firstAttack = true;
             for (let i = 0; i < spend && health > 0; i++) {
                 for (let hit = 0; hit < repeats && health > 0; hit++) {
                     const base = Math.max(minimum, Math.ceil(health * percent));
-                    const amount = Math.ceil((base + bonus) * fusion / fission);
+                    const amount = Math.max(0, Math.ceil((base + bonus) * fusion / fission) + (firstAttack ? power : 0));
                     prediction.target.damageHits.push(amount);
                     health = Math.max(0, health - amount);
+                    firstAttack = false;
                 }
             }
             localContext.lastDamage = prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
@@ -11720,7 +11748,7 @@ function getTermIntroLibrary() {
         same_name_penalty: { label: lt({ zh: '同名卡惩罚', en: 'Same-name penalty', fr: 'Pénalité de même nom', ja: '同名カードペナルティ' }), desc: lt({ zh: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', en: 'Playing the same card name repeatedly in one turn costs extra E. Symbiosis ignores it.', fr: 'Jouer plusieurs fois le même nom pendant un tour coûte du E supplémentaire. Symbiose l’ignore.', ja: '同一ターンに同名カードを繰り返すと追加 E が必要です。共生は無視します。' }), color: COLORS.elixir },
         revealed: { label: UI.tag_revealed || lt({ zh: '被揭示', en: 'Revealed', fr: 'Révélé', ja: '公開' }), desc: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, this card is always visible to opponents.', fr: 'Tant qu’elle est en main, cette carte reste visible pour les adversaires.', ja: '手札にある間、相手に常に見えます。' }), color: '#E74C3C' },
         sublime: { label: UI.tag_sublime || lt({ zh: '崇高', en: 'Sublime', fr: 'Sublime', ja: '崇高' }), desc: lt({ zh: '带有此标签的牌无法被除打出外的行为选中。', en: 'Cards with this tag cannot be selected by actions other than playing them.', fr: 'Les cartes avec ce tag ne peuvent pas être choisies par des actions autres que leur utilisation.', ja: 'このタグを持つカードは、使用以外の行動では選択できません。' }), color: '#9A7A12' },
-        charge: { label: UI.tag_charge || lt({ zh: '电荷', en: 'Charge', fr: 'Charge', ja: '電荷' }), desc: lt({ zh: '带有此效果的牌打出时，对自己造成等同于电荷层数的电伤；持有者回合开始时，电荷层数-1。', en: 'When this card is played, it deals electric damage to its owner equal to its stacks; at the owner’s turn start, it loses 1 stack.', fr: 'Quand cette carte est jouée, elle inflige à son propriétaire des dégâts électriques égaux à ses charges ; au début du tour du propriétaire, elle perd 1 charge.', ja: 'このカードを使う時、層数分の電撃ダメージを自分に与えます。所持者のターン開始時に1層減ります。' }), color: '#4BA3FF' },
+        charge: { label: UI.tag_charge || lt({ zh: '电荷', en: 'Charge', fr: 'Charge', ja: '電荷' }), desc: lt({ zh: '带有此效果的牌打出时，对自己造成等同于电荷层数的电伤；持有者回合结束时，电荷层数-1。', en: 'When this card is played, it deals electric damage to its owner equal to its stacks; at the owner’s turn end, it loses 1 stack.', fr: 'Quand cette carte est jouée, elle inflige à son propriétaire des dégâts électriques égaux à ses charges ; à la fin du tour du propriétaire, elle perd 1 charge.', ja: 'このカードを使う時、層数分の電撃ダメージを自分に与えます。所持者のターン終了時に1層減ります。' }), color: '#4BA3FF' },
         ocean_blinded: { label: UI.tag_ocean_blinded || lt({ zh: '蒙蔽', en: 'Obscured', fr: 'Obscurci', ja: '蒙蔽' }), desc: lt({ zh: '这张牌在自己手中时只能看到问号；持有者下个回合结束，或离开手牌区时失效。', en: 'While in its owner’s hand, this card is shown as unknown. It clears at that owner’s next turn end or when the card leaves hand.', fr: 'Tant qu’elle est dans la main de son propriétaire, cette carte apparaît inconnue. Se dissipe à la fin du prochain tour du propriétaire ou quand elle quitte la main.', ja: '所持者の手札にある間、このカードは不明表示になります。次の所持者ターン終了時、または手札を離れると消えます。' }), color: '#2C3E50' },
         wide_strike: { label: UI.tag_wide_strike || lt({ zh: '广域打击', en: 'Wide Strike', fr: 'Frappe large', ja: '広域打撃' }), desc: lt({ zh: '使用时分别对除自己外的所有可选中目标生效，不进入目标选择；若同时拥有自刃，则也对自己生效。', en: 'When played, affects every selectable target except its user without choosing a target. If it also has Self-target, it affects its user too.', fr: 'À l’utilisation, affecte toutes les cibles sélectionnables sauf son utilisateur, sans choix de cible. Avec Auto-ciblage, elle affecte aussi son utilisateur.', ja: '使用時、対象を選ばず、自分以外の選択可能な全対象に効果を与えます。自刃も持つ場合は自分も含みます。' }), color: '#1F9D8A' },
         self_target: { label: UI.tag_self_target || lt({ zh: '自刃', en: 'Self-cut', fr: 'Auto-ciblage', ja: '自刃' }), desc: lt({ zh: '这张攻击牌可以选择自己为目标。', en: 'This Thorn card can choose its owner as a target.', fr: 'Cette carte Thorn peut choisir son propriétaire comme cible.', ja: 'この攻撃カードは自分を対象にできます。' }), color: '#B02A37' },
@@ -14695,9 +14723,10 @@ function normalizeSkinLook(raw) {
     };
 }
 
-function skinLookCssVars(rawLook) {
+function skinLookCssVars(rawLook, mirrorX = false) {
     const look = normalizeSkinLook(rawLook);
-    return `--skin-look-x:${(look.x * SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%;--skin-look-y:${(look.y * SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`;
+    const lookX = mirrorX ? -look.x : look.x;
+    return `--skin-look-x:${(lookX * SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%;--skin-look-y:${(look.y * SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`;
 }
 
 function isLocalSkinLookPlayerId(id) {
@@ -14737,7 +14766,8 @@ function setSkinLookForPlayerId(id, look, { local = false } = {}) {
 function applySkinLookVarsToAvatar(avatar, look) {
     if (!avatar || !avatar.style) return;
     const normalized = normalizeSkinLook(look);
-    avatar.style.setProperty('--skin-look-x', `${(normalized.x * SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%`);
+    const lookX = avatar.dataset && avatar.dataset.mirrorLookX === '1' ? -normalized.x : normalized.x;
+    avatar.style.setProperty('--skin-look-x', `${(lookX * SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%`);
     avatar.style.setProperty('--skin-look-y', `${(normalized.y * SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`);
 }
 
@@ -14928,12 +14958,14 @@ function renderSkinAvatar(skinInput, options = {}) {
     }
     const defeatedSeed = String(options.defeatedSeed || options.playerId || options.lookOwner || skin.primary_color || 'skin');
     const defeatedRotate = 10 + (hashStringToHue(defeatedSeed) % 341);
-    const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};--skin-defeat-rotate:${defeatedRotate}deg;${skinLookCssVars(look)}`;
+    const mirrorLookX = !!options.mirrorLookX;
+    const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};--skin-defeat-rotate:${defeatedRotate}deg;${skinLookCssVars(look, mirrorLookX)}`;
     const ownerAttr = pid != null
         ? ` data-player-id="${pid}"`
         : ` data-look-owner="${escapeHtml(options.lookOwner || 'local')}"`;
+    const mirrorAttr = mirrorLookX ? ' data-mirror-look-x="1"' : '';
     return `
-        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${defeatedClass}${defeatEnterClass}${corrupted ? ' is-corrupted' : ''}${corruptAnimateClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr} style="${style}">
+        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${defeatedClass}${defeatEnterClass}${corrupted ? ' is-corrupted' : ''}${corruptAnimateClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr}${mirrorAttr} style="${style}">
             <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
             <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
             <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
@@ -19723,8 +19755,12 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
         return { conversions };
     }
     if (eventId === 3) {
+        const eligible = deck.filter(item => {
+            const def = getCardDef(item && item.def_id);
+            return def && def.id !== 'Light' && item.def_id !== 'Light' && def.card_type !== 'thorn';
+        });
         const selected = await showSetupCardMultiSelect(
-            deck,
+            eligible,
             5,
             `${label} ${UI.choose_light_cards || '选择光之洗礼牌'}`,
             { min: 0, excludeDefIds: ['Light'] }
@@ -20753,7 +20789,10 @@ async function showMagicConversionFlow() {
 
 async function showLightConversionChoice() {
     const draftPicks = (eventSelectData.draft_picks || [])
-        .filter(defId => defId !== 'Light')
+        .filter(defId => {
+            const def = getCardDef(defId);
+            return defId !== 'Light' && def && def.card_type !== 'thorn';
+        })
         .map(defId => ({ def_id: defId }));
     if (!draftPicks.length) return null;
     const selected = await showSetupCardMultiSelect(
@@ -21729,6 +21768,7 @@ function renderPlayerAvatar(player, options = {}) {
         defeatedSeed: `${p.id ?? ''}:${p.name || ''}`,
         corrupted: !!p.hasCorruptionEquipment,
         animateCorruption: shouldAnimateSkinCorruption(p.id, !!p.hasCorruptionEquipment, 'classic'),
+        mirrorLookX: !!options.mirrorLookX,
     });
     const skinClass = image ? '' : ' has-skin';
     return `
@@ -22258,7 +22298,9 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
             ${renderClassicStatStrip('m', player.m, player.maxM, !!masks.maskResources)}
         </div>
         <div class="classic-avatar-stack">
-            ${renderPlayerAvatar(player)}
+            ${renderPlayerAvatar(player, {
+                mirrorLookX: container.id === 'classic-fighter-enemy' || container.id === 'classic-fighter-enemy-2',
+            })}
             <div class="classic-equipment-ring">${renderClassicEquipmentList(player)}</div>
         </div>
         <div class="classic-hp-wrap" data-bar-key="health" data-bar-label="H" data-bar-armor="${Number(player.armor || 0)}">

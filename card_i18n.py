@@ -251,7 +251,7 @@ OPENING_EVENT_I18N = {
     },
     3: {
         'name': _t('光之洗礼', 'Baptism of Light', 'Baptême de lumière', 'Batismo de Luz', 'Крещение светом', '光の洗礼'),
-        'desc': _t('将最多五张牌转化为Light：[[card:Light|flag=sprout|flag=symbiosis]]', 'Convert up to five cards into Light: [[card:Light|flag=sprout|flag=symbiosis]]', 'Transforme jusqu’à cinq cartes en Light : [[card:Light|flag=sprout|flag=symbiosis]]', 'Transforma até cinco cartas em Light: [[card:Light|flag=sprout|flag=symbiosis]]', 'Превратите до пяти карт в Light: [[card:Light|flag=sprout|flag=symbiosis]]', '最大5枚のカードをLight：[[card:Light|flag=sprout|flag=symbiosis]]に変化させる'),
+        'desc': _t('将最多5张非攻击牌转化为[[card:Light|flag=sprout|flag=symbiosis]]', 'Convert up to 5 non-Attack cards into [[card:Light|flag=sprout|flag=symbiosis]]', 'Transformez jusqu’à 5 cartes non-Attaque en [[card:Light|flag=sprout|flag=symbiosis]]', 'Transforme até 5 cartas que não sejam de Ataque em [[card:Light|flag=sprout|flag=symbiosis]]', 'Превратите до 5 карт, не являющихся атакующими, в [[card:Light|flag=sprout|flag=symbiosis]]', '攻撃カード以外を最大5枚[[card:Light|flag=sprout|flag=symbiosis]]に変化させる'),
     },
     8: {
         'name': _t('绝境求生', 'Last Stand', 'Dernier recours', 'Último Recurso', 'Последний шанс', '背水の生存'),
@@ -275,7 +275,7 @@ OPENING_EVENT_I18N = {
     },
     9: {
         'name': _t('多重瓣', 'Multi-Petal', 'Multi-pétale', 'Multi-Pétala', 'Много лепестков', '多重子弁'),
-        'desc': _t('多子瓣牌子瓣+1，将5张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'Multi-petal cards gain +1 petal; shuffle 5 [[card:Dust|flag=exile]] into your deck in random order', 'Les cartes à pétales multiples gagnent +1 pétale ; mélangez 5 [[card:Dust|flag=exile]] dans votre deck', 'Cartas de múltiplas pétalas ganham +1 pétala; embaralhe 5 [[card:Dust|flag=exile]] no seu deck', 'Карты с несколькими лепестками получают +1 лепесток; замешайте 5 [[card:Dust|flag=exile]] в колоду', '多子弁カードは子弁+1。5枚の[[card:Dust|flag=exile]]をランダムに山札へ混ぜる'),
+        'desc': _t('多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'Multi-petal cards gain +1 petal; shuffle 3 [[card:Dust|flag=exile]] into your deck in random order', 'Les cartes à pétales multiples gagnent +1 pétale ; mélangez 3 [[card:Dust|flag=exile]] dans votre deck', 'Cartas de múltiplas pétalas ganham +1 pétala; embaralhe 3 [[card:Dust|flag=exile]] no seu deck', 'Карты с несколькими лепестками получают +1 лепесток; замешайте 3 [[card:Dust|flag=exile]] в колоду', '多子弁カードは子弁+1。3枚の[[card:Dust|flag=exile]]をランダムに山札へ混ぜる'),
     },
     10: {
         'name': _t('魔力加速', 'Magic Acceleration', 'Accélération magique', 'Aceleração Mágica', 'Ускорение магии', '魔力加速'),

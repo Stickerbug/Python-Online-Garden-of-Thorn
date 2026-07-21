@@ -46,7 +46,7 @@
             devValuesUpdated: 'Values updated', devJumped: 'Level loaded',
             pileEmpty: 'No cards here', chooseEnemy: 'Choose the enemy', chooseSelf: 'Choose yourself',
             playSelfAnywhere: 'Click anywhere to play on yourself', playAnywhere: 'Click anywhere to play',
-            chooseCardHint: 'Choose a card',
+            chooseCardHint: 'Choose a card', damagePrediction: 'Damage',
             pileTotal: (label, count) => `${label}: ${count} cards`,
             floor: (value) => `Floor ${value}`,
             rooms: { blessing: 'Blessing', combat: 'Battle', elite: 'Elite', event: 'Event', rest: 'Rest', shop: 'Shop', chest: 'Chest', boss: 'Boss' },
@@ -74,7 +74,7 @@
             devValuesUpdated: '数值已更新', devJumped: '已载入所选关卡',
             pileEmpty: '这里没有牌', chooseEnemy: '点击敌方头像以选择目标', chooseSelf: '点击自己的头像以选择目标',
             playSelfAnywhere: '点击场地任意位置对自己使用', playAnywhere: '点击场地任意位置打出',
-            chooseCardHint: '选择一张手牌',
+            chooseCardHint: '选择一张手牌', damagePrediction: '伤害预测',
             pileTotal: (label, count) => `${label}：${count} 张`,
             rooms: { blessing: '赐福', combat: '战斗', elite: '精英', event: '事件', rest: '休息', shop: '商店', chest: '宝箱', boss: '首领' },
             roomMarks: { blessing: '赐', combat: '战', elite: '精', event: '事', rest: '息', shop: '店', chest: '宝', boss: '首' },
@@ -718,14 +718,6 @@
         if (fill) fill.style.width = `${Math.max(0, Math.min(100, now / max * 100))}%`;
     }
 
-    function setResourceStrip(kind, current, maximum) {
-        const now = Math.max(0, Number(current) || 0);
-        const max = Math.max(1, Number(maximum) || 1);
-        setText(`story-combat-player-${kind}-text`, `${now}/${max}`);
-        const fill = $(`story-combat-player-${kind}-fill`);
-        if (fill) fill.style.width = `${Math.max(0, Math.min(100, now / max * 100))}%`;
-    }
-
     function renderResourceOrbs(containerId, current, maximum, spend, kind) {
         const container = $(containerId);
         if (!container) return;
@@ -1001,6 +993,18 @@
         description.className = 'card-effect';
         description.textContent = localize(values.description);
         element.append(typeWrap, description);
+        const prediction = activeRun?.state?.combat?.damage_predictions?.[String(card.instance_id || '')];
+        if (cardType === 'thorn' && prediction?.summary) {
+            const damagePrediction = document.createElement('div');
+            damagePrediction.className = 'story-card-damage-prediction';
+            damagePrediction.setAttribute('aria-label', `${t.damagePrediction}: ${prediction.summary}`);
+            const label = document.createElement('span');
+            label.textContent = t.damagePrediction;
+            const value = document.createElement('strong');
+            value.textContent = String(prediction.summary);
+            damagePrediction.append(label, value);
+            element.append(damagePrediction);
+        }
         if (options.note) {
             const note = document.createElement('span');
             note.className = 'story-card-note';
@@ -1101,8 +1105,6 @@
             selectedValues?.cost_m,
             'm',
         );
-        setResourceStrip('elixir', combat.elixir, player.max_elixir);
-        setResourceStrip('magic', combat.magic, player.max_magic);
         setText('story-enemy-name', localize(enemy.name) || (lang === 'zh' ? '敌人' : 'Enemy'));
         const intentName = localize(enemy.intent?.name);
         setText('story-enemy-intent', [intentName, enemy.intent?.summary].filter(Boolean).join(' · ') || '--');

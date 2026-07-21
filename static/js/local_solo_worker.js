@@ -1478,6 +1478,8 @@ class LocalSoloEngine {
         } else if (eventId === 3) {
             let converted = 0;
             (sub.convert_def_ids || []).slice(0, 5).forEach(sourceDef => {
+                const sourceCardDef = cardDef(sourceDef);
+                if (sourceDef === 'Light' || !sourceCardDef || sourceCardDef.card_type === 'thorn') return;
                 const idx = ps.deck.findIndex(card => card.def_id === sourceDef);
                 if (idx >= 0 && cardDef('Light')) {
                     const light = new LocalCard('Light');
@@ -1532,7 +1534,7 @@ class LocalSoloEngine {
             });
             let added = 0;
             if (cardDef('Dust')) {
-                for (let i = 0; i < 5; i += 1) {
+                for (let i = 0; i < 3; i += 1) {
                     const dust = new LocalCard('Dust');
                     dust.instance_flags.add('exile');
                     this.applySetupModifiersToCard(playerId, dust);
@@ -3647,6 +3649,13 @@ class LocalSoloEngine {
         this.logMsg(log || `${this.pn(targetId)}的${affected}张攻击牌获得${amount}层威力`);
     }
 
+    effect_jurassic_clear_self_power(playerId, card) {
+        if (!card) return;
+        card.power_value = 0;
+        card.instance_flags.delete('power');
+        card.disabled_flags.delete('power');
+    }
+
     effect_jurassic_oil_turn_start(playerId, card, params, log = '') {
         const targetId = this.resolveTarget(playerId, params.target || 'target');
         const target = this.players[targetId];
@@ -5551,6 +5560,9 @@ class LocalSoloEngine {
         const wasCountered = !!card._sewers_was_countered_this_play;
         card._sewers_was_countered_this_play = false;
         this.dealAttackDamage(targetId, 10, 1, false, playerId, card);
+        card.power_value = 0;
+        card.instance_flags.delete('power');
+        card.disabled_flags.delete('power');
         if (wasCountered) this.dealAttackDamage(targetId, 3, 2, false, playerId, card);
     }
 
@@ -6157,7 +6169,7 @@ class LocalSoloEngine {
             }
             if (sourceCard && this.hasEquipment(targetId, 'Plank')) {
                 try {
-                    if (toInt(sourceCard.cost_e, 0) <= 1) {
+                    if (sourceCard.card_type === 'thorn' && toInt(sourceCard.cost_e, 0) <= 1) {
                         plankBlocksAttack = true;
                     }
                 } catch (e) {}
@@ -7247,6 +7259,7 @@ class LocalSoloEngine {
             this.clearInvincibleState(playerId);
             this.logMsg(`${this.pn(playerId)}的无敌效果结束`);
         }
+        this.decayOceanCardChargeTurnEnd(playerId);
         this.saveLastTurnDamageSnapshot(playerId);
         if (playerId === this.first_player) this.startPlayerTurn(1 - this.first_player);
         else this.endRound();
@@ -7274,6 +7287,20 @@ class LocalSoloEngine {
             const armor = toInt(eq.armor, 0);
             if (armor > 0) eq.armor = Math.max(0, armor - 1);
         });
+    }
+
+    decayOceanCardChargeTurnEnd(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        let reduced = 0;
+        [...ps.hand].forEach(card => {
+            const charge = Math.max(0, toInt(card && card.charge_value, 0));
+            if (charge <= 0) return;
+            card.charge_value = Math.max(0, charge - 1);
+            reduced += 1;
+            if (card.charge_value <= 0) card.instance_flags.delete('charge');
+        });
+        if (reduced > 0) this.logMsg(`${this.pn(playerId)}的手牌电荷减少`);
     }
 
     returnCogwheelCardsNow(playerId) {

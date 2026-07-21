@@ -726,13 +726,13 @@ class GameEngine:
     OPENING_EVENTS = {
         1: {'id': 1, 'name': '生命强化', 'desc': '最大生命值+20', 'position': 1},
         2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'position': 2},
-        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多五张牌转化为Light：[[card:Light|flag=sprout|flag=symbiosis]]', 'position': 2},
+        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多5张非攻击牌转化为[[card:Light|flag=sprout|flag=symbiosis]]', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
         4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加3层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '少抽1张牌，然后从总抽牌库选择1张牌洗入牌库', 'position': 3},
         6: {'id': 6, 'name': '能量涌动', 'desc': '每回合多回复1[[icon:E]]', 'position': 3},
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
-        9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将5张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
+        9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
         11: {'id': 11, 'name': '花序编排', 'desc': '选择自己牌库中的3张牌，按选择顺序移至抽牌堆顶', 'position': 2},
         12: {'id': 12, 'name': '众生平等', 'desc': '自己回合开始时，自己对包括自己在内的所有可选中玩家分别造成5[[icon:D]]', 'position': 3},
@@ -3444,6 +3444,16 @@ class GameEngine:
     def start_draft_for_player(self, player_id: int):
         """Initialize draft for a specific player after they select their event.
         Called independently per player - no need to wait for opponent."""
+        if player_id < 0 or player_id >= len(self.players):
+            return False
+        if self.phase not in ('event_select', 'event_reveal', 'draft'):
+            return False
+        if self.player_draft_started[player_id]:
+            return False
+        if self.opening_event_picks[player_id] is None:
+            return False
+        if not all(pick is not None for pick in self.opening_event_picks):
+            return False
         # Initialize draft pool and type order on first call
         if not self.draft_pool:
             self.draft_pool = build_draft_pool(self.allowed_card_ids)
@@ -3459,13 +3469,19 @@ class GameEngine:
         if not self.draft_picks[player_id]:
             self.draft_picks[player_id] = []
         self.player_draft_started[player_id] = True
+        self.phase = 'draft'
         # Generate draft options for this player
         self._generate_draft_options_for_player(player_id)
-        # Update global phase
-        self.phase = 'draft'
+        return True
 
     def _generate_draft_options_for_player(self, player_id: int):
+        if player_id < 0 or player_id >= len(self.players):
+            return
+        if self.phase != 'draft' or not self.player_draft_started[player_id]:
+            return
         if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
+            return
+        if len(self.draft_type_order) <= len(self.draft_picks[player_id]):
             return
         card_type = self.draft_type_order[len(self.draft_picks[player_id])]
         self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
@@ -3475,6 +3491,10 @@ class GameEngine:
         self._generate_draft_options_for_player(1)
 
     def draft_pick(self, player_id: int, def_id: str) -> bool:
+        if player_id < 0 or player_id >= len(self.players):
+            return False
+        if self.phase != 'draft' or not self.player_draft_started[player_id]:
+            return False
         if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
             return False
         if not self.draft_options[player_id]:
@@ -3492,6 +3512,10 @@ class GameEngine:
         return True
 
     def draft_reroll(self, player_id: int) -> bool:
+        if player_id < 0 or player_id >= len(self.players):
+            return False
+        if self.phase != 'draft' or not self.player_draft_started[player_id]:
+            return False
         if self.draft_rerolls[player_id] <= 0:
             return False
         if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
@@ -3610,6 +3634,10 @@ class GameEngine:
         return str(left) == str(right)
 
     def select_opening_event(self, player_id: int, event_id: int) -> bool:
+        if player_id < 0 or player_id >= len(self.players):
+            return False
+        if self.phase not in ('event_select', 'event_reveal'):
+            return False
         if self.opening_event_picks[player_id] is not None:
             return False
         for event in self.opening_event_options[player_id]:
@@ -3621,6 +3649,10 @@ class GameEngine:
     def reroll_opening_event(self, player_id: int) -> bool:
         """Reroll opening event options, guaranteeing at least 1 different option.
         Uses draft_rerolls (shared with draft phase)."""
+        if player_id < 0 or player_id >= len(self.players):
+            return False
+        if self.phase not in ('event_select', 'event_reveal'):
+            return False
         if self.opening_event_picks[player_id] is not None:
             return False
         if self.draft_rerolls[player_id] <= 0:
@@ -3688,14 +3720,13 @@ class GameEngine:
             return max(0, DECK_SIZE - 1)
         return DECK_SIZE
 
-    def needs_sub_choice(self, player_id: int) -> bool:
-        """Check if the player's opening event needs a sub-choice after draft."""
+    def opening_event_requires_sub_choice(self, player_id: int) -> bool:
+        """Return whether the selected opening event has a post-draft choice."""
         event_id = self.opening_event_picks[player_id]
         if event_id is None:
             return False
-        sub = self.opening_event_sub_choices[player_id]
         # Built-in events with post-draft setup choices.
-        if str(event_id) in ('2', '3', '5', '8', '11') and not sub:
+        if str(event_id) in ('2', '3', '5', '8', '11'):
             return True
         # Check v2 events that need sub-choices
         resource = (getattr(self, 'v2_opening_event_defs', {}) or {}).get(str(event_id))
@@ -3710,9 +3741,70 @@ class GameEngine:
                             return True
         return False
 
-    def start_game(self):
+    def needs_sub_choice(self, player_id: int) -> bool:
+        """Check if the selected event still needs its post-draft choice."""
+        if not self.opening_event_requires_sub_choice(player_id):
+            return False
+        return self.opening_event_sub_choices[player_id] is None
+
+    def validate_pregame_ready(self) -> Tuple[bool, str, dict]:
+        """Validate the server-owned draft state before a normal match starts."""
+        player_count = len(self.players)
+        details = {
+            'phase': self.phase,
+            'player_count': player_count,
+            'event_picks': list(self.opening_event_picks),
+            'draft_started': list(self.player_draft_started),
+            'draft_counts': [len(picks) for picks in self.draft_picks],
+            'draft_targets': [self.draft_target_count(i) for i in range(player_count)],
+            'ready': list(self.player_ready),
+            'sub_choice_complete': [choice is not None for choice in self.opening_event_sub_choices],
+        }
+        arrays = (
+            self.opening_event_picks,
+            self.opening_event_sub_choices,
+            self.player_draft_started,
+            self.player_ready,
+            self.draft_picks,
+        )
+        if any(len(values) != player_count for values in arrays):
+            return False, 'pregame_state_size_mismatch', details
+        if self.phase not in ('event_select', 'event_reveal', 'draft'):
+            return False, 'invalid_pregame_phase', details
+        for player_id in range(player_count):
+            event_id = self.opening_event_picks[player_id]
+            if event_id is None:
+                return False, f'opening_event_missing:{player_id}', details
+            valid_event_ids = {
+                str(option.get('id'))
+                for option in (self.opening_event_options[player_id] or [])
+                if isinstance(option, dict) and option.get('id') is not None
+            }
+            if str(event_id) not in valid_event_ids:
+                return False, f'opening_event_not_offered:{player_id}', details
+            if not self.player_draft_started[player_id]:
+                return False, f'draft_not_started:{player_id}', details
+            expected = self.draft_target_count(player_id)
+            if len(self.draft_picks[player_id]) != expected:
+                return False, f'draft_count_invalid:{player_id}', details
+            for def_id in self.draft_picks[player_id]:
+                if def_id not in CARD_DEFS or not self._card_allowed(def_id):
+                    return False, f'draft_card_invalid:{player_id}', details
+            if self.opening_event_requires_sub_choice(player_id):
+                if self.opening_event_sub_choices[player_id] is None:
+                    return False, f'sub_choice_missing:{player_id}', details
+            if not self.player_ready[player_id]:
+                return False, f'player_not_ready:{player_id}', details
+        return True, '', details
+
+    def start_game(self, *, skip_pregame_validation: bool = False):
         if self._game_start_applied:
             return False
+        if not skip_pregame_validation:
+            valid, reason, details = self.validate_pregame_ready()
+            if not valid:
+                self._last_pregame_validation_error = {'reason': reason, 'details': details}
+                return False
         self._game_start_applied = True
         self.phase = 'playing'
         force_first = []
@@ -3907,7 +3999,7 @@ class GameEngine:
                 changed += 1
         added = 0
         if self._builtin_setup_card_available('Dust'):
-            for _ in range(5):
+            for _ in range(3):
                 dust = CardInstance(def_id='Dust')
                 dust.instance_flags.add('exile')
                 self._apply_setup_modifiers_to_card(player_id, dust)
@@ -3915,6 +4007,13 @@ class GameEngine:
                 added += 1
             random.shuffle(ps.deck)
         self.log_msg(f"{self.pn(player_id)}【多重瓣】：{changed}张多子瓣牌子瓣+1，{added}张[[card:Dust|flag=exile]]洗入牌库")
+
+    def _opening_light_source_allowed(self, def_id: str) -> bool:
+        def_id = str(def_id or '')
+        if def_id == 'Light':
+            return False
+        card_def = CARD_DEFS.get(def_id)
+        return card_def is not None and getattr(card_def, 'card_type', '') != 'thorn'
 
     def _apply_magic_acceleration_after_play(self, player_id: int, card: Optional[CardInstance] = None):
         ps = self.players[player_id]
@@ -3991,6 +4090,8 @@ class GameEngine:
             for target_def in list(sub.get('convert_def_ids') or []):
                 if converted >= 5:
                     break
+                if not self._opening_light_source_allowed(target_def):
+                    continue
                 light_card = CardInstance(def_id='Light')
                 light_card.instance_flags = {'sprout', 'symbiosis'}
                 self._apply_setup_modifiers_to_card(player_id, light_card)
@@ -4044,6 +4145,8 @@ class GameEngine:
                 for target_def in target_def_ids:
                     if converted >= 5:
                         break
+                    if not self._opening_light_source_allowed(target_def):
+                        continue
                     light_card = CardInstance(def_id='Light')
                     light_card.instance_flags = {'sprout', 'symbiosis'}
                     self._apply_setup_modifiers_to_card(player_id, light_card)
@@ -5111,8 +5214,6 @@ class GameEngine:
                 return False, "放逐区没有可选择的牌"
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = max(0, card.cost_e + extra_e)
-        if self._bio_blood_knife_active(player_id):
-            total_e = 0
         if total_e > ps.elixir:
             return False, f"能量不足（需要{total_e}E，当前{ps.elixir}E）"
         if card.cost_m > ps.magic:
@@ -5853,7 +5954,6 @@ class GameEngine:
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = 0 if auto_no_cost else max(0, card.cost_e + extra_e)
         total_m = 0 if auto_no_cost else int(card.cost_m)
-        total_e = self._bio_replace_paid_e_cost(player_id, card, total_e, auto_no_cost)
         card._paid_e_this_play = int(total_e)
         card._paid_m_this_play = int(total_m)
         ps.custom_vars['void_current_previous_def_id'] = str(ps.custom_vars.get('void_last_played_def_id', '') or '')
@@ -6550,7 +6650,6 @@ class GameEngine:
             dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
             extra_e = self._get_extra_e_for_card(player_id, card)
             total_e = max(0, card.cost_e + extra_e)
-            total_e = self._bio_replace_paid_e_cost(player_id, card, total_e, False)
             card._paid_e_this_play = int(total_e)
             card._paid_m_this_play = int(card.cost_m)
             self._spend_resource(player_id, 'elixir', total_e, card)
@@ -8404,11 +8503,6 @@ class GameEngine:
             if self._equipment_is(eq, *ids):
                 yield owner_id, eq
 
-    def _bio_blood_knife_active(self, player_id: int) -> bool:
-        if not self._valid_player_id(player_id):
-            return False
-        return bool((getattr(self.players[player_id], 'custom_vars', {}) or {}).get('bio_blood_knife_active'))
-
     def _bio_is_magic_card(self, card: Optional[CardInstance]) -> bool:
         if card is None:
             return False
@@ -8424,29 +8518,10 @@ class GameEngine:
             if value
         )
 
-    def _bio_replace_paid_e_cost(self, player_id: int, card: CardInstance, total_e: int,
-                                 auto_no_cost: bool = False) -> int:
-        total_e = max(0, int(total_e or 0))
-        replaced = total_e if not auto_no_cost and self._bio_blood_knife_active(player_id) else 0
-        card._bio_replaced_e_cost_this_play = replaced
-        return 0 if replaced > 0 else total_e
-
     def _bio_after_card_payment(self, player_id: int, card: CardInstance):
         if not self._valid_player_id(player_id):
             return
         ps = self.players[player_id]
-        replaced_e = max(0, int(getattr(card, '_bio_replaced_e_cost_this_play', 0) or 0))
-        if replaced_e > 0:
-            dealt = self.deal_attack_damage(
-                player_id,
-                3,
-                replaced_e,
-                attacker_id=player_id,
-                source_card=card,
-                ignore_untargetable=True,
-            )
-            self.log_msg(f"{self.pn(player_id)}的血刃将{replaced_e}E替换为{dealt}D")
-
         paid_e = max(0, int(getattr(card, '_paid_e_this_play', 0) or 0))
         paid_m = max(0, int(getattr(card, '_paid_m_this_play', 0) or 0))
         for _, eq in list(self._bio_active_equipment_targeting(player_id, 'Chloroplast', 'bio:chloroplast')):
@@ -8512,7 +8587,6 @@ class GameEngine:
             return
         ps = self.players[player_id]
         for key in (
-            'bio_blood_knife_active',
             'bio_blood_chromosome_active',
             'bio_job_application_active',
             'bio_opal_used_this_turn',
@@ -8914,6 +8988,16 @@ class GameEngine:
             self.players[effect_target_id].armor = max(0, self.players[effect_target_id].armor - 2)
         if self._equipment_is(eq, 'ElectricWeb', 'factory:electricweb'):
             self._cleanup_electric_web_draw_damage(eq)
+        # A transformation removes persistent equip bonuses, but is not a
+        # destruction and must not run offensive destroy effects (for example Sponge).
+        if not run_destroy_event and self._equipment_is(eq, 'Cactus', 'desert_cards_addition:cactus'):
+            target = self.players[effect_target_id]
+            target.max_elixir = max(0, int(target.max_elixir) - 5)
+            target.elixir = min(int(target.elixir), int(target.max_elixir))
+        if not run_destroy_event and self._equipment_is(eq, 'MagicYucca', 'vanilla:magicyucca'):
+            target = self.players[effect_target_id]
+            target.max_magic = max(0, int(target.max_magic) - 5)
+            target.magic = min(int(target.magic), int(target.max_magic))
 
         is_pill = self._equipment_is(eq, 'Pill', 'vanilla:pill', 'troll_cards:pill')
         has_destroy_script = self._has_card_event(eq.card_def, 'equipment_destroy')
@@ -9100,6 +9184,7 @@ class GameEngine:
         ):
             self._clear_invincible_state(player_id)
             self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
+        self._decay_ocean_card_charge_turn_end(player_id)
         self._bio_turn_end_cleanup(player_id)
         self._save_last_turn_damage_snapshot(player_id)
         if player_id == self.first_player:
@@ -10878,8 +10963,13 @@ class GameEngine:
         return -1
 
     def _run_v2_card_event(self, player_id: int, card: CardInstance, event_name: str,
-                           choice: Optional[dict] = None, extra_context: Optional[dict] = None):
-        event_def = self._get_v2_event_def(card.card_def, event_name)
+                           choice: Optional[dict] = None, extra_context: Optional[dict] = None,
+                           event_def_override=None):
+        event_def = (
+            event_def_override
+            if event_def_override is not None
+            else self._get_v2_event_def(card.card_def, event_name)
+        )
         extra_context = extra_context if isinstance(extra_context, dict) else {}
         current_eq = self._find_equipment_for_card(player_id, card) if event_name != 'on_play' else None
         target_id = -1
@@ -11558,7 +11648,7 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}因失明打乱手牌")
         ps.blind = 0
 
-    def _apply_ocean_card_turn_start(self, player_id: int):
+    def _decay_ocean_card_charge_turn_end(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
             return
         ps = self.players[player_id]
@@ -11782,7 +11872,6 @@ class GameEngine:
         self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
-        self._apply_ocean_card_turn_start(player_id)
         self._apply_jungle_turn_start_statuses(player_id)
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
@@ -12116,7 +12205,10 @@ class GameEngine:
                 break
             if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
                 try:
-                    if int(getattr(source_card, 'cost_e', 0) or 0) <= 1:
+                    if (
+                        getattr(source_card, 'card_type', '') == 'thorn'
+                        and int(getattr(source_card, 'cost_e', 0) or 0) <= 1
+                    ):
                         plank_blocks_attack = True
                 except Exception:
                     pass
@@ -14245,30 +14337,73 @@ class GameEngine:
             self._auto_resolve_choices_for = previous_auto_choice
             self._auto_play_no_cost_for = previous_auto_no_cost
 
+    def _fresh_void_transformed_card(self, player_id: int, def_id: str) -> CardInstance:
+        """Create a clean replacement containing only the destination card's own rules."""
+        transformed = CardInstance(def_id)
+        card_def = transformed.card_def
+        transformed.fission_level = clamp_card_layer(getattr(card_def, 'fission_level', 1) or 1)
+        transformed.fusion_level = clamp_card_layer(getattr(card_def, 'fusion_level', 1) or 1)
+        transformed.fission_count = max(0, transformed.fission_level - 1)
+        transformed.fusion_multiplier = float(transformed.fusion_level)
+        self._apply_setup_modifiers_to_card(player_id, transformed)
+        return transformed
+
+    def _run_void_transformed_equipment_on_equip(self, owner_id: int, eq: EquipmentInstance) -> None:
+        """Run immediate equip effects without equipping the transformed card twice."""
+        event_def = self._get_v2_event_def(eq.card_def, 'on_play')
+        if not event_def:
+            return
+        if isinstance(event_def, dict):
+            raw_steps = event_def.get('steps', event_def.get('effects', []))
+        else:
+            raw_steps = event_def
+        if not isinstance(raw_steps, list):
+            return
+        steps = [
+            step for step in raw_steps
+            if self._effect_type(step) not in ('request_target', 'place_as_equip')
+        ]
+        if not steps:
+            return
+        target_id = self._equipment_effect_target_id(eq, owner_id)
+        selected_target = owner_id if self._card_is_self_only(eq.card_instance) else target_id
+        equip_choice = {
+            'target_player': selected_target,
+            'target_player_id': selected_target,
+            'target_id': selected_target,
+        }
+        self._run_v2_card_event(
+            owner_id,
+            eq.card_instance,
+            'on_play',
+            equip_choice,
+            {
+                'source_id': owner_id,
+                'target_id': selected_target,
+                'target_player': selected_target,
+                'target_player_explicit': True,
+                'equipment_owner_id': owner_id,
+            },
+            {'steps': steps},
+        )
+
     def _atomic_void_transform_own_cards(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
-        for zone in (ps.hand, ps.deck, ps.discard):
+        for zone in (ps.hand, ps.deck, ps.discard, ps.exile):
             for idx, old in enumerate(list(zone)):
                 new_id = self._void_weighted_card_id(getattr(old.card_def, 'card_type', ''), exclude={getattr(old, 'def_id', '')})
                 if not new_id:
                     continue
-                new_card = CardInstance(new_id)
-                self._apply_setup_modifiers_to_card(player_id, new_card)
-                zone[idx] = new_card
+                zone[idx] = self._fresh_void_transformed_card(player_id, new_id)
+        transformed_equipment = []
         for eq in list(ps.equipment):
             new_id = self._void_weighted_card_id('root', exclude={getattr(eq, 'def_id', '')})
             if not new_id:
                 continue
-            if (
-                self._equipment_is(eq, 'Quantum', 'void:quantum')
-                and not self._has_other_void_quantum_targeting(player_id, exclude_eq=eq)
-            ):
-                self._restore_void_quantum_costs(player_id)
-            if self._equipment_is(eq, 'MagicSoil', 'jurassic:magic_soil'):
-                self._remove_jurassic_magic_soil_bonus(eq)
             armor = getattr(eq, 'armor', 0)
             target = getattr(eq, 'effect_target', player_id)
-            eq.card_instance = CardInstance(new_id)
+            self._cleanup_equipment_derived_effects(player_id, eq, run_destroy_event=False)
+            eq.card_instance = self._fresh_void_transformed_card(player_id, new_id)
             eq.armor = armor
             eq.turns_equipped = 0
             eq.uses_this_turn = 0
@@ -14276,6 +14411,11 @@ class GameEngine:
             eq.custom_vars = {}
             flags = self._effective_card_flags(eq.card_instance)
             eq.effect_target = player_id if 'self_only' in flags else target
+            if self._equipment_uses_non_stack_rule(eq):
+                self._ensure_non_stack_equipment_order(eq)
+            transformed_equipment.append(eq)
+        for eq in transformed_equipment:
+            self._run_void_transformed_equipment_on_equip(player_id, eq)
         self._refresh_hand_limit_bonuses()
         self._refresh_equipment_derived_player_flags(player_id)
         if log:
@@ -14399,6 +14539,9 @@ class GameEngine:
         was_countered = bool(getattr(card, '_sewers_was_countered_this_play', False))
         card._sewers_was_countered_this_play = False
         self.deal_attack_damage(target_id, 10, 1, attacker_id=player_id, source_card=card)
+        card.power_value = 0
+        card.instance_flags.discard('power')
+        card.disabled_flags.discard('power')
         if was_countered:
             self.deal_attack_damage(target_id, 3, 2, attacker_id=player_id, source_card=card)
 
@@ -14545,6 +14688,13 @@ class GameEngine:
             affected += 1
         self.log_msg(log or f"{self.pn(target_id)}的{affected}张攻击牌获得{amount}层威力")
 
+    def _atomic_jurassic_clear_self_power(self, player_id, card, params, log, choice, context):
+        if card is None:
+            return
+        card.power_value = 0
+        card.instance_flags.discard('power')
+        card.disabled_flags.discard('power')
+
     def _atomic_jurassic_oil_turn_start(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if not self._valid_player_id(target_id):
@@ -14668,8 +14818,22 @@ class GameEngine:
         self.deal_attack_damage(target_id, amount, repeats, attacker_id=player_id, source_card=card)
 
     def _atomic_bio_activate_blood_knife(self, player_id, card, params, log, choice, context):
-        self.players[player_id].custom_vars['bio_blood_knife_active'] = True
-        self.log_msg(log or f"{self.pn(player_id)}本回合以3D替换每1E消耗")
+        dealt = self.deal_attack_damage(
+            player_id,
+            5,
+            1,
+            attacker_id=player_id,
+            source_card=card,
+            ignore_untargetable=True,
+        )
+        recovered = max(0, int(dealt or 0) // 3)
+        if recovered > 0:
+            ps = self.players[player_id]
+            before = int(ps.elixir or 0)
+            ps.gain_elixir(recovered)
+            gained = max(0, int(ps.elixir or 0) - before)
+            if gained > 0:
+                self.log_msg(log or f"{self.pn(player_id)}回复{gained}E")
 
     def _atomic_bio_activate_blood_chromosome(self, player_id, card, params, log, choice, context):
         self.players[player_id].custom_vars['bio_blood_chromosome_active'] = True
@@ -15003,6 +15167,7 @@ class GameEngine:
         percent = max(0.0, float(params.get('health_percent', 0.08) or 0.08))
         minimum = max(0, self._eval_int(player_id, params.get('minimum', 2), card, 2))
         self._game_over_defer_depth += 1
+        first_attack = True
         try:
             for _ in range(spent_elixir):
                 for _ in range(repeats):
@@ -15017,6 +15182,10 @@ class GameEngine:
                         attacker_id=player_id,
                         source_card=card,
                     )
+                    if first_attack:
+                        card.power_value = 0
+                        card.instance_flags.discard('power')
+                        first_attack = False
         finally:
             self._game_over_defer_depth -= 1
         card.fission_level = 1
