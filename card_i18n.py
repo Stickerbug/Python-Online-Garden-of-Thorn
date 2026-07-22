@@ -259,7 +259,7 @@ OPENING_EVENT_I18N = {
     },
     4: {
         'name': _t('烈焰预兆', 'Flame Omen', 'Présage de flammes', 'Presságio Flamejante', 'Огненное знамение', '烈炎の兆し'),
-        'desc': _t('开局对所有敌方玩家施加3层灼烧', 'At game start, apply 3 Burn to all enemy players', 'Au début de la partie, applique 3 Brûlure à tous les joueurs ennemis', 'No início da partida, aplica 3 Queima a todos os jogadores inimigos', 'В начале игры наложите 3 Горения на всех вражеских игроков', '開始時、敵プレイヤー全員に灼焼3を付与'),
+        'desc': _t('开局对所有敌方玩家施加4层灼烧', 'At game start, apply 4 Burn to all enemy players', 'Au début de la partie, applique 4 Brûlure à tous les joueurs ennemis', 'No início da partida, aplica 4 Queima a todos os jogadores inimigos', 'В начале игры наложите 4 Горения на всех вражеских игроков', '開始時、敵プレイヤー全員に灼焼4を付与'),
     },
     5: {
         'name': _t('命运抽签', 'Fated Draw', 'Pioche du destin', 'Compra do Destino', 'Жребий судьбы', '運命のドロー'),
@@ -283,11 +283,11 @@ OPENING_EVENT_I18N = {
     },
     11: {
         'name': _t('花序编排', 'Floral Arrangement', 'Arrangement floral', 'Arranjo Floral', 'Цветочная композиция', '花序編成'),
-        'desc': _t('选择自己牌库中的3张牌，按选择顺序移至抽牌堆顶', 'Choose 3 cards from your deck and move them to the top in the chosen order', 'Choisissez 3 cartes de votre deck et placez-les au-dessus dans l’ordre choisi', 'Escolha 3 cartas do seu deck e mova-as para o topo na ordem escolhida', 'Выберите 3 карты из своей колоды и положите их наверх в выбранном порядке', '自分の山札から3枚を選び、選んだ順に山札の一番上へ移す'),
+        'desc': _t('调整自己抽牌堆的顺序', 'Rearrange your draw pile', 'Réorganisez votre pioche', 'Reorganize sua pilha de compra', 'Измените порядок своей колоды', '自分の山札の順序を変更する'),
     },
     12: {
         'name': _t('众生平等', 'Equal Suffering', 'Souffrance égale', 'Sofrimento Igual', 'Равное страдание', '等しき苦痛'),
-        'desc': _t('自己回合开始时，自己对包括自己在内的所有可选中玩家分别造成5[[icon:D]]', 'At the start of your turn, you deal 5[[icon:D]] to each targetable player, including yourself', 'Au début de votre tour, vous infligez 5[[icon:D]] à chaque joueur pouvant être ciblé, vous y compris', 'No início do seu turno, você causa 5[[icon:D]] a cada jogador que possa ser alvo, incluindo você', 'В начале своего хода вы наносите 5[[icon:D]] каждому доступному для выбора игроку, включая себя', '自分のターン開始時、自分を含む選択可能な各プレイヤーに、自分が5[[icon:D]]を与える'),
+        'desc': _t('自己回合开始时，自己对每名可选中的敌方玩家造成7[[icon:D]]，对自己及队友造成5[[icon:D]]', 'At the start of your turn, deal 7[[icon:D]] to each targetable enemy and 5[[icon:D]] to yourself and each teammate', 'Au début de votre tour, infligez 7[[icon:D]] à chaque ennemi pouvant être ciblé, et 5[[icon:D]] à vous-même et à chaque allié', 'No início do seu turno, cause 7[[icon:D]] a cada inimigo que possa ser alvo e 5[[icon:D]] a você e a cada aliado', 'В начале своего хода нанесите 7[[icon:D]] каждому доступному для выбора врагу и 5[[icon:D]] себе и каждому союзнику', '自分のターン開始時、選択可能な敵全員に7[[icon:D]]、自分と味方全員に5[[icon:D]]を与える'),
     },
 }
 

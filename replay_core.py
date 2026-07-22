@@ -17,6 +17,14 @@ CLEANUP_HOUR = int(os.environ.get('GTN_CLEANUP_HOUR', '4') or 4)
 CLEANUP_MINUTE = int(os.environ.get('GTN_CLEANUP_MINUTE', '30') or 30)
 MAX_REPLAY_COMPRESSED_BYTES = int(os.environ.get('GTN_REPLAY_MAX_COMPRESSED_BYTES', '4000000') or 4000000)
 MAX_REPLAY_STORED_ACTIONS = int(os.environ.get('GTN_REPLAY_MAX_STORED_ACTIONS', '900') or 900)
+CARDS_PLAYED_RECOVERY_MAX_COMPRESSED_BYTES = max(
+    1,
+    int(os.environ.get('GTN_CARDS_PLAYED_RECOVERY_MAX_COMPRESSED_BYTES', str(8 * 1024 * 1024)) or 1),
+)
+CARDS_PLAYED_RECOVERY_MAX_DECODED_BYTES = max(
+    1,
+    int(os.environ.get('GTN_CARDS_PLAYED_RECOVERY_MAX_DECODED_BYTES', str(32 * 1024 * 1024)) or 1),
+)
 REPLAY_ITEM_FIELDS = (
     'id', 'match_id', 'created_at', 'mode', 'player_names_json', 'winner_name', 'winner_index',
     'round_num', 'duration_ms', 'replay_version', 'replay_sha256', 'replay_size',
@@ -705,15 +713,140 @@ def list_replays(
     }
 
 
-def _decode_replay_blob(blob):
+def _decode_replay_blob(blob, max_compressed_bytes=None, max_decoded_bytes=None):
     raw = bytes(blob or b'')
     if not raw:
         return {}
+    if max_compressed_bytes is not None and len(raw) > max(1, int(max_compressed_bytes)):
+        raise ValueError('compressed_too_large')
     try:
-        raw = zlib.decompress(raw)
+        if max_decoded_bytes is None:
+            raw = zlib.decompress(raw)
+        else:
+            decoded_limit = max(1, int(max_decoded_bytes))
+            decoder = zlib.decompressobj()
+            decoded = decoder.decompress(raw, decoded_limit + 1)
+            if len(decoded) > decoded_limit or decoder.unconsumed_tail:
+                raise ValueError('decoded_too_large')
+            remaining = decoded_limit + 1 - len(decoded)
+            if remaining > 0:
+                decoded += decoder.flush(remaining)
+            if len(decoded) > decoded_limit:
+                raise ValueError('decoded_too_large')
+            raw = decoded
     except zlib.error:
         pass
+    if max_decoded_bytes is not None and len(raw) > max(1, int(max_decoded_bytes)):
+        raise ValueError('decoded_too_large')
     return json.loads(raw.decode('utf-8'))
+
+
+_CARD_PLAY_COUNTER_FIELDS = {
+    'achievement_total_card_plays',
+    'cards_played_this_turn',
+    'player_id',
+    'your_id',
+    'round_num',
+    'game_over',
+    'compact',
+}
+_CARD_PLAY_COUNTER_MISSING = object()
+
+
+def _project_card_play_counter_value(value, field_name=''):
+    """Keep only the tiny state projection needed by historical card-play recovery."""
+    if field_name in _CARD_PLAY_COUNTER_FIELDS:
+        return value
+    if isinstance(value, dict):
+        projected = {}
+        for key, child in value.items():
+            child_value = _project_card_play_counter_value(child, str(key))
+            if child_value is not _CARD_PLAY_COUNTER_MISSING:
+                projected[key] = child_value
+        return projected if projected else _CARD_PLAY_COUNTER_MISSING
+    if isinstance(value, list):
+        projected_items = []
+        found = False
+        for child in value:
+            child_value = _project_card_play_counter_value(child)
+            if child_value is _CARD_PLAY_COUNTER_MISSING:
+                projected_items.append(None)
+            else:
+                projected_items.append(child_value)
+                found = True
+        return projected_items if found else _CARD_PLAY_COUNTER_MISSING
+    return _CARD_PLAY_COUNTER_MISSING
+
+
+def _project_card_play_counter_patch(patch, field_name=''):
+    if not isinstance(patch, dict):
+        return _CARD_PLAY_COUNTER_MISSING
+    if field_name in _CARD_PLAY_COUNTER_FIELDS:
+        return patch
+    if '$set' in patch:
+        projected = _project_card_play_counter_value(patch.get('$set'), field_name)
+        if projected is _CARD_PLAY_COUNTER_MISSING:
+            return _CARD_PLAY_COUNTER_MISSING
+        return {'$set': projected}
+    if '$list' in patch:
+        spec = patch.get('$list') if isinstance(patch.get('$list'), dict) else {}
+        items = spec.get('items') if isinstance(spec.get('items'), list) else []
+        projected_items = []
+        found = False
+        for item in items:
+            projected = _project_card_play_counter_value(item)
+            if projected is _CARD_PLAY_COUNTER_MISSING:
+                projected_items.append(None)
+            else:
+                projected_items.append(projected)
+                found = True
+        if not found:
+            return _CARD_PLAY_COUNTER_MISSING
+        return {'$list': {'start': spec.get('start', 0), 'items': projected_items}}
+    if '$items' in patch:
+        changes = patch.get('$items') if isinstance(patch.get('$items'), dict) else {}
+        projected_changes = {}
+        for index, child in changes.items():
+            projected = _project_card_play_counter_patch(child)
+            if projected is not _CARD_PLAY_COUNTER_MISSING:
+                projected_changes[index] = projected
+        if not projected_changes:
+            return _CARD_PLAY_COUNTER_MISSING
+        return {'$items': projected_changes}
+    if '$dict' in patch:
+        changes = patch.get('$dict') if isinstance(patch.get('$dict'), dict) else {}
+        projected_changes = {}
+        for key, child in changes.items():
+            projected = _project_card_play_counter_patch(child, str(key))
+            if projected is not _CARD_PLAY_COUNTER_MISSING:
+                projected_changes[key] = projected
+        projected_remove = [
+            key for key in (patch.get('$remove') or [])
+            if str(key) in _CARD_PLAY_COUNTER_FIELDS
+        ]
+        if not projected_changes and not projected_remove:
+            return _CARD_PLAY_COUNTER_MISSING
+        projected_patch = {'$dict': projected_changes}
+        if projected_remove:
+            projected_patch['$remove'] = projected_remove
+        return projected_patch
+    return _CARD_PLAY_COUNTER_MISSING
+
+
+def _project_card_play_counter_frame(frame_state):
+    if not isinstance(frame_state, dict) or not frame_state:
+        return {}
+    if frame_state.get('delta') is True:
+        patch = _project_card_play_counter_patch(frame_state.get('patch') or {})
+        if patch is _CARD_PLAY_COUNTER_MISSING:
+            patch = {'$dict': {}}
+        return {'delta': True, 'patch': patch}
+    projected = _project_card_play_counter_value(frame_state)
+    if projected is _CARD_PLAY_COUNTER_MISSING or not isinstance(projected, dict):
+        return {}
+    if frame_state.get('compact'):
+        projected['compact'] = True
+    return projected
 
 
 def _replay_private_card_play_counters(state):
@@ -761,10 +894,19 @@ def _replay_private_card_play_counters(state):
     return counters, cumulative
 
 
-def recover_cards_played_from_replay_blob(blob, player_count=0):
+def recover_cards_played_from_replay_blob(
+    blob,
+    player_count=0,
+    max_compressed_bytes=CARDS_PLAYED_RECOVERY_MAX_COMPRESSED_BYTES,
+    max_decoded_bytes=CARDS_PLAYED_RECOVERY_MAX_DECODED_BYTES,
+):
     """Recover per-player card uses from a stored replay without expanding its full timeline."""
     try:
-        replay = _decode_replay_blob(blob)
+        replay = _decode_replay_blob(
+            blob,
+            max_compressed_bytes=max_compressed_bytes,
+            max_decoded_bytes=max_decoded_bytes,
+        )
     except Exception as exc:
         return {'exact': False, 'counts': [], 'source': 'unrecoverable', 'reason': f'decode:{exc}'}
     if not isinstance(replay, dict):
@@ -782,6 +924,37 @@ def recover_cards_played_from_replay_blob(blob, player_count=0):
         return {'exact': False, 'counts': [], 'source': 'unrecoverable', 'reason': 'no_players'}
 
     refs = _build_timeline_index(replay)
+    keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
+    actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
+
+    # Most recent replays persist final cumulative counters in the game-over
+    # frame. Reading that frame first avoids replaying hundreds of state deltas.
+    if not bool(meta.get('truncated')):
+        for ref in reversed(refs):
+            kind = ref.get('kind')
+            source_index = _safe_int(ref.get('source_index'), -1)
+            source = None
+            if kind == 'frame' and 0 <= source_index < len(keyframes):
+                source = keyframes[source_index]
+            elif kind == 'action' and 0 <= source_index < len(actions):
+                source = actions[source_index]
+            if not isinstance(source, dict):
+                continue
+            frame_state = source.get('state')
+            if not isinstance(frame_state, dict) or frame_state.get('delta') is True:
+                continue
+            action_type = str(source.get('type') or '') if kind == 'action' else ''
+            if action_type != 'game_over' and not bool(frame_state.get('game_over')):
+                continue
+            _counters, cumulative = _replay_private_card_play_counters(frame_state)
+            if all(index in cumulative for index in range(expected_players)):
+                return {
+                    'exact': True,
+                    'counts': [cumulative[index] for index in range(expected_players)],
+                    'source': 'replay_total',
+                    'reason': '',
+                }
+
     materialized_state = {}
     round_counters = {}
     response_counts = [0] * expected_players
@@ -790,8 +963,6 @@ def recover_cards_played_from_replay_blob(blob, player_count=0):
     saw_private_counters = False
     incomplete_private_state = bool(meta.get('truncated'))
 
-    keyframes = replay.get('keyframes') if isinstance(replay.get('keyframes'), list) else []
-    actions = replay.get('actions') if isinstance(replay.get('actions'), list) else []
     for ref in refs:
         kind = ref.get('kind')
         if kind == 'setup':
@@ -812,7 +983,9 @@ def recover_cards_played_from_replay_blob(blob, player_count=0):
         if isinstance(frame_state, dict) and frame_state:
             if frame_state.get('truncated'):
                 incomplete_private_state = True
-            materialized_state = _merge_replay_frame_state(materialized_state, frame_state)
+            counter_frame = _project_card_play_counter_frame(frame_state)
+            source['state'] = counter_frame
+            materialized_state = _merge_replay_frame_state(materialized_state, counter_frame)
             counters, cumulative = _replay_private_card_play_counters(materialized_state)
             try:
                 round_num = int(materialized_state.get('round_num', source.get('round', 0)) or 0)

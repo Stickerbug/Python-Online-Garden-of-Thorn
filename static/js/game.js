@@ -516,12 +516,14 @@ function updateBackgroundMusic() {
 
 function playProceduralAudio(name, options = {}) {
     const group = options.group || AUDIO_GROUPS[name] || 'sfx';
-    const gainValue = getAudioGain(group);
-    if (gainValue <= 0) return;
     const nowMs = performance.now();
     const throttleMs = Number(options.throttleMs == null ? 50 : options.throttleMs);
-    if (nowMs - Number(audioLastPlayedAt[name] || 0) < throttleMs) return;
+    const hasPreviousPlay = Object.prototype.hasOwnProperty.call(audioLastPlayedAt, name);
+    if (hasPreviousPlay && nowMs - Number(audioLastPlayedAt[name]) < throttleMs) return;
     audioLastPlayedAt[name] = nowMs;
+    if (recordReplayVideoExportAudio(name, group, options)) return;
+    const gainValue = getAudioGain(group);
+    if (gainValue <= 0) return;
     if (!audioUnlocked) return;
     playAudioFile(name, gainValue, options);
 }
@@ -773,7 +775,7 @@ const I18N = {
         tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_temp_magic_heavy: 'Temporary Magic Heavy', tag_floating: 'Floating', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift', tag_wide_strike: 'Wide Strike', tag_self_target: 'Self-target', tag_charge: 'Charge', tag_ocean_blinded: 'Obscured',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_statuses: 'States', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
-        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card', opening_sequence_title: 'Floral Arrangement', opening_sequence_message: 'Move cards to the top in selection order. The first selected card is drawn first.',
+        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card', opening_sequence_title: 'Floral Arrangement', opening_sequence_message: 'Drag cards to rearrange your draw pile. The top card is drawn first.',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
         foresight_replace_title: 'Foresight', foresight_replace_desc: 'Discard up to {0} cards from your hand, then draw that many cards', foresight_replace_confirm: 'Replace',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
@@ -891,7 +893,7 @@ I18N.zh = { ...I18N.en,
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
     flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸附', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_temp_magic_heavy: '暂时魔力沉重', flag_floating: '漂浮', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
-    choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌', opening_sequence_title: '花序编排', opening_sequence_message: '按选择顺序移至抽牌堆顶，最先选择的牌最先抽取。',
+    choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌', opening_sequence_title: '花序编排', opening_sequence_message: '拖动卡牌调整抽牌堆顺序，最上方的牌最先抽取。',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
@@ -1003,7 +1005,7 @@ I18N.fr = { ...I18N.en,
     status_sluggish: 'Lenteur', status_overload: 'Surcharge', status_foresight: 'Prévoyance', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Cécité', status_heal_block: 'Anti-soin', status_weakness: 'Faiblesse', status_bleed: 'Saignement', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
     flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose', flag_copy: 'Copie', flag_unique: 'Unique', flag_swift: 'Rapidité', flag_stealth: 'Furtif', flag_revealed: 'Révélé',
     choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}', choose_source_card_n: 'Carte source n°{0}',
-    choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Placez les cartes au-dessus dans l’ordre choisi. La première sélectionnée sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
+    choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Faites glisser les cartes pour réorganiser votre pioche. La carte du haut sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
@@ -1076,7 +1078,7 @@ I18N.ja = { ...I18N.en,
     status_sluggish: '遅鈍', status_overload: '過負荷', status_foresight: '予知', status_fracture: '破損', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '治療封じ', status_weakness: '虚弱', status_bleed: '出血', status_fragment: '破片', status_fragment_stacks: '破片',
     flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生', flag_copy: '複製', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隠密', flag_revealed: '公開',
     choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚', choose_source_card_n: 'ソースカード第{0}枚',
-    choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: '選択順に山札の一番上へ移します。最初に選んだカードを最初に引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
+    choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: 'カードをドラッグして山札の順序を変更します。一番上のカードから引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
@@ -4561,6 +4563,7 @@ let phaseChatMatchKey = '';
 let pregameChatEntries = [];
 let pregameChatMatchKey = '';
 let lobbyChatHistorySignature = '';
+let lobbyChatEntries = [];
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
 const FALLBACK_RELEASE_SERVER = 'http://121.41.93.192';
@@ -4692,6 +4695,21 @@ function activeMatchRouteLoginPayload() {
         desired_room_id: route.room_id || '',
         desired_match_key: route.match_key || '',
     };
+}
+
+function reconnectOfferMatchesSavedRoute(data = {}) {
+    const route = readActiveMatchRoute();
+    if (!route) return false;
+    const savedRoomId = route.room_id != null ? String(route.room_id).trim() : '';
+    const offeredRoomId = data.room_id != null ? String(data.room_id).trim() : '';
+    const savedMatchKey = String(route.match_key || '').trim();
+    const offeredMatchKey = String(data.match_key || '').trim();
+    if (savedRoomId && offeredRoomId && savedRoomId !== offeredRoomId) return false;
+    if (savedMatchKey && offeredMatchKey && savedMatchKey !== offeredMatchKey) return false;
+    return !!(
+        (savedRoomId && offeredRoomId && savedRoomId === offeredRoomId)
+        || (savedMatchKey && offeredMatchKey && savedMatchKey === offeredMatchKey)
+    );
 }
 let matchTransitionGuardUntil = 0;
 let allowLobbyTransitionUntil = 0;
@@ -13079,6 +13097,7 @@ function connectSocket(serverUrl) {
             return;
         }
         if (transientMatchRecovery) clearTransientMatchRecovery('login_returned_lobby');
+        clearNetworkMatchStateForLobby();
         phase = 'lobby';
         updateStatus(UI.lobby_status.replace('{0}', nickname));
     });
@@ -13867,12 +13886,9 @@ function connectSocket(serverUrl) {
         clearOpponentDisconnectModal();
     });
     bindSocketEvent('reconnect_available', (data) => {
-        const savedRoute = readActiveMatchRoute();
-        const savedRoomId = savedRoute && savedRoute.room_id != null ? String(savedRoute.room_id) : '';
         const offeredRoomId = data && data.room_id != null ? String(data.room_id) : '';
-        const routeMatches = !!savedRoute && (!savedRoomId || !offeredRoomId || savedRoomId === offeredRoomId);
-        if (!isSpectating && (transientMatchRecovery || routeMatches)) {
-            if (!transientMatchRecovery) beginTransientMatchRecovery('saved_match_route');
+        const routeMatches = reconnectOfferMatchesSavedRoute(data || {});
+        if (!isSpectating && transientMatchRecovery && routeMatches) {
             phase = 'reconnecting';
             transientMatchRecovery.autoAcceptRoomId = offeredRoomId;
             transientMatchRecovery.autoAcceptSentAt = Date.now();
@@ -13894,6 +13910,12 @@ function connectSocket(serverUrl) {
             hideModal();
         };
         $('reconnect-no').onclick = () => {
+            allowLobbyTransition('reconnect_decline');
+            clearTransientMatchRecovery('reconnect_decline');
+            clearNetworkMatchStateForLobby();
+            phase = 'lobby';
+            showView('view-lobby');
+            updateStatus(UI.lobby_status.replace('{0}', nickname));
             socket.emit('reconnect_decline', { room_id: data.room_id, old_sid: data.old_sid });
             hideModal();
         };
@@ -15714,9 +15736,15 @@ function renderAccountReplayFrame() {
     }
     try {
         const replayState = buildReplaySpectateState(frame, accountReplayPerspective);
+        const videoPlayerView = isReplayVideoExportPlayerView();
+        if (videoPlayerView) {
+            applyReplayExportPlayerVisibility(replayState);
+            replayState.spectating = false;
+            replayState.replay_mode = false;
+        }
         replayMode = true;
-        isSpectating = true;
-        playerId = -1;
+        isSpectating = !videoPlayerView;
+        playerId = videoPlayerView ? accountReplayPerspective : -1;
         spectatePerspective = accountReplayPerspective;
         gameState = replayState;
         phase = replayState.phase || 'action';
@@ -17351,11 +17379,6 @@ function ensureReplayVideoExportStyle() {
             height: 32px;
             will-change: left, top, transform;
         }
-        html.replay-video-export .replay-export-drag-card {
-            animation: none !important;
-            opacity: 1;
-            will-change: left, top, transform, opacity;
-        }
         html.replay-video-export .replay-export-click-ripple {
             position: fixed;
             z-index: 4604;
@@ -17375,9 +17398,48 @@ function ensureReplayVideoExportStyle() {
     document.head.appendChild(style);
 }
 
+function isReplayVideoExportPlayerView() {
+    return document.documentElement.classList.contains('replay-video-export');
+}
+
 let replayVideoExportTransitionToken = 0;
 let replayVideoExportCursor = null;
 let replayVideoExportCursorPoint = null;
+let replayVideoExportAudioCaptureActive = false;
+let replayVideoExportAudioCaptureStartedAt = 0;
+let replayVideoExportAudioEvents = [];
+
+function recordReplayVideoExportAudio(name, group, options = {}) {
+    if (!replayVideoExportAudioCaptureActive) return false;
+    const source = pickAudioSource(name);
+    if (!source) return true;
+    replayVideoExportAudioEvents.push({
+        name: String(name || ''),
+        group: String(group || AUDIO_GROUPS[name] || 'sfx'),
+        source: String(source),
+        offset_ms: Math.max(0, performance.now() - replayVideoExportAudioCaptureStartedAt),
+        volume_scale: Math.max(0, Math.min(1.5, Number(options.volumeScale == null ? 1 : options.volumeScale))),
+        playback_rate: Math.max(0.65, Math.min(1.7, Number(options.playbackRate || 1))),
+    });
+    return true;
+}
+
+function beginReplayVideoExportAudioCapture() {
+    replayVideoExportAudioEvents = [];
+    replayVideoExportAudioCaptureStartedAt = performance.now();
+    replayVideoExportAudioCaptureActive = true;
+    // Export holds do not advance page timers. Reset only the short per-sound
+    // throttle here so two visually separated replay steps keep both sounds.
+    audioLastPlayedAt = Object.create(null);
+    return true;
+}
+
+function drainReplayVideoExportAudioCapture() {
+    replayVideoExportAudioCaptureActive = false;
+    const events = replayVideoExportAudioEvents.slice();
+    replayVideoExportAudioEvents = [];
+    return events;
+}
 
 function clampReplayExportNumber(value, min, max) {
     return Math.max(min, Math.min(max, Number(value) || 0));
@@ -17461,7 +17523,7 @@ function moveReplayExportCursor(to, duration, options = {}) {
     const delay = Math.max(0, Number(options.delay || 0));
     const moveDuration = Math.max(80, Number(duration || 0));
     const frames = buildReplayExportCurveFrames(from, to, replayExportSeed(options.seed));
-    cursor.animate(frames, {
+    const movement = cursor.animate(frames, {
         duration: moveDuration,
         delay,
         easing: 'cubic-bezier(.22,.72,.18,1)',
@@ -17472,8 +17534,27 @@ function moveReplayExportCursor(to, duration, options = {}) {
         if (!cursor.isConnected) return;
         cursor.style.left = `${to.x}px`;
         cursor.style.top = `${to.y}px`;
+        try {
+            movement.cancel();
+        } catch (_) {}
     }, delay + moveDuration);
     return delay + moveDuration;
+}
+
+function settleReplayExportCursorOnElement(element, fallbackPoint, delay, options = {}) {
+    const xRatio = Number.isFinite(Number(options.xRatio)) ? Number(options.xRatio) : 0.5;
+    const yRatio = Number.isFinite(Number(options.yRatio)) ? Number(options.yRatio) : 0.5;
+    setTimeout(() => {
+        const point = getReplayExportElementPoint(element, xRatio, yRatio) || fallbackPoint;
+        if (!point) return;
+        const cursor = ensureReplayExportCursor();
+        replayVideoExportCursorPoint = { x: point.x, y: point.y };
+        cursor.style.left = `${point.x}px`;
+        cursor.style.top = `${point.y}px`;
+        classicAimPointer = { x: point.x, y: point.y };
+        if (options.cursorMode) positionClassicCursorCard(point.x, point.y);
+        else updateClassicAimCurve();
+    }, Math.max(0, Number(delay || 0)));
 }
 
 function clickReplayExportCursor(options = {}) {
@@ -17481,6 +17562,7 @@ function clickReplayExportCursor(options = {}) {
     const delay = Math.max(0, Number(options.delay || 0));
     setTimeout(() => {
         if (!cursor.isConnected) return;
+        playUiAudio('ui_click', { throttleMs: 0, volumeScale: 0.58 });
         cursor.animate([
             { transform: 'scale(1)' },
             { transform: 'scale(.82)' },
@@ -17527,13 +17609,129 @@ function findReplayExportCardElement(instanceId) {
     if (!candidates.length) return null;
     const score = element => {
         let value = 0;
-        if (element.closest('#you-hand, #classic-hand-fan, #opp-hand, #opp2-hand, #teammate-hand')) value += 100;
+        if (element.closest('#classic-hand-fan')) value += 1000;
+        else if (element.closest('#you-hand')) value += 900;
+        else if (element.closest('#opp-hand, #opp2-hand, #teammate-hand, .classic-card-tile-row')) value += 100;
         if (element.classList.contains('card') || element.classList.contains('classic-hand-card')) value += 40;
         const rect = element.getBoundingClientRect();
         value += Math.min(30, (rect.width * rect.height) / 1000);
         return value;
     };
     return candidates.sort((left, right) => score(right) - score(left))[0] || null;
+}
+
+function findReplayExportBottomHandCardElement(instanceId) {
+    if (instanceId == null || instanceId === '') return null;
+    const selector = replayExportCardSelector(instanceId);
+    return Array.from(document.querySelectorAll(`#classic-hand-fan .classic-hand-card${selector}`))
+        .find(isVisibleTargetRegion) || null;
+}
+
+function getReplayExportActionActor(frame) {
+    const action = frame && frame.action && typeof frame.action === 'object' ? frame.action : {};
+    return normalizePlayerId(action.actor);
+}
+
+function getReplayExportActionCard(previousState, actorId, instanceId) {
+    const player = getReplayExportPlayer(previousState, actorId);
+    if (!player || !Array.isArray(player.hand)) return null;
+    return player.hand.find(card => String(card && card.instance_id) === String(instanceId)) || null;
+}
+
+function getReplayExportActorHandAnchor(actorId) {
+    const pid = normalizePlayerId(actorId);
+    if (pid == null) return null;
+    if (pid === normalizePlayerId(accountReplayPerspective)) {
+        const cards = Array.from(document.querySelectorAll('#classic-hand-fan .classic-hand-card'))
+            .filter(isVisibleTargetRegion);
+        if (cards.length) return cards[Math.floor(cards.length / 2)];
+        const hand = $('classic-hand-fan');
+        if (isVisibleTargetRegion(hand)) return hand;
+    }
+    const avatar = getClassicFighterElementByPlayerId(pid);
+    const fighter = avatar && avatar.closest ? (avatar.closest('.classic-fighter') || avatar.parentElement) : null;
+    if (fighter) {
+        const tiles = Array.from(fighter.querySelectorAll('.classic-card-tile-row .classic-card-tile'))
+            .filter(isVisibleTargetRegion);
+        if (tiles.length) return tiles[Math.floor(tiles.length / 2)];
+        const slot = fighter.querySelector('.classic-card-tile-slot');
+        if (isVisibleTargetRegion(slot)) return slot;
+    }
+    return isVisibleTargetRegion(avatar) ? avatar : null;
+}
+
+function createReplayExportPlayedCardSource(card, actorId, previousState) {
+    if (!card) return null;
+    const anchor = getReplayExportActorHandAnchor(actorId);
+    if (!anchor) return null;
+    const anchorRect = anchor.getBoundingClientRect();
+    if (anchorRect.width <= 2 || anchorRect.height <= 2) return null;
+    const reference = Array.from(document.querySelectorAll('#classic-hand-fan .classic-fan-card-inner.card'))
+        .find(isVisibleTargetRegion);
+    const referenceRect = reference ? reference.getBoundingClientRect() : null;
+    const width = referenceRect && referenceRect.width > 40
+        ? referenceRect.width
+        : Math.max(88, Math.min(150, window.innerWidth * 0.085));
+    const height = referenceRect && referenceRect.height > 60
+        ? referenceRect.height
+        : width * 88 / 63;
+    const centerX = anchorRect.left + anchorRect.width / 2;
+    const centerY = anchorRect.top + anchorRect.height / 2;
+    const source = createCardElement(card, {
+        disableIntro: true,
+        showAllFlags: true,
+        ownerState: getReplayExportPlayer(previousState, actorId) || {},
+    });
+    source.classList.add('replay-export-temporary-play-source');
+    source.style.position = 'fixed';
+    source.style.left = `${Math.max(4, Math.min(window.innerWidth - width - 4, centerX - width / 2))}px`;
+    source.style.top = `${Math.max(4, Math.min(window.innerHeight - height - 4, centerY - height / 2))}px`;
+    source.style.width = `${width}px`;
+    source.style.height = `${height}px`;
+    source.style.margin = '0';
+    source.style.pointerEvents = 'none';
+    document.body.appendChild(source);
+    return source;
+}
+
+function isReplayExportRevealedCard(card) {
+    if (!card || typeof card !== 'object') return false;
+    const cardDef = getCardDef(card.def_id || card.id || '');
+    const { effective } = getEffectiveCardFlagSets(card, cardDef || {});
+    return effective.has('revealed') && !effective.has('sublime');
+}
+
+function isReplayExportSublimeCard(card) {
+    if (!card || typeof card !== 'object') return false;
+    const cardDef = getCardDef(card.def_id || card.id || '');
+    const { effective } = getEffectiveCardFlagSets(card, cardDef || {});
+    return effective.has('sublime');
+}
+
+function buildReplayExportOpponentView(player) {
+    if (!player || typeof player !== 'object') return player || {};
+    const hidden = { ...player };
+    const fullHand = Array.isArray(player.hand) ? player.hand : [];
+    hidden.hand_count = Number(player.hand_count != null ? player.hand_count : fullHand.length);
+    hidden.hand = [];
+    if (Array.isArray(player.revealed_hand) && player.revealed_hand.length) {
+        hidden.revealed_hand = player.revealed_hand.filter(card => !isReplayExportSublimeCard(card));
+    } else {
+        delete hidden.revealed_hand;
+    }
+    const revealed = Array.isArray(player.revealed_tag_cards)
+        ? player.revealed_tag_cards.filter(card => !isReplayExportSublimeCard(card))
+        : fullHand.filter(isReplayExportRevealedCard);
+    if (revealed.length) hidden.revealed_tag_cards = revealed;
+    else delete hidden.revealed_tag_cards;
+    return hidden;
+}
+
+function applyReplayExportPlayerVisibility(state) {
+    if (!state || typeof state !== 'object') return state;
+    state.opponent = buildReplayExportOpponentView(state.opponent);
+    if (state.opponent2) state.opponent2 = buildReplayExportOpponentView(state.opponent2);
+    return state;
 }
 
 function getReplayExportActionCardId(frame, previousState) {
@@ -17546,23 +17744,29 @@ function getReplayExportActionCardId(frame, previousState) {
     return null;
 }
 
-function getReplayExportActionTarget(frame) {
+function getReplayExportActionTarget(frame, ...states) {
     const action = frame && frame.action && typeof frame.action === 'object' ? frame.action : {};
     const payload = action.payload && typeof action.payload === 'object' ? action.payload : {};
     const choice = payload.choice && typeof payload.choice === 'object' ? payload.choice : {};
     const result = payload.result && typeof payload.result === 'object' ? payload.result : {};
+    const validPlayerIds = new Set();
+    states.forEach(state => {
+        getReplayExportPlayers(state).forEach((player, index) => {
+            const playerId = normalizePlayerId(player && player.player_id);
+            validPlayerIds.add(playerId == null ? index : playerId);
+        });
+    });
     const candidates = [
         payload.target_player_id,
+        payload.target_player,
         choice.target_player_id,
         choice.target_player,
-        choice.target_id,
         result.target_player_id,
         result.target_player,
-        result.target_id,
     ];
     for (const candidate of candidates) {
         const id = normalizePlayerId(candidate);
-        if (id != null && id >= 0) return id;
+        if (id != null && id >= 0 && (!validPlayerIds.size || validPlayerIds.has(id))) return id;
     }
     return null;
 }
@@ -17583,6 +17787,21 @@ function getReplayExportResponseSnapshot(previousFrame, nextFrame) {
 }
 
 function hideReplayExportInteractionPanels() {
+    selectedPlayCardId = null;
+    classicSelectedTriggerEquipmentId = null;
+    destroyClassicCursorCard();
+    document.querySelectorAll('.replay-export-selected-card').forEach(element => {
+        element.classList.remove('is-selected', 'replay-export-selected-card', 'virtual-play-source');
+    });
+    document.querySelectorAll('.classic-equip-chip.is-trigger-selected').forEach(element => {
+        element.classList.remove('is-trigger-selected');
+    });
+    const aim = $('classic-aim-layer');
+    if (aim) aim.classList.add('hidden');
+    const classicRoot = $('battle-classic');
+    if (classicRoot) {
+        classicRoot.classList.remove('has-selected-card', 'is-aiming', 'is-cursor-card-aim', 'is-target-aim');
+    }
     if (responseTimerId) {
         clearInterval(responseTimerId);
         responseTimerId = null;
@@ -17772,64 +17991,191 @@ function showReplayExportAllyConsentWindow(previousFrame, nextFrame) {
     return accepted ? (buttons[0] || null) : (buttons[1] || null);
 }
 
-function animateReplayExportDragCard(source, target, duration, delay, seed) {
-    if (!source || !target) return 0;
-    const sourceRect = source.getBoundingClientRect();
-    if (!sourceRect || sourceRect.width <= 2 || sourceRect.height <= 2) return 0;
-    const targetPoint = getReplayExportElementPoint(target, 0.5, 0.5);
-    if (!targetPoint) return 0;
+function animateReplayExportClassicPointer(from, to, duration, delay, seed, cursorMode) {
     setTimeout(() => {
-        const clone = source.cloneNode(true);
-        clone.classList.add('virtual-play-card', 'replay-export-drag-card');
-        clone.style.left = `${sourceRect.left}px`;
-        clone.style.top = `${sourceRect.top}px`;
-        clone.style.width = `${sourceRect.width}px`;
-        clone.style.height = `${sourceRect.height}px`;
-        document.body.appendChild(clone);
-        source.classList.add('virtual-play-source');
-        const from = { x: sourceRect.left, y: sourceRect.top };
-        const to = { x: targetPoint.x - sourceRect.width / 2, y: targetPoint.y - sourceRect.height / 2 };
-        clone.animate(buildReplayExportCurveFrames(from, to, replayExportSeed(seed)), {
-            duration,
-            easing: 'cubic-bezier(.18,.78,.18,1)',
-            fill: 'forwards',
-        });
-        setTimeout(() => {
-            clone.remove();
-            source.classList.remove('virtual-play-source');
-        }, duration + 80);
-    }, delay);
-    return delay + duration;
+        const cursor = ensureReplayExportCursor();
+        const started = performance.now();
+        const tick = now => {
+            const progress = clampReplayExportNumber((now - started) / Math.max(1, duration), 0, 1);
+            // Follow the browser-composited cursor position so the aim visual
+            // uses exactly the same path and easing as the visible pointer.
+            const rect = cursor.getBoundingClientRect();
+            const point = progress >= 1
+                ? (replayVideoExportCursorPoint || to)
+                : { x: rect.left, y: rect.top };
+            classicAimPointer = point;
+            if (cursorMode) positionClassicCursorCard(point.x, point.y);
+            else updateClassicAimCurve();
+            if (progress < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    }, Math.max(0, delay));
 }
 
-function scheduleReplayExportCardGesture(cardElement, targetElement, budgetMs, delay, seed) {
-    if (!cardElement || budgetMs < 320) return 0;
+function getReplayExportFallbackCardTargetElement(card) {
+    if (!card) return null;
+    const normalizedCard = normalizeBattleCard(card, (gameState && gameState.you) || {});
+    if (classicCursorCardMode(normalizedCard)) return null;
+    const role = getClassicPlayRole(normalizedCard);
+    const pickAvatar = selector => {
+        const avatar = document.querySelector(`${selector} .player-avatar`);
+        if (isVisibleTargetRegion(avatar)) return avatar;
+        const fighter = $(selector.replace(/^#/, ''));
+        return isVisibleTargetRegion(fighter) ? fighter : null;
+    };
+    if (role === 'enemy') return pickAvatar('#classic-fighter-enemy');
+    if (role === 'self' || role === 'equip') return pickAvatar('#classic-fighter-self');
+    if (role === 'stage') return getPlayGestureFallbackTarget();
+    return null;
+}
+
+function beginReplayExportClassicCardSelection(cardElement, card, sourcePoint, cursorMode, delay) {
+    setTimeout(() => {
+        if (!cardElement || !cardElement.isConnected || !card) return;
+        selectedPlayCardId = card.instance_id;
+        classicAimPointer = { x: sourcePoint.x, y: sourcePoint.y };
+        cardElement.classList.add('is-selected', 'replay-export-selected-card');
+        const root = $('battle-classic');
+        if (root) {
+            root.classList.add('has-selected-card', 'is-aiming');
+            root.classList.toggle('is-cursor-card-aim', !!cursorMode);
+            root.classList.toggle('is-target-aim', !cursorMode);
+        }
+        if (cursorMode) {
+            syncClassicCursorCard();
+        } else {
+            const aim = ensureClassicAimLayer();
+            if (aim) aim.classList.remove('hidden');
+            updateClassicAimCurve();
+        }
+    }, Math.max(0, delay));
+}
+
+function clearReplayExportClassicCardSelection(cardElement, card, delay) {
+    setTimeout(() => {
+        if (!card || String(selectedPlayCardId) === String(card.instance_id)) selectedPlayCardId = null;
+        destroyClassicCursorCard();
+        cardElement?.classList.remove('is-selected', 'replay-export-selected-card', 'virtual-play-source');
+        document.querySelectorAll('#classic-hand-fan .classic-hand-card.is-selected, #classic-hand-fan .replay-export-selected-card').forEach(element => {
+            element.classList.remove('is-selected', 'replay-export-selected-card', 'virtual-play-source');
+        });
+        document.querySelectorAll('.virtual-play-target, .is-aim-hover').forEach(element => {
+            element.classList.remove('virtual-play-target', 'is-aim-hover');
+        });
+        const aim = $('classic-aim-layer');
+        if (aim) aim.classList.add('hidden');
+        const root = $('battle-classic');
+        if (root) {
+            root.classList.remove('has-selected-card', 'is-aiming', 'is-cursor-card-aim', 'is-target-aim');
+        }
+    }, Math.max(0, delay));
+}
+
+function scheduleReplayExportCardGesture(cardElement, card, targetElement, budgetMs, delay, seed) {
+    if (!cardElement || !card || budgetMs < 320) return 0;
     const playTarget = getPlayGestureFallbackTarget();
     const sourcePoint = getReplayExportElementPoint(cardElement, 0.58, 0.48);
-    const playPoint = getReplayExportElementPoint(playTarget, 0.5, 0.43);
-    if (!sourcePoint || !playPoint) return 0;
-    const moveToCard = Math.max(140, Math.round(budgetMs * 0.27));
-    const dragDuration = Math.max(180, Math.round(budgetMs * 0.40));
-    const targetDuration = targetElement ? Math.max(140, Math.round(budgetMs * 0.23)) : 0;
+    const normalizedCard = normalizeBattleCard(card, (gameState && gameState.you) || {});
+    const cursorMode = classicCursorCardMode(normalizedCard);
+    const interactionTarget = cursorMode ? playTarget : targetElement;
+    const interactionPoint = getReplayExportElementPoint(
+        interactionTarget,
+        0.5,
+        cursorMode ? 0.43 : 0.5,
+    );
+    if (!sourcePoint || !interactionPoint) return 0;
+    const moveToCard = Math.max(140, Math.round(budgetMs * 0.34));
+    const moveToTarget = Math.max(180, budgetMs - moveToCard - 290);
     let cursorDelay = delay;
     moveReplayExportCursor(sourcePoint, moveToCard, { delay: cursorDelay, seed: `${seed}:source` });
     cursorDelay += moveToCard;
     clickReplayExportCursor({ delay: cursorDelay });
-    cursorDelay += 110;
-    animateReplayExportDragCard(cardElement, playTarget, dragDuration, cursorDelay, `${seed}:drag`);
-    moveReplayExportCursor(playPoint, dragDuration, { delay: cursorDelay, seed: `${seed}:play` });
-    cursorDelay += dragDuration;
-    if (targetElement) {
-        const targetPoint = getReplayExportElementPoint(targetElement, 0.5, 0.5);
-        if (targetPoint) {
-            targetElement.classList.add('virtual-play-target');
-            moveReplayExportCursor(targetPoint, targetDuration, { delay: cursorDelay, seed: `${seed}:target` });
-            cursorDelay += targetDuration;
-            clickReplayExportCursor({ delay: cursorDelay });
-            setTimeout(() => targetElement.classList.remove('virtual-play-target'), cursorDelay + 260);
-            cursorDelay += 120;
-        }
+    beginReplayExportClassicCardSelection(cardElement, card, sourcePoint, cursorMode, cursorDelay);
+    cursorDelay += 120;
+    if (!cursorMode && targetElement) {
+        setTimeout(() => targetElement.classList.add('virtual-play-target', 'is-aim-hover'), cursorDelay);
     }
+    moveReplayExportCursor(interactionPoint, moveToTarget, {
+        delay: cursorDelay,
+        seed: `${seed}:${cursorMode ? 'play' : 'target'}`,
+    });
+    animateReplayExportClassicPointer(
+        sourcePoint,
+        interactionPoint,
+        moveToTarget,
+        cursorDelay,
+        `${seed}:${cursorMode ? 'play' : 'target'}`,
+        !!cursorMode,
+    );
+    cursorDelay += moveToTarget;
+    settleReplayExportCursorOnElement(interactionTarget, interactionPoint, cursorDelay, {
+        yRatio: cursorMode ? 0.43 : 0.5,
+        cursorMode: !!cursorMode,
+    });
+    cursorDelay = clickReplayExportCursor({ delay: cursorDelay });
+    clearReplayExportClassicCardSelection(cardElement, card, cursorDelay + 120);
+    return Math.max(0, cursorDelay - delay);
+}
+
+function beginReplayExportClassicTriggerSelection(equipmentElement, equipmentId, sourcePoint, delay) {
+    setTimeout(() => {
+        if (!equipmentElement || !equipmentElement.isConnected) return;
+        classicSelectedTriggerEquipmentId = equipmentId;
+        classicAimPointer = { x: sourcePoint.x, y: sourcePoint.y };
+        equipmentElement.classList.add('is-trigger-selected');
+        const root = $('battle-classic');
+        if (root) root.classList.add('is-aiming', 'is-target-aim');
+        const aim = ensureClassicAimLayer();
+        if (aim) aim.classList.remove('hidden');
+        updateClassicAimCurve();
+    }, Math.max(0, delay));
+}
+
+function clearReplayExportClassicTriggerSelection(equipmentElement, equipmentId, delay) {
+    setTimeout(() => {
+        if (String(classicSelectedTriggerEquipmentId) === String(equipmentId)) {
+            classicSelectedTriggerEquipmentId = null;
+        }
+        equipmentElement?.classList.remove('is-trigger-selected');
+        document.querySelectorAll('.classic-equip-chip.is-trigger-selected').forEach(element => {
+            element.classList.remove('is-trigger-selected');
+        });
+        document.querySelectorAll('.virtual-play-target, .is-aim-hover').forEach(element => {
+            element.classList.remove('virtual-play-target', 'is-aim-hover');
+        });
+        const aim = $('classic-aim-layer');
+        if (aim) aim.classList.add('hidden');
+        const root = $('battle-classic');
+        if (root) root.classList.remove('is-aiming', 'is-target-aim');
+    }, Math.max(0, delay));
+}
+
+function scheduleReplayExportTriggerGesture(equipmentElement, equipmentId, targetElement, budgetMs, delay, seed) {
+    if (!equipmentElement || equipmentId == null || !targetElement || budgetMs < 320) return 0;
+    const sourcePoint = getReplayExportElementPoint(equipmentElement, 0.5, 0.5);
+    const targetPoint = getReplayExportElementPoint(targetElement, 0.5, 0.5);
+    if (!sourcePoint || !targetPoint) return 0;
+    const moveToEquipment = Math.max(130, Math.round(budgetMs * 0.34));
+    const moveToTarget = Math.max(180, budgetMs - moveToEquipment - 290);
+    let cursorDelay = delay;
+    moveReplayExportCursor(sourcePoint, moveToEquipment, {
+        delay: cursorDelay,
+        seed: `${seed}:equipment`,
+    });
+    cursorDelay += moveToEquipment;
+    clickReplayExportCursor({ delay: cursorDelay });
+    beginReplayExportClassicTriggerSelection(equipmentElement, equipmentId, sourcePoint, cursorDelay);
+    cursorDelay += 120;
+    setTimeout(() => targetElement.classList.add('virtual-play-target', 'is-aim-hover'), cursorDelay);
+    moveReplayExportCursor(targetPoint, moveToTarget, {
+        delay: cursorDelay,
+        seed: `${seed}:target`,
+    });
+    animateReplayExportClassicPointer(sourcePoint, targetPoint, moveToTarget, cursorDelay, `${seed}:target`, false);
+    cursorDelay += moveToTarget;
+    settleReplayExportCursorOnElement(targetElement, targetPoint, cursorDelay);
+    cursorDelay = clickReplayExportCursor({ delay: cursorDelay });
+    clearReplayExportClassicTriggerSelection(equipmentElement, equipmentId, cursorDelay + 120);
     return Math.max(0, cursorDelay - delay);
 }
 
@@ -17893,7 +18239,7 @@ function prepareReplayTimelineForVideoExport(sourceTimeline) {
     if (firstActionIndex < 0) return { timeline, skipped: 0 };
 
     // Keep the state immediately before the first action so the first played
-    // card can still be dragged from the recorded hand, but do not show the
+    // card can still be selected from the recorded hand, but do not show the
     // setup summary overlay or its potentially very long waiting time.
     const sourceIndex = Math.max(0, firstActionIndex - 1);
     const prepared = timeline.slice(sourceIndex);
@@ -17969,78 +18315,92 @@ function startReplayVideoExportTransition(index, options = {}) {
     const action = nextFrame.action && typeof nextFrame.action === 'object' ? nextFrame.action : {};
     const payload = action.payload && typeof action.payload === 'object' ? action.payload : {};
     const actionType = String(action.type || '');
+    const actorId = getReplayExportActionActor(nextFrame);
+    const isPerspectiveAction = actorId != null && actorId === normalizePlayerId(accountReplayPerspective);
     const isCardAction = actionType === 'play_card' || actionType === 'response';
     const cardInstanceId = isCardAction ? getReplayExportActionCardId(nextFrame, previousState) : null;
-    const cardElement = findReplayExportCardElement(cardInstanceId);
-    const targetId = getReplayExportActionTarget(nextFrame);
-    const targetElement = targetId == null ? null : getPlayerRegionById(targetId);
+    const actionCard = isCardAction
+        ? getReplayExportActionCard(previousState, actorId, cardInstanceId)
+        : null;
+    const cardElement = actionType === 'play_card' && isPerspectiveAction
+        ? findReplayExportBottomHandCardElement(cardInstanceId)
+        : null;
+    const targetId = getReplayExportActionTarget(nextFrame, previousState, nextState);
+    const boardTarget = targetId == null ? null : getPlayerRegionById(targetId);
+    let targetElement = targetId == null
+        ? null
+        : (isVisibleTargetRegion(boardTarget) ? boardTarget : getClassicFighterElementByPlayerId(targetId));
+    if (actionType === 'play_card' && actionCard && !isVisibleTargetRegion(targetElement)) {
+        targetElement = getReplayExportFallbackCardTargetElement(actionCard);
+    }
 
     let interactionTarget = null;
-    if (actionType === 'response') {
+    if (actionType === 'response' && isPerspectiveAction) {
         // Exact candidate cards are available only in new replay payloads.
         // Missing historical data is deliberately skipped instead of being
         // reconstructed through the current rules engine.
         interactionTarget = showReplayExportResponseWindow(previousFrame, nextFrame);
-    } else if (actionType === 'resolve_choice') {
+    } else if (actionType === 'resolve_choice' && isPerspectiveAction) {
         interactionTarget = showReplayExportChoiceWindow(previousState, previousFrame, nextFrame);
-    } else if (actionType === 'end_turn') {
-        interactionTarget = currentUiStyle === 'classic' ? $('classic-end-turn') : $('btn-end-turn');
-    } else if (actionType === 'use_trigger') {
-        interactionTarget = findReplayExportCardElement(payload.equipment_instance_id);
-    } else if (actionType === 'v2_ui_response') {
+    } else if (actionType === 'end_turn' && isPerspectiveAction) {
+        interactionTarget = $('classic-end-turn');
+    } else if (actionType === 'use_trigger' && isPerspectiveAction) {
+        const equipmentId = payload.equipment_instance_id;
+        interactionTarget = equipmentId == null
+            ? null
+            : document.querySelector(`#classic-fighter-self .classic-equip-chip${replayExportCardSelector(equipmentId)}`);
+    } else if (actionType === 'v2_ui_response' && isPerspectiveAction) {
         interactionTarget = showReplayExportV2Window(previousFrame, nextFrame);
-    } else if (actionType === 'ally_consent_response') {
+    } else if (actionType === 'ally_consent_response' && isPerspectiveAction) {
         interactionTarget = showReplayExportAllyConsentWindow(previousFrame, nextFrame);
     }
 
     const recordedIntervalMs = Math.max(0, (Number(nextFrame.t) || 0) - (Number(previousFrame.t) || 0));
     const preserveTiming = options.preserve_timing !== false;
     const stateAnimationMs = getReplayExportStateAnimationDuration(previousState, nextState);
-    const naturalGestureMs = actionType === 'play_card' && cardElement
+    const naturalGestureMs = actionType === 'play_card' && cardElement && actionCard
         ? 1750
-        : (interactionTarget ? 620 : 0);
+        : (actionType === 'use_trigger' && interactionTarget && targetElement ? 1300 : (interactionTarget ? 620 : 0));
     const naturalActiveMs = stateAnimationMs + naturalGestureMs;
-    const durationMs = preserveTiming ? recordedIntervalMs : naturalActiveMs;
-    const activeBudgetMs = preserveTiming ? Math.min(durationMs, naturalActiveMs) : naturalActiveMs;
-    const activeStartMs = Math.max(0, durationMs - activeBudgetMs);
+    // Recorded actions may be closer together than the simulated cursor and
+    // combat animation. Preserve long real pauses, but never squeeze a full
+    // gesture into a shorter interval because that makes it unreadably fast.
+    const durationMs = preserveTiming ? Math.max(recordedIntervalMs, naturalActiveMs) : naturalActiveMs;
+    const activeBudgetMs = naturalActiveMs;
+    const activeStartMs = preserveTiming ? Math.max(0, recordedIntervalMs - naturalActiveMs) : 0;
     const stateBudgetMs = Math.min(stateAnimationMs, Math.max(0, activeBudgetMs * (naturalGestureMs ? 0.56 : 1)));
     const gestureBudgetMs = Math.max(0, activeBudgetMs - stateBudgetMs);
 
     let gestureMs = 0;
     if (options.simulate_player_input !== false) {
-        if (actionType === 'play_card' && cardElement) {
+        if (actionType === 'play_card' && cardElement && actionCard) {
             gestureMs = scheduleReplayExportCardGesture(
                 cardElement,
+                actionCard,
                 targetElement,
                 gestureBudgetMs,
                 activeStartMs,
                 `${nextIndex}:${actionType}:${cardInstanceId}`,
             );
+        } else if (actionType === 'use_trigger' && interactionTarget && targetElement) {
+            gestureMs = scheduleReplayExportTriggerGesture(
+                interactionTarget,
+                payload.equipment_instance_id,
+                targetElement,
+                gestureBudgetMs,
+                activeStartMs,
+                `${nextIndex}:${actionType}:${payload.equipment_instance_id}`,
+            );
         } else if (interactionTarget && gestureBudgetMs >= 120) {
             const point = getReplayExportElementPoint(interactionTarget, 0.5, 0.5);
             if (point) {
-                const hasSecondTarget = actionType === 'use_trigger' && !!targetElement;
-                const moveMs = Math.max(100, Math.round((gestureBudgetMs - 150) * (hasSecondTarget ? 0.48 : 1)));
+                const moveMs = Math.max(100, gestureBudgetMs - 170);
                 moveReplayExportCursor(point, moveMs, {
                     delay: activeStartMs,
                     seed: `${nextIndex}:${actionType}:interaction`,
                 });
-                clickReplayExportCursor({ delay: activeStartMs + moveMs });
-                gestureMs = moveMs + 150;
-                if (hasSecondTarget) {
-                    const targetPoint = getReplayExportElementPoint(targetElement, 0.5, 0.5);
-                    if (targetPoint) {
-                        const targetMoveMs = Math.max(100, gestureBudgetMs - gestureMs - 100);
-                        targetElement.classList.add('virtual-play-target');
-                        moveReplayExportCursor(targetPoint, targetMoveMs, {
-                            delay: activeStartMs + gestureMs,
-                            seed: `${nextIndex}:${actionType}:target`,
-                        });
-                        clickReplayExportCursor({ delay: activeStartMs + gestureMs + targetMoveMs });
-                        gestureMs += targetMoveMs + 100;
-                        setTimeout(() => targetElement.classList.remove('virtual-play-target'), activeStartMs + gestureMs + 180);
-                    }
-                }
+                const clickDoneAt = clickReplayExportCursor({ delay: activeStartMs + moveMs });
+                gestureMs = clickDoneAt - activeStartMs;
             }
         }
     }
@@ -18048,17 +18408,25 @@ function startReplayVideoExportTransition(index, options = {}) {
     const settleDelay = Math.min(durationMs, activeStartMs + Math.max(0, gestureMs));
     setTimeout(() => {
         if (token !== replayVideoExportTransitionToken) return;
-        if (isCardAction && cardElement) {
+        let temporaryCardSource = null;
+        let playedCardSource = null;
+        if (actionType === 'play_card') {
+            playedCardSource = cardElement;
+        } else if (actionType === 'response' && isPerspectiveAction) {
+            playedCardSource = interactionTarget;
+        }
+        if (isCardAction && !playedCardSource && actionCard) {
+            temporaryCardSource = createReplayExportPlayedCardSource(actionCard, actorId, previousState);
+            playedCardSource = temporaryCardSource;
+        }
+        if (isCardAction && playedCardSource) {
             animatePlayedCard(cardInstanceId, {
-                sourceElement: cardElement,
-                targetElement,
-            });
-        } else if (actionType === 'response' && interactionTarget && cardInstanceId != null) {
-            animatePlayedCard(cardInstanceId, {
-                sourceElement: interactionTarget,
-                targetElement,
+                sourceElement: playedCardSource,
+                targetElement: targetElement || getPlayGestureFallbackTarget(),
+                durationScale: 2.2,
             });
         }
+        if (temporaryCardSource) temporaryCardSource.remove();
         queueReplayExportExileAnimations(previousState, nextState);
         showReplayVideoExportFrame(nextIndex);
         showStateDeltas(previousState, nextState);
@@ -18072,8 +18440,11 @@ function startReplayVideoExportTransition(index, options = {}) {
         preserved_timing: preserveTiming,
         gesture_ms: gestureMs,
         action_type: actionType,
+        actor_player_id: actorId,
+        perspective_action: isPerspectiveAction,
         card_instance_id: cardInstanceId,
         card_element_found: !!cardElement,
+        card_snapshot_found: !!actionCard,
         visible_card_elements: document.querySelectorAll('[data-instance-id]').length,
         target_player_id: targetId,
         exact_interaction_snapshot: !!interactionTarget,
@@ -18109,7 +18480,7 @@ async function loadReplayForVideoExport(payload, options = {}) {
     localStorage.setItem(MUSIC_NOTICE_KEY, '1');
     applyLang();
     applyTheme(options.theme === 'dark' ? 'dark' : 'light');
-    applyUiStyle(options.ui_style === 'classic' ? 'classic' : 'minimal');
+    applyUiStyle('classic');
     showCardImages = true;
     localStorage.setItem('gtn_show_card_images', '1');
     showEnglishCardNames = options.show_english_names !== false;
@@ -18122,8 +18493,8 @@ async function loadReplayForVideoExport(payload, options = {}) {
     }
 
     replayMode = true;
-    isSpectating = true;
-    playerId = -1;
+    isSpectating = false;
+    playerId = accountReplayPerspective;
     spectatePerspective = accountReplayPerspective;
     activeSpectateRoomId = null;
     pendingSpectateRoomId = null;
@@ -18158,7 +18529,7 @@ async function loadReplayForVideoExport(payload, options = {}) {
 }
 
 window.GTNReplayVideoBridge = {
-    version: 4,
+    version: 6,
     async load(payload, options = {}) {
         return loadReplayForVideoExport(payload, options);
     },
@@ -18173,6 +18544,12 @@ window.GTNReplayVideoBridge = {
     },
     startTransition(index, options = {}) {
         return startReplayVideoExportTransition(index, options);
+    },
+    beginAudioCapture() {
+        return beginReplayVideoExportAudioCapture();
+    },
+    drainAudioCapture() {
+        return drainReplayVideoExportAudioCapture();
     },
     setPerspective(index) {
         accountReplayPerspective = Math.max(0, Number(index) || 0);
@@ -18809,7 +19186,7 @@ function loadSoloDecks(showNotice = true) {
                 ? { def_id: entry, instance_flags: [], disabled_flags: [] }
                 : { def_id: entry.def_id, instance_flags: [...(entry.instance_flags || [])], disabled_flags: [...(entry.disabled_flags || [])] })
             .filter(entry => entry)
-            .slice(0, 15);
+            .slice(0, SOLO_TRAINING_MAX_DECK_SIZE);
         soloDeckA = normalizeDeck(saved.deck0);
         soloDeckB = normalizeDeck(saved.deck1);
         soloEventA = saved.event0 != null ? String(saved.event0) : '';
@@ -21153,6 +21530,26 @@ function chatTimelineSignature(entry = {}) {
     ]);
 }
 
+function chatRepeatCount(entry = {}) {
+    return Math.max(1, Number(entry.repeat_count || entry.repeatCount || 1));
+}
+
+function mergeMonotonicChatRepeatCounts(incoming = [], existing = [], keyForEntry = chatTimelineSignature) {
+    const previousCounts = new Map();
+    (Array.isArray(existing) ? existing : []).forEach(entry => {
+        if (!entry || entry.type !== 'chat') return;
+        const key = keyForEntry(entry);
+        if (!key) return;
+        previousCounts.set(key, Math.max(previousCounts.get(key) || 1, chatRepeatCount(entry)));
+    });
+    return (Array.isArray(incoming) ? incoming : []).map(entry => {
+        if (!entry || entry.type !== 'chat') return entry;
+        const key = keyForEntry(entry);
+        const count = Math.max(chatRepeatCount(entry), previousCounts.get(key) || 1);
+        return { ...entry, repeat_count: count, repeatCount: count };
+    });
+}
+
 function appendCompressedTimelineChat(list, entry, max = 500) {
     if (!Array.isArray(list) || !entry) return false;
     const last = list[list.length - 1];
@@ -21202,8 +21599,14 @@ function syncRoomChatHistory(data = {}) {
     if (signature === roomChatHistorySignature) return;
     roomChatHistorySignature = signature;
     const entries = history.items.map(roomChatHistoryItemToTimelineEntry);
-    const pregame = entries.filter(entry => entry.pregame);
-    const battle = entries.filter(entry => !entry.pregame);
+    const pregame = mergeMonotonicChatRepeatCounts(
+        entries.filter(entry => entry.pregame),
+        pregameChatEntries,
+    );
+    const battle = mergeMonotonicChatRepeatCounts(
+        entries.filter(entry => !entry.pregame),
+        battleChatEntries,
+    );
     pregameChatEntries = pregame.slice(-500);
     phaseChatEntries = pregame.slice(-500);
     battleChatEntries = battle.map(entry => ({ ...entry, matchKey })).slice(-500);
@@ -21471,9 +21874,13 @@ function updateClassicExtraControls(gs) {
     const inSoloGame = !!gs?.solo;
     const inTutorial = !!gs?.tutorial || tutorialMode;
     const gameOver = gs?.phase === 'game_over';
-    const isReadOnlyBattle = !!(isSpectating || replayMode || gs?.spectating || gs?.replay_mode);
+    const replayExportPlayerView = isReplayVideoExportPlayerView();
+    const isReadOnlyBattle = !!(
+        (isSpectating || replayMode || gs?.spectating || gs?.replay_mode)
+        && !replayExportPlayerView
+    );
     if (chatRow) {
-        const showChat = !replayMode && !gs?.replay_mode;
+        const showChat = replayExportPlayerView || (!replayMode && !gs?.replay_mode);
         chatRow.classList.toggle('hidden', !showChat);
         chatRow.style.display = showChat ? '' : 'none';
     }
@@ -21674,7 +22081,10 @@ function buildBattleViewModel(state) {
     const self = normalizeBattlePlayer(gs, you, 'self');
     const enemy = normalizeBattlePlayer(gs, opponent, 'enemy');
     const is2v2 = isClassic2v2State(gs);
-    const isReadOnlyBattle = !!(isSpectating || replayMode || gs.spectating || gs.replay_mode);
+    const isReadOnlyBattle = !!(
+        (isSpectating || replayMode || gs.spectating || gs.replay_mode)
+        && !isReplayVideoExportPlayerView()
+    );
     const ally = is2v2 ? normalizeBattlePlayer(gs, gs.teammate || {}, 'ally') : null;
     const enemy2 = is2v2 ? normalizeBattlePlayer(gs, gs.opponent2 || {}, 'enemy2') : null;
     const hand = (you.hand || []).map(card => normalizeBattleCard(card, you));
@@ -22541,6 +22951,7 @@ function renderGame(data) {
     const myTurn = isMyTurn();
     debugLog('[RENDER] renderGame: phase=', gs.phase, 'current_player=', gs.current_player, 'playerId=', playerId, 'myTurn=', myTurn, 'is2v2=', is2v2);
 
+    const replayExportPlayerView = isReplayVideoExportPlayerView();
     const gameContainer = document.querySelector('.game-container');
     if (gameContainer) {
         if (is2v2) {
@@ -22548,18 +22959,24 @@ function renderGame(data) {
         } else {
             gameContainer.classList.remove('mode-2v2');
         }
-        gameContainer.classList.toggle('mode-spectate', !!(isSpectating || gs.spectating || replayMode || gs.replay_mode));
+        gameContainer.classList.toggle('mode-spectate', !!(
+            (isSpectating || gs.spectating || replayMode || gs.replay_mode)
+            && !replayExportPlayerView
+        ));
         gameContainer.classList.toggle('mode-tutorial', !!gs.tutorial || tutorialMode);
         gameContainer.classList.toggle('mode-solo', !!gs.solo);
         gameContainer.classList.toggle('mode-urf', gs.mode === 'urf');
-        gameContainer.classList.toggle('mode-replay', !!replayMode || !!gs.replay_mode);
+        gameContainer.classList.toggle('mode-replay', (!!replayMode || !!gs.replay_mode) && !replayExportPlayerView);
     }
     const classicContainer = $('battle-classic');
     if (classicContainer) {
-        classicContainer.classList.toggle('mode-spectate', !!(isSpectating || replayMode || gs.spectating || gs.replay_mode));
+        classicContainer.classList.toggle('mode-spectate', !!(
+            (isSpectating || replayMode || gs.spectating || gs.replay_mode)
+            && !replayExportPlayerView
+        ));
         classicContainer.classList.toggle('mode-2v2', !!is2v2);
         classicContainer.classList.toggle('mode-urf', gs.mode === 'urf');
-        classicContainer.classList.toggle('mode-replay', !!(replayMode || gs.replay_mode));
+        classicContainer.classList.toggle('mode-replay', !!(replayMode || gs.replay_mode) && !replayExportPlayerView);
     }
 
     const opp2Half = $('opp2-half');
@@ -22827,23 +23244,23 @@ function renderPlayerBars(containerId, playerData) {
 
 async function showOpeningSequenceChoice(deckEntries, title = (UI.opening_sequence_title || '花序编排')) {
     const candidates = (deckEntries || [])
-        .map(card => typeof card === 'string' ? { def_id: card } : { ...(card || {}) })
+        .map((card, index) => ({
+            ...(typeof card === 'string' ? { def_id: card } : { ...(card || {}) }),
+            instance_id: `opening-sequence-${index}`,
+        }))
         .filter(card => card.def_id && getCardDef(card.def_id) && !cardHasSublimeFlag(card));
-    const required = Math.min(3, candidates.length);
-    if (!required) return { topdeck_def_ids: [] };
-    const selected = await showSetupCardMultiSelect(
-        candidates,
-        required,
-        title,
-        {
-            min: required,
-            cancellable: false,
-            preserveSelectionOrder: true,
-            message: UI.opening_sequence_message || '按选择顺序移至抽牌堆顶，最先选择的牌最先抽取。',
-        }
-    );
-    if (!selected || selected === false) return false;
-    return { topdeck_def_ids: selected.map(card => card.def_id).slice(0, required) };
+    if (!candidates.length) return { deck_order_def_ids: [] };
+    const result = await showReorderDeckUI(candidates, title, {
+        cancellable: false,
+        hint: UI.opening_sequence_message || '拖动卡牌调整抽牌堆顺序，最上方的牌最先抽取。',
+    });
+    if (!result || !Array.isArray(result.new_order)) return false;
+    const byId = new Map(candidates.map(card => [String(card.instance_id), card.def_id]));
+    return {
+        deck_order_def_ids: result.new_order
+            .map(instanceId => byId.get(String(instanceId)))
+            .filter(Boolean),
+    };
 }
 
 function getPlayerCritMultiplier(playerData = {}) {
@@ -26223,6 +26640,18 @@ function lobbyChatEntryKey(entry = {}) {
     return String(entry.message_id || entry.messageId || entry.id || `${entry.time || ''}:${entry.nickname || ''}:${entry.text || ''}`);
 }
 
+function lobbyChatRepeatKey(entry = {}) {
+    if (!entry || entry.type !== 'chat') return '';
+    return JSON.stringify([
+        lobbyChatEntryKey(entry),
+        entry.nickname || entry.display_nick || '',
+        entry.text || '',
+        entry.chat_channel || entry.channel || '',
+        entry.chat_target_name || entry.targetName || '',
+        !!entry.system,
+    ]);
+}
+
 function currentUserMentionTokens(entry = {}) {
     const tokens = new Set();
     const keys = currentUserMentionKeys();
@@ -26374,7 +26803,11 @@ function appendLobbyChatEntry(entry = {}, options = {}) {
 function renderLobbyChatHistory(data = {}) {
     const container = $('lobby-chat-log');
     if (!container) return;
-    const items = Array.isArray(data.items) ? data.items : [];
+    const items = mergeMonotonicChatRepeatCounts(
+        Array.isArray(data.items) ? data.items : [],
+        lobbyChatEntries,
+        lobbyChatRepeatKey,
+    );
     const signature = JSON.stringify([currentLang, items.map(entry => [
         entry && entry.type,
         entry && entry.id,
@@ -26389,6 +26822,7 @@ function renderLobbyChatHistory(data = {}) {
     ])]);
     if (signature === lobbyChatHistorySignature) return;
     lobbyChatHistorySignature = signature;
+    lobbyChatEntries = items.map(entry => (entry && typeof entry === 'object' ? { ...entry } : entry));
     const shouldAutoScroll = isLobbyChatNearBottom(container);
     const previousScrollTop = container.scrollTop;
     container.innerHTML = '';
@@ -26690,9 +27124,8 @@ function animateDrawnCard(cardEl, index = 0) {
     const finalY = finalRect.top + finalRect.height / 2;
     const dx = source.x - finalX;
     const dy = source.y - finalY;
-    const exportingReplayVideo = document.documentElement.classList.contains('replay-video-export');
-    const delay = Math.min(index * (exportingReplayVideo ? 75 : 42), exportingReplayVideo ? 225 : 126);
-    const duration = exportingReplayVideo ? 480 : 230;
+    const delay = Math.min(index * 42, 126);
+    const duration = 230;
     cardEl.classList.add('hand-card-animating');
     cardEl.style.transition = 'none';
     cardEl.style.opacity = '0';
@@ -26771,6 +27204,7 @@ function animatePlayedCard(cardInstanceId, options = {}) {
     flash.style.left = `${rect.left}px`;
     flash.style.top = `${rect.top}px`;
     flash.style.width = `${rect.width}px`;
+    const durationScale = Math.max(0.5, Math.min(3, Number(options.durationScale || 1)));
     let targeted = false;
     if (options.targetElement) {
         const targetRect = options.targetElement.getBoundingClientRect();
@@ -26788,23 +27222,24 @@ function animatePlayedCard(cardInstanceId, options = {}) {
                 burst.style.top = `${targetRect.top + targetRect.height / 2}px`;
                 document.body.appendChild(burst);
                 setTimeout(() => burst.remove(), 520);
-            }, 310);
+            }, 310 * durationScale);
         }
     }
+    flash.style.animationDuration = `${(targeted ? 500 : 380) * durationScale}ms`;
     const startDelay = Math.max(0, Number(options.startDelay || 0));
     const appendFlash = () => document.body.appendChild(flash);
     if (startDelay > 0) setTimeout(appendFlash, startDelay);
     else appendFlash();
     if (options.shatterAfter) {
-        lockCardAnimation(startDelay + (targeted ? 980 : 900));
+        lockCardAnimation(startDelay + (targeted ? 980 : 900) * durationScale);
         setTimeout(() => {
             animateCardShatterFromElement(flash);
             flash.remove();
-        }, startDelay + (targeted ? 420 : 340));
-        setTimeout(() => flash.remove(), startDelay + (targeted ? 900 : 760));
+        }, startDelay + (targeted ? 420 : 340) * durationScale);
+        setTimeout(() => flash.remove(), startDelay + (targeted ? 900 : 760) * durationScale);
     } else {
-        lockCardAnimation(startDelay + (targeted ? 500 : 360));
-        setTimeout(() => flash.remove(), startDelay + (targeted ? 560 : 420));
+        lockCardAnimation(startDelay + (targeted ? 500 : 360) * durationScale);
+        setTimeout(() => flash.remove(), startDelay + (targeted ? 560 : 420) * durationScale);
     }
 }
 
@@ -27635,7 +28070,7 @@ async function showReorderDeckUI(deckCards, titleText, config = {}) {
     content.appendChild(title);
     const hint = document.createElement('p');
     hint.className = 'deck-total';
-    hint.textContent = '拖拽三横线调整顺序（最上方先抽到）';
+    hint.textContent = config.hint || '拖拽三横线调整顺序（最上方先抽到）';
     content.appendChild(hint);
     const list = document.createElement('div');
     list.className = 'deck-list reorder-deck-list';

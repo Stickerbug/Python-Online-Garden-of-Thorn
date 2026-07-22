@@ -157,6 +157,7 @@ from db import (
     record_opening_event_win_result,
     rebuild_card_draft_win_stats_from_matches,
     backfill_achievements_from_matches,
+    backfill_cards_played_achievements_from_matches,
     backfill_match_thorn_dew_from_matches,
     rebuild_gr_from_matches,
     rebuild_user_stats_from_matches,
@@ -392,7 +393,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260721-plank-attack-only-7'
+GTN_STATIC_CACHE_BUST = 'ui-20260722-opening-deck-order-2'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -4338,7 +4339,7 @@ def _default_event_sub_choice(engine, pidx):
         return {}
     if event_id == '11':
         candidates = list(engine.opening_event_topdeck_candidates(pidx)) if hasattr(engine, 'opening_event_topdeck_candidates') else []
-        return {'topdeck_def_ids': candidates[:3]}
+        return {'deck_order_def_ids': candidates}
     return {}
 
 
@@ -7537,7 +7538,7 @@ ADMIN_COMMAND_TREE = {
     },
     'data': {
         'summary': '统计、回放与数据库维护',
-        'usage': 'data <summary|draftstats|rating|rebuildstats|dewbackfill|achievementbackfill> ...',
+        'usage': 'data <summary|draftstats|rating|rebuildstats|dewbackfill|achievementbackfill|cardsbackfill> ...',
         'children': {
             'summary': {'summary': '查看数据库、回放和快照占用', 'usage': 'data summary'},
             'draftstats': {'summary': '查看卡牌选取统计', 'usage': 'data draftstats [1v1|2v2]'},
@@ -7553,6 +7554,7 @@ ADMIN_COMMAND_TREE = {
             'rebuildstats': {'summary': '重建账号统计', 'usage': 'data rebuildstats confirm'},
             'dewbackfill': {'summary': '补发历史对局荆露', 'usage': 'data dewbackfill <preview|confirm>'},
             'achievementbackfill': {'summary': '补发可重算成就', 'usage': 'data achievementbackfill <preview|confirm>'},
+            'cardsbackfill': {'summary': '按账号或全服校正花牌流转进度', 'usage': 'data cardsbackfill <preview|confirm> <账号|all> [批次数]'},
         },
     },
     'room': {
@@ -8330,6 +8332,8 @@ def admin_achievement_backfill_output(result):
         card_errors = cards.get('errors') or []
         if card_errors:
             lines.append(f"  花牌流转补偿错误：{len(card_errors)}条")
+        if cards.get('batch_limit_reached'):
+            lines.append('  花牌流转仍有未处理对局；请重复执行同一命令继续下一批。')
     examples = result.get('examples') or []
     if examples:
         lines.append('')
@@ -8342,6 +8346,45 @@ def admin_achievement_backfill_output(result):
     if dry_run:
         lines.append('')
         lines.append('确认补发请输入：/data achievementbackfill confirm')
+    return '\n'.join(lines)
+
+
+def admin_cards_played_backfill_output(result, user=None):
+    dry_run = bool(result.get('dry_run'))
+    user_label = (
+        f"{user.get('username')}#{user.get('id')}" if isinstance(user, dict) else
+        str(result.get('target_user_id') or '全部账号')
+    )
+    lines = [
+        '花牌流转校正预览' if dry_run else '花牌流转校正已完成',
+        f'账号：{user_label}',
+        f"本批对局：{result.get('matches_compensated', 0)}",
+        f"本批恢复进度：{result.get('cards_total', 0)}张",
+        f"摘要/回放精确恢复：{result.get('summary_players', 0)}/{result.get('replay_players', 0)}人次",
+        f"固定15张补偿：{result.get('fallback_players', 0)}人次，共{result.get('fallback_cards', 0)}张",
+        f"已处理跳过：{result.get('already_processed_players', 0)}人次",
+        f"超限回放：{result.get('oversized_replays', 0)}",
+        (
+            f"预计解锁/奖励：{result.get('would_unlock', 0)}项/{result.get('would_reward_dew', 0)}荆露"
+            if dry_run else
+            f"实际解锁/奖励：{result.get('unlocked', 0)}项/{result.get('reward_dew_awarded', 0)}荆露"
+        ),
+    ]
+    fallback_reasons = result.get('fallback_reasons') or {}
+    if fallback_reasons:
+        lines.append('回退原因：' + '，'.join(f'{key}={value}' for key, value in sorted(fallback_reasons.items())))
+    errors = result.get('errors') or []
+    if errors:
+        lines.append(f'错误：{len(errors)}条')
+    if result.get('batch_limit_reached'):
+        lines.append('仍有未处理历史对局；请重复执行同一命令继续下一批。')
+    if dry_run:
+        confirm_target = user.get('username') if isinstance(user, dict) else 'all'
+        lines.append('')
+        lines.append(
+            f"确认本批校正请输入：/data cardsbackfill confirm {confirm_target} "
+            f"{result.get('batch_limit') or 20}"
+        )
     return '\n'.join(lines)
 
 
@@ -9691,20 +9734,62 @@ def execute_admin_command(line, _internal=False):
                 admin_event('error', f'thorn dew backfill failed: {exc}')
                 return {'success': False, 'output': f'荆露补发失败：{exc}'}
         return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'data dewbackfill <preview|confirm>')}
+    if cmd in ('cardsbackfill', 'backfillcards', '补发花牌流转'):
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        if len(parts) < 3:
+            return {
+                'success': False,
+                'output': command_error(raw, len(raw), 'data cardsbackfill <preview|confirm> <账号|all> [批次数]'),
+            }
+        sub = parts[1].lower()
+        if sub not in ('preview', 'dryrun', 'dry-run', '试算', '预览', 'confirm', '确认'):
+            return {
+                'success': False,
+                'output': command_error(raw, len(parts[0]) + 1, 'data cardsbackfill <preview|confirm> <账号|all> [批次数]'),
+            }
+        target_token = str(parts[2] or '').strip()
+        all_users = target_token.lower() in ('all', '全部', '全服')
+        user = None if all_users else find_user_for_admin(target_token)
+        if not all_users and not user:
+            return {'success': False, 'output': '账号不存在'}
+        try:
+            batch_limit = max(1, min(100, int(parts[3]))) if len(parts) > 3 else 20
+        except (TypeError, ValueError):
+            return {'success': False, 'output': '批次数必须是1-100的整数'}
+        dry_run = sub in ('preview', 'dryrun', 'dry-run', '试算', '预览')
+        try:
+            result = backfill_cards_played_achievements_from_matches(
+                dry_run=dry_run,
+                limit=batch_limit,
+                user_id=None if all_users else user.get('id'),
+            )
+            if not dry_run:
+                target_label = 'all' if all_users else f"{user.get('username')}#{user.get('id')}"
+                admin_event(
+                    'admin',
+                    f"cards played backfill user={target_label} "
+                    f"matches={result.get('matches_compensated', 0)} cards={result.get('cards_total', 0)} "
+                    f"fallback={result.get('fallback_players', 0)}",
+                )
+            return {'success': True, 'output': admin_cards_played_backfill_output(result, user=user)}
+        except Exception as exc:
+            admin_event('error', f'cards played backfill failed user={"all" if all_users else user.get("id")}: {exc}')
+            return {'success': False, 'output': f'花牌流转校正失败：{exc}'}
     if cmd in ('achievementbackfill', 'backfillachievements', 'achievementsbackfill', '补发成就'):
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
         sub = parts[1].lower() if len(parts) > 1 else 'preview'
         if sub in ('preview', 'dryrun', 'dry-run', '试算', '预览'):
             try:
-                result = backfill_achievements_from_matches(dry_run=True)
+                result = backfill_achievements_from_matches(dry_run=True, limit=20)
                 return {'success': True, 'output': admin_achievement_backfill_output(result)}
             except Exception as exc:
                 admin_event('error', f'achievement backfill preview failed: {exc}')
                 return {'success': False, 'output': f'成就补发预览失败：{exc}'}
         if sub in ('confirm', '确认'):
             try:
-                result = backfill_achievements_from_matches(dry_run=False)
+                result = backfill_achievements_from_matches(dry_run=False, limit=20)
                 cards = result.get('cards_played_backfill') or {}
                 admin_event(
                     'admin',
@@ -10513,8 +10598,10 @@ def admin_completions(line):
     if cmd == 'data':
         if sub == 'draftstats' and position == 2:
             return filtered(['1v1', '2v2'])
-        if sub in ('rebuildstats', 'dewbackfill', 'achievementbackfill') and position == 2:
+        if sub in ('rebuildstats', 'dewbackfill', 'achievementbackfill', 'cardsbackfill') and position == 2:
             return filtered(['preview', 'confirm'] if sub != 'rebuildstats' else ['confirm'])
+        if sub == 'cardsbackfill' and position == 3:
+            return filtered(['all', *account_values()])
         if sub == 'rating':
             if position == 2:
                 return filtered(['season', 'list', 'rebuild'])
@@ -15805,6 +15892,8 @@ def on_login(data):
             opponent_nickname = reconnect_room.engine.player_names[1 - reconnect_pidx]
         emit('reconnect_available', {
             'room_id': reconnect_room.room_id,
+            'match_key': room_match_key(reconnect_room),
+            'mode': reconnect_room.mode,
             'old_sid': reconnect_old_sid,
             'opponent_nickname': opponent_nickname,
         })
@@ -17389,14 +17478,17 @@ def on_submit_event_sub_choice(data):
             else:
                 sub_choice = {'add_def_ids': valid_ids}
         if reject_reason is None and not resend_only and str(engine.opening_event_picks[pidx]) == '11':
-            raw_ids = []
-            if isinstance(sub_choice, dict):
-                raw_ids = list(sub_choice.get('topdeck_def_ids') or sub_choice.get('def_ids') or [])
             available = list(engine.opening_event_topdeck_candidates(pidx)) if hasattr(engine, 'opening_event_topdeck_candidates') else []
-            required = min(3, len(available))
+            full_order = isinstance(sub_choice, dict) and 'deck_order_def_ids' in sub_choice
+            if full_order:
+                raw_ids = list(sub_choice.get('deck_order_def_ids') or [])
+                required = len(available)
+            else:
+                raw_ids = list(sub_choice.get('topdeck_def_ids') or sub_choice.get('def_ids') or []) if isinstance(sub_choice, dict) else []
+                required = min(3, len(available))
             valid_ids = []
             remaining = list(available)
-            for def_id in raw_ids[:3]:
+            for def_id in raw_ids[:required]:
                 def_id = str(def_id)
                 if def_id not in remaining:
                     continue
@@ -17405,7 +17497,9 @@ def on_submit_event_sub_choice(data):
             if len(valid_ids) != required or len(raw_ids) != required:
                 resend_only = True
             else:
-                sub_choice = {'topdeck_def_ids': valid_ids}
+                sub_choice = {
+                    'deck_order_def_ids' if full_order else 'topdeck_def_ids': valid_ids,
+                }
         if reject_reason is None and not resend_only:
             event_id_text = str(engine.opening_event_picks[pidx])
             # Built-in setup choices allow an explicit empty confirmation.

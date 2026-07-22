@@ -824,6 +824,7 @@ class LocalSoloEngine {
         this._last_positive_damage_hits = [0, 0];
         this._incoming_damage_hint = [0, 0];
         this._game_over_defer_depth = 0;
+        this._equalSufferingPending = false;
         this._cardResolutionDepth = 0;
         this._cardResolutionTargetSnapshot = null;
         this.halve_next_attack = false;
@@ -928,6 +929,7 @@ class LocalSoloEngine {
         clone._last_positive_damage_hits = [...(this._last_positive_damage_hits || [0, 0])];
         clone._incoming_damage_hint = [...this._incoming_damage_hint];
         clone._game_over_defer_depth = this._game_over_defer_depth;
+        clone._equalSufferingPending = !!this._equalSufferingPending;
         clone._cardResolutionDepth = toInt(this._cardResolutionDepth, 0);
         clone._cardResolutionTargetSnapshot = cloneJson(this._cardResolutionTargetSnapshot);
         clone.halve_next_attack = this.halve_next_attack;
@@ -1493,8 +1495,8 @@ class LocalSoloEngine {
             this.logMsg(`${this.pn(playerId)}【光之洗礼】：${converted}张牌变为[[card:Light|flag=sprout|flag=symbiosis]]`);
         } else if (eventId === 4) {
             if (!this.statusApplicationBlocked(1 - playerId, 'fire')) {
-                opp.fire += 3;
-                this.logMsg(`${this.pn(playerId)}【烈焰预兆】：敌方+3灼烧`);
+                opp.fire += 4;
+                this.logMsg(`${this.pn(playerId)}【烈焰预兆】：敌方+4灼烧`);
             }
         } else if (eventId === 5) {
             const picked = (sub.add_def_ids || sub.def_ids || []).slice(0, 1);
@@ -1549,14 +1551,33 @@ class LocalSoloEngine {
             ps.custom_vars.setup_magic_acceleration_play_count = 0;
             this.logMsg(`${this.pn(playerId)}【魔力加速】：每打出2张不消耗M的牌回复1M`);
         } else if (eventId === 11) {
-            const selectedDefIds = (sub.topdeck_def_ids || sub.def_ids || []).slice(0, 3);
-            const moved = [];
-            selectedDefIds.forEach(defId => {
-                const index = ps.deck.findIndex(card => card.def_id === String(defId) && !card.flags.has('sublime'));
-                if (index >= 0) moved.push(ps.deck.splice(index, 1)[0]);
-            });
-            if (moved.length) ps.deck.unshift(...moved);
-            this.logMsg(`${this.pn(playerId)}【花序编排】：${moved.length}张牌移至抽牌堆顶`);
+            const orderedDefIds = Array.isArray(sub.deck_order_def_ids) ? sub.deck_order_def_ids : [];
+            if (orderedDefIds.length) {
+                const positions = ps.deck
+                    .map((card, index) => (!card.flags.has('sublime') ? index : -1))
+                    .filter(index => index >= 0);
+                const remaining = positions.map(index => ps.deck[index]);
+                const ordered = [];
+                orderedDefIds.forEach(rawDefId => {
+                    const defId = String(rawDefId || '');
+                    const index = remaining.findIndex(card => card.def_id === defId);
+                    if (index >= 0) ordered.push(remaining.splice(index, 1)[0]);
+                });
+                ordered.push(...remaining);
+                positions.forEach((position, index) => { ps.deck[position] = ordered[index]; });
+                this.logMsg(`${this.pn(playerId)}【花序编排】：调整了${positions.length}张牌的抽牌顺序`);
+            } else {
+                const selectedDefIds = (sub.topdeck_def_ids || sub.def_ids || []).slice(0, 3);
+                const moved = [];
+                selectedDefIds.forEach(defId => {
+                    const index = ps.deck.findIndex(card => card.def_id === String(defId) && !card.flags.has('sublime'));
+                    if (index >= 0) moved.push(ps.deck.splice(index, 1)[0]);
+                });
+                if (moved.length) ps.deck.unshift(...moved);
+                this.logMsg(`${this.pn(playerId)}【花序编排】：${moved.length}张牌移至抽牌堆顶`);
+            }
+        } else if (eventId === 12) {
+            this.logMsg(`${this.pn(playerId)}【众生平等】：自己回合开始时，对敌方造成7D，对自己造成5D`);
         }
     }
 
@@ -1712,6 +1733,7 @@ class LocalSoloEngine {
             });
         });
         this._deferTurnStartDeathChecks = true;
+        this.applyEqualSufferingTurnStart(playerId);
         if (ps.poison > 0) {
             this.dealDirectDamage(playerId, ps.poison, '中毒');
             ps.poison = Math.floor(ps.poison / 2);
@@ -1748,10 +1770,42 @@ class LocalSoloEngine {
         });
         if (!this.game_over) this.applyJungleTurnStartRegen(playerId);
         this._deferTurnStartDeathChecks = false;
+        this.finalizeEqualSufferingTurnStart();
+        if (this.game_over) return;
         if (ps.health <= 0) {
             this.checkYggdrasil(playerId);
             this.checkGameOver();
         }
+    }
+
+    applyEqualSufferingTurnStart(playerId) {
+        if (toInt(this.opening_event_picks[playerId], -1) !== 12) return;
+        this._equalSufferingPending = true;
+        this.logMsg(`${this.pn(playerId)}的众生平等生效`);
+        this._game_over_defer_depth += 1;
+        try {
+            this.players.forEach((target, targetId) => {
+                if (!target || target.health <= 0) return;
+                if (target.untargetable && !this.isStatusImmune(targetId)) return;
+                this.dealAttackDamage(targetId, targetId === playerId ? 5 : 7, 1, false, playerId, null);
+            });
+        } finally {
+            this._game_over_defer_depth = Math.max(0, this._game_over_defer_depth - 1);
+        }
+    }
+
+    finalizeEqualSufferingTurnStart() {
+        if (!this._equalSufferingPending) return;
+        this._equalSufferingPending = false;
+        this._game_over_defer_depth += 1;
+        try {
+            this.players.forEach((target, targetId) => {
+                if (target && target.health <= 0) this.checkYggdrasil(targetId);
+            });
+        } finally {
+            this._game_over_defer_depth = Math.max(0, this._game_over_defer_depth - 1);
+        }
+        this.checkGameOver();
     }
 
     applyToxicPoisonAfterPoisonSettlement(playerId) {
@@ -2055,7 +2109,7 @@ class LocalSoloEngine {
     }
 
     checkCardResponseAfterChoice(playerId, card, choice) {
-        const needsResponse = this.checkResponseNeeded(playerId, card) || this.checkPrecisionResponseNeeded(playerId, card);
+        const needsResponse = this.checkResponseNeeded(playerId, card, choice) || this.checkPrecisionResponseNeeded(playerId, card, choice);
         if (!needsResponse) return null;
         const targetId = this.choiceTargetFromChoice(choice, 1 - playerId);
         this.pending_response = {
@@ -6082,9 +6136,11 @@ class LocalSoloEngine {
                 if (!this.cardIs(handCard, 'Amber', 'jurassic:amber')) return;
                 const power = toInt(handCard.power_value, 0);
                 if (power <= -12) return;
-                const prevented = Math.max(0, Math.floor(actual * 0.2));
+                const beforeAmber = Math.max(0, toInt(actual, 0));
+                const afterAmber = Math.max(0, beforeAmber - Math.floor(beforeAmber / 5));
+                const prevented = beforeAmber - afterAmber;
                 if (prevented <= 0) return;
-                actual -= prevented;
+                actual = afterAmber;
                 handCard.power_value = power - prevented * 3;
                 handCard.instance_flags.add('power');
                 this.logMsg(`${this.pn(targetId)}的琥珀减免${prevented}点伤害，威力变为${handCard.power_value}`);
@@ -6587,6 +6643,7 @@ class LocalSoloEngine {
         if (this.phase !== 'action' || (this.current_player !== playerId && this.allowOutOfTurnAutoPlayFor !== playerId)) return [false, '不是你的回合'];
         if (this.actionLimitStatusValue(playerId, 'attack_blocked', 'attack_blocked', '禁攻') > 0 && def.card_type === 'thorn') return [false, '本回合无法使用攻击牌'];
         if (this.actionLimitStatusValue(playerId, 'attack_only', 'attack_only', '仅攻击') > 0 && def.card_type !== 'thorn') return [false, '本回合只能使用攻击牌'];
+        if (this.actionLimitStatusValue(playerId, 'magic_blocked', 'magic_blocked', '魔力封锁', 'troll_cards:magic_blocked') > 0 && card.cost_m > 0) return [false, '本回合无法使用带有魔力消耗的卡牌'];
         if (ps.shovel_active) return [false, '链子效果中，无法使用卡牌'];
         const totalE = Math.max(0, card.cost_e + this.getExtraEForCard(playerId, card));
         if (totalE > ps.elixir) return [false, `能量不足（需要${totalE}E，当前${ps.elixir}E）`];
@@ -6615,8 +6672,10 @@ class LocalSoloEngine {
         });
     }
 
-    checkResponseNeeded(playerId, card) {
+    checkResponseNeeded(playerId, card, choice = null) {
         if (card.flags.has('precision')) return false;
+        const targetId = this.choiceTargetFromChoice(choice, 1 - playerId);
+        if (card.card_type === 'thorn' && !card.flags.has('wide_strike') && targetId === playerId) return false;
         const opp = this.players[1 - playerId];
         const trigger = card.card_type;
         if (opp.hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === 'any')) return true;
@@ -6626,8 +6685,10 @@ class LocalSoloEngine {
         return false;
     }
 
-    checkPrecisionResponseNeeded(playerId, card) {
+    checkPrecisionResponseNeeded(playerId, card, choice = null) {
         if (!card.flags.has('precision')) return false;
+        const targetId = this.choiceTargetFromChoice(choice, 1 - playerId);
+        if (targetId === playerId) return false;
         return this.players[1 - playerId].hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === 'thorn');
     }
 
@@ -7255,6 +7316,7 @@ class LocalSoloEngine {
         });
         this.decayActionLimitStatus(playerId, 'attack_blocked', 'attack_blocked', '禁攻');
         this.decayActionLimitStatus(playerId, 'attack_only', 'attack_only', '仅攻击');
+        this.decayActionLimitStatus(playerId, 'magic_blocked', 'magic_blocked', '魔力封锁', 'troll_cards:magic_blocked');
         if (ps.invincible && !ps.bandage_active && !ps.bandage_death_pending && this.shouldExpireInvincibleOnTurnEnd(playerId)) {
             this.clearInvincibleState(playerId);
             this.logMsg(`${this.pn(playerId)}的无敌效果结束`);

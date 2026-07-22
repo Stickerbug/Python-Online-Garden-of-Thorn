@@ -2720,7 +2720,7 @@ def process_live_achievement_flags(flags_by_user):
     return {'unlocked': unlocked, 'skipped': None}
 
 
-CARDS_PLAYED_BACKFILL_VERSION = 1
+CARDS_PLAYED_BACKFILL_VERSION = 2
 CARDS_PLAYED_BACKFILL_FALLBACK = 15
 
 
@@ -2729,8 +2729,10 @@ def _summary_cards_played_by_player(summary, player_ids):
     raw_counts = summary.get('cards_played_by_player')
     if isinstance(raw_counts, list):
         for index in range(min(len(counts), len(raw_counts))):
+            if raw_counts[index] is None:
+                continue
             try:
-                counts[index] = max(0, int(raw_counts[index] or 0))
+                counts[index] = max(0, int(raw_counts[index]))
             except (TypeError, ValueError):
                 pass
     metric_deltas = summary.get('achievement_metric_deltas_by_user')
@@ -2749,30 +2751,52 @@ def _summary_cards_played_by_player(summary, player_ids):
     return counts
 
 
-def _apply_cards_played_backfill_match(match_id, summary, counts, sources, player_ids):
+def _apply_cards_played_backfill_match(match_id, summary, counts, sources, player_ids, pending_indices=None):
     now = utc_now()
     unlocked = []
+    selected_indices = {
+        int(index) for index in (
+            pending_indices if pending_indices is not None else range(len(player_ids))
+        )
+        if 0 <= int(index) < len(player_ids)
+    }
     metric_deltas = summary.get('achievement_metric_deltas_by_user')
     if not isinstance(metric_deltas, dict):
         metric_deltas = {}
     metric_deltas = {str(key): dict(value) for key, value in metric_deltas.items() if isinstance(value, dict)}
     totals_by_user = {}
     for index, uid in enumerate(player_ids):
-        if uid is None or index >= len(counts):
+        if index not in selected_indices or uid is None or index >= len(counts):
             continue
         totals_by_user[int(uid)] = totals_by_user.get(int(uid), 0) + max(0, int(counts[index] or 0))
     for uid, count in totals_by_user.items():
         user_metrics = metric_deltas.setdefault(str(uid), {})
         user_metrics['cards_played_total'] = count
     summary['achievement_metric_deltas_by_user'] = metric_deltas
-    summary['cards_played_by_player'] = [max(0, int(value or 0)) for value in counts]
+    stored_counts = summary.get('cards_played_by_player')
+    if not isinstance(stored_counts, list):
+        stored_counts = []
+    stored_counts = list(stored_counts[:len(player_ids)])
+    stored_counts.extend([None] * (len(player_ids) - len(stored_counts)))
+    existing_backfill = summary.get('cards_played_backfill')
+    if not isinstance(existing_backfill, dict):
+        existing_backfill = {}
+    stored_sources = existing_backfill.get('sources_by_player')
+    if not isinstance(stored_sources, list):
+        stored_sources = []
+    stored_sources = list(stored_sources[:len(player_ids)])
+    stored_sources.extend([''] * (len(player_ids) - len(stored_sources)))
+    for index in selected_indices:
+        stored_counts[index] = max(0, int(counts[index] or 0))
+        stored_sources[index] = str(sources[index] or '') if index < len(sources) else ''
+    summary['cards_played_by_player'] = stored_counts
     summary['player_ids'] = list(player_ids)
     summary['cards_played_backfill'] = {
         'version': CARDS_PLAYED_BACKFILL_VERSION,
         'fallback_per_player': CARDS_PLAYED_BACKFILL_FALLBACK,
         'processed_at': now,
-        'counts_by_player': list(summary['cards_played_by_player']),
-        'sources_by_player': list(sources),
+        'counts_by_player': list(stored_counts),
+        'sources_by_player': stored_sources,
     }
 
     with get_db_connection() as conn:
@@ -2800,9 +2824,20 @@ def _apply_cards_played_backfill_match(match_id, summary, counts, sources, playe
     return unlocked
 
 
-def backfill_cards_played_achievements_from_matches(dry_run=True, limit=None):
+def backfill_cards_played_achievements_from_matches(dry_run=True, limit=None, user_id=None):
+    try:
+        target_user_id = int(user_id) if user_id is not None else None
+    except (TypeError, ValueError):
+        target_user_id = None
+    try:
+        batch_limit = max(1, min(1000, int(limit))) if limit is not None else None
+    except (TypeError, ValueError):
+        batch_limit = None
     result = {
         'dry_run': bool(dry_run),
+        'target_user_id': target_user_id,
+        'batch_limit': batch_limit,
+        'batch_limit_reached': False,
         'matches_seen': 0,
         'matches_compensated': 0,
         'players_compensated': 0,
@@ -2811,6 +2846,8 @@ def backfill_cards_played_achievements_from_matches(dry_run=True, limit=None):
         'replay_players': 0,
         'fallback_players': 0,
         'fallback_cards': 0,
+        'fallback_reasons': {},
+        'oversized_replays': 0,
         'already_processed_players': 0,
         'unmatched_player_slots': 0,
         'recovered_player_refs': 0,
@@ -2824,14 +2861,12 @@ def backfill_cards_played_achievements_from_matches(dry_run=True, limit=None):
     preview_deltas_by_user = {}
     query = 'SELECT * FROM matches ORDER BY id ASC'
     params = ()
-    if limit is not None:
-        try:
-            query += ' LIMIT ?'
-            params = (max(1, int(limit)),)
-        except (TypeError, ValueError):
-            pass
 
-    from replay_core import recover_cards_played_from_replay_blob
+    from replay_core import (
+        CARDS_PLAYED_RECOVERY_MAX_COMPRESSED_BYTES,
+        CARDS_PLAYED_RECOVERY_MAX_DECODED_BYTES,
+        recover_cards_played_from_replay_blob,
+    )
 
     with get_db_connection() as conn:
         user_columns = {row['name'] for row in conn.execute('PRAGMA table_info(users)').fetchall()}
@@ -2851,105 +2886,151 @@ def backfill_cards_played_achievements_from_matches(dry_run=True, limit=None):
         }
         rows = conn.execute(query, params).fetchall()
 
-    for row in rows:
-        result['matches_seen'] += 1
-        match_id = int(row['id'])
-        summary = _safe_json_loads(row['summary_json'], {})
-        if not isinstance(summary, dict):
-            summary = {}
-        raw_result = str(row['result'] or summary.get('result') or '').strip().lower()
-        if raw_result not in ('win', 'draw', 'finished'):
-            continue
-        player_ids, recovered = _match_player_ids_for_stats(
-            None,
-            row,
-            user_ids,
-            username_key_to_id,
-        )
-        result['recovered_player_refs'] += recovered
-        if not player_ids or not any(uid in user_ids for uid in player_ids):
-            continue
+    replay_conn = get_db_connection()
 
-        already_processed = {
-            uid for uid in player_ids
-            if uid is not None and (match_id, int(uid)) in processed_events
-        }
-        result['already_processed_players'] += len(already_processed)
-        pending_indices = [
-            index for index, uid in enumerate(player_ids)
-            if uid is not None and uid in user_ids and uid not in already_processed
-        ]
-        if not pending_indices:
-            continue
+    try:
+        for row in rows:
+            result['matches_seen'] += 1
+            match_id = int(row['id'])
+            summary = _safe_json_loads(row['summary_json'], {})
+            if not isinstance(summary, dict):
+                summary = {}
+            raw_result = str(row['result'] or summary.get('result') or '').strip().lower()
+            if raw_result not in ('win', 'draw', 'finished'):
+                continue
+            player_ids, recovered = _match_player_ids_for_stats(
+                None,
+                row,
+                user_ids,
+                username_key_to_id,
+            )
+            result['recovered_player_refs'] += recovered
+            if not player_ids or not any(uid in user_ids for uid in player_ids):
+                continue
 
-        counts = _summary_cards_played_by_player(summary, player_ids)
-        sources = ['summary' if value is not None else '' for value in counts]
-        missing_indices = [index for index in pending_indices if counts[index] is None]
-        replay_result = None
-        replay_blob = None
-        if missing_indices:
-            with get_db_connection() as conn:
-                replay_row = conn.execute(
-                    'SELECT replay_blob FROM match_replays WHERE match_id = ? ORDER BY id DESC LIMIT 1',
+            already_processed = {
+                uid for uid in player_ids
+                if uid is not None and (match_id, int(uid)) in processed_events
+            }
+            if target_user_id is None:
+                result['already_processed_players'] += len(already_processed)
+            elif target_user_id in already_processed:
+                result['already_processed_players'] += 1
+            pending_indices = [
+                index for index, uid in enumerate(player_ids)
+                if (
+                    uid is not None
+                    and uid in user_ids
+                    and uid not in already_processed
+                    and (target_user_id is None or int(uid) == target_user_id)
+                )
+            ]
+            if not pending_indices:
+                continue
+            if batch_limit is not None and result['matches_compensated'] >= batch_limit:
+                result['batch_limit_reached'] = True
+                break
+
+            counts = _summary_cards_played_by_player(summary, player_ids)
+            sources = ['summary' if value is not None else '' for value in counts]
+            missing_indices = [index for index in pending_indices if counts[index] is None]
+            replay_result = None
+            replay_blob = None
+            if missing_indices:
+                replay_row = replay_conn.execute(
+                    '''
+                    SELECT id, LENGTH(replay_blob) AS replay_bytes
+                    FROM match_replays
+                    WHERE match_id = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                    ''',
                     (match_id,),
                 ).fetchone()
-                replay_blob = replay_row['replay_blob'] if replay_row is not None else None
-        if missing_indices and replay_blob is not None:
-            replay_result = recover_cards_played_from_replay_blob(replay_blob, len(player_ids))
-            replay_counts = replay_result.get('counts') if replay_result.get('exact') else []
-            if isinstance(replay_counts, list) and len(replay_counts) >= len(player_ids):
-                for index in missing_indices:
-                    counts[index] = max(0, int(replay_counts[index] or 0))
-                    sources[index] = str(replay_result.get('source') or 'replay_state')
+                if replay_row is not None:
+                    replay_bytes = max(0, int(replay_row['replay_bytes'] or 0))
+                    if replay_bytes > CARDS_PLAYED_RECOVERY_MAX_COMPRESSED_BYTES:
+                        replay_result = {
+                            'exact': False,
+                            'counts': [],
+                            'source': 'unrecoverable',
+                            'reason': 'decode:compressed_too_large',
+                        }
+                        result['oversized_replays'] += 1
+                    else:
+                        blob_row = replay_conn.execute(
+                            'SELECT replay_blob FROM match_replays WHERE id = ?',
+                            (int(replay_row['id']),),
+                        ).fetchone()
+                        replay_blob = blob_row['replay_blob'] if blob_row is not None else None
+            if missing_indices and replay_blob is not None:
+                replay_result = recover_cards_played_from_replay_blob(
+                    replay_blob,
+                    len(player_ids),
+                    max_compressed_bytes=CARDS_PLAYED_RECOVERY_MAX_COMPRESSED_BYTES,
+                    max_decoded_bytes=CARDS_PLAYED_RECOVERY_MAX_DECODED_BYTES,
+                )
+                replay_counts = replay_result.get('counts') if replay_result.get('exact') else []
+                if isinstance(replay_counts, list) and len(replay_counts) >= len(player_ids):
+                    for index in missing_indices:
+                        counts[index] = max(0, int(replay_counts[index] or 0))
+                        sources[index] = str(replay_result.get('source') or 'replay_state')
 
-        for index in pending_indices:
-            if counts[index] is None:
-                counts[index] = CARDS_PLAYED_BACKFILL_FALLBACK
-                sources[index] = 'fallback_15'
-        for index in range(len(counts)):
-            if counts[index] is None:
-                counts[index] = 0
-                sources[index] = 'unregistered'
+            fallback_reason = str((replay_result or {}).get('reason') or 'missing_replay')
+            for index in pending_indices:
+                if counts[index] is None:
+                    counts[index] = CARDS_PLAYED_BACKFILL_FALLBACK
+                    sources[index] = 'fallback_15'
+                    result['fallback_reasons'][fallback_reason] = (
+                        int(result['fallback_reasons'].get(fallback_reason, 0) or 0) + 1
+                    )
 
-        pending_cards = sum(max(0, int(counts[index] or 0)) for index in pending_indices)
-        if pending_cards <= 0:
-            continue
-        match_totals_by_user = {}
-        for index in pending_indices:
-            uid = int(player_ids[index])
-            match_totals_by_user[uid] = match_totals_by_user.get(uid, 0) + max(0, int(counts[index] or 0))
-        for uid, count in match_totals_by_user.items():
-            preview_deltas_by_user[uid] = preview_deltas_by_user.get(uid, 0) + count
-        result['matches_compensated'] += 1
-        result['players_compensated'] += len(pending_indices)
-        result['cards_total'] += pending_cards
-        for index in pending_indices:
-            source = sources[index]
-            if source == 'summary':
-                result['summary_players'] += 1
-            elif source == 'fallback_15':
-                result['fallback_players'] += 1
-                result['fallback_cards'] += max(0, int(counts[index] or 0))
-            else:
-                result['replay_players'] += 1
-        result['unmatched_player_slots'] += sum(1 for uid in player_ids if uid is None)
+            pending_cards = sum(max(0, int(counts[index] or 0)) for index in pending_indices)
+            match_totals_by_user = {}
+            for index in pending_indices:
+                uid = int(player_ids[index])
+                match_totals_by_user[uid] = match_totals_by_user.get(uid, 0) + max(0, int(counts[index] or 0))
+            for uid, count in match_totals_by_user.items():
+                preview_deltas_by_user[uid] = preview_deltas_by_user.get(uid, 0) + count
+            result['matches_compensated'] += 1
+            result['players_compensated'] += len(pending_indices)
+            result['cards_total'] += pending_cards
+            for index in pending_indices:
+                source = sources[index]
+                if source == 'summary':
+                    result['summary_players'] += 1
+                elif source == 'fallback_15':
+                    result['fallback_players'] += 1
+                    result['fallback_cards'] += max(0, int(counts[index] or 0))
+                else:
+                    result['replay_players'] += 1
+            result['unmatched_player_slots'] += sum(1 for uid in player_ids if uid is None)
 
-        if len(result['examples']) < 8:
-            result['examples'].append({
-                'match_id': match_id,
-                'counts': [counts[index] for index in pending_indices],
-                'sources': [sources[index] for index in pending_indices],
-                'replay_reason': (replay_result or {}).get('reason', ''),
-            })
-        if dry_run:
-            continue
-        try:
-            unlocked = _apply_cards_played_backfill_match(match_id, summary, counts, sources, player_ids)
-            result['unlocked'] += len(unlocked)
-            result['reward_dew_awarded'] += sum(max(0, int(item.get('reward_dew') or 0)) for item in unlocked)
-            processed_events.update((match_id, int(player_ids[index])) for index in pending_indices)
-        except Exception as exc:
-            result['errors'].append({'match_id': match_id, 'error': str(exc)})
+            if len(result['examples']) < 8:
+                result['examples'].append({
+                    'match_id': match_id,
+                    'counts': [counts[index] for index in pending_indices],
+                    'sources': [sources[index] for index in pending_indices],
+                    'replay_reason': (replay_result or {}).get('reason', ''),
+                })
+            if dry_run:
+                continue
+            try:
+                unlocked = _apply_cards_played_backfill_match(
+                    match_id,
+                    summary,
+                    counts,
+                    sources,
+                    player_ids,
+                    pending_indices=pending_indices,
+                )
+                result['unlocked'] += len(unlocked)
+                result['reward_dew_awarded'] += sum(max(0, int(item.get('reward_dew') or 0)) for item in unlocked)
+                processed_events.update((match_id, int(player_ids[index])) for index in pending_indices)
+            except Exception as exc:
+                result['errors'].append({'match_id': match_id, 'error': str(exc)})
+    finally:
+        replay_conn.close()
     if dry_run and preview_deltas_by_user:
         with get_db_connection() as conn:
             for uid, delta in preview_deltas_by_user.items():
@@ -2986,13 +3067,6 @@ def backfill_achievements_from_matches(dry_run=True, limit=None):
     }
     query = 'SELECT id, summary_json FROM matches ORDER BY id ASC'
     params = ()
-    if limit is not None:
-        try:
-            safe_limit = max(1, min(10000, int(limit)))
-            query += ' LIMIT ?'
-            params = (safe_limit,)
-        except (TypeError, ValueError):
-            pass
     with get_db_connection() as conn:
         rows = conn.execute(query, params).fetchall()
         for row in rows:

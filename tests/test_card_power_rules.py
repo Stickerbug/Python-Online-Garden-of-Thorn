@@ -53,6 +53,40 @@ class CardPowerRuleTests(unittest.TestCase):
         self.assertEqual(card.power_value, 0)
         self.assertNotIn('power', card.instance_flags)
 
+    def test_amber_does_not_lose_power_without_reducing_damage(self):
+        engine = GameEngine()
+        card = CardInstance('jurassic:amber')
+        card.power_value = -6
+        card.instance_flags.add('power')
+        engine.players[0].hand.append(card)
+
+        remaining = engine._apply_universal_damage_shields(0, 4, 1, '测试', 'physical')
+
+        self.assertEqual(remaining, 4)
+        self.assertEqual(card.power_value, -6)
+
+    def test_disabled_amber_does_not_lose_more_power(self):
+        engine = GameEngine()
+        card = CardInstance('jurassic:amber')
+        card.power_value = -12
+        card.instance_flags.add('power')
+        engine.players[0].hand.append(card)
+
+        remaining = engine._apply_universal_damage_shields(0, 20, 1, '测试', 'physical')
+
+        self.assertEqual(remaining, 20)
+        self.assertEqual(card.power_value, -12)
+
+    def test_amber_loses_power_for_actual_prevented_damage(self):
+        engine = GameEngine()
+        card = CardInstance('jurassic:amber')
+        engine.players[0].hand.append(card)
+
+        remaining = engine._apply_universal_damage_shields(0, 10, 1, '测试', 'physical')
+
+        self.assertEqual(remaining, 8)
+        self.assertEqual(card.power_value, -6)
+
     def test_broccoli_power_only_applies_to_first_attack(self):
         engine = GameEngine()
         card = CardInstance('sewers:broccoli')

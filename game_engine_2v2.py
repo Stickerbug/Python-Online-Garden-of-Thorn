@@ -510,7 +510,13 @@ class GameEngine2v2(GameEngine):
             self._void_exile_card(player_id, c)
         self._decay_action_limit_status(player_id, 'attack_blocked', 'attack_blocked', '禁攻')
         self._decay_action_limit_status(player_id, 'attack_only', 'attack_only', '仅攻击')
-        self._decay_action_limit_status(player_id, 'magic_blocked', 'magic_blocked', '魔力封锁')
+        self._decay_action_limit_status(
+            player_id,
+            'magic_blocked',
+            'magic_blocked',
+            '魔力封锁',
+            'troll_cards:magic_blocked',
+        )
         if (
             ps.invincible
             and not ps.bandage_active
@@ -1014,10 +1020,15 @@ class GameEngine2v2(GameEngine):
     def _response_target_ids_for_card(self, player_id: int, card: CardInstance, choice: Optional[dict] = None) -> List[int]:
         if card is None:
             return []
-        if 'wide_strike' in self._effective_card_flags(card):
+        flags = self._effective_card_flags(card)
+        if 'wide_strike' in flags:
             return self._wide_strike_target_ids(player_id, card)
         if getattr(card, 'card_type', '') == 'thorn':
-            target_id = self._selected_attack_target(player_id, choice)
+            explicit_target_id = self._choice_target_from_choice(choice, -1)
+            if explicit_target_id == player_id and 'self_target' in flags:
+                target_id = player_id
+            else:
+                target_id = self._selected_attack_target(player_id, choice)
         else:
             target_id = self._selected_effect_target(player_id, choice)
         return [target_id] if self._is_valid_player_id(target_id) else []

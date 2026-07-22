@@ -728,14 +728,14 @@ class GameEngine:
         2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'position': 2},
         3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多5张非攻击牌转化为[[card:Light|flag=sprout|flag=symbiosis]]', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
-        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加3层灼烧', 'position': 3},
+        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加4层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '少抽1张牌，然后从总抽牌库选择1张牌洗入牌库', 'position': 3},
         6: {'id': 6, 'name': '能量涌动', 'desc': '每回合多回复1[[icon:E]]', 'position': 3},
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
-        11: {'id': 11, 'name': '花序编排', 'desc': '选择自己牌库中的3张牌，按选择顺序移至抽牌堆顶', 'position': 2},
-        12: {'id': 12, 'name': '众生平等', 'desc': '自己回合开始时，自己对包括自己在内的所有可选中玩家分别造成5[[icon:D]]', 'position': 3},
+        11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序', 'position': 2},
+        12: {'id': 12, 'name': '众生平等', 'desc': '自己回合开始时，自己对每名可选中的敌方玩家造成7[[icon:D]]，对自己及队友造成5[[icon:D]]', 'position': 3},
     }
     OPENING_EVENT_ORDER = {
         1: 10, 2: 20, 3: 30, 8: 40,
@@ -3931,6 +3931,27 @@ class GameEngine:
                 candidates.append(def_id)
         return candidates
 
+    def _apply_opening_event_deck_order(self, cards: List[CardInstance], ordered_def_ids: List[str]) -> int:
+        selectable_positions = [
+            index for index, card in enumerate(cards)
+            if self._card_selectable_by_action(card)
+        ]
+        remaining = [cards[index] for index in selectable_positions]
+        ordered_cards = []
+        for raw_def_id in ordered_def_ids:
+            def_id = str(raw_def_id or '')
+            match_index = next((
+                index for index, card in enumerate(remaining)
+                if card.def_id == def_id
+            ), -1)
+            if match_index < 0:
+                continue
+            ordered_cards.append(remaining.pop(match_index))
+        ordered_cards.extend(remaining)
+        for position, card in zip(selectable_positions, ordered_cards):
+            cards[position] = card
+        return len(selectable_positions) - len(remaining)
+
     def _card_total_hits(self, card: CardInstance, base_hits: Optional[int] = None) -> int:
         base = int(base_hits if base_hits is not None else getattr(card.card_def, 'hits', 1) or 1)
         return clamp_damage_hits(base + clamp_card_extra_hits(getattr(card, 'extra_hits', 0)))
@@ -4110,6 +4131,10 @@ class GameEngine:
         elif event_id == 9:
             for card in cards:
                 self._apply_setup_modifiers_to_card(player_id, card)
+        elif event_id == 11 and isinstance(sub, dict):
+            ordered_def_ids = list(sub.get('deck_order_def_ids') or [])
+            if ordered_def_ids:
+                self._apply_opening_event_deck_order(cards, ordered_def_ids)
         return [c.to_dict() for c in cards]
 
     def _apply_opening_event(self, player_id: int):
@@ -4158,9 +4183,9 @@ class GameEngine:
             for target_id in target_ids:
                 if self._status_application_blocked(target_id, 'fire'):
                     continue
-                self.players[target_id].fire += 3
+                self.players[target_id].fire += 4
             target_label = "敌方全体" if len(target_ids) > 1 else "敌方"
-            self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：{target_label}+3灼烧")
+            self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：{target_label}+4灼烧")
         elif event_id == 5:
             picked = []
             if isinstance(sub, dict):
@@ -4202,22 +4227,26 @@ class GameEngine:
             ps.custom_vars['setup_magic_acceleration_play_count'] = 0
             self.log_msg(f"{self.pn(player_id)}【魔力加速】：每打出2张不消耗M的牌回复1M")
         elif event_id == 11:
-            selected_def_ids = []
-            if isinstance(sub, dict):
-                selected_def_ids = list(sub.get('topdeck_def_ids') or sub.get('def_ids') or [])[:3]
-            moved = []
-            for def_id in selected_def_ids:
-                index = next((
-                    idx for idx, deck_card in enumerate(ps.deck)
-                    if deck_card.def_id == str(def_id) and self._card_selectable_by_action(deck_card)
-                ), -1)
-                if index >= 0:
-                    moved.append(ps.deck.pop(index))
-            if moved:
-                ps.deck[0:0] = moved
-            self.log_msg(f"{self.pn(player_id)}【花序编排】：{len(moved)}张牌移至抽牌堆顶")
+            ordered_def_ids = list(sub.get('deck_order_def_ids') or []) if isinstance(sub, dict) else []
+            if ordered_def_ids:
+                ordered_count = self._apply_opening_event_deck_order(ps.deck, ordered_def_ids)
+                self.log_msg(f"{self.pn(player_id)}【花序编排】：调整了{ordered_count}张牌的抽牌顺序")
+            else:
+                # Compatibility with choices recorded before full-deck ordering was introduced.
+                selected_def_ids = list(sub.get('topdeck_def_ids') or sub.get('def_ids') or [])[:3] if isinstance(sub, dict) else []
+                moved = []
+                for def_id in selected_def_ids:
+                    index = next((
+                        idx for idx, deck_card in enumerate(ps.deck)
+                        if deck_card.def_id == str(def_id) and self._card_selectable_by_action(deck_card)
+                    ), -1)
+                    if index >= 0:
+                        moved.append(ps.deck.pop(index))
+                if moved:
+                    ps.deck[0:0] = moved
+                self.log_msg(f"{self.pn(player_id)}【花序编排】：{len(moved)}张牌移至抽牌堆顶")
         elif event_id == 12:
-            self.log_msg(f"{self.pn(player_id)}【众生平等】：自己回合开始时，自己对包括自己在内的所有可选中玩家分别造成5D")
+            self.log_msg(f"{self.pn(player_id)}【众生平等】：自己回合开始时，对敌方造成7D，对自己及队友造成5D")
 
     def _apply_equal_suffering_turn_start(self, player_id: int):
         if not self._valid_player_id(player_id):
@@ -4226,6 +4255,7 @@ class GameEngine:
         if player_id >= len(picks) or str(picks[player_id]) != '12':
             return
         alive_before = [player.health > 0 for player in self.players]
+        enemy_ids = set(self._opening_event_enemy_targets(player_id))
         self._equal_suffering_alive_before = alive_before
         self._game_over_defer_depth += 1
         try:
@@ -4237,7 +4267,7 @@ class GameEngine:
                     continue
                 self.deal_attack_damage(
                     target_id,
-                    5,
+                    7 if target_id in enemy_ids else 5,
                     attacker_id=player_id,
                     source_card=None,
                 )
@@ -4928,10 +4958,12 @@ class GameEngine:
                 power = int(getattr(hand_card, 'power_value', 0) or 0)
                 if power <= -12:
                     continue
-                prevented = max(0, int(math.floor(damage * 0.2)))
+                before_amber = max(0, int(damage))
+                after_amber = max(0, before_amber - before_amber // 5)
+                prevented = before_amber - after_amber
                 if prevented <= 0:
                     continue
-                damage -= prevented
+                damage = after_amber
                 hand_card.power_value = power - prevented * 3
                 hand_card.instance_flags.add('power')
                 self.log_msg(f"{self.pn(target_id)}的琥珀减免{prevented}点伤害，威力变为{hand_card.power_value}")
@@ -5197,7 +5229,13 @@ class GameEngine:
             return False, "本回合无法使用攻击牌"
         if self._action_limit_status_value(player_id, 'attack_only', 'attack_only', '仅攻击') > 0 and card_def.card_type != 'thorn' and not immune:
             return False, "本回合只能使用攻击牌"
-        if self._action_limit_status_value(player_id, 'magic_blocked', 'magic_blocked', '魔力封锁') > 0 and card.cost_m > 0 and not immune:
+        if self._action_limit_status_value(
+            player_id,
+            'magic_blocked',
+            'magic_blocked',
+            '魔力封锁',
+            'troll_cards:magic_blocked',
+        ) > 0 and card.cost_m > 0 and not immune:
             return False, "本回合无法使用带有魔力消耗的卡牌"
         if ps.shovel_active:
             return False, "链子效果中，无法使用卡牌"
@@ -5990,6 +6028,8 @@ class GameEngine:
         if self._card_blocks_response(card):
             return False
         target_id = self._choice_target_from_choice(getattr(self, '_active_choice', None), 1 - player_id)
+        if card.card_type == 'thorn' and 'wide_strike' not in flags and target_id == player_id:
+            return False
         opp = self.players[1 - player_id]
         if target_id == 1 - player_id:
             for c in opp.hand:
@@ -9175,7 +9215,13 @@ class GameEngine:
             self._void_exile_card(player_id, c)
         self._decay_action_limit_status(player_id, 'attack_blocked', 'attack_blocked', '禁攻')
         self._decay_action_limit_status(player_id, 'attack_only', 'attack_only', '仅攻击')
-        self._decay_action_limit_status(player_id, 'magic_blocked', 'magic_blocked', '魔力封锁')
+        self._decay_action_limit_status(
+            player_id,
+            'magic_blocked',
+            'magic_blocked',
+            '魔力封锁',
+            'troll_cards:magic_blocked',
+        )
         if (
             ps.invincible
             and not ps.bandage_active
@@ -13767,6 +13813,7 @@ class GameEngine:
         per_tag = self._eval_int(player_id, params.get('per_tag', 10), card, 10)
         tag_count = len(self._effective_card_flags(card))
         amount = base + self._ocean_visible_status_count(target_id) * per_status + tag_count * per_tag
+        amount = self._modified_attack_damage(amount, card)
         is_precision = 'precision' in self._effective_card_flags(card)
         self.deal_attack_damage(target_id, amount, is_precision=is_precision, attacker_id=player_id, source_card=card)
 
@@ -13777,8 +13824,9 @@ class GameEngine:
         base = self._eval_int(player_id, params.get('base', 2), card, 2)
         per = self._eval_int(player_id, params.get('per', 1), card, 1)
         count = int(self.players[player_id].custom_vars.get('ocean_active_discards', 0) or 0)
+        amount = self._modified_attack_damage(base + count * per, card)
         is_precision = 'precision' in self._effective_card_flags(card)
-        self.deal_attack_damage(target_id, base + count * per, is_precision=is_precision, attacker_id=player_id, source_card=card)
+        self.deal_attack_damage(target_id, amount, is_precision=is_precision, attacker_id=player_id, source_card=card)
 
     def _atomic_ocean_magic_coral_tick(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))

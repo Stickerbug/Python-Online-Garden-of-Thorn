@@ -19269,3 +19269,24 @@ html.battle-mobile-input-focus.minimal-mobile-canvas[data-ui-style="minimal"] #v
   transform: none !important;
   filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .3));
 }
+
+/* Keep the minimal hand on one row and expose its native horizontal scroll only when needed. */
+html[data-ui-style="minimal"] #view-game .hand-area {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+  overscroll-behavior-x: contain;
+}
+
+html[data-ui-style="minimal"] #view-game .hand-area::-webkit-scrollbar {
+  display: block;
+  width: 0;
+  height: var(--scrollbar-size);
+}
+
+html[data-ui-style="minimal"] #view-game .card-animation-lock .hand-area {
+  overflow-x: hidden;
+}
