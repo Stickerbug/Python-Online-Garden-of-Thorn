@@ -127,6 +127,44 @@ class ReplayCardPlayRecoveryTests(unittest.TestCase):
         self.assertEqual(result['source'], 'replay_total')
         self.assertEqual(result['counts'], [41, 37])
 
+    def test_keeps_round_peak_when_game_over_frame_clears_turn_counters(self):
+        active_state = {
+            'round_num': 3,
+            'game_over': False,
+            'perspectives': [{
+                'spectate_players': [
+                    {'player_id': 0, 'cards_played_this_turn': {'Basic': 4}},
+                    {'player_id': 1, 'cards_played_this_turn': {'Light': 3}},
+                ],
+            }],
+        }
+        cleared_state = {
+            'round_num': 3,
+            'game_over': True,
+            'perspectives': [{
+                'spectate_players': [
+                    {'player_id': 0, 'cards_played_this_turn': {}},
+                    {'player_id': 1, 'cards_played_this_turn': {}},
+                ],
+            }],
+        }
+        replay = {
+            'meta': {},
+            'keyframes': [{'seq': 0, 'round': 3, 'state': active_state}],
+            'actions': [{
+                'seq': 1,
+                'round': 3,
+                'type': 'game_over',
+                'state': cleared_state,
+            }],
+        }
+
+        result = recover_cards_played_from_replay_blob(encode_replay(replay), 2)
+
+        self.assertTrue(result['exact'])
+        self.assertEqual(result['source'], 'replay_state')
+        self.assertEqual(result['counts'], [4, 3])
+
     def test_rejects_oversized_replay_before_decoding(self):
         blob = encode_replay({'meta': {}, 'keyframes': [], 'actions': []})
 

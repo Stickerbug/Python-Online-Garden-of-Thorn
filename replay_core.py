@@ -993,7 +993,12 @@ def recover_cards_played_from_replay_blob(
                 round_num = 0
             if round_num > 0 and counters:
                 saw_private_counters = True
-                round_counters.setdefault(round_num, {}).update(counters)
+                round_values = round_counters.setdefault(round_num, {})
+                for player_index, counter in counters.items():
+                    round_values[player_index] = max(
+                        max(0, int(round_values.get(player_index, 0) or 0)),
+                        max(0, int(counter or 0)),
+                    )
 
             action_type = str(source.get('type') or '') if kind == 'action' else ''
             is_game_over = action_type == 'game_over' or bool(materialized_state.get('game_over'))
