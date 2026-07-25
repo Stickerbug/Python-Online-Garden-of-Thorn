@@ -1,6 +1,7 @@
 import json
 import hashlib
 import math
+import colorsys
 import os
 import secrets
 import re
@@ -45,6 +46,37 @@ THORN_DEW_MODE_REWARDS = {
 }
 THORN_DEW_WIN_BONUS = 15
 THORN_DEW_DRAW_BONUS = 8
+KEYBINDINGS_SCHEMA_VERSION = 1
+KEYBINDING_ACTION_IDS = frozenset({
+    'confirm',
+    'cancel',
+    'refresh',
+    'navigate_left',
+    'navigate_right',
+    'navigate_up',
+    'navigate_down',
+    'toggle_focused',
+    'target_self',
+    'target_enemy',
+    'target_teammate',
+    'target_enemy_2',
+    'end_turn',
+    'view_draw',
+    'view_discard',
+    'view_exile',
+    'pass_response',
+    'focus_chat',
+    'shortcut_help',
+    'solo_undo',
+    'solo_redo',
+})
+KEYBINDING_FIXED_CODES = frozenset({
+    'Backquote',
+    *(f'Digit{index}' for index in range(10)),
+})
+KEYBINDING_CODE_RE = re.compile(
+    r'^(?:(?:Ctrl|Alt|Shift|Meta)\+){0,4}[A-Za-z][A-Za-z0-9]{0,31}$'
+)
 ACHIEVEMENT_TYPES = {
     'milestone': {'color': '#5aa469'},
     'battle': {'color': '#b94d5a'},
@@ -164,6 +196,8 @@ _DM_MARK_READ_LAST_AT = {}
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
 ROLE_COLOR_TOKENS = {'admin', 'bloom', 'guard', 'thorn', 'root', 'neutral'}
+TITLE_MAX_EQUIPPED = 3
+TITLE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9_.:-]{0,63}$')
 DEFAULT_SKIN_CONFIG = {
     'primary_color': '#FFE763',
     'eye_shape': 'oval',
@@ -437,8 +471,69 @@ def _normalize_role_color(value, fallback='neutral'):
     if text in ROLE_COLOR_TOKENS:
         return text
     if re.fullmatch(r'#[0-9a-fA-F]{6}', text):
-        return text
+        return text.upper()
     return fallback
+
+
+def normalize_title_color(value, fallback=None):
+    """Normalize role tokens, hexadecimal RGB, rgb(), or hsv() to a CSS color."""
+    text = str(value or '').strip()
+    lowered = text.lower()
+    if lowered in ROLE_COLOR_TOKENS:
+        return lowered
+    short_hex = re.fullmatch(r'#([0-9a-fA-F]{3})', text)
+    if short_hex:
+        digits = short_hex.group(1)
+        return '#' + ''.join(ch * 2 for ch in digits).upper()
+    full_hex = re.fullmatch(r'#([0-9a-fA-F]{6})', text)
+    if full_hex:
+        return f'#{full_hex.group(1).upper()}'
+
+    rgb_match = re.fullmatch(
+        r'(?:rgb\s*[:=]?\s*)?\(?\s*(\d{1,3})\s*[,;/]\s*(\d{1,3})\s*[,;/]\s*(\d{1,3})\s*\)?',
+        lowered,
+    )
+    if rgb_match and (lowered.startswith('rgb') or ',' in lowered or ';' in lowered or '/' in lowered):
+        channels = [int(rgb_match.group(index)) for index in range(1, 4)]
+        if all(0 <= channel <= 255 for channel in channels):
+            return '#{:02X}{:02X}{:02X}'.format(*channels)
+
+    hsv_match = re.fullmatch(
+        r'hsv\s*[:=]?\s*\(?\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))'
+        r'\s*[,;/]\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))%?'
+        r'\s*[,;/]\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))%?\s*\)?',
+        lowered,
+    )
+    if hsv_match:
+        hue = float(hsv_match.group(1)) % 360.0
+        saturation = float(hsv_match.group(2))
+        value_level = float(hsv_match.group(3))
+        if saturation > 1:
+            saturation /= 100.0
+        if value_level > 1:
+            value_level /= 100.0
+        if 0 <= saturation <= 1 and 0 <= value_level <= 1:
+            red, green, blue = colorsys.hsv_to_rgb(hue / 360.0, saturation, value_level)
+            return '#{:02X}{:02X}{:02X}'.format(
+                round(red * 255),
+                round(green * 255),
+                round(blue * 255),
+            )
+    return fallback
+
+
+def _normalize_title_id(value):
+    text = str(value or '').strip().lower()
+    return text if TITLE_ID_RE.fullmatch(text) else ''
+
+
+def _generated_title_id(name, color):
+    digest = hashlib.sha256(f'{str(name).strip()}\0{str(color).strip()}'.encode('utf-8')).hexdigest()[:20]
+    return f'custom:{digest}'
+
+
+def _role_title_id(user_id):
+    return f'role:{int(user_id)}'
 
 
 def _normalize_role_type(value):
@@ -564,6 +659,10 @@ def init_db():
             conn.execute('ALTER TABLE users ADD COLUMN season_ranked_games INTEGER DEFAULT 0')
         if 'gr_season_id' not in existing_columns:
             conn.execute("ALTER TABLE users ADD COLUMN gr_season_id TEXT DEFAULT 'S1'")
+        if 'keybindings_json' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN keybindings_json TEXT')
+        if 'keybindings_revision' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN keybindings_revision INTEGER DEFAULT 0')
         _assign_missing_player_ids(conn)
         season = current_gr_season()
         conn.execute(
@@ -618,7 +717,46 @@ def init_db():
             '''
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_user_roles_type_sort ON user_roles(role_type, sort_order)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS title_catalog (
+                title_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                color TEXT NOT NULL,
+                source_type TEXT NOT NULL DEFAULT 'admin',
+                source_ref TEXT,
+                price_free INTEGER,
+                price_paid INTEGER,
+                purchasable INTEGER NOT NULL DEFAULT 0,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_title_catalog_source ON title_catalog(source_type, source_ref)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_title_catalog_shop ON title_catalog(active, purchasable)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS user_titles (
+                user_id INTEGER NOT NULL,
+                title_id TEXT NOT NULL,
+                acquired_source TEXT NOT NULL DEFAULT 'admin',
+                acquired_ref TEXT,
+                acquired_at TEXT NOT NULL,
+                equipped_slot INTEGER,
+                PRIMARY KEY(user_id, title_id),
+                UNIQUE(user_id, equipped_slot),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(title_id) REFERENCES title_catalog(title_id) ON DELETE CASCADE,
+                CHECK(equipped_slot IS NULL OR equipped_slot BETWEEN 1 AND 3)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_user_titles_equipped ON user_titles(user_id, equipped_slot)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_user_titles_title ON user_titles(title_id, user_id)')
         _seed_builtin_user_roles(conn)
+        _sync_all_role_titles_conn(conn)
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS user_currency_transactions (
@@ -1700,6 +1838,7 @@ def row_to_user(row):
         'total_ranked_games': int(row['total_ranked_games'] or 0) if 'total_ranked_games' in row.keys() else 0,
         'season_ranked_games': int(row['season_ranked_games'] or 0) if 'season_ranked_games' in row.keys() else 0,
         'gr_season_id': row['gr_season_id'] if 'gr_season_id' in row.keys() else current_gr_season()['id'],
+        'keybindings': _keybindings_from_row(row),
     }
     data['thorn_dew_total'] = data['thorn_dew_free'] + data['thorn_dew_paid']
     return data
@@ -2471,6 +2610,46 @@ def _award_achievement_reward_conn(conn, user_id, defn, now=None):
     return True
 
 
+def _award_achievement_title_conn(conn, user_id, defn):
+    """Grant an optional title reward declared by a future achievement definition."""
+    reward_title = defn.get('reward_title')
+    if not reward_title:
+        return False
+    if isinstance(reward_title, str):
+        title_id = _normalize_title_id(reward_title)
+        if not title_id:
+            return False
+    elif isinstance(reward_title, dict):
+        name = str(reward_title.get('name') or reward_title.get('name_cn') or '').strip()
+        color = normalize_title_color(reward_title.get('color'))
+        if not name or not color:
+            return False
+        title_id = _normalize_title_id(reward_title.get('id')) or f"achievement:{_normalize_title_id(defn.get('id'))}"
+        if not title_id:
+            return False
+        _upsert_title_catalog_conn(
+            conn,
+            title_id,
+            name,
+            color,
+            source_type='achievement',
+            source_ref=str(defn.get('id') or ''),
+            purchasable=False,
+            active=True,
+        )
+    else:
+        return False
+    _grant_user_title_conn(
+        conn,
+        int(user_id),
+        title_id,
+        acquired_source='achievement',
+        acquired_ref=str(defn.get('id') or ''),
+        equip=False,
+    )
+    return True
+
+
 def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=None):
     defn = ACHIEVEMENT_DEF_MAP.get(str(achievement_id or ''))
     if not defn:
@@ -2490,6 +2669,7 @@ def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=N
                 (progress_value, now, uid, defn['id']),
             )
         _award_achievement_reward_conn(conn, uid, defn, now)
+        _award_achievement_title_conn(conn, uid, defn)
         return None
     if row:
         conn.execute(
@@ -2510,6 +2690,7 @@ def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=N
         )
     reward = int(defn.get('reward_dew') or 0)
     _award_achievement_reward_conn(conn, uid, defn, now)
+    _award_achievement_title_conn(conn, uid, defn)
     return {
         'id': defn['id'],
         'name_cn': defn.get('name_cn'),
@@ -3199,7 +3380,7 @@ def ensure_current_gr_season(user_ids=None):
         return season
 
 
-def _leaderboard_payload(row, rank=None, scope='season'):
+def _leaderboard_payload(row, rank=None, scope='season', equipped_titles=None):
     games = int(row['games_played'] or 0)
     wins = int(row['wins'] or 0)
     losses = int(row['losses'] or 0)
@@ -3224,6 +3405,8 @@ def _leaderboard_payload(row, rank=None, scope='season'):
         'losses': losses,
         'draws': draws,
         'win_rate': round(wins / games * 100, 1) if games else 0.0,
+        'equipped_titles': list(equipped_titles or []),
+        'name_color': (equipped_titles or [{}])[0].get('color') if equipped_titles else None,
     }
     if rank is not None:
         payload['rank'] = int(rank or 0)
@@ -3263,8 +3446,16 @@ def list_leaderboard(min_games=None, limit=50, scope='season'):
             ''',
             (params[0], min_games, *params[1:-1], GR_INITIAL, params[-1]),
         ).fetchall()
+        titles_by_user = _equipped_titles_by_user_conn(conn, [row['id'] for row in rows])
         conn.commit()
-    return [_leaderboard_payload(row, scope=scope) for row in rows]
+    return [
+        _leaderboard_payload(
+            row,
+            scope=scope,
+            equipped_titles=titles_by_user.get(int(row['id']), []),
+        )
+        for row in rows
+    ]
 
 
 def get_leaderboard_rank(user_id, min_games=None, scope='season'):
@@ -3324,8 +3515,9 @@ def get_leaderboard_rank(user_id, min_games=None, scope='season'):
             if int(ranked['id']) == uid:
                 rank = idx
                 break
+        titles = _equipped_titles_by_user_conn(conn, [uid]).get(uid, [])
         conn.commit()
-    return _leaderboard_payload(row, rank=rank, scope=scope)
+    return _leaderboard_payload(row, rank=rank, scope=scope, equipped_titles=titles)
 
 
 def create_user(username, password):
@@ -4607,12 +4799,475 @@ def update_user_warning(action_id, reason='', duration_seconds=3600, active=True
         }, None
 
 
-def _role_row_to_profile(user_row, role_row):
-    if user_row is None or role_row is None:
+def _title_row_payload(row):
+    if row is None:
         return None
+    keys = set(row.keys()) if hasattr(row, 'keys') else set()
+    return {
+        'id': str(row['title_id'] or ''),
+        'name': str(row['name'] or ''),
+        'color': normalize_title_color(row['color'], '#666666') or '#666666',
+        'source_type': str(row['source_type'] or ''),
+        'source_ref': str(row['source_ref'] or ''),
+        'price_free': max(0, int(row['price_free'] or 0)) if 'price_free' in keys else 0,
+        'price_paid': max(0, int(row['price_paid'] or 0)) if 'price_paid' in keys else 0,
+        'purchasable': bool(row['purchasable']) if 'purchasable' in keys else False,
+        'active': bool(row['active']) if 'active' in keys else True,
+        'owned': 'user_id' in keys and row['user_id'] is not None,
+        'equipped_slot': int(row['equipped_slot']) if 'equipped_slot' in keys and row['equipped_slot'] is not None else None,
+        'acquired_source': str(row['acquired_source'] or '') if 'acquired_source' in keys else '',
+        'acquired_ref': str(row['acquired_ref'] or '') if 'acquired_ref' in keys else '',
+        'acquired_at': row['acquired_at'] if 'acquired_at' in keys else None,
+    }
+
+
+def _list_user_titles_conn(conn, user_id, include_inactive=False):
+    where_active = '' if include_inactive else 'AND c.active = 1'
+    rows = conn.execute(
+        f'''
+        SELECT c.*, ut.user_id, ut.acquired_source, ut.acquired_ref, ut.acquired_at, ut.equipped_slot
+        FROM user_titles ut
+        JOIN title_catalog c ON c.title_id = ut.title_id
+        WHERE ut.user_id = ? {where_active}
+        ORDER BY
+            CASE WHEN ut.equipped_slot IS NULL THEN 1 ELSE 0 END,
+            ut.equipped_slot ASC,
+            ut.acquired_at ASC,
+            c.name COLLATE NOCASE ASC
+        ''',
+        (int(user_id),),
+    ).fetchall()
+    return [_title_row_payload(row) for row in rows]
+
+
+def _equipped_titles_by_user_conn(conn, user_ids):
+    normalized_ids = []
+    for value in user_ids or []:
+        try:
+            uid = int(value)
+        except (TypeError, ValueError):
+            continue
+        if uid > 0 and uid not in normalized_ids:
+            normalized_ids.append(uid)
+    if not normalized_ids:
+        return {}
+    placeholders = ','.join('?' for _ in normalized_ids)
+    rows = conn.execute(
+        f'''
+        SELECT
+            ut.user_id,
+            ut.equipped_slot,
+            c.title_id,
+            c.name,
+            c.color
+        FROM user_titles ut
+        JOIN title_catalog c ON c.title_id = ut.title_id
+        WHERE ut.user_id IN ({placeholders})
+          AND ut.equipped_slot IS NOT NULL
+          AND c.active = 1
+        ORDER BY ut.user_id ASC, ut.equipped_slot ASC
+        ''',
+        normalized_ids,
+    ).fetchall()
+    result = {uid: [] for uid in normalized_ids}
+    for row in rows:
+        uid = int(row['user_id'])
+        if len(result.setdefault(uid, [])) >= TITLE_MAX_EQUIPPED:
+            continue
+        result[uid].append({
+            'id': str(row['title_id'] or ''),
+            'name': str(row['name'] or ''),
+            'color': normalize_title_color(row['color'], '#666666') or '#666666',
+            'equipped_slot': int(row['equipped_slot'] or 0),
+        })
+    return result
+
+
+def _title_identity_fields_conn(conn, user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return {'equipped_titles': [], 'name_color': None}
+    titles = _equipped_titles_by_user_conn(conn, [uid]).get(uid, [])
+    return {
+        'equipped_titles': titles,
+        'name_color': titles[0]['color'] if titles else None,
+    }
+
+
+def _compact_equipped_titles_conn(conn, user_id):
+    rows = conn.execute(
+        '''
+        SELECT title_id
+        FROM user_titles
+        WHERE user_id = ? AND equipped_slot IS NOT NULL
+        ORDER BY equipped_slot ASC, acquired_at ASC, title_id ASC
+        LIMIT ?
+        ''',
+        (int(user_id), TITLE_MAX_EQUIPPED),
+    ).fetchall()
+    conn.execute('UPDATE user_titles SET equipped_slot = NULL WHERE user_id = ?', (int(user_id),))
+    for slot, row in enumerate(rows, start=1):
+        conn.execute(
+            'UPDATE user_titles SET equipped_slot = ? WHERE user_id = ? AND title_id = ?',
+            (slot, int(user_id), row['title_id']),
+        )
+
+
+def _upsert_title_catalog_conn(
+    conn,
+    title_id,
+    name,
+    color,
+    source_type='admin',
+    source_ref='',
+    price_free=None,
+    price_paid=None,
+    purchasable=False,
+    active=True,
+):
+    normalized_id = _normalize_title_id(title_id)
+    title_name = str(name or '').strip()[:32]
+    normalized_color = normalize_title_color(color)
+    if not normalized_id:
+        raise ValueError('称号 ID 仅可包含小写字母、数字及 . _ : -，且最长64个字符')
+    if not title_name:
+        raise ValueError('称号名称不能为空')
+    if not normalized_color:
+        raise ValueError('颜色应为 #RRGGBB、RGB(r,g,b) 或 HSV(h,s,v)')
+    now = utc_now()
+    conn.execute(
+        '''
+        INSERT INTO title_catalog (
+            title_id, name, color, source_type, source_ref,
+            price_free, price_paid, purchasable, active, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(title_id) DO UPDATE SET
+            name = excluded.name,
+            color = excluded.color,
+            source_type = excluded.source_type,
+            source_ref = excluded.source_ref,
+            price_free = excluded.price_free,
+            price_paid = excluded.price_paid,
+            purchasable = excluded.purchasable,
+            active = excluded.active,
+            updated_at = excluded.updated_at
+        ''',
+        (
+            normalized_id,
+            title_name,
+            normalized_color,
+            str(source_type or 'admin').strip().lower()[:24] or 'admin',
+            str(source_ref or '').strip()[:96],
+            max(0, int(price_free)) if price_free is not None else None,
+            max(0, int(price_paid)) if price_paid is not None else None,
+            1 if purchasable else 0,
+            1 if active else 0,
+            now,
+            now,
+        ),
+    )
+    return normalized_id
+
+
+def _grant_user_title_conn(
+    conn,
+    user_id,
+    title_id,
+    acquired_source='admin',
+    acquired_ref='',
+    equip=False,
+):
+    uid = int(user_id)
+    title_key = _normalize_title_id(title_id)
+    row = conn.execute(
+        'SELECT title_id FROM title_catalog WHERE title_id = ? AND active = 1',
+        (title_key,),
+    ).fetchone()
+    if row is None:
+        raise ValueError('称号不存在或已停用')
+    now = utc_now()
+    conn.execute(
+        '''
+        INSERT INTO user_titles (
+            user_id, title_id, acquired_source, acquired_ref, acquired_at, equipped_slot
+        )
+        VALUES (?, ?, ?, ?, ?, NULL)
+        ON CONFLICT(user_id, title_id) DO UPDATE SET
+            acquired_source = CASE
+                WHEN user_titles.acquired_source = 'role' THEN user_titles.acquired_source
+                ELSE excluded.acquired_source
+            END,
+            acquired_ref = CASE
+                WHEN user_titles.acquired_source = 'role' THEN user_titles.acquired_ref
+                ELSE excluded.acquired_ref
+            END
+        ''',
+        (
+            uid,
+            title_key,
+            str(acquired_source or 'admin').strip().lower()[:24] or 'admin',
+            str(acquired_ref or '').strip()[:96],
+            now,
+        ),
+    )
+    if equip:
+        existing = conn.execute(
+            'SELECT equipped_slot FROM user_titles WHERE user_id = ? AND title_id = ?',
+            (uid, title_key),
+        ).fetchone()
+        if existing is not None and existing['equipped_slot'] is None:
+            occupied = {
+                int(item['equipped_slot'])
+                for item in conn.execute(
+                    'SELECT equipped_slot FROM user_titles WHERE user_id = ? AND equipped_slot IS NOT NULL',
+                    (uid,),
+                ).fetchall()
+            }
+            free_slot = next((slot for slot in range(1, TITLE_MAX_EQUIPPED + 1) if slot not in occupied), None)
+            if free_slot is not None:
+                conn.execute(
+                    'UPDATE user_titles SET equipped_slot = ? WHERE user_id = ? AND title_id = ?',
+                    (free_slot, uid, title_key),
+                )
+                _compact_equipped_titles_conn(conn, uid)
+    return title_key
+
+
+def _sync_role_title_for_user_conn(conn, user_row, role_row):
+    if user_row is None:
+        return
+    uid = int(user_row['id'])
+    title_id = _role_title_id(uid)
+    visible_role = (
+        role_row is not None
+        and str(role_row['role_type'] or '').strip().lower() != 'none'
+        and bool(role_row['visible'])
+        and bool(str(role_row['title'] or '').strip())
+    )
+    if not visible_role:
+        conn.execute(
+            'DELETE FROM user_titles WHERE user_id = ? AND title_id = ?',
+            (uid, title_id),
+        )
+        _compact_equipped_titles_conn(conn, uid)
+        return
+    color = normalize_title_color(role_row['color'], '#666666') or '#666666'
+    _upsert_title_catalog_conn(
+        conn,
+        title_id,
+        role_row['title'],
+        color,
+        source_type='role',
+        source_ref=str(role_row['role_key'] or role_row['role_type'] or ''),
+        purchasable=False,
+        active=True,
+    )
+    has_equipped = conn.execute(
+        'SELECT 1 FROM user_titles WHERE user_id = ? AND equipped_slot IS NOT NULL LIMIT 1',
+        (uid,),
+    ).fetchone() is not None
+    _grant_user_title_conn(
+        conn,
+        uid,
+        title_id,
+        acquired_source='role',
+        acquired_ref=str(role_row['role_key'] or role_row['role_type'] or ''),
+        equip=not has_equipped,
+    )
+
+
+def _sync_all_role_titles_conn(conn):
+    rows = conn.execute(
+        '''
+        SELECT
+            u.id AS user_id,
+            u.username,
+            r.role_type,
+            r.role_key,
+            r.title,
+            r.color,
+            r.visible
+        FROM users u
+        LEFT JOIN user_roles r ON r.user_id = u.id
+        '''
+    ).fetchall()
+    for row in rows:
+        user_row = {'id': row['user_id'], 'username': row['username']}
+        role_row = row if row['role_type'] is not None else None
+        _sync_role_title_for_user_conn(conn, user_row, role_row)
+
+
+def list_user_titles(user_id, include_inactive=False):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return []
+    with get_db_connection() as conn:
+        return _list_user_titles_conn(conn, uid, include_inactive=include_inactive)
+
+
+def get_user_title_center(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return {'items': [], 'equipped': [], 'max_equipped': TITLE_MAX_EQUIPPED}
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
+        if user is None:
+            return {'items': [], 'equipped': [], 'max_equipped': TITLE_MAX_EQUIPPED}
+        items = _list_user_titles_conn(conn, uid)
+        return {
+            'items': items,
+            'equipped': [item['id'] for item in items if item.get('equipped_slot') is not None],
+            'max_equipped': TITLE_MAX_EQUIPPED,
+        }
+
+
+def set_user_equipped_titles(user_id, title_ids):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '账号不存在'
+    ordered = [_normalize_title_id(item) for item in (title_ids or [])]
+    if any(not item for item in ordered):
+        return None, '称号 ID 无效'
+    if len(ordered) > TITLE_MAX_EQUIPPED:
+        return None, f'最多佩戴{TITLE_MAX_EQUIPPED}个称号'
+    if len(set(ordered)) != len(ordered):
+        return None, '不能重复佩戴同一个称号'
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
+        if user is None:
+            return None, '账号不存在'
+        if ordered:
+            placeholders = ','.join('?' for _ in ordered)
+            rows = conn.execute(
+                f'''
+                SELECT ut.title_id
+                FROM user_titles ut
+                JOIN title_catalog c ON c.title_id = ut.title_id
+                WHERE ut.user_id = ? AND ut.title_id IN ({placeholders}) AND c.active = 1
+                ''',
+                [uid, *ordered],
+            ).fetchall()
+            owned = {str(row['title_id']) for row in rows}
+            if owned != set(ordered):
+                return None, '只能佩戴自己拥有且仍可用的称号'
+        conn.execute('UPDATE user_titles SET equipped_slot = NULL WHERE user_id = ?', (uid,))
+        for slot, title_id in enumerate(ordered, start=1):
+            conn.execute(
+                'UPDATE user_titles SET equipped_slot = ? WHERE user_id = ? AND title_id = ?',
+                (slot, uid, title_id),
+            )
+        conn.commit()
+        return get_user_title_center(uid), None
+
+
+def admin_grant_user_title(
+    identifier,
+    name,
+    color,
+    title_id='',
+    equip=False,
+    source_type='admin',
+    source_ref='',
+):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, None, '账号不存在'
+    normalized_color = normalize_title_color(color)
+    if not normalized_color:
+        return None, None, '颜色应为 #RRGGBB、RGB(r,g,b) 或 HSV(h,s,v)'
+    normalized_id = _normalize_title_id(title_id) if title_id else _generated_title_id(name, normalized_color)
+    if title_id and not normalized_id:
+        return None, None, '称号 ID 仅可包含小写字母、数字及 . _ : -，且最长64个字符'
+    try:
+        with get_db_connection() as conn:
+            normalized_id = _upsert_title_catalog_conn(
+                conn,
+                normalized_id,
+                name,
+                normalized_color,
+                source_type=source_type,
+                source_ref=source_ref,
+                purchasable=False,
+                active=True,
+            )
+            _grant_user_title_conn(
+                conn,
+                user['id'],
+                normalized_id,
+                acquired_source=source_type,
+                acquired_ref=source_ref,
+                equip=bool(equip),
+            )
+            conn.commit()
+        return user, get_user_title_center(user['id']), None
+    except (TypeError, ValueError) as exc:
+        return None, None, str(exc)
+
+
+def admin_remove_user_title(identifier, title_identifier):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, None, '账号不存在'
+    token = str(title_identifier or '').strip()
+    if not token:
+        return None, None, '称号 ID 或名称不能为空'
+    with get_db_connection() as conn:
+        row = conn.execute(
+            '''
+            SELECT ut.title_id, ut.acquired_source
+            FROM user_titles ut
+            JOIN title_catalog c ON c.title_id = ut.title_id
+            WHERE ut.user_id = ?
+              AND (LOWER(ut.title_id) = LOWER(?) OR LOWER(c.name) = LOWER(?))
+            ORDER BY CASE WHEN LOWER(ut.title_id) = LOWER(?) THEN 0 ELSE 1 END
+            LIMIT 1
+            ''',
+            (user['id'], token, token, token),
+        ).fetchone()
+        if row is None:
+            return None, None, '该玩家未拥有此称号'
+        if str(row['acquired_source'] or '') == 'role':
+            return None, None, '身份称号随身份管理，请先修改或清除对应身份'
+        conn.execute(
+            'DELETE FROM user_titles WHERE user_id = ? AND title_id = ?',
+            (user['id'], row['title_id']),
+        )
+        _compact_equipped_titles_conn(conn, user['id'])
+        conn.commit()
+    return user, get_user_title_center(user['id']), None
+
+
+def _role_row_to_profile(user_row, role_row, equipped_titles=None):
+    if user_row is None:
+        return None
+    titles = list(equipped_titles or [])
+    if role_row is None and not titles:
+        return None
+    if role_row is None:
+        return {
+            'user_id': user_row['id'],
+            'display_name': user_row['username'],
+            'role_type': 'none',
+            'special_role': '',
+            'special_role_label': '',
+            'special_role_color': titles[0]['color'] if titles else '',
+            'special_role_sort': 99,
+            'is_admin_player': False,
+            'can_direct_friend': False,
+            'chat_exempt': False,
+            'equipped_titles': titles,
+            'name_color': titles[0]['color'] if titles else '',
+        }
     role_type = str(role_row['role_type'] or '').strip().lower()
     if role_type == 'none' or not bool(role_row['visible']):
-        return None
+        if not titles:
+            return None
+        return _role_row_to_profile(user_row, None, titles)
     defaults = _role_defaults(role_type)
     role_key = str(role_row['role_key'] or defaults.get('role_key') or role_type).strip()
     title = str(role_row['title'] or defaults.get('title') or '').strip()
@@ -4629,6 +5284,8 @@ def _role_row_to_profile(user_row, role_row):
         'is_admin_player': is_admin,
         'can_direct_friend': bool(role_row['can_direct_friend']),
         'chat_exempt': bool(role_row['chat_exempt']),
+        'equipped_titles': titles,
+        'name_color': titles[0]['color'] if titles else color,
     }
 
 
@@ -4645,9 +5302,21 @@ def get_user_role_profile(identifier):
         if user_row is None:
             return None
         _ensure_builtin_role_for_row(conn, user_row)
-        conn.commit()
         role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user_row['id'],)).fetchone()
-        return _role_row_to_profile(user_row, role_row)
+        if role_row is not None and str(role_row['role_type'] or '').lower() != 'none' and bool(role_row['visible']):
+            role_title = conn.execute(
+                'SELECT 1 FROM user_titles WHERE user_id = ? AND title_id = ?',
+                (user_row['id'], _role_title_id(user_row['id'])),
+            ).fetchone()
+            if role_title is None:
+                _sync_role_title_for_user_conn(conn, user_row, role_row)
+        conn.commit()
+        titles = [
+            item
+            for item in _list_user_titles_conn(conn, user_row['id'])
+            if item.get('equipped_slot') is not None
+        ]
+        return _role_row_to_profile(user_row, role_row, titles)
 
 
 def user_role_can_direct_friend(user_row_or_id):
@@ -4663,9 +5332,21 @@ def user_role_can_direct_friend(user_row_or_id):
         if user_row is None:
             return False
         _ensure_builtin_role_for_row(conn, user_row)
-        conn.commit()
         role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user_row['id'],)).fetchone()
-        profile = _role_row_to_profile(user_row, role_row)
+        if role_row is not None and str(role_row['role_type'] or '').lower() != 'none' and bool(role_row['visible']):
+            role_title = conn.execute(
+                'SELECT 1 FROM user_titles WHERE user_id = ? AND title_id = ?',
+                (user_row['id'], _role_title_id(user_row['id'])),
+            ).fetchone()
+            if role_title is None:
+                _sync_role_title_for_user_conn(conn, user_row, role_row)
+        conn.commit()
+        titles = [
+            item
+            for item in _list_user_titles_conn(conn, user_row['id'])
+            if item.get('equipped_slot') is not None
+        ]
+        profile = _role_row_to_profile(user_row, role_row, titles)
         return bool(profile and profile.get('can_direct_friend'))
 
 
@@ -4781,10 +5462,16 @@ def admin_set_user_role(identifier, role_type, title='', color='', sort_order=No
                 now,
             ),
         )
-        conn.commit()
         user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
         role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user['id'],)).fetchone()
-        return row_to_user(user_row), _role_row_to_profile(user_row, role_row), None
+        _sync_role_title_for_user_conn(conn, user_row, role_row)
+        conn.commit()
+        titles = [
+            item
+            for item in _list_user_titles_conn(conn, user['id'])
+            if item.get('equipped_slot') is not None
+        ]
+        return row_to_user(user_row), _role_row_to_profile(user_row, role_row, titles), None
 
 
 def admin_clear_user_role(identifier):
@@ -5954,10 +6641,40 @@ def get_admin_user_detail(user_id, match_limit=30):
     }
 
 
-def _public_social_user(row):
+def _identity_from_title_map(user_id, titles_by_user):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return {'equipped_titles': [], 'name_color': None}
+    titles = list((titles_by_user or {}).get(uid) or [])
+    return {
+        'equipped_titles': titles,
+        'name_color': titles[0]['color'] if titles else None,
+    }
+
+
+def _public_social_user(row, conn=None, titles_by_user=None, role_by_user=None):
     user = row_to_admin_user(row)
     if not user:
         return None
+    if conn is not None:
+        identity = (
+            _identity_from_title_map(user['id'], titles_by_user)
+            if titles_by_user is not None
+            else _title_identity_fields_conn(conn, user['id'])
+        )
+        role_row = (
+            (role_by_user or {}).get(int(user['id']))
+            if role_by_user is not None
+            else conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user['id'],)).fetchone()
+        )
+        role_profile = _role_row_to_profile(user, role_row, identity['equipped_titles'])
+    else:
+        role_profile = get_user_role_profile(user['id'])
+        identity = {
+            'equipped_titles': list((role_profile or {}).get('equipped_titles') or []),
+            'name_color': (role_profile or {}).get('name_color'),
+        }
     return {
         'id': user['id'],
         'username': user['username'],
@@ -5969,18 +6686,32 @@ def _public_social_user(row):
         'losses': user.get('losses') or 0,
         'draws': user.get('draws') or 0,
         'win_rate': user.get('win_rate') or 0.0,
-        'role': get_user_role_profile(user['id']),
+        'role': role_profile,
+        **identity,
     }
 
 
-def _basic_social_user(row):
+def _basic_social_user(row, conn=None, titles_by_user=None):
     user = row_to_user(row)
     if not user:
         return None
+    if conn is not None:
+        identity = (
+            _identity_from_title_map(user['id'], titles_by_user)
+            if titles_by_user is not None
+            else _title_identity_fields_conn(conn, user['id'])
+        )
+    else:
+        profile = get_user_role_profile(user['id']) or {}
+        identity = {
+            'equipped_titles': list(profile.get('equipped_titles') or []),
+            'name_color': profile.get('name_color'),
+        }
     return {
         'id': user['id'],
         'username': user['username'],
         'player_id': user.get('player_id'),
+        **identity,
     }
 
 
@@ -6218,6 +6949,19 @@ def list_friends(user_id, mark_read=False):
             ''',
             (uid, uid),
         ).fetchall()
+        other_ids = list(dict.fromkeys(
+            int(row['addressee_id'] if row['requester_id'] == uid else row['requester_id'])
+            for row in rows
+        ))
+        titles_by_user = _equipped_titles_by_user_conn(conn, other_ids)
+        role_by_user = {}
+        if other_ids:
+            placeholders = ','.join('?' for _ in other_ids)
+            role_rows = conn.execute(
+                f'SELECT * FROM user_roles WHERE user_id IN ({placeholders})',
+                other_ids,
+            ).fetchall()
+            role_by_user = {int(role_row['user_id']): role_row for role_row in role_rows}
         unread_count = _friend_unread_count(conn, uid)
         friends = []
         incoming = []
@@ -6233,7 +6977,11 @@ def list_friends(user_id, mark_read=False):
                 'notice_type': row['notice_type'] if 'notice_type' in row.keys() else 'request',
                 'is_unread': row['addressee_id'] == uid and not (row['addressee_read_at'] if 'addressee_read_at' in row.keys() else None),
                 'direction': 'incoming' if row['addressee_id'] == uid else 'outgoing',
-                'user': _public_social_user(other) if row['status'] == 'accepted' else _basic_social_user(other),
+                'user': (
+                    _public_social_user(other, conn, titles_by_user, role_by_user)
+                    if row['status'] == 'accepted'
+                    else _basic_social_user(other, conn, titles_by_user)
+                ),
                 'matches': _recent_matches_for_user(conn, other['id'], other['username'], 5) if row['status'] == 'accepted' else [],
                 'created_at': row['created_at'],
                 'updated_at': row['updated_at'],
@@ -6486,14 +7234,66 @@ def _get_or_create_dm_thread(conn, user_a, user_b):
     return conn.execute('SELECT * FROM dm_threads WHERE id = ?', (cur.lastrowid,)).fetchone()
 
 
-def _dm_message_row_to_dict(row, conn=None):
+def _message_sender_profiles_conn(conn, user_ids):
+    normalized_ids = []
+    for value in user_ids or []:
+        try:
+            uid = int(value)
+        except (TypeError, ValueError):
+            continue
+        if uid > 0 and uid not in normalized_ids:
+            normalized_ids.append(uid)
+    if not normalized_ids:
+        return {}
+    placeholders = ','.join('?' for _ in normalized_ids)
+    rows = conn.execute(
+        f'''
+        SELECT u.id, u.username, r.role_type, r.visible
+        FROM users u
+        LEFT JOIN user_roles r ON r.user_id = u.id
+        WHERE u.id IN ({placeholders})
+        ''',
+        normalized_ids,
+    ).fetchall()
+    titles_by_user = _equipped_titles_by_user_conn(conn, normalized_ids)
+    result = {}
+    for row in rows:
+        uid = int(row['id'])
+        titles = titles_by_user.get(uid, [])
+        role = str(row['role_type'] or 'none').strip().lower()
+        if not bool(row['visible']) or role not in ROLE_TYPES:
+            role = 'none'
+        result[uid] = {
+            'sender_name': str(row['username'] or ''),
+            'sender_role': role,
+            'equipped_titles': titles,
+            'name_color': titles[0]['color'] if titles else None,
+        }
+    return result
+
+
+def _dm_message_row_to_dict(row, conn=None, sender_profiles=None):
     if row is None:
         return None
     sender_name = ''
     sender_role = 'none'
-    if conn is not None:
+    sender_titles = []
+    sender_name_color = None
+    try:
+        sender_id = int(row['sender_user_id'])
+    except (TypeError, ValueError):
+        sender_id = 0
+    sender_profile = (sender_profiles or {}).get(sender_id)
+    if sender_profile is None and conn is not None and sender_id:
+        sender_profile = _message_sender_profiles_conn(conn, [sender_id]).get(sender_id)
+    if sender_profile is not None:
+        sender_name = sender_profile.get('sender_name') or ''
+        sender_role = sender_profile.get('sender_role') or 'none'
+        sender_titles = list(sender_profile.get('equipped_titles') or [])
+        sender_name_color = sender_profile.get('name_color')
+    elif conn is not None:
         try:
-            sender = conn.execute('SELECT * FROM users WHERE id = ?', (int(row['sender_user_id']),)).fetchone()
+            sender = conn.execute('SELECT * FROM users WHERE id = ?', (sender_id,)).fetchone()
             if sender is not None:
                 sender_name = sender['username'] or ''
                 sender_role = _role_type_for_user_conn(conn, sender['id'])
@@ -6507,6 +7307,8 @@ def _dm_message_row_to_dict(row, conn=None):
         'recipient_user_id': row['recipient_user_id'],
         'sender_name': sender_name,
         'sender_role': sender_role,
+        'equipped_titles': sender_titles,
+        'name_color': sender_name_color,
         'message': row['message'],
         'risk_level': row['risk_level'],
         'created_at': row['created_at'],
@@ -6571,6 +7373,11 @@ def list_dm_threads(user_id, limit=50):
             ''',
             (uid, uid, uid, safe_limit),
         ).fetchall()
+        other_ids = list(dict.fromkeys(
+            int(row['user_high_id'] if row['user_low_id'] == uid else row['user_low_id'])
+            for row in rows
+        ))
+        titles_by_user = _equipped_titles_by_user_conn(conn, other_ids)
         items = []
         for row in rows:
             other_id = row['user_high_id'] if row['user_low_id'] == uid else row['user_low_id']
@@ -6579,7 +7386,7 @@ def list_dm_threads(user_id, limit=50):
                 continue
             items.append({
                 'thread_id': row['id'],
-                'user': _basic_social_user(other),
+                'user': _basic_social_user(other, conn, titles_by_user),
                 'last_message': row['last_message'] or '',
                 'last_message_at': row['last_message_at'] or row['updated_at'],
                 'unread_count': int(row['unread_count'] or 0),
@@ -6638,11 +7445,18 @@ def get_dm_messages(user_id, thread_id, mark_read=True, limit=50):
         ).fetchall()
         conn.commit()
         unread_count = _dm_unread_count_conn(conn, uid)
+        sender_profiles = _message_sender_profiles_conn(
+            conn,
+            [row['sender_user_id'] for row in rows],
+        )
         return {
             'thread_id': tid,
-            'user': _basic_social_user(other),
+            'user': _basic_social_user(other, conn),
             'friend_status': _friendship_status(conn, uid, other_id),
-            'messages': [_dm_message_row_to_dict(row, conn) for row in reversed(rows)],
+            'messages': [
+                _dm_message_row_to_dict(row, sender_profiles=sender_profiles)
+                for row in reversed(rows)
+            ],
             'unread_count': unread_count,
         }, None
 
@@ -6737,7 +7551,7 @@ def _feedback_user(conn, user_id):
     row = conn.execute('SELECT * FROM users WHERE id = ?', (int(user_id),)).fetchone()
     if row is None or _user_row_is_deleted(row):
         return None
-    data = _basic_social_user(row)
+    data = _basic_social_user(row, conn)
     role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (int(user_id),)).fetchone()
     if role_row is not None and bool(role_row['visible']):
         data.update({
@@ -6801,15 +7615,142 @@ def _feedback_thread_to_dict(conn, row, viewer_user_id=None, staff_view=False):
     }
 
 
-def _feedback_message_to_dict(row):
+def _normalize_keybinding_code(value):
+    token = str(value or '').strip()
+    if not token or len(token) > 64 or not KEYBINDING_CODE_RE.fullmatch(token):
+        return None
+    parts = token.split('+')
+    base = parts[-1]
+    modifiers = parts[:-1]
+    if len(modifiers) != len(set(modifiers)):
+        return None
+    order = {'Ctrl': 0, 'Alt': 1, 'Shift': 2, 'Meta': 3}
+    if any(part not in order for part in modifiers):
+        return None
+    return '+'.join([*sorted(modifiers, key=order.__getitem__), base])
+
+
+def normalize_user_keybindings(payload):
+    source = payload if isinstance(payload, dict) else {}
+    raw_overrides = source.get('overrides')
+    overrides = {}
+    if isinstance(raw_overrides, dict):
+        for raw_action, raw_binding in raw_overrides.items():
+            action = str(raw_action or '').strip()
+            if action not in KEYBINDING_ACTION_IDS:
+                continue
+            binding = _normalize_keybinding_code(raw_binding)
+            if binding and binding not in KEYBINDING_FIXED_CODES:
+                overrides[action] = binding
+
+    raw_unbound = source.get('unbound')
+    unbound = []
+    if isinstance(raw_unbound, (list, tuple, set)):
+        unbound = sorted({
+            str(action or '').strip()
+            for action in raw_unbound
+            if str(action or '').strip() in KEYBINDING_ACTION_IDS
+        })
+    for action in unbound:
+        overrides.pop(action, None)
+
+    return {
+        'schema': KEYBINDINGS_SCHEMA_VERSION,
+        'overrides': dict(sorted(overrides.items())),
+        'unbound': unbound,
+        'show_hints': source.get('show_hints') is not False,
+    }
+
+
+def _keybindings_from_row(row):
+    raw = row['keybindings_json'] if row is not None and 'keybindings_json' in row.keys() else None
+    try:
+        payload = json.loads(raw) if raw else {}
+    except (TypeError, ValueError):
+        payload = {}
+    config = normalize_user_keybindings(payload)
+    config['revision'] = max(
+        0,
+        int(row['keybindings_revision'] or 0)
+        if row is not None and 'keybindings_revision' in row.keys()
+        else 0,
+    )
+    return config
+
+
+def get_user_keybindings(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    with get_db_connection() as conn:
+        row = conn.execute(
+            'SELECT keybindings_json, keybindings_revision FROM users WHERE id = ? AND deleted_at IS NULL',
+            (uid,),
+        ).fetchone()
+    return _keybindings_from_row(row) if row is not None else None
+
+
+def update_user_keybindings(user_id, payload, expected_revision=None):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, 'account_required'
+    try:
+        expected = int(expected_revision)
+    except (TypeError, ValueError):
+        expected = None
+    config = normalize_user_keybindings(payload)
+    serialized = json.dumps(config, ensure_ascii=False, separators=(',', ':'), sort_keys=True)
+    if len(serialized.encode('utf-8')) > 8192:
+        return None, 'payload_too_large'
+
+    with get_db_connection() as conn:
+        row = conn.execute(
+            'SELECT keybindings_json, keybindings_revision FROM users WHERE id = ? AND deleted_at IS NULL',
+            (uid,),
+        ).fetchone()
+        if row is None:
+            return None, 'account_required'
+        current_revision = max(0, int(row['keybindings_revision'] or 0))
+        if expected is not None and expected != current_revision:
+            return _keybindings_from_row(row), 'revision_conflict'
+        next_revision = current_revision + 1
+        cursor = conn.execute(
+            '''
+            UPDATE users
+            SET keybindings_json = ?, keybindings_revision = ?
+            WHERE id = ? AND COALESCE(keybindings_revision, 0) = ?
+            ''',
+            (serialized, next_revision, uid, current_revision),
+        )
+        if cursor.rowcount != 1:
+            latest = conn.execute(
+                'SELECT keybindings_json, keybindings_revision FROM users WHERE id = ?',
+                (uid,),
+            ).fetchone()
+            return _keybindings_from_row(latest), 'revision_conflict'
+        conn.commit()
+    config['revision'] = next_revision
+    return config, None
+
+
+def _feedback_message_to_dict(row, sender_profiles=None):
     if row is None:
         return None
+    try:
+        sender_id = int(row['sender_user_id'])
+    except (TypeError, ValueError):
+        sender_id = 0
+    sender_profile = (sender_profiles or {}).get(sender_id) or {}
     return {
         'id': row['id'],
         'thread_id': row['thread_id'],
         'sender_user_id': row['sender_user_id'],
         'sender_name': row['sender_name'],
         'sender_role': row['sender_role'] or 'none',
+        'equipped_titles': list(sender_profile.get('equipped_titles') or []),
+        'name_color': sender_profile.get('name_color'),
         'message': row['message'],
         'risk_level': int(row['risk_level'] or 0),
         'created_at': row['created_at'],
@@ -6931,9 +7872,16 @@ def get_feedback_messages(user_id, thread_id, mark_read=True, limit=100):
             (tid, safe_limit),
         ).fetchall()
         conn.commit()
+        sender_profiles = _message_sender_profiles_conn(
+            conn,
+            [row['sender_user_id'] for row in rows],
+        )
         return {
             'thread': _feedback_thread_to_dict(conn, thread, viewer_user_id=uid, staff_view=can_staff and not is_owner),
-            'messages': [_feedback_message_to_dict(row) for row in reversed(rows)],
+            'messages': [
+                _feedback_message_to_dict(row, sender_profiles=sender_profiles)
+                for row in reversed(rows)
+            ],
             'is_staff': can_staff,
             'unread_count': feedback_unread_count(uid),
         }, None

@@ -178,6 +178,7 @@ class PlayerState:
         self.damage_multiplier: float = 1.0
         self.bandage_active: bool = False
         self.bandage_death_pending: bool = False
+        self.bandage_trigger_boundary_id: int = -1
         self.attack_blocked: int = 0
         self.untargetable: int = 0
         self.sponge_active: bool = False
@@ -297,6 +298,7 @@ class PlayerState:
             'damage_multiplier': self.damage_multiplier,
             'bandage_active': self.bandage_active,
             'bandage_death_pending': self.bandage_death_pending,
+            'bandage_trigger_boundary_id': self.bandage_trigger_boundary_id,
             'attack_blocked': self.attack_blocked,
             'untargetable': self.untargetable,
             'sponge_active': self.sponge_active,
@@ -408,6 +410,7 @@ class PlayerState:
         ps.damage_multiplier = d.get('damage_multiplier', 1.0)
         ps.bandage_active = d.get('bandage_active', False)
         ps.bandage_death_pending = d.get('bandage_death_pending', False)
+        ps.bandage_trigger_boundary_id = int(d.get('bandage_trigger_boundary_id', -1) or -1)
         ps.attack_blocked = d.get('attack_blocked', 0)
         raw_untargetable = d.get('untargetable', 0)
         if isinstance(raw_untargetable, bool):
@@ -849,6 +852,117 @@ class GameEngine:
             return int(getattr(self, 'current_player', -1))
         except Exception:
             return -1
+
+    TURN_BOUNDARY_CARD_EVENTS = frozenset({
+        'owner_turn_start',
+        'target_turn_start',
+        'enemy_turn_start',
+        'any_turn_start',
+        'owner_turn_end',
+        'hand_owner_turn_start',
+        'hand_owner_turn_end',
+        'discard_owner_turn_start',
+        'deck_owner_turn_start',
+    })
+
+    def _start_new_turn_boundary(self) -> int:
+        serial = int(getattr(self, '_turn_boundary_serial', 0) or 0) + 1
+        self._turn_boundary_serial = serial
+        self._turn_boundary_id = serial
+        self._turn_boundary_active = True
+        self._turn_boundary_processed_sources = set()
+        self._turn_start_auto_settlement_player = None
+        return serial
+
+    def _ensure_turn_boundary(self) -> int:
+        if not bool(getattr(self, '_turn_boundary_active', False)):
+            return self._start_new_turn_boundary()
+        return int(getattr(self, '_turn_boundary_id', 0) or 0)
+
+    def _finish_turn_boundary(self):
+        self._turn_boundary_active = False
+        self._turn_boundary_processed_sources = set()
+        self._turn_start_auto_settlement_player = None
+
+    def _turn_boundary_claim(self, key) -> bool:
+        if not bool(getattr(self, '_turn_boundary_active', False)):
+            return True
+        processed = getattr(self, '_turn_boundary_processed_sources', None)
+        if not isinstance(processed, set):
+            processed = set()
+            self._turn_boundary_processed_sources = processed
+        normalized = tuple(key) if isinstance(key, (list, tuple)) else (str(key),)
+        if normalized in processed:
+            return False
+        if len(processed) >= 4096:
+            return False
+        processed.add(normalized)
+        return True
+
+    def _turn_boundary_card_event_key(self, owner_id: int, card: Optional[CardInstance],
+                                      event_name: str, extra_context: Optional[dict] = None):
+        context = extra_context if isinstance(extra_context, dict) else {}
+        current_player = int(getattr(self, 'current_player', -1) or 0)
+        target_id = context.get('target_id', current_player)
+        try:
+            target_id = int(target_id)
+        except (TypeError, ValueError):
+            target_id = current_player
+        instance_id = getattr(card, 'instance_id', None)
+        return (
+            'card_event',
+            str(event_name or ''),
+            current_player,
+            int(owner_id),
+            instance_id,
+            target_id,
+            str(context.get('zone') or ''),
+        )
+
+    def _claim_turn_boundary_card_event(self, owner_id: int, card: Optional[CardInstance],
+                                        event_name: str, extra_context: Optional[dict] = None) -> bool:
+        if event_name not in self.TURN_BOUNDARY_CARD_EVENTS:
+            return True
+        return self._turn_boundary_claim(
+            self._turn_boundary_card_event_key(owner_id, card, event_name, extra_context)
+        )
+
+    def _mark_bandage_death_pending(self, player_id: int):
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        ps.bandage_death_pending = True
+        if bool(getattr(self, '_turn_boundary_active', False)):
+            ps.bandage_trigger_boundary_id = int(getattr(self, '_turn_boundary_id', -1) or -1)
+        else:
+            ps.bandage_trigger_boundary_id = int(getattr(self, '_turn_boundary_serial', 0) or 0)
+
+    def _expire_bandages_before_action(self):
+        boundary_id = int(getattr(self, '_turn_boundary_id', -1) or -1)
+        expired = []
+        for player_id, ps in enumerate(self.players):
+            if not bool(getattr(ps, 'bandage_death_pending', False)):
+                continue
+            trigger_boundary_id = int(getattr(ps, 'bandage_trigger_boundary_id', -1) or -1)
+            if bool(getattr(self, '_turn_boundary_active', False)) and trigger_boundary_id == boundary_id:
+                continue
+            ps.health = 0
+            ps.bandage_death_pending = False
+            ps.bandage_trigger_boundary_id = -1
+            self._clear_invincible_state(player_id)
+            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，在行动前死亡！")
+            expired.append(player_id)
+        if not expired:
+            return
+        on_player_death = getattr(self, '_on_player_death', None)
+        if callable(on_player_death):
+            self._game_over_defer_depth += 1
+            try:
+                for player_id in expired:
+                    on_player_death(player_id)
+            finally:
+                self._game_over_defer_depth -= 1
+        self._check_game_over()
 
     def _set_invincible_until_next_own_turn_end(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
@@ -1769,16 +1883,34 @@ class GameEngine:
     def _trigger_v2_status_events_for_player(self, player_id: int, event_name: str, extra: Optional[dict] = None):
         if not (0 <= player_id < len(self.players)):
             return
-        statuses = list((getattr(self.players[player_id], 'custom_statuses', {}) or {}).items())
-        for status_id, value in statuses:
-            try:
-                if int(value or 0) <= 0:
+        while True:
+            claimed = False
+            statuses = list((getattr(self.players[player_id], 'custom_statuses', {}) or {}).items())
+            for status_id, value in statuses:
+                try:
+                    if int(value or 0) <= 0:
+                        continue
+                except Exception:
                     continue
-            except Exception:
-                continue
-            self._run_v2_status_event(player_id, str(status_id), event_name, extra)
-            if getattr(self, 'game_over', False) or getattr(self, 'pending_v2_ui', None):
-                break
+                status_id = str(status_id)
+                if not self._get_v2_status_event(status_id, event_name):
+                    continue
+                if bool(getattr(self, '_turn_boundary_active', False)):
+                    key = (
+                        'status_event',
+                        str(event_name or ''),
+                        int(getattr(self, 'current_player', -1)),
+                        int(player_id),
+                        status_id,
+                    )
+                    if not self._turn_boundary_claim(key):
+                        continue
+                self._run_v2_status_event(player_id, status_id, event_name, extra)
+                claimed = True
+                if getattr(self, 'game_over', False) or getattr(self, 'pending_v2_ui', None):
+                    return
+            if not bool(getattr(self, '_turn_boundary_active', False)) or not claimed:
+                return
 
     def _trigger_v2_damage_status_events(self, target_id, source_id, amount):
         try:
@@ -2273,6 +2405,12 @@ class GameEngine:
         self.game_over: bool = False
         self.winner: int = -1
         self._game_over_defer_depth: int = 0
+        self._turn_boundary_serial: int = 0
+        self._turn_boundary_id: int = 0
+        self._turn_boundary_active: bool = False
+        self._turn_boundary_processed_sources: set = set()
+        self._turn_start_auto_settlement_player: Optional[int] = None
+        self._timed_effect_serial: int = 0
         self.negated_card: bool = False
         self._yggdrasil_check: bool = True
         self._antennae_reveal: List[Optional[list]] = [None, None]
@@ -4036,9 +4174,26 @@ class GameEngine:
         card_def = CARD_DEFS.get(def_id)
         return card_def is not None and getattr(card_def, 'card_type', '') != 'thorn'
 
+    def _player_has_magic_acceleration_setup(self, player_id: int) -> bool:
+        if not (0 <= player_id < len(self.players)):
+            return False
+        ps = self.players[player_id]
+        custom_vars = getattr(ps, 'custom_vars', None)
+        if not isinstance(custom_vars, dict):
+            custom_vars = {}
+            ps.custom_vars = custom_vars
+        if int(custom_vars.get('setup_magic_acceleration', 0) or 0) > 0:
+            return True
+        picks = getattr(self, 'opening_event_picks', []) or []
+        if player_id >= len(picks) or str(picks[player_id]).strip() != '10':
+            return False
+        custom_vars['setup_magic_acceleration'] = 1
+        custom_vars.setdefault('setup_magic_acceleration_play_count', 0)
+        return True
+
     def _apply_magic_acceleration_after_play(self, player_id: int, card: Optional[CardInstance] = None):
         ps = self.players[player_id]
-        if int(getattr(ps, 'custom_vars', {}).get('setup_magic_acceleration', 0) or 0) <= 0:
+        if not self._player_has_magic_acceleration_setup(player_id):
             return
         custom_vars = ps.custom_vars
         if card is not None and int(getattr(card, 'cost_m', 0) or 0) > 0:
@@ -4143,6 +4298,9 @@ class GameEngine:
         sub = self.opening_event_sub_choices[player_id]
         if self._apply_v2_opening_event(player_id, event_id):
             return
+        if self._is_builtin_opening_event(event_id):
+            event_id = int(event_id)
+            self.opening_event_picks[player_id] = event_id
         if event_id == 1:
             ps.max_health += 20
             ps.base_max_health += 20
@@ -4327,6 +4485,7 @@ class GameEngine:
         self._start_player_turn(self.first_player)
 
     def _start_player_turn(self, player_id: int):
+        self._ensure_turn_boundary()
         self._reset_achievement_turn_stats(player_id)
         self.current_player = player_id
         ps = self.players[player_id]
@@ -4369,14 +4528,41 @@ class GameEngine:
 
     def _bio_enter_player_action_phase(self, player_id: int):
         if not self.game_over and self._valid_player_id(player_id) and self.players[player_id].health > 0:
+            self._drain_turn_start_event_sources(player_id)
+            if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+                return
             self._enter_player_action_phase(player_id)
 
     def _enter_player_action_phase(self, player_id: int):
         self.phase = 'action'
+        self._turn_start_auto_settlement_player = player_id
+        self._continue_turn_start_auto_settlement(player_id)
+
+    def _continue_turn_start_auto_settlement(self, player_id: int):
+        if self.game_over or not self._valid_player_id(player_id):
+            return
+        if self.current_player != player_id:
+            return
+        if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
         self._run_arctic_ready_cards_turn_start(player_id)
         if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
         self._run_ocean_auto_cards_turn_start(player_id)
+        if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
+        self._expire_bandages_before_action()
+        if self.game_over:
+            return
+        if self.players[player_id].health <= 0:
+            advance_turn = getattr(self, '_advance_turn', None)
+            if callable(advance_turn):
+                advance_turn()
+            else:
+                self._check_game_over()
+            return
+        self._turn_start_auto_settlement_player = None
+        self._finish_turn_boundary()
         self._continue_honey_control_if_needed(player_id)
 
     def _run_arctic_ready_cards_turn_start(self, player_id: int):
@@ -5113,6 +5299,7 @@ class GameEngine:
         ps.damage_multiplier = 1.0
         ps.bandage_active = False
         ps.bandage_death_pending = False
+        ps.bandage_trigger_boundary_id = -1
         self._clear_invincible_state(player_id)
         try:
             ps.custom_statuses.clear()
@@ -5162,8 +5349,8 @@ class GameEngine:
                 self._note_achievement_health(player_id)
                 self._set_invincible_until_next_own_turn_end(player_id)
                 ps.bandage_active = False
-                ps.bandage_death_pending = True
-                self.log_msg(f"{self.pn(player_id)}的绷带发动！无敌直到下一个自己回合结束，然后死亡")
+                self._mark_bandage_death_pending(player_id)
+                self.log_msg(f"{self.pn(player_id)}的绷带发动！下一个回合交替结算完成后，在下一名可行动玩家行动前死亡")
                 self._check_game_over()
                 return
             for card in ps.hand[:]:
@@ -5217,7 +5404,11 @@ class GameEngine:
         return {'success': True}
 
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
+        if not self._valid_player_id(player_id):
+            return False, "无效玩家"
         ps = self.players[player_id]
+        if ps.health <= 0:
+            return False, "阵亡玩家无法行动"
         card_def = card.card_def
         if card_def.card_type == 'guard' and not self._has_script_entry(card_def, 'play') and not card_def.effects and not self._card_has_v2_event(card_def, 'on_play'):
             return False, "反制牌只能通过响应机制使用"
@@ -5467,7 +5658,7 @@ class GameEngine:
         if not (0 <= player_id < len(self.players)):
             return
         ps = self.players[player_id]
-        if int(getattr(ps, 'custom_vars', {}).get('setup_magic_acceleration', 0) or 0) <= 0:
+        if not self._player_has_magic_acceleration_setup(player_id):
             return
         if not self._card_is(source_card, 'Mimic') or not self._card_is(target, 'Mimic'):
             return
@@ -5530,7 +5721,7 @@ class GameEngine:
 
     def _undo_magic_acceleration_after_pending_choice(self, player_id: int, card: Optional[CardInstance] = None):
         ps = self.players[player_id]
-        if int(getattr(ps, 'custom_vars', {}).get('setup_magic_acceleration', 0) or 0) <= 0:
+        if not self._player_has_magic_acceleration_setup(player_id):
             return
         custom_vars = ps.custom_vars
         card_instance_id = int(getattr(card, 'instance_id', 0) or 0)
@@ -6242,6 +6433,12 @@ class GameEngine:
             and self.pending_choice is None
             and not getattr(self, 'pending_v2_ui', None)
         ):
+            if (
+                bool(getattr(self, '_turn_boundary_active', False))
+                and getattr(self, '_turn_start_auto_settlement_player', None) == player_id
+            ):
+                self._continue_turn_start_auto_settlement(player_id)
+                return result
             if isinstance(self.players[player_id].custom_vars.get('arctic_ready_queue'), list):
                 self._run_arctic_ready_cards_turn_start(player_id)
                 if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
@@ -6956,7 +7153,7 @@ class GameEngine:
         if self._status_application_blocked(player_id, 'bandage_active'):
             return
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将无敌至下一个自己回合结束")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；下一个回合交替结算完成后死亡")
 
     def _atomic_equip_sponge(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
@@ -7012,7 +7209,7 @@ class GameEngine:
         if self._status_application_blocked(player_id, 'bandage_active'):
             return
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将无敌至下一个自己回合结束，然后死亡")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；下一个回合交替结算完成后死亡")
 
     def _atomic_on_fatal_set_health_exile(self, player_id, card, params, log, choice, context):
         health_amount = params.get('health', 5)
@@ -9140,6 +9337,7 @@ class GameEngine:
         return {'success': True}
 
     def _end_player_turn(self, player_id: int):
+        self._start_new_turn_boundary()
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
         self._run_v2_event_hooks('turn_end', {
@@ -9160,21 +9358,14 @@ class GameEngine:
         self._run_owner_turn_end_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._drain_turn_end_event_sources(player_id)
+        if self.game_over or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
         self._decay_equipment_armor_end_turn(player_id)
-        if ps.bandage_death_pending and self._should_expire_invincible_on_turn_end(player_id):
-            ps.health = 0
-            ps.bandage_death_pending = False
-            self._clear_invincible_state(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，死亡！")
-            if self._start_turn_status_damage_would_defeat(1 - player_id):
-                self._resolve_start_turn_status_damage_for_transition(1 - player_id)
-            self._check_game_over()
-            if self.game_over:
-                return
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
-            ps.bandage_death_pending = True
-            self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下一个自己回合结束")
+            self._mark_bandage_death_pending(player_id)
+            self.log_msg(f"{self.pn(player_id)}的绷带将在下一个回合交替结算完成后结束")
         # Fracture: clear at end of own turn. Status immunity suppresses the effect, not decay.
         if ps.fracture > 0:
             ps.fracture = 0
@@ -10375,7 +10566,10 @@ class GameEngine:
             return
         if not hasattr(self, 'timed_effects') or not isinstance(self.timed_effects, list):
             self.timed_effects = []
+        timer_serial = int(getattr(self, '_timed_effect_serial', 0) or 0) + 1
+        self._timed_effect_serial = timer_serial
         entry = {
+            '_timer_id': timer_serial,
             'owner_id': owner_id,
             'target_id': target_id,
             'trigger': trigger or 'target_turn_start',
@@ -10391,13 +10585,27 @@ class GameEngine:
     def _run_timed_effects_for_turn(self, current_player: int, phase: str = 'normal'):
         if not getattr(self, 'timed_effects', None):
             return
+        pending = list(self.timed_effects)
+        self.timed_effects = []
         kept = []
-        for entry in list(self.timed_effects):
+        processed_count = 0
+        while pending and processed_count < 512:
+            entry = pending.pop(0)
             if not isinstance(entry, dict):
                 continue
             if not self._timer_trigger_matches(entry, current_player, phase):
                 kept.append(entry)
                 continue
+            timer_id = entry.get('_timer_id')
+            if timer_id is None:
+                timer_id = int(getattr(self, '_timed_effect_serial', 0) or 0) + 1
+                self._timed_effect_serial = timer_id
+                entry['_timer_id'] = timer_id
+            if bool(getattr(self, '_turn_boundary_active', False)):
+                key = ('timed_effect', str(phase or ''), int(current_player), int(timer_id))
+                if not self._turn_boundary_claim(key):
+                    kept.append(entry)
+                    continue
             owner_id = int(entry.get('owner_id', current_player))
             target_id = int(entry.get('target_id', owner_id))
             remaining = int(entry.get('remaining', 0))
@@ -10420,7 +10628,15 @@ class GameEngine:
             entry['remaining'] = remaining - 1
             if entry['remaining'] > 0:
                 kept.append(entry)
-        self.timed_effects = kept
+            processed_count += 1
+            if self.timed_effects:
+                pending.extend(self.timed_effects)
+                self.timed_effects = []
+        if pending:
+            kept.extend(pending)
+        if self.timed_effects:
+            kept.extend(self.timed_effects)
+        self.timed_effects = kept[-200:]
 
     def _atomic_timed_effect(self, player_id, card, params, log, choice, context):
         trigger = str(params.get('trigger') or 'target_turn_start')
@@ -11533,12 +11749,16 @@ class GameEngine:
         v2_event_name = f'on_{event_name}'
         event_def = self._get_v2_event_def(card.card_def, v2_event_name)
         if event_def:
+            if not self._claim_turn_boundary_card_event(owner_id, card, event_name, extra_context):
+                return True
             self._run_v2_card_event(owner_id, card, v2_event_name, choice, extra_context)
             return True
         if self._has_script_entry(card.card_def, event_name):
             effects = self._get_script_effects(card.card_def, event_name)
             if not effects:
                 return False
+            if not self._claim_turn_boundary_card_event(owner_id, card, event_name, extra_context):
+                return True
             self._run_effect_list(
                 owner_id,
                 card,
@@ -11548,13 +11768,19 @@ class GameEngine:
             )
             return True
         event_type = f'on_{event_name}'
-        ran = False
+        matching_effects = []
         for effect in card.card_def.effects or []:
             if not isinstance(effect, dict) or effect.get('type') != event_type:
                 continue
             params = effect.get('params', {}) or {}
-            if not self._event_wrapper_matches(owner_id, event_name, params, extra_context):
-                continue
+            if self._event_wrapper_matches(owner_id, event_name, params, extra_context):
+                matching_effects.append((effect, params))
+        if not matching_effects:
+            return False
+        if not self._claim_turn_boundary_card_event(owner_id, card, event_name, extra_context):
+            return True
+        ran = False
+        for effect, params in matching_effects:
             if event_type == 'on_equipment_trigger' and params.get('destroy_self'):
                 eq = self._find_equipment_for_card(owner_id, card)
                 if eq is not None and not self._destroy_equipment(owner_id, eq):
@@ -11595,6 +11821,86 @@ class GameEngine:
             if zone_card in ps.hand and self._has_card_event(zone_card.card_def, 'hand_owner_turn_end'):
                 self._run_card_event(player_id, zone_card, 'hand_owner_turn_end', None,
                                      {'source_id': player_id, 'target_id': player_id, 'zone': 'hand'})
+
+    def _turn_boundary_processed_count(self) -> int:
+        processed = getattr(self, '_turn_boundary_processed_sources', None)
+        return len(processed) if isinstance(processed, set) else 0
+
+    def _drain_turn_end_event_sources(self, player_id: int):
+        if not bool(getattr(self, '_turn_boundary_active', False)):
+            return
+        for _ in range(64):
+            before = self._turn_boundary_processed_count()
+            self._trigger_v2_status_events_for_player(player_id, 'on_turn_end', {'player_id': player_id})
+            self._run_hand_owner_turn_end_events(player_id)
+            self._run_owner_turn_end_equipment(player_id)
+            if (
+                self.game_over
+                or self.pending_choice is not None
+                or getattr(self, 'pending_v2_ui', None)
+            ):
+                return
+            if self._turn_boundary_processed_count() <= before:
+                return
+
+    def _drain_turn_start_event_sources(self, player_id: int):
+        if not bool(getattr(self, '_turn_boundary_active', False)):
+            return
+        for _ in range(64):
+            before = self._turn_boundary_processed_count()
+            self._trigger_v2_status_events_for_player(player_id, 'on_turn_start', {'player_id': player_id})
+            self._run_zone_owner_turn_start_events(player_id)
+            self._run_timed_effects_for_turn(player_id)
+            self._run_timed_effects_for_turn(player_id, 'after_status_clear')
+            for owner_id, owner_state in enumerate(self.players):
+                for eq in list(getattr(owner_state, 'equipment', []) or []):
+                    if self._has_card_event(eq.card_def, 'any_turn_start'):
+                        self._run_card_event(
+                            owner_id,
+                            eq.card_instance,
+                            'any_turn_start',
+                            None,
+                            {'source_id': owner_id, 'target_id': player_id},
+                        )
+            if hasattr(self, 'get_all_enemies'):
+                enemy_ids = list(self.get_all_enemies(player_id))
+            else:
+                enemy_ids = [1 - player_id] if len(self.players) == 2 else []
+            for enemy_id in enemy_ids:
+                if not (0 <= enemy_id < len(self.players)):
+                    continue
+                for eq in list(getattr(self.players[enemy_id], 'equipment', []) or []):
+                    if self._has_card_event(eq.card_def, 'enemy_turn_start'):
+                        self._run_card_event(
+                            enemy_id,
+                            eq.card_instance,
+                            'enemy_turn_start',
+                            None,
+                            {'source_id': enemy_id, 'target_id': player_id},
+                        )
+            for owner_id, eq in list(self._iter_equipment_targeting_player(player_id)):
+                effect_target_id = getattr(eq, 'effect_target', owner_id)
+                if not isinstance(effect_target_id, int) or not (0 <= effect_target_id < len(self.players)):
+                    effect_target_id = player_id
+                context = {
+                    'source_id': owner_id,
+                    'target_id': effect_target_id,
+                    'current_equipment': eq,
+                    'selected_equipment_instance_id': getattr(eq.card_instance, 'instance_id', None),
+                    'selected_equipment_owner_id': owner_id,
+                }
+                if self._has_card_event(eq.card_def, 'target_turn_start'):
+                    self._run_card_event(owner_id, eq.card_instance, 'target_turn_start', None, context)
+                if self._has_card_event(eq.card_def, 'owner_turn_start'):
+                    self._run_card_event(owner_id, eq.card_instance, 'owner_turn_start', None, context)
+            if (
+                self.game_over
+                or self.pending_choice is not None
+                or getattr(self, 'pending_v2_ui', None)
+            ):
+                return
+            if self._turn_boundary_processed_count() <= before:
+                return
 
     def _equipment_turn_start_key(self, eq) -> int:
         return int(getattr(getattr(eq, 'card_instance', None), 'instance_id', id(eq)) or id(eq))
@@ -12036,6 +12342,9 @@ class GameEngine:
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
+        self._drain_turn_start_event_sources(player_id)
+        if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
         self._defer_turn_start_death_checks = False
         self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
@@ -12164,6 +12473,9 @@ class GameEngine:
                 self.log_msg(f"{self.pn(player_id)}的黄金叶效果：多抽1张牌")
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
+        self._drain_turn_start_event_sources(player_id)
+        if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
         self._defer_turn_start_death_checks = False
         self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
@@ -15438,6 +15750,10 @@ class GameEngine:
         for entry in list(entries):
             if self.game_over or self.phase != 'action':
                 break
+            if bool(getattr(self, '_turn_boundary_active', False)) and not self._turn_boundary_claim(
+                ('ocean_auto_card', int(player_id), id(entry))
+            ):
+                continue
             target_id = int(entry.get('target_id', -1))
             if not self._target_can_be_selected(player_id, target_id, allow_self=False):
                 continue

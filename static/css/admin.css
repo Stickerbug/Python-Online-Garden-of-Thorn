@@ -657,7 +657,10 @@ button {
 }
 
 .admin-replay-chip {
-  max-width: 120px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 210px;
   padding: 3px 6px;
   border: 1px solid #d9e2ec;
   border-radius: 5px;
@@ -668,6 +671,84 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.admin-replay-chip > span:not(.admin-replay-chip-order) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-replay-chip small {
+  color: #62748a;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.admin-replay-chip-order {
+  flex: 0 0 auto;
+  min-width: 16px;
+  color: #829ab1;
+  font-family: var(--data-font);
+  font-size: 9px;
+  text-align: right;
+}
+
+.admin-replay-pile-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 9px;
+}
+
+.admin-replay-pile-tab {
+  min-width: 0;
+  padding: 5px 4px;
+  border: 1px solid #d9e2ec;
+  border-radius: 5px;
+  background: #f7fafc;
+  color: #486581;
+  font: 800 10px/1.2 var(--ui-font);
+  cursor: pointer;
+}
+
+.admin-replay-pile-tab span {
+  color: #829ab1;
+  font-family: var(--data-font);
+}
+
+.admin-replay-pile-tab:hover,
+.admin-replay-pile-tab.active {
+  border-color: #1abc9c;
+  background: #e8faf5;
+  color: #087f6b;
+}
+
+.admin-replay-pile-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 7px 0 4px;
+  color: #334e68;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.admin-replay-pile-heading small {
+  color: #829ab1;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.admin-replay-pile-content {
+  max-height: 150px;
+  overflow: auto;
+  align-content: flex-start;
+  padding: 5px;
+  border: 1px solid #e5edf5;
+  border-radius: 6px;
+  background: #fbfdff;
 }
 
 .admin-replay-log {

@@ -196,11 +196,13 @@
     <button class="account-mode-tab active" type="button" data-achievement-tab="dew">荆露</button>
     <button class="account-mode-tab" type="button" data-achievement-tab="daily">签到</button>
     <button class="account-mode-tab" type="button" data-achievement-tab="achievements">成就</button>
+    <button class="account-mode-tab" type="button" data-achievement-tab="titles">称号</button>
     <button class="account-mode-tab" type="button" data-achievement-tab="tasks">每日任务</button>
   </div>
   <div id="achievements-dew-panel" class="achievement-tab-panel"></div>
   <div id="achievements-daily-panel" class="achievement-tab-panel hidden"></div>
   <div id="achievements-list" class="achievements-list"></div>
+  <div id="achievements-titles-panel" class="achievement-tab-panel title-center-panel hidden"></div>
   <div id="achievements-tasks-panel" class="achievement-tab-panel hidden"></div>
 </div>
 <div id="friends-popover" class="account-popover friends-popover hidden">
@@ -782,6 +784,7 @@
 <button id="settings-tab-mods" class="settings-tab" type="button">模组</button>
 <button id="settings-tab-social" class="settings-tab" type="button">社交</button>
 <button id="settings-tab-audio" class="settings-tab" type="button">音频</button>
+<button id="settings-tab-controls" class="settings-tab" type="button">快捷键</button>
 </div>
 <div id="settings-page-appearance" class="settings-page settings-section">
 <h4 id="settings-section-appearance">外观</h4>
@@ -937,6 +940,25 @@
 </div>
 <div class="settings-audio-test-row">
 <button id="btn-audio-test" type="button" class="btn btn-secondary">测试音效</button>
+</div>
+</div>
+<div id="settings-page-controls" class="settings-page settings-section settings-keybindings-page hidden">
+<div class="keybindings-heading-row">
+<h4 id="settings-section-controls">快捷键</h4>
+<button id="btn-keybindings-help" class="btn btn-secondary btn-small" type="button">查看全部</button>
+</div>
+<div class="settings-check-row">
+<input type="checkbox" id="settings-show-shortcut-hints" checked>
+<label id="settings-label-show-shortcut-hints" for="settings-show-shortcut-hints">按住 Alt 显示快捷键提示</label>
+</div>
+<div id="settings-device-keybindings-row" class="settings-check-row hidden">
+<input type="checkbox" id="settings-device-keybindings">
+<label id="settings-label-device-keybindings" for="settings-device-keybindings">仅此设备使用不同键位</label>
+</div>
+<p id="settings-keybindings-storage-status" class="info-text keybindings-storage-status"></p>
+<div id="settings-keybind-list" class="keybind-list"></div>
+<div class="keybindings-actions">
+<button id="btn-keybindings-reset-all" class="btn btn-secondary" type="button">恢复全部默认</button>
 </div>
 </div>
 <div class="settings-footer">
@@ -1109,5 +1131,6 @@
       window.__GTN_CHANGELOG_VERSION__ = {{ changelog_version|default('')|tojson }};
     </script>
     <script src="/static/js/game.js?v={{ static_version|default('dev')|urlencode }}"></script>
+    <script src="/static/js/keybindings.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>
 </html>

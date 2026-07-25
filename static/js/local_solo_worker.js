@@ -537,6 +537,7 @@ class LocalPlayer {
         this.damage_multiplier = 1.0;
         this.bandage_active = false;
         this.bandage_death_pending = false;
+        this.bandage_trigger_boundary_id = -1;
         this.attack_blocked = 0;
         this.untargetable = false;
         this.sponge_active = false;
@@ -760,6 +761,7 @@ class LocalPlayer {
             damage_multiplier: this.damage_multiplier,
             bandage_active: this.bandage_active,
             bandage_death_pending: this.bandage_death_pending,
+            bandage_trigger_boundary_id: this.bandage_trigger_boundary_id,
             attack_blocked: this.attack_blocked,
             untargetable: this.untargetable,
             sponge_active: this.sponge_active,
@@ -824,6 +826,12 @@ class LocalSoloEngine {
         this._last_positive_damage_hits = [0, 0];
         this._incoming_damage_hint = [0, 0];
         this._game_over_defer_depth = 0;
+        this._turn_boundary_serial = 0;
+        this._turn_boundary_id = 0;
+        this._turn_boundary_active = false;
+        this._turn_boundary_processed_sources = new Set();
+        this._turn_start_auto_settlement_player = null;
+        this._timed_effect_serial = 0;
         this._equalSufferingPending = false;
         this._cardResolutionDepth = 0;
         this._cardResolutionTargetSnapshot = null;
@@ -887,7 +895,7 @@ class LocalSoloEngine {
                 'nazar_active', 'nazar_big_hits', 'equipment_protection', 'magic_battery_m_this_turn',
                 'coffee_first_use', 'invincible', 'invincible_until_player', 'invincible_granted_round',
                 'invincible_granted_turn_marker', 'skip_turn', 'damage_multiplier', 'bandage_active',
-                'bandage_death_pending', 'attack_blocked', 'untargetable', 'sponge_active',
+                'bandage_death_pending', 'bandage_trigger_boundary_id', 'attack_blocked', 'untargetable', 'sponge_active',
                 'shovel_active', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
                 'extra_hand_limit_bonus', 'negate_next_skill', 'is_first_player',
                 'turn_damage_taken', 'turn_damage_dealt', 'last_turn_damage_taken', 'last_turn_damage_dealt',
@@ -929,6 +937,12 @@ class LocalSoloEngine {
         clone._last_positive_damage_hits = [...(this._last_positive_damage_hits || [0, 0])];
         clone._incoming_damage_hint = [...this._incoming_damage_hint];
         clone._game_over_defer_depth = this._game_over_defer_depth;
+        clone._turn_boundary_serial = toInt(this._turn_boundary_serial, 0);
+        clone._turn_boundary_id = toInt(this._turn_boundary_id, 0);
+        clone._turn_boundary_active = !!this._turn_boundary_active;
+        clone._turn_boundary_processed_sources = new Set(this._turn_boundary_processed_sources || []);
+        clone._turn_start_auto_settlement_player = this._turn_start_auto_settlement_player;
+        clone._timed_effect_serial = toInt(this._timed_effect_serial, 0);
         clone._equalSufferingPending = !!this._equalSufferingPending;
         clone._cardResolutionDepth = toInt(this._cardResolutionDepth, 0);
         clone._cardResolutionTargetSnapshot = cloneJson(this._cardResolutionTargetSnapshot);
@@ -1602,6 +1616,7 @@ class LocalSoloEngine {
     }
 
     startPlayerTurn(playerId) {
+        this.ensureTurnBoundary();
         this.current_player = playerId;
         this.resetTurnDamageCounters();
         this.applyTurnStartEffects(playerId);
@@ -1628,8 +1643,29 @@ class LocalSoloEngine {
                 return;
             }
         }
+        this.enterPlayerActionPhase(playerId);
+    }
+
+    enterPlayerActionPhase(playerId) {
         this.phase = 'action';
+        this._turn_start_auto_settlement_player = playerId;
+        this.continueTurnStartAutoSettlement(playerId);
+    }
+
+    continueTurnStartAutoSettlement(playerId) {
+        if (this.game_over || this.current_player !== playerId) return;
+        if (this.pending_response || this.pending_choice) return;
         this.runOceanAutoCardsTurnStart(playerId);
+        if (this.pending_response || this.pending_choice) return;
+        this.expireBandagesBeforeAction();
+        if (this.game_over) return;
+        const ps = this.players[playerId];
+        if (!ps || ps.health <= 0) {
+            this.checkGameOver();
+            return;
+        }
+        this._turn_start_auto_settlement_player = null;
+        this.finishTurnBoundary();
     }
 
     runZoneOwnerTurnStartEvents(playerId) {
@@ -1664,6 +1700,68 @@ class LocalSoloEngine {
                 });
             }
         });
+    }
+
+    turnBoundaryProcessedCount() {
+        return this._turn_boundary_processed_sources instanceof Set
+            ? this._turn_boundary_processed_sources.size
+            : 0;
+    }
+
+    drainTurnEndEventSources(playerId) {
+        if (!this._turn_boundary_active) return;
+        for (let pass = 0; pass < 64; pass++) {
+            const before = this.turnBoundaryProcessedCount();
+            this.runHandOwnerTurnEndEvents(playerId);
+            this.runOwnerTurnEndEquipment(playerId);
+            if (this.game_over || this.pending_choice) return;
+            if (this.turnBoundaryProcessedCount() <= before) return;
+        }
+    }
+
+    drainTurnStartEventSources(playerId) {
+        if (!this._turn_boundary_active) return;
+        for (let pass = 0; pass < 64; pass++) {
+            const before = this.turnBoundaryProcessedCount();
+            this.runTimedEffectsForTurn(playerId);
+            this.runTimedEffectsForTurn(playerId, 'after_status_clear');
+            this.runZoneOwnerTurnStartEvents(playerId);
+            this.players.forEach((owner, ownerId) => {
+                [...owner.equipment].forEach(eq => {
+                    if (this.hasCardEvent(eq.card_def, 'any_turn_start')) {
+                        this.runCardEvent(ownerId, eq.card_instance, 'any_turn_start', null, {
+                            source_id: ownerId,
+                            target_id: playerId,
+                        });
+                    }
+                    const effectTarget = Number(eq.effect_target ?? ownerId);
+                    if (effectTarget !== playerId) return;
+                    if (this.hasCardEvent(eq.card_def, 'target_turn_start')) {
+                        this.runCardEvent(ownerId, eq.card_instance, 'target_turn_start', null, {
+                            source_id: ownerId,
+                            target_id: playerId,
+                        });
+                    }
+                    if (this.hasCardEvent(eq.card_def, 'owner_turn_start')) {
+                        this.runCardEvent(ownerId, eq.card_instance, 'owner_turn_start', null, {
+                            source_id: ownerId,
+                            target_id: playerId,
+                        });
+                    }
+                });
+            });
+            const enemyId = 1 - playerId;
+            [...this.players[enemyId].equipment].forEach(eq => {
+                if (this.hasCardEvent(eq.card_def, 'enemy_turn_start')) {
+                    this.runCardEvent(enemyId, eq.card_instance, 'enemy_turn_start', null, {
+                        source_id: enemyId,
+                        target_id: playerId,
+                    });
+                }
+            });
+            if (this.game_over || this.pending_choice) return;
+            if (this.turnBoundaryProcessedCount() <= before) return;
+        }
     }
 
     applyTurnStartEffects(playerId) {
@@ -1769,6 +1867,8 @@ class LocalSoloEngine {
             }
         });
         if (!this.game_over) this.applyJungleTurnStartRegen(playerId);
+        this.drainTurnStartEventSources(playerId);
+        if (this.pending_choice) return;
         this._deferTurnStartDeathChecks = false;
         this.finalizeEqualSufferingTurnStart();
         if (this.game_over) return;
@@ -3258,15 +3358,20 @@ class LocalSoloEngine {
         const def = card.def();
         const effects = getScriptEffects(def, eventName);
         if (effects.length) {
+            if (!this.claimTurnBoundaryCardEvent(ownerId, card, eventName, extraContext)) return true;
             this.runEffectList(ownerId, card, effects, choice, { event: eventName, ...extraContext, listener_owner_id: ownerId });
             return true;
         }
         const eventType = `on_${eventName}`;
+        const matching = ((def && def.effects) || []).filter(effect => {
+            if (!effect || effect.type !== eventType) return false;
+            return this.eventWrapperMatches(ownerId, eventName, effect.params || {}, extraContext);
+        });
+        if (!matching.length) return false;
+        if (!this.claimTurnBoundaryCardEvent(ownerId, card, eventName, extraContext)) return true;
         let ran = false;
-        ((def && def.effects) || []).forEach(effect => {
-            if (!effect || effect.type !== eventType) return;
+        matching.forEach(effect => {
             const params = effect.params || {};
-            if (!this.eventWrapperMatches(ownerId, eventName, params, extraContext)) return;
             const repeatCount = eventName === 'resource_spent' ? this.resourceEventRepeatCount(ownerId, params, extraContext) : 1;
             for (let repeatIndex = 0; repeatIndex < repeatCount; repeatIndex++) {
                 this.runEffectList(ownerId, card, params.effects || [], choice, {
@@ -3279,6 +3384,24 @@ class LocalSoloEngine {
             ran = true;
         });
         return ran;
+    }
+
+    claimTurnBoundaryCardEvent(ownerId, card, eventName, extraContext = {}) {
+        const lifecycleEvents = new Set([
+            'owner_turn_start', 'target_turn_start', 'enemy_turn_start', 'any_turn_start',
+            'owner_turn_end', 'hand_owner_turn_start', 'hand_owner_turn_end',
+            'discard_owner_turn_start', 'deck_owner_turn_start',
+        ]);
+        if (!lifecycleEvents.has(String(eventName || ''))) return true;
+        return this.turnBoundaryClaim([
+            'card_event',
+            eventName,
+            this.current_player,
+            ownerId,
+            card && card.instance_id,
+            extraContext && extraContext.target_id,
+            extraContext && extraContext.zone,
+        ]);
     }
 
     runEffectList(playerId, card, effects, choice = null, context = {}) {
@@ -3327,7 +3450,9 @@ class LocalSoloEngine {
         duration = Math.max(1, Math.min(toInt(duration, 1), 999));
         if (!Array.isArray(effects) || !effects.length) return;
         this.timed_effects = Array.isArray(this.timed_effects) ? this.timed_effects : [];
+        this._timed_effect_serial = toInt(this._timed_effect_serial, 0) + 1;
         const entry = {
+            _timer_id: this._timed_effect_serial,
             owner_id: ownerId,
             target_id: targetId,
             trigger: trigger || 'target_turn_start',
@@ -3343,12 +3468,27 @@ class LocalSoloEngine {
 
     runTimedEffectsForTurn(currentPlayer, phase = 'normal') {
         if (!Array.isArray(this.timed_effects) || !this.timed_effects.length) return;
+        const pending = [...this.timed_effects];
+        this.timed_effects = [];
         const kept = [];
-        [...this.timed_effects].forEach(entry => {
-            if (!entry || typeof entry !== 'object') return;
+        let processedCount = 0;
+        while (pending.length && processedCount < 512) {
+            const entry = pending.shift();
+            if (!entry || typeof entry !== 'object') continue;
             if (!this.timerTriggerMatches(entry, currentPlayer, phase)) {
                 kept.push(entry);
-                return;
+                continue;
+            }
+            if (entry._timer_id == null) {
+                this._timed_effect_serial = toInt(this._timed_effect_serial, 0) + 1;
+                entry._timer_id = this._timed_effect_serial;
+            }
+            if (
+                this._turn_boundary_active
+                && !this.turnBoundaryClaim(['timed_effect', phase, currentPlayer, entry._timer_id])
+            ) {
+                kept.push(entry);
+                continue;
             }
             const ownerId = toInt(entry.owner_id, currentPlayer);
             const targetId = toInt(entry.target_id, ownerId);
@@ -3363,8 +3503,15 @@ class LocalSoloEngine {
             });
             entry.remaining = remaining - 1;
             if (entry.remaining > 0) kept.push(entry);
-        });
-        this.timed_effects = kept;
+            processedCount += 1;
+            if (this.timed_effects.length) {
+                pending.push(...this.timed_effects);
+                this.timed_effects = [];
+            }
+        }
+        if (pending.length) kept.push(...pending);
+        if (this.timed_effects.length) kept.push(...this.timed_effects);
+        this.timed_effects = kept.slice(-200);
     }
 
     runOneEffect(playerId, card, effect, choice) {
@@ -5505,8 +5652,14 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         const entries = ps && Array.isArray(ps.custom_vars.ocean_auto_cards) ? ps.custom_vars.ocean_auto_cards : [];
         if (!entries.length) return;
-        entries.forEach(entry => {
-            if (this.game_over || this.phase !== 'action') return;
+        entries.forEach((entry, entryIndex) => {
+            if (this.game_over || this.phase !== 'action' || this.pending_response || this.pending_choice) return;
+            if (
+                this._turn_boundary_active
+                && !this.turnBoundaryClaim(['ocean_auto_card', playerId, entryIndex])
+            ) {
+                return;
+            }
             const targetId = toInt(entry && entry.target_id, -1);
             const target = this.players[targetId];
             if (!target || targetId === playerId || toInt(target.health, 0) <= 0 || target.untargetable) return;
@@ -6321,6 +6474,72 @@ class LocalSoloEngine {
         return toInt(this.current_player, -1);
     }
 
+    ensureTurnBoundary() {
+        if (!this._turn_boundary_active) {
+            return this.startNewTurnBoundary();
+        }
+        return this._turn_boundary_id;
+    }
+
+    startNewTurnBoundary() {
+        this._turn_boundary_serial = toInt(this._turn_boundary_serial, 0) + 1;
+        this._turn_boundary_id = this._turn_boundary_serial;
+        this._turn_boundary_active = true;
+        this._turn_boundary_processed_sources = new Set();
+        this._turn_start_auto_settlement_player = null;
+        return this._turn_boundary_id;
+    }
+
+    finishTurnBoundary() {
+        this._turn_boundary_active = false;
+        this._turn_boundary_processed_sources = new Set();
+        this._turn_start_auto_settlement_player = null;
+    }
+
+    turnBoundaryClaim(keyParts) {
+        if (!this._turn_boundary_active) return true;
+        if (!(this._turn_boundary_processed_sources instanceof Set)) {
+            this._turn_boundary_processed_sources = new Set();
+        }
+        const key = (Array.isArray(keyParts) ? keyParts : [keyParts])
+            .map(value => String(value == null ? '' : value))
+            .join('\u001f');
+        if (this._turn_boundary_processed_sources.has(key)) return false;
+        if (this._turn_boundary_processed_sources.size >= 4096) return false;
+        this._turn_boundary_processed_sources.add(key);
+        return true;
+    }
+
+    markBandageDeathPending(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        ps.bandage_death_pending = true;
+        ps.bandage_trigger_boundary_id = this._turn_boundary_active
+            ? toInt(this._turn_boundary_id, -1)
+            : toInt(this._turn_boundary_serial, 0);
+    }
+
+    expireBandagesBeforeAction() {
+        const boundaryId = toInt(this._turn_boundary_id, -1);
+        let expired = false;
+        this.players.forEach((ps, playerId) => {
+            if (!ps || !ps.bandage_death_pending) return;
+            if (
+                this._turn_boundary_active
+                && toInt(ps.bandage_trigger_boundary_id, -1) === boundaryId
+            ) {
+                return;
+            }
+            ps.health = 0;
+            ps.bandage_death_pending = false;
+            ps.bandage_trigger_boundary_id = -1;
+            this.clearInvincibleState(playerId);
+            this.logMsg(`${this.pn(playerId)}的绷带效果结束，在行动前死亡！`);
+            expired = true;
+        });
+        if (expired) this.checkGameOver();
+    }
+
     setInvincibleUntilNextOwnTurnEnd(playerId) {
         const ps = this.players[playerId];
         if (!ps) return;
@@ -6359,6 +6578,7 @@ class LocalSoloEngine {
         ps.damage_multiplier = 1.0;
         ps.bandage_active = false;
         ps.bandage_death_pending = false;
+        ps.bandage_trigger_boundary_id = -1;
         this.clearInvincibleState(playerId);
         ps.custom_statuses = {};
         ps.custom_vars['三角形层数'] = 0;
@@ -6407,8 +6627,8 @@ class LocalSoloEngine {
             ps.health = 1;
             this.setInvincibleUntilNextOwnTurnEnd(playerId);
             ps.bandage_active = false;
-            ps.bandage_death_pending = true;
-            this.logMsg(`${this.pn(playerId)}的绷带发动！无敌直到下一个自己回合结束，然后死亡`);
+            this.markBandageDeathPending(playerId);
+            this.logMsg(`${this.pn(playerId)}的绷带发动！下一个回合交替结算完成后，在下一名可行动玩家行动前死亡`);
             return;
         }
         const idx = ps.hand.findIndex(card => card.def_id === 'Yggdrasil');
@@ -7140,7 +7360,7 @@ class LocalSoloEngine {
             const counterCostE = counter ? Math.max(0, toInt(counter.cost_e, 0)) : 0;
             const counterCostM = counter ? Math.max(0, toInt(counter.cost_m, 0)) : 0;
             if (!counter || counterCostE > responder.elixir || counterCostM > responder.magic) {
-                return this.executeCardEffect(playerId, card, choice);
+                return this.afterResponseResult(playerId, this.executeCardEffect(playerId, card, choice));
             }
             const trigger = counter.def().response_trigger;
             const playedType = card.card_type;
@@ -7149,7 +7369,9 @@ class LocalSoloEngine {
                 || (this.wouldDestroyEquipment(card) && trigger === 'equipment_destroy')
                 || (this.wouldHeal(card) && trigger === 'heal')
                 || (pending.is_precision && trigger === 'thorn');
-            if (!valid) return this.executeCardEffect(playerId, card, choice);
+            if (!valid) {
+                return this.afterResponseResult(playerId, this.executeCardEffect(playerId, card, choice));
+            }
             this.spendResource(responderId, 'elixir', counterCostE, counter);
             this.spendResource(responderId, 'magic', counterCostM, counter);
             const removed = responder.removeHandCard(instanceId);
@@ -7167,12 +7389,27 @@ class LocalSoloEngine {
                 if (!this.isStatusImmune(responderId)) {
                     responder.dodge = Math.min(toInt(responder.dodge, 0), dodgeBeforeCounter);
                 }
-                return result;
+                return this.afterResponseResult(playerId, result);
             }
             if (removed.def_id === 'MagicBubble') this.negated_card = true;
-            return this.executeCardEffect(playerId, card, choice);
+            return this.afterResponseResult(playerId, this.executeCardEffect(playerId, card, choice));
         }
-        return this.executeCardEffect(playerId, card, choice);
+        return this.afterResponseResult(playerId, this.executeCardEffect(playerId, card, choice));
+    }
+
+    afterResponseResult(playerId, result) {
+        if (
+            !this.game_over
+            && this.phase === 'action'
+            && this.current_player === playerId
+            && !this.pending_response
+            && !this.pending_choice
+            && this._turn_boundary_active
+            && this._turn_start_auto_settlement_player === playerId
+        ) {
+            this.continueTurnStartAutoSettlement(playerId);
+        }
+        return result;
     }
 
     executeCounterEffect(responderId, counterCard, originalCard, originalPlayerId, pendingDamagePrediction = null) {
@@ -7284,23 +7521,19 @@ class LocalSoloEngine {
     }
 
     endPlayerTurn(playerId) {
+        this.startNewTurnBoundary();
         const ps = this.players[playerId];
         this.runHandOwnerTurnEndEvents(playerId);
         if (this.game_over) return;
         this.runOwnerTurnEndEquipment(playerId);
         if (this.game_over) return;
+        this.drainTurnEndEventSources(playerId);
+        if (this.game_over || this.pending_choice) return;
         this.decayEquipmentArmorEndTurn(playerId);
-        if (ps.bandage_death_pending && this.shouldExpireInvincibleOnTurnEnd(playerId)) {
-            ps.health = 0;
-            ps.bandage_death_pending = false;
-            this.clearInvincibleState(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带效果结束，死亡！`);
-            this.checkGameOver();
-            if (this.game_over) return;
-        }
         if (ps.bandage_active && ps.invincible) {
             ps.bandage_active = false;
-            ps.bandage_death_pending = true;
+            this.markBandageDeathPending(playerId);
+            this.logMsg(`${this.pn(playerId)}的绷带将在下一个回合交替结算完成后结束`);
         }
         this.returnCogwheelCardsNow(playerId);
         [...ps.hand].forEach(card => {

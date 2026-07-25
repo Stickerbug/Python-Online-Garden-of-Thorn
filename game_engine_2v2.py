@@ -51,6 +51,12 @@ class GameEngine2v2(GameEngine):
         self.winner: int = -1
         self.winning_team: int = -1
         self._game_over_defer_depth: int = 0
+        self._turn_boundary_serial: int = 0
+        self._turn_boundary_id: int = 0
+        self._turn_boundary_active: bool = False
+        self._turn_boundary_processed_sources: set = set()
+        self._turn_start_auto_settlement_player: Optional[int] = None
+        self._timed_effect_serial: int = 0
         self.negated_card: bool = False
         self._yggdrasil_check: bool = True
         self._antennae_reveal: List[Optional[list]] = [None] * 4
@@ -441,7 +447,41 @@ class GameEngine2v2(GameEngine):
             next_player = self.turn_order[self.turn_index]
             self._start_player_turn(next_player)
 
+    def _advance_dead_current_player_if_ready(self) -> bool:
+        if (
+            self.game_over
+            or self.phase != 'action'
+            or self.pending_response is not None
+            or self.pending_choice is not None
+            or getattr(self, 'pending_v2_ui', None) is not None
+            or int(getattr(self, '_card_resolution_depth', 0) or 0) > 0
+            or int(getattr(self, '_game_over_defer_depth', 0) or 0) > 0
+        ):
+            return False
+        player_id = self._normalize_player_id(self.current_player)
+        if not self._is_valid_player_id(player_id) or self.players[player_id].health > 0:
+            return False
+        self._check_game_over()
+        if self.game_over or self.players[player_id].health > 0:
+            return False
+        if self.turn_order and (
+            not (0 <= self.turn_index < len(self.turn_order))
+            or self.turn_order[self.turn_index] != player_id
+        ):
+            try:
+                self.turn_index = self.turn_order.index(player_id)
+            except ValueError:
+                return False
+        self.log_msg(f"{self.pn(player_id)}已阵亡，跳过剩余行动")
+        self._start_new_turn_boundary()
+        self._advance_turn()
+        return True
+
     def _end_player_turn(self, player_id: int):
+        if self._is_valid_player_id(player_id) and self.players[player_id].health <= 0:
+            self._advance_dead_current_player_if_ready()
+            return
+        self._start_new_turn_boundary()
         ps = self.players[player_id]
         self._run_v2_event_hooks('turn_end', {
             'source_player': player_id,
@@ -460,19 +500,14 @@ class GameEngine2v2(GameEngine):
         self._run_owner_turn_end_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
+        self._drain_turn_end_event_sources(player_id)
+        if self.game_over or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
         self._decay_equipment_armor_end_turn(player_id)
-        if ps.bandage_death_pending and self._should_expire_invincible_on_turn_end(player_id):
-            ps.health = 0
-            ps.bandage_death_pending = False
-            self._clear_invincible_state(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，生命值归零！")
-            self._on_player_death(player_id)
-            if self.game_over:
-                return
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
-            ps.bandage_death_pending = True
-            self.log_msg(f"{self.pn(player_id)}的绷带无敌将持续到下一个自己回合结束")
+            self._mark_bandage_death_pending(player_id)
+            self.log_msg(f"{self.pn(player_id)}的绷带将在下一个回合交替结算完成后结束")
         # Fracture: clear at end of own turn
         if ps.fracture > 0:
             ps.fracture = 0
@@ -643,6 +678,10 @@ class GameEngine2v2(GameEngine):
     def handle_response(self, responder_id: int, card_instance_id: Optional[int]) -> dict:
         if self.pending_response is None:
             return {'success': False, 'error': '没有待响应的操作'}
+        if not self._is_valid_player_id(responder_id):
+            return {'success': False, 'error': '无效玩家'}
+        if self.players[responder_id].health <= 0 and card_instance_id is not None:
+            return {'success': False, 'error': '阵亡玩家无法进行反制'}
         pending = self.pending_response
         pending_damage_prediction = self._simulate_pending_response_damage(responder_id, None) if card_instance_id is not None else {'total': 0, 'parts': []}
         self.pending_response = None
@@ -671,9 +710,16 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}{self._card_log_marker(counter_removed)}进行反制！")
             self._note_achievement_counter_success(responder_id)
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
+            alive_before_counter = [player.health > 0 for player in self.players]
+            counter_dead_ids = []
             self._game_over_defer_depth += 1
             try:
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
+                counter_dead_ids = [
+                    candidate
+                    for candidate, was_alive in enumerate(alive_before_counter)
+                    if was_alive and self.players[candidate].health <= 0
+                ]
                 is_precision = pending.get('is_precision', False)
                 if self._card_is(counter_removed, 'Bubble', 'vanilla:bubble'):
                     if self._is_status_immune(responder_id):
@@ -704,7 +750,18 @@ class GameEngine2v2(GameEngine):
                 return self._after_response_result(player_id, result)
             finally:
                 self._game_over_defer_depth -= 1
+                if counter_dead_ids:
+                    counter_death_mask = [
+                        candidate in counter_dead_ids
+                        for candidate in range(len(self.players))
+                    ]
+                    self._game_over_defer_depth += 1
+                    try:
+                        self._finalize_deferred_card_deaths(counter_death_mask)
+                    finally:
+                        self._game_over_defer_depth -= 1
                 self._check_game_over()
+                self._advance_dead_current_player_if_ready()
         return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
 
 
@@ -906,6 +963,7 @@ class GameEngine2v2(GameEngine):
         self._start_player_turn(self.turn_order[0])
 
     def _start_player_turn(self, player_id: int):
+        self._ensure_turn_boundary()
         self._reset_achievement_turn_stats(player_id)
         self.current_player = player_id
         self._refresh_hand_limit_bonuses()
@@ -961,6 +1019,7 @@ class GameEngine2v2(GameEngine):
             return result
         finally:
             self._active_choice = None
+            self._advance_dead_current_player_if_ready()
 
     def _finalize_deferred_card_deaths(self, alive_before=None):
         alive_before = list(alive_before or [])
@@ -1008,7 +1067,14 @@ class GameEngine2v2(GameEngine):
                 if isinstance(choice, dict):
                     merged.update(choice)
                 choice = merged
-        return super().resolve_choice(player_id, choice)
+        result = super().resolve_choice(player_id, choice)
+        self._advance_dead_current_player_if_ready()
+        return result
+
+    def handle_v2_ui_response(self, player_id: int, request_id: str, response: Optional[dict]) -> dict:
+        result = super().handle_v2_ui_response(player_id, request_id, response)
+        self._advance_dead_current_player_if_ready()
+        return result
 
     def _check_card_response_after_choice(self, player_id: int, card: CardInstance, choice: Optional[dict]) -> Optional[dict]:
         pending = self._build_pending_response_for_card(player_id, card, choice)
@@ -1156,6 +1222,10 @@ class GameEngine2v2(GameEngine):
     def play_card(self, player_id: int, card_instance_id: int, target_player_id: int = -1, choice=None) -> dict:
         target_player_id = self._normalize_player_id(target_player_id)
         ps = self.players[player_id] if self._is_valid_player_id(player_id) else None
+        if ps is None:
+            return {'success': False, 'error': '无效玩家'}
+        if ps.health <= 0:
+            return {'success': False, 'error': '阵亡玩家无法行动'}
         card = ps.find_hand_card(card_instance_id) if ps else None
         if card is None:
             return {'success': False, 'error': '手牌中没有这张牌'}
@@ -1295,6 +1365,13 @@ class GameEngine2v2(GameEngine):
             return result
         finally:
             self._active_choice = None
+
+    def end_turn(self, player_id: int) -> dict:
+        if self._is_valid_player_id(player_id) and self.players[player_id].health <= 0:
+            if self.current_player == player_id and self._advance_dead_current_player_if_ready():
+                return {'success': True, 'dead_player_skipped': True}
+            return {'success': False, 'error': '阵亡玩家无法行动'}
+        return super().end_turn(player_id)
 
     def handle_ally_consent(self, target_player_id: int, accepted: bool) -> dict:
         req = getattr(self, 'pending_ally_request', None)
@@ -1732,6 +1809,9 @@ class GameEngine2v2(GameEngine):
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
+        self._drain_turn_start_event_sources(player_id)
+        if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
         self._defer_turn_start_death_checks = False
         self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
@@ -1755,8 +1835,7 @@ class GameEngine2v2(GameEngine):
         if ps.health <= 0:
             self._advance_turn()
             return
-        self.phase = 'action'
-        self._continue_honey_control_if_needed(player_id)
+        self._enter_player_action_phase(player_id)
 
     def _resume_turn_start_2v2(self, player_id: int, foresight_result: Optional[dict] = None):
         state = getattr(self, '_pending_turn_start_2v2_state', None) or {}
@@ -1873,6 +1952,9 @@ class GameEngine2v2(GameEngine):
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
+        self._drain_turn_start_event_sources(player_id)
+        if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
         self._defer_turn_start_death_checks = False
         self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
@@ -2095,6 +2177,10 @@ class GameEngine2v2(GameEngine):
 
     def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1, ally_approved: bool = False) -> dict:
         target_player_id = self._normalize_player_id(target_player_id)
+        if not self._is_valid_player_id(player_id):
+            return {'success': False, 'error': '无效玩家'}
+        if self.players[player_id].health <= 0:
+            return {'success': False, 'error': '阵亡玩家无法行动'}
         if self.current_player != player_id and not self.is_ally(self.current_player, player_id):
             return {'success': False, 'error': '只能在己方回合触发装备'}
         ps = self.players[player_id]
@@ -2138,11 +2224,13 @@ class GameEngine2v2(GameEngine):
             self._dispatch_card_event('equipment_triggered', player_id, eq.card_instance,
                                       target_id=target_player_id, equipment=eq, equipment_owner_id=player_id)
             self._check_game_over()
+            self._advance_dead_current_player_if_ready()
             return {'success': True}
         self._execute_trigger_effect(player_id, eq, target_player_id)
         self._dispatch_card_event('equipment_triggered', player_id, eq.card_instance,
                                   target_id=target_player_id, equipment=eq, equipment_owner_id=player_id)
         self._check_game_over()
+        self._advance_dead_current_player_if_ready()
         return {'success': True}
 
     def _resolve_target(self, player_id, target_str):

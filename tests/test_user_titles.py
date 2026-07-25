@@ -1,0 +1,125 @@
+import gc
+import os
+import tempfile
+import unittest
+
+import db
+
+
+class UserTitleTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.old_db_path = db.DB_PATH
+        db.DB_PATH = os.path.join(self.temp_dir.name, 'titles.sqlite3')
+        db.init_db()
+        self.user, error = db.create_user('TitleTester', 'Aa1!aaaa')
+        self.assertIsNone(error)
+        self.assertIsNotNone(self.user)
+
+    def tearDown(self):
+        db.DB_PATH = self.old_db_path
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def grant(self, name, color, **kwargs):
+        user, center, error = db.admin_grant_user_title(
+            self.user['id'],
+            name,
+            color,
+            **kwargs,
+        )
+        self.assertIsNone(error)
+        self.assertEqual(user['id'], self.user['id'])
+        return center
+
+    def test_title_color_accepts_rgb_hsv_and_hex(self):
+        self.assertEqual(db.normalize_title_color('#3aF'), '#33AAFF')
+        self.assertEqual(db.normalize_title_color('RGB(47,128,200)'), '#2F80C8')
+        self.assertEqual(db.normalize_title_color('HSV(0,100,100)'), '#FF0000')
+        self.assertEqual(db.normalize_title_color('HSV(120,1,1)'), '#00FF00')
+        self.assertIsNone(db.normalize_title_color('not-a-color'))
+
+    def test_multiple_titles_can_be_equipped_reordered_and_compacted(self):
+        self.grant('甲', '#AA1122', title_id='test:first', equip=True)
+        self.grant('乙', 'RGB(20,40,60)', title_id='test:second', equip=True)
+        self.grant('丙', 'HSV(200,50,80)', title_id='test:third', equip=True)
+        center = self.grant('丁', '#445566', title_id='test:fourth', equip=True)
+
+        self.assertEqual(center['equipped'], ['test:first', 'test:second', 'test:third'])
+        self.assertEqual(len(center['items']), 4)
+
+        center, error = db.set_user_equipped_titles(
+            self.user['id'],
+            ['test:third', 'test:first', 'test:fourth'],
+        )
+        self.assertIsNone(error)
+        self.assertEqual(center['equipped'], ['test:third', 'test:first', 'test:fourth'])
+
+        _, too_many_error = db.set_user_equipped_titles(
+            self.user['id'],
+            ['test:first', 'test:second', 'test:third', 'test:fourth'],
+        )
+        self.assertIn('最多佩戴3个称号', too_many_error)
+
+        _, unowned_error = db.set_user_equipped_titles(
+            self.user['id'],
+            ['test:not-owned'],
+        )
+        self.assertIn('只能佩戴自己拥有', unowned_error)
+
+        _, center, error = db.admin_remove_user_title(self.user['id'], 'test:first')
+        self.assertIsNone(error)
+        self.assertEqual(center['equipped'], ['test:third', 'test:fourth'])
+        slots = {
+            item['id']: item['equipped_slot']
+            for item in center['items']
+            if item['equipped_slot'] is not None
+        }
+        self.assertEqual(slots, {'test:third': 1, 'test:fourth': 2})
+
+    def test_role_title_migrates_without_replacing_other_titles(self):
+        self.grant('自定义', '#345678', title_id='test:custom', equip=True)
+        _, profile, error = db.admin_set_user_role(
+            self.user['id'],
+            'contributor',
+            title='设计',
+            color='#A05AC8',
+        )
+        self.assertIsNone(error)
+        self.assertEqual(profile['equipped_titles'][0]['id'], 'test:custom')
+
+        center = db.get_user_title_center(self.user['id'])
+        role_title = next(item for item in center['items'] if item['acquired_source'] == 'role')
+        self.assertIsNone(role_title['equipped_slot'])
+
+        _, _, remove_error = db.admin_remove_user_title(self.user['id'], role_title['id'])
+        self.assertIn('身份称号随身份管理', remove_error)
+
+        _, clear_error = db.admin_clear_user_role(self.user['id'])
+        self.assertIsNone(clear_error)
+        remaining = db.get_user_title_center(self.user['id'])
+        self.assertEqual([item['id'] for item in remaining['items']], ['test:custom'])
+
+    def test_future_achievement_can_grant_a_title(self):
+        definition = {
+            'id': 'test_achievement_title',
+            'reward_title': {
+                'id': 'achievement:test-title',
+                'name': '先行者',
+                'color': 'HSV(45,80,90)',
+            },
+        }
+        with db.get_db_connection() as conn:
+            granted = db._award_achievement_title_conn(conn, self.user['id'], definition)
+            conn.commit()
+        self.assertTrue(granted)
+
+        center = db.get_user_title_center(self.user['id'])
+        self.assertEqual(len(center['items']), 1)
+        self.assertEqual(center['items'][0]['id'], 'achievement:test-title')
+        self.assertEqual(center['items'][0]['acquired_source'], 'achievement')
+        self.assertIsNone(center['items'][0]['equipped_slot'])
+
+
+if __name__ == '__main__':
+    unittest.main()

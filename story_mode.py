@@ -4,8 +4,8 @@ import random
 from story_content import initial_story_player
 
 
-STORY_SCHEMA_VERSION = 2
-STORY_CONTENT_VERSION = 'story-alpha-3'
+STORY_SCHEMA_VERSION = 3
+STORY_CONTENT_VERSION = 'story-garden-2'
 STORY_FLOOR_COUNT = 16
 
 STORY_STAGES = (
@@ -212,6 +212,9 @@ def build_initial_story_state(seed):
         'reward': None,
         'rng_counter': 0,
         'normal_battles': 0,
+        'event_miss_streak': 0,
+        'shop_removals': 0,
+        'shop_upgrades': 0,
         'completed': False,
         'last_events': [],
         'flags': {},

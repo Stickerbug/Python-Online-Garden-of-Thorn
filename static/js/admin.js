@@ -22,6 +22,7 @@ let replayData = null;
 let replayCurrentId = null;
 let replayTotalFrames = 0;
 const replayChunkPromises = new Map();
+const replayPileSelection = new Map();
 const REPLAY_CHUNK_SIZE = 32;
 let gameChatTimer = null;
 let gameChatSignature = '';
@@ -1527,12 +1528,43 @@ function replayCardId(card) {
   return card.def_id || card.id || card.card_id || (card.card_instance && card.card_instance.def_id) || '?';
 }
 
-function replayChipRow(cards, hiddenCount = 0) {
-  const chips = [];
-  (Array.isArray(cards) ? cards : []).slice(0, 18).forEach((card) => {
-    const id = replayCardId(card);
-    chips.push(`<span class="admin-replay-chip" title="${escapeHtml(id)}">${escapeHtml(id)}</span>`);
+function replayCardEffectSummary(card) {
+  const item = card && card.card_instance ? card.card_instance : (card || {});
+  const parts = [];
+  [
+    ['迅', item.swift_value],
+    ['魔迅', item.magic_swift_value],
+    ['暂迅', item.temp_swift_value],
+    ['威', item.power_value],
+    ['电荷', item.charge_value],
+    ['裂', item.fission_count],
+    ['聚', Number(item.fusion_level || 1) > 1 ? item.fusion_level : 0],
+  ].forEach(([label, value]) => {
+    if (Number(value || 0) !== 0) parts.push(`${label}${value}`);
   });
+  const flags = Array.isArray(item.instance_flags) ? item.instance_flags.filter(Boolean) : [];
+  if (flags.length) parts.push(flags.join(','));
+  return parts.join(' · ');
+}
+
+function replayChipRow(cards, hiddenCount = 0, options = {}) {
+  const chips = [];
+  const ordered = !!options.ordered;
+  const limit = Math.max(1, Number(options.limit || 120));
+  const items = Array.isArray(cards) ? cards : [];
+  items.slice(0, limit).forEach((card, index) => {
+    const id = replayCardId(card);
+    const detail = replayCardEffectSummary(card);
+    const instance = card && (card.instance_id || (card.card_instance && card.card_instance.instance_id));
+    const title = [id, instance ? `实例 ${instance}` : '', detail].filter(Boolean).join(' · ');
+    chips.push(`
+      <span class="admin-replay-chip" title="${escapeHtml(title)}">
+        ${ordered ? `<span class="admin-replay-chip-order">${index + 1}</span>` : ''}
+        <span>${escapeHtml(id)}</span>
+        ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+      </span>`);
+  });
+  if (items.length > limit) chips.push(`<span class="admin-replay-chip">+${items.length - limit}</span>`);
   const count = Math.max(0, Number(hiddenCount || 0));
   for (let i = 0; i < Math.min(count, 12); i += 1) chips.push('<span class="admin-replay-chip">?</span>');
   if (count > 12) chips.push(`<span class="admin-replay-chip">+${count - 12}</span>`);
@@ -1542,31 +1574,110 @@ function replayChipRow(cards, hiddenCount = 0) {
 function replayEquipmentRow(equipment) {
   const items = Array.isArray(equipment) ? equipment : [];
   if (!items.length) return '<span class="admin-replay-chip">无</span>';
-  return items.slice(0, 18).map((eq) => {
+  return items.slice(0, 30).map((eq) => {
     const card = eq.card_instance || eq.card || eq;
     const id = replayCardId(card);
-    return `<span class="admin-replay-chip" title="${escapeHtml(id)}">${escapeHtml(id)}</span>`;
+    const details = [];
+    if (eq.target_player_id != null) details.push(`→P${Number(eq.target_player_id) + 1}`);
+    if (Number(eq.held_turns || 0) > 0) details.push(`${eq.held_turns}回合`);
+    if (Number(eq.protection || eq.equipment_protection || 0) > 0) {
+      details.push(`装备护甲${eq.protection || eq.equipment_protection}`);
+    }
+    return `<span class="admin-replay-chip" title="${escapeHtml([id, ...details].join(' · '))}">
+      <span>${escapeHtml(id)}</span>${details.length ? `<small>${escapeHtml(details.join(' · '))}</small>` : ''}
+    </span>`;
   }).join('');
 }
 
 function replayStatusRow(player) {
   const p = player || {};
   const items = [];
-  [['P', p.poison], ['F', p.fire], ['T', p.toxic], ['A', p.armor], ['Dg', p.dodge], ['Tri', p.triangle_stacks]].forEach(([key, value]) => {
+  [
+    ['中毒', p.poison],
+    ['灼烧', p.fire],
+    ['剧毒', p.toxic],
+    ['流血', p.bleed],
+    ['护盾', p.shield],
+    ['闪避', p.dodge],
+    ['三角形', p.triangle_stacks],
+    ['失明', p.blind],
+    ['虚弱', p.weakness],
+    ['破损', p.fracture],
+    ['迟缓', p.sluggish],
+    ['超载', p.overload],
+    ['预知', p.foresight],
+    ['滞留', p.stagnation],
+    ['禁疗', p.heal_block],
+    ['禁攻', p.attack_blocked],
+    ['无法选中', p.untargetable],
+  ].forEach(([key, value]) => {
     if (Number(value || 0) > 0) items.push(`${key}:${value}`);
   });
-  if (p.invincible) items.push('Invincible');
-  if (p.skip_turn) items.push('Skip');
+  if (p.invincible) items.push(`无敌${Number(p.invincible) > 1 ? `:${p.invincible}` : ''}`);
+  if (p.skip_turn || p.forced_skip_turn) items.push('跳过回合');
+  if (p.status_immune) items.push('状态免疫');
+  const custom = p.custom_statuses && typeof p.custom_statuses === 'object' ? p.custom_statuses : {};
+  Object.entries(custom).forEach(([key, raw]) => {
+    const value = raw && typeof raw === 'object'
+      ? (raw.value ?? raw.stacks ?? raw.layers ?? raw.count ?? 0)
+      : raw;
+    if (Number(value || 0) > 0 && !items.some(item => item.startsWith(`${key}:`))) {
+      items.push(`${key}:${value}`);
+    }
+  });
+  if (Number(p.armor || 0) > 0) items.unshift(`护甲:${p.armor}`);
   return items.length ? items.map(item => `<span class="admin-replay-chip">${escapeHtml(item)}</span>`).join('') : '<span class="admin-replay-chip">无</span>';
+}
+
+function replayPileKey(playerId) {
+  return `${replayCurrentId || 'replay'}:${Number(playerId) || 0}`;
+}
+
+function replayPileData(player, pileKey, revealHand = true) {
+  const p = player || {};
+  const definitions = {
+    hand: {
+      label: '手牌',
+      order: '左 → 右',
+      cards: revealHand ? (p.hand || p.revealed_hand || []) : (p.revealed_hand || []),
+      count: Number(p.hand_count || 0),
+    },
+    deck: {
+      label: '抽牌堆',
+      order: '顶部 → 底部',
+      cards: Array.isArray(p.deck) ? p.deck : [],
+      count: Number(p.deck_count || 0),
+    },
+    discard: {
+      label: '弃牌堆',
+      order: '较早 → 较晚',
+      cards: Array.isArray(p.discard) ? p.discard : [],
+      count: Number(p.discard_count || 0),
+    },
+    exile: {
+      label: '放逐区',
+      order: '较早 → 较晚',
+      cards: Array.isArray(p.exile) ? p.exile : [],
+      count: Number(p.exile_count || 0),
+    },
+  };
+  const entry = definitions[pileKey] || definitions.hand;
+  const visibleCount = entry.cards.length;
+  return {
+    ...entry,
+    count: Math.max(entry.count, visibleCount),
+    hiddenCount: Math.max(0, entry.count - visibleCount),
+  };
 }
 
 function replayPlayerPanel(frame, role, player, playerId, fallbackName, revealHand = true) {
   const p = player || {};
   const current = Number(replayFrameState(frame).current_player ?? frame.current_player) === Number(playerId);
-  const hand = revealHand ? (p.hand || p.revealed_hand || []) : (p.revealed_hand || []);
-  const hiddenCount = revealHand ? 0 : Math.max(0, Number(p.hand_count || 0) - hand.length);
-  const deck = Number(p.deck_count || (Array.isArray(p.deck) ? p.deck.length : 0) || 0);
-  const discard = Number(p.discard_count || (Array.isArray(p.discard) ? p.discard.length : 0) || 0);
+  const selectionKey = replayPileKey(playerId);
+  const selectedPile = replayPileSelection.get(selectionKey) || 'hand';
+  const pileKeys = ['hand', 'deck', 'discard', 'exile'];
+  const piles = Object.fromEntries(pileKeys.map(key => [key, replayPileData(p, key, revealHand)]));
+  const activePile = piles[selectedPile] || piles.hand;
   return `
     <section class="admin-replay-player${current ? ' current' : ''}">
       <div class="admin-replay-player-head">
@@ -1581,9 +1692,25 @@ function replayPlayerPanel(frame, role, player, playerId, fallbackName, revealHa
       <div class="admin-replay-section-label">状态</div>
       <div class="admin-replay-chip-row">${replayStatusRow(p)}</div>
       <div class="admin-replay-section-label">装备</div>
-      <div class="admin-replay-chip-row">${replayEquipmentRow(p.equipment)}</div>
-      <div class="admin-replay-section-label">手牌 ${hand.length + hiddenCount} / D${deck} / X${discard}</div>
-      <div class="admin-replay-chip-row">${replayChipRow(hand, hiddenCount)}</div>
+      <div class="admin-replay-chip-row">${replayEquipmentRow(p.equipment || p.equipments)}</div>
+      <div class="admin-replay-pile-tabs" role="tablist" aria-label="${escapeHtml(replayName(frame, playerId, fallbackName))}的牌区">
+        ${pileKeys.map((key) => {
+          const pile = piles[key];
+          return `<button type="button"
+            class="admin-replay-pile-tab${key === selectedPile ? ' active' : ''}"
+            data-admin-replay-pile="${key}"
+            data-admin-replay-player="${playerId}">
+            ${escapeHtml(pile.label)} <span>${pile.count}</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="admin-replay-pile-heading">
+        <span>${escapeHtml(activePile.label)}</span>
+        <small>${escapeHtml(activePile.order)}</small>
+      </div>
+      <div class="admin-replay-chip-row admin-replay-pile-content">
+        ${replayChipRow(activePile.cards, activePile.hiddenCount, { ordered: true, limit: 120 })}
+      </div>
     </section>`;
 }
 
@@ -1609,6 +1736,7 @@ async function openReplayViewer(replayId) {
   replayTimeline = [];
   replayFrameIndex = 0;
   replayPerspectiveIndex = 0;
+  replayPileSelection.clear();
   replayChunkPromises.clear();
   $('replay-frame').innerHTML = '<div class="admin-replay-empty">正在加载回放首屏...</div>';
   try {
@@ -1941,6 +2069,7 @@ function bindEvents() {
 
   document.addEventListener('click', async (event) => {
     const userToggle = event.target.closest && event.target.closest('[data-user-toggle]');
+    const replayPile = event.target.closest && event.target.closest('[data-admin-replay-pile]');
     const kickSid = event.target.dataset && event.target.dataset.kick;
     const skipRoom = event.target.dataset && event.target.dataset.skip;
     const endRoom = event.target.dataset && event.target.dataset.end;
@@ -1969,6 +2098,14 @@ function bindEvents() {
     }
     if (replayPerspective != null) {
       replayPerspectiveIndex = Number(replayPerspective) || 0;
+      renderReplayFrame();
+      return;
+    }
+    if (replayPile) {
+      replayPileSelection.set(
+        replayPileKey(replayPile.dataset.adminReplayPlayer),
+        replayPile.dataset.adminReplayPile || 'hand',
+      );
       renderReplayFrame();
       return;
     }

@@ -101,6 +101,45 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         self.assertEqual(len(dust_cards), 3)
         self.assertTrue(all('exile' in card.flags for card in dust_cards))
 
+    def test_magic_acceleration_accepts_string_event_id(self):
+        engine = GameEngine()
+        engine.opening_event_picks[0] = '10'
+
+        engine._apply_opening_event(0)
+
+        self.assertEqual(engine.opening_event_picks[0], 10)
+        self.assertEqual(engine.players[0].custom_vars.get('setup_magic_acceleration'), 1)
+
+    def test_mimic_copying_symbiosis_mimic_marks_everlasting_mana_pool(self):
+        engine = GameEngine()
+        engine.opening_event_picks[0] = '10'
+        engine._apply_opening_event(0)
+        source = CardInstance('Mimic')
+        target = CardInstance('Mimic')
+        target.instance_flags.add('symbiosis')
+        engine.players[0].hand = [target]
+
+        engine._effect_mimic(0, source, {'target_instance_id': target.instance_id})
+
+        self.assertEqual(
+            engine.players[0].custom_vars.get('achievement_creative_mode_mana_pool'),
+            1,
+        )
+
+    def test_mana_pool_requires_symbiosis_on_the_copied_mimic(self):
+        engine = GameEngine()
+        engine.opening_event_picks[0] = 10
+        engine._apply_opening_event(0)
+        source = CardInstance('Mimic')
+        target = CardInstance('Mimic')
+        engine.players[0].hand = [target]
+
+        engine._effect_mimic(0, source, {'target_instance_id': target.instance_id})
+
+        self.assertIsNone(
+            engine.players[0].custom_vars.get('achievement_creative_mode_mana_pool')
+        )
+
     def test_floral_arrangement_reorders_the_full_visible_deck(self):
         engine = GameEngine()
         engine.players[0].deck = [

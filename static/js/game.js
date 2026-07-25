@@ -32,6 +32,9 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_skin_config',
     'gtn_server',
     'gtn_disabled_mods',
+    'gtn_known_official_mods',
+    'gtn_official_mod_default_v2',
+    'gtn_official_mod_default_v3',
     'gtn_community_mods',
     'gtn_settings_mod_tab',
     'gtn_solo_decks',
@@ -42,6 +45,7 @@ const GTN_BETA_STORAGE_PREFIXES = [
     'gtn_settings_mod_detail_',
     'gtn_cards_cache_',
     'gtn_opening_events_cache_',
+    'gtn_keybindings_',
 ];
 function gtnBetaStorageKey(key) {
     if (!GTN_BETA_MODE) return key;
@@ -58,30 +62,57 @@ function gtnBetaStorageKey(key) {
 const gtnStorageMemory = new Map();
 let gtnPersistentStorage = null;
 let gtnPersistentStorageWritable = false;
-const GTN_COOKIE_FALLBACK_KEYS = new Set(['gtn_disabled_mods', 'gtn_beta_disabled_mods']);
+const GTN_COOKIE_FALLBACK_KEYS = new Set([
+    'gtn_disabled_mods',
+    'gtn_beta_disabled_mods',
+    'gtn_known_official_mods',
+    'gtn_beta_known_official_mods',
+    'gtn_official_mod_default_v2',
+    'gtn_beta_official_mod_default_v2',
+    'gtn_official_mod_default_v3',
+    'gtn_beta_official_mod_default_v3',
+]);
+const GTN_COOKIE_FALLBACK_PREFIXES = ['gtn_keybindings_', 'gtn_beta_keybindings_'];
+const gtnConfirmedCookieFallbackKeys = new Set();
+
+function supportsStorageFallbackCookie(key) {
+    const value = String(key || '');
+    return GTN_COOKIE_FALLBACK_KEYS.has(value)
+        || GTN_COOKIE_FALLBACK_PREFIXES.some(prefix => value.startsWith(prefix));
+}
 
 function readStorageFallbackCookie(key) {
-    if (!GTN_COOKIE_FALLBACK_KEYS.has(key) || typeof document === 'undefined') return null;
+    if (!supportsStorageFallbackCookie(key) || typeof document === 'undefined') return null;
     try {
         const prefix = `${encodeURIComponent(key)}=`;
         const part = String(document.cookie || '').split('; ').find(item => item.startsWith(prefix));
-        return part ? decodeURIComponent(part.slice(prefix.length)) : null;
+        if (!part) return null;
+        const value = decodeURIComponent(part.slice(prefix.length));
+        gtnConfirmedCookieFallbackKeys.add(String(key));
+        return value;
     } catch (_) {
         return null;
     }
 }
 
 function writeStorageFallbackCookie(key, value) {
-    if (!GTN_COOKIE_FALLBACK_KEYS.has(key) || typeof document === 'undefined') return;
+    if (!supportsStorageFallbackCookie(key) || typeof document === 'undefined') return false;
     try {
-        document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}; Max-Age=31536000; Path=/; SameSite=Lax`;
-    } catch (_) {}
+        const text = String(value);
+        document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(text)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+        const saved = readStorageFallbackCookie(key) === text;
+        if (saved) gtnConfirmedCookieFallbackKeys.add(String(key));
+        return saved;
+    } catch (_) {
+        return false;
+    }
 }
 
 function removeStorageFallbackCookie(key) {
-    if (!GTN_COOKIE_FALLBACK_KEYS.has(key) || typeof document === 'undefined') return;
+    if (!supportsStorageFallbackCookie(key) || typeof document === 'undefined') return;
     try {
         document.cookie = `${encodeURIComponent(key)}=; Max-Age=0; Path=/; SameSite=Lax`;
+        gtnConfirmedCookieFallbackKeys.delete(String(key));
     } catch (_) {}
 }
 
@@ -139,10 +170,16 @@ const localStorage = Object.freeze({
             }
         }
     },
-    isPersistent() {
-        return !!gtnPersistentStorageWritable;
+    isPersistent(key = null) {
+        if (gtnPersistentStorageWritable) return true;
+        if (key == null) return false;
+        const mapped = String(gtnBetaStorageKey(key));
+        if (!supportsStorageFallbackCookie(mapped)) return false;
+        if (gtnConfirmedCookieFallbackKeys.has(mapped)) return true;
+        return readStorageFallbackCookie(mapped) != null;
     },
 });
+window.GTN_STORAGE = localStorage;
 
 function clampClientCardLayer(value) {
     const n = Math.floor(Number(value));
@@ -1324,7 +1361,7 @@ Object.assign(I18N.zh, {
     rules_goal_text: 'Garden of Thorn 荆棘花园 是回合制卡牌对战游戏。你需要管理 H、E、M、手牌、状态和装备，利用{thorn}、{bloom}、{root}和{guard}建立优势。除特殊规则外，使敌方玩家全部阵亡即可获胜。',
     rules_resources_title: '资源',
     rules_resource_health: '生命', rules_resource_elixir: '能量', rules_resource_magic: '魔力',
-    rules_resources_text: '{health}降到0时玩家阵亡。{elixir}用于支付大多数卡牌；{magic}用于支付魔法牌。回合开始时会依次结算状态与装备效果，再按规则回复资源、抽牌；上限、迟缓、超载等效果会改变实际结果。',
+    rules_resources_text: '{health}降到0时玩家阵亡。{elixir}用于支付大多数卡牌；{magic}用于支付魔法牌。玩家交替时，先结算前一名玩家的回合结束效果，再结算下一名玩家的回合开始效果；结算完成后，下一名可行动玩家才能行动。',
     rules_types_title: '卡牌类型',
     rules_types_text: '{thornRaw} 是攻击牌，主要造成伤害，例如 {basic}、{bone}。{bloomRaw} 是技能牌，用于回复、施加状态、移动卡牌或改变资源，例如 {fire}。{rootRaw} 是装备牌，使用后留在使用者的装备栏，并按箭头指向的目标产生持续或触发效果，例如 {leaf}。{guardRaw} 是反制牌，只在响应条件满足时进入反制窗口，例如 {bubble}。',
     rules_flow_title: '回合流程',
@@ -1377,7 +1414,7 @@ Object.assign(I18N.en, {
     rules_goal_text: 'Garden of Thorn is a turn-based card battle game. Manage H, E, M, cards, states, and equipment while using {thorn}, {bloom}, {root}, and {guard} to build an advantage. Unless a special rule says otherwise, defeat every enemy player to win.',
     rules_resources_title: 'Resources',
     rules_resource_health: 'Health', rules_resource_elixir: 'Elixir', rules_resource_magic: 'Magic',
-    rules_resources_text: 'A player is defeated when {health} reaches 0. {elixir} pays for most cards, while {magic} pays for magic cards. At turn start, states and equipment resolve before resources and draws; limits, Sluggish, Overload, and other effects can change the result.',
+    rules_resources_text: 'A player is defeated when {health} reaches 0. {elixir} pays for most cards, while {magic} pays for magic cards. During a turn transition, the previous player’s turn-end effects resolve before the next player’s turn-start effects. The next player who can act begins only after settlement finishes.',
     rules_types_title: 'Card Types',
     rules_types_text: '{thornRaw} cards mainly deal damage, such as {basic} and {bone}. {bloomRaw} cards heal, apply states, move cards, or change resources, such as {fire}. {rootRaw} cards remain in the user’s equipment area and apply ongoing or triggered effects to the arrow target, such as {leaf}. {guardRaw} cards appear only in a response window when their condition is met, such as {bubble}.',
     rules_flow_title: 'Turn Flow',
@@ -1446,7 +1483,7 @@ Object.assign(I18N.fr, {
     rules_goal_text: 'Garden of Thorn 荆棘花园 est un jeu de cartes multijoueur. Dans la plupart des modes, votre objectif est d’utiliser quatre types de cartes : {thorn}, {bloom}, {root} et {guard}, afin de réduire le H du camp adverse à 0 tout en protégeant votre camp.',
     rules_resources_title: 'Ressources',
     rules_resource_health: 'Vie', rules_resource_elixir: 'Élixir', rules_resource_magic: 'Magie',
-    rules_resources_text: 'Un joueur est vaincu lorsque {health} atteint 0. {elixir} paie la plupart des cartes, tandis que {magic} paie les cartes magiques. Au début du tour, les états et équipements se résolvent avant la récupération et la pioche.',
+    rules_resources_text: 'Un joueur est vaincu lorsque {health} atteint 0. {elixir} paie la plupart des cartes, tandis que {magic} paie les cartes magiques. Lors d’une transition, les effets de fin du tour précédent se résolvent avant ceux du début du tour suivant. Le prochain joueur capable d’agir ne commence qu’après cette résolution.',
     rules_types_title: 'Types de cartes',
     rules_types_text: 'Les cartes {thornRaw} infligent des dégâts directs, comme {basic} et {bone}. Les cartes {bloomRaw} soignent, appliquent des états, modifient les ressources ou changent la situation, comme {fire}. Les cartes {rootRaw} fournissent des effets continus ou déclenchés après avoir été jouées, comme {leaf}. Les cartes {guardRaw} sont des contres : elles répondent à une action adverse qui remplit leur condition.',
     rules_flow_title: 'Déroulement',
@@ -1500,7 +1537,7 @@ Object.assign(I18N.ja, {
     rules_goal_text: 'Garden of Thorn 荆棘花园 はマルチプレイヤーカード対戦ゲームです。多くのモードでは、{thorn}、{bloom}、{root}、{guard}の4種類のカードを使い、相手側の H を 0 にしながら自分側の H を守ることが目標です。',
     rules_resources_title: 'リソース',
     rules_resource_health: '生命', rules_resource_elixir: 'エネルギー', rules_resource_magic: '魔力',
-    rules_resources_text: '{health}が0になるとプレイヤーは倒れます。{elixir}は多くのカード、{magic}は魔法カードの支払いに使います。ターン開始時は、状態と装備の効果を処理してから、リソース回復とドローを行います。',
+    rules_resources_text: '{health}が0になるとプレイヤーは倒れます。{elixir}は多くのカード、{magic}は魔法カードの支払いに使います。ターン交替では、直前のターン終了時効果を先に、次のターン開始時効果を後に解決します。すべての解決後、次に行動可能なプレイヤーが行動を始めます。',
     rules_types_title: 'カードタイプ',
     rules_types_text: '{thornRaw} は直接ダメージを与えるカードで、例は {basic}、{bone} です。{bloomRaw} は回復、状態付与、リソース調整などを行うカードで、例は {fire} です。{rootRaw} は使用後に継続効果や発動効果を持つカードで、例は {leaf} です。{guardRaw} は相手の行動が条件を満たしたときに反応するカウンターです。',
     rules_flow_title: 'ターンの流れ',
@@ -2439,16 +2476,58 @@ function shouldShowLobbyGameModeBadge(mode) {
 }
 
 function isAdminPlayer(player) {
-    return !!(player && (player.is_admin_player || player.isAdminPlayer || player.admin));
+    return !!(player && (player.is_admin_player || player.isAdminPlayer || player.isAdmin || player.admin));
+}
+
+function titleColorCss(color) {
+    const key = String(color || '').trim().toLowerCase();
+    const tokens = {
+        admin: '#C0392B',
+        thorn: 'var(--thorn)',
+        bloom: 'var(--bloom)',
+        root: 'var(--root)',
+        guard: 'var(--guard)',
+        neutral: 'var(--text-secondary)',
+    };
+    if (tokens[key]) return tokens[key];
+    if (/^#[0-9a-f]{6}$/i.test(key)) return key;
+    return '';
+}
+
+function getEquippedTitles(player) {
+    if (!player) return [];
+    const titles = Array.isArray(player.equipped_titles)
+        ? player.equipped_titles
+            .filter(item => item && item.name)
+            .slice(0, 3)
+            .map((item, index) => ({
+                id: String(item.id || `title-${index + 1}`),
+                name: String(item.name || ''),
+                color: String(item.color || ''),
+                equipped_slot: index + 1,
+            }))
+        : [];
+    if (titles.length) return titles;
+    if (!player.console_player && player.special_role_label) {
+        return [{
+            id: String(player.special_role || 'legacy-role'),
+            name: String(player.special_role_label),
+            color: String(player.name_color || player.special_role_color || (isAdminPlayer(player) ? 'admin' : 'neutral')),
+            equipped_slot: 1,
+        }];
+    }
+    return [];
 }
 
 function isSpecialPlayer(player) {
-    return !!(player && (isAdminPlayer(player) || player.is_special_player || player.special_role));
+    return !!(player && (isAdminPlayer(player) || player.is_special_player || player.special_role || getEquippedTitles(player).length));
 }
 
 function getSpecialRolePrefix(player) {
     if (!player) return '';
     if (player.console_player || player.special_role === 'console') return UI.console_prefix || '控制台';
+    const title = getEquippedTitles(player)[0];
+    if (title) return title.name;
     if (isAdminPlayer(player)) return UI.admin_prefix;
     if (player.special_role === 'chief_designer') return UI.chief_designer_prefix;
     if (player.special_role === 'right_angle_person') return UI.right_angle_person_prefix;
@@ -2458,6 +2537,9 @@ function getSpecialRolePrefix(player) {
 
 function getSpecialRoleColor(player) {
     if (!player) return '';
+    const title = getEquippedTitles(player)[0];
+    if (title) return title.color;
+    if (player.name_color) return player.name_color;
     if (isAdminPlayer(player)) return 'admin';
     return player.special_role_color || '';
 }
@@ -2471,10 +2553,26 @@ function getSpecialSortRank(player) {
     return 99;
 }
 
+function getPlayerBaseName(player) {
+    return localizeCanonicalPlayerName(
+        (player && (
+            player.nickname
+            || player.name
+            || player.display_name
+            || player.username
+            || player.sender_name
+        )) || '?',
+    );
+}
+
 function getPlayerDisplayName(player, options = {}) {
     const { adminPrefix = true } = options;
-    const name = localizeCanonicalPlayerName((player && (player.nickname || player.name)) || '?');
-    const prefix = getSpecialRolePrefix(player);
+    const name = getPlayerBaseName(player);
+    const titles = getEquippedTitles(player);
+    if (adminPrefix && titles.length) {
+        return `${titles.map(title => `[${title.name}]`).join('')}${name}`;
+    }
+    const prefix = titles.length ? '' : getSpecialRolePrefix(player);
     if (prefix && adminPrefix) return `[${prefix}]${name}`;
     return name;
 }
@@ -2495,12 +2593,69 @@ function localizePlayerNameInText(text) {
 function setPlayerNameContent(el, player, options = {}) {
     if (!el) return;
     const { adminPrefix = true } = options;
-    el.textContent = getPlayerDisplayName(player, { adminPrefix });
-    el.classList.toggle('admin-name', isAdminPlayer(player));
-    el.classList.toggle('bloom-name', getSpecialRoleColor(player) === 'bloom');
-    el.classList.toggle('guard-name', getSpecialRoleColor(player) === 'guard');
+    el.textContent = '';
+    const titles = getEquippedTitles(player);
+    if (adminPrefix && titles.length) {
+        titles.forEach(title => {
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'player-title-inline';
+            titleSpan.textContent = `[${title.name}]`;
+            const color = titleColorCss(title.color);
+            if (color) titleSpan.style.color = color;
+            el.appendChild(titleSpan);
+        });
+    } else if (adminPrefix) {
+        const prefix = getSpecialRolePrefix(player);
+        if (prefix) {
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'player-title-inline';
+            titleSpan.textContent = `[${prefix}]`;
+            const color = titleColorCss(getSpecialRoleColor(player));
+            if (color) titleSpan.style.color = color;
+            el.appendChild(titleSpan);
+        }
+    }
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'player-name-value';
+    nameSpan.textContent = getPlayerBaseName(player);
+    const nameColor = titleColorCss(getSpecialRoleColor(player));
+    if (nameColor) nameSpan.style.color = nameColor;
+    el.appendChild(nameSpan);
+    el.classList.toggle('admin-name', false);
+    el.classList.toggle('bloom-name', false);
+    el.classList.toggle('guard-name', false);
     el.classList.toggle('account-name', !!(player && player.is_registered_user) && !isSpecialPlayer(player));
     el.classList.toggle('guest-name', !!(player && !player.is_registered_user) && !isSpecialPlayer(player));
+}
+
+function playerNameHtml(player, options = {}) {
+    const { adminPrefix = true } = options;
+    const titles = getEquippedTitles(player);
+    const parts = [];
+    if (adminPrefix && titles.length) {
+        titles.forEach(title => {
+            const color = titleColorCss(title.color);
+            parts.push(
+                `<span class="player-title-inline"${color ? ` style="color:${escapeHtml(color)}"` : ''}>`
+                + `[${escapeHtml(title.name)}]</span>`,
+            );
+        });
+    } else if (adminPrefix) {
+        const prefix = getSpecialRolePrefix(player);
+        const color = titleColorCss(getSpecialRoleColor(player));
+        if (prefix) {
+            parts.push(
+                `<span class="player-title-inline"${color ? ` style="color:${escapeHtml(color)}"` : ''}>`
+                + `[${escapeHtml(prefix)}]</span>`,
+            );
+        }
+    }
+    const nameColor = titleColorCss(getSpecialRoleColor(player));
+    parts.push(
+        `<span class="player-name-value"${nameColor ? ` style="color:${escapeHtml(nameColor)}"` : ''}>`
+        + `${escapeHtml(getPlayerBaseName(player))}</span>`,
+    );
+    return parts.join('');
 }
 
 function appendPlayerNameNode(parent, player, options = {}) {
@@ -2523,9 +2678,37 @@ function getChatDisplayName(data) {
     if (data && data.system) return '[系统]';
     const base = (data && data.nickname) || '?';
     const spectator = data && data.is_spectator ? `[${UI.spectator_prefix}]` : '';
-    const prefix = getSpecialRolePrefix(data);
-    const name = prefix ? `[${prefix}]${base}` : base;
+    const titles = getEquippedTitles(data);
+    const titlePrefix = titles.length
+        ? titles.map(title => `[${title.name}]`).join('')
+        : (getSpecialRolePrefix(data) ? `[${getSpecialRolePrefix(data)}]` : '');
+    const name = `${titlePrefix}${base}`;
     return `${spectator}${name}`;
+}
+
+function setChatNameContent(el, data = {}, options = {}) {
+    if (!el) return;
+    const suffix = options.suffix == null ? ': ' : String(options.suffix);
+    const fallbackNick = options.fallbackNick || data.nickname || data.sender_name || data.nick || '?';
+    el.textContent = '';
+    if (data.system) {
+        el.textContent = `${fallbackNick}${suffix === ': ' ? ' ' : suffix}`;
+        return;
+    }
+    if (data.is_spectator) {
+        const spectator = document.createElement('span');
+        spectator.className = 'chat-spectator-prefix';
+        spectator.textContent = `[${UI.spectator_prefix}]`;
+        el.appendChild(spectator);
+    }
+    const richName = document.createElement('span');
+    richName.className = 'chat-player-name';
+    setPlayerNameContent(richName, {
+        ...data,
+        nickname: data.nickname || data.sender_name || fallbackNick,
+    }, { adminPrefix: true });
+    el.appendChild(richName);
+    el.appendChild(document.createTextNode(suffix));
 }
 
 const REPORT_CATEGORIES = {
@@ -4434,6 +4617,7 @@ let achievementCenter = null;
 let achievementLoading = false;
 let achievementLoadError = '';
 let achievementActiveTab = 'dew';
+let titleEquipSaving = false;
 let achievementToastQueue = [];
 let achievementToastActive = false;
 let achievementToastTimer = null;
@@ -4761,6 +4945,10 @@ let classicHoverInfoEl = null;
 let classicHoveredCardId = null;
 let classicTargetPickInFlight = false;
 let classicBackquoteHeld = false;
+let activeBoardTargetShortcut = null;
+let keyboardNavigationElement = null;
+let keyboardNavigationContext = '';
+let activeKeyboardReorderController = null;
 const CLASSIC_MOBILE_CANVAS_W = 1600;
 const CLASSIC_MOBILE_CANVAS_H = 900;
 let battleMobileStableViewport = null;
@@ -5272,6 +5460,7 @@ function updateStaticText() {
     if (settingsTabSocial) settingsTabSocial.textContent = UI.social;
     const settingsTabAudio = $('settings-tab-audio');
     if (settingsTabAudio) settingsTabAudio.textContent = UI.settings_audio || '音频';
+    window.GTN_KEYBINDINGS?.refreshText();
     const settingsAppearance = $('settings-section-appearance');
     if (settingsAppearance) settingsAppearance.textContent = UI.settings_appearance;
     const settingsMods = $('settings-section-mods');
@@ -5455,6 +5644,7 @@ function updateStaticText() {
             dew: lt({ zh: '荆露', en: 'Thorn Dew', fr: 'Rosée d’épines', ja: 'ソーンデュー' }),
             daily: lt({ zh: '签到', en: 'Check-in', fr: 'Connexion', ja: 'ログインボーナス' }),
             achievements: lt({ zh: '成就', en: 'Achievements', fr: 'Succès', ja: '実績' }),
+            titles: lt({ zh: '称号', en: 'Titles', fr: 'Titres', ja: '称号' }),
             tasks: lt({ zh: '每日任务', en: 'Daily Tasks', fr: 'Missions quotidiennes', ja: 'デイリー任務' }),
         };
         btn.textContent = labels[tab] || btn.textContent;
@@ -7396,7 +7586,7 @@ function getAllStatusDefs() {
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
-        { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害后无敌直到自己下个回合结束，然后死亡。', color: '#1E8449' },
+        { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；下一个回合交替结算完成后，在下一名可行动玩家行动前死亡。', color: '#1E8449' },
         { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -8411,45 +8601,30 @@ function isTypingKeyboardTarget(target) {
     const el = target.nodeType === 1 ? target : target.parentElement;
     if (!el) return false;
     if (el.isContentEditable) return true;
-    return !!(el.closest && el.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]'));
+    if (!el.closest) return false;
+    if (el.closest('textarea, select, [contenteditable="true"], [contenteditable=""]')) return true;
+    const input = el.closest('input');
+    if (!input) return false;
+    const type = String(input.type || 'text').toLowerCase();
+    return !['button', 'checkbox', 'radio', 'reset', 'submit'].includes(type);
 }
 
-function getDigitKeyIndex(event) {
-    if (!event) return -1;
-    const code = event.code || '';
-    let digit = -1;
-    if (/^Digit\d$/.test(code)) {
-        digit = Number(code.slice(5));
-    } else if (/^Numpad\d$/.test(code)) {
-        digit = Number(code.slice(6));
-    } else if (/^\d$/.test(event.key || '')) {
-        digit = Number(event.key);
-    }
-    if (!Number.isFinite(digit) || digit < 0 || digit > 9) return -1;
-    return digit === 0 ? 9 : digit - 1;
-}
-
-function handleClassicHandNumberShortcut(event) {
+function selectHandCardByShortcutIndex(index, event = null) {
     if (isSpectating || replayMode) return false;
-    if (!shouldUseClassicBattle(gameState)) return false;
-    if (isTypingKeyboardTarget(event && event.target)) return false;
-    if (event.altKey || event.ctrlKey || event.metaKey) return false;
-    if (event.repeat) return false;
-    const baseIndex = getDigitKeyIndex(event);
-    if (baseIndex < 0) return false;
-    const index = baseIndex + (classicBackquoteHeld ? 10 : 0);
     if (index < 0 || index > 19) return false;
     const hand = (gameState && gameState.you && Array.isArray(gameState.you.hand)) ? gameState.you.hand : [];
     const card = hand[index];
     if (!card || card.instance_id == null) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    selectClassicPlayCard(card.instance_id, event);
+    if (shouldUseClassicBattle(gameState)) {
+        selectClassicPlayCard(card.instance_id, event);
+    } else {
+        selectPlayCardForConfirm(card.instance_id, { force: true });
+    }
     return true;
 }
 
-function selectPlayCardForConfirm(cardInstanceId) {
-    if (!isTouchPlayMode()) return false;
+function selectPlayCardForConfirm(cardInstanceId, options = {}) {
+    if (!options.force && !isTouchPlayMode()) return false;
     if (isActionBusy()) return false;
     const hand = (gameState.you || {}).hand || [];
     const cardDict = hand.find(c => c.instance_id === cardInstanceId);
@@ -8685,12 +8860,18 @@ function showModal(html) {
 function hideModal() {
     removeFloatingCardPreview();
     activeV2UiRequestId = null;
+    if (activeKeyboardReorderController) {
+        activeKeyboardReorderController.forceCancel();
+    }
     const modal = $('modal');
     const content = $('modal-content');
     if (content && content.querySelector && content.querySelector('#dc-countdown')) {
         setSpectateDisconnectModalActive(false);
     }
-    if (content) content.className = 'modal-inner';
+    if (content) {
+        content.className = 'modal-inner';
+        delete content.dataset.pileType;
+    }
     if (modal) { modal.classList.add('hidden'); modal.classList.remove('active'); }
     if (tutorialMode) {
         showTutorialOverlay();
@@ -9482,10 +9663,10 @@ function isOwnBlindActive() {
     return getOwnBlindLevel() > 0;
 }
 
-function getOwnBlindLevel() {
-    if (!gameState || !gameState.you || isSpectating) return 0;
-    if (isStatusImmune(gameState.you)) return 0;
-    return Math.max(0, Math.floor(Number(gameState.you.blind || 0)));
+function getOwnBlindLevel(state = gameState) {
+    if (!state || !state.you || isSpectating) return 0;
+    if (isStatusImmune(state.you)) return 0;
+    return Math.max(0, Math.floor(Number(state.you.blind || 0)));
 }
 
 function shouldMaskOwnDrawDeck(state = gameState) {
@@ -11763,6 +11944,7 @@ function getTermIntroLibrary() {
         deck: { label: lt({ zh: '牌堆', en: 'Deck', fr: 'Deck', ja: 'デッキ' }), desc: lt({ zh: '未抽到的牌所在区域。抽牌通常从牌堆顶进入手牌；查看牌堆只能看到抽牌堆。', en: 'The zone for cards not yet drawn. Draw usually moves cards from the top of the deck into hand.', fr: 'Zone des cartes non piochées. La pioche déplace généralement la carte du dessus du deck vers la main.', ja: 'まだ引いていないカードの領域です。通常、デッキ上から手札へ移動します。' }), color: COLORS.text_primary },
         discard: { label: lt({ zh: '弃牌堆', en: 'Discard', fr: 'Défausse', ja: '捨て札' }), desc: lt({ zh: '大多数打出后的牌会进入弃牌堆，之后会被重新洗回牌堆。', en: 'Most played cards go here and may later be shuffled back into the deck.', fr: 'La plupart des cartes jouées y vont, puis peuvent être remélangées dans le deck.', ja: '多くの使用済みカードが入り、後でデッキに戻ることがあります。' }), color: COLORS.text_secondary },
         response: { label: UI.counter || lt({ zh: '反制', en: 'Counter', fr: 'Contre', ja: '反制' }), desc: lt({ zh: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', en: 'A response chance appears when an opponent action meets its condition. Counters can change that action’s result.', fr: 'Une fenêtre de réponse apparaît quand l’action adverse remplit la condition. Un contre peut modifier le résultat.', ja: '相手の行動が条件を満たすと応答機会が出ます。反制はその結果を変えます。' }), color: CARD_TYPE_COLORS.guard },
+        turn_transition: { label: lt({ zh: '回合交替结算', en: 'Turn Transition Settlement', fr: 'Résolution de transition de tour', ja: 'ターン交替解決' }), desc: lt({ zh: '前一名玩家的回合结束与下一名玩家的回合开始属于同一结算时点。先结算回合结束效果，再结算回合开始效果；期间新产生且属于该时点的效果继续结算，同一来源最多结算一次。需要选择时暂停，完成选择后继续，直至下一名可行动玩家开始行动。', en: 'The previous player’s turn end and the next player’s turn start form one settlement point. Turn-end effects resolve first, then turn-start effects. Newly created effects for that point continue resolving, while each source resolves at most once. Choices pause settlement; it resumes afterward until the next player who can act begins acting.', fr: 'La fin du tour précédent et le début du tour suivant forment un même point de résolution. Les effets de fin de tour se résolvent avant ceux de début de tour. Les nouveaux effets de ce point continuent à se résoudre, chaque source au plus une fois. Un choix met la résolution en pause, puis elle reprend jusqu’à ce que le prochain joueur capable d’agir commence son action.', ja: '直前のプレイヤーのターン終了と次のプレイヤーのターン開始は同じ解決時点です。終了時効果、開始時効果の順に解決し、その時点で新たに生じた効果も続けて解決します。同じ発生源は1回までです。選択が必要な場合は一時停止し、完了後、次に行動可能なプレイヤーが行動を始めるまで再開します。' }), color: COLORS.text_primary },
         same_name_penalty: { label: lt({ zh: '同名卡惩罚', en: 'Same-name penalty', fr: 'Pénalité de même nom', ja: '同名カードペナルティ' }), desc: lt({ zh: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', en: 'Playing the same card name repeatedly in one turn costs extra E. Symbiosis ignores it.', fr: 'Jouer plusieurs fois le même nom pendant un tour coûte du E supplémentaire. Symbiose l’ignore.', ja: '同一ターンに同名カードを繰り返すと追加 E が必要です。共生は無視します。' }), color: COLORS.elixir },
         revealed: { label: UI.tag_revealed || lt({ zh: '被揭示', en: 'Revealed', fr: 'Révélé', ja: '公開' }), desc: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, this card is always visible to opponents.', fr: 'Tant qu’elle est en main, cette carte reste visible pour les adversaires.', ja: '手札にある間、相手に常に見えます。' }), color: '#E74C3C' },
         sublime: { label: UI.tag_sublime || lt({ zh: '崇高', en: 'Sublime', fr: 'Sublime', ja: '崇高' }), desc: lt({ zh: '带有此标签的牌无法被除打出外的行为选中。', en: 'Cards with this tag cannot be selected by actions other than playing them.', fr: 'Les cartes avec ce tag ne peuvent pas être choisies par des actions autres que leur utilisation.', ja: 'このタグを持つカードは、使用以外の行動では選択できません。' }), color: '#9A7A12' },
@@ -11971,6 +12153,7 @@ function collectCardIntroTerms(cardDict) {
         [/(抽牌|牌堆|draw|deck)/i, 'deck'],
         [/(弃牌|discard)/i, 'discard'],
         [/(反制|counter|Guard)/i, 'response'],
+        [/(回合交替结算|turn transition settlement|résolution de transition de tour|ターン交替解決)/i, 'turn_transition'],
         [/(爆牌|overflow)/i, 'overdraw'],
         [/(手牌上限|hand limit)/i, 'hand_limit'],
         [/(爆费|上限)/i, 'overcap'],
@@ -12024,6 +12207,7 @@ function collectCardIntroTerms(cardDict) {
         if (key === 'nazar' && /(魔法邪眼|Magic Nazar|magic_nazar)/i.test(rawText) && !/(^|[^魔法])邪眼/.test(rawText)) return;
         const statusItem = getStatusIntroItem({ key });
         addTermIntroItem(items, seen, `status:${key}`, statusItem);
+        if (key === 'bandage') addTermIntroItem(items, seen, 'turn_transition');
     });
     if (/(虚无|Void)/i.test(rawText)) addFlagIntroItem(items, seen, 'void');
     if (/(回转|Rebound)/i.test(rawText)) addFlagIntroItem(items, seen, 'rebound');
@@ -12095,7 +12279,7 @@ function getStatusIntroItem(statusInfo) {
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         magic_blocked: { label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
-        bandage: { label: UI.status_bandage, desc: '受到致命伤害后无敌直到自己下个回合结束，然后死亡。', color: '#1E8449' },
+        bandage: { label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；下一个回合交替结算完成后，在下一名可行动玩家行动前死亡。', color: '#1E8449' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -12143,7 +12327,7 @@ function getStatusIntroItem(statusInfo) {
         blood_debt: { label: lt({ zh: '血债', en: 'Blood Debt', fr: 'Dette de sang', ja: '血債' }), desc: lt({ zh: builtIns.blood_debt.desc, en: 'When physical damage is taken, this effect clears and the attacker gains E equal to its stacks.', fr: 'Quand des dégâts physiques sont subis, cet effet disparaît et l’attaquant gagne E égal aux charges.', ja: '物理ダメージを受けるとこの効果は消え、攻撃者は層数分のEを得ます。' }) },
         unable_counter: { label: lt({ zh: '无法反制', en: 'Unable to Counter', fr: 'Contre impossible', ja: '反制不能' }), desc: lt({ zh: builtIns.unable_counter.desc, en: 'Discards counter cards from left to right equal to its stacks, then reduces those stacks. If stacks remain, drawn counter cards are discarded and reduce stacks.', fr: 'Défausse de gauche à droite autant de contres que de charges, puis réduit ces charges. S’il en reste, les contres piochés sont défaussés et réduisent les charges.', ja: '層数分だけ左から反制牌を弃牌に置き、その分層数を減らします。層数が残る間、引いた反制牌も弃牌に置かれ層数が減ります。' }) },
         untargetable: { label: UI.status_untargetable, desc: lt({ zh: builtIns.untargetable.desc, en: 'Cannot be selected by some targeted effects. Loses 1 stack at the start of your turn.', fr: 'Ne peut pas être choisi par certains effets ciblés. Perd 1 charge au début de votre tour.', ja: '一部の対象指定効果で選べません。自分ターン開始時に1層減ります。' }) },
-        bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'After lethal damage, become invincible until your next turn ends, then die.', fr: 'Après des dégâts mortels, devient invincible jusqu’à la fin de votre prochain tour, puis meurt.', ja: '致命ダメージ後、次の自分ターン終了まで無敵になり、その後死亡します。' }) },
+        bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'When lethal damage is taken, set H to 1 and become invincible. After the next turn transition finishes, die before the next player who can act begins acting.', fr: 'En subissant des dégâts mortels, fixe H à 1 et devient invincible. Après la prochaine transition de tour, meurt avant que le prochain joueur capable d’agir ne commence son action.', ja: '致命ダメージを受ける時、Hを1にして無敵になります。次のターン交替解決後、次に行動可能なプレイヤーが行動を始める前に死亡します。' }) },
         sluggish: { label: UI.status_sluggish, desc: lt({ zh: builtIns.sluggish.desc, en: 'Draw that many fewer cards each turn.', fr: 'Pioche autant de cartes en moins à chaque tour.', ja: '毎ターンその層数分だけドローが減ります。' }) },
         overload: { label: UI.status_overload, desc: lt({ zh: builtIns.overload.desc, en: 'At turn start, lose E equal to its stacks down to 0, then clear it.', fr: 'Au début du tour, perdez E égal aux charges jusqu’à 0, puis l’état disparaît.', ja: 'ターン開始時、層数分のEを0まで失い、その後消えます。' }) },
         foresight: { label: UI.status_foresight, desc: lt({ zh: builtIns.foresight.desc, en: 'At turn-start draw, you may discard up to that many hand cards, then draw the same number.', fr: 'Lors de la pioche de début de tour, vous pouvez défausser jusqu’à autant de cartes en main, puis en piocher autant.', ja: 'ターン開始ドロー時、層数まで手札を捨て、その枚数を引けます。' }) },
@@ -13713,13 +13897,20 @@ function connectSocket(serverUrl) {
     bindSocketEvent('mod_settings_updated', async (data) => {
         const requestId = String((data && data.request_id) || '');
         const pending = requestId ? pendingModSettingsRequests.get(requestId) : null;
-        if (pending) {
-            clearTimeout(pending.timer);
-            pendingModSettingsRequests.delete(requestId);
+        if (!pending) {
+            console.warn('[mods] ignored an unknown or expired settings response', requestId || '(missing request id)');
+            return;
+        }
+        clearTimeout(pending.timer);
+        pendingModSettingsRequests.delete(requestId);
+        if (pending.preferenceRevision !== modSettingsPreferenceRevision) {
+            console.info('[mods] ignored a stale settings response', requestId);
+            pending.resolve({ ...(data || {}), stale: true });
+            return;
         }
         if (data && data.ok) {
             if (Array.isArray(data.disabled_mods)) {
-                localStorage.setItem('gtn_disabled_mods', JSON.stringify(data.disabled_mods));
+                writeDisabledModsPreference(data.disabled_mods);
                 renderOfficialModList();
             }
             const refreshed = await refreshCardsAfterModSettingsConfirmed();
@@ -13735,29 +13926,22 @@ function connectSocket(serverUrl) {
                         ? '服务器已保存，但本地卡牌数据刷新失败；请重新进入大厅或刷新页面。'
                         : 'Saved on the server, but local card data could not be refreshed. Re-enter the lobby or reload.',
                 }), 6000, 'error');
-            } else if (adjusted.length) {
+            } else if (adjusted.length && !pending.silent) {
                 showActionToast(currentLang === 'zh'
                     ? `已保存；为保证牌池可用，已自动启用：${adjusted.join('、')}`
                     : `Saved; automatically enabled for a valid card pool: ${adjusted.join(', ')}`, 4200, 'success');
-            } else {
+            } else if (!pending.silent) {
                 showActionToast(UI.save_success, 1600, 'success');
             }
-            if (pending) pending.resolve(data);
+            pending.resolve(data);
             return;
-        }
-        if (data && Array.isArray(data.disabled_mods)) {
-            localStorage.setItem('gtn_disabled_mods', JSON.stringify(data.disabled_mods));
-            renderOfficialModList();
-            await refreshCardsAfterModSettingsConfirmed();
         }
         const message = formatModSettingsResultMessage(data);
         flashStatus(message, 6000, 'error');
-        if (pending) {
-            const error = new Error(message);
-            error.modSettingsNotified = true;
-            error.modSettingsData = data;
-            pending.reject(error);
-        }
+        const error = new Error(message);
+        error.modSettingsNotified = true;
+        error.modSettingsData = data;
+        pending.reject(error);
     });
     bindSocketEvent('mod_mismatch', (data = {}) => {
         const message = UI.mod_mismatch_msg || '模组不一致，无法开始对局';
@@ -14488,25 +14672,190 @@ function groupAchievementItems(items) {
     return output;
 }
 
+function titleSourceLabel(source) {
+    return {
+        role: lt({ zh: '身份', en: 'Role', fr: 'Rôle', ja: '役職' }),
+        achievement: lt({ zh: '成就', en: 'Achievement', fr: 'Succès', ja: '実績' }),
+        shop: lt({ zh: '商店', en: 'Shop', fr: 'Boutique', ja: 'ショップ' }),
+        event: lt({ zh: '活动', en: 'Event', fr: 'Événement', ja: 'イベント' }),
+        admin: lt({ zh: '授予', en: 'Granted', fr: 'Attribué', ja: '付与' }),
+    }[String(source || '').toLowerCase()] || lt({ zh: '获得', en: 'Owned', fr: 'Obtenu', ja: '獲得' });
+}
+
+function applyTitleCenterOrder(center, orderedIds) {
+    const ids = (orderedIds || []).map(String);
+    const slotById = new Map(ids.map((id, index) => [id, index + 1]));
+    const items = Array.isArray(center?.items) ? center.items : [];
+    return {
+        ...(center || {}),
+        equipped: ids,
+        items: items.map(item => ({
+            ...item,
+            equipped_slot: slotById.get(String(item.id || '')) || null,
+        })).sort((a, b) => {
+            const aSlot = Number(a.equipped_slot || 999);
+            const bSlot = Number(b.equipped_slot || 999);
+            if (aSlot !== bSlot) return aSlot - bSlot;
+            return String(a.name || '').localeCompare(String(b.name || ''), currentLang || 'zh');
+        }),
+    };
+}
+
+async function saveEquippedTitleOrder(orderedIds) {
+    if (titleEquipSaving || !achievementCenter) return;
+    const center = achievementCenter.titles || { items: [], equipped: [], max_equipped: 3 };
+    const previous = JSON.parse(JSON.stringify(center));
+    titleEquipSaving = true;
+    achievementCenter.titles = applyTitleCenterOrder(center, orderedIds);
+    renderAchievementCenter();
+    try {
+        const data = await authRequest('/api/titles/equip', {
+            title_ids: orderedIds,
+        }, { timeoutMs: 6000 });
+        achievementCenter.titles = data.titles || achievementCenter.titles;
+        if (data.user) {
+            currentAccount = data.user;
+            cacheAccount(currentAccount);
+        }
+    } catch (err) {
+        achievementCenter.titles = previous;
+        showActionToast(err.message || lt({
+            zh: '称号设置失败',
+            en: 'Failed to update titles',
+            fr: 'Échec de la mise à jour des titres',
+            ja: '称号を更新できませんでした',
+        }), 2600, 'error');
+    } finally {
+        titleEquipSaving = false;
+        renderAccountState();
+        renderAchievementCenter();
+    }
+}
+
+function renderTitleCenter(panel, center) {
+    if (!panel) return;
+    const items = Array.isArray(center?.items) ? center.items : [];
+    const maxEquipped = Math.max(1, Number(center?.max_equipped || 3) || 3);
+    const equipped = items
+        .filter(item => item.equipped_slot != null)
+        .sort((a, b) => Number(a.equipped_slot) - Number(b.equipped_slot));
+    const accountName = (currentAccount && (currentAccount.display_name || currentAccount.username)) || '?';
+    const previewTitles = equipped.map(item => {
+        const color = titleColorCss(item.color) || 'var(--text-secondary)';
+        return `<span class="title-preview-label" style="color:${escapeHtml(color)}">[${escapeHtml(item.name || '')}]</span>`;
+    }).join('');
+    const nameColor = titleColorCss(equipped[0]?.color) || '';
+    panel.innerHTML = `
+        <div class="title-center-head">
+            <div>
+                <div class="title-center-kicker">${escapeHtml(lt({
+                    zh: '当前展示',
+                    en: 'Current display',
+                    fr: 'Affichage actuel',
+                    ja: '現在の表示',
+                }))}</div>
+                <div class="title-name-preview">
+                    ${previewTitles}<span class="title-preview-name"${nameColor ? ` style="color:${escapeHtml(nameColor)}"` : ''}>${escapeHtml(accountName)}</span>
+                </div>
+            </div>
+            <div class="title-center-limit">${escapeHtml(lt({
+                zh: `已佩戴 ${equipped.length}/${maxEquipped}`,
+                en: `Equipped ${equipped.length}/${maxEquipped}`,
+                fr: `Équipés ${equipped.length}/${maxEquipped}`,
+                ja: `装備中 ${equipped.length}/${maxEquipped}`,
+            }))}</div>
+        </div>
+        <div class="title-center-hint">${escapeHtml(lt({
+            zh: '最多佩戴3个称号；昵称使用第一个称号的颜色，每个称号保留自己的颜色。',
+            en: 'Equip up to 3 titles. Your first title colors your name; each title keeps its own color.',
+            fr: 'Équipez jusqu’à 3 titres. Le premier colore votre nom ; chaque titre garde sa couleur.',
+            ja: '称号は3個まで装備できます。名前は先頭の称号色になり、各称号は固有色を保ちます。',
+        }))}</div>
+        <div class="title-owned-list">
+            ${items.length ? items.map(item => {
+                const selected = item.equipped_slot != null;
+                const color = titleColorCss(item.color) || 'var(--text-secondary)';
+                const slot = Number(item.equipped_slot || 0);
+                return `
+                    <div class="title-owned-row ${selected ? 'is-equipped' : ''}" data-title-id="${escapeHtml(item.id || '')}">
+                        <label class="title-owned-select">
+                            <input type="checkbox" data-title-toggle="${escapeHtml(item.id || '')}" ${selected ? 'checked' : ''} ${titleEquipSaving ? 'disabled' : ''}>
+                            <span class="title-owned-slot">${selected ? slot : ''}</span>
+                            <span class="title-owned-name" style="color:${escapeHtml(color)}">[${escapeHtml(item.name || '')}]</span>
+                        </label>
+                        <span class="title-owned-source">${escapeHtml(titleSourceLabel(item.acquired_source || item.source_type))}</span>
+                        <div class="title-order-actions">
+                            <button type="button" data-title-move="up" data-title-id="${escapeHtml(item.id || '')}" title="${escapeHtml(lt({ zh: '前移', en: 'Move up', fr: 'Monter', ja: '上へ' }))}" ${!selected || slot <= 1 || titleEquipSaving ? 'disabled' : ''}>↑</button>
+                            <button type="button" data-title-move="down" data-title-id="${escapeHtml(item.id || '')}" title="${escapeHtml(lt({ zh: '后移', en: 'Move down', fr: 'Descendre', ja: '下へ' }))}" ${!selected || slot >= equipped.length || titleEquipSaving ? 'disabled' : ''}>↓</button>
+                        </div>
+                    </div>
+                `;
+            }).join('') : `<div class="title-center-empty">${escapeHtml(lt({
+                zh: '暂未拥有称号。',
+                en: 'You do not own any titles yet.',
+                fr: 'Vous ne possédez encore aucun titre.',
+                ja: '所持している称号はまだありません。',
+            }))}</div>`}
+        </div>
+    `;
+    panel.querySelectorAll('[data-title-toggle]').forEach(input => {
+        input.addEventListener('change', () => {
+            const titleId = String(input.dataset.titleToggle || '');
+            const ids = equipped.map(item => String(item.id || ''));
+            const index = ids.indexOf(titleId);
+            if (input.checked && index < 0) {
+                if (ids.length >= maxEquipped) {
+                    input.checked = false;
+                    showActionToast(lt({
+                        zh: '最多佩戴3个称号',
+                        en: 'You can equip up to 3 titles',
+                        fr: 'Vous pouvez équiper jusqu’à 3 titres',
+                        ja: '称号は3個まで装備できます',
+                    }), 1800, 'error');
+                    return;
+                }
+                ids.push(titleId);
+            } else if (!input.checked && index >= 0) {
+                ids.splice(index, 1);
+            }
+            saveEquippedTitleOrder(ids);
+        });
+    });
+    panel.querySelectorAll('[data-title-move]').forEach(button => {
+        button.addEventListener('click', () => {
+            const ids = equipped.map(item => String(item.id || ''));
+            const index = ids.indexOf(String(button.dataset.titleId || ''));
+            const delta = button.dataset.titleMove === 'up' ? -1 : 1;
+            const nextIndex = index + delta;
+            if (index < 0 || nextIndex < 0 || nextIndex >= ids.length) return;
+            [ids[index], ids[nextIndex]] = [ids[nextIndex], ids[index]];
+            saveEquippedTitleOrder(ids);
+        });
+    });
+}
+
 function renderAchievementCenter() {
     const summary = $('achievements-summary');
     const list = $('achievements-list');
     const dewPanel = $('achievements-dew-panel');
     const dailyPanel = $('achievements-daily-panel');
+    const titlesPanel = $('achievements-titles-panel');
     const tasksPanel = $('achievements-tasks-panel');
-    if (!summary || !list || !dewPanel || !dailyPanel || !tasksPanel) return;
+    if (!summary || !list || !dewPanel || !dailyPanel || !titlesPanel || !tasksPanel) return;
     document.querySelectorAll('[data-achievement-tab]').forEach(btn => {
         btn.classList.toggle('active', (btn.dataset.achievementTab || 'dew') === achievementActiveTab);
     });
     dewPanel.classList.toggle('hidden', achievementActiveTab !== 'dew');
     dailyPanel.classList.toggle('hidden', achievementActiveTab !== 'daily');
     list.classList.toggle('hidden', achievementActiveTab !== 'achievements');
+    titlesPanel.classList.toggle('hidden', achievementActiveTab !== 'titles');
     tasksPanel.classList.toggle('hidden', achievementActiveTab !== 'tasks');
     if (!currentAccount) {
         summary.textContent = UI.account_need_login || '请先登录账号';
         dewPanel.innerHTML = '';
         dailyPanel.innerHTML = '';
         list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.account_need_login || '请先登录账号')}</div>`;
+        titlesPanel.innerHTML = '';
         tasksPanel.innerHTML = '';
         return;
     }
@@ -14523,6 +14872,7 @@ function renderAchievementCenter() {
     }
     dailyPanel.innerHTML = thornDewCheckinHtml();
     tasksPanel.innerHTML = thornDewDailyTasksHtml();
+    renderTitleCenter(titlesPanel, data.titles || { items: [], equipped: [], max_equipped: 3 });
     const dailyCheckinBtn = dailyPanel.querySelector('#btn-thorn-dew-checkin-daily');
     if (dailyCheckinBtn) dailyCheckinBtn.onclick = onThornDewCheckin;
     if (achievementLoadError) {
@@ -14564,7 +14914,7 @@ function renderAchievementCenter() {
 }
 
 function setAchievementTab(tab) {
-    achievementActiveTab = ['dew', 'daily', 'achievements', 'tasks'].includes(tab) ? tab : 'dew';
+    achievementActiveTab = ['dew', 'daily', 'achievements', 'titles', 'tasks'].includes(tab) ? tab : 'dew';
     renderAchievementCenter();
 }
 
@@ -15954,6 +16304,9 @@ function cacheAccount(user) {
                 total_ranked_games: user.total_ranked_games || 0,
                 gr_season_id: user.gr_season_id || '',
                 gr_history: Array.isArray(user.gr_history) ? user.gr_history : [],
+                keybindings: user.keybindings && typeof user.keybindings === 'object'
+                    ? user.keybindings
+                    : undefined,
                 last_username_change_at: user.last_username_change_at || '',
                 accept_friend_requests: user.accept_friend_requests !== false,
                 searchable_by_nickname: user.searchable_by_nickname !== false,
@@ -16031,6 +16384,7 @@ function renderAccountState() {
         accountNickDisplay.classList.toggle('hidden', !currentAccount);
     }
     cacheAccount(currentAccount);
+    window.GTN_KEYBINDINGS?.syncAccount(currentAccount);
     renderSocialSettings();
     renderFriendsState();
     renderAccountMode();
@@ -16351,7 +16705,7 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
     return `
         <div class="leaderboard-row${extraClass ? ` ${extraClass}` : ''}">
             <span class="leaderboard-rank ${rankClass}">${escapeHtml(String(rank || '-'))}</span>
-            <span class="leaderboard-name ${rankClass}">${escapeHtml(item && item.username || '-')}</span>
+            <span class="leaderboard-name ${rankClass}">${playerNameHtml(item || {}, { adminPrefix: true })}</span>
             <span class="leaderboard-rate leaderboard-gr">${escapeHtml(grText)}</span>
             <span class="leaderboard-rate">${escapeHtml(rateText)}</span>
             <span class="leaderboard-games">${games}</span>
@@ -16554,7 +16908,7 @@ function friendCardHtml(item, type) {
         const active = String(activeSocialFriendId || '') === String(user.id || '');
         return `
           <button class="friend-name-row${active ? ' active' : ''}" type="button" data-friend-open="${escapeHtml(user.id)}">
-            <span class="friend-name">${escapeHtml(user.username || '-')}</span>
+            <span class="friend-name">${playerNameHtml(user, { adminPrefix: true })}</span>
             ${unread > 0 ? `<span class="dm-unread">${escapeHtml(unread > 99 ? '99+' : String(unread))}</span>` : ''}
           </button>`;
     }
@@ -16584,7 +16938,7 @@ function friendCardHtml(item, type) {
     return `
       <div class="friend-card${isRequestCard ? ' clickable' : ''}${requestActive ? ' active' : ''}"${requestAttrs}>
         <div class="friend-card-head">
-          <span class="friend-name">${escapeHtml(user.username || '-')}</span>
+          <span class="friend-name">${playerNameHtml(user, { adminPrefix: true })}</span>
           <span class="friend-id">${escapeHtml(user.player_id || '')}</span>
         </div>
         ${noticeText}
@@ -16632,7 +16986,7 @@ function renderSocialSelectorList() {
             const active = String(activeDmTargetUserId || '') === String(user.id || '') || (thread && String(thread.thread_id) === String(activeDmThreadId));
             return `
               <button class="friend-name-row${active ? ' active' : ''}" type="button" data-dm-open-user="${escapeHtml(user.id || '')}" data-dm-open-name="${escapeHtml(user.username || '')}">
-                <span class="dm-thread-name">${escapeHtml(user.username || '-')}</span>
+                <span class="dm-thread-name">${playerNameHtml(user, { adminPrefix: true })}</span>
                 ${unread > 0 ? `<span class="dm-unread">${escapeHtml(unread > 99 ? '99+' : String(unread))}</span>` : ''}
               </button>`;
         }).join('') : `<div class="friend-empty">${escapeHtml(UI.friend_empty || '暂无好友')}</div>`;
@@ -16786,7 +17140,7 @@ function renderFriendDetailProfile() {
     const lastSeenLabel = String(UI.last_login || '上次下线').replace(/\{0\}/g, '').replace(/[：:]\s*$/, '').trim() || '上次下线';
     el.innerHTML = `
       <div class="friend-detail-name">
-        <span>${escapeHtml(user.username || '-')}</span>
+        <span>${playerNameHtml(user, { adminPrefix: true })}</span>
         <span class="friend-id">${escapeHtml(user.player_id || '')}</span>
       </div>
       <div class="friend-detail-grid">
@@ -16876,7 +17230,7 @@ function renderDmThreads() {
             const active = String(thread.thread_id) === String(activeDmThreadId);
             return `
               <button class="dm-thread-item${active ? ' active' : ''}" type="button" data-dm-thread="${escapeHtml(thread.thread_id)}">
-                <span class="dm-thread-name">${escapeHtml(user.username || '-')}</span>
+                <span class="dm-thread-name">${playerNameHtml(user, { adminPrefix: true })}</span>
                 ${unread > 0 ? `<span class="dm-unread">${escapeHtml(unread > 99 ? '99+' : String(unread))}</span>` : ''}
                 <span class="dm-thread-preview">${escapeHtml(thread.last_message || '暂无消息')}</span>
               </button>`;
@@ -16915,7 +17269,10 @@ function renderDmMessages() {
             ? (msg.sender_name || currentAccount?.display_name || currentAccount?.username || '')
             : (msg.sender_name || activeThread?.user?.username || $('dm-chat-title')?.textContent?.replace(/^与\s*/, '').replace(/\s*的私信$/, '') || '');
         const nameSpan = document.createElement('span');
-        nameSpan.textContent = nameText;
+        const namePayload = self
+            ? { ...(currentAccount || {}), ...msg, nickname: nameText }
+            : { ...(activeThread?.user || {}), ...msg, nickname: nameText };
+        setPlayerNameContent(nameSpan, namePayload, { adminPrefix: true });
         meta.appendChild(nameSpan);
         const timeSpan = document.createElement('span');
         timeSpan.className = 'dm-message-time';
@@ -17327,7 +17684,11 @@ function renderFeedbackMessages() {
         const meta = document.createElement('div');
         meta.className = `feedback-sender ${feedbackNameClass(msg.sender_role)}`;
         const nameSpan = document.createElement('span');
-        nameSpan.textContent = msg.sender_name || (self ? (currentAccount.username || '') : '-');
+        setPlayerNameContent(nameSpan, {
+            ...(self ? (currentAccount || {}) : {}),
+            ...msg,
+            nickname: msg.sender_name || (self ? (currentAccount.username || '') : '-'),
+        }, { adminPrefix: true });
         meta.appendChild(nameSpan);
         const timeSpan = document.createElement('span');
         timeSpan.className = 'feedback-message-time';
@@ -17362,11 +17723,23 @@ function ensureReplayVideoExportStyle() {
         html.replay-video-export #account-replay-modal,
         html.replay-video-export #boot-loader,
         html.replay-video-export .top-action-buttons,
+        html.replay-video-export .status-bar,
         html.replay-video-export .controls-bar,
         html.replay-video-export .classic-controls,
         html.replay-video-export .game-chat-input-row,
         html.replay-video-export .battle-chat-input-row {
             display: none !important;
+        }
+        html.replay-video-export #view-game {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            flex: none;
+        }
+        html.replay-video-export #view-game .battle-classic:not(.hidden) {
+            width: 100vw;
+            height: 100vh;
         }
         html.replay-video-export.hide-export-cursor,
         html.replay-video-export.hide-export-cursor * {
@@ -17405,9 +17778,11 @@ function isReplayVideoExportPlayerView() {
 let replayVideoExportTransitionToken = 0;
 let replayVideoExportCursor = null;
 let replayVideoExportCursorPoint = null;
+let replayVideoExportCursorQueuedPoint = null;
 let replayVideoExportAudioCaptureActive = false;
 let replayVideoExportAudioCaptureStartedAt = 0;
 let replayVideoExportAudioEvents = [];
+const REPLAY_EXPORT_CARD_CURSOR_SPEED = 1.8;
 
 function recordReplayVideoExportAudio(name, group, options = {}) {
     if (!replayVideoExportAudioCaptureActive) return false;
@@ -17473,6 +17848,27 @@ function getReplayExportElementPoint(element, xRatio = 0.5, yRatio = 0.5) {
     };
 }
 
+function getReplayExportBattleCenterPoint(fallbackElement = null) {
+    const selectors = [
+        '#classic-fighter-self .player-avatar',
+        '#classic-fighter-ally .player-avatar',
+        '#classic-fighter-enemy .player-avatar',
+        '#classic-fighter-enemy-2 .player-avatar',
+    ];
+    const points = selectors
+        .map(selector => document.querySelector(selector))
+        .filter(isVisibleTargetRegion)
+        .map(element => getReplayExportElementPoint(element))
+        .filter(Boolean);
+    if (points.length >= 2) {
+        return {
+            x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+            y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+        };
+    }
+    return getReplayExportElementPoint(fallbackElement || getPlayGestureFallbackTarget());
+}
+
 function ensureReplayExportCursor() {
     if (replayVideoExportCursor && replayVideoExportCursor.isConnected) return replayVideoExportCursor;
     replayVideoExportCursor = createVirtualWindowsCursor();
@@ -17480,6 +17876,10 @@ function ensureReplayExportCursor() {
     replayVideoExportCursorPoint = replayVideoExportCursorPoint || {
         x: Math.round(window.innerWidth * 0.76),
         y: Math.round(window.innerHeight * 0.82),
+    };
+    replayVideoExportCursorQueuedPoint = replayVideoExportCursorQueuedPoint || {
+        x: replayVideoExportCursorPoint.x,
+        y: replayVideoExportCursorPoint.y,
     };
     replayVideoExportCursor.style.left = `${replayVideoExportCursorPoint.x}px`;
     replayVideoExportCursor.style.top = `${replayVideoExportCursorPoint.y}px`;
@@ -17519,36 +17919,66 @@ function buildReplayExportCurveFrames(from, to, seed) {
 function moveReplayExportCursor(to, duration, options = {}) {
     if (!to) return 0;
     const cursor = ensureReplayExportCursor();
-    const from = replayVideoExportCursorPoint || to;
+    const queuedFrom = replayVideoExportCursorQueuedPoint || replayVideoExportCursorPoint || to;
     const delay = Math.max(0, Number(options.delay || 0));
     const moveDuration = Math.max(80, Number(duration || 0));
-    const frames = buildReplayExportCurveFrames(from, to, replayExportSeed(options.seed));
-    const movement = cursor.animate(frames, {
-        duration: moveDuration,
-        delay,
-        easing: 'cubic-bezier(.22,.72,.18,1)',
-        fill: 'forwards',
-    });
-    replayVideoExportCursorPoint = { x: to.x, y: to.y };
+    const transitionToken = replayVideoExportTransitionToken;
+    replayVideoExportCursorQueuedPoint = { x: to.x, y: to.y };
     setTimeout(() => {
-        if (!cursor.isConnected) return;
-        cursor.style.left = `${to.x}px`;
-        cursor.style.top = `${to.y}px`;
-        try {
-            movement.cancel();
-        } catch (_) {}
-    }, delay + moveDuration);
+        if (!cursor.isConnected || transitionToken !== replayVideoExportTransitionToken) return;
+        const actualFrom = replayVideoExportCursorPoint || queuedFrom;
+        const frames = buildReplayExportCurveFrames(actualFrom, to, replayExportSeed(options.seed))
+            .map(frame => ({
+                x: Number.parseFloat(frame.left),
+                y: Number.parseFloat(frame.top),
+            }));
+        const started = performance.now();
+        const tick = now => {
+            if (!cursor.isConnected || transitionToken !== replayVideoExportTransitionToken) return;
+            const progress = clampReplayExportNumber((now - started) / moveDuration, 0, 1);
+            // Drive the pointer through layout properties on every export
+            // frame. Browser compositor animations can otherwise be sampled
+            // only at their endpoint when original replay timing is kept.
+            const eased = progress * progress * (3 - 2 * progress);
+            const scaled = eased * Math.max(1, frames.length - 1);
+            const frameIndex = Math.min(frames.length - 2, Math.floor(scaled));
+            const local = Math.min(1, scaled - frameIndex);
+            const current = frames.length === 1
+                ? frames[0]
+                : {
+                    x: frames[frameIndex].x + (frames[frameIndex + 1].x - frames[frameIndex].x) * local,
+                    y: frames[frameIndex].y + (frames[frameIndex + 1].y - frames[frameIndex].y) * local,
+                };
+            replayVideoExportCursorPoint = { x: current.x, y: current.y };
+            cursor.style.left = `${current.x}px`;
+            cursor.style.top = `${current.y}px`;
+            if (progress < 1) {
+                requestAnimationFrame(tick);
+            } else {
+                replayVideoExportCursorPoint = { x: to.x, y: to.y };
+                cursor.style.left = `${to.x}px`;
+                cursor.style.top = `${to.y}px`;
+            }
+        };
+        requestAnimationFrame(tick);
+    }, delay);
     return delay + moveDuration;
 }
 
 function settleReplayExportCursorOnElement(element, fallbackPoint, delay, options = {}) {
     const xRatio = Number.isFinite(Number(options.xRatio)) ? Number(options.xRatio) : 0.5;
     const yRatio = Number.isFinite(Number(options.yRatio)) ? Number(options.yRatio) : 0.5;
+    const fixedPoint = options.fixedPoint
+        && Number.isFinite(Number(options.fixedPoint.x))
+        && Number.isFinite(Number(options.fixedPoint.y))
+        ? { x: Number(options.fixedPoint.x), y: Number(options.fixedPoint.y) }
+        : null;
     setTimeout(() => {
-        const point = getReplayExportElementPoint(element, xRatio, yRatio) || fallbackPoint;
+        const point = fixedPoint || getReplayExportElementPoint(element, xRatio, yRatio) || fallbackPoint;
         if (!point) return;
         const cursor = ensureReplayExportCursor();
         replayVideoExportCursorPoint = { x: point.x, y: point.y };
+        replayVideoExportCursorQueuedPoint = { x: point.x, y: point.y };
         cursor.style.left = `${point.x}px`;
         cursor.style.top = `${point.y}px`;
         classicAimPointer = { x: point.x, y: point.y };
@@ -17620,11 +18050,19 @@ function findReplayExportCardElement(instanceId) {
     return candidates.sort((left, right) => score(right) - score(left))[0] || null;
 }
 
-function findReplayExportBottomHandCardElement(instanceId) {
+function findReplayExportBottomHandCardElement(instanceId, state = null, actorId = null) {
     if (instanceId == null || instanceId === '') return null;
     const selector = replayExportCardSelector(instanceId);
-    return Array.from(document.querySelectorAll(`#classic-hand-fan .classic-hand-card${selector}`))
-        .find(isVisibleTargetRegion) || null;
+    const exact = Array.from(document.querySelectorAll(`#classic-hand-fan .classic-hand-card${selector}`))
+        .find(isVisibleTargetRegion);
+    if (exact) return exact;
+    const player = getReplayExportPlayer(state, actorId);
+    const hand = Array.isArray(player && player.hand) ? player.hand : [];
+    const handIndex = hand.findIndex(card => String(card && card.instance_id) === String(instanceId));
+    if (handIndex < 0) return null;
+    const renderedCards = Array.from(document.querySelectorAll('#classic-hand-fan .classic-hand-card'))
+        .filter(isVisibleTargetRegion);
+    return renderedCards[handIndex] || null;
 }
 
 function getReplayExportActionActor(frame) {
@@ -17788,6 +18226,7 @@ function getReplayExportResponseSnapshot(previousFrame, nextFrame) {
 
 function hideReplayExportInteractionPanels() {
     selectedPlayCardId = null;
+    classicHoveredCardId = null;
     classicSelectedTriggerEquipmentId = null;
     destroyClassicCursorCard();
     document.querySelectorAll('.replay-export-selected-card').forEach(element => {
@@ -17817,7 +18256,11 @@ function hideReplayExportInteractionPanels() {
         responsePanel.innerHTML = '';
     }
     const prompt = $('game-prompt');
-    if (prompt) prompt.classList.remove('active');
+    if (prompt) {
+        prompt.classList.remove('active');
+        prompt.style.removeProperty('visibility');
+        prompt.style.removeProperty('pointer-events');
+    }
     const modal = $('modal');
     const modalContent = $('modal-content');
     if (modal && modalContent && modalContent.classList.contains('v2-ui-modal')) {
@@ -17910,13 +18353,31 @@ function showReplayExportChoiceWindow(previousState, previousFrame, nextFrame) {
     const params = pending.choice_params && typeof pending.choice_params === 'object' ? pending.choice_params : {};
     const explicitOptions = Array.isArray(params.options) ? params.options : [];
     if (!cards.length && !explicitOptions.length) return null;
+    const pendingCard = pending.card && typeof pending.card === 'object' ? pending.card : {};
+    const pendingCardDef = getCardDef(pendingCard.def_id || '');
+    const pendingCardName = pendingCardDef ? getBlindedCardDisplayName(pendingCard, pendingCardDef) : '';
+    let fallbackTitle = pending.message || UI.choose_target || UI.notice || 'Choose';
+    if (!pending.message && pendingCardName) {
+        if (['choose_card_from_hand', 'choose_cards_from_hand'].includes(choiceType)) {
+            fallbackTitle = UI.choose_hand_for.replace('{0}', pendingCardName);
+        } else if (['choose_card_from_deck', 'choose_from_deck'].includes(choiceType)) {
+            fallbackTitle = UI.choose_from_deck_for.replace('{0}', pendingCardName);
+        } else if (['choose_card_from_discard', 'choose_from_discard'].includes(choiceType)) {
+            fallbackTitle = UI.choose_from_discard_for.replace('{0}', pendingCardName);
+        } else if (['choose_equipment', 'choose_enemy_equipment'].includes(choiceType)) {
+            fallbackTitle = UI.choose_equip_for.replace('{0}', pendingCardName);
+        }
+    }
+    const equipmentChoice = ['choose_equipment', 'choose_enemy_equipment'].includes(choiceType);
     const options = cards.length
-        ? cards.map(card => cardChoiceOption(card))
+        ? cards.map(card => equipmentChoice
+            ? equipmentChoiceOption(card && card.card_instance ? card : { card_instance: card })
+            : cardChoiceOption(card))
         : explicitOptions.map((value, index) => ({
             text: Array.isArray(params.labels) && params.labels[index] ? params.labels[index] : String(value),
             value,
         }));
-    gamePrompt(params.title || UI.choose_target || UI.notice || 'Choose', options, {
+    gamePrompt(params.title || fallbackTitle, options, {
         cancellable: params.cancellable !== false,
         message: params.content || params.message || '',
     });
@@ -17924,7 +18385,10 @@ function showReplayExportChoiceWindow(previousState, previousFrame, nextFrame) {
     if (!optionElements.length) return null;
     const selectedIds = getReplayExportChoiceSelectedIds(nextFrame);
     if (cards.length && selectedIds.length) {
-        const selectedIndex = cards.findIndex(card => selectedIds.includes(String(card && card.instance_id)));
+        const selectedIndex = cards.findIndex(card => {
+            const instance = card && (card.card_instance || card.card || card);
+            return selectedIds.includes(String(instance && instance.instance_id));
+        });
         if (selectedIndex >= 0) return optionElements[selectedIndex] || null;
     }
     const selectedValue = actionChoice.hel_suit ?? actionChoice.bio_blood_sugar_mode ?? actionChoice.value;
@@ -17933,6 +18397,131 @@ function showReplayExportChoiceWindow(previousState, previousFrame, nextFrame) {
         if (selectedIndex >= 0) return optionElements[selectedIndex] || null;
     }
     return null;
+}
+
+function getReplayExportInlineCardChoice(previousState, nextFrame, card) {
+    if (!previousState || !nextFrame || !card) return null;
+    const action = nextFrame.action && typeof nextFrame.action === 'object' ? nextFrame.action : {};
+    const payload = action.payload && typeof action.payload === 'object' ? action.payload : {};
+    const choice = payload.choice && typeof payload.choice === 'object' ? payload.choice : {};
+    const selectedIds = new Set([
+        choice.target_instance_id,
+        ...(Array.isArray(choice.target_instance_ids) ? choice.target_instance_ids : []),
+    ].filter(value => value != null && value !== '').map(String));
+    if (!selectedIds.size) return null;
+
+    const defId = String(card.def_id || payload.def_id || '');
+    const cardDef = getCardDef(defId);
+    const sourceName = cardDef ? getBlindedCardDisplayName(card, cardDef) : defId;
+    const owner = previousState.you || {};
+    const hand = Array.isArray(owner.hand) ? owner.hand : [];
+    const entries = [];
+    let title = UI.choose_target || UI.notice || 'Choose';
+
+    const pushCards = (cards, optionFactory = cardChoiceOption) => {
+        cards.forEach(candidate => {
+            if (!candidate) return;
+            entries.push({
+                ids: [String(candidate.instance_id)],
+                option: optionFactory(candidate),
+            });
+        });
+    };
+
+    if (defId === 'Fission') {
+        const attacks = hand.filter(candidate => {
+            const def = getCardDef(candidate && candidate.def_id);
+            return def && def.card_type === 'thorn' && String(candidate.instance_id) !== String(card.instance_id);
+        });
+        title = UI.choose_attack_for.replace('{0}', sourceName);
+        pushCards(attacks);
+    } else if (defId === 'Fusion') {
+        const groups = new Map();
+        hand.forEach(candidate => {
+            const def = getCardDef(candidate && candidate.def_id);
+            if (!def || def.card_type !== 'thorn' || String(candidate.instance_id) === String(card.instance_id)) return;
+            const group = groups.get(candidate.def_id) || [];
+            group.push(candidate);
+            groups.set(candidate.def_id, group);
+        });
+        groups.forEach(group => {
+            if (group.length < 2) return;
+            buildFusionCombosForGroup(group).forEach(combo => {
+                entries.push({
+                    ids: combo.map(candidate => String(candidate.instance_id)),
+                    option: cardComboChoiceOption(combo),
+                });
+            });
+        });
+        title = UI.choose_attack_group_for.replace('{0}', sourceName);
+    } else if (isMimicCardDict(card)) {
+        const candidates = hand.filter(candidate => (
+            candidate
+            && String(candidate.instance_id) !== String(card.instance_id)
+            && !cardHasSublimeFlag(candidate)
+        ));
+        title = UI.choose_hand_for.replace('{0}', sourceName);
+        pushCards(candidates, candidate => mimicCardChoiceOption(candidate, card, owner));
+    } else if (defId === 'Chromosome') {
+        const discard = (Array.isArray(owner.discard) ? owner.discard : []).filter(candidate => !cardHasSublimeFlag(candidate));
+        title = UI.choose_from_discard_for.replace('{0}', sourceName);
+        pushCards(discard);
+    } else if (defId === 'Sewage') {
+        const targetId = getReplayExportActionTarget(nextFrame, previousState);
+        const target = getReplayExportPlayer(previousState, targetId);
+        const equipment = Array.isArray(target && target.equipment) ? target.equipment : [];
+        equipment.forEach(item => {
+            const instance = item && (item.card_instance || item.card || item);
+            const def = getCardDef(instance && instance.def_id);
+            if (!instance || !def) return;
+            const flags = new Set([...(def.flags || []), ...(instance.instance_flags || [])]);
+            (instance.disabled_flags || []).forEach(flag => flags.delete(flag));
+            if (flags.has('indestructible')) return;
+            entries.push({
+                ids: [String(instance.instance_id)],
+                option: equipmentChoiceOption(item),
+            });
+        });
+        title = UI.choose_equip_for.replace('{0}', sourceName);
+    } else if (defId === 'Chilli') {
+        const candidates = hand.filter(candidate => (
+            candidate
+            && String(candidate.instance_id) !== String(card.instance_id)
+            && !cardHasSublimeFlag(candidate)
+        ));
+        title = UI.choose_discard_for.replace('{0}', sourceName);
+        pushCards(candidates);
+    } else {
+        return null;
+    }
+
+    const selectedIndex = entries.findIndex(entry => (
+        entry.ids.length === selectedIds.size
+        && entry.ids.every(id => selectedIds.has(id))
+    ));
+    if (selectedIndex < 0 || !entries.length) return null;
+    return {
+        title,
+        options: entries.map(entry => entry.option),
+        selectedIndex,
+    };
+}
+
+function prepareReplayExportInlineChoiceWindow(spec) {
+    if (!spec || !Array.isArray(spec.options) || !spec.options.length) return null;
+    gamePrompt(spec.title || UI.choose_target || UI.notice || 'Choose', spec.options, {
+        cancellable: true,
+    });
+    const prompt = $('game-prompt');
+    const optionElements = Array.from(document.querySelectorAll('#game-prompt-options .game-prompt-option'));
+    const target = optionElements[Number(spec.selectedIndex) || 0] || null;
+    if (!prompt || !target) {
+        if (prompt) prompt.classList.remove('active');
+        return null;
+    }
+    prompt.style.visibility = 'hidden';
+    prompt.style.pointerEvents = 'none';
+    return { prompt, target };
 }
 
 function showReplayExportV2Window(previousFrame, nextFrame) {
@@ -18033,6 +18622,7 @@ function beginReplayExportClassicCardSelection(cardElement, card, sourcePoint, c
     setTimeout(() => {
         if (!cardElement || !cardElement.isConnected || !card) return;
         selectedPlayCardId = card.instance_id;
+        classicHoveredCardId = card.instance_id;
         classicAimPointer = { x: sourcePoint.x, y: sourcePoint.y };
         cardElement.classList.add('is-selected', 'replay-export-selected-card');
         const root = $('battle-classic');
@@ -18048,12 +18638,17 @@ function beginReplayExportClassicCardSelection(cardElement, card, sourcePoint, c
             if (aim) aim.classList.remove('hidden');
             updateClassicAimCurve();
         }
+        applyClassicResourcePreview(
+            normalizeBattleCard(card, (gameState && gameState.you) || {}),
+            gameState && gameState.you,
+        );
     }, Math.max(0, delay));
 }
 
 function clearReplayExportClassicCardSelection(cardElement, card, delay) {
     setTimeout(() => {
         if (!card || String(selectedPlayCardId) === String(card.instance_id)) selectedPlayCardId = null;
+        if (!card || String(classicHoveredCardId) === String(card.instance_id)) classicHoveredCardId = null;
         destroyClassicCursorCard();
         cardElement?.classList.remove('is-selected', 'replay-export-selected-card', 'virtual-play-source');
         document.querySelectorAll('#classic-hand-fan .classic-hand-card.is-selected, #classic-hand-fan .replay-export-selected-card').forEach(element => {
@@ -18068,30 +18663,56 @@ function clearReplayExportClassicCardSelection(cardElement, card, delay) {
         if (root) {
             root.classList.remove('has-selected-card', 'is-aiming', 'is-cursor-card-aim', 'is-target-aim');
         }
+        applyClassicResourcePreview(null, gameState && gameState.you);
     }, Math.max(0, delay));
 }
 
-function scheduleReplayExportCardGesture(cardElement, card, targetElement, budgetMs, delay, seed) {
+function scheduleReplayExportCardGesture(cardElement, card, targetElement, budgetMs, delay, seed, inlineChoiceView = null) {
     if (!cardElement || !card || budgetMs < 320) return 0;
     const playTarget = getPlayGestureFallbackTarget();
-    const sourcePoint = getReplayExportElementPoint(cardElement, 0.58, 0.48);
+    const cardVisual = cardElement.matches && cardElement.matches('.card')
+        ? cardElement
+        : (cardElement.querySelector && cardElement.querySelector('.card')) || cardElement;
+    const sourcePoint = getReplayExportElementPoint(cardVisual, 0.58, 0.48);
     const normalizedCard = normalizeBattleCard(card, (gameState && gameState.you) || {});
     const cursorMode = classicCursorCardMode(normalizedCard);
     const interactionTarget = cursorMode ? playTarget : targetElement;
-    const interactionPoint = getReplayExportElementPoint(
-        interactionTarget,
-        0.5,
-        cursorMode ? 0.43 : 0.5,
-    );
+    const interactionPoint = cursorMode
+        ? getReplayExportBattleCenterPoint(playTarget)
+        : getReplayExportElementPoint(interactionTarget, 0.5, 0.5);
     if (!sourcePoint || !interactionPoint) return 0;
-    const moveToCard = Math.max(140, Math.round(budgetMs * 0.34));
-    const moveToTarget = Math.max(180, budgetMs - moveToCard - 290);
+    const inlineChoiceBudgetMs = inlineChoiceView
+        ? Math.max(1100, Math.round(budgetMs * 0.23))
+        : 0;
+    const primaryBudgetMs = Math.max(1200, budgetMs - inlineChoiceBudgetMs);
+    const sourceHoverMs = Math.max(180, Math.round(primaryBudgetMs * 0.06));
+    const selectedHoldMs = Math.max(280, Math.round(primaryBudgetMs * 0.09));
+    const targetHoverMs = Math.max(180, Math.round(primaryBudgetMs * 0.06));
+    const clickDurationMs = 170;
+    const movementBudgetMs = Math.max(
+        900,
+        primaryBudgetMs - sourceHoverMs - selectedHoldMs - targetHoverMs - clickDurationMs * 2,
+    );
+    const baseMoveToCard = Math.max(700, Math.round(movementBudgetMs * 0.42));
+    const baseMoveToTarget = Math.max(900, movementBudgetMs - baseMoveToCard);
+    const moveToCard = Math.max(80, Math.round(baseMoveToCard / REPLAY_EXPORT_CARD_CURSOR_SPEED));
+    const moveToTarget = Math.max(80, Math.round(baseMoveToTarget / REPLAY_EXPORT_CARD_CURSOR_SPEED));
     let cursorDelay = delay;
     moveReplayExportCursor(sourcePoint, moveToCard, { delay: cursorDelay, seed: `${seed}:source` });
     cursorDelay += moveToCard;
-    clickReplayExportCursor({ delay: cursorDelay });
+    settleReplayExportCursorOnElement(cardVisual, sourcePoint, cursorDelay, {
+        xRatio: 0.58,
+        yRatio: 0.48,
+    });
+    setTimeout(() => {
+        if (!cardElement.isConnected || !card) return;
+        classicHoveredCardId = card.instance_id;
+        applyClassicResourcePreview(normalizedCard, gameState && gameState.you);
+    }, Math.max(0, cursorDelay));
+    cursorDelay += sourceHoverMs;
     beginReplayExportClassicCardSelection(cardElement, card, sourcePoint, cursorMode, cursorDelay);
-    cursorDelay += 120;
+    cursorDelay = clickReplayExportCursor({ delay: cursorDelay });
+    cursorDelay += selectedHoldMs;
     if (!cursorMode && targetElement) {
         setTimeout(() => targetElement.classList.add('virtual-play-target', 'is-aim-hover'), cursorDelay);
     }
@@ -18109,10 +18730,34 @@ function scheduleReplayExportCardGesture(cardElement, card, targetElement, budge
     );
     cursorDelay += moveToTarget;
     settleReplayExportCursorOnElement(interactionTarget, interactionPoint, cursorDelay, {
-        yRatio: cursorMode ? 0.43 : 0.5,
         cursorMode: !!cursorMode,
+        fixedPoint: cursorMode ? interactionPoint : null,
     });
+    cursorDelay += targetHoverMs;
     cursorDelay = clickReplayExportCursor({ delay: cursorDelay });
+    if (inlineChoiceView && inlineChoiceView.prompt && inlineChoiceView.target) {
+        const revealHoldMs = 220;
+        const choiceHoverMs = 180;
+        const choiceMoveMs = Math.max(
+            520,
+            inlineChoiceBudgetMs - revealHoldMs - choiceHoverMs - clickDurationMs,
+        );
+        setTimeout(() => {
+            if (!inlineChoiceView.prompt.isConnected) return;
+            inlineChoiceView.prompt.style.removeProperty('visibility');
+            inlineChoiceView.prompt.style.removeProperty('pointer-events');
+        }, Math.max(0, cursorDelay));
+        cursorDelay += revealHoldMs;
+        const choicePoint = getReplayExportElementPoint(inlineChoiceView.target, 0.5, 0.5);
+        if (choicePoint) {
+            moveReplayExportCursor(choicePoint, choiceMoveMs, {
+                delay: cursorDelay,
+                seed: `${seed}:inline-choice`,
+            });
+            cursorDelay += choiceMoveMs + choiceHoverMs;
+            cursorDelay = clickReplayExportCursor({ delay: cursorDelay });
+        }
+    }
     clearReplayExportClassicCardSelection(cardElement, card, cursorDelay + 120);
     return Math.max(0, cursorDelay - delay);
 }
@@ -18213,6 +18858,24 @@ function animateReplayExportDraws(previousState, nextState) {
     });
 }
 
+function trimReplayExportPostGameFrames(timeline) {
+    if (!Array.isArray(timeline) || timeline.length < 2) {
+        return { timeline: Array.isArray(timeline) ? timeline : [], trimmed: 0 };
+    }
+    const gameOverIndex = timeline.findIndex(frame => {
+        if (String(frame && frame.phase || '') === 'game_over') return true;
+        const snapshot = getReplaySnapshot(frame);
+        return !!(snapshot && (snapshot.game_over || String(snapshot.phase || '') === 'game_over'));
+    });
+    if (gameOverIndex < 0 || gameOverIndex >= timeline.length - 1) {
+        return { timeline, trimmed: 0 };
+    }
+    return {
+        timeline: timeline.slice(0, gameOverIndex + 1),
+        trimmed: timeline.length - gameOverIndex - 1,
+    };
+}
+
 function prepareReplayTimelineForVideoExport(sourceTimeline) {
     const timeline = Array.isArray(sourceTimeline)
         ? sourceTimeline.filter(Boolean).map(frame => cloneReplayJson(frame))
@@ -18236,7 +18899,10 @@ function prepareReplayTimelineForVideoExport(sourceTimeline) {
     if (firstActionIndex < 0) {
         firstActionIndex = timeline.findIndex(frame => String(frame && frame.phase || '') === 'action');
     }
-    if (firstActionIndex < 0) return { timeline, skipped: 0 };
+    if (firstActionIndex < 0) {
+        const trimmed = trimReplayExportPostGameFrames(timeline);
+        return { timeline: trimmed.timeline, skipped: 0, trimmed_post_game_frames: trimmed.trimmed };
+    }
 
     // Keep the state immediately before the first action so the first played
     // card can still be selected from the recorded hand, but do not show the
@@ -18268,7 +18934,12 @@ function prepareReplayTimelineForVideoExport(sourceTimeline) {
         if (index === 0) return;
         frame.t = Math.max(introMs, Number(frame.t || 0) - originalFirstActionTime + introMs);
     });
-    return { timeline: prepared, skipped: sourceIndex };
+    const trimmed = trimReplayExportPostGameFrames(prepared);
+    return {
+        timeline: trimmed.timeline,
+        skipped: sourceIndex,
+        trimmed_post_game_frames: trimmed.trimmed,
+    };
 }
 
 function getReplayExportStateAnimationDuration(previousState, nextState) {
@@ -18323,7 +18994,13 @@ function startReplayVideoExportTransition(index, options = {}) {
         ? getReplayExportActionCard(previousState, actorId, cardInstanceId)
         : null;
     const cardElement = actionType === 'play_card' && isPerspectiveAction
-        ? findReplayExportBottomHandCardElement(cardInstanceId)
+        ? findReplayExportBottomHandCardElement(cardInstanceId, previousState, actorId)
+        : null;
+    const inlineChoiceSpec = actionType === 'play_card' && isPerspectiveAction && actionCard
+        ? getReplayExportInlineCardChoice(previousState, nextFrame, actionCard)
+        : null;
+    const inlineChoiceView = cardElement && inlineChoiceSpec
+        ? prepareReplayExportInlineChoiceWindow(inlineChoiceSpec)
         : null;
     const targetId = getReplayExportActionTarget(nextFrame, previousState, nextState);
     const boardTarget = targetId == null ? null : getPlayerRegionById(targetId);
@@ -18333,6 +19010,12 @@ function startReplayVideoExportTransition(index, options = {}) {
     if (actionType === 'play_card' && actionCard && !isVisibleTargetRegion(targetElement)) {
         targetElement = getReplayExportFallbackCardTargetElement(actionCard);
     }
+    const actionCursorMode = actionType === 'play_card' && actionCard
+        ? classicCursorCardMode(normalizeBattleCard(actionCard, (gameState && gameState.you) || {}))
+        : '';
+    const untargetedPlayPoint = actionCursorMode
+        ? getReplayExportBattleCenterPoint(getPlayGestureFallbackTarget())
+        : null;
 
     let interactionTarget = null;
     if (actionType === 'response' && isPerspectiveAction) {
@@ -18355,24 +19038,44 @@ function startReplayVideoExportTransition(index, options = {}) {
         interactionTarget = showReplayExportAllyConsentWindow(previousFrame, nextFrame);
     }
 
-    const recordedIntervalMs = Math.max(0, (Number(nextFrame.t) || 0) - (Number(previousFrame.t) || 0));
+    const rawRecordedIntervalMs = Math.max(0, (Number(nextFrame.t) || 0) - (Number(previousFrame.t) || 0));
+    const previousAlreadyGameOver = !!(
+        previousState
+        && (previousState.game_over || String(previousState.phase || '') === 'game_over')
+    );
+    // Some replays contain a delayed bookkeeping frame after the visible
+    // result. It is not player thinking time and must not create a long tail.
+    const recordedIntervalMs = previousAlreadyGameOver
+        ? Math.min(rawRecordedIntervalMs, 1200)
+        : rawRecordedIntervalMs;
     const preserveTiming = options.preserve_timing !== false;
     const stateAnimationMs = getReplayExportStateAnimationDuration(previousState, nextState);
-    const naturalGestureMs = actionType === 'play_card' && cardElement && actionCard
-        ? 1750
-        : (actionType === 'use_trigger' && interactionTarget && targetElement ? 1300 : (interactionTarget ? 620 : 0));
+    const simulatePlayerInput = options.simulate_player_input !== false;
+    const isVisibleCardGesture = simulatePlayerInput && actionType === 'play_card' && cardElement && actionCard;
+    let naturalGestureMs = isVisibleCardGesture
+        ? 4200 + (inlineChoiceView ? 1500 : 0)
+        : (simulatePlayerInput && actionType === 'use_trigger' && interactionTarget && targetElement
+            ? 1300
+            : (simulatePlayerInput && interactionTarget ? 620 : 0));
+    if (preserveTiming && isVisibleCardGesture) {
+        // Replay data records action timestamps, not pointer telemetry. Use the
+        // available interval to produce a slower plausible input gesture while
+        // retaining a thinking pause for very long waits.
+        naturalGestureMs = Math.min(
+            6500,
+            Math.max(naturalGestureMs, recordedIntervalMs - stateAnimationMs),
+        );
+    }
     const naturalActiveMs = stateAnimationMs + naturalGestureMs;
     // Recorded actions may be closer together than the simulated cursor and
     // combat animation. Preserve long real pauses, but never squeeze a full
     // gesture into a shorter interval because that makes it unreadably fast.
     const durationMs = preserveTiming ? Math.max(recordedIntervalMs, naturalActiveMs) : naturalActiveMs;
-    const activeBudgetMs = naturalActiveMs;
-    const activeStartMs = preserveTiming ? Math.max(0, recordedIntervalMs - naturalActiveMs) : 0;
-    const stateBudgetMs = Math.min(stateAnimationMs, Math.max(0, activeBudgetMs * (naturalGestureMs ? 0.56 : 1)));
-    const gestureBudgetMs = Math.max(0, activeBudgetMs - stateBudgetMs);
+    const activeStartMs = preserveTiming ? Math.max(0, durationMs - naturalActiveMs) : 0;
+    const gestureBudgetMs = naturalGestureMs;
 
     let gestureMs = 0;
-    if (options.simulate_player_input !== false) {
+    if (simulatePlayerInput) {
         if (actionType === 'play_card' && cardElement && actionCard) {
             gestureMs = scheduleReplayExportCardGesture(
                 cardElement,
@@ -18381,6 +19084,7 @@ function startReplayVideoExportTransition(index, options = {}) {
                 gestureBudgetMs,
                 activeStartMs,
                 `${nextIndex}:${actionType}:${cardInstanceId}`,
+                inlineChoiceView,
             );
         } else if (actionType === 'use_trigger' && interactionTarget && targetElement) {
             gestureMs = scheduleReplayExportTriggerGesture(
@@ -18411,25 +19115,32 @@ function startReplayVideoExportTransition(index, options = {}) {
         let temporaryCardSource = null;
         let playedCardSource = null;
         if (actionType === 'play_card') {
-            playedCardSource = cardElement;
+            playedCardSource = isPerspectiveAction
+                ? (document.querySelector('.classic-cursor-card')
+                    || cardElement)
+                : cardElement;
         } else if (actionType === 'response' && isPerspectiveAction) {
             playedCardSource = interactionTarget;
         }
-        if (isCardAction && !playedCardSource && actionCard) {
+        if (isPerspectiveAction && isCardAction && !playedCardSource && actionCard) {
             temporaryCardSource = createReplayExportPlayedCardSource(actionCard, actorId, previousState);
             playedCardSource = temporaryCardSource;
         }
-        if (isCardAction && playedCardSource) {
+        if (isPerspectiveAction && isCardAction && playedCardSource) {
             animatePlayedCard(cardInstanceId, {
                 sourceElement: playedCardSource,
                 targetElement: targetElement || getPlayGestureFallbackTarget(),
+                targetPoint: untargetedPlayPoint,
                 durationScale: 2.2,
             });
         }
         if (temporaryCardSource) temporaryCardSource.remove();
         queueReplayExportExileAnimations(previousState, nextState);
         showReplayVideoExportFrame(nextIndex);
-        showStateDeltas(previousState, nextState);
+        // These states are adjacent entries in the already reconstructed
+        // replay timeline. Delta-compressed replay snapshots intentionally do
+        // not expose the live state_version/seq pair used by socket updates.
+        showStateDeltas(previousState, nextState, { forceSequential: true });
         requestAnimationFrame(() => requestAnimationFrame(() => animateReplayExportDraws(previousState, nextState)));
     }, settleDelay);
 
@@ -18439,6 +19150,7 @@ function startReplayVideoExportTransition(index, options = {}) {
         recorded_interval_ms: recordedIntervalMs,
         preserved_timing: preserveTiming,
         gesture_ms: gestureMs,
+        gesture_budget_ms: gestureBudgetMs,
         action_type: actionType,
         actor_player_id: actorId,
         perspective_action: isPerspectiveAction,
@@ -18448,6 +19160,7 @@ function startReplayVideoExportTransition(index, options = {}) {
         visible_card_elements: document.querySelectorAll('[data-instance-id]').length,
         target_player_id: targetId,
         exact_interaction_snapshot: !!interactionTarget,
+        inline_choice_rendered: !!inlineChoiceView,
     };
 }
 
@@ -18501,9 +19214,21 @@ async function loadReplayForVideoExport(payload, options = {}) {
     if (replayVideoExportCursor && replayVideoExportCursor.isConnected) replayVideoExportCursor.remove();
     replayVideoExportCursor = null;
     replayVideoExportCursorPoint = null;
+    replayVideoExportCursorQueuedPoint = null;
     ensureReplayVideoExportStyle();
-    document.documentElement.classList.add('replay-video-export');
-    document.documentElement.classList.toggle('hide-export-cursor', options.hide_cursor !== false);
+    const documentRoot = document.documentElement;
+    documentRoot.classList.remove(
+        'classic-mobile-canvas',
+        'minimal-mobile-canvas',
+        'landscape-mode-enabled',
+        'battle-mobile-input-focus',
+    );
+    documentRoot.style.removeProperty('--classic-mobile-scale');
+    documentRoot.style.removeProperty('--classic-mobile-rotate');
+    documentRoot.style.removeProperty('--battle-mobile-vw');
+    documentRoot.style.removeProperty('--battle-mobile-vh');
+    documentRoot.classList.add('replay-video-export');
+    documentRoot.classList.toggle('hide-export-cursor', options.hide_cursor !== false);
     const appRoot = $('app');
     if (appRoot) appRoot.style.visibility = 'visible';
     const bootLoaderEl = $('boot-loader');
@@ -18520,16 +19245,19 @@ async function loadReplayForVideoExport(payload, options = {}) {
     const playbackBar = $('account-replay-playback-bar');
     if (playbackBar) playbackBar.classList.add('hidden');
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    renderAccountReplayFrame();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     return {
         frame_count: timeline.length,
         skipped_setup_frames: preparedTimeline.skipped,
+        trimmed_post_game_frames: preparedTimeline.trimmed_post_game_frames || 0,
         players: collectReplayPlayers(getReplaySnapshot(timeline[0])).map(player => player.name || ''),
         meta: accountReplayData.meta,
     };
 }
 
 window.GTNReplayVideoBridge = {
-    version: 6,
+    version: 12,
     async load(payload, options = {}) {
         return loadReplayForVideoExport(payload, options);
     },
@@ -19123,21 +19851,551 @@ function emitModeEvent(soloEventName, onlineEventName, payload = {}) {
     else if (socket) socket.emit(onlineEventName, payload);
 }
 
-function handleSoloHistoryShortcut(event) {
-    if (!event || !event.ctrlKey || event.altKey || event.metaKey) return false;
+function performSoloHistoryAction(direction) {
     if (!soloMode || replayMode || isSpectating || tutorialMode) return false;
     if (!gameState || !gameState.solo || gameState.phase === 'game_over') return false;
-    if (isTypingKeyboardTarget(event.target)) return false;
-    const key = String(event.key || '').toLowerCase();
-    if (key !== 'z' && key !== 'y') return false;
-    event.preventDefault();
-    event.stopPropagation();
-    if (key === 'z' && !event.shiftKey) {
-        emitSoloEvent('solo_undo', {});
-    } else {
-        emitSoloEvent('solo_redo', {});
+    emitSoloEvent(direction === 'redo' ? 'solo_redo' : 'solo_undo', {});
+    return true;
+}
+
+function isShortcutElementVisible(element) {
+    if (!element || element.disabled) return false;
+    if (element.classList && element.classList.contains('hidden')) return false;
+    const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
+    if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
+    const rect = element.getBoundingClientRect ? element.getBoundingClientRect() : null;
+    return !rect || (rect.width > 1 && rect.height > 1);
+}
+
+function getShortcutChoiceElements() {
+    const responsePanel = $('response-panel');
+    if (responsePanel && isShortcutElementVisible(responsePanel)) {
+        return Array.from(responsePanel.querySelectorAll(
+            '.counter-card-btn, .response-btn-row .btn'
+        ));
+    }
+    const prompt = $('game-prompt');
+    if (prompt && prompt.classList.contains('active')) {
+        return Array.from(prompt.querySelectorAll('#game-prompt-options .game-prompt-option'));
+    }
+    const modal = $('modal');
+    if (modal && modal.classList.contains('active')) {
+        const reorderRows = Array.from(modal.querySelectorAll('.reorder-deck-entry:not(.reorder-clone)'));
+        if (reorderRows.length) return reorderRows;
+        const v2Options = Array.from(modal.querySelectorAll('.v2-ui-picker-option'));
+        if (v2Options.length) return v2Options;
+    }
+    if (activeViewId === 'view-draft') {
+        return Array.from(document.querySelectorAll('#draft-options .card'));
+    }
+    if (activeViewId === 'view-event-select') {
+        return Array.from(document.querySelectorAll(
+            '#event-options .event-card:not(.event-reveal-card)'
+        ));
+    }
+    return [];
+}
+
+function isKeyboardNavigationCandidate(element) {
+    return !!(
+        element
+        && element.isConnected
+        && !element.disabled
+        && !element.classList.contains('disabled')
+        && !element.classList.contains('is-trigger-unavailable')
+        && isShortcutElementVisible(element)
+    );
+}
+
+function getKeyboardNavigationSurface() {
+    const targets = Array.from(document.querySelectorAll(
+        '[data-player-target-region].target-pickable'
+    )).filter(isKeyboardNavigationCandidate);
+    if (targets.length) {
+        return { id: 'board-targets', type: 'target', elements: targets };
+    }
+
+    const choices = getShortcutChoiceElements().filter(isKeyboardNavigationCandidate);
+    if (choices.length) {
+        let id = 'choices';
+        if ($('response-panel') && isShortcutElementVisible($('response-panel'))) id = 'response';
+        else if ($('game-prompt')?.classList.contains('active')) id = 'game-prompt';
+        else if ($('modal')?.classList.contains('active')) {
+            id = choices.some(element => element.classList.contains('reorder-deck-entry'))
+                ? 'reorder-deck'
+                : 'modal-picker';
+        }
+        else if (activeViewId === 'view-draft') id = 'draft';
+        else if (activeViewId === 'view-event-select') id = 'event-select';
+        return {
+            id,
+            type: id === 'reorder-deck' ? 'reorder' : 'choice',
+            elements: choices,
+        };
+    }
+
+    if (
+        $('game-alert')?.classList.contains('active')
+        || $('game-prompt')?.classList.contains('active')
+        || $('modal')?.classList.contains('active')
+    ) {
+        return { id: 'blocking-overlay', type: '', elements: [] };
+    }
+
+    if (activeViewId === 'view-game' && !isSpectating && !replayMode) {
+        const triggers = Array.from(document.querySelectorAll(
+            '.classic-equip-chip.is-triggerable:not(.is-trigger-unavailable), .btn-equip-trigger:not(:disabled)'
+        )).filter(isKeyboardNavigationCandidate);
+        if (triggers.length) {
+            return { id: 'equipment-triggers', type: 'trigger', elements: triggers };
+        }
+    }
+    return { id: '', type: '', elements: [] };
+}
+
+function clearKeyboardNavigationFocus() {
+    if (keyboardNavigationElement) {
+        keyboardNavigationElement.classList.remove('keyboard-nav-focus');
+        keyboardNavigationElement.removeAttribute('aria-current');
+    }
+    document.querySelectorAll('.keyboard-nav-focus').forEach(element => {
+        element.classList.remove('keyboard-nav-focus');
+        element.removeAttribute('aria-current');
+    });
+    keyboardNavigationElement = null;
+    keyboardNavigationContext = '';
+}
+
+function setKeyboardNavigationFocus(element, contextId, options = {}) {
+    if (!isKeyboardNavigationCandidate(element)) return false;
+    if (keyboardNavigationElement && keyboardNavigationElement !== element) {
+        keyboardNavigationElement.classList.remove('keyboard-nav-focus');
+        keyboardNavigationElement.removeAttribute('aria-current');
+    }
+    document.querySelectorAll('.keyboard-nav-focus').forEach(other => {
+        if (other === element) return;
+        other.classList.remove('keyboard-nav-focus');
+        other.removeAttribute('aria-current');
+    });
+    keyboardNavigationElement = element;
+    keyboardNavigationContext = String(contextId || '');
+    element.classList.add('keyboard-nav-focus');
+    element.setAttribute('aria-current', 'true');
+    if (options.scroll !== false && typeof element.scrollIntoView === 'function') {
+        element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
     return true;
+}
+
+function getOrderedKeyboardCandidates(elements) {
+    return [...elements].sort((left, right) => {
+        const a = left.getBoundingClientRect();
+        const b = right.getBoundingClientRect();
+        const rowTolerance = Math.max(12, Math.min(a.height || 0, b.height || 0) * 0.4);
+        if (Math.abs(a.top - b.top) > rowTolerance) return a.top - b.top;
+        return a.left - b.left;
+    });
+}
+
+function keyboardCandidateCenter(element) {
+    const rect = element.getBoundingClientRect();
+    return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+    };
+}
+
+function findDirectionalKeyboardCandidate(current, elements, direction) {
+    const origin = keyboardCandidateCenter(current);
+    const horizontal = direction === 'left' || direction === 'right';
+    const sign = direction === 'left' || direction === 'up' ? -1 : 1;
+    const candidates = elements
+        .filter(element => element !== current)
+        .map(element => {
+            const point = keyboardCandidateCenter(element);
+            const primaryDelta = horizontal ? point.x - origin.x : point.y - origin.y;
+            const crossDelta = horizontal ? point.y - origin.y : point.x - origin.x;
+            return {
+                element,
+                primary: primaryDelta * sign,
+                cross: Math.abs(crossDelta),
+            };
+        });
+    const forward = candidates
+        .filter(item => item.primary > 2)
+        .sort((a, b) => (a.primary + a.cross * 1.7) - (b.primary + b.cross * 1.7));
+    if (forward.length) return forward[0].element;
+
+    const wrapped = candidates
+        .filter(item => item.primary < -2)
+        .sort((a, b) => a.primary - b.primary || a.cross - b.cross);
+    return wrapped.length ? wrapped[0].element : null;
+}
+
+function navigateKeyboardSelection(direction) {
+    const surface = getKeyboardNavigationSurface();
+    if (!surface.elements.length) {
+        clearKeyboardNavigationFocus();
+        return false;
+    }
+    const ordered = getOrderedKeyboardCandidates(surface.elements);
+    const currentValid = keyboardNavigationContext === surface.id
+        && surface.elements.includes(keyboardNavigationElement)
+        && isKeyboardNavigationCandidate(keyboardNavigationElement);
+    if (!currentValid) {
+        return setKeyboardNavigationFocus(ordered[0], surface.id);
+    }
+    if (
+        surface.type === 'reorder'
+        && activeKeyboardReorderController
+        && activeKeyboardReorderController.isGrabbed()
+        && (direction === 'up' || direction === 'down')
+    ) {
+        const moved = activeKeyboardReorderController.move(
+            keyboardNavigationElement,
+            direction === 'up' ? -1 : 1
+        );
+        if (moved) {
+            setKeyboardNavigationFocus(keyboardNavigationElement, surface.id);
+        }
+        return true;
+    }
+    const next = findDirectionalKeyboardCandidate(
+        keyboardNavigationElement,
+        surface.elements,
+        direction
+    );
+    if (!next) return true;
+    return setKeyboardNavigationFocus(next, surface.id);
+}
+
+function activateKeyboardFocusedSelection(options = {}) {
+    const surface = getKeyboardNavigationSurface();
+    if (!surface.elements.length) return false;
+    let current = keyboardNavigationContext === surface.id
+        && surface.elements.includes(keyboardNavigationElement)
+        && isKeyboardNavigationCandidate(keyboardNavigationElement)
+        ? keyboardNavigationElement
+        : null;
+    if (!current) {
+        current = getOrderedKeyboardCandidates(surface.elements)[0] || null;
+        if (!current || !setKeyboardNavigationFocus(current, surface.id)) return false;
+    }
+
+    if (surface.type === 'target') {
+        const playerId = normalizePlayerId(current.dataset.playerId);
+        return playerId != null
+            && !!activeBoardTargetShortcut
+            && activeBoardTargetShortcut(playerId);
+    }
+    if (surface.type === 'reorder' && activeKeyboardReorderController) {
+        if (options.toggle) {
+            activeKeyboardReorderController.toggle(current);
+        } else {
+            activeKeyboardReorderController.confirm();
+        }
+        return true;
+    }
+
+    if (!options.toggle) {
+        if (surface.id === 'game-prompt') {
+            const confirm = $('game-prompt')?.querySelector(
+                '.game-prompt-transient-btn:not(:disabled):not(.disabled)'
+            );
+            if (confirm) return false;
+        }
+        if (surface.id === 'modal-picker') {
+            const confirm = $('modal')?.querySelector(
+                '.v2-ui-buttons .btn:not(.secondary):not(:disabled), .modal-buttons .btn-primary:not(:disabled)'
+            );
+            if (confirm) return false;
+        }
+    }
+    current.click();
+    return true;
+}
+
+function activateShortcutSlot(baseIndex, options = {}) {
+    const offset = options.secondPage || classicBackquoteHeld ? 10 : 0;
+    const index = Number(baseIndex) + offset;
+    if (!Number.isInteger(index) || index < 0 || index > 19) return false;
+    const choices = getShortcutChoiceElements();
+    if (choices.length) {
+        const choice = choices[index];
+        if (!choice || choice.disabled || choice.classList.contains('disabled')) return false;
+        const surface = getKeyboardNavigationSurface();
+        setKeyboardNavigationFocus(choice, surface.id, { scroll: false });
+        if (surface.type === 'reorder') return true;
+        choice.click();
+        return true;
+    }
+    if (activeViewId !== 'view-game') return false;
+    return selectHandCardByShortcutIndex(index, options.event || null);
+}
+
+function setShortcutSecondPage(active) {
+    classicBackquoteHeld = !!active;
+    return true;
+}
+
+function getShortcutTargetPlayerId(kind) {
+    if (!gameState) return null;
+    const selfId = normalizePlayerId(gameState.your_id);
+    if (kind === 'self') return selfId;
+    if (kind === 'teammate') {
+        return gameState.mode === '2v2'
+            ? normalizePlayerId(gameState.teammate_id)
+            : null;
+    }
+    const enemyIds = Array.isArray(gameState.enemy_ids)
+        ? gameState.enemy_ids.map(normalizePlayerId).filter(id => id != null && id !== selfId)
+        : [];
+    if (kind === 'enemy_2') {
+        return gameState.mode === '2v2' ? (enemyIds[1] ?? null) : null;
+    }
+    if (enemyIds.length) return enemyIds[0];
+    const explicitEnemy = Array.isArray(gameState.enemy_ids)
+        ? gameState.enemy_ids.map(normalizePlayerId).find(id => id != null && id !== selfId)
+        : null;
+    if (explicitEnemy != null) return explicitEnemy;
+    if (selfId === 0 || selfId === 1) return 1 - selfId;
+    const opponentId = normalizePlayerId(gameState.opponent && gameState.opponent.player_id);
+    return opponentId;
+}
+
+function activateShortcutTarget(kind) {
+    if (isSpectating || replayMode || !gameState) return false;
+    const targetId = getShortcutTargetPlayerId(kind);
+    if (targetId == null) return false;
+    if (activeBoardTargetShortcut && activeBoardTargetShortcut(targetId)) return true;
+    if (!shouldUseClassicBattle(gameState) || selectedPlayCardId == null) return false;
+    const elementId = kind === 'self'
+        ? 'classic-fighter-self'
+        : kind === 'teammate'
+            ? 'classic-fighter-ally'
+            : kind === 'enemy_2'
+                ? 'classic-fighter-enemy-2'
+                : 'classic-fighter-enemy';
+    if (!classicCanPlayFromElement(elementId)) return false;
+    classicPlaySelectedCard(elementId);
+    return true;
+}
+
+function clickShortcutPrimaryButton() {
+    if (activateKeyboardFocusedSelection()) return true;
+    const alert = $('game-alert');
+    if (alert && alert.classList.contains('active')) {
+        const button = alert.querySelector('.game-alert-buttons .btn-primary:not(:disabled)');
+        if (button) {
+            button.click();
+            return true;
+        }
+    }
+    const modal = $('modal');
+    if (modal && modal.classList.contains('active')) {
+        const button = modal.querySelector('.v2-ui-buttons .btn:not(.secondary):not(:disabled), .modal-buttons .btn-primary:not(:disabled)');
+        if (button) {
+            button.click();
+            return true;
+        }
+    }
+    const prompt = $('game-prompt');
+    if (prompt && prompt.classList.contains('active')) {
+        const button = prompt.querySelector('.game-prompt-transient-btn:not(:disabled):not(.disabled)');
+        if (button) {
+            button.click();
+            return true;
+        }
+        const selected = prompt.querySelector('.game-prompt-option.selected:not(.disabled)');
+        if (selected) {
+            selected.click();
+            return true;
+        }
+    }
+    const mobileConfirm = $('mobile-play-ok');
+    if (mobileConfirm && isShortcutElementVisible(mobileConfirm)) {
+        mobileConfirm.click();
+        return true;
+    }
+    const revealStart = document.querySelector(
+        '#view-event-select:not(.hidden) .event-reveal-start-btn:not(:disabled)'
+    );
+    if (revealStart && isShortcutElementVisible(revealStart)) {
+        revealStart.click();
+        return true;
+    }
+    if (activeViewId === 'view-gameover') {
+        const rematch = $('btn-rematch');
+        if (rematch && isShortcutElementVisible(rematch) && !rematch.disabled) {
+            rematch.click();
+            return true;
+        }
+    }
+    if (activeViewId === 'view-solo') {
+        const start = $('btn-solo-start');
+        if (start && isShortcutElementVisible(start) && !start.disabled) {
+            start.click();
+            return true;
+        }
+    }
+    if (shouldUseClassicBattle(gameState) && selectedPlayCardId != null && classicCanPlayFromElement('classic-play-lane')) {
+        classicPlaySelectedCard('classic-play-lane');
+        return true;
+    }
+    return false;
+}
+
+function cancelShortcutContext() {
+    if (activeKeyboardReorderController && activeKeyboardReorderController.isGrabbed()) {
+        activeKeyboardReorderController.release();
+        return true;
+    }
+    if (activeKeyboardReorderController) {
+        activeKeyboardReorderController.cancel();
+        return true;
+    }
+    const responsePanel = $('response-panel');
+    if (responsePanel && isShortcutElementVisible(responsePanel)) {
+        const dismiss = responsePanel.querySelector(
+            '#pass-btn, .response-btn-row .btn-secondary:last-child, '
+            + '.response-btn-row .btn-danger:last-child'
+        );
+        if (dismiss && !dismiss.disabled) {
+            dismiss.click();
+            return true;
+        }
+    }
+    if (targetPickCleanup) {
+        targetPickCleanup();
+        clearKeyboardNavigationFocus();
+        return true;
+    }
+    const alert = $('game-alert');
+    if (alert && alert.classList.contains('active')) {
+        const button = alert.querySelector('.game-alert-buttons .btn-secondary, .game-alert-buttons button');
+        if (button) {
+            button.click();
+            return true;
+        }
+    }
+    const prompt = $('game-prompt');
+    if (prompt && prompt.classList.contains('active')) {
+        const button = $('game-prompt-cancel');
+        if (button && isShortcutElementVisible(button)) {
+            button.click();
+            return true;
+        }
+    }
+    const modal = $('modal');
+    if (modal && modal.classList.contains('active')) {
+        const cancel = modal.querySelector('.v2-ui-buttons .secondary, .modal-buttons .btn-secondary');
+        if (cancel) cancel.click();
+        else hideModal();
+        return true;
+    }
+    if (selectedPlayCardId != null || classicSelectedTriggerEquipmentId != null) {
+        clearKeyboardNavigationFocus();
+        if (shouldUseClassicBattle(gameState)) return cancelClassicSelection();
+        clearSelectedPlayCard();
+        return true;
+    }
+    const settings = $('settings-panel');
+    if (settings && !settings.classList.contains('hidden')) {
+        closeSettings();
+        return true;
+    }
+    return false;
+}
+
+function focusShortcutChat() {
+    const candidates = [
+        $('classic-game-chat-input'),
+        $('game-chat-input'),
+        $('phase-chat-input'),
+        $('lobby-chat-input'),
+    ];
+    const input = candidates.find(isShortcutElementVisible);
+    if (!input) return false;
+    input.focus();
+    if (typeof input.select === 'function') input.select();
+    return true;
+}
+
+function refreshShortcutContext() {
+    const reroll = activeViewId === 'view-draft'
+        ? $('btn-draft-reroll')
+        : (activeViewId === 'view-event-select' ? $('btn-event-reroll') : null);
+    if (reroll && isShortcutElementVisible(reroll)) {
+        reroll.click();
+        return true;
+    }
+    if (activeViewId === 'view-game' && socket && socket.connected && !soloMode) {
+        requestFullGameState('keyboard_refresh');
+        return true;
+    }
+    return false;
+}
+
+function dispatchGameShortcut(actionId, event = null, options = {}) {
+    const action = String(actionId || '');
+    const settings = $('settings-panel');
+    if (
+        settings
+        && !settings.classList.contains('hidden')
+        && action !== 'shortcut_help'
+        && action !== 'cancel'
+    ) {
+        return false;
+    }
+    if (action.startsWith('select_slot_')) {
+        const slot = Number(action.slice('select_slot_'.length));
+        return activateShortcutSlot(slot === 10 ? 9 : slot - 1, {
+            secondPage: !!options.secondPage,
+            event,
+        });
+    }
+    if (action === 'hand_second_page') return setShortcutSecondPage(options.active !== false);
+    if (action === 'shortcut_help') {
+        window.GTN_KEYBINDINGS?.showHelp();
+        return true;
+    }
+    if (action === 'cancel') return cancelShortcutContext();
+    if (action === 'confirm') return clickShortcutPrimaryButton();
+    if (action === 'refresh') return refreshShortcutContext();
+    if (action === 'navigate_left') return navigateKeyboardSelection('left');
+    if (action === 'navigate_right') return navigateKeyboardSelection('right');
+    if (action === 'navigate_up') return navigateKeyboardSelection('up');
+    if (action === 'navigate_down') return navigateKeyboardSelection('down');
+    if (action === 'toggle_focused') return activateKeyboardFocusedSelection({ toggle: true });
+    if (action === 'target_self') return activateShortcutTarget('self');
+    if (action === 'target_enemy') return activateShortcutTarget('enemy');
+    if (action === 'target_teammate') return activateShortcutTarget('teammate');
+    if (action === 'target_enemy_2') return activateShortcutTarget('enemy_2');
+    if (action === 'view_draw') {
+        return toggleShortcutPile('deck');
+    }
+    if (action === 'view_discard') {
+        return toggleShortcutPile('discard');
+    }
+    if (action === 'view_exile') {
+        return toggleShortcutPile('exile');
+    }
+    if (action === 'focus_chat') return focusShortcutChat();
+    if (action === 'solo_undo') return performSoloHistoryAction('undo');
+    if (action === 'solo_redo') return performSoloHistoryAction('redo');
+    if (isSpectating || replayMode) return false;
+    if (action === 'pass_response') {
+        const pass = $('pass-btn');
+        if (!pass || !isShortcutElementVisible(pass)) return false;
+        pass.click();
+        return true;
+    }
+    if (action === 'end_turn') {
+        if (activeViewId !== 'view-game') return false;
+        onEndTurn();
+        return true;
+    }
+    return false;
 }
 
 async function showSoloTraining() {
@@ -21504,8 +22762,14 @@ function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
         sender_name: meta.sender_name || meta.senderName || meta.nickname || nick,
         nickname: meta.nickname || nick,
         system: !!meta.system,
+        is_spectator: !!meta.is_spectator,
         isAdmin: isAdminPlayer(meta),
+        is_admin_player: isAdminPlayer(meta),
         specialRoleColor: getSpecialRoleColor(meta),
+        special_role: meta.special_role || '',
+        special_role_label: meta.special_role_label || '',
+        equipped_titles: getEquippedTitles(meta),
+        name_color: meta.name_color || getSpecialRoleColor(meta),
         channel: channelMeta.chat_channel || channelMeta.channel || '',
         targetName: channelMeta.chat_target_name || channelMeta.targetName || '',
         repeat_count: Number(meta.repeat_count || meta.repeatCount || 1),
@@ -21523,6 +22787,7 @@ function chatTimelineSignature(entry = {}) {
         !!entry.system,
         !!entry.isAdmin,
         entry.specialRoleColor || '',
+        (entry.equipped_titles || []).map(title => [title.id, title.color]),
         entry.channel || '',
         entry.targetName || '',
         !!entry.pregame,
@@ -22373,6 +23638,14 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
     container.classList.toggle('blind-resource-masked', !!masked);
     const block = container.closest('.classic-resource-block');
     if (block) block.classList.toggle('blind-resource-hidden', !!masked);
+    const cur = Math.max(0, Number(current) || 0);
+    const rawMax = Math.max(0, Number(max) || 0);
+    const cost = Math.max(0, Number(spend) || 0);
+    const renderSignature = masked
+        ? `masked|${kind}`
+        : `${kind}|${cur}|${rawMax}|${cost}`;
+    if (container.dataset.renderSignature === renderSignature) return;
+    container.dataset.renderSignature = renderSignature;
     if (masked) {
         container.dataset.current = '?';
         container.dataset.max = '?';
@@ -22381,18 +23654,21 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
         container.innerHTML = '';
         return;
     }
-    const cur = Math.max(0, Number(current) || 0);
-    const rawMax = Math.max(0, Number(max) || 0);
     const displayTotal = Math.min(15, Math.max(1, rawMax || cur || 1));
-    const cost = Math.max(0, Number(spend) || 0);
     container.dataset.current = String(cur);
     container.dataset.max = String(rawMax);
     container.dataset.spend = String(cost);
     container.dataset.displayMax = String(displayTotal);
     container.style.setProperty('--classic-resource-slots', String(displayTotal));
     container.innerHTML = '';
-    const visibleChunks = buildClassicResourcePreviewChunks(cur, cost, displayTotal);
-    while (visibleChunks.length < displayTotal) visibleChunks.push({ value: 1, empty: true });
+    const previewChunks = buildClassicResourcePreviewChunks(cur, cost, displayTotal);
+    const stationaryChunks = previewChunks.filter(chunk => !chunk.willSpend);
+    const spendingChunks = previewChunks.filter(chunk => chunk.willSpend);
+    const emptySlotCount = Math.max(0, displayTotal - stationaryChunks.length - spendingChunks.length);
+    const emptyChunks = Array.from({ length: emptySlotCount }, () => ({ value: 1, empty: true }));
+    // column-reverse places later children nearer the open top of the groove.
+    const visibleChunks = stationaryChunks.concat(emptyChunks, spendingChunks);
+    const previewTravel = Math.max(10, emptySlotCount * 24);
     visibleChunks.forEach((chunk) => {
         const orb = document.createElement('span');
         orb.className = `classic-orb classic-orb-${kind}`;
@@ -22406,6 +23682,7 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
         }
         if (chunk.willSpend) {
             orb.classList.add('will-spend');
+            orb.style.setProperty('--classic-preview-travel', `${previewTravel}px`);
         }
         if (slotValue >= 10 || chunk.grouped) {
             orb.classList.add('is-grouped');
@@ -22471,7 +23748,7 @@ function getClassicResourcePreviewCard(vm = null) {
 function applyClassicResourcePreview(card = null, ownerState = null) {
     const root = $('battle-classic');
     const you = ownerState || ((gameState && gameState.you) || {});
-    const masked = getOwnBlindLevel() >= 2;
+    const masked = getOwnBlindLevel(gameState) >= 2;
     const preview = card || null;
     const costE = (!masked && preview) ? Number(preview.cost_e || 0) : 0;
     const costM = (!masked && preview) ? Number(preview.cost_m || 0) : 0;
@@ -22866,9 +24143,11 @@ function renderClassicBattle(gs) {
         const selectedRole = getClassicPlayRole(selected);
         const selectedSelfOnly = isClassicSelfOnlyCard(selected);
         const selectedCursorMode = classicCursorCardMode(selected);
-        const missingResource = !!resourcePreviewCard && ((Number(resourcePreviewCard.cost_e || 0) > Number(vm.self.e || 0)) || (Number(resourcePreviewCard.cost_m || 0) > Number(vm.self.m || 0)));
+        const blindLevel = getOwnBlindLevel(gs);
+        const maskOwnResources = blindLevel >= 2;
+        const missingResource = !maskOwnResources && !!resourcePreviewCard && ((Number(resourcePreviewCard.cost_e || 0) > Number(vm.self.e || 0)) || (Number(resourcePreviewCard.cost_m || 0) > Number(vm.self.m || 0)));
         root.classList.toggle('has-selected-card', !!selected);
-        root.classList.toggle('has-resource-preview', !!resourcePreviewCard);
+        root.classList.toggle('has-resource-preview', !maskOwnResources && !!resourcePreviewCard);
         root.classList.toggle('has-missing-resource', missingResource);
         root.classList.toggle('is-aiming', !!selected || !!selectedEquipment);
         root.classList.toggle('is-self-only-aim', !!selected && selectedCursorMode === 'self');
@@ -22882,8 +24161,6 @@ function renderClassicBattle(gs) {
         if (classicTimer) classicTimer.textContent = formatClassicTurnTimerText(gs);
         $('classic-phase').textContent = vm.turn.phaseText || '';
         $('classic-action-hint').textContent = selected ? getClassicPlayHint(selected) : (vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn);
-        const blindLevel = getOwnBlindLevel();
-        const maskOwnResources = blindLevel >= 2;
         const maskOwnPiles = blindLevel >= 3;
         const maskOwnDrawDeck = shouldMaskOwnDrawDeck();
         const maskOwnDiscardPile = shouldMaskOwnDiscardPile();
@@ -23869,6 +25146,7 @@ function choosePlayerTargetOnBoard(title, targets) {
         if (tutorialMode) hideTutorialOverlay();
         let settled = false;
         let outsideEnabled = false;
+        let shortcutPick = null;
         const validIds = new Set(targets.map(target => String(normalizePlayerId(target.id))).filter(id => id !== 'null'));
         const tutorialShield = tutorialMode ? document.querySelector('#tutorial-overlay .tutorial-click-shield') : null;
         if (tutorialShield) tutorialShield.classList.add('hidden');
@@ -23885,6 +25163,9 @@ function choosePlayerTargetOnBoard(title, targets) {
         const finish = (value) => {
             if (settled) return;
             settled = true;
+            if (regions.some(({ el }) => el === keyboardNavigationElement)) {
+                clearKeyboardNavigationFocus();
+            }
             regions.forEach(({ el }) => {
                 el.classList.remove('target-pickable', 'target-picked');
             });
@@ -23897,6 +25178,7 @@ function choosePlayerTargetOnBoard(title, targets) {
             if (hint) hint.remove();
             if (tutorialShield) tutorialShield.classList.remove('hidden');
             if (targetPickCleanup === finishCancel) targetPickCleanup = null;
+            if (activeBoardTargetShortcut === shortcutPick) activeBoardTargetShortcut = null;
             if (tutorialMode) {
                 showTutorialOverlay();
                 scheduleTutorialOverlayRefresh(60);
@@ -23936,6 +25218,17 @@ function choosePlayerTargetOnBoard(title, targets) {
             event.preventDefault();
             finishCancel();
         };
+        shortcutPick = (playerId) => {
+            const pid = normalizePlayerId(playerId);
+            if (pid == null || !validIds.has(String(pid))) return false;
+            const region = regions.find(item => normalizePlayerId(item.target.id) === pid);
+            if (!region || !isVisibleTargetRegion(region.el)) return false;
+            region.el.classList.add('target-picked');
+            restartTransientClass(getTargetFeedbackElement(region.el), 'target-feedback-pulse', 720);
+            setTimeout(() => finish(pid), 90);
+            return true;
+        };
+        activeBoardTargetShortcut = shortcutPick;
         regions.forEach(({ target, el }) => {
             el.classList.add('target-pickable');
         });
@@ -24199,7 +25492,11 @@ function setRenderedBarValue(selector, key, value, max, immediate = false) {
     const maxValue = Number.isFinite(Number(max)) && Number(max) > 0 ? Number(max) : getBarMaxForKey({}, key);
     const masked = shouldMaskRenderedBarRegion(region);
     if (wrapper.classList.contains('classic-resource-block')) {
-        renderClassicResourceOrbs(wrapper.querySelector('.classic-orbs'), cur, maxValue, 0, key === 'magic' ? 'm' : 'e', masked);
+        const previewCard = masked ? null : getClassicResourcePreviewCard();
+        const previewCost = previewCard
+            ? Number(key === 'magic' ? previewCard.cost_m : previewCard.cost_e) || 0
+            : 0;
+        renderClassicResourceOrbs(wrapper.querySelector('.classic-orbs'), cur, maxValue, previewCost, key === 'magic' ? 'm' : 'e', masked);
         if (!immediate) {
             wrapper.classList.remove('classic-resource-pop');
             wrapper.offsetHeight;
@@ -24509,8 +25806,9 @@ function inferStatusDamageKindForRef(previous, next, ref, oldData, newData, heal
     return null;
 }
 
-function showStateDeltas(previous, next) {
-    if (!areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true })) return;
+function showStateDeltas(previous, next, options = {}) {
+    if (!options.forceSequential
+        && !areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true })) return;
     if (!next.phase || next.phase === 'draft' || next.phase === 'event_select') return;
     const prev = new Map(getStatePlayerRefs(previous).map(ref => [ref.id, ref]));
     const damageLogEvents = getDamageLogEventsByPlayer(previous, next);
@@ -25725,13 +27023,13 @@ function createBattleLogElement(entry) {
             channelSpan.textContent = `[${channelLabel}] `;
             el.appendChild(channelSpan);
         }
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'chat-nick';
-    if (entry.system) nameSpan.classList.add('system-name');
-    if (entry.isAdmin) nameSpan.classList.add('admin-name');
-        if (entry.specialRoleColor === 'bloom') nameSpan.classList.add('bloom-name');
-        if (entry.specialRoleColor === 'guard') nameSpan.classList.add('guard-name');
-        nameSpan.textContent = entry.system ? `${entry.nick} ` : `${entry.nick}: `;
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'chat-nick';
+        if (entry.system) nameSpan.classList.add('system-name');
+        setChatNameContent(nameSpan, entry, {
+            fallbackNick: entry.nick || entry.nickname || '?',
+            suffix: entry.system ? ' ' : ': ',
+        });
         el.appendChild(nameSpan);
         el.appendChild(document.createTextNode(entry.text));
         const repeatCount = Number(entry.repeatCount || entry.repeat_count || 1);
@@ -26769,11 +28067,11 @@ function appendLobbyChatEntry(entry = {}, options = {}) {
     const nameSpan = document.createElement('span');
     nameSpan.className = 'chat-nick';
     if (entry.system) nameSpan.classList.add('system-name');
-    if (isAdminPlayer(entry)) nameSpan.classList.add('admin-name');
-    if (getSpecialRoleColor(entry) === 'bloom') nameSpan.classList.add('bloom-name');
-    if (getSpecialRoleColor(entry) === 'guard') nameSpan.classList.add('guard-name');
     const nick = entry.display_nick || getChatDisplayName(entry);
-    nameSpan.textContent = entry.system ? `${nick} ` : `${nick}: `;
+    setChatNameContent(nameSpan, entry, {
+        fallbackNick: nick,
+        suffix: entry.system ? ' ' : ': ',
+    });
     el.appendChild(nameSpan);
     const mentionKey = lobbyChatEntryKey(entry);
     const ownMentionTokens = currentUserMentionTokens(entry);
@@ -27201,29 +28499,48 @@ function animatePlayedCard(cardInstanceId, options = {}) {
     const rect = cardEl.getBoundingClientRect();
     const flash = cardEl.cloneNode(true);
     flash.classList.add('card-play-flash');
+    // A classic hand wrapper is positioned relatively. Keep the detached
+    // animation clone in viewport coordinates instead of inheriting that
+    // layout rule and being offset below the stage.
+    flash.style.position = 'fixed';
+    flash.style.margin = '0';
+    flash.style.transformOrigin = '50% 50%';
     flash.style.left = `${rect.left}px`;
     flash.style.top = `${rect.top}px`;
     flash.style.width = `${rect.width}px`;
     const durationScale = Math.max(0.5, Math.min(3, Number(options.durationScale || 1)));
     let targeted = false;
-    if (options.targetElement) {
-        const targetRect = options.targetElement.getBoundingClientRect();
-        if (targetRect.width > 0 && targetRect.height > 0) {
-            const dx = targetRect.left + targetRect.width / 2 - (rect.left + rect.width / 2);
-            const dy = targetRect.top + targetRect.height / 2 - (rect.top + rect.height / 2);
-            flash.classList.add('card-play-flash-targeted');
-            flash.style.setProperty('--play-dx', `${dx}px`);
-            flash.style.setProperty('--play-dy', `${dy}px`);
-            targeted = true;
-            setTimeout(() => {
-                const burst = document.createElement('div');
-                burst.className = 'card-impact-burst';
-                burst.style.left = `${targetRect.left + targetRect.width / 2}px`;
-                burst.style.top = `${targetRect.top + targetRect.height / 2}px`;
-                document.body.appendChild(burst);
-                setTimeout(() => burst.remove(), 520);
-            }, 310 * durationScale);
-        }
+    const explicitTargetPoint = options.targetPoint
+        && Number.isFinite(Number(options.targetPoint.x))
+        && Number.isFinite(Number(options.targetPoint.y))
+        ? { x: Number(options.targetPoint.x), y: Number(options.targetPoint.y) }
+        : null;
+    const targetRect = options.targetElement && options.targetElement.getBoundingClientRect
+        ? options.targetElement.getBoundingClientRect()
+        : null;
+    const targetPoint = explicitTargetPoint || (
+        targetRect && targetRect.width > 0 && targetRect.height > 0
+            ? {
+                x: targetRect.left + targetRect.width / 2,
+                y: targetRect.top + targetRect.height / 2,
+            }
+            : null
+    );
+    if (targetPoint) {
+        const dx = targetPoint.x - (rect.left + rect.width / 2);
+        const dy = targetPoint.y - (rect.top + rect.height / 2);
+        flash.classList.add('card-play-flash-targeted');
+        flash.style.setProperty('--play-dx', `${dx}px`);
+        flash.style.setProperty('--play-dy', `${dy}px`);
+        targeted = true;
+        setTimeout(() => {
+            const burst = document.createElement('div');
+            burst.className = 'card-impact-burst';
+            burst.style.left = `${targetPoint.x}px`;
+            burst.style.top = `${targetPoint.y}px`;
+            document.body.appendChild(burst);
+            setTimeout(() => burst.remove(), 520);
+        }, 310 * durationScale);
     }
     flash.style.animationDuration = `${(targeted ? 500 : 380) * durationScale}ms`;
     const startDelay = Math.max(0, Number(options.startDelay || 0));
@@ -27925,6 +29242,7 @@ function showMagicSaltReflectResponseUI(data = {}, choiceParams = {}) {
 
     const passBtn = document.createElement('button');
     passBtn.className = 'btn btn-danger';
+    passBtn.id = 'pass-btn';
     passBtn.textContent = choiceParams.cancel_text || '不触发';
     container.appendChild(passBtn);
 
@@ -28060,6 +29378,9 @@ async function showReorderDeckUI(deckCards, titleText, config = {}) {
     const modal = $('modal');
     const content = $('modal-content');
     if (!modal || !content) return null;
+    if (activeKeyboardReorderController) {
+        activeKeyboardReorderController.forceCancel();
+    }
     const cancellable = config.cancellable !== false;
     removeFloatingCardPreview();
     const order = deckCards.map(c => c.instance_id);
@@ -28070,7 +29391,13 @@ async function showReorderDeckUI(deckCards, titleText, config = {}) {
     content.appendChild(title);
     const hint = document.createElement('p');
     hint.className = 'deck-total';
-    hint.textContent = config.hint || '拖拽三横线调整顺序（最上方先抽到）';
+    const keyboardHint = lt({
+        zh: '键盘可用方向键选择，空格拿起或放下，拿起后按上下键移动，Enter 确认。',
+        en: 'Keyboard: use arrows to select, Space to pick up or drop, Up/Down to move, and Enter to confirm.',
+        fr: 'Clavier : flèches pour choisir, Espace pour prendre ou poser, Haut/Bas pour déplacer, Entrée pour confirmer.',
+        ja: 'キーボード：矢印で選択、Spaceで持つ・置く、上下で移動、Enterで決定します。',
+    });
+    hint.textContent = `${config.hint || '拖拽三横线调整顺序（最上方先抽到）'} ${keyboardHint}`;
     content.appendChild(hint);
     const list = document.createElement('div');
     list.className = 'deck-list reorder-deck-list';
@@ -28081,6 +29408,8 @@ async function showReorderDeckUI(deckCards, titleText, config = {}) {
         const row = document.createElement('div');
         row.className = 'reorder-deck-entry';
         row.dataset.idx = idx;
+        row.tabIndex = -1;
+        row.setAttribute('role', 'option');
         // Drag handle (hamburger icon)
         const handle = document.createElement('span');
         handle.className = 'reorder-handle';
@@ -28252,39 +29581,108 @@ async function showReorderDeckUI(deckCards, titleText, config = {}) {
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'btn btn-primary';
     confirmBtn.textContent = UI.ok || '确定';
-    confirmBtn.onclick = () => {
-        cleanupDrag(false);
-        modal.classList.add('hidden');
-        modal.classList.remove('active');
-    };
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'btn btn-danger';
     cancelBtn.textContent = UI.cancel || '取消';
-    cancelBtn.onclick = () => {
+    let keyboardGrabbedRow = null;
+    let keyboardController = null;
+    let resolveReorder = null;
+    let reorderSettled = false;
+
+    const releaseKeyboardRow = () => {
+        if (keyboardGrabbedRow) {
+            keyboardGrabbedRow.classList.remove('keyboard-reorder-grabbed');
+            keyboardGrabbedRow.setAttribute('aria-grabbed', 'false');
+        }
+        keyboardGrabbedRow = null;
+    };
+    const disposeKeyboardController = () => {
+        releaseKeyboardRow();
+        if (activeKeyboardReorderController === keyboardController) {
+            activeKeyboardReorderController = null;
+        }
+    };
+    const settleReorder = (value) => {
+        if (reorderSettled) return;
+        reorderSettled = true;
+        if (resolveReorder) resolveReorder(value);
+    };
+    const closeConfirmed = () => {
         cleanupDrag(false);
+        disposeKeyboardController();
+        modal.classList.add('hidden');
+        modal.classList.remove('active');
+        settleReorder({ new_order: [...order] });
+    };
+    const closeCancelled = () => {
+        cleanupDrag(false);
+        disposeKeyboardController();
         order.length = 0;
         modal.classList.add('hidden');
         modal.classList.remove('active');
+        settleReorder(null);
     };
+    confirmBtn.onclick = closeConfirmed;
+    cancelBtn.onclick = closeCancelled;
+
+    keyboardController = {
+        isGrabbed() {
+            return !!keyboardGrabbedRow;
+        },
+        toggle(row) {
+            if (!row || !list.contains(row)) return false;
+            if (keyboardGrabbedRow === row) {
+                releaseKeyboardRow();
+                return true;
+            }
+            releaseKeyboardRow();
+            keyboardGrabbedRow = row;
+            row.classList.add('keyboard-reorder-grabbed');
+            row.setAttribute('aria-grabbed', 'true');
+            return true;
+        },
+        release() {
+            releaseKeyboardRow();
+            return true;
+        },
+        move(row, delta) {
+            if (!row || keyboardGrabbedRow !== row || dragRow) return false;
+            const currentRows = Array.from(
+                list.querySelectorAll('.reorder-deck-entry:not(.reorder-clone)')
+            );
+            const index = currentRows.indexOf(row);
+            const nextIndex = index + Number(delta || 0);
+            if (index < 0 || nextIndex < 0 || nextIndex >= currentRows.length) return false;
+            const neighbor = currentRows[nextIndex];
+            if (nextIndex < index) list.insertBefore(row, neighbor);
+            else list.insertBefore(row, neighbor.nextSibling);
+            rebuildOrderNumbers();
+            row.scrollIntoView({ block: 'nearest' });
+            return true;
+        },
+        confirm() {
+            closeConfirmed();
+            return true;
+        },
+        cancel() {
+            if (cancellable) closeCancelled();
+            else releaseKeyboardRow();
+            return true;
+        },
+        forceCancel() {
+            closeCancelled();
+            return true;
+        },
+    };
+    activeKeyboardReorderController = keyboardController;
+
     if (cancellable) buttons.appendChild(cancelBtn);
     buttons.appendChild(confirmBtn);
     content.appendChild(buttons);
     modal.classList.remove('hidden');
     modal.classList.add('active');
     return new Promise(resolve => {
-        const checkClosed = () => {
-            if (modal.classList.contains('hidden') || !modal.classList.contains('active')) {
-                if (order.length > 0) {
-                    resolve({ new_order: order });
-                } else {
-                    resolve(null);
-                }
-            } else {
-                requestAnimationFrame(checkClosed);
-            }
-        };
-        confirmBtn.addEventListener('click', () => setTimeout(checkClosed, 50));
-        if (cancellable) cancelBtn.addEventListener('click', () => setTimeout(checkClosed, 50));
+        resolveReorder = resolve;
     });
 }
 
@@ -29218,6 +30616,26 @@ function onViewExile() {
     onViewPile('exile');
 }
 
+function toggleShortcutPile(pileType) {
+    if (!gameState || activeViewId !== 'view-game' || gameState.mode === 'urf') return false;
+    const modal = $('modal');
+    const content = $('modal-content');
+    const modalActive = !!(modal && modal.classList.contains('active'));
+    const pileViewerActive = !!(
+        modalActive
+        && content
+        && content.classList.contains('view-deck-modal')
+        && content.dataset.pileType
+    );
+    if (pileViewerActive && content.dataset.pileType === pileType) {
+        hideModal();
+        return true;
+    }
+    if (modalActive && !pileViewerActive) return false;
+    onViewPile(pileType);
+    return true;
+}
+
 function onViewPile(pileType = 'deck') {
     if (gameState && gameState.mode === 'urf') {
         return;
@@ -29236,6 +30654,7 @@ function onViewPile(pileType = 'deck') {
     if (!modal || !content) return;
     removeFloatingCardPreview();
     content.className = 'modal-inner view-deck-modal';
+    content.dataset.pileType = pileType;
     content.innerHTML = '';
     const title = document.createElement('h3');
     const titleText = isDeckPile
@@ -29422,6 +30841,7 @@ let settingsMods = [];
 let settingsCommunityMods = [];
 let settingsAllowServerEdit = true;
 let settingsActiveTab = 'appearance';
+let modSettingsPreferenceRevision = 0;
 let settingsActiveModTab = ['official', 'entertainment', 'community'].includes(localStorage.getItem('gtn_settings_mod_tab'))
     ? localStorage.getItem('gtn_settings_mod_tab')
     : 'official';
@@ -29443,6 +30863,8 @@ const FALLBACK_DEFAULT_DISABLED_MODS = [
     'Hel Cards Addition.gtnmod',
     'Sewers Cards Addition.gtnmod',
     'Arctic Cards Addition.gtnmod',
+    'Jurassic Cards Addition.gtnmod',
+    'Bio Cards Addition.gtnmod',
 ];
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 const COMMUNITY_JSON_MAX_BYTES = 150 * 1024;
@@ -29498,6 +30920,13 @@ function getModLoginPayload() {
     return { disabled_mods: getDisabledMods(), ...getCommunityModSelection() };
 }
 
+function getModSettingsUpdatePayload() {
+    return {
+        ...getModLoginPayload(),
+        client_revision: modSettingsPreferenceRevision,
+    };
+}
+
 function getBundledModCheckboxes() {
     return Array.from(document.querySelectorAll(
         '#settings-official-mods input[type="checkbox"][data-filename], ' +
@@ -29509,20 +30938,21 @@ async function applyPeerModSettings(peerMods = {}) {
     const disabled = Array.isArray(peerMods.disabled_mods)
         ? peerMods.disabled_mods.map(item => String(item || '')).filter(Boolean)
         : [];
-    localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+    writeDisabledModsPreference(disabled);
     if (peerMods.mod_source === 'community' && Array.isArray(peerMods.community_mods)) {
         setSelectedCommunityMods(peerMods.community_mods);
     } else {
-        localStorage.setItem('gtn_community_mods', '[]');
+        setSelectedCommunityMods([]);
     }
     renderModSourceControls();
     renderOfficialModList();
     renderCommunityModList();
-    await refreshCardsAfterModSettingsConfirmed();
     if (socket && socket.connected && phase === 'lobby') {
-        socket.emit('update_mod_settings', { disabled_mods: getDisabledMods(), ...getCommunityModSelection() });
+        await requestModSettingsUpdate(getModSettingsUpdatePayload());
+    } else {
+        await refreshCardsAfterModSettingsConfirmed();
+        showActionToast(UI.save_success || '已保存', 1800, 'success');
     }
-    showActionToast(UI.save_success || '已保存', 1800, 'success');
 }
 
 function syncCurrentSettingsModSelectionToLocal() {
@@ -29540,12 +30970,10 @@ function syncCurrentSettingsModSelectionToLocal() {
         });
         showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
     }
-    localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
-    return disabled;
+    return writeDisabledModsPreference(disabled);
 }
 
 async function syncModSelectionBeforeInviteAccept() {
-    syncCurrentSettingsModSelectionToLocal();
     try {
         await fetchCardDefs({ useCache: false });
         await fetchOpeningEvents({ useCache: false });
@@ -29586,17 +31014,18 @@ function openSettings(options = {}) {
     }
     renderModSourceControls();
     renderSocialSettings();
+    window.GTN_KEYBINDINGS?.renderSettings();
 }
 
 function setSettingsTab(tab) {
     if (tab === 'server' && !settingsAllowServerEdit) tab = 'appearance';
-    settingsActiveTab = ['appearance', 'server', 'mods', 'social', 'audio'].includes(tab) ? tab : 'appearance';
+    settingsActiveTab = ['appearance', 'server', 'mods', 'social', 'audio', 'controls'].includes(tab) ? tab : 'appearance';
     renderSettingsTabs();
 }
 
 function renderSettingsTabs() {
     const hidden = hiddenFeaturesEnabled();
-    const tabs = ['appearance', 'server', 'mods', 'social', 'audio'];
+    const tabs = ['appearance', 'server', 'mods', 'social', 'audio', 'controls'];
     tabs.forEach(tab => {
         const btn = $(`settings-tab-${tab}`);
         const page = $(`settings-page-${tab}`);
@@ -29610,6 +31039,9 @@ function renderSettingsTabs() {
             page.classList.toggle('hidden', !active || (tab === 'server' && !settingsAllowServerEdit));
         }
     });
+    const inner = $('settings-panel')?.querySelector('.settings-inner');
+    if (inner) inner.classList.toggle('settings-keybindings-active', settingsActiveTab === 'controls');
+    if (settingsActiveTab === 'controls') window.GTN_KEYBINDINGS?.renderSettings();
 }
 
 function closeSettings() {
@@ -29626,6 +31058,7 @@ async function loadSettingsMods() {
     const panel = $('settings-panel');
     const cacheFresh = settingsModsLoadedAt && Date.now() - settingsModsLoadedAt < 5 * 60 * 1000;
     if (Array.isArray(settingsMods) && settingsMods.length && cacheFresh) {
+        reconcileKnownBundledMods();
         renderOfficialModList();
         renderModSourceControls();
         if (settingsActiveModTab === 'community') loadSettingsCommunityMods();
@@ -29646,6 +31079,7 @@ async function loadSettingsMods() {
         if (seq !== settingsLoadSeq || (panel && panel.classList.contains('hidden'))) return;
         settingsMods = [];
     }
+    reconcileKnownBundledMods();
     renderOfficialModList();
     if (settingsActiveModTab === 'community') loadSettingsCommunityMods();
     renderModSourceControls();
@@ -29878,16 +31312,17 @@ function renderModSourceControls() {
 }
 
 function setModSource(source) {
-    if (source !== 'community') localStorage.setItem('gtn_community_mods', '[]');
+    if (source !== 'community') setSelectedCommunityMods([]);
     renderModSourceControls();
     renderCommunityModList();
 }
 
 async function refreshCardsAfterCommunityChange() {
-    await refreshCardsAfterModSettingsConfirmed();
     if (socket && socket.connected && phase === 'lobby') {
-        socket.emit('update_mod_settings', { disabled_mods: getDisabledMods(), ...getCommunityModSelection() });
+        await requestModSettingsUpdate(getModSettingsUpdatePayload(), { silent: true });
+        return;
     }
+    await refreshCardsAfterModSettingsConfirmed();
 }
 
 function scheduleCardsAfterCommunityChange() {
@@ -29911,7 +31346,7 @@ async function refreshCardsAfterModSettingsConfirmed() {
 }
 
 function clearCommunityModSelection() {
-    localStorage.setItem('gtn_community_mods', '[]');
+    setSelectedCommunityMods([]);
     renderModSourceControls();
     renderCommunityModList();
     scheduleCardsAfterCommunityChange();
@@ -29929,7 +31364,7 @@ function communityModTitle(mod, index = 0) {
     return localizedModNameFromFields(mod, mod.name || `Community Mod ${index + 1}`);
 }
 
-function setSelectedCommunityMods(mods) {
+function setSelectedCommunityMods(mods, { trackChange = true } = {}) {
     const clean = [];
     const seen = new Set();
     (Array.isArray(mods) ? mods : []).forEach(mod => {
@@ -29945,7 +31380,11 @@ function setSelectedCommunityMods(mods) {
             uploaded_at: String(mod.uploaded_at || '').trim(),
         });
     });
-    localStorage.setItem('gtn_community_mods', JSON.stringify(clean));
+    const nextJson = JSON.stringify(clean);
+    const changed = localStorage.getItem('gtn_community_mods') !== nextJson;
+    localStorage.setItem('gtn_community_mods', nextJson);
+    if (changed && trackChange) modSettingsPreferenceRevision += 1;
+    return clean;
 }
 
 function toggleCommunityModSelection(mod, enabled) {
@@ -30332,6 +31771,54 @@ function getDisabledMods() {
     }
 }
 
+function writeDisabledModsPreference(disabled, { trackChange = true, markExplicit = true } = {}) {
+    const next = coerceValidDisabledMods(disabled).disabled.slice().sort();
+    let current = null;
+    try {
+        const raw = localStorage.getItem('gtn_disabled_mods');
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (Array.isArray(parsed)) current = coerceValidDisabledMods(parsed).disabled.slice().sort();
+    } catch (_) {
+        current = null;
+    }
+    const changed = !current
+        || current.length !== next.length
+        || current.some((filename, index) => filename !== next[index]);
+    localStorage.setItem('gtn_disabled_mods', JSON.stringify(next));
+    if (markExplicit) {
+        localStorage.setItem('gtn_official_mod_default_v2', '1');
+        localStorage.setItem('gtn_official_mod_default_v3', '1');
+    }
+    if (changed && trackChange) modSettingsPreferenceRevision += 1;
+    return next;
+}
+
+function reconcileKnownBundledMods() {
+    if (!Array.isArray(settingsMods) || !settingsMods.length) return;
+    const current = Array.from(new Set(
+        settingsMods.map(mod => String(mod && mod.filename || '').trim()).filter(Boolean)
+    )).sort();
+    if (!current.length) return;
+    let previous = null;
+    try {
+        const raw = localStorage.getItem('gtn_known_official_mods');
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (Array.isArray(parsed)) previous = parsed.map(String).filter(Boolean);
+    } catch (_) {
+        previous = null;
+    }
+    if (previous) {
+        const known = new Set(previous);
+        const newlyAdded = current.filter(filename => (
+            !known.has(filename) && !DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES.has(filename)
+        ));
+        if (newlyAdded.length) {
+            writeDisabledModsPreference([...getDisabledMods(), ...newlyAdded]);
+        }
+    }
+    localStorage.setItem('gtn_known_official_mods', JSON.stringify(current));
+}
+
 function getDefaultDisabledMods() {
     if (!Array.isArray(settingsMods) || settingsMods.length === 0) {
         return FALLBACK_DEFAULT_DISABLED_MODS.slice();
@@ -30433,13 +31920,18 @@ function formatModSettingsResultMessage(data = {}) {
     return `Failed to save mod settings: ${reason} (${parts.join('; ')})`;
 }
 
-function requestModSettingsUpdate(payload) {
+function requestModSettingsUpdate(payload, { silent = false } = {}) {
     if (!socket || !socket.connected) {
         return Promise.reject(new Error(currentLang === 'zh'
             ? '模组设置仅保存到本机：当前未连接服务器。'
             : 'Mod settings were only saved locally because the server is disconnected.'));
     }
     const requestId = `mods-${Date.now().toString(36)}-${(++modSettingsRequestSeq).toString(36)}`;
+    const preferenceRevision = modSettingsPreferenceRevision;
+    const requestPayload = {
+        ...payload,
+        client_revision: preferenceRevision,
+    };
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             pendingModSettingsRequests.delete(requestId);
@@ -30453,9 +31945,15 @@ function requestModSettingsUpdate(payload) {
             });
             reject(new Error(message));
         }, 10000);
-        pendingModSettingsRequests.set(requestId, { resolve, reject, timer });
+        pendingModSettingsRequests.set(requestId, {
+            resolve,
+            reject,
+            timer,
+            preferenceRevision,
+            silent,
+        });
         try {
-            socket.emit('update_mod_settings', { ...payload, request_id: requestId });
+            socket.emit('update_mod_settings', { ...requestPayload, request_id: requestId });
         } catch (error) {
             clearTimeout(timer);
             pendingModSettingsRequests.delete(requestId);
@@ -30494,7 +31992,7 @@ async function saveDisabledMods() {
         });
         showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
     }
-    localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+    disabled = writeDisabledModsPreference(disabled);
     if (!localStorage.isPersistent()) {
         console.info('[storage] mod selection is using session memory; server synchronization will continue normally');
     }
@@ -30934,6 +32432,7 @@ async function init() {
     if ($('settings-tab-mods')) $('settings-tab-mods').addEventListener('click', () => setSettingsTab('mods'));
     if ($('settings-tab-social')) $('settings-tab-social').addEventListener('click', () => setSettingsTab('social'));
     if ($('settings-tab-audio')) $('settings-tab-audio').addEventListener('click', () => setSettingsTab('audio'));
+    if ($('settings-tab-controls')) $('settings-tab-controls').addEventListener('click', () => setSettingsTab('controls'));
     bindAudioSettingsControls();
     ['settings-accept-friend-requests', 'settings-searchable-by-nickname', 'settings-searchable-by-player-id', 'settings-accept-game-invites', 'settings-allow-guest-spectators'].forEach((id) => {
         const input = $(id);
@@ -31009,19 +32508,6 @@ async function init() {
     if ($('game-prompt')) $('game-prompt').addEventListener('click', handleClassicCursorCardClick, true);
     document.addEventListener('mousemove', onClassicAimPointerMove);
     document.addEventListener('pointermove', onClassicAimPointerMove);
-    document.addEventListener('keydown', (event) => {
-        if (handleSoloHistoryShortcut(event)) return;
-        if (event.code === 'Backquote' || event.key === '`') {
-            if (!isSpectating && !replayMode && !isTypingKeyboardTarget(event.target)) classicBackquoteHeld = true;
-            return;
-        }
-        if (handleClassicHandNumberShortcut(event)) return;
-        if (event.key === 'Escape') cancelClassicSelection(event);
-    });
-    document.addEventListener('keyup', (event) => {
-        if (event.code === 'Backquote' || event.key === '`') classicBackquoteHeld = false;
-    });
-    window.addEventListener('blur', () => { classicBackquoteHeld = false; });
     document.addEventListener('contextmenu', (event) => {
         if (cancelClassicSelection(event)) return;
     });
@@ -31173,6 +32659,39 @@ async function init() {
         setTimeout(() => openRulesModal({ firstVisit: true }), 250);
     }
 }
+
+window.GTN_SHORTCUT_HOST = {
+    dispatch(actionId, event, options = {}) {
+        return dispatchGameShortcut(actionId, event, options);
+    },
+    hasVirtualFocus() {
+        return !!(
+            keyboardNavigationElement
+            && keyboardNavigationElement.isConnected
+            && keyboardNavigationElement.classList.contains('keyboard-nav-focus')
+        );
+    },
+    getAccount() {
+        return currentAccount;
+    },
+    getLang() {
+        return currentLang;
+    },
+    isTypingTarget(target) {
+        return isTypingKeyboardTarget(target);
+    },
+    confirm(title, message) {
+        return gameConfirm(title, message);
+    },
+    toast(message, type = '') {
+        flashStatus(message, 2600, type);
+    },
+    patchAccountKeybindings(config) {
+        if (!currentAccount || !config || typeof config !== 'object') return;
+        currentAccount = { ...currentAccount, keybindings: config };
+        cacheAccount(currentAccount);
+    },
+};
 
 if (window.__GTN_CARD_EXPORTER_RENDERER__) {
     const gtnCardExporterCreateCardElement = createCardElement;

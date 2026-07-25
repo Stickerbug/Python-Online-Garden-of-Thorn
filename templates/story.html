@@ -53,7 +53,7 @@
           <label><span>H</span><input id="story-dev-health" type="number" min="0" max="999999" step="1" inputmode="numeric"></label>
           <label><span>E</span><input id="story-dev-elixir" type="number" min="0" max="9999" step="1" inputmode="numeric"></label>
           <label><span>M</span><input id="story-dev-magic" type="number" min="0" max="9999" step="1" inputmode="numeric"></label>
-          <label><span id="story-dev-gold-label">荆露</span><input id="story-dev-gold" type="number" min="0" max="999999999" step="1" inputmode="numeric"></label>
+          <label><span id="story-dev-gold-label">金币</span><input id="story-dev-gold" type="number" min="0" max="999999999" step="1" inputmode="numeric"></label>
         </div>
         <button id="story-dev-apply" class="story-command story-command-primary" type="button">应用数值</button>
       </div>
@@ -96,7 +96,7 @@
             <div><dt>H</dt><dd id="story-health-value">--</dd></div>
             <div><dt>E</dt><dd id="story-elixir-value">--</dd></div>
             <div><dt>M</dt><dd id="story-magic-value">--</dd></div>
-            <div><dt id="story-gold-label">荆露</dt><dd id="story-gold-value">0</dd></div>
+            <div><dt id="story-gold-label">金币</dt><dd id="story-gold-value">0</dd></div>
           </dl>
           <div class="story-current-room">
             <span id="story-floor-value">第 1 层</span>
@@ -128,7 +128,7 @@
           </div>
         </div>
         <div class="story-arena">
-          <article id="story-player-target" class="story-actor story-actor-player">
+          <article id="story-player-target" class="story-actor story-actor-player" data-target-kind="self" data-target-id="player">
             <div class="story-actor-name">{{ account.display_name }}</div>
             <div id="story-player-portrait" class="story-portrait story-player-portrait" aria-label="玩家"></div>
             <div class="story-health-wrap">
@@ -149,24 +149,7 @@
           <div id="story-play-lane" class="story-play-lane" aria-live="polite">
             <span id="story-play-hint"></span>
           </div>
-          <div id="story-enemy-group" class="story-enemy-group">
-            <article id="story-enemy-target" class="story-actor story-actor-enemy">
-              <div class="story-actor-name" id="story-enemy-name">敌人</div>
-              <div class="story-portrait story-enemy-placeholder" aria-label="敌人图片待补全">?</div>
-              <div class="story-health-wrap">
-                <img src="/static/assets/ui-icons/hit-point.svg" alt="" aria-hidden="true">
-                <div class="story-health-body">
-                  <div class="story-health-track"><div id="story-enemy-health-fill" class="story-health-fill"></div></div>
-                  <b id="story-enemy-health">--</b>
-                </div>
-              </div>
-              <div id="story-enemy-effects" class="story-effect-list"></div>
-              <div class="story-intent">
-                <span id="story-intent-label">意图</span>
-                <strong id="story-enemy-intent">--</strong>
-              </div>
-            </article>
-          </div>
+          <div id="story-enemy-group" class="story-enemy-group" aria-label="敌方单位"></div>
         </div>
         <svg id="story-aim-layer" class="story-aim-layer hidden" aria-hidden="true">
           <defs>
@@ -227,6 +210,23 @@
         <div id="story-pile-grid" class="story-pile-grid"></div>
         <div class="story-dialog-actions">
           <button id="story-pile-close" class="story-command story-command-danger" value="cancel">关闭</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="story-card-choice-dialog" class="story-dialog story-card-choice-dialog">
+      <form method="dialog">
+        <div class="story-pile-heading">
+          <div>
+            <h2 id="story-card-choice-title">选择卡牌</h2>
+            <p id="story-card-choice-copy"></p>
+          </div>
+          <button id="story-card-choice-close" class="story-pile-close" value="cancel" aria-label="取消">×</button>
+        </div>
+        <div id="story-card-choice-grid" class="story-card-choice-select-grid"></div>
+        <div class="story-dialog-actions">
+          <button id="story-card-choice-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-card-choice-confirm" class="story-command story-command-primary" value="confirm">确定</button>
         </div>
       </form>
     </dialog>

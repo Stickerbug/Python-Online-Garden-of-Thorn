@@ -78,7 +78,9 @@ from db import (
     add_user_play_seconds,
     admin_change_username,
     admin_clear_user_role,
+    admin_grant_user_title,
     admin_grant_user_achievement,
+    admin_remove_user_title,
     admin_adjust_user_gr,
     admin_change_user_password,
     admin_set_user_gr,
@@ -117,7 +119,9 @@ from db import (
     get_ip_ban_status,
     get_active_user_warnings,
     get_user_ban_status,
+    get_user_keybindings,
     get_user_thorn_dew,
+    get_user_title_center,
     get_report_detail,
     get_user_by_id,
     get_user_role_profile,
@@ -139,6 +143,7 @@ from db import (
     list_user_recent_ips,
     list_reports,
     list_user_roles,
+    list_user_titles,
     list_user_thorn_dew_transactions,
     claim_user_daily_checkin,
     begin_user_online_session,
@@ -177,10 +182,12 @@ from db import (
     set_ip_ban,
     set_user_mute,
     spend_user_thorn_dew,
+    set_user_equipped_titles,
     soft_delete_user,
     upsert_content_disable,
     deactivate_content_disable,
     update_user_skin,
+    update_user_keybindings,
     update_user_social_settings,
     update_feedback_status,
     update_active_ip_ban,
@@ -393,7 +400,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260722-opening-deck-order-2'
+GTN_STATIC_CACHE_BUST = 'ui-20260725-mod-settings-state-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -3333,17 +3340,84 @@ def get_special_account_profile(username):
 def special_public_fields(player_or_profile):
     source = player_or_profile or {}
     role = source.get('special_role')
+    equipped_titles = []
+    for raw_title in list(source.get('equipped_titles') or [])[:3]:
+        if not isinstance(raw_title, dict):
+            continue
+        title_id = str(raw_title.get('id') or '').strip()
+        title_name = str(raw_title.get('name') or '').strip()
+        title_color = str(raw_title.get('color') or '').strip()
+        if not title_id or not title_name or not title_color:
+            continue
+        equipped_titles.append({
+            'id': title_id,
+            'name': title_name,
+            'color': title_color,
+            'equipped_slot': len(equipped_titles) + 1,
+        })
+    name_color = (
+        str(source.get('name_color') or '').strip()
+        or (equipped_titles[0]['color'] if equipped_titles else '')
+        or str(source.get('special_role_color') or '').strip()
+        or ('admin' if source.get('is_admin_player') else '')
+    )
     return {
         'is_admin_player': bool(source.get('is_admin_player')),
-        'is_special_player': bool(role),
+        'is_special_player': bool(role or equipped_titles),
         'special_role': role or None,
         'role_type': source.get('role_type') or ('admin' if source.get('is_admin_player') else None),
         'special_role_label': source.get('special_role_label') or None,
-        'special_role_color': source.get('special_role_color') or ('admin' if source.get('is_admin_player') else None),
+        'special_role_color': name_color or None,
         'special_role_sort': int(source.get('special_role_sort', 99)),
         'can_direct_friend': bool(source.get('can_direct_friend')),
         'chat_exempt': bool(source.get('chat_exempt')),
+        'equipped_titles': equipped_titles,
+        'name_color': name_color or None,
     }
+
+
+def refresh_online_user_titles(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return
+    profile = get_user_role_profile(uid) if DB_AVAILABLE else None
+    fields = special_public_fields(profile or {})
+    affected_rooms = []
+    def belongs_to_user(source):
+        try:
+            return int((source or {}).get('user_id') or 0) == uid
+        except (TypeError, ValueError):
+            return False
+    with _lock:
+        for player in players.values():
+            if belongs_to_user(player):
+                player.update(fields)
+        for room in rooms.values():
+            room_changed = False
+            for sid, stored in list(getattr(room, 'player_profiles', {}).items()):
+                if belongs_to_user(stored):
+                    stored.update(fields)
+                    room_changed = True
+            for sid, stored in list(getattr(room, 'disconnected_players', {}).items()):
+                if belongs_to_user(stored):
+                    stored.update(fields)
+                    room_changed = True
+            if room_changed:
+                affected_rooms.append(room)
+    clear_leaderboard_cache()
+    for cache_key in list(SOCIAL_DM_THREADS_CACHE.keys()):
+        try:
+            if int(cache_key[0]) == uid:
+                SOCIAL_DM_THREADS_CACHE.pop(cache_key, None)
+        except (TypeError, ValueError, IndexError):
+            continue
+    broadcast_lobby()
+    for room in affected_rooms:
+        try:
+            broadcast_game_state(room)
+        except Exception as exc:
+            admin_event('error', f'failed to refresh title display room={getattr(room, "room_id", None)}: {exc}')
 
 
 def refresh_chat_special_fields(chat_payload):
@@ -5119,6 +5193,20 @@ def _emit_mod_settings_result(sid, **kwargs):
     payload = _mod_settings_result_payload(**kwargs)
     socketio.emit('mod_settings_updated', payload, room=sid)
     return payload
+
+
+def _normalize_mod_settings_client_revision(value):
+    if value is None or value == '':
+        return None
+    if isinstance(value, bool):
+        raise ValueError('client_revision must be an integer')
+    try:
+        revision = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('client_revision must be an integer') from exc
+    if revision < 0 or revision > 2_147_483_647:
+        raise ValueError('client_revision is out of range')
+    return revision
 
 
 def socket_guard(event_name, data=None, *, require_player=True, allow_empty=False, emit_error=True):
@@ -7388,7 +7476,7 @@ ADMIN_COMMAND_TREE = {
     },
     'account': {
         'summary': '账号与持久数据',
-        'usage': 'account <get|username|password|achievement|dew|rating|role|ban|unban> ...',
+        'usage': 'account <get|username|password|achievement|dew|rating|role|title|ban|unban> ...',
         'children': {
             'get': {'summary': '查看注册账号详情', 'usage': 'account get <ID|注册顺序|用户名>'},
             'username': {'summary': '修改账号用户名', 'usage': 'account username <ID|注册顺序|用户名> <新用户名>'},
@@ -7430,6 +7518,18 @@ ADMIN_COMMAND_TREE = {
                     'get': {'summary': '查看账号身份', 'usage': 'account role get <账号>'},
                     'set': {'summary': '设置账号身份', 'usage': 'account role set <账号> <身份> [选项]'},
                     'clear': {'summary': '清除特殊身份', 'usage': 'account role clear <账号>'},
+                },
+            },
+            'title': {
+                'summary': '管理玩家拥有的称号',
+                'usage': 'account title <list|grant|remove> ...',
+                'children': {
+                    'list': {'summary': '列出玩家拥有及佩戴的称号', 'usage': 'account title list <账号>'},
+                    'grant': {
+                        'summary': '给予称号',
+                        'usage': 'account title grant <账号> <称号名称> <颜色> [id=称号ID] [equip=true]',
+                    },
+                    'remove': {'summary': '删除玩家拥有的称号', 'usage': 'account title remove <账号> <称号ID|名称>'},
                 },
             },
             'ban': {'summary': '封禁账号并踢下线', 'usage': 'account ban <账号> [时长] [原因]'},
@@ -7766,6 +7866,7 @@ def _translate_structured_admin_command(parts):
         ('account', 'password'): ['userpass', *rest],
         ('account', 'dew'): ['dew', *rest],
         ('account', 'role'): ['role', *rest],
+        ('account', 'title'): ['title', *rest],
         ('account', 'ban'): ['banuser', *rest],
         ('account', 'unban'): ['unbanuser', *rest],
         ('game', 'list'): ['rooms'],
@@ -8088,6 +8189,29 @@ def parse_role_options(tokens):
     return options
 
 
+def parse_title_grant_options(tokens):
+    options = {
+        'title_id': '',
+        'equip': False,
+    }
+    for token in tokens:
+        key, sep, value = token.partition('=')
+        if not sep:
+            if token.lower() in ('equip', 'wear', '佩戴'):
+                options['equip'] = True
+                continue
+            raise ValueError(f'无法识别参数：{token}')
+        key = key.lower().strip()
+        value = value.strip()
+        if key in ('id', 'title_id', 'key', '称号id'):
+            options['title_id'] = value
+        elif key in ('equip', 'wear', '佩戴'):
+            options['equip'] = _parse_bool_option(value)
+        else:
+            raise ValueError(f'未知参数：{key}')
+    return options
+
+
 def format_role_profile(user, profile):
     if not profile:
         return f"{user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 无特殊身份"
@@ -8104,6 +8228,22 @@ def format_role_profile(user, profile):
         f"颜色={profile.get('special_role_color') or '-'} 排序={profile.get('special_role_sort')} "
         f"权限={','.join(perms) if perms else '-'}"
     )
+
+
+def format_user_titles(user, center):
+    items = list((center or {}).get('items') or [])
+    header = f"{user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']})"
+    if not items:
+        return f'{header}\n暂无拥有的称号。'
+    lines = [header, f"称号 {len(items)} 个，最多佩戴 {(center or {}).get('max_equipped', 3)} 个："]
+    for item in items:
+        slot = item.get('equipped_slot')
+        worn = f'佩戴#{slot}' if slot is not None else '未佩戴'
+        lines.append(
+            f"- {item.get('name') or '-'}  id={item.get('id') or '-'}  "
+            f"color={item.get('color') or '-'}  {worn}  来源={item.get('acquired_source') or item.get('source_type') or '-'}"
+        )
+    return '\n'.join(lines)
 
 
 def format_thorn_dew_user(user):
@@ -9848,6 +9988,7 @@ def execute_admin_command(line, _internal=False):
             if error:
                 return {'success': False, 'output': error}
             admin_event('admin', f"cleared role for account {user['username']}#{user['id']}")
+            refresh_online_user_titles(user['id'])
             return {'success': True, 'output': f"已清除 {user['username']} 的特殊身份。"}
         if sub == 'set':
             if len(parts) < 4:
@@ -9870,13 +10011,63 @@ def execute_admin_command(line, _internal=False):
                 return {'success': False, 'output': error}
             admin_event('admin', f"set role for account {user['username']}#{user['id']} -> {profile.get('role_type') if profile else 'none'}")
             output = format_role_profile(user, profile)
-            with _lock:
-                for psid, player in players.items():
-                    if player.get('user_id') == user['id']:
-                        player.update(special_public_fields(profile or {}))
-                broadcast_lobby()
+            refresh_online_user_titles(user['id'])
             return {'success': True, 'output': output}
         return {'success': False, 'output': command_error(raw, len(raw), 'role list|get|set|clear')}
+    if cmd in ('title', 'titles', '称号'):
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), 'account title <list|grant|remove> <账号> ...')}
+        sub = parts[1].lower()
+        user = find_user_for_admin(parts[2])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        if sub == 'list':
+            return {'success': True, 'output': format_user_titles(user, get_user_title_center(user['id']))}
+        if sub == 'grant':
+            if len(parts) < 5:
+                return {
+                    'success': False,
+                    'output': command_error(
+                        raw,
+                        len(raw),
+                        'account title grant <账号> <称号名称> <#RRGGBB|RGB(r,g,b)|HSV(h,s,v)> [id=称号ID] [equip=true]',
+                    ),
+                }
+            try:
+                options = parse_title_grant_options(parts[5:])
+            except ValueError as exc:
+                return {'success': False, 'output': str(exc)}
+            actor = str(session.get('username') or 'adminconsole')
+            granted_user, center, error = admin_grant_user_title(
+                user['id'],
+                parts[3],
+                parts[4],
+                title_id=options.get('title_id', ''),
+                equip=options.get('equip', False),
+                source_type='admin',
+                source_ref=actor,
+            )
+            if error:
+                return {'success': False, 'output': error}
+            refresh_online_user_titles(granted_user['id'])
+            admin_event(
+                'admin',
+                f"granted title {parts[3]} to account {granted_user['username']}#{granted_user['id']}",
+            )
+            return {'success': True, 'output': format_user_titles(granted_user, center)}
+        if sub in ('remove', 'revoke', 'delete'):
+            if len(parts) < 4:
+                return {'success': False, 'output': command_error(raw, len(raw), 'account title remove <账号> <称号ID|名称>')}
+            removed_user, center, error = admin_remove_user_title(user['id'], parts[3])
+            if error:
+                return {'success': False, 'output': error}
+            refresh_online_user_titles(removed_user['id'])
+            admin_event(
+                'admin',
+                f"removed title {parts[3]} from account {removed_user['username']}#{removed_user['id']}",
+            )
+            return {'success': True, 'output': format_user_titles(removed_user, center)}
+        return {'success': False, 'output': command_error(raw, len(raw), 'account title <list|grant|remove> ...')}
     if cmd in ('dew', 'thorndew', 'jinglu', '荆露'):
         if len(parts) < 3 or parts[1].lower() not in ('get', 'add', 'addpaid', 'paid', 'spend', 'tx', 'history'):
             return {'success': False, 'output': command_error(raw, len(raw), 'account dew <get|add|addpaid|spend|tx> <账号> [数量] [原因]')}
@@ -10364,6 +10555,20 @@ def admin_completions(line):
             values.extend((user.get('player_id'), user.get('id'), user.get('username')))
         return values
 
+    def title_values(account_token):
+        if not DB_AVAILABLE:
+            return []
+        try:
+            user = find_user_for_admin(account_token)
+            if not user:
+                return []
+            values = []
+            for item in list_user_titles(user['id']):
+                values.extend((item.get('id'), item.get('name')))
+            return values
+        except Exception:
+            return []
+
     def online_values(include_all=False):
         values = ['all'] if include_all else []
         with _lock:
@@ -10475,6 +10680,19 @@ def admin_completions(line):
                 return filtered(['admin', 'staff', 'contributor', 'sponsor'])
             if position >= 5 and len(parts) > 2 and parts[2].lower() == 'set':
                 return filtered(['title=', 'color=bloom', 'color=guard', 'sort=', 'key=', 'direct=', 'chat='])
+        if sub == 'title':
+            if position == 2:
+                return filtered(['list', 'grant', 'remove'])
+            if position == 3:
+                return filtered(account_values())
+            action = parts[2].lower() if len(parts) > 2 else ''
+            account_token = parts[3] if len(parts) > 3 else ''
+            if action == 'remove' and position == 4:
+                return filtered(title_values(account_token))
+            if action == 'grant' and position == 5:
+                return filtered(['#2F80C8', 'RGB(47,128,200)', 'HSV(207,77,78)'])
+            if action == 'grant' and position >= 6:
+                return filtered(['id=', 'equip=true', 'equip=false'])
         if sub in ('get', 'username', 'password', 'ban', 'unban') and position == 2:
             return filtered(account_values())
 
@@ -14355,13 +14573,45 @@ def api_achievements():
     try:
         achievements = get_user_achievement_center(user.get('id'), lang=lang)
         dew = get_user_thorn_dew_center(user.get('id'))
-        return jsonify({'success': True, **achievements, 'dew': dew})
+        titles = get_user_title_center(user.get('id'))
+        return jsonify({'success': True, **achievements, 'dew': dew, 'titles': titles})
     except sqlite3.OperationalError as exc:
         admin_event('error', f'achievements failed: {exc}')
         return jsonify({'success': False, 'error': '后台暂时不可用，请稍后再试'}), 503
     except Exception as exc:
         admin_event('error', f'achievements failed: {exc}')
         return jsonify({'success': False, 'error': '成就加载失败'}), 500
+
+
+@app.route('/api/titles/equip', methods=['POST'])
+def api_titles_equip():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    title_ids = data.get('title_ids')
+    if not isinstance(title_ids, list):
+        return jsonify({'success': False, 'error': '称号顺序格式错误'}), 400
+    try:
+        center, error = set_user_equipped_titles(user.get('id'), title_ids)
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        refresh_online_user_titles(user.get('id'))
+        fresh = get_user_by_id(user.get('id')) or user
+        _set_account_session(fresh)
+        return jsonify({
+            'success': True,
+            'titles': center,
+            'user': auth_user_payload(fresh),
+        })
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'title equip failed: {exc}')
+        return jsonify({'success': False, 'error': '后台暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'title equip failed: {exc}')
+        return jsonify({'success': False, 'error': '称号设置失败'}), 500
 
 
 @app.route('/api/leaderboard')
@@ -14546,6 +14796,47 @@ def api_social_settings_update():
             player['allow_guest_spectators'] = bool(settings.get('allow_guest_spectators', False))
     user = get_user_by_id(user_id)
     return jsonify({'success': True, 'settings': settings, 'user': auth_user_payload(user)})
+
+
+@app.route('/api/account/keybindings', methods=['GET', 'POST'])
+def api_account_keybindings():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        if request.method == 'GET':
+            config = get_user_keybindings(user_id)
+            if config is None:
+                return jsonify({'success': False, 'error': '请先登录账号'}), 401
+            return jsonify({'success': True, 'keybindings': config})
+
+        data = request.get_json(silent=True) or {}
+        config, error = update_user_keybindings(
+            user_id,
+            data.get('keybindings') if isinstance(data.get('keybindings'), dict) else data,
+            data.get('expected_revision'),
+        )
+        if error == 'revision_conflict':
+            return jsonify({
+                'success': False,
+                'code': 'KEYBINDINGS_REVISION_CONFLICT',
+                'error': '快捷键已在其他页面更新',
+                'keybindings': config,
+            }), 409
+        if error == 'payload_too_large':
+            return jsonify({'success': False, 'error': '快捷键设置数据过大'}), 400
+        if error:
+            return jsonify({'success': False, 'error': '请先登录账号'}), 401
+        user = get_user_by_id(user_id)
+        return jsonify({
+            'success': True,
+            'keybindings': config,
+            'user': auth_user_payload(user),
+        })
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
 
 
 @app.route('/api/feedback/summary')
@@ -15849,6 +16140,8 @@ def on_login(data):
             'community_mod_hash': community_fields.get('community_mod_hash', ''),
             'community_mod_name': community_fields.get('community_mod_name', ''),
             'community_mods': community_fields.get('community_mods', []),
+            '_mod_settings_latest_requested_revision': -1,
+            '_mod_settings_applied_revision': -1,
             'beta_mode': is_beta_mode,
             'skin': skin_config,
             'skin_look': dict(DEFAULT_SKIN_LOOK),
@@ -16009,6 +16302,18 @@ def on_update_mod_settings(data):
     data = dict(data or {})
     request_id = str(data.get('request_id') or '')[:64]
     requested_disabled_mods = normalize_disabled_mods(data.get('disabled_mods'))
+    try:
+        client_revision = _normalize_mod_settings_client_revision(data.get('client_revision'))
+    except ValueError as exc:
+        return _emit_mod_settings_result(
+            sid,
+            ok=False,
+            code='MOD_SETTINGS_INVALID_REVISION',
+            stage='validate',
+            reason=str(exc),
+            request_id=request_id,
+            requested_disabled_mods=requested_disabled_mods,
+        )
 
     with _lock:
         player = players.get(sid)
@@ -16016,6 +16321,10 @@ def on_update_mod_settings(data):
         runtime_mode = player.get('mode', '1v1') if player else '1v1'
         player_status = player.get('status') if player else ''
         user_id = player.get('user_id') if player else None
+        latest_requested_revision = int(player.get('_mod_settings_latest_requested_revision', -1)) if player else -1
+        stale_revision = client_revision is not None and client_revision < latest_requested_revision
+        if player and client_revision is not None and not stale_revision:
+            player['_mod_settings_latest_requested_revision'] = client_revision
 
     if not player:
         return _emit_mod_settings_result(
@@ -16027,6 +16336,19 @@ def on_update_mod_settings(data):
             request_id=request_id,
             disabled_mods=current_disabled_mods,
             requested_disabled_mods=requested_disabled_mods,
+        )
+    if stale_revision:
+        return _emit_mod_settings_result(
+            sid,
+            ok=False,
+            code='MOD_SETTINGS_STALE_REQUEST',
+            stage='ordering',
+            reason='已忽略早于当前选择的模组设置请求。',
+            request_id=request_id,
+            disabled_mods=current_disabled_mods,
+            requested_disabled_mods=requested_disabled_mods,
+            client_revision=client_revision,
+            details={'latest_revision': latest_requested_revision},
         )
     if player_status not in ('lobby', 'reconnecting'):
         return _emit_mod_settings_result(
@@ -16097,6 +16419,23 @@ def on_update_mod_settings(data):
                 requested_disabled_mods=requested_disabled_mods,
                 details={'player_status': player.get('status')},
             )
+        elif (
+            client_revision is not None
+            and client_revision < int(player.get('_mod_settings_latest_requested_revision', -1))
+        ):
+            result_payload = _mod_settings_result_payload(
+                ok=False,
+                code='MOD_SETTINGS_STALE_REQUEST',
+                stage='ordering',
+                reason='已忽略早于当前选择的模组设置请求。',
+                request_id=request_id,
+                disabled_mods=player.get('disabled_mods', []),
+                requested_disabled_mods=requested_disabled_mods,
+                client_revision=client_revision,
+                details={
+                    'latest_revision': int(player.get('_mod_settings_latest_requested_revision', -1)),
+                },
+            )
         else:
             old_hash = player_loadout_hash(player)
             try:
@@ -16114,6 +16453,8 @@ def on_update_mod_settings(data):
                     details={'exception_type': type(exc).__name__},
                 )
             else:
+                if client_revision is not None:
+                    player['_mod_settings_applied_revision'] = client_revision
                 invites.pop(sid, None)
                 for inviter_sid, target_sid in list(invites.items()):
                     if target_sid == sid:
@@ -16138,6 +16479,7 @@ def on_update_mod_settings(data):
                     request_id=request_id,
                     disabled_mods=loadout['disabled_mods'],
                     requested_disabled_mods=requested_disabled_mods,
+                    client_revision=client_revision,
                     details={
                         'requested_count': len(requested_disabled_mods),
                         'applied_count': len(loadout['disabled_mods']),

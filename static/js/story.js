@@ -18,11 +18,12 @@
     let storyCursorCard = null;
     let toastTimer = null;
     let developerModeOpen = false;
+    let cardChoiceContext = null;
 
     const TEXT = {
         en: {
             title: 'Story Mode', account: 'Player', back: 'Back', loading: 'Loading journey',
-            emptyTitle: 'A new journey', start: 'Start', stage: 'Stage', biome: 'Region', gold: 'Dew',
+            emptyTitle: 'A new journey', start: 'Start', stage: 'Stage', biome: 'Region', gold: 'Gold',
             route: 'Route', abandon: 'End Journey', abandonTitle: 'End this journey?',
             abandonMessage: 'This run will be marked as ended.', resetMap: 'Reset Map',
             resetTitle: 'Reset the map?', resetMessage: 'A new route will be generated from Floor 1.',
@@ -31,11 +32,11 @@
             intent: 'Intent', endTurn: 'End Turn', playerTurn: 'Your Turn', enemyTurn: 'Enemy Turn', close: 'Close',
             drawPile: 'Draw', discardPile: 'Discard', exilePile: 'Exile',
             battleWon: 'Battle won', chooseCard: 'Choose a card', skip: 'Skip',
-            gainedGold: (value) => `Gained ${value} Dew.`, room: 'Room', restTitle: 'Rest Site',
+            gainedGold: (value) => `Gained ${value} G.`, room: 'Room', restTitle: 'Rest Site',
             restCopy: 'Recover H or upgrade one card.', heal: 'Recover H', upgrade: 'Upgrade',
             chestTitle: 'Chest', chestCopy: 'Open the chest and continue.', openChest: 'Open',
-            eventTitle: 'Garden Event', eventCopy: 'Choose one outcome.', takeGold: 'Take 20 Dew',
-            recoverHealth: 'Recover 15 H', shopTitle: 'Shop', shopCopy: 'Spend Dew or leave.',
+            eventTitle: 'Garden Event', eventCopy: 'Choose one outcome.', takeGold: 'Take 20 Gold',
+            recoverHealth: 'Recover 15 H', shopTitle: 'Shop', shopCopy: 'Spend Gold or leave.',
             buy: (value) => `Buy · ${value}`, leave: 'Leave', journeyComplete: 'Journey complete',
             journeyCompleteCopy: 'You crossed the Garden route.', journeyFailed: 'Journey ended',
             journeyFailedCopy: 'Your route ends here, but the next map is waiting.', newJourney: 'New Journey',
@@ -47,6 +48,9 @@
             pileEmpty: 'No cards here', chooseEnemy: 'Choose the enemy', chooseSelf: 'Choose yourself',
             playSelfAnywhere: 'Click anywhere to play on yourself', playAnywhere: 'Click anywhere to play',
             chooseCardHint: 'Choose a card', damagePrediction: 'Damage',
+            chooseCards: 'Choose cards', chooseExact: (value) => `Choose ${value} card(s).`,
+            chooseUpTo: (value) => `Choose up to ${value} card(s).`,
+            cardTypes: { thorn: 'Thorn', bloom: 'Bloom', root: 'Root', guard: 'Guard', curse: 'Curse', infect: 'Infect' },
             pileTotal: (label, count) => `${label}: ${count} cards`,
             floor: (value) => `Floor ${value}`,
             rooms: { blessing: 'Blessing', combat: 'Battle', elite: 'Elite', event: 'Event', rest: 'Rest', shop: 'Shop', chest: 'Chest', boss: 'Boss' },
@@ -54,17 +58,17 @@
         },
         zh: {
             title: '故事模式', account: '玩家', back: '返回', loading: '载入旅程', emptyTitle: '一段新的旅程',
-            start: '开始', stage: '阶段', biome: '区域', gold: '荆露', route: '路线', abandon: '结束旅程',
+            start: '开始', stage: '阶段', biome: '区域', gold: '金币', route: '路线', abandon: '结束旅程',
             abandonTitle: '结束旅程？', abandonMessage: '当前进度将被记录为已结束。', resetMap: '重置地图',
             resetTitle: '重置地图？', resetMessage: '将重新生成路线并返回第一层。', mapReset: '地图已重置',
             cancel: '取消', confirm: '确定', garden: '花园', blessingTitle: '选择初始赐福',
             blessingCopy: '本次旅程只能选择一项。', intent: '意图', endTurn: '结束回合', playerTurn: '玩家回合', enemyTurn: '敌方回合', close: '关闭', drawPile: '抽牌堆',
             discardPile: '弃牌堆', exilePile: '放逐区', battleWon: '战斗胜利', chooseCard: '选择一张牌',
-            skip: '跳过', gainedGold: (value) => `获得 ${value} 荆露。`, room: '房间', restTitle: '休息区',
+            skip: '跳过', gainedGold: (value) => `获得 ${value}G。`, room: '房间', restTitle: '休息区',
             restCopy: '回复生命，或升级一张牌。', heal: '回复生命', upgrade: '升级', chestTitle: '宝箱',
             chestCopy: '打开宝箱后继续前进。', openChest: '打开', eventTitle: '花园事件',
-            eventCopy: '选择一种结果。', takeGold: '获得20荆露', recoverHealth: '回复15H', shopTitle: '商店',
-            shopCopy: '消耗荆露购买物品，也可以直接离开。', buy: (value) => `购买 · ${value}`, leave: '离开',
+            eventCopy: '选择一种结果。', takeGold: '获得20金币', recoverHealth: '回复15H', shopTitle: '商店',
+            shopCopy: '消耗金币购买物品，也可以直接离开。', buy: (value) => `购买 · ${value}`, leave: '离开',
             journeyComplete: '旅程完成', journeyCompleteCopy: '你已经穿过了花园路线。', journeyFailed: '旅程结束',
             journeyFailedCopy: '本次路线止步于此，下一张地图仍在等待。', newJourney: '开始新旅程',
             requestFailed: '故事记录暂时不可用', stateUpdated: '状态已同步', upgraded: '已升级',
@@ -75,13 +79,16 @@
             pileEmpty: '这里没有牌', chooseEnemy: '点击敌方头像以选择目标', chooseSelf: '点击自己的头像以选择目标',
             playSelfAnywhere: '点击场地任意位置对自己使用', playAnywhere: '点击场地任意位置打出',
             chooseCardHint: '选择一张手牌', damagePrediction: '伤害预测',
+            chooseCards: '选择卡牌', chooseExact: (value) => `选择 ${value} 张牌。`,
+            chooseUpTo: (value) => `选择至多 ${value} 张牌。`,
+            cardTypes: { thorn: '攻击', bloom: '技能', root: '装备', guard: '反制', curse: '诅咒', infect: '状态牌' },
             pileTotal: (label, count) => `${label}：${count} 张`,
             rooms: { blessing: '赐福', combat: '战斗', elite: '精英', event: '事件', rest: '休息', shop: '商店', chest: '宝箱', boss: '首领' },
             roomMarks: { blessing: '赐', combat: '战', elite: '精', event: '事', rest: '息', shop: '店', chest: '宝', boss: '首' },
         },
         fr: {
             title: 'Mode histoire', account: 'Joueur', back: 'Retour', loading: 'Chargement du voyage',
-            emptyTitle: 'Un nouveau voyage', start: 'Commencer', stage: 'Étape', biome: 'Région', gold: 'Rosée',
+            emptyTitle: 'Un nouveau voyage', start: 'Commencer', stage: 'Étape', biome: 'Région', gold: 'Or',
             route: 'Route', abandon: 'Terminer le voyage', blessingTitle: 'Choisir une bénédiction',
             blessingCopy: 'Choisissez-en une pour ce voyage.', intent: 'Intention', endTurn: 'Fin du tour',
             drawPile: 'Pioche', discardPile: 'Défausse', exilePile: 'Exil', battleWon: 'Victoire',
@@ -95,7 +102,7 @@
         },
         ja: {
             title: 'ストーリーモード', account: 'プレイヤー', back: '戻る', loading: '旅を読み込み中',
-            emptyTitle: '新しい旅', start: '開始', stage: 'ステージ', biome: '地域', gold: 'ソーンデュー',
+            emptyTitle: '新しい旅', start: '開始', stage: 'ステージ', biome: '地域', gold: 'ゴールド',
             route: 'ルート', abandon: '旅を終了', blessingTitle: '祝福を選択', blessingCopy: '今回の旅で一つ選択します。',
             intent: '意図', endTurn: 'ターン終了', drawPile: '山札', discardPile: '捨て札', exilePile: '追放',
             battleWon: '戦闘勝利', chooseCard: 'カードを選択', skip: 'スキップ', room: '部屋',
@@ -120,6 +127,7 @@
         ...(TEXT[lang] || {}),
         rooms: { ...TEXT.en.rooms, ...((TEXT[lang] || {}).rooms || {}) },
         roomMarks: { ...TEXT.en.roomMarks, ...((TEXT[lang] || {}).roomMarks || {}) },
+        cardTypes: { ...TEXT.en.cardTypes, ...((TEXT[lang] || {}).cardTypes || {}) },
     };
 
     class StoryApiError extends Error {
@@ -601,23 +609,38 @@
     function cardValues(card) {
         const definition = storyContent?.cards?.[card?.def_id];
         if (!definition) return null;
-        return card.upgraded ? { ...definition, ...(definition.upgrade || {}) } : definition;
+        const values = card.upgraded ? { ...definition, ...(definition.upgrade || {}) } : { ...definition };
+        const modifiers = card?.modifiers && typeof card.modifiers === 'object' ? card.modifiers : {};
+        if (Number.isFinite(Number(values.cost_e))) {
+            values.cost_e = Math.max(0,
+                Number(values.cost_e)
+                + Number(modifiers.cost_e_delta || 0)
+                - Number(modifiers.swift || 0));
+        }
+        if (Number.isFinite(Number(values.cost_m))) {
+            values.cost_m = Math.max(0,
+                Number(values.cost_m)
+                + Number(modifiers.cost_m_delta || 0)
+                - Number(modifiers.magic_swift || 0));
+        }
+        const tags = new Set(Array.isArray(values.tags) ? values.tags : []);
+        if (modifiers.force_exile) tags.add('exile');
+        if (modifiers.retain) tags.add('retain');
+        values.tags = [...tags];
+        return values;
     }
 
     function cardTargetKind(card) {
         const values = cardValues(card);
-        const effects = values?.effects || [];
-        return effects.some((effect) => ['damage', 'enemy_status'].includes(String(effect?.type || '')))
-            ? 'enemy'
-            : 'self';
+        return values?.target === 'enemy' ? 'enemy' : 'self';
     }
 
     function storyCursorCardMode(card) {
         const values = cardValues(card);
         if (!values) return '';
-        const flags = new Set((Array.isArray(values.flags) ? values.flags : [])
-            .map((flag) => String(flag || '').trim().toLowerCase()));
-        if (values.wide_strike || flags.has('wide_strike') || flags.has('tag_wide_strike')) return 'untargeted';
+        const tags = new Set((Array.isArray(values.tags) ? values.tags : [])
+            .map((tag) => String(tag || '').trim().toLowerCase()));
+        if (tags.has('wide')) return 'untargeted';
         return cardTargetKind(card) === 'self' ? 'self' : '';
     }
 
@@ -777,10 +800,11 @@
     function updateStoryAimHover(card) {
         const targetKind = cardTargetKind(card);
         const hoveredPortrait = document.elementFromPoint(storyAimPointer.x, storyAimPointer.y)?.closest?.('.story-portrait');
-        const hovered = hoveredPortrait?.closest?.('#story-player-target, #story-enemy-target');
-        const validId = targetKind === 'enemy' ? 'story-enemy-target' : 'story-player-target';
-        $('story-player-target')?.classList.toggle('is-aim-hover', hovered?.id === validId);
-        $('story-enemy-target')?.classList.toggle('is-aim-hover', hovered?.id === validId);
+        const hovered = hoveredPortrait?.closest?.('.story-actor[data-target-kind]');
+        document.querySelectorAll('.story-actor.is-aim-hover').forEach((element) => {
+            element.classList.remove('is-aim-hover');
+        });
+        if (hovered?.dataset.targetKind === targetKind) hovered.classList.add('is-aim-hover');
     }
 
     function updateAimArrow(state) {
@@ -791,8 +815,9 @@
         const card = selectedCombatCard(state);
         if (!layer || !path || !outline || !card || storyCursorCardMode(card)) {
             layer?.classList.add('hidden');
-            $('story-player-target')?.classList.remove('is-aim-hover');
-            $('story-enemy-target')?.classList.remove('is-aim-hover');
+            document.querySelectorAll('.story-actor.is-aim-hover').forEach((element) => {
+                element.classList.remove('is-aim-hover');
+            });
             return;
         }
         const source = document.querySelector(`.story-hand-card[data-instance-id="${CSS.escape(String(card.instance_id))}"]`);
@@ -845,13 +870,133 @@
         renderCombat(state);
     }
 
-    async function playSelectedCombatCard(targetKind) {
+    function cardSelectionSpec(card) {
+        const values = cardValues(card);
+        const effects = values?.effects || [];
+        const combat = activeRun?.state?.combat || {};
+        for (const effect of effects) {
+            const type = String(effect?.type || '');
+            if (type === 'choose_exile' || type === 'copy_hand_card') {
+                const exact = type === 'copy_hand_card' || Boolean(effect.exact);
+                return {
+                    source: (combat.hand || []).filter((item) => String(item.instance_id) !== String(card.instance_id)),
+                    payloadKey: 'selected_card_ids',
+                    maximum: Math.max(1, Number(effect.amount || 1)),
+                    minimum: exact ? Math.max(1, Number(effect.amount || 1)) : 0,
+                };
+            }
+            if (type === 'discard_to_draw_top' && (combat.discard_pile || []).length) {
+                return {
+                    source: [...combat.discard_pile],
+                    payloadKey: 'selected_discard_ids',
+                    maximum: 1,
+                    minimum: 1,
+                };
+            }
+        }
+        return null;
+    }
+
+    function openCardSelection(card, targetKind, targetId) {
+        const spec = cardSelectionSpec(card);
+        if (!spec) return false;
+        const dialog = $('story-card-choice-dialog');
+        const grid = $('story-card-choice-grid');
+        if (!dialog || !grid) return false;
+        cardChoiceContext = {
+            cardId: String(card.instance_id),
+            targetKind,
+            targetId: String(targetId || ''),
+            spec,
+            selected: new Set(),
+        };
+        setText('story-card-choice-title', t.chooseCards);
+        setText('story-card-choice-copy',
+            spec.minimum === spec.maximum
+                ? t.chooseExact(spec.maximum)
+                : t.chooseUpTo(spec.maximum));
+        grid.replaceChildren();
+        spec.source.forEach((choiceCard) => {
+            const wrapper = document.createElement('button');
+            wrapper.type = 'button';
+            wrapper.className = 'story-card-choice-select-item';
+            wrapper.dataset.instanceId = String(choiceCard.instance_id);
+            wrapper.append(createStoryCard(choiceCard, { interactive: false, compact: true }));
+            wrapper.addEventListener('click', () => {
+                const id = String(choiceCard.instance_id);
+                if (cardChoiceContext?.selected.has(id)) {
+                    cardChoiceContext.selected.delete(id);
+                    wrapper.classList.remove('is-selected');
+                } else if ((cardChoiceContext?.selected.size || 0) < spec.maximum) {
+                    cardChoiceContext?.selected.add(id);
+                    wrapper.classList.add('is-selected');
+                }
+                const count = cardChoiceContext?.selected.size || 0;
+                $('story-card-choice-confirm').disabled = count < spec.minimum || count > spec.maximum;
+            });
+            grid.append(wrapper);
+        });
+        $('story-card-choice-confirm').disabled = spec.minimum > 0;
+        dialog.showModal();
+        return true;
+    }
+
+    function openOpeningRedraw(state) {
+        const combat = state?.combat || {};
+        const dialog = $('story-card-choice-dialog');
+        const grid = $('story-card-choice-grid');
+        if (!combat.opening_redraw_pending || !dialog || !grid || dialog.open) return;
+        const source = [...(combat.hand || [])];
+        const spec = {
+            source,
+            payloadKey: 'selected_card_ids',
+            maximum: source.length,
+            minimum: 0,
+        };
+        cardChoiceContext = {
+            mode: 'opening_redraw',
+            spec,
+            selected: new Set(),
+        };
+        setText('story-card-choice-title', lang === 'zh' ? '冷却' : 'Cooldown');
+        setText(
+            'story-card-choice-copy',
+            lang === 'zh'
+                ? '选择任意张手牌丢弃，然后抽取等量牌。'
+                : 'Discard any number of cards, then draw the same number.',
+        );
+        grid.replaceChildren();
+        source.forEach((choiceCard) => {
+            const wrapper = document.createElement('button');
+            wrapper.type = 'button';
+            wrapper.className = 'story-card-choice-select-item';
+            wrapper.dataset.instanceId = String(choiceCard.instance_id);
+            wrapper.append(createStoryCard(choiceCard, { interactive: false, compact: true }));
+            wrapper.addEventListener('click', () => {
+                const id = String(choiceCard.instance_id);
+                if (cardChoiceContext?.selected.has(id)) {
+                    cardChoiceContext.selected.delete(id);
+                    wrapper.classList.remove('is-selected');
+                } else {
+                    cardChoiceContext?.selected.add(id);
+                    wrapper.classList.add('is-selected');
+                }
+            });
+            grid.append(wrapper);
+        });
+        $('story-card-choice-confirm').disabled = false;
+        dialog.showModal();
+    }
+
+    async function performSelectedCombatCard(targetKind, targetId = '', extraPayload = {}) {
         if (cardPlayInFlight || actionInFlight || !activeRun) return;
         const state = activeRun.state || {};
         const card = selectedCombatCard(state);
         if (!card || cardTargetKind(card) !== targetKind) return;
         const wrapper = document.querySelector(`.story-hand-card[data-instance-id="${CSS.escape(String(card.instance_id))}"]`);
-        const target = targetKind === 'enemy' ? $('story-enemy-target') : $('story-player-target');
+        const target = targetKind === 'enemy'
+            ? document.querySelector(`.story-actor-enemy[data-target-id="${CSS.escape(String(targetId || ''))}"]`)
+            : $('story-player-target');
         cardPlayInFlight = true;
         destroyStoryCursorCard();
         if (wrapper && target) {
@@ -864,10 +1009,22 @@
         }
         selectedCombatCardId = '';
         try {
-            await storyAction('play_card', { card_instance_id: card.instance_id });
+            await storyAction('play_card', {
+                card_instance_id: card.instance_id,
+                ...(targetId ? { target_id: targetId } : {}),
+                ...extraPayload,
+            });
         } finally {
             cardPlayInFlight = false;
         }
+    }
+
+    function playSelectedCombatCard(targetKind, targetId = '') {
+        if (cardPlayInFlight || actionInFlight || !activeRun) return;
+        const card = selectedCombatCard(activeRun.state);
+        if (!card || cardTargetKind(card) !== targetKind) return;
+        if (openCardSelection(card, targetKind, targetId)) return;
+        performSelectedCombatCard(targetKind, targetId);
     }
 
     function createStoryPileTile(card, order) {
@@ -987,12 +1144,22 @@
         typeWrap.className = 'card-type-label-wrap';
         const typeLabel = document.createElement('span');
         typeLabel.className = 'card-type-label';
-        typeLabel.textContent = cardType[0].toUpperCase() + cardType.slice(1);
+        typeLabel.textContent = t.cardTypes?.[cardType] || cardType;
         typeWrap.append(typeLabel);
+        const tags = document.createElement('div');
+        tags.className = 'story-card-tags';
+        (values.tags || []).forEach((tagId) => {
+            const definition = storyContent?.tags?.[tagId];
+            if (!definition) return;
+            const tag = document.createElement('span');
+            tag.textContent = localize(definition.name);
+            tag.title = localize(definition.description);
+            tags.append(tag);
+        });
         const description = document.createElement('div');
         description.className = 'card-effect';
         description.textContent = localize(values.description);
-        element.append(typeWrap, description);
+        element.append(typeWrap, tags, description);
         const prediction = activeRun?.state?.combat?.damage_predictions?.[String(card.instance_id || '')];
         if (cardType === 'thorn' && prediction?.summary) {
             const damagePrediction = document.createElement('div');
@@ -1020,7 +1187,8 @@
         setText('story-blessing-kicker', t.floor(state.current_floor || 1));
         const container = $('story-blessing-options');
         container?.replaceChildren();
-        Object.entries(storyContent?.blessings || {}).forEach(([id, blessing]) => {
+        const expected = Number(state.stage || 1) === 1 ? 'titan' : 'oracle';
+        Object.entries(storyContent?.blessings || {}).filter(([id]) => id === expected).forEach(([id, blessing]) => {
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'story-choice-option story-blessing-option';
@@ -1056,13 +1224,27 @@
 
     function renderEffects(containerId, values) {
         const container = $(containerId);
+        renderEffectsInto(container, values);
+    }
+
+    function renderEffectsInto(container, values) {
         if (!container) return;
         container.replaceChildren();
         const icons = {
             shield: 'shield',
             power: 'triangle',
+            temporary_power: 'triangle',
+            endurance: 'armor',
             weak: 'weakness',
             vulnerable: 'fragile',
+            fragile: 'fragile',
+            evade: 'dodge',
+            poison: 'poison',
+            stun: 'stunned',
+            reflection: 'nazar',
+            wither: 'stagnation',
+            broken: 'fracture',
+            rockfall: 'root_status',
         };
         values.filter((item) => Number(item.value) > 0).forEach((item) => {
             const chip = document.createElement('span');
@@ -1080,17 +1262,92 @@
         });
     }
 
+    function canSatisfyCardSelection(card, combat) {
+        const values = cardValues(card);
+        for (const effect of values?.effects || []) {
+            const type = String(effect?.type || '');
+            if ((type === 'choose_exile' && effect.exact) || type === 'copy_hand_card') {
+                const needed = Math.max(1, Number(effect.amount || 1));
+                const available = (combat.hand || []).filter((item) => String(item.instance_id) !== String(card.instance_id)).length;
+                if (available < needed) return false;
+            }
+        }
+        return true;
+    }
+
+    function createEnemyActor(enemy, selectedTargetKind) {
+        const actor = document.createElement('article');
+        actor.className = 'story-actor story-actor-enemy';
+        actor.dataset.targetKind = 'enemy';
+        actor.dataset.targetId = String(enemy.id || '');
+        actor.classList.toggle('is-play-target', selectedTargetKind === 'enemy');
+
+        const name = document.createElement('div');
+        name.className = 'story-actor-name';
+        name.textContent = localize(enemy.name) || (lang === 'zh' ? '敌人' : 'Enemy');
+        const portrait = document.createElement('div');
+        portrait.className = 'story-portrait story-enemy-placeholder';
+        portrait.setAttribute('aria-label', name.textContent);
+        portrait.textContent = '?';
+
+        const health = document.createElement('div');
+        health.className = 'story-health-wrap';
+        const healthIcon = document.createElement('img');
+        healthIcon.src = '/static/assets/ui-icons/hit-point.svg';
+        healthIcon.alt = '';
+        healthIcon.setAttribute('aria-hidden', 'true');
+        const healthBody = document.createElement('div');
+        healthBody.className = 'story-health-body';
+        const track = document.createElement('div');
+        track.className = 'story-health-track';
+        const fill = document.createElement('div');
+        fill.className = 'story-health-fill';
+        fill.style.width = `${Math.max(0, Math.min(100, Number(enemy.health || 0) / Math.max(1, Number(enemy.max_health || 1)) * 100))}%`;
+        track.append(fill);
+        const healthValue = document.createElement('b');
+        healthValue.textContent = `${Math.max(0, Number(enemy.health || 0))}/${Math.max(1, Number(enemy.max_health || 1))}`;
+        healthBody.append(track, healthValue);
+        health.append(healthIcon, healthBody);
+
+        const effects = document.createElement('div');
+        effects.className = 'story-effect-list';
+        renderEffectsInto(effects, [
+            { key: 'shield', label: t.shield, value: enemy.shield },
+            { key: 'power', label: t.power, value: enemy.power },
+            { key: 'temporary_power', label: t.power, value: enemy.temporary_power },
+            { key: 'weak', label: t.weak, value: enemy.weak },
+            { key: 'vulnerable', label: t.vulnerable, value: enemy.vulnerable },
+            { key: 'fragile', label: '脆弱', value: enemy.fragile },
+            { key: 'stun', label: '眩晕', value: enemy.stun },
+            { key: 'reflection', label: '反射', value: enemy.reflection },
+            { key: 'wither', label: '凋萎', value: enemy.wither },
+            { key: 'rockfall', label: '落石', value: enemy.rockfall },
+        ]);
+
+        const intent = document.createElement('div');
+        intent.className = 'story-intent';
+        const intentLabel = document.createElement('span');
+        intentLabel.textContent = t.intent;
+        const intentValue = document.createElement('strong');
+        const intentName = localize(enemy.intent?.name);
+        intentValue.textContent = [intentName, enemy.intent?.summary].filter(Boolean).join(' · ') || '--';
+        intent.append(intentLabel, intentValue);
+        actor.append(name, portrait, health, effects, intent);
+        return actor;
+    }
+
     function renderCombat(state) {
         const combat = state.combat || {};
         const player = state.player || {};
-        const enemy = (combat.enemies || []).find((item) => Number(item.health) > 0) || (combat.enemies || [])[0] || {};
+        const livingEnemies = (combat.enemies || []).filter((item) => Number(item.health) > 0);
+        const enemy = livingEnemies[0] || (combat.enemies || [])[0] || {};
         if (selectedCombatCardId && !selectedCombatCard(state)) selectedCombatCardId = '';
         const selected = selectedCombatCard(state);
         const selectedValues = cardValues(selected);
+        const selectedTargetKind = selected && !storyCursorCardMode(selected) ? cardTargetKind(selected) : '';
         setText('story-round', `R${combat.round || 1}`);
         setText('story-phase', combat.turn === 'player' ? t.playerTurn : t.enemyTurn);
         setHealthBar('story-combat-player', player.health, player.max_health);
-        setHealthBar('story-enemy', enemy.health, enemy.max_health);
         renderResourceOrbs(
             'story-combat-player-elixir',
             combat.elixir,
@@ -1105,31 +1362,42 @@
             selectedValues?.cost_m,
             'm',
         );
-        setText('story-enemy-name', localize(enemy.name) || (lang === 'zh' ? '敌人' : 'Enemy'));
-        const intentName = localize(enemy.intent?.name);
-        setText('story-enemy-intent', [intentName, enemy.intent?.summary].filter(Boolean).join(' · ') || '--');
         renderEffects('story-player-effects', [
             { key: 'shield', label: t.shield, value: combat.shield },
             { key: 'power', label: t.power, value: combat.power },
+            { key: 'temporary_power', label: t.power, value: combat.temporary_power },
+            { key: 'endurance', label: '耐力', value: combat.endurance },
             { key: 'weak', label: t.weak, value: combat.weak },
             { key: 'vulnerable', label: t.vulnerable, value: combat.vulnerable },
+            { key: 'fragile', label: '脆弱', value: combat.fragile },
+            { key: 'evade', label: '闪避', value: combat.evade },
+            { key: 'poison', label: '中毒', value: combat.poison },
+            { key: 'stun', label: '眩晕', value: combat.stun },
+            { key: 'broken', label: '破损', value: combat.broken },
         ]);
-        renderEffects('story-enemy-effects', [
-            { key: 'shield', label: t.shield, value: enemy.shield },
-            { key: 'power', label: t.power, value: enemy.power },
-            { key: 'weak', label: t.weak, value: enemy.weak },
-            { key: 'vulnerable', label: t.vulnerable, value: enemy.vulnerable },
-        ]);
+        const enemyGroup = $('story-enemy-group');
+        enemyGroup?.replaceChildren();
+        enemyGroup?.style.setProperty('--story-enemy-count', String(Math.max(1, livingEnemies.length)));
+        enemyGroup?.style.setProperty('--story-enemy-scale', String(Math.max(.48, Math.min(.82, 1.03 - livingEnemies.length * .13))));
+        livingEnemies.forEach((enemyItem) => {
+            enemyGroup?.append(createEnemyActor(enemyItem, selectedTargetKind));
+        });
         const hand = $('story-hand');
         hand?.replaceChildren();
         hand?.classList.toggle('has-selected-card', Boolean(selected));
         const cards = combat.hand || [];
         cards.forEach((card, index) => {
             const values = cardValues(card);
+            const tags = new Set(values?.tags || []);
+            const costE = values?.cost_e === 'X' ? 0 : Number(values?.cost_e || 0);
             const playable = values
-                && Number(combat.elixir) >= Number(values.cost_e || 0)
+                && !tags.has('unplayable')
+                && Number(combat.elixir) >= costE
                 && Number(combat.magic) >= Number(values.cost_m || 0)
-                && combat.turn === 'player';
+                && combat.turn === 'player'
+                && !combat.opening_redraw_pending
+                && (combat.card_play_limit == null || Number(combat.cards_played_this_turn || 0) < Number(combat.card_play_limit))
+                && canSatisfyCardSelection(card, combat);
             const wrapper = document.createElement('div');
             wrapper.className = 'story-hand-card';
             wrapper.dataset.instanceId = String(card.instance_id || '');
@@ -1152,7 +1420,9 @@
         const targetKind = selected ? cardTargetKind(selected) : '';
         const cursorMode = selected ? storyCursorCardMode(selected) : '';
         $('story-player-target')?.classList.toggle('is-play-target', !cursorMode && targetKind === 'self');
-        $('story-enemy-target')?.classList.toggle('is-play-target', !cursorMode && targetKind === 'enemy');
+        document.querySelectorAll('.story-actor-enemy').forEach((actor) => {
+            actor.classList.toggle('is-play-target', !cursorMode && targetKind === 'enemy');
+        });
         $('story-play-lane')?.classList.toggle('is-armed', Boolean(selected));
         setText('story-play-hint', selected
             ? (cursorMode
@@ -1177,9 +1447,12 @@
             if (labelNode) labelNode.textContent = title.trim();
         });
         const endTurn = $('story-end-turn');
-        if (endTurn) endTurn.disabled = combat.turn !== 'player';
+        if (endTurn) endTurn.disabled = combat.turn !== 'player' || Boolean(combat.opening_redraw_pending);
         showView('story-combat');
         scheduleStoryAimUpdate(state);
+        if (combat.opening_redraw_pending) {
+            queueMicrotask(() => openOpeningRedraw(state));
+        }
     }
 
     function choiceButton(label, onClick, options = {}) {
@@ -1205,7 +1478,13 @@
         const container = $('story-room-options');
         container?.replaceChildren();
         setText('story-room-kicker', `${t.floor(state.current_floor || 1)} · ${t.rooms[room.type] || t.room}`);
-        if (room.type === 'rest') {
+        if (room.type === 'stage_choice') {
+            setText('story-room-title', lang === 'zh' ? `选择第 ${room.stage || ''} 阶段区域` : `Choose Stage ${room.stage || ''} region`);
+            setText('story-room-copy', lang === 'zh' ? '进入后将生成新的16层路线。' : 'A new 16-floor route will be generated.');
+            (room.biomes || []).forEach((biome) => {
+                container?.append(choiceButton(String(biome), () => storyAction('choose_stage', { biome }), { primary: true }));
+            });
+        } else if (room.type === 'rest') {
             setText('story-room-title', t.restTitle);
             setText('story-room-copy', t.restCopy);
             const amount = Math.ceil(Number(player.max_health || 0) * 0.3);
@@ -1216,31 +1495,95 @@
                 note: card.upgraded ? t.upgraded : t.upgrade,
                 onClick: () => storyAction('resolve_room', { option: 'upgrade', card_instance_id: card.instance_id }),
             })));
+            if ((room.options || []).includes('gold')) {
+                container?.append(choiceButton(lang === 'zh' ? '获得150G' : 'Gain 150 G', () => storyAction('resolve_room', { option: 'gold' })));
+            }
         } else if (room.type === 'chest') {
             setText('story-room-title', t.chestTitle);
-            setText('story-room-copy', t.chestCopy);
+            const relic = storyContent?.relics?.[room.relic];
+            setText('story-room-copy', [
+                `${Number(room.gold || 0)}G`,
+                relic ? `${localize(relic.name)}：${localize(relic.description)}` : '',
+            ].filter(Boolean).join(' · '));
             container?.append(choiceButton(t.openChest, () => storyAction('resolve_room', { option: 'claim' }), { primary: true }));
         } else if (room.type === 'shop') {
             setText('story-room-title', t.shopTitle);
             setText('story-room-copy', t.shopCopy);
-            (room.cards || []).forEach((defId) => {
-                const card = { instance_id: `shop-${defId}`, def_id: defId, upgraded: false };
+            (room.cards || []).filter((item) => !item.sold).forEach((item) => {
+                const card = { instance_id: item.id, def_id: item.card_id, upgraded: false };
                 container?.append(createStoryCard(card, {
                     compact: true,
-                    disabled: Number(player.gold || 0) < Number(room.card_price || 50),
-                    note: t.buy(room.card_price || 50),
-                    onClick: () => storyAction('resolve_room', { option: 'buy_card', card_id: defId }),
+                    disabled: Number(player.gold || 0) < Number(item.price || 0),
+                    note: `${Number(item.price || 0)}G`,
+                    onClick: () => storyAction('resolve_room', { option: 'buy_card', item_id: item.id }),
                 }));
             });
-            container?.append(choiceButton(`${t.heal} 20H · ${room.heal_price || 30}`, () => storyAction('resolve_room', { option: 'heal' }), {
-                disabled: Number(player.gold || 0) < Number(room.heal_price || 30),
-            }));
+            (room.relics || []).filter((item) => !item.sold).forEach((item) => {
+                const relic = storyContent?.relics?.[item.relic_id];
+                container?.append(choiceButton(`${localize(relic?.name) || item.relic_id} · ${item.price}G`, () => {
+                    storyAction('resolve_room', { option: 'buy_relic', item_id: item.id });
+                }, {
+                    description: localize(relic?.description),
+                    disabled: Number(player.gold || 0) < Number(item.price || 0),
+                }));
+            });
+            (player.deck || []).forEach((card) => {
+                container?.append(createStoryCard(card, {
+                    compact: true,
+                    disabled: Number(player.gold || 0) < Number(room.remove_price || 0),
+                    note: `${lang === 'zh' ? '移除' : 'Remove'} · ${room.remove_price}G`,
+                    onClick: () => storyAction('resolve_room', { option: 'remove_card', card_instance_id: card.instance_id }),
+                }));
+                container?.append(createStoryCard(card, {
+                    compact: true,
+                    disabled: Boolean(card.upgraded) || Number(player.gold || 0) < Number(room.upgrade_price || 0),
+                    note: `${t.upgrade} · ${room.upgrade_price}G`,
+                    onClick: () => storyAction('resolve_room', { option: 'upgrade_card', card_instance_id: card.instance_id }),
+                }));
+            });
             container?.append(choiceButton(t.leave, () => storyAction('resolve_room', { option: 'leave' })));
         } else {
-            setText('story-room-title', t.eventTitle);
-            setText('story-room-copy', t.eventCopy);
-            container?.append(choiceButton(t.takeGold, () => storyAction('resolve_room', { option: 'gold' }), { primary: true }));
-            container?.append(choiceButton(t.recoverHealth, () => storyAction('resolve_room', { option: 'heal' })));
+            setText('story-room-title', localize(room.title) || t.eventTitle);
+            const eventCopy = [
+                localize(room.description) || t.eventCopy,
+                localize(room.last_result),
+                room.event_id === 'mystery_lottery'
+                    ? (lang === 'zh' ? `已抽奖 ${Number(room.attempts || 0)}/4 次` : `${Number(room.attempts || 0)}/4 attempts`)
+                    : '',
+            ].filter(Boolean).join(' ');
+            setText('story-room-copy', eventCopy);
+            (room.options || []).forEach((rawOption) => {
+                const option = typeof rawOption === 'string'
+                    ? { id: rawOption, label: rawOption, description: '' }
+                    : rawOption;
+                const optionId = String(option.id || '');
+                if (optionId === 'lottery_inspect') {
+                    (player.deck || [])
+                        .filter((card) => !card.upgraded && storyContent?.cards?.[card.def_id]?.upgrade)
+                        .forEach((card) => container?.append(createStoryCard(card, {
+                            compact: true,
+                            note: localize(option.label),
+                            onClick: () => storyAction('resolve_room', {
+                                option: optionId,
+                                card_instance_id: card.instance_id,
+                            }),
+                        })));
+                    return;
+                }
+                const disabled = (
+                    (optionId === 'event_buy' && Number(player.gold || 0) < 35)
+                    || (optionId === 'lottery_draw' && Number(player.gold || 0) < 50)
+                );
+                container?.append(choiceButton(
+                    localize(option.label) || optionId,
+                    () => storyAction('resolve_room', { option: optionId }),
+                    {
+                        primary: optionId !== 'leave' && optionId !== 'fight_leave',
+                        description: localize(option.description),
+                        disabled,
+                    },
+                ));
+            });
         }
         showView('story-room');
     }
@@ -1255,8 +1598,10 @@
         setText('story-reward-copy', details.join(' '));
         const container = $('story-reward-options');
         container?.replaceChildren();
-        (reward.cards || []).forEach((defId) => {
-            const card = { instance_id: `reward-${defId}`, def_id: defId, upgraded: false };
+        (reward.cards || []).forEach((choice) => {
+            const defId = typeof choice === 'string' ? choice : choice.card_id;
+            const upgraded = Boolean(typeof choice === 'object' && choice.upgraded);
+            const card = { instance_id: `reward-${defId}`, def_id: defId, upgraded };
             container?.append(createStoryCard(card, {
                 onClick: () => storyAction('choose_reward', { card_id: defId }),
             }));
@@ -1292,7 +1637,7 @@
             selectedCombatCardId = '';
             destroyStoryCursorCard();
             $('story-aim-layer')?.classList.add('hidden');
-            if (state.phase === 'room') renderRoom(state);
+            if (state.phase === 'room' || state.phase === 'stage_choice') renderRoom(state);
             else if (state.phase === 'reward') renderReward(state);
             else if (state.phase === 'complete' || state.phase === 'game_over') renderTerminal(state);
             else renderMapView(state);
@@ -1391,8 +1736,11 @@
         $('story-player-target')?.addEventListener('click', (event) => {
             if (event.target?.closest?.('.story-portrait')) playSelectedCombatCard('self');
         });
-        $('story-enemy-target')?.addEventListener('click', (event) => {
-            if (event.target?.closest?.('.story-portrait')) playSelectedCombatCard('enemy');
+        $('story-enemy-group')?.addEventListener('click', (event) => {
+            const actor = event.target?.closest?.('.story-actor-enemy[data-target-id]');
+            if (actor && event.target?.closest?.('.story-portrait')) {
+                playSelectedCombatCard('enemy', actor.dataset.targetId || '');
+            }
         });
         $('story-combat')?.addEventListener('click', (event) => {
             const card = selectedCombatCard(activeRun?.state);
@@ -1414,6 +1762,23 @@
             event.stopImmediatePropagation();
             playSelectedCombatCard(cardTargetKind(card));
         }, true);
+        $('story-card-choice-dialog')?.addEventListener('close', (event) => {
+            const context = cardChoiceContext;
+            cardChoiceContext = null;
+            if (!context) return;
+            const selected = [...context.selected];
+            if (context.mode === 'opening_redraw') {
+                storyAction('opening_redraw', {
+                    selected_card_ids: event.target.returnValue === 'confirm' ? selected : [],
+                });
+                return;
+            }
+            if (event.target.returnValue !== 'confirm') return;
+            if (selected.length < context.spec.minimum || selected.length > context.spec.maximum) return;
+            performSelectedCombatCard(context.targetKind, context.targetId, {
+                [context.spec.payloadKey]: selected,
+            });
+        });
         $('story-reward-skip')?.addEventListener('click', () => storyAction('choose_reward'));
         $('story-terminal-new')?.addEventListener('click', startNewJourney);
         $('story-dev-toggle')?.addEventListener('click', () => setDeveloperMode(!developerModeOpen));

@@ -1207,6 +1207,34 @@ a { font: inherit; }
 .story-card.bloom .card-type-label { color: var(--bloom); background: var(--bloom-bg); }
 .story-card.root .card-type-label { color: var(--root); background: var(--root-bg); }
 .story-card.guard .card-type-label { color: var(--guard); background: var(--guard-bg); }
+.story-card.curse { --story-card-accent: #704b87; border-color: #704b87; }
+.story-card.infect { --story-card-accent: #7e9638; border-color: #7e9638; }
+.story-card.curse .card-name,
+.story-card.curse .card-english-name { color: #704b87; }
+.story-card.infect .card-name,
+.story-card.infect .card-english-name { color: #667d2d; }
+.story-card.curse .card-type-label { color: #704b87; background: #f0e9f4; }
+.story-card.infect .card-type-label { color: #667d2d; background: #edf2df; }
+
+.story-card-tags {
+  min-height: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  margin: 0 7%;
+}
+.story-card-tags:empty { display: none; }
+.story-card-tags span {
+  padding: 1px 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: #4f5968;
+  background: rgba(255, 255, 255, .88);
+  font-size: clamp(6px, 2.6cqi, 9px);
+  font-weight: 700;
+  line-height: 1.1;
+}
 
 .story-card .card-effect {
   min-height: 0;
@@ -1387,7 +1415,18 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   font-weight: 700;
 }
 .story-actor-player { justify-self: center; }
-.story-enemy-group { justify-self: center; }
+.story-enemy-group {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0px, .45vw, 7px);
+  justify-self: stretch;
+}
+.story-enemy-group .story-actor {
+  --story-fighter-scale: var(--story-enemy-scale, .82);
+  margin-inline: clamp(-28px, calc((var(--story-enemy-count) - 1) * -8px), 0px);
+}
 .story-actor-name {
   padding: 4px 12px;
   border: 1px solid var(--story-line-soft);
@@ -2018,6 +2057,55 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .story-pile-dialog .story-dialog-actions { margin-top: 12px; }
 #story-pile-close { min-width: 94px; }
 
+.story-card-choice-dialog {
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(78vh, 720px);
+}
+.story-card-choice-dialog form { min-height: 260px; }
+.story-card-choice-select-grid {
+  min-height: 170px;
+  max-height: min(52vh, 480px);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  align-items: start;
+  gap: 10px;
+  padding: 8px;
+  overflow: auto;
+}
+.story-card-choice-select-item {
+  position: relative;
+  min-width: 0;
+  padding: 4px;
+  border: 2px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+.story-card-choice-select-item .story-card.card {
+  width: 100%;
+  min-width: 0;
+  pointer-events: none;
+}
+.story-card-choice-select-item.is-selected {
+  border-color: #3f8e58;
+  background: rgba(63, 142, 88, .11);
+  box-shadow: 0 0 0 3px rgba(63, 142, 88, .12);
+}
+.story-card-choice-select-item.is-selected::after {
+  content: '✓';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #3f8e58;
+  font-weight: 900;
+}
+
 @media (max-width: 980px), (max-height: 620px) {
   .story-actor { --story-fighter-scale: .78; }
   .story-health-wrap { width: 142px; }
@@ -2025,7 +2113,18 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   .story-icon-counter img { width: 14px; height: 14px; }
   .story-health-track { height: 14px; }
   .story-hand-card { width: clamp(62px, min(8.2vw, 20vh), 98px); }
-  .story-combat-controls .story-pile-command { font-size: 9px; }
+  .story-combat-controls {
+    width: 150px;
+    grid-template-columns: repeat(3, 40px);
+    justify-content: end;
+  }
+  .story-combat-controls .story-pile-command {
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 9px;
+  }
+  .story-combat-controls .story-pile-command span { display: none; }
+  #story-end-turn { width: 150px; min-height: 54px; }
 }
 
 @media (max-width: 680px) {
