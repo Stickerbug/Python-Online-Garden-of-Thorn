@@ -444,7 +444,7 @@
     <section class="solo-deck-panel">
       <div class="solo-deck-head">
         <h3 id="solo-deck-a-title">我方牌堆</h3>
-        <span id="solo-deck-a-count">0/100</span>
+        <span id="solo-deck-a-count">0/50</span>
         <button id="btn-solo-shuffle-a" class="btn btn-small solo-shuffle-btn" type="button">打乱顺序</button>
         <button id="btn-solo-clear-a" class="btn btn-small btn-danger solo-clear-btn" type="button">清空牌组</button>
       </div>
@@ -453,7 +453,7 @@
     <section class="solo-deck-panel">
       <div class="solo-deck-head">
         <h3 id="solo-deck-b-title">对方牌堆</h3>
-        <span id="solo-deck-b-count">0/100</span>
+        <span id="solo-deck-b-count">0/50</span>
         <button id="btn-solo-shuffle-b" class="btn btn-small solo-shuffle-btn" type="button">打乱顺序</button>
         <button id="btn-solo-clear-b" class="btn btn-small btn-danger solo-clear-btn" type="button">清空牌组</button>
       </div>
@@ -617,8 +617,17 @@
     <div id="classic-fighter-ally" class="classic-fighter fighter-ally hidden"></div>
   </div>
   <div id="classic-log-drawer" class="classic-log-drawer">
-    <button id="classic-log-toggle" class="classic-log-toggle" type="button">战斗日志</button>
-    <div id="classic-log-content" class="classic-log-content"></div>
+    <div id="classic-battle-panel-tabs" class="battle-panel-tabs classic-battle-panel-tabs" role="tablist">
+      <button id="classic-log-toggle" class="classic-log-toggle battle-panel-tab active" type="button" role="tab" aria-selected="true" data-battle-panel-tab="log">
+        <span class="battle-panel-tab-label">战斗日志</span>
+      </button>
+      <button id="classic-spectator-list-toggle" class="classic-log-toggle battle-panel-tab" type="button" role="tab" aria-selected="false" data-battle-panel-tab="spectators">
+        <span class="battle-panel-tab-label">观战列表</span>
+        <span class="battle-panel-tab-count">(0)</span>
+      </button>
+    </div>
+    <div id="classic-log-content" class="classic-log-content" data-battle-panel-content="log"></div>
+    <div id="classic-spectator-list" class="battle-spectator-list classic-spectator-list hidden" data-battle-panel-content="spectators"></div>
     <div id="classic-chat-row" class="classic-chat-row">
       <select id="classic-game-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
       <input type="text" id="classic-game-chat-input" placeholder="聊天..." maxlength="200">
@@ -678,8 +687,17 @@
       <span>取消打出</span>
     </div>
     <div id="battle-log" class="battle-log">
-      <div class="log-header">战斗日志</div>
-      <div class="log-content"></div>
+      <div id="battle-panel-tabs" class="battle-panel-tabs log-header" role="tablist">
+        <button class="battle-panel-tab active" type="button" role="tab" aria-selected="true" data-battle-panel-tab="log">
+          <span class="battle-panel-tab-label">战斗日志</span>
+        </button>
+        <button class="battle-panel-tab" type="button" role="tab" aria-selected="false" data-battle-panel-tab="spectators">
+          <span class="battle-panel-tab-label">观战列表</span>
+          <span class="battle-panel-tab-count">(0)</span>
+        </button>
+      </div>
+      <div class="log-content" data-battle-panel-content="log"></div>
+      <div id="battle-spectator-list" class="battle-spectator-list hidden" data-battle-panel-content="spectators"></div>
       <div class="controls-group controls-right battle-log-chat-row">
         <select id="game-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
         <input type="text" id="game-chat-input" placeholder="聊天..." maxlength="200">
@@ -1055,7 +1073,7 @@
 (() => {
   const T = {
     en: {
-      bootSub: 'Loading...', bootStep: 'Preparing...', subtitle: 'LAN card battle', nickname: 'Nickname', nicknamePlaceholder: 'Enter nickname',
+      bootSub: 'Loading...', bootStep: 'Preparing...', subtitle: 'Online multiplayer card battle', nickname: 'Nickname', nicknamePlaceholder: 'Enter nickname',
       enterLobby: 'Multiplayer', storyMode: 'Story Mode', soloTraining: 'Solo Training', settings: 'Settings', loadLast: 'Load Last', saveDecks: 'Save Decks', startTraining: 'Start Training', back: 'Back', clearDeck: 'Clear Deck', shuffleDeck: 'Shuffle',
       searchCards: 'Search cards', soloDeckA: 'Your Deck', soloDeckB: 'Opponent Deck', soloEventA: 'Your opening event', soloEventB: 'Opponent opening event',
       lobby: 'Lobby', onlinePlayers: 'Online Players', onlineCount: 'Online: 0', ongoingGames: 'Ongoing Games', chat: 'Chat', messagePlaceholder: 'Type a message...', send: 'Send', backHome: 'Back to Home',
@@ -1077,8 +1095,8 @@
       rotatePrompt: '请横屏游玩', rotateSub: '请旋转至横屏', continueEnter: '继续进入'
     }
   };
-  T.fr = { ...T.en, subtitle: 'Combat de cartes en réseau local', nickname: 'Pseudo', nicknamePlaceholder: 'Saisir un pseudo', enterLobby: 'Multijoueur', storyMode: 'Mode histoire', soloTraining: 'Entraînement solo', settings: 'Paramètres', loadLast: 'Charger', saveDecks: 'Sauver decks', startTraining: 'Commencer', back: 'Retour', shuffleDeck: 'Mélanger', searchCards: 'Chercher cartes', soloDeckA: 'Votre deck', soloDeckB: 'Deck adverse', soloEventA: 'Événement de départ', soloEventB: 'Événement adverse', lobby: 'Salon', onlinePlayers: 'Joueurs en ligne', onlineCount: 'En ligne: 0', ongoingGames: 'Parties en cours', messagePlaceholder: 'Saisir un message...', send: 'Envoyer', backHome: "Retour à l'accueil", draft: 'Phase de draft', reroll: 'Relancer', selectEvent: 'Choisir événement', selectEventDesc: 'Choisir un événement de départ', opponent: 'Adversaire', oppInfo: 'Main:0 Deck:0', battleLog: 'Journal de combat', you: 'Vous', youInfo: 'Main:0 Deck:0 Défausse:0', dragToPlay: 'Glisser pour jouer', endTurn: 'Fin du tour', viewDeck: 'Voir la pioche', viewDiscard: 'Voir la défausse', viewExile: "Voir l’exil", setNextDraw: 'Fixer prochaine pioche', pauseEdit: 'Pause édition', surrender: 'Abandonner', switchPerspective: 'Changer de perspective', leaveSpectate: "Quitter l'observation", rematch: 'Rejouer', returnLobby: 'Retour au salon', modEditor: 'Éditeur de mod', modPlaceholder: 'Collez ou modifiez le JSON du mod ici...', loadMod: 'Charger le mod', save: 'Enregistrer', validateJson: 'Valider le JSON', appearance: 'Apparence', theme: 'Thème', light: 'Clair', dark: 'Sombre', language: 'Langue', landscapeMode: 'Activer le mode paysage', server: 'Serveur', address: 'Adresse', serverPlaceholder: 'Laisser vide pour le serveur par défaut', mods: 'Mods', noMods: 'Aucun fichier de mod', cancel: 'Annuler', rotatePrompt: 'Veuillez jouer en mode paysage', rotateSub: 'Passez en mode paysage', continueEnter: 'Continuer' };
-  T.ja = { ...T.en, subtitle: 'LANカード対戦', nickname: 'ニックネーム', nicknamePlaceholder: 'ニックネームを入力', enterLobby: 'マルチプレイ', storyMode: 'ストーリーモード', soloTraining: 'ソロ練習場', settings: '設定', loadLast: '前回を読み込む', saveDecks: 'デッキ保存', startTraining: '開始', shuffleDeck: 'シャッフル', searchCards: 'カード検索', soloDeckA: '自分のデッキ', soloDeckB: '相手デッキ', soloEventA: '自分の開局イベント', soloEventB: '相手の開局イベント', lobby: 'ロビー', onlinePlayers: 'オンラインプレイヤー', onlineCount: 'オンライン: 0', ongoingGames: '進行中の対戦', messagePlaceholder: 'メッセージを入力...', send: '送信', backHome: 'ホームに戻る', draft: 'ドラフトフェイズ', reroll: 'リロール', selectEvent: 'イベント選択', selectEventDesc: 'オープニングイベントを選択', opponent: '相手', oppInfo: '手札:0 デッキ:0', battleLog: 'バトルログ', you: 'あなた', youInfo: '手札:0 デッキ:0 捨て札:0', dragToPlay: 'ドラッグしてプレイ', endTurn: 'ターン終了', viewDeck: '山札を見る', viewDiscard: '捨て札を見る', viewExile: '放逐を見る', setNextDraw: '次のドロー設定', pauseEdit: '中断して編集', surrender: '降参', switchPerspective: '視点切替', leaveSpectate: '観戦終了', rematch: '再戦', returnLobby: 'ロビーに戻る', modEditor: 'Modエディター', modPlaceholder: 'ここにMod JSONを貼り付けるか編集...', loadMod: 'Modを読み込む', validateJson: 'JSONを検証', appearance: '外観', theme: 'テーマ', light: 'ライト', dark: 'ダーク', language: '言語', landscapeMode: '横画面モードを有効化', server: 'サーバー', address: 'アドレス', serverPlaceholder: '空欄なら既定サーバーを使用', mods: 'Mod', noMods: 'Modファイルが見つかりません', cancel: 'キャンセル', rotatePrompt: '横向きでプレイしてください', rotateSub: '横向きにしてください', continueEnter: '続ける' };
+  T.fr = { ...T.en, subtitle: 'Combat de cartes multijoueur en ligne', nickname: 'Pseudo', nicknamePlaceholder: 'Saisir un pseudo', enterLobby: 'Multijoueur', storyMode: 'Mode histoire', soloTraining: 'Entraînement solo', settings: 'Paramètres', loadLast: 'Charger', saveDecks: 'Sauver decks', startTraining: 'Commencer', back: 'Retour', shuffleDeck: 'Mélanger', searchCards: 'Chercher cartes', soloDeckA: 'Votre deck', soloDeckB: 'Deck adverse', soloEventA: 'Événement de départ', soloEventB: 'Événement adverse', lobby: 'Salon', onlinePlayers: 'Joueurs en ligne', onlineCount: 'En ligne: 0', ongoingGames: 'Parties en cours', messagePlaceholder: 'Saisir un message...', send: 'Envoyer', backHome: "Retour à l'accueil", draft: 'Phase de draft', reroll: 'Relancer', selectEvent: 'Choisir événement', selectEventDesc: 'Choisir un événement de départ', opponent: 'Adversaire', oppInfo: 'Main:0 Deck:0', battleLog: 'Journal de combat', you: 'Vous', youInfo: 'Main:0 Deck:0 Défausse:0', dragToPlay: 'Glisser pour jouer', endTurn: 'Fin du tour', viewDeck: 'Voir la pioche', viewDiscard: 'Voir la défausse', viewExile: "Voir l’exil", setNextDraw: 'Fixer prochaine pioche', pauseEdit: 'Pause édition', surrender: 'Abandonner', switchPerspective: 'Changer de perspective', leaveSpectate: "Quitter l'observation", rematch: 'Rejouer', returnLobby: 'Retour au salon', modEditor: 'Éditeur de mod', modPlaceholder: 'Collez ou modifiez le JSON du mod ici...', loadMod: 'Charger le mod', save: 'Enregistrer', validateJson: 'Valider le JSON', appearance: 'Apparence', theme: 'Thème', light: 'Clair', dark: 'Sombre', language: 'Langue', landscapeMode: 'Activer le mode paysage', server: 'Serveur', address: 'Adresse', serverPlaceholder: 'Laisser vide pour le serveur par défaut', mods: 'Mods', noMods: 'Aucun fichier de mod', cancel: 'Annuler', rotatePrompt: 'Veuillez jouer en mode paysage', rotateSub: 'Passez en mode paysage', continueEnter: 'Continuer' };
+  T.ja = { ...T.en, subtitle: 'オンラインカード対戦', nickname: 'ニックネーム', nicknamePlaceholder: 'ニックネームを入力', enterLobby: 'マルチプレイ', storyMode: 'ストーリーモード', soloTraining: 'ソロ練習場', settings: '設定', loadLast: '前回を読み込む', saveDecks: 'デッキ保存', startTraining: '開始', shuffleDeck: 'シャッフル', searchCards: 'カード検索', soloDeckA: '自分のデッキ', soloDeckB: '相手デッキ', soloEventA: '自分の開局イベント', soloEventB: '相手の開局イベント', lobby: 'ロビー', onlinePlayers: 'オンラインプレイヤー', onlineCount: 'オンライン: 0', ongoingGames: '進行中の対戦', messagePlaceholder: 'メッセージを入力...', send: '送信', backHome: 'ホームに戻る', draft: 'ドラフトフェイズ', reroll: 'リロール', selectEvent: 'イベント選択', selectEventDesc: 'オープニングイベントを選択', opponent: '相手', oppInfo: '手札:0 デッキ:0', battleLog: 'バトルログ', you: 'あなた', youInfo: '手札:0 デッキ:0 捨て札:0', dragToPlay: 'ドラッグしてプレイ', endTurn: 'ターン終了', viewDeck: '山札を見る', viewDiscard: '捨て札を見る', viewExile: '放逐を見る', setNextDraw: '次のドロー設定', pauseEdit: '中断して編集', surrender: '降参', switchPerspective: '視点切替', leaveSpectate: '観戦終了', rematch: '再戦', returnLobby: 'ロビーに戻る', modEditor: 'Modエディター', modPlaceholder: 'ここにMod JSONを貼り付けるか編集...', loadMod: 'Modを読み込む', validateJson: 'JSONを検証', appearance: '外観', theme: 'テーマ', light: 'ライト', dark: 'ダーク', language: '言語', landscapeMode: '横画面モードを有効化', server: 'サーバー', address: 'アドレス', serverPlaceholder: '空欄なら既定サーバーを使用', mods: 'Mod', noMods: 'Modファイルが見つかりません', cancel: 'キャンセル', rotatePrompt: '横向きでプレイしてください', rotateSub: '横向きにしてください', continueEnter: '続ける' };
   const t = T[window.__bootLang] || T.zh;
   const setText = (sel, value) => {
     const el = document.querySelector(sel);
@@ -1096,7 +1114,7 @@
   setText('.boot-sub', t.bootSub); setText('#boot-step', t.bootStep); setText('#view-login .subtitle', t.subtitle); setText('label[for="input-nickname"]', t.nickname); setPlaceholder('#input-nickname', t.nicknamePlaceholder);
   setText('#btn-connect', t.enterLobby); setText('#btn-story-mode', t.storyMode); setText('#btn-solo-training', t.soloTraining); setText('#btn-open-settings', t.settings); setText('#btn-card-gallery', window.__bootLang === 'zh' ? '图鉴' : 'Gallery'); setText('#btn-replays-top', window.__bootLang === 'zh' ? '回放' : 'Replays'); setText('#solo-title', t.soloTraining); setText('#btn-solo-load', t.loadLast); setText('#btn-solo-save', t.saveDecks); setText('#btn-solo-start', t.startTraining); setText('#btn-solo-back', t.back); setText('#btn-solo-shuffle-a', t.shuffleDeck); setText('#btn-solo-shuffle-b', t.shuffleDeck); setPlaceholder('#solo-card-search', t.searchCards); setText('#solo-deck-a-title', t.soloDeckA); setText('#solo-deck-b-title', t.soloDeckB); setText('#solo-event-a-label', t.soloEventA); setText('#solo-event-b-label', t.soloEventB);
   setText('#view-lobby .lobby-header h2', t.lobby); setText('#view-lobby .lobby-left .lobby-section:first-child h3', t.onlinePlayers); setText('#lobby-online-count', t.onlineCount); setText('#view-lobby .lobby-left .lobby-section:last-child h3', t.ongoingGames); setText('#view-lobby .lobby-right .lobby-section h3', t.chat); setPlaceholder('#lobby-chat-input', t.messagePlaceholder); setText('#btn-lobby-chat-send', t.send); setText('#btn-lobby-back', t.backHome);
-  setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); setText('#battle-log .log-header', t.battleLog); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-view-discard', t.viewDiscard); setText('#btn-view-exile', t.viewExile); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-prediction-target', t.predictionTarget || '修改预测目标'); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-spectate-view-deck', t.viewDeck); setText('#btn-spectate-view-discard', t.viewDiscard); setText('#btn-spectate-view-exile', t.viewExile); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
+  setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); document.querySelectorAll('[data-battle-panel-tab="log"] .battle-panel-tab-label').forEach(el => { el.textContent = t.battleLog; }); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-view-discard', t.viewDiscard); setText('#btn-view-exile', t.viewExile); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-prediction-target', t.predictionTarget || '修改预测目标'); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-spectate-view-deck', t.viewDeck); setText('#btn-spectate-view-discard', t.viewDiscard); setText('#btn-spectate-view-exile', t.viewExile); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
   setText('#btn-rematch', t.rematch); setText('#btn-return-lobby', t.returnLobby); setText('#btn-report-match', (window.__bootLang === 'zh' ? '举报本局' : 'Report Match')); setText('#view-mod-editor h2', t.modEditor); setPlaceholder('#mod-editor-area', t.modPlaceholder); setText('#btn-mod-load', t.loadMod); setText('#btn-mod-save', t.save); setText('#btn-mod-validate', t.validateJson); setText('#btn-mod-back', t.back);
   setText('#settings-title', t.settings); setText('#settings-tab-appearance', t.appearance); setText('#settings-tab-server', t.server); setText('#settings-tab-mods', t.mods); setText('#settings-tab-audio', t.audio); setText('#settings-section-appearance', t.appearance); setText('#settings-label-theme', t.theme); setText('#settings-theme-select option[value=\"light\"]', t.light); setText('#settings-theme-select option[value=\"dark\"]', t.dark); setText('#settings-label-ui-style', t.uiStyle); setText('#settings-ui-style-select option[value=\"minimal\"]', t.minimal); setText('#settings-ui-style-select option[value=\"classic\"]', t.classic); setText('#settings-label-lang', t.language); setText('#settings-label-landscape-mode', t.landscapeMode); setText('#settings-section-server', t.server); setText('#settings-label-server', t.address); setPlaceholder('#settings-server-input', t.serverPlaceholder); setText('#settings-section-mods', t.mods); setText('#settings-section-audio', t.audio); setText('#settings-no-mods', t.noMods); setText('#btn-settings-close', t.ok); setText('#game-prompt-cancel', t.cancel); setText('.rotate-text', t.rotatePrompt); setText('.rotate-text-en', t.rotateSub); setText('#btn-dismiss-rotate', t.continueEnter);
   const app = document.getElementById('app'); if (app) app.style.visibility = 'visible';

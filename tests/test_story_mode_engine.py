@@ -1,11 +1,20 @@
+from pathlib import Path
+
 import pytest
 
 from story_content import (
     STORY_CARDS,
+    STORY_ENEMIES,
     STORY_REWARD_CARD_IDS,
     validate_story_content,
 )
-from story_engine import StoryActionError, _new_card, apply_story_action
+from story_engine import (
+    StoryActionError,
+    _gain_elixir,
+    _gain_magic,
+    _new_card,
+    apply_story_action,
+)
 from story_mode import STORY_FLOOR_COUNT, build_initial_story_state, generate_story_map
 
 
@@ -38,6 +47,17 @@ def _inject_hand_card(state, def_id, upgraded=False):
     return card
 
 
+def test_story_resources_can_exceed_legacy_display_maximums():
+    state, _ = _begin_combat('unbounded-story-resources')
+    events = []
+    _gain_elixir(state, 25000, events)
+    _gain_magic(state, 25000, events)
+    assert state['combat']['elixir'] > state['player']['max_elixir']
+    assert state['combat']['magic'] > state['player']['max_magic']
+    assert {'type': 'elixir', 'amount': 25000} in events
+    assert {'type': 'magic', 'amount': 25000} in events
+
+
 def test_story_content_is_valid_and_reward_pool_excludes_special_cards():
     validate_story_content()
     assert len(STORY_CARDS) >= 60
@@ -49,6 +69,15 @@ def test_story_content_is_valid_and_reward_pool_excludes_special_cards():
         and STORY_CARDS[card_id]['rarity'] not in ('super', 'special')
         for card_id in STORY_REWARD_CARD_IDS
     )
+
+
+def test_every_story_enemy_has_a_packaged_image():
+    project_root = Path(__file__).resolve().parents[1]
+    for enemy_id, definition in STORY_ENEMIES.items():
+        image_url = definition.get('image_url')
+        assert image_url, enemy_id
+        assert image_url.startswith('/static/assets/story-enemies/'), enemy_id
+        assert (project_root / image_url.removeprefix('/')).is_file(), enemy_id
 
 
 def test_story_map_has_sixteen_floors_no_early_elites_and_no_crossing_edges():

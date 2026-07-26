@@ -12,7 +12,7 @@ from cards import (
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
     create_deck_from_draft, ERROR_CARD_ID, normalize_card_flag, normalize_card_flags,
-    clamp_card_layer, clamp_card_extra_hits, clamp_damage_hits, _new_instance_id,
+    clamp_card_layer, clamp_card_extra_hits, clamp_card_power, clamp_damage_hits, _new_instance_id,
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
@@ -22,6 +22,7 @@ from damage_types import (
     DAMAGE_TYPE_MAGIC, DAMAGE_TYPE_PHYSICAL, damage_type_tag, infer_damage_type,
     is_status_damage_tag, status_damage_tag,
 )
+from runtime_budget import ActionWorkBudgetExceeded
 
 CORRUPTION_DAMAGE_MULTIPLIER = 1.5
 LATE_ROUND_FIRE_START = 10
@@ -759,6 +760,56 @@ class GameEngine:
         12: '#A34F5E',
     }
     MAGIC_CARD_POOL = ['MagicBone', 'MagicStinger', 'MagicSewage', 'MagicNazar', 'MagicBubble']
+    DEEPCOPY_SHARED_ATTRS = (
+        'v2_loadout',
+        'v2_ui_components',
+        'v2_tag_defs',
+        'v2_status_defs',
+        'v2_opening_event_defs',
+        'v2_event_hooks',
+        'allowed_card_ids',
+        'available_builtin_setup_card_ids',
+    )
+    DEEPCOPY_SHALLOW_ATTRS = (
+        '_solo_undo_stack',
+        '_solo_redo_stack',
+    )
+
+    def __deepcopy__(self, memo):
+        existing = memo.get(id(self))
+        if existing is not None:
+            return existing
+        clone = self.__class__.__new__(self.__class__)
+        memo[id(self)] = clone
+        for attr, value in self.__dict__.items():
+            if attr in self.DEEPCOPY_SHARED_ATTRS:
+                setattr(clone, attr, value)
+            elif attr in self.DEEPCOPY_SHALLOW_ATTRS:
+                setattr(clone, attr, copy.copy(value))
+            else:
+                setattr(clone, attr, copy.deepcopy(value, memo))
+        clone._bind_player_callbacks()
+        return clone
+
+    def _begin_action_work_budget(self, limit: int):
+        limit = max(1, int(limit or 1))
+        self._action_work_budget_initial = limit
+        self._action_work_budget_remaining = limit
+
+    def _end_action_work_budget(self):
+        initial = int(getattr(self, '_action_work_budget_initial', 0) or 0)
+        remaining = int(getattr(self, '_action_work_budget_remaining', initial) or 0)
+        self.__dict__.pop('_action_work_budget_initial', None)
+        self.__dict__.pop('_action_work_budget_remaining', None)
+        return max(0, initial - remaining)
+
+    def _consume_action_work(self, units: int = 1):
+        if '_action_work_budget_remaining' not in self.__dict__:
+            return
+        remaining = int(self._action_work_budget_remaining) - max(1, int(units or 1))
+        self._action_work_budget_remaining = remaining
+        if remaining < 0:
+            raise ActionWorkBudgetExceeded('isolated action work budget exceeded')
 
     _EFFECT_ALIASES = {
         'damage': 'deal_damage',
@@ -937,11 +988,15 @@ class GameEngine:
         else:
             ps.bandage_trigger_boundary_id = int(getattr(self, '_turn_boundary_serial', 0) or 0)
 
-    def _expire_bandages_before_action(self):
+    def _expire_bandages_before_action(self, action_player_id: Optional[int] = None):
+        if action_player_id is None:
+            action_player_id = int(getattr(self, 'current_player', -1) or 0)
         boundary_id = int(getattr(self, '_turn_boundary_id', -1) or -1)
         expired = []
         for player_id, ps in enumerate(self.players):
             if not bool(getattr(ps, 'bandage_death_pending', False)):
+                continue
+            if not self._same_timer_side(player_id, action_player_id):
                 continue
             trigger_boundary_id = int(getattr(ps, 'bandage_trigger_boundary_id', -1) or -1)
             if bool(getattr(self, '_turn_boundary_active', False)) and trigger_boundary_id == boundary_id:
@@ -950,7 +1005,7 @@ class GameEngine:
             ps.bandage_death_pending = False
             ps.bandage_trigger_boundary_id = -1
             self._clear_invincible_state(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，在行动前死亡！")
+            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，在己方下一名可行动玩家行动前死亡！")
             expired.append(player_id)
         if not expired:
             return
@@ -966,8 +1021,6 @@ class GameEngine:
 
     def _set_invincible_until_next_own_turn_end(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
-            return
-        if self._is_status_immune(player_id):
             return
         ps = self.players[player_id]
         ps.invincible = True
@@ -1355,6 +1408,8 @@ class GameEngine:
             return 0
         ps = self.players[target_id]
         status = str(status or '').strip()
+        if status in ('invincible', '无敌'):
+            return 0
         if status in ('status_immune', 'immune', '状态免疫'):
             return 1 if self._is_status_immune(target_id) else 0
         if self._is_status_immune(target_id) and status not in ('status_immune', 'immune', '状态免疫'):
@@ -1373,8 +1428,6 @@ class GameEngine:
             'equipment_protection': ps.equipment_protection,
             '装备摧毁保护': ps.equipment_protection,
             '装备保护': ps.equipment_protection,
-            'invincible': 1 if ps.invincible else 0,
-            '无敌': 1 if ps.invincible else 0,
             'untargetable': int(getattr(ps, 'untargetable', 0) or 0),
             '不可选中': int(getattr(ps, 'untargetable', 0) or 0),
             '邪眼': self._nazar_status_value(target_id),
@@ -2239,6 +2292,8 @@ class GameEngine:
             return int(ps.max_magic)
         if prop == 'armor':
             return int(ps.armor)
+        if prop == 'invincible':
+            return 1 if bool(ps.invincible) else 0
         if prop in ('poison', 'fire', 'toxic', 'equipment_protection',
                     'attack_blocked', 'attack_only',
                     'nazar_big_hits', 'sluggish', 'overload', 'foresight', 'fracture',
@@ -2250,7 +2305,7 @@ class GameEngine:
             if self._is_status_immune(target_id):
                 return 0
             return int(getattr(ps, prop, 0))
-        if prop in ('invincible', 'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
+        if prop in ('untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
                     'negate_next_skill', 'nazar_active'):
             if self._is_status_immune(target_id):
                 return 0
@@ -2314,7 +2369,9 @@ class GameEngine:
             'nazar_big_hits', 'sluggish', 'overload', 'foresight', 'fracture', 'stagnation',
             'blind', 'heal_block', 'weakness', 'bleed', 'skip_turn',
         }
-        if value > 0 and self._is_status_immune(target_id) and (prop in status_numeric_props or prop in bool_props):
+        if value > 0 and self._is_status_immune(target_id) and (
+            prop in status_numeric_props or (prop in bool_props and prop != 'invincible')
+        ):
             return None
         if prop in non_negative:
             if prop == 'hand_limit_bonus':
@@ -4551,7 +4608,7 @@ class GameEngine:
         self._run_ocean_auto_cards_turn_start(player_id)
         if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
-        self._expire_bandages_before_action()
+        self._expire_bandages_before_action(player_id)
         if self.game_over:
             return
         if self.players[player_id].health <= 0:
@@ -4785,7 +4842,7 @@ class GameEngine:
         if not (0 <= player_id < len(self.players)):
             return 0
         ps = self.players[player_id]
-        if ps.invincible and not self._is_status_immune(player_id):
+        if ps.invincible:
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
@@ -5350,7 +5407,7 @@ class GameEngine:
                 self._set_invincible_until_next_own_turn_end(player_id)
                 ps.bandage_active = False
                 self._mark_bandage_death_pending(player_id)
-                self.log_msg(f"{self.pn(player_id)}的绷带发动！下一个回合交替结算完成后，在下一名可行动玩家行动前死亡")
+                self.log_msg(f"{self.pn(player_id)}的绷带发动！在己方下一名可行动玩家行动前死亡")
                 self._check_game_over()
                 return
             for card in ps.hand[:]:
@@ -6670,10 +6727,14 @@ class GameEngine:
             pass
         for hand_card in list(getattr(self.players[player_id], 'hand', []) or []):
             if self._card_is(hand_card, 'MagicTrident', 'ocean:magic_trident'):
-                hand_card.power_value = max(0, int(getattr(hand_card, 'power_value', 0) or 0) + 5 * int(amount))
+                hand_card.power_value = clamp_card_power(
+                    max(0, int(getattr(hand_card, 'power_value', 0) or 0) + 5 * int(amount))
+                )
                 hand_card.instance_flags.add('power')
             elif self._card_is(hand_card, 'MagicPearl', 'ocean:magic_pearl'):
-                hand_card.power_value = max(0, int(getattr(hand_card, 'power_value', 0) or 0) + 2 * int(amount))
+                hand_card.power_value = clamp_card_power(
+                    max(0, int(getattr(hand_card, 'power_value', 0) or 0) + 2 * int(amount))
+                )
                 hand_card.instance_flags.add('power')
 
 
@@ -7053,8 +7114,6 @@ class GameEngine:
                 self.log_msg(log or f"{self.pn(target_id)}血量设为{amount}")
 
     def _atomic_set_invincible(self, player_id, card, params, log, choice, context):
-        if self._status_application_blocked(player_id, 'invincible'):
-            return
         self._set_invincible_until_next_own_turn_end(player_id)
         self.log_msg(log or f"{self.pn(player_id)}获得无敌直到下一个自己回合结束")
 
@@ -7153,7 +7212,7 @@ class GameEngine:
         if self._status_application_blocked(player_id, 'bandage_active'):
             return
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；下一个回合交替结算完成后死亡")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；在己方下一名可行动玩家行动前死亡")
 
     def _atomic_equip_sponge(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
@@ -7209,7 +7268,7 @@ class GameEngine:
         if self._status_application_blocked(player_id, 'bandage_active'):
             return
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；下一个回合交替结算完成后死亡")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；在己方下一名可行动玩家行动前死亡")
 
     def _atomic_on_fatal_set_health_exile(self, player_id, card, params, log, choice, context):
         health_amount = params.get('health', 5)
@@ -7282,14 +7341,12 @@ class GameEngine:
         status = params.get('status', '')
         ps = self.players[target_id]
         status_map = {'poison': 'poison', 'burn': 'fire',
-                      'toxic': 'toxic', 'dodge': 'dodge', 'invincible': 'invincible',
+                      'toxic': 'toxic', 'dodge': 'dodge',
                       'stagnation': 'stagnation', 'blind': 'blind',
                       'untargetable': 'untargetable', 'equip_protection': 'equipment_protection'}
         attr = status_map.get(status)
         if attr and hasattr(ps, attr):
-            if attr == 'invincible':
-                self._clear_invincible_state(target_id)
-            elif isinstance(getattr(ps, attr), bool):
+            if isinstance(getattr(ps, attr), bool):
                 setattr(ps, attr, False)
             else:
                 setattr(ps, attr, 0)
@@ -7669,7 +7726,7 @@ class GameEngine:
 
         for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
             values = [int(getattr(c, attr, 0) or 0) for c in cards]
-            setattr(keep, attr, max(values) if attr == 'power_value' else max(0, max(values)))
+            setattr(keep, attr, clamp_card_power(max(values)) if attr == 'power_value' else max(0, max(values)))
 
         # Layered special-effect tags remain active if any merged card had them.
         keep.instance_flags.update(*(getattr(c, 'instance_flags', set()) or set() for c in cards))
@@ -8975,6 +9032,7 @@ class GameEngine:
         self._bio_draining_auto_play = True
         try:
             while queue and not self.game_over:
+                self._consume_action_work(20)
                 if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
                     break
                 entry = queue.pop(0)
@@ -9100,7 +9158,7 @@ class GameEngine:
         """Distribute Power across all physical segments emitted by one Bio effect."""
         if card is None:
             return 0
-        original_power = int(getattr(card, 'power_value', 0) or 0)
+        original_power = clamp_card_power(getattr(card, 'power_value', 0) or 0)
         fission_level = max(1, int(getattr(card, 'fission_level', 1) or 1))
         segment_count = max(1, fission_level * max(1, int(hits_per_fission or 1)))
         if original_power != 0 and segment_count > 1:
@@ -9110,7 +9168,7 @@ class GameEngine:
     @staticmethod
     def _bio_restore_segmented_power(card: Optional[CardInstance], original_power: int):
         if card is not None:
-            card.power_value = int(original_power or 0)
+            card.power_value = clamp_card_power(original_power)
 
     def _jurassic_active_equipment_targeting(self, target_id: int, *ids: str):
         for owner_id, eq in self._iter_equipment_targeting_player(target_id):
@@ -9365,7 +9423,7 @@ class GameEngine:
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             self._mark_bandage_death_pending(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带将在下一个回合交替结算完成后结束")
+            self.log_msg(f"{self.pn(player_id)}的绷带将在己方下一名可行动玩家行动前结束")
         # Fracture: clear at end of own turn. Status immunity suppresses the effect, not decay.
         if ps.fracture > 0:
             ps.fracture = 0
@@ -9776,7 +9834,6 @@ class GameEngine:
                 'equipment_protection': ps.equipment_protection > 0,
                 '装备摧毁保护': ps.equipment_protection > 0,
                 '装备保护': ps.equipment_protection > 0,
-                'invincible': bool(ps.invincible),
                 'untargetable': bool(ps.untargetable),
             }
             return bool(status_map.get(status, False))
@@ -10469,6 +10526,7 @@ class GameEngine:
             self._active_choice = choice
         try:
             for eff in effects or []:
+                self._consume_action_work(2)
                 et = eff if isinstance(eff, str) else self._effect_type(eff)
                 pm = {} if isinstance(eff, str) else self._effect_params(eff)
                 lg = None if isinstance(eff, str) else eff.get('log')
@@ -10496,6 +10554,8 @@ class GameEngine:
                                   'countdown_var', 'cost_e', 'cost_m'):
                         self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue):
+                    raise
+                except ActionWorkBudgetExceeded:
                     raise
                 except Exception as exc:
                     self._log_mod_runtime_error(et, exc, player_id, card)
@@ -11565,6 +11625,7 @@ class GameEngine:
                              target_id: Optional[int] = None, equipment: Optional[EquipmentInstance] = None,
                              equipment_owner_id: Optional[int] = None, choice: Optional[dict] = None,
                              extra_context: Optional[dict] = None):
+        self._consume_action_work()
         try:
             card_user_id = int(source_id)
         except (TypeError, ValueError):
@@ -11593,6 +11654,7 @@ class GameEngine:
         if isinstance(extra_context, dict):
             context.update(extra_context)
         for owner_id, listener_card, _ in list(self._iter_event_listener_cards()):
+            self._consume_action_work(2)
             if getattr(listener_card, 'instance_id', None) == event_card_id:
                 continue
             if not self._has_card_event(listener_card.card_def, event_name):
@@ -11611,7 +11673,7 @@ class GameEngine:
         if not (0 <= player_id < len(self.players)):
             return False
         ps = self.players[player_id]
-        if (ps.bandage_active or ps.invincible) and not self._is_status_immune(player_id):
+        if ps.invincible or (ps.bandage_active and not self._is_status_immune(player_id)):
             return True
         for card in list(ps.hand):
             if getattr(card, 'def_id', '') == 'Yggdrasil':
@@ -12538,6 +12600,7 @@ class GameEngine:
         self._last_positive_damage_hits[target_id] = 0
         immune = self._is_status_immune(target_id)
         for _ in range(hits):
+            self._consume_action_work(4)
             precision_dodged = False
             plank_blocks_attack = False
             if ps.dodge > 0 and not immune:
@@ -12550,13 +12613,13 @@ class GameEngine:
                     self.log_msg(f"{self.pn(target_id)}闪避了攻击")
                     self._record_dodge_damage_prevented(target_id, amount)
                     continue
-            if ps.invincible and not immune:
+            if ps.invincible:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
                 continue
             source_power = 0
             if source_card is not None:
                 try:
-                    source_power = int(getattr(source_card, 'power_value', 0) or 0)
+                    source_power = clamp_card_power(getattr(source_card, 'power_value', 0) or 0)
                 except Exception:
                     source_power = 0
             if amount <= 0 and source_power <= 0 and hits <= 1:
@@ -12574,7 +12637,7 @@ class GameEngine:
             power = 0
             if source_card is not None:
                 try:
-                    power = int(getattr(source_card, 'power_value', 0) or 0)
+                    power = clamp_card_power(getattr(source_card, 'power_value', 0) or 0)
                 except Exception:
                     power = 0
             if power != 0:
@@ -12834,6 +12897,7 @@ class GameEngine:
             self._clamp_card_layers(card)
             fission_level = clamp_card_layer(getattr(card, 'fission_level', 1))
             for hit_idx in range(fission_level):
+                self._consume_action_work(4)
                 if self.game_over:
                     break
                 card.fission_hit = hit_idx
@@ -13232,6 +13296,8 @@ class GameEngine:
             value = clamp_card_layer(value)
         elif prop == 'extra_hits':
             value = clamp_card_extra_hits(value)
+        elif prop == 'power_value':
+            value = clamp_card_power(value)
         elif prop in ('mimic_discount', 'cost_e_override', 'cost_m_override', 'bonus_damage', 'return_to_hand_turns',
                       'held_turns', 'swift_value', 'magic_swift_value', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
             value = max(0, value)
@@ -13311,6 +13377,8 @@ class GameEngine:
                 return min(18, max(0, value))
             if prop == 'power_value':
                 return min(18, max(0, value))
+        if prop == 'power_value':
+            return clamp_card_power(value)
         return value
 
     def _atomic_card_prop_set(self, player_id, card, params, log, choice, context):
@@ -13789,7 +13857,7 @@ class GameEngine:
         flags = normalize_card_flags(params.get('flags', []))
         swift = self._eval_int(player_id, params.get('swift_value', 0), card, 0)
         magic_swift = self._eval_int(player_id, params.get('magic_swift_value', 0), card, 0)
-        power = self._eval_int(player_id, params.get('power_value', 0), card, 0)
+        power = clamp_card_power(self._eval_int(player_id, params.get('power_value', 0), card, 0))
         extra_hits = clamp_card_extra_hits(self._eval_int(player_id, params.get('extra_hits', 0), card, 0))
         ps = self.players[target_id]
         made = []
@@ -14033,7 +14101,7 @@ class GameEngine:
             amount = self._eval_int(player_id, params.get('amount', 6), card, 6)
         amount = self._modified_attack_damage(amount, card)
         is_precision = 'precision' in self._effective_card_flags(card)
-        original_power = max(0, int(getattr(card, 'power_value', 0) or 0)) if card is not None else 0
+        original_power = max(0, clamp_card_power(getattr(card, 'power_value', 0) or 0)) if card is not None else 0
         fission_level = max(1, int(getattr(card, 'fission_level', 1) or 1)) if card is not None else 1
         if card is not None and original_power > 0 and fission_level > 1:
             card.power_value = int(math.ceil(original_power / fission_level))
@@ -15043,7 +15111,7 @@ class GameEngine:
         for hand_card in list(self.players[target_id].hand):
             if hand_card.card_type != 'thorn':
                 continue
-            hand_card.power_value = int(getattr(hand_card, 'power_value', 0) or 0) + amount
+            hand_card.power_value = clamp_card_power(int(getattr(hand_card, 'power_value', 0) or 0) + amount)
             hand_card.instance_flags.add('power')
             affected += 1
         self.log_msg(log or f"{self.pn(target_id)}的{affected}张攻击牌获得{amount}层威力")
@@ -15771,9 +15839,13 @@ class GameEngine:
             if int(entry.get('magic_swift_value', 0) or 0) > 0:
                 temp_card.magic_swift_value = int(entry.get('magic_swift_value', 0) or 0)
                 temp_card.instance_flags.add('magic_swift')
-            if temp_card.cost_e > ps.elixir or temp_card.cost_m > ps.magic:
+            can_auto_play, _ = self.can_play_card(player_id, temp_card)
+            if not can_auto_play:
                 continue
-            ps.add_to_hand(temp_card, trigger_enter_hand=False)
+            # This copy exists only for the automatic play. Going through
+            # add_to_hand would treat a full hand as an overflow draw and put
+            # the copy in the discard pile before it can be played.
+            ps.hand.append(temp_card)
             auto_choice = {'target_player_id': target_id, 'target_player': target_id, 'target_id': target_id}
             previous_auto_actor = getattr(self, '_allow_out_of_turn_auto_play_for', None)
             previous_auto_choice = getattr(self, '_auto_resolve_choices_for', None)
@@ -15784,6 +15856,10 @@ class GameEngine:
                     result = self.play_card(player_id, temp_card.instance_id, target_id, auto_choice)
                 else:
                     result = self.play_card(player_id, temp_card.instance_id, auto_choice)
+            except Exception:
+                if temp_card in ps.hand:
+                    ps.hand.remove(temp_card)
+                raise
             finally:
                 self._allow_out_of_turn_auto_play_for = previous_auto_actor
                 self._auto_resolve_choices_for = previous_auto_choice

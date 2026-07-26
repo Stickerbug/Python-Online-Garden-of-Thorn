@@ -8,6 +8,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from cards import CARD_DEFS, CardInstance, ERROR_CARD_ID, clamp_card_extra_hits, clamp_damage_hits
 from damage_types import DAMAGE_TYPE_PHYSICAL
+from runtime_budget import ActionWorkBudgetExceeded
 
 
 STEP_BUDGET = 1000
@@ -125,6 +126,8 @@ def run_v2_event(engine, context: Dict[str, Any], event_def: Any):
         return run_v2_steps(engine, ctx, steps)
     except V2UIPause as pause:
         return {"success": True, "needs_v2_ui": True, "v2_ui_pause": pause.payload}
+    except ActionWorkBudgetExceeded:
+        raise
     except Exception as exc:
         _log_runtime_error(engine, ctx, "v2_event", exc)
         return {"success": False, "error": str(exc)}
@@ -152,6 +155,9 @@ def run_v2_steps(engine, context: Dict[str, Any], steps: Iterable[Any]):
 
 
 def run_v2_step(engine, context: Dict[str, Any], step: Any):
+    consume = getattr(engine, "_consume_action_work", None)
+    if callable(consume):
+        consume()
     _consume_budget(context)
     if not isinstance(step, dict):
         raise V2RuntimeError("step must be an object")

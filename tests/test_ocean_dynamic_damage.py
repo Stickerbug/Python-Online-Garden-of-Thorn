@@ -5,13 +5,13 @@ from cards import CARD_DEFS, CardDef, CardInstance
 from game_engine import GameEngine
 
 
-def make_card_def(def_id, *, flags=None):
+def make_card_def(def_id, *, flags=None, cost_e=0, cost_m=0):
     return CardDef(
         def_id,
         def_id,
         def_id,
-        0,
-        0,
+        cost_e,
+        cost_m,
         'thorn',
         1,
         'Common',
@@ -23,7 +23,11 @@ def make_card_def(def_id, *, flags=None):
 
 class OceanDynamicDamageTests(unittest.TestCase):
     def setUp(self):
-        self.test_ids = {'test:ocean_trident', 'test:ocean_magic_trident'}
+        self.test_ids = {
+            'test:ocean_trident',
+            'test:ocean_magic_trident',
+            'test:ocean_auto_pearl',
+        }
         self.previous_defs = {key: CARD_DEFS.get(key) for key in self.test_ids}
         CARD_DEFS['test:ocean_trident'] = make_card_def(
             'test:ocean_trident',
@@ -32,6 +36,10 @@ class OceanDynamicDamageTests(unittest.TestCase):
         CARD_DEFS['test:ocean_magic_trident'] = make_card_def(
             'test:ocean_magic_trident',
             flags={'precision'},
+        )
+        CARD_DEFS['test:ocean_auto_pearl'] = make_card_def(
+            'test:ocean_auto_pearl',
+            cost_e=1,
         )
 
     def tearDown(self):
@@ -87,6 +95,55 @@ class OceanDynamicDamageTests(unittest.TestCase):
 
         self.assertEqual(deal_damage.call_count, 3)
         self.assertEqual([call.args[1] for call in deal_damage.call_args_list], [10, 10, 10])
+
+    def _fill_hand(self, engine):
+        player = engine.players[0]
+        while player.rule_hand_size() < player.hand_limit():
+            player.hand.append(CardInstance('Basic'))
+        return player
+
+    def _mark_auto_pearl(self, player):
+        player.custom_vars['ocean_auto_cards'] = [{
+            'def_id': 'test:ocean_auto_pearl',
+            'target_id': 1,
+            'swift_value': 0,
+            'magic_swift_value': 0,
+        }]
+
+    def test_auto_pearl_copy_plays_without_overflowing_a_full_hand(self):
+        engine = GameEngine()
+        engine.phase = 'action'
+        engine.current_player = 0
+        player = self._fill_hand(engine)
+        player.elixir = 10
+        original_hand_ids = [card.instance_id for card in player.hand]
+        self._mark_auto_pearl(player)
+
+        engine._run_ocean_auto_cards_turn_start(0)
+
+        self.assertEqual([card.instance_id for card in player.hand], original_hand_ids)
+        self.assertEqual(player.discard, [])
+        self.assertEqual(
+            [card.def_id for card in player.exile],
+            ['test:ocean_auto_pearl'],
+        )
+
+    def test_auto_pearl_copy_with_unpayable_effective_cost_enters_no_zone(self):
+        engine = GameEngine()
+        engine.phase = 'action'
+        engine.current_player = 0
+        player = self._fill_hand(engine)
+        player.elixir = 1
+        player.cards_played_this_turn['test:ocean_auto_pearl'] = 1
+        original_hand_ids = [card.instance_id for card in player.hand]
+        self._mark_auto_pearl(player)
+
+        engine._run_ocean_auto_cards_turn_start(0)
+
+        self.assertEqual([card.instance_id for card in player.hand], original_hand_ids)
+        self.assertEqual(player.elixir, 1)
+        self.assertEqual(player.discard, [])
+        self.assertEqual(player.exile, [])
 
 
 if __name__ == '__main__':

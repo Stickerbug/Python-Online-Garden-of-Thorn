@@ -90,6 +90,11 @@
   --color-fragment: #795548;
   --bg-page: #F5F5F0;
   --bg-card: #FFFFFF;
+  --bg-main: var(--bg-primary);
+  --bg-secondary: #ECECE6;
+  --input-bg: #FFFFFF;
+  --card-surface: #FFFFFF;
+  --card-surface-raised: #FFFFFF;
   --text-primary: #2C3E50;
   --text-secondary: #7F8C8D;
   --border-color: #DCDCDC;
@@ -160,14 +165,79 @@ html.fonts-loaded-main {
 }
 
 [data-theme="dark"] {
-  --bg-primary: #1a1a2e;
-  --bg-card: #16213e;
-  --bg-card-hover: #1c2a4a;
-  --text-primary: #e0e0e0;
-  --text-secondary: #a0a0a0;
-  --text-muted: #6a6a7a;
-  --border-color: #2a2a4a;
-  --border-light: #3d3d5c;
+  --bg-page: #111419;
+  --bg-primary: #111419;
+  --bg-main: #111419;
+  --bg-card: #1C222B;
+  --bg-card-hover: #252D38;
+  --bg-secondary: #202731;
+  --input-bg: #171C23;
+  --card-surface: #202630;
+  --card-surface-raised: #272F3A;
+  --text-primary: #F0F2F5;
+  --text-secondary: #BAC1CA;
+  --text-muted: #8D97A4;
+  --border-color: #3B4552;
+  --border-light: #4A5665;
+  --color-elixir: #F4D35E;
+  --color-elixir-text: #F7DA67;
+  --color-elixir-bg: #342F1B;
+  --color-magic: #69BCEB;
+  --color-magic-text: #86CEF4;
+  --color-magic-bg: #172D3B;
+  --color-health: #57D18A;
+  --color-health-text: #72DFA0;
+  --color-heal: #F6A0BF;
+  --color-heal-text: #FF9FC2;
+  --color-heal-bg: #38222D;
+  --color-armor: #B9C4C9;
+  --color-armor-text: #D5DDE0;
+  --color-armor-bg: #293139;
+  --color-damage: #F0786C;
+  --color-damage-bg: #38211F;
+  --color-poison: #C58DDB;
+  --color-poison-bg: #302439;
+  --color-toxic: #C797DD;
+  --color-fire: #F4A45C;
+  --color-fire-bg: #38291D;
+  --color-banish: #C58DDB;
+  --color-banish-bg: #302439;
+  --color-non-stack: #B4C0CC;
+  --color-non-stack-bg: #29313A;
+  --color-indestructible: #F0CD55;
+  --color-indestructible-bg: #342F1B;
+  --color-vulnus: #F28A7E;
+  --color-vulnus-bg: #38211F;
+  --color-void: #B8C4C9;
+  --color-void-bg: #293139;
+  --color-adhere: #D3AA9D;
+  --color-adhere-bg: #352A27;
+  --color-precise: #B6C3C9;
+  --color-precise-bg: #293139;
+  --color-thorn: #F0786C;
+  --color-thorn-bg: #38211F;
+  --color-root: #D0AA9D;
+  --color-root-bg: #352A27;
+  --color-bloom: #5BD0B9;
+  --color-bloom-bg: #18342F;
+  --color-guard: #78BCE8;
+  --color-guard-bg: #182E3D;
+  --color-sprout: #70D49B;
+  --color-sprout-bg: #1B3428;
+  --color-symbiosis: #7DC2EA;
+  --color-symbiosis-bg: #182E3D;
+  --color-stealth: #B8C3CE;
+  --color-revealed: #FF8175;
+  --thorn: #F0786C;
+  --bloom: #5BD0B9;
+  --root: #D0AA9D;
+  --guard: #78BCE8;
+  --health: #57D18A;
+  --elixir: #F4D35E;
+  --magic: #69BCEB;
+  --damage: #F0786C;
+  --poison: #C58DDB;
+  --fire: #F4A45C;
   --bg-overlay: rgba(0, 0, 0, 0.6);
   --thorn-bg: rgba(192, 57, 43, 0.15);
   --thorn-glow: rgba(192, 57, 43, 0.4);
@@ -229,17 +299,13 @@ html.fonts-loaded-main {
 }
 
 [data-theme="dark"] .card {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
-    #22304f;
+  background: var(--card-surface);
 }
 
 [data-theme="dark"] .game-container.mode-spectate .card,
 [data-theme="dark"] .game-container.mode-spectate .card-small,
 [data-theme="dark"] .game-container.mode-spectate .card-back.revealed {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04)),
-    #26385f;
+  background: var(--card-surface);
   --card-frame-color: currentColor;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
 }
@@ -2384,6 +2450,7 @@ body {
 }
 
 .social-detail-tab {
+  position: relative;
   width: 100%;
   min-height: 36px;
   border: 1px solid transparent;
@@ -2395,6 +2462,24 @@ body {
   cursor: pointer;
   text-align: left;
   padding: 8px 10px;
+}
+
+.social-detail-tab.has-badge::after {
+  content: attr(data-badge);
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #d32f2f;
+  color: #fff;
+  border: 1px solid var(--bg-primary);
+  font-size: 9px;
+  line-height: 15px;
+  text-align: center;
+  font-weight: 900;
 }
 
 .social-detail-tab.active {
@@ -6905,10 +6990,51 @@ body {
   text-align: center;
 }
 
+.invincible-meter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  height: 24px;
+  padding: 2px;
+  border: 1px solid var(--color-elixir, #F1C40F);
+  border-radius: 4px;
+  background: var(--color-elixir-bg, #FEF9E7);
+  color: var(--color-elixir-text, #806800);
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(35, 45, 45, 0.12);
+}
+
+.invincible-meter-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex: 0 0 18px;
+}
+
+.invincible-meter:active,
+.invincible-meter:focus,
+.invincible-meter:focus-visible {
+  transform: none;
+  outline: none;
+}
+
+.invincible-meter.hidden {
+  display: none !important;
+}
+
 [data-theme="dark"] .armor-meter {
   background: color-mix(in srgb, var(--color-armor-bg) 70%, #1d2328);
   border-color: color-mix(in srgb, var(--color-armor) 78%, #ffffff);
   color: #e6ecec;
+}
+
+[data-theme="dark"] .invincible-meter {
+  background: color-mix(in srgb, var(--color-elixir-bg, #FEF9E7) 38%, #1d2328);
+  border-color: color-mix(in srgb, var(--color-elixir, #F1C40F) 82%, #ffffff);
+  color: #FFF1A8;
 }
 
 .status-tag {
@@ -8057,7 +8183,7 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 .card-token.tag-precision {
-  color: var(--color-precision);
+  color: var(--color-precise);
 }
 
 .card-token.tag-exile {
@@ -8081,7 +8207,7 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 .card-token.tag-attract {
-  color: var(--color-attract);
+  color: var(--color-adhere);
 }
 
 .card-token.tag-void {
@@ -8089,11 +8215,11 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 .card-token.tag-self-only {
-  color: var(--color-self-only);
+  color: #2F3542;
 }
 
 .card-token.tag-uncancellable {
-  color: var(--color-uncancellable);
+  color: #7F1D1D;
 }
 
 .card-token.tag-infinite-exclude {
@@ -8221,9 +8347,7 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 [data-theme="dark"] .card-hold-preview {
-  background:
-    linear-gradient(135deg, rgba(34, 48, 79, 0.96), rgba(28, 39, 64, 0.9)),
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 10px);
+  background: var(--card-surface-raised);
   box-shadow: 0 16px 42px rgba(0, 0, 0, 0.42);
 }
 
@@ -8507,6 +8631,12 @@ html.blind-level-4 .card-prediction-part.magic {
   display: inline-flex;
   align-items: center;
   gap: 0.42em;
+}
+
+.gallery-status-title[style*="--status-fg"],
+.gallery-status-heading[style*="--status-fg"],
+.gallery-status-source[style*="--status-fg"] {
+  color: var(--status-fg);
 }
 
 .status-icon-gallery-row {
@@ -8800,7 +8930,7 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 [data-theme="dark"] .card-prediction-part {
-  background: rgba(255, 255, 255, 0.78);
+  background: color-mix(in srgb, currentColor 18%, var(--card-surface-raised));
 }
 
 .card-flags {
@@ -13044,7 +13174,7 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
 }
 
 [data-theme="dark"] .choice-card-name {
-  background: #fff !important;
+  background: var(--card-surface-raised) !important;
 }
 
 .choice-card-flags,
@@ -13943,9 +14073,81 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
   white-space: nowrap;
 }
 
+.shortcut-hint-host-static {
+  position: relative;
+}
+
+.shortcut-context-hints {
+  position: fixed;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 30050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 11px;
+  width: min(920px, calc(100vw - 24px));
+  padding: 9px 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(30, 32, 38, 0.68);
+  border-radius: 8px;
+  background: rgba(250, 251, 253, 0.96);
+  color: #30343c;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.22);
+  font-family: var(--font-main);
+  font-size: 11px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+#modal.shortcut-help-active {
+    z-index: 30040;
+}
+
+.shortcut-context-hints-title {
+  margin-right: 3px;
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.shortcut-context-hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.shortcut-context-hint-item kbd {
+  min-width: 20px;
+  padding: 2px 5px;
+  border: 1px solid rgba(30, 32, 38, 0.68);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #fff;
+  color: #20232a;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+
 [data-theme="dark"] .shortcut-hint-badge {
   border-color: rgba(232, 235, 244, 0.72);
   background: rgba(31, 36, 48, 0.96);
+  color: #f2f4fa;
+}
+
+[data-theme="dark"] .shortcut-context-hints {
+  border-color: rgba(232, 235, 244, 0.58);
+  background: rgba(31, 36, 48, 0.97);
+  color: #d8dce8;
+}
+
+[data-theme="dark"] .shortcut-context-hint-item kbd {
+  border-color: rgba(232, 235, 244, 0.64);
+  background: #202633;
   color: #f2f4fa;
 }
 
@@ -14007,6 +14209,26 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
 
   .keybind-capture-button {
     min-width: 96px;
+  }
+
+  .shortcut-context-hints {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    gap: 5px 8px;
+    width: min(96vw, 720px);
+    max-height: calc(100vh - 16px);
+    overflow: hidden;
+    padding: 7px 9px;
+    font-size: 9px;
+  }
+
+  .shortcut-context-hints-title {
+    font-size: 9px;
+  }
+
+  .shortcut-context-hint-item kbd {
+    min-width: 18px;
+    padding: 2px 4px;
+    font-size: 9px;
   }
 }
 
@@ -14577,7 +14799,7 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
 }
 
 [data-theme="dark"] .teammate-hand-chip {
-    background: #fff;
+    background: var(--card-surface-raised);
 }
 
 .teammate-hand-row .card {
@@ -15149,9 +15371,7 @@ html[data-ui-style="minimal"] .card,
 
 html[data-ui-style="minimal"][data-theme="dark"] .card,
 [data-theme="dark"] .battle-classic .card {
-  background:
-    radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.13), transparent 28%),
-    linear-gradient(180deg, #263658, #1f2b47);
+  background: var(--card-surface);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 4px 12px rgba(0, 0, 0, 0.28);
 }
 
@@ -17663,6 +17883,30 @@ button.armor-meter:focus-visible {
   transform: translateY(-50%) !important;
 }
 
+.classic-hp-wrap .classic-invincible-meter {
+  position: absolute;
+  top: 8.5px;
+  transform: translateY(-50%);
+  width: 29px;
+  min-width: 29px;
+  height: 23px;
+  padding: 2px;
+  border-radius: 4px;
+  z-index: 3;
+}
+
+.classic-hp-wrap .classic-invincible-meter .invincible-meter-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.classic-hp-wrap .classic-invincible-meter:active,
+.classic-hp-wrap .classic-invincible-meter:focus,
+.classic-hp-wrap .classic-invincible-meter:focus-visible,
+.classic-hp-wrap button.classic-invincible-meter:not(:disabled):active {
+  transform: translateY(-50%) !important;
+}
+
 .classic-hp-icon {
   position: absolute;
   left: -30px;
@@ -19761,4 +20005,495 @@ html[data-ui-style="minimal"] #view-game .hand-area::-webkit-scrollbar {
 
 html[data-ui-style="minimal"] #view-game .card-animation-lock .hand-area {
   overflow-x: hidden;
+}
+
+/* Dark-theme surface contract.
+   Rebuilt battle elements use semantic custom properties so a state refresh
+   cannot reintroduce light inline backgrounds. */
+.status-tag[style*="--status-fg"] {
+  color: var(--status-fg);
+  background: var(--status-bg);
+  border-color: var(--status-fg);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  color: var(--text-primary);
+  background-color: var(--input-bg);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .card.card-small,
+[data-theme="dark"] .game-container.mode-spectate .card,
+[data-theme="dark"] .game-container.mode-spectate .card-small,
+[data-theme="dark"] .game-container.mode-spectate .card-back.revealed,
+html[data-ui-style="minimal"][data-theme="dark"] .card,
+[data-theme="dark"] .battle-classic .card {
+  background: var(--card-surface) !important;
+}
+
+[data-theme="dark"] .choice-card-name,
+[data-theme="dark"] .counter-card-btn .choice-card-name,
+[data-theme="dark"] .teammate-hand-chip {
+  background: var(--card-surface-raised) !important;
+  box-shadow: 0 var(--chip-shadow-y, 1px) var(--chip-shadow-blur, 4px) rgba(0, 0, 0, 0.32);
+}
+
+[data-theme="dark"] .card-prediction-part,
+[data-theme="dark"] .counter-status-reduction {
+  background: color-mix(in srgb, currentColor 18%, var(--card-surface-raised));
+  border-color: color-mix(in srgb, currentColor 52%, var(--border-color));
+}
+
+[data-theme="dark"] .card-flag {
+  color: #E8EDF2;
+  background: color-mix(in srgb, currentColor 16%, var(--card-surface)) !important;
+  border-color: color-mix(in srgb, currentColor 52%, var(--border-color)) !important;
+}
+
+[data-theme="dark"] .card-flag.precision { color: var(--color-precise); }
+[data-theme="dark"] .card-flag.exile { color: var(--color-banish); }
+[data-theme="dark"] .card-flag.non-stackable { color: var(--color-non-stack); }
+[data-theme="dark"] .card-flag.indestructible { color: var(--color-indestructible); }
+[data-theme="dark"] .card-flag.sprout { color: var(--color-sprout); }
+[data-theme="dark"] .card-flag.symbiosis { color: var(--color-symbiosis); }
+[data-theme="dark"] .card-flag.attract { color: var(--color-adhere); }
+[data-theme="dark"] .card-flag.void { color: var(--color-void); }
+[data-theme="dark"] .card-flag.self-only { color: #C8D0DA; }
+[data-theme="dark"] .card-flag.uncancellable { color: #FF9292; }
+[data-theme="dark"] .card-flag.infinite-exclude { color: #B7C2CA; }
+[data-theme="dark"] .card-flag.rebound { color: #D6A6E8; }
+[data-theme="dark"] .card-flag.copy { color: #F3A18E; }
+[data-theme="dark"] .card-flag.unique { color: #F8D67B; }
+[data-theme="dark"] .card-flag.swift { color: #72BEF2; }
+[data-theme="dark"] .card-flag.temp-swift { color: #70D1F5; }
+[data-theme="dark"] .card-flag.temp-heavy { color: #D0AAA0; }
+[data-theme="dark"] .card-flag.temp-magic-heavy { color: #B4A1FF; }
+[data-theme="dark"] .card-flag.magic-swift { color: #ACA0FF; }
+[data-theme="dark"] .card-flag.power { color: #F0786C; }
+[data-theme="dark"] .card-flag.team-limited { color: #B8D27F; }
+[data-theme="dark"] .card-flag.team-unique { color: #D0AA9D; }
+[data-theme="dark"] .card-flag.charge { color: #82BFFF; }
+[data-theme="dark"] .card-flag.ocean-blinded { color: #BBC5CF; }
+[data-theme="dark"] .card-flag.wide-strike { color: #66D5C1; }
+[data-theme="dark"] .card-flag.self-target { color: #FF8D97; }
+[data-theme="dark"] .card-flag.fusion-layer { color: var(--color-poison); }
+[data-theme="dark"] .card-flag.fission-layer { color: #65D6C9; }
+[data-theme="dark"] .card-flag.tomato-layer { color: #F58FAE; }
+[data-theme="dark"] .card-flag.stealth { color: var(--color-stealth); }
+[data-theme="dark"] .card-flag.revealed { color: var(--color-revealed); }
+[data-theme="dark"] .card-flag.sublime { color: #F4D56F; }
+[data-theme="dark"] .card-flag.floating { color: #72C8EB; }
+[data-theme="dark"] .card-flag.custom {
+  color: color-mix(in srgb, var(--custom-tag-color, #C7D0DA) 62%, #FFFFFF);
+}
+
+[data-theme="dark"] .status-tag {
+  background: color-mix(in srgb, currentColor 17%, var(--bg-card)) !important;
+  border-color: color-mix(in srgb, currentColor 54%, var(--border-color)) !important;
+}
+
+[data-theme="dark"] .status-tag[style*="--status-fg"] {
+  color: color-mix(in srgb, var(--status-fg) 68%, #FFFFFF);
+  background: color-mix(in srgb, var(--status-fg) 17%, var(--bg-card)) !important;
+  border-color: color-mix(in srgb, var(--status-fg) 58%, var(--border-color)) !important;
+}
+
+[data-theme="dark"] .gallery-status-title[style*="--status-fg"],
+[data-theme="dark"] .gallery-status-heading[style*="--status-fg"],
+[data-theme="dark"] .gallery-status-source[style*="--status-fg"] {
+  color: color-mix(in srgb, var(--status-fg) 66%, #FFFFFF);
+}
+
+[data-theme="dark"] .term-intro-item {
+  border-color: color-mix(in srgb, var(--term-color, var(--text-primary)) 52%, var(--border-color));
+  border-left-color: color-mix(in srgb, var(--term-color, var(--text-primary)) 66%, #FFFFFF);
+}
+
+[data-theme="dark"] .term-intro-item-title {
+  color: color-mix(in srgb, var(--term-color, var(--text-primary)) 66%, #FFFFFF);
+}
+
+[data-theme="dark"] .term-intro-status-card {
+  color: color-mix(in srgb, var(--term-color, var(--text-primary)) 66%, #FFFFFF);
+  border-color: color-mix(in srgb, var(--term-color, var(--text-primary)) 58%, var(--border-color));
+  background: color-mix(in srgb, var(--term-color, var(--bg-card)) 16%, var(--card-surface-raised));
+}
+
+[data-theme="dark"] .equip-icon,
+[data-theme="dark"] .btn-equip-trigger .equip-icon {
+  background: var(--card-surface-raised);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+[data-theme="dark"] .equip-item.indestructible {
+  color: var(--color-indestructible);
+  background: var(--color-indestructible-bg);
+  border-color: color-mix(in srgb, var(--color-indestructible) 58%, var(--border-color));
+}
+
+[data-theme="dark"] .card-token.damage,
+[data-theme="dark"] .combat-damage { color: var(--color-damage); }
+[data-theme="dark"] .card-token.armor,
+[data-theme="dark"] .combat-armor { color: var(--color-armor-text); }
+[data-theme="dark"] .card-token.heal,
+[data-theme="dark"] .combat-heal { color: var(--color-heal); }
+[data-theme="dark"] .card-token.health { color: var(--color-health); }
+[data-theme="dark"] .card-token.elixir,
+[data-theme="dark"] .combat-elixir { color: var(--color-elixir-text); }
+[data-theme="dark"] .card-token.magic,
+[data-theme="dark"] .combat-magic { color: var(--color-magic); }
+[data-theme="dark"] .combat-poison { color: var(--color-poison); }
+[data-theme="dark"] .combat-fire { color: var(--color-fire); }
+[data-theme="dark"] .card-token.tag-precision { color: var(--color-precise); }
+[data-theme="dark"] .card-token.tag-exile { color: var(--color-banish); }
+[data-theme="dark"] .card-token.tag-non-stackable { color: var(--color-non-stack); }
+[data-theme="dark"] .card-token.tag-indestructible { color: var(--color-indestructible); }
+[data-theme="dark"] .card-token.tag-sprout { color: var(--color-sprout); }
+[data-theme="dark"] .card-token.tag-symbiosis { color: var(--color-symbiosis); }
+[data-theme="dark"] .card-token.tag-attract { color: var(--color-adhere); }
+[data-theme="dark"] .card-token.tag-void { color: var(--color-void); }
+[data-theme="dark"] .card-token.tag-self-only { color: #C8D0DA; }
+[data-theme="dark"] .card-token.tag-uncancellable { color: #FF9292; }
+[data-theme="dark"] .card-token.tag-infinite-exclude { color: #B7C2CA; }
+[data-theme="dark"] .card-token.tag-rebound,
+[data-theme="dark"] .card-token.tag-unique,
+[data-theme="dark"] .card-token.tag-power { color: #F0786C; }
+[data-theme="dark"] .card-token.tag-copy { color: #D6A6E8; }
+[data-theme="dark"] .card-token.tag-swift,
+[data-theme="dark"] .card-token.tag-temp-swift { color: #70D1F5; }
+[data-theme="dark"] .card-token.tag-temp-heavy { color: #D0AAA0; }
+[data-theme="dark"] .card-token.tag-stealth,
+[data-theme="dark"] .card-token.tag-ocean-blinded { color: #BBC5CF; }
+[data-theme="dark"] .card-token.tag-revealed { color: var(--color-revealed); }
+[data-theme="dark"] .card-token.tag-sublime { color: #F4D56F; }
+[data-theme="dark"] .card-token.tag-team-limited { color: #B8D27F; }
+[data-theme="dark"] .card-token.tag-team-unique { color: #D0AA9D; }
+[data-theme="dark"] .card-token.tag-magic-swift { color: #ACA0FF; }
+[data-theme="dark"] .card-token.tag-charge { color: #82BFFF; }
+[data-theme="dark"] .card-token.tag-sewers-confusion { color: #B4A9F4; }
+[data-theme="dark"] .card-token.tag-arctic-ready { color: #78BCE8; }
+[data-theme="dark"] .card-token.tag-wide-strike { color: #66D5C1; }
+[data-theme="dark"] .card-token.tag-self-target { color: #FF8D97; }
+[data-theme="dark"] .card-token.status-toxic-poison { color: #9BCB72; }
+[data-theme="dark"] .card-token.status-sluggish { color: var(--color-fire); }
+[data-theme="dark"] .card-token.status-fragile { color: #D7A36F; }
+[data-theme="dark"] .card-token.status-shield { color: #72CEC9; }
+[data-theme="dark"] .card-token.status-turn-heal { color: var(--color-heal); }
+[data-theme="dark"] .card-token.status-turn-magic { color: #ACA0FF; }
+[data-theme="dark"] .card-token.status-root { color: #B8D27F; }
+[data-theme="dark"] .card-token.status-triangle { color: var(--color-non-stack); }
+[data-theme="dark"] .card-token.status-dodge { color: var(--color-guard); }
+[data-theme="dark"] .card-token.status-nazar,
+[data-theme="dark"] .card-token.status-magic-nazar,
+[data-theme="dark"] .card-token.status-magic-blocked { color: var(--color-magic); }
+[data-theme="dark"] .card-token.equipment-armor,
+[data-theme="dark"] .card-token.status-crit { color: var(--color-indestructible); }
+[data-theme="dark"] .card-token.status-bleed { color: #F08A80; }
+[data-theme="dark"] .card-token.status-fracture { color: var(--color-armor-text); }
+[data-theme="dark"] .card-token.status-stagnation { color: #D6A6E8; }
+[data-theme="dark"] .card-token.status-blind { color: #BBC5CF; }
+[data-theme="dark"] .card-token.status-foresight { color: var(--color-guard); }
+[data-theme="dark"] .card-token.status-overload,
+[data-theme="dark"] .card-token.status-stunned,
+[data-theme="dark"] .card-token.status-attack-blocked { color: var(--color-damage); }
+[data-theme="dark"] .card-token.status-heal-block { color: #F59AC7; }
+[data-theme="dark"] .card-token.status-weakness { color: var(--color-poison); }
+[data-theme="dark"] .card-token.status-fragment { color: #D0AAA0; }
+[data-theme="dark"] .card-token.status-blood-debt { color: #F08A98; }
+[data-theme="dark"] .card-token.status-unable-counter { color: #B7C2CA; }
+[data-theme="dark"] .card-token.status-luck { color: #8BD083; }
+[data-theme="dark"] .card-token.status-frost { color: #82C8EC; }
+[data-theme="dark"] .card-token.status-blazing-fire { color: #FF946F; }
+[data-theme="dark"] .card-token.status-immune { color: #65D6C1; }
+[data-theme="dark"] .card-token.status-invincible { color: var(--color-elixir); }
+[data-theme="dark"] .card-token.status-bandage { color: var(--color-health-text); }
+[data-theme="dark"] .card-token.status-sponge { color: var(--color-poison); }
+[data-theme="dark"] .card-token.status-attack-only { color: var(--color-fire); }
+[data-theme="dark"] .card-token.status-untargetable { color: var(--color-guard); }
+
+[data-theme="dark"] .lobby-player-row:hover {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+/* The white-board classic layout gets a real dark counterpart instead of
+   keeping its light surfaces while only the surrounding page changes. */
+[data-theme="dark"] .battle-classic {
+  --classic-ink: #EEF1F5;
+  --classic-muted: #AEB7C3;
+  --classic-line: rgba(221, 228, 236, 0.18);
+  --classic-panel: rgba(28, 34, 43, 0.9);
+  --classic-panel-strong: #242B35;
+  --classic-stage: #11151B;
+  color: var(--classic-ink);
+  background: var(--classic-stage);
+}
+
+[data-theme="dark"] .battle-classic .classic-bg {
+  background:
+    linear-gradient(90deg, rgba(226, 232, 240, 0.035) 1px, transparent 1px) 0 0 / 54px 54px,
+    linear-gradient(0deg, rgba(226, 232, 240, 0.028) 1px, transparent 1px) 0 0 / 54px 54px,
+    radial-gradient(ellipse at 50% 58%, rgba(71, 82, 96, 0.18), transparent 56%);
+}
+
+[data-theme="dark"] .battle-classic .classic-round,
+[data-theme="dark"] .battle-classic .classic-phase,
+[data-theme="dark"] .battle-classic .classic-icon-btn,
+[data-theme="dark"] .battle-classic .classic-fighter-name,
+[data-theme="dark"] .battle-classic .classic-intent-badge,
+[data-theme="dark"] .battle-classic .classic-stat-strip,
+[data-theme="dark"] .battle-classic .classic-icon-counter,
+[data-theme="dark"] .battle-classic .classic-log-drawer,
+[data-theme="dark"] .battle-classic .classic-log-toggle {
+  color: var(--classic-ink);
+  background: var(--classic-panel-strong);
+  border-color: var(--classic-line);
+}
+
+[data-theme="dark"] .battle-classic .classic-log-drawer {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.34);
+}
+
+[data-theme="dark"] .battle-classic .classic-card-tile-inner {
+  background: var(--card-surface);
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.34);
+}
+
+[data-theme="dark"] .battle-classic .classic-card-tile-back .classic-card-tile-inner {
+  background: #343B46;
+  border-color: rgba(226, 232, 240, 0.2);
+}
+
+[data-theme="dark"] .battle-classic .classic-card-tile-back-face {
+  color: rgba(238, 241, 245, 0.68);
+}
+
+[data-theme="dark"] .battle-classic .classic-card-tile-unknown {
+  color: var(--classic-ink);
+  background: var(--classic-panel-strong);
+}
+
+[data-theme="dark"] .battle-classic .classic-stat-track,
+[data-theme="dark"] .battle-classic .classic-hp-track {
+  background: #2B2529;
+  border-color: rgba(235, 139, 145, 0.3);
+}
+
+[data-theme="dark"] .battle-classic .classic-orbs {
+  border-color: rgba(220, 226, 234, 0.7);
+}
+
+[data-theme="dark"] .battle-classic .classic-e-orbs {
+  background: #332F1E;
+}
+
+[data-theme="dark"] .battle-classic .classic-m-orbs {
+  background: #172D3B;
+}
+
+[data-theme="dark"] .battle-classic .classic-hp-text,
+[data-theme="dark"] .battle-classic .classic-lane-text,
+[data-theme="dark"] .battle-classic .classic-resource-label,
+[data-theme="dark"] .battle-classic .classic-piles,
+[data-theme="dark"] .battle-classic .classic-log-content {
+  color: var(--classic-ink);
+}
+
+[data-theme="dark"] .battle-classic .classic-status-ring .status-tag.classic-status-icon-only {
+  background: color-mix(in srgb, currentColor 16%, var(--classic-panel-strong)) !important;
+  border-color: color-mix(in srgb, currentColor 54%, var(--classic-line)) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .battle-classic .classic-status-ring .status-tag:not(.classic-status-icon-only) {
+  background: color-mix(in srgb, currentColor 16%, var(--classic-panel-strong)) !important;
+}
+
+[data-theme="dark"] .battle-classic .classic-equip-top {
+  color: var(--classic-ink);
+  background: var(--classic-panel-strong);
+  border-color: var(--classic-line);
+}
+
+[data-theme="dark"] .battle-classic .classic-equip-armor {
+  color: var(--color-armor-text);
+  background: var(--color-armor-bg);
+}
+
+/* Lobby spectators and the shared battle log/spectator panel. */
+.lobby-player-row.is-spectating .player-name {
+  opacity: 0.48;
+  filter: saturate(0.45);
+}
+
+.lobby-spectating-badge {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 45%, transparent);
+  border-radius: 4px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.battle-panel-tabs {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 76%, transparent);
+}
+
+.battle-panel-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1 1 50%;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 0;
+  border-right: 1px solid color-mix(in srgb, var(--border-color) 58%, transparent);
+  border-radius: 0;
+  color: var(--text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.battle-panel-tab:last-child {
+  border-right: 0;
+}
+
+.battle-panel-tab:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-card) 72%, var(--bg-primary));
+}
+
+.battle-panel-tab.active {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-card) 92%, var(--bg-primary));
+  box-shadow: inset 0 -2px 0 var(--accent-color, #2F80C8);
+}
+
+.battle-panel-tab-count {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.battle-panel-tabs.is-log-only .battle-panel-tab[data-battle-panel-tab="log"] {
+  flex-basis: 100%;
+  justify-content: flex-start;
+  color: var(--text-secondary);
+  background: transparent;
+  box-shadow: none;
+}
+
+.battle-panel-tab.is-static {
+  pointer-events: none;
+  cursor: default;
+}
+
+.battle-log .battle-panel-tabs.log-header {
+  padding: 0;
+  font-size: inherit;
+}
+
+.battle-spectator-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 9px 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.battle-spectator-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 5px 3px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 58%, transparent);
+}
+
+.battle-spectator-row:last-child {
+  border-bottom: 0;
+}
+
+.battle-spectator-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.battle-spectator-report-btn {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+.battle-spectator-empty {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.classic-battle-panel-tabs {
+  border-color: var(--classic-line, var(--border-color));
+  background: var(--classic-panel-strong, var(--bg-card));
+}
+
+.classic-battle-panel-tabs .classic-log-toggle {
+  flex: 1 1 50%;
+  justify-content: center;
+  padding: 8px 10px;
+  border: 0;
+  border-right: 1px solid var(--classic-line, var(--border-color));
+  border-bottom: 0;
+  color: var(--classic-muted, var(--text-muted));
+  background: transparent;
+}
+
+.classic-battle-panel-tabs .classic-log-toggle:last-child {
+  border-right: 0;
+}
+
+.classic-battle-panel-tabs .classic-log-toggle.active {
+  color: var(--classic-ink, var(--text-primary));
+  background: color-mix(in srgb, var(--classic-panel-strong, var(--bg-card)) 84%, var(--bg-primary));
+}
+
+#classic-spectator-list-toggle::before {
+  display: none;
+}
+
+.classic-spectator-list {
+  color: var(--classic-ink, var(--text-primary));
+  font-size: clamp(11px, 0.8vw, 13px);
+}
+
+[data-theme="dark"] .battle-panel-tabs,
+[data-theme="dark"] .classic-battle-panel-tabs {
+  background: var(--classic-panel-strong, var(--bg-card));
+  border-color: var(--classic-line, var(--border-color));
 }

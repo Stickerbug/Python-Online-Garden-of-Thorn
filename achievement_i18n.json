@@ -1037,10 +1037,10 @@
         "ja": "なぜこのようなことが起こるのでしょうか?"
       },
       "description": {
-        "zh": "在单人训练场，使双方玩家状态总数为25或更多。",
-        "en": "In Solo Training, make both players have 25 or more total status types.",
-        "fr": "Sur le terrain d'entraînement solo, faites en sorte que le statut total des deux joueurs soit de 25 ou plus.",
-        "ja": "1人用練習場で、お互いのステータスの合計を25以上にする。"
+        "zh": "在单人训练场，使双方玩家状态总数为30或更多。",
+        "en": "In Solo Training, make both players have 30 or more total status types.",
+        "fr": "Sur le terrain d'entraînement solo, faites en sorte que le statut total des deux joueurs soit de 30 ou plus.",
+        "ja": "1人用練習場で、お互いのステータスの合計を30以上にする。"
       }
     },
     "creative_mode_mana_pool": {

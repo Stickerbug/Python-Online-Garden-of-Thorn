@@ -61,6 +61,8 @@ KEYBINDING_ACTION_IDS = frozenset({
     'target_teammate',
     'target_enemy_2',
     'end_turn',
+    'view_log',
+    'view_spectators',
     'view_draw',
     'view_discard',
     'view_exile',
@@ -159,7 +161,7 @@ ACHIEVEMENT_DEFS = [
     {'id': 'deep_roots', 'type': 'hidden', 'hidden': True, 'name_cn': '根系发达', 'name_en': 'Deep Roots', 'description_cn': '同时装备4个或更多装备。', 'description_en': 'Have 4 or more equipment at the same time.', 'target': 1, 'metric': 'flag_max_equipment_5', 'reward_dew': 500},
     {'id': 'calculated_finish', 'type': 'hidden', 'hidden': True, 'name_cn': '精打细算', 'name_en': 'Calculated Finish', 'description_cn': '1v1中，对手死亡时自己的E和M均为0。', 'description_en': 'In 1v1, win while your E and M are both 0 when the opponent dies.', 'target': 1, 'metric': 'flag_1v1_zero_resources_win', 'reward_dew': 750},
     {'id': 'enemy_6_statuses', 'type': 'hidden', 'hidden': True, 'name_cn': '狂乱的鸡尾酒', 'name_en': 'Mad Cocktail', 'description_cn': '使一名敌方玩家同时拥有6个或更多不同状态。', 'description_en': 'Make an enemy have 6 or more different statuses at once.', 'target': 1, 'metric': 'flag_enemy_6_statuses', 'reward_dew': 700},
-    {'id': 'solo_status_25', 'type': 'hidden', 'hidden': True, 'name_cn': '为什么会变成这样呢？', 'name_en': 'How Did It Come to This?', 'description_cn': '在单人训练场，使双方玩家状态总数为25或更多。', 'description_en': 'In Solo Training, make both players have 25 or more total status types.', 'target': 1, 'metric': 'flag_solo_status_25', 'reward_dew': 600},
+    {'id': 'solo_status_25', 'type': 'hidden', 'hidden': True, 'name_cn': '为什么会变成这样呢？', 'name_en': 'How Did It Come to This?', 'description_cn': '在单人训练场，使双方玩家状态总数为30或更多。', 'description_en': 'In Solo Training, make both players have 30 or more total status types.', 'target': 1, 'metric': 'flag_solo_status_25', 'reward_dew': 600},
     {'id': 'creative_mode_mana_pool', 'type': 'easter_egg', 'hidden': True, 'invisible_until_unlocked': True, 'name_cn': '永恒魔力池', 'name_en': 'The Everlasting Guilty Pool', 'description_cn': '选择魔力加速配装后，在对局中使用拟态复制一张带有共生的拟态。', 'description_en': 'After choosing Magic Acceleration, use Mimic to copy a Mimic with Symbiosis.', 'target': 1, 'metric': 'flag_creative_mode_mana_pool', 'reward_dew': 800},
 ]
 
@@ -196,6 +198,13 @@ _DM_MARK_READ_LAST_AT = {}
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
 ROLE_COLOR_TOKENS = {'admin', 'bloom', 'guard', 'thorn', 'root', 'neutral'}
+TITLE_COLOR_TOKENS = (
+    'thorn', 'bloom', 'root', 'guard', 'curse', 'infect',
+    'health', 'elixir', 'energy', 'magic', 'damage', 'electric', 'poison', 'fire', 'armor',
+    'precision', 'banish', 'indestructible', 'critical',
+    'primary', 'common', 'rare', 'ultra', 'super',
+    'milestone', 'hidden', 'admin', 'neutral',
+)
 TITLE_MAX_EQUIPPED = 3
 TITLE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9_.:-]{0,63}$')
 DEFAULT_SKIN_CONFIG = {
@@ -206,7 +215,7 @@ SKIN_EYE_SHAPES = {'oval', 'rectangle', 'diamond', 'hexagon'}
 ROLE_DEFAULTS = {
     'admin': {
         'role_key': 'admin',
-        'title': '管理员',
+        'title': '',
         'color': 'admin',
         'sort_order': 0,
         'can_direct_friend': True,
@@ -214,7 +223,7 @@ ROLE_DEFAULTS = {
     },
     'staff': {
         'role_key': 'staff',
-        'title': '技术人员',
+        'title': '',
         'color': 'bloom',
         'sort_order': 1,
         'can_direct_friend': True,
@@ -222,7 +231,7 @@ ROLE_DEFAULTS = {
     },
     'contributor': {
         'role_key': 'contributor',
-        'title': '贡献者',
+        'title': '',
         'color': 'guard',
         'sort_order': 2,
         'can_direct_friend': False,
@@ -230,9 +239,17 @@ ROLE_DEFAULTS = {
     },
     'sponsor': {
         'role_key': 'sponsor',
-        'title': '赞助者',
+        'title': '',
         'color': 'bloom',
         'sort_order': 3,
+        'can_direct_friend': False,
+        'chat_exempt': False,
+    },
+    'none': {
+        'role_key': 'none',
+        'title': '',
+        'color': 'neutral',
+        'sort_order': 99,
         'can_direct_friend': False,
         'chat_exempt': False,
     },
@@ -242,26 +259,21 @@ BUILTIN_USER_ROLES = {
         **ROLE_DEFAULTS['admin'],
         'role_type': 'admin',
         'role_key': 'admin',
-        'title': '管理员',
     },
     'netherdog': {
         **ROLE_DEFAULTS['staff'],
         'role_type': 'staff',
-        'role_key': 'chief_designer',
-        'title': '总设计师',
+        'role_key': 'staff',
     },
     'eric': {
         **ROLE_DEFAULTS['staff'],
         'role_type': 'staff',
-        'role_key': 'chief_designer',
-        'title': '总设计师',
+        'role_key': 'staff',
     },
     'winniepooh': {
         **ROLE_DEFAULTS['contributor'],
         'role_type': 'contributor',
-        'role_key': 'right_angle_person',
-        'title': '直角人',
-        'color': 'guard',
+        'role_key': 'contributor',
     },
 }
 
@@ -476,10 +488,10 @@ def _normalize_role_color(value, fallback='neutral'):
 
 
 def normalize_title_color(value, fallback=None):
-    """Normalize role tokens, hexadecimal RGB, rgb(), or hsv() to a CSS color."""
+    """Normalize named presets, hexadecimal RGB, rgb(), or hsv() to a CSS color."""
     text = str(value or '').strip()
     lowered = text.lower()
-    if lowered in ROLE_COLOR_TOKENS:
+    if lowered in TITLE_COLOR_TOKENS:
         return lowered
     short_hex = re.fullmatch(r'#([0-9a-fA-F]{3})', text)
     if short_hex:
@@ -530,10 +542,6 @@ def _normalize_title_id(value):
 def _generated_title_id(name, color):
     digest = hashlib.sha256(f'{str(name).strip()}\0{str(color).strip()}'.encode('utf-8')).hexdigest()[:20]
     return f'custom:{digest}'
-
-
-def _role_title_id(user_id):
-    return f'role:{int(user_id)}'
 
 
 def _normalize_role_type(value):
@@ -756,7 +764,7 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_user_titles_equipped ON user_titles(user_id, equipped_slot)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_user_titles_title ON user_titles(title_id, user_id)')
         _seed_builtin_user_roles(conn)
-        _sync_all_role_titles_conn(conn)
+        _remove_legacy_role_titles_conn(conn)
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS user_currency_transactions (
@@ -847,6 +855,7 @@ def init_db():
                 updated_at TEXT NOT NULL,
                 expires_at TEXT,
                 addressee_read_at TEXT,
+                requester_read_at TEXT,
                 notice_type TEXT DEFAULT 'request',
                 UNIQUE(requester_id, addressee_id),
                 FOREIGN KEY(requester_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -859,11 +868,21 @@ def init_db():
             conn.execute('ALTER TABLE friendships ADD COLUMN expires_at TEXT')
         if 'addressee_read_at' not in friendship_columns:
             conn.execute('ALTER TABLE friendships ADD COLUMN addressee_read_at TEXT')
+        if 'requester_read_at' not in friendship_columns:
+            conn.execute('ALTER TABLE friendships ADD COLUMN requester_read_at TEXT')
+            conn.execute(
+                '''
+                UPDATE friendships
+                SET requester_read_at = COALESCE(updated_at, created_at)
+                WHERE status = 'accepted'
+                '''
+            )
         if 'notice_type' not in friendship_columns:
             conn.execute("ALTER TABLE friendships ADD COLUMN notice_type TEXT DEFAULT 'request'")
         conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships(requester_id, status)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id, status)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_unread ON friendships(addressee_id, status, addressee_read_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_requester_unread ON friendships(requester_id, status, requester_read_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_friendships_updated ON friendships(updated_at)')
         conn.execute(
             '''
@@ -4934,7 +4953,7 @@ def _upsert_title_catalog_conn(
     if not title_name:
         raise ValueError('称号名称不能为空')
     if not normalized_color:
-        raise ValueError('颜色应为 #RRGGBB、RGB(r,g,b) 或 HSV(h,s,v)')
+        raise ValueError('颜色应为预设名称、#RRGGBB、RGB(r,g,b) 或 HSV(h,s,v)')
     now = utc_now()
     conn.execute(
         '''
@@ -5035,68 +5054,39 @@ def _grant_user_title_conn(
     return title_key
 
 
-def _sync_role_title_for_user_conn(conn, user_row, role_row):
-    if user_row is None:
-        return
-    uid = int(user_row['id'])
-    title_id = _role_title_id(uid)
-    visible_role = (
-        role_row is not None
-        and str(role_row['role_type'] or '').strip().lower() != 'none'
-        and bool(role_row['visible'])
-        and bool(str(role_row['title'] or '').strip())
-    )
-    if not visible_role:
-        conn.execute(
-            'DELETE FROM user_titles WHERE user_id = ? AND title_id = ?',
-            (uid, title_id),
-        )
-        _compact_equipped_titles_conn(conn, uid)
-        return
-    color = normalize_title_color(role_row['color'], '#666666') or '#666666'
-    _upsert_title_catalog_conn(
-        conn,
-        title_id,
-        role_row['title'],
-        color,
-        source_type='role',
-        source_ref=str(role_row['role_key'] or role_row['role_type'] or ''),
-        purchasable=False,
-        active=True,
-    )
-    has_equipped = conn.execute(
-        'SELECT 1 FROM user_titles WHERE user_id = ? AND equipped_slot IS NOT NULL LIMIT 1',
-        (uid,),
-    ).fetchone() is not None
-    _grant_user_title_conn(
-        conn,
-        uid,
-        title_id,
-        acquired_source='role',
-        acquired_ref=str(role_row['role_key'] or role_row['role_type'] or ''),
-        equip=not has_equipped,
-    )
-
-
-def _sync_all_role_titles_conn(conn):
+def _remove_legacy_role_titles_conn(conn):
+    """Remove titles generated by the retired identity-to-title bridge."""
     rows = conn.execute(
         '''
-        SELECT
-            u.id AS user_id,
-            u.username,
-            r.role_type,
-            r.role_key,
-            r.title,
-            r.color,
-            r.visible
-        FROM users u
-        LEFT JOIN user_roles r ON r.user_id = u.id
+        SELECT DISTINCT user_id
+        FROM user_titles
+        WHERE acquired_source = 'role'
+           OR title_id IN (
+               SELECT title_id FROM title_catalog WHERE source_type = 'role'
+           )
         '''
     ).fetchall()
-    for row in rows:
-        user_row = {'id': row['user_id'], 'username': row['username']}
-        role_row = row if row['role_type'] is not None else None
-        _sync_role_title_for_user_conn(conn, user_row, role_row)
+    user_ids = [int(row['user_id']) for row in rows]
+    conn.execute(
+        '''
+        DELETE FROM user_titles
+        WHERE acquired_source = 'role'
+           OR title_id IN (
+               SELECT title_id FROM title_catalog WHERE source_type = 'role'
+           )
+        '''
+    )
+    conn.execute(
+        '''
+        DELETE FROM title_catalog
+        WHERE source_type = 'role'
+          AND NOT EXISTS (
+              SELECT 1 FROM user_titles WHERE user_titles.title_id = title_catalog.title_id
+          )
+        '''
+    )
+    for user_id in user_ids:
+        _compact_equipped_titles_conn(conn, user_id)
 
 
 def list_user_titles(user_id, include_inactive=False):
@@ -5179,7 +5169,7 @@ def admin_grant_user_title(
         return None, None, '账号不存在'
     normalized_color = normalize_title_color(color)
     if not normalized_color:
-        return None, None, '颜色应为 #RRGGBB、RGB(r,g,b) 或 HSV(h,s,v)'
+        return None, None, '颜色应为预设名称、#RRGGBB、RGB(r,g,b) 或 HSV(h,s,v)'
     normalized_id = _normalize_title_id(title_id) if title_id else _generated_title_id(name, normalized_color)
     if title_id and not normalized_id:
         return None, None, '称号 ID 仅可包含小写字母、数字及 . _ : -，且最长64个字符'
@@ -5231,8 +5221,6 @@ def admin_remove_user_title(identifier, title_identifier):
         ).fetchone()
         if row is None:
             return None, None, '该玩家未拥有此称号'
-        if str(row['acquired_source'] or '') == 'role':
-            return None, None, '身份称号随身份管理，请先修改或清除对应身份'
         conn.execute(
             'DELETE FROM user_titles WHERE user_id = ? AND title_id = ?',
             (user['id'], row['title_id']),
@@ -5269,23 +5257,22 @@ def _role_row_to_profile(user_row, role_row, equipped_titles=None):
             return None
         return _role_row_to_profile(user_row, None, titles)
     defaults = _role_defaults(role_type)
-    role_key = str(role_row['role_key'] or defaults.get('role_key') or role_type).strip()
-    title = str(role_row['title'] or defaults.get('title') or '').strip()
-    color = _normalize_role_color(role_row['color'], defaults.get('color') or 'neutral')
+    role_key = str(defaults.get('role_key') or role_type).strip()
+    color = _normalize_role_color(defaults.get('color'), 'neutral')
     is_admin = role_type == 'admin'
     return {
         'user_id': user_row['id'],
         'display_name': user_row['username'],
         'role_type': role_type,
         'special_role': role_key or role_type,
-        'special_role_label': title,
+        'special_role_label': '',
         'special_role_color': color,
-        'special_role_sort': int(role_row['sort_order'] if role_row['sort_order'] is not None else defaults.get('sort_order', 99)),
+        'special_role_sort': int(defaults.get('sort_order', 99)),
         'is_admin_player': is_admin,
-        'can_direct_friend': bool(role_row['can_direct_friend']),
-        'chat_exempt': bool(role_row['chat_exempt']),
+        'can_direct_friend': bool(defaults.get('can_direct_friend')),
+        'chat_exempt': bool(defaults.get('chat_exempt')),
         'equipped_titles': titles,
-        'name_color': titles[0]['color'] if titles else color,
+        'name_color': titles[0]['color'] if titles else '',
     }
 
 
@@ -5303,13 +5290,6 @@ def get_user_role_profile(identifier):
             return None
         _ensure_builtin_role_for_row(conn, user_row)
         role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user_row['id'],)).fetchone()
-        if role_row is not None and str(role_row['role_type'] or '').lower() != 'none' and bool(role_row['visible']):
-            role_title = conn.execute(
-                'SELECT 1 FROM user_titles WHERE user_id = ? AND title_id = ?',
-                (user_row['id'], _role_title_id(user_row['id'])),
-            ).fetchone()
-            if role_title is None:
-                _sync_role_title_for_user_conn(conn, user_row, role_row)
         conn.commit()
         titles = [
             item
@@ -5333,13 +5313,6 @@ def user_role_can_direct_friend(user_row_or_id):
             return False
         _ensure_builtin_role_for_row(conn, user_row)
         role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user_row['id'],)).fetchone()
-        if role_row is not None and str(role_row['role_type'] or '').lower() != 'none' and bool(role_row['visible']):
-            role_title = conn.execute(
-                'SELECT 1 FROM user_titles WHERE user_id = ? AND title_id = ?',
-                (user_row['id'], _role_title_id(user_row['id'])),
-            ).fetchone()
-            if role_title is None:
-                _sync_role_title_for_user_conn(conn, user_row, role_row)
         conn.commit()
         titles = [
             item
@@ -5359,15 +5332,14 @@ def list_user_roles(query='', limit=100):
     where = 'WHERE r.role_type <> ?'
     params = ['none']
     if name:
-        where += ' AND (u.username_lower LIKE ? OR u.player_id LIKE ? OR r.role_type LIKE ? OR r.title LIKE ?)'
-        params.extend([f'%{name.lower()}%', f'%{str(query or "").strip().upper()}%', f'%{name.lower()}%', f'%{name}%'])
+        where += ' AND (u.username_lower LIKE ? OR u.player_id LIKE ? OR r.role_type LIKE ?)'
+        params.extend([f'%{name.lower()}%', f'%{str(query or "").strip().upper()}%', f'%{name.lower()}%'])
     with get_db_connection() as conn:
         _seed_builtin_user_roles(conn)
         conn.commit()
         rows = conn.execute(
             f'''
-            SELECT u.*, r.role_type, r.role_key, r.title, r.color, r.sort_order,
-                   r.can_direct_friend, r.chat_exempt, r.visible
+            SELECT u.*, r.role_type, r.visible
             FROM user_roles r
             JOIN users u ON u.id = r.user_id
             {where}
@@ -5385,17 +5357,13 @@ def list_user_roles(query='', limit=100):
                 'username': row['username'],
                 'player_id': row['player_id'],
                 'role_type': row['role_type'],
-                'role_key': row['role_key'],
-                'title': row['title'],
-                'color': row['color'],
-                'sort_order': row['sort_order'],
-                'can_direct_friend': bool(row['can_direct_friend']),
-                'chat_exempt': bool(row['chat_exempt']),
+                'can_direct_friend': bool(_role_defaults(row['role_type']).get('can_direct_friend')),
+                'chat_exempt': bool(_role_defaults(row['role_type']).get('chat_exempt')),
             })
         return result
 
 
-def admin_set_user_role(identifier, role_type, title='', color='', sort_order=None, role_key='', can_direct_friend=None, chat_exempt=None, visible=True):
+def admin_set_user_role(identifier, role_type):
     user = find_user_for_admin(identifier)
     if not user:
         return None, None, '账号不存在'
@@ -5408,26 +5376,11 @@ def admin_set_user_role(identifier, role_type, title='', color='', sort_order=No
     if user_key == 'stickerbug' and normalized_type != 'admin':
         return None, None, 'Stickerbug 必须保持管理员身份'
     defaults = _role_defaults(normalized_type)
-    title_text = str(title or defaults.get('title') or '').strip()[:32]
-    role_key_text = str(role_key or defaults.get('role_key') or normalized_type).strip()[:40]
-    color_text = _normalize_role_color(color, defaults.get('color') or 'neutral')
-    if sort_order is None:
-        order_value = int(defaults.get('sort_order', 99))
-    else:
-        try:
-            order_value = max(0, min(int(sort_order), 99))
-        except (TypeError, ValueError):
-            return None, None, 'sort 必须是 0-99 的整数'
-    direct = defaults.get('can_direct_friend') if can_direct_friend is None else bool(can_direct_friend)
-    chat = defaults.get('chat_exempt') if chat_exempt is None else bool(chat_exempt)
-    if normalized_type == 'admin':
-        direct = True
-        chat = True
-        order_value = 0
-    if normalized_type == 'staff':
-        direct = True
-        chat = True
-        order_value = min(order_value, 1)
+    role_key_text = str(defaults.get('role_key') or normalized_type).strip()[:40]
+    color_text = _normalize_role_color(defaults.get('color'), 'neutral')
+    order_value = int(defaults.get('sort_order', 99))
+    direct = bool(defaults.get('can_direct_friend'))
+    chat = bool(defaults.get('chat_exempt'))
     now = utc_now()
     with get_db_connection() as conn:
         conn.execute(
@@ -5452,19 +5405,18 @@ def admin_set_user_role(identifier, role_type, title='', color='', sort_order=No
                 user['id'],
                 normalized_type,
                 role_key_text,
-                title_text,
+                '',
                 color_text,
                 order_value,
                 1 if direct else 0,
                 1 if chat else 0,
-                1 if visible and normalized_type != 'none' else 0,
+                1 if normalized_type != 'none' else 0,
                 now,
                 now,
             ),
         )
         user_row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
         role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (user['id'],)).fetchone()
-        _sync_role_title_for_user_conn(conn, user_row, role_row)
         conn.commit()
         titles = [
             item
@@ -5480,7 +5432,7 @@ def admin_clear_user_role(identifier):
         return None, '账号不存在'
     if normalize_username_key(user['username']) == 'stickerbug':
         return None, '不能清除 Stickerbug 的管理员身份'
-    _, _, error = admin_set_user_role(user['id'], 'none', title='', color='neutral', sort_order=99, role_key='none', can_direct_friend=False, chat_exempt=False, visible=False)
+    _, _, error = admin_set_user_role(user['id'], 'none')
     if error:
         return None, error
     return user, None
@@ -6806,20 +6758,47 @@ def _mark_friend_notifications_read(conn, user_id):
         ''',
         (now, user_id, 'pending', 'auto_add'),
     )
+    conn.execute(
+        '''
+        UPDATE friendships
+        SET requester_read_at = COALESCE(requester_read_at, ?)
+        WHERE requester_id = ?
+          AND requester_read_at IS NULL
+          AND status = ?
+        ''',
+        (now, user_id, 'accepted'),
+    )
 
 
 def _friend_unread_count(conn, user_id):
     row = conn.execute(
         '''
-        SELECT COUNT(*) AS count
+        SELECT
+            SUM(
+                CASE
+                    WHEN f.addressee_id = ?
+                     AND f.addressee_read_at IS NULL
+                     AND (f.status = ? OR f.notice_type = ?)
+                    THEN 1 ELSE 0
+                END
+            )
+            +
+            SUM(
+                CASE
+                    WHEN f.requester_id = ?
+                     AND f.requester_read_at IS NULL
+                     AND f.status = ?
+                    THEN 1 ELSE 0
+                END
+            ) AS count
         FROM friendships f
-        JOIN users u ON u.id = f.requester_id
-        WHERE f.addressee_id = ?
-          AND f.addressee_read_at IS NULL
-          AND (f.status = ? OR f.notice_type = ?)
-          AND u.deleted_at IS NULL
+        JOIN users requester ON requester.id = f.requester_id
+        JOIN users addressee ON addressee.id = f.addressee_id
+        WHERE (f.requester_id = ? OR f.addressee_id = ?)
+          AND requester.deleted_at IS NULL
+          AND addressee.deleted_at IS NULL
         ''',
-        (user_id, 'pending', 'auto_add'),
+        (user_id, 'pending', 'auto_add', user_id, 'accepted', user_id, user_id),
     ).fetchone()
     return int(row['count'] or 0) if row else 0
 
@@ -6971,11 +6950,20 @@ def list_friends(user_id, mark_read=False):
             other = conn.execute('SELECT * FROM users WHERE id = ?', (other_id,)).fetchone()
             if other is None or _user_row_is_deleted(other):
                 continue
+            addressee_unread = (
+                row['addressee_id'] == uid
+                and not (row['addressee_read_at'] if 'addressee_read_at' in row.keys() else None)
+            )
+            requester_unread = (
+                row['requester_id'] == uid
+                and row['status'] == 'accepted'
+                and not (row['requester_read_at'] if 'requester_read_at' in row.keys() else None)
+            )
             item = {
                 'request_id': row['id'],
                 'status': row['status'],
                 'notice_type': row['notice_type'] if 'notice_type' in row.keys() else 'request',
-                'is_unread': row['addressee_id'] == uid and not (row['addressee_read_at'] if 'addressee_read_at' in row.keys() else None),
+                'is_unread': addressee_unread or requester_unread,
                 'direction': 'incoming' if row['addressee_id'] == uid else 'outgoing',
                 'user': (
                     _public_social_user(other, conn, titles_by_user, role_by_user)
@@ -6989,8 +6977,10 @@ def list_friends(user_id, mark_read=False):
             }
             if row['status'] == 'accepted':
                 friends.append(item)
-                if item['notice_type'] == 'auto_add' and row['addressee_id'] == uid:
+                if item['notice_type'] == 'auto_add' and addressee_unread:
                     incoming.append({**item, 'status': 'notice'})
+                elif requester_unread:
+                    incoming.append({**item, 'status': 'notice', 'notice_type': 'accepted'})
             elif row['status'] == 'pending' and row['addressee_id'] == uid:
                 incoming.append(item)
             elif row['status'] == 'pending':
@@ -7019,6 +7009,7 @@ def add_friend_request(user_id, identifier):
         return None, '请先登录账号'
     now = utc_now()
     return_friend_list = False
+    notify_user_ids = []
     with get_db_connection() as conn:
         requester = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if requester is None or _user_row_is_deleted(requester):
@@ -7030,6 +7021,7 @@ def add_friend_request(user_id, identifier):
             return None, '账号不存在'
         if int(target['id']) == uid:
             return None, '不能添加自己为好友'
+        target_id = int(target['id'])
         auto_add = _is_auto_friend_requester(requester, conn)
         if not auto_add and not bool(target['accept_friend_requests']):
             return None, '对方暂不接受好友请求'
@@ -7048,22 +7040,31 @@ def add_friend_request(user_id, identifier):
                 return_friend_list = True
             elif existing['status'] == 'pending' and existing['addressee_id'] == uid:
                 conn.execute(
-                    'UPDATE friendships SET status = ?, updated_at = ?, addressee_read_at = COALESCE(addressee_read_at, ?) WHERE id = ?',
+                    '''
+                    UPDATE friendships
+                    SET status = ?, updated_at = ?,
+                        addressee_read_at = COALESCE(addressee_read_at, ?),
+                        requester_read_at = NULL
+                    WHERE id = ?
+                    ''',
                     ('accepted', now, now, existing['id']),
                 )
                 conn.commit()
                 return_friend_list = True
+                notify_user_ids.extend((uid, int(existing['requester_id'])))
             elif auto_add:
                 conn.execute(
                     '''
                     UPDATE friendships
-                    SET status = ?, updated_at = ?, notice_type = ?, expires_at = NULL, addressee_read_at = NULL
+                    SET status = ?, updated_at = ?, notice_type = ?, expires_at = NULL,
+                        addressee_read_at = NULL, requester_read_at = ?
                     WHERE id = ?
                     ''',
-                    ('accepted', now, 'auto_add', existing['id']),
+                    ('accepted', now, 'auto_add', now, existing['id']),
                 )
                 conn.commit()
                 return_friend_list = True
+                notify_user_ids.extend((uid, target_id))
             else:
                 return_friend_list = True
         else:
@@ -7074,16 +7075,19 @@ def add_friend_request(user_id, identifier):
                 '''
                 INSERT INTO friendships (
                     requester_id, addressee_id, status, created_at, updated_at,
-                    expires_at, addressee_read_at, notice_type
+                    expires_at, addressee_read_at, requester_read_at, notice_type
                 )
-                VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
+                VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)
                 ''',
-                (uid, target['id'], status, now, now, expires_at, notice_type),
+                (uid, target_id, status, now, now, expires_at, now if auto_add else None, notice_type),
             )
             conn.commit()
             return_friend_list = True
+            notify_user_ids.extend((uid, target_id))
     if return_friend_list:
-        return list_friends(uid)[0], None
+        result = list_friends(uid)[0] or {}
+        result['_notify_user_ids'] = list(dict.fromkeys(notify_user_ids))
+        return result, None
     return None, '添加好友失败'
 
 
@@ -7095,6 +7099,7 @@ def respond_friend_request(user_id, request_id, action):
         return None, '请先登录账号'
     action_text = str(action or '').lower()
     now = utc_now()
+    notify_user_ids = [uid]
     with get_db_connection() as conn:
         row = conn.execute(
             'SELECT * FROM friendships WHERE id = ? AND addressee_id = ? AND status = ?',
@@ -7102,6 +7107,8 @@ def respond_friend_request(user_id, request_id, action):
         ).fetchone()
         if row is None:
             return None, '好友请求不存在'
+        requester_id = int(row['requester_id'])
+        notify_user_ids.append(requester_id)
         if action_text == 'ignore':
             conn.execute(
                 'UPDATE friendships SET addressee_read_at = COALESCE(addressee_read_at, ?), updated_at = ? WHERE id = ?',
@@ -7109,13 +7116,21 @@ def respond_friend_request(user_id, request_id, action):
             )
         elif action_text == 'accept':
             conn.execute(
-                'UPDATE friendships SET status = ?, updated_at = ?, addressee_read_at = COALESCE(addressee_read_at, ?) WHERE id = ?',
+                '''
+                UPDATE friendships
+                SET status = ?, updated_at = ?,
+                    addressee_read_at = COALESCE(addressee_read_at, ?),
+                    requester_read_at = NULL
+                WHERE id = ?
+                ''',
                 ('accepted', now, now, rid),
             )
         else:
             conn.execute('DELETE FROM friendships WHERE id = ?', (rid,))
         conn.commit()
-    return list_friends(uid)[0], None
+    result = list_friends(uid)[0] or {}
+    result['_notify_user_ids'] = list(dict.fromkeys(notify_user_ids))
+    return result, None
 
 
 def remove_friend(user_id, friend_user_id):
@@ -7136,7 +7151,9 @@ def remove_friend(user_id, friend_user_id):
             ('accepted', uid, fid, fid, uid),
         )
         conn.commit()
-    return list_friends(uid)[0], None
+    result = list_friends(uid)[0] or {}
+    result['_notify_user_ids'] = list(dict.fromkeys((uid, fid)))
+    return result, None
 
 
 def _friendship_status(conn, user_a, user_b):
@@ -7213,6 +7230,21 @@ def _dm_unread_count_conn(conn, user_id):
         (int(user_id),),
     ).fetchone()
     return int(row['count'] or 0) if row else 0
+
+
+def social_unread_counts(user_id):
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '请先登录账号'
+    with get_db_connection() as conn:
+        user = conn.execute('SELECT id, deleted_at FROM users WHERE id = ?', (uid,)).fetchone()
+        if user is None or _user_row_is_deleted(user):
+            return None, '请先登录账号'
+        return {
+            'friend_unread_count': _friend_unread_count(conn, uid),
+            'dm_unread_count': _dm_unread_count_conn(conn, uid),
+        }, None
 
 
 def _get_or_create_dm_thread(conn, user_a, user_b):
@@ -7554,10 +7586,12 @@ def _feedback_user(conn, user_id):
     data = _basic_social_user(row, conn)
     role_row = conn.execute('SELECT * FROM user_roles WHERE user_id = ?', (int(user_id),)).fetchone()
     if role_row is not None and bool(role_row['visible']):
+        role_type = str(role_row['role_type'] or 'none').strip().lower()
+        defaults = _role_defaults(role_type)
         data.update({
-            'role_type': str(role_row['role_type'] or 'none').strip().lower(),
-            'role_title': role_row['title'] or '',
-            'role_color': role_row['color'] or '',
+            'role_type': role_type,
+            'role_title': '',
+            'role_color': _normalize_role_color(defaults.get('color'), 'neutral'),
         })
     else:
         data.update({'role_type': 'none', 'role_title': '', 'role_color': ''})

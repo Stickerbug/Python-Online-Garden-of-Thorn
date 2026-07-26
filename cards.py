@@ -7,6 +7,7 @@ ERROR_CARD_ID = 'Error'
 MAX_CARD_LAYER = 64
 MAX_CARD_EXTRA_HITS = 32
 MAX_DAMAGE_HITS = 100
+MAX_CARD_POWER = 1024
 
 
 def clamp_card_layer(value: Any, default: int = 1) -> int:
@@ -28,6 +29,13 @@ def clamp_damage_hits(value: Any) -> int:
         return min(MAX_DAMAGE_HITS, max(1, int(value)))
     except Exception:
         return 1
+
+
+def clamp_card_power(value: Any) -> int:
+    try:
+        return min(MAX_CARD_POWER, int(value))
+    except Exception:
+        return 0
 
 CARD_FLAG_ALIASES = {
     'tag_troll_cards:exile': 'exile',
@@ -206,6 +214,7 @@ class CardInstance:
     setup_modifiers: Set[str] = field(default_factory=set)
 
     def __post_init__(self):
+        self.power_value = clamp_card_power(self.power_value)
         if not self.def_id:
             self.def_id = ERROR_CARD_ID
             return
@@ -281,7 +290,7 @@ class CardInstance:
             'disabled_flags': list(self.disabled_flags) if self.disabled_flags else [],
             'swift_value': self.swift_value,
             'magic_swift_value': self.magic_swift_value,
-            'power_value': self.power_value,
+            'power_value': clamp_card_power(self.power_value),
             'temp_swift_value': self.temp_swift_value,
             'temp_heavy_value': self.temp_heavy_value,
             'temp_magic_heavy_value': self.temp_magic_heavy_value,
@@ -311,7 +320,7 @@ class CardInstance:
             disabled_flags=normalize_card_flags(d.get('disabled_flags', [])),
             swift_value=max(0, int(d.get('swift_value', 0))),
             magic_swift_value=max(0, int(d.get('magic_swift_value', 0))),
-            power_value=int(d.get('power_value', 0)),
+            power_value=clamp_card_power(d.get('power_value', 0)),
             temp_swift_value=max(0, int(d.get('temp_swift_value', 0))),
             temp_heavy_value=max(0, int(d.get('temp_heavy_value', 0))),
             temp_magic_heavy_value=max(0, int(d.get('temp_magic_heavy_value', 0))),

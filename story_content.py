@@ -13,6 +13,7 @@ STORY_RULES = {
     'starting_elixir': 3,
     'starting_magic': 0,
     'max_magic': 10,
+    'resource_cap': None,
     'draw_per_turn': 5,
     'hand_limit': 10,
     'stage_floor_count': 16,
@@ -607,6 +608,28 @@ STORY_ENEMIES = {
     ), script='hive'),
 }
 
+STORY_ENEMY_IMAGE_URLS = {
+    'soldier_ant': '/static/assets/story-enemies/soldier-ant.svg',
+    'young_ant': '/static/assets/story-enemies/young-ant.svg',
+    'worker_ant': '/static/assets/story-enemies/worker-ant.svg',
+    'bee': '/static/assets/story-enemies/bee.svg',
+    'wasp': '/static/assets/story-enemies/wasp.svg',
+    'ladybug': '/static/assets/story-enemies/ladybug.svg',
+    'garden_rock': '/static/assets/story-enemies/garden-rock.svg',
+    'dandelion': '/static/assets/story-enemies/dandelion.svg',
+    'centipede': '/static/assets/story-enemies/centipede-body.svg',
+    'spider': '/static/assets/story-enemies/spider.svg',
+    'sunflower': '/static/assets/story-enemies/sunflower.svg',
+    'avocado': '/static/assets/story-enemies/avocado.svg',
+    'spider_yuba': '/static/assets/story-enemies/spider-yuba.svg',
+    'digger': '/static/assets/story-enemies/digger.svg',
+    'ant_queen': '/static/assets/story-enemies/ant-queen.svg',
+    'hive': '/static/assets/story-enemies/hive.svg',
+}
+
+for _enemy_id, _image_url in STORY_ENEMY_IMAGE_URLS.items():
+    STORY_ENEMIES[_enemy_id]['image_url'] = _image_url
+
 
 STORY_ENCOUNTERS = {
     'garden': {
@@ -721,7 +744,7 @@ def validate_story_content():
         'delayed_copy', 'discard_to_draw_top', 'draw', 'draw_target_status',
         'draw_to_limit', 'elixir', 'elixir_from_hand', 'equipment',
         'exile_hand_for_shield', 'first_use_power', 'next_attack_multiplier',
-        'next_skill_repeats', 'power', 'random_exile', 'salt', 'shield',
+        'magic', 'next_skill_repeats', 'power', 'random_exile', 'salt', 'shield',
         'shield_from_target_status', 'status', 'status_self',
         'temporary_cost_down', 'temporary_effect',
     }

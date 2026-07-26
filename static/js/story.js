@@ -19,6 +19,35 @@
     let toastTimer = null;
     let developerModeOpen = false;
     let cardChoiceContext = null;
+    let hoveredPredictionTargetId = '';
+    let storyKeyboardFocus = null;
+    let storySecondHandPage = false;
+
+    const STORY_TAG_STYLES = Object.freeze({
+        precise: { className: 'precision', color: '#546E7A' },
+        exile: { className: 'exile', color: '#6C3483' },
+        ready: { className: 'custom story-ready', color: '#B9770E' },
+        unplayable: { className: 'custom story-unplayable', color: '#922B21' },
+        retain: { className: 'custom story-retain', color: '#2874A6' },
+        void: { className: 'void', color: '#37474F' },
+        wide: { className: 'wide-strike', color: '#1F9D8A' },
+    });
+
+    const STORY_INLINE_ICONS = Object.freeze({
+        D: '/static/assets/ui-icons/damage.svg',
+        H: '/static/assets/ui-icons/hit-point.svg',
+        E: '/static/assets/ui-icons/elixir.svg',
+        M: '/static/assets/ui-icons/magic.svg',
+    });
+
+    const STORY_CARD_TYPE_LABELS = Object.freeze({
+        thorn: 'Thorn',
+        bloom: 'Bloom',
+        root: 'Root',
+        guard: 'Guard',
+        curse: 'Curse',
+        infect: 'Infect',
+    });
 
     const TEXT = {
         en: {
@@ -381,6 +410,8 @@
 
     function showView(name) {
         VIEWS.forEach((id) => $(id)?.classList.toggle('hidden', id !== name));
+        if (storyKeyboardFocus && !storyElementVisible(storyKeyboardFocus)) clearStoryKeyboardFocus();
+        window.GTN_KEYBINDINGS?.refreshHints?.();
     }
 
     function stateValue(value) {
@@ -413,12 +444,43 @@
         });
     }
 
-    async function animateEnemyLunge() {
-        await waitForStoryAnimation($('story-enemy-group'), 'is-lunging', 420);
+    function storySleep(duration) {
+        return new Promise((resolve) => window.setTimeout(resolve, duration));
     }
 
-    async function animateEnemyGain() {
-        const group = $('story-enemy-group');
+    function storyEnemyActor(enemyId) {
+        if (!enemyId) return null;
+        return document.querySelector(
+            `.story-actor-enemy[data-target-id="${CSS.escape(String(enemyId))}"]`,
+        );
+    }
+
+    function spawnStoryFloat(target, message, kind = '') {
+        const layer = $('story-float-layer');
+        if (!layer || !target || !message) return;
+        const rect = target.getBoundingClientRect();
+        const item = document.createElement('span');
+        item.className = `story-combat-float${kind ? ` story-combat-float-${kind}` : ''}`;
+        item.textContent = String(message);
+        item.style.left = `${rect.left + rect.width / 2}px`;
+        item.style.top = `${rect.top + Math.max(18, rect.height * .28)}px`;
+        layer.append(item);
+        item.addEventListener('animationend', () => item.remove(), { once: true });
+        window.setTimeout(() => item.remove(), 1100);
+    }
+
+    function storyEventAmount(value) {
+        const amount = Math.floor(Number(value) || 0);
+        return amount > 0 ? `+${amount}` : String(amount);
+    }
+
+    async function animateEnemyLunge(enemyId) {
+        const actor = storyEnemyActor(enemyId) || $('story-enemy-group');
+        await waitForStoryAnimation(actor, 'is-lunging', 420);
+    }
+
+    async function animateEnemyGain(enemyId) {
+        const group = storyEnemyActor(enemyId) || $('story-enemy-group');
         if (!group) return;
         const direction = Math.random() < .5 ? -1 : 1;
         const x = direction * (3 + Math.random() * 4);
@@ -433,29 +495,106 @@
         await waitForStoryAnimation(group, 'is-gaining', 330);
     }
 
-    async function playEnemyEventSequence(events, nextRun) {
+    async function animateStoryPileMove(event, destination) {
+        const source = event?.card_instance_id
+            ? document.querySelector(
+                `.story-hand-card[data-instance-id="${CSS.escape(String(event.card_instance_id))}"] .story-card`,
+            )
+            : null;
+        const target = destination === 'draw'
+            ? $('story-draw-pile')
+            : destination === 'exile'
+                ? $('story-exile-pile')
+                : $('story-discard-pile');
+        if (!target) return;
+        const sourceRect = source?.getBoundingClientRect() || $('story-hand')?.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        if (!sourceRect) return;
+        const ghost = source?.cloneNode(true) || document.createElement('span');
+        ghost.classList.add('story-pile-motion');
+        if (!source) ghost.classList.add('story-pile-motion-back');
+        ghost.style.left = `${sourceRect.left}px`;
+        ghost.style.top = `${sourceRect.top}px`;
+        ghost.style.width = `${Math.max(34, sourceRect.width)}px`;
+        ghost.style.height = `${Math.max(48, sourceRect.height)}px`;
+        ghost.style.setProperty('--story-pile-x', `${targetRect.left + targetRect.width / 2 - sourceRect.left - sourceRect.width / 2}px`);
+        ghost.style.setProperty('--story-pile-y', `${targetRect.top + targetRect.height / 2 - sourceRect.top - sourceRect.height / 2}px`);
+        document.body.append(ghost);
+        await waitForStoryAnimation(ghost, 'is-moving', 300);
+        ghost.remove();
+    }
+
+    async function animateStoryDraw(event) {
+        const source = $('story-draw-pile');
+        const target = $('story-hand');
+        if (!source || !target) return;
+        const sourceRect = source.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const ghost = document.createElement('span');
+        ghost.className = 'story-pile-motion story-pile-motion-back';
+        ghost.style.left = `${sourceRect.left + sourceRect.width / 2 - 22}px`;
+        ghost.style.top = `${sourceRect.top + sourceRect.height / 2 - 31}px`;
+        ghost.style.width = '44px';
+        ghost.style.height = '62px';
+        ghost.style.setProperty('--story-pile-x', `${targetRect.left + targetRect.width / 2 - sourceRect.left - sourceRect.width / 2}px`);
+        ghost.style.setProperty('--story-pile-y', `${targetRect.top + targetRect.height * .58 - sourceRect.top - sourceRect.height / 2}px`);
+        if (Number(event?.count) > 1) ghost.dataset.count = String(event.count);
+        document.body.append(ghost);
+        await waitForStoryAnimation(ghost, 'is-moving', 300);
+        ghost.remove();
+    }
+
+    function enemyMoveHasDamage(event) {
+        const enemy = activeRun?.state?.combat?.enemies?.find(
+            (item) => String(item.id) === String(event?.enemy_id),
+        );
+        const definition = storyContent?.enemies?.[enemy?.def_id];
+        const move = definition?.moves?.[Number(event?.move_index) || 0];
+        return (move?.effects || []).some((effect) => effect?.type === 'damage');
+    }
+
+    function updateAnimatedEnemyHealth(event, nextRun) {
+        const actor = storyEnemyActor(event?.enemy_id);
+        const history = Array.isArray(event?.history) ? event.history : [];
+        const finalHit = history[history.length - 1];
+        if (!actor || !finalHit || !Number.isFinite(Number(finalHit.after))) return;
+        const enemy = nextRun?.state?.combat?.enemies?.find(
+            (item) => String(item.id) === String(event.enemy_id),
+        );
+        const maximum = Math.max(1, Number(enemy?.max_health) || 1);
+        const current = Number(finalHit.after);
+        const fill = actor.querySelector('[data-enemy-health-fill]');
+        const value = actor.querySelector('[data-enemy-health-value]');
+        if (fill) fill.style.width = `${Math.max(0, Math.min(100, current / maximum * 100))}%`;
+        if (value) value.textContent = `${Math.max(0, current)}/${maximum}`;
+    }
+
+    async function playStoryEventSequence(events, nextRun, actionType) {
         const sequence = Array.isArray(events) ? events : [];
-        const relevant = sequence.filter((event) => (
-            event?.type === 'player_damage'
-            || (event?.type === 'enemy_gain' && Number(event.amount) > 0)
-        ));
-        if (!relevant.length || !$('story-enemy-group') || $('story-combat')?.classList.contains('hidden')) return;
+        if (!sequence.length || !$('story-enemy-group') || $('story-combat')?.classList.contains('hidden')) return;
 
         selectedCombatCardId = '';
+        destroyStoryCursorCard();
         $('story-aim-layer')?.classList.add('hidden');
         $('story-player-target')?.classList.remove('is-play-target', 'is-aim-hover');
-        $('story-enemy-target')?.classList.remove('is-play-target', 'is-aim-hover');
-        $('story-hand')?.replaceChildren();
+        document.querySelectorAll('.story-actor-enemy').forEach((actor) => {
+            actor.classList.remove('is-play-target', 'is-aim-hover');
+        });
         setText('story-play-hint', '');
-        setText('story-phase', t.enemyTurn);
+        if (actionType === 'end_turn') setText('story-phase', t.enemyTurn);
         const endTurn = $('story-end-turn');
         if (endTurn) endTurn.disabled = true;
         document.body.dataset.enemyAnimating = 'true';
 
         try {
-            for (const event of relevant) {
-                if (event.type === 'player_damage') {
-                    await animateEnemyLunge();
+            for (const event of sequence) {
+                if (!event?.type) continue;
+                if (event.type === 'enemy_action') {
+                    if (enemyMoveHasDamage(event)) await animateEnemyLunge(event.enemy_id);
+                    else await animateEnemyGain(event.enemy_id);
+                } else if (event.type === 'player_damage') {
+                    const target = $('story-player-target');
+                    await waitForStoryAnimation(target, 'is-taking-hit', 280);
                     const history = Array.isArray(event.history) ? event.history : [];
                     const finalHit = history[history.length - 1];
                     if (finalHit && Number.isFinite(Number(finalHit.after))) {
@@ -465,10 +604,40 @@
                             nextRun?.state?.player?.max_health || activeRun?.state?.player?.max_health,
                         );
                     }
+                    spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
+                } else if (event.type === 'enemy_damage') {
+                    const target = storyEnemyActor(event.enemy_id);
+                    updateAnimatedEnemyHealth(event, nextRun);
+                    await waitForStoryAnimation(target, 'is-taking-hit', 280);
+                    spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
                 } else if (event.type === 'enemy_gain') {
-                    await animateEnemyGain();
+                    const target = storyEnemyActor(event.enemy_id);
+                    await animateEnemyGain(event.enemy_id);
+                    spawnStoryFloat(target, `${storyEventAmount(event.amount)} ${event.kind || ''}`, 'gain');
+                } else if (event.type === 'enemy_heal') {
+                    const target = storyEnemyActor(event.enemy_id);
+                    spawnStoryFloat(target, `${storyEventAmount(event.amount)}H`, 'heal');
+                    await waitForStoryAnimation(target, 'is-recovering', 260);
+                } else if (event.type === 'heal') {
+                    const target = $('story-player-target');
+                    spawnStoryFloat(target, `${storyEventAmount(event.amount)}H`, 'heal');
+                    await waitForStoryAnimation(target, 'is-recovering', 260);
+                } else if (event.type === 'shield') {
+                    spawnStoryFloat($('story-player-target'), `${storyEventAmount(event.amount)} ${t.shield}`, 'shield');
+                } else if (event.type === 'elixir') {
+                    spawnStoryFloat($('story-player-target'), `${storyEventAmount(event.amount)}E`, 'elixir');
+                } else if (event.type === 'magic') {
+                    spawnStoryFloat($('story-player-target'), `${storyEventAmount(event.amount)}M`, 'magic');
+                } else if (event.type === 'draw') {
+                    await animateStoryDraw(event);
+                } else if (event.type === 'card_discarded') {
+                    await animateStoryPileMove(event, 'discard');
+                } else if (event.type === 'card_exiled') {
+                    await animateStoryPileMove(event, 'exile');
+                } else if (event.type === 'equipment_added') {
+                    spawnStoryFloat($('story-player-target'), localize(storyContent?.cards?.[event.def_id]?.name), 'equipment');
                 }
-                await new Promise((resolve) => window.setTimeout(resolve, 45));
+                await storySleep(32);
             }
         } finally {
             delete document.body.dataset.enemyAnimating;
@@ -491,7 +660,7 @@
                 }),
             });
             const nextRun = result.run || activeRun;
-            if (actionType === 'end_turn') await playEnemyEventSequence(result.events, nextRun);
+            await playStoryEventSequence(result.events, nextRun, actionType);
             renderRun(nextRun);
             return result;
         } catch (error) {
@@ -630,6 +799,122 @@
         return values;
     }
 
+    function appendStoryRichText(container, value) {
+        if (!container) return;
+        const text = String(value || '');
+        const pattern = /(\d+(?:\s*[×xX*]\s*\d+)?)\s*([DHEM])(?![A-Za-z])/g;
+        let cursor = 0;
+        let match = null;
+        while ((match = pattern.exec(text))) {
+            if (match.index > cursor) container.append(document.createTextNode(text.slice(cursor, match.index)));
+            const token = document.createElement('span');
+            token.className = `story-inline-token story-inline-token-${match[2].toLowerCase()}`;
+            const amount = document.createElement('span');
+            amount.textContent = match[1].replace(/\s+/g, '');
+            const icon = document.createElement('img');
+            icon.className = 'story-inline-token-icon';
+            icon.src = STORY_INLINE_ICONS[match[2]];
+            icon.alt = match[2];
+            token.append(amount, icon);
+            container.append(token);
+            cursor = pattern.lastIndex;
+        }
+        if (cursor < text.length) container.append(document.createTextNode(text.slice(cursor)));
+    }
+
+    function livingStoryEnemies(state = activeRun?.state) {
+        return (state?.combat?.enemies || []).filter((enemy) => Number(enemy.health) > 0);
+    }
+
+    function storyPredictionTargetId(state = activeRun?.state) {
+        const living = livingStoryEnemies(state);
+        if (living.length === 1) return String(living[0].id || '');
+        if (living.some((enemy) => String(enemy.id) === String(hoveredPredictionTargetId))) {
+            return String(hoveredPredictionTargetId);
+        }
+        return '';
+    }
+
+    function storyCardPrediction(card, targetId = storyPredictionTargetId()) {
+        if (!targetId) return null;
+        const prediction = activeRun?.state?.combat?.damage_predictions?.[String(card?.instance_id || '')];
+        if (!prediction) return null;
+        return prediction.by_target?.[String(targetId)] || null;
+    }
+
+    function storyTagElement(tagId) {
+        const definition = storyContent?.tags?.[tagId];
+        if (!definition) return null;
+        const style = STORY_TAG_STYLES[String(tagId || '').toLowerCase()] || {
+            className: 'custom',
+            color: '#34495E',
+        };
+        const tag = document.createElement('span');
+        tag.className = `card-flag ${style.className}`;
+        tag.textContent = localize(definition.name);
+        tag.title = localize(definition.description);
+        if (style.className.includes('custom')) tag.style.setProperty('--custom-tag-color', style.color);
+        return tag;
+    }
+
+    function createStoryCardBottom(card, values, targetId = storyPredictionTargetId()) {
+        const prediction = values?.type === 'thorn' ? storyCardPrediction(card, targetId) : null;
+        const flags = document.createElement('div');
+        flags.className = 'card-flags';
+        (values?.tags || []).forEach((tagId) => {
+            const tag = storyTagElement(tagId);
+            if (tag) flags.append(tag);
+        });
+        if (!flags.childElementCount) flags.classList.add('card-flags-empty');
+        if (!prediction?.summary && !flags.childElementCount) return null;
+
+        const bottom = document.createElement('div');
+        bottom.className = `card-bottom-zone${prediction?.summary ? ' has-prediction' : ''}`;
+        if (prediction?.summary) {
+            const predictionBox = document.createElement('div');
+            predictionBox.className = 'card-prediction';
+            predictionBox.setAttribute('aria-label', `${t.damagePrediction}: ${prediction.summary}`);
+            const section = document.createElement('span');
+            section.className = 'card-prediction-section';
+            const label = document.createElement('span');
+            label.className = 'card-prediction-label';
+            label.textContent = t.damagePrediction;
+            const value = document.createElement('span');
+            value.className = 'card-prediction-part damage';
+            value.textContent = String(prediction.summary);
+            section.append(label, value);
+            predictionBox.append(section);
+            bottom.append(predictionBox);
+        }
+        if (prediction?.summary || flags.childElementCount) bottom.append(flags);
+        return bottom;
+    }
+
+    function refreshStoryCardPredictions() {
+        if (!activeRun?.state?.combat) return;
+        const targetId = storyPredictionTargetId(activeRun.state);
+        document.querySelectorAll('#story-hand .story-card.card[data-instance-id]').forEach((element) => {
+            const instanceId = String(element.dataset.instanceId || '');
+            const card = activeRun.state.combat.hand.find((item) => String(item.instance_id) === instanceId);
+            if (!card) return;
+            const values = cardValues(card);
+            element.querySelector('.card-bottom-zone')?.remove();
+            const bottom = createStoryCardBottom(card, values, targetId);
+            if (bottom) element.append(bottom);
+            element.classList.toggle('card-effect-fit-prediction', Boolean(bottom?.classList.contains('has-prediction')));
+        });
+    }
+
+    function setStoryPredictionTarget(targetId) {
+        const next = String(targetId || '');
+        if (next === hoveredPredictionTargetId) return;
+        hoveredPredictionTargetId = next;
+        document.querySelectorAll('.story-actor-enemy').forEach((actor) => {
+            actor.classList.toggle('is-prediction-hover', String(actor.dataset.targetId || '') === next);
+        });
+        refreshStoryCardPredictions();
+    }
+
     function cardTargetKind(card) {
         const values = cardValues(card);
         return values?.target === 'enemy' ? 'enemy' : 'self';
@@ -741,35 +1026,51 @@
         if (fill) fill.style.width = `${Math.max(0, Math.min(100, now / max * 100))}%`;
     }
 
-    function renderResourceOrbs(containerId, current, maximum, spend, kind) {
+    function renderResourceOrbs(containerId, current, baseSlots, spend, kind) {
         const container = $(containerId);
         if (!container) return;
         const now = Math.max(0, Math.floor(Number(current) || 0));
-        const max = Math.max(1, Math.floor(Number(maximum) || now || 1));
-        const slots = Math.min(15, max);
+        const baseline = Math.min(15, Math.max(1, Math.floor(Number(baseSlots) || 1)));
         const cost = Math.max(0, Math.floor(Number(spend) || 0));
-        container.style.setProperty('--story-resource-slots', String(slots));
-        container.setAttribute('aria-label', `${kind.toUpperCase()} ${now}/${max}`);
-        container.title = `${kind.toUpperCase()} ${now}/${max}`;
-        container.replaceChildren();
         const chunks = [];
         if (now > 15) {
-            for (let count = Math.floor(now / 10); count > 0; count -= 1) chunks.push(10);
+            const tens = Math.floor(now / 10);
+            const ones = now % 10;
+            const visibleTenSlots = Math.max(1, 15 - ones);
+            if (tens > visibleTenSlots) {
+                chunks.push((tens - visibleTenSlots + 1) * 10);
+                for (let count = 1; count < visibleTenSlots; count += 1) chunks.push(10);
+            } else {
+                for (let count = tens; count > 0; count -= 1) chunks.push(10);
+            }
             for (let count = now % 10; count > 0; count -= 1) chunks.push(1);
         } else {
             for (let count = 0; count < now; count += 1) chunks.push(1);
         }
+        const slots = Math.min(15, Math.max(baseline, chunks.length || 1));
+        container.style.setProperty('--story-resource-slots', String(slots));
+        container.setAttribute('aria-label', `${kind.toUpperCase()} ${now}`);
+        container.title = `${kind.toUpperCase()} ${now}`;
+        setText(`${containerId}-total`, String(now));
+        container.replaceChildren();
         while (chunks.length < slots) chunks.push(0);
+        let remainingSpend = Math.min(now, cost);
+        const spending = new Set();
+        for (let index = chunks.length - 1; index >= 0 && remainingSpend > 0; index -= 1) {
+            const value = Number(chunks[index] || 0);
+            if (!value) continue;
+            spending.add(index);
+            remainingSpend -= value;
+        }
         chunks.slice(0, slots).forEach((value, index) => {
             const orb = document.createElement('span');
             orb.className = `story-resource-orb story-resource-orb-${kind}`;
             if (!value) orb.classList.add('is-empty');
-            if (value >= 10) {
+            if (value > 1) {
                 orb.classList.add('is-grouped');
                 orb.dataset.groupValue = String(value);
             }
-            const spendStart = Math.max(0, now - cost);
-            if (value && now <= 15 && index >= spendStart && index < now) orb.classList.add('will-spend');
+            if (value && spending.has(index)) orb.classList.add('will-spend');
             container.append(orb);
         });
     }
@@ -1085,7 +1386,11 @@
         } else {
             cards.forEach((card, index) => grid?.append(createStoryPileTile(card, index + 1)));
         }
-        $('story-pile-dialog')?.showModal();
+        const dialog = $('story-pile-dialog');
+        if (dialog) {
+            dialog.dataset.pileKind = kind;
+            dialog.showModal();
+        }
     }
 
     function createStoryCard(card, options = {}) {
@@ -1144,33 +1449,16 @@
         typeWrap.className = 'card-type-label-wrap';
         const typeLabel = document.createElement('span');
         typeLabel.className = 'card-type-label';
-        typeLabel.textContent = t.cardTypes?.[cardType] || cardType;
+        typeLabel.textContent = STORY_CARD_TYPE_LABELS[cardType] || cardType;
         typeWrap.append(typeLabel);
-        const tags = document.createElement('div');
-        tags.className = 'story-card-tags';
-        (values.tags || []).forEach((tagId) => {
-            const definition = storyContent?.tags?.[tagId];
-            if (!definition) return;
-            const tag = document.createElement('span');
-            tag.textContent = localize(definition.name);
-            tag.title = localize(definition.description);
-            tags.append(tag);
-        });
         const description = document.createElement('div');
         description.className = 'card-effect';
-        description.textContent = localize(values.description);
-        element.append(typeWrap, tags, description);
-        const prediction = activeRun?.state?.combat?.damage_predictions?.[String(card.instance_id || '')];
-        if (cardType === 'thorn' && prediction?.summary) {
-            const damagePrediction = document.createElement('div');
-            damagePrediction.className = 'story-card-damage-prediction';
-            damagePrediction.setAttribute('aria-label', `${t.damagePrediction}: ${prediction.summary}`);
-            const label = document.createElement('span');
-            label.textContent = t.damagePrediction;
-            const value = document.createElement('strong');
-            value.textContent = String(prediction.summary);
-            damagePrediction.append(label, value);
-            element.append(damagePrediction);
+        appendStoryRichText(description, localize(values.description));
+        element.append(typeWrap, description);
+        const bottom = createStoryCardBottom(card, values, options.predictionTargetId);
+        if (bottom) {
+            element.append(bottom);
+            element.classList.toggle('card-effect-fit-prediction', bottom.classList.contains('has-prediction'));
         }
         if (options.note) {
             const note = document.createElement('span');
@@ -1212,8 +1500,8 @@
         setText('story-stage-value', state.stage || 1);
         setText('story-biome-value', state.biome === 'garden' ? t.garden : state.biome || t.garden);
         setText('story-health-value', `${stateValue(player.health)}/${stateValue(player.max_health)}`);
-        setText('story-elixir-value', `${stateValue(player.max_elixir)} E`);
-        setText('story-magic-value', `${stateValue(player.magic)}/${stateValue(player.max_magic)}`);
+        setText('story-elixir-value', `${stateValue(player.elixir ?? player.max_elixir)} E`);
+        setText('story-magic-value', `${stateValue(player.magic)} M`);
         setText('story-gold-value', stateValue(player.gold ?? 0));
         setText('story-floor-value', t.floor(state.current_floor || node?.floor || 1));
         setText('story-room-value', t.rooms[node?.type] || node?.type || '');
@@ -1225,6 +1513,42 @@
     function renderEffects(containerId, values) {
         const container = $(containerId);
         renderEffectsInto(container, values);
+    }
+
+    function renderStoryEquipment(cards) {
+        const container = $('story-player-equipment');
+        if (!container) return;
+        container.replaceChildren();
+        const equipment = Array.isArray(cards) ? cards : [];
+        container.style.setProperty('--story-equipment-count', String(Math.max(1, equipment.length)));
+        equipment.forEach((card, index) => {
+            const values = cardValues(card);
+            if (!values) return;
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'story-equipment';
+            item.style.setProperty('--story-equipment-index', String(index));
+            const angle = 360 / Math.max(1, equipment.length) * index;
+            item.style.setProperty('--story-equipment-angle', `${angle}deg`);
+            item.style.setProperty('--story-equipment-counter-angle', `${-angle}deg`);
+            item.title = `${localize(values.name)}\n${localize(values.description)}`;
+            item.setAttribute('aria-label', item.title);
+            const imageUrl = card.upgraded
+                ? (values.upgraded_image_url || values.image_url || '')
+                : (values.image_url || '');
+            if (imageUrl) {
+                const image = document.createElement('img');
+                image.src = imageUrl;
+                image.alt = '';
+                image.setAttribute('aria-hidden', 'true');
+                item.append(image);
+            } else {
+                const fallback = document.createElement('span');
+                fallback.textContent = localize(values.name).slice(0, 1);
+                item.append(fallback);
+            }
+            container.append(item);
+        });
     }
 
     function renderEffectsInto(container, values) {
@@ -1276,19 +1600,31 @@
     }
 
     function createEnemyActor(enemy, selectedTargetKind) {
+        const definition = storyContent?.enemies?.[enemy?.def_id] || {};
         const actor = document.createElement('article');
-        actor.className = 'story-actor story-actor-enemy';
+        actor.className = 'story-actor story-actor-enemy classic-fighter';
         actor.dataset.targetKind = 'enemy';
         actor.dataset.targetId = String(enemy.id || '');
+        actor.tabIndex = 0;
         actor.classList.toggle('is-play-target', selectedTargetKind === 'enemy');
 
         const name = document.createElement('div');
-        name.className = 'story-actor-name';
+        name.className = 'story-actor-name classic-fighter-name';
         name.textContent = localize(enemy.name) || (lang === 'zh' ? '敌人' : 'Enemy');
         const portrait = document.createElement('div');
-        portrait.className = 'story-portrait story-enemy-placeholder';
+        const imageUrl = String(enemy?.image_url || definition.image_url || '').trim();
+        portrait.className = `story-portrait ${imageUrl ? 'story-enemy-portrait' : 'story-enemy-placeholder'}`;
         portrait.setAttribute('aria-label', name.textContent);
-        portrait.textContent = '?';
+        if (imageUrl) {
+            const image = document.createElement('img');
+            image.src = imageUrl;
+            image.alt = '';
+            image.draggable = false;
+            image.setAttribute('aria-hidden', 'true');
+            portrait.append(image);
+        } else {
+            portrait.textContent = '?';
+        }
 
         const health = document.createElement('div');
         health.className = 'story-health-wrap';
@@ -1302,9 +1638,11 @@
         track.className = 'story-health-track';
         const fill = document.createElement('div');
         fill.className = 'story-health-fill';
+        fill.dataset.enemyHealthFill = String(enemy.id || '');
         fill.style.width = `${Math.max(0, Math.min(100, Number(enemy.health || 0) / Math.max(1, Number(enemy.max_health || 1)) * 100))}%`;
         track.append(fill);
         const healthValue = document.createElement('b');
+        healthValue.dataset.enemyHealthValue = String(enemy.id || '');
         healthValue.textContent = `${Math.max(0, Number(enemy.health || 0))}/${Math.max(1, Number(enemy.max_health || 1))}`;
         healthBody.append(track, healthValue);
         health.append(healthIcon, healthBody);
@@ -1333,6 +1671,18 @@
         intentValue.textContent = [intentName, enemy.intent?.summary].filter(Boolean).join(' · ') || '--';
         intent.append(intentLabel, intentValue);
         actor.append(name, portrait, health, effects, intent);
+        const previewPrediction = () => setStoryPredictionTarget(enemy.id);
+        const clearPrediction = (event) => {
+            if (event?.relatedTarget && actor.contains(event.relatedTarget)) return;
+            if (livingStoryEnemies().length > 1) setStoryPredictionTarget('');
+        };
+        actor.addEventListener('pointerenter', previewPrediction);
+        actor.addEventListener('pointerleave', clearPrediction);
+        actor.addEventListener('focusin', previewPrediction);
+        actor.addEventListener('focusout', clearPrediction);
+        actor.addEventListener('pointerdown', () => {
+            if (!selectedCombatCardId && livingStoryEnemies().length > 1) previewPrediction();
+        });
         return actor;
     }
 
@@ -1340,7 +1690,10 @@
         const combat = state.combat || {};
         const player = state.player || {};
         const livingEnemies = (combat.enemies || []).filter((item) => Number(item.health) > 0);
-        const enemy = livingEnemies[0] || (combat.enemies || [])[0] || {};
+        if (livingEnemies.length <= 1) hoveredPredictionTargetId = '';
+        else if (!livingEnemies.some((item) => String(item.id) === String(hoveredPredictionTargetId))) {
+            hoveredPredictionTargetId = '';
+        }
         if (selectedCombatCardId && !selectedCombatCard(state)) selectedCombatCardId = '';
         const selected = selectedCombatCard(state);
         const selectedValues = cardValues(selected);
@@ -1358,7 +1711,7 @@
         renderResourceOrbs(
             'story-combat-player-magic',
             combat.magic,
-            player.max_magic,
+            1,
             selectedValues?.cost_m,
             'm',
         );
@@ -1375,6 +1728,7 @@
             { key: 'stun', label: '眩晕', value: combat.stun },
             { key: 'broken', label: '破损', value: combat.broken },
         ]);
+        renderStoryEquipment(combat.equipment);
         const enemyGroup = $('story-enemy-group');
         enemyGroup?.replaceChildren();
         enemyGroup?.style.setProperty('--story-enemy-count', String(Math.max(1, livingEnemies.length)));
@@ -1412,6 +1766,7 @@
             if (String(card.instance_id) === String(selectedCombatCardId)) wrapper.classList.add('is-selected');
             wrapper.append(createStoryCard(card, {
                 disabled: !playable,
+                predictionTargetId: storyPredictionTargetId(state),
                 onClick: (event) => selectCombatCard(state, card, event),
             }));
             hand?.append(wrapper);
@@ -1727,6 +2082,429 @@
         if (button) button.disabled = false;
     }
 
+    function storyElementVisible(element) {
+        if (!element || !element.isConnected || element.disabled) return false;
+        if (element.closest('.hidden')) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }
+
+    function storyKeyboardItems() {
+        const shortcutModal = $('modal');
+        if (shortcutModal?.classList.contains('active')) {
+            return [...shortcutModal.querySelectorAll('button:not(:disabled)')]
+                .filter(storyElementVisible);
+        }
+        const dialog = document.querySelector('dialog[open]');
+        if (dialog) {
+            return [...dialog.querySelectorAll(
+                '.story-card-choice-select-item:not(:disabled), button:not(:disabled)',
+            )].filter(storyElementVisible);
+        }
+        const selected = selectedCombatCard(activeRun?.state);
+        if (
+            selected
+            && !storyCursorCardMode(selected)
+            && !$('story-combat')?.classList.contains('hidden')
+        ) {
+            const targetKind = cardTargetKind(selected);
+            const selector = targetKind === 'enemy'
+                ? '.story-actor-enemy[data-target-id]'
+                : '#story-player-target';
+            return [...document.querySelectorAll(selector)].filter(storyElementVisible);
+        }
+        return [
+            ...document.querySelectorAll(
+                '#story-hand .story-card:not(:disabled), '
+                + '.story-choice-screen:not(.hidden) .story-choice-option:not(:disabled), '
+                + '.story-choice-screen:not(.hidden) .story-card:not(:disabled), '
+                + '.story-map-node.is-actionable, '
+                + '#story-terminal:not(.hidden) button:not(:disabled), '
+                + '#story-empty:not(.hidden) button:not(:disabled)',
+            ),
+        ].filter(storyElementVisible);
+    }
+
+    function clearStoryKeyboardFocus() {
+        document.querySelectorAll('.keyboard-nav-focus').forEach((element) => {
+            element.classList.remove('keyboard-nav-focus');
+        });
+        storyKeyboardFocus = null;
+        window.GTN_KEYBINDINGS?.refreshHints?.();
+    }
+
+    function focusStoryKeyboardItem(element) {
+        if (!storyElementVisible(element)) return false;
+        clearStoryKeyboardFocus();
+        storyKeyboardFocus = element;
+        element.classList.add('keyboard-nav-focus');
+        try {
+            element.focus?.({ preventScroll: true });
+        } catch (_) {
+            element.focus?.();
+        }
+        element.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+        window.GTN_KEYBINDINGS?.refreshHints?.();
+        return true;
+    }
+
+    function moveStoryKeyboardFocus(delta) {
+        const items = storyKeyboardItems();
+        if (!items.length) return false;
+        let index = items.indexOf(storyKeyboardFocus);
+        if (index < 0) index = delta > 0 ? -1 : 0;
+        return focusStoryKeyboardItem(items[(index + delta + items.length) % items.length]);
+    }
+
+    function activateStoryElement(element) {
+        if (!storyElementVisible(element)) return false;
+        const actor = element.matches?.('.story-actor[data-target-kind]')
+            ? element
+            : element.closest?.('.story-actor[data-target-kind]');
+        if (actor) {
+            const targetKind = String(actor.dataset.targetKind || '');
+            const card = selectedCombatCard(activeRun?.state);
+            if (card && cardTargetKind(card) === targetKind) {
+                playSelectedCombatCard(targetKind, actor.dataset.targetId || '');
+                return true;
+            }
+            if (!card && targetKind === 'enemy') {
+                setStoryPredictionTarget(actor.dataset.targetId || '');
+                return true;
+            }
+            return false;
+        }
+        element.dispatchEvent(new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+        }));
+        return true;
+    }
+
+    function storySelectSlot(slot, options = {}) {
+        const index = Number(slot) - 1 + ((options.secondPage || storySecondHandPage) ? 10 : 0);
+        const handItems = [...document.querySelectorAll(
+            '#story-hand .story-card:not(:disabled)',
+        )].filter(storyElementVisible);
+        const items = handItems.length ? handItems : storyKeyboardItems();
+        if (index < 0 || index >= items.length) return false;
+        return activateStoryElement(items[index]);
+    }
+
+    function toggleStoryPile(kind) {
+        const dialog = $('story-pile-dialog');
+        if (dialog?.open && dialog.dataset.pileKind === kind) {
+            dialog.close('cancel');
+            return true;
+        }
+        if (document.querySelector('dialog[open]')) return false;
+        if (!activeRun?.state?.combat) return false;
+        openStoryPile(kind);
+        return true;
+    }
+
+    function cancelStorySurface() {
+        const shortcutModal = $('modal');
+        if (shortcutModal?.classList.contains('active')) {
+            shortcutModal.classList.remove('shortcut-help-active');
+            shortcutModal.classList.remove('active');
+            shortcutModal.classList.add('hidden');
+            shortcutModal.setAttribute('aria-hidden', 'true');
+            return true;
+        }
+        const dialog = document.querySelector('dialog[open]');
+        if (dialog) {
+            dialog.close('cancel');
+            return true;
+        }
+        if (developerModeOpen) {
+            setDeveloperMode(false);
+            return true;
+        }
+        return cancelStoryCombatSelection(true);
+    }
+
+    function confirmStorySurface() {
+        const shortcutModal = $('modal');
+        if (shortcutModal?.classList.contains('active')) {
+            const focused = shortcutModal.querySelector('.keyboard-nav-focus');
+            if (focused && activateStoryElement(focused)) return true;
+            return activateStoryElement(shortcutModal.querySelector(
+                '.modal-buttons .btn-primary:not(:disabled), button:not(:disabled)',
+            ));
+        }
+        const dialog = document.querySelector('dialog[open]');
+        if (dialog) {
+            const focused = dialog.querySelector('.keyboard-nav-focus');
+            if (focused && activateStoryElement(focused)) return true;
+            const confirm = dialog.querySelector(
+                '[value="confirm"]:not(:disabled), .story-command-primary:not(:disabled)',
+            );
+            return activateStoryElement(confirm);
+        }
+        if (storyKeyboardFocus && activateStoryElement(storyKeyboardFocus)) return true;
+        const card = selectedCombatCard(activeRun?.state);
+        if (card && storyCursorCardMode(card)) {
+            playSelectedCombatCard(cardTargetKind(card));
+            return true;
+        }
+        const primary = document.querySelector(
+            '.story-choice-screen:not(.hidden) .is-primary:not(:disabled), '
+            + '#story-terminal:not(.hidden) .story-command-primary:not(:disabled), '
+            + '#story-empty:not(.hidden) .story-command-primary:not(:disabled)',
+        );
+        return activateStoryElement(primary);
+    }
+
+    function createStoryShortcutContext(id) {
+        return {
+            id: String(id || ''),
+            slots: [],
+            slotLabels: [],
+            slotLabel: '',
+            actions: [],
+        };
+    }
+
+    function addStoryShortcutAction(context, id, elements = [], label = '') {
+        const actionId = String(id || '');
+        if (!actionId) return;
+        const targets = [...new Set(
+            (Array.isArray(elements) ? elements : [elements]).filter(storyElementVisible),
+        )];
+        const existing = context.actions.find((action) => action.id === actionId);
+        if (existing) {
+            existing.elements = [...new Set([...(existing.elements || []), ...targets])];
+            if (!existing.label && label) existing.label = String(label);
+            return;
+        }
+        context.actions.push({ id: actionId, elements: targets, label: String(label || '') });
+    }
+
+    function addStoryNavigationActions(context, elements, options = {}) {
+        const controls = [...new Set((elements || []).filter(storyElementVisible))];
+        if (!controls.length) return;
+        addStoryShortcutAction(context, 'navigate_left');
+        addStoryShortcutAction(context, 'navigate_right');
+        addStoryShortcutAction(context, 'navigate_up');
+        addStoryShortcutAction(context, 'navigate_down');
+        addStoryShortcutAction(context, 'confirm');
+        if (options.toggle) addStoryShortcutAction(context, 'toggle_focused');
+    }
+
+    function finalizeStoryShortcutContext(context) {
+        if (
+            storyKeyboardFocus
+            && storyElementVisible(storyKeyboardFocus)
+            && storyKeyboardItems().includes(storyKeyboardFocus)
+        ) {
+            addStoryShortcutAction(context, 'confirm', [storyKeyboardFocus]);
+            if (context.actions.some((action) => action.id === 'toggle_focused')) {
+                addStoryShortcutAction(context, 'toggle_focused', [storyKeyboardFocus]);
+            }
+        }
+        addStoryShortcutAction(context, 'shortcut_help');
+        return context;
+    }
+
+    function getStoryShortcutContext() {
+        const shortcutModal = $('modal');
+        if (shortcutModal?.classList.contains('active') && storyElementVisible(shortcutModal)) {
+            const context = createStoryShortcutContext('story-shortcut-help');
+            const buttons = [...shortcutModal.querySelectorAll('button:not(:disabled)')]
+                .filter(storyElementVisible);
+            addStoryNavigationActions(context, buttons);
+            if (buttons.length) {
+                addStoryShortcutAction(context, 'confirm', buttons);
+                addStoryShortcutAction(context, 'cancel', buttons);
+            }
+            return finalizeStoryShortcutContext(context);
+        }
+        const dialog = document.querySelector('dialog[open]');
+        if (dialog) {
+            const context = createStoryShortcutContext(`dialog-${dialog.id || 'story'}`);
+            const choices = [...dialog.querySelectorAll(
+                '.story-card-choice-select-item:not(:disabled)',
+            )].filter(storyElementVisible);
+            context.slots = choices.slice(0, 20);
+            context.slotLabel = t.chooseCard || '选择卡牌';
+            addStoryNavigationActions(context, storyKeyboardItems(), { toggle: choices.length > 0 });
+            const confirm = dialog.querySelector(
+                '[value="confirm"]:not(:disabled), .story-command-primary:not(:disabled)',
+            );
+            const cancel = dialog.querySelector(
+                '[value="cancel"]:not(:disabled), .story-pile-close:not(:disabled)',
+            );
+            if (storyElementVisible(confirm)) addStoryShortcutAction(context, 'confirm', [confirm]);
+            if (storyElementVisible(cancel)) addStoryShortcutAction(context, 'cancel', [cancel]);
+            if (dialog.id === 'story-pile-dialog') {
+                const pileKind = String(dialog.dataset.pileKind || '');
+                const actionId = { draw: 'view_draw', discard: 'view_discard', exile: 'view_exile' }[pileKind];
+                if (actionId) addStoryShortcutAction(context, actionId, cancel ? [cancel] : []);
+            }
+            return finalizeStoryShortcutContext(context);
+        }
+
+        const combat = $('story-combat');
+        if (combat && !combat.classList.contains('hidden')) {
+            const context = createStoryShortcutContext('story-combat');
+            const card = selectedCombatCard(activeRun?.state);
+            if (card && !storyCursorCardMode(card)) {
+                const targetKind = cardTargetKind(card);
+                if (targetKind === 'self') {
+                    addStoryShortcutAction(context, 'target_self', [$('story-player-target')]);
+                } else {
+                    const enemies = livingStoryEnemies();
+                    const enemyElements = [...document.querySelectorAll(
+                        '.story-actor-enemy[data-target-id]',
+                    )].filter(storyElementVisible);
+                    if (enemies[0] && enemyElements[0]) {
+                        addStoryShortcutAction(context, 'target_enemy', [enemyElements[0]]);
+                    }
+                    if (enemies[1] && enemyElements[1]) {
+                        addStoryShortcutAction(context, 'target_enemy_2', [enemyElements[1]]);
+                    }
+                }
+                addStoryNavigationActions(context, storyKeyboardItems());
+                addStoryShortcutAction(context, 'cancel');
+                return finalizeStoryShortcutContext(context);
+            }
+
+            const hand = [...document.querySelectorAll(
+                '#story-hand .story-card:not(:disabled)',
+            )].filter(storyElementVisible);
+            context.slots = hand.slice(0, 20);
+            context.slotLabel = t.hand || '手牌';
+            addStoryNavigationActions(context, hand);
+            if (card) addStoryShortcutAction(context, 'cancel');
+            const endTurn = $('story-end-turn');
+            if (storyElementVisible(endTurn)) addStoryShortcutAction(context, 'end_turn', [endTurn]);
+            [
+                ['view_draw', $('story-draw-pile')],
+                ['view_discard', $('story-discard-pile')],
+                ['view_exile', $('story-exile-pile')],
+            ].forEach(([actionId, element]) => {
+                if (storyElementVisible(element)) addStoryShortcutAction(context, actionId, [element]);
+            });
+            addStoryShortcutAction(context, 'refresh');
+            return finalizeStoryShortcutContext(context);
+        }
+
+        const context = createStoryShortcutContext('story-page');
+        const choices = [...document.querySelectorAll(
+            '.story-choice-screen:not(.hidden) .story-choice-option:not(:disabled), '
+            + '.story-choice-screen:not(.hidden) .story-card:not(:disabled), '
+            + '#story-run:not(.hidden) .story-map-node.is-actionable',
+        )].filter(storyElementVisible);
+        context.slots = choices.slice(0, 20);
+        context.slotLabel = t.choose || '选择';
+        const controls = storyKeyboardItems();
+        addStoryNavigationActions(context, controls);
+        const primary = document.querySelector(
+            '.story-choice-screen:not(.hidden) .is-primary:not(:disabled), '
+            + '#story-terminal:not(.hidden) .story-command-primary:not(:disabled), '
+            + '#story-empty:not(.hidden) .story-command-primary:not(:disabled)',
+        );
+        if (storyElementVisible(primary)) addStoryShortcutAction(context, 'confirm', [primary]);
+        if (developerModeOpen) addStoryShortcutAction(context, 'cancel', [$('story-dev-close')]);
+        addStoryShortcutAction(context, 'refresh');
+        return finalizeStoryShortcutContext(context);
+    }
+
+    function dispatchStoryShortcut(actionId, event = null, options = {}) {
+        const slotMatch = /^select_slot_(\d+)$/.exec(String(actionId || ''));
+        if (slotMatch) return storySelectSlot(Number(slotMatch[1]), options);
+        if (
+            actionId !== 'hand_second_page'
+            && !getStoryShortcutContext().actions.some((action) => action.id === actionId)
+        ) {
+            return false;
+        }
+        switch (actionId) {
+        case 'hand_second_page':
+            storySecondHandPage = options.active !== false;
+            return true;
+        case 'confirm':
+        case 'toggle_focused':
+            return confirmStorySurface();
+        case 'cancel':
+            return cancelStorySurface();
+        case 'refresh':
+            loadRun();
+            return true;
+        case 'navigate_left':
+        case 'navigate_up':
+            return moveStoryKeyboardFocus(-1);
+        case 'navigate_right':
+        case 'navigate_down':
+            return moveStoryKeyboardFocus(1);
+        case 'target_self': {
+            const card = selectedCombatCard(activeRun?.state);
+            if (!card || cardTargetKind(card) !== 'self') return false;
+            playSelectedCombatCard('self');
+            return true;
+        }
+        case 'target_enemy':
+        case 'target_enemy_2': {
+            const enemies = livingStoryEnemies();
+            const index = actionId === 'target_enemy_2' ? 1 : 0;
+            const enemy = enemies[index];
+            if (!enemy) return false;
+            const card = selectedCombatCard(activeRun?.state);
+            if (!card) {
+                setStoryPredictionTarget(enemy.id);
+                return true;
+            }
+            if (cardTargetKind(card) !== 'enemy') return false;
+            playSelectedCombatCard('enemy', enemy.id);
+            return true;
+        }
+        case 'end_turn': {
+            const button = $('story-end-turn');
+            return activateStoryElement(button);
+        }
+        case 'view_draw':
+            return toggleStoryPile('draw');
+        case 'view_discard':
+            return toggleStoryPile('discard');
+        case 'view_exile':
+            return toggleStoryPile('exile');
+        case 'shortcut_help':
+            window.GTN_KEYBINDINGS?.showHelp?.();
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    window.GTN_SHORTCUT_HOST = {
+        dispatch: dispatchStoryShortcut,
+        getShortcutContext: getStoryShortcutContext,
+        hasVirtualFocus() {
+            return Boolean(storyKeyboardFocus?.isConnected);
+        },
+        getAccount() {
+            return window.__STORY_ACCOUNT__ || null;
+        },
+        getLang() {
+            return lang;
+        },
+        isTypingTarget(target) {
+            return Boolean(target?.closest?.('input, textarea, select, [contenteditable="true"]'));
+        },
+        confirm(title, message) {
+            return Promise.resolve(window.confirm([title, message].filter(Boolean).join('\n\n')));
+        },
+        toast(message) {
+            showToast(message);
+        },
+        patchAccountKeybindings(config) {
+            if (!window.__STORY_ACCOUNT__ || !config || typeof config !== 'object') return;
+            window.__STORY_ACCOUNT__ = { ...window.__STORY_ACCOUNT__, keybindings: config };
+        },
+    };
+
     function bind() {
         $('story-start')?.addEventListener('click', startRun);
         $('story-end-turn')?.addEventListener('click', () => storyAction('end_turn'));
@@ -1789,6 +2567,11 @@
         $('story-reset-map')?.addEventListener('click', () => $('story-reset-dialog')?.showModal());
         $('story-reset-dialog')?.addEventListener('close', (event) => {
             if (event.target.returnValue === 'confirm') resetMap();
+        });
+        $('modal')?.addEventListener('click', (event) => {
+            if (event.target !== event.currentTarget) return;
+            event.currentTarget.classList.remove('active');
+            event.currentTarget.classList.add('hidden');
         });
         const moveAim = (event) => {
             storyAimPointer = { x: event.clientX, y: event.clientY };

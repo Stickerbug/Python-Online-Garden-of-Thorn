@@ -12,7 +12,7 @@ from cards import (
     BASE_MAX_ELIXIR, BASE_MAX_MAGIC, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
-    create_deck_from_draft, ERROR_CARD_ID, clamp_damage_hits,
+    create_deck_from_draft, ERROR_CARD_ID, clamp_card_power, clamp_damage_hits,
 )
 
 
@@ -507,7 +507,7 @@ class GameEngine2v2(GameEngine):
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             self._mark_bandage_death_pending(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带将在下一个回合交替结算完成后结束")
+            self.log_msg(f"{self.pn(player_id)}的绷带将在己方下一名可行动玩家行动前结束")
         # Fracture: clear at end of own turn
         if ps.fracture > 0:
             ps.fracture = 0
@@ -974,7 +974,9 @@ class GameEngine2v2(GameEngine):
         self._skip_current_turn_after_start = False
         self._bio_turn_start_setup(player_id)
         self._apply_turn_start_effects_2v2(player_id)
-        if self.game_over:
+        # Turn-start damage can kill this player and recursively advance through
+        # other dead seats. Do not let this stale start flow advance once more.
+        if self.game_over or self.current_player != player_id or ps.health <= 0:
             return
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
@@ -984,12 +986,11 @@ class GameEngine2v2(GameEngine):
 
     def _bio_continue_start_player_turn(self, player_id: int):
         ps = self.players[player_id]
+        if self.current_player != player_id or ps.health <= 0:
+            return
         if getattr(self, '_skip_current_turn_after_start', False):
             self._skip_current_turn_after_start = False
             self._end_player_turn(player_id)
-            return
-        if ps.health <= 0:
-            self._advance_turn()
             return
         if not self.game_over:
             self._enter_player_action_phase(player_id)
@@ -1399,7 +1400,7 @@ class GameEngine2v2(GameEngine):
         if not self._is_valid_player_id(player_id):
             return 0
         ps = self.players[player_id]
-        if ps.invincible and not self._is_status_immune(player_id):
+        if ps.invincible:
             self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
@@ -2014,7 +2015,7 @@ class GameEngine2v2(GameEngine):
                 precision_dodged = True
                 if not getattr(self, '_suppress_next_precision_dodge_log', False):
                     self.log_msg(f"{self.pn(target_id)}的闪避被精准消耗")
-            if ps.invincible and not immune:
+            if ps.invincible:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
                 continue
             if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
@@ -2029,7 +2030,7 @@ class GameEngine2v2(GameEngine):
             power = 0
             if source_card is not None:
                 try:
-                    power = int(getattr(source_card, 'power_value', 0) or 0)
+                    power = clamp_card_power(getattr(source_card, 'power_value', 0) or 0)
                 except Exception:
                     power = 0
             dmg = max(0, amount + int(math.ceil(power / max(1, int(hits or 1)))))

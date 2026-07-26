@@ -7,7 +7,8 @@ const GTN_INSTANCE_ID = String(window.__GTN_INSTANCE_ID__ || '');
 const GTN_INSTANCE_PORT = String(window.__GTN_INSTANCE_PORT__ || '');
 const MAX_CLIENT_CARD_LAYER = 64;
 const MAX_CLIENT_CARD_EXTRA_HITS = 32;
-const MAX_CLIENT_DAMAGE_SEGMENTS = 100;
+const MAX_CLIENT_DAMAGE_HITS = 100;
+const MAX_CLIENT_DAMAGE_SEGMENTS = MAX_CLIENT_CARD_LAYER * MAX_CLIENT_DAMAGE_HITS;
 const GTN_ROUTE_COOKIE = 'gtn_route_port';
 const GTN_ACTIVE_ROUTE_KEY = 'gtn_active_route';
 const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
@@ -191,6 +192,12 @@ function clampClientExtraHits(value) {
     const n = Math.floor(Number(value));
     if (!Number.isFinite(n)) return 0;
     return Math.min(MAX_CLIENT_CARD_EXTRA_HITS, Math.max(0, n));
+}
+
+function clampClientDamageHits(value) {
+    const n = Math.floor(Number(value));
+    if (!Number.isFinite(n)) return 1;
+    return Math.min(MAX_CLIENT_DAMAGE_HITS, Math.max(1, n));
 }
 
 function clampClientDamageSegments(value) {
@@ -824,7 +831,7 @@ const I18N = {
         counter_insufficient: 'Tip: counter cards are not affordable', default_status: 'Garden of Thorn', game_loading: 'Loading...', server_no_response: 'Server is not responding. Check the connection or refresh.',
         spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck', shuffle_deck: 'Shuffle',
         solo_deck_a: 'Your Deck', solo_deck_b: 'Opponent Deck', search_cards: 'Search cards', pause_edit: 'Pause & Edit', set_next_draw: 'Set Next Draw', solo_saved: 'Training decks saved',
-        solo_need_15: 'Both training decks must contain 0-100 cards', solo_event_a: 'Your opening event', solo_event_b: 'Opponent opening event', no_event: 'None', edit_tags: 'Edit Tags',
+        solo_need_15: 'Both training decks must contain 0-50 cards', solo_event_a: 'Your opening event', solo_event_b: 'Opponent opening event', no_event: 'None', edit_tags: 'Edit Tags',
         login_need_nickname: 'Please enter a nickname', login_name_too_long: 'Nickname too long (max 8 CJK or 16 Latin chars)', login_name_not_numbers: 'Nickname cannot be only numbers',
         login_name_not_symbols: 'Nickname cannot be only symbols', login_name_no_repeat_symbols: '- and _ cannot appear consecutively',
         operation_failed: 'Operation failed', server_not_connected: 'Not connected to server', no_mod_files: 'No mod files found', load_success: 'Loaded', load_failed: 'Load failed', save_success: 'Saved', save_failed: 'Save failed: {0}',
@@ -854,7 +861,7 @@ const I18N = {
         error_attack_blocked: 'You cannot use Thorn cards this turn',
         error_attack_only: 'Only Thorn cards can be used this turn',
         error_waiting_response_ui: 'Waiting for response',
-        app_subtitle: 'LAN card battle',
+        app_subtitle: 'Online multiplayer card battle',
         nickname_placeholder: 'Enter nickname',
         message_placeholder: 'Type a message...',
         chat_day_yesterday: 'Yesterday',
@@ -943,7 +950,7 @@ I18N.zh = { ...I18N.en,
     spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天',
     lobby_phase_event_select: '配装选择', lobby_phase_draw: '抽牌',
     solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', clear_deck: '清空牌组', shuffle_deck: '打乱顺序', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
-    search_cards: '搜索卡牌', pause_edit: '暂停并编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练牌组已保存', solo_need_15: '双方训练场牌组都必须为 0-100 张',
+    search_cards: '搜索卡牌', pause_edit: '暂停并编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练牌组已保存', solo_need_15: '双方训练场牌组都必须为 0-50 张',
     solo_event_a: '你的配装倾向', solo_event_b: '对方配装倾向', no_event: '无', edit_tags: '编辑标签',
     login_need_nickname: '请输入昵称', login_name_too_long: '昵称过长（最多 8 个中文或 16 个拉丁字符）', login_name_not_numbers: '昵称不能全为数字', login_name_not_symbols: '昵称不能全为符号', login_name_no_repeat_symbols: '- 和 _ 不能连续出现',
         operation_failed: '操作失败', server_not_connected: '未连接到服务器', no_mod_files: '未找到模组文件', load_success: '加载成功', load_failed: '加载失败', save_success: '保存成功', save_failed: '保存失败：{0}',
@@ -1057,12 +1064,12 @@ I18N.fr = { ...I18N.en,
     spectator_prefix: 'Spectateur', lobby_title: 'Salon', online_count: 'En ligne: {0}', chat_title: 'Chat',
     solo_training: 'Entraînement solo', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer', clear_deck: 'Vider deck', shuffle_deck: 'Mélanger',
     solo_deck_a: 'Votre deck', solo_deck_b: 'Deck adverse', search_cards: 'Chercher cartes', pause_edit: 'Pause édition',
-    set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks d’entraînement doivent contenir 0 à 100 cartes',
+    set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks d’entraînement doivent contenir 0 à 50 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
     edit_tags: 'Modifier tags', tag_precision: 'Précision', tag_exile: 'Exil', tag_non_stackable: 'Non-cumul',
     tag_indestructible: 'Indestructible', tag_sprout: 'Pousse', tag_symbiosis: 'Symbiose', tag_attract: 'Attraction', tag_void: 'Vide', tag_self_only: 'Sans cible', tag_uncancellable: 'Non annulable', tag_rebound: 'Retour', tag_copy: 'Copie', tag_unique: 'Unique', tag_swift: 'Rapidité', tag_stealth: 'Furtif', tag_revealed: 'Révélé', tag_infinite_exclude: 'Retiré d’Infinite Fire',
     fusion_layer: 'Fusion', fission_layer: 'Fission',
-    app_subtitle: 'Combat de cartes en réseau local',
+    app_subtitle: 'Combat de cartes multijoueur en ligne',
     nickname_placeholder: 'Saisir un pseudo',
     message_placeholder: 'Saisir un message...',
     chat_day_yesterday: 'hier',
@@ -1130,12 +1137,12 @@ I18N.ja = { ...I18N.en,
     spectator_prefix: '観戦', lobby_title: 'ロビー', online_count: 'オンライン: {0}', chat_title: 'チャット',
     solo_training: 'ソロ練習場', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始', clear_deck: 'デッキを空にする', shuffle_deck: 'シャッフル',
     solo_deck_a: '自分のデッキ', solo_deck_b: '相手デッキ', search_cards: 'カード検索', pause_edit: '中断して編集',
-    set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '練習デッキは両方とも0〜100枚にしてください',
+    set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '練習デッキは両方とも0〜50枚にしてください',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
     edit_tags: 'タグ編集', tag_precision: '精密', tag_exile: '追放', tag_non_stackable: '非重複',
     tag_indestructible: '破壊不可', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '誘引', tag_void: '虚無', tag_self_only: '対象選択なし', tag_uncancellable: 'キャンセル不可', tag_copy: '複製', tag_unique: '唯一', tag_swift: '迅捷', tag_stealth: '隠密', tag_revealed: '公開', tag_infinite_exclude: 'Infinite Fireから削除', tag_rebound: '回転',
     fusion_layer: '融合', fission_layer: '分裂',
-    app_subtitle: 'LANカード対戦',
+    app_subtitle: 'オンラインカード対戦',
     nickname_placeholder: 'ニックネームを入力',
     message_placeholder: 'メッセージを入力...',
     chat_day_yesterday: '昨日',
@@ -1843,7 +1850,7 @@ Object.assign(I18N.en, {
     friend_accept: 'Accept', friend_decline: 'Decline', friend_ignore: 'Ignore', friend_remove: 'Remove',
     friend_empty: 'No friends yet.', friend_request_empty: 'No pending requests.', friend_sent_empty: 'No sent requests.',
     friend_added: 'Friend request sent', friend_added_direct: 'Friend added', friend_removed: 'Friend removed', friend_updated: 'Updated', friend_remove_confirm: 'Remove this friend?',
-    friend_auto_added: '{0} added you as a friend',
+    friend_auto_added: '{0} added you as a friend', friend_request_accepted: '{0} accepted your friend request',
     social: 'Social', social_login_hint: 'Sign in to use social settings.',
     social_accept_requests: 'Accept friend requests', social_search_nickname: 'Allow adding me by nickname',
     social_search_id: 'Allow adding me by ID', social_accept_game_invites: 'Accept match invitations', social_allow_guest_spectators: 'Allow guest spectators',
@@ -1861,7 +1868,7 @@ Object.assign(I18N.zh, {
     friend_accept: '同意', friend_decline: '拒绝', friend_ignore: '忽略', friend_remove: '删除',
     friend_empty: '暂无好友。', friend_request_empty: '暂无好友请求。', friend_sent_empty: '暂无已发送请求。',
     friend_added: '好友请求已发送', friend_added_direct: '已添加好友', friend_removed: '好友已删除', friend_updated: '已更新', friend_remove_confirm: '确认删除这个好友吗？',
-    friend_auto_added: '{0}已加你为好友',
+    friend_auto_added: '{0}已加你为好友', friend_request_accepted: '{0}已通过你的好友申请',
     social: '社交', social_login_hint: '登录账号后可以使用社交设置。',
     social_accept_requests: '接受好友请求', social_search_nickname: '允许通过昵称添加我',
     social_search_id: '允许通过ID添加我', social_accept_game_invites: '接受对局邀请', social_allow_guest_spectators: '允许游客观战',
@@ -1879,7 +1886,7 @@ Object.assign(I18N.fr, {
     friend_accept: 'Accepter', friend_decline: 'Refuser', friend_ignore: 'Ignorer', friend_remove: 'Retirer',
     friend_empty: 'Aucun ami.', friend_request_empty: 'Aucune demande.', friend_sent_empty: 'Aucune demande envoyée.',
     friend_added: 'Demande envoyée', friend_added_direct: 'Ami ajouté', friend_removed: 'Ami retiré', friend_updated: 'Mis à jour', friend_remove_confirm: 'Retirer cet ami ?',
-    friend_auto_added: '{0} vous a ajouté en ami',
+    friend_auto_added: '{0} vous a ajouté en ami', friend_request_accepted: '{0} a accepté votre demande d’ami',
     social: 'Social', social_login_hint: 'Connectez-vous pour utiliser les réglages sociaux.',
     social_accept_requests: 'Accepter les demandes', social_search_nickname: 'Autoriser par pseudo',
     social_search_id: 'Autoriser par ID', social_accept_game_invites: 'Accepter les invitations de partie', social_allow_guest_spectators: 'Autoriser les spectateurs invités',
@@ -1897,7 +1904,7 @@ Object.assign(I18N.ja, {
     friend_accept: '承認', friend_decline: '拒否', friend_ignore: '無視', friend_remove: '削除',
     friend_empty: 'フレンドはいません。', friend_request_empty: '申請はありません。', friend_sent_empty: '送信済み申請はありません。',
     friend_added: '申請を送信しました', friend_added_direct: 'フレンドを追加しました', friend_removed: '削除しました', friend_updated: '更新しました', friend_remove_confirm: 'このフレンドを削除しますか？',
-    friend_auto_added: '{0}があなたをフレンドに追加しました',
+    friend_auto_added: '{0}があなたをフレンドに追加しました', friend_request_accepted: '{0}がフレンド申請を承認しました',
     social: 'ソーシャル', social_login_hint: 'ログインするとソーシャル設定を使えます。',
     social_accept_requests: 'フレンド申請を受け取る', social_search_nickname: '名前で追加を許可',
     social_search_id: 'IDで追加を許可', social_accept_game_invites: '対戦招待を受け取る', social_allow_guest_spectators: 'ゲスト観戦を許可',
@@ -1978,10 +1985,26 @@ Object.assign(I18N.en, { spectate_unavailable: 'Not spectatable yet' });
 Object.assign(I18N.zh, { spectate_unavailable: '\u6682\u4e0d\u80fd\u89c2\u6218' });
 Object.assign(I18N.fr, { spectate_unavailable: 'Observation indisponible' });
 Object.assign(I18N.ja, { spectate_unavailable: '\u307e\u3060\u89b3\u6226\u3067\u304d\u307e\u305b\u3093' });
-Object.assign(I18N.en, { spectator_count_status: 'Spectators: {0}' });
-Object.assign(I18N.zh, { spectator_count_status: '\u89c2\u6218\uff1a{0}' });
-Object.assign(I18N.fr, { spectator_count_status: 'Spectateurs : {0}' });
-Object.assign(I18N.ja, { spectator_count_status: '\u89b3\u6226\uff1a{0}' });
+Object.assign(I18N.en, {
+    spectator_list: 'Spectator List',
+    no_spectators: 'No spectators',
+    spectating_status: 'Spectating',
+});
+Object.assign(I18N.zh, {
+    spectator_list: '\u89c2\u6218\u5217\u8868',
+    no_spectators: '\u6682\u65e0\u89c2\u6218\u8005',
+    spectating_status: '\u89c2\u6218\u4e2d',
+});
+Object.assign(I18N.fr, {
+    spectator_list: 'Liste des spectateurs',
+    no_spectators: 'Aucun spectateur',
+    spectating_status: 'En observation',
+});
+Object.assign(I18N.ja, {
+    spectator_list: '\u89b3\u6226\u8005\u4e00\u89a7',
+    no_spectators: '\u89b3\u6226\u8005\u306f\u3044\u307e\u305b\u3093',
+    spectating_status: '\u89b3\u6226\u4e2d',
+});
 Object.assign(I18N.en, {
     tutorial_player_you: 'You', tutorial_player_opponent: 'Practice Opponent',
     error_urf_equip_limit: 'Infinite Fire equipment limit is {0}. Sell equipment first.',
@@ -2487,6 +2510,28 @@ function titleColorCss(color) {
         bloom: 'var(--bloom)',
         root: 'var(--root)',
         guard: 'var(--guard)',
+        curse: '#704B87',
+        infect: '#7E9638',
+        health: '#2ECC71',
+        elixir: '#F1C40F',
+        energy: '#F1C40F',
+        magic: '#3498DB',
+        damage: '#C0392B',
+        electric: '#4BA3FF',
+        poison: '#8E44AD',
+        fire: '#E67E22',
+        armor: '#95A5A6',
+        precision: '#546E7A',
+        banish: '#6C3483',
+        indestructible: '#D4AC0D',
+        critical: '#D4AC0D',
+        primary: '#606873',
+        common: '#438C55',
+        rare: '#337DB4',
+        ultra: '#A64D9A',
+        super: '#D39A22',
+        milestone: '#5AA469',
+        hidden: '#7257A8',
         neutral: 'var(--text-secondary)',
     };
     if (tokens[key]) return tokens[key];
@@ -2507,16 +2552,7 @@ function getEquippedTitles(player) {
                 equipped_slot: index + 1,
             }))
         : [];
-    if (titles.length) return titles;
-    if (!player.console_player && player.special_role_label) {
-        return [{
-            id: String(player.special_role || 'legacy-role'),
-            name: String(player.special_role_label),
-            color: String(player.name_color || player.special_role_color || (isAdminPlayer(player) ? 'admin' : 'neutral')),
-            equipped_slot: 1,
-        }];
-    }
-    return [];
+    return titles;
 }
 
 function isSpecialPlayer(player) {
@@ -2527,12 +2563,7 @@ function getSpecialRolePrefix(player) {
     if (!player) return '';
     if (player.console_player || player.special_role === 'console') return UI.console_prefix || '控制台';
     const title = getEquippedTitles(player)[0];
-    if (title) return title.name;
-    if (isAdminPlayer(player)) return UI.admin_prefix;
-    if (player.special_role === 'chief_designer') return UI.chief_designer_prefix;
-    if (player.special_role === 'right_angle_person') return UI.right_angle_person_prefix;
-    if (player.special_role_label) return player.special_role_label;
-    return '';
+    return title ? title.name : '';
 }
 
 function getSpecialRoleColor(player) {
@@ -2540,8 +2571,8 @@ function getSpecialRoleColor(player) {
     const title = getEquippedTitles(player)[0];
     if (title) return title.color;
     if (player.name_color) return player.name_color;
-    if (isAdminPlayer(player)) return 'admin';
-    return player.special_role_color || '';
+    if (player.console_player || player.special_role === 'console') return 'admin';
+    return '';
 }
 
 function getSpecialSortRank(player) {
@@ -2874,7 +2905,10 @@ const COLORS = {
 };
 
 const CARD_TYPE_COLORS = {
-    thorn: COLORS.damage, bloom: COLORS.bloom, root: COLORS.root, guard: COLORS.guard,
+    thorn: 'var(--thorn)',
+    bloom: 'var(--bloom)',
+    root: 'var(--root)',
+    guard: 'var(--guard)',
 };
 
 const CARD_FLAG_STYLES = {
@@ -3779,6 +3813,14 @@ function bindInlineCardChips(root, options = {}) {
     });
 }
 
+function bindGalleryTermDescriptionInteractions(root) {
+    if (!root || !root.querySelectorAll) return;
+    bindInlineCardChips(root, { interactive: true });
+    root.querySelectorAll('.card-token[data-term-key]').forEach(token => {
+        attachTermIntroToTermKey(token, token.dataset.termKey || '');
+    });
+}
+
 function colorizeCardText(value) {
     const text = String(value || '')
         .replace(/\bSwiftness\b/gi, 'Swift')
@@ -3991,7 +4033,7 @@ function getCardTextTokenTermKey(cls, text = '') {
         'status-fragment': 'status:fragment',
         'status-immune': 'status:immune',
         'status-stunned': 'status:stunned',
-        'status-invincible': 'status:invincible',
+        'status-invincible': 'term:invincible',
         'status-bandage': 'status:bandage',
         'status-attack-blocked': 'status:attack_blocked',
         'status-attack-only': 'status:attack_only',
@@ -4037,7 +4079,7 @@ const BUILTIN_OPENING_EVENT_ICONS = Object.freeze({
     '9': '/static/assets/opening-events/multi-petal.svg',
     '10': '/static/assets/opening-events/magic-acceleration.svg',
     '11': '/static/assets/opening-events/inflorescence-arrangement.svg',
-    '12': '/static/assets/ui-icons/damage.svg',
+    '12': '/static/assets/opening-events/all-living-beings-are-equal.svg',
 });
 
 function getOpeningEventIconUrl(eventOrId) {
@@ -4391,12 +4433,13 @@ function localizeKnownLogText(line) {
         ['流血', 'bleed'], ['破损', 'fracture'], ['护盾', 'shield'], ['眩晕', 'stunned'],
         ['闪避', 'dodge'], ['禁疗', 'heal_block'], ['禁攻', 'attack_blocked'], ['血债', 'blood_debt'],
         ['幸运', 'luck'], ['烈火', 'blazing_fire'], ['霜冻', 'arctic:frost'], ['碎片', 'fragment'],
-        ['无敌', 'invincible'], ['绷带', 'bandage'], ['邪眼', 'nazar'], ['树根', 'root_status'],
+        ['绷带', 'bandage'], ['邪眼', 'nazar'], ['树根', 'root_status'],
         ['暴击', 'crit'],
     ];
     for (const [source, key] of statusTerms) {
         out = replaceBattleLogTextOutsidePlayerNames(out, source, `[[status:${key}]]`);
     }
+    out = replaceBattleLogTextOutsidePlayerNames(out, '无敌', '[[term:invincible]]');
     const equipmentArmorLabel = termLib.equipment_armor && termLib.equipment_armor.label;
     if (equipmentArmorLabel) out = replaceBattleLogTextOutsidePlayerNames(out, '装备护甲', equipmentArmorLabel);
     out = replaceBattleLogTextOutsidePlayerNames(out, '中毒', '[[icon:P]]');
@@ -4631,11 +4674,16 @@ let activeDmMessages = [];
 let dmThreadsRequestPromise = null;
 let dmThreadsAbortController = null;
 let dmMessagesAbortController = null;
+let dmSelectionRevision = 0;
 const dmMessageRequestPromises = new Map();
 const dmMessageLastFetchAt = new Map();
 let dmThreadsLastFetchAt = 0;
 const dmFailureBackoff = { threads: 0, messages: new Map() };
 const socialEndpointRequestTimes = new Map();
+let socialUnreadPollTimer = null;
+let socialUnreadAbortController = null;
+let socialUnreadRequestPromise = null;
+let socialUnreadPollDelay = 30000;
 let feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [], thread: null, replay: null };
 let activeFeedbackTab = 'send';
 let activeFeedbackThreadId = null;
@@ -4781,6 +4829,7 @@ let spectatePerspective = 0;
 let pendingSpectateRoomId = null;
 let activeSpectateRoomId = null;
 let spectateCardDataKey = '';
+let activeBattlePanelTab = 'log';
 let responseTimerId = null;
 let responseCountdown = 0;
 let allyConsentTimerId = null;
@@ -4899,7 +4948,7 @@ let matchTransitionGuardUntil = 0;
 let allowLobbyTransitionUntil = 0;
 let soloMode = false;
 const SOLO_TRAINING_MIN_DECK_SIZE = 0;
-const SOLO_TRAINING_MAX_DECK_SIZE = 100;
+const SOLO_TRAINING_MAX_DECK_SIZE = 50;
 let soloDeckA = [];
 let soloDeckB = [];
 let soloTargetDeck = 'a';
@@ -5012,6 +5061,8 @@ const COMBAT_FLOAT_MIN_DURATION_MS = 620;
 const COMBAT_FLOAT_END_PAD_MS = 140;
 const COMBAT_FLOAT_MAX_LAST_DELAY_MS = COMBAT_FLOAT_TOTAL_LIMIT_MS - COMBAT_FLOAT_MIN_DURATION_MS - COMBAT_FLOAT_END_PAD_MS;
 const COMBAT_HIT_STEP_MS = 170;
+const combatImpactCleanupTimers = new WeakMap();
+const combatPulseCleanupTimers = new WeakMap();
 let targetPickCleanup = null;
 let gameOverRenderTimer = null;
 let scheduledGameOverState = null;
@@ -5373,12 +5424,9 @@ function updateCompactUiText() {
     setCompactButtonText('btn-surrender', 'surrender', 'compact_surrender');
     setCompactButtonText('btn-leave-spectate', 'leave_spectate', 'compact_leave_spectate');
     setCompactButtonText('btn-game-chat-send', 'send', 'compact_send');
-    const battleLogHeader = document.querySelector('#battle-log .log-header');
-    if (battleLogHeader) {
-        const full = UI.battle_log;
-        battleLogHeader.textContent = full;
-        battleLogHeader.title = '';
-    }
+    document.querySelectorAll('[data-battle-panel-tab="log"] .battle-panel-tab-label').forEach(label => {
+        label.textContent = UI.battle_log;
+    });
     const teammateSections = document.querySelectorAll('.teammate-sidebar-section');
     if (teammateSections[0]) teammateSections[0].textContent = compactText('compact_hand', 'compact_hand');
     if (teammateSections[1]) teammateSections[1].textContent = compactText('compact_equipment', 'compact_equipment');
@@ -5906,8 +5954,13 @@ function updateStaticText() {
     if (soloDeckATitle) soloDeckATitle.textContent = UI.solo_deck_a;
     const soloDeckBTitle = $('solo-deck-b-title');
     if (soloDeckBTitle) soloDeckBTitle.textContent = UI.solo_deck_b;
-    const battleLogHeader = document.querySelector('#battle-log .log-header');
-    if (battleLogHeader) battleLogHeader.textContent = UI.battle_log;
+    document.querySelectorAll('[data-battle-panel-tab="log"] .battle-panel-tab-label').forEach(label => {
+        label.textContent = UI.battle_log;
+    });
+    document.querySelectorAll('[data-battle-panel-tab="spectators"] .battle-panel-tab-label').forEach(label => {
+        label.textContent = UI.spectator_list || '观战列表';
+    });
+    updateBattlePanelTabs(gameState);
     const oppLabel = $('opp-label');
     if (oppLabel && (!gameState || !gameState.opponent_name)) oppLabel.textContent = UI.opponent;
     const youLabel = $('you-label');
@@ -6058,12 +6111,122 @@ function formatClassicRoundLabel(gs) {
     return 'R0';
 }
 
-function appendSpectatorCountStatus(text, gs) {
-    if (!gs || gs.solo || gs.spectator_count == null) return text;
-    const count = Number(gs.spectator_count);
-    if (!Number.isFinite(count) || count <= 0) return text;
-    const label = (UI.spectator_count_status || 'Spectators: {0}').replace('{0}', String(Math.floor(count)));
-    return text ? `${text} · ${label}` : label;
+function battlePanelSupportsSpectators(gs = gameState) {
+    return !!(
+        gs
+        && activeViewId === 'view-game'
+        && !soloMode
+        && !tutorialMode
+        && !gs.solo
+        && !gs.tutorial
+        && !replayMode
+        && !gs.replay_mode
+    );
+}
+
+function battleSpectatorPlayers(gs = gameState) {
+    return Array.isArray(gs && gs.spectator_players)
+        ? gs.spectator_players.filter(player => player && (player.nickname || player.sid))
+        : [];
+}
+
+function battleSpectatorCount(gs = gameState) {
+    const playersInList = battleSpectatorPlayers(gs);
+    if (Array.isArray(gs && gs.spectator_players)) return playersInList.length;
+    const count = Number(gs && gs.spectator_count);
+    return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+}
+
+function isOwnSpectatorEntry(player) {
+    if (!player) return false;
+    if (player.sid && mySid && String(player.sid) === String(mySid)) return true;
+    return !!(
+        currentAccount
+        && currentAccount.id != null
+        && player.user_id != null
+        && String(currentAccount.id) === String(player.user_id)
+    );
+}
+
+function renderBattleSpectatorList(container, gs = gameState) {
+    if (!container) return;
+    const spectators = battleSpectatorPlayers(gs);
+    container.textContent = '';
+    if (!spectators.length) {
+        const empty = document.createElement('div');
+        empty.className = 'battle-spectator-empty';
+        empty.textContent = UI.no_spectators || '暂无观战者';
+        container.appendChild(empty);
+        return;
+    }
+    spectators.forEach(player => {
+        const row = document.createElement('div');
+        row.className = 'battle-spectator-row';
+        const name = document.createElement('span');
+        name.className = 'battle-spectator-name player-name-inline';
+        setPlayerNameContent(name, player, { adminPrefix: true });
+        row.appendChild(name);
+        if (!isOwnSpectatorEntry(player)) {
+            row.appendChild(createReportButton({
+                objectType: 'player',
+                objectId: String(player.user_id || player.sid || player.nickname || ''),
+                targetUserId: player.user_id || '',
+                targetUsername: player.nickname || '',
+                title: UI.report_player,
+            }, {
+                className: 'report-inline-btn battle-spectator-report-btn',
+                text: UI.report,
+                title: UI.report_player,
+            }));
+        }
+        container.appendChild(row);
+    });
+}
+
+function setBattlePanelTab(tab, options = {}) {
+    const requested = tab === 'spectators' ? 'spectators' : 'log';
+    const next = requested === 'spectators' && battlePanelSupportsSpectators(gameState)
+        ? 'spectators'
+        : 'log';
+    const changed = activeBattlePanelTab !== next;
+    activeBattlePanelTab = next;
+    document.querySelectorAll('[data-battle-panel-tab]').forEach(button => {
+        const active = button.dataset.battlePanelTab === next;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+        button.tabIndex = active ? 0 : -1;
+    });
+    document.querySelectorAll('[data-battle-panel-content]').forEach(content => {
+        content.classList.toggle('hidden', content.dataset.battlePanelContent !== next);
+    });
+    if (changed && options.refreshHints !== false) {
+        window.GTN_KEYBINDINGS?.refreshHints();
+    }
+    return true;
+}
+
+function updateBattlePanelTabs(gs = gameState) {
+    const supportsSpectators = battlePanelSupportsSpectators(gs);
+    const count = battleSpectatorCount(gs);
+    document.querySelectorAll('.battle-panel-tabs').forEach(tabList => {
+        tabList.classList.toggle('is-log-only', !supportsSpectators);
+        const logButton = tabList.querySelector('[data-battle-panel-tab="log"]');
+        const spectatorButton = tabList.querySelector('[data-battle-panel-tab="spectators"]');
+        const logLabel = logButton && logButton.querySelector('.battle-panel-tab-label');
+        const spectatorLabel = spectatorButton && spectatorButton.querySelector('.battle-panel-tab-label');
+        const countLabel = spectatorButton && spectatorButton.querySelector('.battle-panel-tab-count');
+        if (logLabel) logLabel.textContent = UI.battle_log || '战斗日志';
+        if (spectatorLabel) spectatorLabel.textContent = UI.spectator_list || '观战列表';
+        if (countLabel) countLabel.textContent = `(${count})`;
+        if (spectatorButton) spectatorButton.classList.toggle('hidden', !supportsSpectators);
+        if (logButton) logButton.classList.toggle('is-static', !supportsSpectators);
+    });
+    renderBattleSpectatorList($('battle-spectator-list'), gs);
+    renderBattleSpectatorList($('classic-spectator-list'), gs);
+    if (!supportsSpectators && activeBattlePanelTab === 'spectators') {
+        activeBattlePanelTab = 'log';
+    }
+    setBattlePanelTab(activeBattlePanelTab, { refreshHints: false });
 }
 
 function updateTopActionButtons(viewId = activeViewId) {
@@ -6091,8 +6254,10 @@ function updateTopActionButtons(viewId = activeViewId) {
 function showView(viewId) {
     const el = $(viewId);
     const sameView = activeViewId === viewId && el && !el.classList.contains('hidden');
+    if (viewId !== 'view-game') closePileViewerModal();
     if (!sameView) {
         removeFloatingCardPreview();
+        clearKeyboardNavigationFocus();
         document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
         if (el) el.classList.remove('hidden');
         activeViewId = viewId;
@@ -6189,6 +6354,7 @@ function rejectLobbyInvitationOutsideLobby(eventName, data = {}) {
 
 function clearNetworkMatchStateForLobby() {
     if (soloMode || replayMode) return;
+    closePileViewerModal();
     clearActiveMatchRoute('lobby');
     gameState = {};
     draftState = {};
@@ -6198,6 +6364,7 @@ function clearNetworkMatchStateForLobby() {
     activeSpectateRoomId = null;
     spectateCardDataKey = '';
     spectatePerspective = 0;
+    activeBattlePanelTab = 'log';
     pendingPlayCard = null;
     responsePending = false;
     responseData = null;
@@ -6608,6 +6775,7 @@ function loadCachedChangelog() {
 }
 
 async function loadChangelog(force = false, options = {}) {
+    if (changelogLoadingPromise) return changelogLoadingPromise;
     if (changelogLoaded && !force) {
         if (!options.silent && changelogCache && Array.isArray(changelogCache.items)) {
             renderChangelogItems(changelogCache.items);
@@ -6615,7 +6783,6 @@ async function loadChangelog(force = false, options = {}) {
         updateChangelogBadge();
         return;
     }
-    if (changelogLoadingPromise) return changelogLoadingPromise;
     const body = $('changelog-popover-body');
     const cacheVersion = currentChangelogCacheVersion();
     if (!force) {
@@ -7485,13 +7652,17 @@ function renderTagGallery(list, detail, q) {
     const relatedLabel = isGalleryMechanicFlag(gallerySelectedId)
         ? (UI.gallery_related_cards || UI.gallery_cards_with_tag)
         : UI.gallery_cards_with_tag;
+    const descriptionHtml = colorizeCardText(
+        getIntroFlagDescription(gallerySelectedId, getCustomTagDef(gallerySelectedId)) || ''
+    );
     detail.innerHTML = `<div class="gallery-simple-detail">
         <h3>${getFlagLabel(gallerySelectedId)}</h3>
         <div class="gallery-tag-list">${makeGalleryFlagHtml(gallerySelectedId)}</div>
         <p><b>ID：</b>${gallerySelectedId}</p>
-        <p><b>${UI.gallery_explanation}：</b>${getIntroFlagDescription(gallerySelectedId, getCustomTagDef(gallerySelectedId))}</p>
+        <p><b>${UI.gallery_explanation}：</b>${descriptionHtml}</p>
         <p><b>${relatedLabel}：</b>${usedBy.length ? usedBy.map(getCardName).join(' / ') : '-'}</p>
     </div>`;
+    bindGalleryTermDescriptionInteractions(detail);
 }
 
 function renderOpeningEventGallery(list, detail, q) {
@@ -7579,14 +7750,13 @@ function getAllStatusDefs() {
         { key: 'nazar', label: UI.status_nazar, desc: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', color: COLORS.magic },
         { key: 'magic_nazar', label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
-        { key: 'invincible', label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
         { key: 'dodge', label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。自己回合开始时清空层数。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
-        { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲不是状态，不会被状态免疫影响。', color: '#16A085' },
+        { key: 'status_immune', label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲、无敌和暴击倍率不是状态，不受状态免疫影响。', color: '#16A085' },
         { key: 'stunned', label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
-        { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；下一个回合交替结算完成后，在下一名可行动玩家行动前死亡。', color: '#1E8449' },
+        { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；在己方下一名可行动玩家行动前死亡。', color: '#1E8449' },
         { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -7611,7 +7781,7 @@ function getAllStatusDefs() {
     ];
     const statusTermAliases = {
         poison: 'P', fire: 'F', toxic: 'toxic', triangle: 'triangle', nazar: 'nazar',
-        magic_nazar: 'magic_nazar', equip_protect: 'equip_protect', invincible: 'invincible',
+        magic_nazar: 'magic_nazar', equip_protect: 'equip_protect',
         dodge: 'dodge', status_immune: 'status_immune', stunned: 'stunned',
         attack_blocked: 'attack_blocked', attack_only: 'attack_only', untargetable: 'untargetable',
         bandage: 'bandage', sluggish: 'sluggish', overload: 'overload',
@@ -7708,8 +7878,9 @@ function renderStatusGallery(list, detail, q) {
         const id = `status:${s.key}`;
         const row = document.createElement('div');
         row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
-        const sourceTag = s.source === 'vanilla' ? '' : `<span class="gallery-row-meta" style="color:${s.color}">${s.source}</span>`;
-        row.innerHTML = `<div class="gallery-row-title gallery-status-title" style="color:${s.color}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-row')}${escapeHtml(s.label)}</div>${sourceTag}`;
+        const statusColorStyle = `--status-fg:${escapeHtml(s.color || COLORS.text_primary)}`;
+        const sourceTag = s.source === 'vanilla' ? '' : `<span class="gallery-row-meta gallery-status-source" style="${statusColorStyle}">${s.source}</span>`;
+        row.innerHTML = `<div class="gallery-row-title gallery-status-title" style="${statusColorStyle}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-row')}${escapeHtml(s.label)}</div>${sourceTag}`;
         row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
         list.appendChild(row);
     });
@@ -7721,11 +7892,12 @@ function renderStatusGallery(list, detail, q) {
     }
     gallerySelectedId = `status:${s.key}`;
     detail.innerHTML = `<div class="gallery-simple-detail">
-        <h3 class="gallery-status-heading" style="color:${s.color}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-detail')}${escapeHtml(s.label)}</h3>
+        <h3 class="gallery-status-heading" style="--status-fg:${escapeHtml(s.color || COLORS.text_primary)}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-detail')}${escapeHtml(s.label)}</h3>
         <p><b>ID：</b>${s.key}</p>
         <p><b>来源：</b>${s.source === 'vanilla' ? '原版' : s.source}</p>
-        <p>${escapeHtml(s.desc)}</p>
+        <p>${colorizeCardText(s.desc || '')}</p>
     </div>`;
+    bindGalleryTermDescriptionInteractions(detail);
 }
 
 function openRulesModal({ firstVisit = false } = {}) {
@@ -8852,6 +9024,7 @@ function showModal(html) {
     if (tutorialMode) hideTutorialOverlay();
     const content = $('modal-content');
     const modal = $('modal');
+    if (modal) modal.classList.remove('shortcut-help-active');
     if (content) content.className = 'modal-inner';
     if (content) content.innerHTML = html;
     if (modal) { modal.classList.remove('hidden'); modal.classList.add('active'); }
@@ -8872,11 +9045,30 @@ function hideModal() {
         content.className = 'modal-inner';
         delete content.dataset.pileType;
     }
-    if (modal) { modal.classList.add('hidden'); modal.classList.remove('active'); }
+    if (modal) {
+        modal.classList.remove('shortcut-help-active');
+        modal.classList.add('hidden');
+        modal.classList.remove('active');
+    }
     if (tutorialMode) {
         showTutorialOverlay();
         setTimeout(updateTutorialOverlay, 60);
     }
+}
+
+function closePileViewerModal() {
+    const modal = $('modal');
+    const content = $('modal-content');
+    const isOpen = !!(
+        modal
+        && content
+        && modal.classList.contains('active')
+        && content.classList.contains('view-deck-modal')
+        && content.dataset.pileType
+    );
+    if (!isOpen) return false;
+    hideModal();
+    return true;
 }
 
 function setSpectateDisconnectModalActive(active) {
@@ -8884,6 +9076,7 @@ function setSpectateDisconnectModalActive(active) {
 }
 
 function leaveSpectateAction() {
+    closePileViewerModal();
     if (replayMode) {
         closeAccountReplayModal();
         return;
@@ -9799,6 +9992,11 @@ function getCardEffectTextForInstance(cardDict, cardDef) {
 const pendingCardEffectFits = new Set();
 let pendingCardEffectFitFrame = 0;
 
+function addPresetCardEffectScaleClass(cardEl, className) {
+    if (!cardEl || !className) return;
+    cardEl.classList.add(className, 'card-effect-scale-preset');
+}
+
 function resetCardEffectAutoFit(effectEl) {
     if (!effectEl) return;
     effectEl.style.removeProperty('font-size');
@@ -9814,6 +10012,10 @@ function fitCardEffectText(cardEl) {
     if (!effectEl) return;
 
     resetCardEffectAutoFit(effectEl);
+    if (cardEl.classList.contains('card-effect-scale-preset')) {
+        cardEl.dataset.effectFitScale = 'preset';
+        return;
+    }
     cardEl.dataset.effectFitScale = '1';
     const cardRect = cardEl.getBoundingClientRect();
     if (cardRect.width < 20 || cardRect.height < 20 || effectEl.getClientRects().length === 0) return;
@@ -9902,48 +10104,48 @@ function createCardElement(cardDict, options = {}) {
         el.classList.add(cardDef.card_type);
     }
     if (defId === 'Assembler' || cardDef.id === 'Assembler' || cardDef.legacy_id === 'Assembler' || cardDef.name_cn === '重构机') {
-        el.classList.add('card-assembler');
+        addPresetCardEffectScaleClass(el, 'card-assembler');
     }
     if (defId === 'Honey' || cardDef.id === 'Honey' || cardDef.legacy_id === 'Honey' || cardDef.name_cn === '蜂蜜') {
-        el.classList.add('card-honey');
+        addPresetCardEffectScaleClass(el, 'card-honey');
     }
     if (defId === 'Fragment' || cardDef.id === 'Fragment' || cardDef.legacy_id === 'Fragment' || cardDef.name_cn === '碎片') {
-        el.classList.add('card-fragment');
+        addPresetCardEffectScaleClass(el, 'card-fragment');
     }
     if (defId === 'Coconut' || cardDef.id === 'Coconut' || cardDef.legacy_id === 'Coconut' || cardDef.name_cn === '椰子') {
-        el.classList.add('card-coconut');
+        addPresetCardEffectScaleClass(el, 'card-coconut');
     }
     if (defId === 'Sponge' || cardDef.id === 'Sponge' || cardDef.legacy_id === 'Sponge' || cardDef.name_cn === '海绵') {
-        el.classList.add('card-sponge');
+        addPresetCardEffectScaleClass(el, 'card-sponge');
     }
     if (defId === 'Relic' || cardDef.id === 'Relic' || cardDef.legacy_id === 'Relic' || cardDef.name_cn === '遗物') {
-        el.classList.add('card-relic');
+        addPresetCardEffectScaleClass(el, 'card-relic');
     }
     if (defId === 'Root' || cardDef.id === 'Root' || cardDef.legacy_id === 'Root' || cardDef.name_cn === '树根') {
-        el.classList.add('card-jungle-root');
+        addPresetCardEffectScaleClass(el, 'card-jungle-root');
     }
     if (defId === 'Yggdrasil' || cardDef.id === 'Yggdrasil' || cardDef.legacy_id === 'Yggdrasil' || cardDef.name_cn === '世界树之叶') {
-        el.classList.add('card-yggdrasil');
+        addPresetCardEffectScaleClass(el, 'card-yggdrasil');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Mimic', 'Leaf', 'Dizzy'])
         || ['拟态', '叶子', '眩晕'].includes(cardDef.name_cn)) {
-        el.classList.add('card-effect-gentle-small');
+        addPresetCardEffectScaleClass(el, 'card-effect-gentle-small');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Mimic']) || cardDef.name_cn === '拟态') {
-        el.classList.add('card-mimic-compact');
+        addPresetCardEffectScaleClass(el, 'card-mimic-compact');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['MagicCoral']) || cardDef.name_cn === '魔法珊瑚') {
-        el.classList.add('card-magic-coral-compact');
+        addPresetCardEffectScaleClass(el, 'card-magic-coral-compact');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Nuke']) || cardDef.name_cn === '核弹') {
-        el.classList.add('card-nuke-compact');
+        addPresetCardEffectScaleClass(el, 'card-nuke-compact');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['LightBulb', 'sewers:light_bulb']) || cardDef.name_cn === '灯泡') {
-        el.classList.add('card-light-bulb');
+        addPresetCardEffectScaleClass(el, 'card-light-bulb');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Pearl', 'MagicPearl', 'Spikeball', 'Sapphire'])
         || ['珍珠', '魔法珍珠', '尖刺球', '蓝宝石'].includes(cardDef.name_cn)) {
-        el.classList.add('card-ocean-compact');
+        addPresetCardEffectScaleClass(el, 'card-ocean-compact');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, [
         'Singularity', 'Scar', 'Scythe', 'Antimatter', 'MagicWing',
@@ -9952,43 +10154,43 @@ function createCardElement(cardDict, options = {}) {
         '奇点', '疤痕', '镰刀', '反物质', '魔法翅膀',
         '魔法星座', '相对论', '星座', '傀儡架台', '小猫',
     ].includes(cardDef.name_cn)) {
-        el.classList.add('card-void-compact');
+        addPresetCardEffectScaleClass(el, 'card-void-compact');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['MagicPearl']) || cardDef.name_cn === '魔法珍珠') {
-        el.classList.add('card-ocean-magic-pearl');
+        addPresetCardEffectScaleClass(el, 'card-ocean-magic-pearl');
     }
     if (cardDef.ui_effect_size === 'slightly_small') {
-        el.classList.add('card-effect-slightly-small');
+        addPresetCardEffectScaleClass(el, 'card-effect-slightly-small');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Triangle', 'Fang', 'Sawblade', 'Tomato', 'MagicTomato'])
         || ['三角形', '尖牙', '锯片', '番茄', '魔法番茄'].includes(cardDef.name_cn)) {
-        el.classList.add('card-effect-tiny-small');
+        addPresetCardEffectScaleClass(el, 'card-effect-tiny-small');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['MagicPoisonStinger']) || cardDef.name_cn === '魔法毒刺') {
-        el.classList.add('card-effect-extra-small');
+        addPresetCardEffectScaleClass(el, 'card-effect-extra-small');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Dice', 'PokerCard', 'PokerChip', 'Domino', 'Gunpowder', 'MagicDice'])
         || ['骰子', '纸牌', '筹码', '骨牌', '火药', '魔法骰子'].includes(cardDef.name_cn)) {
-        el.classList.add('card-hel-compact');
+        addPresetCardEffectScaleClass(el, 'card-hel-compact');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['PokerCard', 'PokerChip'])
         || ['纸牌', '筹码'].includes(cardDef.name_cn)) {
-        el.classList.add('card-hel-extra-compact');
+        addPresetCardEffectScaleClass(el, 'card-hel-extra-compact');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['PokerCard']) || cardDef.name_cn === '纸牌') {
-        el.classList.add('card-hel-poker-card');
+        addPresetCardEffectScaleClass(el, 'card-hel-poker-card');
     }
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Grapes', 'MagicGrapes', 'Peas', 'MagicPeas'])
         || ['葡萄', '魔法葡萄', '豌豆', '魔法豌豆'].includes(cardDef.name_cn)) {
-        el.classList.add('card-petal-copy');
+        addPresetCardEffectScaleClass(el, 'card-petal-copy');
     }
     if (defId === 'MagicGrapes' || cardDef.id === 'MagicGrapes' || cardDef.legacy_id === 'MagicGrapes'
         || cardDef.id === 'jungle:magic_grapes' || cardDef.name_cn === '魔法葡萄') {
-        el.classList.add('card-magic-grapes');
+        addPresetCardEffectScaleClass(el, 'card-magic-grapes');
     }
     if (defId === 'MagicPeas' || cardDef.id === 'MagicPeas' || cardDef.legacy_id === 'MagicPeas'
         || cardDef.id === 'jungle:magic_peas' || cardDef.name_cn === '魔法豌豆') {
-        el.classList.add('card-magic-peas');
+        addPresetCardEffectScaleClass(el, 'card-magic-peas');
     }
     const rawTypeLabel = getCardTypeLabel(cardDef.card_type) || cardDef.card_type;
     const blindLevel = getCardBlindLevelForSelf(cardDict, options);
@@ -10728,7 +10930,7 @@ function getResponseTargetState(data) {
         (data && data.target_player_id) != null ? data.target_player_id
             : ((data && data.target_id) != null ? data.target_id : pending.target_player_id)
     );
-    if (targetId == null) targetId = normalizePlayerId(playerId);
+    if (targetId == null) targetId = normalizePlayerId(gameState && gameState.your_id);
     return targetId == null ? {} : (getPlayerDataById(targetId) || {});
 }
 
@@ -10743,7 +10945,7 @@ function readPlayerHealthValue(playerState, keys, fallback = 0) {
 function getClawDamageHits(cardDict, attackerState, targetState, info) {
     const fusion = clampClientCardLayer(cardDict.fusion_level || 1);
     const fission = clampClientCardLayer(cardDict.fission_level || 1);
-    const baseHits = clampClientDamageSegments(Math.round(Number((info && info.hits) || 1)) + clampClientExtraHits(cardDict.extra_hits || 0));
+    const baseHits = clampClientDamageHits(Math.round(Number((info && info.hits) || 1)) + clampClientExtraHits(cardDict.extra_hits || 0));
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
     const power = Number(cardDict.power_value || 0);
     const totalSegments = clampClientDamageSegments(baseHits * fission);
@@ -10885,7 +11087,8 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     }
     const inheritExtraHits = info.inheritExtraHits !== false && !cardMatchesAnyLocalId(cardDict, cardDef, ['Peas', 'MagicPeas']);
     const extraHits = inheritExtraHits ? clampClientExtraHits(cardDict.extra_hits || 0) : 0;
-    const totalHits = clampClientDamageSegments((Math.max(1, Math.round(Number(info.hits || 1))) + extraHits) * fission);
+    const hitsPerFission = clampClientDamageHits(Math.max(1, Math.round(Number(info.hits || 1))) + extraHits);
+    const totalHits = clampClientDamageSegments(hitsPerFission * fission);
     const amount = Number(info.amount || 0) + bonus;
     const perHit = Math.ceil(amount * fusion / fission);
     const powerPerSegment = Math.ceil(power / Math.max(1, totalHits));
@@ -11080,7 +11283,7 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     const attackerImmune = isPredictionStatusImmune(attackerState);
     let dodge = immune ? 0 : Math.max(0, Number(targetState && targetState.dodge || 0));
     const armor = Math.max(0, Number(targetState && targetState.armor || 0));
-    const invincible = immune ? false : !!(targetState && targetState.invincible);
+    const invincible = !!(targetState && targetState.invincible);
     const sponge = immune ? false : !!(targetState && targetState.sponge_active);
     const rootArmor = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:root', 'jungle:root_status', 'root_status');
     const fragile = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:fragile', 'fragile');
@@ -11634,8 +11837,8 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
             result.target.poison += Math.ceil(Number(simulatedHits.spongePoison || 0));
             result.target.damageHits = result.target.damageHits.filter(v => Number(v) > 0);
         }
-        const attackerImmune = isPredictionStatusImmune(attackerState);
-        const toxic = attackerImmune ? 0 : Math.max(0, Number(attackerState && attackerState.toxic || 0));
+        const targetImmune = isPredictionStatusImmune(targetState);
+        const toxic = targetImmune ? 0 : Math.max(0, Number(targetState && targetState.toxic || 0));
         const positiveHits = result.target.damageHits.filter(v => Number(v) > 0).length;
         if (toxic > 0 && positiveHits > 0) {
             result.target.poison += toxic * positiveHits;
@@ -11732,8 +11935,8 @@ function getResponseBaseEffectPrediction(data, cardDict, noCounterPrediction = {
         options.damageHits = normalizePredictionHits(noCounterPrediction.parts);
     }
     const prediction = getCardPlayEffectPredictionParts(cardDict, options);
-    if (noCounterPrediction && Number(noCounterPrediction.poison || 0) > 0) {
-        prediction.target.poison += Math.ceil(Number(noCounterPrediction.poison || 0));
+    if (noCounterPrediction && Object.prototype.hasOwnProperty.call(noCounterPrediction, 'poison')) {
+        prediction.target.poison = Math.max(0, Math.ceil(Number(noCounterPrediction.poison || 0)));
         prediction.poison = prediction.target.poison;
     }
     return prediction;
@@ -11775,6 +11978,13 @@ function getResponseCounterStatusReduction(data, cardDict, basePrediction, count
     if (cardDef && cardDef.card_type === 'thorn') {
         const beforeHits = normalizePredictionHits(basePrediction.damageHits);
         const afterHits = normalizePredictionHits(counterPrediction && counterPrediction.after && counterPrediction.after.parts);
+        if (counterPrediction && counterPrediction.after && Object.prototype.hasOwnProperty.call(counterPrediction.after, 'poison')) {
+            reduction.poison = Math.max(
+                0,
+                Number(basePrediction.poison || 0) - Math.max(0, Math.ceil(Number(counterPrediction.after.poison || 0))),
+            );
+            return reduction;
+        }
         if (beforeHits.length && (counterPrediction && counterPrediction.after && Object.prototype.hasOwnProperty.call(counterPrediction.after, 'parts'))) {
             const beforePositive = beforeHits.filter(v => v > 0).length;
             const afterPositive = afterHits.filter(v => v > 0).length;
@@ -11935,6 +12145,7 @@ function getTermIntroLibrary() {
         magic_damage: { label: lt({ zh: '魔法伤害(Magic Damage)', en: 'Magic Damage', fr: 'Dégâts magiques', ja: '魔法ダメージ' }), desc: magicDamageDesc, color: COLORS.magic },
         crit: { label: lt({ zh: '暴击', en: 'Critical', fr: 'Critique', ja: 'クリティカル' }), desc: lt({ zh: '使一次物理伤害乘以暴击倍率。初始暴击倍率为×1.5，部分效果可以提高倍率。', en: 'Multiplies one physical damage hit by the critical multiplier. The base multiplier is ×1.5, and some effects can raise it.', fr: 'Multiplie un coup de dégâts physiques par le multiplicateur critique. Le multiplicateur de base est ×1,5, certains effets peuvent l’augmenter.', ja: '1回の物理ダメージに暴击倍率を掛けます。基本倍率は×1.5で、一部効果で上昇します。' }), color: '#D4AC0D', iconKey: 'critical' },
         A: { label: lt({ zh: 'A：护甲(Armor)', en: 'A: Armor', fr: 'A : armure', ja: 'A：護甲' }), desc: lt({ zh: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。护甲不是状态，不受状态免疫影响。', en: 'Reduces D. It does not reduce magic damage from Poison, Burn, or similar states. Armor is not a status and is not affected by Status Immune.', fr: 'Réduit D. Ne réduit pas les dégâts magiques du Poison, de la Brûlure ou des états similaires. L’armure n’est pas un statut et n’est pas affectée par l’immunité aux statuts.', ja: 'D を軽減します。中毒、灼烧などの魔法ダメージは軽減しません。護甲は状態ではなく、状態免疫の影響を受けません。' }), color: COLORS.armor_text },
+        invincible: { label: UI.status_invincible || lt({ zh: '无敌', en: 'Invincible', fr: 'Invincible', ja: '無敵' }), desc: lt({ zh: '无敌期间免疫受到的伤害。无敌不是状态，不受状态免疫影响。', en: 'Prevents incoming damage while active. Invincible is not a state and is not affected by Status Immune.', fr: 'Empêche les dégâts reçus tant que l’effet est actif. Invincible n’est pas un statut et n’est pas affecté par l’immunité aux statuts.', ja: '有効中は受けるダメージを無効にします。無敵は状態ではなく、状態免疫の影響を受けません。' }), color: COLORS.elixir, iconKey: 'invincible' },
         P: { label: lt({ zh: 'P：中毒(Poison)', en: 'P: Poison', fr: 'P : poison', ja: 'P：毒' }), desc: lt({ zh: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', en: 'At your turn start, take magic damage equal to current P. If you survive, P halves rounded down, e.g. 10P→5P, 5P→2P.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au P actuel. Si vous survivez, P est divisé par deux arrondi à l’inférieur, ex. 10P→5P, 5P→2P.', ja: '自分のターン開始時、現在の P と同じ魔法ダメージを受けます。生存していれば P は切り捨てで半減します。例：10P→5P、5P→2P。' }), color: COLORS.poison },
         F: { label: lt({ zh: 'F：灼烧(Fire)', en: 'F: Burn', fr: 'F : brûlure', ja: 'F：火傷' }), desc: lt({ zh: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 10 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', en: 'At your turn start, take magic damage equal to current F. Burn stacks do not decrease. From round 10 onward, all players gain 1 Burn at each turn start.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au F actuel. Les charges de Brûlure ne diminuent pas. À partir du tour 10, tous les joueurs gagnent 1 Brûlure au début de chaque tour.', ja: '自分のターン開始時、現在の F と同じ魔法ダメージを受けます。火傷は減少しません。10ラウンド以降、各ターン開始時に全員へ火傷1層を付与します。' }), color: COLORS.fire },
         toxic: { label: `${UI.status_toxic || 'Toxic'}(Toxic)`, desc: lt({ zh: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', en: 'After actually dealing D, apply P equal to Toxic stacks. It does not trigger if all damage is blocked.', fr: 'Après avoir réellement infligé D, applique P égal aux charges de Toxique. Ne se déclenche pas si tous les dégâts sont bloqués.', ja: '実際に D を与えた後、淬毒層数と同じ P を付与します。ダメージが完全に防がれた場合は発動しません。' }), color: '#6C3483' },
@@ -12270,16 +12481,16 @@ function getStatusIntroItem(statusInfo) {
         nazar: { label: UI.status_nazar, desc: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', color: COLORS.magic },
         magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
-        invincible: { label: UI.status_invincible, desc: '无敌期间不会因受到伤害而失败。', color: COLORS.elixir },
+        invincible: { label: UI.status_invincible, desc: getTermIntroLibrary().invincible.desc, color: COLORS.elixir, iconKey: 'invincible' },
         dodge: { label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。自己回合开始时清空层数。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
-        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲不是状态，不会被状态免疫影响。', color: '#16A085' },
-        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲不是状态，不会被状态免疫影响。', color: '#16A085' },
+        status_immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲、无敌和暴击倍率不是状态，不受状态免疫影响。', color: '#16A085' },
+        immune: { label: UI.status_immune || '状态免疫', desc: '效果存在时，所有状态不会生效，但会正常衰减。状态仍可被施加和累积，效果结束后剩余层数会重新生效。护甲、无敌和暴击倍率不是状态，不受状态免疫影响。', color: '#16A085' },
         stunned: { label: UI.status_stunned, desc: '轮到自己回合时，层数减1，跳过一回合主动行动，但装备的被动效果正常。', color: COLORS.damage },
         attack_blocked: { label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         magic_blocked: { label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
-        bandage: { label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；下一个回合交替结算完成后，在下一名可行动玩家行动前死亡。', color: '#1E8449' },
+        bandage: { label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；在己方下一名可行动玩家行动前死亡。', color: '#1E8449' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -12316,10 +12527,10 @@ function getStatusIntroItem(statusInfo) {
         nazar: { label: UI.status_nazar || 'Nazar', desc: getTermIntroLibrary().nazar.desc },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: getTermIntroLibrary().magic_nazar.desc },
         equip_protect: { label: UI.status_equip_protect, desc: lt({ zh: builtIns.equip_protect.desc, en: 'Prevents equipment from being destroyed by destroy effects.', fr: 'Empêche un équipement d’être détruit par les effets de destruction.', ja: '装備が破壊効果で破壊されるのを防ぎます。' }) },
-        invincible: { label: UI.status_invincible, desc: lt({ zh: builtIns.invincible.desc, en: 'While invincible, damage does not cause defeat.', fr: 'Pendant l’invincibilité, les dégâts ne provoquent pas la défaite.', ja: '無敵中はダメージで敗北しません。' }) },
+        invincible: { label: UI.status_invincible, desc: getTermIntroLibrary().invincible.desc, iconKey: 'invincible' },
         dodge: { label: UI.status_dodge || 'Dodge', desc: lt({ zh: builtIns.dodge.desc, en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. Clear all stacks at the start of your turn. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Retirez toutes les charges au début de votre tour. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。自分のターン開始時に全層を消去します。状態免疫中は蓄積できますが発動も消費もされません。' }) },
-        status_immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends. Armor is not a state and is not affected by Status Immune.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite. L’armure n’est pas un état et n’est pas affectée.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。護甲は状態ではなく、状態免疫の影響を受けません。' }) },
-        immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。' }) },
+        status_immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends. Armor, Invincible, and the critical multiplier are not states and are not affected by Status Immune.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite. L’armure, Invincible et le multiplicateur critique ne sont pas des statuts et ne sont pas affectés.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。護甲、無敵、クリティカル倍率は状態ではなく、状態免疫の影響を受けません。' }) },
+        immune: { label: UI.status_immune || 'Status Immune', desc: lt({ zh: builtIns.status_immune.desc, en: 'While active, states do not take effect, but still decay normally. States can still be applied and stacked; remaining stacks work again after this ends. Armor, Invincible, and the critical multiplier are not states and are not affected by Status Immune.', fr: 'Tant que cet effet existe, les états ne prennent pas effet mais diminuent normalement. Ils peuvent encore être appliqués et cumulés ; les charges restantes refonctionnent ensuite. L’armure, Invincible et le multiplicateur critique ne sont pas des statuts et ne sont pas affectés.', ja: '存在中、状態は効果を発揮しませんが通常通り減衰します。状態は付与・蓄積され、終了後に残り層数が再び有効になります。護甲、無敵、クリティカル倍率は状態ではなく、状態免疫の影響を受けません。' }) },
         stunned: { label: UI.status_stunned, desc: lt({ zh: builtIns.stunned.desc, en: 'At your turn, lose 1 stack and skip active actions. Passive equipment still works.', fr: 'À votre tour, perdez 1 charge et sautez vos actions actives. Les équipements passifs fonctionnent encore.', ja: '自分のターンに1層減り、能動行動をスキップします。装備の受動効果は通常通りです。' }) },
         attack_blocked: { label: UI.status_attack_blocked, desc: lt({ zh: builtIns.attack_blocked.desc, en: 'You cannot play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez pas jouer de cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードを使用できません。' }) },
         attack_only: { label: UI.status_attack_only, desc: lt({ zh: builtIns.attack_only.desc, en: 'You can only play Thorn cards while this effect lasts.', fr: 'Vous ne pouvez jouer que des cartes Thorn tant que cet effet dure.', ja: '効果中、Thornカードしか使用できません。' }) },
@@ -12327,7 +12538,7 @@ function getStatusIntroItem(statusInfo) {
         blood_debt: { label: lt({ zh: '血债', en: 'Blood Debt', fr: 'Dette de sang', ja: '血債' }), desc: lt({ zh: builtIns.blood_debt.desc, en: 'When physical damage is taken, this effect clears and the attacker gains E equal to its stacks.', fr: 'Quand des dégâts physiques sont subis, cet effet disparaît et l’attaquant gagne E égal aux charges.', ja: '物理ダメージを受けるとこの効果は消え、攻撃者は層数分のEを得ます。' }) },
         unable_counter: { label: lt({ zh: '无法反制', en: 'Unable to Counter', fr: 'Contre impossible', ja: '反制不能' }), desc: lt({ zh: builtIns.unable_counter.desc, en: 'Discards counter cards from left to right equal to its stacks, then reduces those stacks. If stacks remain, drawn counter cards are discarded and reduce stacks.', fr: 'Défausse de gauche à droite autant de contres que de charges, puis réduit ces charges. S’il en reste, les contres piochés sont défaussés et réduisent les charges.', ja: '層数分だけ左から反制牌を弃牌に置き、その分層数を減らします。層数が残る間、引いた反制牌も弃牌に置かれ層数が減ります。' }) },
         untargetable: { label: UI.status_untargetable, desc: lt({ zh: builtIns.untargetable.desc, en: 'Cannot be selected by some targeted effects. Loses 1 stack at the start of your turn.', fr: 'Ne peut pas être choisi par certains effets ciblés. Perd 1 charge au début de votre tour.', ja: '一部の対象指定効果で選べません。自分ターン開始時に1層減ります。' }) },
-        bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'When lethal damage is taken, set H to 1 and become invincible. After the next turn transition finishes, die before the next player who can act begins acting.', fr: 'En subissant des dégâts mortels, fixe H à 1 et devient invincible. Après la prochaine transition de tour, meurt avant que le prochain joueur capable d’agir ne commence son action.', ja: '致命ダメージを受ける時、Hを1にして無敵になります。次のターン交替解決後、次に行動可能なプレイヤーが行動を始める前に死亡します。' }) },
+        bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'When lethal damage is taken, set H to 1 and become invincible; die before the next player on your team who can act begins acting.', fr: 'En subissant des dégâts mortels, fixe H à 1 et devient invincible ; meurt avant que le prochain joueur de votre équipe capable d’agir ne commence son action.', ja: '致命ダメージを受ける時、Hを1にして無敵になります。次に行動可能な味方プレイヤーが行動を始める前に死亡します。' }) },
         sluggish: { label: UI.status_sluggish, desc: lt({ zh: builtIns.sluggish.desc, en: 'Draw that many fewer cards each turn.', fr: 'Pioche autant de cartes en moins à chaque tour.', ja: '毎ターンその層数分だけドローが減ります。' }) },
         overload: { label: UI.status_overload, desc: lt({ zh: builtIns.overload.desc, en: 'At turn start, lose E equal to its stacks down to 0, then clear it.', fr: 'Au début du tour, perdez E égal aux charges jusqu’à 0, puis l’état disparaît.', ja: 'ターン開始時、層数分のEを0まで失い、その後消えます。' }) },
         foresight: { label: UI.status_foresight, desc: lt({ zh: builtIns.foresight.desc, en: 'At turn-start draw, you may discard up to that many hand cards, then draw the same number.', fr: 'Lors de la pioche de début de tour, vous pouvez défausser jusqu’à autant de cartes en main, puis en piocher autant.', ja: 'ターン開始ドロー時、層数まで手札を捨て、その枚数を引けます。' }) },
@@ -12588,7 +12799,7 @@ function showTermIntroForStatus(statusInfo) {
     const statusIcon = renderStatusIconHtml(item.key || statusInfo?.key || '', item.label || displayText, item.iconKey || statusInfo?.iconKey || '', 'tag');
     cardSlot.innerHTML = `
         <div class="term-intro-status-card" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
-            <span class="status-tag term-intro-status-tag" style="color:${escapeHtml(statusInfo?.fg || item.color || COLORS.text_primary)};background:${escapeHtml(statusInfo?.bg || COLORS.bg_card || '#fff')};border-color:${escapeHtml(statusInfo?.fg || item.color || COLORS.text_primary)}">${statusIcon}<span class="status-tag-text">${escapeHtml(displayText)}</span></span>
+            <span class="status-tag term-intro-status-tag" style="--status-fg:${escapeHtml(statusInfo?.fg || item.color || COLORS.text_primary)};--status-bg:${escapeHtml(statusInfo?.bg || COLORS.bg_card || '#fff')}">${statusIcon}<span class="status-tag-text">${escapeHtml(displayText)}</span></span>
         </div>
     `;
     title.textContent = `${displayText} · ${lt({ zh: '状态说明', en: 'State Guide', fr: 'Guide d’état', ja: '状態説明' })}`;
@@ -12649,7 +12860,7 @@ function showTermIntroForStandaloneItem(item, sourceEl = null, titleText = '') {
         || renderInlineIconHtml(item.iconKey || getTermIntroIconKey(item.key || '', item), item.label || item.key || '');
     cardSlot.innerHTML = `
         <div class="term-intro-status-card" style="--term-color:${escapeHtml(color)}">
-            <span class="status-tag term-intro-status-tag" style="color:${escapeHtml(color)};background:${escapeHtml(COLORS.bg_card || '#fff')};border-color:${escapeHtml(color)}">${statusIcon}<span class="status-tag-text">${escapeHtml(item.label || item.key || '')}</span></span>
+            <span class="status-tag term-intro-status-tag" style="--status-fg:${escapeHtml(color)};--status-bg:${escapeHtml(COLORS.bg_card || '#fff')}">${statusIcon}<span class="status-tag-text">${escapeHtml(item.label || item.key || '')}</span></span>
         </div>
     `;
     title.textContent = titleText || lt({ zh: '术语说明', en: 'Term Guide', fr: 'Guide des termes', ja: '用語説明' });
@@ -12771,7 +12982,7 @@ function attachTermIntroToStatus(anchor, statusInfo) {
 function attachTermIntroToTermKey(anchor, key = '') {
     if (!anchor || !key) return;
     attachTermIntroLongPress(anchor, () => showTermIntroForTokenKey(key, anchor));
-    if (anchor.classList && (anchor.classList.contains('armor-meter') || anchor.classList.contains('crit-meter')) && anchor.dataset.meterTermClickBound !== '1') {
+    if (anchor.classList && (anchor.classList.contains('armor-meter') || anchor.classList.contains('crit-meter') || anchor.classList.contains('invincible-meter')) && anchor.dataset.meterTermClickBound !== '1') {
         anchor.dataset.meterTermClickBound = '1';
         anchor.addEventListener('click', (event) => {
             event.preventDefault();
@@ -13330,10 +13541,17 @@ function connectSocket(serverUrl) {
         renderLobbyChatHistory(data || {});
     });
     bindSocketEvent('dm_update', (data = {}) => {
-        dmData.unread_count = Number(data.unread_count || dmData.unread_count || 0);
-        updateFriendsBadge();
+        const previousFriendUnread = Number(socialData.unread_count || 0);
+        const previousDmUnread = Number(dmData.unread_count || 0);
+        applySocialUnreadSummary(data);
         if (!document.hidden && (isFriendsPopoverOpen() || isSocialDetailOpen())) {
-            loadDmThreads(true);
+            const friendUnreadIncreased = Number(socialData.unread_count || 0) > previousFriendUnread;
+            const dmUnreadIncreased = Number(dmData.unread_count || 0) > previousDmUnread;
+            if (friendUnreadIncreased) {
+                loadFriends(false);
+            } else if (dmUnreadIncreased) {
+                loadDmThreads(true);
+            }
         }
     });
     bindSocketEvent('achievement_unlocked', (data = {}) => {
@@ -13505,6 +13723,7 @@ function connectSocket(serverUrl) {
             showView('view-game');
             updateStatus(UI.game_loading || 'Loading...');
         } else if (phase === 'game_over') {
+            closePileViewerModal();
             updateStatus(UI.game_over);
         } else if (phase === 'lobby') {
             allowLobbyTransition('game_phase:lobby');
@@ -16473,6 +16692,9 @@ async function refreshAuthMe() {
     if (currentAccount) {
         loadFriends(false);
         loadFeedbackSummary();
+        startSocialUnreadPolling(true);
+    } else {
+        stopSocialUnreadPolling();
     }
 }
 
@@ -16491,6 +16713,7 @@ async function onAccountLogin() {
         renderAccountState();
         loadFriends(false);
         loadAccountReplays();
+        startSocialUnreadPolling(true);
     } catch (err) {
         setAccountError(err.message || UI.account_error);
     }
@@ -16514,6 +16737,7 @@ async function onAccountRegister() {
         renderAccountState();
         loadFriends(false);
         loadAccountReplays();
+        startSocialUnreadPolling(true);
     } catch (err) {
         setAccountError(err.message || UI.account_error);
     }
@@ -16603,6 +16827,9 @@ async function onAccountDeleteConfirm() {
         currentAccount = null;
         socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
         dmData = { threads: [], unread_count: 0 };
+        stopSocialUnreadPolling();
+        dmSelectionRevision += 1;
+        stopSocialNetworkActivity();
         resetAccountDeleteWarning();
         cacheAccount(null);
         renderAccountState();
@@ -16622,6 +16849,9 @@ async function onAccountLogout() {
     thornDewCenter = null;
     socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
     dmData = { threads: [], unread_count: 0 };
+    stopSocialUnreadPolling();
+    dmSelectionRevision += 1;
+    stopSocialNetworkActivity();
     activeDmThreadId = null;
     activeDmTargetUserId = null;
     activeDmMessages = [];
@@ -16928,7 +17158,8 @@ function friendCardHtml(item, type) {
     } else {
         actions = `<button class="mini-btn" type="button" data-dm-open-user="${escapeHtml(user.id)}" data-dm-open-name="${escapeHtml(user.username || '')}">私信</button>`;
     }
-    const noticeText = isNotice ? `<div class="friend-sub friend-notice">${escapeHtml(tf('friend_auto_added', user.username || '-'))}</div>` : '';
+    const noticeKey = item?.notice_type === 'accepted' ? 'friend_request_accepted' : 'friend_auto_added';
+    const noticeText = isNotice ? `<div class="friend-sub friend-notice">${escapeHtml(tf(noticeKey, user.username || '-'))}</div>` : '';
     const requestId = item?.request_id == null ? '' : String(item.request_id);
     const isRequestCard = type === 'incoming' || type === 'outgoing';
     const requestAttrs = isRequestCard && requestId
@@ -17058,7 +17289,7 @@ function normalizeSocialTab(tabName = 'friends') {
     return 'friends';
 }
 
-function showSocialDetailTab(tabName = 'friends') {
+function showSocialDetailTab(tabName = 'friends', options = {}) {
     const tab = normalizeSocialTab(tabName);
     activeSocialSection = tab;
     if (tab !== 'requests') activeSocialRequestId = null;
@@ -17071,13 +17302,18 @@ function showSocialDetailTab(tabName = 'friends') {
         if (page) page.classList.toggle('hidden', !visible);
     });
     renderSocialSelectorList();
-    if (tab === 'dm') {
+    if (tab === 'dm' && options.skipDmRestore !== true) {
+        const selectionRevision = dmSelectionRevision;
         loadDmThreads(true, { force: true }).then(() => {
+            if (selectionRevision !== dmSelectionRevision || !isDmPanelOpen()) return;
             if (activeDmThreadId) {
-                openDmThread(activeDmThreadId, { markRead: true, force: true });
+                openDmThread(activeDmThreadId, { markRead: true, force: true, selectionRevision });
             } else if (activeDmTargetUserId) {
                 const thread = findDmThreadByUserId(activeDmTargetUserId);
-                if (thread) openDmThread(thread.thread_id, { markRead: true, force: true });
+                if (thread) {
+                    activeDmThreadId = thread.thread_id;
+                    openDmThread(thread.thread_id, { markRead: true, force: true, selectionRevision });
+                }
                 else renderDmMessages();
             } else {
                 renderDmMessages();
@@ -17086,7 +17322,7 @@ function showSocialDetailTab(tabName = 'friends') {
     }
 }
 
-function toggleSocialDetailModal(force, tabName = 'friends') {
+function toggleSocialDetailModal(force, tabName = 'friends', options = {}) {
     const modal = $('social-detail-modal');
     if (!modal) return;
     const show = typeof force === 'boolean' ? force : modal.classList.contains('hidden');
@@ -17094,9 +17330,10 @@ function toggleSocialDetailModal(force, tabName = 'friends') {
     if (show) {
         toggleFriendsPopover(false);
         toggleAccountPopover(false);
-        showSocialDetailTab(tabName);
+        showSocialDetailTab(tabName, options);
         renderFriendDetailProfile();
     } else {
+        dmSelectionRevision += 1;
         stopSocialNetworkActivity();
     }
 }
@@ -17178,14 +17415,102 @@ function setFriendsError(message, tone = 'error', autoHideMs = 0) {
 
 function updateFriendsBadge() {
     const btn = $('btn-friends-top');
-    if (!btn) return;
-    const count = Number(socialData.unread_count || 0) + Number(dmData.unread_count || 0);
-    if (count > 0) {
-        btn.dataset.badge = count > 99 ? '99+' : String(count);
-        btn.classList.add('has-badge');
+    const friendUnread = Math.max(0, Number(socialData.unread_count) || 0);
+    const dmUnread = Math.max(0, Number(dmData.unread_count) || 0);
+    const setBadge = (element, count) => {
+        if (!element) return;
+        if (count > 0) {
+            element.dataset.badge = count > 99 ? '99+' : String(count);
+            element.classList.add('has-badge');
+        } else {
+            delete element.dataset.badge;
+            element.classList.remove('has-badge');
+        }
+    };
+    setBadge(btn, friendUnread + dmUnread);
+    setBadge(document.querySelector('[data-social-detail-tab="requests"]'), friendUnread);
+    setBadge(document.querySelector('[data-social-detail-tab="dm"]'), dmUnread);
+}
+
+function applySocialUnreadSummary(data = {}) {
+    if (Object.prototype.hasOwnProperty.call(data, 'dm_unread_count')) {
+        dmData.unread_count = Math.max(0, Number(data.dm_unread_count) || 0);
+    } else if (Object.prototype.hasOwnProperty.call(data, 'unread_count')) {
+        dmData.unread_count = Math.max(0, Number(data.unread_count) || 0);
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'friend_unread_count')) {
+        socialData.unread_count = Math.max(0, Number(data.friend_unread_count) || 0);
+    }
+    updateFriendsBadge();
+}
+
+function stopSocialUnreadPolling() {
+    if (socialUnreadPollTimer) {
+        clearTimeout(socialUnreadPollTimer);
+        socialUnreadPollTimer = null;
+    }
+    if (socialUnreadAbortController) {
+        try { socialUnreadAbortController.abort(); } catch (_) {}
+        socialUnreadAbortController = null;
+    }
+    socialUnreadRequestPromise = null;
+}
+
+async function refreshSocialUnreadSummary() {
+    if (!currentAccount || document.hidden) return;
+    if (socialUnreadRequestPromise) return socialUnreadRequestPromise;
+    const accountId = String(currentAccount.id || '');
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    socialUnreadAbortController = controller;
+    const requestPath = '/api/social/unread';
+    warnSocialEndpointStorm(requestPath);
+    let promise;
+    promise = (async () => {
+        try {
+            const data = await authRequest(requestPath, undefined, {
+                signal: controller ? controller.signal : undefined,
+                timeoutMs: 7000,
+            });
+            if (!currentAccount || String(currentAccount.id || '') !== accountId) return;
+            applySocialUnreadSummary(data);
+            socialUnreadPollDelay = 30000;
+        } catch (err) {
+            if (!(err && /abort|取消|超时|timeout/i.test(String(err.message || err.name || '')))) {
+                socialUnreadPollDelay = Math.min(Math.max(30000, socialUnreadPollDelay * 2), 60000);
+            }
+        } finally {
+            if (socialUnreadRequestPromise === promise) socialUnreadRequestPromise = null;
+            if (socialUnreadAbortController === controller) socialUnreadAbortController = null;
+        }
+    })();
+    socialUnreadRequestPromise = promise;
+    return promise;
+}
+
+function scheduleSocialUnreadPoll(delay = socialUnreadPollDelay) {
+    if (socialUnreadPollTimer) clearTimeout(socialUnreadPollTimer);
+    socialUnreadPollTimer = null;
+    if (!currentAccount || document.hidden) return;
+    socialUnreadPollTimer = setTimeout(async () => {
+        socialUnreadPollTimer = null;
+        await refreshSocialUnreadSummary();
+        scheduleSocialUnreadPoll();
+    }, Math.max(30000, Number(delay) || 30000));
+}
+
+function startSocialUnreadPolling(immediate = false) {
+    if (!currentAccount || document.hidden) {
+        stopSocialUnreadPolling();
+        return;
+    }
+    if (socialUnreadPollTimer) {
+        clearTimeout(socialUnreadPollTimer);
+        socialUnreadPollTimer = null;
+    }
+    if (immediate) {
+        refreshSocialUnreadSummary().finally(() => scheduleSocialUnreadPoll());
     } else {
-        delete btn.dataset.badge;
-        btn.classList.remove('has-badge');
+        scheduleSocialUnreadPoll();
     }
 }
 
@@ -17304,17 +17629,21 @@ function isDmPanelOpen() {
     return isSocialDetailOpen() && !!page && !page.classList.contains('hidden');
 }
 
+function abortDmMessageFetches() {
+    if (dmMessagesAbortController) {
+        try { dmMessagesAbortController.abort(); } catch (_) {}
+        dmMessagesAbortController = null;
+    }
+    dmMessageRequestPromises.clear();
+}
+
 function abortDmFetches() {
     if (dmThreadsAbortController) {
         try { dmThreadsAbortController.abort(); } catch (_) {}
         dmThreadsAbortController = null;
     }
-    if (dmMessagesAbortController) {
-        try { dmMessagesAbortController.abort(); } catch (_) {}
-        dmMessagesAbortController = null;
-    }
+    abortDmMessageFetches();
     dmThreadsRequestPromise = null;
-    dmMessageRequestPromises.clear();
 }
 
 function stopSocialNetworkActivity() {
@@ -17385,11 +17714,13 @@ async function loadDmThreads(renderOnly = true, options = {}) {
     if (dmThreadsAbortController) {
         try { dmThreadsAbortController.abort(); } catch (_) {}
     }
-    dmThreadsAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const signal = dmThreadsAbortController ? dmThreadsAbortController.signal : undefined;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    dmThreadsAbortController = controller;
+    const signal = controller ? controller.signal : undefined;
     const requestPath = '/api/social/dm/threads?limit=50';
     warnSocialEndpointStorm(requestPath);
-    dmThreadsRequestPromise = (async () => {
+    let requestPromise;
+    requestPromise = (async () => {
     try {
         const data = await authRequest(requestPath, undefined, { signal, timeoutMs: 7000 });
         dmData = {
@@ -17409,17 +17740,22 @@ async function loadDmThreads(renderOnly = true, options = {}) {
             setFriendsError(err.message || UI.account_error);
         }
     } finally {
-        dmThreadsRequestPromise = null;
-        dmThreadsAbortController = null;
+        if (dmThreadsRequestPromise === requestPromise) dmThreadsRequestPromise = null;
+        if (dmThreadsAbortController === controller) dmThreadsAbortController = null;
     }
     })();
-    return dmThreadsRequestPromise;
+    dmThreadsRequestPromise = requestPromise;
+    return requestPromise;
 }
 
 async function openDmThread(threadId, options = {}) {
     if (!threadId) return;
     if (document.hidden || !isDmPanelOpen()) return;
     const tid = String(threadId);
+    const selectionRevision = Number.isInteger(options.selectionRevision)
+        ? options.selectionRevision
+        : dmSelectionRevision;
+    if (selectionRevision !== dmSelectionRevision) return;
     const force = options.force === true;
     const markRead = options.markRead === true;
     if (!force && !markRead) {
@@ -17428,16 +17764,21 @@ async function openDmThread(threadId, options = {}) {
     }
     if (!socialBackoffReady('messages', tid)) return;
     if (dmMessageRequestPromises.has(tid)) return dmMessageRequestPromises.get(tid);
-    if (dmMessagesAbortController) {
-        try { dmMessagesAbortController.abort(); } catch (_) {}
-    }
-    dmMessagesAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const signal = dmMessagesAbortController ? dmMessagesAbortController.signal : undefined;
+    abortDmMessageFetches();
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    dmMessagesAbortController = controller;
+    const signal = controller ? controller.signal : undefined;
     const requestPath = `/api/social/dm/messages?thread_id=${encodeURIComponent(tid)}&limit=50&mark_read=${markRead ? '1' : '0'}`;
     warnSocialEndpointStorm(requestPath);
-    const promise = (async () => {
+    let promise;
+    promise = (async () => {
     try {
         const data = await authRequest(requestPath, undefined, { signal, timeoutMs: 7000 });
+        if (
+            selectionRevision !== dmSelectionRevision
+            || String(activeDmThreadId || '') !== tid
+            || !isDmPanelOpen()
+        ) return;
         activeDmThreadId = data.thread_id || threadId;
         activeDmTargetUserId = data.user && data.user.id;
         activeDmTargetIdentifier = '';
@@ -17456,40 +17797,76 @@ async function openDmThread(threadId, options = {}) {
         dmMessageLastFetchAt.set(tid, Date.now());
         recordSocialBackoff('messages', tid, false);
     } catch (err) {
-        if (!(err && /abort|取消|超时|timeout/i.test(String(err.message || err.name || '')))) {
+        if (
+            selectionRevision === dmSelectionRevision
+            && !(err && /abort|取消|超时|timeout/i.test(String(err.message || err.name || '')))
+        ) {
             recordSocialBackoff('messages', tid, true);
             setFriendsError(err.message || UI.account_error);
         }
     } finally {
-        dmMessageRequestPromises.delete(tid);
-        dmMessagesAbortController = null;
+        if (dmMessageRequestPromises.get(tid) === promise) dmMessageRequestPromises.delete(tid);
+        if (dmMessagesAbortController === controller) dmMessagesAbortController = null;
     }
     })();
     dmMessageRequestPromises.set(tid, promise);
     return promise;
 }
 
+function beginDmSelection({ threadId = null, userId = null, identifier = '', title = '' } = {}) {
+    dmSelectionRevision += 1;
+    abortDmMessageFetches();
+    activeDmThreadId = threadId == null ? null : threadId;
+    activeDmTargetUserId = userId == null ? null : userId;
+    activeDmTargetIdentifier = String(identifier || '');
+    activeDmMessages = [];
+    if (activeDmTargetUserId) activeSocialFriendId = String(activeDmTargetUserId);
+    const titleEl = $('dm-chat-title');
+    if (titleEl && title) titleEl.textContent = title;
+    renderDmThreads();
+    renderSocialSelectorList();
+    renderDmMessages();
+    renderFriendDetailProfile();
+    return dmSelectionRevision;
+}
+
+async function selectDmThread(threadId) {
+    const tid = String(threadId || '');
+    if (!tid) return;
+    const thread = findDmThreadById(tid);
+    const user = thread?.user || {};
+    const selectionRevision = beginDmSelection({
+        threadId: tid,
+        userId: user.id || null,
+        title: user.username ? `与 ${user.username} 的私信` : '私信',
+    });
+    toggleSocialDetailModal(true, 'dm', { skipDmRestore: true });
+    clearDmUnreadForThread(tid);
+    renderDmThreads();
+    renderSocialSelectorList();
+    await openDmThread(tid, { markRead: true, force: true, selectionRevision });
+}
+
 async function startDmToUser(userId, username = '') {
     const uid = userId || null;
-    activeDmTargetUserId = uid;
-    activeDmTargetIdentifier = '';
-    if (uid) activeSocialFriendId = String(uid);
-    toggleSocialDetailModal(true, 'dm');
+    const selectionRevision = beginDmSelection({
+        userId: uid,
+        title: username ? `给 ${username} 发私信` : '新私信',
+    });
+    toggleSocialDetailModal(true, 'dm', { skipDmRestore: true });
     let thread = findDmThreadByUserId(uid);
     if (!thread) {
         await loadDmThreads(true, { force: true });
+        if (selectionRevision !== dmSelectionRevision || String(activeDmTargetUserId || '') !== String(uid || '')) return;
         thread = findDmThreadByUserId(uid);
     }
     if (thread) {
         activeDmThreadId = thread.thread_id;
         clearDmUnreadForThread(activeDmThreadId);
         renderDmThreads();
-        await openDmThread(activeDmThreadId, { markRead: true, force: true });
+        renderSocialSelectorList();
+        await openDmThread(activeDmThreadId, { markRead: true, force: true, selectionRevision });
     } else {
-        activeDmThreadId = null;
-        activeDmMessages = [];
-        const title = $('dm-chat-title');
-        if (title) title.textContent = username ? `给 ${username} 发私信` : '新私信';
         renderDmThreads();
         renderDmMessages();
         renderFriendDetailProfile();
@@ -17502,13 +17879,8 @@ async function startDmFromIdentifier() {
     const input = $('input-social-identifier') || $('input-friend-identifier');
     const identifier = (input?.value || '').trim();
     if (!identifier) return;
-    activeDmThreadId = null;
-    activeDmTargetUserId = null;
-    activeDmTargetIdentifier = identifier;
-    activeDmMessages = [];
-    const title = $('dm-chat-title');
-    if (title) title.textContent = `给 ${identifier} 发私信`;
-    toggleSocialDetailModal(true, 'dm');
+    beginDmSelection({ identifier, title: `给 ${identifier} 发私信` });
+    toggleSocialDetailModal(true, 'dm', { skipDmRestore: true });
     const msgInput = $('dm-message-input');
     if (msgInput) msgInput.focus();
 }
@@ -17519,6 +17891,7 @@ async function sendDmMessage() {
     const text = input.value.trim();
     if (!text) return;
     const identifier = activeDmTargetIdentifier || ($('input-social-identifier')?.value || $('input-friend-identifier')?.value || '').trim();
+    const selectionRevision = dmSelectionRevision;
     const payload = { text };
     if (activeDmTargetUserId) payload.target_user_id = activeDmTargetUserId;
     else if (identifier) payload.identifier = identifier;
@@ -17529,6 +17902,10 @@ async function sendDmMessage() {
     try {
         const data = await authRequest('/api/social/dm/send', payload);
         input.value = '';
+        if (selectionRevision !== dmSelectionRevision) {
+            await loadDmThreads(true, { force: true });
+            return;
+        }
         activeDmThreadId = data.thread_id || activeDmThreadId;
         activeDmTargetUserId = data.user && data.user.id ? data.user.id : activeDmTargetUserId;
         activeDmTargetIdentifier = '';
@@ -19726,6 +20103,7 @@ function handleLocalGamePhase(data) {
         showView('view-game');
         updateStatus(UI.game_loading || 'Loading...');
     } else if (phase === 'game_over') {
+        closePileViewerModal();
         updateStatus(UI.game_over);
     }
     syncBattleLogMatch(data || {});
@@ -19867,24 +20245,519 @@ function isShortcutElementVisible(element) {
     return !rect || (rect.width > 1 && rect.height > 1);
 }
 
-function getShortcutChoiceElements() {
+function shortcutElements(selector, root = document) {
+    if (!root || !root.querySelectorAll) return [];
+    return Array.from(root.querySelectorAll(selector)).filter(isShortcutElementVisible);
+}
+
+function createShortcutScene(id) {
+    return {
+        id: String(id || ''),
+        slots: [],
+        slotLabels: [],
+        slotLabel: '',
+        actions: [],
+        navigation: [],
+        navigationId: '',
+    };
+}
+
+function setShortcutSceneSlots(scene, elements, options = {}) {
+    scene.slots = [...new Set((elements || []).filter(isShortcutElementVisible))].slice(0, 20);
+    scene.slotLabel = String(options.label || '');
+    scene.slotLabels = Array.isArray(options.labels)
+        ? scene.slots.map((_, index) => String(options.labels[index] || ''))
+        : [];
+}
+
+function addShortcutSceneAction(scene, id, elements = [], label = '') {
+    const actionId = String(id || '');
+    if (!actionId) return;
+    const targets = [...new Set((Array.isArray(elements) ? elements : [elements]).filter(isShortcutElementVisible))];
+    const existing = scene.actions.find(action => action.id === actionId);
+    if (existing) {
+        existing.elements = [...new Set([...(existing.elements || []), ...targets])];
+        if (!existing.label && label) existing.label = String(label);
+        return;
+    }
+    scene.actions.push({
+        id: actionId,
+        elements: targets,
+        label: String(label || ''),
+    });
+}
+
+function addShortcutNavigationActions(scene, elements, options = {}) {
+    const navigation = [...new Set((elements || []).filter(isKeyboardNavigationCandidate))];
+    scene.navigation = navigation;
+    scene.navigationId = String(options.id || scene.id || 'scene');
+    if (!navigation.length) return;
+    addShortcutSceneAction(scene, 'navigate_left');
+    addShortcutSceneAction(scene, 'navigate_right');
+    addShortcutSceneAction(scene, 'navigate_up');
+    addShortcutSceneAction(scene, 'navigate_down');
+    addShortcutSceneAction(scene, 'confirm');
+    if (options.toggle) addShortcutSceneAction(scene, 'toggle_focused');
+}
+
+function finalizeShortcutScene(scene) {
+    if (
+        keyboardNavigationElement
+        && scene.navigation.includes(keyboardNavigationElement)
+        && isShortcutElementVisible(keyboardNavigationElement)
+    ) {
+        addShortcutSceneAction(scene, 'confirm', [keyboardNavigationElement]);
+        if (shortcutSceneHasAction(scene, 'toggle_focused')) {
+            addShortcutSceneAction(scene, 'toggle_focused', [keyboardNavigationElement]);
+        }
+    }
+    addShortcutSceneAction(scene, 'shortcut_help');
+    return scene;
+}
+
+function visibleShortcutCloseButton(root) {
+    if (!root || !root.querySelector) return null;
+    return root.querySelector(
+        '.account-close-btn:not(:disabled), #btn-settings-close:not(:disabled), '
+        + '#btn-about-close:not(:disabled), #btn-dismiss-rotate:not(:disabled), '
+        + '.modal-buttons .btn-secondary:not(:disabled), '
+        + '.modal-buttons .btn-danger:not(:disabled), .term-intro-close:not(:disabled), '
+        + '[value="cancel"]:not(:disabled)'
+    );
+}
+
+function visibleShortcutOverlayRoots() {
+    const ids = [
+        'social-detail-modal',
+        'feedback-modal',
+        'account-replay-modal',
+        'term-intro-overlay',
+        'rotate-hint',
+        'settings-panel',
+        'about-panel',
+        'changelog-popover',
+        'account-popover',
+        'stats-popover',
+        'leaderboard-popover',
+        'achievements-popover',
+        'friends-popover',
+    ];
+    return ids
+        .map(id => $(id))
+        .filter(isShortcutElementVisible);
+}
+
+function shortcutLayerZIndex(element) {
+    if (!element || !window.getComputedStyle) return 0;
+    const value = Number.parseInt(window.getComputedStyle(element).zIndex, 10);
+    return Number.isFinite(value) ? value : 0;
+}
+
+function topmostShortcutElement(elements) {
+    const ranked = [...new Set((elements || []).filter(isShortcutElementVisible))]
+        .map((element, index) => ({
+            element,
+            index,
+            zIndex: shortcutLayerZIndex(element),
+        }))
+        .sort((left, right) => left.zIndex - right.zIndex || left.index - right.index);
+    return ranked.length ? ranked[ranked.length - 1].element : null;
+}
+
+function topmostShortcutBlockingRoot() {
+    return topmostShortcutElement([
+        $('modal'),
+        $('game-alert'),
+        $('game-prompt'),
+        $('response-panel'),
+        $('afk-check-overlay'),
+        ...visibleShortcutOverlayRoots(),
+    ]);
+}
+
+function getHomeShortcutButtons() {
+    return [
+        $('btn-connect'),
+        $('btn-story-mode'),
+        $('btn-solo-training'),
+    ].filter(isShortcutElementVisible);
+}
+
+function shortcutClassicFighterId(kind) {
+    if (kind === 'self') return 'classic-fighter-self';
+    if (kind === 'teammate') return 'classic-fighter-ally';
+    if (kind === 'enemy_2') return 'classic-fighter-enemy-2';
+    return 'classic-fighter-enemy';
+}
+
+function canUseClassicShortcutTarget(kind) {
+    const elementId = shortcutClassicFighterId(kind);
+    if (classicSelectedTriggerEquipmentId != null) {
+        const equipment = getSelectedClassicTriggerEquipment();
+        return !!(
+            equipment
+            && classicCanTriggerEquipmentFromElement(
+                elementId,
+                equipment.cardDef,
+                equipment.cardInst
+            )
+        );
+    }
+    return selectedPlayCardId != null && classicCanPlayFromElement(elementId);
+}
+
+function getGameShortcutContext() {
+    const modal = $('modal');
+    const modalContent = $('modal-content');
+    const blockingRoot = topmostShortcutBlockingRoot();
+    if (
+        blockingRoot === modal
+        && modal.classList.contains('active')
+        && isShortcutElementVisible(modal)
+    ) {
+        const scene = createShortcutScene('modal');
+        const pileType = modalContent && modalContent.classList.contains('view-deck-modal')
+            ? String(modalContent.dataset.pileType || '')
+            : '';
+        if (pileType) {
+            const actionByPile = { deck: 'view_draw', discard: 'view_discard', exile: 'view_exile' };
+            const close = visibleShortcutCloseButton(modalContent);
+            const actionId = actionByPile[pileType];
+            if (actionId) addShortcutSceneAction(scene, actionId, close ? [close] : []);
+            if (close) addShortcutSceneAction(scene, 'cancel', [close]);
+            return finalizeShortcutScene(scene);
+        }
+
+        const options = shortcutElements(
+            '.reorder-deck-entry:not(.reorder-clone), .v2-ui-picker-option',
+            modalContent
+        );
+        let buttons = shortcutElements(
+            '.v2-ui-buttons button:not(:disabled), .modal-buttons button:not(:disabled)',
+            modalContent
+        );
+        if (!buttons.length) {
+            buttons = shortcutElements('button:not(:disabled)', modalContent);
+        }
+        if (options.length) {
+            setShortcutSceneSlots(scene, options, { label: UI.select_card || UI.confirm || '选择' });
+            addShortcutNavigationActions(scene, options, { id: 'modal-options', toggle: true });
+        } else {
+            addShortcutNavigationActions(scene, buttons, { id: 'modal-buttons' });
+        }
+        let primary = buttons.filter(button => (
+            button.classList.contains('btn-primary')
+            || button.classList.contains('game-prompt-transient-btn')
+            || button.value === 'confirm'
+        ));
+        if (!primary.length) {
+            primary = buttons.filter(button => (
+                !button.classList.contains('secondary')
+                && !button.classList.contains('btn-secondary')
+                && !button.classList.contains('btn-danger')
+                && button.value !== 'cancel'
+            ));
+        }
+        if (primary.length) addShortcutSceneAction(scene, 'confirm', primary);
+        const cancel = buttons.filter(button => (
+            button.classList.contains('secondary')
+            || button.classList.contains('btn-secondary')
+            || button.classList.contains('btn-danger')
+            || button.value === 'cancel'
+        ));
+        if (cancel.length) addShortcutSceneAction(scene, 'cancel', cancel);
+        if (modalContent?.classList.contains('shortcut-help-modal') && buttons.length) {
+            addShortcutSceneAction(scene, 'cancel', buttons);
+        }
+        return finalizeShortcutScene(scene);
+    }
+
+    const alert = $('game-alert');
+    if (
+        blockingRoot === alert
+        && alert.classList.contains('active')
+        && isShortcutElementVisible(alert)
+    ) {
+        const scene = createShortcutScene('game-alert');
+        const buttons = shortcutElements('.game-alert-buttons button:not(:disabled)', alert);
+        addShortcutNavigationActions(scene, buttons, { id: 'game-alert-buttons' });
+        const primary = buttons.filter(button => button.classList.contains('btn-primary'));
+        const secondary = buttons.filter(button => !button.classList.contains('btn-primary'));
+        if (primary.length) addShortcutSceneAction(scene, 'confirm', primary);
+        if (secondary.length) addShortcutSceneAction(scene, 'cancel', secondary);
+        return finalizeShortcutScene(scene);
+    }
+
+    const prompt = $('game-prompt');
+    if (
+        blockingRoot === prompt
+        && prompt.classList.contains('active')
+        && isShortcutElementVisible(prompt)
+    ) {
+        const scene = createShortcutScene('game-prompt');
+        const options = shortcutElements('#game-prompt-options .game-prompt-option:not(.disabled)', prompt);
+        const transientButtons = shortcutElements(
+            '.game-prompt-transient-btn:not(:disabled):not(.disabled)',
+            prompt
+        );
+        setShortcutSceneSlots(scene, options, { label: UI.select_card || UI.confirm || '选择' });
+        addShortcutNavigationActions(scene, options, { id: 'game-prompt-options', toggle: true });
+        if (transientButtons.length) addShortcutSceneAction(scene, 'confirm', transientButtons);
+        const cancel = $('game-prompt-cancel');
+        if (isShortcutElementVisible(cancel)) addShortcutSceneAction(scene, 'cancel', [cancel]);
+        return finalizeShortcutScene(scene);
+    }
+
     const responsePanel = $('response-panel');
-    if (responsePanel && isShortcutElementVisible(responsePanel)) {
+    if (blockingRoot === responsePanel && isShortcutElementVisible(responsePanel)) {
+        const scene = createShortcutScene('response');
+        const options = shortcutElements('.counter-card-btn, .response-btn-row .btn:not(:disabled)', responsePanel);
+        setShortcutSceneSlots(scene, options, { label: UI.counter || UI.confirm || '反制' });
+        addShortcutNavigationActions(scene, options, { id: 'response-options' });
+        const pass = $('pass-btn');
+        if (isShortcutElementVisible(pass)) {
+            addShortcutSceneAction(scene, 'pass_response', [pass]);
+            addShortcutSceneAction(scene, 'cancel', [pass]);
+        }
+        return finalizeShortcutScene(scene);
+    }
+
+    const afkOverlay = $('afk-check-overlay');
+    if (blockingRoot === afkOverlay && isShortcutElementVisible(afkOverlay)) {
+        const scene = createShortcutScene('afk-check');
+        const buttons = shortcutElements('button:not(:disabled)', afkOverlay);
+        addShortcutNavigationActions(scene, buttons, { id: 'afk-check' });
+        return finalizeShortcutScene(scene);
+    }
+
+    const overlayRoot = visibleShortcutOverlayRoots().includes(blockingRoot)
+        ? blockingRoot
+        : null;
+    if (overlayRoot) {
+        const scene = createShortcutScene(`overlay-${overlayRoot.id || 'panel'}`);
+        const controls = shortcutElements(
+            'button:not(:disabled), [role="button"]:not([aria-disabled="true"])',
+            overlayRoot
+        );
+        addShortcutNavigationActions(scene, controls, { id: scene.id });
+        const close = visibleShortcutCloseButton(overlayRoot);
+        if (close) addShortcutSceneAction(scene, 'cancel', [close]);
+        if (overlayRoot.id === 'account-replay-modal') {
+            const refresh = $('btn-account-replays-refresh');
+            if (isShortcutElementVisible(refresh)) addShortcutSceneAction(scene, 'refresh', [refresh]);
+        }
+        return finalizeShortcutScene(scene);
+    }
+
+    const targetRegions = shortcutElements('[data-player-target-region].target-pickable');
+    if (targetRegions.length) {
+        const scene = createShortcutScene('board-targets');
+        addShortcutNavigationActions(scene, targetRegions, { id: 'board-targets' });
+        const targetKinds = [
+            ['target_self', 'self'],
+            ['target_enemy', 'enemy'],
+            ['target_teammate', 'teammate'],
+            ['target_enemy_2', 'enemy_2'],
+        ];
+        targetKinds.forEach(([actionId, kind]) => {
+            const targetId = getShortcutTargetPlayerId(kind);
+            const region = targetId == null ? null : getPlayerRegionById(targetId);
+            if (region && targetRegions.includes(region)) addShortcutSceneAction(scene, actionId, [region]);
+        });
+        addShortcutSceneAction(scene, 'cancel');
+        return finalizeShortcutScene(scene);
+    }
+
+    if (activeViewId === 'view-login') {
+        const scene = createShortcutScene('home');
+        const buttons = getHomeShortcutButtons();
+        setShortcutSceneSlots(scene, buttons, {
+            labels: buttons.map(button => String(button.textContent || '').trim()),
+        });
+        addShortcutNavigationActions(scene, buttons, { id: 'home-main-actions' });
+        return finalizeShortcutScene(scene);
+    }
+
+    if (activeViewId === 'view-lobby') {
+        const scene = createShortcutScene('lobby');
+        const modeTabs = shortcutElements('#lobby-mode-tabs .mode-tab');
+        setShortcutSceneSlots(scene, modeTabs, {
+            labels: modeTabs.map(tab => String(tab.querySelector('.mode-tab-label')?.textContent || tab.textContent || '').trim()),
+        });
+        const controls = [
+            ...modeTabs,
+            ...shortcutElements(
+                '#lobby-players .lobby-player-actions button:not(:disabled), '
+                + '#lobby-players .lobby-team-row button:not(:disabled), '
+                + '#lobby-games .spectate-btn:not(:disabled), '
+                + '#view-lobby .lobby-footer button:not(:disabled)'
+            ),
+        ];
+        addShortcutNavigationActions(scene, controls, { id: 'lobby-controls' });
+        const back = $('btn-lobby-back');
+        if (isShortcutElementVisible(back)) addShortcutSceneAction(scene, 'cancel', [back]);
+        const chat = $('lobby-chat-input');
+        const send = $('btn-lobby-chat-send');
+        if (isShortcutElementVisible(chat)) addShortcutSceneAction(scene, 'focus_chat', [send, chat]);
+        return finalizeShortcutScene(scene);
+    }
+
+    if (activeViewId === 'view-draft' || activeViewId === 'view-event-select') {
+        const drafting = activeViewId === 'view-draft';
+        const scene = createShortcutScene(drafting ? 'draft' : 'event-select');
+        const options = shortcutElements(drafting
+            ? '#draft-options .card'
+            : '#event-options .event-card:not(.event-reveal-card)');
+        setShortcutSceneSlots(scene, options, {
+            label: drafting ? (UI.draft_phase || '选牌') : (UI.select_event || '选择配装'),
+        });
+        addShortcutNavigationActions(scene, options, { id: scene.id });
+        const reroll = drafting ? $('btn-draft-reroll') : $('btn-event-reroll');
+        if (isShortcutElementVisible(reroll)) addShortcutSceneAction(scene, 'refresh', [reroll]);
+        const phaseChat = $('phase-chat-input');
+        if (isShortcutElementVisible(phaseChat)) {
+            addShortcutSceneAction(scene, 'focus_chat', [$('btn-phase-chat-send'), phaseChat]);
+        }
+        return finalizeShortcutScene(scene);
+    }
+
+    if (activeViewId === 'view-game') {
+        const scene = createShortcutScene(replayMode ? 'replay' : (isSpectating ? 'spectate' : 'battle'));
+        const handCards = shouldUseClassicBattle(gameState)
+            ? shortcutElements('#classic-hand-fan .classic-hand-card')
+            : shortcutElements('#you-hand > .card');
+        if (!isSpectating && !replayMode) {
+            setShortcutSceneSlots(scene, handCards, { label: UI.hand || '手牌' });
+        }
+        const triggerButtons = shortcutElements(
+            '.classic-equip-chip.is-triggerable:not(.is-trigger-unavailable), '
+            + '.btn-equip-trigger:not(:disabled)'
+        );
+        const navigation = !isSpectating && !replayMode
+            ? [...handCards, ...triggerButtons]
+            : [];
+        addShortcutNavigationActions(scene, navigation, { id: 'battle-actions' });
+
+        if (!isSpectating && !replayMode) {
+            const endTurnButtons = [$('btn-end-turn'), $('classic-end-turn')].filter(isShortcutElementVisible);
+            if (endTurnButtons.length) addShortcutSceneAction(scene, 'end_turn', endTurnButtons);
+            if (selectedPlayCardId != null || classicSelectedTriggerEquipmentId != null) {
+                addShortcutSceneAction(scene, 'cancel');
+                [
+                    ['target_self', 'self'],
+                    ['target_enemy', 'enemy'],
+                    ['target_teammate', 'teammate'],
+                    ['target_enemy_2', 'enemy_2'],
+                ].forEach(([actionId, kind]) => {
+                    const targetId = getShortcutTargetPlayerId(kind);
+                    const region = targetId == null ? null : getPlayerRegionById(targetId);
+                    if (
+                        isShortcutElementVisible(region)
+                        && (!shouldUseClassicBattle(gameState) || canUseClassicShortcutTarget(kind))
+                    ) {
+                        addShortcutSceneAction(scene, actionId, [region]);
+                    }
+                });
+            }
+            if (soloMode) {
+                addShortcutSceneAction(scene, 'solo_undo');
+                addShortcutSceneAction(scene, 'solo_redo');
+            } else if (socket && socket.connected) {
+                addShortcutSceneAction(scene, 'refresh');
+            }
+        }
+
+        const pileActions = [
+            ['view_draw', ['btn-view-deck', 'classic-view-deck', 'btn-spectate-view-deck']],
+            ['view_discard', ['btn-view-discard', 'classic-view-discard', 'btn-spectate-view-discard']],
+            ['view_exile', ['btn-view-exile', 'classic-view-exile', 'btn-spectate-view-exile']],
+        ];
+        pileActions.forEach(([actionId, ids]) => {
+            const buttons = ids.map(id => $(id)).filter(isShortcutElementVisible);
+            if (buttons.length) addShortcutSceneAction(scene, actionId, buttons);
+        });
+        if (battlePanelSupportsSpectators(gameState)) {
+            const logTabs = shortcutElements('[data-battle-panel-tab="log"]');
+            const spectatorTabs = shortcutElements('[data-battle-panel-tab="spectators"]');
+            if (logTabs.length) addShortcutSceneAction(scene, 'view_log', logTabs);
+            if (spectatorTabs.length) addShortcutSceneAction(scene, 'view_spectators', spectatorTabs);
+        }
+        const chatInputs = [
+            $('classic-game-chat-input'),
+            $('game-chat-input'),
+        ].filter(isShortcutElementVisible);
+        if (chatInputs.length) {
+            addShortcutSceneAction(
+                scene,
+                'focus_chat',
+                [$('btn-classic-game-chat-send'), $('btn-game-chat-send'), ...chatInputs]
+            );
+        }
+        return finalizeShortcutScene(scene);
+    }
+
+    if (activeViewId === 'view-gameover') {
+        const scene = createShortcutScene('gameover');
+        const controls = shortcutElements('#view-gameover button:not(:disabled)');
+        addShortcutNavigationActions(scene, controls, { id: 'gameover-controls' });
+        const rematch = $('btn-rematch');
+        const lobby = $('btn-return-lobby');
+        if (isShortcutElementVisible(rematch)) addShortcutSceneAction(scene, 'confirm', [rematch]);
+        if (isShortcutElementVisible(lobby)) addShortcutSceneAction(scene, 'cancel', [lobby]);
+        return finalizeShortcutScene(scene);
+    }
+
+    if (activeViewId === 'view-solo') {
+        const scene = createShortcutScene('solo-builder');
+        const cards = shortcutElements('#solo-card-list .solo-card-row');
+        setShortcutSceneSlots(scene, cards, { label: UI.select_card || '添加卡牌' });
+        const controls = [
+            ...cards,
+            ...shortcutElements('#view-solo button:not(:disabled)'),
+        ];
+        addShortcutNavigationActions(scene, controls, { id: 'solo-builder' });
+        const start = $('btn-solo-start');
+        const back = $('btn-solo-back');
+        if (isShortcutElementVisible(start)) addShortcutSceneAction(scene, 'confirm', [start]);
+        if (isShortcutElementVisible(back)) addShortcutSceneAction(scene, 'cancel', [back]);
+        return finalizeShortcutScene(scene);
+    }
+
+    const genericView = $(activeViewId);
+    const scene = createShortcutScene(activeViewId || 'page');
+    const genericControls = genericView
+        ? shortcutElements('button:not(:disabled), [role="button"]:not([aria-disabled="true"])', genericView)
+        : [];
+    addShortcutNavigationActions(scene, genericControls, { id: scene.id });
+    const genericBack = genericControls.find(button => /(?:back|return|close)/i.test(button.id || ''));
+    if (genericBack) addShortcutSceneAction(scene, 'cancel', [genericBack]);
+    return finalizeShortcutScene(scene);
+}
+
+function shortcutSceneHasAction(scene, actionId) {
+    return !!(scene && scene.actions.some(action => action.id === actionId));
+}
+
+function getShortcutChoiceElements() {
+    const blockingRoot = topmostShortcutBlockingRoot();
+    const responsePanel = $('response-panel');
+    if (blockingRoot === responsePanel && isShortcutElementVisible(responsePanel)) {
         return Array.from(responsePanel.querySelectorAll(
             '.counter-card-btn, .response-btn-row .btn'
         ));
     }
     const prompt = $('game-prompt');
-    if (prompt && prompt.classList.contains('active')) {
+    if (blockingRoot === prompt && prompt.classList.contains('active')) {
         return Array.from(prompt.querySelectorAll('#game-prompt-options .game-prompt-option'));
     }
     const modal = $('modal');
-    if (modal && modal.classList.contains('active')) {
+    if (blockingRoot === modal && modal.classList.contains('active')) {
         const reorderRows = Array.from(modal.querySelectorAll('.reorder-deck-entry:not(.reorder-clone)'));
         if (reorderRows.length) return reorderRows;
         const v2Options = Array.from(modal.querySelectorAll('.v2-ui-picker-option'));
         if (v2Options.length) return v2Options;
     }
+    if (blockingRoot) return [];
     if (activeViewId === 'view-draft') {
         return Array.from(document.querySelectorAll('#draft-options .card'));
     }
@@ -19908,13 +20781,6 @@ function isKeyboardNavigationCandidate(element) {
 }
 
 function getKeyboardNavigationSurface() {
-    const targets = Array.from(document.querySelectorAll(
-        '[data-player-target-region].target-pickable'
-    )).filter(isKeyboardNavigationCandidate);
-    if (targets.length) {
-        return { id: 'board-targets', type: 'target', elements: targets };
-    }
-
     const choices = getShortcutChoiceElements().filter(isKeyboardNavigationCandidate);
     if (choices.length) {
         let id = 'choices';
@@ -19934,21 +20800,24 @@ function getKeyboardNavigationSurface() {
         };
     }
 
-    if (
-        $('game-alert')?.classList.contains('active')
-        || $('game-prompt')?.classList.contains('active')
-        || $('modal')?.classList.contains('active')
-    ) {
-        return { id: 'blocking-overlay', type: '', elements: [] };
+    const targets = Array.from(document.querySelectorAll(
+        '[data-player-target-region].target-pickable'
+    )).filter(isKeyboardNavigationCandidate);
+    if (targets.length) {
+        return { id: 'board-targets', type: 'target', elements: targets };
     }
 
-    if (activeViewId === 'view-game' && !isSpectating && !replayMode) {
-        const triggers = Array.from(document.querySelectorAll(
-            '.classic-equip-chip.is-triggerable:not(.is-trigger-unavailable), .btn-equip-trigger:not(:disabled)'
-        )).filter(isKeyboardNavigationCandidate);
-        if (triggers.length) {
-            return { id: 'equipment-triggers', type: 'trigger', elements: triggers };
-        }
+    const scene = getGameShortcutContext();
+    const navigation = (scene.navigation || []).filter(isKeyboardNavigationCandidate);
+    if (navigation.length) {
+        return {
+            id: scene.navigationId || scene.id || 'scene',
+            type: 'scene',
+            elements: navigation,
+        };
+    }
+    if (topmostShortcutBlockingRoot()) {
+        return { id: 'blocking-overlay', type: '', elements: [] };
     }
     return { id: '', type: '', elements: [] };
 }
@@ -19964,6 +20833,7 @@ function clearKeyboardNavigationFocus() {
     });
     keyboardNavigationElement = null;
     keyboardNavigationContext = '';
+    window.GTN_KEYBINDINGS?.refreshHints();
 }
 
 function setKeyboardNavigationFocus(element, contextId, options = {}) {
@@ -19984,6 +20854,7 @@ function setKeyboardNavigationFocus(element, contextId, options = {}) {
     if (options.scroll !== false && typeof element.scrollIntoView === 'function') {
         element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
+    window.GTN_KEYBINDINGS?.refreshHints();
     return true;
 }
 
@@ -20119,6 +20990,15 @@ function activateShortcutSlot(baseIndex, options = {}) {
     const offset = options.secondPage || classicBackquoteHeld ? 10 : 0;
     const index = Number(baseIndex) + offset;
     if (!Number.isInteger(index) || index < 0 || index > 19) return false;
+    const scene = getGameShortcutContext();
+    const sceneSlot = scene.slots[index];
+    if (sceneSlot) {
+        if (!isKeyboardNavigationCandidate(sceneSlot)) return false;
+        setKeyboardNavigationFocus(sceneSlot, scene.navigationId || scene.id || 'shortcut-slots', { scroll: false });
+        if (sceneSlot.classList.contains('reorder-deck-entry')) return true;
+        sceneSlot.click();
+        return true;
+    }
     const choices = getShortcutChoiceElements();
     if (choices.length) {
         const choice = choices[index];
@@ -20168,23 +21048,29 @@ function activateShortcutTarget(kind) {
     const targetId = getShortcutTargetPlayerId(kind);
     if (targetId == null) return false;
     if (activeBoardTargetShortcut && activeBoardTargetShortcut(targetId)) return true;
-    if (!shouldUseClassicBattle(gameState) || selectedPlayCardId == null) return false;
-    const elementId = kind === 'self'
-        ? 'classic-fighter-self'
-        : kind === 'teammate'
-            ? 'classic-fighter-ally'
-            : kind === 'enemy_2'
-                ? 'classic-fighter-enemy-2'
-                : 'classic-fighter-enemy';
+    if (!shouldUseClassicBattle(gameState)) return false;
+    const elementId = shortcutClassicFighterId(kind);
+    if (classicSelectedTriggerEquipmentId != null) {
+        return classicTriggerSelectedEquipmentAtElement(elementId);
+    }
+    if (selectedPlayCardId == null) return false;
     if (!classicCanPlayFromElement(elementId)) return false;
     classicPlaySelectedCard(elementId);
     return true;
 }
 
 function clickShortcutPrimaryButton() {
-    if (activateKeyboardFocusedSelection()) return true;
+    const blockingRoot = topmostShortcutBlockingRoot();
+    const surface = getKeyboardNavigationSurface();
+    const hasCurrentFocus = (
+        keyboardNavigationElement
+        && keyboardNavigationContext === surface.id
+        && surface.elements.includes(keyboardNavigationElement)
+        && isKeyboardNavigationCandidate(keyboardNavigationElement)
+    );
+    if (hasCurrentFocus && activateKeyboardFocusedSelection()) return true;
     const alert = $('game-alert');
-    if (alert && alert.classList.contains('active')) {
+    if (blockingRoot === alert && alert.classList.contains('active')) {
         const button = alert.querySelector('.game-alert-buttons .btn-primary:not(:disabled)');
         if (button) {
             button.click();
@@ -20192,15 +21078,22 @@ function clickShortcutPrimaryButton() {
         }
     }
     const modal = $('modal');
-    if (modal && modal.classList.contains('active')) {
-        const button = modal.querySelector('.v2-ui-buttons .btn:not(.secondary):not(:disabled), .modal-buttons .btn-primary:not(:disabled)');
+    if (blockingRoot === modal && modal.classList.contains('active')) {
+        const button = modal.querySelector(
+            '.v2-ui-buttons .btn-primary:not(:disabled), '
+            + '.v2-ui-buttons [value="confirm"]:not(:disabled), '
+            + '.modal-buttons .btn-primary:not(:disabled), '
+            + '#modal-content > .btn-primary:not(:disabled), '
+            + '#modal-content .rules-actions .btn-primary:not(:disabled)'
+        );
         if (button) {
             button.click();
             return true;
         }
     }
+    if (activateKeyboardFocusedSelection()) return true;
     const prompt = $('game-prompt');
-    if (prompt && prompt.classList.contains('active')) {
+    if (blockingRoot === prompt && prompt.classList.contains('active')) {
         const button = prompt.querySelector('.game-prompt-transient-btn:not(:disabled):not(.disabled)');
         if (button) {
             button.click();
@@ -20246,16 +21139,9 @@ function clickShortcutPrimaryButton() {
 }
 
 function cancelShortcutContext() {
-    if (activeKeyboardReorderController && activeKeyboardReorderController.isGrabbed()) {
-        activeKeyboardReorderController.release();
-        return true;
-    }
-    if (activeKeyboardReorderController) {
-        activeKeyboardReorderController.cancel();
-        return true;
-    }
+    const blockingRoot = topmostShortcutBlockingRoot();
     const responsePanel = $('response-panel');
-    if (responsePanel && isShortcutElementVisible(responsePanel)) {
+    if (blockingRoot === responsePanel && isShortcutElementVisible(responsePanel)) {
         const dismiss = responsePanel.querySelector(
             '#pass-btn, .response-btn-row .btn-secondary:last-child, '
             + '.response-btn-row .btn-danger:last-child'
@@ -20265,13 +21151,8 @@ function cancelShortcutContext() {
             return true;
         }
     }
-    if (targetPickCleanup) {
-        targetPickCleanup();
-        clearKeyboardNavigationFocus();
-        return true;
-    }
     const alert = $('game-alert');
-    if (alert && alert.classList.contains('active')) {
+    if (blockingRoot === alert && alert.classList.contains('active')) {
         const button = alert.querySelector('.game-alert-buttons .btn-secondary, .game-alert-buttons button');
         if (button) {
             button.click();
@@ -20279,7 +21160,7 @@ function cancelShortcutContext() {
         }
     }
     const prompt = $('game-prompt');
-    if (prompt && prompt.classList.contains('active')) {
+    if (blockingRoot === prompt && prompt.classList.contains('active')) {
         const button = $('game-prompt-cancel');
         if (button && isShortcutElementVisible(button)) {
             button.click();
@@ -20287,10 +21168,37 @@ function cancelShortcutContext() {
         }
     }
     const modal = $('modal');
-    if (modal && modal.classList.contains('active')) {
-        const cancel = modal.querySelector('.v2-ui-buttons .secondary, .modal-buttons .btn-secondary');
+    if (blockingRoot === modal && modal.classList.contains('active')) {
+        if (activeKeyboardReorderController && activeKeyboardReorderController.isGrabbed()) {
+            activeKeyboardReorderController.release();
+            return true;
+        }
+        if (activeKeyboardReorderController) {
+            activeKeyboardReorderController.cancel();
+            return true;
+        }
+        const cancel = modal.querySelector(
+            '.v2-ui-buttons .secondary:not(:disabled), '
+            + '.v2-ui-buttons .btn-secondary:not(:disabled), '
+            + '.modal-buttons .btn-secondary:not(:disabled), '
+            + '#modal-content .btn-secondary:not(:disabled), '
+            + '#modal-content [value="cancel"]:not(:disabled)'
+        );
         if (cancel) cancel.click();
         else hideModal();
+        return true;
+    }
+    if (blockingRoot && visibleShortcutOverlayRoots().includes(blockingRoot)) {
+        const close = visibleShortcutCloseButton(blockingRoot);
+        if (close) {
+            close.click();
+            return true;
+        }
+    }
+    if (blockingRoot) return false;
+    if (targetPickCleanup) {
+        targetPickCleanup();
+        clearKeyboardNavigationFocus();
         return true;
     }
     if (selectedPlayCardId != null || classicSelectedTriggerEquipmentId != null) {
@@ -20302,6 +21210,36 @@ function cancelShortcutContext() {
     const settings = $('settings-panel');
     if (settings && !settings.classList.contains('hidden')) {
         closeSettings();
+        return true;
+    }
+    if (activeViewId === 'view-gameover') {
+        const lobby = $('btn-return-lobby');
+        if (isShortcutElementVisible(lobby)) {
+            lobby.click();
+            return true;
+        }
+    }
+    if (activeViewId === 'view-lobby') {
+        const back = $('btn-lobby-back');
+        if (isShortcutElementVisible(back)) {
+            back.click();
+            return true;
+        }
+    }
+    if (activeViewId === 'view-solo') {
+        const back = $('btn-solo-back');
+        if (isShortcutElementVisible(back)) {
+            back.click();
+            return true;
+        }
+    }
+    const currentView = $(activeViewId);
+    const genericBack = currentView && shortcutElements(
+        'button[id*="back"]:not(:disabled), button[id*="return"]:not(:disabled)',
+        currentView
+    )[0];
+    if (genericBack) {
+        genericBack.click();
         return true;
     }
     return false;
@@ -20338,15 +21276,6 @@ function refreshShortcutContext() {
 
 function dispatchGameShortcut(actionId, event = null, options = {}) {
     const action = String(actionId || '');
-    const settings = $('settings-panel');
-    if (
-        settings
-        && !settings.classList.contains('hidden')
-        && action !== 'shortcut_help'
-        && action !== 'cancel'
-    ) {
-        return false;
-    }
     if (action.startsWith('select_slot_')) {
         const slot = Number(action.slice('select_slot_'.length));
         return activateShortcutSlot(slot === 10 ? 9 : slot - 1, {
@@ -20359,6 +21288,8 @@ function dispatchGameShortcut(actionId, event = null, options = {}) {
         window.GTN_KEYBINDINGS?.showHelp();
         return true;
     }
+    const shortcutScene = getGameShortcutContext();
+    if (!shortcutSceneHasAction(shortcutScene, action)) return false;
     if (action === 'cancel') return cancelShortcutContext();
     if (action === 'confirm') return clickShortcutPrimaryButton();
     if (action === 'refresh') return refreshShortcutContext();
@@ -20380,6 +21311,8 @@ function dispatchGameShortcut(actionId, event = null, options = {}) {
     if (action === 'view_exile') {
         return toggleShortcutPile('exile');
     }
+    if (action === 'view_log') return setBattlePanelTab('log');
+    if (action === 'view_spectators') return setBattlePanelTab('spectators');
     if (action === 'focus_chat') return focusShortcutChat();
     if (action === 'solo_undo') return performSoloHistoryAction('undo');
     if (action === 'solo_redo') return performSoloHistoryAction('redo');
@@ -21492,6 +22425,7 @@ function renderLobby(data) {
     const modeCounts = data.mode_counts && typeof data.mode_counts === 'object'
         ? data.mode_counts
         : lobbyPlayers.reduce((acc, player) => {
+            if (player.status === 'spectating') return acc;
             const mode = player.mode || '1v1';
             if (mode === '1v1' || mode === '2v2' || mode === 'urf' || mode === 'random_deck') {
                 acc[mode] = (acc[mode] || 0) + 1;
@@ -21530,6 +22464,8 @@ function renderLobby(data) {
 
     const playerBySid = new Map(lobbyPlayers.map(p => [p.sid, p]));
     const adminSort = (a, b) => {
+        const statusDelta = Number(a.status === 'spectating') - Number(b.status === 'spectating');
+        if (statusDelta) return statusDelta;
         const rankDelta = getSpecialSortRank(a) - getSpecialSortRank(b);
         if (rankDelta) return rankDelta;
         return String(a.nickname || '').localeCompare(String(b.nickname || ''));
@@ -21541,7 +22477,9 @@ function renderLobby(data) {
     );
     const teamHasAdmin = (team) => teamSpecialRank(team) < 99;
     const filteredPlayers = lobbyPlayers.filter(p => {
-        const pMode = p.mode || '1v1';
+        const pMode = p.status === 'spectating'
+            ? (p.spectating_mode || p.mode || '1v1')
+            : (p.mode || '1v1');
         return pMode === currentMode;
     }).sort(adminSort);
 
@@ -21574,10 +22512,18 @@ function renderLobby(data) {
         const row = document.createElement('div');
         row.className = 'lobby-player-row';
         const isMe = p.sid === mySid;
+        const isSpectatingPlayer = p.status === 'spectating';
+        row.classList.toggle('is-spectating', isSpectatingPlayer);
         const nameSpan = document.createElement('span');
         nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
         setPlayerNameContent(nameSpan, p, { adminPrefix: true });
         row.appendChild(nameSpan);
+        if (isSpectatingPlayer) {
+            const badge = document.createElement('span');
+            badge.className = 'lobby-spectating-badge';
+            badge.textContent = UI.spectating_status || '观战中';
+            row.appendChild(badge);
+        }
         if (p.is_registered_user && p.season_gr != null) {
             const gr = document.createElement('span');
             gr.className = 'lobby-player-gr';
@@ -21586,13 +22532,13 @@ function renderLobby(data) {
         }
         const actions = document.createElement('div');
         actions.className = 'lobby-player-actions';
-        if (!isMe && buttonMode === 'team' && !myTeam) {
+        if (!isSpectatingPlayer && !isMe && buttonMode === 'team' && !myTeam) {
             const btn = document.createElement('button');
             btn.textContent = UI.form_team;
             btn.className = 'btn btn-primary btn-sm';
             btn.onclick = () => socket.emit('form_team', { target_sid: p.sid });
             actions.appendChild(btn);
-        } else if (!isMe && buttonMode === 'invite') {
+        } else if (!isSpectatingPlayer && !isMe && buttonMode === 'invite') {
             const btn = document.createElement('button');
             btn.textContent = UI.invite;
             btn.className = 'btn btn-primary';
@@ -21625,9 +22571,10 @@ function renderLobby(data) {
         row.className = 'lobby-team-row';
         const nameSpan = document.createElement('span');
         nameSpan.className = 'player-name';
-        const memberInfos = (team.member_infos && team.member_infos.length)
+        const memberInfos = ((team.member_infos && team.member_infos.length)
             ? team.member_infos
-            : (team.member_sids || []).map(sid => playerBySid.get(sid) || { nickname: '?' });
+            : (team.member_sids || []).map(sid => playerBySid.get(sid) || { nickname: '?' }))
+            .filter(member => member.status !== 'spectating');
         appendPlayerNameList(nameSpan, memberInfos, { adminPrefix: false });
         row.appendChild(nameSpan);
         if (!isMyTeamRow && myTeam) {
@@ -21644,7 +22591,7 @@ function renderLobby(data) {
         const teamsInMode = teamList.filter(t => {
             return t.member_sids.some(sid => {
                 const p = playerBySid.get(sid);
-                return p && (p.mode || '1v1') === '2v2';
+                return p && p.status !== 'spectating' && (p.mode || '1v1') === '2v2';
             });
         }).sort((a, b) => {
             const rankDelta = teamSpecialRank(a) - teamSpecialRank(b);
@@ -21652,7 +22599,9 @@ function renderLobby(data) {
             return String((a.members || [])[0] || '').localeCompare(String((b.members || [])[0] || ''));
         });
         const teamedSids = new Set();
-        teamsInMode.forEach(t => t.member_sids.forEach(s => teamedSids.add(s)));
+        teamsInMode.forEach(t => t.member_sids.forEach(sid => {
+            if (playerBySid.get(sid)?.status !== 'spectating') teamedSids.add(sid);
+        }));
         const unteamed = filteredPlayers.filter(p => !teamedSids.has(p.sid));
 
         if (teamsInMode.length === 0 && unteamed.length === 0) {
@@ -22730,6 +23679,7 @@ function syncBattleLogMatch(ctx) {
         }
         resetBattleLogState(content);
         renderedBattleLogMatchKey = key;
+        activeBattlePanelTab = 'log';
         lastDraftOptionsSignature = '';
         lastDraftPicksSignature = '';
     }
@@ -23622,11 +24572,11 @@ function attachClassicStatusIntros(container) {
             iconKey: tag.dataset.statusIcon || tag.dataset.iconKey || '',
             name: tag.dataset.statusName || fallbackName || tag.title || '',
             val: value,
-            fg: tag.style.color || '',
+            fg: tag.style.getPropertyValue('--status-fg') || tag.style.color || '',
             title: tag.title || '',
         });
     });
-    container.querySelectorAll('.armor-meter[data-term-key], .crit-meter[data-term-key]').forEach(meter => {
+    container.querySelectorAll('.armor-meter[data-term-key], .crit-meter[data-term-key], .invincible-meter[data-term-key]').forEach(meter => {
         delete meter.dataset.termIntroBound;
         delete meter.dataset.termIntroSuppressClick;
         attachTermIntroToTermKey(meter, meter.dataset.termKey || 'A');
@@ -23962,9 +24912,14 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
     if (!container) return;
     const hpPct = player.maxHp > 0 ? Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100)) : 0;
     const armorValue = Math.max(0, Number(player.armor || 0) + getPlayerRootArmorValue(player.raw || {}));
+    const armorVisible = armorValue > 0 && !masks.maskResources;
     const critMultiplier = getPlayerCritMultiplier(player.raw || player);
     const critVisible = critMultiplier != null && !masks.maskResources;
+    const invincibleVisible = !!((player.raw && player.raw.invincible) || player.invincible) && !masks.maskResources;
     const critLabel = (getTermIntroLibrary().crit || {}).label || (currentLang === 'zh' ? '暴击' : 'Critical');
+    const invincibleLabel = (getTermIntroLibrary().invincible || {}).label || UI.status_invincible || '无敌';
+    const critOffset = 7 + (armorVisible ? 47 : 0);
+    const invincibleOffset = critOffset + (critVisible ? 69 : 0);
     const role = getClassicPlayRole(selectedCard);
     const selfOnly = isClassicSelfOnlyCard(selectedCard);
     const cursorMode = classicCursorCardMode(selectedCard);
@@ -23996,13 +24951,16 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
                 <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
                 <div class="classic-hp-text">${player.hp}/${player.maxHp}</div>
             </div>
-            <button class="armor-meter classic-armor-meter${armorValue > 0 && !masks.maskResources ? '' : ' hidden'}" type="button" data-term-key="A" data-term-label="${escapeHtml(UI.status_armor || '护甲')}" data-term-color="${escapeHtml(COLORS.armor_text)}" data-status-value="${armorValue}" title="${escapeHtml(UI.status_armor || '护甲')}: ${armorValue}">
+            <button class="armor-meter classic-armor-meter${armorVisible ? '' : ' hidden'}" type="button" data-term-key="A" data-term-label="${escapeHtml(UI.status_armor || '护甲')}" data-term-color="${escapeHtml(COLORS.armor_text)}" data-status-value="${armorValue}" title="${escapeHtml(UI.status_armor || '护甲')}: ${armorValue}">
                 <img class="armor-meter-icon" src="/static/assets/status-icons/armor.svg" alt="" aria-hidden="true">
                 <span class="armor-meter-value">${escapeHtml(String(armorValue))}</span>
             </button>
-            <button class="crit-meter classic-crit-meter${critVisible ? '' : ' hidden'}${armorValue > 0 && !masks.maskResources ? '' : ' is-solo'}" type="button" data-term-key="term:crit" data-term-label="${escapeHtml(critLabel)}" data-term-color="#D4AC0D" title="${escapeHtml(critLabel)}: ${escapeHtml(formatCritMultiplier(critMultiplier))}">
+            <button class="crit-meter classic-crit-meter${critVisible ? '' : ' hidden'}" style="left:calc(100% + ${critOffset}px)" type="button" data-term-key="term:crit" data-term-label="${escapeHtml(critLabel)}" data-term-color="#D4AC0D" title="${escapeHtml(critLabel)}: ${escapeHtml(formatCritMultiplier(critMultiplier))}">
                 <img class="crit-meter-icon" src="/static/assets/ui-icons/critical.svg" alt="" aria-hidden="true">
                 <span class="crit-meter-value">${escapeHtml(formatCritMultiplier(critMultiplier))}</span>
+            </button>
+            <button class="invincible-meter classic-invincible-meter${invincibleVisible ? '' : ' hidden'}" style="left:calc(100% + ${invincibleOffset}px)" type="button" data-term-key="term:invincible" data-term-label="${escapeHtml(invincibleLabel)}" data-term-color="${escapeHtml(COLORS.elixir)}" title="${escapeHtml(invincibleLabel)}">
+                <img class="invincible-meter-icon" src="/static/assets/status-icons/invincible.svg" alt="" aria-hidden="true">
             </button>
         </div>
         ${renderClassicPileCounters(player, side, masks)}
@@ -24356,10 +25314,10 @@ function renderGame(data) {
             : gs.phase === 'game_over' ? UI.game_over : '';
     }
     const fullRoundStatus = formatRoundStatus(gs, phaseText);
-    const bottomStatus = appendSpectatorCountStatus(isMinimalUiStyle() ? formatCompactRoundStatus(gs, phaseText) : fullRoundStatus, gs);
+    const bottomStatus = isMinimalUiStyle() ? formatCompactRoundStatus(gs, phaseText) : fullRoundStatus;
     updateStatus(bottomStatus);
     const statusTextEl = $('status-text');
-    if (statusTextEl) statusTextEl.title = isMinimalUiStyle() ? appendSpectatorCountStatus(fullRoundStatus, gs) : '';
+    if (statusTextEl) statusTextEl.title = isMinimalUiStyle() ? fullRoundStatus : '';
 
     const endTurnBtn = $('btn-end-turn');
     if (endTurnBtn) {
@@ -24414,6 +25372,7 @@ function renderGame(data) {
     }
     scheduleAdjust();
     renderClassicBattle(gs);
+    updateBattlePanelTabs(gs);
     updateMinimalPlayCancelZone();
 }
 
@@ -24438,7 +25397,10 @@ function renderPlayerBars(containerId, playerData) {
         { key: 'elixir', cur: playerData.elixir || 0, max: playerData.max_elixir || 10, color: COLORS.elixir, bg: COLORS.elixir_bg, label: 'E', icon: 'elixir', title: 'E' },
         { key: 'magic', cur: playerData.magic || 0, max: playerData.max_magic || 10, color: COLORS.magic, bg: COLORS.magic_bg, label: 'M', icon: 'magic', title: 'M' },
     ];
-    if (container.querySelectorAll('.bar-wrapper').length !== bars.length || !container.querySelector('.armor-meter') || !container.querySelector('.crit-meter')) {
+    if (container.querySelectorAll('.bar-wrapper').length !== bars.length
+        || !container.querySelector('.armor-meter')
+        || !container.querySelector('.crit-meter')
+        || !container.querySelector('.invincible-meter')) {
         container.innerHTML = '';
         bars.forEach(bar => {
             const wrapper = document.createElement('div');
@@ -24479,6 +25441,15 @@ function renderPlayerBars(containerId, playerData) {
             <span class="crit-meter-value"></span>
         `;
         container.appendChild(crit);
+        const invincible = document.createElement('button');
+        const invincibleLabel = (getTermIntroLibrary().invincible || {}).label || UI.status_invincible || '无敌';
+        invincible.type = 'button';
+        invincible.className = 'invincible-meter hidden';
+        invincible.dataset.termKey = 'term:invincible';
+        invincible.dataset.termLabel = invincibleLabel;
+        invincible.dataset.termColor = COLORS.elixir;
+        invincible.innerHTML = '<img class="invincible-meter-icon" src="/static/assets/status-icons/invincible.svg" alt="" aria-hidden="true">';
+        container.appendChild(invincible);
     }
     const wrappers = container.querySelectorAll('.bar-wrapper');
     bars.forEach((bar, i) => {
@@ -24516,6 +25487,16 @@ function renderPlayerBars(containerId, playerData) {
         delete critMeter.dataset.termIntroBound;
         delete critMeter.dataset.termIntroSuppressClick;
         attachTermIntroToTermKey(critMeter, 'term:crit');
+    }
+    const invincibleMeter = container.querySelector('.invincible-meter');
+    if (invincibleMeter) {
+        const shown = !!(playerData && playerData.invincible) && !masked;
+        const invincibleLabel = (getTermIntroLibrary().invincible || {}).label || UI.status_invincible || '无敌';
+        invincibleMeter.classList.toggle('hidden', !shown);
+        invincibleMeter.title = invincibleLabel;
+        delete invincibleMeter.dataset.termIntroBound;
+        delete invincibleMeter.dataset.termIntroSuppressClick;
+        attachTermIntroToTermKey(invincibleMeter, 'term:invincible');
     }
 }
 
@@ -24617,7 +25598,6 @@ function renderStatusTags(containerId, playerData) {
         tags.push({ key: 'magic_nazar', name: info.label, abbr: currentLang === 'zh' ? '魔邪' : 'MNz', val: magicNazar, fg: COLORS.magic_text, bg: COLORS.magic_bg });
     }
     if (p.equipment_protection > 0) tags.push({ key: 'equip_protect', name: UI.status_equip_protect, abbr: 'EP', val: p.equipment_protection, fg: COLORS.indestructible, bg: COLORS.indestructible_bg });
-    if (p.invincible) tags.push({ key: 'invincible', name: UI.status_invincible, abbr: 'Inv', val: '', fg: COLORS.elixir_text, bg: COLORS.elixir_bg });
     const statusImmune = customCount('status_immune', 'immune', '状态免疫');
     if (statusImmune > 0) tags.push({ key: 'status_immune', name: UI.status_immune || '状态免疫', abbr: '免疫', val: '', fg: '#16A085', bg: '#E8F8F5' });
     const stunnedStacks = Math.max(Number(p.skip_turn || 0), customCount('dizzy', 'stunned', 'skip_turn', '眩晕'));
@@ -24697,8 +25677,8 @@ function renderStatusTags(containerId, playerData) {
     tags.forEach(t => {
         const el = document.createElement('span');
         el.className = 'status-tag';
-        el.style.color = t.fg;
-        el.style.background = t.bg;
+        el.style.setProperty('--status-fg', t.fg);
+        el.style.setProperty('--status-bg', t.bg);
         const shownVal = maskStatusValues && t.val ? '?' : t.val;
         const fullText = shownVal ? `${t.name}:${shownVal}` : t.name;
         nextItems.push(fullText);
@@ -25399,9 +26379,13 @@ function triggerCombatImpact(selector, kind = 'damage', delay = 0) {
         region.classList.add('combat-impact');
         if (impactKind === 'poison') region.classList.add('combat-impact-poison');
         if (impactKind === 'fire') region.classList.add('combat-impact-fire');
-        setTimeout(() => {
+        const previousCleanup = combatImpactCleanupTimers.get(region);
+        if (previousCleanup) clearTimeout(previousCleanup);
+        const cleanup = setTimeout(() => {
             region.classList.remove('combat-impact', 'combat-impact-poison', 'combat-impact-fire');
+            combatImpactCleanupTimers.delete(region);
         }, 460);
+        combatImpactCleanupTimers.set(region, cleanup);
     }, Math.max(0, Number(delay) || 0));
 }
 
@@ -25423,10 +26407,28 @@ function triggerCombatPulse(selector, kind = 'info', delay = 0) {
         region.classList.add('combat-pulse');
         if (kind === 'heal') region.classList.add('combat-pulse-heal');
         if (kind === 'elixir' || kind === 'magic' || kind === 'armor') region.classList.add('combat-pulse-resource');
-        setTimeout(() => {
+        const previousCleanup = combatPulseCleanupTimers.get(region);
+        if (previousCleanup) clearTimeout(previousCleanup);
+        const cleanup = setTimeout(() => {
             region.classList.remove('combat-pulse', 'combat-pulse-heal', 'combat-pulse-resource');
+            combatPulseCleanupTimers.delete(region);
         }, 420);
+        combatPulseCleanupTimers.set(region, cleanup);
     }, Math.max(0, Number(delay) || 0));
+}
+
+function scheduleCombatEventEffects(selector, playerId, scheduledEvents) {
+    const skinDamageEvents = [];
+    (scheduledEvents || []).forEach(event => {
+        if (!event) return;
+        const delay = Math.max(0, Number(event.delay) || 0);
+        if (event.impactKind) triggerCombatImpact(selector, event.impactKind, delay);
+        if (event.pulseKind) triggerCombatPulse(selector, event.pulseKind, delay);
+        if (event.skinDamageKind) {
+            skinDamageEvents.push({ delay, kind: event.skinDamageKind });
+        }
+    });
+    scheduleSkinDamageMoods(playerId, skinDamageEvents);
 }
 
 function scheduleSkinDamageMoods(playerId, events) {
@@ -25841,7 +26843,6 @@ function showStateDeltas(previous, next, options = {}) {
         const newMagic = getBarValueForKey(newData, 'magic');
         let stagedHealth = oldHealth;
         let lastHealthDelay = 0;
-        const skinDamageEvents = [];
         const inferredStatusDamageKind = inferStatusDamageKindForRef(previous, next, ref, oldData, newData, healthDelta, damageHits);
         if (damageHits.length) {
             damageHits.forEach((hit, hitIndex) => {
@@ -25850,8 +26851,6 @@ function showStateDeltas(previous, next, options = {}) {
                 const delay = hitIndex * COMBAT_HIT_STEP_MS;
                 stagedHealth = Number.isFinite(Number(hit.health)) ? Number(hit.health) : stagedHealth - amount;
                 lastHealthDelay = delay;
-                skinDamageEvents.push({ delay, kind: hit.visualKind || 'damage' });
-                triggerCombatImpact(ref.selector, hit.visualKind || 'damage', delay);
                 events.push({
                     text: `-${amount}H`,
                     kind: 'damage',
@@ -25860,6 +26859,8 @@ function showStateDeltas(previous, next, options = {}) {
                     barKey: 'health',
                     barValue: stagedHealth,
                     barMax: healthMax,
+                    impactKind: hit.visualKind || 'damage',
+                    skinDamageKind: hit.visualKind || 'damage',
                 });
             });
             if (stagedHealth !== newHealth) {
@@ -25875,24 +26876,33 @@ function showStateDeltas(previous, next, options = {}) {
                 });
             }
         } else if (healthDelta < 0) {
-            events.push({ text: `${healthDelta}H`, kind: 'damage', barKey: 'health', barValue: newHealth, barMax: healthMax });
-            skinDamageEvents.push({ delay: 0, kind: 'damage' });
-            triggerCombatImpact(ref.selector, inferredStatusDamageKind || 'damage', 0);
+            events.push({
+                text: `${healthDelta}H`,
+                kind: 'damage',
+                barKey: 'health',
+                barValue: newHealth,
+                barMax: healthMax,
+                impactKind: inferredStatusDamageKind || 'damage',
+                skinDamageKind: inferredStatusDamageKind || 'damage',
+            });
         } else if (healthDelta > 0) {
-            events.push({ text: `+${healthDelta}H`, kind: 'heal', barKey: 'health', barValue: newHealth, barMax: healthMax });
-            triggerCombatPulse(ref.selector, 'heal', 0);
+            events.push({
+                text: `+${healthDelta}H`,
+                kind: 'heal',
+                barKey: 'health',
+                barValue: newHealth,
+                barMax: healthMax,
+                pulseKind: 'heal',
+            });
         }
         if (armorDelta > 0) {
-            events.push({ text: `+${armorDelta}A`, kind: 'armor' });
-            triggerCombatPulse(ref.selector, 'armor', 40);
+            events.push({ text: `+${armorDelta}A`, kind: 'armor', delay: 40, pulseKind: 'armor' });
         } else if (armorDelta < 0) events.push({ text: `${armorDelta}A`, kind: 'armor' });
         if (poisonDelta > 0) {
-            events.push({ text: `+${poisonDelta}P`, kind: 'poison' });
-            triggerCombatPulse(ref.selector, 'poison', 70);
+            events.push({ text: `+${poisonDelta}P`, kind: 'poison', delay: 70, pulseKind: 'poison' });
         } else if (poisonDelta < 0) events.push({ text: `${poisonDelta}P`, kind: 'poison' });
         if (fireDelta > 0) {
-            events.push({ text: `+${fireDelta}F`, kind: 'fire' });
-            triggerCombatPulse(ref.selector, 'fire', 70);
+            events.push({ text: `+${fireDelta}F`, kind: 'fire', delay: 70, pulseKind: 'fire' });
         } else if (fireDelta < 0) events.push({ text: `${fireDelta}F`, kind: 'fire' });
         let stagedElixir = oldElixir;
         let stagedMagic = oldMagic;
@@ -25932,23 +26942,24 @@ function showStateDeltas(previous, next, options = {}) {
             magicDelta += resourceCost.totalM;
         }
         if (elixirDelta > 0) {
-            events.push({ text: `+${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: resourceCost ? 1 : undefined, barKey: 'elixir', barValue: newElixir, barMax: elixirMax });
-            triggerCombatPulse(ref.selector, 'elixir', resourceDelay);
+            events.push({ text: `+${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: resourceCost ? 1 : undefined, barKey: 'elixir', barValue: newElixir, barMax: elixirMax, pulseKind: 'elixir' });
         } else if (elixirDelta < 0) {
             events.push({ text: `${elixirDelta}E`, kind: 'elixir', delay: resourceDelay, stackIndex: resourceCost ? 1 : undefined, barKey: 'elixir', barValue: newElixir, barMax: elixirMax });
         }
         if (magicDelta > 0) {
-            events.push({ text: `+${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: resourceCost ? 2 : undefined, barKey: 'magic', barValue: newMagic, barMax: magicMax });
-            triggerCombatPulse(ref.selector, 'magic', resourceDelay + 40);
+            events.push({ text: `+${magicDelta}M`, kind: 'magic', delay: resourceDelay + 40, stackIndex: resourceCost ? 2 : undefined, barKey: 'magic', barValue: newMagic, barMax: magicMax, pulseKind: 'magic' });
         } else if (magicDelta < 0) {
             events.push({ text: `${magicDelta}M`, kind: 'magic', delay: resourceDelay, stackIndex: resourceCost ? 2 : undefined, barKey: 'magic', barValue: newMagic, barMax: magicMax });
         }
-        if (inferredStatusDamageKind && !skinDamageEvents.some(event => event.kind === 'poison' || event.kind === 'fire')) {
-            if (skinDamageEvents.length) skinDamageEvents[0].kind = inferredStatusDamageKind;
-            else skinDamageEvents.push({ delay: 0, kind: inferredStatusDamageKind });
+        const damageEvents = events.filter(event => event && event.skinDamageKind);
+        if (inferredStatusDamageKind && !damageEvents.some(event => event.skinDamageKind === 'poison' || event.skinDamageKind === 'fire')) {
+            if (damageEvents.length) {
+                damageEvents[0].skinDamageKind = inferredStatusDamageKind;
+                damageEvents[0].impactKind = inferredStatusDamageKind;
+            }
         }
         const scheduledEvents = showCombatFloatSequence(ref.selector, events);
-        scheduleSkinDamageMoods(ref.id, skinDamageEvents);
+        scheduleCombatEventEffects(ref.selector, ref.id, scheduledEvents);
         animateBarEventSequence(ref.selector, scheduledEvents, oldData, newData, { startValues: barStartValues });
         if (newEquipCount > oldEquipCount) {
             setTimeout(() => animateEquipmentForRegion(ref.selector), 30);
@@ -25997,6 +27008,7 @@ function estimateGameOverAnimationDelay(previous, next) {
 }
 
 function renderGameOverAfterFinalAnimation(previous, next, options = {}) {
+    closePileViewerModal();
     clearScheduledGameOver();
     const shouldAnimate = previous
         && next
@@ -26451,8 +27463,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
         el.className = 'equip-item';
         const indestructible = (cardDef.flags || []).includes('indestructible');
         if (indestructible) {
-            el.style.color = COLORS.indestructible;
-            el.style.background = COLORS.indestructible_bg;
+            el.classList.add('indestructible');
         }
         const targetId = normalizePlayerId(eqDict.effect_target);
         const ownerId = normalizeEquipmentOwnerId(eqDict, playerData);
@@ -28154,6 +29165,7 @@ function refreshBattleLogViews() {
     if (shouldUseClassicBattle(gs)) {
         renderClassicLog(buildBattleViewModel(gs));
     }
+    updateBattlePanelTabs(gs);
 }
 
 function renderPendingCard() {
@@ -30935,9 +31947,13 @@ function getBundledModCheckboxes() {
 }
 
 async function applyPeerModSettings(peerMods = {}) {
-    const disabled = Array.isArray(peerMods.disabled_mods)
-        ? peerMods.disabled_mods.map(item => String(item || '')).filter(Boolean)
-        : [];
+    if (!Object.prototype.hasOwnProperty.call(peerMods, 'disabled_mods')
+        || !Array.isArray(peerMods.disabled_mods)) {
+        throw new Error(currentLang === 'zh'
+            ? '对方的模组设置数据不完整，未更改你的设置。'
+            : 'The peer mod payload is incomplete. Your settings were not changed.');
+    }
+    const disabled = peerMods.disabled_mods.map(item => String(item || '')).filter(Boolean);
     writeDisabledModsPreference(disabled);
     if (peerMods.mod_source === 'community' && Array.isArray(peerMods.community_mods)) {
         setSelectedCommunityMods(peerMods.community_mods);
@@ -32187,10 +33203,22 @@ async function init() {
     if ($('skin-eye-shape')) $('skin-eye-shape').addEventListener('change', renderSkinEditorPreview);
     document.addEventListener('pointermove', updateSkinEyeTracking, { passive: true });
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) stopSocialNetworkActivity();
+        if (document.hidden) {
+            dmSelectionRevision += 1;
+            stopSocialNetworkActivity();
+            stopSocialUnreadPolling();
+        } else if (currentAccount) {
+            startSocialUnreadPolling(true);
+        }
     });
-    window.addEventListener('pagehide', stopSocialNetworkActivity);
-    window.addEventListener('beforeunload', stopSocialNetworkActivity);
+    window.addEventListener('pagehide', () => {
+        stopSocialNetworkActivity();
+        stopSocialUnreadPolling();
+    });
+    window.addEventListener('beforeunload', () => {
+        stopSocialNetworkActivity();
+        stopSocialUnreadPolling();
+    });
     if ($('btn-open-feedback')) $('btn-open-feedback').addEventListener('click', () => toggleFeedbackModal(true));
     if ($('btn-feedback-close')) $('btn-feedback-close').addEventListener('click', () => toggleFeedbackModal(false));
     document.querySelectorAll('[data-feedback-tab]').forEach(btn => {
@@ -32286,12 +33314,7 @@ async function init() {
         const dmThreadBtn = event.target.closest('[data-dm-thread]');
         if (dmThreadBtn) {
             event.preventDefault();
-            toggleSocialDetailModal(true, 'dm');
-            activeDmThreadId = dmThreadBtn.dataset.dmThread;
-            clearDmUnreadForThread(dmThreadBtn.dataset.dmThread);
-            renderDmThreads();
-            renderSocialSelectorList();
-            openDmThread(dmThreadBtn.dataset.dmThread, { markRead: true, force: true });
+            selectDmThread(dmThreadBtn.dataset.dmThread);
             return;
         }
         const dmUserBtn = event.target.closest('[data-dm-open-user]');
@@ -32529,12 +33552,11 @@ async function init() {
             }
         });
     });
-    if ($('classic-log-toggle')) {
-        $('classic-log-toggle').addEventListener('click', () => {
-            const drawer = $('classic-log-drawer');
-            if (drawer) drawer.classList.toggle('is-open');
+    document.querySelectorAll('[data-battle-panel-tab]').forEach(button => {
+        button.addEventListener('click', () => {
+            setBattlePanelTab(button.dataset.battlePanelTab);
         });
-    }
+    });
     const handleSoloPauseEdit = () => { if (socket || isLocalSoloRuntimeActive()) emitSoloEvent('solo_pause', {}); else showSoloTraining(); };
     $('btn-view-deck').addEventListener('click', onViewDeck);
     if ($('btn-view-discard')) $('btn-view-discard').addEventListener('click', onViewDiscard);
@@ -32663,6 +33685,9 @@ async function init() {
 window.GTN_SHORTCUT_HOST = {
     dispatch(actionId, event, options = {}) {
         return dispatchGameShortcut(actionId, event, options);
+    },
+    getShortcutContext() {
+        return getGameShortcutContext();
     },
     hasVirtualFocus() {
         return !!(

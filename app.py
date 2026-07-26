@@ -14,6 +14,8 @@ import math
 import random
 import threading
 import copy
+import pickle
+import zlib
 import shutil
 import shlex
 import difflib
@@ -55,6 +57,7 @@ from mod_spec_v2 import sha256_json
 from font_subsets import ensure_community_font_subset
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
 from runtime_errors import set_mod_runtime_error_logger
+from runtime_budget import ActionWorkBudgetExceeded
 from story_content import story_content_payload
 from story_engine import StoryActionError, apply_story_action
 from story_mode import STORY_CONTENT_VERSION, build_initial_story_state
@@ -74,6 +77,7 @@ from r2_mods import (
 )
 from db import (
     DB_PATH,
+    TITLE_COLOR_TOKENS,
     abandon_story_run,
     add_user_play_seconds,
     admin_change_username,
@@ -103,7 +107,6 @@ from db import (
     create_user,
     current_gr_season,
     db_slow_log,
-    dm_unread_count,
     find_user_for_admin,
     format_duration_zh,
     feedback_is_staff,
@@ -179,6 +182,7 @@ from db import (
     save_match_summary,
     send_dm_message,
     send_feedback_message,
+    social_unread_counts,
     set_ip_ban,
     set_user_mute,
     spend_user_thorn_dew,
@@ -400,7 +404,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260725-mod-settings-state-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260726-interrupted-fixes-2'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -461,9 +465,9 @@ def read_changelog_items(limit=20):
 
 def changelog_version():
     try:
-        st = os.stat(CHANGELOG_PATH)
-        return f'{int(st.st_mtime)}-{int(st.st_size)}'
-    except Exception:
+        with open(CHANGELOG_PATH, 'rb') as fh:
+            return hashlib.sha256(fh.read()).hexdigest()[:20]
+    except (OSError, ValueError):
         return ''
 
 
@@ -801,6 +805,18 @@ invites = {}
 solo_sessions = {}
 tutorial_sessions = set()
 SOLO_HISTORY_LIMIT = 100
+SOLO_MAX_CONCURRENT_ACTIONS = max(1, _env_int('GTN_SOLO_MAX_CONCURRENT_ACTIONS', 1))
+SOLO_ACTION_QUEUE_WAIT_SECONDS = max(0.0, _env_float('GTN_SOLO_ACTION_QUEUE_WAIT_SECONDS', 0.2))
+SOLO_ACTION_SLOW_MS = max(1.0, _env_float('GTN_SOLO_ACTION_SLOW_MS', 250))
+SOLO_ACTION_WORK_BUDGET = max(1000, _env_int('GTN_SOLO_ACTION_WORK_BUDGET', 20000))
+SOLO_LOG_LIMIT = max(200, _env_int('GTN_SOLO_LOG_LIMIT', 1200))
+SOLO_ACTION_SAMPLES = deque(maxlen=500)
+_SOLO_ACTION_LOCKS = {}
+_SOLO_ACTION_CAPACITY = threading.BoundedSemaphore(SOLO_MAX_CONCURRENT_ACTIONS)
+_SOLO_SLOW_LOG_LAST = {}
+_SOLO_LOADOUT_CACHE = OrderedDict()
+_SOLO_LOADOUT_CACHE_LOCK = threading.Lock()
+_SOLO_LOADOUT_CACHE_LIMIT = 16
 teams = {}
 pending_team_matches = {}
 v2_ui_timers = {}
@@ -1236,6 +1252,7 @@ SOLO_STATUS_TOTAL_EXCLUDED_CUSTOM_KEYS = {
     'jungle:root', 'jungle:root_status', 'root_status',
     'equipment_protection', 'armor',
 }
+SOLO_STATUS_ACHIEVEMENT_REQUIRED_TYPES = 30
 
 
 def _solo_player_status_type_count(ps):
@@ -1243,8 +1260,6 @@ def _solo_player_status_type_count(ps):
     for attr in SOLO_STATUS_TOTAL_ATTRS:
         if _positive_int(getattr(ps, attr, 0)) > 0:
             total += 1
-    if bool(getattr(ps, 'invincible', False)):
-        total += 1
     if bool(getattr(ps, 'bandage_active', False)):
         total += 1
     if bool(getattr(ps, 'bandage_death_pending', False)):
@@ -1271,7 +1286,7 @@ def check_solo_achievements(sid, engine):
         return
     try:
         total = sum(_solo_player_status_type_count(ps) for ps in getattr(engine, 'players', []) or [])
-        if total < 25:
+        if total < SOLO_STATUS_ACHIEVEMENT_REQUIRED_TYPES:
             return
         seen = getattr(engine, '_solo_achievement_flags_seen', None)
         if seen is None:
@@ -2939,12 +2954,39 @@ def _emit_dm_update_for_user(user_id):
     if not user_id:
         return
     try:
-        unread = dm_unread_count(user_id) if DB_AVAILABLE else 0
-    except Exception:
-        unread = 0
+        counts, error = social_unread_counts(user_id) if DB_AVAILABLE else ({}, None)
+        if error:
+            return
+    except Exception as exc:
+        try:
+            admin_event('error', f'failed to load social unread counts user_id={user_id}: {exc}')
+        except Exception:
+            print(f'[social] failed to load unread counts user_id={user_id}: {exc}', flush=True)
+        return
+    payload = {
+        'unread_count': int((counts or {}).get('dm_unread_count') or 0),
+        'dm_unread_count': int((counts or {}).get('dm_unread_count') or 0),
+        'friend_unread_count': int((counts or {}).get('friend_unread_count') or 0),
+    }
     for target_sid, target in list(players.items()):
         if str(target.get('user_id') or '') == str(user_id or ''):
-            socketio.emit('dm_update', {'unread_count': unread}, room=target_sid)
+            try:
+                socketio.emit('dm_update', payload, room=target_sid)
+            except Exception as exc:
+                print(f'[social] failed to emit unread update sid={target_sid}: {exc}', flush=True)
+
+
+def _pop_social_notify_user_ids(result):
+    if not isinstance(result, dict):
+        return []
+    raw_ids = result.pop('_notify_user_ids', [])
+    notify_ids = []
+    for value in raw_ids if isinstance(raw_ids, (list, tuple, set)) else []:
+        try:
+            notify_ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return list(dict.fromkeys(notify_ids))
 
 
 def _chat_entry_signature(entry):
@@ -3330,7 +3372,7 @@ def get_special_account_profile(username):
             if profile:
                 return profile
         except Exception as exc:
-            admin_event('error', f'failed to load account role for {username}: {exc}')
+            admin_event('error', f'failed to load account identity for {username}: {exc}')
     lower = str(username or '').strip().lower()
     for profile in SPECIAL_ACCOUNT_PROFILES:
         if lower == profile['display_name'].lower():
@@ -3358,16 +3400,14 @@ def special_public_fields(player_or_profile):
     name_color = (
         str(source.get('name_color') or '').strip()
         or (equipped_titles[0]['color'] if equipped_titles else '')
-        or str(source.get('special_role_color') or '').strip()
-        or ('admin' if source.get('is_admin_player') else '')
     )
     return {
         'is_admin_player': bool(source.get('is_admin_player')),
         'is_special_player': bool(role or equipped_titles),
         'special_role': role or None,
         'role_type': source.get('role_type') or ('admin' if source.get('is_admin_player') else None),
-        'special_role_label': source.get('special_role_label') or None,
-        'special_role_color': name_color or None,
+        'special_role_label': None,
+        'special_role_color': source.get('special_role_color') or None,
         'special_role_sort': int(source.get('special_role_sort', 99)),
         'can_direct_friend': bool(source.get('can_direct_friend')),
         'chat_exempt': bool(source.get('chat_exempt')),
@@ -3731,10 +3771,20 @@ def mark_player_session_last_seen(player, exclude_sid=None):
 
 def public_player_info(sid, player=None):
     p = player if player is not None else players.get(sid, {})
+    status = p.get('status', '')
+    spectating_room = p.get('spectating_room')
+    spectating_mode = None
+    if status == 'spectating' and spectating_room is not None:
+        spectated_room = rooms.get(spectating_room)
+        if spectated_room is not None:
+            spectating_mode = getattr(spectated_room, 'mode', None)
     info = {
         'sid': sid,
         'nickname': p.get('nickname', '?'),
         'mode': p.get('mode', '1v1'),
+        'status': status,
+        'spectating_room': spectating_room,
+        'spectating_mode': spectating_mode,
         'user_id': p.get('user_id'),
         'is_registered_user': bool(p.get('is_registered_user')),
         'season_gr': p.get('season_gr'),
@@ -4902,6 +4952,16 @@ SOFT_REJECT_EVENT_NAMES = {
     'select_opening_event',
     'confirm_opening_reveal',
     'submit_event_sub_choice',
+    'tutorial_bot_action',
+    'solo_play_card',
+    'solo_response',
+    'solo_resolve_choice',
+    'solo_v2_ui_response',
+    'solo_use_trigger',
+    'solo_end_turn',
+    'solo_set_next_draw',
+    'solo_undo',
+    'solo_redo',
 }
 SOFT_REJECT_CODES = {
     'WAITING_FOR_RESPONSE',
@@ -5296,7 +5356,7 @@ def validate_tag_id_list(value, *, name='tags', maximum=12):
     ]
 
 SOLO_TRAINING_MIN_DECK_SIZE = 0
-SOLO_TRAINING_MAX_DECK_SIZE = 100
+SOLO_TRAINING_MAX_DECK_SIZE = 50
 
 
 def validate_solo_deck_entries(value, *, name='deck'):
@@ -6168,15 +6228,49 @@ def has_mod_loadout_payload(data):
     ))
 
 
-def resolve_mod_loadout_payload(data):
-    community_fields, community_mod = resolve_community_loadout(data or {})
+def resolve_disabled_mods_payload(data, fallback=None, require_explicit=False):
+    if not isinstance(data, dict):
+        raise ValueError('模组设置格式错误')
+    if 'disabled_mods' not in data:
+        if require_explicit:
+            raise ValueError('模组设置缺少 disabled_mods')
+        return normalize_disabled_mods(fallback) if fallback is not None else default_disabled_mods()
+    value = data.get('disabled_mods')
+    if not isinstance(value, (str, list, tuple, set)):
+        raise ValueError('disabled_mods 必须是列表或逗号分隔文本')
+    return normalize_disabled_mods(value)
+
+
+def resolve_mod_loadout_payload(data, fallback_payload=None, require_disabled_mods=False):
+    payload = dict(fallback_payload or {})
+    payload.update(dict(data or {}))
+    disabled_fallback = (fallback_payload or {}).get('disabled_mods') if isinstance(fallback_payload, dict) else None
+    disabled_mods = resolve_disabled_mods_payload(
+        data or {},
+        fallback=disabled_fallback,
+        require_explicit=require_disabled_mods,
+    )
+    community_fields, community_mod = resolve_community_loadout(payload)
     loadout = build_mod_loadout(
-        (data or {}).get('disabled_mods', []),
+        disabled_mods,
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
-        runtime_mode=(data or {}).get('_runtime_mode') or (data or {}).get('mode'),
+        runtime_mode=payload.get('_runtime_mode') or payload.get('mode'),
     )
     return community_fields, loadout
+
+
+def validated_match_allowed_card_ids(player, runtime_mode):
+    player = player or {}
+    stored = set(player.get('allowed_card_ids') or [])
+    if str(player.get('mod_source') or 'official') != 'community':
+        disabled_value = player.get('disabled_mods') if 'disabled_mods' in player else None
+        disabled_mods = normalize_disabled_mods_with_default(disabled_value)
+        expected = set(get_allowed_card_ids(disabled_mods))
+        stored = expected
+    elif not stored:
+        raise ValueError('社区模组牌池尚未加载，请重新进入大厅')
+    return apply_runtime_content_filter(stored, runtime_mode)
 
 
 def player_loadout_hash(player):
@@ -6434,8 +6528,7 @@ def _take_over_online_session_locked(old_sid, reason='login_reconnect'):
         room = rooms[spectating_room]
         if old_sid in room.spectators:
             room.spectators.remove(old_sid)
-    solo_sessions.pop(old_sid, None)
-    tutorial_sessions.discard(old_sid)
+    _drop_solo_session_locked(old_sid)
     for inv_sid, target_sid in list(invites.items()):
         if inv_sid == old_sid or target_sid == old_sid:
             del invites[inv_sid]
@@ -6466,9 +6559,13 @@ def get_lobby_list(beta_mode=None):
     for sid, p in players.items():
         if beta_mode is not None and bool(p.get('beta_mode')) != bool(beta_mode):
             continue
-        if p['status'] == 'lobby':
+        if p.get('status') in {'lobby', 'spectating'}:
             lobby.append(public_player_info(sid, p))
-    lobby.sort(key=lambda item: (item.get('special_role_sort', 99), item.get('nickname', '').lower()))
+    lobby.sort(key=lambda item: (
+        item.get('status') == 'spectating',
+        item.get('special_role_sort', 99),
+        item.get('nickname', '').lower(),
+    ))
     return lobby
 
 
@@ -6986,6 +7083,7 @@ def socket_metrics_payload():
     actions = _recent_samples(SOCKET_ACTION_SAMPLES, 300)
     broadcasts = _recent_samples(SOCKET_BROADCAST_SAMPLES, 300)
     loop_lag = _recent_samples(EVENT_LOOP_LAG_SAMPLES, 300)
+    solo_actions = _recent_samples(SOLO_ACTION_SAMPLES, 300)
     action_by_name = {}
     for item in actions:
         bucket = action_by_name.setdefault(item.get('event') or '?', [])
@@ -7024,6 +7122,23 @@ def socket_metrics_payload():
             'lag_p95_ms': _p95(item.get('lag_ms') for item in loop_lag),
             'lag_latest_ms': loop_lag[-1].get('lag_ms') if loop_lag else None,
             'lag_max_ms': max([float(item.get('lag_ms') or 0) for item in loop_lag] or [0]),
+        },
+        'solo_actions': {
+            'active_sessions': len(solo_sessions),
+            'max_concurrent': SOLO_MAX_CONCURRENT_ACTIONS,
+            'work_budget': SOLO_ACTION_WORK_BUDGET,
+            'count': len(solo_actions),
+            'outcomes': {
+                outcome: sum(1 for item in solo_actions if item.get('outcome') == outcome)
+                for outcome in ('ok', 'budget_exceeded', 'exception')
+            },
+            'avg_ms': _avg(item.get('elapsed_ms') for item in solo_actions),
+            'p95_ms': _p95(item.get('elapsed_ms') for item in solo_actions),
+            'slowest': sorted(
+                solo_actions,
+                key=lambda item: item.get('elapsed_ms') or 0,
+                reverse=True,
+            )[:5],
         },
     }
 
@@ -7476,7 +7591,7 @@ ADMIN_COMMAND_TREE = {
     },
     'account': {
         'summary': '账号与持久数据',
-        'usage': 'account <get|username|password|achievement|dew|rating|role|title|ban|unban> ...',
+        'usage': 'account <get|username|password|achievement|dew|rating|identity|title|ban|unban> ...',
         'children': {
             'get': {'summary': '查看注册账号详情', 'usage': 'account get <ID|注册顺序|用户名>'},
             'username': {'summary': '修改账号用户名', 'usage': 'account username <ID|注册顺序|用户名> <新用户名>'},
@@ -7510,14 +7625,14 @@ ADMIN_COMMAND_TREE = {
                     'snapshot': {'summary': '写入今日分数快照', 'usage': 'account rating snapshot <账号>'},
                 },
             },
-            'role': {
+            'identity': {
                 'summary': '管理账号身份',
-                'usage': 'account role <list|get|set|clear> ...',
+                'usage': 'account identity <list|get|set|clear> ...',
                 'children': {
-                    'list': {'summary': '列出特殊身份', 'usage': 'account role list [搜索]'},
-                    'get': {'summary': '查看账号身份', 'usage': 'account role get <账号>'},
-                    'set': {'summary': '设置账号身份', 'usage': 'account role set <账号> <身份> [选项]'},
-                    'clear': {'summary': '清除特殊身份', 'usage': 'account role clear <账号>'},
+                    'list': {'summary': '列出特殊身份', 'usage': 'account identity list [搜索]'},
+                    'get': {'summary': '查看账号身份', 'usage': 'account identity get <账号>'},
+                    'set': {'summary': '设置账号身份', 'usage': 'account identity set <账号> <身份>'},
+                    'clear': {'summary': '清除特殊身份', 'usage': 'account identity clear <账号>'},
                 },
             },
             'title': {
@@ -7527,7 +7642,7 @@ ADMIN_COMMAND_TREE = {
                     'list': {'summary': '列出玩家拥有及佩戴的称号', 'usage': 'account title list <账号>'},
                     'grant': {
                         'summary': '给予称号',
-                        'usage': 'account title grant <账号> <称号名称> <颜色> [id=称号ID] [equip=true]',
+                        'usage': 'account title grant <账号> <称号名称> <颜色预设|#RRGGBB|RGB|HSV> [id=称号ID] [equip=true]',
                     },
                     'remove': {'summary': '删除玩家拥有的称号', 'usage': 'account title remove <账号> <称号ID|名称>'},
                 },
@@ -7865,7 +7980,7 @@ def _translate_structured_admin_command(parts):
         ('account', 'username'): ['userrename', *rest],
         ('account', 'password'): ['userpass', *rest],
         ('account', 'dew'): ['dew', *rest],
-        ('account', 'role'): ['role', *rest],
+        ('account', 'identity'): ['identity', *rest],
         ('account', 'title'): ['title', *rest],
         ('account', 'ban'): ['banuser', *rest],
         ('account', 'unban'): ['unbanuser', *rest],
@@ -8154,41 +8269,6 @@ def _parse_bool_option(value):
     raise ValueError(f'需要布尔值：{value}')
 
 
-def parse_role_options(tokens):
-    options = {
-        'title': '',
-        'color': '',
-        'sort_order': None,
-        'role_key': '',
-        'can_direct_friend': None,
-        'chat_exempt': None,
-    }
-    for token in tokens:
-        key, sep, value = token.partition('=')
-        if not sep:
-            if not options['title']:
-                options['title'] = token
-                continue
-            raise ValueError(f'无法识别参数：{token}')
-        key = key.lower().strip()
-        value = value.strip()
-        if key in ('title', 'label', 'name', '称号', '名称'):
-            options['title'] = value
-        elif key in ('color', 'colour', '颜色'):
-            options['color'] = value
-        elif key in ('sort', 'order', 'rank', '排序'):
-            options['sort_order'] = parse_int_token(value, 'sort')
-        elif key in ('key', 'role_key', 'prefix_key'):
-            options['role_key'] = value
-        elif key in ('direct', 'friend', 'direct_friend', '好友'):
-            options['can_direct_friend'] = _parse_bool_option(value)
-        elif key in ('chat', 'chat_exempt', '聊天'):
-            options['chat_exempt'] = _parse_bool_option(value)
-        else:
-            raise ValueError(f'未知参数：{key}')
-    return options
-
-
 def parse_title_grant_options(tokens):
     options = {
         'title_id': '',
@@ -8224,8 +8304,7 @@ def format_role_profile(user, profile):
         perms.append('聊天无限制')
     return (
         f"{user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) "
-        f"类型={profile.get('role_type')} 称号={profile.get('special_role_label') or '-'} "
-        f"颜色={profile.get('special_role_color') or '-'} 排序={profile.get('special_role_sort')} "
+        f"身份={profile.get('role_type')} "
         f"权限={','.join(perms) if perms else '-'}"
     )
 
@@ -8912,6 +8991,7 @@ ADMIN_RESOURCE_ATTRS = {
     'm': 'magic', 'magic': 'magic',
     'maxm': 'max_magic', 'max_magic': 'max_magic',
     'armor': 'armor',
+    'invincible': 'invincible', '无敌': 'invincible',
 }
 
 ADMIN_STATUS_ATTRS = {
@@ -8921,7 +9001,6 @@ ADMIN_STATUS_ATTRS = {
     'triangle': 'triangle_stacks', 'triangle_stacks': 'triangle_stacks', '三角形': 'triangle_stacks',
     'dodge': 'dodge', '闪避': 'dodge',
     'equipment_protection': 'equipment_protection', '装备护甲': 'equipment_protection',
-    'invincible': 'invincible', '无敌': 'invincible',
     'skip_turn': 'skip_turn', 'dizzy': 'skip_turn', '眩晕': 'skip_turn',
     'attack_blocked': 'attack_blocked', '禁攻': 'attack_blocked',
     'untargetable': 'untargetable', '无法选中': 'untargetable',
@@ -9009,10 +9088,6 @@ def _set_admin_status_value(engine, ps, status, value):
     if attr:
         current = getattr(ps, attr, 0)
         setattr(ps, attr, bool(value) if isinstance(current, bool) else value)
-        if attr == 'invincible' and not value:
-            ps.invincible_until_player = None
-            ps.invincible_granted_round = -1
-            ps.invincible_granted_turn_marker = -1
         return ADMIN_STATUS_CANONICAL.get(attr, status_key), value
     ps.custom_statuses = getattr(ps, 'custom_statuses', {}) or {}
     if status_key in ('status_immune', 'immune', '状态免疫'):
@@ -9051,9 +9126,6 @@ def admin_game_status(room_id, pidx, action, status=None, value=None):
                 current = getattr(ps, attr, 0)
                 setattr(ps, attr, False if isinstance(current, bool) else 0)
             ps.custom_statuses = {}
-            ps.invincible_until_player = None
-            ps.invincible_granted_round = -1
-            ps.invincible_granted_turn_marker = -1
             changed = '全部状态'
         elif action in ('set', 'add', 'remove'):
             if not status:
@@ -9949,16 +10021,16 @@ def execute_admin_command(line, _internal=False):
         sent = send_system_broadcast(msg)
         admin_event('admin', f'broadcast: {msg}')
         return {'success': True, 'output': f'已发送广播：{msg}'}
-    if cmd in ('role', 'userrole'):
+    if cmd in ('identity', 'role', 'userrole'):
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'role list|get|set|clear')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'account identity <list|get|set|clear>')}
         sub = parts[1].lower()
         if sub == 'list':
             query = parts[2] if len(parts) > 2 else ''
             rows = list_user_roles(query=query, limit=120)
             if not rows:
                 return {'success': True, 'output': '暂无特殊身份。'}
-            lines = ['账号  ID  类型  称号  颜色  排序  权限']
+            lines = ['账号  ID  身份  权限']
             for row in rows:
                 perms = []
                 if row.get('role_type') == 'admin':
@@ -9969,7 +10041,6 @@ def execute_admin_command(line, _internal=False):
                     perms.append('聊天无限制')
                 lines.append(
                     f"{row.get('username')}  {row.get('player_id') or '-'}  {row.get('role_type')}  "
-                    f"{row.get('title') or '-'}  {row.get('color') or '-'}  {row.get('sort_order')}  "
                     f"{','.join(perms) if perms else '-'}"
                 )
             return {'success': True, 'output': '\n'.join(lines)}
@@ -9991,21 +10062,18 @@ def execute_admin_command(line, _internal=False):
             refresh_online_user_titles(user['id'])
             return {'success': True, 'output': f"已清除 {user['username']} 的特殊身份。"}
         if sub == 'set':
-            if len(parts) < 4:
-                return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名> <admin|staff|contributor|sponsor> [title=称号] [color=bloom]')}
-            try:
-                options = parse_role_options(parts[4:])
-            except ValueError as exc:
-                return {'success': False, 'output': str(exc)}
+            if len(parts) != 4:
+                return {
+                    'success': False,
+                    'output': command_error(
+                        raw,
+                        len(raw),
+                        'account identity set <ID|注册顺序|用户名> <admin|staff|contributor|sponsor>',
+                    ) + '\n身份不再设置称号、颜色或自定义权限；请使用 account title 管理称号。',
+                }
             user, profile, error = admin_set_user_role(
                 parts[2],
                 parts[3],
-                title=options.get('title', ''),
-                color=options.get('color', ''),
-                sort_order=options.get('sort_order'),
-                role_key=options.get('role_key', ''),
-                can_direct_friend=options.get('can_direct_friend'),
-                chat_exempt=options.get('chat_exempt'),
             )
             if error:
                 return {'success': False, 'output': error}
@@ -10013,7 +10081,7 @@ def execute_admin_command(line, _internal=False):
             output = format_role_profile(user, profile)
             refresh_online_user_titles(user['id'])
             return {'success': True, 'output': output}
-        return {'success': False, 'output': command_error(raw, len(raw), 'role list|get|set|clear')}
+        return {'success': False, 'output': command_error(raw, len(raw), 'account identity <list|get|set|clear>')}
     if cmd in ('title', 'titles', '称号'):
         if len(parts) < 3:
             return {'success': False, 'output': command_error(raw, len(raw), 'account title <list|grant|remove> <账号> ...')}
@@ -10030,7 +10098,7 @@ def execute_admin_command(line, _internal=False):
                     'output': command_error(
                         raw,
                         len(raw),
-                        'account title grant <账号> <称号名称> <#RRGGBB|RGB(r,g,b)|HSV(h,s,v)> [id=称号ID] [equip=true]',
+                        'account title grant <账号> <称号名称> <颜色预设|#RRGGBB|RGB(r,g,b)|HSV(h,s,v)> [id=称号ID] [equip=true]',
                     ),
                 }
             try:
@@ -10671,15 +10739,13 @@ def admin_completions(line):
                 return filtered(['get', 'add', 'addpaid', 'spend', 'tx'])
             if position == 3:
                 return filtered(account_values())
-        if sub == 'role':
+        if sub == 'identity':
             if position == 2:
                 return filtered(['list', 'get', 'set', 'clear'])
             if position == 3 and len(parts) > 2 and parts[2].lower() != 'list':
                 return filtered(account_values())
             if position == 4 and len(parts) > 2 and parts[2].lower() == 'set':
                 return filtered(['admin', 'staff', 'contributor', 'sponsor'])
-            if position >= 5 and len(parts) > 2 and parts[2].lower() == 'set':
-                return filtered(['title=', 'color=bloom', 'color=guard', 'sort=', 'key=', 'direct=', 'chat='])
         if sub == 'title':
             if position == 2:
                 return filtered(['list', 'grant', 'remove'])
@@ -10690,7 +10756,12 @@ def admin_completions(line):
             if action == 'remove' and position == 4:
                 return filtered(title_values(account_token))
             if action == 'grant' and position == 5:
-                return filtered(['#2F80C8', 'RGB(47,128,200)', 'HSV(207,77,78)'])
+                return filtered([
+                    *TITLE_COLOR_TOKENS,
+                    '#2F80C8',
+                    'RGB(47,128,200)',
+                    'HSV(207,77,78)',
+                ])
             if action == 'grant' and position >= 6:
                 return filtered(['id=', 'equip=true', 'equip=false'])
         if sub in ('get', 'username', 'password', 'ban', 'unban') and position == 2:
@@ -10992,6 +11063,11 @@ def set_room_player_attr(room_id, pidx, key, val):
         elif attr == 'max_magic':
             ps.max_magic = max(0, val)
             ps.magic = min(ps.magic, ps.max_magic)
+        elif attr == 'invincible':
+            if val > 0:
+                e._set_invincible_until_next_own_turn_end(pidx)
+            else:
+                e._clear_invincible_state(pidx)
         else:
             setattr(ps, attr, max(0, val))
         broadcast_game_state(room)
@@ -11363,6 +11439,27 @@ def room_spectator_count(room):
         return len(getattr(room, 'spectators', []) or [])
 
 
+def room_spectator_players(room):
+    result = []
+    seen = set()
+    room_id = getattr(room, 'room_id', None)
+    for sid in (getattr(room, 'spectators', []) or []):
+        if sid in seen:
+            continue
+        seen.add(sid)
+        player = players.get(sid)
+        if not player:
+            continue
+        if player.get('status') != 'spectating' or player.get('spectating_room') != room_id:
+            continue
+        result.append(public_player_info(sid, player))
+    result.sort(key=lambda item: (
+        item.get('special_role_sort', 99),
+        item.get('nickname', '').lower(),
+    ))
+    return result
+
+
 def _broadcast_game_state_now(room):
     _broadcast_started = time.perf_counter()
     _broadcast_recipients = 0
@@ -11383,6 +11480,7 @@ def _broadcast_game_state_now(room):
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
         state['spectator_count'] = room_spectator_count(room)
+        state['spectator_players'] = room_spectator_players(room)
         state['room_chat_history'] = room_chat_history_for_sid(room, sid)
         state.update(instance_payload())
         state.update(_room_timer_payload(room))
@@ -11566,6 +11664,7 @@ def send_game_state_to(room, pidx):
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
         state['spectator_count'] = room_spectator_count(room)
+        state['spectator_players'] = room_spectator_players(room)
         state['room_chat_history'] = room_chat_history_for_sid(room, sid)
         state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
@@ -11929,6 +12028,65 @@ def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=N
     return engine
 
 
+def _reusable_player_loadout_for_solo(sid, disabled_mods, request_data):
+    requested_community = _community_request_fields(request_data or {})
+    with _lock:
+        player = players.get(sid)
+        if not player:
+            return None
+        current = {
+            'disabled_mods': list(player.get('disabled_mods') or []),
+            'mod_source': str(player.get('mod_source') or 'official'),
+            'community_mod_hash': str(player.get('community_mod_hash') or ''),
+            'allowed_card_ids': player.get('allowed_card_ids'),
+            'v2_loadout': player.get('v2_loadout'),
+            'v2_ui_components': player.get('v2_ui_components'),
+            'v2_tag_defs': player.get('v2_tag_defs'),
+            'v2_status_defs': player.get('v2_status_defs'),
+            'v2_opening_event_defs': player.get('v2_opening_event_defs'),
+        }
+    if set(current['disabled_mods']) != set(disabled_mods or []):
+        return None
+    if current['mod_source'] != requested_community.get('mod_source', 'official'):
+        return None
+    if current['mod_source'] == 'community' and (
+        current['community_mod_hash'] != requested_community.get('community_mod_hash', '')
+    ):
+        return None
+    allowed_card_ids = set(current.get('allowed_card_ids') or [])
+    if not allowed_card_ids:
+        return None
+    return {
+        'disabled_mods': list(disabled_mods or []),
+        'allowed_card_ids': apply_runtime_content_filter(allowed_card_ids, 'solo'),
+        'v2_loadout': current.get('v2_loadout'),
+        'v2_ui_components': current.get('v2_ui_components') or {},
+        'v2_tag_defs': current.get('v2_tag_defs') or {},
+        'v2_status_defs': current.get('v2_status_defs') or {},
+        'v2_opening_event_defs': current.get('v2_opening_event_defs') or {},
+    }
+
+
+def _cached_official_solo_loadout(disabled_mods):
+    cache_key = (
+        tuple(sorted(set(disabled_mods or []))),
+        current_mods_signature(),
+        _public_data_disable_key(active_content_disables('any')),
+    )
+    with _SOLO_LOADOUT_CACHE_LOCK:
+        cached = _SOLO_LOADOUT_CACHE.get(cache_key)
+        if cached is not None:
+            _SOLO_LOADOUT_CACHE.move_to_end(cache_key)
+            return cached
+    loadout = build_mod_loadout(disabled_mods, runtime_mode='solo')
+    with _SOLO_LOADOUT_CACHE_LOCK:
+        _SOLO_LOADOUT_CACHE[cache_key] = loadout
+        _SOLO_LOADOUT_CACHE.move_to_end(cache_key)
+        while len(_SOLO_LOADOUT_CACHE) > _SOLO_LOADOUT_CACHE_LIMIT:
+            _SOLO_LOADOUT_CACHE.popitem(last=False)
+    return loadout
+
+
 def init_solo_history(engine):
     if engine is None:
         return
@@ -11940,11 +12098,155 @@ def _solo_history_enabled(sid):
     return sid not in tutorial_sessions
 
 
+_SOLO_SNAPSHOT_MAGIC = b'GTNS1\0'
+_SOLO_SNAPSHOT_SHARED_ATTRS = GameEngine.DEEPCOPY_SHARED_ATTRS
+_SOLO_SNAPSHOT_DETACHED_ATTRS = (
+    '_solo_undo_stack',
+    '_solo_redo_stack',
+    *_SOLO_SNAPSHOT_SHARED_ATTRS,
+)
+
+
+def _solo_action_lock_for_sid(sid):
+    with _lock:
+        lock = _SOLO_ACTION_LOCKS.get(sid)
+        if lock is None:
+            lock = threading.Lock()
+            _SOLO_ACTION_LOCKS[sid] = lock
+        return lock
+
+
+def _try_acquire_solo_action(sid, event_name):
+    lock = _solo_action_lock_for_sid(sid)
+    if lock.acquire(blocking=False):
+        return lock
+    soft_reject(
+        sid,
+        event_name,
+        'ACTION_BUSY',
+        message='训练场正在处理上一项操作，请稍后重试',
+    )
+    return None
+
+
+def _begin_solo_engine_action(sid, event_name):
+    lock = _try_acquire_solo_action(sid, event_name)
+    if lock is None:
+        return None, None
+    with _lock:
+        engine = solo_sessions.get(sid)
+    if engine is None:
+        lock.release()
+        socketio.emit('server_error', {'message': '训练场尚未开始'}, room=sid)
+        return None, None
+    return lock, engine
+
+
+def _drop_solo_session_locked(sid):
+    solo_sessions.pop(sid, None)
+    tutorial_sessions.discard(sid)
+    _SOLO_ACTION_LOCKS.pop(sid, None)
+
+
+def _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome='ok'):
+    sample = {
+        'ts': time.time(),
+        'sid': sid,
+        'event': event_name,
+        'elapsed_ms': round(float(elapsed_ms), 2),
+        'ok': bool(ok),
+        'outcome': str(outcome or ('ok' if ok else 'error')),
+    }
+    SOLO_ACTION_SAMPLES.append(sample)
+    if elapsed_ms < SOLO_ACTION_SLOW_MS:
+        return
+    key = (sid, event_name)
+    now = time.time()
+    if now - float(_SOLO_SLOW_LOG_LAST.get(key, 0) or 0) < 10:
+        return
+    _SOLO_SLOW_LOG_LAST[key] = now
+    try:
+        admin_event(
+            'perf',
+            (
+                f'solo_action event={event_name} elapsed_ms={elapsed_ms:.1f} '
+                f'ok={bool(ok)} outcome={sample["outcome"]}'
+            ),
+            sid=sid,
+            event_name=event_name,
+            elapsed_ms=round(float(elapsed_ms), 1),
+            outcome=sample['outcome'],
+        )
+    except Exception as exc:
+        print(
+            f'solo action perf log failed event={event_name}: {type(exc).__name__}: {exc}',
+            flush=True,
+        )
+
+
+def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
+    acquired = _SOLO_ACTION_CAPACITY.acquire(timeout=SOLO_ACTION_QUEUE_WAIT_SECONDS)
+    if not acquired:
+        soft_reject(
+            sid,
+            event_name,
+            'ACTION_BUSY',
+            message='训练场运算繁忙，请稍后重试',
+        )
+        return False, None
+    started = time.perf_counter()
+    ok = False
+    outcome = 'error'
+    try:
+        if offload and eventlet is not None:
+            from eventlet import tpool
+            value = tpool.execute(fn)
+        else:
+            value = fn()
+        ok = True
+        outcome = 'ok'
+        return True, value
+    except ActionWorkBudgetExceeded:
+        outcome = 'budget_exceeded'
+        admin_event(
+            'warning',
+            f'solo action budget exceeded event={event_name} budget={SOLO_ACTION_WORK_BUDGET}',
+            sid=sid,
+            event_name=event_name,
+            work_budget=SOLO_ACTION_WORK_BUDGET,
+        )
+        socketio.emit(
+            'server_error',
+            {'message': '本次训练场结算过于复杂，已撤销该操作', 'code': 'SOLO_ACTION_TOO_COMPLEX'},
+            room=sid,
+        )
+        return False, None
+    except Exception as exc:
+        outcome = 'exception'
+        traceback.print_exc()
+        admin_event(
+            'error',
+            f'solo action failed event={event_name}: {type(exc).__name__}: {exc}',
+            sid=sid,
+            event_name=event_name,
+        )
+        socketio.emit(
+            'server_error',
+            {'message': '训练场操作失败，已恢复操作前状态', 'code': 'SOLO_ACTION_FAILED'},
+            room=sid,
+        )
+        return False, None
+    finally:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        _SOLO_ACTION_CAPACITY.release()
+        _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome)
+
+
 def _solo_engine_snapshot(engine):
     if engine is None:
         return None
     saved = {}
-    for attr in ('_solo_undo_stack', '_solo_redo_stack'):
+    for attr in _SOLO_SNAPSHOT_DETACHED_ATTRS:
         if hasattr(engine, attr):
             saved[attr] = getattr(engine, attr)
             try:
@@ -11952,7 +12254,14 @@ def _solo_engine_snapshot(engine):
             except Exception:
                 pass
     try:
-        return copy.deepcopy(engine)
+        payload = pickle.dumps(engine, protocol=pickle.HIGHEST_PROTOCOL)
+        return _SOLO_SNAPSHOT_MAGIC + zlib.compress(payload, level=1)
+    except Exception:
+        restored = copy.deepcopy(engine)
+        for attr in _SOLO_SNAPSHOT_SHARED_ATTRS:
+            if attr in saved:
+                setattr(restored, attr, saved[attr])
+        return {'kind': 'deepcopy', 'engine': restored}
     finally:
         for attr, value in saved.items():
             setattr(engine, attr, value)
@@ -11980,7 +12289,23 @@ def _solo_restore_snapshot(engine, snapshot):
         return False
     undo_stack = getattr(engine, '_solo_undo_stack', deque(maxlen=SOLO_HISTORY_LIMIT))
     redo_stack = getattr(engine, '_solo_redo_stack', deque(maxlen=SOLO_HISTORY_LIMIT))
-    restored = copy.deepcopy(snapshot)
+    shared = {
+        attr: getattr(engine, attr)
+        for attr in _SOLO_SNAPSHOT_SHARED_ATTRS
+        if hasattr(engine, attr)
+    }
+    if isinstance(snapshot, (bytes, bytearray)) and bytes(snapshot).startswith(_SOLO_SNAPSHOT_MAGIC):
+        restored = pickle.loads(zlib.decompress(bytes(snapshot)[len(_SOLO_SNAPSHOT_MAGIC):]))
+        for attr, value in shared.items():
+            setattr(restored, attr, value)
+    elif isinstance(snapshot, dict) and snapshot.get('kind') == 'deepcopy':
+        memo = {id(value): value for value in shared.values()}
+        restored = copy.deepcopy(snapshot.get('engine'), memo)
+        for attr, value in shared.items():
+            setattr(restored, attr, value)
+    else:
+        memo = {id(value): value for value in shared.values()}
+        restored = copy.deepcopy(snapshot, memo)
     engine.__dict__.clear()
     engine.__dict__.update(restored.__dict__)
     engine._solo_undo_stack = undo_stack
@@ -11992,11 +12317,73 @@ def _solo_restore_snapshot(engine, snapshot):
     return True
 
 
-def _solo_emit_pending_after_state(sid, engine):
+def _build_solo_pending_response_payload(engine):
+    pending = getattr(engine, 'pending_response', None)
+    if not isinstance(pending, dict) or getattr(engine, 'game_over', False):
+        return None
+    try:
+        source_id = int(pending.get('player_id', getattr(engine, 'current_player', 0)))
+    except (TypeError, ValueError):
+        source_id = int(getattr(engine, 'current_player', 0) or 0)
+    responder_id = 1 - source_id
+    played_card = pending.get('card') or {}
+    counter_cards = []
+    seen_instances = set()
+    for trigger_type in _response_trigger_types_for_card(engine, played_card):
+        for counter_card in engine.get_counter_cards(responder_id, trigger_type):
+            key = getattr(counter_card, 'instance_id', None)
+            if key in seen_instances:
+                continue
+            seen_instances.add(key)
+            counter_cards.append(counter_card)
+    engine._consume_action_work(250)
+    return build_response_request_payload(
+        engine,
+        responder_id,
+        played_card,
+        source_id,
+        counter_cards,
+        pending.get('target_player_id', responder_id),
+    )
+
+
+def _solo_mutate_engine(sid, engine, fn, *, record_history=True):
+    history_snapshot = _solo_capture_undo_snapshot(sid, engine) if record_history else None
+    rollback_snapshot = history_snapshot if history_snapshot is not None else _solo_engine_snapshot(engine)
+    engine._begin_action_work_budget(SOLO_ACTION_WORK_BUDGET)
+    try:
+        result = fn()
+        if isinstance(result, dict) and getattr(engine, 'pending_response', None):
+            result['_solo_response_request_payload'] = _build_solo_pending_response_payload(engine)
+        log = getattr(engine, 'log', None)
+        if isinstance(log, list) and len(log) > SOLO_LOG_LIMIT:
+            trim_count = len(log) - SOLO_LOG_LIMIT
+            del log[:trim_count]
+            engine._solo_log_offset = max(
+                0,
+                int(getattr(engine, '_solo_log_offset', 0) or 0),
+            ) + trim_count
+            engine._log_compaction_floor = max(
+                0,
+                int(getattr(engine, '_log_compaction_floor', 0) or 0) - trim_count,
+            )
+    except Exception:
+        if rollback_snapshot is not None:
+            _solo_restore_snapshot(engine, rollback_snapshot)
+        raise
+    finally:
+        engine._end_action_work_budget()
+    return result, history_snapshot
+
+
+def _solo_emit_pending_after_state(sid, engine, response_payload=None):
     if not engine or getattr(engine, 'game_over', False):
         return
     pending = getattr(engine, 'pending_response', None)
     if pending:
+        if isinstance(response_payload, dict):
+            socketio.emit('response_request', response_payload, room=sid)
+            return
         try:
             pending_player = int(pending.get('player_id', getattr(engine, 'current_player', 0)))
             emit_solo_response_request(sid, engine, pending_player, pending.get('card') or {})
@@ -12011,9 +12398,13 @@ def _solo_emit_pending_after_state(sid, engine):
             admin_event('error', f'solo pending v2 emit failed: {exc}')
 
 
-def send_solo_state_with_pending(sid, perspective=None):
+def send_solo_state_with_pending(sid, perspective=None, response_payload=None):
     send_solo_state(sid, perspective)
-    _solo_emit_pending_after_state(sid, solo_sessions.get(sid))
+    _solo_emit_pending_after_state(
+        sid,
+        solo_sessions.get(sid),
+        response_payload=response_payload,
+    )
 
 
 TUTORIAL_PROGRESS_KEYS = (
@@ -12113,6 +12504,9 @@ def send_solo_state(sid, perspective=None):
     if perspective is None:
         perspective = 0 if is_tutorial else (engine.current_player if not engine.game_over else 0)
     state = engine.get_public_state(perspective)
+    log_offset = max(0, int(getattr(engine, '_solo_log_offset', 0) or 0))
+    state['log_start'] = log_offset
+    state['log_total'] = log_offset + len(state.get('log') or [])
     state['your_id'] = perspective
     state['match_key'] = f"solo:{id(engine)}"
     if is_tutorial:
@@ -12455,7 +12849,10 @@ def emit_pending_interaction_after_state_change(room, reason='state_change'):
         emit_room_v2_ui_request(room)
 
 
-def emit_solo_response_request(sid, engine, pidx, played_card):
+def emit_solo_response_request(sid, engine, pidx, played_card, payload=None):
+    if isinstance(payload, dict):
+        socketio.emit('response_request', payload, room=sid)
+        return
     opp_pidx = 1 - pidx
     trigger_types = _response_trigger_types_for_card(engine, played_card)
     counter_cards = []
@@ -12491,17 +12888,51 @@ def _schedule_v2_ui_timeout(scope, engine, player_id, request_id, timeout_ms):
     def _timeout():
         with _lock:
             v2_ui_timers.pop(timer_key, None)
+        if scope[0] == 'solo':
+            sid = scope[1]
+            action_lock = _solo_action_lock_for_sid(sid)
+            if not action_lock.acquire(timeout=0.2):
+                _schedule_v2_ui_timeout(scope, engine, player_id, request_id, 250)
+                return
+            try:
+                with _lock:
+                    is_current = solo_sessions.get(sid) is engine
+                pending = getattr(engine, 'pending_v2_ui', None)
+                if not is_current or not pending or str(pending.get('request_id')) != str(request_id):
+                    return
+                ok, outcome = _solo_safe_cpu_call(
+                    sid,
+                    'solo_v2_ui_timeout',
+                    lambda: _solo_mutate_engine(
+                        sid,
+                        engine,
+                        lambda: engine.handle_v2_ui_response(
+                            player_id,
+                            request_id,
+                            {'button': 'cancel', 'values': {}},
+                        ),
+                        record_history=False,
+                    ),
+                    offload=False,
+                )
+                if not ok or not outcome:
+                    if getattr(engine, 'pending_v2_ui', None):
+                        _schedule_v2_ui_timeout(scope, engine, player_id, request_id, 250)
+                    return
+                result, _ = outcome
+                send_solo_state(sid)
+                if result.get('needs_v2_ui'):
+                    emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
+            finally:
+                action_lock.release()
+            return
+
+        with _lock:
             pending = getattr(engine, 'pending_v2_ui', None)
             if not pending or str(pending.get('request_id')) != str(request_id):
                 return
             result = engine.handle_v2_ui_response(player_id, request_id, {'button': 'cancel', 'values': {}})
-            if scope[0] == 'solo':
-                sid = scope[1]
-                if sid in solo_sessions and solo_sessions.get(sid) is engine:
-                    send_solo_state(sid)
-                    if result.get('needs_v2_ui'):
-                        emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
-            elif scope[0] == 'room':
+            if scope[0] == 'room':
                 room = rooms.get(scope[1])
                 if room and room.engine is engine:
                     broadcast_game_state(room)
@@ -12612,6 +13043,7 @@ def build_spectate_state(room, perspective=0):
     base['room_id'] = room.room_id
     base['match_key'] = room_match_key(room)
     base['spectator_count'] = room_spectator_count(room)
+    base['spectator_players'] = room_spectator_players(room)
     base['room_chat_history'] = room_chat_history_for_sid(room, spectator=True)
     base.update(room_mod_payload(room))
     base.update(_room_disconnect_state_payload(room))
@@ -12820,6 +13252,7 @@ def story_page():
             'username': user.get('username'),
             'display_name': user.get('display_name') or user.get('username'),
             'skin': public_skin_config(user.get('skin')),
+            'keybindings': user.get('keybindings'),
         },
         story_dev_tools=STORY_DEV_TOOLS_ENABLED,
     )
@@ -14710,13 +15143,34 @@ def api_social_friends():
         return auth_error
     mark_read = str(request.args.get('mark_read') or '').lower() in ('1', 'true', 'yes')
     try:
+        started = time.perf_counter()
+        data, error = list_friends(user_id, mark_read=False)
+        db_slow_log('/api/social/friends', (time.perf_counter() - started) * 1000, 'friend_list')
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
         if mark_read:
             _, mark_error = mark_friend_notifications_read_for_user(user_id)
             if mark_error:
                 return jsonify({'success': False, 'error': mark_error}), 400
+            data['unread_count'] = 0
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+    if mark_read:
+        _emit_dm_update_for_user(user_id)
+    return jsonify({'success': True, **(data or {})})
+
+
+@app.route('/api/social/unread')
+def api_social_unread():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    try:
         started = time.perf_counter()
-        data, error = list_friends(user_id, mark_read=False)
-        db_slow_log('/api/social/friends', (time.perf_counter() - started) * 1000, 'friend_list')
+        data, error = social_unread_counts(user_id)
+        db_slow_log('/api/social/unread', (time.perf_counter() - started) * 1000, 'social_unread')
     except sqlite3.OperationalError as exc:
         return _db_busy_response(exc)
     if error:
@@ -14740,6 +15194,9 @@ def api_social_friend_add():
         return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
+    notify_user_ids = _pop_social_notify_user_ids(result)
+    for notify_user_id in notify_user_ids:
+        _emit_dm_update_for_user(notify_user_id)
     return jsonify({'success': True, **(result or {})})
 
 
@@ -14757,6 +15214,9 @@ def api_social_friend_respond():
         return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
+    notify_user_ids = _pop_social_notify_user_ids(result)
+    for notify_user_id in notify_user_ids:
+        _emit_dm_update_for_user(notify_user_id)
     return jsonify({'success': True, **(result or {})})
 
 
@@ -14774,6 +15234,9 @@ def api_social_friend_remove():
         return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
+    notify_user_ids = _pop_social_notify_user_ids(result)
+    for notify_user_id in notify_user_ids:
+        _emit_dm_update_for_user(notify_user_id)
     return jsonify({'success': True, **(result or {})})
 
 
@@ -16301,7 +16764,17 @@ def on_update_mod_settings(data):
         return
     data = dict(data or {})
     request_id = str(data.get('request_id') or '')[:64]
-    requested_disabled_mods = normalize_disabled_mods(data.get('disabled_mods'))
+    try:
+        requested_disabled_mods = resolve_disabled_mods_payload(data, require_explicit=True)
+    except ValueError as exc:
+        return _emit_mod_settings_result(
+            sid,
+            ok=False,
+            code='MOD_SETTINGS_INVALID_PAYLOAD',
+            stage='validate',
+            reason=str(exc),
+            request_id=request_id,
+        )
     try:
         client_revision = _normalize_mod_settings_client_revision(data.get('client_revision'))
     except ValueError as exc:
@@ -16365,7 +16838,7 @@ def on_update_mod_settings(data):
 
     data['_runtime_mode'] = runtime_mode
     try:
-        community_fields, loadout = resolve_mod_loadout_payload(data)
+        community_fields, loadout = resolve_mod_loadout_payload(data, require_disabled_mods=True)
     except Exception as exc:
         admin_event(
             'error',
@@ -16530,9 +17003,12 @@ def on_accept_team(data):
         _security_illegal(sid, 'accept_team', str(exc))
         return
     pending_loadout = None
+    with _lock:
+        current_player = players.get(sid)
+        fallback_mod_payload = player_mod_match_payload(current_player) if current_player else None
     if has_mod_loadout_payload(data):
         try:
-            pending_loadout = resolve_mod_loadout_payload(data)
+            pending_loadout = resolve_mod_loadout_payload(data, fallback_payload=fallback_mod_payload)
         except Exception as exc:
             emit('server_error', {'message': f'模组设置保存失败：{exc}'})
             return
@@ -16730,16 +17206,16 @@ def on_accept_team_match(data):
                 socketio.emit('team_match_accepted', {}, room=member_sid)
         room_id = _next_room_id
         _next_room_id += 1
-        allowed = None
         first_sid = all_sids[0]
-        if first_sid in players and players[first_sid].get('allowed_card_ids'):
-            allowed = players[first_sid]['allowed_card_ids']
-        if allowed is not None:
-            allowed = apply_runtime_content_filter(allowed, '2v2')
-            pool_issue = runtime_card_pool_issue(allowed, '2v2')
-            if pool_issue:
-                emit_match_start_failed(all_sids, pool_issue, reason='content_temporarily_disabled')
-                return
+        try:
+            allowed = validated_match_allowed_card_ids(players.get(first_sid), '2v2')
+        except ValueError as exc:
+            emit_match_start_failed(all_sids, str(exc), reason='mod_loadout_unavailable')
+            return
+        pool_issue = runtime_card_pool_issue(allowed, '2v2')
+        if pool_issue:
+            emit_match_start_failed(all_sids, pool_issue, reason='content_temporarily_disabled')
+            return
         clear_pending_match_invites_for_sids_locked(all_sids)
         room = GameRoom(room_id, all_sids, allowed, mode='2v2', beta_mode=bool(players[first_sid].get('beta_mode', False)))
         apply_v2_loadout_to_engine(room.engine, players.get(first_sid, {}), room.mode)
@@ -16798,8 +17274,7 @@ def on_disconnect():
                 return
             player = players[sid]
             mark_player_session_last_seen_locked(player, exclude_sid=sid)
-            solo_sessions.pop(sid, None)
-            tutorial_sessions.discard(sid)
+            _drop_solo_session_locked(sid)
             room_id = player.get('room_id')
             nickname = player['nickname']
             admin_event('player', f'{nickname} disconnected', sid=sid, room_id=room_id)
@@ -16866,14 +17341,15 @@ def on_disconnect():
                             t.cancel()
                         _cancel_game_over_cleanup_timer(room)
                         del rooms[room_id]
-                if pidx < 0 and player.get('spectating_room') is not None:
-                    spec_room_id = player['spectating_room']
-                    if spec_room_id is not None and spec_room_id in rooms:
-                        spec_room = rooms[spec_room_id]
-                        if sid in spec_room.spectators:
-                            spec_room.spectators.remove(sid)
-                    player['spectating_room'] = None
-                    player['spectate_perspective'] = 0
+            spec_room_id = player.get('spectating_room')
+            if spec_room_id is not None:
+                spec_room = rooms.get(spec_room_id)
+                if spec_room is not None and sid in spec_room.spectators:
+                    spec_room.spectators.remove(sid)
+                    pending_emits.append(('broadcast_game_state', spec_room, None))
+                player['spectating_room'] = None
+                player['spectate_perspective'] = 0
+                pending_emits.append(('broadcast_lobby', None, None))
             for inv_sid, target_sid in list(invites.items()):
                 if inv_sid == sid or target_sid == sid:
                     del invites[inv_sid]
@@ -17219,9 +17695,12 @@ def on_accept_invite(data):
     if reject_new_match_if_draining([sid, inviter_sid], 'accept_invite'):
         return
     pending_loadout = None
+    with _lock:
+        current_player = players.get(sid)
+        fallback_mod_payload = player_mod_match_payload(current_player) if current_player else None
     if has_mod_loadout_payload(data):
         try:
-            pending_loadout = resolve_mod_loadout_payload(data)
+            pending_loadout = resolve_mod_loadout_payload(data, fallback_payload=fallback_mod_payload)
         except Exception as exc:
             emit('server_error', {'message': f'模组设置保存失败：{exc}'})
             return
@@ -17248,8 +17727,11 @@ def on_accept_invite(data):
             return
         room_id = _next_room_id
         _next_room_id += 1
-        allowed_card_ids = inviter.get('allowed_card_ids') or get_allowed_card_ids(inviter.get('disabled_mods', []))
-        allowed_card_ids = apply_runtime_content_filter(allowed_card_ids, inviter.get('mode', '1v1'))
+        try:
+            allowed_card_ids = validated_match_allowed_card_ids(inviter, inviter.get('mode', '1v1'))
+        except ValueError as exc:
+            emit_match_start_failed([inviter_sid, sid], str(exc), reason='mod_loadout_unavailable')
+            return
         pool_issue = runtime_card_pool_issue(allowed_card_ids, inviter.get('mode', '1v1'))
         if pool_issue:
             emit_match_start_failed([inviter_sid, sid], pool_issue, reason='content_temporarily_disabled')
@@ -17905,38 +18387,80 @@ def on_solo_start(data):
         sub1 = validate_choice_payload(data.get('sub1'))
     except ValueError as exc:
         _security_illegal(sid, 'solo_start', str(exc))
-        emit('server_error', {'message': '训练场牌组必须各为0-100张'})
+        emit('server_error', {'message': '训练场牌组必须各为0-50张'})
         return
     disabled_mods = ensure_valid_disabled_mods(normalize_disabled_mods_with_default(data.get('disabled_mods') if data else None))
+    reusable_loadout = _reusable_player_loadout_for_solo(sid, disabled_mods, data)
+    action_lock = _try_acquire_solo_action(sid, 'solo_start')
+    if action_lock is None:
+        return
     try:
-        community_fields, community_mod = resolve_community_loadout(data or {})
-        loadout = build_mod_loadout(
-            disabled_mods,
-            community_mod=community_mod,
-            community_hash=community_fields.get('community_mod_hash', ''),
-            runtime_mode='solo',
+        def _prepare_solo_start():
+            loadout = reusable_loadout
+            if loadout is None:
+                try:
+                    requested_community = _community_request_fields(data or {})
+                    if requested_community.get('mod_source') == 'community':
+                        community_fields, community_mod = resolve_community_loadout(data or {})
+                        loadout = build_mod_loadout(
+                            disabled_mods,
+                            community_mod=community_mod,
+                            community_hash=community_fields.get('community_mod_hash', ''),
+                            runtime_mode='solo',
+                        )
+                    else:
+                        loadout = _cached_official_solo_loadout(disabled_mods)
+                except Exception as exc:
+                    return {'error': f'训练场模组加载失败: {exc}'}
+            allowed_card_ids = set(loadout.get('allowed_card_ids') or [])
+
+            def _valid_entry(entry):
+                def_id = entry.get('def_id') if isinstance(entry, dict) else entry
+                return def_id in CARD_DEFS and def_id in allowed_card_ids
+
+            if any(not _valid_entry(entry) for entry in deck0 + deck1):
+                return {'error': '训练场牌组中包含当前未启用的卡牌'}
+            engine = create_solo_engine(
+                deck0,
+                deck1,
+                event0,
+                event1,
+                sub0,
+                sub1,
+                loadout=loadout,
+            )
+            return {
+                'engine': engine,
+                'allowed_card_ids': allowed_card_ids,
+            }
+
+        ok, prepared = _solo_safe_cpu_call(
+            sid,
+            'solo_start',
+            _prepare_solo_start,
         )
-    except Exception as exc:
-        emit('server_error', {'message': f'社区模组加载失败: {exc}'})
-        return
-    allowed_card_ids = loadout['allowed_card_ids']
-    if sid in players:
-        players[sid]['disabled_mods'] = disabled_mods
-        players[sid]['allowed_card_ids'] = allowed_card_ids
-    def _valid_entry(entry):
-        def_id = entry.get('def_id') if isinstance(entry, dict) else entry
-        return def_id in CARD_DEFS and def_id in allowed_card_ids
-    if any(not _valid_entry(entry) for entry in deck0 + deck1):
-        emit('server_error', {'message': '训练场牌组中包含当前未启用的卡牌'})
-        return
-    with _lock:
-        clear_pending_match_invites_for_sids_locked([sid])
-        tutorial_sessions.discard(sid)
-        solo_sessions[sid] = create_solo_engine(deck0, deck1, event0, event1, sub0, sub1, loadout=loadout)
-        if sid in players:
-            players[sid]['status'] = 'solo'
+        if not ok or not prepared:
+            return
+        if prepared.get('error'):
+            emit('server_error', {'message': prepared['error']})
+            return
+        engine = prepared.get('engine')
+        allowed_card_ids = prepared.get('allowed_card_ids') or set()
+        if engine is None:
+            emit('server_error', {'message': '训练场创建失败'})
+            return
+        with _lock:
+            clear_pending_match_invites_for_sids_locked([sid])
+            tutorial_sessions.discard(sid)
+            solo_sessions[sid] = engine
+            if sid in players:
+                players[sid]['disabled_mods'] = disabled_mods
+                players[sid]['allowed_card_ids'] = allowed_card_ids
+                players[sid]['status'] = 'solo'
         socketio.emit('game_phase', {'phase': 'playing', 'solo': True}, room=sid)
         send_solo_state(sid)
+    finally:
+        action_lock.release()
 
 
 @socketio.on('tutorial_start')
@@ -17958,30 +18482,42 @@ def on_tutorial_start(data=None):
         'Basic', 'Bone', 'Mark', 'Sewage', 'MagicBubble',
     ]
     tutorial_allowed = apply_runtime_content_filter(CARD_DEFS.keys(), 'tutorial')
-    with _lock:
-        clear_pending_match_invites_for_sids_locked([sid])
-        tutorial_sessions.add(sid)
-        solo_sessions[sid] = create_solo_engine(
-            deck0,
-            deck1,
-            None,
-            None,
-            None,
-            None,
-            player_names=['你', '练习对手'],
-            start_label='新手教程开始',
-        )
-        engine = solo_sessions[sid]
-        engine.tutorial_progress = {key: False for key in TUTORIAL_PROGRESS_KEYS}
-        engine.players[0].health = min(int(engine.players[0].max_health), 90)
-        engine.players[0].elixir = max(int(engine.players[0].elixir), 5)
-        engine.allowed_card_ids = tutorial_allowed
-        for ps in engine.players:
-            ps.deck = [card for card in ps.deck if card.def_id in tutorial_allowed]
-        if sid in players:
-            players[sid]['status'] = 'tutorial'
+    action_lock = _try_acquire_solo_action(sid, 'tutorial_start')
+    if action_lock is None:
+        return
+    try:
+        def _create_tutorial_engine():
+            engine = create_solo_engine(
+                deck0,
+                deck1,
+                None,
+                None,
+                None,
+                None,
+                player_names=['你', '练习对手'],
+                start_label='新手教程开始',
+            )
+            engine.tutorial_progress = {key: False for key in TUTORIAL_PROGRESS_KEYS}
+            engine.players[0].health = min(int(engine.players[0].max_health), 90)
+            engine.players[0].elixir = max(int(engine.players[0].elixir), 5)
+            engine.allowed_card_ids = tutorial_allowed
+            for ps in engine.players:
+                ps.deck = [card for card in ps.deck if card.def_id in tutorial_allowed]
+            return engine
+
+        ok, engine = _solo_safe_cpu_call(sid, 'tutorial_start', _create_tutorial_engine)
+        if not ok or engine is None:
+            return
+        with _lock:
+            clear_pending_match_invites_for_sids_locked([sid])
+            tutorial_sessions.add(sid)
+            solo_sessions[sid] = engine
+            if sid in players:
+                players[sid]['status'] = 'tutorial'
         socketio.emit('game_phase', {'phase': 'playing', 'solo': True, 'tutorial': True}, room=sid)
         send_solo_state(sid, 0)
+    finally:
+        action_lock.release()
 
 
 def _pick_tutorial_bot_card(engine):
@@ -18013,30 +18549,44 @@ def on_tutorial_bot_action(data=None):
     data = socket_guard('tutorial_bot_action', data, require_player=False, allow_empty=True, emit_error=False)
     if data is None:
         return
-    with _lock:
-        if sid not in tutorial_sessions:
-            return
-        engine = solo_sessions.get(sid)
-        if not engine or engine.game_over:
+    action_lock, engine = _begin_solo_engine_action(sid, 'tutorial_bot_action')
+    if action_lock is None:
+        return
+    try:
+        if sid not in tutorial_sessions or engine.game_over:
             send_solo_state(sid, 0)
             return
         if engine.current_player != 1 or engine.pending_response is not None:
             send_solo_state(sid, 0)
             return
-        card = _pick_tutorial_bot_card(engine)
-        if card:
-            result = engine.play_card(1, card.instance_id)
-            if result.get('needs_response'):
-                send_solo_state(sid, 0)
-                emit_solo_response_request(sid, engine, 1, result['card'])
-            elif result.get('needs_choice'):
-                engine.end_turn(1)
-                send_solo_state(sid, 0)
-            else:
-                send_solo_state(sid, 0)
-        else:
-            engine.end_turn(1)
+
+        def _bot_action():
+            def _mutate():
+                card = _pick_tutorial_bot_card(engine)
+                if card is None:
+                    return {'kind': 'end_turn', 'result': engine.end_turn(1)}
+                result = engine.play_card(1, card.instance_id)
+                if result.get('needs_choice'):
+                    engine.end_turn(1)
+                return {'kind': 'play', 'result': result}
+            return _solo_mutate_engine(sid, engine, _mutate, record_history=False)[0]
+
+        ok, outcome = _solo_safe_cpu_call(sid, 'tutorial_bot_action', _bot_action)
+        if not ok:
             send_solo_state(sid, 0)
+            return
+        result = (outcome or {}).get('result') or {}
+        send_solo_state(sid, 0)
+        if result.get('needs_response'):
+            emit_solo_response_request(
+                sid,
+                engine,
+                1,
+                result['card'],
+                payload=(outcome or {}).get('_solo_response_request_payload'),
+            )
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_play_card')
@@ -18052,11 +18602,10 @@ def on_solo_play_card(data):
     except ValueError as exc:
         _security_illegal(sid, 'solo_play_card', str(exc))
         return
-    with _lock:
-        engine = solo_sessions.get(sid)
-        if not engine:
-            emit('server_error', {'message': '训练场尚未开始'})
-            return
+    action_lock, engine = _begin_solo_engine_action(sid, 'solo_play_card')
+    if action_lock is None:
+        return
+    try:
         pidx = engine.current_player
         if target_player_id >= 0:
             choice = dict(choice or {})
@@ -18064,18 +18613,37 @@ def on_solo_play_card(data):
             choice.setdefault('target_player_id', target_player_id)
             choice.setdefault('target_id', target_player_id)
         tutorial_card_before = _tutorial_card_before_action(engine, pidx, card_instance_id) if sid in tutorial_sessions else None
-        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
-        result = engine.play_card(pidx, card_instance_id, choice)
-        if sid in tutorial_sessions:
-            _tutorial_note_card_action(engine, pidx, tutorial_card_before, choice, result)
+
+        def _play():
+            def _mutate():
+                result = engine.play_card(pidx, card_instance_id, choice)
+                if sid in tutorial_sessions:
+                    _tutorial_note_card_action(engine, pidx, tutorial_card_before, choice, result)
+                    if result.get('needs_response') and pidx == 0:
+                        engine.handle_response(1, None)
+                        result = dict(result)
+                        result['_tutorial_auto_responded'] = True
+                return result
+            return _solo_mutate_engine(sid, engine, _mutate)
+
+        ok, outcome = _solo_safe_cpu_call(sid, 'solo_play_card', _play)
+        if not ok or not outcome:
+            send_solo_state(sid)
+            return
+        result, undo_snapshot = outcome
         if result.get('needs_response'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
-            if sid in tutorial_sessions and pidx == 0:
-                engine.handle_response(1, None)
+            if result.get('_tutorial_auto_responded'):
                 send_solo_state(sid, 0)
                 return
             send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pidx)
-            emit_solo_response_request(sid, engine, pidx, result['card'])
+            emit_solo_response_request(
+                sid,
+                engine,
+                pidx,
+                result['card'],
+                payload=result.get('_solo_response_request_payload'),
+            )
         elif result.get('needs_choice'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
@@ -18089,6 +18657,8 @@ def on_solo_play_card(data):
             send_solo_state(sid)
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_response')
@@ -18103,10 +18673,10 @@ def on_solo_response(data):
     except ValueError as exc:
         _security_illegal(sid, 'solo_response', str(exc))
         return
-    with _lock:
-        engine = solo_sessions.get(sid)
-        if not engine:
-            return
+    action_lock, engine = _begin_solo_engine_action(sid, 'solo_response')
+    if action_lock is None:
+        return
+    try:
         had_pending_response = bool(getattr(engine, 'pending_response', None))
         responder = 1 - engine.pending_response['player_id'] if had_pending_response else engine.current_player
         if sid in tutorial_sessions and responder != 0:
@@ -18116,28 +18686,50 @@ def on_solo_response(data):
             if sid in tutorial_sessions and card_instance_id is not None
             else None
         )
-        undo_snapshot = _solo_capture_undo_snapshot(sid, engine) if had_pending_response else None
-        response_result = engine.handle_response(responder, card_instance_id)
-        if (
-            sid in tutorial_sessions
-            and responder == 0
-            and isinstance(tutorial_counter, dict)
-            and tutorial_counter.get('def_id') == 'Bubble'
-            and isinstance(response_result, dict)
-            and response_result.get('success')
-        ):
-            _tutorial_mark(engine, 'counter_used')
+
+        def _respond():
+            def _mutate():
+                response_result = engine.handle_response(responder, card_instance_id)
+                if (
+                    sid in tutorial_sessions
+                    and responder == 0
+                    and isinstance(tutorial_counter, dict)
+                    and tutorial_counter.get('def_id') == 'Bubble'
+                    and isinstance(response_result, dict)
+                    and response_result.get('success')
+                ):
+                    _tutorial_mark(engine, 'counter_used')
+                pending = getattr(engine, 'pending_response', None)
+                if pending and sid in tutorial_sessions:
+                    pending_player = int(pending.get('player_id', engine.current_player))
+                    if (1 - pending_player) != 0:
+                        engine.handle_response(1 - pending_player, None)
+                return response_result
+            return _solo_mutate_engine(
+                sid,
+                engine,
+                _mutate,
+                record_history=had_pending_response,
+            )
+
+        ok, outcome = _solo_safe_cpu_call(sid, 'solo_response', _respond)
+        if not ok or not outcome:
+            send_solo_state(sid)
+            return
+        response_result, undo_snapshot = outcome
         if had_pending_response:
             _solo_commit_undo_snapshot(engine, undo_snapshot)
         pending = getattr(engine, 'pending_response', None)
         if pending:
             pending_player = int(pending.get('player_id', engine.current_player))
-            if sid in tutorial_sessions and (1 - pending_player) != 0:
-                engine.handle_response(1 - pending_player, None)
-                send_solo_state(sid)
-            else:
-                send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pending_player)
-                emit_solo_response_request(sid, engine, pending_player, pending.get('card') or {})
+            send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pending_player)
+            emit_solo_response_request(
+                sid,
+                engine,
+                pending_player,
+                pending.get('card') or {},
+                payload=response_result.get('_solo_response_request_payload'),
+            )
         elif getattr(engine, 'pending_choice', None):
             send_solo_state(sid)
             socketio.emit('choice_request', build_choice_request_payload(engine.pending_choice), room=sid)
@@ -18146,6 +18738,8 @@ def on_solo_response(data):
             emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
         else:
             send_solo_state(sid)
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_resolve_choice')
@@ -18159,26 +18753,45 @@ def on_solo_resolve_choice(data):
     except ValueError as exc:
         _security_illegal(sid, 'solo_resolve_choice', str(exc))
         return
-    with _lock:
-        engine = solo_sessions.get(sid)
-        if not engine:
-            return
+    action_lock, engine = _begin_solo_engine_action(sid, 'solo_resolve_choice')
+    if action_lock is None:
+        return
+    try:
         if not getattr(engine, 'pending_choice', None):
             send_solo_state(sid)
             return
         pidx = engine.pending_choice.get('player_id', engine.current_player) if engine.pending_choice else engine.current_player
-        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
-        result = engine.resolve_choice(pidx, choice)
-        if sid in tutorial_sessions and pidx == 0 and result.get('success'):
-            _tutorial_refresh_progress(engine)
+
+        def _resolve():
+            def _mutate():
+                result = engine.resolve_choice(pidx, choice)
+                if sid in tutorial_sessions and pidx == 0 and result.get('success'):
+                    _tutorial_refresh_progress(engine)
+                if sid in tutorial_sessions and pidx == 0 and result.get('needs_response'):
+                    engine.handle_response(1, None)
+                    result = dict(result)
+                    result['_tutorial_auto_responded'] = True
+                return result
+            return _solo_mutate_engine(sid, engine, _mutate)
+
+        ok, outcome = _solo_safe_cpu_call(sid, 'solo_resolve_choice', _resolve)
+        if not ok or not outcome:
+            send_solo_state(sid)
+            return
+        result, undo_snapshot = outcome
         if result.get('needs_response'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
-            if sid in tutorial_sessions and pidx == 0:
-                engine.handle_response(1, None)
+            if result.get('_tutorial_auto_responded'):
                 send_solo_state(sid, 0)
                 return
             send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pidx)
-            emit_solo_response_request(sid, engine, pidx, result['card'])
+            emit_solo_response_request(
+                sid,
+                engine,
+                pidx,
+                result['card'],
+                payload=result.get('_solo_response_request_payload'),
+            )
         elif result.get('needs_choice'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
@@ -18190,6 +18803,8 @@ def on_solo_resolve_choice(data):
         else:
             _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_v2_ui_response')
@@ -18209,27 +18824,44 @@ def on_solo_v2_ui_response(data):
     except ValueError as exc:
         _security_illegal(sid, 'solo_v2_ui_response', str(exc))
         return
-    with _lock:
-        engine = solo_sessions.get(sid)
-        if not engine:
-            return
+    action_lock, engine = _begin_solo_engine_action(sid, 'solo_v2_ui_response')
+    if action_lock is None:
+        return
+    try:
         pending = getattr(engine, 'pending_v2_ui', None)
         if not pending:
             return
         pidx = int(pending.get('player_id', engine.current_player))
         _cancel_v2_ui_timeout(('solo', sid), request_id)
-        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
-        result = engine.handle_v2_ui_response(pidx, request_id, clean_data)
+
+        ok, outcome = _solo_safe_cpu_call(
+            sid,
+            'solo_v2_ui_response',
+            lambda: _solo_mutate_engine(
+                sid,
+                engine,
+                lambda: engine.handle_v2_ui_response(pidx, request_id, clean_data),
+            ),
+        )
+        if not ok or not outcome:
+            send_solo_state(sid)
+            return
+        result, undo_snapshot = outcome
         if result.get('needs_v2_ui'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
             send_solo_state(sid)
             emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
         elif result.get('success'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
-            send_solo_state(sid)
+            send_solo_state_with_pending(
+                sid,
+                response_payload=result.get('_solo_response_request_payload'),
+            )
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
             send_solo_state(sid)
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_use_trigger')
@@ -18244,25 +18876,44 @@ def on_solo_use_trigger(data):
     except ValueError as exc:
         _security_illegal(sid, 'solo_use_trigger', str(exc))
         return
-    with _lock:
-        engine = solo_sessions.get(sid)
-        if not engine:
-            return
+    action_lock, engine = _begin_solo_engine_action(sid, 'solo_use_trigger')
+    if action_lock is None:
+        return
+    try:
         tutorial_equipment_def_id = ''
         if sid in tutorial_sessions and engine.current_player == 0:
             for eq in list(getattr(engine.players[0], 'equipment', []) or []):
                 if int(getattr(eq.card_instance, 'instance_id', -1)) == equipment_instance_id:
                     tutorial_equipment_def_id = str(getattr(eq.card_instance, 'def_id', '') or '')
                     break
-        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
-        result = engine.use_trigger(engine.current_player, equipment_instance_id, target_player_id=target_player_id)
-        if sid in tutorial_sessions and tutorial_equipment_def_id == 'Leaf' and result.get('success'):
-            _tutorial_mark(engine, 'trigger_used')
+
+        def _trigger():
+            def _mutate():
+                result = engine.use_trigger(
+                    engine.current_player,
+                    equipment_instance_id,
+                    target_player_id=target_player_id,
+                )
+                if sid in tutorial_sessions and tutorial_equipment_def_id == 'Leaf' and result.get('success'):
+                    _tutorial_mark(engine, 'trigger_used')
+                return result
+            return _solo_mutate_engine(sid, engine, _mutate)
+
+        ok, outcome = _solo_safe_cpu_call(sid, 'solo_use_trigger', _trigger)
+        if not ok or not outcome:
+            send_solo_state(sid)
+            return
+        result, undo_snapshot = outcome
         if result.get('success') or result.get('needs_response') or result.get('needs_choice') or result.get('needs_v2_ui'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
         if not result.get('success'):
             emit('server_error', {'message': result.get('error', 'Operation failed')})
-        send_solo_state_with_pending(sid)
+        send_solo_state_with_pending(
+            sid,
+            response_payload=result.get('_solo_response_request_payload'),
+        )
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_end_turn')
@@ -18271,20 +18922,35 @@ def on_solo_end_turn(data=None):
     data = socket_guard('solo_end_turn', data, require_player=False, allow_empty=True)
     if data is None:
         return
-    with _lock:
-        engine = solo_sessions.get(sid)
-        if not engine:
-            return
+    action_lock, engine = _begin_solo_engine_action(sid, 'solo_end_turn')
+    if action_lock is None:
+        return
+    try:
         tutorial_player_id = engine.current_player
-        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
-        result = engine.end_turn(engine.current_player)
-        if sid in tutorial_sessions and tutorial_player_id == 0 and result.get('success'):
-            _tutorial_mark(engine, 'turn_ended')
+
+        def _end_turn():
+            def _mutate():
+                result = engine.end_turn(engine.current_player)
+                if sid in tutorial_sessions and tutorial_player_id == 0 and result.get('success'):
+                    _tutorial_mark(engine, 'turn_ended')
+                return result
+            return _solo_mutate_engine(sid, engine, _mutate)
+
+        ok, outcome = _solo_safe_cpu_call(sid, 'solo_end_turn', _end_turn)
+        if not ok or not outcome:
+            send_solo_state(sid)
+            return
+        result, undo_snapshot = outcome
         if result.get('success'):
             _solo_commit_undo_snapshot(engine, undo_snapshot)
         if not result.get('success'):
             emit('server_error', {'message': result.get('error', 'Operation failed')})
-        send_solo_state(sid)
+        send_solo_state_with_pending(
+            sid,
+            response_payload=result.get('_solo_response_request_payload'),
+        )
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_set_next_draw')
@@ -18304,35 +18970,41 @@ def on_solo_set_next_draw(data):
     except ValueError as exc:
         _security_illegal(sid, 'solo_set_next_draw', str(exc))
         return
-    with _lock:
-        engine = solo_sessions.get(sid)
-        if not engine or not def_ids:
+    if not def_ids:
+        return
+    action_lock, engine = _begin_solo_engine_action(sid, 'solo_set_next_draw')
+    if action_lock is None:
+        return
+    try:
+        def _set_next_draw():
+            def _mutate():
+                ps = engine.players[engine.current_player]
+                picked = []
+                for did in def_ids:
+                    idx2 = next((i for i, c in enumerate(ps.deck) if c.def_id == did), -1)
+                    if idx2 >= 0:
+                        picked.append(ps.deck.pop(idx2))
+                if not picked:
+                    return {'success': False, 'error': '设置失败：牌堆中没有这些牌'}
+                for card in reversed(picked):
+                    ps.deck.insert(0, card)
+                names = '、'.join(card.name_cn for card in picked)
+                engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 设置下次抽牌：{names}")
+                return {'success': True}
+            return _solo_mutate_engine(sid, engine, _mutate)
+
+        ok, outcome = _solo_safe_cpu_call(sid, 'solo_set_next_draw', _set_next_draw)
+        if not ok or not outcome:
+            send_solo_state(sid)
             return
-        ps = engine.players[engine.current_player]
-        picked = []
-        for did in def_ids:
-            idx2 = next((i for i, c in enumerate(ps.deck) if c.def_id == did), -1)
-            if idx2 >= 0:
-                picked.append(ps.deck.pop(idx2))
-        if not picked:
-            emit('server_error', {'message': '设置失败：牌堆中没有这些牌'})
+        result, undo_snapshot = outcome
+        if not result.get('success'):
+            emit('server_error', {'message': result.get('error', '设置失败')})
             return
-        undo_snapshot = _solo_capture_undo_snapshot(sid, engine)
-        for c in reversed(picked):
-            ps.deck.insert(0, c)
-        names = '、'.join([c.name_cn for c in picked])
-        engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 设置下次抽牌：{names}")
         _solo_commit_undo_snapshot(engine, undo_snapshot)
         send_solo_state(sid)
-        return
-        idx = next((i for i, c in enumerate(ps.deck) if c.def_id == def_id), -1)
-        if idx < 0:
-            emit('server_error', {'message': '设置失败：牌堆中没有这张牌'})
-            return
-        card = ps.deck.pop(idx)
-        ps.deck.insert(0, card)
-        engine.log_msg(f"训练场：{engine.pn(engine.current_player)} 设置下次抽牌：{card.name_cn}")
-        send_solo_state(sid)
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_undo')
@@ -18341,25 +19013,42 @@ def on_solo_undo(data=None):
     data = socket_guard('solo_undo', data, require_player=False, allow_empty=True)
     if data is None:
         return
-    with _lock:
-        engine = solo_sessions.get(sid)
-        if not engine:
-            emit('server_error', {'message': '训练场尚未开始'})
-            return
+    action_lock, engine = _begin_solo_engine_action(sid, 'solo_undo')
+    if action_lock is None:
+        return
+    try:
         if sid in tutorial_sessions:
             emit('server_error', {'message': '新手教程不能撤销'})
             return
-        if not hasattr(engine, '_solo_undo_stack') or not hasattr(engine, '_solo_redo_stack'):
-            init_solo_history(engine)
-        if not engine._solo_undo_stack:
-            emit('server_error', {'message': '没有可撤销操作'})
+
+        def _undo():
+            if not hasattr(engine, '_solo_undo_stack') or not hasattr(engine, '_solo_redo_stack'):
+                init_solo_history(engine)
+            if not engine._solo_undo_stack:
+                return {'success': False, 'error': '没有可撤销操作'}
+            current = _solo_engine_snapshot(engine)
+            snapshot = engine._solo_undo_stack.pop()
+            if current is not None:
+                engine._solo_redo_stack.append(current)
+            _solo_restore_snapshot(engine, snapshot)
+            result = {'success': True}
+            if getattr(engine, 'pending_response', None):
+                result['_solo_response_request_payload'] = _build_solo_pending_response_payload(engine)
+            return result
+
+        ok, result = _solo_safe_cpu_call(sid, 'solo_undo', _undo)
+        if not ok:
+            send_solo_state_with_pending(sid)
             return
-        current = _solo_engine_snapshot(engine)
-        snapshot = engine._solo_undo_stack.pop()
-        if current is not None:
-            engine._solo_redo_stack.append(current)
-        _solo_restore_snapshot(engine, snapshot)
-        send_solo_state_with_pending(sid)
+        if not result.get('success'):
+            emit('server_error', {'message': result.get('error', '没有可撤销操作')})
+            return
+        send_solo_state_with_pending(
+            sid,
+            response_payload=result.get('_solo_response_request_payload'),
+        )
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_redo')
@@ -18368,25 +19057,42 @@ def on_solo_redo(data=None):
     data = socket_guard('solo_redo', data, require_player=False, allow_empty=True)
     if data is None:
         return
-    with _lock:
-        engine = solo_sessions.get(sid)
-        if not engine:
-            emit('server_error', {'message': '训练场尚未开始'})
-            return
+    action_lock, engine = _begin_solo_engine_action(sid, 'solo_redo')
+    if action_lock is None:
+        return
+    try:
         if sid in tutorial_sessions:
             emit('server_error', {'message': '新手教程不能重做'})
             return
-        if not hasattr(engine, '_solo_undo_stack') or not hasattr(engine, '_solo_redo_stack'):
-            init_solo_history(engine)
-        if not engine._solo_redo_stack:
-            emit('server_error', {'message': '没有可重做操作'})
+
+        def _redo():
+            if not hasattr(engine, '_solo_undo_stack') or not hasattr(engine, '_solo_redo_stack'):
+                init_solo_history(engine)
+            if not engine._solo_redo_stack:
+                return {'success': False, 'error': '没有可重做操作'}
+            current = _solo_engine_snapshot(engine)
+            snapshot = engine._solo_redo_stack.pop()
+            if current is not None:
+                engine._solo_undo_stack.append(current)
+            _solo_restore_snapshot(engine, snapshot)
+            result = {'success': True}
+            if getattr(engine, 'pending_response', None):
+                result['_solo_response_request_payload'] = _build_solo_pending_response_payload(engine)
+            return result
+
+        ok, result = _solo_safe_cpu_call(sid, 'solo_redo', _redo)
+        if not ok:
+            send_solo_state_with_pending(sid)
             return
-        current = _solo_engine_snapshot(engine)
-        snapshot = engine._solo_redo_stack.pop()
-        if current is not None:
-            engine._solo_undo_stack.append(current)
-        _solo_restore_snapshot(engine, snapshot)
-        send_solo_state_with_pending(sid)
+        if not result.get('success'):
+            emit('server_error', {'message': result.get('error', '没有可重做操作')})
+            return
+        send_solo_state_with_pending(
+            sid,
+            response_payload=result.get('_solo_response_request_payload'),
+        )
+    finally:
+        action_lock.release()
 
 
 @socketio.on('solo_pause')
@@ -18395,11 +19101,21 @@ def on_solo_pause(data=None):
     data = socket_guard('solo_pause', data, require_player=False, allow_empty=True)
     if data is None:
         return
-    solo_sessions.pop(sid, None)
-    tutorial_sessions.discard(sid)
-    if sid in players:
-        players[sid]['status'] = 'lobby'
-    socketio.emit('solo_paused', {}, room=sid)
+    action_lock = _try_acquire_solo_action(sid, 'solo_pause')
+    if action_lock is None:
+        return
+    try:
+        with _lock:
+            solo_sessions.pop(sid, None)
+            tutorial_sessions.discard(sid)
+            if sid in players:
+                players[sid]['status'] = 'lobby'
+        socketio.emit('solo_paused', {}, room=sid)
+    finally:
+        action_lock.release()
+        with _lock:
+            if solo_sessions.get(sid) is None:
+                _SOLO_ACTION_LOCKS.pop(sid, None)
 
 
 @socketio.on('play_card')
@@ -19309,6 +20025,8 @@ def on_return_lobby(data=None):
     data = socket_guard('return_lobby', data, require_player=True, allow_empty=True)
     if data is None:
         return
+    left_spectate = False
+    left_spectate_room = None
     with _lock:
         if sid not in players:
             return
@@ -19320,8 +20038,8 @@ def on_return_lobby(data=None):
             room_id=player.get('room_id'),
         )
         if player.get('spectating_room') is not None:
-            _handle_leave_spectate_internal(sid)
-            return
+            left_spectate = True
+            left_spectate_room = _handle_leave_spectate_internal(sid)
         room_id = player.get('room_id')
         if room_id is not None and room_id in rooms:
             room = rooms[room_id]
@@ -19373,6 +20091,10 @@ def on_return_lobby(data=None):
                 rooms.pop(room_id, None)
         player['room_id'] = None
         player['status'] = 'lobby'
+    if left_spectate:
+        socketio.emit('spectate_leave', {}, room=sid)
+    if left_spectate_room is not None:
+        broadcast_game_state(left_spectate_room)
     broadcast_lobby()
 
 
@@ -19431,6 +20153,8 @@ def on_spectate(data):
             'player2': p2,
         })
         _send_spectate_state_internal(sid, room)
+    broadcast_game_state(room)
+    broadcast_lobby()
 
 
 def _send_spectate_state_internal(spid, room):
@@ -19448,9 +20172,10 @@ def _send_spectate_state_internal(spid, room):
 
 def _handle_leave_spectate_internal(sid):
     if sid not in players:
-        return
+        return None
     player = players[sid]
     room_id = player.get('spectating_room')
+    room = None
     if room_id is not None and room_id in rooms:
         room = rooms[room_id]
         if sid in room.spectators:
@@ -19458,7 +20183,7 @@ def _handle_leave_spectate_internal(sid):
     player['spectating_room'] = None
     player['spectate_perspective'] = 0
     player['status'] = 'lobby'
-    socketio.emit('spectate_leave', {}, room=sid)
+    return room
 
 
 @socketio.on('leave_spectate')
@@ -19468,7 +20193,10 @@ def on_leave_spectate(data=None):
     if data is None:
         return
     with _lock:
-        _handle_leave_spectate_internal(sid)
+        room = _handle_leave_spectate_internal(sid)
+    socketio.emit('spectate_leave', {}, room=sid)
+    if room is not None:
+        broadcast_game_state(room)
     broadcast_lobby()
 
 

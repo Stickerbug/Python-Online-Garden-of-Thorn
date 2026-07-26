@@ -25,11 +25,13 @@
         { id: 'target_teammate', group: 'battle', defaultBinding: 'Shift+KeyE' },
         { id: 'target_enemy_2', group: 'battle', defaultBinding: 'Shift+KeyQ' },
         { id: 'end_turn', group: 'battle', defaultBinding: 'KeyF' },
-        { id: 'pass_response', group: 'battle', defaultBinding: 'KeyX' },
+        { id: 'pass_response', group: 'battle', defaultBinding: 'KeyV' },
+        { id: 'view_log', group: 'view', defaultBinding: 'KeyX' },
+        { id: 'view_spectators', group: 'view', defaultBinding: 'KeyC' },
         { id: 'view_draw', group: 'view', defaultBinding: 'KeyA' },
         { id: 'view_discard', group: 'view', defaultBinding: 'KeyS' },
         { id: 'view_exile', group: 'view', defaultBinding: 'KeyD' },
-        { id: 'focus_chat', group: 'view', defaultBinding: 'KeyC' },
+        { id: 'focus_chat', group: 'view', defaultBinding: 'KeyT' },
         { id: 'shortcut_help', group: 'view', defaultBinding: 'Slash' },
         { id: 'solo_undo', group: 'training', defaultBinding: 'Ctrl+KeyZ' },
         { id: 'solo_redo', group: 'training', defaultBinding: 'Ctrl+KeyY' },
@@ -80,6 +82,8 @@
         target_enemy_2: '选择敌方 2（2v2）',
         end_turn: '结束回合',
         pass_response: '不反制',
+        view_log: '切换到战斗日志',
+        view_spectators: '切换到观战列表',
         view_draw: '查看或关闭抽牌堆',
         view_discard: '查看或关闭弃牌堆',
         view_exile: '查看或关闭放逐区',
@@ -102,6 +106,7 @@
             target_self: 'Target self', target_enemy: 'Target enemy 1',
             target_teammate: 'Target teammate (2v2)', target_enemy_2: 'Target enemy 2 (2v2)',
             end_turn: 'End turn', pass_response: 'Pass response',
+            view_log: 'Show battle log', view_spectators: 'Show spectator list',
             view_draw: 'Toggle draw pile', view_discard: 'Toggle discard pile', view_exile: 'Toggle exile pile',
             focus_chat: 'Focus chat', shortcut_help: 'Toggle shortcut overview',
             solo_undo: 'Undo', solo_redo: 'Redo',
@@ -118,6 +123,7 @@
             target_self: 'Se cibler', target_enemy: 'Cibler l’ennemi 1',
             target_teammate: 'Cibler le coéquipier (2v2)', target_enemy_2: 'Cibler l’ennemi 2 (2v2)',
             end_turn: 'Terminer le tour', pass_response: 'Ne pas contrer',
+            view_log: 'Afficher le journal de combat', view_spectators: 'Afficher les spectateurs',
             view_draw: 'Afficher ou masquer la pioche', view_discard: 'Afficher ou masquer la défausse', view_exile: 'Afficher ou masquer l’exil',
             focus_chat: 'Écrire dans le chat', shortcut_help: 'Afficher ou masquer les raccourcis',
             solo_undo: 'Annuler', solo_redo: 'Rétablir',
@@ -134,6 +140,7 @@
             target_self: '自分を選択', target_enemy: '敵1を選択',
             target_teammate: '味方を選択（2v2）', target_enemy_2: '敵2を選択（2v2）',
             end_turn: 'ターン終了', pass_response: 'カウンターしない',
+            view_log: 'バトルログを表示', view_spectators: '観戦者一覧を表示',
             view_draw: '山札を開閉', view_discard: '捨て札を開閉', view_exile: '追放を開閉',
             focus_chat: 'チャットを入力', shortcut_help: 'ショートカット一覧を開閉',
             solo_undo: '元に戻す', solo_redo: 'やり直す',
@@ -152,7 +159,7 @@
             conflict_title: '键位冲突', conflict_message: '此键已用于“{0}”。是否交换两个动作的键位？',
             reserved: '该组合由浏览器、系统或固定选牌键占用，请使用其他按键。', capture_cancelled: '已取消改键',
             reset_confirm: '确定恢复全部默认快捷键吗？',
-            help_title: '快捷键总览', close: '关闭',
+            help_title: '快捷键总览', current_shortcuts: '当前可用快捷键', close: '关闭',
         },
         en: {
             tab: 'Shortcuts', title: 'Keyboard shortcuts', help: 'View all',
@@ -165,7 +172,7 @@
             conflict_title: 'Binding conflict', conflict_message: 'This key is used by “{0}”. Swap the two bindings?',
             reserved: 'This shortcut is reserved by the browser, system, or fixed card selection keys.', capture_cancelled: 'Binding change cancelled',
             reset_confirm: 'Reset all shortcuts to defaults?',
-            help_title: 'Shortcut overview', close: 'Close',
+            help_title: 'Shortcut overview', current_shortcuts: 'Available shortcuts', close: 'Close',
         },
         fr: {
             tab: 'Raccourcis', title: 'Raccourcis clavier', help: 'Tout afficher',
@@ -178,7 +185,7 @@
             conflict_title: 'Conflit de touches', conflict_message: 'Cette touche sert déjà à « {0} ». Échanger les deux touches ?',
             reserved: 'Cette combinaison est réservée par le navigateur, le système ou la sélection fixe des cartes.', capture_cancelled: 'Modification annulée',
             reset_confirm: 'Rétablir tous les raccourcis par défaut ?',
-            help_title: 'Aperçu des raccourcis', close: 'Fermer',
+            help_title: 'Aperçu des raccourcis', current_shortcuts: 'Raccourcis disponibles', close: 'Fermer',
         },
         ja: {
             tab: 'キー設定', title: 'キーボードショートカット', help: '一覧を見る',
@@ -191,7 +198,7 @@
             conflict_title: 'キーの競合', conflict_message: 'このキーは「{0}」で使用中です。2つのキーを交換しますか？',
             reserved: 'このキーはブラウザー、システム、または固定カード選択で使用されています。', capture_cancelled: 'キー変更をキャンセルしました',
             reset_confirm: 'すべてのショートカットを初期設定に戻しますか？',
-            help_title: 'ショートカット一覧', close: '閉じる',
+            help_title: 'ショートカット一覧', current_shortcuts: '現在使用できるショートカット', close: '閉じる',
         },
     };
 
@@ -348,6 +355,7 @@
     let renderScheduled = false;
     let hintsScheduled = false;
     let suppressHintObserver = false;
+    let suppressHintObserverTimer = 0;
     const heldActionCodes = new Map();
     const heldAltCodes = new Set();
     let fixedSecondPageHeld = false;
@@ -468,6 +476,7 @@
 
     async function flushAccountSave() {
         if (accountSaveInFlight || !account || deviceOverrideEnabled) return;
+        if (!dirtyAccountActions.size && !dirtyAccountHints) return;
         if (accountSaveTimer) {
             clearTimeout(accountSaveTimer);
             accountSaveTimer = null;
@@ -893,11 +902,31 @@
 
     function appendHint(element, label, extraClass = '') {
         if (!element || !label) return;
+        const hintHost = element.matches?.('input, textarea, select, option, img')
+            ? element.parentElement
+            : element;
+        if (!hintHost) return;
+        const existing = Array.from(hintHost.children || []).find(child => (
+            child.classList?.contains('shortcut-hint-badge')
+        ));
+        if (existing) {
+            const labels = existing.textContent.split(' / ').map(value => value.trim());
+            if (!labels.includes(label)) existing.textContent += ` / ${label}`;
+            if (extraClass) existing.classList.add(extraClass);
+            return;
+        }
+        hintHost.classList.add('shortcut-hint-host');
+        const position = window.getComputedStyle
+            ? window.getComputedStyle(hintHost).position
+            : '';
+        if (!position || position === 'static') {
+            hintHost.classList.add('shortcut-hint-host-static');
+        }
         const badge = document.createElement('kbd');
         badge.className = 'shortcut-hint-badge' + (extraClass ? ' ' + extraClass : '');
         badge.textContent = label;
         badge.setAttribute('aria-hidden', 'true');
-        element.appendChild(badge);
+        hintHost.appendChild(badge);
     }
 
     function slotHint(index) {
@@ -923,48 +952,158 @@
         });
     }
 
+    function normalizeContextElements(value) {
+        const raw = Array.isArray(value) ? value : (value ? [value] : []);
+        const elements = [];
+        raw.forEach(item => {
+            if (typeof item === 'string') {
+                document.querySelectorAll(item).forEach(element => elements.push(element));
+            } else if (item && item.nodeType === 1) {
+                elements.push(item);
+            }
+        });
+        return [...new Set(elements)].filter(elementIsVisible);
+    }
+
+    function activeShortcutContext() {
+        if (typeof host.getShortcutContext !== 'function') return null;
+        try {
+            const context = host.getShortcutContext();
+            if (!context || typeof context !== 'object') return null;
+            return {
+                id: String(context.id || ''),
+                slots: normalizeContextElements(context.slots).slice(0, 20),
+                slotLabel: String(context.slotLabel || ''),
+                slotLabels: Array.isArray(context.slotLabels)
+                    ? context.slotLabels.map(label => String(label || ''))
+                    : [],
+                actions: Array.isArray(context.actions) ? context.actions : [],
+            };
+        } catch (error) {
+            console.warn('[keybindings] shortcut context failed', error);
+            return null;
+        }
+    }
+
+    function appendContextPanelItem(panel, binding, label) {
+        if (!binding || !label) return;
+        const item = document.createElement('span');
+        item.className = 'shortcut-context-hint-item';
+        const key = document.createElement('kbd');
+        key.textContent = binding;
+        const textNode = document.createElement('span');
+        textNode.textContent = label;
+        item.append(key, textNode);
+        panel.appendChild(item);
+    }
+
+    function renderContextHints(context) {
+        if (!context) return false;
+        const panel = document.createElement('div');
+        panel.id = 'shortcut-context-hints';
+        panel.className = 'shortcut-context-hints';
+        panel.setAttribute('aria-hidden', 'true');
+        const heading = document.createElement('strong');
+        heading.className = 'shortcut-context-hints-title';
+        heading.textContent = text('current_shortcuts');
+        panel.appendChild(heading);
+
+        if (context.slots.length) {
+            context.slots.forEach((element, index) => {
+                const binding = slotHint(index);
+                appendHint(element, binding, 'shortcut-hint-slot');
+                const explicitLabel = context.slotLabels[index] || '';
+                if (explicitLabel) appendContextPanelItem(panel, binding, explicitLabel);
+            });
+            if (!context.slotLabels.some(Boolean)) {
+                const firstRange = context.slots.length <= 10
+                    ? `1–${context.slots.length === 10 ? 0 : context.slots.length}`
+                    : '1–0';
+                appendContextPanelItem(
+                    panel,
+                    firstRange,
+                    context.slotLabel || actionLabel('fixed_slots_1_10'),
+                );
+                if (context.slots.length > 10) {
+                    appendContextPanelItem(
+                        panel,
+                        '`+1–0',
+                        context.slotLabel || actionLabel('fixed_slots_11_20'),
+                    );
+                }
+            }
+        }
+
+        const renderedActions = new Set();
+        context.actions.forEach(raw => {
+            const entry = typeof raw === 'string' ? { id: raw } : (raw || {});
+            const actionId = String(entry.id || '');
+            if (!ACTION_BY_ID.has(actionId) || renderedActions.has(actionId)) return;
+            const rawBinding = bindingFor(actionId);
+            if (!rawBinding) return;
+            renderedActions.add(actionId);
+            const binding = displayBinding(rawBinding, true);
+            const label = String(entry.label || actionLabel(actionId));
+            normalizeContextElements(entry.elements).forEach(element => {
+                appendHint(element, binding, 'shortcut-hint-action');
+            });
+            appendContextPanelItem(panel, binding, label);
+        });
+
+        if (!renderedActions.has('shortcut_help') && bindingFor('shortcut_help')) {
+            appendContextPanelItem(
+                panel,
+                displayBinding(bindingFor('shortcut_help'), true),
+                actionLabel('shortcut_help'),
+            );
+        }
+        if (!panel.querySelector('.shortcut-context-hint-item')) return true;
+        document.body.appendChild(panel);
+        return true;
+    }
+
     function refreshHints() {
+        if (suppressHintObserverTimer) {
+            clearTimeout(suppressHintObserverTimer);
+            suppressHintObserverTimer = 0;
+        }
         suppressHintObserver = true;
         document.querySelectorAll('.shortcut-hint-badge').forEach(badge => badge.remove());
+        document.querySelectorAll('.shortcut-hint-host').forEach(element => {
+            element.classList.remove('shortcut-hint-host', 'shortcut-hint-host-static');
+        });
+        const oldPanel = byId('shortcut-context-hints');
+        if (oldPanel) oldPanel.remove();
         const previewActive = effectiveShowHints && heldAltCodes.size > 0;
         if (previewActive) {
-            decorateSequence('#response-panel .counter-card-btn, #response-panel .response-btn-row .btn');
-            decorateSequence('#game-prompt.active #game-prompt-options .game-prompt-option');
-            decorateSequence('#modal.active .v2-ui-picker-option');
-            decorateSequence('#modal.active .reorder-deck-entry:not(.reorder-clone)');
-            decorateSequence('#draft-options .card');
-            decorateSequence('#event-options .event-card');
-            decorateSequence('#classic-hand-fan .classic-hand-card');
-            decorateSequence('#you-hand > .card');
-            decorateAction(
-                '[data-player-target-region].target-pickable.keyboard-nav-focus, '
-                + '#response-panel .keyboard-nav-focus, #draft-options .keyboard-nav-focus, '
-                + '#event-options .keyboard-nav-focus, .btn-equip-trigger.keyboard-nav-focus, '
-                + '.classic-equip-chip.keyboard-nav-focus',
-                'confirm'
-            );
-            decorateAction(
-                '#game-prompt.active .game-prompt-option.keyboard-nav-focus, '
-                + '#modal.active .v2-ui-picker-option.keyboard-nav-focus, '
-                + '#modal.active .reorder-deck-entry.keyboard-nav-focus',
-                'toggle_focused'
-            );
-            decorateAction('#btn-end-turn, #classic-end-turn', 'end_turn');
-            decorateAction('#btn-view-deck, #classic-view-deck, #btn-spectate-view-deck', 'view_draw');
-            decorateAction('#btn-view-discard, #classic-view-discard, #btn-spectate-view-discard', 'view_discard');
-            decorateAction('#btn-view-exile, #classic-view-exile, #btn-spectate-view-exile', 'view_exile');
-            decorateAction('#pass-btn', 'pass_response');
-            decorateAction('#game-prompt-cancel', 'cancel');
-            decorateAction('#btn-draft-reroll, #btn-event-reroll', 'refresh');
-            decorateAction(
-                '#mobile-play-ok, #game-alert-buttons .btn-primary, '
-                + '#modal.active .v2-ui-buttons .btn:not(.secondary), '
-                + '.event-reveal-start-btn, #btn-rematch, #btn-solo-start',
-                'confirm'
-            );
-            decorateAction('#game-alert-buttons .btn-secondary, #modal.active .v2-ui-buttons .secondary', 'cancel');
-            decorateAction('#btn-game-chat-send, #btn-classic-game-chat-send, #btn-phase-chat-send', 'focus_chat');
-            decorateAction('#btn-keybindings-help', 'shortcut_help');
+            const context = activeShortcutContext();
+            if (!renderContextHints(context)) {
+                decorateSequence('#response-panel .counter-card-btn, #response-panel .response-btn-row .btn');
+                decorateSequence('#game-prompt.active #game-prompt-options .game-prompt-option');
+                decorateSequence('#modal.active .v2-ui-picker-option');
+                decorateSequence('#modal.active .reorder-deck-entry:not(.reorder-clone)');
+                decorateSequence('#draft-options .card');
+                decorateSequence('#event-options .event-card');
+                decorateSequence('#classic-hand-fan .classic-hand-card');
+                decorateSequence('#you-hand > .card');
+                decorateSequence('#story-hand .story-hand-card');
+                decorateSequence('#story-card-choice-dialog[open] .story-card-choice-select-item');
+                decorateSequence('#story-blessing:not(.hidden) .story-choice-option');
+                decorateSequence('#story-room:not(.hidden) .story-choice-option, #story-room:not(.hidden) .story-card');
+                decorateSequence('#story-reward:not(.hidden) .story-card');
+                decorateSequence('#story-run:not(.hidden) .story-map-node.is-actionable');
+                decorateAction('#btn-end-turn, #classic-end-turn, #story-end-turn', 'end_turn');
+                decorateAction('#btn-view-deck, #classic-view-deck, #btn-spectate-view-deck, #story-draw-pile', 'view_draw');
+                decorateAction('#btn-view-discard, #classic-view-discard, #btn-spectate-view-discard, #story-discard-pile', 'view_discard');
+                decorateAction('#btn-view-exile, #classic-view-exile, #btn-spectate-view-exile, #story-exile-pile', 'view_exile');
+                decorateAction('[data-battle-panel-tab="log"]', 'view_log');
+                decorateAction('[data-battle-panel-tab="spectators"]', 'view_spectators');
+                decorateAction('#pass-btn', 'pass_response');
+                decorateAction('#game-prompt-cancel', 'cancel');
+                decorateAction('#btn-draft-reroll, #btn-event-reroll', 'refresh');
+                decorateAction('#btn-game-chat-send, #btn-classic-game-chat-send, #btn-phase-chat-send', 'focus_chat');
+                decorateAction('#btn-keybindings-help', 'shortcut_help');
+            }
         }
         const chatBinding = previewActive && bindingFor('focus_chat')
             ? displayBinding(bindingFor('focus_chat'), true)
@@ -975,7 +1114,10 @@
             if (chatBinding) input.dataset.shortcut = chatBinding;
             else delete input.dataset.shortcut;
         });
-        suppressHintObserver = false;
+        suppressHintObserverTimer = window.setTimeout(() => {
+            suppressHintObserver = false;
+            suppressHintObserverTimer = 0;
+        }, 0);
     }
 
     function scheduleRefreshHints() {
@@ -989,22 +1131,37 @@
 
     function mutationContainsOnlyHints(mutation) {
         const nodes = [...mutation.addedNodes, ...mutation.removedNodes].filter(node => node.nodeType === 1);
-        return nodes.length > 0 && nodes.every(node => node.classList.contains('shortcut-hint-badge'));
+        return nodes.length > 0 && nodes.every(node => (
+            node.classList.contains('shortcut-hint-badge')
+            || node.classList.contains('shortcut-context-hints')
+        ));
     }
 
     function observeActionSurfaces() {
         const observer = new MutationObserver(mutations => {
-            if (suppressHintObserver || mutations.every(mutationContainsOnlyHints)) return;
+            if (
+                suppressHintObserver
+                || !effectiveShowHints
+                || heldAltCodes.size === 0
+                || mutations.every(mutationContainsOnlyHints)
+            ) return;
             scheduleRefreshHints();
         });
-        observer.observe(document.body, { childList: true, subtree: true });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'disabled', 'aria-hidden', 'open'],
+        });
     }
 
     function closeHelp() {
         const modal = byId('modal');
         if (modal) {
+            modal.classList.remove('shortcut-help-active');
             modal.classList.remove('active');
             modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
         }
     }
 
@@ -1054,8 +1211,10 @@
         close.addEventListener('click', closeHelp);
         buttons.appendChild(close);
         content.appendChild(buttons);
+        modal.classList.add('shortcut-help-active');
         modal.classList.remove('hidden');
         modal.classList.add('active');
+        modal.setAttribute('aria-hidden', 'false');
     }
 
     function init() {

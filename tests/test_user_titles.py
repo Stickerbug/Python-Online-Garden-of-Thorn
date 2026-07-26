@@ -37,6 +37,10 @@ class UserTitleTests(unittest.TestCase):
         self.assertEqual(db.normalize_title_color('RGB(47,128,200)'), '#2F80C8')
         self.assertEqual(db.normalize_title_color('HSV(0,100,100)'), '#FF0000')
         self.assertEqual(db.normalize_title_color('HSV(120,1,1)'), '#00FF00')
+        self.assertEqual(db.normalize_title_color('thorn'), 'thorn')
+        self.assertEqual(db.normalize_title_color('curse'), 'curse')
+        self.assertEqual(db.normalize_title_color('health'), 'health')
+        self.assertEqual(db.normalize_title_color('super'), 'super')
         self.assertIsNone(db.normalize_title_color('not-a-color'))
 
     def test_multiple_titles_can_be_equipped_reordered_and_compacted(self):
@@ -77,28 +81,49 @@ class UserTitleTests(unittest.TestCase):
         }
         self.assertEqual(slots, {'test:third': 1, 'test:fourth': 2})
 
-    def test_role_title_migrates_without_replacing_other_titles(self):
+    def test_identity_does_not_create_or_replace_titles(self):
         self.grant('自定义', '#345678', title_id='test:custom', equip=True)
         _, profile, error = db.admin_set_user_role(
             self.user['id'],
             'contributor',
-            title='设计',
-            color='#A05AC8',
         )
         self.assertIsNone(error)
         self.assertEqual(profile['equipped_titles'][0]['id'], 'test:custom')
+        self.assertEqual(profile['special_role_label'], '')
+        self.assertEqual(profile['name_color'], '#345678')
 
         center = db.get_user_title_center(self.user['id'])
-        role_title = next(item for item in center['items'] if item['acquired_source'] == 'role')
-        self.assertIsNone(role_title['equipped_slot'])
-
-        _, _, remove_error = db.admin_remove_user_title(self.user['id'], role_title['id'])
-        self.assertIn('身份称号随身份管理', remove_error)
+        self.assertEqual([item['id'] for item in center['items']], ['test:custom'])
 
         _, clear_error = db.admin_clear_user_role(self.user['id'])
         self.assertIsNone(clear_error)
         remaining = db.get_user_title_center(self.user['id'])
         self.assertEqual([item['id'] for item in remaining['items']], ['test:custom'])
+
+    def test_init_removes_legacy_role_generated_titles(self):
+        with db.get_db_connection() as conn:
+            now = db.utc_now()
+            conn.execute(
+                '''
+                INSERT INTO title_catalog (
+                    title_id, name, color, source_type, source_ref,
+                    purchasable, active, created_at, updated_at
+                ) VALUES (?, ?, ?, 'role', 'staff', 0, 1, ?, ?)
+                ''',
+                ('role:legacy', '旧身份称号', 'bloom', now, now),
+            )
+            conn.execute(
+                '''
+                INSERT INTO user_titles (
+                    user_id, title_id, acquired_source, acquired_ref, acquired_at, equipped_slot
+                ) VALUES (?, ?, 'role', 'staff', ?, 1)
+                ''',
+                (self.user['id'], 'role:legacy', now),
+            )
+            conn.commit()
+
+        db.init_db()
+        self.assertEqual(db.get_user_title_center(self.user['id'])['items'], [])
 
     def test_future_achievement_can_grant_a_title(self):
         definition = {

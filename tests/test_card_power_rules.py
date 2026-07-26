@@ -1,7 +1,8 @@
 import unittest
 
-from cards import CARD_DEFS, CardDef, CardInstance
+from cards import CARD_DEFS, MAX_CARD_POWER, CardDef, CardInstance
 from game_engine import GameEngine
+from game_engine_2v2 import GameEngine2v2
 
 
 def make_card_def(def_id, card_type, *, v2_events=None):
@@ -22,7 +23,7 @@ def make_card_def(def_id, card_type, *, v2_events=None):
 
 class CardPowerRuleTests(unittest.TestCase):
     def setUp(self):
-        self.test_ids = {'jurassic:amber', 'sewers:broccoli'}
+        self.test_ids = {'jurassic:amber', 'sewers:broccoli', 'Tomato'}
         self.previous_defs = {key: CARD_DEFS.get(key) for key in self.test_ids}
         CARD_DEFS['jurassic:amber'] = make_card_def(
             'jurassic:amber',
@@ -34,6 +35,7 @@ class CardPowerRuleTests(unittest.TestCase):
             },
         )
         CARD_DEFS['sewers:broccoli'] = make_card_def('sewers:broccoli', 'thorn')
+        CARD_DEFS['Tomato'] = make_card_def('Tomato', 'thorn')
 
     def tearDown(self):
         for key, old_value in self.previous_defs.items():
@@ -107,6 +109,65 @@ class CardPowerRuleTests(unittest.TestCase):
         self.assertEqual(engine.players[1].health, 78)
         self.assertEqual(card.power_value, 0)
         self.assertNotIn('power', card.instance_flags)
+
+    def test_power_is_capped_when_card_state_is_loaded(self):
+        card = CardInstance.from_dict({
+            'def_id': 'sewers:broccoli',
+            'instance_id': 999001,
+            'power_value': MAX_CARD_POWER + 500,
+        })
+
+        self.assertEqual(card.power_value, MAX_CARD_POWER)
+
+    def test_v2_power_addition_uses_global_cap(self):
+        engine = GameEngine()
+        card = CardInstance('sewers:broccoli')
+        card.power_value = MAX_CARD_POWER - 1
+
+        engine._atomic_card_prop_add(
+            0,
+            card,
+            {'card': {'ref': 'current_card'}, 'property': 'power_value', 'amount': 10},
+            '',
+            None,
+            {},
+        )
+
+        self.assertEqual(card.power_value, MAX_CARD_POWER)
+        self.assertIn('power', card.instance_flags)
+
+    def test_tomato_keeps_its_18_power_card_limit(self):
+        engine = GameEngine()
+        card = CardInstance('Tomato')
+        card.power_value = 17
+
+        engine._atomic_card_prop_add(
+            0,
+            card,
+            {'card': {'ref': 'current_card'}, 'property': 'power_value', 'amount': 10},
+            '',
+            None,
+            {},
+        )
+
+        self.assertEqual(card.power_value, 18)
+
+    def test_damage_clamps_in_memory_power_in_1v1_and_2v2(self):
+        for engine, target_id in ((GameEngine(), 1), (GameEngine2v2(), 2)):
+            card = CardInstance('sewers:broccoli')
+            card.power_value = MAX_CARD_POWER + 500
+            engine.players[target_id].max_health = 2000
+            engine.players[target_id].health = 2000
+
+            dealt = engine.deal_attack_damage(
+                target_id,
+                0,
+                1,
+                attacker_id=0,
+                source_card=card,
+            )
+
+            self.assertEqual(dealt, MAX_CARD_POWER)
 
 
 if __name__ == '__main__':

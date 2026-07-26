@@ -208,6 +208,16 @@ def _gain_elixir(state, amount, events):
         events.append({'type': 'elixir', 'amount': int(amount)})
 
 
+def _gain_magic(state, amount, events):
+    combat = state.get('combat')
+    if combat is not None:
+        combat['magic'] = max(0, int(combat.get('magic') or 0) + int(amount))
+    else:
+        state['player']['magic'] = max(0, int(state['player'].get('magic') or 0) + int(amount))
+    if amount:
+        events.append({'type': 'magic', 'amount': int(amount)})
+
+
 def _status_count(unit):
     keys = (
         'shield', 'power', 'temporary_power', 'endurance', 'weak',
@@ -697,6 +707,8 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
             combat['power'] = int(combat.get('power') or 0) + int(amount)
     elif effect_type == 'elixir':
         _gain_elixir(state, int(amount), events)
+    elif effect_type == 'magic':
+        _gain_magic(state, int(amount), events)
     elif effect_type == 'draw':
         _draw_cards(state, int(amount), seed, events, context.get('autoplay_depth', 0))
     elif effect_type == 'draw_to_limit':
@@ -2145,7 +2157,12 @@ def _dev_integer(payload, key, maximum):
 
 
 def _dev_set_values(state, payload, events):
-    limits = {'health': 999999, 'elixir': 9999, 'magic': 9999, 'gold': 999999999}
+    limits = {
+        'health': 999999,
+        'elixir': 2147483647,
+        'magic': 2147483647,
+        'gold': 999999999,
+    }
     values = {
         key: _dev_integer(payload, key, maximum)
         for key, maximum in limits.items()

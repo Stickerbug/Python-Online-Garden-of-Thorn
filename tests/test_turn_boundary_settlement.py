@@ -1,6 +1,6 @@
 import unittest
 
-from cards import CardInstance
+from cards import CARD_DEFS, CardDef, CardInstance
 from game_engine import EquipmentInstance, GameEngine
 from game_engine_2v2 import GameEngine2v2
 
@@ -19,7 +19,7 @@ class TurnBoundarySettlementTests(unittest.TestCase):
             player.discard = []
         return engine
 
-    def test_bandage_expires_before_next_actionable_player(self):
+    def test_bandage_expires_before_next_allied_actionable_player(self):
         engine = self._prime_1v1()
         player = engine.players[0]
         player.invincible = True
@@ -27,6 +27,12 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         player.bandage_trigger_boundary_id = 0
 
         engine._end_player_turn(0)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(engine.current_player, 1)
+        self.assertEqual(player.health, 100)
+
+        engine._end_player_turn(1)
 
         self.assertTrue(engine.game_over)
         self.assertEqual(engine.winner, 1)
@@ -52,7 +58,7 @@ class TurnBoundarySettlementTests(unittest.TestCase):
 
     def test_turn_start_auto_effects_finish_before_bandage_death(self):
         engine = self._prime_1v1()
-        engine.current_player = 1
+        engine.current_player = 0
         engine._ensure_turn_boundary()
         player = engine.players[0]
         player.invincible = True
@@ -60,7 +66,7 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         player.bandage_trigger_boundary_id = 0
         engine._run_ocean_auto_cards_turn_start = lambda _player_id: engine.log_msg('回合开始自动效果')
 
-        engine._enter_player_action_phase(1)
+        engine._enter_player_action_phase(0)
 
         auto_index = engine.log.index('回合开始自动效果')
         bandage_index = next(i for i, line in enumerate(engine.log) if '的绷带效果结束' in line)
@@ -108,11 +114,18 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         engine._end_player_turn(0)
 
         self.assertFalse(engine.game_over)
-        self.assertEqual(player.health, 0)
+        self.assertEqual(player.health, 100)
         self.assertEqual(engine.current_player, 2)
         self.assertEqual(engine.phase, 'action')
 
-    def test_simultaneous_bandage_expiry_can_end_two_vs_two_in_draw(self):
+        engine._end_player_turn(2)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(player.health, 0)
+        self.assertEqual(engine.current_player, 1)
+        self.assertEqual(engine.phase, 'action')
+
+    def test_opposing_pending_bandages_expire_on_their_respective_team_turns(self):
         engine = GameEngine2v2()
         engine.phase = 'action'
         engine.current_player = 0
@@ -129,10 +142,128 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         engine._enter_player_action_phase(0)
 
         self.assertTrue(engine.game_over)
-        self.assertEqual(engine.winner, -1)
-        self.assertEqual(engine.winning_team, -1)
+        self.assertEqual(engine.winner, 1)
+        self.assertEqual(engine.winning_team, 1)
         self.assertEqual(engine.players[0].health, 0)
-        self.assertEqual(engine.players[2].health, 0)
+        self.assertEqual(engine.players[2].health, 1)
+
+    def test_bandage_trigger_does_not_block_the_current_action_phase(self):
+        engine = self._prime_1v1()
+        player = engine.players[0]
+        player.health = 0
+        player.elixir = 10
+        player.bandage_active = True
+
+        engine._check_yggdrasil(0)
+
+        card = CardInstance('Basic')
+        player.hand = [card]
+        result = engine.play_card(
+            0,
+            card.instance_id,
+            {'target_player': 1, 'target_player_id': 1, 'target_id': 1},
+        )
+
+        self.assertTrue(result.get('success'))
+        self.assertEqual(player.health, 1)
+        self.assertTrue(player.bandage_death_pending)
+        self.assertEqual(engine.phase, 'action')
+        self.assertEqual(engine.current_player, 0)
+
+    def test_stunned_teammate_is_not_the_next_allied_actionable_player(self):
+        engine = GameEngine2v2()
+        engine.phase = 'action'
+        engine.round_num = 2
+        engine.turn_order = [0, 2, 1, 3]
+        engine.turn_index = 0
+        engine.current_player = 0
+        for player in engine.players:
+            player.health = 100
+            player.deck = []
+            player.hand = []
+            player.discard = []
+        pending = engine.players[0]
+        pending.invincible = True
+        pending.bandage_death_pending = True
+        pending.bandage_trigger_boundary_id = 0
+        engine.players[1].skip_turn = 1
+
+        engine._end_player_turn(0)
+        engine._end_player_turn(2)
+
+        self.assertEqual(engine.current_player, 3)
+        self.assertEqual(pending.health, 100)
+        self.assertEqual(engine.players[1].skip_turn, 0)
+
+        engine._end_player_turn(3)
+
+        self.assertEqual(pending.health, 0)
+        self.assertEqual(engine.current_player, 2)
+
+    def test_turn_start_death_does_not_skip_living_player_or_soil_turn_end(self):
+        soil_id = 'test:r15236_soil'
+        previous = CARD_DEFS.get(soil_id)
+        CARD_DEFS[soil_id] = CardDef(
+            soil_id,
+            'Soil',
+            '土',
+            0,
+            0,
+            'root',
+            1,
+            'Common',
+            '',
+            '',
+            flags={'indestructible'},
+            v2_events={
+                'on_owner_turn_end': {
+                    'steps': [{
+                        'op': 'add_status',
+                        'target': 'target',
+                        'status': 'sluggish',
+                        'amount': 1,
+                    }],
+                },
+            },
+        )
+        try:
+            engine = GameEngine2v2()
+            engine.phase = 'action'
+            engine.round_num = 17
+            engine.turn_order = [0, 2, 1, 3]
+            engine.turn_index = 2
+            engine.current_player = 1
+            for player in engine.players:
+                player.health = 100
+                player.max_health = 100
+                player.deck = []
+                player.hand = []
+                player.discard = []
+                player.exile = []
+                player.equipment = []
+            engine.players[0].health = 0
+            engine.players[3].health = 1
+            engine.players[3].fire = 1
+            for owner_id in (1, 1, 3):
+                equipment = EquipmentInstance(CardInstance(soil_id), owner_id)
+                equipment.effect_target = 2
+                engine.players[owner_id].equipment.append(equipment)
+
+            engine._end_player_turn(1)
+
+            self.assertEqual(engine.players[3].health, 0)
+            self.assertEqual(engine.current_player, 2)
+            self.assertEqual(engine.turn_index, 1)
+            self.assertEqual(engine.players[2].sluggish, 0)
+
+            engine._end_player_turn(2)
+
+            self.assertEqual(engine.players[2].sluggish, 3)
+        finally:
+            if previous is None:
+                CARD_DEFS.pop(soil_id, None)
+            else:
+                CARD_DEFS[soil_id] = previous
 
     def test_new_matching_timed_effect_settles_in_same_boundary(self):
         engine = self._prime_1v1()

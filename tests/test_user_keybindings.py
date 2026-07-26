@@ -40,6 +40,8 @@ class UserKeybindingsTests(unittest.TestCase):
                     'navigate_left': 'ArrowUp',
                     'navigate_right': 'KeyV',
                     'target_teammate': 'KeyB',
+                    'view_log': 'KeyX',
+                    'view_spectators': 'KeyC',
                     'select_slot_1': 'Digit2',
                     'refresh': 'Digit3',
                     'toggle_log': 'KeyL',
@@ -58,6 +60,8 @@ class UserKeybindingsTests(unittest.TestCase):
             'navigate_left': 'ArrowUp',
             'navigate_right': 'KeyV',
             'target_teammate': 'KeyB',
+            'view_log': 'KeyX',
+            'view_spectators': 'KeyC',
         })
         self.assertEqual(config['unbound'], ['view_exile'])
         self.assertFalse(config['show_hints'])

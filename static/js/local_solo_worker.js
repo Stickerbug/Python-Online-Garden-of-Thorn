@@ -15,8 +15,9 @@ const INITIAL_MAGIC = 0;
 const INITIAL_HAND_SIZE = 5;
 const FIRST_PLAYER_HAND_SIZE = 4;
 const SOLO_TRAINING_MIN_DECK_SIZE = 0;
-const SOLO_TRAINING_MAX_DECK_SIZE = 100;
+const SOLO_TRAINING_MAX_DECK_SIZE = 50;
 const ERROR_CARD_ID = 'Error';
+const MAX_CARD_POWER = 1024;
 const MOD_RUNTIME_ERROR_MESSAGE = '模组执行出现了一个意外错误。请联系管理员。';
 const CORRUPTION_DAMAGE_MULTIPLIER = 1.5;
 const LATE_ROUND_FIRE_START = 10;
@@ -173,6 +174,10 @@ function toInt(value, fallbackValue = 0) {
     const n = Number(value);
     if (!Number.isFinite(n)) return fallbackValue;
     return Math.trunc(n);
+}
+
+function clampCardPower(value) {
+    return Math.min(MAX_CARD_POWER, toInt(value, 0));
 }
 
 function escapeRegExp(value) {
@@ -398,7 +403,7 @@ class LocalCard {
         this.held_turns = toInt(source.held_turns, 0);
         this.swift_value = Math.max(0, toInt(source.swift_value, 0));
         this.magic_swift_value = Math.max(0, toInt(source.magic_swift_value, 0));
-        this.power_value = toInt(source.power_value, 0);
+        this.power_value = clampCardPower(source.power_value);
         this.temp_swift_value = Math.max(0, toInt(source.temp_swift_value, 0));
         this.temp_heavy_value = Math.max(0, toInt(source.temp_heavy_value, 0));
         this.temp_magic_heavy_value = Math.max(0, toInt(source.temp_magic_heavy_value, 0));
@@ -1657,7 +1662,7 @@ class LocalSoloEngine {
         if (this.pending_response || this.pending_choice) return;
         this.runOceanAutoCardsTurnStart(playerId);
         if (this.pending_response || this.pending_choice) return;
-        this.expireBandagesBeforeAction();
+        this.expireBandagesBeforeAction(playerId);
         if (this.game_over) return;
         const ps = this.players[playerId];
         if (!ps || ps.health <= 0) {
@@ -2647,6 +2652,7 @@ class LocalSoloEngine {
         const ps = this.players[targetId];
         if (!ps) return 0;
         const key = String(status || '');
+        if (['invincible', '无敌'].includes(key)) return 0;
         if (this.isStatusImmune(targetId) && !['status_immune', 'immune', '状态免疫'].includes(key)) return 0;
         const map = {
             poison: ps.poison,
@@ -2664,8 +2670,6 @@ class LocalSoloEngine {
             equip_protection: ps.equipment_protection,
             equipment_protection: ps.equipment_protection,
             '装备摧毁保护': ps.equipment_protection,
-            invincible: ps.invincible ? 1 : 0,
-            '无敌': ps.invincible ? 1 : 0,
             untargetable: ps.untargetable ? 1 : 0,
             '不可选中': ps.untargetable ? 1 : 0,
             '邪眼': this.nazarStatusValue(playerId),
@@ -3166,12 +3170,13 @@ class LocalSoloEngine {
         if (prop === 'discard_size' || prop === 'discard_count') return ps.discard.length;
         if (prop === 'exile_size' || prop === 'exile_count') return ps.exile.length;
         if (prop === 'equip_count' || prop === 'equipment_count') return ps.equipment.length;
+        if (prop === 'invincible') return ps.invincible ? 1 : 0;
         const statusProps = new Set([
             'dodge', 'poison', 'fire', 'vulnerable', 'toxic', 'equipment_protection',
             'attack_blocked', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
             'nazar_big_hits', 'sluggish', 'overload', 'foresight', 'fracture', 'stagnation',
             'blind', 'heal_block', 'weakness', 'bleed', 'skip_turn',
-            'invincible', 'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
+            'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
             'negate_next_skill', 'nazar_active',
         ]);
         if (this.isStatusImmune(targetId) && statusProps.has(prop)) return 0;
@@ -3190,7 +3195,7 @@ class LocalSoloEngine {
             'attack_blocked', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
             'nazar_big_hits', 'sluggish', 'overload', 'foresight', 'fracture', 'stagnation',
             'blind', 'heal_block', 'weakness', 'bleed', 'skip_turn',
-            'invincible', 'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
+            'untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
             'negate_next_skill', 'nazar_active',
         ]);
         if (next > 0 && this.isStatusImmune(targetId) && statusProps.has(prop)) return;
@@ -3843,7 +3848,7 @@ class LocalSoloEngine {
         let affected = 0;
         target.hand.forEach(handCard => {
             if (handCard.card_type !== 'thorn') return;
-            handCard.power_value = toInt(handCard.power_value, 0) + amount;
+            handCard.power_value = clampCardPower(toInt(handCard.power_value, 0) + amount);
             handCard.instance_flags.add('power');
             affected += 1;
         });
@@ -4927,6 +4932,8 @@ class LocalSoloEngine {
         let next = toInt(value, 0);
         if (prop === 'fusion_level' || prop === 'fission_level') {
             next = Math.max(1, next);
+        } else if (prop === 'power_value') {
+            next = Math.max(0, clampCardPower(next));
         } else {
             next = Math.max(0, next);
         }
@@ -5151,7 +5158,7 @@ class LocalSoloEngine {
         const flags = normalizeCardFlags(params.flags || []);
         const swift = Math.max(0, this.evalInt(playerId, params.swift_value ?? 0, card, 0));
         const magicSwift = Math.max(0, this.evalInt(playerId, params.magic_swift_value ?? 0, card, 0));
-        const power = Math.max(0, this.evalInt(playerId, params.power_value ?? 0, card, 0));
+        const power = Math.max(0, clampCardPower(this.evalInt(playerId, params.power_value ?? 0, card, 0)));
         const extraHits = Math.max(0, this.evalInt(playerId, params.extra_hits ?? 0, card, 0));
         for (let i = 0; i < count; i++) {
             const newCard = new LocalCard(def.id || cardId);
@@ -5837,7 +5844,6 @@ class LocalSoloEngine {
     effect_invincible(playerId, card, params) {
         const targetId = this.resolveTarget(playerId, params.target || 'self');
         if (this.evalInt(playerId, params.value ?? params.amount ?? 1, card, 1) > 0) {
-            if (this.statusApplicationBlocked(targetId, 'invincible')) return;
             this.setInvincibleUntilNextOwnTurnEnd(targetId);
         } else {
             this.clearInvincibleState(targetId);
@@ -6330,7 +6336,7 @@ class LocalSoloEngine {
 
     dealDirectDamage(playerId, amount, source = '', sourceId = null, damageMeta = null) {
         const ps = this.players[playerId];
-        if (!ps || (ps.invincible && !this.isStatusImmune(playerId))) {
+        if (!ps || ps.invincible) {
             if (ps) this.logMsg(`${this.pn(playerId)}无敌，免疫${source}伤害`);
             return 0;
         }
@@ -6372,7 +6378,7 @@ class LocalSoloEngine {
                     this.logMsg(`${this.pn(targetId)}的闪避被精准消耗`);
                 }
             }
-            if (ps.invincible && !immune) {
+            if (ps.invincible) {
                 this.logMsg(`${this.pn(targetId)}无敌，免疫伤害`);
                 continue;
             }
@@ -6385,7 +6391,7 @@ class LocalSoloEngine {
             }
             let power = 0;
             if (sourceCard) {
-                power = toInt(sourceCard.power_value, 0);
+                power = clampCardPower(sourceCard.power_value);
             }
             let dmg = Math.max(0, toInt(amount, 0) + Math.ceil(power / Math.max(1, toInt(hits, 1))));
             if (this.halve_next_attack) dmg = Math.ceil(dmg / 2);
@@ -6519,11 +6525,12 @@ class LocalSoloEngine {
             : toInt(this._turn_boundary_serial, 0);
     }
 
-    expireBandagesBeforeAction() {
+    expireBandagesBeforeAction(actionPlayerId = this.current_player) {
         const boundaryId = toInt(this._turn_boundary_id, -1);
         let expired = false;
         this.players.forEach((ps, playerId) => {
             if (!ps || !ps.bandage_death_pending) return;
+            if (playerId !== actionPlayerId) return;
             if (
                 this._turn_boundary_active
                 && toInt(ps.bandage_trigger_boundary_id, -1) === boundaryId
@@ -6534,7 +6541,7 @@ class LocalSoloEngine {
             ps.bandage_death_pending = false;
             ps.bandage_trigger_boundary_id = -1;
             this.clearInvincibleState(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带效果结束，在行动前死亡！`);
+            this.logMsg(`${this.pn(playerId)}的绷带效果结束，在己方下一名可行动玩家行动前死亡！`);
             expired = true;
         });
         if (expired) this.checkGameOver();
@@ -6543,7 +6550,6 @@ class LocalSoloEngine {
     setInvincibleUntilNextOwnTurnEnd(playerId) {
         const ps = this.players[playerId];
         if (!ps) return;
-        if (this.isStatusImmune(playerId)) return;
         ps.invincible = true;
         ps.invincible_until_player = playerId;
         ps.invincible_granted_round = toInt(this.round_num, 0);
@@ -6628,7 +6634,7 @@ class LocalSoloEngine {
             this.setInvincibleUntilNextOwnTurnEnd(playerId);
             ps.bandage_active = false;
             this.markBandageDeathPending(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带发动！下一个回合交替结算完成后，在下一名可行动玩家行动前死亡`);
+            this.logMsg(`${this.pn(playerId)}的绷带发动！在己方下一名可行动玩家行动前死亡`);
             return;
         }
         const idx = ps.hand.findIndex(card => card.def_id === 'Yggdrasil');
@@ -7533,7 +7539,7 @@ class LocalSoloEngine {
         if (ps.bandage_active && ps.invincible) {
             ps.bandage_active = false;
             this.markBandageDeathPending(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带将在下一个回合交替结算完成后结束`);
+            this.logMsg(`${this.pn(playerId)}的绷带将在己方下一名可行动玩家行动前结束`);
         }
         this.returnCogwheelCardsNow(playerId);
         [...ps.hand].forEach(card => {
@@ -7700,7 +7706,7 @@ function startLocalGame(message) {
         || deck0.length > SOLO_TRAINING_MAX_DECK_SIZE
         || deck1.length > SOLO_TRAINING_MAX_DECK_SIZE
     )) {
-        emit('server_error', { message: '训练场牌组必须各为0-100张' });
+        emit('server_error', { message: '训练场牌组必须各为0-50张' });
         return;
     }
     engine = new LocalSoloEngine(

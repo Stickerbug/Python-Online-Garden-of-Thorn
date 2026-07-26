@@ -88,6 +88,48 @@ class ModSettingsStateTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     normalize(value)
 
+    def test_missing_disabled_mods_never_means_enable_every_mod(self):
+        tree = ast.parse(APP_PY)
+        function_node = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == 'resolve_disabled_mods_payload'
+        )
+        module = ast.Module(body=[function_node], type_ignores=[])
+        ast.fix_missing_locations(module)
+        namespace = {
+            'normalize_disabled_mods': lambda value: list(value or []),
+            'default_disabled_mods': lambda: ['default-disabled.gtnmod'],
+        }
+        exec(compile(module, '<isolated-function>', 'exec'), namespace)
+        resolve = namespace['resolve_disabled_mods_payload']
+        self.assertEqual(resolve({}), ['default-disabled.gtnmod'])
+        self.assertEqual(resolve({}, fallback=['saved.gtnmod']), ['saved.gtnmod'])
+        with self.assertRaises(ValueError):
+            resolve({}, require_explicit=True)
+        with self.assertRaises(ValueError):
+            resolve({'disabled_mods': None})
+
+    def test_peer_matching_rejects_an_incomplete_payload(self):
+        section = source_between(
+            GAME_JS,
+            'async function applyPeerModSettings(',
+            'function syncCurrentSettingsModSelectionToLocal(',
+        )
+        validation = section.index("Object.prototype.hasOwnProperty.call(peerMods, 'disabled_mods')")
+        write = section.index('writeDisabledModsPreference(disabled)')
+        self.assertLess(validation, write)
+        self.assertNotIn(': [];', section[:write])
+
+    def test_new_matches_revalidate_the_official_card_pool(self):
+        helper = source_between(
+            APP_PY,
+            'def validated_match_allowed_card_ids(',
+            'def player_loadout_hash(',
+        )
+        self.assertIn('expected = set(get_allowed_card_ids(disabled_mods))', helper)
+        self.assertIn('stored = expected', helper)
+
 
 if __name__ == '__main__':
     unittest.main()
