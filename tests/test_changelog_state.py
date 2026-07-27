@@ -40,6 +40,45 @@ class ChangelogStateTests(unittest.TestCase):
         )
         self.assertIn('Promise.resolve(loadChangelog()).then(markChangelogRead)', toggle)
 
+    def test_read_markers_use_persistent_fallbacks(self):
+        storage_section = source_between(
+            GAME_JS,
+            'const GTN_COOKIE_FALLBACK_KEYS',
+            'const GTN_COOKIE_FALLBACK_PREFIXES',
+        )
+        for key in (
+            'gtn_changelog_read_version_v1',
+            'gtn_changelog_read_latest_date_v1',
+            'gtn_changelog_boot_version_v1',
+        ):
+            self.assertIn(key, storage_section)
+
+        cookie_reader = source_between(
+            GAME_JS,
+            'function readStorageFallbackCookie(',
+            'function writeStorageFallbackCookie(',
+        )
+        self.assertIn(".split(';')", cookie_reader)
+        self.assertIn('.map(item => item.trim())', cookie_reader)
+
+        marker_section = source_between(
+            GAME_JS,
+            'function readChangelogMarker(',
+            'function currentChangelogCacheVersion(',
+        )
+        self.assertIn('window.sessionStorage.getItem(key)', marker_section)
+        self.assertIn('window.sessionStorage.setItem(key, text)', marker_section)
+        self.assertIn('writeStorageFallbackCookie(', marker_section)
+
+    def test_mark_read_is_also_saved_in_cached_changelog(self):
+        section = source_between(
+            GAME_JS,
+            'function markChangelogRead(',
+            'function loadCachedChangelog(',
+        )
+        self.assertIn('changelogCache = { ...changelogCache, readVersion, readDate }', section)
+        self.assertIn('localStorage.setItem(CHANGELOG_CACHE_KEY', section)
+
 
 if __name__ == '__main__':
     unittest.main()

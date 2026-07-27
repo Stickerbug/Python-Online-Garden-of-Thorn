@@ -2,9 +2,10 @@
 <html lang="zh-CN" data-ui-style="classic">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=0.7, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <title>故事模式 | Garden of Thorn</title>
+  <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=3" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/css/story.css?v={{ static_version }}">
   <script>
     (() => {
@@ -132,8 +133,10 @@
         <div class="story-arena">
           <article id="story-player-target" class="story-actor story-actor-player classic-fighter" data-target-kind="self" data-target-id="player">
             <div class="story-actor-name classic-fighter-name">{{ account.display_name }}</div>
-            <div id="story-player-portrait" class="story-portrait story-player-portrait player-avatar has-skin" aria-label="玩家"></div>
-            <div id="story-player-equipment" class="story-equipment-list" aria-label="装备"></div>
+            <div class="story-avatar-stack">
+              <div id="story-player-portrait" class="story-portrait story-player-portrait player-avatar has-skin" aria-label="玩家"></div>
+              <div id="story-player-equipment" class="story-equipment-list" aria-label="装备"></div>
+            </div>
             <div class="story-health-wrap">
               <img src="/static/assets/ui-icons/hit-point.svg" alt="" aria-hidden="true">
               <div class="story-health-body">
@@ -252,6 +255,9 @@
     <div id="modal" class="hidden" aria-hidden="true">
       <div id="modal-content" class="modal-inner"></div>
     </div>
+    <dialog id="story-term-dialog" class="story-term-dialog">
+      <div id="story-term-content" class="modal-inner story-card-terms-modal"></div>
+    </dialog>
   </div>
   <script>
     window.__STORY_ACCOUNT__ = {{ account|tojson }};
@@ -284,6 +290,7 @@
       };
     })();
   </script>
+  <script src="/static/js/resource_orbs.js?v={{ static_version }}" defer></script>
   <script src="/static/js/story.js?v={{ static_version }}" defer></script>
   <script src="/static/js/keybindings.js?v={{ static_version }}" defer></script>
 </body>

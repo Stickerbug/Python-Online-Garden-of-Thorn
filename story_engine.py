@@ -424,23 +424,31 @@ def _player_physical_hit(state, base_amount, attacker, events, source):
 
 def _player_raw_damage(state, amount, events, source):
     amount = max(0, int(amount))
-    before = int(state['player']['health'])
-    state['player']['health'] = before - amount
     combat = state['combat']
-    combat['damage_taken'] = int(combat.get('damage_taken') or 0) + amount
-    if amount and not combat.get('first_damage_taken'):
+    shield = int(combat.get('shield') or 0)
+    blocked = min(shield, amount)
+    combat['shield'] = shield - blocked
+    dealt = amount - blocked
+    before = int(state['player']['health'])
+    state['player']['health'] = before - dealt
+    combat['damage_taken'] = int(combat.get('damage_taken') or 0) + dealt
+    if dealt and not combat.get('first_damage_taken'):
         combat['first_damage_taken'] = True
         if _has_relic(state, 'solid_barrier'):
             _gain_elixir(state, int(STORY_RELICS['solid_barrier']['amount']), events)
     events.append({
         'type': 'player_damage',
-        'amount': amount,
+        'amount': dealt,
         'hits': 1,
-        'history': [{'before': before, 'after': int(state['player']['health']), 'blocked': 0}],
+        'history': [{
+            'before': before,
+            'after': int(state['player']['health']),
+            'blocked': blocked,
+        }],
         'source': source,
         'attacker_id': None,
     })
-    return amount
+    return dealt
 
 
 def _player_damage(state, amount, hits, events, source, attacker=None):
@@ -1572,10 +1580,12 @@ def _check_combat_end(state, seed, events):
     if not combat:
         return False
     _resolve_enemy_death_hooks(state, events)
+    if _resolve_player_death(state, events):
+        return True
     if not _living_enemies(combat):
         _finish_combat(state, seed, events)
         return True
-    return _resolve_player_death(state, events)
+    return False
 
 
 def _unlock_from_node(state, node_id):

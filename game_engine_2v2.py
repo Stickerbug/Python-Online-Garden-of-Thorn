@@ -340,6 +340,7 @@ class GameEngine2v2(GameEngine):
                 self._last_pregame_validation_error = {'reason': reason, 'details': details}
                 return False
         self._game_start_applied = True
+        self._clear_turn_card_tracking()
         self.phase = 'playing'
         force_first = sorted(self._effective_first_pressure_players())
         self._first_pressure_effective_players = set(force_first)
@@ -474,6 +475,10 @@ class GameEngine2v2(GameEngine):
                 return False
         self.log_msg(f"{self.pn(player_id)}已阵亡，跳过剩余行动")
         self._start_new_turn_boundary()
+        self._expire_bandages_after_action(player_id)
+        self._clear_turn_card_tracking(player_id)
+        if self.game_over:
+            return True
         self._advance_turn()
         return True
 
@@ -507,7 +512,7 @@ class GameEngine2v2(GameEngine):
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             self._mark_bandage_death_pending(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带将在己方下一名可行动玩家行动前结束")
+            self.log_msg(f"{self.pn(player_id)}的绷带将在己方下一名可行动玩家回合结束后使其死亡")
         # Fracture: clear at end of own turn
         if ps.fracture > 0:
             ps.fracture = 0
@@ -563,6 +568,10 @@ class GameEngine2v2(GameEngine):
         self._decay_ocean_card_charge_turn_end(player_id)
         self._bio_turn_end_cleanup(player_id)
         self._save_last_turn_damage_snapshot(player_id)
+        self._expire_bandages_after_action(player_id)
+        self._clear_turn_card_tracking(player_id)
+        if self.game_over:
+            return
         self._advance_turn()
 
     def _end_round(self):
@@ -585,6 +594,7 @@ class GameEngine2v2(GameEngine):
             self.winning_team = -1
             self.winner = -1
             self.phase = 'game_over'
+            self._clear_turn_card_tracking()
             self.log_msg("双方队伍全部阵亡！平局！")
             return
         if self.game_over:
@@ -594,6 +604,7 @@ class GameEngine2v2(GameEngine):
             self.winning_team = 1
             self.winner = 1
             self.phase = 'game_over'
+            self._clear_turn_card_tracking()
             self.log_msg(f"队伍{self.teams[1]}获胜！")
             return
         if not team1_alive:
@@ -601,6 +612,7 @@ class GameEngine2v2(GameEngine):
             self.winning_team = 0
             self.winner = 0
             self.phase = 'game_over'
+            self._clear_turn_card_tracking()
             self.log_msg(f"队伍{self.teams[0]}获胜！")
             return
 
@@ -631,6 +643,7 @@ class GameEngine2v2(GameEngine):
         self.winning_team = 1 - team
         self.winner = 1 - team
         self.phase = 'game_over'
+        self._clear_turn_card_tracking()
         self.log_msg(f"{self.pn(player_id)}投降，队伍{self.teams[self.winning_team]}获胜！")
         return {'success': True}
 
@@ -1146,7 +1159,17 @@ class GameEngine2v2(GameEngine):
             and self.is_enemy(player_id, tid)
             and self.players[tid].health > 0
         ]
-        responder_ids = list(dict.fromkeys([*target_responders, *equipment_destroy_responders]))
+        global_response_responders = []
+        if getattr(card, 'card_type', '') == 'bloom' or self._would_heal(card):
+            global_response_responders = [
+                enemy_id for enemy_id in self.get_all_enemies(player_id)
+                if self._is_valid_player_id(enemy_id) and self.players[enemy_id].health > 0
+            ]
+        responder_ids = list(dict.fromkeys([
+            *target_responders,
+            *equipment_destroy_responders,
+            *global_response_responders,
+        ]))
 
         try:
             for responder_id in responder_ids:
@@ -1456,6 +1479,7 @@ class GameEngine2v2(GameEngine):
     def _on_player_death(self, player_id: int):
         ps = self.players[player_id]
         self._note_achievement_death(player_id)
+        self._clear_turn_card_tracking(player_id)
         surviving_equip = []
         for eq in ps.equipment:
             if 'indestructible' in eq.card_instance.flags:
@@ -1646,8 +1670,7 @@ class GameEngine2v2(GameEngine):
         if hasattr(self, '_antennae_reveal_targets'):
             self._antennae_reveal_targets[player_id] = None
         self._return_cogwheel_cards_now(player_id)
-        ps.cards_played_this_turn = {}
-        ps.cards_played_this_turn_instance_ids = []
+        self._clear_turn_card_tracking(player_id)
         ps.magic_battery_m_this_turn = 0
         ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
         self._reset_turn_damage_counters()
@@ -2070,12 +2093,6 @@ class GameEngine2v2(GameEngine):
                 dmg = max(1, int(dmg * (1.0 - reduction)))
             dmg, _hel_crit = self._hel_apply_lucky_crit_to_damage(attacker_id, dmg, source_card)
             dmg = self._apply_attack_damage_halving(target_id, dmg, precision_dodged)
-            nazar_stacks = 0 if immune else self._nazar_status_value(target_id)
-            if dmg > 0 and nazar_stacks > 0:
-                original_dmg = dmg
-                dmg = max(1, dmg - 9)
-                if original_dmg >= 10:
-                    self._set_nazar_status_value(target_id, nazar_stacks - 1)
             if immune:
                 root_armor = 0
                 fragile = 0
@@ -2084,6 +2101,13 @@ class GameEngine2v2(GameEngine):
                 fragile = self._custom_status_value(target_id, 'jungle:fragile', 'fragile')
             effective_armor = int(ps.armor) + root_armor - fragile
             dmg = max(0, dmg - effective_armor)
+            # Nazar transforms the physical damage remaining after armor and Fragile.
+            nazar_stacks = 0 if immune else self._nazar_status_value(target_id)
+            if dmg > 0 and nazar_stacks > 0:
+                original_dmg = dmg
+                dmg = max(1, dmg - 9)
+                if original_dmg >= 10:
+                    self._set_nazar_status_value(target_id, nazar_stacks - 1)
             if self._bio_indictment_converts_damage(
                 target_id,
                 dmg,

@@ -251,7 +251,7 @@ OPENING_EVENT_I18N = {
     },
     3: {
         'name': _t('光之洗礼', 'Baptism of Light', 'Baptême de lumière', 'Batismo de Luz', 'Крещение светом', '光の洗礼'),
-        'desc': _t('将最多5张非攻击牌转化为[[card:Light|flag=sprout|flag=symbiosis]]', 'Convert up to 5 non-Attack cards into [[card:Light|flag=sprout|flag=symbiosis]]', 'Transformez jusqu’à 5 cartes non-Attaque en [[card:Light|flag=sprout|flag=symbiosis]]', 'Transforme até 5 cartas que não sejam de Ataque em [[card:Light|flag=sprout|flag=symbiosis]]', 'Превратите до 5 карт, не являющихся атакующими, в [[card:Light|flag=sprout|flag=symbiosis]]', '攻撃カード以外を最大5枚[[card:Light|flag=sprout|flag=symbiosis]]に変化させる'),
+        'desc': _t('将最多5张攻击牌转化为[[card:Light|flag=sprout|flag=symbiosis]]', 'Convert up to 5 Attack cards into [[card:Light|flag=sprout|flag=symbiosis]]', 'Transformez jusqu’à 5 cartes Attaque en [[card:Light|flag=sprout|flag=symbiosis]]', 'Transforme até 5 cartas de Ataque em [[card:Light|flag=sprout|flag=symbiosis]]', 'Превратите до 5 карт атаки в [[card:Light|flag=sprout|flag=symbiosis]]', '攻撃カードを最大5枚[[card:Light|flag=sprout|flag=symbiosis]]に変化させる'),
     },
     8: {
         'name': _t('绝境求生', 'Last Stand', 'Dernier recours', 'Último Recurso', 'Последний шанс', '背水の生存'),

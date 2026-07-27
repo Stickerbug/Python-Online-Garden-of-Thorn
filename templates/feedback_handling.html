@@ -4,20 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>举报处理</title>
-  <link rel="stylesheet" href="/static/css/handling.css?v=8">
+  <link rel="stylesheet" href="/static/css/handling.css?v={{ static_version|default('dev')|urlencode }}">
 </head>
 <body>
-<div id="login" class="login-view">
-  <form id="login-form" class="panel login-panel">
-    <h1>举报处理</h1>
-    <p>请输入处理页密码。</p>
-    <input id="password" type="password" autocomplete="current-password" placeholder="密码" autofocus>
-    <button type="submit" class="btn primary">进入</button>
-    <div id="login-error" class="error"></div>
-  </form>
-</div>
-
-<main id="app" class="app hidden">
+<main id="app" class="app">
   <header class="topbar">
     <div>
       <h1>举报处理</h1>
@@ -25,7 +15,7 @@
     </div>
     <div class="top-actions">
       <button id="refresh" class="btn">刷新</button>
-      <button id="logout" class="btn danger">退出</button>
+      <button id="handling-exit" class="btn">返回反馈</button>
     </div>
   </header>
   <div id="action-result" class="result page-result" aria-live="polite"></div>
@@ -147,6 +137,6 @@
   </div>
 </div>
 
-<script src="/static/js/handling.js?v=8"></script>
+<script src="/static/js/handling.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>
 </html>

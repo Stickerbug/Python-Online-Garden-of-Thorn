@@ -22,6 +22,9 @@
     let hoveredPredictionTargetId = '';
     let storyKeyboardFocus = null;
     let storySecondHandPage = false;
+    const storyCardElementData = new WeakMap();
+    const STORY_SKIN_LOOK_OFFSET_X_PERCENT = 38;
+    const STORY_SKIN_LOOK_OFFSET_Y_PERCENT = 56;
 
     const STORY_TAG_STYLES = Object.freeze({
         precise: { className: 'precision', color: '#546E7A' },
@@ -38,6 +41,25 @@
         H: '/static/assets/ui-icons/hit-point.svg',
         E: '/static/assets/ui-icons/elixir.svg',
         M: '/static/assets/ui-icons/magic.svg',
+    });
+
+    const STORY_RESOURCE_TERMS = Object.freeze({
+        D: {
+            name: { zh: '物理伤害', en: 'Physical Damage' },
+            description: { zh: '物理伤害会减少目标的H', en: 'Physical damage reduces the target’s H' },
+        },
+        H: {
+            name: { zh: '生命', en: 'Health' },
+            description: { zh: 'H降至0时阵亡', en: 'A unit is defeated when its H reaches 0' },
+        },
+        E: {
+            name: { zh: '能量', en: 'Elixir' },
+            description: { zh: '打出牌时消耗的基础资源', en: 'The primary resource spent to play cards' },
+        },
+        M: {
+            name: { zh: '魔力', en: 'Magic' },
+            description: { zh: '部分牌打出时消耗的魔力资源', en: 'The magic resource spent by some cards' },
+        },
     });
 
     const STORY_CARD_TYPE_LABELS = Object.freeze({
@@ -79,6 +101,7 @@
             chooseCardHint: 'Choose a card', damagePrediction: 'Damage',
             chooseCards: 'Choose cards', chooseExact: (value) => `Choose ${value} card(s).`,
             chooseUpTo: (value) => `Choose up to ${value} card(s).`,
+            cardTerms: 'Card Terms', noCardTerms: 'No additional terms',
             cardTypes: { thorn: 'Thorn', bloom: 'Bloom', root: 'Root', guard: 'Guard', curse: 'Curse', infect: 'Infect' },
             pileTotal: (label, count) => `${label}: ${count} cards`,
             floor: (value) => `Floor ${value}`,
@@ -110,6 +133,7 @@
             chooseCardHint: '选择一张手牌', damagePrediction: '伤害预测',
             chooseCards: '选择卡牌', chooseExact: (value) => `选择 ${value} 张牌。`,
             chooseUpTo: (value) => `选择至多 ${value} 张牌。`,
+            cardTerms: '卡牌术语', noCardTerms: '没有额外术语',
             cardTypes: { thorn: '攻击', bloom: '技能', root: '装备', guard: '反制', curse: '诅咒', infect: '状态牌' },
             pileTotal: (label, count) => `${label}：${count} 张`,
             rooms: { blessing: '赐福', combat: '战斗', elite: '精英', event: '事件', rest: '休息', shop: '商店', chest: '宝箱', boss: '首领' },
@@ -148,6 +172,20 @@
         let value = 'zh';
         try { value = String(localStorage.getItem('gtn_lang') || 'zh').toLowerCase(); } catch (_) {}
         return Object.prototype.hasOwnProperty.call(TEXT, value) ? value : 'zh';
+    }
+
+    function loadStoryMainFont() {
+        if (!('FontFace' in window)) return;
+        const font = new FontFace(
+            'Kreadon',
+            "url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2')",
+            { weight: '400', style: 'normal' },
+        );
+        font.load().then((loaded) => {
+            document.fonts.add(loaded);
+            document.documentElement.classList.add('fonts-loaded-main');
+            scheduleVisibleStoryCardEffectFits();
+        }).catch(() => {});
     }
 
     const lang = language();
@@ -219,8 +257,29 @@
         portrait.replaceChildren(avatar);
     }
 
+    function updateStorySkinEyeTracking(clientX, clientY) {
+        const avatar = $('story-player-portrait')?.querySelector('.skin-avatar');
+        if (!avatar) return;
+        const rect = avatar.getBoundingClientRect();
+        if (!rect || rect.width <= 0 || rect.height <= 0) return;
+        const dx = Number(clientX) - (rect.left + rect.width / 2);
+        const dy = Number(clientY) - (rect.top + rect.height / 2);
+        const distance = Math.hypot(dx, dy);
+        if (!Number.isFinite(distance) || distance < 1.5) return;
+        const lookX = Math.max(-1, Math.min(1, dx / distance));
+        const lookY = Math.max(-1, Math.min(1, dy / distance));
+        avatar.style.setProperty(
+            '--skin-look-x',
+            `${(lookX * STORY_SKIN_LOOK_OFFSET_X_PERCENT).toFixed(1)}%`,
+        );
+        avatar.style.setProperty(
+            '--skin-look-y',
+            `${(lookY * STORY_SKIN_LOOK_OFFSET_Y_PERCENT).toFixed(1)}%`,
+        );
+    }
+
     function applyText() {
-        document.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
+        document.documentElement.lang = lang;
         document.title = `${t.title} | Garden of Thorn`;
         const values = {
             'story-title': t.title, 'story-account-label': t.account, 'story-loading-label': t.loading,
@@ -799,27 +858,137 @@
         return values;
     }
 
+    function createStoryInlineIcon(unit) {
+        const normalizedUnit = String(unit || '').toUpperCase();
+        const wrapper = document.createElement('span');
+        wrapper.className = 'story-inline-token-icon-wrap';
+        const icon = document.createElement('img');
+        icon.className = 'story-inline-token-icon';
+        icon.src = STORY_INLINE_ICONS[normalizedUnit] || '';
+        icon.alt = normalizedUnit;
+        const fallback = document.createElement('span');
+        fallback.className = 'story-inline-token-icon-fallback';
+        fallback.textContent = normalizedUnit;
+        icon.addEventListener('error', () => wrapper.classList.add('icon-load-failed'), { once: true });
+        wrapper.append(icon, fallback);
+        return wrapper;
+    }
+
     function appendStoryRichText(container, value) {
         if (!container) return;
         const text = String(value || '');
-        const pattern = /(\d+(?:\s*[×xX*]\s*\d+)?)\s*([DHEM])(?![A-Za-z])/g;
+        const pattern = /(\d+(?:\.\d+)?)\s*(?:(?:\[\[icon:([DHEM])\]\]|([DHEM]))\s*([×xX*])\s*(\d+)|([×xX*])\s*(\d+)\s*(?:\[\[icon:([DHEM])\]\]|([DHEM]))|(?:\[\[icon:([DHEM])\]\]|([DHEM])))(?![A-Za-z])/gi;
         let cursor = 0;
         let match = null;
         while ((match = pattern.exec(text))) {
             if (match.index > cursor) container.append(document.createTextNode(text.slice(cursor, match.index)));
+            const unit = String(match[2] || match[3] || match[8] || match[9] || match[10] || match[11] || '').toUpperCase();
             const token = document.createElement('span');
-            token.className = `story-inline-token story-inline-token-${match[2].toLowerCase()}`;
+            token.className = `story-inline-token story-inline-token-${unit.toLowerCase()}`;
             const amount = document.createElement('span');
-            amount.textContent = match[1].replace(/\s+/g, '');
-            const icon = document.createElement('img');
-            icon.className = 'story-inline-token-icon';
-            icon.src = STORY_INLINE_ICONS[match[2]];
-            icon.alt = match[2];
-            token.append(amount, icon);
+            amount.textContent = match[1];
+            token.append(amount);
+            if (match[6] && match[7]) {
+                const multiplier = document.createElement('span');
+                multiplier.textContent = `×${match[7]}`;
+                token.append(multiplier, createStoryInlineIcon(unit));
+            } else {
+                token.append(createStoryInlineIcon(unit));
+                if (match[4] && match[5]) {
+                    const multiplier = document.createElement('span');
+                    multiplier.textContent = `×${match[5]}`;
+                    token.append(multiplier);
+                }
+            }
             container.append(token);
             cursor = pattern.lastIndex;
         }
         if (cursor < text.length) container.append(document.createTextNode(text.slice(cursor)));
+    }
+
+    const pendingStoryCardEffectFits = new Set();
+    let pendingStoryCardEffectFitFrame = 0;
+
+    function resetStoryCardEffectFit(effect) {
+        if (!effect) return;
+        effect.style.removeProperty('font-size');
+        effect.style.removeProperty('padding-top');
+        effect.style.removeProperty('padding-right');
+        effect.style.removeProperty('padding-bottom');
+        effect.style.removeProperty('padding-left');
+    }
+
+    function fitStoryCardEffect(cardElement) {
+        if (!cardElement?.isConnected) return;
+        const effect = cardElement.querySelector(':scope > .card-effect');
+        if (!effect) return;
+        resetStoryCardEffectFit(effect);
+        cardElement.dataset.effectFitScale = '1';
+        const cardRect = cardElement.getBoundingClientRect();
+        if (cardRect.width < 20 || cardRect.height < 20 || effect.getClientRects().length === 0) return;
+
+        const baseStyle = getComputedStyle(effect);
+        const baseFontSize = parseFloat(baseStyle.fontSize) || 1;
+        const baseLineHeight = parseFloat(baseStyle.lineHeight) || (baseFontSize * 1.2);
+        const basePadding = {
+            top: parseFloat(baseStyle.paddingTop) || 0,
+            right: parseFloat(baseStyle.paddingRight) || 0,
+            bottom: parseFloat(baseStyle.paddingBottom) || 0,
+            left: parseFloat(baseStyle.paddingLeft) || 0,
+        };
+        const predictionHeightLimit = cardElement.classList.contains('card-effect-fit-prediction')
+            ? baseLineHeight * 3.7
+            : Infinity;
+        const minimumScale = 0.6;
+        let scale = 1;
+
+        for (let pass = 0; pass < 14; pass += 1) {
+            const style = getComputedStyle(effect);
+            const paddingY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+            const naturalTextHeight = Math.max(0, effect.scrollHeight - paddingY);
+            const overflowed = effect.scrollHeight > effect.clientHeight + 0.75;
+            const nextElement = effect.nextElementSibling;
+            const effectRect = effect.getBoundingClientRect();
+            const nextTop = nextElement
+                ? nextElement.getBoundingClientRect().top
+                : cardElement.getBoundingClientRect().bottom;
+            const spareGap = Math.max(0, nextTop - effectRect.bottom);
+            const needsBreathingRoom = spareGap + 0.5 < baseLineHeight * 0.18;
+            const predictionTooTall = naturalTextHeight > predictionHeightLimit + 0.5;
+            if (!overflowed && !needsBreathingRoom && !predictionTooTall) break;
+            if (scale <= minimumScale + 0.001) break;
+
+            let nextScale = scale - 0.04;
+            if (predictionTooTall && naturalTextHeight > 0) {
+                nextScale = Math.min(
+                    nextScale,
+                    scale * predictionHeightLimit / naturalTextHeight * 0.985,
+                );
+            }
+            scale = Math.max(minimumScale, nextScale);
+            effect.style.fontSize = `${baseFontSize * scale}px`;
+            effect.style.paddingTop = `${basePadding.top * scale}px`;
+            effect.style.paddingRight = `${basePadding.right * scale}px`;
+            effect.style.paddingBottom = `${basePadding.bottom * scale}px`;
+            effect.style.paddingLeft = `${basePadding.left * scale}px`;
+            cardElement.dataset.effectFitScale = scale.toFixed(3);
+        }
+    }
+
+    function scheduleStoryCardEffectFit(cardElement) {
+        if (!cardElement) return;
+        pendingStoryCardEffectFits.add(cardElement);
+        if (pendingStoryCardEffectFitFrame) return;
+        pendingStoryCardEffectFitFrame = requestAnimationFrame(() => {
+            pendingStoryCardEffectFitFrame = 0;
+            const cards = [...pendingStoryCardEffectFits];
+            pendingStoryCardEffectFits.clear();
+            cards.forEach(fitStoryCardEffect);
+        });
+    }
+
+    function scheduleVisibleStoryCardEffectFits() {
+        document.querySelectorAll('.story-card.card').forEach(scheduleStoryCardEffectFit);
     }
 
     function livingStoryEnemies(state = activeRun?.state) {
@@ -857,8 +1026,14 @@
         return tag;
     }
 
-    function createStoryCardBottom(card, values, targetId = storyPredictionTargetId()) {
-        const prediction = values?.type === 'thorn' ? storyCardPrediction(card, targetId) : null;
+    function createStoryCardBottom(
+        card,
+        values,
+        targetId = storyPredictionTargetId(),
+        enablePrediction = false,
+    ) {
+        const supportsPrediction = enablePrediction && values?.type === 'thorn';
+        const prediction = supportsPrediction ? storyCardPrediction(card, targetId) : null;
         const flags = document.createElement('div');
         flags.className = 'card-flags';
         (values?.tags || []).forEach((tagId) => {
@@ -866,10 +1041,10 @@
             if (tag) flags.append(tag);
         });
         if (!flags.childElementCount) flags.classList.add('card-flags-empty');
-        if (!prediction?.summary && !flags.childElementCount) return null;
+        if (!supportsPrediction && !flags.childElementCount) return null;
 
         const bottom = document.createElement('div');
-        bottom.className = `card-bottom-zone${prediction?.summary ? ' has-prediction' : ''}`;
+        bottom.className = `card-bottom-zone${supportsPrediction ? ' supports-prediction' : ''}${prediction?.summary ? ' has-prediction' : ''}`;
         if (prediction?.summary) {
             const predictionBox = document.createElement('div');
             predictionBox.className = 'card-prediction';
@@ -899,9 +1074,8 @@
             if (!card) return;
             const values = cardValues(card);
             element.querySelector('.card-bottom-zone')?.remove();
-            const bottom = createStoryCardBottom(card, values, targetId);
+            const bottom = createStoryCardBottom(card, values, targetId, true);
             if (bottom) element.append(bottom);
-            element.classList.toggle('card-effect-fit-prediction', Boolean(bottom?.classList.contains('has-prediction')));
         });
     }
 
@@ -1026,51 +1200,37 @@
         if (fill) fill.style.width = `${Math.max(0, Math.min(100, now / max * 100))}%`;
     }
 
-    function renderResourceOrbs(containerId, current, baseSlots, spend, kind) {
+    const STORY_RESOURCE_SLOT_COUNT = 10;
+
+    function renderResourceOrbs(containerId, current, spend, kind) {
         const container = $(containerId);
         if (!container) return;
         const now = Math.max(0, Math.floor(Number(current) || 0));
-        const baseline = Math.min(15, Math.max(1, Math.floor(Number(baseSlots) || 1)));
         const cost = Math.max(0, Math.floor(Number(spend) || 0));
-        const chunks = [];
-        if (now > 15) {
-            const tens = Math.floor(now / 10);
-            const ones = now % 10;
-            const visibleTenSlots = Math.max(1, 15 - ones);
-            if (tens > visibleTenSlots) {
-                chunks.push((tens - visibleTenSlots + 1) * 10);
-                for (let count = 1; count < visibleTenSlots; count += 1) chunks.push(10);
-            } else {
-                for (let count = tens; count > 0; count -= 1) chunks.push(10);
-            }
-            for (let count = now % 10; count > 0; count -= 1) chunks.push(1);
-        } else {
-            for (let count = 0; count < now; count += 1) chunks.push(1);
-        }
-        const slots = Math.min(15, Math.max(baseline, chunks.length || 1));
-        container.style.setProperty('--story-resource-slots', String(slots));
+        const slots = STORY_RESOURCE_SLOT_COUNT;
+        container.style.setProperty('--story-resource-slots', String(STORY_RESOURCE_SLOT_COUNT));
         container.setAttribute('aria-label', `${kind.toUpperCase()} ${now}`);
         container.title = `${kind.toUpperCase()} ${now}`;
         setText(`${containerId}-total`, String(now));
         container.replaceChildren();
-        while (chunks.length < slots) chunks.push(0);
-        let remainingSpend = Math.min(now, cost);
-        const spending = new Set();
-        for (let index = chunks.length - 1; index >= 0 && remainingSpend > 0; index -= 1) {
-            const value = Number(chunks[index] || 0);
-            if (!value) continue;
-            spending.add(index);
-            remainingSpend -= value;
-        }
-        chunks.slice(0, slots).forEach((value, index) => {
+        const previewChunks = globalThis.GTN_RESOURCE_ORBS.buildPreviewChunks(now, cost, slots);
+        const stationaryChunks = previewChunks.filter((chunk) => !chunk.willSpend);
+        const spendingChunks = previewChunks.filter((chunk) => chunk.willSpend);
+        const emptySlotCount = Math.max(0, slots - stationaryChunks.length - spendingChunks.length);
+        const emptyChunks = Array.from({ length: emptySlotCount }, () => ({ value: 1, empty: true }));
+        const visibleChunks = stationaryChunks.concat(emptyChunks, spendingChunks);
+        visibleChunks.forEach((chunk) => {
             const orb = document.createElement('span');
             orb.className = `story-resource-orb story-resource-orb-${kind}`;
-            if (!value) orb.classList.add('is-empty');
-            if (value > 1) {
+            const value = Math.max(1, Number(chunk.value) || 1);
+            if (chunk.empty) orb.classList.add('is-empty');
+            else if (chunk.missing) orb.classList.add('is-missing');
+            else orb.classList.add('is-filled');
+            if (value >= 10 || chunk.grouped) {
                 orb.classList.add('is-grouped');
                 orb.dataset.groupValue = String(value);
             }
-            if (value && spending.has(index)) orb.classList.add('will-spend');
+            if (chunk.willSpend) orb.classList.add('will-spend');
             container.append(orb);
         });
     }
@@ -1153,7 +1313,12 @@
 
     function selectCombatCard(state, card, event = null) {
         if (cardPlayInFlight || actionInFlight) return;
-        if (event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+        if (
+            event
+            && Number(event.detail) > 0
+            && Number.isFinite(event.clientX)
+            && Number.isFinite(event.clientY)
+        ) {
             storyAimPointer = { x: event.clientX, y: event.clientY };
         }
         if (String(selectedCombatCardId) === String(card.instance_id)) {
@@ -1360,6 +1525,7 @@
         inner.append(costs, name, art);
         tile.append(inner);
         entry.append(tile, orderLabel);
+        storyCardElementData.set(tile, card);
         return entry;
     }
 
@@ -1409,10 +1575,15 @@
         const imageUrl = card.upgraded
             ? (values.upgraded_image_url || values.image_url || '')
             : (values.image_url || '');
+        const enablePrediction = options.enablePrediction === true;
+        if (enablePrediction && cardType === 'thorn') {
+            element.classList.add('card-effect-fit-prediction');
+        }
         element.classList.add(englishName ? 'card-has-english' : 'card-no-english');
         element.classList.add(imageUrl ? 'card-has-art' : 'card-no-art');
         element.dataset.instanceId = String(card.instance_id || '');
         element.dataset.defId = String(card.def_id || '');
+        storyCardElementData.set(element, card);
 
         const costs = document.createElement('div');
         costs.className = 'card-costs';
@@ -1455,11 +1626,13 @@
         description.className = 'card-effect';
         appendStoryRichText(description, localize(values.description));
         element.append(typeWrap, description);
-        const bottom = createStoryCardBottom(card, values, options.predictionTargetId);
-        if (bottom) {
-            element.append(bottom);
-            element.classList.toggle('card-effect-fit-prediction', bottom.classList.contains('has-prediction'));
-        }
+        const bottom = createStoryCardBottom(
+            card,
+            values,
+            options.predictionTargetId,
+            enablePrediction,
+        );
+        if (bottom) element.append(bottom);
         if (options.note) {
             const note = document.createElement('span');
             note.className = 'story-card-note';
@@ -1468,7 +1641,170 @@
         }
         if (options.disabled) element.disabled = true;
         if (typeof options.onClick === 'function') element.addEventListener('click', options.onClick);
+        scheduleStoryCardEffectFit(element);
         return element;
+    }
+
+    function storyCardTermKey(card) {
+        return [
+            String(card?.instance_id || ''),
+            String(card?.def_id || ''),
+            card?.upgraded ? '1' : '0',
+        ].join(':');
+    }
+
+    function collectStoryStatusIds(value, result) {
+        if (Array.isArray(value)) {
+            value.forEach((item) => collectStoryStatusIds(item, result));
+            return;
+        }
+        if (!value || typeof value !== 'object') return;
+        if (typeof value.status === 'string' && storyContent?.statuses?.[value.status]) {
+            result.add(value.status);
+        }
+        Object.values(value).forEach((item) => collectStoryStatusIds(item, result));
+    }
+
+    function storyCardTermItems(card) {
+        const values = cardValues(card);
+        if (!values) return [];
+        const items = [];
+        const seen = new Set();
+        const add = (kind, id, definition) => {
+            const key = `${kind}:${id}`;
+            if (!definition || seen.has(key)) return;
+            seen.add(key);
+            items.push({ kind, id, definition });
+        };
+        (values.tags || []).forEach((tagId) => {
+            add('tag', tagId, storyContent?.tags?.[tagId]);
+        });
+
+        const statusIds = new Set();
+        collectStoryStatusIds(values.effects, statusIds);
+        const description = localize(values.description);
+        Object.entries(storyContent?.statuses || {}).forEach(([statusId, definition]) => {
+            const names = Object.values(definition?.name || {})
+                .map((name) => String(name || '').trim())
+                .filter(Boolean);
+            if (names.some((name) => description.includes(name))) statusIds.add(statusId);
+        });
+        statusIds.forEach((statusId) => {
+            add('status', statusId, storyContent?.statuses?.[statusId]);
+        });
+
+        Object.entries(STORY_RESOURCE_TERMS).forEach(([unit, definition]) => {
+            const markerPattern = new RegExp(`\\[\\[icon:${unit}\\]\\]`, 'i');
+            const unitPattern = new RegExp(`\\d+(?:\\.\\d+)?(?:\\s*[×xX*]\\s*\\d+)?\\s*${unit}(?![A-Za-z])`, 'i');
+            if (markerPattern.test(description) || unitPattern.test(description)) {
+                add('resource', unit, definition);
+            }
+        });
+        return items;
+    }
+
+    function appendStoryTermRow(container, item) {
+        const row = document.createElement('section');
+        row.className = `story-term-row story-term-row-${item.kind}`;
+        const heading = document.createElement('h3');
+        if (item.kind === 'tag') {
+            const badge = storyTagElement(item.id);
+            if (badge) heading.append(badge);
+        } else if (item.kind === 'resource') {
+            const badge = document.createElement('span');
+            badge.className = `story-term-resource story-inline-token-${item.id.toLowerCase()}`;
+            badge.append(createStoryInlineIcon(item.id));
+            const name = document.createElement('span');
+            name.textContent = localize(item.definition.name);
+            badge.append(name);
+            heading.append(badge);
+        } else {
+            const badge = document.createElement('span');
+            badge.className = 'story-term-status';
+            badge.textContent = localize(item.definition.name);
+            heading.append(badge);
+        }
+        const description = document.createElement('p');
+        appendStoryRichText(description, localize(item.definition.description));
+        row.append(heading, description);
+        container.append(row);
+    }
+
+    function closeStoryOverlayModal() {
+        const modal = $('modal');
+        if (!modal) return;
+        modal.classList.remove('shortcut-help-active', 'active');
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    function closeStoryCardTerms() {
+        const dialog = $('story-term-dialog');
+        if (!dialog) return;
+        if (dialog.open) dialog.close();
+        delete dialog.dataset.storyTermKey;
+    }
+
+    function openStoryCardTerms(card) {
+        const values = cardValues(card);
+        const dialog = $('story-term-dialog');
+        const content = $('story-term-content');
+        if (!values || !dialog || !content) return;
+        const termKey = storyCardTermKey(card);
+        if (
+            dialog.open
+            && dialog.dataset.storyTermKey === termKey
+        ) {
+            closeStoryCardTerms();
+            return;
+        }
+
+        content.className = 'modal-inner story-card-terms-modal';
+        content.replaceChildren();
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'story-term-close';
+        close.setAttribute('aria-label', t.close);
+        close.textContent = '×';
+        close.addEventListener('click', closeStoryCardTerms);
+
+        const layout = document.createElement('div');
+        layout.className = 'story-card-terms-layout';
+        const preview = document.createElement('div');
+        preview.className = 'story-card-terms-preview';
+        preview.append(createStoryCard(card, {
+            interactive: false,
+            predictionTargetId: '',
+        }));
+
+        const copy = document.createElement('div');
+        copy.className = 'story-card-terms-copy';
+        const title = document.createElement('h2');
+        title.textContent = `${card.upgraded ? '+' : ''}${localize(values.name)}`;
+        const effect = document.createElement('p');
+        effect.className = 'story-card-terms-effect';
+        appendStoryRichText(effect, localize(values.description));
+        const termTitle = document.createElement('h3');
+        termTitle.className = 'story-card-terms-heading';
+        termTitle.textContent = t.cardTerms;
+        const terms = document.createElement('div');
+        terms.className = 'story-card-terms-list';
+        const termItems = storyCardTermItems(card);
+        if (termItems.length) {
+            termItems.forEach((item) => appendStoryTermRow(terms, item));
+        } else {
+            const empty = document.createElement('p');
+            empty.className = 'story-card-terms-empty';
+            empty.textContent = t.noCardTerms;
+            terms.append(empty);
+        }
+        copy.append(title, effect, termTitle, terms);
+        layout.append(preview, copy);
+        content.append(close, layout);
+
+        dialog.dataset.storyTermKey = termKey;
+        if (!dialog.open) dialog.showModal();
+        scheduleStoryCardEffectFit(preview.querySelector('.story-card.card'));
     }
 
     function renderBlessing(state) {
@@ -1704,14 +2040,12 @@
         renderResourceOrbs(
             'story-combat-player-elixir',
             combat.elixir,
-            player.max_elixir,
             selectedValues?.cost_e,
             'e',
         );
         renderResourceOrbs(
             'story-combat-player-magic',
             combat.magic,
-            1,
             selectedValues?.cost_m,
             'm',
         );
@@ -1766,6 +2100,7 @@
             if (String(card.instance_id) === String(selectedCombatCardId)) wrapper.classList.add('is-selected');
             wrapper.append(createStoryCard(card, {
                 disabled: !playable,
+                enablePrediction: true,
                 predictionTargetId: storyPredictionTargetId(state),
                 onClick: (event) => selectCombatCard(state, card, event),
             }));
@@ -2207,10 +2542,7 @@
     function cancelStorySurface() {
         const shortcutModal = $('modal');
         if (shortcutModal?.classList.contains('active')) {
-            shortcutModal.classList.remove('shortcut-help-active');
-            shortcutModal.classList.remove('active');
-            shortcutModal.classList.add('hidden');
-            shortcutModal.setAttribute('aria-hidden', 'true');
+            closeStoryOverlayModal();
             return true;
         }
         const dialog = document.querySelector('dialog[open]');
@@ -2570,17 +2902,26 @@
         });
         $('modal')?.addEventListener('click', (event) => {
             if (event.target !== event.currentTarget) return;
-            event.currentTarget.classList.remove('active');
-            event.currentTarget.classList.add('hidden');
+            closeStoryOverlayModal();
+        });
+        $('story-term-dialog')?.addEventListener('click', (event) => {
+            if (event.target === event.currentTarget) closeStoryCardTerms();
+        });
+        $('story-term-dialog')?.addEventListener('close', (event) => {
+            delete event.currentTarget.dataset.storyTermKey;
         });
         const moveAim = (event) => {
             storyAimPointer = { x: event.clientX, y: event.clientY };
+            updateStorySkinEyeTracking(event.clientX, event.clientY);
             positionStoryCursorCard(event.clientX, event.clientY);
             if (selectedCombatCardId) scheduleStoryAimUpdate();
         };
         document.addEventListener('mousemove', moveAim);
         document.addEventListener('pointermove', moveAim);
-        window.addEventListener('resize', () => scheduleStoryAimUpdate());
+        window.addEventListener('resize', () => {
+            scheduleStoryAimUpdate();
+            scheduleVisibleStoryCardEffectFits();
+        });
         window.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && developerModeOpen) {
                 event.preventDefault();
@@ -2592,12 +2933,22 @@
             cancelStoryCombatSelection(true);
         });
         document.addEventListener('contextmenu', (event) => {
-            if (!selectedCombatCardId || !activeRun?.state) return;
             event.preventDefault();
-            cancelStoryCombatSelection(true);
+            const cardElement = event.target?.closest?.('.story-card.card, .story-pile-tile');
+            const card = cardElement ? storyCardElementData.get(cardElement) : null;
+            if (card) {
+                openStoryCardTerms(card);
+                return;
+            }
+            if ($('story-term-dialog')?.open) {
+                closeStoryCardTerms();
+                return;
+            }
+            if (selectedCombatCardId && activeRun?.state) cancelStoryCombatSelection(true);
         });
     }
 
+    loadStoryMainFont();
     applyText();
     renderPlayerSkin();
     bind();

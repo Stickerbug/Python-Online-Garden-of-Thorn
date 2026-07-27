@@ -5,6 +5,7 @@ import pytest
 from story_content import (
     STORY_CARDS,
     STORY_ENEMIES,
+    STORY_RARITIES,
     STORY_REWARD_CARD_IDS,
     validate_story_content,
 )
@@ -50,8 +51,12 @@ def _inject_hand_card(state, def_id, upgraded=False):
 def test_story_resources_can_exceed_legacy_display_maximums():
     state, _ = _begin_combat('unbounded-story-resources')
     events = []
+    original_elixir = state['combat']['elixir']
+    original_magic = state['combat']['magic']
     _gain_elixir(state, 25000, events)
     _gain_magic(state, 25000, events)
+    assert state['combat']['elixir'] == original_elixir + 25000
+    assert state['combat']['magic'] == original_magic + 25000
     assert state['combat']['elixir'] > state['player']['max_elixir']
     assert state['combat']['magic'] > state['player']['max_magic']
     assert {'type': 'elixir', 'amount': 25000} in events
@@ -69,6 +74,33 @@ def test_story_content_is_valid_and_reward_pool_excludes_special_cards():
         and STORY_CARDS[card_id]['rarity'] not in ('super', 'special')
         for card_id in STORY_REWARD_CARD_IDS
     )
+
+
+def test_story_rarity_default_colors():
+    assert {
+        rarity: definition['color']
+        for rarity, definition in STORY_RARITIES.items()
+    } == {
+        'primary': '#7EEF6D',
+        'common': '#FFE65D',
+        'rare': '#861FDE',
+        'ultra': '#FF2B75',
+        'super': '#2BFFA3',
+    }
+
+
+def test_story_card_descriptions_do_not_end_with_full_stops():
+    for card_id, definition in STORY_CARDS.items():
+        descriptions = [definition.get('description')]
+        descriptions.append((definition.get('upgrade') or {}).get('description'))
+        for description in descriptions:
+            if isinstance(description, dict):
+                for language, text in description.items():
+                    assert not str(text).rstrip().endswith(('。', '.')), (
+                        card_id,
+                        language,
+                        text,
+                    )
 
 
 def test_every_story_enemy_has_a_packaged_image():
@@ -329,15 +361,83 @@ def test_enemy_applied_broken_survives_until_the_player_uses_it():
     state['combat']['enemies'] = [enemy]
     state, _ = apply_story_action(state, 'end_turn', {}, 'broken-duration')
     assert state['combat']['broken'] == 3
+    state['combat']['shield'] = 2
     health = state['player']['health']
     card = _inject_hand_card(state, 'basic')
-    state, _ = apply_story_action(
+    state, events = apply_story_action(
         state,
         'play_card',
         {'card_instance_id': card['instance_id'], 'target_id': enemy['id']},
         'broken-duration',
     )
-    assert state['player']['health'] == health - 3
+    assert state['player']['health'] == health - 1
+    assert state['combat']['shield'] == 0
+    broken_damage = next(
+        event
+        for event in events
+        if event.get('type') == 'player_damage' and event.get('source') == 'broken'
+    )
+    assert broken_damage['amount'] == 1
+    assert broken_damage['history'] == [{
+        'before': health,
+        'after': health - 1,
+        'blocked': 2,
+    }]
+
+
+def test_player_shield_also_blocks_poison_damage():
+    state, _ = _begin_combat('poison-shield')
+    combat = state['combat']
+    combat['shield'] = 3
+    combat['poison'] = 5
+    combat['enemies'][0]['stun'] = 1
+    health = state['player']['health']
+
+    state, events = apply_story_action(
+        state,
+        'end_turn',
+        {},
+        'poison-shield',
+    )
+
+    assert state['player']['health'] == health - 2
+    assert state['combat']['poison'] == 2
+    poison_damage = next(
+        event
+        for event in events
+        if event.get('type') == 'player_damage' and event.get('source') == 'poison'
+    )
+    assert poison_damage['amount'] == 2
+    assert poison_damage['history'] == [{
+        'before': health,
+        'after': health - 2,
+        'blocked': 3,
+    }]
+
+
+def test_broken_damage_defeats_player_even_when_the_card_kills_last_enemy():
+    state, _ = _begin_combat('broken-double-defeat')
+    enemy = state['combat']['enemies'][0]
+    enemy['health'] = 1
+    enemy['shield'] = 0
+    enemy['reflection'] = 0
+    state['combat']['enemies'] = [enemy]
+    state['combat']['broken'] = 3
+    state['combat']['shield'] = 0
+    state['player']['health'] = 2
+    card = _inject_hand_card(state, 'basic')
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id'], 'target_id': enemy['id']},
+        'broken-double-defeat',
+    )
+
+    assert state['player']['health'] == 0
+    assert state['phase'] == 'game_over'
+    assert any(event.get('type') == 'game_over' for event in events)
+    assert not any(event.get('type') == 'combat_victory' for event in events)
 
 
 def test_rockfall_grows_and_triggers_before_the_rock_action():

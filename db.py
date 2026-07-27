@@ -4782,6 +4782,8 @@ def update_user_warning(action_id, reason='', duration_seconds=3600, active=True
         ).fetchone()
         if row is None:
             return None, '警告不存在'
+        if not active and not reason_text:
+            reason_text = str(row['reason'] or '').strip()[:500]
         conn.execute(
             '''
             UPDATE moderation_actions

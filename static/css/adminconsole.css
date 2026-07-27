@@ -118,6 +118,12 @@ a {
   color: #ffffff;
 }
 
+.console-actions button:disabled {
+  border-color: var(--line);
+  color: #596572;
+  cursor: default;
+}
+
 .console-login-error {
   min-height: 22px;
   margin-top: 12px;
@@ -152,7 +158,41 @@ a {
 .console-status {
   color: var(--muted);
   font-size: 12px;
+}
+
+.console-status::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.console-status[data-state="connected"] {
+  color: var(--green);
+}
+
+.console-status[data-state="running"] {
+  color: var(--yellow);
+}
+
+.console-status[data-state="offline"] {
+  color: var(--red);
+}
+
+.console-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 18px;
   margin-top: 2px;
+}
+
+.console-activity {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .console-actions {
@@ -229,7 +269,9 @@ a {
 }
 
 .completion-item {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 14px;
   width: 100%;
   border: 0;
   border-radius: 3px;
@@ -240,10 +282,27 @@ a {
   cursor: pointer;
 }
 
+.completion-value {
+  color: inherit;
+}
+
+.completion-detail {
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .completion-item.active,
 .completion-item:hover {
   background: #20303d;
   color: #fff;
+}
+
+.completion-item.active .completion-detail,
+.completion-item:hover .completion-detail {
+  color: #b9c7d3;
 }
 
 .console-input-row {
@@ -256,6 +315,15 @@ a {
 .console-prompt {
   color: var(--green);
   font-weight: 700;
+  min-width: 1ch;
+}
+
+.console-input-row.secret {
+  border-top-color: var(--yellow);
+}
+
+.console-input-row.secret .console-prompt {
+  color: var(--yellow);
 }
 
 @media (max-width: 720px) {

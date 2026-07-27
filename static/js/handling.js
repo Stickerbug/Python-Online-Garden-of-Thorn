@@ -94,8 +94,8 @@ function el(tag, className = '', content = '') {
 }
 
 function showApp() {
-  $('login').classList.add('hidden');
-  $('app').classList.remove('hidden');
+  const app = $('app');
+  if (app) app.classList.remove('hidden');
   setText('summary', '未加载，点击刷新读取当前列表');
   renderList();
   if (currentTab === 'reports' && !reportsLoadedOnce) {
@@ -105,42 +105,10 @@ function showApp() {
   }
 }
 
-function showLogin() {
-  $('login').classList.remove('hidden');
-  $('app').classList.add('hidden');
-}
-
-async function checkAuth() {
-  try {
-    const data = await api('/api/handling/me');
-    if (data.authenticated) {
-      showApp();
-    } else {
-      showLogin();
-    }
-  } catch {
-    showLogin();
+function exitHandling() {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'gtn:feedback-handling-exit' }, window.location.origin);
   }
-}
-
-async function login(event) {
-  event.preventDefault();
-  setText('login-error', '');
-  try {
-    await api('/api/handling/login', {
-      method: 'POST',
-      body: JSON.stringify({ password: $('password').value }),
-    });
-    $('password').value = '';
-    showApp();
-  } catch (e) {
-    setText('login-error', e.message || '登录失败');
-  }
-}
-
-async function logout() {
-  await api('/api/handling/logout', { method: 'POST', body: '{}' }).catch(() => null);
-  showLogin();
 }
 
 function switchTab(tab) {
@@ -171,7 +139,7 @@ async function loadReports() {
   reportsRequestInFlight = true;
   const status = $('status-filter').value || 'all';
   try {
-    const data = await api(`/api/handling/reports?status=${encodeURIComponent(status)}&limit=30`);
+    const data = await api(`/api/feedback/handling/reports?status=${encodeURIComponent(status)}&limit=30`);
     reports = data.items || [];
     reportsLoadedOnce = true;
     setText('summary', `举报 ${reports.length}/${data.total || reports.length}`);
@@ -186,7 +154,7 @@ async function loadUsers() {
   usersRequestInFlight = true;
   const query = $('user-query').value.trim();
   try {
-    const data = await api(`/api/handling/users?query=${encodeURIComponent(query)}&limit=20`);
+    const data = await api(`/api/feedback/handling/users?query=${encodeURIComponent(query)}&limit=20`);
     users = data.users || [];
     setText('summary', `玩家 ${users.length}/${data.total || users.length}`);
   } finally {
@@ -198,7 +166,7 @@ async function loadIpBans() {
   if (!handlingPageVisible() || ipBansRequestInFlight) return;
   ipBansRequestInFlight = true;
   try {
-    const data = await api('/api/handling/ip-bans?active=1&limit=30');
+    const data = await api('/api/feedback/handling/ip-bans?active=1&limit=30');
     ipBans = data.items || [];
     setText('summary', `IP封禁 ${ipBans.length}/${data.total || ipBans.length}`);
   } finally {
@@ -211,7 +179,7 @@ async function loadModerationRecords() {
   moderationRequestInFlight = true;
   const kind = $('moderation-filter').value || 'all';
   try {
-    const data = await api(`/api/handling/moderation?kind=${encodeURIComponent(kind)}&limit=40`);
+    const data = await api(`/api/feedback/handling/moderation?kind=${encodeURIComponent(kind)}&limit=40`);
     moderationRecords = data.items || [];
     const counts = data.counts || {};
     setText('summary', `处罚 ${moderationRecords.length}/${data.total || moderationRecords.length} · 封禁 ${counts.account_ban || 0} · 警告 ${counts.warning || 0}`);
@@ -440,7 +408,7 @@ async function selectReport(id) {
   renderList();
   setText('action-result', '');
   try {
-    const data = await api(`/api/handling/reports/${encodeURIComponent(id)}`);
+    const data = await api(`/api/feedback/handling/reports/${encodeURIComponent(id)}`);
     renderReportDetail(data.report);
   } catch (e) {
     clearDetail();
@@ -659,7 +627,7 @@ async function openReport(reportId) {
 
 async function updateWarning(warningId, reason, duration, active) {
   try {
-    await api(`/api/handling/warnings/${encodeURIComponent(warningId)}`, {
+    await api(`/api/feedback/handling/warnings/${encodeURIComponent(warningId)}`, {
       method: active ? 'PATCH' : 'DELETE',
       body: JSON.stringify({ reason, duration_seconds: duration, active }),
     });
@@ -676,7 +644,7 @@ async function updateWarning(warningId, reason, duration, active) {
 
 async function updateAccountBan(userId, reason, duration) {
   try {
-    await api(`/api/handling/users/${encodeURIComponent(userId)}/ban`, {
+    await api(`/api/feedback/handling/users/${encodeURIComponent(userId)}/ban`, {
       method: 'PATCH',
       body: JSON.stringify({ reason, duration_seconds: duration }),
     });
@@ -702,7 +670,7 @@ async function endAccountBan(userId) {
 
 async function updateIpBan(ip, reason, duration) {
   try {
-    const data = await api(`/api/handling/ip-bans/${encodeURIComponent(ip)}`, {
+    const data = await api(`/api/feedback/handling/ip-bans/${encodeURIComponent(ip)}`, {
       method: 'PATCH',
       body: JSON.stringify({ reason, duration_seconds: duration }),
     });
@@ -779,7 +747,7 @@ async function setUserBan(userId, banned) {
   if (!userId) return;
   const reason = $('note').value || (banned ? '举报处理页封禁' : '');
   try {
-    const data = await api(`/api/handling/users/${encodeURIComponent(userId)}/ban`, {
+    const data = await api(`/api/feedback/handling/users/${encodeURIComponent(userId)}/ban`, {
       method: 'POST',
       body: JSON.stringify({
         banned,
@@ -814,7 +782,7 @@ async function resolveReport() {
   };
   payload.moderation_action = payload.target_moderation_action;
   try {
-    const data = await api(`/api/handling/reports/${encodeURIComponent(selectedReportId)}/resolve`, {
+    const data = await api(`/api/feedback/handling/reports/${encodeURIComponent(selectedReportId)}/resolve`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -833,7 +801,7 @@ async function banIp() {
   const ip = $('ip-input').value.trim();
   if (!ip) return;
   try {
-    const data = await api('/api/handling/ip-bans', {
+    const data = await api('/api/feedback/handling/ip-bans', {
       method: 'POST',
       body: JSON.stringify({
         ip,
@@ -853,7 +821,7 @@ async function banIp() {
 
 async function unbanIp(ip) {
   try {
-    await api(`/api/handling/ip-bans/${encodeURIComponent(ip)}`, { method: 'DELETE' });
+    await api(`/api/feedback/handling/ip-bans/${encodeURIComponent(ip)}`, { method: 'DELETE' });
     $('action-result').className = 'result ok';
     setText('action-result', '已解除 IP 封禁');
     await loadIpBans();
@@ -949,8 +917,8 @@ function updateDurationLabel() {
 }
 
 function bind() {
-  $('login-form').addEventListener('submit', login);
-  $('logout').addEventListener('click', logout);
+  const exitButton = $('handling-exit');
+  if (exitButton) exitButton.addEventListener('click', exitHandling);
   $('refresh').addEventListener('click', refreshCurrent);
   $('search-users').addEventListener('click', loadUsersThenRender);
   $('user-query').addEventListener('keydown', (event) => {
@@ -999,4 +967,4 @@ async function searchUser(query) {
 }
 
 bind();
-checkAuth();
+showApp();

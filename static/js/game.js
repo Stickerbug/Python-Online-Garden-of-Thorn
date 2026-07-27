@@ -72,6 +72,9 @@ const GTN_COOKIE_FALLBACK_KEYS = new Set([
     'gtn_beta_official_mod_default_v2',
     'gtn_official_mod_default_v3',
     'gtn_beta_official_mod_default_v3',
+    'gtn_changelog_read_version_v1',
+    'gtn_changelog_read_latest_date_v1',
+    'gtn_changelog_boot_version_v1',
 ]);
 const GTN_COOKIE_FALLBACK_PREFIXES = ['gtn_keybindings_', 'gtn_beta_keybindings_'];
 const gtnConfirmedCookieFallbackKeys = new Set();
@@ -86,7 +89,10 @@ function readStorageFallbackCookie(key) {
     if (!supportsStorageFallbackCookie(key) || typeof document === 'undefined') return null;
     try {
         const prefix = `${encodeURIComponent(key)}=`;
-        const part = String(document.cookie || '').split('; ').find(item => item.startsWith(prefix));
+        const part = String(document.cookie || '')
+            .split(';')
+            .map(item => item.trim())
+            .find(item => item.startsWith(prefix));
         if (!part) return null;
         const value = decodeURIComponent(part.slice(prefix.length));
         gtnConfirmedCookieFallbackKeys.add(String(key));
@@ -100,7 +106,8 @@ function writeStorageFallbackCookie(key, value) {
     if (!supportsStorageFallbackCookie(key) || typeof document === 'undefined') return false;
     try {
         const text = String(value);
-        document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(text)}; Max-Age=31536000; Path=/; SameSite=Lax`;
+        const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(text)}; Max-Age=31536000; Expires=Fri, 31 Dec 9999 23:59:59 GMT; Path=/; SameSite=Lax${secure}`;
         const saved = readStorageFallbackCookie(key) === text;
         if (saved) gtnConfirmedCookieFallbackKeys.add(String(key));
         return saved;
@@ -819,7 +826,7 @@ const I18N = {
         tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_temp_magic_heavy: 'Temporary Magic Heavy', tag_floating: 'Floating', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift', tag_wide_strike: 'Wide Strike', tag_self_target: 'Self-target', tag_charge: 'Charge', tag_ocean_blinded: 'Obscured',
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_statuses: 'States', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
-        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Light cards', choose_yggdrasil_card: 'Choose Yggdrasil card', opening_sequence_title: 'Floral Arrangement', opening_sequence_message: 'Drag cards to rearrange your draw pile. The top card is drawn first.',
+        choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Attack cards to convert', choose_yggdrasil_card: 'Choose Yggdrasil card', opening_sequence_title: 'Floral Arrangement', opening_sequence_message: 'Drag cards to rearrange your draw pile. The top card is drawn first.',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
         foresight_replace_title: 'Foresight', foresight_replace_desc: 'Discard up to {0} cards from your hand, then draw that many cards', foresight_replace_confirm: 'Replace',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
@@ -937,7 +944,7 @@ I18N.zh = { ...I18N.en,
     status_untargetable: '不可选中', status_bandage: '绷带', status_sponge: '海绵', status_shovel: '铲子',
     status_sluggish: '迟缓', status_overload: '超载', status_foresight: '预知', status_fracture: '破损', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '禁疗', status_weakness: '虚弱', status_bleed: '流血', status_fragment: '碎片', status_fragment_stacks: '碎片',
     flag_precision: '精准', flag_exile: '放逐', flag_non_stackable: '不叠加', flag_indestructible: '不可摧毁', flag_sprout: '萌芽', flag_symbiosis: '共生', flag_attract: '吸附', flag_void: '虚无', flag_self_only: '不选择目标', flag_uncancellable: '不可取消', flag_infinite_exclude: '无限火力移除', flag_rebound: '回转', flag_copy: '副本', flag_unique: '唯一', flag_swift: '迅捷', flag_temp_swift: '暂时迅捷', flag_temp_heavy: '暂时沉重', flag_temp_magic_heavy: '暂时魔力沉重', flag_floating: '漂浮', flag_stealth: '隐匿', flag_revealed: '被揭示', flag_sublime: '崇高', flag_team_limited: '队伍限定', flag_team_unique: '队伍独一', flag_power: '威力', flag_magic_swift: '魔力迅捷', flag_wide_strike: '广域打击', flag_self_target: '自刃', flag_charge: '电荷', flag_ocean_blinded: '蒙蔽',
-    choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择 Light 牌', choose_yggdrasil_card: '选择世界树之叶牌', opening_sequence_title: '花序编排', opening_sequence_message: '拖动卡牌调整抽牌堆顺序，最上方的牌最先抽取。',
+    choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择要转化的攻击牌', choose_yggdrasil_card: '选择世界树之叶牌', opening_sequence_title: '花序编排', opening_sequence_message: '拖动卡牌调整抽牌堆顺序，最上方的牌最先抽取。',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
@@ -1049,7 +1056,7 @@ I18N.fr = { ...I18N.en,
     status_sluggish: 'Lenteur', status_overload: 'Surcharge', status_foresight: 'Prévoyance', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Cécité', status_heal_block: 'Anti-soin', status_weakness: 'Faiblesse', status_bleed: 'Saignement', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
     flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose', flag_copy: 'Copie', flag_unique: 'Unique', flag_swift: 'Rapidité', flag_stealth: 'Furtif', flag_revealed: 'Révélé',
     choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}', choose_source_card_n: 'Carte source n°{0}',
-    choose_light_cards: 'Cartes de conversion Lumière', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Faites glisser les cartes pour réorganiser votre pioche. La carte du haut sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
+    choose_light_cards: 'Choisissez les cartes Attaque à convertir', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Faites glisser les cartes pour réorganiser votre pioche. La carte du haut sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
@@ -1122,7 +1129,7 @@ I18N.ja = { ...I18N.en,
     status_sluggish: '遅鈍', status_overload: '過負荷', status_foresight: '予知', status_fracture: '破損', status_stagnation: '滞留', status_blind: '失明', status_heal_block: '治療封じ', status_weakness: '虚弱', status_bleed: '出血', status_fragment: '破片', status_fragment_stacks: '破片',
     flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生', flag_copy: '複製', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隠密', flag_revealed: '公開',
     choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚', choose_source_card_n: 'ソースカード第{0}枚',
-    choose_light_cards: '光変換カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: 'カードをドラッグして山札の順序を変更します。一番上のカードから引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
+    choose_light_cards: '変化させる攻撃カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: 'カードをドラッグして山札の順序を変更します。一番上のカードから引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
@@ -1856,7 +1863,7 @@ Object.assign(I18N.en, {
     social_search_id: 'Allow adding me by ID', social_accept_game_invites: 'Accept match invitations', social_allow_guest_spectators: 'Allow guest spectators',
     social_game_invites_disabled: 'This player has disabled match invitations.',
     social_settings_saved: 'Social settings saved',
-    feedback: 'Feedback', feedback_send: 'Send Feedback', feedback_staff: 'View Feedback',
+    feedback: 'Feedback', feedback_send: 'Send Feedback', feedback_staff: 'View Feedback', feedback_handling: 'Moderation',
     feedback_login_required: 'Sign in to send feedback.', feedback_empty: 'No feedback yet.',
     feedback_staff_empty: 'No player feedback.', feedback_sent: 'Feedback sent',
     last_login: 'Last seen: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches',
@@ -1874,7 +1881,7 @@ Object.assign(I18N.zh, {
     social_search_id: '允许通过ID添加我', social_accept_game_invites: '接受对局邀请', social_allow_guest_spectators: '允许游客观战',
     social_game_invites_disabled: '该玩家已关闭对局邀请',
     social_settings_saved: '社交设置已保存',
-    feedback: '反馈', feedback_send: '发送反馈', feedback_staff: '查看反馈',
+    feedback: '反馈', feedback_send: '发送反馈', feedback_staff: '查看反馈', feedback_handling: '举报处理',
     feedback_login_required: '登录账号后可以发送反馈。', feedback_empty: '暂无反馈。',
     feedback_staff_empty: '暂无玩家反馈。', feedback_sent: '反馈已发送',
     last_login: '上次下线：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局',
@@ -1892,7 +1899,7 @@ Object.assign(I18N.fr, {
     social_search_id: 'Autoriser par ID', social_accept_game_invites: 'Accepter les invitations de partie', social_allow_guest_spectators: 'Autoriser les spectateurs invités',
     social_game_invites_disabled: 'Ce joueur a désactivé les invitations de partie.',
     social_settings_saved: 'Réglages enregistrés',
-    feedback: 'Feedback', feedback_send: 'Envoyer', feedback_staff: 'Voir les feedbacks',
+    feedback: 'Feedback', feedback_send: 'Envoyer', feedback_staff: 'Voir les feedbacks', feedback_handling: 'Modération',
     feedback_login_required: 'Connectez-vous pour envoyer un feedback.', feedback_empty: 'Aucun feedback.',
     feedback_staff_empty: 'Aucun feedback joueur.', feedback_sent: 'Feedback envoyé',
     last_login: 'Dernière activité : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes',
@@ -1910,7 +1917,7 @@ Object.assign(I18N.ja, {
     social_search_id: 'IDで追加を許可', social_accept_game_invites: '対戦招待を受け取る', social_allow_guest_spectators: 'ゲスト観戦を許可',
     social_game_invites_disabled: 'このプレイヤーは対戦招待を無効にしています。',
     social_settings_saved: '設定を保存しました',
-    feedback: 'フィードバック', feedback_send: '送信', feedback_staff: '確認',
+    feedback: 'フィードバック', feedback_send: '送信', feedback_staff: '確認', feedback_handling: '通報管理',
     feedback_login_required: 'ログインすると送信できます。', feedback_empty: 'まだありません。',
     feedback_staff_empty: 'プレイヤー feedback はありません。', feedback_sent: '送信しました',
     last_login: '最終退出: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦',
@@ -2525,11 +2532,11 @@ function titleColorCss(color) {
         banish: '#6C3483',
         indestructible: '#D4AC0D',
         critical: '#D4AC0D',
-        primary: '#606873',
-        common: '#438C55',
-        rare: '#337DB4',
-        ultra: '#A64D9A',
-        super: '#D39A22',
+        primary: '#7EEF6D',
+        common: '#FFE65D',
+        rare: '#861FDE',
+        ultra: '#FF2B75',
+        super: '#2BFFA3',
         milestone: '#5AA469',
         hidden: '#7257A8',
         neutral: 'var(--text-secondary)',
@@ -4689,6 +4696,7 @@ let activeFeedbackTab = 'send';
 let activeFeedbackThreadId = null;
 let activeFeedbackStaffView = false;
 let feedbackCollapsedGroups = { open: false, pending: false, closed: true };
+let feedbackHandlingOpen = false;
 let activeSocialFriendId = null;
 let activeSocialSection = 'friends';
 let activeSocialRequestId = null;
@@ -4754,6 +4762,8 @@ let gameState = {};
 let lastGameStateResyncRequestAt = 0;
 let gameStateResyncTimer = null;
 let gameStateResyncNeeded = false;
+let battleStartupResyncTimer = null;
+let battleStartupExpectedKey = '';
 
 function isCompleteBattleStatePayload(data) {
     if (!data || typeof data !== 'object') return false;
@@ -4781,6 +4791,52 @@ function requestFullGameState(reason = 'incomplete_state') {
 function clearGameStateResyncTimer() {
     if (gameStateResyncTimer) clearTimeout(gameStateResyncTimer);
     gameStateResyncTimer = null;
+}
+
+function hasMatchingLiveBattleState(payload = {}) {
+    const statePhase = String((gameState && gameState.phase) || '');
+    if (!['action', 'draw', 'response', 'choice'].includes(statePhase)) return false;
+    if (!isCompleteBattleStatePayload(gameState)) return false;
+    if (pendingResponseExpectsCurrentPlayer(gameState) && !responsePending) return false;
+    const expectedKey = phaseContextMatchKey(payload);
+    const stateKey = phaseContextMatchKey(gameState);
+    return !expectedKey || !stateKey || expectedKey === stateKey;
+}
+
+function clearBattleStartupResync() {
+    if (battleStartupResyncTimer) clearTimeout(battleStartupResyncTimer);
+    battleStartupResyncTimer = null;
+    battleStartupExpectedKey = '';
+}
+
+function scheduleBattleStartupResync(payload = {}, reason = 'battle_start') {
+    if (soloMode || replayMode || payload.solo || payload.replay || payload.spectating) return;
+    if (hasMatchingLiveBattleState(payload)) {
+        clearBattleStartupResync();
+        return;
+    }
+    const expectedKey = phaseContextMatchKey(payload);
+    if (battleStartupResyncTimer && battleStartupExpectedKey === expectedKey) return;
+    clearBattleStartupResync();
+    battleStartupExpectedKey = expectedKey;
+    gameStateResyncNeeded = true;
+    battleStartupResyncTimer = setTimeout(() => {
+        battleStartupResyncTimer = null;
+        const currentKey = phaseContextMatchKey(gameState);
+        if (
+            battleStartupExpectedKey
+            && currentKey
+            && battleStartupExpectedKey !== currentKey
+        ) {
+            return;
+        }
+        if (hasMatchingLiveBattleState(payload)) {
+            gameStateResyncNeeded = false;
+            battleStartupExpectedKey = '';
+            return;
+        }
+        requestFullGameState(`${reason}_missing_initial_state`);
+    }, 900);
 }
 let predictionTargetOverrideId = null;
 let activeV2UiRequestId = null;
@@ -4839,16 +4895,128 @@ let surrenderConsentCountdown = 0;
 let localCountdownTimerId = null;
 let localTurnTimerSnapshot = null;
 let lastPregameResyncRequestAt = 0;
+let pendingResponseRecoveryTimer = null;
+let pendingChoiceRecoveryTimer = null;
+
+function clearPendingResponseRecovery() {
+    if (pendingResponseRecoveryTimer) clearTimeout(pendingResponseRecoveryTimer);
+    pendingResponseRecoveryTimer = null;
+}
+
+function pendingResponseExpectsCurrentPlayer(state = {}) {
+    const pending = state.pending_response;
+    const ownId = Number(state.your_id);
+    if (!pending || !Number.isFinite(ownId)) return false;
+    const responders = (Array.isArray(pending.counter_cards) ? pending.counter_cards : [])
+        .map((entry) => Number(entry && entry.responder_id))
+        .filter(Number.isFinite);
+    if (responders.length) return responders.includes(ownId);
+    const sourceId = Number(pending.player_id);
+    return !Number.isFinite(sourceId) || sourceId !== ownId;
+}
+
+function schedulePendingResponseRecoveryFromState(state = {}) {
+    if (
+        soloMode
+        || replayMode
+        || state.solo
+        || state.replay
+        || state.spectating
+        || !pendingResponseExpectsCurrentPlayer(state)
+        || responsePending
+    ) {
+        clearPendingResponseRecovery();
+        return;
+    }
+    clearPendingResponseRecovery();
+    const expectedMatchKey = phaseContextMatchKey(state);
+    pendingResponseRecoveryTimer = setTimeout(() => {
+        pendingResponseRecoveryTimer = null;
+        if (responsePending || !pendingResponseExpectsCurrentPlayer(gameState)) return;
+        if (
+            expectedMatchKey
+            && phaseContextMatchKey(gameState)
+            && expectedMatchKey !== phaseContextMatchKey(gameState)
+        ) {
+            return;
+        }
+        requestFullGameState('pending_response_request_missing');
+    }, 350);
+}
+
+function choiceRequestSignature(data = {}) {
+    const card = data.card || {};
+    const params = data.choice_params || {};
+    const compactCards = (items) => (Array.isArray(items) ? items : []).map((item) => {
+        if (!item || typeof item !== 'object') return String(item || '');
+        return [
+            item.instance_id ?? '',
+            item.def_id || item.id || '',
+            item.equipment_instance_id ?? '',
+        ].join(':');
+    });
+    return JSON.stringify([
+        data.choice_type || '',
+        data.player_id ?? '',
+        data.target_player_id ?? '',
+        card.instance_id ?? '',
+        card.def_id || '',
+        data.max_replace ?? '',
+        params.request_id ?? '',
+        params.zone || '',
+        params.min_count ?? params.min ?? '',
+        params.max_count ?? params.max ?? '',
+        compactCards(data.hand_cards),
+        compactCards(data.deck_cards),
+        compactCards(data.discard_cards),
+        compactCards(data.exile_cards),
+        compactCards(data.equipment_cards),
+        compactCards(data.top_cards),
+    ]);
+}
+
+function hasVisibleChoiceInteraction() {
+    const prompt = $('game-prompt');
+    const modal = $('modal');
+    const responsePanel = $('response-panel');
+    return !!targetPickCleanup
+        || !!activeKeyboardReorderController
+        || !!(prompt && prompt.classList.contains('active'))
+        || !!(modal && modal.classList.contains('active') && activeV2UiRequestId != null)
+        || !!(
+            responsePanel
+            && responsePanel.classList.contains('magic-salt-response-panel')
+            && !responsePanel.classList.contains('hidden')
+        );
+}
+
+function clearPendingChoiceRecovery() {
+    if (pendingChoiceRecoveryTimer) clearTimeout(pendingChoiceRecoveryTimer);
+    pendingChoiceRecoveryTimer = null;
+}
 
 function beginChoiceRequest(data = {}) {
+    clearPendingChoiceRecovery();
+    const signature = choiceRequestSignature(data);
+    if (
+        choicePending
+        && choiceData
+        && choiceData._choice_signature === signature
+        && hasVisibleChoiceInteraction()
+    ) {
+        return false;
+    }
     choicePending = true;
     choiceData = data || {};
     choiceRequestSeq += 1;
     choiceData._choice_request_seq = choiceRequestSeq;
+    choiceData._choice_signature = signature;
     showChoiceUI(choiceData);
+    return true;
 }
 
 function invalidateChoiceRequest() {
+    clearPendingChoiceRecovery();
     choicePending = false;
     choiceData = {};
     choiceRequestSeq += 1;
@@ -4859,7 +5027,66 @@ function invalidateChoiceRequest() {
         responsePanel.classList.remove('visible', 'magic-salt-response-panel');
     }
 }
+
+function schedulePendingChoiceRecoveryFromState(state = {}) {
+    const pending = state.pending_choice;
+    const ownId = Number(state.your_id);
+    const pendingPlayerId = Number(pending && pending.player_id);
+    if (
+        !pending
+        || state.spectating
+        || !Number.isFinite(ownId)
+        || !Number.isFinite(pendingPlayerId)
+        || ownId !== pendingPlayerId
+    ) {
+        clearPendingChoiceRecovery();
+        return;
+    }
+    const signature = choiceRequestSignature(pending);
+    if (
+        choicePending
+        && choiceData
+        && choiceData._choice_signature === signature
+        && hasVisibleChoiceInteraction()
+    ) {
+        clearPendingChoiceRecovery();
+        return;
+    }
+    clearPendingChoiceRecovery();
+    const expectedMatchKey = phaseContextMatchKey(state);
+    pendingChoiceRecoveryTimer = setTimeout(() => {
+        pendingChoiceRecoveryTimer = null;
+        const currentPending = gameState && gameState.pending_choice;
+        if (!currentPending) return;
+        if (
+            expectedMatchKey
+            && phaseContextMatchKey(gameState)
+            && expectedMatchKey !== phaseContextMatchKey(gameState)
+        ) {
+            return;
+        }
+        if (choiceRequestSignature(currentPending) !== signature) return;
+        if (
+            choicePending
+            && choiceData
+            && choiceData._choice_signature === signature
+            && hasVisibleChoiceInteraction()
+        ) {
+            return;
+        }
+        clearPendingServerAction({ keepOptimistic: true });
+        pendingPlayCard = null;
+        beginChoiceRequest({
+            ...currentPending,
+            room_id: gameState.room_id,
+            match_key: gameState.match_key,
+        });
+    }, 220);
+}
 let localPregameTimerSnapshot = null;
+let activeNetworkMatchKey = '';
+const retiredNetworkMatchKeys = new Set();
+const MAX_RETIRED_NETWORK_MATCH_KEYS = 16;
 
 function setRouteCookie(name, value, maxAgeSeconds) {
     try {
@@ -5523,6 +5750,8 @@ function updateStaticText() {
     if (feedbackSendTab) feedbackSendTab.textContent = UI.feedback_send;
     const feedbackStaffTab = $('feedback-tab-staff');
     if (feedbackStaffTab) feedbackStaffTab.textContent = UI.feedback_staff;
+    const feedbackHandlingTab = $('feedback-tab-handling');
+    if (feedbackHandlingTab) feedbackHandlingTab.textContent = UI.feedback_handling || '举报处理';
     const feedbackAppealOption = document.querySelector('#feedback-category option[value="appeal"]');
     if (feedbackAppealOption) feedbackAppealOption.textContent = UI.feedback_appeal || '对局申诉';
     const feedbackReplayInput = $('feedback-replay-id');
@@ -6354,8 +6583,10 @@ function rejectLobbyInvitationOutsideLobby(eventName, data = {}) {
 
 function clearNetworkMatchStateForLobby() {
     if (soloMode || replayMode) return;
+    retireActiveNetworkMatch('return_to_lobby');
     closePileViewerModal();
     clearActiveMatchRoute('lobby');
+    resetMatchRuntimeState({ clearGameState: true });
     gameState = {};
     draftState = {};
     eventSelectData = {};
@@ -6661,12 +6892,7 @@ function readChangelogMarker(key) {
     let value = '';
     try { value = String(localStorage.getItem(key) || ''); } catch (_) {}
     if (!value) {
-        try {
-            const prefix = `${encodeURIComponent(key)}=`;
-            const part = String(document.cookie || '').split('; ')
-                .find(item => item.startsWith(prefix));
-            if (part) value = decodeURIComponent(part.slice(prefix.length));
-        } catch (_) {}
+        try { value = String(window.sessionStorage.getItem(key) || ''); } catch (_) {}
     }
     changelogReadMemory.set(key, value);
     return value;
@@ -6676,9 +6902,8 @@ function writeChangelogMarker(key, value) {
     const text = String(value || '');
     changelogReadMemory.set(key, text);
     try { localStorage.setItem(key, text); } catch (_) {}
-    try {
-        document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(text)}; Max-Age=31536000; Path=/; SameSite=Lax`;
-    } catch (_) {}
+    try { window.sessionStorage.setItem(key, text); } catch (_) {}
+    writeStorageFallbackCookie(String(gtnBetaStorageKey(key)), text);
 }
 
 function currentChangelogCacheVersion() {
@@ -6729,9 +6954,11 @@ function renderChangelogItems(items) {
 function getChangelogUnreadCount(cache = changelogCache) {
     if (!cache || !Array.isArray(cache.items) || !cache.items.length) return 0;
     const serverVersion = String(cache.serverVersion || '');
-    const readVersion = readChangelogMarker(CHANGELOG_READ_VERSION_KEY);
+    const readVersion = readChangelogMarker(CHANGELOG_READ_VERSION_KEY)
+        || String(cache.readVersion || '');
     if (serverVersion && readVersion === serverVersion) return 0;
-    const readDate = readChangelogMarker(CHANGELOG_READ_DATE_KEY);
+    const readDate = readChangelogMarker(CHANGELOG_READ_DATE_KEY)
+        || String(cache.readDate || '');
     if (!readDate) return Math.min(cache.items.length, 99);
     const newerCount = cache.items.filter(item => String(item && item.date || '') > readDate).length;
     return Math.min(Math.max(newerCount, serverVersion ? 1 : 0), 99);
@@ -6757,8 +6984,14 @@ function isChangelogPopoverOpen() {
 
 function markChangelogRead() {
     if (!changelogCache || !Array.isArray(changelogCache.items) || !changelogCache.items.length) return;
-    writeChangelogMarker(CHANGELOG_READ_VERSION_KEY, changelogCache.serverVersion || '');
-    writeChangelogMarker(CHANGELOG_READ_DATE_KEY, changelogCache.items[0] && changelogCache.items[0].date || '');
+    const readVersion = String(changelogCache.serverVersion || currentChangelogCacheVersion());
+    const readDate = String(changelogCache.items[0] && changelogCache.items[0].date || '');
+    writeChangelogMarker(CHANGELOG_READ_VERSION_KEY, readVersion);
+    writeChangelogMarker(CHANGELOG_READ_DATE_KEY, readDate);
+    changelogCache = { ...changelogCache, readVersion, readDate };
+    try {
+        localStorage.setItem(CHANGELOG_CACHE_KEY, JSON.stringify(changelogCache));
+    } catch (_) {}
     updateChangelogBadge();
 }
 
@@ -6801,7 +7034,14 @@ async function loadChangelog(force = false, options = {}) {
         .then(data => {
             changelogLoaded = true;
             const items = data && data.items || [];
-            changelogCache = { version: cacheVersion, serverVersion: data && data.version || '', items, savedAt: Date.now() };
+            changelogCache = {
+                version: cacheVersion,
+                serverVersion: data && data.version || '',
+                items,
+                savedAt: Date.now(),
+                readVersion: readChangelogMarker(CHANGELOG_READ_VERSION_KEY),
+                readDate: readChangelogMarker(CHANGELOG_READ_DATE_KEY),
+            };
             try {
                 localStorage.setItem(CHANGELOG_CACHE_KEY, JSON.stringify(changelogCache));
             } catch (_) {}
@@ -7047,8 +7287,23 @@ function getCustomTagDef(flag) {
     return (CUSTOM_TAG_DEFS && CUSTOM_TAG_DEFS[normalized]) || null;
 }
 
+function normalizeStatusIntroKey(statusId) {
+    const raw = String(statusId || '').trim();
+    const comparable = raw.toLowerCase().replace(/[\s-]+/g, '_');
+    if (
+        raw === '魔法邪眼'
+        || comparable === 'magic_nazar'
+        || comparable.endsWith(':magic_nazar')
+    ) {
+        return 'magic_nazar';
+    }
+    return raw;
+}
+
 function getCustomStatusDef(statusId) {
-    return (CUSTOM_STATUS_DEFS && CUSTOM_STATUS_DEFS[statusId]) || null;
+    const raw = String(statusId || '').trim();
+    const normalized = normalizeStatusIntroKey(raw);
+    return (CUSTOM_STATUS_DEFS && (CUSTOM_STATUS_DEFS[raw] || CUSTOM_STATUS_DEFS[normalized])) || null;
 }
 
 const CORE_REGISTRY_I18N = {
@@ -7735,6 +7990,10 @@ function getAllStatusDefs() {
     const statusGalleryAliases = new Map([
         ['jungle:root_status', 'root_status'],
         ['jungle:root', 'root_status'],
+        ['magic_nazar', 'magic_nazar'],
+        ['Magic Nazar', 'magic_nazar'],
+        ['魔法邪眼', 'magic_nazar'],
+        ['vanilla:magic_nazar', 'magic_nazar'],
         ['魔力封锁', 'magic_blocked'],
         ['ocean:blood_debt', 'blood_debt'],
         ['troll_cards:magic_blocked', 'magic_blocked'],
@@ -7747,7 +8006,7 @@ function getAllStatusDefs() {
         { key: 'fire', label: UI.status_fire, desc: termLib.F ? termLib.F.desc : '', color: COLORS.fire },
         { key: 'toxic', label: UI.status_toxic, desc: termLib.toxic ? termLib.toxic.desc : '', color: '#6C3483' },
         { key: 'triangle', label: UI.status_triangle || '三角形', desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
-        { key: 'nazar', label: UI.status_nazar, desc: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', color: COLORS.magic },
+        { key: 'nazar', label: UI.status_nazar, desc: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', color: COLORS.magic },
         { key: 'magic_nazar', label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'dodge', label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。自己回合开始时清空层数。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
@@ -7756,7 +8015,7 @@ function getAllStatusDefs() {
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
-        { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；在己方下一名可行动玩家行动前死亡。', color: '#1E8449' },
+        { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；在己方下一名可行动玩家回合结束后死亡。', color: '#1E8449' },
         { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -7836,6 +8095,7 @@ const STATUS_ICON_KEYS = new Set([
 function normalizeStatusIconKey(key) {
     const raw = String(key || '').trim();
     if (!raw) return '';
+    if (normalizeStatusIntroKey(raw) === 'magic_nazar') return 'magic_nazar';
     if (raw === 'arctic:frost' || raw === '霜冻') return 'frost';
     if (raw === 'jungle:fragile') return 'fragile';
     if (raw === 'jungle:shield') return 'shield';
@@ -9082,8 +9342,9 @@ function leaveSpectateAction() {
         return;
     }
     clearOpponentDisconnectModal();
+    const context = currentMatchActionContext();
     clearActiveMatchRoute('leave_spectate');
-    if (socket) socket.emit('leave_spectate', {});
+    if (socket) socket.emit('leave_spectate', context);
 }
 
 function closeAfkCheckOverlay() {
@@ -9822,7 +10083,14 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     normalizeFlagList(cardDict.disabled_flags || []).forEach(flag => flags.delete(flag));
     const ownerId = normalizePlayerId(ownerState && ownerState.player_id);
     const currentPlayerId = normalizePlayerId(gameState && gameState.current_player);
-    const isOwnersActiveTurn = ownerId == null || currentPlayerId == null || ownerId === currentPlayerId;
+    const livePenaltyPhases = new Set(['action', 'response', 'choice']);
+    const isLivePenaltyPhase = !!gameState
+        && !gameState.game_over
+        && livePenaltyPhases.has(String(gameState.phase || '').toLowerCase());
+    const isOwnersActiveTurn = isLivePenaltyPhase
+        && ownerId != null
+        && currentPlayerId != null
+        && ownerId === currentPlayerId;
     const playedThisTurn = isOwnersActiveTurn && ownerState && ownerState.cards_played_this_turn
         ? ownerState.cards_played_this_turn
         : null;
@@ -11325,14 +11593,14 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
             dmg = Math.max(1, Math.floor(dmg * (1 - reduction)));
         }
         if (precisionDodged) dmg = Math.ceil(dmg / 2);
-        if (nazarStacks > 0) {
+        dmg = Math.max(0, dmg - armor - rootArmor + fragile);
+        if (dmg > 0 && nazarStacks > 0) {
             const original = dmg;
             dmg = Math.max(1, dmg - 9);
             if (original >= 10) {
                 nazarStacks = Math.max(0, nazarStacks - 1);
             }
         }
-        dmg = Math.max(0, dmg - armor - rootArmor + fragile);
         if (sponge && dmg > 0) {
             spongePoison += Math.min(10, Math.floor(dmg / 2));
             dmg = 0;
@@ -12171,7 +12439,7 @@ function getTermIntroLibrary() {
         temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，打出后清除。', en: 'Increases E cost for this play only, then clears after being played.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを増やし、使用後に消えます。' }), color: '#795548' },
         temp_magic_heavy: { label: UI.tag_temp_magic_heavy || 'Temporary Magic Heavy', desc: lt({ zh: '本次打出时 M 花费增加对应层数，打出后清除。', en: 'Increases M cost for this play only, then clears after being played.', fr: 'Augmente le coût M pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ M コストを増やし、使用後に消えます。' }), color: '#7A5CFF' },
         floating: { label: UI.tag_floating || 'Floating', desc: lt({ zh: '打出后若本应进入弃牌堆，则洗入抽牌堆随机位置。', en: 'After being played, if it would enter discard, it is shuffled into the deck instead.', fr: 'Après utilisation, si elle devait aller dans la défausse, elle est mélangée dans le deck à la place.', ja: '使用後、本来捨て札に行く場合、代わりに山札へランダムに戻ります。' }), color: '#1687B8' },
-        nazar: { label: UI.status_nazar || lt({ zh: '邪眼', en: 'Nazar', fr: 'Nazar', ja: 'ナザール' }), desc: lt({ zh: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', en: 'While present, physical damage you take that is 9 or less becomes 1. Physical damage of 10 or more is reduced by 9, then this loses 1 stack.', fr: 'Tant qu’il existe, les dégâts physiques subis de 9 ou moins deviennent 1. Les dégâts physiques de 10 ou plus sont réduits de 9, puis cet état perd 1 charge.', ja: '存在中、自分が受ける9以下の物理ダメージは1になります。10以上の物理ダメージは9減少し、その後1層減ります。' }), color: COLORS.magic },
+        nazar: { label: UI.status_nazar || lt({ zh: '邪眼', en: 'Nazar', fr: 'Nazar', ja: 'ナザール' }), desc: lt({ zh: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', en: 'After armor resolves, 1-9 physical damage you would take becomes 1. At 10 or more, reduce it by 9 and remove 1 stack.', fr: 'Après l’armure, les dégâts physiques subis de 1 à 9 deviennent 1. À partir de 10, ils sont réduits de 9 et cet effet perd 1 charge.', ja: '護甲の計算後、受ける物理ダメージが1～9なら1になります。10以上なら9減少し、1層減ります。' }), color: COLORS.magic },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs 1E or less is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement 1E ou moins est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に1E以下消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
         dodge: { label: UI.status_dodge || lt({ zh: '闪避', en: 'Dodge', fr: 'Esquive', ja: '回避' }), desc: lt({ zh: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。自己回合开始时清空层数。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. Clear all stacks at the start of your turn. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Retirez toutes les charges au début de votre tour. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。自分のターン開始時に全層を消去します。状態免疫中は蓄積できますが発動も消費もされません。' }), color: COLORS.guard },
         equipment_armor: { label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: lt({ zh: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。玩家回合结束时，该玩家所有装备的装备护甲-1。', en: 'If the equipment would be destroyed, prevent that destruction and consume 1 Equipment Armor. At the end of a player turn, all that player’s equipment loses 1 Equipment Armor.', fr: 'Si l’équipement devait être détruit, empêche cette destruction et consomme 1 Armure d’équipement. À la fin du tour d’un joueur, tout son équipement perd 1 Armure d’équipement.', ja: '装備が破壊される時、それを防ぎ装備護甲を1層消費します。プレイヤーのターン終了時、そのプレイヤーの全装備の装備護甲が1層減ります。' }), color: COLORS.indestructible },
@@ -12461,9 +12729,10 @@ function collectCardIntroTerms(cardDict) {
 }
 
 function getStatusIntroItem(statusInfo) {
-    const key = statusInfo && statusInfo.key;
-    const customDef = (statusInfo && statusInfo.customDef) || getCustomStatusDef(key);
-    if (customDef) {
+    const rawKey = statusInfo && statusInfo.key;
+    const key = normalizeStatusIntroKey(rawKey);
+    const customDef = (statusInfo && statusInfo.customDef) || getCustomStatusDef(rawKey);
+    if (customDef && key !== 'magic_nazar') {
         return {
             key,
             label: getRegistryText(customDef, 'name', key),
@@ -12478,7 +12747,7 @@ function getStatusIntroItem(statusInfo) {
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
         armor: { label: UI.status_armor || '护甲', desc: getTermIntroLibrary().A.desc, color: COLORS.armor_text },
         triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
-        nazar: { label: UI.status_nazar, desc: '存在时，自己所受≤9的物理伤害变为1。若受到≥10的物理伤害，则将其减少9，且层数-1。', color: COLORS.magic },
+        nazar: { label: UI.status_nazar, desc: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', color: COLORS.magic },
         magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: getTermIntroLibrary().invincible.desc, color: COLORS.elixir, iconKey: 'invincible' },
@@ -12490,7 +12759,7 @@ function getStatusIntroItem(statusInfo) {
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         magic_blocked: { label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
-        bandage: { label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；在己方下一名可行动玩家行动前死亡。', color: '#1E8449' },
+        bandage: { label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；在己方下一名可行动玩家回合结束后死亡。', color: '#1E8449' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -12538,7 +12807,7 @@ function getStatusIntroItem(statusInfo) {
         blood_debt: { label: lt({ zh: '血债', en: 'Blood Debt', fr: 'Dette de sang', ja: '血債' }), desc: lt({ zh: builtIns.blood_debt.desc, en: 'When physical damage is taken, this effect clears and the attacker gains E equal to its stacks.', fr: 'Quand des dégâts physiques sont subis, cet effet disparaît et l’attaquant gagne E égal aux charges.', ja: '物理ダメージを受けるとこの効果は消え、攻撃者は層数分のEを得ます。' }) },
         unable_counter: { label: lt({ zh: '无法反制', en: 'Unable to Counter', fr: 'Contre impossible', ja: '反制不能' }), desc: lt({ zh: builtIns.unable_counter.desc, en: 'Discards counter cards from left to right equal to its stacks, then reduces those stacks. If stacks remain, drawn counter cards are discarded and reduce stacks.', fr: 'Défausse de gauche à droite autant de contres que de charges, puis réduit ces charges. S’il en reste, les contres piochés sont défaussés et réduisent les charges.', ja: '層数分だけ左から反制牌を弃牌に置き、その分層数を減らします。層数が残る間、引いた反制牌も弃牌に置かれ層数が減ります。' }) },
         untargetable: { label: UI.status_untargetable, desc: lt({ zh: builtIns.untargetable.desc, en: 'Cannot be selected by some targeted effects. Loses 1 stack at the start of your turn.', fr: 'Ne peut pas être choisi par certains effets ciblés. Perd 1 charge au début de votre tour.', ja: '一部の対象指定効果で選べません。自分ターン開始時に1層減ります。' }) },
-        bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'When lethal damage is taken, set H to 1 and become invincible; die before the next player on your team who can act begins acting.', fr: 'En subissant des dégâts mortels, fixe H à 1 et devient invincible ; meurt avant que le prochain joueur de votre équipe capable d’agir ne commence son action.', ja: '致命ダメージを受ける時、Hを1にして無敵になります。次に行動可能な味方プレイヤーが行動を始める前に死亡します。' }) },
+        bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'When lethal damage is taken, set H to 1 and become invincible; die after the next player on your team who can act ends their turn.', fr: 'En subissant des dégâts mortels, fixe H à 1 et devient invincible ; meurt à la fin du tour du prochain joueur de votre équipe capable d’agir.', ja: '致命ダメージを受ける時、Hを1にして無敵になります。次に行動可能な味方プレイヤーのターン終了後に死亡します。' }) },
         sluggish: { label: UI.status_sluggish, desc: lt({ zh: builtIns.sluggish.desc, en: 'Draw that many fewer cards each turn.', fr: 'Pioche autant de cartes en moins à chaque tour.', ja: '毎ターンその層数分だけドローが減ります。' }) },
         overload: { label: UI.status_overload, desc: lt({ zh: builtIns.overload.desc, en: 'At turn start, lose E equal to its stacks down to 0, then clear it.', fr: 'Au début du tour, perdez E égal aux charges jusqu’à 0, puis l’état disparaît.', ja: 'ターン開始時、層数分のEを0まで失い、その後消えます。' }) },
         foresight: { label: UI.status_foresight, desc: lt({ zh: builtIns.foresight.desc, en: 'At turn-start draw, you may discard up to that many hand cards, then draw the same number.', fr: 'Lors de la pioche de début de tour, vous pouvez défausser jusqu’à autant de cartes en main, puis en piocher autant.', ja: 'ターン開始ドロー時、層数まで手札を捨て、その枚数を引けます。' }) },
@@ -13682,6 +13951,12 @@ function connectSocket(serverUrl) {
     bindSocketEvent('game_phase', (data) => {
         debugLog('[client] game_phase:', data.phase);
         const nextPhase = data.phase;
+        const previousPhase = phase;
+        if (nextPhase === 'lobby') {
+            if (!shouldAcceptNetworkMatchPayload(data, 'game_phase:lobby', { allowSwitch: false })) return;
+        } else if (!shouldAcceptNetworkMatchPayload(data, 'game_phase')) {
+            return;
+        }
         if (nextPhase !== 'lobby') dismissLobbyInvitationModal();
         if (!data.solo) soloMode = false;
         if (nextPhase === 'lobby' && transientMatchRecovery) {
@@ -13696,6 +13971,7 @@ function connectSocket(serverUrl) {
             clearTransientMatchRecovery(`game_phase:${nextPhase}`);
         }
         if (isNetworkMatchPhase(nextPhase)) markNetworkMatchTransition(`game_phase:${nextPhase}`);
+        prepareRuntimeForBattleEntry(previousPhase, nextPhase);
         phase = nextPhase;
         rememberActiveMatchRoute(data || {}, `game_phase:${nextPhase}`);
         if (!data.spectating) {
@@ -13722,24 +13998,29 @@ function connectSocket(serverUrl) {
             resetRematchUiState();
             showView('view-game');
             updateStatus(UI.game_loading || 'Loading...');
+            scheduleBattleStartupResync(data || {}, 'game_phase_playing');
         } else if (phase === 'game_over') {
             closePileViewerModal();
             updateStatus(UI.game_over);
         } else if (phase === 'lobby') {
             allowLobbyTransition('game_phase:lobby');
+            clearNetworkMatchStateForLobby();
             showView('view-lobby');
             updateStatus(getViewStatusText('view-lobby'));
         } else if (phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
             showView('view-game');
+            scheduleBattleStartupResync(data || {}, `game_phase_${phase}`);
         }
         syncBattleLogMatch(data || {});
         syncPhaseChatMatch(data || {});
     });
     bindSocketEvent('draft_state', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'draft_state')) return;
         if (shouldIgnoreLatePregamePayload(data, 'draft_state')) return;
         clearTransientMatchRecovery('draft_state');
         markNetworkMatchTransition('draft_state');
         rememberActiveMatchRoute({ ...(data || {}), phase: 'draft' }, 'draft_state');
+        settleServerCompletedEventSubChoice(data);
         const previousDraftState = draftState;
         const oldOptIds = draftState && draftState.options ? draftState.options.map(o => o.def_id) : [];
         const newOptIds = data.options ? data.options.map(o => o.def_id) : [];
@@ -13756,6 +14037,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('pregame_status_update', (data) => {
         if (!data || !draftState) return;
+        if (!shouldAcceptNetworkMatchPayload(data, 'pregame_status_update', { allowSwitch: false })) return;
         if (shouldIgnoreLatePregamePayload(data, 'pregame_status_update')) return;
         if (phaseContextMatchKey(data) && phaseContextMatchKey(draftState) && phaseContextMatchKey(data) !== phaseContextMatchKey(draftState)) return;
         draftState = {
@@ -13768,6 +14050,7 @@ function connectSocket(serverUrl) {
             selected_opening_events: data.selected_opening_events || draftState.selected_opening_events || {},
             total_rounds: data.total_rounds || draftState.total_rounds,
             round: data.round || draftState.round,
+            your_status: data.your_status || draftState.your_status,
             pregame_timer_remaining: data.pregame_timer_remaining ?? draftState.pregame_timer_remaining,
             pregame_timer_total: data.pregame_timer_total ?? draftState.pregame_timer_total,
             pregame_timer_status: data.pregame_timer_status || draftState.pregame_timer_status,
@@ -13780,6 +14063,7 @@ function connectSocket(serverUrl) {
             watching_pregame_timer_status: data.watching_pregame_timer_status || draftState.watching_pregame_timer_status,
             watching_pregame_timer_paused: data.watching_pregame_timer_paused ?? draftState.watching_pregame_timer_paused,
         };
+        settleServerCompletedEventSubChoice(data);
         if (data.your_id != null) playerId = data.your_id;
         syncRoomChatHistory(data || {});
         updateDraftInfo(draftState);
@@ -13787,11 +14071,13 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('pregame_timer_update', (data) => {
         if (!data) return;
+        if (!shouldAcceptNetworkMatchPayload(data, 'pregame_timer_update', { allowSwitch: false })) return;
         if (shouldIgnoreLatePregamePayload(data, 'pregame_timer_update')) return;
         if (draftState && phaseContextMatchKey(data) && phaseContextMatchKey(draftState) && phaseContextMatchKey(data) !== phaseContextMatchKey(draftState)) return;
         if (eventSelectData && phaseContextMatchKey(data) && phaseContextMatchKey(eventSelectData) && phaseContextMatchKey(data) !== phaseContextMatchKey(eventSelectData)) return;
         rememberPregameTimerSnapshot(data);
         if (draftState) {
+            draftState.your_status = data.your_status || draftState.your_status;
             draftState.pregame_timer_remaining = data.pregame_timer_remaining;
             draftState.pregame_timer_total = data.pregame_timer_total;
             draftState.pregame_timer_status = data.pregame_timer_status;
@@ -13805,6 +14091,7 @@ function connectSocket(serverUrl) {
             draftState.watching_pregame_timer_paused = data.watching_pregame_timer_paused;
         }
         if (eventSelectData) {
+            eventSelectData.your_status = data.your_status || eventSelectData.your_status;
             eventSelectData.pregame_timer_remaining = data.pregame_timer_remaining;
             eventSelectData.pregame_timer_total = data.pregame_timer_total;
             eventSelectData.pregame_timer_status = data.pregame_timer_status;
@@ -13817,10 +14104,12 @@ function connectSocket(serverUrl) {
             eventSelectData.watching_pregame_timer_status = data.watching_pregame_timer_status;
             eventSelectData.watching_pregame_timer_paused = data.watching_pregame_timer_paused;
         }
+        settleServerCompletedEventSubChoice(data);
         updatePregameTimerDisplay(data, pregameTimerDisplayTarget(data));
     });
     bindSocketEvent('event_select', (data) => {
         debugLog('[client] event_select');
+        if (!shouldAcceptNetworkMatchPayload(data, 'event_select')) return;
         if (shouldIgnoreLatePregamePayload(data, 'event_select')) return;
         clearTransientMatchRecovery('event_select');
         markNetworkMatchTransition('event_select');
@@ -13838,6 +14127,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('event_reveal', (data) => {
         debugLog('[client] event_reveal');
+        if (!shouldAcceptNetworkMatchPayload(data, 'event_reveal')) return;
         if (shouldIgnoreLatePregamePayload(data, 'event_reveal')) return;
         clearTransientMatchRecovery('event_reveal');
         markNetworkMatchTransition('event_reveal');
@@ -13856,6 +14146,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('event_sub_choice', (data) => {
         debugLog('[client] event_sub_choice');
+        if (!shouldAcceptNetworkMatchPayload(data, 'event_sub_choice')) return;
         if (shouldIgnoreLatePregamePayload(data, 'event_sub_choice')) return;
         clearTransientMatchRecovery('event_sub_choice');
         markNetworkMatchTransition('event_sub_choice');
@@ -13871,8 +14162,6 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('state_update', (data) => {
         debugLog('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
-        markNetworkMatchTransition('state_update');
-        rememberActiveMatchRoute(data || {}, 'state_update');
         if (data && data.spectating && pendingSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(pendingSpectateRoomId)) {
             debugLog('[client] ignored stale spectate state for room=', data.room_id, 'pending=', pendingSpectateRoomId);
             return;
@@ -13885,6 +14174,9 @@ function connectSocket(serverUrl) {
             debugLog('[client] ignored spectate state for inactive room=', data.room_id, 'active=', activeSpectateRoomId);
             return;
         }
+        if (!shouldAcceptNetworkMatchPayload(data, 'state_update')) return;
+        markNetworkMatchTransition('state_update');
+        rememberActiveMatchRoute(data || {}, 'state_update');
         if (!isCompleteBattleStatePayload(data)) {
             gameStateResyncNeeded = true;
             console.warn('[client] incomplete battle state ignored; requesting a full snapshot', {
@@ -13905,10 +14197,13 @@ function connectSocket(serverUrl) {
         }
         gameStateResyncNeeded = false;
         clearGameStateResyncTimer();
+        clearBattleStartupResync();
         clearTransientMatchRecovery('state_update');
+        const previousPhase = phase;
         const previousGameState = gameState;
         data = preserveGameOverLogState(data, previousGameState);
         rememberTurnTimerSnapshot(data);
+        prepareRuntimeForBattleEntry(previousPhase, data.phase);
         clearTargetPickUi();
         soloMode = !!data.solo;
         syncBattleLogMatch(data || {});
@@ -13947,9 +14242,11 @@ function connectSocket(serverUrl) {
             if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
             if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
         }
+        schedulePendingResponseRecoveryFromState(data);
         if (data.pending_choice == null && choicePending) {
             invalidateChoiceRequest();
         }
+        schedulePendingChoiceRecoveryFromState(data);
         if (pendingPlayCard && data.you && data.you.hand) {
             const stillInHand = data.you.hand.some(c => c.instance_id === pendingPlayCard.instance_id);
             if (!stillInHand) {
@@ -13977,6 +14274,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('turn_timer_update', (data) => {
         if (!data || !gameState) return;
+        if (!shouldAcceptNetworkMatchPayload(data, 'turn_timer_update', { allowSwitch: false })) return;
         if (data.room_id != null && gameState.room_id != null && Number(data.room_id) !== Number(gameState.room_id)) return;
         rememberTurnTimerSnapshot(data);
         gameState.turn_timer_remaining = data.turn_timer_remaining;
@@ -13989,9 +14287,11 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('solo_state', (data) => {
         clearPendingSoloFallback();
+        const previousPhase = phase;
         const previousGameState = gameState;
         data = preserveGameOverLogState(data, previousGameState);
         rememberTurnTimerSnapshot(data);
+        prepareRuntimeForBattleEntry(previousPhase, data.phase);
         clearTargetPickUi();
         soloMode = true;
         tutorialMode = !!data.tutorial || tutorialMode;
@@ -14013,6 +14313,10 @@ function connectSocket(serverUrl) {
             if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
             if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
         }
+        if (data.pending_choice == null && choicePending) {
+            invalidateChoiceRequest();
+        }
+        schedulePendingChoiceRecoveryFromState(data);
         const keepOptimisticForState = !!optimisticResourceOverride;
         clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
         if (phase === 'game_over') {
@@ -14042,7 +14346,9 @@ function connectSocket(serverUrl) {
     }
     });
     bindSocketEvent('response_request', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'response_request', { allowSwitch: false })) return;
         debugLog('[RESPONSE] response_request, counter_cards:', (data.counter_cards || []).length);
+        clearPendingResponseRecovery();
         clearPendingServerAction({ keepOptimistic: true });
         responsePending = true;
         responseData = data;
@@ -14050,24 +14356,30 @@ function connectSocket(serverUrl) {
         if (tutorialMode) scheduleTutorialOverlayRefresh(30);
     });
     bindSocketEvent('ally_consent_request', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'ally_consent_request', { allowSwitch: false })) return;
         showAllyConsentUI(data);
     });
     bindSocketEvent('surrender_consent_request', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'surrender_consent_request', { allowSwitch: false })) return;
         showSurrenderConsentUI(data);
     });
-    bindSocketEvent('surrender_consent_waiting', () => {
+    bindSocketEvent('surrender_consent_waiting', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'surrender_consent_waiting', { allowSwitch: false })) return;
         flashStatus(UI.surrender_waiting_teammate, 3000);
     });
     bindSocketEvent('surrender_consent_result', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'surrender_consent_result', { allowSwitch: false })) return;
         const accepted = !!(data && data.accepted);
         flashStatus(accepted ? UI.surrender_confirmed : UI.surrender_declined, 2600, accepted ? undefined : 'error');
     });
     bindSocketEvent('choice_request', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'choice_request', { allowSwitch: false })) return;
         clearPendingServerAction({ keepOptimistic: true });
         pendingPlayCard = null;
         beginChoiceRequest(data);
     });
     bindSocketEvent('v2_ui_request', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'v2_ui_request', { allowSwitch: false })) return;
         clearPendingServerAction({ keepOptimistic: true });
         pendingPlayCard = null;
         clearSelectedPlayCard();
@@ -14258,6 +14570,7 @@ function connectSocket(serverUrl) {
         }
     });
     bindSocketEvent('opponent_disconnected', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'opponent_disconnected', { allowSwitch: false })) return;
         if (data && data.timeout) {
             if (data.stay) {
                 clearOpponentDisconnectModal();
@@ -14327,6 +14640,7 @@ function connectSocket(serverUrl) {
         returnHomeAfterSocketDisconnect(UI.reconnect_timeout || UI.disconnected || '重连超时');
     });
     bindSocketEvent('rematch_requested', (data = {}) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'rematch_requested', { allowSwitch: false })) return;
         debugLog('[client] rematch_requested');
         if (data.mode === '2v2' || (gameState && gameState.mode === '2v2')) {
             if (phase === 'game_over') updateGameOverRematchButton(gameState);
@@ -14338,11 +14652,13 @@ function connectSocket(serverUrl) {
         updateStatus(UI.opponent_rematch);
     });
     bindSocketEvent('rematch_state', (data = {}) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'rematch_state', { allowSwitch: false })) return;
         updateRematchState(data);
         if (data.mode === '2v2') rematchRequestedByOpponent = false;
         if (phase === 'game_over') updateGameOverRematchButton(gameState);
     });
     bindSocketEvent('player_returned_lobby', (data = {}) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'player_returned_lobby', { allowSwitch: false })) return;
         const name = data.player_name || data.nickname || '';
         updateRematchState({
             ...(rematchState || {}),
@@ -14364,6 +14680,7 @@ function connectSocket(serverUrl) {
             debugLog('[client] ignored stale spectate_enter for room=', data.room_id, 'pending=', pendingSpectateRoomId);
             return;
         }
+        if (!shouldAcceptNetworkMatchPayload(data, 'spectate_enter')) return;
         pendingSpectateRoomId = null;
         activeSpectateRoomId = data && data.room_id != null ? Number(data.room_id) : null;
         isSpectating = true;
@@ -14371,7 +14688,8 @@ function connectSocket(serverUrl) {
         phase = 'playing';
         showView('view-game');
     });
-    bindSocketEvent('spectate_leave', () => {
+    bindSocketEvent('spectate_leave', (data = {}) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'spectate_leave', { allowSwitch: false })) return;
         allowLobbyTransition('spectate_leave');
         clearNetworkMatchStateForLobby();
         pendingSpectateRoomId = null;
@@ -19737,6 +20055,9 @@ function updateFeedbackReplayField() {
 function renderFeedbackModal() {
     const staffTab = $('feedback-tab-staff');
     if (staffTab) staffTab.classList.toggle('hidden', !feedbackState.is_staff);
+    const handlingTab = $('feedback-tab-handling');
+    if (handlingTab) handlingTab.classList.toggle('hidden', !feedbackState.is_staff);
+    if (!feedbackState.is_staff && feedbackHandlingOpen) setFeedbackHandlingView(false);
     document.querySelectorAll('[data-feedback-tab]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.feedbackTab === activeFeedbackTab);
     });
@@ -19751,6 +20072,34 @@ function renderFeedbackModal() {
     renderFeedbackThreads();
     renderFeedbackMessages();
     updateFeedbackBadge();
+}
+
+function setFeedbackHandlingView(show) {
+    const modal = $('feedback-modal');
+    const inner = modal?.querySelector('.feedback-inner');
+    const frame = $('feedback-handling-frame');
+    if (!inner || !frame) return;
+    const shouldShow = !!show && !!feedbackState.is_staff;
+    feedbackHandlingOpen = shouldShow;
+    inner.classList.toggle('handling-open', shouldShow);
+    frame.classList.toggle('hidden', !shouldShow);
+    if (shouldShow && !frame.getAttribute('src')) {
+        frame.setAttribute('src', '/feedback/handling-pane');
+    }
+}
+
+function handleFeedbackHandlingMessage(event) {
+    const frame = $('feedback-handling-frame');
+    if (
+        !frame
+        || event.origin !== window.location.origin
+        || event.source !== frame.contentWindow
+        || !event.data
+        || event.data.type !== 'gtn:feedback-handling-exit'
+    ) {
+        return;
+    }
+    setFeedbackHandlingView(false);
 }
 
 async function loadFeedbackThreads(staffView = false) {
@@ -19864,7 +20213,11 @@ async function toggleFeedbackModal(show) {
     const modal = $('feedback-modal');
     if (!modal) return;
     modal.classList.toggle('hidden', !show);
-    if (!show) return;
+    if (!show) {
+        setFeedbackHandlingView(false);
+        return;
+    }
+    setFeedbackHandlingView(false);
     activeFeedbackTab = feedbackState.is_staff && activeFeedbackTab === 'staff' ? 'staff' : 'send';
     activeFeedbackStaffView = activeFeedbackTab === 'staff';
     if (!currentAccount) {
@@ -20096,6 +20449,8 @@ function stopLocalSoloRuntime() {
 }
 
 function handleLocalGamePhase(data) {
+    const previousPhase = phase;
+    prepareRuntimeForBattleEntry(previousPhase, data.phase);
     phase = data.phase || phase;
     if (data.solo) soloMode = true;
     if (data.tutorial) tutorialMode = true;
@@ -20112,29 +20467,32 @@ function handleLocalGamePhase(data) {
 
 function handleLocalSoloState(data) {
     applyClientSoloSkins(data);
+    const previousPhase = phase;
     const previousGameState = gameState;
     soloMode = true;
     tutorialMode = !!data.tutorial || tutorialMode;
     isSpectating = false;
     spectateCardDataKey = '';
     syncBattleLogMatch(data || {});
+    prepareRuntimeForBattleEntry(previousPhase, data.phase);
     gameState = data;
     phase = data.phase || phase;
     playerId = data.your_id;
     if (data.pending_response == null && !responsePending) {
         pendingPlayCard = null;
     }
-    if (data.pending_response === null && responsePending) {
-        responsePending = false;
+        if (data.pending_response === null && responsePending) {
+            responsePending = false;
         responseData = null;
         removeFloatingCardPreview();
         const rp = $('response-panel');
         if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
-        if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
-    }
-    if (data.pending_choice == null && choicePending) {
+            if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
+        }
+        if (data.pending_choice == null && choicePending) {
         invalidateChoiceRequest();
     }
+    schedulePendingChoiceRecoveryFromState(data);
     const keepOptimisticForState = !!optimisticResourceOverride;
     clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
     if (phase === 'game_over') {
@@ -20171,6 +20529,7 @@ function handleLocalSoloMessage(event) {
     } else if (message.type === 'solo_state') {
         handleLocalSoloState(data);
     } else if (message.type === 'response_request') {
+        clearPendingResponseRecovery();
         clearPendingServerAction({ keepOptimistic: true });
         responsePending = true;
         responseData = data;
@@ -20226,7 +20585,10 @@ function emitSoloEvent(eventName, payload = {}) {
 
 function emitModeEvent(soloEventName, onlineEventName, payload = {}) {
     if (soloMode) emitSoloEvent(soloEventName, payload);
-    else if (socket) socket.emit(onlineEventName, payload);
+    else if (socket) socket.emit(onlineEventName, {
+        ...(payload || {}),
+        ...currentMatchActionContext(),
+    });
 }
 
 function performSoloHistoryAction(direction) {
@@ -20639,6 +21001,10 @@ function getGameShortcutContext() {
         addShortcutNavigationActions(scene, navigation, { id: 'battle-actions' });
 
         if (!isSpectating && !replayMode) {
+            const mobileConfirm = $('mobile-play-ok');
+            if (isShortcutElementVisible(mobileConfirm)) {
+                addShortcutSceneAction(scene, 'confirm', [mobileConfirm]);
+            }
             const endTurnButtons = [$('btn-end-turn'), $('classic-end-turn')].filter(isShortcutElementVisible);
             if (endTurnButtons.length) addShortcutSceneAction(scene, 'end_turn', endTurnButtons);
             if (selectedPlayCardId != null || classicSelectedTriggerEquipmentId != null) {
@@ -20995,6 +21361,11 @@ function activateShortcutSlot(baseIndex, options = {}) {
     if (sceneSlot) {
         if (!isKeyboardNavigationCandidate(sceneSlot)) return false;
         setKeyboardNavigationFocus(sceneSlot, scene.navigationId || scene.id || 'shortcut-slots', { scroll: false });
+        const battleHandCard = activeViewId === 'view-game'
+            && !!sceneSlot.closest('#classic-hand-fan, #you-hand');
+        if (battleHandCard) {
+            return selectHandCardByShortcutIndex(index, options.event || null);
+        }
         if (sceneSlot.classList.contains('reorder-deck-entry')) return true;
         sceneSlot.click();
         return true;
@@ -21062,6 +21433,11 @@ function activateShortcutTarget(kind) {
 function clickShortcutPrimaryButton() {
     const blockingRoot = topmostShortcutBlockingRoot();
     const surface = getKeyboardNavigationSurface();
+    const mobileConfirm = $('mobile-play-ok');
+    if (!blockingRoot && mobileConfirm && isShortcutElementVisible(mobileConfirm)) {
+        mobileConfirm.click();
+        return true;
+    }
     const hasCurrentFocus = (
         keyboardNavigationElement
         && keyboardNavigationContext === surface.id
@@ -21104,11 +21480,6 @@ function clickShortcutPrimaryButton() {
             selected.click();
             return true;
         }
-    }
-    const mobileConfirm = $('mobile-play-ok');
-    if (mobileConfirm && isShortcutElementVisible(mobileConfirm)) {
-        mobileConfirm.click();
-        return true;
     }
     const revealStart = document.querySelector(
         '#view-event-select:not(.hidden) .event-reveal-start-btn:not(:disabled)'
@@ -22325,13 +22696,13 @@ async function buildSoloEventSubChoice(eventId, deck, label) {
     if (eventId === 3) {
         const eligible = deck.filter(item => {
             const def = getCardDef(item && item.def_id);
-            return def && def.id !== 'Light' && item.def_id !== 'Light' && def.card_type !== 'thorn';
+            return def && def.card_type === 'thorn';
         });
         const selected = await showSetupCardMultiSelect(
             eligible,
             5,
             `${label} ${UI.choose_light_cards || '选择光之洗礼牌'}`,
-            { min: 0, excludeDefIds: ['Light'] }
+            { min: 0 }
         );
         if (!selected) return false;
         return { convert_def_ids: selected.map(item => item.def_id) };
@@ -22945,7 +23316,7 @@ function maybeRequestPregameStateResync(data) {
     if (!socket || !socket.connected || !localPregameTimerSnapshot) return;
     if (localPregameTimerSnapshot.paused) return;
     const phaseName = phase || (data && data.phase);
-    if (!['draft', 'event_select', 'event_reveal'].includes(phaseName)) return;
+    if (!['draft', 'event_select', 'event_reveal', 'event_sub_choice'].includes(phaseName)) return;
     const elapsed = Math.max(0, (performance.now() - localPregameTimerSnapshot.receivedAt) / 1000);
     const overdue = elapsed - Number(localPregameTimerSnapshot.remaining || 0);
     if (!Number.isFinite(overdue) || overdue < 2) return;
@@ -23287,6 +23658,26 @@ async function onEventSelect(eventId) {
     // Server will send draft phase immediately, no need to show waiting
 }
 
+function settleServerCompletedEventSubChoice(data = {}) {
+    if (String(data.your_status || '') !== 'ready' || !activeEventSubChoiceKey) return false;
+    eventSelectData = { ...(eventSelectData || {}), your_status: 'ready' };
+    activeEventSubChoiceKey = '';
+    if (activeKeyboardReorderController) {
+        try { activeKeyboardReorderController.forceCancel(); } catch (_) {}
+    }
+    const prompt = $('game-prompt');
+    if (prompt && prompt.classList.contains('active')) {
+        const cancel = $('game-prompt-cancel');
+        if (cancel && typeof cancel.onclick === 'function') {
+            try { cancel.onclick(); } catch (_) { prompt.classList.remove('active'); }
+        } else {
+            prompt.classList.remove('active');
+        }
+    }
+    updateStatus(UI.event_waiting);
+    return true;
+}
+
 async function handleEventSubChoice(data) {
     updatePregameTimerDisplay(data, 'draft');
     const eventId = data.event_id;
@@ -23326,6 +23717,21 @@ async function handleEventSubChoice(data) {
         } else if (String(eventId) === '11') {
             subChoice = await showOpeningSequenceChoice(eventSelectData.draft_picks || [], UI.opening_sequence_title || '花序编排');
             if (subChoice === false) subChoice = null;
+        }
+        if (activeEventSubChoiceKey !== subChoiceKey) {
+            debugLog('[client] skipped setup choice already completed by server timeout', {
+                eventId,
+                matchKey: phaseContextMatchKey(data),
+            });
+            return;
+        }
+        if (isLiveBattleInteractionPhase(phase)) {
+            debugLog('[client] skipped stale pregame sub-choice after battle entry', {
+                eventId,
+                phase,
+                matchKey: phaseContextMatchKey(data),
+            });
+            return;
         }
         socket.emit('submit_event_sub_choice', { sub_choice: subChoice });
     } finally {
@@ -23375,7 +23781,7 @@ async function showLightConversionChoice() {
     const draftPicks = (eventSelectData.draft_picks || [])
         .filter(defId => {
             const def = getCardDef(defId);
-            return defId !== 'Light' && def && def.card_type !== 'thorn';
+            return def && def.card_type === 'thorn';
         })
         .map(defId => ({ def_id: defId }));
     if (!draftPicks.length) return null;
@@ -23582,6 +23988,65 @@ function phaseContextMatchKey(ctx) {
     return String(ctx.match_key || (ctx.room_id != null ? `room:${ctx.room_id}` : ''));
 }
 
+function rememberRetiredNetworkMatchKey(matchKey, reason = '') {
+    const key = String(matchKey || '').trim();
+    if (!key) return;
+    retiredNetworkMatchKeys.add(key);
+    while (retiredNetworkMatchKeys.size > MAX_RETIRED_NETWORK_MATCH_KEYS) {
+        retiredNetworkMatchKeys.delete(retiredNetworkMatchKeys.values().next().value);
+    }
+    if (reason) debugLog('[client] retired network match:', key, reason);
+}
+
+function retireActiveNetworkMatch(reason = '') {
+    const currentKey = activeNetworkMatchKey
+        || phaseContextMatchKey(gameState)
+        || phaseContextMatchKey(draftState)
+        || phaseContextMatchKey(eventSelectData);
+    if (currentKey) rememberRetiredNetworkMatchKey(currentKey, reason);
+    activeNetworkMatchKey = '';
+}
+
+function shouldAcceptNetworkMatchPayload(data, eventName = 'room_event', options = {}) {
+    if (!data || soloMode || replayMode || data.solo || data.replay) return true;
+    const incomingKey = phaseContextMatchKey(data);
+    if (!incomingKey) return true;
+    if (retiredNetworkMatchKeys.has(incomingKey)) {
+        debugLog('[client] ignored retired match payload:', eventName, incomingKey);
+        return false;
+    }
+    if (!activeNetworkMatchKey) {
+        activeNetworkMatchKey = incomingKey;
+        return true;
+    }
+    if (activeNetworkMatchKey === incomingKey) return true;
+    if (options.allowSwitch === false) {
+        debugLog('[client] ignored mismatched match payload:', eventName, incomingKey, 'active=', activeNetworkMatchKey);
+        return false;
+    }
+    rememberRetiredNetworkMatchKey(activeNetworkMatchKey, `superseded:${eventName}`);
+    activeNetworkMatchKey = incomingKey;
+    return true;
+}
+
+function currentMatchActionContext(source = null) {
+    const candidates = [source, gameState, draftState, eventSelectData];
+    for (const candidate of candidates) {
+        if (!candidate || candidate.room_id == null) continue;
+        const context = {
+            room_id: candidate.room_id,
+            match_key: phaseContextMatchKey(candidate),
+        };
+        if (context.match_key) return context;
+    }
+    const route = readActiveMatchRoute();
+    if (!route) return {};
+    return {
+        room_id: route.room_id || '',
+        match_key: route.match_key || '',
+    };
+}
+
 function isActiveBattlePhase(value = phase) {
     return ['playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(String(value || ''));
 }
@@ -23592,6 +24057,64 @@ function shouldIgnoreLatePregamePayload(data, eventName = 'pregame') {
     const currentKey = phaseContextMatchKey(gameState) || phaseContextMatchKey(draftState) || phaseContextMatchKey(eventSelectData);
     if (incomingKey && currentKey && incomingKey !== currentKey) return false;
     debugLog('[client] ignored late pregame payload after battle start:', eventName, 'phase=', phase, 'match=', incomingKey || currentKey);
+    return true;
+}
+
+function isLiveBattleInteractionPhase(value) {
+    return ['playing', 'action', 'draw', 'response', 'choice'].includes(String(value || ''));
+}
+
+function prepareRuntimeForBattleEntry(previousPhase, nextPhase) {
+    if (!isLiveBattleInteractionPhase(nextPhase)) return false;
+    if (isLiveBattleInteractionPhase(previousPhase)) return false;
+
+    // A pregame timeout can advance the server while a local setup prompt is
+    // still open. Resolve and invalidate that stale UI before the first battle
+    // snapshot arrives, otherwise its invisible overlay keeps the hand blocked.
+    invalidateChoiceRequest();
+    clearPendingResponseRecovery();
+    if (activeKeyboardReorderController) {
+        try { activeKeyboardReorderController.forceCancel(); } catch (_) {}
+    }
+    const prompt = $('game-prompt');
+    if (prompt && prompt.classList.contains('active')) {
+        const cancel = $('game-prompt-cancel');
+        if (cancel && typeof cancel.onclick === 'function') {
+            try { cancel.onclick(); } catch (_) { prompt.classList.remove('active'); }
+        } else {
+            prompt.classList.remove('active');
+        }
+    }
+    if (activeV2UiRequestId != null) hideModal();
+    cleanupDragState();
+    clearTargetPickUi();
+    clearPendingServerAction();
+    clearSelectedPlayCard({ skipRender: true });
+    removeFloatingCardPreview();
+    responsePending = false;
+    responseData = {};
+    pendingPlayCard = null;
+    activeV2UiRequestId = null;
+    optimisticResourceOverride = null;
+    pendingLocalResourceCosts = [];
+    pendingOptimisticResourceCosts = [];
+    activeEventSubChoiceKey = '';
+    if (responseTimerId) {
+        clearInterval(responseTimerId);
+        responseTimerId = null;
+    }
+    if (cardAnimationUnlockTimer) {
+        clearTimeout(cardAnimationUnlockTimer);
+        cardAnimationUnlockTimer = null;
+    }
+    cardAnimationLockUntil = 0;
+    document.body.classList.remove('server-action-pending', 'card-animation-lock', 'card-dragging');
+    const responsePanel = $('response-panel');
+    if (responsePanel) {
+        responsePanel.innerHTML = '';
+        responsePanel.classList.add('hidden');
+        responsePanel.classList.remove('visible', 'magic-salt-response-panel');
+    }
     return true;
 }
 
@@ -23614,6 +24137,8 @@ function resetMatchRuntimeState(options = {}) {
     }
     cleanupDragState();
     clearScheduledGameOver();
+    clearBattleStartupResync();
+    clearPendingResponseRecovery();
     clearPendingServerAction();
     clearSelectedPlayCard({ skipRender: true });
     removeFloatingCardPreview();
@@ -24644,41 +25169,11 @@ function renderClassicResourceOrbs(container, current, max, spend = 0, kind = 'e
 }
 
 function buildClassicResourceChunks(amount, maxSlots = 17) {
-    const total = Math.max(0, Math.floor(Number(amount) || 0));
-    let remaining = total;
-    const chunks = [];
-    if (total > 15) {
-        const tens = Math.floor(total / 10);
-        const ones = total % 10;
-        for (let i = 0; i < tens; i++) chunks.push({ value: 10, grouped: true });
-        remaining = ones;
-    }
-    while (remaining > 0) {
-        chunks.push({ value: 1 });
-        remaining -= 1;
-    }
-    return chunks.slice(0, Math.max(0, Number(maxSlots) || 0));
+    return globalThis.GTN_RESOURCE_ORBS.buildChunks(amount, maxSlots);
 }
 
 function buildClassicResourcePreviewChunks(current, spend, displayTotal) {
-    const cur = Math.max(0, Math.floor(Number(current) || 0));
-    const cost = Math.max(0, Math.floor(Number(spend) || 0));
-    const baseChunks = buildClassicResourceChunks(cur, Math.max(32, displayTotal * 2)).map(chunk => ({ ...chunk }));
-    let spendFromCurrent = Math.min(cur, cost);
-    let spentAmount = 0;
-    for (let i = baseChunks.length - 1; i >= 0 && spendFromCurrent > 0; i--) {
-        const before = Math.max(0, Number(baseChunks[i].value) || 0);
-        const take = Math.min(before, spendFromCurrent);
-        baseChunks[i].value = before - take;
-        spentAmount += take;
-        spendFromCurrent -= take;
-    }
-    const remainingChunks = baseChunks.filter(chunk => Number(chunk.value) > 0);
-    const spendChunks = buildClassicResourceChunks(spentAmount, Math.max(32, displayTotal * 2))
-        .map(chunk => ({ ...chunk, willSpend: true }));
-    const missingChunks = buildClassicResourceChunks(Math.max(0, cost - cur), Math.max(32, displayTotal * 2))
-        .map(chunk => ({ ...chunk, missing: true, willSpend: true }));
-    return remainingChunks.concat(spendChunks, missingChunks);
+    return globalThis.GTN_RESOURCE_ORBS.buildPreviewChunks(current, spend, displayTotal);
 }
 
 function getClassicResourcePreviewCard(vm = null) {
@@ -25592,7 +26087,7 @@ function renderStatusTags(containerId, playerData) {
     let nazarStacks = customCount('nazar', '邪眼', 'Nazar');
     if (p.nazar_active) nazarStacks += Math.max(0, 2 - Math.max(0, Number(p.nazar_big_hits || 0)));
     if (nazarStacks > 0) tags.push({ key: 'nazar', name: UI.status_nazar, abbr: currentLang === 'zh' ? '邪眼' : 'Nz', val: nazarStacks, fg: COLORS.magic_text, bg: COLORS.magic_bg });
-    const magicNazar = customCount('magic_nazar');
+    const magicNazar = customCount('magic_nazar', 'Magic Nazar', '魔法邪眼', 'vanilla:magic_nazar');
     if (magicNazar > 0) {
         const info = getStatusIntroItem({ key: 'magic_nazar' });
         tags.push({ key: 'magic_nazar', name: info.label, abbr: currentLang === 'zh' ? '魔邪' : 'MNz', val: magicNazar, fg: COLORS.magic_text, bg: COLORS.magic_bg });
@@ -25649,11 +26144,11 @@ function renderStatusTags(containerId, playerData) {
         if (count > 0) tags.push({ key: info.keys[0], iconKey: info.iconKey, name: info.name, abbr: info.abbr, val: count, fg: info.fg, bg: info.bg, title: info.title });
     });
     if (customStatuses && typeof customStatuses === 'object') {
-            const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','nazar','邪眼','Nazar','magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','dizzy','stunned','skip_turn','眩晕','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:root','jungle:root_status','root_status','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
+            const builtinKeys = new Set(['poison','fire','toxic','dodge','armor','nazar','邪眼','Nazar','magic_nazar','Magic Nazar','魔法邪眼','vanilla:magic_nazar','sluggish','overload','foresight','fracture','stagnation','blind','heal_block','weakness','bleed','fragment','fragment_stacks','dizzy','stunned','skip_turn','眩晕','attack_blocked','禁攻','attack_only','仅攻击','magic_blocked','魔力封锁','status_immune','immune','状态免疫','jungle:root','jungle:root_status','root_status','jungle:turn_heal_turns','jungle:turn_heal_power','turn_heal_turns','turn_heal_power','jungle:turn_magic_turns','jungle:turn_magic_power','turn_magic_turns','turn_magic_power', ...jungleStatusDisplay.flatMap(info => info.keys)]);
         Object.entries(customStatuses).forEach(([name, value]) => {
             const count = Number(value || 0);
             if (count < 0) return;
-            if (builtinKeys.has(name)) return;
+            if (builtinKeys.has(name) || builtinKeys.has(normalizeStatusIntroKey(name))) return;
             const def = getCustomStatusDef(name);
             if (def && def.visible === false) return;
             const label = def ? getRegistryText(def, 'name', name) : name;
@@ -26248,6 +26743,14 @@ function areSequentialGameStates(previous, next, options = {}) {
     if ((previous.mode || '') !== (next.mode || '')) return false;
     if (!!previous.solo !== !!next.solo) return false;
     if (!!previous.spectating !== !!next.spectating) return false;
+    const previousMatchKey = phaseContextMatchKey(previous);
+    const nextMatchKey = phaseContextMatchKey(next);
+    if (previousMatchKey && nextMatchKey && previousMatchKey !== nextMatchKey) return false;
+    if (
+        previous.room_id != null
+        && next.room_id != null
+        && Number(previous.room_id) !== Number(next.room_id)
+    ) return false;
     if (previous.spectating && next.spectating) {
         if (Number(previous.room_id) !== Number(next.room_id)) return false;
         if (normalizePlayerId(previous.spectate_perspective) !== normalizePlayerId(next.spectate_perspective)) return false;
@@ -26990,6 +27493,15 @@ function preserveGameOverLogState(state, fallback) {
     if (!state || state.phase !== 'game_over') return state;
     const current = copyBattleLogState(state);
     if (current && current.log.length) return { ...state, ...current };
+    const stateMatchKey = phaseContextMatchKey(state);
+    const fallbackMatchKey = phaseContextMatchKey(fallback);
+    if (stateMatchKey && fallbackMatchKey && stateMatchKey !== fallbackMatchKey) return state;
+    if (
+        state.room_id != null
+        && fallback
+        && fallback.room_id != null
+        && Number(state.room_id) !== Number(fallback.room_id)
+    ) return state;
     const previous = copyBattleLogState(fallback);
     if (!previous || !previous.log.length) return state;
     return { ...state, ...previous };
@@ -27031,9 +27543,21 @@ function renderGameOverAfterFinalAnimation(previous, next, options = {}) {
     showStateDeltas(previous, stableNext);
     updateStatus(UI.game_over);
     const delay = estimateGameOverAnimationDelay(previous, stableNext);
+    const scheduledMatchKey = phaseContextMatchKey(stableNext);
     scheduledGameOverState = stableNext;
     gameOverRenderTimer = setTimeout(() => {
         gameOverRenderTimer = null;
+        const currentMatchKey = phaseContextMatchKey(gameState) || activeNetworkMatchKey;
+        if (
+            scheduledMatchKey
+            && (
+                retiredNetworkMatchKeys.has(scheduledMatchKey)
+                || (currentMatchKey && currentMatchKey !== scheduledMatchKey)
+            )
+        ) {
+            scheduledGameOverState = null;
+            return;
+        }
         const finalState = preserveGameOverLogState(
             gameState && gameState.phase === 'game_over' ? gameState : scheduledGameOverState,
             scheduledGameOverState
@@ -29923,7 +30447,11 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         if (sel < 0) return false;
         return { target_instance_id: destroyable[sel].card_instance.instance_id };
     } else if (defId === 'Chilli') {
-        const others = hand.filter(c => c.instance_id !== cardDict.instance_id);
+        const others = hand.filter(c => (
+            c
+            && c.instance_id !== cardDict.instance_id
+            && !cardHasSublimeFlag(c)
+        ));
         if (others.length) {
             const options = others.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(UI.choose_discard_for.replace('{0}', sourceCardName), options);
@@ -30279,7 +30807,7 @@ function showAllyConsentUI(data) {
     removeFloatingCardPreview();
     const container = $('response-panel');
     if (!container) {
-        socket.emit('ally_consent_response', { accepted: false });
+        socket.emit('ally_consent_response', { accepted: false, ...currentMatchActionContext() });
         return;
     }
     if (allyConsentTimerId) clearInterval(allyConsentTimerId);
@@ -30330,7 +30858,7 @@ function respondAllyConsent(accepted) {
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
     beginPendingServerAction('ally_consent', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
-    socket.emit('ally_consent_response', { accepted: !!accepted });
+    socket.emit('ally_consent_response', { accepted: !!accepted, ...currentMatchActionContext() });
 }
 
 function showSurrenderConsentUI(data) {
@@ -30338,7 +30866,7 @@ function showSurrenderConsentUI(data) {
     removeFloatingCardPreview();
     const container = $('response-panel');
     if (!container) {
-        socket.emit('surrender_consent_response', { accepted: false });
+        socket.emit('surrender_consent_response', { accepted: false, ...currentMatchActionContext() });
         return;
     }
     if (surrenderConsentTimerId) clearInterval(surrenderConsentTimerId);
@@ -30383,7 +30911,7 @@ function respondSurrenderConsent(accepted) {
     if (surrenderConsentTimerId) { clearInterval(surrenderConsentTimerId); surrenderConsentTimerId = null; }
     const container = $('response-panel');
     if (container) { container.innerHTML = ''; container.classList.add('hidden'); container.classList.remove('visible'); }
-    if (socket) socket.emit('surrender_consent_response', { accepted: !!accepted });
+    if (socket) socket.emit('surrender_consent_response', { accepted: !!accepted, ...currentMatchActionContext() });
 }
 
 async function showReorderDeckUI(deckCards, titleText, config = {}) {
@@ -31129,7 +31657,7 @@ function updateGameOverRematchButton(gs) {
         rematchBtn.onclick = () => {
             if (!socket || rematchBtn.disabled) return;
             clearActiveMatchRoute('rematch');
-            socket.emit('rematch');
+            socket.emit('rematch', currentMatchActionContext());
             const nextVotes = Math.min(progress.total, Math.max(progress.votes + (progress.hasVoted ? 0 : 1), progress.votes));
             rematchState = { ...progress, votes: nextVotes, hasVoted: true, mode: '2v2' };
             rematchBtn.textContent = formatRematchProgress(nextVotes, progress.total);
@@ -31146,7 +31674,7 @@ function updateGameOverRematchButton(gs) {
             if (!socket) { debugLog('[REMATCH] socket missing'); return; }
             debugLog('[REMATCH] emit rematch accept');
             clearActiveMatchRoute('rematch');
-            socket.emit('rematch');
+            socket.emit('rematch', currentMatchActionContext());
             rematchBtn.textContent = UI.rematch_sent;
             rematchBtn.disabled = true;
         };
@@ -31157,7 +31685,7 @@ function updateGameOverRematchButton(gs) {
             if (!socket) { debugLog('[REMATCH] socket missing'); return; }
             debugLog('[REMATCH] emit rematch request');
             clearActiveMatchRoute('rematch');
-            socket.emit('rematch');
+            socket.emit('rematch', currentMatchActionContext());
             rematchBtn.textContent = UI.rematch_sent;
             rematchBtn.disabled = true;
         };
@@ -31387,16 +31915,31 @@ function renderGameOver(data) {
             };
         } else {
             returnLobbyBtn.textContent = UI.return_lobby;
-            returnLobbyBtn.onclick = () => {
-                if (!socket) return;
-                allowLobbyTransition('return_lobby_button');
-                socket.emit('return_lobby');
-                clearNetworkMatchStateForLobby();
-                showView('view-lobby');
-                phase = 'lobby';
-            };
+            const returnContext = currentMatchActionContext(gs);
+            returnLobbyBtn.onclick = () => returnToLobbyFromGameOver(returnContext);
         }
     }
+}
+
+function returnToLobbyFromGameOver(expectedContext = {}) {
+    if (!socket || !socket.connected) return;
+    const expectedKey = phaseContextMatchKey(expectedContext);
+    const currentKey = activeNetworkMatchKey || phaseContextMatchKey(gameState);
+    if (
+        phase !== 'game_over'
+        || (expectedKey && currentKey && expectedKey !== currentKey)
+        || (expectedContext.room_id != null && gameState.room_id != null
+            && Number(expectedContext.room_id) !== Number(gameState.room_id))
+    ) {
+        debugLog('[client] ignored stale return-lobby control:', expectedContext, 'active=', currentKey, 'phase=', phase);
+        requestFullGameState('stale_return_lobby_control');
+        return;
+    }
+    allowLobbyTransition('return_lobby_button');
+    socket.emit('return_lobby', currentMatchActionContext(expectedContext));
+    clearNetworkMatchStateForLobby();
+    showView('view-lobby');
+    phase = 'lobby';
 }
 
 function showOpponentDCWaiting(data) {
@@ -33221,8 +33764,13 @@ async function init() {
     });
     if ($('btn-open-feedback')) $('btn-open-feedback').addEventListener('click', () => toggleFeedbackModal(true));
     if ($('btn-feedback-close')) $('btn-feedback-close').addEventListener('click', () => toggleFeedbackModal(false));
+    if ($('feedback-tab-handling')) {
+        $('feedback-tab-handling').addEventListener('click', () => setFeedbackHandlingView(true));
+    }
+    window.addEventListener('message', handleFeedbackHandlingMessage);
     document.querySelectorAll('[data-feedback-tab]').forEach(btn => {
         btn.addEventListener('click', async () => {
+            setFeedbackHandlingView(false);
             activeFeedbackTab = btn.dataset.feedbackTab || 'send';
             activeFeedbackThreadId = null;
             feedbackState.messages = [];
@@ -33570,7 +34118,9 @@ async function init() {
                 switchAccountReplayPerspective();
                 return;
             }
-            if (socket && isSpectating) socket.emit('switch_spectate_perspective', {});
+            if (socket && isSpectating) {
+                socket.emit('switch_spectate_perspective', currentMatchActionContext());
+            }
         });
     }
     if ($('classic-view-deck')) $('classic-view-deck').addEventListener('click', onViewDeck);
@@ -33582,7 +34132,9 @@ async function init() {
                 switchAccountReplayPerspective();
                 return;
             }
-            if (socket && isSpectating) socket.emit('switch_spectate_perspective', {});
+            if (socket && isSpectating) {
+                socket.emit('switch_spectate_perspective', currentMatchActionContext());
+            }
         });
     }
     if ($('classic-leave-spectate')) {
@@ -33623,13 +34175,6 @@ async function init() {
         } else {
             showView('view-login');
         }
-    });
-    $('btn-return-lobby').addEventListener('click', () => {
-        allowLobbyTransition('return_lobby_button');
-        clearActiveMatchRoute('return_lobby_button');
-        if (socket) socket.emit('return_lobby', {});
-        showView('view-lobby');
-        phase = 'lobby';
     });
     $('btn-leave-spectate').addEventListener('click', leaveSpectateAction);
     $('btn-lobby-chat-send').addEventListener('click', onLobbyChatSend);

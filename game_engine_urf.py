@@ -235,6 +235,7 @@ class GameEngineInfiniteFire(GameEngine):
         if self._game_start_applied:
             return False
         self._game_start_applied = True
+        self._clear_turn_card_tracking()
         self.phase = 'playing'
         self._build_infinite_pool()
         self.first_player = random.randint(0, 1)
@@ -292,9 +293,9 @@ class GameEngineInfiniteFire(GameEngine):
         return True
 
     def _start_draw_phase(self):
+        self._clear_turn_card_tracking()
         for i in range(2):
             ps = self.players[i]
-            ps.cards_played_this_turn = {}
             ps.magic_battery_m_this_turn = 0
             ps.urf_replace_available = True
             ps.urf_sell_available = True

@@ -30,6 +30,57 @@ SPIKEBALL_BOOSTED_FLAG = 'ocean_spikeball_boosted'
 SPIKEBALL_ADDED_PRECISION_FLAG = 'ocean_spikeball_added_precision'
 SPIKEBALL_ADDED_WIDE_STRIKE_FLAG = 'ocean_spikeball_added_wide_strike'
 
+CARD_ZONE_LABELS_ZH = {
+    'hand': '手牌',
+    'deck': '抽牌堆',
+    'discard': '弃牌堆',
+    'exile': '放逐区',
+    'equipment': '装备区',
+}
+
+CARD_TYPE_LABELS_ZH = {
+    'thorn': '攻击牌',
+    'bloom': '技能牌',
+    'root': '装备牌',
+    'guard': '反制牌',
+    'curse': '诅咒牌',
+    'infect': '状态牌',
+}
+
+CARD_FLAG_LABELS_ZH = {
+    'precision': '精准',
+    'exile': '放逐',
+    'non_stackable': '不叠加',
+    'indestructible': '不可摧毁',
+    'sprout': '萌芽',
+    'symbiosis': '共生',
+    'attract': '吸附',
+    'void': '虚无',
+    'nothingness': '虚无',
+    'self_only': '不选择目标',
+    'uncancellable': '不可取消',
+    'infinite_exclude': '无限火力移除',
+    'rebound': '回转',
+    'copy': '副本',
+    'unique': '唯一',
+    'swift': '迅捷',
+    'temp_swift': '暂时迅捷',
+    'temp_heavy': '暂时沉重',
+    'temp_magic_heavy': '暂时魔力沉重',
+    'floating': '漂浮',
+    'stealth': '隐匿',
+    'revealed': '被揭示',
+    'sublime': '崇高',
+    'team_limited': '队伍限定',
+    'team_unique': '队伍独一',
+    'power': '威力',
+    'magic_swift': '魔力迅捷',
+    'wide_strike': '广域打击',
+    'self_target': '自刃',
+    'charge': '电荷',
+    'ocean_blinded': '蒙蔽',
+}
+
 
 class ModLoopBreak(Exception):
     pass
@@ -180,6 +231,7 @@ class PlayerState:
         self.bandage_active: bool = False
         self.bandage_death_pending: bool = False
         self.bandage_trigger_boundary_id: int = -1
+        self.bandage_death_action_player_id: int = -1
         self.attack_blocked: int = 0
         self.untargetable: int = 0
         self.sponge_active: bool = False
@@ -300,6 +352,7 @@ class PlayerState:
             'bandage_active': self.bandage_active,
             'bandage_death_pending': self.bandage_death_pending,
             'bandage_trigger_boundary_id': self.bandage_trigger_boundary_id,
+            'bandage_death_action_player_id': self.bandage_death_action_player_id,
             'attack_blocked': self.attack_blocked,
             'untargetable': self.untargetable,
             'sponge_active': self.sponge_active,
@@ -412,6 +465,10 @@ class PlayerState:
         ps.bandage_active = d.get('bandage_active', False)
         ps.bandage_death_pending = d.get('bandage_death_pending', False)
         ps.bandage_trigger_boundary_id = int(d.get('bandage_trigger_boundary_id', -1) or -1)
+        raw_bandage_action_player = d.get('bandage_death_action_player_id', -1)
+        ps.bandage_death_action_player_id = int(
+            raw_bandage_action_player if raw_bandage_action_player is not None else -1
+        )
         ps.attack_blocked = d.get('attack_blocked', 0)
         raw_untargetable = d.get('untargetable', 0)
         if isinstance(raw_untargetable, bool):
@@ -730,7 +787,7 @@ class GameEngine:
     OPENING_EVENTS = {
         1: {'id': 1, 'name': '生命强化', 'desc': '最大生命值+20', 'position': 1},
         2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'position': 2},
-        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多5张非攻击牌转化为[[card:Light|flag=sprout|flag=symbiosis]]', 'position': 2},
+        3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多5张攻击牌转化为[[card:Light|flag=sprout|flag=symbiosis]]', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
         4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加4层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '少抽1张牌，然后从总抽牌库选择1张牌洗入牌库', 'position': 3},
@@ -983,29 +1040,42 @@ class GameEngine:
             return
         ps = self.players[player_id]
         ps.bandage_death_pending = True
+        ps.bandage_death_action_player_id = -1
         if bool(getattr(self, '_turn_boundary_active', False)):
             ps.bandage_trigger_boundary_id = int(getattr(self, '_turn_boundary_id', -1) or -1)
         else:
             ps.bandage_trigger_boundary_id = int(getattr(self, '_turn_boundary_serial', 0) or 0)
 
-    def _expire_bandages_before_action(self, action_player_id: Optional[int] = None):
+    def _arm_bandages_for_action(self, action_player_id: Optional[int] = None):
         if action_player_id is None:
             action_player_id = int(getattr(self, 'current_player', -1) or 0)
-        boundary_id = int(getattr(self, '_turn_boundary_id', -1) or -1)
-        expired = []
+        if not (0 <= action_player_id < len(self.players)):
+            return
         for player_id, ps in enumerate(self.players):
             if not bool(getattr(ps, 'bandage_death_pending', False)):
                 continue
             if not self._same_timer_side(player_id, action_player_id):
                 continue
-            trigger_boundary_id = int(getattr(ps, 'bandage_trigger_boundary_id', -1) or -1)
-            if bool(getattr(self, '_turn_boundary_active', False)) and trigger_boundary_id == boundary_id:
+            if int(getattr(ps, 'bandage_death_action_player_id', -1)) < 0:
+                ps.bandage_death_action_player_id = action_player_id
+
+    def _expire_bandages_after_action(self, action_player_id: Optional[int] = None):
+        if action_player_id is None:
+            action_player_id = int(getattr(self, 'current_player', -1) or 0)
+        if not (0 <= action_player_id < len(self.players)):
+            return
+        expired = []
+        for player_id, ps in enumerate(self.players):
+            if not bool(getattr(ps, 'bandage_death_pending', False)):
+                continue
+            if int(getattr(ps, 'bandage_death_action_player_id', -1)) != action_player_id:
                 continue
             ps.health = 0
             ps.bandage_death_pending = False
             ps.bandage_trigger_boundary_id = -1
+            ps.bandage_death_action_player_id = -1
             self._clear_invincible_state(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，在己方下一名可行动玩家行动前死亡！")
+            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，在己方下一名可行动玩家回合结束后死亡！")
             expired.append(player_id)
         if not expired:
             return
@@ -2493,6 +2563,39 @@ class GameEngine:
 
     def pn(self, pid: int) -> str:
         return self.player_names[pid] if 0 <= pid < len(self.player_names) else f'玩家{pid+1}'
+
+    @staticmethod
+    def _zone_log_label(zone: str) -> str:
+        key = str(zone or '').strip().lower()
+        return CARD_ZONE_LABELS_ZH.get(key, key or '区域')
+
+    @staticmethod
+    def _card_type_log_label(card_type: str) -> str:
+        key = str(card_type or '').strip().lower()
+        return CARD_TYPE_LABELS_ZH.get(key, f'{key}牌' if key else '牌')
+
+    def _card_flag_log_label(self, flag: str) -> str:
+        raw = str(flag or '').strip()
+        normalized = normalize_card_flag(raw)
+        if normalized in CARD_FLAG_LABELS_ZH:
+            return CARD_FLAG_LABELS_ZH[normalized]
+        local = normalized.split(':', 1)[-1]
+        if local in CARD_FLAG_LABELS_ZH:
+            return CARD_FLAG_LABELS_ZH[local]
+        definitions = getattr(self, 'v2_tag_defs', {}) or {}
+        definition = definitions.get(normalized) or definitions.get(raw)
+        if isinstance(definition, dict):
+            name_i18n = definition.get('name_i18n')
+            if isinstance(name_i18n, dict) and name_i18n.get('zh'):
+                return str(name_i18n['zh'])
+            for key in ('name_cn', 'name_zh', 'name'):
+                if definition.get(key):
+                    return str(definition[key])
+        return normalized or raw
+
+    def _card_flag_log_text(self, flag: str) -> str:
+        label = self._card_flag_log_label(flag)
+        return label if label.endswith('标签') else f'{label}标签'
 
     def log_msg(self, msg: str):
         text = self._normalize_log_text(str(msg))
@@ -4001,6 +4104,7 @@ class GameEngine:
                 self._last_pregame_validation_error = {'reason': reason, 'details': details}
                 return False
         self._game_start_applied = True
+        self._clear_turn_card_tracking()
         self.phase = 'playing'
         force_first = []
         for i in range(2):
@@ -4064,7 +4168,13 @@ class GameEngine:
         target_id = 1 - player_id
         return [target_id] if 0 <= target_id < len(self.players) else []
 
-    def _replace_first_card_in_setup_zones(self, player_id: int, source_def_id: str, replacement: CardInstance) -> bool:
+    def _replace_first_card_in_setup_zones(
+        self,
+        player_id: int,
+        source_def_id: str,
+        replacement: CardInstance,
+        excluded_instance_ids=None,
+    ) -> bool:
         """Replace one matching setup card after initial draw.
 
         Setup choices are made from the drafted deck list, but initial hands are
@@ -4072,12 +4182,16 @@ class GameEngine:
         chosen card still converts when it was drawn into the opening hand.
         """
         ps = self.players[player_id]
+        excluded = set(excluded_instance_ids or ())
         for zone_name in ('hand', 'deck'):
             zone = getattr(ps, zone_name, None)
             if not isinstance(zone, list):
                 continue
             for idx, card in enumerate(zone):
-                if getattr(card, 'def_id', None) == source_def_id:
+                if (
+                    getattr(card, 'def_id', None) == source_def_id
+                    and getattr(card, 'instance_id', None) not in excluded
+                ):
                     zone[idx] = replacement
                     return True
         return False
@@ -4226,10 +4340,8 @@ class GameEngine:
 
     def _opening_light_source_allowed(self, def_id: str) -> bool:
         def_id = str(def_id or '')
-        if def_id == 'Light':
-            return False
         card_def = CARD_DEFS.get(def_id)
-        return card_def is not None and getattr(card_def, 'card_type', '') != 'thorn'
+        return card_def is not None and getattr(card_def, 'card_type', '') == 'thorn'
 
     def _player_has_magic_acceleration_setup(self, player_id: int) -> bool:
         if not (0 <= player_id < len(self.players)):
@@ -4295,9 +4407,13 @@ class GameEngine:
                 continue
             cards.append(CardInstance(def_id=def_id))
 
-        def replace_first(source_def_id: str, replacement: CardInstance) -> bool:
+        def replace_first(source_def_id: str, replacement: CardInstance, excluded_instance_ids=None) -> bool:
+            excluded = set(excluded_instance_ids or ())
             for idx, card in enumerate(cards):
-                if getattr(card, 'def_id', None) == source_def_id:
+                if (
+                    getattr(card, 'def_id', None) == source_def_id
+                    and getattr(card, 'instance_id', None) not in excluded
+                ):
                     cards[idx] = replacement
                     return True
             return False
@@ -4320,6 +4436,7 @@ class GameEngine:
                     replace_first(source_def, mana_card)
         elif event_id == 3 and self._builtin_setup_card_available('Light') and sub and 'convert_def_ids' in sub:
             converted = 0
+            generated_instance_ids = set()
             for target_def in list(sub.get('convert_def_ids') or []):
                 if converted >= 5:
                     break
@@ -4328,8 +4445,9 @@ class GameEngine:
                 light_card = CardInstance(def_id='Light')
                 light_card.instance_flags = {'sprout', 'symbiosis'}
                 self._apply_setup_modifiers_to_card(player_id, light_card)
-                if replace_first(target_def, light_card):
+                if replace_first(target_def, light_card, generated_instance_ids):
                     converted += 1
+                    generated_instance_ids.add(light_card.instance_id)
         elif event_id == 8:
             if not self._builtin_setup_card_available('Yggdrasil'):
                 return [c.to_dict() for c in cards]
@@ -4382,6 +4500,7 @@ class GameEngine:
             if self._builtin_setup_card_available('Light') and sub and 'convert_def_ids' in sub:
                 target_def_ids = list(sub['convert_def_ids'])
                 converted = 0
+                generated_instance_ids = set()
                 for target_def in target_def_ids:
                     if converted >= 5:
                         break
@@ -4390,8 +4509,14 @@ class GameEngine:
                     light_card = CardInstance(def_id='Light')
                     light_card.instance_flags = {'sprout', 'symbiosis'}
                     self._apply_setup_modifiers_to_card(player_id, light_card)
-                    if self._replace_first_card_in_setup_zones(player_id, target_def, light_card):
+                    if self._replace_first_card_in_setup_zones(
+                        player_id,
+                        target_def,
+                        light_card,
+                        generated_instance_ids,
+                    ):
                         converted += 1
+                        generated_instance_ids.add(light_card.instance_id)
                 self.log_msg(f"{self.pn(player_id)}【光之洗礼】：{converted}张牌变为[[card:Light|flag=sprout|flag=symbiosis]]")
         elif event_id == 4:
             target_ids = self._opening_event_enemy_targets(player_id)
@@ -4527,12 +4652,27 @@ class GameEngine:
             self._store_v2_ui_pause(result.get('v2_ui_pause') or {})
         return True
 
-    def _start_draw_phase(self):
-        self.phase = 'draw'
-        for i in range(2):
-            ps = self.players[i]
+    def _clear_turn_card_tracking(self, player_id: Optional[int] = None):
+        if player_id is None:
+            player_ids = range(len(self.players))
+        else:
+            try:
+                normalized_player_id = int(player_id)
+            except (TypeError, ValueError):
+                return
+            if not (0 <= normalized_player_id < len(self.players)):
+                return
+            player_ids = (normalized_player_id,)
+        for current_player_id in player_ids:
+            ps = self.players[current_player_id]
             ps.cards_played_this_turn = {}
             ps.cards_played_this_turn_instance_ids = []
+
+    def _start_draw_phase(self):
+        self.phase = 'draw'
+        self._clear_turn_card_tracking()
+        for i in range(2):
+            ps = self.players[i]
             ps.magic_battery_m_this_turn = 0
             ps.custom_vars['\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54'] = 0
         self.log_msg(f"=== 第{self.round_num}回合 ===")
@@ -4608,16 +4748,7 @@ class GameEngine:
         self._run_ocean_auto_cards_turn_start(player_id)
         if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
-        self._expire_bandages_before_action(player_id)
-        if self.game_over:
-            return
-        if self.players[player_id].health <= 0:
-            advance_turn = getattr(self, '_advance_turn', None)
-            if callable(advance_turn):
-                advance_turn()
-            else:
-                self._check_game_over()
-            return
+        self._arm_bandages_for_action(player_id)
         self._turn_start_auto_settlement_player = None
         self._finish_turn_boundary()
         self._continue_honey_control_if_needed(player_id)
@@ -5357,6 +5488,7 @@ class GameEngine:
         ps.bandage_active = False
         ps.bandage_death_pending = False
         ps.bandage_trigger_boundary_id = -1
+        ps.bandage_death_action_player_id = -1
         self._clear_invincible_state(player_id)
         try:
             ps.custom_statuses.clear()
@@ -5407,7 +5539,7 @@ class GameEngine:
                 self._set_invincible_until_next_own_turn_end(player_id)
                 ps.bandage_active = False
                 self._mark_bandage_death_pending(player_id)
-                self.log_msg(f"{self.pn(player_id)}的绷带发动！在己方下一名可行动玩家行动前死亡")
+                self.log_msg(f"{self.pn(player_id)}的绷带发动！在己方下一名可行动玩家回合结束后死亡")
                 self._check_game_over()
                 return
             for card in ps.hand[:]:
@@ -5439,6 +5571,7 @@ class GameEngine:
             self.game_over = True
             self.winner = -1
             self.phase = 'game_over'
+            self._clear_turn_card_tracking()
             self.log_msg("双方生命值同时归零！平局！")
             return
         if self.game_over:
@@ -5448,6 +5581,7 @@ class GameEngine:
                 self.game_over = True
                 self.winner = 1 - i
                 self.phase = 'game_over'
+                self._clear_turn_card_tracking()
                 self.log_msg(f"{self.pn(i)}生命值归零！{self.pn(self.winner)}获胜！")
                 return
 
@@ -5457,6 +5591,7 @@ class GameEngine:
         self.game_over = True
         self.winner = 1 - player_id
         self.phase = 'game_over'
+        self._clear_turn_card_tracking()
         self.log_msg(f"{self.pn(player_id)}投降，{self.pn(self.winner)}获胜！")
         return {'success': True}
 
@@ -5866,6 +6001,7 @@ class GameEngine:
             eligible = [
                 hand_card for hand_card in getattr(owner, 'hand', [])
                 if getattr(hand_card, 'instance_id', None) != current_iid
+                and self._card_selectable_by_action(hand_card)
             ]
             if not eligible and params.get('continue_on_cancel'):
                 return True
@@ -5883,6 +6019,15 @@ class GameEngine:
                 return False
             ids = choice.get('target_instance_ids')
             if isinstance(ids, list) and current_iid in ids:
+                return False
+        selected_ids = []
+        if choice.get('target_instance_id') is not None:
+            selected_ids.append(choice.get('target_instance_id'))
+        if isinstance(choice.get('target_instance_ids'), list):
+            selected_ids.extend(choice.get('target_instance_ids'))
+        for instance_id in selected_ids:
+            selected_card = self._find_card_by_instance_id(instance_id)
+            if selected_card is None or not self._card_selectable_by_action(selected_card):
                 return False
         if choice_type == 'choose_same_attacks_from_hand':
             ids = choice.get('target_instance_ids')
@@ -7212,7 +7357,7 @@ class GameEngine:
         if self._status_application_blocked(player_id, 'bandage_active'):
             return
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；在己方下一名可行动玩家行动前死亡")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；在己方下一名可行动玩家回合结束后死亡")
 
     def _atomic_equip_sponge(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
@@ -7268,7 +7413,7 @@ class GameEngine:
         if self._status_application_blocked(player_id, 'bandage_active'):
             return
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；在己方下一名可行动玩家行动前死亡")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；在己方下一名可行动玩家回合结束后死亡")
 
     def _atomic_on_fatal_set_health_exile(self, player_id, card, params, log, choice, context):
         health_amount = params.get('health', 5)
@@ -7780,7 +7925,7 @@ class GameEngine:
         if tag and target_card:
             target_card.instance_flags = getattr(target_card, 'instance_flags', set())
             target_card.instance_flags.add(tag)
-            self.log_msg(log or f"{target_card.name_cn}获得标签{tag}")
+            self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
 
     def _atomic_third_eye_precision_or_hidden(self, player_id, card, params, log, choice, context):
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'chosen_card'}), card)
@@ -7843,8 +7988,13 @@ class GameEngine:
         if log:
             self.log_msg(log)
         else:
-            type_desc = f"{card_type_filter}牌" if card_type_filter else "牌"
-            self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}的{zone}区{count}张{type_desc}添加了{tag}标签")
+            zone_desc = self._zone_log_label(zone)
+            type_desc = self._card_type_log_label(card_type_filter)
+            tag_desc = self._card_flag_log_text(tag)
+            self.log_msg(
+                f"{self.pn(player_id)}使{self.pn(target_id)}{zone_desc}中的"
+                f"{count}张{type_desc}获得{tag_desc}"
+            )
 
     def _atomic_cogwheel_mark(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
@@ -8016,7 +8166,7 @@ class GameEngine:
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if tag and target_card and hasattr(target_card, 'instance_flags'):
             target_card.instance_flags.discard(tag)
-            self.log_msg(log or f"{target_card.name_cn}移除标签{tag}")
+            self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
 
     def _atomic_transform_card(self, player_id, card, params, log, choice, context):
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
@@ -8320,7 +8470,7 @@ class GameEngine:
         if tag and target_card:
             target_card.instance_flags = getattr(target_card, 'instance_flags', set())
             target_card.instance_flags.add(tag)
-            self.log_msg(log or f"{target_card.name_cn}添加标签[{tag}]")
+            self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
 
     def _atomic_tag_remove_named(self, player_id, card, params, log, choice, context):
         tag = normalize_card_flag(params.get('tag', ''))
@@ -8328,7 +8478,7 @@ class GameEngine:
         if tag and target_card:
             target_card.instance_flags = getattr(target_card, 'instance_flags', set())
             target_card.instance_flags.discard(tag)
-            self.log_msg(log or f"{target_card.name_cn}移除标签[{tag}]")
+            self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
 
     def _atomic_batch_tag_add(self, player_id, card, params, log, choice, context):
         self._atomic_tag_add_named(player_id, card, {'tag': params.get('tag', '')}, log, choice, context)
@@ -9423,7 +9573,7 @@ class GameEngine:
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             self._mark_bandage_death_pending(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带将在己方下一名可行动玩家行动前结束")
+            self.log_msg(f"{self.pn(player_id)}的绷带将在己方下一名可行动玩家回合结束后使其死亡")
         # Fracture: clear at end of own turn. Status immunity suppresses the effect, not decay.
         if ps.fracture > 0:
             ps.fracture = 0
@@ -9482,6 +9632,10 @@ class GameEngine:
         self._decay_ocean_card_charge_turn_end(player_id)
         self._bio_turn_end_cleanup(player_id)
         self._save_last_turn_damage_snapshot(player_id)
+        self._expire_bandages_after_action(player_id)
+        self._clear_turn_card_tracking(player_id)
+        if self.game_over:
+            return
         if player_id == self.first_player:
             other = 1 - self.first_player
             self._start_player_turn(other)
@@ -12679,12 +12833,6 @@ class GameEngine:
                 dmg = max(1, int(dmg * (1.0 - reduction)))
             dmg, _hel_crit = self._hel_apply_lucky_crit_to_damage(attacker_id, dmg, source_card)
             dmg = self._apply_attack_damage_halving(target_id, dmg, precision_dodged)
-            nazar_stacks = 0 if immune else self._nazar_status_value(target_id)
-            if dmg > 0 and nazar_stacks > 0:
-                original_dmg = dmg
-                dmg = max(1, dmg - 9)
-                if original_dmg >= 10:
-                    self._set_nazar_status_value(target_id, nazar_stacks - 1)
             if immune:
                 root_armor = 0
                 fragile = 0
@@ -12693,6 +12841,13 @@ class GameEngine:
                 fragile = self._custom_status_value(target_id, 'jungle:fragile', 'fragile')
             effective_armor = int(ps.armor) + root_armor - fragile
             dmg = max(0, dmg - effective_armor)
+            # Nazar transforms the physical damage remaining after armor and Fragile.
+            nazar_stacks = 0 if immune else self._nazar_status_value(target_id)
+            if dmg > 0 and nazar_stacks > 0:
+                original_dmg = dmg
+                dmg = max(1, dmg - 9)
+                if original_dmg >= 10:
+                    self._set_nazar_status_value(target_id, nazar_stacks - 1)
             if self._bio_indictment_converts_damage(
                 target_id,
                 dmg,

@@ -2,7 +2,7 @@
 <html lang="zh-CN" data-theme="light" data-ui-style="minimal">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content">
+<meta name="viewport" content="width=device-width, initial-scale=0.7, viewport-fit=cover, interactive-widget=overlays-content">
 <title>Garden of Thorn 荆棘花园</title>
 <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
@@ -294,6 +294,7 @@
     <div class="feedback-tabs">
       <button id="feedback-tab-send" class="feedback-tab active" type="button" data-feedback-tab="send">发送反馈</button>
       <button id="feedback-tab-staff" class="feedback-tab hidden" type="button" data-feedback-tab="staff">查看反馈</button>
+      <button id="feedback-tab-handling" class="feedback-tab hidden" type="button">举报处理</button>
     </div>
     <div class="feedback-body">
       <aside id="feedback-thread-list" class="feedback-thread-list"></aside>
@@ -324,6 +325,12 @@
         <p id="feedback-error" class="error-text"></p>
       </section>
     </div>
+    <iframe
+      id="feedback-handling-frame"
+      class="feedback-handling-frame hidden"
+      title="举报处理"
+      loading="lazy"
+    ></iframe>
   </div>
 </div>
 <div id="view-skin" class="view hidden">
@@ -1007,6 +1014,7 @@
 <p>Stickerbug</p>
 <p>champion</p>
 <p>huanxiang0273</p>
+<p>801random</p>
 </section>
 <section>
 <h4 id="credits-art-title">美工</h4>
@@ -1148,6 +1156,7 @@
       window.__GTN_STATIC_VERSION__ = {{ static_version|default('dev')|tojson }};
       window.__GTN_CHANGELOG_VERSION__ = {{ changelog_version|default('')|tojson }};
     </script>
+    <script src="/static/js/resource_orbs.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/game.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/keybindings.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>

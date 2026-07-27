@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GTN 管理控制台</title>
-<link rel="stylesheet" href="/static/css/adminconsole.css?v=2">
+<link rel="stylesheet" href="/static/css/adminconsole.css?v=3">
 </head>
 <body class="console-body">
 <main class="console-root">
@@ -25,11 +25,14 @@
     <header class="console-header">
       <div>
         <div class="console-title">GTN Admin Console</div>
-        <div id="console-status" class="console-status">connected</div>
+        <div class="console-status-row">
+          <span id="console-status" class="console-status" data-state="connecting">connecting</span>
+          <span id="console-activity" class="console-activity" aria-live="polite">idle</span>
+        </div>
       </div>
       <div class="console-actions">
         <a href="/adminpage" target="_blank" rel="noopener">adminpage</a>
-        <a href="/handling" target="_blank" rel="noopener">handling</a>
+        <button id="console-stop" type="button" disabled>interrupt</button>
         <button id="console-clear" type="button">clear</button>
         <button id="console-logout" type="button">logout</button>
       </div>
@@ -40,11 +43,11 @@
     <div id="console-completions" class="console-completions hidden"></div>
 
     <form id="console-command-form" class="console-input-row" autocomplete="off">
-      <span class="console-prompt">&gt;</span>
-      <input id="console-command" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="控制台命令">
+      <span id="console-prompt" class="console-prompt">&gt;</span>
+      <input id="console-command" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" enterkeyhint="send" aria-label="控制台命令">
     </form>
   </section>
 </main>
-<script src="/static/js/adminconsole.js?v=4"></script>
+<script src="/static/js/adminconsole.js?v=7"></script>
 </body>
 </html>

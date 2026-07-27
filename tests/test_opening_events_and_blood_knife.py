@@ -72,22 +72,44 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
             else:
                 CARD_DEFS[key] = old_value
 
-    def test_light_baptism_only_converts_non_attack_cards(self):
+    def test_light_baptism_only_converts_attack_cards(self):
         engine = GameEngine()
         engine.players[0].deck = [
             CardInstance('test:light_attack'),
             CardInstance('test:light_skill'),
+            CardInstance('Light'),
         ]
         engine.opening_event_picks[0] = 3
         engine.opening_event_sub_choices[0] = {
-            'convert_def_ids': ['test:light_attack', 'test:light_skill'],
+            'convert_def_ids': ['test:light_attack', 'test:light_skill', 'Light'],
         }
 
         engine._apply_opening_event(0)
 
         self.assertEqual(
             [card.def_id for card in engine.players[0].deck],
-            ['test:light_attack', 'Light'],
+            ['Light', 'test:light_skill', 'Light'],
+        )
+        converted_lights = [
+            card for card in engine.players[0].deck
+            if card.def_id == 'Light'
+        ]
+        self.assertEqual(len(converted_lights), 2)
+        self.assertTrue(all({'sprout', 'symbiosis'} <= card.flags for card in converted_lights))
+        self.assertIn('最多5张攻击牌', engine.OPENING_EVENTS[3]['desc'])
+
+    def test_light_baptism_frontends_only_offer_attack_cards(self):
+        root = Path(__file__).resolve().parents[1]
+        game_js = (root / 'static' / 'js' / 'game.js').read_text(encoding='utf-8')
+        local_worker_js = (root / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
+
+        self.assertGreaterEqual(
+            game_js.count("return def && def.card_type === 'thorn';"),
+            2,
+        )
+        self.assertIn(
+            "if (!sourceCardDef || sourceCardDef.card_type !== 'thorn') return;",
+            local_worker_js,
         )
 
     def test_multi_petal_adds_three_dust_cards(self):

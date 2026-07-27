@@ -2586,6 +2586,35 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+.feedback-inner.handling-open {
+  width: min(1500px, calc(100vw - 20px));
+  height: calc(100vh - 20px);
+  max-width: none;
+  max-height: none;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+
+.feedback-inner.handling-open > .account-popover-head,
+.feedback-inner.handling-open > .feedback-tabs,
+.feedback-inner.handling-open > .feedback-body {
+  display: none;
+}
+
+.feedback-handling-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: var(--bg-primary, #f4f5f7);
+}
+
+.feedback-handling-frame.hidden {
+  display: none;
+}
+
 .feedback-tabs {
   display: flex;
   gap: 8px;
@@ -2856,6 +2885,12 @@ body {
     padding: clamp(8px, 2vw, 12px);
     gap: 7px;
     grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .feedback-inner.handling-open {
+    width: calc(100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
+    height: calc(100vh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    padding: 0;
   }
 
   .feedback-tabs {
@@ -6542,7 +6577,8 @@ body {
 
 .opp-hand-equip {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  align-content: flex-start;
   gap: 8px;
   padding: 2px 12px 6px;
   flex-wrap: wrap;
@@ -6551,6 +6587,8 @@ body {
 .opp-hand-row {
   display: flex;
   align-items: center;
+  align-content: flex-start;
+  align-self: flex-start;
   gap: 4px;
   flex-wrap: wrap;
 }
@@ -6580,6 +6618,8 @@ body {
 .equip-row {
   display: flex;
   align-items: center;
+  align-content: flex-start;
+  align-self: flex-start;
   gap: 6px;
   padding: 2px 12px;
   flex-wrap: wrap;
@@ -14704,16 +14744,38 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
 }
 
 .game-container.mode-2v2 .opp-hand-equip {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    align-content: flex-start;
     min-height: 0;
     overflow: hidden;
 }
 
 .game-container.mode-2v2 .opp-hand-row {
     display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    align-items: flex-start;
+    align-content: flex-start;
     gap: 3px;
     overflow-x: auto;
     overflow-y: hidden;
     padding: 2px 0 4px;
+}
+
+.game-container.mode-2v2 .opp-hand-equip > .equip-row {
+    flex: 0 1 48%;
+    min-width: 0;
+    max-width: 48%;
+    max-height: 76px;
+    align-self: flex-start;
+    align-items: flex-start;
+    align-content: flex-start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 2px 0 4px;
+    scrollbar-width: thin;
 }
 
 .game-container.mode-2v2 .opp-hand-row .card,

@@ -20,11 +20,11 @@ STORY_RULES = {
 }
 
 STORY_RARITIES = {
-    'primary': {'name': {'zh': '基础', 'en': 'Primary'}, 'color': '#606873'},
-    'common': {'name': {'zh': '普通', 'en': 'Common'}, 'color': '#438C55'},
-    'rare': {'name': {'zh': '稀有', 'en': 'Rare'}, 'color': '#337DB4'},
-    'ultra': {'name': {'zh': '究极', 'en': 'Ultra'}, 'color': '#A64D9A'},
-    'super': {'name': {'zh': '超级', 'en': 'Super'}, 'color': '#D39A22'},
+    'primary': {'name': {'zh': '基础', 'en': 'Primary'}, 'color': '#7EEF6D'},
+    'common': {'name': {'zh': '普通', 'en': 'Common'}, 'color': '#FFE65D'},
+    'rare': {'name': {'zh': '稀有', 'en': 'Rare'}, 'color': '#861FDE'},
+    'ultra': {'name': {'zh': '究极', 'en': 'Ultra'}, 'color': '#FF2B75'},
+    'super': {'name': {'zh': '超级', 'en': 'Super'}, 'color': '#2BFFA3'},
 }
 
 STORY_CARD_TYPES = {
@@ -73,7 +73,7 @@ STORY_TAGS = {
 STORY_STATUSES = {
     'shield': {
         'name': {'zh': '护盾', 'en': 'Shield'},
-        'description': {'zh': '抵扣等量物理伤害；回合开始时清空。', 'en': 'Blocks physical damage, then clears at turn start.'},
+        'description': {'zh': '抵扣等量伤害；回合开始时清空。', 'en': 'Blocks an equal amount of damage, then clears at turn start.'},
     },
     'power': {
         'name': {'zh': '力量', 'en': 'Power'},
@@ -122,8 +122,8 @@ STORY_STATUSES = {
     'broken': {
         'name': {'zh': '破损', 'en': 'Broken'},
         'description': {
-            'zh': '每打出1张牌，失去等同于层数的H；自己的行动回合结束时清空。',
-            'en': 'Lose H equal to its stacks whenever you play a card; clear it after your action turn.',
+            'zh': '每打出1张牌，受到等同于层数的伤害；自己的行动回合结束时清空。',
+            'en': 'Take damage equal to its stacks whenever you play a card; clear it after your action turn.',
         },
     },
     'rockfall': {
@@ -147,6 +147,20 @@ STORY_BLESSINGS = {
 }
 
 
+def _story_card_description(value):
+    if isinstance(value, dict):
+        return {
+            key: _story_card_description(text)
+            for key, text in value.items()
+        }
+    if not isinstance(value, str):
+        return value
+    text = value.rstrip()
+    while text.endswith(('。', '.')):
+        text = text[:-1].rstrip()
+    return text
+
+
 def _card(
     source_card_id,
     zh,
@@ -165,6 +179,7 @@ def _card(
     flavor='',
     script=None,
 ):
+    description = _story_card_description(description)
     definition = {
         'source_card_id': source_card_id,
         'name': {'zh': zh, 'en': en},
@@ -181,7 +196,12 @@ def _card(
     if flavor:
         definition['flavor'] = {'zh': flavor, 'en': flavor}
     if upgrade:
-        definition['upgrade'] = upgrade
+        normalized_upgrade = deepcopy(upgrade)
+        if 'description' in normalized_upgrade:
+            normalized_upgrade['description'] = _story_card_description(
+                normalized_upgrade['description']
+            )
+        definition['upgrade'] = normalized_upgrade
     if script:
         definition['script'] = script
     return definition

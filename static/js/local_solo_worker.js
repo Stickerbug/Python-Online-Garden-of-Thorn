@@ -543,6 +543,7 @@ class LocalPlayer {
         this.bandage_active = false;
         this.bandage_death_pending = false;
         this.bandage_trigger_boundary_id = -1;
+        this.bandage_death_action_player_id = -1;
         this.attack_blocked = 0;
         this.untargetable = false;
         this.sponge_active = false;
@@ -767,6 +768,7 @@ class LocalPlayer {
             bandage_active: this.bandage_active,
             bandage_death_pending: this.bandage_death_pending,
             bandage_trigger_boundary_id: this.bandage_trigger_boundary_id,
+            bandage_death_action_player_id: this.bandage_death_action_player_id,
             attack_blocked: this.attack_blocked,
             untargetable: this.untargetable,
             sponge_active: this.sponge_active,
@@ -900,7 +902,8 @@ class LocalSoloEngine {
                 'nazar_active', 'nazar_big_hits', 'equipment_protection', 'magic_battery_m_this_turn',
                 'coffee_first_use', 'invincible', 'invincible_until_player', 'invincible_granted_round',
                 'invincible_granted_turn_marker', 'skip_turn', 'damage_multiplier', 'bandage_active',
-                'bandage_death_pending', 'bandage_trigger_boundary_id', 'attack_blocked', 'untargetable', 'sponge_active',
+                'bandage_death_pending', 'bandage_trigger_boundary_id', 'bandage_death_action_player_id',
+                'attack_blocked', 'untargetable', 'sponge_active',
                 'shovel_active', 'attack_only', 'enemy_draw_reduction', 'enemy_e_reduction',
                 'extra_hand_limit_bonus', 'negate_next_skill', 'is_first_player',
                 'turn_damage_taken', 'turn_damage_dealt', 'last_turn_damage_taken', 'last_turn_damage_dealt',
@@ -1080,6 +1083,16 @@ class LocalSoloEngine {
             if (defId && cardDef(defId)) ps.deck.push(new LocalCard(entry));
         });
         this.enforceUniqueCardsForPlayer(playerId);
+    }
+
+    clearTurnCardTracking(playerId = null) {
+        const players = playerId == null
+            ? this.players
+            : [this.players[toInt(playerId, -1)]].filter(Boolean);
+        players.forEach(ps => {
+            ps.cards_played_this_turn = {};
+            ps.cards_played_this_turn_instance_ids = [];
+        });
     }
 
     enforceUniqueCardsForPlayer(playerId, preferredCard = null) {
@@ -1498,16 +1511,21 @@ class LocalSoloEngine {
             });
         } else if (eventId === 3) {
             let converted = 0;
+            const generatedInstanceIds = new Set();
             (sub.convert_def_ids || []).slice(0, 5).forEach(sourceDef => {
                 const sourceCardDef = cardDef(sourceDef);
-                if (sourceDef === 'Light' || !sourceCardDef || sourceCardDef.card_type === 'thorn') return;
-                const idx = ps.deck.findIndex(card => card.def_id === sourceDef);
+                if (!sourceCardDef || sourceCardDef.card_type !== 'thorn') return;
+                const idx = ps.deck.findIndex(card => (
+                    card.def_id === sourceDef
+                    && !generatedInstanceIds.has(card.instance_id)
+                ));
                 if (idx >= 0 && cardDef('Light')) {
                     const light = new LocalCard('Light');
                     light.instance_flags.add('sprout');
                     light.instance_flags.add('symbiosis');
                     this.applySetupModifiersToCard(playerId, light);
                     ps.deck[idx] = light;
+                    generatedInstanceIds.add(light.instance_id);
                     converted += 1;
                 }
             });
@@ -1608,9 +1626,8 @@ class LocalSoloEngine {
 
     startDrawPhase() {
         this.phase = 'draw';
+        this.clearTurnCardTracking();
         this.players.forEach(ps => {
-            ps.cards_played_this_turn = {};
-            ps.cards_played_this_turn_instance_ids = [];
             ps.magic_battery_m_this_turn = 0;
             ps.custom_vars['魔法电池本回合回魔'] = 0;
         });
@@ -1662,8 +1679,7 @@ class LocalSoloEngine {
         if (this.pending_response || this.pending_choice) return;
         this.runOceanAutoCardsTurnStart(playerId);
         if (this.pending_response || this.pending_choice) return;
-        this.expireBandagesBeforeAction(playerId);
-        if (this.game_over) return;
+        this.armBandagesForAction(playerId);
         const ps = this.players[playerId];
         if (!ps || ps.health <= 0) {
             this.checkGameOver();
@@ -2057,6 +2073,15 @@ class LocalSoloEngine {
         if (type === 'request_confirm' || choiceType === 'confirm') {
             return choice.confirmed != null || choice.accepted != null;
         }
+        const selectedIds = [];
+        if (choice.target_instance_id != null) selectedIds.push(choice.target_instance_id);
+        if (Array.isArray(choice.target_instance_ids)) selectedIds.push(...choice.target_instance_ids);
+        if (selectedIds.some(instanceId => {
+            const selectedCard = this.findCardByInstanceId(instanceId);
+            return !selectedCard || !cardSelectableByAction(selectedCard);
+        })) {
+            return false;
+        }
         if (choiceType === 'choose_cards_from_hand') {
             if (!Array.isArray(choice.target_instance_ids)) return false;
             const minCount = Math.max(0, toInt(params.min_count ?? params.min ?? 1, 1));
@@ -2182,7 +2207,11 @@ class LocalSoloEngine {
         if (type === 'choose_cards_from_hand' || type === 'choose_same_attacks_from_hand') {
             const maxCount = Math.max(1, toInt((pending.choice_params || {}).max_count || (pending.choice_params || {}).count || 1, 1));
             const currentId = card ? card.instance_id : -1;
-            const cards = this.players[playerId].hand.filter(c => c.instance_id !== currentId && !c.flags.has('exalted') && (type !== 'choose_same_attacks_from_hand' || c.card_type === 'thorn'));
+            const cards = this.players[playerId].hand.filter(c => (
+                c.instance_id !== currentId
+                && cardSelectableByAction(c)
+                && (type !== 'choose_same_attacks_from_hand' || c.card_type === 'thorn')
+            ));
             return { ...choice, target_instance_ids: cards.slice(0, maxCount).map(c => c.instance_id) };
         }
         const zoneMap = {
@@ -2197,12 +2226,23 @@ class LocalSoloEngine {
         if (zoneMap[type]) {
             const ownerId = ['choose_from_enemy_hand', 'choose_card_from_hand', 'choose_from_deck', 'choose_from_discard', 'choose_from_exile'].includes(type) ? targetId : playerId;
             const zone = (this.players[ownerId] && this.players[ownerId][zoneMap[type]]) || [];
-            let selected = zone.find(c => c && !c.flags.has('exalted') && (!card || c.instance_id !== card.instance_id));
-            if (type === 'choose_attack_from_hand') selected = zone.find(c => c && c.card_type === 'thorn' && !c.flags.has('exalted') && (!card || c.instance_id !== card.instance_id));
+            let selected = zone.find(c => c && cardSelectableByAction(c) && (!card || c.instance_id !== card.instance_id));
+            if (type === 'choose_attack_from_hand') {
+                selected = zone.find(c => (
+                    c
+                    && c.card_type === 'thorn'
+                    && cardSelectableByAction(c)
+                    && (!card || c.instance_id !== card.instance_id)
+                ));
+            }
             return selected ? { ...choice, target_instance_id: selected.instance_id } : null;
         }
         if (type === 'choose_ocean_sapphire') {
-            const selected = this.players[playerId].hand.find(c => c.card_type === 'thorn' && !c.flags.has('exalted') && (!card || c.instance_id !== card.instance_id));
+            const selected = this.players[playerId].hand.find(c => (
+                c.card_type === 'thorn'
+                && cardSelectableByAction(c)
+                && (!card || c.instance_id !== card.instance_id)
+            ));
             return selected ? { ...choice, target_instance_id: selected.instance_id } : null;
         }
         if (type === 'choose_equipment' || type === 'choose_enemy_equipment') {
@@ -6399,6 +6439,9 @@ class LocalSoloEngine {
             dmg = this.applyCorruptionMultiplier(dmg);
             dmg += this.damageDealtEquipmentFlatBonus(attackerId);
             if (plankBlocksAttack) dmg = 0;
+            const rootArmor = immune ? 0 : this.customStatusValue(targetId, 'jungle:root', 'jungle:root_status', 'root_status');
+            const fragile = immune ? 0 : this.customStatusValue(targetId, 'jungle:fragile', 'fragile');
+            dmg = Math.max(0, dmg - ps.armor - rootArmor + fragile);
             let nazarStacks = immune ? 0 : this.nazarStatusValue(targetId);
             if (dmg > 0 && nazarStacks > 0) {
                 const original = dmg;
@@ -6407,9 +6450,6 @@ class LocalSoloEngine {
                     this.setNazarStatusValue(targetId, nazarStacks - 1);
                 }
             }
-            const rootArmor = immune ? 0 : this.customStatusValue(targetId, 'jungle:root', 'jungle:root_status', 'root_status');
-            const fragile = immune ? 0 : this.customStatusValue(targetId, 'jungle:fragile', 'fragile');
-            dmg = Math.max(0, dmg - ps.armor - rootArmor + fragile);
             if (ps.sponge_active && dmg > 0 && !immune) {
                 const converted = Math.min(10, Math.floor(dmg / 2));
                 ps.poison += converted;
@@ -6520,28 +6560,34 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         if (!ps) return;
         ps.bandage_death_pending = true;
+        ps.bandage_death_action_player_id = -1;
         ps.bandage_trigger_boundary_id = this._turn_boundary_active
             ? toInt(this._turn_boundary_id, -1)
             : toInt(this._turn_boundary_serial, 0);
     }
 
-    expireBandagesBeforeAction(actionPlayerId = this.current_player) {
-        const boundaryId = toInt(this._turn_boundary_id, -1);
-        let expired = false;
+    armBandagesForAction(actionPlayerId = this.current_player) {
         this.players.forEach((ps, playerId) => {
             if (!ps || !ps.bandage_death_pending) return;
             if (playerId !== actionPlayerId) return;
-            if (
-                this._turn_boundary_active
-                && toInt(ps.bandage_trigger_boundary_id, -1) === boundaryId
-            ) {
-                return;
+            if (toInt(ps.bandage_death_action_player_id, -1) < 0) {
+                ps.bandage_death_action_player_id = actionPlayerId;
             }
+        });
+    }
+
+    expireBandagesAfterAction(actionPlayerId = this.current_player) {
+        if (!this.players[actionPlayerId]) return;
+        let expired = false;
+        this.players.forEach((ps, playerId) => {
+            if (!ps || !ps.bandage_death_pending) return;
+            if (toInt(ps.bandage_death_action_player_id, -1) !== actionPlayerId) return;
             ps.health = 0;
             ps.bandage_death_pending = false;
             ps.bandage_trigger_boundary_id = -1;
+            ps.bandage_death_action_player_id = -1;
             this.clearInvincibleState(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带效果结束，在己方下一名可行动玩家行动前死亡！`);
+            this.logMsg(`${this.pn(playerId)}的绷带效果结束，在己方下一名可行动玩家回合结束后死亡！`);
             expired = true;
         });
         if (expired) this.checkGameOver();
@@ -6585,6 +6631,7 @@ class LocalSoloEngine {
         ps.bandage_active = false;
         ps.bandage_death_pending = false;
         ps.bandage_trigger_boundary_id = -1;
+        ps.bandage_death_action_player_id = -1;
         this.clearInvincibleState(playerId);
         ps.custom_statuses = {};
         ps.custom_vars['三角形层数'] = 0;
@@ -6634,7 +6681,7 @@ class LocalSoloEngine {
             this.setInvincibleUntilNextOwnTurnEnd(playerId);
             ps.bandage_active = false;
             this.markBandageDeathPending(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带发动！在己方下一名可行动玩家行动前死亡`);
+            this.logMsg(`${this.pn(playerId)}的绷带发动！在己方下一名可行动玩家回合结束后死亡`);
             return;
         }
         const idx = ps.hand.findIndex(card => card.def_id === 'Yggdrasil');
@@ -6649,6 +6696,7 @@ class LocalSoloEngine {
             this.game_over = true;
             this.winner = -1;
             this.phase = 'game_over';
+            this.clearTurnCardTracking();
             this.logMsg('双方生命值同时归零！平局！');
             return;
         }
@@ -6657,6 +6705,7 @@ class LocalSoloEngine {
                 this.game_over = true;
                 this.winner = 1 - i;
                 this.phase = 'game_over';
+                this.clearTurnCardTracking();
                 this.logMsg(`${this.pn(i)}生命值归零！${this.pn(this.winner)}获胜！`);
                 return;
             }
@@ -7539,7 +7588,7 @@ class LocalSoloEngine {
         if (ps.bandage_active && ps.invincible) {
             ps.bandage_active = false;
             this.markBandageDeathPending(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带将在己方下一名可行动玩家行动前结束`);
+            this.logMsg(`${this.pn(playerId)}的绷带将在己方下一名可行动玩家回合结束后使其死亡`);
         }
         this.returnCogwheelCardsNow(playerId);
         [...ps.hand].forEach(card => {
@@ -7562,6 +7611,9 @@ class LocalSoloEngine {
         }
         this.decayOceanCardChargeTurnEnd(playerId);
         this.saveLastTurnDamageSnapshot(playerId);
+        this.expireBandagesAfterAction(playerId);
+        this.clearTurnCardTracking(playerId);
+        if (this.game_over) return;
         if (playerId === this.first_player) this.startPlayerTurn(1 - this.first_player);
         else this.endRound();
     }
