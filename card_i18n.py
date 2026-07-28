@@ -188,7 +188,7 @@ CARD_I18N = {
     'Sewage': {
         'name': _t('污水', 'Sewage', 'Eaux usées', 'Esgoto', 'Стоки', '汚水'),
         'desc': _t('腐蚀一切装备。', 'Corrodes all equipment.', 'Corrode tout équipement.', 'Corrói todo equipamento.', 'Разъедает любое снаряжение.', 'あらゆる装備を腐食させる。'),
-        'effect': _t('摧毁目标一张装备', 'Destroy one target equipment', 'Détruit un équipement de la cible', 'Destrói um equipamento do alvo', 'Уничтожить одно снаряжение цели', '対象の装備1つを破壊する'),
+        'effect': _t('选择目标一张装备摧毁', 'Destroy one target equipment', 'Détruit un équipement de la cible', 'Destrói um equipamento do alvo', 'Уничтожить одно снаряжение цели', '対象の装備1つを破壊する'),
     },
     'Pincer': {
         'name': _t('螫针', 'Pincer', 'Pince', 'Pinça', 'Клешня', '毒針'),

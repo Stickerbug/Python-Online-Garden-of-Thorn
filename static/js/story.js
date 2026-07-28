@@ -3,6 +3,8 @@
 
     const $ = (id) => document.getElementById(id);
     const SVG_NS = 'http://www.w3.org/2000/svg';
+    const STORY_MAP_NODE_RADIUS = 25;
+    const STORY_MAP_EDGE_INSET = STORY_MAP_NODE_RADIUS + 4;
     const VIEWS = [
         'story-loading', 'story-empty', 'story-blessing', 'story-run',
         'story-combat', 'story-room', 'story-reward', 'story-terminal',
@@ -22,6 +24,10 @@
     let hoveredPredictionTargetId = '';
     let storyKeyboardFocus = null;
     let storySecondHandPage = false;
+    let activeStoryRoomTabKey = '';
+    let activeStoryRoomTabId = '';
+    let pendingStoryDeckChange = null;
+    let pendingStoryEventAction = null;
     const storyCardElementData = new WeakMap();
     const STORY_SKIN_LOOK_OFFSET_X_PERCENT = 38;
     const STORY_SKIN_LOOK_OFFSET_Y_PERCENT = 56;
@@ -42,6 +48,25 @@
         E: '/static/assets/ui-icons/elixir.svg',
         M: '/static/assets/ui-icons/magic.svg',
     });
+
+    const STORY_STATUS_ICONS = Object.freeze({
+        shield: 'shield',
+        power: 'triangle',
+        temporary_power: 'triangle',
+        endurance: 'armor',
+        weak: 'weakness',
+        vulnerable: 'fragile',
+        fragile: 'fragile',
+        evade: 'dodge',
+        poison: 'poison',
+        stun: 'stunned',
+        reflection: 'nazar',
+        wither: 'stagnation',
+        broken: 'fracture',
+        rockfall: 'root_status',
+    });
+    const STORY_TERM_LONG_PRESS_MS = 430;
+    const STORY_TERM_MOVE_CANCEL_PX = 12;
 
     const STORY_RESOURCE_TERMS = Object.freeze({
         D: {
@@ -82,10 +107,25 @@
             blessingTitle: 'Choose a starting blessing', blessingCopy: 'Choose one for this journey.',
             intent: 'Intent', endTurn: 'End Turn', playerTurn: 'Your Turn', enemyTurn: 'Enemy Turn', close: 'Close',
             drawPile: 'Draw', discardPile: 'Discard', exilePile: 'Exile',
-            battleWon: 'Battle won', chooseCard: 'Choose a card', skip: 'Skip',
-            gainedGold: (value) => `Gained ${value} G.`, room: 'Room', restTitle: 'Rest Site',
+            battleWon: 'Battle won', chooseCard: 'Choose a card', skip: 'Skip card',
+            rewards: 'Battle rewards', rewardCopy: 'Claim each reward before continuing.',
+            claim: 'Claim', claimed: 'Claimed', cardReward: 'Card reward', talentReward: 'Talent',
+            continueJourney: 'Continue', gainedGold: (value) => `Gained ${value} G.`,
+            goldReward: (value) => `${value} G`, room: 'Room', restTitle: 'Rest Site',
             restCopy: 'Recover H or upgrade one card.', heal: 'Recover H', upgrade: 'Upgrade',
+            shopCards: 'Cards', shopTalents: 'Talents', remove: 'Remove',
+            roomActions: 'Actions', restGold: 'Gold',
+            noShopCards: 'No cards are available', noShopTalents: 'No talents are available',
+            noUpgradableCards: 'No cards can be upgraded',
+            confirmUpgradeTitle: 'Confirm upgrade', confirmRemoveTitle: 'Confirm removal',
+            permanentDeckChange: 'This change lasts for the rest of this journey.',
+            removedFromDeck: 'Removed from the deck', beforeChange: 'Before', afterChange: 'After',
+            confirmEventTitle: 'Confirm this choice',
+            confirmEventCopy: 'This result takes effect immediately and cannot be undone in this room.',
             chestTitle: 'Chest', chestCopy: 'Open the chest and continue.', openChest: 'Open',
+            currentHealth: 'Current H', restRecovery: 'Recovery', chestGold: 'Gold',
+            chestTalent: 'Talent', shopWallet: 'Available Gold', removePrice: 'Removal',
+            upgradePrice: 'Upgrade', none: 'None',
             eventTitle: 'Garden Event', eventCopy: 'Choose one outcome.', takeGold: 'Take 20 Gold',
             recoverHealth: 'Recover 15 H', shopTitle: 'Shop', shopCopy: 'Spend Gold or leave.',
             buy: (value) => `Buy · ${value}`, leave: 'Leave', journeyComplete: 'Journey complete',
@@ -93,6 +133,7 @@
             journeyFailedCopy: 'Your route ends here, but the next map is waiting.', newJourney: 'New Journey',
             requestFailed: 'Story data is temporarily unavailable', stateUpdated: 'State synchronized',
             upgraded: 'Upgraded', shield: 'Shield', power: 'Power', weak: 'Weak', vulnerable: 'Vulnerable',
+            summon: 'Summon', defeated: 'Defeated', allies: 'All allies', self: 'Self', addCard: 'Add card', consume: 'Consume',
             developerMode: 'Developer Mode', devJump: 'Jump to Level', devFloor: 'Floor', devRoom: 'Room',
             devValues: 'Set Values', devApply: 'Apply Values', devJumpButton: 'Jump',
             devValuesUpdated: 'Values updated', devJumped: 'Level loaded',
@@ -101,7 +142,8 @@
             chooseCardHint: 'Choose a card', damagePrediction: 'Damage',
             chooseCards: 'Choose cards', chooseExact: (value) => `Choose ${value} card(s).`,
             chooseUpTo: (value) => `Choose up to ${value} card(s).`,
-            cardTerms: 'Card Terms', noCardTerms: 'No additional terms',
+            cardTerms: 'Card Terms', statusTerms: 'Status Term', noCardTerms: 'No additional terms',
+            beforeUpgrade: 'Before Upgrade', afterUpgrade: 'After Upgrade',
             cardTypes: { thorn: 'Thorn', bloom: 'Bloom', root: 'Root', guard: 'Guard', curse: 'Curse', infect: 'Infect' },
             pileTotal: (label, count) => `${label}: ${count} cards`,
             floor: (value) => `Floor ${value}`,
@@ -116,15 +158,31 @@
             cancel: '取消', confirm: '确定', garden: '花园', blessingTitle: '选择初始赐福',
             blessingCopy: '本次旅程只能选择一项。', intent: '意图', endTurn: '结束回合', playerTurn: '玩家回合', enemyTurn: '敌方回合', close: '关闭', drawPile: '抽牌堆',
             discardPile: '弃牌堆', exilePile: '放逐区', battleWon: '战斗胜利', chooseCard: '选择一张牌',
-            skip: '跳过', gainedGold: (value) => `获得 ${value}G。`, room: '房间', restTitle: '休息区',
+            skip: '跳过卡牌', rewards: '战斗奖励', rewardCopy: '逐项领取奖励后继续前进。',
+            claim: '领取', claimed: '已领取', cardReward: '卡牌奖励', talentReward: '天赋',
+            continueJourney: '继续前进', gainedGold: (value) => `获得 ${value}G。`,
+            goldReward: (value) => `${value}G`, room: '房间', restTitle: '休息区',
             restCopy: '回复生命，或升级一张牌。', heal: '回复生命', upgrade: '升级', chestTitle: '宝箱',
+            shopCards: '卡牌', shopTalents: '天赋', remove: '移除',
+            roomActions: '选项', restGold: '金币',
+            noShopCards: '暂无可购买卡牌', noShopTalents: '暂无可购买天赋',
+            noUpgradableCards: '暂无可升级卡牌',
+            confirmUpgradeTitle: '确认升级', confirmRemoveTitle: '确认移除',
+            permanentDeckChange: '此变化将在本次旅程中永久生效。',
+            removedFromDeck: '从牌组中移除', beforeChange: '变化前', afterChange: '变化后',
+            confirmEventTitle: '确认事件选择',
+            confirmEventCopy: '此结果将立即生效，且无法在当前节点内撤回。',
             chestCopy: '打开宝箱后继续前进。', openChest: '打开', eventTitle: '花园事件',
+            currentHealth: '当前生命', restRecovery: '本次回复', chestGold: '金币',
+            chestTalent: '天赋', shopWallet: '可用金币', removePrice: '移除费用',
+            upgradePrice: '升级费用', none: '无',
             eventCopy: '选择一种结果。', takeGold: '获得20金币', recoverHealth: '回复15H', shopTitle: '商店',
             shopCopy: '消耗金币购买物品，也可以直接离开。', buy: (value) => `购买 · ${value}`, leave: '离开',
             journeyComplete: '旅程完成', journeyCompleteCopy: '你已经穿过了花园路线。', journeyFailed: '旅程结束',
             journeyFailedCopy: '本次路线止步于此，下一张地图仍在等待。', newJourney: '开始新旅程',
             requestFailed: '故事记录暂时不可用', stateUpdated: '状态已同步', upgraded: '已升级',
             shield: '护盾', power: '力量', weak: '虚弱', vulnerable: '易损', floor: (value) => `第 ${value} 层`,
+            summon: '召唤', defeated: '阵亡', allies: '全体友方', self: '自己', addCard: '加入卡牌', consume: '吞噬',
             developerMode: '开发人员模式', devJump: '关卡跳转', devFloor: '层数', devRoom: '房间',
             devValues: '数值设置', devApply: '应用数值', devJumpButton: '跳转',
             devValuesUpdated: '数值已更新', devJumped: '已载入所选关卡',
@@ -133,7 +191,8 @@
             chooseCardHint: '选择一张手牌', damagePrediction: '伤害预测',
             chooseCards: '选择卡牌', chooseExact: (value) => `选择 ${value} 张牌。`,
             chooseUpTo: (value) => `选择至多 ${value} 张牌。`,
-            cardTerms: '卡牌术语', noCardTerms: '没有额外术语',
+            cardTerms: '卡牌术语', statusTerms: '状态术语', noCardTerms: '没有额外术语',
+            beforeUpgrade: '升级前', afterUpgrade: '升级后',
             cardTypes: { thorn: '攻击', bloom: '技能', root: '装备', guard: '反制', curse: '诅咒', infect: '状态牌' },
             pileTotal: (label, count) => `${label}：${count} 张`,
             rooms: { blessing: '赐福', combat: '战斗', elite: '精英', event: '事件', rest: '休息', shop: '商店', chest: '宝箱', boss: '首领' },
@@ -145,10 +204,28 @@
             route: 'Route', abandon: 'Terminer le voyage', blessingTitle: 'Choisir une bénédiction',
             blessingCopy: 'Choisissez-en une pour ce voyage.', intent: 'Intention', endTurn: 'Fin du tour',
             drawPile: 'Pioche', discardPile: 'Défausse', exilePile: 'Exil', battleWon: 'Victoire',
-            chooseCard: 'Choisissez une carte', skip: 'Passer', room: 'Salle', newJourney: 'Nouveau voyage',
+            chooseCard: 'Choisissez une carte', skip: 'Passer la carte', room: 'Salle', newJourney: 'Nouveau voyage',
+            rewards: 'Récompenses du combat', rewardCopy: 'Récupérez chaque récompense avant de continuer.',
+            claim: 'Récupérer', claimed: 'Récupéré', cardReward: 'Carte', talentReward: 'Talent',
+            continueJourney: 'Continuer', goldReward: (value) => `${value} G`,
+            summon: 'Invocation', allies: 'Tous les alliés', self: 'Soi', addCard: 'Ajouter une carte', consume: 'Absorber',
             developerMode: 'Mode développeur', devJump: 'Changer de niveau', devFloor: 'Étage', devRoom: 'Salle',
             devValues: 'Modifier les valeurs', devApply: 'Appliquer', devJumpButton: 'Aller',
             devValuesUpdated: 'Valeurs mises à jour', devJumped: 'Niveau chargé',
+            cardTerms: 'Termes de carte', statusTerms: 'Terme d’état', noCardTerms: 'Aucun terme supplémentaire',
+            beforeUpgrade: 'Avant amélioration', afterUpgrade: 'Après amélioration',
+            shopCards: 'Cartes', shopTalents: 'Talents', remove: 'Retirer',
+            roomActions: 'Choix', restGold: 'Or',
+            noShopCards: 'Aucune carte disponible', noShopTalents: 'Aucun talent disponible',
+            noUpgradableCards: 'Aucune carte ne peut être améliorée',
+            confirmUpgradeTitle: 'Confirmer l’amélioration', confirmRemoveTitle: 'Confirmer le retrait',
+            permanentDeckChange: 'Ce changement dure pendant tout ce voyage.',
+            removedFromDeck: 'Retirée du paquet', beforeChange: 'Avant', afterChange: 'Après',
+            confirmEventTitle: 'Confirmer ce choix',
+            confirmEventCopy: 'Ce résultat prend effet immédiatement et ne peut pas être annulé dans cette salle.',
+            currentHealth: 'H actuels', restRecovery: 'Récupération', chestGold: 'Or',
+            chestTalent: 'Talent', shopWallet: 'Or disponible', removePrice: 'Retrait',
+            upgradePrice: 'Amélioration', none: 'Aucun', defeated: 'Vaincu',
             garden: 'Jardin', floor: (value) => `Étage ${value}`,
             rooms: { blessing: 'Bénédiction', combat: 'Combat', elite: 'Élite', event: 'Événement', rest: 'Repos', shop: 'Boutique', chest: 'Coffre', boss: 'Boss' },
             roomMarks: { blessing: 'B', combat: 'C', elite: 'É', event: '?', rest: 'R', shop: '$', chest: 'T', boss: 'X' },
@@ -158,10 +235,28 @@
             emptyTitle: '新しい旅', start: '開始', stage: 'ステージ', biome: '地域', gold: 'ゴールド',
             route: 'ルート', abandon: '旅を終了', blessingTitle: '祝福を選択', blessingCopy: '今回の旅で一つ選択します。',
             intent: '意図', endTurn: 'ターン終了', drawPile: '山札', discardPile: '捨て札', exilePile: '追放',
-            battleWon: '戦闘勝利', chooseCard: 'カードを選択', skip: 'スキップ', room: '部屋',
+            battleWon: '戦闘勝利', chooseCard: 'カードを選択', skip: 'カードをスキップ', room: '部屋',
+            rewards: '戦闘報酬', rewardCopy: 'すべての報酬を受け取ってから先へ進みます。',
+            claim: '受け取る', claimed: '受取済み', cardReward: 'カード報酬', talentReward: '天賦',
+            continueJourney: '進む', goldReward: (value) => `${value} G`,
+            summon: '召喚', allies: '味方全体', self: '自身', addCard: 'カード追加', consume: '吸収',
             developerMode: '開発者モード', devJump: 'ステージ移動', devFloor: '階', devRoom: '部屋',
             devValues: '数値設定', devApply: '適用', devJumpButton: '移動',
             devValuesUpdated: '数値を更新しました', devJumped: 'ステージを読み込みました',
+            cardTerms: 'カード用語', statusTerms: '状態用語', noCardTerms: '追加用語なし',
+            beforeUpgrade: 'アップグレード前', afterUpgrade: 'アップグレード後',
+            shopCards: 'カード', shopTalents: '天賦', remove: '削除',
+            roomActions: '選択肢', restGold: 'ゴールド',
+            noShopCards: '購入できるカードはありません', noShopTalents: '購入できる天賦はありません',
+            noUpgradableCards: 'アップグレードできるカードはありません',
+            confirmUpgradeTitle: 'アップグレード確認', confirmRemoveTitle: '削除確認',
+            permanentDeckChange: 'この旅の間、変更は元に戻せません。',
+            removedFromDeck: 'デッキから削除', beforeChange: '変更前', afterChange: '変更後',
+            confirmEventTitle: 'イベント選択の確認',
+            confirmEventCopy: '結果は直ちに適用され、この部屋では取り消せません。',
+            currentHealth: '現在のH', restRecovery: '回復量', chestGold: 'ゴールド',
+            chestTalent: '天賦', shopWallet: '所持ゴールド', removePrice: '削除費用',
+            upgradePrice: '強化費用', none: 'なし', defeated: '撃破',
             newJourney: '新しい旅', garden: 'ガーデン', floor: (value) => `${value}階`,
             rooms: { blessing: '祝福', combat: '戦闘', elite: 'エリート', event: 'イベント', rest: '休憩', shop: 'ショップ', chest: '宝箱', boss: 'ボス' },
             roomMarks: { blessing: '祝', combat: '戦', elite: '精', event: '？', rest: '休', shop: '店', chest: '宝', boss: '首' },
@@ -170,7 +265,10 @@
 
     function language() {
         let value = 'zh';
-        try { value = String(localStorage.getItem('gtn_lang') || 'zh').toLowerCase(); } catch (_) {}
+        try {
+            const storage = window.GTN_STORAGE || window.localStorage;
+            value = String(storage.getItem('gtn_lang') || 'zh').toLowerCase();
+        } catch (_) {}
         return Object.prototype.hasOwnProperty.call(TEXT, value) ? value : 'zh';
     }
 
@@ -291,12 +389,19 @@
             'story-blessing-title': t.blessingTitle, 'story-blessing-copy': t.blessingCopy,
             'story-intent-label': t.intent, 'story-end-turn': t.endTurn,
             'story-pile-close': t.close,
-            'story-reward-skip': t.skip, 'story-terminal-new': t.newJourney,
+            'story-reward-skip': t.skip, 'story-reward-continue': t.continueJourney,
+            'story-terminal-new': t.newJourney,
             'story-dev-toggle': t.developerMode, 'story-dev-title': t.developerMode,
             'story-dev-jump-label': t.devJump, 'story-dev-floor-label': t.devFloor,
             'story-dev-node-label': t.devRoom, 'story-dev-values-label': t.devValues,
             'story-dev-jump': t.devJumpButton, 'story-dev-apply': t.devApply,
             'story-dev-gold-label': t.gold,
+            'story-deck-change-before-label': t.beforeChange,
+            'story-deck-change-after-label': t.afterChange,
+            'story-deck-change-cancel': t.cancel,
+            'story-deck-change-confirm': t.confirm,
+            'story-event-confirm-cancel': t.cancel,
+            'story-event-confirm-submit': t.confirm,
         };
         Object.entries(values).forEach(([id, value]) => setText(id, value));
         const back = $('story-back');
@@ -514,6 +619,47 @@
         );
     }
 
+    function storyEnemyFromRun(run, enemyId) {
+        return run?.state?.combat?.enemies?.find(
+            (item) => String(item.id) === String(enemyId),
+        ) || null;
+    }
+
+    function syncStoryEnemyGroupLayout() {
+        const group = $('story-enemy-group');
+        if (!group) return;
+        const actors = [...group.querySelectorAll('.story-actor-enemy')]
+            .filter((actor) => !actor.classList.contains('is-defeated-complete'));
+        const count = Math.max(1, actors.length);
+        group.style.setProperty('--story-enemy-count', String(count));
+        group.style.setProperty(
+            '--story-enemy-scale',
+            String(Math.max(.48, Math.min(.82, 1.03 - count * .13))),
+        );
+    }
+
+    function ensureStorySummonedActor(event, nextRun) {
+        const enemyId = String(event?.enemy_id || '');
+        if (!enemyId) return null;
+        const existing = storyEnemyActor(enemyId);
+        if (existing) return existing;
+        const nextEnemy = storyEnemyFromRun(nextRun, enemyId);
+        const eventEnemy = event?.enemy && typeof event.enemy === 'object'
+            ? event.enemy
+            : null;
+        if (!nextEnemy && !eventEnemy) return null;
+        const enemy = {
+            ...(nextEnemy || {}),
+            ...(eventEnemy || {}),
+            intent: eventEnemy?.intent || nextEnemy?.intent,
+        };
+        const actor = createEnemyActor(enemy, '');
+        actor.classList.add('is-presentation-spawn');
+        $('story-enemy-group')?.append(actor);
+        syncStoryEnemyGroupLayout();
+        return actor;
+    }
+
     function spawnStoryFloat(target, message, kind = '') {
         const layer = $('story-float-layer');
         if (!layer || !target || !message) return;
@@ -552,6 +698,25 @@
         group.style.setProperty('--story-shake-rotate', `${rotate.toFixed(2)}deg`);
         group.style.setProperty('--story-shake-rotate-reverse', `${(-rotate * .72).toFixed(2)}deg`);
         await waitForStoryAnimation(group, 'is-gaining', 330);
+    }
+
+    async function animateEnemySummon(event, nextRun) {
+        const actor = ensureStorySummonedActor(event, nextRun);
+        if (!actor) return;
+        spawnStoryFloat(actor, t.summon, 'gain');
+        await waitForStoryAnimation(actor, 'is-summoning', 520);
+        actor.classList.remove('is-presentation-spawn');
+    }
+
+    async function animateEnemyDefeat(event) {
+        const actor = storyEnemyActor(event?.enemy_id);
+        if (!actor || actor.classList.contains('is-defeated-complete')) return;
+        spawnStoryFloat(actor, t.defeated, 'damage');
+        await waitForStoryAnimation(actor, 'is-defeating', 460);
+        actor.classList.add('is-defeated-complete');
+        actor.setAttribute('aria-hidden', 'true');
+        actor.tabIndex = -1;
+        syncStoryEnemyGroupLayout();
     }
 
     async function animateStoryPileMove(event, destination) {
@@ -616,20 +781,142 @@
         const actor = storyEnemyActor(event?.enemy_id);
         const history = Array.isArray(event?.history) ? event.history : [];
         const finalHit = history[history.length - 1];
-        if (!actor || !finalHit || !Number.isFinite(Number(finalHit.after))) return;
+        const after = Number.isFinite(Number(event?.after))
+            ? Number(event.after)
+            : Number(finalHit?.after);
+        if (!actor || !Number.isFinite(after)) return;
         const enemy = nextRun?.state?.combat?.enemies?.find(
+            (item) => String(item.id) === String(event.enemy_id),
+        ) || activeRun?.state?.combat?.enemies?.find(
             (item) => String(item.id) === String(event.enemy_id),
         );
         const maximum = Math.max(1, Number(enemy?.max_health) || 1);
-        const current = Number(finalHit.after);
+        const current = after;
         const fill = actor.querySelector('[data-enemy-health-fill]');
         const value = actor.querySelector('[data-enemy-health-value]');
         if (fill) fill.style.width = `${Math.max(0, Math.min(100, current / maximum * 100))}%`;
         if (value) value.textContent = `${Math.max(0, current)}/${maximum}`;
     }
 
+    function storyEventBatches(sequence) {
+        const groups = new Map();
+        sequence.forEach((event) => {
+            const group = String(event?.parallel_group || '');
+            if (!group) return;
+            if (!groups.has(group)) groups.set(group, []);
+            groups.get(group).push(event);
+        });
+        const emitted = new Set();
+        const batches = [];
+        sequence.forEach((event) => {
+            const group = String(event?.parallel_group || '');
+            if (!group) {
+                batches.push([event]);
+                return;
+            }
+            if (emitted.has(group)) return;
+            emitted.add(group);
+            batches.push(groups.get(group) || [event]);
+        });
+        return batches;
+    }
+
+    async function playStoryPresentationEvent(event, nextRun) {
+        const eventType = String(event?.type || event?.kind || '');
+        if (!eventType) return;
+        if (eventType === 'enemy_action') {
+            const motion = String(event.presentation?.motion || '');
+            if (motion === 'attack' || (!motion && enemyMoveHasDamage(event))) {
+                await animateEnemyLunge(event.enemy_id);
+            } else {
+                await animateEnemyGain(event.enemy_id);
+            }
+        } else if (eventType === 'player_damage') {
+            const target = $('story-player-target');
+            await waitForStoryAnimation(target, 'is-taking-hit', 280);
+            const history = Array.isArray(event.history) ? event.history : [];
+            const finalHit = history[history.length - 1];
+            const after = Number.isFinite(Number(event.after))
+                ? Number(event.after)
+                : Number(finalHit?.after);
+            if (Number.isFinite(after)) {
+                setHealthBar(
+                    'story-combat-player',
+                    after,
+                    nextRun?.state?.player?.max_health || activeRun?.state?.player?.max_health,
+                );
+            }
+            spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
+        } else if (eventType === 'enemy_damage') {
+            const target = storyEnemyActor(event.enemy_id);
+            updateAnimatedEnemyHealth(event, nextRun);
+            await waitForStoryAnimation(target, 'is-taking-hit', 280);
+            spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
+        } else if (eventType === 'enemy_gain') {
+            const target = storyEnemyActor(event.enemy_id);
+            const effectKind = event.effect_kind || (
+                event.kind !== event.type ? event.kind : ''
+            );
+            await animateEnemyGain(event.enemy_id);
+            spawnStoryFloat(
+                target,
+                `${storyEventAmount(event.amount)} ${storyIntentStatusLabel(effectKind)}`,
+                'gain',
+            );
+        } else if (eventType === 'enemy_heal') {
+            const target = storyEnemyActor(event.enemy_id);
+            spawnStoryFloat(target, `${storyEventAmount(event.amount)}H`, 'heal');
+            await waitForStoryAnimation(target, 'is-recovering', 260);
+        } else if (eventType === 'heal') {
+            const target = $('story-player-target');
+            spawnStoryFloat(target, `${storyEventAmount(event.amount)}H`, 'heal');
+            await waitForStoryAnimation(target, 'is-recovering', 260);
+        } else if (eventType === 'shield') {
+            spawnStoryFloat($('story-player-target'), `${storyEventAmount(event.amount)} ${t.shield}`, 'shield');
+        } else if (eventType === 'status') {
+            const target = String(event.target_id || '') === 'player'
+                ? $('story-player-target')
+                : storyEnemyActor(event.target_id);
+            spawnStoryFloat(
+                target,
+                `${storyEventAmount(event.amount)} ${storyIntentStatusLabel(event.status)}`,
+                'status',
+            );
+        } else if (eventType === 'elixir') {
+            spawnStoryFloat($('story-player-target'), `${storyEventAmount(event.amount)}E`, 'elixir');
+        } else if (eventType === 'magic') {
+            spawnStoryFloat($('story-player-target'), `${storyEventAmount(event.amount)}M`, 'magic');
+        } else if (eventType === 'draw') {
+            await animateStoryDraw(event);
+        } else if (eventType === 'card_discarded') {
+            await animateStoryPileMove(event, 'discard');
+        } else if (eventType === 'card_exiled') {
+            await animateStoryPileMove(event, 'exile');
+        } else if (eventType === 'equipment_added') {
+            spawnStoryFloat($('story-player-target'), localize(storyContent?.cards?.[event.def_id]?.name), 'equipment');
+        } else if (eventType === 'enemy_summoned') {
+            await animateEnemySummon(event, nextRun);
+        } else if (eventType === 'enemy_withered') {
+            spawnStoryFloat(storyEnemyActor(event.enemy_id), storyIntentStatusLabel('wither'), 'status');
+        } else if (eventType === 'enemy_defeated') {
+            await animateEnemyDefeat(event);
+        }
+    }
+
     async function playStoryEventSequence(events, nextRun, actionType) {
-        const sequence = Array.isArray(events) ? events : [];
+        const sequence = (Array.isArray(events) ? events : [])
+            .map((event, index) => ({ event, index }))
+            .sort((left, right) => {
+                const leftSequence = Number(left.event?.sequence);
+                const rightSequence = Number(right.event?.sequence);
+                if (Number.isFinite(leftSequence) && Number.isFinite(rightSequence)) {
+                    return leftSequence - rightSequence || left.index - right.index;
+                }
+                if (Number.isFinite(leftSequence)) return -1;
+                if (Number.isFinite(rightSequence)) return 1;
+                return left.index - right.index;
+            })
+            .map((item) => item.event);
         if (!sequence.length || !$('story-enemy-group') || $('story-combat')?.classList.contains('hidden')) return;
 
         selectedCombatCardId = '';
@@ -646,56 +933,10 @@
         document.body.dataset.enemyAnimating = 'true';
 
         try {
-            for (const event of sequence) {
-                if (!event?.type) continue;
-                if (event.type === 'enemy_action') {
-                    if (enemyMoveHasDamage(event)) await animateEnemyLunge(event.enemy_id);
-                    else await animateEnemyGain(event.enemy_id);
-                } else if (event.type === 'player_damage') {
-                    const target = $('story-player-target');
-                    await waitForStoryAnimation(target, 'is-taking-hit', 280);
-                    const history = Array.isArray(event.history) ? event.history : [];
-                    const finalHit = history[history.length - 1];
-                    if (finalHit && Number.isFinite(Number(finalHit.after))) {
-                        setHealthBar(
-                            'story-combat-player',
-                            Number(finalHit.after),
-                            nextRun?.state?.player?.max_health || activeRun?.state?.player?.max_health,
-                        );
-                    }
-                    spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
-                } else if (event.type === 'enemy_damage') {
-                    const target = storyEnemyActor(event.enemy_id);
-                    updateAnimatedEnemyHealth(event, nextRun);
-                    await waitForStoryAnimation(target, 'is-taking-hit', 280);
-                    spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
-                } else if (event.type === 'enemy_gain') {
-                    const target = storyEnemyActor(event.enemy_id);
-                    await animateEnemyGain(event.enemy_id);
-                    spawnStoryFloat(target, `${storyEventAmount(event.amount)} ${event.kind || ''}`, 'gain');
-                } else if (event.type === 'enemy_heal') {
-                    const target = storyEnemyActor(event.enemy_id);
-                    spawnStoryFloat(target, `${storyEventAmount(event.amount)}H`, 'heal');
-                    await waitForStoryAnimation(target, 'is-recovering', 260);
-                } else if (event.type === 'heal') {
-                    const target = $('story-player-target');
-                    spawnStoryFloat(target, `${storyEventAmount(event.amount)}H`, 'heal');
-                    await waitForStoryAnimation(target, 'is-recovering', 260);
-                } else if (event.type === 'shield') {
-                    spawnStoryFloat($('story-player-target'), `${storyEventAmount(event.amount)} ${t.shield}`, 'shield');
-                } else if (event.type === 'elixir') {
-                    spawnStoryFloat($('story-player-target'), `${storyEventAmount(event.amount)}E`, 'elixir');
-                } else if (event.type === 'magic') {
-                    spawnStoryFloat($('story-player-target'), `${storyEventAmount(event.amount)}M`, 'magic');
-                } else if (event.type === 'draw') {
-                    await animateStoryDraw(event);
-                } else if (event.type === 'card_discarded') {
-                    await animateStoryPileMove(event, 'discard');
-                } else if (event.type === 'card_exiled') {
-                    await animateStoryPileMove(event, 'exile');
-                } else if (event.type === 'equipment_added') {
-                    spawnStoryFloat($('story-player-target'), localize(storyContent?.cards?.[event.def_id]?.name), 'equipment');
-                }
+            for (const batch of storyEventBatches(sequence)) {
+                await Promise.all(
+                    batch.map((event) => playStoryPresentationEvent(event, nextRun)),
+                );
                 await storySleep(32);
             }
         } finally {
@@ -767,6 +1008,25 @@
         return element;
     }
 
+    function mapEdgeSegment(start, end) {
+        const dx = Number(end.x) - Number(start.x);
+        const dy = Number(end.y) - Number(start.y);
+        const distance = Math.hypot(dx, dy);
+        if (!Number.isFinite(distance) || distance <= STORY_MAP_EDGE_INSET * 2) return null;
+        const unitX = dx / distance;
+        const unitY = dy / distance;
+        return {
+            start: {
+                x: Number(start.x) + unitX * STORY_MAP_EDGE_INSET,
+                y: Number(start.y) + unitY * STORY_MAP_EDGE_INSET,
+            },
+            end: {
+                x: Number(end.x) - unitX * STORY_MAP_EDGE_INSET,
+                y: Number(end.y) - unitY * STORY_MAP_EDGE_INSET,
+            },
+        };
+    }
+
     function renderMap(map, currentNodeId) {
         const svg = $('story-map');
         if (!svg || !map || !Array.isArray(map.floors)) return;
@@ -780,8 +1040,17 @@
             if (!from || !to) return;
             const start = mapPoint(from);
             const end = mapPoint(to);
+            const segment = mapEdgeSegment(start, end);
+            if (!segment) return;
+            const traversed = from.status === 'completed'
+                && (to.status === 'completed' || String(to.id) === String(currentNodeId));
+            const next = String(from.id) === String(currentNodeId) && to.status === 'available';
             edgeGroup.append(svgElement('line', {
-                class: 'story-map-edge', x1: start.x, y1: start.y, x2: end.x, y2: end.y,
+                class: `story-map-edge${traversed ? ' is-traversed' : ''}${next ? ' is-next' : ''}`,
+                x1: segment.start.x,
+                y1: segment.start.y,
+                x2: segment.end.x,
+                y2: segment.end.y,
             }));
         });
         svg.append(edgeGroup);
@@ -789,8 +1058,9 @@
         map.floors.forEach((floor) => floor.nodes.forEach((node) => {
             const point = mapPoint(node);
             const actionable = node.status === 'available';
+            const routeCurrent = String(node.id) === String(currentNodeId);
             const group = svgElement('g', {
-                class: `story-map-node${actionable ? ' is-actionable' : ''}`,
+                class: `story-map-node${actionable ? ' is-actionable' : ''}${routeCurrent ? ' is-route-current' : ''}`,
                 transform: `translate(${point.x} ${point.y})`,
                 'data-room-type': node.type,
                 'data-status': node.status || 'locked',
@@ -798,10 +1068,22 @@
                 tabindex: actionable ? '0' : '-1',
                 'aria-label': `${t.floor(node.floor)} ${t.rooms[node.type] || node.type}`,
             });
-            group.append(svgElement('circle', { cx: 0, cy: 0, r: 25 }));
+            group.append(svgElement('circle', {
+                cx: 0,
+                cy: 0,
+                r: STORY_MAP_NODE_RADIUS,
+            }));
             const text = svgElement('text', { x: 0, y: 1 });
             text.textContent = t.roomMarks[node.type] || '?';
             group.append(text);
+            if (routeCurrent) {
+                group.append(svgElement('circle', {
+                    class: 'story-map-current-marker',
+                    cx: 0,
+                    cy: -37,
+                    r: 5,
+                }));
+            }
             if (actionable) {
                 const choose = () => storyAction('enter_node', { node_id: node.id });
                 group.addEventListener('click', choose);
@@ -856,6 +1138,14 @@
         if (modifiers.retain) tags.add('retain');
         values.tags = [...tags];
         return values;
+    }
+
+    function storyCardHasUpgrade(card) {
+        return Boolean(storyContent?.cards?.[card?.def_id]?.upgrade);
+    }
+
+    function storyCardAtUpgradeState(card, upgraded) {
+        return { ...card, upgraded: Boolean(upgraded) };
     }
 
     function createStoryInlineIcon(unit) {
@@ -1641,6 +1931,43 @@
         }
         if (options.disabled) element.disabled = true;
         if (typeof options.onClick === 'function') element.addEventListener('click', options.onClick);
+        if (options.previewUpgradeOnHover && !card.upgraded && storyCardHasUpgrade(card)) {
+            let pointerPreview = false;
+            let focusPreview = false;
+            let previewing = false;
+            const renderPreview = () => {
+                const shouldPreview = pointerPreview || focusPreview;
+                if (shouldPreview === previewing) return;
+                previewing = shouldPreview;
+                const displayCard = storyCardAtUpgradeState(card, shouldPreview);
+                const visual = createStoryCard(displayCard, {
+                    ...options,
+                    interactive: false,
+                    onClick: undefined,
+                    previewUpgradeOnHover: false,
+                });
+                element.replaceChildren(...visual.childNodes);
+                element.dataset.previewUpgraded = shouldPreview ? '1' : '0';
+                storyCardElementData.set(element, displayCard);
+                scheduleStoryCardEffectFit(element);
+            };
+            element.addEventListener('pointerenter', () => {
+                pointerPreview = true;
+                renderPreview();
+            });
+            element.addEventListener('pointerleave', () => {
+                pointerPreview = false;
+                renderPreview();
+            });
+            element.addEventListener('focus', () => {
+                focusPreview = true;
+                renderPreview();
+            });
+            element.addEventListener('blur', () => {
+                focusPreview = false;
+                renderPreview();
+            });
+        }
         scheduleStoryCardEffectFit(element);
         return element;
     }
@@ -1721,7 +2048,13 @@
         } else {
             const badge = document.createElement('span');
             badge.className = 'story-term-status';
-            badge.textContent = localize(item.definition.name);
+            const icon = document.createElement('img');
+            icon.src = storyStatusIconUrl(item.id);
+            icon.alt = '';
+            icon.setAttribute('aria-hidden', 'true');
+            const name = document.createElement('span');
+            name.textContent = localize(item.definition.name);
+            badge.append(icon, name);
             heading.append(badge);
         }
         const description = document.createElement('p');
@@ -1743,13 +2076,125 @@
         if (!dialog) return;
         if (dialog.open) dialog.close();
         delete dialog.dataset.storyTermKey;
+        delete dialog.dataset.storyTermUpgrade;
+    }
+
+    function storyStatusDefinition(statusKey) {
+        return storyContent?.statuses?.[String(statusKey || '')] || null;
+    }
+
+    function storyStatusIconUrl(statusKey) {
+        const key = String(statusKey || '');
+        return `/static/assets/status-icons/${STORY_STATUS_ICONS[key] || key}.svg`;
+    }
+
+    function openStoryStatusTerms(statusKey) {
+        const key = String(statusKey || '');
+        const definition = storyStatusDefinition(key);
+        const dialog = $('story-term-dialog');
+        const content = $('story-term-content');
+        if (!key || !definition || !dialog || !content) return false;
+        const termKey = `status:${key}`;
+        if (dialog.open && dialog.dataset.storyTermKey === termKey) {
+            closeStoryCardTerms();
+            return true;
+        }
+
+        content.className = 'modal-inner story-card-terms-modal story-status-terms-modal';
+        content.replaceChildren();
+
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'story-term-close';
+        close.setAttribute('aria-label', t.close);
+        close.textContent = '×';
+        close.addEventListener('click', closeStoryCardTerms);
+
+        const layout = document.createElement('div');
+        layout.className = 'story-status-terms-layout';
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'story-status-terms-icon';
+        const icon = document.createElement('img');
+        icon.src = storyStatusIconUrl(key);
+        icon.alt = '';
+        icon.setAttribute('aria-hidden', 'true');
+        const iconName = document.createElement('span');
+        iconName.className = 'story-status-terms-name';
+        iconName.textContent = localize(definition.name);
+        iconWrap.append(icon, iconName);
+
+        const copy = document.createElement('div');
+        copy.className = 'story-status-terms-copy';
+        const title = document.createElement('h2');
+        title.textContent = t.statusTerms;
+        const terms = document.createElement('div');
+        terms.className = 'story-card-terms-list';
+        appendStoryTermRow(terms, {
+            kind: 'status',
+            id: key,
+            definition,
+        });
+        copy.append(title, terms);
+        layout.append(iconWrap, copy);
+        content.append(close, layout);
+
+        dialog.dataset.storyTermKey = termKey;
+        delete dialog.dataset.storyTermUpgrade;
+        if (!dialog.open) dialog.showModal();
+        return true;
+    }
+
+    function attachStoryStatusTermAccess(element, statusKey) {
+        if (!element || !storyStatusDefinition(statusKey)) return;
+        element.dataset.storyStatusKey = String(statusKey);
+        element.setAttribute('role', 'button');
+        element.tabIndex = 0;
+        let timer = 0;
+        let start = null;
+        const cancel = () => {
+            if (timer) window.clearTimeout(timer);
+            timer = 0;
+            start = null;
+        };
+        element.addEventListener('pointerdown', (event) => {
+            if (event.button != null && event.button !== 0) return;
+            cancel();
+            start = { x: event.clientX, y: event.clientY };
+            timer = window.setTimeout(() => {
+                timer = 0;
+                start = null;
+                if (selectedCombatCardId && activeRun?.state) {
+                    cancelStoryCombatSelection(true);
+                    return;
+                }
+                element.dataset.storyTermLongPress = '1';
+                window.setTimeout(() => {
+                    delete element.dataset.storyTermLongPress;
+                }, 1200);
+                openStoryStatusTerms(statusKey);
+            }, STORY_TERM_LONG_PRESS_MS);
+        });
+        element.addEventListener('pointermove', (event) => {
+            if (!timer || !start) return;
+            if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > STORY_TERM_MOVE_CANCEL_PX) {
+                cancel();
+            }
+        });
+        ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'].forEach((eventName) => {
+            element.addEventListener(eventName, cancel);
+        });
+        element.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            event.stopPropagation();
+            openStoryStatusTerms(statusKey);
+        });
     }
 
     function openStoryCardTerms(card) {
-        const values = cardValues(card);
         const dialog = $('story-term-dialog');
         const content = $('story-term-content');
-        if (!values || !dialog || !content) return;
+        if (!cardValues(card) || !dialog || !content) return;
         const termKey = storyCardTermKey(card);
         if (
             dialog.open
@@ -1759,52 +2204,97 @@
             return;
         }
 
-        content.className = 'modal-inner story-card-terms-modal';
-        content.replaceChildren();
-        const close = document.createElement('button');
-        close.type = 'button';
-        close.className = 'story-term-close';
-        close.setAttribute('aria-label', t.close);
-        close.textContent = '×';
-        close.addEventListener('click', closeStoryCardTerms);
+        const hasUpgrade = storyCardHasUpgrade(card);
+        const renderVersion = (upgraded) => {
+            const showUpgraded = hasUpgrade && Boolean(upgraded);
+            const displayCard = storyCardAtUpgradeState(card, showUpgraded);
+            const values = cardValues(displayCard);
+            content.className = 'modal-inner story-card-terms-modal';
+            content.replaceChildren();
 
-        const layout = document.createElement('div');
-        layout.className = 'story-card-terms-layout';
-        const preview = document.createElement('div');
-        preview.className = 'story-card-terms-preview';
-        preview.append(createStoryCard(card, {
-            interactive: false,
-            predictionTargetId: '',
-        }));
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'story-term-close';
+            close.setAttribute('aria-label', t.close);
+            close.textContent = '×';
+            close.addEventListener('click', closeStoryCardTerms);
 
-        const copy = document.createElement('div');
-        copy.className = 'story-card-terms-copy';
-        const title = document.createElement('h2');
-        title.textContent = `${card.upgraded ? '+' : ''}${localize(values.name)}`;
-        const effect = document.createElement('p');
-        effect.className = 'story-card-terms-effect';
-        appendStoryRichText(effect, localize(values.description));
-        const termTitle = document.createElement('h3');
-        termTitle.className = 'story-card-terms-heading';
-        termTitle.textContent = t.cardTerms;
-        const terms = document.createElement('div');
-        terms.className = 'story-card-terms-list';
-        const termItems = storyCardTermItems(card);
-        if (termItems.length) {
-            termItems.forEach((item) => appendStoryTermRow(terms, item));
-        } else {
-            const empty = document.createElement('p');
-            empty.className = 'story-card-terms-empty';
-            empty.textContent = t.noCardTerms;
-            terms.append(empty);
-        }
-        copy.append(title, effect, termTitle, terms);
-        layout.append(preview, copy);
-        content.append(close, layout);
+            const layout = document.createElement('div');
+            layout.className = 'story-card-terms-layout';
+            const preview = document.createElement('div');
+            preview.className = 'story-card-terms-preview';
+            preview.append(createStoryCard(displayCard, {
+                interactive: false,
+                predictionTargetId: '',
+            }));
+
+            const copy = document.createElement('div');
+            copy.className = 'story-card-terms-copy';
+            const title = document.createElement('h2');
+            title.textContent = `${showUpgraded ? '+' : ''}${localize(values.name)}`;
+            copy.append(title);
+
+            if (hasUpgrade) {
+                const tabs = document.createElement('div');
+                tabs.className = 'story-card-version-tabs';
+                tabs.setAttribute('role', 'tablist');
+                [
+                    { upgraded: false, label: t.beforeUpgrade },
+                    { upgraded: true, label: t.afterUpgrade },
+                ].forEach((version) => {
+                    const active = version.upgraded === showUpgraded;
+                    const tab = document.createElement('button');
+                    tab.type = 'button';
+                    tab.className = `story-card-version-tab${active ? ' is-active' : ''}`;
+                    tab.dataset.storyUpgradeState = version.upgraded ? '1' : '0';
+                    tab.setAttribute('role', 'tab');
+                    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                    tab.tabIndex = active ? 0 : -1;
+                    tab.textContent = version.label;
+                    tab.addEventListener('click', () => renderVersion(version.upgraded));
+                    tab.addEventListener('keydown', (event) => {
+                        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                        event.preventDefault();
+                        const nextUpgraded = event.key === 'ArrowRight' || event.key === 'End';
+                        renderVersion(nextUpgraded);
+                        requestAnimationFrame(() => {
+                            content.querySelector(
+                                `[data-story-upgrade-state="${nextUpgraded ? '1' : '0'}"]`,
+                            )?.focus();
+                        });
+                    });
+                    tabs.append(tab);
+                });
+                copy.append(tabs);
+            }
+
+            const effect = document.createElement('p');
+            effect.className = 'story-card-terms-effect';
+            appendStoryRichText(effect, localize(values.description));
+            const termTitle = document.createElement('h3');
+            termTitle.className = 'story-card-terms-heading';
+            termTitle.textContent = t.cardTerms;
+            const terms = document.createElement('div');
+            terms.className = 'story-card-terms-list';
+            const termItems = storyCardTermItems(displayCard);
+            if (termItems.length) {
+                termItems.forEach((item) => appendStoryTermRow(terms, item));
+            } else {
+                const empty = document.createElement('p');
+                empty.className = 'story-card-terms-empty';
+                empty.textContent = t.noCardTerms;
+                terms.append(empty);
+            }
+            copy.append(effect, termTitle, terms);
+            layout.append(preview, copy);
+            content.append(close, layout);
+            dialog.dataset.storyTermUpgrade = showUpgraded ? '1' : '0';
+            scheduleStoryCardEffectFit(preview.querySelector('.story-card.card'));
+        };
 
         dialog.dataset.storyTermKey = termKey;
+        renderVersion(Boolean(card.upgraded));
         if (!dialog.open) dialog.showModal();
-        scheduleStoryCardEffectFit(preview.querySelector('.story-card.card'));
     }
 
     function renderBlessing(state) {
@@ -1890,34 +2380,21 @@
     function renderEffectsInto(container, values) {
         if (!container) return;
         container.replaceChildren();
-        const icons = {
-            shield: 'shield',
-            power: 'triangle',
-            temporary_power: 'triangle',
-            endurance: 'armor',
-            weak: 'weakness',
-            vulnerable: 'fragile',
-            fragile: 'fragile',
-            evade: 'dodge',
-            poison: 'poison',
-            stun: 'stunned',
-            reflection: 'nazar',
-            wither: 'stagnation',
-            broken: 'fracture',
-            rockfall: 'root_status',
-        };
         values.filter((item) => Number(item.value) > 0).forEach((item) => {
             const chip = document.createElement('span');
             chip.className = `story-effect story-effect-${item.key}`;
-            chip.title = `${item.label}: ${item.value}`;
+            const definition = storyStatusDefinition(item.key);
+            const label = definition ? localize(definition.name) : item.label;
+            chip.title = `${label}: ${item.value}`;
             chip.setAttribute('aria-label', chip.title);
             const icon = document.createElement('img');
-            icon.src = `/static/assets/status-icons/${icons[item.key] || item.key}.svg`;
+            icon.src = storyStatusIconUrl(item.key);
             icon.alt = '';
             icon.setAttribute('aria-hidden', 'true');
             const value = document.createElement('strong');
             value.textContent = String(item.value);
             chip.append(icon, value);
+            attachStoryStatusTermAccess(chip, item.key);
             container.append(chip);
         });
     }
@@ -1933,6 +2410,65 @@
             }
         }
         return true;
+    }
+
+    function storyIntentStatusLabel(status) {
+        return {
+            power: t.power,
+            shield: t.shield,
+            weak: t.weak,
+            vulnerable: t.vulnerable,
+            fragile: lang === 'zh' ? '脆弱' : 'Fragile',
+            broken: lang === 'zh' ? '破损' : 'Broken',
+            stun: lang === 'zh' ? '眩晕' : 'Stun',
+            reflection: lang === 'zh' ? '反射' : 'Reflection',
+            wither: lang === 'zh' ? '凋萎' : 'Wither',
+        }[String(status || '')] || String(status || '');
+    }
+
+    function createStoryIntentEntry(entry) {
+        const item = document.createElement('span');
+        const kind = String(entry?.kind || 'special');
+        item.className = `story-intent-entry is-${kind}`;
+        item.dataset.intentKind = kind;
+        const amount = Math.max(0, Number(entry?.amount) || 0);
+        const hits = Math.max(1, Number(entry?.hits) || 1);
+        let label = '';
+        let iconUrl = '';
+        if (kind === 'attack' || kind === 'self_damage') {
+            iconUrl = STORY_INLINE_ICONS.D;
+            label = `${amount}${hits > 1 ? `×${hits}` : ''}`;
+            if (kind === 'self_damage') label = `${t.self} ${label}`;
+        } else if (kind === 'heal') {
+            iconUrl = STORY_INLINE_ICONS.H;
+            label = `+${amount}`;
+        } else if (kind === 'defend') {
+            label = `${storyIntentStatusLabel(entry.stat || 'shield')} +${amount}`;
+        } else if (kind === 'buff') {
+            label = `${storyIntentStatusLabel(entry.stat || 'power')} +${amount}`;
+        } else if (kind === 'status') {
+            label = `${storyIntentStatusLabel(entry.status)} +${amount}`;
+        } else if (kind === 'summon') {
+            label = t.summon;
+        } else if (kind === 'card') {
+            label = t.addCard;
+        } else if (kind === 'consume') {
+            label = t.consume;
+        } else {
+            label = String(entry?.effect_type || entry?.summary || '--');
+        }
+        if (entry?.target === 'all_enemies') label = `${t.allies} · ${label}`;
+        if (iconUrl) {
+            const icon = document.createElement('img');
+            icon.src = iconUrl;
+            icon.alt = '';
+            icon.setAttribute('aria-hidden', 'true');
+            item.append(icon);
+        }
+        const value = document.createElement('strong');
+        value.textContent = label;
+        item.append(value);
+        return item;
     }
 
     function createEnemyActor(enemy, selectedTargetKind) {
@@ -2001,11 +2537,19 @@
         const intent = document.createElement('div');
         intent.className = 'story-intent';
         const intentLabel = document.createElement('span');
-        intentLabel.textContent = t.intent;
-        const intentValue = document.createElement('strong');
         const intentName = localize(enemy.intent?.name);
-        intentValue.textContent = [intentName, enemy.intent?.summary].filter(Boolean).join(' · ') || '--';
-        intent.append(intentLabel, intentValue);
+        intentLabel.className = 'story-intent-title';
+        intentLabel.textContent = [t.intent, intentName].filter(Boolean).join(' · ');
+        const intentEntries = document.createElement('div');
+        intentEntries.className = 'story-intent-entries';
+        const structuredEntries = Array.isArray(enemy.intent?.entries) ? enemy.intent.entries : [];
+        structuredEntries.forEach((entry) => intentEntries.append(createStoryIntentEntry(entry)));
+        if (!structuredEntries.length) {
+            const fallback = document.createElement('strong');
+            fallback.textContent = enemy.intent?.summary || '--';
+            intentEntries.append(fallback);
+        }
+        intent.append(intentLabel, intentEntries);
         actor.append(name, portrait, health, effects, intent);
         const previewPrediction = () => setStoryPredictionTarget(enemy.id);
         const clearPrediction = (event) => {
@@ -2065,11 +2609,10 @@
         renderStoryEquipment(combat.equipment);
         const enemyGroup = $('story-enemy-group');
         enemyGroup?.replaceChildren();
-        enemyGroup?.style.setProperty('--story-enemy-count', String(Math.max(1, livingEnemies.length)));
-        enemyGroup?.style.setProperty('--story-enemy-scale', String(Math.max(.48, Math.min(.82, 1.03 - livingEnemies.length * .13))));
         livingEnemies.forEach((enemyItem) => {
             enemyGroup?.append(createEnemyActor(enemyItem, selectedTargetKind));
         });
+        syncStoryEnemyGroupLayout();
         const hand = $('story-hand');
         hand?.replaceChildren();
         hand?.classList.toggle('has-selected-card', Boolean(selected));
@@ -2162,11 +2705,242 @@
         return button;
     }
 
+    function storyRoomTabKey(state, room) {
+        return [
+            String(state?.stage || ''),
+            String(state?.current_node_id || ''),
+            String(room?.type || ''),
+            String(room?.event_id || ''),
+        ].join(':');
+    }
+
+    function setStoryRoomGridMode(container, mode = 'choices') {
+        if (!container) return;
+        container.classList.toggle('story-room-card-grid', mode === 'cards');
+    }
+
+    function appendStoryRoomEmpty(container, message) {
+        const empty = document.createElement('p');
+        empty.className = 'story-room-empty';
+        empty.textContent = message;
+        container?.append(empty);
+    }
+
+    function storyRoomFooterButton(label, onClick) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'story-command';
+        button.textContent = label;
+        button.addEventListener('click', onClick);
+        return button;
+    }
+
+    function renderStoryRoomTabs(state, definitions) {
+        const tabs = $('story-room-tabs');
+        const container = $('story-room-options');
+        if (!tabs || !container || !definitions.length) return;
+        const key = storyRoomTabKey(state, state.room || {});
+        const availableIds = new Set(definitions.map((definition) => definition.id));
+        if (activeStoryRoomTabKey !== key || !availableIds.has(activeStoryRoomTabId)) {
+            activeStoryRoomTabKey = key;
+            activeStoryRoomTabId = definitions[0].id;
+        }
+
+        tabs.replaceChildren();
+        tabs.classList.toggle('hidden', definitions.length < 2);
+        tabs.setAttribute('aria-label', t.roomActions);
+        const buttons = new Map();
+        const activate = (tabId, focus = false) => {
+            const definition = definitions.find((item) => item.id === tabId) || definitions[0];
+            activeStoryRoomTabId = definition.id;
+            buttons.forEach((button, id) => {
+                const active = id === definition.id;
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+                button.tabIndex = active ? 0 : -1;
+            });
+            container.replaceChildren();
+            container.setAttribute('role', 'tabpanel');
+            container.setAttribute('aria-labelledby', `story-room-tab-${definition.id}`);
+            setStoryRoomGridMode(container, definition.mode);
+            definition.render(container);
+            scheduleVisibleStoryCardEffectFits();
+            if (focus) buttons.get(definition.id)?.focus();
+        };
+
+        definitions.forEach((definition, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.id = `story-room-tab-${definition.id}`;
+            button.className = 'story-room-tab';
+            button.setAttribute('role', 'tab');
+            button.setAttribute('aria-controls', 'story-room-options');
+            button.textContent = definition.label;
+            button.addEventListener('click', () => activate(definition.id));
+            button.addEventListener('keydown', (event) => {
+                let nextIndex = null;
+                if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                    nextIndex = (index - 1 + definitions.length) % definitions.length;
+                } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                    nextIndex = (index + 1) % definitions.length;
+                } else if (event.key === 'Home') {
+                    nextIndex = 0;
+                } else if (event.key === 'End') {
+                    nextIndex = definitions.length - 1;
+                }
+                if (nextIndex == null) return;
+                event.preventDefault();
+                activate(definitions[nextIndex].id, true);
+            });
+            buttons.set(definition.id, button);
+            tabs.append(button);
+        });
+        activate(activeStoryRoomTabId);
+    }
+
+    function openStoryDeckChange({ kind, card, payload, price = 0 }) {
+        const dialog = $('story-deck-change-dialog');
+        const before = $('story-deck-change-before');
+        const after = $('story-deck-change-after');
+        if (!dialog || !before || !after || !card) return;
+        pendingStoryDeckChange = { actionType: 'resolve_room', payload: { ...payload } };
+        dialog.returnValue = '';
+        setText(
+            'story-deck-change-title',
+            kind === 'remove' ? t.confirmRemoveTitle : t.confirmUpgradeTitle,
+        );
+        setText(
+            'story-deck-change-copy',
+            [
+                Number(price) > 0 ? `${Number(price)}G` : '',
+                t.permanentDeckChange,
+            ].filter(Boolean).join(' · '),
+        );
+        before.replaceChildren(createStoryCard(
+            storyCardAtUpgradeState(card, Boolean(card.upgraded)),
+            { compact: true },
+        ));
+        after.replaceChildren();
+        if (kind === 'remove') {
+            const removed = document.createElement('div');
+            removed.className = 'story-deck-change-removed';
+            removed.textContent = t.removedFromDeck;
+            after.append(removed);
+        } else {
+            after.append(createStoryCard(
+                storyCardAtUpgradeState(card, true),
+                { compact: true },
+            ));
+        }
+        if (!dialog.open) dialog.showModal();
+    }
+
+    function openStoryEventConfirmation(option, onConfirm) {
+        const dialog = $('story-event-confirm-dialog');
+        if (!dialog || typeof onConfirm !== 'function') return;
+        pendingStoryEventAction = onConfirm;
+        dialog.returnValue = '';
+        setText('story-event-confirm-title', t.confirmEventTitle);
+        setText('story-event-confirm-copy', t.confirmEventCopy);
+        setText('story-event-confirm-label', localize(option?.label) || String(option?.id || ''));
+        setText('story-event-confirm-description', localize(option?.description));
+        if (!dialog.open) dialog.showModal();
+    }
+
+    function renderStoryEventContext(room) {
+        const context = $('story-event-context');
+        if (!context) return;
+        const isEvent = room?.type === 'event';
+        context.classList.toggle('hidden', !isEvent);
+        if (!isEvent) return;
+        const scene = room.scene || {};
+        const sceneElement = $('story-event-scene');
+        if (sceneElement) {
+            sceneElement.textContent = String(scene.mark || '?');
+            sceneElement.dataset.sceneId = String(scene.id || room.event_id || '');
+        }
+        setText('story-event-speaker', localize(room.speaker));
+        setText(
+            'story-event-body',
+            localize(room.body) || localize(room.description) || t.eventCopy,
+        );
+        const history = $('story-event-history');
+        history?.replaceChildren();
+        const historyEntries = Array.isArray(room.history) ? room.history : [];
+        historyEntries.slice(0, -1).slice(-4).forEach((entry) => {
+            const result = localize(entry?.result);
+            if (!result) return;
+            const item = document.createElement('li');
+            item.textContent = result;
+            history?.append(item);
+        });
+    }
+
+    function renderStoryRoomContext(state, room) {
+        renderStoryEventContext(room);
+        const roomView = $('story-room');
+        if (roomView) roomView.dataset.roomType = String(room?.type || '');
+        const player = state?.player || {};
+        const rest = $('story-rest-context');
+        const chest = $('story-chest-context');
+        const shop = $('story-shop-context');
+        const isRest = room?.type === 'rest';
+        const isChest = room?.type === 'chest';
+        const isShop = room?.type === 'shop';
+        rest?.classList.toggle('hidden', !isRest);
+        chest?.classList.toggle('hidden', !isChest);
+        shop?.classList.toggle('hidden', !isShop);
+
+        if (isRest) {
+            const health = Math.max(0, Number(player.health) || 0);
+            const maximum = Math.max(0, Number(player.max_health) || 0);
+            const recovery = Math.min(
+                Math.max(0, maximum - health),
+                Math.ceil(maximum * .3),
+            );
+            setText('story-rest-health-label', t.currentHealth);
+            setText('story-rest-health-value', `${health}/${maximum}`);
+            setText('story-rest-heal-label', t.restRecovery);
+            setText('story-rest-heal-value', `+${recovery}H`);
+        }
+        if (isChest) {
+            const relic = storyContent?.relics?.[room.relic];
+            const relicDescription = localize(relic?.description);
+            setText('story-chest-mark', t.roomMarks.chest || 'T');
+            setText('story-chest-gold-label', t.chestGold);
+            setText('story-chest-gold-value', `${Math.max(0, Number(room.gold) || 0)}G`);
+            setText('story-chest-relic-label', t.chestTalent);
+            setText('story-chest-relic-name', localize(relic?.name) || t.none);
+            setText('story-chest-relic-description', relicDescription);
+            $('story-chest-relic-description')?.classList.toggle('hidden', !relicDescription);
+        }
+        if (isShop) {
+            setText('story-shop-mark', t.roomMarks.shop || '$');
+            setText('story-shop-gold-label', t.shopWallet);
+            setText('story-shop-gold-value', `${Math.max(0, Number(player.gold) || 0)}G`);
+            setText('story-shop-remove-label', t.removePrice);
+            setText('story-shop-remove-value', `${Math.max(0, Number(room.remove_price) || 0)}G`);
+            setText('story-shop-upgrade-label', t.upgradePrice);
+            setText('story-shop-upgrade-value', `${Math.max(0, Number(room.upgrade_price) || 0)}G`);
+        }
+    }
+
     function renderRoom(state) {
         const room = state.room || {};
         const player = state.player || {};
+        const upgradableCards = (player.deck || [])
+            .filter((card) => !card.upgraded && storyCardHasUpgrade(card));
         const container = $('story-room-options');
+        const tabs = $('story-room-tabs');
+        const footer = $('story-room-footer');
         container?.replaceChildren();
+        container?.removeAttribute('role');
+        container?.removeAttribute('aria-labelledby');
+        setStoryRoomGridMode(container);
+        tabs?.replaceChildren();
+        tabs?.classList.add('hidden');
+        footer?.replaceChildren();
+        renderStoryRoomContext(state, room);
         setText('story-room-kicker', `${t.floor(state.current_floor || 1)} · ${t.rooms[room.type] || t.room}`);
         if (room.type === 'stage_choice') {
             setText('story-room-title', lang === 'zh' ? `选择第 ${room.stage || ''} 阶段区域` : `Choose Stage ${room.stage || ''} region`);
@@ -2178,95 +2952,179 @@
             setText('story-room-title', t.restTitle);
             setText('story-room-copy', t.restCopy);
             const amount = Math.ceil(Number(player.max_health || 0) * 0.3);
-            container?.append(choiceButton(`${t.heal} ${amount}H`, () => storyAction('resolve_room', { option: 'heal' }), { primary: true }));
-            (player.deck || []).forEach((card) => container?.append(createStoryCard(card, {
-                compact: true,
-                disabled: Boolean(card.upgraded),
-                note: card.upgraded ? t.upgraded : t.upgrade,
-                onClick: () => storyAction('resolve_room', { option: 'upgrade', card_instance_id: card.instance_id }),
-            })));
+            const restTabs = [
+                {
+                    id: 'rest-heal',
+                    label: t.heal,
+                    mode: 'choices',
+                    render: (target) => target.append(choiceButton(
+                        `${t.heal} ${amount}H`,
+                        () => storyAction('resolve_room', { option: 'heal' }),
+                        { primary: true },
+                    )),
+                },
+                {
+                    id: 'rest-upgrade',
+                    label: t.upgrade,
+                    mode: 'cards',
+                    render: (target) => {
+                        if (!upgradableCards.length) appendStoryRoomEmpty(target, t.noUpgradableCards);
+                        upgradableCards.forEach((card) => target.append(createStoryCard(card, {
+                            compact: true,
+                            note: t.upgrade,
+                            previewUpgradeOnHover: true,
+                            onClick: () => openStoryDeckChange({
+                                kind: 'upgrade',
+                                card,
+                                payload: {
+                                    option: 'upgrade',
+                                    card_instance_id: card.instance_id,
+                                },
+                            }),
+                        })));
+                    },
+                },
+            ];
             if ((room.options || []).includes('gold')) {
-                container?.append(choiceButton(lang === 'zh' ? '获得150G' : 'Gain 150 G', () => storyAction('resolve_room', { option: 'gold' })));
+                restTabs.push({
+                    id: 'rest-gold',
+                    label: t.restGold,
+                    mode: 'choices',
+                    render: (target) => target.append(choiceButton(
+                        t.gainedGold(150),
+                        () => storyAction('resolve_room', { option: 'gold' }),
+                    )),
+                });
             }
+            renderStoryRoomTabs(state, restTabs);
         } else if (room.type === 'chest') {
             setText('story-room-title', t.chestTitle);
-            const relic = storyContent?.relics?.[room.relic];
-            setText('story-room-copy', [
-                `${Number(room.gold || 0)}G`,
-                relic ? `${localize(relic.name)}：${localize(relic.description)}` : '',
-            ].filter(Boolean).join(' · '));
+            setText('story-room-copy', t.chestCopy);
             container?.append(choiceButton(t.openChest, () => storyAction('resolve_room', { option: 'claim' }), { primary: true }));
         } else if (room.type === 'shop') {
             setText('story-room-title', t.shopTitle);
             setText('story-room-copy', t.shopCopy);
-            (room.cards || []).filter((item) => !item.sold).forEach((item) => {
-                const card = { instance_id: item.id, def_id: item.card_id, upgraded: false };
-                container?.append(createStoryCard(card, {
-                    compact: true,
-                    disabled: Number(player.gold || 0) < Number(item.price || 0),
-                    note: `${Number(item.price || 0)}G`,
-                    onClick: () => storyAction('resolve_room', { option: 'buy_card', item_id: item.id }),
-                }));
-            });
-            (room.relics || []).filter((item) => !item.sold).forEach((item) => {
-                const relic = storyContent?.relics?.[item.relic_id];
-                container?.append(choiceButton(`${localize(relic?.name) || item.relic_id} · ${item.price}G`, () => {
-                    storyAction('resolve_room', { option: 'buy_relic', item_id: item.id });
-                }, {
-                    description: localize(relic?.description),
-                    disabled: Number(player.gold || 0) < Number(item.price || 0),
-                }));
-            });
-            (player.deck || []).forEach((card) => {
-                container?.append(createStoryCard(card, {
-                    compact: true,
-                    disabled: Number(player.gold || 0) < Number(room.remove_price || 0),
-                    note: `${lang === 'zh' ? '移除' : 'Remove'} · ${room.remove_price}G`,
-                    onClick: () => storyAction('resolve_room', { option: 'remove_card', card_instance_id: card.instance_id }),
-                }));
-                container?.append(createStoryCard(card, {
-                    compact: true,
-                    disabled: Boolean(card.upgraded) || Number(player.gold || 0) < Number(room.upgrade_price || 0),
-                    note: `${t.upgrade} · ${room.upgrade_price}G`,
-                    onClick: () => storyAction('resolve_room', { option: 'upgrade_card', card_instance_id: card.instance_id }),
-                }));
-            });
-            container?.append(choiceButton(t.leave, () => storyAction('resolve_room', { option: 'leave' })));
+            renderStoryRoomTabs(state, [
+                {
+                    id: 'shop-cards',
+                    label: t.shopCards,
+                    mode: 'cards',
+                    render: (target) => {
+                        const available = (room.cards || []).filter((item) => !item.sold);
+                        if (!available.length) appendStoryRoomEmpty(target, t.noShopCards);
+                        available.forEach((item) => {
+                            const card = { instance_id: item.id, def_id: item.card_id, upgraded: false };
+                            target.append(createStoryCard(card, {
+                                compact: true,
+                                disabled: Number(player.gold || 0) < Number(item.price || 0),
+                                note: `${Number(item.price || 0)}G`,
+                                onClick: () => storyAction('resolve_room', {
+                                    option: 'buy_card',
+                                    item_id: item.id,
+                                }),
+                            }));
+                        });
+                    },
+                },
+                {
+                    id: 'shop-talents',
+                    label: t.shopTalents,
+                    mode: 'choices',
+                    render: (target) => {
+                        const available = (room.relics || []).filter((item) => !item.sold);
+                        if (!available.length) appendStoryRoomEmpty(target, t.noShopTalents);
+                        available.forEach((item) => {
+                            const relic = storyContent?.relics?.[item.relic_id];
+                            target.append(choiceButton(
+                                `${localize(relic?.name) || item.relic_id} · ${item.price}G`,
+                                () => storyAction('resolve_room', {
+                                    option: 'buy_relic',
+                                    item_id: item.id,
+                                }),
+                                {
+                                    description: localize(relic?.description),
+                                    disabled: Number(player.gold || 0) < Number(item.price || 0),
+                                },
+                            ));
+                        });
+                    },
+                },
+                {
+                    id: 'shop-remove',
+                    label: t.remove,
+                    mode: 'cards',
+                    render: (target) => (player.deck || []).forEach((card) => target.append(createStoryCard(card, {
+                        compact: true,
+                        disabled: Number(player.gold || 0) < Number(room.remove_price || 0),
+                        note: `${t.remove} · ${room.remove_price}G`,
+                        onClick: () => openStoryDeckChange({
+                            kind: 'remove',
+                            card,
+                            price: room.remove_price,
+                            payload: {
+                                option: 'remove_card',
+                                card_instance_id: card.instance_id,
+                            },
+                        }),
+                    }))),
+                },
+                {
+                    id: 'shop-upgrade',
+                    label: t.upgrade,
+                    mode: 'cards',
+                    render: (target) => {
+                        if (!upgradableCards.length) appendStoryRoomEmpty(target, t.noUpgradableCards);
+                        upgradableCards.forEach((card) => target.append(createStoryCard(card, {
+                            compact: true,
+                            disabled: Number(player.gold || 0) < Number(room.upgrade_price || 0),
+                            note: `${t.upgrade} · ${room.upgrade_price}G`,
+                            previewUpgradeOnHover: true,
+                            onClick: () => openStoryDeckChange({
+                                kind: 'upgrade',
+                                card,
+                                price: room.upgrade_price,
+                                payload: {
+                                    option: 'upgrade_card',
+                                    card_instance_id: card.instance_id,
+                                },
+                            }),
+                        })));
+                    },
+                },
+            ]);
+            footer?.append(storyRoomFooterButton(
+                t.leave,
+                () => storyAction('resolve_room', { option: 'leave' }),
+            ));
         } else {
             setText('story-room-title', localize(room.title) || t.eventTitle);
             const eventCopy = [
-                localize(room.description) || t.eventCopy,
-                localize(room.last_result),
                 room.event_id === 'mystery_lottery'
                     ? (lang === 'zh' ? `已抽奖 ${Number(room.attempts || 0)}/4 次` : `${Number(room.attempts || 0)}/4 attempts`)
                     : '',
             ].filter(Boolean).join(' ');
             setText('story-room-copy', eventCopy);
-            (room.options || []).forEach((rawOption) => {
-                const option = typeof rawOption === 'string'
+            const options = (room.choices || room.options || []).map((rawOption) => (
+                typeof rawOption === 'string'
                     ? { id: rawOption, label: rawOption, description: '' }
-                    : rawOption;
+                    : rawOption
+            ));
+            const renderEventActions = (target, actionOptions) => actionOptions.forEach((option) => {
                 const optionId = String(option.id || '');
-                if (optionId === 'lottery_inspect') {
-                    (player.deck || [])
-                        .filter((card) => !card.upgraded && storyContent?.cards?.[card.def_id]?.upgrade)
-                        .forEach((card) => container?.append(createStoryCard(card, {
-                            compact: true,
-                            note: localize(option.label),
-                            onClick: () => storyAction('resolve_room', {
-                                option: optionId,
-                                card_instance_id: card.instance_id,
-                            }),
-                        })));
-                    return;
-                }
                 const disabled = (
                     (optionId === 'event_buy' && Number(player.gold || 0) < 35)
                     || (optionId === 'lottery_draw' && Number(player.gold || 0) < 50)
                 );
-                container?.append(choiceButton(
+                const resolveOption = () => storyAction('resolve_room', { option: optionId });
+                target.append(choiceButton(
                     localize(option.label) || optionId,
-                    () => storyAction('resolve_room', { option: optionId }),
+                    () => {
+                        if (option.requires_confirmation) {
+                            openStoryEventConfirmation(option, resolveOption);
+                        } else {
+                            resolveOption();
+                        }
+                    },
                     {
                         primary: optionId !== 'leave' && optionId !== 'fight_leave',
                         description: localize(option.description),
@@ -2274,28 +3132,137 @@
                     },
                 ));
             });
+            const upgradeOption = options.find((option) => String(option.id || '') === 'lottery_inspect');
+            if (upgradeOption) {
+                renderStoryRoomTabs(state, [
+                    {
+                        id: 'event-actions',
+                        label: t.roomActions,
+                        mode: 'choices',
+                        render: (target) => renderEventActions(
+                            target,
+                            options.filter((option) => String(option.id || '') !== 'lottery_inspect'),
+                        ),
+                    },
+                    {
+                        id: 'event-upgrade',
+                        label: t.upgrade,
+                        mode: 'cards',
+                        render: (target) => {
+                            if (!upgradableCards.length) appendStoryRoomEmpty(target, t.noUpgradableCards);
+                            upgradableCards.forEach((card) => target.append(createStoryCard(card, {
+                                compact: true,
+                                note: localize(upgradeOption.label),
+                                previewUpgradeOnHover: true,
+                                onClick: () => openStoryDeckChange({
+                                    kind: 'upgrade',
+                                    card,
+                                    payload: {
+                                        option: 'lottery_inspect',
+                                        card_instance_id: card.instance_id,
+                                    },
+                                }),
+                            })));
+                        },
+                    },
+                ]);
+            } else {
+                renderEventActions(container, options);
+            }
         }
         showView('story-room');
     }
 
+    function normalizedRewardClaims(reward) {
+        const claims = reward?.claims;
+        if (claims && typeof claims === 'object') {
+            return {
+                gold: Boolean(claims.gold) || Number(reward.gold || 0) <= 0,
+                card: Boolean(claims.card) || !(reward.cards || []).length,
+                relic: Boolean(claims.relic) || !reward.relic,
+            };
+        }
+        return {
+            gold: true,
+            card: !(reward?.cards || []).length,
+            relic: !reward?.relic,
+        };
+    }
+
+    function rewardClaimButton(label, description, claimed, onClick) {
+        const button = choiceButton(
+            label,
+            onClick,
+            { description: claimed ? t.claimed : description, disabled: claimed },
+        );
+        button.classList.add('story-reward-claim');
+        button.classList.toggle('is-claimed', claimed);
+        return button;
+    }
+
     function renderReward(state) {
         const reward = state.reward || {};
+        const claims = normalizedRewardClaims(reward);
         setText('story-reward-kicker', t.battleWon);
-        setText('story-reward-title', t.chooseCard);
+        setText('story-reward-title', t.rewards);
+        setText('story-reward-copy', t.rewardCopy);
         const relic = reward.relic ? storyContent?.relics?.[reward.relic] : null;
-        const details = [t.gainedGold(reward.gold || 0)];
-        if (relic) details.push(`${localize(relic.name)}：${localize(relic.description)}`);
-        setText('story-reward-copy', details.join(' '));
+        const claimContainer = $('story-reward-claims');
+        claimContainer?.replaceChildren();
+        if (Number(reward.gold || 0) > 0) {
+            claimContainer?.append(rewardClaimButton(
+                t.goldReward(reward.gold),
+                t.claim,
+                claims.gold,
+                () => storyAction('choose_reward', { reward_type: 'gold' }),
+            ));
+        }
+        if (relic) {
+            claimContainer?.append(rewardClaimButton(
+                `${t.talentReward} · ${localize(relic.name)}`,
+                localize(relic.description),
+                claims.relic,
+                () => storyAction('choose_reward', { reward_type: 'relic' }),
+            ));
+        }
+        if (claims.card) {
+            const selected = (reward.cards || []).find((choice) => {
+                const defId = typeof choice === 'string' ? choice : choice.card_id;
+                return defId === reward.selected_card_id;
+            });
+            const selectedDefId = typeof selected === 'string' ? selected : selected?.card_id;
+            const selectedName = selectedDefId
+                ? localize(storyContent?.cards?.[selectedDefId]?.name)
+                : t.skip;
+            claimContainer?.append(rewardClaimButton(
+                `${t.cardReward} · ${selectedName}`,
+                t.claimed,
+                true,
+                () => {},
+            ));
+        }
         const container = $('story-reward-options');
         container?.replaceChildren();
-        (reward.cards || []).forEach((choice) => {
-            const defId = typeof choice === 'string' ? choice : choice.card_id;
-            const upgraded = Boolean(typeof choice === 'object' && choice.upgraded);
-            const card = { instance_id: `reward-${defId}`, def_id: defId, upgraded };
-            container?.append(createStoryCard(card, {
-                onClick: () => storyAction('choose_reward', { card_id: defId }),
-            }));
-        });
+        container?.classList.toggle('hidden', claims.card);
+        if (!claims.card) {
+            (reward.cards || []).forEach((choice) => {
+                const defId = typeof choice === 'string' ? choice : choice.card_id;
+                const upgraded = Boolean(typeof choice === 'object' && choice.upgraded);
+                const card = { instance_id: `reward-${defId}`, def_id: defId, upgraded };
+                container?.append(createStoryCard(card, {
+                    onClick: () => storyAction('choose_reward', {
+                        reward_type: 'card',
+                        card_id: defId,
+                    }),
+                }));
+            });
+        }
+        const skip = $('story-reward-skip');
+        skip?.classList.toggle('hidden', claims.card);
+        const canContinue = Object.values(claims).every(Boolean);
+        const continueButton = $('story-reward-continue');
+        continueButton?.classList.toggle('hidden', !canContinue);
+        if (continueButton) continueButton.disabled = !canContinue;
         showView('story-reward');
     }
 
@@ -2334,6 +3301,28 @@
         }
     }
 
+    async function resumeRunFromCheckpoint(run) {
+        const checkpoint = run?.state?.recovery_checkpoint;
+        const phase = String(run?.state?.phase || '');
+        if (!checkpoint?.state || !['combat', 'room', 'reward'].includes(phase)) return run;
+        try {
+            const result = await requestJson('/api/story/run/action', {
+                method: 'POST',
+                body: JSON.stringify({
+                    run_id: run.id,
+                    state_version: run.state_version,
+                    action_id: createActionId(),
+                    action_type: 'resume_node',
+                    payload: {},
+                }),
+            });
+            return result.run || run;
+        } catch (error) {
+            if (error.payload?.run) return error.payload.run;
+            throw error;
+        }
+    }
+
     async function loadRun() {
         showView('story-loading');
         try {
@@ -2343,12 +3332,13 @@
             ]);
             storyContent = contentPayload.content || {};
             contentVersion = contentPayload.content_version || '';
-            const run = runPayload.run || null;
+            let run = runPayload.run || null;
             if (run && contentVersion && run.content_version !== contentVersion && window.__STORY_DEV_TOOLS__) {
                 activeRun = run;
                 await resetMap(true);
                 return;
             }
+            run = await resumeRunFromCheckpoint(run);
             renderRun(run);
         } catch (error) {
             if (error.message === 'AUTH_REQUIRED') return;
@@ -2417,11 +3407,20 @@
         if (button) button.disabled = false;
     }
 
-    function storyElementVisible(element) {
-        if (!element || !element.isConnected || element.disabled) return false;
+    function storyElementRendered(element) {
+        if (!element || !element.isConnected) return false;
         if (element.closest('.hidden')) return false;
         const rect = element.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0;
+    }
+
+    function storyElementVisible(element) {
+        return storyElementRendered(element) && !element.disabled;
+    }
+
+    function topmostStoryDialog() {
+        const dialogs = [...document.querySelectorAll('dialog[open]')];
+        return dialogs.length ? dialogs[dialogs.length - 1] : null;
     }
 
     function storyKeyboardItems() {
@@ -2430,7 +3429,7 @@
             return [...shortcutModal.querySelectorAll('button:not(:disabled)')]
                 .filter(storyElementVisible);
         }
-        const dialog = document.querySelector('dialog[open]');
+        const dialog = topmostStoryDialog();
         if (dialog) {
             return [...dialog.querySelectorAll(
                 '.story-card-choice-select-item:not(:disabled), button:not(:disabled)',
@@ -2519,11 +3518,10 @@
 
     function storySelectSlot(slot, options = {}) {
         const index = Number(slot) - 1 + ((options.secondPage || storySecondHandPage) ? 10 : 0);
-        const handItems = [...document.querySelectorAll(
-            '#story-hand .story-card:not(:disabled)',
-        )].filter(storyElementVisible);
-        const items = handItems.length ? handItems : storyKeyboardItems();
+        const context = getStoryShortcutContext();
+        const items = Array.isArray(context?.slots) ? context.slots : [];
         if (index < 0 || index >= items.length) return false;
+        if (!storyElementVisible(items[index])) return true;
         return activateStoryElement(items[index]);
     }
 
@@ -2545,7 +3543,7 @@
             closeStoryOverlayModal();
             return true;
         }
-        const dialog = document.querySelector('dialog[open]');
+        const dialog = topmostStoryDialog();
         if (dialog) {
             dialog.close('cancel');
             return true;
@@ -2566,7 +3564,7 @@
                 '.modal-buttons .btn-primary:not(:disabled), button:not(:disabled)',
             ));
         }
-        const dialog = document.querySelector('dialog[open]');
+        const dialog = topmostStoryDialog();
         if (dialog) {
             const focused = dialog.querySelector('.keyboard-nav-focus');
             if (focused && activateStoryElement(focused)) return true;
@@ -2653,12 +3651,12 @@
             }
             return finalizeStoryShortcutContext(context);
         }
-        const dialog = document.querySelector('dialog[open]');
+        const dialog = topmostStoryDialog();
         if (dialog) {
             const context = createStoryShortcutContext(`dialog-${dialog.id || 'story'}`);
             const choices = [...dialog.querySelectorAll(
-                '.story-card-choice-select-item:not(:disabled)',
-            )].filter(storyElementVisible);
+                '.story-card-choice-select-item',
+            )].filter(storyElementRendered);
             context.slots = choices.slice(0, 20);
             context.slotLabel = t.chooseCard || '选择卡牌';
             addStoryNavigationActions(context, storyKeyboardItems(), { toggle: choices.length > 0 });
@@ -2704,11 +3702,11 @@
             }
 
             const hand = [...document.querySelectorAll(
-                '#story-hand .story-card:not(:disabled)',
-            )].filter(storyElementVisible);
+                '#story-hand .story-card',
+            )].filter(storyElementRendered);
             context.slots = hand.slice(0, 20);
             context.slotLabel = t.hand || '手牌';
-            addStoryNavigationActions(context, hand);
+            addStoryNavigationActions(context, hand.filter(storyElementVisible));
             if (card) addStoryShortcutAction(context, 'cancel');
             const endTurn = $('story-end-turn');
             if (storyElementVisible(endTurn)) addStoryShortcutAction(context, 'end_turn', [endTurn]);
@@ -2725,10 +3723,10 @@
 
         const context = createStoryShortcutContext('story-page');
         const choices = [...document.querySelectorAll(
-            '.story-choice-screen:not(.hidden) .story-choice-option:not(:disabled), '
-            + '.story-choice-screen:not(.hidden) .story-card:not(:disabled), '
+            '.story-choice-screen:not(.hidden) .story-choice-option, '
+            + '.story-choice-screen:not(.hidden) .story-card, '
             + '#story-run:not(.hidden) .story-map-node.is-actionable',
-        )].filter(storyElementVisible);
+        )].filter(storyElementRendered);
         context.slots = choices.slice(0, 20);
         context.slotLabel = t.choose || '选择';
         const controls = storyKeyboardItems();
@@ -2838,6 +3836,14 @@
     };
 
     function bind() {
+        const storyApp = $('story-app');
+        storyApp?.addEventListener('selectstart', (event) => {
+            if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+            event.preventDefault();
+        });
+        storyApp?.addEventListener('dragstart', (event) => {
+            if (event.target?.closest?.('img')) event.preventDefault();
+        });
         $('story-start')?.addEventListener('click', startRun);
         $('story-end-turn')?.addEventListener('click', () => storyAction('end_turn'));
         $('story-draw-pile')?.addEventListener('click', () => openStoryPile('draw'));
@@ -2889,7 +3895,24 @@
                 [context.spec.payloadKey]: selected,
             });
         });
-        $('story-reward-skip')?.addEventListener('click', () => storyAction('choose_reward'));
+        $('story-deck-change-dialog')?.addEventListener('close', (event) => {
+            const pending = pendingStoryDeckChange;
+            pendingStoryDeckChange = null;
+            if (!pending || event.target.returnValue !== 'confirm') return;
+            storyAction(pending.actionType, pending.payload);
+        });
+        $('story-event-confirm-dialog')?.addEventListener('close', (event) => {
+            const pending = pendingStoryEventAction;
+            pendingStoryEventAction = null;
+            if (!pending || event.target.returnValue !== 'confirm') return;
+            pending();
+        });
+        $('story-reward-skip')?.addEventListener('click', () => storyAction('choose_reward', {
+            reward_type: 'card',
+        }));
+        $('story-reward-continue')?.addEventListener('click', () => storyAction('choose_reward', {
+            reward_type: 'continue',
+        }));
         $('story-terminal-new')?.addEventListener('click', startNewJourney);
         $('story-dev-toggle')?.addEventListener('click', () => setDeveloperMode(!developerModeOpen));
         $('story-dev-close')?.addEventListener('click', () => setDeveloperMode(false));
@@ -2909,6 +3932,7 @@
         });
         $('story-term-dialog')?.addEventListener('close', (event) => {
             delete event.currentTarget.dataset.storyTermKey;
+            delete event.currentTarget.dataset.storyTermUpgrade;
         });
         const moveAim = (event) => {
             storyAimPointer = { x: event.clientX, y: event.clientY };
@@ -2934,6 +3958,20 @@
         });
         document.addEventListener('contextmenu', (event) => {
             event.preventDefault();
+            if (selectedCombatCardId && activeRun?.state) {
+                event.stopImmediatePropagation();
+                cancelStoryCombatSelection(true);
+                return;
+            }
+            const statusElement = event.target?.closest?.('[data-story-status-key]');
+            if (statusElement) {
+                if (statusElement.dataset.storyTermLongPress === '1') {
+                    delete statusElement.dataset.storyTermLongPress;
+                    return;
+                }
+                openStoryStatusTerms(statusElement.dataset.storyStatusKey);
+                return;
+            }
             const cardElement = event.target?.closest?.('.story-card.card, .story-pile-tile');
             const card = cardElement ? storyCardElementData.get(cardElement) : null;
             if (card) {
@@ -2944,7 +3982,6 @@
                 closeStoryCardTerms();
                 return;
             }
-            if (selectedCombatCardId && activeRun?.state) cancelStoryCombatSelection(true);
         });
     }
 

@@ -64,3 +64,10 @@ def test_magic_nazar_status_aliases_are_forced_to_the_core_localized_term():
     assert "comparable.endsWith(':magic_nazar')" in GAME_JS
     assert "customDef && key !== 'magic_nazar'" in GAME_JS
     assert "customCount('magic_nazar', 'Magic Nazar', '魔法邪眼', 'vanilla:magic_nazar')" in GAME_JS
+
+
+def test_zero_heal_log_has_structured_localization():
+    assert "no_heal: '{p} recovers no H'" in GAME_JS
+    assert "no_heal_detail: 'but {p} recovers no H'" in GAME_JS
+    assert "out.match(/^但(.+)未回复生命$/)" in GAME_JS
+    assert "fmtLog('no_heal_detail'" in GAME_JS

@@ -11069,7 +11069,7 @@ html.blind-level-4 .card-prediction-part.magic {
 .afk-check-overlay {
   position: fixed;
   inset: 0;
-  z-index: 3600;
+  z-index: 40000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -16022,9 +16022,11 @@ html[data-ui-style="minimal"] .btn-end-turn {
   border: 1px solid rgba(255,255,255,0.12);
   color: #fff;
   font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.12;
 }
 
 .classic-intent-badge {

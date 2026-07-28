@@ -444,7 +444,7 @@ _reg(CardDef('Chromosome', 'Chromosome', '染色体', 1, 0, 'bloom', 2, 'Common'
              '从基因中提取记忆，寻找所需之牌。', '从弃牌堆中选择一张牌将其加入手中，并使其获得共生'))
 
 _reg(CardDef('Sewage', 'Sewage', '污水', 2, 0, 'bloom', 10, 'Common',
-             '腐蚀一切装备。', '摧毁目标一张装备'))
+             '腐蚀一切装备。', '选择目标一张装备摧毁'))
 
 _reg(CardDef('MagicSewage', 'Magic Sewage', '魔法污水', 0, 6, 'bloom', 3, 'Common',
              '至死方休！', '摧毁场上所有装备；每摧毁1张装备，回复自己1E',

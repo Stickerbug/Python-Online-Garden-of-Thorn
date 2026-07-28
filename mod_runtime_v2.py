@@ -368,6 +368,8 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 healed = max(0, engine.players[target_id].health - before)
                 if healed:
                     engine.log_msg(f"{engine.pn(target_id)}回复{healed}H")
+                else:
+                    engine.log_msg(f"{engine.pn(target_id)}未回复生命")
         return {"success": True}
 
     if op == "draw_cards":

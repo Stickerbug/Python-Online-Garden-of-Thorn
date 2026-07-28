@@ -109,7 +109,8 @@ function renderCard(card, options = {}) {
   const width = Math.max(240, Number($ce('card-width')?.value || 744));
   const showArt = options.showArt ?? $ce('show-art')?.checked;
   const showEnglish = options.showEnglish ?? $ce('show-english')?.checked;
-  const lang = localStorage.getItem('gtn_lang') || 'zh';
+  const storage = window.GTN_STORAGE || window.localStorage;
+  const lang = storage.getItem('gtn_lang') || 'zh';
   document.documentElement.lang = lang === 'zh-CN' ? 'zh' : lang;
   const renderer = window.GTN_CARD_RENDERER;
   if (!renderer || typeof renderer.createCardElement !== 'function') {

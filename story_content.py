@@ -605,7 +605,7 @@ STORY_ENEMIES = {
         _move('旋转', 'Spin', _effect('damage', 3, hits=3)),
         _move('膨胀', 'Expand', _effect('damage', 11), _effect('gain_power', 1)),
     ), script='swell'),
-    'spider_yuba': _enemy('蜘蛛尤巴', 'Yuba Spider', 102, (
+    'spider_yoba': _enemy('蜘蛛尤巴', 'Yoba Spider', 102, (
         _move('下劈', 'Chop', _effect('damage', 11), _effect('gain_power', 2)),
         _move('嘲讽', 'Taunt', _effect('gain_shield', 10), _effect('player_status', 3, status='vulnerable')),
         _move('回旋斩', 'Whirlwind', _effect('damage', 3, hits=3)),
@@ -641,7 +641,7 @@ STORY_ENEMY_IMAGE_URLS = {
     'spider': '/static/assets/story-enemies/spider.svg',
     'sunflower': '/static/assets/story-enemies/sunflower.svg',
     'avocado': '/static/assets/story-enemies/avocado.svg',
-    'spider_yuba': '/static/assets/story-enemies/spider-yuba.svg',
+    'spider_yoba': '/static/assets/story-enemies/spider-yoba.svg',
     'digger': '/static/assets/story-enemies/digger.svg',
     'ant_queen': '/static/assets/story-enemies/ant-queen.svg',
     'hive': '/static/assets/story-enemies/hive.svg',
@@ -671,7 +671,7 @@ STORY_ENCOUNTERS = {
         'elite': (
             ({'def_id': 'centipede', 'move_index': 0}, {'def_id': 'centipede', 'move_index': 1},
              {'def_id': 'centipede', 'move_index': 2}, {'def_id': 'centipede', 'move_index': 3}),
-            ('spider_yuba',),
+            ('spider_yoba',),
             ('avocado',),
         ),
         'boss': (

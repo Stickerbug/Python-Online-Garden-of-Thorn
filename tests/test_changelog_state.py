@@ -66,9 +66,14 @@ class ChangelogStateTests(unittest.TestCase):
             'function readChangelogMarker(',
             'function currentChangelogCacheVersion(',
         )
-        self.assertIn('window.sessionStorage.getItem(key)', marker_section)
-        self.assertIn('window.sessionStorage.setItem(key, text)', marker_section)
+        cookie_read = marker_section.index('readStorageFallbackCookie(storageKey)')
+        local_read = marker_section.index('localStorage.getItem(storageKey)')
+        self.assertLess(cookie_read, local_read)
+        self.assertIn('window.sessionStorage.getItem(storageKey)', marker_section)
+        self.assertIn('window.sessionStorage.setItem(storageKey, text)', marker_section)
         self.assertIn('writeStorageFallbackCookie(', marker_section)
+        self.assertIn('function readChangelogReadReceipt()', marker_section)
+        self.assertIn('.sort((left, right)', marker_section)
 
     def test_mark_read_is_also_saved_in_cached_changelog(self):
         section = source_between(
@@ -77,6 +82,7 @@ class ChangelogStateTests(unittest.TestCase):
             'function loadCachedChangelog(',
         )
         self.assertIn('changelogCache = { ...changelogCache, readVersion, readDate }', section)
+        self.assertIn('writeChangelogReadReceipt(readVersion, readDate)', section)
         self.assertIn('localStorage.setItem(CHANGELOG_CACHE_KEY', section)
 
 

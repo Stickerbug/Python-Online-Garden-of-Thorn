@@ -19,6 +19,7 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_hidden_features_enabled',
     'gtn_show_english_card_names',
     'gtn_show_card_images',
+    'gtn_play_gesture_animation',
     'gtn_landscape_mode',
     'gtn_audio_enabled',
     'gtn_audio_master',
@@ -29,7 +30,6 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_audio_sfx',
     'gtn_audio_settings_v3',
     'gtn_audio_settings_v4',
-    'gtn_music_notice_v1',
     'gtn_skin_config',
     'gtn_server',
     'gtn_disabled_mods',
@@ -63,26 +63,59 @@ function gtnBetaStorageKey(key) {
 const gtnStorageMemory = new Map();
 let gtnPersistentStorage = null;
 let gtnPersistentStorageWritable = false;
+let gtnSessionStorage = null;
 const GTN_COOKIE_FALLBACK_KEYS = new Set([
+    'gtn_theme',
+    'gtn_lang',
+    'gtn_ui_style',
+    'gtn_ui_style_v2_migrated',
+    'gtn_hidden_features_enabled',
+    'gtn_show_english_card_names',
+    'gtn_show_card_images',
+    'gtn_play_gesture_animation',
+    'gtn_landscape_mode',
+    'gtn_audio_enabled',
+    'gtn_audio_master',
+    'gtn_audio_music',
+    'gtn_audio_menu_music',
+    'gtn_audio_battle_music',
+    'gtn_audio_ui',
+    'gtn_audio_sfx',
+    'gtn_audio_settings_v3',
+    'gtn_audio_settings_v4',
+    'gtn_skin_config',
+    'gtn_server',
+    'gtn_settings_mod_tab',
+    'gtn_seen_intro',
+    'gtn_nickname',
+    'preferred_mode',
+    'gtn_active_route',
     'gtn_disabled_mods',
-    'gtn_beta_disabled_mods',
     'gtn_known_official_mods',
-    'gtn_beta_known_official_mods',
     'gtn_official_mod_default_v2',
-    'gtn_beta_official_mod_default_v2',
     'gtn_official_mod_default_v3',
-    'gtn_beta_official_mod_default_v3',
     'gtn_changelog_read_version_v1',
     'gtn_changelog_read_latest_date_v1',
     'gtn_changelog_boot_version_v1',
+    'gtn_changelog_read_receipt_v1',
 ]);
-const GTN_COOKIE_FALLBACK_PREFIXES = ['gtn_keybindings_', 'gtn_beta_keybindings_'];
+const GTN_COOKIE_FALLBACK_PREFIXES = ['gtn_keybindings_'];
 const gtnConfirmedCookieFallbackKeys = new Set();
+
+function normalizeStorageFallbackKey(key) {
+    const value = String(key || '');
+    if (value === 'gtn_beta_preferred_mode') return 'preferred_mode';
+    if (value.startsWith('gtn_beta_')) {
+        return `gtn_${value.slice('gtn_beta_'.length)}`;
+    }
+    return value;
+}
 
 function supportsStorageFallbackCookie(key) {
     const value = String(key || '');
-    return GTN_COOKIE_FALLBACK_KEYS.has(value)
-        || GTN_COOKIE_FALLBACK_PREFIXES.some(prefix => value.startsWith(prefix));
+    const normalized = normalizeStorageFallbackKey(value);
+    return GTN_COOKIE_FALLBACK_KEYS.has(normalized)
+        || GTN_COOKIE_FALLBACK_PREFIXES.some(prefix => normalized.startsWith(prefix));
 }
 
 function readStorageFallbackCookie(key) {
@@ -134,9 +167,18 @@ try {
     console.warn('[storage] persistent local storage is unavailable; using an in-memory fallback', error);
 }
 
+try {
+    gtnSessionStorage = window.sessionStorage;
+    const probeKey = gtnBetaStorageKey('__gtn_session_storage_probe__');
+    gtnSessionStorage.setItem(probeKey, '1');
+    gtnSessionStorage.removeItem(probeKey);
+} catch (_) {
+    gtnSessionStorage = null;
+}
+
 // Keep browser privacy restrictions from breaking gameplay. Account-backed
-// settings are still sent to the server; guest settings remain available for
-// the lifetime of this page when persistent storage is unavailable.
+// settings are still sent to the server. Small preferences also use a cookie
+// fallback, while larger decks and caches remain session-only.
 const localStorage = Object.freeze({
     getItem(key) {
         const mapped = String(gtnBetaStorageKey(key));
@@ -147,12 +189,21 @@ const localStorage = Object.freeze({
                 if (stored != null) return stored;
             } catch (_) {}
         }
+        if (gtnSessionStorage) {
+            try {
+                const stored = gtnSessionStorage.getItem(mapped);
+                if (stored != null) return stored;
+            } catch (_) {}
+        }
         return readStorageFallbackCookie(mapped);
     },
     setItem(key, value) {
         const mapped = String(gtnBetaStorageKey(key));
         const text = String(value);
         gtnStorageMemory.set(mapped, text);
+        if (gtnSessionStorage) {
+            try { gtnSessionStorage.setItem(mapped, text); } catch (_) {}
+        }
         if (!gtnPersistentStorage || !gtnPersistentStorageWritable) {
             writeStorageFallbackCookie(mapped, text);
             return;
@@ -169,6 +220,9 @@ const localStorage = Object.freeze({
         const mapped = String(gtnBetaStorageKey(key));
         gtnStorageMemory.delete(mapped);
         removeStorageFallbackCookie(mapped);
+        if (gtnSessionStorage) {
+            try { gtnSessionStorage.removeItem(mapped); } catch (_) {}
+        }
         if (gtnPersistentStorage && gtnPersistentStorageWritable) {
             try {
                 gtnPersistentStorage.removeItem(mapped);
@@ -326,7 +380,6 @@ let musicFadeTimers = new WeakMap();
 let musicSceneUpdateTimer = null;
 let musicRequestSeq = 0;
 let audioLastUnlockAttemptAt = 0;
-const MUSIC_NOTICE_KEY = 'gtn_music_notice_v1';
 
 function clampPercent(value, fallback = 100) {
     const n = Number(value);
@@ -421,30 +474,6 @@ function unlockAudio() {
     audioUnlocked = true;
     preloadAudioFiles();
     updateBackgroundMusic();
-}
-
-function shouldShowMusicNotice() {
-    try {
-        return !!localStorage.getItem('gtn_seen_intro') && localStorage.getItem(MUSIC_NOTICE_KEY) !== '1';
-    } catch (_) {
-        return false;
-    }
-}
-
-function acknowledgeMusicNoticeAndPlay() {
-    try { localStorage.setItem(MUSIC_NOTICE_KEY, '1'); } catch (_) {}
-    unlockAudio();
-}
-
-function maybeShowMusicNotice() {
-    if (window.__GTN_REPLAY_VIDEO_EXPORT__) return false;
-    if (!shouldShowMusicNotice()) return false;
-    gameAlert(
-        UI.music_notice_title || UI.notice || '提示',
-        UI.music_notice_message || '本版本加入了主界面音乐。如果你有减小噪音的需求，请先调低设备音量。',
-        [{ text: UI.confirm || UI.ok || '确认', cls: 'btn-primary', action: acknowledgeMusicNoticeAndPlay }],
-    );
-    return true;
 }
 
 function fadeMusicAudio(audio, targetVolume, durationMs = 650, onDone = null) {
@@ -695,16 +724,11 @@ function bindAudioSettingsControls() {
 function initAudioSystem() {
     loadAudioSettings();
     syncAudioSettingsUi();
-    const unlockOnGesture = () => {
-        if (shouldShowMusicNotice()) return;
-        unlockAudio();
-    };
+    const unlockOnGesture = () => unlockAudio();
     ['pointerdown', 'keydown', 'touchstart', 'click'].forEach((eventName) => {
         document.addEventListener(eventName, unlockOnGesture, { passive: true, capture: true });
     });
-    window.setTimeout(() => {
-        if (!shouldShowMusicNotice()) unlockAudio();
-    }, 0);
+    window.setTimeout(unlockAudio, 0);
     document.addEventListener('click', (event) => {
         if (!event.target || event.defaultPrevented) return;
         const target = event.target.closest('button, .settings-tab, .mode-tab, .choice-card-token, .top-nav-icon-btn, .btn');
@@ -833,7 +857,7 @@ const I18N = {
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', start_draft: 'Start Draft', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard', fusion_layer: 'Fusion', fission_layer: 'Fission',
         settings_title: 'Settings', settings_appearance: 'Appearance', settings_theme: 'Theme', settings_lang: 'Language', settings_mods: 'Mods', settings_audio: 'Audio', settings_theme_light: 'Light', settings_theme_dark: 'Dark',
-        settings_audio_enabled: 'Enable audio', settings_volume_master: 'Master volume', settings_volume_music: 'Music', settings_volume_menu_music: 'Home/Lobby music', settings_volume_battle_music: 'Battle music', settings_volume_ui: 'Buttons', settings_volume_sfx: 'Effects', settings_audio_test: 'Test sound', settings_audio_hint: 'Music starts after your first click or key press.', music_notice_title: 'Music Added', music_notice_message: 'This version adds home-screen music. If you need less noise, please lower your device volume first.',
+        settings_audio_enabled: 'Enable audio', settings_volume_master: 'Master volume', settings_volume_music: 'Music', settings_volume_menu_music: 'Home/Lobby music', settings_volume_battle_music: 'Battle music', settings_volume_ui: 'Buttons', settings_volume_sfx: 'Effects', settings_audio_test: 'Test sound', settings_audio_hint: 'Music starts after your first click or key press.',
         no_games: 'No ongoing games', back_to_home: 'Back to Home', settings_btn: 'Settings', settings_server: 'Server', settings_server_addr: 'Address', not_your_turn: 'Not your turn',
         counter_insufficient: 'Tip: counter cards are not affordable', default_status: 'Garden of Thorn', game_loading: 'Loading...', server_no_response: 'Server is not responding. Check the connection or refresh.',
         spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck', shuffle_deck: 'Shuffle',
@@ -951,7 +975,7 @@ I18N.zh = { ...I18N.en,
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
     select_event_desc: '选择一个配装倾向', start_draft: '开始选牌', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
     settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_audio: '音频', settings_theme_light: '明亮', settings_theme_dark: '黑暗',
-    settings_audio_enabled: '启用音频', settings_volume_master: '主音量', settings_volume_music: '背景音乐', settings_volume_menu_music: '主页/大厅音乐', settings_volume_battle_music: '对局音乐', settings_volume_ui: '按钮', settings_volume_sfx: '效果', settings_audio_test: '测试音效', settings_audio_hint: '音乐会在首次点击或按键后开始播放。', music_notice_title: '音乐提示', music_notice_message: '本版本加入了主界面音乐。如果你有减小噪音的需求，请先调低设备音量。',
+    settings_audio_enabled: '启用音频', settings_volume_master: '主音量', settings_volume_music: '背景音乐', settings_volume_menu_music: '主页/大厅音乐', settings_volume_battle_music: '对局音乐', settings_volume_ui: '按钮', settings_volume_sfx: '效果', settings_audio_test: '测试音效', settings_audio_hint: '音乐会在首次点击或按键后开始播放。',
     no_games: '暂无进行中的对局', back_to_home: '返回主页', settings_btn: '设置', settings_server: '服务器', settings_server_addr: '地址', not_your_turn: '还没轮到你',
     counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
     spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天',
@@ -1064,7 +1088,7 @@ I18N.fr = { ...I18N.en,
     select_event_desc: "Choisir un événement de départ", opponent_selected: 'Adversaire a choisi', opponent_selecting: 'Adversaire choisit...',
     card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
     settings_title: 'Paramètres', settings_appearance: 'Apparence', settings_theme: 'Thème', settings_lang: 'Langue', settings_mods: 'Mods', settings_audio: 'Audio', settings_theme_light: 'Clair', settings_theme_dark: 'Sombre',
-    settings_audio_enabled: 'Activer l’audio', settings_volume_master: 'Volume général', settings_volume_music: 'Musique', settings_volume_menu_music: 'Accueil/Salon', settings_volume_battle_music: 'Combat', settings_volume_ui: 'Boutons', settings_volume_sfx: 'Effets', settings_audio_test: 'Tester le son', settings_audio_hint: 'La musique démarre après le premier clic ou appui.', music_notice_title: 'Musique ajoutée', music_notice_message: 'Cette version ajoute une musique d’accueil. Si vous voulez moins de bruit, baissez d’abord le volume de votre appareil.',
+    settings_audio_enabled: 'Activer l’audio', settings_volume_master: 'Volume général', settings_volume_music: 'Musique', settings_volume_menu_music: 'Accueil/Salon', settings_volume_battle_music: 'Combat', settings_volume_ui: 'Boutons', settings_volume_sfx: 'Effets', settings_audio_test: 'Tester le son', settings_audio_hint: 'La musique démarre après le premier clic ou appui.',
     no_games: 'Aucune partie en cours', back_to_home: "Retour à l'accueil", settings_btn: 'Paramètres', settings_server: 'Serveur', settings_server_addr: 'Adresse',
     not_your_turn: "Ce n'est pas votre tour", counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
     game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
@@ -1137,7 +1161,7 @@ I18N.ja = { ...I18N.en,
     select_event_desc: 'オープニングイベントを選択', opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
     card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
     settings_title: '設定', settings_appearance: '外観', settings_theme: 'テーマ', settings_lang: '言語', settings_mods: 'Mod', settings_audio: '音声', settings_theme_light: 'ライト', settings_theme_dark: 'ダーク',
-    settings_audio_enabled: '音声を有効化', settings_volume_master: 'マスター音量', settings_volume_music: 'BGM', settings_volume_menu_music: 'ホーム/ロビーBGM', settings_volume_battle_music: '対戦BGM', settings_volume_ui: 'ボタン', settings_volume_sfx: '効果音', settings_audio_test: 'テスト再生', settings_audio_hint: '音楽は最初のクリックまたはキー入力後に再生されます。', music_notice_title: '音楽のお知らせ', music_notice_message: 'このバージョンではホーム画面の音楽が追加されました。音量が気になる場合は、先に端末の音量を下げてください。',
+    settings_audio_enabled: '音声を有効化', settings_volume_master: 'マスター音量', settings_volume_music: 'BGM', settings_volume_menu_music: 'ホーム/ロビーBGM', settings_volume_battle_music: '対戦BGM', settings_volume_ui: 'ボタン', settings_volume_sfx: '効果音', settings_audio_test: 'テスト再生', settings_audio_hint: '音楽は最初のクリックまたはキー入力後に再生されます。',
     no_games: '進行中の対戦なし', back_to_home: 'ホームに戻る', settings_btn: '設定', settings_server: 'サーバー', settings_server_addr: 'アドレス',
     not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
     game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
@@ -1996,21 +2020,29 @@ Object.assign(I18N.en, {
     spectator_list: 'Spectator List',
     no_spectators: 'No spectators',
     spectating_status: 'Spectating',
+    player_turn: "{0}'s turn",
+    spectating_turn: "Spectating · {0}'s turn",
 });
 Object.assign(I18N.zh, {
     spectator_list: '\u89c2\u6218\u5217\u8868',
     no_spectators: '\u6682\u65e0\u89c2\u6218\u8005',
     spectating_status: '\u89c2\u6218\u4e2d',
+    player_turn: '{0}\u7684\u56de\u5408',
+    spectating_turn: '\u89c2\u6218 \u00b7 {0}\u7684\u56de\u5408',
 });
 Object.assign(I18N.fr, {
     spectator_list: 'Liste des spectateurs',
     no_spectators: 'Aucun spectateur',
     spectating_status: 'En observation',
+    player_turn: 'Tour de {0}',
+    spectating_turn: 'Spectateur \u00b7 Tour de {0}',
 });
 Object.assign(I18N.ja, {
     spectator_list: '\u89b3\u6226\u8005\u4e00\u89a7',
     no_spectators: '\u89b3\u6226\u8005\u306f\u3044\u307e\u305b\u3093',
     spectating_status: '\u89b3\u6226\u4e2d',
+    player_turn: '{0}\u306e\u30bf\u30fc\u30f3',
+    spectating_turn: '\u89b3\u6226 \u00b7 {0}\u306e\u30bf\u30fc\u30f3',
 });
 Object.assign(I18N.en, {
     tutorial_player_you: 'You', tutorial_player_opponent: 'Practice Opponent',
@@ -3399,6 +3431,19 @@ function getLocalizedCardTextTokenRules() {
         const aliases = (CARD_TEXT_LOCALIZED_STATUS_ALIASES[currentLang] || {})[statusKey] || [];
         aliases.forEach(alias => addRule(alias, meta));
     });
+    Object.entries(CUSTOM_STATUS_DEFS || {}).forEach(([statusKey, customDef]) => {
+        if (!customDef || customDef.visible === false) return;
+        const item = getStatusIntroItem({ key: statusKey, customDef });
+        if (!item || !item.label) return;
+        const iconKey = normalizeStatusIconKey(item.iconKey || customDef.icon || statusKey);
+        const cls = `status-${iconKey.replace(/_/g, '-')}`;
+        addRule(item.label, {
+            cls,
+            termKey: `status:${statusKey}`,
+            color: item.color || '',
+            iconKey,
+        });
+    });
     rules.sort((a, b) => String(b.re.source).length - String(a.re.source).length);
     cardTextLocalizedRuleCache = { signature, rules };
     return rules;
@@ -3593,6 +3638,8 @@ function getInlineIconUrl(iconKey) {
         magic_blocked: 'magic_blocked',
     };
     if (statusIcons[key]) return `/static/assets/status-icons/${statusIcons[key]}.svg`;
+    const registeredStatusIconUrl = getStatusIconUrl(key);
+    if (registeredStatusIconUrl) return registeredStatusIconUrl;
     return '';
 }
 
@@ -3710,9 +3757,9 @@ function getCardTextTokenIconKey(cls, rawText = '') {
     return statusMap[cls] || '';
 }
 
-function renderCardTextTokenHtml(cls, rawText = '', termAttr = '', color = '') {
+function renderCardTextTokenHtml(cls, rawText = '', termAttr = '', color = '', explicitIconKey = '') {
     const text = String(rawText || '');
-    const iconKey = getCardTextTokenIconKey(cls, text);
+    const iconKey = explicitIconKey || getCardTextTokenIconKey(cls, text);
     const iconHtml = renderInlineIconHtml(iconKey, text);
     const style = color ? ` style="color:${escapeHtml(color)}"` : '';
     return `<span class="card-token ${cls}"${termAttr}${style}>${escapeHtml(text)}${iconHtml}</span>`;
@@ -3828,6 +3875,70 @@ function bindGalleryTermDescriptionInteractions(root) {
     });
 }
 
+function matchComputedCardTextToken(value) {
+    const text = String(value || '');
+    const finalIcon = String.raw`\[\[icon:(H|E|M|D|damage|electric_damage|P|F|A|armor)\]\]`;
+    const nestedIcon = String.raw`\[\[icon:[a-zA-Z0-9_:-]+\]\]`;
+    const iconPatterns = [
+        new RegExp(`^(等同于(?:(?![，；。！？\\r\\n]).)+?的)${finalIcon}`, 'i'),
+        new RegExp(`^((?:向上取整|向下取整)(?:\\([^\\)\\r\\n]*\\)|（[^）\\r\\n]*）)(?:的|层)?)${finalIcon}`, 'i'),
+        new RegExp(`^((?:(?:目标|自己|攻击者|本装备|对应)?${nestedIcon})(?:层数|数量|数值|消耗|回复量)(?:(?:的)?(?:两倍|\\d+(?:\\.\\d+)?倍)|[×x]\\d+(?:\\.\\d+)?)?的)${finalIcon}`, 'i'),
+        new RegExp(`^((?:\\([^\\)\\r\\n]*${nestedIcon}[^\\)\\r\\n]*\\)|（[^）\\r\\n]*${nestedIcon}[^）\\r\\n]*）)(?:的|层)?)${finalIcon}`, 'i'),
+        new RegExp(`^((?:等量|对应|回复量(?:\\d+(?:\\.\\d+)?倍)?的))${finalIcon}`, 'i'),
+        new RegExp(`^((?:(?:不少于|不超过|至多|至少)?(?:该|本次|目标|自己)?(?:消耗|伤害|回复量|层数)\\d+(?:\\.\\d+)?倍的))${finalIcon}`, 'i'),
+        new RegExp(`^((?:其)?特殊效果超出初始值的层数总和一半的)${finalIcon}`, 'i'),
+    ];
+    for (const pattern of iconPatterns) {
+        const match = text.match(pattern);
+        if (match && match[0] && match[2]) {
+            return {
+                raw: match[0],
+                iconKey: match[2],
+            };
+        }
+    }
+    const statusPatterns = [
+        { re: /^(等同于(?:(?![，；。！？\r\n]).)+?的易损层数)/i, cls: 'status-fragile', termKey: 'status:fragile' },
+        { re: /^(等同于(?:(?![，；。！？\r\n]).)+?的护盾)/i, cls: 'status-shield', termKey: 'status:shield' },
+    ];
+    for (const spec of statusPatterns) {
+        const match = text.match(spec.re);
+        if (match && match[0]) {
+            return {
+                raw: match[0],
+                cls: spec.cls,
+                termKey: spec.termKey,
+            };
+        }
+    }
+    return null;
+}
+
+function renderComputedCardTextTokenContent(value) {
+    const text = String(value || '');
+    const marker = /\[\[icon:([a-zA-Z0-9_:-]+)\]\]/gi;
+    let html = '';
+    let offset = 0;
+    let match;
+    while ((match = marker.exec(text)) !== null) {
+        html += escapeHtml(text.slice(offset, match.index));
+        html += renderInlineIconHtml(match[1], match[1]);
+        offset = match.index + match[0].length;
+    }
+    html += escapeHtml(text.slice(offset));
+    return html;
+}
+
+function renderComputedCardTextTokenHtml(token) {
+    const iconKey = String((token && token.iconKey) || '');
+    const cls = String((token && token.cls) || getIconTokenClass(iconKey) || '');
+    const termKey = String((token && token.termKey) || getIconTermKey(iconKey) || '');
+    const hasInlineIcon = /\[\[icon:/i.test(String((token && token.raw) || ''));
+    const className = `card-token${hasInlineIcon ? ' inline-icon-token inline-unit-token' : ''}${cls ? ` ${escapeHtml(cls)}` : ''}`;
+    const termAttr = termKey ? ` data-term-key="${escapeHtml(termKey)}"` : '';
+    return `<span class="${className}"${termAttr}>${renderComputedCardTextTokenContent(token && token.raw)}</span>`;
+}
+
 function colorizeCardText(value) {
     const text = String(value || '')
         .replace(/\bSwiftness\b/gi, 'Swift')
@@ -3842,14 +3953,10 @@ function colorizeCardText(value) {
             i += 2;
             continue;
         }
-        const damageFromPoisonMarker = rest.match(/^\[\[icon:P\]\]((?:层数两倍的|层数的两倍|层数等同的|层数相同的))\[\[icon:(D|electric_damage)\]\]/i);
-        if (damageFromPoisonMarker && damageFromPoisonMarker[1] && damageFromPoisonMarker[2]) {
-            const damageIconKey = damageFromPoisonMarker[2];
-            const termKey = getIconTermKey(damageIconKey);
-            const termAttr = termKey ? ` data-term-key="${escapeHtml(termKey)}"` : '';
-            const cls = getIconTokenClass(damageIconKey);
-            html += `<span class="card-token inline-icon-token inline-unit-token${cls ? ` ${escapeHtml(cls)}` : ''}"${termAttr}>${renderInlineIconHtml('P', 'P')}${escapeHtml(damageFromPoisonMarker[1])}${renderInlineIconHtml(damageIconKey, damageIconKey)}</span>`;
-            i += damageFromPoisonMarker[0].length;
+        const computedToken = matchComputedCardTextToken(rest);
+        if (computedToken) {
+            html += renderComputedCardTextTokenHtml(computedToken);
+            i += computedToken.raw.length;
             continue;
         }
         const iconMarker = rest.match(/^\[\[icon:([a-zA-Z0-9_:-]+)\]\]/i);
@@ -3906,7 +4013,13 @@ function colorizeCardText(value) {
             for (const rule of getLocalizedCardTextTokenRules()) {
                 const m = rest.match(rule.re);
                 if (m && m[0]) {
-                    matched = { cls: rule.cls, text: m[0], termKey: rule.termKey, color: rule.color };
+                    matched = {
+                        cls: rule.cls,
+                        text: m[0],
+                        termKey: rule.termKey,
+                        color: rule.color,
+                        iconKey: rule.iconKey,
+                    };
                     break;
                 }
             }
@@ -3914,7 +4027,13 @@ function colorizeCardText(value) {
         if (matched) {
             const termKey = matched.termKey || getCardTextTokenTermKey(matched.cls, matched.text);
             const termAttr = termKey ? ` data-term-key="${escapeHtml(termKey)}"` : '';
-            html += renderCardTextTokenHtml(matched.cls, matched.text, termAttr, matched.color || '');
+            html += renderCardTextTokenHtml(
+                matched.cls,
+                matched.text,
+                termAttr,
+                matched.color || '',
+                matched.iconKey || '',
+            );
             i += matched.text.length;
         } else {
             html += escapeHtml(text[i]);
@@ -4188,6 +4307,8 @@ Object.assign(LOG_TEXT.en, {
     equipment_removed: "{p}'s {card} {detail}",
     equipment_destroyed: '{card} is destroyed',
     card_rejected: '{target} refuses to let {p} use {card}',
+    no_heal: '{p} recovers no H',
+    no_heal_detail: 'but {p} recovers no H',
 });
 Object.assign(LOG_TEXT.fr, {
     compact_damage: '{p} subit {damage} (H={h})',
@@ -4207,6 +4328,8 @@ Object.assign(LOG_TEXT.fr, {
     equipment_removed: '{card} de {p} {detail}',
     equipment_destroyed: '{card} est détruit',
     card_rejected: '{target} refuse que {p} utilise {card}',
+    no_heal: '{p} ne récupère aucun H',
+    no_heal_detail: 'mais {p} ne récupère aucun H',
 });
 Object.assign(LOG_TEXT.ja, {
     compact_damage: '{p}が{damage}を受ける（H={h}）',
@@ -4226,6 +4349,12 @@ Object.assign(LOG_TEXT.ja, {
     equipment_removed: '{p}の{card}{detail}',
     equipment_destroyed: '{card}が破壊された',
     card_rejected: '{target}が{p}による{card}の使用を拒否',
+    no_heal: '{p}のHは回復しない',
+    no_heal_detail: 'しかし{p}のHは回復しない',
+});
+Object.assign(LOG_TEXT.ru, {
+    no_heal: '{p} recovers no H',
+    no_heal_detail: 'but {p} recovers no H',
 });
 
 Object.assign(LOG_TEXT.zh || (LOG_TEXT.zh = {}), {
@@ -4239,6 +4368,8 @@ Object.assign(LOG_TEXT.zh || (LOG_TEXT.zh = {}), {
     equipment_removed: '{p}的{card}{detail}',
     equipment_destroyed: '{card}被摧毁',
     card_rejected: '{target}拒绝{p}对其使用{card}',
+    no_heal: '{p}未回复生命',
+    no_heal_detail: '但{p}未回复生命',
 });
 
 Object.assign(LOG_TEXT.zh || (LOG_TEXT.zh = {}), {
@@ -4424,6 +4555,14 @@ function localizedCardTypeFromCn(typeName) {
 
 function localizeKnownLogText(line) {
     let out = String(line || '');
+    let noHealMatch = out.match(/^但(.+)未回复生命$/);
+    if (noHealMatch && currentLang !== 'zh') {
+        return fmtLog('no_heal_detail', { p: localizeCanonicalPlayerName(noHealMatch[1]) }) || out;
+    }
+    noHealMatch = out.match(/^(.+)未回复生命$/);
+    if (noHealMatch && currentLang !== 'zh') {
+        return fmtLog('no_heal', { p: localizeCanonicalPlayerName(noHealMatch[1]) }) || out;
+    }
     const cardNames = Object.values(CARD_DEFS)
         .filter(cd => cd && cd.name_cn)
         .sort((a, b) => String(b.name_cn).length - String(a.name_cn).length);
@@ -4744,6 +4883,8 @@ let latencyPingTimer = null;
 let activeAfkCheck = null;
 let afkCheckTimer = null;
 let afkCheckHoldTimer = null;
+let lastAfkActivityReportAt = 0;
+const AFK_ACTIVITY_REPORT_INTERVAL_MS = 20000;
 let skinSaveInFlight = false;
 let CARD_DEFS = {};
 let GALLERY_CARD_DEFS = null;
@@ -6322,6 +6463,67 @@ function formatRoundStatus(gs, phaseText = '') {
     return UI.round_status.replace('{0}', roundNum).replace('{1}', phaseName);
 }
 
+function isReadOnlyBattleStatus(gs = gameState) {
+    return !!(
+        gs
+        && (gs.spectating || gs.replay_mode || isSpectating || replayMode)
+        && !isReplayVideoExportPlayerView()
+    );
+}
+
+function getBattleStatePlayerName(gs, id) {
+    const playerIndex = normalizePlayerId(id);
+    if (!gs || playerIndex == null) return '?';
+
+    const spectatePlayer = Array.isArray(gs.spectate_players)
+        ? gs.spectate_players.find(player => normalizePlayerId(player && player.player_id) === playerIndex)
+        : null;
+    const listedName = Array.isArray(gs.player_names) ? gs.player_names[playerIndex] : '';
+    const yourId = normalizePlayerId(gs.your_id);
+    const teammateId = normalizePlayerId(gs.teammate_id);
+    const enemyIds = Array.isArray(gs.enemy_ids) ? gs.enemy_ids.map(normalizePlayerId) : [];
+    const enemyIndex = enemyIds.indexOf(playerIndex);
+    const directName = gs[`player${playerIndex + 1}_name`];
+
+    let name = (spectatePlayer && (spectatePlayer.name || spectatePlayer.nickname)) || listedName || directName;
+    if (!name && playerIndex === yourId) name = gs.your_name || (gs.you && gs.you.name);
+    if (!name && playerIndex === teammateId) name = gs.teammate_name || (gs.teammate && gs.teammate.name);
+    if (!name && enemyIndex >= 0) {
+        name = (Array.isArray(gs.opponent_names) && gs.opponent_names[enemyIndex])
+            || (enemyIndex === 0 && gs.opponent && gs.opponent.name)
+            || (enemyIndex === 1 && gs.opponent2 && gs.opponent2.name);
+    }
+    if (!name && gs.mode !== '2v2' && playerIndex !== yourId) {
+        name = gs.opponent_name || (gs.opponent && gs.opponent.name);
+    }
+    return localizeCanonicalPlayerName(name || `P${playerIndex + 1}`);
+}
+
+function formatBattlePhaseText(gs) {
+    if (!gs) return '';
+    if (gs.phase === 'action') {
+        if (isReadOnlyBattleStatus(gs)) {
+            const currentName = getBattleStatePlayerName(gs, gs.current_player);
+            const key = (gs.spectating || isSpectating) && !(gs.replay_mode || replayMode)
+                ? 'spectating_turn'
+                : 'player_turn';
+            return tf(key, currentName);
+        }
+        if (isMyTurn()) return UI.your_turn;
+        if (gs.mode === '2v2') {
+            return `${UI.opponent_turn}：${getBattleStatePlayerName(gs, gs.current_player)}`;
+        }
+        return UI.opponent_turn;
+    }
+    if (gs.phase === 'draw') return UI.draw_phase;
+    if (gs.phase === 'response') return UI.waiting_response;
+    if (gs.phase === 'choice') return UI.choose_target;
+    if (gs.phase === 'draft') return UI.draft_phase;
+    if (gs.phase === 'event_select') return UI.select_event;
+    if (gs.phase === 'game_over') return UI.game_over;
+    return gs.phase || '';
+}
+
 function formatCompactRoundStatus(gs, phaseText = '') {
     const roundNum = Number(gs && gs.round_num);
     if (!Number.isFinite(roundNum) || roundNum <= 0) {
@@ -6330,6 +6532,14 @@ function formatCompactRoundStatus(gs, phaseText = '') {
         return phaseText || UI.draft_phase;
     }
     return `R${roundNum} · ${phaseText}`;
+}
+
+function formatGameBottomStatus(gs) {
+    if (!gs) return UI.default_status;
+    const phaseText = formatBattlePhaseText(gs);
+    return isMinimalUiStyle()
+        ? formatCompactRoundStatus(gs, phaseText)
+        : formatRoundStatus(gs, phaseText);
 }
 
 function formatClassicRoundLabel(gs) {
@@ -6885,14 +7095,19 @@ const CHANGELOG_CACHE_KEY = 'gtn_changelog_cache_v1';
 const CHANGELOG_READ_VERSION_KEY = 'gtn_changelog_read_version_v1';
 const CHANGELOG_READ_DATE_KEY = 'gtn_changelog_read_latest_date_v1';
 const CHANGELOG_BOOT_VERSION_KEY = 'gtn_changelog_boot_version_v1';
+const CHANGELOG_READ_RECEIPT_KEY = 'gtn_changelog_read_receipt_v1';
 const changelogReadMemory = new Map();
 
 function readChangelogMarker(key) {
     if (changelogReadMemory.has(key)) return String(changelogReadMemory.get(key) || '');
+    const storageKey = String(gtnBetaStorageKey(key));
     let value = '';
-    try { value = String(localStorage.getItem(key) || ''); } catch (_) {}
+    try { value = String(readStorageFallbackCookie(storageKey) || ''); } catch (_) {}
     if (!value) {
-        try { value = String(window.sessionStorage.getItem(key) || ''); } catch (_) {}
+        try { value = String(localStorage.getItem(storageKey) || ''); } catch (_) {}
+    }
+    if (!value) {
+        try { value = String(window.sessionStorage.getItem(storageKey) || ''); } catch (_) {}
     }
     changelogReadMemory.set(key, value);
     return value;
@@ -6900,10 +7115,48 @@ function readChangelogMarker(key) {
 
 function writeChangelogMarker(key, value) {
     const text = String(value || '');
+    const storageKey = String(gtnBetaStorageKey(key));
     changelogReadMemory.set(key, text);
-    try { localStorage.setItem(key, text); } catch (_) {}
-    try { window.sessionStorage.setItem(key, text); } catch (_) {}
-    writeStorageFallbackCookie(String(gtnBetaStorageKey(key)), text);
+    try { localStorage.setItem(storageKey, text); } catch (_) {}
+    try { window.sessionStorage.setItem(storageKey, text); } catch (_) {}
+    writeStorageFallbackCookie(storageKey, text);
+}
+
+function parseChangelogReadReceipt(raw) {
+    if (!raw) return null;
+    try {
+        const value = JSON.parse(String(raw));
+        const version = String(value && value.version || '');
+        const date = String(value && value.date || '');
+        const readAt = Number(value && value.readAt || 0);
+        if (!version && !date) return null;
+        return { version, date, readAt: Number.isFinite(readAt) ? readAt : 0 };
+    } catch (_) {
+        return null;
+    }
+}
+
+function readChangelogReadReceipt() {
+    const storageKey = String(gtnBetaStorageKey(CHANGELOG_READ_RECEIPT_KEY));
+    const candidates = [];
+    try { candidates.push(parseChangelogReadReceipt(localStorage.getItem(storageKey))); } catch (_) {}
+    try { candidates.push(parseChangelogReadReceipt(window.sessionStorage.getItem(storageKey))); } catch (_) {}
+    try { candidates.push(parseChangelogReadReceipt(readStorageFallbackCookie(storageKey))); } catch (_) {}
+    return candidates
+        .filter(Boolean)
+        .sort((left, right) => Number(right.readAt || 0) - Number(left.readAt || 0))[0] || null;
+}
+
+function writeChangelogReadReceipt(version, date) {
+    const receipt = JSON.stringify({
+        version: String(version || ''),
+        date: String(date || ''),
+        readAt: Date.now(),
+    });
+    const storageKey = String(gtnBetaStorageKey(CHANGELOG_READ_RECEIPT_KEY));
+    try { localStorage.setItem(storageKey, receipt); } catch (_) {}
+    try { window.sessionStorage.setItem(storageKey, receipt); } catch (_) {}
+    writeStorageFallbackCookie(storageKey, receipt);
 }
 
 function currentChangelogCacheVersion() {
@@ -6953,11 +7206,14 @@ function renderChangelogItems(items) {
 
 function getChangelogUnreadCount(cache = changelogCache) {
     if (!cache || !Array.isArray(cache.items) || !cache.items.length) return 0;
+    const receipt = readChangelogReadReceipt();
     const serverVersion = String(cache.serverVersion || '');
-    const readVersion = readChangelogMarker(CHANGELOG_READ_VERSION_KEY)
+    const readVersion = String(receipt && receipt.version || '')
+        || readChangelogMarker(CHANGELOG_READ_VERSION_KEY)
         || String(cache.readVersion || '');
     if (serverVersion && readVersion === serverVersion) return 0;
-    const readDate = readChangelogMarker(CHANGELOG_READ_DATE_KEY)
+    const readDate = String(receipt && receipt.date || '')
+        || readChangelogMarker(CHANGELOG_READ_DATE_KEY)
         || String(cache.readDate || '');
     if (!readDate) return Math.min(cache.items.length, 99);
     const newerCount = cache.items.filter(item => String(item && item.date || '') > readDate).length;
@@ -6988,6 +7244,7 @@ function markChangelogRead() {
     const readDate = String(changelogCache.items[0] && changelogCache.items[0].date || '');
     writeChangelogMarker(CHANGELOG_READ_VERSION_KEY, readVersion);
     writeChangelogMarker(CHANGELOG_READ_DATE_KEY, readDate);
+    writeChangelogReadReceipt(readVersion, readDate);
     changelogCache = { ...changelogCache, readVersion, readDate };
     try {
         localStorage.setItem(CHANGELOG_CACHE_KEY, JSON.stringify(changelogCache));
@@ -7303,7 +7560,27 @@ function normalizeStatusIntroKey(statusId) {
 function getCustomStatusDef(statusId) {
     const raw = String(statusId || '').trim();
     const normalized = normalizeStatusIntroKey(raw);
-    return (CUSTOM_STATUS_DEFS && (CUSTOM_STATUS_DEFS[raw] || CUSTOM_STATUS_DEFS[normalized])) || null;
+    const definitions = CUSTOM_STATUS_DEFS || {};
+    const direct = definitions[raw] || definitions[normalized];
+    if (direct) return direct;
+    const comparable = String(normalized || raw).toLowerCase().replace(/[\s-]+/g, '_');
+    if (!comparable) return null;
+    const matches = Object.entries(definitions).filter(([id, def]) => {
+        const normalizedId = String(id || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+        if (normalizedId === comparable || normalizedId.split(':').pop() === comparable) return true;
+        const localizedNames = [
+            def && def.name,
+            def && def.name_cn,
+            def && def.name_en,
+            def && def.name_fr,
+            def && def.name_ja,
+            ...Object.values((def && def.name_i18n) || {}),
+        ];
+        return localizedNames.some(name => (
+            String(name || '').trim().toLowerCase().replace(/[\s-]+/g, '_') === comparable
+        ));
+    });
+    return matches.length === 1 ? matches[0][1] : null;
 }
 
 const CORE_REGISTRY_I18N = {
@@ -8203,6 +8480,10 @@ function openRulesModal({ firstVisit = false } = {}) {
 }
 
 function updateStatus(text) {
+    if (_statusTimeout) {
+        clearTimeout(_statusTimeout);
+        _statusTimeout = null;
+    }
     const s = $('status-text');
     if (s) {
         s.textContent = text;
@@ -8212,7 +8493,6 @@ function updateStatus(text) {
 }
 
 let _statusTimeout = null;
-let _prevStatusText = '';
 function getVisibleViewId() {
     const visible = document.querySelector('.view:not(.hidden)');
     return visible ? visible.id : 'view-login';
@@ -8226,6 +8506,7 @@ function getViewStatusText(viewId = getVisibleViewId()) {
     if (viewId === 'view-event-select') return UI.select_event;
     if (viewId === 'view-card-gallery') return UI.gallery_title;
     if (viewId === 'view-mod-editor') return UI.mod_editor;
+    if (viewId === 'view-game' && gameState) return formatGameBottomStatus(gameState);
     return UI.default_status;
 }
 
@@ -8242,7 +8523,6 @@ function flashStatus(text, duration, type) {
     showActionToast(text, duration, type);
     if (!s) return;
     if (_statusTimeout) { clearTimeout(_statusTimeout); _statusTimeout = null; }
-    else { _prevStatusText = getViewStatusText(); }
     s.textContent = text;
     if (type === 'error') {
         s.style.color = '#C0392B';
@@ -8252,11 +8532,8 @@ function flashStatus(text, duration, type) {
     }
     s.style.fontWeight = '700';
     _statusTimeout = setTimeout(() => {
-        s.style.color = '';
-        s.style.fontWeight = '';
-        s.textContent = _prevStatusText || getViewStatusText();
-        _prevStatusText = '';
         _statusTimeout = null;
+        updateStatus(getViewStatusText());
     }, duration || 2000);
 }
 
@@ -9028,6 +9305,25 @@ function cancelClassicSelection(event) {
     return true;
 }
 
+function cancelSelectedBattleActionFromContextMenu(event) {
+    if (activeViewId !== 'view-game') return false;
+    if (selectedPlayCardId == null && classicSelectedTriggerEquipmentId == null) return false;
+    if (shouldUseClassicBattle(gameState)) return cancelClassicSelection(event);
+    if (selectedPlayCardId == null) return false;
+    event?.preventDefault();
+    clearSelectedPlayCard();
+    return true;
+}
+
+function bindSelectedBattleContextMenuPriority() {
+    if (document.documentElement.dataset.selectedBattleContextBound === '1') return;
+    document.documentElement.dataset.selectedBattleContextBound = '1';
+    document.addEventListener('contextmenu', (event) => {
+        if (!cancelSelectedBattleActionFromContextMenu(event)) return;
+        event.stopImmediatePropagation();
+    }, true);
+}
+
 function isTypingKeyboardTarget(target) {
     if (!target) return false;
     const el = target.nodeType === 1 ? target : target.parentElement;
@@ -9345,6 +9641,39 @@ function leaveSpectateAction() {
     const context = currentMatchActionContext();
     clearActiveMatchRoute('leave_spectate');
     if (socket) socket.emit('leave_spectate', context);
+}
+
+function reportAfkActivity(event) {
+    if (
+        document.hidden
+        || !socket
+        || !socket.connected
+        || replayMode
+        || !(activeViewId === 'view-lobby' || isSpectating)
+    ) {
+        return;
+    }
+    const target = event?.target;
+    if (target?.closest?.('#lobby-mode-tabs, #afk-check-overlay')) return;
+    const now = Date.now();
+    if (now - lastAfkActivityReportAt < AFK_ACTIVITY_REPORT_INTERVAL_MS) return;
+    lastAfkActivityReportAt = now;
+    socket.emit('afk_activity', {});
+}
+
+function bindAfkActivityReporting() {
+    document.addEventListener('pointerdown', reportAfkActivity, {
+        passive: true,
+        capture: true,
+    });
+    document.addEventListener('touchstart', reportAfkActivity, {
+        passive: true,
+        capture: true,
+    });
+    document.addEventListener('wheel', reportAfkActivity, {
+        passive: true,
+        capture: true,
+    });
 }
 
 function closeAfkCheckOverlay() {
@@ -10067,6 +10396,16 @@ function isVoidPlaceholderCard(cardDict, cardDef) {
     return cardMatchesAnyLocalId(cardDict || {}, cardDef || {}, ['Void', 'void:void']);
 }
 
+function isArcticNukeCard(cardDict, cardDef) {
+    return cardMatchesAnyLocalId(cardDict || {}, cardDef || {}, ['Nuke', 'arctic:nuke']);
+}
+
+function getCardDisplayCostELabel(cardDict, cardDef, numericCost) {
+    if (isVoidPlaceholderCard(cardDict, cardDef)) return '?';
+    if (isArcticNukeCard(cardDict, cardDef)) return 'X';
+    return numericCost;
+}
+
 function getFlagLabel(flag) {
     const normalized = normalizeCardFlag(flag);
     const custom = getCustomTagDef(normalized);
@@ -10560,7 +10899,7 @@ function createCardElement(cardDict, options = {}) {
     if (cardDef.card_type === 'thorn' && predictionHtml) {
         el.classList.add('card-effect-fit-prediction');
     }
-    const displayCostE = isVoidPlaceholderCard(cardDict, cardDef) ? '?' : totalE;
+    const displayCostE = getCardDisplayCostELabel(cardDict, cardDef, totalE);
     const displayCostM = isVoidPlaceholderCard(cardDict, cardDef) ? '?' : totalM;
     const bottomHtml = (predictionHtml || flagsHtml)
         ? `<div class="card-bottom-zone ${predictionHtml ? 'has-prediction' : ''}">
@@ -10647,6 +10986,25 @@ function cardHasSublimeFlag(cardDict, cardDef = null) {
     const resolvedDef = cardDef || getCardDef(cardDict && cardDict.def_id);
     const { effective } = getEffectiveCardFlagSets(cardDict || {}, resolvedDef || {});
     return effective.has('sublime') || effective.has('vanilla:sublime') || effective.has('tag_sublime') || effective.has('tag_vanilla:sublime');
+}
+
+function isOceanSapphireCard(cardDict, cardDef = null) {
+    const resolvedDef = cardDef || getCardDef(cardDict && cardDict.def_id);
+    return cardMatchesAnyLocalId(cardDict || {}, resolvedDef || {}, ['Sapphire', 'ocean:sapphire']);
+}
+
+function getOceanSapphireSelectableAttacks(sourceCard, hand = null) {
+    const cards = Array.isArray(hand)
+        ? hand
+        : (Array.isArray(gameState && gameState.you && gameState.you.hand) ? gameState.you.hand : []);
+    const sourceId = sourceCard && sourceCard.instance_id;
+    return cards.filter(candidate => {
+        if (!candidate || String(candidate.instance_id) === String(sourceId)) return false;
+        const candidateDef = getCardDef(candidate.def_id);
+        if (!candidateDef || candidateDef.card_type !== 'thorn' || cardHasSublimeFlag(candidate, candidateDef)) return false;
+        const { effective } = getEffectiveCardFlagSets(candidate, candidateDef);
+        return !effective.has('unique') && !effective.has('exile');
+    });
 }
 
 function cardHasWideStrikeFlag(cardDict, cardDef = null) {
@@ -10891,6 +11249,7 @@ function createClassicCardTile(cardDict, options = {}) {
     const hideTypeByBlind = blindLevel >= 2;
     const typeColor = getCardBlindDisplayColor(cardDef, blindLevel);
     const costs = getCardDisplayCosts(cardDict, cardDef, ownerState);
+    const displayCostE = getCardDisplayCostELabel(cardDict, cardDef, costs.totalE);
     const imageUrl = getCardArtUrl(cardDict, cardDef) || `/static/cards/${encodeURIComponent(defId)}.webp`;
     tile.dataset.defId = defId;
     if (cardDict.instance_id != null) tile.dataset.instanceId = String(cardDict.instance_id);
@@ -10910,7 +11269,7 @@ function createClassicCardTile(cardDict, options = {}) {
     tile.innerHTML = `
         <span class="classic-card-tile-inner">
             <span class="classic-card-tile-costs">
-                <span class="classic-card-tile-cost cost-e">${blinded ? '?' : costs.totalE}</span>
+                <span class="classic-card-tile-cost cost-e">${blinded ? '?' : displayCostE}</span>
                 <span class="classic-card-tile-cost cost-m">${blinded ? '?' : costs.totalM}</span>
             </span>
             <span class="classic-card-tile-name">${escapeHtml(displayName)}</span>
@@ -19885,7 +20244,6 @@ async function loadReplayForVideoExport(payload, options = {}) {
     currentLang = lang;
     localStorage.setItem('gtn_lang', lang);
     localStorage.setItem('gtn_seen_intro', '1');
-    localStorage.setItem(MUSIC_NOTICE_KEY, '1');
     applyLang();
     applyTheme(options.theme === 'dark' ? 'dark' : 'light');
     applyUiStyle('classic');
@@ -20598,8 +20956,8 @@ function performSoloHistoryAction(direction) {
     return true;
 }
 
-function isShortcutElementVisible(element) {
-    if (!element || element.disabled) return false;
+function isShortcutElementRendered(element) {
+    if (!element || !element.isConnected) return false;
     if (element.classList && element.classList.contains('hidden')) return false;
     const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
     if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
@@ -20607,9 +20965,16 @@ function isShortcutElementVisible(element) {
     return !rect || (rect.width > 1 && rect.height > 1);
 }
 
-function shortcutElements(selector, root = document) {
+function isShortcutElementVisible(element) {
+    return isShortcutElementRendered(element) && !element.disabled;
+}
+
+function shortcutElements(selector, root = document, options = {}) {
     if (!root || !root.querySelectorAll) return [];
-    return Array.from(root.querySelectorAll(selector)).filter(isShortcutElementVisible);
+    const predicate = options.includeDisabled
+        ? isShortcutElementRendered
+        : isShortcutElementVisible;
+    return Array.from(root.querySelectorAll(selector)).filter(predicate);
 }
 
 function createShortcutScene(id) {
@@ -20625,7 +20990,7 @@ function createShortcutScene(id) {
 }
 
 function setShortcutSceneSlots(scene, elements, options = {}) {
-    scene.slots = [...new Set((elements || []).filter(isShortcutElementVisible))].slice(0, 20);
+    scene.slots = [...new Set((elements || []).filter(isShortcutElementRendered))].slice(0, 20);
     scene.slotLabel = String(options.label || '');
     scene.slotLabels = Array.isArray(options.labels)
         ? scene.slots.map((_, index) => String(options.labels[index] || ''))
@@ -20792,7 +21157,8 @@ function getGameShortcutContext() {
 
         const options = shortcutElements(
             '.reorder-deck-entry:not(.reorder-clone), .v2-ui-picker-option',
-            modalContent
+            modalContent,
+            { includeDisabled: true }
         );
         let buttons = shortcutElements(
             '.v2-ui-buttons button:not(:disabled), .modal-buttons button:not(:disabled)',
@@ -20857,7 +21223,11 @@ function getGameShortcutContext() {
         && isShortcutElementVisible(prompt)
     ) {
         const scene = createShortcutScene('game-prompt');
-        const options = shortcutElements('#game-prompt-options .game-prompt-option:not(.disabled)', prompt);
+        const options = shortcutElements(
+            '#game-prompt-options .game-prompt-option',
+            prompt,
+            { includeDisabled: true }
+        );
         const transientButtons = shortcutElements(
             '.game-prompt-transient-btn:not(:disabled):not(.disabled)',
             prompt
@@ -20873,7 +21243,11 @@ function getGameShortcutContext() {
     const responsePanel = $('response-panel');
     if (blockingRoot === responsePanel && isShortcutElementVisible(responsePanel)) {
         const scene = createShortcutScene('response');
-        const options = shortcutElements('.counter-card-btn, .response-btn-row .btn:not(:disabled)', responsePanel);
+        const options = shortcutElements(
+            '.counter-card-btn, .response-btn-row .btn',
+            responsePanel,
+            { includeDisabled: true }
+        );
         setShortcutSceneSlots(scene, options, { label: UI.counter || UI.confirm || '反制' });
         addShortcutNavigationActions(scene, options, { id: 'response-options' });
         const pass = $('pass-btn');
@@ -20967,9 +21341,13 @@ function getGameShortcutContext() {
     if (activeViewId === 'view-draft' || activeViewId === 'view-event-select') {
         const drafting = activeViewId === 'view-draft';
         const scene = createShortcutScene(drafting ? 'draft' : 'event-select');
-        const options = shortcutElements(drafting
-            ? '#draft-options .card'
-            : '#event-options .event-card:not(.event-reveal-card)');
+        const options = shortcutElements(
+            drafting
+                ? '#draft-options .card'
+                : '#event-options .event-card:not(.event-reveal-card)',
+            document,
+            { includeDisabled: true }
+        );
         setShortcutSceneSlots(scene, options, {
             label: drafting ? (UI.draft_phase || '选牌') : (UI.select_event || '选择配装'),
         });
@@ -20986,8 +21364,8 @@ function getGameShortcutContext() {
     if (activeViewId === 'view-game') {
         const scene = createShortcutScene(replayMode ? 'replay' : (isSpectating ? 'spectate' : 'battle'));
         const handCards = shouldUseClassicBattle(gameState)
-            ? shortcutElements('#classic-hand-fan .classic-hand-card')
-            : shortcutElements('#you-hand > .card');
+            ? shortcutElements('#classic-hand-fan .classic-hand-card', document, { includeDisabled: true })
+            : shortcutElements('#you-hand > .card', document, { includeDisabled: true });
         if (!isSpectating && !replayMode) {
             setShortcutSceneSlots(scene, handCards, { label: UI.hand || '手牌' });
         }
@@ -21058,6 +21436,12 @@ function getGameShortcutContext() {
                 'focus_chat',
                 [$('btn-classic-game-chat-send'), $('btn-game-chat-send'), ...chatInputs]
             );
+        }
+        if (isSpectating && !replayMode) {
+            addShortcutSceneAction(scene, 'cancel', [
+                $('btn-leave-spectate'),
+                $('classic-leave-spectate'),
+            ]);
         }
         return finalizeShortcutScene(scene);
     }
@@ -21359,7 +21743,7 @@ function activateShortcutSlot(baseIndex, options = {}) {
     const scene = getGameShortcutContext();
     const sceneSlot = scene.slots[index];
     if (sceneSlot) {
-        if (!isKeyboardNavigationCandidate(sceneSlot)) return false;
+        if (!isKeyboardNavigationCandidate(sceneSlot)) return true;
         setKeyboardNavigationFocus(sceneSlot, scene.navigationId || scene.id || 'shortcut-slots', { scroll: false });
         const battleHandCard = activeViewId === 'view-game'
             && !!sceneSlot.closest('#classic-hand-fan, #you-hand');
@@ -21373,13 +21757,14 @@ function activateShortcutSlot(baseIndex, options = {}) {
     const choices = getShortcutChoiceElements();
     if (choices.length) {
         const choice = choices[index];
-        if (!choice || choice.disabled || choice.classList.contains('disabled')) return false;
+        if (!choice || choice.disabled || choice.classList.contains('disabled')) return true;
         const surface = getKeyboardNavigationSurface();
         setKeyboardNavigationFocus(choice, surface.id, { scroll: false });
         if (surface.type === 'reorder') return true;
         choice.click();
         return true;
     }
+    if (topmostShortcutBlockingRoot()) return true;
     if (activeViewId !== 'view-game') return false;
     return selectHandCardByShortcutIndex(index, options.event || null);
 }
@@ -21581,6 +21966,10 @@ function cancelShortcutContext() {
     const settings = $('settings-panel');
     if (settings && !settings.classList.contains('hidden')) {
         closeSettings();
+        return true;
+    }
+    if (activeViewId === 'view-game' && isSpectating && !replayMode) {
+        leaveSpectateAction();
         return true;
     }
     if (activeViewId === 'view-gameover') {
@@ -22374,7 +22763,8 @@ function renderSoloBuilder() {
                 const row = document.createElement('div');
                 row.className = 'solo-card-row';
                 const cd = CARD_DEFS[defId];
-                row.innerHTML = `<span>${getCardName(cd)}</span><small>${getCardTypeLabel(cd.card_type)} ${cd.cost_e}E/${cd.cost_m}M</small>`;
+                const displayCostE = getCardDisplayCostELabel({ def_id: defId }, cd, cd.cost_e);
+                row.innerHTML = `<span>${getCardName(cd)}</span><small>${getCardTypeLabel(cd.card_type)} ${displayCostE}E/${cd.cost_m}M</small>`;
                 row.onclick = () => addSoloCard(defId);
                 list.appendChild(row);
             });
@@ -24829,15 +25219,7 @@ function buildBattleViewModel(state) {
     const enemy2 = is2v2 ? normalizeBattlePlayer(gs, gs.opponent2 || {}, 'enemy2') : null;
     const hand = (you.hand || []).map(card => normalizeBattleCard(card, you));
     const selected = hand.find(card => card.instance_id === selectedPlayCardId) || null;
-    const phaseText = gs.phase === 'action'
-        ? (isMyTurn() ? UI.your_turn : UI.opponent_turn)
-        : gs.phase === 'draw' ? UI.draw_phase
-        : gs.phase === 'response' ? UI.waiting_response
-        : gs.phase === 'choice' ? UI.choose_target
-        : gs.phase === 'draft' ? UI.draft_phase
-        : gs.phase === 'event_select' ? UI.select_event
-        : gs.phase === 'game_over' ? UI.game_over
-        : (gs.phase || '');
+    const phaseText = formatBattlePhaseText(gs);
     return {
         self,
         enemy,
@@ -25428,7 +25810,7 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
     container.classList.toggle('is-soft-target', isSoftTarget);
     container.classList.toggle('is-self-only-target', isSelfOnlyTarget);
     container.innerHTML = `
-        <div class="classic-fighter-name">${escapeHtml(player.name || '?')}</div>
+        <div class="classic-fighter-name" title="${escapeHtml(player.name || '?')}">${escapeHtml(player.name || '?')}</div>
         <div class="classic-card-tile-slot"></div>
         <div class="classic-fighter-resources">
             ${renderClassicStatStrip('e', player.e, player.maxE, !!masks.maskResources)}
@@ -25795,19 +26177,7 @@ function renderGame(data) {
 
     renderLog(gs.log || [], gs.log_start || 0, gs.log_total);
 
-    let phaseText;
-    if (is2v2) {
-        const cpName = gs.current_player === playerId ? localizeCanonicalPlayerName(gs.your_name || UI.you) :
-            (gs.current_player === gs.teammate_id ? localizeCanonicalPlayerName(gs.teammate_name || UI.teammate) :
-            localizeCanonicalPlayerName((gs.opponent_names || [])[gs.enemy_ids ? gs.enemy_ids.indexOf(gs.current_player) : -1] || '...'));
-        phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : `${UI.opponent_turn}：${cpName}`)
-            : gs.phase === 'draw' ? UI.draw_phase
-            : gs.phase === 'game_over' ? UI.game_over : '';
-    } else {
-        phaseText = gs.phase === 'action' ? (myTurn ? UI.your_turn : UI.opponent_turn)
-            : gs.phase === 'draw' ? UI.draw_phase
-            : gs.phase === 'game_over' ? UI.game_over : '';
-    }
+    const phaseText = formatBattlePhaseText(gs);
     const fullRoundStatus = formatRoundStatus(gs, phaseText);
     const bottomStatus = isMinimalUiStyle() ? formatCompactRoundStatus(gs, phaseText) : fullRoundStatus;
     updateStatus(bottomStatus);
@@ -26369,6 +26739,7 @@ function canPlayCard(cardDict) {
     if (!immune && getActionLimitStatusValue(you, 'attack_blocked', '禁攻') > 0 && cardDef.card_type === 'thorn') return false;
     if (!immune && getActionLimitStatusValue(you, 'attack_only', '仅攻击') > 0 && cardDef.card_type !== 'thorn') return false;
     if (!immune && getActionLimitStatusValue(you, 'magic_blocked', '魔力封锁') > 0 && Number(cardDict.cost_m || cardDef.cost_m || 0) > 0) return false;
+    if (isOceanSapphireCard(cardDict, cardDef) && !getOceanSapphireSelectableAttacks(cardDict).length) return false;
     const elixir = you.elixir || 0;
     const magic = you.magic || 0;
     const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
@@ -26421,6 +26792,9 @@ function getCannotPlayReason(cardDict) {
     if (!immune && getActionLimitStatusValue(you, 'attack_blocked', '禁攻') > 0 && cardDef.card_type === 'thorn') return UI.error_attack_blocked || UI.cannot_play;
     if (!immune && getActionLimitStatusValue(you, 'attack_only', '仅攻击') > 0 && cardDef.card_type !== 'thorn') return UI.error_attack_only || UI.cannot_play;
     if (!immune && getActionLimitStatusValue(you, 'magic_blocked', '魔力封锁') > 0 && Number(cardDict.cost_m || cardDef.cost_m || 0) > 0) return UI.error_magic_blocked || '本回合无法使用带有魔力消耗的卡牌';
+    if (isOceanSapphireCard(cardDict, cardDef) && !getOceanSapphireSelectableAttacks(cardDict).length) {
+        return UI.no_attack_cards || '没有攻击牌';
+    }
     const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
     const reasons = [];
     if (totalE > (you.elixir || 0)) reasons.push(UI.error_not_enough_e || UI.insufficient_resources || UI.cannot_play);
@@ -31283,23 +31657,17 @@ async function showChoiceUI(data) {
         })), choicePromptConfig);
         if (sel >= 0 && sel < modes.length) choiceResult = { bio_blood_sugar_mode: modes[sel] };
     } else if (choiceType === 'choose_ocean_sapphire') {
-        const targetId = await choosePlayerTarget(choiceTitle(UI.choose_target || UI.select_target || 'Choose target'), {
-            includeSelf: true,
-            aliveOnly: true,
-            candidates: 'all',
-        });
-        if (targetId >= 0) {
-            const attacks = ((gameState.you || {}).hand || []).filter(c => {
-                if (!c || c.instance_id === cardDict.instance_id || cardHasSublimeFlag(c)) return false;
-                const cd = getCardDef(c.def_id);
-                if (!cd || cd.card_type !== 'thorn') return false;
-                const { effective } = getEffectiveCardFlagSets(c || {}, cd || {});
-                return !effective.has('unique') && !effective.has('exile');
+        const attacks = getOceanSapphireSelectableAttacks(cardDict);
+        if (!attacks.length) {
+            gameAlert(UI.notice, UI.no_attack_cards || '没有攻击牌');
+            choiceResult = { cancelled: true };
+        } else {
+            const targetId = await choosePlayerTarget(choiceTitle(UI.choose_target || UI.select_target || 'Choose target'), {
+                includeSelf: true,
+                aliveOnly: true,
+                candidates: 'all',
             });
-            if (!attacks.length) {
-                gameAlert(UI.notice, UI.no_attack_cards || '没有攻击牌');
-                choiceResult = { cancelled: true };
-            } else {
+            if (targetId >= 0) {
                 const options = attacks.map(a => cardChoiceOption(a));
                 const sel = await simpleChoice(choiceTitle(UI.choose_attack_for.replace('{0}', cardName)), options, choicePromptConfig);
                 if (sel >= 0 && sel < attacks.length) {
@@ -33552,7 +33920,7 @@ async function saveDisabledMods() {
         showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
     }
     disabled = writeDisabledModsPreference(disabled);
-    if (!localStorage.isPersistent()) {
+    if (!localStorage.isPersistent('gtn_disabled_mods')) {
         console.info('[storage] mod selection is using session memory; server synchronization will continue normally');
     }
     const serverInput = $('settings-server-input');
@@ -33670,6 +34038,7 @@ async function init() {
     bindClickOnce('btn-open-settings', openSettings);
     bindClickOnce('btn-card-gallery', () => showCardGallery());
     bindClickOnce('btn-open-about', openAbout);
+    bindSelectedBattleContextMenuPriority();
     bindCardTextTokenContextMenu();
 
     document.addEventListener('contextmenu', (e) => {
@@ -33683,6 +34052,7 @@ async function init() {
     const savedLang = normalizeLang(localStorage.getItem('gtn_lang') || 'zh');
     applyLang(savedLang);
     initAudioSystem();
+    bindAfkActivityReporting();
     initChangelogBadge();
     bootLoader.step(UI.init_theme_lang, 24);
     bootLoader.step(UI.init_fonts, 36);
@@ -34080,7 +34450,7 @@ async function init() {
     document.addEventListener('mousemove', onClassicAimPointerMove);
     document.addEventListener('pointermove', onClassicAimPointerMove);
     document.addEventListener('contextmenu', (event) => {
-        if (cancelClassicSelection(event)) return;
+        if (cancelSelectedBattleActionFromContextMenu(event)) return;
     });
     ['classic-play-lane', 'classic-fighter-self', 'classic-fighter-enemy', 'classic-fighter-enemy-2', 'classic-fighter-ally'].forEach(id => {
         const el = $(id);
@@ -34219,9 +34589,6 @@ async function init() {
     bootLoader.done();
     document.getElementById('app').style.visibility = 'visible';
     const hasSeenIntro = !!localStorage.getItem('gtn_seen_intro');
-    if (hasSeenIntro) {
-        window.setTimeout(maybeShowMusicNotice, 180);
-    }
     if (!hasSeenIntro && !window.__GTN_REPLAY_VIDEO_EXPORT__) {
         setTimeout(() => openRulesModal({ firstVisit: true }), 250);
     }

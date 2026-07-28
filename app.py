@@ -404,7 +404,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling'
+GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -631,7 +631,13 @@ AFK_CHECK_HOLD_MIN_MS = int(os.environ.get('AFK_CHECK_HOLD_MIN_MS', '750'))
 AFK_CHECK_HOLD_MAX_MS = int(os.environ.get('AFK_CHECK_HOLD_MAX_MS', '2200'))
 AFK_AUTO_MIN_SECONDS = int(os.environ.get('AFK_AUTO_MIN_SECONDS', '300'))
 AFK_AUTO_MAX_SECONDS = int(os.environ.get('AFK_AUTO_MAX_SECONDS', '600'))
-LOBBY_ACTIVITY_IGNORED_EVENTS = {'set_mode'}
+AFK_AUTO_STATUSES = frozenset({'lobby', 'spectating'})
+AFK_ACTIVITY_IGNORED_EVENTS = frozenset({
+    'afk_check_response',
+    'request_game_state',
+    'request_pregame_state',
+    'set_mode',
+})
 DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
 DEFAULT_ADMIN_CONSOLE_PASSWORD_HASH = 'scrypt:32768:8:1$37ezeWM6dBx97XH0$733f3b74ee3092ac5422eb19df05ff626cb251150a74ed3e03a6e7dd7799607d18123cf6e4b7d518e78e50c1700240f34c9411eb52761b1f9d695ff71c4309af'
@@ -2269,6 +2275,42 @@ def room_spectator_session_is_current(room, sid):
         and player.get('status') == 'spectating'
         and sid in (getattr(room, 'spectators', []) or [])
     )
+
+
+def repair_stale_spectator_state_locked(sid):
+    """Return a stale spectator session to the lobby.
+
+    Callers must hold ``_lock``. A valid room participant is never repaired
+    here, even if its public status was corrupted.
+    """
+    player = players.get(sid)
+    if not player or player.get('status') != 'spectating':
+        return False
+    spectating_room_id = player.get('spectating_room')
+    spectating_room = rooms.get(spectating_room_id)
+    if (
+        spectating_room is not None
+        and sid in (getattr(spectating_room, 'spectators', []) or [])
+    ):
+        return False
+    active_room_id = player.get('room_id')
+    active_room = rooms.get(active_room_id)
+    if (
+        active_room is not None
+        and sid in (getattr(active_room, 'player_sids', []) or [])
+    ):
+        return False
+    player['room_id'] = None
+    player['spectating_room'] = None
+    player['spectate_perspective'] = 0
+    player['status'] = 'lobby'
+    admin_event(
+        'player',
+        f'repaired stale spectator state room={spectating_room_id}',
+        sid=sid,
+        room_id=spectating_room_id,
+    )
+    return True
 
 
 def room_event_context(room):
@@ -3953,9 +3995,13 @@ def public_player_info(sid, player=None):
     return info
 
 
-def mark_lobby_activity(sid, now=None):
+def _player_uses_automatic_afk_check(player):
+    return bool(player and player.get('status') in AFK_AUTO_STATUSES)
+
+
+def mark_afk_activity(sid, now=None):
     player = players.get(sid)
-    if not player or player.get('status') != 'lobby':
+    if not _player_uses_automatic_afk_check(player):
         return
     ts = float(now or time.time())
     player['last_lobby_activity_at'] = ts
@@ -3976,29 +4022,30 @@ def _lobby_idle_cleanup_worker():
             check_sids = []
             with _lock:
                 for sid, player in list(players.items()):
-                    if player.get('status') != 'lobby':
+                    if not _player_uses_automatic_afk_check(player):
                         continue
                     if sid in PENDING_AFK_CHECKS:
                         continue
                     next_at = float(player.get('next_lobby_afk_check_at') or 0)
                     if not next_at:
-                        mark_lobby_activity(sid, now)
+                        mark_afk_activity(sid, now)
                         continue
                     if now >= next_at:
-                        check_sids.append(sid)
+                        check_sids.append((sid, player.get('status')))
             if not check_sids:
                 continue
             sent = 0
-            for sid in check_sids:
-                result, error = send_afk_check_to_player(sid, reason='auto_lobby_idle', lobby_only=True)
+            for sid, status in check_sids:
+                reason = 'auto_spectator_idle' if status == 'spectating' else 'auto_lobby_idle'
+                result, error = send_afk_check_to_player(sid, reason=reason, lobby_only=True)
                 if result:
                     sent += 1
                 elif error:
-                    admin_event('error', f'auto lobby afk check failed for {sid}: {error}')
+                    admin_event('error', f'auto afk check failed for {sid}: {error}')
             if sent:
-                admin_event('player', f'auto lobby afk check sent to {sent} player(s)')
+                admin_event('player', f'auto afk check sent to {sent} lobby/spectator player(s)')
         except Exception as exc:
-            admin_event('error', f'lobby afk check worker error: {exc}')
+            admin_event('error', f'auto afk check worker error: {exc}')
 
 
 def ensure_lobby_idle_cleanup_started():
@@ -4026,7 +4073,13 @@ def _afk_check_timeout_worker(sid, request_id, timeout_seconds):
                 PENDING_AFK_CHECKS.pop(sid, None)
                 player = players.get(sid) or {}
                 nickname = player.get('nickname', '?')
-                should_kick = sid in players and not (pending.get('lobby_only') and player.get('status') != 'lobby')
+                should_kick = (
+                    sid in players
+                    and not (
+                        pending.get('lobby_only')
+                        and not _player_uses_automatic_afk_check(player)
+                    )
+                )
         if should_kick:
             socketio.emit('kicked', {'reason': '挂机检测超时，已断开连接'}, room=sid)
             socketio.server.disconnect(sid)
@@ -4043,6 +4096,8 @@ def send_afk_check_to_player(sid, reason='admin command', timeout_seconds=None, 
         player = players.get(sid)
         if not player:
             return None, '未找到在线玩家'
+        if lobby_only and not _player_uses_automatic_afk_check(player):
+            return None, None
         nickname = player.get('nickname', '?')
         PENDING_AFK_CHECKS[sid] = {
             'id': request_id,
@@ -5517,8 +5572,11 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
         else:
             _security_illegal(sid, event_name, '操作过于频繁', emit_error=emit_error, severity='high')
         return None
-    if player and player.get('status') == 'lobby' and event_name not in LOBBY_ACTIVITY_IGNORED_EVENTS:
-        mark_lobby_activity(sid)
+    if (
+        _player_uses_automatic_afk_check(player)
+        and event_name not in AFK_ACTIVITY_IGNORED_EVENTS
+    ):
+        mark_afk_activity(sid)
     return payload
 
 
@@ -11345,17 +11403,17 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                 target_sids = [sid] if sid else []
             if not target_sids:
                 return {'success': False, 'output': f"未找到玩家：{target}"}
-            non_lobby = [
+            non_idle = [
                 (sid, (players.get(sid) or {}).get('nickname', '?'), (players.get(sid) or {}).get('status', '?'))
                 for sid in target_sids
-                if (players.get(sid) or {}).get('status') != 'lobby'
+                if not _player_uses_automatic_afk_check(players.get(sid))
             ]
-        if non_lobby and not confirmed:
-            sample = ', '.join(f'{name}({status})' for _sid, name, status in non_lobby[:8])
-            more = f' 等 {len(non_lobby)} 人' if len(non_lobby) > 8 else ''
+        if non_idle and not confirmed:
+            sample = ', '.join(f'{name}({status})' for _sid, name, status in non_idle[:8])
+            more = f' 等 {len(non_idle)} 人' if len(non_idle) > 8 else ''
             return {
                 'success': False,
-                'output': f'目标中包含非大厅玩家：{sample}{more}。\n若确认要发送，请追加 confirm，例如：/player afkcheck {target} confirm {reason}',
+                'output': f'目标中包含不在大厅或观战中的玩家：{sample}{more}。\n若确认要发送，请追加 confirm，例如：/player afkcheck {target} confirm {reason}',
             }
         sent = []
         failed = []
@@ -12680,6 +12738,7 @@ def _schedule_game_over_cleanup(room):
                     if room_spectator_session_is_current(room, spid):
                         players[spid]['spectating_room'] = None
                         players[spid]['spectate_perspective'] = 0
+                        players[spid]['status'] = 'lobby'
                         pending_emits.append(('spectate_leave', room_event_context(room), spid))
                 rooms.pop(rid, None)
                 admin_event('game', f'room {rid} auto-cleaned after game_over timeout')
@@ -17502,7 +17561,7 @@ def on_afk_check_response(data=None):
                 result_payload = {'success': False, 'retry': True, 'message': '按得太久了，请重试'}
             else:
                 PENDING_AFK_CHECKS.pop(sid, None)
-                if player and player.get('status') == 'lobby':
+                if _player_uses_automatic_afk_check(player):
                     player['last_lobby_activity_at'] = now
                     player['next_lobby_afk_check_at'] = now + random.uniform(
                         max(60, AFK_AUTO_MIN_SECONDS),
@@ -17513,6 +17572,17 @@ def on_afk_check_response(data=None):
     emit('afk_check_result', result_payload or {'success': False, 'retry': False, 'message': '挂机检测失败'})
     if passed:
         admin_event('player', f'afk check passed: {nickname} sid={sid} hold_ms={hold_ms}')
+
+
+@socketio.on('afk_activity')
+def on_afk_activity(data=None):
+    sid = request.sid
+    if data is not None and not isinstance(data, dict):
+        return
+    if not rate_limiter(f'afk-activity:{sid}', limit=12, window=60):
+        return
+    with _lock:
+        mark_afk_activity(sid)
 
 
 @socketio.on('skin_look')
@@ -21443,11 +21513,13 @@ def on_spectate(data):
     except ValueError as exc:
         _security_illegal(sid, 'spectate', str(exc))
         return
+    previous_spectate_room = None
     with _lock:
         if sid not in players:
             return
         player = players[sid]
-        if player['status'] != 'lobby':
+        repair_stale_spectator_state_locked(sid)
+        if player['status'] not in ('lobby', 'spectating'):
             emit('server_error', {'message': '只有在大厅中才能观战'})
             return
         if room_id is None or room_id not in rooms:
@@ -21470,6 +21542,8 @@ def on_spectate(data):
         if phase not in ('action', 'draw', 'playing', 'response', 'choice'):
             emit('server_error', {'message': '该对局当前不能观战'})
             return
+        if player['status'] == 'spectating':
+            previous_spectate_room = _handle_leave_spectate_internal(sid)
         player['status'] = 'spectating'
         player['spectating_room'] = room_id
         player['spectate_perspective'] = 0
@@ -21488,6 +21562,8 @@ def on_spectate(data):
             'player2': p2,
         })
         _send_spectate_state_internal(sid, room)
+    if previous_spectate_room is not None and previous_spectate_room is not room:
+        broadcast_game_state(previous_spectate_room)
     broadcast_game_state(room)
     broadcast_lobby()
 

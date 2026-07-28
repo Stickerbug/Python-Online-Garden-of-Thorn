@@ -11,17 +11,17 @@ RESOURCE_ORBS_JS = (ROOT / 'static' / 'js' / 'resource_orbs.js').read_text(encod
 
 def test_story_damage_floats_describe_lost_health():
     player_branch = STORY_JS.split(
-        "} else if (event.type === 'player_damage') {",
+        "} else if (eventType === 'player_damage') {",
         1,
     )[1].split(
-        "} else if (event.type === 'enemy_damage') {",
+        "} else if (eventType === 'enemy_damage') {",
         1,
     )[0]
     enemy_branch = STORY_JS.split(
-        "} else if (event.type === 'enemy_damage') {",
+        "} else if (eventType === 'enemy_damage') {",
         1,
     )[1].split(
-        "} else if (event.type === 'enemy_gain') {",
+        "} else if (eventType === 'enemy_gain') {",
         1,
     )[0]
 
@@ -100,6 +100,95 @@ def test_story_globally_suppresses_context_menu_and_opens_card_terms():
     assert 'if (!dialog.open) dialog.showModal();' in STORY_JS
 
 
+def test_story_status_icons_open_term_descriptions():
+    assert 'function openStoryStatusTerms(statusKey)' in STORY_JS
+    assert 'function attachStoryStatusTermAccess(element, statusKey)' in STORY_JS
+    assert 'element.dataset.storyStatusKey = String(statusKey);' in STORY_JS
+    assert 'attachStoryStatusTermAccess(chip, item.key);' in STORY_JS
+    assert "event.target?.closest?.('[data-story-status-key]')" in STORY_JS
+    assert 'openStoryStatusTerms(statusElement.dataset.storyStatusKey);' in STORY_JS
+    assert "title.textContent = t.statusTerms;" in STORY_JS
+    assert "kind: 'status'," in STORY_JS
+    assert 'icon.src = storyStatusIconUrl(item.id);' in STORY_JS
+    assert '.story-status-terms-layout {' in STORY_CSS
+    assert '.story-status-terms-icon img {' in STORY_CSS
+
+
+def test_story_modals_use_normal_mode_motion_and_readable_term_layout():
+    assert '.story-dialog[open] {' in STORY_CSS
+    assert '#modal.active .modal-inner {' in STORY_CSS
+    assert '#story-term-dialog[open] .story-card-terms-modal {' in STORY_CSS
+    assert '.story-dev-panel:not(.hidden) {' in STORY_CSS
+    assert '@keyframes storyModalPopIn {' in STORY_CSS
+    assert '@keyframes storyPanelDropIn {' in STORY_CSS
+    assert 'width: min(920px, calc(100vw - 32px));' in STORY_CSS
+    assert 'grid-template-columns: 220px minmax(0, 1fr);' in STORY_CSS
+    assert 'border-left: 4px solid var(--story-blue);' in STORY_CSS
+    assert '#story-term-dialog[open] .story-card-terms-modal,' in STORY_CSS
+
+
+def test_story_surface_blocks_accidental_selection_and_native_image_dragging():
+    assert '.story-app {' in STORY_CSS
+    assert '-webkit-user-select: none;' in STORY_CSS
+    assert 'user-select: none;' in STORY_CSS
+    assert ".story-app [contenteditable='true'] {" in STORY_CSS
+    assert '-webkit-user-select: text;' in STORY_CSS
+    assert 'user-select: text;' in STORY_CSS
+    assert '.story-app img {' in STORY_CSS
+    assert '-webkit-user-drag: none;' in STORY_CSS
+    assert "storyApp?.addEventListener('selectstart'" in STORY_JS
+    assert "'input, textarea, select, [contenteditable=\"true\"]'" in STORY_JS
+    assert "storyApp?.addEventListener('dragstart'" in STORY_JS
+    assert "event.target?.closest?.('img')" in STORY_JS
+
+
+def test_story_card_terms_switch_between_base_and_upgraded_versions():
+    assert 'function storyCardHasUpgrade(card)' in STORY_JS
+    assert 'function storyCardAtUpgradeState(card, upgraded)' in STORY_JS
+    assert 'renderVersion(Boolean(card.upgraded));' in STORY_JS
+    assert "{ upgraded: false, label: t.beforeUpgrade }" in STORY_JS
+    assert "{ upgraded: true, label: t.afterUpgrade }" in STORY_JS
+    assert "tab.setAttribute('aria-selected', active ? 'true' : 'false');" in STORY_JS
+    assert 'const termItems = storyCardTermItems(displayCard);' in STORY_JS
+    assert '.story-card-version-tabs {' in STORY_CSS
+    assert '.story-card-version-tab.is-active {' in STORY_CSS
+
+
+def test_story_upgrade_actions_preview_the_upgraded_card_on_hover():
+    assert "if (options.previewUpgradeOnHover && !card.upgraded && storyCardHasUpgrade(card))" in STORY_JS
+    assert "element.addEventListener('pointerenter'" in STORY_JS
+    assert "element.addEventListener('pointerleave'" in STORY_JS
+    assert STORY_JS.count('previewUpgradeOnHover: true,') >= 3
+
+
+def test_story_room_actions_are_separated_into_tabs():
+    assert 'id="story-room-tabs"' in STORY_TEMPLATE
+    assert 'id="story-room-footer"' in STORY_TEMPLATE
+    assert 'function renderStoryRoomTabs(state, definitions)' in STORY_JS
+    for tab_id in (
+        'rest-heal',
+        'rest-upgrade',
+        'shop-cards',
+        'shop-talents',
+        'shop-remove',
+        'shop-upgrade',
+        'event-actions',
+        'event-upgrade',
+    ):
+        assert f"id: '{tab_id}'" in STORY_JS
+    assert 'activeStoryRoomTabKey !== key' in STORY_JS
+    assert "button.setAttribute('aria-selected', active ? 'true' : 'false');" in STORY_JS
+    assert '.story-room-tabs {' in STORY_CSS
+    assert '#story-room-options.story-room-card-grid {' in STORY_CSS
+    assert '.story-room-footer:empty {' in STORY_CSS
+
+
+def test_story_upgrade_tabs_only_show_cards_with_an_upgrade():
+    assert "const upgradableCards = (player.deck || [])" in STORY_JS
+    assert ".filter((card) => !card.upgraded && storyCardHasUpgrade(card));" in STORY_JS
+    assert STORY_JS.count('appendStoryRoomEmpty(target, t.noUpgradableCards);') == 3
+
+
 def test_story_equipment_orbits_around_player_portrait():
     avatar_stack = '''<div class="story-avatar-stack">
               <div id="story-player-portrait" class="story-portrait story-player-portrait player-avatar has-skin" aria-label="玩家"></div>
@@ -119,6 +208,55 @@ def test_story_player_eyes_follow_the_pointer():
     assert "'--skin-look-y'," in STORY_JS
     assert 'updateStorySkinEyeTracking(event.clientX, event.clientY);' in STORY_JS
     assert 'transition: transform 300ms cubic-bezier(.22, .8, .24, 1);' in STORY_CSS
+
+
+def test_story_shortcut_slots_follow_visual_order_and_active_dialog():
+    visibility = STORY_JS.split(
+        'function storyElementRendered(element) {',
+        1,
+    )[1].split(
+        'function clearStoryKeyboardFocus() {',
+        1,
+    )[0]
+    selection = STORY_JS.split(
+        'function storySelectSlot(slot, options = {}) {',
+        1,
+    )[1].split(
+        'function toggleStoryPile(kind) {',
+        1,
+    )[0]
+    context = STORY_JS.split(
+        'function getStoryShortcutContext() {',
+        1,
+    )[1].split(
+        'function dispatchStoryShortcut(',
+        1,
+    )[0]
+
+    assert 'return storyElementRendered(element) && !element.disabled;' in visibility
+    assert 'const dialog = topmostStoryDialog();' in visibility
+    assert 'const context = getStoryShortcutContext();' in selection
+    assert 'const items = Array.isArray(context?.slots) ? context.slots : [];' in selection
+    assert '#story-hand .story-card:not(:disabled)' not in selection
+    assert "'.story-card-choice-select-item'," in context
+    assert '].filter(storyElementRendered);' in context
+    assert "'#story-hand .story-card'," in context
+
+
+def test_story_right_click_cancels_selection_before_opening_terms():
+    context_menu = STORY_JS.split(
+        "document.addEventListener('contextmenu', (event) => {",
+    )[-1].split(
+        '});',
+        1,
+    )[0]
+
+    cancel_check = "if (selectedCombatCardId && activeRun?.state) {"
+    card_lookup = "const cardElement = event.target?.closest?.('.story-card.card, .story-pile-tile');"
+    assert cancel_check in context_menu
+    assert 'event.stopImmediatePropagation();' in context_menu
+    assert 'cancelStoryCombatSelection(true);' in context_menu
+    assert context_menu.index(cancel_check) < context_menu.index(card_lookup)
 
 
 def test_story_keyboard_card_selection_preserves_the_last_pointer_position():
@@ -144,3 +282,131 @@ def test_story_resources_use_fixed_tracks_and_shared_classic_compression():
     assert 'COMPRESSION_THRESHOLD = 15' in RESOURCE_ORBS_JS
     assert INDEX_TEMPLATE.index('/static/js/resource_orbs.js') < INDEX_TEMPLATE.index('/static/js/game.js')
     assert STORY_TEMPLATE.index('/static/js/resource_orbs.js') < STORY_TEMPLATE.index('/static/js/story.js')
+
+
+def test_story_refresh_uses_recovery_checkpoints_and_rewards_are_layered():
+    assert "action_type: 'resume_node'" in STORY_JS
+    assert "['combat', 'room', 'reward'].includes(phase)" in STORY_JS
+    assert 'id="story-reward-claims"' in STORY_TEMPLATE
+    assert 'id="story-reward-continue"' in STORY_TEMPLATE
+    assert "reward_type: 'gold'" in STORY_JS
+    assert "reward_type: 'card'" in STORY_JS
+    assert "reward_type: 'relic'" in STORY_JS
+    assert "reward_type: 'continue'" in STORY_JS
+    assert '.story-reward-claims {' in STORY_CSS
+
+
+def test_story_event_animation_respects_server_sequence_metadata():
+    assert '.sort((left, right) => {' in STORY_JS
+    assert 'const leftSequence = Number(left.event?.sequence);' in STORY_JS
+    assert 'return leftSequence - rightSequence || left.index - right.index;' in STORY_JS
+    assert 'function storyEventBatches(sequence)' in STORY_JS
+    assert 'String(event?.parallel_group || \'\')' in STORY_JS
+    assert 'await Promise.all(' in STORY_JS
+    assert 'playStoryPresentationEvent(event, nextRun)' in STORY_JS
+
+
+def test_story_enemy_lifecycle_uses_stable_summon_and_defeat_actors():
+    assert 'function ensureStorySummonedActor(event, nextRun)' in STORY_JS
+    assert "const actor = createEnemyActor(enemy, '');" in STORY_JS
+    assert "actor.classList.add('is-presentation-spawn');" in STORY_JS
+    assert "eventType === 'enemy_summoned'" in STORY_JS
+    assert 'await animateEnemySummon(event, nextRun);' in STORY_JS
+    assert "eventType === 'enemy_defeated'" in STORY_JS
+    assert 'await animateEnemyDefeat(event);' in STORY_JS
+    assert '.story-actor.is-summoning {' in STORY_CSS
+    assert '.story-actor.is-defeating {' in STORY_CSS
+    assert '.story-actor.is-defeated-complete {' in STORY_CSS
+    assert '@keyframes storyEnemySummonActor {' in STORY_CSS
+    assert '@keyframes storyEnemyDefeatActor {' in STORY_CSS
+
+
+def test_story_enemy_intents_render_structured_entries():
+    assert 'function createStoryIntentEntry(entry)' in STORY_JS
+    assert "item.dataset.intentKind = kind;" in STORY_JS
+    assert 'Array.isArray(enemy.intent?.entries)' in STORY_JS
+    assert '.story-intent-entries {' in STORY_CSS
+    assert '.story-intent-entry.is-attack' in STORY_CSS
+
+
+def test_story_map_distinguishes_traversed_and_next_edges():
+    assert "traversed ? ' is-traversed' : ''" in STORY_JS
+    assert "next ? ' is-next' : ''" in STORY_JS
+    assert "class: 'story-map-current-marker'" in STORY_JS
+    assert '.story-map-edge.is-traversed {' in STORY_CSS
+    assert '.story-map-edge.is-next {' in STORY_CSS
+
+
+def test_story_map_edges_stop_outside_translucent_nodes():
+    assert 'const STORY_MAP_NODE_RADIUS = 25;' in STORY_JS
+    assert 'const STORY_MAP_EDGE_INSET = STORY_MAP_NODE_RADIUS + 4;' in STORY_JS
+    assert 'function mapEdgeSegment(start, end)' in STORY_JS
+    assert 'const distance = Math.hypot(dx, dy);' in STORY_JS
+    assert 'distance <= STORY_MAP_EDGE_INSET * 2' in STORY_JS
+    assert 'const segment = mapEdgeSegment(start, end);' in STORY_JS
+    assert 'x1: segment.start.x,' in STORY_JS
+    assert 'y1: segment.start.y,' in STORY_JS
+    assert 'x2: segment.end.x,' in STORY_JS
+    assert 'y2: segment.end.y,' in STORY_JS
+    assert 'r: STORY_MAP_NODE_RADIUS,' in STORY_JS
+
+
+def test_story_permanent_deck_changes_require_explicit_confirmation():
+    assert 'id="story-deck-change-dialog"' in STORY_TEMPLATE
+    assert 'id="story-deck-change-before"' in STORY_TEMPLATE
+    assert 'id="story-deck-change-after"' in STORY_TEMPLATE
+    assert 'function openStoryDeckChange({ kind, card, payload, price = 0 })' in STORY_JS
+    assert "kind: 'remove'" in STORY_JS
+    assert "kind: 'upgrade'" in STORY_JS
+    assert "event.target.returnValue !== 'confirm'" in STORY_JS
+    assert 'storyAction(pending.actionType, pending.payload);' in STORY_JS
+    assert '.story-deck-change-preview {' in STORY_CSS
+
+
+def test_story_high_cost_event_choices_require_confirmation():
+    assert 'id="story-event-confirm-dialog"' in STORY_TEMPLATE
+    assert 'function openStoryEventConfirmation(option, onConfirm)' in STORY_JS
+    assert 'if (option.requires_confirmation)' in STORY_JS
+    assert "event.target.returnValue !== 'confirm'" in STORY_JS
+    assert '.story-event-confirm-result {' in STORY_CSS
+
+
+def test_story_event_rooms_support_scene_speaker_history_and_choices():
+    assert 'id="story-event-context"' in STORY_TEMPLATE
+    assert 'id="story-event-scene"' in STORY_TEMPLATE
+    assert 'id="story-event-speaker"' in STORY_TEMPLATE
+    assert 'id="story-event-body"' in STORY_TEMPLATE
+    assert 'id="story-event-history"' in STORY_TEMPLATE
+    assert 'function renderStoryEventContext(room)' in STORY_JS
+    assert 'room.choices || room.options || []' in STORY_JS
+    assert 'historyEntries.slice(0, -1).slice(-4)' in STORY_JS
+    assert '.story-event-context {' in STORY_CSS
+
+
+def test_story_rest_chest_and_shop_have_dedicated_context_bands():
+    for context_id in (
+        'story-rest-context',
+        'story-chest-context',
+        'story-shop-context',
+    ):
+        assert f'id="{context_id}"' in STORY_TEMPLATE
+    for value_id in (
+        'story-rest-health-value',
+        'story-rest-heal-value',
+        'story-chest-gold-value',
+        'story-chest-relic-name',
+        'story-shop-gold-value',
+        'story-shop-remove-value',
+        'story-shop-upgrade-value',
+    ):
+        assert f'id="{value_id}"' in STORY_TEMPLATE
+    assert 'function renderStoryRoomContext(state, room)' in STORY_JS
+    assert 'renderStoryRoomContext(state, room);' in STORY_JS
+    assert "roomView.dataset.roomType = String(room?.type || '');" in STORY_JS
+    assert "const isRest = room?.type === 'rest';" in STORY_JS
+    assert "const isChest = room?.type === 'chest';" in STORY_JS
+    assert "const isShop = room?.type === 'shop';" in STORY_JS
+    assert '.story-room-context {' in STORY_CSS
+    assert '.story-rest-context {' in STORY_CSS
+    assert '.story-chest-context {' in STORY_CSS
+    assert '.story-shop-context {' in STORY_CSS

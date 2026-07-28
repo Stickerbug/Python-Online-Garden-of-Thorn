@@ -2091,7 +2091,14 @@ class LocalSoloEngine {
             return Array.isArray(choice.target_instance_ids) && choice.target_instance_ids.length > 0;
         }
         if (choiceType === 'choose_ocean_sapphire') {
-            return this.choiceTargetFromChoice(choice) >= 0 && choice.target_instance_id != null;
+            const selectedId = toInt(choice.target_instance_id, -1);
+            const selectedCard = this.findCardByInstanceId(selectedId);
+            const selectedLocation = this.findCardLocation(selectedCard);
+            return !!selectedLocation
+                && selectedLocation.zone === 'hand'
+                && this.choiceTargetFromChoice(choice) >= 0
+                && this.oceanSapphireSelectableAttacks(selectedLocation.ownerId, card)
+                    .some(candidate => candidate.instance_id === selectedId);
         }
         if ([
             'choose_attack_from_hand', 'choose_card_from_hand', 'choose_card_to_discard',
@@ -2238,11 +2245,7 @@ class LocalSoloEngine {
             return selected ? { ...choice, target_instance_id: selected.instance_id } : null;
         }
         if (type === 'choose_ocean_sapphire') {
-            const selected = this.players[playerId].hand.find(c => (
-                c.card_type === 'thorn'
-                && cardSelectableByAction(c)
-                && (!card || c.instance_id !== card.instance_id)
-            ));
+            const selected = this.oceanSapphireSelectableAttacks(playerId, card)[0];
             return selected ? { ...choice, target_instance_id: selected.instance_id } : null;
         }
         if (type === 'choose_equipment' || type === 'choose_enemy_equipment') {
@@ -2355,8 +2358,10 @@ class LocalSoloEngine {
         if (!card) return null;
         for (const [ownerId, ps] of this.players.entries()) {
             for (const zone of ['hand', 'deck', 'discard', 'exile']) {
-                const idx = ps[zone].indexOf(card);
-                if (idx >= 0) return { ownerId, zone, index: idx, card };
+                const idx = ps[zone].findIndex(candidate => (
+                    candidate === card || candidate.instance_id === card.instance_id
+                ));
+                if (idx >= 0) return { ownerId, zone, index: idx, card: ps[zone][idx] };
             }
             const eqIndex = ps.equipment.findIndex(eq => eq.card_instance === card || eq.card_instance.instance_id === card.instance_id);
             if (eqIndex >= 0) return { ownerId, zone: 'equipment', index: eqIndex, card };
@@ -4586,23 +4591,21 @@ class LocalSoloEngine {
         const copied = card.copy();
         copied.instance_id = randintId();
         copied.setup_modifiers.add('bio_diamond_copy');
-        ['wide_strike', 'self_target', 'exile'].forEach(flag => copied.instance_flags.add(flag));
+        ['wide_strike', 'self_target', 'exile', 'swift'].forEach(flag => copied.instance_flags.add(flag));
         copied.fission_level = 3;
         copied.fission_count = 2;
+        copied.swift_value = 2;
         const ps = this.players[playerId];
         ps.addToHand(copied, { triggerEnterHand: false });
         const previousAutoActor = this.allowOutOfTurnAutoPlayFor;
         const previousAutoChoice = this._auto_resolve_choices_for;
-        const previousAutoNoCost = this._auto_play_no_cost_for;
         this.allowOutOfTurnAutoPlayFor = playerId;
         this._auto_resolve_choices_for = playerId;
-        this._auto_play_no_cost_for = playerId;
         try {
             this.playCard(playerId, copied.instance_id, choice || {});
         } finally {
             this.allowOutOfTurnAutoPlayFor = previousAutoActor;
             this._auto_resolve_choices_for = previousAutoChoice;
-            this._auto_play_no_cost_for = previousAutoNoCost;
         }
         this.logMsg(log || `${this.pn(playerId)}的钻石额外打出一张复制`);
     }
@@ -5673,8 +5676,8 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         const iid = choice && choice.target_instance_id != null ? toInt(choice.target_instance_id, -1) : -1;
         const chosen = iid >= 0 ? ps.findHandCard(iid) : null;
-        if (!chosen || chosen.card_type !== 'thorn') return;
-        if (chosen.flags.has('unique') || chosen.flags.has('exile')) return;
+        const eligibleIds = new Set(this.oceanSapphireSelectableAttacks(playerId, card).map(candidate => candidate.instance_id));
+        if (!chosen || !eligibleIds.has(chosen.instance_id)) return;
         const idx = ps.hand.indexOf(chosen);
         if (idx < 0) return;
         const autoCardData = chosen.toDict();
@@ -6909,6 +6912,20 @@ class LocalSoloEngine {
         });
     }
 
+    oceanSapphireSelectableAttacks(playerId, sourceCard = null) {
+        const ps = this.players[playerId];
+        if (!ps) return [];
+        const sourceId = sourceCard ? sourceCard.instance_id : null;
+        return ps.hand.filter(candidate => (
+            candidate
+            && candidate.instance_id !== sourceId
+            && candidate.card_type === 'thorn'
+            && cardSelectableByAction(candidate)
+            && !candidate.flags.has('unique')
+            && !candidate.flags.has('exile')
+        ));
+    }
+
     canPlayCard(playerId, card) {
         const ps = this.players[playerId];
         const def = card.def();
@@ -6920,6 +6937,9 @@ class LocalSoloEngine {
         if (this.actionLimitStatusValue(playerId, 'attack_only', 'attack_only', '仅攻击') > 0 && def.card_type !== 'thorn') return [false, '本回合只能使用攻击牌'];
         if (this.actionLimitStatusValue(playerId, 'magic_blocked', 'magic_blocked', '魔力封锁', 'troll_cards:magic_blocked') > 0 && card.cost_m > 0) return [false, '本回合无法使用带有魔力消耗的卡牌'];
         if (ps.shovel_active) return [false, '链子效果中，无法使用卡牌'];
+        if (this.cardIs(card, 'Sapphire', 'ocean:sapphire') && !this.oceanSapphireSelectableAttacks(playerId, card).length) {
+            return [false, '手中没有可选择的攻击牌'];
+        }
         const totalE = Math.max(0, card.cost_e + this.getExtraEForCard(playerId, card));
         if (totalE > ps.elixir) return [false, `能量不足（需要${totalE}E，当前${ps.elixir}E）`];
         if (card.cost_m > ps.magic) return [false, `魔力不足（需要${card.cost_m}M，当前${ps.magic}M）`];

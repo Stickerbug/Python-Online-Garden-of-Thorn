@@ -11,14 +11,43 @@
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
-  const betaExactKeys = new Set(['gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled', 'gtn_landscape_mode']);
+  const betaExactKeys = new Set(['gtn_theme', 'gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled', 'gtn_play_gesture_animation', 'gtn_landscape_mode']);
   const betaKey = (key) => window.__GTN_BETA_MODE__ && betaExactKeys.has(key) ? `gtn_beta_${key.slice(4)}` : key;
+  const readCookie = (key) => {
+    try {
+      const prefix = `${encodeURIComponent(key)}=`;
+      const part = String(document.cookie || '').split(';').map(item => item.trim()).find(item => item.startsWith(prefix));
+      return part ? decodeURIComponent(part.slice(prefix.length)) : null;
+    } catch (_) {
+      return null;
+    }
+  };
+  const writeCookie = (key, value) => {
+    try {
+      const secure = location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
+    } catch (_) {}
+  };
   const storage = {
     getItem(key) {
-      try { return window.localStorage.getItem(key); } catch (_) { return null; }
+      try {
+        const value = window.localStorage.getItem(key);
+        if (value != null) return value;
+      } catch (_) {}
+      try {
+        const value = window.sessionStorage.getItem(key);
+        if (value != null) return value;
+      } catch (_) {}
+      return readCookie(key);
     },
     setItem(key, value) {
-      try { window.localStorage.setItem(key, value); } catch (_) {}
+      let persistent = false;
+      try {
+        window.localStorage.setItem(key, value);
+        persistent = window.localStorage.getItem(key) === String(value);
+      } catch (_) {}
+      try { window.sessionStorage.setItem(key, value); } catch (_) {}
+      if (!persistent) writeCookie(key, value);
     },
   };
   const supportedLangs = new Set(['zh', 'en', 'fr', 'ja']);
@@ -36,7 +65,9 @@
     storage.setItem(migrationKey, '1');
   }
   if (uiStyle !== 'classic') uiStyle = 'minimal';
+  const theme = storage.getItem(betaKey('gtn_theme')) === 'dark' ? 'dark' : 'light';
   document.documentElement.setAttribute('lang', lang);
+  document.documentElement.setAttribute('data-theme', theme);
   document.documentElement.setAttribute('data-ui-style', uiStyle);
   if (window.__GTN_BETA_MODE__) document.documentElement.setAttribute('data-beta-mode', 'true');
   window.__bootLang = lang;

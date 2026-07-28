@@ -3068,6 +3068,7 @@ class GameEngine:
             return False
         actor, card_name = m.group(1), m.group(2)
         detail = ''
+        no_heal = bool(re.fullmatch(r'.+未回复生命', text))
         if text.startswith(actor):
             detail = text[len(actor):]
         allowed_starts = (
@@ -3085,11 +3086,13 @@ class GameEngine:
                 r'.+抽\d+张牌',
                 r'.+消耗\d+[EM]',
                 r'.+每回合.+[+-]\d+',
+                r'.+未回复生命',
             )
             if not any(re.fullmatch(pattern, text) for pattern in result_patterns):
                 return False
             detail = text
-        self.log[-1] = f'{actor}使用{card_name}，{detail}'
+        connector = '，但' if no_heal else '，'
+        self.log[-1] = f'{actor}使用{card_name}{connector}{detail}'
         return True
 
     def _merge_counted_log(self, text: str, last: str) -> bool:
@@ -5595,6 +5598,28 @@ class GameEngine:
         self.log_msg(f"{self.pn(player_id)}投降，{self.pn(self.winner)}获胜！")
         return {'success': True}
 
+    def _ocean_sapphire_selectable_attacks(
+        self,
+        player_id: int,
+        source_card: Optional[CardInstance] = None,
+    ) -> List[CardInstance]:
+        if not self._valid_player_id(player_id):
+            return []
+        source_iid = getattr(source_card, 'instance_id', None)
+        selectable = []
+        for candidate in self.players[player_id].hand:
+            if source_iid is not None and getattr(candidate, 'instance_id', None) == source_iid:
+                continue
+            if getattr(candidate, 'card_type', '') != 'thorn':
+                continue
+            if not self._card_selectable_by_action(candidate):
+                continue
+            flags = self._effective_card_flags(candidate)
+            if 'unique' in flags or 'exile' in flags:
+                continue
+            selectable.append(candidate)
+        return selectable
+
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         if not self._valid_player_id(player_id):
             return False, "无效玩家"
@@ -5633,6 +5658,9 @@ class GameEngine:
         if self._card_is(card, 'RansomMoney', 'bio:ransom_money'):
             if not any(self._card_selectable_by_action(c) for c in ps.exile):
                 return False, "放逐区没有可选择的牌"
+        if self._card_is(card, 'Sapphire', 'ocean:sapphire'):
+            if not self._ocean_sapphire_selectable_attacks(player_id, card):
+                return False, "手中没有可选择的攻击牌"
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = max(0, card.cost_e + extra_e)
         if total_e > ps.elixir:
@@ -6044,7 +6072,21 @@ class GameEngine:
                 return True
             return False
         if choice_type == 'choose_ocean_sapphire':
-            return self._choice_target_from_choice(choice) >= 0 and choice.get('target_instance_id') is not None
+            try:
+                selected_iid = int(choice.get('target_instance_id'))
+            except Exception:
+                return False
+            selected_card = self._find_card_by_instance_id(selected_iid)
+            owner_id, zone_name, _ = self._find_card_location(selected_card)
+            if owner_id is None or zone_name != 'hand':
+                return False
+            return (
+                self._choice_target_from_choice(choice) >= 0
+                and any(
+                    getattr(candidate, 'instance_id', None) == selected_iid
+                    for candidate in self._ocean_sapphire_selectable_attacks(owner_id, card)
+                )
+            )
         if choice_type in ('choose_card_from_discard',):
             return choice.get('target_def_id') is not None or choice.get('target_instance_id') is not None
         if choice_type in (
@@ -6169,8 +6211,7 @@ class GameEngine:
             return {'bio_blood_sugar_mode': random.choice(['electric_target', 'physical_target']), **choice}
         if choice_type == 'choose_ocean_sapphire':
             chosen_target = self._default_auto_target_choice(player_id, allow_self=False)
-            selected = self._first_selectable_card_from_zone(player_id, player_id, 'hand', card)
-            selected = selected if selected and getattr(selected, 'card_type', '') == 'thorn' else None
+            selected = next(iter(self._ocean_sapphire_selectable_attacks(player_id, card)), None)
             return {'target_player_id': chosen_target, 'target_player': chosen_target, 'target_id': chosen_target, 'target_instance_id': getattr(selected, 'instance_id', None)} if chosen_target >= 0 and selected else None
         if choice_type in ('choose_cards_from_hand', 'choose_same_attacks_from_hand'):
             owner_id = player_id
@@ -13797,8 +13838,14 @@ class GameEngine:
         if not (0 <= target_id < len(self.players)):
             return
         amount = self._eval_int(player_id, params.get('amount', 0), card)
+        before = self.players[target_id].health
         self.players[target_id].heal(amount)
-        self.log_msg(log or f"{self.pn(target_id)}回复{amount}H")
+        healed = max(0, self.players[target_id].health - before)
+        self.log_msg(log or (
+            f"{self.pn(target_id)}回复{healed}H"
+            if healed
+            else f"{self.pn(target_id)}未回复生命"
+        ))
 
     def _atomic_draw(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -14481,10 +14528,11 @@ class GameEngine:
         # Choice resumption may deserialize chosen_card into a detached object.
         # Always resolve the canonical live hand instance before moving it.
         chosen = self.players[player_id].find_hand_card(iid) if iid >= 0 else None
-        if chosen is None or not self._card_selectable_by_action(chosen) or getattr(chosen, 'card_type', '') != 'thorn':
-            return
-        chosen_flags = self._effective_card_flags(chosen)
-        if 'unique' in chosen_flags or 'exile' in chosen_flags:
+        eligible_ids = {
+            getattr(candidate, 'instance_id', None)
+            for candidate in self._ocean_sapphire_selectable_attacks(player_id, card)
+        }
+        if chosen is None or getattr(chosen, 'instance_id', None) not in eligible_ids:
             return
         auto_card_data = chosen.to_dict() if hasattr(chosen, 'to_dict') else None
         self.players[player_id].hand.remove(chosen)
@@ -15596,10 +15644,11 @@ class GameEngine:
         snapshot = getattr(card, '_bio_pre_play_snapshot', None)
         copied = fresh_card_copy_from_dict(snapshot if isinstance(snapshot, dict) else card.to_dict(), card.def_id)
         copied.setup_modifiers.add('bio_diamond_copy')
-        copied.instance_flags.update({'wide_strike', 'self_target', 'exile'})
+        copied.instance_flags.update({'wide_strike', 'self_target', 'exile', 'swift'})
         copied.fission_level = 3
         copied.fission_count = 2
-        self._bio_queue_auto_play(player_id, copied, choice, no_cost=True, source='diamond')
+        copied.swift_value = 2
+        self._bio_queue_auto_play(player_id, copied, choice, no_cost=False, source='diamond')
         self.log_msg(log or f"{self.pn(player_id)}的钻石额外打出一张复制")
 
     def _atomic_bio_blood_diamond_attack(self, player_id, card, params, log, choice, context):

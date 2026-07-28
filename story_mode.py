@@ -4,7 +4,7 @@ import random
 from story_content import initial_story_player
 
 
-STORY_SCHEMA_VERSION = 3
+STORY_SCHEMA_VERSION = 4
 STORY_CONTENT_VERSION = 'story-garden-2'
 STORY_FLOOR_COUNT = 16
 
@@ -217,5 +217,7 @@ def build_initial_story_state(seed):
         'shop_upgrades': 0,
         'completed': False,
         'last_events': [],
+        'recovery_checkpoint': None,
+        'presentation_event_counter': 0,
         'flags': {},
     }

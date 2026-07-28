@@ -9,9 +9,30 @@
   <link rel="stylesheet" href="/static/css/story.css?v={{ static_version }}">
   <script>
     (() => {
-      let theme = 'light';
-      try { theme = localStorage.getItem('gtn_theme') || 'light'; } catch (_) {}
+      const readCookie = (key) => {
+        try {
+          const prefix = `${encodeURIComponent(key)}=`;
+          const part = String(document.cookie || '').split(';').map(item => item.trim()).find(item => item.startsWith(prefix));
+          return part ? decodeURIComponent(part.slice(prefix.length)) : null;
+        } catch (_) {
+          return null;
+        }
+      };
+      const readPreference = (key) => {
+        try {
+          const value = window.localStorage.getItem(key);
+          if (value != null) return value;
+        } catch (_) {}
+        try {
+          const value = window.sessionStorage.getItem(key);
+          if (value != null) return value;
+        } catch (_) {}
+        return readCookie(key);
+      };
+      const theme = readPreference('gtn_theme') || 'light';
+      const lang = readPreference('gtn_lang') || 'zh';
       document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+      document.documentElement.lang = ['zh', 'en', 'fr', 'ja'].includes(lang) ? lang : 'zh';
     })();
   </script>
 </head>
@@ -188,7 +209,65 @@
           <h2 id="story-room-title">选择</h2>
           <p id="story-room-copy"></p>
         </div>
+        <div id="story-event-context" class="story-event-context hidden">
+          <div id="story-event-scene" class="story-event-scene" aria-hidden="true">?</div>
+          <div class="story-event-narrative">
+            <strong id="story-event-speaker"></strong>
+            <p id="story-event-body"></p>
+            <ol id="story-event-history" class="story-event-history"></ol>
+          </div>
+        </div>
+        <div id="story-rest-context" class="story-room-context story-rest-context hidden">
+          <div class="story-room-context-mark" aria-hidden="true">
+            <img src="/static/assets/ui-icons/hit-point.svg" alt="">
+          </div>
+          <dl class="story-room-context-metrics">
+            <div>
+              <dt id="story-rest-health-label">当前生命</dt>
+              <dd id="story-rest-health-value">0/0</dd>
+            </div>
+            <div>
+              <dt id="story-rest-heal-label">本次回复</dt>
+              <dd id="story-rest-heal-value">+0H</dd>
+            </div>
+          </dl>
+        </div>
+        <div id="story-chest-context" class="story-room-context story-chest-context hidden">
+          <div id="story-chest-mark" class="story-room-context-mark" aria-hidden="true">宝</div>
+          <div class="story-room-context-details">
+            <div class="story-room-context-line">
+              <span id="story-chest-gold-label">金币</span>
+              <strong id="story-chest-gold-value">0G</strong>
+            </div>
+            <div class="story-room-context-line story-room-context-line-detail">
+              <span id="story-chest-relic-label">天赋</span>
+              <div>
+                <strong id="story-chest-relic-name">无</strong>
+                <small id="story-chest-relic-description"></small>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="story-shop-context" class="story-room-context story-shop-context hidden">
+          <div id="story-shop-mark" class="story-room-context-mark" aria-hidden="true">$</div>
+          <dl class="story-room-context-metrics story-shop-context-metrics">
+            <div>
+              <dt id="story-shop-gold-label">可用金币</dt>
+              <dd id="story-shop-gold-value">0G</dd>
+            </div>
+            <div>
+              <dt id="story-shop-remove-label">移除费用</dt>
+              <dd id="story-shop-remove-value">0G</dd>
+            </div>
+            <div>
+              <dt id="story-shop-upgrade-label">升级费用</dt>
+              <dd id="story-shop-upgrade-value">0G</dd>
+            </div>
+          </dl>
+        </div>
+        <div id="story-room-tabs" class="story-room-tabs hidden" role="tablist" aria-label="房间分类"></div>
         <div id="story-room-options" class="story-choice-grid story-choice-grid-wide"></div>
+        <div id="story-room-footer" class="story-room-footer"></div>
       </section>
 
       <section id="story-reward" class="story-choice-screen hidden">
@@ -197,8 +276,12 @@
           <h2 id="story-reward-title">选择一张牌</h2>
           <p id="story-reward-copy"></p>
         </div>
+        <div id="story-reward-claims" class="story-reward-claims"></div>
         <div id="story-reward-options" class="story-choice-grid story-card-choice-grid"></div>
-        <button id="story-reward-skip" class="story-command" type="button">跳过</button>
+        <div class="story-reward-actions">
+          <button id="story-reward-skip" class="story-command" type="button">跳过卡牌</button>
+          <button id="story-reward-continue" class="story-command story-command-primary hidden" type="button">继续</button>
+        </div>
       </section>
 
       <section id="story-terminal" class="story-empty hidden">
@@ -237,6 +320,53 @@
       </form>
     </dialog>
 
+    <dialog id="story-deck-change-dialog" class="story-dialog story-deck-change-dialog">
+      <form method="dialog">
+        <div class="story-pile-heading">
+          <div>
+            <h2 id="story-deck-change-title">确认牌组变化</h2>
+            <p id="story-deck-change-copy"></p>
+          </div>
+          <button class="story-pile-close" value="cancel" aria-label="取消">×</button>
+        </div>
+        <div class="story-deck-change-preview">
+          <section>
+            <span id="story-deck-change-before-label">变化前</span>
+            <div id="story-deck-change-before" class="story-deck-change-card"></div>
+          </section>
+          <span class="story-deck-change-arrow" aria-hidden="true">→</span>
+          <section>
+            <span id="story-deck-change-after-label">变化后</span>
+            <div id="story-deck-change-after" class="story-deck-change-card"></div>
+          </section>
+        </div>
+        <div class="story-dialog-actions">
+          <button id="story-deck-change-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-deck-change-confirm" class="story-command story-command-primary" value="confirm">确定</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="story-event-confirm-dialog" class="story-dialog">
+      <form method="dialog">
+        <div class="story-pile-heading">
+          <div>
+            <h2 id="story-event-confirm-title">确认事件选择</h2>
+            <p id="story-event-confirm-copy"></p>
+          </div>
+          <button class="story-pile-close" value="cancel" aria-label="取消">×</button>
+        </div>
+        <div class="story-event-confirm-result">
+          <strong id="story-event-confirm-label"></strong>
+          <span id="story-event-confirm-description"></span>
+        </div>
+        <div class="story-dialog-actions">
+          <button id="story-event-confirm-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-event-confirm-submit" class="story-command story-command-primary" value="confirm">确定</button>
+        </div>
+      </form>
+    </dialog>
+
     {% if story_dev_tools %}
     <dialog id="story-reset-dialog" class="story-dialog">
       <form method="dialog">
@@ -265,6 +395,7 @@
     window.GTN_STORAGE = window.GTN_STORAGE || (() => {
       const memory = new Map();
       let storage = null;
+      let sessionStorage = null;
       try {
         storage = window.localStorage;
         const probe = '__gtn_story_storage_probe__';
@@ -273,20 +404,85 @@
       } catch (_) {
         storage = null;
       }
+      try {
+        sessionStorage = window.sessionStorage;
+        const probe = '__gtn_story_session_storage_probe__';
+        sessionStorage.setItem(probe, '1');
+        sessionStorage.removeItem(probe);
+      } catch (_) {
+        sessionStorage = null;
+      }
+      const supportsCookie = (key) => {
+        const value = String(key || '');
+        return value === 'gtn_theme'
+          || value === 'gtn_lang'
+          || value.startsWith('gtn_keybindings_');
+      };
+      const readCookie = (key) => {
+        if (!supportsCookie(key)) return null;
+        try {
+          const prefix = `${encodeURIComponent(key)}=`;
+          const part = String(document.cookie || '').split(';').map(item => item.trim()).find(item => item.startsWith(prefix));
+          return part ? decodeURIComponent(part.slice(prefix.length)) : null;
+        } catch (_) {
+          return null;
+        }
+      };
+      const writeCookie = (key, value) => {
+        if (!supportsCookie(key)) return false;
+        try {
+          const secure = location.protocol === 'https:' ? '; Secure' : '';
+          document.cookie = `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
+          return readCookie(key) === String(value);
+        } catch (_) {
+          return false;
+        }
+      };
+      const removeCookie = (key) => {
+        if (!supportsCookie(key)) return;
+        try { document.cookie = `${encodeURIComponent(key)}=; Max-Age=0; Path=/; SameSite=Lax`; } catch (_) {}
+      };
       return {
         getItem(key) {
-          if (memory.has(String(key))) return memory.get(String(key));
-          try { return storage ? storage.getItem(key) : null; } catch (_) { return null; }
+          const mapped = String(key);
+          if (memory.has(mapped)) return memory.get(mapped);
+          try {
+            const value = storage ? storage.getItem(mapped) : null;
+            if (value != null) return value;
+          } catch (_) {}
+          try {
+            const value = sessionStorage ? sessionStorage.getItem(mapped) : null;
+            if (value != null) return value;
+          } catch (_) {}
+          return readCookie(mapped);
         },
         setItem(key, value) {
-          memory.set(String(key), String(value));
-          try { if (storage) storage.setItem(key, value); } catch (_) {}
+          const mapped = String(key);
+          const text = String(value);
+          memory.set(mapped, text);
+          try { if (sessionStorage) sessionStorage.setItem(mapped, text); } catch (_) {}
+          let persistent = false;
+          try {
+            if (storage) {
+              storage.setItem(mapped, text);
+              persistent = storage.getItem(mapped) === text;
+            }
+          } catch (_) {
+            storage = null;
+          }
+          if (!persistent) writeCookie(mapped, text);
         },
         removeItem(key) {
-          memory.delete(String(key));
-          try { if (storage) storage.removeItem(key); } catch (_) {}
+          const mapped = String(key);
+          memory.delete(mapped);
+          removeCookie(mapped);
+          try { if (sessionStorage) sessionStorage.removeItem(mapped); } catch (_) {}
+          try { if (storage) storage.removeItem(mapped); } catch (_) {}
         },
-        isPersistent() { return Boolean(storage); },
+        isPersistent(key = null) {
+          if (storage) return true;
+          return key != null && readCookie(String(key)) != null;
+        },
       };
     })();
   </script>

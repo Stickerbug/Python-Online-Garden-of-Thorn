@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 
 import pytest
@@ -5,12 +6,14 @@ import pytest
 from story_content import (
     STORY_CARDS,
     STORY_ENEMIES,
+    STORY_ENEMY_IMAGE_URLS,
     STORY_RARITIES,
     STORY_REWARD_CARD_IDS,
     validate_story_content,
 )
 from story_engine import (
     StoryActionError,
+    _enemy_intent,
     _gain_elixir,
     _gain_magic,
     _new_card,
@@ -59,8 +62,20 @@ def test_story_resources_can_exceed_legacy_display_maximums():
     assert state['combat']['magic'] == original_magic + 25000
     assert state['combat']['elixir'] > state['player']['max_elixir']
     assert state['combat']['magic'] > state['player']['max_magic']
-    assert {'type': 'elixir', 'amount': 25000} in events
-    assert {'type': 'magic', 'amount': 25000} in events
+    assert any(
+        event.get('type') == 'elixir'
+        and event.get('amount') == 25000
+        and event.get('before') == original_elixir
+        and event.get('after') == original_elixir + 25000
+        for event in events
+    )
+    assert any(
+        event.get('type') == 'magic'
+        and event.get('amount') == 25000
+        and event.get('before') == original_magic
+        and event.get('after') == original_magic + 25000
+        for event in events
+    )
 
 
 def test_story_content_is_valid_and_reward_pool_excludes_special_cards():
@@ -139,6 +154,34 @@ def test_story_map_has_sixteen_floors_no_early_elites_and_no_crossing_edges():
                     (left_source['x'] - right_source['x'])
                     * (left_target['x'] - right_target['x'])
                 ) >= 0
+
+
+def test_entering_a_new_stage_restores_all_health():
+    state = build_initial_story_state('stage-heal')
+    state['player']['max_health'] = 120
+    state['player']['health'] = 17
+    state['phase'] = 'stage_choice'
+    state['room'] = {
+        'type': 'stage_choice',
+        'stage': 2,
+        'biomes': ['jungle'],
+    }
+
+    state, events = apply_story_action(
+        state,
+        'choose_stage',
+        {'biome': 'jungle'},
+        'stage-heal',
+    )
+
+    assert state['stage'] == 2
+    assert state['player']['health'] == 120
+    assert any(
+        event.get('type') == 'heal'
+        and event.get('amount') == 103
+        and event.get('source') == 'stage_transition'
+        for event in events
+    )
 
 
 def test_a_complete_four_stage_journey_can_reach_the_terminal_state():
@@ -330,6 +373,24 @@ def test_end_turn_runs_enemy_actions_and_starts_a_fresh_player_turn():
         assert len(state['combat']['hand']) <= 10
 
 
+def test_turn_start_adds_uncapped_elixir_and_preserves_magic():
+    state, _ = _begin_combat('turn-resources')
+    state['player']['health'] = 999
+    state['player']['max_health'] = 999
+    state['combat']['elixir'] = 7
+    state['combat']['magic'] = 14
+
+    state, events = apply_story_action(state, 'end_turn', {}, 'turn-resources')
+
+    assert state['phase'] == 'combat'
+    assert state['combat']['elixir'] == 10
+    assert state['combat']['magic'] == 14
+    assert any(
+        event.get('type') == 'elixir' and event.get('amount') == 3
+        for event in events
+    )
+
+
 def test_nuke_spends_all_elixir_and_hits_once_per_point():
     state, _ = _begin_combat('nuke')
     state['combat']['elixir'] = 3
@@ -343,9 +404,31 @@ def test_nuke_spends_all_elixir_and_hits_once_per_point():
         'nuke',
     )
     assert state['combat']['elixir'] == 0
-    damage = next(event for event in events if event['type'] == 'enemy_damage')
-    assert damage['hits'] == 3
+    damage = [event for event in events if event['type'] == 'enemy_damage']
+    assert len(damage) == 3
+    assert [event['hit_index'] for event in damage] == [1, 2, 3]
+    assert all(event['hit_count'] == 3 for event in damage)
     assert before - state['combat']['enemies'][0]['health'] == 27
+
+
+def test_nuke_at_zero_elixir_deals_no_damage():
+    state, _ = _begin_combat('nuke-zero')
+    state['combat']['elixir'] = 0
+    card = _inject_hand_card(state, 'nuke')
+    target = state['combat']['enemies'][0]
+    before = target['health']
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id'], 'target_id': target['id']},
+        'nuke-zero',
+    )
+
+    assert state['combat']['elixir'] == 0
+    assert state['combat']['enemies'][0]['health'] == before
+    assert not any(event['type'] == 'enemy_damage' for event in events)
+    assert any(event['type'] == 'card_played' for event in events)
 
 
 def test_enemy_applied_broken_survives_until_the_player_uses_it():
@@ -436,8 +519,14 @@ def test_broken_damage_defeats_player_even_when_the_card_kills_last_enemy():
 
     assert state['player']['health'] == 0
     assert state['phase'] == 'game_over'
+    assert 'recovery_checkpoint' not in state
     assert any(event.get('type') == 'game_over' for event in events)
     assert not any(event.get('type') == 'combat_victory' for event in events)
+    terminal_state = copy.deepcopy(state)
+    with pytest.raises(StoryActionError) as error:
+        apply_story_action(state, 'end_turn', {}, 'broken-double-defeat')
+    assert error.value.code == 'END_TURN_NOT_ALLOWED'
+    assert state == terminal_state
 
 
 def test_rockfall_grows_and_triggers_before_the_rock_action():
@@ -488,6 +577,51 @@ def test_hive_death_summons_a_withering_wasp_instead_of_ending_combat():
     assert wasps[0]['move_index'] == 1
     assert wasps[0]['wither'] == 3
     assert any(event['type'] == 'enemy_death_trigger' for event in events)
+    defeat = next(event for event in events if event['type'] == 'enemy_defeated')
+    summon = next(event for event in events if event['type'] == 'enemy_summoned')
+    assert defeat['enemy_id'] == enemy['id']
+    assert defeat['presentation']['motion'] == 'defeat'
+    assert summon['actor_id'] == enemy['id']
+    assert summon['target_ids'] == [wasps[0]['id']]
+    assert summon['enemy']['id'] == wasps[0]['id']
+    assert summon['enemy']['health'] == wasps[0]['max_health']
+    assert summon['presentation']['motion'] == 'summon'
+    assert defeat['sequence'] < summon['sequence']
+
+
+def test_enemy_defeat_events_are_emitted_once_and_parallelized():
+    seed = 'enemy-defeat-contract'
+    state, _ = _begin_combat(seed)
+    state['combat']['opening_redraw_pending'] = False
+    first = state['combat']['enemies'][0]
+    first['health'] = 1
+    first['shield'] = 0
+    second = copy.deepcopy(first)
+    second['id'] = 'enemy-defeat-2'
+    state['combat']['enemies'] = [first, second]
+    card = _inject_hand_card(state, 'lightning')
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id']},
+        seed,
+    )
+
+    defeats = [
+        event for event in events
+        if event.get('type') == 'enemy_defeated'
+    ]
+    assert state['phase'] == 'reward'
+    assert [event['enemy_id'] for event in defeats] == [first['id'], second['id']]
+    assert len({event['enemy_id'] for event in defeats}) == 2
+    assert len({event['parallel_group'] for event in defeats}) == 1
+    assert defeats[0]['parallel_group'] is not None
+    assert all(event['actor_id'] == 'player' for event in defeats)
+    assert all(event['source_card_instance_id'] == card['instance_id'] for event in defeats)
+    assert all(event['source_definition_id'] == card['def_id'] for event in defeats)
+    assert all(event['after'] == 0 for event in defeats)
+    assert all(event['presentation']['motion'] == 'defeat' for event in defeats)
 
 
 def test_cooldown_relic_blocks_actions_until_opening_redraw_is_resolved():
@@ -564,8 +698,18 @@ def test_creature_struggle_starts_the_selected_custom_encounter():
     )
     assert state['phase'] == 'combat'
     assert state['combat']['event_resolution'] == 'fight_help_spider'
-    assert [enemy['def_id'] for enemy in state['combat']['enemies']] == ['spider_yuba']
+    assert [enemy['def_id'] for enemy in state['combat']['enemies']] == ['spider_yoba']
     assert state['combat']['enemies'][0]['health'] == 51
+
+
+def test_yoba_spider_identifiers_and_asset_use_the_correct_spelling():
+    obsolete_id = 'spider_' + 'yu' + 'ba'
+    assert obsolete_id not in STORY_ENEMIES
+    assert obsolete_id not in STORY_ENEMY_IMAGE_URLS
+    assert STORY_ENEMIES['spider_yoba']['name']['en'] == 'Yoba Spider'
+    image_url = STORY_ENEMY_IMAGE_URLS['spider_yoba']
+    assert image_url.endswith('/spider-yoba.svg')
+    assert (Path(__file__).resolve().parents[1] / image_url.lstrip('/')).is_file()
 
 
 def test_light_only_sprouts_one_exile_copy_from_a_non_exile_card():
@@ -602,3 +746,321 @@ def test_light_only_sprouts_one_exile_copy_from_a_non_exile_card():
     )
     assert state['combat']['draw_pile'] == []
     assert [card['def_id'] for card in state['combat']['exile_pile']] == ['light']
+
+
+def test_refresh_checkpoint_restores_the_initial_combat_state():
+    seed = 'combat-checkpoint'
+    state, _ = _begin_combat(seed)
+    checkpoint = state.get('recovery_checkpoint')
+    assert checkpoint
+    assert checkpoint['kind'] == 'combat_entry'
+    expected_combat = copy.deepcopy(checkpoint['state']['combat'])
+
+    state['combat']['round'] = 99
+    state['combat']['elixir'] = 0
+    state['player']['health'] = 1
+
+    state, events = apply_story_action(state, 'resume_node', {}, seed)
+
+    assert state['combat'] == expected_combat
+    assert state['recovery_checkpoint']['kind'] == 'combat_entry'
+    assert any(event.get('type') == 'checkpoint_restored' for event in events)
+
+
+def test_event_progress_checkpoint_restores_the_latest_stable_stage():
+    seed = 'event-progress-checkpoint'
+    state = build_initial_story_state(seed)
+    state, _ = apply_story_action(
+        state,
+        'choose_blessing',
+        {'blessing_id': 'titan'},
+        seed,
+    )
+    lottery_choice = {
+        'id': 'lottery_draw',
+        'label': {'zh': '抽奖', 'en': 'Draw'},
+        'description': {'zh': '花费50G。', 'en': 'Pay 50 G.'},
+    }
+    state['phase'] = 'room'
+    state['player']['gold'] = 200
+    state['room'] = {
+        'type': 'event',
+        'event_id': 'mystery_lottery',
+        'attempts': 0,
+        'stage_id': 'intro',
+        'history': [],
+        'choices': [lottery_choice],
+        'options': [lottery_choice],
+    }
+
+    state, _ = apply_story_action(
+        state,
+        'resolve_room',
+        {'option': 'lottery_draw'},
+        seed,
+    )
+    expected_gold = state['player']['gold']
+    expected_health = state['player']['health']
+    assert state['room']['attempts'] == 1
+    assert state['room']['stage_id'] == 'attempt_1'
+    assert len(state['room']['history']) == 1
+    assert state['recovery_checkpoint']['kind'] == 'room_progress'
+
+    state['room']['attempts'] = 99
+    state['player']['gold'] = 999
+    state['player']['health'] = 1
+    state, _ = apply_story_action(state, 'resume_node', {}, seed)
+
+    assert state['room']['attempts'] == 1
+    assert state['room']['stage_id'] == 'attempt_1'
+    assert state['player']['gold'] == expected_gold
+    assert state['player']['health'] == expected_health
+
+
+def test_shop_progress_checkpoint_does_not_restore_a_removed_card():
+    seed = 'shop-progress-checkpoint'
+    state = build_initial_story_state(seed)
+    state, _ = apply_story_action(
+        state,
+        'choose_blessing',
+        {'blessing_id': 'titan'},
+        seed,
+    )
+    removed = state['player']['deck'][0]
+    state['phase'] = 'room'
+    state['player']['gold'] = 100
+    state['room'] = {
+        'type': 'shop',
+        'options': ['remove_card', 'leave'],
+        'cards': [],
+        'relics': [],
+        'remove_price': 25,
+        'upgrade_price': 25,
+    }
+
+    state, _ = apply_story_action(
+        state,
+        'resolve_room',
+        {
+            'option': 'remove_card',
+            'card_instance_id': removed['instance_id'],
+        },
+        seed,
+    )
+    assert all(
+        card['instance_id'] != removed['instance_id']
+        for card in state['player']['deck']
+    )
+    assert state['player']['gold'] == 75
+    assert state['recovery_checkpoint']['kind'] == 'room_progress'
+
+    state['player']['deck'].append(copy.deepcopy(removed))
+    state['player']['gold'] = 999
+    state, _ = apply_story_action(state, 'resume_node', {}, seed)
+
+    assert all(
+        card['instance_id'] != removed['instance_id']
+        for card in state['player']['deck']
+    )
+    assert state['player']['gold'] == 75
+
+
+def test_legacy_reward_state_does_not_grant_its_gold_twice():
+    seed = 'legacy-layered-reward'
+    state = build_initial_story_state(seed)
+    state, _ = apply_story_action(
+        state,
+        'choose_blessing',
+        {'blessing_id': 'titan'},
+        seed,
+    )
+    state['phase'] = 'reward'
+    state['player']['gold'] = 75
+    state['reward'] = {
+        'gold': 75,
+        'cards': [],
+        'relic': None,
+        'room_type': 'combat',
+    }
+
+    state, _ = apply_story_action(state, 'choose_reward', {}, seed)
+
+    assert state['player']['gold'] == 75
+    assert state['phase'] == 'map'
+
+
+def test_legacy_combat_without_checkpoint_remains_playable():
+    seed = 'legacy-combat-without-checkpoint'
+    state, _ = _begin_combat(seed)
+    state.pop('recovery_checkpoint', None)
+    state.pop('presentation_event_counter', None)
+    state['combat']['opening_redraw_pending'] = False
+    target = state['combat']['enemies'][0]
+    card = _inject_hand_card(state, 'basic')
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id'], 'target_id': target['id']},
+        seed,
+    )
+
+    assert state['phase'] in ('combat', 'reward')
+    assert events
+    assert all(event['event_id'].startswith('story-event-') for event in events)
+    assert int(state['presentation_event_counter']) == len(events)
+
+
+def test_layered_rewards_are_claimed_once_and_survive_checkpoint_restore():
+    seed = 'layered-reward'
+    state = build_initial_story_state(seed)
+    state['phase'] = 'reward'
+    state['reward'] = {
+        'gold': 18,
+        'cards': [{'card_id': 'basic', 'upgraded': False}],
+        'relic': None,
+        'room_type': 'combat',
+        'claims': {'gold': False, 'card': False, 'relic': True},
+        'selected_card_id': None,
+        'card_skipped': False,
+    }
+    initial_gold = state['player']['gold']
+
+    state, events = apply_story_action(
+        state,
+        'choose_reward',
+        {'reward_type': 'gold'},
+        seed,
+    )
+    assert state['phase'] == 'reward'
+    assert state['player']['gold'] == initial_gold + 18
+    assert state['reward']['claims']['gold'] is True
+    assert state['recovery_checkpoint']['kind'] == 'reward_progress'
+    assert any(
+        event.get('type') == 'reward_claimed'
+        and event.get('reward_type') == 'gold'
+        for event in events
+    )
+
+    state['player']['gold'] += 999
+    state, _ = apply_story_action(state, 'resume_node', {}, seed)
+    assert state['player']['gold'] == initial_gold + 18
+
+    with pytest.raises(StoryActionError) as exc_info:
+        apply_story_action(
+            state,
+            'choose_reward',
+            {'reward_type': 'gold'},
+            seed,
+        )
+    assert exc_info.value.code == 'REWARD_ALREADY_CLAIMED'
+
+    state, _ = apply_story_action(
+        state,
+        'choose_reward',
+        {'reward_type': 'card'},
+        seed,
+    )
+    assert state['reward']['card_skipped'] is True
+    state, _ = apply_story_action(
+        state,
+        'choose_reward',
+        {'reward_type': 'continue'},
+        seed,
+    )
+    assert state['phase'] == 'map'
+    assert 'recovery_checkpoint' not in state
+
+
+def test_story_events_expose_order_and_card_source_metadata():
+    seed = 'presentation-contract'
+    state, _ = _begin_combat(seed)
+    state['combat']['opening_redraw_pending'] = False
+    target = state['combat']['enemies'][0]
+    target['health'] = 999
+    target['max_health'] = 999
+    card = _inject_hand_card(state, 'basic')
+
+    _, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id'], 'target_id': target['id']},
+        seed,
+    )
+
+    assert [event['sequence'] for event in events] == list(range(1, len(events) + 1))
+    assert len({event['event_id'] for event in events}) == len(events)
+    assert all(isinstance(event.get('target_ids'), list) for event in events)
+    assert all(event.get('kind') == event.get('type') for event in events)
+    assert all('hit_index' in event and 'hit_count' in event for event in events)
+    assert all('before' in event and 'after' in event for event in events)
+    assert all('parallel_group' in event for event in events)
+    assert all(isinstance(event.get('presentation'), dict) for event in events)
+    damage = next(event for event in events if event.get('type') == 'enemy_damage')
+    assert damage['source_card_instance_id'] == card['instance_id']
+    assert damage['source_definition_id'] == card['def_id']
+    assert damage['actor_id'] == 'player'
+    assert damage['before'] == 999
+    assert damage['after'] < damage['before']
+
+
+def test_wide_multihit_events_parallelize_matching_hits_only():
+    seed = 'presentation-parallel'
+    state, _ = _begin_combat(seed)
+    state['combat']['opening_redraw_pending'] = False
+    first = state['combat']['enemies'][0]
+    first['health'] = first['max_health'] = 999
+    second = copy.deepcopy(first)
+    second['id'] = 'enemy-parallel-2'
+    state['combat']['enemies'].append(second)
+    card = _inject_hand_card(state, 'lightning')
+
+    _, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id']},
+        seed,
+    )
+
+    damage = [event for event in events if event.get('type') == 'enemy_damage']
+    assert len(damage) == 4
+    groups_by_hit = {
+        hit_index: {
+            event['parallel_group']
+            for event in damage
+            if event['hit_index'] == hit_index
+        }
+        for hit_index in (1, 2)
+    }
+    assert all(len(groups) == 1 and None not in groups for groups in groups_by_hit.values())
+    assert groups_by_hit[1] != groups_by_hit[2]
+    assert {
+        tuple(event['target_ids'])
+        for event in damage
+        if event['hit_index'] == 1
+    } == {(first['id'],), (second['id'],)}
+
+
+def test_enemy_intent_uses_structured_entries_and_current_damage_modifiers():
+    state, _ = _begin_combat('structured-intent')
+    enemy = state['combat']['enemies'][0]
+    definition = STORY_ENEMIES[enemy['def_id']]
+    move_index = next(
+        index
+        for index, move in enumerate(definition['moves'])
+        if any(effect.get('type') == 'damage' for effect in move['effects'])
+    )
+    move = definition['moves'][move_index]
+    damage_effect = next(effect for effect in move['effects'] if effect.get('type') == 'damage')
+    enemy['move_index'] = move_index
+    enemy['power'] = 4
+    state['combat']['vulnerable'] = 1
+
+    intent = _enemy_intent(state, enemy)
+    attack = next(entry for entry in intent['entries'] if entry['kind'] == 'attack')
+    expected = int((int(damage_effect['amount']) + 4) * 1.5)
+
+    assert attack['amount'] == expected
+    assert attack['hits'] == int(damage_effect.get('hits') or 1)
+    assert attack['target'] == 'player'
+    assert attack['summary'] in intent['summary']
