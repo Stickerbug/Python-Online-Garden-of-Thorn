@@ -259,6 +259,19 @@ def test_story_right_click_cancels_selection_before_opening_terms():
     assert context_menu.index(cancel_check) < context_menu.index(card_lookup)
 
 
+def test_story_presence_and_status_surfaces_are_wired():
+    assert 'id="story-online-count"' in STORY_TEMPLATE
+    assert 'id="story-status-bar"' in STORY_TEMPLATE
+    assert 'id="story-status-text"' in STORY_TEMPLATE
+    assert 'id="story-status-online"' in STORY_TEMPLATE
+    assert "requestJson('/api/story/presence'" in STORY_JS
+    assert 'body: JSON.stringify({ client_id: STORY_PRESENCE_CLIENT_ID })' in STORY_JS
+    assert 'startStoryPresence();' in STORY_JS
+    assert 'function updateStoryStatusBar()' in STORY_JS
+    assert 'grid-template-rows: 56px minmax(0, 1fr) 28px;' in STORY_CSS
+    assert '.story-status-bar {' in STORY_CSS
+
+
 def test_story_keyboard_card_selection_preserves_the_last_pointer_position():
     selection_branch = STORY_JS.split(
         'function selectCombatCard(state, card, event = null) {',

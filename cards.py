@@ -93,7 +93,7 @@ _VANILLA_FLAGS = {
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
     'team_limited', 'team_unique', 'power', 'magic_swift',
     'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'wide_strike', 'self_target',
-    'floating',
+    'floating', 'charge', 'ocean_blinded', 'sublime',
 }
 
 
@@ -212,6 +212,7 @@ class CardInstance:
     hand_blind_turns: int = 0
     extra_hits: int = 0
     setup_modifiers: Set[str] = field(default_factory=set)
+    custom_vars: Dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self):
         self.power_value = clamp_card_power(self.power_value)
@@ -299,6 +300,7 @@ class CardInstance:
             'blind_level': 1 if self.hand_blind_turns > 0 else 0,
             'extra_hits': clamp_card_extra_hits(self.extra_hits),
             'setup_modifiers': list(self.setup_modifiers) if self.setup_modifiers else [],
+            'custom_vars': dict(self.custom_vars) if isinstance(self.custom_vars, dict) else {},
         }
 
     @staticmethod
@@ -328,6 +330,7 @@ class CardInstance:
             hand_blind_turns=max(0, int(d.get('hand_blind_turns', d.get('blind_level', 0)))),
             extra_hits=clamp_card_extra_hits(d.get('extra_hits', 0)),
             setup_modifiers=set(str(x) for x in (d.get('setup_modifiers') or []) if x),
+            custom_vars=dict(d.get('custom_vars', {}) or {}),
         )
 
     def copy(self) -> 'CardInstance':
@@ -461,8 +464,8 @@ _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Sup
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
              '基础的装备之一，可以回复生命亦可造成伤害。',
-             '自己回合开始时+2H',
-             trigger_cost_e=1, trigger_effect_text='若已装备一回合则可摧毁此装备，造成8D'))
+             '目标回合开始时，回复目标2H；若已装备一回合，可花费1E，触发：摧毁此装备，选择一个目标，对其造成8D',
+             trigger_cost_e=1))
 
 _reg(CardDef('Yucca', 'Yucca', '丝兰', 4, 0, 'root', 5, 'Common',
              '在平缓的回合后积蓄更多生机。', '自己回合开始时+3H；若上个自己的回合造成的实际伤害低于10D，则额外+7H'))
@@ -475,8 +478,8 @@ _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
 
 _reg(CardDef('MagicLeaf', 'Magic Leaf', '魔法叶', 1, 0, 'root', 5, 'Common',
              '不再能造成伤害了，但它可以回复魔力。',
-             '目标回合开始时，回复目标1M；可花费4M，触发：选择目标，对其造成12D，并摧毁本装备',
-             trigger_cost_e=0, trigger_cost_m=4, trigger_effect_text='选择目标造成12D，然后摧毁自身'))
+             '目标回合开始时，回复目标1M；可花费4M，触发：摧毁此装备，选择一个目标，对其造成12D',
+             trigger_cost_e=0, trigger_cost_m=4))
 
 _reg(CardDef('MagicYucca', 'Magic Yucca', '魔法丝兰', 4, 0, 'root', 5, 'Common',
              '生成更多魔力。', '装备存在时，目标M上限+5；使用时及目标回合开始抽牌前，将一张[魔法球][共生+放逐+虚无]加入目标手牌'))
@@ -503,12 +506,13 @@ _reg(CardDef('Corruption', 'Corruption', '腐化', 0, 0, 'root', 2, 'Common',
              '伤敌一千，自损八百。', '自下个回合开始，全场所有伤害变为1.5倍（向上取整）', flags={'indestructible', 'self_only'}))
 
 _reg(CardDef('Mark', 'Mark', '标记', 4, 0, 'root', 3, 'Common',
-             '你被标记了！', '使目标+1层眩晕',
-             trigger_cost_e=0, trigger_effect_text='装备1回合后可触发，0E，使目标+1层眩晕'))
+             '你被标记了！', '若已装备一回合，可花费0E，触发：摧毁此装备，对目标施加1层眩晕',
+             trigger_cost_e=0))
 
 _reg(CardDef('Mine', 'Mine', '地雷', 3, 0, 'root', 3, 'Common',
-             '它很危险，但需要一回合准备。', '下回合造成20D',
-             trigger_cost_e=0, trigger_effect_text='若已装备一回合则可摧毁此装备，造成20D'))
+             '它很危险，但需要一回合准备。',
+             '若已装备一回合，可花费0E，触发：摧毁此装备，选择一个目标，对其造成20D',
+             trigger_cost_e=0))
 
 _reg(CardDef('Bubble', 'Bubble', '泡泡', 2, 0, 'guard', 10, 'Common',
              '闪！', '获得1层闪避（敌方使用攻击牌时）',
@@ -631,6 +635,27 @@ def generate_draft_options(pool: List[CardInstance], card_type: str, count: int 
             return available + weighted_unique_sample([c for c in type_cards if c.def_id in exclude], min(needed, len(fallback)))
         return available
     return weighted_unique_sample(type_cards, min(count, len(unique_cards)))
+
+
+def ensure_first_bloom_draft_includes_sewage(
+    pool: List[CardInstance],
+    options: List[CardInstance],
+    card_type: str,
+    previous_types: List[str],
+) -> List[CardInstance]:
+    result = list(options or [])
+    if card_type != 'bloom' or 'bloom' in (previous_types or []):
+        return result
+    if any(card.def_id == 'Sewage' for card in result):
+        return result
+    sewage = next((card for card in pool if card.def_id == 'Sewage'), None)
+    if sewage is None:
+        return result
+    if result:
+        result[-1] = sewage
+    else:
+        result.append(sewage)
+    return result
 
 
 def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids: Optional[Set[str]] = None) -> List[str]:

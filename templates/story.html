@@ -19,6 +19,8 @@
         }
       };
       const readPreference = (key) => {
+        const cookieValue = readCookie(key);
+        if (cookieValue != null) return cookieValue;
         try {
           const value = window.localStorage.getItem(key);
           if (value != null) return value;
@@ -27,7 +29,7 @@
           const value = window.sessionStorage.getItem(key);
           if (value != null) return value;
         } catch (_) {}
-        return readCookie(key);
+        return null;
       };
       const theme = readPreference('gtn_theme') || 'light';
       const lang = readPreference('gtn_lang') || 'zh';
@@ -45,6 +47,7 @@
         <span id="story-subtitle">Garden of Thorn</span>
       </div>
       <div class="story-header-actions">
+        <span id="story-online-count" class="story-online-count">在线玩家：--</span>
         <div class="story-account">
           <span id="story-account-label">玩家</span>
           <strong>{{ account.display_name }}</strong>
@@ -292,6 +295,11 @@
       </section>
     </main>
 
+    <footer id="story-status-bar" class="story-status-bar">
+      <span id="story-status-text">故事模式</span>
+      <span id="story-status-online">在线玩家：--</span>
+    </footer>
+
     <dialog id="story-pile-dialog" class="story-dialog story-pile-dialog">
       <form method="dialog">
         <h3 id="story-pile-title">牌堆</h3>
@@ -446,6 +454,8 @@
         getItem(key) {
           const mapped = String(key);
           if (memory.has(mapped)) return memory.get(mapped);
+          const cookieValue = readCookie(mapped);
+          if (cookieValue != null) return cookieValue;
           try {
             const value = storage ? storage.getItem(mapped) : null;
             if (value != null) return value;
@@ -454,23 +464,22 @@
             const value = sessionStorage ? sessionStorage.getItem(mapped) : null;
             if (value != null) return value;
           } catch (_) {}
-          return readCookie(mapped);
+          return null;
         },
         setItem(key, value) {
           const mapped = String(key);
           const text = String(value);
           memory.set(mapped, text);
+          writeCookie(mapped, text);
           try { if (sessionStorage) sessionStorage.setItem(mapped, text); } catch (_) {}
-          let persistent = false;
           try {
             if (storage) {
               storage.setItem(mapped, text);
-              persistent = storage.getItem(mapped) === text;
+              if (storage.getItem(mapped) !== text) storage = null;
             }
           } catch (_) {
             storage = null;
           }
-          if (!persistent) writeCookie(mapped, text);
         },
         removeItem(key) {
           const mapped = String(key);

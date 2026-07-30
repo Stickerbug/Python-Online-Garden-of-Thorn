@@ -30,6 +30,8 @@
   };
   const storage = {
     getItem(key) {
+      const cookieValue = readCookie(key);
+      if (cookieValue != null) return cookieValue;
       try {
         const value = window.localStorage.getItem(key);
         if (value != null) return value;
@@ -38,16 +40,14 @@
         const value = window.sessionStorage.getItem(key);
         if (value != null) return value;
       } catch (_) {}
-      return readCookie(key);
+      return null;
     },
     setItem(key, value) {
-      let persistent = false;
+      writeCookie(key, value);
       try {
         window.localStorage.setItem(key, value);
-        persistent = window.localStorage.getItem(key) === String(value);
       } catch (_) {}
       try { window.sessionStorage.setItem(key, value); } catch (_) {}
-      if (!persistent) writeCookie(key, value);
     },
   };
   const supportedLangs = new Set(['zh', 'en', 'fr', 'ja']);
@@ -444,7 +444,7 @@
 <div class="form-row">
 <button id="btn-connect" class="btn btn-primary">多人游戏</button>
 </div>
-<div id="story-mode-entry-row" class="form-row hidden">
+<div id="story-mode-entry-row" class="form-row">
 <button id="btn-story-mode" class="btn btn-story" type="button">故事模式</button>
 </div>
 <div class="form-row">
@@ -1046,6 +1046,7 @@
 <p>champion</p>
 <p>huanxiang0273</p>
 <p>801random</p>
+<p>AArcC</p>
 </section>
 <section>
 <h4 id="credits-art-title">美工</h4>

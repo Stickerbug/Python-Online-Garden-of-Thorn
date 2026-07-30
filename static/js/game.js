@@ -40,6 +40,7 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_settings_mod_tab',
     'gtn_solo_decks',
     'gtn_seen_intro',
+    'gtn_story_test_warning_ack_v1',
     'preferred_mode',
 ]);
 const GTN_BETA_STORAGE_PREFIXES = [
@@ -87,6 +88,7 @@ const GTN_COOKIE_FALLBACK_KEYS = new Set([
     'gtn_server',
     'gtn_settings_mod_tab',
     'gtn_seen_intro',
+    'gtn_story_test_warning_ack_v1',
     'gtn_nickname',
     'preferred_mode',
     'gtn_active_route',
@@ -177,12 +179,14 @@ try {
 }
 
 // Keep browser privacy restrictions from breaking gameplay. Account-backed
-// settings are still sent to the server. Small preferences also use a cookie
-// fallback, while larger decks and caches remain session-only.
+// settings are still sent to the server. Small preferences are mirrored to a
+// cookie, while larger decks and caches remain outside the cookie fallback.
 const localStorage = Object.freeze({
     getItem(key) {
         const mapped = String(gtnBetaStorageKey(key));
         if (gtnStorageMemory.has(mapped)) return gtnStorageMemory.get(mapped);
+        const cookieValue = readStorageFallbackCookie(mapped);
+        if (cookieValue != null) return cookieValue;
         if (gtnPersistentStorage) {
             try {
                 const stored = gtnPersistentStorage.getItem(mapped);
@@ -204,15 +208,20 @@ const localStorage = Object.freeze({
         if (gtnSessionStorage) {
             try { gtnSessionStorage.setItem(mapped, text); } catch (_) {}
         }
-        if (!gtnPersistentStorage || !gtnPersistentStorageWritable) {
+        if (supportsStorageFallbackCookie(mapped)) {
             writeStorageFallbackCookie(mapped, text);
+        }
+        if (!gtnPersistentStorage || !gtnPersistentStorageWritable) {
             return;
         }
         try {
             gtnPersistentStorage.setItem(mapped, text);
+            if (gtnPersistentStorage.getItem(mapped) !== text) {
+                gtnPersistentStorageWritable = false;
+                console.warn('[storage] persistent write verification failed; using the cookie fallback');
+            }
         } catch (error) {
             gtnPersistentStorageWritable = false;
-            writeStorageFallbackCookie(mapped, text);
             console.warn('[storage] persistent write failed; continuing with in-memory storage', error);
         }
     },
@@ -2211,6 +2220,8 @@ Object.assign(I18N.en, {
     view_draw_deck_title: 'Draw Deck',
     view_discard_title: 'Discard Pile',
     view_exile_title: 'Exile',
+    initial_deck_title: 'Initial Deck',
+    initial_deck_total: '{0} cards',
     exile_empty: 'Exile empty',
     tutorial_hint_deck: 'Check your draw deck: press View Draw Deck to see what may come next.',
 });
@@ -2227,6 +2238,8 @@ Object.assign(I18N.zh, {
     view_draw_deck_title: '抽牌堆',
     view_discard_title: '弃牌堆',
     view_exile_title: '放逐区',
+    initial_deck_title: '初始牌组',
+    initial_deck_total: '共 {0} 张',
     exile_empty: '放逐区为空',
     tutorial_hint_deck: '先看看抽牌堆：点击“查看抽牌堆”，了解接下来可能抽到什么。',
 });
@@ -2243,6 +2256,8 @@ Object.assign(I18N.fr, {
     view_draw_deck_title: 'Pioche',
     view_discard_title: 'Défausse',
     view_exile_title: 'Exil',
+    initial_deck_title: 'Deck initial',
+    initial_deck_total: '{0} cartes',
     exile_empty: 'Exil vide',
     tutorial_hint_deck: 'Regardez votre pioche : appuyez sur Voir la pioche.',
 });
@@ -2259,6 +2274,8 @@ Object.assign(I18N.ja, {
     view_draw_deck_title: '山札',
     view_discard_title: '捨て札',
     view_exile_title: '放逐',
+    initial_deck_title: '初期デッキ',
+    initial_deck_total: '{0}枚',
     exile_empty: '放逐は空',
     tutorial_hint_deck: '山札を確認します。「山札を見る」を押しましょう。',
 });
@@ -2477,6 +2494,7 @@ let playGestureAnimationEnabled = localStorage.getItem('gtn_play_gesture_animati
 document.documentElement.classList.toggle('landscape-mode-enabled', landscapeModeEnabled);
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
 const HIDDEN_FEATURES_KEY = 'gtn_hidden_features_enabled';
+const STORY_TEST_WARNING_ACK_KEY = 'gtn_story_test_warning_ack_v1';
 function hiddenFeaturesEnabled() {
     try {
         return localStorage.getItem(HIDDEN_FEATURES_KEY) === '1';
@@ -4905,6 +4923,8 @@ let gameStateResyncTimer = null;
 let gameStateResyncNeeded = false;
 let battleStartupResyncTimer = null;
 let battleStartupExpectedKey = '';
+let lastGardenInitialDeckRevealKey = '';
+let gardenInitialDeckRevealTimer = null;
 
 function isCompleteBattleStatePayload(data) {
     if (!data || typeof data !== 'object') return false;
@@ -5515,13 +5535,14 @@ function clearTargetPickUi() {
     document.querySelectorAll('.target-pick-board-hint').forEach(el => el.remove());
 }
 
-function gameAlert(title, message, buttons) {
+function gameAlert(title, message, buttons, options = {}) {
     if ((!buttons || buttons.length === 0) && (title === UI.notice || title === t('notice'))) {
         flashStatus(message || title || UI.notice, 2400, 'error');
         return;
     }
     const el = $('game-alert');
     if (!el) return;
+    el.classList.toggle('game-alert-danger', options.variant === 'danger');
     $('game-alert-icon').textContent = '!';
     $('game-alert-title').textContent = title || '';
     $('game-alert-message').textContent = message || '';
@@ -5531,7 +5552,10 @@ function gameAlert(title, message, buttons) {
         const btn = document.createElement('button');
         btn.className = 'btn ' + (b.cls || 'btn-primary');
         btn.textContent = b.text;
-        btn.onclick = () => { el.classList.remove('active'); b.action(); };
+        btn.onclick = () => {
+            el.classList.remove('active', 'game-alert-danger');
+            b.action();
+        };
         btnsEl.appendChild(btn);
     });
     el.classList.add('active');
@@ -5548,7 +5572,7 @@ function gameConfirm(title, message = '') {
 
 function hideGameAlert() {
     const el = $('game-alert');
-    if (el) el.classList.remove('active');
+    if (el) el.classList.remove('active', 'game-alert-danger');
 }
 
 function cleanupGamePromptTransientButtons() {
@@ -7368,10 +7392,9 @@ function updateStoryEntryAvailability() {
     const button = $('btn-story-mode');
     if (!button) return;
     const row = $('story-mode-entry-row');
-    const visible = hiddenFeaturesEnabled();
     const authenticated = !!currentAccount;
-    if (row) row.classList.toggle('hidden', !visible);
-    else button.classList.toggle('hidden', !visible);
+    if (row) row.classList.remove('hidden');
+    button.classList.remove('hidden');
     button.disabled = !authenticated;
     button.setAttribute('aria-disabled', authenticated ? 'false' : 'true');
     button.title = authenticated
@@ -7384,6 +7407,10 @@ function updateStoryEntryAvailability() {
         });
 }
 
+function storyTestWarningAcknowledged() {
+    return localStorage.getItem(STORY_TEST_WARNING_ACK_KEY) === '1';
+}
+
 function openStoryMode() {
     if (!currentAccount) {
         flashStatus(lt({
@@ -7394,7 +7421,41 @@ function openStoryMode() {
         }), 1800);
         return;
     }
-    window.location.assign('/story');
+    const enterStory = () => window.location.assign('/story');
+    if (storyTestWarningAcknowledged()) {
+        enterStory();
+        return;
+    }
+    gameAlert(
+        lt({
+            zh: '警告',
+            en: 'Warning',
+            fr: 'Avertissement',
+            ja: '警告',
+        }),
+        lt({
+            zh: '本模式仍然在测试阶段，不保证关卡和进度的安全性，我们可能随时由于更新删除游玩数据。',
+            en: 'This mode is still being tested. Stage and progress data are not guaranteed to remain safe, and updates may delete gameplay data at any time.',
+            fr: 'Ce mode est encore en phase de test. La conservation des niveaux et de la progression n’est pas garantie, et une mise à jour peut supprimer les données de jeu à tout moment.',
+            ja: 'このモードはまだテスト段階です。ステージや進行状況の安全性は保証されず、アップデートによりプレイデータが予告なく削除される場合があります。',
+        }),
+        [
+            {
+                text: lt({ zh: '确认', en: 'Confirm', fr: 'Confirmer', ja: '確認' }),
+                cls: 'btn-danger',
+                action: () => {
+                    localStorage.setItem(STORY_TEST_WARNING_ACK_KEY, '1');
+                    enterStory();
+                },
+            },
+            {
+                text: lt({ zh: '退出', en: 'Exit', fr: 'Quitter', ja: '退出' }),
+                cls: 'btn-secondary',
+                action: () => {},
+            },
+        ],
+        { variant: 'danger' },
+    );
 }
 
 function setHiddenFeaturesEnabled(enabled) {
@@ -7541,7 +7602,16 @@ async function showCardGallery(selectedId = null, mode = 'cards') {
 function getCustomTagDef(flag) {
     const normalized = normalizeCardFlag(flag);
     if (CARD_FLAG_STYLES[normalized] || GALLERY_MECHANIC_FLAGS.has(normalized)) return null;
-    return (CUSTOM_TAG_DEFS && CUSTOM_TAG_DEFS[normalized]) || null;
+    const custom = (CUSTOM_TAG_DEFS && CUSTOM_TAG_DEFS[normalized]) || null;
+    if (custom) return custom;
+    const core = CORE_REGISTRY_I18N[normalized];
+    if (!core || core.kind !== 'tag') return null;
+    return {
+        id: normalized,
+        name_i18n: core.name || {},
+        description_i18n: core.description || {},
+        color: core.color || '#2C3E50',
+    };
 }
 
 function normalizeStatusIntroKey(statusId) {
@@ -7585,6 +7655,8 @@ function getCustomStatusDef(statusId) {
 
 const CORE_REGISTRY_I18N = {
     'arctic:ready': {
+        kind: 'tag',
+        color: '#3F83B8',
         name: { zh: '蓄势待发', en: 'Ready', fr: 'Prêt', ja: '準備万端' },
         description: {
             zh: '自己回合开始时，若此牌满足打出条件，则自动打出。',
@@ -7594,6 +7666,8 @@ const CORE_REGISTRY_I18N = {
         },
     },
     'arctic:ricochet_3': {
+        kind: 'tag',
+        color: '#D77635',
         name: { zh: '弹射:3', en: 'Ricochet:3', fr: 'Ricochet:3', ja: '跳弾:3' },
         description: {
             zh: '效果结算后，随机选择一个不同于上次目标的可选中目标，使该效果额外结算1次；重复3次。',
@@ -7603,6 +7677,8 @@ const CORE_REGISTRY_I18N = {
         },
     },
     'arctic:ricochet_4': {
+        kind: 'tag',
+        color: '#D77635',
         name: { zh: '弹射:4', en: 'Ricochet:4', fr: 'Ricochet:4', ja: '跳弾:4' },
         description: {
             zh: '效果结算后，随机选择一个不同于上次目标的可选中目标，使该效果额外结算1次；重复4次。',
@@ -7612,6 +7688,8 @@ const CORE_REGISTRY_I18N = {
         },
     },
     'sewers:confusion': {
+        kind: 'tag',
+        color: '#5D55A5',
         name: { zh: '迷惑', en: 'Misdirection', fr: 'Diversion', ja: '攪乱' },
         description: {
             zh: '反制窗口中，此牌显示为所选模组卡池中攻击伤害最接近的另一张牌；实际效果与战斗日志不变。',
@@ -8365,7 +8443,7 @@ const STATUS_ICON_KEYS = new Set([
     'invincible', 'luck', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
     'root_status', 'shield', 'sluggish', 'stagnation', 'status_immune',
     'stunned', 'toxic_poison', 'toxic', 'triangle', 'turn_heal', 'turn_magic',
-    'unable_counter', 'blazing_fire', 'frost', 'debt', 'extra_healing',
+    'unable_counter', 'blazing_fire', 'frost', 'debt', 'extra_healing', 'shield_conversion',
     'untargetable', 'weakness'
 ]);
 
@@ -10591,6 +10669,12 @@ function getCardEffectTextForInstance(cardDict, cardDef) {
         );
     }
     text = text.replace(new RegExp(`(破损\\s*[x×]\\s*)${baseHits}(\\s*层)`, 'g'), `$1${nextHits}$2`);
+    const petalStatusCardId = String(cardDef.legacy_id || cardDef.id || '').split(':').pop();
+    if (['Pollen', 'MagicPollen'].includes(petalStatusCardId)) {
+        text = text.replace(new RegExp(`${baseHits}(?=\\s*层破损)`, 'g'), String(nextHits))
+            .replace(new RegExp(`${baseHits}(?=\\s+Fracture\\b)`, 'gi'), String(nextHits))
+            .replace(new RegExp(`${baseHits}(?=\\s*破損)`, 'g'), String(nextHits));
+    }
     text = text.replace(new RegExp(`${baseHits}(\\s*层\\s*\\d+\\s*级\\s*(?:回合回复|魔力回合回复))`, 'g'), `${nextHits}$1`);
     text = text.replace(new RegExp(`([（(])\\s*${baseHits}\\s*(子瓣|petals?|pétales?|pétalas|лепестка|лепестков|子弁)([^）)]*[）)])`, 'gi'), `$1${nextHits}$2$3`);
     return text;
@@ -10685,6 +10769,19 @@ function scheduleCardEffectFit(cardEl) {
 
 function scheduleVisibleCardEffectFits() {
     document.querySelectorAll('.card:not(.card-facedown)').forEach(scheduleCardEffectFit);
+}
+
+function compactVisibleTextLength(value) {
+    return Array.from(String(value || '').replace(/\s+/g, '')).length;
+}
+
+function tileNameHtml(displayName) {
+    const name = String(displayName || '');
+    const shouldWrap = ['zh', 'ja'].includes(currentLang) && compactVisibleTextLength(name) >= 6;
+    if (!shouldWrap) return escapeHtml(name);
+    const chars = Array.from(name);
+    const splitAt = Math.ceil(chars.length / 2);
+    return `<span>${escapeHtml(chars.slice(0, splitAt).join(''))}</span><span>${escapeHtml(chars.slice(splitAt).join(''))}</span>`;
 }
 
 let cardEffectFitResizeTimer = 0;
@@ -10807,6 +10904,9 @@ function createCardElement(cardDict, options = {}) {
     const displayTypeColor = getCardBlindDisplayColor(cardDef, blindLevel);
     const typeLabel = hideTypeByBlind ? '?' : rawTypeLabel;
     const cardName = blinded ? '?' : getCardName(cardDef);
+    if (!blinded && currentLang === 'zh' && compactVisibleTextLength(cardName) >= 7) {
+        el.classList.add('card-name-long-zh');
+    }
     const englishName = (!blinded && shouldShowEnglishCardName(cardDef, cardName)) ? getEnglishCardName(cardDef) : '';
     const effectText = blinded ? '?' : getCardEffectTextForInstance(cardDict, cardDef);
     const imageUrl = (!blinded && showCardImages) ? getCardArtUrl(cardDict, cardDef) : '';
@@ -11004,6 +11104,23 @@ function getOceanSapphireSelectableAttacks(sourceCard, hand = null) {
         if (!candidateDef || candidateDef.card_type !== 'thorn' || cardHasSublimeFlag(candidate, candidateDef)) return false;
         const { effective } = getEffectiveCardFlagSets(candidate, candidateDef);
         return !effective.has('unique') && !effective.has('exile');
+    });
+}
+
+function getArcticRubySelectableAttacks(sourceCard, hand = null, ownerState = null) {
+    const owner = ownerState || (gameState && gameState.you) || {};
+    const cards = Array.isArray(hand)
+        ? hand
+        : (Array.isArray(owner.hand) ? owner.hand : []);
+    const sourceId = sourceCard && sourceCard.instance_id;
+    const elixir = Math.max(0, Number(owner.elixir || 0));
+    const magic = Math.max(0, Number(owner.magic || 0));
+    return cards.filter(candidate => {
+        if (!candidate || String(candidate.instance_id) === String(sourceId)) return false;
+        const candidateDef = getCardDef(candidate.def_id);
+        if (!candidateDef || candidateDef.card_type !== 'thorn' || cardHasSublimeFlag(candidate, candidateDef)) return false;
+        const costs = getCardDisplayCosts(candidate, candidateDef, owner);
+        return costs.totalE <= elixir && costs.totalM <= magic;
     });
 }
 
@@ -11262,6 +11379,10 @@ function createClassicCardTile(cardDict, options = {}) {
     const displayName = blinded
         ? (hideTypeByBlind ? '?' : (getCardTypeLabel(cardDef.card_type) || '?'))
         : getCardName(cardDef);
+    const wrappedTileName = !blinded
+        && ['zh', 'ja'].includes(currentLang)
+        && compactVisibleTextLength(displayName) >= 6;
+    if (wrappedTileName) tile.classList.add('classic-card-tile-name-wrapped');
     const flagsHtml = blinded ? '' : buildInstanceOnlyFlagHtml(cardDict, cardDef, {
         ...options,
         hideFlags: options.hideFlags || [],
@@ -11272,7 +11393,7 @@ function createClassicCardTile(cardDict, options = {}) {
                 <span class="classic-card-tile-cost cost-e">${blinded ? '?' : displayCostE}</span>
                 <span class="classic-card-tile-cost cost-m">${blinded ? '?' : costs.totalM}</span>
             </span>
-            <span class="classic-card-tile-name">${escapeHtml(displayName)}</span>
+            <span class="classic-card-tile-name">${tileNameHtml(displayName)}</span>
             <span class="classic-card-tile-art">${blinded ? '' : `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">`}</span>
             ${flagsHtml ? `<span class="classic-card-tile-flags choice-card-flags">${flagsHtml}</span>` : ''}
         </span>
@@ -11649,6 +11770,14 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
             amount: 21 + countVisibleStatusesForPrediction(targetState) * 5 + tagCount * 5,
         };
     }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Kale', 'garden:kale'])) {
+        const maxHealth = readPlayerHealthValue(targetState, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
+        const health = readPlayerHealthValue(targetState, ['health', 'hp', 'h'], maxHealth);
+        info = {
+            ...info,
+            amount: maxHealth > 0 && health <= maxHealth * 0.2 ? 36 : 9,
+        };
+    }
     if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['PrivetBerry', 'desert_cards_addition:privet_berry'])) {
         info = {
             ...info,
@@ -11700,7 +11829,10 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     const fusion = clampClientCardLayer(cardDict.fusion_level || 1);
     const fission = clampClientCardLayer(cardDict.fission_level || 1);
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
-    const power = Number(cardDict.power_value || 0);
+    let power = Number(cardDict.power_value || 0);
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Coal', 'garden:coal'])) {
+        power = Math.max(0, Number(attackerState && attackerState.fire) || 0) * 5;
+    }
     if (info.triangle) {
         const attackerImmune = isPredictionStatusImmune(attackerState);
         const startStacks = attackerImmune ? 0 : Math.max(0, Number(attackerState.triangle_stacks || 0));
@@ -11916,9 +12048,10 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     const fragile = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:fragile', 'fragile');
     let shield = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:shield', 'shield');
     const weakness = attackerImmune ? 0 : Math.max(0, Number(attackerState && attackerState.weakness || 0));
+    const actualCardCostE = getCardDisplayCosts(cardDict || {}, cardDef || {}, attackerState || {}).totalE;
     const plankBlocks = predictionPlayerHasEquipment(targetState, 'Plank', 'jungle:plank')
         && String(cardDict && cardDict.card_type || cardDef && cardDef.card_type || '').toLowerCase() === 'thorn'
-        && Number(cardDict && cardDict.cost_e || cardDef && cardDef.cost_e || 0) <= 1;
+        && actualCardCostE <= 1;
     let nazarStacks = immune ? 0 : getPredictionCustomStatusValue(targetState, 'nazar', '邪眼', 'Nazar');
     if (!immune && targetState && targetState.nazar_active) {
         nazarStacks += Math.max(0, 2 - Math.max(0, Number(targetState.nazar_big_hits || 0)));
@@ -13941,6 +14074,14 @@ function bindSocketEvent(eventName, handler) {
     socket.on(eventName, handler);
 }
 
+function isReplacementNoticeForCurrentSocket(data = {}) {
+    return !!(
+        data.replacement_sid
+        && socket
+        && String(data.replacement_sid) === String(socket.id || '')
+    );
+}
+
 function connectSocket(serverUrl) {
     stopLocalSoloRuntime();
     let url = normalizeServerUrl(serverUrl);
@@ -14020,12 +14161,13 @@ function connectSocket(serverUrl) {
         }
     });
     bindSocketEvent('account_session_replaced', (data = {}) => {
+        if (isReplacementNoticeForCurrentSocket(data)) {
+            debugLog('[client] ignored stale self account replacement notice');
+            return;
+        }
         const reason = data.reason || '账号在其他位置进入大厅。\n如果该操作不是由本人进行，请修改密码。';
         manualDisconnect = true;
         phase = 'login';
-        currentAccount = null;
-        cacheAccount(null);
-        renderAccountState();
         showModal(`
             <h3>${escapeHtml(UI.notice || '提示')}</h3>
             <p>${escapeHtml(translateServerMessage(reason)).replace(/\n/g, '<br>')}</p>
@@ -14040,6 +14182,10 @@ function connectSocket(serverUrl) {
         };
     });
     bindSocketEvent('kicked', (data = {}) => {
+        if (isReplacementNoticeForCurrentSocket(data)) {
+            debugLog('[client] ignored stale self kick notice');
+            return;
+        }
         setButtonLoading('btn-connect', false);
         const reason = data.reason || UI.disconnected || 'Disconnected';
         debugLog('[client] kicked:', reason);
@@ -14626,6 +14772,7 @@ function connectSocket(serverUrl) {
             queueVisibleHandExileAnimations(previousGameState, data);
             renderGame(data);
             showStateDeltas(previousGameState, data);
+            maybeShowGardenInitialDeckReveal(data);
             if (data.pending_v2_ui) showV2UiRequest(data.pending_v2_ui);
             optimisticResourceOverride = null;
         }
@@ -14694,6 +14841,7 @@ function connectSocket(serverUrl) {
             queueVisibleHandExileAnimations(previousGameState, data);
             renderGame(data);
             showStateDeltas(previousGameState, data);
+            maybeShowGardenInitialDeckReveal(data);
             if (data.pending_v2_ui) showV2UiRequest(data.pending_v2_ui);
             optimisticResourceOverride = null;
         }
@@ -15039,6 +15187,7 @@ function connectSocket(serverUrl) {
             debugLog('[client] ignored stale spectate_enter for room=', data.room_id, 'pending=', pendingSpectateRoomId);
             return;
         }
+        restoreExplicitSpectateMatch(data);
         if (!shouldAcceptNetworkMatchPayload(data, 'spectate_enter')) return;
         pendingSpectateRoomId = null;
         activeSpectateRoomId = data && data.room_id != null ? Number(data.room_id) : null;
@@ -19416,7 +19565,7 @@ function showReplayExportChoiceWindow(previousState, previousFrame, nextFrame) {
             fallbackTitle = UI.choose_hand_for.replace('{0}', pendingCardName);
         } else if (['choose_card_from_deck', 'choose_from_deck'].includes(choiceType)) {
             fallbackTitle = UI.choose_from_deck_for.replace('{0}', pendingCardName);
-        } else if (['choose_card_from_discard', 'choose_from_discard'].includes(choiceType)) {
+        } else if (['choose_card_from_discard', 'choose_cards_from_discard', 'choose_from_discard'].includes(choiceType)) {
             fallbackTitle = UI.choose_from_discard_for.replace('{0}', pendingCardName);
         } else if (['choose_equipment', 'choose_enemy_equipment'].includes(choiceType)) {
             fallbackTitle = UI.choose_equip_for.replace('{0}', pendingCardName);
@@ -24397,6 +24546,14 @@ function retireActiveNetworkMatch(reason = '') {
     activeNetworkMatchKey = '';
 }
 
+function restoreExplicitSpectateMatch(data) {
+    if (!data || pendingSpectateRoomId == null || data.room_id == null) return;
+    if (Number(data.room_id) !== Number(pendingSpectateRoomId)) return;
+    const incomingKey = phaseContextMatchKey(data);
+    if (!incomingKey) return;
+    retiredNetworkMatchKeys.delete(incomingKey);
+}
+
 function shouldAcceptNetworkMatchPayload(data, eventName = 'room_event', options = {}) {
     if (!data || soloMode || replayMode || data.solo || data.replay) return true;
     const incomingKey = phaseContextMatchKey(data);
@@ -24521,6 +24678,11 @@ function syncPhaseChatMatch(ctx) {
 }
 
 function resetMatchRuntimeState(options = {}) {
+    lastGardenInitialDeckRevealKey = '';
+    if (gardenInitialDeckRevealTimer) {
+        clearTimeout(gardenInitialDeckRevealTimer);
+        gardenInitialDeckRevealTimer = null;
+    }
     if (targetPickCleanup) {
         try { targetPickCleanup(); } catch (_) {}
         targetPickCleanup = null;
@@ -26156,7 +26318,7 @@ function renderGame(data) {
     renderStatusTags('opp-status', opp);
     renderStatusTags('you-status', you);
     renderOppHand(opp);
-    renderPlayerHand(you);
+    renderPlayerHand(you, gs.mode);
     renderEquipment('opp-equip', opp, false);
     renderEquipment('you-equip', you, true);
 
@@ -26686,7 +26848,75 @@ function createTeammateHandChip(cardDict, ownerState = null) {
     return el;
 }
 
-function renderPlayerHand(playerData) {
+function calculateMinimalHandLayout(handCount, mode, availableWidth, mobileHandLayout, viewportHeight, mobileCanvas) {
+    const count = Math.max(0, Math.floor(Number(handCount) || 0));
+    const width = Math.max(0, Number(availableWidth) || 0);
+    const height = Math.max(1, Number(viewportHeight) || 1);
+    const isUrf = mode === 'urf';
+    const gap = isUrf ? 3 : 4;
+    let columns;
+    let sizingSlots;
+
+    if (isUrf) {
+        const singleRowMinimum = (10 * 64) + (9 * gap);
+        const splitIntoFive = count > 5 && width > 0 && width < singleRowMinimum;
+        columns = splitIntoFive ? 5 : 10;
+        sizingSlots = columns;
+    } else {
+        columns = count > 21 ? Math.ceil(count / 3) : 7;
+        const desktopShrinkSlots = Math.max(7, Math.min(10, count || 0));
+        sizingSlots = Math.max(columns, mobileHandLayout ? 7 : desktopShrinkSlots);
+    }
+
+    const rows = Math.max(1, Math.ceil(count / Math.max(1, columns)));
+    const horizontalWidth = width > 0
+        ? Math.max(1, (width - (Math.max(1, sizingSlots) - 1) * gap) / Math.max(1, sizingSlots))
+        : (isUrf ? 104 : 140);
+    const verticalWidth = Math.max(1, ((height * 0.55) / rows) * (63 / 88));
+    const maximumWidth = isUrf ? 116 : (mobileCanvas ? 156 : 140);
+    return {
+        columns,
+        rows,
+        sizingSlots,
+        cardWidth: Math.max(1, Math.min(horizontalWidth, verticalWidth, maximumWidth)),
+        layout: isUrf
+            ? (columns === 5 ? 'urf-5x2' : 'urf-10x1')
+            : (count > 21 ? 'normal-dense' : 'normal-7'),
+    };
+}
+
+function updateMinimalHandLayout(container = $('you-hand'), handCount = null, mode = null) {
+    if (!container) return null;
+    const count = handCount == null
+        ? container.querySelectorAll(':scope > .card').length
+        : Math.max(0, Number(handCount) || 0);
+    const mobileHandLayout = isTouchPlayMode()
+        || !!(window.matchMedia && window.matchMedia('(max-width: 900px), (max-height: 620px)').matches);
+    const mobileCanvas = document.documentElement.classList.contains('minimal-mobile-canvas');
+    const availableWidth = Math.max(
+        0,
+        Number(container.clientWidth)
+        || Number(container.parentElement && container.parentElement.clientWidth)
+        || 0,
+    );
+    const viewportHeight = mobileCanvas ? 900 : Math.max(1, Number(window.innerHeight) || 1);
+    const layout = calculateMinimalHandLayout(
+        count,
+        mode || (gameState && gameState.mode) || '',
+        Math.max(0, availableWidth - 4),
+        mobileHandLayout,
+        viewportHeight,
+        mobileCanvas,
+    );
+    container.style.setProperty('--hand-card-columns', String(layout.columns));
+    container.style.setProperty('--hand-row-count', String(layout.rows));
+    container.style.setProperty('--hand-card-slots', String(layout.sizingSlots + 0.35));
+    container.style.setProperty('--minimal-hand-card-width', `${layout.cardWidth.toFixed(2)}px`);
+    container.dataset.handLayout = layout.layout;
+    return layout;
+}
+
+function renderPlayerHand(playerData, mode = null) {
     const container = $('you-hand');
     if (!container) return;
     const oldRects = new Map();
@@ -26695,11 +26925,7 @@ function renderPlayerHand(playerData) {
     });
     container.innerHTML = '';
     const hand = playerData.hand || [];
-    const mobileHandLayout = isTouchPlayMode()
-        || (window.matchMedia && window.matchMedia('(max-width: 900px), (max-height: 620px)').matches);
-    const maxSingleRowSlots = mobileHandLayout ? 7 : 10;
-    const handSlots = Math.max(7, Math.min(maxSingleRowSlots, hand.length || 0));
-    container.style.setProperty('--hand-card-slots', String(handSlots + 0.35));
+    updateMinimalHandLayout(container, hand.length, mode);
     if (selectedPlayCardId != null && !hand.some(c => c.instance_id === selectedPlayCardId)) {
         clearSelectedPlayCard();
     }
@@ -28088,12 +28314,22 @@ function equipmentChoosesTargetOnTrigger(cardDef) {
     if (!cardDef || cardDef.card_type !== 'root') return false;
     const triggerCost = Number(cardDef.trigger_cost_e);
     if (!Number.isFinite(triggerCost) || triggerCost < 0) return false;
+    if (equipmentTriggerUsesEffectTarget(cardDef)) return false;
     return true;
+}
+
+function equipmentTriggerUsesEffectTarget(cardDef) {
+    if (!cardDef) return false;
+    const resource = cardDef.v2_resource && typeof cardDef.v2_resource === 'object'
+        ? cardDef.v2_resource
+        : cardDef;
+    return !!resource.trigger_uses_effect_target;
 }
 
 function equipmentTriggerForbidsSelfTarget(cardDef) {
     if (!cardDef || cardDef.card_type !== 'root') return false;
     if (cardHasSelfOnlyFlag({}, cardDef)) return false;
+    if (equipmentTriggerUsesEffectTarget(cardDef)) return false;
     if (cardDef.v2_resource && cardDef.v2_resource.trigger_allow_self) return false;
     return getEquipmentTriggerPayloads(cardDef).some(effectTreeUsesEventTarget);
 }
@@ -28219,15 +28455,38 @@ function canTriggerEquipmentNow(cardInst, cardDef, eqDict = {}, isMyEquipment = 
     if (!cardInst || !cardDef || cardDef.card_type !== 'root') return false;
     const turns = Number(eqDict.turns_equipped || 0);
     const triggerReady = !(cardInst.def_id === 'Flower' && turns < 1);
+    const maxUses = getEquipmentTriggerMaxUses(cardDef);
+    const usesThisTurn = Math.max(0, Number(eqDict.uses_this_turn || 0));
     return (
         Number(cardDef.trigger_cost_e) >= 0
         && !!isMyEquipment
         && turns >= 1
         && triggerReady
+        && !(maxUses > 0 && usesThisTurn >= maxUses)
         && isFriendlyTurn()
         && !isSpectating
         && !replayMode
     );
+}
+
+function getEquipmentTriggerMaxUses(cardDef) {
+    if (!cardDef) return 0;
+    const events = (
+        cardDef.v2_events
+        || (cardDef.v2_resource && cardDef.v2_resource.events)
+        || cardDef.events
+        || {}
+    );
+    const eventDef = events.on_equipment_trigger || events.equipment_trigger;
+    if (eventDef && typeof eventDef === 'object') {
+        return Math.max(0, Number(eventDef.max_uses_per_turn || eventDef.max_uses || 0));
+    }
+    for (const effect of (cardDef.effects || [])) {
+        if (!effect || effect.type !== 'on_equipment_trigger') continue;
+        const params = effect.params || {};
+        return Math.max(0, Number(params.max_uses_per_turn || params.max_uses || 0));
+    }
+    return 0;
 }
 
 function getEquipmentTriggerCost(cardDef) {
@@ -30845,7 +31104,7 @@ async function simpleChoice(title, options, config = {}) {
 function multiChoice(title, options, config = {}) {
     return new Promise((resolve) => {
         const el = $('game-prompt');
-        if (!el) { resolve([]); return; }
+        if (!el) { resolve(config.distinguishCancel ? null : []); return; }
         if (!options.length) { resolve([]); return; }
         if (tutorialMode) hideTutorialOverlay();
         cleanupGamePromptTransientButtons();
@@ -30907,7 +31166,7 @@ function multiChoice(title, options, config = {}) {
         cancelBtn.textContent = UI.cancel;
         cancelBtn.classList.toggle('hidden', !cancellable);
         cancelBtn.style.display = cancellable ? '' : 'none';
-        cancelBtn.onclick = () => finish([]);
+        cancelBtn.onclick = () => finish(config.distinguishCancel ? null : []);
         // Insert confirm after cancel in the buttons row
         const buttonsRow = cancelBtn.parentNode;
         buttonsRow.appendChild(confirmBtn);
@@ -31680,6 +31939,25 @@ async function showChoiceUI(data) {
                 }
             }
         }
+    } else if (choiceType === 'choose_arctic_ruby') {
+        const attacks = getArcticRubySelectableAttacks(
+            cardDict,
+            data.hand_cards || ((gameState.you || {}).hand || []),
+            gameState.you || {},
+        );
+        if (!attacks.length) {
+            gameAlert(UI.notice, UI.no_matching_cards || '没有可支付消耗的攻击牌');
+        } else {
+            const options = attacks.map(attack => cardChoiceOption(attack));
+            const sel = await simpleChoice(
+                choiceTitle(UI.choose_attack_for.replace('{0}', cardName)),
+                options,
+                choicePromptConfig,
+            );
+            if (sel >= 0 && sel < attacks.length) {
+                choiceResult = { target_instance_id: attacks[sel].instance_id };
+            }
+        }
     } else if (choiceType === 'choose_enemy_equipment') {
         const oppEq = (gameState.opponent || {}).equipment || [];
         if (!oppEq.length) { gameAlert(UI.notice, UI.no_enemy_equipment); }
@@ -31723,6 +32001,35 @@ async function showChoiceUI(data) {
             const options = discard.map(c => cardChoiceOption(c));
             const sel = await simpleChoice(choiceTitle(UI.choose_from_discard_for.replace('{0}', cardName)), options, choicePromptConfig);
             if (sel >= 0 && sel < discard.length) choiceResult = { target_instance_id: discard[sel].instance_id, target_def_id: discard[sel].def_id };
+        }
+    } else if (choiceType === 'choose_cards_from_discard') {
+        const discard = ((gameState.you || {}).discard || []).filter(c => !cardHasSublimeFlag(c));
+        const minCount = Math.max(0, Number(choiceParams.min_count ?? 0));
+        const maxCount = Math.max(minCount, Math.min(
+            discard.length,
+            Number(choiceParams.max_count ?? choiceParams.count ?? discard.length)
+        ));
+        if (!discard.length) {
+            choiceResult = minCount === 0 ? { target_instance_ids: [] } : { cancelled: true };
+        } else {
+            const options = discard.map(c => cardChoiceOption(c));
+            const selected = await multiChoice(
+                choiceTitle(UI.choose_from_discard_for.replace('{0}', cardName)),
+                options,
+                {
+                    ...choicePromptConfig,
+                    min: minCount,
+                    max: maxCount,
+                    distinguishCancel: true,
+                }
+            );
+            if (selected === null) {
+                choiceResult = { cancelled: true };
+            } else if (selected.length >= minCount) {
+                choiceResult = {
+                    target_instance_ids: selected.map(index => discard[index].instance_id),
+                };
+            }
         }
     } else if (choiceType === 'choose_same_attacks_from_hand') {
         const attacks = ((gameState.you || {}).hand || []).filter(c => {
@@ -32537,6 +32844,108 @@ function onViewDiscard() {
 
 function onViewExile() {
     onViewPile('exile');
+}
+
+function gardenInitialDeckRevealKey(data, reveal) {
+    if (!reveal || reveal.token == null) return '';
+    const matchKey = phaseContextMatchKey(data)
+        || String((data && (data.match_id || data.room_id || data.game_id)) || 'solo');
+    return `${matchKey}:${String(reveal.target_player_id)}:${String(reveal.token)}`;
+}
+
+function showGardenInitialDeckReveal(data, reveal, revealKey) {
+    const modal = $('modal');
+    const content = $('modal-content');
+    if (!modal || !content) return false;
+    removeFloatingCardPreview();
+    content.className = 'modal-inner view-deck-modal garden-initial-deck-modal';
+    delete content.dataset.pileType;
+    content.innerHTML = '';
+
+    const title = document.createElement('h3');
+    const ownerName = String(reveal.target_name || '').trim();
+    title.textContent = ownerName
+        ? `${UI.initial_deck_title || 'Initial Deck'} - ${ownerName}`
+        : (UI.initial_deck_title || 'Initial Deck');
+    content.appendChild(title);
+
+    const cards = Array.isArray(reveal.cards) ? reveal.cards.filter(Boolean) : [];
+    const total = document.createElement('p');
+    total.className = 'deck-total';
+    total.textContent = String(UI.initial_deck_total || '{0} cards').replace('{0}', cards.length);
+    content.appendChild(total);
+
+    const targetState = getPlayerDataById(reveal.target_player_id) || null;
+    const list = document.createElement('div');
+    list.className = 'deck-list pile-tile-grid';
+    const groups = new Map();
+    cards.forEach(card => {
+        const key = cardChoiceIdentity(card);
+        const group = groups.get(key) || { card, count: 0 };
+        group.count += 1;
+        groups.set(key, group);
+    });
+    Array.from(groups.values()).sort((a, b) => {
+        const aDef = getCardDef(a.card.def_id);
+        const bDef = getCardDef(b.card.def_id);
+        if (aDef && bDef) return compareGalleryCards(a.card.def_id, b.card.def_id);
+        return String(a.card.def_id || '').localeCompare(String(b.card.def_id || ''));
+    }).forEach(({ card, count }) => {
+        const row = document.createElement('div');
+        row.className = 'deck-entry pile-tile-entry pile-tile-grouped';
+        row.appendChild(createClassicCardTile(card, { ownerState: targetState }));
+        if (count > 1) {
+            const countEl = document.createElement('span');
+            countEl.className = 'choice-option-detail deck-entry-count pile-tile-count';
+            countEl.textContent = `×${count}`;
+            row.appendChild(countEl);
+        }
+        list.appendChild(row);
+    });
+    content.appendChild(list);
+
+    const buttons = document.createElement('div');
+    buttons.className = 'modal-buttons';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-danger';
+    closeBtn.textContent = UI.close;
+    closeBtn.onclick = hideModal;
+    buttons.appendChild(closeBtn);
+    content.appendChild(buttons);
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+    lastGardenInitialDeckRevealKey = revealKey;
+    return true;
+}
+
+function maybeShowGardenInitialDeckReveal(data) {
+    const reveal = data && data.garden_initial_deck_reveal;
+    const revealKey = gardenInitialDeckRevealKey(data, reveal);
+    if (!revealKey || revealKey === lastGardenInitialDeckRevealKey || isSpectating || replayMode) return;
+    if (gardenInitialDeckRevealTimer) {
+        clearTimeout(gardenInitialDeckRevealTimer);
+        gardenInitialDeckRevealTimer = null;
+    }
+    const tryShow = () => {
+        gardenInitialDeckRevealTimer = null;
+        const currentReveal = gameState && gameState.garden_initial_deck_reveal;
+        const currentKey = gardenInitialDeckRevealKey(gameState, currentReveal);
+        if (!currentReveal || currentKey !== revealKey || currentKey === lastGardenInitialDeckRevealKey) return;
+        const modal = $('modal');
+        const modalBusy = !!(modal && modal.classList.contains('active'));
+        if (
+            modalBusy
+            || choicePending
+            || responsePending
+            || activeV2UiRequestId != null
+            || (gameState && gameState.pending_v2_ui)
+        ) {
+            gardenInitialDeckRevealTimer = setTimeout(tryShow, 300);
+            return;
+        }
+        showGardenInitialDeckReveal(gameState, currentReveal, currentKey);
+    };
+    tryShow();
 }
 
 function toggleShortcutPile(pileType) {
@@ -34661,6 +35070,7 @@ if (window.__GTN_CARD_EXPORTER_RENDERER__) {
         if (gc) gc.style.removeProperty('--card-w');
         scheduleAdjust();
         updateClassicMobileCanvas();
+        updateMinimalHandLayout();
         if (tutorialMode) setTimeout(updateTutorialOverlay, 80);
     });
     if (window.visualViewport) {

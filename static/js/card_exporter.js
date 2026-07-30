@@ -4,10 +4,10 @@
 const $ce = (id) => document.getElementById(id);
 
 const TYPE_META = {
-  thorn: { label: 'Thorn', color: '#c0392b' },
-  bloom: { label: 'Bloom', color: '#ff8fb3' },
-  guard: { label: 'Guard', color: '#4d4d4d' },
-  root: { label: 'Root', color: '#5b8f48' },
+  thorn: { label: 'Thorn' },
+  bloom: { label: 'Bloom' },
+  guard: { label: 'Guard' },
+  root: { label: 'Root' },
 };
 
 const FLAG_NAMES = {
@@ -85,7 +85,8 @@ function cardModName(card) {
 }
 
 function typeColor(card) {
-  return (TYPE_META[String(card.card_type || '').toLowerCase()] || TYPE_META.thorn).color;
+  const type = String(card.card_type || '').toLowerCase();
+  return `var(--${TYPE_META[type] ? type : 'thorn'})`;
 }
 
 function safeFilename(value) {

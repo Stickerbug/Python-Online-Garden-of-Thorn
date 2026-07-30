@@ -45,6 +45,7 @@ const STATUS_LABELS = {
   spectating: '观战中',
   reconnecting: '重连中',
   solo: '单人训练',
+  story: '故事模式',
   tutorial: '新手教程',
 };
 
@@ -494,7 +495,7 @@ function renderStatus(data) {
   $('metric-uptime').textContent = formatUptime(metrics.uptime_seconds);
   $('metric-clock').textContent = formatAdminTime(metrics.time);
   $('metric-online').textContent = summary.online_players || 0;
-  $('metric-online-sub').textContent = `大厅 ${summary.lobby_players || 0} / 观战 ${summary.spectators || 0}`;
+  $('metric-online-sub').textContent = `大厅 ${summary.lobby_players || 0} / 观战 ${summary.spectators || 0} / 故事 ${summary.story_players || 0}`;
   $('metric-rooms').textContent = summary.rooms || 0;
   $('metric-history-sub').textContent = `历史 ${summary.history_count || 0}`;
   renderServerResources(metrics);
@@ -613,7 +614,9 @@ function renderPlayers(players) {
             <td>${escapeHtml(p.mode || '')}</td>
             <td>${escapeHtml(p.room_id ?? p.spectating_room ?? '-')}</td>
             <td><span class="muted">${escapeHtml(p.sid)}</span></td>
-            <td><button class="row-action danger" data-kick="${escapeHtml(p.sid)}">踢出</button></td>
+            <td>${p.kickable === false
+              ? '<span class="muted">—</span>'
+              : `<button class="row-action danger" data-kick="${escapeHtml(p.sid)}">踢出</button>`}</td>
           </tr>`).join('')}
       </tbody>
     </table>`;

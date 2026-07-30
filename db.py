@@ -708,6 +708,12 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_user_ip_events_ip ON user_ip_events(ip, created_at)')
         conn.execute(
             '''
+            CREATE INDEX IF NOT EXISTS idx_user_ip_events_dedupe
+            ON user_ip_events(user_id, ip, source, created_at)
+            '''
+        )
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS user_roles (
                 user_id INTEGER PRIMARY KEY,
                 role_type TEXT NOT NULL,
@@ -1873,7 +1879,7 @@ def row_to_admin_user(row):
     return user
 
 
-def record_user_ip_event(user_id, username='', ip='', source='auth'):
+def record_user_ip_event(user_id, username='', ip='', source='auth', dedupe_seconds=0):
     try:
         uid = int(user_id)
     except (TypeError, ValueError):
@@ -1881,18 +1887,36 @@ def record_user_ip_event(user_id, username='', ip='', source='auth'):
     token = str(ip or '').strip()[:80]
     if not token:
         return False
+    source_token = str(source or 'auth')[:40]
+    try:
+        dedupe_window = max(0, min(int(dedupe_seconds or 0), 3600))
+    except (TypeError, ValueError):
+        dedupe_window = 0
     now = utc_now()
     try:
-        with get_db_connection() as conn:
+        with closing(get_db_connection()) as conn:
             row = conn.execute('SELECT username FROM users WHERE id = ?', (uid,)).fetchone()
             if row is None:
                 return False
+            if dedupe_window:
+                cutoff = utc_iso(utc_now_dt() - timedelta(seconds=dedupe_window))
+                duplicate = conn.execute(
+                    '''
+                    SELECT 1
+                    FROM user_ip_events
+                    WHERE user_id = ? AND ip = ? AND source = ? AND created_at >= ?
+                    LIMIT 1
+                    ''',
+                    (uid, token, source_token, cutoff),
+                ).fetchone()
+                if duplicate is not None:
+                    return True
             conn.execute(
                 '''
                 INSERT INTO user_ip_events (user_id, username, ip, source, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 ''',
-                (uid, str(username or row['username'] or '')[:80], token, str(source or 'auth')[:40], now),
+                (uid, str(username or row['username'] or '')[:80], token, source_token, now),
             )
             conn.commit()
             return True

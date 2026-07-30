@@ -66,10 +66,29 @@ class SettingsPersistenceTests(unittest.TestCase):
         self.assertIn('writeStorageFallbackCookie(mapped, text)', section)
         self.assertIn('normalizeStorageFallbackKey(value)', section)
 
+    def test_cookie_backed_preferences_prefer_and_refresh_the_cookie_copy(self):
+        section = source_between(
+            GAME_JS,
+            'const localStorage = Object.freeze({',
+            'window.GTN_STORAGE = localStorage;',
+        )
+        cookie_read = section.index('const cookieValue = readStorageFallbackCookie(mapped)')
+        persistent_read = section.index('gtnPersistentStorage.getItem(mapped)')
+        self.assertLess(cookie_read, persistent_read)
+        self.assertIn(
+            'if (supportsStorageFallbackCookie(mapped)) {\n'
+            '            writeStorageFallbackCookie(mapped, text);',
+            section,
+        )
+        self.assertIn("gtnPersistentStorage.getItem(mapped) !== text", section)
+
     def test_bootstrap_reads_language_theme_from_fallback_storage(self):
         section = source_between(INDEX_HTML, '<script>', '</script>')
+        cookie_read = section.index('const cookieValue = readCookie(key)')
+        persistent_read = section.index('window.localStorage.getItem(key)')
+        self.assertLess(cookie_read, persistent_read)
         self.assertIn('window.sessionStorage.getItem(key)', section)
-        self.assertIn('return readCookie(key)', section)
+        self.assertIn('writeCookie(key, value)', section)
         self.assertIn("betaKey('gtn_lang')", section)
         self.assertIn("betaKey('gtn_theme')", section)
         self.assertIn("setAttribute('data-theme', theme)", section)
@@ -80,7 +99,8 @@ class SettingsPersistenceTests(unittest.TestCase):
         self.assertIn("value === 'gtn_lang'", STORY_HTML)
         self.assertIn("value.startsWith('gtn_keybindings_')", STORY_HTML)
         self.assertIn('sessionStorage.getItem(mapped)', STORY_HTML)
-        self.assertIn('return readCookie(mapped)', STORY_HTML)
+        self.assertIn('const cookieValue = readCookie(mapped)', STORY_HTML)
+        self.assertIn('writeCookie(mapped, text)', STORY_HTML)
 
 
 if __name__ == '__main__':

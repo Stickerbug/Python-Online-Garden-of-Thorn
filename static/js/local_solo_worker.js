@@ -410,6 +410,9 @@ class LocalCard {
         this.charge_value = Math.max(0, toInt(source.charge_value, 0));
         this.extra_hits = Math.max(0, toInt(source.extra_hits, 0));
         this.setup_modifiers = new Set(source.setup_modifiers || []);
+        this.custom_vars = source.custom_vars && typeof source.custom_vars === 'object'
+            ? { ...source.custom_vars }
+            : {};
         if (this.def_id === 'Tomato') {
             this.power_value = Math.min(18, Math.max(0, this.power_value));
         }
@@ -440,6 +443,8 @@ class LocalCard {
         const def = this.def();
         const flags = new Set(normalizeCardFlags([...(def.flags || []), ...(def.tags || [])]));
         this.instance_flags.forEach(flag => flags.add(flag));
+        if (this.setup_modifiers.has('desert_citron_precision_play')) flags.add('precision');
+        if (this.setup_modifiers.has('desert_citron_stealth_play')) flags.add('stealth');
         this.disabled_flags.forEach(flag => flags.delete(flag));
         return flags;
     }
@@ -473,6 +478,7 @@ class LocalCard {
             charge_value: this.charge_value,
             extra_hits: this.extra_hits,
             setup_modifiers: Array.from(this.setup_modifiers),
+            custom_vars: { ...(this.custom_vars || {}) },
             durability: this.durability,
         };
     }
@@ -596,7 +602,10 @@ class LocalPlayer {
 
     handLimit() {
         const ownGoldenLeaf = this.equipment.filter(eq =>
-            eq && eq.def_id === 'GoldenLeaf' && (eq.effect_target ?? this.player_id) === this.player_id
+            eq
+            && eq.def_id === 'GoldenLeaf'
+            && (eq.effect_target ?? this.player_id) === this.player_id
+            && !toInt((eq.custom_vars || {})._sewers_sealed_inactive, 0)
         ).length;
         return Math.max(0, HAND_LIMIT + ownGoldenLeaf + Number(this.extra_hand_limit_bonus || 0));
     }
@@ -829,6 +838,9 @@ class LocalSoloEngine {
         this.opening_event_picks = [payload.event0 ?? null, payload.event1 ?? null];
         this.opening_event_sub_choices = [payload.sub0 || null, payload.sub1 || null];
         this._antennae_reveal = [null, null];
+        this._garden_initial_decks = [[], []];
+        this._garden_initial_deck_reveal = [null, null];
+        this._garden_initial_deck_reveal_serial = 0;
         this._last_damage_value = [0, 0];
         this._last_positive_damage_hits = [0, 0];
         this._incoming_damage_hint = [0, 0];
@@ -869,6 +881,7 @@ class LocalSoloEngine {
             this.players[i].drawCards(handSize);
             this.enforceUniqueCardsForPlayer(i);
         }
+        this._garden_initial_decks = this.players.map(player => this.gardenSnapshotCurrentCards(player.player_id));
         this.logMsg(`${options.startLabel || '单人训练场开始'}！${this.pn(this.first_player)}先手。`);
         this.logMsg(`=== 第${this.round_num}回合 ===`);
         this.startPlayerTurn(this.first_player);
@@ -941,6 +954,9 @@ class LocalSoloEngine {
         clone.opening_event_picks = [...this.opening_event_picks];
         clone.opening_event_sub_choices = cloneJson(this.opening_event_sub_choices) || [null, null];
         clone._antennae_reveal = cloneJson(this._antennae_reveal) || [null, null];
+        clone._garden_initial_decks = cloneJson(this._garden_initial_decks) || [[], []];
+        clone._garden_initial_deck_reveal = cloneJson(this._garden_initial_deck_reveal) || [null, null];
+        clone._garden_initial_deck_reveal_serial = toInt(this._garden_initial_deck_reveal_serial, 0);
         clone._last_damage_value = [...this._last_damage_value];
         clone._last_positive_damage_hits = [...(this._last_positive_damage_hits || [0, 0])];
         clone._incoming_damage_hint = [...this._incoming_damage_hint];
@@ -1389,6 +1405,7 @@ class LocalSoloEngine {
     }
 
     publicState(perspective = null) {
+        this.refreshEquipmentDerivedFlags();
         this.refreshHandLimitBonuses();
         const forPlayer = perspective == null
             ? (this.tutorial ? 0 : (this.game_over ? 0 : this.current_player))
@@ -1441,6 +1458,7 @@ class LocalSoloEngine {
             pending_choice: this.pending_choice,
             opening_event_picks: this.opening_event_picks,
             antennae_reveal: this._antennae_reveal[forPlayer],
+            garden_initial_deck_reveal: this._garden_initial_deck_reveal[forPlayer],
             your_id: forPlayer,
             your_name: this.tutorial ? '你' : (forPlayer === 0 ? 'Player A' : 'Player B'),
             opponent_name: this.tutorial ? '练习对手' : (forPlayer === 0 ? 'Player B' : 'Player A'),
@@ -1470,6 +1488,7 @@ class LocalSoloEngine {
         this.players.forEach(ps => { ps.extra_hand_limit_bonus = 0; });
         this.players.forEach((owner, ownerId) => {
             (owner.equipment || []).forEach(eq => {
+                if (!this.equipmentRuntimeActive(eq)) return;
                 const targetId = toInt(eq.effect_target ?? ownerId, ownerId);
                 if (targetId < 0 || targetId >= this.players.length) return;
                 if (targetId !== ownerId && this.cardIs(eq.card_instance || eq, 'GoldenLeaf', 'vanilla:goldenleaf')) {
@@ -1677,6 +1696,8 @@ class LocalSoloEngine {
     continueTurnStartAutoSettlement(playerId) {
         if (this.game_over || this.current_player !== playerId) return;
         if (this.pending_response || this.pending_choice) return;
+        this.runArcticReadyCardsTurnStart(playerId);
+        if (this.pending_response || this.pending_choice) return;
         this.runOceanAutoCardsTurnStart(playerId);
         if (this.pending_response || this.pending_choice) return;
         this.armBandagesForAction(playerId);
@@ -1685,6 +1706,7 @@ class LocalSoloEngine {
             this.checkGameOver();
             return;
         }
+        this.finishSealedEquipmentTurnStart(playerId);
         this._turn_start_auto_settlement_player = null;
         this.finishTurnBoundary();
     }
@@ -1790,6 +1812,7 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         const oppId = 1 - playerId;
         const opp = this.players[oppId];
+        this.decaySealedEquipmentForOwnerTurn(playerId);
         this.activatePendingCorruption();
         this._antennae_reveal[playerId] = null;
         this.runZoneOwnerTurnStartEvents(playerId);
@@ -1878,6 +1901,7 @@ class LocalSoloEngine {
         [...ps.equipment].forEach(eq => {
             const key = eq.card_instance && eq.card_instance.instance_id;
             if (earlyEquipment.has(key)) return;
+            if (!this.equipmentRuntimeActive(eq)) return;
             eq.turns_equipped += 1;
             if (this.hasCardEvent(eq.card_def, 'owner_turn_start')) {
                 this.runCardEvent(playerId, eq.card_instance, 'owner_turn_start', null, {
@@ -1975,6 +1999,7 @@ class LocalSoloEngine {
         this.players.forEach((owner, ownerId) => {
             owner.equipment.slice().forEach(eq => {
                 if ((eq.effect_target ?? ownerId) !== playerId) return;
+                if (!this.equipmentRuntimeActive(eq)) return;
                 if (!this.ownerTurnStartEquipmentActionStatuses(eq)) return;
                 const key = eq.card_instance && eq.card_instance.instance_id;
                 if (handled.has(key)) return;
@@ -2060,7 +2085,7 @@ class LocalSoloEngine {
         return '';
     }
 
-    choiceRequestSatisfied(effect, choice) {
+    choiceRequestSatisfied(effect, choice, card = null) {
         if (!effect) return true;
         if (!choice || typeof choice !== 'object') return false;
         const params = effect.params || {};
@@ -2087,6 +2112,22 @@ class LocalSoloEngine {
             const minCount = Math.max(0, toInt(params.min_count ?? params.min ?? 1, 1));
             return choice.target_instance_ids.length >= minCount;
         }
+        if (choiceType === 'choose_cards_from_discard') {
+            if (!Array.isArray(choice.target_instance_ids)) return false;
+            const minCount = Math.max(0, toInt(params.min_count ?? params.min ?? 0, 0));
+            const maxCount = Math.max(minCount, toInt(params.max_count ?? params.max ?? choice.target_instance_ids.length, choice.target_instance_ids.length));
+            if (choice.target_instance_ids.length < minCount || choice.target_instance_ids.length > maxCount) return false;
+            if (new Set(choice.target_instance_ids).size !== choice.target_instance_ids.length) return false;
+            const location = this.findCardLocation(card);
+            const ownerId = location ? location.ownerId : toInt(this.current_player, -1);
+            if (!this.players[ownerId]) return false;
+            const selectableIds = new Set(
+                this.players[ownerId].discard
+                    .filter(candidate => cardSelectableByAction(candidate))
+                    .map(candidate => candidate.instance_id)
+            );
+            return choice.target_instance_ids.every(instanceId => selectableIds.has(instanceId));
+        }
         if (choiceType === 'choose_same_attacks_from_hand') {
             return Array.isArray(choice.target_instance_ids) && choice.target_instance_ids.length > 0;
         }
@@ -2098,6 +2139,15 @@ class LocalSoloEngine {
                 && selectedLocation.zone === 'hand'
                 && this.choiceTargetFromChoice(choice) >= 0
                 && this.oceanSapphireSelectableAttacks(selectedLocation.ownerId, card)
+                    .some(candidate => candidate.instance_id === selectedId);
+        }
+        if (choiceType === 'choose_arctic_ruby') {
+            const selectedId = toInt(choice.target_instance_id, -1);
+            const selectedCard = this.findCardByInstanceId(selectedId);
+            const selectedLocation = this.findCardLocation(selectedCard);
+            return !!selectedLocation
+                && selectedLocation.zone === 'hand'
+                && this.arcticRubySelectableAttacks(selectedLocation.ownerId, card)
                     .some(candidate => candidate.instance_id === selectedId);
         }
         if ([
@@ -2121,7 +2171,7 @@ class LocalSoloEngine {
             const type = effect.type || '';
             const isChoice = ['request_target', 'request_card', 'request_confirm', 'discard_choice_then_draw', 'destroy_equipment_choice_or_first', 'choose_from_deck', 'choose_from_discard', 'steal_enemy_card'].includes(type);
             if (!isChoice) continue;
-            if (this.choiceRequestSatisfied(effect, choice)) continue;
+            if (this.choiceRequestSatisfied(effect, choice, card)) continue;
             if (['request_target', 'request_card', 'request_confirm'].includes(type)) return effect;
             if (['discard_choice_then_draw', 'destroy_equipment_choice_or_first', 'choose_from_deck', 'choose_from_discard', 'steal_enemy_card'].includes(type)) {
                 return effect;
@@ -2175,8 +2225,11 @@ class LocalSoloEngine {
         }
         if (targetId != null) {
             this.pending_choice.target_player_id = targetId;
-            if (['choose_from_enemy_hand', 'choose_card_from_hand'].includes(choiceType) && this.players[targetId]) {
-                this.pending_choice.hand_cards = this.players[targetId].hand.map(c => c.toDict());
+            if (['choose_from_enemy_hand', 'choose_card_from_hand', 'choose_arctic_ruby'].includes(choiceType) && this.players[targetId]) {
+                const handCards = choiceType === 'choose_arctic_ruby'
+                    ? this.arcticRubySelectableAttacks(playerId, card)
+                    : this.players[targetId].hand;
+                this.pending_choice.hand_cards = handCards.map(c => c.toDict());
             }
         }
         const keepPaidChoice = choiceType === 'choose_ocean_sapphire' || choiceType === 'magic_salt_reflect';
@@ -2196,8 +2249,11 @@ class LocalSoloEngine {
             target_player_id: targetId,
             card: card.toDict(),
         };
-        if (targetId != null && ['choose_from_enemy_hand', 'choose_card_from_hand'].includes(choiceType) && this.players[targetId]) {
-            result.hand_cards = this.players[targetId].hand.map(c => c.toDict());
+        if (targetId != null && ['choose_from_enemy_hand', 'choose_card_from_hand', 'choose_arctic_ruby'].includes(choiceType) && this.players[targetId]) {
+            const handCards = choiceType === 'choose_arctic_ruby'
+                ? this.arcticRubySelectableAttacks(playerId, card)
+                : this.players[targetId].hand;
+            result.hand_cards = handCards.map(c => c.toDict());
         }
         return result;
     }
@@ -2220,6 +2276,16 @@ class LocalSoloEngine {
                 && (type !== 'choose_same_attacks_from_hand' || c.card_type === 'thorn')
             ));
             return { ...choice, target_instance_ids: cards.slice(0, maxCount).map(c => c.instance_id) };
+        }
+        if (type === 'choose_cards_from_discard') {
+            const maxCount = Math.max(0, toInt(
+                (pending.choice_params || {}).max_count
+                    ?? (pending.choice_params || {}).count
+                    ?? this.players[playerId].discard.length,
+                this.players[playerId].discard.length
+            ));
+            const cards = this.players[playerId].discard.filter(candidate => cardSelectableByAction(candidate));
+            return { ...choice, target_instance_ids: cards.slice(0, maxCount).map(candidate => candidate.instance_id) };
         }
         const zoneMap = {
             choose_attack_from_hand: 'hand',
@@ -2248,6 +2314,10 @@ class LocalSoloEngine {
             const selected = this.oceanSapphireSelectableAttacks(playerId, card)[0];
             return selected ? { ...choice, target_instance_id: selected.instance_id } : null;
         }
+        if (type === 'choose_arctic_ruby') {
+            const selected = this.arcticRubySelectableAttacks(playerId, card)[0];
+            return selected ? { ...choice, target_instance_id: selected.instance_id } : null;
+        }
         if (type === 'choose_equipment' || type === 'choose_enemy_equipment') {
             const ownerId = type === 'choose_enemy_equipment' ? targetId : playerId;
             const eq = this.players[ownerId] && this.players[ownerId].equipment[0];
@@ -2259,13 +2329,17 @@ class LocalSoloEngine {
     checkCardResponseAfterChoice(playerId, card, choice) {
         const needsResponse = this.checkResponseNeeded(playerId, card, choice) || this.checkPrecisionResponseNeeded(playerId, card, choice);
         if (!needsResponse) return null;
-        const targetId = this.choiceTargetFromChoice(choice, 1 - playerId);
+        let targetId = this.choiceTargetFromChoice(choice, 1 - playerId);
+        const secondaryTargets = this.secondaryAttackTargetIds(card, choice);
+        if (targetId === playerId && secondaryTargets.includes(1 - playerId)) targetId = 1 - playerId;
         this.pending_response = {
             card: card.toDict(),
             player_id: playerId,
             target_player_id: targetId,
             original_choice: choice,
             is_precision: card.flags.has('precision'),
+            paid_e: Math.max(0, toInt(card._paid_e_this_play ?? card.cost_e, 0)),
+            paid_m: Math.max(0, toInt(card._paid_m_this_play ?? card.cost_m, 0)),
         };
         return { success: true, needs_response: true, card: card.toDict() };
     }
@@ -2471,9 +2545,10 @@ class LocalSoloEngine {
     cleanupEquipmentDerivedEffects(ownerId, eq) {
         const ps = this.players[ownerId];
         if (!ps || !eq) return;
+        const wasSealedSuspended = toInt((eq.custom_vars || {})._sewers_sealed_suspended, 0) > 0;
         const effectTarget = Math.max(0, Math.min(this.players.length - 1, toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId)));
         const targetState = this.players[effectTarget] || ps;
-        if (this.cardIs(eq.card_instance || eq, 'Disc', 'vanilla:disc')) {
+        if (!wasSealedSuspended && this.cardIs(eq.card_instance || eq, 'Disc', 'vanilla:disc')) {
             targetState.armor = Math.max(0, toInt(targetState.armor, 0) - 2);
         }
         if (this.cardIs(eq.card_instance || eq, 'ElectricWeb', 'factory:electricweb')) {
@@ -2482,7 +2557,7 @@ class LocalSoloEngine {
         if (this.cardIs(eq.card_instance || eq, 'MagicSoil', 'jurassic:magic_soil')) {
             this.removeJurassicMagicSoilBonus(eq);
         }
-        if (this.cardIs(eq.card_instance || eq, 'Pill', 'vanilla:pill', 'troll_cards:pill')) {
+        if (!wasSealedSuspended && this.cardIs(eq.card_instance || eq, 'Pill', 'vanilla:pill', 'troll_cards:pill')) {
             targetState.custom_statuses = targetState.custom_statuses || {};
             delete targetState.custom_statuses.status_immune;
             delete targetState.custom_statuses.immune;
@@ -2492,7 +2567,7 @@ class LocalSoloEngine {
             targetState['状态免疫'] = 0;
         }
         const rootLayers = toInt((eq.custom_vars || {}).jungle_root_layers, 0);
-        if (rootLayers > 0) {
+        if (!wasSealedSuspended && rootLayers > 0) {
             const current = this.customStatusValue(effectTarget, 'jungle:root_status', 'jungle:root', 'root_status');
             this.setCustomStatusAliasGroup(effectTarget, 'jungle:root_status', ['jungle:root_status', 'jungle:root', 'root_status'], Math.max(0, current - rootLayers));
             eq.custom_vars.jungle_root_layers = 0;
@@ -2502,6 +2577,12 @@ class LocalSoloEngine {
             && !this.hasOtherVoidQuantumTargeting(effectTarget, eq)
         ) {
             this.restoreVoidQuantumCosts(effectTarget);
+        }
+        if (eq.custom_vars) {
+            delete eq.custom_vars._sewers_sealed_suspended;
+            delete eq.custom_vars._sewers_sealed_inactive;
+            delete eq.custom_vars._sewers_sealed_skip_boundary;
+            delete eq.custom_vars.sewers_sealed;
         }
     }
 
@@ -2739,6 +2820,9 @@ class LocalSoloEngine {
         const allKeys = Array.from(new Set([primaryKey, ...(keys || [])].filter(Boolean).map(String)));
         allKeys.forEach(key => { ps[key] = 0; });
         if (amount > 0) ps[String(primaryKey)] = amount;
+        if (allKeys.some(key => key === 'jungle:shield' || key === 'shield')) {
+            this.refreshGardenMagicDiscBonuses();
+        }
     }
 
     mergeTurnRegenStatus(playerId, kind, turns, power) {
@@ -2762,7 +2846,9 @@ class LocalSoloEngine {
         ps['jungle:fragile'] = 0;
         ps.fragile = 0;
         const shield = this.customStatusValue(playerId, 'jungle:shield', 'shield');
-        if (shield > 0) this.setCustomStatusAliasGroup(playerId, 'jungle:shield', ['jungle:shield', 'shield'], Math.floor(shield / 2));
+        if (shield > 0 && !this.gardenHasSunflowerTargeting(playerId)) {
+            this.setCustomStatusAliasGroup(playerId, 'jungle:shield', ['jungle:shield', 'shield'], Math.floor(shield / 2));
+        }
     }
 
     applyJungleTurnStartRegen(playerId) {
@@ -3350,8 +3436,26 @@ class LocalSoloEngine {
         return true;
     }
 
+    equipmentTriggerUsesEffectTarget(cardDef) {
+        if (!cardDef) return false;
+        const resource = cardDef.v2_resource && typeof cardDef.v2_resource === 'object'
+            ? cardDef.v2_resource
+            : cardDef;
+        return !!resource.trigger_uses_effect_target;
+    }
+
     equipmentTriggerMaxUses(eq) {
         if (!eq || !eq.card_def) return 0;
+        const events = (
+            eq.card_def.v2_events
+            || (eq.card_def.v2_resource && eq.card_def.v2_resource.events)
+            || eq.card_def.events
+            || {}
+        );
+        const eventDef = events.on_equipment_trigger || events.equipment_trigger;
+        if (eventDef && typeof eventDef === 'object') {
+            return Math.max(0, toInt(eventDef.max_uses_per_turn ?? eventDef.max_uses ?? 0, 0));
+        }
         for (const effect of eq.card_def.effects || []) {
             if (!effect || effect.type !== 'on_equipment_trigger') continue;
             const params = effect.params || {};
@@ -3400,6 +3504,7 @@ class LocalSoloEngine {
             if (!this.hasCardEvent(card.def(), eventName)) return;
             this.runCardEvent(ownerId, card, eventName, choice, context);
         });
+        if (eventName === 'card_used') this.drainArcticPineconeAutoPlayQueue();
     }
 
     runCardEvent(ownerId, card, eventName, choice = null, extraContext = {}) {
@@ -3795,6 +3900,95 @@ class LocalSoloEngine {
                 });
             }
         }
+        if (log) this.logMsg(log);
+    }
+
+    gardenSnapshotCurrentCards(playerId) {
+        const ps = this.players[playerId];
+        if (!ps) return [];
+        return [
+            ...ps.hand,
+            ...ps.deck,
+            ...ps.discard,
+            ...ps.exile,
+            ...ps.equipment.map(eq => eq.card_instance).filter(Boolean),
+        ].filter(card => card && card.def_id !== ERROR_CARD_ID).map(card => card.toDict());
+    }
+
+    effect_garden_show_initial_deck(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (!this.players[playerId] || !this.players[targetId]) return;
+        let cards = Array.isArray(this._garden_initial_decks[targetId])
+            ? this._garden_initial_decks[targetId]
+            : [];
+        if (!cards.length) {
+            cards = this.gardenSnapshotCurrentCards(targetId);
+            this._garden_initial_decks[targetId] = cards.map(entry => ({ ...entry }));
+        }
+        this._garden_initial_deck_reveal_serial = toInt(this._garden_initial_deck_reveal_serial, 0) + 1;
+        this._garden_initial_deck_reveal[playerId] = {
+            token: this._garden_initial_deck_reveal_serial,
+            target_player_id: targetId,
+            target_name: this.pn(targetId),
+            cards: cards.map(entry => ({ ...entry })),
+        };
+        this.logMsg(log || `${this.pn(playerId)}查看了${this.pn(targetId)}的初始牌组`);
+    }
+
+    gardenAttackOnce(playerId, targetId, card, amount) {
+        if (!this.players[targetId]) return 0;
+        const damage = this.modifiedAttackDamage(Math.max(0, toInt(amount, 0)), card);
+        return this.dealAttackDamage(
+            targetId,
+            damage,
+            1,
+            !!(card && card.flags && card.flags.has('precision')),
+            playerId,
+            card
+        );
+    }
+
+    effect_garden_kale_attack(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const target = this.players[targetId];
+        if (!target) return;
+        const normal = this.evalInt(playerId, params.normal_amount ?? 9, card, 9);
+        const low = this.evalInt(playerId, params.low_health_amount ?? 36, card, 36);
+        const amount = toInt(target.health, 0) * 5 <= Math.max(1, toInt(target.max_health, 1))
+            ? low
+            : normal;
+        this._last_damage_value[targetId] = this.gardenAttackOnce(playerId, targetId, card, amount);
+        if (log) this.logMsg(log);
+    }
+
+    effect_garden_daisy_delayed_attack(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (!this.players[targetId]) return;
+        const amount = this.evalInt(playerId, params.amount ?? 15, card, 15);
+        this._last_damage_value[targetId] = this.gardenAttackOnce(playerId, targetId, card, amount);
+        this.logMsg(log || `${this.pn(playerId)}的雏菊对${this.pn(targetId)}造成延迟伤害`);
+    }
+
+    gardenRefreshCoalCards() {
+        this.players.forEach(ps => {
+            const power = clampCardPower(Math.max(0, toInt(ps.fire, 0)) * 5);
+            ps.hand.forEach(handCard => {
+                if (!this.cardIs(handCard, 'Coal', 'garden:coal')) return;
+                handCard.power_value = power;
+                if (power > 0) handCard.instance_flags.add('power');
+                else handCard.instance_flags.delete('power');
+            });
+        });
+    }
+
+    effect_garden_coal_attack(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (!this.players[targetId]) return;
+        card.power_value = clampCardPower(Math.max(0, toInt(this.players[playerId].fire, 0)) * 5);
+        if (card.power_value > 0) card.instance_flags.add('power');
+        else card.instance_flags.delete('power');
+        const amount = this.evalInt(playerId, params.amount ?? 9, card, 9);
+        this._last_damage_value[targetId] = this.gardenAttackOnce(playerId, targetId, card, amount);
         if (log) this.logMsg(log);
     }
 
@@ -4608,6 +4802,30 @@ class LocalSoloEngine {
             this._auto_resolve_choices_for = previousAutoChoice;
         }
         this.logMsg(log || `${this.pn(playerId)}的钻石额外打出一张复制`);
+    }
+
+    effect_bio_add_shield_conversion(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (!this.players[targetId]) return;
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 1, card, 1));
+        this.bioSetStatusValue(
+            targetId,
+            'shield_conversion',
+            this.bioStatusValue(targetId, 'shield_conversion') + amount,
+        );
+        this.logMsg(log || `${this.pn(targetId)}获得${amount}层护盾转化`);
+    }
+
+    effect_bio_clear_poison_fire(playerId, card, params, log = '') {
+        const targets = card && card.flags && card.flags.has('wide_strike')
+            ? this.wideStrikeTargetIds(playerId, card)
+            : [this.resolveTarget(playerId, params.target || 'target')];
+        targets.forEach(targetId => {
+            if (!this.players[targetId]) return;
+            this.players[targetId].poison = 0;
+            this.players[targetId].fire = 0;
+        });
+        if (log) this.logMsg(log);
     }
 
     effect_direct_damage(playerId, card, params) {
@@ -5639,6 +5857,92 @@ class LocalSoloEngine {
         }
     }
 
+    jungleTeamMembers(targetId) {
+        if (!Array.isArray(this.teams)) return [];
+        const team = this.teams.find(candidate =>
+            Array.isArray(candidate) && candidate.length >= 2 && candidate.includes(targetId)
+        );
+        if (!team) return [];
+        return team.filter(memberId =>
+            this.players[memberId] && toInt(this.players[memberId].health, 0) > 0
+        );
+    }
+
+    effect_jungle_monstera_heal_team(playerId, card, params, log, choice) {
+        if (toInt(this.current_player, -1) !== playerId) return;
+        const { eq } = this.findEquipmentByCardInstanceId(card && card.instance_id);
+        const targetId = eq
+            ? toInt(eq.effect_target ?? eq.owner ?? playerId, playerId)
+            : this.resolveTarget(playerId, params.target || 'target', choice);
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 4, card, 4, choice));
+        if (amount <= 0) return;
+        this.jungleTeamMembers(targetId).forEach(memberId => {
+            const before = toInt(this.players[memberId].health, 0);
+            this.players[memberId].heal(amount);
+            const healed = Math.max(0, toInt(this.players[memberId].health, 0) - before);
+            this.logMsg(
+                log
+                || (
+                    healed > 0
+                        ? `${this.pn(playerId)}的龟背竹使${this.pn(memberId)}回复${healed}H`
+                        : `${this.pn(playerId)}的龟背竹未使${this.pn(memberId)}回复生命`
+                )
+            );
+        });
+    }
+
+    effect_jungle_dianthus_record_use(playerId, card, params, log, choice) {
+        if (!card) return;
+        card.custom_vars = card.custom_vars && typeof card.custom_vars === 'object'
+            ? card.custom_vars
+            : {};
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 5, card, 5, choice));
+        const maximum = Math.max(0, this.evalInt(playerId, params.maximum ?? 20, card, 20, choice));
+        const current = Math.max(0, toInt(card.custom_vars.jungle_dianthus_power, 0));
+        card.custom_vars.jungle_dianthus_power = Math.min(maximum, current + amount);
+        card.custom_vars.jungle_dianthus_pending_reentry = 1;
+    }
+
+    effect_jungle_dianthus_restore_power(playerId, card, params, log, choice) {
+        if (!card) return;
+        card.custom_vars = card.custom_vars && typeof card.custom_vars === 'object'
+            ? card.custom_vars
+            : {};
+        const maximum = Math.max(0, this.evalInt(playerId, params.maximum ?? 20, card, 20, choice));
+        const specialPower = Math.min(
+            maximum,
+            Math.max(0, toInt(card.custom_vars.jungle_dianthus_power, 0)),
+        );
+        const previousApplied = Math.max(0, toInt(card.custom_vars.jungle_dianthus_applied_power, 0));
+        const pendingReentry = toInt(card.custom_vars.jungle_dianthus_pending_reentry, 0) > 0;
+        delete card.custom_vars.jungle_dianthus_pending_reentry;
+        const otherPower = pendingReentry ? 0 : toInt(card.power_value, 0) - previousApplied;
+        card.power_value = clampCardPower(otherPower + specialPower);
+        card.custom_vars.jungle_dianthus_applied_power = specialPower;
+        if (card.power_value !== 0) card.instance_flags.add('power');
+        else card.instance_flags.delete('power');
+    }
+
+    effect_jungle_add_maple_to_hand(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'self', choice);
+        const target = this.players[targetId];
+        const def = cardDef('Maple');
+        if (!target || !def) return;
+        const newCard = new LocalCard(def.id || 'Maple');
+        ['symbiosis', 'exile', 'void'].forEach(flag => newCard.instance_flags.add(flag));
+        this.applySetupModifiersToCard(targetId, newCard);
+        target.addToHand(newCard);
+        this.enforceUniqueCardsForPlayer(targetId, newCard);
+        this._last_created_card_instance_id = newCard.instance_id;
+        if (this._active_effect_context) {
+            this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+        }
+        this.logMsg(
+            log
+            || `${this.pn(targetId)}将1张[[card:Maple|flag=symbiosis|flag=exile|flag=void]]加入手中`
+        );
+    }
+
     effect_electric_web_arm(playerId, card, params, log, choice) {
         const targetId = this.resolveTarget(playerId, params.target || 'target', choice);
         const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 2, card, 2, choice));
@@ -5696,6 +6000,119 @@ class LocalSoloEngine {
         });
         ps.custom_vars.ocean_auto_cards = entries;
         this.logMsg(log || `${this.pn(playerId)}的蓝宝石放逐1张攻击牌`);
+    }
+
+    runArcticReadyCardsTurnStart(playerId) {
+        const ps = this.players[playerId];
+        if (!ps || this.game_over || this.phase !== 'action') return;
+        if (!Array.isArray(ps.custom_vars.arctic_ready_queue)) {
+            ps.custom_vars.arctic_ready_queue = ps.hand
+                .filter(card => card && card.flags && card.flags.has('arctic:ready'))
+                .map(card => toInt(card.instance_id, -1));
+        }
+        const queue = ps.custom_vars.arctic_ready_queue;
+        while (queue.length && !this.game_over && this.phase === 'action') {
+            if (this.pending_response || this.pending_choice) return;
+            const instanceId = toInt(queue.shift(), -1);
+            const readyCard = ps.findHandCard(instanceId);
+            if (!readyCard || !readyCard.flags.has('arctic:ready')) continue;
+            if (!this.canPlayCard(playerId, readyCard)[0]) continue;
+            const enemyId = 1 - playerId;
+            const targetId = this.players[enemyId] && this.players[enemyId].health > 0 && !this.players[enemyId].untargetable
+                ? enemyId
+                : (readyCard.flags.has('self_target') ? playerId : -1);
+            if (targetId < 0) continue;
+            const previousAutoActor = this.allowOutOfTurnAutoPlayFor;
+            const previousAutoChoice = this._auto_resolve_choices_for;
+            this.allowOutOfTurnAutoPlayFor = playerId;
+            this._auto_resolve_choices_for = playerId;
+            let result;
+            try {
+                result = this.playCard(playerId, instanceId, {
+                    target_player: targetId,
+                    target_player_id: targetId,
+                    target_id: targetId,
+                });
+            } finally {
+                this.allowOutOfTurnAutoPlayFor = previousAutoActor;
+                this._auto_resolve_choices_for = previousAutoChoice;
+            }
+            if (result && (result.needs_response || result.needs_choice || result.needs_v2_ui)) return;
+        }
+        delete ps.custom_vars.arctic_ready_queue;
+    }
+
+    effect_arctic_pinecone_copy(playerId, card, params, log, choice) {
+        if (!card || card.setup_modifiers.has('arctic_pinecone_copy')) return;
+        const copied = card.copy();
+        copied.instance_id = randintId();
+        copied.setup_modifiers.add('arctic_pinecone_copy');
+        ['wide_strike', 'self_target', 'exile', 'swift'].forEach(flag => {
+            copied.instance_flags.add(flag);
+            copied.disabled_flags.delete(flag);
+        });
+        copied.fission_level = 3;
+        copied.fission_count = 2;
+        copied.fission_hit = 0;
+        copied.swift_value = Math.max(2, toInt(copied.swift_value, 0));
+        this.players[playerId].addToHand(copied, { triggerEnterHand: false });
+        if (!Array.isArray(this.arcticPineconeAutoPlayQueue)) this.arcticPineconeAutoPlayQueue = [];
+        this.arcticPineconeAutoPlayQueue.push({
+            playerId,
+            instanceId: copied.instance_id,
+            choice: { ...(choice || {}) },
+        });
+        this.logMsg(log || `${this.pn(playerId)}的松果额外打出一张复制`);
+    }
+
+    drainArcticPineconeAutoPlayQueue() {
+        if (this.drainingArcticPineconeAutoPlay) return;
+        const queue = this.arcticPineconeAutoPlayQueue;
+        if (!Array.isArray(queue) || !queue.length || this.pending_response || this.pending_choice) return;
+        this.drainingArcticPineconeAutoPlay = true;
+        try {
+            while (queue.length && !this.game_over && !this.pending_response && !this.pending_choice) {
+                const entry = queue.shift();
+                const playerId = toInt(entry && entry.playerId, -1);
+                const player = this.players[playerId];
+                const copy = player && player.findHandCard(toInt(entry && entry.instanceId, -1));
+                if (!player || !copy || toInt(player.health, 0) <= 0) continue;
+                const previousAutoActor = this.allowOutOfTurnAutoPlayFor;
+                const previousAutoChoice = this._auto_resolve_choices_for;
+                this.allowOutOfTurnAutoPlayFor = playerId;
+                this._auto_resolve_choices_for = playerId;
+                let result = null;
+                try {
+                    result = this.playCard(playerId, copy.instance_id, entry.choice || {});
+                } finally {
+                    this.allowOutOfTurnAutoPlayFor = previousAutoActor;
+                    this._auto_resolve_choices_for = previousAutoChoice;
+                }
+                if (result && (result.needs_response || result.needs_choice || result.needs_v2_ui)) break;
+            }
+            if (!queue.length) this.arcticPineconeAutoPlayQueue = [];
+        } finally {
+            this.drainingArcticPineconeAutoPlay = false;
+        }
+    }
+
+    effect_arctic_ruby_fuse(playerId, card, params, log, choice) {
+        const selectedId = toInt(choice && choice.target_instance_id, -1);
+        const selected = this.players[playerId] && this.players[playerId].findHandCard(selectedId);
+        if (!selected || !this.arcticRubySelectableAttacks(playerId, card).some(candidate => candidate.instance_id === selectedId)) {
+            return;
+        }
+        const paidE = Math.max(0, selected.cost_e + this.getExtraEForCard(playerId, selected));
+        const paidM = Math.max(0, selected.cost_m);
+        this.spendResource(playerId, 'elixir', paidE, selected);
+        this.spendResource(playerId, 'magic', paidM, selected);
+        selected.fusion_level = this.clampCardProperty(
+            selected,
+            'fusion_level',
+            Math.max(1, toInt(selected.fusion_level, 1)) + 1,
+        );
+        selected.fusion_multiplier = selected.fusion_level;
+        this.logMsg(log || `${this.pn(playerId)}消耗${paidE}E和${paidM}M，使${cardName(selected.def_id)}的聚变层数增加1`);
     }
 
     runOceanAutoCardsTurnStart(playerId) {
@@ -5785,11 +6202,9 @@ class LocalSoloEngine {
         if (!target) return;
         if (target.flags.has('precision') || target.instance_flags.has('precision')) {
             target.instance_flags.add('stealth');
-            if (log) this.logMsg(log);
             return;
         }
         target.instance_flags.add('precision');
-        if (log) this.logMsg(log);
     }
 
     effect_grant_temp_swift_highest_e(playerId, card, params, log) {
@@ -5837,6 +6252,159 @@ class LocalSoloEngine {
         }
         const healed = target.heal(actualDamage * 5);
         if (healed > 0) this.logMsg(`${this.pn(targetId)}回复${healed}H`);
+    }
+
+    effect_desert_magic_compass(playerId, card, params, log, choice) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        const rawIds = choice && Array.isArray(choice.target_instance_ids)
+            ? choice.target_instance_ids
+            : [];
+        const selectedIds = [];
+        rawIds.forEach(rawId => {
+            const instanceId = toInt(rawId, -1);
+            if (instanceId >= 0 && !selectedIds.includes(instanceId)) selectedIds.push(instanceId);
+        });
+        const selectableById = new Map(
+            ps.discard
+                .filter(candidate => cardSelectableByAction(candidate))
+                .map(candidate => [candidate.instance_id, candidate])
+        );
+        const selected = selectedIds
+            .map(instanceId => selectableById.get(instanceId))
+            .filter(Boolean);
+        selected.forEach(selectedCard => {
+            const index = ps.discard.indexOf(selectedCard);
+            if (index >= 0) ps.discard.splice(index, 1);
+        });
+        shuffle(selected);
+        if (selected.length) {
+            ps.deck.unshift(...selected);
+            this.logMsg(log || `${this.pn(playerId)}将${selected.length}张弃牌随机置于抽牌堆顶`);
+        }
+    }
+
+    effect_desert_marble_attack(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (!this.players[targetId]) return;
+        const baseDamage = this.evalInt(playerId, params.amount ?? 9, card, 9, choice);
+        const extraBaseDamage = this.evalInt(playerId, params.extra_amount ?? 23, card, 23, choice);
+        const extraDamage = this.modifiedAttackDamage(extraBaseDamage, card);
+        const primaryDamage = this.modifiedAttackDamage(baseDamage, card);
+        const primaryHits = this.cardTotalHits(card, 1);
+        const isPrecision = card.flags.has('precision');
+        this.dealAttackDamage(targetId, primaryDamage, primaryHits, isPrecision, playerId, card);
+        const positiveHits = Array.isArray(this._last_positive_damage_hits)
+            ? Math.max(0, toInt(this._last_positive_damage_hits[targetId], 0))
+            : 0;
+        const preparedTargets = choice && Array.isArray(choice._desert_marble_targets)
+            ? choice._desert_marble_targets
+            : [];
+        let cursor = Math.max(0, toInt(card._desert_marble_bounce_cursor, 0));
+        let previousTargetId = toInt(card._desert_marble_previous_target, targetId);
+        for (let hitIndex = 0; hitIndex < positiveHits; hitIndex += 1) {
+            let bounceTargetId = cursor < preparedTargets.length
+                ? toInt(preparedTargets[cursor], -1)
+                : -1;
+            cursor += 1;
+            const isSelectable = targetIdToCheck => {
+                const target = this.players[targetIdToCheck];
+                if (!target || target.health <= 0) return false;
+                return targetIdToCheck === playerId || !target.untargetable || this.isStatusImmune(targetIdToCheck);
+            };
+            if (bounceTargetId === previousTargetId || !isSelectable(bounceTargetId)) {
+                const candidates = this.players
+                    .map((_, candidateId) => candidateId)
+                    .filter(candidateId => candidateId !== previousTargetId && isSelectable(candidateId));
+                if (!candidates.length) continue;
+                bounceTargetId = candidates[Math.floor(Math.random() * candidates.length)];
+            }
+            this.dealAttackDamage(bounceTargetId, extraDamage, 1, isPrecision, playerId, card);
+            previousTargetId = bounceTargetId;
+        }
+        card._desert_marble_bounce_cursor = cursor;
+        card._desert_marble_previous_target = previousTargetId;
+    }
+
+    effect_arctic_ricochet_attack(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (!this.players[targetId]) return;
+        const amount = this.modifiedAttackDamage(
+            this.evalInt(playerId, params.amount ?? 10, card, 10, choice),
+            card,
+        );
+        const repeats = Math.max(0, this.evalInt(playerId, params.repeats ?? 3, card, 3, choice));
+        const isPrecision = card.flags.has('precision');
+        this.dealAttackDamage(targetId, amount, 1, isPrecision, playerId, card);
+        const preparedTargets = choice && Array.isArray(choice._arctic_ricochet_targets)
+            ? choice._arctic_ricochet_targets
+            : [];
+        let cursor = Math.max(0, toInt(card._arctic_ricochet_cursor, 0));
+        let previousTargetId = toInt(card._arctic_ricochet_previous_target, targetId);
+        const isSelectable = targetIdToCheck => {
+            const target = this.players[targetIdToCheck];
+            if (!target || target.health <= 0) return false;
+            return targetIdToCheck === playerId || !target.untargetable || this.isStatusImmune(targetIdToCheck);
+        };
+        for (let repeatIndex = 0; repeatIndex < repeats; repeatIndex += 1) {
+            let bounceTargetId = cursor < preparedTargets.length
+                ? toInt(preparedTargets[cursor], -1)
+                : -1;
+            cursor += 1;
+            if (bounceTargetId === previousTargetId || !isSelectable(bounceTargetId)) {
+                const candidates = this.players
+                    .map((_, candidateId) => candidateId)
+                    .filter(candidateId => candidateId !== previousTargetId && isSelectable(candidateId));
+                if (!candidates.length) break;
+                bounceTargetId = candidates[Math.floor(Math.random() * candidates.length)];
+            }
+            this.dealAttackDamage(bounceTargetId, amount, 1, isPrecision, playerId, card);
+            previousTargetId = bounceTargetId;
+        }
+        card._arctic_ricochet_cursor = cursor;
+        card._arctic_ricochet_previous_target = previousTargetId;
+    }
+
+    effect_desert_emerald_resource(playerId, card, params, log) {
+        const eq = this.findEquipmentForCard(playerId, card)
+            || this.findEquipmentByCardInstanceId(card && card.instance_id).eq;
+        if (!eq) return;
+        const context = this._active_effect_context || {};
+        const resource = String(context.resource || (context.vars && context.vars.resource) || '');
+        if (resource !== 'elixir') return;
+        const spenderId = toInt(context.source_id, -1);
+        const targetId = toInt(eq.effect_target ?? eq.owner, playerId);
+        if (spenderId !== targetId) return;
+        const amount = Math.max(0, toInt(context.amount ?? (context.vars && context.vars.amount), 0));
+        if (amount <= 0) return;
+        eq.custom_vars = eq.custom_vars || {};
+        const accumulated = Math.max(0, toInt(eq.custom_vars.desert_emerald_e_spent, 0)) + amount;
+        const triggers = Math.floor(accumulated / 2);
+        eq.custom_vars.desert_emerald_e_spent = accumulated % 2;
+        if (triggers <= 0 || !this.players[playerId]) return;
+        const owner = this.players[playerId];
+        const before = owner.magic;
+        owner.gainMagic(triggers);
+        const gained = Math.max(0, owner.magic - before);
+        if (gained > 0) this.logMsg(log || `${this.pn(playerId)}的绿宝石使其回复${gained}M`);
+    }
+
+    effect_desert_topaz_apply() {
+        this.refreshEquipmentDerivedFlags();
+    }
+
+    effect_desert_magic_yggdrasil(playerId, card, params, log) {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const target = this.players[targetId];
+        if (!target || !cardDef('Yggdrasil')) return;
+        const newCard = this.applySetupModifiersToCard(targetId, new LocalCard('Yggdrasil'));
+        if (target.canAddToHand()) target.addToHand(newCard);
+        else target.discard.push(newCard);
+        this._last_created_card_instance_id = newCard.instance_id;
+        if (this._active_effect_context) {
+            this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
+        }
+        this.logMsg(log || `${this.pn(targetId)}获得1张世界树之叶`);
     }
 
     effect_delayed_blind_next_turn(playerId, card, params, log) {
@@ -6099,7 +6667,11 @@ class LocalSoloEngine {
         let count = 0;
         this.players.forEach(ps => {
             ps.equipment.forEach(eq => {
-                if (this.cardIs(eq.card_instance || eq, 'Corruption', 'vanilla:corruption') && eq.corruption_active) count += 1;
+                if (
+                    this.equipmentRuntimeActive(eq)
+                    && this.cardIs(eq.card_instance || eq, 'Corruption', 'vanilla:corruption')
+                    && eq.corruption_active
+                ) count += 1;
             });
         });
         return count;
@@ -6108,6 +6680,7 @@ class LocalSoloEngine {
     activatePendingCorruption() {
         this.players.forEach((owner, ownerId) => {
             (owner.equipment || []).forEach(eq => {
+                if (!this.equipmentRuntimeActive(eq)) return;
                 if (!this.cardIs(eq.card_instance || eq, 'Corruption', 'vanilla:corruption') || eq.corruption_active) return;
                 eq.corruption_active = true;
                 this.logMsg(`${this.pn(ownerId)}的腐化效果激活`);
@@ -6170,6 +6743,141 @@ class LocalSoloEngine {
         return !!(eq && eq.card_instance && eq.card_instance.flags.has('non_stackable'));
     }
 
+    equipmentSealedLayers(eq) {
+        return Math.max(0, toInt(eq && eq.custom_vars && eq.custom_vars.sewers_sealed, 0));
+    }
+
+    equipmentRuntimeActive(eq) {
+        return !!eq && !toInt((eq.custom_vars || {})._sewers_sealed_inactive, 0);
+    }
+
+    suspendSealedEquipmentPassives(ownerId, eq) {
+        const owner = this.players[ownerId];
+        if (!owner || !eq) return;
+        eq.custom_vars = eq.custom_vars || {};
+        if (toInt(eq.custom_vars._sewers_sealed_suspended, 0) > 0) return;
+        eq.custom_vars._sewers_sealed_suspended = 1;
+        eq.custom_vars._sewers_sealed_inactive = 1;
+        const targetId = Math.max(0, Math.min(
+            this.players.length - 1,
+            toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId)
+        ));
+        const target = this.players[targetId];
+
+        if (this.cardIs(eq.card_instance || eq, 'Disc', 'vanilla:disc')) {
+            target.armor = Math.max(0, toInt(target.armor, 0) - 2);
+        }
+        if (this.cardIs(eq.card_instance || eq, 'MagicSoil', 'jurassic:magic_soil')) {
+            this.removeJurassicMagicSoilBonus(eq);
+        }
+        const rootLayers = Math.max(0, toInt(eq.custom_vars.jungle_root_layers, 0));
+        if (rootLayers > 0) {
+            const current = this.customStatusValue(targetId, 'jungle:root_status', 'jungle:root', 'root_status');
+            this.setCustomStatusAliasGroup(
+                targetId,
+                'jungle:root_status',
+                ['jungle:root_status', 'jungle:root', 'root_status'],
+                Math.max(0, current - rootLayers)
+            );
+        }
+        if (
+            this.cardIs(eq.card_instance || eq, 'Quantum', 'void:quantum')
+            && !this.hasOtherVoidQuantumTargeting(targetId, eq)
+        ) {
+            this.restoreVoidQuantumCosts(targetId);
+        }
+        if (
+            this.cardIs(eq.card_instance || eq, 'Pill', 'vanilla:pill', 'troll_cards:pill')
+            && !this.hasPillTargeting(targetId)
+            && this.desertTopazCountTargeting(targetId) <= 0
+        ) {
+            delete target.custom_statuses.status_immune;
+            delete target.custom_statuses.immune;
+            delete target.custom_statuses['状态免疫'];
+        }
+        this.refreshEquipmentDerivedFlags();
+        this.refreshHandLimitBonuses();
+    }
+
+    resumeSealedEquipmentPassives(ownerId, eq) {
+        const owner = this.players[ownerId];
+        if (!owner || !eq) return;
+        eq.custom_vars = eq.custom_vars || {};
+        if (toInt(eq.custom_vars._sewers_sealed_suspended, 0) <= 0) return;
+        delete eq.custom_vars._sewers_sealed_suspended;
+        delete eq.custom_vars._sewers_sealed_inactive;
+        const targetId = Math.max(0, Math.min(
+            this.players.length - 1,
+            toInt(eq.effect_target ?? eq.owner ?? ownerId, ownerId)
+        ));
+        const target = this.players[targetId];
+
+        if (this.cardIs(eq.card_instance || eq, 'Disc', 'vanilla:disc')) {
+            target.armor = Math.max(0, toInt(target.armor, 0)) + 2;
+        }
+        if (this.cardIs(eq.card_instance || eq, 'MagicSoil', 'jurassic:magic_soil')) {
+            this.applyJurassicMagicSoilBonus(eq, targetId);
+        }
+        const rootLayers = Math.max(0, toInt(eq.custom_vars.jungle_root_layers, 0));
+        if (rootLayers > 0) {
+            const current = this.customStatusValue(targetId, 'jungle:root_status', 'jungle:root', 'root_status');
+            this.setCustomStatusAliasGroup(
+                targetId,
+                'jungle:root_status',
+                ['jungle:root_status', 'jungle:root', 'root_status'],
+                current + rootLayers
+            );
+        }
+        if (this.cardIs(eq.card_instance || eq, 'Pill', 'vanilla:pill', 'troll_cards:pill')) {
+            target.custom_statuses.status_immune = Math.max(
+                1,
+                toInt(target.custom_statuses.status_immune, 0)
+            );
+        }
+        this.refreshEquipmentDerivedFlags();
+        this.refreshHandLimitBonuses();
+    }
+
+    applySealedToEquipment(ownerId, eq, amount = 1) {
+        const added = Math.max(0, toInt(amount, 0));
+        if (!eq || added <= 0) return this.equipmentSealedLayers(eq);
+        eq.custom_vars = eq.custom_vars || {};
+        if (this.equipmentSealedLayers(eq) <= 0) {
+            this.suspendSealedEquipmentPassives(ownerId, eq);
+        }
+        eq.custom_vars.sewers_sealed = this.equipmentSealedLayers(eq) + added;
+        return eq.custom_vars.sewers_sealed;
+    }
+
+    decaySealedEquipmentForOwnerTurn(ownerId) {
+        const owner = this.players[ownerId];
+        if (!owner) return;
+        const boundary = toInt(this._turn_boundary_id, -1);
+        owner.equipment.slice().forEach(eq => {
+            const layers = this.equipmentSealedLayers(eq);
+            if (layers <= 0) return;
+            eq.custom_vars = eq.custom_vars || {};
+            eq.custom_vars._sewers_sealed_skip_boundary = boundary;
+            eq.custom_vars._sewers_sealed_inactive = 1;
+            if (layers > 1) eq.custom_vars.sewers_sealed = layers - 1;
+            else delete eq.custom_vars.sewers_sealed;
+        });
+    }
+
+    finishSealedEquipmentTurnStart(ownerId) {
+        const owner = this.players[ownerId];
+        if (!owner) return;
+        const boundary = toInt(this._turn_boundary_id, -1);
+        owner.equipment.slice().forEach(eq => {
+            eq.custom_vars = eq.custom_vars || {};
+            if (toInt(eq.custom_vars._sewers_sealed_skip_boundary, -2) !== boundary) return;
+            delete eq.custom_vars._sewers_sealed_skip_boundary;
+            if (this.equipmentSealedLayers(eq) <= 0) {
+                this.resumeSealedEquipmentPassives(ownerId, eq);
+            }
+        });
+    }
+
     ensureNonStackEquipmentOrder(eq) {
         if (!this.equipmentUsesNonStackRule(eq)) return 0;
         eq.custom_vars = eq.custom_vars || {};
@@ -6185,6 +6893,7 @@ class LocalSoloEngine {
     }
 
     nonStackEquipmentIsActive(eq) {
+        if (!this.equipmentRuntimeActive(eq)) return false;
         if (!this.equipmentUsesNonStackRule(eq)) return true;
         const order = this.ensureNonStackEquipmentOrder(eq);
         const defId = String(eq.def_id || '');
@@ -6239,6 +6948,129 @@ class LocalSoloEngine {
         });
     }
 
+    desertTopazCountTargeting(targetId) {
+        return this.iterEquipmentTargetingPlayer(targetId)
+            .filter(({ eq }) => this.cardIs(eq.card_instance || eq, 'Topaz', 'desert_cards_addition:topaz'))
+            .length;
+    }
+
+    hasPillTargeting(targetId) {
+        return this.iterEquipmentTargetingPlayer(targetId)
+            .some(({ eq }) => this.cardIs(eq.card_instance || eq, 'Pill', 'vanilla:pill', 'troll_cards:pill'));
+    }
+
+    refreshDesertTopazBonuses() {
+        this.players.forEach((ps, targetId) => {
+            ps.custom_vars = ps.custom_vars || {};
+            ps.custom_statuses = ps.custom_statuses || {};
+            const oldArmor = Math.max(0, toInt(ps.custom_vars.desert_topaz_armor_applied, 0));
+            const count = this.desertTopazCountTargeting(targetId);
+            const nextArmor = count * 4;
+            ps.armor = Math.max(0, toInt(ps.armor, 0) - oldArmor) + nextArmor;
+            if (nextArmor > 0) ps.custom_vars.desert_topaz_armor_applied = nextArmor;
+            else delete ps.custom_vars.desert_topaz_armor_applied;
+
+            const wasApplied = !!ps.custom_vars.desert_topaz_immunity_applied;
+            if (count > 0) {
+                if (!wasApplied) {
+                    ps.custom_vars.desert_topaz_had_external_immunity = ['status_immune', 'immune', '状态免疫']
+                        .some(key => toInt(ps.custom_statuses[key], 0) > 0);
+                }
+                ps.custom_vars.desert_topaz_immunity_applied = true;
+                ps.custom_statuses.status_immune = Math.max(1, toInt(ps.custom_statuses.status_immune, 0));
+            } else if (wasApplied) {
+                const hadExternal = !!ps.custom_vars.desert_topaz_had_external_immunity;
+                delete ps.custom_vars.desert_topaz_had_external_immunity;
+                delete ps.custom_vars.desert_topaz_immunity_applied;
+                if (!hadExternal && !this.hasPillTargeting(targetId)) {
+                    delete ps.custom_statuses.status_immune;
+                    delete ps.custom_statuses.immune;
+                    delete ps.custom_statuses['状态免疫'];
+                }
+            }
+        });
+    }
+
+    gardenEquipmentTargeting(playerId, ...ids) {
+        if (!this.players[playerId]) return [];
+        return this.iterEquipmentTargetingPlayer(playerId)
+            .filter(({ eq }) => this.nonStackEquipmentIsActive(eq))
+            .filter(({ eq }) => this.cardIs(eq.card_instance || eq, ...ids));
+    }
+
+    gardenHasSunflowerTargeting(playerId) {
+        return this.gardenEquipmentTargeting(playerId, 'Sunflower', 'garden:sunflower').length > 0;
+    }
+
+    refreshGardenMagicDiscBonuses() {
+        this.players.forEach((ps, targetId) => {
+            ps.custom_vars = ps.custom_vars || {};
+            const oldBonus = Math.max(0, toInt(ps.custom_vars.garden_magic_disc_armor_applied, 0));
+            const count = this.gardenEquipmentTargeting(targetId, 'MagicDisc', 'garden:magic_disc').length;
+            const shield = this.customStatusValue(targetId, 'jungle:shield', 'shield');
+            const nextBonus = count * (shield > 0 ? 3 : 1);
+            if (oldBonus !== nextBonus) {
+                ps.armor = Math.max(0, toInt(ps.armor, 0) - oldBonus) + nextBonus;
+            }
+            if (nextBonus > 0) ps.custom_vars.garden_magic_disc_armor_applied = nextBonus;
+            else delete ps.custom_vars.garden_magic_disc_armor_applied;
+        });
+    }
+
+    gardenMagicCutterAfterHit(attackerId, targetId, damage) {
+        if (!this.players[attackerId] || attackerId === targetId || toInt(damage, 0) <= 0) return;
+        const copies = this.gardenEquipmentTargeting(
+            attackerId,
+            'MagicCutter',
+            'garden:magic_cutter'
+        ).length;
+        if (copies <= 0) return;
+        const amount = copies * 2;
+        const current = this.customStatusValue(attackerId, 'jungle:shield', 'shield');
+        this.setCustomStatusAliasGroup(
+            attackerId,
+            'jungle:shield',
+            ['jungle:shield', 'shield'],
+            current + amount
+        );
+        this.logMsg(`${this.pn(attackerId)}的魔法锯齿使其获得${amount}层护盾`);
+    }
+
+    runGardenMagicPollenOwnerTurnEnd(playerId) {
+        const owner = this.players[playerId];
+        if (!owner) return;
+        [...owner.equipment].forEach(eq => {
+            if (!this.cardIs(eq.card_instance || eq, 'MagicPollen', 'garden:magic_pollen')) return;
+            if (!this.nonStackEquipmentIsActive(eq) || owner.magic < 1) return;
+            const targetId = toInt(eq.effect_target ?? playerId, playerId);
+            if (!this.players[targetId]) return;
+            const petals = this.cardTotalHits(
+                eq.card_instance,
+                Math.max(1, toInt(eq.card_instance.def().hits, 3))
+            );
+            this.spendResource(playerId, 'magic', 1, eq.card_instance);
+            this.players[targetId].fracture = Math.max(0, toInt(this.players[targetId].fracture, 0)) + petals;
+            this.logMsg(`${this.pn(playerId)}的魔法花粉消耗1M，使${this.pn(targetId)}获得${petals}层破损`);
+        });
+    }
+
+    gardenReturnFirstPlayedCard(playerId, card) {
+        if (!this.players[playerId] || !card || this.current_player !== playerId || this.phase !== 'action') return;
+        const ps = this.players[playerId];
+        const marker = `${toInt(this._turn_boundary_id, 0)}:${playerId}`;
+        if (String(ps.custom_vars.garden_cat_ears_return_marker || '') === marker) return;
+        if (!this.gardenEquipmentTargeting(playerId, 'CatEars', 'garden:cat_ears').length) return;
+        const location = this.findCardLocation(card);
+        if (!location || location.ownerId !== playerId || !['deck', 'discard'].includes(location.zone)) return;
+        const zone = ps[location.zone];
+        const index = zone.indexOf(location.card);
+        if (index < 0) return;
+        zone.splice(index, 1);
+        ps.addToHand(location.card);
+        ps.custom_vars.garden_cat_ears_return_marker = marker;
+        this.logMsg(`${this.pn(playerId)}的猫耳使${cardName(location.card.def_id)}回到手中`);
+    }
+
     refreshEquipmentDerivedFlags() {
         this.players.forEach(ps => { ps.sponge_active = false; });
         this.players.forEach((owner, ownerId) => {
@@ -6252,6 +7084,9 @@ class LocalSoloEngine {
             });
         });
         this.refreshJurassicMagicSoilBonuses();
+        this.refreshDesertTopazBonuses();
+        this.refreshGardenMagicDiscBonuses();
+        this.gardenRefreshCoalCards();
     }
 
     jurassicActiveEquipmentTargeting(targetId, ...ids) {
@@ -6270,7 +7105,55 @@ class LocalSoloEngine {
         return tied[Math.floor(Math.random() * tied.length)].targetId;
     }
 
+    bioStatusValue(playerId, name) {
+        const aliases = {
+            debt: ['bio:debt', 'debt', '负债'],
+            extra_healing: ['bio:extra_healing', 'extra_healing', '额外回复'],
+            shield_conversion: ['bio:shield_conversion', 'shield_conversion', '护盾转化'],
+        };
+        return this.customStatusValue(playerId, ...(aliases[name] || [name]));
+    }
+
+    bioSetStatusValue(playerId, name, value) {
+        const aliases = {
+            debt: ['bio:debt', 'debt', '负债'],
+            extra_healing: ['bio:extra_healing', 'extra_healing', '额外回复'],
+            shield_conversion: ['bio:shield_conversion', 'shield_conversion', '护盾转化'],
+        };
+        const keys = aliases[name] || [name];
+        this.setCustomStatusAliasGroup(playerId, keys[0], keys, Math.max(0, toInt(value, 0)));
+    }
+
+    bioStemCellAfterHealthLoss(targetId, amount) {
+        const lost = Math.max(0, toInt(amount, 0));
+        if (!this.players[targetId] || lost <= 0) return;
+        this.iterEquipmentTargetingPlayer(targetId).forEach(({ eq }) => {
+            if (!this.cardIs(eq.card_instance || eq, 'StemCell', 'bio:stem_cell')) return;
+            eq.custom_vars = eq.custom_vars || {};
+            eq.custom_vars.layers = Math.max(0, toInt(eq.custom_vars.layers, 0)) + lost;
+        });
+    }
+
     jurassicRedirectHealing(playerId, amount) {
+        amount = Math.max(0, toInt(amount, 0));
+        if (amount <= 0) return 0;
+        const extraHealing = this.bioStatusValue(playerId, 'extra_healing');
+        if (extraHealing > 0 && !this.isStatusImmune(playerId)) {
+            amount += extraHealing;
+        }
+        const shieldConversion = this.bioStatusValue(playerId, 'shield_conversion');
+        if (shieldConversion > 0 && !this.isStatusImmune(playerId)) {
+            const shield = amount * shieldConversion;
+            this.bioSetStatusValue(playerId, 'shield_conversion', 0);
+            this.setCustomStatusAliasGroup(
+                playerId,
+                'jungle:shield',
+                ['jungle:shield', 'shield'],
+                this.customStatusValue(playerId, 'jungle:shield', 'shield') + shield,
+            );
+            this.logMsg(`${this.pn(playerId)}的护盾转化将${amount}H转化为${shield}层护盾`);
+            return 0;
+        }
         const tooth = this.jurassicActiveEquipmentTargeting(playerId, 'Tooth', 'jurassic:tooth')[0];
         if (!tooth) return amount;
         const enemyId = this.jurassicLowestSelectableEnemy(playerId);
@@ -6385,7 +7268,10 @@ class LocalSoloEngine {
         }
         let actual = this.applyCorruptionMultiplier(amount);
         actual = this.applyUniversalDamageShields(playerId, actual, sourceId, source);
+        const oldHealth = ps.health;
         ps.health -= actual;
+        const healthLost = Math.max(0, toInt(oldHealth, 0) - Math.max(0, toInt(ps.health, 0)));
+        this.bioStemCellAfterHealthLoss(playerId, healthLost);
         this.recordDamage(playerId, actual, sourceId);
         this.logMsg(`${this.pn(playerId)}受到${actual}点${source}伤害（H=${ps.health}）`);
         if (!this._deferTurnStartDeathChecks) {
@@ -6427,7 +7313,10 @@ class LocalSoloEngine {
             }
             if (sourceCard && this.hasEquipment(targetId, 'Plank')) {
                 try {
-                    if (sourceCard.card_type === 'thorn' && toInt(sourceCard.cost_e, 0) <= 1) {
+                    const actualPaidE = sourceCard._paid_e_this_play != null
+                        ? Math.max(0, toInt(sourceCard._paid_e_this_play, 0))
+                        : Math.max(0, toInt(sourceCard.cost_e, 0));
+                    if (sourceCard.card_type === 'thorn' && actualPaidE <= 1) {
                         plankBlocksAttack = true;
                     }
                 } catch (e) {}
@@ -6459,11 +7348,15 @@ class LocalSoloEngine {
                 dmg = 0;
             }
             dmg = this.applyUniversalDamageShields(targetId, dmg, attackerId, '攻击');
+            const oldHealth = ps.health;
             ps.health -= dmg;
+            const healthLost = Math.max(0, toInt(oldHealth, 0) - Math.max(0, toInt(ps.health, 0)));
+            this.bioStemCellAfterHealthLoss(targetId, healthLost);
             total += dmg;
             if (dmg > 0) this._last_positive_damage_hits[targetId] += 1;
             this.recordDamage(targetId, dmg, attackerId);
             this.logMsg(`${this.pn(targetId)}受到${dmg}点伤害（H=${ps.health}）`);
+            if (dmg > 0) this.gardenMagicCutterAfterHit(attackerId, targetId, dmg);
             if (dmg > 0) {
                 const rootLayers = this.customStatusValue(targetId, 'jungle:root', 'jungle:root_status', 'root_status');
                 if (rootLayers > 0) {
@@ -6742,6 +7635,12 @@ class LocalSoloEngine {
         card.instance_flags.delete('power');
         card.instance_flags.delete('temp_swift');
         card.instance_flags.delete('temp_heavy');
+        card.setup_modifiers.delete('desert_citron_precision_play');
+        card.setup_modifiers.delete('desert_citron_stealth_play');
+        delete card._desert_marble_bounce_cursor;
+        delete card._desert_marble_previous_target;
+        delete card._arctic_ricochet_cursor;
+        delete card._arctic_ricochet_previous_target;
         const legacySpikeballBoost = card.instance_flags.has('ocean_spikeball_boosted')
             && !card.instance_flags.has('ocean_spikeball_added_precision')
             && !card.instance_flags.has('ocean_spikeball_added_wide_strike');
@@ -6755,6 +7654,9 @@ class LocalSoloEngine {
         card.instance_flags.delete('ocean_spikeball_added_precision');
         card.instance_flags.delete('ocean_spikeball_added_wide_strike');
         delete card._sewers_was_countered_this_play;
+        if (card.custom_vars && typeof card.custom_vars === 'object') {
+            delete card.custom_vars.sewers_toilet_paper_power;
+        }
     }
 
     resetCardForDiscard(card) {
@@ -6884,6 +7786,7 @@ class LocalSoloEngine {
     isStatusImmune(playerId) {
         const ps = this.players[playerId];
         if (!ps) return false;
+        if (this.desertTopazCountTargeting(playerId) > 0) return true;
         const custom = ps.custom_statuses || {};
         return ['status_immune', 'immune', '状态免疫'].some(key => toInt(custom[key], 0) > 0 || toInt(ps[key], 0) > 0);
     }
@@ -6926,6 +7829,20 @@ class LocalSoloEngine {
         ));
     }
 
+    arcticRubySelectableAttacks(playerId, sourceCard = null) {
+        const ps = this.players[playerId];
+        if (!ps) return [];
+        const sourceId = sourceCard ? sourceCard.instance_id : null;
+        return ps.hand.filter(candidate => (
+            candidate
+            && candidate.instance_id !== sourceId
+            && candidate.card_type === 'thorn'
+            && cardSelectableByAction(candidate)
+            && Math.max(0, candidate.cost_e + this.getExtraEForCard(playerId, candidate)) <= ps.elixir
+            && candidate.cost_m <= ps.magic
+        ));
+    }
+
     canPlayCard(playerId, card) {
         const ps = this.players[playerId];
         const def = card.def();
@@ -6939,6 +7856,9 @@ class LocalSoloEngine {
         if (ps.shovel_active) return [false, '链子效果中，无法使用卡牌'];
         if (this.cardIs(card, 'Sapphire', 'ocean:sapphire') && !this.oceanSapphireSelectableAttacks(playerId, card).length) {
             return [false, '手中没有可选择的攻击牌'];
+        }
+        if (this.cardIs(card, 'Ruby', 'arctic:ruby') && !this.arcticRubySelectableAttacks(playerId, card).length) {
+            return [false, '手中没有可支付消耗的攻击牌'];
         }
         const totalE = Math.max(0, card.cost_e + this.getExtraEForCard(playerId, card));
         if (totalE > ps.elixir) return [false, `能量不足（需要${totalE}E，当前${ps.elixir}E）`];
@@ -6969,10 +7889,17 @@ class LocalSoloEngine {
 
     checkResponseNeeded(playerId, card, choice = null) {
         if (card.flags.has('precision')) return false;
+        if (card.flags.has('stealth')) return false;
         const targetId = this.choiceTargetFromChoice(choice, 1 - playerId);
-        if (card.card_type === 'thorn' && !card.flags.has('wide_strike') && targetId === playerId) return false;
+        const secondaryTargets = this.secondaryAttackTargetIds(card, choice);
+        const targetsOpponent = targetId === 1 - playerId || secondaryTargets.includes(1 - playerId);
+        if (card.card_type === 'thorn' && !card.flags.has('wide_strike') && targetId === playerId && !targetsOpponent) return false;
         const opp = this.players[1 - playerId];
         const trigger = card.card_type;
+        if (targetsOpponent && opp.hand.some(c => (
+            this.canPayCounterCard(1 - playerId, c)
+            && c.def().response_trigger === 'targeted'
+        ))) return true;
         if (opp.hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === 'any')) return true;
         if (opp.hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === trigger)) return true;
         if (this.wouldDestroyEquipment(card) && opp.hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === 'equipment_destroy')) return true;
@@ -6982,8 +7909,10 @@ class LocalSoloEngine {
 
     checkPrecisionResponseNeeded(playerId, card, choice = null) {
         if (!card.flags.has('precision')) return false;
+        if (card.flags.has('stealth')) return false;
         const targetId = this.choiceTargetFromChoice(choice, 1 - playerId);
-        if (targetId === playerId) return false;
+        const secondaryTargets = this.secondaryAttackTargetIds(card, choice);
+        if (targetId !== 1 - playerId && !secondaryTargets.includes(1 - playerId)) return false;
         return this.players[1 - playerId].hand.some(c => this.canPayCounterCard(1 - playerId, c) && c.def().response_trigger === 'thorn');
     }
 
@@ -6999,6 +7928,120 @@ class LocalSoloEngine {
         if (this.wouldDestroyEquipment(playedCard)) triggerTypes.push('equipment_destroy');
         if (this.wouldHeal(playedCard)) triggerTypes.push('heal');
         return this.players[playerId].hand.filter(card => triggerTypes.includes(card.def().response_trigger));
+    }
+
+    prepareDesertCitronPlayFlags(playerId, card) {
+        if (!card) return;
+        card.setup_modifiers.delete('desert_citron_precision_play');
+        card.setup_modifiers.delete('desert_citron_stealth_play');
+        if (card.card_type !== 'thorn') return;
+        const citrons = this.iterEquipmentTargetingPlayer(playerId)
+            .filter(({ eq }) => this.cardIs(eq.card_instance || eq, 'Citron', 'desert_cards_addition:citron'));
+        citrons.forEach(() => {
+            if (card.flags.has('precision')) card.setup_modifiers.add('desert_citron_stealth_play');
+            else card.setup_modifiers.add('desert_citron_precision_play');
+        });
+    }
+
+    prepareDesertMarbleTargets(playerId, card, choice) {
+        if (!this.cardIs(card, 'Marble', 'desert_cards_addition:marble')) return choice;
+        const updated = { ...(choice || {}) };
+        if (!Array.isArray(updated._desert_marble_targets)) {
+            const count = Math.max(1, toInt(card.fission_level, 1)) * this.cardTotalHits(card, 1);
+            const primaryTarget = this.choiceTargetFromChoice(updated, -1);
+            updated._desert_marble_targets = this.randomNonrepeatingAttackTargets(
+                playerId,
+                count,
+                primaryTarget,
+            );
+        }
+        card._desert_marble_bounce_cursor = 0;
+        card._desert_marble_previous_target = this.choiceTargetFromChoice(updated, -1);
+        return updated;
+    }
+
+    randomNonrepeatingAttackTargets(playerId, count, previousTarget = -1) {
+        const targets = [];
+        let previous = toInt(previousTarget, -1);
+        for (let index = 0; index < Math.max(0, toInt(count, 0)); index += 1) {
+            const candidates = this.players
+                .map((ps, targetId) => ({ ps, targetId }))
+                .filter(({ ps, targetId }) => (
+                    ps
+                    && targetId !== previous
+                    && toInt(ps.health, 0) > 0
+                    && (targetId === playerId || !ps.untargetable || this.isStatusImmune(targetId))
+                ))
+                .map(({ targetId }) => targetId);
+            if (!candidates.length) break;
+            previous = candidates[Math.floor(Math.random() * candidates.length)];
+            targets.push(previous);
+        }
+        return targets;
+    }
+
+    arcticRicochetRepeatCount(card) {
+        if (!card || typeof card.def !== 'function') return 0;
+        const event = card.def().v2_events && card.def().v2_events.on_play;
+        const steps = event && (Array.isArray(event) ? event : (event.steps || event.effects));
+        if (!Array.isArray(steps)) return 0;
+        const effect = steps.find(step => (
+            step
+            && typeof step === 'object'
+            && String(step.op || step.type || '') === 'arctic_ricochet_attack'
+        ));
+        return effect ? Math.max(0, toInt(effect.repeats ?? (effect.params && effect.params.repeats), 0)) : 0;
+    }
+
+    prepareArcticRicochetTargets(playerId, card, choice) {
+        const repeats = this.arcticRicochetRepeatCount(card);
+        if (repeats <= 0) return choice;
+        const updated = { ...(choice || {}) };
+        if (!Array.isArray(updated._arctic_ricochet_targets)) {
+            const count = repeats * Math.max(1, toInt(card.fission_level, 1));
+            const primaryTarget = this.choiceTargetFromChoice(updated, -1);
+            updated._arctic_ricochet_targets = this.randomNonrepeatingAttackTargets(
+                playerId,
+                count,
+                primaryTarget,
+            );
+        }
+        card._arctic_ricochet_cursor = 0;
+        card._arctic_ricochet_previous_target = this.choiceTargetFromChoice(updated, -1);
+        return updated;
+    }
+
+    desertMarbleTargetIds(card, choice) {
+        if (!this.cardIs(card, 'Marble', 'desert_cards_addition:marble') || !choice) return [];
+        const result = [];
+        (Array.isArray(choice._desert_marble_targets) ? choice._desert_marble_targets : []).forEach(rawId => {
+            const targetId = toInt(rawId, -1);
+            if (targetId >= 0 && targetId < this.players.length && !result.includes(targetId)) result.push(targetId);
+        });
+        return result;
+    }
+
+    arcticRicochetTargetIds(card, choice) {
+        if (this.arcticRicochetRepeatCount(card) <= 0 || !choice) return [];
+        const result = [];
+        (Array.isArray(choice._arctic_ricochet_targets) ? choice._arctic_ricochet_targets : []).forEach(rawId => {
+            const targetId = toInt(rawId, -1);
+            if (targetId >= 0 && targetId < this.players.length && !result.includes(targetId)) result.push(targetId);
+        });
+        return result;
+    }
+
+    secondaryAttackTargetIds(card, choice) {
+        return [
+            ...this.desertMarbleTargetIds(card, choice),
+            ...this.arcticRicochetTargetIds(card, choice),
+        ].filter((targetId, index, targets) => targets.indexOf(targetId) === index);
+    }
+
+    prepareDesertPlayState(playerId, card, choice) {
+        this.prepareDesertCitronPlayFlags(playerId, card);
+        choice = this.prepareDesertMarbleTargets(playerId, card, choice);
+        return this.prepareArcticRicochetTargets(playerId, card, choice);
     }
 
     prepareOceanSpikeballForPlay(playerId, card) {
@@ -7079,6 +8122,7 @@ class LocalSoloEngine {
             if (queued) return queued;
         }
         this.prepareOceanSpikeballForPlay(playerId, card);
+        choice = this.prepareDesertPlayState(playerId, card, choice);
         const totalE = autoNoCost ? 0 : Math.max(0, card.cost_e + this.getExtraEForCard(playerId, card));
         const totalM = autoNoCost ? 0 : card.cost_m;
         card._paid_e_this_play = totalE;
@@ -7150,6 +8194,7 @@ class LocalSoloEngine {
             this.resetCardAfterPlay(card);
             if (card.flags.has('exile')) this.putCardInExile(playerId, card);
             else this.discardCard(ps, card);
+            this.gardenReturnFirstPlayedCard(playerId, card);
             this.dispatchCardEvent('card_used', playerId, card, playerId, null, null, choice);
             result.countered = true;
             result.negated = true;
@@ -7169,6 +8214,7 @@ class LocalSoloEngine {
                 this.resetCardAfterPlay(card);
                 if (card.flags.has('exile')) this.putCardInExile(playerId, card);
                 else this.discardCard(ps, card);
+                this.gardenReturnFirstPlayedCard(playerId, card);
                 this.dispatchCardEvent('card_used', playerId, card, playerId, null, null, choice);
                 return result;
             }
@@ -7269,6 +8315,7 @@ class LocalSoloEngine {
             const loc = this.findCardLocation(card);
             if (!loc) this.discardCard(ps, card);
         }
+        this.gardenReturnFirstPlayedCard(playerId, card);
         const targetId = choice && (choice.target_player ?? choice.target_player_id ?? choice.target_id);
         this.dispatchCardEvent('card_used', playerId, card, targetId == null ? playerId : toInt(targetId, playerId), null, null, choice);
         this.checkGameOver();
@@ -7285,6 +8332,7 @@ class LocalSoloEngine {
             const handlesWideStrikeInternally = effects.some(effect => [
                 'ocean_for_each_selectable_target',
                 'ocean_spikeball_damage',
+                'bio_clear_poison_fire',
             ].includes(String(effect && effect.type || '')));
             if (card.flags.has('wide_strike') && !handlesWideStrikeInternally) {
                 this.wideStrikeTargetIds(playerId, card).forEach(targetId => {
@@ -7398,6 +8446,7 @@ class LocalSoloEngine {
             }
             return { success: false, cancelled: true, error: '选择已取消' };
         }
+        choice = this.prepareDesertPlayState(playerId, card, choice);
         if (!pending.already_paid) {
             const handCard = ps.findHandCard(card.instance_id);
             const costCard = handCard || card;
@@ -7428,6 +8477,8 @@ class LocalSoloEngine {
         this.pending_response = null;
         const playerId = pending.player_id;
         const card = new LocalCard(pending.card);
+        card._paid_e_this_play = Math.max(0, toInt(pending.paid_e ?? card.cost_e, 0));
+        card._paid_m_this_play = Math.max(0, toInt(pending.paid_m ?? card.cost_m, 0));
         const choice = pending.original_choice;
         if (instanceId != null) {
             const responder = this.players[responderId];
@@ -7441,6 +8492,7 @@ class LocalSoloEngine {
             const playedType = card.card_type;
             const valid = trigger === 'any'
                 || trigger === playedType
+                || (trigger === 'targeted' && responderId === toInt(pending.target_player_id, -1))
                 || (this.wouldDestroyEquipment(card) && trigger === 'equipment_destroy')
                 || (this.wouldHeal(card) && trigger === 'heal')
                 || (pending.is_precision && trigger === 'thorn');
@@ -7544,6 +8596,7 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         const eq = ps.findEquipment(equipmentInstanceId);
         if (!eq) return { success: false, error: '装备不存在' };
+        if (!this.equipmentRuntimeActive(eq)) return { success: false, error: '装备处于尘封状态' };
         const triggerCost = toInt(eq.card_def.trigger_cost_e, -1);
         const triggerCostM = Math.max(0, toInt(eq.card_def.trigger_cost_m ?? eq.card_def.v2_resource?.trigger_cost_m, 0));
         if (triggerCost < 0 && !this.hasCardEvent(eq.card_def, 'equipment_trigger')) return { success: false, error: '该装备没有触发效果' };
@@ -7555,10 +8608,16 @@ class LocalSoloEngine {
         if (cardEventRequiresSelfDestroy(eq.card_def, 'equipment_trigger') && toInt(ps.equipment_protection, 0) > 0) {
             return { success: false, error: '装备保护会抵消摧毁，无法触发' };
         }
+        const usesEffectTarget = this.equipmentTriggerUsesEffectTarget(eq.card_def);
+        const targetId = usesEffectTarget
+            ? toInt(eq.effect_target ?? playerId, playerId)
+            : (Number.isInteger(Number(targetPlayerId)) ? toInt(targetPlayerId, 1 - playerId) : 1 - playerId);
+        if (usesEffectTarget && (!this.players[targetId] || toInt(this.players[targetId].health, 0) <= 0)) {
+            return { success: false, error: '没有可选中的玩家' };
+        }
         if (triggerCost > 0) this.spendResource(playerId, 'elixir', triggerCost, eq.card_instance);
         if (triggerCostM > 0) this.spendResource(playerId, 'magic', triggerCostM, eq.card_instance);
         eq.uses_this_turn = toInt(eq.uses_this_turn, 0) + 1;
-        const targetId = Number.isInteger(Number(targetPlayerId)) ? toInt(targetPlayerId, 1 - playerId) : 1 - playerId;
         if (this.hasCardEvent(eq.card_def, 'equipment_trigger')) {
             this.runCardEvent(playerId, eq.card_instance, 'equipment_trigger', {
                 target_player: targetId,
@@ -7602,6 +8661,8 @@ class LocalSoloEngine {
         if (this.game_over) return;
         this.runOwnerTurnEndEquipment(playerId);
         if (this.game_over) return;
+        this.runGardenMagicPollenOwnerTurnEnd(playerId);
+        if (this.game_over) return;
         this.drainTurnEndEventSources(playerId);
         if (this.game_over || this.pending_choice) return;
         this.decayEquipmentArmorEndTurn(playerId);
@@ -7630,6 +8691,7 @@ class LocalSoloEngine {
             this.logMsg(`${this.pn(playerId)}的无敌效果结束`);
         }
         this.decayOceanCardChargeTurnEnd(playerId);
+        delete ps.custom_vars.arctic_ready_queue;
         this.saveLastTurnDamageSnapshot(playerId);
         this.expireBandagesAfterAction(playerId);
         this.clearTurnCardTracking(playerId);

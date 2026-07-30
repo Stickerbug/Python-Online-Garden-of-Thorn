@@ -212,6 +212,25 @@ class MatchContextClientContractTests(unittest.TestCase):
         self.assertIn("retireActiveNetworkMatch('return_to_lobby')", section)
         self.assertIn('resetMatchRuntimeState({ clearGameState: true })', section)
 
+    def test_explicit_spectate_reentry_revives_the_requested_match(self):
+        helper = source_between(
+            GAME_JS,
+            'function restoreExplicitSpectateMatch(data)',
+            'function shouldAcceptNetworkMatchPayload(',
+        )
+        self.assertIn('pendingSpectateRoomId == null', helper)
+        self.assertIn('Number(data.room_id) !== Number(pendingSpectateRoomId)', helper)
+        self.assertIn('retiredNetworkMatchKeys.delete(incomingKey)', helper)
+
+        handler = source_between(
+            GAME_JS,
+            "bindSocketEvent('spectate_enter'",
+            "bindSocketEvent('spectate_leave'",
+        )
+        restore = handler.index('restoreExplicitSpectateMatch(data)')
+        guard = handler.index("shouldAcceptNetworkMatchPayload(data, 'spectate_enter')")
+        self.assertLess(restore, guard)
+
     def test_old_lobby_and_delayed_game_over_payloads_are_guarded(self):
         phase_section = source_between(
             GAME_JS,

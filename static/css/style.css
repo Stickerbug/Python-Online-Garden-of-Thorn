@@ -13001,6 +13001,20 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
   color: var(--text-primary);
 }
 
+.game-alert.game-alert-danger .game-alert-inner {
+  border: 2px solid var(--damage);
+  box-shadow: 0 0 0 3px rgb(235 87 87 / 16%), var(--shadow-lg);
+}
+
+.game-alert.game-alert-danger .game-alert-icon,
+.game-alert.game-alert-danger .game-alert-title {
+  color: var(--damage);
+}
+
+.game-alert.game-alert-danger .game-alert-message {
+  color: var(--text-primary);
+}
+
 .game-alert-message {
   font-size: 14px;
   color: var(--text-secondary);
@@ -17683,6 +17697,25 @@ html[data-ui-style="minimal"] .btn-end-turn {
   text-overflow: ellipsis;
 }
 
+.classic-card-tile-name-wrapped .classic-card-tile-name {
+  display: grid;
+  grid-template-rows: repeat(2, 1fr);
+  align-items: center;
+  justify-items: center;
+  min-height: 16px;
+  transform: translateY(-7px);
+  font-size: 7px;
+  line-height: 1;
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.classic-card-tile-name-wrapped .classic-card-tile-name > span {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
 .classic-card-tile-art {
   grid-row: 3;
   display: grid;
@@ -18710,6 +18743,10 @@ button.armor-meter:focus-visible {
 
 [lang="zh"] .card {
   --card-name-font-scale: 10.5cqi;
+}
+
+[lang="zh"] .card.card-name-long-zh {
+  --card-name-font-scale: 8.9cqi;
 }
 
 [lang="en"] .card,
@@ -20050,25 +20087,57 @@ html.battle-mobile-input-focus.minimal-mobile-canvas[data-ui-style="minimal"] #v
   filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .3));
 }
 
-/* Keep the minimal hand on one row and expose its native horizontal scroll only when needed. */
+/* Minimal hand layout: seven cards per row, capped at three rows. Larger
+   hands increase the column count instead of creating a fourth row. URF
+   independently switches between ten cards in one row and five in two rows. */
 html[data-ui-style="minimal"] #view-game .hand-area {
-  flex-wrap: nowrap;
-  justify-content: flex-start;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  -ms-overflow-style: auto;
-  overscroll-behavior-x: contain;
+  display: grid;
+  grid-template-columns: repeat(var(--hand-card-columns, 7), minmax(0, 1fr));
+  grid-auto-flow: row;
+  grid-auto-rows: max-content;
+  align-items: end;
+  align-content: end;
+  justify-items: center;
+  justify-content: stretch;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-x: none;
 }
 
 html[data-ui-style="minimal"] #view-game .hand-area::-webkit-scrollbar {
-  display: block;
+  display: none;
   width: 0;
-  height: var(--scrollbar-size);
+  height: 0;
 }
 
-html[data-ui-style="minimal"] #view-game .card-animation-lock .hand-area {
-  overflow-x: hidden;
+html[data-ui-style="minimal"] #view-game .game-container .hand-area > .card {
+  flex: none;
+  min-width: 0;
+  width: min(100%, var(--minimal-hand-card-width, 140px)) !important;
+  max-width: 100%;
+  justify-self: center;
+}
+
+html[data-ui-style="minimal"] #view-game .game-container,
+html[data-ui-style="minimal"] #view-game .player-section,
+html[data-ui-style="minimal"] #view-game .hand-play-row,
+html[data-ui-style="minimal"] #view-game .middle-section,
+html[data-ui-style="minimal"] #view-game .battle-log,
+html[data-ui-style="minimal"] #view-game .battle-panel-tabs,
+html[data-ui-style="minimal"] #view-game .battle-log-chat-row {
+  min-width: 0;
+  max-width: 100%;
+}
+
+html[data-ui-style="minimal"] #view-game .battle-log-chat-row input {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Dark-theme surface contract.

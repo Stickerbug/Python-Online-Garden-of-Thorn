@@ -28,7 +28,14 @@
     let activeStoryRoomTabId = '';
     let pendingStoryDeckChange = null;
     let pendingStoryEventAction = null;
+    let storyOnlineCount = null;
+    let storyPresenceTimer = 0;
+    let storyPresenceInFlight = false;
+    let storyPresenceIntervalMs = 25000;
     const storyCardElementData = new WeakMap();
+    const STORY_PRESENCE_CLIENT_ID = globalThis.crypto?.randomUUID
+        ? crypto.randomUUID()
+        : `story-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const STORY_SKIN_LOOK_OFFSET_X_PERCENT = 38;
     const STORY_SKIN_LOOK_OFFSET_Y_PERCENT = 56;
 
@@ -99,6 +106,7 @@
     const TEXT = {
         en: {
             title: 'Story Mode', account: 'Player', back: 'Back', loading: 'Loading journey',
+            onlinePlayers: (value) => `Online Players: ${value}`,
             emptyTitle: 'A new journey', start: 'Start', stage: 'Stage', biome: 'Region', gold: 'Gold',
             route: 'Route', abandon: 'End Journey', abandonTitle: 'End this journey?',
             abandonMessage: 'This run will be marked as ended.', resetMap: 'Reset Map',
@@ -152,6 +160,7 @@
         },
         zh: {
             title: '故事模式', account: '玩家', back: '返回', loading: '载入旅程', emptyTitle: '一段新的旅程',
+            onlinePlayers: (value) => `在线玩家：${value}`,
             start: '开始', stage: '阶段', biome: '区域', gold: '金币', route: '路线', abandon: '结束旅程',
             abandonTitle: '结束旅程？', abandonMessage: '当前进度将被记录为已结束。', resetMap: '重置地图',
             resetTitle: '重置地图？', resetMessage: '将重新生成路线并返回第一层。', mapReset: '地图已重置',
@@ -200,6 +209,7 @@
         },
         fr: {
             title: 'Mode histoire', account: 'Joueur', back: 'Retour', loading: 'Chargement du voyage',
+            onlinePlayers: (value) => `Joueurs en ligne : ${value}`,
             emptyTitle: 'Un nouveau voyage', start: 'Commencer', stage: 'Étape', biome: 'Région', gold: 'Or',
             route: 'Route', abandon: 'Terminer le voyage', blessingTitle: 'Choisir une bénédiction',
             blessingCopy: 'Choisissez-en une pour ce voyage.', intent: 'Intention', endTurn: 'Fin du tour',
@@ -232,6 +242,7 @@
         },
         ja: {
             title: 'ストーリーモード', account: 'プレイヤー', back: '戻る', loading: '旅を読み込み中',
+            onlinePlayers: (value) => `オンラインプレイヤー：${value}`,
             emptyTitle: '新しい旅', start: '開始', stage: 'ステージ', biome: '地域', gold: 'ゴールド',
             route: 'ルート', abandon: '旅を終了', blessingTitle: '祝福を選択', blessingCopy: '今回の旅で一つ選択します。',
             intent: '意図', endTurn: 'ターン終了', drawPile: '山札', discardPile: '捨て札', exilePile: '追放',
@@ -404,6 +415,8 @@
             'story-event-confirm-submit': t.confirm,
         };
         Object.entries(values).forEach(([id, value]) => setText(id, value));
+        updateStoryPresenceDisplay();
+        updateStoryStatusBar();
         const back = $('story-back');
         if (back) {
             back.title = t.back;
@@ -570,6 +583,73 @@
         } finally {
             clearTimeout(timeout);
         }
+    }
+
+    function storyStatusText(run = activeRun) {
+        const state = run?.state;
+        if (!state) return t.title;
+        const parts = [t.title, t.floor(state.current_floor || 1)];
+        if (state.phase === 'combat' && state.combat) {
+            parts.push(state.combat.turn === 'player' ? t.playerTurn : t.enemyTurn);
+        } else if (state.phase === 'blessing') {
+            parts.push(t.rooms.blessing);
+        } else if (state.phase === 'reward') {
+            parts.push(t.rewards);
+        } else if (state.phase === 'complete') {
+            parts.push(t.journeyComplete);
+        } else if (state.phase === 'game_over') {
+            parts.push(t.journeyFailed);
+        } else {
+            const roomType = state.room?.type || currentNode(state)?.type;
+            if (roomType) parts.push(t.rooms[roomType] || roomType);
+        }
+        return parts.filter(Boolean).join(' · ');
+    }
+
+    function updateStoryPresenceDisplay() {
+        const value = storyOnlineCount == null ? '--' : String(storyOnlineCount);
+        const label = t.onlinePlayers(value);
+        setText('story-online-count', label);
+        setText('story-status-online', label);
+    }
+
+    function updateStoryStatusBar() {
+        setText('story-status-text', storyStatusText());
+    }
+
+    function scheduleStoryPresence() {
+        clearTimeout(storyPresenceTimer);
+        storyPresenceTimer = window.setTimeout(sendStoryPresence, storyPresenceIntervalMs);
+    }
+
+    async function sendStoryPresence() {
+        if (storyPresenceInFlight) {
+            scheduleStoryPresence();
+            return;
+        }
+        storyPresenceInFlight = true;
+        try {
+            const payload = await requestJson('/api/story/presence', {
+                method: 'POST',
+                body: JSON.stringify({ client_id: STORY_PRESENCE_CLIENT_ID }),
+            });
+            storyOnlineCount = Math.max(0, Number(payload.online_count) || 0);
+            const requestedInterval = Number(payload.heartbeat_interval_seconds) * 1000;
+            if (Number.isFinite(requestedInterval) && requestedInterval >= 10000) {
+                storyPresenceIntervalMs = requestedInterval;
+            }
+            updateStoryPresenceDisplay();
+        } catch (error) {
+            if (error.message === 'AUTH_REQUIRED') return;
+        } finally {
+            storyPresenceInFlight = false;
+            scheduleStoryPresence();
+        }
+    }
+
+    function startStoryPresence() {
+        clearTimeout(storyPresenceTimer);
+        void sendStoryPresence();
     }
 
     function showView(name) {
@@ -3277,6 +3357,7 @@
 
     function renderRun(run) {
         activeRun = run;
+        updateStoryStatusBar();
         if (window.__STORY_DEV_TOOLS__) {
             renderDeveloperPanel(run?.state || null, { syncValues: developerModeOpen });
         }
@@ -3989,5 +4070,6 @@
     applyText();
     renderPlayerSkin();
     bind();
+    startStoryPresence();
     loadRun();
 })();

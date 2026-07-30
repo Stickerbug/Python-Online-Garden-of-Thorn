@@ -358,6 +358,7 @@ class ModCard:
         self.description = data.get('description', '')
         self.effect_text = data.get('effect_text', '')
         self.flags = normalize_card_flags(data.get('flags', []))
+        self.flags.update(normalize_card_flags(data.get('tags', [])))
         self.effects = data.get('effects', [])
         self.scripts = data.get('scripts', {}) if isinstance(data.get('scripts', {}), dict) else {}
         self.trigger_cost_e = data.get('trigger_cost_e', -1)

@@ -7,6 +7,7 @@ from cards import (
     CardInstance, CARD_DEFS, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     BASE_MAX_HEALTH, DRAW_PER_TURN, ELIXIR_RECOVERY,
+    normalize_card_flags,
 )
 from damage_types import DAMAGE_TAG_FIRE, DAMAGE_TAG_POISON, DAMAGE_TYPE_MAGIC
 
@@ -66,7 +67,8 @@ def _card_identity_keys(card_def) -> set:
 def is_infinite_excluded(card_def) -> bool:
     if not card_def:
         return True
-    if 'infinite_exclude' in getattr(card_def, 'flags', set()):
+    flags = normalize_card_flags(getattr(card_def, 'flags', set()) or set())
+    if 'infinite_exclude' in flags or 'team_limited' in flags:
         return True
     excluded_keys = {key.lower() for key in INFINITE_EXCLUDED_IDS}
     excluded_keys.update(_compact_card_key(key) for key in INFINITE_EXCLUDED_IDS)
@@ -108,7 +110,7 @@ class InfinitePlayerState(PlayerState):
         return URF_HAND_LIMIT
 
     def _draw_one_infinite(self, card_type: Optional[str] = None) -> Optional[CardInstance]:
-        return self._infinite_engine.create_infinite_card(card_type)
+        return self._infinite_engine.create_infinite_card(card_type, player_id=self.player_id)
 
     def draw_cards(self, count: int) -> List[CardInstance]:
         drawn = []
@@ -170,19 +172,65 @@ class GameEngineInfiniteFire(GameEngine):
             by_type[card_type]['weights'].append(get_infinite_weight(card_def))
         self.infinite_by_type = by_type
 
-    def create_infinite_card(self, card_type: Optional[str] = None) -> Optional[CardInstance]:
+    def _active_unique_card_ids(self, player_id: Optional[int]) -> set:
+        if player_id is None or not 0 <= player_id < len(self.players):
+            return set()
+        player = self.players[player_id]
+        active_cards = list(getattr(player, 'hand', []) or [])
+        active_cards.extend(
+            equipment.card_instance
+            for equipment in (getattr(player, 'equipment', []) or [])
+            if getattr(equipment, 'card_instance', None) is not None
+        )
+        return {
+            card.def_id
+            for card in active_cards
+            if 'unique' in normalize_card_flags(getattr(card, 'flags', set()) or set())
+        }
+
+    def _available_infinite_candidates(
+        self,
+        ids: List[str],
+        weights: List[int],
+        player_id: Optional[int],
+    ):
+        blocked_unique_ids = self._active_unique_card_ids(player_id)
+        if not blocked_unique_ids:
+            return ids, weights
+        available_ids = []
+        available_weights = []
+        for def_id, weight in zip(ids, weights):
+            if def_id in blocked_unique_ids:
+                continue
+            available_ids.append(def_id)
+            available_weights.append(weight)
+        return available_ids, available_weights
+
+    def create_infinite_card(
+        self,
+        card_type: Optional[str] = None,
+        player_id: Optional[int] = None,
+    ) -> Optional[CardInstance]:
         if not self.infinite_card_pool:
             self._build_infinite_pool()
         if card_type:
             pool = self.infinite_by_type.get(card_type) or {}
             ids = pool.get('ids') or []
             weights = pool.get('weights') or []
+            ids, weights = self._available_infinite_candidates(ids, weights, player_id)
             if not ids:
                 return None
             return CardInstance(def_id=random.choices(ids, weights=weights, k=1)[0])
         if not self.infinite_card_pool:
             return None
-        def_id = random.choices(self.infinite_card_pool, weights=self.infinite_card_weights, k=1)[0]
+        ids, weights = self._available_infinite_candidates(
+            self.infinite_card_pool,
+            self.infinite_card_weights,
+            player_id,
+        )
+        if not ids:
+            return None
+        def_id = random.choices(ids, weights=weights, k=1)[0]
         return CardInstance(def_id=def_id)
 
     def add_card_to_urf_hand(self, player_id: int, card: CardInstance, log: bool = True) -> bool:
@@ -196,7 +244,7 @@ class GameEngineInfiniteFire(GameEngine):
         return True
 
     def _draw_to_hand_by_type(self, player_id: int, card_type: str):
-        card = self.create_infinite_card(card_type)
+        card = self.create_infinite_card(card_type, player_id=player_id)
         if not card:
             return
         self.add_card_to_urf_hand(player_id, card, log=False)
@@ -224,7 +272,7 @@ class GameEngineInfiniteFire(GameEngine):
         ps.hand = []
         for card_type, count in URF_STARTING_HAND_COUNTS.items():
             for _ in range(count):
-                card = self.create_infinite_card(card_type)
+                card = self.create_infinite_card(card_type, player_id=ps.player_id)
                 if card:
                     self.add_card_to_urf_hand(ps.player_id, card, log=False)
 
@@ -540,7 +588,7 @@ class GameEngineInfiniteFire(GameEngine):
         if not card:
             return {'success': False, 'error': '卡牌不在手中'}
         ps.discard.append(card)
-        new_card = self.create_infinite_card(card.card_type)
+        new_card = self.create_infinite_card(card.card_type, player_id=player_id)
         if new_card:
             added = self.add_card_to_urf_hand(player_id, new_card, log=False)
             type_name = CARD_TYPE_CN.get(card.card_type, card.card_type)

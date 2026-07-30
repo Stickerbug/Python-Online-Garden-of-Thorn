@@ -11,6 +11,7 @@ from cards import (
     BASE_MAX_ELIXIR, BASE_MAX_MAGIC, INITIAL_HEALTH, INITIAL_ELIXIR,
     INITIAL_MAGIC, FIRST_PLAYER_ELIXIR, SECOND_PLAYER_HEALTH,
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
+    ensure_first_bloom_draft_includes_sewage,
     create_deck_from_draft, ERROR_CARD_ID, normalize_card_flag, normalize_card_flags,
     clamp_card_layer, clamp_card_extra_hits, clamp_card_power, clamp_damage_hits, _new_instance_id,
 )
@@ -169,8 +170,20 @@ def reset_card_after_play(card: CardInstance):
     card.instance_flags.discard('temp_magic_heavy')
     clear_spikeball_play_flags(card)
     card.instance_flags.discard('wide_strike')
+    card.setup_modifiers.discard('desert_citron_precision_play')
+    card.setup_modifiers.discard('desert_citron_stealth_play')
+    for attr in (
+        '_desert_marble_bounce_cursor',
+        '_desert_marble_previous_target',
+        '_arctic_ricochet_cursor',
+        '_arctic_ricochet_previous_target',
+    ):
+        if hasattr(card, attr):
+            delattr(card, attr)
     if hasattr(card, '_sewers_was_countered_this_play'):
         delattr(card, '_sewers_was_countered_this_play')
+    if isinstance(getattr(card, 'custom_vars', None), dict):
+        card.custom_vars.pop('sewers_toilet_paper_power', None)
     if card.card_type == 'thorn':
         card.fission_level = preserved_fission_level if preserve_fission else 1
         card.fusion_level = 1
@@ -606,6 +619,7 @@ class PlayerState:
             1
             for e in self.equipment
             if e.def_id == 'GoldenLeaf' and getattr(e, 'effect_target', self.player_id) == self.player_id
+            and max(0, int((getattr(e, 'custom_vars', {}) or {}).get('sewers_sealed', 0) or 0)) <= 0
         )
         air_penalty = sum(
             1
@@ -618,6 +632,7 @@ class PlayerState:
         return bool(getattr(self, 'external_zero_e_ignore_hand_limit', False)) or any(
             e.def_id in ('MagicGoldenLeaf', 'vanilla:magicgoldenleaf')
             and getattr(e, 'effect_target', self.player_id) == self.player_id
+            and max(0, int((getattr(e, 'custom_vars', {}) or {}).get('sewers_sealed', 0) or 0)) <= 0
             for e in self.equipment
         )
 
@@ -1676,6 +1691,39 @@ class GameEngine:
                 'elixir': int(getattr(ps, 'elixir', 0) or 0),
                 'magic': int(getattr(ps, 'magic', 0) or 0),
             }
+            self._ensure_garden_initial_deck_storage()
+            cards = (
+                list(getattr(ps, 'hand', []) or [])
+                + list(getattr(ps, 'deck', []) or [])
+                + list(getattr(ps, 'discard', []) or [])
+                + list(getattr(ps, 'exile', []) or [])
+                + [
+                    eq.card_instance
+                    for eq in list(getattr(ps, 'equipment', []) or [])
+                    if getattr(eq, 'card_instance', None) is not None
+                ]
+            )
+            self._garden_initial_decks[player_id] = [
+                copy.deepcopy(card.to_dict())
+                for card in cards
+                if getattr(card, 'def_id', ERROR_CARD_ID) != ERROR_CARD_ID
+            ]
+
+    def _ensure_garden_initial_deck_storage(self):
+        player_count = len(self.players)
+        decks = getattr(self, '_garden_initial_decks', None)
+        if not isinstance(decks, list):
+            decks = []
+        while len(decks) < player_count:
+            decks.append([])
+        self._garden_initial_decks = decks[:player_count]
+
+        reveals = getattr(self, '_garden_initial_deck_reveal', None)
+        if not isinstance(reveals, list):
+            reveals = []
+        while len(reveals) < player_count:
+            reveals.append(None)
+        self._garden_initial_deck_reveal = reveals[:player_count]
 
     def _save_all_match_start_snapshots(self):
         for pid in range(len(self.players)):
@@ -1809,6 +1857,8 @@ class GameEngine:
             for owner_id, owner in enumerate(self.players):
                 for eq in list(getattr(owner, 'equipment', []) or []):
                     if not self._card_is(eq.card_instance, 'VampireFang', 'sewers:vampire_fang'):
+                        continue
+                    if not self._non_stack_equipment_is_active(eq):
                         continue
                     target_id = self._equipment_effect_target_id(eq, owner_id)
                     if target_id != selected_id:
@@ -2541,6 +2591,9 @@ class GameEngine:
         self.negated_card: bool = False
         self._yggdrasil_check: bool = True
         self._antennae_reveal: List[Optional[list]] = [None, None]
+        self._garden_initial_decks: List[List[dict]] = [[], []]
+        self._garden_initial_deck_reveal: List[Optional[dict]] = [None, None]
+        self._garden_initial_deck_reveal_serial: int = 0
 
         self.opening_event_options: List[List[dict]] = [[], []]
         self.opening_event_picks: List[Optional[int]] = [None, None]
@@ -3475,6 +3528,8 @@ class GameEngine:
             ps.external_zero_e_ignore_hand_limit = False
         for owner_id, owner_state in enumerate(getattr(self, 'players', []) or []):
             for eq in getattr(owner_state, 'equipment', []) or []:
+                if not self._equipment_runtime_active(eq):
+                    continue
                 try:
                     target_id = int(getattr(eq, 'effect_target', owner_id))
                 except Exception:
@@ -3494,6 +3549,8 @@ class GameEngine:
             return False
         for owner_id, owner_state in enumerate(getattr(self, 'players', []) or []):
             for eq in getattr(owner_state, 'equipment', []) or []:
+                if not self._equipment_runtime_active(eq):
+                    continue
                 try:
                     target_id = int(getattr(eq, 'effect_target', owner_id))
                 except Exception:
@@ -3715,6 +3772,7 @@ class GameEngine:
         if for_player in goggles_targets:
             you_data['deck_ordered'] = [c.to_dict() for c in self.players[for_player].deck]
             you_data['discard_ordered'] = [c.to_dict() for c in self.players[for_player].discard]
+        self._ensure_garden_initial_deck_storage()
         return {
             'phase': self.phase,
             'current_player': self.current_player,
@@ -3731,6 +3789,7 @@ class GameEngine:
             'pending_v2_ui': self._public_v2_ui(for_player),
             'opening_event_picks': self.opening_event_picks,
             'antennae_reveal': self._antennae_reveal[for_player],
+            'garden_initial_deck_reveal': copy.deepcopy(self._garden_initial_deck_reveal[for_player]),
             'forced_target_player_id': self._sewers_forced_target_for_player(for_player),
         }
 
@@ -3784,8 +3843,15 @@ class GameEngine:
             return
         if len(self.draft_type_order) <= len(self.draft_picks[player_id]):
             return
-        card_type = self.draft_type_order[len(self.draft_picks[player_id])]
-        self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
+        draft_index = len(self.draft_picks[player_id])
+        card_type = self.draft_type_order[draft_index]
+        options = generate_draft_options(self.draft_pool, card_type, 3)
+        self.draft_options[player_id] = ensure_first_bloom_draft_includes_sewage(
+            self.draft_pool,
+            options,
+            card_type,
+            self.draft_type_order[:draft_index],
+        )
 
     def _generate_draft_options(self):
         self._generate_draft_options_for_player(0)
@@ -4752,6 +4818,7 @@ class GameEngine:
         if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
         self._arm_bandages_for_action(player_id)
+        self._finish_sealed_equipment_turn_start(player_id)
         self._turn_start_auto_settlement_player = None
         self._finish_turn_boundary()
         self._continue_honey_control_if_needed(player_id)
@@ -4877,7 +4944,7 @@ class GameEngine:
         immune = self._is_status_immune(player_id)
         shield_keys = ('jungle:shield', 'shield')
         shield = self._custom_status_value(player_id, *shield_keys)
-        if shield > 0:
+        if shield > 0 and not self._garden_has_sunflower_targeting(player_id):
             self._set_custom_status_alias_group(player_id, 'jungle:shield', shield_keys, shield // 2)
 
     def _apply_jungle_turn_start_regen(self, player_id: int):
@@ -5018,9 +5085,15 @@ class GameEngine:
             return 0
         old_health = ps.health
         ps.health -= actual
+        health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
+        self._bio_stem_cell_after_health_loss(player_id, health_lost)
         self._note_achievement_health(player_id)
         self._record_damage(player_id, actual, source_id)
         self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={old_health}→{ps.health}）")
+        if resolved_damage_type == DAMAGE_TYPE_PHYSICAL and health_lost > 0:
+            self._sewers_grow_toilet_paper_power(player_id)
+        if resolved_damage_tag == DAMAGE_TAG_POISON and health_lost > 0:
+            self._sewers_neem_after_poison_health_loss(player_id, health_lost)
         self._run_v2_after_damage_hooks(damage_context, actual)
         if not getattr(self, '_defer_turn_start_death_checks', False):
             self._check_yggdrasil(player_id)
@@ -5083,6 +5156,8 @@ class GameEngine:
             if name != primary:
                 self._set_custom_status_value(player_id, name, 0)
         self._set_custom_status_value(player_id, primary, value)
+        if any(str(name) in ('jungle:shield', 'shield') for name in aliases):
+            self._refresh_garden_magic_disc_bonuses()
 
     def _hel_luck_keys(self) -> tuple:
         return ('hel:luck', 'luck', '幸运')
@@ -5368,7 +5443,11 @@ class GameEngine:
         count = 0
         for ps in self.players:
             for eq in ps.equipment:
-                if self._equipment_is(eq, 'Corruption', 'vanilla:corruption') and eq.corruption_active:
+                if (
+                    self._non_stack_equipment_is_active(eq)
+                    and self._equipment_is(eq, 'Corruption', 'vanilla:corruption')
+                    and eq.corruption_active
+                ):
                     count += 1
         return count
 
@@ -5376,6 +5455,8 @@ class GameEngine:
         for owner_id, owner_state in enumerate(self.players):
             for eq in list(getattr(owner_state, 'equipment', []) or []):
                 if not self._equipment_is(eq, 'Corruption', 'vanilla:corruption') or eq.corruption_active:
+                    continue
+                if not self._non_stack_equipment_is_active(eq):
                     continue
                 eq.corruption_active = True
                 self.log_msg(f"{self.pn(owner_id)}的腐化效果激活")
@@ -5406,6 +5487,8 @@ class GameEngine:
         count = 0
         for owner_state in self.players:
             for eq in getattr(owner_state, 'equipment', []):
+                if not self._non_stack_equipment_is_active(eq):
+                    continue
                 eq_id = str(getattr(eq, 'def_id', '') or '').lower()
                 effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', source_id)))
                 if effect_target != source_id:
@@ -5424,6 +5507,8 @@ class GameEngine:
         bonus = 0
         for owner_state in self.players:
             for eq in getattr(owner_state, 'equipment', []):
+                if not self._non_stack_equipment_is_active(eq):
+                    continue
                 eq_id = str(getattr(eq, 'def_id', '') or '').lower()
                 effect_target = int(getattr(eq, 'effect_target', getattr(eq, 'owner', source_id)))
                 if effect_target != source_id:
@@ -5620,6 +5705,23 @@ class GameEngine:
             selectable.append(candidate)
         return selectable
 
+    def _arctic_ruby_selectable_attacks(
+        self,
+        player_id: int,
+        source_card: Optional[CardInstance] = None,
+    ) -> List[CardInstance]:
+        if not self._valid_player_id(player_id):
+            return []
+        source_iid = getattr(source_card, 'instance_id', None)
+        return [
+            candidate
+            for candidate in self.players[player_id].hand
+            if getattr(candidate, 'instance_id', None) != source_iid
+            and getattr(candidate, 'card_type', '') == 'thorn'
+            and self._card_selectable_by_action(candidate)
+            and self._card_payable_now(player_id, candidate)
+        ]
+
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         if not self._valid_player_id(player_id):
             return False, "无效玩家"
@@ -5661,6 +5763,9 @@ class GameEngine:
         if self._card_is(card, 'Sapphire', 'ocean:sapphire'):
             if not self._ocean_sapphire_selectable_attacks(player_id, card):
                 return False, "手中没有可选择的攻击牌"
+        if self._card_is(card, 'Ruby', 'arctic:ruby'):
+            if not self._arctic_ruby_selectable_attacks(player_id, card):
+                return False, "手中没有可支付消耗的攻击牌"
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = max(0, card.cost_e + extra_e)
         if total_e > ps.elixir:
@@ -5761,6 +5866,25 @@ class GameEngine:
             return False
         return 'non_stackable' in self._effective_card_flags(getattr(eq, 'card_instance', None))
 
+    def _equipment_sealed_layers(self, eq: Optional[EquipmentInstance]) -> int:
+        if eq is None:
+            return 0
+        try:
+            return max(0, int((getattr(eq, 'custom_vars', {}) or {}).get('sewers_sealed', 0) or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def _equipment_runtime_active(self, eq: Optional[EquipmentInstance]) -> bool:
+        if eq is None or self._equipment_sealed_layers(eq) > 0:
+            return False
+        custom = getattr(eq, 'custom_vars', {}) or {}
+        try:
+            skipped_boundary = int(custom.get('_sewers_sealed_skip_boundary', -1) or -1)
+            current_boundary = int(getattr(self, '_turn_boundary_id', -2) or -2)
+        except (TypeError, ValueError):
+            return True
+        return skipped_boundary != current_boundary
+
     def _ensure_non_stack_equipment_order(self, eq: Optional[EquipmentInstance]) -> int:
         if eq is None:
             return 0
@@ -5787,6 +5911,8 @@ class GameEngine:
 
     def _non_stack_equipment_is_active(self, eq: Optional[EquipmentInstance]) -> bool:
         """Only the earliest equipped copy of a non-stacking card is active globally."""
+        if not self._equipment_runtime_active(eq):
+            return False
         if not self._equipment_uses_non_stack_rule(eq):
             return True
         wanted_id = str(getattr(eq, 'def_id', '') or '')
@@ -5801,6 +5927,127 @@ class GameEngine:
                 if candidate_order < current_order:
                     return False
         return True
+
+    def _suspend_sealed_equipment_passives(self, owner_id: int, eq: EquipmentInstance) -> None:
+        if eq is None or not self._valid_player_id(owner_id):
+            return
+        custom = getattr(eq, 'custom_vars', {}) or {}
+        if custom.get('_sewers_sealed_suspended'):
+            return
+        custom['_sewers_sealed_suspended'] = 1
+        eq.custom_vars = custom
+        target_id = self._equipment_effect_target_id(eq, owner_id)
+        target = self.players[target_id]
+
+        if self._equipment_is(eq, 'MagicSoil', 'jurassic:magic_soil'):
+            self._remove_jurassic_magic_soil_bonus(eq)
+        if self._equipment_is(eq, 'Disc', 'vanilla:disc'):
+            target.armor = max(0, int(target.armor or 0) - 2)
+        if self._equipment_is(eq, 'Cactus', 'desert_cards_addition:cactus'):
+            target.max_elixir = max(0, int(target.max_elixir or 0) - 5)
+            target.elixir = min(int(target.elixir or 0), int(target.max_elixir or 0))
+        if self._equipment_is(eq, 'MagicYucca', 'vanilla:magicyucca'):
+            target.max_magic = max(0, int(target.max_magic or 0) - 5)
+            target.magic = min(int(target.magic or 0), int(target.max_magic or 0))
+        if self._equipment_is(eq, 'Pill', 'vanilla:pill', 'troll_cards:pill'):
+            if not self._has_other_pill_targeting(target_id, exclude_eq=eq):
+                self._clear_status_immune_aliases(target_id)
+        root_layers = max(0, int(custom.get('jungle_root_layers', 0) or 0))
+        if root_layers > 0:
+            current = self._custom_status_value(target_id, 'jungle:root_status', 'jungle:root', 'root_status')
+            self._set_custom_status_alias_group(
+                target_id,
+                'jungle:root_status',
+                ('jungle:root_status', 'jungle:root', 'root_status'),
+                max(0, current - root_layers),
+            )
+        if self._equipment_is(eq, 'Quantum', 'void:quantum'):
+            self._restore_void_quantum_costs(target_id)
+
+        self._refresh_equipment_derived_player_flags(owner_id)
+        self._refresh_hand_limit_bonuses()
+
+    def _resume_sealed_equipment_passives(self, owner_id: int, eq: EquipmentInstance) -> None:
+        if eq is None or not self._valid_player_id(owner_id):
+            return
+        custom = getattr(eq, 'custom_vars', {}) or {}
+        if not custom.pop('_sewers_sealed_suspended', None):
+            return
+        eq.custom_vars = custom
+        target_id = self._equipment_effect_target_id(eq, owner_id)
+        target = self.players[target_id]
+
+        if self._equipment_is(eq, 'MagicSoil', 'jurassic:magic_soil'):
+            self._apply_jurassic_magic_soil_bonus(eq, target_id)
+        if self._equipment_is(eq, 'Disc', 'vanilla:disc'):
+            target.armor = max(0, int(target.armor or 0)) + 2
+        if self._equipment_is(eq, 'Cactus', 'desert_cards_addition:cactus'):
+            target.max_elixir = max(0, int(target.max_elixir or 0)) + 5
+        if self._equipment_is(eq, 'MagicYucca', 'vanilla:magicyucca'):
+            target.max_magic = max(0, int(target.max_magic or 0)) + 5
+        if self._equipment_is(eq, 'Pill', 'vanilla:pill', 'troll_cards:pill'):
+            target.custom_statuses = getattr(target, 'custom_statuses', {}) or {}
+            target.custom_statuses['status_immune'] = max(
+                1,
+                int(target.custom_statuses.get('status_immune', 0) or 0),
+            )
+        root_layers = max(0, int(custom.get('jungle_root_layers', 0) or 0))
+        if root_layers > 0:
+            current = self._custom_status_value(target_id, 'jungle:root_status', 'jungle:root', 'root_status')
+            self._set_custom_status_alias_group(
+                target_id,
+                'jungle:root_status',
+                ('jungle:root_status', 'jungle:root', 'root_status'),
+                current + root_layers,
+            )
+
+        self._refresh_equipment_derived_player_flags(owner_id)
+        self._refresh_hand_limit_bonuses()
+
+    def _apply_sealed_to_equipment(self, owner_id: int, eq: EquipmentInstance, amount: int = 1) -> int:
+        if eq is None or not self._valid_player_id(owner_id):
+            return 0
+        amount = max(0, int(amount or 0))
+        current = self._equipment_sealed_layers(eq)
+        if amount <= 0:
+            return current
+        if current <= 0:
+            self._suspend_sealed_equipment_passives(owner_id, eq)
+        value = current + amount
+        eq.custom_vars['sewers_sealed'] = value
+        return value
+
+    def _decay_sealed_equipment_for_owner_turn(self, owner_id: int) -> None:
+        if not self._valid_player_id(owner_id):
+            return
+        boundary = int(getattr(self, '_turn_boundary_id', -1) or -1)
+        for eq in list(getattr(self.players[owner_id], 'equipment', []) or []):
+            layers = self._equipment_sealed_layers(eq)
+            if layers <= 0:
+                continue
+            eq.custom_vars['_sewers_sealed_skip_boundary'] = boundary
+            layers -= 1
+            if layers > 0:
+                eq.custom_vars['sewers_sealed'] = layers
+            else:
+                eq.custom_vars.pop('sewers_sealed', None)
+
+    def _finish_sealed_equipment_turn_start(self, owner_id: int) -> None:
+        if not self._valid_player_id(owner_id):
+            return
+        boundary = int(getattr(self, '_turn_boundary_id', -1) or -1)
+        for eq in list(getattr(self.players[owner_id], 'equipment', []) or []):
+            custom = getattr(eq, 'custom_vars', {}) or {}
+            try:
+                skipped = int(custom.get('_sewers_sealed_skip_boundary', -2) or -2)
+            except (TypeError, ValueError):
+                skipped = -2
+            if skipped != boundary:
+                continue
+            custom.pop('_sewers_sealed_skip_boundary', None)
+            eq.custom_vars = custom
+            if self._equipment_sealed_layers(eq) <= 0:
+                self._resume_sealed_equipment_passives(owner_id, eq)
 
     def _mimic_special_cost_for_card(self, target: Optional[CardInstance]) -> int:
         if target is None:
@@ -6071,6 +6318,31 @@ class GameEngine:
             if min_count <= 1 and max_count <= 1 and choice.get('target_instance_id') is not None:
                 return True
             return False
+        if choice_type == 'choose_cards_from_discard':
+            raw_ids = choice.get('target_instance_ids')
+            if not isinstance(raw_ids, list):
+                return False
+            ids = []
+            for raw_id in raw_ids:
+                try:
+                    ids.append(int(raw_id))
+                except Exception:
+                    return False
+            min_count = max(0, self._eval_int(0, params.get('min_count', 0), card, 0))
+            max_count = max(min_count, self._eval_int(0, params.get('max_count', len(ids)), card, len(ids)))
+            if not (min_count <= len(ids) <= max_count) or len(ids) != len(set(ids)):
+                return False
+            owner_id, _, _ = self._find_card_location(card)
+            if owner_id is None:
+                owner_id = int(getattr(self, 'current_player', -1) or 0)
+            if not (0 <= owner_id < len(self.players)):
+                return False
+            selectable_ids = {
+                getattr(candidate, 'instance_id', None)
+                for candidate in self.players[owner_id].discard
+                if self._card_selectable_by_action(candidate)
+            }
+            return all(instance_id in selectable_ids for instance_id in ids)
         if choice_type == 'choose_ocean_sapphire':
             try:
                 selected_iid = int(choice.get('target_instance_id'))
@@ -6086,6 +6358,19 @@ class GameEngine:
                     getattr(candidate, 'instance_id', None) == selected_iid
                     for candidate in self._ocean_sapphire_selectable_attacks(owner_id, card)
                 )
+            )
+        if choice_type == 'choose_arctic_ruby':
+            try:
+                selected_iid = int(choice.get('target_instance_id'))
+            except Exception:
+                return False
+            selected_card = self._find_card_by_instance_id(selected_iid)
+            owner_id, zone_name, _ = self._find_card_location(selected_card)
+            if owner_id is None or zone_name != 'hand':
+                return False
+            return any(
+                getattr(candidate, 'instance_id', None) == selected_iid
+                for candidate in self._arctic_ruby_selectable_attacks(owner_id, card)
             )
         if choice_type in ('choose_card_from_discard',):
             return choice.get('target_def_id') is not None or choice.get('target_instance_id') is not None
@@ -6213,6 +6498,9 @@ class GameEngine:
             chosen_target = self._default_auto_target_choice(player_id, allow_self=False)
             selected = next(iter(self._ocean_sapphire_selectable_attacks(player_id, card)), None)
             return {'target_player_id': chosen_target, 'target_player': chosen_target, 'target_id': chosen_target, 'target_instance_id': getattr(selected, 'instance_id', None)} if chosen_target >= 0 and selected else None
+        if choice_type == 'choose_arctic_ruby':
+            selected = next(iter(self._arctic_ruby_selectable_attacks(player_id, card)), None)
+            return {'target_instance_id': getattr(selected, 'instance_id', None)} if selected else None
         if choice_type in ('choose_cards_from_hand', 'choose_same_attacks_from_hand'):
             owner_id = player_id
             current_iid = getattr(card, 'instance_id', None)
@@ -6222,6 +6510,23 @@ class GameEngine:
             else:
                 cards = [c for c in self.players[owner_id].hand if getattr(c, 'instance_id', None) != current_iid and self._card_selectable_by_action(c)]
             ids = [getattr(c, 'instance_id', None) for c in cards[:max_count] if getattr(c, 'instance_id', None) is not None]
+            return {'target_instance_ids': ids, **choice}
+        if choice_type == 'choose_cards_from_discard':
+            max_count = max(0, self._eval_int(
+                player_id,
+                params.get('max_count', params.get('count', len(self.players[player_id].discard))),
+                card,
+                len(self.players[player_id].discard),
+            ))
+            cards = [
+                candidate for candidate in self.players[player_id].discard
+                if self._card_selectable_by_action(candidate)
+            ]
+            ids = [
+                getattr(candidate, 'instance_id', None)
+                for candidate in cards[:max_count]
+                if getattr(candidate, 'instance_id', None) is not None
+            ]
             return {'target_instance_ids': ids, **choice}
         zone_for_choice = {
             'choose_attack_from_hand': 'hand',
@@ -6288,9 +6593,14 @@ class GameEngine:
             self.pending_choice['paid_m'] = max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0))
         if choice_target_id is not None:
             self.pending_choice['target_player_id'] = choice_target_id
-            if choice_type in ('choose_from_enemy_hand', 'choose_card_from_hand') and 0 <= choice_target_id < len(self.players):
+            if choice_type in ('choose_from_enemy_hand', 'choose_card_from_hand', 'choose_arctic_ruby') and 0 <= choice_target_id < len(self.players):
+                hand_cards = (
+                    self._arctic_ruby_selectable_attacks(player_id, card)
+                    if choice_type == 'choose_arctic_ruby'
+                    else self.players[choice_target_id].hand
+                )
                 self.pending_choice['hand_cards'] = self._visible_card_dicts(
-                    self.players[choice_target_id].hand,
+                    hand_cards,
                     player_id,
                     choice_target_id,
                     choice_list=True,
@@ -6306,9 +6616,14 @@ class GameEngine:
             'target_player_id': choice_target_id,
             'card': card.to_dict(),
         }
-        if choice_type in ('choose_from_enemy_hand', 'choose_card_from_hand') and choice_target_id is not None and 0 <= choice_target_id < len(self.players):
+        if choice_type in ('choose_from_enemy_hand', 'choose_card_from_hand', 'choose_arctic_ruby') and choice_target_id is not None and 0 <= choice_target_id < len(self.players):
+            hand_cards = (
+                self._arctic_ruby_selectable_attacks(player_id, card)
+                if choice_type == 'choose_arctic_ruby'
+                else self.players[choice_target_id].hand
+            )
             result['hand_cards'] = self._visible_card_dicts(
-                self.players[choice_target_id].hand,
+                hand_cards,
                 player_id,
                 choice_target_id,
                 choice_list=True,
@@ -6323,12 +6638,15 @@ class GameEngine:
         response_target_id = self._choice_target_from_choice(choice, 1 - player_id)
         if not (0 <= response_target_id < len(self.players)):
             response_target_id = 1 - player_id
+        secondary_targets = self._secondary_attack_target_ids(card, choice)
+        if response_target_id == player_id and 1 - player_id in secondary_targets:
+            response_target_id = 1 - player_id
         self._pending_response_preview = {
             'card': card.to_dict(),
             'player_id': player_id,
             'target_player_id': response_target_id,
             'original_choice': choice,
-            'is_precision': 'precision' in card.flags,
+            'is_precision': 'precision' in self._effective_card_flags(card),
         }
         try:
             needs_response = self._check_response_needed(player_id, card)
@@ -6344,8 +6662,10 @@ class GameEngine:
             'player_id': player_id,
             'target_player_id': response_target_id,
             'original_choice': choice,
-            'is_precision': 'precision' in card.flags,
+            'is_precision': 'precision' in self._effective_card_flags(card),
             'bio_pre_play_snapshot': getattr(card, '_bio_pre_play_snapshot', None),
+            'paid_e': self._actual_card_elixir_cost(card),
+            'paid_m': max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0)),
         }
         return {'success': True, 'needs_response': True, 'card': card.to_dict()}
 
@@ -6423,6 +6743,7 @@ class GameEngine:
             if getattr(self, 'pending_v2_ui', None) is not None:
                 return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
         self._prepare_ocean_spikeball_for_play(player_id, card)
+        choice = self._prepare_desert_play_state(player_id, card, choice)
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = 0 if auto_no_cost else max(0, card.cost_e + extra_e)
         total_m = 0 if auto_no_cost else int(card.cost_m)
@@ -6462,10 +6783,12 @@ class GameEngine:
         if self._card_blocks_response(card):
             return False
         target_id = self._choice_target_from_choice(getattr(self, '_active_choice', None), 1 - player_id)
-        if card.card_type == 'thorn' and 'wide_strike' not in flags and target_id == player_id:
+        secondary_targets = self._secondary_attack_target_ids(card, getattr(self, '_active_choice', None))
+        targets_opponent = target_id == 1 - player_id or 1 - player_id in secondary_targets
+        if card.card_type == 'thorn' and 'wide_strike' not in flags and target_id == player_id and not targets_opponent:
             return False
         opp = self.players[1 - player_id]
-        if target_id == 1 - player_id:
+        if targets_opponent:
             for c in opp.hand:
                 if (
                     self._can_pay_counter_card(1 - player_id, c)
@@ -6513,7 +6836,8 @@ class GameEngine:
         if self._card_blocks_response(card):
             return False
         target_id = self._choice_target_from_choice(getattr(self, '_active_choice', None), 1 - player_id)
-        if target_id != 1 - player_id:
+        secondary_targets = self._secondary_attack_target_ids(card, getattr(self, '_active_choice', None))
+        if target_id != 1 - player_id and 1 - player_id not in secondary_targets:
             return False
         opp = self.players[1 - player_id]
         for c in opp.hand:
@@ -6587,6 +6911,14 @@ class GameEngine:
         self.pending_response = None
         player_id = pending['player_id']
         card = CardInstance.from_dict(pending['card'])
+        card._paid_e_this_play = max(
+            0,
+            int(pending.get('paid_e', getattr(card, 'cost_e', 0)) or 0),
+        )
+        card._paid_m_this_play = max(
+            0,
+            int(pending.get('paid_m', getattr(card, 'cost_m', 0)) or 0),
+        )
         if isinstance(pending.get('bio_pre_play_snapshot'), dict):
             card._bio_pre_play_snapshot = dict(pending.get('bio_pre_play_snapshot') or {})
         choice = pending.get('original_choice')
@@ -7049,6 +7381,7 @@ class GameEngine:
                         self._put_card_in_exile(ps.player_id, card)
                     else:
                         self._discard_card(ps, card)
+                    self._garden_return_first_played_card(player_id, card)
                     self._log_card_play(player_id, card)
                     self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
                     self._run_v2_play_hook('after_play_card', player_id, card, choice)
@@ -7130,6 +7463,8 @@ class GameEngine:
         self._run_v2_play_hook('before_play_card', player_id, card, choice)
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
+        self._prepare_ocean_spikeball_for_play(player_id, card)
+        choice = self._prepare_desert_play_state(player_id, card, choice)
         if not pending.get('already_paid'):
             dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
             extra_e = self._get_extra_e_for_card(player_id, card)
@@ -7978,11 +8313,8 @@ class GameEngine:
             return
         if 'precision' in self._effective_card_flags(target_card):
             target_card.instance_flags.add('stealth')
-            applied = '隐匿'
         else:
             target_card.instance_flags.add('precision')
-            applied = '精准'
-        self.log_msg(log or f"{target_card.name_cn}获得{applied}")
 
     def _atomic_grant_temp_swift_highest_e(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -8528,6 +8860,8 @@ class GameEngine:
         self._atomic_tag_remove_named(player_id, card, {'tag': params.get('tag', '')}, log, choice, context)
 
     def _is_status_immune(self, player_id: int) -> bool:
+        if self._desert_topaz_count_targeting(player_id) > 0:
+            return True
         ps = self.players[player_id]
         custom = getattr(ps, 'custom_statuses', {}) or {}
         for key in ('status_immune', 'immune', '状态免疫'):
@@ -8541,6 +8875,48 @@ class GameEngine:
                 if raw:
                     return True
         return False
+
+    def _desert_topaz_count_targeting(self, target_id: int) -> int:
+        if not (0 <= target_id < len(self.players)):
+            return 0
+        return sum(
+            1 for _, eq in self._iter_equipment_targeting_player(target_id)
+            if self._equipment_is(eq, 'Topaz', 'desert_cards_addition:topaz')
+        )
+
+    def _refresh_desert_topaz_bonuses(self) -> None:
+        for target_id, ps in enumerate(self.players):
+            custom_vars = getattr(ps, 'custom_vars', {}) or {}
+            custom_statuses = getattr(ps, 'custom_statuses', {}) or {}
+            old_armor = max(0, int(custom_vars.get('desert_topaz_armor_applied', 0) or 0))
+            count = self._desert_topaz_count_targeting(target_id)
+            new_armor = count * 4
+            ps.armor = max(0, int(getattr(ps, 'armor', 0) or 0) - old_armor) + new_armor
+            if new_armor > 0:
+                custom_vars['desert_topaz_armor_applied'] = new_armor
+            else:
+                custom_vars.pop('desert_topaz_armor_applied', None)
+
+            topaz_immunity_applied = bool(custom_vars.get('desert_topaz_immunity_applied'))
+            if count > 0:
+                if not topaz_immunity_applied:
+                    had_external = any(
+                        int(custom_statuses.get(key, 0) or 0) > 0
+                        for key in ('status_immune', 'immune', '状态免疫')
+                    )
+                    custom_vars['desert_topaz_had_external_immunity'] = bool(had_external)
+                custom_vars['desert_topaz_immunity_applied'] = True
+                custom_statuses['status_immune'] = max(
+                    1,
+                    int(custom_statuses.get('status_immune', 0) or 0),
+                )
+            elif topaz_immunity_applied:
+                had_external = bool(custom_vars.pop('desert_topaz_had_external_immunity', False))
+                custom_vars.pop('desert_topaz_immunity_applied', None)
+                if not had_external and not self._has_other_pill_targeting(target_id):
+                    self._clear_status_immune_aliases(target_id)
+            ps.custom_vars = custom_vars
+            ps.custom_statuses = custom_statuses
 
     def _is_suppressed_status_var(self, player_id: int, name: str) -> bool:
         """Return true when a custom variable is an alias for a suppressed built-in status."""
@@ -8886,6 +9262,9 @@ class GameEngine:
                 self.players[target_id].sponge_active = True
 
         self._refresh_jurassic_magic_soil_bonuses()
+        self._refresh_desert_topaz_bonuses()
+        self._refresh_garden_magic_disc_bonuses()
+        self._garden_refresh_coal_cards()
 
         # Pill applies status immunity through its card event to the chosen effect target.
         # Equipment itself stays in the user's equipment area, so deriving the status from
@@ -8941,6 +9320,10 @@ class GameEngine:
                     applied = int((getattr(eq, 'custom_vars', {}) or {}).get('jurassic_magic_soil_applied_target', -1))
                 except Exception:
                     applied = -1
+                if not self._equipment_runtime_active(eq):
+                    if applied >= 0:
+                        self._remove_jurassic_magic_soil_bonus(eq)
+                    continue
                 if applied >= 0 and applied != target_id:
                     self._remove_jurassic_magic_soil_bonus(eq)
                 self._apply_jurassic_magic_soil_bonus(eq, target_id)
@@ -8969,6 +9352,7 @@ class GameEngine:
         aliases = {
             'debt': ('bio:debt', 'debt', '负债'),
             'extra_healing': ('bio:extra_healing', 'extra_healing', '额外回复'),
+            'shield_conversion': ('bio:shield_conversion', 'shield_conversion', '护盾转化'),
         }
         return self._custom_status_value(player_id, *aliases.get(name, (name,)))
 
@@ -8976,6 +9360,7 @@ class GameEngine:
         aliases = {
             'debt': ('bio:debt', 'debt', '负债'),
             'extra_healing': ('bio:extra_healing', 'extra_healing', '额外回复'),
+            'shield_conversion': ('bio:shield_conversion', 'shield_conversion', '护盾转化'),
         }
         keys = aliases.get(name, (name,))
         self._set_custom_status_alias_group(player_id, keys[0], keys, max(0, int(value or 0)))
@@ -8987,6 +9372,21 @@ class GameEngine:
         for owner_id, eq in self._iter_equipment_targeting_player(target_id):
             if self._equipment_is(eq, *ids):
                 yield owner_id, eq
+
+    def _bio_stem_cell_after_health_loss(self, target_id: int, amount: int):
+        if not self._valid_player_id(target_id):
+            return
+        amount = max(0, int(amount or 0))
+        if amount <= 0:
+            return
+        for _, eq in list(self._bio_active_equipment_targeting(
+            target_id,
+            'StemCell',
+            'bio:stem_cell',
+        )):
+            custom = getattr(eq, 'custom_vars', {}) or {}
+            custom['layers'] = max(0, int(custom.get('layers', 0) or 0)) + amount
+            eq.custom_vars = custom
 
     def _bio_is_magic_card(self, card: Optional[CardInstance]) -> bool:
         if card is None:
@@ -9373,6 +9773,13 @@ class GameEngine:
         extra_healing = self._bio_status_value(player_id, 'extra_healing')
         if extra_healing > 0 and not self._is_status_immune(player_id):
             amount += extra_healing
+        shield_conversion = self._bio_status_value(player_id, 'shield_conversion')
+        if shield_conversion > 0 and not self._is_status_immune(player_id):
+            shield = amount * shield_conversion
+            self._bio_set_status_value(player_id, 'shield_conversion', 0)
+            self._add_custom_status_value(player_id, 'jungle:shield', shield)
+            self.log_msg(f"{self.pn(player_id)}的护盾转化将{amount}H转化为{shield}层护盾")
+            return 0
         tooth = next(self._jurassic_active_equipment_targeting(player_id, 'Tooth', 'jurassic:tooth'), None)
         if tooth is None:
             return amount
@@ -9443,6 +9850,8 @@ class GameEngine:
             for candidate in getattr(player, 'equipment', []) or []:
                 if candidate is exclude_eq:
                     continue
+                if not self._equipment_runtime_active(candidate):
+                    continue
                 if not self._equipment_is(candidate, 'Pill', 'vanilla:pill', 'troll_cards:pill'):
                     continue
                 if self._equipment_effect_target_id(candidate, owner_id) == target_id:
@@ -9456,6 +9865,8 @@ class GameEngine:
             for candidate in getattr(player, 'equipment', []) or []:
                 if candidate is exclude_eq:
                     continue
+                if not self._equipment_runtime_active(candidate):
+                    continue
                 if not self._equipment_is(candidate, 'Sponge', 'ocean:sponge', 'troll_cards:sponge', 'vanilla:sponge'):
                     continue
                 if self._equipment_effect_target_id(candidate, owner_id) == target_id:
@@ -9467,20 +9878,21 @@ class GameEngine:
         if not (0 <= owner_id < len(self.players)) or eq is None:
             return
         effect_target_id = self._equipment_effect_target_id(eq, owner_id)
+        was_sealed_suspended = bool((getattr(eq, 'custom_vars', {}) or {}).get('_sewers_sealed_suspended'))
         non_stack_active = self._non_stack_equipment_is_active(eq)
         if self._equipment_is(eq, 'MagicSoil', 'jurassic:magic_soil'):
             self._remove_jurassic_magic_soil_bonus(eq)
-        if self._equipment_is(eq, 'Disc', 'vanilla:disc'):
+        if not was_sealed_suspended and self._equipment_is(eq, 'Disc', 'vanilla:disc'):
             self.players[effect_target_id].armor = max(0, self.players[effect_target_id].armor - 2)
         if self._equipment_is(eq, 'ElectricWeb', 'factory:electricweb'):
             self._cleanup_electric_web_draw_damage(eq)
         # A transformation removes persistent equip bonuses, but is not a
         # destruction and must not run offensive destroy effects (for example Sponge).
-        if not run_destroy_event and self._equipment_is(eq, 'Cactus', 'desert_cards_addition:cactus'):
+        if not was_sealed_suspended and not run_destroy_event and self._equipment_is(eq, 'Cactus', 'desert_cards_addition:cactus'):
             target = self.players[effect_target_id]
             target.max_elixir = max(0, int(target.max_elixir) - 5)
             target.elixir = min(int(target.elixir), int(target.max_elixir))
-        if not run_destroy_event and self._equipment_is(eq, 'MagicYucca', 'vanilla:magicyucca'):
+        if not was_sealed_suspended and not run_destroy_event and self._equipment_is(eq, 'MagicYucca', 'vanilla:magicyucca'):
             target = self.players[effect_target_id]
             target.max_magic = max(0, int(target.max_magic) - 5)
             target.magic = min(int(target.magic), int(target.max_magic))
@@ -9503,7 +9915,13 @@ class GameEngine:
             target_state.poison = 0
             if poison_layers > 0:
                 physical_dmg = poison_layers * 2
+                old_health = target_state.health
                 target_state.health -= physical_dmg
+                health_lost = max(
+                    0,
+                    int(old_health or 0) - max(0, int(target_state.health or 0)),
+                )
+                self._bio_stem_cell_after_health_loss(effect_target_id, health_lost)
                 self._note_achievement_health(effect_target_id)
                 self.log_msg(f"海绵被摧毁！{self.pn(effect_target_id)}去除{poison_layers}层中毒，受到{physical_dmg}点物理伤害")
                 self._check_yggdrasil(effect_target_id)
@@ -9524,7 +9942,7 @@ class GameEngine:
             root_layers = int((getattr(eq, 'custom_vars', {}) or {}).get('jungle_root_layers', 0) or 0)
         except Exception:
             root_layers = 0
-        if root_layers > 0:
+        if root_layers > 0 and not was_sealed_suspended:
             current = self._custom_status_value(effect_target_id, 'jungle:root_status', 'jungle:root', 'root_status')
             self._set_custom_status_alias_group(
                 effect_target_id,
@@ -9532,7 +9950,11 @@ class GameEngine:
                 ('jungle:root_status', 'jungle:root', 'root_status'),
                 max(0, current - root_layers),
             )
+        if root_layers > 0:
             eq.custom_vars['jungle_root_layers'] = 0
+        eq.custom_vars.pop('_sewers_sealed_suspended', None)
+        eq.custom_vars.pop('_sewers_sealed_skip_boundary', None)
+        eq.custom_vars.pop('sewers_sealed', None)
 
         if (
             self._equipment_is(eq, 'Quantum', 'void:quantum')
@@ -9605,6 +10027,9 @@ class GameEngine:
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         self._run_owner_turn_end_equipment(player_id)
+        if self.game_over or getattr(self, 'pending_v2_ui', None):
+            return
+        self._run_garden_magic_pollen_owner_turn_end(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         self._drain_turn_end_event_sources(player_id)
@@ -9705,6 +10130,8 @@ class GameEngine:
         for eq_owner_id, owner in enumerate(getattr(self, 'players', []) or []):
             for eq in list(getattr(owner, 'equipment', []) or []):
                 if not self._equipment_is(eq, 'void:singularity', 'Singularity'):
+                    continue
+                if not self._non_stack_equipment_is_active(eq):
                     continue
                 target_id = int(getattr(eq, 'effect_target', eq_owner_id))
                 if not self._valid_player_id(target_id):
@@ -10632,8 +11059,17 @@ class GameEngine:
             return any(self._effect_tree_uses_event_target(item) for item in value.values())
         return False
 
+    @staticmethod
+    def _equipment_trigger_uses_effect_target(card_def) -> bool:
+        resource = getattr(card_def, 'v2_resource', None) or {}
+        return bool(isinstance(resource, dict) and resource.get('trigger_uses_effect_target'))
+
     def _equipment_trigger_forbids_self_target(self, card_def):
-        if not card_def or 'self_only' in getattr(card_def, 'flags', set()):
+        if (
+            not card_def
+            or 'self_only' in getattr(card_def, 'flags', set())
+            or self._equipment_trigger_uses_effect_target(card_def)
+        ):
             return False
         resource = getattr(card_def, 'v2_resource', None) or {}
         if isinstance(resource, dict) and resource.get('trigger_allow_self'):
@@ -11040,10 +11476,7 @@ class GameEngine:
                 target_card = self._resolve_card_ref(player_id, expr.get('card', {'ref': 'current_card'}), card)
                 if target_card is None:
                     return 0
-                flags = normalize_card_flags(getattr(target_card.card_def, 'flags', set()) or set())
-                flags.update(normalize_card_flags(getattr(target_card, 'instance_flags', set()) or set()))
-                flags.difference_update(normalize_card_flags(getattr(target_card, 'disabled_flags', set()) or set()))
-                return len(flags)
+                return len(self._effective_card_flags(target_card))
             if ref == 'card_def_property':
                 return self._get_card_def_property_value(player_id, expr.get('card', ''), expr.get('property', 'cost_e'), card)
             if ref == 'card_def_tags':
@@ -11714,11 +12147,161 @@ class GameEngine:
             return set()
         flags = normalize_card_flags(getattr(target_card.card_def, 'flags', set()) or set())
         flags.update(normalize_card_flags(getattr(target_card, 'instance_flags', set()) or set()))
+        setup_modifiers = set(getattr(target_card, 'setup_modifiers', set()) or set())
+        if 'desert_citron_precision_play' in setup_modifiers:
+            flags.add('precision')
+        if 'desert_citron_stealth_play' in setup_modifiers:
+            flags.add('stealth')
         flags.difference_update(normalize_card_flags(getattr(target_card, 'disabled_flags', set()) or set()))
         return flags
 
+    @staticmethod
+    def _actual_card_elixir_cost(card: Optional[CardInstance]) -> int:
+        if card is None:
+            return 0
+        paid = getattr(card, '_paid_e_this_play', None)
+        if paid is not None:
+            return max(0, int(paid or 0))
+        return max(0, int(getattr(card, 'cost_e', 0) or 0))
+
     def _card_blocks_response(self, card: Optional[CardInstance]) -> bool:
         return 'stealth' in self._effective_card_flags(card)
+
+    def _prepare_desert_citron_play_flags(self, player_id: int, card: Optional[CardInstance]) -> None:
+        if card is None:
+            return
+        card.setup_modifiers.discard('desert_citron_precision_play')
+        card.setup_modifiers.discard('desert_citron_stealth_play')
+        if getattr(card, 'card_type', '') != 'thorn':
+            return
+        citrons = [
+            eq for _, eq in self._iter_equipment_targeting_player(player_id)
+            if self._equipment_is(eq, 'Citron', 'desert_cards_addition:citron')
+        ]
+        for _ in citrons:
+            flags = self._effective_card_flags(card)
+            if 'precision' in flags:
+                card.setup_modifiers.add('desert_citron_stealth_play')
+            else:
+                card.setup_modifiers.add('desert_citron_precision_play')
+
+    def _random_nonrepeating_attack_targets(
+            self,
+            player_id: int,
+            count: int,
+            previous_target: Optional[int] = None) -> List[int]:
+        targets: List[int] = []
+        try:
+            previous = int(previous_target) if previous_target is not None else -1
+        except (TypeError, ValueError):
+            previous = -1
+        for _ in range(max(0, int(count or 0))):
+            candidates = [
+                target_id for target_id in range(len(self.players))
+                if target_id != previous
+                and self._target_can_be_selected(player_id, target_id, allow_self=True)
+            ]
+            if not candidates:
+                break
+            previous = random.choice(candidates)
+            targets.append(previous)
+        return targets
+
+    def _prepare_desert_marble_targets(self, player_id: int, card: Optional[CardInstance],
+                                       choice: Optional[dict]) -> Optional[dict]:
+        if not self._card_is(card, 'Marble', 'desert_cards_addition:marble'):
+            return choice
+        updated = dict(choice or {})
+        if not isinstance(updated.get('_desert_marble_targets'), list):
+            count = (
+                clamp_card_layer(getattr(card, 'fission_level', 1))
+                * self._card_total_hits(card, 1)
+            )
+            primary_target = self._choice_target_from_choice(updated, -1)
+            updated['_desert_marble_targets'] = self._random_nonrepeating_attack_targets(
+                player_id,
+                count,
+                primary_target,
+            )
+        card._desert_marble_bounce_cursor = 0
+        card._desert_marble_previous_target = self._choice_target_from_choice(updated, -1)
+        return updated
+
+    def _arctic_ricochet_repeat_count(self, player_id: int, card: Optional[CardInstance]) -> int:
+        if card is None:
+            return 0
+        for effect in self._v2_play_steps_for_card(card):
+            if self._EFFECT_ALIASES.get(self._effect_type(effect), self._effect_type(effect)) != 'arctic_ricochet_attack':
+                continue
+            params = self._effect_params(effect)
+            return max(0, self._eval_int(player_id, params.get('repeats', 0), card, 0))
+        return 0
+
+    def _prepare_arctic_ricochet_targets(
+            self,
+            player_id: int,
+            card: Optional[CardInstance],
+            choice: Optional[dict]) -> Optional[dict]:
+        repeats = self._arctic_ricochet_repeat_count(player_id, card)
+        if repeats <= 0:
+            return choice
+        updated = dict(choice or {})
+        if not isinstance(updated.get('_arctic_ricochet_targets'), list):
+            count = repeats * clamp_card_layer(getattr(card, 'fission_level', 1))
+            primary_target = self._choice_target_from_choice(updated, -1)
+            updated['_arctic_ricochet_targets'] = self._random_nonrepeating_attack_targets(
+                player_id,
+                count,
+                primary_target,
+            )
+        card._arctic_ricochet_cursor = 0
+        card._arctic_ricochet_previous_target = self._choice_target_from_choice(updated, -1)
+        return updated
+
+    def _prepare_desert_play_state(self, player_id: int, card: Optional[CardInstance],
+                                   choice: Optional[dict]) -> Optional[dict]:
+        self._prepare_desert_citron_play_flags(player_id, card)
+        choice = self._prepare_desert_marble_targets(player_id, card, choice)
+        return self._prepare_arctic_ricochet_targets(player_id, card, choice)
+
+    def _desert_marble_target_ids(self, card: Optional[CardInstance],
+                                  choice: Optional[dict]) -> List[int]:
+        if not self._card_is(card, 'Marble', 'desert_cards_addition:marble') or not isinstance(choice, dict):
+            return []
+        result = []
+        for raw_target_id in choice.get('_desert_marble_targets', []):
+            try:
+                target_id = int(raw_target_id)
+            except Exception:
+                continue
+            if 0 <= target_id < len(self.players) and target_id not in result:
+                result.append(target_id)
+        return result
+
+    def _arctic_ricochet_target_ids(self, card: Optional[CardInstance],
+                                    choice: Optional[dict]) -> List[int]:
+        if self._arctic_ricochet_repeat_count(0, card) <= 0 or not isinstance(choice, dict):
+            return []
+        result = []
+        for raw_target_id in choice.get('_arctic_ricochet_targets', []):
+            try:
+                target_id = int(raw_target_id)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= target_id < len(self.players) and target_id not in result:
+                result.append(target_id)
+        return result
+
+    def _secondary_attack_target_ids(self, card: Optional[CardInstance],
+                                     choice: Optional[dict]) -> List[int]:
+        result: List[int] = []
+        for target_id in [
+            *self._desert_marble_target_ids(card, choice),
+            *self._arctic_ricochet_target_ids(card, choice),
+        ]:
+            if target_id not in result:
+                result.append(target_id)
+        return result
 
     def _wide_strike_target_ids(self, player_id: int, card: Optional[CardInstance]) -> List[int]:
         snapshot = getattr(self, '_card_resolution_target_snapshot', None)
@@ -12003,6 +12586,9 @@ class GameEngine:
 
     def _run_card_event(self, owner_id: int, card: CardInstance, event_name: str,
                         choice: Optional[dict] = None, extra_context: Optional[dict] = None) -> bool:
+        equipped = self._find_equipment_for_card(owner_id, card)
+        if equipped is not None and not self._equipment_runtime_active(equipped):
+            return False
         v2_event_name = f'on_{event_name}'
         event_def = self._get_v2_event_def(card.card_def, v2_event_name)
         if event_def:
@@ -12465,6 +13051,7 @@ class GameEngine:
 
     def _apply_turn_start_effects(self, player_id: int):
         ps = self.players[player_id]
+        self._decay_sealed_equipment_for_owner_turn(player_id)
         self._activate_pending_corruption()
         self._sewers_clear_light_bulb_at_turn_start(player_id)
         opp_id = 1 - player_id
@@ -12823,7 +13410,7 @@ class GameEngine:
                 try:
                     if (
                         getattr(source_card, 'card_type', '') == 'thorn'
-                        and int(getattr(source_card, 'cost_e', 0) or 0) <= 1
+                        and self._actual_card_elixir_cost(source_card) <= 1
                     ):
                         plank_blocks_attack = True
                 except Exception:
@@ -12909,13 +13496,19 @@ class GameEngine:
                 and int(getattr(self, '_prediction_first_attack_damage', 0) or 0) <= 0
             ):
                 self._prediction_first_attack_damage = int(dmg)
+            old_health = ps.health
             ps.health -= dmg
+            health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
+            self._bio_stem_cell_after_health_loss(target_id, health_lost)
             self._note_achievement_health(target_id)
             total_dealt += dmg
             if dmg > 0:
                 self._last_positive_damage_hits[target_id] += 1
             self._record_damage(target_id, dmg, attacker_id)
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
+            if dmg > 0:
+                self._sewers_grow_toilet_paper_power(target_id)
+                self._garden_magic_cutter_after_hit(attacker_id, target_id, dmg)
             self._run_v2_after_damage_hooks(damage_context, dmg)
             if dmg > 0:
                 self._apply_ocean_blood_debt_after_physical_damage(target_id, attacker_id)
@@ -13027,6 +13620,7 @@ class GameEngine:
                 self._put_card_in_exile(ps.player_id, card)
             else:
                 self._discard_card(ps, card)
+            self._garden_return_first_played_card(player_id, card)
             self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
             self._run_v2_play_hook('after_play_card', player_id, card, choice)
             result['card'] = card.to_dict()
@@ -13042,6 +13636,7 @@ class GameEngine:
                 self._put_card_in_exile(ps.player_id, card)
             else:
                 self._discard_card(ps, card)
+            self._garden_return_first_played_card(player_id, card)
             self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
             self._run_v2_play_hook('after_play_card', player_id, card, choice)
             result['countered'] = True
@@ -13068,6 +13663,7 @@ class GameEngine:
                         self._put_card_in_exile(ps.player_id, card)
                     else:
                         self._discard_card(ps, card)
+                    self._garden_return_first_played_card(player_id, card)
                     self._dispatch_card_event('card_used', player_id, card, target_id=player_id, choice=choice)
                     self._run_v2_play_hook('after_play_card', player_id, card, choice)
                     return result
@@ -13206,6 +13802,7 @@ class GameEngine:
             owner_id, zone_name, _ = self._find_card_location(card)
             if owner_id is None or zone_name is None:
                 self._discard_card(ps, card)
+        self._garden_return_first_played_card(player_id, card)
         target_id = player_id
         if isinstance(choice, dict):
             for key in ('target_player', 'target_player_id', 'target_id'):
@@ -13761,7 +14358,10 @@ class GameEngine:
             if ps.invincible:
                 self.log_msg(f"{self.pn(tid)}无敌，免疫{source}伤害")
                 continue
+            old_health = ps.health
             ps.health -= amount
+            health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
+            self._bio_stem_cell_after_health_loss(tid, health_lost)
             self._note_achievement_health(tid)
             self._record_damage(tid, amount, source_id)
             self.log_msg(log or f"{self.pn(tid)}受到{amount}点{source}伤害（H={ps.health}）")
@@ -14125,6 +14725,98 @@ class GameEngine:
             self._set_custom_status_value(owner_id, 'jungle:root_status', max(0, self._custom_status_value(owner_id, 'jungle:root_status') - amount))
             if eq is not None:
                 eq.custom_vars['jungle_root_layers'] = 0
+
+    def _jungle_team_members(self, target_id: int) -> List[int]:
+        teams = getattr(self, 'teams', None)
+        if not isinstance(teams, list):
+            return []
+        for team in teams:
+            if not isinstance(team, (list, tuple)) or target_id not in team or len(team) < 2:
+                continue
+            return [
+                int(member_id)
+                for member_id in team
+                if self._valid_player_id(member_id)
+                and int(getattr(self.players[member_id], 'health', 0) or 0) > 0
+            ]
+        return []
+
+    def _atomic_jungle_monstera_heal_team(self, player_id, card, params, log, choice, context):
+        if int(getattr(self, 'current_player', -1)) != player_id:
+            return
+        _, equipment = self._find_equipment_by_card_instance_id(getattr(card, 'instance_id', None))
+        target_id = (
+            self._equipment_effect_target_id(equipment, player_id)
+            if equipment is not None
+            else self._resolve_target(player_id, params.get('target', 'target'))
+        )
+        amount = max(0, self._eval_int(player_id, params.get('amount', 4), card, 4))
+        if amount <= 0:
+            return
+        for member_id in self._jungle_team_members(target_id):
+            before = int(getattr(self.players[member_id], 'health', 0) or 0)
+            self.players[member_id].heal(amount)
+            healed = max(0, int(getattr(self.players[member_id], 'health', 0) or 0) - before)
+            self.log_msg(
+                log
+                or (
+                    f"{self.pn(player_id)}的龟背竹使{self.pn(member_id)}回复{healed}H"
+                    if healed
+                    else f"{self.pn(player_id)}的龟背竹未使{self.pn(member_id)}回复生命"
+                )
+            )
+
+    def _atomic_jungle_dianthus_record_use(self, player_id, card, params, log, choice, context):
+        if card is None:
+            return
+        custom = getattr(card, 'custom_vars', None)
+        if not isinstance(custom, dict):
+            custom = {}
+            card.custom_vars = custom
+        amount = max(0, self._eval_int(player_id, params.get('amount', 5), card, 5))
+        maximum = max(0, self._eval_int(player_id, params.get('maximum', 20), card, 20))
+        current = max(0, int(custom.get('jungle_dianthus_power', 0) or 0))
+        custom['jungle_dianthus_power'] = min(maximum, current + amount)
+        custom['jungle_dianthus_pending_reentry'] = 1
+
+    def _atomic_jungle_dianthus_restore_power(self, player_id, card, params, log, choice, context):
+        if card is None:
+            return
+        custom = getattr(card, 'custom_vars', None)
+        if not isinstance(custom, dict):
+            custom = {}
+            card.custom_vars = custom
+        maximum = max(0, self._eval_int(player_id, params.get('maximum', 20), card, 20))
+        special_power = min(maximum, max(0, int(custom.get('jungle_dianthus_power', 0) or 0)))
+        previous_applied = max(0, int(custom.get('jungle_dianthus_applied_power', 0) or 0))
+        if int(custom.pop('jungle_dianthus_pending_reentry', 0) or 0) > 0:
+            other_power = 0
+        else:
+            other_power = int(getattr(card, 'power_value', 0) or 0) - previous_applied
+        card.power_value = clamp_card_power(other_power + special_power)
+        custom['jungle_dianthus_applied_power'] = special_power
+        if card.power_value:
+            card.instance_flags.add('power')
+        else:
+            card.instance_flags.discard('power')
+
+    def _atomic_jungle_add_maple_to_hand(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not self._valid_player_id(target_id):
+            return
+        card_def = CARD_DEFS.get('Maple')
+        if card_def is None or not self._card_allowed(card_def.id):
+            return
+        new_card = CardInstance(card_def.id)
+        new_card.instance_flags.update(normalize_card_flags(('symbiosis', 'exile', 'void')))
+        self._apply_setup_modifiers_to_card(target_id, new_card)
+        self.players[target_id].add_to_hand(new_card)
+        self._enforce_unique_cards_for_player(target_id, preferred_card=new_card)
+        self._remember_created_card(new_card, context)
+        self.log_msg(
+            log
+            or f"{self.pn(target_id)}将1张[[card:Maple|flag=symbiosis|flag=exile|flag=void]]加入手中"
+        )
 
     def _consume_jungle_root_layer_from_equipment(self, owner_id: int):
         if not (0 <= owner_id < len(self.players)):
@@ -15146,6 +15838,349 @@ class GameEngine:
         if log:
             self.log_msg(log)
 
+    def _garden_equipment_targeting(self, player_id: int, *ids: str):
+        if not self._valid_player_id(player_id):
+            return []
+        return [
+            (owner_id, eq)
+            for owner_id, eq in self._iter_equipment_targeting_player(player_id)
+            if self._equipment_is(eq, *ids)
+        ]
+
+    def _garden_players_are_enemies(self, first_id: int, second_id: int) -> bool:
+        if not self._valid_player_id(first_id) or not self._valid_player_id(second_id):
+            return False
+        is_enemy = getattr(self, 'is_enemy', None)
+        if callable(is_enemy):
+            try:
+                return bool(is_enemy(first_id, second_id))
+            except Exception:
+                pass
+        return first_id != second_id
+
+    def _garden_snapshot_current_cards(self, player_id: int) -> List[dict]:
+        if not self._valid_player_id(player_id):
+            return []
+        ps = self.players[player_id]
+        cards = (
+            list(getattr(ps, 'hand', []) or [])
+            + list(getattr(ps, 'deck', []) or [])
+            + list(getattr(ps, 'discard', []) or [])
+            + list(getattr(ps, 'exile', []) or [])
+            + [
+                eq.card_instance
+                for eq in list(getattr(ps, 'equipment', []) or [])
+                if getattr(eq, 'card_instance', None) is not None
+            ]
+        )
+        return [
+            copy.deepcopy(card.to_dict())
+            for card in cards
+            if getattr(card, 'def_id', ERROR_CARD_ID) != ERROR_CARD_ID
+        ]
+
+    def _atomic_garden_show_initial_deck(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(player_id) or not self._valid_player_id(target_id):
+            return
+        self._ensure_garden_initial_deck_storage()
+        cards = self._garden_initial_decks[target_id]
+        if not cards:
+            cards = self._garden_snapshot_current_cards(target_id)
+            self._garden_initial_decks[target_id] = copy.deepcopy(cards)
+        self._garden_initial_deck_reveal_serial = int(
+            getattr(self, '_garden_initial_deck_reveal_serial', 0) or 0
+        ) + 1
+        self._garden_initial_deck_reveal[player_id] = {
+            'token': self._garden_initial_deck_reveal_serial,
+            'target_player_id': target_id,
+            'target_name': self.pn(target_id),
+            'cards': copy.deepcopy(cards),
+        }
+        self.log_msg(log or f"{self.pn(player_id)}查看了{self.pn(target_id)}的初始牌组")
+
+    def _garden_attack_once(self, player_id: int, target_id: int, card: CardInstance, amount: int) -> int:
+        if not self._valid_player_id(target_id):
+            return 0
+        damage = self._modified_attack_damage(max(0, int(amount or 0)), card)
+        precision = 'precision' in self._effective_card_flags(card)
+        try:
+            return self.deal_attack_damage(
+                target_id,
+                damage,
+                1,
+                is_precision=precision,
+                attacker_id=player_id,
+                source_card=card,
+            )
+        except TypeError:
+            return self.deal_attack_damage(target_id, damage, 1, is_precision=precision)
+
+    def _atomic_garden_kale_attack(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        target = self.players[target_id]
+        normal = self._eval_int(player_id, params.get('normal_amount', 9), card, 9)
+        low = self._eval_int(player_id, params.get('low_health_amount', 36), card, 36)
+        amount = low if int(target.health) * 5 <= max(1, int(target.max_health)) else normal
+        dealt = self._garden_attack_once(player_id, target_id, card, amount)
+        self._last_damage_value[target_id] = int(dealt)
+        if log:
+            self.log_msg(log)
+
+    def _atomic_garden_daisy_delayed_attack(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        amount = self._eval_int(player_id, params.get('amount', 15), card, 15)
+        dealt = self._garden_attack_once(player_id, target_id, card, amount)
+        self._last_damage_value[target_id] = int(dealt)
+        self.log_msg(log or f"{self.pn(player_id)}的雏菊对{self.pn(target_id)}造成延迟伤害")
+
+    def _garden_refresh_coal_cards(self):
+        for ps in self.players:
+            fire_power = clamp_card_power(max(0, int(getattr(ps, 'fire', 0) or 0)) * 5)
+            for candidate in list(getattr(ps, 'hand', []) or []):
+                if not self._card_is(candidate, 'Coal', 'garden:coal'):
+                    continue
+                candidate.power_value = fire_power
+                if fire_power > 0:
+                    candidate.flags.add('power')
+                else:
+                    candidate.flags.discard('power')
+
+    def _atomic_garden_coal_attack(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        card.power_value = clamp_card_power(max(0, int(self.players[player_id].fire or 0)) * 5)
+        if card.power_value > 0:
+            card.flags.add('power')
+        else:
+            card.flags.discard('power')
+        amount = self._eval_int(player_id, params.get('amount', 9), card, 9)
+        dealt = self._garden_attack_once(player_id, target_id, card, amount)
+        self._last_damage_value[target_id] = int(dealt)
+        if log:
+            self.log_msg(log)
+
+    def _garden_has_sunflower_targeting(self, player_id: int) -> bool:
+        return bool(self._garden_equipment_targeting(player_id, 'Sunflower', 'garden:sunflower'))
+
+    def _refresh_garden_magic_disc_bonuses(self):
+        for target_id, ps in enumerate(self.players):
+            old_bonus = max(0, int(ps.custom_vars.get('garden_magic_disc_armor_applied', 0) or 0))
+            count = len(self._garden_equipment_targeting(target_id, 'MagicDisc', 'garden:magic_disc'))
+            shield = self._custom_status_value(target_id, 'jungle:shield', 'shield')
+            new_bonus = count * (3 if shield > 0 else 1)
+            if old_bonus != new_bonus:
+                ps.armor = max(0, int(ps.armor or 0) - old_bonus) + new_bonus
+            if new_bonus > 0:
+                ps.custom_vars['garden_magic_disc_armor_applied'] = new_bonus
+            else:
+                ps.custom_vars.pop('garden_magic_disc_armor_applied', None)
+
+    def _garden_magic_cutter_after_hit(self, attacker_id: int, target_id: int, damage: int):
+        if damage <= 0 or not self._garden_players_are_enemies(attacker_id, target_id):
+            return
+        copies = len(self._garden_equipment_targeting(attacker_id, 'MagicCutter', 'garden:magic_cutter'))
+        if copies <= 0:
+            return
+        amount = copies * 2
+        current = self._custom_status_value(attacker_id, 'jungle:shield', 'shield')
+        self._set_custom_status_alias_group(
+            attacker_id,
+            'jungle:shield',
+            ('jungle:shield', 'shield'),
+            current + amount,
+        )
+        self.log_msg(f"{self.pn(attacker_id)}的魔法锯齿使其获得{amount}层护盾")
+
+    def _run_garden_magic_pollen_owner_turn_end(self, player_id: int):
+        if not self._valid_player_id(player_id):
+            return
+        owner = self.players[player_id]
+        for eq in list(getattr(owner, 'equipment', []) or []):
+            if not self._equipment_is(eq, 'MagicPollen', 'garden:magic_pollen'):
+                continue
+            if not self._non_stack_equipment_is_active(eq) or owner.magic < 1:
+                continue
+            target_id = self._equipment_effect_target_id(eq, player_id)
+            if not self._valid_player_id(target_id):
+                continue
+            petals = self._card_total_hits(eq.card_instance)
+            self._spend_resource(player_id, 'magic', 1, eq.card_instance)
+            self.players[target_id].fracture += petals
+            self._note_achievement_status_peak(target_id)
+            self.log_msg(f"{self.pn(player_id)}的魔法花粉消耗1M，使{self.pn(target_id)}获得{petals}层破损")
+
+    def _garden_return_first_played_card(self, player_id: int, card: CardInstance):
+        if not self._valid_player_id(player_id) or card is None:
+            return
+        if int(getattr(self, 'current_player', -1)) != player_id or self.phase != 'action':
+            return
+        marker = f"{int(getattr(self, '_turn_boundary_id', 0) or 0)}:{player_id}"
+        ps = self.players[player_id]
+        if str(ps.custom_vars.get('garden_cat_ears_return_marker', '')) == marker:
+            return
+        if not self._garden_equipment_targeting(player_id, 'CatEars', 'garden:cat_ears'):
+            return
+        owner_id, zone_name, located = self._find_card_location(card)
+        if owner_id != player_id or zone_name not in ('deck', 'discard') or located is None:
+            return
+        zone = getattr(ps, zone_name)
+        try:
+            zone.remove(located)
+        except ValueError:
+            return
+        ps.add_to_hand(located)
+        ps.custom_vars['garden_cat_ears_return_marker'] = marker
+        self.log_msg(f"{self.pn(player_id)}的猫耳使{located.name_cn}回到手中")
+
+    def _atomic_desert_magic_compass(self, player_id, card, params, log, choice, context):
+        if not self._valid_player_id(player_id):
+            return
+        raw_ids = choice.get('target_instance_ids', []) if isinstance(choice, dict) else []
+        selected_ids = []
+        for raw_id in raw_ids if isinstance(raw_ids, list) else []:
+            try:
+                instance_id = int(raw_id)
+            except Exception:
+                continue
+            if instance_id not in selected_ids:
+                selected_ids.append(instance_id)
+        ps = self.players[player_id]
+        by_id = {
+            getattr(candidate, 'instance_id', None): candidate
+            for candidate in ps.discard
+            if self._card_selectable_by_action(candidate)
+        }
+        selected = [by_id[instance_id] for instance_id in selected_ids if instance_id in by_id]
+        for selected_card in selected:
+            ps.discard.remove(selected_card)
+        random.shuffle(selected)
+        if selected:
+            ps.deck = selected + ps.deck
+            self.log_msg(log or f"{self.pn(player_id)}将{len(selected)}张弃牌随机置于抽牌堆顶")
+
+    def _atomic_desert_marble_attack(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        base_damage = self._eval_int(player_id, params.get('amount', 9), card, 9)
+        bounce_base_damage = self._eval_int(player_id, params.get('extra_amount', 23), card, 23)
+        bounce_damage = self._modified_attack_damage(bounce_base_damage, card)
+        primary_damage = self._modified_attack_damage(base_damage, card)
+        primary_hits = self._card_total_hits(card, 1)
+        is_precision = 'precision' in self._effective_card_flags(card)
+        self.deal_attack_damage(
+            target_id,
+            primary_damage,
+            primary_hits,
+            is_precision=is_precision,
+            attacker_id=player_id,
+            source_card=card,
+        )
+        positive_hits = max(
+            0,
+            int((getattr(self, '_last_positive_damage_hits', []) or [])[target_id] or 0),
+        )
+        prepared_targets = (
+            choice.get('_desert_marble_targets', [])
+            if isinstance(choice, dict) and isinstance(choice.get('_desert_marble_targets'), list)
+            else []
+        )
+        cursor = max(0, int(getattr(card, '_desert_marble_bounce_cursor', 0) or 0))
+        previous_target = int(
+            getattr(card, '_desert_marble_previous_target', target_id) or 0
+        )
+        for _ in range(positive_hits):
+            prepared_target = prepared_targets[cursor] if cursor < len(prepared_targets) else -1
+            cursor += 1
+            try:
+                bounce_target_id = int(prepared_target)
+            except Exception:
+                bounce_target_id = -1
+            if (
+                bounce_target_id == previous_target
+                or not self._target_can_be_selected(player_id, bounce_target_id, allow_self=True)
+            ):
+                candidates = [
+                    candidate_id for candidate_id in range(len(self.players))
+                    if candidate_id != previous_target
+                    and self._target_can_be_selected(player_id, candidate_id, allow_self=True)
+                ]
+                if not candidates:
+                    continue
+                bounce_target_id = random.choice(candidates)
+            bounce_choice = {
+                'target_player': bounce_target_id,
+                'target_player_id': bounce_target_id,
+                'target_id': bounce_target_id,
+            }
+            self._sewers_trigger_vampire_fangs(player_id, card, bounce_choice)
+            self.deal_attack_damage(
+                bounce_target_id,
+                bounce_damage,
+                1,
+                is_precision=is_precision,
+                attacker_id=player_id,
+                source_card=card,
+            )
+            previous_target = bounce_target_id
+        card._desert_marble_bounce_cursor = cursor
+        card._desert_marble_previous_target = previous_target
+
+    def _atomic_desert_emerald_resource(self, player_id, card, params, log, choice, context):
+        eq = context.get('current_equipment') if isinstance(context, dict) else None
+        if eq is None:
+            eq = self._find_equipment_for_card(player_id, card)
+        if eq is None:
+            return
+        event_vars = context.get('vars', {}) if isinstance(context, dict) else {}
+        resource = str(event_vars.get('resource', context.get('resource', '')) or '')
+        if resource != 'elixir':
+            return
+        try:
+            spender_id = int(context.get('source_id', -1))
+        except Exception:
+            spender_id = -1
+        target_id = self._equipment_effect_target_id(eq, player_id)
+        if spender_id != target_id:
+            return
+        amount = max(0, int(event_vars.get('amount', context.get('amount', 0)) or 0))
+        if amount <= 0:
+            return
+        eq.custom_vars = getattr(eq, 'custom_vars', {}) or {}
+        accumulated = max(0, int(eq.custom_vars.get('desert_emerald_e_spent', 0) or 0)) + amount
+        triggers, remainder = divmod(accumulated, 2)
+        eq.custom_vars['desert_emerald_e_spent'] = remainder
+        if triggers <= 0 or not self._valid_player_id(player_id):
+            return
+        owner = self.players[player_id]
+        before = int(getattr(owner, 'magic', 0) or 0)
+        owner.gain_magic(triggers)
+        gained = max(0, int(getattr(owner, 'magic', 0) or 0) - before)
+        if gained > 0:
+            self.log_msg(log or f"{self.pn(player_id)}的绿宝石使其回复{gained}M")
+
+    def _atomic_desert_topaz_apply(self, player_id, card, params, log, choice, context):
+        self._refresh_equipment_derived_player_flags(player_id)
+
+    def _atomic_desert_magic_yggdrasil(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        yggdrasil_def = CARD_DEFS.get('Yggdrasil')
+        if yggdrasil_def is None:
+            return
+        new_card = CardInstance('Yggdrasil')
+        self._apply_setup_modifiers_to_card(target_id, new_card)
+        self.players[target_id].add_to_hand(new_card)
+        self._remember_created_card(new_card, context if isinstance(context, dict) else None)
+        self.log_msg(log or f"{self.pn(target_id)}获得1张世界树之叶")
+
     def _atomic_sewers_lotus_heal(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if not (0 <= target_id < len(self.players)):
@@ -15203,6 +16238,148 @@ class GameEngine:
         healed = max(0, int(getattr(target, 'health', 0) or 0) - before)
         if healed > 0:
             self.log_msg(f"{self.pn(target_id)}回复{healed}H")
+
+    def _atomic_sewers_iodine_turn_start(self, player_id, card, params, log, choice, context):
+        healed_targets = []
+        for target_id in range(len(self.players)):
+            if not self._target_can_be_selected(player_id, target_id, allow_self=True):
+                continue
+            target = self.players[target_id]
+            before = int(getattr(target, 'health', 0) or 0)
+            target.heal(5)
+            healed = max(0, int(getattr(target, 'health', 0) or 0) - before)
+            if healed > 0:
+                healed_targets.append((target_id, healed))
+        for target_id, healed in healed_targets:
+            self.log_msg(f"{self.pn(player_id)}的碘使{self.pn(target_id)}回复{healed}H")
+
+    def _atomic_sewers_iodine_trigger(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        eq = self._find_equipment_for_card(player_id, card)
+        if eq is None or not self._destroy_equipment(player_id, eq, check_protection=False):
+            return
+        self.deal_attack_damage(
+            target_id,
+            12,
+            1,
+            attacker_id=player_id,
+            source_card=card,
+        )
+        self.players[target_id].poison += 12
+        self._normalize_status_value(self.players[target_id], 'poison')
+        self._note_achievement_status_peak(target_id)
+        self.log_msg(log or f"{self.pn(target_id)}+12层中毒")
+
+    def _atomic_sewers_cheese_control(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        target = self.players[target_id]
+        target.honey_control_turns = max(1, int(getattr(target, 'honey_control_turns', 0) or 0))
+        target.custom_vars['honey_lowest_enemy'] = True
+        self.log_msg(log or f"{self.pn(player_id)}使{self.pn(target_id)}下回合进入自动控制")
+
+    def _atomic_sewers_chitin_turn_start(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id) or self._nazar_status_value(target_id) > 0:
+            return
+        self._add_nazar_status_value(target_id, 1)
+        self.log_msg(log or f"{self.pn(target_id)}获得1层邪眼")
+
+    def _atomic_sewers_seal_target_equipment(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
+        affected = 0
+        for eq in list(getattr(self.players[target_id], 'equipment', []) or []):
+            if self._apply_sealed_to_equipment(target_id, eq, amount) > 0:
+                affected += 1
+        if affected > 0:
+            self.log_msg(log or f"{self.pn(target_id)}的{affected}张装备获得{amount}层尘封")
+
+    def _atomic_sewers_basil_turn_start(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        target = self.players[target_id]
+        low_health = int(getattr(target, 'health', 0) or 0) * 100 <= max(
+            1,
+            int(getattr(target, 'max_health', 0) or 0),
+        ) * 40
+        amount = 8 if low_health else 3
+        before = int(getattr(target, 'health', 0) or 0)
+        target.heal(amount)
+        healed = max(0, int(getattr(target, 'health', 0) or 0) - before)
+        if healed > 0:
+            self.log_msg(log or f"{self.pn(player_id)}的罗勒使{self.pn(target_id)}回复{healed}H")
+
+    def _atomic_sewers_neurotoxin(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        target = self.players[target_id]
+        target.poison += 7
+        self._normalize_status_value(target, 'poison')
+        if target.poison >= 22:
+            target.skip_turn += 1
+            status_text = '1层眩晕'
+        else:
+            target.weakness += 1
+            status_text = '1层虚弱'
+        self._note_achievement_status_peak(target_id)
+        self.log_msg(log or f"{self.pn(target_id)}+7层中毒，+{status_text}")
+
+    def _atomic_sewers_quartz(self, player_id, card, params, log, choice, context):
+        if not self._valid_player_id(player_id):
+            return
+        changed = 0
+        for hand_card in list(getattr(self.players[player_id], 'hand', []) or []):
+            hand_card.temp_swift_value = max(0, int(getattr(hand_card, 'temp_swift_value', 0) or 0)) + 1
+            hand_card.instance_flags.add('temp_swift')
+            changed += 1
+        if changed > 0:
+            self.log_msg(log or f"{self.pn(player_id)}的{changed}张手牌获得暂时迅捷:1")
+
+    def _sewers_neem_after_poison_health_loss(self, victim_id: int, health_lost: int) -> None:
+        health_lost = max(0, int(health_lost or 0))
+        if health_lost <= 0:
+            return
+        amount = health_lost // 2
+        if amount <= 0:
+            return
+        for owner_id, owner in enumerate(self.players):
+            for eq in list(getattr(owner, 'equipment', []) or []):
+                if not self._equipment_is(eq, 'Neem', 'sewers:neem'):
+                    continue
+                if not self._non_stack_equipment_is_active(eq):
+                    continue
+                target_id = self._equipment_effect_target_id(eq, owner_id)
+                if target_id == victim_id or not self._valid_player_id(target_id):
+                    continue
+                target = self.players[target_id]
+                before = int(getattr(target, 'health', 0) or 0)
+                target.heal(amount)
+                healed = max(0, int(getattr(target, 'health', 0) or 0) - before)
+                if healed > 0:
+                    self.log_msg(f"{self.pn(owner_id)}的苦楝使{self.pn(target_id)}回复{healed}H")
+
+    def _sewers_grow_toilet_paper_power(self, target_id: int) -> None:
+        if not self._valid_player_id(target_id):
+            return
+        for hand_card in list(getattr(self.players[target_id], 'hand', []) or []):
+            if not self._card_is(hand_card, 'ToiletPaper', 'sewers:toilet_paper'):
+                continue
+            custom = getattr(hand_card, 'custom_vars', {}) or {}
+            gained = max(0, int(custom.get('sewers_toilet_paper_power', 0) or 0))
+            if gained >= 24:
+                continue
+            custom['sewers_toilet_paper_power'] = gained + 1
+            hand_card.custom_vars = custom
+            hand_card.power_value = clamp_card_power(int(getattr(hand_card, 'power_value', 0) or 0) + 1)
+            hand_card.instance_flags.add('power')
 
     def _jurassic_selected_hand_cards(self, player_id: int, card: Optional[CardInstance], choice) -> List[CardInstance]:
         if not self._valid_player_id(player_id) or not isinstance(choice, dict):
@@ -15478,6 +16655,23 @@ class GameEngine:
         self._bio_add_status_value(target_id, 'extra_healing', amount)
         self.log_msg(log or f"{self.pn(target_id)}获得{amount}层额外回复")
 
+    def _atomic_bio_add_shield_conversion(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'target'))
+        if not self._valid_player_id(target_id):
+            return
+        amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
+        self._bio_add_status_value(target_id, 'shield_conversion', amount)
+        self.log_msg(log or f"{self.pn(target_id)}获得{amount}层护盾转化")
+
+    def _atomic_bio_clear_poison_fire(self, player_id, card, params, log, choice, context):
+        for target_id in self._bio_atomic_targets(player_id, card, params.get('target', 'target')):
+            if not self._valid_player_id(target_id):
+                continue
+            self.players[target_id].poison = 0
+            self.players[target_id].fire = 0
+        if log:
+            self.log_msg(log)
+
     def _atomic_bio_job_application(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if not self._valid_player_id(target_id):
@@ -15681,6 +16875,48 @@ class GameEngine:
         self.players[player_id].add_to_hand(copied)
         self.log_msg(log or f"{self.pn(player_id)}将一张强化的雪花复制加入手中")
 
+    def _atomic_arctic_pinecone_copy(self, player_id, card, params, log, choice, context):
+        if card is None or 'arctic_pinecone_copy' in (getattr(card, 'setup_modifiers', set()) or set()):
+            return
+        snapshot = getattr(card, '_bio_pre_play_snapshot', None)
+        copied = fresh_card_copy_from_dict(
+            snapshot if isinstance(snapshot, dict) else card.to_dict(),
+            card.def_id,
+        )
+        copied.setup_modifiers.add('arctic_pinecone_copy')
+        copied.instance_flags.update({'wide_strike', 'self_target', 'exile', 'swift'})
+        copied.disabled_flags.difference_update({'wide_strike', 'self_target', 'exile', 'swift'})
+        copied.fission_level = 3
+        copied.fission_count = 2
+        copied.fission_hit = 0
+        copied.swift_value = max(2, int(getattr(copied, 'swift_value', 0) or 0))
+        self._bio_queue_auto_play(player_id, copied, choice, no_cost=False, source='pinecone')
+        self.log_msg(log or f"{self.pn(player_id)}的松果额外打出一张复制")
+
+    def _atomic_arctic_ruby_fuse(self, player_id, card, params, log, choice, context):
+        if not self._valid_player_id(player_id):
+            return
+        try:
+            selected_iid = int((choice or {}).get('target_instance_id'))
+        except Exception:
+            return
+        selected = self.players[player_id].find_hand_card(selected_iid)
+        if selected is None or not any(
+            getattr(candidate, 'instance_id', None) == selected_iid
+            for candidate in self._arctic_ruby_selectable_attacks(player_id, card)
+        ):
+            return
+        paid_e = max(0, int(selected.cost_e) + self._get_extra_e_for_card(player_id, selected))
+        paid_m = max(0, int(selected.cost_m))
+        self._spend_resource(player_id, 'elixir', paid_e, selected)
+        self._spend_resource(player_id, 'magic', paid_m, selected)
+        selected.fusion_level = clamp_card_layer(int(getattr(selected, 'fusion_level', 1) or 1) + 1)
+        selected.fusion_multiplier = float(selected.fusion_level)
+        self.log_msg(
+            log
+            or f"{self.pn(player_id)}消耗{paid_e}E和{paid_m}M，使{selected.name_cn}的聚变层数增加1"
+        )
+
     def _atomic_arctic_activate_snowball(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if not self._valid_player_id(target_id):
@@ -15754,17 +16990,40 @@ class GameEngine:
         repeats = max(0, self._eval_int(player_id, params.get('repeats', 3), card, 3))
         is_precision = 'precision' in self._effective_card_flags(card)
         self.deal_attack_damage(target_id, amount, 1, is_precision=is_precision, attacker_id=player_id, source_card=card)
-        previous_target = target_id
+        prepared_targets = (
+            choice.get('_arctic_ricochet_targets', [])
+            if isinstance(choice, dict) and isinstance(choice.get('_arctic_ricochet_targets'), list)
+            else []
+        )
+        cursor = max(0, int(getattr(card, '_arctic_ricochet_cursor', 0) or 0))
+        previous_target = int(
+            getattr(card, '_arctic_ricochet_previous_target', target_id) or 0
+        )
         for _ in range(repeats):
-            candidates = [
-                tid for tid in range(len(self.players))
-                if tid != previous_target
-                and self.players[tid].health > 0
-                and self._target_can_be_selected(player_id, tid, allow_self=True)
-            ]
-            if not candidates:
-                break
-            bounced_target = random.choice(candidates)
+            prepared_target = prepared_targets[cursor] if cursor < len(prepared_targets) else -1
+            cursor += 1
+            try:
+                bounced_target = int(prepared_target)
+            except (TypeError, ValueError):
+                bounced_target = -1
+            if (
+                bounced_target == previous_target
+                or not self._target_can_be_selected(player_id, bounced_target, allow_self=True)
+            ):
+                candidates = [
+                    tid for tid in range(len(self.players))
+                    if tid != previous_target
+                    and self._target_can_be_selected(player_id, tid, allow_self=True)
+                ]
+                if not candidates:
+                    break
+                bounced_target = random.choice(candidates)
+            bounce_choice = {
+                'target_player': bounced_target,
+                'target_player_id': bounced_target,
+                'target_id': bounced_target,
+            }
+            self._sewers_trigger_vampire_fangs(player_id, card, bounce_choice)
             self.deal_attack_damage(
                 bounced_target,
                 amount,
@@ -15774,6 +17033,8 @@ class GameEngine:
                 source_card=card,
             )
             previous_target = bounced_target
+        card._arctic_ricochet_cursor = cursor
+        card._arctic_ricochet_previous_target = previous_target
 
     def _atomic_arctic_nuke(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
@@ -16380,6 +17641,8 @@ class GameEngine:
         eq = ps.find_equipment(equipment_instance_id)
         if eq is None:
             return {'success': False, 'error': '装备不存在'}
+        if not self._equipment_runtime_active(eq):
+            return {'success': False, 'error': '装备处于尘封状态'}
         has_mod_trigger = self._has_card_event(eq.card_def, 'equipment_trigger')
         if eq.card_def.trigger_cost_e < 0 and not has_mod_trigger:
             return {'success': False, 'error': '该装备没有触发效果'}
@@ -16394,13 +17657,23 @@ class GameEngine:
         max_uses = self._equipment_trigger_max_uses(eq)
         if max_uses > 0 and int(getattr(eq, 'uses_this_turn', 0)) >= max_uses:
             return {'success': False, 'error': f'该装备本回合最多触发{max_uses}次'}
-        try:
-            target_id = int(target_player_id)
-        except Exception:
-            target_id = -1
-        if not (0 <= target_id < len(self.players)):
-            target_id = 1 - player_id
-        if not self._target_can_be_selected(player_id, target_id, allow_self=True):
+        uses_effect_target = self._equipment_trigger_uses_effect_target(eq.card_def)
+        if uses_effect_target:
+            target_id = self._equipment_effect_target_id(eq, player_id)
+        else:
+            try:
+                target_id = int(target_player_id)
+            except Exception:
+                target_id = -1
+            if not (0 <= target_id < len(self.players)):
+                target_id = 1 - player_id
+        fixed_target_available = (
+            self._valid_player_id(target_id)
+            and int(getattr(self.players[target_id], 'health', 0) or 0) > 0
+        )
+        if uses_effect_target and not fixed_target_available:
+            return {'success': False, 'error': '没有可选中的玩家'}
+        if not uses_effect_target and not self._target_can_be_selected(player_id, target_id, allow_self=True):
             return {'success': False, 'error': '没有可选中的玩家'}
         if self._equipment_trigger_forbids_self_target(eq.card_def) and target_id == player_id:
             return {'success': False, 'error': '不能选择自己作为目标'}

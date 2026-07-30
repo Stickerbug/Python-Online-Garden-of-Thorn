@@ -404,7 +404,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color'
+GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -806,6 +806,22 @@ LAST_SEEN_FLUSH_MAX_PENDING = _env_int('GTN_LAST_SEEN_FLUSH_MAX_PENDING', 100)
 _LAST_SEEN_LOCK = threading.Lock()
 _LAST_SEEN_PENDING = set()
 _LAST_SEEN_WORKER_STARTED = False
+ACCOUNT_GAME_ENTRY_IP_DEDUPE_SECONDS = max(
+    0,
+    _env_int('GTN_ACCOUNT_GAME_ENTRY_IP_DEDUPE_SECONDS', 60),
+)
+STORY_PRESENCE_HEARTBEAT_SECONDS = max(
+    10,
+    _env_int('GTN_STORY_PRESENCE_HEARTBEAT_SECONDS', 25),
+)
+STORY_PRESENCE_TIMEOUT_SECONDS = max(
+    STORY_PRESENCE_HEARTBEAT_SECONDS * 3,
+    _env_int('GTN_STORY_PRESENCE_TIMEOUT_SECONDS', 80),
+)
+STORY_PRESENCE_CLIENT_LIMIT = max(
+    1,
+    _env_int('GTN_STORY_PRESENCE_CLIENT_LIMIT', 6),
+)
 
 try:
     import psutil
@@ -821,6 +837,8 @@ rooms = {}
 invites = {}
 solo_sessions = {}
 tutorial_sessions = set()
+_STORY_PRESENCE_LOCK = threading.Lock()
+_STORY_PRESENCES = {}
 SOLO_HISTORY_LIMIT = 100
 SOLO_MAX_CONCURRENT_ACTIONS = max(1, _env_int('GTN_SOLO_MAX_CONCURRENT_ACTIONS', 1))
 SOLO_ACTION_QUEUE_WAIT_SECONDS = max(0.0, _env_float('GTN_SOLO_ACTION_QUEUE_WAIT_SECONDS', 0.2))
@@ -5099,6 +5117,43 @@ def _client_ip():
     return request.remote_addr or 'unknown'
 
 
+def record_account_ip_event_async(user_id, username, ip, source='game_enter'):
+    if not DB_AVAILABLE or not user_id:
+        return
+    ip_token = str(ip or '').strip()
+    if not ip_token or ip_token.lower() == 'unknown':
+        return
+    source_token = str(source or 'game_enter').strip()[:40] or 'game_enter'
+
+    def _record():
+        try:
+            recorded = record_user_ip_event(
+                user_id,
+                username,
+                ip_token,
+                source=source_token,
+                dedupe_seconds=ACCOUNT_GAME_ENTRY_IP_DEDUPE_SECONDS,
+            )
+            if not recorded:
+                admin_event(
+                    'warning',
+                    f'account IP record skipped source={source_token} user_id={user_id}',
+                    user_id=user_id,
+                )
+        except Exception as exc:
+            admin_event(
+                'error',
+                f'account IP record failed source={source_token}: {exc}',
+                user_id=user_id,
+            )
+
+    _start_socket_background_task(_record)
+
+
+def record_account_game_entry_async(user_id, username, ip):
+    record_account_ip_event_async(user_id, username, ip, source='game_enter')
+
+
 SOCKET_EVENT_LIMITS = {
     'login': (8, 60),
     'chat': (10, 60),
@@ -6932,14 +6987,87 @@ def get_ongoing_games(beta_mode=None):
     return games
 
 
+def _prune_story_presences_locked(now=None):
+    current = float(now if now is not None else time.time())
+    cutoff = current - STORY_PRESENCE_TIMEOUT_SECONDS
+    stale_keys = [
+        key
+        for key, presence in _STORY_PRESENCES.items()
+        if float(presence.get('last_seen') or 0) < cutoff
+    ]
+    for key in stale_keys:
+        _STORY_PRESENCES.pop(key, None)
+
+
+def _touch_story_presence(user, client_id, ip):
+    user_id = int(user.get('id'))
+    client_token = str(client_id or '').strip()
+    now = time.time()
+    key = (user_id, client_token)
+    with _STORY_PRESENCE_LOCK:
+        _prune_story_presences_locked(now)
+        is_new = key not in _STORY_PRESENCES
+        previous = _STORY_PRESENCES.get(key) or {}
+        _STORY_PRESENCES[key] = {
+            'user_id': user_id,
+            'nickname': str(user.get('display_name') or user.get('username') or '?'),
+            'account_player_id': str(user.get('player_id') or ''),
+            'client_id': client_token,
+            'ip': str(ip or '').strip(),
+            'entered_at': float(previous.get('entered_at') or now),
+            'last_seen': now,
+            'beta_mode': bool(is_beta_instance()),
+        }
+        same_user = sorted(
+            (
+                (presence_key, presence)
+                for presence_key, presence in _STORY_PRESENCES.items()
+                if int(presence.get('user_id') or 0) == user_id
+            ),
+            key=lambda item: float(item[1].get('last_seen') or 0),
+            reverse=True,
+        )
+        for presence_key, _ in same_user[STORY_PRESENCE_CLIENT_LIMIT:]:
+            _STORY_PRESENCES.pop(presence_key, None)
+    return is_new
+
+
+def _active_story_presences(beta_mode=None):
+    if beta_mode is None:
+        beta_mode = is_beta_instance()
+    now = time.time()
+    with _STORY_PRESENCE_LOCK:
+        _prune_story_presences_locked(now)
+        rows = [
+            dict(presence)
+            for presence in _STORY_PRESENCES.values()
+            if bool(presence.get('beta_mode', False)) == bool(beta_mode)
+        ]
+    latest_by_user = {}
+    for presence in rows:
+        user_id = int(presence.get('user_id') or 0)
+        previous = latest_by_user.get(user_id)
+        if previous is None or float(presence.get('last_seen') or 0) > float(previous.get('last_seen') or 0):
+            latest_by_user[user_id] = presence
+    return list(latest_by_user.values())
+
+
+def _update_story_presence_username(user_id, username):
+    with _STORY_PRESENCE_LOCK:
+        for presence in _STORY_PRESENCES.values():
+            if int(presence.get('user_id') or 0) == int(user_id):
+                presence['nickname'] = str(username)
+
+
 def build_admin_players(beta_mode=None):
     if beta_mode is None:
         beta_mode = is_beta_instance()
     result = []
+    socket_rows_by_user_id = {}
     for sid, p in players.items():
         if bool(p.get('beta_mode', False)) != bool(beta_mode):
             continue
-        result.append({
+        row = {
             'sid': sid,
             'nickname': p.get('nickname', '?'),
             'user_id': p.get('user_id'),
@@ -6950,6 +7078,40 @@ def build_admin_players(beta_mode=None):
             'mode': p.get('mode', '1v1'),
             'beta_mode': bool(p.get('beta_mode')),
             'mods': p.get('mods_list', []),
+            'ip': p.get('ip') or '',
+            'kickable': True,
+            'story_online': False,
+        }
+        result.append(row)
+        try:
+            user_id = int(p.get('user_id') or 0)
+        except (TypeError, ValueError):
+            user_id = 0
+        if user_id and user_id not in socket_rows_by_user_id:
+            socket_rows_by_user_id[user_id] = row
+    for presence in _active_story_presences(beta_mode):
+        user_id = int(presence.get('user_id') or 0)
+        socket_row = socket_rows_by_user_id.get(user_id)
+        if socket_row is not None:
+            socket_row['story_online'] = True
+            socket_row['story_last_seen'] = presence.get('last_seen')
+            socket_row['story_ip'] = presence.get('ip') or ''
+            continue
+        result.append({
+            'sid': f'story:{user_id}',
+            'nickname': presence.get('nickname', '?'),
+            'user_id': user_id,
+            'player_id': presence.get('account_player_id') or '',
+            'status': 'story',
+            'room_id': None,
+            'spectating_room': None,
+            'mode': 'story',
+            'beta_mode': bool(presence.get('beta_mode')),
+            'mods': [],
+            'ip': presence.get('ip') or '',
+            'kickable': False,
+            'story_online': True,
+            'story_last_seen': presence.get('last_seen'),
         })
     return result
 
@@ -7784,6 +7946,7 @@ def get_admin_status_payload():
         'summary': {
             'online_players': len(player_list),
             'lobby_players': sum(1 for p in player_list if p.get('status') == 'lobby'),
+            'story_players': sum(1 for p in player_list if p.get('story_online')),
             'rooms': len(room_list),
             'spectators': spectator_count,
             'history_count': len(history),
@@ -7812,13 +7975,15 @@ def get_admin_status_payload_light():
         }
     with _lock:
         try:
-            online_players = len(players)
-            lobby_players = sum(1 for p in players.values() if p.get('status') == 'lobby')
-            spectator_count = sum(1 for p in players.values() if p.get('status') == 'spectating')
+            player_list = build_admin_players()
+            online_players = len(player_list)
+            lobby_players = sum(1 for p in player_list if p.get('status') == 'lobby')
+            story_players = sum(1 for p in player_list if p.get('story_online'))
+            spectator_count = sum(1 for p in player_list if p.get('status') == 'spectating')
             room_count = len(rooms)
         except Exception as exc:
             status_errors.append(f'summary: {exc}')
-            online_players = lobby_players = spectator_count = room_count = 0
+            online_players = lobby_players = story_players = spectator_count = room_count = 0
         try:
             history_count = len(MATCH_HISTORY)
         except Exception:
@@ -7845,6 +8010,7 @@ def get_admin_status_payload_light():
         'summary': {
             'online_players': online_players,
             'lobby_players': lobby_players,
+            'story_players': story_players,
             'rooms': room_count,
             'spectators': spectator_count,
             'history_count': history_count,
@@ -9274,6 +9440,29 @@ def _find_online_player_for_admin(token):
             str(player.get('user_id') or '').lower(),
         ):
             return psid, player
+    for presence in _active_story_presences():
+        presence_sid = f"story:{presence.get('user_id')}"
+        if lowered not in (
+            presence_sid.lower(),
+            str(presence.get('nickname') or '').lower(),
+            str(presence.get('account_player_id') or '').lower(),
+            str(presence.get('user_id') or '').lower(),
+        ):
+            continue
+        return presence_sid, {
+            'nickname': presence.get('nickname', '?'),
+            'display_name': presence.get('nickname', '?'),
+            'user_id': presence.get('user_id'),
+            'account_player_id': presence.get('account_player_id') or '',
+            'status': 'story',
+            'mode': 'story',
+            'room_id': None,
+            'spectating_room': None,
+            'beta_mode': bool(presence.get('beta_mode')),
+            'mods_list': [],
+            'ip': presence.get('ip') or '',
+            'story_online': True,
+        }
     return None, None
 
 
@@ -9311,6 +9500,7 @@ def _sync_admin_username_to_online_players(user):
                 names = getattr(room.engine, 'player_names', []) or []
                 if player_index < len(names):
                     names[player_index] = username
+    _update_story_presence_username(user_id, username)
     return updated_sids
 
 
@@ -9829,6 +10019,7 @@ def zh_status(value):
         'spectating': '观战中',
         'reconnecting': '重连中',
         'solo': '单人训练',
+        'story': '故事模式',
         'tutorial': '新手教程',
     }.get(value, value)
 
@@ -10292,7 +10483,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'on|off|status')}
         with _lock:
             room_count = len(rooms)
-            player_count = len(players)
+            player_count = len(build_admin_players())
         return {'success': True, 'output': (
             f"Drain: {'ON' if is_instance_draining() else 'OFF'}\n"
             f"Instance: {GTN_INSTANCE_ID} | Version: {GTN_VERSION} | Port: {GTN_PORT}\n"
@@ -10312,7 +10503,8 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             f"Branch: {profile.get('git_branch', os.environ.get('GTN_GIT_BRANCH', 'main'))} | "
             f"Service: {profile.get('service_name') or '-'}\n"
             f"在线：{summary['online_players']} | 大厅：{summary['lobby_players']} | "
-            f"对局：{summary['rooms']} | 观战：{summary['spectators']}\n"
+            f"对局：{summary['rooms']} | 观战：{summary['spectators']} | "
+            f"故事：{summary.get('story_players', 0)}\n"
             f"运行时间：{metrics['uptime_seconds']} 秒 | "
             f"CPU：进程 {metrics['process']['cpu_percent']}% / 系统 {metrics['system']['cpu_percent']}% | "
             f"进程内存：{metrics['process']['memory_rss']} 字节\n"
@@ -10721,7 +10913,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         return {'success': True, 'output': '\n'.join([
             '服务器诊断：',
             f"db_ok={DB_AVAILABLE} db_error={DB_INIT_ERROR or '-'}",
-            f"players={summary.get('online_players')} lobby={summary.get('lobby_players')} rooms={summary.get('rooms')} spectators={summary.get('spectators')}",
+            f"players={summary.get('online_players')} lobby={summary.get('lobby_players')} rooms={summary.get('rooms')} spectators={summary.get('spectators')} story={summary.get('story_players', 0)}",
             f"global_lock held={lock_snapshot.get('held')} held_seconds={lock_snapshot.get('held_seconds')} owner={lock_snapshot.get('owner')}",
             admin_diagnose_stuck_output(),
         ])}
@@ -14416,6 +14608,16 @@ def index():
     )
 
 
+def _story_dev_tools_allowed(user_id):
+    if not STORY_DEV_TOOLS_ENABLED or not user_id:
+        return False
+    try:
+        return bool(feedback_is_staff(user_id))
+    except Exception as exc:
+        app.logger.warning('failed to resolve story developer permission for user %s: %s', user_id, exc)
+        return False
+
+
 @app.route('/story')
 def story_page():
     user = _current_account_user()
@@ -14431,8 +14633,36 @@ def story_page():
             'skin': public_skin_config(user.get('skin')),
             'keybindings': user.get('keybindings'),
         },
-        story_dev_tools=STORY_DEV_TOOLS_ENABLED,
+        story_dev_tools=_story_dev_tools_allowed(user.get('id')),
     )
+
+
+@app.route('/api/story/presence', methods=['POST'])
+def api_story_presence():
+    user = _current_account_user()
+    if not user:
+        return _json_error('请先登录账号', 401)
+    data = request.get_json(silent=True) or {}
+    client_id = str(data.get('client_id') or '').strip()
+    if not re.fullmatch(r'[A-Za-z0-9._:-]{8,96}', client_id):
+        return _json_error('故事模式页面标识无效', 400)
+    ip = _client_ip()
+    is_new = _touch_story_presence(user, client_id, ip)
+    if is_new:
+        record_account_ip_event_async(
+            user.get('id'),
+            user.get('username') or '',
+            ip,
+            source='story_enter',
+        )
+    with _lock:
+        online_players = build_admin_players()
+    return jsonify({
+        'success': True,
+        'online_count': len(online_players),
+        'story_online_count': sum(1 for player in online_players if player.get('story_online')),
+        'heartbeat_interval_seconds': STORY_PRESENCE_HEARTBEAT_SECONDS,
+    })
 
 
 @app.route('/api/story/run', methods=['GET'])
@@ -14502,7 +14732,7 @@ def api_story_run_action():
         return _json_error('故事操作类型无效', 400, code='INVALID_ACTION_TYPE')
     if not isinstance(payload, dict):
         return _json_error('故事操作参数无效', 400, code='INVALID_ACTION_PAYLOAD')
-    if action_type.startswith('dev_') and not STORY_DEV_TOOLS_ENABLED:
+    if action_type.startswith('dev_') and not _story_dev_tools_allowed(user_id):
         return _json_error('未找到此功能', 404, code='DEV_TOOLS_DISABLED')
 
     try:
@@ -14589,7 +14819,7 @@ def api_story_run_reset_map():
     user_id, _, error = _require_account_json()
     if error:
         return error
-    if not STORY_DEV_TOOLS_ENABLED:
+    if not _story_dev_tools_allowed(user_id):
         return _json_error('未找到此功能', 404)
     data = request.get_json(silent=True) or {}
     try:
@@ -15197,6 +15427,7 @@ def admin_status():
             'summary': {
                 'online_players': 0,
                 'lobby_players': 0,
+                'story_players': 0,
                 'rooms': 0,
                 'spectators': 0,
                 'history_count': 0,
@@ -15468,16 +15699,18 @@ def admin_report_resolve(report_id):
 
 def _admin_online_user_map():
     online = {}
-    for sid, player in players.items():
+    for player in build_admin_players():
         nickname = player.get('nickname')
         if not nickname:
             continue
         online[str(nickname).lower()] = {
-            'sid': sid,
+            'sid': player.get('sid'),
             'status': player.get('status', ''),
             'mode': player.get('mode', '1v1'),
             'room_id': player.get('room_id'),
             'spectating_room': player.get('spectating_room'),
+            'ip': player.get('ip') or player.get('story_ip') or '',
+            'story_online': bool(player.get('story_online')),
         }
     return online
 
@@ -17792,6 +18025,11 @@ def on_login(data):
         account_player_id = account_user.get('player_id') if account_user else ''
         client_ip = _client_ip()
         for old_sid, p in list(players.items()):
+            # Re-submitting login on an already connected socket is idempotent.
+            # Treating the current sid as a takeover target makes the server
+            # notify and disconnect the very session that just logged in.
+            if old_sid == sid:
+                continue
             if _can_take_over_online_session(
                 p,
                 name_key=name_key,
@@ -17836,7 +18074,7 @@ def on_login(data):
         )
         players[sid] = {
             'nickname': name,
-            'ip': _client_ip(),
+            'ip': client_ip,
             'room_id': None,
             'status': initial_status,
             'login_at': login_now,
@@ -17881,10 +18119,11 @@ def on_login(data):
     takeover_notice = {
         'reason': '账号在其他位置进入大厅。\n如果该操作不是由本人进行，请修改密码。',
         'code': 'account_entered_elsewhere',
+        'replacement_sid': sid,
     }
     for takeover_info in stale_disconnect_sessions:
         old_sid = takeover_info.get('sid')
-        if not old_sid:
+        if not old_sid or old_sid == sid:
             continue
         try:
             if takeover_info.get('user_id') or takeover_info.get('account_player_id'):
@@ -17930,6 +18169,12 @@ def on_login(data):
             pass
         admin_event('player', 'login aborted: socket disconnected before lobby join', sid=sid)
         return
+    if is_registered_user:
+        record_account_game_entry_async(
+            user_id,
+            account_user.get('username') or name,
+            client_ip,
+        )
     login_payload = {
         'sid': sid,
         'nickname': name,
