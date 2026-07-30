@@ -33,6 +33,7 @@ GR_INITIAL = 1000
 GR_SOFT_RESET_RATIO = 0.5
 GR_SOFT_RESET_MIN = 850
 GR_SOFT_RESET_MAX = 1250
+GR_SEASON_RESET_DEW_PER_POINT = 50
 GR_SEASON_MIN_GAMES = 8
 GR_TOTAL_MIN_GAMES = 20
 GR_2V2_FACTOR = 0.85
@@ -102,6 +103,10 @@ ACHIEVEMENT_DEFS = [
     {'id': 'cards_played_5000', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 V', 'name_en': 'Cards in Motion V', 'description_cn': '累计成功打出5000张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 5,000 cards, regardless of where they go afterward.', 'target': 5000, 'metric': 'cards_played_total', 'reward_dew': 2500},
     {'id': 'cards_played_10000', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 VI', 'name_en': 'Cards in Motion VI', 'description_cn': '累计成功打出10000张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 10,000 cards, regardless of where they go afterward.', 'target': 10000, 'metric': 'cards_played_total', 'reward_dew': 3500},
     {'id': 'cards_played_20000', 'series': 'cards_played', 'type': 'milestone', 'name_cn': '花牌流转 VII', 'name_en': 'Cards in Motion VII', 'description_cn': '累计成功打出20000张牌，无论其打出后进入何处。', 'description_en': 'Successfully play 20,000 cards, regardless of where they go afterward.', 'target': 20000, 'metric': 'cards_played_total', 'reward_dew': 5000},
+    {'id': 'damage_output_500', 'series': 'damage_output', 'type': 'milestone', 'name_cn': '摧枯拉朽 I', 'name_en': 'Overwhelming Force I', 'description_cn': '累计造成500点伤害。被防御效果吸收及超过目标剩余H的伤害仍计入。', 'description_en': "Deal 500 total damage. Damage prevented by defensive effects and damage beyond a target's remaining H still count.", 'target': 500, 'metric': 'damage_output_total', 'reward_dew': 250},
+    {'id': 'damage_output_2000', 'series': 'damage_output', 'type': 'milestone', 'name_cn': '摧枯拉朽 II', 'name_en': 'Overwhelming Force II', 'description_cn': '累计造成2000点伤害。被防御效果吸收及超过目标剩余H的伤害仍计入。', 'description_en': "Deal 2,000 total damage. Damage prevented by defensive effects and damage beyond a target's remaining H still count.", 'target': 2000, 'metric': 'damage_output_total', 'reward_dew': 600},
+    {'id': 'damage_output_10000', 'series': 'damage_output', 'type': 'milestone', 'name_cn': '摧枯拉朽 III', 'name_en': 'Overwhelming Force III', 'description_cn': '累计造成10000点伤害。被防御效果吸收及超过目标剩余H的伤害仍计入。', 'description_en': "Deal 10,000 total damage. Damage prevented by defensive effects and damage beyond a target's remaining H still count.", 'target': 10000, 'metric': 'damage_output_total', 'reward_dew': 1500},
+    {'id': 'damage_output_50000', 'series': 'damage_output', 'type': 'milestone', 'name_cn': '摧枯拉朽 IV', 'name_en': 'Overwhelming Force IV', 'description_cn': '累计造成50000点伤害。被防御效果吸收及超过目标剩余H的伤害仍计入。', 'description_en': "Deal 50,000 total damage. Damage prevented by defensive effects and damage beyond a target's remaining H still count.", 'target': 50000, 'metric': 'damage_output_total', 'reward_dew': 3500},
     {'id': 'dodge_damage_100', 'series': 'dodge_damage', 'type': 'milestone', 'name_cn': '万花丛中过，片叶不沾身 I', 'name_en': 'Through the Flowers Untouched I', 'description_cn': '累计通过闪避免除100点物理伤害。', 'description_en': 'Prevent 100 physical damage with Dodge.', 'target': 100, 'metric': 'dodge_damage_prevented_total', 'reward_dew': 250},
     {'id': 'dodge_damage_250', 'series': 'dodge_damage', 'type': 'milestone', 'name_cn': '万花丛中过，片叶不沾身 II', 'name_en': 'Through the Flowers Untouched II', 'description_cn': '累计通过闪避免除250点物理伤害。', 'description_en': 'Prevent 250 physical damage with Dodge.', 'target': 250, 'metric': 'dodge_damage_prevented_total', 'reward_dew': 400},
     {'id': 'dodge_damage_500', 'series': 'dodge_damage', 'type': 'milestone', 'name_cn': '万花丛中过，片叶不沾身 III', 'name_en': 'Through the Flowers Untouched III', 'description_cn': '累计通过闪避免除500点物理伤害。', 'description_en': 'Prevent 500 physical damage with Dodge.', 'target': 500, 'metric': 'dodge_damage_prevented_total', 'reward_dew': 600},
@@ -3366,6 +3371,65 @@ def _soft_reset_gr(value):
     return max(GR_SOFT_RESET_MIN, min(GR_SOFT_RESET_MAX, reset))
 
 
+def _award_gr_season_reset_dew_for_conn(
+    conn,
+    user_id,
+    previous_season_id,
+    season_id,
+    old_gr,
+    new_gr,
+    created_at,
+):
+    try:
+        uid = int(user_id)
+        old_value = float(old_gr)
+        new_value = float(new_gr)
+    except (TypeError, ValueError):
+        return 0
+    reduced_gr = max(0.0, old_value - new_value)
+    reward = max(0, int(math.floor(reduced_gr * GR_SEASON_RESET_DEW_PER_POINT + 0.5)))
+    if reward <= 0:
+        return 0
+    source_id = f'{str(previous_season_id or "unknown")}->{str(season_id or "unknown")}'
+    if _currency_source_exists(conn, uid, 'gr_season_reset', source_id):
+        return 0
+    user = conn.execute(
+        'SELECT thorn_dew_free, thorn_dew_paid FROM users WHERE id = ?',
+        (uid,),
+    ).fetchone()
+    if user is None:
+        return 0
+    free_before = max(0, int(user['thorn_dew_free'] or 0))
+    paid_balance = max(0, int(user['thorn_dew_paid'] or 0))
+    free_after = free_before + reward
+    conn.execute(
+        'UPDATE users SET thorn_dew_free = ? WHERE id = ?',
+        (free_after, uid),
+    )
+    conn.execute(
+        '''
+        INSERT INTO user_currency_transactions (
+            user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
+            balance_free_after, balance_paid_after, admin_username, created_at
+        )
+        VALUES (?, 'thorn_dew', ?, 0, ?, 'gr_season_reset', ?, ?, ?, '', ?)
+        ''',
+        (
+            uid,
+            reward,
+            (
+                f'赛季花阶分重置补偿：{old_value:.1f}→{new_value:.1f}'
+                f'（降低{reduced_gr:.1f}，每分{GR_SEASON_RESET_DEW_PER_POINT}荆露）'
+            ),
+            source_id,
+            free_after,
+            paid_balance,
+            created_at,
+        ),
+    )
+    return reward
+
+
 def ensure_current_gr_season_for_conn(conn, user_ids=None):
     season = current_gr_season()
     params = []
@@ -3392,7 +3456,9 @@ def ensure_current_gr_season_for_conn(conn, user_ids=None):
     for row in rows:
         if str(row['gr_season_id'] or '') == season['id']:
             continue
-        new_gr = _soft_reset_gr(row['season_gr'])
+        previous_season_id = str(row['gr_season_id'] or '')
+        old_gr = float(row['season_gr']) if row['season_gr'] is not None else float(GR_INITIAL)
+        new_gr = _soft_reset_gr(old_gr)
         conn.execute(
             '''
             UPDATE users
@@ -3402,6 +3468,15 @@ def ensure_current_gr_season_for_conn(conn, user_ids=None):
             WHERE id = ?
             ''',
             (new_gr, season['id'], row['id']),
+        )
+        _award_gr_season_reset_dew_for_conn(
+            conn,
+            row['id'],
+            previous_season_id,
+            season['id'],
+            old_gr,
+            new_gr,
+            now,
         )
         conn.execute(
             '''

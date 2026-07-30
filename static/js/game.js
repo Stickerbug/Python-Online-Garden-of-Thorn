@@ -869,7 +869,7 @@ const I18N = {
         settings_audio_enabled: 'Enable audio', settings_volume_master: 'Master volume', settings_volume_music: 'Music', settings_volume_menu_music: 'Home/Lobby music', settings_volume_battle_music: 'Battle music', settings_volume_ui: 'Buttons', settings_volume_sfx: 'Effects', settings_audio_test: 'Test sound', settings_audio_hint: 'Music starts after your first click or key press.',
         no_games: 'No ongoing games', back_to_home: 'Back to Home', settings_btn: 'Settings', settings_server: 'Server', settings_server_addr: 'Address', not_your_turn: 'Not your turn',
         counter_insufficient: 'Tip: counter cards are not affordable', default_status: 'Garden of Thorn', game_loading: 'Loading...', server_no_response: 'Server is not responding. Check the connection or refresh.',
-        spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck', shuffle_deck: 'Shuffle',
+        spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', chat_origin_multiplayer: 'Multiplayer', chat_origin_story: 'Story', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck', shuffle_deck: 'Shuffle',
         solo_deck_a: 'Your Deck', solo_deck_b: 'Opponent Deck', search_cards: 'Search cards', pause_edit: 'Pause & Edit', set_next_draw: 'Set Next Draw', solo_saved: 'Training decks saved',
         solo_need_15: 'Both training decks must contain 0-50 cards', solo_event_a: 'Your opening event', solo_event_b: 'Opponent opening event', no_event: 'None', edit_tags: 'Edit Tags',
         login_need_nickname: 'Please enter a nickname', login_name_too_long: 'Nickname too long (max 8 CJK or 16 Latin chars)', login_name_not_numbers: 'Nickname cannot be only numbers',
@@ -987,7 +987,7 @@ I18N.zh = { ...I18N.en,
     settings_audio_enabled: '启用音频', settings_volume_master: '主音量', settings_volume_music: '背景音乐', settings_volume_menu_music: '主页/大厅音乐', settings_volume_battle_music: '对局音乐', settings_volume_ui: '按钮', settings_volume_sfx: '效果', settings_audio_test: '测试音效', settings_audio_hint: '音乐会在首次点击或按键后开始播放。',
     no_games: '暂无进行中的对局', back_to_home: '返回主页', settings_btn: '设置', settings_server: '服务器', settings_server_addr: '地址', not_your_turn: '还没轮到你',
     counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
-    spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天',
+    spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天', chat_origin_multiplayer: '多人', chat_origin_story: '故事',
     lobby_phase_event_select: '配装选择', lobby_phase_draw: '抽牌',
     solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', clear_deck: '清空牌组', shuffle_deck: '打乱顺序', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
     search_cards: '搜索卡牌', pause_edit: '暂停并编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练牌组已保存', solo_need_15: '双方训练场牌组都必须为 0-50 张',
@@ -1101,7 +1101,7 @@ I18N.fr = { ...I18N.en,
     no_games: 'Aucune partie en cours', back_to_home: "Retour à l'accueil", settings_btn: 'Paramètres', settings_server: 'Serveur', settings_server_addr: 'Adresse',
     not_your_turn: "Ce n'est pas votre tour", counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
     game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
-    spectator_prefix: 'Spectateur', lobby_title: 'Salon', online_count: 'En ligne: {0}', chat_title: 'Chat',
+    spectator_prefix: 'Spectateur', lobby_title: 'Salon', online_count: 'En ligne: {0}', chat_title: 'Chat', chat_origin_multiplayer: 'Multijoueur', chat_origin_story: 'Histoire',
     solo_training: 'Entraînement solo', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer', clear_deck: 'Vider deck', shuffle_deck: 'Mélanger',
     solo_deck_a: 'Votre deck', solo_deck_b: 'Deck adverse', search_cards: 'Chercher cartes', pause_edit: 'Pause édition',
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks d’entraînement doivent contenir 0 à 50 cartes',
@@ -1174,7 +1174,7 @@ I18N.ja = { ...I18N.en,
     no_games: '進行中の対戦なし', back_to_home: 'ホームに戻る', settings_btn: '設定', settings_server: 'サーバー', settings_server_addr: 'アドレス',
     not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
     game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
-    spectator_prefix: '観戦', lobby_title: 'ロビー', online_count: 'オンライン: {0}', chat_title: 'チャット',
+    spectator_prefix: '観戦', lobby_title: 'ロビー', online_count: 'オンライン: {0}', chat_title: 'チャット', chat_origin_multiplayer: 'マルチ', chat_origin_story: 'ストーリー',
     solo_training: 'ソロ練習場', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始', clear_deck: 'デッキを空にする', shuffle_deck: 'シャッフル',
     solo_deck_a: '自分のデッキ', solo_deck_b: '相手デッキ', search_cards: 'カード検索', pause_edit: '中断して編集',
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '練習デッキは両方とも0〜50枚にしてください',
@@ -2782,6 +2782,15 @@ function setChatNameContent(el, data = {}, options = {}) {
     if (data.system) {
         el.textContent = `${fallbackNick}${suffix === ': ' ? ' ' : suffix}`;
         return;
+    }
+    const chatOrigin = String(data.chat_origin || data.chatOrigin || '').toLowerCase();
+    if (chatOrigin === 'multiplayer' || chatOrigin === 'story') {
+        const origin = document.createElement('span');
+        origin.className = `chat-origin-prefix chat-origin-${chatOrigin}`;
+        origin.textContent = `[${chatOrigin === 'story'
+            ? (UI.chat_origin_story || '故事')
+            : (UI.chat_origin_multiplayer || '多人')}]`;
+        el.appendChild(origin);
     }
     if (data.is_spectator) {
         const spectator = document.createElement('span');
@@ -9430,6 +9439,10 @@ function selectHandCardByShortcutIndex(index, event = null) {
 }
 
 function selectPlayCardForConfirm(cardInstanceId, options = {}) {
+    if (isReadOnlyBattleStatus()) {
+        clearSelectedPlayCard({ skipRender: true });
+        return false;
+    }
     if (!options.force && !isTouchPlayMode()) return false;
     if (isActionBusy()) return false;
     const hand = (gameState.you || {}).hand || [];
@@ -10022,7 +10035,7 @@ function escapeClassToken(value) {
     return String(value || 'default').replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
-const DATA_CACHE_VERSION = 'v10';
+const DATA_CACHE_VERSION = 'v12';
 const loadedCommunityFontSubsets = new Set();
 const communityFontFaceUrls = new Set();
 
@@ -11771,11 +11784,18 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
         };
     }
     if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Kale', 'garden:kale'])) {
-        const maxHealth = readPlayerHealthValue(targetState, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
-        const health = readPlayerHealthValue(targetState, ['health', 'hp', 'h'], maxHealth);
         info = {
             ...info,
-            amount: maxHealth > 0 && health <= maxHealth * 0.2 ? 36 : 9,
+            amount: 14,
+        };
+    }
+    if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Deliverance', 'hel:deliverance'])) {
+        const handCount = Array.isArray(targetState && targetState.hand)
+            ? targetState.hand.length
+            : Math.max(0, Number(targetState && targetState.hand_count) || 0);
+        info = {
+            ...info,
+            amount: 2 + handCount * 2,
         };
     }
     if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['PrivetBerry', 'desert_cards_addition:privet_berry'])) {
@@ -11831,7 +11851,7 @@ function getActualAttackDamageHits(cardDict, attackerState = {}, targetState = {
     const bonus = Math.max(0, Number(cardDict.bonus_damage || 0));
     let power = Number(cardDict.power_value || 0);
     if (cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Coal', 'garden:coal'])) {
-        power = Math.max(0, Number(attackerState && attackerState.fire) || 0) * 5;
+        power = Math.max(0, Number(attackerState && attackerState.fire) || 0) * 3;
     }
     if (info.triangle) {
         const attackerImmune = isPredictionStatusImmune(attackerState);
@@ -12060,7 +12080,18 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
     const dizzyMult = 1 + 0.5 * countDizzyEquipmentForPrediction(attackerState);
     const cutterBonus = countCutterEquipmentForPrediction(attackerState);
     const precision = cardHasEffectiveFlagForPrediction(cardDict || {}, cardDef || {}, 'precision');
-    rawHits.forEach(raw => {
+    const kale = cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Kale', 'garden:kale']);
+    const targetMaxHealth = readPlayerHealthValue(
+        targetState,
+        ['max_health', 'maxHp', 'maxH', 'max_h'],
+        0,
+    );
+    let targetHealth = readPlayerHealthValue(
+        targetState,
+        ['health', 'hp', 'h'],
+        targetMaxHealth,
+    );
+    const resolveRawHit = raw => {
         let dmg = Math.max(0, Math.ceil(Number(raw || 0)));
         let precisionDodged = false;
         if (dodge > 0) {
@@ -12069,12 +12100,12 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
                 precisionDodged = true;
             } else {
                 hits.push(0);
-                return;
+                return 0;
             }
         }
         if (invincible) {
             hits.push(0);
-            return;
+            return 0;
         }
         if (dizzyMult > 1) dmg = Math.ceil(dmg * dizzyMult);
         if (corruptionMult > 1) dmg = Math.ceil(dmg * corruptionMult);
@@ -12103,6 +12134,19 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
             dmg = Math.max(0, dmg - blocked);
         }
         hits.push(dmg);
+        targetHealth -= dmg;
+        return dmg;
+    };
+    rawHits.forEach(raw => {
+        const dealt = resolveRawHit(raw);
+        if (
+            kale
+            && dealt > 0
+            && targetMaxHealth > 0
+            && targetHealth * 5 <= targetMaxHealth
+        ) {
+            resolveRawHit(raw);
+        }
     });
     hits.spongePoison = spongePoison;
     return hits;
@@ -13049,6 +13093,117 @@ function buildCardIntroSummaryHtml(cardDef) {
     `;
 }
 
+function getCardSourceModText(cardDef) {
+    const memberships = getGalleryCardModMemberships(cardDef);
+    const labels = [...new Set(
+        memberships
+            .map(item => String(item && item.label || '').trim())
+            .filter(Boolean)
+    )];
+    if (labels.length > 1) {
+        return lt({
+            zh: '所有模组',
+            en: 'All Mods',
+            fr: 'Tous les mods',
+            ja: 'すべてのMod',
+        });
+    }
+    return labels[0] || lt({
+        zh: '未知',
+        en: 'Unknown',
+        fr: 'Inconnu',
+        ja: '不明',
+    });
+}
+
+function getGallerySameTypeDrawProbability(cardDef) {
+    if (!cardDef) return null;
+    ensureGalleryCardFilterState();
+    const defs = getGalleryCardDefs();
+    const eligible = Object.values(defs).filter(candidate => {
+        if (!isPublicCardDef(candidate) || candidate.temporarily_disabled) return false;
+        const count = Number(candidate.count);
+        if (!Number.isFinite(count) || count <= 0) return false;
+        return getGalleryCardModMemberships(candidate)
+            .some(item => gallerySelectedModKeys.has(item.key));
+    });
+    const weights = new Map();
+    const fixedByType = new Map();
+    eligible.forEach(candidate => {
+        weights.set(candidate.id, Math.max(0, Number(candidate.count) || 0));
+        const ratio = Number(candidate.fixed_same_type_draw_ratio);
+        if (Number.isFinite(ratio) && ratio > 0) {
+            if (!fixedByType.has(candidate.card_type)) fixedByType.set(candidate.card_type, []);
+            fixedByType.get(candidate.card_type).push({ id: candidate.id, ratio });
+        }
+    });
+    fixedByType.forEach((fixedCards, cardType) => {
+        const fixedIds = new Set(fixedCards.map(item => item.id));
+        const fixedRatioTotal = fixedCards.reduce((sum, item) => sum + item.ratio, 0);
+        const otherTotal = eligible.reduce((sum, candidate) => {
+            if (candidate.card_type !== cardType || fixedIds.has(candidate.id)) return sum;
+            return sum + (weights.get(candidate.id) || 0);
+        }, 0);
+        if (otherTotal <= 0 || fixedRatioTotal <= 0 || fixedRatioTotal >= 1) return;
+        fixedCards.forEach(item => {
+            weights.set(item.id, item.ratio * otherTotal / (1 - fixedRatioTotal));
+        });
+    });
+    const ownWeight = weights.get(cardDef.id) || 0;
+    if (ownWeight <= 0) return null;
+    const sameTypeTotal = eligible.reduce((sum, candidate) => (
+        candidate.card_type === cardDef.card_type
+            ? sum + (weights.get(candidate.id) || 0)
+            : sum
+    ), 0);
+    return sameTypeTotal > 0 ? ownWeight / sameTypeTotal : null;
+}
+
+function formatSameTypeDrawProbability(cardDef) {
+    const raw = phase === 'gallery'
+        ? getGallerySameTypeDrawProbability(cardDef)
+        : Number(cardDef && cardDef.same_type_draw_probability);
+    if (!Number.isFinite(raw) || raw <= 0) {
+        return lt({
+            zh: '无法抽到',
+            en: 'Cannot be drawn',
+            fr: 'Impossible à piocher',
+            ja: '抽選されません',
+        });
+    }
+    const probability = Math.max(0, Math.min(1, raw));
+    return `${(probability * 100).toFixed(2)}%`;
+}
+
+function buildCardSourceMetaHtml(cardDef) {
+    if (!cardDef) return '';
+    const sourceMod = getCardSourceModText(cardDef);
+    const probability = formatSameTypeDrawProbability(cardDef);
+    const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
+    return `
+        <dl class="term-intro-card-meta">
+            <div class="term-intro-card-meta-row">
+                <dt>${escapeHtml(lt({
+                    zh: '来源模组',
+                    en: 'Source Mod',
+                    fr: 'Mod d’origine',
+                    ja: '収録Mod',
+                }))}</dt>
+                <dd>${escapeHtml(sourceMod)}</dd>
+            </div>
+            <div class="term-intro-card-meta-row">
+                <dt>${escapeHtml(lt({
+                    zh: '同类型牌抽到概率',
+                    en: 'Same-type draw chance',
+                    fr: 'Chance de pioche (même type)',
+                    ja: '同タイプ抽選確率',
+                }))}</dt>
+                <dd class="term-intro-card-meta-probability" style="--card-meta-accent:${escapeHtml(typeColor)}">${escapeHtml(probability)}</dd>
+            </div>
+        </dl>
+    `;
+}
+
 function buildCardIntroTermsHtml(cardDict) {
     if (cardDict && cardDict.__blind_for_self) {
         return `
@@ -13063,7 +13218,7 @@ function buildCardIntroTermsHtml(cardDict) {
         `;
     }
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
-    return `${buildCardIntroSummaryHtml(cardDef)}${renderTermIntroItems(collectCardIntroTerms(cardDict))}`;
+    return `${buildCardSourceMetaHtml(cardDef)}${buildCardIntroSummaryHtml(cardDef)}${renderTermIntroItems(collectCardIntroTerms(cardDict))}`;
 }
 
 function collectCardIntroTerms(cardDict) {
@@ -13108,7 +13263,23 @@ function collectCardIntroTerms(cardDict) {
         const names = [id, def && def.name_cn, def && def.name_en, def && def.name]
             .filter(Boolean)
             .map(value => String(value));
-        if (!names.some(name => rawText.includes(name)) || seen.has(`status:${id}`)) return;
+        const normalizedId = String(id || '').toLowerCase().split(':').pop();
+        let mentioned = names.some(name => rawText.includes(name));
+        if (normalizedId === 'extra_healing') {
+            const explicitStatusToken = /\[\[(?:status|term):(?:bio:)?extra_healing(?:\|[^\]]*)?\]\]/i.test(rawText);
+            const explicitStack = names.some(name => {
+                const escaped = escapeCardTextRegExp(name);
+                return new RegExp(
+                    `(?:\\d+|[一二三四五六七八九十]+)\\s*`
+                    + `(?:层|層|stacks?|layers?|couches?)\\s*`
+                    + `(?:of\\s+|de\\s+)?${escaped}`
+                    + `|${escaped}\\s*[:：]\\s*\\d+`,
+                    'iu',
+                ).test(rawText);
+            });
+            mentioned = explicitStatusToken || explicitStack;
+        }
+        if (!mentioned || seen.has(`status:${id}`)) return;
         addTermIntroItem(items, seen, `status:${id}`, getStatusIntroItem({ key: id, customDef: def }));
     });
     const probes = [
@@ -26954,6 +27125,7 @@ function renderPlayerHand(playerData, mode = null) {
 
 function canPlayCard(cardDict) {
     const gs = gameState;
+    if (!gs || isReadOnlyBattleStatus(gs)) return false;
     const you = gs.you || {};
     if (gs.phase !== 'action') return false;
     if (!isMyTurn()) return false;
@@ -30114,6 +30286,7 @@ function lobbyChatRepeatKey(entry = {}) {
         entry.text || '',
         entry.chat_channel || entry.channel || '',
         entry.chat_target_name || entry.targetName || '',
+        entry.chat_origin || entry.chatOrigin || '',
         !!entry.system,
     ]);
 }
@@ -30283,6 +30456,7 @@ function renderLobbyChatHistory(data = {}) {
         entry && entry.repeat_count,
         entry && entry.display_time,
         entry && entry.chat_channel,
+        entry && entry.chat_origin,
         entry && entry.system,
         entry && JSON.stringify(entry.mentions || []),
     ])]);

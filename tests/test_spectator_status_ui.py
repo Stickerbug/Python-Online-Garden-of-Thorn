@@ -53,3 +53,24 @@ def test_classic_player_names_do_not_collapse_to_ellipsis():
     assert 'text-overflow: clip;' in block
     assert 'white-space: normal;' in block
     assert 'overflow-wrap: anywhere;' in block
+
+
+def test_spectator_hand_never_enters_mobile_play_confirmation():
+    selection_helper = GAME_JS.split(
+        'function selectPlayCardForConfirm',
+        1,
+    )[1].split(
+        'async function selectClassicPlayCard',
+        1,
+    )[0]
+    playability_helper = GAME_JS.split(
+        'function canPlayCard',
+        1,
+    )[1].split(
+        'function getActionLimitStatusValue',
+        1,
+    )[0]
+
+    assert 'if (isReadOnlyBattleStatus()) {' in selection_helper
+    assert 'clearSelectedPlayCard({ skipRender: true });' in selection_helper
+    assert 'if (!gs || isReadOnlyBattleStatus(gs)) return false;' in playability_helper

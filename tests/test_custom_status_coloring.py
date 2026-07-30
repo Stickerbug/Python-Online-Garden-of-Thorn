@@ -34,3 +34,8 @@ def test_short_or_localized_status_keys_resolve_only_unique_custom_statuses():
     assert "normalizedId.split(':').pop() === comparable" in GAME_JS
     assert "Object.values((def && def.name_i18n) || {})" in GAME_JS
     assert "return matches.length === 1 ? matches[0][1] : null;" in GAME_JS
+
+
+def test_extra_healing_term_requires_an_explicit_status_stack_reference():
+    assert "if (normalizedId === 'extra_healing')" in GAME_JS
+    assert "explicitStatusToken || explicitStack" in GAME_JS

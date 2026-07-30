@@ -207,6 +207,26 @@ a { font: inherit; }
   min-width: 0;
 }
 
+.story-run-deck-command {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 2px solid var(--story-line);
+  border-radius: 4px;
+  color: var(--story-text);
+  background: var(--story-surface-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.story-run-deck-command:hover { background: var(--story-green-soft); }
+.story-run-deck-command img { width: 22px; height: 22px; object-fit: contain; }
+
 .story-online-count {
   color: var(--story-muted);
   font-size: 12px;
@@ -1000,6 +1020,8 @@ a { font: inherit; }
   .story-heading span,
   .story-account span { display: none; }
   .story-header-actions { gap: 6px; }
+  .story-run-deck-command { min-height: 30px; padding: 3px 6px; font-size: 10px; }
+  .story-run-deck-command img { width: 19px; height: 19px; }
   .story-online-count { font-size: 10px; }
   .story-account strong { max-width: 20vw; font-size: 11px; }
   .story-status-bar { padding-inline: 8px; font-size: 10px; }
@@ -1410,6 +1432,17 @@ a { font: inherit; }
 
 .story-blessing-option { grid-template-columns: 58px 1fr; grid-template-rows: auto auto; }
 .story-blessing-option .story-choice-mark { grid-row: 1 / 3; }
+.story-blessing-option.is-unnamed {
+  grid-template-rows: auto;
+}
+.story-blessing-option.is-unnamed .story-choice-mark {
+  grid-row: 1;
+}
+.story-blessing-option.is-unnamed > span:not(.story-choice-mark) {
+  align-self: center;
+  color: var(--story-text);
+  font-size: 16px;
+}
 .story-choice-mark {
   width: 48px;
   height: 48px;
@@ -3836,6 +3869,256 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   top: 3px;
 }
 
+.story-chat-toggle {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(42px, calc(30px + env(safe-area-inset-bottom)));
+  z-index: 30010;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 96px;
+  min-height: 42px;
+  padding: 8px 15px;
+  border: 2px solid var(--story-line);
+  border-radius: 7px;
+  color: var(--story-text);
+  background: var(--story-surface);
+  box-shadow: 0 5px 15px var(--story-shadow);
+  cursor: pointer;
+}
+
+.story-chat-toggle:hover {
+  border-color: var(--story-green);
+  background: var(--story-green-soft);
+}
+
+.story-chat-unread {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 11px;
+  color: #fff;
+  background: var(--story-red);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.story-chat-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 30020;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(1040px, 84vw);
+  height: min(760px, 82vh);
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--story-line);
+  border-radius: 8px;
+  color: var(--story-text);
+  background: var(--story-surface);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, .32);
+  -webkit-user-select: text;
+  user-select: text;
+  animation: storyChatPanelIn 190ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.story-chat-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 58px;
+  padding: 10px 14px 10px 18px;
+  border-bottom: 1px solid var(--story-line-soft);
+  background: var(--story-surface-muted);
+}
+
+.story-chat-heading > div {
+  min-width: 0;
+}
+
+.story-chat-heading h2 {
+  margin: 0;
+  font-family: 'Kreadon Demi', var(--font-main);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.story-chat-status {
+  display: block;
+  margin-top: 3px;
+  color: var(--story-muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.story-chat-close {
+  display: grid;
+  flex: 0 0 36px;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--story-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.story-chat-close:hover {
+  border-color: var(--story-line-soft);
+  color: var(--story-text);
+  background: var(--story-surface);
+}
+
+.story-chat-log {
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 18px 18px;
+  scrollbar-color: var(--story-green) var(--story-surface-muted);
+  scrollbar-width: thin;
+}
+
+.story-chat-message {
+  padding: 3px 0;
+  color: var(--story-text);
+  font-size: 14px;
+  line-height: 1.48;
+  overflow-wrap: anywhere;
+}
+
+.story-chat-message.is-system {
+  color: var(--story-muted);
+}
+
+.story-chat-identity,
+.story-chat-message-text {
+  white-space: pre-wrap;
+}
+
+.story-chat-origin,
+.story-chat-player-title,
+.story-chat-player-name,
+.story-chat-system-name {
+  font-weight: 700;
+}
+
+.story-chat-origin {
+  margin-right: 2px;
+}
+
+.story-chat-origin-multiplayer {
+  color: #117d6e;
+}
+
+.story-chat-origin-story {
+  color: #94601a;
+}
+
+:root[data-theme='dark'] .story-chat-origin-multiplayer {
+  color: #62d8c0;
+}
+
+:root[data-theme='dark'] .story-chat-origin-story {
+  color: #e3ad60;
+}
+
+.story-chat-repeat {
+  color: var(--story-muted);
+  font-size: .88em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.story-chat-time {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 11px 0 8px;
+  color: var(--story-muted);
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+}
+
+.story-chat-time::before,
+.story-chat-time::after {
+  flex: 1;
+  height: 1px;
+  content: '';
+  background: var(--story-line-soft);
+}
+
+.story-chat-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 11px 13px 12px;
+  border-top: 1px solid var(--story-line-soft);
+  background: var(--story-surface-muted);
+}
+
+.story-chat-input-row textarea {
+  width: 100%;
+  min-height: 56px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 9px 11px;
+  border: 1px solid var(--story-line-soft);
+  border-radius: 6px;
+  outline: 0;
+  color: var(--story-text);
+  background: var(--story-surface);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.story-chat-input-row textarea:focus {
+  border-color: var(--story-green);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--story-green) 24%, transparent);
+}
+
+.story-chat-send {
+  align-self: stretch;
+  min-width: 76px;
+  padding: 8px 15px;
+  border: 2px solid var(--story-line);
+  border-radius: 6px;
+  color: #102a22;
+  background: var(--story-green);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.story-chat-send:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+@keyframes storyChatPanelIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 12px)) scale(.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 .story-combat-controls .shortcut-hint-badge {
   top: -7px;
   left: auto;
@@ -3877,8 +4160,140 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   }
 }
 
+.story-afk-check-overlay {
+  position: fixed;
+  z-index: 100000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: rgba(12, 18, 16, .72);
+  animation: storyOverlayIn 150ms ease-out both;
+}
+
+.story-afk-check-dialog {
+  display: grid;
+  justify-items: center;
+  width: min(390px, 92vw);
+  max-height: min(560px, 92vh);
+  overflow: auto;
+  padding: 26px 28px 24px;
+  color: var(--story-text);
+  text-align: center;
+  background: var(--story-surface);
+  border: 2px solid var(--story-line);
+  border-radius: 8px;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, .34);
+  animation: storyModalPopIn 220ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.story-afk-check-title {
+  font-family: 'Kreadon Demi', var(--font-main);
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.story-afk-check-desc {
+  min-height: 44px;
+  margin-top: 11px;
+  color: var(--story-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.story-afk-check-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  margin: 19px 0 15px;
+  padding: 0;
+  color: #fff;
+  font: inherit;
+  border: 4px solid color-mix(in srgb, var(--story-line) 74%, #000);
+  border-radius: 50%;
+  outline: 0;
+  background: var(--story-red);
+  box-shadow: 0 7px 0 color-mix(in srgb, var(--story-red) 58%, #000), 0 12px 24px rgba(0, 0, 0, .25);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  transition: transform 100ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.story-afk-check-button.is-holding {
+  transform: translateY(5px) scale(.97);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--story-red) 58%, #000), 0 7px 15px rgba(0, 0, 0, .22);
+}
+
+.story-afk-check-button.is-ready {
+  color: #10261a;
+  background: #70e194;
+  box-shadow: 0 2px 0 #317548, 0 0 0 8px rgba(112, 225, 148, .2), 0 0 34px rgba(112, 225, 148, .72);
+  animation: storyAfkReadyPulse 720ms ease-in-out infinite alternate;
+}
+
+.story-afk-check-button:disabled {
+  opacity: .42;
+  cursor: default;
+  transform: none;
+  animation: none;
+}
+
+.story-afk-check-core {
+  pointer-events: none;
+  font-family: 'Kreadon Demi', var(--font-main);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.story-afk-check-status {
+  min-height: 24px;
+  color: var(--story-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.story-afk-check-status.is-error { color: var(--story-red); }
+.story-afk-check-status.is-ok { color: var(--story-green); }
+
+@keyframes storyAfkReadyPulse {
+  from { box-shadow: 0 2px 0 #317548, 0 0 0 6px rgba(112, 225, 148, .16), 0 0 22px rgba(112, 225, 148, .56); }
+  to { box-shadow: 0 2px 0 #317548, 0 0 0 10px rgba(112, 225, 148, .24), 0 0 40px rgba(112, 225, 148, .82); }
+}
+
 @media (max-width: 700px) {
   .shortcut-help-groups { grid-template-columns: 1fr; }
+
+  .story-chat-toggle {
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(36px, calc(28px + env(safe-area-inset-bottom)));
+    min-width: 82px;
+    min-height: 36px;
+    padding: 6px 11px;
+    font-size: 12px;
+  }
+
+  .story-chat-panel {
+    width: min(94vw, 1040px);
+    height: min(88vh, 760px);
+  }
+
+  .story-chat-heading {
+    min-height: 48px;
+    padding: 8px 10px 8px 13px;
+  }
+
+  .story-chat-heading h2 { font-size: 16px; }
+  .story-chat-log { padding: 10px 13px 13px; }
+  .story-chat-message { font-size: 12px; }
+  .story-chat-input-row { gap: 7px; padding: 8px 9px 9px; }
+  .story-chat-input-row textarea { min-height: 46px; padding: 7px 9px; font-size: 12px; }
+  .story-chat-send { min-width: 60px; padding: 6px 10px; font-size: 12px; }
 
   .shortcut-context-hints {
     bottom: max(8px, env(safe-area-inset-bottom));
@@ -3892,6 +4307,13 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
   .shortcut-context-hints-title { font-size: 9px; }
   .shortcut-context-hint-item kbd { min-width: 18px; padding: 2px 4px; font-size: 9px; }
+
+  .story-afk-check-dialog { width: min(360px, 94vw); padding: 19px 20px 18px; }
+  .story-afk-check-title { font-size: 21px; }
+  .story-afk-check-desc { min-height: 38px; font-size: 12px; }
+  .story-afk-check-button { width: 110px; height: 110px; margin: 13px 0 11px; }
+  .story-afk-check-core { font-size: 17px; }
+  .story-afk-check-status { min-height: 21px; font-size: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3904,7 +4326,11 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   #modal.active,
   #modal.active .modal-inner,
   #story-term-dialog[open] .story-card-terms-modal,
-  .story-dev-panel:not(.hidden) {
+  .story-dev-panel:not(.hidden),
+  .story-chat-panel,
+  .story-afk-check-overlay,
+  .story-afk-check-dialog,
+  .story-afk-check-button {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
   }

@@ -98,3 +98,44 @@ def test_repeated_draws_immediately_exclude_the_unique_card_just_drawn():
         REGULAR_ID,
     ]
     assert sum(card.def_id == UNIQUE_ID for card in player.hand) == 1
+
+
+def test_manual_replacement_never_returns_the_same_card():
+    engine = make_engine()
+    engine.phase = "action"
+    engine.current_player = 0
+    player = engine.players[0]
+    original = CardInstance(REGULAR_ID)
+    player.hand = [original]
+
+    with patch("game_engine_urf.random.choices", side_effect=choose_first):
+        result = engine.replace_hand_card(0, original.instance_id)
+
+    assert result["success"]
+    assert [card.def_id for card in player.hand] == [UNIQUE_ID]
+    assert player.discard == [original]
+    assert player.urf_replace_available is False
+
+
+def test_manual_replacement_keeps_the_card_when_no_different_card_exists():
+    engine = make_engine()
+    engine.phase = "action"
+    engine.current_player = 0
+    engine.infinite_card_pool = [REGULAR_ID]
+    engine.infinite_card_weights = [1]
+    engine.infinite_by_type = {
+        "thorn": {
+            "ids": [REGULAR_ID],
+            "weights": [1],
+        }
+    }
+    player = engine.players[0]
+    original = CardInstance(REGULAR_ID)
+    player.hand = [original]
+
+    result = engine.replace_hand_card(0, original.instance_id)
+
+    assert result == {"success": False, "error": "当前没有不同的同类型牌可供替换"}
+    assert player.hand == [original]
+    assert player.discard == []
+    assert getattr(player, "urf_replace_available", True) is True

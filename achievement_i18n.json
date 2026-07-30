@@ -203,6 +203,62 @@
         "ja": "プレイされた後のカードがどこに行くかに関係なく、合計 20,000 枚のカードが正常にプレイされました。"
       }
     },
+    "damage_output_500": {
+      "name": {
+        "zh": "摧枯拉朽 I",
+        "en": "Overwhelming Force I",
+        "fr": "Force écrasante I",
+        "ja": "圧倒的破壊力 I"
+      },
+      "description": {
+        "zh": "累计造成500点伤害。被防御效果吸收及超过目标剩余H的伤害仍计入。",
+        "en": "Deal 500 total damage. Damage prevented by defensive effects and damage beyond a target's remaining H still count.",
+        "fr": "Infligez un total de 500 points de dégâts. Les dégâts absorbés par des effets défensifs ou dépassant les H restants de la cible sont comptabilisés.",
+        "ja": "累計500ダメージを与える。防御効果に吸収されたダメージや、対象の残りHを超えたダメージも数える。"
+      }
+    },
+    "damage_output_2000": {
+      "name": {
+        "zh": "摧枯拉朽 II",
+        "en": "Overwhelming Force II",
+        "fr": "Force écrasante II",
+        "ja": "圧倒的破壊力 II"
+      },
+      "description": {
+        "zh": "累计造成2000点伤害。被防御效果吸收及超过目标剩余H的伤害仍计入。",
+        "en": "Deal 2,000 total damage. Damage prevented by defensive effects and damage beyond a target's remaining H still count.",
+        "fr": "Infligez un total de 2 000 points de dégâts. Les dégâts absorbés par des effets défensifs ou dépassant les H restants de la cible sont comptabilisés.",
+        "ja": "累計2,000ダメージを与える。防御効果に吸収されたダメージや、対象の残りHを超えたダメージも数える。"
+      }
+    },
+    "damage_output_10000": {
+      "name": {
+        "zh": "摧枯拉朽 III",
+        "en": "Overwhelming Force III",
+        "fr": "Force écrasante III",
+        "ja": "圧倒的破壊力 III"
+      },
+      "description": {
+        "zh": "累计造成10000点伤害。被防御效果吸收及超过目标剩余H的伤害仍计入。",
+        "en": "Deal 10,000 total damage. Damage prevented by defensive effects and damage beyond a target's remaining H still count.",
+        "fr": "Infligez un total de 10 000 points de dégâts. Les dégâts absorbés par des effets défensifs ou dépassant les H restants de la cible sont comptabilisés.",
+        "ja": "累計10,000ダメージを与える。防御効果に吸収されたダメージや、対象の残りHを超えたダメージも数える。"
+      }
+    },
+    "damage_output_50000": {
+      "name": {
+        "zh": "摧枯拉朽 IV",
+        "en": "Overwhelming Force IV",
+        "fr": "Force écrasante IV",
+        "ja": "圧倒的破壊力 IV"
+      },
+      "description": {
+        "zh": "累计造成50000点伤害。被防御效果吸收及超过目标剩余H的伤害仍计入。",
+        "en": "Deal 50,000 total damage. Damage prevented by defensive effects and damage beyond a target's remaining H still count.",
+        "fr": "Infligez un total de 50 000 points de dégâts. Les dégâts absorbés par des effets défensifs ou dépassant les H restants de la cible sont comptabilisés.",
+        "ja": "累計50,000ダメージを与える。防御効果に吸収されたダメージや、対象の残りHを超えたダメージも数える。"
+      }
+    },
     "dodge_damage_100": {
       "name": {
         "zh": "万花丛中过，片叶不沾身 I",

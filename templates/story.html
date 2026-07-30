@@ -47,6 +47,10 @@
         <span id="story-subtitle">Garden of Thorn</span>
       </div>
       <div class="story-header-actions">
+        <button id="story-run-deck" class="story-run-deck-command hidden" type="button" aria-label="查看总牌库" title="查看总牌库">
+          <img src="/static/assets/ui-icons/total-pile.svg" alt="" aria-hidden="true">
+          <span id="story-run-deck-label">总牌库</span>
+        </button>
         <span id="story-online-count" class="story-online-count">在线玩家：--</span>
         <div class="story-account">
           <span id="story-account-label">玩家</span>
@@ -295,6 +299,25 @@
       </section>
     </main>
 
+    <button id="story-chat-toggle" class="story-chat-toggle" type="button" aria-expanded="false" aria-controls="story-chat-panel">
+      <span id="story-chat-toggle-label">聊天</span>
+      <span id="story-chat-unread" class="story-chat-unread hidden" aria-label="0 条未读消息">0</span>
+    </button>
+    <aside id="story-chat-panel" class="story-chat-panel hidden" aria-labelledby="story-chat-title">
+      <header class="story-chat-heading">
+        <div>
+          <h2 id="story-chat-title">聊天</h2>
+          <span id="story-chat-status" class="story-chat-status">正在连接...</span>
+        </div>
+        <button id="story-chat-close" class="story-chat-close" type="button" aria-label="收起聊天">×</button>
+      </header>
+      <div id="story-chat-log" class="story-chat-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
+      <div class="story-chat-input-row">
+        <textarea id="story-chat-input" rows="2" maxlength="200" placeholder="输入消息..." aria-label="输入消息"></textarea>
+        <button id="story-chat-send" class="story-chat-send" type="button" disabled>发送</button>
+      </div>
+    </aside>
+
     <footer id="story-status-bar" class="story-status-bar">
       <span id="story-status-text">故事模式</span>
       <span id="story-status-online">在线玩家：--</span>
@@ -495,6 +518,7 @@
       };
     })();
   </script>
+  <script src="/static/vendor/socket.io.min.js?v=4.7.2" defer></script>
   <script src="/static/js/resource_orbs.js?v={{ static_version }}" defer></script>
   <script src="/static/js/story.js?v={{ static_version }}" defer></script>
   <script src="/static/js/keybindings.js?v={{ static_version }}" defer></script>

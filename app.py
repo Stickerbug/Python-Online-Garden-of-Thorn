@@ -37,7 +37,8 @@ from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
 from cards import (
     CardDef, CardInstance, CARD_DEFS, DRAFT_RATIO, DECK_SIZE, build_draft_pool, generate_draft_options,
-    create_random_weighted_deck_def_ids, ALL_MOD_SHARED_CARD_IDS,
+    create_random_weighted_deck_def_ids, fixed_same_type_draw_ratio, same_type_draw_probabilities,
+    ALL_MOD_SHARED_CARD_IDS,
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
     normalize_card_flag, normalize_card_flags,
@@ -404,7 +405,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw'
+GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -1448,6 +1449,7 @@ def admin_match_record(room, result='finished'):
         }
         cards_played_by_player = []
         dodge_damage_prevented_by_player = []
+        damage_output_by_player = []
         achievement_metric_deltas_by_user = {}
         for pidx in range(len(names)):
             try:
@@ -1462,10 +1464,15 @@ def admin_match_record(room, result='finished'):
                 int(getattr(ps, 'achievement_dodge_damage_prevented', 0) or 0),
             ) if ps else 0
             dodge_damage_prevented_by_player.append(dodge_prevented)
+            damage_output = max(
+                0,
+                int(getattr(ps, 'achievement_total_damage_output', 0) or 0),
+            ) if ps else 0
+            damage_output_by_player.append(damage_output)
             uid = player_user_ids[pidx] if pidx < len(player_user_ids) else None
             if uid is None:
                 continue
-            if card_plays > 0 or dodge_prevented > 0:
+            if card_plays > 0 or dodge_prevented > 0 or damage_output > 0:
                 user_metrics = achievement_metric_deltas_by_user.setdefault(str(uid), {})
                 if card_plays > 0:
                     user_metrics['cards_played_total'] = int(user_metrics.get('cards_played_total', 0) or 0) + card_plays
@@ -1474,8 +1481,14 @@ def admin_match_record(room, result='finished'):
                         int(user_metrics.get('dodge_damage_prevented_total', 0) or 0)
                         + dodge_prevented
                     )
+                if damage_output > 0:
+                    user_metrics['damage_output_total'] = (
+                        int(user_metrics.get('damage_output_total', 0) or 0)
+                        + damage_output
+                    )
         summary['cards_played_by_player'] = cards_played_by_player
         summary['dodge_damage_prevented_by_player'] = dodge_damage_prevented_by_player
+        summary['damage_output_by_player'] = damage_output_by_player
         summary['achievement_metric_deltas_by_user'] = achievement_metric_deltas_by_user
         raw_draft_picks = getattr(e, 'draft_picks', []) or []
         player_draft_cards = []
@@ -3215,11 +3228,16 @@ def _chat_entry_signature(entry):
         bool(entry.get('system')),
         entry.get('chat_channel', ''),
         entry.get('chat_target_name', ''),
+        entry.get('chat_origin', ''),
     )
 
 
 def _lobby_chat_scope_key(beta_mode=False):
     return 'beta' if bool(beta_mode) else 'release'
+
+
+def _story_lobby_chat_room(beta_mode=False):
+    return f'story-lobby-chat:{_lobby_chat_scope_key(beta_mode)}'
 
 
 def _lobby_chat_cache_locked(beta_mode=False):
@@ -3256,6 +3274,7 @@ def _lobby_chat_history_payload_locked(limit=LOBBY_CHAT_VISIBLE_LIMIT, beta_mode
         'items': _lobby_chat_recent_locked(limit, beta_mode),
         'limit': limit,
         'total_cached': len(cache),
+        'beta_mode': bool(beta_mode),
     }
 
 
@@ -3286,6 +3305,12 @@ def restore_lobby_chat_item_locked(item, beta_mode=False):
     chat_payload = refresh_chat_special_fields(item)
     chat_payload['type'] = 'chat'
     chat_payload['beta_mode'] = bool(beta_mode)
+    if (
+        not chat_payload.get('system')
+        and not chat_payload.get('console_player')
+        and not chat_payload.get('chat_origin')
+    ):
+        chat_payload['chat_origin'] = 'multiplayer'
     item_ts = _chat_item_ts(chat_payload)
     chat_payload['ts'] = item_ts
     chat_payload['time'] = datetime.fromtimestamp(item_ts, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
@@ -3332,6 +3357,12 @@ def append_lobby_chat_locked(payload, now=None, beta_mode=False):
     chat_payload = copy.deepcopy(payload or {})
     chat_payload['type'] = 'chat'
     chat_payload['beta_mode'] = bool(beta_mode)
+    if (
+        not chat_payload.get('system')
+        and not chat_payload.get('console_player')
+        and not chat_payload.get('chat_origin')
+    ):
+        chat_payload['chat_origin'] = 'multiplayer'
     chat_payload['time'] = datetime.fromtimestamp(now, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
     chat_payload.setdefault('repeat_count', 1)
     last = cache[-1] if cache else None
@@ -3374,6 +3405,12 @@ def lobby_chat_history_payloads_locked(limit=LOBBY_CHAT_VISIBLE_LIMIT, beta_mode
         if key not in histories:
             histories[key] = _lobby_chat_history_payload_locked(limit, player_beta)
         payloads.append((sid, copy.deepcopy(histories[key])))
+    story_scopes = (bool(beta_mode),) if beta_mode is not None else (False, True)
+    for story_beta in story_scopes:
+        key = _lobby_chat_scope_key(story_beta)
+        if key not in histories:
+            histories[key] = _lobby_chat_history_payload_locked(limit, story_beta)
+        payloads.append((_story_lobby_chat_room(story_beta), copy.deepcopy(histories[key])))
     return payloads
 
 
@@ -6999,7 +7036,14 @@ def _prune_story_presences_locked(now=None):
         _STORY_PRESENCES.pop(key, None)
 
 
-def _touch_story_presence(user, client_id, ip):
+def _next_story_afk_check_at(now):
+    return float(now) + random.uniform(
+        max(60, AFK_AUTO_MIN_SECONDS),
+        max(max(60, AFK_AUTO_MIN_SECONDS), AFK_AUTO_MAX_SECONDS),
+    )
+
+
+def _touch_story_presence(user, client_id, ip, activity=False):
     user_id = int(user.get('id'))
     client_token = str(client_id or '').strip()
     now = time.time()
@@ -7008,6 +7052,21 @@ def _touch_story_presence(user, client_id, ip):
         _prune_story_presences_locked(now)
         is_new = key not in _STORY_PRESENCES
         previous = _STORY_PRESENCES.get(key) or {}
+        pending_check = previous.get('afk_check')
+        if not isinstance(pending_check, dict):
+            pending_check = None
+        timed_out_at = float(previous.get('afk_timed_out_at') or 0)
+        reset_activity = is_new or (bool(activity) and not pending_check and not timed_out_at)
+        last_activity_at = (
+            now
+            if reset_activity
+            else float(previous.get('afk_last_activity_at') or previous.get('entered_at') or now)
+        )
+        next_check_at = (
+            _next_story_afk_check_at(now)
+            if reset_activity
+            else float(previous.get('afk_next_check_at') or _next_story_afk_check_at(now))
+        )
         _STORY_PRESENCES[key] = {
             'user_id': user_id,
             'nickname': str(user.get('display_name') or user.get('username') or '?'),
@@ -7017,6 +7076,10 @@ def _touch_story_presence(user, client_id, ip):
             'entered_at': float(previous.get('entered_at') or now),
             'last_seen': now,
             'beta_mode': bool(is_beta_instance()),
+            'afk_last_activity_at': last_activity_at,
+            'afk_next_check_at': next_check_at,
+            'afk_check': pending_check,
+            'afk_timed_out_at': timed_out_at,
         }
         same_user = sorted(
             (
@@ -7032,6 +7095,87 @@ def _touch_story_presence(user, client_id, ip):
     return is_new
 
 
+def _mark_story_afk_activity(user_id, client_id, now=None):
+    key = (int(user_id), str(client_id or '').strip())
+    current = float(now if now is not None else time.time())
+    with _STORY_PRESENCE_LOCK:
+        presence = _STORY_PRESENCES.get(key)
+        if not presence or presence.get('afk_check') or presence.get('afk_timed_out_at'):
+            return False
+        presence['last_seen'] = current
+        presence['afk_last_activity_at'] = current
+        presence['afk_next_check_at'] = _next_story_afk_check_at(current)
+    return True
+
+
+def _story_afk_state(user_id, client_id, now=None):
+    key = (int(user_id), str(client_id or '').strip())
+    current = float(now if now is not None else time.time())
+    with _STORY_PRESENCE_LOCK:
+        presence = _STORY_PRESENCES.get(key)
+        if not presence:
+            return {}
+        if presence.get('afk_timed_out_at'):
+            return {'timed_out': True}
+        pending = presence.get('afk_check')
+        if isinstance(pending, dict):
+            if current >= float(pending.get('expires_at') or 0):
+                presence['afk_check'] = None
+                presence['afk_timed_out_at'] = current
+                return {'timed_out': True}
+            return {'check': dict(pending)}
+        next_check_at = float(presence.get('afk_next_check_at') or 0)
+        if not next_check_at:
+            presence['afk_next_check_at'] = _next_story_afk_check_at(current)
+            return {
+                'next_check_in_seconds': max(
+                    0.0,
+                    float(presence['afk_next_check_at']) - current,
+                ),
+            }
+        if current < next_check_at:
+            return {'next_check_in_seconds': max(0.0, next_check_at - current)}
+        timeout_seconds = max(1, int(AFK_CHECK_TIMEOUT_SECONDS))
+        pending = {
+            'id': secrets.token_urlsafe(12),
+            'created_at': current,
+            'expires_at': current + timeout_seconds,
+            'timeout_seconds': timeout_seconds,
+            'min_ms': int(AFK_CHECK_HOLD_MIN_MS),
+            'max_ms': int(AFK_CHECK_HOLD_MAX_MS),
+            'reason': 'auto_story_idle',
+        }
+        presence['afk_check'] = pending
+        return {'check': dict(pending)}
+
+
+def _answer_story_afk_check(user_id, client_id, request_id, hold_ms, now=None):
+    key = (int(user_id), str(client_id or '').strip())
+    current = float(now if now is not None else time.time())
+    with _STORY_PRESENCE_LOCK:
+        presence = _STORY_PRESENCES.get(key)
+        if not presence or presence.get('afk_timed_out_at'):
+            return {'result': 'timed_out', 'timed_out': True}
+        pending = presence.get('afk_check')
+        if not isinstance(pending, dict) or pending.get('id') != str(request_id or ''):
+            return {'result': 'invalid', 'retry': False}
+        if current >= float(pending.get('expires_at') or 0):
+            presence['afk_check'] = None
+            presence['afk_timed_out_at'] = current
+            return {'result': 'timed_out', 'timed_out': True}
+        minimum = int(pending.get('min_ms') or AFK_CHECK_HOLD_MIN_MS)
+        maximum = int(pending.get('max_ms') or AFK_CHECK_HOLD_MAX_MS)
+        if int(hold_ms) < minimum:
+            return {'result': 'too_short', 'retry': True}
+        if int(hold_ms) > maximum:
+            return {'result': 'too_long', 'retry': True}
+        presence['afk_check'] = None
+        presence['last_seen'] = current
+        presence['afk_last_activity_at'] = current
+        presence['afk_next_check_at'] = _next_story_afk_check_at(current)
+        return {'result': 'passed', 'passed': True}
+
+
 def _active_story_presences(beta_mode=None):
     if beta_mode is None:
         beta_mode = is_beta_instance()
@@ -7042,6 +7186,7 @@ def _active_story_presences(beta_mode=None):
             dict(presence)
             for presence in _STORY_PRESENCES.values()
             if bool(presence.get('beta_mode', False)) == bool(beta_mode)
+            and not presence.get('afk_timed_out_at')
         ]
     latest_by_user = {}
     for presence in rows:
@@ -14647,7 +14792,12 @@ def api_story_presence():
     if not re.fullmatch(r'[A-Za-z0-9._:-]{8,96}', client_id):
         return _json_error('故事模式页面标识无效', 400)
     ip = _client_ip()
-    is_new = _touch_story_presence(user, client_id, ip)
+    is_new = _touch_story_presence(
+        user,
+        client_id,
+        ip,
+        activity=bool(data.get('activity')),
+    )
     if is_new:
         record_account_ip_event_async(
             user.get('id'),
@@ -14655,6 +14805,7 @@ def api_story_presence():
             ip,
             source='story_enter',
         )
+    afk_state = _story_afk_state(user.get('id'), client_id)
     with _lock:
         online_players = build_admin_players()
     return jsonify({
@@ -14662,7 +14813,35 @@ def api_story_presence():
         'online_count': len(online_players),
         'story_online_count': sum(1 for player in online_players if player.get('story_online')),
         'heartbeat_interval_seconds': STORY_PRESENCE_HEARTBEAT_SECONDS,
+        'afk_check': afk_state.get('check'),
+        'afk_timed_out': bool(afk_state.get('timed_out')),
+        'afk_next_check_seconds': afk_state.get('next_check_in_seconds'),
     })
+
+
+@app.route('/api/story/afk-check', methods=['POST'])
+def api_story_afk_check():
+    user = _current_account_user()
+    if not user:
+        return _json_error('请先登录账号', 401)
+    data = request.get_json(silent=True) or {}
+    client_id = str(data.get('client_id') or '').strip()
+    request_id = str(data.get('id') or '').strip()
+    if not re.fullmatch(r'[A-Za-z0-9._:-]{8,96}', client_id):
+        return _json_error('故事模式页面标识无效', 400)
+    if not request_id or len(request_id) > 96:
+        return _json_error('挂机检测已失效', 400)
+    try:
+        hold_ms = int(data.get('hold_ms') or 0)
+    except (TypeError, ValueError):
+        return _json_error('挂机检测参数无效', 400)
+    if hold_ms < 0 or hold_ms > 10000:
+        return _json_error('挂机检测参数无效', 400)
+    user_id = int(user.get('id'))
+    if not rate_limiter(f'story-afk-check:{user_id}:{client_id}', limit=15, window=60):
+        return _json_error('操作过于频繁，请稍后重试', 429)
+    result = _answer_story_afk_check(user_id, client_id, request_id, hold_ms)
+    return jsonify({'success': True, **result})
 
 
 @app.route('/api/story/run', methods=['GET'])
@@ -14734,6 +14913,9 @@ def api_story_run_action():
         return _json_error('故事操作参数无效', 400, code='INVALID_ACTION_PAYLOAD')
     if action_type.startswith('dev_') and not _story_dev_tools_allowed(user_id):
         return _json_error('未找到此功能', 404, code='DEV_TOOLS_DISABLED')
+    client_id = str(data.get('client_id') or '').strip()
+    if re.fullmatch(r'[A-Za-z0-9._:-]{8,96}', client_id):
+        _mark_story_afk_activity(user_id, client_id)
 
     try:
         if get_story_run_action(user_id, run_id, action_id):
@@ -14898,6 +15080,7 @@ def api_card_exporter_cards():
     except Exception as exc:
         admin_event('error', f'card exporter failed to reload mod card defs: {exc}')
     card_mod_sources = get_card_mod_sources([])
+    draw_probabilities = same_type_draw_probabilities(set(CARD_DEFS.keys()))
     cards = []
     for def_id, card_def in CARD_DEFS.items():
         if str(def_id or '').lower() in {'error', 'gtn:error', 'system:error'}:
@@ -14920,6 +15103,8 @@ def api_card_exporter_cards():
             'cost_m': card_def.cost_m,
             'card_type': card_def.card_type,
             'count': card_def.count,
+            'fixed_same_type_draw_ratio': fixed_same_type_draw_ratio(def_id),
+            'same_type_draw_probability': round(draw_probabilities.get(def_id, 0.0), 4),
             'quality': card_def.quality,
             'description': card_def.description,
             'effect_text': card_def.effect_text,
@@ -17114,6 +17299,7 @@ def api_cards():
                     'is_vanilla': False,
                     'is_community': True,
                 }
+    draw_probabilities = same_type_draw_probabilities(set(allowed_card_ids))
     result = {}
     for def_id, card_def in CARD_DEFS.items():
         source = card_mod_sources.get(def_id, {})
@@ -17150,6 +17336,8 @@ def api_cards():
             'cost_m': card_def.cost_m,
             'card_type': card_def.card_type,
             'count': card_def.count,
+            'fixed_same_type_draw_ratio': fixed_same_type_draw_ratio(def_id),
+            'same_type_draw_probability': round(draw_probabilities.get(def_id, 0.0), 4),
             'quality': card_def.quality,
             'description': card_def.description,
             'effect_text': card_def.effect_text,
@@ -19323,6 +19511,232 @@ def on_decline_invite(data):
                 socketio.emit('invite_declined', {'target_sid': sid}, room=inviter_sid)
 
 
+def _story_chat_sender_profile(user):
+    source = dict(user or {})
+    try:
+        role_profile = get_special_account_profile(
+            source.get('username') or source.get('display_name')
+        )
+    except Exception:
+        role_profile = None
+    if role_profile:
+        source.update(role_profile)
+    nickname = str(
+        source.get('display_name')
+        or source.get('username')
+        or (user or {}).get('display_name')
+        or (user or {}).get('username')
+        or '?'
+    ).strip()
+    source.update({
+        'nickname': nickname,
+        'display_name': nickname,
+        'user_id': source.get('id') or (user or {}).get('id'),
+        'is_registered_user': True,
+        'beta_mode': bool(is_beta_instance()),
+    })
+    source.update(special_public_fields(source))
+    return source
+
+
+@socketio.on('story_chat_join')
+def on_story_chat_join(data=None):
+    sid = request.sid
+    if data is not None and not isinstance(data, dict):
+        emit('server_error', {'message': '聊天连接参数无效'})
+        return
+    if not rate_limiter(f'story-chat-join:{sid}', limit=12, window=60):
+        emit('server_error', {'message': '操作过于频繁，请稍后重试'})
+        return
+    user = _current_account_user()
+    if not user:
+        emit('story_chat_auth_required', {'message': '请先登录账号'})
+        return
+    client_id = str((data or {}).get('client_id') or '').strip()
+    if client_id and not re.fullmatch(r'[A-Za-z0-9._:-]{8,96}', client_id):
+        emit('server_error', {'message': '故事模式页面标识无效'})
+        return
+    beta_mode = bool(is_beta_instance())
+    join_room(_story_lobby_chat_room(beta_mode))
+    with _lock:
+        payload = _lobby_chat_history_payload_locked(LOBBY_CHAT_VISIBLE_LIMIT, beta_mode)
+    emit('lobby_chat_history', payload)
+    emit('story_chat_ready', {'success': True})
+
+
+@socketio.on('story_chat_send')
+def on_story_chat_send(data=None):
+    sid = request.sid
+    if not isinstance(data, dict):
+        emit('server_error', {'message': '聊天内容无效'})
+        return
+    user = _current_account_user()
+    if not user:
+        emit('story_chat_auth_required', {'message': '请先登录账号'})
+        return
+    profile = _story_chat_sender_profile(user)
+    user_id = profile.get('user_id')
+    nickname = profile.get('nickname', '?')
+    mute_key = chat_mute_key(sid, profile)
+    if is_muted(mute_key):
+        emit('server_error', muted_error_payload(mute_remaining_seconds(mute_key)))
+        return
+    if DB_AVAILABLE and user_id:
+        try:
+            muted, mute_info = is_user_muted_db(user_id)
+        except Exception as exc:
+            admin_event('error', f'failed to check story chat mute: {exc}')
+            muted, mute_info = False, {}
+        if muted:
+            remaining = 0
+            try:
+                until_dt = datetime.fromisoformat(str(mute_info.get('muted_until') or '').replace('Z', '+00:00'))
+                remaining = max(0, int((until_dt - datetime.now(timezone.utc)).total_seconds()))
+            except Exception:
+                remaining = 0
+            emit('server_error', muted_error_payload(remaining))
+            return
+
+    exempt = is_chat_limit_exempt(profile)
+    if not exempt:
+        if not rate_limiter(f'chat-fast:{mute_key}', limit=1, window=2):
+            emit('server_error', {'message': '聊天发送过快'})
+            return
+        if not rate_limiter(f'chat-burst:{mute_key}', limit=5, window=10):
+            emit('server_error', {'message': '聊天发送过快'})
+            return
+    try:
+        text, chat_risk = _validate_chat_text_for_sender(data.get('text', ''), exempt=exempt)
+    except ValueError as exc:
+        emit('server_error', {'message': str(exc)})
+        return
+    if not text:
+        return
+
+    risk = chat_risk.get('risk') or {}
+    risk_level = int(chat_risk.get('risk_level') or 0)
+    risk_action = str(chat_risk.get('risk_action') or '')
+    matched_rules = list(chat_risk.get('matched_rules') or [])
+    normalized_message = chat_risk.get('normalized_message') or normalize_message(text)
+    beta_mode = bool(profile.get('beta_mode', False))
+    chat_data = {
+        'nickname': nickname,
+        'text': text,
+        'is_spectator': False,
+        'risk_level': risk_level,
+        'risk_action': risk_action,
+        'user_id': user_id,
+        'chat_origin': 'story',
+    }
+    if matched_rules:
+        chat_data['matched_rules'] = matched_rules[:5]
+    chat_data.update(special_public_fields(profile))
+
+    if risk_action == 'reject_mute' or risk_level >= 4:
+        if DB_AVAILABLE:
+            try:
+                record_chat_message(
+                    f'lobby:{_lobby_chat_scope_key(beta_mode)}',
+                    'public',
+                    user_id,
+                    nickname,
+                    text,
+                    json.dumps(chat_data, ensure_ascii=False, separators=(',', ':')),
+                    risk_level,
+                    hidden=True,
+                )
+            except Exception as exc:
+                admin_event('error', f'failed to record rejected story chat: {exc}')
+        mute_user(mute_key, 300, 'severe chat risk')
+        if DB_AVAILABLE and user_id:
+            try:
+                set_user_mute(user_id, nickname, 300, 'severe chat risk', 'system')
+            except Exception as exc:
+                admin_event('error', f'failed to persist severe story chat mute: {exc}')
+        _security_record(
+            'chat_rejected',
+            'severe story chat risk rejected',
+            sid=sid,
+            severity='high',
+            extra={'rules': matched_rules},
+        )
+        emit('server_error', muted_error_payload(300, message='消息包含高风险内容，已被拦截并临时禁言'))
+        return
+    if risk_action == 'mask_flag' or risk_level >= 3:
+        text = risk.get('sanitized_text') or text
+        chat_data['text'] = text
+
+    error_payload = None
+    security_note = None
+    lobby_payloads = None
+    if not _lock.acquire(timeout=0.2):
+        emit('server_error', {'message': '服务器正在处理上一项操作，请稍后重试'})
+        return
+    try:
+        mentions = _extract_lobby_mentions(text, beta_mode=beta_mode)
+        if mentions and not exempt:
+            mention_key = f'mention:{chat_rate_key(sid, profile)}'
+            if not rate_limiter(mention_key, limit=MENTION_RATE_LIMIT, window=60):
+                security_note = 'story lobby mention rate limited'
+                error_payload = {'message': '@发送过快'}
+        if not error_payload:
+            if mentions:
+                chat_data['mentions'] = [
+                    {
+                        'user_id': item.get('user_id'),
+                        'nickname': item.get('nickname'),
+                        'player_id': item.get('player_id'),
+                    }
+                    for item in mentions
+                ]
+                chat_data['mention_user_ids'] = [
+                    item.get('user_id') for item in mentions if item.get('user_id')
+                ]
+                chat_data['mention_names'] = [
+                    item.get('nickname') for item in mentions if item.get('nickname')
+                ]
+            will_fold = lobby_chat_would_fold_locked(chat_data, time.time(), beta_mode=beta_mode)
+            if not will_fold and not check_chat_rate_locked(sid, profile, time.time()):
+                security_note = 'story lobby chat rate limited'
+                error_payload = {'message': '聊天发送过快'}
+                mute_user(mute_key, 60, 'chat rate limit')
+            else:
+                now = time.time()
+                append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
+                append_admin_game_chat_locked(chat_data, now, scope='lobby')
+                lobby_payloads = lobby_chat_history_payloads_locked(
+                    LOBBY_CHAT_VISIBLE_LIMIT,
+                    beta_mode=beta_mode,
+                )
+    finally:
+        _lock.release()
+
+    if security_note:
+        _security_record('chat_rate', security_note, sid=sid, severity='medium')
+    if error_payload:
+        emit('server_error', error_payload)
+        return
+
+    if DB_AVAILABLE:
+        try:
+            record_chat_message(
+                f'lobby:{_lobby_chat_scope_key(beta_mode)}',
+                'public',
+                user_id,
+                nickname,
+                text,
+                json.dumps(chat_data, ensure_ascii=False, separators=(',', ':')),
+                risk_level,
+                hidden=False,
+            )
+        except Exception as exc:
+            admin_event('error', f'failed to persist story lobby chat: {exc}')
+    emit_lobby_chat_history_payloads(lobby_payloads)
+    client_id = str(data.get('client_id') or '').strip()
+    if re.fullmatch(r'[A-Za-z0-9._:-]{8,96}', client_id):
+        _mark_story_afk_activity(user_id, client_id)
+
+
 @socketio.on('chat')
 def on_chat(data):
     sid = request.sid
@@ -19527,6 +19941,7 @@ def on_chat(data):
                 )
         else:
             beta_mode = bool(player.get('beta_mode', False))
+            chat_data['chat_origin'] = 'multiplayer'
             mentions = _extract_lobby_mentions(text, beta_mode=beta_mode)
             if mentions and not exempt:
                 mention_key = f"mention:{chat_rate_key(sid, player)}"

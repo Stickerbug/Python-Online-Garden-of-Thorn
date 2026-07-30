@@ -5,7 +5,7 @@ from story_content import initial_story_player
 
 
 STORY_SCHEMA_VERSION = 4
-STORY_CONTENT_VERSION = 'story-garden-2'
+STORY_CONTENT_VERSION = 'story-garden-4'
 STORY_FLOOR_COUNT = 16
 
 STORY_STAGES = (

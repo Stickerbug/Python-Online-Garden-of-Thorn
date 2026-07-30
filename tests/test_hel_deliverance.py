@@ -68,7 +68,8 @@ class HelDeliveranceTests(unittest.TestCase):
         self.assertEqual((self.card.cost_e, self.card.cost_m), (2, 0))
         self.assertEqual(self.card.card_type, "thorn")
         self.assertEqual(self.card.count, 1)
-        self.assertEqual(self.card.damage, 12)
+        self.assertEqual(self.card.damage, 2)
+        self.assertIn("precision", self.card.flags)
         self.assertIn("stealth", self.card.flags)
         self.assertEqual(self.card.v2_resource.get("tags"), [])
 
@@ -91,12 +92,12 @@ class HelDeliveranceTests(unittest.TestCase):
                 if card.get("legacy_id") == CARD_ID
             )
             self.assertEqual(deliverance["tags"], [])
-            self.assertEqual(deliverance["flags"], ["stealth"])
+            self.assertEqual(deliverance["flags"], ["precision", "stealth"])
             for locale in ("zh", "en", "fr", "ja"):
                 translated = json.loads(archive.read(f"locales/{locale}.json"))
                 self.assertIn("hel:deliverance", translated["cards"])
 
-    def test_deliverance_deals_twelve_damage_without_opening_response(self):
+    def test_deliverance_uses_target_hand_count_without_opening_response(self):
         for engine_type, target_id in ((GameEngine, 1), (GameEngine2v2, 2)):
             with self.subTest(engine=engine_type.__name__):
                 engine = self.action_engine(engine_type)
@@ -122,9 +123,28 @@ class HelDeliveranceTests(unittest.TestCase):
                 self.assertTrue(result.get("success"), result)
                 self.assertFalse(result.get("needs_response", False), result)
                 self.assertIsNone(engine.pending_response)
-                self.assertEqual(engine.players[target_id].health, 88)
+                self.assertEqual(engine.players[target_id].health, 96)
                 self.assertEqual(engine.players[0].elixir, 28)
                 self.assertIn(deliverance, engine.players[0].discard)
+
+    def test_deliverance_counts_every_current_hand_card(self):
+        engine = self.action_engine(GameEngine)
+        deliverance = CardInstance(CARD_ID)
+        engine.players[0].hand = [deliverance]
+        engine.players[1].hand = [
+            CardInstance("Basic"),
+            CardInstance("Rose"),
+            CardInstance("Bubble"),
+        ]
+
+        result = engine.play_card(
+            0,
+            deliverance.instance_id,
+            self.target_choice(1),
+        )
+
+        self.assertTrue(result.get("success"), result)
+        self.assertEqual(engine.players[1].health, 92)
 
 
 if __name__ == "__main__":

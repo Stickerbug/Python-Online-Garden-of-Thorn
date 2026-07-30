@@ -1665,6 +1665,7 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         if (ps.custom_vars && ps.custom_vars.ocean_skip_action_after_start) {
             ps.custom_vars.ocean_skip_action_after_start = false;
+            this.clearHoneyControlState(playerId, true);
             this.logMsg(`${this.pn(playerId)}被魔法珊瑚影响，跳过本回合行动`);
             this.endPlayerTurn(playerId);
             return;
@@ -1673,6 +1674,7 @@ class LocalSoloEngine {
             ps.skip_turn = Math.max(0, toInt(ps.skip_turn, 0) - 1);
         } else if (ps.skip_turn > 0) {
             ps.skip_turn -= 1;
+            this.clearHoneyControlState(playerId, true);
             this.logMsg(`${this.pn(playerId)}被眩晕，跳过本回合！`);
             this.endPlayerTurn(playerId);
             return;
@@ -1689,8 +1691,23 @@ class LocalSoloEngine {
 
     enterPlayerActionPhase(playerId) {
         this.phase = 'action';
+        this.activatePendingVoidPuppeteer(playerId);
         this._turn_start_auto_settlement_player = playerId;
         this.continueTurnStartAutoSettlement(playerId);
+    }
+
+    activatePendingVoidPuppeteer(playerId) {
+        const ps = this.players[playerId];
+        if (!ps || !ps.custom_vars) return;
+        const pending = Math.max(0, toInt(ps.custom_vars.void_puppeteer_pending_turns, 0));
+        delete ps.custom_vars.void_puppeteer_pending_turns;
+        if (pending <= 0) return;
+        ps.honey_control_turns = Math.max(1, toInt(ps.honey_control_turns, 0));
+        ps.custom_vars.void_puppeteer_damage_multiplier = Math.max(
+            Number(ps.custom_vars.void_puppeteer_damage_multiplier || 1),
+            1.5,
+        );
+        ps.custom_vars.honey_lowest_enemy = true;
     }
 
     continueTurnStartAutoSettlement(playerId) {
@@ -1700,6 +1717,7 @@ class LocalSoloEngine {
         if (this.pending_response || this.pending_choice) return;
         this.runOceanAutoCardsTurnStart(playerId);
         if (this.pending_response || this.pending_choice) return;
+        if (this.continueHoneyControlIfNeeded(playerId)) return;
         this.armBandagesForAction(playerId);
         const ps = this.players[playerId];
         if (!ps || ps.health <= 0) {
@@ -1709,6 +1727,82 @@ class LocalSoloEngine {
         this.finishSealedEquipmentTurnStart(playerId);
         this._turn_start_auto_settlement_player = null;
         this.finishTurnBoundary();
+    }
+
+    continueHoneyControlIfNeeded(playerId) {
+        if (
+            this.game_over
+            || this.phase !== 'action'
+            || this.current_player !== playerId
+            || this.pending_response
+            || this.pending_choice
+        ) {
+            return false;
+        }
+        const ps = this.players[playerId];
+        if (!ps || toInt(ps.honey_control_turns, 0) <= 0) return false;
+        if (this._honey_control_running) return true;
+        this._honey_control_running = true;
+        try {
+            while (
+                !this.game_over
+                && this.phase === 'action'
+                && this.current_player === playerId
+                && !this.pending_response
+                && !this.pending_choice
+                && toInt(ps.honey_control_turns, 0) > 0
+            ) {
+                const forced = ps.custom_vars && ps.custom_vars.sewers_cheese_forced_target;
+                const targetId = forced == null ? 1 - playerId : toInt(forced, -1);
+                const target = this.players[targetId];
+                if (
+                    !target
+                    || targetId === playerId
+                    || toInt(target.health, 0) <= 0
+                    || (target.untargetable && !this.isStatusImmune(targetId))
+                ) {
+                    break;
+                }
+                const nextCard = ps.hand.find(handCard => (
+                    handCard.card_type === 'thorn'
+                    && this.canPlayCard(playerId, handCard)[0]
+                ));
+                if (!nextCard) break;
+                this.logMsg(`自动控制：${this.pn(playerId)}自动打出${cardName(nextCard.def_id)}`);
+                const previousAutoChoice = this._auto_resolve_choices_for;
+                this._auto_resolve_choices_for = playerId;
+                let result;
+                try {
+                    result = this.playCard(playerId, nextCard.instance_id, {
+                        target_player: targetId,
+                        target_player_id: targetId,
+                        target_id: targetId,
+                    });
+                } finally {
+                    this._auto_resolve_choices_for = previousAutoChoice;
+                }
+                if (!result || !result.success) break;
+                if (result.needs_response || result.needs_choice || result.needs_v2_ui) return true;
+            }
+            this.clearHoneyControlState(playerId);
+            if (!this.game_over && this.phase === 'action' && this.current_player === playerId) {
+                this.logMsg(`自动控制结束：${this.pn(playerId)}自动结束回合`);
+                this.endPlayerTurn(playerId);
+            }
+            return true;
+        } finally {
+            this._honey_control_running = false;
+        }
+    }
+
+    clearHoneyControlState(playerId, includePending = false) {
+        const ps = this.players[playerId];
+        if (!ps || !ps.custom_vars) return;
+        ps.honey_control_turns = 0;
+        delete ps.custom_vars.void_puppeteer_damage_multiplier;
+        delete ps.custom_vars.sewers_cheese_forced_target;
+        delete ps.custom_vars.honey_lowest_enemy;
+        if (includePending) delete ps.custom_vars.void_puppeteer_pending_turns;
     }
 
     runZoneOwnerTurnStartEvents(playerId) {
@@ -3952,26 +4046,47 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'target');
         const target = this.players[targetId];
         if (!target) return;
-        const normal = this.evalInt(playerId, params.normal_amount ?? 9, card, 9);
-        const low = this.evalInt(playerId, params.low_health_amount ?? 36, card, 36);
-        const amount = toInt(target.health, 0) * 5 <= Math.max(1, toInt(target.max_health, 1))
-            ? low
-            : normal;
-        this._last_damage_value[targetId] = this.gardenAttackOnce(playerId, targetId, card, amount);
+        const amount = this.evalInt(playerId, params.amount ?? 14, card, 14);
+        let dealt = this.gardenAttackOnce(playerId, targetId, card, amount);
+        if (
+            dealt > 0
+            && toInt(target.health, 0) * 5 <= Math.max(1, toInt(target.max_health, 1))
+        ) {
+            dealt += this.gardenAttackOnce(playerId, targetId, card, amount);
+        }
+        this._last_damage_value[targetId] = dealt;
+        if (log) this.logMsg(log);
+    }
+
+    effect_garden_daisy_attack(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (!this.players[targetId]) return;
+        const amount = this.evalInt(playerId, params.amount ?? 9, card, 9);
+        const dealt = this.gardenAttackOnce(playerId, targetId, card, amount);
+        this._last_damage_value[targetId] = dealt;
+        if (dealt > 0) {
+            const delayedAmount = this.evalInt(playerId, params.delayed_amount ?? 4, card, 4);
+            this.registerTimedEffect(playerId, targetId, 'target_turn_start', 1, [
+                {
+                    type: 'garden_daisy_delayed_attack',
+                    params: { target: 'target', amount: delayedAmount },
+                },
+            ], card);
+        }
         if (log) this.logMsg(log);
     }
 
     effect_garden_daisy_delayed_attack(playerId, card, params, log = '') {
         const targetId = this.resolveTarget(playerId, params.target || 'target');
         if (!this.players[targetId]) return;
-        const amount = this.evalInt(playerId, params.amount ?? 15, card, 15);
+        const amount = this.evalInt(playerId, params.amount ?? 4, card, 4);
         this._last_damage_value[targetId] = this.gardenAttackOnce(playerId, targetId, card, amount);
         this.logMsg(log || `${this.pn(playerId)}的雏菊对${this.pn(targetId)}造成延迟伤害`);
     }
 
     gardenRefreshCoalCards() {
         this.players.forEach(ps => {
-            const power = clampCardPower(Math.max(0, toInt(ps.fire, 0)) * 5);
+            const power = clampCardPower(Math.max(0, toInt(ps.fire, 0)) * 3);
             ps.hand.forEach(handCard => {
                 if (!this.cardIs(handCard, 'Coal', 'garden:coal')) return;
                 handCard.power_value = power;
@@ -3984,10 +4099,21 @@ class LocalSoloEngine {
     effect_garden_coal_attack(playerId, card, params, log = '') {
         const targetId = this.resolveTarget(playerId, params.target || 'target');
         if (!this.players[targetId]) return;
-        card.power_value = clampCardPower(Math.max(0, toInt(this.players[playerId].fire, 0)) * 5);
+        card.power_value = clampCardPower(Math.max(0, toInt(this.players[playerId].fire, 0)) * 3);
         if (card.power_value > 0) card.instance_flags.add('power');
         else card.instance_flags.delete('power');
         const amount = this.evalInt(playerId, params.amount ?? 9, card, 9);
+        this._last_damage_value[targetId] = this.gardenAttackOnce(playerId, targetId, card, amount);
+        if (log) this.logMsg(log);
+    }
+
+    effect_hel_deliverance_attack(playerId, card, params, log = '') {
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        const target = this.players[targetId];
+        if (!target) return;
+        const base = this.evalInt(playerId, params.base ?? 2, card, 2);
+        const perCard = this.evalInt(playerId, params.per_card ?? 2, card, 2);
+        const amount = Math.max(0, base + perCard * target.hand.length);
         this._last_damage_value[targetId] = this.gardenAttackOnce(playerId, targetId, card, amount);
         if (log) this.logMsg(log);
     }
@@ -4745,9 +4871,10 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'target');
         const ps = this.players[targetId];
         if (!ps) return;
-        ps.honey_control_turns = Math.max(1, toInt(ps.honey_control_turns, 0) + 1);
-        ps.custom_vars.void_puppeteer_damage_multiplier = Math.max(Number(ps.custom_vars.void_puppeteer_damage_multiplier || 1), 1.5);
-        ps.custom_vars.honey_lowest_enemy = true;
+        ps.custom_vars.void_puppeteer_pending_turns = Math.max(
+            1,
+            toInt(ps.custom_vars.void_puppeteer_pending_turns, 0),
+        );
         if (log) this.logMsg(log);
     }
 
@@ -4922,6 +5049,8 @@ class LocalSoloEngine {
 
     effect_magic_salt_reflect(playerId, card, params) {
         const context = this._active_effect_context || {};
+        if (context.damage_kind && context.damage_kind !== 'attack') return;
+        if (context.damage_type && context.damage_type !== 'physical') return;
         const ownerId = toInt(context.selected_equipment_owner_id ?? playerId, playerId);
         const attackerId = toInt(context.source_id, -1);
         const owner = this.players[ownerId];
@@ -5896,8 +6025,8 @@ class LocalSoloEngine {
         card.custom_vars = card.custom_vars && typeof card.custom_vars === 'object'
             ? card.custom_vars
             : {};
-        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 5, card, 5, choice));
-        const maximum = Math.max(0, this.evalInt(playerId, params.maximum ?? 20, card, 20, choice));
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 3, card, 3, choice));
+        const maximum = Math.max(0, this.evalInt(playerId, params.maximum ?? 12, card, 12, choice));
         const current = Math.max(0, toInt(card.custom_vars.jungle_dianthus_power, 0));
         card.custom_vars.jungle_dianthus_power = Math.min(maximum, current + amount);
         card.custom_vars.jungle_dianthus_pending_reentry = 1;
@@ -5908,7 +6037,7 @@ class LocalSoloEngine {
         card.custom_vars = card.custom_vars && typeof card.custom_vars === 'object'
             ? card.custom_vars
             : {};
-        const maximum = Math.max(0, this.evalInt(playerId, params.maximum ?? 20, card, 20, choice));
+        const maximum = Math.max(0, this.evalInt(playerId, params.maximum ?? 12, card, 12, choice));
         const specialPower = Math.min(
             maximum,
             Math.max(0, toInt(card.custom_vars.jungle_dianthus_power, 0)),
@@ -7260,6 +7389,33 @@ class LocalSoloEngine {
         return out;
     }
 
+    runDirectDamageTakenEquipmentEvents(targetId, sourceId, damage, damageMeta = null, source = '') {
+        if (damage <= 0 || !this.players[targetId]) return;
+        this.iterEquipmentTargetingPlayer(targetId).forEach(({ ownerId, eq }) => {
+            if (this.cardIs(
+                eq.card_instance || eq,
+                'Battery',
+                'vanilla:battery',
+                'MagicBattery',
+                'vanilla:magicbattery',
+            )) return;
+            if (!this.hasCardEvent(eq.card_def, 'damage_taken')) return;
+            this.runCardEvent(targetId, eq.card_instance, 'damage_taken', null, {
+                event: 'damage_taken',
+                source_id: sourceId,
+                target_id: targetId,
+                damage,
+                damage_amount: damage,
+                damage_kind: 'direct',
+                damage_type: String((damageMeta && damageMeta.damage_type) || 'magic'),
+                damage_tag: String((damageMeta && damageMeta.damage_tag) || 'direct'),
+                damage_source_name: source,
+                selected_equipment_instance_id: eq.card_instance && eq.card_instance.instance_id,
+                selected_equipment_owner_id: ownerId,
+            });
+        });
+    }
+
     dealDirectDamage(playerId, amount, source = '', sourceId = null, damageMeta = null) {
         const ps = this.players[playerId];
         if (!ps || ps.invincible) {
@@ -7274,6 +7430,7 @@ class LocalSoloEngine {
         this.bioStemCellAfterHealthLoss(playerId, healthLost);
         this.recordDamage(playerId, actual, sourceId);
         this.logMsg(`${this.pn(playerId)}受到${actual}点${source}伤害（H=${ps.health}）`);
+        this.runDirectDamageTakenEquipmentEvents(playerId, sourceId, actual, damageMeta, source);
         if (!this._deferTurnStartDeathChecks) {
             this.checkYggdrasil(playerId);
             this.checkGameOver();
@@ -7394,6 +7551,10 @@ class LocalSoloEngine {
                                 source_id: attackerId,
                                 target_id: targetId,
                                 damage: dmg,
+                                damage_amount: dmg,
+                                damage_kind: 'attack',
+                                damage_type: 'physical',
+                                damage_tag: 'physical',
                                 selected_equipment_instance_id: eq.card_instance && eq.card_instance.instance_id,
                                 selected_equipment_owner_id: ownerId,
                             });
@@ -7684,17 +7845,18 @@ class LocalSoloEngine {
         }
     }
 
-    destroyEquipment(ownerId, eq) {
+    destroyEquipment(ownerId, eq, options = {}) {
         const ps = this.players[ownerId];
         if (!eq || !ps.equipment.includes(eq)) return false;
+        const ignoreProtection = !!(options && options.ignoreProtection);
         eq._destroy_log_name = eq._destroy_log_name || cardName(eq.def_id || (eq.card_instance && eq.card_instance.def_id));
         if (eq.card_instance && eq.card_instance.flags && eq.card_instance.flags.has('indestructible')) return false;
-        if (toInt(eq.armor, 0) > 0) {
+        if (!ignoreProtection && toInt(eq.armor, 0) > 0) {
             eq.armor = Math.max(0, toInt(eq.armor, 0) - 1);
             this.logMsg(`${this.pn(ownerId)}的${eq._destroy_log_name}装备护甲抵消了摧毁（剩余${eq.armor}）`);
             return false;
         }
-        if (ps.equipment_protection > 0) {
+        if (!ignoreProtection && ps.equipment_protection > 0) {
             ps.equipment_protection -= 1;
             this.logMsg(`${this.pn(ownerId)}的装备保护抵消了摧毁！`);
             return false;
@@ -8506,6 +8668,7 @@ class LocalSoloEngine {
                 card._sewers_was_countered_this_play = true;
             }
             this.logMsg(`${this.pn(responderId)}使用${cardName(removed.def_id)}进行反制！`);
+            this.triggerSewersCheeseAfterCounter(playerId, responderId);
             const dodgeBeforeCounter = toInt(responder.dodge, 0);
             const pendingDamagePrediction = this.simulatePendingResponseDamage(responderId, null);
             this.executeCounterEffect(responderId, removed, card, playerId, pendingDamagePrediction);
@@ -8535,8 +8698,37 @@ class LocalSoloEngine {
             && this._turn_start_auto_settlement_player === playerId
         ) {
             this.continueTurnStartAutoSettlement(playerId);
+        } else if (
+            !this.game_over
+            && this.phase === 'action'
+            && this.current_player === playerId
+            && !this.pending_response
+            && !this.pending_choice
+        ) {
+            this.continueHoneyControlIfNeeded(playerId);
         }
         return result;
+    }
+
+    triggerSewersCheeseAfterCounter(cardUserId, responderId) {
+        const owner = this.players[cardUserId];
+        const responder = this.players[responderId];
+        if (!owner || !responder || cardUserId === responderId) return false;
+        const equipment = owner.equipment.find(eq => (
+            this.cardIs(eq.card_instance, 'Cheese', 'sewers:cheese')
+            && this.equipmentRuntimeActive(eq)
+        ));
+        if (!equipment || !this.destroyEquipment(cardUserId, equipment, { ignoreProtection: true })) {
+            return false;
+        }
+        responder.honey_control_turns = Math.max(1, toInt(responder.honey_control_turns, 0));
+        responder.custom_vars.sewers_cheese_forced_target = cardUserId;
+        delete responder.custom_vars.honey_lowest_enemy;
+        this.logMsg(
+            `${this.pn(cardUserId)}的奶酪使${this.pn(responderId)}`
+            + `下回合自动攻击${this.pn(cardUserId)}`
+        );
+        return true;
     }
 
     executeCounterEffect(responderId, counterCard, originalCard, originalPlayerId, pendingDamagePrediction = null) {

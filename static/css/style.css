@@ -1450,6 +1450,17 @@ body {
   color: var(--text-muted);
 }
 
+.chat-origin-prefix {
+  margin-right: 2px;
+  font-weight: 700;
+}
+
+.chat-origin-multiplayer { color: #117d6e; }
+.chat-origin-story { color: #94601a; }
+
+[data-theme="dark"] .chat-origin-multiplayer { color: #62d8c0; }
+[data-theme="dark"] .chat-origin-story { color: #e3ad60; }
+
 .achievement-item {
   position: relative;
   display: grid;
@@ -8524,6 +8535,44 @@ html.blind-level-4 .card-prediction-part.magic {
   font-weight: 900;
   line-height: 1.2;
   margin: 0 44px 14px 0;
+}
+
+.term-intro-card-meta {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.term-intro-card-meta-row {
+  display: grid;
+  grid-template-columns: minmax(108px, auto) minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+}
+
+.term-intro-card-meta dt {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.term-intro-card-meta dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.term-intro-card-meta .term-intro-card-meta-probability {
+  color: var(--card-meta-accent, var(--text-primary));
+  font-variant-numeric: tabular-nums;
 }
 
 .term-intro-summary {
@@ -20092,13 +20141,16 @@ html.battle-mobile-input-focus.minimal-mobile-canvas[data-ui-style="minimal"] #v
    independently switches between ten cards in one row and five in two rows. */
 html[data-ui-style="minimal"] #view-game .hand-area {
   display: grid;
-  grid-template-columns: repeat(var(--hand-card-columns, 7), minmax(0, 1fr));
+  grid-template-columns: repeat(
+    var(--hand-card-columns, 7),
+    minmax(0, var(--minimal-hand-card-width, 140px))
+  );
   grid-auto-flow: row;
   grid-auto-rows: max-content;
   align-items: end;
   align-content: end;
-  justify-items: center;
-  justify-content: stretch;
+  justify-items: stretch;
+  justify-content: start;
   min-width: 0;
   width: 100%;
   max-width: 100%;
@@ -20121,7 +20173,10 @@ html[data-ui-style="minimal"] #view-game .game-container .hand-area > .card {
   min-width: 0;
   width: min(100%, var(--minimal-hand-card-width, 140px)) !important;
   max-width: 100%;
-  justify-self: center;
+}
+
+html[data-ui-style="minimal"] #view-game .game-container.mode-urf .hand-area {
+  justify-content: center;
 }
 
 html[data-ui-style="minimal"] #view-game .game-container,

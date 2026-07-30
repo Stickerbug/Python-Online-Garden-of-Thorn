@@ -95,7 +95,8 @@ ADVANCED_ATOMIC_OPS = {
     "jurassic_torch", "jurassic_magic_torch", "jurassic_pyrite_draw",
     "jurassic_antler",
     "garden_show_initial_deck", "garden_kale_attack",
-    "garden_daisy_delayed_attack", "garden_coal_attack",
+    "garden_daisy_attack", "garden_daisy_delayed_attack", "garden_coal_attack",
+    "hel_deliverance_attack",
 }
 
 ATOMIC_OP_ALIASES = {

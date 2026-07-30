@@ -66,11 +66,14 @@ class JungleNewCards20260729Tests(unittest.TestCase):
         self.assertEqual(self.mod.info.version, "1.1.0")
         self.assertTrue(NEW_CARD_IDS <= self.mod_cards.keys())
         self.assertEqual(self.mod_cards["Monstera"].count, 3)
+        self.assertEqual(self.mod_cards["Monstera"].cost_e, 3)
         self.assertEqual(self.mod_cards["Dianthus"].count, 1)
         self.assertEqual(self.mod_cards["Maple"].count, 3)
         self.assertIn("team_unique", self.mod_cards["Monstera"].flags)
         self.assertIn("team_limited", self.mod_cards["Monstera"].flags)
         self.assertIn("rebound", self.mod_cards["Dianthus"].flags)
+        self.assertIn("ocean_blinded", self.mod_cards["Dianthus"].flags)
+        self.assertIn("precision", self.mod_cards["Dianthus"].flags)
         self.assertIn("symbiosis", self.mod_cards["Maple"].flags)
 
         expected_assets = {
@@ -97,14 +100,14 @@ class JungleNewCards20260729Tests(unittest.TestCase):
                 for card in card_specs.values():
                     self.assertIn(card["id"], localized_cards)
 
-    def test_dianthus_same_instance_grows_after_each_use_and_caps_at_twenty(self):
+    def test_dianthus_same_instance_grows_after_each_use_and_caps_at_twelve(self):
         engine = self.action_engine()
         dianthus = CardInstance("Dianthus")
         original_instance_id = dianthus.instance_id
         engine.players[0].hand = [dianthus]
         damage_sequence = []
 
-        for expected_power in (5, 10, 15, 20, 20):
+        for expected_power in (3, 6, 9, 12, 12):
             health_before = engine.players[1].health
             result = engine.play_card(
                 0,
@@ -122,7 +125,7 @@ class JungleNewCards20260729Tests(unittest.TestCase):
                 expected_power,
             )
 
-        self.assertEqual(damage_sequence, [8, 13, 18, 23, 28])
+        self.assertEqual(damage_sequence, [4, 7, 10, 13, 16])
 
     def test_dianthus_uses_other_power_then_clears_only_that_temporary_gain(self):
         engine = self.action_engine()
@@ -134,15 +137,15 @@ class JungleNewCards20260729Tests(unittest.TestCase):
         first_health = engine.players[1].health
         result = engine.play_card(0, dianthus.instance_id, self.target_choice(1))
         self.assertTrue(result.get("success"), result)
-        self.assertEqual(first_health - engine.players[1].health, 15)
-        self.assertEqual(engine.players[0].hand[0].power_value, 5)
+        self.assertEqual(first_health - engine.players[1].health, 11)
+        self.assertEqual(engine.players[0].hand[0].power_value, 3)
 
         engine.players[0].hand[0].power_value += 3
         second_health = engine.players[1].health
         result = engine.play_card(0, dianthus.instance_id, self.target_choice(1))
         self.assertTrue(result.get("success"), result)
-        self.assertEqual(second_health - engine.players[1].health, 16)
-        self.assertEqual(engine.players[0].hand[0].power_value, 10)
+        self.assertEqual(second_health - engine.players[1].health, 10)
+        self.assertEqual(engine.players[0].hand[0].power_value, 6)
 
     def test_maple_adds_a_full_tagged_copy_to_its_owners_hand(self):
         engine = self.action_engine()

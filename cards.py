@@ -560,6 +560,16 @@ INITIAL_HAND_SIZE = 5
 FIRST_PLAYER_HAND_SIZE = 4
 
 
+def fixed_same_type_draw_ratio(def_id: str) -> Optional[float]:
+    ratio = FIXED_GLOBAL_DRAFT_WEIGHT_RATIOS.get(str(def_id or ''))
+    if not ratio:
+        return None
+    numerator, denominator = ratio
+    if not denominator:
+        return None
+    return max(0.0, float(numerator) / float(denominator))
+
+
 def _effective_draft_weights(allowed_def_ids: Optional[Set[str]] = None) -> Dict[str, float]:
     allowed = {}
     for def_id, card_def in CARD_DEFS.items():
@@ -594,6 +604,27 @@ def _effective_draft_weights(allowed_def_ids: Optional[Set[str]] = None) -> Dict
             if target_ratio > 0:
                 allowed[def_id] = target_ratio * other_total / (1.0 - fixed_ratio_sum)
     return allowed
+
+
+def same_type_draw_probabilities(allowed_def_ids: Optional[Set[str]] = None) -> Dict[str, float]:
+    """Return each card's weighted share among eligible cards of the same type."""
+    weights = _effective_draft_weights(allowed_def_ids)
+    totals: Dict[str, float] = {}
+    for def_id, weight in weights.items():
+        card_def = CARD_DEFS.get(def_id)
+        if card_def is None:
+            continue
+        card_type = str(getattr(card_def, 'card_type', '') or '')
+        totals[card_type] = totals.get(card_type, 0.0) + max(0.0, float(weight or 0.0))
+
+    probabilities = {}
+    for def_id, weight in weights.items():
+        card_def = CARD_DEFS.get(def_id)
+        if card_def is None:
+            continue
+        total = totals.get(str(getattr(card_def, 'card_type', '') or ''), 0.0)
+        probabilities[def_id] = max(0.0, float(weight or 0.0)) / total if total > 0 else 0.0
+    return probabilities
 
 
 def build_draft_pool(allowed_def_ids: Optional[Set[str]] = None) -> List[CardInstance]:

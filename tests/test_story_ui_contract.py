@@ -265,11 +265,36 @@ def test_story_presence_and_status_surfaces_are_wired():
     assert 'id="story-status-text"' in STORY_TEMPLATE
     assert 'id="story-status-online"' in STORY_TEMPLATE
     assert "requestJson('/api/story/presence'" in STORY_JS
-    assert 'body: JSON.stringify({ client_id: STORY_PRESENCE_CLIENT_ID })' in STORY_JS
+    assert 'activity: reportActivity' in STORY_JS
+    assert 'Number(payload.story_online_count)' in STORY_JS
     assert 'startStoryPresence();' in STORY_JS
     assert 'function updateStoryStatusBar()' in STORY_JS
     assert 'grid-template-rows: 56px minmax(0, 1fr) 28px;' in STORY_CSS
     assert '.story-status-bar {' in STORY_CSS
+
+
+def test_story_afk_check_tracks_interaction_without_counting_heartbeats():
+    assert "requestJson('/api/story/afk-check'" in STORY_JS
+    assert 'function showStoryAfkCheckOverlay(data = {})' in STORY_JS
+    assert 'function bindStoryAfkActivityReporting()' in STORY_JS
+    assert "document.addEventListener('keydown', reportStoryAfkActivity" in STORY_JS
+    assert "event?.target?.closest?.('#story-afk-check-overlay')" in STORY_JS
+    assert 'client_id: STORY_PRESENCE_CLIENT_ID' in STORY_JS
+    assert '.story-afk-check-overlay {' in STORY_CSS
+    assert '.story-afk-check-button.is-ready {' in STORY_CSS
+
+
+def test_story_out_of_combat_deck_reuses_the_pile_viewer():
+    assert 'id="story-run-deck"' in STORY_TEMPLATE
+    assert 'src="/static/assets/ui-icons/total-pile.svg"' in STORY_TEMPLATE
+    assert "runDeck: '总牌库', viewRunDeck: '查看总牌库'" in STORY_JS
+    assert "deck: { source: state?.player?.deck, title: t.runDeck, reverse: false }" in STORY_JS
+    assert "if (kind === 'deck' && state?.phase === 'combat') return;" in STORY_JS
+    assert "['story-loading', 'story-empty', 'story-combat'].includes(name)" in STORY_JS
+    assert 'runDeck?.classList.toggle(\'hidden\', runDeckUnavailable);' in STORY_JS
+    assert "$('story-run-deck')?.addEventListener('click', () => openStoryPile('deck'));" in STORY_JS
+    assert "cards.forEach((card, index) => grid?.append(createStoryPileTile(card, index + 1)));" in STORY_JS
+    assert '.story-run-deck-command {' in STORY_CSS
 
 
 def test_story_keyboard_card_selection_preserves_the_last_pointer_position():

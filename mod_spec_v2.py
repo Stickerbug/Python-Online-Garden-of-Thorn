@@ -113,7 +113,7 @@ VALID_LOGIC_OPS = {
     "desert_emerald_resource", "desert_topaz_apply",
     "desert_magic_yggdrasil",
     "garden_show_initial_deck", "garden_kale_attack",
-    "garden_daisy_delayed_attack", "garden_coal_attack",
+    "garden_daisy_attack", "garden_daisy_delayed_attack", "garden_coal_attack",
     "jungle_monstera_heal_team", "jungle_dianthus_record_use",
     "jungle_dianthus_restore_power", "jungle_add_maple_to_hand",
     "show_hint",
@@ -417,6 +417,7 @@ VALID_LOGIC_OPS = {
     "hel_fire_by_equipment",
     "hel_bugatti_draw",
     "hel_magic_clover_trigger",
+    "hel_deliverance_attack",
 }
 
 VALID_EVENT_HOOKS = {

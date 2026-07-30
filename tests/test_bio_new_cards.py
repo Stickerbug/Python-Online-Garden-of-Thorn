@@ -15,7 +15,7 @@ PACKAGE = ROOT / "mods" / "Bio Cards Addition.gtnmod"
 JURASSIC_PACKAGE = ROOT / "mods" / "Jurassic Cards Addition.gtnmod"
 LOCAL_WORKER = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
 GAME_JS = (ROOT / "static" / "js" / "game.js").read_text(encoding="utf-8")
-NEW_CARD_IDS = {"CyanidePill", "StemCell", "Mitochondria"}
+NEW_CARD_IDS = {"BloodSugar", "CyanidePill", "StemCell", "Mitochondria"}
 
 
 class BioNewCardsTests(unittest.TestCase):
@@ -190,6 +190,42 @@ class BioNewCardsTests(unittest.TestCase):
         self.assertEqual(target.health, 55)
         self.assertEqual(engine._bio_status_value(1, "shield_conversion"), 2)
         self.assertEqual(engine._custom_status_value(1, "jungle:shield", "shield"), 0)
+
+    def test_blood_sugar_prompts_after_target_and_respects_damage_assignment(self):
+        target_choice = self.target_choice(1)
+        expected_health = {
+            "electric_target": [50, 55],
+            "physical_target": [55, 50],
+        }
+
+        for mode, expected in expected_health.items():
+            with self.subTest(mode=mode):
+                engine = self.action_engine()
+                for player in engine.players:
+                    player.health = 50
+                    player.armor = 1
+                card = CardInstance("BloodSugar")
+                engine.players[0].hand = [card]
+
+                play_result = engine.play_card(0, card.instance_id, target_choice)
+
+                self.assertTrue(play_result.get("success"), play_result)
+                self.assertTrue(play_result.get("needs_choice"), play_result)
+                self.assertEqual(play_result.get("choice_type"), "bio_blood_sugar_mode")
+                self.assertEqual(
+                    engine.pending_choice.get("original_choice", {}).get("target_player_id"),
+                    1,
+                )
+                self.assertEqual([player.health for player in engine.players], [50, 50])
+
+                resolve_result = engine.resolve_choice(
+                    0,
+                    {"bio_blood_sugar_mode": mode},
+                )
+
+                self.assertTrue(resolve_result.get("success"), resolve_result)
+                self.assertEqual([player.health for player in engine.players], expected)
+                self.assertIsNone(engine.pending_choice)
 
     def test_local_solo_worker_contains_matching_bio_hooks(self):
         self.assertIn("bioStemCellAfterHealthLoss(targetId, amount)", LOCAL_WORKER)

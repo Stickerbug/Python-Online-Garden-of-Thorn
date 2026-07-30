@@ -740,6 +740,7 @@ class GameEngine2v2(GameEngine):
                 card._sewers_was_countered_this_play = True
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}{self._card_log_marker(counter_removed)}进行反制！")
             self._note_achievement_counter_success(responder_id)
+            self._trigger_sewers_cheese_after_counter(player_id, responder_id)
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             alive_before_counter = [player.health > 0 for player in self.players]
             counter_dead_ids = []
@@ -1029,6 +1030,7 @@ class GameEngine2v2(GameEngine):
             return
         if getattr(self, '_skip_current_turn_after_start', False):
             self._skip_current_turn_after_start = False
+            self._clear_honey_control_state(player_id, include_pending=True)
             self._end_player_turn(player_id)
             return
         if not self.game_over:
@@ -1508,6 +1510,14 @@ class GameEngine2v2(GameEngine):
         if resolved_damage_tag == DAMAGE_TAG_POISON and health_lost > 0:
             self._sewers_neem_after_poison_health_loss(player_id, health_lost)
         self._run_v2_after_damage_hooks(damage_context, actual)
+        self._run_direct_damage_taken_equipment_events(
+            player_id,
+            source_id,
+            actual,
+            damage_type=resolved_damage_type,
+            damage_tag=resolved_damage_tag,
+            source=source,
+        )
         if not getattr(self, '_defer_turn_start_death_checks', False):
             self._check_yggdrasil(player_id)
             if ps.health <= 0 and self._game_over_defer_depth <= 0:
@@ -1906,6 +1916,7 @@ class GameEngine2v2(GameEngine):
             return
         if getattr(self, '_skip_current_turn_after_start', False):
             self._skip_current_turn_after_start = False
+            self._clear_honey_control_state(player_id, include_pending=True)
             self._end_player_turn(player_id)
             return
         if ps.health <= 0:
@@ -2061,6 +2072,7 @@ class GameEngine2v2(GameEngine):
             return
         if getattr(self, '_skip_current_turn_after_start', False):
             self._skip_current_turn_after_start = False
+            self._clear_honey_control_state(player_id, include_pending=True)
             self._end_player_turn(player_id)
             return
         if ps.health <= 0:
@@ -2245,6 +2257,10 @@ class GameEngine2v2(GameEngine):
                                 'source_id': attacker_id,
                                 'target_id': target_id,
                                 'damage': dmg,
+                                'damage_amount': dmg,
+                                'damage_kind': 'attack',
+                                'damage_type': DAMAGE_TYPE_PHYSICAL,
+                                'damage_tag': DAMAGE_TAG_PHYSICAL,
                                 'selected_equipment_instance_id': eq.card_instance.instance_id,
                                 'selected_equipment_owner_id': owner_id,
                             },

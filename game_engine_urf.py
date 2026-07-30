@@ -193,14 +193,16 @@ class GameEngineInfiniteFire(GameEngine):
         ids: List[str],
         weights: List[int],
         player_id: Optional[int],
+        excluded_def_ids: Optional[set] = None,
     ):
         blocked_unique_ids = self._active_unique_card_ids(player_id)
-        if not blocked_unique_ids:
+        excluded_ids = set(excluded_def_ids or set())
+        if not blocked_unique_ids and not excluded_ids:
             return ids, weights
         available_ids = []
         available_weights = []
         for def_id, weight in zip(ids, weights):
-            if def_id in blocked_unique_ids:
+            if def_id in blocked_unique_ids or def_id in excluded_ids:
                 continue
             available_ids.append(def_id)
             available_weights.append(weight)
@@ -210,6 +212,7 @@ class GameEngineInfiniteFire(GameEngine):
         self,
         card_type: Optional[str] = None,
         player_id: Optional[int] = None,
+        excluded_def_ids: Optional[set] = None,
     ) -> Optional[CardInstance]:
         if not self.infinite_card_pool:
             self._build_infinite_pool()
@@ -217,7 +220,12 @@ class GameEngineInfiniteFire(GameEngine):
             pool = self.infinite_by_type.get(card_type) or {}
             ids = pool.get('ids') or []
             weights = pool.get('weights') or []
-            ids, weights = self._available_infinite_candidates(ids, weights, player_id)
+            ids, weights = self._available_infinite_candidates(
+                ids,
+                weights,
+                player_id,
+                excluded_def_ids=excluded_def_ids,
+            )
             if not ids:
                 return None
             return CardInstance(def_id=random.choices(ids, weights=weights, k=1)[0])
@@ -227,6 +235,7 @@ class GameEngineInfiniteFire(GameEngine):
             self.infinite_card_pool,
             self.infinite_card_weights,
             player_id,
+            excluded_def_ids=excluded_def_ids,
         )
         if not ids:
             return None
@@ -584,18 +593,26 @@ class GameEngineInfiniteFire(GameEngine):
         ps = self.players[player_id]
         if not getattr(ps, 'urf_replace_available', True):
             return {'success': False, 'error': '本回合已经替换过手牌'}
+        card = ps.find_hand_card(card_instance_id)
+        if not card:
+            return {'success': False, 'error': '卡牌不在手中'}
+        new_card = self.create_infinite_card(
+            card.card_type,
+            player_id=player_id,
+            excluded_def_ids={card.def_id},
+        )
+        if not new_card:
+            return {'success': False, 'error': '当前没有不同的同类型牌可供替换'}
         card = ps.remove_hand_card(card_instance_id)
         if not card:
             return {'success': False, 'error': '卡牌不在手中'}
         ps.discard.append(card)
-        new_card = self.create_infinite_card(card.card_type, player_id=player_id)
-        if new_card:
-            added = self.add_card_to_urf_hand(player_id, new_card, log=False)
-            type_name = CARD_TYPE_CN.get(card.card_type, card.card_type)
-            if added:
-                self.log_msg(f"{self.pn(player_id)}替换1张{type_name}牌")
-            else:
-                self.log_msg(f"{self.pn(player_id)}替换1张{type_name}牌，手牌已满，新牌进入弃牌堆")
+        added = self.add_card_to_urf_hand(player_id, new_card, log=False)
+        type_name = CARD_TYPE_CN.get(card.card_type, card.card_type)
+        if added:
+            self.log_msg(f"{self.pn(player_id)}替换1张{type_name}牌")
+        else:
+            self.log_msg(f"{self.pn(player_id)}替换1张{type_name}牌，手牌已满，新牌进入弃牌堆")
         ps.urf_replace_available = False
         return {'success': True}
 

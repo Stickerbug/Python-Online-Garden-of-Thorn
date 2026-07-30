@@ -43,7 +43,11 @@ def test_minimal_hand_is_a_bounded_grid_and_side_panels_can_shrink():
         "/* Dark-theme surface contract.",
     )
     assert "display: grid" in layout_css
-    assert "grid-template-columns: repeat(var(--hand-card-columns, 7)" in layout_css
+    assert "grid-template-columns: repeat(" in layout_css
+    assert "var(--hand-card-columns, 7)" in layout_css
+    assert "minmax(0, var(--minimal-hand-card-width, 140px))" in layout_css
+    assert "minmax(0, 1fr)" not in layout_css
+    assert "justify-content: start" in layout_css
     assert "overflow-x: auto" not in layout_css
     assert ".battle-log-chat-row" in layout_css
     assert "min-width: 0" in layout_css

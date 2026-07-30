@@ -32,6 +32,20 @@
     let storyPresenceTimer = 0;
     let storyPresenceInFlight = false;
     let storyPresenceIntervalMs = 25000;
+    let storyPresenceActivityPending = false;
+    let lastStoryAfkActivityReportAt = 0;
+    let activeStoryAfkCheck = null;
+    let storyAfkCheckTimer = 0;
+    let storyAfkHoldFrame = 0;
+    let storyAfkRedirectTimer = 0;
+    let storyChatSocket = null;
+    let storyChatOpen = false;
+    let storyChatConnected = false;
+    let storyChatInitialized = false;
+    let storyChatEntries = [];
+    let storyChatHistorySignature = '';
+    let storyChatUnreadCount = 0;
+    const STORY_AFK_ACTIVITY_REPORT_INTERVAL_MS = 20000;
     const storyCardElementData = new WeakMap();
     const STORY_PRESENCE_CLIENT_ID = globalThis.crypto?.randomUUID
         ? crypto.randomUUID()
@@ -107,14 +121,30 @@
         en: {
             title: 'Story Mode', account: 'Player', back: 'Back', loading: 'Loading journey',
             onlinePlayers: (value) => `Online Players: ${value}`,
+            afkTitle: 'AFK Check',
+            afkPrompt: (countdown) => `Hold the round button and release it when it glows. Time left: ${countdown}.`,
+            afkHold: 'Hold', afkReady: 'Hold the button when ready.', afkHolding: 'Keep holding...',
+            afkVerifying: 'Verifying...', afkPassed: 'AFK check passed',
+            afkTooShort: 'Held too briefly. Try again.', afkTooLong: 'Held too long. Try again.',
+            afkTimedOut: 'AFK check timed out. Returning to the home page...',
+            afkFailed: 'The check failed. Try again.',
+            chatTitle: 'Chat', chatConnecting: 'Connecting...', chatConnected: 'Lobby chat',
+            chatDisconnected: 'Disconnected. Reconnecting...', chatPlaceholder: 'Type a message...',
+            chatSend: 'Send', chatCollapse: 'Collapse chat',
+            chatOriginMultiplayer: 'Multiplayer', chatOriginStory: 'Story',
+            chatUnread: (count) => `${count} unread message(s)`,
             emptyTitle: 'A new journey', start: 'Start', stage: 'Stage', biome: 'Region', gold: 'Gold',
             route: 'Route', abandon: 'End Journey', abandonTitle: 'End this journey?',
             abandonMessage: 'This run will be marked as ended.', resetMap: 'Reset Map',
             resetTitle: 'Reset the map?', resetMessage: 'A new route will be generated from Floor 1.',
             mapReset: 'Map reset', cancel: 'Cancel', confirm: 'Confirm', garden: 'Garden',
             blessingTitle: 'Choose a starting blessing', blessingCopy: 'Choose one for this journey.',
+            blessingChooseCard: 'Choose a deck card', blessingBack: 'Back to blessings',
+            transform: 'Transform', blessingRewardCopy: 'Choose one card from each reward.',
+            blessingCardReward: (index, total) => `Card reward ${index}/${total}`,
             intent: 'Intent', endTurn: 'End Turn', playerTurn: 'Your Turn', enemyTurn: 'Enemy Turn', close: 'Close',
             drawPile: 'Draw', discardPile: 'Discard', exilePile: 'Exile',
+            runDeck: 'Full Deck', viewRunDeck: 'View Full Deck',
             battleWon: 'Battle won', chooseCard: 'Choose a card', skip: 'Skip card',
             rewards: 'Battle rewards', rewardCopy: 'Claim each reward before continuing.',
             claim: 'Claim', claimed: 'Claimed', cardReward: 'Card reward', talentReward: 'Talent',
@@ -122,7 +152,7 @@
             goldReward: (value) => `${value} G`, room: 'Room', restTitle: 'Rest Site',
             restCopy: 'Recover H or upgrade one card.', heal: 'Recover H', upgrade: 'Upgrade',
             shopCards: 'Cards', shopTalents: 'Talents', remove: 'Remove',
-            roomActions: 'Actions', restGold: 'Gold',
+            roomActions: 'Actions', restGold: 'Gold', plantDandelion: 'Plant Dandelion',
             noShopCards: 'No cards are available', noShopTalents: 'No talents are available',
             noUpgradableCards: 'No cards can be upgraded',
             confirmUpgradeTitle: 'Confirm upgrade', confirmRemoveTitle: 'Confirm removal',
@@ -161,19 +191,36 @@
         zh: {
             title: '故事模式', account: '玩家', back: '返回', loading: '载入旅程', emptyTitle: '一段新的旅程',
             onlinePlayers: (value) => `在线玩家：${value}`,
+            afkTitle: 'AFK Check',
+            afkPrompt: (countdown) => `请在 ${countdown} 内按住圆形按钮，按钮明显发光后松开。`,
+            afkHold: '按住', afkReady: '准备好了就按住按钮。', afkHolding: '保持按住...',
+            afkVerifying: '正在验证...', afkPassed: '挂机检测已通过',
+            afkTooShort: '按得太短了，请重试', afkTooLong: '按得太久了，请重试',
+            afkTimedOut: '挂机检测已超时，正在返回主页...',
+            afkFailed: '检测失败，请重试',
+            chatTitle: '聊天', chatConnecting: '正在连接...', chatConnected: '大厅聊天',
+            chatDisconnected: '连接已断开，正在重连...', chatPlaceholder: '输入消息...',
+            chatSend: '发送', chatCollapse: '收起聊天',
+            chatOriginMultiplayer: '多人', chatOriginStory: '故事',
+            chatUnread: (count) => `${count} 条未读消息`,
             start: '开始', stage: '阶段', biome: '区域', gold: '金币', route: '路线', abandon: '结束旅程',
             abandonTitle: '结束旅程？', abandonMessage: '当前进度将被记录为已结束。', resetMap: '重置地图',
             resetTitle: '重置地图？', resetMessage: '将重新生成路线并返回第一层。', mapReset: '地图已重置',
             cancel: '取消', confirm: '确定', garden: '花园', blessingTitle: '选择初始赐福',
-            blessingCopy: '本次旅程只能选择一项。', intent: '意图', endTurn: '结束回合', playerTurn: '玩家回合', enemyTurn: '敌方回合', close: '关闭', drawPile: '抽牌堆',
-            discardPile: '弃牌堆', exilePile: '放逐区', battleWon: '战斗胜利', chooseCard: '选择一张牌',
+            blessingCopy: '本次旅程只能选择一项。', blessingChooseCard: '选择一张牌组中的牌',
+            blessingBack: '返回赐福选择', transform: '变化',
+            blessingRewardCopy: '每次卡牌奖励选择1张牌。',
+            blessingCardReward: (index, total) => `卡牌奖励 ${index}/${total}`,
+            intent: '意图', endTurn: '结束回合', playerTurn: '玩家回合', enemyTurn: '敌方回合', close: '关闭', drawPile: '抽牌堆',
+            discardPile: '弃牌堆', exilePile: '放逐区', runDeck: '总牌库', viewRunDeck: '查看总牌库',
+            battleWon: '战斗胜利', chooseCard: '选择一张牌',
             skip: '跳过卡牌', rewards: '战斗奖励', rewardCopy: '逐项领取奖励后继续前进。',
             claim: '领取', claimed: '已领取', cardReward: '卡牌奖励', talentReward: '天赋',
             continueJourney: '继续前进', gainedGold: (value) => `获得 ${value}G。`,
             goldReward: (value) => `${value}G`, room: '房间', restTitle: '休息区',
             restCopy: '回复生命，或升级一张牌。', heal: '回复生命', upgrade: '升级', chestTitle: '宝箱',
             shopCards: '卡牌', shopTalents: '天赋', remove: '移除',
-            roomActions: '选项', restGold: '金币',
+            roomActions: '选项', restGold: '金币', plantDandelion: '种植蒲公英',
             noShopCards: '暂无可购买卡牌', noShopTalents: '暂无可购买天赋',
             noUpgradableCards: '暂无可升级卡牌',
             confirmUpgradeTitle: '确认升级', confirmRemoveTitle: '确认移除',
@@ -210,10 +257,28 @@
         fr: {
             title: 'Mode histoire', account: 'Joueur', back: 'Retour', loading: 'Chargement du voyage',
             onlinePlayers: (value) => `Joueurs en ligne : ${value}`,
+            afkTitle: 'Contrôle AFK',
+            afkPrompt: (countdown) => `Maintenez le bouton rond, puis relâchez-le lorsqu’il brille. Temps restant : ${countdown}.`,
+            afkHold: 'Maintenir', afkReady: 'Maintenez le bouton quand vous êtes prêt.',
+            afkHolding: 'Continuez à maintenir...', afkVerifying: 'Vérification...',
+            afkPassed: 'Contrôle AFK réussi', afkTooShort: 'Maintien trop court. Réessayez.',
+            afkTooLong: 'Maintien trop long. Réessayez.',
+            afkTimedOut: 'Délai du contrôle AFK dépassé. Retour à l’accueil...',
+            afkFailed: 'Échec du contrôle. Réessayez.',
+            chatTitle: 'Chat', chatConnecting: 'Connexion...', chatConnected: 'Chat du salon',
+            chatDisconnected: 'Déconnecté. Reconnexion...', chatPlaceholder: 'Écrire un message...',
+            chatSend: 'Envoyer', chatCollapse: 'Réduire le chat',
+            chatOriginMultiplayer: 'Multijoueur', chatOriginStory: 'Histoire',
+            chatUnread: (count) => `${count} message(s) non lu(s)`,
             emptyTitle: 'Un nouveau voyage', start: 'Commencer', stage: 'Étape', biome: 'Région', gold: 'Or',
             route: 'Route', abandon: 'Terminer le voyage', blessingTitle: 'Choisir une bénédiction',
-            blessingCopy: 'Choisissez-en une pour ce voyage.', intent: 'Intention', endTurn: 'Fin du tour',
-            drawPile: 'Pioche', discardPile: 'Défausse', exilePile: 'Exil', battleWon: 'Victoire',
+            blessingCopy: 'Choisissez-en une pour ce voyage.', blessingChooseCard: 'Choisissez une carte du paquet',
+            blessingBack: 'Retour aux bénédictions', transform: 'Transformer',
+            blessingRewardCopy: 'Choisissez une carte pour chaque récompense.',
+            blessingCardReward: (index, total) => `Récompense de carte ${index}/${total}`,
+            intent: 'Intention', endTurn: 'Fin du tour',
+            drawPile: 'Pioche', discardPile: 'Défausse', exilePile: 'Exil',
+            runDeck: 'Deck complet', viewRunDeck: 'Voir le deck complet', battleWon: 'Victoire',
             chooseCard: 'Choisissez une carte', skip: 'Passer la carte', room: 'Salle', newJourney: 'Nouveau voyage',
             rewards: 'Récompenses du combat', rewardCopy: 'Récupérez chaque récompense avant de continuer.',
             claim: 'Récupérer', claimed: 'Récupéré', cardReward: 'Carte', talentReward: 'Talent',
@@ -225,7 +290,7 @@
             cardTerms: 'Termes de carte', statusTerms: 'Terme d’état', noCardTerms: 'Aucun terme supplémentaire',
             beforeUpgrade: 'Avant amélioration', afterUpgrade: 'Après amélioration',
             shopCards: 'Cartes', shopTalents: 'Talents', remove: 'Retirer',
-            roomActions: 'Choix', restGold: 'Or',
+            roomActions: 'Choix', restGold: 'Or', plantDandelion: 'Planter le pissenlit',
             noShopCards: 'Aucune carte disponible', noShopTalents: 'Aucun talent disponible',
             noUpgradableCards: 'Aucune carte ne peut être améliorée',
             confirmUpgradeTitle: 'Confirmer l’amélioration', confirmRemoveTitle: 'Confirmer le retrait',
@@ -243,9 +308,27 @@
         ja: {
             title: 'ストーリーモード', account: 'プレイヤー', back: '戻る', loading: '旅を読み込み中',
             onlinePlayers: (value) => `オンラインプレイヤー：${value}`,
+            afkTitle: 'AFKチェック',
+            afkPrompt: (countdown) => `残り${countdown}以内に丸いボタンを長押しし、光ったら離してください。`,
+            afkHold: '長押し', afkReady: '準備ができたら長押ししてください。',
+            afkHolding: 'そのまま長押し...', afkVerifying: '確認中...',
+            afkPassed: 'AFKチェックに成功しました',
+            afkTooShort: '押す時間が短すぎます。もう一度お試しください。',
+            afkTooLong: '押す時間が長すぎます。もう一度お試しください。',
+            afkTimedOut: 'AFKチェックが時間切れです。ホームへ戻ります...',
+            afkFailed: '確認に失敗しました。もう一度お試しください。',
+            chatTitle: 'チャット', chatConnecting: '接続中...', chatConnected: 'ロビーチャット',
+            chatDisconnected: '切断されました。再接続中...', chatPlaceholder: 'メッセージを入力...',
+            chatSend: '送信', chatCollapse: 'チャットを閉じる',
+            chatOriginMultiplayer: 'マルチ', chatOriginStory: 'ストーリー',
+            chatUnread: (count) => `未読メッセージ ${count}件`,
             emptyTitle: '新しい旅', start: '開始', stage: 'ステージ', biome: '地域', gold: 'ゴールド',
             route: 'ルート', abandon: '旅を終了', blessingTitle: '祝福を選択', blessingCopy: '今回の旅で一つ選択します。',
+            blessingChooseCard: 'デッキのカードを選択', blessingBack: '祝福選択に戻る',
+            transform: '変化', blessingRewardCopy: '各カード報酬から1枚選びます。',
+            blessingCardReward: (index, total) => `カード報酬 ${index}/${total}`,
             intent: '意図', endTurn: 'ターン終了', drawPile: '山札', discardPile: '捨て札', exilePile: '追放',
+            runDeck: '全デッキ', viewRunDeck: '全デッキを見る',
             battleWon: '戦闘勝利', chooseCard: 'カードを選択', skip: 'カードをスキップ', room: '部屋',
             rewards: '戦闘報酬', rewardCopy: 'すべての報酬を受け取ってから先へ進みます。',
             claim: '受け取る', claimed: '受取済み', cardReward: 'カード報酬', talentReward: '天賦',
@@ -257,7 +340,7 @@
             cardTerms: 'カード用語', statusTerms: '状態用語', noCardTerms: '追加用語なし',
             beforeUpgrade: 'アップグレード前', afterUpgrade: 'アップグレード後',
             shopCards: 'カード', shopTalents: '天賦', remove: '削除',
-            roomActions: '選択肢', restGold: 'ゴールド',
+            roomActions: '選択肢', restGold: 'ゴールド', plantDandelion: 'タンポポを植える',
             noShopCards: '購入できるカードはありません', noShopTalents: '購入できる天賦はありません',
             noUpgradableCards: 'アップグレードできるカードはありません',
             confirmUpgradeTitle: 'アップグレード確認', confirmRemoveTitle: '削除確認',
@@ -394,6 +477,7 @@
             'story-title': t.title, 'story-account-label': t.account, 'story-loading-label': t.loading,
             'story-empty-title': t.emptyTitle, 'story-start': t.start, 'story-stage-label': t.stage,
             'story-biome-label': t.biome, 'story-gold-label': t.gold, 'story-map-title': t.route,
+            'story-run-deck-label': t.runDeck,
             'story-reset-map': t.resetMap,
             'story-reset-title': t.resetTitle, 'story-reset-message': t.resetMessage,
             'story-reset-cancel': t.cancel, 'story-reset-confirm': t.confirm,
@@ -413,6 +497,9 @@
             'story-deck-change-confirm': t.confirm,
             'story-event-confirm-cancel': t.cancel,
             'story-event-confirm-submit': t.confirm,
+            'story-chat-toggle-label': t.chatTitle,
+            'story-chat-title': t.chatTitle,
+            'story-chat-send': t.chatSend,
         };
         Object.entries(values).forEach(([id, value]) => setText(id, value));
         updateStoryPresenceDisplay();
@@ -422,8 +509,22 @@
             back.title = t.back;
             back.setAttribute('aria-label', t.back);
         }
+        const runDeck = $('story-run-deck');
+        if (runDeck) {
+            runDeck.title = t.viewRunDeck;
+            runDeck.setAttribute('aria-label', t.viewRunDeck);
+        }
         const devClose = $('story-dev-close');
         if (devClose) devClose.setAttribute('aria-label', t.close);
+        const chatClose = $('story-chat-close');
+        if (chatClose) chatClose.setAttribute('aria-label', t.chatCollapse);
+        const chatInput = $('story-chat-input');
+        if (chatInput) {
+            chatInput.placeholder = t.chatPlaceholder;
+            chatInput.setAttribute('aria-label', t.chatPlaceholder);
+        }
+        updateStoryChatConnectionUi();
+        updateStoryChatUnreadBadge();
     }
 
     function showToast(message) {
@@ -594,7 +695,7 @@
         } else if (state.phase === 'blessing') {
             parts.push(t.rooms.blessing);
         } else if (state.phase === 'reward') {
-            parts.push(t.rewards);
+            parts.push(state.reward?.source === 'blessing' ? t.rooms.blessing : t.rewards);
         } else if (state.phase === 'complete') {
             parts.push(t.journeyComplete);
         } else if (state.phase === 'game_over') {
@@ -617,33 +718,671 @@
         setText('story-status-text', storyStatusText());
     }
 
-    function scheduleStoryPresence() {
-        clearTimeout(storyPresenceTimer);
-        storyPresenceTimer = window.setTimeout(sendStoryPresence, storyPresenceIntervalMs);
+    const STORY_CHAT_AUTO_SCROLL_THRESHOLD = 28;
+    const STORY_CHAT_TITLE_COLORS = Object.freeze({
+        admin: '#C0392B',
+        thorn: 'var(--thorn)',
+        bloom: 'var(--bloom)',
+        root: 'var(--root)',
+        guard: 'var(--guard)',
+        curse: '#704B87',
+        infect: '#7E9638',
+        health: '#2ECC71',
+        elixir: '#F1C40F',
+        energy: '#F1C40F',
+        magic: '#3498DB',
+        damage: '#C0392B',
+        electric: '#4BA3FF',
+        poison: '#8E44AD',
+        fire: '#E67E22',
+        armor: '#95A5A6',
+        precision: '#546E7A',
+        banish: '#6C3483',
+        indestructible: '#D4AC0D',
+        critical: '#D4AC0D',
+        primary: '#7EEF6D',
+        common: '#FFE65D',
+        rare: '#861FDE',
+        ultra: '#FF2B75',
+        super: '#2BFFA3',
+        milestone: '#5AA469',
+        hidden: '#7257A8',
+        neutral: 'var(--story-muted)',
+    });
+
+    function storyChatColorCss(value) {
+        const raw = String(value || '').trim();
+        const key = raw.toLowerCase();
+        if (STORY_CHAT_TITLE_COLORS[key]) return STORY_CHAT_TITLE_COLORS[key];
+        if (/^#[0-9a-f]{6}$/i.test(raw)) return raw;
+        if (
+            globalThis.CSS?.supports?.('color', raw)
+            && /^(?:rgb|hsl)a?\([^;{}]+\)$/i.test(raw)
+        ) {
+            return raw;
+        }
+        return '';
     }
 
-    async function sendStoryPresence() {
-        if (storyPresenceInFlight) {
-            scheduleStoryPresence();
+    function storyChatEntryKey(entry = {}) {
+        return String(
+            entry.message_id
+            || entry.messageId
+            || entry.id
+            || `${entry.time || ''}:${entry.nickname || ''}:${entry.text || ''}`,
+        );
+    }
+
+    function storyChatRepeatKey(entry = {}) {
+        if (!entry || entry.type !== 'chat') return '';
+        return JSON.stringify([
+            storyChatEntryKey(entry),
+            entry.nickname || entry.sender_name || '',
+            entry.text || '',
+            entry.chat_channel || entry.channel || '',
+            entry.chat_origin || entry.chatOrigin || '',
+            Boolean(entry.system),
+        ]);
+    }
+
+    function mergeStoryChatEntries(incoming, previous) {
+        const previousByKey = new Map();
+        (previous || []).forEach((entry) => {
+            const key = storyChatRepeatKey(entry);
+            if (key) previousByKey.set(key, entry);
+        });
+        return (incoming || []).map((entry) => {
+            if (!entry || typeof entry !== 'object') return entry;
+            const copy = { ...entry };
+            const old = previousByKey.get(storyChatRepeatKey(copy));
+            if (!old) return copy;
+            const oldCount = Math.max(1, Number(old.repeat_count || old.repeatCount || 1));
+            const newCount = Math.max(1, Number(copy.repeat_count || copy.repeatCount || 1));
+            if (oldCount > newCount) {
+                copy.repeat_count = oldCount;
+                copy.time = old.time || copy.time;
+                copy.ts = old.ts || copy.ts;
+            }
+            return copy;
+        });
+    }
+
+    function countNewStoryChatMessages(nextEntries, previousEntries) {
+        const previousCounts = new Map();
+        (previousEntries || []).forEach((entry) => {
+            if (!entry || entry.type !== 'chat') return;
+            previousCounts.set(
+                storyChatRepeatKey(entry),
+                Math.max(1, Number(entry.repeat_count || entry.repeatCount || 1)),
+            );
+        });
+        return (nextEntries || []).reduce((count, entry) => {
+            if (!entry || entry.type !== 'chat') return count;
+            const nextCount = Math.max(1, Number(entry.repeat_count || entry.repeatCount || 1));
+            const previousCount = previousCounts.get(storyChatRepeatKey(entry));
+            return count + (previousCount == null ? nextCount : Math.max(0, nextCount - previousCount));
+        }, 0);
+    }
+
+    function storyChatLocale() {
+        if (lang === 'zh') return 'zh-CN';
+        if (lang === 'ja') return 'ja-JP';
+        if (lang === 'fr') return 'fr-FR';
+        return 'en-US';
+    }
+
+    function formatStoryChatTime(entry = {}) {
+        const value = entry.time || entry.created_at || entry.createdAt;
+        const date = value ? new Date(value) : null;
+        if (!date || Number.isNaN(date.getTime())) {
+            return String(entry.display_time || entry.displayTime || '');
+        }
+        const now = new Date();
+        const time = date.toLocaleTimeString(storyChatLocale(), {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        });
+        if (
+            date.getFullYear() === now.getFullYear()
+            && date.getMonth() === now.getMonth()
+            && date.getDate() === now.getDate()
+        ) {
+            return time;
+        }
+        const day = date.toLocaleDateString(storyChatLocale(), {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+        });
+        return `${day} ${time}`;
+    }
+
+    function appendStoryChatIdentity(parent, entry = {}) {
+        const originKey = String(entry.chat_origin || entry.chatOrigin || '').toLowerCase();
+        if (originKey === 'multiplayer' || originKey === 'story') {
+            const origin = document.createElement('span');
+            origin.className = `story-chat-origin story-chat-origin-${originKey}`;
+            origin.textContent = `[${originKey === 'story'
+                ? t.chatOriginStory
+                : t.chatOriginMultiplayer}]`;
+            parent.appendChild(origin);
+        }
+
+        if (entry.system) {
+            const systemName = document.createElement('span');
+            systemName.className = 'story-chat-system-name';
+            systemName.textContent = String(
+                entry.nickname || entry.sender_name || (lang === 'zh' ? '系统' : 'System'),
+            );
+            parent.appendChild(systemName);
             return;
         }
+
+        const titles = Array.isArray(entry.equipped_titles)
+            ? entry.equipped_titles.filter((item) => item?.name).slice(0, 3)
+            : [];
+        titles.forEach((title) => {
+            const titleElement = document.createElement('span');
+            titleElement.className = 'story-chat-player-title';
+            titleElement.textContent = `[${String(title.name)}]`;
+            const color = storyChatColorCss(title.color);
+            if (color) titleElement.style.color = color;
+            parent.appendChild(titleElement);
+        });
+
+        const name = document.createElement('span');
+        name.className = 'story-chat-player-name';
+        name.textContent = String(
+            entry.nickname
+            || entry.sender_name
+            || entry.display_name
+            || entry.username
+            || '?',
+        );
+        const nameColor = storyChatColorCss(
+            entry.name_color
+            || titles[0]?.color
+            || entry.special_role_color,
+        );
+        if (nameColor) name.style.color = nameColor;
+        parent.appendChild(name);
+    }
+
+    function isStoryChatNearBottom(container) {
+        if (!container) return true;
+        return container.scrollHeight - container.scrollTop - container.clientHeight
+            <= STORY_CHAT_AUTO_SCROLL_THRESHOLD;
+    }
+
+    function appendStoryChatEntry(container, entry = {}) {
+        if (!container) return;
+        if (entry.type === 'time') {
+            const separator = document.createElement('div');
+            separator.className = 'story-chat-time';
+            separator.textContent = formatStoryChatTime(entry);
+            container.appendChild(separator);
+            return;
+        }
+        if (entry.type !== 'chat') return;
+
+        const row = document.createElement('div');
+        row.className = `story-chat-message${entry.system ? ' is-system' : ''}`;
+        const identity = document.createElement('span');
+        identity.className = 'story-chat-identity';
+        appendStoryChatIdentity(identity, entry);
+        identity.appendChild(document.createTextNode(entry.system ? ' ' : ': '));
+        row.appendChild(identity);
+
+        const message = document.createElement('span');
+        message.className = 'story-chat-message-text';
+        message.textContent = String(entry.text || '');
+        row.appendChild(message);
+
+        const repeatCount = Math.max(1, Number(entry.repeat_count || entry.repeatCount || 1));
+        if (repeatCount > 1) {
+            const repeat = document.createElement('span');
+            repeat.className = 'story-chat-repeat';
+            repeat.textContent = ` ×${repeatCount}`;
+            row.appendChild(repeat);
+        }
+        container.appendChild(row);
+    }
+
+    function updateStoryChatConnectionUi() {
+        const status = $('story-chat-status');
+        if (status) {
+            if (storyChatConnected) {
+                status.textContent = t.chatConnected;
+            } else if (storyChatInitialized) {
+                status.textContent = t.chatDisconnected;
+            } else {
+                status.textContent = t.chatConnecting;
+            }
+        }
+        const input = $('story-chat-input');
+        const send = $('story-chat-send');
+        if (send) {
+            send.disabled = !storyChatConnected || !String(input?.value || '').trim();
+        }
+    }
+
+    function updateStoryChatUnreadBadge() {
+        const badge = $('story-chat-unread');
+        if (!badge) return;
+        const count = Math.max(0, Number(storyChatUnreadCount) || 0);
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.classList.toggle('hidden', count <= 0);
+        badge.setAttribute('aria-label', t.chatUnread(count));
+    }
+
+    function setStoryChatOpen(open) {
+        storyChatOpen = Boolean(open);
+        const panel = $('story-chat-panel');
+        const toggle = $('story-chat-toggle');
+        panel?.classList.toggle('hidden', !storyChatOpen);
+        toggle?.classList.toggle('hidden', storyChatOpen);
+        toggle?.setAttribute('aria-expanded', storyChatOpen ? 'true' : 'false');
+        if (storyChatOpen) {
+            storyChatUnreadCount = 0;
+            updateStoryChatUnreadBadge();
+            requestAnimationFrame(() => {
+                const log = $('story-chat-log');
+                if (log) log.scrollTop = log.scrollHeight;
+            });
+        }
+    }
+
+    function renderStoryChatHistory(data = {}) {
+        const log = $('story-chat-log');
+        if (!log) return;
+        const incoming = Array.isArray(data.items) ? data.items : [];
+        const entries = mergeStoryChatEntries(incoming, storyChatEntries);
+        if (storyChatInitialized && !storyChatOpen) {
+            storyChatUnreadCount += countNewStoryChatMessages(entries, storyChatEntries);
+            updateStoryChatUnreadBadge();
+        }
+        const signature = JSON.stringify([lang, entries.map((entry) => [
+            entry?.type,
+            entry?.id,
+            entry?.message_id,
+            entry?.time,
+            entry?.nickname,
+            entry?.text,
+            entry?.repeat_count,
+            entry?.chat_origin,
+            entry?.system,
+            entry?.name_color,
+            entry?.equipped_titles,
+        ])]);
+        storyChatInitialized = true;
+        storyChatConnected = true;
+        updateStoryChatConnectionUi();
+        if (signature === storyChatHistorySignature) return;
+        storyChatHistorySignature = signature;
+        const stayAtBottom = isStoryChatNearBottom(log);
+        const previousScrollTop = log.scrollTop;
+        storyChatEntries = entries;
+        log.replaceChildren();
+        entries.forEach((entry) => appendStoryChatEntry(log, entry));
+        if (storyChatOpen && stayAtBottom) {
+            log.scrollTop = log.scrollHeight;
+        } else {
+            const maximum = Math.max(0, log.scrollHeight - log.clientHeight);
+            log.scrollTop = Math.min(previousScrollTop, maximum);
+        }
+    }
+
+    function startStoryChat() {
+        if (typeof globalThis.io !== 'function') {
+            storyChatInitialized = true;
+            storyChatConnected = false;
+            updateStoryChatConnectionUi();
+            return;
+        }
+        storyChatSocket = globalThis.io({
+            transports: ['websocket', 'polling'],
+            timeout: 12000,
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 500,
+            reconnectionDelayMax: 5000,
+            withCredentials: true,
+        });
+        storyChatSocket.on('connect', () => {
+            storyChatConnected = false;
+            updateStoryChatConnectionUi();
+            storyChatSocket.emit('story_chat_join', {
+                client_id: STORY_PRESENCE_CLIENT_ID,
+            });
+        });
+        storyChatSocket.on('story_chat_ready', () => {
+            storyChatConnected = true;
+            storyChatInitialized = true;
+            updateStoryChatConnectionUi();
+        });
+        storyChatSocket.on('lobby_chat_history', renderStoryChatHistory);
+        storyChatSocket.on('server_error', (data = {}) => {
+            showToast(data.message || t.requestFailed);
+        });
+        storyChatSocket.on('story_chat_auth_required', () => {
+            storyChatConnected = false;
+            updateStoryChatConnectionUi();
+            window.location.replace('/?story=login_required');
+        });
+        storyChatSocket.on('disconnect', () => {
+            storyChatConnected = false;
+            storyChatInitialized = true;
+            updateStoryChatConnectionUi();
+        });
+        storyChatSocket.on('connect_error', () => {
+            storyChatConnected = false;
+            storyChatInitialized = true;
+            updateStoryChatConnectionUi();
+        });
+        window.addEventListener('pagehide', () => {
+            storyChatSocket?.disconnect();
+        }, { once: true });
+    }
+
+    function sendStoryChat() {
+        const input = $('story-chat-input');
+        const text = String(input?.value || '').trim();
+        if (!text || !storyChatConnected || !storyChatSocket) return;
+        storyChatSocket.emit('story_chat_send', {
+            text: text.slice(0, 200),
+            client_id: STORY_PRESENCE_CLIENT_ID,
+        });
+        input.value = '';
+        updateStoryChatConnectionUi();
+    }
+
+    function scheduleStoryPresence(delayMs = storyPresenceIntervalMs) {
+        clearTimeout(storyPresenceTimer);
+        if (storyAfkRedirectTimer) return;
+        const delay = Math.max(250, Number(delayMs) || storyPresenceIntervalMs);
+        storyPresenceTimer = window.setTimeout(() => {
+            void sendStoryPresence();
+        }, delay);
+    }
+
+    function closeStoryAfkCheckOverlay() {
+        if (storyAfkCheckTimer) {
+            clearInterval(storyAfkCheckTimer);
+            storyAfkCheckTimer = 0;
+        }
+        if (storyAfkHoldFrame) {
+            cancelAnimationFrame(storyAfkHoldFrame);
+            storyAfkHoldFrame = 0;
+        }
+        if (storyAfkRedirectTimer) {
+            clearTimeout(storyAfkRedirectTimer);
+            storyAfkRedirectTimer = 0;
+        }
+        $('story-afk-check-overlay')?.remove();
+        activeStoryAfkCheck = null;
+    }
+
+    function setStoryAfkCheckStatus(message, tone = '') {
+        const element = $('story-afk-check-status');
+        if (!element) return;
+        element.textContent = message || '';
+        element.classList.toggle('is-error', tone === 'error');
+        element.classList.toggle('is-ok', tone === 'ok');
+    }
+
+    function storyAfkResultText(result) {
+        if (result === 'passed') return t.afkPassed;
+        if (result === 'too_short') return t.afkTooShort;
+        if (result === 'too_long') return t.afkTooLong;
+        if (result === 'timed_out') return t.afkTimedOut;
+        return t.afkFailed;
+    }
+
+    function ensureStoryAfkTimeoutOverlay() {
+        if ($('story-afk-check-overlay')) return;
+        const overlay = document.createElement('div');
+        overlay.id = 'story-afk-check-overlay';
+        overlay.className = 'story-afk-check-overlay';
+        overlay.innerHTML = `
+            <div class="story-afk-check-dialog" role="alertdialog" aria-modal="true">
+                <div class="story-afk-check-title"></div>
+                <div class="story-afk-check-desc"></div>
+                <div id="story-afk-check-status" class="story-afk-check-status is-error"></div>
+            </div>
+        `;
+        overlay.querySelector('.story-afk-check-title').textContent = t.afkTitle;
+        overlay.querySelector('.story-afk-check-desc').textContent = t.afkTimedOut;
+        document.body.appendChild(overlay);
+    }
+
+    function expireStoryAfkCheck() {
+        if (storyAfkCheckTimer) {
+            clearInterval(storyAfkCheckTimer);
+            storyAfkCheckTimer = 0;
+        }
+        if (storyAfkHoldFrame) {
+            cancelAnimationFrame(storyAfkHoldFrame);
+            storyAfkHoldFrame = 0;
+        }
+        if (activeStoryAfkCheck) {
+            activeStoryAfkCheck.holding = false;
+            activeStoryAfkCheck.sent = true;
+        }
+        ensureStoryAfkTimeoutOverlay();
+        $('story-afk-check-button')?.setAttribute('disabled', 'disabled');
+        setStoryAfkCheckStatus(t.afkTimedOut, 'error');
+        if (!storyAfkRedirectTimer) {
+            storyAfkRedirectTimer = window.setTimeout(() => {
+                window.location.replace('/');
+            }, 900);
+        }
+    }
+
+    async function submitStoryAfkCheck(holdMs) {
+        const check = activeStoryAfkCheck;
+        if (!check?.id) return;
+        try {
+            const payload = await requestJson('/api/story/afk-check', {
+                method: 'POST',
+                body: JSON.stringify({
+                    client_id: STORY_PRESENCE_CLIENT_ID,
+                    id: check.id,
+                    hold_ms: Math.max(0, Math.round(Number(holdMs) || 0)),
+                }),
+            });
+            if (activeStoryAfkCheck?.id !== check.id) return;
+            const result = String(payload.result || '');
+            if (result === 'passed') {
+                setStoryAfkCheckStatus(storyAfkResultText(result), 'ok');
+                window.setTimeout(closeStoryAfkCheckOverlay, 650);
+                return;
+            }
+            if (payload.timed_out || result === 'timed_out' || payload.retry === false) {
+                expireStoryAfkCheck();
+                return;
+            }
+            activeStoryAfkCheck.sent = false;
+            setStoryAfkCheckStatus(storyAfkResultText(result), 'error');
+        } catch (error) {
+            if (error.message === 'AUTH_REQUIRED') return;
+            if (!activeStoryAfkCheck || Date.now() >= check.expiresAt) {
+                expireStoryAfkCheck();
+                return;
+            }
+            activeStoryAfkCheck.sent = false;
+            setStoryAfkCheckStatus(t.afkFailed, 'error');
+        }
+    }
+
+    function updateStoryAfkCheckCountdown() {
+        if (!activeStoryAfkCheck) return;
+        const left = Math.max(0, Math.ceil((activeStoryAfkCheck.expiresAt - Date.now()) / 1000));
+        const description = $('story-afk-check-desc');
+        if (description) description.textContent = t.afkPrompt(`${left}s`);
+        if (left > 0) return;
+        const check = activeStoryAfkCheck;
+        if (!check.sent) {
+            check.sent = true;
+            void submitStoryAfkCheck(0);
+        }
+        expireStoryAfkCheck();
+    }
+
+    function showStoryAfkCheckOverlay(data = {}) {
+        const requestId = String(data.id || '');
+        if (!requestId) return;
+        if (activeStoryAfkCheck?.id === requestId && $('story-afk-check-overlay')) return;
+        closeStoryAfkCheckOverlay();
+        const timeoutSeconds = Math.max(1, Number(data.timeout_seconds || 60));
+        const minMs = Math.max(100, Number(data.min_ms || 750));
+        const maxMs = Math.max(minMs + 100, Number(data.max_ms || 2200));
+        const serverExpiry = Number(data.expires_at || 0) * 1000;
+        const expiresAt = serverExpiry > 0 ? serverExpiry : Date.now() + timeoutSeconds * 1000;
+        activeStoryAfkCheck = {
+            id: requestId,
+            minMs,
+            maxMs,
+            expiresAt,
+            holding: false,
+            holdStart: 0,
+            sent: false,
+        };
+
+        const overlay = document.createElement('div');
+        overlay.id = 'story-afk-check-overlay';
+        overlay.className = 'story-afk-check-overlay';
+        overlay.innerHTML = `
+            <div class="story-afk-check-dialog" role="dialog" aria-modal="true">
+                <div class="story-afk-check-title"></div>
+                <div id="story-afk-check-desc" class="story-afk-check-desc"></div>
+                <button id="story-afk-check-button" class="story-afk-check-button" type="button">
+                    <span class="story-afk-check-core"></span>
+                </button>
+                <div id="story-afk-check-status" class="story-afk-check-status"></div>
+            </div>
+        `;
+        overlay.querySelector('.story-afk-check-title').textContent = t.afkTitle;
+        overlay.querySelector('.story-afk-check-core').textContent = t.afkHold;
+        const button = overlay.querySelector('.story-afk-check-button');
+        button.setAttribute('aria-label', t.afkHold);
+        document.body.appendChild(overlay);
+        setStoryAfkCheckStatus(t.afkReady);
+
+        const updateHold = () => {
+            const check = activeStoryAfkCheck;
+            if (!check?.holding || !button) return;
+            const elapsed = Date.now() - check.holdStart;
+            button.classList.toggle('is-ready', elapsed >= check.minMs && elapsed <= check.maxMs);
+            storyAfkHoldFrame = requestAnimationFrame(updateHold);
+        };
+        const startHold = (event) => {
+            event.preventDefault();
+            const check = activeStoryAfkCheck;
+            if (!check || check.sent || check.holding) return;
+            check.holding = true;
+            check.holdStart = Date.now();
+            button.classList.add('is-holding');
+            setStoryAfkCheckStatus(t.afkHolding);
+            updateHold();
+        };
+        const endHold = (event) => {
+            event?.preventDefault();
+            const check = activeStoryAfkCheck;
+            if (!check?.holding || check.sent) return;
+            check.holding = false;
+            if (storyAfkHoldFrame) {
+                cancelAnimationFrame(storyAfkHoldFrame);
+                storyAfkHoldFrame = 0;
+            }
+            button.classList.remove('is-holding', 'is-ready');
+            check.sent = true;
+            setStoryAfkCheckStatus(t.afkVerifying);
+            void submitStoryAfkCheck(Date.now() - check.holdStart);
+        };
+        button.addEventListener('pointerdown', startHold);
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach((name) => {
+            button.addEventListener(name, endHold);
+        });
+        button.addEventListener('contextmenu', (event) => event.preventDefault());
+        updateStoryAfkCheckCountdown();
+        storyAfkCheckTimer = window.setInterval(updateStoryAfkCheckCountdown, 250);
+    }
+
+    function reportStoryAfkActivity(event) {
+        if (document.hidden || activeStoryAfkCheck) return;
+        if (event?.type === 'keydown' && event.repeat) return;
+        if (event?.target?.closest?.('#story-afk-check-overlay')) return;
+        const now = Date.now();
+        if (now - lastStoryAfkActivityReportAt < STORY_AFK_ACTIVITY_REPORT_INTERVAL_MS) return;
+        lastStoryAfkActivityReportAt = now;
+        storyPresenceActivityPending = true;
+        void sendStoryPresence({ activity: true });
+    }
+
+    function bindStoryAfkActivityReporting() {
+        document.addEventListener('pointerdown', reportStoryAfkActivity, {
+            passive: true,
+            capture: true,
+        });
+        document.addEventListener('touchstart', reportStoryAfkActivity, {
+            passive: true,
+            capture: true,
+        });
+        document.addEventListener('wheel', reportStoryAfkActivity, {
+            passive: true,
+            capture: true,
+        });
+        document.addEventListener('keydown', reportStoryAfkActivity, {
+            capture: true,
+        });
+    }
+
+    async function sendStoryPresence(options = {}) {
+        const reportActivity = Boolean(options.activity || storyPresenceActivityPending);
+        if (storyPresenceInFlight) {
+            if (reportActivity) storyPresenceActivityPending = true;
+            return;
+        }
+        clearTimeout(storyPresenceTimer);
         storyPresenceInFlight = true;
+        if (reportActivity) storyPresenceActivityPending = false;
+        let nextDelay = storyPresenceIntervalMs;
         try {
             const payload = await requestJson('/api/story/presence', {
                 method: 'POST',
-                body: JSON.stringify({ client_id: STORY_PRESENCE_CLIENT_ID }),
+                body: JSON.stringify({
+                    client_id: STORY_PRESENCE_CLIENT_ID,
+                    activity: reportActivity,
+                }),
             });
-            storyOnlineCount = Math.max(0, Number(payload.online_count) || 0);
+            storyOnlineCount = Math.max(0, Number(payload.story_online_count) || 0);
             const requestedInterval = Number(payload.heartbeat_interval_seconds) * 1000;
             if (Number.isFinite(requestedInterval) && requestedInterval >= 10000) {
                 storyPresenceIntervalMs = requestedInterval;
+                nextDelay = requestedInterval;
+            }
+            const nextCheckSeconds = Number(payload.afk_next_check_seconds);
+            if (Number.isFinite(nextCheckSeconds) && nextCheckSeconds >= 0) {
+                nextDelay = Math.min(nextDelay, Math.max(250, nextCheckSeconds * 1000 + 50));
             }
             updateStoryPresenceDisplay();
+            if (payload.afk_timed_out) {
+                expireStoryAfkCheck();
+            } else if (payload.afk_check) {
+                showStoryAfkCheckOverlay(payload.afk_check);
+            }
         } catch (error) {
             if (error.message === 'AUTH_REQUIRED') return;
+            if (reportActivity) storyPresenceActivityPending = true;
+            nextDelay = Math.min(nextDelay, 5000);
         } finally {
             storyPresenceInFlight = false;
-            scheduleStoryPresence();
+            if (storyPresenceActivityPending && !activeStoryAfkCheck && !storyAfkRedirectTimer) {
+                scheduleStoryPresence(250);
+            } else {
+                scheduleStoryPresence(nextDelay);
+            }
         }
     }
 
@@ -654,6 +1393,10 @@
 
     function showView(name) {
         VIEWS.forEach((id) => $(id)?.classList.toggle('hidden', id !== name));
+        const runDeck = $('story-run-deck');
+        const runDeckUnavailable = !activeRun?.state
+            || ['story-loading', 'story-empty', 'story-combat'].includes(name);
+        runDeck?.classList.toggle('hidden', runDeckUnavailable);
         if (storyKeyboardFocus && !storyElementVisible(storyKeyboardFocus)) clearStoryKeyboardFocus();
         window.GTN_KEYBINDINGS?.refreshHints?.();
     }
@@ -1037,6 +1780,7 @@
                     action_id: createActionId(),
                     action_type: actionType,
                     payload,
+                    client_id: STORY_PRESENCE_CLIENT_ID,
                 }),
             });
             const nextRun = result.run || activeRun;
@@ -1900,16 +2644,19 @@
     }
 
     function openStoryPile(kind) {
-        const combat = activeRun?.state?.combat;
-        if (!combat) return;
+        const state = activeRun?.state;
+        const combat = state?.combat;
+        if (kind === 'deck' && state?.phase === 'combat') return;
         const config = {
-            draw: { key: 'draw_pile', title: t.drawPile },
-            discard: { key: 'discard_pile', title: t.discardPile },
-            exile: { key: 'exile_pile', title: t.exilePile },
+            deck: { source: state?.player?.deck, title: t.runDeck, reverse: false },
+            draw: { source: combat?.draw_pile, title: t.drawPile, reverse: true },
+            discard: { source: combat?.discard_pile, title: t.discardPile, reverse: true },
+            exile: { source: combat?.exile_pile, title: t.exilePile, reverse: true },
         }[kind];
         if (!config) return;
-        const source = Array.isArray(combat[config.key]) ? combat[config.key] : [];
-        const cards = kind === 'draw' ? [...source].reverse() : [...source].reverse();
+        if (kind !== 'deck' && !combat) return;
+        const source = Array.isArray(config.source) ? config.source : [];
+        const cards = config.reverse ? [...source].reverse() : [...source];
         setText('story-pile-title', config.title);
         setText('story-pile-total', t.pileTotal(config.title, cards.length));
         const grid = $('story-pile-grid');
@@ -2379,22 +3126,66 @@
 
     function renderBlessing(state) {
         setText('story-blessing-kicker', t.floor(state.current_floor || 1));
+        setText('story-blessing-title', t.blessingTitle);
+        setText('story-blessing-copy', t.blessingCopy);
         const container = $('story-blessing-options');
         container?.replaceChildren();
-        const expected = Number(state.stage || 1) === 1 ? 'titan' : 'oracle';
-        Object.entries(storyContent?.blessings || {}).filter(([id]) => id === expected).forEach(([id, blessing]) => {
+        container?.classList.remove('story-card-choice-grid');
+        const blessings = Object.entries(storyContent?.blessings || {}).sort(
+            ([firstId, first], [secondId, second]) => (
+                (Number(first.order) || 999) - (Number(second.order) || 999)
+                || firstId.localeCompare(secondId)
+            ),
+        );
+
+        const chooseDeckCard = (id, blessing) => {
+            setText('story-blessing-title', t.blessingChooseCard);
+            setText('story-blessing-copy', localize(blessing.description));
+            container?.replaceChildren();
+            container?.classList.add('story-card-choice-grid');
+            (state.player?.deck || []).forEach((card) => {
+                container?.append(createStoryCard(card, {
+                    compact: true,
+                    note: blessing.script === 'remove_card' ? t.remove : t.transform,
+                    onClick: () => storyAction('choose_blessing', {
+                        blessing_id: id,
+                        card_instance_id: card.instance_id,
+                    }),
+                }));
+            });
+            container?.append(choiceButton(
+                t.blessingBack,
+                () => renderBlessing(state),
+            ));
+        };
+
+        blessings.forEach(([id, blessing], index) => {
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'story-choice-option story-blessing-option';
+            button.dataset.blessingId = id;
             const mark = document.createElement('span');
             mark.className = 'story-choice-mark';
-            mark.textContent = localize(blessing.name).slice(0, 1);
-            const name = document.createElement('strong');
-            name.textContent = localize(blessing.name);
+            mark.textContent = String(index + 1);
+            const nameText = localize(blessing.name).trim();
             const description = document.createElement('span');
             description.textContent = localize(blessing.description);
-            button.append(mark, name, description);
-            button.addEventListener('click', () => storyAction('choose_blessing', { blessing_id: id }));
+            button.append(mark);
+            if (nameText) {
+                const name = document.createElement('strong');
+                name.textContent = nameText;
+                button.append(name);
+            } else {
+                button.classList.add('is-unnamed');
+            }
+            button.append(description);
+            button.addEventListener('click', () => {
+                if (blessing.selection === 'deck_card') {
+                    chooseDeckCard(id, blessing);
+                    return;
+                }
+                storyAction('choose_blessing', { blessing_id: id });
+            });
             container?.append(button);
         });
         showView('story-blessing');
@@ -3076,6 +3867,18 @@
                     )),
                 });
             }
+            if ((room.options || []).includes('plant_dandelion')) {
+                restTabs.push({
+                    id: 'rest-plant-dandelion',
+                    label: t.plantDandelion,
+                    mode: 'choices',
+                    render: (target) => target.append(choiceButton(
+                        t.plantDandelion,
+                        () => storyAction('resolve_room', { option: 'plant_dandelion' }),
+                        { primary: true },
+                    )),
+                });
+            }
             renderStoryRoomTabs(state, restTabs);
         } else if (room.type === 'chest') {
             setText('story-room-title', t.chestTitle);
@@ -3283,9 +4086,15 @@
     function renderReward(state) {
         const reward = state.reward || {};
         const claims = normalizedRewardClaims(reward);
-        setText('story-reward-kicker', t.battleWon);
-        setText('story-reward-title', t.rewards);
-        setText('story-reward-copy', t.rewardCopy);
+        const isBlessingReward = reward.source === 'blessing';
+        const rewardRound = Math.max(1, Number(reward.round_index) || 1);
+        const rewardTotal = Math.max(rewardRound, Number(reward.round_total) || 1);
+        setText('story-reward-kicker', isBlessingReward ? t.rooms.blessing : t.battleWon);
+        setText(
+            'story-reward-title',
+            isBlessingReward ? t.blessingCardReward(rewardRound, rewardTotal) : t.rewards,
+        );
+        setText('story-reward-copy', isBlessingReward ? t.blessingRewardCopy : t.rewardCopy);
         const relic = reward.relic ? storyContent?.relics?.[reward.relic] : null;
         const claimContainer = $('story-reward-claims');
         claimContainer?.replaceChildren();
@@ -3917,7 +4726,17 @@
     };
 
     function bind() {
+        bindStoryAfkActivityReporting();
         const storyApp = $('story-app');
+        $('story-chat-toggle')?.addEventListener('click', () => setStoryChatOpen(true));
+        $('story-chat-close')?.addEventListener('click', () => setStoryChatOpen(false));
+        $('story-chat-send')?.addEventListener('click', sendStoryChat);
+        $('story-chat-input')?.addEventListener('input', updateStoryChatConnectionUi);
+        $('story-chat-input')?.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+            event.preventDefault();
+            sendStoryChat();
+        });
         storyApp?.addEventListener('selectstart', (event) => {
             if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
             event.preventDefault();
@@ -3927,6 +4746,7 @@
         });
         $('story-start')?.addEventListener('click', startRun);
         $('story-end-turn')?.addEventListener('click', () => storyAction('end_turn'));
+        $('story-run-deck')?.addEventListener('click', () => openStoryPile('deck'));
         $('story-draw-pile')?.addEventListener('click', () => openStoryPile('draw'));
         $('story-discard-pile')?.addEventListener('click', () => openStoryPile('discard'));
         $('story-exile-pile')?.addEventListener('click', () => openStoryPile('exile'));
@@ -4028,6 +4848,11 @@
             scheduleVisibleStoryCardEffectFits();
         });
         window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && storyChatOpen) {
+                event.preventDefault();
+                setStoryChatOpen(false);
+                return;
+            }
             if (event.key === 'Escape' && developerModeOpen) {
                 event.preventDefault();
                 setDeveloperMode(false);
@@ -4070,6 +4895,7 @@
     applyText();
     renderPlayerSkin();
     bind();
+    startStoryChat();
     startStoryPresence();
     loadRun();
 })();

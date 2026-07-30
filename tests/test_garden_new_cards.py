@@ -299,8 +299,8 @@ class GardenNewCardsTests(unittest.TestCase):
         candle = CardInstance("Candle")
         engine.players[0].hand = [candle]
         engine._run_arctic_ready_cards_turn_start(0)
-        self.assertEqual(engine.players[1].bleed, 1)
-        self.assertEqual(engine.players[1].vulnerable, 1)
+        self.assertEqual(engine.players[1].bleed, 2)
+        self.assertEqual(engine.players[1].vulnerable, 3)
         self.assertIn(candle, engine.players[0].discard)
 
     def test_magic_disc_armor_tracks_shield_and_equipment_removal(self):
@@ -360,7 +360,7 @@ class GardenNewCardsTests(unittest.TestCase):
         engine.players[0].hand = [kale]
         result = engine.play_card(0, kale.instance_id, self.target_choice(1))
         self.assertTrue(result.get("success"), result)
-        self.assertEqual(engine.players[1].health, -16)
+        self.assertEqual(engine.players[1].health, -8)
 
         engine = self.action_engine()
         engine.players[0].fire = 2
@@ -368,7 +368,7 @@ class GardenNewCardsTests(unittest.TestCase):
         engine.players[0].hand = [coal]
         result = engine.play_card(0, coal.instance_id, self.target_choice(1))
         self.assertTrue(result.get("success"), result)
-        self.assertEqual(engine.players[1].health, 81)
+        self.assertEqual(engine.players[1].health, 85)
 
     def test_daisy_delayed_damage_uses_original_player_as_attacker(self):
         engine = self.action_engine()
@@ -376,9 +376,18 @@ class GardenNewCardsTests(unittest.TestCase):
         engine.players[0].hand = [daisy]
         result = engine.play_card(0, daisy.instance_id, self.target_choice(1))
         self.assertTrue(result.get("success"), result)
-        self.assertEqual(engine.players[1].health, 98)
+        self.assertEqual(engine.players[1].health, 91)
         engine._run_timed_effects_for_turn(1)
-        self.assertEqual(engine.players[1].health, 83)
+        self.assertEqual(engine.players[1].health, 87)
+
+        blocked = self.action_engine()
+        blocked.players[1].armor = 100
+        blocked_daisy = CardInstance("Daisy")
+        blocked.players[0].hand = [blocked_daisy]
+        result = blocked.play_card(0, blocked_daisy.instance_id, self.target_choice(1))
+        self.assertTrue(result.get("success"), result)
+        self.assertEqual(blocked.players[1].health, 100)
+        self.assertEqual(blocked.timed_effects, [])
 
     def test_grass_uses_standard_once_per_turn_equipment_trigger(self):
         engine = self.action_engine()
@@ -393,14 +402,14 @@ class GardenNewCardsTests(unittest.TestCase):
         result = engine.use_trigger(0, equipment.card_instance.instance_id)
         self.assertTrue(result.get("success"), result)
         self.assertEqual(engine.players[0].elixir, 2)
-        self.assertEqual(engine.players[1].health, 55)
+        self.assertEqual(engine.players[1].health, 56)
         self.assertEqual(equipment.uses_this_turn, 1)
 
         repeated = engine.use_trigger(0, equipment.card_instance.instance_id)
         self.assertFalse(repeated.get("success"))
         self.assertIn("本回合最多触发1次", repeated.get("error", ""))
         self.assertEqual(engine.players[0].elixir, 2)
-        self.assertEqual(engine.players[1].health, 55)
+        self.assertEqual(engine.players[1].health, 56)
 
     def test_2v2_grass_keeps_its_equipped_target_on_team_turn(self):
         engine = self.action_engine(GameEngine2v2)
@@ -415,7 +424,7 @@ class GardenNewCardsTests(unittest.TestCase):
         self.assertTrue(result.get("success"), result)
         self.assertFalse(result.get("needs_ally_consent"))
         self.assertEqual(engine.players[0].elixir, 2)
-        self.assertEqual(engine.players[2].health, 55)
+        self.assertEqual(engine.players[2].health, 56)
 
     def test_magic_antennae_reveal_is_private_and_tokenized(self):
         engine = self.action_engine()

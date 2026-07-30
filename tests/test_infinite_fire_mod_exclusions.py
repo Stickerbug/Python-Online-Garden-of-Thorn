@@ -8,7 +8,8 @@ from mod_loader import load_mod
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_EXCLUSIONS = {
     "Arctic Cards Addition.gtnmod": {"Icicle", "Snowflake"},
-    "Bio Cards Addition.gtnmod": {"RansomMoney"},
+    "Bio Cards Addition.gtnmod": {"DNA", "RansomMoney"},
+    "Desert Cards Addition.gtnmod": {"Ankh"},
     "Hel Cards Addition.gtnmod": {"PokerCard", "Bugatti"},
     "Jurassic Cards Addition.gtnmod": {
         "Feather",
