@@ -38,6 +38,7 @@ GR_SEASON_ACTIVITY_REWARD_CAP = 100000
 GR_SEASON_MIN_GAMES = 8
 GR_TOTAL_MIN_GAMES = 20
 GR_2V2_FACTOR = 0.85
+GR_SEASON_TIMEZONE = timezone(timedelta(hours=8))
 THORN_DEW_TIMEZONE = timezone(timedelta(hours=8))
 THORN_DEW_SIGNIN_REWARDS = (40, 45, 50, 55, 60, 70, 100)
 THORN_DEW_MODE_REWARDS = {
@@ -323,14 +324,15 @@ def current_gr_season(now=None):
     dt = now or datetime.now(timezone.utc)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    year = dt.year
-    month = dt.month
+    local_dt = dt.astimezone(GR_SEASON_TIMEZONE)
+    year = local_dt.year
+    month = local_dt.month
     season_id = 'S1' if year == 2026 and month == 7 else f'S{year}{month:02d}'
-    start = datetime(year, month, 1, tzinfo=timezone.utc)
+    start = datetime(year, month, 1, tzinfo=GR_SEASON_TIMEZONE)
     if month == 12:
-        end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        end = datetime(year + 1, 1, 1, tzinfo=GR_SEASON_TIMEZONE)
     else:
-        end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+        end = datetime(year, month + 1, 1, tzinfo=GR_SEASON_TIMEZONE)
     return {
         'id': season_id,
         'name': season_id,
@@ -3402,22 +3404,23 @@ def _soft_reset_gr(value):
 def _gr_season_period(season_id, fallback_end_at=None):
     season_key = str(season_id or '').strip()
     if season_key == 'S1':
-        start = datetime(2026, 7, 1, tzinfo=timezone.utc)
-        end = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        start = datetime(2026, 7, 1, tzinfo=GR_SEASON_TIMEZONE)
+        end = datetime(2026, 8, 1, tzinfo=GR_SEASON_TIMEZONE)
         return utc_iso(start), utc_iso(end)
     matched = re.fullmatch(r'S(\d{4})(\d{2})', season_key)
     if matched:
         year = int(matched.group(1))
         month = int(matched.group(2))
         if 1 <= month <= 12:
-            start = datetime(year, month, 1, tzinfo=timezone.utc)
+            start = datetime(year, month, 1, tzinfo=GR_SEASON_TIMEZONE)
             if month == 12:
-                end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+                end = datetime(year + 1, 1, 1, tzinfo=GR_SEASON_TIMEZONE)
             else:
-                end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+                end = datetime(year, month + 1, 1, tzinfo=GR_SEASON_TIMEZONE)
             return utc_iso(start), utc_iso(end)
     if fallback_end_at:
-        end = _parse_utc_datetime(fallback_end_at).replace(day=1, hour=0, minute=0, second=0)
+        end = _parse_utc_datetime(fallback_end_at).astimezone(GR_SEASON_TIMEZONE)
+        end = end.replace(day=1, hour=0, minute=0, second=0)
         if end.month == 1:
             start = end.replace(year=end.year - 1, month=12)
         else:

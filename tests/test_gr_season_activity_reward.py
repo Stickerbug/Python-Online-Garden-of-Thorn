@@ -2,6 +2,7 @@ import gc
 import os
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import db
@@ -11,9 +12,9 @@ OLD_SEASON_ID = 'S209901'
 NEXT_SEASON = {
     'id': 'S209902',
     'name': 'S209902',
-    'starts_at': '2099-02-01T00:00:00Z',
-    'ends_at': '2099-02-28T23:59:59Z',
-    'next_starts_at': '2099-03-01T00:00:00Z',
+    'starts_at': '2099-01-31T16:00:00Z',
+    'ends_at': '2099-02-28T15:59:59Z',
+    'next_starts_at': '2099-02-28T16:00:00Z',
 }
 
 
@@ -209,8 +210,20 @@ class GrSeasonActivityRewardTests(unittest.TestCase):
     def test_s1_period_is_preserved_as_july_2026(self):
         self.assertEqual(
             db._gr_season_period('S1'),
-            ('2026-07-01T00:00:00Z', '2026-08-01T00:00:00Z'),
+            ('2026-06-30T16:00:00Z', '2026-07-31T16:00:00Z'),
         )
+
+    def test_season_changes_at_beijing_month_boundary(self):
+        before = db.current_gr_season(
+            datetime(2026, 7, 31, 15, 59, 59, tzinfo=timezone.utc)
+        )
+        after = db.current_gr_season(
+            datetime(2026, 7, 31, 16, 0, 0, tzinfo=timezone.utc)
+        )
+
+        self.assertEqual(before['id'], 'S1')
+        self.assertEqual(after['id'], 'S202608')
+        self.assertEqual(after['starts_at'], '2026-07-31T16:00:00Z')
 
 
 if __name__ == '__main__':
