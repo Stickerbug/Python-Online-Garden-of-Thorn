@@ -8,6 +8,8 @@
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=3" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/static/css/style.css?v={{ static_version|default('dev')|urlencode }}">
+    <link rel="stylesheet" href="/static/css/shared-afk.css?v={{ static_version|default('dev')|urlencode }}">
+    <link rel="stylesheet" href="/static/css/shared-lobby-chat.css?v={{ static_version|default('dev')|urlencode }}">
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
@@ -567,12 +569,12 @@
 </div>
 </div>
 <div class="lobby-right">
-<div class="lobby-section lobby-chat">
-<h3>聊天</h3>
-<div id="lobby-chat-log" class="lobby-chat-log"></div>
-<div class="chat-input-row">
-<input type="text" id="lobby-chat-input" placeholder="输入消息..." maxlength="200">
-<button id="btn-lobby-chat-send" class="btn btn-small">发送</button>
+<div class="lobby-section lobby-chat gtn-lobby-chat-surface">
+<h3 class="gtn-lobby-chat-title">聊天</h3>
+<div id="lobby-chat-log" class="lobby-chat-log gtn-lobby-chat-log"></div>
+<div class="chat-input-row gtn-lobby-chat-input-row">
+<input type="text" id="lobby-chat-input" class="gtn-lobby-chat-input" placeholder="输入消息..." maxlength="200">
+<button id="btn-lobby-chat-send" class="btn btn-small gtn-lobby-chat-send">发送</button>
 </div>
 </div>
 </div>

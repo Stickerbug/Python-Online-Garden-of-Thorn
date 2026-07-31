@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 STORY_TEMPLATE = (ROOT / 'templates' / 'story.html').read_text(encoding='utf-8')
 STORY_JS = (ROOT / 'static' / 'js' / 'story.js').read_text(encoding='utf-8')
 STORY_CSS = (ROOT / 'static' / 'css' / 'story.css').read_text(encoding='utf-8')
+SHARED_CHAT_CSS = (ROOT / 'static' / 'css' / 'shared-lobby-chat.css').read_text(encoding='utf-8')
+INDEX_TEMPLATE = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
 GAME_JS = (ROOT / 'static' / 'js' / 'game.js').read_text(encoding='utf-8')
 GAME_CSS = (ROOT / 'static' / 'css' / 'style.css').read_text(encoding='utf-8')
 
@@ -141,7 +143,7 @@ class SharedStoryChatTests(unittest.TestCase):
         self.assertEqual(items[-1]['chat_origin'], 'story')
 
 
-def test_story_chat_ui_is_large_collapsible_and_uses_shared_socket_history():
+def test_story_chat_ui_is_collapsible_and_uses_shared_socket_history():
     for element_id in (
         'story-chat-toggle',
         'story-chat-unread',
@@ -156,8 +158,26 @@ def test_story_chat_ui_is_large_collapsible_and_uses_shared_socket_history():
     assert "storyChatSocket.emit('story_chat_send'" in STORY_JS
     assert "storyChatSocket.on('lobby_chat_history', renderStoryChatHistory);" in STORY_JS
     assert 'function setStoryChatOpen(open)' in STORY_JS
-    assert 'width: min(1040px, 84vw);' in STORY_CSS
-    assert 'height: min(760px, 82vh);' in STORY_CSS
+    assert 'width: min(640px, calc(100vw - 32px));' in STORY_CSS
+    assert 'height: min(560px, calc(100dvh - 96px));' in STORY_CSS
+
+
+def test_story_and_lobby_chat_share_the_same_visual_components():
+    for class_name in (
+        'gtn-lobby-chat-surface',
+        'gtn-lobby-chat-title',
+        'gtn-lobby-chat-log',
+        'gtn-lobby-chat-input-row',
+        'gtn-lobby-chat-input',
+        'gtn-lobby-chat-send',
+    ):
+        assert class_name in STORY_TEMPLATE
+        assert class_name in INDEX_TEMPLATE
+        assert f'.{class_name}' in SHARED_CHAT_CSS
+    assert '/static/css/shared-lobby-chat.css' in STORY_TEMPLATE
+    assert '/static/css/shared-lobby-chat.css' in INDEX_TEMPLATE
+    assert '<input id="story-chat-input"' in STORY_TEMPLATE
+    assert '<textarea id="story-chat-input"' not in STORY_TEMPLATE
 
 
 def test_chat_origin_prefix_has_its_own_color_and_repeat_identity():

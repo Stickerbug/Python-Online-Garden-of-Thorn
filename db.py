@@ -931,6 +931,7 @@ def init_db():
                 replay_sha256 TEXT NOT NULL,
                 replay_size INTEGER NOT NULL,
                 replay_blob BLOB NOT NULL,
+                replay_blob_path TEXT,
                 mod_source TEXT,
                 mod_hash TEXT,
                 community_mod_name TEXT
@@ -944,6 +945,8 @@ def init_db():
             conn.execute('ALTER TABLE match_replays ADD COLUMN mod_hash TEXT')
         if 'community_mod_name' not in replay_columns:
             conn.execute('ALTER TABLE match_replays ADD COLUMN community_mod_name TEXT')
+        if 'replay_blob_path' not in replay_columns:
+            conn.execute('ALTER TABLE match_replays ADD COLUMN replay_blob_path TEXT')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS replay_mod_blobs (
@@ -3094,6 +3097,7 @@ def backfill_cards_played_achievements_from_matches(dry_run=True, limit=None, us
     from replay_core import (
         CARDS_PLAYED_RECOVERY_MAX_COMPRESSED_BYTES,
         CARDS_PLAYED_RECOVERY_MAX_DECODED_BYTES,
+        load_replay_blob,
         recover_cards_played_from_replay_blob,
     )
 
@@ -3168,7 +3172,7 @@ def backfill_cards_played_achievements_from_matches(dry_run=True, limit=None, us
             if missing_indices:
                 replay_row = replay_conn.execute(
                     '''
-                    SELECT id, LENGTH(replay_blob) AS replay_bytes
+                    SELECT id, replay_size AS replay_bytes, replay_blob_path
                     FROM match_replays
                     WHERE match_id = ?
                     ORDER BY id DESC
@@ -3188,10 +3192,13 @@ def backfill_cards_played_achievements_from_matches(dry_run=True, limit=None, us
                         result['oversized_replays'] += 1
                     else:
                         blob_row = replay_conn.execute(
-                            'SELECT replay_blob FROM match_replays WHERE id = ?',
+                            '''
+                            SELECT replay_blob, replay_blob_path, replay_size
+                            FROM match_replays WHERE id = ?
+                            ''',
                             (int(replay_row['id']),),
                         ).fetchone()
-                        replay_blob = blob_row['replay_blob'] if blob_row is not None else None
+                        replay_blob = load_replay_blob(blob_row) if blob_row is not None else None
             if missing_indices and replay_blob is not None:
                 replay_result = recover_cards_played_from_replay_blob(
                     replay_blob,

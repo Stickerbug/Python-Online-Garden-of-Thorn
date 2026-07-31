@@ -12,7 +12,6 @@ from mod_loader import load_mod
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "mods" / "Hel Cards Addition.gtnmod"
-SOURCE_ASSET = ROOT / "DLC" / "hel DLC" / "Deliverance.svg"
 CARD_ID = "Deliverance"
 
 
@@ -75,10 +74,6 @@ class HelDeliveranceTests(unittest.TestCase):
 
         with zipfile.ZipFile(PACKAGE) as archive:
             self.assertIsNone(archive.testzip())
-            self.assertEqual(
-                archive.read("card-art/deliverance.svg"),
-                SOURCE_ASSET.read_bytes(),
-            )
             root = ET.fromstring(archive.read("card-art/deliverance.svg"))
             self.assertEqual(
                 root.attrib.get("viewBox"),

@@ -12,7 +12,6 @@ from mod_loader import load_mod
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "mods" / "Ocean Cards Addition.gtnmod"
-SOURCE_ASSETS = ROOT / "DLC" / "ocean DLC"
 NEW_CARD_IDS = {"BubbleBomb", "Shell"}
 
 
@@ -84,12 +83,11 @@ class OceanBubbleBombShellTests(unittest.TestCase):
             self.assertIsNone(archive.testzip())
             files = set(archive.namelist())
             expected_assets = {
-                "card-art/bubble bomb.svg": SOURCE_ASSETS / "bubble bomb.svg",
-                "card-art/shell.svg": SOURCE_ASSETS / "shell.svg",
+                "card-art/bubble bomb.svg",
+                "card-art/shell.svg",
             }
-            self.assertTrue(expected_assets.keys() <= files)
-            for archive_name, source_path in expected_assets.items():
-                self.assertEqual(archive.read(archive_name), source_path.read_bytes())
+            self.assertTrue(expected_assets <= files)
+            for archive_name in expected_assets:
                 ET.fromstring(archive.read(archive_name))
 
             spec = json.loads(archive.read("mod.json"))

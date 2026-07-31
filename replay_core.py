@@ -3,10 +3,12 @@ import json
 import os
 import sqlite3
 import struct
+import uuid
 import zlib
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 
+import db as db_module
 from db import DB_PATH, get_db_connection, utc_now
 
 
@@ -25,6 +27,9 @@ CARDS_PLAYED_RECOVERY_MAX_DECODED_BYTES = max(
     1,
     int(os.environ.get('GTN_CARDS_PLAYED_RECOVERY_MAX_DECODED_BYTES', str(32 * 1024 * 1024)) or 1),
 )
+REPLAY_EXTERNAL_BLOBS_ENABLED = str(
+    os.environ.get('GTN_REPLAY_EXTERNAL_BLOBS', '1')
+).strip().lower() not in {'0', 'false', 'no', 'off'}
 REPLAY_ITEM_FIELDS = (
     'id', 'match_id', 'created_at', 'mode', 'player_names_json', 'winner_name', 'winner_index',
     'round_num', 'duration_ms', 'replay_version', 'replay_sha256', 'replay_size',
@@ -152,6 +157,79 @@ def _encode_replay_for_storage(replay):
 
 def _sha256_bytes(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def replay_blob_root():
+    configured = str(os.environ.get('GTN_REPLAY_BLOB_DIR') or '').strip()
+    if configured:
+        return os.path.abspath(configured)
+    current_db_path = getattr(db_module, 'DB_PATH', DB_PATH)
+    return os.path.join(os.path.dirname(os.path.abspath(current_db_path)), 'replay-blobs')
+
+
+def _replay_blob_full_path(relative_path):
+    relative = str(relative_path or '').strip().replace('\\', '/')
+    parts = [part for part in relative.split('/') if part]
+    if not parts or any(part in {'.', '..'} for part in parts):
+        raise ValueError('invalid_replay_blob_path')
+    root = os.path.abspath(replay_blob_root())
+    candidate = os.path.abspath(os.path.join(root, *parts))
+    try:
+        if os.path.commonpath((root, candidate)) != root:
+            raise ValueError('invalid_replay_blob_path')
+    except ValueError as exc:
+        raise ValueError('invalid_replay_blob_path') from exc
+    return candidate
+
+
+def store_replay_blob_external(blob):
+    payload = bytes(blob or b'')
+    if not payload:
+        raise ValueError('empty_replay_blob')
+    digest = hashlib.sha256(payload).hexdigest()
+    relative_path = f'{digest[:2]}/{digest[2:14]}-{uuid.uuid4().hex}.zlib'
+    output_path = _replay_blob_full_path(relative_path)
+    os.makedirs(os.path.dirname(output_path), mode=0o700, exist_ok=True)
+    temp_path = f'{output_path}.{uuid.uuid4().hex}.tmp'
+    try:
+        with open(temp_path, 'xb') as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_path, 0o600)
+        os.replace(temp_path, output_path)
+    except Exception:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+        raise
+    return relative_path
+
+
+def remove_replay_blob_external(relative_path):
+    if not relative_path:
+        return False
+    try:
+        os.remove(_replay_blob_full_path(relative_path))
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def load_replay_blob(row):
+    relative_path = _row_get(row, 'replay_blob_path', '')
+    if relative_path:
+        path = _replay_blob_full_path(relative_path)
+        with open(path, 'rb') as handle:
+            payload = handle.read()
+        expected_size = int(_row_get(row, 'replay_size', 0) or 0)
+        if expected_size > 0 and len(payload) != expected_size:
+            raise OSError(
+                f'replay_blob_size_mismatch expected={expected_size} actual={len(payload)}'
+            )
+        return payload
+    return bytes(_row_get(row, 'replay_blob', b'') or b'')
 
 
 def _cutoff_iso(retention_days=None):
@@ -362,49 +440,66 @@ def save_replay_snapshot(match_id, summary, *, card_defs=None, game_version='', 
     if storage_truncated:
         replay = json.loads(raw.decode('utf-8'))
     created_at = data.get('ended_at') or utc_now()
-    with get_db_connection() as conn:
-        card_hash = _store_card_snapshot(conn, card_defs, game_version=game_version, git_sha=git_sha)
-        mod_hashes = _store_community_mod_blobs(conn, data)
-        cur = conn.execute(
-            '''
-            INSERT INTO match_replays (
-                match_id, created_at, mode, player_names_json, winner_name, winner_index,
-                round_num, duration_ms, replay_version, replay_sha256, replay_size, replay_blob,
-                mod_source, mod_hash, community_mod_name
+    external_path = ''
+    database_blob = compressed
+    if REPLAY_EXTERNAL_BLOBS_ENABLED:
+        try:
+            external_path = store_replay_blob_external(compressed)
+            database_blob = b''
+        except OSError as exc:
+            print(f'[replay_storage] external write failed; using SQLite: {exc}', flush=True)
+    try:
+        with get_db_connection() as conn:
+            card_hash = _store_card_snapshot(conn, card_defs, game_version=game_version, git_sha=git_sha)
+            mod_hashes = _store_community_mod_blobs(conn, data)
+            cur = conn.execute(
+                '''
+                INSERT INTO match_replays (
+                    match_id, created_at, mode, player_names_json, winner_name, winner_index,
+                    round_num, duration_ms, replay_version, replay_sha256, replay_size, replay_blob,
+                    replay_blob_path, mod_source, mod_hash, community_mod_name
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    match_id,
+                    created_at,
+                    data.get('mode'),
+                    json.dumps(players, ensure_ascii=False),
+                    data.get('winner_name'),
+                    data.get('winner_index'),
+                    data.get('rounds'),
+                    duration_ms,
+                    REPLAY_VERSION,
+                    digest,
+                    len(compressed),
+                    database_blob,
+                    external_path or None,
+                    data.get('mod_source') or 'official',
+                    data.get('mod_hash') or '',
+                    data.get('community_mod_name') or '',
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''',
-            (
-                match_id,
-                created_at,
-                data.get('mode'),
-                json.dumps(players, ensure_ascii=False),
-                data.get('winner_name'),
-                data.get('winner_index'),
-                data.get('rounds'),
-                duration_ms,
-                REPLAY_VERSION,
-                digest,
-                len(compressed),
-                compressed,
-                data.get('mod_source') or 'official',
-                data.get('mod_hash') or '',
-                data.get('community_mod_name') or '',
-            ),
-        )
-        replay_id = cur.lastrowid
-        deps = []
-        if card_hash:
-            deps.append(('card_defs', card_hash))
-        for mod_hash in mod_hashes:
-            deps.append(('community_mod', mod_hash))
-        for dep_type, dep_hash in deps:
-            conn.execute(
-                'INSERT INTO replay_dependencies (replay_id, dep_type, dep_hash, created_at) VALUES (?, ?, ?, ?)',
-                (replay_id, dep_type, dep_hash, created_at),
-            )
-        conn.commit()
-        return replay_id
+            replay_id = cur.lastrowid
+            deps = []
+            if card_hash:
+                deps.append(('card_defs', card_hash))
+            for mod_hash in mod_hashes:
+                deps.append(('community_mod', mod_hash))
+            for dep_type, dep_hash in deps:
+                conn.execute(
+                    'INSERT INTO replay_dependencies (replay_id, dep_type, dep_hash, created_at) VALUES (?, ?, ?, ?)',
+                    (replay_id, dep_type, dep_hash, created_at),
+                )
+            conn.commit()
+            return replay_id
+    except Exception:
+        if external_path:
+            try:
+                remove_replay_blob_external(external_path)
+            except OSError:
+                pass
+        raise
 
 
 def _db_file_size(path):
@@ -417,14 +512,17 @@ def _db_file_size(path):
 def storage_summary(retention_days=None):
     days = DEFAULT_RETENTION_DAYS if retention_days is None else int(retention_days)
     cutoff = _cutoff_iso(days)
-    db_bytes = _db_file_size(DB_PATH)
-    wal_bytes = _db_file_size(f'{DB_PATH}-wal')
-    shm_bytes = _db_file_size(f'{DB_PATH}-shm')
+    current_db_path = getattr(db_module, 'DB_PATH', DB_PATH)
+    db_bytes = _db_file_size(current_db_path)
+    wal_bytes = _db_file_size(f'{current_db_path}-wal')
+    shm_bytes = _db_file_size(f'{current_db_path}-shm')
     with get_db_connection() as conn:
         replay = conn.execute(
             '''
             SELECT COUNT(*) AS count, COALESCE(SUM(replay_size), 0) AS bytes,
-                   MIN(created_at) AS oldest_created_at, MAX(created_at) AS newest_created_at
+                   MIN(created_at) AS oldest_created_at, MAX(created_at) AS newest_created_at,
+                   SUM(CASE WHEN COALESCE(replay_blob_path, '') <> '' THEN 1 ELSE 0 END)
+                       AS external_count
             FROM match_replays
             '''
         ).fetchone()
@@ -471,7 +569,7 @@ def storage_summary(retention_days=None):
         ).fetchone()
     return {
         'db': {
-            'path': DB_PATH,
+            'path': current_db_path,
             'db_file_bytes': db_bytes,
             'wal_file_bytes': wal_bytes,
             'shm_file_bytes': shm_bytes,
@@ -486,6 +584,8 @@ def storage_summary(retention_days=None):
             'oldest_created_at': replay['oldest_created_at'],
             'newest_created_at': replay['newest_created_at'],
             'held_count': int(holds['count'] or 0),
+            'external_count': int(replay['external_count'] or 0),
+            'external_root': replay_blob_root(),
         },
         'mod_blobs': {
             'community_count': mods['count'],
@@ -605,7 +705,7 @@ def cleanup_old_replays(retention_days=None, dry_run=False):
         ).fetchone()['count']
         rows = conn.execute(
             '''
-            SELECT r.id, r.replay_size
+            SELECT r.id, r.replay_size, r.replay_blob_path
             FROM match_replays r
             WHERE r.created_at < ?
               AND NOT EXISTS (
@@ -625,6 +725,8 @@ def cleanup_old_replays(retention_days=None, dry_run=False):
             'deleted_mod_blob_bytes': 0,
             'deleted_card_snapshots': 0,
             'deleted_card_snapshot_bytes': 0,
+            'deleted_external_files': 0,
+            'external_file_delete_errors': 0,
             'cutoff': cutoff,
         }
         if dry_run:
@@ -636,6 +738,15 @@ def cleanup_old_replays(retention_days=None, dry_run=False):
             conn.executemany('DELETE FROM replay_dependencies WHERE replay_id = ?', ids)
             conn.executemany('DELETE FROM match_replays WHERE id = ?', ids)
             conn.commit()
+    for row in rows:
+        external_path = row['replay_blob_path']
+        if not external_path:
+            continue
+        try:
+            if remove_replay_blob_external(external_path):
+                result['deleted_external_files'] += 1
+        except (OSError, ValueError):
+            result['external_file_delete_errors'] += 1
     orphan = cleanup_orphan_replay_blobs(dry_run=dry_run)
     result.update(orphan)
     return result
@@ -1127,7 +1238,8 @@ def build_replay_download_package(replay_id):
         row = conn.execute(
             '''
             SELECT id, match_id, created_at, mode, player_names_json,
-                   replay_version, replay_sha256, replay_size, replay_blob
+                   replay_version, replay_sha256, replay_size, replay_blob,
+                   replay_blob_path
             FROM match_replays WHERE id = ?
             ''',
             (replay_id,),
@@ -1138,7 +1250,7 @@ def build_replay_download_package(replay_id):
         players = json.loads(row['player_names_json'] or '[]')
     except Exception:
         players = []
-    blob = bytes(row['replay_blob'] or b'')
+    blob = load_replay_blob(row)
     header = {
         'format': 'gtn-replay',
         'format_version': 1,
@@ -1276,12 +1388,15 @@ def export_replay_json_file(replay_id, output_dir):
     replay_id = normalize_replay_id(replay_id)
     with get_db_connection() as conn:
         row = conn.execute(
-            'SELECT replay_blob, replay_sha256 FROM match_replays WHERE id = ?',
+            '''
+            SELECT replay_blob, replay_blob_path, replay_size, replay_sha256
+            FROM match_replays WHERE id = ?
+            ''',
             (replay_id,),
         ).fetchone()
     if row is None:
         return None
-    replay = _decode_replay_blob(row['replay_blob'])
+    replay = _decode_replay_blob(load_replay_blob(row))
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.abspath(os.path.join(output_dir, f'replay-{format_replay_id(replay_id)}.json'))
     temp_path = f'{output_path}.tmp'
@@ -1694,7 +1809,7 @@ def _timeline_cache_get(row):
         if 'timeline' not in cached:
             cached['timeline'] = _build_timeline_from_replay(cached['replay'])
         return cached['replay'], cached['timeline']
-    replay = _decode_replay_blob(row['replay_blob'])
+    replay = _decode_replay_blob(load_replay_blob(row))
     timeline = _build_timeline_from_replay(replay)
     _timeline_cache_store(replay_id, replay_sha, replay, timeline=timeline)
     return replay, timeline
@@ -1711,7 +1826,7 @@ def _timeline_index_cache_get(row):
         if 'timeline_index' not in cached:
             cached['timeline_index'] = _build_timeline_index(cached['replay'])
         return cached['replay'], cached['timeline_index'], len(cached['timeline_index'])
-    replay = _decode_replay_blob(row['replay_blob'])
+    replay = _decode_replay_blob(load_replay_blob(row))
     timeline_index = _build_timeline_index(replay)
     _timeline_cache_store(replay_id, replay_sha, replay, timeline_index=timeline_index)
     return replay, timeline_index, len(timeline_index)

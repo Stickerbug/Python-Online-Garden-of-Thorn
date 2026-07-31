@@ -142,6 +142,64 @@ STORY_STATUSES = {
     },
 }
 
+STORY_STATUS_IMAGE_URLS = {
+    'endurance': '/static/assets/story-status-icons/endurance.svg',
+    'power': '/static/assets/story-status-icons/power.svg',
+    'reflection': '/static/assets/story-status-icons/reflection.svg',
+    'rockfall': '/static/assets/story-status-icons/rockfall.svg',
+    'temporary_power': '/static/assets/story-status-icons/temporary-power.svg',
+    'vulnerable': '/static/assets/story-status-icons/vulnerable.svg',
+    'wither': '/static/assets/story-status-icons/wither.svg',
+}
+
+for _status_id, _image_url in STORY_STATUS_IMAGE_URLS.items():
+    STORY_STATUSES[_status_id]['image_url'] = _image_url
+
+
+STORY_TRAITS = {
+    'adjacent': {
+        'name': {'zh': '紧连', 'en': 'Linked'},
+        'description': {
+            'zh': '受到伤害时，相邻体节受到本次实际伤害向下取整一半的伤害。',
+            'en': 'When damaged, adjacent segments take half the actual damage, rounded down.',
+        },
+        'image_url': '/static/assets/story-trait-icons/adjacent.svg',
+    },
+    'nourish': {
+        'name': {'zh': '滋养', 'en': 'Nourish'},
+        'description': {
+            'zh': 'H低于40%时触发一次：击杀所有友方单位；每击杀1个，获得2层力量，并回复其H上限的H。',
+            'en': 'Once below 40% H, defeat all allies; gain 2 Power and heal their maximum H for each.',
+        },
+        'image_url': '/static/assets/story-trait-icons/nourish.svg',
+    },
+    'sturdy': {
+        'name': {'zh': '坚固', 'en': 'Sturdy'},
+        'description': {
+            'zh': '护盾不会在回合开始时清空。',
+            'en': 'Shield does not clear at turn start.',
+        },
+        'image_url': '/static/assets/story-trait-icons/sturdy.svg',
+    },
+    'summon_after_death': {
+        'name': {'zh': '死后召唤', 'en': 'Death Summon'},
+        'description': {
+            'zh': '死亡后召唤1只初始行动为“射击”的黄蜂，并使其获得4层凋萎。',
+            'en': 'On death, summon a Wasp starting with Shot and give it 4 Wither.',
+        },
+        'image_url': '/static/assets/story-trait-icons/summon-after-death.svg',
+    },
+    'swell': {
+        'name': {'zh': '胀大', 'en': 'Swell'},
+        'description': {
+            'zh': '每次受到攻击时，获得1层暂时力量。',
+            'en': 'Gain 1 Temporary Power whenever attacked.',
+        },
+        'image_url': '/static/assets/story-trait-icons/swell.svg',
+    },
+}
+
+
 STORY_BLESSINGS = {
     'max_health': {
         'name': {'zh': '', 'en': ''},
@@ -566,6 +624,24 @@ STORY_CARDS = {
                       }),
 }
 
+STORY_CARD_IMAGE_URLS = {
+    'dandelion_seed': '/static/assets/story-card-art/dandelion-seed.svg',
+    'fatigued': '/static/assets/story-card-art/fatigued.svg',
+    'injury': '/static/assets/story-card-art/injury.svg',
+    'magic_feather': '/static/assets/story-card-art/magic-feather.svg',
+    'magic_shell': '/static/assets/story-card-art/magic-shell.svg',
+    'moon_rock': '/static/assets/story-card-art/moon-rock.svg',
+    'shell': '/static/assets/story-card-art/shell.svg',
+    'slimed': '/static/assets/story-card-art/slimed.svg',
+    'soul_splitter': '/static/assets/story-card-art/soul-splitter.svg',
+    'startled': '/static/assets/story-card-art/startled.svg',
+    'unrelenting': '/static/assets/story-card-art/unrelenting.svg',
+}
+
+for _card_id, _image_url in STORY_CARD_IMAGE_URLS.items():
+    STORY_CARDS[_card_id]['image_url'] = _image_url
+    STORY_CARDS[_card_id]['upgraded_image_url'] = _image_url
+
 
 STORY_REWARD_CARD_IDS = tuple(
     card_id
@@ -615,12 +691,13 @@ def _move(zh, en, *effects):
     return {'name': {'zh': zh, 'en': en}, 'effects': tuple(effects)}
 
 
-def _enemy(zh, en, health, moves, *, script=None):
+def _enemy(zh, en, health, moves, *, script=None, traits=()):
     return {
         'name': {'zh': zh, 'en': en},
         'max_health': health,
         'moves': tuple(moves),
         'script': script,
+        'traits': tuple(traits),
     }
 
 
@@ -664,7 +741,7 @@ STORY_ENEMIES = {
         _move('冲击', 'Impact', _effect('damage', 8)),
         _move('防护', 'Protect', _effect('adjacent_shield', 10), _effect('player_status', 1, status='fragile')),
         _move('生长', 'Growth', _effect('gain_power', 2)),
-    ), script='centipede'),
+    ), script='centipede', traits=('adjacent',)),
     'spider': _enemy('蜘蛛', 'Spider', 47, (
         _move('吐网', 'Web', _effect('player_status', 1, status='weak'), _effect('add_draw_card', 1, card_id='slimed')),
         _move('收网', 'Reel', _effect('damage', 8)),
@@ -672,11 +749,11 @@ STORY_ENEMIES = {
     'sunflower': _enemy('向日葵', 'Sunflower', 40, (
         _move('生长', 'Grow', _effect('gain_shield', 20), _effect('gain_power', 3)),
         _move('绽放', 'Bloom', _effect('damage', 2)),
-    ), script='persistent_shield'),
+    ), script='persistent_shield', traits=('sturdy',)),
     'avocado': _enemy('牛油果', 'Avocado', 76, (
         _move('膨胀', 'Expand', _effect('damage', 11), _effect('gain_power', 2)),
         _move('旋转', 'Spin', _effect('damage', 3, hits=3)),
-    ), script='swell'),
+    ), script='swell', traits=('swell',)),
     'spider_yoba': _enemy('蜘蛛尤巴', 'Yoba Spider', 102, (
         _move('下劈', 'Chop', _effect('damage', 11), _effect('gain_power', 2)),
         _move('嘲讽', 'Taunt', _effect('gain_shield', 13), _effect('player_status', 3, status='vulnerable')),
@@ -692,12 +769,12 @@ STORY_ENEMIES = {
         _move('连劈', 'Combo', _effect('damage', 3, hits=2)),
         _move('产卵', 'Lay Eggs', _effect('summon_to_ant_count', 5, enemy_id='young_ant')),
         _move('滋养', 'Nourish', _effect('consume_allies', 2)),
-    ), script='ant_queen'),
+    ), script='ant_queen', traits=('nourish',)),
     'hive': _enemy('蜂巢', 'Hive', 172, (
         _move('召唤蜜蜂', 'Summon Bee', _effect('summon', 1, enemy_id='bee', move_index=1, wither=4), _effect('self_damage', 30)),
         _move('召唤黄蜂', 'Summon Wasp', _effect('summon', 1, enemy_id='wasp', move_index=0, wither=4), _effect('self_damage', 30)),
         _move('蜂蜜', 'Honey', _effect('self_heal', 15), _effect('player_status', 1, status='fragile'), _effect('player_status', 1, status='vulnerable')),
-    ), script='hive'),
+    ), script='hive', traits=('summon_after_death',)),
 }
 
 STORY_ENEMY_IMAGE_URLS = {
@@ -812,9 +889,9 @@ def story_content_payload(card_defs=None):
                 or getattr(source, 'upgraded_image', '')
                 or image_url
             )
-            if image_url:
+            if image_url and not definition.get('image_url'):
                 definition['image_url'] = image_url
-            if upgraded_image_url:
+            if upgraded_image_url and not definition.get('upgraded_image_url'):
                 definition['upgraded_image_url'] = upgraded_image_url
     return {
         'rules': deepcopy(STORY_RULES),
@@ -822,6 +899,7 @@ def story_content_payload(card_defs=None):
         'card_types': deepcopy(STORY_CARD_TYPES),
         'tags': deepcopy(STORY_TAGS),
         'statuses': deepcopy(STORY_STATUSES),
+        'traits': deepcopy(STORY_TRAITS),
         'blessings': deepcopy(STORY_BLESSINGS),
         'cards': cards,
         'relics': deepcopy(STORY_RELICS),
@@ -936,6 +1014,9 @@ def validate_story_content():
         script = definition.get('script')
         if script and script not in enemy_scripts:
             errors.append(f'{enemy_id}: unknown enemy script {script}')
+        for trait in definition.get('traits', ()):
+            if trait not in STORY_TRAITS:
+                errors.append(f'{enemy_id}: unknown trait {trait}')
         for move_index, move in enumerate(definition.get('moves') or ()):
             for effect_index, effect in enumerate(move.get('effects') or ()):
                 owner = f'{enemy_id}.moves[{move_index}].effects[{effect_index}]'

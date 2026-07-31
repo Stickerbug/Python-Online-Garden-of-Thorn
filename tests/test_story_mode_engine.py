@@ -5,6 +5,7 @@ import pytest
 
 from story_content import (
     STORY_BLESSINGS,
+    STORY_CARD_IMAGE_URLS,
     STORY_CARDS,
     STORY_ENCOUNTERS,
     STORY_ENEMIES,
@@ -12,6 +13,9 @@ from story_content import (
     STORY_RARITIES,
     STORY_RELICS,
     STORY_REWARD_CARD_IDS,
+    STORY_STATUS_IMAGE_URLS,
+    STORY_STATUSES,
+    STORY_TRAITS,
     initial_story_player,
     validate_story_content,
 )
@@ -366,6 +370,46 @@ def test_every_story_enemy_has_a_packaged_image():
         assert image_url, enemy_id
         assert image_url.startswith('/static/assets/story-enemies/'), enemy_id
         assert (project_root / image_url.removeprefix('/')).is_file(), enemy_id
+
+
+def test_story_patch_card_status_and_trait_images_are_packaged():
+    project_root = Path(__file__).resolve().parents[1]
+    image_groups = (
+        (STORY_CARD_IMAGE_URLS, STORY_CARDS),
+        (STORY_STATUS_IMAGE_URLS, STORY_STATUSES),
+        (
+            {
+                trait_id: definition['image_url']
+                for trait_id, definition in STORY_TRAITS.items()
+            },
+            STORY_TRAITS,
+        ),
+    )
+    referenced_urls = set()
+    for image_urls, definitions in image_groups:
+        for definition_id, image_url in image_urls.items():
+            assert image_url not in referenced_urls, definition_id
+            referenced_urls.add(image_url)
+            assert (project_root / image_url.removeprefix('/')).is_file(), definition_id
+            if definitions is not None:
+                assert definitions[definition_id]['image_url'] == image_url
+
+    assert len(STORY_CARD_IMAGE_URLS) == 11
+    assert len(STORY_STATUS_IMAGE_URLS) == 7
+    assert len(STORY_TRAITS) == 5
+
+
+def test_story_enemy_traits_reference_defined_visual_terms():
+    expected = {
+        'centipede': ('adjacent',),
+        'sunflower': ('sturdy',),
+        'avocado': ('swell',),
+        'ant_queen': ('nourish',),
+        'hive': ('summon_after_death',),
+    }
+    for enemy_id, trait_ids in expected.items():
+        assert STORY_ENEMIES[enemy_id]['traits'] == trait_ids
+        assert all(trait_id in STORY_TRAITS for trait_id in trait_ids)
 
 
 def test_story_map_has_sixteen_floors_no_early_elites_and_no_crossing_edges():

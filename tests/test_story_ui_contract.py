@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STORY_JS = (ROOT / 'static' / 'js' / 'story.js').read_text(encoding='utf-8')
 STORY_CSS = (ROOT / 'static' / 'css' / 'story.css').read_text(encoding='utf-8')
+SHARED_AFK_CSS = (ROOT / 'static' / 'css' / 'shared-afk.css').read_text(encoding='utf-8')
 STORY_TEMPLATE = (ROOT / 'templates' / 'story.html').read_text(encoding='utf-8')
 INDEX_TEMPLATE = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
 RESOURCE_ORBS_JS = (ROOT / 'static' / 'js' / 'resource_orbs.js').read_text(encoding='utf-8')
@@ -109,9 +110,25 @@ def test_story_status_icons_open_term_descriptions():
     assert 'openStoryStatusTerms(statusElement.dataset.storyStatusKey);' in STORY_JS
     assert "title.textContent = t.statusTerms;" in STORY_JS
     assert "kind: 'status'," in STORY_JS
-    assert 'icon.src = storyStatusIconUrl(item.id);' in STORY_JS
+    assert "item.kind === 'trait'" in STORY_JS
+    assert 'storyStatusIconUrl(item.id);' in STORY_JS
     assert '.story-status-terms-layout {' in STORY_CSS
     assert '.story-status-terms-icon img {' in STORY_CSS
+
+
+def test_story_patch_traits_and_gold_icon_are_visible_ui_assets():
+    assert 'function renderTraitsInto(container, traitIds, actor = null)' in STORY_JS
+    assert 'function openStoryTraitTerms(traitKey)' in STORY_JS
+    assert 'attachStoryTraitTermAccess(chip, key);' in STORY_JS
+    assert 'renderTraitsInto(effects, definition.traits, enemy);' in STORY_JS
+    assert "event.target?.closest?.('[data-story-trait-key]')" in STORY_JS
+    assert '.story-effect.story-trait {' in STORY_CSS
+    assert '.story-term-row-trait {' in STORY_CSS
+    gold_url = '/static/assets/story-ui-icons/gold.svg'
+    assert gold_url in STORY_TEMPLATE
+    assert gold_url in STORY_CSS
+    assert "setText('story-shop-mark'" not in STORY_JS
+    assert (ROOT / gold_url.removeprefix('/')).is_file()
 
 
 def test_story_modals_use_normal_mode_motion_and_readable_term_layout():
@@ -260,17 +277,55 @@ def test_story_right_click_cancels_selection_before_opening_terms():
 
 
 def test_story_presence_and_status_surfaces_are_wired():
-    assert 'id="story-online-count"' in STORY_TEMPLATE
+    assert 'class="story-header"' not in STORY_TEMPLATE
+    assert 'id="story-back"' in STORY_TEMPLATE
+    assert 'id="story-chat-toggle"' in STORY_TEMPLATE
     assert 'id="story-status-bar"' in STORY_TEMPLATE
     assert 'id="story-status-text"' in STORY_TEMPLATE
     assert 'id="story-status-online"' in STORY_TEMPLATE
+    assert 'class="story-account"' not in STORY_TEMPLATE
+    assert 'id="story-account-label"' not in STORY_TEMPLATE
+    assert 'class="story-status-center"' in STORY_TEMPLATE
+    assert 'id="story-dev-toggle"' in STORY_TEMPLATE.split(
+        '<footer id="story-status-bar"',
+        1,
+    )[1]
     assert "requestJson('/api/story/presence'" in STORY_JS
     assert 'activity: reportActivity' in STORY_JS
     assert 'Number(payload.story_online_count)' in STORY_JS
     assert 'startStoryPresence();' in STORY_JS
     assert 'function updateStoryStatusBar()' in STORY_JS
-    assert 'grid-template-rows: 56px minmax(0, 1fr) 28px;' in STORY_CSS
+    assert 'grid-template-rows: minmax(0, 1fr) 32px;' in STORY_CSS
     assert '.story-status-bar {' in STORY_CSS
+    assert 'background: rgba(0, 0, 0, .05);' in STORY_CSS
+
+
+def test_story_exit_glyph_is_visually_centered_in_its_button():
+    glyph_rule = STORY_CSS.split('.story-exit-glyph {', 1)[1].split('}', 1)[0]
+    assert 'position: relative;' in glyph_rule
+    assert 'left: 2.8px;' in glyph_rule
+    assert 'transform: rotate(45deg);' in glyph_rule
+
+
+def test_story_enemy_group_enlarges_only_portraits_and_compacts_layout():
+    assert "Math.max(.48, Math.min(.82, 1.03 - count * .13))" in STORY_JS
+    group_rule = STORY_CSS.split('.story-enemy-group {', 2)[2].split('}', 1)[0]
+    actor_rule = STORY_CSS.split('.story-enemy-group .story-actor {', 1)[1].split('}', 1)[0]
+    assert 'gap: clamp(0px, .2vw, 3px);' in group_rule
+    assert '--story-avatar-width: clamp(84px, 10vw, 152px);' in actor_rule
+    assert '--story-fighter-scale: var(--story-enemy-scale, .82);' in actor_rule
+    assert 'calc((var(--story-enemy-count) - 1) * -7px)' in actor_rule
+
+
+def test_story_chat_uses_the_shared_t_shortcut_as_a_safe_toggle():
+    assert "const chatControl = storyChatOpen ? $('story-chat-input') : $('story-chat-toggle');" in STORY_JS
+    assert "addStoryShortcutAction(context, 'focus_chat', [chatControl]);" in STORY_JS
+    assert "case 'focus_chat': {" in STORY_JS
+    assert 'if (storyChatOpen && input && document.activeElement === input) return false;' in STORY_JS
+    assert 'setStoryChatOpen(!storyChatOpen);' in STORY_JS
+    assert "defaultBinding: 'KeyT'" in (
+        ROOT / 'static' / 'js' / 'keybindings.js'
+    ).read_text(encoding='utf-8')
 
 
 def test_story_afk_check_tracks_interaction_without_counting_heartbeats():
@@ -280,8 +335,24 @@ def test_story_afk_check_tracks_interaction_without_counting_heartbeats():
     assert "document.addEventListener('keydown', reportStoryAfkActivity" in STORY_JS
     assert "event?.target?.closest?.('#story-afk-check-overlay')" in STORY_JS
     assert 'client_id: STORY_PRESENCE_CLIENT_ID' in STORY_JS
-    assert '.story-afk-check-overlay {' in STORY_CSS
-    assert '.story-afk-check-button.is-ready {' in STORY_CSS
+    assert "overlay.className = 'afk-check-overlay';" in STORY_JS
+    assert "class=\"afk-check-dialog\"" in STORY_JS
+    assert "class=\"afk-check-button\"" in STORY_JS
+    assert "classList.toggle('afk-check-ready'" in STORY_JS
+    assert "classList.add('afk-check-holding')" in STORY_JS
+    assert '.afk-check-overlay {' in SHARED_AFK_CSS
+    assert '.afk-check-button.afk-check-ready {' in SHARED_AFK_CSS
+    assert '/static/css/shared-afk.css' in STORY_TEMPLATE
+    assert '/static/css/shared-afk.css' in INDEX_TEMPLATE
+
+
+def test_story_surfaces_use_the_regular_ui_border_palette():
+    assert '--story-line: #dcdcdc;' in STORY_CSS
+    assert '--story-line-soft: #e0e0e0;' in STORY_CSS
+    assert '--story-line: #3b4552;' in STORY_CSS
+    assert '--story-line-soft: #4a5665;' in STORY_CSS
+    assert 'border: 1px solid var(--story-line-soft);' in STORY_CSS
+    assert '.story-afk-check-dialog' not in STORY_CSS
 
 
 def test_story_out_of_combat_deck_reuses_the_pile_viewer():

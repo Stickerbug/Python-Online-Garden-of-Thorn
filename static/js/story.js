@@ -180,7 +180,7 @@
             chooseCardHint: 'Choose a card', damagePrediction: 'Damage',
             chooseCards: 'Choose cards', chooseExact: (value) => `Choose ${value} card(s).`,
             chooseUpTo: (value) => `Choose up to ${value} card(s).`,
-            cardTerms: 'Card Terms', statusTerms: 'Status Term', noCardTerms: 'No additional terms',
+            cardTerms: 'Card Terms', statusTerms: 'Status Term', traitTerms: 'Effect Term', noCardTerms: 'No additional terms',
             beforeUpgrade: 'Before Upgrade', afterUpgrade: 'After Upgrade',
             cardTypes: { thorn: 'Thorn', bloom: 'Bloom', root: 'Root', guard: 'Guard', curse: 'Curse', infect: 'Infect' },
             pileTotal: (label, count) => `${label}: ${count} cards`,
@@ -247,7 +247,7 @@
             chooseCardHint: '选择一张手牌', damagePrediction: '伤害预测',
             chooseCards: '选择卡牌', chooseExact: (value) => `选择 ${value} 张牌。`,
             chooseUpTo: (value) => `选择至多 ${value} 张牌。`,
-            cardTerms: '卡牌术语', statusTerms: '状态术语', noCardTerms: '没有额外术语',
+            cardTerms: '卡牌术语', statusTerms: '状态术语', traitTerms: '特殊效果术语', noCardTerms: '没有额外术语',
             beforeUpgrade: '升级前', afterUpgrade: '升级后',
             cardTypes: { thorn: '攻击', bloom: '技能', root: '装备', guard: '反制', curse: '诅咒', infect: '状态牌' },
             pileTotal: (label, count) => `${label}：${count} 张`,
@@ -287,7 +287,7 @@
             developerMode: 'Mode développeur', devJump: 'Changer de niveau', devFloor: 'Étage', devRoom: 'Salle',
             devValues: 'Modifier les valeurs', devApply: 'Appliquer', devJumpButton: 'Aller',
             devValuesUpdated: 'Valeurs mises à jour', devJumped: 'Niveau chargé',
-            cardTerms: 'Termes de carte', statusTerms: 'Terme d’état', noCardTerms: 'Aucun terme supplémentaire',
+            cardTerms: 'Termes de carte', statusTerms: 'Terme d’état', traitTerms: 'Terme d’effet', noCardTerms: 'Aucun terme supplémentaire',
             beforeUpgrade: 'Avant amélioration', afterUpgrade: 'Après amélioration',
             shopCards: 'Cartes', shopTalents: 'Talents', remove: 'Retirer',
             roomActions: 'Choix', restGold: 'Or', plantDandelion: 'Planter le pissenlit',
@@ -337,7 +337,7 @@
             developerMode: '開発者モード', devJump: 'ステージ移動', devFloor: '階', devRoom: '部屋',
             devValues: '数値設定', devApply: '適用', devJumpButton: '移動',
             devValuesUpdated: '数値を更新しました', devJumped: 'ステージを読み込みました',
-            cardTerms: 'カード用語', statusTerms: '状態用語', noCardTerms: '追加用語なし',
+            cardTerms: 'カード用語', statusTerms: '状態用語', traitTerms: '特殊効果用語', noCardTerms: '追加用語なし',
             beforeUpgrade: 'アップグレード前', afterUpgrade: 'アップグレード後',
             shopCards: 'カード', shopTalents: '天賦', remove: '削除',
             roomActions: '選択肢', restGold: 'ゴールド', plantDandelion: 'タンポポを植える',
@@ -474,7 +474,7 @@
         document.documentElement.lang = lang;
         document.title = `${t.title} | Garden of Thorn`;
         const values = {
-            'story-title': t.title, 'story-account-label': t.account, 'story-loading-label': t.loading,
+            'story-title': t.title, 'story-loading-label': t.loading,
             'story-empty-title': t.emptyTitle, 'story-start': t.start, 'story-stage-label': t.stage,
             'story-biome-label': t.biome, 'story-gold-label': t.gold, 'story-map-title': t.route,
             'story-run-deck-label': t.runDeck,
@@ -710,7 +710,6 @@
     function updateStoryPresenceDisplay() {
         const value = storyOnlineCount == null ? '--' : String(storyOnlineCount);
         const label = t.onlinePlayers(value);
-        setText('story-online-count', label);
         setText('story-status-online', label);
     }
 
@@ -980,6 +979,9 @@
         storyChatOpen = Boolean(open);
         const panel = $('story-chat-panel');
         const toggle = $('story-chat-toggle');
+        if (!storyChatOpen && panel?.contains(document.activeElement)) {
+            document.activeElement?.blur?.();
+        }
         panel?.classList.toggle('hidden', !storyChatOpen);
         toggle?.classList.toggle('hidden', storyChatOpen);
         toggle?.setAttribute('aria-expanded', storyChatOpen ? 'true' : 'false');
@@ -1127,8 +1129,8 @@
         const element = $('story-afk-check-status');
         if (!element) return;
         element.textContent = message || '';
-        element.classList.toggle('is-error', tone === 'error');
-        element.classList.toggle('is-ok', tone === 'ok');
+        element.classList.toggle('afk-check-error', tone === 'error');
+        element.classList.toggle('afk-check-ok', tone === 'ok');
     }
 
     function storyAfkResultText(result) {
@@ -1143,16 +1145,16 @@
         if ($('story-afk-check-overlay')) return;
         const overlay = document.createElement('div');
         overlay.id = 'story-afk-check-overlay';
-        overlay.className = 'story-afk-check-overlay';
+        overlay.className = 'afk-check-overlay';
         overlay.innerHTML = `
-            <div class="story-afk-check-dialog" role="alertdialog" aria-modal="true">
-                <div class="story-afk-check-title"></div>
-                <div class="story-afk-check-desc"></div>
-                <div id="story-afk-check-status" class="story-afk-check-status is-error"></div>
+            <div class="afk-check-dialog" role="alertdialog" aria-modal="true">
+                <div class="afk-check-title"></div>
+                <div class="afk-check-desc"></div>
+                <div id="story-afk-check-status" class="afk-check-status afk-check-error"></div>
             </div>
         `;
-        overlay.querySelector('.story-afk-check-title').textContent = t.afkTitle;
-        overlay.querySelector('.story-afk-check-desc').textContent = t.afkTimedOut;
+        overlay.querySelector('.afk-check-title').textContent = t.afkTitle;
+        overlay.querySelector('.afk-check-desc').textContent = t.afkTimedOut;
         document.body.appendChild(overlay);
     }
 
@@ -1251,20 +1253,20 @@
 
         const overlay = document.createElement('div');
         overlay.id = 'story-afk-check-overlay';
-        overlay.className = 'story-afk-check-overlay';
+        overlay.className = 'afk-check-overlay';
         overlay.innerHTML = `
-            <div class="story-afk-check-dialog" role="dialog" aria-modal="true">
-                <div class="story-afk-check-title"></div>
-                <div id="story-afk-check-desc" class="story-afk-check-desc"></div>
-                <button id="story-afk-check-button" class="story-afk-check-button" type="button">
-                    <span class="story-afk-check-core"></span>
+            <div class="afk-check-dialog" role="dialog" aria-modal="true">
+                <div class="afk-check-title"></div>
+                <div id="story-afk-check-desc" class="afk-check-desc"></div>
+                <button id="story-afk-check-button" class="afk-check-button" type="button">
+                    <span class="afk-check-core"></span>
                 </button>
-                <div id="story-afk-check-status" class="story-afk-check-status"></div>
+                <div id="story-afk-check-status" class="afk-check-status"></div>
             </div>
         `;
-        overlay.querySelector('.story-afk-check-title').textContent = t.afkTitle;
-        overlay.querySelector('.story-afk-check-core').textContent = t.afkHold;
-        const button = overlay.querySelector('.story-afk-check-button');
+        overlay.querySelector('.afk-check-title').textContent = t.afkTitle;
+        overlay.querySelector('.afk-check-core').textContent = t.afkHold;
+        const button = overlay.querySelector('.afk-check-button');
         button.setAttribute('aria-label', t.afkHold);
         document.body.appendChild(overlay);
         setStoryAfkCheckStatus(t.afkReady);
@@ -1273,7 +1275,7 @@
             const check = activeStoryAfkCheck;
             if (!check?.holding || !button) return;
             const elapsed = Date.now() - check.holdStart;
-            button.classList.toggle('is-ready', elapsed >= check.minMs && elapsed <= check.maxMs);
+            button.classList.toggle('afk-check-ready', elapsed >= check.minMs && elapsed <= check.maxMs);
             storyAfkHoldFrame = requestAnimationFrame(updateHold);
         };
         const startHold = (event) => {
@@ -1282,7 +1284,7 @@
             if (!check || check.sent || check.holding) return;
             check.holding = true;
             check.holdStart = Date.now();
-            button.classList.add('is-holding');
+            button.classList.add('afk-check-holding');
             setStoryAfkCheckStatus(t.afkHolding);
             updateHold();
         };
@@ -1295,7 +1297,7 @@
                 cancelAnimationFrame(storyAfkHoldFrame);
                 storyAfkHoldFrame = 0;
             }
-            button.classList.remove('is-holding', 'is-ready');
+            button.classList.remove('afk-check-holding', 'afk-check-ready');
             check.sent = true;
             setStoryAfkCheckStatus(t.afkVerifying);
             void submitStoryAfkCheck(Date.now() - check.holdStart);
@@ -2876,7 +2878,9 @@
             const badge = document.createElement('span');
             badge.className = 'story-term-status';
             const icon = document.createElement('img');
-            icon.src = storyStatusIconUrl(item.id);
+            icon.src = item.kind === 'trait'
+                ? storyTraitIconUrl(item.id)
+                : storyStatusIconUrl(item.id);
             icon.alt = '';
             icon.setAttribute('aria-hidden', 'true');
             const name = document.createElement('span');
@@ -2912,7 +2916,17 @@
 
     function storyStatusIconUrl(statusKey) {
         const key = String(statusKey || '');
+        const imageUrl = String(storyStatusDefinition(key)?.image_url || '').trim();
+        if (imageUrl) return imageUrl;
         return `/static/assets/status-icons/${STORY_STATUS_ICONS[key] || key}.svg`;
+    }
+
+    function storyTraitDefinition(traitKey) {
+        return storyContent?.traits?.[String(traitKey || '')] || null;
+    }
+
+    function storyTraitIconUrl(traitKey) {
+        return String(storyTraitDefinition(traitKey)?.image_url || '').trim();
     }
 
     function openStoryStatusTerms(statusKey) {
@@ -3015,6 +3029,109 @@
             event.preventDefault();
             event.stopPropagation();
             openStoryStatusTerms(statusKey);
+        });
+    }
+
+    function openStoryTraitTerms(traitKey) {
+        const key = String(traitKey || '');
+        const definition = storyTraitDefinition(key);
+        const dialog = $('story-term-dialog');
+        const content = $('story-term-content');
+        if (!key || !definition || !dialog || !content) return false;
+        const termKey = `trait:${key}`;
+        if (dialog.open && dialog.dataset.storyTermKey === termKey) {
+            closeStoryCardTerms();
+            return true;
+        }
+
+        content.className = 'modal-inner story-card-terms-modal story-status-terms-modal';
+        content.replaceChildren();
+
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'story-term-close';
+        close.setAttribute('aria-label', t.close);
+        close.textContent = '×';
+        close.addEventListener('click', closeStoryCardTerms);
+
+        const layout = document.createElement('div');
+        layout.className = 'story-status-terms-layout';
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'story-status-terms-icon';
+        const icon = document.createElement('img');
+        icon.src = storyTraitIconUrl(key);
+        icon.alt = '';
+        icon.setAttribute('aria-hidden', 'true');
+        const iconName = document.createElement('span');
+        iconName.className = 'story-status-terms-name';
+        iconName.textContent = localize(definition.name);
+        iconWrap.append(icon, iconName);
+
+        const copy = document.createElement('div');
+        copy.className = 'story-status-terms-copy';
+        const title = document.createElement('h2');
+        title.textContent = t.traitTerms;
+        const terms = document.createElement('div');
+        terms.className = 'story-card-terms-list';
+        appendStoryTermRow(terms, {
+            kind: 'trait',
+            id: key,
+            definition,
+        });
+        copy.append(title, terms);
+        layout.append(iconWrap, copy);
+        content.append(close, layout);
+
+        dialog.dataset.storyTermKey = termKey;
+        delete dialog.dataset.storyTermUpgrade;
+        if (!dialog.open) dialog.showModal();
+        return true;
+    }
+
+    function attachStoryTraitTermAccess(element, traitKey) {
+        if (!element || !storyTraitDefinition(traitKey)) return;
+        element.dataset.storyTraitKey = String(traitKey);
+        element.setAttribute('role', 'button');
+        element.tabIndex = 0;
+        let timer = 0;
+        let start = null;
+        const cancel = () => {
+            if (timer) window.clearTimeout(timer);
+            timer = 0;
+            start = null;
+        };
+        element.addEventListener('pointerdown', (event) => {
+            if (event.button != null && event.button !== 0) return;
+            cancel();
+            start = { x: event.clientX, y: event.clientY };
+            timer = window.setTimeout(() => {
+                timer = 0;
+                start = null;
+                if (selectedCombatCardId && activeRun?.state) {
+                    cancelStoryCombatSelection(true);
+                    return;
+                }
+                element.dataset.storyTermLongPress = '1';
+                window.setTimeout(() => {
+                    delete element.dataset.storyTermLongPress;
+                }, 1200);
+                openStoryTraitTerms(traitKey);
+            }, STORY_TERM_LONG_PRESS_MS);
+        });
+        element.addEventListener('pointermove', (event) => {
+            if (!timer || !start) return;
+            if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > STORY_TERM_MOVE_CANCEL_PX) {
+                cancel();
+            }
+        });
+        ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'].forEach((eventName) => {
+            element.addEventListener(eventName, cancel);
+        });
+        element.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            event.stopPropagation();
+            openStoryTraitTerms(traitKey);
         });
     }
 
@@ -3270,6 +3387,28 @@
         });
     }
 
+    function renderTraitsInto(container, traitIds, actor = null) {
+        if (!container) return;
+        (traitIds || []).forEach((traitId) => {
+            const key = String(traitId || '');
+            const definition = storyTraitDefinition(key);
+            if (!definition || (key === 'nourish' && actor?.nourished)) return;
+            const chip = document.createElement('span');
+            chip.className = `story-effect story-trait story-trait-${key.replaceAll('_', '-')}`;
+            const name = localize(definition.name);
+            const description = localize(definition.description);
+            chip.title = [name, description].filter(Boolean).join('\n');
+            chip.setAttribute('aria-label', chip.title);
+            const icon = document.createElement('img');
+            icon.src = storyTraitIconUrl(key);
+            icon.alt = '';
+            icon.setAttribute('aria-hidden', 'true');
+            chip.append(icon);
+            attachStoryTraitTermAccess(chip, key);
+            container.append(chip);
+        });
+    }
+
     function canSatisfyCardSelection(card, combat) {
         const values = cardValues(card);
         for (const effect of values?.effects || []) {
@@ -3404,6 +3543,7 @@
             { key: 'wither', label: '凋萎', value: enemy.wither },
             { key: 'rockfall', label: '落石', value: enemy.rockfall },
         ]);
+        renderTraitsInto(effects, definition.traits, enemy);
 
         const intent = document.createElement('div');
         intent.className = 'story-intent';
@@ -3786,7 +3926,6 @@
             $('story-chest-relic-description')?.classList.toggle('hidden', !relicDescription);
         }
         if (isShop) {
-            setText('story-shop-mark', t.roomMarks.shop || '$');
             setText('story-shop-gold-label', t.shopWallet);
             setText('story-shop-gold-value', `${Math.max(0, Number(player.gold) || 0)}G`);
             setText('story-shop-remove-label', t.removePrice);
@@ -4524,6 +4663,10 @@
                 addStoryShortcutAction(context, 'toggle_focused', [storyKeyboardFocus]);
             }
         }
+        const chatControl = storyChatOpen ? $('story-chat-input') : $('story-chat-toggle');
+        if (storyElementVisible(chatControl)) {
+            addStoryShortcutAction(context, 'focus_chat', [chatControl]);
+        }
         addStoryShortcutAction(context, 'shortcut_help');
         return context;
     }
@@ -4690,6 +4833,12 @@
             return toggleStoryPile('discard');
         case 'view_exile':
             return toggleStoryPile('exile');
+        case 'focus_chat': {
+            const input = $('story-chat-input');
+            if (storyChatOpen && input && document.activeElement === input) return false;
+            setStoryChatOpen(!storyChatOpen);
+            return true;
+        }
         case 'shortcut_help':
             window.GTN_KEYBINDINGS?.showHelp?.();
             return true;
@@ -4876,6 +5025,15 @@
                     return;
                 }
                 openStoryStatusTerms(statusElement.dataset.storyStatusKey);
+                return;
+            }
+            const traitElement = event.target?.closest?.('[data-story-trait-key]');
+            if (traitElement) {
+                if (traitElement.dataset.storyTermLongPress === '1') {
+                    delete traitElement.dataset.storyTermLongPress;
+                    return;
+                }
+                openStoryTraitTerms(traitElement.dataset.storyTraitKey);
                 return;
             }
             const cardElement = event.target?.closest?.('.story-card.card, .story-pile-tile');

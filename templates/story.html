@@ -7,6 +7,8 @@
   <title>故事模式 | Garden of Thorn</title>
   <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=3" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/css/story.css?v={{ static_version }}">
+  <link rel="stylesheet" href="/static/css/shared-afk.css?v={{ static_version }}">
+  <link rel="stylesheet" href="/static/css/shared-lobby-chat.css?v={{ static_version }}">
   <script>
     (() => {
       const readCookie = (key) => {
@@ -40,27 +42,12 @@
 </head>
 <body>
   <div id="story-app" class="story-app">
-    <header class="story-header">
-      <a id="story-back" class="story-icon-command" href="/" aria-label="返回" title="返回">‹</a>
-      <div class="story-heading">
-        <h1 id="story-title">故事模式</h1>
-        <span id="story-subtitle">Garden of Thorn</span>
-      </div>
-      <div class="story-header-actions">
-        <button id="story-run-deck" class="story-run-deck-command hidden" type="button" aria-label="查看总牌库" title="查看总牌库">
-          <img src="/static/assets/ui-icons/total-pile.svg" alt="" aria-hidden="true">
-          <span id="story-run-deck-label">总牌库</span>
-        </button>
-        <span id="story-online-count" class="story-online-count">在线玩家：--</span>
-        <div class="story-account">
-          <span id="story-account-label">玩家</span>
-          <strong>{{ account.display_name }}</strong>
-        </div>
-        {% if story_dev_tools %}
-        <button id="story-dev-toggle" class="story-dev-toggle" type="button" aria-expanded="false" aria-controls="story-dev-panel">开发人员模式</button>
-        {% endif %}
-      </div>
-    </header>
+    <a id="story-back" class="story-exit-command" href="/" aria-label="返回" title="返回"><span class="story-exit-glyph" aria-hidden="true"></span></a>
+
+    <button id="story-chat-toggle" class="story-chat-toggle" type="button" aria-expanded="false" aria-controls="story-chat-panel">
+      <span id="story-chat-toggle-label">聊天</span>
+      <span id="story-chat-unread" class="story-chat-unread hidden" aria-label="0 条未读消息">0</span>
+    </button>
 
     {% if story_dev_tools %}
     <aside id="story-dev-panel" class="story-dev-panel hidden" aria-labelledby="story-dev-title">
@@ -256,7 +243,9 @@
           </div>
         </div>
         <div id="story-shop-context" class="story-room-context story-shop-context hidden">
-          <div id="story-shop-mark" class="story-room-context-mark" aria-hidden="true">$</div>
+          <div id="story-shop-mark" class="story-room-context-mark" aria-hidden="true">
+            <img src="/static/assets/story-ui-icons/gold.svg" alt="">
+          </div>
           <dl class="story-room-context-metrics story-shop-context-metrics">
             <div>
               <dt id="story-shop-gold-label">可用金币</dt>
@@ -299,28 +288,33 @@
       </section>
     </main>
 
-    <button id="story-chat-toggle" class="story-chat-toggle" type="button" aria-expanded="false" aria-controls="story-chat-panel">
-      <span id="story-chat-toggle-label">聊天</span>
-      <span id="story-chat-unread" class="story-chat-unread hidden" aria-label="0 条未读消息">0</span>
-    </button>
-    <aside id="story-chat-panel" class="story-chat-panel hidden" aria-labelledby="story-chat-title">
+    <aside id="story-chat-panel" class="story-chat-panel gtn-lobby-chat-surface hidden" aria-labelledby="story-chat-title">
       <header class="story-chat-heading">
-        <div>
-          <h2 id="story-chat-title">聊天</h2>
-          <span id="story-chat-status" class="story-chat-status">正在连接...</span>
-        </div>
+        <h3 id="story-chat-title" class="gtn-lobby-chat-title">聊天</h3>
+        <span id="story-chat-status" class="story-chat-status">正在连接...</span>
         <button id="story-chat-close" class="story-chat-close" type="button" aria-label="收起聊天">×</button>
       </header>
-      <div id="story-chat-log" class="story-chat-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
-      <div class="story-chat-input-row">
-        <textarea id="story-chat-input" rows="2" maxlength="200" placeholder="输入消息..." aria-label="输入消息"></textarea>
-        <button id="story-chat-send" class="story-chat-send" type="button" disabled>发送</button>
+      <div id="story-chat-log" class="story-chat-log gtn-lobby-chat-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
+      <div class="story-chat-input-row gtn-lobby-chat-input-row">
+        <input id="story-chat-input" class="gtn-lobby-chat-input" type="text" maxlength="200" placeholder="输入消息..." aria-label="输入消息">
+        <button id="story-chat-send" class="story-chat-send gtn-lobby-chat-send" type="button" disabled>发送</button>
       </div>
     </aside>
 
     <footer id="story-status-bar" class="story-status-bar">
       <span id="story-status-text">故事模式</span>
-      <span id="story-status-online">在线玩家：--</span>
+      <div class="story-status-center">
+        {% if story_dev_tools %}
+        <button id="story-dev-toggle" class="story-dev-toggle" type="button" aria-expanded="false" aria-controls="story-dev-panel">开发人员模式</button>
+        {% endif %}
+      </div>
+      <div class="story-status-actions">
+        <button id="story-run-deck" class="story-run-deck-command hidden" type="button" aria-label="查看总牌库" title="查看总牌库">
+          <img src="/static/assets/ui-icons/total-pile.svg" alt="" aria-hidden="true">
+          <span id="story-run-deck-label">总牌库</span>
+        </button>
+        <span id="story-status-online">在线玩家：--</span>
+      </div>
     </footer>
 
     <dialog id="story-pile-dialog" class="story-dialog story-pile-dialog">

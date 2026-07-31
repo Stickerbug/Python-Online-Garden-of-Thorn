@@ -3,6 +3,8 @@ set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/gtn}"
 DB_PATH="${DB_PATH:-/var/lib/gtn/gtn.sqlite3}"
+REPLAY_BLOB_DIR="${REPLAY_BLOB_DIR:-/var/lib/gtn/replay-blobs}"
+REPLAY_SNAPSHOT_DIR="${REPLAY_SNAPSHOT_DIR:-$BACKUP_DIR/replay-blobs-current}"
 KEEP_COUNT="${KEEP_COUNT:-1}"
 MIN_FREE_EXTRA_BYTES="${MIN_FREE_EXTRA_BYTES:-536870912}"
 LOCK_PATH="${LOCK_PATH:-/run/lock/gtn-db-backup.lock}"
@@ -46,9 +48,11 @@ fi
 stamp="$(date +%F-%H%M%S)"
 final_path="$BACKUP_DIR/gtn-$stamp.sqlite3"
 temp_path="$BACKUP_DIR/.gtn-$stamp.sqlite3.tmp.$$"
+replay_temp_path="$BACKUP_DIR/.replay-blobs.tmp.$$"
 
 cleanup_temp() {
     rm -f -- "$temp_path"
+    rm -rf -- "$replay_temp_path"
 }
 trap cleanup_temp EXIT INT TERM
 
@@ -91,8 +95,65 @@ if (( expected_size != backup_size )); then
     exit 1
 fi
 
+# Replay payloads are immutable external files. Snapshot only the paths
+# referenced by this SQLite backup and use hard links so the local safety copy
+# consumes inodes, not another copy of several gigabytes of replay data.
+external_count=0
+if sqlite3 -readonly "$temp_path" \
+    "SELECT 1 FROM pragma_table_info('match_replays') WHERE name='replay_blob_path' LIMIT 1;" \
+    | grep -qx 1; then
+    mkdir -p -- "$replay_temp_path"
+    while IFS= read -r relative_path; do
+        [[ -n "$relative_path" ]] || continue
+        case "/$relative_path/" in
+            *"/../"*|*"/./"*|*"//"*)
+                log "invalid replay blob path in database: $relative_path"
+                exit 1
+                ;;
+        esac
+        if [[ "$relative_path" = /* ]]; then
+            log "absolute replay blob path in database: $relative_path"
+            exit 1
+        fi
+        source_path="$REPLAY_BLOB_DIR/$relative_path"
+        target_path="$replay_temp_path/$relative_path"
+        if [[ ! -f "$source_path" ]]; then
+            log "missing replay blob: $source_path"
+            exit 1
+        fi
+        mkdir -p -- "$(dirname -- "$target_path")"
+        ln -- "$source_path" "$target_path"
+        external_count=$((external_count + 1))
+    done < <(
+        sqlite3 -readonly "$temp_path" \
+            "SELECT replay_blob_path FROM match_replays
+             WHERE COALESCE(replay_blob_path, '') <> ''
+             ORDER BY id;"
+    )
+    printf 'created_at=%s\ncount=%s\nsource=%s\n' \
+        "$(date --iso-8601=seconds)" "$external_count" "$REPLAY_BLOB_DIR" \
+        > "$replay_temp_path/MANIFEST"
+fi
+
 chmod 600 "$temp_path"
 mv -- "$temp_path" "$final_path"
+
+if [[ -d "$replay_temp_path" ]]; then
+    replay_previous_path="$BACKUP_DIR/.replay-blobs.previous"
+    case "$REPLAY_SNAPSHOT_DIR" in
+        "$BACKUP_DIR"/*) ;;
+        *)
+            log "REPLAY_SNAPSHOT_DIR must be inside BACKUP_DIR"
+            exit 1
+            ;;
+    esac
+    rm -rf -- "$replay_previous_path"
+    if [[ -e "$REPLAY_SNAPSHOT_DIR" ]]; then
+        mv -- "$REPLAY_SNAPSHOT_DIR" "$replay_previous_path"
+    fi
+    mv -- "$replay_temp_path" "$REPLAY_SNAPSHOT_DIR"
+    rm -rf -- "$replay_previous_path"
+fi
 trap - EXIT INT TERM
 
 # Delete older complete backups only after the new backup has been validated and
@@ -107,4 +168,4 @@ if (( ${#backups[@]} > KEEP_COUNT )); then
     done
 fi
 
-log "completed; bytes=$backup_size retained=$KEEP_COUNT"
+log "completed; bytes=$backup_size retained=$KEEP_COUNT external_replays=$external_count"
