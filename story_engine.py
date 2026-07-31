@@ -10,6 +10,7 @@ from story_content import (
     STORY_CARDS,
     STORY_ENCOUNTERS,
     STORY_ENEMIES,
+    STORY_PLAYER_ATTACK_EFFECT_TYPES,
     STORY_RELICS,
     STORY_REWARD_CARD_IDS,
     STORY_RULES,
@@ -611,21 +612,52 @@ def _enemy_raw_damage(state, enemy, amount, events, source, propagate=False):
     return dealt
 
 
+def _player_attack_effect_segment(state, effect, target, context):
+    """Return the base damage and hit count for one card attack effect."""
+    combat = state['combat']
+    effect_type = str(effect.get('type') or '')
+    amount = int(effect.get('amount') or 0)
+    if effect_type == 'damage':
+        base_amount = amount
+        hits = max(1, int(effect.get('hits') or 1))
+    elif effect_type == 'damage_per_status':
+        base_amount = amount
+        hits = int(effect.get('base_hits') or 0) + _status_count(target)
+    elif effect_type == 'damage_from_shield':
+        base_amount = int(combat.get('shield') or 0) * amount
+        hits = 1
+    elif effect_type == 'damage_per_elixir':
+        base_amount = amount
+        hits = int(context.get('x_cost') or 0)
+    else:
+        return None
+    attack_multiplier = float(context.get('attack_multiplier') or 1)
+    return max(0, math.floor(base_amount * attack_multiplier)), max(0, hits)
+
+
+def _player_attack_hit_amount(state, enemy, base_amount, effect=None):
+    """Apply shared player-side and target-side modifiers to one physical hit."""
+    combat = state['combat']
+    effect = effect or {}
+    power_scale = int(effect.get('power_scale') or 1)
+    power = int(combat.get('power') or 0) + int(combat.get('temporary_power') or 0)
+    amount = max(0, int(base_amount) + power * power_scale)
+    if int(combat.get('weak') or 0) > 0:
+        amount = math.floor(amount * 0.75)
+    if int(enemy.get('vulnerable') or 0) > 0:
+        amount = math.floor(amount * 1.5)
+    if effect.get('damage_multiplier'):
+        amount = math.floor(amount * float(effect['damage_multiplier']))
+    return max(0, amount)
+
+
 def _enemy_physical_damage(state, enemy, base_amount, hits, events, source, values=None):
     combat = state['combat']
     values = values or {}
     hit_count = max(0, int(hits))
     if hit_count <= 0:
         return 0
-    power_scale = int(values.get('power_scale') or 1)
-    card_power = int(combat.get('power') or 0) + int(combat.get('temporary_power') or 0)
-    amount = max(0, int(base_amount) + card_power * power_scale)
-    if int(combat.get('weak') or 0) > 0:
-        amount = math.floor(amount * 0.75)
-    if int(enemy.get('vulnerable') or 0) > 0:
-        amount = math.floor(amount * 1.5)
-    if values.get('damage_multiplier'):
-        amount = math.floor(amount * float(values['damage_multiplier']))
+    amount = _player_attack_hit_amount(state, enemy, base_amount, values)
     total = 0
     for hit_index in range(1, hit_count + 1):
         shield = int(enemy.get('shield') or 0)
@@ -780,11 +812,12 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
     combat = state['combat']
     effect_type = str(effect.get('type') or '')
     amount = effect.get('amount', 0)
-    if effect_type == 'damage':
-        hits = max(1, int(effect.get('hits') or 1))
-        multiplier = float(context.get('attack_multiplier') or 1)
+    if effect_type in STORY_PLAYER_ATTACK_EFFECT_TYPES:
         for target in targets:
-            hit_amount = math.floor(int(amount) * multiplier)
+            segment = _player_attack_effect_segment(state, effect, target, context)
+            if segment is None:
+                continue
+            hit_amount, hits = segment
             _enemy_physical_damage(
                 state,
                 target,
@@ -792,29 +825,8 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
                 hits,
                 events,
                 _localized(values.get('name')),
-                values={**effect, 'damage_multiplier': 1},
+                values=effect,
             )
-    elif effect_type == 'damage_per_status':
-        for target in targets:
-            hits = int(effect.get('base_hits') or 0) + _status_count(target)
-            if hits > 0:
-                _enemy_physical_damage(state, target, int(amount), hits, events, _localized(values.get('name')))
-    elif effect_type == 'damage_from_shield':
-        for target in targets:
-            _enemy_physical_damage(
-                state,
-                target,
-                int(combat.get('shield') or 0) * int(amount),
-                1,
-                events,
-                _localized(values.get('name')),
-            )
-    elif effect_type == 'damage_per_elixir':
-        spent = int(context.get('x_cost') or 0)
-        multiplier = float(context.get('attack_multiplier') or 1)
-        hit_amount = math.floor(int(amount) * multiplier)
-        for target in targets:
-            _enemy_physical_damage(state, target, hit_amount, spent, events, _localized(values.get('name')))
     elif effect_type == 'status':
         for target in targets:
             _apply_status(state, target, str(effect.get('status') or ''), int(amount), events)
@@ -1195,30 +1207,22 @@ def _card_damage_prediction(state, card, enemy):
         return None
     combat = state['combat']
     predicted = []
-    multiplier = float(combat.get('next_attack_multiplier') or 1)
-    power = int(combat.get('power') or 0) + int(combat.get('temporary_power') or 0)
+    cost_e = values.get('cost_e')
+    context = {
+        'attack_multiplier': float(combat.get('next_attack_multiplier') or 1),
+        'x_cost': (
+            int(combat.get('elixir') or 0)
+            if cost_e == 'X'
+            else int(cost_e or 0)
+        ),
+    }
+    shield = int(enemy.get('shield') or 0)
     for effect in values.get('effects') or ():
-        effect_type = effect.get('type')
-        hits = int(effect.get('hits') or 1)
-        amount = int(effect.get('amount') or 0)
-        if effect_type == 'damage':
-            value = math.floor(amount * multiplier) + power * int(effect.get('power_scale') or 1)
-        elif effect_type == 'damage_per_status':
-            hits = int(effect.get('base_hits') or 0) + _status_count(enemy)
-            value = amount + power
-        elif effect_type == 'damage_from_shield':
-            value = int(combat.get('shield') or 0) * amount + power
-            hits = 1
-        elif effect_type == 'damage_per_elixir':
-            value = math.floor(amount * multiplier) + power
-            hits = int(combat.get('elixir') or 0)
-        else:
+        segment = _player_attack_effect_segment(state, effect, enemy, context)
+        if segment is None:
             continue
-        if int(combat.get('weak') or 0) > 0:
-            value = math.floor(value * 0.75)
-        if int(enemy.get('vulnerable') or 0) > 0:
-            value = math.floor(value * 1.5)
-        shield = int(enemy.get('shield') or 0)
+        base_amount, hits = segment
+        value = _player_attack_hit_amount(state, enemy, base_amount, effect)
         for _ in range(max(0, hits)):
             blocked = min(shield, max(0, value))
             shield -= blocked
@@ -1339,7 +1343,11 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         combat['endurance'] += 1
     for enemy in enemies:
         if _has_relic(state, 'opening_lightning'):
+            event_offset = len(events)
             _enemy_raw_damage(state, enemy, int(STORY_RELICS['opening_lightning']['amount']), events, 'opening_lightning')
+            for event in events[event_offset:]:
+                if event.get('type') == 'enemy_damage':
+                    event['parallel_group'] = 'opening_lightning'
     draw_count = int(STORY_RULES['draw_per_turn']) + int(state['player'].get('opening_draw_bonus') or 0)
     if _has_relic(state, 'prepared'):
         draw_count += int(STORY_RELICS['prepared']['amount'])
@@ -3173,6 +3181,11 @@ def apply_story_action(source_state, action_type, payload, seed):
             checkpoint_kind = f'{phase}_entry'
         elif previous_phase != phase:
             checkpoint_kind = f'{phase}_entry'
+        elif phase == 'combat' and action_type != 'resume_node':
+            # Every accepted combat action leaves a complete, server-authoritative
+            # state. Refresh recovery must resume here instead of rewinding the
+            # whole encounter and losing piles such as the exile pile.
+            checkpoint_kind = 'combat_progress'
         elif action_type == 'resolve_room' and phase == 'room':
             checkpoint_kind = 'room_progress'
         elif action_type == 'choose_reward' and phase == 'reward':

@@ -116,6 +116,39 @@ def test_story_status_icons_open_term_descriptions():
     assert '.story-status-terms-icon img {' in STORY_CSS
 
 
+def test_story_talents_open_term_descriptions_from_every_visible_source():
+    assert 'function openStoryRelicTerms(relicKey)' in STORY_JS
+    assert 'function attachStoryRelicTermAccess(element, relicKey)' in STORY_JS
+    assert 'element.dataset.storyRelicKey = key;' in STORY_JS
+    assert "event.target?.closest?.('[data-story-relic-key]')" in STORY_JS
+    assert 'openStoryRelicTerms(relicElement.dataset.storyRelicKey);' in STORY_JS
+    assert 'title.textContent = t.talentTerms;' in STORY_JS
+    assert "kind: 'relic'," in STORY_JS
+    assert "attachStoryRelicTermAccess($('story-chest-relic-name')?.parentElement, room.relic);" in STORY_JS
+    assert 'if (options.relicKey) attachStoryRelicTermAccess(button, options.relicKey);' in STORY_JS
+    assert 'relicKey: item.relic_id,' in STORY_JS
+    assert 'reward.relic,' in STORY_JS
+    assert '.story-relic-terms-modal {' in STORY_CSS
+    assert '.story-term-row-relic {' in STORY_CSS
+    assert '.story-term-relic {' in STORY_CSS
+
+
+def test_story_equipment_matches_classic_orbit_preview_and_terms():
+    assert "visual.className = 'story-equipment-visual';" in STORY_JS
+    assert "icon.className = 'story-equipment-icon';" in STORY_JS
+    assert "image.className = 'story-equipment-image';" in STORY_JS
+    assert "item.style.setProperty('--story-equipment-orbit-delay'" in STORY_JS
+    assert "item.style.setProperty('--story-equipment-spin-delay'" in STORY_JS
+    assert 'storyCardElementData.set(item, card);' in STORY_JS
+    assert 'attachStoryEquipmentPreview(item, card);' in STORY_JS
+    assert "event.target?.closest?.('.story-equipment')" in STORY_JS
+    assert 'animation: storyEquipmentOrbit 20s linear infinite;' in STORY_CSS
+    assert 'animation: storyEquipmentCounterOrbit 20s linear infinite;' in STORY_CSS
+    assert 'animation: storyEquipmentIconSpin 17.333s linear infinite;' in STORY_CSS
+    assert '.story-equipment-preview {' in STORY_CSS
+    assert '.story-equipment-preview .story-card.card {' in STORY_CSS
+
+
 def test_story_patch_traits_and_gold_icon_are_visible_ui_assets():
     assert 'function renderTraitsInto(container, traitIds, actor = null)' in STORY_JS
     assert 'function openStoryTraitTerms(traitKey)' in STORY_JS
@@ -368,6 +401,28 @@ def test_story_out_of_combat_deck_reuses_the_pile_viewer():
     assert '.story-run-deck-command {' in STORY_CSS
 
 
+def test_story_talent_overview_sits_before_deck_and_opens_terms():
+    status_actions = STORY_TEMPLATE.split(
+        '<div class="story-status-actions">',
+        1,
+    )[1].split(
+        '</div>',
+        1,
+    )[0]
+    assert status_actions.index('id="story-talent-overview"') < status_actions.index('id="story-run-deck"')
+    assert 'id="story-talent-overview-label"' in STORY_TEMPLATE
+    assert '/static/assets/ui-icons/achievements.svg' in STORY_TEMPLATE
+    assert 'function openStoryTalentOverview()' in STORY_JS
+    assert 'state.player?.relics' in STORY_JS
+    assert 'createStoryTalentOverviewItem(relicKey, index + 1)' in STORY_JS
+    assert 'attachStoryRelicTermAccess(item, key);' in STORY_JS
+    assert 'openStoryRelicTerms(key);' in STORY_JS
+    assert "$('story-talent-overview')?.addEventListener('click', openStoryTalentOverview);" in STORY_JS
+    assert "grid?.classList.add('is-talents');" in STORY_JS
+    assert '.story-pile-grid.is-talents {' in STORY_CSS
+    assert '.story-talent-overview-item {' in STORY_CSS
+
+
 def test_story_keyboard_card_selection_preserves_the_last_pointer_position():
     selection_branch = STORY_JS.split(
         'function selectCombatCard(state, card, event = null) {',
@@ -413,6 +468,19 @@ def test_story_event_animation_respects_server_sequence_metadata():
     assert 'String(event?.parallel_group || \'\')' in STORY_JS
     assert 'await Promise.all(' in STORY_JS
     assert 'playStoryPresentationEvent(event, nextRun)' in STORY_JS
+
+
+def test_story_opening_lightning_stages_and_animates_combat_entrance():
+    assert 'function createStoryCombatEntranceRun(run, events)' in STORY_JS
+    assert "String(event?.source || '') === 'opening_lightning'" in STORY_JS
+    assert 'storyCombatEntranceAnimating = true;' in STORY_JS
+    assert 'renderRun(entranceRun);' in STORY_JS
+    assert 'await storyNextPaint();' in STORY_JS
+    assert 'const strike = animateOpeningLightning(target);' in STORY_JS
+    assert "waitForStoryAnimation(target, 'is-opening-lightning-hit', 520)" in STORY_JS
+    assert '.story-opening-lightning.is-striking {' in STORY_CSS
+    assert '@keyframes storyOpeningLightningStrike {' in STORY_CSS
+    assert '@keyframes storyActorLightningHit {' in STORY_CSS
 
 
 def test_story_enemy_lifecycle_uses_stable_summon_and_defeat_actors():
@@ -519,3 +587,44 @@ def test_story_rest_chest_and_shop_have_dedicated_context_bands():
     assert '.story-rest-context {' in STORY_CSS
     assert '.story-chest-context {' in STORY_CSS
     assert '.story-shop-context {' in STORY_CSS
+
+
+def test_story_room_tabs_remain_visible_when_card_lists_overflow():
+    browser_index = STORY_TEMPLATE.index('<div class="story-room-browser">')
+    tabs_index = STORY_TEMPLATE.index('id="story-room-tabs"')
+    options_index = STORY_TEMPLATE.index('id="story-room-options"')
+    footer_index = STORY_TEMPLATE.index('id="story-room-footer"')
+    assert browser_index < tabs_index < options_index < footer_index
+
+    room_rule = STORY_CSS.split(
+        '#story-room.story-choice-screen {',
+        1,
+    )[1].split(
+        '}',
+        1,
+    )[0]
+    assert 'overflow: hidden;' in room_rule
+    assert 'flex-direction: column;' in room_rule
+    assert 'justify-content: flex-start;' in room_rule
+
+    browser_rule = STORY_CSS.split(
+        '.story-room-browser {\n  width: min(980px',
+        1,
+    )[1].split(
+        '}',
+        1,
+    )[0]
+    assert 'min-height: 0;' in browser_rule
+    assert 'flex: 1 1 auto;' in browser_rule
+
+    options_rule = STORY_CSS.split(
+        '.story-room-browser #story-room-options {',
+        1,
+    )[1].split(
+        '}',
+        1,
+    )[0]
+    assert 'min-height: 0;' in options_rule
+    assert 'overflow-y: auto;' in options_rule
+    assert 'align-content: start;' in options_rule
+    assert 'align-content: safe center;' in STORY_CSS

@@ -36,6 +36,13 @@ STORY_CARD_TYPES = {
     'infect': {'name': {'zh': '状态牌', 'en': 'Infect'}, 'color': '#7E9638'},
 }
 
+STORY_PLAYER_ATTACK_EFFECT_TYPES = frozenset({
+    'damage',
+    'damage_per_status',
+    'damage_from_shield',
+    'damage_per_elixir',
+})
+
 STORY_TAGS = {
     'precise': {
         'name': {'zh': '精准', 'en': 'Precise'},
@@ -149,6 +156,7 @@ STORY_STATUS_IMAGE_URLS = {
     'rockfall': '/static/assets/story-status-icons/rockfall.svg',
     'temporary_power': '/static/assets/story-status-icons/temporary-power.svg',
     'vulnerable': '/static/assets/story-status-icons/vulnerable.svg',
+    'fragile': '/static/assets/story-status-icons/fragile.svg',
     'wither': '/static/assets/story-status-icons/wither.svg',
 }
 
@@ -910,8 +918,7 @@ def story_content_payload(card_defs=None):
 def validate_story_content():
     errors = []
     card_effect_types = {
-        'choose_exile', 'copy_hand_card', 'damage', 'damage_from_shield',
-        'damage_per_elixir', 'damage_per_status', 'decaying_shield',
+        'choose_exile', 'copy_hand_card', 'decaying_shield',
         'delayed_copy', 'discard_to_draw_top', 'draw', 'draw_target_status',
         'draw_to_limit', 'elixir', 'elixir_from_hand', 'equipment',
         'exile_hand_for_shield', 'first_use_power', 'next_attack_multiplier',
@@ -919,6 +926,7 @@ def validate_story_content():
         'shield_from_target_status', 'shuffle_hand_redraw', 'status', 'status_self',
         'temporary_cost_down', 'temporary_effect',
     }
+    card_effect_types.update(STORY_PLAYER_ATTACK_EFFECT_TYPES)
     card_scripts = {
         'azalea', 'azalea_plus', 'light_sprout', 'return_draw_top', 'slimed',
         'startled', 'unrelenting',

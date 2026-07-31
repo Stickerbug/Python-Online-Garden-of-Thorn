@@ -45,6 +45,8 @@
     let storyChatEntries = [];
     let storyChatHistorySignature = '';
     let storyChatUnreadCount = 0;
+    let storyEquipmentPreview = null;
+    let storyCombatEntranceAnimating = false;
     const STORY_AFK_ACTIVITY_REPORT_INTERVAL_MS = 20000;
     const storyCardElementData = new WeakMap();
     const STORY_PRESENCE_CLIENT_ID = globalThis.crypto?.randomUUID
@@ -144,6 +146,8 @@
             blessingCardReward: (index, total) => `Card reward ${index}/${total}`,
             intent: 'Intent', endTurn: 'End Turn', playerTurn: 'Your Turn', enemyTurn: 'Enemy Turn', close: 'Close',
             drawPile: 'Draw', discardPile: 'Discard', exilePile: 'Exile',
+            talentOverview: 'Talents', viewTalentOverview: 'View Talents',
+            talentTotal: (count) => `${count} talent(s)`, noTalents: 'No talents acquired',
             runDeck: 'Full Deck', viewRunDeck: 'View Full Deck',
             battleWon: 'Battle won', chooseCard: 'Choose a card', skip: 'Skip card',
             rewards: 'Battle rewards', rewardCopy: 'Claim each reward before continuing.',
@@ -180,7 +184,7 @@
             chooseCardHint: 'Choose a card', damagePrediction: 'Damage',
             chooseCards: 'Choose cards', chooseExact: (value) => `Choose ${value} card(s).`,
             chooseUpTo: (value) => `Choose up to ${value} card(s).`,
-            cardTerms: 'Card Terms', statusTerms: 'Status Term', traitTerms: 'Effect Term', noCardTerms: 'No additional terms',
+            cardTerms: 'Card Terms', statusTerms: 'Status Term', traitTerms: 'Effect Term', talentTerms: 'Talent Details', noCardTerms: 'No additional terms',
             beforeUpgrade: 'Before Upgrade', afterUpgrade: 'After Upgrade',
             cardTypes: { thorn: 'Thorn', bloom: 'Bloom', root: 'Root', guard: 'Guard', curse: 'Curse', infect: 'Infect' },
             pileTotal: (label, count) => `${label}: ${count} cards`,
@@ -212,7 +216,10 @@
             blessingRewardCopy: '每次卡牌奖励选择1张牌。',
             blessingCardReward: (index, total) => `卡牌奖励 ${index}/${total}`,
             intent: '意图', endTurn: '结束回合', playerTurn: '玩家回合', enemyTurn: '敌方回合', close: '关闭', drawPile: '抽牌堆',
-            discardPile: '弃牌堆', exilePile: '放逐区', runDeck: '总牌库', viewRunDeck: '查看总牌库',
+            discardPile: '弃牌堆', exilePile: '放逐区',
+            talentOverview: '天赋总览', viewTalentOverview: '查看天赋总览',
+            talentTotal: (count) => `共 ${count} 项天赋`, noTalents: '尚未获得天赋',
+            runDeck: '总牌库', viewRunDeck: '查看总牌库',
             battleWon: '战斗胜利', chooseCard: '选择一张牌',
             skip: '跳过卡牌', rewards: '战斗奖励', rewardCopy: '逐项领取奖励后继续前进。',
             claim: '领取', claimed: '已领取', cardReward: '卡牌奖励', talentReward: '天赋',
@@ -247,7 +254,7 @@
             chooseCardHint: '选择一张手牌', damagePrediction: '伤害预测',
             chooseCards: '选择卡牌', chooseExact: (value) => `选择 ${value} 张牌。`,
             chooseUpTo: (value) => `选择至多 ${value} 张牌。`,
-            cardTerms: '卡牌术语', statusTerms: '状态术语', traitTerms: '特殊效果术语', noCardTerms: '没有额外术语',
+            cardTerms: '卡牌术语', statusTerms: '状态术语', traitTerms: '特殊效果术语', talentTerms: '天赋说明', noCardTerms: '没有额外术语',
             beforeUpgrade: '升级前', afterUpgrade: '升级后',
             cardTypes: { thorn: '攻击', bloom: '技能', root: '装备', guard: '反制', curse: '诅咒', infect: '状态牌' },
             pileTotal: (label, count) => `${label}：${count} 张`,
@@ -278,6 +285,8 @@
             blessingCardReward: (index, total) => `Récompense de carte ${index}/${total}`,
             intent: 'Intention', endTurn: 'Fin du tour',
             drawPile: 'Pioche', discardPile: 'Défausse', exilePile: 'Exil',
+            talentOverview: 'Talents', viewTalentOverview: 'Voir les talents',
+            talentTotal: (count) => `${count} talent(s)`, noTalents: 'Aucun talent obtenu',
             runDeck: 'Deck complet', viewRunDeck: 'Voir le deck complet', battleWon: 'Victoire',
             chooseCard: 'Choisissez une carte', skip: 'Passer la carte', room: 'Salle', newJourney: 'Nouveau voyage',
             rewards: 'Récompenses du combat', rewardCopy: 'Récupérez chaque récompense avant de continuer.',
@@ -287,7 +296,7 @@
             developerMode: 'Mode développeur', devJump: 'Changer de niveau', devFloor: 'Étage', devRoom: 'Salle',
             devValues: 'Modifier les valeurs', devApply: 'Appliquer', devJumpButton: 'Aller',
             devValuesUpdated: 'Valeurs mises à jour', devJumped: 'Niveau chargé',
-            cardTerms: 'Termes de carte', statusTerms: 'Terme d’état', traitTerms: 'Terme d’effet', noCardTerms: 'Aucun terme supplémentaire',
+            cardTerms: 'Termes de carte', statusTerms: 'Terme d’état', traitTerms: 'Terme d’effet', talentTerms: 'Détails du talent', noCardTerms: 'Aucun terme supplémentaire',
             beforeUpgrade: 'Avant amélioration', afterUpgrade: 'Après amélioration',
             shopCards: 'Cartes', shopTalents: 'Talents', remove: 'Retirer',
             roomActions: 'Choix', restGold: 'Or', plantDandelion: 'Planter le pissenlit',
@@ -328,6 +337,8 @@
             transform: '変化', blessingRewardCopy: '各カード報酬から1枚選びます。',
             blessingCardReward: (index, total) => `カード報酬 ${index}/${total}`,
             intent: '意図', endTurn: 'ターン終了', drawPile: '山札', discardPile: '捨て札', exilePile: '追放',
+            talentOverview: '天賦一覧', viewTalentOverview: '天賦一覧を見る',
+            talentTotal: (count) => `天賦 ${count}個`, noTalents: '天賦を獲得していません',
             runDeck: '全デッキ', viewRunDeck: '全デッキを見る',
             battleWon: '戦闘勝利', chooseCard: 'カードを選択', skip: 'カードをスキップ', room: '部屋',
             rewards: '戦闘報酬', rewardCopy: 'すべての報酬を受け取ってから先へ進みます。',
@@ -337,7 +348,7 @@
             developerMode: '開発者モード', devJump: 'ステージ移動', devFloor: '階', devRoom: '部屋',
             devValues: '数値設定', devApply: '適用', devJumpButton: '移動',
             devValuesUpdated: '数値を更新しました', devJumped: 'ステージを読み込みました',
-            cardTerms: 'カード用語', statusTerms: '状態用語', traitTerms: '特殊効果用語', noCardTerms: '追加用語なし',
+            cardTerms: 'カード用語', statusTerms: '状態用語', traitTerms: '特殊効果用語', talentTerms: '天賦の説明', noCardTerms: '追加用語なし',
             beforeUpgrade: 'アップグレード前', afterUpgrade: 'アップグレード後',
             shopCards: 'カード', shopTalents: '天賦', remove: '削除',
             roomActions: '選択肢', restGold: 'ゴールド', plantDandelion: 'タンポポを植える',
@@ -477,6 +488,7 @@
             'story-title': t.title, 'story-loading-label': t.loading,
             'story-empty-title': t.emptyTitle, 'story-start': t.start, 'story-stage-label': t.stage,
             'story-biome-label': t.biome, 'story-gold-label': t.gold, 'story-map-title': t.route,
+            'story-talent-overview-label': t.talentOverview,
             'story-run-deck-label': t.runDeck,
             'story-reset-map': t.resetMap,
             'story-reset-title': t.resetTitle, 'story-reset-message': t.resetMessage,
@@ -513,6 +525,11 @@
         if (runDeck) {
             runDeck.title = t.viewRunDeck;
             runDeck.setAttribute('aria-label', t.viewRunDeck);
+        }
+        const talentOverview = $('story-talent-overview');
+        if (talentOverview) {
+            talentOverview.title = t.viewTalentOverview;
+            talentOverview.setAttribute('aria-label', t.viewTalentOverview);
         }
         const devClose = $('story-dev-close');
         if (devClose) devClose.setAttribute('aria-label', t.close);
@@ -1394,11 +1411,13 @@
     }
 
     function showView(name) {
+        if (name !== 'story-combat') removeStoryEquipmentPreview();
         VIEWS.forEach((id) => $(id)?.classList.toggle('hidden', id !== name));
         const runDeck = $('story-run-deck');
         const runDeckUnavailable = !activeRun?.state
             || ['story-loading', 'story-empty', 'story-combat'].includes(name);
         runDeck?.classList.toggle('hidden', runDeckUnavailable);
+        $('story-talent-overview')?.classList.toggle('hidden', runDeckUnavailable);
         if (storyKeyboardFocus && !storyElementVisible(storyKeyboardFocus)) clearStoryKeyboardFocus();
         window.GTN_KEYBINDINGS?.refreshHints?.();
     }
@@ -1435,6 +1454,35 @@
 
     function storySleep(duration) {
         return new Promise((resolve) => window.setTimeout(resolve, duration));
+    }
+
+    function storyNextPaint() {
+        return new Promise((resolve) => {
+            window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+        });
+    }
+
+    function createStoryCombatEntranceRun(run, events) {
+        const sequence = Array.isArray(events) ? events : [];
+        if (!sequence.some(
+            (event) => event?.type === 'enemy_damage'
+                && String(event?.source || '') === 'opening_lightning',
+        )) return null;
+        const stagedRun = typeof structuredClone === 'function'
+            ? structuredClone(run)
+            : JSON.parse(JSON.stringify(run));
+        const enemies = stagedRun?.state?.combat?.enemies || [];
+        [...sequence].reverse().forEach((event) => {
+            if (event?.type !== 'enemy_damage') return;
+            const enemy = enemies.find((item) => String(item.id) === String(event.enemy_id));
+            if (!enemy) return;
+            const before = Number(event.before);
+            if (Number.isFinite(before)) enemy.health = before;
+            const blocked = (Array.isArray(event.history) ? event.history : [])
+                .reduce((total, hit) => total + Math.max(0, Number(hit?.blocked) || 0), 0);
+            if (blocked > 0) enemy.shield = Math.max(0, Number(enemy.shield) || 0) + blocked;
+        });
+        return stagedRun;
     }
 
     function storyEnemyActor(enemyId) {
@@ -1523,6 +1571,31 @@
         group.style.setProperty('--story-shake-rotate', `${rotate.toFixed(2)}deg`);
         group.style.setProperty('--story-shake-rotate-reverse', `${(-rotate * .72).toFixed(2)}deg`);
         await waitForStoryAnimation(group, 'is-gaining', 330);
+    }
+
+    async function animateOpeningLightning(target) {
+        const layer = $('story-float-layer');
+        if (!layer || !target) return;
+        const rect = target.getBoundingClientRect();
+        const strike = document.createElement('span');
+        strike.className = 'story-opening-lightning';
+        strike.style.left = `${rect.left + rect.width / 2}px`;
+        strike.style.top = `${Math.max(-24, rect.top - 104)}px`;
+        strike.style.height = `${Math.max(160, rect.height + 118)}px`;
+        const bolt = document.createElement('span');
+        bolt.className = 'story-opening-lightning-bolt';
+        const flash = document.createElement('span');
+        flash.className = 'story-opening-lightning-flash';
+        strike.append(bolt, flash);
+        layer.append(strike);
+        try {
+            await Promise.all([
+                waitForStoryAnimation(strike, 'is-striking', 520),
+                waitForStoryAnimation(target, 'is-opening-lightning-hit', 520),
+            ]);
+        } finally {
+            strike.remove();
+        }
     }
 
     async function animateEnemySummon(event, nextRun) {
@@ -1674,9 +1747,17 @@
             spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
         } else if (eventType === 'enemy_damage') {
             const target = storyEnemyActor(event.enemy_id);
-            updateAnimatedEnemyHealth(event, nextRun);
-            await waitForStoryAnimation(target, 'is-taking-hit', 280);
-            spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
+            if (String(event.source || '') === 'opening_lightning') {
+                const strike = animateOpeningLightning(target);
+                await storySleep(105);
+                updateAnimatedEnemyHealth(event, nextRun);
+                spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
+                await strike;
+            } else {
+                updateAnimatedEnemyHealth(event, nextRun);
+                await waitForStoryAnimation(target, 'is-taking-hit', 280);
+                spawnStoryFloat(target, `-${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
+            }
         } else if (eventType === 'enemy_gain') {
             const target = storyEnemyActor(event.enemy_id);
             const effectKind = event.effect_kind || (
@@ -1774,6 +1855,7 @@
         actionInFlight = true;
         document.body.dataset.actionInFlight = 'true';
         try {
+            const previousPhase = String(activeRun?.state?.phase || '');
             const result = await requestJson('/api/story/run/action', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -1786,7 +1868,21 @@
                 }),
             });
             const nextRun = result.run || activeRun;
-            await playStoryEventSequence(result.events, nextRun, actionType);
+            const enteringCombat = previousPhase !== 'combat'
+                && String(nextRun?.state?.phase || '') === 'combat';
+            const entranceRun = enteringCombat
+                ? createStoryCombatEntranceRun(nextRun, result.events)
+                : null;
+            if (entranceRun) {
+                storyCombatEntranceAnimating = true;
+                renderRun(entranceRun);
+                await storyNextPaint();
+            }
+            try {
+                await playStoryEventSequence(result.events, nextRun, actionType);
+            } finally {
+                storyCombatEntranceAnimating = false;
+            }
             renderRun(nextRun);
             return result;
         } catch (error) {
@@ -2645,6 +2741,69 @@
         return entry;
     }
 
+    function createStoryTalentOverviewItem(relicKey, order) {
+        const key = String(relicKey || '');
+        const definition = storyRelicDefinition(key);
+        if (!definition) return null;
+        const color = storyRelicRarityColor(definition);
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'story-talent-overview-item';
+        item.style.setProperty('--story-relic-color', color);
+
+        const marker = document.createElement('span');
+        marker.className = 'story-talent-overview-marker';
+        marker.textContent = '★';
+        marker.setAttribute('aria-hidden', 'true');
+
+        const copy = document.createElement('span');
+        copy.className = 'story-talent-overview-copy';
+        const name = document.createElement('strong');
+        name.textContent = localize(definition.name);
+        const description = document.createElement('span');
+        description.className = 'story-talent-overview-description';
+        appendStoryRichText(description, localize(definition.description));
+        copy.append(name, description);
+
+        const index = document.createElement('span');
+        index.className = 'story-talent-overview-order';
+        index.textContent = String(order);
+        item.append(marker, copy, index);
+        attachStoryRelicTermAccess(item, key);
+        item.addEventListener('click', () => {
+            if (item.dataset.storyRelicSuppressClick === '1') return;
+            openStoryRelicTerms(key);
+        });
+        return item;
+    }
+
+    function openStoryTalentOverview() {
+        const state = activeRun?.state;
+        if (!state) return;
+        const relics = Array.isArray(state.player?.relics) ? state.player.relics : [];
+        setText('story-pile-title', t.talentOverview);
+        setText('story-pile-total', t.talentTotal(relics.length));
+        const grid = $('story-pile-grid');
+        grid?.replaceChildren();
+        grid?.classList.add('is-talents');
+        if (!relics.length) {
+            const empty = document.createElement('div');
+            empty.className = 'story-pile-empty';
+            empty.textContent = t.noTalents;
+            grid?.append(empty);
+        } else {
+            relics.forEach((relicKey, index) => {
+                const item = createStoryTalentOverviewItem(relicKey, index + 1);
+                if (item) grid?.append(item);
+            });
+        }
+        const dialog = $('story-pile-dialog');
+        if (dialog) {
+            dialog.dataset.pileKind = 'talents';
+            dialog.showModal();
+        }
+    }
+
     function openStoryPile(kind) {
         const state = activeRun?.state;
         const combat = state?.combat;
@@ -2663,6 +2822,7 @@
         setText('story-pile-total', t.pileTotal(config.title, cards.length));
         const grid = $('story-pile-grid');
         grid?.replaceChildren();
+        grid?.classList.remove('is-talents');
         if (!cards.length) {
             const empty = document.createElement('div');
             empty.className = 'story-pile-empty';
@@ -2874,6 +3034,14 @@
             name.textContent = localize(item.definition.name);
             badge.append(name);
             heading.append(badge);
+        } else if (item.kind === 'relic') {
+            const badge = document.createElement('span');
+            const color = storyRelicRarityColor(item.definition);
+            row.style.setProperty('--story-relic-color', color);
+            badge.className = 'story-term-relic';
+            badge.style.setProperty('--story-relic-color', color);
+            badge.textContent = localize(item.definition.name);
+            heading.append(badge);
         } else {
             const badge = document.createElement('span');
             badge.className = 'story-term-status';
@@ -2927,6 +3095,18 @@
 
     function storyTraitIconUrl(traitKey) {
         return String(storyTraitDefinition(traitKey)?.image_url || '').trim();
+    }
+
+    function storyRelicDefinition(relicKey) {
+        return storyContent?.relics?.[String(relicKey || '')] || null;
+    }
+
+    function storyRelicRarityColor(definition) {
+        const rarity = String(definition?.rarity || 'common');
+        return String(
+            storyContent?.rarities?.[rarity]?.color
+            || (rarity === 'special' ? '#D4AC0D' : '#FFE65D'),
+        );
     }
 
     function openStoryStatusTerms(statusKey) {
@@ -3135,6 +3315,107 @@
         });
     }
 
+    function openStoryRelicTerms(relicKey) {
+        const key = String(relicKey || '');
+        const definition = storyRelicDefinition(key);
+        const dialog = $('story-term-dialog');
+        const content = $('story-term-content');
+        if (!key || !definition || !dialog || !content) return false;
+        const termKey = `relic:${key}`;
+        if (dialog.open && dialog.dataset.storyTermKey === termKey) {
+            closeStoryCardTerms();
+            return true;
+        }
+
+        content.className = 'modal-inner story-card-terms-modal story-relic-terms-modal';
+        content.replaceChildren();
+
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'story-term-close';
+        close.setAttribute('aria-label', t.close);
+        close.textContent = '×';
+        close.addEventListener('click', closeStoryCardTerms);
+
+        const title = document.createElement('h2');
+        title.textContent = t.talentTerms;
+        const terms = document.createElement('div');
+        terms.className = 'story-card-terms-list';
+        appendStoryTermRow(terms, {
+            kind: 'relic',
+            id: key,
+            definition,
+        });
+        content.append(close, title, terms);
+
+        dialog.dataset.storyTermKey = termKey;
+        delete dialog.dataset.storyTermUpgrade;
+        if (!dialog.open) dialog.showModal();
+        return true;
+    }
+
+    function attachStoryRelicTermAccess(element, relicKey) {
+        if (!element) return;
+        const key = String(relicKey || '');
+        if (!storyRelicDefinition(key)) {
+            delete element.dataset.storyRelicKey;
+            return;
+        }
+        element.dataset.storyRelicKey = key;
+        if (!element.matches('button, [role="button"]')) {
+            element.setAttribute('role', 'button');
+            element.tabIndex = 0;
+        }
+        if (element.dataset.storyRelicTermBound === '1') return;
+        element.dataset.storyRelicTermBound = '1';
+
+        let timer = 0;
+        let start = null;
+        const cancel = () => {
+            if (timer) window.clearTimeout(timer);
+            timer = 0;
+            start = null;
+        };
+        element.addEventListener('pointerdown', (event) => {
+            if (event.button != null && event.button !== 0) return;
+            cancel();
+            start = { x: event.clientX, y: event.clientY };
+            timer = window.setTimeout(() => {
+                timer = 0;
+                start = null;
+                element.dataset.storyTermLongPress = '1';
+                element.dataset.storyRelicSuppressClick = '1';
+                window.setTimeout(() => {
+                    delete element.dataset.storyTermLongPress;
+                    delete element.dataset.storyRelicSuppressClick;
+                }, 1200);
+                openStoryRelicTerms(element.dataset.storyRelicKey);
+            }, STORY_TERM_LONG_PRESS_MS);
+        });
+        element.addEventListener('pointermove', (event) => {
+            if (!timer || !start) return;
+            if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > STORY_TERM_MOVE_CANCEL_PX) {
+                cancel();
+            }
+        });
+        ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'].forEach((eventName) => {
+            element.addEventListener(eventName, cancel);
+        });
+        element.addEventListener('click', (event) => {
+            if (element.dataset.storyRelicSuppressClick !== '1') return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            delete element.dataset.storyRelicSuppressClick;
+        }, true);
+        element.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            if (element.matches('button') && !event.altKey) return;
+            event.preventDefault();
+            event.stopPropagation();
+            openStoryRelicTerms(element.dataset.storyRelicKey);
+        });
+    }
+
     function openStoryCardTerms(card) {
         const dialog = $('story-term-dialog');
         const content = $('story-term-content');
@@ -3329,38 +3610,111 @@
         renderEffectsInto(container, values);
     }
 
+    function removeStoryEquipmentPreview() {
+        if (!storyEquipmentPreview) return;
+        storyEquipmentPreview.remove();
+        storyEquipmentPreview = null;
+    }
+
+    function positionStoryEquipmentPreview(anchor) {
+        if (!storyEquipmentPreview || !anchor?.isConnected) return;
+        const anchorRect = anchor.getBoundingClientRect();
+        const previewRect = storyEquipmentPreview.getBoundingClientRect();
+        const gap = 14;
+        let left = anchorRect.right + gap;
+        let top = anchorRect.top + anchorRect.height / 2 - previewRect.height / 2;
+        if (left + previewRect.width > window.innerWidth - 8) {
+            left = anchorRect.left - previewRect.width - gap;
+        }
+        left = Math.max(8, Math.min(window.innerWidth - previewRect.width - 8, left));
+        top = Math.max(8, Math.min(window.innerHeight - previewRect.height - 8, top));
+        storyEquipmentPreview.style.left = `${left}px`;
+        storyEquipmentPreview.style.top = `${top}px`;
+    }
+
+    function showStoryEquipmentPreview(anchor, card) {
+        if (!anchor || !cardValues(card)) return;
+        removeStoryEquipmentPreview();
+        const preview = document.createElement('div');
+        preview.className = 'story-equipment-preview';
+        preview.setAttribute('aria-hidden', 'true');
+        const previewCard = createStoryCard(card, {
+            interactive: false,
+            predictionTargetId: '',
+        });
+        preview.append(previewCard);
+        document.body.append(preview);
+        storyEquipmentPreview = preview;
+        positionStoryEquipmentPreview(anchor);
+        scheduleStoryCardEffectFit(previewCard);
+        requestAnimationFrame(() => {
+            positionStoryEquipmentPreview(anchor);
+            preview.classList.add('is-visible');
+        });
+    }
+
+    function attachStoryEquipmentPreview(anchor, card) {
+        if (!anchor || !cardValues(card)) return;
+        anchor.addEventListener('pointerenter', () => {
+            if (window.matchMedia?.('(hover: none), (pointer: coarse)').matches) return;
+            showStoryEquipmentPreview(anchor, card);
+        });
+        anchor.addEventListener('pointermove', () => positionStoryEquipmentPreview(anchor));
+        anchor.addEventListener('pointerleave', removeStoryEquipmentPreview);
+        anchor.addEventListener('focus', () => showStoryEquipmentPreview(anchor, card));
+        anchor.addEventListener('blur', removeStoryEquipmentPreview);
+    }
+
     function renderStoryEquipment(cards) {
         const container = $('story-player-equipment');
         if (!container) return;
+        removeStoryEquipmentPreview();
         container.replaceChildren();
         const equipment = Array.isArray(cards) ? cards : [];
         container.style.setProperty('--story-equipment-count', String(Math.max(1, equipment.length)));
+        const nowSeconds = Date.now() / 1000;
+        const orbitDelay = -(nowSeconds % 20);
+        const spinDelay = -(nowSeconds % 17.333);
         equipment.forEach((card, index) => {
             const values = cardValues(card);
             if (!values) return;
             const item = document.createElement('button');
             item.type = 'button';
             item.className = 'story-equipment';
+            item.dataset.instanceId = String(card.instance_id || '');
             item.style.setProperty('--story-equipment-index', String(index));
             const angle = 360 / Math.max(1, equipment.length) * index;
             item.style.setProperty('--story-equipment-angle', `${angle}deg`);
-            item.style.setProperty('--story-equipment-counter-angle', `${-angle}deg`);
-            item.title = `${localize(values.name)}\n${localize(values.description)}`;
-            item.setAttribute('aria-label', item.title);
+            item.style.setProperty('--story-equipment-orbit-delay', `${orbitDelay.toFixed(3)}s`);
+            item.style.setProperty('--story-equipment-spin-delay', `${spinDelay.toFixed(3)}s`);
+            item.setAttribute(
+                'aria-label',
+                `${localize(values.name)}：${localize(values.description)}`,
+            );
+            const visual = document.createElement('span');
+            visual.className = 'story-equipment-visual';
+            const icon = document.createElement('span');
+            icon.className = 'story-equipment-icon';
             const imageUrl = card.upgraded
                 ? (values.upgraded_image_url || values.image_url || '')
                 : (values.image_url || '');
             if (imageUrl) {
                 const image = document.createElement('img');
+                image.className = 'story-equipment-image';
                 image.src = imageUrl;
                 image.alt = '';
                 image.setAttribute('aria-hidden', 'true');
-                item.append(image);
+                icon.append(image);
             } else {
                 const fallback = document.createElement('span');
+                fallback.className = 'story-equipment-fallback';
                 fallback.textContent = localize(values.name).slice(0, 1);
-                item.append(fallback);
+                icon.append(fallback);
             }
+            visual.append(icon);
+            item.append(visual);
+            storyCardElementData.set(item, card);
+            attachStoryEquipmentPreview(item, card);
             container.append(item);
         });
     }
@@ -3695,7 +4049,9 @@
         showView('story-combat');
         scheduleStoryAimUpdate(state);
         if (combat.opening_redraw_pending) {
-            queueMicrotask(() => openOpeningRedraw(state));
+            queueMicrotask(() => {
+                if (!storyCombatEntranceAnimating) openOpeningRedraw(state);
+            });
         }
     }
 
@@ -3713,6 +4069,7 @@
         }
         button.disabled = Boolean(options.disabled);
         button.addEventListener('click', onClick);
+        if (options.relicKey) attachStoryRelicTermAccess(button, options.relicKey);
         return button;
     }
 
@@ -3924,6 +4281,7 @@
             setText('story-chest-relic-name', localize(relic?.name) || t.none);
             setText('story-chest-relic-description', relicDescription);
             $('story-chest-relic-description')?.classList.toggle('hidden', !relicDescription);
+            attachStoryRelicTermAccess($('story-chest-relic-name')?.parentElement, room.relic);
         }
         if (isShop) {
             setText('story-shop-gold-label', t.shopWallet);
@@ -4066,6 +4424,7 @@
                                 {
                                     description: localize(relic?.description),
                                     disabled: Number(player.gold || 0) < Number(item.price || 0),
+                                    relicKey: item.relic_id,
                                 },
                             ));
                         });
@@ -4211,11 +4570,15 @@
         };
     }
 
-    function rewardClaimButton(label, description, claimed, onClick) {
+    function rewardClaimButton(label, description, claimed, onClick, relicKey = '') {
         const button = choiceButton(
             label,
             onClick,
-            { description: claimed ? t.claimed : description, disabled: claimed },
+            {
+                description: claimed ? t.claimed : description,
+                disabled: claimed,
+                relicKey,
+            },
         );
         button.classList.add('story-reward-claim');
         button.classList.toggle('is-claimed', claimed);
@@ -4251,6 +4614,7 @@
                 localize(relic.description),
                 claims.relic,
                 () => storyAction('choose_reward', { reward_type: 'relic' }),
+                reward.relic,
             ));
         }
         if (claims.card) {
@@ -4895,6 +5259,7 @@
         });
         $('story-start')?.addEventListener('click', startRun);
         $('story-end-turn')?.addEventListener('click', () => storyAction('end_turn'));
+        $('story-talent-overview')?.addEventListener('click', openStoryTalentOverview);
         $('story-run-deck')?.addEventListener('click', () => openStoryPile('deck'));
         $('story-draw-pile')?.addEventListener('click', () => openStoryPile('draw'));
         $('story-discard-pile')?.addEventListener('click', () => openStoryPile('discard'));
@@ -5036,8 +5401,19 @@
                 openStoryTraitTerms(traitElement.dataset.storyTraitKey);
                 return;
             }
+            const relicElement = event.target?.closest?.('[data-story-relic-key]');
+            if (relicElement) {
+                if (relicElement.dataset.storyTermLongPress === '1') {
+                    delete relicElement.dataset.storyTermLongPress;
+                    return;
+                }
+                openStoryRelicTerms(relicElement.dataset.storyRelicKey);
+                return;
+            }
             const cardElement = event.target?.closest?.('.story-card.card, .story-pile-tile');
-            const card = cardElement ? storyCardElementData.get(cardElement) : null;
+            const equipmentElement = event.target?.closest?.('.story-equipment');
+            const cardSourceElement = cardElement || equipmentElement;
+            const card = cardSourceElement ? storyCardElementData.get(cardSourceElement) : null;
             if (card) {
                 openStoryCardTerms(card);
                 return;

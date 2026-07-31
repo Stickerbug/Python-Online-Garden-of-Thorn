@@ -10,6 +10,7 @@ from story_content import (
     STORY_ENCOUNTERS,
     STORY_ENEMIES,
     STORY_ENEMY_IMAGE_URLS,
+    STORY_PLAYER_ATTACK_EFFECT_TYPES,
     STORY_RARITIES,
     STORY_RELICS,
     STORY_REWARD_CARD_IDS,
@@ -98,6 +99,32 @@ def test_story_content_is_valid_and_reward_pool_excludes_special_cards():
     assert STORY_CARDS['mark']['owner'] == 'neutral'
     assert 'exile' in STORY_CARDS['mark']['tags']
     assert initial_story_player()['relics'] == ['energetic']
+
+
+def test_story_attack_effect_types_share_one_calculation_contract():
+    attack_effect_types = {
+        str(effect.get('type') or '')
+        for definition in STORY_CARDS.values()
+        if definition.get('type') == 'thorn'
+        for effect in (
+            tuple(definition.get('effects') or ())
+            + tuple((definition.get('upgrade') or {}).get('effects') or ())
+        )
+        if str(effect.get('type') or '').startswith('damage')
+    }
+    assert attack_effect_types == set(STORY_PLAYER_ATTACK_EFFECT_TYPES)
+
+
+def test_story_statuses_use_their_dedicated_icons():
+    expected = {
+        'temporary_power': '/static/assets/story-status-icons/temporary-power.svg',
+        'vulnerable': '/static/assets/story-status-icons/vulnerable.svg',
+        'fragile': '/static/assets/story-status-icons/fragile.svg',
+    }
+    for status_id, image_url in expected.items():
+        assert STORY_STATUS_IMAGE_URLS[status_id] == image_url
+        assert STORY_STATUSES[status_id]['image_url'] == image_url
+        assert (Path(__file__).resolve().parents[1] / image_url.removeprefix('/')).is_file()
     assert all(
         STORY_CARDS[card_id]['type'] not in ('curse', 'infect')
         and STORY_CARDS[card_id]['rarity'] not in ('super', 'special')
@@ -395,7 +422,7 @@ def test_story_patch_card_status_and_trait_images_are_packaged():
                 assert definitions[definition_id]['image_url'] == image_url
 
     assert len(STORY_CARD_IMAGE_URLS) == 11
-    assert len(STORY_STATUS_IMAGE_URLS) == 7
+    assert len(STORY_STATUS_IMAGE_URLS) == 8
     assert len(STORY_TRAITS) == 5
 
 
@@ -920,6 +947,76 @@ def test_nuke_damage_and_prediction_receive_fusion_multiplier():
     assert state['combat']['next_attack_multiplier'] == 1
 
 
+def test_cutter_damage_and_prediction_receive_fusion_multiplier():
+    state, _ = _begin_combat('cutter-fusion')
+    state['combat']['shield'] = 12
+    state['combat']['next_attack_multiplier'] = 2
+    card = _inject_hand_card(state, 'cutter')
+    target = state['combat']['enemies'][0]
+    target['health'] = 200
+    target['max_health'] = 200
+    target['shield'] = 0
+    _refresh_combat_projections(state)
+
+    prediction = state['combat']['damage_predictions'][card['instance_id']]
+    assert prediction['by_target'][target['id']]['hits'] == [24]
+    assert prediction['by_target'][target['id']]['total'] == 24
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id'], 'target_id': target['id']},
+        'cutter-fusion',
+    )
+
+    damage = [event for event in events if event['type'] == 'enemy_damage']
+    assert [event['amount'] for event in damage] == [24]
+    assert state['combat']['enemies'][0]['health'] == 176
+    assert state['combat']['next_attack_multiplier'] == 1
+
+
+def test_status_count_attack_uses_shared_fusion_calculation():
+    state, _ = _begin_combat('antler-fusion')
+    state['combat']['next_attack_multiplier'] = 2
+    card = _inject_hand_card(state, 'antler')
+    target = state['combat']['enemies'][0]
+    target['health'] = 200
+    target['max_health'] = 200
+    target['shield'] = 0
+    for status in (
+        'power',
+        'temporary_power',
+        'endurance',
+        'weak',
+        'vulnerable',
+        'fragile',
+        'evade',
+        'poison',
+        'stun',
+        'reflection',
+        'wither',
+        'broken',
+        'rockfall',
+    ):
+        target[status] = 0
+    target['stun'] = 1
+    _refresh_combat_projections(state)
+
+    prediction = state['combat']['damage_predictions'][card['instance_id']]
+    assert prediction['by_target'][target['id']]['hits'] == [12]
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id'], 'target_id': target['id']},
+        'antler-fusion',
+    )
+
+    damage = [event for event in events if event['type'] == 'enemy_damage']
+    assert [event['amount'] for event in damage] == [12]
+    assert state['combat']['enemies'][0]['health'] == 188
+
+
 def test_enemy_applied_broken_survives_until_the_player_uses_it():
     state, _ = _begin_combat('broken-duration')
     enemy = state['combat']['enemies'][0]
@@ -1147,6 +1244,35 @@ def test_cooldown_relic_blocks_actions_until_opening_redraw_is_resolved():
     assert any(event['type'] == 'opening_redraw_resolved' for event in events)
 
 
+def test_opening_lightning_emits_parallel_damage_for_combat_entrance():
+    seed = 'opening-lightning-animation'
+    state = build_initial_story_state(seed)
+    state['player']['relics'].append('opening_lightning')
+    state, _ = apply_story_action(state, 'choose_blessing', {'blessing_id': 'max_health'}, seed)
+    node = next(
+        node
+        for floor in state['map']['floors']
+        for node in floor['nodes']
+        if node['status'] == 'available'
+    )
+    state, events = apply_story_action(
+        state,
+        'enter_node',
+        {'node_id': node['id']},
+        seed,
+    )
+    damage_events = [
+        event
+        for event in events
+        if event.get('type') == 'enemy_damage'
+        and event.get('source') == 'opening_lightning'
+    ]
+    assert damage_events
+    assert len(damage_events) == len(state['combat']['enemies'])
+    assert all(event.get('amount') == 9 for event in damage_events)
+    assert all(event.get('parallel_group') == 'opening_lightning' for event in damage_events)
+
+
 def test_occultist_event_adds_the_defined_cards_and_completes():
     seed = 'occultist-event'
     state = build_initial_story_state(seed)
@@ -1254,6 +1380,40 @@ def test_refresh_checkpoint_restores_the_initial_combat_state():
     assert state['combat'] == expected_combat
     assert state['recovery_checkpoint']['kind'] == 'combat_entry'
     assert any(event.get('type') == 'checkpoint_restored' for event in events)
+
+
+def test_exile_pile_survives_turn_boundary_and_refresh_recovery():
+    seed = 'persistent-exile-checkpoint'
+    state, _ = _begin_combat(seed)
+    combat = state['combat']
+    combat['opening_redraw_pending'] = False
+    target = combat['enemies'][0]
+    mark = _inject_hand_card(state, 'mark')
+
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': mark['instance_id'], 'target_id': target['id']},
+        seed,
+    )
+    assert [card['instance_id'] for card in state['combat']['exile_pile']] == [
+        mark['instance_id'],
+    ]
+    assert state['recovery_checkpoint']['kind'] == 'combat_progress'
+
+    state, _ = apply_story_action(state, 'end_turn', {}, seed)
+    assert state['combat']['round'] == 2
+    assert [card['instance_id'] for card in state['combat']['exile_pile']] == [
+        mark['instance_id'],
+    ]
+    assert state['recovery_checkpoint']['kind'] == 'combat_progress'
+
+    state['combat']['exile_pile'] = []
+    state, _ = apply_story_action(state, 'resume_node', {}, seed)
+    assert state['combat']['round'] == 2
+    assert [card['instance_id'] for card in state['combat']['exile_pile']] == [
+        mark['instance_id'],
+    ]
 
 
 def test_event_progress_checkpoint_restores_the_latest_stable_stage():

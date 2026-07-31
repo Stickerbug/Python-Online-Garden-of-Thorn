@@ -33,7 +33,8 @@ GR_INITIAL = 1000
 GR_SOFT_RESET_RATIO = 0.5
 GR_SOFT_RESET_MIN = 850
 GR_SOFT_RESET_MAX = 1250
-GR_SEASON_RESET_DEW_PER_POINT = 50
+GR_SEASON_ACTIVITY_MIN_VALID_MATCHES = 20
+GR_SEASON_ACTIVITY_REWARD_CAP = 100000
 GR_SEASON_MIN_GAMES = 8
 GR_TOTAL_MIN_GAMES = 20
 GR_2V2_FACTOR = 0.85
@@ -1071,6 +1072,26 @@ def init_db():
             '''
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_gr_daily_snapshots_user ON gr_daily_snapshots(user_id, snapshot_date)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS gr_season_activity_rewards (
+                user_id INTEGER NOT NULL,
+                season_id TEXT NOT NULL,
+                next_season_id TEXT NOT NULL,
+                season_gr REAL NOT NULL,
+                valid_matches INTEGER NOT NULL,
+                random_value REAL NOT NULL,
+                reward_dew INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, season_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_gr_season_activity_rewards_season '
+            'ON gr_season_activity_rewards(season_id, created_at)'
+        )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_mode ON card_draft_win_stats(mode)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_rate ON card_draft_win_stats(win_games, picked_games)')
         conn.execute(
@@ -3378,27 +3399,187 @@ def _soft_reset_gr(value):
     return max(GR_SOFT_RESET_MIN, min(GR_SOFT_RESET_MAX, reset))
 
 
-def _award_gr_season_reset_dew_for_conn(
+def _gr_season_period(season_id, fallback_end_at=None):
+    season_key = str(season_id or '').strip()
+    if season_key == 'S1':
+        start = datetime(2026, 7, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        return utc_iso(start), utc_iso(end)
+    matched = re.fullmatch(r'S(\d{4})(\d{2})', season_key)
+    if matched:
+        year = int(matched.group(1))
+        month = int(matched.group(2))
+        if 1 <= month <= 12:
+            start = datetime(year, month, 1, tzinfo=timezone.utc)
+            if month == 12:
+                end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+            else:
+                end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+            return utc_iso(start), utc_iso(end)
+    if fallback_end_at:
+        end = _parse_utc_datetime(fallback_end_at).replace(day=1, hour=0, minute=0, second=0)
+        if end.month == 1:
+            start = end.replace(year=end.year - 1, month=12)
+        else:
+            start = end.replace(month=end.month - 1)
+        return utc_iso(start), utc_iso(end)
+    return None, None
+
+
+def _gr_season_valid_match_counts_for_conn(
+    conn,
+    user_ids,
+    season_id,
+    fallback_end_at=None,
+):
+    target_ids = set()
+    for value in user_ids or []:
+        try:
+            target_ids.add(int(value))
+        except (TypeError, ValueError):
+            pass
+    counts = {uid: 0 for uid in target_ids}
+    if not target_ids:
+        return counts
+    start_at, end_at = _gr_season_period(season_id, fallback_end_at=fallback_end_at)
+    if not start_at or not end_at:
+        return counts
+
+    user_rows = conn.execute('SELECT id, username FROM users').fetchall()
+    all_user_ids = {int(row['id']) for row in user_rows}
+    username_key_to_id = {}
+    for row in user_rows:
+        key = normalize_username_key(row['username'])
+        if key and key not in username_key_to_id:
+            username_key_to_id[key] = int(row['id'])
+    rows = conn.execute(
+        '''
+        SELECT *
+        FROM matches
+        WHERE (
+            ended_at >= ? AND ended_at < ?
+        ) OR (
+            (ended_at IS NULL OR ended_at = '')
+            AND started_at >= ? AND started_at < ?
+        )
+        ORDER BY id ASC
+        ''',
+        (start_at, end_at, start_at, end_at),
+    ).fetchall()
+    for row in rows:
+        summary = _safe_json_loads(row['summary_json'], {})
+        result = str(row['result'] or summary.get('result') or '').lower()
+        if result not in ('win', 'draw', 'finished'):
+            continue
+        try:
+            duration = int(row['duration_seconds'] or summary.get('duration_seconds') or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration < RANKING_MIN_DURATION_SECONDS:
+            continue
+        if _match_has_action_counts_for_stats(summary):
+            side_counts = _match_side_action_counts_for_stats(summary, row['mode'])
+            if (
+                len(side_counts) < 2
+                or any(
+                    int(value or 0) < RANKING_MIN_ACTIONS_PER_SIDE
+                    for value in side_counts[:2]
+                )
+            ):
+                continue
+        player_ids, _ = _match_player_ids_for_stats(
+            conn,
+            row,
+            all_user_ids,
+            username_key_to_id,
+        )
+        for uid in set(player_ids) & target_ids:
+            counts[uid] += 1
+    return counts
+
+
+def _gr_season_activity_random():
+    return secrets.randbits(53) / float(1 << 53)
+
+
+def _calculate_gr_season_activity_reward(season_gr, random_value):
+    try:
+        x = max(0.0, float(season_gr))
+    except (TypeError, ValueError):
+        x = float(GR_INITIAL)
+    try:
+        random_factor = max(0.0, min(1.0, float(random_value)))
+    except (TypeError, ValueError):
+        random_factor = 0.0
+    low_rating_curve = math.pow(1.0098, x - 100.0) if x <= 800.0 else 0.0
+    try:
+        high_rating_curve = 10.0 * x - 7000.0 + math.pow(1.02, x - 890.0)
+    except OverflowError:
+        return GR_SEASON_ACTIVITY_REWARD_CAP
+    raw_reward = 200.0 * random_factor * random_factor + max(
+        low_rating_curve,
+        high_rating_curve,
+    )
+    if not math.isfinite(raw_reward) or raw_reward >= GR_SEASON_ACTIVITY_REWARD_CAP:
+        return GR_SEASON_ACTIVITY_REWARD_CAP
+    reward = 100 * int(math.ceil(raw_reward / 100.0))
+    return max(0, min(GR_SEASON_ACTIVITY_REWARD_CAP, reward))
+
+
+def _award_gr_season_activity_reward_for_conn(
     conn,
     user_id,
     previous_season_id,
     season_id,
     old_gr,
-    new_gr,
+    valid_matches,
     created_at,
 ):
     try:
         uid = int(user_id)
         old_value = float(old_gr)
-        new_value = float(new_gr)
+        match_count = max(0, int(valid_matches))
     except (TypeError, ValueError):
         return 0
-    reduced_gr = max(0.0, old_value - new_value)
-    reward = max(0, int(math.floor(reduced_gr * GR_SEASON_RESET_DEW_PER_POINT + 0.5)))
+    previous_key = str(previous_season_id or '').strip()
+    if not previous_key or match_count < GR_SEASON_ACTIVITY_MIN_VALID_MATCHES:
+        return 0
+
+    reward_row = conn.execute(
+        '''
+        SELECT random_value, reward_dew
+        FROM gr_season_activity_rewards
+        WHERE user_id = ? AND season_id = ?
+        ''',
+        (uid, previous_key),
+    ).fetchone()
+    if reward_row is None:
+        random_value = _gr_season_activity_random()
+        reward = _calculate_gr_season_activity_reward(old_value, random_value)
+        conn.execute(
+            '''
+            INSERT INTO gr_season_activity_rewards (
+                user_id, season_id, next_season_id, season_gr, valid_matches,
+                random_value, reward_dew, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                uid,
+                previous_key,
+                str(season_id or ''),
+                old_value,
+                match_count,
+                random_value,
+                reward,
+                created_at,
+            ),
+        )
+    else:
+        reward = max(0, int(reward_row['reward_dew'] or 0))
     if reward <= 0:
         return 0
-    source_id = f'{str(previous_season_id or "unknown")}->{str(season_id or "unknown")}'
-    if _currency_source_exists(conn, uid, 'gr_season_reset', source_id):
+    if _currency_source_exists(conn, uid, 'season_activity_reward', previous_key):
         return 0
     user = conn.execute(
         'SELECT thorn_dew_free, thorn_dew_paid FROM users WHERE id = ?',
@@ -3419,16 +3600,16 @@ def _award_gr_season_reset_dew_for_conn(
             user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
             balance_free_after, balance_paid_after, admin_username, created_at
         )
-        VALUES (?, 'thorn_dew', ?, 0, ?, 'gr_season_reset', ?, ?, ?, '', ?)
+        VALUES (?, 'thorn_dew', ?, 0, ?, 'season_activity_reward', ?, ?, ?, '', ?)
         ''',
         (
             uid,
             reward,
             (
-                f'赛季花阶分重置补偿：{old_value:.1f}→{new_value:.1f}'
-                f'（降低{reduced_gr:.1f}，每分{GR_SEASON_RESET_DEW_PER_POINT}荆露）'
+                f'赛季活跃奖励：{previous_key}'
+                f'（有效对局{match_count}，结算花阶分{old_value:.1f}）'
             ),
-            source_id,
+            previous_key,
             free_after,
             paid_balance,
             created_at,
@@ -3459,10 +3640,27 @@ def ensure_current_gr_season_for_conn(conn, user_ids=None):
         ''',
         params,
     ).fetchall()
+    pending_rows = [
+        row
+        for row in rows
+        if str(row['gr_season_id'] or '') != season['id']
+    ]
+    valid_match_counts = {}
+    rows_by_previous_season = {}
+    for row in pending_rows:
+        previous_season_id = str(row['gr_season_id'] or '')
+        rows_by_previous_season.setdefault(previous_season_id, []).append(int(row['id']))
+    for previous_season_id, season_user_ids in rows_by_previous_season.items():
+        valid_match_counts.update(
+            _gr_season_valid_match_counts_for_conn(
+                conn,
+                season_user_ids,
+                previous_season_id,
+                fallback_end_at=season.get('starts_at'),
+            )
+        )
     now = utc_now()
-    for row in rows:
-        if str(row['gr_season_id'] or '') == season['id']:
-            continue
+    for row in pending_rows:
         previous_season_id = str(row['gr_season_id'] or '')
         old_gr = float(row['season_gr']) if row['season_gr'] is not None else float(GR_INITIAL)
         new_gr = _soft_reset_gr(old_gr)
@@ -3476,13 +3674,13 @@ def ensure_current_gr_season_for_conn(conn, user_ids=None):
             ''',
             (new_gr, season['id'], row['id']),
         )
-        _award_gr_season_reset_dew_for_conn(
+        _award_gr_season_activity_reward_for_conn(
             conn,
             row['id'],
             previous_season_id,
             season['id'],
             old_gr,
-            new_gr,
+            valid_match_counts.get(int(row['id']), 0),
             now,
         )
         conn.execute(

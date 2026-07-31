@@ -261,8 +261,10 @@
             </div>
           </dl>
         </div>
-        <div id="story-room-tabs" class="story-room-tabs hidden" role="tablist" aria-label="房间分类"></div>
-        <div id="story-room-options" class="story-choice-grid story-choice-grid-wide"></div>
+        <div class="story-room-browser">
+          <div id="story-room-tabs" class="story-room-tabs hidden" role="tablist" aria-label="房间分类"></div>
+          <div id="story-room-options" class="story-choice-grid story-choice-grid-wide"></div>
+        </div>
         <div id="story-room-footer" class="story-room-footer"></div>
       </section>
 
@@ -309,6 +311,10 @@
         {% endif %}
       </div>
       <div class="story-status-actions">
+        <button id="story-talent-overview" class="story-run-deck-command hidden" type="button" aria-label="查看天赋总览" title="查看天赋总览">
+          <img src="/static/assets/ui-icons/achievements.svg" alt="" aria-hidden="true">
+          <span id="story-talent-overview-label">天赋总览</span>
+        </button>
         <button id="story-run-deck" class="story-run-deck-command hidden" type="button" aria-label="查看总牌库" title="查看总牌库">
           <img src="/static/assets/ui-icons/total-pile.svg" alt="" aria-hidden="true">
           <span id="story-run-deck-label">总牌库</span>
