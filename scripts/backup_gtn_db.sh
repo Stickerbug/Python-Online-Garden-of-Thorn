@@ -52,6 +52,7 @@ replay_temp_path="$BACKUP_DIR/.replay-blobs.tmp.$$"
 
 cleanup_temp() {
     rm -f -- "$temp_path"
+    rm -f -- "$temp_path-wal" "$temp_path-shm"
     rm -rf -- "$replay_temp_path"
 }
 trap cleanup_temp EXIT INT TERM
@@ -94,6 +95,7 @@ if (( expected_size != backup_size )); then
     log "backup size does not match SQLite page metadata; expected=$expected_size actual=$backup_size"
     exit 1
 fi
+rm -f -- "$temp_path-wal" "$temp_path-shm"
 
 # Replay payloads are immutable external files. Snapshot only the paths
 # referenced by this SQLite backup and use hard links so the local safety copy
