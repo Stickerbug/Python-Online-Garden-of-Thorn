@@ -10,6 +10,7 @@ STATE_DIR="${GTN_HEALTHCHECK_STATE_DIR:-/run/gtn-healthcheck}"
 SNAPSHOT_DIR="${GTN_HEALTHCHECK_SNAPSHOT_DIR:-/root/gtn-freeze-dumps}"
 LOCK_FILE="/tmp/${SERVICE}-healthcheck.lock"
 FAIL_FILE="${STATE_DIR}/${SERVICE}.fail"
+MAINTENANCE_FILE="${GTN_HEALTHCHECK_MAINTENANCE_FILE:-/run/gtn-maintenance/${SERVICE}}"
 RESTART_AFTER="${GTN_HEALTHCHECK_RESTART_AFTER:-2}"
 HTTP_TIMEOUT="${GTN_HEALTHCHECK_HTTP_TIMEOUT:-4}"
 
@@ -93,6 +94,12 @@ pass_once() {
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
     log "skip: previous healthcheck still running"
+    exit 0
+fi
+
+if [ -e "$MAINTENANCE_FILE" ]; then
+    echo 0 > "$FAIL_FILE"
+    log "skip: maintenance marker active file=$MAINTENANCE_FILE"
     exit 0
 fi
 

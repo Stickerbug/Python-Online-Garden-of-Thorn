@@ -168,9 +168,12 @@ def verify_external_files():
 def vacuum_database():
     db_path = os.path.abspath(db.DB_PATH)
     before = os.path.getsize(db_path)
-    with db.get_db_connection() as conn:
+    conn = db.get_db_connection()
+    try:
         conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
         conn.execute('VACUUM')
+    finally:
+        conn.close()
     after = os.path.getsize(db_path)
     print(
         f'vacuum complete: before={_format_bytes(before)} after={_format_bytes(after)}',
