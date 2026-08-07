@@ -124,6 +124,7 @@
           <div class="story-map-heading">
             <h2 id="story-map-title">路线</h2>
             <div class="story-map-heading-actions">
+              <button id="story-map-return" class="story-save-open hidden" type="button">返回战斗</button>
               <button id="story-save-open" class="story-save-open" type="button">存读档</button>
               <div id="story-map-legend" class="story-map-legend"></div>
             </div>
@@ -196,6 +197,7 @@
           <button class="story-command story-pile-command" id="story-exile-pile" type="button" aria-label="查看放逐区" title="查看放逐区">
             <img src="/static/assets/ui-icons/exile-pile.svg" alt="" aria-hidden="true"><span id="story-exile-pile-label">查看放逐区</span>
           </button>
+          <button class="story-command story-pile-command" id="story-combat-map" type="button">查看地图</button>
           <button class="story-command story-command-primary" id="story-end-turn" type="button">结束回合</button>
         </div>
       </section>
@@ -314,6 +316,9 @@
         {% endif %}
       </div>
       <div class="story-status-actions">
+        <button id="story-save-open-global" class="story-run-deck-command hidden" type="button" aria-label="存读档" title="存读档">
+          <span id="story-save-open-global-label">存读档</span>
+        </button>
         <button id="story-codex-open" class="story-run-deck-command story-codex-command" type="button" aria-label="查看故事图鉴" title="查看故事图鉴">
           <img src="/static/assets/ui-icons/gallery.svg" alt="" aria-hidden="true">
           <span id="story-codex-open-label">故事图鉴</span>
@@ -351,7 +356,10 @@
           </div>
           <button id="story-save-close" class="story-pile-close" value="cancel" aria-label="关闭">×</button>
         </div>
-        <button id="story-save-create" class="story-command story-command-primary" type="button">保存当前进度</button>
+        <div class="story-save-actions">
+          <button id="story-save-create" class="story-command story-command-primary" type="button">保存当前进度</button>
+          <button id="story-restart-floor" class="story-command story-command-danger hidden" type="button">重新开始本层</button>
+        </div>
         <div id="story-save-list" class="story-save-list" aria-live="polite"></div>
       </form>
     </dialog>
@@ -391,6 +399,17 @@
         <div class="story-dialog-actions">
           <button id="story-save-load-cancel" class="story-command" value="cancel">取消</button>
           <button id="story-save-load-confirm" class="story-command story-command-primary" value="confirm">读取</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="story-restart-floor-dialog" class="story-dialog story-save-load-dialog">
+      <form method="dialog">
+        <h2 id="story-restart-floor-title">重新开始本层？</h2>
+        <p id="story-restart-floor-copy">本层内的全部操作将被撤销，并以相同随机结果重新开始。</p>
+        <div class="story-dialog-actions">
+          <button id="story-restart-floor-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-restart-floor-confirm" class="story-command story-command-danger" value="confirm">重新开始</button>
         </div>
       </form>
     </dialog>

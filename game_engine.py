@@ -819,7 +819,7 @@ class GameEngine:
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
         11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序', 'position': 2},
-        12: {'id': 12, 'name': '众生平等', 'desc': '自己回合结束时，自己对每名其他可选中玩家造成8[[icon:D]]', 'position': 3},
+        12: {'id': 12, 'name': '众生平等', 'desc': '自己回合结束时，对自己造成5[[icon:D]]，并对每名其他可选中玩家造成8[[icon:D]]', 'position': 3},
     }
     OPENING_EVENT_ORDER = {
         1: 10, 2: 20, 3: 30, 8: 40,
@@ -4741,7 +4741,7 @@ class GameEngine:
                     ps.deck[0:0] = moved
                 self.log_msg(f"{self.pn(player_id)}【花序编排】：{len(moved)}张牌移至抽牌堆顶")
         elif event_id == 12:
-            self.log_msg(f"{self.pn(player_id)}【众生平等】：自己回合结束时，对所有其他可选中玩家造成8D")
+            self.log_msg(f"{self.pn(player_id)}【众生平等】：自己回合结束时，对自己造成5D，并对所有其他可选中玩家造成8D")
 
     def _apply_equal_suffering_turn_end(self, player_id: int):
         if not self._valid_player_id(player_id):
@@ -4753,6 +4753,13 @@ class GameEngine:
         self._game_over_defer_depth += 1
         try:
             self.log_msg(f"{self.pn(player_id)}的众生平等生效")
+            if self.players[player_id].health > 0:
+                self.deal_attack_damage(
+                    player_id,
+                    5,
+                    attacker_id=player_id,
+                    source_card=None,
+                )
             for target_id, target in enumerate(self.players):
                 if target_id == player_id or target.health <= 0:
                     continue

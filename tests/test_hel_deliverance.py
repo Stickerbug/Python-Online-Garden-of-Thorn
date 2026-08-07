@@ -11,7 +11,7 @@ from mod_loader import load_mod
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "mods" / "Hel Cards DLC.gtnmod"
+PACKAGE = ROOT / "mods" / "Hel Cards Addition.gtnmod"
 CARD_ID = "Deliverance"
 
 
@@ -63,7 +63,7 @@ class HelDeliveranceTests(unittest.TestCase):
 
     def test_package_metadata_asset_and_locales(self):
         self.assertEqual(self.mod.info.author, "Eric, AArcC")
-        self.assertEqual(self.mod.info.version, "1.0.0")
+        self.assertEqual(self.mod.info.version, "1.1.0")
         self.assertEqual((self.card.cost_e, self.card.cost_m), (2, 0))
         self.assertEqual(self.card.card_type, "thorn")
         self.assertEqual(self.card.count, 1)

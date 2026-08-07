@@ -24,6 +24,101 @@ _NEGATIVE_STATUSES = frozenset({
     'vulnerable', 'weak',
 })
 
+_PRESENTATION_EFFECT_KEYS = (
+    'shield', 'power', 'temporary_power', 'endurance', 'weak',
+    'vulnerable', 'fragile', 'evade', 'poison', 'stun', 'reflection',
+    'wither', 'broken', 'rockfall', 'blind', 'entangle',
+    'negative_status_immunity', 'evil_eye', 'sturdy', 'shelter',
+    'hidden', 'turn_shield', 'charging', 'charged', 'frenzy', 'vampire',
+    'regenerations',
+)
+
+
+def _story_presentation_state(state):
+    """Return the compact combat state that must track each visual event."""
+    combat = state.get('combat')
+    if not isinstance(combat, dict):
+        return {}
+    player = state.get('player') or {}
+
+    def actor_state(actor, include_health=False):
+        result = {
+            'effects': {
+                key: int(actor.get(key) or 0)
+                for key in _PRESENTATION_EFFECT_KEYS
+            },
+        }
+        if include_health:
+            result['health'] = int(actor.get('health') or 0)
+            result['max_health'] = max(1, int(actor.get('max_health') or 1))
+        return result
+
+    enemies = {}
+    for enemy in combat.get('enemies') or ():
+        enemy_id = str(enemy.get('id') or '')
+        if enemy_id:
+            enemies[enemy_id] = actor_state(enemy, include_health=True)
+    return {
+        'player': {
+            'health': int(player.get('health') or 0),
+            'max_health': max(1, int(player.get('max_health') or 1)),
+        },
+        'combat': {
+            'elixir': int(combat.get('elixir') or 0),
+            'magic': int(combat.get('magic') or 0),
+            **actor_state(combat),
+        },
+        'enemies': enemies,
+    }
+
+
+def _story_presentation_diff(before, after):
+    """Build a small recursive patch; zero values are intentionally retained."""
+    if before == after:
+        return {}
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return copy.deepcopy(after)
+    patch = {}
+    for key in before.keys() | after.keys():
+        if key not in after:
+            patch[key] = None
+            continue
+        if key not in before:
+            patch[key] = copy.deepcopy(after[key])
+            continue
+        if before[key] == after[key]:
+            continue
+        if isinstance(before[key], dict) and isinstance(after[key], dict):
+            child = _story_presentation_diff(before[key], after[key])
+            if child:
+                patch[key] = child
+        else:
+            patch[key] = copy.deepcopy(after[key])
+    return patch
+
+
+class _StoryEventList(list):
+    """Attach authoritative presentation deltas at the moment events are emitted."""
+
+    def __init__(self, state):
+        super().__init__()
+        self._state = state
+        self._presentation_state = _story_presentation_state(state)
+
+    def append(self, event):
+        if isinstance(event, dict):
+            current = _story_presentation_state(self._state)
+            patch = _story_presentation_diff(self._presentation_state, current)
+            if patch:
+                event.setdefault('presentation_patch', patch)
+            self._presentation_state = current
+        super().append(event)
+
+    def capture_pending(self):
+        current = _story_presentation_state(self._state)
+        if _story_presentation_diff(self._presentation_state, current):
+            self.append({'type': 'state_sync'})
+
 
 def _difficulty(state):
     value = str(state.get('difficulty') or 'normal').lower()
@@ -37,7 +132,24 @@ def _effect_amount(state, effect):
 
 
 def _curse_stacks(state, curse_id):
-    return max(0, int((state.get('curses') or {}).get(curse_id) or 0))
+    curses = state.get('curses') or {}
+    stacks = max(0, int(curses.get(curse_id) or 0))
+    if curse_id == 'affliction':
+        # "Ward" was merged into Affliction. Keep old runs playable without
+        # resetting their route or silently dropping a selected curse.
+        stacks += max(0, int(curses.get('ward') or 0))
+    return stacks
+
+
+def _normalize_legacy_story_state(state):
+    curses = state.get('curses')
+    if not isinstance(curses, dict) or 'ward' not in curses:
+        return
+    ward_stacks = max(0, int(curses.pop('ward') or 0))
+    if ward_stacks:
+        curses['affliction'] = (
+            max(0, int(curses.get('affliction') or 0)) + ward_stacks
+        )
 
 
 def _turn_elixir_baseline(state, combat=None):
@@ -74,6 +186,7 @@ def _fail(code, message):
 def _checkpoint_snapshot(state):
     snapshot = copy.deepcopy(state)
     snapshot.pop('recovery_checkpoint', None)
+    snapshot.pop('floor_entry_checkpoint', None)
     snapshot['last_events'] = []
     return snapshot
 
@@ -96,9 +209,12 @@ def _restore_recovery_checkpoint(state, events):
     if not isinstance(snapshot, dict):
         _fail('NO_RECOVERY_CHECKPOINT', '当前节点没有可恢复的检查点')
     event_counter = int(state.get('presentation_event_counter') or 0)
+    floor_entry_checkpoint = copy.deepcopy(state.get('floor_entry_checkpoint'))
     restored = copy.deepcopy(snapshot)
     state.clear()
     state.update(restored)
+    if isinstance(floor_entry_checkpoint, dict):
+        state['floor_entry_checkpoint'] = floor_entry_checkpoint
     state['presentation_event_counter'] = max(
         event_counter,
         int(state.get('presentation_event_counter') or 0),
@@ -107,6 +223,38 @@ def _restore_recovery_checkpoint(state, events):
     events.append({
         'type': 'checkpoint_restored',
         'checkpoint_kind': checkpoint.get('kind'),
+        'node_id': state.get('current_node_id'),
+    })
+
+
+def _capture_floor_entry_checkpoint(state):
+    if state.get('phase') not in ('combat', 'room', 'reward'):
+        state.pop('floor_entry_checkpoint', None)
+        return
+    state['floor_entry_checkpoint'] = {
+        'version': 1,
+        'node_id': state.get('current_node_id'),
+        'state': _checkpoint_snapshot(state),
+    }
+
+
+def _restore_floor_entry_checkpoint(state, events):
+    checkpoint = state.get('floor_entry_checkpoint')
+    snapshot = checkpoint.get('state') if isinstance(checkpoint, dict) else None
+    if not isinstance(snapshot, dict):
+        _fail('NO_FLOOR_ENTRY_CHECKPOINT', '当前层没有可重新开始的检查点')
+    event_counter = int(state.get('presentation_event_counter') or 0)
+    restored = copy.deepcopy(snapshot)
+    state.clear()
+    state.update(restored)
+    state['presentation_event_counter'] = max(
+        event_counter,
+        int(state.get('presentation_event_counter') or 0),
+    )
+    _capture_floor_entry_checkpoint(state)
+    _capture_recovery_checkpoint(state, f'{state.get("phase")}_entry')
+    events.append({
+        'type': 'floor_restarted',
         'node_id': state.get('current_node_id'),
     })
 
@@ -158,7 +306,7 @@ def _new_card(state, def_id, upgraded=False, modifiers=None):
         and STORY_CARDS[def_id].get('rarity') == 'primary'
     ):
         card.setdefault('modifiers', {})['primary_bonus'] = int(
-            STORY_RELICS['steady']['amount']
+            _relic_amount(state, 'steady')
         )
     if (
         _has_relic(state, 'return_to_origin')
@@ -291,10 +439,10 @@ def _build_enemy(state, def_id, serial, spec=None):
             enemy[str(key)] = int(value)
         else:
             enemy[str(key)] = copy.deepcopy(value)
-    ward = _curse_stacks(state, 'ward')
-    if ward:
+    affliction = _curse_stacks(state, 'affliction')
+    if affliction:
         enemy['negative_status_immunity'] = (
-            int(enemy.get('negative_status_immunity') or 0) + 3 * ward
+            int(enemy.get('negative_status_immunity') or 0) + 3 * affliction
         )
     return enemy
 
@@ -323,6 +471,18 @@ def _equipment_effects(combat, script=None):
 
 def _has_relic(state, relic_id):
     return relic_id in state.get('player', {}).get('relics', [])
+
+
+def _relic_count(state, relic_id):
+    return sum(
+        1 for item in state.get('player', {}).get('relics', [])
+        if item == relic_id
+    )
+
+
+def _relic_amount(state, relic_id):
+    relic = STORY_RELICS.get(relic_id) or {}
+    return int(relic.get('amount') or 0) * _relic_count(state, relic_id)
 
 
 def _gain_shield(state, amount, events, source='card', enemy=None):
@@ -389,7 +549,7 @@ def _gain_deck_card(state, card_id, events, upgraded=False, source='reward'):
     if _has_relic(state, 'diligent'):
         _heal_player(
             state,
-            int(STORY_RELICS['diligent']['amount']),
+            _relic_amount(state, 'diligent'),
             events,
             source='diligent',
         )
@@ -545,7 +705,7 @@ def _on_card_drawn(state, card, seed, events, autoplay_depth):
             ) + 1
         events.append({'type': 'hand_charged', 'amount': 1, 'source': 'static_electricity'})
     if 'ready' in _card_tags(values) and autoplay_depth < 24:
-        if _is_card_playable(state, card):
+        if _is_card_playable(state, card, automatic=True):
             target = min(_living_enemies(state['combat']), key=lambda item: (int(item['health']), item['id']), default=None)
             _play_card(
                 state,
@@ -601,7 +761,7 @@ def _play_ready_cards_in_hand(state, seed, events, autoplay_depth=0):
                 item for item in list(combat.get('hand', []))
                 if item['instance_id'] not in skipped
                 and 'ready' in _card_tags(_card_values(item))
-                and _is_card_playable(state, item)
+                and _is_card_playable(state, item, automatic=True)
             ),
             None,
         )
@@ -672,8 +832,6 @@ def _player_physical_hit(state, base_amount, attacker, events, source):
         return 0, amount, health_before
     if combat.get('disc_active'):
         amount = math.floor(amount / 2)
-    if _has_relic(state, 'fearless_pain'):
-        amount = max(0, amount - int(STORY_RELICS['fearless_pain']['amount']))
     shield = int(combat.get('shield') or 0)
     blocked = min(shield, amount)
     combat['shield'] = shield - blocked
@@ -683,6 +841,10 @@ def _player_physical_hit(state, base_amount, attacker, events, source):
         if poison:
             _apply_status(state, combat, 'poison', poison, events, source='sponge')
         dealt = 0
+    if dealt > 0 and _has_relic(state, 'fearless_pain'):
+        reduction = min(dealt, _relic_amount(state, 'fearless_pain'))
+        dealt -= reduction
+        blocked += reduction
     if dealt > 0 and _has_relic(state, 'phoenix') and not combat.get('phoenix_used'):
         combat['phoenix_used'] = True
         blocked += dealt
@@ -694,7 +856,7 @@ def _player_physical_hit(state, base_amount, attacker, events, source):
     if dealt and not combat.get('first_damage_taken'):
         combat['first_damage_taken'] = True
         if _has_relic(state, 'solid_barrier'):
-            _gain_elixir(state, int(STORY_RELICS['solid_barrier']['amount']), events)
+            _gain_elixir(state, _relic_amount(state, 'solid_barrier'), events)
     return dealt, blocked, before
 
 
@@ -705,6 +867,10 @@ def _player_raw_damage(state, amount, events, source):
     blocked = min(shield, amount)
     combat['shield'] = shield - blocked
     dealt = amount - blocked
+    if dealt > 0 and _has_relic(state, 'fearless_pain'):
+        reduction = min(dealt, _relic_amount(state, 'fearless_pain'))
+        dealt -= reduction
+        blocked += reduction
     if dealt > 0 and _has_relic(state, 'phoenix') and not combat.get('phoenix_used'):
         combat['phoenix_used'] = True
         blocked += dealt
@@ -716,7 +882,7 @@ def _player_raw_damage(state, amount, events, source):
     if dealt and not combat.get('first_damage_taken'):
         combat['first_damage_taken'] = True
         if _has_relic(state, 'solid_barrier'):
-            _gain_elixir(state, int(STORY_RELICS['solid_barrier']['amount']), events)
+            _gain_elixir(state, _relic_amount(state, 'solid_barrier'), events)
     events.append({
         'type': 'player_damage',
         'amount': dealt,
@@ -755,11 +921,25 @@ def _player_damage(state, amount, hits, events, source, attacker=None):
             'attacker_id': attacker.get('id'),
         })
         if dealt and int(combat_reflection := state['combat'].get('reflection') or 0) > 0 and attacker:
-            _enemy_raw_damage(state, attacker, combat_reflection, events, 'reflection')
+            _enemy_raw_damage(
+                state,
+                attacker,
+                combat_reflection,
+                events,
+                'reflection',
+                player_caused=True,
+            )
         salt_multipliers = state['combat'].get('salt_multipliers') or []
         if dealt > 0 and attacker and int(attacker.get('health') or 0) > 0 and salt_multipliers:
             multiplier = max(1, int(salt_multipliers.pop(0)))
-            _enemy_raw_damage(state, attacker, dealt * multiplier, events, 'salt')
+            _enemy_raw_damage(
+                state,
+                attacker,
+                dealt * multiplier,
+                events,
+                'salt',
+                player_caused=True,
+            )
         if dealt > 0 and attacker and int(attacker.get('health') or 0) > 0:
             vampire = max(0, int(attacker.get('vampire') or 0))
             if vampire:
@@ -797,7 +977,11 @@ def _apply_enemy_lethal_rules(enemy, before, dealt, events):
         enemy['health'] = before - dealt
         return dealt
     script = STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
-    if script == 'bandage_beetle' and int(enemy.get('bandage') or 0) > 0:
+    if script == 'bandage_beetle' and enemy.get('bandage_triggered'):
+        # The durable marker is authoritative even if an older/stale state
+        # accidentally restores the visible stack counter.
+        enemy['bandage'] = 0
+    elif script == 'bandage_beetle' and int(enemy.get('bandage') or 0) > 0:
         enemy['bandage'] = 0
         enemy['health'] = 1
         enemy['bandage_triggered'] = True
@@ -824,9 +1008,22 @@ def _record_enemy_health_damage(enemy, dealt):
         enemy['fossil_awaken_pending'] = True
 
 
-def _enemy_raw_damage(state, enemy, amount, events, source, propagate=False):
+def _enemy_raw_damage(
+    state,
+    enemy,
+    amount,
+    events,
+    source,
+    propagate=False,
+    player_caused=False,
+):
     if not enemy or int(enemy.get('health') or 0) <= 0:
         return 0
+    amount = max(0, int(amount))
+    if player_caused and not propagate and _has_relic(state, 'frenzy_relic'):
+        amount = math.floor(
+            amount * float(STORY_RELICS['frenzy_relic']['amount'])
+        )
     if int(enemy.get('invincible') or 0) > 0:
         events.append({
             'type': 'enemy_damage',
@@ -841,7 +1038,6 @@ def _enemy_raw_damage(state, enemy, amount, events, source, propagate=False):
             'source': source,
         })
         return 0
-    amount = max(0, int(amount))
     shield = int(enemy.get('shield') or 0)
     blocked = min(shield, amount)
     enemy['shield'] = shield - blocked
@@ -916,6 +1112,10 @@ def _player_attack_hit_amount(
     amount = math.floor(amount * float(attack_multiplier or 1))
     if effect.get('damage_multiplier'):
         amount = math.floor(amount * float(effect['damage_multiplier']))
+    if _has_relic(state, 'frenzy_relic'):
+        amount = math.floor(
+            amount * float(STORY_RELICS['frenzy_relic']['amount'])
+        )
     if int(combat.get('weak') or 0) > 0:
         amount = math.floor(amount * 0.75)
     if int(enemy.get('vulnerable') or 0) > 0:
@@ -964,18 +1164,50 @@ def _enemy_physical_damage(
         attack_multiplier=attack_multiplier,
     )
     tags = _card_tags(values)
-    if int(enemy.get('evade') or 0) > 0 and 'precise' not in tags:
-        enemy['evade'] = max(0, int(enemy['evade']) - 1)
-        events.append({
-            'type': 'evade',
-            'target_id': enemy['id'],
-            'amount': base_hit_amount,
-            'source': source,
-        })
-        return 0
+    precise = 'precise' in tags
     total = 0
+    resolved_hit = False
     for hit_index in range(1, hit_count + 1):
-        amount = _enemy_special_damage_amount(enemy, base_hit_amount, consume=True)
+        hit_amount = base_hit_amount
+        evade = max(0, int(enemy.get('evade') or 0))
+        if evade > 0:
+            enemy['evade'] = evade - 1
+            if precise:
+                reduced = int(math.ceil(hit_amount / 2))
+                prevented = max(0, hit_amount - reduced)
+                hit_amount = reduced
+            else:
+                prevented = hit_amount
+            events.append({
+                'type': 'evade',
+                'target_id': enemy['id'],
+                'amount': prevented,
+                'source': source,
+                'precision': precise,
+                'hit_index': hit_index,
+                'hit_count': hit_count,
+            })
+            if not precise:
+                before = int(enemy['health'])
+                events.append({
+                    'type': 'enemy_damage',
+                    'enemy_id': enemy['id'],
+                    'amount': 0,
+                    'hits': 1,
+                    'hit_index': hit_index,
+                    'hit_count': hit_count,
+                    'history': [{
+                        'before': before,
+                        'after': before,
+                        'blocked': prevented,
+                    }],
+                    'before': before,
+                    'after': before,
+                    'source': source,
+                })
+                continue
+        resolved_hit = True
+        amount = _enemy_special_damage_amount(enemy, hit_amount, consume=True)
         shield = int(enemy.get('shield') or 0)
         invincible = int(enemy.get('invincible') or 0) > 0
         blocked = amount if invincible else min(shield, amount)
@@ -1010,6 +1242,8 @@ def _enemy_physical_damage(
                     adjacent = enemies[adjacent_index]
                     if STORY_ENEMIES[adjacent['def_id']].get('script') == 'centipede':
                         _enemy_raw_damage(state, adjacent, math.floor(dealt / 2), events, 'linked', propagate=True)
+    if not resolved_hit:
+        return total
     definition = STORY_ENEMIES[enemy['def_id']]
     if 'swell' in definition.get('traits', ()):
         enemy['temporary_power'] = int(enemy.get('temporary_power') or 0) + 1
@@ -1055,7 +1289,18 @@ def _resolve_player_death(state, events):
     return True
 
 
-def _is_card_playable(state, card):
+def _must_play_attack_card(state, card):
+    if not _has_relic(state, 'frenzy_relic'):
+        return False
+    if _card_values(card).get('type') == 'thorn':
+        return False
+    return any(
+        _card_values(hand_card).get('type') == 'thorn'
+        for hand_card in (state.get('combat') or {}).get('hand', [])
+    )
+
+
+def _is_card_playable(state, card, automatic=False):
     combat = state.get('combat') or {}
     values = _card_values(card)
     tags = _card_tags(values)
@@ -1063,6 +1308,7 @@ def _is_card_playable(state, card):
         'unplayable' in tags
         or combat.get('turn') != 'player'
         or combat.get('opening_redraw_pending')
+        or (not automatic and _must_play_attack_card(state, card))
     ):
         return False
     if combat.get('card_play_limit') is not None and int(combat.get('cards_played_this_turn') or 0) >= int(combat['card_play_limit']):
@@ -1107,10 +1353,11 @@ def _validate_card_selections(combat, card, values, payload):
                 item for item in combat['hand']
                 if item is not card and 'sublime' not in _card_tags(_card_values(item))
             ])
-            if exact and available < maximum:
+            required = 0 if effect_type == 'choose_exile' and available == 0 else maximum
+            if exact and available < required:
                 _fail('CARD_NOT_PLAYABLE', '没有足够的可选择手牌')
-            if exact and len(selected) != maximum:
-                _fail('CARD_SELECTION_REQUIRED', f'请选择{maximum}张牌')
+            if exact and len(selected) != required:
+                _fail('CARD_SELECTION_REQUIRED', f'请选择{required}张牌')
             if len(selected) > maximum:
                 _fail('TOO_MANY_CARDS_SELECTED', '选择的牌过多')
         elif effect_type == 'discard_to_draw_top':
@@ -1337,7 +1584,7 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
     if not card:
         _fail('CARD_NOT_IN_HAND', '这张牌不在手牌中')
     values = _card_values(card)
-    if not _is_card_playable(state, card):
+    if not _is_card_playable(state, card, automatic=bool(payload.get('automatic'))):
         _fail('CARD_NOT_PLAYABLE', '当前无法打出这张牌')
     _validate_card_selections(combat, card, values, payload)
     if int(combat.get('cards_played_this_turn') or 0) == 1:
@@ -1389,7 +1636,14 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
         if _has_relic(state, 'blade') and not combat.get('blade_used'):
             combat['blade_used'] = True
             for target in targets:
-                _apply_status(state, target, 'vulnerable', 1, events, source='blade')
+                _apply_status(
+                    state,
+                    target,
+                    'vulnerable',
+                    _relic_amount(state, 'blade'),
+                    events,
+                    source='blade',
+                )
         if _has_relic(state, 'sword_strategy'):
             _gain_shield(
                 state,
@@ -1656,6 +1910,8 @@ def _card_damage_prediction(state, card, enemy):
     }
     simulated_enemy = copy.deepcopy(enemy)
     shield = int(simulated_enemy.get('shield') or 0)
+    dodge = max(0, int(simulated_enemy.get('evade') or 0))
+    precise = 'precise' in _card_tags(values)
     for effect in values.get('effects') or ():
         segment = _player_attack_effect_segment(state, effect, enemy, context)
         if segment is None:
@@ -1669,7 +1925,15 @@ def _card_damage_prediction(state, card, enemy):
             attack_multiplier=context.get('attack_multiplier', 1),
         )
         for _ in range(max(0, hits)):
-            value = _enemy_special_damage_amount(simulated_enemy, raw_value, consume=True)
+            hit_value = raw_value
+            if dodge > 0:
+                dodge -= 1
+                if precise:
+                    hit_value = int(math.ceil(hit_value / 2))
+                else:
+                    predicted.append(0)
+                    continue
+            value = _enemy_special_damage_amount(simulated_enemy, hit_value, consume=True)
             blocked = min(shield, max(0, value))
             shield -= blocked
             predicted.append(max(0, value) - blocked)
@@ -1712,7 +1976,26 @@ def _encounter_specs(state, room_type, seed, category_override=None):
         category = 'simple'
     else:
         category = 'hard'
-    encounter = _rng(state, seed, f'encounter:{category}').choice(groups[category])
+    pool = list(groups.get(category) or ())
+    if not pool:
+        _fail('EMPTY_ENCOUNTER_POOL', '当前区域没有可用的战斗配置')
+    rng = _rng(state, seed, f'encounter:{category}')
+    if category == 'elite':
+        history = state.setdefault('encounter_history', {}).setdefault('elite', {})
+        seen = {
+            int(item) for item in history.get(biome, [])
+            if isinstance(item, int) or str(item).isdigit()
+        }
+        available = [index for index in range(len(pool)) if index not in seen]
+        if not available:
+            seen.clear()
+            available = list(range(len(pool)))
+        selected_index = rng.choice(available)
+        seen.add(selected_index)
+        history[biome] = sorted(seen)
+        encounter = pool[selected_index]
+    else:
+        encounter = rng.choice(pool)
     return [spec if isinstance(spec, dict) else {'def_id': spec} for spec in encounter]
 
 
@@ -1720,7 +2003,7 @@ def _start_combat(state, node, seed, events, encounter_override=None):
     specs = encounter_override or _encounter_specs(state, node['type'], seed)
     draw_pile = copy.deepcopy(state['player']['deck'])
     if _has_relic(state, 'steady'):
-        primary_bonus = int(STORY_RELICS['steady']['amount'])
+        primary_bonus = _relic_amount(state, 'steady')
         for card in draw_pile:
             if STORY_CARDS[card['def_id']].get('rarity') == 'primary':
                 card.setdefault('modifiers', {})['primary_bonus'] = primary_bonus
@@ -1745,6 +2028,8 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'evade': 0,
         'stun': 0,
         'broken': 0,
+        'blind': 0,
+        'blind_active': False,
         'draw_pile': draw_pile,
         'hand': [],
         'discard_pile': [],
@@ -1771,9 +2056,9 @@ def _start_combat(state, node, seed, events, encounter_override=None):
     if _has_relic(state, 'first_strike'):
         combat['elixir'] += int(STORY_RELICS['first_strike']['amount'])
     if _has_relic(state, 'ruthless'):
-        combat['power'] += 1
+        combat['power'] += _relic_amount(state, 'ruthless')
     if _has_relic(state, 'firm_defense'):
-        combat['endurance'] += 1
+        combat['endurance'] += _relic_amount(state, 'firm_defense')
     if _has_relic(state, 'dizzy_relic'):
         _apply_status(state, combat, 'blind', 1, events, source='dizzy_relic')
     if _has_relic(state, 'uranium'):
@@ -1782,16 +2067,24 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         combat['poison'] = math.floor(int(combat['poison']) / 2)
     if _has_relic(state, 'pollen_relic'):
         _apply_status(state, combat, 'broken', 1, events, source='pollen_relic')
+    _activate_player_blind(combat, events)
     for enemy in enemies:
         if _has_relic(state, 'opening_lightning'):
             event_offset = len(events)
-            _enemy_raw_damage(state, enemy, int(STORY_RELICS['opening_lightning']['amount']), events, 'opening_lightning')
+            _enemy_raw_damage(
+                state,
+                enemy,
+                _relic_amount(state, 'opening_lightning'),
+                events,
+                'opening_lightning',
+                player_caused=True,
+            )
             for event in events[event_offset:]:
                 if event.get('type') == 'enemy_damage':
                     event['parallel_group'] = 'opening_lightning'
     draw_count = int(STORY_RULES['draw_per_turn']) + int(state['player'].get('opening_draw_bonus') or 0)
     if _has_relic(state, 'prepared'):
-        draw_count += int(STORY_RELICS['prepared']['amount'])
+        draw_count += _relic_amount(state, 'prepared')
     if _has_relic(state, 'first_strike'):
         draw_count += int(STORY_RELICS['first_strike']['amount'])
     if _has_relic(state, 'grab_every_card'):
@@ -2240,9 +2533,22 @@ def _enemy_move_target_ids(combat, enemy, move):
     return list(dict.fromkeys(targets))
 
 
+def _prepare_enemy_turn_defenses(combat):
+    """Expire defenses from the previous enemy turn before new actions resolve."""
+    for enemy in combat['enemies']:
+        if int(enemy.get('health') or 0) <= 0:
+            continue
+        sturdy = max(0, int(enemy.get('sturdy') or 0))
+        if sturdy:
+            enemy['sturdy'] = sturdy - 1
+        else:
+            enemy['shield'] = 0
+
+
 def _enemy_turn(state, seed, events):
     combat = state['combat']
     combat['turn'] = 'enemy'
+    _prepare_enemy_turn_defenses(combat)
     action_order = list(combat['enemies'])
     for enemy in action_order:
         if int(enemy.get('health') or 0) <= 0:
@@ -2385,8 +2691,24 @@ def _run_turn_start_equipment(state, seed, events):
             _gain_shield(state, amount, events)
 
 
+def _activate_player_blind(combat, events):
+    stacks = max(0, int(combat.get('blind') or 0))
+    combat['blind_active'] = stacks > 0
+    if not stacks:
+        return
+    combat['blind'] = stacks - 1
+    events.append({
+        'type': 'status_decay',
+        'target_id': 'player',
+        'status': 'blind',
+        'before': stacks,
+        'after': int(combat['blind']),
+    })
+
+
 def _turn_boundary(state, seed, events, extra=False):
     combat = state['combat']
+    combat['blind_active'] = False
     combat['temporary_power'] = 0
     combat['disc_active'] = False
     combat['cannot_draw'] = False
@@ -2413,15 +2735,17 @@ def _turn_boundary(state, seed, events, extra=False):
                 enemy['health'] = 0
                 events.append({'type': 'enemy_withered', 'enemy_id': enemy['id']})
         if int(enemy.get('poison') or 0) > 0:
-            _enemy_raw_damage(state, enemy, int(enemy['poison']), events, 'poison')
+            _enemy_raw_damage(
+                state,
+                enemy,
+                int(enemy['poison']),
+                events,
+                'poison',
+                player_caused=True,
+            )
             enemy['poison'] = math.floor(int(enemy['poison']) / 2)
         if int(enemy.get('health') or 0) <= 0:
             continue
-        sturdy = max(0, int(enemy.get('sturdy') or 0))
-        if sturdy:
-            enemy['sturdy'] = sturdy - 1
-        else:
-            enemy['shield'] = 0
         enemy['evade'] = max(0, int(enemy.get('evade') or 0) - 1)
         enemy['hidden'] = max(0, int(enemy.get('hidden') or 0) - 1)
         turn_shield = max(0, int(enemy.get('turn_shield') or 0))
@@ -2482,12 +2806,13 @@ def _turn_boundary(state, seed, events, extra=False):
     combat['magic'] = int(state['player'].get('magic') or 0)
     _gain_elixir(state, _turn_elixir_baseline(state, combat), events)
     if _has_relic(state, 'accumulate') and int(combat['round']) == 2:
-        combat['temporary_power'] += int(STORY_RELICS['accumulate']['amount'])
+        combat['temporary_power'] += _relic_amount(state, 'accumulate')
     if _has_relic(state, 'support'):
         _gain_shield(state, int(STORY_RELICS['support']['amount']), events)
     _run_turn_start_equipment(state, seed, events)
     for equipment in combat.get('equipment', []):
         equipment['turns_equipped'] = int(equipment.get('turns_equipped') or 0) + 1
+    _activate_player_blind(combat, events)
     _play_ready_cards_in_hand(state, seed, events)
     if state.get('phase') != 'combat':
         return
@@ -2520,6 +2845,7 @@ def _end_turn(state, seed, events):
     if state.get('phase') != 'combat' or state.get('combat', {}).get('turn') != 'player':
         _fail('END_TURN_NOT_ALLOWED', '当前不能结束回合')
     combat = state['combat']
+    combat['blind_active'] = False
     if combat.get('opening_redraw_pending'):
         _fail('OPENING_REDRAW_PENDING', '请先处理冷却效果')
     for status in ('weak', 'vulnerable', 'fragile'):
@@ -2592,7 +2918,8 @@ def _random_relic(state, seed):
     pool = [
         relic_id
         for relic_id, relic in STORY_RELICS.items()
-        if relic_id not in owned and relic.get('rarity') != 'special'
+        if relic.get('rarity') != 'special'
+        and (relic_id not in owned or relic.get('stackable'))
     ]
     if not pool:
         return None
@@ -2670,11 +2997,13 @@ def _queue_relic_operation(state, relic_id):
 
 
 def _gain_relic(state, relic_id, seed, events):
-    if not relic_id or relic_id not in STORY_RELICS or relic_id in state['player']['relics']:
+    if not relic_id or relic_id not in STORY_RELICS:
         return
     player = state['player']
-    player['relics'].append(relic_id)
     relic = STORY_RELICS[relic_id]
+    if relic_id in player['relics'] and not relic.get('stackable'):
+        return
+    player['relics'].append(relic_id)
     script = relic.get('script')
     amount = int(relic.get('amount') or 0)
     if script == 'gain_gold':
@@ -2796,7 +3125,13 @@ def _finish_combat(state, seed, events):
         and _has_relic(state, 'indomitable')
         and int(state['combat'].get('damage_taken') or 0) > int(STORY_RELICS['indomitable']['amount'])
     ):
-        _upgrade_random_cards(state, 1, seed, events, 'indomitable')
+        _upgrade_random_cards(
+            state,
+            _relic_count(state, 'indomitable'),
+            seed,
+            events,
+            'indomitable',
+        )
     state['reward'] = _new_reward(
         gold,
         _reward_choices(state, seed, room_type),
@@ -2914,7 +3249,7 @@ def _resolve_enemy_death_hooks(state, events):
             })
         elif STORY_ENEMIES[enemy['def_id']].get('script') == 'wreckage':
             summon_id = str(enemy.get('death_summon') or '')
-            if summon_id and enemy.get('death_reason') != 'burst':
+            if summon_id:
                 summoned = _summon_enemy(
                     state,
                     summon_id,
@@ -2977,12 +3312,19 @@ def _complete_current_node(state, events):
     if int(node['floor']) >= int(state.get('map', {}).get('floor_count') or 16):
         if int(state.get('stage') or 1) < len(STORY_STAGES):
             next_stage = int(state.get('stage') or 1) + 1
+            selected_curses = {
+                curse_id for curse_id in STORY_CURSES
+                if _curse_stacks(state, curse_id) > 0
+            }
             state['phase'] = 'stage_choice'
             state['room'] = {
                 'type': 'stage_choice',
                 'stage': next_stage,
                 'biomes': list(STORY_STAGES[next_stage - 1]['biomes']),
-                'curses': list(STORY_CURSES),
+                'curses': [
+                    curse_id for curse_id in STORY_CURSES
+                    if curse_id not in selected_curses
+                ],
             }
         else:
             state['phase'] = 'complete'
@@ -2994,6 +3336,7 @@ def _complete_current_node(state, events):
     state['combat'] = None
     state['reward'] = None
     state.pop('recovery_checkpoint', None)
+    state.pop('floor_entry_checkpoint', None)
     state['player']['elixir'] = int(state['player']['max_elixir'])
     events.append({'type': 'node_completed', 'node_id': node['id']})
 
@@ -3005,6 +3348,7 @@ def _complete_blessing_node(state):
     state['phase'] = 'map'
     state['room'] = None
     state['reward'] = None
+    state.pop('floor_entry_checkpoint', None)
 
 
 def _record_blessing(player, blessing_id):
@@ -3231,7 +3575,11 @@ def _make_shop(state, seed):
     for rarity, base in (('common', 175), ('rare', 225), ('ultra', 275)):
         pool = [
             relic_id for relic_id, relic in STORY_RELICS.items()
-            if relic.get('rarity') == rarity and relic_id not in state['player']['relics']
+            if relic.get('rarity') == rarity
+            and (
+                relic_id not in state['player']['relics']
+                or relic.get('stackable')
+            )
         ]
         if pool:
             relics.append({
@@ -3251,7 +3599,8 @@ def _make_shop(state, seed):
         'cards': cards,
         'relics': relics,
         'remove_price': 75 + 25 * int(state.get('shop_removals') or 0),
-        'upgrade_price': 75 + 25 * int(state.get('shop_upgrades') or 0),
+        'upgrade_price': 50 + 25 * int(state.get('shop_upgrades') or 0),
+        'service_used': False,
     }
 
 
@@ -3334,6 +3683,25 @@ def _record_event_progress(room, choice_id, result, stage_id=None):
     room['body'] = copy.deepcopy(result)
 
 
+def _choose_story_event_id(state, seed, event_ids):
+    event_ids = list(dict.fromkeys(str(item) for item in event_ids if item))
+    if not event_ids:
+        _fail('EMPTY_EVENT_POOL', '当前没有可用事件')
+    history = state.setdefault('encounter_history', {})
+    seen = {
+        str(item) for item in history.get('event', [])
+        if str(item)
+    }
+    available = [event_id for event_id in event_ids if event_id not in seen]
+    if not available:
+        seen.difference_update(event_ids)
+        available = list(event_ids)
+    event_id = _rng(state, seed, 'story_event').choice(available)
+    seen.add(event_id)
+    history['event'] = sorted(seen)
+    return event_id
+
+
 def _make_story_event(state, seed):
     event_ids = [
         'mystery_lottery',
@@ -3344,11 +3712,18 @@ def _make_story_event(state, seed):
         'adventure_master',
         'dandelion_seed_event',
         'farm',
-        'card_trader',
     ]
+    deck = list(state.get('player', {}).get('deck', []))
+    can_afford_primary_trade = int(state.get('player', {}).get('gold') or 0) >= 50
+    has_free_trade = any(
+        STORY_CARDS.get(card.get('def_id'), {}).get('rarity') != 'primary'
+        for card in deck
+    )
+    if deck and (can_afford_primary_trade or has_free_trade):
+        event_ids.append('card_trader')
     if str(state.get('biome') or '') == 'garden':
         event_ids.append('creature_struggle')
-    event_id = _rng(state, seed, 'story_event').choice(event_ids)
+    event_id = _choose_story_event_id(state, seed, event_ids)
     if event_id == 'creature_struggle':
         return _story_event_room(
             event_id,
@@ -3367,7 +3742,8 @@ def _make_story_event(state, seed):
                     'fight_leave',
                     '假装无事发生',
                     'Walk Past',
-                    '获得1张无情。',
+                    '获得1张[[card:unrelenting]]。',
+                    'Gain 1 [[card:unrelenting]].',
                     requires_confirmation=True,
                 ),
             ],
@@ -3424,14 +3800,16 @@ def _make_story_event(state, seed):
                     'occult_power',
                     '祈求更大力量',
                     'Ask for More Power',
-                    '获得标记，并将2张惊吓加入牌组。',
+                    '获得[[card:mark]]，并将2张[[card:startled]]加入牌组。',
+                    'Gain [[card:mark]] and add 2 [[card:startled]] to your deck.',
                     requires_confirmation=True,
                 ),
                 _event_option(
                     'occult_flee',
                     '被吓到并逃跑',
                     'Flee',
-                    '将1张疲劳加入牌组。',
+                    '将1张[[card:fatigued]]加入牌组。',
+                    'Add 1 [[card:fatigued]] to your deck.',
                     requires_confirmation=True,
                 ),
             ],
@@ -3502,8 +3880,8 @@ def _make_story_event(state, seed):
                     'hive_explore',
                     '深入探险',
                     'Explore Deeper',
-                    '获得1张疲劳和164G。',
-                    'Gain a Fatigued card and 164 G.',
+                    '获得1张[[card:fatigued]]和164G。',
+                    'Gain 1 [[card:fatigued]] and 164 G.',
                     requires_confirmation=True,
                 ),
             ],
@@ -3536,7 +3914,13 @@ def _make_story_event(state, seed):
             '*',
             [
                 _event_option('dandelion_eat', '吃下', 'Eat It', '随机升级1张牌。', 'Upgrade a random card.'),
-                _event_option('dandelion_take', '带走', 'Take It', '获得1张蒲公英种子。', 'Gain a Dandelion Seed.'),
+                _event_option(
+                    'dandelion_take',
+                    '带走',
+                    'Take It',
+                    '获得1张[[card:dandelion_seed]]。',
+                    'Gain 1 [[card:dandelion_seed]].',
+                ),
             ],
         )
     if event_id == 'farm':
@@ -3554,8 +3938,8 @@ def _make_story_event(state, seed):
                     'farm_reminisce',
                     '回忆',
                     'Reminisce',
-                    '获得1张疲劳和1项随机天赋。',
-                    'Gain a Fatigued card and a random talent.',
+                    '获得1张[[card:fatigued]]和1项随机天赋。',
+                    'Gain 1 [[card:fatigued]] and a random talent.',
                     requires_confirmation=True,
                 ),
                 _event_option('farm_search', '搜刮', 'Search', '获得53G。', 'Gain 53 G.'),
@@ -3564,6 +3948,20 @@ def _make_story_event(state, seed):
     if event_id == 'card_trader':
         candidates = list(state['player'].get('deck', []))
         _rng(state, seed, 'card_trader_candidates').shuffle(candidates)
+        if int(state['player'].get('gold') or 0) < 50 and not any(
+            STORY_CARDS.get(card.get('def_id'), {}).get('rarity') != 'primary'
+            for card in candidates[:3]
+        ):
+            free_candidate = next(
+                (
+                    card for card in candidates[3:]
+                    if STORY_CARDS.get(card.get('def_id'), {}).get('rarity') != 'primary'
+                ),
+                None,
+            )
+            if free_candidate is not None:
+                candidates.remove(free_candidate)
+                candidates.insert(0, free_candidate)
         candidate_ids = [card['instance_id'] for card in candidates[:3]]
         choices = []
         if candidate_ids:
@@ -3576,13 +3974,12 @@ def _make_story_event(state, seed):
                 selection='trade',
                 candidate_ids=candidate_ids,
             ))
-        choices.append(_event_option('leave', '离开', 'Leave'))
         return _story_event_room(
             event_id,
             {'zh': '卡牌交换商', 'en': 'Card Trader'},
             {
-                'zh': '商人从你的牌组中挑出了至多3张牌，愿意随机改造其中1张。',
-                'en': 'The trader offers to randomly transform one of up to three cards from your deck.',
+                'zh': '商人从你的牌组中挑出了3张牌。选择其中1张，将其随机交换为另一张牌；基础牌需支付50G加工费。',
+                'en': 'The trader selected 3 cards from your deck. Choose 1 to exchange for another random card. Primary cards cost a 50 G processing fee.',
             },
             {'zh': '卡牌交换商', 'en': 'Card Trader'},
             '?',
@@ -3609,7 +4006,8 @@ def _make_story_event(state, seed):
                 'event_help',
                 '帮忙推销',
                 'Help Sell',
-                '获得80G与1张无情。',
+                '获得80G与1张[[card:unrelenting]]。',
+                'Gain 80 G and 1 [[card:unrelenting]].',
                 requires_confirmation=True,
             ),
             _event_option('leave', '离开', 'Leave'),
@@ -3621,12 +4019,13 @@ def _enter_event_node(state, node, seed, events):
     streak = max(0, int(state.get('event_miss_streak') or 0))
     multiplier = min(5, streak + 1)
     roll = _rng(state, seed, 'event_room_type').random()
-    conversions = (
+    conversions = [
         ('combat', 0.10 * multiplier),
         ('shop', 0.05 * multiplier),
-        ('elite', 0.03 * multiplier),
         ('chest', 0.02 * multiplier),
-    )
+    ]
+    if int(state.get('current_floor') or 1) > 9:
+        conversions.insert(2, ('elite', 0.03 * multiplier))
     cursor = 0.0
     converted = None
     for room_type, probability in conversions:
@@ -3757,9 +4156,15 @@ def _resolve_stage_choice(state, payload, seed, events):
     curse_id = str(payload.get('curse_id') or '')
     if state.get('phase') != 'stage_choice' or biome not in room.get('biomes', []):
         _fail('INVALID_STAGE_CHOICE', '无法选择该区域')
-    available_curses = room.get('curses') or list(STORY_CURSES)
+    available_curses = (
+        room.get('curses')
+        if isinstance(room.get('curses'), list)
+        else list(STORY_CURSES)
+    )
     if curse_id not in available_curses or curse_id not in STORY_CURSES:
         _fail('INVALID_CURSE_CHOICE', '请选择一项诅咒')
+    if _curse_stacks(state, curse_id) > 0:
+        _fail('CURSE_ALREADY_SELECTED', '该诅咒已经选择过')
     stage = int(room['stage'])
     player = state['player']
     if _difficulty(state) in ('hard', 'lunatic'):
@@ -3779,7 +4184,9 @@ def _resolve_stage_choice(state, payload, seed, events):
         )
     state['stage'] = stage
     state['biome'] = biome
-    state.setdefault('curses', {})[curse_id] = _curse_stacks(state, curse_id) + 1
+    state.setdefault('curses', {})[curse_id] = 1
+    if curse_id == 'affliction':
+        state['curses'].pop('ward', None)
     state['stage_normal_battles'] = 0
     state['map'] = generate_story_map(seed, stage, biome, _difficulty(state))
     first = state['map']['floors'][0]['nodes'][0]
@@ -3821,7 +4228,10 @@ def _restock_shop_item(state, item, seed, events, item_type):
         pool = [
             relic_id for relic_id, relic in STORY_RELICS.items()
             if relic.get('rarity') == rarity
-            and relic_id not in state['player']['relics']
+            and (
+                relic_id not in state['player']['relics']
+                or relic.get('stackable')
+            )
         ]
         if not pool:
             return
@@ -3998,7 +4408,7 @@ def _resolve_room(state, payload, seed, events):
             _fail('CARD_NOT_UPGRADABLE', '请选择一张可升级的牌')
         _upgrade_cards(state, [card], seed, events, 'rest')
     elif room['type'] == 'rest' and option == 'gold':
-        player['gold'] += int(STORY_RELICS['greedy']['amount'])
+        player['gold'] += _relic_amount(state, 'greedy')
     elif room['type'] == 'rest' and option == 'plant_dandelion':
         seed_card = next(
             (
@@ -4066,7 +4476,10 @@ def _resolve_room(state, payload, seed, events):
                 ]
                 card_id = _rng(state, seed, 'lottery_card').choice(pool)
                 _gain_deck_card(state, card_id, events, source='lottery')
-                result = {'zh': f'获得了{_localized(STORY_CARDS[card_id]["name"])}。', 'en': 'You won a Rare card.'}
+                result = {
+                    'zh': f'获得了[[card:{card_id}]]。',
+                    'en': f'You won [[card:{card_id}]].',
+                }
             elif roll <= 20:
                 _heal_player(state, 20, events, source='lottery')
                 result = {'zh': '回复20H。', 'en': 'Recovered 20 H.'}
@@ -4206,6 +4619,18 @@ def _resolve_room(state, payload, seed, events):
                 'to_upgraded': False,
                 'source': 'card_trader',
             })
+            result = {
+                'zh': f'[[card:{previous_def_id}]]交换为了[[card:{card["def_id"]}]]。',
+                'en': f'[[card:{previous_def_id}]] was exchanged for [[card:{card["def_id"]}]].',
+            }
+            _record_event_progress(room, option, result, stage_id='result')
+            room['choices'] = [
+                _event_option('trade_continue', '继续前进', 'Continue'),
+            ]
+            room['options'] = list(room['choices'])
+            complete = False
+        elif option == 'trade_continue':
+            pass
         elif option == 'event_buy':
             if player['gold'] < 35:
                 _fail('NOT_ENOUGH_GOLD', '金币不足')
@@ -4235,6 +4660,8 @@ def _resolve_room(state, payload, seed, events):
             item['sold'] = True
             _restock_shop_item(state, item, seed, events, 'relic')
         elif option in ('remove_card', 'upgrade_card'):
+            if room.get('service_used'):
+                _fail('SHOP_SERVICE_ALREADY_USED', '本店的牌组服务已经使用')
             price_key = 'remove_price' if option == 'remove_card' else 'upgrade_price'
             if option == 'remove_card' and _has_relic(state, 'grab_every_card'):
                 _fail('CARD_REMOVAL_DISABLED', '见牌就抓使你无法删除牌')
@@ -4249,6 +4676,7 @@ def _resolve_room(state, payload, seed, events):
                 _upgrade_cards(state, [card], seed, events, 'shop')
                 state['shop_upgrades'] = int(state.get('shop_upgrades') or 0) + 1
             room[price_key] += 25
+            room['service_used'] = True
     if int(player.get('health') or 0) <= 0:
         _resolve_player_death(state, events)
         if state.get('phase') == 'game_over':
@@ -4589,15 +5017,20 @@ def _finalize_story_events(state, events):
 
 def apply_story_action(source_state, action_type, payload, seed):
     state = copy.deepcopy(source_state or {})
+    _normalize_legacy_story_state(state)
     payload = payload if isinstance(payload, dict) else {}
-    events = []
+    events = _StoryEventList(state)
     action_type = str(action_type or '').strip().lower()
     previous_phase = str(state.get('phase') or '')
     pending_operations = state.get('pending_deck_operations')
     if (
         isinstance(pending_operations, list)
         and pending_operations
-        and action_type not in ('resolve_deck_operation', 'dev_set_values')
+        and action_type not in (
+            'resolve_deck_operation',
+            'dev_set_values',
+            'restart_floor',
+        )
     ):
         _fail('DECK_OPERATION_PENDING', '请先处理待选择的牌组操作')
     handlers = {
@@ -4605,6 +5038,7 @@ def apply_story_action(source_state, action_type, payload, seed):
         'choose_blessing': lambda: _choose_blessing(state, payload, seed, events),
         'enter_node': lambda: _enter_node(state, payload, seed, events),
         'resume_node': lambda: _restore_recovery_checkpoint(state, events),
+        'restart_floor': lambda: _restore_floor_entry_checkpoint(state, events),
         'opening_redraw': lambda: _resolve_opening_redraw(state, payload, seed, events),
         'play_card': lambda: _play_card(state, payload, seed, events),
         'end_turn': lambda: _end_turn(state, seed, events),
@@ -4619,8 +5053,12 @@ def apply_story_action(source_state, action_type, payload, seed):
     if not handler:
         _fail('UNKNOWN_ACTION', '未知故事操作')
     handler()
+    # A checkpoint restored by this action can itself come from an older run.
+    _normalize_legacy_story_state(state)
     _refresh_combat_projections(state)
     phase = str(state.get('phase') or '')
+    if action_type in ('enter_node', 'dev_jump_node') and phase in ('combat', 'room', 'reward'):
+        _capture_floor_entry_checkpoint(state)
     if phase in ('combat', 'room', 'reward'):
         checkpoint_kind = None
         if action_type in ('enter_node', 'dev_jump_node'):
@@ -4642,6 +5080,7 @@ def apply_story_action(source_state, action_type, payload, seed):
             _capture_recovery_checkpoint(state, checkpoint_kind)
     else:
         state.pop('recovery_checkpoint', None)
+    events.capture_pending()
     events = _finalize_story_events(state, events)
     state['last_events'] = events[-40:]
     return state, events

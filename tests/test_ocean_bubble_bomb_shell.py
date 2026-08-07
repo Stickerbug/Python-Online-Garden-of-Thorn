@@ -11,7 +11,7 @@ from mod_loader import load_mod
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "mods" / "Ocean Cards DLC.gtnmod"
+PACKAGE = ROOT / "mods" / "Ocean Cards Addition.gtnmod"
 NEW_CARD_IDS = {"BubbleBomb", "Shell"}
 
 
@@ -66,7 +66,7 @@ class OceanBubbleBombShellTests(unittest.TestCase):
 
     def test_package_metadata_assets_and_locales(self):
         self.assertEqual(self.mod.info.author, "huanxiang0273, XinYu")
-        self.assertEqual(self.mod.info.version, "1.0.0")
+        self.assertEqual(self.mod.info.version, "1.1.0")
         self.assertTrue(NEW_CARD_IDS <= self.mod_cards.keys())
 
         bubble_bomb = self.mod_cards["BubbleBomb"]

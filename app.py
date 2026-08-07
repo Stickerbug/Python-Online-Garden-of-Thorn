@@ -258,6 +258,10 @@ VANILLA_MOD_FILENAME = 'Vanilla Cards.gtnmod'
 RETIRED_OFFICIAL_MOD_FILENAMES = {
     'Troll Cards.gtnmod',
     'Thorn Cards.gtnmod',
+    'Factory Cards DLC.gtnmod',
+    'Ocean Cards DLC.gtnmod',
+    'Hel Cards DLC.gtnmod',
+    'Arctic Cards DLC.gtnmod',
 }
 DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
     VANILLA_MOD_FILENAME,
@@ -412,7 +416,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807'
+GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -2533,9 +2537,10 @@ def _mark_player_defeated_state(room, player_index, state):
 
 def _room_blocking_player_sids(room):
     if getattr(room, 'mode', None) == '2v2':
+        timeout_defeated = set(getattr(room, 'disconnect_timeout_defeated', set()) or set())
         return [
             psid for idx, psid in enumerate(room.player_sids)
-            if not _room_player_dead(room, idx)
+            if idx not in timeout_defeated and not _room_player_dead(room, idx)
         ]
     return list(room.player_sids)
 
@@ -2751,6 +2756,11 @@ def _force_2v2_disconnect_death(room, player_index, nickname, reason='断线超�
     e = room.engine
     if room.mode != '2v2' or player_index < 0 or player_index >= len(getattr(e, 'players', [])):
         return False
+    if getattr(e, 'phase', None) in ('event_select', 'event_reveal', 'draft'):
+        # PlayerState.current_player has a default value before start_game().
+        # Advancing it here skips deck construction and creates an action-phase
+        # match in which every card zone is empty.
+        return False
     was_alive = _force_player_death_ignoring_saves(room, player_index, nickname, reason, log=True)
     if not getattr(e, 'game_over', False) and getattr(e, 'current_player', None) == player_index:
         advance = getattr(e, '_advance_turn', None)
@@ -2761,6 +2771,21 @@ def _force_2v2_disconnect_death(room, player_index, nickname, reason='断线超�
     elif not getattr(e, 'game_over', False) and getattr(e, 'phase', None) in ('response', 'choice'):
         e.phase = 'action'
     return was_alive
+
+
+def _apply_pregame_disconnect_timeout_deaths(room):
+    """Apply setup-time 2v2 forfeits after decks and opening hands exist."""
+    if getattr(room, 'mode', None) != '2v2':
+        return
+    defeated = sorted(set(getattr(room, 'disconnect_timeout_defeated', set()) or set()))
+    for player_index in defeated:
+        if getattr(room.engine, 'game_over', False):
+            break
+        if _room_player_dead(room, player_index):
+            continue
+        sid = room.player_sids[player_index] if 0 <= player_index < len(room.player_sids) else None
+        nickname = room_player_nickname(room, sid, f'P{player_index + 1}') if sid is not None else f'P{player_index + 1}'
+        _force_2v2_disconnect_death(room, player_index, nickname, '断线超时')
 
 
 def _clear_room_pending_on_forfeit(room):
@@ -4918,6 +4943,34 @@ def _auto_submit_event_sub_choice_locked(room, pidx):
     return True
 
 
+def _auto_complete_timed_out_pregame_player_locked(room, pidx):
+    """Advance a timed-out setup slot without bypassing normal game startup."""
+    engine = getattr(room, 'engine', None)
+    if engine is None or not hasattr(engine, 'get_player_status'):
+        return False
+    changed = False
+    # A player can move through event selection, reveal, draft, and an event
+    # sub-choice. Stop when another player's input is required.
+    for _ in range(8):
+        status = engine.get_player_status(pidx)
+        if status == 'ready':
+            break
+        if status == 'event_select':
+            advanced = _auto_select_opening_event_locked(room, pidx)
+        elif status == 'event_reveal':
+            advanced = _auto_confirm_opening_reveal_locked(room, pidx)
+        elif status == 'drafting':
+            advanced = _auto_complete_draft_locked(room, pidx)
+        elif status == 'sub_choice':
+            advanced = _auto_submit_event_sub_choice_locked(room, pidx)
+        else:
+            break
+        changed = bool(advanced) or changed
+        if not advanced:
+            break
+    return changed
+
+
 def _room_timer_worker():
     while True:
         try:
@@ -4955,6 +5008,7 @@ def _room_timer_worker():
                         continue
                     _clear_pregame_deadline_pause(room)
                     pregame_statuses = []
+                    timeout_defeated = set(getattr(room, 'disconnect_timeout_defeated', set()) or set())
                     for pidx in range(player_count):
                         status = engine.get_player_status(pidx) if hasattr(engine, 'get_player_status') else None
                         pregame_statuses.append(status)
@@ -4969,14 +5023,17 @@ def _room_timer_worker():
                             timeout = EVENT_SUB_CHOICE_TIMEOUT_SECONDS
                         if timeout is None:
                             continue
+                        force_progress = pidx in timeout_defeated
                         key = (pidx, status)
                         deadline = room.pregame_deadlines.get(key) if hasattr(room, 'pregame_deadlines') else None
                         if deadline is None:
-                            room.pregame_deadlines[key] = now + float(timeout)
+                            deadline = now if force_progress else now + float(timeout)
+                            room.pregame_deadlines[key] = deadline
                             pregame_timer_updates.add((room, pidx, status))
-                            continue
+                            if not force_progress:
+                                continue
                         pregame_timer_updates.add((room, pidx, status))
-                        if now < deadline:
+                        if not force_progress and now < deadline:
                             continue
                         changed = False
                         if status == 'event_select':
@@ -13437,6 +13494,7 @@ def start_game(room):
         if room.engine.start_game() is False:
             admin_event('warning', f'ignored duplicate game start room={room.room_id}', room_id=room.room_id)
             return
+        _apply_pregame_disconnect_timeout_deaths(room)
         room.started_at = time.time()
         admin_event('game', f'room {room.room_id} started mode={room.mode}')
         record_room_replay_keyframe(room, 'game_start')
@@ -14692,6 +14750,12 @@ def _mark_disconnect_timeout_loss(room, player_index, nickname):
     if getattr(room, 'mode', None) == '2v2' and _room_player_dead(room, player_index):
         return False
     if getattr(room, 'mode', None) == '2v2':
+        if getattr(e, 'phase', None) in ('event_select', 'event_reveal', 'draft'):
+            if not hasattr(room, 'disconnect_timeout_defeated'):
+                room.disconnect_timeout_defeated = set()
+            room.disconnect_timeout_defeated.add(int(player_index))
+            _auto_complete_timed_out_pregame_player_locked(room, player_index)
+            return False
         changed = _force_2v2_disconnect_death(room, player_index, nickname, '断线超时')
         if changed:
             if not hasattr(room, 'disconnect_timeout_defeated'):
@@ -14718,6 +14782,7 @@ def reconnect_timeout(room_id, old_sid):
             timed_out_timer = room.reconnect_timers.pop(old_sid, None)
             if timed_out_timer:
                 timed_out_timer.cancel()
+            was_pregame = getattr(room.engine, 'phase', None) in ('event_select', 'event_reveal', 'draft')
             ended = _mark_disconnect_timeout_loss(
                 room,
                 int(dc_info.get('player_index', -1)),
@@ -14730,6 +14795,7 @@ def reconnect_timeout(room_id, old_sid):
                 'reconnect_timeout': int(_disconnect_info_timeout(dc_info)),
             })
             if room.mode == '2v2':
+                pregame_timeout = was_pregame and not getattr(room.engine, 'game_over', False)
                 if ended:
                     _cancel_room_reconnect_timers(room)
                     for other_sid in room.player_sids:
@@ -14752,7 +14818,14 @@ def reconnect_timeout(room_id, old_sid):
                                 **room_event_context(room),
                             }, other_sid, room))
                 admin_event('game', f'room {room_id} disconnect timeout result: {dc_info.get("nickname", "?")}')
-                pending_emits.append(('broadcast_game_state', room, None))
+                if pregame_timeout:
+                    for pidx in range(len(room.player_sids)):
+                        schedule_pregame_state(room, pidx, allow_sub_choice=True)
+                    schedule_pregame_status_update(room)
+                    if all(room.engine.player_ready[pidx] for pidx in range(len(room.player_sids))):
+                        schedule_start_game(room)
+                else:
+                    pending_emits.append(('broadcast_game_state', room, None))
                 pending_emits.append(('broadcast_lobby', None, None))
             else:
                 _cancel_room_reconnect_timers(room)
@@ -22296,6 +22369,7 @@ def on_rematch(data=None):
                 room.pregame_deadlines = {}
                 room.pregame_state_last_resend = 0.0
                 room.disconnect_attempt_counts = [0 for _ in room.player_sids]
+                room.disconnect_timeout_defeated = set()
                 room.chat_history = []
                 room.chat_sequence = 0
                 reset_room_replay(room)
@@ -22581,15 +22655,6 @@ def on_leave_spectate(data=None):
     with _lock:
         player = players.get(sid)
         room_id = player.get('spectating_room') if player else None
-        current_room = rooms.get(room_id)
-        if current_room is not None and reject_stale_room_event_context(
-            sid,
-            'leave_spectate',
-            data,
-            current_room,
-            -1,
-        ):
-            return
         room = _handle_leave_spectate_internal(sid)
     payload = room_event_context(room) if room is not None else {}
     socketio.emit('spectate_leave', payload, room=sid)

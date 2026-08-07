@@ -284,7 +284,7 @@ OPENING_EVENT_I18N = {
     },
     12: {
         'name': _t('众生平等', 'Equal Suffering', 'Souffrance égale', 'Sofrimento Igual', 'Равное страдание', '等しき苦痛'),
-        'desc': _t('自己回合结束时，自己对每名其他可选中玩家造成8[[icon:D]]', 'At the end of your turn, deal 8[[icon:D]] to every other targetable player', 'À la fin de votre tour, infligez 8[[icon:D]] à chaque autre joueur pouvant être ciblé', 'No fim do seu turno, cause 8[[icon:D]] a cada outro jogador que possa ser alvo', 'В конце своего хода нанесите 8[[icon:D]] каждому другому доступному для выбора игроку', '自分のターン終了時、自分以外の選択可能な各プレイヤーに8[[icon:D]]を与える'),
+        'desc': _t('自己回合结束时，对自己造成5[[icon:D]]，并对每名其他可选中玩家造成8[[icon:D]]', 'At the end of your turn, deal 5[[icon:D]] to yourself and 8[[icon:D]] to every other targetable player', 'À la fin de votre tour, infligez-vous 5[[icon:D]] et infligez 8[[icon:D]] à chaque autre joueur pouvant être ciblé', 'No fim do seu turno, cause 5[[icon:D]] a si mesmo e 8[[icon:D]] a cada outro jogador que possa ser alvo', 'В конце своего хода нанесите себе 5[[icon:D]], а каждому другому доступному для выбора игроку — 8[[icon:D]]', '自分のターン終了時、自分に5[[icon:D]]を与え、自分以外の選択可能な各プレイヤーに8[[icon:D]]を与える'),
     },
 }
 

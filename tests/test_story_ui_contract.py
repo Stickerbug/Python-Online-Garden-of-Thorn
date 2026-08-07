@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STORY_JS = (ROOT / 'static' / 'js' / 'story.js').read_text(encoding='utf-8')
 STORY_CSS = (ROOT / 'static' / 'css' / 'story.css').read_text(encoding='utf-8')
+STORY_ENGINE = (ROOT / 'story_engine.py').read_text(encoding='utf-8')
 SHARED_AFK_CSS = (ROOT / 'static' / 'css' / 'shared-afk.css').read_text(encoding='utf-8')
 STORY_TEMPLATE = (ROOT / 'templates' / 'story.html').read_text(encoding='utf-8')
 INDEX_TEMPLATE = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
@@ -32,6 +33,23 @@ def test_story_damage_floats_describe_lost_health():
     assert 'event.amount) || 0)}D' not in enemy_branch
 
 
+def test_story_player_uses_classic_hurt_mouth_animation():
+    assert 'STORY_SKIN_MOUTH_NORMAL_POINTS = Object.freeze([20, 18, 36, 32, 64, 32, 80, 18])' in STORY_JS
+    assert 'STORY_SKIN_MOUTH_HURT_POINTS = Object.freeze([20, 26, 36, 12, 64, 12, 80, 26])' in STORY_JS
+    assert 'const STORY_SKIN_DAMAGE_HOLD_MS = 3000;' in STORY_JS
+    assert 'const duration = 360;' in STORY_JS
+
+    player_branch = STORY_JS.split(
+        "} else if (eventType === 'player_damage') {",
+        1,
+    )[1].split(
+        "} else if (eventType === 'enemy_damage') {",
+        1,
+    )[0]
+    assert 'if (Number(event.amount) > 0) triggerStoryPlayerDamageMood();' in player_branch
+    assert "renderedAvatar?.classList.remove('skin-mouth-hurt');" in STORY_JS
+
+
 def test_story_card_types_are_always_rendered_in_english():
     expected_labels = {
         'thorn': 'Thorn',
@@ -44,7 +62,7 @@ def test_story_card_types_are_always_rendered_in_english():
     for card_type, label in expected_labels.items():
         assert f"{card_type}: '{label}'" in STORY_JS
 
-    assert 'typeLabel.textContent = STORY_CARD_TYPE_LABELS[cardType] || cardType;' in STORY_JS
+    assert "typeLabel.textContent = blinded ? '?' : (STORY_CARD_TYPE_LABELS[cardType] || cardType);" in STORY_JS
     assert 'typeLabel.textContent = t.cardTypes?.[cardType] || cardType;' not in STORY_JS
 
 
@@ -85,6 +103,28 @@ def test_story_rich_text_colors_icon_suffix_multipliers():
     assert 'font-weight: 800;' in STORY_CSS
 
 
+def test_story_event_card_references_render_as_interactive_chips():
+    assert r'/\[\[card:([a-z0-9_-]+)\]\]/gi' in STORY_JS
+    assert 'function createStoryInlineCardChip(defId)' in STORY_JS
+    assert "chip.className = 'story-event-card-chip';" in STORY_JS
+    assert 'storyCardElementData.set(chip, card);' in STORY_JS
+    assert 'appendStoryRichText(description, options.description);' in STORY_JS
+    assert 'appendStoryRichText(description, localize(option?.description));' in STORY_JS
+    assert 'appendStoryRichText(item, result);' in STORY_JS
+    assert '[[card:unrelenting]]' in STORY_ENGINE
+    assert '[[card:fatigued]]' in STORY_ENGINE
+    assert '.story-event-card-chip {' in STORY_CSS
+
+
+def test_story_tiles_and_inline_chips_cover_every_story_card_type_color():
+    for card_type in ('thorn', 'bloom', 'root', 'guard', 'curse', 'infect'):
+        assert f"{card_type}: 'var(--{card_type})'" in STORY_JS
+    assert "tile.style.setProperty('--tile-color', storyCardTypeColor(values.type));" in STORY_JS
+    assert "chip.style.setProperty('--story-chip-color', storyCardTypeColor(values.type));" in STORY_JS
+    assert '--curse: #704b87;' in STORY_CSS
+    assert '--infect: #7e9638;' in STORY_CSS
+
+
 def test_story_globally_suppresses_context_menu_and_opens_card_terms():
     context_menu_branch = STORY_JS.split(
         "document.addEventListener('contextmenu', (event) => {",
@@ -94,7 +134,7 @@ def test_story_globally_suppresses_context_menu_and_opens_card_terms():
         1,
     )[0]
     assert 'event.preventDefault();' in context_menu_branch
-    assert "event.target?.closest?.('.story-card.card, .story-pile-tile')" in context_menu_branch
+    assert "'.story-card.card, .story-pile-tile, .story-event-card-chip'," in context_menu_branch
     assert 'openStoryCardTerms(card);' in context_menu_branch
     assert 'story-card-terms-modal' in STORY_CSS
     assert '<dialog id="story-term-dialog" class="story-term-dialog">' in STORY_TEMPLATE
@@ -116,21 +156,14 @@ def test_story_status_icons_open_term_descriptions():
     assert '.story-status-terms-icon img {' in STORY_CSS
 
 
-def test_story_talents_open_term_descriptions_from_every_visible_source():
-    assert 'function openStoryRelicTerms(relicKey)' in STORY_JS
-    assert 'function attachStoryRelicTermAccess(element, relicKey)' in STORY_JS
-    assert 'element.dataset.storyRelicKey = key;' in STORY_JS
-    assert "event.target?.closest?.('[data-story-relic-key]')" in STORY_JS
-    assert 'openStoryRelicTerms(relicElement.dataset.storyRelicKey);' in STORY_JS
-    assert 'title.textContent = t.talentTerms;' in STORY_JS
-    assert "kind: 'relic'," in STORY_JS
-    assert "attachStoryRelicTermAccess($('story-chest-relic-name')?.parentElement, room.relic);" in STORY_JS
-    assert 'if (options.relicKey) attachStoryRelicTermAccess(button, options.relicKey);' in STORY_JS
-    assert 'relicKey: item.relic_id,' in STORY_JS
-    assert 'reward.relic,' in STORY_JS
-    assert '.story-relic-terms-modal {' in STORY_CSS
-    assert '.story-term-row-relic {' in STORY_CSS
-    assert '.story-term-relic {' in STORY_CSS
+def test_story_talents_show_their_copy_without_redundant_term_interactions():
+    assert 'function renderStoryCodexTalentDetail(record, detail)' in STORY_JS
+    assert 'appendStoryRichText(description, localize(record.definition.description));' in STORY_JS
+    assert 'function openStoryRelicTerms(relicKey)' not in STORY_JS
+    assert 'function attachStoryRelicTermAccess(element, relicKey)' not in STORY_JS
+    assert "event.target?.closest?.('[data-story-relic-key]')" not in STORY_JS
+    assert "attachStoryRelicTermAccess($('story-chest-relic-name')?.parentElement, room.relic);" not in STORY_JS
+    assert 'if (options.relicKey) attachStoryRelicTermAccess(button, options.relicKey);' not in STORY_JS
 
 
 def test_story_equipment_matches_classic_orbit_preview_and_terms():
@@ -147,16 +180,36 @@ def test_story_equipment_matches_classic_orbit_preview_and_terms():
     assert 'animation: storyEquipmentIconSpin 17.333s linear infinite;' in STORY_CSS
     assert '.story-equipment-preview {' in STORY_CSS
     assert '.story-equipment-preview .story-card.card {' in STORY_CSS
+    preview_rule = STORY_CSS.split('.story-equipment-preview {', 1)[1].split('}', 1)[0]
+    preview_card_rule = STORY_CSS.split(
+        '.story-equipment-preview .story-card.card {',
+        1,
+    )[1].split('}', 1)[0]
+    assert 'width: min(136px, 31vw);' in preview_rule
+    assert 'width: 100%;' in preview_card_rule
+    assert 'min-width: 0;' in preview_card_rule
 
 
 def test_story_patch_traits_and_gold_icon_are_visible_ui_assets():
     assert 'function renderTraitsInto(container, traitIds, actor = null)' in STORY_JS
+    assert 'const STORY_TRAIT_VALUE_KEYS = Object.freeze({' in STORY_JS
+    assert "sturdy: 'sturdy'" in STORY_JS
+    assert 'function createStoryTraitChip(traitKey, rawAmount = 0, isStatic = false)' in STORY_JS
+    assert 'if (Number(actor?.[effectKey]) > 0 && storyTraitDefinition(traitKey))' in STORY_JS
+    assert 'visibleTraitKeys.add(traitKey);' in STORY_JS
+    assert 'const traitKey = storyTraitKeyForEffectKey(key);' in STORY_JS
+    assert 'traitKey ? createStoryTraitChip(traitKey, amount) : null' in STORY_JS
     assert 'function openStoryTraitTerms(traitKey)' in STORY_JS
     assert 'attachStoryTraitTermAccess(chip, key);' in STORY_JS
     assert 'renderTraitsInto(effects, definition.traits, enemy);' in STORY_JS
     assert "event.target?.closest?.('[data-story-trait-key]')" in STORY_JS
     assert '.story-effect.story-trait {' in STORY_CSS
     assert '.story-term-row-trait {' in STORY_CSS
+
+
+def test_consumed_bandage_beetle_trait_does_not_reappear_after_rerender():
+    assert "actor?.def_id === 'bandage_beetle'" in STORY_JS
+    assert 'actor?.bandage_triggered || Number(actor?.bandage || 0) <= 0' in STORY_JS
     gold_url = '/static/assets/story-ui-icons/gold.svg'
     assert gold_url in STORY_TEMPLATE
     assert gold_url in STORY_CSS
@@ -205,7 +258,7 @@ def test_story_card_terms_switch_between_base_and_upgraded_versions():
 
 
 def test_story_upgrade_actions_preview_the_upgraded_card_on_hover():
-    assert "if (options.previewUpgradeOnHover && !card.upgraded && storyCardHasUpgrade(card))" in STORY_JS
+    assert "if (!blinded && options.previewUpgradeOnHover && !card.upgraded && storyCardHasUpgrade(card))" in STORY_JS
     assert "element.addEventListener('pointerenter'" in STORY_JS
     assert "element.addEventListener('pointerleave'" in STORY_JS
     assert STORY_JS.count('previewUpgradeOnHover: true,') >= 3
@@ -291,6 +344,12 @@ def test_story_shortcut_slots_follow_visual_order_and_active_dialog():
     assert "'.story-card-choice-select-item'," in context
     assert '].filter(storyElementRendered);' in context
     assert "'#story-hand .story-card'," in context
+    selected_target_branch = context.split(
+        'if (card && !storyCursorCardMode(card)) {',
+        1,
+    )[0]
+    assert 'context.slots = hand.slice(0, 20);' in selected_target_branch
+    assert "context.slotLabel = t.hand || '手牌';" in selected_target_branch
 
 
 def test_story_right_click_cancels_selection_before_opening_terms():
@@ -302,7 +361,7 @@ def test_story_right_click_cancels_selection_before_opening_terms():
     )[0]
 
     cancel_check = "if (selectedCombatCardId && activeRun?.state) {"
-    card_lookup = "const cardElement = event.target?.closest?.('.story-card.card, .story-pile-tile');"
+    card_lookup = 'const cardElement = event.target?.closest?.('
     assert cancel_check in context_menu
     assert 'event.stopImmediatePropagation();' in context_menu
     assert 'cancelStoryCombatSelection(true);' in context_menu
@@ -352,12 +411,40 @@ def test_story_exit_glyph_is_visually_centered_in_its_button():
 
 def test_story_enemy_group_enlarges_only_portraits_and_compacts_layout():
     assert "Math.max(.48, Math.min(.82, 1.03 - count * .13))" in STORY_JS
+    assert "group.classList.toggle('has-multiple-enemies', count > 1);" in STORY_JS
     group_rule = STORY_CSS.split('.story-enemy-group {', 2)[2].split('}', 1)[0]
     actor_rule = STORY_CSS.split('.story-enemy-group .story-actor {', 1)[1].split('}', 1)[0]
+    multi_actor_rule = STORY_CSS.split(
+        '.story-enemy-group.has-multiple-enemies .story-actor {',
+        1,
+    )[1].split('}', 1)[0]
     assert 'gap: clamp(0px, .2vw, 3px);' in group_rule
     assert '--story-avatar-width: clamp(84px, 10vw, 152px);' in actor_rule
+    assert '--story-avatar-width: clamp(94px, 11.2vw, 170px);' in multi_actor_rule
     assert '--story-fighter-scale: var(--story-enemy-scale, .82);' in actor_rule
     assert 'calc((var(--story-enemy-count) - 1) * -7px)' in actor_rule
+
+
+def test_story_journey_setup_is_localized_and_centered():
+    assert "journey_setup: '新旅程'" in STORY_JS
+    assert "journey_setup: 'New Journey'" in STORY_JS
+    assert "container?.classList.add('is-journey-setup');" in STORY_JS
+    assert "container.classList.remove('is-journey-setup');" in STORY_JS
+    setup_rule = STORY_CSS.split(
+        '.story-room-browser #story-room-options.is-journey-setup {',
+        1,
+    )[1].split('}', 1)[0]
+    assert 'display: flex;' in setup_rule
+    assert 'flex-wrap: wrap;' in setup_rule
+    assert 'align-content: safe center;' in setup_rule
+    assert 'justify-content: center;' in setup_rule
+    assert '#story-room-options.is-journey-setup .story-choice-section-title {' in STORY_CSS
+    option_rule = STORY_CSS.split(
+        '#story-room-options.is-journey-setup .story-choice-option {',
+        1,
+    )[1].split('}', 1)[0]
+    assert 'justify-items: center;' in option_rule
+    assert 'text-align: center;' in option_rule
 
 
 def test_story_chat_uses_the_shared_t_shortcut_as_a_safe_toggle():
@@ -398,20 +485,21 @@ def test_story_surfaces_use_the_regular_ui_border_palette():
     assert '.story-afk-check-dialog' not in STORY_CSS
 
 
-def test_story_out_of_combat_deck_reuses_the_pile_viewer():
+def test_story_run_deck_and_talents_remain_available_during_combat():
     assert 'id="story-run-deck"' in STORY_TEMPLATE
     assert 'src="/static/assets/ui-icons/total-pile.svg"' in STORY_TEMPLATE
     assert "runDeck: '总牌库', viewRunDeck: '查看总牌库'" in STORY_JS
     assert "deck: { source: state?.player?.deck, title: t.runDeck, reverse: false }" in STORY_JS
-    assert "if (kind === 'deck' && state?.phase === 'combat') return;" in STORY_JS
-    assert "['story-loading', 'story-empty', 'story-combat'].includes(name)" in STORY_JS
+    assert "if (kind === 'deck' && state?.phase === 'combat') return;" not in STORY_JS
+    assert 'const runDeckUnavailable = !activeRun?.state;' in STORY_JS
     assert 'runDeck?.classList.toggle(\'hidden\', runDeckUnavailable);' in STORY_JS
+    assert "$('story-talent-overview')?.classList.toggle('hidden', runDeckUnavailable);" in STORY_JS
     assert "$('story-run-deck')?.addEventListener('click', () => openStoryPile('deck'));" in STORY_JS
     assert "cards.forEach((card, index) => grid?.append(createStoryPileTile(card, index + 1)));" in STORY_JS
     assert '.story-run-deck-command {' in STORY_CSS
 
 
-def test_story_talent_overview_sits_before_deck_and_opens_terms():
+def test_story_talent_overview_sits_before_deck_and_is_self_explanatory():
     status_actions = STORY_TEMPLATE.split(
         '<div class="story-status-actions">',
         1,
@@ -424,13 +512,47 @@ def test_story_talent_overview_sits_before_deck_and_opens_terms():
     assert '/static/assets/ui-icons/achievements.svg' in STORY_TEMPLATE
     assert 'function openStoryTalentOverview()' in STORY_JS
     assert 'state.player?.relics' in STORY_JS
-    assert 'createStoryTalentOverviewItem(relicKey, index + 1)' in STORY_JS
-    assert 'attachStoryRelicTermAccess(item, key);' in STORY_JS
-    assert 'openStoryRelicTerms(key);' in STORY_JS
+    assert 'createStoryTalentOverviewItem(relicKey, index + 1, count)' in STORY_JS
+    assert "const item = document.createElement('div');" in STORY_JS
+    assert 'appendStoryRichText(description, localize(definition.description));' in STORY_JS
+    assert 'attachStoryRelicTermAccess(item, key);' not in STORY_JS
     assert "$('story-talent-overview')?.addEventListener('click', openStoryTalentOverview);" in STORY_JS
     assert "grid?.classList.add('is-talents');" in STORY_JS
     assert '.story-pile-grid.is-talents {' in STORY_CSS
     assert '.story-talent-overview-item {' in STORY_CSS
+
+
+def test_story_combat_map_is_read_only_and_can_return_to_combat():
+    assert 'id="story-combat-map"' in STORY_TEMPLATE
+    assert 'id="story-map-return"' in STORY_TEMPLATE
+    assert 'const actionable = !options.readOnly && node.status === \'available\';' in STORY_JS
+    assert 'renderMap(state.map, state.current_node_id, { readOnly: combatPreview });' in STORY_JS
+    assert "$('story-combat-map')?.addEventListener('click', openStoryCombatMap);" in STORY_JS
+    assert "$('story-map-return')?.addEventListener('click', returnToStoryCombat);" in STORY_JS
+
+
+def test_story_floor_restart_is_confirmed_and_available_after_combat_failure():
+    assert 'id="story-save-open-global"' in STORY_TEMPLATE
+    assert 'id="story-restart-floor"' in STORY_TEMPLATE
+    assert 'id="story-restart-floor-dialog"' in STORY_TEMPLATE
+    assert "await storyAction('restart_floor', {});" in STORY_JS
+    assert "Boolean(state.floor_entry_checkpoint?.state)" in STORY_JS
+
+
+def test_story_cards_use_rarity_frames_type_tints_and_blind_concealment():
+    assert "'--story-card-rarity-color'" in STORY_JS
+    assert "'--story-card-type-color'" in STORY_JS
+    assert '--card-border-width: 3.25cqi;' in STORY_CSS
+    assert 'border: var(--card-border-width) solid var(--card-frame-color);' in STORY_CSS
+    assert 'color-mix(in srgb, var(--story-card-type-color) 10%, var(--bg-card));' in STORY_CSS
+    assert "const blindActive = Boolean(combat.blind_active);" in STORY_JS
+    assert "element.classList.add('card-blinded', 'card-blinded-deep');" in STORY_JS
+    assert "appendStoryRichText(description, blinded ? '?' : localize(values.description));" in STORY_JS
+
+
+def test_empty_exact_exile_selection_skips_the_choice_dialog():
+    assert "type === 'choose_exile' && source.length === 0" in STORY_JS
+    assert 'if (!spec.source.length && spec.minimum === 0) return false;' in STORY_JS
 
 
 def test_story_keyboard_card_selection_preserves_the_last_pointer_position():
@@ -438,12 +560,46 @@ def test_story_keyboard_card_selection_preserves_the_last_pointer_position():
         'function selectCombatCard(state, card, event = null) {',
         1,
     )[1].split(
-        'function cardSelectionSpec(card) {',
+        'function isStoryCardChoiceCandidate(item, sourceCard) {',
         1,
     )[0]
 
     assert 'Number(event.detail) > 0' in selection_branch
     assert 'storyAimPointer = { x: event.clientX, y: event.clientY };' in selection_branch
+
+
+def test_story_card_choice_rules_cover_sewage_and_share_candidate_validation():
+    selection_branch = STORY_JS.split(
+        'function isStoryCardChoiceCandidate(item, sourceCard) {',
+        1,
+    )[1].split(
+        'function setStoryCardChoiceRequired(required) {',
+        1,
+    )[0]
+    playable_branch = STORY_JS.split(
+        'function canSatisfyCardSelection(card, combat) {',
+        1,
+    )[1].split(
+        'function storyIntentStatusLabel(status)',
+        1,
+    )[0]
+
+    assert "['choose_exile', 'copy_hand_card', 'make_card_free'].includes(type)" in selection_branch
+    assert "!(cardValues(item)?.tags || []).includes('sublime')" in selection_branch
+    assert 'const spec = cardSelectionSpec(card, combat);' in playable_branch
+    assert 'spec.source.length >= spec.minimum' in playable_branch
+
+
+def test_story_event_and_choice_prose_use_the_loaded_game_font():
+    for selector in (
+        '.story-event-confirm-result span',
+        '.story-event-narrative > p',
+        '.story-event-history',
+        '.story-choice-option > span:not(.story-choice-mark)',
+    ):
+        rule = STORY_CSS.split(f'{selector} {{', 1)[1].split('}', 1)[0]
+        assert 'font-family: var(--font-main);' in rule
+        assert 'system-ui' not in rule
 
 
 def test_story_resources_use_fixed_tracks_and_shared_classic_compression():
@@ -529,6 +685,9 @@ def test_story_codex_separates_intent_operations_and_omits_unnamed_blessing_head
 
 def test_story_presentation_syncs_each_event_and_cannot_block_final_state_render():
     assert 'function syncStoryPresentationEvent(event, nextRun)' in STORY_JS
+    assert 'function syncStoryPresentationPatch(patch, nextRun)' in STORY_JS
+    assert 'syncStoryPresentationPatch(event.presentation_patch, nextRun);' in STORY_JS
+    assert 'syncStoryPresentationEvent(event, nextRun);\n                            await playStoryPresentationEvent' in STORY_JS
     assert 'syncStoryPresentationEvent(event, nextRun);' in STORY_JS
     assert "console.warn('[story] presentation event failed'" in STORY_JS
     assert 'function updateStoryEffectValue(container, key, rawAmount)' in STORY_JS
@@ -666,3 +825,95 @@ def test_story_room_tabs_remain_visible_when_card_lists_overflow():
     assert 'overflow-y: auto;' in options_rule
     assert 'align-content: start;' in options_rule
     assert 'align-content: safe center;' in STORY_CSS
+
+
+def test_story_card_browsers_scroll_vertically_without_overlapping_rows():
+    assert "detail.classList.toggle('is-card-browser', storyCodexMode === 'cards');" in STORY_JS
+    assert '.story-codex-detail.is-card-browser {' in STORY_CSS
+    assert '.story-codex-card-shell {' in STORY_CSS
+    assert 'max-height: 100%;' in STORY_CSS
+    for selector in (
+        '#story-room-options.story-room-card-grid {',
+        '.story-card-choice-select-grid {',
+        '.story-codex-card-grid {',
+    ):
+        rule = STORY_CSS.split(selector, 1)[1].split('}', 1)[0]
+        assert 'grid-auto-rows: max-content;' in rule
+        assert 'overflow-y: auto;' in rule
+    assert 'overscroll-behavior: contain;' in STORY_CSS
+
+
+def test_story_scrollable_lists_keep_position_when_the_same_view_rerenders():
+    assert 'const STORY_PRESERVED_SCROLL_SELECTORS = Object.freeze([' in STORY_JS
+    for selector in (
+        "'#story-room-options'",
+        "'#story-reward-options'",
+        "'#story-hand'",
+        "'#story-pile-grid'",
+        "'#story-card-choice-grid'",
+        "'[data-story-scroll-key]'",
+    ):
+        assert selector in STORY_JS
+    assert 'function storyRunScrollContext(run = activeRun)' in STORY_JS
+    assert 'function captureStoryScrollPositions()' in STORY_JS
+    assert 'function restoreStoryScrollPositions(positions)' in STORY_JS
+    assert "return `${storyRunScrollContext()}:room-tab:${activeStoryRoomTabId}:${identity}`;" in STORY_JS
+    assert "if (identity.startsWith('codex-')) return identity;" in STORY_JS
+    assert 'detail.dataset.storyScrollKey = `codex-detail:${storyCodexMode}:${subtype}:${storyCodexSelectedId}`;' in STORY_JS
+    assert "grid.dataset.storyScrollKey = 'codex-card-grid';" in STORY_JS
+    assert "list.dataset.storyScrollKey = 'codex-enemy-list';" in STORY_JS
+    assert "renderCombat(state, false);" in STORY_JS
+
+    for function_name in ('renderCombat', 'renderStoryCodex', 'renderManualStorySaves'):
+        branch = STORY_JS.split(f'function {function_name}(', 1)[1]
+        assert 'captureStoryScrollPositions()' in branch[:1200]
+        assert 'restoreStoryScrollPositions(scrollPositions);' in branch
+
+
+def test_story_codex_uses_explicit_rarity_order():
+    expected_order = (
+        "'primary'",
+        "'common'",
+        "'rare'",
+        "'ultra'",
+        "'super'",
+        "'special'",
+    )
+    order_block = STORY_JS.split(
+        'const STORY_RARITY_ORDER = Object.freeze([',
+        1,
+    )[1].split(']);', 1)[0]
+    positions = [order_block.index(rarity) for rarity in expected_order]
+    assert positions == sorted(positions)
+
+    card_sort = STORY_JS.split('function storyCodexCardRecords() {', 1)[1].split(
+        'function storyCodexFilterActions',
+        1,
+    )[0]
+    assert 'STORY_RARITY_ORDER.indexOf' in card_sort
+    assert 'Object.keys(storyContent?.rarities || {})' not in card_sort
+    assert "[...rarityCounts.entries()].sort" in STORY_JS
+
+
+def test_initial_blessing_card_selection_preserves_card_ratio_and_scrolls():
+    render_branch = STORY_JS.split('function renderBlessing(state) {', 1)[1].split(
+        'function appendStoryChoiceHeading',
+        1,
+    )[0]
+    assert "screen?.classList.remove('is-card-selection');" in render_branch
+    assert "screen?.classList.add('is-card-selection');" in render_branch
+    grid_rule = STORY_CSS.split('.story-card-choice-grid {', 1)[1].split('}', 1)[0]
+    card_rule = STORY_CSS.split(
+        '.story-card-choice-grid > .story-card.card {',
+        1,
+    )[1].split('}', 1)[0]
+    selection_rule = STORY_CSS.split(
+        '#story-blessing.is-card-selection #story-blessing-options {',
+        1,
+    )[1].split('}', 1)[0]
+    assert 'grid-auto-rows: max-content;' in grid_rule
+    assert 'align-items: start;' in grid_rule
+    assert 'height: auto;' in card_rule
+    assert 'align-self: start;' in card_rule
+    assert 'overflow-y: auto;' in selection_rule
+    assert 'align-content: start;' in selection_rule

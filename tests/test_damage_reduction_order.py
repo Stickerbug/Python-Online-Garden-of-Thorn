@@ -68,6 +68,53 @@ class DamageReductionOrderTests(unittest.TestCase):
         self.assertEqual(target.health, 98)
         self.assertEqual(engine._nazar_status_value(1), 0)
 
+    def test_dodge_consumes_one_stack_per_multihit_segment(self):
+        engine = self.build_engine(nazar=0)
+        engine.players[1].dodge = 1
+
+        dealt = engine.deal_attack_damage(1, 5, hits=3, attacker_id=0)
+
+        self.assertEqual(dealt, 10)
+        self.assertEqual(engine.players[1].health, 90)
+        self.assertEqual(engine.players[1].dodge, 0)
+
+    def test_multiple_dodge_stacks_prevent_the_same_number_of_hits(self):
+        engine = self.build_engine(nazar=0)
+        engine.players[1].dodge = 2
+
+        dealt = engine.deal_attack_damage(1, 5, hits=3, attacker_id=0)
+
+        self.assertEqual(dealt, 5)
+        self.assertEqual(engine.players[1].health, 95)
+        self.assertEqual(engine.players[1].dodge, 0)
+
+    def test_precision_halves_only_the_hit_that_consumes_dodge(self):
+        engine = self.build_engine(nazar=0)
+        engine.players[1].dodge = 1
+
+        dealt = engine.deal_attack_damage(
+            1,
+            5,
+            hits=2,
+            is_precision=True,
+            attacker_id=0,
+        )
+
+        self.assertEqual(dealt, 8)
+        self.assertEqual(engine.players[1].health, 92)
+        self.assertEqual(engine.players[1].dodge, 0)
+
+    def test_2v2_dodge_also_consumes_one_stack_per_multihit_segment(self):
+        engine = GameEngine2v2()
+        engine.players[1].health = 100
+        engine.players[1].dodge = 1
+
+        dealt = engine.deal_attack_damage(1, 5, hits=3, attacker_id=0)
+
+        self.assertEqual(dealt, 10)
+        self.assertEqual(engine.players[1].health, 90)
+        self.assertEqual(engine.players[1].dodge, 0)
+
     def test_client_prediction_applies_armor_before_nazar(self):
         section = source_between(
             GAME_JS,

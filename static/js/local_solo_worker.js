@@ -1634,7 +1634,7 @@ class LocalSoloEngine {
                 this.logMsg(`${this.pn(playerId)}【花序编排】：${moved.length}张牌移至抽牌堆顶`);
             }
         } else if (eventId === 12) {
-            this.logMsg(`${this.pn(playerId)}【众生平等】：自己回合结束时，对所有其他可选中玩家造成8D`);
+            this.logMsg(`${this.pn(playerId)}【众生平等】：自己回合结束时，对自己造成5D，并对所有其他可选中玩家造成8D`);
         }
     }
 
@@ -2025,6 +2025,10 @@ class LocalSoloEngine {
         this.logMsg(`${this.pn(playerId)}的众生平等生效`);
         this._game_over_defer_depth += 1;
         try {
+            const owner = this.players[playerId];
+            if (owner && owner.health > 0) {
+                this.dealAttackDamage(playerId, 5, 1, false, playerId, null);
+            }
             this.players.forEach((target, targetId) => {
                 if (!target || targetId === playerId || target.health <= 0) return;
                 if (target.untargetable && !this.isStatusImmune(targetId)) return;

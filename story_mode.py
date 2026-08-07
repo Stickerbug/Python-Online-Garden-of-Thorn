@@ -240,11 +240,16 @@ def build_initial_story_state(seed):
         'stage_normal_battles': 0,
         'curses': {},
         'event_miss_streak': 0,
+        'encounter_history': {
+            'elite': {},
+            'event': [],
+        },
         'shop_removals': 0,
         'shop_upgrades': 0,
         'completed': False,
         'last_events': [],
         'recovery_checkpoint': None,
+        'floor_entry_checkpoint': None,
         'presentation_event_counter': 0,
         'flags': {},
     }

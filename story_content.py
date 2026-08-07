@@ -76,15 +76,8 @@ STORY_CURSES = {
     'affliction': {
         'name': {'zh': '苦难', 'en': 'Affliction'},
         'description': {
-            'zh': '每名敌人每次行动后，随机对自己施加1层虚弱、脆弱或易伤',
-            'en': 'After each enemy action, gain 1 random Weak, Fragile, or Vulnerable',
-        },
-    },
-    'ward': {
-        'name': {'zh': '抗拒', 'en': 'Ward'},
-        'description': {
-            'zh': '所有敌人在战斗开始时获得3层负面状态免疫',
-            'en': 'All enemies start combat with 3 Negative Status Immunity',
+            'zh': '所有敌人在战斗开始时获得3层负面状态免疫；每名敌人每次行动后，随机对自己施加1层虚弱、脆弱或易伤',
+            'en': 'All enemies start combat with 3 Negative Status Immunity; after each enemy action, gain 1 random Weak, Fragile, or Vulnerable',
         },
     },
 }
@@ -103,7 +96,7 @@ STORY_CARD_TYPES = {
     'root': {'name': {'zh': '装备', 'en': 'Root'}, 'color': '#8A6337'},
     'guard': {'name': {'zh': '反制', 'en': 'Guard'}, 'color': '#496FA8'},
     'curse': {'name': {'zh': '诅咒', 'en': 'Curse'}, 'color': '#704B87'},
-    'infect': {'name': {'zh': '状态牌', 'en': 'Infect'}, 'color': '#7E9638'},
+    'infect': {'name': {'zh': '状态', 'en': 'Infect'}, 'color': '#7E9638'},
 }
 
 STORY_PLAYER_ATTACK_EFFECT_TYPES = frozenset({
@@ -257,6 +250,8 @@ STORY_STATUSES = {
 STORY_STATUS_IMAGE_URLS = {
     'entangle': '/static/assets/story-status-icons/entangle.svg',
     'endurance': '/static/assets/story-status-icons/endurance.svg',
+    'evil_eye': '/static/assets/status-icons/nazar.svg',
+    'negative_status_immunity': '/static/assets/status-icons/status_immune.svg',
     'power': '/static/assets/story-status-icons/power.svg',
     'reflection': '/static/assets/story-status-icons/reflection.svg',
     'rockfall': '/static/assets/story-status-icons/rockfall.svg',
@@ -609,7 +604,7 @@ STORY_CARDS = {
                             'effects': (_effect('damage', 11), _effect('choose_exile', 1, exact=True), _effect('draw', 1))}),
     'antibody': _card('Antibody', '抗体', 'Antibody', 1, 'bloom', 'common',
                       '对目标施加1层易伤，然后抽等同于其易伤层数的牌。',
-                      tags=('exile',), effects=(_effect('status', 1, status='vulnerable'), _effect('draw_target_status', status='vulnerable')),
+                      effects=(_effect('status', 1, status='vulnerable'), _effect('draw_target_status', status='vulnerable')),
                       target='enemy',
                       upgrade={'description': {'zh': '对目标施加2层易伤，然后抽等同于其易伤层数的牌。', 'en': 'Apply 2 Vulnerable, then draw that many cards.'},
                                'effects': (_effect('status', 2, status='vulnerable'), _effect('draw_target_status', status='vulnerable'))}),
@@ -707,7 +702,7 @@ STORY_CARDS = {
                    '每有1张非轻的牌被放逐，将1张带有保留和放逐的轻加入手牌。',
                    effects=(_effect('equipment', script='pearl'),), target='self',
                    upgrade={'cost_e': 1}),
-    'crystal_leaf': _card('Crystal Leaf', '水晶叶', 'Crystal Leaf', 3, 'root', 'rare',
+    'crystal_leaf': _card('Crystal Leaf', '水晶叶', 'Crystal Leaf', 3, 'root', 'ultra',
                            '回合开始时获得2层力量。',
                           effects=(_effect('equipment', 2, script='start_power'),), target='self',
                           upgrade={'cost_e': 2}),
@@ -965,13 +960,16 @@ STORY_REWARD_CARD_IDS = tuple(
 )
 
 
-def _relic(zh, en, description, rarity='common', script=None, amount=0):
+def _relic(zh, en, description, rarity='common', script=None, amount=0, stackable=None):
+    if stackable is None:
+        stackable = rarity != 'special'
     return {
         'name': {'zh': zh, 'en': en},
         'description': {'zh': description, 'en': description},
         'rarity': rarity,
         'script': script,
         'amount': amount,
+        'stackable': bool(stackable),
     }
 
 
@@ -986,10 +984,10 @@ STORY_RELICS = {
     ),
     'ruthless': _relic('无情猛击', 'Ruthless Strike', '战斗开始时获得1层力量。', script='opening_power', amount=1),
     'firm_defense': _relic('坚定防守', 'Firm Defense', '战斗开始时获得1层耐力。', script='opening_endurance', amount=1),
-    'fearless_pain': _relic('无惧疼痛', 'Fearless Pain', '每次受到的伤害-1。', script='flat_damage_reduction', amount=1),
-    'circulation': _relic('回转', 'Circulation', '商店购买后会补充货品。', rarity='rare', script='shop_restock'),
+    'fearless_pain': _relic('无惧疼痛', 'Fearless Pain', '每次即将失去H时，失去量-1。', script='flat_damage_reduction', amount=1),
+    'circulation': _relic('回转', 'Circulation', '商店购买后会补充货品。', rarity='rare', script='shop_restock', stackable=False),
     'prepared': _relic('未雨绸缪', 'Prepared', '第一回合额外抽2张牌。', script='opening_draw', amount=2),
-    'cooldown': _relic('冷却', 'Cooldown', '第一回合可丢弃任意张牌，然后抽等量的牌。', rarity='rare', script='opening_redraw'),
+    'cooldown': _relic('冷却', 'Cooldown', '第一回合可丢弃任意张牌，然后抽等量的牌。', rarity='rare', script='opening_redraw', stackable=False),
     'accumulate': _relic('厚积薄发', 'Accumulate', '第二回合获得5层暂时力量。', rarity='rare', script='round_power', amount=5),
     'opening_lightning': _relic('开幕雷击', 'Opening Lightning', '战斗开始时对所有敌人造成9D。', rarity='rare', script='opening_damage', amount=9),
     'solid_barrier': _relic('坚固壁垒', 'Solid Barrier', '本场战斗第一次受伤时回复2E。', rarity='rare', script='first_hit_elixir', amount=2),
@@ -1002,7 +1000,7 @@ STORY_RELICS = {
     'body_reinforcement': _relic('肉体强化', 'Body Reinforcement', '获得时最大生命值+10，并回复10H。', script='gain_max_health', amount=10),
     'indomitable': _relic('愈挫愈勇', 'Indomitable', '普通战斗失去超过15H时，随机升级1张牌。', rarity='rare', script='loss_upgrade', amount=15),
     'support': _relic('支援', 'Support', '第一回合少抽1张牌；每回合获得3层护盾。', rarity='special', script='support', amount=3),
-    'bargaining': _relic('讨价还价', 'Bargaining', '商店价格降低50%。', rarity='rare', script='shop_discount', amount=50),
+    'bargaining': _relic('讨价还价', 'Bargaining', '商店价格降低50%。', rarity='rare', script='shop_discount', amount=50, stackable=False),
     'world_tree_leaf': _relic('世界树之叶', 'World Tree Leaf', '本次旅程首次死亡时，清除效果并回复至满H。', rarity='special', script='revive'),
     'dandelion_blessing': _relic('蒲公英加护', 'Dandelion Blessing', '战斗开始时获得7层护盾。', rarity='special', script='opening_shield', amount=7),
     'coward_defense': _relic('懦夫才防', 'Cowardly Defense', '每回合多回复1E；卡牌奖励中不再出现技能牌。', rarity='special', script='boss_no_bloom', amount=1),
@@ -1018,6 +1016,7 @@ STORY_RELICS = {
     'grab_every_card': _relic('见牌就抓', 'Grab Every Card', '每回合多回复1E并多抽1张牌；无法跳过卡牌奖励或删除牌。', rarity='special', script='must_take_cards', amount=1),
     'cognitive_bias': _relic('认知偏差', 'Cognitive Bias', '每回合多回复2E；回合结束时使每回合E-1，最低为1E。', rarity='special', script='decaying_elixir', amount=2),
     'pollen_relic': _relic('花粉', 'Pollen', '每回合多回复1E；回合开始时获得1层破损。', rarity='special', script='boss_broken', amount=1),
+    'frenzy_relic': _relic('狂乱', 'Frenzy', '造成的伤害变为2倍；手中有攻击牌时，只能打出攻击牌。', rarity='special', script='boss_frenzy', amount=2),
     'web_relic': _relic('网', 'Web', '每回合多回复1E；每回合完成初始抽牌后无法再抽牌。', rarity='special', script='boss_no_extra_draw', amount=1),
     'first_strike': _relic('先发制人', 'First Strike', '第一回合额外获得2E并多抽2张牌。', rarity='special', script='first_round_boost', amount=2),
     'fast_learning': _relic('快速学习', 'Fast Learning', '每次升级牌时，额外升级1张牌。', rarity='special', script='extra_upgrade', amount=1),
@@ -1461,9 +1460,9 @@ STORY_ENCOUNTERS = {
         ),
         'boss': (
             (
-                {'def_id': 'desert_centipede', 'move_index': 0, 'hidden': 1},
-                {'def_id': 'desert_centipede', 'move_index': 1},
-                {'def_id': 'desert_centipede', 'move_index': 2, 'hidden': 2},
+                {'def_id': 'desert_centipede', 'move_index': 0, 'move_step': 0, 'hidden': 1},
+                {'def_id': 'desert_centipede', 'move_index': 1, 'move_step': 1},
+                {'def_id': 'desert_centipede', 'move_index': 2, 'move_step': 2, 'hidden': 2},
             ),
             ('worm',),
             ('shiny_ladybug',),
@@ -1611,7 +1610,7 @@ def validate_story_content():
         'turn_elixir', 'victory_gold', 'vulnerable_shield',
     }
     relic_scripts = {
-        'attack_shield', 'avoid_elite', 'boss_blind', 'boss_broken',
+        'attack_shield', 'avoid_elite', 'boss_blind', 'boss_broken', 'boss_frenzy',
         'boss_no_bloom', 'boss_no_extra_draw', 'boss_no_heal', 'boss_poison',
         'decaying_elixir', 'elite_boss_elixir', 'enchant_starter',
         'extra_upgrade', 'first_attack_vulnerable', 'first_health_loss_immunity',

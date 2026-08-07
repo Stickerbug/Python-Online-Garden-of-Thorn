@@ -241,11 +241,23 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
 
         engine._apply_equal_suffering_turn_end(0)
 
-        self.assertEqual(engine.players[0].health, 100)
+        self.assertEqual(engine.players[0].health, 95)
         self.assertEqual(engine.players[1].health, 92)
 
+    def test_equal_suffering_finishes_all_damage_before_draw_check(self):
+        engine = GameEngine()
+        engine.opening_event_picks[0] = 12
+        engine.players[0].health = 5
+        engine.players[1].health = 8
+
+        engine._apply_equal_suffering_turn_end(0)
+
+        self.assertEqual([player.health for player in engine.players], [0, 0])
+        self.assertTrue(engine.game_over)
+        self.assertEqual(engine.winner, -1)
+
     def test_equal_suffering_and_leaf_fallback_text_matches_current_rules(self):
-        expected = '自己回合结束时，自己对每名其他可选中玩家造成8[[icon:D]]'
+        expected = '自己回合结束时，对自己造成5[[icon:D]]，并对每名其他可选中玩家造成8[[icon:D]]'
         self.assertEqual(GameEngine.OPENING_EVENTS[12]['desc'], expected)
         self.assertEqual(OPENING_EVENT_I18N[12]['desc']['zh'], expected)
         leaf_text = CARD_DEFS['Leaf'].effect_text.replace('[[icon:H]]', 'H')
@@ -257,7 +269,7 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         self.assertIn('可花费3M', CARD_I18N['MagicLeaf']['effect']['zh'])
 
         worker = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
-        self.assertIn('自己回合结束时，对所有其他可选中玩家造成8D', worker)
+        self.assertIn('自己回合结束时，对自己造成5D，并对所有其他可选中玩家造成8D', worker)
         self.assertNotIn('【众生平等】：自己回合开始时，对敌方造成7D', worker)
 
         vanilla_path = Path(__file__).resolve().parents[1] / 'mods' / 'Vanilla Cards.gtnmod'
@@ -280,7 +292,7 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
 
         engine._apply_equal_suffering_turn_end(0)
 
-        self.assertEqual([player.health for player in engine.players], [100, 92, 92, 92])
+        self.assertEqual([player.health for player in engine.players], [95, 92, 92, 92])
 
     def test_blood_knife_recovers_for_actual_damage_dealt(self):
         engine = GameEngine()

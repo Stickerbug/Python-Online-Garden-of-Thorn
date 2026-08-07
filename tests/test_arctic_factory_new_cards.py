@@ -9,9 +9,8 @@ from mod_loader import load_mod
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ARCTIC_PACKAGE = ROOT / "mods" / "Arctic Cards DLC.gtnmod"
+ARCTIC_PACKAGE = ROOT / "mods" / "Arctic Cards Addition.gtnmod"
 FACTORY_PACKAGE = ROOT / "mods" / "Factory Cards Addition.gtnmod"
-FACTORY_DLC_PACKAGE = ROOT / "mods" / "Factory Cards DLC.gtnmod"
 NEW_CARD_IDS = {"Pinecone", "Ruby", "Lithium", "Assembler"}
 
 
@@ -20,12 +19,11 @@ class ArcticFactoryNewCardsTests(unittest.TestCase):
     def setUpClass(cls):
         cls.arctic = load_mod(str(ARCTIC_PACKAGE))
         cls.factory = load_mod(str(FACTORY_PACKAGE))
-        cls.factory_dlc = load_mod(str(FACTORY_DLC_PACKAGE))
-        if cls.arctic.errors or cls.factory.errors or cls.factory_dlc.errors:
-            raise AssertionError(cls.arctic.errors + cls.factory.errors + cls.factory_dlc.errors)
+        if cls.arctic.errors or cls.factory.errors:
+            raise AssertionError(cls.arctic.errors + cls.factory.errors)
         cls.mod_cards = {
             card.id: card
-            for card in [*cls.arctic.cards, *cls.factory.cards, *cls.factory_dlc.cards]
+            for card in [*cls.arctic.cards, *cls.factory.cards]
         }
 
     def setUp(self):
@@ -70,22 +68,20 @@ class ArcticFactoryNewCardsTests(unittest.TestCase):
 
     def test_package_metadata_assets_and_locales(self):
         self.assertEqual(self.arctic.info.author, "huanxiang0273, Eric, XinYu")
-        self.assertEqual(self.arctic.info.version, "1.0.0")
-        self.assertEqual(self.factory.info.author, "Eric")
-        self.assertEqual(self.factory.info.version, "1.0.0")
-        self.assertEqual(self.factory_dlc.info.author, "Eric, XinYu")
-        self.assertEqual(self.factory_dlc.info.version, "1.0.0")
+        self.assertEqual(self.arctic.info.version, "1.1.0")
+        self.assertEqual(self.factory.info.author, "Eric, XinYu")
+        self.assertEqual(self.factory.info.version, "1.1.0")
         self.assertEqual(self.mod_cards["Pinecone"].count, 3)
         self.assertEqual(self.mod_cards["Ruby"].count, 3)
         self.assertEqual(self.mod_cards["Lithium"].count, 3)
 
         expected_assets = {
             ARCTIC_PACKAGE: {"card-art/pinecone.svg", "card-art/ruby.svg"},
-            FACTORY_DLC_PACKAGE: {"card-art/Lithium.svg"},
+            FACTORY_PACKAGE: {"card-art/Lithium.svg"},
         }
         expected_locale_ids = {
             ARCTIC_PACKAGE: {"arctic:pinecone", "arctic:ruby"},
-            FACTORY_DLC_PACKAGE: {"factory:lithium"},
+            FACTORY_PACKAGE: {"factory:lithium"},
         }
         for package, assets in expected_assets.items():
             with zipfile.ZipFile(package) as archive:

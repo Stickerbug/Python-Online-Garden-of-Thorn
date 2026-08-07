@@ -7,6 +7,7 @@ from story_content import (
     STORY_BLESSINGS,
     STORY_CARD_IMAGE_URLS,
     STORY_CARDS,
+    STORY_CARD_TYPES,
     STORY_ENCOUNTERS,
     STORY_ENEMIES,
     STORY_ENEMY_IMAGE_URLS,
@@ -24,6 +25,7 @@ from story_engine import (
     StoryActionError,
     _draw_cards,
     _enemy_intent,
+    _enemy_physical_damage,
     _gain_elixir,
     _gain_magic,
     _new_card,
@@ -175,8 +177,14 @@ def test_story_attack_effect_types_share_one_calculation_contract():
     assert attack_effect_types == set(STORY_PLAYER_ATTACK_EFFECT_TYPES)
 
 
+def test_story_infect_filter_uses_the_short_status_label():
+    assert STORY_CARD_TYPES['infect']['name']['zh'] == '状态'
+
+
 def test_story_statuses_use_their_dedicated_icons():
     expected = {
+        'entangle': '/static/assets/story-status-icons/entangle.svg',
+        'evil_eye': '/static/assets/status-icons/nazar.svg',
         'temporary_power': '/static/assets/story-status-icons/temporary-power.svg',
         'vulnerable': '/static/assets/story-status-icons/vulnerable.svg',
         'fragile': '/static/assets/story-status-icons/fragile.svg',
@@ -184,6 +192,12 @@ def test_story_statuses_use_their_dedicated_icons():
     for status_id, image_url in expected.items():
         assert STORY_STATUS_IMAGE_URLS[status_id] == image_url
         assert STORY_STATUSES[status_id]['image_url'] == image_url
+        assert (Path(__file__).resolve().parents[1] / image_url.removeprefix('/')).is_file()
+    for trait_id in ('sturdy', 'hidden'):
+        image_url = STORY_TRAITS[trait_id]['image_url']
+        assert (Path(__file__).resolve().parents[1] / image_url.removeprefix('/')).is_file()
+    for enemy_id in ('crab', 'turtle'):
+        image_url = STORY_ENEMY_IMAGE_URLS[enemy_id]
         assert (Path(__file__).resolve().parents[1] / image_url.removeprefix('/')).is_file()
     assert all(
         STORY_CARDS[card_id]['type'] not in ('curse', 'infect')
@@ -643,7 +657,23 @@ def test_a_complete_four_stage_journey_can_reach_the_terminal_state():
                 seed,
             )
         elif phase == 'reward':
-            state, _ = apply_story_action(state, 'choose_reward', {}, seed)
+            reward_payload = {}
+            if (
+                'grab_every_card' in state['player'].get('relics', [])
+                and state['reward'].get('cards')
+            ):
+                first_reward = state['reward']['cards'][0]
+                reward_payload['card_id'] = (
+                    first_reward.get('card_id')
+                    if isinstance(first_reward, dict)
+                    else first_reward
+                )
+            state, _ = apply_story_action(
+                state,
+                'choose_reward',
+                reward_payload,
+                seed,
+            )
         elif phase == 'room':
             room = state['room']
             raw_options = list(room.get('options', []))
@@ -673,10 +703,13 @@ def test_a_complete_four_stage_journey_can_reach_the_terminal_state():
                     ),
                     options[0],
                 )
+            room_payload = {'option': option}
+            if room.get('event_id') == 'card_trader' and option == 'trade_card':
+                room_payload['card_instance_id'] = room['trade_candidates'][0]
             state, _ = apply_story_action(
                 state,
                 'resolve_room',
-                {'option': option},
+                room_payload,
                 seed,
             )
         elif phase == 'stage_choice':
@@ -764,6 +797,63 @@ def test_exact_hand_selection_is_server_validated_and_exiled():
         'selection',
     )
     assert any(item['instance_id'] == other['instance_id'] for item in state['combat']['exile_pile'])
+
+
+def test_sewage_requires_and_modifies_one_selectable_hand_card():
+    state, _ = _begin_combat('sewage-selection')
+    state['combat']['elixir'] = 10
+    sewage = _inject_hand_card(state, 'sewage')
+    selected = _inject_hand_card(state, 'basic')
+
+    with pytest.raises(StoryActionError) as error:
+        apply_story_action(
+            state,
+            'play_card',
+            {'card_instance_id': sewage['instance_id']},
+            'sewage-selection',
+        )
+    assert error.value.code == 'CARD_SELECTION_REQUIRED'
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {
+            'card_instance_id': sewage['instance_id'],
+            'selected_card_ids': [selected['instance_id']],
+        },
+        'sewage-selection',
+    )
+    selected_after = next(
+        card for card in state['combat']['hand']
+        if card['instance_id'] == selected['instance_id']
+    )
+    assert selected_after['modifiers']['free_play'] is True
+    assert selected_after['modifiers']['force_exile'] is True
+    assert any(
+        event.get('type') == 'card_modified'
+        and event.get('card_instance_id') == selected['instance_id']
+        for event in events
+    )
+
+
+def test_exact_story_card_choices_reject_sublime_cards_as_candidates():
+    state, _ = _begin_combat('sublime-selection')
+    state['combat']['elixir'] = 10
+    sewage = _inject_hand_card(state, 'sewage')
+    sublime = _inject_hand_card(state, 'mark')
+    state['combat']['hand'] = [sewage, sublime]
+
+    with pytest.raises(StoryActionError) as error:
+        apply_story_action(
+            state,
+            'play_card',
+            {
+                'card_instance_id': sewage['instance_id'],
+                'selected_card_ids': [sublime['instance_id']],
+            },
+            'sublime-selection',
+        )
+    assert error.value.code == 'INVALID_CARD_SELECTION'
 
 
 def test_end_turn_runs_enemy_actions_and_starts_a_fresh_player_turn():
@@ -1040,6 +1130,121 @@ def test_nuke_damage_and_prediction_receive_fusion_multiplier():
     assert state['combat']['next_attack_multiplier'] == 1
 
 
+def test_enemy_dodge_consumes_one_stack_per_multihit_segment():
+    state, _ = _begin_combat('story-enemy-dodge-multihit')
+    enemy = state['combat']['enemies'][0]
+    enemy.update({
+        'health': 100,
+        'max_health': 100,
+        'shield': 0,
+        'evade': 1,
+        'hidden': 0,
+        'evil_eye': 0,
+        'vulnerable': 0,
+    })
+    events = []
+
+    dealt = _enemy_physical_damage(
+        state,
+        enemy,
+        5,
+        3,
+        events,
+        'dodge-test',
+        values={'tags': ()},
+    )
+
+    damage = [event for event in events if event.get('type') == 'enemy_damage']
+    assert dealt == 10
+    assert enemy['health'] == 90
+    assert enemy['evade'] == 0
+    assert [event['amount'] for event in damage] == [0, 5, 5]
+    assert [event['hit_index'] for event in damage] == [1, 2, 3]
+
+
+def test_multiple_enemy_dodge_stacks_each_prevent_one_multihit_segment():
+    state, _ = _begin_combat('story-enemy-dodge-stacks')
+    enemy = state['combat']['enemies'][0]
+    enemy.update({
+        'health': 100,
+        'max_health': 100,
+        'shield': 0,
+        'evade': 2,
+        'hidden': 0,
+        'evil_eye': 0,
+        'vulnerable': 0,
+    })
+    events = []
+
+    dealt = _enemy_physical_damage(
+        state,
+        enemy,
+        5,
+        3,
+        events,
+        'dodge-stack-test',
+        values={'tags': ()},
+    )
+
+    damage = [event for event in events if event.get('type') == 'enemy_damage']
+    assert dealt == 5
+    assert enemy['health'] == 95
+    assert enemy['evade'] == 0
+    assert [event['amount'] for event in damage] == [0, 0, 5]
+
+
+def test_precision_consumes_one_enemy_dodge_stack_and_halves_only_that_hit():
+    state, _ = _begin_combat('story-enemy-precision-dodge')
+    enemy = state['combat']['enemies'][0]
+    enemy.update({
+        'health': 100,
+        'max_health': 100,
+        'shield': 0,
+        'evade': 1,
+        'hidden': 0,
+        'evil_eye': 0,
+        'vulnerable': 0,
+    })
+    events = []
+
+    dealt = _enemy_physical_damage(
+        state,
+        enemy,
+        5,
+        2,
+        events,
+        'precision-dodge-test',
+        values={'tags': ('precise',)},
+    )
+
+    damage = [event for event in events if event.get('type') == 'enemy_damage']
+    assert dealt == 8
+    assert enemy['health'] == 92
+    assert enemy['evade'] == 0
+    assert [event['amount'] for event in damage] == [3, 5]
+
+
+def test_story_damage_prediction_consumes_dodge_per_hit():
+    state, _ = _begin_combat('story-dodge-prediction')
+    card = _inject_hand_card(state, 'lightning')
+    enemy = state['combat']['enemies'][0]
+    enemy.update({
+        'health': 100,
+        'max_health': 100,
+        'shield': 0,
+        'evade': 1,
+        'hidden': 0,
+        'evil_eye': 0,
+        'vulnerable': 0,
+    })
+
+    _refresh_combat_projections(state)
+
+    prediction = state['combat']['damage_predictions'][card['instance_id']]
+    assert prediction['by_target'][enemy['id']]['hits'] == [0, 3]
+    assert prediction['by_target'][enemy['id']]['total'] == 3
+
+
 def test_player_damage_applies_power_before_multiplier_and_vulnerable_last():
     seed = 'story-player-damage-order'
     state, _ = _begin_combat(seed)
@@ -1204,6 +1409,8 @@ def test_enemy_applied_broken_survives_until_the_player_uses_it():
         'after': health - 1,
         'blocked': 2,
     }]
+    assert broken_damage['presentation_patch']['combat']['effects']['shield'] == 0
+    assert broken_damage['presentation_patch']['player']['health'] == health - 1
 
 
 def test_player_shield_also_blocks_poison_damage():
@@ -1235,6 +1442,11 @@ def test_player_shield_also_blocks_poison_damage():
         'after': health - 2,
         'blocked': 3,
     }]
+    assert poison_damage['presentation_patch']['combat']['effects']['shield'] == 0
+    assert any(
+        event.get('presentation_patch', {}).get('combat', {}).get('effects', {}).get('poison') == 2
+        for event in events
+    )
 
 
 def test_broken_damage_defeats_player_even_when_the_card_kills_last_enemy():

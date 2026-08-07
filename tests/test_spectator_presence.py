@@ -412,6 +412,65 @@ class SpectatorPresenceTests(unittest.TestCase):
             with app._lock:
                 app.rooms.pop(room_id, None)
 
+    def test_leave_spectate_ignores_stale_match_context(self):
+        client = app.socketio.test_client(app.app)
+        room_id = 930_000 + (id(self) % 10_000)
+        room = SimpleNamespace(
+            room_id=room_id,
+            match_seq=4,
+            created_at=12.5,
+            spectators=[],
+        )
+        sid = None
+        try:
+            client.emit('login', {
+                'nickname': f'StaleSpec{id(self) % 1000}',
+                'mode': '1v1',
+            })
+            login_events = [
+                event['args'][0]
+                for event in client.get_received()
+                if event['name'] == 'login_ok'
+            ]
+            self.assertTrue(login_events)
+            sid = login_events[-1]['sid']
+            with app._lock:
+                player = app.players[sid]
+                player['status'] = 'spectating'
+                player['spectating_room'] = room_id
+                room.spectators.append(sid)
+                app.rooms[room_id] = room
+
+            with (
+                patch.object(app, 'broadcast_game_state') as broadcast_state,
+                patch.object(app, 'broadcast_lobby') as broadcast_lobby,
+            ):
+                client.emit('leave_spectate', {
+                    'room_id': room_id + 1,
+                    'match_key': 'stale-match-key',
+                })
+
+            received = client.get_received()
+            self.assertIn('spectate_leave', [event['name'] for event in received])
+            self.assertFalse(any(
+                event['name'] == 'action_rejected'
+                and event.get('args')
+                and event['args'][0].get('code') == 'STATE_VERSION_OLD'
+                for event in received
+            ))
+            self.assertEqual(app.players[sid]['status'], 'lobby')
+            self.assertIsNone(app.players[sid].get('spectating_room'))
+            self.assertNotIn(sid, room.spectators)
+            broadcast_state.assert_called_once_with(room)
+            broadcast_lobby.assert_called_once()
+        finally:
+            if client.is_connected():
+                client.disconnect()
+            with app._lock:
+                if sid is not None:
+                    app.players.pop(sid, None)
+                app.rooms.pop(room_id, None)
+
 
 if __name__ == '__main__':
     unittest.main()
