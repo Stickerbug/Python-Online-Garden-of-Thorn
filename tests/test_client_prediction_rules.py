@@ -38,6 +38,16 @@ class ClientPredictionRuleTests(unittest.TestCase):
         self.assertIn('prediction.target.poison = Math.max(', section)
         self.assertNotIn('prediction.target.poison +=', section)
 
+    def test_only_a_real_nullifier_cancels_bloom_effect_prediction(self):
+        section = source_between(
+            GAME_JS,
+            'function counterCardCancelsResponseCard(',
+            'function getResponseCounterStatusReduction(',
+        )
+        self.assertIn("counterId === 'MagicBubble'", section)
+        self.assertIn("counterId === 'vanilla:magicbubble'", section)
+        self.assertNotIn('counterDef.response_trigger === responseDef.card_type', section)
+
     def test_fission_total_is_not_capped_as_one_damage_call(self):
         self.assertIn(
             'const MAX_CLIENT_DAMAGE_SEGMENTS = MAX_CLIENT_CARD_LAYER * MAX_CLIENT_DAMAGE_HITS;',

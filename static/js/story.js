@@ -45,10 +45,26 @@
     let storyChatEntries = [];
     let storyChatHistorySignature = '';
     let storyChatUnreadCount = 0;
+    let storyMentionDirectory = [];
+    let storyMentionCandidates = [];
+    let storyMentionMenu = null;
+    let storyMentionActiveRange = null;
+    const readStoryMentionIds = new Set();
     let storyEquipmentPreview = null;
     let storyCombatEntranceAnimating = false;
+    let pendingStorySaveId = 0;
+    let storyDiscoveries = [];
+    let storyCodexMode = 'cards';
+    let storyCodexSearch = '';
+    let storyCodexSelectedId = '';
+    let storyCodexTalentKind = 'relic';
+    let storyCodexTermKind = 'status';
+    let storyCodexCardFiltersReady = false;
+    const storyCodexRarities = new Set();
+    const storyCodexTypes = new Set();
     const STORY_AFK_ACTIVITY_REPORT_INTERVAL_MS = 20000;
     const storyCardElementData = new WeakMap();
+    const storyCardTermOptions = new WeakMap();
     const STORY_PRESENCE_CLIENT_ID = globalThis.crypto?.randomUUID
         ? crypto.randomUUID()
         : `story-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -134,12 +150,20 @@
             chatDisconnected: 'Disconnected. Reconnecting...', chatPlaceholder: 'Type a message...',
             chatSend: 'Send', chatCollapse: 'Collapse chat',
             chatOriginMultiplayer: 'Multiplayer', chatOriginStory: 'Story',
+            chatSpectator: 'Spectating', chatYesterday: 'Yesterday', chatBeforeYesterday: 'The day before yesterday',
+            chatConsole: 'Console',
             chatUnread: (count) => `${count} unread message(s)`,
             emptyTitle: 'A new journey', start: 'Start', stage: 'Stage', biome: 'Region', gold: 'Gold',
             route: 'Route', abandon: 'End Journey', abandonTitle: 'End this journey?',
             abandonMessage: 'This run will be marked as ended.', resetMap: 'Reset Map',
             resetTitle: 'Reset the map?', resetMessage: 'A new route will be generated from Floor 1.',
             mapReset: 'Map reset', cancel: 'Cancel', confirm: 'Confirm', garden: 'Garden',
+            saveManager: 'Save / Load', saveCopy: 'Available on the route map. The latest 3 saves are kept.',
+            saveCurrent: 'Save Current Progress', loadSave: 'Load', noSaves: 'No manual saves yet',
+            saveCurrentSlot: 'Current', savePreviousSlot: (value) => `Previous ${value}`,
+            saveSucceeded: 'Journey saved', loadSucceeded: 'Journey loaded',
+            loadSaveTitle: 'Load this save?', loadSaveCopy: 'Your current route progress will be replaced.',
+            saveOnlyOnMap: 'Manual saves are only available on the route map',
             blessingTitle: 'Choose a starting blessing', blessingCopy: 'Choose one for this journey.',
             blessingChooseCard: 'Choose a deck card', blessingBack: 'Back to blessings',
             transform: 'Transform', blessingRewardCopy: 'Choose one card from each reward.',
@@ -149,6 +173,16 @@
             talentOverview: 'Talents', viewTalentOverview: 'View Talents',
             talentTotal: (count) => `${count} talent(s)`, noTalents: 'No talents acquired',
             runDeck: 'Full Deck', viewRunDeck: 'View Full Deck',
+            codexTitle: 'Story Compendium', viewCodex: 'View Story Compendium',
+            codexCards: 'Cards', codexEnemies: 'Enemies', codexTalents: 'Talents', codexTerms: 'Terms',
+            codexSearch: 'Search discovered content', codexRarity: 'Rarity', codexType: 'Type',
+            codexAll: 'All', codexClear: 'Clear', codexResults: (count) => `${count} result(s)`,
+            codexDiscovered: (found, total) => `Discovered ${found}/${total}`,
+            codexEmpty: 'No matching discoveries', codexUnknownTalent: 'Unnamed blessing',
+            codexRelics: 'Talents', codexBlessings: 'Blessings', codexStatuses: 'Statuses',
+            codexTags: 'Tags', codexTraits: 'Enemy effects', codexResources: 'Resources',
+            codexHealth: 'Health', codexObservedIntents: (count) => `${count} observed intent(s)`,
+            codexNew: 'New compendium entry', codexNewCount: (count) => `${count} new compendium entries`,
             battleWon: 'Battle won', chooseCard: 'Choose a card', skip: 'Skip card',
             rewards: 'Battle rewards', rewardCopy: 'Claim each reward before continuing.',
             claim: 'Claim', claimed: 'Claimed', cardReward: 'Card reward', talentReward: 'Talent',
@@ -206,11 +240,18 @@
             chatDisconnected: '连接已断开，正在重连...', chatPlaceholder: '输入消息...',
             chatSend: '发送', chatCollapse: '收起聊天',
             chatOriginMultiplayer: '多人', chatOriginStory: '故事',
+            chatSpectator: '观战', chatYesterday: '昨天', chatBeforeYesterday: '前天', chatConsole: '控制台',
             chatUnread: (count) => `${count} 条未读消息`,
             start: '开始', stage: '阶段', biome: '区域', gold: '金币', route: '路线', abandon: '结束旅程',
             abandonTitle: '结束旅程？', abandonMessage: '当前进度将被记录为已结束。', resetMap: '重置地图',
             resetTitle: '重置地图？', resetMessage: '将重新生成路线并返回第一层。', mapReset: '地图已重置',
             cancel: '取消', confirm: '确定', garden: '花园', blessingTitle: '选择初始赐福',
+            saveManager: '存读档', saveCopy: '仅可在路线选择界面保存或读取，最多保留最近3份。',
+            saveCurrent: '保存当前进度', loadSave: '读取', noSaves: '暂无手动存档',
+            saveCurrentSlot: '当前存档', savePreviousSlot: (value) => `前 ${value} 次存档`,
+            saveSucceeded: '旅程进度已保存', loadSucceeded: '旅程进度已读取',
+            loadSaveTitle: '读取此存档？', loadSaveCopy: '当前路线进度将被所选存档覆盖。',
+            saveOnlyOnMap: '只能在路线选择界面使用手动存读档',
             blessingCopy: '本次旅程只能选择一项。', blessingChooseCard: '选择一张牌组中的牌',
             blessingBack: '返回赐福选择', transform: '变化',
             blessingRewardCopy: '每次卡牌奖励选择1张牌。',
@@ -220,6 +261,16 @@
             talentOverview: '天赋总览', viewTalentOverview: '查看天赋总览',
             talentTotal: (count) => `共 ${count} 项天赋`, noTalents: '尚未获得天赋',
             runDeck: '总牌库', viewRunDeck: '查看总牌库',
+            codexTitle: '故事图鉴', viewCodex: '查看故事图鉴',
+            codexCards: '卡牌', codexEnemies: '敌人', codexTalents: '天赋', codexTerms: '术语',
+            codexSearch: '搜索已发现内容', codexRarity: '稀有度', codexType: '类型',
+            codexAll: '全选', codexClear: '清空', codexResults: (count) => `${count} 项`,
+            codexDiscovered: (found, total) => `已发现 ${found}/${total}`,
+            codexEmpty: '没有符合条件的已发现内容', codexUnknownTalent: '未命名赐福',
+            codexRelics: '天赋', codexBlessings: '赐福', codexStatuses: '状态',
+            codexTags: '标签', codexTraits: '敌人特殊效果', codexResources: '资源',
+            codexHealth: '生命', codexObservedIntents: (count) => `已观察 ${count} 个意图`,
+            codexNew: '发现了新的图鉴内容', codexNewCount: (count) => `发现了 ${count} 项新的图鉴内容`,
             battleWon: '战斗胜利', chooseCard: '选择一张牌',
             skip: '跳过卡牌', rewards: '战斗奖励', rewardCopy: '逐项领取奖励后继续前进。',
             claim: '领取', claimed: '已领取', cardReward: '卡牌奖励', talentReward: '天赋',
@@ -276,9 +327,17 @@
             chatDisconnected: 'Déconnecté. Reconnexion...', chatPlaceholder: 'Écrire un message...',
             chatSend: 'Envoyer', chatCollapse: 'Réduire le chat',
             chatOriginMultiplayer: 'Multijoueur', chatOriginStory: 'Histoire',
+            chatSpectator: 'Spectateur', chatYesterday: 'Hier', chatBeforeYesterday: 'Avant-hier',
+            chatConsole: 'Console',
             chatUnread: (count) => `${count} message(s) non lu(s)`,
             emptyTitle: 'Un nouveau voyage', start: 'Commencer', stage: 'Étape', biome: 'Région', gold: 'Or',
             route: 'Route', abandon: 'Terminer le voyage', blessingTitle: 'Choisir une bénédiction',
+            saveManager: 'Sauvegarder / Charger', saveCopy: 'Disponible sur la carte. Les 3 sauvegardes les plus récentes sont conservées.',
+            saveCurrent: 'Sauvegarder', loadSave: 'Charger', noSaves: 'Aucune sauvegarde manuelle',
+            saveCurrentSlot: 'Actuelle', savePreviousSlot: (value) => `Précédente ${value}`,
+            saveSucceeded: 'Progression sauvegardée', loadSucceeded: 'Progression chargée',
+            loadSaveTitle: 'Charger cette sauvegarde ?', loadSaveCopy: 'La progression actuelle sera remplacée.',
+            saveOnlyOnMap: 'La sauvegarde manuelle est disponible uniquement sur la carte',
             blessingCopy: 'Choisissez-en une pour ce voyage.', blessingChooseCard: 'Choisissez une carte du paquet',
             blessingBack: 'Retour aux bénédictions', transform: 'Transformer',
             blessingRewardCopy: 'Choisissez une carte pour chaque récompense.',
@@ -288,6 +347,16 @@
             talentOverview: 'Talents', viewTalentOverview: 'Voir les talents',
             talentTotal: (count) => `${count} talent(s)`, noTalents: 'Aucun talent obtenu',
             runDeck: 'Deck complet', viewRunDeck: 'Voir le deck complet', battleWon: 'Victoire',
+            codexTitle: 'Compendium', viewCodex: 'Voir le compendium',
+            codexCards: 'Cartes', codexEnemies: 'Ennemis', codexTalents: 'Talents', codexTerms: 'Termes',
+            codexSearch: 'Rechercher le contenu découvert', codexRarity: 'Rareté', codexType: 'Type',
+            codexAll: 'Tout', codexClear: 'Effacer', codexResults: (count) => `${count} résultat(s)`,
+            codexDiscovered: (found, total) => `Découvert ${found}/${total}`,
+            codexEmpty: 'Aucune découverte correspondante', codexUnknownTalent: 'Bénédiction sans nom',
+            codexRelics: 'Talents', codexBlessings: 'Bénédictions', codexStatuses: 'États',
+            codexTags: 'Étiquettes', codexTraits: 'Effets ennemis', codexResources: 'Ressources',
+            codexHealth: 'Vie', codexObservedIntents: (count) => `${count} intention(s) observée(s)`,
+            codexNew: 'Nouvelle entrée du compendium', codexNewCount: (count) => `${count} nouvelles entrées du compendium`,
             chooseCard: 'Choisissez une carte', skip: 'Passer la carte', room: 'Salle', newJourney: 'Nouveau voyage',
             rewards: 'Récompenses du combat', rewardCopy: 'Récupérez chaque récompense avant de continuer.',
             claim: 'Récupérer', claimed: 'Récupéré', cardReward: 'Carte', talentReward: 'Talent',
@@ -330,9 +399,16 @@
             chatDisconnected: '切断されました。再接続中...', chatPlaceholder: 'メッセージを入力...',
             chatSend: '送信', chatCollapse: 'チャットを閉じる',
             chatOriginMultiplayer: 'マルチ', chatOriginStory: 'ストーリー',
+            chatSpectator: '観戦', chatYesterday: '昨日', chatBeforeYesterday: '一昨日', chatConsole: 'コンソール',
             chatUnread: (count) => `未読メッセージ ${count}件`,
             emptyTitle: '新しい旅', start: '開始', stage: 'ステージ', biome: '地域', gold: 'ゴールド',
             route: 'ルート', abandon: '旅を終了', blessingTitle: '祝福を選択', blessingCopy: '今回の旅で一つ選択します。',
+            saveManager: 'セーブ / ロード', saveCopy: 'ルート画面でのみ利用できます。最新3件を保存します。',
+            saveCurrent: '現在の進行を保存', loadSave: 'ロード', noSaves: '手動セーブはありません',
+            saveCurrentSlot: '最新', savePreviousSlot: (value) => `${value}つ前`,
+            saveSucceeded: '進行を保存しました', loadSucceeded: '進行を読み込みました',
+            loadSaveTitle: 'このセーブを読み込みますか？', loadSaveCopy: '現在のルート進行は上書きされます。',
+            saveOnlyOnMap: '手動セーブはルート画面でのみ利用できます',
             blessingChooseCard: 'デッキのカードを選択', blessingBack: '祝福選択に戻る',
             transform: '変化', blessingRewardCopy: '各カード報酬から1枚選びます。',
             blessingCardReward: (index, total) => `カード報酬 ${index}/${total}`,
@@ -340,6 +416,16 @@
             talentOverview: '天賦一覧', viewTalentOverview: '天賦一覧を見る',
             talentTotal: (count) => `天賦 ${count}個`, noTalents: '天賦を獲得していません',
             runDeck: '全デッキ', viewRunDeck: '全デッキを見る',
+            codexTitle: '物語図鑑', viewCodex: '物語図鑑を見る',
+            codexCards: 'カード', codexEnemies: '敵', codexTalents: '天賦', codexTerms: '用語',
+            codexSearch: '発見済みを検索', codexRarity: 'レア度', codexType: 'タイプ',
+            codexAll: 'すべて', codexClear: '解除', codexResults: (count) => `${count}件`,
+            codexDiscovered: (found, total) => `発見 ${found}/${total}`,
+            codexEmpty: '一致する発見はありません', codexUnknownTalent: '名前のない祝福',
+            codexRelics: '天賦', codexBlessings: '祝福', codexStatuses: '状態',
+            codexTags: 'タグ', codexTraits: '敵の特殊効果', codexResources: 'リソース',
+            codexHealth: '生命', codexObservedIntents: (count) => `確認済み意図 ${count}個`,
+            codexNew: '図鑑に新しい項目を発見', codexNewCount: (count) => `図鑑に${count}件を新発見`,
             battleWon: '戦闘勝利', chooseCard: 'カードを選択', skip: 'カードをスキップ', room: '部屋',
             rewards: '戦闘報酬', rewardCopy: 'すべての報酬を受け取ってから先へ進みます。',
             claim: '受け取る', claimed: '受取済み', cardReward: 'カード報酬', talentReward: '天賦',
@@ -488,8 +574,22 @@
             'story-title': t.title, 'story-loading-label': t.loading,
             'story-empty-title': t.emptyTitle, 'story-start': t.start, 'story-stage-label': t.stage,
             'story-biome-label': t.biome, 'story-gold-label': t.gold, 'story-map-title': t.route,
+            'story-save-open': t.saveManager,
+            'story-save-title': t.saveManager,
+            'story-save-copy': t.saveCopy,
+            'story-save-create': t.saveCurrent,
+            'story-save-load-title': t.loadSaveTitle,
+            'story-save-load-copy': t.loadSaveCopy,
+            'story-save-load-cancel': t.cancel,
+            'story-save-load-confirm': t.loadSave,
             'story-talent-overview-label': t.talentOverview,
             'story-run-deck-label': t.runDeck,
+            'story-codex-open-label': t.codexTitle,
+            'story-codex-title': t.codexTitle,
+            'story-codex-tab-cards': t.codexCards,
+            'story-codex-tab-enemies': t.codexEnemies,
+            'story-codex-tab-talents': t.codexTalents,
+            'story-codex-tab-terms': t.codexTerms,
             'story-reset-map': t.resetMap,
             'story-reset-title': t.resetTitle, 'story-reset-message': t.resetMessage,
             'story-reset-cancel': t.cancel, 'story-reset-confirm': t.confirm,
@@ -526,6 +626,17 @@
             runDeck.title = t.viewRunDeck;
             runDeck.setAttribute('aria-label', t.viewRunDeck);
         }
+        const codex = $('story-codex-open');
+        if (codex) {
+            codex.title = t.viewCodex;
+            codex.setAttribute('aria-label', t.viewCodex);
+        }
+        const codexSearch = $('story-codex-search');
+        if (codexSearch) {
+            codexSearch.placeholder = t.codexSearch;
+            codexSearch.setAttribute('aria-label', t.codexSearch);
+        }
+        $('story-codex-close')?.setAttribute('aria-label', t.close);
         const talentOverview = $('story-talent-overview');
         if (talentOverview) {
             talentOverview.title = t.viewTalentOverview;
@@ -677,13 +788,14 @@
     }
 
     async function requestJson(url, options = {}) {
+        const { timeoutMs = 10000, ...fetchOptions } = options;
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
+        const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 10000));
         try {
             const response = await fetch(url, {
                 credentials: 'same-origin',
-                ...options,
-                headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+                ...fetchOptions,
+                headers: { 'Content-Type': 'application/json', ...(fetchOptions.headers || {}) },
                 signal: controller.signal,
             });
             const payload = await response.json().catch(() => ({}));
@@ -700,6 +812,21 @@
             throw error;
         } finally {
             clearTimeout(timeout);
+        }
+    }
+
+    async function requestStoryLoadJson(url) {
+        const retryDelays = [350, 1000];
+        for (let attempt = 0; ; attempt += 1) {
+            try {
+                return await requestJson(url, { timeoutMs: 25000 });
+            } catch (error) {
+                if (error?.message === 'AUTH_REQUIRED') throw error;
+                const retryable = !Number.isFinite(Number(error?.status))
+                    || [408, 429, 502, 503, 504].includes(Number(error.status));
+                if (!retryable || attempt >= retryDelays.length) throw error;
+                await storySleep(retryDelays[attempt]);
+            }
         }
     }
 
@@ -847,6 +974,25 @@
         return 'en-US';
     }
 
+    function storyChatLocalDateKey(date) {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }
+
+    function storyChatDayStart(date) {
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+
+    function formatStoryChatDate(date) {
+        if (lang === 'zh' || lang === 'ja') {
+            return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+        }
+        return date.toLocaleDateString(storyChatLocale(), {
+            year: 'numeric',
+            month: lang === 'fr' ? '2-digit' : 'short',
+            day: 'numeric',
+        });
+    }
+
     function formatStoryChatTime(entry = {}) {
         const value = entry.time || entry.created_at || entry.createdAt;
         const date = value ? new Date(value) : null;
@@ -859,26 +1005,86 @@
             minute: '2-digit',
             hour12: false,
         });
-        if (
-            date.getFullYear() === now.getFullYear()
-            && date.getMonth() === now.getMonth()
-            && date.getDate() === now.getDate()
-        ) {
-            return time;
-        }
-        const day = date.toLocaleDateString(storyChatLocale(), {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
+        if (storyChatLocalDateKey(date) === storyChatLocalDateKey(now)) return time;
+        const daysAgo = Math.round(
+            (storyChatDayStart(now).getTime() - storyChatDayStart(date).getTime()) / 86400000,
+        );
+        if (daysAgo === 1) return `${t.chatYesterday} ${time}`;
+        if (daysAgo === 2) return `${t.chatBeforeYesterday} ${time}`;
+        return `${formatStoryChatDate(date)} ${time}`;
+    }
+
+    function storyCurrentMentionKeys() {
+        const account = window.__STORY_ACCOUNT__ || {};
+        const keys = new Set();
+        if (account.id != null) keys.add(`user:${account.id}`);
+        if (account.username) keys.add(`name:${String(account.username).toLowerCase()}`);
+        if (account.display_name) keys.add(`name:${String(account.display_name).toLowerCase()}`);
+        if (account.player_id) keys.add(`pid:${String(account.player_id).toUpperCase()}`);
+        return keys;
+    }
+
+    function storyCurrentUserMentionTokens(entry = {}) {
+        const tokens = new Set();
+        const keys = storyCurrentMentionKeys();
+        (Array.isArray(entry.mentions) ? entry.mentions : []).forEach((item) => {
+            if (!item) return;
+            const matches = (
+                (item.user_id != null && keys.has(`user:${item.user_id}`))
+                || (item.nickname && keys.has(`name:${String(item.nickname).toLowerCase()}`))
+                || (item.player_id && keys.has(`pid:${String(item.player_id).toUpperCase()}`))
+            );
+            if (!matches) return;
+            if (item.nickname) tokens.add(String(item.nickname).toLowerCase());
+            if (item.player_id) tokens.add(String(item.player_id).toUpperCase());
         });
-        return `${day} ${time}`;
+        return tokens;
+    }
+
+    function appendStoryChatTextWithMentions(
+        parent,
+        text,
+        mentions = [],
+        ownMentionTokens = new Set(),
+        shouldFlashOwnMention = false,
+    ) {
+        const raw = String(text || '');
+        const mentionNames = [];
+        (Array.isArray(mentions) ? mentions : []).forEach((item) => {
+            if (!item) return;
+            if (item.nickname) mentionNames.push(String(item.nickname));
+            if (item.player_id) mentionNames.push(String(item.player_id));
+        });
+        const unique = [...new Set(mentionNames.filter(Boolean))].sort((left, right) => right.length - left.length);
+        if (!unique.length) {
+            parent.appendChild(document.createTextNode(raw));
+            return;
+        }
+        const escaped = unique.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const pattern = new RegExp(`(@(?:${escaped.join('|')}))(?![\\w\\u4e00-\\u9fff\\u3040-\\u30ff\\uac00-\\ud7af-])`, 'gi');
+        let last = 0;
+        raw.replace(pattern, (match, token, offset) => {
+            if (offset > last) parent.appendChild(document.createTextNode(raw.slice(last, offset)));
+            const span = document.createElement('span');
+            span.className = 'chat-mention-token';
+            const tokenName = String(match || '').replace(/^@/, '');
+            const mentionsCurrentUser = ownMentionTokens.has(tokenName.toLowerCase())
+                || ownMentionTokens.has(tokenName.toUpperCase());
+            if (mentionsCurrentUser) span.classList.add('mention-self');
+            if (shouldFlashOwnMention && mentionsCurrentUser) span.classList.add('mention-flash');
+            span.textContent = match;
+            parent.appendChild(span);
+            last = offset + match.length;
+            return match;
+        });
+        if (last < raw.length) parent.appendChild(document.createTextNode(raw.slice(last)));
     }
 
     function appendStoryChatIdentity(parent, entry = {}) {
         const originKey = String(entry.chat_origin || entry.chatOrigin || '').toLowerCase();
         if (originKey === 'multiplayer' || originKey === 'story') {
             const origin = document.createElement('span');
-            origin.className = `story-chat-origin story-chat-origin-${originKey}`;
+            origin.className = `story-chat-origin story-chat-origin-${originKey} chat-origin-prefix chat-origin-${originKey}`;
             origin.textContent = `[${originKey === 'story'
                 ? t.chatOriginStory
                 : t.chatOriginMultiplayer}]`;
@@ -895,6 +1101,13 @@
             return;
         }
 
+        if (entry.is_spectator) {
+            const spectator = document.createElement('span');
+            spectator.className = 'chat-spectator-prefix';
+            spectator.textContent = `[${t.chatSpectator}]`;
+            parent.appendChild(spectator);
+        }
+
         const titles = Array.isArray(entry.equipped_titles)
             ? entry.equipped_titles.filter((item) => item?.name).slice(0, 3)
             : [];
@@ -906,9 +1119,17 @@
             if (color) titleElement.style.color = color;
             parent.appendChild(titleElement);
         });
+        if (!titles.length && (entry.console_player || entry.special_role === 'console')) {
+            const titleElement = document.createElement('span');
+            titleElement.className = 'story-chat-player-title player-title-inline';
+            titleElement.textContent = `[${t.chatConsole}]`;
+            const color = storyChatColorCss(entry.special_role_color || 'admin');
+            if (color) titleElement.style.color = color;
+            parent.appendChild(titleElement);
+        }
 
         const name = document.createElement('span');
-        name.className = 'story-chat-player-name';
+        name.className = 'story-chat-player-name chat-player-name player-name-value';
         name.textContent = String(
             entry.nickname
             || entry.sender_name
@@ -935,7 +1156,7 @@
         if (!container) return;
         if (entry.type === 'time') {
             const separator = document.createElement('div');
-            separator.className = 'story-chat-time';
+            separator.className = 'story-chat-time chat-time-separator';
             separator.textContent = formatStoryChatTime(entry);
             container.appendChild(separator);
             return;
@@ -943,26 +1164,152 @@
         if (entry.type !== 'chat') return;
 
         const row = document.createElement('div');
-        row.className = `story-chat-message${entry.system ? ' is-system' : ''}`;
+        row.className = `story-chat-message chat-msg${entry.system ? ' is-system' : ''}`;
         const identity = document.createElement('span');
-        identity.className = 'story-chat-identity';
+        identity.className = `story-chat-identity chat-nick${entry.system ? ' system-name' : ''}`;
         appendStoryChatIdentity(identity, entry);
         identity.appendChild(document.createTextNode(entry.system ? ' ' : ': '));
         row.appendChild(identity);
 
         const message = document.createElement('span');
         message.className = 'story-chat-message-text';
-        message.textContent = String(entry.text || '');
+        const mentionKey = storyChatEntryKey(entry);
+        const ownMentionTokens = storyCurrentUserMentionTokens(entry);
+        const shouldFlashOwnMention = ownMentionTokens.size > 0 && !readStoryMentionIds.has(mentionKey);
+        if (shouldFlashOwnMention) row.dataset.mentionId = mentionKey;
+        appendStoryChatTextWithMentions(
+            message,
+            entry.text || '',
+            entry.mentions || [],
+            ownMentionTokens,
+            shouldFlashOwnMention,
+        );
         row.appendChild(message);
 
         const repeatCount = Math.max(1, Number(entry.repeat_count || entry.repeatCount || 1));
         if (repeatCount > 1) {
             const repeat = document.createElement('span');
-            repeat.className = 'story-chat-repeat';
+            repeat.className = 'story-chat-repeat chat-repeat-count';
             repeat.textContent = ` ×${repeatCount}`;
             row.appendChild(repeat);
         }
         container.appendChild(row);
+    }
+
+    function clearStoryMentionFlash() {
+        document.querySelectorAll('#story-chat-log [data-mention-id]').forEach((element) => {
+            if (element.dataset.mentionId) readStoryMentionIds.add(element.dataset.mentionId);
+            element.removeAttribute('data-mention-id');
+        });
+        document.querySelectorAll('#story-chat-log .mention-flash').forEach((element) => {
+            element.classList.remove('mention-flash');
+        });
+    }
+
+    function ensureStoryMentionMenu() {
+        if (storyMentionMenu) return storyMentionMenu;
+        storyMentionMenu = document.createElement('div');
+        storyMentionMenu.id = 'story-mention-menu';
+        storyMentionMenu.className = 'mention-menu hidden';
+        document.body.appendChild(storyMentionMenu);
+        storyMentionMenu.addEventListener('mousedown', (event) => {
+            const item = event.target.closest('[data-mention-index]');
+            if (!item) return;
+            event.preventDefault();
+            const candidate = storyMentionCandidates[Number(item.dataset.mentionIndex)];
+            if (candidate) insertStoryMention(candidate);
+        });
+        return storyMentionMenu;
+    }
+
+    function getStoryMentionCandidates() {
+        const selfKeys = storyCurrentMentionKeys();
+        const seen = new Set();
+        return storyMentionDirectory
+            .map((item) => ({
+                nickname: String(item?.nickname || ''),
+                player_id: String(item?.player_id || ''),
+                user_id: item?.user_id ?? '',
+            }))
+            .filter((item) => {
+                const nameKey = `name:${item.nickname.toLowerCase()}`;
+                const userKey = item.user_id !== '' ? `user:${item.user_id}` : '';
+                const identity = userKey || nameKey;
+                if (!item.nickname || selfKeys.has(nameKey) || (userKey && selfKeys.has(userKey)) || seen.has(identity)) {
+                    return false;
+                }
+                seen.add(identity);
+                return true;
+            });
+    }
+
+    function findStoryMentionRange(input) {
+        if (!input) return null;
+        const value = input.value || '';
+        const position = input.selectionStart ?? value.length;
+        const before = value.slice(0, position);
+        const match = before.match(/(^|\s)@([^\s@]*)$/);
+        if (!match) return null;
+        const start = before.length - match[0].length + match[1].length;
+        return { start, end: position, query: match[2] || '' };
+    }
+
+    function updateStoryMentionMenu() {
+        const input = $('story-chat-input');
+        const menu = ensureStoryMentionMenu();
+        const range = findStoryMentionRange(input);
+        storyMentionActiveRange = range;
+        if (!storyChatOpen || !input || !range) {
+            menu.classList.add('hidden');
+            return;
+        }
+        const query = String(range.query || '').toLowerCase();
+        storyMentionCandidates = getStoryMentionCandidates()
+            .filter((item) => (
+                !query
+                || item.nickname.toLowerCase().includes(query)
+                || item.player_id.toLowerCase().includes(query)
+            ))
+            .slice(0, 8);
+        if (!storyMentionCandidates.length) {
+            menu.classList.add('hidden');
+            return;
+        }
+        menu.replaceChildren(...storyMentionCandidates.map((candidate, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'mention-menu-item';
+            button.dataset.mentionIndex = String(index);
+            const name = document.createElement('span');
+            name.textContent = `@${candidate.nickname}`;
+            button.appendChild(name);
+            if (candidate.player_id) {
+                const playerId = document.createElement('small');
+                playerId.textContent = candidate.player_id;
+                button.appendChild(playerId);
+            }
+            return button;
+        }));
+        const rect = input.getBoundingClientRect();
+        menu.style.left = `${Math.max(8, rect.left)}px`;
+        menu.style.top = `${Math.max(8, rect.top - Math.min(220, menu.offsetHeight || 180) - 6)}px`;
+        menu.style.width = `${Math.min(260, Math.max(180, rect.width))}px`;
+        menu.classList.remove('hidden');
+    }
+
+    function insertStoryMention(candidate) {
+        const input = $('story-chat-input');
+        if (!input || !storyMentionActiveRange) return;
+        const value = input.value || '';
+        const token = `@${candidate.nickname} `;
+        input.value = value.slice(0, storyMentionActiveRange.start)
+            + token
+            + value.slice(storyMentionActiveRange.end);
+        const position = storyMentionActiveRange.start + token.length;
+        input.focus();
+        input.setSelectionRange(position, position);
+        storyMentionMenu?.classList.add('hidden');
+        updateStoryChatConnectionUi();
     }
 
     function updateStoryChatConnectionUi() {
@@ -1004,17 +1351,24 @@
         toggle?.setAttribute('aria-expanded', storyChatOpen ? 'true' : 'false');
         if (storyChatOpen) {
             storyChatUnreadCount = 0;
+            clearStoryMentionFlash();
             updateStoryChatUnreadBadge();
             requestAnimationFrame(() => {
                 const log = $('story-chat-log');
                 if (log) log.scrollTop = log.scrollHeight;
+                $('story-chat-input')?.focus();
             });
+        } else {
+            storyMentionMenu?.classList.add('hidden');
         }
     }
 
     function renderStoryChatHistory(data = {}) {
         const log = $('story-chat-log');
         if (!log) return;
+        storyMentionDirectory = Array.isArray(data.mention_candidates)
+            ? data.mention_candidates.map((item) => ({ ...item }))
+            : [];
         const incoming = Array.isArray(data.items) ? data.items : [];
         const entries = mergeStoryChatEntries(incoming, storyChatEntries);
         if (storyChatInitialized && !storyChatOpen) {
@@ -1031,8 +1385,13 @@
             entry?.repeat_count,
             entry?.chat_origin,
             entry?.system,
+            entry?.is_spectator,
             entry?.name_color,
             entry?.equipped_titles,
+            entry?.special_role,
+            entry?.special_role_color,
+            entry?.console_player,
+            entry && JSON.stringify(entry.mentions || []),
         ])]);
         storyChatInitialized = true;
         storyChatConnected = true;
@@ -1113,6 +1472,7 @@
             client_id: STORY_PRESENCE_CLIENT_ID,
         });
         input.value = '';
+        storyMentionMenu?.classList.add('hidden');
         updateStoryChatConnectionUi();
     }
 
@@ -1382,7 +1742,7 @@
                 nextDelay = requestedInterval;
             }
             const nextCheckSeconds = Number(payload.afk_next_check_seconds);
-            if (Number.isFinite(nextCheckSeconds) && nextCheckSeconds >= 0) {
+            if (!payload.afk_check && Number.isFinite(nextCheckSeconds) && nextCheckSeconds >= 0) {
                 nextDelay = Math.min(nextDelay, Math.max(250, nextCheckSeconds * 1000 + 50));
             }
             updateStoryPresenceDisplay();
@@ -1696,6 +2056,57 @@
         if (value) value.textContent = `${Math.max(0, current)}/${maximum}`;
     }
 
+    function updateAnimatedPlayerHealth(event, nextRun) {
+        const after = Number(event?.after);
+        if (!Number.isFinite(after)) return;
+        setHealthBar(
+            'story-combat-player',
+            after,
+            nextRun?.state?.player?.max_health || activeRun?.state?.player?.max_health,
+        );
+    }
+
+    function storyPresentationEffectContainer(targetId) {
+        if (String(targetId || '') === 'player') return $('story-player-effects');
+        return storyEnemyActor(targetId)?.querySelector('.story-effect-list') || null;
+    }
+
+    function syncStoryPresentationEvent(event, nextRun) {
+        const eventType = String(event?.type || event?.kind || '');
+        if (!eventType) return;
+        if (eventType === 'player_damage' || eventType === 'heal') {
+            updateAnimatedPlayerHealth(event, nextRun);
+        } else if (['enemy_damage', 'enemy_heal', 'enemy_revived'].includes(eventType)) {
+            updateAnimatedEnemyHealth(event, nextRun);
+        }
+
+        if (eventType === 'enemy_gain') {
+            updateStoryEffectValue(
+                storyPresentationEffectContainer(event.enemy_id),
+                String(event.effect_kind || ''),
+                event.after,
+            );
+        } else if (eventType === 'status') {
+            updateStoryEffectValue(
+                storyPresentationEffectContainer(event.target_id),
+                String(event.status || ''),
+                event.after,
+            );
+        } else if (eventType === 'status_cleared') {
+            updateStoryEffectValue(
+                storyPresentationEffectContainer(event.target_id),
+                String(event.status || ''),
+                0,
+            );
+        } else if (eventType === 'shield') {
+            updateStoryEffectValue($('story-player-effects'), 'shield', event.after);
+        } else if (eventType === 'elixir' && Number.isFinite(Number(event.after))) {
+            renderResourceOrbs('story-combat-player-elixir', Number(event.after), 0, 'e');
+        } else if (eventType === 'magic' && Number.isFinite(Number(event.after))) {
+            renderResourceOrbs('story-combat-player-magic', Number(event.after), 0, 'm');
+        }
+    }
+
     function storyEventBatches(sequence) {
         const groups = new Map();
         sequence.forEach((event) => {
@@ -1841,7 +2252,15 @@
         try {
             for (const batch of storyEventBatches(sequence)) {
                 await Promise.all(
-                    batch.map((event) => playStoryPresentationEvent(event, nextRun)),
+                    batch.map(async (event) => {
+                        try {
+                            await playStoryPresentationEvent(event, nextRun);
+                        } catch (error) {
+                            console.warn('[story] presentation event failed', event?.type || event?.kind, error);
+                        } finally {
+                            syncStoryPresentationEvent(event, nextRun);
+                        }
+                    }),
                 );
                 await storySleep(32);
             }
@@ -1882,8 +2301,9 @@
                 await playStoryEventSequence(result.events, nextRun, actionType);
             } finally {
                 storyCombatEntranceAnimating = false;
+                renderRun(nextRun);
             }
-            renderRun(nextRun);
+            ingestStoryDiscoveryPayload(result, { notify: true });
             return result;
         } catch (error) {
             if (error.message === 'AUTH_REQUIRED') return null;
@@ -2575,12 +2995,38 @@
         return null;
     }
 
+    function setStoryCardChoiceRequired(required) {
+        const dialog = $('story-card-choice-dialog');
+        if (dialog) dialog.dataset.required = required ? '1' : '0';
+        $('story-card-choice-close')?.classList.toggle('hidden', required);
+        $('story-card-choice-cancel')?.classList.toggle('hidden', required);
+    }
+
+    function toggleStoryCardChoice(wrapper, id, maximum) {
+        if (!cardChoiceContext) return;
+        const selected = cardChoiceContext.selected;
+        if (selected.has(id)) {
+            selected.delete(id);
+            wrapper.classList.remove('is-selected');
+            return;
+        }
+        if (maximum === 1) {
+            selected.clear();
+            $('story-card-choice-grid')?.querySelectorAll('.story-card-choice-select-item.is-selected')
+                .forEach((item) => item.classList.remove('is-selected'));
+        }
+        if (selected.size >= maximum) return;
+        selected.add(id);
+        wrapper.classList.add('is-selected');
+    }
+
     function openCardSelection(card, targetKind, targetId) {
         const spec = cardSelectionSpec(card);
         if (!spec) return false;
         const dialog = $('story-card-choice-dialog');
         const grid = $('story-card-choice-grid');
         if (!dialog || !grid) return false;
+        setStoryCardChoiceRequired(false);
         cardChoiceContext = {
             cardId: String(card.instance_id),
             targetKind,
@@ -2602,13 +3048,7 @@
             wrapper.append(createStoryCard(choiceCard, { interactive: false, compact: true }));
             wrapper.addEventListener('click', () => {
                 const id = String(choiceCard.instance_id);
-                if (cardChoiceContext?.selected.has(id)) {
-                    cardChoiceContext.selected.delete(id);
-                    wrapper.classList.remove('is-selected');
-                } else if ((cardChoiceContext?.selected.size || 0) < spec.maximum) {
-                    cardChoiceContext?.selected.add(id);
-                    wrapper.classList.add('is-selected');
-                }
+                toggleStoryCardChoice(wrapper, id, spec.maximum);
                 const count = cardChoiceContext?.selected.size || 0;
                 $('story-card-choice-confirm').disabled = count < spec.minimum || count > spec.maximum;
             });
@@ -2624,6 +3064,7 @@
         const dialog = $('story-card-choice-dialog');
         const grid = $('story-card-choice-grid');
         if (!combat.opening_redraw_pending || !dialog || !grid || dialog.open) return;
+        setStoryCardChoiceRequired(false);
         const source = [...(combat.hand || [])];
         const spec = {
             source,
@@ -2664,6 +3105,75 @@
         });
         $('story-card-choice-confirm').disabled = false;
         dialog.showModal();
+    }
+
+    function openPendingStoryDeckOperation(state) {
+        const operation = state?.pending_deck_operations?.[0];
+        const dialog = $('story-card-choice-dialog');
+        const grid = $('story-card-choice-grid');
+        if (!operation || !dialog || !grid) return false;
+        if (
+            dialog.open
+            && cardChoiceContext?.mode === 'deck_operation'
+            && String(cardChoiceContext.operationId) === String(operation.id)
+        ) return true;
+        if (dialog.open) return false;
+        const allowed = new Set((operation.candidate_ids || []).map(String));
+        const source = (state?.player?.deck || []).filter((card) => (
+            allowed.has(String(card.instance_id))
+        ));
+        const maximum = Math.max(0, Number(operation.maximum ?? operation.count) || 0);
+        const minimum = Math.min(
+            maximum,
+            Math.max(0, Number(operation.minimum ?? maximum) || 0),
+        );
+        const labels = {
+            upgrade: t.upgrade,
+            remove: t.remove,
+            enchant_amulet: lang === 'zh' ? '附魔护身符' : 'Enchant Amulet',
+        };
+        const spec = {
+            source,
+            payloadKey: 'selected_card_ids',
+            minimum,
+            maximum,
+        };
+        cardChoiceContext = {
+            mode: 'deck_operation',
+            operationId: String(operation.id || ''),
+            spec,
+            selected: new Set(),
+        };
+        setStoryCardChoiceRequired(true);
+        setText('story-card-choice-title', labels[operation.kind] || t.chooseCards);
+        setText(
+            'story-card-choice-copy',
+            minimum === maximum ? t.chooseExact(maximum) : t.chooseUpTo(maximum),
+        );
+        grid.replaceChildren();
+        source.forEach((choiceCard) => {
+            const wrapper = document.createElement('button');
+            wrapper.type = 'button';
+            wrapper.className = 'story-card-choice-select-item';
+            wrapper.dataset.instanceId = String(choiceCard.instance_id);
+            wrapper.append(createStoryCard(choiceCard, {
+                interactive: false,
+                compact: true,
+                previewUpgradeOnHover: operation.kind === 'upgrade',
+            }));
+            wrapper.addEventListener('click', () => {
+                const id = String(choiceCard.instance_id);
+                toggleStoryCardChoice(wrapper, id, maximum);
+                $('story-card-choice-confirm').disabled = (
+                    (cardChoiceContext?.selected.size || 0) < minimum
+                    || (cardChoiceContext?.selected.size || 0) > maximum
+                );
+            });
+            grid.append(wrapper);
+        });
+        $('story-card-choice-confirm').disabled = minimum > 0;
+        dialog.showModal();
+        return true;
     }
 
     async function performSelectedCombatCard(targetKind, targetId = '', extraPayload = {}) {
@@ -3109,6 +3619,17 @@
         );
     }
 
+    function storyCardRarityDefinition(definition) {
+        const rarityId = String(definition?.rarity || 'special');
+        const fallback = rarityId === 'special'
+            ? { name: { zh: '特殊', en: 'Special' }, color: '#D4AC0D' }
+            : { name: { zh: rarityId, en: rarityId }, color: '#FFE65D' };
+        return {
+            id: rarityId,
+            ...(storyContent?.rarities?.[rarityId] || fallback),
+        };
+    }
+
     function openStoryStatusTerms(statusKey) {
         const key = String(statusKey || '');
         const definition = storyStatusDefinition(key);
@@ -3416,7 +3937,7 @@
         });
     }
 
-    function openStoryCardTerms(card) {
+    function openStoryCardTerms(card, options = {}) {
         const dialog = $('story-term-dialog');
         const content = $('story-term-content');
         if (!cardValues(card) || !dialog || !content) return;
@@ -3430,8 +3951,20 @@
         }
 
         const hasUpgrade = storyCardHasUpgrade(card);
+        const requestedStates = Array.isArray(options.allowedUpgradeStates)
+            ? options.allowedUpgradeStates.map(Boolean)
+            : null;
+        const availableStates = hasUpgrade
+            ? [...new Set(requestedStates?.length ? requestedStates : [false, true])]
+            : [false];
+        const initialState = availableStates.includes(Boolean(card.upgraded))
+            ? Boolean(card.upgraded)
+            : availableStates[0];
         const renderVersion = (upgraded) => {
-            const showUpgraded = hasUpgrade && Boolean(upgraded);
+            const requestedUpgrade = hasUpgrade && Boolean(upgraded);
+            const showUpgraded = availableStates.includes(requestedUpgrade)
+                ? requestedUpgrade
+                : availableStates[0];
             const displayCard = storyCardAtUpgradeState(card, showUpgraded);
             const values = cardValues(displayCard);
             content.className = 'modal-inner story-card-terms-modal';
@@ -3457,16 +3990,21 @@
             copy.className = 'story-card-terms-copy';
             const title = document.createElement('h2');
             title.textContent = `${showUpgraded ? '+' : ''}${localize(values.name)}`;
-            copy.append(title);
+            const rarityDefinition = storyCardRarityDefinition(values);
+            const rarity = document.createElement('span');
+            rarity.className = 'story-card-terms-rarity';
+            rarity.style.setProperty('--story-card-rarity', rarityDefinition.color);
+            rarity.textContent = `${t.codexRarity} · ${localize(rarityDefinition.name) || rarityDefinition.id}`;
+            copy.append(title, rarity);
 
-            if (hasUpgrade) {
+            if (availableStates.length > 1) {
                 const tabs = document.createElement('div');
                 tabs.className = 'story-card-version-tabs';
                 tabs.setAttribute('role', 'tablist');
                 [
                     { upgraded: false, label: t.beforeUpgrade },
                     { upgraded: true, label: t.afterUpgrade },
-                ].forEach((version) => {
+                ].filter((version) => availableStates.includes(version.upgraded)).forEach((version) => {
                     const active = version.upgraded === showUpgraded;
                     const tab = document.createElement('button');
                     tab.type = 'button';
@@ -3496,6 +4034,12 @@
             const effect = document.createElement('p');
             effect.className = 'story-card-terms-effect';
             appendStoryRichText(effect, localize(values.description));
+            const flavorText = localize(values.flavor).trim();
+            const flavor = flavorText ? document.createElement('p') : null;
+            if (flavor) {
+                flavor.className = 'story-card-terms-flavor';
+                flavor.textContent = flavorText;
+            }
             const termTitle = document.createElement('h3');
             termTitle.className = 'story-card-terms-heading';
             termTitle.textContent = t.cardTerms;
@@ -3510,7 +4054,9 @@
                 empty.textContent = t.noCardTerms;
                 terms.append(empty);
             }
-            copy.append(effect, termTitle, terms);
+            copy.append(effect);
+            if (flavor) copy.append(flavor);
+            copy.append(termTitle, terms);
             layout.append(preview, copy);
             content.append(close, layout);
             dialog.dataset.storyTermUpgrade = showUpgraded ? '1' : '0';
@@ -3518,8 +4064,749 @@
         };
 
         dialog.dataset.storyTermKey = termKey;
-        renderVersion(Boolean(card.upgraded));
+        if (availableStates.includes(Boolean(card.upgraded))) {
+            renderVersion(Boolean(card.upgraded));
+        } else {
+            renderVersion(initialState);
+        }
         if (!dialog.open) dialog.showModal();
+    }
+
+    function storyDiscoveryKey(discovery) {
+        return [
+            String(discovery?.content_type || '').toLowerCase(),
+            String(discovery?.content_id || ''),
+            String(discovery?.variant || 'base').toLowerCase(),
+        ].join(':');
+    }
+
+    function storyDiscoveryLabel(discovery) {
+        const contentType = String(discovery?.content_type || '');
+        const contentId = String(discovery?.content_id || '');
+        if (contentType === 'card') return localize(storyContent?.cards?.[contentId]?.name) || contentId;
+        if (contentType === 'enemy') return localize(storyContent?.enemies?.[contentId]?.name) || contentId;
+        if (contentType === 'relic') return localize(storyContent?.relics?.[contentId]?.name) || contentId;
+        if (contentType === 'blessing') {
+            return localize(storyContent?.blessings?.[contentId]?.name)
+                || localize(storyContent?.blessings?.[contentId]?.description)
+                || t.codexUnknownTalent;
+        }
+        if (contentType === 'term') {
+            const [kind, ...rest] = contentId.split(':');
+            const termId = rest.join(':');
+            const definition = storyCodexTermDefinition(kind, termId);
+            return localize(definition?.name) || termId;
+        }
+        return contentId;
+    }
+
+    function updateStoryCodexBadge() {
+        const badge = $('story-codex-badge');
+        if (!badge) return;
+        const unread = storyDiscoveries.filter((item) => !item.viewed_at).length;
+        badge.textContent = unread > 99 ? '99+' : String(unread);
+        badge.classList.toggle('hidden', unread <= 0);
+        badge.setAttribute('aria-hidden', unread > 0 ? 'false' : 'true');
+    }
+
+    function mergeStoryDiscoveries(items, options = {}) {
+        const incoming = Array.isArray(items) ? items : [];
+        if (!incoming.length) return [];
+        const byKey = new Map(storyDiscoveries.map((item) => [storyDiscoveryKey(item), item]));
+        const added = [];
+        incoming.forEach((raw) => {
+            if (!raw || typeof raw !== 'object') return;
+            const normalized = {
+                ...raw,
+                content_type: String(raw.content_type || '').toLowerCase(),
+                content_id: String(raw.content_id || ''),
+                variant: String(raw.variant || 'base').toLowerCase(),
+            };
+            if (!normalized.content_type || !normalized.content_id) return;
+            const key = storyDiscoveryKey(normalized);
+            const existing = byKey.get(key);
+            if (!existing) {
+                byKey.set(key, normalized);
+                added.push(normalized);
+                return;
+            }
+            byKey.set(key, {
+                ...existing,
+                ...normalized,
+                viewed_at: normalized.viewed_at || existing.viewed_at || null,
+            });
+        });
+        storyDiscoveries = [...byKey.values()].sort((left, right) => (
+            String(left.first_seen_at || '').localeCompare(String(right.first_seen_at || ''))
+            || storyDiscoveryKey(left).localeCompare(storyDiscoveryKey(right))
+        ));
+        updateStoryCodexBadge();
+        if ($('story-codex-dialog')?.open) renderStoryCodex();
+        if (options.notify && added.length) {
+            const message = added.length === 1
+                ? `${t.codexNew}：${storyDiscoveryLabel(added[0])}`
+                : t.codexNewCount(added.length);
+            showToast(message);
+        }
+        return added;
+    }
+
+    function ingestStoryDiscoveryPayload(payload, options = {}) {
+        if (!payload || typeof payload !== 'object') return;
+        const newItems = Array.isArray(payload.new_discoveries) ? payload.new_discoveries : [];
+        if (newItems.length) mergeStoryDiscoveries(newItems, { notify: Boolean(options.notify) });
+        mergeStoryDiscoveries(payload.discoveries, { notify: false });
+    }
+
+    function storyCodexDiscoveredIds(contentType) {
+        return new Set(
+            storyDiscoveries
+                .filter((item) => item.content_type === contentType)
+                .map((item) => item.content_id),
+        );
+    }
+
+    function storyCodexSearchMatches(id, definition, extra = '') {
+        const query = storyCodexSearch.trim().toLocaleLowerCase();
+        if (!query) return true;
+        const values = [id, extra];
+        ['name', 'description', 'flavor'].forEach((field) => {
+            const value = definition?.[field];
+            if (value && typeof value === 'object') values.push(...Object.values(value));
+            else values.push(value);
+        });
+        return values.some((value) => String(value || '').toLocaleLowerCase().includes(query));
+    }
+
+    function storyCodexCardRecords() {
+        const records = new Map();
+        storyDiscoveries.forEach((item) => {
+            if (item.content_type !== 'card' || !storyContent?.cards?.[item.content_id]) return;
+            if (!records.has(item.content_id)) {
+                records.set(item.content_id, {
+                    id: item.content_id,
+                    definition: storyContent.cards[item.content_id],
+                    variants: new Set(),
+                });
+            }
+            records.get(item.content_id).variants.add(item.variant === 'upgraded' ? 'upgraded' : 'base');
+        });
+        const rarityOrder = Object.keys(storyContent?.rarities || {});
+        const typeOrder = Object.keys(storyContent?.card_types || {});
+        return [...records.values()].sort((left, right) => {
+            const leftRarity = rarityOrder.indexOf(String(left.definition.rarity || 'common'));
+            const rightRarity = rarityOrder.indexOf(String(right.definition.rarity || 'common'));
+            const rarityCompare = (leftRarity < 0 ? 999 : leftRarity) - (rightRarity < 0 ? 999 : rightRarity);
+            if (rarityCompare) return rarityCompare;
+            const typeCompare = typeOrder.indexOf(left.definition.type) - typeOrder.indexOf(right.definition.type);
+            if (typeCompare) return typeCompare;
+            return localize(left.definition.name).localeCompare(localize(right.definition.name), lang);
+        });
+    }
+
+    function storyCodexFilterActions(onAll, onClear) {
+        const actions = document.createElement('div');
+        actions.className = 'story-codex-filter-actions';
+        [
+            { label: t.codexAll, action: onAll },
+            { label: t.codexClear, action: onClear },
+        ].forEach((config) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'story-codex-filter-action';
+            button.textContent = config.label;
+            button.addEventListener('click', config.action);
+            actions.append(button);
+        });
+        return actions;
+    }
+
+    function storyCodexFilterOption(key, definition, count, selectedSet, onChange, options = {}) {
+        const label = document.createElement('label');
+        label.className = `story-codex-filter-option${selectedSet.has(key) ? ' is-active' : ''}`;
+        if (options.color) label.style.setProperty('--story-filter-color', options.color);
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = selectedSet.has(key);
+        const name = document.createElement('span');
+        name.textContent = localize(definition?.name) || String(options.fallback || key);
+        const total = document.createElement('small');
+        total.textContent = String(count);
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) selectedSet.add(key);
+            else selectedSet.delete(key);
+            onChange();
+        });
+        label.append(checkbox, name, total);
+        return label;
+    }
+
+    function ensureStoryCodexCardFilters(records) {
+        if (storyCodexCardFiltersReady) return;
+        Object.keys(storyContent?.rarities || {}).forEach((key) => storyCodexRarities.add(key));
+        Object.keys(storyContent?.card_types || {}).forEach((key) => storyCodexTypes.add(key));
+        records.forEach((record) => {
+            storyCodexRarities.add(String(record.definition.rarity || 'common'));
+            storyCodexTypes.add(String(record.definition.type || ''));
+        });
+        storyCodexCardFiltersReady = true;
+    }
+
+    function renderStoryCodexCards(sidebar, detail) {
+        const records = storyCodexCardRecords();
+        ensureStoryCodexCardFilters(records);
+        const rarityCounts = new Map();
+        const typeCounts = new Map();
+        records.forEach((record) => {
+            const rarity = String(record.definition.rarity || 'common');
+            const type = String(record.definition.type || '');
+            rarityCounts.set(rarity, (rarityCounts.get(rarity) || 0) + 1);
+            typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+        });
+
+        const rarityTitle = document.createElement('strong');
+        rarityTitle.className = 'story-codex-filter-title';
+        rarityTitle.textContent = t.codexRarity;
+        sidebar.append(rarityTitle, storyCodexFilterActions(
+            () => {
+                rarityCounts.forEach((_, key) => storyCodexRarities.add(key));
+                renderStoryCodex();
+            },
+            () => {
+                storyCodexRarities.clear();
+                renderStoryCodex();
+            },
+        ));
+        const rarityOptions = document.createElement('div');
+        rarityOptions.className = 'story-codex-filter-options';
+        rarityCounts.forEach((count, key) => {
+            const definition = storyContent?.rarities?.[key] || {
+                name: { zh: '特殊', en: 'Special' },
+                color: '#D4AC0D',
+            };
+            rarityOptions.append(storyCodexFilterOption(
+                key,
+                definition,
+                count,
+                storyCodexRarities,
+                renderStoryCodex,
+                { color: definition.color },
+            ));
+        });
+        sidebar.append(rarityOptions);
+
+        const shell = document.createElement('div');
+        shell.className = 'story-codex-card-shell';
+        const main = document.createElement('div');
+        main.className = 'story-codex-card-main';
+        const resultCount = document.createElement('div');
+        resultCount.className = 'story-codex-result-count';
+        const grid = document.createElement('div');
+        grid.className = 'story-codex-card-grid';
+        const typeSidebar = document.createElement('aside');
+        typeSidebar.className = 'story-codex-type-filter';
+        const typeTitle = document.createElement('strong');
+        typeTitle.className = 'story-codex-filter-title';
+        typeTitle.textContent = t.codexType;
+        typeSidebar.append(typeTitle, storyCodexFilterActions(
+            () => {
+                typeCounts.forEach((_, key) => storyCodexTypes.add(key));
+                renderStoryCodex();
+            },
+            () => {
+                storyCodexTypes.clear();
+                renderStoryCodex();
+            },
+        ));
+        const typeOptions = document.createElement('div');
+        typeOptions.className = 'story-codex-filter-options';
+        typeCounts.forEach((count, key) => {
+            const definition = storyContent?.card_types?.[key] || { name: { en: key } };
+            typeOptions.append(storyCodexFilterOption(
+                key,
+                definition,
+                count,
+                storyCodexTypes,
+                renderStoryCodex,
+                { color: definition.color || `var(--${key})` },
+            ));
+        });
+        typeSidebar.append(typeOptions);
+
+        const visible = records.filter((record) => (
+            storyCodexRarities.has(String(record.definition.rarity || 'common'))
+            && storyCodexTypes.has(String(record.definition.type || ''))
+            && storyCodexSearchMatches(record.id, record.definition)
+        ));
+        resultCount.textContent = t.codexResults(visible.length);
+        visible.forEach((record) => {
+            const upgraded = !record.variants.has('base') && record.variants.has('upgraded');
+            const card = {
+                instance_id: `codex:${record.id}:${upgraded ? 'upgraded' : 'base'}`,
+                def_id: record.id,
+                upgraded,
+            };
+            const allowedUpgradeStates = [
+                ...(record.variants.has('base') ? [false] : []),
+                ...(record.variants.has('upgraded') ? [true] : []),
+            ];
+            const cardElement = createStoryCard(card, {
+                onClick: () => openStoryCardTerms(card, { allowedUpgradeStates }),
+            });
+            cardElement.classList.add('story-codex-card-tile');
+            storyCardTermOptions.set(cardElement, { allowedUpgradeStates });
+            grid.append(cardElement);
+        });
+        if (!visible.length) grid.append(storyCodexEmpty());
+        main.append(resultCount, grid);
+        shell.append(main, typeSidebar);
+        detail.append(shell);
+    }
+
+    function storyCodexEnemyRecords() {
+        const records = new Map();
+        storyDiscoveries.forEach((item) => {
+            if (item.content_type !== 'enemy' || !storyContent?.enemies?.[item.content_id]) return;
+            if (!records.has(item.content_id)) {
+                records.set(item.content_id, {
+                    id: item.content_id,
+                    definition: storyContent.enemies[item.content_id],
+                    intents: new Set(),
+                });
+            }
+            if (item.variant.startsWith('intent:')) {
+                const index = Number(item.variant.slice(7));
+                if (Number.isInteger(index) && index >= 0) records.get(item.content_id).intents.add(index);
+            }
+        });
+        return [...records.values()].sort((left, right) => (
+            localize(left.definition.name).localeCompare(localize(right.definition.name), lang)
+        ));
+    }
+
+    function storyCodexIntentFromEffect(effect) {
+        const type = String(effect?.type || '');
+        const amount = Math.max(0, Number(effect?.amount) || 0);
+        const hits = Math.max(1, Number(effect?.hits) || 1);
+        if (type === 'damage') return { kind: 'attack', amount, hits, target: 'player' };
+        if (type === 'self_damage') return { kind: 'self_damage', amount, hits, target: 'self' };
+        if (type === 'gain_power') return { kind: 'buff', stat: 'power', amount, target: 'self' };
+        if (type === 'gain_shield') return { kind: 'defend', stat: 'shield', amount, target: 'self' };
+        if (type === 'gain_status') return { kind: 'status', status: effect.status, amount, target: 'self' };
+        if (type === 'clear_status') return { kind: 'clear_status', status: effect.status, target: 'self' };
+        if (['gain_charged', 'gain_charging', 'gain_frenzy', 'gain_hidden', 'gain_sturdy'].includes(type)) {
+            const status = {
+                gain_charged: 'charged', gain_charging: 'charging', gain_frenzy: 'frenzy',
+                gain_hidden: 'hidden', gain_sturdy: 'sturdy',
+            }[type];
+            return { kind: 'status', status, amount, target: 'self' };
+        }
+        if (type === 'player_status' || type === 'delayed_player_status') {
+            return {
+                kind: 'status', status: effect.status, amount, target: 'player',
+                delayed: type === 'delayed_player_status',
+            };
+        }
+        if (type === 'self_heal') return { kind: 'heal', amount, target: 'self' };
+        if (type === 'heal_to_full') return { kind: 'heal', full: true, target: 'self' };
+        if (type === 'allies_heal') return { kind: 'heal', amount, target: 'all_enemies' };
+        if (type === 'allies_power') return { kind: 'buff', stat: 'power', amount, target: 'all_enemies' };
+        if (type === 'allies_shield' || type === 'lowest_ally_shield' || type === 'adjacent_shield') {
+            return { kind: 'defend', stat: 'shield', amount, target: type === 'allies_shield' ? 'all_enemies' : type };
+        }
+        if (type.startsWith('summon')) {
+            const enemyId = String(effect.enemy_id || (type === 'summon_wreckage' ? 'wreckage' : ''));
+            return {
+                kind: 'summon', enemy_id: enemyId,
+                enemy_name: storyContent?.enemies?.[enemyId]?.name,
+                amount: amount || 1, target: 'self',
+            };
+        }
+        if (type === 'add_draw_card' || type === 'delayed_hand_charge') {
+            return { kind: 'card', effect_type: type, amount: amount || 1, target: 'player' };
+        }
+        if (type === 'consume_allies') return { kind: 'consume', target: 'all_enemies' };
+        if (type === 'stun_if_player_shield') {
+            return { kind: 'status', status: 'stun', amount: 1, target: 'player', conditional: 'shield' };
+        }
+        if (type === 'consume_pearls_damage' || type === 'lose_max_health_percent') {
+            return { kind: 'special', effect_type: type, amount, target: type === 'lose_max_health_percent' ? 'self' : 'player' };
+        }
+        if (type === 'self_kill') return { kind: 'self_damage', target: 'self', lethal: true };
+        return { kind: 'special', effect_type: type, amount };
+    }
+
+    function renderStoryCodexEnemyDetail(record, detail) {
+        const definition = record?.definition;
+        if (!definition) {
+            detail.append(storyCodexEmpty());
+            return;
+        }
+        const layout = document.createElement('article');
+        layout.className = 'story-codex-enemy-detail';
+        const portrait = document.createElement('div');
+        portrait.className = 'story-codex-enemy-portrait';
+        if (definition.image_url) {
+            const image = document.createElement('img');
+            image.src = definition.image_url;
+            image.alt = '';
+            portrait.append(image);
+        } else {
+            portrait.textContent = '?';
+        }
+        const copy = document.createElement('div');
+        copy.className = 'story-codex-enemy-copy';
+        const name = document.createElement('h3');
+        name.textContent = localize(definition.name) || record.id;
+        const health = document.createElement('p');
+        const normalHealth = Number(definition.max_health || 0);
+        const lunaticHealth = Number(definition.lunatic_max_health || normalHealth);
+        health.className = 'story-codex-enemy-health';
+        health.textContent = `${t.codexHealth}：${normalHealth}${lunaticHealth !== normalHealth ? ` / ${lunaticHealth}` : ''}H`;
+        copy.append(name, health);
+        if ((definition.traits || []).length) {
+            const traits = document.createElement('div');
+            traits.className = 'story-codex-enemy-traits';
+            definition.traits.forEach((traitId) => {
+                const traitDefinition = storyTraitDefinition(traitId);
+                if (!traitDefinition) return;
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'story-codex-trait';
+                const icon = document.createElement('img');
+                icon.src = storyTraitIconUrl(traitId);
+                icon.alt = '';
+                const label = document.createElement('span');
+                label.textContent = localize(traitDefinition.name);
+                button.append(icon, label);
+                attachStoryTraitTermAccess(button, traitId);
+                button.addEventListener('click', () => openStoryTraitTerms(traitId));
+                traits.append(button);
+            });
+            copy.append(traits);
+        }
+        layout.append(portrait, copy);
+
+        const intents = document.createElement('section');
+        intents.className = 'story-codex-intents';
+        const intentTitle = document.createElement('h4');
+        intentTitle.textContent = t.codexObservedIntents(record.intents.size);
+        intents.append(intentTitle);
+        [...record.intents].sort((a, b) => a - b).forEach((index) => {
+            const move = definition.moves?.[index];
+            if (!move) return;
+            const row = document.createElement('div');
+            row.className = 'story-codex-intent-row';
+            const moveName = document.createElement('strong');
+            moveName.textContent = localize(move.name) || `${t.intent} ${index + 1}`;
+            const entries = document.createElement('div');
+            entries.className = 'story-codex-intent-entries';
+            (move.effects || []).forEach((effect) => {
+                entries.append(createStoryIntentEntry(storyCodexIntentFromEffect(effect)));
+            });
+            row.append(moveName, entries);
+            intents.append(row);
+        });
+        if (!record.intents.size) intents.append(storyCodexEmpty());
+        detail.append(layout, intents);
+    }
+
+    function renderStoryCodexEnemies(sidebar, detail) {
+        const records = storyCodexEnemyRecords().filter((record) => (
+            storyCodexSearchMatches(record.id, record.definition)
+        ));
+        const list = document.createElement('div');
+        list.className = 'story-codex-entry-list';
+        records.forEach((record) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `story-codex-entry-row${storyCodexSelectedId === record.id ? ' is-active' : ''}`;
+            if (record.definition.image_url) {
+                const image = document.createElement('img');
+                image.src = record.definition.image_url;
+                image.alt = '';
+                button.append(image);
+            }
+            const copy = document.createElement('span');
+            const name = document.createElement('strong');
+            name.textContent = localize(record.definition.name) || record.id;
+            const meta = document.createElement('small');
+            meta.textContent = t.codexObservedIntents(record.intents.size);
+            copy.append(name, meta);
+            button.append(copy);
+            button.addEventListener('click', () => {
+                storyCodexSelectedId = record.id;
+                renderStoryCodex();
+            });
+            list.append(button);
+        });
+        sidebar.append(list);
+        if (!records.length) {
+            detail.append(storyCodexEmpty());
+            return;
+        }
+        if (!records.some((record) => record.id === storyCodexSelectedId)) storyCodexSelectedId = records[0].id;
+        renderStoryCodexEnemyDetail(records.find((record) => record.id === storyCodexSelectedId), detail);
+    }
+
+    function storyCodexTalentRecords(kind) {
+        const contentType = kind === 'blessing' ? 'blessing' : 'relic';
+        const catalog = contentType === 'blessing' ? storyContent?.blessings : storyContent?.relics;
+        return [...storyCodexDiscoveredIds(contentType)]
+            .map((id) => ({ id, kind: contentType, definition: catalog?.[id] }))
+            .filter((item) => item.definition && storyCodexSearchMatches(item.id, item.definition))
+            .sort((left, right) => (
+                (Number(left.definition.order) || 999) - (Number(right.definition.order) || 999)
+                || (localize(left.definition.name) || localize(left.definition.description))
+                    .localeCompare(localize(right.definition.name) || localize(right.definition.description), lang)
+            ));
+    }
+
+    function storyCodexSegmented(options, current, onChange) {
+        const controls = document.createElement('div');
+        controls.className = 'story-codex-segmented';
+        options.forEach((option) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = option.id === current ? 'is-active' : '';
+            button.textContent = option.label;
+            button.addEventListener('click', () => onChange(option.id));
+            controls.append(button);
+        });
+        return controls;
+    }
+
+    function renderStoryCodexTalentDetail(record, detail) {
+        if (!record?.definition) {
+            detail.append(storyCodexEmpty());
+            return;
+        }
+        if (record.kind === 'relic') {
+            const wrapper = document.createElement('article');
+            wrapper.className = 'story-codex-talent-detail';
+            const marker = document.createElement('span');
+            marker.className = 'story-codex-talent-marker';
+            marker.style.setProperty('--story-relic-color', storyRelicRarityColor(record.definition));
+            marker.textContent = '★';
+            const list = document.createElement('div');
+            list.className = 'story-card-terms-list';
+            appendStoryTermRow(list, {
+                kind: 'relic', id: record.id, definition: record.definition,
+            });
+            wrapper.append(marker, list);
+            detail.append(wrapper);
+            return;
+        }
+        const wrapper = document.createElement('article');
+        wrapper.className = 'story-codex-blessing-detail';
+        const mark = document.createElement('span');
+        mark.textContent = '✦';
+        const copy = document.createElement('div');
+        const nameText = localize(record.definition.name).trim();
+        const description = document.createElement('p');
+        appendStoryRichText(description, localize(record.definition.description));
+        if (nameText) {
+            const title = document.createElement('h3');
+            title.textContent = nameText;
+            copy.append(title);
+        }
+        copy.append(description);
+        wrapper.append(mark, copy);
+        detail.append(wrapper);
+    }
+
+    function renderStoryCodexTalents(sidebar, detail) {
+        sidebar.append(storyCodexSegmented([
+            { id: 'relic', label: t.codexRelics },
+            { id: 'blessing', label: t.codexBlessings },
+        ], storyCodexTalentKind, (kind) => {
+            storyCodexTalentKind = kind;
+            storyCodexSelectedId = '';
+            renderStoryCodex();
+        }));
+        const records = storyCodexTalentRecords(storyCodexTalentKind);
+        const list = document.createElement('div');
+        list.className = 'story-codex-entry-list';
+        records.forEach((record) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `story-codex-entry-row is-text${storyCodexSelectedId === record.id ? ' is-active' : ''}`;
+            const name = document.createElement('strong');
+            name.textContent = localize(record.definition.name)
+                || localize(record.definition.description)
+                || t.codexUnknownTalent;
+            button.append(name);
+            button.addEventListener('click', () => {
+                storyCodexSelectedId = record.id;
+                renderStoryCodex();
+            });
+            list.append(button);
+        });
+        sidebar.append(list);
+        if (!records.length) {
+            detail.append(storyCodexEmpty());
+            return;
+        }
+        if (!records.some((record) => record.id === storyCodexSelectedId)) storyCodexSelectedId = records[0].id;
+        renderStoryCodexTalentDetail(records.find((record) => record.id === storyCodexSelectedId), detail);
+    }
+
+    function storyCodexTermDefinition(kind, id) {
+        if (kind === 'status') return storyContent?.statuses?.[id] || null;
+        if (kind === 'tag') return storyContent?.tags?.[id] || null;
+        if (kind === 'trait') return storyContent?.traits?.[id] || null;
+        if (kind === 'resource') return STORY_RESOURCE_TERMS[id] || null;
+        return null;
+    }
+
+    function storyCodexTermRecords(kind) {
+        const prefix = `${kind}:`;
+        return storyDiscoveries
+            .filter((item) => item.content_type === 'term' && item.content_id.startsWith(prefix))
+            .map((item) => {
+                const id = item.content_id.slice(prefix.length);
+                return { id, kind, definition: storyCodexTermDefinition(kind, id) };
+            })
+            .filter((item) => item.definition && storyCodexSearchMatches(item.id, item.definition))
+            .sort((left, right) => (
+                localize(left.definition.name).localeCompare(localize(right.definition.name), lang)
+            ));
+    }
+
+    function renderStoryCodexTermDetail(record, detail) {
+        if (!record?.definition) {
+            detail.append(storyCodexEmpty());
+            return;
+        }
+        const list = document.createElement('div');
+        list.className = 'story-card-terms-list story-codex-term-detail';
+        appendStoryTermRow(list, record);
+        detail.append(list);
+    }
+
+    function renderStoryCodexTerms(sidebar, detail) {
+        sidebar.append(storyCodexSegmented([
+            { id: 'status', label: t.codexStatuses },
+            { id: 'tag', label: t.codexTags },
+            { id: 'trait', label: t.codexTraits },
+            { id: 'resource', label: t.codexResources },
+        ], storyCodexTermKind, (kind) => {
+            storyCodexTermKind = kind;
+            storyCodexSelectedId = '';
+            renderStoryCodex();
+        }));
+        const records = storyCodexTermRecords(storyCodexTermKind);
+        const list = document.createElement('div');
+        list.className = 'story-codex-entry-list';
+        records.forEach((record) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `story-codex-entry-row is-term${storyCodexSelectedId === record.id ? ' is-active' : ''}`;
+            if (record.kind === 'status' || record.kind === 'trait') {
+                const icon = document.createElement('img');
+                icon.src = record.kind === 'status'
+                    ? storyStatusIconUrl(record.id)
+                    : storyTraitIconUrl(record.id);
+                icon.alt = '';
+                button.append(icon);
+            } else if (record.kind === 'resource') {
+                button.append(createStoryInlineIcon(record.id));
+            }
+            const name = document.createElement('strong');
+            name.textContent = localize(record.definition.name) || record.id;
+            button.append(name);
+            button.addEventListener('click', () => {
+                storyCodexSelectedId = record.id;
+                renderStoryCodex();
+            });
+            list.append(button);
+        });
+        sidebar.append(list);
+        if (!records.length) {
+            detail.append(storyCodexEmpty());
+            return;
+        }
+        if (!records.some((record) => record.id === storyCodexSelectedId)) storyCodexSelectedId = records[0].id;
+        renderStoryCodexTermDetail(records.find((record) => record.id === storyCodexSelectedId), detail);
+    }
+
+    function storyCodexEmpty() {
+        const empty = document.createElement('p');
+        empty.className = 'story-codex-empty';
+        empty.textContent = t.codexEmpty;
+        return empty;
+    }
+
+    function storyCodexProgress(mode) {
+        if (mode === 'cards') {
+            return [storyCodexDiscoveredIds('card').size, Object.keys(storyContent?.cards || {}).length];
+        }
+        if (mode === 'enemies') {
+            return [storyCodexDiscoveredIds('enemy').size, Object.keys(storyContent?.enemies || {}).length];
+        }
+        if (mode === 'talents') {
+            const found = storyCodexDiscoveredIds('relic').size + storyCodexDiscoveredIds('blessing').size;
+            const total = Object.keys(storyContent?.relics || {}).length + Object.keys(storyContent?.blessings || {}).length;
+            return [found, total];
+        }
+        const found = storyCodexDiscoveredIds('term').size;
+        const total = Object.keys(storyContent?.statuses || {}).length
+            + Object.keys(storyContent?.tags || {}).length
+            + Object.keys(storyContent?.traits || {}).length
+            + Object.keys(STORY_RESOURCE_TERMS).length;
+        return [found, total];
+    }
+
+    function renderStoryCodex() {
+        const sidebar = $('story-codex-sidebar');
+        const detail = $('story-codex-detail');
+        if (!sidebar || !detail || !storyContent) return;
+        sidebar.replaceChildren();
+        detail.replaceChildren();
+        document.querySelectorAll('[data-story-codex-mode]').forEach((tab) => {
+            const active = tab.dataset.storyCodexMode === storyCodexMode;
+            tab.classList.toggle('is-active', active);
+            tab.setAttribute('aria-selected', active ? 'true' : 'false');
+            tab.tabIndex = active ? 0 : -1;
+        });
+        const [found, total] = storyCodexProgress(storyCodexMode);
+        setText('story-codex-progress', t.codexDiscovered(found, total));
+        if (storyCodexMode === 'cards') renderStoryCodexCards(sidebar, detail);
+        else if (storyCodexMode === 'enemies') renderStoryCodexEnemies(sidebar, detail);
+        else if (storyCodexMode === 'talents') renderStoryCodexTalents(sidebar, detail);
+        else renderStoryCodexTerms(sidebar, detail);
+        scheduleVisibleStoryCardEffectFits();
+    }
+
+    async function markStoryCodexViewed() {
+        const unread = storyDiscoveries.some((item) => !item.viewed_at);
+        if (!unread) return;
+        const viewedAt = new Date().toISOString();
+        storyDiscoveries = storyDiscoveries.map((item) => (
+            item.viewed_at ? item : { ...item, viewed_at: viewedAt }
+        ));
+        updateStoryCodexBadge();
+        try {
+            await requestJson('/api/story/discoveries/read', {
+                method: 'POST',
+                body: '{}',
+            });
+        } catch (_) {
+            // Reading the compendium must not interrupt the active journey.
+        }
+    }
+
+    function openStoryCodex() {
+        const dialog = $('story-codex-dialog');
+        if (!dialog || !storyContent) return;
+        renderStoryCodex();
+        if (!dialog.open) dialog.showModal();
+        markStoryCodexViewed();
+    }
+
+    function closeStoryCodex() {
+        const dialog = $('story-codex-dialog');
+        if (dialog?.open) dialog.close();
     }
 
     function renderBlessing(state) {
@@ -3529,7 +4816,12 @@
         const container = $('story-blessing-options');
         container?.replaceChildren();
         container?.classList.remove('story-card-choice-grid');
-        const blessings = Object.entries(storyContent?.blessings || {}).sort(
+        const offered = new Set(
+            Array.isArray(state.blessing_options) ? state.blessing_options : [],
+        );
+        const blessings = Object.entries(storyContent?.blessings || {})
+            .filter(([id]) => !offered.size || offered.has(id))
+            .sort(
             ([firstId, first], [secondId, second]) => (
                 (Number(first.order) || 999) - (Number(second.order) || 999)
                 || firstId.localeCompare(secondId)
@@ -3587,6 +4879,82 @@
             container?.append(button);
         });
         showView('story-blessing');
+    }
+
+    function appendStoryChoiceHeading(container, text) {
+        const heading = document.createElement('h3');
+        heading.className = 'story-choice-section-title';
+        heading.textContent = text;
+        container?.append(heading);
+    }
+
+    function renderJourneySetup(state) {
+        const room = state.room || {};
+        const container = $('story-room-options');
+        const tabs = $('story-room-tabs');
+        const footer = $('story-room-footer');
+        container?.replaceChildren();
+        tabs?.replaceChildren();
+        tabs?.classList.add('hidden');
+        footer?.replaceChildren();
+        setStoryRoomGridMode(container);
+        setText('story-room-kicker', lang === 'zh' ? '新旅程' : 'New Journey');
+        setText('story-room-title', lang === 'zh' ? '选择起始区域与难度' : 'Choose a region and difficulty');
+        setText(
+            'story-room-copy',
+            lang === 'zh'
+                ? '确认后生成路线，并从随机3项赐福中选择1项。'
+                : 'Confirm to generate the route, then choose 1 of 3 random blessings.',
+        );
+
+        let selectedBiome = String(room.biomes?.[0] || 'garden');
+        let selectedDifficulty = String(room.difficulties?.[0] || 'normal');
+        const selectionButtons = [];
+        const refreshSelections = () => {
+            selectionButtons.forEach(({ button, kind, id }) => {
+                button.classList.toggle(
+                    'is-selected',
+                    kind === 'biome' ? id === selectedBiome : id === selectedDifficulty,
+                );
+            });
+        };
+
+        appendStoryChoiceHeading(container, lang === 'zh' ? '区域' : 'Region');
+        (room.biomes || []).forEach((biomeId) => {
+            const definition = storyContent?.biomes?.[biomeId] || {};
+            const button = choiceButton(
+                localize(definition.name) || String(biomeId),
+                () => {
+                    selectedBiome = String(biomeId);
+                    refreshSelections();
+                },
+            );
+            selectionButtons.push({ button, kind: 'biome', id: String(biomeId) });
+            container?.append(button);
+        });
+        appendStoryChoiceHeading(container, lang === 'zh' ? '难度' : 'Difficulty');
+        (room.difficulties || []).forEach((difficultyId) => {
+            const definition = storyContent?.difficulties?.[difficultyId] || {};
+            const button = choiceButton(
+                localize(definition.name) || String(difficultyId),
+                () => {
+                    selectedDifficulty = String(difficultyId);
+                    refreshSelections();
+                },
+                { description: localize(definition.description) },
+            );
+            selectionButtons.push({ button, kind: 'difficulty', id: String(difficultyId) });
+            container?.append(button);
+        });
+        refreshSelections();
+        footer?.append(storyRoomFooterButton(
+            lang === 'zh' ? '开始旅程' : 'Start Journey',
+            () => storyAction('start_journey', {
+                biome: selectedBiome,
+                difficulty: selectedDifficulty,
+            }),
+        ));
+        showView('story-room');
     }
 
     function renderMapView(state) {
@@ -3719,36 +5087,79 @@
         });
     }
 
+    function createStoryEffectChip(item, amount) {
+        const chip = document.createElement('span');
+        chip.className = `story-effect story-effect-${item.key}`;
+        chip.dataset.storyEffectKey = String(item.key || '');
+        const definition = storyStatusDefinition(item.key);
+        const label = definition ? localize(definition.name) : (item.label || storyIntentStatusLabel(item.key));
+        chip.title = `${label}: ${amount}`;
+        chip.setAttribute('aria-label', chip.title);
+        const icon = document.createElement('img');
+        icon.src = storyStatusIconUrl(item.key);
+        icon.alt = '';
+        icon.setAttribute('aria-hidden', 'true');
+        const value = document.createElement('strong');
+        value.textContent = String(amount);
+        chip.append(icon, value);
+        attachStoryStatusTermAccess(chip, item.key);
+        return chip;
+    }
+
+    function updateStoryEffectValue(container, key, rawAmount) {
+        if (!container || !key) return;
+        const amount = Number(rawAmount);
+        if (!Number.isFinite(amount)) return;
+        const chip = [...container.querySelectorAll('[data-story-effect-key]')]
+            .find((item) => item.dataset.storyEffectKey === key);
+        if (amount === 0) {
+            if (chip?.dataset.storyEffectStatic === 'true') chip.querySelector('strong')?.remove();
+            else chip?.remove();
+            return;
+        }
+        if (!chip) {
+            container.append(createStoryEffectChip({ key, label: storyIntentStatusLabel(key) }, amount));
+            return;
+        }
+        let value = chip.querySelector('strong');
+        if (!value) {
+            value = document.createElement('strong');
+            chip.append(value);
+        }
+        value.textContent = String(amount);
+        const definition = storyStatusDefinition(key);
+        const label = definition ? localize(definition.name) : storyIntentStatusLabel(key);
+        chip.title = `${label}: ${amount}`;
+        chip.setAttribute('aria-label', chip.title);
+    }
+
     function renderEffectsInto(container, values) {
         if (!container) return;
         container.replaceChildren();
-        values.filter((item) => Number(item.value) > 0).forEach((item) => {
-            const chip = document.createElement('span');
-            chip.className = `story-effect story-effect-${item.key}`;
-            const definition = storyStatusDefinition(item.key);
-            const label = definition ? localize(definition.name) : item.label;
-            chip.title = `${label}: ${item.value}`;
-            chip.setAttribute('aria-label', chip.title);
-            const icon = document.createElement('img');
-            icon.src = storyStatusIconUrl(item.key);
-            icon.alt = '';
-            icon.setAttribute('aria-hidden', 'true');
-            const value = document.createElement('strong');
-            value.textContent = String(item.value);
-            chip.append(icon, value);
-            attachStoryStatusTermAccess(chip, item.key);
-            container.append(chip);
+        values.forEach((item) => {
+            const amount = Number(item.value);
+            if (!Number.isFinite(amount) || amount === 0) return;
+            container.append(createStoryEffectChip(item, amount));
         });
     }
 
     function renderTraitsInto(container, traitIds, actor = null) {
         if (!container) return;
+        const valueKeys = {
+            sturdy: 'sturdy', shelter: 'shelter', hidden: 'hidden',
+            turn_shield: 'turn_shield', charging_up: 'charging',
+            charged: 'charged', frenzied: 'frenzy', vampire: 'vampire',
+            limb_survival: 'regenerations',
+        };
         (traitIds || []).forEach((traitId) => {
             const key = String(traitId || '');
             const definition = storyTraitDefinition(key);
             if (!definition || (key === 'nourish' && actor?.nourished)) return;
             const chip = document.createElement('span');
             chip.className = `story-effect story-trait story-trait-${key.replaceAll('_', '-')}`;
+            const effectKey = valueKeys[key];
+            if (effectKey) chip.dataset.storyEffectKey = effectKey;
+            chip.dataset.storyEffectStatic = 'true';
             const name = localize(definition.name);
             const description = localize(definition.description);
             chip.title = [name, description].filter(Boolean).join('\n');
@@ -3758,6 +5169,12 @@
             icon.alt = '';
             icon.setAttribute('aria-hidden', 'true');
             chip.append(icon);
+            const value = Math.max(0, Number(actor?.[effectKey]) || 0);
+            if (value > 0) {
+                const counter = document.createElement('strong');
+                counter.textContent = String(value);
+                chip.append(counter);
+            }
             attachStoryTraitTermAccess(chip, key);
             container.append(chip);
         });
@@ -3777,6 +5194,9 @@
     }
 
     function storyIntentStatusLabel(status) {
+        const key = String(status || '');
+        const definition = storyStatusDefinition(key);
+        if (definition) return localize(definition.name) || key;
         return {
             power: t.power,
             shield: t.shield,
@@ -3787,7 +5207,15 @@
             stun: lang === 'zh' ? '眩晕' : 'Stun',
             reflection: lang === 'zh' ? '反射' : 'Reflection',
             wither: lang === 'zh' ? '凋萎' : 'Wither',
-        }[String(status || '')] || String(status || '');
+            charged: lang === 'zh' ? '带电' : 'Charged',
+            charging: lang === 'zh' ? '蓄力' : 'Charging Up',
+            frenzy: lang === 'zh' ? '狂暴' : 'Frenzied',
+            hidden: lang === 'zh' ? '隐形' : 'Hidden',
+            sturdy: lang === 'zh' ? '坚固' : 'Sturdy',
+            blind: lang === 'zh' ? '失明' : 'Blind',
+            poison: lang === 'zh' ? '中毒' : 'Poison',
+            entangle: lang === 'zh' ? '缠绕' : 'Entangle',
+        }[key] || key;
     }
 
     function createStoryIntentEntry(entry) {
@@ -3801,25 +5229,46 @@
         let iconUrl = '';
         if (kind === 'attack' || kind === 'self_damage') {
             iconUrl = STORY_INLINE_ICONS.D;
-            label = `${amount}${hits > 1 ? `×${hits}` : ''}`;
+            label = entry?.lethal
+                ? (lang === 'zh' ? '死亡' : 'Defeat self')
+                : `${amount}${hits > 1 ? `×${hits}` : ''}`;
             if (kind === 'self_damage') label = `${t.self} ${label}`;
         } else if (kind === 'heal') {
             iconUrl = STORY_INLINE_ICONS.H;
-            label = `+${amount}`;
+            label = entry?.full ? (lang === 'zh' ? '回满' : 'Full') : `+${amount}`;
         } else if (kind === 'defend') {
             label = `${storyIntentStatusLabel(entry.stat || 'shield')} +${amount}`;
         } else if (kind === 'buff') {
             label = `${storyIntentStatusLabel(entry.stat || 'power')} +${amount}`;
         } else if (kind === 'status') {
             label = `${storyIntentStatusLabel(entry.status)} +${amount}`;
+            if (entry?.delayed) label = lang === 'zh' ? `下回合 ${label}` : `Next turn ${label}`;
+            if (entry?.conditional === 'shield') {
+                label = lang === 'zh' ? `若仍有护盾：${label}` : `If Shield remains: ${label}`;
+            }
+        } else if (kind === 'clear_status') {
+            const statusLabel = storyIntentStatusLabel(entry.status);
+            label = lang === 'zh' ? `清除${statusLabel}` : `Clear ${statusLabel}`;
         } else if (kind === 'summon') {
-            label = t.summon;
+            const summonedName = localize(entry?.enemy_name) || String(entry?.enemy_id || '');
+            label = [t.summon, amount > 1 ? `${amount}×` : '', summonedName]
+                .filter(Boolean)
+                .join(' ');
         } else if (kind === 'card') {
-            label = t.addCard;
+            label = entry?.effect_type === 'delayed_hand_charge'
+                ? (lang === 'zh' ? `下回合手牌电荷 +${amount}` : `Next turn hand Charge +${amount}`)
+                : t.addCard;
         } else if (kind === 'consume') {
             label = t.consume;
         } else {
-            label = String(entry?.effect_type || entry?.summary || '--');
+            const effectType = String(entry?.effect_type || '');
+            if (effectType === 'lose_max_health_percent') {
+                label = lang === 'zh' ? `自身H上限-${amount}%` : `Own max H -${amount}%`;
+            } else if (effectType === 'consume_pearls_damage') {
+                label = lang === 'zh' ? `每颗珍珠造成${amount}D` : `${amount}D per Pearl`;
+            } else {
+                label = String(entry?.summary || effectType || '--');
+            }
         }
         if (entry?.target === 'all_enemies') label = `${t.allies} · ${label}`;
         if (iconUrl) {
@@ -3889,13 +5338,21 @@
             { key: 'shield', label: t.shield, value: enemy.shield },
             { key: 'power', label: t.power, value: enemy.power },
             { key: 'temporary_power', label: t.power, value: enemy.temporary_power },
+            { key: 'endurance', label: '耐力', value: enemy.endurance },
             { key: 'weak', label: t.weak, value: enemy.weak },
             { key: 'vulnerable', label: t.vulnerable, value: enemy.vulnerable },
             { key: 'fragile', label: '脆弱', value: enemy.fragile },
+            { key: 'evade', label: '闪避', value: enemy.evade },
+            { key: 'poison', label: '中毒', value: enemy.poison },
             { key: 'stun', label: '眩晕', value: enemy.stun },
             { key: 'reflection', label: '反射', value: enemy.reflection },
             { key: 'wither', label: '凋萎', value: enemy.wither },
+            { key: 'broken', label: '破损', value: enemy.broken },
             { key: 'rockfall', label: '落石', value: enemy.rockfall },
+            { key: 'blind', label: '失明', value: enemy.blind },
+            { key: 'entangle', label: '缠绕', value: enemy.entangle },
+            { key: 'negative_status_immunity', label: '负面状态免疫', value: enemy.negative_status_immunity },
+            { key: 'evil_eye', label: '邪眼', value: enemy.evil_eye },
         ]);
         renderTraitsInto(effects, definition.traits, enemy);
 
@@ -3970,6 +5427,13 @@
             { key: 'poison', label: '中毒', value: combat.poison },
             { key: 'stun', label: '眩晕', value: combat.stun },
             { key: 'broken', label: '破损', value: combat.broken },
+            { key: 'reflection', label: '反射', value: combat.reflection },
+            { key: 'wither', label: '凋萎', value: combat.wither },
+            { key: 'rockfall', label: '落石', value: combat.rockfall },
+            { key: 'blind', label: '失明', value: combat.blind },
+            { key: 'entangle', label: '缠绕', value: combat.entangle },
+            { key: 'negative_status_immunity', label: '负面状态免疫', value: combat.negative_status_immunity },
+            { key: 'evil_eye', label: '邪眼', value: combat.evil_eye },
         ]);
         renderStoryEquipment(combat.equipment);
         const enemyGroup = $('story-enemy-group');
@@ -4175,7 +5639,11 @@
         dialog.returnValue = '';
         setText(
             'story-deck-change-title',
-            kind === 'remove' ? t.confirmRemoveTitle : t.confirmUpgradeTitle,
+            kind === 'remove'
+                ? t.confirmRemoveTitle
+                : (kind === 'transform'
+                    ? (lang === 'zh' ? '确认变化卡牌' : 'Confirm card transformation')
+                    : t.confirmUpgradeTitle),
         );
         setText(
             'story-deck-change-copy',
@@ -4194,6 +5662,11 @@
             removed.className = 'story-deck-change-removed';
             removed.textContent = t.removedFromDeck;
             after.append(removed);
+        } else if (kind === 'transform') {
+            const transformed = document.createElement('div');
+            transformed.className = 'story-deck-change-removed';
+            transformed.textContent = lang === 'zh' ? '随机变化为另一张牌' : 'Transform into another random card';
+            after.append(transformed);
         } else {
             after.append(createStoryCard(
                 storyCardAtUpgradeState(card, true),
@@ -4312,10 +5785,61 @@
         setText('story-room-kicker', `${t.floor(state.current_floor || 1)} · ${t.rooms[room.type] || t.room}`);
         if (room.type === 'stage_choice') {
             setText('story-room-title', lang === 'zh' ? `选择第 ${room.stage || ''} 阶段区域` : `Choose Stage ${room.stage || ''} region`);
-            setText('story-room-copy', lang === 'zh' ? '进入后将生成新的16层路线。' : 'A new 16-floor route will be generated.');
+            setText(
+                'story-room-copy',
+                lang === 'zh'
+                    ? '选择下一区域和1项诅咒；随后生成新的16层路线。'
+                    : 'Choose the next region and 1 curse, then generate a new 16-floor route.',
+            );
+            let selectedBiome = String(room.biomes?.[0] || 'garden');
+            const availableCurses = room.curses?.length
+                ? room.curses
+                : Object.keys(storyContent?.curses || {});
+            let selectedCurse = String(availableCurses[0] || '');
+            const selectionButtons = [];
+            const refreshSelections = () => {
+                selectionButtons.forEach(({ button, kind, id }) => {
+                    button.classList.toggle(
+                        'is-selected',
+                        kind === 'biome' ? id === selectedBiome : id === selectedCurse,
+                    );
+                });
+            };
+            appendStoryChoiceHeading(container, lang === 'zh' ? '区域' : 'Region');
             (room.biomes || []).forEach((biome) => {
-                container?.append(choiceButton(String(biome), () => storyAction('choose_stage', { biome }), { primary: true }));
+                const definition = storyContent?.biomes?.[biome] || {};
+                const button = choiceButton(
+                    localize(definition.name) || String(biome),
+                    () => {
+                        selectedBiome = String(biome);
+                        refreshSelections();
+                    },
+                );
+                selectionButtons.push({ button, kind: 'biome', id: String(biome) });
+                container?.append(button);
             });
+            appendStoryChoiceHeading(container, lang === 'zh' ? '诅咒' : 'Curse');
+            availableCurses.forEach((curseId) => {
+                const definition = storyContent?.curses?.[curseId] || {};
+                const button = choiceButton(
+                    localize(definition.name) || String(curseId),
+                    () => {
+                        selectedCurse = String(curseId);
+                        refreshSelections();
+                    },
+                    { description: localize(definition.description) },
+                );
+                selectionButtons.push({ button, kind: 'curse', id: String(curseId) });
+                container?.append(button);
+            });
+            refreshSelections();
+            footer?.append(storyRoomFooterButton(
+                t.confirm,
+                () => storyAction('choose_stage', {
+                    biome: selectedBiome,
+                    curse_id: selectedCurse,
+                }),
+            ));
         } else if (room.type === 'rest') {
             setText('story-room-title', t.restTitle);
             setText('story-room-copy', t.restCopy);
@@ -4472,7 +5996,10 @@
                         })));
                     },
                 },
-            ]);
+            ].filter((definition) => (
+                definition.id !== 'shop-remove'
+                || (room.options || []).includes('remove_card')
+            )));
             footer?.append(storyRoomFooterButton(
                 t.leave,
                 () => storyAction('resolve_room', { option: 'leave' }),
@@ -4493,8 +6020,12 @@
             const renderEventActions = (target, actionOptions) => actionOptions.forEach((option) => {
                 const optionId = String(option.id || '');
                 const disabled = (
-                    (optionId === 'event_buy' && Number(player.gold || 0) < 35)
-                    || (optionId === 'lottery_draw' && Number(player.gold || 0) < 50)
+                    Number(player.gold || 0) < Number(option.cost_gold || 0)
+                    || (optionId === 'event_buy' && Number(player.gold || 0) < 35)
+                    || (optionId === 'lottery_draw' && (
+                        Number(player.gold || 0) < 50
+                        || Number(room.attempts || 0) >= 4
+                    ))
                 );
                 const resolveOption = () => storyAction('resolve_room', { option: optionId });
                 target.append(choiceButton(
@@ -4513,40 +6044,90 @@
                     },
                 ));
             });
-            const upgradeOption = options.find((option) => String(option.id || '') === 'lottery_inspect');
-            if (upgradeOption) {
-                renderStoryRoomTabs(state, [
-                    {
+            const selectionOptions = options.filter((option) => option.selection);
+            if (selectionOptions.length) {
+                const eventTabs = [];
+                const eventTabIds = {
+                    upgrade: { id: 'event-upgrade' }.id,
+                    remove: { id: 'event-remove' }.id,
+                    trade: { id: 'event-trade' }.id,
+                };
+                const usedEventTabIds = new Set();
+                const actionOptions = options.filter((option) => !option.selection);
+                if (actionOptions.length) {
+                    eventTabs.push({
                         id: 'event-actions',
                         label: t.roomActions,
                         mode: 'choices',
-                        render: (target) => renderEventActions(
-                            target,
-                            options.filter((option) => String(option.id || '') !== 'lottery_inspect'),
-                        ),
-                    },
-                    {
-                        id: 'event-upgrade',
-                        label: t.upgrade,
+                        render: (target) => renderEventActions(target, actionOptions),
+                    });
+                }
+                selectionOptions.forEach((option) => {
+                    const selection = String(option.selection || '');
+                    const allowed = new Set((option.candidate_ids || []).map(String));
+                    let source = [...(player.deck || [])];
+                    if (selection === 'upgrade') {
+                        source = upgradableCards;
+                    } else if (allowed.size) {
+                        source = source.filter((card) => allowed.has(String(card.instance_id)));
+                    }
+                    const baseTabId = eventTabIds[selection]
+                        || `event-${String(option.id || selection)}`;
+                    let tabId = baseTabId;
+                    let duplicateIndex = 2;
+                    while (usedEventTabIds.has(tabId)) {
+                        tabId = `${baseTabId}-${duplicateIndex}`;
+                        duplicateIndex += 1;
+                    }
+                    usedEventTabIds.add(tabId);
+                    eventTabs.push({
+                        id: tabId,
+                        label: localize(option.label) || t.chooseCards,
                         mode: 'cards',
                         render: (target) => {
-                            if (!upgradableCards.length) appendStoryRoomEmpty(target, t.noUpgradableCards);
-                            upgradableCards.forEach((card) => target.append(createStoryCard(card, {
-                                compact: true,
-                                note: localize(upgradeOption.label),
-                                previewUpgradeOnHover: true,
-                                onClick: () => openStoryDeckChange({
-                                    kind: 'upgrade',
-                                    card,
-                                    payload: {
-                                        option: 'lottery_inspect',
-                                        card_instance_id: card.instance_id,
-                                    },
-                                }),
-                            })));
+                            if (!source.length) {
+                                if (selection === 'upgrade') {
+                                    appendStoryRoomEmpty(target, t.noUpgradableCards);
+                                } else {
+                                    appendStoryRoomEmpty(target, t.none);
+                                }
+                                return;
+                            }
+                            source.forEach((card) => {
+                                const isPrimary = storyContent?.cards?.[card.def_id]?.rarity === 'primary';
+                                const price = selection === 'trade'
+                                    ? (isPrimary ? 50 : 0)
+                                    : Number(option.cost_gold || 0);
+                                const disabled = Number(player.gold || 0) < price;
+                                const cardOptions = {
+                                    compact: true,
+                                    disabled,
+                                    note: [localize(option.label), price > 0 ? `${price}G` : '']
+                                        .filter(Boolean)
+                                        .join(' · '),
+                                    onClick: () => openStoryDeckChange({
+                                        kind: selection === 'trade' ? 'transform' : selection,
+                                        card,
+                                        price,
+                                        payload: {
+                                            option: String(option.id || ''),
+                                            card_instance_id: card.instance_id,
+                                        },
+                                    }),
+                                };
+                                if (selection === 'upgrade') {
+                                    target.append(createStoryCard(card, {
+                                        ...cardOptions,
+                                        previewUpgradeOnHover: true,
+                                    }));
+                                } else {
+                                    target.append(createStoryCard(card, cardOptions));
+                                }
+                            });
                         },
-                    },
-                ]);
+                    });
+                });
+                renderStoryRoomTabs(state, eventTabs);
             } else {
                 renderEventActions(container, options);
             }
@@ -4560,13 +6141,13 @@
             return {
                 gold: Boolean(claims.gold) || Number(reward.gold || 0) <= 0,
                 card: Boolean(claims.card) || !(reward.cards || []).length,
-                relic: Boolean(claims.relic) || !reward.relic,
+                relic: Boolean(claims.relic) || !(reward.relics || []).length && !reward.relic,
             };
         }
         return {
             gold: true,
             card: !(reward?.cards || []).length,
-            relic: !reward?.relic,
+            relic: !(reward?.relics || []).length && !reward?.relic,
         };
     }
 
@@ -4591,13 +6172,16 @@
         const isBlessingReward = reward.source === 'blessing';
         const rewardRound = Math.max(1, Number(reward.round_index) || 1);
         const rewardTotal = Math.max(rewardRound, Number(reward.round_total) || 1);
+        const isSequentialReward = rewardTotal > 1;
         setText('story-reward-kicker', isBlessingReward ? t.rooms.blessing : t.battleWon);
         setText(
             'story-reward-title',
-            isBlessingReward ? t.blessingCardReward(rewardRound, rewardTotal) : t.rewards,
+            isSequentialReward ? t.blessingCardReward(rewardRound, rewardTotal) : t.rewards,
         );
-        setText('story-reward-copy', isBlessingReward ? t.blessingRewardCopy : t.rewardCopy);
-        const relic = reward.relic ? storyContent?.relics?.[reward.relic] : null;
+        setText('story-reward-copy', isSequentialReward ? t.blessingRewardCopy : t.rewardCopy);
+        const relicIds = (reward.relics || []).length
+            ? reward.relics
+            : (reward.relic ? [reward.relic] : []);
         const claimContainer = $('story-reward-claims');
         claimContainer?.replaceChildren();
         if (Number(reward.gold || 0) > 0) {
@@ -4608,14 +6192,29 @@
                 () => storyAction('choose_reward', { reward_type: 'gold' }),
             ));
         }
-        if (relic) {
+        if (claims.relic && reward.selected_relic_id) {
+            const relic = storyContent?.relics?.[reward.selected_relic_id];
             claimContainer?.append(rewardClaimButton(
-                `${t.talentReward} · ${localize(relic.name)}`,
-                localize(relic.description),
-                claims.relic,
-                () => storyAction('choose_reward', { reward_type: 'relic' }),
-                reward.relic,
+                `${t.talentReward} · ${localize(relic?.name) || reward.selected_relic_id}`,
+                t.claimed,
+                true,
+                () => {},
+                reward.selected_relic_id,
             ));
+        } else if (!claims.relic) {
+            relicIds.forEach((relicId) => {
+                const relic = storyContent?.relics?.[relicId];
+                claimContainer?.append(rewardClaimButton(
+                    `${t.talentReward} · ${localize(relic?.name) || relicId}`,
+                    localize(relic?.description),
+                    false,
+                    () => storyAction('choose_reward', {
+                        reward_type: 'relic',
+                        relic_id: relicId,
+                    }),
+                    relicId,
+                ));
+            });
         }
         if (claims.card) {
             const selected = (reward.cards || []).find((choice) => {
@@ -4650,7 +6249,8 @@
             });
         }
         const skip = $('story-reward-skip');
-        skip?.classList.toggle('hidden', claims.card);
+        const mustTakeCard = (state?.player?.relics || []).includes('grab_every_card');
+        skip?.classList.toggle('hidden', claims.card || mustTakeCard);
         const canContinue = Object.values(claims).every(Boolean);
         const continueButton = $('story-reward-continue');
         continueButton?.classList.toggle('hidden', !canContinue);
@@ -4681,7 +6281,8 @@
             return;
         }
         const state = run.state || {};
-        if (state.phase === 'blessing') renderBlessing(state);
+        if (state.phase === 'journey_setup') renderJourneySetup(state);
+        else if (state.phase === 'blessing') renderBlessing(state);
         else if (state.phase === 'combat' && state.combat) renderCombat(state);
         else {
             selectedCombatCardId = '';
@@ -4692,6 +6293,7 @@
             else if (state.phase === 'complete' || state.phase === 'game_over') renderTerminal(state);
             else renderMapView(state);
         }
+        openPendingStoryDeckOperation(state);
     }
 
     async function resumeRunFromCheckpoint(run) {
@@ -4709,6 +6311,7 @@
                     payload: {},
                 }),
             });
+            ingestStoryDiscoveryPayload(result);
             return result.run || run;
         } catch (error) {
             if (error.payload?.run) return error.payload.run;
@@ -4720,11 +6323,13 @@
         showView('story-loading');
         try {
             const [contentPayload, runPayload] = await Promise.all([
-                requestJson('/api/story/content'),
-                requestJson('/api/story/run'),
+                requestStoryLoadJson('/api/story/content'),
+                requestStoryLoadJson('/api/story/run'),
             ]);
             storyContent = contentPayload.content || {};
             contentVersion = contentPayload.content_version || '';
+            ingestStoryDiscoveryPayload(contentPayload);
+            ingestStoryDiscoveryPayload(runPayload);
             let run = runPayload.run || null;
             if (run && contentVersion && run.content_version !== contentVersion && window.__STORY_DEV_TOOLS__) {
                 activeRun = run;
@@ -4745,11 +6350,13 @@
         if (button) button.disabled = true;
         try {
             if (!storyContent) {
-                const contentPayload = await requestJson('/api/story/content');
+                const contentPayload = await requestStoryLoadJson('/api/story/content');
                 storyContent = contentPayload.content || {};
                 contentVersion = contentPayload.content_version || '';
+                ingestStoryDiscoveryPayload(contentPayload);
             }
             const payload = await requestJson('/api/story/run', { method: 'POST', body: '{}' });
+            ingestStoryDiscoveryPayload(payload);
             renderRun(payload.run || null);
         } catch (error) {
             if (error.message !== 'AUTH_REQUIRED') showToast(error.message);
@@ -4783,12 +6390,141 @@
                 method: 'POST',
                 body: JSON.stringify({ run_id: activeRun.id }),
             });
+            ingestStoryDiscoveryPayload(payload);
             renderRun(payload.run || null);
             if (!silent) showToast(t.mapReset);
         } catch (error) {
             if (error.message !== 'AUTH_REQUIRED') showToast(error.message);
         } finally {
             if (button) button.disabled = false;
+        }
+    }
+
+    function storySaveDate(value) {
+        const date = new Date(String(value || ''));
+        if (!Number.isFinite(date.getTime())) return '--';
+        const locale = { zh: 'zh-CN', en: 'en-US', fr: 'fr-FR', ja: 'ja-JP' }[lang] || 'zh-CN';
+        return new Intl.DateTimeFormat(locale, {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+        }).format(date);
+    }
+
+    function renderManualStorySaves(saves) {
+        const list = $('story-save-list');
+        if (!list) return;
+        list.replaceChildren();
+        const entries = Array.isArray(saves) ? saves : [];
+        if (!entries.length) {
+            const empty = document.createElement('p');
+            empty.className = 'story-save-empty';
+            empty.textContent = t.noSaves;
+            list.append(empty);
+            return;
+        }
+        entries.forEach((save) => {
+            const row = document.createElement('article');
+            row.className = 'story-save-row';
+            const details = document.createElement('div');
+            details.className = 'story-save-details';
+            const title = document.createElement('strong');
+            const slotIndex = Math.max(0, Number(save.slot_index) || 0);
+            title.textContent = slotIndex === 0
+                ? t.saveCurrentSlot
+                : t.savePreviousSlot(slotIndex);
+            const summary = document.createElement('span');
+            summary.textContent = `${t.stage} ${stateValue(save.stage)} · ${t.floor(stateValue(save.floor))}`;
+            const timestamp = document.createElement('time');
+            timestamp.dateTime = String(save.created_at || '');
+            timestamp.textContent = storySaveDate(save.created_at);
+            details.append(title, summary, timestamp);
+            const loadButton = document.createElement('button');
+            loadButton.type = 'button';
+            loadButton.className = 'story-command story-save-load';
+            loadButton.textContent = t.loadSave;
+            loadButton.addEventListener('click', () => {
+                pendingStorySaveId = Number(save.id) || 0;
+                $('story-save-load-dialog')?.showModal();
+            });
+            row.append(details, loadButton);
+            list.append(row);
+        });
+    }
+
+    async function openManualStorySaves() {
+        if (!activeRun || activeRun.state?.phase !== 'map') {
+            showToast(t.saveOnlyOnMap);
+            return;
+        }
+        const dialog = $('story-save-dialog');
+        const list = $('story-save-list');
+        if (list) {
+            const loading = document.createElement('p');
+            loading.className = 'story-save-empty';
+            loading.textContent = t.loading;
+            list.replaceChildren(loading);
+        }
+        dialog?.showModal();
+        try {
+            const payload = await requestJson(
+                `/api/story/run/saves?run_id=${encodeURIComponent(activeRun.id)}`,
+            );
+            renderManualStorySaves(payload.saves);
+        } catch (error) {
+            if (error.message !== 'AUTH_REQUIRED') showToast(error.message || t.requestFailed);
+            renderManualStorySaves([]);
+        }
+    }
+
+    async function createManualStorySave() {
+        if (!activeRun || activeRun.state?.phase !== 'map') {
+            showToast(t.saveOnlyOnMap);
+            return;
+        }
+        const button = $('story-save-create');
+        if (button) button.disabled = true;
+        try {
+            const payload = await requestJson('/api/story/run/save', {
+                method: 'POST',
+                body: JSON.stringify({
+                    run_id: activeRun.id,
+                    state_version: activeRun.state_version,
+                }),
+            });
+            renderManualStorySaves(payload.saves);
+            showToast(t.saveSucceeded);
+        } catch (error) {
+            if (error.payload?.run) renderRun(error.payload.run);
+            if (error.message !== 'AUTH_REQUIRED') showToast(error.message || t.requestFailed);
+        } finally {
+            if (button) button.disabled = false;
+        }
+    }
+
+    async function loadManualStorySave(saveId) {
+        if (!activeRun || activeRun.state?.phase !== 'map' || !saveId) {
+            showToast(t.saveOnlyOnMap);
+            return;
+        }
+        try {
+            const payload = await requestJson('/api/story/run/load', {
+                method: 'POST',
+                body: JSON.stringify({
+                    run_id: activeRun.id,
+                    state_version: activeRun.state_version,
+                    save_id: saveId,
+                }),
+            });
+            $('story-save-dialog')?.close();
+            ingestStoryDiscoveryPayload(payload);
+            renderRun(payload.run || activeRun);
+            showToast(t.loadSucceeded);
+        } catch (error) {
+            if (error.payload?.run) renderRun(error.payload.run);
+            if (error.message !== 'AUTH_REQUIRED') showToast(error.message || t.requestFailed);
         }
     }
 
@@ -5244,10 +6980,30 @@
         $('story-chat-toggle')?.addEventListener('click', () => setStoryChatOpen(true));
         $('story-chat-close')?.addEventListener('click', () => setStoryChatOpen(false));
         $('story-chat-send')?.addEventListener('click', sendStoryChat);
-        $('story-chat-input')?.addEventListener('input', updateStoryChatConnectionUi);
+        $('story-chat-input')?.addEventListener('input', () => {
+            updateStoryChatConnectionUi();
+            updateStoryMentionMenu();
+        });
+        $('story-chat-input')?.addEventListener('focus', () => {
+            clearStoryMentionFlash();
+            updateStoryMentionMenu();
+        });
+        $('story-chat-input')?.addEventListener('blur', () => {
+            setTimeout(() => storyMentionMenu?.classList.add('hidden'), 120);
+        });
         $('story-chat-input')?.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && storyMentionMenu && !storyMentionMenu.classList.contains('hidden')) {
+                event.preventDefault();
+                event.stopPropagation();
+                storyMentionMenu.classList.add('hidden');
+                return;
+            }
             if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
             event.preventDefault();
+            if (storyMentionMenu && !storyMentionMenu.classList.contains('hidden') && storyMentionCandidates[0]) {
+                insertStoryMention(storyMentionCandidates[0]);
+                return;
+            }
             sendStoryChat();
         });
         storyApp?.addEventListener('selectstart', (event) => {
@@ -5259,6 +7015,40 @@
         });
         $('story-start')?.addEventListener('click', startRun);
         $('story-end-turn')?.addEventListener('click', () => storyAction('end_turn'));
+        $('story-codex-open')?.addEventListener('click', openStoryCodex);
+        $('story-codex-close')?.addEventListener('click', closeStoryCodex);
+        $('story-codex-dialog')?.addEventListener('click', (event) => {
+            if (event.target === event.currentTarget) closeStoryCodex();
+        });
+        document.querySelectorAll('[data-story-codex-mode]').forEach((tab) => {
+            tab.addEventListener('click', () => {
+                storyCodexMode = String(tab.dataset.storyCodexMode || 'cards');
+                storyCodexSelectedId = '';
+                storyCodexSearch = '';
+                const input = $('story-codex-search');
+                if (input) input.value = '';
+                renderStoryCodex();
+            });
+            tab.addEventListener('keydown', (event) => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                const tabs = [...document.querySelectorAll('[data-story-codex-mode]')];
+                const index = tabs.indexOf(tab);
+                if (index < 0) return;
+                event.preventDefault();
+                let next = index;
+                if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+                else if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+                else if (event.key === 'Home') next = 0;
+                else next = tabs.length - 1;
+                tabs[next]?.click();
+                tabs[next]?.focus();
+            });
+        });
+        $('story-codex-search')?.addEventListener('input', (event) => {
+            storyCodexSearch = String(event.target?.value || '');
+            storyCodexSelectedId = '';
+            renderStoryCodex();
+        });
         $('story-talent-overview')?.addEventListener('click', openStoryTalentOverview);
         $('story-run-deck')?.addEventListener('click', () => openStoryPile('deck'));
         $('story-draw-pile')?.addEventListener('click', () => openStoryPile('draw'));
@@ -5293,11 +7083,31 @@
             event.stopImmediatePropagation();
             playSelectedCombatCard(cardTargetKind(card));
         }, true);
+        $('story-card-choice-dialog')?.addEventListener('cancel', (event) => {
+            if (event.currentTarget.dataset.required === '1') event.preventDefault();
+        });
         $('story-card-choice-dialog')?.addEventListener('close', (event) => {
             const context = cardChoiceContext;
             cardChoiceContext = null;
             if (!context) return;
             const selected = [...context.selected];
+            if (context.mode === 'deck_operation') {
+                if (event.target.returnValue !== 'confirm') {
+                    requestAnimationFrame(() => openPendingStoryDeckOperation(activeRun?.state));
+                    return;
+                }
+                if (
+                    selected.length < context.spec.minimum
+                    || selected.length > context.spec.maximum
+                ) {
+                    requestAnimationFrame(() => openPendingStoryDeckOperation(activeRun?.state));
+                    return;
+                }
+                setStoryCardChoiceRequired(false);
+                storyAction('resolve_deck_operation', { selected_card_ids: selected });
+                return;
+            }
+            setStoryCardChoiceRequired(false);
             if (context.mode === 'opening_redraw') {
                 storyAction('opening_redraw', {
                     selected_card_ids: event.target.returnValue === 'confirm' ? selected : [],
@@ -5337,6 +7147,16 @@
         $('story-reset-map')?.addEventListener('click', () => $('story-reset-dialog')?.showModal());
         $('story-reset-dialog')?.addEventListener('close', (event) => {
             if (event.target.returnValue === 'confirm') resetMap();
+        });
+        $('story-save-open')?.addEventListener('click', openManualStorySaves);
+        $('story-save-create')?.addEventListener('click', createManualStorySave);
+        $('story-save-dialog')?.addEventListener('close', () => {
+            pendingStorySaveId = 0;
+        });
+        $('story-save-load-dialog')?.addEventListener('close', (event) => {
+            const saveId = pendingStorySaveId;
+            pendingStorySaveId = 0;
+            if (event.target.returnValue === 'confirm') loadManualStorySave(saveId);
         });
         $('modal')?.addEventListener('click', (event) => {
             if (event.target !== event.currentTarget) return;
@@ -5415,7 +7235,9 @@
             const cardSourceElement = cardElement || equipmentElement;
             const card = cardSourceElement ? storyCardElementData.get(cardSourceElement) : null;
             if (card) {
-                openStoryCardTerms(card);
+                const termOptions = storyCardTermOptions.get(cardSourceElement);
+                if (termOptions) openStoryCardTerms(card, termOptions);
+                else openStoryCardTerms(card);
                 return;
             }
             if ($('story-term-dialog')?.open) {

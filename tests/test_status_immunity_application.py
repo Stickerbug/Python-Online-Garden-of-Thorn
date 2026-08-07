@@ -130,6 +130,79 @@ class StatusImmunityApplicationTests(unittest.TestCase):
                     3,
                 )
 
+    def test_named_builtin_and_custom_statuses_stack_while_suppressed(self):
+        for engine_type in ENGINE_TYPES:
+            with self.subTest(engine=engine_type.__name__):
+                engine = engine_type()
+                player = engine.players[0]
+                card = CardInstance("Basic")
+                self.grant_status_immunity(engine)
+
+                engine._atomic_status_add_named(
+                    0,
+                    card,
+                    {"target": "self", "status": "poison", "amount": 2},
+                    "",
+                    None,
+                    "play",
+                )
+                engine._atomic_status_add_named(
+                    0,
+                    card,
+                    {"target": "self", "status": "hel:blazing_fire", "amount": 3},
+                    "",
+                    None,
+                    "play",
+                )
+
+                self.assertEqual(player.poison, 2)
+                self.assertEqual(player.custom_statuses.get("hel:blazing_fire"), 3)
+                self.assertEqual(engine._get_status_count(0, "poison"), 0)
+                self.assertEqual(engine._get_status_count(0, "hel:blazing_fire"), 0)
+
+                player.custom_statuses.pop("status_immune", None)
+                self.assertEqual(engine._get_status_count(0, "poison"), 2)
+                self.assertEqual(engine._get_status_count(0, "hel:blazing_fire"), 3)
+
+    def test_turn_regen_stacks_and_decays_without_healing_while_suppressed(self):
+        for engine_type in ENGINE_TYPES:
+            with self.subTest(engine=engine_type.__name__):
+                engine = engine_type()
+                player = engine.players[0]
+                player.health = 50
+                player.max_health = 100
+                self.grant_status_immunity(engine)
+
+                engine._atomic_apply_turn_regen(
+                    0,
+                    CardInstance("Basic"),
+                    {"target": "self", "kind": "heal", "turns": 3, "power": 3},
+                    "",
+                    None,
+                    {},
+                )
+
+                self.assertEqual(player.health, 50)
+                self.assertEqual(
+                    engine._custom_status_value(
+                        0,
+                        "jungle:turn_heal_turns",
+                        "turn_heal_turns",
+                    ),
+                    2,
+                )
+                player.custom_statuses.pop("status_immune", None)
+                engine._apply_jungle_turn_start_regen(0)
+                self.assertEqual(player.health, 53)
+                self.assertEqual(
+                    engine._custom_status_value(
+                        0,
+                        "jungle:turn_heal_turns",
+                        "turn_heal_turns",
+                    ),
+                    1,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

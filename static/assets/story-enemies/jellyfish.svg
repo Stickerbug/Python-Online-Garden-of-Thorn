@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #efefef;
+      }
+
+      .st0, .st1 {
+        opacity: .4;
+        stroke: #c9caca;
+        stroke-miterlimit: 10;
+        stroke-width: 8px;
+      }
+
+      .st1 {
+        fill: none;
+        stroke-linecap: round;
+      }
+    </style>
+  </defs>
+  <path class="st0" d="M174.44,110.33c16.89,16.99,17.11,44.31.49,61.02-16.62,16.72-43.78,16.5-60.67-.49-16.89-16.99-17.11-44.31-.49-61.02s43.78-16.5,60.67.49Z"/>
+  <polyline class="st1" points="109.14 144.35 77.4 144.09 56.6 136.85"/>
+  <polyline class="st1" points="122.55 118.29 93.02 88.59 85.64 81.16"/>
+  <polyline class="st1" points="144.35 103.82 149.75 80.46 162.31 60.69"/>
+  <polyline class="st1" points="169.86 114 180.4 100.84 208.5 96.35"/>
+  <line class="st1" x1="182.15" y1="138.95" x2="226.87" y2="137.86"/>
+  <polyline class="st1" points="167.59 167.86 181.64 187.75 177.09 205.13"/>
+  <line class="st1" x1="126.74" y1="222.77" x2="139.53" y2="180.46"/>
+  <polyline class="st1" points="116.15 162.91 92.04 196.61 97.03 208.47"/>
+</svg>

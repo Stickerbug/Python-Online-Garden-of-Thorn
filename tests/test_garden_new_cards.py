@@ -11,7 +11,7 @@ from mod_loader import ModCard, load_mod
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "mods" / "Garden Cards Addition.gtnmod"
+PACKAGE = ROOT / "mods" / "Garden Cards DLC.gtnmod"
 NEW_CARD_IDS = {
     "MoonRock",
     "Avocado",
@@ -100,7 +100,7 @@ class GardenNewCardsTests(unittest.TestCase):
 
     def test_package_metadata_cards_assets_and_locales(self):
         self.assertEqual(self.mod.info.author, "NetherDog, Eric, AArcC")
-        self.assertEqual(self.mod.info.version, "1.1.0")
+        self.assertEqual(self.mod.info.version, "1.0.0")
         self.assertTrue(NEW_CARD_IDS <= self.mod_cards.keys())
         expected_counts = {
             "MoonRock": 2,
@@ -263,6 +263,12 @@ class GardenNewCardsTests(unittest.TestCase):
             source_card=CardInstance("Basic"),
         )
         self.assertEqual(engine.players[1].health, 82)
+
+        engine = self.action_engine()
+        self.equip(engine, "Avocado", 0, 1)
+        engine.players[1].health = 90
+        engine._deal_direct_damage(1, 10, "测试电伤", 0, damage_type="magic")
+        self.assertEqual(engine.players[1].health, 80)
 
         engine = self.action_engine()
         self.equip(engine, "MagicAvocado", 0, 1)

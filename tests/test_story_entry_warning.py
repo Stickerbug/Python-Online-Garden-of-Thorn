@@ -22,7 +22,9 @@ def test_story_entry_is_publicly_visible_but_still_requires_an_account():
     )
     assert "hiddenFeaturesEnabled()" not in availability
     assert "row.classList.remove('hidden')" in availability
-    assert "button.disabled = !authenticated" in availability
+    assert "button.disabled = false" in availability
+    assert "button.setAttribute('aria-disabled', 'false')" in availability
+    assert "if (!currentAccount) await refreshAuthMe();" in GAME_JS
 
 
 def test_story_warning_only_persists_after_confirmation():

@@ -41,7 +41,7 @@ def test_requested_mod_cards_are_excluded_from_infinite_fire():
 
 
 def test_team_limited_cards_are_excluded_from_every_infinite_fire_pool():
-    jungle = load_mod(str(ROOT / "mods" / "Jungle Cards Addition.gtnmod"))
+    jungle = load_mod(str(ROOT / "mods" / "Jungle Cards DLC.gtnmod"))
     assert not jungle.errors, jungle.errors
     monstera = next(card for card in jungle.cards if card.id == "Monstera")
     assert "team_limited" in monstera.flags

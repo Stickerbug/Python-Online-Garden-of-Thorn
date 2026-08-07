@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        stroke: #231815;
+        stroke-linecap: round;
+        stroke-width: 5px;
+      }
+
+      .st0, .st1 {
+        fill: #231815;
+      }
+
+      .st0, .st1, .st2 {
+        stroke-miterlimit: 10;
+      }
+
+      .st1 {
+        stroke: #7ecde9;
+      }
+
+      .st1, .st2 {
+        stroke-width: 15px;
+      }
+
+      .st2 {
+        fill: #fff;
+        stroke: #0b61ae;
+      }
+    </style>
+  </defs>
+  <g>
+    <path class="st0" d="M132.93,111.33c-7.06-21.98-24.8-34.87-31-40.9-9.82-9.56,30.67,5.4,41,26.02,10.32,20.62-2.93,36.88-10,14.88Z"/>
+    <path class="st0" d="M111.33,132.93c-21.98-7.06-34.87-24.8-40.9-31-9.56-9.82,5.4,30.67,26.02,41,20.62,10.32,36.88-2.93,14.88-10Z"/>
+  </g>
+  <g>
+    <ellipse class="st2" cx="159.01" cy="159.01" rx="52.21" ry="51.74" transform="translate(-65.87 159.01) rotate(-45)"/>
+    <ellipse class="st1" cx="159.01" cy="159.01" rx="20.88" ry="20.69" transform="translate(-65.87 159.01) rotate(-45)"/>
+  </g>
+</svg>

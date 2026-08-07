@@ -12,6 +12,7 @@ from mod_loader import load_mod
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "mods" / "Bio Cards Addition.gtnmod"
+NEW_CARDS_PACKAGE = ROOT / "mods" / "Bio Cards DLC.gtnmod"
 JURASSIC_PACKAGE = ROOT / "mods" / "Jurassic Cards Addition.gtnmod"
 LOCAL_WORKER = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
 GAME_JS = (ROOT / "static" / "js" / "game.js").read_text(encoding="utf-8")
@@ -22,9 +23,10 @@ class BioNewCardsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.mod = load_mod(str(PACKAGE))
-        if cls.mod.errors:
-            raise AssertionError(cls.mod.errors)
-        cls.mod_cards = {card.id: card for card in cls.mod.cards}
+        cls.new_cards_mod = load_mod(str(NEW_CARDS_PACKAGE))
+        if cls.mod.errors or cls.new_cards_mod.errors:
+            raise AssertionError(cls.mod.errors + cls.new_cards_mod.errors)
+        cls.mod_cards = {card.id: card for card in [*cls.mod.cards, *cls.new_cards_mod.cards]}
 
     def setUp(self):
         self.previous_defs = {card_id: CARD_DEFS.get(card_id) for card_id in NEW_CARD_IDS}
@@ -71,8 +73,8 @@ class BioNewCardsTests(unittest.TestCase):
         }
 
     def test_package_metadata_assets_status_and_locales(self):
-        self.assertEqual(self.mod.info.author, "huanxiang0273, Eric, XinYu")
-        self.assertEqual(self.mod.info.version, "1.1.0")
+        self.assertEqual(self.new_cards_mod.info.author, "huanxiang0273, Eric, XinYu")
+        self.assertEqual(self.new_cards_mod.info.version, "1.0.0")
         self.assertTrue(NEW_CARD_IDS <= self.mod_cards.keys())
         self.assertEqual(self.mod_cards["CyanidePill"].count, 3)
         self.assertEqual(self.mod_cards["StemCell"].count, 3)
@@ -80,7 +82,7 @@ class BioNewCardsTests(unittest.TestCase):
         self.assertTrue({"wide_strike", "self_target"} <= self.mod_cards["CyanidePill"].flags)
         self.assertEqual(self.mod_cards["StemCell"].trigger_cost_m, 6)
 
-        with zipfile.ZipFile(PACKAGE) as archive, zipfile.ZipFile(JURASSIC_PACKAGE) as jurassic:
+        with zipfile.ZipFile(NEW_CARDS_PACKAGE) as archive, zipfile.ZipFile(JURASSIC_PACKAGE) as jurassic:
             self.assertIsNone(archive.testzip())
             files = set(archive.namelist())
             self.assertTrue({

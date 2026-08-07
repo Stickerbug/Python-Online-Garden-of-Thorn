@@ -147,6 +147,7 @@ class GameEngineInfiniteFire(GameEngine):
         self.infinite_card_pool: List[str] = []
         self.infinite_card_weights: List[int] = []
         self.infinite_by_type = {}
+        self._urf_pending_response_replenish = None
 
     def _build_infinite_pool(self):
         ids = []
@@ -257,6 +258,23 @@ class GameEngineInfiniteFire(GameEngine):
         if not card:
             return
         self.add_card_to_urf_hand(player_id, card, log=False)
+
+    def _replenish_card_types(self, player_id: int, card_types: List[str]):
+        for card_type in card_types:
+            if card_type:
+                self._draw_to_hand_by_type(player_id, card_type)
+
+    def _replenish_or_defer_for_response(self, player_id: int, card_types: List[str], result: dict):
+        card_types = [card_type for card_type in card_types if card_type]
+        if not card_types:
+            return
+        if result.get('needs_response') and self.pending_response is not None:
+            self._urf_pending_response_replenish = {
+                'player_id': player_id,
+                'card_types': card_types,
+            }
+            return
+        self._replenish_card_types(player_id, card_types)
 
     def _fusion_extra_replenish_types(self, player_id: int, card: Optional[CardInstance], choice) -> List[str]:
         if not card or card.def_id != 'Fusion' or not isinstance(choice, dict):
@@ -534,9 +552,11 @@ class GameEngineInfiniteFire(GameEngine):
         extra_replenish_types = self._fusion_extra_replenish_types(player_id, card, choice)
         result = super().play_card(player_id, card_instance_id, choice)
         if result.get('success') and not result.get('ignored') and not result.get('needs_choice') and card_type:
-            self._draw_to_hand_by_type(player_id, card_type)
-            for extra_type in extra_replenish_types:
-                self._draw_to_hand_by_type(player_id, extra_type)
+            self._replenish_or_defer_for_response(
+                player_id,
+                [card_type, *extra_replenish_types],
+                result,
+            )
         return result
 
     def resolve_choice(self, player_id: int, choice: dict) -> dict:
@@ -552,14 +572,16 @@ class GameEngineInfiniteFire(GameEngine):
         extra_replenish_types = self._fusion_extra_replenish_types(player_id, pending_card, choice)
         result = super().resolve_choice(player_id, choice)
         if result.get('success') and not result.get('cancelled') and card_type:
-            self._draw_to_hand_by_type(player_id, card_type)
-            for extra_type in extra_replenish_types:
-                self._draw_to_hand_by_type(player_id, extra_type)
+            self._replenish_or_defer_for_response(
+                player_id,
+                [card_type, *extra_replenish_types],
+                result,
+            )
         return result
 
     def handle_response(self, responder_id: int, card_instance_id: Optional[int]) -> dict:
-        pending = self.pending_response or {}
-        player_id = pending.get('player_id')
+        deferred_replenish = getattr(self, '_urf_pending_response_replenish', None)
+        self._urf_pending_response_replenish = None
         counter_type = None
         counter_instance_id = None
         if card_instance_id is not None and 0 <= responder_id < len(self.players):
@@ -568,6 +590,11 @@ class GameEngineInfiniteFire(GameEngine):
                 counter_type = counter.card_type
                 counter_instance_id = counter.instance_id
         result = super().handle_response(responder_id, card_instance_id)
+        if result.get('success') and isinstance(deferred_replenish, dict):
+            source_player_id = deferred_replenish.get('player_id')
+            source_card_types = deferred_replenish.get('card_types') or []
+            if isinstance(source_player_id, int) and 0 <= source_player_id < len(self.players):
+                self._replenish_card_types(source_player_id, source_card_types)
         if result.get('success') and counter_type and counter_instance_id is not None:
             if self.players[responder_id].find_hand_card(counter_instance_id) is None:
                 self._draw_to_hand_by_type(responder_id, counter_type)

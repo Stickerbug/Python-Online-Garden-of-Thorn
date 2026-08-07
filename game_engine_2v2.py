@@ -243,7 +243,7 @@ class GameEngine2v2(GameEngine):
             'log_start': log_start,
             'log_total': len(self.log),
             'pending_response': self._public_pending_response(for_player),
-            'pending_choice': self.pending_choice,
+            'pending_choice': self._public_pending_choice(for_player),
             'pending_v2_ui': self._public_v2_ui(for_player),
             'pending_ally_request': getattr(self, 'pending_ally_request', None),
             'opening_event_picks': self.opening_event_picks,
@@ -517,6 +517,9 @@ class GameEngine2v2(GameEngine):
             return
         self._drain_turn_end_event_sources(player_id)
         if self.game_over or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
+        self._apply_equal_suffering_turn_end(player_id)
+        if self.game_over:
             return
         self._decay_equipment_armor_end_turn(player_id)
         if ps.bandage_active and ps.invincible:
@@ -1219,13 +1222,9 @@ class GameEngine2v2(GameEngine):
                     if target_match:
                         if self._can_pay_counter_card(responder_id, c):
                             has_payable_counter = True
-                        counter_cards.append({
-                            'instance_id': c.instance_id,
-                            'def_id': c.def_id,
-                            'cost_e_override': c.cost_e_override,
-                            'cost_m_override': c.cost_m_override,
-                            'responder_id': responder_id,
-                        })
+                        counter_entry = c.to_dict()
+                        counter_entry['responder_id'] = responder_id
+                        counter_cards.append(counter_entry)
         finally:
             self._pending_response_preview = prev_preview
         if not has_payable_counter:
@@ -1287,6 +1286,12 @@ class GameEngine2v2(GameEngine):
         card = ps.find_hand_card(card_instance_id) if ps else None
         if card is None:
             return {'success': False, 'error': '手牌中没有这张牌'}
+        is_forced_auto_play = (
+            getattr(self, '_allow_out_of_turn_auto_play_for', None) == player_id
+            or getattr(self, '_auto_resolve_choices_for', None) == player_id
+        )
+        if is_forced_auto_play and self._forced_auto_play_blocked(player_id):
+            return {'success': False, 'error': '眩晕时无法自动打出卡牌'}
         if card.def_id == ERROR_CARD_ID:
             ps.remove_hand_card(card_instance_id)
             return {'success': True, 'card': card.to_dict(), 'ignored': True}
@@ -1379,7 +1384,6 @@ class GameEngine2v2(GameEngine):
         if (
             self._card_needs_choice(card)
             and not self._choice_satisfies_request(card, choice)
-            and not self._card_is(card, 'Sapphire', 'ocean:sapphire')
         ):
             queued = self._queue_card_choice(player_id, card, choice, already_paid=False)
             if queued:
@@ -1836,7 +1840,6 @@ class GameEngine2v2(GameEngine):
                         eid, eq.card_instance, 'enemy_turn_start', None,
                         {'source_id': eid, 'target_id': player_id}):
                     continue
-        self._apply_equal_suffering_turn_start(player_id)
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -1899,7 +1902,6 @@ class GameEngine2v2(GameEngine):
             return
         self._defer_turn_start_death_checks = False
         self._finish_sealed_equipment_turn_start(player_id)
-        self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
             self._check_yggdrasil(player_id)
             if ps.health <= 0:
@@ -1992,7 +1994,6 @@ class GameEngine2v2(GameEngine):
                         eid, eq.card_instance, 'enemy_turn_start', None,
                         {'source_id': eid, 'target_id': player_id}):
                     continue
-        self._apply_equal_suffering_turn_start(player_id)
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -2055,7 +2056,6 @@ class GameEngine2v2(GameEngine):
             return
         self._defer_turn_start_death_checks = False
         self._finish_sealed_equipment_turn_start(player_id)
-        self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
             self._check_yggdrasil(player_id)
             if ps.health <= 0:

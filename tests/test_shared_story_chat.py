@@ -91,6 +91,40 @@ class SharedStoryChatTests(unittest.TestCase):
         recipients = [recipient for recipient, _payload in payloads]
         self.assertIn(gtn._story_lobby_chat_room(False), recipients)
 
+    def test_mention_directory_includes_lobby_spectators_and_story_players(self):
+        with gtn._lock:
+            gtn.players.update({
+                'lobby-sid': {
+                    'status': 'lobby',
+                    'beta_mode': False,
+                    'nickname': 'LobbyPlayer',
+                    'user_id': 11,
+                    'player_id': 'LOBBY11',
+                },
+                'spectator-sid': {
+                    'status': 'spectating',
+                    'beta_mode': False,
+                    'nickname': 'SpectatorPlayer',
+                    'user_id': 12,
+                    'player_id': 'SPEC12',
+                },
+            })
+            with mock.patch.object(gtn, '_active_story_presences', return_value=[{
+                'user_id': 13,
+                'nickname': 'StoryPlayer',
+                'account_player_id': 'STORY13',
+            }]):
+                payload = gtn._lobby_chat_history_payload_locked(
+                    gtn.LOBBY_CHAT_VISIBLE_LIMIT,
+                    beta_mode=False,
+                )
+
+        candidates = payload['mention_candidates']
+        self.assertEqual(
+            {item['nickname'] for item in candidates},
+            {'LobbyPlayer', 'SpectatorPlayer', 'StoryPlayer'},
+        )
+
     def test_story_socket_joins_and_sends_to_shared_lobby_history(self):
         user = self.user()
         patches = (
@@ -188,6 +222,25 @@ def test_chat_origin_prefix_has_its_own_color_and_repeat_identity():
     assert '.story-chat-origin-multiplayer' in STORY_CSS
     assert '.story-chat-origin-story' in STORY_CSS
     assert "name.style.color = nameColor;" in STORY_JS
+
+
+def test_story_chat_matches_lobby_name_time_and_mention_rendering():
+    assert "identity.className = `story-chat-identity chat-nick" in STORY_JS
+    assert "spectator.className = 'chat-spectator-prefix';" in STORY_JS
+    assert 'function appendStoryChatTextWithMentions(' in STORY_JS
+    assert "entry && JSON.stringify(entry.mentions || [])" in STORY_JS
+    assert "if (daysAgo === 1) return `${t.chatYesterday} ${time}`;" in STORY_JS
+    assert "if (daysAgo === 2) return `${t.chatBeforeYesterday} ${time}`;" in STORY_JS
+    assert "span.classList.add('mention-self')" in STORY_JS
+    assert "span.classList.add('mention-self')" in GAME_JS
+
+
+def test_only_mentions_of_the_current_user_have_a_frame():
+    assert '.chat-mention-token {' in SHARED_CHAT_CSS
+    assert 'background: transparent;' in SHARED_CHAT_CSS
+    assert '.chat-mention-token.mention-self {' in SHARED_CHAT_CSS
+    own_rule = SHARED_CHAT_CSS.split('.chat-mention-token.mention-self {', 1)[1].split('}', 1)[0]
+    assert 'border: 1px solid currentColor;' in own_rule
 
 
 if __name__ == '__main__':

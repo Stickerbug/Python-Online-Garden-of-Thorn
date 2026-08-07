@@ -4,6 +4,7 @@ import zipfile
 from pathlib import Path
 
 from cards import CARD_DEFS, CardDef, CardInstance
+from card_i18n import CARD_I18N, OPENING_EVENT_I18N
 from game_engine import GameEngine
 from game_engine_2v2 import GameEngine2v2
 
@@ -37,6 +38,9 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
             'test:self_attack',
             'test:thorn_counter',
             'test:magic_cost',
+            'test:copy_petal',
+            'test:hit_petal',
+            'test:fission_petal',
         }
         self.previous_defs = {key: CARD_DEFS.get(key) for key in self.test_ids}
         CARD_DEFS['test:light_attack'] = make_card_def('test:light_attack', 'thorn')
@@ -64,6 +68,16 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
             'bloom',
             cost_m=1,
         )
+        CARD_DEFS['test:copy_petal'] = make_card_def(
+            'test:copy_petal',
+            'thorn',
+            flags={'copy'},
+        )
+        CARD_DEFS['test:copy_petal'].copy_count = 1
+        CARD_DEFS['test:hit_petal'] = make_card_def('test:hit_petal', 'thorn')
+        CARD_DEFS['test:hit_petal'].hits = 3
+        CARD_DEFS['test:fission_petal'] = make_card_def('test:fission_petal', 'thorn')
+        CARD_DEFS['test:fission_petal'].fission_level = 4
 
     def tearDown(self):
         for key, old_value in self.previous_defs.items():
@@ -122,6 +136,26 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         dust_cards = [card for card in engine.players[0].deck if card.def_id == 'Dust']
         self.assertEqual(len(dust_cards), 3)
         self.assertTrue(all('exile' in card.flags for card in dust_cards))
+
+    def test_multi_petal_expands_copy_hit_and_fission_petals_once(self):
+        engine = GameEngine()
+        engine.opening_event_picks[0] = 9
+
+        copy_petal = CardInstance('test:copy_petal')
+        engine._apply_setup_modifiers_to_card(0, copy_petal)
+        self.assertIn('multi_petal', copy_petal.setup_modifiers)
+        self.assertEqual(copy_petal.extra_hits, 0)
+        engine.players[0].hand = [copy_petal]
+        engine._handle_card_enter_hand(0, copy_petal)
+        self.assertEqual(len(engine.players[0].hand), 3)
+
+        hit_petal = CardInstance('test:hit_petal')
+        engine._apply_setup_modifiers_to_card(0, hit_petal)
+        self.assertEqual(hit_petal.extra_hits, 1)
+
+        fission_petal = CardInstance('test:fission_petal')
+        engine._apply_setup_modifiers_to_card(0, fission_petal)
+        self.assertEqual(fission_petal.fission_level, 5)
 
     def test_magic_acceleration_accepts_string_event_id(self):
         engine = GameEngine()
@@ -199,16 +233,44 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
 
         self.assertEqual(engine.players[1].fire, 4)
 
-    def test_equal_suffering_deals_more_damage_to_enemies(self):
+    def test_equal_suffering_hits_other_players_at_turn_end(self):
         engine = GameEngine()
         engine.opening_event_picks[0] = 12
         engine.players[0].health = 100
         engine.players[1].health = 100
 
-        engine._apply_equal_suffering_turn_start(0)
+        engine._apply_equal_suffering_turn_end(0)
 
-        self.assertEqual(engine.players[0].health, 95)
-        self.assertEqual(engine.players[1].health, 93)
+        self.assertEqual(engine.players[0].health, 100)
+        self.assertEqual(engine.players[1].health, 92)
+
+    def test_equal_suffering_and_leaf_fallback_text_matches_current_rules(self):
+        expected = '自己回合结束时，自己对每名其他可选中玩家造成8[[icon:D]]'
+        self.assertEqual(GameEngine.OPENING_EVENTS[12]['desc'], expected)
+        self.assertEqual(OPENING_EVENT_I18N[12]['desc']['zh'], expected)
+        leaf_text = CARD_DEFS['Leaf'].effect_text.replace('[[icon:H]]', 'H')
+        magic_leaf_text = CARD_DEFS['MagicLeaf'].effect_text.replace('[[icon:M]]', 'M').replace('[[icon:D]]', 'D')
+        self.assertIn('装备拥有者回合开始时，回复目标1H', leaf_text)
+        self.assertIn('可花费3M', magic_leaf_text)
+        self.assertIn('对其造成8D', magic_leaf_text)
+        self.assertIn('装备拥有者回合开始时，回复目标1H', CARD_I18N['Leaf']['effect']['zh'])
+        self.assertIn('可花费3M', CARD_I18N['MagicLeaf']['effect']['zh'])
+
+        worker = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
+        self.assertIn('自己回合结束时，对所有其他可选中玩家造成8D', worker)
+        self.assertNotIn('【众生平等】：自己回合开始时，对敌方造成7D', worker)
+
+        vanilla_path = Path(__file__).resolve().parents[1] / 'mods' / 'Vanilla Cards.gtnmod'
+        with zipfile.ZipFile(vanilla_path) as archive:
+            english = json.loads(archive.read('locales/en.json'))['cards']
+            french = json.loads(archive.read('locales/fr.json'))['cards']
+            japanese = json.loads(archive.read('locales/ja.json'))['cards']
+        for localized in (english, french, japanese):
+            self.assertNotIn('12[[icon:D]]', localized['vanilla:magicleaf']['effect_text'])
+            self.assertIn('8[[icon:D]]', localized['vanilla:magicleaf']['effect_text'])
+        self.assertIn("equipment owner's turn", english['vanilla:leaf']['effect_text'])
+        self.assertIn("propriétaire de l'équipement", french['vanilla:leaf']['effect_text'])
+        self.assertIn('装備の所有者', japanese['vanilla:leaf']['effect_text'])
 
     def test_equal_suffering_uses_team_damage_in_two_vs_two(self):
         engine = GameEngine2v2()
@@ -216,9 +278,9 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         for player in engine.players:
             player.health = 100
 
-        engine._apply_equal_suffering_turn_start(0)
+        engine._apply_equal_suffering_turn_end(0)
 
-        self.assertEqual([player.health for player in engine.players], [95, 95, 93, 93])
+        self.assertEqual([player.health for player in engine.players], [100, 92, 92, 92])
 
     def test_blood_knife_recovers_for_actual_damage_dealt(self):
         engine = GameEngine()
@@ -229,8 +291,9 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
 
         engine._atomic_bio_activate_blood_knife(0, card, {}, '', None, {})
 
-        self.assertEqual(player.health, 95)
-        self.assertEqual(player.elixir, 1)
+        self.assertEqual(player.health, 93)
+        self.assertEqual(player.elixir, 2)
+        self.assertTrue(card.custom_vars.get('bio_blood_knife_return'))
 
     def test_blood_knife_mod_data_matches_new_rules(self):
         archive = Path(__file__).resolve().parents[1] / 'mods' / 'Bio Cards Addition.gtnmod'
@@ -243,10 +306,10 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
 
         self.assertEqual(card['cost_e'], 0)
         self.assertEqual(card['card_type'], 'bloom')
-        self.assertEqual(set(card['flags']), {'self_only', 'rebound', 'symbiosis'})
+        self.assertEqual(set(card['flags']), {'self_only', 'symbiosis'})
         self.assertEqual(
             card['effect_text'],
-            '对自己造成5[[icon:D]]；每造成3[[icon:D]]，回复自己1[[icon:E]]',
+            '对自己造成7[[icon:electric_damage]]；每造成3[[icon:electric_damage]]，回复自己1[[icon:E]]；若实际回复至少1[[icon:E]]，此牌回到手中',
         )
 
     def test_blood_sugar_does_not_have_self_target(self):

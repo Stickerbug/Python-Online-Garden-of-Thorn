@@ -4,6 +4,7 @@ import copy
 import math
 import random
 import uuid
+from contextlib import nullcontext
 from typing import Any, Dict, Iterable, List, Optional
 
 from cards import CARD_DEFS, CardInstance, ERROR_CARD_ID, clamp_card_extra_hits, clamp_damage_hits
@@ -1719,7 +1720,17 @@ def _try_run_engine_atomic_op(engine, context: Dict[str, Any], op: str, params: 
     action = context.get("current_action")
     if choice is None and isinstance(action, dict):
         choice = action.get("choice", action)
-    engine_effect = _engine_effect_from_step(engine, context, step, effect_type)
+    mutation_scope = nullcontext()
+    if resolved_type in {"var_set", "var_add", "var_sub", "var_mul", "var_div"}:
+        raw_params = step.get("params") if isinstance(step.get("params"), dict) else step
+        name = str(raw_params.get("name") or "var")
+        target_selector = raw_params.get("target", "source")
+        target_refs = resolve_v2_target(engine, context, target_selector)
+        mutation_reader = getattr(engine, "_read_status_var_for_mutation", None)
+        if callable(mutation_reader):
+            mutation_scope = mutation_reader(target_refs, name)
+    with mutation_scope:
+        engine_effect = _engine_effect_from_step(engine, context, step, effect_type)
     engine_context = context
     try:
         engine._run_effect_list(source_id, card, [engine_effect], choice if isinstance(choice, dict) else None, engine_context)

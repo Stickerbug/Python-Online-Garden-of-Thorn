@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock
 
 from cards import CARD_DEFS, CardDef, CardInstance
 from game_engine import GameEngine
@@ -141,6 +142,7 @@ class OceanSapphirePlayabilityTests(unittest.TestCase):
         sapphire = CardInstance('test:ocean_sapphire')
         attack = CardInstance('test:sapphire_attack')
         player.hand.extend([sapphire, attack])
+        engine._bio_after_card_payment = Mock(wraps=engine._bio_after_card_payment)
 
         play_result = engine.play_card(0, sapphire.instance_id)
 
@@ -148,7 +150,9 @@ class OceanSapphirePlayabilityTests(unittest.TestCase):
         self.assertTrue(play_result['needs_choice'])
         self.assertEqual(play_result['choice_type'], 'choose_ocean_sapphire')
         self.assertIsNotNone(engine.pending_choice)
-        self.assertIsNone(player.find_hand_card(sapphire.instance_id))
+        self.assertIs(player.find_hand_card(sapphire.instance_id), sapphire)
+        self.assertEqual(player.elixir, 10)
+        engine._bio_after_card_payment.assert_not_called()
 
         choice_result = engine.resolve_choice(0, {
             'target_player': 1,
@@ -159,11 +163,100 @@ class OceanSapphirePlayabilityTests(unittest.TestCase):
 
         self.assertTrue(choice_result['success'])
         self.assertIsNone(engine.pending_choice)
+        self.assertIsNone(player.find_hand_card(sapphire.instance_id))
         self.assertIsNone(player.find_hand_card(attack.instance_id))
+        self.assertEqual(player.elixir, 8)
+        engine._bio_after_card_payment.assert_called_once()
         self.assertIn(attack.instance_id, [card.instance_id for card in player.exile])
         entries = player.custom_vars.get('ocean_auto_cards', [])
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]['target_id'], 1)
+
+    def test_sapphire_choice_is_queued_before_payment_in_1v1_and_2v2(self):
+        for engine in (GameEngine(), GameEngine2v2()):
+            with self.subTest(engine=type(engine).__name__):
+                player = self.prepare_engine(engine)
+                sapphire = CardInstance('test:ocean_sapphire')
+                attack = CardInstance('test:sapphire_attack')
+                player.hand.extend([sapphire, attack])
+                engine._bio_after_card_payment = Mock(wraps=engine._bio_after_card_payment)
+
+                result = (
+                    engine.play_card(0, sapphire.instance_id)
+                    if isinstance(engine, GameEngine) and not isinstance(engine, GameEngine2v2)
+                    else engine.play_card(0, sapphire.instance_id, -1)
+                )
+
+                self.assertTrue(result['success'])
+                self.assertTrue(result['needs_choice'])
+                self.assertEqual(
+                    [card['instance_id'] for card in result.get('hand_cards', [])],
+                    [attack.instance_id],
+                )
+                self.assertEqual(player.elixir, 10)
+                self.assertIs(player.find_hand_card(sapphire.instance_id), sapphire)
+                engine._bio_after_card_payment.assert_not_called()
+
+    def test_cancelling_sapphire_does_not_count_as_playing_it(self):
+        engine = GameEngine()
+        player = self.prepare_engine(engine)
+        sapphire = CardInstance('test:ocean_sapphire')
+        attack = CardInstance('test:sapphire_attack')
+        player.hand.extend([sapphire, attack])
+        engine._bio_after_card_payment = Mock(wraps=engine._bio_after_card_payment)
+
+        engine.play_card(0, sapphire.instance_id)
+        result = engine.resolve_choice(0, {'cancelled': True})
+
+        self.assertFalse(result['success'])
+        self.assertTrue(result['cancelled'])
+        self.assertIsNone(engine.pending_choice)
+        self.assertEqual(player.elixir, 10)
+        self.assertIs(player.find_hand_card(sapphire.instance_id), sapphire)
+        self.assertEqual(player.cards_played_this_turn.get(sapphire.def_id, 0), 0)
+        engine._bio_after_card_payment.assert_not_called()
+
+    def test_sapphire_rejects_an_attack_from_another_players_hand(self):
+        engine = GameEngine()
+        player = self.prepare_engine(engine)
+        sapphire = CardInstance('test:ocean_sapphire')
+        own_attack = CardInstance('test:sapphire_attack')
+        enemy_attack = CardInstance('test:sapphire_attack')
+        player.hand.extend([sapphire, own_attack])
+        engine.players[1].hand.append(enemy_attack)
+        engine._bio_after_card_payment = Mock(wraps=engine._bio_after_card_payment)
+
+        engine.play_card(0, sapphire.instance_id)
+        result = engine.resolve_choice(0, {
+            'target_player_id': 1,
+            'target_instance_id': enemy_attack.instance_id,
+        })
+
+        self.assertFalse(result['success'])
+        self.assertIn('已失效', result['error'])
+        self.assertIsNotNone(engine.pending_choice)
+        self.assertEqual(player.elixir, 10)
+        self.assertIs(player.find_hand_card(sapphire.instance_id), sapphire)
+        engine._bio_after_card_payment.assert_not_called()
+
+    def test_another_player_cannot_resolve_sapphire_choice(self):
+        engine = GameEngine()
+        player = self.prepare_engine(engine)
+        sapphire = CardInstance('test:ocean_sapphire')
+        attack = CardInstance('test:sapphire_attack')
+        player.hand.extend([sapphire, attack])
+
+        engine.play_card(0, sapphire.instance_id)
+        result = engine.resolve_choice(1, {
+            'target_player_id': 1,
+            'target_instance_id': attack.instance_id,
+        })
+
+        self.assertFalse(result['success'])
+        self.assertIn('不是你的选择操作', result['error'])
+        self.assertIsNotNone(engine.pending_choice)
+        self.assertEqual(player.elixir, 10)
+        self.assertIs(player.find_hand_card(sapphire.instance_id), sapphire)
 
 
 if __name__ == '__main__':

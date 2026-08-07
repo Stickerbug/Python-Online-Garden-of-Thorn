@@ -30,7 +30,7 @@ def make_counter(def_id, response_trigger):
 class SecondaryAttackTargetingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        desert = load_mod(str(ROOT / 'mods' / 'Desert Cards Addition.gtnmod'))
+        desert = load_mod(str(ROOT / 'mods' / 'Desert Cards DLC.gtnmod'))
         arctic = load_mod(str(ROOT / 'mods' / 'Arctic Cards Addition.gtnmod'))
         if desert.errors or arctic.errors:
             raise AssertionError([*desert.errors, *arctic.errors])

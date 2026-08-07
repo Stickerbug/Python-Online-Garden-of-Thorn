@@ -10,7 +10,7 @@ from mod_loader import load_mod
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "mods" / "Jungle Cards Addition.gtnmod"
+PACKAGE = ROOT / "mods" / "Jungle Cards DLC.gtnmod"
 NEW_CARD_IDS = {"Monstera", "Dianthus", "Maple"}
 
 
@@ -63,7 +63,7 @@ class JungleNewCards20260729Tests(unittest.TestCase):
 
     def test_package_metadata_assets_and_locales(self):
         self.assertEqual(self.mod.info.author, "Eric, AArcC")
-        self.assertEqual(self.mod.info.version, "1.1.0")
+        self.assertEqual(self.mod.info.version, "1.0.0")
         self.assertTrue(NEW_CARD_IDS <= self.mod_cards.keys())
         self.assertEqual(self.mod_cards["Monstera"].count, 3)
         self.assertEqual(self.mod_cards["Monstera"].cost_e, 3)

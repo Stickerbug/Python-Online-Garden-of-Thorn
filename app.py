@@ -60,6 +60,7 @@ from card_i18n import apply_card_i18n_defaults, card_text, event_text
 from runtime_errors import set_mod_runtime_error_logger
 from runtime_budget import ActionWorkBudgetExceeded
 from story_content import story_content_payload
+from story_discovery import collect_story_discoveries
 from story_engine import StoryActionError, apply_story_action
 from story_mode import STORY_CONTENT_VERSION, build_initial_story_state
 from r2_mods import (
@@ -102,6 +103,7 @@ from db import (
     cleanup_expired_content_disables_once,
     cleanup_old_dm_messages_once,
     commit_story_run_action,
+    create_story_manual_save,
     create_story_run,
     create_report_entry,
     create_remember_token,
@@ -142,6 +144,8 @@ from db import (
     list_user_gr_snapshots,
     list_card_draft_stats,
     list_opening_event_stats,
+    list_story_manual_saves,
+    list_story_discoveries,
     list_ip_bans,
     list_active_moderation_records,
     list_user_recent_ips,
@@ -152,6 +156,7 @@ from db import (
     claim_user_daily_checkin,
     begin_user_online_session,
     mark_user_last_seen,
+    mark_story_discoveries_viewed,
     mark_friend_notifications_read_for_user,
     normalize_skin_config,
     normalize_username_key,
@@ -164,6 +169,7 @@ from db import (
     record_card_draft_win_result,
     record_opening_event_pick_counts,
     record_opening_event_win_result,
+    record_story_discoveries,
     rebuild_card_draft_win_stats_from_matches,
     backfill_achievements_from_matches,
     backfill_cards_played_achievements_from_matches,
@@ -172,6 +178,7 @@ from db import (
     rebuild_user_stats_from_matches,
     rebuild_user_play_seconds_from_matches,
     remove_friend,
+    load_story_manual_save,
     reset_story_run_map,
     revoke_remember_token,
     resolve_report_entry,
@@ -405,7 +412,7 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui'
+GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
 GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -3133,21 +3140,45 @@ def _validate_chat_text_for_sender(raw_text, *, exempt=False):
 
 def _online_lobby_mention_candidates(beta_mode=False):
     items = []
+    seen = set()
+
+    def append_candidate(*, sid='', user_id=None, nickname='', player_id=''):
+        name = str(nickname or '').strip()
+        if not name:
+            return
+        identity = (
+            f'user:{user_id}' if user_id not in (None, '')
+            else f'name:{normalize_username_key(name)}'
+        )
+        if identity in seen:
+            return
+        seen.add(identity)
+        items.append({
+            'sid': sid,
+            'user_id': user_id,
+            'nickname': name,
+            'player_id': str(player_id or ''),
+            'key': normalize_username_key(name),
+        })
+
     for target_sid, target in players.items():
-        if target.get('status') != 'lobby':
+        if target.get('status') not in {'lobby', 'spectating'}:
             continue
         if bool(target.get('beta_mode', False)) != bool(beta_mode):
             continue
-        name = str(target.get('nickname') or '').strip()
-        if not name:
-            continue
-        items.append({
-            'sid': target_sid,
-            'user_id': target.get('user_id'),
-            'nickname': name,
-            'player_id': target.get('player_id') or '',
-            'key': normalize_username_key(name),
-        })
+        append_candidate(
+            sid=target_sid,
+            user_id=target.get('user_id'),
+            nickname=target.get('nickname'),
+            player_id=target.get('player_id'),
+        )
+    for presence in _active_story_presences(beta_mode):
+        append_candidate(
+            sid=f"story:{presence.get('user_id')}",
+            user_id=presence.get('user_id'),
+            nickname=presence.get('nickname'),
+            player_id=presence.get('account_player_id'),
+        )
     return items
 
 
@@ -3272,6 +3303,14 @@ def _lobby_chat_history_payload_locked(limit=LOBBY_CHAT_VISIBLE_LIMIT, beta_mode
     cache = _lobby_chat_cache_locked(beta_mode)
     return {
         'items': _lobby_chat_recent_locked(limit, beta_mode),
+        'mention_candidates': [
+            {
+                'user_id': item.get('user_id'),
+                'nickname': item.get('nickname'),
+                'player_id': item.get('player_id'),
+            }
+            for item in _online_lobby_mention_candidates(beta_mode)
+        ],
         'limit': limit,
         'total_cached': len(cache),
         'beta_mode': bool(beta_mode),
@@ -14046,6 +14085,27 @@ def send_solo_state(sid, perspective=None):
         socketio.emit('choice_request', build_choice_request_payload(pending), room=sid)
 
 
+def _response_destroy_target_equipment(engine, played_card, pending):
+    choice = pending.get('original_choice') if isinstance(pending, dict) else None
+    if not isinstance(choice, dict) or choice.get('target_instance_id') is None:
+        return None
+    try:
+        source_card = CardInstance.from_dict(played_card)
+        destroys_equipment = bool(engine._would_destroy_equipment(source_card))
+        target_instance_id = int(choice.get('target_instance_id'))
+    except (AttributeError, TypeError, ValueError, KeyError):
+        return None
+    if not destroys_equipment:
+        return None
+    for owner_id, player_state in enumerate(getattr(engine, 'players', []) or []):
+        equipment = player_state.find_equipment(target_instance_id)
+        if equipment is not None:
+            serialized = equipment.to_dict()
+            serialized['owner_id'] = owner_id
+            return serialized
+    return None
+
+
 def build_response_request_payload(engine, responder_id, played_card, player_id, counter_cards, target_player_id=None):
     serialized_cards = [
         c.to_dict() if hasattr(c, 'to_dict') else c
@@ -14071,6 +14131,9 @@ def build_response_request_payload(engine, responder_id, played_card, player_id,
         'target_player_id': target_player_id,
         'counter_cards': serialized_cards,
     }
+    destroy_target_equipment = _response_destroy_target_equipment(engine, played_card, pending)
+    if destroy_target_equipment is not None:
+        payload['destroy_target_equipment'] = destroy_target_equipment
     predictor = getattr(engine, 'build_response_damage_prediction', None)
     if is_confusion_disguise:
         predictor = getattr(engine, 'build_sewers_confusion_damage_prediction', predictor)
@@ -14798,6 +14861,7 @@ def story_page():
             'id': user.get('id'),
             'username': user.get('username'),
             'display_name': user.get('display_name') or user.get('username'),
+            'player_id': user.get('player_id'),
             'skin': public_skin_config(user.get('skin')),
             'keybindings': user.get('keybindings'),
         },
@@ -14867,14 +14931,93 @@ def api_story_afk_check():
     return jsonify({'success': True, **result})
 
 
+def _current_story_run(user_id):
+    run = get_active_story_run(user_id)
+    if not run or str(run.get('content_version') or '') == STORY_CONTENT_VERSION:
+        return run
+    seed = secrets.token_hex(16)
+    state = build_initial_story_state(seed)
+    return reset_story_run_map(
+        user_id,
+        seed,
+        STORY_CONTENT_VERSION,
+        state,
+        run_id=run.get('id'),
+    )
+
+
+def _sync_story_discoveries(user_id, run):
+    if not run or not isinstance(run.get('state'), dict):
+        return []
+    try:
+        discoveries = collect_story_discoveries(run.get('state') or {})
+        return record_story_discoveries(user_id, discoveries, run.get('id'))
+    except sqlite3.OperationalError as exc:
+        if 'locked' not in str(exc).lower():
+            raise
+        app.logger.warning(
+            'story discovery sync skipped because database is locked user=%s run=%s',
+            user_id,
+            run.get('id'),
+        )
+        return []
+
+
+def _list_story_discoveries_without_blocking(user_id):
+    try:
+        return list_story_discoveries(user_id)
+    except sqlite3.OperationalError as exc:
+        if 'locked' not in str(exc).lower():
+            raise
+        app.logger.warning(
+            'story discovery list skipped because database is locked user=%s',
+            user_id,
+        )
+        return []
+
+
+@app.route('/api/story/discoveries', methods=['GET'])
+def api_story_discoveries_get():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    run = _current_story_run(user_id)
+    new_discoveries = _sync_story_discoveries(user_id, run)
+    return jsonify({
+        'success': True,
+        'discoveries': _list_story_discoveries_without_blocking(user_id),
+        'new_discoveries': new_discoveries,
+    })
+
+
+@app.route('/api/story/discoveries/read', methods=['POST'])
+def api_story_discoveries_read():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    try:
+        marked = mark_story_discoveries_viewed(user_id)
+        return jsonify({'success': True, 'marked': marked})
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事图鉴暂时不可用，请稍后重试', 503)
+        raise
+
+
 @app.route('/api/story/run', methods=['GET'])
 def api_story_run_get():
     user_id, _, error = _require_account_json()
     if error:
         return error
     try:
-        run = get_active_story_run(user_id)
-        return jsonify({'success': True, 'run': run})
+        run = _current_story_run(user_id)
+        new_discoveries = _sync_story_discoveries(user_id, run)
+        return jsonify({
+            'success': True,
+            'run': run,
+            'discoveries': _list_story_discoveries_without_blocking(user_id),
+            'new_discoveries': new_discoveries,
+        })
     except sqlite3.OperationalError as exc:
         if 'locked' in str(exc).lower():
             return _json_error('故事记录暂时不可用，请稍后重试', 503)
@@ -14887,13 +15030,27 @@ def api_story_run_create():
     if error:
         return error
     try:
-        existing = get_active_story_run(user_id)
+        existing = _current_story_run(user_id)
         if existing:
-            return jsonify({'success': True, 'created': False, 'run': existing})
+            new_discoveries = _sync_story_discoveries(user_id, existing)
+            return jsonify({
+                'success': True,
+                'created': False,
+                'run': existing,
+                'discoveries': _list_story_discoveries_without_blocking(user_id),
+                'new_discoveries': new_discoveries,
+            })
         seed = secrets.token_hex(16)
         state = build_initial_story_state(seed)
         run, created = create_story_run(user_id, seed, STORY_CONTENT_VERSION, state)
-        return jsonify({'success': True, 'created': created, 'run': run})
+        new_discoveries = _sync_story_discoveries(user_id, run)
+        return jsonify({
+            'success': True,
+            'created': created,
+            'run': run,
+            'discoveries': _list_story_discoveries_without_blocking(user_id),
+            'new_discoveries': new_discoveries,
+        })
     except sqlite3.OperationalError as exc:
         if 'locked' in str(exc).lower():
             return _json_error('故事记录暂时不可用，请稍后重试', 503)
@@ -14902,13 +15059,14 @@ def api_story_run_create():
 
 @app.route('/api/story/content', methods=['GET'])
 def api_story_content_get():
-    _, _, error = _require_account_json()
+    user_id, _, error = _require_account_json()
     if error:
         return error
     return jsonify({
         'success': True,
         'content_version': STORY_CONTENT_VERSION,
         'content': story_content_payload(CARD_DEFS),
+        'discoveries': _list_story_discoveries_without_blocking(user_id),
     })
 
 
@@ -14942,15 +15100,16 @@ def api_story_run_action():
 
     try:
         if get_story_run_action(user_id, run_id, action_id):
-            current = get_active_story_run(user_id)
+            current = _current_story_run(user_id)
             return jsonify({
                 'success': True,
                 'duplicate': True,
                 'run': current,
                 'events': [],
+                'discoveries': _list_story_discoveries_without_blocking(user_id),
             })
 
-        run = get_active_story_run(user_id)
+        run = _current_story_run(user_id)
         if not run or run.get('id') != run_id:
             return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
         if int(run.get('state_version') or 0) != expected_version:
@@ -14985,11 +15144,21 @@ def api_story_run_action():
                 code='STATE_VERSION_OLD',
                 run=updated,
             )
+        new_discoveries = (
+            [] if outcome == 'duplicate'
+            else _sync_story_discoveries(user_id, updated)
+        )
         return jsonify({
             'success': True,
             'duplicate': outcome == 'duplicate',
             'run': updated,
             'events': [] if outcome == 'duplicate' else events,
+            'new_discoveries': new_discoveries,
+            **(
+                {'discoveries': _list_story_discoveries_without_blocking(user_id)}
+                if outcome == 'duplicate'
+                else {}
+            ),
         })
     except StoryActionError as exc:
         current = get_active_story_run(user_id)
@@ -15019,6 +15188,121 @@ def api_story_run_abandon():
         raise
 
 
+@app.route('/api/story/run/saves', methods=['GET'])
+def api_story_run_saves():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    run_id = str(request.args.get('run_id') or '').strip()
+    if not run_id or len(run_id) > 64:
+        return _json_error('故事旅程编号无效', 400, code='INVALID_RUN_ID')
+    try:
+        run = _current_story_run(user_id)
+        if not run or run.get('id') != run_id:
+            return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
+        return jsonify({
+            'success': True,
+            'saves': list_story_manual_saves(user_id, run_id),
+        })
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+
+
+@app.route('/api/story/run/save', methods=['POST'])
+def api_story_run_save():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    run_id = str(data.get('run_id') or '').strip()
+    try:
+        expected_version = int(data.get('state_version'))
+    except (TypeError, ValueError):
+        return _json_error('故事状态版本无效', 400, code='INVALID_STATE_VERSION')
+    if not run_id or len(run_id) > 64:
+        return _json_error('故事旅程编号无效', 400, code='INVALID_RUN_ID')
+    try:
+        result, outcome = create_story_manual_save(
+            user_id,
+            run_id,
+            expected_version,
+        )
+        if outcome == 'not_found':
+            return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
+        if outcome == 'version':
+            return _json_error(
+                '故事状态已更新', 409, code='STATE_VERSION_OLD', run=result,
+            )
+        if outcome == 'phase':
+            return _json_error(
+                '只能在路线选择界面保存进度',
+                400,
+                code='MANUAL_SAVE_NOT_ALLOWED',
+                run=result,
+            )
+        if outcome != 'saved':
+            return _json_error('当前故事进度无法保存', 400, code='INVALID_STORY_STATE')
+        return jsonify({'success': True, 'saves': result})
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+
+
+@app.route('/api/story/run/load', methods=['POST'])
+def api_story_run_load():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    run_id = str(data.get('run_id') or '').strip()
+    try:
+        expected_version = int(data.get('state_version'))
+        save_id = int(data.get('save_id'))
+    except (TypeError, ValueError):
+        return _json_error('故事存档参数无效', 400, code='INVALID_SAVE_REQUEST')
+    if not run_id or len(run_id) > 64 or save_id <= 0:
+        return _json_error('故事存档参数无效', 400, code='INVALID_SAVE_REQUEST')
+    try:
+        run, outcome = load_story_manual_save(
+            user_id,
+            run_id,
+            save_id,
+            expected_version,
+        )
+        if outcome == 'not_found':
+            return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
+        if outcome == 'save_not_found':
+            return _json_error('该故事存档不存在', 404, code='SAVE_NOT_FOUND')
+        if outcome == 'version':
+            return _json_error(
+                '故事状态已更新', 409, code='STATE_VERSION_OLD', run=run,
+            )
+        if outcome == 'phase':
+            return _json_error(
+                '只能在路线选择界面读取进度',
+                400,
+                code='MANUAL_LOAD_NOT_ALLOWED',
+                run=run,
+            )
+        if outcome != 'loaded':
+            return _json_error('该故事存档无法读取', 400, code='INVALID_STORY_SAVE')
+        new_discoveries = _sync_story_discoveries(user_id, run)
+        return jsonify({
+            'success': True,
+            'run': run,
+            'saves': list_story_manual_saves(user_id, run_id),
+            'discoveries': _list_story_discoveries_without_blocking(user_id),
+            'new_discoveries': new_discoveries,
+        })
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+
+
 @app.route('/api/story/run/reset-map', methods=['POST'])
 def api_story_run_reset_map():
     user_id, _, error = _require_account_json()
@@ -15039,7 +15323,13 @@ def api_story_run_reset_map():
         )
         if run is None:
             return _json_error('没有进行中的故事旅程', 404)
-        return jsonify({'success': True, 'run': run})
+        new_discoveries = _sync_story_discoveries(user_id, run)
+        return jsonify({
+            'success': True,
+            'run': run,
+            'discoveries': _list_story_discoveries_without_blocking(user_id),
+            'new_discoveries': new_discoveries,
+        })
     except sqlite3.OperationalError as exc:
         if 'locked' in str(exc).lower():
             return _json_error('故事记录暂时不可用，请稍后重试', 503)

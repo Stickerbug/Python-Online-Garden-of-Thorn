@@ -22,6 +22,7 @@ from story_content import (
 )
 from story_engine import (
     StoryActionError,
+    _draw_cards,
     _enemy_intent,
     _gain_elixir,
     _gain_magic,
@@ -32,8 +33,20 @@ from story_engine import (
 from story_mode import STORY_FLOOR_COUNT, build_initial_story_state, generate_story_map
 
 
-def _begin_combat(seed='story-test'):
+def _journey_state(seed='story-test', difficulty='normal', biome='garden'):
     state = build_initial_story_state(seed)
+    state, _ = apply_story_action(
+        state,
+        'start_journey',
+        {'biome': biome, 'difficulty': difficulty},
+        seed,
+    )
+    state['blessing_options'] = list(STORY_BLESSINGS)
+    return state
+
+
+def _begin_combat(seed='story-test'):
+    state = _journey_state(seed)
     state, _ = apply_story_action(
         state,
         'choose_blessing',
@@ -88,6 +101,50 @@ def test_story_resources_can_exceed_legacy_display_maximums():
     )
 
 
+def test_story_resources_reset_to_turn_baselines_instead_of_carrying_over():
+    seed = 'story-resource-reset'
+    state, _ = _begin_combat(seed)
+    state['combat']['opening_redraw_pending'] = False
+    state['combat']['elixir'] = 41
+    state['combat']['magic'] = 29
+    state['player']['max_elixir'] = 7
+    state['player']['magic'] = 3
+    state['player']['health'] = state['player']['max_health'] = 999
+    for enemy in state['combat']['enemies']:
+        enemy['stun'] = 1
+
+    state, _ = apply_story_action(state, 'end_turn', {}, seed)
+
+    assert state['phase'] == 'combat'
+    assert state['combat']['elixir'] == 7
+    assert state['combat']['magic'] == 3
+
+
+def test_story_draw_reshuffles_discard_during_the_same_draw_action():
+    seed = 'story-mid-draw-reshuffle'
+    state, _ = _begin_combat(seed)
+    combat = state['combat']
+    combat['hand'] = []
+    first = _new_card(state, 'basic')
+    second = _new_card(state, 'rose')
+    third = _new_card(state, 'heavy')
+    combat['draw_pile'] = [first]
+    combat['discard_pile'] = [second, third]
+    events = []
+
+    drawn = _draw_cards(state, 3, seed, events)
+
+    assert set(drawn) == {
+        first['instance_id'],
+        second['instance_id'],
+        third['instance_id'],
+    }
+    assert combat['draw_pile'] == []
+    assert combat['discard_pile'] == []
+    assert any(event.get('type') == 'reshuffle' for event in events)
+    assert any(event.get('type') == 'draw' and event.get('count') == 3 for event in events)
+
+
 def test_story_content_is_valid_and_reward_pool_excludes_special_cards():
     validate_story_content()
     assert len(STORY_CARDS) >= 60
@@ -98,7 +155,10 @@ def test_story_content_is_valid_and_reward_pool_excludes_special_cards():
     assert STORY_CARDS['mark']['rarity'] == 'super'
     assert STORY_CARDS['mark']['owner'] == 'neutral'
     assert 'exile' in STORY_CARDS['mark']['tags']
-    assert initial_story_player()['relics'] == ['energetic']
+    initial_player = initial_story_player()
+    assert initial_player['relics'] == ['energetic']
+    assert initial_player['gold'] == 99
+    assert STORY_RELICS['energetic']['script'] == 'floor_heal'
 
 
 def test_story_attack_effect_types_share_one_calculation_contract():
@@ -135,7 +195,7 @@ def test_story_statuses_use_their_dedicated_icons():
 def test_immediate_blessings_apply_the_latest_defined_rewards():
     seed = 'story-blessing-immediate'
 
-    health_state = build_initial_story_state(seed)
+    health_state = _journey_state(seed)
     initial_health = health_state['player']['health']
     initial_max_health = health_state['player']['max_health']
     health_state, _ = apply_story_action(
@@ -148,7 +208,7 @@ def test_immediate_blessings_apply_the_latest_defined_rewards():
     assert health_state['player']['health'] == initial_health
     assert health_state['player']['blessings'] == ['max_health']
 
-    rare_state = build_initial_story_state(seed)
+    rare_state = _journey_state(seed)
     initial_deck_size = len(rare_state['player']['deck'])
     rare_state, rare_events = apply_story_action(
         rare_state,
@@ -163,16 +223,16 @@ def test_immediate_blessings_apply_the_latest_defined_rewards():
     assert len(rare_state['player']['deck']) == initial_deck_size + 1
     assert STORY_CARDS[gained_rare['card_id']]['rarity'] == 'rare'
 
-    gold_state = build_initial_story_state(seed)
+    gold_state = _journey_state(seed)
     gold_state, _ = apply_story_action(
         gold_state,
         'choose_blessing',
         {'blessing_id': 'gold'},
         seed,
     )
-    assert gold_state['player']['gold'] == 100
+    assert gold_state['player']['gold'] == 199
 
-    relic_state = build_initial_story_state(seed)
+    relic_state = _journey_state(seed)
     relic_state, _ = apply_story_action(
         relic_state,
         'choose_blessing',
@@ -182,14 +242,14 @@ def test_immediate_blessings_apply_the_latest_defined_rewards():
     assert len(relic_state['player']['relics']) == 2
     assert relic_state['player']['deck'][-1]['def_id'] == 'fatigued'
 
-    wealth_state = build_initial_story_state(seed)
+    wealth_state = _journey_state(seed)
     wealth_state, _ = apply_story_action(
         wealth_state,
         'choose_blessing',
         {'blessing_id': 'wealth_and_basics'},
         seed,
     )
-    assert wealth_state['player']['gold'] == 250
+    assert wealth_state['player']['gold'] == 349
     assert [card['def_id'] for card in wealth_state['player']['deck'][-2:]] == [
         'basic',
         'rose',
@@ -198,7 +258,7 @@ def test_immediate_blessings_apply_the_latest_defined_rewards():
 
 def test_blessing_can_transform_or_remove_the_selected_deck_instance():
     seed = 'story-blessing-deck-change'
-    transform_state = build_initial_story_state(seed)
+    transform_state = _journey_state(seed)
     selected = transform_state['player']['deck'][0]
     selected['upgraded'] = True
     selected['modifiers'] = {'temporary': 3}
@@ -222,7 +282,7 @@ def test_blessing_can_transform_or_remove_the_selected_deck_instance():
     assert 'modifiers' not in transformed
     assert any(event.get('type') == 'card_transformed' for event in events)
 
-    remove_state = build_initial_story_state(seed)
+    remove_state = _journey_state(seed)
     removed = remove_state['player']['deck'][0]
     initial_size = len(remove_state['player']['deck'])
     remove_state, events = apply_story_action(
@@ -248,7 +308,7 @@ def test_blessing_can_transform_or_remove_the_selected_deck_instance():
 
 def test_double_card_reward_blessing_resolves_two_complete_reward_rounds():
     seed = 'story-blessing-double-reward'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     state, _ = apply_story_action(
         state,
         'choose_blessing',
@@ -305,7 +365,7 @@ def test_double_card_reward_blessing_resolves_two_complete_reward_rounds():
 
 def test_updated_story_card_balance_matches_the_latest_design():
     assert STORY_CARDS['coffee']['effects'][0]['amount'] == 3
-    assert STORY_CARDS['bur']['effects'][0]['amount'] == 9
+    assert STORY_CARDS['bur']['effects'][0]['amount'] == 6
     assert STORY_CARDS['shell']['upgrade']['cost_e'] == 1
     assert STORY_CARDS['sponge']['cost_e'] == 1
     assert STORY_CARDS['sponge']['upgrade']['cost_e'] == 0
@@ -318,13 +378,13 @@ def test_updated_story_card_balance_matches_the_latest_design():
     assert 'exile' not in STORY_CARDS['heavy']['tags']
     assert STORY_CARDS['magic_shell']['effects'][1]['amount'] == 4
     assert STORY_CARDS['crystal_leaf']['cost_e'] == 3
-    assert STORY_CARDS['crystal_leaf']['effects'][0]['amount'] == 3
+    assert STORY_CARDS['crystal_leaf']['effects'][0]['amount'] == 2
     assert STORY_CARDS['magic_crystal_leaf']['type'] == 'root'
     assert STORY_CARDS['magic_crystal_leaf']['effects'][0]['amount'] == 3
     assert STORY_CARDS['dna']['type'] == 'root'
     assert STORY_CARDS['chromosome']['effects'][0]['amount'] == 7
     assert STORY_CARDS['moon_rock']['upgrade']['effects'][1]['amount'] == -1
-    assert STORY_CARDS['nuke']['rarity'] == 'ultra'
+    assert STORY_CARDS['nuke']['rarity'] == 'rare'
     assert STORY_CARDS['rmb']['effects'][0]['amount'] == 15
     assert STORY_CARDS['rmb']['upgrade']['effects'][0]['amount'] == 25
     assert STORY_CARDS['bubble']['rarity'] == 'ultra'
@@ -341,9 +401,8 @@ def test_updated_story_relic_and_garden_enemy_balance():
     assert STORY_ENEMIES['soldier_ant']['moves'][1]['effects'][0]['amount'] == 14
     assert STORY_ENEMIES['young_ant']['max_health'] == 11
     assert STORY_ENEMIES['worker_ant']['max_health'] == 32
-    assert STORY_ENEMIES['wasp']['moves'][0]['effects'] == (
-        {'type': 'gain_shield', 'amount': 6},
-    )
+    assert STORY_ENEMIES['wasp']['moves'][0]['effects'][0]['amount'] == 6
+    assert STORY_ENEMIES['wasp']['moves'][0]['effects'][0]['lunatic_amount'] == 8
     assert STORY_ENEMIES['centipede']['max_health'] == 52
     assert STORY_ENEMIES['avocado']['moves'][0]['name']['en'] == 'Expand'
     assert STORY_ENEMIES['avocado']['moves'][0]['effects'][1]['amount'] == 2
@@ -421,9 +480,9 @@ def test_story_patch_card_status_and_trait_images_are_packaged():
             if definitions is not None:
                 assert definitions[definition_id]['image_url'] == image_url
 
-    assert len(STORY_CARD_IMAGE_URLS) == 11
-    assert len(STORY_STATUS_IMAGE_URLS) == 8
-    assert len(STORY_TRAITS) == 5
+    assert len(STORY_CARD_IMAGE_URLS) >= 16
+    assert len(STORY_STATUS_IMAGE_URLS) >= 9
+    assert len(STORY_TRAITS) >= 19
 
 
 def test_story_enemy_traits_reference_defined_visual_terms():
@@ -482,7 +541,7 @@ def test_entering_a_new_stage_restores_all_health():
     state, events = apply_story_action(
         state,
         'choose_stage',
-        {'biome': 'jungle'},
+        {'biome': 'jungle', 'curse_id': 'vitality'},
         'stage-heal',
     )
 
@@ -504,18 +563,38 @@ def test_a_complete_four_stage_journey_can_reach_the_terminal_state():
     while state.get('phase') not in ('complete', 'game_over'):
         action_count += 1
         assert action_count < 1000
+        operations = state.get('pending_deck_operations') or []
+        if operations:
+            operation = operations[0]
+            minimum = int(operation.get('minimum', operation.get('count')) or 0)
+            state, _ = apply_story_action(
+                state,
+                'resolve_deck_operation',
+                {'selected_card_ids': operation.get('candidate_ids', [])[:minimum]},
+                seed,
+            )
+            continue
         state['player']['health'] = max(100000, int(state['player']['health']))
         state['player']['max_health'] = max(
             100000,
             int(state['player']['max_health']),
         )
+        state['player']['gold'] = max(100000, int(state['player']['gold']))
         phase = state['phase']
 
-        if phase == 'blessing':
+        if phase == 'journey_setup':
+            state, _ = apply_story_action(
+                state,
+                'start_journey',
+                {'biome': 'garden', 'difficulty': 'normal'},
+                seed,
+            )
+            state['blessing_options'] = list(STORY_BLESSINGS)
+        elif phase == 'blessing':
             state, _ = apply_story_action(
                 state,
                 'choose_blessing',
-                {'blessing_id': 'max_health'},
+                {'blessing_id': state['blessing_options'][0]},
                 seed,
             )
         elif phase == 'map':
@@ -567,22 +646,33 @@ def test_a_complete_four_stage_journey_can_reach_the_terminal_state():
             state, _ = apply_story_action(state, 'choose_reward', {}, seed)
         elif phase == 'room':
             room = state['room']
+            raw_options = list(room.get('options', []))
             options = [
                 option.get('id') if isinstance(option, dict) else option
-                for option in room.get('options', [])
+                for option in raw_options
             ]
             preferred = {
                 'rest': 'heal',
                 'chest': 'claim',
                 'shop': 'leave',
             }.get(room.get('type'))
-            option = preferred if preferred in options else next(
-                (
-                    value for value in ('pass_by', 'leave', 'escape', 'observe')
-                    if value in options
-                ),
-                options[0],
-            )
+            if room.get('type') == 'event':
+                raw_option = next(
+                    (
+                        value for value in raw_options
+                        if not isinstance(value, dict) or not value.get('selection')
+                    ),
+                    raw_options[0],
+                )
+                option = raw_option.get('id') if isinstance(raw_option, dict) else raw_option
+            else:
+                option = preferred if preferred in options else next(
+                    (
+                        value for value in ('pass_by', 'leave', 'escape', 'observe')
+                        if value in options
+                    ),
+                    options[0],
+                )
             state, _ = apply_story_action(
                 state,
                 'resolve_room',
@@ -593,7 +683,10 @@ def test_a_complete_four_stage_journey_can_reach_the_terminal_state():
             state, _ = apply_story_action(
                 state,
                 'choose_stage',
-                {'biome': state['room']['biomes'][0]},
+                {
+                    'biome': state['room']['biomes'][0],
+                    'curse_id': state['room']['curses'][0],
+                },
                 seed,
             )
         else:
@@ -709,22 +802,22 @@ def test_salt_returns_the_next_actual_damage_to_its_source_immediately():
         {'card_instance_id': salt['instance_id']},
         seed,
     )
-    assert state['combat']['shield'] == 5
+    assert state['combat']['shield'] == 3
     assert state['combat']['salt_multipliers'] == [1]
 
     player_health = state['player']['health']
     enemy_health = state['combat']['enemies'][0]['health']
     state, events = apply_story_action(state, 'end_turn', {}, seed)
 
-    assert state['player']['health'] == player_health - 1
-    assert state['combat']['enemies'][0]['health'] == enemy_health - 1
+    assert state['player']['health'] == player_health - 3
+    assert state['combat']['enemies'][0]['health'] == enemy_health - 3
     assert state['combat']['salt_multipliers'] == []
     returned = next(
         event
         for event in events
         if event.get('type') == 'enemy_damage' and event.get('source') == 'salt'
     )
-    assert returned['amount'] == 1
+    assert returned['amount'] == 3
 
 
 def test_fission_does_not_consume_or_repeat_on_another_fission():
@@ -763,7 +856,7 @@ def test_fission_does_not_consume_or_repeat_on_another_fission():
 
 def test_dandelion_seed_can_be_planted_at_a_rest_site():
     seed = 'plant-dandelion'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     seed_card = _new_card(state, 'dandelion_seed')
     state['player']['deck'].append(seed_card)
     state['phase'] = 'room'
@@ -837,7 +930,7 @@ def test_yin_yang_shuffles_the_other_hand_and_draws_one_extra_card():
 
 def test_occultist_life_choice_loses_thirty_percent_max_health():
     seed = 'occultist-life'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     state['phase'] = 'room'
     state['room'] = {
         'type': 'event',
@@ -945,6 +1038,65 @@ def test_nuke_damage_and_prediction_receive_fusion_multiplier():
     assert [event['amount'] for event in damage] == [18, 18]
     assert before - state['combat']['enemies'][0]['health'] == 36
     assert state['combat']['next_attack_multiplier'] == 1
+
+
+def test_player_damage_applies_power_before_multiplier_and_vulnerable_last():
+    seed = 'story-player-damage-order'
+    state, _ = _begin_combat(seed)
+    state['combat']['power'] = 3
+    state['combat']['next_attack_multiplier'] = 2
+    card = _inject_hand_card(state, 'basic')
+    target = state['combat']['enemies'][0]
+    target['health'] = target['max_health'] = 999
+    target['shield'] = 0
+    target['vulnerable'] = 1
+    _refresh_combat_projections(state)
+
+    prediction = state['combat']['damage_predictions'][card['instance_id']]
+    assert prediction['by_target'][target['id']]['hits'] == [27]
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id'], 'target_id': target['id']},
+        seed,
+    )
+    damage = [event for event in events if event['type'] == 'enemy_damage']
+    assert [event['amount'] for event in damage] == [27]
+
+
+def test_acid_exiling_azalea_runs_azalea_exile_effect():
+    seed = 'story-acid-azalea'
+    state, _ = _begin_combat(seed)
+    acid = _new_card(state, 'acid')
+    azalea = _new_card(state, 'azalea')
+    state['combat']['hand'] = [acid, azalea]
+    target = state['combat']['enemies'][0]
+    target['health'] = target['max_health'] = 999
+    state['combat']['shield'] = 0
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': acid['instance_id'], 'target_id': target['id']},
+        seed,
+    )
+
+    assert state['combat']['shield'] == 3
+    assert any(
+        card['instance_id'] == azalea['instance_id']
+        for card in state['combat']['exile_pile']
+    )
+    assert any(
+        card['def_id'] == 'azalea'
+        and card['instance_id'] != azalea['instance_id']
+        for card in state['combat']['discard_pile']
+    )
+    assert any(
+        event.get('type') == 'card_exiled'
+        and event.get('card_instance_id') == azalea['instance_id']
+        for event in events
+    )
 
 
 def test_cutter_damage_and_prediction_receive_fusion_multiplier():
@@ -1059,7 +1211,8 @@ def test_player_shield_also_blocks_poison_damage():
     combat = state['combat']
     combat['shield'] = 3
     combat['poison'] = 5
-    combat['enemies'][0]['stun'] = 1
+    for enemy in combat['enemies']:
+        enemy['stun'] = 1
     health = state['player']['health']
 
     state, events = apply_story_action(
@@ -1212,7 +1365,7 @@ def test_enemy_defeat_events_are_emitted_once_and_parallelized():
 
 def test_cooldown_relic_blocks_actions_until_opening_redraw_is_resolved():
     seed = 'cooldown'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     state['player']['relics'].append('cooldown')
     state, _ = apply_story_action(state, 'choose_blessing', {'blessing_id': 'max_health'}, seed)
     node = next(
@@ -1246,7 +1399,7 @@ def test_cooldown_relic_blocks_actions_until_opening_redraw_is_resolved():
 
 def test_opening_lightning_emits_parallel_damage_for_combat_entrance():
     seed = 'opening-lightning-animation'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     state['player']['relics'].append('opening_lightning')
     state, _ = apply_story_action(state, 'choose_blessing', {'blessing_id': 'max_health'}, seed)
     node = next(
@@ -1275,7 +1428,7 @@ def test_opening_lightning_emits_parallel_damage_for_combat_entrance():
 
 def test_occultist_event_adds_the_defined_cards_and_completes():
     seed = 'occultist-event'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     state, _ = apply_story_action(state, 'choose_blessing', {'blessing_id': 'max_health'}, seed)
     state['phase'] = 'room'
     state['room'] = {
@@ -1297,7 +1450,7 @@ def test_occultist_event_adds_the_defined_cards_and_completes():
 
 def test_creature_struggle_starts_the_selected_custom_encounter():
     seed = 'creature-event'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     state, _ = apply_story_action(state, 'choose_blessing', {'blessing_id': 'max_health'}, seed)
     state['phase'] = 'room'
     state['room'] = {
@@ -1418,7 +1571,7 @@ def test_exile_pile_survives_turn_boundary_and_refresh_recovery():
 
 def test_event_progress_checkpoint_restores_the_latest_stable_stage():
     seed = 'event-progress-checkpoint'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     state, _ = apply_story_action(
         state,
         'choose_blessing',
@@ -1468,7 +1621,7 @@ def test_event_progress_checkpoint_restores_the_latest_stable_stage():
 
 def test_shop_progress_checkpoint_does_not_restore_a_removed_card():
     seed = 'shop-progress-checkpoint'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     state, _ = apply_story_action(
         state,
         'choose_blessing',
@@ -1516,7 +1669,7 @@ def test_shop_progress_checkpoint_does_not_restore_a_removed_card():
 
 def test_legacy_reward_state_does_not_grant_its_gold_twice():
     seed = 'legacy-layered-reward'
-    state = build_initial_story_state(seed)
+    state = _journey_state(seed)
     state, _ = apply_story_action(
         state,
         'choose_blessing',
@@ -1661,7 +1814,7 @@ def test_wide_multihit_events_parallelize_matching_hits_only():
     first['health'] = first['max_health'] = 999
     second = copy.deepcopy(first)
     second['id'] = 'enemy-parallel-2'
-    state['combat']['enemies'].append(second)
+    state['combat']['enemies'] = [first, second]
     card = _inject_hand_card(state, 'lightning')
 
     _, events = apply_story_action(
@@ -1713,3 +1866,33 @@ def test_enemy_intent_uses_structured_entries_and_current_damage_modifiers():
     assert attack['hits'] == int(damage_effect.get('hits') or 1)
     assert attack['target'] == 'player'
     assert attack['summary'] in intent['summary']
+
+
+def test_summon_intent_names_the_enemy_that_will_be_summoned():
+    state, _ = _begin_combat('summon-intent-name')
+    enemy = state['combat']['enemies'][0]
+    enemy['def_id'] = 'hive'
+    enemy['name'] = STORY_ENEMIES['hive']['name']
+    enemy['move_index'] = 0
+
+    intent = _enemy_intent(state, enemy)
+    summon = next(entry for entry in intent['entries'] if entry['kind'] == 'summon')
+
+    assert summon['enemy_id'] == 'bee'
+    assert summon['enemy_name'] == STORY_ENEMIES['bee']['name']
+    assert summon['amount'] == 1
+    assert '蜜蜂' in intent['summary']
+
+
+def test_clear_status_intent_is_structured_instead_of_leaking_internal_effect_name():
+    state, _ = _begin_combat('clear-status-intent')
+    enemy = state['combat']['enemies'][0]
+    enemy['def_id'] = 'cactus'
+    enemy['name'] = STORY_ENEMIES['cactus']['name']
+    enemy['forced_move_index'] = 1
+
+    intent = _enemy_intent(state, enemy)
+    clear = next(entry for entry in intent['entries'] if entry['kind'] == 'clear_status')
+
+    assert clear['status'] == 'reflection'
+    assert 'clear_status' not in intent['summary']

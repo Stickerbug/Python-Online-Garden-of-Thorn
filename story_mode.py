@@ -4,23 +4,31 @@ import random
 from story_content import initial_story_player
 
 
-STORY_SCHEMA_VERSION = 4
-STORY_CONTENT_VERSION = 'story-garden-4'
+STORY_SCHEMA_VERSION = 6
+STORY_CONTENT_VERSION = 'story-redesign-6'
 STORY_FLOOR_COUNT = 16
 
 STORY_STAGES = (
     {'stage': 1, 'biomes': ('garden', 'desert', 'ocean')},
-    {'stage': 2, 'biomes': ('jungle', 'arctic', 'bio')},
-    {'stage': 3, 'biomes': ('factory', 'sewers', 'jurassic')},
-    {'stage': 4, 'biomes': ('hel', 'void'), 'hidden': True},
+    {'stage': 2, 'biomes': ('garden', 'desert', 'ocean')},
+    {'stage': 3, 'biomes': ('garden', 'desert', 'ocean')},
+    {'stage': 4, 'biomes': ('garden', 'desert', 'ocean')},
 )
 
-_ROOM_WEIGHTS = (
+_NORMAL_ROOM_WEIGHTS = (
     ('shop', 1),
     ('rest', 2),
     ('elite', 3),
     ('event', 3),
     ('combat', 6),
+)
+
+_HARD_ROOM_WEIGHTS = (
+    ('shop', 2),
+    ('rest', 3),
+    ('elite', 8),
+    ('event', 5),
+    ('combat', 12),
 )
 
 
@@ -47,7 +55,7 @@ def _floor_widths(rng):
         minimum = max(2, previous - 2)
         maximum = min(5, previous + 2, previous * 2)
         if floor == 2:
-            minimum = maximum = 2
+            minimum, maximum = 2, 3
         elif floor == STORY_FLOOR_COUNT - 1:
             maximum = min(maximum, 3)
         choices = list(range(minimum, maximum + 1))
@@ -95,7 +103,6 @@ def _connect_floors(rng, previous_nodes, next_nodes):
             len(next_nodes),
             len(previous_nodes),
             rng,
-            max_size=2,
         )
         target_cursor = 0
         for parent, group_size in zip(previous_nodes, group_sizes):
@@ -145,12 +152,18 @@ def _connect_floors(rng, previous_nodes, next_nodes):
     ]
 
 
-def generate_story_map(seed, stage=1, biome='garden'):
+def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
     stage = int(stage)
     biome = str(biome or 'garden')
-    rng = random.Random(_seed_int(seed, f'map:{stage}:{biome}'))
+    difficulty = str(difficulty or 'normal')
+    rng = random.Random(_seed_int(seed, f'map:{stage}:{biome}:{difficulty}'))
     widths = _floor_widths(rng)
     floors = []
+    room_weights = (
+        _HARD_ROOM_WEIGHTS
+        if difficulty in ('hard', 'lunatic')
+        else _NORMAL_ROOM_WEIGHTS
+    )
 
     for floor, width in enumerate(widths, start=1):
         if floor == 1:
@@ -164,7 +177,7 @@ def generate_story_map(seed, stage=1, biome='garden'):
         elif floor == 16:
             room_types = ['boss'] * width
         else:
-            choices = tuple(item for item in _ROOM_WEIGHTS if floor > 6 or item[0] != 'elite')
+            choices = tuple(item for item in room_weights if floor > 6 or item[0] != 'elite')
             room_types = [_weighted_choice(rng, choices) for _ in range(width)]
 
         nodes = []
@@ -187,6 +200,7 @@ def generate_story_map(seed, stage=1, biome='garden'):
     return {
         'stage': stage,
         'biome': biome,
+        'difficulty': difficulty,
         'floor_count': STORY_FLOOR_COUNT,
         'floors': floors,
         'edges': edges,
@@ -194,24 +208,37 @@ def generate_story_map(seed, stage=1, biome='garden'):
 
 
 def build_initial_story_state(seed):
-    story_map = generate_story_map(seed, stage=1, biome='garden')
+    story_map = generate_story_map(
+        seed,
+        stage=1,
+        biome='garden',
+        difficulty='normal',
+    )
     first_node = story_map['floors'][0]['nodes'][0]
     return {
         'schema_version': STORY_SCHEMA_VERSION,
         'content_version': STORY_CONTENT_VERSION,
-        'phase': 'blessing',
+        'phase': 'journey_setup',
         'stage': 1,
         'biome': 'garden',
+        'difficulty': 'normal',
         'current_floor': 1,
         'current_node_id': first_node['id'],
         'available_stages': list(STORY_STAGES),
         'map': story_map,
         'player': initial_story_player(),
         'combat': None,
-        'room': None,
+        'room': {
+            'type': 'journey_setup',
+            'stage': 1,
+            'biomes': list(STORY_STAGES[0]['biomes']),
+            'difficulties': ['normal', 'hard', 'lunatic'],
+        },
         'reward': None,
         'rng_counter': 0,
         'normal_battles': 0,
+        'stage_normal_battles': 0,
+        'curses': {},
         'event_miss_streak': 0,
         'shop_removals': 0,
         'shop_upgrades': 0,

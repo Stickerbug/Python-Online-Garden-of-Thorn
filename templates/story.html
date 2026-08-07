@@ -123,7 +123,10 @@
         <section class="story-map-panel" aria-labelledby="story-map-title">
           <div class="story-map-heading">
             <h2 id="story-map-title">路线</h2>
-            <div id="story-map-legend" class="story-map-legend"></div>
+            <div class="story-map-heading-actions">
+              <button id="story-save-open" class="story-save-open" type="button">存读档</button>
+              <div id="story-map-legend" class="story-map-legend"></div>
+            </div>
           </div>
           <div class="story-map-scroll">
             <svg id="story-map" class="story-map" viewBox="0 0 760 1040" role="img" aria-label="故事路线"></svg>
@@ -311,6 +314,11 @@
         {% endif %}
       </div>
       <div class="story-status-actions">
+        <button id="story-codex-open" class="story-run-deck-command story-codex-command" type="button" aria-label="查看故事图鉴" title="查看故事图鉴">
+          <img src="/static/assets/ui-icons/gallery.svg" alt="" aria-hidden="true">
+          <span id="story-codex-open-label">故事图鉴</span>
+          <span id="story-codex-badge" class="story-codex-badge hidden" aria-hidden="true">0</span>
+        </button>
         <button id="story-talent-overview" class="story-run-deck-command hidden" type="button" aria-label="查看天赋总览" title="查看天赋总览">
           <img src="/static/assets/ui-icons/achievements.svg" alt="" aria-hidden="true">
           <span id="story-talent-overview-label">天赋总览</span>
@@ -330,6 +338,59 @@
         <div id="story-pile-grid" class="story-pile-grid"></div>
         <div class="story-dialog-actions">
           <button id="story-pile-close" class="story-command story-command-danger" value="cancel">关闭</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="story-save-dialog" class="story-dialog story-save-dialog">
+      <form method="dialog">
+        <div class="story-pile-heading">
+          <div>
+            <h2 id="story-save-title">旅程存档</h2>
+            <p id="story-save-copy">仅可在路线选择界面保存或读取，最多保留最近3份。</p>
+          </div>
+          <button id="story-save-close" class="story-pile-close" value="cancel" aria-label="关闭">×</button>
+        </div>
+        <button id="story-save-create" class="story-command story-command-primary" type="button">保存当前进度</button>
+        <div id="story-save-list" class="story-save-list" aria-live="polite"></div>
+      </form>
+    </dialog>
+
+    <dialog id="story-codex-dialog" class="story-dialog story-codex-dialog">
+      <div class="story-codex-shell">
+        <header class="story-codex-header">
+          <div class="story-codex-heading">
+            <h2 id="story-codex-title">故事图鉴</h2>
+            <span id="story-codex-progress" class="story-codex-progress"></span>
+          </div>
+          <button id="story-codex-close" class="story-pile-close" type="button" aria-label="关闭">×</button>
+        </header>
+        <nav id="story-codex-tabs" class="story-codex-tabs" role="tablist" aria-label="故事图鉴分类">
+          <button class="story-codex-tab is-active" type="button" role="tab" aria-selected="true" data-story-codex-mode="cards" id="story-codex-tab-cards">卡牌</button>
+          <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="enemies" id="story-codex-tab-enemies">敌人</button>
+          <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="talents" id="story-codex-tab-talents">天赋</button>
+          <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="terms" id="story-codex-tab-terms">术语</button>
+        </nav>
+        <div class="story-codex-body">
+          <aside class="story-codex-sidebar">
+            <label class="story-codex-search-wrap" for="story-codex-search">
+              <span class="sr-only">搜索</span>
+              <input id="story-codex-search" type="search" autocomplete="off" placeholder="搜索">
+            </label>
+            <div id="story-codex-sidebar" class="story-codex-sidebar-content"></div>
+          </aside>
+          <section id="story-codex-detail" class="story-codex-detail" aria-live="polite"></section>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="story-save-load-dialog" class="story-dialog story-save-load-dialog">
+      <form method="dialog">
+        <h2 id="story-save-load-title">读取此存档？</h2>
+        <p id="story-save-load-copy">当前路线进度将被所选存档覆盖。</p>
+        <div class="story-dialog-actions">
+          <button id="story-save-load-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-save-load-confirm" class="story-command story-command-primary" value="confirm">读取</button>
         </div>
       </form>
     </dialog>

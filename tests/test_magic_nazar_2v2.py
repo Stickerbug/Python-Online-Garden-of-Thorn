@@ -61,6 +61,28 @@ class MagicNazar2v2Tests(unittest.TestCase):
         self.assertEqual(engine.players[2].custom_statuses.get('magic_nazar'), 1)
         self.assertTrue(any('被魔法邪眼反制，失效' in line for line in engine.log))
 
+    def test_magic_nazar_response_does_not_negate_current_high_e_skill(self):
+        cases = (
+            ('Fire', 'fire', 2),
+            ('Iris', 'poison', 10),
+        )
+        for skill_id, status_name, expected_stacks in cases:
+            with self.subTest(skill=skill_id):
+                engine = self.build_engine()
+                skill = CardInstance(skill_id)
+                magic_nazar = CardInstance('MagicNazar')
+                engine.players[0].hand = [skill]
+                engine.players[2].hand = [magic_nazar]
+
+                result = engine.play_card(0, skill.instance_id, 2, target_choice(2))
+
+                self.assertTrue(result.get('needs_response'), result)
+                response = engine.handle_response(2, magic_nazar.instance_id)
+
+                self.assertTrue(response.get('success'), response)
+                self.assertEqual(getattr(engine.players[2], status_name), expected_stacks)
+                self.assertEqual(engine.players[2].custom_statuses.get('magic_nazar'), 2)
+
     def test_attack_counter_stays_limited_to_the_attacked_player(self):
         engine = self.build_engine()
         attack = CardInstance('Basic')
@@ -72,6 +94,33 @@ class MagicNazar2v2Tests(unittest.TestCase):
 
         self.assertFalse(result.get('needs_response', False))
         self.assertIsNone(engine.pending_response)
+
+    def test_temporary_swift_counter_keeps_instance_cost_in_response_window(self):
+        engine = self.build_engine()
+        skill = CardInstance('ManaOrb')
+        magic_nazar = CardInstance('MagicNazar')
+        magic_nazar.temp_swift_value = max(1, magic_nazar.cost_e)
+        magic_nazar.instance_flags.add('temp_swift')
+        engine.players[0].hand = [skill]
+        engine.players[2].hand = [magic_nazar]
+        engine.players[2].elixir = 0
+
+        result = engine.play_card(0, skill.instance_id, 0, target_choice(0))
+
+        self.assertTrue(result.get('needs_response'), result)
+        entry = next(
+            card
+            for card in engine.pending_response.get('counter_cards', [])
+            if int(card.get('instance_id', -1)) == magic_nazar.instance_id
+        )
+        self.assertEqual(entry.get('temp_swift_value'), magic_nazar.temp_swift_value)
+        self.assertEqual(CardInstance.from_dict(entry).cost_e, 0)
+
+        response = engine.handle_response(2, magic_nazar.instance_id)
+
+        self.assertTrue(response.get('success'), response)
+        self.assertEqual(engine.players[2].elixir, 0)
+        self.assertEqual(engine.players[2].custom_statuses.get('magic_nazar'), 1)
 
 
 if __name__ == '__main__':

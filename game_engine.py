@@ -69,6 +69,7 @@ CARD_FLAG_LABELS_ZH = {
     'temp_swift': '暂时迅捷',
     'temp_heavy': '暂时沉重',
     'temp_magic_heavy': '暂时魔力沉重',
+    'amplify': '增幅',
     'floating': '漂浮',
     'stealth': '隐匿',
     'revealed': '被揭示',
@@ -160,12 +161,15 @@ def reset_card_after_play(card: CardInstance):
     card.cost_e_override = None
     card.cost_m_override = None
     card.mimic_discount = 0
-    card.power_value = 0
+    preserve_power = 'amplify' in normalize_card_flags(getattr(card, 'instance_flags', set()) or set()) or 'amplify' in normalize_card_flags(getattr(card.card_def, 'flags', set()) or set())
+    if not preserve_power:
+        card.power_value = 0
     card.temp_swift_value = 0
     card.temp_heavy_value = 0
     card.temp_magic_heavy_value = 0
     card.hand_blind_turns = 0
-    card.instance_flags.discard('power')
+    if not preserve_power:
+        card.instance_flags.discard('power')
     card.instance_flags.discard('temp_swift')
     card.instance_flags.discard('temp_heavy')
     card.instance_flags.discard('temp_magic_heavy')
@@ -815,7 +819,7 @@ class GameEngine:
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
         11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序', 'position': 2},
-        12: {'id': 12, 'name': '众生平等', 'desc': '自己回合开始时，自己对每名可选中的敌方玩家造成7[[icon:D]]，对自己及队友造成5[[icon:D]]', 'position': 3},
+        12: {'id': 12, 'name': '众生平等', 'desc': '自己回合结束时，自己对每名其他可选中玩家造成8[[icon:D]]', 'position': 3},
     }
     OPENING_EVENT_ORDER = {
         1: 10, 2: 20, 3: 30, 8: 40,
@@ -3622,6 +3626,8 @@ class GameEngine:
             return
         # Copy: create exile copies when entering hand
         copy_count = getattr(card.card_def, 'copy_count', 0)
+        if copy_count > 0 and 'multi_petal' in getattr(card, 'setup_modifiers', set()):
+            copy_count += 1
         if copy_count > 0 and 'copy' in card.flags:
             added = 0
             for _ in range(copy_count):
@@ -3776,6 +3782,24 @@ class GameEngine:
                 payload[f'{zone}_count'] = len(payload[zone])
         return payload
 
+    def _public_pending_choice(self, for_player: int) -> Optional[dict]:
+        pending = getattr(self, 'pending_choice', None)
+        if not isinstance(pending, dict):
+            return None
+        try:
+            acting_player = int(pending.get('player_id', -1))
+        except (TypeError, ValueError):
+            acting_player = -1
+        if acting_player == for_player:
+            return copy.deepcopy(pending)
+        # Other players only need to know why resolution is paused. Card lists,
+        # candidate ids and previews are private to the player making the choice.
+        return {
+            'player_id': acting_player,
+            'choice_type': str(pending.get('choice_type', '') or ''),
+            'private': True,
+        }
+
     def get_public_state(self, for_player: int) -> dict:
         self._refresh_equipment_derived_player_flags()
         self._refresh_hand_limit_bonuses()
@@ -3838,7 +3862,7 @@ class GameEngine:
             'log_start': log_start,
             'log_total': len(self.log),
             'pending_response': self._public_pending_response(for_player),
-            'pending_choice': self.pending_choice,
+            'pending_choice': self._public_pending_choice(for_player),
             'pending_v2_ui': self._public_v2_ui(for_player),
             'opening_event_picks': self.opening_event_picks,
             'antennae_reveal': self._antennae_reveal[for_player],
@@ -4404,6 +4428,7 @@ class GameEngine:
         best = max(
             1,
             int(getattr(card.card_def, 'hits', 1) or 1),
+            int(getattr(card, 'fission_level', 1) or 1),
             int(vanilla_fallback.get(getattr(card, 'def_id', ''), 1)),
         )
         try:
@@ -4428,14 +4453,22 @@ class GameEngine:
             event_id = int(self.opening_event_picks[player_id])
         except Exception:
             event_id = self.opening_event_picks[player_id]
-        if event_id == 9 and self._card_base_petal_count(card) >= 2:
+        copy_count = max(0, int(getattr(getattr(card, 'card_def', None), 'copy_count', 0) or 0))
+        if event_id == 9 and (copy_count > 0 or self._card_base_petal_count(card) >= 2):
             modifiers = getattr(card, 'setup_modifiers', None)
             if not isinstance(modifiers, set):
                 modifiers = set(modifiers or [])
                 card.setup_modifiers = modifiers
             if 'multi_petal' not in modifiers:
-                if getattr(card, 'def_id', '') == 'Fission':
+                if copy_count > 0:
+                    # Copy petals are expanded when the card enters hand; they
+                    # must not also become extra attack hits.
+                    pass
+                elif getattr(card, 'def_id', '') == 'Fission':
                     card.instance_flags.add('multi_petal_fission')
+                elif int(getattr(card, 'fission_level', 1) or 1) > 1:
+                    card.fission_level = clamp_card_layer(int(card.fission_level) + 1)
+                    card.fission_count = max(0, card.fission_level - 1)
                 else:
                     card.extra_hits = clamp_card_extra_hits(max(0, int(getattr(card, 'extra_hits', 0) or 0)) + 1)
                 modifiers.add('multi_petal')
@@ -4708,39 +4741,31 @@ class GameEngine:
                     ps.deck[0:0] = moved
                 self.log_msg(f"{self.pn(player_id)}【花序编排】：{len(moved)}张牌移至抽牌堆顶")
         elif event_id == 12:
-            self.log_msg(f"{self.pn(player_id)}【众生平等】：自己回合开始时，对敌方造成7D，对自己及队友造成5D")
+            self.log_msg(f"{self.pn(player_id)}【众生平等】：自己回合结束时，对所有其他可选中玩家造成8D")
 
-    def _apply_equal_suffering_turn_start(self, player_id: int):
+    def _apply_equal_suffering_turn_end(self, player_id: int):
         if not self._valid_player_id(player_id):
             return
         picks = getattr(self, 'opening_event_picks', []) or []
         if player_id >= len(picks) or str(picks[player_id]) != '12':
             return
         alive_before = [player.health > 0 for player in self.players]
-        enemy_ids = set(self._opening_event_enemy_targets(player_id))
-        self._equal_suffering_alive_before = alive_before
         self._game_over_defer_depth += 1
         try:
             self.log_msg(f"{self.pn(player_id)}的众生平等生效")
             for target_id, target in enumerate(self.players):
-                if target.health <= 0:
+                if target_id == player_id or target.health <= 0:
                     continue
                 if bool(getattr(target, 'untargetable', 0)) and not self._is_status_immune(target_id):
                     continue
                 self.deal_attack_damage(
                     target_id,
-                    7 if target_id in enemy_ids else 5,
+                    8,
                     attacker_id=player_id,
                     source_card=None,
                 )
         finally:
             self._game_over_defer_depth = max(0, self._game_over_defer_depth - 1)
-
-    def _finalize_equal_suffering_turn_start(self):
-        alive_before = getattr(self, '_equal_suffering_alive_before', None)
-        if not isinstance(alive_before, list):
-            return
-        self._equal_suffering_alive_before = None
         self._game_over_defer_depth += 1
         try:
             self._finalize_deferred_card_deaths(alive_before)
@@ -4970,6 +4995,12 @@ class GameEngine:
         extra_e = self._get_extra_e_for_card(player_id, card)
         return max(0, card.cost_e + extra_e) <= ps.elixir and card.cost_m <= ps.magic
 
+    def _forced_auto_play_blocked(self, player_id: int) -> bool:
+        if not self._valid_player_id(player_id):
+            return True
+        ps = self.players[player_id]
+        return max(0, int(getattr(ps, 'skip_turn', 0) or 0)) > 0 and not self._is_status_immune(player_id)
+
     def _continue_honey_control_if_needed(self, player_id: int):
         if self.game_over or self.phase != 'action' or self.current_player != player_id:
             return
@@ -4977,6 +5008,9 @@ class GameEngine:
             return
         ps = self.players[player_id]
         if int(getattr(ps, 'honey_control_turns', 0) or 0) <= 0:
+            return
+        if self._forced_auto_play_blocked(player_id):
+            self._clear_honey_control_state(player_id, include_pending=True)
             return
         if getattr(self, '_honey_control_running', False):
             return
@@ -5876,6 +5910,29 @@ class GameEngine:
             selectable.append(candidate)
         return selectable
 
+    def _ocean_sapphire_choice_is_valid(
+        self,
+        player_id: int,
+        source_card: CardInstance,
+        choice: Optional[dict],
+    ) -> bool:
+        if not self._valid_player_id(player_id) or not isinstance(choice, dict):
+            return False
+        target_id = self._choice_target_from_choice(choice, -1)
+        if not self._target_can_be_selected(player_id, target_id, allow_self=True):
+            return False
+        try:
+            selected_iid = int(choice.get('target_instance_id'))
+        except (TypeError, ValueError):
+            return False
+        selected = self.players[player_id].find_hand_card(selected_iid)
+        if selected is None:
+            return False
+        return any(
+            getattr(candidate, 'instance_id', None) == selected_iid
+            for candidate in self._ocean_sapphire_selectable_attacks(player_id, source_card)
+        )
+
     def _arctic_ruby_selectable_attacks(
         self,
         player_id: int,
@@ -6515,21 +6572,19 @@ class GameEngine:
             }
             return all(instance_id in selectable_ids for instance_id in ids)
         if choice_type == 'choose_ocean_sapphire':
-            try:
-                selected_iid = int(choice.get('target_instance_id'))
-            except Exception:
+            owner_id, _, _ = self._find_card_location(card)
+            if owner_id is None:
+                try:
+                    selected_iid = int(choice.get('target_instance_id'))
+                except (TypeError, ValueError):
+                    return False
+                selected_card = self._find_card_by_instance_id(selected_iid)
+                owner_id, zone_name, _ = self._find_card_location(selected_card)
+                if owner_id is None or zone_name != 'hand':
+                    return False
+            if not self._valid_player_id(owner_id):
                 return False
-            selected_card = self._find_card_by_instance_id(selected_iid)
-            owner_id, zone_name, _ = self._find_card_location(selected_card)
-            if owner_id is None or zone_name != 'hand':
-                return False
-            return (
-                self._choice_target_from_choice(choice) >= 0
-                and any(
-                    getattr(candidate, 'instance_id', None) == selected_iid
-                    for candidate in self._ocean_sapphire_selectable_attacks(owner_id, card)
-                )
-            )
+            return self._ocean_sapphire_choice_is_valid(owner_id, card, choice)
         if choice_type == 'choose_arctic_ruby':
             try:
                 selected_iid = int(choice.get('target_instance_id'))
@@ -6764,11 +6819,18 @@ class GameEngine:
             self.pending_choice['paid_m'] = max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0))
         if choice_target_id is not None:
             self.pending_choice['target_player_id'] = choice_target_id
-            if choice_type in ('choose_from_enemy_hand', 'choose_card_from_hand', 'choose_arctic_ruby') and 0 <= choice_target_id < len(self.players):
+            if choice_type in (
+                'choose_from_enemy_hand', 'choose_card_from_hand',
+                'choose_arctic_ruby', 'choose_ocean_sapphire',
+            ) and 0 <= choice_target_id < len(self.players):
                 hand_cards = (
-                    self._arctic_ruby_selectable_attacks(player_id, card)
-                    if choice_type == 'choose_arctic_ruby'
-                    else self.players[choice_target_id].hand
+                    self._ocean_sapphire_selectable_attacks(player_id, card)
+                    if choice_type == 'choose_ocean_sapphire'
+                    else (
+                        self._arctic_ruby_selectable_attacks(player_id, card)
+                        if choice_type == 'choose_arctic_ruby'
+                        else self.players[choice_target_id].hand
+                    )
                 )
                 self.pending_choice['hand_cards'] = self._visible_card_dicts(
                     hand_cards,
@@ -6776,7 +6838,7 @@ class GameEngine:
                     choice_target_id,
                     choice_list=True,
                 )
-        keep_paid_choice = choice_type in ('choose_ocean_sapphire', 'magic_salt_reflect')
+        keep_paid_choice = choice_type == 'magic_salt_reflect'
         if already_paid and not keep_paid_choice:
             self._undo_pending_choice_play_side_effects(player_id, card)
         result = {
@@ -6787,11 +6849,18 @@ class GameEngine:
             'target_player_id': choice_target_id,
             'card': card.to_dict(),
         }
-        if choice_type in ('choose_from_enemy_hand', 'choose_card_from_hand', 'choose_arctic_ruby') and choice_target_id is not None and 0 <= choice_target_id < len(self.players):
+        if choice_type in (
+            'choose_from_enemy_hand', 'choose_card_from_hand',
+            'choose_arctic_ruby', 'choose_ocean_sapphire',
+        ) and choice_target_id is not None and 0 <= choice_target_id < len(self.players):
             hand_cards = (
-                self._arctic_ruby_selectable_attacks(player_id, card)
-                if choice_type == 'choose_arctic_ruby'
-                else self.players[choice_target_id].hand
+                self._ocean_sapphire_selectable_attacks(player_id, card)
+                if choice_type == 'choose_ocean_sapphire'
+                else (
+                    self._arctic_ruby_selectable_attacks(player_id, card)
+                    if choice_type == 'choose_arctic_ruby'
+                    else self.players[choice_target_id].hand
+                )
             )
             result['hand_cards'] = self._visible_card_dicts(
                 hand_cards,
@@ -6845,6 +6914,12 @@ class GameEngine:
         card = ps.find_hand_card(card_instance_id)
         if card is None:
             return {'success': False, 'error': '卡牌不在手中'}
+        is_forced_auto_play = (
+            getattr(self, '_allow_out_of_turn_auto_play_for', None) == player_id
+            or getattr(self, '_auto_resolve_choices_for', None) == player_id
+        )
+        if is_forced_auto_play and self._forced_auto_play_blocked(player_id):
+            return {'success': False, 'error': '眩晕时无法自动打出卡牌'}
         if card.def_id == ERROR_CARD_ID:
             ps.remove_hand_card(card_instance_id)
             return {'success': True, 'card': card.to_dict(), 'ignored': True}
@@ -6904,7 +6979,6 @@ class GameEngine:
         if (
             self._card_needs_choice(card)
             and not self._choice_satisfies_request(card, choice)
-            and not self._card_is(card, 'Sapphire', 'ocean:sapphire')
         ):
             queued = self._queue_card_choice(player_id, card, choice, already_paid=False)
             if queued:
@@ -7462,6 +7536,12 @@ class GameEngine:
         if self.pending_choice is None:
             return {'success': False, 'error': '没有待选择操作'}
         pending = self.pending_choice
+        try:
+            pending_player_id = int(pending.get('player_id', player_id))
+        except (TypeError, ValueError):
+            pending_player_id = -1
+        if pending_player_id != int(player_id):
+            return {'success': False, 'error': '不是你的选择操作'}
         choice_type = pending.get('choice_type', '')
         if pending.get('bio_dna_turn_start'):
             if int(pending.get('player_id', -1)) != int(player_id):
@@ -7559,12 +7639,22 @@ class GameEngine:
                     self._run_v2_play_hook('after_play_card', player_id, card, choice)
             self._enforce_unique_cards_for_all()
             return {'success': True, 'reordered': True}
-        self.pending_choice = None
         card = CardInstance.from_dict(pending['card'])
         ps = self.players[player_id]
         choice_cancelled = choice is None or (
             isinstance(choice, dict) and (bool(choice.get('cancelled')) or bool(choice.get('cancel')))
         )
+        if choice_type == 'choose_ocean_sapphire' and not choice_cancelled:
+            live_card = ps.find_hand_card(card.instance_id)
+            if live_card is None:
+                return {'success': False, 'error': '蓝宝石已不在手中，请取消后重试'}
+            if not self._ocean_sapphire_choice_is_valid(player_id, live_card, choice):
+                return {'success': False, 'error': '蓝宝石的目标或攻击牌已失效，请重新选择'}
+            can_play, reason = self.can_play_card(player_id, live_card)
+            if not can_play:
+                return {'success': False, 'error': reason}
+            card = live_card
+        self.pending_choice = None
         if choice_type == 'magic_salt_reflect':
             self.pending_choice = None
             if choice_cancelled or not (isinstance(choice, dict) and (choice.get('confirmed') or choice.get('accepted'))):
@@ -7663,6 +7753,12 @@ class GameEngine:
             return result
         if self._card_is(card, 'Broccoli', 'sewers:broccoli'):
             card._sewers_was_countered_this_play = False
+        if pending.get('keep_paid') and self._card_is(card, 'Assembler'):
+            self._remove_pending_choice_play_log(
+                player_id,
+                card,
+                play_log_marker=pending.get('play_log_marker'),
+            )
         response_result = self._check_card_response_after_choice(player_id, card, choice)
         if response_result:
             return response_result
@@ -8503,7 +8599,7 @@ class GameEngine:
         target_card.temp_swift_value = max(0, int(getattr(target_card, 'temp_swift_value', 0) or 0)) + amount
         target_card.instance_flags.add('temp_swift')
         target_card.disabled_flags.discard('temp_swift')
-        self.log_msg(log or f"{target_card.name_cn}获得暂时迅捷:{amount}")
+        self.log_msg(f"{self.pn(target_id)}的一张手牌获得暂时迅捷:{amount}")
 
     def _atomic_add_tag_to_zone(self, player_id, card, params, log, choice, context):
         """Add a tag to all cards in a zone, optionally filtered by card_type."""
@@ -8583,7 +8679,7 @@ class GameEngine:
                 return
             target_ps.hand.remove(target)
             self._put_card_in_exile(target_id, target)
-            self.log_msg(f"{self.pn(player_id)}用重构机放逐了{self.pn(target_id)}的{target.name_cn}")
+            self.log_msg(f"{self.pn(player_id)}用重构机放逐了{self.pn(target_id)}的1张手牌")
             # Random effect
             import random as _random
             roll = _random.randint(1, 3)
@@ -9098,7 +9194,12 @@ class GameEngine:
             return False
         if not (0 <= player_id < len(self.players)):
             return False
-        if getattr(self, '_status_var_mutation_read', None) == (player_id, str(name)):
+        mutation_key = (player_id, str(name))
+        mutation_reads = getattr(self, '_status_var_mutation_read', None)
+        if mutation_reads == mutation_key or (
+            isinstance(mutation_reads, (set, frozenset, list))
+            and mutation_key in mutation_reads
+        ):
             return False
         if not self._is_status_immune(player_id):
             return False
@@ -9107,8 +9208,17 @@ class GameEngine:
     @contextmanager
     def _read_status_var_for_mutation(self, target_ref, name: str):
         previous = getattr(self, '_status_var_mutation_read', None)
-        if isinstance(target_ref, int):
-            self._status_var_mutation_read = (target_ref, str(name))
+        target_refs = target_ref if isinstance(target_ref, (list, tuple, set, frozenset)) else [target_ref]
+        mutation_reads = set()
+        if isinstance(previous, tuple) and len(previous) == 2:
+            mutation_reads.add(previous)
+        elif isinstance(previous, (set, frozenset, list)):
+            mutation_reads.update(previous)
+        for item in target_refs:
+            if isinstance(item, int):
+                mutation_reads.add((item, str(name)))
+        if mutation_reads:
+            self._status_var_mutation_read = frozenset(mutation_reads)
         try:
             yield
         finally:
@@ -9770,7 +9880,7 @@ class GameEngine:
             ps = self.players[player_id]
             index = ps.hand.index(selected)
             ps.hand[index] = replacement
-            self.log_msg(f"{self.pn(player_id)}的DNA将{selected.name_cn}变换为{replacement.name_cn}并使其获得1层暂时迅捷")
+            self.log_msg(f"{self.pn(player_id)}的DNA完成一次手牌变换，并使该牌获得1层暂时迅捷")
         if self._bio_queue_next_dna_choice(player_id):
             return {'success': True, 'needs_choice': True}
         self._bio_finish_dna_turn_start(player_id)
@@ -10218,6 +10328,9 @@ class GameEngine:
             return
         self._drain_turn_end_event_sources(player_id)
         if self.game_over or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
+        self._apply_equal_suffering_turn_end(player_id)
+        if self.game_over:
             return
         self._decay_equipment_armor_end_turn(player_id)
         if ps.bandage_active and ps.invincible:
@@ -12777,6 +12890,20 @@ class GameEngine:
         equipped = self._find_equipment_for_card(owner_id, card)
         if equipped is not None and not self._equipment_runtime_active(equipped):
             return False
+        if event_name == 'damage_taken' and self._card_is(
+            card,
+            'Avocado',
+            'garden:avocado',
+            'MagicAvocado',
+            'garden:magic_avocado',
+        ):
+            context = extra_context or {}
+            if (
+                int(context.get('damage_amount', context.get('damage', 0)) or 0) <= 0
+                or str(context.get('damage_kind') or '') != 'attack'
+                or str(context.get('damage_type') or '') != DAMAGE_TYPE_PHYSICAL
+            ):
+                return False
         v2_event_name = f'on_{event_name}'
         event_def = self._get_v2_event_def(card.card_def, v2_event_name)
         if event_def:
@@ -13301,7 +13428,6 @@ class GameEngine:
                     opp_id, eq.card_instance, 'enemy_turn_start', None,
                     {'source_id': opp_id, 'target_id': player_id}):
                 continue
-        self._apply_equal_suffering_turn_start(player_id)
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -13378,7 +13504,6 @@ class GameEngine:
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
         self._defer_turn_start_death_checks = False
-        self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
             self._check_yggdrasil(player_id)
             self._check_game_over()
@@ -13430,7 +13555,6 @@ class GameEngine:
                     opp_id, eq.card_instance, 'enemy_turn_start', None,
                     {'source_id': opp_id, 'target_id': player_id}):
                 continue
-        self._apply_equal_suffering_turn_start(player_id)
         early_owner_turn_start_equipment |= self._run_owner_turn_start_healing_equipment(player_id)
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
@@ -13509,7 +13633,6 @@ class GameEngine:
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
         self._defer_turn_start_death_checks = False
-        self._finalize_equal_suffering_turn_start()
         if ps.health <= 0:
             self._check_yggdrasil(player_id)
             self._check_game_over()
@@ -13932,7 +14055,7 @@ class GameEngine:
             if pending.get('choice_type') == 'magic_salt_reflect':
                 pass
             else:
-                keep_paid_choice = bool(pending.get('keep_paid')) or pending.get('choice_type') in ('choose_ocean_sapphire',)
+                keep_paid_choice = bool(pending.get('keep_paid'))
                 if keep_paid_choice:
                     pending['play_log_marker'] = play_log_marker
                 else:
@@ -13967,6 +14090,7 @@ class GameEngine:
         if equip_owner_id < 0 or equip_owner_id >= len(self.players):
             equip_owner_id = player_id
         equip_owner = self.players[equip_owner_id]
+        blood_knife_return = bool((getattr(card, 'custom_vars', {}) or {}).pop('bio_blood_knife_return', False))
         reset_card_after_play(card)
         force_exile_after_auto_play = 'ocean_no_auto' in getattr(card, 'instance_flags', set()) and 'exile' in card.flags
         if (card.card_type == 'root' and not script_controls_play) or placed_as_equipment:
@@ -13997,6 +14121,9 @@ class GameEngine:
                 delattr(card, '_placed_as_equipment')
             if hasattr(card, '_placed_as_equipment_owner'):
                 delattr(card, '_placed_as_equipment_owner')
+        elif blood_knife_return:
+            ps.add_to_hand(card)
+            self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因实际回复能量回到手中")
         elif force_exile_after_auto_play:
             card.instance_flags.discard('return_to_hand')
             owner_id, zone_name, _ = self._find_card_location(card)
@@ -14849,22 +14976,27 @@ class GameEngine:
         turns = self._eval_int(player_id, params.get('turns', 1), card, 1)
         power = self._eval_int(player_id, params.get('power', 1), card, 1)
         kind = str(params.get('kind', 'heal'))
+        suppressed = self._is_status_immune(target_id)
         if kind == 'magic':
             merged_turns, merged_power = self._merge_turn_regen_status(target_id, 'magic', turns, power)
-            self.players[target_id].gain_magic(power)
+            if not suppressed:
+                self.players[target_id].gain_magic(power)
             remaining_turns = max(0, merged_turns - 1)
             self._set_custom_status_alias_group(target_id, 'jungle:turn_magic_turns', ('jungle:turn_magic_turns', 'turn_magic_turns'), remaining_turns)
             if remaining_turns <= 0:
                 self._set_custom_status_alias_group(target_id, 'jungle:turn_magic_power', ('jungle:turn_magic_power', 'turn_magic_power'), 0)
-            self.log_msg(log or f"{self.pn(target_id)}获得魔力回合回复：{remaining_turns};{merged_power}，+{power}M")
+            suffix = '' if suppressed else f'，+{power}M'
+            self.log_msg(log or f"{self.pn(target_id)}获得魔力回合回复：{remaining_turns};{merged_power}{suffix}")
         else:
             merged_turns, merged_power = self._merge_turn_regen_status(target_id, 'heal', turns, power)
-            self.players[target_id].heal(power)
+            if not suppressed:
+                self.players[target_id].heal(power)
             remaining_turns = max(0, merged_turns - 1)
             self._set_custom_status_alias_group(target_id, 'jungle:turn_heal_turns', ('jungle:turn_heal_turns', 'turn_heal_turns'), remaining_turns)
             if remaining_turns <= 0:
                 self._set_custom_status_alias_group(target_id, 'jungle:turn_heal_power', ('jungle:turn_heal_power', 'turn_heal_power'), 0)
-            self.log_msg(log or f"{self.pn(target_id)}获得回合回复：{remaining_turns};{merged_power}，+{power}H")
+            suffix = '' if suppressed else f'，+{power}H'
+            self.log_msg(log or f"{self.pn(target_id)}获得回合回复：{remaining_turns};{merged_power}{suffix}")
 
     def _atomic_magic_grapes_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -15458,7 +15590,6 @@ class GameEngine:
         }
         if chosen is None or getattr(chosen, 'instance_id', None) not in eligible_ids:
             return
-        auto_card_data = chosen.to_dict() if hasattr(chosen, 'to_dict') else None
         self.players[player_id].hand.remove(chosen)
         chosen.instance_flags.add('exile')
         self._put_card_in_exile(player_id, chosen)
@@ -15467,10 +15598,8 @@ class GameEngine:
             entries = []
         entries.append({
             'def_id': getattr(chosen, 'def_id', ''),
-            'card': auto_card_data,
+            'card_instance_id': int(getattr(chosen, 'instance_id', -1) or -1),
             'target_id': target_id,
-            'swift_value': int(getattr(chosen, 'swift_value', 0) or 0),
-            'magic_swift_value': int(getattr(chosen, 'magic_swift_value', 0) or 0),
             'exile': True,
             'no_auto': True,
         })
@@ -16930,13 +17059,13 @@ class GameEngine:
         self.deal_attack_damage(target_id, amount, repeats, attacker_id=player_id, source_card=card)
 
     def _atomic_bio_activate_blood_knife(self, player_id, card, params, log, choice, context):
-        dealt = self.deal_attack_damage(
+        dealt = self._deal_direct_damage(
             player_id,
-            5,
-            1,
-            attacker_id=player_id,
-            source_card=card,
-            ignore_untargetable=True,
+            7,
+            '血刃电伤',
+            player_id,
+            damage_type=DAMAGE_TYPE_MAGIC,
+            damage_tag=DAMAGE_TAG_BATTERY,
         )
         recovered = max(0, int(dealt or 0) // 3)
         if recovered > 0:
@@ -16945,6 +17074,7 @@ class GameEngine:
             ps.gain_elixir(recovered)
             gained = max(0, int(ps.elixir or 0) - before)
             if gained > 0:
+                card.custom_vars['bio_blood_knife_return'] = True
                 self.log_msg(log or f"{self.pn(player_id)}回复{gained}E")
 
     def _atomic_bio_activate_blood_chromosome(self, player_id, card, params, log, choice, context):
@@ -17607,27 +17737,46 @@ class GameEngine:
             target_id = int(entry.get('target_id', -1))
             if not self._target_can_be_selected(player_id, target_id, allow_self=False):
                 continue
-            def_id = str(entry.get('def_id') or '')
-            if def_id not in CARD_DEFS:
+            uses_exiled_card = entry.get('card_instance_id') is not None
+            if uses_exiled_card:
+                try:
+                    instance_id = int(entry.get('card_instance_id', -1))
+                except (TypeError, ValueError):
+                    instance_id = -1
+                auto_card = next(
+                    (
+                        candidate
+                        for candidate in ps.exile
+                        if int(getattr(candidate, 'instance_id', -1)) == instance_id
+                    ),
+                    None,
+                )
+            else:
+                snapshot = entry.get('card')
+                if not isinstance(snapshot, dict):
+                    snapshot = {'def_id': str(entry.get('def_id') or '')}
+                auto_card = fresh_card_copy_from_dict(snapshot, str(entry.get('def_id') or ''))
+                auto_card.swift_value = max(
+                    int(getattr(auto_card, 'swift_value', 0) or 0),
+                    max(0, int(entry.get('swift_value', 0) or 0)),
+                )
+                auto_card.magic_swift_value = max(
+                    int(getattr(auto_card, 'magic_swift_value', 0) or 0),
+                    max(0, int(entry.get('magic_swift_value', 0) or 0)),
+                )
+            if auto_card is None:
                 continue
-            card_data = entry.get('card') if isinstance(entry.get('card'), dict) else None
-            temp_card = fresh_card_copy_from_dict(card_data, def_id) if card_data else CardInstance(def_id)
-            temp_card.instance_flags.add('exile')
-            temp_card.instance_flags.add('ocean_no_auto')
-            temp_card.disabled_flags.add('rebound')
-            if int(entry.get('swift_value', 0) or 0) > 0:
-                temp_card.swift_value = int(entry.get('swift_value', 0) or 0)
-                temp_card.instance_flags.add('swift')
-            if int(entry.get('magic_swift_value', 0) or 0) > 0:
-                temp_card.magic_swift_value = int(entry.get('magic_swift_value', 0) or 0)
-                temp_card.instance_flags.add('magic_swift')
-            can_auto_play, _ = self.can_play_card(player_id, temp_card)
+            auto_card.instance_flags.add('exile')
+            auto_card.instance_flags.add('ocean_no_auto')
+            auto_card.disabled_flags.add('rebound')
+            can_auto_play, _ = self.can_play_card(player_id, auto_card)
             if not can_auto_play:
                 continue
-            # This copy exists only for the automatic play. Going through
-            # add_to_hand would treat a full hand as an overflow draw and put
-            # the copy in the discard pile before it can be played.
-            ps.hand.append(temp_card)
+            if uses_exiled_card:
+                ps.exile.remove(auto_card)
+            # Move the exact physical card directly to hand so a full hand does
+            # not treat the automatic play as an overflow draw.
+            ps.hand.append(auto_card)
             auto_choice = {'target_player_id': target_id, 'target_player': target_id, 'target_id': target_id}
             previous_auto_actor = getattr(self, '_allow_out_of_turn_auto_play_for', None)
             previous_auto_choice = getattr(self, '_auto_resolve_choices_for', None)
@@ -17635,18 +17784,20 @@ class GameEngine:
             self._auto_resolve_choices_for = player_id
             try:
                 if len(getattr(self, 'players', []) or []) > 2:
-                    result = self.play_card(player_id, temp_card.instance_id, target_id, auto_choice)
+                    result = self.play_card(player_id, auto_card.instance_id, target_id, auto_choice)
                 else:
-                    result = self.play_card(player_id, temp_card.instance_id, auto_choice)
+                    result = self.play_card(player_id, auto_card.instance_id, auto_choice)
             except Exception:
-                if temp_card in ps.hand:
-                    ps.hand.remove(temp_card)
+                if auto_card in ps.hand:
+                    ps.hand.remove(auto_card)
+                    self._put_card_in_exile(player_id, auto_card)
                 raise
             finally:
                 self._allow_out_of_turn_auto_play_for = previous_auto_actor
                 self._auto_resolve_choices_for = previous_auto_choice
-            if temp_card in ps.hand and not result.get('needs_choice') and not result.get('needs_v2_ui'):
-                ps.hand.remove(temp_card)
+            if auto_card in ps.hand and not result.get('needs_response') and not result.get('needs_choice') and not result.get('needs_v2_ui'):
+                ps.hand.remove(auto_card)
+                self._put_card_in_exile(player_id, auto_card)
             if not result.get('success') and not result.get('needs_response') and not result.get('needs_choice') and not result.get('needs_v2_ui'):
                 continue
             if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):

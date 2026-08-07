@@ -75,8 +75,15 @@ def validate_mod_v2(data: Any, source: str = "", *, allow_reserved_namespaces: b
     )
     normalized["manifest"] = manifest
     mod_id = manifest.get("id", "")
+    resource_namespace = manifest.get("resource_namespace", mod_id)
 
-    registries = _validate_registries(normalized.get("registries"), mod_id, errors, warnings, allow_reserved_namespaces)
+    registries = _validate_registries(
+        normalized.get("registries"),
+        resource_namespace,
+        errors,
+        warnings,
+        allow_reserved_namespaces,
+    )
     normalized["registries"] = registries
 
     normalized["patches"] = _validate_patches(normalized.get("patches"), mod_id, errors, warnings)
@@ -125,6 +132,20 @@ def _validate_manifest(value: Any, errors: List[str], warnings: List[str], *, al
     elif mod_id in RESERVED_NAMESPACES and not allow_reserved_namespaces:
         errors.append(f"社区 v2 模组不能使用保留命名空间 {mod_id}")
     manifest["id"] = mod_id
+
+    resource_namespace_declared = "resource_namespace" in manifest
+    resource_namespace = str(manifest.get("resource_namespace") or mod_id).strip()
+    if not is_namespace(resource_namespace):
+        errors.append("manifest.resource_namespace 必须是合法模组命名空间")
+        resource_namespace = mod_id
+    elif resource_namespace != mod_id and not allow_reserved_namespaces:
+        errors.append("社区模组的 manifest.resource_namespace 必须与 manifest.id 相同")
+        resource_namespace = mod_id
+    elif resource_namespace in RESERVED_NAMESPACES and not allow_reserved_namespaces:
+        errors.append(f"社区 v2 模组不能使用保留资源命名空间 {resource_namespace}")
+        resource_namespace = mod_id
+    if resource_namespace_declared:
+        manifest["resource_namespace"] = resource_namespace
 
     for key in ("name", "version"):
         if not isinstance(manifest.get(key), str) or not manifest.get(key).strip():
@@ -246,7 +267,7 @@ def _valid_version_range(value: str) -> bool:
     return bool(re.fullmatch(r"(>=|<=|==)?\d+\.\d+\.\d+", value.strip()))
 
 
-def _validate_registries(value: Any, mod_id: str, errors: List[str], warnings: List[str],
+def _validate_registries(value: Any, resource_namespace: str, errors: List[str], warnings: List[str],
                          allow_reserved_namespaces: bool) -> Dict[str, List[Dict[str, Any]]]:
     if value is None:
         value = {}
@@ -274,14 +295,14 @@ def _validate_registries(value: Any, mod_id: str, errors: List[str], warnings: L
             resource = copy.deepcopy(item)
             raw_id = resource.get("id")
             try:
-                rid = normalize_resource_id(mod_id, raw_id)
+                rid = normalize_resource_id(resource_namespace, raw_id)
             except ValueError as exc:
                 errors.append(f"registries.{key}[{idx}].id 错误: {exc}")
                 continue
             namespace, _ = split_resource_id(rid)
             if namespace in RESERVED_NAMESPACES and not allow_reserved_namespaces:
                 errors.append(f"registries.{key}[{idx}] 不能定义保留命名空间资源 {rid}")
-            if namespace != mod_id and not (allow_reserved_namespaces and mod_id in RESERVED_NAMESPACES):
+            if namespace != resource_namespace:
                 errors.append(f"registries.{key}[{idx}] 只能定义本模组命名空间资源，当前为 {rid}")
             if rid in seen_ids:
                 errors.append(f"资源 ID 重复: {rid} 同时出现在 {seen_ids[rid]} 和 registries.{key}[{idx}]")

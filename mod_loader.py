@@ -27,16 +27,25 @@ _MODS_CACHE: List['Mod'] = []
 OFFICIAL_MOD_DISPLAY_ORDER = (
     'Vanilla Cards.gtnmod',
     'Garden Cards Addition.gtnmod',
+    'Garden Cards DLC.gtnmod',
     'Factory Cards Addition.gtnmod',
+    'Factory Cards DLC.gtnmod',
     'Desert Cards Addition.gtnmod',
+    'Desert Cards DLC.gtnmod',
     'Jungle Cards Addition.gtnmod',
+    'Jungle Cards DLC.gtnmod',
     'Ocean Cards Addition.gtnmod',
+    'Ocean Cards DLC.gtnmod',
     'Void Card Addition.gtnmod',
     'Hel Cards Addition.gtnmod',
+    'Hel Cards DLC.gtnmod',
     'Sewers Cards Addition.gtnmod',
+    'Sewers Cards DLC.gtnmod',
     'Arctic Cards Addition.gtnmod',
+    'Arctic Cards DLC.gtnmod',
     'Jurassic Cards Addition.gtnmod',
     'Bio Cards Addition.gtnmod',
+    'Bio Cards DLC.gtnmod',
 )
 _OFFICIAL_MOD_DISPLAY_RANK = {
     filename.casefold(): index for index, filename in enumerate(OFFICIAL_MOD_DISPLAY_ORDER)

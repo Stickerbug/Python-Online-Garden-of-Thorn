@@ -70,6 +70,17 @@ class ModSettingsStateTests(unittest.TestCase):
         self.assertIn("'Jurassic Cards Addition.gtnmod'", GAME_JS)
         self.assertIn("'Bio Cards Addition.gtnmod'", GAME_JS)
 
+    def test_split_dlc_mods_are_disabled_before_the_first_settings_open(self):
+        section = source_between(
+            GAME_JS,
+            'function getDisabledMods()',
+            'function writeDisabledModsPreference(',
+        )
+        self.assertIn('if (!Array.isArray(disabled)) disabled = getDefaultDisabledMods()', section)
+        self.assertIn('V11_DLC_DEFAULT_MIGRATION_KEY', section)
+        self.assertIn('...V11_DLC_MOD_FILENAMES', section)
+        self.assertIn("localStorage.setItem('gtn_disabled_mods'", section)
+
     def test_server_rejects_out_of_order_mod_setting_revisions(self):
         self.assertIn('MOD_SETTINGS_STALE_REQUEST', APP_PY)
         self.assertIn('_mod_settings_latest_requested_revision', APP_PY)

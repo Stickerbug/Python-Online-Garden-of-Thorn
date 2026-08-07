@@ -1250,6 +1250,10 @@ I18N.ja.tutorial_victory_message = 'おめでとうございます。チュー�
 I18N.ja.tutorial_defeat_message = 'チュートリアルの対局に敗北しました。大丈夫です。次の対局ではもっと動きが見えてきます。';
 I18N.ja.tutorial_retry = 'チュートリアルをやり直す';
 I18N.ja.target_pick_hint = '強調表示されたプレイヤー欄を押してください。';
+Object.assign(I18N.en, { flag_amplify: 'Amplify', tag_amplify: 'Amplify' });
+Object.assign(I18N.zh, { flag_amplify: '增幅', tag_amplify: '增幅' });
+Object.assign(I18N.fr, { flag_amplify: 'Amplification', tag_amplify: 'Amplification' });
+Object.assign(I18N.ja, { flag_amplify: '増幅', tag_amplify: '増幅' });
 I18N.en.tutorial_intro = 'Now, let’s begin the tutorial.';
 I18N.en.tutorial_hint_ui = 'First read the interface: your hand is at the bottom, H/E/M and states are near each player, and the battle log is on the side. Press View Draw Deck to inspect upcoming cards.';
 I18N.en.tutorial_hint_play = 'Now play a Thorn attack. In 1v1, attacks target the opponent; if the target cannot be selected, the card cannot be played.';
@@ -2999,6 +3003,7 @@ const CARD_FLAG_STYLES = {
     floating: { label: '', fg: '#1687B8', bg: 'rgba(22,135,184,0.15)', cls: 'floating' },
     magic_swift: { label: '', fg: '#6C5CE7', bg: 'rgba(108,92,231,0.15)', cls: 'magic-swift' },
     power: { label: '', fg: '#C0392B', bg: 'rgba(192,57,43,0.14)', cls: 'power' },
+    amplify: { label: '', fg: '#B54708', bg: 'rgba(181,71,8,0.14)', cls: 'amplify' },
     team_limited: { label: '', fg: '#607D3B', bg: 'rgba(96,125,59,0.15)', cls: 'team-limited' },
     team_unique: { label: '', fg: '#8D6E63', bg: 'rgba(141,110,99,0.15)', cls: 'team-unique' },
     charge: { label: '', fg: '#4BA3FF', bg: 'rgba(75,163,255,0.15)', cls: 'charge' },
@@ -3034,6 +3039,7 @@ const CARD_FLAG_TERM_COLORS = {
     floating: '#1687B8',
     magic_swift: '#6C5CE7',
     power: '#C0392B',
+    amplify: '#B54708',
     team_limited: '#607D3B',
     team_unique: '#8D6E63',
     charge: '#4BA3FF',
@@ -3164,7 +3170,7 @@ const _VANILLA_FLAGS = new Set([
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
     'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'floating', 'stealth', 'revealed', 'sublime', 'team_limited', 'team_unique',
-    'power', 'magic_swift',
+    'power', 'magic_swift', 'amplify',
     'charge', 'ocean_blinded', 'wide_strike', 'self_target',
 ]);
 
@@ -3355,7 +3361,7 @@ const CARD_TEXT_LOCALIZED_FLAG_SPECS = [
     ['attract', 'tag-attract'], ['void', 'tag-void'], ['rebound', 'tag-rebound'],
     ['copy', 'tag-copy'], ['unique', 'tag-unique'], ['swift', 'tag-swift'],
     ['stealth', 'tag-stealth'], ['revealed', 'tag-revealed'], ['sublime', 'tag-sublime'],
-    ['power', 'tag-power'], ['charge', 'tag-charge'], ['floating', 'tag-floating'],
+    ['power', 'tag-power'], ['amplify', 'tag-amplify'], ['charge', 'tag-charge'], ['floating', 'tag-floating'],
     ['ocean_blinded', 'tag-ocean-blinded'], ['wide_strike', 'tag-wide-strike'],
     ['self_target', 'tag-self-target'], ['sewers:confusion', 'tag-sewers-confusion'],
     ['arctic:ready', 'tag-arctic-ready'], ['arctic:ricochet_3', 'tag-arctic-ricochet'],
@@ -4867,6 +4873,7 @@ let activeSocialFriendId = null;
 let activeSocialSection = 'friends';
 let activeSocialRequestId = null;
 let lobbyMentionCandidates = [];
+let lobbyMentionDirectory = [];
 let lobbyMentionMenu = null;
 let lobbyMentionActiveRange = null;
 const readLobbyMentionIds = new Set();
@@ -7404,8 +7411,10 @@ function updateStoryEntryAvailability() {
     const authenticated = !!currentAccount;
     if (row) row.classList.remove('hidden');
     button.classList.remove('hidden');
-    button.disabled = !authenticated;
-    button.setAttribute('aria-disabled', authenticated ? 'false' : 'true');
+    // The server remains authoritative. Keeping this clickable lets a valid
+    // remember-cookie session recover when the initial account probe failed.
+    button.disabled = false;
+    button.setAttribute('aria-disabled', 'false');
     button.title = authenticated
         ? ''
         : lt({
@@ -7420,7 +7429,8 @@ function storyTestWarningAcknowledged() {
     return localStorage.getItem(STORY_TEST_WARNING_ACK_KEY) === '1';
 }
 
-function openStoryMode() {
+async function openStoryMode() {
+    if (!currentAccount) await refreshAuthMe();
     if (!currentAccount) {
         flashStatus(lt({
             zh: '请先登录账号',
@@ -7791,38 +7801,56 @@ const GALLERY_CARD_TYPE_ORDER = { thorn: 0, bloom: 1, guard: 2, root: 3 };
 const OFFICIAL_MOD_DISPLAY_ORDER = [
     'Vanilla Cards.gtnmod',
     'Garden Cards Addition.gtnmod',
+    'Garden Cards DLC.gtnmod',
     'Factory Cards Addition.gtnmod',
+    'Factory Cards DLC.gtnmod',
     'Desert Cards Addition.gtnmod',
+    'Desert Cards DLC.gtnmod',
     'Jungle Cards Addition.gtnmod',
+    'Jungle Cards DLC.gtnmod',
     'Ocean Cards Addition.gtnmod',
+    'Ocean Cards DLC.gtnmod',
     'Void Card Addition.gtnmod',
     'Hel Cards Addition.gtnmod',
+    'Hel Cards DLC.gtnmod',
     'Sewers Cards Addition.gtnmod',
+    'Sewers Cards DLC.gtnmod',
     'Arctic Cards Addition.gtnmod',
+    'Arctic Cards DLC.gtnmod',
     'Jurassic Cards Addition.gtnmod',
     'Bio Cards Addition.gtnmod',
+    'Bio Cards DLC.gtnmod',
 ];
 
 const OFFICIAL_MOD_DISPLAY_ALIASES = [
     ['vanilla cards.gtnmod', 'vanilla cards', 'garden of thorn vanilla cards'],
     ['garden cards addition.gtnmod', 'garden cards addition', 'garden cards'],
+    ['garden cards dlc.gtnmod', 'garden cards dlc'],
     ['factory cards addition.gtnmod', 'factory cards addition', 'factory cards'],
+    ['factory cards dlc.gtnmod', 'factory cards dlc'],
     ['desert cards addition.gtnmod', 'desert cards addition', 'desert cards'],
+    ['desert cards dlc.gtnmod', 'desert cards dlc'],
     ['jungle cards addition.gtnmod', 'jungle cards addition', 'jungle cards'],
+    ['jungle cards dlc.gtnmod', 'jungle cards dlc'],
     ['ocean cards addition.gtnmod', 'ocean cards addition', 'ocean cards'],
+    ['ocean cards dlc.gtnmod', 'ocean cards dlc'],
     ['void card addition.gtnmod', 'void card addition', 'void cards addition', 'void cards'],
     ['hel cards addition.gtnmod', 'hel cards addition', 'hel cards'],
+    ['hel cards dlc.gtnmod', 'hel cards dlc'],
     ['sewers cards addition.gtnmod', 'sewers cards addition', 'sewers cards'],
+    ['sewers cards dlc.gtnmod', 'sewers cards dlc'],
     ['arctic cards addition.gtnmod', 'arctic cards addition', 'arctic cards'],
+    ['arctic cards dlc.gtnmod', 'arctic cards dlc'],
     ['jurassic cards addition.gtnmod', 'jurassic cards addition', 'jurassic cards'],
     ['bio cards addition.gtnmod', 'bio cards addition', 'bio cards'],
+    ['bio cards dlc.gtnmod', 'bio cards dlc'],
 ];
 
 const OFFICIAL_MOD_SHORT_NAMES = {
-    zh: ['原版', '花园', '工厂', '沙漠', '丛林', '海洋', '虚空', '冥界', '管道', '极地', '侏罗', '生化'],
-    en: ['Vanilla', 'Garden', 'Factory', 'Desert', 'Jungle', 'Ocean', 'Void', 'Hel', 'Sewers', 'Arctic', 'Jurassic', 'Bio'],
-    fr: ['Vanille', 'Jardin', 'Usine', 'Désert', 'Jungle', 'Océan', 'Vide', 'Hel', 'Égouts', 'Arctique', 'Jurassique', 'Bio'],
-    ja: ['原版', '庭園', '工場', '砂漠', 'ジャングル', '海洋', '虚空', '冥界', '下水道', '極地', 'ジュラ紀', '生化'],
+    zh: ['原版', '花园', '花园DLC', '工厂', '工厂DLC', '沙漠', '沙漠DLC', '丛林', '丛林DLC', '海洋', '海洋DLC', '虚空', '冥界', '冥界DLC', '管道', '管道DLC', '极地', '极地DLC', '侏罗', '生化', '生化DLC'],
+    en: ['Vanilla', 'Garden', 'Garden DLC', 'Factory', 'Factory DLC', 'Desert', 'Desert DLC', 'Jungle', 'Jungle DLC', 'Ocean', 'Ocean DLC', 'Void', 'Hel', 'Hel DLC', 'Sewers', 'Sewers DLC', 'Arctic', 'Arctic DLC', 'Jurassic', 'Bio', 'Bio DLC'],
+    fr: ['Vanille', 'Jardin', 'DLC Jardin', 'Usine', 'DLC Usine', 'Désert', 'DLC Désert', 'Jungle', 'DLC Jungle', 'Océan', 'DLC Océan', 'Vide', 'Hel', 'DLC Hel', 'Égouts', 'DLC Égouts', 'Arctique', 'DLC Arctique', 'Jurassique', 'Bio', 'DLC Bio'],
+    ja: ['原版', '庭園', '庭園DLC', '工場', '工場DLC', '砂漠', '砂漠DLC', 'ジャングル', 'ジャングルDLC', '海洋', '海洋DLC', '虚空', '冥界', '冥界DLC', '下水道', '下水道DLC', '極地', '極地DLC', 'ジュラ紀', '生化', '生化DLC'],
 };
 
 function normalizeModDisplayIdentity(value) {
@@ -12770,9 +12798,12 @@ function counterCardCancelsResponseCard(counterCard, responseCard) {
     const counterDef = getCardDef(counterCard && counterCard.def_id);
     const responseDef = getCardDef(responseCard && responseCard.def_id);
     if (!counterDef || !responseDef) return false;
-    if ((counterCard.def_id === 'MagicBubble' || counterCard.def_id === 'vanilla:magicbubble' || counterDef.legacy_id === 'MagicBubble') && responseDef.card_type === 'bloom') return true;
-    if (counterDef.response_trigger === responseDef.card_type && responseDef.card_type === 'bloom') return true;
-    return false;
+    const counterId = String(counterCard.def_id || '');
+    const legacyId = String(counterDef.legacy_id || '');
+    const negatesSkill = counterId === 'MagicBubble'
+        || counterId === 'vanilla:magicbubble'
+        || legacyId === 'MagicBubble';
+    return negatesSkill && responseDef.card_type === 'bloom';
 }
 
 function getResponseCounterStatusReduction(data, cardDict, basePrediction, counterPrediction, counterCard) {
@@ -12970,6 +13001,7 @@ function getTermIntroLibrary() {
         team_limited: { label: UI.tag_team_limited || 'Team Limited', desc: lt({ zh: '只在每队至少2名玩家的模式出现；单人训练场可出现但不生效。', en: 'Appears only in modes where a team has at least 2 players. It can be selected in training but has no practical effect there.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. Sélectionnable en entraînement, mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ意味があります。訓練場では選べますが実質効果はありません。' }), color: '#607D3B' },
         team_unique: { label: UI.tag_team_unique || 'Team Unique', desc: lt({ zh: '同队若多人选择同名队伍独一牌，随机保留1张，其余放逐。', en: 'If multiple teammates choose this card, one copy is kept at random and the extras are exiled.', fr: 'Si plusieurs coéquipiers choisissent cette carte, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }), color: '#8D6E63' },
         power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的物理伤害增加对应层数；多段伤害的每段增加向上取整(威力/段数)D。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }), color: '#C0392B' },
+        amplify: { label: UI.tag_amplify || 'Amplify', desc: lt({ zh: '此卡的威力不会因为打出而降低。', en: 'This card’s Power does not decrease when it is played.', fr: 'La Puissance de cette carte ne diminue pas lorsqu’elle est jouée.', ja: 'このカードは使用しても威力が減少しません。' }), color: '#B54708' },
         magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
         temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，打出后清除。', en: 'Reduces E cost for this play only, then clears after being played.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを減らし、使用後に消えます。' }), color: '#0EA5E9' },
         temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，打出后清除。', en: 'Increases E cost for this play only, then clears after being played.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを増やし、使用後に消えます。' }), color: '#795548' },
@@ -13049,6 +13081,7 @@ function getIntroFlagDescription(flag, custom = null) {
         temp_magic_heavy: getTermIntroLibrary().temp_magic_heavy.desc,
         floating: getTermIntroLibrary().floating.desc,
         power: lt({ zh: '此牌造成的每段D增加。多段D会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }),
+        amplify: lt({ zh: '此卡的威力不会因为打出而降低。', en: 'This card’s Power does not decrease when it is played.', fr: 'La Puissance de cette carte ne diminue pas lorsqu’elle est jouée.', ja: 'このカードは使用しても威力が減少しません。' }),
         team_limited: lt({ zh: '只在一队至少2名玩家的模式出现；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. In training it can appear but has no practical effect.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. En entraînement, elle peut apparaître mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ出ます。訓練場では出ても実質効果はありません。' }),
         team_unique: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose it, one copy is kept at random and extras are exiled.', fr: 'Si plusieurs coéquipiers la choisissent, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }),
         stealth: lt({ zh: '不会触发对手的响应窗口。', en: 'Does not open the opponent’s response window.', fr: 'N’ouvre pas la fenêtre de réponse adverse.', ja: '相手の応答ウィンドウを開きません。' }),
@@ -30327,7 +30360,10 @@ function appendChatTextWithMentions(parent, text, mentions = [], ownMentionToken
         const span = document.createElement('span');
         span.className = 'chat-mention-token';
         const tokenName = String(match || '').replace(/^@/, '');
-        if (shouldFlashOwnMention && (ownMentionTokens.has(tokenName.toLowerCase()) || ownMentionTokens.has(tokenName.toUpperCase()))) {
+        const mentionsCurrentUser = ownMentionTokens.has(tokenName.toLowerCase())
+            || ownMentionTokens.has(tokenName.toUpperCase());
+        if (mentionsCurrentUser) span.classList.add('mention-self');
+        if (shouldFlashOwnMention && mentionsCurrentUser) {
             span.classList.add('mention-flash');
         }
         span.textContent = match;
@@ -30442,6 +30478,9 @@ function appendLobbyChatEntry(entry = {}, options = {}) {
 function renderLobbyChatHistory(data = {}) {
     const container = $('lobby-chat-log');
     if (!container) return;
+    lobbyMentionDirectory = Array.isArray(data.mention_candidates)
+        ? data.mention_candidates.map((item) => ({ ...item }))
+        : [];
     const items = mergeMonotonicChatRepeatCounts(
         Array.isArray(data.items) ? data.items : [],
         lobbyChatEntries,
@@ -30572,13 +30611,26 @@ function ensureLobbyMentionMenu() {
 
 function getLobbyMentionCandidates() {
     const selfKeys = currentUserMentionKeys();
-    return (Array.isArray(lobbyPlayers) ? lobbyPlayers : [])
+    const seen = new Set();
+    return [
+        ...(Array.isArray(lobbyPlayers) ? lobbyPlayers : []),
+        ...lobbyMentionDirectory,
+    ]
         .map(player => ({
             nickname: player.nickname || player.name || '',
             player_id: player.player_id || '',
             user_id: player.user_id || '',
         }))
-        .filter(item => item.nickname && !selfKeys.has(`name:${String(item.nickname).toLowerCase()}`));
+        .filter((item) => {
+            const nameKey = `name:${String(item.nickname).toLowerCase()}`;
+            const userKey = item.user_id !== '' ? `user:${item.user_id}` : '';
+            const identity = userKey || nameKey;
+            if (!item.nickname || selfKeys.has(nameKey) || (userKey && selfKeys.has(userKey)) || seen.has(identity)) {
+                return false;
+            }
+            seen.add(identity);
+            return true;
+        });
 }
 
 function findLobbyMentionRange(input) {
@@ -31412,6 +31464,10 @@ function showResponseUI(data) {
     container.classList.add('visible');
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
+    const destroyTargetEquipment = data.destroy_target_equipment || null;
+    const destroyTargetCard = destroyTargetEquipment && destroyTargetEquipment.card_instance
+        ? destroyTargetEquipment.card_instance
+        : null;
     const blindLevel = getOwnBlindLevel();
     const hideResponsePrediction = blindLevel >= 2;
     let triggerDesc = '';
@@ -31436,7 +31492,10 @@ function showResponseUI(data) {
     prefix.className = 'response-trigger-prefix';
     prefix.textContent = triggerDesc ? `${triggerDesc}:` : '';
     if (prefix.textContent) label.appendChild(prefix);
-    label.appendChild(createCardChoiceChip(cardDict, blindLevel > 0 ? { blindForSelf: true, blindLevel } : {}));
+    label.appendChild(createCardChoiceChip(
+        destroyTargetCard || cardDict,
+        destroyTargetCard || blindLevel <= 0 ? {} : { blindForSelf: true, blindLevel },
+    ));
     const prediction = data.damage_prediction || {};
     const noCounterPrediction = prediction.no_counter || {};
     const baseEffectPrediction = getResponseBaseEffectPrediction(data, cardDict, noCounterPrediction);
@@ -32090,7 +32149,10 @@ async function showChoiceUI(data) {
         })), choicePromptConfig);
         if (sel >= 0 && sel < modes.length) choiceResult = { bio_blood_sugar_mode: modes[sel] };
     } else if (choiceType === 'choose_ocean_sapphire') {
-        const attacks = getOceanSapphireSelectableAttacks(cardDict);
+        const attacks = getOceanSapphireSelectableAttacks(
+            cardDict,
+            Array.isArray(data.hand_cards) ? data.hand_cards : null,
+        );
         if (!attacks.length) {
             gameAlert(UI.notice, UI.no_attack_cards || '没有攻击牌');
             choiceResult = { cancelled: true };
@@ -33359,18 +33421,39 @@ const RETIRED_OFFICIAL_MOD_FILENAMES = new Set([
 const DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = new Set([
     VANILLA_MOD_FILENAME,
 ]);
+const V11_DLC_MOD_FILENAMES = [
+    'Garden Cards DLC.gtnmod',
+    'Factory Cards DLC.gtnmod',
+    'Desert Cards DLC.gtnmod',
+    'Jungle Cards DLC.gtnmod',
+    'Ocean Cards DLC.gtnmod',
+    'Hel Cards DLC.gtnmod',
+    'Sewers Cards DLC.gtnmod',
+    'Arctic Cards DLC.gtnmod',
+    'Bio Cards DLC.gtnmod',
+];
+const V11_DLC_DEFAULT_MIGRATION_KEY = 'gtn_v11_dlc_default_v1';
 const FALLBACK_DEFAULT_DISABLED_MODS = [
     'Desert Cards Addition.gtnmod',
+    'Desert Cards DLC.gtnmod',
     'Factory Cards Addition.gtnmod',
+    'Factory Cards DLC.gtnmod',
     'Garden Cards Addition.gtnmod',
+    'Garden Cards DLC.gtnmod',
     'Jungle Cards Addition.gtnmod',
+    'Jungle Cards DLC.gtnmod',
     'Ocean Cards Addition.gtnmod',
+    'Ocean Cards DLC.gtnmod',
     'Void Card Addition.gtnmod',
     'Hel Cards Addition.gtnmod',
+    'Hel Cards DLC.gtnmod',
     'Sewers Cards Addition.gtnmod',
+    'Sewers Cards DLC.gtnmod',
     'Arctic Cards Addition.gtnmod',
+    'Arctic Cards DLC.gtnmod',
     'Jurassic Cards Addition.gtnmod',
     'Bio Cards Addition.gtnmod',
+    'Bio Cards DLC.gtnmod',
 ];
 const REQUIRED_MOD_CARD_TYPES = ['thorn', 'bloom', 'root', 'guard'];
 const COMMUNITY_JSON_MAX_BYTES = 150 * 1024;
@@ -33603,14 +33686,41 @@ function isSettingsModDetailOpen(kind, key) {
     return localStorage.getItem(settingsModDetailKey(kind, key)) === 'open';
 }
 
+function positionSettingsModDetails(item) {
+    const details = item?.querySelector('.settings-mod-card-details');
+    const list = item?.parentElement;
+    if (!details || !list || details.classList.contains('hidden')) return;
+    details.classList.remove('settings-mod-details-align-right');
+    requestAnimationFrame(() => {
+        if (details.classList.contains('hidden')) return;
+        const listRect = list.getBoundingClientRect();
+        const detailsRect = details.getBoundingClientRect();
+        details.classList.toggle('settings-mod-details-align-right', detailsRect.right > listRect.right + 1);
+    });
+}
+
 function setSettingsModDetailOpen(kind, key, open, toggleButton = null) {
     localStorage.setItem(settingsModDetailKey(kind, key), open ? 'open' : 'closed');
-    const item = toggleButton?.closest('.settings-mod-item');
+    const item = toggleButton?.closest('.settings-mod-card');
     const details = item?.querySelector('.settings-mod-card-details');
     if (item && details) {
+        if (open) {
+            item.parentElement?.querySelectorAll('.settings-mod-card.mod-expanded').forEach(other => {
+                if (other === item) return;
+                other.classList.remove('mod-expanded');
+                other.querySelector('.settings-mod-card-details')?.classList.add('hidden');
+                other.querySelector('.settings-mod-item-toggle')?.setAttribute('aria-expanded', 'false');
+                const otherKind = other.dataset.detailKind;
+                const otherKey = other.dataset.detailKey;
+                if (otherKind && otherKey) {
+                    localStorage.setItem(settingsModDetailKey(otherKind, otherKey), 'closed');
+                }
+            });
+        }
         item.classList.toggle('mod-expanded', open);
         details.classList.toggle('hidden', !open);
         toggleButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) positionSettingsModDetails(item);
         return;
     }
     if (kind === 'community') renderCommunityModList();
@@ -33702,18 +33812,24 @@ function renderBundledModList(category) {
     }
     if (noModsEl) noModsEl.style.display = 'none';
     const disabled = getDisabledMods();
+    let restoredDetail = false;
     categoryMods.forEach((mod, i) => {
         const info = mod.info || {};
         const name = localizedModNameFromFields(info, mod.filename || tf('mod_default_name', i + 1));
         const version = info.version || '';
         const filename = mod.filename || '';
         const errors = Array.isArray(mod.errors) ? mod.errors.filter(Boolean) : [];
-        const expanded = isSettingsModDetailOpen(category, filename || name);
+        const detailKey = filename || name;
+        const expanded = !restoredDetail && isSettingsModDetailOpen(category, detailKey);
+        if (expanded) restoredDetail = true;
         const item = document.createElement('div');
         item.className = 'settings-mod-item settings-mod-card';
+        if (filename === VANILLA_MOD_FILENAME) item.classList.add('mod-vanilla-card');
+        item.dataset.detailKind = category;
+        item.dataset.detailKey = detailKey;
         if (errors.length) item.classList.add('mod-error');
         if (expanded) item.classList.add('mod-expanded');
-        item.appendChild(createSettingsModCaret(category, filename || name, expanded));
+        item.appendChild(createSettingsModCaret(category, detailKey, expanded));
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.id = `mod-cb-${category}-${i}`;
@@ -33779,6 +33895,7 @@ function renderBundledModList(category) {
         }
         item.appendChild(details);
         listEl.appendChild(item);
+        if (expanded) positionSettingsModDetails(item);
     });
 }
 
@@ -34153,12 +34270,16 @@ function renderCommunityModList() {
     }
     if (noModsEl) noModsEl.style.display = 'none';
     const selectedHashes = new Set((selected.community_mods || []).map(mod => mod.sha256));
+    let restoredDetail = false;
     settingsCommunityMods.forEach((mod, i) => {
         const item = document.createElement('div');
         item.className = 'settings-community-card settings-mod-card';
         const expandKey = mod.sha256 || mod.public_url || communityModTitle(mod, i);
-        const expanded = isSettingsModDetailOpen('community', expandKey);
+        const expanded = !restoredDetail && isSettingsModDetailOpen('community', expandKey);
+        if (expanded) restoredDetail = true;
         if (expanded) item.classList.add('mod-expanded');
+        item.dataset.detailKind = 'community';
+        item.dataset.detailKey = expandKey;
         const isSelected = selectedHashes.has(mod.sha256);
         if (isSelected) {
             item.classList.add('community-selected');
@@ -34236,6 +34357,7 @@ function renderCommunityModList() {
         details.appendChild(actions);
         item.appendChild(details);
         listEl.appendChild(item);
+        if (expanded) positionSettingsModDetails(item);
     });
     renderCommunityCurrent();
     updateCommunityUploadState();
@@ -34269,6 +34391,12 @@ function getDisabledMods() {
     try {
         const raw = localStorage.getItem('gtn_disabled_mods');
         let disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
+        if (!Array.isArray(disabled)) disabled = getDefaultDisabledMods();
+        if (localStorage.getItem(V11_DLC_DEFAULT_MIGRATION_KEY) !== '1') {
+            disabled = [...(Array.isArray(disabled) ? disabled : []), ...V11_DLC_MOD_FILENAMES];
+            localStorage.setItem(V11_DLC_DEFAULT_MIGRATION_KEY, '1');
+            localStorage.setItem('gtn_disabled_mods', JSON.stringify(Array.from(new Set(disabled))));
+        }
         if (shouldMigrateLegacyOfficialModDefault(disabled) || shouldMigrateOfficialModDefaultV3(disabled)) {
             disabled = getDefaultDisabledMods();
             localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
@@ -34295,6 +34423,7 @@ function writeDisabledModsPreference(disabled, { trackChange = true, markExplici
         || current.length !== next.length
         || current.some((filename, index) => filename !== next[index]);
     localStorage.setItem('gtn_disabled_mods', JSON.stringify(next));
+    localStorage.setItem(V11_DLC_DEFAULT_MIGRATION_KEY, '1');
     if (markExplicit) {
         localStorage.setItem('gtn_official_mod_default_v2', '1');
         localStorage.setItem('gtn_official_mod_default_v3', '1');

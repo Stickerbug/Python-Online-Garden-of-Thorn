@@ -12,7 +12,7 @@ from mod_loader import load_mod
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "mods" / "Desert Cards Addition.gtnmod"
+PACKAGE = ROOT / "mods" / "Desert Cards DLC.gtnmod"
 NEW_CARD_IDS = {
     "MagicCompass",
     "Marble",

@@ -5127,9 +5127,11 @@ body {
 }
 
 .settings-mods-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(176px, 100%), 1fr));
+  align-items: start;
+  gap: 8px;
 }
 
 .settings-mod-source-tabs {
@@ -5268,6 +5270,7 @@ body {
 }
 
 .settings-community-card {
+  position: relative;
   display: grid;
   grid-template-columns: auto auto 1fr;
   gap: 8px 12px;
@@ -5285,12 +5288,25 @@ body {
 }
 
 .settings-mod-card-details {
-  grid-column: 1 / -1;
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  width: max(100%, min(360px, calc(100vw - 80px)));
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 10px 2px 30px;
-  border-top: 1px solid var(--border-color);
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+}
+
+.settings-mod-card-details.settings-mod-details-align-right {
+  right: 0;
+  left: auto;
 }
 
 .settings-mod-card-details.hidden {
@@ -5348,6 +5364,8 @@ body {
 }
 
 .settings-mod-item {
+  position: relative;
+  z-index: 0;
   display: grid;
   grid-template-columns: auto auto 1fr;
   align-items: center;
@@ -5355,6 +5373,14 @@ body {
   padding: 6px 8px;
   background: rgba(0, 0, 0, 0.04);
   border-radius: var(--radius-md);
+}
+
+.settings-mod-card.mod-expanded {
+  z-index: 30;
+}
+
+.settings-mod-item.mod-vanilla-card {
+  grid-column: 1 / -1;
 }
 
 .settings-mod-item-toggle {

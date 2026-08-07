@@ -93,7 +93,7 @@ _VANILLA_FLAGS = {
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
     'team_limited', 'team_unique', 'power', 'magic_swift',
     'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'wide_strike', 'self_target',
-    'floating', 'charge', 'ocean_blinded', 'sublime',
+    'floating', 'charge', 'ocean_blinded', 'sublime', 'amplify',
 }
 
 
@@ -464,7 +464,7 @@ _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Sup
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
              '基础的装备之一，可以回复生命亦可造成伤害。',
-             '目标回合开始时，回复目标2H；若已装备一回合，可花费1E，触发：摧毁此装备，选择一个目标，对其造成8D',
+             '装备拥有者回合开始时，回复目标1H；若已装备一回合，可花费1E，触发：摧毁此装备，选择一个目标，对其造成8D',
              trigger_cost_e=1))
 
 _reg(CardDef('Yucca', 'Yucca', '丝兰', 4, 0, 'root', 5, 'Common',
@@ -478,8 +478,8 @@ _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
 
 _reg(CardDef('MagicLeaf', 'Magic Leaf', '魔法叶', 1, 0, 'root', 5, 'Common',
              '不再能造成伤害了，但它可以回复魔力。',
-             '目标回合开始时，回复目标1M；可花费4M，触发：摧毁此装备，选择一个目标，对其造成12D',
-             trigger_cost_e=0, trigger_cost_m=4))
+             '装备拥有者回合开始时，回复目标1M；可花费3M，触发：摧毁此装备，选择一个目标，对其造成8D',
+             trigger_cost_e=0, trigger_cost_m=3))
 
 _reg(CardDef('MagicYucca', 'Magic Yucca', '魔法丝兰', 4, 0, 'root', 5, 'Common',
              '生成更多魔力。', '装备存在时，目标M上限+5；使用时及目标回合开始抽牌前，将一张[魔法球][共生+放逐+虚无]加入目标手牌'))

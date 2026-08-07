@@ -326,11 +326,21 @@ def test_story_presence_and_status_surfaces_are_wired():
     assert "requestJson('/api/story/presence'" in STORY_JS
     assert 'activity: reportActivity' in STORY_JS
     assert 'Number(payload.story_online_count)' in STORY_JS
+    assert '!payload.afk_check && Number.isFinite(nextCheckSeconds)' in STORY_JS
     assert 'startStoryPresence();' in STORY_JS
     assert 'function updateStoryStatusBar()' in STORY_JS
     assert 'grid-template-rows: minmax(0, 1fr) 32px;' in STORY_CSS
     assert '.story-status-bar {' in STORY_CSS
     assert 'background: rgba(0, 0, 0, .05);' in STORY_CSS
+
+
+def test_story_initial_load_retries_transient_failures_without_retrying_actions():
+    assert 'async function requestStoryLoadJson(url)' in STORY_JS
+    assert "requestStoryLoadJson('/api/story/content')" in STORY_JS
+    assert "requestStoryLoadJson('/api/story/run')" in STORY_JS
+    assert 'const retryDelays = [350, 1000];' in STORY_JS
+    assert '[408, 429, 502, 503, 504].includes(Number(error.status))' in STORY_JS
+    assert "requestJson('/api/story/run/action'" in STORY_JS
 
 
 def test_story_exit_glyph_is_visually_centered_in_its_button():
@@ -506,6 +516,25 @@ def test_story_enemy_intents_render_structured_entries():
     assert '.story-intent-entry.is-attack' in STORY_CSS
 
 
+def test_story_codex_separates_intent_operations_and_omits_unnamed_blessing_heading():
+    assert '.story-codex-intent-entries {' in STORY_CSS
+    assert 'column-gap: 11px;' in STORY_CSS
+    assert 'row-gap: 7px;' in STORY_CSS
+    assert 'border-radius: 7px;' in STORY_CSS
+    assert 'const nameText = localize(record.definition.name).trim();' in STORY_JS
+    assert 'if (nameText) {' in STORY_JS
+    assert "if (type === 'clear_status') return { kind: 'clear_status'" in STORY_JS
+    assert "} else if (kind === 'clear_status') {" in STORY_JS
+
+
+def test_story_presentation_syncs_each_event_and_cannot_block_final_state_render():
+    assert 'function syncStoryPresentationEvent(event, nextRun)' in STORY_JS
+    assert 'syncStoryPresentationEvent(event, nextRun);' in STORY_JS
+    assert "console.warn('[story] presentation event failed'" in STORY_JS
+    assert 'function updateStoryEffectValue(container, key, rawAmount)' in STORY_JS
+    assert 'storyCombatEntranceAnimating = false;\n                renderRun(nextRun);' in STORY_JS
+
+
 def test_story_map_distinguishes_traversed_and_next_edges():
     assert "traversed ? ' is-traversed' : ''" in STORY_JS
     assert "next ? ' is-next' : ''" in STORY_JS
@@ -538,6 +567,15 @@ def test_story_permanent_deck_changes_require_explicit_confirmation():
     assert "event.target.returnValue !== 'confirm'" in STORY_JS
     assert 'storyAction(pending.actionType, pending.payload);' in STORY_JS
     assert '.story-deck-change-preview {' in STORY_CSS
+
+
+def test_story_single_card_choices_replace_the_previous_selection():
+    assert 'function toggleStoryCardChoice(wrapper, id, maximum)' in STORY_JS
+    assert 'if (maximum === 1) {' in STORY_JS
+    assert 'selected.clear();' in STORY_JS
+    assert "querySelectorAll('.story-card-choice-select-item.is-selected')" in STORY_JS
+    assert 'toggleStoryCardChoice(wrapper, id, spec.maximum);' in STORY_JS
+    assert 'toggleStoryCardChoice(wrapper, id, maximum);' in STORY_JS
 
 
 def test_story_high_cost_event_choices_require_confirmation():

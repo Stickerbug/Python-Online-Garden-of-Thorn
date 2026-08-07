@@ -1445,6 +1445,54 @@ def init_db():
             'CREATE INDEX IF NOT EXISTS idx_story_run_actions_run '
             'ON story_run_actions(run_id, sequence)'
         )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_manual_saves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                slot_index INTEGER NOT NULL,
+                source_state_version INTEGER NOT NULL,
+                state_json TEXT NOT NULL,
+                stage INTEGER NOT NULL DEFAULT 1,
+                floor INTEGER NOT NULL DEFAULT 1,
+                node_id TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(run_id) REFERENCES story_runs(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(run_id, slot_index)
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_manual_saves_run '
+            'ON story_manual_saves(run_id, slot_index)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_discoveries (
+                user_id INTEGER NOT NULL,
+                content_type TEXT NOT NULL,
+                content_id TEXT NOT NULL,
+                variant TEXT NOT NULL DEFAULT 'base',
+                first_run_id TEXT,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                seen_count INTEGER NOT NULL DEFAULT 1,
+                viewed_at TEXT,
+                PRIMARY KEY(user_id, content_type, content_id, variant),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_discoveries_user_seen '
+            'ON story_discoveries(user_id, first_seen_at DESC)'
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_discoveries_unread '
+            'ON story_discoveries(user_id, viewed_at, first_seen_at DESC)'
+        )
         conn.commit()
 
 
@@ -1471,6 +1519,98 @@ def get_active_story_run(user_id):
     return _story_run_payload(row)
 
 
+def list_story_discoveries(user_id):
+    user_id = int(user_id)
+    with closing(get_db_connection()) as conn:
+        rows = conn.execute(
+            '''SELECT user_id, content_type, content_id, variant, first_run_id,
+                      first_seen_at, last_seen_at, seen_count, viewed_at
+               FROM story_discoveries
+               WHERE user_id = ?
+               ORDER BY first_seen_at ASC, content_type ASC, content_id ASC,
+                        variant ASC''',
+            (user_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def record_story_discoveries(user_id, discoveries, run_id=None):
+    """Insert newly visible story content in one short write transaction."""
+    user_id = int(user_id)
+    normalized = []
+    seen = set()
+    for discovery in discoveries or ():
+        if not isinstance(discovery, dict):
+            continue
+        content_type = str(discovery.get('content_type') or '').strip().lower()
+        content_id = str(discovery.get('content_id') or '').strip()
+        variant = str(discovery.get('variant') or 'base').strip().lower()
+        if not content_type or not content_id:
+            continue
+        key = (content_type, content_id, variant)
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(key)
+    if not normalized:
+        return []
+
+    now = utc_iso(utc_now_dt())
+    run_id = str(run_id or '').strip() or None
+    with closing(get_db_connection()) as conn:
+        existing_rows = conn.execute(
+            '''SELECT content_type, content_id, variant
+               FROM story_discoveries WHERE user_id = ?''',
+            (user_id,),
+        ).fetchall()
+        existing = {
+            (row['content_type'], row['content_id'], row['variant'])
+            for row in existing_rows
+        }
+        pending = [key for key in normalized if key not in existing]
+        if not pending:
+            return []
+        conn.execute('BEGIN IMMEDIATE')
+        conn.executemany(
+            '''INSERT OR IGNORE INTO story_discoveries
+               (user_id, content_type, content_id, variant, first_run_id,
+                first_seen_at, last_seen_at, seen_count, viewed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1, NULL)''',
+            [
+                (user_id, content_type, content_id, variant, run_id, now, now)
+                for content_type, content_id, variant in pending
+            ],
+        )
+        conn.commit()
+        inserted_rows = conn.execute(
+            '''SELECT user_id, content_type, content_id, variant, first_run_id,
+                      first_seen_at, last_seen_at, seen_count, viewed_at
+               FROM story_discoveries
+               WHERE user_id = ? AND first_seen_at = ?
+               ORDER BY content_type ASC, content_id ASC, variant ASC''',
+            (user_id, now),
+        ).fetchall()
+    inserted = {
+        (row['content_type'], row['content_id'], row['variant']): dict(row)
+        for row in inserted_rows
+    }
+    return [inserted[key] for key in pending if key in inserted]
+
+
+def mark_story_discoveries_viewed(user_id):
+    user_id = int(user_id)
+    now = utc_iso(utc_now_dt())
+    with closing(get_db_connection()) as conn:
+        cursor = conn.execute(
+            '''UPDATE story_discoveries
+               SET viewed_at = ?
+               WHERE user_id = ? AND viewed_at IS NULL''',
+            (now, user_id),
+        )
+        conn.commit()
+    return int(cursor.rowcount or 0)
+
+
 def get_story_run_action(user_id, run_id, action_id):
     user_id = int(user_id)
     run_id = str(run_id or '').strip()
@@ -1486,6 +1626,167 @@ def get_story_run_action(user_id, run_id, action_id):
             (run_id, action_id, user_id),
         ).fetchone()
     return dict(row) if row is not None else None
+
+
+def _story_manual_save_payload(row):
+    if row is None:
+        return None
+    payload = dict(row)
+    payload.pop('state_json', None)
+    return payload
+
+
+def list_story_manual_saves(user_id, run_id):
+    user_id = int(user_id)
+    run_id = str(run_id or '').strip()
+    if not run_id:
+        return []
+    with closing(get_db_connection()) as conn:
+        rows = conn.execute(
+            '''SELECT id, run_id, user_id, slot_index, source_state_version,
+                      stage, floor, node_id, created_at
+               FROM story_manual_saves
+               WHERE user_id = ? AND run_id = ?
+               ORDER BY slot_index ASC''',
+            (user_id, run_id),
+        ).fetchall()
+    return [_story_manual_save_payload(row) for row in rows]
+
+
+def create_story_manual_save(user_id, run_id, expected_state_version):
+    """Store the current map state, retaining the newest three snapshots."""
+    user_id = int(user_id)
+    run_id = str(run_id or '').strip()
+    expected_state_version = int(expected_state_version)
+    now = utc_iso(utc_now_dt())
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        run_row = conn.execute(
+            '''SELECT * FROM story_runs
+               WHERE id = ? AND user_id = ? AND status = 'active' LIMIT 1''',
+            (run_id, user_id),
+        ).fetchone()
+        if run_row is None:
+            conn.rollback()
+            return None, 'not_found'
+        if int(run_row['state_version']) != expected_state_version:
+            conn.rollback()
+            return _story_run_payload(run_row), 'version'
+        try:
+            state = json.loads(run_row['state_json'] or '{}')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            conn.rollback()
+            return _story_run_payload(run_row), 'invalid_state'
+        if str(state.get('phase') or '') != 'map':
+            conn.rollback()
+            return _story_run_payload(run_row), 'phase'
+
+        snapshot = dict(state)
+        snapshot['last_events'] = []
+        snapshot.pop('recovery_checkpoint', None)
+        snapshot_json = json.dumps(
+            snapshot, ensure_ascii=False, separators=(',', ':'),
+        )
+        conn.execute(
+            'DELETE FROM story_manual_saves WHERE run_id = ? AND slot_index >= 2',
+            (run_id,),
+        )
+        conn.execute(
+            'UPDATE story_manual_saves SET slot_index = 2 '
+            'WHERE run_id = ? AND slot_index = 1',
+            (run_id,),
+        )
+        conn.execute(
+            'UPDATE story_manual_saves SET slot_index = 1 '
+            'WHERE run_id = ? AND slot_index = 0',
+            (run_id,),
+        )
+        conn.execute(
+            '''INSERT INTO story_manual_saves
+               (run_id, user_id, slot_index, source_state_version, state_json,
+                stage, floor, node_id, created_at)
+               VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?)''',
+            (
+                run_id,
+                user_id,
+                expected_state_version,
+                snapshot_json,
+                int(state.get('stage') or 1),
+                int(state.get('current_floor') or 1),
+                str(state.get('current_node_id') or ''),
+                now,
+            ),
+        )
+        conn.commit()
+    return list_story_manual_saves(user_id, run_id), 'saved'
+
+
+def load_story_manual_save(
+    user_id,
+    run_id,
+    save_id,
+    expected_state_version,
+):
+    """Restore a map snapshot without touching account-level currencies."""
+    user_id = int(user_id)
+    run_id = str(run_id or '').strip()
+    save_id = int(save_id)
+    expected_state_version = int(expected_state_version)
+    now = utc_iso(utc_now_dt())
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        run_row = conn.execute(
+            '''SELECT * FROM story_runs
+               WHERE id = ? AND user_id = ? AND status = 'active' LIMIT 1''',
+            (run_id, user_id),
+        ).fetchone()
+        if run_row is None:
+            conn.rollback()
+            return None, 'not_found'
+        if int(run_row['state_version']) != expected_state_version:
+            conn.rollback()
+            return _story_run_payload(run_row), 'version'
+        try:
+            current_state = json.loads(run_row['state_json'] or '{}')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            conn.rollback()
+            return _story_run_payload(run_row), 'invalid_state'
+        if str(current_state.get('phase') or '') != 'map':
+            conn.rollback()
+            return _story_run_payload(run_row), 'phase'
+        save_row = conn.execute(
+            '''SELECT * FROM story_manual_saves
+               WHERE id = ? AND run_id = ? AND user_id = ? LIMIT 1''',
+            (save_id, run_id, user_id),
+        ).fetchone()
+        if save_row is None:
+            conn.rollback()
+            return _story_run_payload(run_row), 'save_not_found'
+        try:
+            restored = json.loads(save_row['state_json'] or '{}')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            conn.rollback()
+            return _story_run_payload(run_row), 'invalid_save'
+        if str(restored.get('phase') or '') != 'map':
+            conn.rollback()
+            return _story_run_payload(run_row), 'invalid_save'
+        restored['last_events'] = []
+        restored.pop('recovery_checkpoint', None)
+        state_json = json.dumps(
+            restored, ensure_ascii=False, separators=(',', ':'),
+        )
+        conn.execute(
+            '''UPDATE story_runs
+               SET state_json = ?, state_version = state_version + 1,
+                   updated_at = ?
+               WHERE id = ? AND user_id = ? AND status = 'active' ''',
+            (state_json, now, run_id, user_id),
+        )
+        conn.commit()
+        updated = conn.execute(
+            'SELECT * FROM story_runs WHERE id = ?', (run_id,),
+        ).fetchone()
+    return _story_run_payload(updated), 'loaded'
 
 
 def commit_story_run_action(

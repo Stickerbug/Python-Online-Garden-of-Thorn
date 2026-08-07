@@ -8,7 +8,7 @@ from mod_loader import load_mod
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "mods" / "Sewers Cards Addition.gtnmod"
+PACKAGE = ROOT / "mods" / "Sewers Cards DLC.gtnmod"
 CARD_IDS = {"Cheese", "Perfume"}
 
 
