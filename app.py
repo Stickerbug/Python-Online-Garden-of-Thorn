@@ -5672,12 +5672,16 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
     return payload
 
 
+MAX_INSTANCE_ID = 10**12
+MAX_CHOICE_INTEGER = 10**6
+
+
 def validate_instance_id(value, *, name='instance_id', required=True):
     text = validate_str(value, min_len=1 if required else 0, max_len=80, name=name)
     if text and not re.fullmatch(r'[A-Za-z0-9_.:\-]+', text):
         raise ValueError(f'{name} format is invalid')
     if re.fullmatch(r'\d+', text or ''):
-        return validate_int(text, minimum=0, maximum=10**12, name=name)
+        return validate_int(text, minimum=0, maximum=MAX_INSTANCE_ID, name=name)
     return text
 
 
@@ -5723,7 +5727,14 @@ def validate_solo_deck_entries(value, *, name='deck'):
     return clean
 
 
-def validate_choice_payload(choice, *, depth=0):
+def _choice_integer_limit(field_name):
+    key = str(field_name or '').rsplit('.', 1)[-1].lower()
+    if key == 'instance_id' or key.endswith('_instance_id') or key.endswith('_instance_ids'):
+        return MAX_INSTANCE_ID
+    return MAX_CHOICE_INTEGER
+
+
+def validate_choice_payload(choice, *, depth=0, field_name='choice'):
     if choice is None:
         return None
     if depth > 4:
@@ -5731,20 +5742,32 @@ def validate_choice_payload(choice, *, depth=0):
     if isinstance(choice, bool):
         return bool(choice)
     if isinstance(choice, int):
-        return validate_int(choice, minimum=-1, maximum=1000000, name='choice')
+        return validate_int(
+            choice,
+            minimum=-1,
+            maximum=_choice_integer_limit(field_name),
+            name=field_name,
+        )
     if isinstance(choice, str):
-        return validate_str(choice, max_len=120, name='choice')
+        return validate_str(choice, max_len=120, name=field_name)
     if isinstance(choice, list):
         if len(choice) > 60:
             raise ValueError('choice list too long')
-        return [validate_choice_payload(item, depth=depth + 1) for item in choice]
+        return [
+            validate_choice_payload(item, depth=depth + 1, field_name=field_name)
+            for item in choice
+        ]
     if isinstance(choice, dict):
         if len(choice) > 30:
             raise ValueError('choice object too large')
         clean = {}
         for key, value in choice.items():
             safe_key = validate_str(key, min_len=1, max_len=64, pattern=r'[A-Za-z0-9_.:\-]+', name='choice key')
-            clean[safe_key] = validate_choice_payload(value, depth=depth + 1)
+            clean[safe_key] = validate_choice_payload(
+                value,
+                depth=depth + 1,
+                field_name=f'{field_name}.{safe_key}',
+            )
         return clean
     raise ValueError('choice contains unsupported value')
 
