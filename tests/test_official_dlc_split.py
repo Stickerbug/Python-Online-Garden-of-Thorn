@@ -2,7 +2,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from mod_loader import OFFICIAL_MOD_DISPLAY_ORDER, load_mod
+from mod_loader import OFFICIAL_MOD_DISPLAY_ORDER, load_mod, mod_category
 from mod_loadout_v2 import build_v2_loadout
 from mod_validator_v2 import validate_mod_v2
 
@@ -111,6 +111,8 @@ def test_unmerged_dlc_cards_remain_in_independent_packages():
         assert manifest["optional_dependencies"] == []
         assert manifest["load_after"] == []
         assert manifest["load_before"] == []
+        assert manifest["category"] == "entertainment"
+        assert mod_category(dlc) == "entertainment"
         assert dlc.info.version == "1.0.0"
         assert build_v2_loadout([dlc]).ok
         assert build_v2_loadout([parent, dlc]).ok

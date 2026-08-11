@@ -58,7 +58,16 @@ def normalize_mod_category(value):
     return category if category in VALID_MOD_CATEGORIES else MOD_CATEGORY_OFFICIAL
 
 
+def is_dlc_mod_filename(value):
+    filename = os.path.basename(str(getattr(value, 'filename', value) or '')).casefold()
+    stem = os.path.splitext(filename)[0]
+    tokens = stem.replace('-', ' ').replace('_', ' ').split()
+    return 'dlc' in tokens
+
+
 def mod_category(value):
+    if is_dlc_mod_filename(value):
+        return MOD_CATEGORY_ENTERTAINMENT
     info = getattr(value, 'info', None)
     manifest = getattr(value, 'manifest', None)
     raw = getattr(info, 'category', '') if info is not None else ''

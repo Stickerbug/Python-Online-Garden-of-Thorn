@@ -480,6 +480,7 @@ def manifest(mod_id: str, resource_namespace: str, name: str, name_cn: str, auth
         "api_version": "2.0",
         "author": author,
         "description": description,
+        "category": "entertainment",
         "capabilities": ["cards", "logic.basic", "logic.advanced"],
         "default_language": "zh",
         "dependencies": [],
@@ -604,6 +605,7 @@ def update_bio_dlc(assets):
     path = MODS / "Bio Cards DLC.gtnmod"
     document, members = read_package(path)
     document["manifest"]["author"] = "huanxiang0273, Eric, XinYu, AArcC"
+    document["manifest"]["category"] = "entertainment"
     existing = {row.get("id"): row for row in document["registries"]["cards"]}
     for row in BIO_CARDS:
         existing.setdefault(row["id"], row)

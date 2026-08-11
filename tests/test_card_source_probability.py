@@ -89,6 +89,8 @@ class CardSourceProbabilityUiContractTests(unittest.TestCase):
         )
         self.assertIn('def hidden_disabled_entertainment_card_ids', app_source)
         self.assertIn('disabled_entertainment_mod_filenames(disabled_mods)', app_source)
+        self.assertIn('def get_all_mod_shared_card_memberships(excluded_mod_filenames=None)', app_source)
+        self.assertIn('entertainment_disabled if include_all_mods else None', app_source)
         self.assertIn("params.set('disabled_mods', getDisabledMods().join(','))", game_source)
         self.assertIn('const previousListScrollTop = list.scrollTop || 0;', game_source)
         self.assertIn('list.scrollTop = previousListScrollTop;', game_source)

@@ -6488,10 +6488,11 @@ def hidden_disabled_entertainment_card_ids(disabled_mods=None):
     return hidden.difference(visible_elsewhere)
 
 
-def get_all_mod_shared_card_memberships():
+def get_all_mod_shared_card_memberships(excluded_mod_filenames=None):
+    excluded = set(excluded_mod_filenames or [])
     memberships = {card_id: [] for card_id in ALL_MOD_SHARED_CARD_IDS}
     for mod in sort_mods_for_display(load_all_mods()):
-        if mod.errors:
+        if mod.errors or mod.filename in excluded:
             continue
         info = mod.info
         mod_name = info.name if info and info.name else mod.filename
@@ -17786,7 +17787,9 @@ def api_cards():
     hidden_entertainment_cards = hidden_disabled_entertainment_card_ids(disabled_mods) if include_all_mods else set()
     allowed_card_ids = (set(CARD_DEFS.keys()) - hidden_entertainment_cards) if include_all_mods else loadout['allowed_card_ids']
     card_mod_sources = get_card_mod_sources(sorted(entertainment_disabled) if include_all_mods else [])
-    shared_card_memberships = get_all_mod_shared_card_memberships()
+    shared_card_memberships = get_all_mod_shared_card_memberships(
+        entertainment_disabled if include_all_mods else None
+    )
     if community_mod:
         selected_hashes = {
             str(entry.get('sha256') or '').strip().lower()
