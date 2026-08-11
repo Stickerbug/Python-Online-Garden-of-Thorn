@@ -87,6 +87,12 @@ class CardSourceProbabilityUiContractTests(unittest.TestCase):
             '`${buildCardSourceMetaHtml(cardDef)}${buildCardIntroSummaryHtml(cardDef)}',
             game_source,
         )
+        self.assertIn('def hidden_disabled_entertainment_card_ids', app_source)
+        self.assertIn('disabled_entertainment_mod_filenames(disabled_mods)', app_source)
+        self.assertIn("params.set('disabled_mods', getDisabledMods().join(','))", game_source)
+        self.assertIn('const previousListScrollTop = list.scrollTop || 0;', game_source)
+        self.assertIn('list.scrollTop = previousListScrollTop;', game_source)
+        self.assertIn('Math.min(previousListScrollTop, Math.max(0, list.scrollHeight - list.clientHeight))', game_source)
         self.assertIn('.term-intro-card-meta {', style_source)
         self.assertIn('.term-intro-card-meta-probability', style_source)
 

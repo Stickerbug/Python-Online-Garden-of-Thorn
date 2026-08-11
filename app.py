@@ -110,6 +110,7 @@ from db import (
     create_user,
     current_gr_season,
     db_slow_log,
+    delete_story_manual_save,
     find_user_for_admin,
     format_duration_zh,
     feedback_is_staff,
@@ -150,6 +151,7 @@ from db import (
     list_active_moderation_records,
     list_user_recent_ips,
     list_reports,
+    search_handling_matches,
     list_user_roles,
     list_user_titles,
     list_user_thorn_dew_transactions,
@@ -415,9 +417,9 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2'
+GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
 GTN_DRAINING_ENV = os.environ.get('GTN_DRAINING', '').strip().lower()
@@ -6456,6 +6458,34 @@ def get_card_mod_sources(disabled_mods=None):
                     'is_vanilla': mod.filename == VANILLA_MOD_FILENAME,
                 }
     return sources
+
+
+def disabled_entertainment_mod_filenames(disabled_mods=None):
+    disabled = set(normalize_disabled_mods(disabled_mods))
+    return {
+        mod.filename
+        for mod in load_all_mods()
+        if not mod.errors
+        and mod.filename in disabled
+        and mod_category(mod) == 'entertainment'
+    }
+
+
+def hidden_disabled_entertainment_card_ids(disabled_mods=None):
+    disabled_entertainment = disabled_entertainment_mod_filenames(disabled_mods)
+    if not disabled_entertainment:
+        return set()
+    hidden = set()
+    visible_elsewhere = set()
+    for mod in load_all_mods():
+        if mod.errors:
+            continue
+        card_ids = {card.id for card in mod.cards if card.id in CARD_DEFS}
+        if mod.filename in disabled_entertainment:
+            hidden.update(card_ids)
+        else:
+            visible_elsewhere.update(card_ids)
+    return hidden.difference(visible_elsewhere)
 
 
 def get_all_mod_shared_card_memberships():
@@ -15329,6 +15359,34 @@ def api_story_run_save():
         raise
 
 
+@app.route('/api/story/run/save/delete', methods=['POST'])
+def api_story_run_save_delete():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    run_id = str(data.get('run_id') or '').strip()
+    try:
+        save_id = int(data.get('save_id'))
+    except (TypeError, ValueError):
+        return _json_error('故事存档参数无效', 400, code='INVALID_SAVE_REQUEST')
+    if not run_id or len(run_id) > 64 or save_id <= 0:
+        return _json_error('故事存档参数无效', 400, code='INVALID_SAVE_REQUEST')
+    try:
+        saves, outcome = delete_story_manual_save(user_id, run_id, save_id)
+        if outcome == 'not_found':
+            return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
+        if outcome == 'save_not_found':
+            return _json_error('该故事存档不存在', 404, code='SAVE_NOT_FOUND', saves=saves or [])
+        if outcome != 'deleted':
+            return _json_error('该故事存档无法删除', 400, code='INVALID_STORY_SAVE')
+        return jsonify({'success': True, 'saves': saves})
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+
+
 @app.route('/api/story/run/load', methods=['POST'])
 def api_story_run_load():
     user_id, _, error = _require_account_json()
@@ -15849,6 +15907,57 @@ def handling_user_ban(user_id):
             broadcast_lobby()
     admin_event('moderation', f'handling {"banned" if banned else "unbanned"} user {user.get("username") if user else user_id}: {reason or "-"}')
     return jsonify({'success': True, 'user': user, 'kicked': len(kicked)})
+
+
+@app.route('/api/feedback/handling/users/<int:user_id>')
+def handling_user_detail(user_id):
+    started = time.perf_counter()
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        detail = get_admin_user_detail(
+            user_id,
+            validate_int(request.args.get('match_limit', 20), default=20, minimum=1, maximum=50, name='match_limit'),
+        )
+        if not detail:
+            return _json_error('用户不存在', 404)
+        detail['user']['recent_ips'] = list_user_recent_ips(user_id, limit=8)
+        with _lock:
+            online = _admin_online_user_map()
+        detail['user']['online'] = online.get(str(detail['user'].get('username', '')).lower())
+        log_admin_api_timing('/api/feedback/handling/users/detail', (time.perf_counter() - started) * 1000, user=user_id, rows=1)
+        return jsonify({'success': True, **detail})
+    except Exception as exc:
+        admin_event('error', f'handling user detail failed: {exc}')
+        log_admin_api_timing('/api/feedback/handling/users/detail', (time.perf_counter() - started) * 1000, user=user_id, error=type(exc).__name__)
+        return jsonify({'success': False, 'error': '账号数据库不可用'}), 500
+
+
+@app.route('/api/feedback/handling/matches')
+def handling_matches():
+    started = time.perf_counter()
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        data = search_handling_matches(
+            query=request.args.get('query', ''),
+            mode=request.args.get('mode', 'all'),
+            risk=request.args.get('risk', 'all'),
+            limit=validate_int(request.args.get('limit', 30), default=30, minimum=1, maximum=50, name='limit'),
+            offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
+        )
+        log_admin_api_timing(
+            '/api/feedback/handling/matches',
+            (time.perf_counter() - started) * 1000,
+            rows=len(data.get('items') or []),
+            total=data.get('total'),
+            limit=data.get('limit'),
+        )
+        return jsonify({'success': True, **data})
+    except Exception as exc:
+        admin_event('error', f'handling matches query failed: {exc}')
+        log_admin_api_timing('/api/feedback/handling/matches', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/api/feedback/handling/moderation')
@@ -17666,14 +17775,17 @@ def api_cards():
         return _json_error(str(exc), 400)
     include_all_mods = str(request.args.get('include_all_mods', '')).strip().lower() in {'1', 'true', 'yes', 'all'}
     runtime_mode = str(request.args.get('mode', '') or '').strip().lower() or None
+    entertainment_disabled = disabled_entertainment_mod_filenames(disabled_mods) if include_all_mods else set()
+    loadout_disabled_mods = sorted(entertainment_disabled) if include_all_mods else disabled_mods
     loadout = build_mod_loadout(
-        disabled_mods,
+        loadout_disabled_mods,
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
         runtime_mode=runtime_mode,
     )
-    allowed_card_ids = set(CARD_DEFS.keys()) if include_all_mods else loadout['allowed_card_ids']
-    card_mod_sources = get_card_mod_sources([])
+    hidden_entertainment_cards = hidden_disabled_entertainment_card_ids(disabled_mods) if include_all_mods else set()
+    allowed_card_ids = (set(CARD_DEFS.keys()) - hidden_entertainment_cards) if include_all_mods else loadout['allowed_card_ids']
+    card_mod_sources = get_card_mod_sources(sorted(entertainment_disabled) if include_all_mods else [])
     shared_card_memberships = get_all_mod_shared_card_memberships()
     if community_mod:
         selected_hashes = {
@@ -17786,8 +17898,10 @@ def api_opening_events():
     except Exception as exc:
         return _json_error(str(exc), 400)
     include_all_mods = str(request.args.get('include_all_mods', '')).strip().lower() in {'1', 'true', 'yes', 'all'}
+    disabled_mods = request.args.get('disabled_mods', '')
+    entertainment_disabled = disabled_entertainment_mod_filenames(disabled_mods) if include_all_mods else set()
     loadout = build_mod_loadout(
-        '' if include_all_mods else request.args.get('disabled_mods', ''),
+        sorted(entertainment_disabled) if include_all_mods else disabled_mods,
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
     )

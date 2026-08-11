@@ -30,6 +30,7 @@ from story_engine import (
     _gain_magic,
     _new_card,
     _refresh_combat_projections,
+    _start_combat,
     apply_story_action,
 )
 from story_mode import (
@@ -81,6 +82,42 @@ def _inject_hand_card(state, def_id, upgraded=False):
     return card
 
 
+def test_story_disc_halves_enemy_physical_damage_until_next_player_turn():
+    state = build_initial_story_state('story-disc')
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'story-disc',
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    combat = state['combat']
+    combat['hand'] = []
+    combat['draw_pile'] = []
+    combat['discard_pile'] = []
+    combat['elixir'] = 10
+    state['player']['health'] = 80
+    disc = _inject_hand_card(state, 'disc')
+
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': disc['instance_id']},
+        'story-disc-play',
+    )
+    assert state['combat']['disc_active'] is True
+
+    state, events = apply_story_action(state, 'end_turn', {}, 'story-disc-end')
+
+    damage_events = [
+        event for event in events
+        if event.get('type') == 'player_damage'
+    ]
+    assert damage_events[0]['amount'] == 3
+    assert state['player']['health'] == 77
+    assert state['combat']['disc_active'] is False
+
+
 def test_story_resources_can_exceed_legacy_display_maximums():
     state, _ = _begin_combat('unbounded-story-resources')
     events = []
@@ -125,6 +162,23 @@ def test_story_resources_reset_to_turn_baselines_instead_of_carrying_over():
     assert state['phase'] == 'combat'
     assert state['combat']['elixir'] == 7
     assert state['combat']['magic'] == 3
+
+
+def test_story_surrender_directly_ends_run_without_revive():
+    seed = 'story-surrender'
+    state, _ = _begin_combat(seed)
+    state['player']['health'] = 17
+    state['player']['relics'].append('world_tree_leaf')
+
+    state, events = apply_story_action(state, 'surrender', {}, seed)
+
+    assert state['phase'] == 'game_over'
+    assert state['player']['health'] == 0
+    assert state.get('recovery_checkpoint') is None
+    assert state['combat'].get('turn') == 'ended'
+    assert any(event.get('type') == 'story_surrender' for event in events)
+    assert any(event.get('type') == 'game_over' for event in events)
+    assert not any(event.get('type') == 'revive' for event in events)
 
 
 def test_story_draw_reshuffles_discard_during_the_same_draw_action():
@@ -670,6 +724,67 @@ def test_boss_rush_stage_choice_stacks_curses_and_advances_endlessly():
             and event.get('curse_stacks') == block
             for event in events
         )
+
+
+def test_lunatic_stage_three_gate_boss_completes_without_reward():
+    seed = 'lunatic-gate-boss'
+    state = build_initial_story_state(seed)
+    state['stage'] = 3
+    state['biome'] = 'garden'
+    state['difficulty'] = 'lunatic'
+    state['journey_mode'] = 'standard'
+    state['map'] = generate_story_map(seed, stage=3, biome='garden', difficulty='lunatic')
+    node = state['map']['floors'][15]['nodes'][0]
+    assert node['floor'] == 16
+    assert node['type'] == 'boss'
+    node['status'] = 'current'
+    state['current_floor'] = node['floor']
+    state['current_node_id'] = node['id']
+    starting_gold = state['player']['gold']
+    events = []
+    _start_combat(
+        state,
+        node,
+        seed,
+        events,
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    state['combat']['opening_redraw_pending'] = False
+    state['combat']['draw_pile'] = []
+    state['combat']['discard_pile'] = []
+    state['combat']['exile_pile'] = []
+    target = state['combat']['enemies'][0]
+    target['health'] = 1
+    target['shield'] = 0
+    state['combat']['hand'] = [_new_card(state, 'basic')]
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {
+            'card_instance_id': state['combat']['hand'][0]['instance_id'],
+            'target_id': target['id'],
+        },
+        seed,
+    )
+
+    assert state['phase'] == 'map'
+    assert state['reward'] is None
+    assert state['combat'] is None
+    assert state['player']['gold'] == starting_gold
+    completed_node = next(
+        item
+        for floor in state['map']['floors']
+        for item in floor['nodes']
+        if item['id'] == node['id']
+    )
+    assert completed_node['status'] == 'completed'
+    assert any(
+        event.get('type') == 'combat_victory'
+        and event.get('source') == 'lunatic_gate_boss'
+        and event.get('gold') == 0
+        for event in events
+    )
 
 
 def test_entering_a_new_stage_restores_all_health():

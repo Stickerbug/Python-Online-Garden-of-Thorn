@@ -85,6 +85,41 @@ def test_manual_story_saves_roll_three_slots_and_restore_rng(tmp_path, monkeypat
     assert 'recovery_checkpoint' not in restored['state']
 
 
+def test_manual_story_save_delete_compacts_remaining_slots(tmp_path, monkeypatch):
+    monkeypatch.setattr(db, 'DB_PATH', str(tmp_path / 'story-save-delete.sqlite3'))
+    db.init_db()
+    user, error = db.create_user('SaveDeleteT', 'Aa1!aaaa')
+    assert error is None
+
+    seed = 'manual-save-delete'
+    state = _map_state(seed)
+    run, _ = db.create_story_run(user['id'], seed, STORY_CONTENT_VERSION, state)
+    for health in (91, 72, 44):
+        state = copy.deepcopy(state)
+        state['player']['health'] = health
+        run, outcome = db.commit_story_run_action(
+            user['id'], run['id'], run['state_version'],
+            f'save-delete-health-{health}', 'test', {}, state,
+        )
+        assert outcome == 'committed'
+        saves, outcome = db.create_story_manual_save(
+            user['id'], run['id'], run['state_version'],
+        )
+        assert outcome == 'saved'
+    assert [item['slot_index'] for item in saves] == [0, 1, 2]
+
+    middle = next(item for item in saves if item['slot_index'] == 1)
+    saves, outcome = db.delete_story_manual_save(user['id'], run['id'], middle['id'])
+
+    assert outcome == 'deleted'
+    assert [item['slot_index'] for item in saves] == [0, 1]
+    assert all(item['id'] != middle['id'] for item in saves)
+
+    saves, outcome = db.delete_story_manual_save(user['id'], run['id'], middle['id'])
+    assert outcome == 'save_not_found'
+    assert [item['slot_index'] for item in saves] == [0, 1]
+
+
 def test_manual_story_save_and_load_are_rejected_outside_map(tmp_path, monkeypatch):
     monkeypatch.setattr(db, 'DB_PATH', str(tmp_path / 'story-save-phase.sqlite3'))
     db.init_db()

@@ -116,7 +116,7 @@ input:focus, select:focus, textarea:focus {
 }
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   margin-bottom: 10px;
 }
@@ -182,6 +182,8 @@ input:focus, select:focus, textarea:focus {
   color: var(--muted);
 }
 .badge.risk-3, .badge.risk-4 { color: var(--danger); border-color: #f0b8b5; }
+.badge.risk-2 { color: var(--warn); border-color: #f0d28a; }
+.badge.risk-1 { color: var(--primary); border-color: #9ebcff; }
 .badge.pending { color: var(--warn); border-color: #f0d28a; }
 .badge.accepted { color: var(--ok); border-color: #a5d6be; }
 .badge.danger-badge { color: var(--danger); border-color: #f0b8b5; }
@@ -195,6 +197,12 @@ input:focus, select:focus, textarea:focus {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+
+.inline-actions a.btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 .split-actions {
@@ -322,6 +330,49 @@ input:focus, select:focus, textarea:focus {
 }
 .ip-related {
   margin-top: 4px;
+}
+
+.flag-list {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.flag-chip {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fafbfc;
+}
+
+.flag-chip.risk-3,
+.flag-chip.risk-4 {
+  border-color: #efb4af;
+  background: #fff7f6;
+}
+
+.flag-chip.risk-2 {
+  border-color: #ead18a;
+  background: #fffaf0;
+}
+
+.match-ip-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.match-mini-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .record-editor {

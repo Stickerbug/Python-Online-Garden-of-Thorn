@@ -47,7 +47,7 @@ STORY_DIFFICULTIES = {
         'name': {'zh': '普通', 'en': 'Normal'},
         'abbreviation': {'zh': 'N', 'en': 'N'},
         'description': {
-            'zh': '使用标准地图、奖励与敌人强度',
+            'zh': '使用标准地图、奖励与生物强度',
             'en': 'Standard map, rewards, and enemy strength',
         },
     },
@@ -63,7 +63,7 @@ STORY_DIFFICULTIES = {
         'name': {'zh': '疯狂', 'en': 'Lunatic'},
         'abbreviation': {'zh': 'L', 'en': 'L'},
         'description': {
-            'zh': '继承困难规则，且敌人的H、伤害与行动更强',
+            'zh': '继承困难规则，且生物的H、伤害与行动更强',
             'en': 'Includes Hard rules and strengthens enemy H, damage, and actions',
         },
     },
@@ -73,21 +73,21 @@ STORY_CURSES = {
     'vitality': {
         'name': {'zh': '旺盛', 'en': 'Vitality'},
         'description': {
-            'zh': '所有敌人的H上限增加150%',
+            'zh': '所有生物的H上限增加150%',
             'en': 'All enemies gain 150% maximum H',
         },
     },
     'aggression': {
         'name': {'zh': '凶猛', 'en': 'Aggression'},
         'description': {
-            'zh': '所有敌人的攻击伤害增加80%',
+            'zh': '所有生物的攻击伤害增加80%',
             'en': 'All enemies deal 80% more attack damage',
         },
     },
     'affliction': {
         'name': {'zh': '苦难', 'en': 'Affliction'},
         'description': {
-            'zh': '所有敌人在战斗开始时获得3层负面状态免疫；每名敌人每次行动后，随机对玩家施加1层虚弱、脆弱或易伤',
+            'zh': '所有生物在战斗开始时获得3层负面状态免疫；每名生物每次行动后，随机对玩家方施加1层虚弱、脆弱或易伤',
             'en': 'All enemies start combat with 3 Negative Status Immunity; after each enemy action, apply 1 random Weak, Fragile, or Vulnerable to the player',
         },
     },
@@ -148,7 +148,7 @@ STORY_TAGS = {
     },
     'wide': {
         'name': {'zh': '广域打击', 'en': 'Wide Strike'},
-        'description': {'zh': '对所有可选中的敌方单位生效。', 'en': 'Apply the effect to every selectable enemy.'},
+        'description': {'zh': '对所有可选中的生物生效。', 'en': 'Apply the effect to every selectable creature.'},
     },
     'recovery': {
         'name': {'zh': '恢复', 'en': 'Recovery'},
@@ -307,7 +307,7 @@ STORY_TRAITS = {
     'nourish': {
         'name': {'zh': '滋养', 'en': 'Nourish'},
         'description': {
-            'zh': 'H低于40%时触发一次：击杀所有友方单位；每击杀1个，获得2层力量，并回复其H上限的H。',
+            'zh': 'H低于40%时触发一次：击杀所有生物；每击杀1个，获得2层力量，并回复其H上限的H。',
             'en': 'Once below 40% H, defeat all allies; gain 2 Power and heal their maximum H for each.',
         },
         'image_url': '/static/assets/story-trait-icons/nourish.svg',
@@ -363,7 +363,7 @@ STORY_TRAITS = {
     'shelter': {
         'name': {'zh': '庇护', 'en': 'Shelter'},
         'description': {
-            'zh': '回合结束时，若本回合未受到实际伤害，使所有敌人获得等同于层数的护盾。',
+            'zh': '回合结束时，若本回合未受到实际伤害，使所有生物获得等同于层数的护盾。',
             'en': 'At turn end, if undamaged this turn, all enemies gain Shield equal to its stacks.',
         },
         'image_url': '/static/assets/story-trait-icons/shelter.svg',
@@ -411,7 +411,7 @@ STORY_TRAITS = {
     'proliferation': {
         'name': {'zh': '增生', 'en': 'Proliferation'},
         'description': {
-            'zh': '有其他敌人死亡时，回复所有敌人等同于层数的H，使其获得等同于层数的护盾和1层坚固。',
+            'zh': '有其他生物死亡时，回复所有生物等同于层数的H，使其获得等同于层数的护盾和1层坚固。',
             'en': 'When another enemy dies, heal all enemies and grant them Shield equal to its stacks, plus 1 Sturdy.',
         },
         'image_url': '/static/assets/story-trait-icons/proliferation.svg',
@@ -459,7 +459,7 @@ STORY_TRAITS = {
     'brittle': {
         'name': {'zh': '易碎', 'en': 'Brittle'},
         'description': {
-            'zh': '若并非因爆裂死亡，死后召唤的敌人H减半，并获得1层眩晕。',
+            'zh': '若并非因爆裂死亡，死后召唤的生物H减半，并获得1层眩晕。',
             'en': 'If not defeated by Burst, its death summon has half H and gains 1 Stun.',
         },
         'image_url': '/static/assets/story-trait-icons/brittle.svg',
@@ -672,9 +672,9 @@ STORY_CARDS = {
                    '回合开始时获得5层护盾。', effects=(_effect('equipment', 5, script='start_shield'),),
                    target='self', upgrade={'cost_e': 1}),
     'lightning': _card('Lightning', '闪电', 'Lightning', 1, 'thorn', 'common',
-                       '对所有敌人造成3D×2。', tags=('wide',),
+                       '对所有生物造成3D×2。', tags=('wide',),
                        effects=(_effect('damage', 3, hits=2),),
-                       upgrade={'description': {'zh': '对所有敌人造成5D×2。', 'en': 'Deal 5 D twice to all enemies.'},
+                       upgrade={'description': {'zh': '对所有生物造成5D×2。', 'en': 'Deal 5 D twice to all creatures.'},
                                 'effects': (_effect('damage', 5, hits=2),)}),
     'magic_torch': _card('Magic Torch', '魔法火把', 'Magic Torch', 2, 'bloom', 'ultra',
                          '主动丢弃全部其他手牌，每丢弃1张获得4层护盾。',
@@ -745,7 +745,7 @@ STORY_CARDS = {
                          upgrade={'description': {'zh': '抽3张牌；获得4层护盾。', 'en': 'Draw 3; gain 4 Shield.'},
                                   'effects': (_effect('draw', 3), _effect('shield', 4))}),
     'pearl': _card('Pearl', '珍珠', 'Pearl', 2, 'root', 'ultra',
-                   '每主动丢弃1张牌，对随机敌人造成3D。',
+        '每主动丢弃1张牌，对随机生物造成3D。',
                    effects=(_effect('equipment', script='pearl'),), target='self',
                    upgrade={'cost_e': 1}),
     'crystal_leaf': _card('Crystal Leaf', '水晶叶', 'Crystal Leaf', 3, 'root', 'ultra',
@@ -809,9 +809,9 @@ STORY_CARDS = {
                     '每回合多回复1E。', effects=(_effect('equipment', 1, script='turn_elixir'),), target='self',
                     upgrade={'cost_e': 1}),
     'rna': _card('RNA', 'RNA', 'RNA', 1, 'root', 'rare',
-                 '每次对敌人施加易伤时，获得4层护盾。',
+                 '每次对生物施加易伤时，获得4层护盾。',
                  effects=(_effect('equipment', 4, script='vulnerable_shield'),), target='self',
-                 upgrade={'description': {'zh': '每次对敌人施加易伤时，获得6层护盾。', 'en': 'When applying Vulnerable, gain 6 Shield.'},
+                 upgrade={'description': {'zh': '每次对生物施加易伤时，获得6层护盾。', 'en': 'When applying Vulnerable, gain 6 Shield.'},
                           'effects': (_effect('equipment', 6, script='vulnerable_shield'),)}),
     'nuke': _card('Nuke', '核弹', 'Nuke', 'X', 'thorn', 'rare',
                   '消耗自己所有E；每消耗1E，对目标造成9D一次。',
@@ -856,8 +856,8 @@ STORY_CARDS = {
     'fragment': _card('Fragment', '碎片', 'Fragment', 0, 'bloom', 'common',
                       '获得1层力量。', tags=('exile',), effects=(_effect('power', 1),),
                       upgrade={
-                          'description': {'zh': '放逐自己1张其他手牌；获得2层力量。', 'en': 'Exile another card; gain 2 Power.'},
-                          'effects': (_effect('choose_exile', 1, exact=True), _effect('power', 2)),
+                          'description': {'zh': '丢弃自己1张其他手牌；获得2层力量。', 'en': 'Discard another card; gain 2 Power.'},
+                          'effects': (_effect('active_discard', 1, exact=True), _effect('power', 2)),
                       }),
     'rice': _card('Rice', '米', 'Rice', 0, 'thorn', 'rare',
                   '对目标造成6D，然后将此牌置于抽牌堆顶。',
@@ -1023,10 +1023,10 @@ STORY_CARDS = {
     ),
     'maple': _card(
         'Maple', '枫叶', 'Maple', 1, 'thorn', 'rare',
-        '对随机敌人造成5D；本回合每主动丢弃2张牌，额外造成1次。',
+        '对随机生物造成5D；本回合每主动丢弃2张牌，额外造成1次。',
         target='self', effects=(_effect('random_damage_per_discards', 5, divisor=2),),
         upgrade={
-            'description': {'zh': '对随机敌人造成7D；本回合每主动丢弃2张牌，额外造成1次。', 'en': 'Deal 7 D to a random enemy, plus once per 2 cards actively discarded this turn.'},
+            'description': {'zh': '对随机生物造成7D；本回合每主动丢弃2张牌，额外造成1次。', 'en': 'Deal 7 D to a random creature, plus once per 2 cards actively discarded this turn.'},
             'effects': (_effect('random_damage_per_discards', 7, divisor=2),),
         },
     ),
@@ -1207,6 +1207,8 @@ STORY_CARD_IMAGE_URLS = {
     'enchanted_amulet': '/static/assets/story-card-art/enchanted-amulet.svg',
     'fatigued': '/static/assets/story-card-art/fatigued.svg',
     'injury': '/static/assets/story-card-art/injury.svg',
+    'magic_acid': '/static/assets/story-card-art/magic-acid.svg',
+    'magic_assembler': '/static/assets/story-card-art/magic-assembler.svg',
     'magic_feather': '/static/assets/story-card-art/magic-feather.svg',
     'magic_shell': '/static/assets/story-card-art/magic-shell.svg',
     'moon_rock': '/static/assets/story-card-art/moon-rock.svg',
@@ -1281,7 +1283,7 @@ STORY_RELICS = {
     'prepared': _relic('未雨绸缪', 'Prepared', '第一回合额外抽2张牌。', script='opening_draw', amount=2),
     'cooldown': _relic('冷却', 'Cooldown', '第一回合可丢弃任意张牌，然后抽等量的牌。', rarity='rare', script='opening_redraw', stackable=False),
     'accumulate': _relic('厚积薄发', 'Accumulate', '第二回合获得5层暂时力量。', rarity='rare', script='round_power', amount=5),
-    'opening_lightning': _relic('开幕雷击', 'Opening Lightning', '战斗开始时对所有敌人造成9D。', rarity='rare', script='opening_damage', amount=9),
+    'opening_lightning': _relic('开幕雷击', 'Opening Lightning', '战斗开始时对所有生物造成9D。', rarity='rare', script='opening_damage', amount=9),
     'solid_barrier': _relic('坚固壁垒', 'Solid Barrier', '本场战斗第一次受伤时回复2E。', rarity='rare', script='first_hit_elixir', amount=2),
     'sharpen': _relic('磨刀', 'Sharpen', '获得时升级2张牌。', rarity='rare', script='gain_upgrade', amount=2),
     'blade': _relic('利刃', 'Blade', '本场战斗第一次攻击时，对目标施加1层易伤。', rarity='rare', script='first_attack_vulnerable', amount=1),
@@ -1409,7 +1411,7 @@ STORY_ENEMIES = {
         _move('呵护', 'Care', _effect('allies_heal', 13)),
         _move('保护', 'Protect', _effect('damage', 8), _effect('player_status', 1, status='weak')),
     )),
-    'garden_rock': _enemy('岩石', 'Rock', 52, (
+    'garden_rock': _enemy('岩石', 'Rock', 48, (
         _move('滚动', 'Roll', _effect('gain_status', 1, status='rockfall'), _effect('player_status', 1, status='weak')),
         _move('坚固', 'Solid', _effect('allies_shield', 8)),
     ), script='garden_rock'),
@@ -1467,7 +1469,7 @@ _GARDEN_LUNATIC_HEALTH = {
     'bee': 43,
     'wasp': 35,
     'ladybug': 47,
-    'garden_rock': 59,
+    'garden_rock': 54,
     'dandelion': 36,
     'centipede': 59,
     'spider': 53,
@@ -1582,7 +1584,7 @@ STORY_ENEMIES.update({
         _move('潜地', 'Burrow', _effect('damage', 10, lunatic_amount=12), _effect('gain_hidden', 2)),
         _move('沙潮', 'Sand Tide', _effect('damage', 2, hits=3, lunatic_hits=4), _effect('gain_power', 2)),
         _move('狂暴', 'Frenzy', _effect('damage', 4, hits=3, lunatic_hits=4)),
-    ), script='desert_centipede', traits=('adjacent',), lunatic_health=65),
+    ), script='desert_centipede', lunatic_health=65),
 
     'ocean_bubble': _enemy('泡泡', 'Bubble', 11, (
         _move('膨胀', 'Inflate', _effect('gain_charging', 4, lunatic_amount=5)),
@@ -1852,6 +1854,9 @@ def initial_story_player():
 def _find_source(card_defs, source_id):
     if not source_id or not card_defs:
         return None
+    def normalize(value):
+        return ''.join(ch for ch in str(value).lower() if ch.isalnum())
+
     candidates = (
         source_id,
         str(source_id).lower(),
@@ -1862,10 +1867,18 @@ def _find_source(card_defs, source_id):
         source = card_defs.get(candidate)
         if source is not None:
             return source
-    source_key = str(source_id).lower().replace('_', '').replace(' ', '')
+    source_key = normalize(source_id)
+    source_aliases = {
+        'chilly': 'chilli',
+        'magicchilly': 'magicchilli',
+        'magicacid': 'acid',
+        'redemptionmoney': 'ransommoney',
+        'magicassembler': 'assembler',
+    }
+    alias_key = source_aliases.get(source_key, source_key)
     for key, source in card_defs.items():
-        key_value = str(key).split(':')[-1].lower().replace('_', '').replace(' ', '')
-        if key_value == source_key:
+        key_value = normalize(str(key).split(':')[-1])
+        if key_value == source_key or key_value == alias_key:
             return source
     return None
 

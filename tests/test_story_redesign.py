@@ -331,6 +331,7 @@ def test_desert_centipede_segments_start_on_distinct_intents_and_hidden_values()
         STORY_ENEMIES['desert_centipede']['moves'].index(_next_enemy_move(state, enemy))
         for enemy in enemies
     ] == [0, 1, 2]
+    assert STORY_ENEMIES['desert_centipede'].get('traits') == ()
 
 
 def test_shipwreck_wreckage_keeps_three_distinct_death_summons():
@@ -900,6 +901,46 @@ def test_exact_active_discard_card_is_unplayable_without_another_card():
     assert error.value.code == 'CARD_NOT_PLAYABLE'
     assert state['combat']['hand'] == [amulet]
     assert target['health'] == 999
+
+
+def test_upgraded_fragment_discards_other_card_instead_of_exiling_it():
+    state = _started_state('upgraded-fragment-discard')
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'upgraded-fragment-discard',
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    combat = state['combat']
+    combat['opening_redraw_pending'] = False
+    combat['draw_pile'] = []
+    combat['discard_pile'] = []
+    combat['exile_pile'] = []
+    fragment = _new_card(state, 'fragment', upgraded=True)
+    other = _new_card(state, 'basic')
+    combat['hand'] = [fragment, other]
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {
+            'card_instance_id': fragment['instance_id'],
+            'selected_card_ids': [other['instance_id']],
+        },
+        'upgraded-fragment-discard',
+    )
+
+    assert state['combat']['power'] == 2
+    assert other in state['combat']['discard_pile']
+    assert other not in state['combat']['exile_pile']
+    assert fragment in state['combat']['exile_pile']
+    assert any(
+        event.get('type') == 'card_discarded'
+        and event.get('card_instance_id') == other['instance_id']
+        and event.get('reason') == 'active'
+        for event in events
+    )
 
 
 def test_blind_consumes_one_stack_and_hides_the_entire_player_turn():

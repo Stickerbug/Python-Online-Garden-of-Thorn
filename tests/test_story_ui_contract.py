@@ -91,7 +91,7 @@ def test_story_card_typography_matches_gallery_primitives():
     assert "--card-english-font: 5.55cqi;" in STORY_CSS
     assert ":lang(zh) .story-card.card" in STORY_CSS
     assert "-webkit-text-size-adjust: none;" in STORY_CSS
-    assert "--font-card: 'Kreadon Demi', 'Kreadon CJK', 'Kreadon', 'Microsoft YaHei', sans-serif;" in STORY_CSS
+    assert "--font-card: 'Kreadon Demi', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Kreadon CJK', 'Kreadon', sans-serif;" in STORY_CSS
     assert "document.documentElement.lang = lang;" in STORY_JS
 
 
@@ -168,6 +168,15 @@ def test_story_talents_show_their_copy_without_redundant_term_interactions():
     assert 'if (options.relicKey) attachStoryRelicTermAccess(button, options.relicKey);' not in STORY_JS
 
 
+def test_story_surrender_button_requires_confirmation_and_uses_action():
+    assert 'id="story-surrender"' in STORY_TEMPLATE
+    assert 'id="story-surrender-dialog"' in STORY_TEMPLATE
+    assert "storyAction('surrender')" in STORY_JS
+    assert "['journey_setup', 'complete', 'game_over'].includes(phase)" in STORY_JS
+    assert "'story-surrender-confirm': t.surrender" in STORY_JS
+    assert '.story-surrender-command {' in STORY_CSS
+
+
 def test_story_equipment_matches_classic_orbit_preview_and_terms():
     assert "visual.className = 'story-equipment-visual';" in STORY_JS
     assert "icon.className = 'story-equipment-icon';" in STORY_JS
@@ -221,15 +230,13 @@ def test_bandage_beetle_uses_the_bandage_trait_instead_of_yggdrasil():
     assert (ROOT / gold_url.removeprefix('/')).is_file()
 
 
-def test_story_cards_expose_hover_details_charge_stacks_and_optional_borders():
-    assert 'function showStoryCardHoverPreview(anchor, card)' in STORY_JS
-    assert 'function attachStoryCardHoverPreview(anchor, getCard)' in STORY_JS
-    assert "preview.className = 'story-card-hover-preview';" in STORY_JS
-    assert 'hoverPreview: false' in STORY_JS
-    assert "window.matchMedia?.('(hover: none), (pointer: coarse)').matches" in STORY_JS
+def test_story_cards_do_not_open_enlarged_hover_previews_and_keep_optional_borders():
+    assert 'function showStoryCardHoverPreview(anchor, card)' not in STORY_JS
+    assert 'function attachStoryCardHoverPreview(anchor, getCard)' not in STORY_JS
+    assert "preview.className = 'story-card-hover-preview';" not in STORY_JS
+    assert '.story-card-hover-preview {' not in STORY_CSS
     assert 'Number(card?.modifiers?.charge)' in STORY_JS
     assert "storyTagElement('charge')" in STORY_JS
-    assert '.story-card-hover-preview {' in STORY_CSS
     assert '.story-hide-card-borders .story-card.card::after {' in STORY_CSS
     assert 'gtn_story_hide_card_borders' in STORY_TEMPLATE
     assert 'gtn_story_hide_card_borders' in INDEX_TEMPLATE
@@ -588,6 +595,17 @@ def test_story_floor_restart_is_confirmed_and_available_after_combat_failure():
     assert 'id="story-restart-floor-dialog"' in STORY_TEMPLATE
     assert "await storyAction('restart_floor', {});" in STORY_JS
     assert "Boolean(state.floor_entry_checkpoint?.state)" in STORY_JS
+
+
+def test_story_manual_save_delete_is_confirmed_and_refreshes_list():
+    assert 'id="story-save-delete-dialog"' in STORY_TEMPLATE
+    assert 'id="story-save-delete-confirm"' in STORY_TEMPLATE
+    assert 'story-save-row-actions' in STORY_JS
+    assert 'story-save-delete' in STORY_JS
+    assert '/api/story/run/save/delete' in STORY_JS
+    assert 'function deleteManualStorySave(saveId)' in STORY_JS
+    assert "renderManualStorySaves(payload.saves, activeRun.state?.phase === 'map');" in STORY_JS
+    assert ".story-save-row-actions {" in STORY_CSS
 
 
 def test_story_cards_use_rarity_frames_type_tints_and_blind_concealment():

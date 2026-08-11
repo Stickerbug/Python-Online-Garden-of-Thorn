@@ -1721,6 +1721,49 @@ def create_story_manual_save(user_id, run_id, expected_state_version):
     return list_story_manual_saves(user_id, run_id), 'saved'
 
 
+def delete_story_manual_save(user_id, run_id, save_id):
+    """Delete one manual story save and compact the remaining save slots."""
+    user_id = int(user_id)
+    run_id = str(run_id or '').strip()
+    save_id = int(save_id)
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        run_row = conn.execute(
+            '''SELECT id FROM story_runs
+               WHERE id = ? AND user_id = ? AND status = 'active' LIMIT 1''',
+            (run_id, user_id),
+        ).fetchone()
+        if run_row is None:
+            conn.rollback()
+            return None, 'not_found'
+        save_row = conn.execute(
+            '''SELECT id FROM story_manual_saves
+               WHERE id = ? AND run_id = ? AND user_id = ? LIMIT 1''',
+            (save_id, run_id, user_id),
+        ).fetchone()
+        if save_row is None:
+            conn.rollback()
+            return list_story_manual_saves(user_id, run_id), 'save_not_found'
+        conn.execute(
+            '''DELETE FROM story_manual_saves
+               WHERE id = ? AND run_id = ? AND user_id = ?''',
+            (save_id, run_id, user_id),
+        )
+        rows = conn.execute(
+            '''SELECT id FROM story_manual_saves
+               WHERE run_id = ? AND user_id = ?
+               ORDER BY slot_index ASC, created_at DESC, id DESC''',
+            (run_id, user_id),
+        ).fetchall()
+        for slot_index, row in enumerate(rows):
+            conn.execute(
+                'UPDATE story_manual_saves SET slot_index = ? WHERE id = ?',
+                (slot_index, int(row['id'])),
+            )
+        conn.commit()
+    return list_story_manual_saves(user_id, run_id), 'deleted'
+
+
 def load_story_manual_save(
     user_id,
     run_id,
@@ -7200,6 +7243,236 @@ def get_admin_user_detail(user_id, match_limit=30):
     return {
         'user': user,
         'matches': [_row_to_match_summary(match, perspective_username=user['username'], perspective_user_id=uid) for match in matches],
+    }
+
+
+def _match_row_json(row):
+    return _safe_json_loads(row['summary_json'] if row and 'summary_json' in row.keys() else '{}', {})
+
+
+def _match_player_names(row, summary=None):
+    if row is None:
+        return []
+    names = _safe_json_loads(row['player_names_json'], [])
+    if not names and isinstance(summary, dict):
+        names = summary.get('players') or summary.get('player_names') or []
+    return [str(name or '') for name in names if str(name or '').strip()]
+
+
+def _match_player_ids(row, summary=None):
+    if row is None:
+        return []
+    ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
+    if not ids and isinstance(summary, dict):
+        ids = summary.get('player_ids') or []
+    result = []
+    for value in ids:
+        try:
+            result.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def _user_ip_summary_for_ids(conn, user_ids, limit_per_user=4):
+    result = {}
+    for uid in user_ids:
+        try:
+            safe_uid = int(uid)
+        except (TypeError, ValueError):
+            continue
+        rows = conn.execute(
+            '''
+            SELECT ip, MAX(created_at) AS last_seen_at, COUNT(*) AS count
+            FROM user_ip_events
+            WHERE user_id = ?
+            GROUP BY ip
+            ORDER BY last_seen_at DESC
+            LIMIT ?
+            ''',
+            (safe_uid, max(1, min(int(limit_per_user or 4), 8))),
+        ).fetchall()
+        result[safe_uid] = [
+            {'ip': row['ip'], 'last_seen_at': row['last_seen_at'], 'count': int(row['count'] or 0)}
+            for row in rows
+        ]
+    return result
+
+
+def _assess_match_risk(conn, row):
+    summary = _match_row_json(row)
+    players = _match_player_names(row, summary)
+    player_ids = _match_player_ids(row, summary)
+    flags = []
+    score = 0
+    duration = int(row['duration_seconds'] or summary.get('duration_seconds') or summary.get('duration') or 0)
+    rounds = int(row['rounds'] or summary.get('rounds') or summary.get('round') or 0)
+    raw_result = str(row['result'] or summary.get('result') or '').lower()
+    summary_text = json.dumps(summary, ensure_ascii=False).lower() if isinstance(summary, dict) else ''
+
+    if not bool(summary.get('valid_for_ranking', True)):
+        score += 2
+        flags.append({
+            'code': 'ranking_invalid',
+            'label': '不计分对局',
+            'detail': str(summary.get('ranking_invalid_reason') or '摘要标记为不计分'),
+        })
+    if ('surrender' in raw_result or 'surrender' in summary_text or '投降' in raw_result or '投降' in summary_text) and (duration <= 90 or rounds <= 3):
+        score += 3
+        flags.append({
+            'code': 'early_surrender',
+            'label': '早期投降',
+            'detail': f'时长 {duration}s，回合 {rounds}',
+        })
+    if duration and duration < RANKING_MIN_DURATION_SECONDS:
+        score += 1
+        flags.append({
+            'code': 'short_match',
+            'label': '对局过短',
+            'detail': f'{duration}s',
+        })
+
+    ip_by_user = _user_ip_summary_for_ids(conn, player_ids, limit_per_user=5)
+    ip_owners = {}
+    for uid, ips in ip_by_user.items():
+        for item in ips:
+            ip = item.get('ip')
+            if ip:
+                ip_owners.setdefault(ip, []).append(uid)
+    shared_ips = [
+        {'ip': ip, 'user_ids': owners}
+        for ip, owners in ip_owners.items()
+        if len(set(owners)) >= 2
+    ]
+    if shared_ips:
+        score += 4
+        flags.append({
+            'code': 'shared_ip',
+            'label': '同 IP 参赛',
+            'detail': '、'.join(item['ip'] for item in shared_ips[:3]),
+        })
+
+    return {
+        'score': score,
+        'level': 3 if score >= 6 else (2 if score >= 3 else (1 if score > 0 else 0)),
+        'flags': flags,
+        'ip_by_user': ip_by_user,
+        'shared_ips': shared_ips,
+        'players': players,
+        'player_ids': player_ids,
+    }
+
+
+def _handling_match_to_dict(conn, row):
+    base = _row_to_match_summary(row)
+    risk = _assess_match_risk(conn, row)
+    base.update({
+        'replay_id': row['replay_id'] if 'replay_id' in row.keys() else None,
+        'replay_size': row['replay_size'] if 'replay_size' in row.keys() else None,
+        'risk_score': risk['score'],
+        'risk_level': risk['level'],
+        'risk_flags': risk['flags'],
+        'ip_by_user': risk['ip_by_user'],
+        'shared_ips': risk['shared_ips'],
+    })
+    return base
+
+
+def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
+    try:
+        safe_limit = max(1, min(int(limit or 30), 50))
+    except (TypeError, ValueError):
+        safe_limit = 30
+    try:
+        safe_offset = max(0, int(offset or 0))
+    except (TypeError, ValueError):
+        safe_offset = 0
+    token = str(query or '').strip()
+    mode_token = str(mode or '').strip()
+    risk_token = str(risk or 'all').strip().lower()
+    params = []
+    where = []
+    if mode_token and mode_token != 'all':
+        where.append('m.mode = ?')
+        params.append(mode_token)
+    if token:
+        replay_match = re.fullmatch(r'[Rr]-?(\d+)', token)
+        numeric = None
+        try:
+            numeric = int(replay_match.group(1) if replay_match else token)
+        except (TypeError, ValueError):
+            numeric = None
+        clauses = [
+            'm.player_names_json LIKE ?',
+            'm.player_ids_json LIKE ?',
+            'm.summary_json LIKE ?',
+            'm.mode LIKE ?',
+        ]
+        like = f'%{token}%'
+        token_params = [like, like, like, like]
+        if numeric is not None:
+            clauses.extend(['m.id = ?', 'r.replay_id = ?'])
+            token_params.extend([numeric, numeric])
+        ip_rows = []
+        if re.search(r'[\d:.]', token):
+            try:
+                with get_db_connection() as ip_conn:
+                    ip_rows = ip_conn.execute(
+                        '''
+                        SELECT DISTINCT user_id FROM user_ip_events
+                        WHERE ip LIKE ?
+                        LIMIT 80
+                        ''',
+                        (like,),
+                    ).fetchall()
+            except sqlite3.OperationalError:
+                ip_rows = []
+        for ip_row in ip_rows:
+            clauses.append('m.player_ids_json LIKE ?')
+            token_params.append(f'%{int(ip_row["user_id"])}%')
+        where.append('(' + ' OR '.join(clauses) + ')')
+        params.extend(token_params)
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    with get_db_connection() as conn:
+        total_row = conn.execute(
+            f'''
+            SELECT COUNT(*) FROM matches m
+            LEFT JOIN (
+                SELECT match_id, MAX(id) AS replay_id
+                FROM match_replays
+                GROUP BY match_id
+            ) r ON r.match_id = m.id
+            {where_sql}
+            ''',
+            params,
+        ).fetchone()
+        rows = conn.execute(
+            f'''
+            SELECT m.*, r.replay_id, rr.replay_size
+            FROM matches m
+            LEFT JOIN (
+                SELECT match_id, MAX(id) AS replay_id
+                FROM match_replays
+                GROUP BY match_id
+            ) r ON r.match_id = m.id
+            LEFT JOIN match_replays rr ON rr.id = r.replay_id
+            {where_sql}
+            ORDER BY m.id DESC
+            LIMIT ? OFFSET ?
+            ''',
+            params + [safe_limit * (3 if risk_token in {'risk', 'flagged'} else 1), safe_offset],
+        ).fetchall()
+        items = [_handling_match_to_dict(conn, row) for row in rows]
+    if risk_token in {'risk', 'flagged'}:
+        items = [item for item in items if int(item.get('risk_score') or 0) > 0][:safe_limit]
+    else:
+        items = items[:safe_limit]
+    return {
+        'items': items,
+        'total': int(total_row[0] if total_row else len(items)),
+        'limit': safe_limit,
+        'offset': safe_offset,
+        'risk': risk_token,
     }
 
 

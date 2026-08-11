@@ -1442,6 +1442,32 @@ def _resolve_player_death(state, events):
     return True
 
 
+def _surrender_run(state, events):
+    if state.get('phase') in ('complete', 'game_over'):
+        _fail('STORY_RUN_ENDED', '旅程已经结束')
+    if state.get('phase') == 'journey_setup':
+        _fail('SURRENDER_NOT_ALLOWED', '当前无法投降')
+    player = state.setdefault('player', {})
+    before = int(player.get('health') or 0)
+    player['health'] = 0
+    state['phase'] = 'game_over'
+    state.pop('pending_deck_operations', None)
+    combat = state.get('combat')
+    if isinstance(combat, dict):
+        combat.pop('pending_card_choice', None)
+        combat['turn'] = 'ended'
+    state.pop('recovery_checkpoint', None)
+    events.append({
+        'type': 'player_damage',
+        'amount': max(0, before),
+        'source': 'surrender',
+        'source_definition_id': 'surrender',
+        'history': [{'before': before, 'after': 0, 'blocked': 0}],
+    })
+    events.append({'type': 'story_surrender'})
+    events.append({'type': 'game_over'})
+
+
 def _must_play_attack_card(state, card):
     if not _has_relic(state, 'frenzy_relic'):
         return False
@@ -1657,7 +1683,7 @@ def _card_targets(combat, values, payload):
     if target is None and len(living) == 1:
         target = living[0]
     if target is None:
-        _fail('NO_TARGET', '请选择一个可选中的敌人')
+        _fail('NO_TARGET', '请选择一个可选中的生物')
     return [target]
 
 
@@ -1841,6 +1867,8 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
             combat['sewage_active'] = True
             for hand_card in combat.get('hand', []):
                 hand_card.setdefault('modifiers', {})['temporary_free_e'] = True
+        elif script == 'disc':
+            combat['disc_active'] = True
         elif script:
             combat[script] = True
     elif effect_type == 'temporary_cost_down':
@@ -2364,7 +2392,7 @@ def _enemy_intent(state, enemy):
                 'amount': amount,
                 'target': 'all_enemies',
             })
-            parts.append(f"全体友方+{amount}{labels[effect_type]}")
+            parts.append(f"全体生物+{amount}{labels[effect_type]}")
         elif effect_type in ('lowest_ally_shield', 'adjacent_shield'):
             entries.append({
                 'kind': 'defend',
@@ -2372,7 +2400,7 @@ def _enemy_intent(state, enemy):
                 'amount': amount,
                 'target': effect_type,
             })
-            parts.append(f'友方获得{amount}层护盾')
+            parts.append(f'生物获得{amount}层护盾')
         elif effect_type == 'self_heal':
             entries.append({'kind': 'heal', 'stat': 'health', 'amount': amount, 'target': 'self'})
             parts.append(f'回复{amount}H')
@@ -2386,7 +2414,7 @@ def _enemy_intent(state, enemy):
             parts.append('向抽牌堆加入牌')
         elif effect_type == 'consume_allies':
             entries.append({'kind': 'consume', 'target': 'all_enemies'})
-            parts.append('吞噬友方')
+            parts.append('吞噬生物')
         elif effect_type in {
             'gain_charged', 'gain_charging', 'gain_frenzy', 'gain_hidden',
             'gain_sturdy',
@@ -3816,10 +3844,22 @@ def _finish_combat(state, seed, events):
         events.append({'type': 'combat_victory', 'gold': 100, 'source': event_resolution})
         return
     room_type = state['combat'].get('reward_room_type') or node['type']
+    is_standard_final_stage = (
+        state.get('journey_mode') != 'boss_rush'
+        and int(state.get('stage') or 1) >= len(STORY_STAGES)
+    )
     if (
         room_type == 'boss'
-        and state.get('journey_mode') != 'boss_rush'
-        and int(state.get('stage') or 1) >= len(STORY_STAGES)
+        and is_standard_final_stage
+        and _difficulty(state) == 'lunatic'
+        and int(node.get('floor') or 0) < int(state.get('map', {}).get('floor_count') or 16)
+    ):
+        events.append({'type': 'combat_victory', 'gold': 0, 'source': 'lunatic_gate_boss'})
+        _complete_current_node(state, events)
+        return
+    if (
+        room_type == 'boss'
+        and is_standard_final_stage
         and int(node.get('floor') or 0) >= int(state.get('map', {}).get('floor_count') or 16)
     ):
         events.append({'type': 'combat_victory', 'gold': 0, 'source': 'final_boss'})
@@ -5945,6 +5985,7 @@ def apply_story_action(source_state, action_type, payload, seed):
             'resolve_deck_operation',
             'dev_set_values',
             'restart_floor',
+            'surrender',
         )
     ):
         _fail('DECK_OPERATION_PENDING', '请先处理待选择的牌组操作')
@@ -5955,6 +5996,7 @@ def apply_story_action(source_state, action_type, payload, seed):
             'resolve_card_choice',
             'dev_set_values',
             'restart_floor',
+            'surrender',
         )
     ):
         _fail('CARD_CHOICE_PENDING', '请先处理待选择的卡牌')
@@ -5973,6 +6015,7 @@ def apply_story_action(source_state, action_type, payload, seed):
         'resolve_room': lambda: _resolve_room(state, payload, seed, events),
         'choose_stage': lambda: _resolve_stage_choice(state, payload, seed, events),
         'resolve_deck_operation': lambda: _resolve_deck_operation(state, payload, seed, events),
+        'surrender': lambda: _surrender_run(state, events),
         'dev_set_values': lambda: _dev_set_values(state, payload, events),
         'dev_jump_node': lambda: _dev_jump_node(state, payload, seed, events),
     }

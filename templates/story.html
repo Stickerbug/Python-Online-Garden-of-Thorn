@@ -53,6 +53,8 @@
       <span id="story-chat-unread" class="story-chat-unread hidden" aria-label="0 条未读消息">0</span>
     </button>
 
+    <button id="story-surrender" class="story-surrender-command hidden" type="button">投降</button>
+
     {% if story_dev_tools %}
     <aside id="story-dev-panel" class="story-dev-panel hidden" aria-labelledby="story-dev-title">
       <div class="story-dev-heading">
@@ -178,7 +180,7 @@
           <div id="story-play-lane" class="story-play-lane classic-play-lane" aria-live="polite">
             <span id="story-play-hint"></span>
           </div>
-          <div id="story-enemy-group" class="story-enemy-group" aria-label="敌方单位"></div>
+          <div id="story-enemy-group" class="story-enemy-group" aria-label="生物单位"></div>
         </div>
         <svg id="story-aim-layer" class="story-aim-layer hidden" aria-hidden="true">
           <defs>
@@ -380,7 +382,7 @@
         </header>
         <nav id="story-codex-tabs" class="story-codex-tabs" role="tablist" aria-label="故事图鉴分类">
           <button class="story-codex-tab is-active" type="button" role="tab" aria-selected="true" data-story-codex-mode="cards" id="story-codex-tab-cards">卡牌</button>
-          <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="enemies" id="story-codex-tab-enemies">敌人</button>
+          <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="enemies" id="story-codex-tab-enemies">生物</button>
           <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="talents" id="story-codex-tab-talents">天赋</button>
           <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="terms" id="story-codex-tab-terms">术语</button>
         </nav>
@@ -408,6 +410,17 @@
       </form>
     </dialog>
 
+    <dialog id="story-save-delete-dialog" class="story-dialog story-save-load-dialog">
+      <form method="dialog">
+        <h2 id="story-save-delete-title">删除此存档？</h2>
+        <p id="story-save-delete-copy">该手动存档将被移除。</p>
+        <div class="story-dialog-actions">
+          <button id="story-save-delete-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-save-delete-confirm" class="story-command story-command-danger" value="confirm">删除</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="story-restart-floor-dialog" class="story-dialog story-save-load-dialog">
       <form method="dialog">
         <h2 id="story-restart-floor-title">重新开始本层？</h2>
@@ -415,6 +428,17 @@
         <div class="story-dialog-actions">
           <button id="story-restart-floor-cancel" class="story-command" value="cancel">取消</button>
           <button id="story-restart-floor-confirm" class="story-command story-command-danger" value="confirm">重新开始</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="story-surrender-dialog" class="story-dialog">
+      <form method="dialog">
+        <h2 id="story-surrender-title">确认投降？</h2>
+        <p id="story-surrender-copy">本次旅程会立即失败。</p>
+        <div class="story-dialog-actions">
+          <button id="story-surrender-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-surrender-confirm" class="story-command story-command-danger" value="confirm">投降</button>
         </div>
       </form>
     </dialog>

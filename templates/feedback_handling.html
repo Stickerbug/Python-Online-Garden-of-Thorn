@@ -25,6 +25,8 @@
       <div class="tabs" role="tablist">
         <button class="tab active" data-tab="reports">举报</button>
         <button class="tab" data-tab="users">玩家</button>
+        <button class="tab" data-tab="matches">对局</button>
+        <button class="tab" data-tab="risk">风险</button>
         <button class="tab" data-tab="moderation">处罚</button>
         <button class="tab" data-tab="ip">IP封禁</button>
       </div>
@@ -41,6 +43,22 @@
         <input id="user-query" placeholder="昵称 / ID / 注册顺序">
         <button id="search-users" class="btn primary">搜索玩家</button>
         <div class="hint">不自动刷新；默认最多返回 20 个。</div>
+      </div>
+      <div id="matches-tools" class="tools hidden">
+        <input id="match-query" placeholder="R-编号 / 对局ID / 玩家 / IP">
+        <select id="match-mode">
+          <option value="all">全部模式</option>
+          <option value="1v1">1v1</option>
+          <option value="2v2">2v2</option>
+          <option value="urf">无限火力</option>
+          <option value="random_deck">随机卡组</option>
+        </select>
+        <button id="search-matches" class="btn primary">搜索对局</button>
+        <div class="hint">只查摘要和元数据，不读取完整回放。</div>
+      </div>
+      <div id="risk-tools" class="tools hidden">
+        <button id="search-risk" class="btn primary">读取风险对局</button>
+        <div class="hint">自动标记同 IP、早期投降、过短或不计分对局；仅供人工判断。</div>
       </div>
       <div id="ip-tools" class="tools hidden">
         <input id="ip-input" placeholder="IP">
@@ -60,7 +78,7 @@
     </aside>
 
     <section class="center panel">
-      <div id="empty" class="empty">选择一条举报、玩家、处罚或 IP 记录。</div>
+      <div id="empty" class="empty">选择一条举报、玩家、对局、风险、处罚或 IP 记录。</div>
       <article id="detail" class="detail hidden"></article>
     </section>
 

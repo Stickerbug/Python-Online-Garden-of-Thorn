@@ -8140,6 +8140,7 @@ function renderCardGallery() {
         return;
     }
     ensureGalleryCardFilterState();
+    const previousListScrollTop = list.scrollTop || 0;
     list.className = 'gallery-card-list gallery-filter-list gallery-mod-filter-list';
     detail.className = 'gallery-detail gallery-card-grid-detail';
     const modOptions = getGalleryModOptions();
@@ -8176,6 +8177,10 @@ function renderCardGallery() {
             else gallerySelectedModKeys.delete(key);
             scheduleRenderCardGallery(20);
         });
+    });
+    list.scrollTop = previousListScrollTop;
+    requestAnimationFrame(() => {
+        list.scrollTop = Math.min(previousListScrollTop, Math.max(0, list.scrollHeight - list.clientHeight));
     });
     const defs = getGalleryCardDefs();
     const ids = Object.keys(defs)
@@ -10330,7 +10335,7 @@ async function refreshCardDefsFromServer({ silent = false } = {}) {
 function buildGalleryModQueryString() {
     const params = new URLSearchParams();
     params.set('include_all_mods', '1');
-    params.set('disabled_mods', '');
+    params.set('disabled_mods', getDisabledMods().join(','));
     const community = getCommunityModSelection();
     params.set('mod_source', community.mod_source);
     if (community.mod_source === 'community') {

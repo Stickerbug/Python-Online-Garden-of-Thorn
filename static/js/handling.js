@@ -3,16 +3,21 @@ const $ = (id) => document.getElementById(id);
 let currentTab = 'reports';
 let reports = [];
 let users = [];
+let matches = [];
+let riskMatches = [];
 let ipBans = [];
 let moderationRecords = [];
 let selectedReportId = null;
 let selectedReport = null;
 let selectedUserId = null;
+let selectedMatchId = null;
 let selectedModerationKey = '';
 let selectedDuration = 0;
 let durationTarget = 'moderation';
 let reportsRequestInFlight = false;
 let usersRequestInFlight = false;
+let matchesRequestInFlight = false;
+let riskRequestInFlight = false;
 let ipBansRequestInFlight = false;
 let moderationRequestInFlight = false;
 let reportsLoadedOnce = false;
@@ -116,16 +121,22 @@ function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
   $('reports-tools').classList.toggle('hidden', tab !== 'reports');
   $('users-tools').classList.toggle('hidden', tab !== 'users');
+  $('matches-tools').classList.toggle('hidden', tab !== 'matches');
+  $('risk-tools').classList.toggle('hidden', tab !== 'risk');
   $('ip-tools').classList.toggle('hidden', tab !== 'ip');
   $('moderation-tools').classList.toggle('hidden', tab !== 'moderation');
-  const hideActionPanel = tab === 'moderation' || tab === 'ip';
+  const hideActionPanel = tab !== 'reports';
   $('handling-actions').classList.toggle('hidden', hideActionPanel);
   $('handling-layout').classList.toggle('no-right', hideActionPanel);
   const summaryText = tab === 'reports'
     ? `举报 ${reports.length}`
     : (tab === 'users'
       ? `玩家 ${users.length}`
-      : (tab === 'moderation' ? `处罚 ${moderationRecords.length}` : `IP封禁 ${ipBans.length}`));
+      : (tab === 'matches'
+        ? `对局 ${matches.length}`
+        : (tab === 'risk'
+          ? `风险 ${riskMatches.length}`
+          : (tab === 'moderation' ? `处罚 ${moderationRecords.length}` : `IP封禁 ${ipBans.length}`))));
   setText('summary', `${summaryText}，点击刷新读取`);
   clearDetail();
   renderList();
@@ -162,6 +173,32 @@ async function loadUsers() {
   }
 }
 
+async function loadMatches() {
+  if (!handlingPageVisible() || matchesRequestInFlight) return;
+  matchesRequestInFlight = true;
+  const query = $('match-query').value.trim();
+  const mode = $('match-mode').value || 'all';
+  try {
+    const data = await api(`/api/feedback/handling/matches?query=${encodeURIComponent(query)}&mode=${encodeURIComponent(mode)}&limit=30`);
+    matches = data.items || [];
+    setText('summary', `对局 ${matches.length}/${data.total || matches.length}`);
+  } finally {
+    matchesRequestInFlight = false;
+  }
+}
+
+async function loadRiskMatches() {
+  if (!handlingPageVisible() || riskRequestInFlight) return;
+  riskRequestInFlight = true;
+  try {
+    const data = await api('/api/feedback/handling/matches?risk=risk&limit=30');
+    riskMatches = data.items || [];
+    setText('summary', `风险对局 ${riskMatches.length}/${data.total || riskMatches.length}`);
+  } finally {
+    riskRequestInFlight = false;
+  }
+}
+
 async function loadIpBans() {
   if (!handlingPageVisible() || ipBansRequestInFlight) return;
   ipBansRequestInFlight = true;
@@ -194,6 +231,10 @@ async function refreshCurrent() {
       await loadReports();
     } else if (currentTab === 'users') {
       await loadUsers();
+    } else if (currentTab === 'matches') {
+      await loadMatches();
+    } else if (currentTab === 'risk') {
+      await loadRiskMatches();
     } else if (currentTab === 'moderation') {
       await loadModerationRecords();
     } else {
@@ -210,13 +251,19 @@ function renderList() {
   list.textContent = '';
   const items = currentTab === 'reports'
     ? reports
-    : (currentTab === 'users' ? users : (currentTab === 'moderation' ? moderationRecords : ipBans));
+    : (currentTab === 'users'
+      ? users
+      : (currentTab === 'matches'
+        ? matches
+        : (currentTab === 'risk' ? riskMatches : (currentTab === 'moderation' ? moderationRecords : ipBans))));
   if (!items.length) {
     const emptyText = currentTab === 'reports'
       ? '暂无举报'
       : (currentTab === 'users'
         ? '暂无玩家，输入条件后点击搜索'
-        : (currentTab === 'moderation' ? '暂无有效处罚' : '暂无 IP 封禁'));
+        : (currentTab === 'matches'
+          ? '暂无对局，输入条件后点击搜索'
+          : (currentTab === 'risk' ? '暂无风险标记' : (currentTab === 'moderation' ? '暂无有效处罚' : '暂无 IP 封禁'))));
     list.appendChild(el('div', 'list-item muted', emptyText));
     return;
   }
@@ -243,7 +290,17 @@ function renderList() {
       row.appendChild(title);
       row.appendChild(el('div', 'mono muted', `ID:${item.player_id || '-'} 注册顺序:${item.id || '-'}`));
       row.appendChild(el('div', 'muted', `${item.online ? '在线' : '离线'} · 上次 ${fmtTime(item.last_login_at)}`));
-      row.addEventListener('click', () => renderUserDetail(item));
+      row.addEventListener('click', () => selectUser(item));
+    } else if (currentTab === 'matches' || currentTab === 'risk') {
+      if (item.id === selectedMatchId) row.classList.add('active');
+      const title = el('div', 'list-title');
+      title.appendChild(el('strong', '', matchTitle(item)));
+      title.appendChild(el('span', `badge risk-${item.risk_level || 0}`, `risk ${item.risk_score || 0}`));
+      row.appendChild(title);
+      row.appendChild(el('div', 'muted', `${(item.players || []).join(' / ') || '-'} · ${item.mode || '-'} · ${fmtTime(item.started_at)}`));
+      const flags = matchFlagsText(item);
+      if (flags) row.appendChild(el('div', 'report-list-evidence', flags));
+      row.addEventListener('click', () => renderMatchDetail(item));
     } else if (currentTab === 'moderation') {
       if (item.key === selectedModerationKey) row.classList.add('active');
       const isWarning = item.kind === 'warning';
@@ -280,6 +337,74 @@ function addKv(parent, key, value, mono = false) {
   row.appendChild(el('div', 'muted', key));
   row.appendChild(el('div', mono ? 'mono' : '', value == null || value === '' ? '-' : value));
   parent.appendChild(row);
+}
+
+function matchTitle(match) {
+  if (!match) return '对局';
+  const replay = match.replay_id ? `R-${match.replay_id}` : '';
+  return replay ? `${replay} / M-${match.id}` : `M-${match.id || '-'}`;
+}
+
+function matchFlagsText(match) {
+  const flags = Array.isArray(match && match.risk_flags) ? match.risk_flags : [];
+  return flags.map((flag) => flag.detail ? `${flag.label}：${flag.detail}` : flag.label).join('；');
+}
+
+function resultText(match) {
+  if (!match) return '-';
+  if (match.winner_name && !['draw', '平局'].includes(String(match.winner_name).toLowerCase())) {
+    return `胜者：${match.winner_name}`;
+  }
+  if (match.result_raw || match.result) return match.result_raw || match.result;
+  return '-';
+}
+
+function renderRiskFlags(parent, match) {
+  const flags = Array.isArray(match && match.risk_flags) ? match.risk_flags : [];
+  parent.appendChild(el('h3', '', '风险提示'));
+  if (!flags.length) {
+    parent.appendChild(el('div', 'muted', '暂无自动风险标记。'));
+    return;
+  }
+  const wrap = el('div', 'flag-list');
+  flags.forEach((flag) => {
+    const chip = el('div', `flag-chip risk-${match.risk_level || 0}`);
+    chip.appendChild(el('strong', '', flag.label || flag.code || '风险'));
+    if (flag.detail) chip.appendChild(el('span', '', flag.detail));
+    wrap.appendChild(chip);
+  });
+  parent.appendChild(wrap);
+}
+
+function renderMatchIpEvidence(parent, match) {
+  parent.appendChild(el('h3', '', '参赛 IP 线索'));
+  const players = Array.isArray(match.players) ? match.players : [];
+  const playerIds = Array.isArray(match.player_ids) ? match.player_ids : [];
+  const ipByUser = match.ip_by_user || {};
+  if (!playerIds.length) {
+    parent.appendChild(el('div', 'muted', '此对局没有账号 ID 记录，无法关联 IP。'));
+    return;
+  }
+  playerIds.forEach((uid, index) => {
+    const box = el('div', 'ip-history-card');
+    const name = players[index] || `用户 #${uid}`;
+    box.appendChild(el('div', 'ip-history-main', `${name} / #${uid}`));
+    const ips = Array.isArray(ipByUser[uid]) ? ipByUser[uid] : [];
+    if (!ips.length) {
+      box.appendChild(el('div', 'muted', '暂无 IP 历史。'));
+    } else {
+      ips.forEach((item) => {
+        const row = el('div', 'match-ip-row');
+        row.appendChild(el('span', 'mono ip-chip', item.ip || '-'));
+        row.appendChild(el('span', 'muted', `${fmtTime(item.last_seen_at)} · ${item.count || 0}次`));
+        const ban = el('button', 'btn small danger', '封禁');
+        ban.addEventListener('click', () => prepareIpBan(item.ip, `对局 ${matchTitle(match)}`));
+        row.appendChild(ban);
+        box.appendChild(row);
+      });
+    }
+    parent.appendChild(box);
+  });
 }
 
 function reportPartyName(name, id) {
@@ -617,6 +742,52 @@ function renderModerationDetail(item) {
   });
 }
 
+function renderMatchDetail(match) {
+  selectedMatchId = match && match.id;
+  renderList();
+  setText('action-result', '');
+  $('empty').classList.add('hidden');
+  const detail = $('detail');
+  detail.classList.remove('hidden');
+  detail.textContent = '';
+  detail.appendChild(el('h2', '', matchTitle(match)));
+  addKv(detail, '模式', match.mode || '-');
+  addKv(detail, '玩家', (match.players || []).join(' / ') || '-');
+  addKv(detail, '结果', resultText(match));
+  addKv(detail, '开始时间', fmtTime(match.started_at), true);
+  addKv(detail, '结束时间', fmtTime(match.ended_at), true);
+  addKv(detail, '时长', `${match.duration_seconds || 0}s`, true);
+  addKv(detail, '回合', match.rounds || 0, true);
+  addKv(detail, '计分状态', match.valid_for_ranking ? '计分' : `不计分：${match.ranking_invalid_reason || '-'}`);
+  if (match.gr_result) addKv(detail, 'GR', JSON.stringify(match.gr_result), true);
+  addKv(detail, '房间', match.room_id || '-', true);
+  addKv(detail, '回放', match.replay_id ? `R-${match.replay_id}` : '无', true);
+  addKv(detail, '回放大小', match.replay_size ? `${match.replay_size} bytes` : '-', true);
+
+  const actions = el('div', 'inline-actions');
+  (match.players || []).forEach((name) => {
+    const btn = el('button', 'btn small', `查玩家 ${name}`);
+    btn.addEventListener('click', () => searchUser(name));
+    actions.appendChild(btn);
+  });
+  if (match.replay_id) {
+    const open = el('a', 'btn small primary', '打开回放接口');
+    open.href = `/api/replays/${encodeURIComponent(match.replay_id)}?admin=1`;
+    open.target = '_blank';
+    open.rel = 'noopener';
+    actions.appendChild(open);
+    const timeline = el('a', 'btn small', '时间线接口');
+    timeline.href = `/api/replays/${encodeURIComponent(match.replay_id)}/timeline?admin=1&offset=0&limit=50`;
+    timeline.target = '_blank';
+    timeline.rel = 'noopener';
+    actions.appendChild(timeline);
+  }
+  if (actions.childNodes.length) detail.appendChild(actions);
+
+  renderRiskFlags(detail, match);
+  renderMatchIpEvidence(detail, match);
+}
+
 async function openReport(reportId) {
   $('status-filter').value = 'all';
   switchTab('reports');
@@ -730,6 +901,22 @@ function renderUserDetail(user) {
       detail.appendChild(box);
     });
   }
+  const recentMatches = Array.isArray(user.matches) ? user.matches : [];
+  detail.appendChild(el('h3', '', '最近对局'));
+  if (!recentMatches.length) {
+    detail.appendChild(el('div', 'muted', '暂无最近对局。'));
+  } else {
+    recentMatches.slice(0, 12).forEach((match) => {
+      const row = el('div', 'match-mini-row');
+      row.appendChild(el('strong', '', `M-${match.id}`));
+      row.appendChild(el('span', 'muted', `${match.mode || '-'} · ${fmtTime(match.started_at)} · ${match.duration_seconds || 0}s`));
+      row.appendChild(el('span', 'muted', resultText(match)));
+      const btn = el('button', 'btn small', '查此对局');
+      btn.addEventListener('click', () => searchMatch(match.id));
+      row.appendChild(btn);
+      detail.appendChild(row);
+    });
+  }
   const actions = el('div', 'inline-actions');
   if (user.banned) {
     const unban = el('button', 'btn primary', '解除账号封禁');
@@ -741,6 +928,21 @@ function renderUserDetail(user) {
     actions.appendChild(ban);
   }
   detail.appendChild(actions);
+}
+
+async function selectUser(user) {
+  selectedUserId = user && user.id;
+  renderUserDetail(user || {});
+  if (!user || !user.id) return;
+  try {
+    const data = await api(`/api/feedback/handling/users/${encodeURIComponent(user.id)}?match_limit=20`);
+    const merged = { ...(data.user || user), matches: data.matches || [] };
+    const idx = users.findIndex((item) => Number(item.id) === Number(user.id));
+    if (idx >= 0) users[idx] = { ...users[idx], ...merged };
+    renderUserDetail(merged);
+  } catch (e) {
+    setText('action-result', e.message);
+  }
 }
 
 async function setUserBan(userId, banned) {
@@ -921,8 +1123,18 @@ function bind() {
   if (exitButton) exitButton.addEventListener('click', exitHandling);
   $('refresh').addEventListener('click', refreshCurrent);
   $('search-users').addEventListener('click', loadUsersThenRender);
+  $('search-matches').addEventListener('click', loadMatchesThenRender);
+  $('search-risk').addEventListener('click', loadRiskThenRender);
   $('user-query').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') loadUsersThenRender();
+  });
+  $('match-query').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') loadMatchesThenRender();
+  });
+  $('match-mode').addEventListener('change', () => {
+    setText('summary', '筛选已更改，点击搜索对局读取');
+    matches = [];
+    renderList();
   });
   $('status-filter').addEventListener('change', () => {
     setText('summary', '筛选已更改，点击刷新读取');
@@ -960,10 +1172,34 @@ async function loadUsersThenRender() {
   }
 }
 
+async function loadMatchesThenRender() {
+  try {
+    await loadMatches();
+    renderList();
+  } catch (e) {
+    setText('summary', `对局搜索失败：${e.message}`);
+  }
+}
+
+async function loadRiskThenRender() {
+  try {
+    await loadRiskMatches();
+    renderList();
+  } catch (e) {
+    setText('summary', `风险检索失败：${e.message}`);
+  }
+}
+
 async function searchUser(query) {
   switchTab('users');
   $('user-query').value = text(query);
   await loadUsersThenRender();
+}
+
+async function searchMatch(query) {
+  switchTab('matches');
+  $('match-query').value = text(query);
+  await loadMatchesThenRender();
 }
 
 bind();

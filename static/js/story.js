@@ -203,10 +203,12 @@
             emptyTitle: 'A new journey', start: 'Start', stage: 'Stage', biome: 'Region', gold: 'Gold',
             route: 'Route', abandon: 'End Journey', abandonTitle: 'End this journey?',
             abandonMessage: 'This run will be marked as ended.', resetMap: 'Reset Map',
+            surrender: 'Surrender', surrenderTitle: 'Surrender?', surrenderCopy: 'This journey will end in defeat immediately.',
             resetTitle: 'Reset the map?', resetMessage: 'A new route will be generated from Floor 1.',
             mapReset: 'Map reset', cancel: 'Cancel', confirm: 'Confirm', garden: 'Garden',
             saveManager: 'Save / Load', saveCopy: 'Available on the route map. The latest 3 saves are kept.',
             saveCurrent: 'Save Current Progress', loadSave: 'Load', noSaves: 'No manual saves yet',
+            deleteSave: 'Delete', deleteSaveTitle: 'Delete this save?', deleteSaveCopy: 'This manual save will be removed.', saveDeleted: 'Save deleted',
             saveCurrentSlot: 'Current', savePreviousSlot: (value) => `Previous ${value}`,
             saveSucceeded: 'Journey saved', loadSucceeded: 'Journey loaded',
             loadSaveTitle: 'Load this save?', loadSaveCopy: 'Your current route progress will be replaced.',
@@ -263,7 +265,7 @@
             journeyFailedCopy: 'Your route ends here, but the next map is waiting.', newJourney: 'New Journey',
             requestFailed: 'Story data is temporarily unavailable', stateUpdated: 'State synchronized',
             upgraded: 'Upgraded', shield: 'Shield', power: 'Power', weak: 'Weak', vulnerable: 'Vulnerable',
-            summon: 'Summon', defeated: 'Defeated', allies: 'All allies', self: 'Self', addCard: 'Add card', consume: 'Consume',
+            summon: 'Summon', defeated: 'Defeated', allies: 'All creatures', playerSide: 'Player side', self: 'Self', addCard: 'Add card', consume: 'Consume',
             developerMode: 'Developer Mode', devJump: 'Jump to Level', devFloor: 'Floor', devRoom: 'Room',
             devValues: 'Set Values', devApply: 'Apply Values', devJumpButton: 'Jump',
             devValuesUpdated: 'Values updated', devJumped: 'Level loaded',
@@ -298,10 +300,12 @@
             chatUnread: (count) => `${count} 条未读消息`,
             start: '开始', stage: '阶段', biome: '区域', gold: '金币', route: '路线', abandon: '结束旅程',
             abandonTitle: '结束旅程？', abandonMessage: '当前进度将被记录为已结束。', resetMap: '重置地图',
+            surrender: '投降', surrenderTitle: '确认投降？', surrenderCopy: '本次旅程会立即失败。',
             resetTitle: '重置地图？', resetMessage: '将重新生成路线并返回第一层。', mapReset: '地图已重置',
             cancel: '取消', confirm: '确定', garden: '花园', blessingTitle: '选择初始赐福',
             saveManager: '存读档', saveCopy: '仅可在路线选择界面保存或读取，最多保留最近3份。',
             saveCurrent: '保存当前进度', loadSave: '读取', noSaves: '暂无手动存档',
+            deleteSave: '删除', deleteSaveTitle: '删除此存档？', deleteSaveCopy: '该手动存档将被移除。', saveDeleted: '存档已删除',
             saveCurrentSlot: '当前存档', savePreviousSlot: (value) => `前 ${value} 次存档`,
             saveSucceeded: '旅程进度已保存', loadSucceeded: '旅程进度已读取',
             loadSaveTitle: '读取此存档？', loadSaveCopy: '当前路线进度将被所选存档覆盖。',
@@ -315,19 +319,19 @@
             blessingBack: '返回赐福选择', transform: '变化',
             blessingRewardCopy: '每次卡牌奖励选择1张牌。',
             blessingCardReward: (index, total) => `卡牌奖励 ${index}/${total}`,
-            intent: '意图', endTurn: '结束回合', playerTurn: '玩家回合', enemyTurn: '敌方回合', close: '关闭', drawPile: '抽牌堆',
+            intent: '意图', endTurn: '结束回合', playerTurn: '玩家回合', enemyTurn: '生物回合', close: '关闭', drawPile: '抽牌堆',
             discardPile: '弃牌堆', exilePile: '放逐区',
             talentOverview: '天赋总览', viewTalentOverview: '查看天赋总览',
             talentTotal: (count) => `共 ${count} 项天赋`, noTalents: '尚未获得天赋',
             runDeck: '总牌库', viewRunDeck: '查看总牌库',
             codexTitle: '故事图鉴', viewCodex: '查看故事图鉴',
-            codexCards: '卡牌', codexEnemies: '敌人', codexTalents: '天赋', codexTerms: '术语',
+            codexCards: '卡牌', codexEnemies: '生物', codexTalents: '天赋', codexTerms: '术语',
             codexSearch: '搜索已发现内容', codexRarity: '稀有度', codexType: '类型',
             codexAll: '全选', codexClear: '清空', codexResults: (count) => `${count} 项`,
             codexDiscovered: (found, total) => `已发现 ${found}/${total}`,
             codexEmpty: '没有符合条件的已发现内容', codexUnknownTalent: '未命名赐福',
             codexRelics: '天赋', codexBlessings: '赐福', codexStatuses: '状态',
-            codexTags: '标签', codexTraits: '敌人特殊效果', codexResources: '资源',
+            codexTags: '标签', codexTraits: '生物特殊效果', codexResources: '资源',
             codexHealth: '生命', codexObservedIntents: (count) => `已观察 ${count} 个意图`,
             codexNew: '发现了新的图鉴内容', codexNewCount: (count) => `发现了 ${count} 项新的图鉴内容`,
             battleWon: '战斗胜利', chooseCard: '选择一张牌',
@@ -357,11 +361,11 @@
             journeyFailedCopy: '本次路线止步于此，下一张地图仍在等待。', newJourney: '开始新旅程',
             requestFailed: '故事记录暂时不可用', stateUpdated: '状态已同步', upgraded: '已升级',
             shield: '护盾', power: '力量', weak: '虚弱', vulnerable: '易损', floor: (value) => `第 ${value} 层`,
-            summon: '召唤', defeated: '阵亡', allies: '全体友方', self: '自己', addCard: '加入卡牌', consume: '吞噬',
+            summon: '召唤', defeated: '阵亡', allies: '全体生物', playerSide: '玩家方', self: '自己', addCard: '加入卡牌', consume: '吞噬',
             developerMode: '开发人员模式', devJump: '关卡跳转', devFloor: '层数', devRoom: '房间',
             devValues: '数值设置', devApply: '应用数值', devJumpButton: '跳转',
             devValuesUpdated: '数值已更新', devJumped: '已载入所选关卡',
-            pileEmpty: '这里没有牌', chooseEnemy: '点击敌方头像以选择目标', chooseSelf: '点击自己的头像以选择目标',
+            pileEmpty: '这里没有牌', chooseEnemy: '点击生物头像以选择目标', chooseSelf: '点击自己的头像以选择目标',
             playSelfAnywhere: '点击场地任意位置对自己使用', playAnywhere: '点击场地任意位置打出',
             chooseCardHint: '选择一张手牌', damagePrediction: '伤害预测',
             chooseCards: '选择卡牌', chooseExact: (value) => `选择 ${value} 张牌。`,
@@ -393,8 +397,10 @@
             chatUnread: (count) => `${count} message(s) non lu(s)`,
             emptyTitle: 'Un nouveau voyage', start: 'Commencer', stage: 'Étape', biome: 'Région', gold: 'Or',
             route: 'Route', abandon: 'Terminer le voyage', blessingTitle: 'Choisir une bénédiction',
+            surrender: 'Abandonner', surrenderTitle: 'Abandonner ?', surrenderCopy: 'Ce voyage se soldera immédiatement par un échec.',
             saveManager: 'Sauvegarder / Charger', saveCopy: 'Disponible sur la carte. Les 3 sauvegardes les plus récentes sont conservées.',
             saveCurrent: 'Sauvegarder', loadSave: 'Charger', noSaves: 'Aucune sauvegarde manuelle',
+            deleteSave: 'Supprimer', deleteSaveTitle: 'Supprimer cette sauvegarde ?', deleteSaveCopy: 'Cette sauvegarde manuelle sera retirée.', saveDeleted: 'Sauvegarde supprimée',
             saveCurrentSlot: 'Actuelle', savePreviousSlot: (value) => `Précédente ${value}`,
             saveSucceeded: 'Progression sauvegardée', loadSucceeded: 'Progression chargée',
             loadSaveTitle: 'Charger cette sauvegarde ?', loadSaveCopy: 'La progression actuelle sera remplacée.',
@@ -424,7 +430,7 @@
             claim: 'Récupérer', claimed: 'Récupéré', cardReward: 'Carte', talentReward: 'Talent',
             directLeave: 'Partir sans rien prendre de plus', claimChestGold: 'Prendre l’or', claimChestTalent: 'Prendre le talent',
             continueJourney: 'Continuer', goldReward: (value) => `${value} G`,
-            summon: 'Invocation', allies: 'Tous les alliés', self: 'Soi', addCard: 'Ajouter une carte', consume: 'Absorber',
+            summon: 'Invocation', allies: 'Toutes les créatures', playerSide: 'Camp joueur', self: 'Soi', addCard: 'Ajouter une carte', consume: 'Absorber',
             developerMode: 'Mode développeur', devJump: 'Changer de niveau', devFloor: 'Étage', devRoom: 'Salle',
             devValues: 'Modifier les valeurs', devApply: 'Appliquer', devJumpButton: 'Aller',
             devValuesUpdated: 'Valeurs mises à jour', devJumped: 'Niveau chargé',
@@ -466,8 +472,10 @@
             chatUnread: (count) => `未読メッセージ ${count}件`,
             emptyTitle: '新しい旅', start: '開始', stage: 'ステージ', biome: '地域', gold: 'ゴールド',
             route: 'ルート', abandon: '旅を終了', blessingTitle: '祝福を選択', blessingCopy: '今回の旅で一つ選択します。',
+            surrender: '降参', surrenderTitle: '降参しますか？', surrenderCopy: 'この旅はすぐに敗北として終了します。',
             saveManager: 'セーブ / ロード', saveCopy: 'ルート画面でのみ利用できます。最新3件を保存します。',
             saveCurrent: '現在の進行を保存', loadSave: 'ロード', noSaves: '手動セーブはありません',
+            deleteSave: '削除', deleteSaveTitle: 'このセーブを削除しますか？', deleteSaveCopy: 'この手動セーブは削除されます。', saveDeleted: 'セーブを削除しました',
             saveCurrentSlot: '最新', savePreviousSlot: (value) => `${value}つ前`,
             saveSucceeded: '進行を保存しました', loadSucceeded: '進行を読み込みました',
             loadSaveTitle: 'このセーブを読み込みますか？', loadSaveCopy: '現在のルート進行は上書きされます。',
@@ -495,7 +503,7 @@
             claim: '受け取る', claimed: '受取済み', cardReward: 'カード報酬', talentReward: '天賦',
             directLeave: '残りを受け取らず退出', claimChestGold: 'ゴールドを受け取る', claimChestTalent: '天賦を受け取る',
             continueJourney: '進む', goldReward: (value) => `${value} G`,
-            summon: '召喚', allies: '味方全体', self: '自身', addCard: 'カード追加', consume: '吸収',
+            summon: '召喚', allies: '全生物', playerSide: 'プレイヤー側', self: '自身', addCard: 'カード追加', consume: '吸収',
             developerMode: '開発者モード', devJump: 'ステージ移動', devFloor: '階', devRoom: '部屋',
             devValues: '数値設定', devApply: '適用', devJumpButton: '移動',
             devValuesUpdated: '数値を更新しました', devJumped: 'ステージを読み込みました',
@@ -530,13 +538,20 @@
 
     function loadStoryMainFont() {
         if (!('FontFace' in window)) return;
-        const font = new FontFace(
-            'Kreadon',
-            "url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2')",
-            { weight: '400', style: 'normal' },
-        );
-        font.load().then((loaded) => {
-            document.fonts.add(loaded);
+        const fonts = [
+            new FontFace(
+                'Kreadon',
+                "url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2')",
+                { weight: '400', style: 'normal' },
+            ),
+            new FontFace(
+                'Kreadon Demi',
+                "url('/fonts/Kreadon-Demi.subset.woff2?v=3') format('woff2')",
+                { weight: '700', style: 'normal' },
+            ),
+        ];
+        Promise.all(fonts.map((font) => font.load())).then((loadedFonts) => {
+            loadedFonts.forEach((loaded) => document.fonts.add(loaded));
             document.documentElement.classList.add('fonts-loaded-main');
             scheduleVisibleStoryCardEffectFits();
         }).catch(() => {});
@@ -716,11 +731,20 @@
             'story-save-load-copy': t.loadSaveCopy,
             'story-save-load-cancel': t.cancel,
             'story-save-load-confirm': t.loadSave,
+            'story-save-delete-title': t.deleteSaveTitle,
+            'story-save-delete-copy': t.deleteSaveCopy,
+            'story-save-delete-cancel': t.cancel,
+            'story-save-delete-confirm': t.deleteSave,
             'story-restart-floor': t.restartFloor,
             'story-restart-floor-title': t.restartFloorTitle,
             'story-restart-floor-copy': t.restartFloorCopy,
             'story-restart-floor-cancel': t.cancel,
             'story-restart-floor-confirm': t.restartFloor,
+            'story-surrender': t.surrender,
+            'story-surrender-title': t.surrenderTitle,
+            'story-surrender-copy': t.surrenderCopy,
+            'story-surrender-cancel': t.cancel,
+            'story-surrender-confirm': t.surrender,
             'story-talent-overview-label': t.talentOverview,
             'story-run-deck-label': t.runDeck,
             'story-codex-open-label': t.codexTitle,
@@ -756,6 +780,7 @@
         Object.entries(values).forEach(([id, value]) => setText(id, value));
         updateStoryPresenceDisplay();
         updateStoryStatusBar();
+        updateStorySurrenderControl();
         const back = $('story-back');
         if (back) {
             back.title = t.back;
@@ -1001,6 +1026,19 @@
 
     function updateStoryStatusBar() {
         setText('story-status-text', storyStatusText());
+    }
+
+    function updateStorySurrenderControl(run = activeRun) {
+        const button = $('story-surrender');
+        if (!button) return;
+        const phase = String(run?.state?.phase || '');
+        const visible = Boolean(run)
+            && phase
+            && !['journey_setup', 'complete', 'game_over'].includes(phase);
+        button.classList.toggle('hidden', !visible);
+        button.disabled = !visible || actionInFlight;
+        button.title = t.surrender;
+        button.setAttribute('aria-label', t.surrender);
     }
 
     const STORY_CHAT_AUTO_SCROLL_THRESHOLD = 28;
@@ -2551,6 +2589,7 @@
         if (!activeRun || actionInFlight) return null;
         actionInFlight = true;
         document.body.dataset.actionInFlight = 'true';
+        updateStorySurrenderControl();
         try {
             const previousPhase = String(activeRun?.state?.phase || '');
             const result = await requestJson('/api/story/run/action', {
@@ -2591,6 +2630,7 @@
         } finally {
             actionInFlight = false;
             delete document.body.dataset.actionInFlight;
+            updateStorySurrenderControl();
         }
     }
 
@@ -3991,9 +4031,6 @@
                 focusPreview = false;
                 renderPreview();
             });
-        }
-        if (!blinded && options.hoverPreview !== false) {
-            attachStoryCardHoverPreview(element, () => storyCardElementData.get(element) || card);
         }
         scheduleStoryCardEffectFit(element);
         return element;
@@ -5560,64 +5597,6 @@
         storyCardHoverPreview = null;
     }
 
-    function positionStoryCardHoverPreview(anchor) {
-        if (!storyCardHoverPreview || !anchor?.isConnected) return;
-        const anchorRect = anchor.getBoundingClientRect();
-        const previewRect = storyCardHoverPreview.getBoundingClientRect();
-        const gap = 14;
-        let left = anchorRect.right + gap;
-        let top = anchorRect.top + anchorRect.height / 2 - previewRect.height / 2;
-        if (left + previewRect.width > window.innerWidth - 8) {
-            left = anchorRect.left - previewRect.width - gap;
-        }
-        if (left < 8) {
-            left = anchorRect.left + anchorRect.width / 2 - previewRect.width / 2;
-            top = anchorRect.top - previewRect.height - gap;
-        }
-        if (top < 8 && anchorRect.bottom + previewRect.height + gap <= window.innerHeight - 8) {
-            top = anchorRect.bottom + gap;
-        }
-        left = Math.max(8, Math.min(window.innerWidth - previewRect.width - 8, left));
-        top = Math.max(8, Math.min(window.innerHeight - previewRect.height - 8, top));
-        storyCardHoverPreview.style.left = `${left}px`;
-        storyCardHoverPreview.style.top = `${top}px`;
-    }
-
-    function showStoryCardHoverPreview(anchor, card) {
-        if (!anchor || !cardValues(card)) return;
-        removeStoryCardHoverPreview();
-        const preview = document.createElement('div');
-        preview.className = 'story-card-hover-preview';
-        preview.setAttribute('aria-hidden', 'true');
-        const previewCard = createStoryCard(card, {
-            interactive: false,
-            hoverPreview: false,
-            enablePrediction: Boolean(activeRun?.state?.combat),
-            predictionTargetId: storyPredictionTargetId(),
-        });
-        preview.append(previewCard);
-        document.body.append(preview);
-        storyCardHoverPreview = preview;
-        positionStoryCardHoverPreview(anchor);
-        scheduleStoryCardEffectFit(previewCard);
-        requestAnimationFrame(() => {
-            positionStoryCardHoverPreview(anchor);
-            preview.classList.add('is-visible');
-        });
-    }
-
-    function attachStoryCardHoverPreview(anchor, getCard) {
-        if (!anchor || typeof getCard !== 'function') return;
-        anchor.addEventListener('pointerenter', () => {
-            if (window.matchMedia?.('(hover: none), (pointer: coarse)').matches) return;
-            showStoryCardHoverPreview(anchor, getCard());
-        });
-        anchor.addEventListener('pointermove', () => positionStoryCardHoverPreview(anchor));
-        anchor.addEventListener('pointerleave', removeStoryCardHoverPreview);
-        anchor.addEventListener('focus', () => showStoryCardHoverPreview(anchor, getCard()));
-        anchor.addEventListener('blur', removeStoryCardHoverPreview);
-    }
-
     function positionStoryEquipmentPreview(anchor) {
         if (!storyEquipmentPreview || !anchor?.isConnected) return;
         const anchorRect = anchor.getBoundingClientRect();
@@ -5927,6 +5906,7 @@
             }
         }
         if (entry?.target === 'all_enemies') label = `${t.allies} · ${label}`;
+        else if (entry?.target === 'player') label = `${t.playerSide || (lang === 'zh' ? '玩家方' : 'Player side')} · ${label}`;
         if (iconUrl) {
             const icon = document.createElement('img');
             icon.src = iconUrl;
@@ -5951,7 +5931,7 @@
 
         const name = document.createElement('div');
         name.className = 'story-actor-name classic-fighter-name';
-        name.textContent = localize(enemy.name) || (lang === 'zh' ? '敌人' : 'Enemy');
+        name.textContent = localize(enemy.name) || (lang === 'zh' ? '生物' : 'Creature');
         const portrait = document.createElement('div');
         const imageUrl = String(enemy?.image_url || definition.image_url || '').trim();
         portrait.className = `story-portrait ${imageUrl ? 'story-enemy-portrait' : 'story-enemy-placeholder'}`;
@@ -7022,6 +7002,7 @@
         activeRun = run;
         storyMapPreviewOpen = false;
         updateStoryStatusBar();
+        updateStorySurrenderControl(run);
         if (window.__STORY_DEV_TOOLS__) {
             renderDeveloperPanel(run?.state || null, { syncValues: developerModeOpen });
         }
@@ -7215,7 +7196,18 @@
                 pendingStorySaveId = Number(save.id) || 0;
                 $('story-save-load-dialog')?.showModal();
             });
-            row.append(details, loadButton);
+            const actions = document.createElement('div');
+            actions.className = 'story-save-row-actions';
+            const deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'story-command story-command-danger story-save-delete';
+            deleteButton.textContent = t.deleteSave;
+            deleteButton.addEventListener('click', () => {
+                pendingStorySaveId = Number(save.id) || 0;
+                $('story-save-delete-dialog')?.showModal();
+            });
+            actions.append(loadButton, deleteButton);
+            row.append(details, actions);
             list.append(row);
         });
         restoreStoryScrollPositions(scrollPositions);
@@ -7314,6 +7306,30 @@
         } catch (error) {
             if (error.payload?.run) renderRun(error.payload.run);
             if (error.message !== 'AUTH_REQUIRED') showToast(error.message || t.requestFailed);
+        }
+    }
+
+    async function deleteManualStorySave(saveId) {
+        if (!activeRun || !saveId) return;
+        const button = $('story-save-delete-confirm');
+        if (button) button.disabled = true;
+        try {
+            const payload = await requestJson('/api/story/run/save/delete', {
+                method: 'POST',
+                body: JSON.stringify({
+                    run_id: activeRun.id,
+                    save_id: saveId,
+                }),
+            });
+            renderManualStorySaves(payload.saves, activeRun.state?.phase === 'map');
+            showToast(t.saveDeleted);
+        } catch (error) {
+            if (error.payload?.saves) {
+                renderManualStorySaves(error.payload.saves, activeRun.state?.phase === 'map');
+            }
+            if (error.message !== 'AUTH_REQUIRED') showToast(error.message || t.requestFailed);
+        } finally {
+            if (button) button.disabled = false;
         }
     }
 
@@ -7946,6 +7962,22 @@
             reward_type: 'continue',
         }));
         $('story-terminal-new')?.addEventListener('click', startNewJourney);
+        $('story-surrender')?.addEventListener('click', () => {
+            if (actionInFlight || !activeRun) return;
+            $('story-surrender-dialog')?.showModal();
+        });
+        $('story-surrender-dialog')?.addEventListener('close', (event) => {
+            if (event.target.returnValue !== 'confirm') return;
+            selectedCombatCardId = '';
+            cardChoiceContext = null;
+            pendingStoryDeckChange = null;
+            pendingStoryEventAction = null;
+            ['story-card-choice-dialog', 'story-deck-change-dialog', 'story-event-confirm-dialog'].forEach((id) => {
+                const dialog = $(id);
+                if (dialog?.open) dialog.close('cancel');
+            });
+            storyAction('surrender');
+        });
         $('story-dev-toggle')?.addEventListener('click', () => setDeveloperMode(!developerModeOpen));
         $('story-dev-close')?.addEventListener('click', () => setDeveloperMode(false));
         $('story-dev-floor')?.addEventListener('change', () => renderDeveloperNodes(activeRun?.state || null));
@@ -7971,6 +8003,11 @@
             const saveId = pendingStorySaveId;
             pendingStorySaveId = 0;
             if (event.target.returnValue === 'confirm') loadManualStorySave(saveId);
+        });
+        $('story-save-delete-dialog')?.addEventListener('close', (event) => {
+            const saveId = pendingStorySaveId;
+            pendingStorySaveId = 0;
+            if (event.target.returnValue === 'confirm') deleteManualStorySave(saveId);
         });
         $('modal')?.addEventListener('click', (event) => {
             if (event.target !== event.currentTarget) return;
