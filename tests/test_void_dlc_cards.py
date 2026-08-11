@@ -3,8 +3,6 @@ import unittest
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
-
 from cards import CARD_DEFS, CardInstance
 from game_engine import EquipmentInstance, GameEngine
 from game_engine_2v2 import GameEngine2v2
@@ -98,26 +96,27 @@ class VoidDlcCardTests(unittest.TestCase):
                     root = ET.fromstring(archive.read(image))
                     self.assertEqual(root.attrib.get("viewBox"), "0 0 100 100")
 
-    def test_capacitor_charge_can_be_cancelled_by_copper_rod(self):
+    def test_copper_rod_absorbs_responded_attack_damage_as_charge(self):
         engine = self.action_engine()
-        capacitor = CardInstance("Capacitor")
+        attack = CardInstance("Basic")
         copper_rod = CardInstance("CopperRod")
         other_card = CardInstance("Basic")
-        engine.players[0].hand = [capacitor]
+        engine.players[0].hand = [attack]
         engine.players[1].hand = [copper_rod, other_card]
 
-        result = engine.play_card(0, capacitor.instance_id, self.target_choice(1))
+        result = engine.play_card(0, attack.instance_id, self.target_choice(1))
         self.assertTrue(result.get("needs_response"), result)
         response = engine.handle_response(1, copper_rod.instance_id)
 
         self.assertTrue(response.get("success"), response)
-        self.assertEqual(other_card.charge_value, 0)
-        self.assertNotIn("charge", other_card.flags)
+        self.assertEqual(engine.players[1].health, 100)
+        self.assertGreater(other_card.charge_value, 0)
+        self.assertIn("charge", other_card.flags)
         self.assertIn(copper_rod, engine.players[1].discard)
 
     def test_magic_copper_rod_absorbs_one_electric_hit(self):
         engine = self.action_engine()
-        equipment = self.equip(engine, 0, 0, "MagicCopperRod")
+        self.equip(engine, 0, 0, "MagicCopperRod")
         charged = CardInstance("Basic")
         charged.charge_value = 2
         charged.instance_flags.add("charge")
@@ -133,24 +132,14 @@ class VoidDlcCardTests(unittest.TestCase):
         )
 
         self.assertEqual(result, 0)
-        self.assertIsNotNone(engine.pending_v2_ui)
-        request_id = engine.pending_v2_ui["request_id"]
-        response = engine.handle_v2_ui_response(
-            0,
-            request_id,
-            {
-                "button": "confirm",
-                "values": {"response": f"copper:{equipment.card_instance.instance_id}"},
-            },
-        )
-        self.assertTrue(response.get("success"), response)
+        self.assertIsNone(engine.pending_v2_ui)
         self.assertEqual(engine.players[0].health, 100)
         self.assertEqual(engine.players[0].magic, 49)
-        self.assertEqual(charged.charge_value, 1)
+        self.assertEqual(charged.charge_value, 9)
 
     def test_magic_copper_rod_can_answer_enemy_electric_attack_path(self):
         engine = self.action_engine()
-        equipment = self.equip(engine, 0, 0, "MagicCopperRod")
+        self.equip(engine, 0, 0, "MagicCopperRod")
 
         result = engine.deal_attack_damage(
             0,
@@ -161,62 +150,36 @@ class VoidDlcCardTests(unittest.TestCase):
         )
 
         self.assertEqual(result, 0)
-        self.assertIsNotNone(engine.pending_v2_ui)
-        request_id = engine.pending_v2_ui["request_id"]
-        response = engine.handle_v2_ui_response(
-            0,
-            request_id,
-            {
-                "button": "confirm",
-                "values": {"response": f"copper:{equipment.card_instance.instance_id}"},
-            },
-        )
-        self.assertTrue(response.get("success"), response)
+        self.assertIsNone(engine.pending_v2_ui)
         self.assertEqual(engine.players[0].health, 100)
         self.assertEqual(engine.players[0].magic, 49)
 
-    def test_magic_copper_rod_absorbs_only_one_hit_from_a_multi_hit_event(self):
+    def test_magic_copper_rod_absorbs_each_hit_while_magic_is_enough(self):
         engine = self.action_engine()
-        equipment = self.equip(engine, 0, 0, "MagicCopperRod")
+        self.equip(engine, 0, 0, "MagicCopperRod")
 
         engine.deal_attack_damage(0, 7, 2, is_battery=True, attacker_id=1)
-        first_request = engine.pending_v2_ui["request_id"]
-        first_response = engine.handle_v2_ui_response(
-            0,
-            first_request,
-            {
-                "button": "confirm",
-                "values": {"response": f"copper:{equipment.card_instance.instance_id}"},
-            },
-        )
 
-        self.assertTrue(first_response.get("needs_v2_ui"), first_response)
-        second_request = engine.pending_v2_ui["request_id"]
-        second_response = engine.handle_v2_ui_response(
-            0,
-            second_request,
-            {"button": "confirm", "values": {"response": "pass"}},
-        )
-        self.assertTrue(second_response.get("success"), second_response)
-        self.assertEqual(engine.players[0].health, 93)
-        self.assertEqual(engine.players[0].magic, 49)
+        self.assertIsNone(engine.pending_v2_ui)
+        self.assertEqual(engine.players[0].health, 100)
+        self.assertEqual(engine.players[0].magic, 48)
 
-    def test_capacitor_starts_with_one_charge_without_resetting_saved_zero(self):
+    def test_capacitor_starts_with_three_charge_without_resetting_saved_zero(self):
         engine = self.action_engine()
         capacitor = CardInstance("Capacitor")
 
-        self.assertEqual(self.mod_cards["Capacitor"].charge_value, 1)
-        self.assertEqual(CARD_DEFS["Capacitor"].charge_value, 1)
-        self.assertEqual(capacitor.charge_value, 1)
+        self.assertEqual(self.mod_cards["Capacitor"].charge_value, 3)
+        self.assertEqual(CARD_DEFS["Capacitor"].charge_value, 3)
+        self.assertEqual(capacitor.charge_value, 3)
         engine.players[0].add_to_hand(capacitor)
-        self.assertEqual(capacitor.charge_value, 1)
+        self.assertEqual(capacitor.charge_value, 3)
         self.assertIn("charge", capacitor.flags)
 
         capacitor.charge_value = 0
         restored = CardInstance.from_dict(capacitor.to_dict())
         self.assertEqual(restored.charge_value, 0)
 
-    def test_masks_project_effective_layers_without_mutating_saved_state(self):
+    def test_masks_no_longer_project_reduced_visible_layers(self):
         engine = self.action_engine()
         self.equip(engine, 0, 1, "Mask")
         self.equip(engine, 0, 1, "MagicMask")
@@ -227,14 +190,14 @@ class VoidDlcCardTests(unittest.TestCase):
 
         public = engine.get_public_state(1)["you"]
 
-        self.assertEqual(public["toxic"], 1)
-        self.assertEqual(public["blind"], 1)
-        self.assertEqual(public["custom_statuses"]["jungle:toxic_poison"], 2)
+        self.assertEqual(public["toxic"], 3)
+        self.assertEqual(public["blind"], 2)
+        self.assertEqual(public["custom_statuses"]["jungle:toxic_poison"], 4)
         self.assertEqual(target.toxic, 3)
         self.assertEqual(target.blind, 2)
         self.assertEqual(target.custom_statuses["jungle:toxic_poison"], 4)
 
-    def test_mask_projection_is_used_by_2v2_public_state(self):
+    def test_mask_projection_no_longer_changes_2v2_public_state(self):
         engine = self.action_engine(GameEngine2v2)
         self.equip(engine, 0, 2, "MagicMask")
         engine.players[2].blind = 1
@@ -243,9 +206,9 @@ class VoidDlcCardTests(unittest.TestCase):
 
         public = engine.get_public_state(2)["you"]
 
-        self.assertEqual(public["blind"], 0)
-        self.assertEqual(public["toxic"], 1)
-        self.assertEqual(public["custom_statuses"]["jungle:toxic_poison"], 1)
+        self.assertEqual(public["blind"], 1)
+        self.assertEqual(public["toxic"], 2)
+        self.assertEqual(public["custom_statuses"]["jungle:toxic_poison"], 2)
 
     def test_magic_slime_ball_copies_gain_magic_swift_two(self):
         engine = self.action_engine()
@@ -260,40 +223,27 @@ class VoidDlcCardTests(unittest.TestCase):
             self.assertIn("exile", copy_card.flags)
             self.assertNotIn("copy", copy_card.flags)
 
-    def test_pipe_bomb_rolls_for_each_target_and_fission_segment(self):
+    def test_pipe_bomb_deals_fixed_damage_to_wide_targets_and_ends_turn(self):
         engine = self.action_engine()
         pipe_bomb = CardInstance("PipeBomb")
-        pipe_bomb.fission_level = 2
-        pipe_bomb.fission_count = 1
         engine.players[0].hand = [pipe_bomb]
-        rolls = []
 
-        def always_hit(limit):
-            rolls.append(limit)
-            return 1
-
-        with patch("void_dlc_runtime.random.randrange", side_effect=always_hit):
-            result = engine.play_card(0, pipe_bomb.instance_id, {})
+        result = engine.play_card(0, pipe_bomb.instance_id, {})
 
         self.assertTrue(result.get("success"), result)
-        self.assertEqual(rolls, [2, 2, 2, 2])
-        self.assertEqual([player.health for player in engine.players], [74, 74])
+        self.assertEqual([player.health for player in engine.players], [100, 84])
+        self.assertEqual(engine.current_player, 1)
 
-    def test_illuminati_pool_includes_stun_and_cleans_applied_layers(self):
+    def test_illuminati_applies_all_statuses_then_clears_target_statuses(self):
         engine = self.action_engine()
         triangle = CardInstance("IlluminatiTriangle")
         engine.players[0].hand = [triangle]
-        populations = []
+        engine.players[1].health = 80
 
-        def choose_statuses(population, count):
-            populations.append(list(population))
-            return ["skip_turn", "poison", "fire", "blind", "weakness"][:count]
-
-        with patch("void_dlc_runtime.random.sample", side_effect=choose_statuses):
-            result = engine.play_card(0, triangle.instance_id, self.target_choice(1))
+        result = engine.play_card(0, triangle.instance_id, self.target_choice(1))
 
         self.assertTrue(result.get("success"), result)
-        self.assertIn("skip_turn", populations[0])
+        self.assertEqual(engine.players[1].health, 100)
         self.assertEqual(engine.players[1].skip_turn, 1)
         self.assertEqual(engine.players[1].poison, 1)
         engine.end_turn(0)
@@ -331,6 +281,19 @@ class VoidDlcCardTests(unittest.TestCase):
 
         self.assertEqual(engine._resolve_targets(0, "random_enemy"), [3])
         self.assertEqual(engine._resolve_targets(2, "random_friendly"), [3])
+
+    def test_eyeball_forces_targeted_cards_to_equipment_owner(self):
+        engine = self.action_engine(GameEngine2v2)
+        engine.current_player = 2
+        self.equip(engine, 0, 2, "Eyeball")
+        attack = CardInstance("Basic")
+        engine.players[2].hand = [attack]
+
+        result = engine.play_card(2, attack.instance_id, self.target_choice(1))
+
+        self.assertTrue(result.get("success"), result)
+        self.assertEqual(engine.players[0].health, 94)
+        self.assertEqual(engine.players[1].health, 100)
 
 
 if __name__ == "__main__":

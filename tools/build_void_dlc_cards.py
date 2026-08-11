@@ -606,7 +606,7 @@ def update_bio_dlc(assets):
     document["manifest"]["author"] = "huanxiang0273, Eric, XinYu, AArcC"
     existing = {row.get("id"): row for row in document["registries"]["cards"]}
     for row in BIO_CARDS:
-        existing[row["id"]] = row
+        existing.setdefault(row["id"], row)
     document["registries"]["cards"] = list(existing.values())
     selected_assets = {
         name: content for name, content in assets.items()
@@ -655,11 +655,35 @@ def update_bio_dlc(assets):
     })
 
 
+def current_package_cards(path: Path, fallback: list[dict]) -> list[dict]:
+    try:
+        document, _members = read_package(path)
+        cards = document.get("registries", {}).get("cards")
+        if isinstance(cards, list) and cards:
+            return copy.deepcopy(cards)
+    except Exception:
+        pass
+    return copy.deepcopy(fallback)
+
+
+def current_card_art(path: Path) -> dict[str, bytes]:
+    try:
+        _document, members = read_package(path)
+    except Exception:
+        return {}
+    return {
+        name.removeprefix("card-art/"): content
+        for name, content in members.items()
+        if name.startswith("card-art/")
+    }
+
+
 def main():
     assets = art_payloads()
     lithium, lithium_art = lithium_from_parent_snapshot()
 
-    factory_cards = [lithium, *FACTORY_CARDS]
+    factory_path = MODS / "Factory Cards DLC.gtnmod"
+    factory_cards = current_package_cards(factory_path, [lithium, *FACTORY_CARDS])
     factory_doc = package_document(
         manifest("factory_dlc", "factory", "Factory Cards DLC", "工厂卡DLC包", "Eric, XinYu, AArcC", "工厂主题卡牌扩展。"),
         factory_cards,
@@ -668,24 +692,35 @@ def main():
         "zh": "工厂卡DLC包", "en": "Factory Cards DLC", "fr": "DLC de cartes d'usine", "ja": "工場カードDLC",
         "en_description": "Additional cards for Factory Cards Addition.",
     }
-    factory_art_names = {row["assets"]["image"].split("/")[-1] for row in FACTORY_CARDS}
+    factory_art_names = {row["assets"]["image"].split("/")[-1] for row in factory_cards if row.get("assets", {}).get("image")}
     write_package(
-        MODS / "Factory Cards DLC.gtnmod",
+        factory_path,
         factory_doc,
         factory_names,
-        {"Lithium.svg": lithium_art, **{name: assets[name] for name in factory_art_names}},
+        {
+            **current_card_art(factory_path),
+            "Lithium.svg": lithium_art,
+            **{name: assets[name] for name in factory_art_names if name in assets},
+        },
     )
 
+    void_path = MODS / "Void Cards DLC.gtnmod"
+    void_cards = current_package_cards(void_path, VOID_CARDS)
     void_doc = package_document(
         manifest("void_dlc", "void", "Void Cards DLC", "虚空卡DLC包", "Eric, AArcC", "虚空主题卡牌扩展。"),
-        VOID_CARDS,
+        void_cards,
     )
     void_names = {
         "zh": "虚空卡DLC包", "en": "Void Cards DLC", "fr": "DLC de cartes du Néant", "ja": "虚空カードDLC",
         "en_description": "Additional cards for Void Card Addition.",
     }
-    void_art_names = {row["assets"]["image"].split("/")[-1] for row in VOID_CARDS}
-    write_package(MODS / "Void Cards DLC.gtnmod", void_doc, void_names, {name: assets[name] for name in void_art_names})
+    void_art_names = {row["assets"]["image"].split("/")[-1] for row in void_cards if row.get("assets", {}).get("image")}
+    write_package(
+        void_path,
+        void_doc,
+        void_names,
+        {**current_card_art(void_path), **{name: assets[name] for name in void_art_names if name in assets}},
+    )
 
     update_bio_dlc(assets)
     rewrite_factory_parent()

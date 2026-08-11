@@ -1842,6 +1842,17 @@ class GameEngine:
     def _sewers_apply_forced_target_choice(self, player_id: int, card: Optional[CardInstance], choice):
         target_id = self._sewers_forced_target_for_card(player_id, card)
         if target_id is None:
+            try:
+                from void_dlc_runtime import forced_choice_target
+                target_id = forced_choice_target(
+                    self,
+                    player_id,
+                    card,
+                    self._choice_target_from_choice(choice, -1) if isinstance(choice, dict) else -1,
+                )
+            except Exception:
+                target_id = None
+        if target_id is None:
             return choice, None
         updated = dict(choice or {})
         updated['target_player'] = target_id
@@ -5243,7 +5254,7 @@ class GameEngine:
                 return 0
         if not (0 <= player_id < len(self.players)):
             return 0
-        from void_dlc_runtime import maybe_defer_direct_damage
+        from void_dlc_runtime import blocks_special_effect_damage, maybe_defer_direct_damage, try_magic_copper_rod_absorb
         if maybe_defer_direct_damage(
             self,
             player_id,
@@ -5303,6 +5314,10 @@ class GameEngine:
         )
         if actual <= 0:
             return 0
+        if blocks_special_effect_damage(self, player_id):
+            self._record_achievement_damage_output(source_id, actual)
+            self.log_msg(f"{self.pn(player_id)}的口罩免受{source}伤害")
+            return 0
         if self._bio_indictment_converts_damage(
             player_id,
             actual,
@@ -5316,6 +5331,9 @@ class GameEngine:
         actual = self._apply_universal_damage_shields(player_id, actual, source_id, source, resolved_damage_type)
         self._record_achievement_damage_output(source_id, max(0, before_shields - actual))
         if actual <= 0:
+            return 0
+        if try_magic_copper_rod_absorb(self, player_id, actual):
+            self._record_achievement_damage_output(source_id, actual)
             return 0
         old_health = ps.health
         ps.health -= actual
@@ -13967,6 +13985,14 @@ class GameEngine:
                 and int(getattr(self, '_prediction_first_attack_damage', 0) or 0) <= 0
             ):
                 self._prediction_first_attack_damage = int(dmg)
+            if dmg > 0:
+                from void_dlc_runtime import consume_lightning_rod_absorb, try_magic_copper_rod_absorb
+                if consume_lightning_rod_absorb(self, target_id, source_card, dmg):
+                    self._record_achievement_damage_output(attacker_id, dmg)
+                    continue
+                if try_magic_copper_rod_absorb(self, target_id, dmg):
+                    self._record_achievement_damage_output(attacker_id, dmg)
+                    continue
             old_health = ps.health
             ps.health -= dmg
             health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
@@ -17974,6 +18000,10 @@ class GameEngine:
         status = str(params.get('status', '')).strip()
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+            if card is None:
+                from void_dlc_runtime import blocks_special_effect_interference
+                if blocks_special_effect_interference(self, tid):
+                    continue
             if self._status_application_blocked(tid, status):
                 continue
             ps = self.players[tid]

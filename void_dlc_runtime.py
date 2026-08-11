@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from cards import CARD_DEFS, CardInstance, clamp_card_layer, clamp_card_power
 from damage_types import (
     DAMAGE_TAG_BATTERY,
+    DAMAGE_TAG_FIRE,
     DAMAGE_TAG_PHYSICAL,
     DAMAGE_TAG_POISON,
     DAMAGE_TYPE_MAGIC,
@@ -25,6 +26,9 @@ SCHIZO_IDS = {"Schizo", "void:schizo"}
 MAGIC_COPPER_ROD_IDS = {"MagicCopperRod", "void:magic_copper_rod"}
 HORN_IDS = {"Horn", "void:horn"}
 DAMAGE_QUEUE_KEY = "void_dlc_deferred_damage_queue"
+LIGHTNING_ROD_ABSORB_KEY = "void_dlc_lightning_rod_absorb_targets"
+LIGHTNING_ROD_ABSORB_EVENTS_KEY = "void_dlc_lightning_rod_absorb_events"
+CICADA_PENDING_BLIND_KEY = "void_dlc_cicada_pending_blind"
 
 ILLUMINATI_STATUSES = (
     "poison",
@@ -298,28 +302,6 @@ def _damage_response_options(engine, event: dict) -> tuple[int, List[dict]]:
     target_id = int(event.get("target_id", -1))
     attempted = {int(value) for value in event.get("attempted_responders", [])}
     by_responder: Dict[int, List[dict]] = {}
-    is_electric_event = (
-        event.get("kind") == "direct"
-        and _is_electric_damage(str(event.get("source") or ""), event.get("damage_tag"))
-    ) or (
-        event.get("kind") == "attack"
-        and bool(event.get("is_battery"))
-    )
-    if is_electric_event:
-        for owner_id, owner in enumerate(engine.players):
-            if owner_id in attempted or owner.health <= 0 or owner.magic < 1:
-                continue
-            for equipment in list(getattr(owner, "equipment", []) or []):
-                if (
-                    _active_equipment(engine, equipment)
-                    and _equipment_is(engine, equipment, *MAGIC_COPPER_ROD_IDS)
-                    and _equipment_target(engine, equipment, owner_id) == target_id
-                ):
-                    by_responder.setdefault(owner_id, []).append({
-                        "kind": "copper",
-                        "instance_id": int(equipment.card_instance.instance_id),
-                        "card": equipment.card_instance.to_dict(),
-                    })
     try:
         source_id = int(event.get("source_id", -1))
     except (TypeError, ValueError):
@@ -545,48 +527,140 @@ def _play_damage_targets(engine, player_id: int, card: CardInstance, choice, con
     return total
 
 
+def _clear_all_statuses(engine, target_id: int) -> None:
+    if not _valid_player(engine, target_id):
+        return
+    ps = engine.players[target_id]
+    for attr in (
+        "poison", "fire", "toxic", "dodge", "sluggish", "overload", "foresight",
+        "fracture", "stagnation", "blind", "heal_block", "weakness", "bleed",
+        "attack_blocked", "attack_only", "magic_blocked", "skip_turn",
+    ):
+        if hasattr(ps, attr):
+            setattr(ps, attr, 0)
+    ps.custom_statuses = {}
+    normalizer = getattr(engine, "_normalize_statuses", None)
+    if callable(normalizer):
+        normalizer(target_id)
+
+
+def _distribute_charge_to_hand(engine, target_id: int, total: int) -> int:
+    if not _valid_player(engine, target_id):
+        return 0
+    hand = list(getattr(engine.players[target_id], "hand", []) or [])
+    if not hand:
+        return 0
+    amount = int(math.ceil(max(0, int(total or 0)) / len(hand)))
+    if amount <= 0:
+        return 0
+    for hand_card in hand:
+        _add_charge(hand_card, amount)
+    return amount
+
+
+def consume_lightning_rod_absorb(engine, target_id: int, source_card: Optional[CardInstance], damage: int) -> bool:
+    if damage <= 0 or not _valid_player(engine, target_id):
+        return False
+    card_key = str(getattr(source_card, "instance_id", "") or "") if source_card is not None else ""
+    absorb_events = getattr(engine, "custom_vars", {}).get(LIGHTNING_ROD_ABSORB_EVENTS_KEY)
+    if isinstance(absorb_events, dict):
+        matched_key = None
+        targets_map = {}
+        for candidate_key in (card_key, "_any"):
+            if not candidate_key:
+                continue
+            candidate_map = dict(absorb_events.get(candidate_key, {}) or {})
+            if str(target_id) in candidate_map:
+                matched_key = candidate_key
+                targets_map = candidate_map
+                break
+        if matched_key is not None:
+            targets_map.pop(str(target_id), None)
+            if targets_map:
+                absorb_events[matched_key] = targets_map
+            else:
+                absorb_events.pop(matched_key, None)
+            engine.custom_vars[LIGHTNING_ROD_ABSORB_EVENTS_KEY] = absorb_events
+            amount = _distribute_charge_to_hand(engine, target_id, damage)
+            engine.log_msg(f"{engine.pn(target_id)}的铜棒吸收了{damage}点伤害，使每张手牌获得{amount}层电荷")
+            return True
+    if source_card is None:
+        return False
+    custom = getattr(source_card, "custom_vars", {}) or {}
+    targets_map = dict(custom.get(LIGHTNING_ROD_ABSORB_KEY, {}) or {})
+    if str(target_id) not in targets_map:
+        return False
+    targets_map.pop(str(target_id), None)
+    custom[LIGHTNING_ROD_ABSORB_KEY] = targets_map
+    source_card.custom_vars = custom
+    amount = _distribute_charge_to_hand(engine, target_id, damage)
+    engine.log_msg(f"{engine.pn(target_id)}的铜棒吸收了{damage}点伤害，使每张手牌获得{amount}层电荷")
+    return True
+
+
+def try_magic_copper_rod_absorb(engine, target_id: int, damage: int) -> bool:
+    if damage <= 0 or not _valid_player(engine, target_id):
+        return False
+    for owner_id, owner in enumerate(getattr(engine, "players", []) or []):
+        for equipment in list(getattr(owner, "equipment", []) or []):
+            if (
+                _active_equipment(engine, equipment)
+                and _equipment_target(engine, equipment, owner_id) == target_id
+                and _equipment_is(engine, equipment, *MAGIC_COPPER_ROD_IDS)
+                and int(getattr(engine.players[owner_id], "magic", 0) or 0) >= 1
+            ):
+                engine._spend_resource(owner_id, "magic", 1, equipment.card_instance)
+                amount = _distribute_charge_to_hand(engine, target_id, damage)
+                engine.log_msg(
+                    f"{engine.pn(owner_id)}的魔法铜棒消耗1M，吸收{engine.pn(target_id)}受到的{damage}点伤害，"
+                    f"使其每张手牌获得{amount}层电荷"
+                )
+                return True
+    return False
+
+
 def _run_simple_action(engine, player_id: int, card: CardInstance, action: str,
                        params: dict, choice, context) -> bool:
     targets = _action_targets(engine, player_id, card, choice, context)
     if action == "bomb_attack":
         _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 6)),
-                             status_after=(("overload", 1, False), ("weakness", 1, False)))
+                             status_after=(
+                                 ("overload", 1, bool(params.get("require_hit"))),
+                                 ("weakness", 1, bool(params.get("require_hit"))),
+                             ))
     elif action == "fire_bomb_attack":
+        status_name = "fire" if "fire" in params else "hel:blazing_fire"
+        status_amount = int(params.get("fire", params.get("blaze", 3)) or 0)
         _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 16)),
-                             status_after=(("hel:blazing_fire", int(params.get("blaze", 3)), False),))
+                             status_after=((status_name, status_amount, bool(params.get("require_hit"))),))
     elif action == "magic_bomb_attack":
         _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 20)),
                              status_after=(("skip_turn", 1, False),))
     elif action == "pipe_bomb_attack":
-        base = max(0, int(params.get("damage", 25) or 25))
-        hit_count = engine._card_total_hits(card, 1)
-        original_power = clamp_card_power(getattr(card, "power_value", 0) or 0)
-        fission_level = max(1, int(getattr(card, "fission_level", 1) or 1))
-        split_power = int(math.ceil(original_power / max(1, hit_count * fission_level)))
-        try:
-            card.power_value = split_power
-            for target_id in targets:
-                for _ in range(hit_count):
-                    _attack(
-                        engine,
-                        player_id,
-                        card,
-                        target_id,
-                        base if random.randrange(2) else 0,
-                        hits=1,
-                        split_power_for_fission=False,
-                    )
-        finally:
-            card.power_value = original_power
+        _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 16) or 16))
+        if params.get("end_turn") and not getattr(engine, "game_over", False):
+            end_turn = getattr(engine, "end_turn", None)
+            if callable(end_turn):
+                end_turn(player_id)
+            else:
+                engine._end_player_turn(player_id)
     elif action == "dvd_attack":
         _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 6)),
-                             status_after=(("fire", 1, False),))
+                             status_after=(("fire", 1, bool(params.get("require_hit"))),))
     elif action == "dvd_return":
         owner_id, zone_name, _ = engine._find_card_location(card)
         if owner_id == player_id and zone_name == "discard" and card in engine.players[player_id].discard:
             engine.players[player_id].discard.remove(card)
             engine.players[player_id].add_to_hand(card)
             engine.log_msg(f"{engine.pn(player_id)}的{card.name_cn}回到手中")
+    elif action == "fan_play":
+        for target_id in targets:
+            _add_status(engine, target_id, "fire", 2)
+            if not engine._is_status_immune(target_id) and engine.players[target_id].fire > 0:
+                _direct_damage(engine, target_id, engine.players[target_id].fire, "灼烧", player_id, damage_tag=DAMAGE_TAG_FIRE)
+                engine._decay_fire_after_turn_start(target_id)
+            engine.players[target_id].gain_elixir(4)
+            engine.log_msg(f"{engine.pn(target_id)}因扇子获得4E")
     elif action in ("fan_turn_start", "schizo_turn_start"):
         pass
     elif action == "seed_charge":
@@ -600,28 +674,39 @@ def _run_simple_action(engine, player_id: int, card: CardInstance, action: str,
                 _add_charge(hand_card, int(params.get("amount", 1) or 1))
             if engine.players[target_id].hand:
                 engine.log_msg(f"{engine.pn(target_id)}的所有手牌获得{int(params.get('amount', 1) or 1)}层电荷")
-    elif action == "copper_rod_response":
+    elif action in ("copper_rod_response", "lightning_rod_response"):
         original = context.get("original_card") if isinstance(context, dict) else None
         if original is not None:
+            card_key = str(getattr(original, "instance_id", "") or "")
+            if card_key:
+                absorb_events = engine.custom_vars.setdefault(LIGHTNING_ROD_ABSORB_EVENTS_KEY, {})
+                if not isinstance(absorb_events, dict):
+                    absorb_events = {}
+                    engine.custom_vars[LIGHTNING_ROD_ABSORB_EVENTS_KEY] = absorb_events
+                targets_map = dict(absorb_events.get(card_key, {}) or {})
+                targets_map[str(player_id)] = max(0, int((context.get("incoming_damage") or {}).get("total", 0) or 0))
+                absorb_events[card_key] = targets_map
+            any_map = dict(engine.custom_vars.setdefault(LIGHTNING_ROD_ABSORB_EVENTS_KEY, {}).get("_any", {}) or {})
+            any_map[str(player_id)] = max(0, int((context.get("incoming_damage") or {}).get("total", 0) or 0))
+            engine.custom_vars[LIGHTNING_ROD_ABSORB_EVENTS_KEY]["_any"] = any_map
             custom = getattr(original, "custom_vars", {}) or {}
-            cancelled = list(custom.get("void_dlc_charge_cancelled_targets", []) or [])
-            if player_id not in cancelled:
-                cancelled.append(player_id)
-            custom["void_dlc_charge_cancelled_targets"] = cancelled
+            targets_map = dict(custom.get(LIGHTNING_ROD_ABSORB_KEY, {}) or {})
+            targets_map[str(player_id)] = max(0, int((context.get("incoming_damage") or {}).get("total", 0) or 0))
+            custom[LIGHTNING_ROD_ABSORB_KEY] = targets_map
             original.custom_vars = custom
-        for hand_card in engine.players[player_id].hand:
-            hand_card.charge_value = 0
-            hand_card.instance_flags.discard("charge")
-        engine.log_msg(f"{engine.pn(player_id)}的铜棒清除了手牌电荷并使本次电荷效果失效")
+        engine.log_msg(f"{engine.pn(player_id)}的铜棒将吸收本次攻击牌伤害")
     elif action == "plasma_attack":
+        amount = int(params.get("amount", 4) or 4)
+        damage = int(params.get("damage", 4) or 4)
+        electric = int(params.get("electric", 4) or 4)
         for target_id in targets:
-            _add_status(engine, target_id, "poison", 2)
-            _add_status(engine, target_id, "fire", 2)
+            _add_status(engine, target_id, "poison", amount)
+            _add_status(engine, target_id, "fire", amount)
             selectable = [item for item in engine.players[target_id].hand if _selectable_card(engine, item)]
             if selectable:
-                _add_charge(random.choice(selectable), 2)
-            _attack(engine, player_id, card, target_id, 5)
-            _direct_damage(engine, target_id, 5, "等离子体电伤", player_id, electric=True)
+                _add_charge(random.choice(selectable), amount)
+            _attack(engine, player_id, card, target_id, damage)
+            _direct_damage(engine, target_id, electric, "等离子体电伤", player_id, electric=True)
     elif action == "apply_status":
         for target_id in targets:
             _add_status(engine, target_id, str(params.get("status", "")), int(params.get("amount", 1) or 1))
@@ -635,16 +720,15 @@ def _run_simple_action(engine, player_id: int, card: CardInstance, action: str,
             cleanup = []
             engine.custom_vars["void_dlc_illuminati_cleanup"] = cleanup
         for target_id in targets:
-            _attack(engine, player_id, card, target_id, int(params.get("damage", 5) or 5))
-            available_ids = {
-                *ILLUMINATI_STATUSES[:CORE_ILLUMINATI_STATUS_COUNT],
-                *(getattr(engine, "v2_status_defs", {}) or {}).keys(),
-            }
-            available = [status for status in ILLUMINATI_STATUSES if status in available_ids]
-            selected = random.sample(available, min(max(0, int(params.get("status_count", 5) or 5)), len(available)))
-            for status in selected:
+            heal_amount = int(params.get("heal", 20) or 20)
+            if heal_amount > 0:
+                before = engine.players[target_id].health
+                engine.players[target_id].heal(heal_amount)
+                recovered = max(0, int(engine.players[target_id].health or 0) - int(before or 0))
+                engine.log_msg(f"{engine.pn(target_id)}回复{recovered}H")
+            for status in ILLUMINATI_STATUSES:
                 _add_status(engine, target_id, status, 1)
-                cleanup.append({"source_id": player_id, "target_id": target_id, "status": status, "amount": 1})
+            cleanup.append({"source_id": player_id, "target_id": target_id, "clear_all": True})
     elif action == "heated_thorn":
         dealt = _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 6)),
                                      status_after=(("hel:blazing_fire", 1, False),))
@@ -654,6 +738,7 @@ def _run_simple_action(engine, player_id: int, card: CardInstance, action: str,
             spawned.fission_level = clamp_card_layer(3)
             spawned.fission_count = 2
             spawned.instance_flags.add("wide_strike")
+            spawned.instance_flags.add("self_target")
             spawned.custom_vars["void_dlc_no_heated_thorn_spawn"] = True
             engine._bio_queue_auto_play(player_id, spawned, {}, no_cost=True, source="heated_thorn")
     elif action == "comb_statuses":
@@ -663,11 +748,12 @@ def _run_simple_action(engine, player_id: int, card: CardInstance, action: str,
     elif action == "magic_nut_attack":
         spent = max(0, int(engine.players[player_id].elixir or 0))
         engine._spend_resource(player_id, "elixir", spent, card)
-        _play_damage_targets(engine, player_id, card, choice, context, 10 + spent * 3)
+        _play_damage_targets(engine, player_id, card, choice, context,
+                             int(params.get("base", 10) or 10) + spent * int(params.get("per_e", 5) or 5))
     elif action == "one_ring":
         for target_id in targets:
-            _add_status(engine, target_id, "hel:blazing_fire", 3)
-            _add_status(engine, target_id, "fire", 1)
+            _add_status(engine, target_id, "hel:blazing_fire", int(params.get("blaze", 2) or 2))
+            _add_status(engine, target_id, "fire", int(params.get("fire", 1) or 1))
     elif action == "magic_stardust":
         for target_id in targets:
             raw_toxic = _status_value(engine, target_id, "jungle:toxic_poison")
@@ -830,6 +916,10 @@ def _finish_resume_handler(engine, state: dict) -> dict:
 def queue_turn_start_choices(engine, player_id: int, resume_handler: str) -> bool:
     if not _valid_player(engine, player_id):
         return False
+    pending_blind = max(0, int((getattr(engine.players[player_id], "custom_vars", {}) or {}).pop(CICADA_PENDING_BLIND_KEY, 0) or 0))
+    if pending_blind > 0:
+        _add_status(engine, player_id, "blind", pending_blind)
+        engine.log_msg(f"{engine.pn(player_id)}因蝉3301获得{pending_blind}层失明")
     entries = []
     for owner_id, owner in enumerate(engine.players):
         for equipment in list(getattr(owner, "equipment", []) or []):
@@ -970,7 +1060,9 @@ def _resume_turn_start(engine, state: dict, purpose: str, value: Any, cancelled:
 def start_cicada(engine, player_id: int, card: CardInstance) -> dict:
     for target_id in range(len(engine.players)):
         if _target_selectable(engine, player_id, target_id, allow_self=True):
-            _add_status(engine, target_id, "blind", 3)
+            custom = getattr(engine.players[target_id], "custom_vars", {}) or {}
+            custom[CICADA_PENDING_BLIND_KEY] = max(0, int(custom.get(CICADA_PENDING_BLIND_KEY, 0) or 0)) + 3
+            engine.players[target_id].custom_vars = custom
     selectable = [item for item in engine.players[player_id].hand if _selectable_card(engine, item)]
     if len(selectable) < 2:
         engine.log_msg(f"{engine.pn(player_id)}没有2张可丢弃的其他手牌，蝉3301的后续效果未执行")
@@ -988,16 +1080,15 @@ def _cicada_mode_options(engine, player_id: int) -> List[dict]:
     options = []
     clear_targets = [target for target in range(len(engine.players)) if _target_selectable(engine, player_id, target, allow_self=True)]
     if clear_targets:
-        options.append({"value": "clear", "label_cn": "清空一个目标的手牌", "label_en": "Clear a target's hand"})
+        options.append({"value": "clear", "label_cn": "放逐所有目标的手牌", "label_en": "Exile every target's hand"})
     if any(player.health <= 0 for player in engine.players):
-        options.append({"value": "revive", "label_cn": "复活一个目标", "label_en": "Revive a target"})
-    enemy_cards = [
+        options.append({"value": "revive", "label_cn": "复活所有目标", "label_en": "Revive every target"})
+    deck_cards = [
         card for owner_id, player in enumerate(engine.players)
-        if engine._opposite_timer_side(player_id, owner_id)
         for card in player.deck if _selectable_card(engine, card)
     ]
-    if enemy_cards:
-        options.append({"value": "reorder", "label_cn": "重排敌方牌堆并分配牌", "label_en": "Reorder enemy decks and distribute cards"})
+    if deck_cards:
+        options.append({"value": "reorder", "label_cn": "重排所有目标的抽牌堆并选牌", "label_en": "Reorder every target deck and choose cards"})
     return options
 
 
@@ -1029,44 +1120,21 @@ def _run_cicada_state(engine, state: dict) -> dict:
             component=_choice_component(title_cn="蝉3301", title_en="Cicada 3301", control=control),
             control_id="mode", display_card_instance_id=display_id,
         )
-    if stage == "clear_target":
-        allowed = [target for target in range(len(engine.players)) if _target_selectable(engine, player_id, target, allow_self=True)]
-        if not allowed:
-            return {"success": True}
-        control = _player_control("target", allowed, "选择要清空手牌的目标", "Choose a target whose hand will be cleared")
-        return _pause(
-            engine, state, player_id=player_id, purpose="cicada_clear",
-            component=_choice_component(title_cn="蝉3301", title_en="Cicada 3301", control=control),
-            control_id="target", display_card_instance_id=display_id,
-        )
-    if stage == "revive_target":
-        allowed = [target for target, player in enumerate(engine.players) if player.health <= 0]
-        if not allowed:
-            return {"success": True}
-        control = _player_control("target", allowed, "选择要复活的目标", "Choose a target to revive")
-        return _pause(
-            engine, state, player_id=player_id, purpose="cicada_revive",
-            component=_choice_component(title_cn="蝉3301", title_en="Cicada 3301", control=control),
-            control_id="target", display_card_instance_id=display_id,
-        )
     if stage == "reorder_pick":
-        allies = state.get("allies") if isinstance(state.get("allies"), list) else []
-        while allies:
-            ally_id = int(allies[0])
-            if not _valid_player(engine, ally_id) or engine.players[ally_id].health <= 0:
-                allies.pop(0)
+        targets_to_pick = state.get("targets_to_pick") if isinstance(state.get("targets_to_pick"), list) else []
+        while targets_to_pick:
+            source_id = int(targets_to_pick[0])
+            if not _valid_player(engine, source_id):
+                targets_to_pick.pop(0)
                 continue
-            cards = [
-                card for owner_id, player in enumerate(engine.players)
-                if engine._opposite_timer_side(player_id, owner_id)
-                for card in player.deck if _selectable_card(engine, card)
-            ]
+            cards = [card for card in engine.players[source_id].deck if _selectable_card(engine, card)]
             if not cards:
-                return {"success": True}
-            state["active_ally_id"] = ally_id
+                targets_to_pick.pop(0)
+                continue
+            state["active_source_id"] = source_id
             control = _catalog_control("card", cards, "选择1张牌加入手中", "Choose 1 card to add to your hand")
             return _pause(
-                engine, state, player_id=ally_id, purpose="cicada_reorder_pick",
+                engine, state, player_id=player_id, purpose="cicada_reorder_pick",
                 component=_choice_component(title_cn="蝉3301", title_en="Cicada 3301", control=control),
                 control_id="card", display_card_instance_id=display_id,
             )
@@ -1094,48 +1162,38 @@ def _resume_cicada(engine, state: dict, purpose: str, value: Any, cancelled: boo
     elif purpose == "cicada_mode":
         mode = str(value or "")
         if mode == "clear":
-            state["stage"] = "clear_target"
+            for target_id in range(len(engine.players)):
+                if not _target_selectable(engine, player_id, target_id, allow_self=True):
+                    continue
+                exiled = 0
+                for card in list(engine.players[target_id].hand):
+                    if not _selectable_card(engine, card):
+                        continue
+                    engine.players[target_id].hand.remove(card)
+                    engine._put_card_in_exile(target_id, card)
+                    exiled += 1
+                engine.log_msg(f"{engine.pn(target_id)}被蝉3301放逐{exiled}张手牌")
+            return {"success": True}
         elif mode == "revive":
-            state["stage"] = "revive_target"
+            for target_id, target in enumerate(engine.players):
+                if target.health > 0:
+                    continue
+                target.health = max(1, int(math.ceil(max(1, target.max_health) * 0.05)))
+                set_invincible = getattr(engine, "_set_invincible_until_next_own_turn_end", None)
+                if callable(set_invincible):
+                    set_invincible(target_id)
+                engine.log_msg(f"{engine.pn(target_id)}被蝉3301复活至{target.health}H并获得1回合无敌")
+            return {"success": True}
         elif mode == "reorder":
             for owner_id, player in enumerate(engine.players):
-                if engine._opposite_timer_side(player_id, owner_id):
-                    random.shuffle(player.deck)
-            state["allies"] = [
-                ally_id for ally_id, player in enumerate(engine.players)
-                if engine._same_timer_side(player_id, ally_id) and player.health > 0
-            ]
+                random.shuffle(player.deck)
+            state["targets_to_pick"] = [owner_id for owner_id, player in enumerate(engine.players) if player.deck]
             state["stage"] = "reorder_pick"
         else:
             return {"success": True}
-    elif purpose == "cicada_clear":
-        try:
-            target_id = int(value)
-        except (TypeError, ValueError):
-            target_id = -1
-        if _target_selectable(engine, player_id, target_id, allow_self=True):
-            discarded = 0
-            for card in list(engine.players[target_id].hand):
-                if not _selectable_card(engine, card):
-                    continue
-                engine.players[target_id].hand.remove(card)
-                engine._discard_card(engine.players[target_id], card)
-                discarded += 1
-            engine.log_msg(f"{engine.pn(target_id)}被蝉3301清空{discarded}张手牌")
-        return {"success": True}
-    elif purpose == "cicada_revive":
-        try:
-            target_id = int(value)
-        except (TypeError, ValueError):
-            target_id = -1
-        if _valid_player(engine, target_id) and engine.players[target_id].health <= 0:
-            target = engine.players[target_id]
-            target.health = max(1, int(math.ceil(max(1, target.max_health) * 0.05)))
-            engine.log_msg(f"{engine.pn(target_id)}被蝉3301复活至{target.health}H")
-        return {"success": True}
     elif purpose == "cicada_reorder_pick":
-        allies = state.get("allies") if isinstance(state.get("allies"), list) else []
-        ally_id = int(state.pop("active_ally_id", allies[0] if allies else -1))
+        targets_to_pick = state.get("targets_to_pick") if isinstance(state.get("targets_to_pick"), list) else []
+        source_id = int(state.pop("active_source_id", targets_to_pick[0] if targets_to_pick else -1))
         try:
             instance_id = int(value)
         except (TypeError, ValueError):
@@ -1143,12 +1201,12 @@ def _resume_cicada(engine, state: dict, purpose: str, value: Any, cancelled: boo
         selected = _find_card(engine, instance_id)
         if selected is not None and _selectable_card(engine, selected):
             owner_id, zone_name, _ = engine._find_card_location(selected)
-            if owner_id is not None and zone_name == "deck" and engine._opposite_timer_side(player_id, owner_id):
+            if owner_id == source_id and zone_name == "deck":
                 engine.players[owner_id].deck.remove(selected)
-                engine.players[ally_id].add_to_hand(selected)
-                engine.log_msg(f"{engine.pn(ally_id)}因蝉3301从敌方牌堆获得1张牌")
-        if allies and allies[0] == ally_id:
-            allies.pop(0)
+                engine.players[player_id].add_to_hand(selected)
+                engine.log_msg(f"{engine.pn(player_id)}因蝉3301从{engine.pn(owner_id)}的抽牌堆获得1张牌")
+        if targets_to_pick and targets_to_pick[0] == source_id:
+            targets_to_pick.pop(0)
         state["stage"] = "reorder_pick"
     return _run_cicada_state(engine, state)
 
@@ -1272,12 +1330,15 @@ def cleanup_turn_end(engine, player_id: int) -> None:
         if not isinstance(entry, dict) or int(entry.get("source_id", -1)) != player_id:
             remaining.append(entry)
             continue
-        _remove_status_layers(
-            engine,
-            int(entry.get("target_id", -1)),
-            str(entry.get("status") or ""),
-            max(0, int(entry.get("amount", 0) or 0)),
-        )
+        if entry.get("clear_all"):
+            _clear_all_statuses(engine, int(entry.get("target_id", -1)))
+        else:
+            _remove_status_layers(
+                engine,
+                int(entry.get("target_id", -1)),
+                str(entry.get("status") or ""),
+                max(0, int(entry.get("amount", 0) or 0)),
+            )
     if remaining:
         engine.custom_vars["void_dlc_illuminati_cleanup"] = remaining
     else:
@@ -1285,20 +1346,16 @@ def cleanup_turn_end(engine, player_id: int) -> None:
 
 
 def refresh_nut_costs(engine) -> None:
+    # Nut no longer has dynamic deck-count cost. Clear leftovers from old saves.
     for player in getattr(engine, "players", []) or []:
-        cards = [
+        for card in [
             card
             for zone_name in ("hand", "deck", "discard", "exile")
             for card in list(getattr(player, zone_name, []) or [])
             if _card_is(engine, card, *NUT_IDS)
-        ]
-        extra = max(0, len(cards) - 1)
-        base_cost = 8
-        for _ in range(extra):
-            base_cost //= 2
-        for card in cards:
-            card.cost_e_override = max(0, base_cost)
-            card.custom_vars["void_dlc_nut_dynamic_cost"] = base_cost
+        ]:
+            if (getattr(card, "custom_vars", {}) or {}).pop("void_dlc_nut_dynamic_cost", None) is not None:
+                card.cost_e_override = None
 
 
 def can_play_extra(engine, player_id: int, card: CardInstance) -> tuple[bool, str]:
@@ -1310,6 +1367,22 @@ def can_play_extra(engine, player_id: int, card: CardInstance) -> tuple[bool, st
         ]
         if len(selectable) < 2:
             return False, "至少需要2张可丢弃的其他手牌"
+    if _card_is(engine, card, "PipeBomb", "factory:pipe_bomb"):
+        if len(getattr(engine.players[player_id], "hand", []) or []) % 2 == 0:
+            return False, "手牌数量为奇数时才可使用"
+    if _card_is(engine, card, "Nut", "void:nut"):
+        hand = list(getattr(engine.players[player_id], "hand", []) or [])
+        if not any(other is not card and _card_is(engine, other, "Nut", "void:nut") for other in hand):
+            return False, "手牌中需要有另一张坚果"
+    if _card_is(engine, card, "MagicNut", "void:magic_nut"):
+        names = []
+        for zone_name in ("hand", "deck", "discard", "exile"):
+            for item in list(getattr(engine.players[player_id], zone_name, []) or []):
+                if item is card:
+                    continue
+                names.append(str(getattr(item, "name_cn", "") or getattr(item, "def_id", "")))
+        if len(names) != len(set(names)):
+            return False, "卡组中所有牌互不相同时才可使用"
     return True, ""
 
 
@@ -1345,41 +1418,48 @@ def mask_reduction(engine, player_id: int, *, magic_only: bool = False) -> int:
     return count
 
 
+def _has_equipment_targeting(engine, player_id: int, ids: Iterable[str]) -> bool:
+    wanted = set(ids)
+    if not _valid_player(engine, player_id):
+        return False
+    for owner_id, owner in enumerate(getattr(engine, "players", []) or []):
+        for equipment in list(getattr(owner, "equipment", []) or []):
+            if (
+                _active_equipment(engine, equipment)
+                and _equipment_target(engine, equipment, owner_id) == player_id
+                and _equipment_is(engine, equipment, *wanted)
+            ):
+                return True
+    return False
+
+
+def blocks_special_effect_damage(engine, player_id: int) -> bool:
+    return _has_equipment_targeting(engine, player_id, MASK_IDS) or _has_equipment_targeting(engine, player_id, MAGIC_MASK_IDS)
+
+
+def blocks_special_effect_interference(engine, player_id: int) -> bool:
+    return _has_equipment_targeting(engine, player_id, MAGIC_MASK_IDS)
+
+
 def effective_toxic_poison(engine, player_id: int) -> int:
     raw = engine._custom_status_value(player_id, "jungle:toxic_poison", "toxic_poison", "剧毒")
-    return max(0, int(raw) - mask_reduction(engine, player_id))
+    return max(0, int(raw))
 
 
 def effective_poison_coating(engine, player_id: int) -> int:
     if not _valid_player(engine, player_id):
         return 0
-    return max(0, int(engine.players[player_id].toxic or 0) - mask_reduction(engine, player_id))
+    return max(0, int(engine.players[player_id].toxic or 0))
 
 
 def effective_blind(engine, player_id: int) -> int:
     if not _valid_player(engine, player_id):
         return 0
-    return max(0, int(engine.players[player_id].blind or 0) - mask_reduction(engine, player_id, magic_only=True))
+    return max(0, int(engine.players[player_id].blind or 0))
 
 
 def project_effective_mask_statuses(engine, player_id: int, payload: dict) -> dict:
-    """Expose mask-adjusted layers without mutating the saved game state."""
-    if not _valid_player(engine, player_id) or not isinstance(payload, dict):
-        return payload
-    payload["toxic"] = effective_poison_coating(engine, player_id)
-    payload["blind"] = effective_blind(engine, player_id)
-    custom_statuses = payload.get("custom_statuses")
-    if not isinstance(custom_statuses, dict):
-        return payload
-    existing_aliases = [alias for alias in TOXIC_POISON_ALIASES if alias in custom_statuses]
-    if not existing_aliases:
-        return payload
-    effective_value = effective_toxic_poison(engine, player_id)
-    for alias in existing_aliases:
-        custom_statuses.pop(alias, None)
-    if effective_value > 0:
-        custom_statuses[existing_aliases[0]] = effective_value
-    payload["custom_statuses"] = custom_statuses
+    """Mask no longer changes visible status layers."""
     return payload
 
 
@@ -1418,3 +1498,31 @@ def forced_random_target(engine, actor_id: int, candidates: Iterable[int], chose
     if forced_targets:
         return random.choice(forced_targets)
     return chosen if chosen in candidate_ids else (random.choice(candidate_ids) if candidate_ids else -1)
+
+
+def forced_choice_target(engine, actor_id: int, card: Optional[CardInstance], chosen: int = -1) -> Optional[int]:
+    if card is None or not _valid_player(engine, actor_id):
+        return None
+    try:
+        flags = engine._effective_card_flags(card)
+    except Exception:
+        flags = set(getattr(card, "flags", set()) or set())
+    if "wide_strike" in flags or getattr(card, "card_type", "") == "guard":
+        return None
+    if getattr(engine, "_card_is_self_only", lambda value: False)(card):
+        return None
+    owner_targets = []
+    for owner_id, owner in enumerate(getattr(engine, "players", []) or []):
+        for equipment in list(getattr(owner, "equipment", []) or []):
+            if (
+                _active_equipment(engine, equipment)
+                and _equipment_is(engine, equipment, "Eyeball", "void:eyeball")
+                and _equipment_target(engine, equipment, owner_id) == actor_id
+                and _target_selectable(engine, actor_id, owner_id, allow_self=True)
+            ):
+                owner_targets.append(owner_id)
+    if not owner_targets:
+        return None
+    if chosen in owner_targets:
+        return int(chosen)
+    return int(owner_targets[0])
