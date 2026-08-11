@@ -82,7 +82,7 @@
   --radius-lg: 8px;
   --radius-xl: 10px;
   --font-main: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
-  --font-card: 'Kreadon Demi', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Kreadon CJK', 'Kreadon', sans-serif;
+  --font-card: 'Kreadon Demi', 'Kreadon CJK', 'Kreadon', 'Microsoft YaHei', sans-serif;
   --gtn-card-border-width: 1.5px;
   --gtn-card-border-width: clamp(1px, 1.3cqi, 1.7px);
   --gtn-card-radius: 5.5% / 4%;
@@ -145,7 +145,6 @@ html.fonts-loaded-main {
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  font-synthesis: none;
 }
 
 button,
@@ -1874,7 +1873,7 @@ a { font: inherit; }
   --card-effect-padding-x: 2.5cqi;
   --card-flag-font-scale: 6cqi;
   --card-flag-radius: 2cqi;
-  --card-english-font: 5.55cqi;
+  --card-english-font: 5.75cqi;
   --card-english-margin-top: -1.55cqi;
   --card-english-padding-x: 1.45cqi;
   position: relative;
@@ -1914,6 +1913,17 @@ a { font: inherit; }
 :lang(en) .story-card.card,
 :lang(fr) .story-card.card,
 :lang(ja) .story-card.card {
+  --card-name-font-scale: 8.5cqi;
+}
+
+[lang="zh"] .story-card.card {
+  --card-name-font-scale: 10.5cqi;
+}
+
+[lang="en"] .story-card.card,
+[lang="fr"] .story-card.card,
+[lang="pt"] .story-card.card,
+[lang="ja"] .story-card.card {
   --card-name-font-scale: 8.5cqi;
 }
 
