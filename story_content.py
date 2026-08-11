@@ -35,8 +35,17 @@ STORY_BIOMES = {
 }
 
 STORY_DIFFICULTIES = {
+    'easy': {
+        'name': {'zh': '简单', 'en': 'Easy'},
+        'abbreviation': {'zh': 'E', 'en': 'E'},
+        'description': {
+            'zh': '使用普通地图，并在初始赐福前从3项简单难度天赋中选择1项',
+            'en': 'Use the Normal map and choose 1 of 3 Easy talents before the starting blessing',
+        },
+    },
     'normal': {
         'name': {'zh': '普通', 'en': 'Normal'},
+        'abbreviation': {'zh': 'N', 'en': 'N'},
         'description': {
             'zh': '使用标准地图、奖励与敌人强度',
             'en': 'Standard map, rewards, and enemy strength',
@@ -44,6 +53,7 @@ STORY_DIFFICULTIES = {
     },
     'hard': {
         'name': {'zh': '困难', 'en': 'Hard'},
+        'abbreviation': {'zh': 'H', 'en': 'H'},
         'description': {
             'zh': '危险房间更多，金币和升级牌更少，商店价格更高',
             'en': 'More dangerous rooms, less gold and fewer upgraded cards, with higher shop prices',
@@ -51,6 +61,7 @@ STORY_DIFFICULTIES = {
     },
     'lunatic': {
         'name': {'zh': '疯狂', 'en': 'Lunatic'},
+        'abbreviation': {'zh': 'L', 'en': 'L'},
         'description': {
             'zh': '继承困难规则，且敌人的H、伤害与行动更强',
             'en': 'Includes Hard rules and strengthens enemy H, damage, and actions',
@@ -62,22 +73,22 @@ STORY_CURSES = {
     'vitality': {
         'name': {'zh': '旺盛', 'en': 'Vitality'},
         'description': {
-            'zh': '所有敌人的H上限增加200%',
-            'en': 'All enemies gain 200% maximum H',
+            'zh': '所有敌人的H上限增加150%',
+            'en': 'All enemies gain 150% maximum H',
         },
     },
     'aggression': {
         'name': {'zh': '凶猛', 'en': 'Aggression'},
         'description': {
-            'zh': '所有敌人的攻击伤害增加100%',
-            'en': 'All enemies deal 100% more attack damage',
+            'zh': '所有敌人的攻击伤害增加80%',
+            'en': 'All enemies deal 80% more attack damage',
         },
     },
     'affliction': {
         'name': {'zh': '苦难', 'en': 'Affliction'},
         'description': {
-            'zh': '所有敌人在战斗开始时获得3层负面状态免疫；每名敌人每次行动后，随机对自己施加1层虚弱、脆弱或易伤',
-            'en': 'All enemies start combat with 3 Negative Status Immunity; after each enemy action, gain 1 random Weak, Fragile, or Vulnerable',
+            'zh': '所有敌人在战斗开始时获得3层负面状态免疫；每名敌人每次行动后，随机对玩家施加1层虚弱、脆弱或易伤',
+            'en': 'All enemies start combat with 3 Negative Status Immunity; after each enemy action, apply 1 random Weak, Fragile, or Vulnerable to the player',
         },
     },
 }
@@ -101,6 +112,7 @@ STORY_CARD_TYPES = {
 
 STORY_PLAYER_ATTACK_EFFECT_TYPES = frozenset({
     'damage',
+    'damage_per_active_discard',
     'damage_per_status',
     'damage_from_shield',
     'damage_per_elixir',
@@ -152,6 +164,20 @@ STORY_TAGS = {
             'en': 'Cannot be selected by anything except being played.',
         },
     },
+    'eternal': {
+        'name': {'zh': '永恒', 'en': 'Eternal'},
+        'description': {
+            'zh': '无法从牌组中删除。',
+            'en': 'Cannot be removed from the deck.',
+        },
+    },
+    'charge': {
+        'name': {'zh': '电荷', 'en': 'Charge'},
+        'description': {
+            'zh': '打出时对自己造成等同于层数的电伤。',
+            'en': 'When played, deal electric damage to yourself equal to its stacks.',
+        },
+    },
 }
 
 STORY_STATUSES = {
@@ -193,7 +219,11 @@ STORY_STATUSES = {
     },
     'stun': {
         'name': {'zh': '眩晕', 'en': 'Stun'},
-        'description': {'zh': '跳过层数个可行动回合。', 'en': 'Skip that many actionable turns.'},
+        'description': {
+            'zh': '跳过层数个可行动回合；眩晕是一种行动，不属于状态。',
+            'en': 'Skip that many actionable turns; Stun is an action, not a status.',
+        },
+        'category': 'action',
     },
     'reflection': {
         'name': {'zh': '反射', 'en': 'Reflection'},
@@ -309,10 +339,18 @@ STORY_TRAITS = {
     'miracle': {
         'name': {'zh': '奇迹', 'en': 'Miracle'},
         'description': {
-            'zh': '每回合在玩家打出第2张牌前，获得1层闪避。',
-            'en': 'Before the player plays their second card each round, gain 1 Evade.',
+            'zh': '玩家打出第2张牌前，消耗1次并获得1层闪避。',
+            'en': 'Before the player plays their second card, spend 1 use to gain 1 Evade.',
         },
         'image_url': '/static/assets/story-trait-icons/miracle.svg',
+    },
+    'bandage': {
+        'name': {'zh': '绷带', 'en': 'Bandage'},
+        'description': {
+            'zh': '首次受到致命伤害时保留1H，获得1回合无敌，并将下一次行动改为狂乱攻击。',
+            'en': 'The first lethal hit leaves 1 H, grants Invincibility for one turn, and changes the next action to Frenzied Strike.',
+        },
+        'image_url': '/static/assets/status-icons/bandage.svg',
     },
     'chaos': {
         'name': {'zh': '紊乱', 'en': 'Chaos'},
@@ -373,10 +411,18 @@ STORY_TRAITS = {
     'proliferation': {
         'name': {'zh': '增生', 'en': 'Proliferation'},
         'description': {
-            'zh': '有其他敌人死亡时，回复所有敌人15H，使其获得15层护盾和1层坚固。',
-            'en': 'When another enemy dies, heal all enemies 15 H and grant 15 Shield and 1 Sturdy.',
+            'zh': '有其他敌人死亡时，回复所有敌人等同于层数的H，使其获得等同于层数的护盾和1层坚固。',
+            'en': 'When another enemy dies, heal all enemies and grant them Shield equal to its stacks, plus 1 Sturdy.',
         },
         'image_url': '/static/assets/story-trait-icons/proliferation.svg',
+    },
+    'regeneration': {
+        'name': {'zh': '再生', 'en': 'Regeneration'},
+        'description': {
+            'zh': '回合开始时，回复等同于层数的H。',
+            'en': 'At turn start, heal H equal to its stacks.',
+        },
+        'image_url': '/static/assets/status-icons/turn_heal.svg',
     },
     'vampire': {
         'name': {'zh': '吸血', 'en': 'Vampire'},
@@ -413,8 +459,8 @@ STORY_TRAITS = {
     'brittle': {
         'name': {'zh': '易碎', 'en': 'Brittle'},
         'description': {
-            'zh': '若并非因爆裂死亡，死后召唤的敌人H减半。',
-            'en': 'If not defeated by Burst, its death summon has half H.',
+            'zh': '若并非因爆裂死亡，死后召唤的敌人H减半，并获得1层眩晕。',
+            'en': 'If not defeated by Burst, its death summon has half H and gains 1 Stun.',
         },
         'image_url': '/static/assets/story-trait-icons/brittle.svg',
     },
@@ -555,10 +601,10 @@ STORY_CARDS = {
                   upgrade={'description': {'zh': '获得8层护盾。', 'en': 'Gain 8 Shield.'},
                            'effects': (_effect('shield', 8),)}),
     'amulet': _card('Amulet', '护身符', 'Amulet', 2, 'thorn', 'primary',
-                    '对目标造成16D；放逐自己1张其他手牌。',
-                    effects=(_effect('damage', 16), _effect('choose_exile', 1, exact=True)),
-                    upgrade={'description': {'zh': '对目标造成20D；放逐自己至多1张其他手牌。', 'en': 'Deal 20 D; exile up to 1 other card.'},
-                             'effects': (_effect('damage', 20), _effect('choose_exile', 1, exact=False))}),
+                    '对目标造成16D；主动丢弃自己1张其他手牌。',
+                    effects=(_effect('damage', 16), _effect('active_discard', 1, exact=True)),
+                    upgrade={'description': {'zh': '对目标造成20D；主动丢弃自己至多1张其他手牌。', 'en': 'Deal 20 D; actively discard up to 1 other card.'},
+                             'effects': (_effect('damage', 20), _effect('active_discard', 1, exact=False))}),
     'enchanted_amulet': _card(
         None,
         '附魔护身符',
@@ -566,20 +612,20 @@ STORY_CARDS = {
         1,
         'thorn',
         'super',
-        '对目标造成20D；放逐自己至多2张其他手牌，然后抽等量的牌。',
+        '对目标造成20D；主动丢弃自己至多2张其他手牌，然后抽等量的牌。',
         effects=(
             _effect('damage', 20),
-            _effect('choose_exile', 2, exact=False),
+            _effect('active_discard', 2, exact=False),
             _effect('draw_selected', 0),
         ),
         upgrade={
             'description': {
-                'zh': '对目标造成25D；放逐自己至多3张其他手牌，然后抽等量的牌。',
-                'en': 'Deal 25 D; exile up to 3 other cards, then draw that many.',
+                'zh': '对目标造成25D；主动丢弃自己至多3张其他手牌，然后抽等量的牌。',
+                'en': 'Deal 25 D; actively discard up to 3 other cards, then draw that many.',
             },
             'effects': (
                 _effect('damage', 25),
-                _effect('choose_exile', 3, exact=False),
+                _effect('active_discard', 3, exact=False),
                 _effect('draw_selected', 0),
             ),
         },
@@ -598,10 +644,10 @@ STORY_CARDS = {
                  upgrade={'description': {'zh': '对目标造成8D，并施加2层易伤。', 'en': 'Deal 8 D and apply 2 Vulnerable.'},
                           'effects': (_effect('damage', 8), _effect('status', 2, status='vulnerable'))}),
     'torch': _card('Torch', '火把', 'Torch', 1, 'thorn', 'common',
-                   '对目标造成9D；放逐自己1张其他手牌。',
-                   effects=(_effect('damage', 9), _effect('choose_exile', 1, exact=True)),
-                   upgrade={'description': {'zh': '对目标造成11D；放逐自己1张其他手牌，然后抽1张牌。', 'en': 'Deal 11 D; exile 1 other card, then draw 1.'},
-                            'effects': (_effect('damage', 11), _effect('choose_exile', 1, exact=True), _effect('draw', 1))}),
+                   '对目标造成9D；主动丢弃自己1张其他手牌，然后抽1张牌。',
+                   effects=(_effect('damage', 9), _effect('active_discard', 1, exact=True), _effect('draw', 1)),
+                   upgrade={'description': {'zh': '对目标造成11D；主动丢弃自己1张其他手牌，然后抽2张牌。', 'en': 'Deal 11 D; actively discard 1 other card, then draw 2.'},
+                            'effects': (_effect('damage', 11), _effect('active_discard', 1, exact=True), _effect('draw', 2))}),
     'antibody': _card('Antibody', '抗体', 'Antibody', 1, 'bloom', 'common',
                       '对目标施加1层易伤，然后抽等同于其易伤层数的牌。',
                       effects=(_effect('status', 1, status='vulnerable'), _effect('draw_target_status', status='vulnerable')),
@@ -631,10 +677,10 @@ STORY_CARDS = {
                        upgrade={'description': {'zh': '对所有敌人造成5D×2。', 'en': 'Deal 5 D twice to all enemies.'},
                                 'effects': (_effect('damage', 5, hits=2),)}),
     'magic_torch': _card('Magic Torch', '魔法火把', 'Magic Torch', 2, 'bloom', 'ultra',
-                         '放逐全部其他手牌，每放逐1张获得5层护盾。',
-                         tags=('exile',), effects=(_effect('exile_hand_for_shield', 5),),
-                         upgrade={'description': {'zh': '放逐全部其他手牌，每放逐1张获得7层护盾。', 'en': 'Exile your other hand; gain 7 Shield per card.'},
-                                  'effects': (_effect('exile_hand_for_shield', 7),)}),
+                         '主动丢弃全部其他手牌，每丢弃1张获得4层护盾。',
+                         effects=(_effect('active_discard_all'), _effect('shield_selected', 4)),
+                         upgrade={'description': {'zh': '主动丢弃全部其他手牌，每丢弃1张获得6层护盾。', 'en': 'Actively discard your other hand; gain 6 Shield per card.'},
+                                  'effects': (_effect('active_discard_all'), _effect('shield_selected', 6))}),
     'sponge': _card('Sponge', '海绵', 'Sponge', 1, 'root', 'rare',
                     '目标受到伤害时，改为获得等同于伤害向上取整一半的中毒。',
                     target='self', effects=(_effect('equipment', script='sponge'),),
@@ -669,10 +715,10 @@ STORY_CARDS = {
                      upgrade={'description': {'zh': '对目标造成44D。', 'en': 'Deal 44 D.'},
                               'effects': (_effect('damage', 44),)}),
     'fries': _card('Fries', '薯条', 'Fries', 2, 'bloom', 'rare',
-                   '获得14层护盾；放逐自己1张其他手牌。',
-                   effects=(_effect('shield', 14), _effect('choose_exile', 1, exact=True)),
-                   upgrade={'description': {'zh': '获得18层护盾；放逐自己至多1张其他手牌，然后抽1张牌。', 'en': 'Gain 18 Shield; exile up to 1 other card, then draw 1.'},
-                            'effects': (_effect('shield', 18), _effect('choose_exile', 1, exact=False), _effect('draw', 1))}),
+                   '获得14层护盾；主动丢弃自己1张其他手牌。',
+                   effects=(_effect('shield', 14), _effect('active_discard', 1, exact=True)),
+                   upgrade={'description': {'zh': '获得18层护盾；主动丢弃自己至多1张其他手牌，然后抽1张牌。', 'en': 'Gain 18 Shield; actively discard up to 1 other card, then draw 1.'},
+                            'effects': (_effect('shield', 18), _effect('active_discard', 1, exact=False), _effect('draw', 1))}),
     'heavy': _card('Heavy', '重', 'Heavy', 3, 'thorn', 'ultra',
                    '对目标造成26D；此牌受到的力量加成变为4倍。',
                    effects=(_effect('damage', 26, power_scale=4),),
@@ -699,7 +745,7 @@ STORY_CARDS = {
                          upgrade={'description': {'zh': '抽3张牌；获得4层护盾。', 'en': 'Draw 3; gain 4 Shield.'},
                                   'effects': (_effect('draw', 3), _effect('shield', 4))}),
     'pearl': _card('Pearl', '珍珠', 'Pearl', 2, 'root', 'ultra',
-                   '每有1张非轻的牌被放逐，将1张带有保留和放逐的轻加入手牌。',
+                   '每主动丢弃1张牌，对随机敌人造成3D。',
                    effects=(_effect('equipment', script='pearl'),), target='self',
                    upgrade={'cost_e': 1}),
     'crystal_leaf': _card('Crystal Leaf', '水晶叶', 'Crystal Leaf', 3, 'root', 'ultra',
@@ -711,17 +757,19 @@ STORY_CARDS = {
                                 upgrade={'description': {'zh': '获得5层力量。', 'en': 'Gain 5 Power.'},
                                          'effects': (_effect('power', 5),)}),
     'magic_pearl': _card('Magic Pearl', '魔法珍珠', 'Magic Pearl', 2, 'root', 'ultra',
-                         '每有1张牌被放逐，获得1层力量。',
-                         effects=(_effect('equipment', script='magic_pearl'),), target='self',
-                         upgrade={'cost_e': 1}),
-    'magic_acid': _card('Acid', '魔法酸', 'Magic Acid', 2, 'root', 'ultra',
-                        '每有1张牌被放逐，抽1张牌。',
-                        effects=(_effect('equipment', script='magic_acid'),), target='self',
-                        upgrade={'cost_e': 1}),
+                         '每主动丢弃1张牌，获得2层护盾。',
+                         effects=(_effect('equipment', 2, script='magic_pearl'),), target='self',
+                         upgrade={'description': {'zh': '每主动丢弃1张牌，获得3层护盾。', 'en': 'Whenever you actively discard a card, gain 3 Shield.'},
+                                  'effects': (_effect('equipment', 3, script='magic_pearl'),)}),
+    'magic_acid': _card('Magic Acid', '魔法酸', 'Magic Acid', 0, 'bloom', 'rare',
+                        '主动丢弃自己任意张其他手牌，然后抽等量的牌。',
+                        effects=(_effect('active_discard', 99, exact=False), _effect('draw_selected', 0)),
+                        upgrade={'description': {'zh': '主动丢弃自己任意张其他手牌，然后抽丢弃数量+1张牌。', 'en': 'Actively discard any number of other cards, then draw that many plus 1.'},
+                                 'effects': (_effect('active_discard', 99, exact=False), _effect('draw_selected', 1))}),
     'azalea': _card('Azalea', '杜鹃花', 'Azalea', 1, 'bloom', 'common',
-                    '获得5层护盾；被放逐时获得3层护盾，并将1张复制加入弃牌堆。',
+                    '获得5层护盾；被主动丢弃时获得3层护盾。',
                     effects=(_effect('shield', 5),), script='azalea',
-                    upgrade={'description': {'zh': '获得7层护盾；被放逐时获得4层护盾，并将1张复制加入弃牌堆。', 'en': 'Gain 7 Shield; when exiled gain 4 and add a copy to discard.'},
+                    upgrade={'description': {'zh': '获得7层护盾；被主动丢弃时获得4层护盾。', 'en': 'Gain 7 Shield; when actively discarded, gain 4 Shield.'},
                              'effects': (_effect('shield', 7),), 'script': 'azalea_plus'}),
     'fusion': _card('Fusion', '聚变', 'Fusion', 1, 'bloom', 'ultra',
                     '本回合下一次攻击伤害变为2倍。',
@@ -805,7 +853,7 @@ STORY_CARDS = {
     'unrelenting': _card(None, '无情', 'Unrelenting', 0, 'curse', 'special',
                         '回合结束时若在手牌中，获得1层虚弱。', tags=('unplayable',),
                         effects=(), script='unrelenting'),
-    'fragment': _card('Fragment', '碎片', 'Fragment', 0, 'bloom', 'super',
+    'fragment': _card('Fragment', '碎片', 'Fragment', 0, 'bloom', 'common',
                       '获得1层力量。', tags=('exile',), effects=(_effect('power', 1),),
                       upgrade={
                           'description': {'zh': '放逐自己1张其他手牌；获得2层力量。', 'en': 'Exile another card; gain 2 Power.'},
@@ -813,17 +861,17 @@ STORY_CARDS = {
                       }),
     'rice': _card('Rice', '米', 'Rice', 0, 'thorn', 'rare',
                   '对目标造成6D，然后将此牌置于抽牌堆顶。',
-                  effects=(_effect('damage', 6),), script='return_draw_top',
+                  owner='neutral', effects=(_effect('damage', 6),), script='return_draw_top',
                   upgrade={'description': {'zh': '对目标造成9D，然后将此牌置于抽牌堆顶。', 'en': 'Deal 9 D, then put this on top of the draw pile.'},
                            'effects': (_effect('damage', 9),)}),
     'glass': _card('Glass', '玻璃', 'Glass', 0, 'thorn', 'rare',
                    '对目标造成3D；下回合开始时将1张复制加入手牌。',
-                   effects=(_effect('damage', 3), _effect('delayed_copy', 1)),
+                   owner='neutral', effects=(_effect('damage', 3), _effect('delayed_copy', 1)),
                    upgrade={'description': {'zh': '对目标造成5D；下回合开始时将1张复制加入手牌。', 'en': 'Deal 5 D; add a copy next turn.'},
                             'effects': (_effect('damage', 5), _effect('delayed_copy', 1))}),
     'dust': _card('Dust', '灰尘', 'Dust', 0, 'thorn', 'rare',
                   '对目标造成3D；获得3层护盾。',
-                  effects=(_effect('damage', 3), _effect('shield', 3)),
+                  owner='neutral', effects=(_effect('damage', 3), _effect('shield', 3)),
                   upgrade={'description': {'zh': '对目标造成4D；获得4层护盾。', 'en': 'Deal 4 D; gain 4 Shield.'},
                            'effects': (_effect('damage', 4), _effect('shield', 4))}),
     'leaf': _card('Leaf', '叶子', 'Leaf', 0, 'bloom', 'common',
@@ -831,15 +879,15 @@ STORY_CARDS = {
                   upgrade={'description': {'zh': '获得5层护盾。', 'en': 'Gain 5 Shield.'},
                            'effects': (_effect('shield', 5),)}),
     'acid': _card('Acid', '酸', 'Acid', 0, 'thorn', 'common',
-                  '对目标造成7D；随机放逐自己1张其他手牌。',
-                  effects=(_effect('damage', 7), _effect('random_exile', 1)),
-                  upgrade={'description': {'zh': '对目标造成10D；随机放逐自己1张其他手牌。', 'en': 'Deal 10 D; randomly exile another card.'},
-                           'effects': (_effect('damage', 10), _effect('random_exile', 1))}),
+                  '对目标造成7D；随机主动丢弃自己1张其他手牌。',
+                  effects=(_effect('damage', 7), _effect('random_active_discard', 1)),
+                  upgrade={'description': {'zh': '对目标造成10D；随机主动丢弃自己1张其他手牌。', 'en': 'Deal 10 D; randomly actively discard another card.'},
+                           'effects': (_effect('damage', 10), _effect('random_active_discard', 1))}),
     'pyrite': _card('Pyrite', '黄铁矿', 'Pyrite', 0, 'bloom', 'rare',
-                    '回复自己2E；放逐自己1张其他手牌。',
-                    effects=(_effect('elixir', 2), _effect('choose_exile', 1, exact=True)),
-                    upgrade={'description': {'zh': '回复自己3E；放逐自己1张其他手牌。', 'en': 'Recover 3 E; exile another card.'},
-                             'effects': (_effect('elixir', 3), _effect('choose_exile', 1, exact=True))}),
+                    '回复自己2E；随机主动丢弃自己2张其他手牌。',
+                    effects=(_effect('elixir', 2), _effect('random_active_discard', 2, exact=True)),
+                    upgrade={'description': {'zh': '回复自己2E；主动丢弃自己2张其他手牌。', 'en': 'Recover 2 E; actively discard 2 other cards.'},
+                             'effects': (_effect('elixir', 2), _effect('active_discard', 2, exact=True))}),
     'feather': _card('Feather', '羽毛', 'Feather', 1, 'bloom', 'rare',
                      '抽3张牌。', effects=(_effect('draw', 3),),
                      upgrade={'description': {'zh': '抽4张牌。', 'en': 'Draw 4.'},
@@ -875,13 +923,238 @@ STORY_CARDS = {
         'Sewage',
         '污水',
         'Sewage',
-        2,
+        3,
         'bloom',
         'rare',
-        '选择自己1张其他手牌，使其本次打出不消耗E或M，并获得放逐。',
+        '本回合打出卡牌不消耗E；每打出1张牌，随机主动丢弃自己1张其他手牌。',
         tags=('exile',),
-        effects=(_effect('make_card_free', 1),),
-        upgrade={'cost_e': 1},
+        effects=(_effect('temporary_effect', script='sewage'),),
+        upgrade={
+            'cost_e': 2,
+            'description': {
+                'zh': '本回合打出卡牌不消耗E；每打出1张牌，随机主动丢弃自己1张其他手牌。',
+                'en': 'Cards cost no E this turn; whenever you play one, randomly actively discard another card.',
+            },
+        },
+    ),
+    'mjolnir': _card(
+        'Mjolnir', '雷神之锤', 'Mjolnir', 2, 'thorn', 'rare',
+        '对目标造成14D；此牌可无限升级。',
+        effects=(_effect('damage', 14),),
+        upgrade={
+            'infinite': True,
+            'description': {'zh': '对目标造成18D；此牌可无限升级。', 'en': 'Deal 18 D. This card can be upgraded indefinitely.'},
+            'effects': (_effect('damage', 18),),
+        },
+    ),
+    'chilly': _card(
+        'Chilly', '辣椒', 'Chilly', 1, 'bloom', 'rare',
+        '抽1张牌并获得2层暂时力量；若抽到攻击牌，回复自己1E。',
+        effects=(_effect('draw_attack_power', 1, power=2, elixir=1),),
+        upgrade={
+            'description': {'zh': '抽1张牌并获得3层暂时力量；若抽到攻击牌，回复自己1E。', 'en': 'Draw 1 and gain 3 Temporary Power; if it is an Attack, recover 1 E.'},
+            'effects': (_effect('draw_attack_power', 1, power=3, elixir=1),),
+        },
+    ),
+    'jelly': _card(
+        'Jelly', '果冻', 'Jelly', 2, 'thorn', 'rare',
+        '对目标造成24D；失去2层力量。',
+        effects=(_effect('damage', 24), _effect('power', -2)),
+        upgrade={
+            'description': {'zh': '对目标造成30D；失去2层力量。', 'en': 'Deal 30 D; lose 2 Power.'},
+            'effects': (_effect('damage', 30), _effect('power', -2)),
+        },
+    ),
+    'nitro': _card(
+        'Nitro', '氮气', 'Nitro', 3, 'bloom', 'ultra',
+        '对目标造成10D；结束当前回合并立即进入1个完整的额外回合，额外回合开始时获得3层破损。',
+        tags=('exile',), target='enemy',
+        effects=(_effect('damage', 10), _effect('immediate_extra_turn', 3)),
+        upgrade={
+            'description': {'zh': '对目标造成14D；结束当前回合并立即进入1个完整的额外回合，额外回合开始时获得2层破损。', 'en': 'Deal 14 D; end this turn and immediately take a full extra turn, gaining 2 Broken at its start.'},
+            'effects': (_effect('damage', 14), _effect('immediate_extra_turn', 2)),
+        },
+    ),
+    'cogwheel': _card(
+        'Cogwheel', '齿轮', 'Cogwheel', 1, 'bloom', 'rare',
+        '抽2张牌；每抽到1张攻击牌，获得2层暂时力量。',
+        effects=(_effect('draw_attack_power', 2, power=2),),
+        upgrade={
+            'description': {'zh': '抽3张牌；每抽到1张攻击牌，获得2层暂时力量。', 'en': 'Draw 3; gain 2 Temporary Power for each Attack drawn.'},
+            'effects': (_effect('draw_attack_power', 3, power=2),),
+        },
+    ),
+    'chloroplast': _card(
+        'Chloroplast', '叶绿体', 'Chloroplast', 0, 'bloom', 'rare',
+        '获得4层护盾；将1张叶绿体加入弃牌堆。',
+        effects=(_effect('shield', 4), _effect('create_discard_copy')),
+        upgrade={
+            'description': {'zh': '获得6层护盾；将1张已升级的叶绿体加入弃牌堆。', 'en': 'Gain 6 Shield; add an upgraded Chloroplast to the discard pile.'},
+            'effects': (_effect('shield', 6), _effect('create_discard_copy')),
+        },
+    ),
+    'beeswax': _card(
+        'Beeswax', '蜜蜡', 'Beeswax', 1, 'bloom', 'ultra',
+        '获得8层护盾；此牌同时受到力量与耐力加成。',
+        effects=(_effect('shield_with_power', 8),),
+        upgrade={
+            'description': {'zh': '获得11层护盾；此牌同时受到力量与耐力加成。', 'en': 'Gain 11 Shield; both Power and Endurance increase it.'},
+            'effects': (_effect('shield_with_power', 11),),
+        },
+    ),
+    'bamboo': _card(
+        'Bamboo', '竹子', 'Bamboo', 2, 'bloom', 'ultra',
+        '对目标造成8D；打出后，此牌在本次旅程中永久获得3点伤害。',
+        tags=('exile',), target='enemy',
+        effects=(_effect('damage', 8), _effect('permanent_damage_growth', 3)),
+        upgrade={
+            'description': {'zh': '对目标造成11D；打出后，此牌在本次旅程中永久获得4点伤害。', 'en': 'Deal 11 D; after playing, this card permanently gains 4 damage for this journey.'},
+            'effects': (_effect('damage', 11), _effect('permanent_damage_growth', 4)),
+        },
+    ),
+    'corn': _card(
+        'Corn', '玉米', 'Corn', 2, 'thorn', 'rare',
+        '对目标造成14D；若本回合主动丢弃过牌，回复自己2E。',
+        effects=(_effect('damage', 14), _effect('elixir_if_active_discard', 2)),
+        upgrade={
+            'description': {'zh': '对目标造成18D；若本回合主动丢弃过牌，回复自己2E。', 'en': 'Deal 18 D; if you actively discarded this turn, recover 2 E.'},
+            'effects': (_effect('damage', 18), _effect('elixir_if_active_discard', 2)),
+        },
+    ),
+    'maple': _card(
+        'Maple', '枫叶', 'Maple', 1, 'thorn', 'rare',
+        '对随机敌人造成5D；本回合每主动丢弃2张牌，额外造成1次。',
+        target='self', effects=(_effect('random_damage_per_discards', 5, divisor=2),),
+        upgrade={
+            'description': {'zh': '对随机敌人造成7D；本回合每主动丢弃2张牌，额外造成1次。', 'en': 'Deal 7 D to a random enemy, plus once per 2 cards actively discarded this turn.'},
+            'effects': (_effect('random_damage_per_discards', 7, divisor=2),),
+        },
+    ),
+    'assembler': _card(
+        'Assembler', '重构机', 'Assembler', 2, 'bloom', 'ultra',
+        '从3张完全随机的牌中选择1张加入手牌；其获得迅捷99、放逐与虚无。',
+        owner='neutral', effects=(_effect('choose_random_generated', 3),),
+        upgrade={
+            'description': {'zh': '从3张完全随机的已升级牌中选择1张加入手牌；其获得迅捷99、放逐与虚无。', 'en': 'Choose 1 of 3 fully random upgraded cards to add to hand with Swift 99, Exile, and Void.'},
+            'effects': (_effect('choose_random_generated', 3, upgraded=True),),
+        },
+    ),
+    'redemption_money': _card(
+        'Redemption Money', '赎身钱', 'Redemption Money', 0, 'bloom', 'rare',
+        '失去5H；选择放逐区1张牌加入手牌，使其获得虚无与放逐。',
+        owner='neutral', tags=('exile',),
+        effects=(_effect('lose_health', 5), _effect('recover_exiled', 1, exact=True)),
+        upgrade={
+            'description': {'zh': '失去2H；选择放逐区1张牌加入手牌，使其获得虚无与放逐。', 'en': 'Lose 2 H; return 1 card from exile to hand with Void and Exile.'},
+            'effects': (_effect('lose_health', 2), _effect('recover_exiled', 1, exact=True)),
+        },
+    ),
+    'antennae': _card(
+        'Antennae', '触角', 'Antennae', 1, 'bloom', 'rare',
+        '查看抽牌堆顶5张牌，选择其中2张加入手牌，其余置入弃牌堆。',
+        owner='neutral', tags=('exile',), effects=(_effect('inspect_draw_choose', 5, choose=2),),
+        upgrade={
+            'description': {'zh': '查看抽牌堆顶6张牌，选择其中3张加入手牌，其余置入弃牌堆。', 'en': 'Look at the top 6 cards; put 3 into hand and the rest into discard.'},
+            'effects': (_effect('inspect_draw_choose', 6, choose=3),),
+        },
+    ),
+    'sunflower_card': _card(
+        'Sunflower', '向日葵', 'Sunflower', 2, 'bloom', 'rare',
+        '获得12层护盾与1层坚固。',
+        effects=(_effect('shield', 12), _effect('status_self', 1, status='sturdy')),
+        upgrade={
+            'description': {'zh': '获得18层护盾与1层坚固。', 'en': 'Gain 18 Shield and 1 Sturdy.'},
+            'effects': (_effect('shield', 18), _effect('status_self', 1, status='sturdy')),
+        },
+    ),
+    'wind': _card(
+        'Wind', '风', 'Wind', 0, 'bloom', 'rare',
+        '主动丢弃自己所有当前E花费大于0的其他手牌，然后抽等量的牌。',
+        effects=(_effect('active_discard_all', filter='positive_e'), _effect('draw_selected', 0)),
+        upgrade={
+            'description': {'zh': '主动丢弃自己所有当前E花费大于0的其他手牌，然后抽丢弃数量+1张牌。', 'en': 'Actively discard all other cards costing more than 0 E, then draw that many plus 1.'},
+            'effects': (_effect('active_discard_all', filter='positive_e'), _effect('draw_selected', 1)),
+        },
+    ),
+    'ankh': _card(
+        'Ankh', '安卡', 'Ankh', 1, 'root', 'rare',
+        '回合结束时，最多保留3点剩余E。',
+        owner='neutral', effects=(_effect('equipment', 3, script='retain_elixir'),), target='self',
+        upgrade={'cost_e': 0},
+    ),
+    'trident': _card(
+        'Trident', '三叉戟', 'Trident', 3, 'root', 'ultra',
+        '每抽5张牌，获得1层力量。',
+        effects=(_effect('equipment', 5, script='draw_power'),), target='self',
+        upgrade={
+            'description': {'zh': '每抽4张牌，获得1层力量。', 'en': 'Gain 1 Power for every 4 cards drawn.'},
+            'effects': (_effect('equipment', 4, script='draw_power'),),
+        },
+    ),
+    'magic_trident': _card(
+        'Magic Trident', '魔法三叉戟', 'Magic Trident', 1, 'thorn', 'ultra',
+        '对目标造成(8+本场战斗主动丢弃牌数)D。',
+        effects=(_effect('damage_per_active_discard', 8),),
+        upgrade={
+            'description': {'zh': '对目标造成(12+本场战斗主动丢弃牌数)D。', 'en': 'Deal D equal to 12 plus cards actively discarded this combat.'},
+            'effects': (_effect('damage_per_active_discard', 12),),
+        },
+    ),
+    'magic_yin_yang': _card(
+        'Magic Yin-Yang', '魔法阴阳', 'Magic Yin-Yang', 0, 'bloom', 'ultra',
+        '对调自己的抽牌堆与弃牌堆，然后抽2张牌。',
+        owner='neutral', tags=('exile',), effects=(_effect('swap_piles_draw', 2),),
+        upgrade={
+            'description': {'zh': '对调自己的抽牌堆与弃牌堆，然后抽2张牌；保留。', 'en': 'Swap your draw and discard piles, then draw 2. Retain.'},
+            'tags': ('exile', 'retain'),
+            'effects': (_effect('swap_piles_draw', 2),),
+        },
+    ),
+    'magic_assembler': _card(
+        'Magic Assembler', '魔法重构机', 'Magic Assembler', 1, 'root', 'ultra',
+        '自己回合开始时，将1张随机技能牌加入手牌。',
+        effects=(_effect('equipment', script='start_random_bloom'),), target='self',
+        upgrade={
+            'description': {'zh': '自己回合开始时，将1张随机已升级的技能牌加入手牌。', 'en': 'At turn start, add a random upgraded Skill to hand.'},
+            'effects': (_effect('equipment', script='start_random_bloom', upgraded=True),),
+        },
+    ),
+    'magic_chilly': _card(
+        'Magic Chilly', '魔法辣椒', 'Magic Chilly', 1, 'bloom', 'rare',
+        '抽4张牌，然后主动丢弃自己4张手牌；不足则全部丢弃。',
+        effects=(_effect('draw_then_discard', 4, discard=4),),
+        upgrade={
+            'description': {'zh': '抽6张牌，然后主动丢弃自己5张手牌；不足则全部丢弃。', 'en': 'Draw 6, then actively discard 5 cards, or all of them if fewer are available.'},
+            'effects': (_effect('draw_then_discard', 6, discard=5),),
+        },
+    ),
+    'mushroom': _card(
+        'Mushroom', '蘑菇', 'Mushroom', 2, 'bloom', 'rare',
+        '获得30层护盾；下回合开始时获得12层中毒。',
+        effects=(_effect('shield', 30), _effect('delayed_player_status', 12, status='poison')),
+        upgrade={
+            'description': {'zh': '获得30层护盾；下回合开始时获得8层中毒。', 'en': 'Gain 30 Shield; gain 8 Poison at the start of your next turn.'},
+            'effects': (_effect('shield', 30), _effect('delayed_player_status', 8, status='poison')),
+        },
+    ),
+    'puppeteer': _card(
+        'Puppeteer', '傀儡架台', 'Puppeteer', 0, 'bloom', 'rare',
+        '抽3张牌；下回合少抽2张牌。',
+        effects=(_effect('draw', 3), _effect('next_turn_draw', -2)),
+        upgrade={
+            'description': {'zh': '抽3张牌；下回合少抽1张牌。', 'en': 'Draw 3; draw 1 fewer card next turn.'},
+            'effects': (_effect('draw', 3), _effect('next_turn_draw', -1)),
+        },
+    ),
+    'seed': _card(
+        'Seed', '种子', 'Seed', 3, 'bloom', 'rare',
+        '回复自己2E；此牌在本次旅程中永久获得1层迅捷。',
+        effects=(_effect('elixir', 2), _effect('permanent_swift', 1)),
+        upgrade={
+            'cost_e': 2,
+            'description': {'zh': '回复自己2E；此牌在本次旅程中永久获得1层迅捷。', 'en': 'Recover 2 E; this card permanently gains 1 Swift for this journey.'},
+            'effects': (_effect('elixir', 2), _effect('permanent_swift', 1)),
+        },
     ),
     'sand_dust': _card(
         None,
@@ -922,7 +1195,7 @@ STORY_CARDS = {
         'curse',
         'special',
         '回合结束时若仍在手牌中，受到3D；打出后放逐。',
-        tags=('exile', 'void'),
+        tags=('exile', 'void', 'eternal'),
         effects=(),
         script='corruption',
     ),
@@ -957,10 +1230,28 @@ STORY_REWARD_CARD_IDS = tuple(
     for card_id, definition in STORY_CARDS.items()
     if definition['rarity'] in ('common', 'rare', 'ultra')
     and definition['type'] not in ('curse', 'infect')
+    and definition.get('owner') == 'primary'
 )
 
 
-def _relic(zh, en, description, rarity='common', script=None, amount=0, stackable=None):
+STORY_SHOP_CARD_IDS = tuple(
+    card_id
+    for card_id, definition in STORY_CARDS.items()
+    if definition['rarity'] in ('common', 'rare', 'ultra')
+    and definition['type'] not in ('curse', 'infect')
+)
+
+
+def _relic(
+    zh,
+    en,
+    description,
+    rarity='common',
+    script=None,
+    amount=0,
+    stackable=None,
+    shop_excluded=False,
+):
     if stackable is None:
         stackable = rarity != 'special'
     return {
@@ -970,6 +1261,7 @@ def _relic(zh, en, description, rarity='common', script=None, amount=0, stackabl
         'script': script,
         'amount': amount,
         'stackable': bool(stackable),
+        'shop_excluded': bool(shop_excluded),
     }
 
 
@@ -994,7 +1286,14 @@ STORY_RELICS = {
     'sharpen': _relic('磨刀', 'Sharpen', '获得时升级2张牌。', rarity='rare', script='gain_upgrade', amount=2),
     'blade': _relic('利刃', 'Blade', '本场战斗第一次攻击时，对目标施加1层易伤。', rarity='rare', script='first_attack_vulnerable', amount=1),
     'steady': _relic('稳扎稳打', 'Steady', '所有基础牌的数值+2。', rarity='rare', script='primary_bonus', amount=2),
-    'rich': _relic('富裕', 'Rich', '获得时获得200G。', script='gain_gold', amount=200),
+    'rich': _relic(
+        '富裕',
+        'Rich',
+        '获得时获得200G。',
+        script='gain_gold',
+        amount=200,
+        shop_excluded=True,
+    ),
     'diligent': _relic('勤学', 'Diligent', '每获得1张新牌，回复5H。', script='gain_card_heal', amount=5),
     'greedy': _relic('贪婪', 'Greedy', '休息区可选择获得150G。', rarity='rare', script='rest_gold', amount=150),
     'body_reinforcement': _relic('肉体强化', 'Body Reinforcement', '获得时最大生命值+10，并回复10H。', script='gain_max_health', amount=10),
@@ -1003,7 +1302,7 @@ STORY_RELICS = {
     'bargaining': _relic('讨价还价', 'Bargaining', '商店价格降低50%。', rarity='rare', script='shop_discount', amount=50, stackable=False),
     'world_tree_leaf': _relic('世界树之叶', 'World Tree Leaf', '本次旅程首次死亡时，清除效果并回复至满H。', rarity='special', script='revive'),
     'dandelion_blessing': _relic('蒲公英加护', 'Dandelion Blessing', '战斗开始时获得7层护盾。', rarity='special', script='opening_shield', amount=7),
-    'coward_defense': _relic('懦夫才防', 'Cowardly Defense', '每回合多回复1E；卡牌奖励中不再出现技能牌。', rarity='special', script='boss_no_bloom', amount=1),
+    'coward_defense': _relic('懦夫才防', 'Cowardly Defense', '每回合多回复1E；卡牌奖励和商店中不再出现技能牌。', rarity='special', script='boss_no_bloom', amount=1),
     'return_to_origin': _relic('返璞归真', 'Return to Origin', '所有基础牌的基础数值变为2倍。', rarity='special', script='primary_multiplier', amount=2),
     'last_stand': _relic('破釜沉舟', 'Last Stand', '每回合多回复1E；无法回复H。', rarity='special', script='boss_no_heal', amount=1),
     'quantized': _relic('量子化', 'Quantized', '每回合多回复2E；抽到牌时，其E花费随机变为0至3E。', rarity='special', script='quantized_cost', amount=2),
@@ -1024,7 +1323,22 @@ STORY_RELICS = {
     'phoenix': _relic('凤凰天翔', 'Phoenix', '抵消每场战斗第一次生命值损失。', rarity='special', script='first_health_loss_immunity', amount=1),
     'sword_strategy': _relic('亮剑妙计', 'Sword Strategy', '每打出1张攻击牌，获得2层护盾。', rarity='special', script='attack_shield', amount=2),
     'perfection': _relic('致臻化境', 'Perfection', '获得时，将牌组中的1张护身符变为附魔护身符。', rarity='special', script='enchant_starter', amount=1),
+    'easy_miracle': _relic('奇迹', 'Miracle', '每回合多回复1E。', rarity='special', script='turn_elixir', amount=1),
+    'easy_peace': _relic('安宁', 'Tranquility', '回合开始时回复3H。', rarity='special', script='turn_heal', amount=3),
+    'easy_study': _relic('勤学精进', 'Diligent Study', '之后获得的牌均已升级。', rarity='special', script='gained_cards_upgraded'),
+    'easy_tiger': _relic('猛虎下山', 'Tiger Descends', '每回合多抽2张牌。', rarity='special', script='turn_draw', amount=2),
+    'easy_godhood': _relic('神格', 'Divinity', '战斗开始时获得3E；未使用的E保留至下回合。', rarity='special', script='retain_elixir', amount=3),
+    'consolation': _relic('安慰', 'Consolation', '获得时H上限+1。', rarity='special', script='gain_max_health_only', amount=1, stackable=True),
 }
+
+
+STORY_EASY_RELIC_IDS = (
+    'easy_miracle',
+    'easy_peace',
+    'easy_study',
+    'easy_tiger',
+    'easy_godhood',
+)
 
 STORY_BOSS_RELIC_IDS = tuple(
     relic_id
@@ -1207,11 +1521,11 @@ STORY_ENEMIES.update({
     'cicada': _enemy('蝉', 'Cicada', 33, (
         _move('扬尘', 'Dust Up', _effect('damage', 8, lunatic_amount=10), _effect('player_status', 1, status='weak')),
         _move('冲撞', 'Charge', _effect('damage', 11, lunatic_amount=12), _effect('gain_power', 2, lunatic_amount=3)),
-    ), traits=('miracle',), initial={'miracle': 1}, lunatic_health=37),
+    ), traits=('miracle',), initial={'miracle': 3}, lunatic_health=37),
     'sandstorm': _enemy('沙尘暴', 'Sandstorm', 51, (
         _move('旋转', 'Spin', _effect('damage', 3, hits=3)),
-        _move('吸取', 'Absorb', _effect('damage', 6, lunatic_amount=8), _effect('gain_power', 2)),
-        _move('凝聚', 'Condense', _effect('gain_shield', 12, lunatic_amount=15), _effect('self_heal', 12, lunatic_amount=15)),
+        _move('吸取', 'Absorb', _effect('damage', 6, lunatic_amount=8), _effect('gain_power', 1)),
+        _move('凝聚', 'Condense', _effect('gain_shield', 12, lunatic_amount=15), _effect('self_heal', 6, lunatic_amount=9)),
     ), script='random_intent', traits=('chaos',), lunatic_health=57),
     'palm_tree': _enemy('棕榈树', 'Palm Tree', 36, (
         _move('固守', 'Hold Fast', _effect('gain_shield', 9, lunatic_amount=11), _effect('player_status', 1, status='weak')),
@@ -1223,120 +1537,121 @@ STORY_ENEMIES.update({
     ), initial={'reflection': 2}, lunatic_health=31),
     'sandstone': _enemy('砂岩', 'Sandstone', 31, (
         _move('滚动', 'Roll', _effect('damage', 8, lunatic_amount=9)),
-        _move('粉碎', 'Shatter', _effect('damage', 20, lunatic_amount=23), _effect('self_kill')),
+        _move('粉碎', 'Shatter', _effect('damage', 17, lunatic_amount=20), _effect('self_kill')),
     ), initial={'vulnerable': 1}, lunatic_health=35),
     'bandage_beetle': _enemy('甲虫', 'Bandage Beetle', 62, (
         _move('撕咬', 'Bite', _effect('damage', 12, lunatic_amount=14)),
         _move('头槌', 'Headbutt', _effect('damage', 8, lunatic_amount=10), _effect('player_status', 1, status='vulnerable')),
         _move('狂乱攻击', 'Frenzied Strike', _effect('damage', 20, lunatic_amount=23)),
-    ), script='bandage_beetle', traits=('yggdrasil_power',), initial={'bandage': 1}, lunatic_health=71),
+    ), script='bandage_beetle', traits=('bandage',), initial={'bandage': 1}, lunatic_health=71),
     'scorpion': _enemy('蝎子', 'Scorpion', 42, (
         _move('迷惑', 'Confound', _effect('gain_shield', 8, lunatic_amount=11), _effect('player_status', 2, status='weak')),
         _move('蛰针', 'Sting', _effect('damage', 8, lunatic_amount=9), _effect('player_status', 3, status='poison', lunatic_amount=4)),
     ), lunatic_health=47),
     'tumbleweed': _enemy('风滚草', 'Tumbleweed', 44, (
-        _move('滚动', 'Roll', _effect('damage', 6), _effect('player_status', 1, status='weak')),
+        _move('滚动', 'Roll', _effect('damage', 6, lunatic_amount=8), _effect('player_status', 1, status='weak')),
         _move('扬沙', 'Scatter Sand', _effect('add_draw_card', 2, card_id='sand_dust')),
     ), lunatic_health=49),
     'rain_frog': _enemy('雨蛙', 'Rain Frog', 110, (
-        _move('集沙', 'Gather Sand', _effect('damage', 13, lunatic_amount=15), _effect('gain_sturdy', 1)),
-        _move('蓄力', 'Power Up', _effect('gain_power', 5, lunatic_amount=6)),
-        _move('冲刺', 'Dash', _effect('damage', 28, lunatic_amount=32)),
-    ), lunatic_health=123),
+        _move('集沙', 'Gather Sand', _effect('damage', 13, lunatic_amount=15), _effect('player_status', 1, status='sturdy')),
+        _move('蓄力', 'Power Up', _effect('gain_power', 4, lunatic_amount=5)),
+        _move('冲刺', 'Dash', _effect('damage', 26, lunatic_amount=29)),
+    ), lunatic_health=119),
     'nazar_beetle': _enemy('邪眼甲虫', 'Nazar Beetle', 89, (
-        _move('蓄力', 'Power Up', _effect('gain_power', 3), _effect('gain_shield', 12), _effect('clear_status', 0, status='evil_eye')),
-        _move('凝视', 'Gaze', _effect('damage', 16, lunatic_amount=19), _effect('gain_status', 1, status='evil_eye')),
-    ), initial={'evil_eye': 1}, lunatic_health=100),
-    'fossil': _enemy('化石', 'Fossil', 84, (
-        _move('沉睡', 'Slumber', _effect('gain_charging', 5)),
-        _move('惊醒', 'Awaken', _effect('damage', 14, lunatic_amount=17), _effect('gain_power', 3)),
-    ), script='fossil', traits=('turn_shield', 'charging_up'), initial={'turn_shield': 10}, lunatic_health=94),
-    'shiny_ladybug': _enemy('闪亮瓢虫', 'Shiny Ladybug', 144, (
-        _move('迷幻', 'Dazzle', _effect('player_status', 1, status='weak'), _effect('add_draw_card', 2, card_id='confused'), _effect('gain_shield', 20)),
-        _move('再生', 'Regenerate', _effect('self_heal', 20), _effect('gain_power', 5)),
-        _move('狂怒', 'Rage', _effect('damage', 18, lunatic_amount=21)),
-    ), script='shiny_ladybug', traits=('yggdrasil_power',), lunatic_health=161),
+        _move('蓄力', 'Power Up', _effect('gain_power', 2, lunatic_amount=3), _effect('gain_shield', 12, lunatic_amount=14), _effect('clear_status', 0, status='evil_eye')),
+        _move('凝视', 'Gaze', _effect('damage', 16, lunatic_amount=18), _effect('gain_status', 1, status='evil_eye')),
+    ), initial={'evil_eye': 1}, lunatic_health=95),
+    'fossil': _enemy('化石', 'Fossil', 76, (
+        _move('沉睡', 'Slumber', _effect('gain_charging', 5, lunatic_amount=6)),
+        _move('惊醒', 'Awaken', _effect('damage', 14, lunatic_amount=16), _effect('gain_power', 3)),
+    ), script='fossil', traits=('turn_shield', 'charging_up'), initial={'turn_shield': 10}, lunatic_health=84),
+    'shiny_ladybug': _enemy('闪亮瓢虫', 'Shiny Ladybug', 132, (
+        _move('迷幻', 'Dazzle', _effect('player_status', 1, status='weak'), _effect('add_draw_card', 1, card_id='confused'), _effect('gain_shield', 14, lunatic_amount=17)),
+        _move('再生', 'Regenerate', _effect('self_heal', 14, lunatic_amount=17), _effect('gain_power', 3, lunatic_amount=4)),
+        _move('狂怒', 'Rage', _effect('damage', 16, lunatic_amount=17)),
+        _move('腐化', 'Corruption', _effect('gain_power', 10, lunatic_amount=12), _effect('self_kill', trigger_survival=True)),
+    ), script='shiny_ladybug', traits=('yggdrasil_power',), lunatic_health=144),
     'worm': _enemy('蠕虫', 'Worm', 197, (
-        _move('冲撞', 'Ram', _effect('damage', 12, lunatic_amount=14)),
-        _move('追击', 'Pursue', _effect('gain_power', 3), _effect('gain_shield', 20)),
+        _move('冲撞', 'Ram', _effect('damage', 12, lunatic_amount=15)),
+        _move('追击', 'Pursue', _effect('gain_power', 3, lunatic_amount=4), _effect('gain_shield', 20, lunatic_amount=24)),
         _move('吞下', 'Swallow', _effect('damage', 18, lunatic_amount=21), _effect('stun_if_player_shield')),
-        _move('消化', 'Digest', _effect('player_status', 6, status='poison', lunatic_amount=7)),
-    ), script='worm', lunatic_health=221),
-    'desert_centipede': _enemy('沙漠蜈蚣体节', 'Desert Centipede Segment', 63, (
-        _move('泼沙', 'Throw Sand', _effect('gain_shield', 10), _effect('add_draw_card', 1, card_id='sand_dust')),
-        _move('潜地', 'Burrow', _effect('damage', 12, lunatic_amount=14), _effect('gain_hidden', 2)),
-        _move('沙潮', 'Sand Tide', _effect('damage', 4, hits=2), _effect('gain_power', 2)),
-        _move('狂暴', 'Frenzy', _effect('damage', 4, hits=4, lunatic_amount=5)),
-    ), script='desert_centipede', traits=('adjacent',), lunatic_health=71),
+        _move('消化', 'Digest', _effect('player_status', 7, status='poison', lunatic_amount=9)),
+    ), script='worm', lunatic_health=214),
+    'desert_centipede': _enemy('沙漠蜈蚣体节', 'Desert Centipede Segment', 59, (
+        _move('泼沙', 'Throw Sand', _effect('gain_shield', 10, lunatic_amount=12), _effect('add_draw_card', 1, card_id='sand_dust')),
+        _move('潜地', 'Burrow', _effect('damage', 10, lunatic_amount=12), _effect('gain_hidden', 2)),
+        _move('沙潮', 'Sand Tide', _effect('damage', 2, hits=3, lunatic_hits=4), _effect('gain_power', 2)),
+        _move('狂暴', 'Frenzy', _effect('damage', 4, hits=3, lunatic_hits=4)),
+    ), script='desert_centipede', traits=('adjacent',), lunatic_health=65),
 
-    'ocean_bubble': _enemy('泡泡', 'Bubble', 13, (
-        _move('膨胀', 'Inflate', _effect('gain_charging', 5)),
-        _move('爆炸', 'Explode', _effect('damage', 8), _effect('self_kill', reason='burst')),
-    ), script='ocean_bubble', traits=('charging_up',), initial={'shield': 20}, lunatic_health=15),
-    'crab': _enemy('螃蟹', 'Crab', 59, (
+    'ocean_bubble': _enemy('泡泡', 'Bubble', 11, (
+        _move('膨胀', 'Inflate', _effect('gain_charging', 4, lunatic_amount=5)),
+        _move('爆炸', 'Explode', _effect('damage', 7, lunatic_amount=9), _effect('self_kill', reason='burst')),
+    ), script='ocean_bubble', traits=('charging_up',), initial={'shield': 10}, lunatic_health=13),
+    'crab': _enemy('螃蟹', 'Crab', 57, (
         _move('蓄力', 'Power Up', _effect('gain_power', 4)),
-        _move('猛击', 'Slam', _effect('damage', 10, lunatic_amount=12)),
-    ), initial={'shield': 10}, lunatic_health=66),
+        _move('猛击', 'Slam', _effect('damage', 9, lunatic_amount=11)),
+    ), initial={'shield': 6}, lunatic_health=63),
     'lily_pad': _enemy('睡莲', 'Lily Pad', 33, (
-        _move('旋转', 'Spin', _effect('damage', 4, hits=2)),
-        _move('漂浮', 'Float', _effect('gain_shield', 20), _effect('gain_power', 1)),
-    ), traits=('proliferation',), lunatic_health=37),
-    'waterspout': _enemy('水龙卷', 'Waterspout', 25, (
+        _move('旋转', 'Spin', _effect('damage', 2, hits=3, lunatic_hits=4)),
+        _move('漂浮', 'Float', _effect('gain_shield', 12, lunatic_amount=20), _effect('gain_power', 1)),
+    ), traits=('proliferation',), initial={'proliferation': 10}, lunatic_health=37),
+    'waterspout': _enemy('水龙卷', 'Waterspout', 23, (
         _move('涡旋', 'Vortex', _effect('player_status', 2, status='weak'), _effect('player_status', 2, status='fragile')),
         _move('洋流', 'Current', _effect('summon', 1, enemy_id='ocean_bubble')),
         _move('解离', 'Dissolve', _effect('self_kill')),
     ), script='waterspout', lunatic_health=28),
     'urchin': _enemy('海胆', 'Urchin', 42, (
         _move('蓄力', 'Power Up', _effect('gain_power', 1), _effect('clear_status', 0, status='reflection')),
-        _move('喷射', 'Jet', _effect('damage', 2, hits=4), _effect('gain_status', 2, status='reflection')),
+        _move('喷射', 'Jet', _effect('damage', 4, hits=2, lunatic_amount=5), _effect('gain_status', 2, status='reflection', lunatic_amount=3)),
     ), initial={'reflection': 2}, lunatic_health=47),
-    'turtle': _enemy('海龟', 'Turtle', 76, (
+    'turtle': _enemy('海龟', 'Turtle', 69, (
         _move('吐泡', 'Spit Bubble', _effect('summon', 1, enemy_id='ocean_bubble'), _effect('gain_power', 2)),
-        _move('盾击', 'Shield Bash', _effect('damage', 10, lunatic_amount=12), _effect('allies_shield', 10), _effect('player_status', 1, status='weak')),
-    ), initial={'shield': 20}, lunatic_health=85),
-    'electric_eel': _enemy('电鳗', 'Electric Eel', 67, (
+        _move('盾击', 'Shield Bash', _effect('damage', 10, lunatic_amount=12), _effect('allies_shield', 10, lunatic_amount=12), _effect('player_status', 1, status='weak')),
+    ), initial={'shield': 10}, lunatic_health=76),
+    'electric_eel': _enemy('电鳗', 'Electric Eel', 62, (
         _move('放电', 'Discharge', _effect('damage', 9, lunatic_amount=11), _effect('delayed_hand_charge', 1)),
-        _move('生长', 'Grow', _effect('self_heal', 13, lunatic_amount=15), _effect('gain_charged', 1)),
-    ), traits=('charged',), initial={'charged': 2}, lunatic_health=75),
+        _move('生长', 'Grow', _effect('self_heal', 9, lunatic_amount=13), _effect('gain_charged', 1)),
+    ), traits=('charged',), initial={'charged': 2}, lunatic_health=71),
     'leech': _enemy('水蛭', 'Leech', 56, (
-        _move('吸食', 'Suck', _effect('damage', 13, lunatic_amount=15), _effect('gain_power', 2)),
+        _move('吸食', 'Suck', _effect('damage', 12, lunatic_amount=13), _effect('gain_power', 2)),
         _move('扭动', 'Twist', _effect('damage', 3, hits=3)),
-    ), traits=('vampire',), initial={'vampire': 2}, lunatic_health=63),
-    'shark': _enemy('鲨鱼', 'Shark', 98, (
-        _move('追猎', 'Hunt', _effect('damage', 9, lunatic_amount=11), _effect('player_status', 1, status='vulnerable'), _effect('gain_power', 1)),
-        _move('撕咬', 'Bite', _effect('damage', 7, hits=2, lunatic_amount=8)),
-    ), traits=('bloodthirsty',), lunatic_health=110),
-    'ocean_shell': _enemy('贝壳', 'Shell', 126, (
-        _move('吐出', 'Spit Out', _effect('damage', 13, lunatic_amount=15), _effect('summon', 1, enemy_id='ocean_pearl')),
-        _move('拉回', 'Pull Back', _effect('damage', 10, hits=2, lunatic_amount=12), _effect('gain_power', 2), _effect('consume_pearls_damage', 10)),
-    ), script='ocean_shell', lunatic_health=141),
-    'ocean_pearl': _enemy('珍珠', 'Pearl', 19, (
+    ), traits=('vampire',), initial={'vampire': 2}, lunatic_health=59),
+    'shark': _enemy('鲨鱼', 'Shark', 86, (
+        _move('追猎', 'Hunt', _effect('damage', 9, lunatic_amount=12), _effect('player_status', 1, status='vulnerable'), _effect('gain_power', 1)),
+        _move('撕咬', 'Bite', _effect('damage', 2, hits=7, lunatic_hits=8)),
+    ), traits=('bloodthirsty',), lunatic_health=93),
+    'ocean_shell': _enemy('贝壳', 'Shell', 114, (
+        _move('吐出', 'Spit Out', _effect('damage', 11, lunatic_amount=13), _effect('summon', 1, enemy_id='ocean_pearl')),
+        _move('拉回', 'Pull Back', _effect('damage', 2, hits=7, lunatic_hits=8), _effect('gain_power', 2, lunatic_amount=3), _effect('consume_pearls_damage', 7, lunatic_amount=8)),
+    ), script='ocean_shell', lunatic_health=125),
+    'ocean_pearl': _enemy('珍珠', 'Pearl', 11, (
         _move('闪耀', 'Shine', _effect('allies_power', 1)),
-    ), lunatic_health=21),
+    ), lunatic_health=13),
     'starfish': _enemy('海星', 'Starfish', 87, (
-        _move('猛击', 'Slam', _effect('damage', 11, lunatic_amount=13), _effect('gain_power', 1)),
-        _move('抽打', 'Lash', _effect('damage', 3, hits=4)),
+        _move('猛击', 'Slam', _effect('damage', 12, lunatic_amount=14), _effect('gain_power', 1)),
+        _move('抽打', 'Lash', _effect('damage', 4, hits=3, lunatic_amount=5)),
         _move('断臂', 'Sever Limb', _effect('lose_max_health_percent', 20), _effect('heal_to_full')),
-    ), script='starfish', traits=('limb_survival',), initial={'regenerations': 5}, lunatic_health=97),
+    ), script='starfish', traits=('limb_survival',), initial={'regenerations': 999, 'regeneration': 5}, lunatic_health=95),
     'jellyfish': _enemy('水母', 'Jellyfish', 176, (
-        _move('麻痹', 'Paralyze', _effect('damage', 12, lunatic_amount=14), _effect('player_status', 1, status='weak')),
-        _move('发电', 'Generate', _effect('add_draw_card', 2, card_id='static_electricity'), _effect('gain_power', 3)),
-        _move('放电', 'Discharge', _effect('damage', 14, lunatic_amount=17), _effect('delayed_hand_charge', 1)),
-    ), traits=('charged',), initial={'charged': 1}, lunatic_health=197),
-    'squid': _enemy('鱿鱼', 'Squid', 258, (
-        _move('紧缠', 'Constrict', _effect('damage', 11, lunatic_amount=13), _effect('player_status', 3, status='entangle')),
+        _move('麻痹', 'Paralyze', _effect('damage', 10, lunatic_amount=12), _effect('player_status', 1, status='weak')),
+        _move('发电', 'Generate', _effect('add_draw_card', 2, card_id='static_electricity'), _effect('gain_power', 2, lunatic_amount=3)),
+        _move('放电', 'Discharge', _effect('damage', 11, lunatic_amount=13), _effect('delayed_hand_charge', 1)),
+    ), traits=('charged',), initial={'charged': 1}, lunatic_health=190),
+    'squid': _enemy('鱿鱼', 'Squid', 218, (
+        _move('紧缠', 'Constrict', _effect('damage', 8), _effect('player_status', 3, status='entangle')),
         _move('喷墨', 'Ink', _effect('delayed_player_status', 1, status='blind'), _effect('gain_power', 2)),
-        _move('蛮力', 'Brute Force', _effect('damage', 5, hits=2, lunatic_amount=6), _effect('player_status', 1, status='weak')),
-    ), lunatic_health=289),
-    'shipwreck': _enemy('沉船', 'Shipwreck', 208, (
+        _move('蛮力', 'Brute Force', _effect('damage', 5, hits=2), _effect('player_status', 1, status='weak')),
+    )),
+    'shipwreck': _enemy('沉船', 'Shipwreck', 196, (
         _move('晃动', 'Rock', _effect('summon_wreckage', 3)),
-        _move('震击', 'Shock', _effect('damage', 18, lunatic_amount=21)),
-        _move('沉默', 'Silence', _effect('player_status', 1, status='weak'), _effect('gain_shield', 20)),
-        _move('喷发', 'Erupt', _effect('damage', 8, hits=2, lunatic_amount=10), _effect('gain_power', 3)),
-    ), script='shipwreck', initial={'shield': 50}, lunatic_health=233),
-    'wreckage': _enemy('残骸', 'Wreckage', 13, (
+        _move('震击', 'Shock', _effect('damage', 18, lunatic_amount=20)),
+        _move('沉默', 'Silence', _effect('player_status', 1, status='weak'), _effect('gain_shield', 18, lunatic_amount=24)),
+        _move('喷发', 'Erupt', _effect('damage', 2, hits=8, lunatic_hits=9), _effect('gain_power', 3)),
+    ), script='shipwreck', initial={'shield': 20}, lunatic_health=212),
+    'wreckage': _enemy('残骸', 'Debris', 11, (
         _move('爆裂', 'Burst', _effect('self_kill', reason='burst')),
-    ), script='wreckage', traits=('brittle',), lunatic_health=15),
+    ), script='wreckage', traits=('brittle',), lunatic_health=13),
 })
 
 # Explicit move orders preserve repeated moves without encoding them as
@@ -1345,16 +1660,26 @@ STORY_ENEMIES.update({
 STORY_ENEMIES['cactus']['move_order'] = (0, 0, 1)
 STORY_ENEMIES['cactus']['lunatic_initial'] = {'reflection': 3}
 STORY_ENEMIES['palm_tree']['lunatic_initial'] = {'shelter': 10}
+STORY_ENEMIES['cicada']['lunatic_initial'] = {'miracle': 5}
 STORY_ENEMIES['bandage_beetle']['move_order'] = (0, 1)
 STORY_ENEMIES['hive']['move_order'] = (0, 1, 2)
 STORY_ENEMIES['fossil']['move_order'] = (0,)
-STORY_ENEMIES['shiny_ladybug']['move_order'] = (0, 1)
+STORY_ENEMIES['fossil']['lunatic_initial'] = {'turn_shield': 12}
+STORY_ENEMIES['shiny_ladybug']['move_order'] = (0, 1, 0, 1, 0, 1, 3)
 STORY_ENEMIES['worm']['move_order'] = (0, 1, 2)
 STORY_ENEMIES['desert_centipede']['move_order'] = (0, 1, 2)
 STORY_ENEMIES['ocean_bubble']['move_order'] = (0, 0, 1)
+STORY_ENEMIES['ocean_bubble']['lunatic_initial'] = {'shield': 20}
+STORY_ENEMIES['crab']['lunatic_initial'] = {'shield': 12}
+STORY_ENEMIES['lily_pad']['lunatic_initial'] = {'proliferation': 15}
 STORY_ENEMIES['waterspout']['move_order'] = (0, 1, 0, 2)
+STORY_ENEMIES['urchin']['lunatic_initial'] = {'reflection': 3}
+STORY_ENEMIES['turtle']['lunatic_initial'] = {'shield': 20}
+STORY_ENEMIES['leech']['lunatic_initial'] = {'vampire': 3}
 STORY_ENEMIES['ocean_shell']['move_order'] = (0, 0, 1)
 STORY_ENEMIES['starfish']['move_order'] = (0, 1)
+STORY_ENEMIES['starfish']['lunatic_initial'] = {'regenerations': 1, 'regeneration': 7}
+STORY_ENEMIES['shipwreck']['lunatic_initial'] = {'shield': 50}
 
 STORY_ENEMY_IMAGE_URLS = {
     'soldier_ant': '/static/assets/story-enemies/soldier-ant.svg',
@@ -1475,9 +1800,9 @@ STORY_ENCOUNTERS = {
             ('urchin',),
         ),
         'hard': (
-            ('lily_pad', 'lily_pad', 'waterspout', 'ocean_bubble'),
+            ('lily_pad', 'lily_pad', 'waterspout'),
             ({'def_id': 'crab', 'move_index': 0}, {'def_id': 'crab', 'move_index': 1}),
-            ('turtle', 'waterspout', 'ocean_bubble'),
+            ('turtle', 'waterspout'),
             ('electric_eel',),
             ('leech', 'ocean_bubble'),
             (
@@ -1584,6 +1909,7 @@ def story_content_payload(card_defs=None):
         'cards': cards,
         'relics': deepcopy(STORY_RELICS),
         'boss_relic_ids': list(STORY_BOSS_RELIC_IDS),
+        'easy_relic_ids': list(STORY_EASY_RELIC_IDS),
         'enemies': deepcopy(STORY_ENEMIES),
     }
 
@@ -1591,13 +1917,22 @@ def story_content_payload(card_defs=None):
 def validate_story_content():
     errors = []
     card_effect_types = {
+        'active_discard', 'active_discard_all',
         'choose_exile', 'copy_hand_card', 'decaying_shield',
-        'delayed_copy', 'discard_to_draw_top', 'draw', 'draw_target_status',
+        'choose_random_generated', 'create_discard_copy',
+        'delayed_copy', 'delayed_player_status', 'discard_to_draw_top',
+        'draw', 'draw_attack_power', 'draw_target_status', 'draw_then_discard',
         'draw_selected', 'draw_to_limit', 'elixir', 'elixir_from_hand', 'equipment',
+        'elixir_if_active_discard',
         'exile_hand_for_shield', 'first_use_power', 'next_attack_multiplier',
-        'magic', 'next_skill_repeats', 'power', 'random_exile', 'salt', 'shield',
-        'shield_from_target_status', 'shuffle_hand_redraw', 'status', 'status_self',
-        'temporary_cost_down', 'temporary_effect', 'make_card_free',
+        'immediate_extra_turn', 'inspect_draw_choose', 'lose_health',
+        'magic', 'make_card_free', 'next_skill_repeats', 'next_turn_draw',
+        'permanent_damage_growth', 'permanent_swift', 'power',
+        'random_active_discard', 'random_damage_per_discards', 'random_exile',
+        'recover_exiled', 'salt', 'shield', 'shield_from_target_status',
+        'shield_selected', 'shield_with_power', 'shuffle_hand_redraw',
+        'status', 'status_self', 'swap_piles_draw', 'temporary_cost_down',
+        'temporary_effect',
     }
     card_effect_types.update(STORY_PLAYER_ATTACK_EFFECT_TYPES)
     card_scripts = {
@@ -1606,8 +1941,9 @@ def validate_story_content():
     }
     equipment_scripts = {
         'cannot_draw', 'disc', 'magic_acid', 'magic_pearl', 'pearl',
-        'soul_splitter', 'sponge', 'start_power', 'start_shield',
-        'turn_elixir', 'victory_gold', 'vulnerable_shield',
+        'draw_power', 'retain_elixir', 'sewage', 'soul_splitter', 'sponge',
+        'start_power', 'start_random_bloom', 'start_shield', 'turn_elixir',
+        'victory_gold', 'vulnerable_shield',
     }
     relic_scripts = {
         'attack_shield', 'avoid_elite', 'boss_blind', 'boss_broken', 'boss_frenzy',
@@ -1616,13 +1952,15 @@ def validate_story_content():
         'extra_upgrade', 'first_attack_vulnerable', 'first_health_loss_immunity',
         'first_hit_elixir', 'first_round_boost', 'flat_damage_reduction',
         'floor_heal', 'gain_card_heal', 'gain_gold', 'gain_max_health',
+        'gain_max_health_only', 'gained_cards_upgraded',
         'floor_max_health', 'gain_remove', 'gain_upgrade', 'loss_upgrade',
         'must_take_cards', 'opening_damage', 'opening_draw',
         'opening_endurance', 'opening_power', 'opening_redraw',
         'opening_shield', 'no_resource_retention', 'primary_bonus',
         'primary_multiplier', 'quantized_cost',
         'rest_gold', 'revive', 'round_power', 'skip_shop',
-        'shop_discount', 'shop_restock', 'support',
+        'retain_elixir', 'shop_discount', 'shop_restock', 'support',
+        'turn_draw', 'turn_elixir', 'turn_heal',
     }
     enemy_effect_types = {
         'add_draw_card', 'adjacent_shield', 'allies_heal', 'allies_power',
@@ -1657,7 +1995,7 @@ def validate_story_content():
             if effect_type not in card_effect_types:
                 errors.append(f'{effect_owner}: unknown effect {effect_type}')
             status = effect.get('status')
-            if status and status not in STORY_STATUSES:
+            if status and status not in STORY_STATUSES and status not in STORY_TRAITS:
                 errors.append(f'{effect_owner}: unknown status {status}')
             script = effect.get('script')
             if script and script not in equipment_scripts:
@@ -1700,6 +2038,16 @@ def validate_story_content():
         definition = STORY_CARDS[card_id]
         if definition['type'] in ('curse', 'infect') or definition['rarity'] in ('super', 'special'):
             errors.append(f'{card_id}: illegal reward card')
+        if definition.get('owner') != 'primary':
+            errors.append(f'{card_id}: non-primary reward card')
+
+    for card_id in STORY_SHOP_CARD_IDS:
+        if card_id not in STORY_CARDS:
+            errors.append(f'{card_id}: unknown shop card')
+            continue
+        definition = STORY_CARDS[card_id]
+        if definition['type'] in ('curse', 'infect') or definition['rarity'] in ('super', 'special'):
+            errors.append(f'{card_id}: illegal shop card')
 
     for relic_id, definition in STORY_RELICS.items():
         if definition.get('rarity') not in STORY_RARITIES and definition.get('rarity') != 'special':
@@ -1721,7 +2069,7 @@ def validate_story_content():
                 if effect_type not in enemy_effect_types:
                     errors.append(f'{owner}: unknown effect {effect_type}')
                 status = effect.get('status')
-                if status and status not in STORY_STATUSES:
+                if status and status not in STORY_STATUSES and status not in STORY_TRAITS:
                     errors.append(f'{owner}: unknown status {status}')
                 summoned_enemy = effect.get('enemy_id')
                 if summoned_enemy and summoned_enemy not in STORY_ENEMIES:

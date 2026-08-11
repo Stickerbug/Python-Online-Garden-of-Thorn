@@ -4,15 +4,14 @@ import random
 from story_content import initial_story_player
 
 
-STORY_SCHEMA_VERSION = 6
-STORY_CONTENT_VERSION = 'story-redesign-6'
+STORY_SCHEMA_VERSION = 8
+STORY_CONTENT_VERSION = 'story-redesign-8'
 STORY_FLOOR_COUNT = 16
 
 STORY_STAGES = (
     {'stage': 1, 'biomes': ('garden', 'desert', 'ocean')},
     {'stage': 2, 'biomes': ('garden', 'desert', 'ocean')},
     {'stage': 3, 'biomes': ('garden', 'desert', 'ocean')},
-    {'stage': 4, 'biomes': ('garden', 'desert', 'ocean')},
 )
 
 _NORMAL_ROOM_WEIGHTS = (
@@ -48,15 +47,22 @@ def _weighted_choice(rng, values):
     return values[-1][0]
 
 
-def _floor_widths(rng):
+def story_floor_count(stage, difficulty):
+    return 17 if int(stage) == 3 and str(difficulty).lower() == 'lunatic' else STORY_FLOOR_COUNT
+
+
+def _floor_widths(rng, floor_count):
     widths = [1]
-    for floor in range(2, STORY_FLOOR_COUNT):
+    for floor in range(2, floor_count):
+        if floor >= 16:
+            widths.append(1)
+            continue
         previous = widths[-1]
         minimum = max(2, previous - 2)
         maximum = min(5, previous + 2, previous * 2)
         if floor == 2:
             minimum, maximum = 2, 3
-        elif floor == STORY_FLOOR_COUNT - 1:
+        elif floor == 15:
             maximum = min(maximum, 3)
         choices = list(range(minimum, maximum + 1))
         widths.append(rng.choice(choices))
@@ -156,8 +162,10 @@ def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
     stage = int(stage)
     biome = str(biome or 'garden')
     difficulty = str(difficulty or 'normal')
-    rng = random.Random(_seed_int(seed, f'map:{stage}:{biome}:{difficulty}'))
-    widths = _floor_widths(rng)
+    map_difficulty = 'normal' if difficulty == 'easy' else difficulty
+    rng = random.Random(_seed_int(seed, f'map:{stage}:{biome}:{map_difficulty}'))
+    floor_count = story_floor_count(stage, difficulty)
+    widths = _floor_widths(rng, floor_count)
     floors = []
     room_weights = (
         _HARD_ROOM_WEIGHTS
@@ -174,7 +182,7 @@ def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
             room_types = ['chest'] * width
         elif floor == 15:
             room_types = ['rest'] * width
-        elif floor == 16:
+        elif floor >= 16:
             room_types = ['boss'] * width
         else:
             choices = tuple(item for item in room_weights if floor > 6 or item[0] != 'elite')
@@ -201,7 +209,56 @@ def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
         'stage': stage,
         'biome': biome,
         'difficulty': difficulty,
-        'floor_count': STORY_FLOOR_COUNT,
+        'floor_count': floor_count,
+        'floors': floors,
+        'edges': edges,
+    }
+
+
+def generate_boss_rush_map(seed, block=1, biome='garden', difficulty='normal'):
+    """Generate one ten-floor, single-route block of the endless Boss Rush."""
+    block = max(1, int(block))
+    biome = str(biome or 'garden')
+    difficulty = str(difficulty or 'normal')
+    rng = random.Random(_seed_int(seed, f'boss_rush:{block}:{biome}:{difficulty}'))
+    floor_offset = (block - 1) * 10
+    floors = []
+    edges = []
+    previous_id = None
+
+    for local_floor in range(1, 11):
+        global_floor = floor_offset + local_floor
+        roll = rng.random()
+        # Match the ordinary map's shop chance and halve its event chance.
+        if roll < (1 / 15):
+            room_type = 'shop'
+        elif roll < (2.5 / 15):
+            room_type = 'event'
+        else:
+            room_type = 'boss' if rng.random() < 0.5 else 'elite'
+        node_id = f'br-b{block:03d}-f{global_floor:04d}'
+        node = {
+            'id': node_id,
+            'floor': global_floor,
+            'index': 0,
+            'x': 0.5,
+            'type': room_type,
+            'status': 'locked',
+        }
+        if room_type == 'elite':
+            node['enemy_health_multiplier'] = 3
+        floors.append({'floor': global_floor, 'width': 1, 'nodes': [node]})
+        if previous_id:
+            edges.append({'from': previous_id, 'to': node_id})
+        previous_id = node_id
+
+    return {
+        'stage': block,
+        'biome': biome,
+        'difficulty': difficulty,
+        'mode': 'boss_rush',
+        'floor_offset': floor_offset,
+        'floor_count': floor_offset + 10,
         'floors': floors,
         'edges': edges,
     }
@@ -222,6 +279,7 @@ def build_initial_story_state(seed):
         'stage': 1,
         'biome': 'garden',
         'difficulty': 'normal',
+        'journey_mode': 'standard',
         'current_floor': 1,
         'current_node_id': first_node['id'],
         'available_stages': list(STORY_STAGES),
@@ -232,7 +290,8 @@ def build_initial_story_state(seed):
             'type': 'journey_setup',
             'stage': 1,
             'biomes': list(STORY_STAGES[0]['biomes']),
-            'difficulties': ['normal', 'hard', 'lunatic'],
+            'difficulties': ['easy', 'normal', 'hard', 'lunatic'],
+            'modes': ['standard', 'boss_rush'],
         },
         'reward': None,
         'rng_counter': 0,

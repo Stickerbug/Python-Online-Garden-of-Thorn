@@ -29,12 +29,14 @@ OFFICIAL_MOD_DISPLAY_ORDER = (
     'Garden Cards Addition.gtnmod',
     'Garden Cards DLC.gtnmod',
     'Factory Cards Addition.gtnmod',
+    'Factory Cards DLC.gtnmod',
     'Desert Cards Addition.gtnmod',
     'Desert Cards DLC.gtnmod',
     'Jungle Cards Addition.gtnmod',
     'Jungle Cards DLC.gtnmod',
     'Ocean Cards Addition.gtnmod',
     'Void Card Addition.gtnmod',
+    'Void Cards DLC.gtnmod',
     'Hel Cards Addition.gtnmod',
     'Sewers Cards Addition.gtnmod',
     'Sewers Cards DLC.gtnmod',
@@ -393,6 +395,7 @@ class ModCard:
         self.copy_count = max(0, int(data.get('copy_count', 0)))
         self.swift_value = max(0, int(data.get('swift_value', 0)))
         self.magic_swift_value = max(0, int(data.get('magic_swift_value', 0)))
+        self.charge_value = max(0, int(data.get('charge_value', 0)))
         self.fission_level = max(1, int(data.get('fission_level', data.get('fission_count', 0) + 1) or 1))
         self.fusion_level = max(1, int(data.get('fusion_level', data.get('fusion_multiplier', 1)) or 1))
         self.ui_effect_size = str(data.get('ui_effect_size', '') or '').strip()
@@ -432,6 +435,7 @@ class ModCard:
             'copy_count': self.copy_count,
             'swift_value': self.swift_value,
             'magic_swift_value': self.magic_swift_value,
+            'charge_value': self.charge_value,
             'fission_level': self.fission_level,
             'fusion_level': self.fusion_level,
             'ui_effect_size': self.ui_effect_size,
@@ -474,6 +478,7 @@ class ModCard:
             copy_count=self.copy_count,
             swift_value=self.swift_value,
             magic_swift_value=self.magic_swift_value,
+            charge_value=self.charge_value,
             fission_level=self.fission_level,
             fusion_level=self.fusion_level,
             damage=self.damage,

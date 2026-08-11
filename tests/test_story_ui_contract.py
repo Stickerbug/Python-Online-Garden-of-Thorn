@@ -148,7 +148,9 @@ def test_story_status_icons_open_term_descriptions():
     assert 'attachStoryStatusTermAccess(chip, item.key);' in STORY_JS
     assert "event.target?.closest?.('[data-story-status-key]')" in STORY_JS
     assert 'openStoryStatusTerms(statusElement.dataset.storyStatusKey);' in STORY_JS
-    assert "title.textContent = t.statusTerms;" in STORY_JS
+    assert "definition.category === 'action'" in STORY_JS
+    assert 't.actionTerms' in STORY_JS
+    assert ': t.statusTerms;' in STORY_JS
     assert "kind: 'status'," in STORY_JS
     assert "item.kind === 'trait'" in STORY_JS
     assert 'storyStatusIconUrl(item.id);' in STORY_JS
@@ -207,14 +209,56 @@ def test_story_patch_traits_and_gold_icon_are_visible_ui_assets():
     assert '.story-term-row-trait {' in STORY_CSS
 
 
-def test_consumed_bandage_beetle_trait_does_not_reappear_after_rerender():
-    assert "actor?.def_id === 'bandage_beetle'" in STORY_JS
-    assert 'actor?.bandage_triggered || Number(actor?.bandage || 0) <= 0' in STORY_JS
+def test_bandage_beetle_uses_the_bandage_trait_instead_of_yggdrasil():
+    assert "bandage: 'bandage'" in STORY_JS
+    assert "actor?.def_id === 'bandage_beetle'" not in STORY_JS
+    assert 'bandage_triggered || Number(actor?.bandage || 0) <= 0' not in STORY_JS
+    assert "key === 'miracle' || key === 'bandage'" in STORY_JS
     gold_url = '/static/assets/story-ui-icons/gold.svg'
     assert gold_url in STORY_TEMPLATE
     assert gold_url in STORY_CSS
     assert "setText('story-shop-mark'" not in STORY_JS
     assert (ROOT / gold_url.removeprefix('/')).is_file()
+
+
+def test_story_cards_expose_hover_details_charge_stacks_and_optional_borders():
+    assert 'function showStoryCardHoverPreview(anchor, card)' in STORY_JS
+    assert 'function attachStoryCardHoverPreview(anchor, getCard)' in STORY_JS
+    assert "preview.className = 'story-card-hover-preview';" in STORY_JS
+    assert 'hoverPreview: false' in STORY_JS
+    assert "window.matchMedia?.('(hover: none), (pointer: coarse)').matches" in STORY_JS
+    assert 'Number(card?.modifiers?.charge)' in STORY_JS
+    assert "storyTagElement('charge')" in STORY_JS
+    assert '.story-card-hover-preview {' in STORY_CSS
+    assert '.story-hide-card-borders .story-card.card::after {' in STORY_CSS
+    assert 'gtn_story_hide_card_borders' in STORY_TEMPLATE
+    assert 'gtn_story_hide_card_borders' in INDEX_TEMPLATE
+    assert 'settings-story-hide-card-borders' in INDEX_TEMPLATE
+
+
+def test_story_status_scale_difficulty_labels_and_reward_escape_are_visible():
+    status_rule = STORY_CSS.split('.story-effect.story-status {', 1)[1].split('}', 1)[0]
+    status_image_rule = STORY_CSS.split('.story-effect.story-status img {', 1)[1].split('}', 1)[0]
+    assert 'width: 46.5px;' in status_rule
+    assert 'height: 46.5px;' in status_rule
+    assert 'width: 34.5px;' in status_image_rule
+    assert 'height: 34.5px;' in status_image_rule
+    assert "const englishName = String(definition.name?.en || '').trim();" in STORY_JS
+    assert '? `${localizedName} ${englishName}`' in STORY_JS
+    assert "option: 'claim_gold'" in STORY_JS
+    assert "option: 'claim_relic'" in STORY_JS
+    assert "option: 'leave'" in STORY_JS
+    assert "reward_type: 'leave'" in STORY_JS
+    assert 'id="story-reward-leave"' in STORY_TEMPLATE
+
+
+def test_story_cross_browser_baseline_disables_native_font_and_button_drift():
+    assert '-webkit-text-size-adjust: 100%;' in STORY_CSS
+    assert 'text-size-adjust: 100%;' in STORY_CSS
+    assert 'font-synthesis: none;' in STORY_CSS
+    assert '-webkit-appearance: none;' in STORY_CSS
+    assert 'appearance: none;' in STORY_CSS
+    assert '--gtn-card-border-width: clamp(1px, 1.3cqi, 1.7px);' in STORY_CSS
 
 
 def test_story_modals_use_normal_mode_motion_and_readable_term_layout():
@@ -258,7 +302,7 @@ def test_story_card_terms_switch_between_base_and_upgraded_versions():
 
 
 def test_story_upgrade_actions_preview_the_upgraded_card_on_hover():
-    assert "if (!blinded && options.previewUpgradeOnHover && !card.upgraded && storyCardHasUpgrade(card))" in STORY_JS
+    assert "if (!blinded && options.previewUpgradeOnHover && storyCardIsUpgradable(card))" in STORY_JS
     assert "element.addEventListener('pointerenter'" in STORY_JS
     assert "element.addEventListener('pointerleave'" in STORY_JS
     assert STORY_JS.count('previewUpgradeOnHover: true,') >= 3
@@ -288,7 +332,7 @@ def test_story_room_actions_are_separated_into_tabs():
 
 def test_story_upgrade_tabs_only_show_cards_with_an_upgrade():
     assert "const upgradableCards = (player.deck || [])" in STORY_JS
-    assert ".filter((card) => !card.upgraded && storyCardHasUpgrade(card));" in STORY_JS
+    assert ".filter((card) => storyCardIsUpgradable(card));" in STORY_JS
     assert STORY_JS.count('appendStoryRoomEmpty(target, t.noUpgradableCards);') == 3
 
 
@@ -428,6 +472,13 @@ def test_story_enemy_group_enlarges_only_portraits_and_compacts_layout():
 def test_story_journey_setup_is_localized_and_centered():
     assert "journey_setup: '新旅程'" in STORY_JS
     assert "journey_setup: 'New Journey'" in STORY_JS
+    assert "name: lang === 'zh' ? '标准旅程' : 'Standard Journey'" in STORY_JS
+    assert "name: 'Boss Rush'" in STORY_JS
+    assert "(room.modes || ['standard']).forEach((modeId) =>" in STORY_JS
+    assert 'mode: selectedMode,' in STORY_JS
+    assert '每10层选择区域与可叠加诅咒，无限推进。' in STORY_JS
+    assert 'every 10 floors, choose a region and a stackable curse and continue endlessly.' in STORY_JS
+    assert "room.boss_rush || state.journey_mode === 'boss_rush'" in STORY_JS
     assert "container?.classList.add('is-journey-setup');" in STORY_JS
     assert "container.classList.remove('is-journey-setup');" in STORY_JS
     setup_rule = STORY_CSS.split(
@@ -542,9 +593,11 @@ def test_story_floor_restart_is_confirmed_and_available_after_combat_failure():
 def test_story_cards_use_rarity_frames_type_tints_and_blind_concealment():
     assert "'--story-card-rarity-color'" in STORY_JS
     assert "'--story-card-type-color'" in STORY_JS
-    assert '--card-border-width: 3.25cqi;' in STORY_CSS
+    assert '--card-border-width: var(--gtn-card-border-width);' in STORY_CSS
     assert 'border: var(--card-border-width) solid var(--card-frame-color);' in STORY_CSS
-    assert 'color-mix(in srgb, var(--story-card-type-color) 10%, var(--bg-card));' in STORY_CSS
+    type_tint = 'color-mix(in srgb, var(--story-card-type-color) 10%, var(--bg-card));'
+    assert STORY_CSS.count(type_tint) >= 2
+    assert 'background: rgba(255, 255, 255, .5);' not in STORY_CSS
     assert "const blindActive = Boolean(combat.blind_active);" in STORY_JS
     assert "element.classList.add('card-blinded', 'card-blinded-deep');" in STORY_JS
     assert "appendStoryRichText(description, blinded ? '?' : localize(values.description));" in STORY_JS
@@ -584,7 +637,7 @@ def test_story_card_choice_rules_cover_sewage_and_share_candidate_validation():
         1,
     )[0]
 
-    assert "['choose_exile', 'copy_hand_card', 'make_card_free'].includes(type)" in selection_branch
+    assert "['choose_exile', 'copy_hand_card', 'make_card_free', 'active_discard'].includes(type)" in selection_branch
     assert "!(cardValues(item)?.tags || []).includes('sublime')" in selection_branch
     assert 'const spec = cardSelectionSpec(card, combat);' in playable_branch
     assert 'spec.source.length >= spec.minimum' in playable_branch
@@ -605,7 +658,8 @@ def test_story_event_and_choice_prose_use_the_loaded_game_font():
 def test_story_resources_use_fixed_tracks_and_shared_classic_compression():
     assert 'const STORY_RESOURCE_SLOT_COUNT = 10;' in STORY_JS
     assert "container.style.setProperty('--story-resource-slots', String(STORY_RESOURCE_SLOT_COUNT));" in STORY_JS
-    assert 'globalThis.GTN_RESOURCE_ORBS.buildPreviewChunks(now, cost, slots)' in STORY_JS
+    assert 'globalThis.GTN_RESOURCE_ORBS.buildPreviewChunks(' in STORY_JS
+    assert '            slots,\n            10,\n            true,' in STORY_JS
     assert '--story-resource-slots: 10;' in STORY_CSS
     assert 'Math.min(15, Math.max(baseline' not in STORY_JS
     assert 'chunks.slice(0, slots)' not in STORY_JS

@@ -154,6 +154,7 @@ class CardDef:
     copy_count: int = 0
     swift_value: int = 0
     magic_swift_value: int = 0
+    charge_value: int = 0
     fission_level: int = 1
     fusion_level: int = 1
     damage: int = 0
@@ -208,7 +209,7 @@ class CardInstance:
     temp_swift_value: int = 0
     temp_heavy_value: int = 0
     temp_magic_heavy_value: int = 0
-    charge_value: int = 0
+    charge_value: Optional[int] = None
     hand_blind_turns: int = 0
     extra_hits: int = 0
     setup_modifiers: Set[str] = field(default_factory=set)
@@ -216,20 +217,27 @@ class CardInstance:
 
     def __post_init__(self):
         self.power_value = clamp_card_power(self.power_value)
+        base_charge_value = 0
         if not self.def_id:
             self.def_id = ERROR_CARD_ID
+            self.charge_value = max(0, int(self.charge_value or 0))
             return
         self.fission_level = clamp_card_layer(self.fission_level)
         self.fusion_level = clamp_card_layer(self.fusion_level)
         try:
             card_def = CARD_DEFS.get(self.def_id)
             if card_def:
+                base_charge_value = max(0, int(getattr(card_def, 'charge_value', 0) or 0))
                 if self.fission_level <= 1:
                     self.fission_level = clamp_card_layer(getattr(card_def, 'fission_level', 1) or 1)
                 if self.fusion_level <= 1:
                     self.fusion_level = clamp_card_layer(getattr(card_def, 'fusion_level', 1) or 1)
         except Exception:
             pass
+        if self.charge_value is None:
+            self.charge_value = base_charge_value
+        else:
+            self.charge_value = max(0, int(self.charge_value or 0))
         self.fission_count = max(0, self.fission_level - 1)
         self.extra_hits = clamp_card_extra_hits(self.extra_hits)
         defs = globals().get('CARD_DEFS')
@@ -242,15 +250,25 @@ class CardInstance:
 
     @property
     def name_cn(self) -> str:
-        return self.card_def.name_cn
+        custom = self.custom_vars if isinstance(self.custom_vars, dict) else {}
+        return str(custom.get('display_name_cn') or self.card_def.name_cn)
 
     @property
     def name_en(self) -> str:
-        return self.card_def.name_en
+        custom = self.custom_vars if isinstance(self.custom_vars, dict) else {}
+        return str(custom.get('display_name_en') or self.card_def.name_en)
 
     @property
     def cost_e(self) -> int:
-        base = self.cost_e_override if self.cost_e_override is not None else self.card_def.cost_e
+        custom = self.custom_vars if isinstance(self.custom_vars, dict) else {}
+        if 'formal_logic_temporary_cost_e' in custom:
+            base = int(custom.get('formal_logic_temporary_cost_e', 0) or 0)
+        elif self.cost_e_override is not None:
+            base = self.cost_e_override
+        elif 'formal_logic_permanent_cost_e' in custom:
+            base = int(custom.get('formal_logic_permanent_cost_e', 0) or 0)
+        else:
+            base = self.card_def.cost_e
         swift = self.swift_value if self.swift_value > 0 else self.card_def.swift_value
         temp_swift = max(0, int(self.temp_swift_value or 0))
         temp_heavy = max(0, int(self.temp_heavy_value or 0))
@@ -258,7 +276,15 @@ class CardInstance:
 
     @property
     def cost_m(self) -> int:
-        base = self.cost_m_override if self.cost_m_override is not None else self.card_def.cost_m
+        custom = self.custom_vars if isinstance(self.custom_vars, dict) else {}
+        if 'formal_logic_temporary_cost_m' in custom:
+            base = int(custom.get('formal_logic_temporary_cost_m', 0) or 0)
+        elif self.cost_m_override is not None:
+            base = self.cost_m_override
+        elif 'formal_logic_permanent_cost_m' in custom:
+            base = int(custom.get('formal_logic_permanent_cost_m', 0) or 0)
+        else:
+            base = self.card_def.cost_m
         temp_magic_heavy = max(0, int(self.temp_magic_heavy_value or 0))
         return max(0, base + temp_magic_heavy - max(0, int(self.magic_swift_value or 0)))
 
@@ -295,12 +321,12 @@ class CardInstance:
             'temp_swift_value': self.temp_swift_value,
             'temp_heavy_value': self.temp_heavy_value,
             'temp_magic_heavy_value': self.temp_magic_heavy_value,
-            'charge_value': self.charge_value,
+            'charge_value': max(0, int(self.charge_value or 0)),
             'hand_blind_turns': self.hand_blind_turns,
             'blind_level': 1 if self.hand_blind_turns > 0 else 0,
             'extra_hits': clamp_card_extra_hits(self.extra_hits),
             'setup_modifiers': list(self.setup_modifiers) if self.setup_modifiers else [],
-            'custom_vars': dict(self.custom_vars) if isinstance(self.custom_vars, dict) else {},
+            'custom_vars': copy.deepcopy(self.custom_vars) if isinstance(self.custom_vars, dict) else {},
         }
 
     @staticmethod
@@ -330,7 +356,7 @@ class CardInstance:
             hand_blind_turns=max(0, int(d.get('hand_blind_turns', d.get('blind_level', 0)))),
             extra_hits=clamp_card_extra_hits(d.get('extra_hits', 0)),
             setup_modifiers=set(str(x) for x in (d.get('setup_modifiers') or []) if x),
-            custom_vars=dict(d.get('custom_vars', {}) or {}),
+            custom_vars=copy.deepcopy(d.get('custom_vars', {}) or {}),
         )
 
     def copy(self) -> 'CardInstance':
@@ -359,6 +385,7 @@ class CardInstance:
             hand_blind_turns=self.hand_blind_turns,
             extra_hits=clamp_card_extra_hits(self.extra_hits),
             setup_modifiers=set(self.setup_modifiers),
+            custom_vars=copy.deepcopy(self.custom_vars) if isinstance(self.custom_vars, dict) else {},
         )
         return c
 

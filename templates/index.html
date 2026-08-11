@@ -13,7 +13,7 @@
 <script>
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
-  const betaExactKeys = new Set(['gtn_theme', 'gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled', 'gtn_play_gesture_animation', 'gtn_landscape_mode']);
+  const betaExactKeys = new Set(['gtn_theme', 'gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled', 'gtn_play_gesture_animation', 'gtn_landscape_mode', 'gtn_story_hide_card_borders']);
   const betaKey = (key) => window.__GTN_BETA_MODE__ && betaExactKeys.has(key) ? `gtn_beta_${key.slice(4)}` : key;
   const readCookie = (key) => {
     try {
@@ -884,6 +884,10 @@
 <div id="settings-landscape-mode-row" class="settings-check-row">
 <input type="checkbox" id="settings-landscape-mode">
 <label id="settings-label-landscape-mode" for="settings-landscape-mode">开启横屏模式</label>
+</div>
+<div id="settings-story-card-borders-row" class="settings-check-row">
+<input type="checkbox" id="settings-story-hide-card-borders">
+<label id="settings-label-story-hide-card-borders" for="settings-story-hide-card-borders">隐藏故事模式卡牌边框</label>
 </div>
 </div>
 <div id="settings-page-server" class="settings-page settings-section hidden">

@@ -21,6 +21,7 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_show_card_images',
     'gtn_play_gesture_animation',
     'gtn_landscape_mode',
+    'gtn_story_hide_card_borders',
     'gtn_audio_enabled',
     'gtn_audio_master',
     'gtn_audio_music',
@@ -75,6 +76,7 @@ const GTN_COOKIE_FALLBACK_KEYS = new Set([
     'gtn_show_card_images',
     'gtn_play_gesture_animation',
     'gtn_landscape_mode',
+    'gtn_story_hide_card_borders',
     'gtn_audio_enabled',
     'gtn_audio_master',
     'gtn_audio_music',
@@ -1742,6 +1744,10 @@ Object.assign(I18N.en, { settings_landscape_mode: 'Enable landscape mode' });
 Object.assign(I18N.zh, { settings_landscape_mode: '开启横屏模式' });
 Object.assign(I18N.fr, { settings_landscape_mode: 'Activer le mode paysage' });
 Object.assign(I18N.ja, { settings_landscape_mode: '横画面モードを有効化' });
+Object.assign(I18N.en, { settings_story_hide_card_borders: 'Hide Story Mode card borders' });
+Object.assign(I18N.zh, { settings_story_hide_card_borders: '隐藏故事模式卡牌边框' });
+Object.assign(I18N.fr, { settings_story_hide_card_borders: 'Masquer les bordures des cartes du mode histoire' });
+Object.assign(I18N.ja, { settings_story_hide_card_borders: 'ストーリーモードのカード枠を隠す' });
 Object.assign(I18N.en, { official_mods: 'Official Mods', entertainment_mods: 'Entertainment Mods', entertainment_mods_note: 'Matches using any entertainment mod do not affect Garden Rating.', no_entertainment_mods: 'No entertainment mods yet', gr_unranked_entertainment: 'This match used an entertainment mod and did not affect GR.', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found', mod_beta_warning: 'In testing, not recommended' });
 Object.assign(I18N.zh, { official_mods: '官方模组', entertainment_mods: '娱乐模组', entertainment_mods_note: '启用任一娱乐模组后，对局不计花阶分。', no_entertainment_mods: '暂无娱乐模组', gr_unranked_entertainment: '本局使用了娱乐模组，不计入花阶分。', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组', mod_beta_warning: '测试中，不推荐使用' });
 Object.assign(I18N.fr, { entertainment_mods: 'Mods détente', entertainment_mods_note: 'Les parties utilisant un mod détente ne modifient pas le Garden Rating.', no_entertainment_mods: 'Aucun mod détente', gr_unranked_entertainment: 'Cette partie utilisait un mod détente et n’a pas modifié le GR.', mod_beta_warning: 'En test, déconseillé' });
@@ -2494,6 +2500,7 @@ if (localStorage.getItem('gtn_lang') !== currentLang) localStorage.setItem('gtn_
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
 let showCardImages = localStorage.getItem('gtn_show_card_images') !== '0';
 let landscapeModeEnabled = localStorage.getItem('gtn_landscape_mode') === '1';
+let storyCardBordersHidden = localStorage.getItem('gtn_story_hide_card_borders') === '1';
 let playGestureAnimationEnabled = localStorage.getItem('gtn_play_gesture_animation') === '1';
 document.documentElement.classList.toggle('landscape-mode-enabled', landscapeModeEnabled);
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
@@ -5680,6 +5687,18 @@ function applyLandscapeMode(value) {
     updateClassicMobileCanvas();
 }
 
+function updateStoryCardBordersInput() {
+    const input = $('settings-story-hide-card-borders');
+    if (input) input.checked = !!storyCardBordersHidden;
+    document.documentElement.classList.toggle('story-hide-card-borders', !!storyCardBordersHidden);
+}
+
+function applyStoryCardBordersHidden(value) {
+    storyCardBordersHidden = !!value;
+    localStorage.setItem('gtn_story_hide_card_borders', storyCardBordersHidden ? '1' : '0');
+    updateStoryCardBordersInput();
+}
+
 function updatePlayGestureAnimationInput() {
     const input = $('settings-play-gesture-animation');
     if (input) input.checked = !!playGestureAnimationEnabled;
@@ -6005,10 +6024,13 @@ function updateStaticText() {
     if (settingsPlayGestureLabel) settingsPlayGestureLabel.textContent = UI.settings_play_gesture_animation || '显示出牌操作演示';
     const settingsLandscapeModeLabel = $('settings-label-landscape-mode');
     if (settingsLandscapeModeLabel) settingsLandscapeModeLabel.textContent = UI.settings_landscape_mode;
+    const settingsStoryCardBordersLabel = $('settings-label-story-hide-card-borders');
+    if (settingsStoryCardBordersLabel) settingsStoryCardBordersLabel.textContent = UI.settings_story_hide_card_borders;
     updateEnglishNameSettingVisibility();
     updateCardImageSettingInput();
     updatePlayGestureAnimationInput();
     updateLandscapeModeInput();
+    updateStoryCardBordersInput();
     const themeSelect = $('settings-theme-select');
     if (themeSelect) {
         themeSelect.options[0].textContent = UI.settings_theme_light;
@@ -7803,12 +7825,14 @@ const OFFICIAL_MOD_DISPLAY_ORDER = [
     'Garden Cards Addition.gtnmod',
     'Garden Cards DLC.gtnmod',
     'Factory Cards Addition.gtnmod',
+    'Factory Cards DLC.gtnmod',
     'Desert Cards Addition.gtnmod',
     'Desert Cards DLC.gtnmod',
     'Jungle Cards Addition.gtnmod',
     'Jungle Cards DLC.gtnmod',
     'Ocean Cards Addition.gtnmod',
     'Void Card Addition.gtnmod',
+    'Void Cards DLC.gtnmod',
     'Hel Cards Addition.gtnmod',
     'Sewers Cards Addition.gtnmod',
     'Sewers Cards DLC.gtnmod',
@@ -7822,13 +7846,15 @@ const OFFICIAL_MOD_DISPLAY_ALIASES = [
     ['vanilla cards.gtnmod', 'vanilla cards', 'garden of thorn vanilla cards'],
     ['garden cards addition.gtnmod', 'garden cards addition', 'garden cards'],
     ['garden cards dlc.gtnmod', 'garden cards dlc'],
-    ['factory cards addition.gtnmod', 'factory cards addition', 'factory cards', 'factory cards dlc.gtnmod', 'factory cards dlc'],
+    ['factory cards addition.gtnmod', 'factory cards addition', 'factory cards'],
+    ['factory cards dlc.gtnmod', 'factory cards dlc'],
     ['desert cards addition.gtnmod', 'desert cards addition', 'desert cards'],
     ['desert cards dlc.gtnmod', 'desert cards dlc'],
     ['jungle cards addition.gtnmod', 'jungle cards addition', 'jungle cards'],
     ['jungle cards dlc.gtnmod', 'jungle cards dlc'],
     ['ocean cards addition.gtnmod', 'ocean cards addition', 'ocean cards', 'ocean cards dlc.gtnmod', 'ocean cards dlc'],
     ['void card addition.gtnmod', 'void card addition', 'void cards addition', 'void cards'],
+    ['void cards dlc.gtnmod', 'void cards dlc'],
     ['hel cards addition.gtnmod', 'hel cards addition', 'hel cards', 'hel cards dlc.gtnmod', 'hel cards dlc'],
     ['sewers cards addition.gtnmod', 'sewers cards addition', 'sewers cards'],
     ['sewers cards dlc.gtnmod', 'sewers cards dlc'],
@@ -9993,10 +10019,14 @@ function showV2UiRequest(data = {}) {
             select.addEventListener('change', sync);
             sync();
             row.appendChild(select);
-        } else if (type === 'card_picker' || type === 'equipment_picker' || type === 'player_picker' || type === 'target_picker') {
+        } else if (type === 'card_picker' || type === 'equipment_picker' || type === 'multi_card_picker' || type === 'multi_equipment_picker' || type === 'card_catalog_picker' || type === 'player_picker' || type === 'target_picker') {
             row.appendChild(makeV2UiLabel(labelText));
             const list = document.createElement('div');
             list.className = 'v2-ui-picker-list';
+            const multi = type === 'multi_card_picker' || type === 'multi_equipment_picker';
+            const minSelect = Math.max(0, Number(control.min_select || 0));
+            const maxSelect = Math.max(minSelect, Number(control.max_select || (control.options || []).length));
+            const selectedValues = [];
             (control.options || []).forEach(option => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
@@ -10008,16 +10038,37 @@ function showV2UiRequest(data = {}) {
                     btn.textContent = getV2Text(option, 'label', String(option.label || option.value));
                 }
                 btn.addEventListener('click', () => {
-                    list.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
-                    btn.classList.add('selected');
-                    controlState[control.id] = option.value;
+                    if (multi) {
+                        const value = String(option.value);
+                        const currentIndex = selectedValues.indexOf(value);
+                        if (currentIndex >= 0) {
+                            if (selectedValues.length <= minSelect) return;
+                            selectedValues.splice(currentIndex, 1);
+                            btn.classList.remove('selected');
+                        } else {
+                            if (selectedValues.length >= maxSelect) return;
+                            selectedValues.push(value);
+                            btn.classList.add('selected');
+                        }
+                        controlState[control.id] = [...selectedValues];
+                    } else {
+                        list.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+                        btn.classList.add('selected');
+                        controlState[control.id] = option.value;
+                    }
                 });
                 list.appendChild(btn);
             });
-            const first = list.querySelector('.v2-ui-picker-option');
-            if (first) {
-                first.classList.add('selected');
-                controlState[control.id] = first.dataset.value;
+            const pickerOptions = Array.from(list.querySelectorAll('.v2-ui-picker-option'));
+            if (multi) {
+                pickerOptions.slice(0, minSelect).forEach(option => {
+                    option.classList.add('selected');
+                    selectedValues.push(String(option.dataset.value));
+                });
+                controlState[control.id] = [...selectedValues];
+            } else if (pickerOptions[0]) {
+                pickerOptions[0].classList.add('selected');
+                controlState[control.id] = pickerOptions[0].dataset.value;
             }
             row.appendChild(list);
         }
@@ -10625,7 +10676,7 @@ function shouldBlindCardForSelf(cardDict, options = {}) {
 
 function getBlindedCardDisplayName(cardDict, cardDef, options = {}) {
     const blindLevel = getCardBlindLevelForSelf(cardDict, options);
-    return blindLevel > 0 ? '?' : getCardName(cardDef);
+    return blindLevel > 0 ? '?' : getCardInstanceName(cardDict, cardDef);
 }
 
 function getCardBlindDisplayColor(cardDef, blindLevel = 0) {
@@ -10668,8 +10719,25 @@ function getEquipmentIconHtml(cardInst, cardDef) {
     return `<span class="equip-icon" style="${style}">${img}${fallback}</span>`;
 }
 
+function getCardInstanceName(cardDict, cardDef) {
+    const custom = cardDict && typeof cardDict.custom_vars === 'object' ? cardDict.custom_vars : {};
+    if (currentLang === 'zh') {
+        return String(custom.display_name_cn || getCardName(cardDef) || '');
+    }
+    return String(custom.display_name_en || getCardName(cardDef) || '');
+}
+
+function getCardInstanceEnglishName(cardDict, cardDef) {
+    const custom = cardDict && typeof cardDict.custom_vars === 'object' ? cardDict.custom_vars : {};
+    return String(custom.display_name_en || getEnglishCardName(cardDef) || '');
+}
+
 function getCardEffectTextForInstance(cardDict, cardDef) {
-    let text = getCardEffectText(cardDef) || '';
+    const custom = cardDict && typeof cardDict.custom_vars === 'object' ? cardDict.custom_vars : {};
+    const override = currentLang === 'zh'
+        ? custom.display_effect_text_cn
+        : custom.display_effect_text_en;
+    let text = override != null ? String(override) : (getCardEffectText(cardDef) || '');
     const extraHits = Math.max(0, Number(cardDict && cardDict.extra_hits || 0));
     const setupModifiers = Array.isArray(cardDict && cardDict.setup_modifiers) ? cardDict.setup_modifiers : [];
     if (cardDef && (cardDef.id === 'Fission' || cardDef.legacy_id === 'Fission') && setupModifiers.includes('multi_petal')) {
@@ -10936,11 +11004,14 @@ function createCardElement(cardDict, options = {}) {
     const typeColor = CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary;
     const displayTypeColor = getCardBlindDisplayColor(cardDef, blindLevel);
     const typeLabel = hideTypeByBlind ? '?' : rawTypeLabel;
-    const cardName = blinded ? '?' : getCardName(cardDef);
+    const cardName = blinded ? '?' : getCardInstanceName(cardDict, cardDef);
     if (!blinded && currentLang === 'zh' && compactVisibleTextLength(cardName) >= 7) {
         el.classList.add('card-name-long-zh');
     }
-    const englishName = (!blinded && shouldShowEnglishCardName(cardDef, cardName)) ? getEnglishCardName(cardDef) : '';
+    const instanceEnglishName = getCardInstanceEnglishName(cardDict, cardDef);
+    const englishName = (!blinded && shouldShowEnglishCardName(cardDef, cardName) && instanceEnglishName !== cardName)
+        ? instanceEnglishName
+        : '';
     const effectText = blinded ? '?' : getCardEffectTextForInstance(cardDict, cardDef);
     const imageUrl = (!blinded && showCardImages) ? getCardArtUrl(cardDict, cardDef) : '';
     if (blinded) {
@@ -10962,7 +11033,7 @@ function createCardElement(cardDict, options = {}) {
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
-    const chargeValue = Number(cardDict.charge_value || 0);
+    const chargeValue = Number(cardDict.charge_value ?? cardDef.charge_value ?? 0);
     const copyCount = Number(cardDef.copy_count || 0);
     el.style.setProperty('--card-frame-color', displayTypeColor);
     el.dataset.instanceId = cardDict.instance_id;
@@ -11237,7 +11308,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
-    const chargeValue = Number(cardDict.charge_value || 0);
+    const chargeValue = Number(cardDict.charge_value ?? cardDef.charge_value ?? 0);
     effective.forEach(flag => {
         if (flag === 'swift' && swiftValue > 0) return;
         if (flag === 'temp_swift' && tempSwiftValue > 0) return;
@@ -11332,7 +11403,9 @@ function createCardChoiceChip(cardDict, options = {}) {
     name.className = 'choice-card-name';
     name.style.borderColor = typeColor;
     name.style.color = typeColor;
-    name.textContent = blinded ? (hideTypeByBlind ? '?' : (getCardTypeLabel(cardDef.card_type) || '?')) : getCardName(cardDef);
+    name.textContent = blinded
+        ? (hideTypeByBlind ? '?' : (getCardTypeLabel(cardDef.card_type) || '?'))
+        : getCardInstanceName(cardDict, cardDef);
     chip.appendChild(name);
     if (!blinded && options.extraCostText) {
         const cost = document.createElement('span');
@@ -11411,7 +11484,7 @@ function createClassicCardTile(cardDict, options = {}) {
     }
     const displayName = blinded
         ? (hideTypeByBlind ? '?' : (getCardTypeLabel(cardDef.card_type) || '?'))
-        : getCardName(cardDef);
+        : getCardInstanceName(cardDict, cardDef);
     const wrappedTileName = !blinded
         && ['zh', 'ja'].includes(currentLang)
         && compactVisibleTextLength(displayName) >= 6;
@@ -11502,7 +11575,7 @@ function cardChoiceOption(cardDict, extra = {}) {
     return {
         kind: 'card',
         card: cardDict,
-        text: cardDef ? getCardName(cardDef) : ((cardDict && cardDict.def_id) || '?'),
+        text: cardDef ? getCardInstanceName(cardDict, cardDef) : ((cardDict && cardDict.def_id) || '?'),
         ...extra,
     };
 }
@@ -13727,7 +13800,7 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
     card.classList.add('term-intro-card');
     if (isUsableRect(sourceRect)) card.classList.add('term-intro-card-hidden');
     cardSlot.appendChild(card);
-    title.textContent = blinded ? '? · ?' : `${getCardName(cardDef)} · ${lt({ zh: '术语说明', en: 'Term Guide', fr: 'Guide des termes', ja: '用語説明' })}`;
+    title.textContent = blinded ? '? · ?' : `${getCardInstanceName(cardDict, cardDef)} · ${lt({ zh: '术语说明', en: 'Term Guide', fr: 'Guide des termes', ja: '用語説明' })}`;
     list.innerHTML = buildCardIntroTermsHtml(introCardDict);
     overlay.dataset.termIntroDepth = String(termIntroDepth);
     bindInlineCardChips(cardSlot, { interactive: true, allowTermIntro: allowNestedTermIntro, termIntroDepth: termIntroDepth + 1 });
@@ -14051,7 +14124,7 @@ function updateCardHoldPreview(pos) {
     el.style.top = `${top}px`;
 }
 
-function buildCardHoldPreviewHtml(cardDef, blinded = false) {
+function buildCardHoldPreviewHtml(cardDef, blinded = false, cardDict = {}) {
     if (!cardDef) return '';
     if (blinded) {
         return `
@@ -14060,10 +14133,10 @@ function buildCardHoldPreviewHtml(cardDef, blinded = false) {
             <div class="card-hold-preview-desc">?</div>
         `;
     }
-    const effectText = getCardEffectText(cardDef) || '';
+    const effectText = getCardEffectTextForInstance(cardDict, cardDef) || '';
     const descriptionText = getCardDescriptionText(cardDef) || '';
     return `
-        <div class="card-hold-preview-title">${escapeHtml(getCardName(cardDef))}</div>
+        <div class="card-hold-preview-title">${escapeHtml(getCardInstanceName(cardDict, cardDef))}</div>
         ${effectText ? `<div class="card-hold-preview-effect">${colorizeCardText(effectText)}</div>` : ''}
         ${descriptionText ? `<div class="card-hold-preview-desc">${escapeHtml(descriptionText)}</div>` : ''}
     `;
@@ -14083,7 +14156,7 @@ function showCardHoldPreview(cardEl, pos) {
     preview.className = 'card-hold-preview';
     if (blinded) preview.classList.add('card-hold-preview-blinded');
     preview.style.setProperty('--preview-color', typeColor);
-    preview.innerHTML = buildCardHoldPreviewHtml(cardDef, blinded);
+    preview.innerHTML = buildCardHoldPreviewHtml(cardDef, blinded, cardDict);
     bindInlineCardChips(preview);
     document.body.appendChild(preview);
     dragState.previewEl = preview;
@@ -16951,7 +17024,8 @@ function replayActionLabel(frame) {
     if (!action) return frame.label || frame.phase || '';
     const payload = action.payload || {};
     const cardDef = payload.def_id ? getCardDef(payload.def_id) : null;
-    const cardName = cardDef ? getCardName(cardDef) : (payload.def_id || '');
+    const replayCard = payload.card && typeof payload.card === 'object' ? payload.card : payload;
+    const cardName = cardDef ? getCardInstanceName(replayCard, cardDef) : (payload.def_id || '');
     const targetName = payload.target_player_id != null ? localizeCanonicalPlayerName(names[payload.target_player_id] || `P${Number(payload.target_player_id) + 1}`) : '';
     const typeMap = {
         play_card: '使用手牌',
@@ -25740,7 +25814,7 @@ function renderClassicEquipmentList(player) {
     return equipment.map((eq, index) => {
         const cardInst = eq.card_instance || {};
         const cardDef = getCardDef(cardInst.def_id || '');
-        const name = cardDef ? getCardName(cardDef) : (cardInst.def_id || '?');
+        const name = cardDef ? getCardInstanceName(cardInst, cardDef) : (cardInst.def_id || '?');
         const targetId = normalizePlayerId(eq.effect_target);
         const ownerId = normalizeEquipmentOwnerId(eq, player);
         const targetSuffix = targetId != null && targetId !== ownerId ? `→${getPlayerNameById(targetId)}` : '';
@@ -26133,7 +26207,7 @@ function showClassicHoverInfo(card, anchor) {
     preview.className = 'card-hold-preview classic-hover-info';
     if (blindLevel > 0) preview.classList.add('card-hold-preview-blinded');
     preview.style.setProperty('--preview-color', typeColor);
-    preview.innerHTML = buildCardHoldPreviewHtml(cardDef, blindLevel > 0);
+    preview.innerHTML = buildCardHoldPreviewHtml(cardDef, blindLevel > 0, card.raw || card);
     document.body.appendChild(preview);
     classicHoverInfoEl = preview;
     positionClassicHoverInfo(anchor);
@@ -27024,7 +27098,7 @@ function createTeammateBlindHandChip(card = {}) {
 function createTeammateHandChip(cardDict, ownerState = null) {
     const cardDef = getCardDef(cardDict.def_id);
     const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.border_color) : COLORS.border_color;
-    const name = cardDef ? getCardName(cardDef) : (cardDict.def_id || '?');
+    const name = cardDef ? getCardInstanceName(cardDict, cardDef) : (cardDict.def_id || '?');
     const el = document.createElement('span');
     el.className = 'teammate-hand-chip';
     el.dataset.instanceId = cardDict.instance_id || '';
@@ -28847,7 +28921,7 @@ function renderEquipment(containerId, playerData, isMyEquipment) {
                 '护甲': equipArmor,
             };
         }
-        const equipName = `${getCardName(cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`;
+        const equipName = `${getCardInstanceName(cardInst, cardDef)}${targetSuffix ? `(${targetSuffix})` : ''}`;
         const equipDisplayName = `${equipName}${layerSuffix}${armorSuffix}`;
         const fullText = UI.equip_info.replace('{0}', equipName).replace('{1}', turns) + layerSuffix + armorSuffix + (corruption ? UI.equip_corruption : '');
         const compactTextValue = `${equipName}${turns ? ` · ${turns}` : ''}${layerSuffix}${armorSuffix}${corruption ? ` · ${UI.compact_corrupted}` : ''}`;
@@ -30538,7 +30612,7 @@ function renderPendingCard() {
     const typeLabel = cardDef ? getCardTypeLabel(cardDef.card_type) : '';
     playZone.innerHTML = `
         <div class="pending-card" style="border-color:${typeColor}">
-            <div style="color:${typeColor};font-weight:bold">${cardDef ? getCardName(cardDef) : '?'}</div>
+            <div style="color:${typeColor};font-weight:bold">${cardDef ? escapeHtml(getCardInstanceName(pendingPlayCard, cardDef)) : '?'}</div>
             <div style="color:${typeColor};font-size:11px">${typeLabel}</div>
             <div style="color:${COLORS.damage};font-size:11px">${UI.waiting_response}</div>
         </div>
@@ -31672,7 +31746,7 @@ function showAllyConsentUI(data) {
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
     const allyBlindLevel = getOwnBlindLevel();
-    const cardName = cardDef ? (allyBlindLevel > 0 ? '?' : getCardName(cardDef)) : (cardDict.def_id || '?');
+    const cardName = cardDef ? (allyBlindLevel > 0 ? '?' : getCardInstanceName(cardDict, cardDef)) : (cardDict.def_id || '?');
     container.innerHTML = '';
     container.classList.remove('hidden');
     container.classList.add('visible');
@@ -32091,7 +32165,7 @@ async function showChoiceUI(data) {
     const choiceType = data.choice_type || '';
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
-    const cardName = cardDef ? (getOwnBlindLevel() > 0 ? '?' : getCardName(cardDef)) : '?';
+    const cardName = cardDef ? (getOwnBlindLevel() > 0 ? '?' : getCardInstanceName(cardDict, cardDef)) : '?';
     const choiceParams = data.choice_params || {};
     const choicePromptConfig = {
         cancellable: choiceParams.cancellable !== false && !(cardDef && (cardDef.flags || []).includes('uncancellable')),
@@ -33409,7 +33483,6 @@ const VANILLA_MOD_FILENAME = 'Vanilla Cards.gtnmod';
 const RETIRED_OFFICIAL_MOD_FILENAMES = new Set([
     'Troll Cards.gtnmod',
     'Thorn Cards.gtnmod',
-    'Factory Cards DLC.gtnmod',
     'Ocean Cards DLC.gtnmod',
     'Hel Cards DLC.gtnmod',
     'Arctic Cards DLC.gtnmod',
@@ -33419,22 +33492,26 @@ const DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = new Set([
 ]);
 const V11_DLC_MOD_FILENAMES = [
     'Garden Cards DLC.gtnmod',
+    'Factory Cards DLC.gtnmod',
     'Desert Cards DLC.gtnmod',
     'Jungle Cards DLC.gtnmod',
     'Sewers Cards DLC.gtnmod',
     'Bio Cards DLC.gtnmod',
+    'Void Cards DLC.gtnmod',
 ];
 const V11_DLC_DEFAULT_MIGRATION_KEY = 'gtn_v11_dlc_default_v1';
 const FALLBACK_DEFAULT_DISABLED_MODS = [
     'Desert Cards Addition.gtnmod',
     'Desert Cards DLC.gtnmod',
     'Factory Cards Addition.gtnmod',
+    'Factory Cards DLC.gtnmod',
     'Garden Cards Addition.gtnmod',
     'Garden Cards DLC.gtnmod',
     'Jungle Cards Addition.gtnmod',
     'Jungle Cards DLC.gtnmod',
     'Ocean Cards Addition.gtnmod',
     'Void Card Addition.gtnmod',
+    'Void Cards DLC.gtnmod',
     'Hel Cards Addition.gtnmod',
     'Sewers Cards Addition.gtnmod',
     'Sewers Cards DLC.gtnmod',
@@ -35125,6 +35202,11 @@ async function init() {
     if (landscapeModeToggle) {
         landscapeModeToggle.checked = landscapeModeEnabled;
         landscapeModeToggle.addEventListener('change', (e) => applyLandscapeMode(e.target.checked));
+    }
+    const storyCardBordersToggle = $('settings-story-hide-card-borders');
+    if (storyCardBordersToggle) {
+        storyCardBordersToggle.checked = storyCardBordersHidden;
+        storyCardBordersToggle.addEventListener('change', (e) => applyStoryCardBordersHidden(e.target.checked));
     }
     $('btn-lobby-back').addEventListener('click', () => {
         phase = 'login';

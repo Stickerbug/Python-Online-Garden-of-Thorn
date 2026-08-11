@@ -8,12 +8,13 @@
         return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
     }
 
-    function buildChunks(amount, maxChunks = 17) {
+    function buildChunks(amount, maxChunks = 17, compressionThreshold = COMPRESSION_THRESHOLD) {
         const total = wholeNumber(amount);
         const limit = Math.max(1, wholeNumber(maxChunks));
+        const threshold = Math.max(0, wholeNumber(compressionThreshold));
         if (!total) return [];
 
-        if (total <= COMPRESSION_THRESHOLD) {
+        if (total <= threshold) {
             if (total <= limit) {
                 return Array.from({ length: total }, () => ({ value: 1 }));
             }
@@ -48,11 +49,21 @@
         ];
     }
 
-    function buildPreviewChunks(current, spend, displayTotal) {
+    function buildPreviewChunks(
+        current,
+        spend,
+        displayTotal,
+        compressionThreshold = COMPRESSION_THRESHOLD,
+        enforceDisplayLimit = false,
+    ) {
         const cur = wholeNumber(current);
         const cost = wholeNumber(spend);
-        const chunkLimit = Math.max(32, wholeNumber(displayTotal) * 2);
-        const baseChunks = buildChunks(cur, chunkLimit).map((chunk) => ({ ...chunk }));
+        const displayLimit = Math.max(1, wholeNumber(displayTotal));
+        const chunkLimit = enforceDisplayLimit
+            ? displayLimit
+            : Math.max(32, displayLimit * 2);
+        const baseChunks = buildChunks(cur, chunkLimit, compressionThreshold)
+            .map((chunk) => ({ ...chunk }));
         let spendFromCurrent = Math.min(cur, cost);
         let spentAmount = 0;
 
@@ -65,9 +76,13 @@
         }
 
         const remainingChunks = baseChunks.filter((chunk) => wholeNumber(chunk.value) > 0);
-        const spendingChunks = buildChunks(spentAmount, chunkLimit)
+        const spendingChunks = buildChunks(spentAmount, chunkLimit, compressionThreshold)
             .map((chunk) => ({ ...chunk, willSpend: true }));
-        const missingChunks = buildChunks(Math.max(0, cost - cur), chunkLimit)
+        const missingChunks = buildChunks(
+            Math.max(0, cost - cur),
+            chunkLimit,
+            compressionThreshold,
+        )
             .map((chunk) => ({ ...chunk, missing: true, willSpend: true }));
         return remainingChunks.concat(spendingChunks, missingChunks);
     }

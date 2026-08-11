@@ -14,6 +14,7 @@
     let contentVersion = '';
     let actionInFlight = false;
     let selectedCombatCardId = '';
+    let hoveredCombatCardId = '';
     let cardPlayInFlight = false;
     let storyAimPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     let storyAimFrame = 0;
@@ -51,6 +52,7 @@
     let storyMentionActiveRange = null;
     const readStoryMentionIds = new Set();
     let storyEquipmentPreview = null;
+    let storyCardHoverPreview = null;
     let storyCombatEntranceAnimating = false;
     let storyMapPreviewOpen = false;
     let pendingStorySaveId = 0;
@@ -104,6 +106,8 @@
         retain: { className: 'custom story-retain', color: '#2874A6' },
         void: { className: 'void', color: '#37474F' },
         wide: { className: 'wide-strike', color: '#1F9D8A' },
+        eternal: { className: 'custom story-eternal', color: '#8E44AD' },
+        charge: { className: 'custom story-charge', color: '#2471A3' },
     });
 
     const STORY_INLINE_ICONS = Object.freeze({
@@ -211,6 +215,7 @@
             restartFloor: 'Restart Floor', restartFloorTitle: 'Restart this floor?',
             restartFloorCopy: 'All actions on this floor will be undone. The same random results will be used.',
             restartFloorSucceeded: 'Floor restarted', shopServiceUsed: 'This shop’s deck service has already been used',
+            easyRelicTitle: 'Choose an Easy talent', easyRelicCopy: 'Choose 1 of 3 talents, then choose your starting blessing.',
             blessingTitle: 'Choose a starting blessing', blessingCopy: 'Choose one for this journey.',
             blessingChooseCard: 'Choose a deck card', blessingBack: 'Back to blessings',
             transform: 'Transform', blessingRewardCopy: 'Choose one card from each reward.',
@@ -233,6 +238,8 @@
             battleWon: 'Battle won', chooseCard: 'Choose a card', skip: 'Skip card',
             rewards: 'Battle rewards', rewardCopy: 'Claim each reward before continuing.',
             claim: 'Claim', claimed: 'Claimed', cardReward: 'Card reward', talentReward: 'Talent',
+            directLeave: 'Leave without taking more', claimChestGold: 'Take Gold', claimChestTalent: 'Take Talent',
+            cannotRemove: 'Cannot be removed',
             continueJourney: 'Continue', gainedGold: (value) => `Gained ${value} G.`,
             goldReward: (value) => `${value} G`, room: 'Room', restTitle: 'Rest Site',
             restCopy: 'Recover H or upgrade one card.', heal: 'Recover H', upgrade: 'Upgrade',
@@ -245,7 +252,7 @@
             removedFromDeck: 'Removed from the deck', beforeChange: 'Before', afterChange: 'After',
             confirmEventTitle: 'Confirm this choice',
             confirmEventCopy: 'This result takes effect immediately and cannot be undone in this room.',
-            chestTitle: 'Chest', chestCopy: 'Open the chest and continue.', openChest: 'Open',
+            chestTitle: 'Chest', chestCopy: 'Take any rewards you want, or leave them behind.', openChest: 'Open',
             currentHealth: 'Current H', restRecovery: 'Recovery', chestGold: 'Gold',
             chestTalent: 'Talent', shopWallet: 'Available Gold', removePrice: 'Removal',
             upgradePrice: 'Upgrade', none: 'None',
@@ -265,7 +272,7 @@
             chooseCardHint: 'Choose a card', damagePrediction: 'Damage',
             chooseCards: 'Choose cards', chooseExact: (value) => `Choose ${value} card(s).`,
             chooseUpTo: (value) => `Choose up to ${value} card(s).`,
-            cardTerms: 'Card Terms', statusTerms: 'Status Term', traitTerms: 'Effect Term', talentTerms: 'Talent Details', noCardTerms: 'No additional terms',
+            cardTerms: 'Card Terms', statusTerms: 'Status Term', actionTerms: 'Action Term', traitTerms: 'Effect Term', talentTerms: 'Talent Details', noCardTerms: 'No additional terms',
             beforeUpgrade: 'Before Upgrade', afterUpgrade: 'After Upgrade',
             cardTypes: { thorn: 'Thorn', bloom: 'Bloom', root: 'Root', guard: 'Guard', curse: 'Curse', infect: 'Infect' },
             pileTotal: (label, count) => `${label}: ${count} cards`,
@@ -303,6 +310,7 @@
             restartFloor: '重新开始本层', restartFloorTitle: '重新开始本层？',
             restartFloorCopy: '本层内的全部操作将被撤销，并以相同随机结果重新开始。',
             restartFloorSucceeded: '已重新开始本层', shopServiceUsed: '本店的牌组服务已经使用',
+            easyRelicTitle: '选择简单难度天赋', easyRelicCopy: '从3项天赋中选择1项，然后继续选择初始赐福。',
             blessingCopy: '本次旅程只能选择一项。', blessingChooseCard: '选择一张牌组中的牌',
             blessingBack: '返回赐福选择', transform: '变化',
             blessingRewardCopy: '每次卡牌奖励选择1张牌。',
@@ -325,6 +333,8 @@
             battleWon: '战斗胜利', chooseCard: '选择一张牌',
             skip: '跳过卡牌', rewards: '战斗奖励', rewardCopy: '逐项领取奖励后继续前进。',
             claim: '领取', claimed: '已领取', cardReward: '卡牌奖励', talentReward: '天赋',
+            directLeave: '直接离开', claimChestGold: '领取金币', claimChestTalent: '领取天赋',
+            cannotRemove: '无法删除',
             continueJourney: '继续前进', gainedGold: (value) => `获得 ${value}G。`,
             goldReward: (value) => `${value}G`, room: '房间', restTitle: '休息区',
             restCopy: '回复生命，或升级一张牌。', heal: '回复生命', upgrade: '升级', chestTitle: '宝箱',
@@ -337,7 +347,7 @@
             removedFromDeck: '从牌组中移除', beforeChange: '变化前', afterChange: '变化后',
             confirmEventTitle: '确认事件选择',
             confirmEventCopy: '此结果将立即生效，且无法在当前节点内撤回。',
-            chestCopy: '打开宝箱后继续前进。', openChest: '打开', eventTitle: '花园事件',
+            chestCopy: '可以分别领取想要的奖励，也可以直接离开。', openChest: '打开', eventTitle: '花园事件',
             currentHealth: '当前生命', restRecovery: '本次回复', chestGold: '金币',
             chestTalent: '天赋', shopWallet: '可用金币', removePrice: '移除费用',
             upgradePrice: '升级费用', none: '无',
@@ -356,7 +366,7 @@
             chooseCardHint: '选择一张手牌', damagePrediction: '伤害预测',
             chooseCards: '选择卡牌', chooseExact: (value) => `选择 ${value} 张牌。`,
             chooseUpTo: (value) => `选择至多 ${value} 张牌。`,
-            cardTerms: '卡牌术语', statusTerms: '状态术语', traitTerms: '特殊效果术语', talentTerms: '天赋说明', noCardTerms: '没有额外术语',
+            cardTerms: '卡牌术语', statusTerms: '状态术语', actionTerms: '行动术语', traitTerms: '特殊效果术语', talentTerms: '天赋说明', noCardTerms: '没有额外术语',
             beforeUpgrade: '升级前', afterUpgrade: '升级后',
             cardTypes: { thorn: '攻击', bloom: '技能', root: '装备', guard: '反制', curse: '诅咒', infect: '状态牌' },
             pileTotal: (label, count) => `${label}：${count} 张`,
@@ -389,6 +399,7 @@
             saveSucceeded: 'Progression sauvegardée', loadSucceeded: 'Progression chargée',
             loadSaveTitle: 'Charger cette sauvegarde ?', loadSaveCopy: 'La progression actuelle sera remplacée.',
             saveOnlyOnMap: 'La sauvegarde manuelle est disponible uniquement sur la carte',
+            easyRelicTitle: 'Choisir un talent facile', easyRelicCopy: 'Choisissez 1 talent parmi 3, puis votre bénédiction initiale.',
             blessingCopy: 'Choisissez-en une pour ce voyage.', blessingChooseCard: 'Choisissez une carte du paquet',
             blessingBack: 'Retour aux bénédictions', transform: 'Transformer',
             blessingRewardCopy: 'Choisissez une carte pour chaque récompense.',
@@ -411,12 +422,13 @@
             chooseCard: 'Choisissez une carte', skip: 'Passer la carte', room: 'Salle', newJourney: 'Nouveau voyage',
             rewards: 'Récompenses du combat', rewardCopy: 'Récupérez chaque récompense avant de continuer.',
             claim: 'Récupérer', claimed: 'Récupéré', cardReward: 'Carte', talentReward: 'Talent',
+            directLeave: 'Partir sans rien prendre de plus', claimChestGold: 'Prendre l’or', claimChestTalent: 'Prendre le talent',
             continueJourney: 'Continuer', goldReward: (value) => `${value} G`,
             summon: 'Invocation', allies: 'Tous les alliés', self: 'Soi', addCard: 'Ajouter une carte', consume: 'Absorber',
             developerMode: 'Mode développeur', devJump: 'Changer de niveau', devFloor: 'Étage', devRoom: 'Salle',
             devValues: 'Modifier les valeurs', devApply: 'Appliquer', devJumpButton: 'Aller',
             devValuesUpdated: 'Valeurs mises à jour', devJumped: 'Niveau chargé',
-            cardTerms: 'Termes de carte', statusTerms: 'Terme d’état', traitTerms: 'Terme d’effet', talentTerms: 'Détails du talent', noCardTerms: 'Aucun terme supplémentaire',
+            cardTerms: 'Termes de carte', statusTerms: 'Terme d’état', actionTerms: 'Terme d’action', traitTerms: 'Terme d’effet', talentTerms: 'Détails du talent', noCardTerms: 'Aucun terme supplémentaire',
             beforeUpgrade: 'Avant amélioration', afterUpgrade: 'Après amélioration',
             shopCards: 'Cartes', shopTalents: 'Talents', remove: 'Retirer',
             roomActions: 'Choix', restGold: 'Or', plantDandelion: 'Planter le pissenlit',
@@ -460,6 +472,7 @@
             saveSucceeded: '進行を保存しました', loadSucceeded: '進行を読み込みました',
             loadSaveTitle: 'このセーブを読み込みますか？', loadSaveCopy: '現在のルート進行は上書きされます。',
             saveOnlyOnMap: '手動セーブはルート画面でのみ利用できます',
+            easyRelicTitle: 'イージー天賦を選択', easyRelicCopy: '3つから1つ選び、その後に初期祝福を選択します。',
             blessingChooseCard: 'デッキのカードを選択', blessingBack: '祝福選択に戻る',
             transform: '変化', blessingRewardCopy: '各カード報酬から1枚選びます。',
             blessingCardReward: (index, total) => `カード報酬 ${index}/${total}`,
@@ -480,12 +493,13 @@
             battleWon: '戦闘勝利', chooseCard: 'カードを選択', skip: 'カードをスキップ', room: '部屋',
             rewards: '戦闘報酬', rewardCopy: 'すべての報酬を受け取ってから先へ進みます。',
             claim: '受け取る', claimed: '受取済み', cardReward: 'カード報酬', talentReward: '天賦',
+            directLeave: '残りを受け取らず退出', claimChestGold: 'ゴールドを受け取る', claimChestTalent: '天賦を受け取る',
             continueJourney: '進む', goldReward: (value) => `${value} G`,
             summon: '召喚', allies: '味方全体', self: '自身', addCard: 'カード追加', consume: '吸収',
             developerMode: '開発者モード', devJump: 'ステージ移動', devFloor: '階', devRoom: '部屋',
             devValues: '数値設定', devApply: '適用', devJumpButton: '移動',
             devValuesUpdated: '数値を更新しました', devJumped: 'ステージを読み込みました',
-            cardTerms: 'カード用語', statusTerms: '状態用語', traitTerms: '特殊効果用語', talentTerms: '天賦の説明', noCardTerms: '追加用語なし',
+            cardTerms: 'カード用語', statusTerms: '状態用語', actionTerms: '行動用語', traitTerms: '特殊効果用語', talentTerms: '天賦の説明', noCardTerms: '追加用語なし',
             beforeUpgrade: 'アップグレード前', afterUpgrade: 'アップグレード後',
             shopCards: 'カード', shopTalents: '天賦', remove: '削除',
             roomActions: '選択肢', restGold: 'ゴールド', plantDandelion: 'タンポポを植える',
@@ -721,7 +735,8 @@
             'story-blessing-title': t.blessingTitle, 'story-blessing-copy': t.blessingCopy,
             'story-intent-label': t.intent, 'story-end-turn': t.endTurn,
             'story-pile-close': t.close,
-            'story-reward-skip': t.skip, 'story-reward-continue': t.continueJourney,
+            'story-reward-skip': t.skip, 'story-reward-leave': t.directLeave,
+            'story-reward-continue': t.continueJourney,
             'story-terminal-new': t.newJourney,
             'story-dev-toggle': t.developerMode, 'story-dev-title': t.developerMode,
             'story-dev-jump-label': t.devJump, 'story-dev-floor-label': t.devFloor,
@@ -961,6 +976,8 @@
         const parts = [t.title, t.floor(state.current_floor || 1)];
         if (state.phase === 'combat' && state.combat) {
             parts.push(state.combat.turn === 'player' ? t.playerTurn : t.enemyTurn);
+        } else if (state.phase === 'easy_relic') {
+            parts.push(t.easyRelicTitle);
         } else if (state.phase === 'blessing') {
             parts.push(t.rooms.blessing);
         } else if (state.phase === 'reward') {
@@ -1897,6 +1914,7 @@
 
     function showView(name) {
         if (name !== 'story-combat') removeStoryEquipmentPreview();
+        removeStoryCardHoverPreview();
         VIEWS.forEach((id) => $(id)?.classList.toggle('hidden', id !== name));
         const runDeck = $('story-run-deck');
         const runDeckUnavailable = !activeRun?.state;
@@ -2721,7 +2739,24 @@
     function cardValues(card) {
         const definition = storyContent?.cards?.[card?.def_id];
         if (!definition) return null;
-        const values = card.upgraded ? { ...definition, ...(definition.upgrade || {}) } : { ...definition };
+        const upgradeLevel = Math.max(
+            Number(card?.upgrade_level || 0),
+            card?.upgraded ? 1 : 0,
+        );
+        const values = upgradeLevel
+            ? { ...definition, ...(definition.upgrade || {}) }
+            : { ...definition };
+        values.effects = (values.effects || []).map((effect) => ({ ...effect }));
+        if (definition.upgrade?.infinite) {
+            const damage = Math.ceil(14 + 3 * upgradeLevel + (upgradeLevel ** 2) / 2);
+            values.effects = values.effects.map((effect) => (
+                effect.type === 'damage' ? { ...effect, amount: damage } : effect
+            ));
+            values.description = {
+                zh: `对目标造成${damage}D；此牌可无限升级。`,
+                en: `Deal ${damage} D. This card can be upgraded indefinitely.`,
+            };
+        }
         const modifiers = card?.modifiers && typeof card.modifiers === 'object' ? card.modifiers : {};
         if (Number.isFinite(Number(values.cost_e))) {
             values.cost_e = Math.max(0,
@@ -2735,11 +2770,50 @@
                 + Number(modifiers.cost_m_delta || 0)
                 - Number(modifiers.magic_swift || 0));
         }
+        if (modifiers.free_play) {
+            values.cost_e = 0;
+            values.cost_m = 0;
+        } else if (modifiers.temporary_free_e) {
+            values.cost_e = 0;
+        }
+        const boostEffects = (types, amount, multiplier = 1) => {
+            if (!Number(amount)) return;
+            values.effects = values.effects.map((effect) => (
+                types.includes(String(effect.type || ''))
+                    ? {
+                        ...effect,
+                        amount: Math.max(
+                            0,
+                            (Number(effect.amount || 0) + Number(amount)) * multiplier,
+                        ),
+                    }
+                    : effect
+            ));
+        };
+        boostEffects(['damage', 'shield'], Number(modifiers.primary_bonus || 0));
+        boostEffects(['damage'], Number(modifiers.damage_bonus || 0));
+        if (values.rarity === 'primary' && Number(modifiers.primary_multiplier || 0) > 1) {
+            const multiplier = Math.max(1, Number(modifiers.primary_multiplier || 1));
+            values.effects = values.effects.map((effect) => (
+                ['damage', 'shield'].includes(String(effect.type || ''))
+                    ? { ...effect, amount: Math.max(0, Number(effect.amount || 0) * multiplier) }
+                    : effect
+            ));
+        }
         const tags = new Set(Array.isArray(values.tags) ? values.tags : []);
         if (modifiers.force_exile) tags.add('exile');
+        if (modifiers.force_void) tags.add('void');
         if (modifiers.retain) tags.add('retain');
         values.tags = [...tags];
         return values;
+    }
+
+    function storyCardUpgradePrefix(card) {
+        const level = Math.max(Number(card?.upgrade_level || 0), card?.upgraded ? 1 : 0);
+        if (!level) return '';
+        return storyContent?.cards?.[card?.def_id]?.upgrade?.infinite && level > 1
+            ? `+${level} `
+            : '+';
     }
 
     function storyCardTypeColor(type) {
@@ -2750,7 +2824,19 @@
         return Boolean(storyContent?.cards?.[card?.def_id]?.upgrade);
     }
 
+    function storyCardIsUpgradable(card) {
+        const upgrade = storyContent?.cards?.[card?.def_id]?.upgrade;
+        return Boolean(upgrade && (upgrade.infinite || !card?.upgraded));
+    }
+
     function storyCardAtUpgradeState(card, upgraded) {
+        if (upgraded && storyContent?.cards?.[card?.def_id]?.upgrade?.infinite) {
+            const currentLevel = Math.max(
+                Number(card?.upgrade_level || 0),
+                card?.upgraded ? 1 : 0,
+            );
+            return { ...card, upgraded: true, upgrade_level: currentLevel + 1 };
+        }
         return { ...card, upgraded: Boolean(upgraded) };
     }
 
@@ -2978,6 +3064,14 @@
             const tag = storyTagElement(tagId);
             if (tag) flags.append(tag);
         });
+        const charge = Math.max(0, Number(card?.modifiers?.charge) || 0);
+        if (charge) {
+            const tag = storyTagElement('charge');
+            if (tag) {
+                tag.textContent = `${localize(storyContent?.tags?.charge?.name) || 'Charge'}: ${charge}`;
+                flags.append(tag);
+            }
+        }
         if (!flags.childElementCount) flags.classList.add('card-flags-empty');
         if (!supportsPrediction && !flags.childElementCount) return null;
 
@@ -3151,7 +3245,13 @@
         container.title = `${kind.toUpperCase()} ${now}`;
         setText(`${containerId}-total`, String(now));
         container.replaceChildren();
-        const previewChunks = globalThis.GTN_RESOURCE_ORBS.buildPreviewChunks(now, cost, slots);
+        const previewChunks = globalThis.GTN_RESOURCE_ORBS.buildPreviewChunks(
+            now,
+            cost,
+            slots,
+            10,
+            true,
+        );
         const stationaryChunks = previewChunks.filter((chunk) => !chunk.willSpend);
         const spendingChunks = previewChunks.filter((chunk) => chunk.willSpend);
         const emptySlotCount = Math.max(0, slots - stationaryChunks.length - spendingChunks.length);
@@ -3279,23 +3379,62 @@
         return !(cardValues(item)?.tags || []).includes('sublime');
     }
 
+    function previewedCombatCard(state) {
+        const hand = state?.combat?.hand || [];
+        return hand.find((card) => (
+            String(card.instance_id) === String(hoveredCombatCardId)
+        )) || selectedCombatCard(state);
+    }
+
+    function renderCombatResourcePreview(state = activeRun?.state) {
+        const combat = state?.combat;
+        if (!combat) return;
+        const values = cardValues(previewedCombatCard(state));
+        renderResourceOrbs(
+            'story-combat-player-elixir',
+            combat.elixir,
+            values?.cost_e,
+            'e',
+        );
+        renderResourceOrbs(
+            'story-combat-player-magic',
+            combat.magic,
+            values?.cost_m,
+            'm',
+        );
+    }
+
     function cardSelectionSpec(card, combatState = activeRun?.state?.combat || {}) {
         const values = cardValues(card);
         const effects = values?.effects || [];
         const combat = combatState || {};
         for (const effect of effects) {
             const type = String(effect?.type || '');
-            if (['choose_exile', 'copy_hand_card', 'make_card_free'].includes(type)) {
+            if (['choose_exile', 'copy_hand_card', 'make_card_free', 'active_discard'].includes(type)) {
                 const exact = ['copy_hand_card', 'make_card_free'].includes(type) || Boolean(effect.exact);
                 const source = (combat.hand || []).filter((item) => isStoryCardChoiceCandidate(item, card));
-                const maximum = Math.max(1, Number(effect.amount || 1));
+                const requested = Math.max(1, Number(effect.amount || 1));
+                const maximum = Math.min(source.length, requested);
                 return {
                     source,
                     payloadKey: 'selected_card_ids',
                     maximum,
                     minimum: exact && !(type === 'choose_exile' && source.length === 0)
-                        ? maximum
+                        ? requested
                         : 0,
+                };
+            }
+            if (type === 'recover_exiled') {
+                const source = (combat.exile_pile || []).filter((item) => (
+                    isStoryCardChoiceCandidate(item, null)
+                ));
+                const requested = Math.max(1, Number(effect.amount || 1));
+                const maximum = Math.min(source.length, requested);
+                return {
+                    source,
+                    payloadKey: 'selected_exile_ids',
+                    maximum,
+                    minimum: requested,
                 };
             }
             if (type === 'discard_to_draw_top' && (combat.discard_pile || []).length) {
@@ -3423,6 +3562,63 @@
         dialog.showModal();
     }
 
+    function openPendingStoryCardChoice(state) {
+        const pending = state?.combat?.pending_card_choice;
+        const dialog = $('story-card-choice-dialog');
+        const grid = $('story-card-choice-grid');
+        if (!pending || !dialog || !grid) return false;
+        if (
+            dialog.open
+            && cardChoiceContext?.mode === 'pending_card'
+            && String(cardChoiceContext.choiceKind) === String(pending.kind)
+        ) return true;
+        if (dialog.open) return false;
+        const source = Array.isArray(pending.cards) ? pending.cards : [];
+        const maximum = Math.min(
+            source.length,
+            Math.max(0, Number(pending.maximum || 0)),
+        );
+        const minimum = Math.min(
+            maximum,
+            Math.max(0, Number(pending.minimum || 0)),
+        );
+        const spec = {
+            source,
+            payloadKey: 'selected_card_ids',
+            minimum,
+            maximum,
+        };
+        cardChoiceContext = {
+            mode: 'pending_card',
+            choiceKind: String(pending.kind || ''),
+            spec,
+            selected: new Set(),
+        };
+        setStoryCardChoiceRequired(true);
+        setText('story-card-choice-title', localize(pending.title) || t.chooseCards);
+        setText(
+            'story-card-choice-copy',
+            minimum === maximum ? t.chooseExact(maximum) : t.chooseUpTo(maximum),
+        );
+        grid.replaceChildren();
+        source.forEach((choiceCard) => {
+            const wrapper = document.createElement('button');
+            wrapper.type = 'button';
+            wrapper.className = 'story-card-choice-select-item';
+            wrapper.dataset.instanceId = String(choiceCard.instance_id || '');
+            wrapper.append(createStoryCard(choiceCard, { interactive: false, compact: true }));
+            wrapper.addEventListener('click', () => {
+                toggleStoryCardChoice(wrapper, String(choiceCard.instance_id || ''), maximum);
+                const count = cardChoiceContext?.selected.size || 0;
+                $('story-card-choice-confirm').disabled = count < minimum || count > maximum;
+            });
+            grid.append(wrapper);
+        });
+        $('story-card-choice-confirm').disabled = minimum > 0;
+        dialog.showModal();
+        return true;
+    }
+
     function openPendingStoryDeckOperation(state) {
         const operation = state?.pending_deck_operations?.[0];
         const dialog = $('story-card-choice-dialog');
@@ -3546,7 +3742,7 @@
         costs.innerHTML = `<span class="story-pile-tile-cost cost-e">${Number(values.cost_e || 0)}</span><span class="story-pile-tile-cost cost-m">${Number(values.cost_m || 0)}</span>`;
         const name = document.createElement('div');
         name.className = 'story-pile-tile-name';
-        name.textContent = `${card.upgraded ? '+' : ''}${localize(values.name)}`;
+        name.textContent = `${storyCardUpgradePrefix(card)}${localize(values.name)}`;
         const art = document.createElement('div');
         art.className = 'story-pile-tile-art';
         const imageUrl = card.upgraded ? (values.upgraded_image_url || values.image_url) : values.image_url;
@@ -3688,7 +3884,7 @@
         }
         const displayName = blinded
             ? '?'
-            : `${card.upgraded ? '+' : ''}${localize(values.name)}`;
+            : `${storyCardUpgradePrefix(card)}${localize(values.name)}`;
         const englishName = blinded || lang === 'en' ? '' : String(values.name?.en || '');
         const imageUrl = blinded ? '' : (card.upgraded
             ? (values.upgraded_image_url || values.image_url || '')
@@ -3759,7 +3955,7 @@
         }
         if (options.disabled) element.disabled = true;
         if (typeof options.onClick === 'function') element.addEventListener('click', options.onClick);
-        if (!blinded && options.previewUpgradeOnHover && !card.upgraded && storyCardHasUpgrade(card)) {
+        if (!blinded && options.previewUpgradeOnHover && storyCardIsUpgradable(card)) {
             let pointerPreview = false;
             let focusPreview = false;
             let previewing = false;
@@ -3795,6 +3991,9 @@
                 focusPreview = false;
                 renderPreview();
             });
+        }
+        if (!blinded && options.hoverPreview !== false) {
+            attachStoryCardHoverPreview(element, () => storyCardElementData.get(element) || card);
         }
         scheduleStoryCardEffectFit(element);
         return element;
@@ -3834,6 +4033,9 @@
         (values.tags || []).forEach((tagId) => {
             add('tag', tagId, storyContent?.tags?.[tagId]);
         });
+        if (Number(card?.modifiers?.charge) > 0) {
+            add('tag', 'charge', storyContent?.tags?.charge);
+        }
 
         const statusIds = new Set();
         collectStoryStatusIds(values.effects, statusIds);
@@ -3946,6 +4148,8 @@
         frenzied: 'frenzy',
         vampire: 'vampire',
         limb_survival: 'regenerations',
+        bandage: 'bandage',
+        miracle: 'miracle',
     });
 
     const STORY_TRAIT_KEYS_BY_EFFECT = Object.freeze(Object.fromEntries(
@@ -3981,6 +4185,7 @@
     }
 
     function openStoryStatusTerms(statusKey) {
+        removeStoryCardHoverPreview();
         const key = String(statusKey || '');
         const definition = storyStatusDefinition(key);
         const dialog = $('story-term-dialog');
@@ -4018,7 +4223,9 @@
         const copy = document.createElement('div');
         copy.className = 'story-status-terms-copy';
         const title = document.createElement('h2');
-        title.textContent = t.statusTerms;
+        title.textContent = definition.category === 'action'
+            ? (t.actionTerms || (lang === 'zh' ? '行动说明' : 'Action Details'))
+            : t.statusTerms;
         const terms = document.createElement('div');
         terms.className = 'story-card-terms-list';
         appendStoryTermRow(terms, {
@@ -4084,6 +4291,7 @@
     }
 
     function openStoryTraitTerms(traitKey) {
+        removeStoryCardHoverPreview();
         const key = String(traitKey || '');
         const definition = storyTraitDefinition(key);
         const dialog = $('story-term-dialog');
@@ -4187,6 +4395,7 @@
     }
 
     function openStoryCardTerms(card, options = {}) {
+        removeStoryCardHoverPreview();
         const dialog = $('story-term-dialog');
         const content = $('story-term-content');
         if (!cardValues(card) || !dialog || !content) return;
@@ -5103,16 +5312,18 @@
             setText('story-blessing-copy', localize(blessing.description));
             container?.replaceChildren();
             container?.classList.add('story-card-choice-grid');
-            (state.player?.deck || []).forEach((card) => {
-                container?.append(createStoryCard(card, {
-                    compact: true,
-                    note: blessing.script === 'remove_card' ? t.remove : t.transform,
-                    onClick: () => storyAction('choose_blessing', {
-                        blessing_id: id,
-                        card_instance_id: card.instance_id,
-                    }),
-                }));
-            });
+            (state.player?.deck || [])
+                .filter((card) => blessing.script !== 'remove_card' || !cardValues(card)?.tags?.includes('eternal'))
+                .forEach((card) => {
+                    container?.append(createStoryCard(card, {
+                        compact: true,
+                        note: blessing.script === 'remove_card' ? t.remove : t.transform,
+                        onClick: () => storyAction('choose_blessing', {
+                            blessing_id: id,
+                            card_instance_id: card.instance_id,
+                        }),
+                    }));
+                });
             container?.append(choiceButton(
                 t.blessingBack,
                 () => renderBlessing(state),
@@ -5151,6 +5362,40 @@
         showView('story-blessing');
     }
 
+    function renderEasyRelicChoice(state) {
+        const screen = $('story-blessing');
+        screen?.classList.remove('is-card-selection');
+        setText('story-blessing-kicker', t.floor(state.current_floor || 1));
+        setText('story-blessing-title', t.easyRelicTitle);
+        setText('story-blessing-copy', t.easyRelicCopy);
+        const container = $('story-blessing-options');
+        container?.replaceChildren();
+        container?.classList.remove('story-card-choice-grid');
+        const options = Array.isArray(state.easy_relic_options)
+            ? state.easy_relic_options
+            : [];
+        options.forEach((id, index) => {
+            const relic = storyContent?.relics?.[id] || {};
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'story-choice-option story-blessing-option';
+            button.dataset.relicId = id;
+            const mark = document.createElement('span');
+            mark.className = 'story-choice-mark';
+            mark.textContent = String(index + 1);
+            const name = document.createElement('strong');
+            name.textContent = localize(relic.name) || id;
+            const description = document.createElement('span');
+            description.textContent = localize(relic.description);
+            button.append(mark, name, description);
+            button.addEventListener('click', () => {
+                storyAction('choose_easy_relic', { relic_id: id });
+            });
+            container?.append(button);
+        });
+        showView('story-blessing');
+    }
+
     function appendStoryChoiceHeading(container, text) {
         const heading = document.createElement('h3');
         heading.className = 'story-choice-section-title';
@@ -5170,26 +5415,58 @@
         setStoryRoomGridMode(container);
         container?.classList.add('is-journey-setup');
         setText('story-room-kicker', lang === 'zh' ? '新旅程' : 'New Journey');
-        setText('story-room-title', lang === 'zh' ? '选择起始区域与难度' : 'Choose a region and difficulty');
+        setText('story-room-title', lang === 'zh' ? '选择旅程模式、起始区域与难度' : 'Choose a journey mode, region, and difficulty');
         setText(
             'story-room-copy',
             lang === 'zh'
-                ? '确认后生成路线，并从随机3项赐福中选择1项。'
-                : 'Confirm to generate the route, then choose 1 of 3 random blessings.',
+                ? '标准旅程包含3个阶段；Boss Rush 将不断生成新的10层路线。'
+                : 'Standard journeys have 3 stages; Boss Rush keeps generating new 10-floor routes.',
         );
 
         let selectedBiome = String(room.biomes?.[0] || 'garden');
         let selectedDifficulty = String(room.difficulties?.[0] || 'normal');
+        let selectedMode = String(room.modes?.[0] || 'standard');
         const selectionButtons = [];
         const refreshSelections = () => {
             selectionButtons.forEach(({ button, kind, id }) => {
+                const selectedId = kind === 'biome'
+                    ? selectedBiome
+                    : (kind === 'difficulty' ? selectedDifficulty : selectedMode);
                 button.classList.toggle(
                     'is-selected',
-                    kind === 'biome' ? id === selectedBiome : id === selectedDifficulty,
+                    id === selectedId,
                 );
             });
         };
 
+        const modeCopy = {
+            standard: {
+                name: lang === 'zh' ? '标准旅程' : 'Standard Journey',
+                description: lang === 'zh'
+                    ? '穿越3个阶段，每个阶段拥有一条16层路线。'
+                    : 'Cross 3 stages, each with a 16-floor route.',
+            },
+            boss_rush: {
+                name: 'Boss Rush',
+                description: lang === 'zh'
+                    ? '先获得10次卡牌奖励与1项天赋；每10层选择区域与可叠加诅咒，无限推进。'
+                    : 'Begin with 10 card rewards and 1 talent; every 10 floors, choose a region and a stackable curse and continue endlessly.',
+            },
+        };
+        appendStoryChoiceHeading(container, lang === 'zh' ? '模式' : 'Mode');
+        (room.modes || ['standard']).forEach((modeId) => {
+            const copy = modeCopy[modeId] || { name: String(modeId), description: '' };
+            const button = choiceButton(
+                copy.name,
+                () => {
+                    selectedMode = String(modeId);
+                    refreshSelections();
+                },
+                { description: copy.description },
+            );
+            selectionButtons.push({ button, kind: 'mode', id: String(modeId) });
+            container?.append(button);
+        });
         appendStoryChoiceHeading(container, lang === 'zh' ? '区域' : 'Region');
         (room.biomes || []).forEach((biomeId) => {
             const definition = storyContent?.biomes?.[biomeId] || {};
@@ -5206,8 +5483,13 @@
         appendStoryChoiceHeading(container, lang === 'zh' ? '难度' : 'Difficulty');
         (room.difficulties || []).forEach((difficultyId) => {
             const definition = storyContent?.difficulties?.[difficultyId] || {};
+            const localizedName = localize(definition.name) || String(difficultyId);
+            const englishName = String(definition.name?.en || '').trim();
+            const difficultyLabel = lang !== 'en' && englishName && englishName !== localizedName
+                ? `${localizedName} ${englishName}`
+                : localizedName;
             const button = choiceButton(
-                localize(definition.name) || String(difficultyId),
+                difficultyLabel,
                 () => {
                     selectedDifficulty = String(difficultyId);
                     refreshSelections();
@@ -5223,6 +5505,7 @@
             () => storyAction('start_journey', {
                 biome: selectedBiome,
                 difficulty: selectedDifficulty,
+                mode: selectedMode,
             }),
         ));
         showView('story-room');
@@ -5271,6 +5554,70 @@
         storyEquipmentPreview = null;
     }
 
+    function removeStoryCardHoverPreview() {
+        if (!storyCardHoverPreview) return;
+        storyCardHoverPreview.remove();
+        storyCardHoverPreview = null;
+    }
+
+    function positionStoryCardHoverPreview(anchor) {
+        if (!storyCardHoverPreview || !anchor?.isConnected) return;
+        const anchorRect = anchor.getBoundingClientRect();
+        const previewRect = storyCardHoverPreview.getBoundingClientRect();
+        const gap = 14;
+        let left = anchorRect.right + gap;
+        let top = anchorRect.top + anchorRect.height / 2 - previewRect.height / 2;
+        if (left + previewRect.width > window.innerWidth - 8) {
+            left = anchorRect.left - previewRect.width - gap;
+        }
+        if (left < 8) {
+            left = anchorRect.left + anchorRect.width / 2 - previewRect.width / 2;
+            top = anchorRect.top - previewRect.height - gap;
+        }
+        if (top < 8 && anchorRect.bottom + previewRect.height + gap <= window.innerHeight - 8) {
+            top = anchorRect.bottom + gap;
+        }
+        left = Math.max(8, Math.min(window.innerWidth - previewRect.width - 8, left));
+        top = Math.max(8, Math.min(window.innerHeight - previewRect.height - 8, top));
+        storyCardHoverPreview.style.left = `${left}px`;
+        storyCardHoverPreview.style.top = `${top}px`;
+    }
+
+    function showStoryCardHoverPreview(anchor, card) {
+        if (!anchor || !cardValues(card)) return;
+        removeStoryCardHoverPreview();
+        const preview = document.createElement('div');
+        preview.className = 'story-card-hover-preview';
+        preview.setAttribute('aria-hidden', 'true');
+        const previewCard = createStoryCard(card, {
+            interactive: false,
+            hoverPreview: false,
+            enablePrediction: Boolean(activeRun?.state?.combat),
+            predictionTargetId: storyPredictionTargetId(),
+        });
+        preview.append(previewCard);
+        document.body.append(preview);
+        storyCardHoverPreview = preview;
+        positionStoryCardHoverPreview(anchor);
+        scheduleStoryCardEffectFit(previewCard);
+        requestAnimationFrame(() => {
+            positionStoryCardHoverPreview(anchor);
+            preview.classList.add('is-visible');
+        });
+    }
+
+    function attachStoryCardHoverPreview(anchor, getCard) {
+        if (!anchor || typeof getCard !== 'function') return;
+        anchor.addEventListener('pointerenter', () => {
+            if (window.matchMedia?.('(hover: none), (pointer: coarse)').matches) return;
+            showStoryCardHoverPreview(anchor, getCard());
+        });
+        anchor.addEventListener('pointermove', () => positionStoryCardHoverPreview(anchor));
+        anchor.addEventListener('pointerleave', removeStoryCardHoverPreview);
+        anchor.addEventListener('focus', () => showStoryCardHoverPreview(anchor, getCard()));
+        anchor.addEventListener('blur', removeStoryCardHoverPreview);
+    }
+
     function positionStoryEquipmentPreview(anchor) {
         if (!storyEquipmentPreview || !anchor?.isConnected) return;
         const anchorRect = anchor.getBoundingClientRect();
@@ -5289,6 +5636,7 @@
 
     function showStoryEquipmentPreview(anchor, card) {
         if (!anchor || !cardValues(card)) return;
+        removeStoryCardHoverPreview();
         removeStoryEquipmentPreview();
         const preview = document.createElement('div');
         preview.className = 'story-equipment-preview';
@@ -5296,6 +5644,7 @@
         const previewCard = createStoryCard(card, {
             interactive: false,
             predictionTargetId: '',
+            hoverPreview: false,
         });
         preview.append(previewCard);
         document.body.append(preview);
@@ -5376,9 +5725,10 @@
 
     function createStoryEffectChip(item, amount) {
         const chip = document.createElement('span');
-        chip.className = `story-effect story-effect-${item.key}`;
-        chip.dataset.storyEffectKey = String(item.key || '');
         const definition = storyStatusDefinition(item.key);
+        const categoryClass = definition?.category === 'action' ? 'story-action' : 'story-status';
+        chip.className = `story-effect ${categoryClass} story-effect-${item.key}`;
+        chip.dataset.storyEffectKey = String(item.key || '');
         const label = definition ? localize(definition.name) : (item.label || storyIntentStatusLabel(item.key));
         chip.title = `${label}: ${amount}`;
         chip.setAttribute('aria-label', chip.title);
@@ -5412,7 +5762,7 @@
         icon.alt = '';
         icon.setAttribute('aria-hidden', 'true');
         chip.append(icon);
-        if (amount > 0) {
+        if (amount > 0 || key === 'miracle' || key === 'bandage') {
             const counter = document.createElement('strong');
             counter.textContent = String(amount);
             chip.append(counter);
@@ -5427,13 +5777,23 @@
         if (!Number.isFinite(amount)) return;
         const chip = [...container.querySelectorAll('[data-story-effect-key]')]
             .find((item) => item.dataset.storyEffectKey === key);
+        const traitKey = storyTraitKeyForEffectKey(key);
         if (amount === 0) {
-            if (chip?.dataset.storyEffectStatic === 'true') chip.querySelector('strong')?.remove();
+            if (
+                chip?.dataset.storyEffectStatic === 'true'
+                && (traitKey === 'miracle' || traitKey === 'bandage')
+            ) {
+                let value = chip.querySelector('strong');
+                if (!value) {
+                    value = document.createElement('strong');
+                    chip.append(value);
+                }
+                value.textContent = '0';
+            } else if (chip?.dataset.storyEffectStatic === 'true') chip.querySelector('strong')?.remove();
             else chip?.remove();
             return;
         }
         if (!chip) {
-            const traitKey = storyTraitKeyForEffectKey(key);
             const traitChip = traitKey ? createStoryTraitChip(traitKey, amount) : null;
             container.append(traitChip || createStoryEffectChip({
                 key,
@@ -5447,7 +5807,6 @@
             chip.append(value);
         }
         value.textContent = String(amount);
-        const traitKey = storyTraitKeyForEffectKey(key);
         const definition = storyStatusDefinition(key) || storyTraitDefinition(traitKey);
         const label = definition ? localize(definition.name) : storyIntentStatusLabel(key);
         chip.title = `${label}: ${amount}`;
@@ -5460,7 +5819,9 @@
         values.forEach((item) => {
             const amount = Number(item.value);
             if (!Number.isFinite(amount) || amount === 0) return;
-            container.append(createStoryEffectChip(item, amount));
+            const traitKey = storyTraitKeyForEffectKey(item.key);
+            const traitChip = traitKey ? createStoryTraitChip(traitKey, amount) : null;
+            container.append(traitChip || createStoryEffectChip(item, amount));
         });
     }
 
@@ -5476,11 +5837,6 @@
         visibleTraitKeys.forEach((key) => {
             const definition = storyTraitDefinition(key);
             if (!definition || (key === 'nourish' && actor?.nourished)) return;
-            if (
-                key === 'yggdrasil_power'
-                && actor?.def_id === 'bandage_beetle'
-                && (actor?.bandage_triggered || Number(actor?.bandage || 0) <= 0)
-            ) return;
             const effectKey = STORY_TRAIT_VALUE_KEYS[key];
             const value = Math.max(0, Number(actor?.[effectKey]) || 0);
             const chip = createStoryTraitChip(key, value, staticTraitKeys.has(key));
@@ -5699,7 +6055,7 @@
         }
         if (selectedCombatCardId && !selectedCombatCard(state)) selectedCombatCardId = '';
         const selected = selectedCombatCard(state);
-        const selectedValues = cardValues(selected);
+        const selectedValues = cardValues(previewedCombatCard(state));
         const blindActive = Boolean(combat.blind_active);
         const selectedTargetKind = selected && !storyCursorCardMode(selected) ? cardTargetKind(selected) : '';
         setText('story-round', `R${combat.round || 1}`);
@@ -5740,6 +6096,7 @@
             { key: 'entangle', label: '缠绕', value: combat.entangle },
             { key: 'negative_status_immunity', label: '负面状态免疫', value: combat.negative_status_immunity },
             { key: 'evil_eye', label: '邪眼', value: combat.evil_eye },
+            { key: 'sturdy', label: '坚固', value: combat.sturdy },
         ]);
         renderStoryEquipment(combat.equipment);
         const enemyGroup = $('story-enemy-group');
@@ -5764,6 +6121,7 @@
                 && Number(combat.magic) >= Number(values.cost_m || 0)
                 && combat.turn === 'player'
                 && !combat.opening_redraw_pending
+                && !combat.pending_card_choice
                 && (!frenzyForcesAttack || values.type === 'thorn')
                 && (combat.card_play_limit == null || Number(combat.cards_played_this_turn || 0) < Number(combat.card_play_limit))
                 && canSatisfyCardSelection(card, combat);
@@ -5786,6 +6144,16 @@
                 predictionTargetId: storyPredictionTargetId(state),
                 onClick: (event) => selectCombatCard(state, card, event),
             }));
+            wrapper.addEventListener('pointerenter', () => {
+                hoveredCombatCardId = String(card.instance_id || '');
+                renderCombatResourcePreview(state);
+            });
+            wrapper.addEventListener('pointerleave', () => {
+                if (hoveredCombatCardId === String(card.instance_id || '')) {
+                    hoveredCombatCardId = '';
+                    renderCombatResourcePreview(state);
+                }
+            });
             hand?.append(wrapper);
         });
         syncStoryCursorCard(state);
@@ -5819,12 +6187,20 @@
             if (labelNode) labelNode.textContent = title.trim();
         });
         const endTurn = $('story-end-turn');
-        if (endTurn) endTurn.disabled = combat.turn !== 'player' || Boolean(combat.opening_redraw_pending);
+        if (endTurn) endTurn.disabled = (
+            combat.turn !== 'player'
+            || Boolean(combat.opening_redraw_pending)
+            || Boolean(combat.pending_card_choice)
+        );
         showView('story-combat');
         scheduleStoryAimUpdate(state);
         if (combat.opening_redraw_pending) {
             queueMicrotask(() => {
                 if (!storyCombatEntranceAnimating) openOpeningRedraw(state);
+            });
+        } else if (combat.pending_card_choice) {
+            queueMicrotask(() => {
+                if (!storyCombatEntranceAnimating) openPendingStoryCardChoice(state);
             });
         }
         if (preserveScroll) restoreStoryScrollPositions(scrollPositions);
@@ -6084,7 +6460,7 @@
         const room = state.room || {};
         const player = state.player || {};
         const upgradableCards = (player.deck || [])
-            .filter((card) => !card.upgraded && storyCardHasUpgrade(card));
+            .filter((card) => storyCardIsUpgradable(card));
         const container = $('story-room-options');
         const tabs = $('story-room-tabs');
         const footer = $('story-room-footer');
@@ -6098,12 +6474,25 @@
         renderStoryRoomContext(state, room);
         setText('story-room-kicker', `${t.floor(state.current_floor || 1)} · ${t.rooms[room.type] || t.room}`);
         if (room.type === 'stage_choice') {
-            setText('story-room-title', lang === 'zh' ? `选择第 ${room.stage || ''} 阶段区域` : `Choose Stage ${room.stage || ''} region`);
+            const bossRush = Boolean(room.boss_rush || state.journey_mode === 'boss_rush');
+            const block = Math.max(1, Number(room.stage) || 1);
+            const floorStart = (block - 1) * 10 + 1;
+            const floorEnd = block * 10;
+            setText(
+                'story-room-title',
+                bossRush
+                    ? (lang === 'zh' ? `Boss Rush：选择第 ${block} 轮区域` : `Boss Rush: Choose Block ${block} Region`)
+                    : (lang === 'zh' ? `选择第 ${room.stage || ''} 阶段区域` : `Choose Stage ${room.stage || ''} region`),
+            );
             setText(
                 'story-room-copy',
-                lang === 'zh'
-                    ? '选择下一区域和1项诅咒；随后生成新的16层路线。'
-                    : 'Choose the next region and 1 curse, then generate a new 16-floor route.',
+                bossRush
+                    ? (lang === 'zh'
+                        ? `选择下一区域和1项可叠加的诅咒，随后进入第 ${floorStart}-${floorEnd} 层。`
+                        : `Choose the next region and 1 stackable curse, then enter Floors ${floorStart}-${floorEnd}.`)
+                    : (lang === 'zh'
+                        ? '选择下一区域和1项诅咒；随后生成新的16层路线。'
+                        : 'Choose the next region and 1 curse, then generate a new 16-floor route.'),
             );
             let selectedBiome = String(room.biomes?.[0] || 'garden');
             const availableCurses = Array.isArray(room.curses)
@@ -6215,10 +6604,38 @@
                 });
             }
             renderStoryRoomTabs(state, restTabs);
+            footer?.append(storyRoomFooterButton(
+                t.directLeave,
+                () => storyAction('resolve_room', { option: 'leave' }),
+            ));
         } else if (room.type === 'chest') {
             setText('story-room-title', t.chestTitle);
             setText('story-room-copy', t.chestCopy);
-            container?.append(choiceButton(t.openChest, () => storyAction('resolve_room', { option: 'claim' }), { primary: true }));
+            const claims = room.claims && typeof room.claims === 'object'
+                ? room.claims
+                : { gold: false, relic: false };
+            const relic = storyContent?.relics?.[room.relic];
+            if (Number(room.gold || 0) > 0) {
+                container?.append(choiceButton(
+                    `${t.claimChestGold} · ${Number(room.gold)}G`,
+                    () => storyAction('resolve_room', { option: 'claim_gold' }),
+                    { disabled: Boolean(claims.gold), description: claims.gold ? t.claimed : t.claim },
+                ));
+            }
+            if (room.relic) {
+                container?.append(choiceButton(
+                    `${t.claimChestTalent} · ${localize(relic?.name) || room.relic}`,
+                    () => storyAction('resolve_room', { option: 'claim_relic' }),
+                    {
+                        disabled: Boolean(claims.relic),
+                        description: claims.relic ? t.claimed : localize(relic?.description),
+                    },
+                ));
+            }
+            footer?.append(storyRoomFooterButton(
+                t.directLeave,
+                () => storyAction('resolve_room', { option: 'leave' }),
+            ));
         } else if (room.type === 'shop') {
             setText('story-room-title', t.shopTitle);
             setText('story-room-copy', t.shopCopy);
@@ -6276,20 +6693,23 @@
                             appendStoryRoomEmpty(target, t.shopServiceUsed);
                             return;
                         }
-                        (player.deck || []).forEach((card) => target.append(createStoryCard(card, {
-                            compact: true,
-                            disabled: Number(player.gold || 0) < Number(room.remove_price || 0),
-                            note: `${t.remove} · ${room.remove_price}G`,
-                            onClick: () => openStoryDeckChange({
-                                kind: 'remove',
-                                card,
-                                price: room.remove_price,
-                                payload: {
-                                    option: 'remove_card',
-                                    card_instance_id: card.instance_id,
-                                },
-                            }),
-                        })));
+                        (player.deck || []).forEach((card) => {
+                            const eternal = cardValues(card)?.tags?.includes('eternal');
+                            target.append(createStoryCard(card, {
+                                compact: true,
+                                disabled: eternal || Number(player.gold || 0) < Number(room.remove_price || 0),
+                                note: eternal ? t.cannotRemove : `${t.remove} · ${room.remove_price}G`,
+                                onClick: () => openStoryDeckChange({
+                                    kind: 'remove',
+                                    card,
+                                    price: room.remove_price,
+                                    payload: {
+                                        option: 'remove_card',
+                                        card_instance_id: card.instance_id,
+                                    },
+                                }),
+                            }));
+                        });
                     },
                 },
                 {
@@ -6391,8 +6811,13 @@
                     let source = [...(player.deck || [])];
                     if (selection === 'upgrade') {
                         source = upgradableCards;
-                    } else if (allowed.size) {
-                        source = source.filter((card) => allowed.has(String(card.instance_id)));
+                    } else {
+                        if (allowed.size) {
+                            source = source.filter((card) => allowed.has(String(card.instance_id)));
+                        }
+                        if (selection === 'remove') {
+                            source = source.filter((card) => !cardValues(card)?.tags?.includes('eternal'));
+                        }
                     }
                     const baseTabId = eventTabIds[selection]
                         || `event-${String(option.id || selection)}`;
@@ -6575,6 +7000,11 @@
         const continueButton = $('story-reward-continue');
         continueButton?.classList.toggle('hidden', !canContinue);
         if (continueButton) continueButton.disabled = !canContinue;
+        const leaveButton = $('story-reward-leave');
+        if (leaveButton) {
+            leaveButton.textContent = t.directLeave;
+            leaveButton.classList.toggle('hidden', canContinue);
+        }
         showView('story-reward');
     }
 
@@ -6613,6 +7043,7 @@
         );
         $('story-restart-floor')?.classList.toggle('hidden', !hasFloorCheckpoint);
         if (state.phase === 'journey_setup') renderJourneySetup(state);
+        else if (state.phase === 'easy_relic') renderEasyRelicChoice(state);
         else if (state.phase === 'blessing') renderBlessing(state);
         else if (state.phase === 'combat' && state.combat) renderCombat(state, false);
         else {
@@ -7467,6 +7898,19 @@
                 storyAction('resolve_deck_operation', { selected_card_ids: selected });
                 return;
             }
+            if (context.mode === 'pending_card') {
+                if (
+                    event.target.returnValue !== 'confirm'
+                    || selected.length < context.spec.minimum
+                    || selected.length > context.spec.maximum
+                ) {
+                    requestAnimationFrame(() => openPendingStoryCardChoice(activeRun?.state));
+                    return;
+                }
+                setStoryCardChoiceRequired(false);
+                storyAction('resolve_card_choice', { selected_card_ids: selected });
+                return;
+            }
             setStoryCardChoiceRequired(false);
             if (context.mode === 'opening_redraw') {
                 storyAction('opening_redraw', {
@@ -7494,6 +7938,9 @@
         });
         $('story-reward-skip')?.addEventListener('click', () => storyAction('choose_reward', {
             reward_type: 'card',
+        }));
+        $('story-reward-leave')?.addEventListener('click', () => storyAction('choose_reward', {
+            reward_type: 'leave',
         }));
         $('story-reward-continue')?.addEventListener('click', () => storyAction('choose_reward', {
             reward_type: 'continue',
@@ -7565,6 +8012,19 @@
         });
         document.addEventListener('contextmenu', (event) => {
             event.preventDefault();
+            const cardChoiceDialog = $('story-card-choice-dialog');
+            if (cardChoiceDialog?.open) {
+                event.stopImmediatePropagation();
+                if (cardChoiceDialog.dataset.required !== '1') {
+                    cardChoiceDialog.close('cancel');
+                }
+                return;
+            }
+            if ($('story-term-dialog')?.open) {
+                event.stopImmediatePropagation();
+                closeStoryCardTerms();
+                return;
+            }
             if (selectedCombatCardId && activeRun?.state) {
                 event.stopImmediatePropagation();
                 cancelStoryCombatSelection(true);
@@ -7599,10 +8059,6 @@
                 const termOptions = storyCardTermOptions.get(cardSourceElement);
                 if (termOptions) openStoryCardTerms(card, termOptions);
                 else openStoryCardTerms(card);
-                return;
-            }
-            if ($('story-term-dialog')?.open) {
-                closeStoryCardTerms();
                 return;
             }
         });

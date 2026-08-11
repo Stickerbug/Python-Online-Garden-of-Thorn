@@ -97,7 +97,7 @@ ADVANCED_ATOMIC_OPS = {
     "jurassic_antler",
     "garden_show_initial_deck", "garden_kale_attack",
     "garden_daisy_attack", "garden_daisy_delayed_attack", "garden_coal_attack",
-    "hel_deliverance_attack",
+    "hel_deliverance_attack", "void_dlc_action",
 }
 
 ATOMIC_OP_ALIASES = {
@@ -801,12 +801,24 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
         return [i for i in range(len(engine.players)) if i != source]
     if text == "random_enemy":
         enemies = resolve_v2_target(engine, context, "all_enemies")
-        return enemies[0] if enemies else _enemy_id(engine, int(context.get("source_player", 0)))
+        source = int(context.get("source_player", 0))
+        chosen = enemies[0] if enemies else _enemy_id(engine, source)
+        from void_dlc_runtime import forced_random_target
+        return forced_random_target(engine, source, enemies, chosen)
     if text == "random_friendly":
         friends = resolve_v2_target(engine, context, "all_friendlies")
-        return friends[0] if friends else int(context.get("source_player", 0))
+        source = int(context.get("source_player", 0))
+        chosen = friends[0] if friends else source
+        from void_dlc_runtime import forced_random_target
+        return forced_random_target(engine, source, friends, chosen)
     if text == "random_player":
-        return 0 if not getattr(engine, "players", []) else int(context.get("_rng_index", 0)) % len(engine.players)
+        players = list(range(len(getattr(engine, "players", []))))
+        if not players:
+            return -1
+        source = int(context.get("source_player", 0))
+        chosen = int(context.get("_rng_index", 0)) % len(players)
+        from void_dlc_runtime import forced_random_target
+        return forced_random_target(engine, source, players, chosen)
     if text in ("hand", "deck", "discard", "exile", "equipment"):
         return _zone(engine, int(context.get("source_player", 0)), text)
     if text in ("choice_target", "selected_target", "chosen_target", "event_target", "target_id"):
@@ -948,29 +960,60 @@ def validate_v2_ui_response(engine, context: Dict[str, Any], component: Dict[str
                 if abs(offset - round(offset)) > 1e-6:
                     raise V2RuntimeError(f"v2 ui value does not match step: {cid}")
             values_out[cid] = int(value) if float(value).is_integer() else value
-        elif ctype == "select":
+        elif ctype in ("select", "card_catalog_picker"):
             options = _control_options(control)
             allowed = [str(opt.get("value")) for opt in options]
             value = str(raw_value)
             if allowed and value not in allowed:
                 raise V2RuntimeError(f"invalid v2 ui select value: {cid}")
             values_out[cid] = value
-        elif ctype in ("card_picker", "equipment_picker"):
-            try:
-                instance_id = int(raw_value)
-            except Exception:
-                raise V2RuntimeError(f"invalid v2 ui picker value: {cid}")
-            zone = str(control.get("zone") or ("equipment" if ctype == "equipment_picker" else "hand"))
+        elif ctype in ("card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker"):
+            multi = ctype.startswith("multi_")
+            zone = str(control.get("zone") or ("equipment" if "equipment" in ctype else "hand"))
             target_id = _player_id(engine, resolve_v2_target(engine, context, control.get("target", "source")))
-            if instance_id not in _picker_instance_ids(engine, target_id, zone, ctype):
-                raise V2RuntimeError(f"v2 ui picker target not allowed: {cid}")
-            values_out[cid] = instance_id
+            picker_type = "equipment_picker" if "equipment" in ctype else "card_picker"
+            allowed_ids = _picker_instance_ids(engine, target_id, zone, picker_type)
+            explicit_allowed = control.get("allowed_instance_ids")
+            if isinstance(explicit_allowed, list):
+                normalized_allowed = set()
+                for value in explicit_allowed:
+                    try:
+                        normalized_allowed.add(int(value))
+                    except Exception:
+                        continue
+                allowed_ids = [instance_id for instance_id in allowed_ids if instance_id in normalized_allowed]
+            raw_values = raw_value if isinstance(raw_value, list) else ([] if raw_value in (None, "") else [raw_value])
+            instance_ids = []
+            for value in raw_values:
+                try:
+                    instance_id = int(value)
+                except Exception:
+                    raise V2RuntimeError(f"invalid v2 ui picker value: {cid}")
+                if instance_id in instance_ids:
+                    continue
+                if instance_id not in allowed_ids:
+                    raise V2RuntimeError(f"v2 ui picker target not allowed: {cid}")
+                instance_ids.append(instance_id)
+            min_select = max(0, _to_int(control.get("min_select", 0 if multi else 1)))
+            max_select = max(min_select, _to_int(control.get("max_select", len(allowed_ids) if multi else 1)))
+            if len(instance_ids) < min_select or len(instance_ids) > max_select:
+                raise V2RuntimeError(f"v2 ui picker selection count invalid: {cid}")
+            values_out[cid] = instance_ids if multi else (instance_ids[0] if instance_ids else None)
         elif ctype in ("player_picker", "target_picker"):
             try:
                 player_id = int(raw_value)
             except Exception:
                 raise V2RuntimeError(f"invalid v2 ui player value: {cid}")
-            if not _valid_player(engine, player_id):
+            explicit_allowed = control.get("allowed_player_ids")
+            normalized_allowed = None
+            if isinstance(explicit_allowed, list):
+                normalized_allowed = set()
+                for value in explicit_allowed:
+                    try:
+                        normalized_allowed.add(int(value))
+                    except Exception:
+                        continue
+            if not _valid_player(engine, player_id) or (normalized_allowed is not None and player_id not in normalized_allowed):
                 raise V2RuntimeError(f"invalid v2 ui player target: {cid}")
             values_out[cid] = player_id
         else:
@@ -1029,7 +1072,7 @@ def _sanitize_ui_component(engine, context: Dict[str, Any], component: Dict[str,
     }
     out = {key: copy.deepcopy(component[key]) for key in allowed_component_keys if key in component}
     ctype = str(out.get("type") or "modal")
-    if ctype not in {"modal", "confirm", "select", "slider", "number", "number_input", "card_picker", "equipment_picker", "player_picker", "target_picker", "text"}:
+    if ctype not in {"modal", "confirm", "select", "card_catalog_picker", "slider", "number", "number_input", "card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker", "player_picker", "target_picker", "text"}:
         raise V2RuntimeError(f"unsupported v2 ui component type: {ctype}")
     out["type"] = ctype
     controls = out.get("controls") if isinstance(out.get("controls"), list) else []
@@ -1069,7 +1112,7 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
     ctype = str(control.get("type") or "text")
     if not cid:
         raise V2RuntimeError("ui control id is required")
-    if ctype not in {"text", "select", "slider", "number", "number_input", "card_picker", "equipment_picker", "player_picker", "target_picker"}:
+    if ctype not in {"text", "select", "card_catalog_picker", "slider", "number", "number_input", "card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker", "player_picker", "target_picker"}:
         raise V2RuntimeError(f"unsupported v2 ui control type: {ctype}")
     out: Dict[str, Any] = {
         "id": cid,
@@ -1090,16 +1133,46 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
             offset = round((default - min_value) / step)
             default = min(max(min_value + offset * step, min_value), max_value)
         out.update({"min": min_value, "max": max_value, "step": step, "default": default})
-    elif ctype == "select":
+    elif ctype in ("select", "card_catalog_picker"):
         out["options"] = _control_options(control)
-    elif ctype in ("card_picker", "equipment_picker"):
-        zone = str(control.get("zone") or ("equipment" if ctype == "equipment_picker" else "hand"))
+    elif ctype in ("card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker"):
+        picker_type = "equipment_picker" if "equipment" in ctype else "card_picker"
+        zone = str(control.get("zone") or ("equipment" if picker_type == "equipment_picker" else "hand"))
         target_id = _player_id(engine, resolve_v2_target(engine, context, control.get("target", "source")))
+        options = _picker_options(engine, target_id, zone, picker_type)
+        explicit_allowed = control.get("allowed_instance_ids")
+        if isinstance(explicit_allowed, list):
+            allowed = set()
+            for value in explicit_allowed:
+                try:
+                    allowed.add(int(value))
+                except Exception:
+                    continue
+            options = [option for option in options if int(option.get("value", -1)) in allowed]
         out["zone"] = zone
         out["target"] = target_id
-        out["options"] = _picker_options(engine, target_id, zone, ctype)
+        out["options"] = options
+        out["allowed_instance_ids"] = [int(option.get("value")) for option in options]
+        if ctype.startswith("multi_"):
+            min_select = max(0, _to_int(control.get("min_select", 0)))
+            max_select = max(min_select, _to_int(control.get("max_select", len(options))))
+            out["min_select"] = min(min_select, len(options))
+            out["max_select"] = min(max_select, len(options))
     elif ctype in ("player_picker", "target_picker"):
-        out["options"] = [{"value": idx, "label": engine.pn(idx)} for idx in range(len(getattr(engine, "players", [])))]
+        allowed = None
+        if isinstance(control.get("allowed_player_ids"), list):
+            allowed = set()
+            for value in control.get("allowed_player_ids"):
+                try:
+                    allowed.add(int(value))
+                except Exception:
+                    continue
+        out["options"] = [
+            {"value": idx, "label": engine.pn(idx)}
+            for idx in range(len(getattr(engine, "players", [])))
+            if allowed is None or idx in allowed
+        ]
+        out["allowed_player_ids"] = [int(option["value"]) for option in out["options"]]
     else:
         out["text"] = str(control.get("text") or control.get("text_cn") or control.get("label_cn") or "")
         out["text_cn"] = str(control.get("text_cn") or control.get("text") or "")
@@ -1211,12 +1284,15 @@ def _control_options(control: Dict[str, Any]) -> List[Dict[str, Any]]:
         if isinstance(item, dict):
             value = item.get("value", item.get("id", item.get("label", "")))
             label = item.get("label", item.get("text", value))
-            options.append({
+            option = {
                 "value": str(value),
                 "label": str(label),
                 "label_cn": str(item.get("label_cn") or item.get("text_cn") or label),
                 "label_en": str(item.get("label_en") or item.get("text_en") or label),
-            })
+            }
+            if isinstance(item.get("card"), dict):
+                option["card"] = copy.deepcopy(item.get("card"))
+            options.append(option)
         else:
             options.append({"value": str(item), "label": str(item), "label_cn": str(item), "label_en": str(item)})
     return options

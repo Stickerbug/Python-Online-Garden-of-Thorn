@@ -7,8 +7,13 @@ from story_content import (
     STORY_BLESSINGS,
     STORY_BOSS_RELIC_IDS,
     STORY_CARDS,
+    STORY_DIFFICULTIES,
+    STORY_EASY_RELIC_IDS,
     STORY_ENCOUNTERS,
     STORY_ENEMIES,
+    STORY_RELICS,
+    STORY_REWARD_CARD_IDS,
+    STORY_SHOP_CARD_IDS,
     STORY_STATUSES,
 )
 from story_engine import (
@@ -67,6 +72,98 @@ def test_negative_status_immunity_reuses_multiplayer_status_immunity_icon():
     )
 
 
+def test_stun_is_an_action_and_bypasses_negative_status_immunity():
+    state = _started_state('stun-action')
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'stun-action',
+        [],
+        encounter_override=[{'def_id': 'cicada'}],
+    )
+    enemy = state['combat']['enemies'][0]
+    enemy['negative_status_immunity'] = 2
+    status_count_before = story_engine._status_count(enemy)
+    events = []
+
+    story_engine._apply_status(state, enemy, 'stun', 2, events, source='test')
+
+    assert STORY_STATUSES['stun']['category'] == 'action'
+    assert enemy['stun'] == 2
+    assert enemy['negative_status_immunity'] == 2
+    assert story_engine._status_count(enemy) == status_count_before
+    assert any(
+        event.get('type') == 'status'
+        and event.get('status') == 'stun'
+        and event.get('category') == 'action'
+        for event in events
+    )
+    assert not any(event.get('type') == 'status_blocked' for event in events)
+
+
+def test_miracle_spends_one_visible_use_before_the_second_card_only():
+    state = _started_state('miracle-counter', biome='desert')
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'miracle-counter',
+        [],
+        encounter_override=[{'def_id': 'cicada'}],
+    )
+    combat = state['combat']
+    combat['opening_redraw_pending'] = False
+    combat['elixir'] = 99
+    combat['hand'] = [
+        _new_card(state, 'rose'),
+        _new_card(state, 'rose'),
+        _new_card(state, 'rose'),
+    ]
+    first_id, second_id, third_id = [card['instance_id'] for card in combat['hand']]
+
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': first_id},
+        'miracle-counter:first',
+    )
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': second_id},
+        'miracle-counter:second',
+    )
+
+    enemy = state['combat']['enemies'][0]
+    assert enemy['miracle'] == 2
+    assert enemy['evade'] == 1
+    miracle_events = [
+        event for event in events
+        if event.get('effect_kind') == 'miracle'
+    ]
+    assert len(miracle_events) == 1
+    assert miracle_events[0]['before'] == 3
+    assert miracle_events[0]['after'] == 2
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': third_id},
+        'miracle-counter:third',
+    )
+    assert state['combat']['enemies'][0]['miracle'] == 2
+    assert not any(event.get('effect_kind') == 'miracle' for event in events)
+
+
+def test_corruption_is_eternal_and_cannot_be_removed_from_the_deck():
+    state = _started_state('eternal-corruption')
+    corruption = _new_card(state, 'corruption')
+
+    assert 'eternal' in STORY_CARDS['corruption']['tags']
+    with pytest.raises(StoryActionError) as exc_info:
+        story_engine._ensure_card_removable(corruption)
+    assert exc_info.value.code == 'CARD_ETERNAL'
+
+
 def test_updated_card_rarities_and_tags_match_the_story_design():
     assert STORY_CARDS['crystal_leaf']['rarity'] == 'ultra'
     assert STORY_CARDS['antibody']['tags'] == ()
@@ -79,6 +176,71 @@ def test_journey_setup_offers_three_blessings_and_applies_hard_start():
     assert len(set(state['blessing_options'])) == 3
     assert set(state['blessing_options']) <= set(STORY_BLESSINGS)
     assert [card['def_id'] for card in state['player']['deck']].count('corruption') == 1
+
+
+def test_easy_difficulty_uses_normal_map_and_precedes_blessing_with_a_talent():
+    assert list(STORY_DIFFICULTIES) == ['easy', 'normal', 'hard', 'lunatic']
+    assert [STORY_DIFFICULTIES[key]['abbreviation']['en'] for key in STORY_DIFFICULTIES] == [
+        'E', 'N', 'H', 'L',
+    ]
+    easy_map = generate_story_map('easy-map', 1, 'garden', 'easy')
+    normal_map = generate_story_map('easy-map', 1, 'garden', 'normal')
+    assert easy_map['floors'] == normal_map['floors']
+    assert easy_map['edges'] == normal_map['edges']
+
+    state = _started_state('easy-setup', difficulty='easy')
+    assert state['phase'] == 'easy_relic'
+    assert len(state['easy_relic_options']) == 3
+    assert set(state['easy_relic_options']) <= set(STORY_EASY_RELIC_IDS)
+    selected = state['easy_relic_options'][0]
+    state, events = apply_story_action(
+        state,
+        'choose_easy_relic',
+        {'relic_id': selected},
+        'easy-setup',
+    )
+    assert state['phase'] == 'blessing'
+    assert selected in state['player']['relics']
+    assert any(event.get('type') == 'easy_relic_chosen' for event in events)
+
+
+def test_lunatic_stage_three_has_two_consecutive_boss_floors():
+    story_map = generate_story_map('lunatic-stage-three', 3, 'ocean', 'lunatic')
+    assert story_map['floor_count'] == 17
+    assert len(story_map['floors']) == 17
+    assert {node['type'] for node in story_map['floors'][15]['nodes']} == {'boss'}
+    assert {node['type'] for node in story_map['floors'][16]['nodes']} == {'boss'}
+    assert story_map['floors'][15]['width'] == 1
+    assert story_map['floors'][16]['width'] == 1
+
+
+def test_easy_talents_apply_draw_heal_resource_retention_and_card_upgrades():
+    state = _started_state('easy-talents')
+    state['player']['relics'].extend([
+        'easy_miracle',
+        'easy_peace',
+        'easy_study',
+        'easy_tiger',
+        'easy_godhood',
+    ])
+    state['player']['health'] -= 10
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'easy-talents',
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    assert state['combat']['elixir'] == state['player']['max_elixir'] + 4
+    assert len(state['combat']['hand']) == 7
+    assert state['player']['health'] == state['player']['max_health'] - 7
+
+    state['combat']['elixir'] = 2
+    _turn_boundary(state, 'easy-talents:next', [])
+    assert state['combat']['elixir'] == state['player']['max_elixir'] + 3
+
+    gained = story_engine._gain_deck_card(state, 'heavy', [], source='test')
+    assert gained['upgraded'] is True
 
 
 def test_second_floor_uses_the_general_non_crossing_connection_rules():
@@ -104,7 +266,7 @@ def test_enemy_builder_applies_lunatic_values_and_stacking_curses():
         encounter_override=[{'def_id': 'cactus'}],
     )
     enemy = state['combat']['enemies'][0]
-    assert enemy['max_health'] == STORY_ENEMIES['cactus']['lunatic_max_health'] * 3
+    assert enemy['max_health'] == 78
     assert enemy['reflection'] == 3
     assert enemy['negative_status_immunity'] == 6
 
@@ -260,6 +422,8 @@ def test_frenzy_doubles_attacks_and_requires_attacks_to_be_played_first():
 
 
 def test_bandage_and_shiny_ladybug_survival_rules_are_distinct():
+    assert STORY_ENEMIES['bandage_beetle']['traits'] == ('bandage',)
+    assert STORY_ENEMIES['shiny_ladybug']['traits'] == ('yggdrasil_power',)
     state = _started_state('enemy-survival', biome='desert')
     _start_combat(
         state,
@@ -306,6 +470,15 @@ def test_soul_splitter_extra_turn_cannot_restore_beetle_bandage():
     _end_turn(state, 'soul-splitter-bandage', [])
     assert combat['turn_kind'] == 'extra'
     assert beetle['bandage'] == 0
+    assert beetle['invincible'] == 1
+
+    # Extra player turns do not consume the beetle's protected forced action.
+    blocked_events = []
+    _enemy_physical_damage(state, beetle, 10, 1, blocked_events, 'blocked lethal')
+    assert beetle['health'] == 1
+
+    story_engine._enemy_turn(state, 'soul-splitter-bandage', [])
+    assert beetle['invincible'] == 0
 
     # A durable one-use marker also protects migrated or stale states whose
     # numeric counter was accidentally restored.
@@ -337,6 +510,41 @@ def test_turn_boundary_resolves_shelter_without_expiring_new_turn_defenses():
     assert frog['shield'] >= 7 + palm['shelter']
     assert frog['sturdy'] == 1
     assert all(card.get('modifiers', {}).get('charge') == 2 for card in state['combat']['hand'])
+
+
+def test_rain_frog_grants_player_sturdy_that_preserves_shield_for_one_boundary():
+    state = _started_state('rain-frog-sturdy', biome='desert')
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'rain-frog-sturdy',
+        [],
+        encounter_override=[{'def_id': 'rain_frog'}],
+    )
+    combat = state['combat']
+    frog = combat['enemies'][0]
+    move = STORY_ENEMIES['rain_frog']['moves'][0]
+    events = []
+
+    _resolve_enemy_effect(
+        state,
+        frog,
+        move['effects'][1],
+        move,
+        'rain-frog-sturdy:effect',
+        events,
+    )
+    combat['shield'] = 9
+    _turn_boundary(state, 'rain-frog-sturdy:boundary', events)
+
+    assert combat['sturdy'] == 0
+    assert combat['shield'] >= 9
+    assert any(
+        event.get('type') == 'status'
+        and event.get('target_id') == 'player'
+        and event.get('status') == 'sturdy'
+        for event in events
+    )
 
 
 def test_enemy_action_shield_survives_until_the_next_enemy_turn():
@@ -497,6 +705,11 @@ def test_cowardly_defense_filters_bloom_rewards_and_peaceful_mind_is_optional():
     for index in range(20):
         choices = _reward_choices(state, f'boss-restrictions:{index}')
         assert all(STORY_CARDS[item['card_id']]['type'] != 'bloom' for item in choices)
+    shop = _make_shop(state, 'boss-restrictions:shop')
+    assert all(
+        STORY_CARDS[item['card_id']]['type'] != 'bloom'
+        for item in shop['cards']
+    )
 
     events = []
     _gain_relic(state, 'peaceful_mind', 'boss-restrictions', events)
@@ -510,6 +723,35 @@ def test_cowardly_defense_filters_bloom_rewards_and_peaceful_mind_is_optional():
         'boss-restrictions',
     )
     assert 'pending_deck_operations' not in state
+
+
+def test_normal_rewards_are_primary_but_shops_can_offer_neutral_cards():
+    assert STORY_REWARD_CARD_IDS
+    assert all(STORY_CARDS[card_id]['owner'] == 'primary' for card_id in STORY_REWARD_CARD_IDS)
+    assert any(STORY_CARDS[card_id]['owner'] == 'neutral' for card_id in STORY_SHOP_CARD_IDS)
+    state = _started_state('separate-card-pools')
+    shop = _make_shop(state, 'separate-card-pools')
+    assert any(item['owner'] == 'neutral' for item in shop['cards'])
+    assert all(
+        STORY_CARDS[item['card_id']]['owner'] == 'primary'
+        for item in _reward_choices(state, 'separate-card-pools')
+    )
+
+
+def test_relic_pools_exclude_owned_items_and_shop_excluded_rich():
+    state = _started_state('relic-pool-rules')
+    assert 'rich' not in story_engine._natural_relic_pool(state, for_shop=True)
+    natural_ids = [
+        relic_id
+        for relic_id, relic in STORY_RELICS.items()
+        if relic.get('rarity') != 'special'
+    ]
+    state['player']['relics'].extend(natural_ids)
+    assert story_engine._random_relic(state, 'relic-pool-rules') == 'consolation'
+    assert _make_shop(state, 'relic-pool-rules')['relics'][0]['relic_id'] == 'consolation'
+
+    state['player']['relics'].extend(STORY_BOSS_RELIC_IDS)
+    assert _boss_relic_choices(state, 'relic-pool-rules') == ['consolation']
 
 
 def test_elite_encounters_do_not_repeat_until_the_biome_pool_is_exhausted():
@@ -627,7 +869,7 @@ def test_shop_upgrade_and_remove_share_one_service_slot_and_separate_prices():
     assert next_shop['upgrade_price'] == 75
 
 
-def test_exact_exile_card_remains_playable_when_no_other_card_can_be_selected():
+def test_exact_active_discard_card_is_unplayable_without_another_card():
     state = _started_state('empty-exile-selection')
     _start_combat(
         state,
@@ -647,18 +889,17 @@ def test_exact_exile_card_remains_playable_when_no_other_card_can_be_selected():
     target = combat['enemies'][0]
     target['health'] = target['max_health'] = 999
 
-    state, _ = apply_story_action(
-        state,
-        'play_card',
-        {'card_instance_id': amulet['instance_id'], 'target_id': target['id']},
-        'empty-exile-selection',
-    )
+    with pytest.raises(StoryActionError) as error:
+        apply_story_action(
+            state,
+            'play_card',
+            {'card_instance_id': amulet['instance_id'], 'target_id': target['id']},
+            'empty-exile-selection',
+        )
 
-    updated_target = state['combat']['enemies'][0]
-    assert updated_target['health'] == 983
-    assert [card['instance_id'] for card in state['combat']['discard_pile']] == [
-        amulet['instance_id'],
-    ]
+    assert error.value.code == 'CARD_NOT_PLAYABLE'
+    assert state['combat']['hand'] == [amulet]
+    assert target['health'] == 999
 
 
 def test_blind_consumes_one_stack_and_hides_the_entire_player_turn():
@@ -708,7 +949,7 @@ def test_affliction_applies_one_random_negative_status_after_each_enemy_action()
     ) == 2
 
 
-def test_wreckage_summons_its_assigned_enemy_regardless_of_death_source():
+def test_wreckage_non_burst_death_halves_and_stuns_its_assigned_summon():
     state = _started_state('wreckage-death-hook', biome='ocean')
     _start_combat(
         state,
@@ -723,7 +964,9 @@ def test_wreckage_summons_its_assigned_enemy_regardless_of_death_source():
 
     assert _check_combat_end(state, 'wreckage-death-hook', events) is False
     crab = next(enemy for enemy in state['combat']['enemies'] if enemy['def_id'] == 'crab')
+    assert crab['max_health'] == 29
     assert crab['health'] == crab['max_health']
+    assert crab['stun'] == 1
     assert any(
         event.get('type') == 'enemy_death_trigger'
         and event.get('script') == 'wreckage'
@@ -731,16 +974,41 @@ def test_wreckage_summons_its_assigned_enemy_regardless_of_death_source():
     )
 
 
-def test_numeric_relics_stack_but_rule_toggle_relics_remain_unique():
+def test_wreckage_burst_death_summons_at_full_health_without_stun():
+    state = _started_state('wreckage-burst', biome='ocean')
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'wreckage-burst',
+        [],
+        encounter_override=[{'def_id': 'wreckage', 'death_summon': 'crab'}],
+    )
+    wreckage = state['combat']['enemies'][0]
+    wreckage['health'] = 0
+    wreckage['death_reason'] = 'burst'
+
+    assert _check_combat_end(state, 'wreckage-burst', []) is False
+    crab = next(enemy for enemy in state['combat']['enemies'] if enemy['def_id'] == 'crab')
+    assert crab['max_health'] == STORY_ENEMIES['crab']['max_health']
+    assert crab['health'] == crab['max_health']
+    assert crab['stun'] == 0
+
+
+def test_duplicate_relics_become_consolation_instead_of_stacking():
     state = _started_state('stacking-relics')
     events = []
+    health_before = state['player']['health']
+    max_health_before = state['player']['max_health']
     _gain_relic(state, 'ruthless', 'stacking-relics:1', events)
     _gain_relic(state, 'ruthless', 'stacking-relics:2', events)
     _gain_relic(state, 'circulation', 'stacking-relics:3', events)
     _gain_relic(state, 'circulation', 'stacking-relics:4', events)
 
-    assert state['player']['relics'].count('ruthless') == 2
+    assert state['player']['relics'].count('ruthless') == 1
     assert state['player']['relics'].count('circulation') == 1
+    assert state['player']['relics'].count('consolation') == 2
+    assert state['player']['health'] == health_before
+    assert state['player']['max_health'] == max_health_before + 2
     _start_combat(
         state,
         {'type': 'combat'},
@@ -748,7 +1016,7 @@ def test_numeric_relics_stack_but_rule_toggle_relics_remain_unique():
         [],
         encounter_override=[{'def_id': 'soldier_ant'}],
     )
-    assert state['combat']['power'] == 2
+    assert state['combat']['power'] == 1
 
 
 def test_restart_floor_restores_the_immutable_node_entry_state_even_after_death():

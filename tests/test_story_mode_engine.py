@@ -32,7 +32,12 @@ from story_engine import (
     _refresh_combat_projections,
     apply_story_action,
 )
-from story_mode import STORY_FLOOR_COUNT, build_initial_story_state, generate_story_map
+from story_mode import (
+    STORY_FLOOR_COUNT,
+    build_initial_story_state,
+    generate_boss_rush_map,
+    generate_story_map,
+)
 
 
 def _journey_state(seed='story-test', difficulty='normal', biome='garden'):
@@ -541,6 +546,132 @@ def test_story_map_has_sixteen_floors_no_early_elites_and_no_crossing_edges():
                 ) >= 0
 
 
+def test_boss_rush_map_is_a_ten_floor_global_single_route_block():
+    story_map = generate_boss_rush_map(
+        'boss-rush-map',
+        block=3,
+        biome='desert',
+        difficulty='hard',
+    )
+
+    assert story_map['mode'] == 'boss_rush'
+    assert story_map['floor_offset'] == 20
+    assert story_map['floor_count'] == 30
+    assert [floor['floor'] for floor in story_map['floors']] == list(range(21, 31))
+    assert all(floor['width'] == 1 for floor in story_map['floors'])
+    assert len(story_map['edges']) == 9
+    assert all(
+        node['status'] == 'locked'
+        for floor in story_map['floors']
+        for node in floor['nodes']
+    )
+    assert all(
+        node.get('enemy_health_multiplier') == 3
+        for floor in story_map['floors']
+        for node in floor['nodes']
+        if node['type'] == 'elite'
+    )
+
+
+def test_boss_rush_opens_after_ten_card_rewards_and_one_talent():
+    seed = 'boss-rush-opening'
+    state = build_initial_story_state(seed)
+    initial_deck_size = len(state['player']['deck'])
+    initial_relic_count = len(state['player']['relics'])
+
+    state, _ = apply_story_action(
+        state,
+        'start_journey',
+        {'biome': 'garden', 'difficulty': 'normal', 'mode': 'boss_rush'},
+        seed,
+    )
+
+    assert state['journey_mode'] == 'boss_rush'
+    assert state['phase'] == 'reward'
+    assert state['reward']['source'] == 'boss_rush_start_cards'
+    assert state['reward']['round_total'] == 10
+    assert state['map']['floors'][0]['nodes'][0]['status'] == 'locked'
+
+    for round_index in range(1, 11):
+        reward = state['reward']
+        assert reward['round_index'] == round_index
+        choice = reward['cards'][0]
+        card_id = choice.get('card_id') if isinstance(choice, dict) else choice
+        state, _ = apply_story_action(
+            state,
+            'choose_reward',
+            {'reward_type': 'card', 'card_id': card_id},
+            seed,
+        )
+        state, _ = apply_story_action(
+            state,
+            'choose_reward',
+            {'reward_type': 'continue'},
+            seed,
+        )
+
+    assert len(state['player']['deck']) == initial_deck_size + 10
+    assert state['phase'] == 'reward'
+    assert state['reward']['source'] == 'boss_rush_start_relic'
+    relic_id = state['reward']['relic']
+    state, _ = apply_story_action(
+        state,
+        'choose_reward',
+        {'reward_type': 'relic', 'relic_id': relic_id},
+        seed,
+    )
+    state, _ = apply_story_action(
+        state,
+        'choose_reward',
+        {'reward_type': 'continue'},
+        seed,
+    )
+
+    assert state['phase'] == 'map'
+    assert state['current_floor'] == 1
+    assert state['map']['floors'][0]['nodes'][0]['status'] == 'available'
+    assert len(state['player']['relics']) == initial_relic_count + 1
+
+
+def test_boss_rush_stage_choice_stacks_curses_and_advances_endlessly():
+    seed = 'boss-rush-loop'
+    state = build_initial_story_state(seed)
+    state['journey_mode'] = 'boss_rush'
+    state['difficulty'] = 'normal'
+    state['curses'] = {'vitality': 1}
+
+    for block in (2, 3):
+        state['phase'] = 'stage_choice'
+        state['room'] = {
+            'type': 'stage_choice',
+            'stage': block,
+            'biomes': ['garden'],
+            'curses': ['vitality'],
+            'allow_repeated_curses': True,
+            'boss_rush': True,
+        }
+        state, events = apply_story_action(
+            state,
+            'choose_stage',
+            {'biome': 'garden', 'curse_id': 'vitality'},
+            seed,
+        )
+
+        first_node = state['map']['floors'][0]['nodes'][0]
+        assert state['phase'] == 'map'
+        assert state['stage'] == block
+        assert state['current_floor'] == (block - 1) * 10 + 1
+        assert state['map']['floor_count'] == block * 10
+        assert first_node['status'] == 'available'
+        assert state['curses']['vitality'] == block
+        assert any(
+            event.get('type') == 'stage_started'
+            and event.get('mode') == 'boss_rush'
+            and event.get('curse_stacks') == block
+            for event in events
+        )
+
+
 def test_entering_a_new_stage_restores_all_health():
     state = build_initial_story_state('stage-heal')
     state['player']['max_health'] = 120
@@ -569,7 +700,7 @@ def test_entering_a_new_stage_restores_all_health():
     )
 
 
-def test_a_complete_four_stage_journey_can_reach_the_terminal_state():
+def test_a_complete_three_stage_journey_can_reach_the_terminal_state():
     seed = 'full-journey'
     state = build_initial_story_state(seed)
     action_count = 0
@@ -726,7 +857,7 @@ def test_a_complete_four_stage_journey_can_reach_the_terminal_state():
             raise AssertionError(f'Unhandled story phase: {phase}')
 
     assert state['phase'] == 'complete'
-    assert state['stage'] == 4
+    assert state['stage'] == 3
     assert state['completed'] is True
 
 
@@ -773,7 +904,7 @@ def test_wide_strike_hits_every_living_enemy():
     assert after == [value - 6 for value in before]
 
 
-def test_exact_hand_selection_is_server_validated_and_exiled():
+def test_exact_hand_selection_is_server_validated_and_actively_discarded():
     state, _ = _begin_combat('selection')
     card = _inject_hand_card(state, 'amulet')
     other = next(item for item in state['combat']['hand'] if item is not card)
@@ -786,7 +917,7 @@ def test_exact_hand_selection_is_server_validated_and_exiled():
             'selection',
         )
     assert error.value.code == 'CARD_SELECTION_REQUIRED'
-    state, _ = apply_story_action(
+    state, events = apply_story_action(
         state,
         'play_card',
         {
@@ -796,59 +927,56 @@ def test_exact_hand_selection_is_server_validated_and_exiled():
         },
         'selection',
     )
-    assert any(item['instance_id'] == other['instance_id'] for item in state['combat']['exile_pile'])
+    assert any(item['instance_id'] == other['instance_id'] for item in state['combat']['discard_pile'])
+    assert any(
+        event.get('type') == 'card_discarded'
+        and event.get('card_instance_id') == other['instance_id']
+        and event.get('reason') == 'active'
+        for event in events
+    )
 
 
-def test_sewage_requires_and_modifies_one_selectable_hand_card():
+def test_sewage_makes_hand_free_without_an_initial_card_choice():
     state, _ = _begin_combat('sewage-selection')
     state['combat']['elixir'] = 10
     sewage = _inject_hand_card(state, 'sewage')
     selected = _inject_hand_card(state, 'basic')
 
-    with pytest.raises(StoryActionError) as error:
-        apply_story_action(
-            state,
-            'play_card',
-            {'card_instance_id': sewage['instance_id']},
-            'sewage-selection',
-        )
-    assert error.value.code == 'CARD_SELECTION_REQUIRED'
-
     state, events = apply_story_action(
         state,
         'play_card',
-        {
-            'card_instance_id': sewage['instance_id'],
-            'selected_card_ids': [selected['instance_id']],
-        },
+        {'card_instance_id': sewage['instance_id']},
         'sewage-selection',
     )
     selected_after = next(
         card for card in state['combat']['hand']
         if card['instance_id'] == selected['instance_id']
     )
-    assert selected_after['modifiers']['free_play'] is True
-    assert selected_after['modifiers']['force_exile'] is True
+    assert state['combat']['sewage_active'] is True
+    assert selected_after['modifiers']['temporary_free_e'] is True
     assert any(
-        event.get('type') == 'card_modified'
-        and event.get('card_instance_id') == selected['instance_id']
-        for event in events
+        card['instance_id'] == sewage['instance_id']
+        for card in state['combat']['exile_pile']
     )
+    assert not any(event.get('type') == 'card_choice_required' for event in events)
 
 
 def test_exact_story_card_choices_reject_sublime_cards_as_candidates():
     state, _ = _begin_combat('sublime-selection')
     state['combat']['elixir'] = 10
-    sewage = _inject_hand_card(state, 'sewage')
+    amulet = _inject_hand_card(state, 'amulet')
     sublime = _inject_hand_card(state, 'mark')
-    state['combat']['hand'] = [sewage, sublime]
+    ordinary = _inject_hand_card(state, 'basic')
+    state['combat']['hand'] = [amulet, sublime, ordinary]
+    target = state['combat']['enemies'][0]
 
     with pytest.raises(StoryActionError) as error:
         apply_story_action(
             state,
             'play_card',
             {
-                'card_instance_id': sewage['instance_id'],
+                'card_instance_id': amulet['instance_id'],
+                'target_id': target['id'],
                 'selected_card_ids': [sublime['instance_id']],
             },
             'sublime-selection',
@@ -1270,7 +1398,7 @@ def test_player_damage_applies_power_before_multiplier_and_vulnerable_last():
     assert [event['amount'] for event in damage] == [27]
 
 
-def test_acid_exiling_azalea_runs_azalea_exile_effect():
+def test_acid_actively_discarding_azalea_runs_azalea_effect():
     seed = 'story-acid-azalea'
     state, _ = _begin_combat(seed)
     acid = _new_card(state, 'acid')
@@ -1290,16 +1418,12 @@ def test_acid_exiling_azalea_runs_azalea_exile_effect():
     assert state['combat']['shield'] == 3
     assert any(
         card['instance_id'] == azalea['instance_id']
-        for card in state['combat']['exile_pile']
-    )
-    assert any(
-        card['def_id'] == 'azalea'
-        and card['instance_id'] != azalea['instance_id']
         for card in state['combat']['discard_pile']
     )
     assert any(
-        event.get('type') == 'card_exiled'
+        event.get('type') == 'card_discarded'
         and event.get('card_instance_id') == azalea['instance_id']
+        and event.get('reason') == 'active'
         for event in events
     )
 
@@ -1356,7 +1480,7 @@ def test_status_count_attack_uses_shared_fusion_calculation():
         'rockfall',
     ):
         target[status] = 0
-    target['stun'] = 1
+    target['poison'] = 1
     _refresh_combat_projections(state)
 
     prediction = state['combat']['damage_predictions'][card['instance_id']]
@@ -1403,6 +1527,13 @@ def test_enemy_applied_broken_survives_until_the_player_uses_it():
         for event in events
         if event.get('type') == 'player_damage' and event.get('source') == 'broken'
     )
+    target_damage_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.get('type') == 'enemy_damage'
+    )
+    broken_damage_index = events.index(broken_damage)
+    assert target_damage_index < broken_damage_index
     assert broken_damage['amount'] == 1
     assert broken_damage['history'] == [{
         'before': health,
@@ -1984,6 +2115,96 @@ def test_layered_rewards_are_claimed_once_and_survive_checkpoint_restore():
     )
     assert state['phase'] == 'map'
     assert 'recovery_checkpoint' not in state
+
+
+@pytest.mark.parametrize('claim_option', ('claim_gold', 'claim_relic'))
+def test_chest_rewards_can_be_claimed_independently_or_left_behind(claim_option):
+    seed = f'optional-chest:{claim_option}'
+    state = _journey_state(seed)
+    state, _ = apply_story_action(
+        state,
+        'choose_blessing',
+        {'blessing_id': 'max_health'},
+        seed,
+    )
+    node = next(
+        node
+        for floor in state['map']['floors']
+        for node in floor['nodes']
+        if node['status'] == 'available'
+    )
+    node['type'] = 'chest'
+    state, _ = apply_story_action(
+        state,
+        'enter_node',
+        {'node_id': node['id']},
+        seed,
+    )
+    state['room']['relic'] = 'ruthless'
+    initial_gold = state['player']['gold']
+    initial_relics = list(state['player']['relics'])
+    room_gold = state['room']['gold']
+
+    state, events = apply_story_action(
+        state,
+        'resolve_room',
+        {'option': claim_option},
+        seed,
+    )
+
+    assert state['phase'] == 'room'
+    assert state['room']['claims'][claim_option.removeprefix('claim_')] is True
+    if claim_option == 'claim_gold':
+        assert state['player']['gold'] == initial_gold + room_gold
+        assert state['player']['relics'] == initial_relics
+    else:
+        assert state['player']['gold'] == initial_gold
+        assert len(state['player']['relics']) == len(initial_relics) + 1
+    assert any(
+        event.get('type') == 'chest_claimed'
+        and event.get('reward_type') == claim_option.removeprefix('claim_')
+        for event in events
+    )
+
+    state, events = apply_story_action(
+        state,
+        'resolve_room',
+        {'option': 'leave'},
+        seed,
+    )
+    assert state['phase'] == 'map'
+    assert any(event.get('type') == 'room_left' for event in events)
+
+
+def test_directly_leaving_a_reward_skips_every_unclaimed_part():
+    seed = 'optional-combat-reward'
+    state, _ = _begin_combat(seed)
+    initial_gold = state['player']['gold']
+    initial_deck_size = len(state['player']['deck'])
+    initial_relics = list(state['player']['relics'])
+    state['phase'] = 'reward'
+    state['combat'] = None
+    state['reward'] = {
+        'gold': 40,
+        'cards': [{'card_id': 'basic', 'upgraded': False}],
+        'relic': 'ruthless',
+        'claims': {'gold': False, 'card': False, 'relic': False},
+        'room_type': 'combat',
+    }
+
+    state, events = apply_story_action(
+        state,
+        'choose_reward',
+        {'reward_type': 'leave'},
+        seed,
+    )
+
+    assert state['phase'] == 'map'
+    assert state['player']['gold'] == initial_gold
+    assert len(state['player']['deck']) == initial_deck_size
+    assert state['player']['relics'] == initial_relics
+    reward_left = next(event for event in events if event.get('type') == 'reward_left')
+    assert set(reward_left['skipped']) == {'gold', 'card', 'relic'}
 
 
 def test_story_events_expose_order_and_card_source_metadata():

@@ -73,7 +73,7 @@ class BioNewCardsTests(unittest.TestCase):
         }
 
     def test_package_metadata_assets_status_and_locales(self):
-        self.assertEqual(self.new_cards_mod.info.author, "huanxiang0273, Eric, XinYu")
+        self.assertEqual(self.new_cards_mod.info.author, "huanxiang0273, Eric, XinYu, AArcC")
         self.assertEqual(self.new_cards_mod.info.version, "1.0.0")
         self.assertTrue(NEW_CARD_IDS <= self.mod_cards.keys())
         self.assertEqual(self.mod_cards["CyanidePill"].count, 3)

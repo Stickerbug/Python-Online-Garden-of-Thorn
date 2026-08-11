@@ -1823,7 +1823,8 @@ class GameEngine:
         except (TypeError, ValueError):
             stored_target = -1
         if stored_signature != signature or stored_target not in candidates:
-            stored_target = random.choice(candidates)
+            from void_dlc_runtime import forced_random_target
+            stored_target = forced_random_target(self, player_id, candidates)
             ps.custom_vars['sewers_forced_target_signature'] = signature
             ps.custom_vars['sewers_forced_target_id'] = stored_target
         return stored_target
@@ -3638,6 +3639,8 @@ class GameEngine:
                 # Remove copy tag from copies to prevent infinite loop
                 copy_card.disabled_flags.add('copy')
                 self._apply_setup_modifiers_to_card(player_id, copy_card)
+                from void_dlc_runtime import prepare_copy_card
+                prepare_copy_card(card, copy_card)
                 ps.add_to_hand(copy_card, trigger_enter_hand=False)
                 added += 1
             if added > 0:
@@ -3653,6 +3656,8 @@ class GameEngine:
             swift_after = int(getattr(card, 'swift_value', 0) or 0)
             if swift_after <= swift_before:
                 self._add_card_swift_stack(card, 1)
+        from formal_logic_runtime import on_card_enter_hand as formal_logic_card_enter_hand
+        formal_logic_card_enter_hand(self, player_id, card)
 
     def _ocean_spikeball_should_boost(self, player_id: int, card: Optional[CardInstance]) -> bool:
         return bool(
@@ -3801,10 +3806,13 @@ class GameEngine:
         }
 
     def get_public_state(self, for_player: int) -> dict:
+        from void_dlc_runtime import project_effective_mask_statuses, refresh_nut_costs
+        refresh_nut_costs(self)
         self._refresh_equipment_derived_player_flags()
         self._refresh_hand_limit_bonuses()
         opponent = 1 - for_player
         opp_data = self.players[opponent].to_dict(include_private=False)
+        project_effective_mask_statuses(self, opponent, opp_data)
         opp_data['hand_count'] = len([c for c in self.players[opponent].hand if c.def_id != ERROR_CARD_ID])
         opp_data['deck_count'] = len([c for c in self.players[opponent].deck if c.def_id != ERROR_CARD_ID])
         opp_data['discard_count'] = len([c for c in self.players[opponent].discard if c.def_id != ERROR_CARD_ID])
@@ -3846,6 +3854,7 @@ class GameEngine:
             opp_data['deck_ordered'] = [c.to_dict() for c in self.players[opponent].deck]
             opp_data['discard_ordered'] = [c.to_dict() for c in self.players[opponent].discard]
         you_data = self.players[for_player].to_dict(include_private=True)
+        project_effective_mask_statuses(self, for_player, you_data)
         if for_player in goggles_targets:
             you_data['deck_ordered'] = [c.to_dict() for c in self.players[for_player].deck]
             you_data['discard_ordered'] = [c.to_dict() for c in self.players[for_player].discard]
@@ -3922,9 +3931,11 @@ class GameEngine:
             return
         draft_index = len(self.draft_picks[player_id])
         card_type = self.draft_type_order[draft_index]
-        options = generate_draft_options(self.draft_pool, card_type, 3)
+        from formal_logic_runtime import boosted_draft_pool
+        player_pool = boosted_draft_pool(self, player_id, self.draft_pool)
+        options = generate_draft_options(player_pool, card_type, 3)
         self.draft_options[player_id] = ensure_first_bloom_draft_includes_sewage(
-            self.draft_pool,
+            player_pool,
             options,
             card_type,
             self.draft_type_order[:draft_index],
@@ -3967,7 +3978,9 @@ class GameEngine:
         old_ids = [c.def_id for c in self.draft_options[player_id]]
         self.draft_rerolls[player_id] -= 1
         card_type = self.draft_type_order[len(self.draft_picks[player_id])]
-        options = generate_draft_options(self.draft_pool, card_type, 3, exclude_def_ids=old_ids)
+        from formal_logic_runtime import boosted_draft_pool
+        player_pool = boosted_draft_pool(self, player_id, self.draft_pool)
+        options = generate_draft_options(player_pool, card_type, 3, exclude_def_ids=old_ids)
         self.draft_options[player_id] = options
         return True
 
@@ -4837,8 +4850,11 @@ class GameEngine:
 
     def _start_player_turn(self, player_id: int):
         self._ensure_turn_boundary()
-        self._reset_achievement_turn_stats(player_id)
         self.current_player = player_id
+        from formal_logic_runtime import maybe_prompt_great_mathematician
+        if maybe_prompt_great_mathematician(self, player_id):
+            return
+        self._reset_achievement_turn_stats(player_id)
         ps = self.players[player_id]
         opp = self.players[1 - player_id]
         self._bio_turn_start_setup(player_id)
@@ -4846,6 +4862,9 @@ class GameEngine:
         if self.game_over:
             return
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
+            return
+        from void_dlc_runtime import queue_turn_start_choices
+        if queue_turn_start_choices(self, player_id, '_bio_continue_start_player_turn'):
             return
         if self._bio_queue_dna_turn_start(player_id, '_bio_continue_start_player_turn'):
             return
@@ -5223,6 +5242,17 @@ class GameEngine:
             except Exception:
                 return 0
         if not (0 <= player_id < len(self.players)):
+            return 0
+        from void_dlc_runtime import maybe_defer_direct_damage
+        if maybe_defer_direct_damage(
+            self,
+            player_id,
+            amount,
+            source,
+            source_id,
+            damage_type,
+            damage_tag,
+        ):
             return 0
         ps = self.players[player_id]
         resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
@@ -5960,6 +5990,8 @@ class GameEngine:
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         if not self._valid_player_id(player_id):
             return False, "无效玩家"
+        from void_dlc_runtime import can_play_extra, refresh_nut_costs
+        refresh_nut_costs(self)
         ps = self.players[player_id]
         if ps.health <= 0:
             return False, "阵亡玩家无法行动"
@@ -6001,6 +6033,13 @@ class GameEngine:
         if self._card_is(card, 'Ruby', 'arctic:ruby'):
             if not self._arctic_ruby_selectable_attacks(player_id, card):
                 return False, "手中没有可支付消耗的攻击牌"
+        from formal_logic_runtime import can_play_formal_card
+        formal_allowed, formal_reason = can_play_formal_card(self, player_id, card)
+        if not formal_allowed:
+            return False, formal_reason
+        extra_allowed, extra_reason = can_play_extra(self, player_id, card)
+        if not extra_allowed:
+            return False, extra_reason
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = max(0, card.cost_e + extra_e)
         if total_e > ps.elixir:
@@ -7037,6 +7076,15 @@ class GameEngine:
         target_id = self._choice_target_from_choice(getattr(self, '_active_choice', None), 1 - player_id)
         secondary_targets = self._secondary_attack_target_ids(card, getattr(self, '_active_choice', None))
         targets_opponent = target_id == 1 - player_id or 1 - player_id in secondary_targets
+        from void_dlc_runtime import card_applies_hand_charge
+        if targets_opponent and card_applies_hand_charge(card):
+            if any(
+                self._can_pay_counter_card(1 - player_id, c)
+                and c.card_def.response_trigger == 'hand_charge'
+                and self._counter_card_can_counter_pending(1 - player_id, c)
+                for c in self.players[1 - player_id].hand
+            ):
+                return True
         if card.card_type == 'thorn' and 'wide_strike' not in flags and target_id == player_id and not targets_opponent:
             return False
         opp = self.players[1 - player_id]
@@ -7201,6 +7249,12 @@ class GameEngine:
                 can_respond = True
             elif self._would_destroy_equipment(card) and counter_card.card_def.response_trigger == 'equipment_destroy':
                 can_respond = True
+            elif counter_card.card_def.response_trigger == 'hand_charge':
+                from void_dlc_runtime import card_applies_hand_charge
+                can_respond = (
+                    responder_id == pending.get('target_player_id')
+                    and card_applies_hand_charge(card)
+                )
             if not can_respond:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             self._spend_resource(responder_id, 'elixir', counter_cost_e, counter_card)
@@ -7458,6 +7512,13 @@ class GameEngine:
     def _discard_card(self, ps, card: CardInstance):
         reset_card_for_discard(card)
         ps.discard.append(card)
+        from formal_logic_runtime import on_card_discarded as formal_logic_card_discarded
+        formal_logic_card_discarded(
+            self,
+            ps.player_id,
+            card,
+            during_play=getattr(self, '_formal_logic_current_play_card', None) is card,
+        )
         self._note_achievement_card_discarded(ps.player_id, card)
         try:
             self._note_achievement_enemy_card_total(ps.player_id)
@@ -10339,6 +10400,8 @@ class GameEngine:
         self._apply_equal_suffering_turn_end(player_id)
         if self.game_over:
             return
+        from void_dlc_runtime import cleanup_turn_end
+        cleanup_turn_end(self, player_id)
         self._decay_equipment_armor_end_turn(player_id)
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
@@ -10401,6 +10464,8 @@ class GameEngine:
             self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
         self._decay_ocean_card_charge_turn_end(player_id)
         self._bio_turn_end_cleanup(player_id)
+        from formal_logic_runtime import on_turn_end as formal_logic_turn_end
+        formal_logic_turn_end(self, player_id)
         self._save_last_turn_damage_snapshot(player_id)
         self._expire_bandages_after_action(player_id)
         self._clear_turn_card_tracking(player_id)
@@ -10520,7 +10585,8 @@ class GameEngine:
         elif target_str == 'both':
             return -1
         elif target_str == 'random':
-            return random.choice([player_id, 1 - player_id])
+            from void_dlc_runtime import forced_random_target
+            return forced_random_target(self, player_id, [player_id, 1 - player_id])
         return player_id
     def _resolve_targets(self, player_id, target_str):
         if isinstance(target_str, int):
@@ -10547,7 +10613,9 @@ class GameEngine:
             enemy_id = 1 - player_id
             return [enemy_id] if self._target_can_be_selected(player_id, enemy_id, allow_self=False) else []
         if target_str == 'random_player':
-            return [random.choice([0, 1])]
+            from void_dlc_runtime import forced_random_target
+            target_id = forced_random_target(self, player_id, [0, 1])
+            return [target_id] if target_id >= 0 else []
         rid = self._resolve_target(player_id, target_str)
         if rid == -1:
             return []
@@ -11970,6 +12038,10 @@ class GameEngine:
         previous_card = getattr(self, '_active_v2_card', None)
         self._active_v2_card = card
         try:
+            from formal_logic_runtime import formal_proxy_suppresses_effect
+            if formal_proxy_suppresses_effect(card):
+                self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}（宏定义代理）")
+                return
             if self._card_is(card, 'Yggdrasil', 'vanilla:yggdrasil'):
                 self._effect_yggdrasil(player_id, card, choice)
                 return
@@ -12364,6 +12436,8 @@ class GameEngine:
             'card': card.to_dict() if card is not None else (
                 context.get('card').to_dict() if isinstance(context.get('card'), CardInstance) else None
             ),
+            'resume_kind': str(pause.get('resume_kind') or 'v2_steps'),
+            'resume_state': copy.deepcopy(pause.get('resume_state')) if isinstance(pause.get('resume_state'), dict) else {},
         }
 
     def _public_v2_ui(self, for_player: int) -> Optional[dict]:
@@ -12390,6 +12464,26 @@ class GameEngine:
             self.pending_v2_ui = None
             button = clean.get('button')
             button_role = self._v2_button_role(component, button)
+            if pending.get('resume_kind') == 'formal_logic':
+                from formal_logic_runtime import resume_formal_logic_actions
+                result = resume_formal_logic_actions(
+                    self,
+                    pending.get('resume_state') or {},
+                    clean,
+                    cancelled=button_role == 'cancel',
+                )
+                self._check_game_over()
+                return result if isinstance(result, dict) else {'success': True}
+            if pending.get('resume_kind') == 'void_dlc':
+                from void_dlc_runtime import resume_void_dlc_actions
+                result = resume_void_dlc_actions(
+                    self,
+                    pending.get('resume_state') or {},
+                    clean,
+                    cancelled=button_role == 'cancel',
+                )
+                self._check_game_over()
+                return result if isinstance(result, dict) else {'success': True}
             if button_role == 'cancel':
                 cancel_steps = pending.get('on_cancel', []) if isinstance(pending.get('on_cancel', []), list) else []
                 if cancel_steps:
@@ -12511,7 +12605,8 @@ class GameEngine:
             ]
             if not candidates:
                 break
-            previous = random.choice(candidates)
+            from void_dlc_runtime import forced_random_target
+            previous = forced_random_target(self, player_id, candidates)
             targets.append(previous)
         return targets
 
@@ -12754,6 +12849,11 @@ class GameEngine:
         if event_name == 'card_used' and event_card is not None:
             self._arctic_trigger_snowballs_after_play(card_user_id, event_card)
             self._bio_after_card_used(card_user_id, event_card, int(context.get('target_id', card_user_id)), choice)
+            from formal_logic_runtime import finalize_card_used as formal_logic_finalize_card_used
+            formal_logic_finalize_card_used(self, card_user_id, event_card)
+        elif event_name == 'equipment_triggered' and event_card is not None:
+            from formal_logic_runtime import on_equipment_triggered as formal_logic_equipment_triggered
+            formal_logic_equipment_triggered(self, card_user_id, event_card)
 
     def _has_fatal_prevention(self, player_id: int) -> bool:
         if not (0 <= player_id < len(self.players)):
@@ -13129,7 +13229,8 @@ class GameEngine:
     def _apply_toxic_poison_after_poison_settlement(self, player_id: int):
         if not (0 <= player_id < len(self.players)) or self._is_status_immune(player_id):
             return
-        amount = self._custom_status_value(player_id, 'jungle:toxic_poison', 'toxic_poison', '剧毒')
+        from void_dlc_runtime import effective_toxic_poison
+        amount = effective_toxic_poison(self, player_id)
         if amount <= 0:
             return
         ps = self.players[player_id]
@@ -13154,7 +13255,8 @@ class GameEngine:
         if not (0 <= player_id < len(self.players)):
             return
         ps = self.players[player_id]
-        blind_level = int(getattr(ps, 'blind', 0) or 0)
+        from void_dlc_runtime import effective_blind
+        blind_level = effective_blind(self, player_id)
         if blind_level <= 0:
             return
         if self._is_status_immune(player_id):
@@ -13416,7 +13518,8 @@ class GameEngine:
         self._defer_turn_start_death_checks = True
         if self.round_num > 1 and not skip_draw_recovery:
             sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
-            draw_count = max(0, DRAW_PER_TURN - sluggish_reduction)
+            from formal_logic_runtime import consume_draw_reduction
+            draw_count = max(0, DRAW_PER_TURN - sluggish_reduction - consume_draw_reduction(self, player_id))
             if self._queue_foresight_replace_choice(player_id, draw_count, 'turn_start_after_foresight'):
                 self._pending_turn_start_early_owner_equipment = set(early_owner_turn_start_equipment)
                 return
@@ -13568,7 +13671,12 @@ class GameEngine:
             return
         self._hel_apply_blazing_fire_turn_start(player_id)
         if self.round_num > 1:
-            draw_count = max(0, int((foresight_result or {}).get('draw_count', 0) or 0))
+            from formal_logic_runtime import consume_draw_reduction
+            draw_count = max(
+                0,
+                int((foresight_result or {}).get('draw_count', 0) or 0)
+                - consume_draw_reduction(self, player_id),
+            )
             drawn = self._draw_cards_with_v2_hooks(player_id, draw_count, 'turn_start')
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌")
             if ps.sluggish > 0 and not self._is_status_immune(player_id):
@@ -13670,6 +13778,9 @@ class GameEngine:
             if ps.health <= 0:
                 self._check_game_over()
                 return
+        from void_dlc_runtime import queue_turn_start_choices
+        if queue_turn_start_choices(self, player_id, '_bio_enter_player_action_phase'):
+            return
         if self._bio_queue_dna_turn_start(player_id, '_bio_enter_player_action_phase'):
             return
         self._enter_player_action_phase(player_id)
@@ -13691,6 +13802,19 @@ class GameEngine:
             self._clamp_card_layers(source_card)
         ps = self.players[target_id]
         if ps.health <= 0 and self._game_over_defer_depth <= 0:
+            return 0
+        from void_dlc_runtime import maybe_defer_attack_damage
+        if maybe_defer_attack_damage(
+            self,
+            target_id,
+            amount,
+            hits,
+            attacker_id,
+            source_card,
+            is_battery=is_battery,
+            is_precision=is_precision,
+            ignore_untargetable=ignore_untargetable,
+        ):
             return 0
         if attacker_id < 0:
             attacker_id = 1 - target_id
@@ -13865,7 +13989,8 @@ class GameEngine:
                     self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
                     self._consume_jungle_root_layer_from_equipment(target_id)
             if dmg > 0 and ps.toxic > 0 and not immune:
-                ps.poison += ps.toxic
+                from void_dlc_runtime import effective_poison_coating
+                ps.poison += effective_poison_coating(self, target_id)
             self._game_over_defer_depth += 1
             try:
                 self._check_yggdrasil(target_id)
@@ -13932,11 +14057,14 @@ class GameEngine:
                 }
             elif selected_target >= 0:
                 snapshot['selected_target'] = selected_target
+        previous_formal_card = getattr(self, '_formal_logic_current_play_card', None)
+        self._formal_logic_current_play_card = card
         self._card_resolution_depth = card_resolution_depth + 1
         self._game_over_defer_depth += 1
         try:
             return self._execute_card_effect_impl(player_id, card, choice)
         finally:
+            self._formal_logic_current_play_card = previous_formal_card
             self._game_over_defer_depth = max(0, self._game_over_defer_depth - 1)
             self._card_resolution_depth = max(0, int(getattr(self, '_card_resolution_depth', 1) or 1) - 1)
             has_pending_action = bool(
@@ -14048,6 +14176,22 @@ class GameEngine:
             card.fission_hit = 0
         else:
             self._apply_card_effect(player_id, card, choice)
+        if (
+            self.pending_response is None
+            and self.pending_choice is None
+            and getattr(self, 'pending_v2_ui', None) is None
+        ):
+            from formal_logic_runtime import consume_double_resolution
+            if consume_double_resolution(self, player_id):
+                self.log_msg(f"{card.name_cn}因登场效果额外结算1次")
+                if card.card_type == 'thorn':
+                    for hit_idx in range(clamp_card_layer(getattr(card, 'fission_level', 1))):
+                        self._consume_action_work(4)
+                        card.fission_hit = hit_idx
+                        self._apply_card_effect(player_id, card, choice)
+                    card.fission_hit = 0
+                else:
+                    self._apply_card_effect(player_id, card, choice)
         # Check if an effect (e.g. request_reorder_deck/assembler_effect) set pending_choice during execution
         # Must check BEFORE card disposition (discard/equip) to allow the choice to complete first
         if self.pending_choice is not None:
@@ -14080,6 +14224,9 @@ class GameEngine:
                     'max_replace': pending.get('max_replace'),
                     'message': pending.get('message', ''),
                 }
+        from formal_logic_runtime import on_card_resolved_before_disposition
+        formal_target_id = self._choice_target_from_choice(choice, player_id)
+        on_card_resolved_before_disposition(self, player_id, card, formal_target_id, choice)
         # Fracture: take damage when playing a card
         if ps.fracture > 0 and not self._is_status_immune(player_id):
             frac_dmg = ps.fracture
@@ -14091,7 +14238,8 @@ class GameEngine:
             self._deal_direct_damage(player_id, bleed_dmg, '流血', player_id,
                                      damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_BLEED)
         placed_as_equipment = bool(getattr(card, '_placed_as_equipment', False))
-        script_controls_play = self._card_has_script(card.card_def)
+        from formal_logic_runtime import formal_proxy_suppresses_effect
+        script_controls_play = self._card_has_script(card.card_def) or formal_proxy_suppresses_effect(card)
         explicit_equip_owner = hasattr(card, '_placed_as_equipment_owner')
         equip_owner_id = int(getattr(card, '_placed_as_equipment_owner', player_id))
         if equip_owner_id < 0 or equip_owner_id >= len(self.players):
@@ -15940,6 +16088,14 @@ class GameEngine:
         if log:
             self.log_msg(log)
 
+    def _atomic_void_dlc_action(self, player_id, card, params, log, choice, context):
+        from void_dlc_runtime import run_action
+        result = run_action(self, player_id, card, params, choice, context)
+        if result is False:
+            raise RuntimeError(f"Unknown Void DLC action: {params.get('action', '')}")
+        if log:
+            self.log_msg(log)
+
     def _void_kitty_random_target(self, actor_id: int, top_card: CardInstance) -> int:
         flags = self._effective_card_flags(top_card)
         if 'wide_strike' in flags or 'self_only' in flags:
@@ -15955,7 +16111,8 @@ class GameEngine:
                 tid for tid in dict.fromkeys(candidate_ids)
                 if self._target_can_be_selected(actor_id, tid, allow_self='self_target' in flags)
             ]
-            return random.choice(candidates) if candidates else -1
+            from void_dlc_runtime import forced_random_target
+            return forced_random_target(self, actor_id, candidates)
         needs_target = self._v2_play_requires_choice_target(top_card) or self._root_play_requires_owner_target(top_card)
         if not needs_target:
             return -1
@@ -15974,7 +16131,8 @@ class GameEngine:
             tid for tid in dict.fromkeys(candidate_ids)
             if self._target_can_be_selected(actor_id, tid, allow_self=True)
         ]
-        return random.choice(candidates) if candidates else -1
+        from void_dlc_runtime import forced_random_target
+        return forced_random_target(self, actor_id, candidates)
 
     def _atomic_void_kitty_auto_play(self, player_id, card, params, log, choice, context):
         if not self._valid_player_id(player_id):
@@ -16516,7 +16674,8 @@ class GameEngine:
                 ]
                 if not candidates:
                     continue
-                bounce_target_id = random.choice(candidates)
+                from void_dlc_runtime import forced_random_target
+                bounce_target_id = forced_random_target(self, player_id, candidates)
             bounce_choice = {
                 'target_player': bounce_target_id,
                 'target_player_id': bounce_target_id,
@@ -17458,7 +17617,8 @@ class GameEngine:
                 ]
                 if not candidates:
                     break
-                bounced_target = random.choice(candidates)
+                from void_dlc_runtime import forced_random_target
+                bounced_target = forced_random_target(self, player_id, candidates)
             bounce_choice = {
                 'target_player': bounced_target,
                 'target_player_id': bounced_target,

@@ -10,7 +10,8 @@ from mod_loader import load_mod
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCTIC_PACKAGE = ROOT / "mods" / "Arctic Cards Addition.gtnmod"
-FACTORY_PACKAGE = ROOT / "mods" / "Factory Cards Addition.gtnmod"
+FACTORY_PACKAGE = ROOT / "mods" / "Factory Cards DLC.gtnmod"
+FACTORY_PARENT_PACKAGE = ROOT / "mods" / "Factory Cards Addition.gtnmod"
 NEW_CARD_IDS = {"Pinecone", "Ruby", "Lithium", "Assembler"}
 
 
@@ -19,11 +20,12 @@ class ArcticFactoryNewCardsTests(unittest.TestCase):
     def setUpClass(cls):
         cls.arctic = load_mod(str(ARCTIC_PACKAGE))
         cls.factory = load_mod(str(FACTORY_PACKAGE))
-        if cls.arctic.errors or cls.factory.errors:
-            raise AssertionError(cls.arctic.errors + cls.factory.errors)
+        cls.factory_parent = load_mod(str(FACTORY_PARENT_PACKAGE))
+        if cls.arctic.errors or cls.factory.errors or cls.factory_parent.errors:
+            raise AssertionError(cls.arctic.errors + cls.factory.errors + cls.factory_parent.errors)
         cls.mod_cards = {
             card.id: card
-            for card in [*cls.arctic.cards, *cls.factory.cards]
+            for card in [*cls.arctic.cards, *cls.factory.cards, *cls.factory_parent.cards]
         }
 
     def setUp(self):
@@ -69,8 +71,8 @@ class ArcticFactoryNewCardsTests(unittest.TestCase):
     def test_package_metadata_assets_and_locales(self):
         self.assertEqual(self.arctic.info.author, "huanxiang0273, Eric, XinYu")
         self.assertEqual(self.arctic.info.version, "1.1.0")
-        self.assertEqual(self.factory.info.author, "Eric, XinYu")
-        self.assertEqual(self.factory.info.version, "1.1.0")
+        self.assertEqual(self.factory.info.author, "Eric, XinYu, AArcC")
+        self.assertEqual(self.factory.info.version, "1.0.0")
         self.assertEqual(self.mod_cards["Pinecone"].count, 3)
         self.assertEqual(self.mod_cards["Ruby"].count, 3)
         self.assertEqual(self.mod_cards["Lithium"].count, 3)

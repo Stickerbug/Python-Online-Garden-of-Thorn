@@ -417,7 +417,7 @@ VALID_LOGIC_OPS = {
     "hel_fire_by_equipment",
     "hel_bugatti_draw",
     "hel_magic_clover_trigger",
-    "hel_deliverance_attack",
+    "hel_deliverance_attack", "void_dlc_action",
 }
 
 VALID_EVENT_HOOKS = {

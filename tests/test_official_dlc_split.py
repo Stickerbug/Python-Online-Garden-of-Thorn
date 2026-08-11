@@ -19,12 +19,6 @@ MERGED_DLC = {
         "huanxiang0273, Eric, XinYu",
         {"card-art/pinecone.svg", "card-art/ruby.svg"},
     ),
-    "Factory": (
-        {"Lithium"},
-        "factory",
-        "Eric, XinYu",
-        {"card-art/Lithium.svg"},
-    ),
     "Hel": (
         {"Deliverance"},
         "hel",
@@ -40,19 +34,23 @@ MERGED_DLC = {
 }
 
 DLC_SPLITS = {
-    "Bio": ({"CyanidePill", "StemCell", "Mitochondria"}, "bio", "bio_dlc"),
+    "Bio": ({"CyanidePill", "StemCell", "Mitochondria", "Mask", "MagicMask"}, "bio", "bio_dlc"),
+    "Factory": ({"Lithium", "Bomb", "FireBomb", "MagicBomb", "MagicFireBomb", "PipeBomb"}, "factory", "factory_dlc"),
     "Desert": ({"MagicCompass", "Marble", "Emerald", "Topaz", "Citron", "MagicYggdrasil"}, "desert_cards_addition", "desert_dlc"),
     "Garden": ({"MoonRock", "Avocado", "MagicPollen", "MagicAntennae", "CatEars", "Sunflower", "Beeswax", "MagicAvocado", "MagicRice", "MagicDisc", "MagicCutter", "Kale", "Daisy", "Coal", "Grass", "Candle"}, "garden", "garden_dlc"),
     "Jungle": ({"Monstera", "Dianthus", "Maple"}, "jungle", "jungle_dlc"),
     "Sewers": ({"Iodine", "Cheese", "Perfume", "AcidBomb", "Dung", "Chitin", "Whiskers", "Neem", "Basil", "Neurotoxin", "ToiletPaper", "Quartz"}, "sewers", "sewers_dlc"),
+    "Void": ({"DVD", "Fan", "Capacitor", "CopperRod", "Plasma", "Attractor", "MagicSlimeBall", "MysteriousOrb", "Schizo", "IlluminatiTriangle", "VoidMark", "Cicada3301", "HeatedThorn", "MagicCopperRod", "Nut", "Comb", "Stardust", "MagicNut", "OneRing", "Eyeball", "MagicStardust", "Horn", "BloodScythe", "MagicBloodScythe", "Hexagram"}, "void", "void_dlc"),
 }
 
 PARENT_AUTHORS = {
     "Bio": "huanxiang0273, Eric",
+    "Factory": "Eric",
     "Desert": "NetherDog",
     "Garden": "NetherDog",
     "Jungle": "Eric",
     "Sewers": "NetherDog",
+    "Void": "Eric",
 }
 
 
@@ -61,9 +59,13 @@ def read_spec(path):
         return json.loads(archive.read("mod.json")), set(archive.namelist())
 
 
+def parent_filename(family):
+    return "Void Card Addition.gtnmod" if family == "Void" else f"{family} Cards Addition.gtnmod"
+
+
 def test_selected_dlc_cards_are_merged_into_v110_parent_packages():
     for family, (expected_cards, namespace, author, expected_assets) in MERGED_DLC.items():
-        parent_path = MODS / f"{family} Cards Addition.gtnmod"
+        parent_path = MODS / parent_filename(family)
         retired_dlc_path = MODS / f"{family} Cards DLC.gtnmod"
         parent = load_mod(str(parent_path))
         assert not parent.errors, (parent_path.name, parent.errors)
@@ -88,7 +90,7 @@ def test_selected_dlc_cards_are_merged_into_v110_parent_packages():
 
 def test_unmerged_dlc_cards_remain_in_independent_packages():
     for family, (expected_cards, namespace, mod_id) in DLC_SPLITS.items():
-        parent_path = MODS / f"{family} Cards Addition.gtnmod"
+        parent_path = MODS / parent_filename(family)
         dlc_path = MODS / f"{family} Cards DLC.gtnmod"
         parent = load_mod(str(parent_path))
         dlc = load_mod(str(dlc_path))
@@ -134,7 +136,7 @@ def test_unmerged_dlc_packages_keep_card_ids_locales_and_assets_intact():
 
 def test_each_remaining_dlc_is_adjacent_to_its_parent_and_default_disabled():
     for family in DLC_SPLITS:
-        parent = f"{family} Cards Addition.gtnmod"
+        parent = parent_filename(family)
         dlc = f"{family} Cards DLC.gtnmod"
         parent_index = OFFICIAL_MOD_DISPLAY_ORDER.index(parent)
         assert OFFICIAL_MOD_DISPLAY_ORDER[parent_index + 1] == dlc

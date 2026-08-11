@@ -407,7 +407,8 @@ class LocalCard {
         this.temp_swift_value = Math.max(0, toInt(source.temp_swift_value, 0));
         this.temp_heavy_value = Math.max(0, toInt(source.temp_heavy_value, 0));
         this.temp_magic_heavy_value = Math.max(0, toInt(source.temp_magic_heavy_value, 0));
-        this.charge_value = Math.max(0, toInt(source.charge_value, 0));
+        const initialCharge = source.charge_value ?? (cardDef(this.def_id) || {}).charge_value ?? 0;
+        this.charge_value = Math.max(0, toInt(initialCharge, 0));
         this.extra_hits = Math.max(0, toInt(source.extra_hits, 0));
         this.setup_modifiers = new Set(source.setup_modifiers || []);
         this.custom_vars = source.custom_vars && typeof source.custom_vars === 'object'

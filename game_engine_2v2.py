@@ -133,6 +133,8 @@ class GameEngine2v2(GameEngine):
 
 
     def get_public_state(self, for_player: int) -> dict:
+        from void_dlc_runtime import effective_blind, project_effective_mask_statuses, refresh_nut_costs
+        refresh_nut_costs(self)
         self._refresh_equipment_derived_player_flags()
         self._refresh_hand_limit_bonuses()
         teammate_id = self.get_teammate(for_player)
@@ -143,6 +145,7 @@ class GameEngine2v2(GameEngine):
         opp_data_list = []
         for eid in enemy_ids:
             ed = self.players[eid].to_dict(include_private=False)
+            project_effective_mask_statuses(self, eid, ed)
             ed['hand_count'] = len([c for c in self.players[eid].hand if c.def_id != ERROR_CARD_ID])
             ed['deck_count'] = len([c for c in self.players[eid].deck if c.def_id != ERROR_CARD_ID])
             ed['discard_count'] = len([c for c in self.players[eid].discard if c.def_id != ERROR_CARD_ID])
@@ -165,6 +168,7 @@ class GameEngine2v2(GameEngine):
         teammate_data = None
         if teammate_id >= 0:
             teammate_data = self.players[teammate_id].to_dict(include_private=True)
+            project_effective_mask_statuses(self, teammate_id, teammate_data)
             self._redact_error_cards_from_payload(teammate_data)
             for zone in ('hand', 'deck', 'discard', 'exile'):
                 teammate_data[zone] = self._visible_card_dicts(
@@ -174,7 +178,7 @@ class GameEngine2v2(GameEngine):
                 )
             teammate_blind = 0
             if not self._is_status_immune(teammate_id):
-                teammate_blind = max(0, int(getattr(self.players[teammate_id], 'blind', 0) or 0))
+                teammate_blind = effective_blind(self, teammate_id)
             if teammate_blind > 0:
                 teammate_data['hand'] = [
                     {
@@ -220,6 +224,7 @@ class GameEngine2v2(GameEngine):
         log_start = 0
         self._mark_log_visible()
         you_data = self.players[for_player].to_dict(include_private=True)
+        project_effective_mask_statuses(self, for_player, you_data)
         if for_player in goggles_targets:
             you_data['deck_ordered'] = [c.to_dict() for c in self.players[for_player].deck]
             you_data['discard_ordered'] = [c.to_dict() for c in self.players[for_player].discard]
@@ -521,6 +526,8 @@ class GameEngine2v2(GameEngine):
         self._apply_equal_suffering_turn_end(player_id)
         if self.game_over:
             return
+        from void_dlc_runtime import cleanup_turn_end
+        cleanup_turn_end(self, player_id)
         self._decay_equipment_armor_end_turn(player_id)
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
@@ -699,6 +706,14 @@ class GameEngine2v2(GameEngine):
             return True
         if self._would_destroy_equipment(played_card) and counter_card.card_def.response_trigger == 'equipment_destroy':
             return True
+        if counter_card.card_def.response_trigger == 'hand_charge':
+            from void_dlc_runtime import card_applies_hand_charge
+            return (
+                responder_id is not None
+                and target_player_id is not None
+                and int(responder_id) == int(target_player_id)
+                and card_applies_hand_charge(played_card)
+            )
         return False
 
     def handle_response(self, responder_id: int, card_instance_id: Optional[int]) -> dict:
@@ -1194,6 +1209,14 @@ class GameEngine2v2(GameEngine):
             and self.is_enemy(player_id, tid)
             and self.players[tid].health > 0
         ]
+        from void_dlc_runtime import card_applies_hand_charge
+        if card_applies_hand_charge(card):
+            target_responders = [
+                tid for tid in target_ids
+                if self._is_valid_player_id(tid)
+                and tid != player_id
+                and self.players[tid].health > 0
+            ]
         global_response_responders = []
         if getattr(card, 'card_type', '') == 'bloom' or self._would_heal(card):
             global_response_responders = [
@@ -1460,6 +1483,17 @@ class GameEngine2v2(GameEngine):
     def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None,
                             damage_type: Optional[str] = None, damage_tag: Optional[str] = None):
         if not self._is_valid_player_id(player_id):
+            return 0
+        from void_dlc_runtime import maybe_defer_direct_damage
+        if maybe_defer_direct_damage(
+            self,
+            player_id,
+            amount,
+            source,
+            source_id,
+            damage_type,
+            damage_tag,
+        ):
             return 0
         ps = self.players[player_id]
         if ps.invincible:
@@ -1924,6 +1958,9 @@ class GameEngine2v2(GameEngine):
         if ps.health <= 0:
             self._advance_turn()
             return
+        from void_dlc_runtime import queue_turn_start_choices
+        if queue_turn_start_choices(self, player_id, '_bio_enter_player_action_phase'):
+            return
         self._enter_player_action_phase(player_id)
 
     def _resume_turn_start_2v2(self, player_id: int, foresight_result: Optional[dict] = None):
@@ -2078,6 +2115,9 @@ class GameEngine2v2(GameEngine):
         if ps.health <= 0:
             self._advance_turn()
             return
+        from void_dlc_runtime import queue_turn_start_choices
+        if queue_turn_start_choices(self, player_id, '_bio_enter_player_action_phase'):
+            return
         if self._bio_queue_dna_turn_start(player_id, '_bio_enter_player_action_phase'):
             return
         self._enter_player_action_phase(player_id)
@@ -2092,6 +2132,19 @@ class GameEngine2v2(GameEngine):
         if not self._is_valid_player_id(target_id):
             return 0
         ps = self.players[target_id]
+        from void_dlc_runtime import maybe_defer_attack_damage
+        if maybe_defer_attack_damage(
+            self,
+            target_id,
+            amount,
+            hits,
+            attacker_id,
+            source_card,
+            is_battery=is_battery,
+            is_precision=is_precision,
+            ignore_untargetable=ignore_untargetable,
+        ):
+            return 0
         if attacker_id < 0:
             attacker_id = self._last_attacker.get(target_id, -1)
         if ps.untargetable and not is_battery and not ignore_untargetable and not self._is_status_immune(target_id):
@@ -2224,7 +2277,8 @@ class GameEngine2v2(GameEngine):
                     self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
                     self._consume_jungle_root_layer_from_equipment(target_id)
             if dmg > 0 and ps.toxic > 0 and not immune:
-                ps.poison += ps.toxic
+                from void_dlc_runtime import effective_poison_coating
+                ps.poison += effective_poison_coating(self, target_id)
             self._game_over_defer_depth += 1
             try:
                 self._check_yggdrasil(target_id)
@@ -2401,7 +2455,8 @@ class GameEngine2v2(GameEngine):
         if target_str == 'random':
             enemies = self.get_enemies(player_id)
             enemies = [enemy_id for enemy_id in enemies if self._is_valid_enemy_target(player_id, enemy_id)]
-            return random.choice(enemies) if enemies else -1
+            from void_dlc_runtime import forced_random_target
+            return forced_random_target(self, player_id, enemies)
         if target_str == 'teammate':
             teammate_id = self.get_teammate(player_id)
             return teammate_id if self._is_valid_effect_target(player_id, teammate_id) else -1
@@ -2459,13 +2514,19 @@ class GameEngine2v2(GameEngine):
         if target_str == 'random_friendly':
             team = self.teams[self.team_of(player_id)]
             alive = [p for p in team if self.players[p].health > 0]
-            return [random.choice(alive)] if alive else []
+            from void_dlc_runtime import forced_random_target
+            target_id = forced_random_target(self, player_id, alive)
+            return [target_id] if target_id >= 0 else []
         if target_str == 'random_enemy':
             enemies = [i for i in self.get_enemies(player_id) if self._is_valid_enemy_target(player_id, i)]
-            return [random.choice(enemies)] if enemies else []
+            from void_dlc_runtime import forced_random_target
+            target_id = forced_random_target(self, player_id, enemies)
+            return [target_id] if target_id >= 0 else []
         if target_str == 'random_player':
             alive = [i for i, p in enumerate(self.players) if p.health > 0]
-            return [random.choice(alive)] if alive else []
+            from void_dlc_runtime import forced_random_target
+            target_id = forced_random_target(self, player_id, alive)
+            return [target_id] if target_id >= 0 else []
         tid = self._resolve_target(player_id, target_str)
         if tid == -1:
             return []

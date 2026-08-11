@@ -37,6 +37,10 @@
       const lang = readPreference('gtn_lang') || 'zh';
       document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
       document.documentElement.lang = ['zh', 'en', 'fr', 'ja'].includes(lang) ? lang : 'zh';
+      document.documentElement.classList.toggle(
+        'story-hide-card-borders',
+        readPreference('gtn_story_hide_card_borders') === '1',
+      );
     })();
   </script>
 </head>
@@ -283,6 +287,7 @@
         <div id="story-reward-options" class="story-choice-grid story-card-choice-grid"></div>
         <div class="story-reward-actions">
           <button id="story-reward-skip" class="story-command" type="button">跳过卡牌</button>
+          <button id="story-reward-leave" class="story-command" type="button">直接离开</button>
           <button id="story-reward-continue" class="story-command story-command-primary hidden" type="button">继续</button>
         </div>
       </section>
@@ -527,6 +532,7 @@
         const value = String(key || '');
         return value === 'gtn_theme'
           || value === 'gtn_lang'
+          || value === 'gtn_story_hide_card_borders'
           || value.startsWith('gtn_keybindings_');
       };
       const readCookie = (key) => {
