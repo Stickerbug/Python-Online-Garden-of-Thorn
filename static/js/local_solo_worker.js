@@ -578,6 +578,7 @@ class LocalPlayer {
         this.last_turn_damage_dealt = 0;
         this.total_damage_taken = 0;
         this.total_damage_dealt = 0;
+        this.custom_statuses = {};
         this.custom_vars = {
             '咖啡首次使用': 1,
             '三角形层数': 0,
@@ -741,7 +742,7 @@ class LocalPlayer {
             'jungle:root_status', 'jungle:root', 'root_status',
             'jungle:toxic_poison', 'toxic_poison',
         ];
-        const result = {};
+        const result = { ...(this.custom_statuses || {}) };
         keys.forEach(key => {
             const value = toInt(this[key], 0);
             if (value > 0) result[key] = value;
@@ -939,6 +940,7 @@ class LocalSoloEngine {
             });
             player.cards_played_this_turn = { ...(source.cards_played_this_turn || {}) };
             player.cards_played_this_turn_instance_ids = [...(source.cards_played_this_turn_instance_ids || [])];
+            player.custom_statuses = { ...(data.custom_statuses || source.custom_statuses || {}) };
             player.custom_vars = { ...(source.custom_vars || {}) };
             return player;
         });
@@ -1095,6 +1097,7 @@ class LocalSoloEngine {
         ps.equipment = [];
         ps.cards_played_this_turn = {};
         ps.cards_played_this_turn_instance_ids = [];
+        ps.custom_statuses = {};
         ps.custom_vars = { '咖啡首次使用': 1, '三角形层数': 0, '魔法电池本回合回魔': 0 };
         deckEntries.forEach(entry => {
             const defId = typeof entry === 'string' ? entry : entry && entry.def_id;
@@ -4380,11 +4383,100 @@ class LocalSoloEngine {
     }
 
     effect_ocean_charge_self_damage(playerId, card, params, log) {
+        if (!card) return;
+        card.custom_vars = card.custom_vars && typeof card.custom_vars === 'object'
+            ? card.custom_vars
+            : {};
+        if (card.custom_vars._ocean_charge_resolved_this_play) return;
+        card.custom_vars._ocean_charge_resolved_this_play = true;
         const amount = Math.max(0, toInt(card && card.charge_value, 0));
         if (amount > 0) {
             this.dealDirectDamage(playerId, amount, '电荷', playerId, { damage_type: 'magic', damage_tag: 'battery' });
         }
         if (log) this.logMsg(log);
+    }
+
+    effect_ocean_add_charge_to_hand(playerId, card, params, log = '') {
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 3, card, 3));
+        const rawCount = params.count;
+        const count = rawCount == null || rawCount === 'all' || rawCount === '全部'
+            ? null
+            : Math.max(0, this.evalInt(playerId, rawCount, card, 0));
+        this.resolveTargets(playerId, params.target || 'target').forEach(targetId => {
+            const target = this.players[targetId];
+            if (!target) return;
+            if (params.require_hit && toInt(this._last_damage_value[targetId], 0) <= 0) return;
+            const candidates = [...target.hand];
+            shuffle(candidates);
+            const selected = count == null ? candidates : candidates.slice(0, count);
+            selected.forEach(handCard => {
+                handCard.charge_value = Math.max(0, toInt(handCard.charge_value, 0) + amount);
+                if (handCard.charge_value > 0) handCard.instance_flags.add('charge');
+            });
+            if (selected.length > 0) {
+                this.logMsg(log || `${this.pn(targetId)}的${selected.length}张手牌获得${amount}层电荷`);
+            }
+        });
+    }
+
+    effect_ocean_add_blood_debt(playerId, card, params, log = '') {
+        const context = this._active_effect_context || {};
+        if (params.require_physical_damage && toInt(context.damage ?? context.damage_amount, 0) <= 0) return;
+        const selector = params.target || 'target';
+        const eventName = String(context.current_event || context.event || '');
+        let targetIds;
+        if (['on_damage_taken', 'damage_taken'].includes(eventName) && context.source_id != null) {
+            targetIds = [toInt(context.source_id, -1)];
+        } else if (['source', 'event_source', 'last_actor', 'damage_source'].includes(selector)) {
+            targetIds = [toInt(context.source_id, playerId)];
+        } else {
+            targetIds = this.resolveTargets(playerId, selector);
+        }
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 1, card, 1));
+        targetIds.forEach(targetId => {
+            const target = this.players[targetId];
+            if (!target || amount <= 0) return;
+            target.custom_statuses = target.custom_statuses || {};
+            const current = this.customStatusValue(targetId, 'ocean:blood_debt', 'blood_debt', '血债');
+            ['blood_debt', '血债'].forEach(key => { delete target.custom_statuses[key]; });
+            target.custom_statuses['ocean:blood_debt'] = current + amount;
+            this.logMsg(log || `${this.pn(targetId)}+${amount}层血债`);
+        });
+    }
+
+    applyOceanBloodDebtAfterPhysicalDamage(targetId, attackerId) {
+        const target = this.players[targetId];
+        const attacker = this.players[attackerId];
+        if (!target || !attacker) return;
+        const stacks = this.customStatusValue(targetId, 'ocean:blood_debt', 'blood_debt', '血债');
+        if (stacks <= 0) return;
+        target.custom_statuses = target.custom_statuses || {};
+        ['ocean:blood_debt', 'blood_debt', '血债'].forEach(key => {
+            delete target.custom_statuses[key];
+            target[key] = 0;
+        });
+        attacker.gainElixir(stacks);
+        this.logMsg(`${this.pn(targetId)}的血债解除，${this.pn(attackerId)}获得${stacks}E`);
+    }
+
+    effect_ocean_mark_auto_play(playerId, card, params) {
+        if (!card || card.instance_flags.has('ocean_no_auto') || toInt(card.fission_hit, 0) > 0) return;
+        const targetId = this.resolveTarget(playerId, params.target || 'target');
+        if (!this.players[targetId]) return;
+        const ps = this.players[playerId];
+        const entries = Array.isArray(ps.custom_vars.ocean_auto_cards)
+            ? ps.custom_vars.ocean_auto_cards
+            : [];
+        entries.push({
+            def_id: card.def_id,
+            card: card.toDict(),
+            target_id: targetId,
+            swift_value: Math.max(0, this.evalInt(playerId, params.swift_value ?? 0, card, 0)),
+            magic_swift_value: Math.max(0, this.evalInt(playerId, params.magic_swift_value ?? 0, card, 0)),
+            exile: params.exile !== false,
+            no_auto: true,
+        });
+        ps.custom_vars.ocean_auto_cards = entries;
     }
 
     oceanVisibleStatusCount(playerId) {
@@ -7617,6 +7709,7 @@ class LocalSoloEngine {
                             });
                         }
                     });
+                    this.applyOceanBloodDebtAfterPhysicalDamage(targetId, attackerId);
                 }
             } finally {
                 this._game_over_defer_depth -= 1;
@@ -7875,6 +7968,7 @@ class LocalSoloEngine {
         delete card._sewers_was_countered_this_play;
         if (card.custom_vars && typeof card.custom_vars === 'object') {
             delete card.custom_vars.sewers_toilet_paper_power;
+            delete card.custom_vars._ocean_charge_resolved_this_play;
         }
     }
 
@@ -8318,6 +8412,14 @@ class LocalSoloEngine {
         return true;
     }
 
+    prepareOceanChargeForPlay(card) {
+        if (!card) return;
+        card.custom_vars = card.custom_vars && typeof card.custom_vars === 'object'
+            ? card.custom_vars
+            : {};
+        delete card.custom_vars._ocean_charge_resolved_this_play;
+    }
+
     playCard(playerId, instanceId, choice = null) {
         const ps = this.players[playerId];
         const card = ps.findHandCard(instanceId);
@@ -8387,6 +8489,7 @@ class LocalSoloEngine {
         if (!removed) return { success: false, error: '移出手牌失败' };
         ps.cards_played_this_turn_instance_ids.push(toInt(card.instance_id, instanceId));
         this.applyMagicAccelerationAfterPlay(playerId, card);
+        this.prepareOceanChargeForPlay(card);
         this.effect_ocean_charge_self_damage(playerId, card, {}, '');
         if (this.cardIs(card, 'Broccoli', 'sewers:broccoli')) {
             card._sewers_was_countered_this_play = false;
@@ -8730,6 +8833,7 @@ class LocalSoloEngine {
             ps.cards_played_this_turn[card.def_id] = dupCount + 1;
             if (handCard) ps.removeHandCard(card.instance_id);
             this.applyMagicAccelerationAfterPlay(playerId, card);
+            this.prepareOceanChargeForPlay(card);
             this.effect_ocean_charge_self_damage(playerId, card, {}, '');
         }
         if (this.cardNeedsChoice(card) && !this.choiceSatisfiesRequest(card, choice)) {
@@ -8786,6 +8890,8 @@ class LocalSoloEngine {
             this.triggerSewersCheeseAfterCounter(playerId, responderId);
             const dodgeBeforeCounter = toInt(responder.dodge, 0);
             const pendingDamagePrediction = this.simulatePendingResponseDamage(responderId, null);
+            this.prepareOceanChargeForPlay(removed);
+            this.effect_ocean_charge_self_damage(responderId, removed, {}, '');
             this.executeCounterEffect(responderId, removed, card, playerId, pendingDamagePrediction);
             if (removed.def_id === 'Bubble') {
                 const result = pending.is_precision

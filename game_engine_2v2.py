@@ -768,6 +768,15 @@ class GameEngine2v2(GameEngine):
             counter_dead_ids = []
             self._game_over_defer_depth += 1
             try:
+                self._prepare_ocean_charge_for_play(counter_removed)
+                self._atomic_ocean_charge_self_damage(
+                    responder_id,
+                    counter_removed,
+                    {},
+                    '',
+                    None,
+                    {'target_id': responder_id},
+                )
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
                 counter_dead_ids = [
                     candidate
@@ -1436,6 +1445,7 @@ class GameEngine2v2(GameEngine):
         card._bio_pre_play_snapshot = card.to_dict()
         self._bio_after_card_payment(player_id, card)
         self._apply_magic_acceleration_after_play(player_id, card)
+        self._prepare_ocean_charge_for_play(card)
         self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
         self._sewers_trigger_vampire_fangs(player_id, card, choice)
         if self._card_is(card, 'Broccoli', 'sewers:broccoli'):

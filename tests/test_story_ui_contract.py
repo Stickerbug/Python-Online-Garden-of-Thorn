@@ -260,10 +260,10 @@ def test_story_status_scale_difficulty_labels_and_reward_escape_are_visible():
     assert 'id="story-reward-leave"' in STORY_TEMPLATE
 
 
-def test_story_cross_browser_baseline_disables_native_font_and_button_drift():
+def test_story_cross_browser_baseline_preserves_cjk_bold_and_disables_button_drift():
     assert '-webkit-text-size-adjust: 100%;' in STORY_CSS
     assert 'text-size-adjust: 100%;' in STORY_CSS
-    assert 'font-synthesis: none;' in STORY_CSS
+    assert 'font-synthesis: none;' not in STORY_CSS
     assert '-webkit-appearance: none;' in STORY_CSS
     assert 'appearance: none;' in STORY_CSS
     assert '--gtn-card-border-width: clamp(1px, 1.3cqi, 1.7px);' in STORY_CSS
@@ -484,8 +484,9 @@ def test_story_journey_setup_is_localized_and_centered():
     assert "name: 'Boss Rush'" in STORY_JS
     assert "(room.modes || ['standard']).forEach((modeId) =>" in STORY_JS
     assert 'mode: selectedMode,' in STORY_JS
-    assert '每10层选择区域与可叠加诅咒，无限推进。' in STORY_JS
-    assert 'every 10 floors, choose a region and a stackable curse and continue endlessly.' in STORY_JS
+    assert '每10层选择下一区域，无限推进。' in STORY_JS
+    assert 'every 10 floors, choose the next region and continue endlessly.' in STORY_JS
+    assert "storyContent?.curses" not in STORY_JS
     assert "room.boss_rush || state.journey_mode === 'boss_rush'" in STORY_JS
     assert "container?.classList.add('is-journey-setup');" in STORY_JS
     assert "container.classList.remove('is-journey-setup');" in STORY_JS
@@ -997,3 +998,11 @@ def test_initial_blessing_card_selection_preserves_card_ratio_and_scrolls():
     assert 'align-self: start;' in card_rule
     assert 'overflow-y: auto;' in selection_rule
     assert 'align-content: start;' in selection_rule
+
+
+def test_story_untargeted_cards_bypass_only_the_explicit_enemy_target_guard():
+    for function_name in ('performSelectedCombatCard', 'playSelectedCombatCard'):
+        branch = STORY_JS.split(f'function {function_name}(', 1)[1].split('\n    }', 1)[0]
+        guard = branch.split("targetKind === 'enemy'", 1)[1].split(') return;', 1)[0]
+        assert '!storyCursorCardMode(card)' in guard
+        assert '!storyEnemyIsSelectable(card, targetId' in guard

@@ -3758,7 +3758,11 @@
         const state = activeRun.state || {};
         const card = selectedCombatCard(state);
         if (!card || cardTargetKind(card) !== targetKind) return;
-        if (targetKind === 'enemy' && !storyEnemyIsSelectable(card, targetId, state)) return;
+        if (
+            targetKind === 'enemy'
+            && !storyCursorCardMode(card)
+            && !storyEnemyIsSelectable(card, targetId, state)
+        ) return;
         const wrapper = document.querySelector(`.story-hand-card[data-instance-id="${CSS.escape(String(card.instance_id))}"]`);
         const target = targetKind === 'enemy'
             ? document.querySelector(`.story-actor-enemy[data-target-id="${CSS.escape(String(targetId || ''))}"]`)
@@ -3789,7 +3793,11 @@
         if (cardPlayInFlight || actionInFlight || !activeRun) return;
         const card = selectedCombatCard(activeRun.state);
         if (!card || cardTargetKind(card) !== targetKind) return;
-        if (targetKind === 'enemy' && !storyEnemyIsSelectable(card, targetId, activeRun.state)) return;
+        if (
+            targetKind === 'enemy'
+            && !storyCursorCardMode(card)
+            && !storyEnemyIsSelectable(card, targetId, activeRun.state)
+        ) return;
         if (openCardSelection(card, targetKind, targetId)) return;
         performSelectedCombatCard(targetKind, targetId);
     }
@@ -5531,8 +5539,8 @@
             boss_rush: {
                 name: 'Boss Rush',
                 description: lang === 'zh'
-                    ? '先获得10次卡牌奖励与1项天赋；每10层选择区域与可叠加诅咒，无限推进。'
-                    : 'Begin with 10 card rewards and 1 talent; every 10 floors, choose a region and a stackable curse and continue endlessly.',
+                    ? '先获得10次卡牌奖励与1项天赋；每10层选择下一区域，无限推进。'
+                    : 'Begin with 10 card rewards and 1 talent; every 10 floors, choose the next region and continue endlessly.',
             },
         };
         appendStoryChoiceHeading(container, lang === 'zh' ? '模式' : 'Mode');
@@ -6546,24 +6554,17 @@
                 'story-room-copy',
                 bossRush
                     ? (lang === 'zh'
-                        ? `选择下一区域和1项可叠加的诅咒，随后进入第 ${floorStart}-${floorEnd} 层。`
-                        : `Choose the next region and 1 stackable curse, then enter Floors ${floorStart}-${floorEnd}.`)
+                        ? `选择下一区域，随后进入第 ${floorStart}-${floorEnd} 层。`
+                        : `Choose the next region, then enter Floors ${floorStart}-${floorEnd}.`)
                     : (lang === 'zh'
-                        ? '选择下一区域和1项诅咒；随后生成新的16层路线。'
-                        : 'Choose the next region and 1 curse, then generate a new 16-floor route.'),
+                        ? '选择下一区域，随后生成新的16层路线。'
+                        : 'Choose the next region, then generate a new 16-floor route.'),
             );
             let selectedBiome = String(room.biomes?.[0] || 'garden');
-            const availableCurses = Array.isArray(room.curses)
-                ? room.curses
-                : Object.keys(storyContent?.curses || {});
-            let selectedCurse = String(availableCurses[0] || '');
             const selectionButtons = [];
             const refreshSelections = () => {
-                selectionButtons.forEach(({ button, kind, id }) => {
-                    button.classList.toggle(
-                        'is-selected',
-                        kind === 'biome' ? id === selectedBiome : id === selectedCurse,
-                    );
+                selectionButtons.forEach(({ button, id }) => {
+                    button.classList.toggle('is-selected', id === selectedBiome);
                 });
             };
             appendStoryChoiceHeading(container, lang === 'zh' ? '区域' : 'Region');
@@ -6576,21 +6577,7 @@
                         refreshSelections();
                     },
                 );
-                selectionButtons.push({ button, kind: 'biome', id: String(biome) });
-                container?.append(button);
-            });
-            appendStoryChoiceHeading(container, lang === 'zh' ? '诅咒' : 'Curse');
-            availableCurses.forEach((curseId) => {
-                const definition = storyContent?.curses?.[curseId] || {};
-                const button = choiceButton(
-                    localize(definition.name) || String(curseId),
-                    () => {
-                        selectedCurse = String(curseId);
-                        refreshSelections();
-                    },
-                    { description: localize(definition.description) },
-                );
-                selectionButtons.push({ button, kind: 'curse', id: String(curseId) });
+                selectionButtons.push({ button, id: String(biome) });
                 container?.append(button);
             });
             refreshSelections();
@@ -6598,7 +6585,6 @@
                 t.confirm,
                 () => storyAction('choose_stage', {
                     biome: selectedBiome,
-                    curse_id: selectedCurse,
                 }),
             ));
         } else if (room.type === 'rest') {

@@ -10,7 +10,6 @@ from story_content import (
     STORY_BIOMES,
     STORY_BOSS_RELIC_IDS,
     STORY_CARDS,
-    STORY_CURSES,
     STORY_EASY_RELIC_IDS,
     STORY_ENCOUNTERS,
     STORY_ENEMIES,
@@ -147,31 +146,18 @@ def _effect_hits(state, effect):
     return max(1, int(effect.get('hits') or 1))
 
 
-def _curse_stacks(state, curse_id):
-    curses = state.get('curses') or {}
-    stacks = max(0, int(curses.get(curse_id) or 0))
-    if curse_id == 'affliction':
-        # "Ward" was merged into Affliction. Keep old runs playable without
-        # resetting their route or silently dropping a selected curse.
-        stacks += max(0, int(curses.get('ward') or 0))
-    return stacks
-
-
 def _normalize_legacy_story_state(state):
     state.setdefault('journey_mode', 'standard')
     state['rng_version'] = 2
     if not isinstance(state.get('rng_streams'), dict):
         state['rng_streams'] = {}
+    state.pop('curses', None)
     room = state.get('room')
     if isinstance(room, dict) and room.get('type') == 'journey_setup':
         room.setdefault('modes', ['standard', 'boss_rush'])
-    curses = state.get('curses')
-    if isinstance(curses, dict) and 'ward' in curses:
-        ward_stacks = max(0, int(curses.pop('ward') or 0))
-        if ward_stacks:
-            curses['affliction'] = (
-                max(0, int(curses.get('affliction') or 0)) + ward_stacks
-            )
+    if isinstance(room, dict) and room.get('type') == 'stage_choice':
+        room.pop('curses', None)
+        room.pop('allow_repeated_curses', None)
 
 
 def _turn_elixir_baseline(state, combat=None):
@@ -505,8 +491,7 @@ def _build_enemy(state, def_id, serial, spec=None):
     spec = spec if isinstance(spec, dict) else {}
     definition = STORY_ENEMIES[def_id]
     base_health = _enemy_base_health(state, definition, spec)
-    vitality = _curse_stacks(state, 'vitality')
-    max_health = max(1, math.ceil(base_health * (1 + 1.5 * vitality)))
+    max_health = base_health
     initial = copy.deepcopy(definition.get('initial') or {})
     if _difficulty(state) == 'lunatic':
         initial.update(copy.deepcopy(definition.get('lunatic_initial') or {}))
@@ -545,11 +530,6 @@ def _build_enemy(state, def_id, serial, spec=None):
         enemy['segment_origin'] = max(
             int(enemy.get('segments') or 0),
             int(enemy.get('segment_origin') or 0),
-        )
-    affliction = _curse_stacks(state, 'affliction')
-    if affliction:
-        enemy['negative_status_immunity'] = (
-            int(enemy.get('negative_status_immunity') or 0) + 3 * affliction
         )
     return enemy
 
@@ -1018,9 +998,6 @@ def _enemy_physical_hit_amount(state, attacker, base_amount):
         + int(attacker.get('temporary_power') or 0)
         + int(attacker.get('charging') or 0),
     )
-    aggression = _curse_stacks(state, 'aggression')
-    if aggression:
-        amount = math.floor(amount * (1 + 0.8 * aggression))
     if int(attacker.get('weak') or 0) > 0:
         amount = math.floor(amount * 0.75)
     if int(combat.get('vulnerable') or 0) > 0:
@@ -4195,12 +4172,6 @@ def _enemy_turn(state, seed, events):
                         'parallel_group',
                         f'{group_prefix}:hit:{hit_index}' if hit_index else group_prefix,
                     )
-        affliction = _curse_stacks(state, 'affliction')
-        for _ in range(affliction):
-            status = _rng(state, seed, f'affliction:{enemy["id"]}').choice(
-                ('weak', 'fragile', 'vulnerable')
-            )
-            _apply_status(state, combat, status, 1, events, source='affliction')
         _advance_enemy_move(state, enemy, move_index, seed)
         if (
             definition.get('script') == 'bandage_beetle'
@@ -5183,25 +5154,15 @@ def _complete_current_node(state, events):
                 'type': 'stage_choice',
                 'stage': int(state.get('stage') or 1) + 1,
                 'biomes': list(STORY_BIOMES),
-                'curses': list(STORY_CURSES),
-                'allow_repeated_curses': True,
                 'boss_rush': True,
             }
         elif int(state.get('stage') or 1) < len(STORY_STAGES):
             next_stage = int(state.get('stage') or 1) + 1
-            selected_curses = {
-                curse_id for curse_id in STORY_CURSES
-                if _curse_stacks(state, curse_id) > 0
-            }
             state['phase'] = 'stage_choice'
             state['room'] = {
                 'type': 'stage_choice',
                 'stage': next_stage,
                 'biomes': list(STORY_STAGES[next_stage - 1]['biomes']),
-                'curses': [
-                    curse_id for curse_id in STORY_CURSES
-                    if curse_id not in selected_curses
-                ],
             }
         else:
             state['phase'] = 'room'
@@ -5361,7 +5322,6 @@ def _start_journey(state, payload, seed, events):
     state['biome'] = biome
     state['difficulty'] = difficulty
     state['journey_mode'] = journey_mode
-    state['curses'] = {}
     state['normal_battles'] = 0
     state['stage_normal_battles'] = 0
     state['map'] = (
@@ -6092,23 +6052,12 @@ def _resolve_stage_choice(state, payload, seed, events):
 
     room = state.get('room') or {}
     biome = str(payload.get('biome') or '')
-    curse_id = str(payload.get('curse_id') or '')
     if state.get('phase') != 'stage_choice' or biome not in room.get('biomes', []):
         _fail('INVALID_STAGE_CHOICE', '无法选择该区域')
-    available_curses = (
-        room.get('curses')
-        if isinstance(room.get('curses'), list)
-        else list(STORY_CURSES)
-    )
-    if curse_id not in available_curses or curse_id not in STORY_CURSES:
-        _fail('INVALID_CURSE_CHOICE', '请选择一项诅咒')
     boss_rush = bool(
         room.get('boss_rush')
         or state.get('journey_mode') == 'boss_rush'
     )
-    current_curse_stacks = _curse_stacks(state, curse_id)
-    if current_curse_stacks > 0 and not room.get('allow_repeated_curses'):
-        _fail('CURSE_ALREADY_SELECTED', '该诅咒已经选择过')
     stage = int(room['stage'])
     player = state['player']
     if _difficulty(state) in ('hard', 'lunatic'):
@@ -6128,11 +6077,6 @@ def _resolve_stage_choice(state, payload, seed, events):
         )
     state['stage'] = stage
     state['biome'] = biome
-    state.setdefault('curses', {})[curse_id] = (
-        current_curse_stacks + 1 if boss_rush else 1
-    )
-    if curse_id == 'affliction':
-        state['curses'].pop('ward', None)
     state['stage_normal_battles'] = 0
     if boss_rush:
         state['map'] = generate_boss_rush_map(
@@ -6152,8 +6096,6 @@ def _resolve_stage_choice(state, payload, seed, events):
         'type': 'stage_started',
         'stage': stage,
         'biome': biome,
-        'curse_id': curse_id,
-        'curse_stacks': _curse_stacks(state, curse_id),
         'mode': 'boss_rush' if boss_rush else 'standard',
     })
 
@@ -6840,6 +6782,8 @@ def _choose_reward(state, payload, seed, events):
         claim_gold()
     elif reward_type == 'card':
         claim_card()
+        if str(reward.get('source') or '') == 'boss_rush_start_cards':
+            finish_reward()
     elif reward_type == 'relic':
         claim_relic()
     elif reward_type == 'continue':

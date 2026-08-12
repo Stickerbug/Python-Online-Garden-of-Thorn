@@ -77,30 +77,6 @@ STORY_DIFFICULTIES = {
     },
 }
 
-STORY_CURSES = {
-    'vitality': {
-        'name': {'zh': '旺盛', 'en': 'Vitality'},
-        'description': {
-            'zh': '所有生物的H上限增加150%',
-            'en': 'All enemies gain 150% maximum H',
-        },
-    },
-    'aggression': {
-        'name': {'zh': '凶猛', 'en': 'Aggression'},
-        'description': {
-            'zh': '所有生物的攻击伤害增加80%',
-            'en': 'All enemies deal 80% more attack damage',
-        },
-    },
-    'affliction': {
-        'name': {'zh': '苦难', 'en': 'Affliction'},
-        'description': {
-            'zh': '所有生物在战斗开始时获得3层负面状态免疫；每名生物每次行动后，随机对玩家方施加1层虚弱、脆弱或易伤',
-            'en': 'All enemies start combat with 3 Negative Status Immunity; after each enemy action, apply 1 random Weak, Fragile, or Vulnerable to the player',
-        },
-    },
-}
-
 STORY_RARITIES = {
     'primary': {'name': {'zh': '基础', 'en': 'Primary'}, 'color': '#7EEF6D'},
     'common': {'name': {'zh': '普通', 'en': 'Common'}, 'color': '#FFE65D'},
@@ -2412,7 +2388,6 @@ def story_content_payload(card_defs=None):
         'rules': deepcopy(STORY_RULES),
         'biomes': deepcopy(STORY_BIOMES),
         'difficulties': deepcopy(STORY_DIFFICULTIES),
-        'curses': deepcopy(STORY_CURSES),
         'rarities': deepcopy(STORY_RARITIES),
         'card_types': deepcopy(STORY_CARD_TYPES),
         'tags': deepcopy(STORY_TAGS),

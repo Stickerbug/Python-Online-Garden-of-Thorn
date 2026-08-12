@@ -299,7 +299,6 @@ def build_initial_story_state(seed):
         'rng_streams': {},
         'normal_battles': 0,
         'stage_normal_battles': 0,
-        'curses': {},
         'event_miss_streak': 0,
         'encounter_history': {
             'elite': {},

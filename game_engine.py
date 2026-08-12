@@ -189,6 +189,7 @@ def reset_card_after_play(card: CardInstance):
         delattr(card, '_sewers_was_countered_this_play')
     if isinstance(getattr(card, 'custom_vars', None), dict):
         card.custom_vars.pop('sewers_toilet_paper_power', None)
+        card.custom_vars.pop('_ocean_charge_resolved_this_play', None)
     if card.card_type == 'thorn':
         card.fission_level = preserved_fission_level if preserve_fission else 1
         card.fusion_level = 1
@@ -7120,6 +7121,7 @@ class GameEngine:
         card._bio_pre_play_snapshot = card.to_dict()
         self._bio_after_card_payment(player_id, card)
         self._apply_magic_acceleration_after_play(player_id, card)
+        self._prepare_ocean_charge_for_play(card)
         self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
         self._sewers_trigger_vampire_fangs(player_id, card, choice)
         if self._card_is(card, 'Broccoli', 'sewers:broccoli'):
@@ -7336,6 +7338,15 @@ class GameEngine:
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             self._game_over_defer_depth += 1
             try:
+                self._prepare_ocean_charge_for_play(counter_removed)
+                self._atomic_ocean_charge_self_damage(
+                    responder_id,
+                    counter_removed,
+                    {},
+                    '',
+                    None,
+                    {'target_id': responder_id},
+                )
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
                 is_precision = pending.get('is_precision', False)
                 if self._card_is(counter_removed, 'Bubble', 'vanilla:bubble'):
@@ -7889,6 +7900,7 @@ class GameEngine:
             card._bio_pre_play_snapshot = card.to_dict()
             self._bio_after_card_payment(player_id, card)
             self._apply_magic_acceleration_after_play(player_id, card)
+            self._prepare_ocean_charge_for_play(card)
             self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
             self._sewers_trigger_vampire_fangs(player_id, card, choice)
         if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
@@ -15574,7 +15586,25 @@ class GameEngine:
             child_context['vars'] = vars_dict
             self._run_effect_list(player_id, card, body, child_choice, child_context)
 
+    def _prepare_ocean_charge_for_play(self, card: Optional[CardInstance]):
+        if card is None:
+            return
+        custom = getattr(card, 'custom_vars', None)
+        if not isinstance(custom, dict):
+            custom = {}
+            card.custom_vars = custom
+        custom.pop('_ocean_charge_resolved_this_play', None)
+
     def _atomic_ocean_charge_self_damage(self, player_id, card, params, log, choice, context):
+        if card is None:
+            return
+        custom = getattr(card, 'custom_vars', None)
+        if not isinstance(custom, dict):
+            custom = {}
+            card.custom_vars = custom
+        if custom.get('_ocean_charge_resolved_this_play'):
+            return
+        custom['_ocean_charge_resolved_this_play'] = True
         amount = max(0, int(getattr(card, 'charge_value', 0) or 0)) if card is not None else 0
         if amount <= 0:
             return

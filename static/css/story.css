@@ -82,6 +82,7 @@
   --radius-lg: 8px;
   --radius-xl: 10px;
   --font-main: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
+  /* Kreadon Demi omits most CJK glyphs, so Chinese bold relies on synthesis. */
   --font-card: 'Kreadon Demi', 'Kreadon CJK', 'Kreadon', 'Microsoft YaHei', sans-serif;
   --gtn-card-border-width: 1.5px;
   --gtn-card-border-width: clamp(1px, 1.3cqi, 1.7px);
@@ -145,7 +146,6 @@ html.fonts-loaded-main {
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  font-synthesis: none;
 }
 
 button,

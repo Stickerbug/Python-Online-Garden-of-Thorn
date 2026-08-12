@@ -207,6 +207,7 @@ def test_story_content_inherits_source_card_flavor_text():
     payload = story_content_payload({'Rose': source})
 
     assert payload['cards']['rose']['flavor'] == source.description_i18n
+    assert 'curses' not in payload
 
 
 def test_story_card_terms_show_rarity_and_plain_flavor_text():

@@ -651,18 +651,16 @@ def test_boss_rush_opens_after_ten_card_rewards_and_one_talent():
         assert reward['round_index'] == round_index
         choice = reward['cards'][0]
         card_id = choice.get('card_id') if isinstance(choice, dict) else choice
-        state, _ = apply_story_action(
+        state, events = apply_story_action(
             state,
             'choose_reward',
             {'reward_type': 'card', 'card_id': card_id},
             seed,
         )
-        state, _ = apply_story_action(
-            state,
-            'choose_reward',
-            {'reward_type': 'continue'},
-            seed,
-        )
+        assert any(event['type'] == 'reward_claimed' for event in events)
+        if round_index < 10:
+            assert state['reward']['source'] == 'boss_rush_start_cards'
+            assert state['reward']['round_index'] == round_index + 1
 
     assert len(state['player']['deck']) == initial_deck_size + 10
     assert state['phase'] == 'reward'
@@ -687,12 +685,12 @@ def test_boss_rush_opens_after_ten_card_rewards_and_one_talent():
     assert len(state['player']['relics']) == initial_relic_count + 1
 
 
-def test_boss_rush_stage_choice_stacks_curses_and_advances_endlessly():
+def test_boss_rush_stage_choice_advances_endlessly_without_curses():
     seed = 'boss-rush-loop'
     state = build_initial_story_state(seed)
+    assert 'curses' not in state
     state['journey_mode'] = 'boss_rush'
     state['difficulty'] = 'normal'
-    state['curses'] = {'vitality': 1}
 
     for block in (2, 3):
         state['phase'] = 'stage_choice'
@@ -700,14 +698,12 @@ def test_boss_rush_stage_choice_stacks_curses_and_advances_endlessly():
             'type': 'stage_choice',
             'stage': block,
             'biomes': ['garden'],
-            'curses': ['vitality'],
-            'allow_repeated_curses': True,
             'boss_rush': True,
         }
         state, events = apply_story_action(
             state,
             'choose_stage',
-            {'biome': 'garden', 'curse_id': 'vitality'},
+            {'biome': 'garden'},
             seed,
         )
 
@@ -717,11 +713,11 @@ def test_boss_rush_stage_choice_stacks_curses_and_advances_endlessly():
         assert state['current_floor'] == (block - 1) * 10 + 1
         assert state['map']['floor_count'] == block * 10
         assert first_node['status'] == 'available'
-        assert state['curses']['vitality'] == block
+        assert 'curses' not in state
         assert any(
             event.get('type') == 'stage_started'
             and event.get('mode') == 'boss_rush'
-            and event.get('curse_stacks') == block
+            and 'curse_id' not in event
             for event in events
         )
 
@@ -801,7 +797,7 @@ def test_entering_a_new_stage_restores_all_health():
     state, events = apply_story_action(
         state,
         'choose_stage',
-        {'biome': 'jungle', 'curse_id': 'vitality'},
+        {'biome': 'jungle'},
         'stage-heal',
     )
 
@@ -971,7 +967,6 @@ def test_a_complete_three_stage_journey_can_reach_the_terminal_state():
                 'choose_stage',
                 {
                     'biome': state['room']['biomes'][0],
-                    'curse_id': state['room']['curses'][0],
                 },
                 seed,
             )

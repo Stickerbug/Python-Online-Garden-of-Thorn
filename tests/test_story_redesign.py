@@ -255,47 +255,43 @@ def test_second_floor_uses_the_general_non_crossing_connection_rules():
         assert {edge['to'] for edge in outgoing} == {node['id'] for node in second_floor}
 
 
-def test_enemy_builder_applies_lunatic_values_and_stacking_curses():
-    state = _started_state('curse-enemy', difficulty='lunatic', biome='desert')
+def test_enemy_builder_ignores_removed_legacy_run_curses():
+    state = _started_state('legacy-curse-enemy', difficulty='lunatic', biome='desert')
     state['curses'] = {'vitality': 1, 'affliction': 2}
     _start_combat(
         state,
         {'type': 'combat'},
-        'curse-enemy',
+        'legacy-curse-enemy',
         [],
         encounter_override=[{'def_id': 'cactus'}],
     )
     enemy = state['combat']['enemies'][0]
-    assert enemy['max_health'] == 78
+    assert enemy['max_health'] == 31
     assert enemy['reflection'] == 3
-    assert enemy['negative_status_immunity'] == 6
+    assert int(enemy.get('negative_status_immunity') or 0) == 0
 
 
-def test_legacy_ward_curse_is_merged_into_affliction_for_existing_runs():
-    state = _started_state('legacy-ward', biome='desert')
-    state['curses'] = {'ward': 1}
-    _start_combat(
-        state,
-        {'type': 'combat'},
-        'legacy-ward',
-        [],
-        encounter_override=[{'def_id': 'cactus'}],
-    )
-    assert state['combat']['enemies'][0]['negative_status_immunity'] == 3
-
-
-def test_legacy_ward_curse_is_persistently_normalized_on_the_next_action():
-    state = _started_state('legacy-ward-normalization', biome='desert')
+def test_removed_run_curses_are_dropped_on_the_next_action():
+    state = _started_state('removed-curse-normalization', biome='desert')
     state['curses'] = {'affliction': 2, 'ward': 1}
+    state['phase'] = 'stage_choice'
+    state['room'] = {
+        'type': 'stage_choice',
+        'stage': 2,
+        'biomes': ['desert'],
+        'curses': ['affliction'],
+        'allow_repeated_curses': True,
+    }
 
     state, _ = apply_story_action(
         state,
-        'dev_set_values',
-        {'gold': state['player']['gold']},
-        'legacy-ward-normalization',
+        'choose_stage',
+        {'biome': 'desert'},
+        'removed-curse-normalization',
     )
 
-    assert state['curses'] == {'affliction': 3}
+    assert 'curses' not in state
+    assert state['stage'] == 2
 
 
 def test_repeated_enemy_move_orders_are_not_limited_to_two_entries():
@@ -1015,27 +1011,6 @@ def test_blind_consumes_one_stack_and_hides_the_entire_player_turn():
     assert combat['blind'] == 0
 
 
-def test_affliction_applies_one_random_negative_status_after_each_enemy_action():
-    state = _started_state('affliction-action')
-    state['curses'] = {'affliction': 2}
-    _start_combat(
-        state,
-        {'type': 'combat'},
-        'affliction-action',
-        [],
-        encounter_override=[{'def_id': 'soldier_ant'}],
-    )
-    state['player']['health'] = state['player']['max_health'] = 999
-    state['combat']['opening_redraw_pending'] = False
-
-    _end_turn(state, 'affliction-action:turn', [])
-
-    assert sum(
-        int(state['combat'].get(status) or 0)
-        for status in ('weak', 'fragile', 'vulnerable')
-    ) == 2
-
-
 def test_wreckage_non_burst_death_halves_and_stuns_its_assigned_summon():
     state = _started_state('wreckage-death-hook', biome='ocean')
     _start_combat(
@@ -1151,24 +1126,3 @@ def test_restart_floor_restores_the_immutable_node_entry_state_even_after_death(
     assert state['floor_entry_checkpoint']['node_id'] == node['id']
     assert state['recovery_checkpoint']['kind'] == 'combat_entry'
     assert any(event.get('type') == 'floor_restarted' for event in events)
-
-
-def test_a_curse_cannot_be_selected_again_on_a_later_stage():
-    state = _started_state('unique-stage-curse')
-    state['phase'] = 'stage_choice'
-    state['curses'] = {'affliction': 1}
-    state['room'] = {
-        'type': 'stage_choice',
-        'stage': 2,
-        'biomes': ['desert'],
-        'curses': ['affliction'],
-    }
-
-    with pytest.raises(StoryActionError) as exc_info:
-        apply_story_action(
-            state,
-            'choose_stage',
-            {'biome': 'desert', 'curse_id': 'affliction'},
-            'unique-stage-curse',
-        )
-    assert exc_info.value.code == 'CURSE_ALREADY_SELECTED'
