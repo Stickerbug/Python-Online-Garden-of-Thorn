@@ -6772,6 +6772,7 @@ function showView(viewId) {
         toggleFriendsPopover(false);
         toggleStatsPopover(false);
         toggleChangelogPopover(false);
+        toggleAchievementsPopover(false);
         toggleLeaderboardPopover(false);
     }
     if (!sameView && viewId !== 'view-game') {
@@ -7326,6 +7327,29 @@ function loadCachedChangelog() {
     return null;
 }
 
+function isCurrentChangelogCache(cache, expectedVersion = currentChangelogCacheVersion()) {
+    if (!cache || !Array.isArray(cache.items)) return false;
+    const version = String(cache.version || '');
+    const serverVersion = String(cache.serverVersion || '');
+    return !!expectedVersion && version === expectedVersion && serverVersion === expectedVersion;
+}
+
+async function fetchCurrentChangelog(expectedVersion, retry = false) {
+    const params = new URLSearchParams();
+    params.set('limit', '20');
+    params.set('version', expectedVersion);
+    if (retry) params.set('_refresh', String(Date.now()));
+    const resp = await fetch(`/api/changelog?${params.toString()}`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const serverVersion = String(data && data.version || '');
+    if (!serverVersion || serverVersion !== expectedVersion) {
+        if (!retry) return fetchCurrentChangelog(expectedVersion, true);
+        throw new Error(`CHANGELOG_VERSION_MISMATCH:${serverVersion || 'missing'}`);
+    }
+    return data;
+}
+
 async function loadChangelog(force = false, options = {}) {
     if (changelogLoadingPromise) return changelogLoadingPromise;
     if (changelogLoaded && !force) {
@@ -7339,7 +7363,7 @@ async function loadChangelog(force = false, options = {}) {
     const cacheVersion = currentChangelogCacheVersion();
     if (!force) {
         const cached = loadCachedChangelog();
-        if (cached && cached.version === cacheVersion) {
+        if (isCurrentChangelogCache(cached, cacheVersion)) {
             if (!options.silent) renderChangelogItems(cached.items);
             updateChangelogBadge();
             return;
@@ -7348,8 +7372,7 @@ async function loadChangelog(force = false, options = {}) {
     if (body && !changelogLoaded && !options.silent) {
         body.innerHTML = `<p class="muted">${escapeHtml(UI.loading || 'Loading...')}</p>`;
     }
-    changelogLoadingPromise = fetch('/api/changelog?limit=20', { cache: 'default' })
-        .then(resp => resp.ok ? resp.json() : Promise.reject(new Error(`HTTP ${resp.status}`)))
+    changelogLoadingPromise = fetchCurrentChangelog(cacheVersion)
         .then(data => {
             changelogLoaded = true;
             const items = data && data.items || [];
@@ -7364,17 +7387,25 @@ async function loadChangelog(force = false, options = {}) {
             try {
                 localStorage.setItem(CHANGELOG_CACHE_KEY, JSON.stringify(changelogCache));
             } catch (_) {}
+            writeChangelogMarker(CHANGELOG_BOOT_VERSION_KEY, cacheVersion);
             if (!options.silent || isChangelogPopoverOpen()) renderChangelogItems(items);
             updateChangelogBadge();
+            return true;
         })
         .catch(() => {
-            if (body && !options.silent) {
+            const hasFallback = !!(changelogCache && Array.isArray(changelogCache.items));
+            changelogLoaded = hasFallback;
+            if (hasFallback && (!options.silent || isChangelogPopoverOpen())) {
+                renderChangelogItems(changelogCache.items);
+                updateChangelogBadge();
+            } else if (body && !options.silent) {
                 body.textContent = '';
                 const error = document.createElement('p');
                 error.className = 'error-text';
                 error.textContent = UI.changelog_error || '更新日志加载失败。';
                 body.appendChild(error);
             }
+            return false;
         })
         .finally(() => {
             changelogLoadingPromise = null;
@@ -7383,14 +7414,14 @@ async function loadChangelog(force = false, options = {}) {
 }
 
 function initChangelogBadge() {
-    loadCachedChangelog();
+    const cached = loadCachedChangelog();
     updateChangelogBadge();
     const cacheVersion = currentChangelogCacheVersion();
-    const lastBootVersion = readChangelogMarker(CHANGELOG_BOOT_VERSION_KEY);
-    if (cacheVersion && lastBootVersion !== cacheVersion) {
+    if (isCurrentChangelogCache(cached, cacheVersion)) {
         writeChangelogMarker(CHANGELOG_BOOT_VERSION_KEY, cacheVersion);
-        loadChangelog(true, { silent: true });
+        return;
     }
+    loadChangelog(true, { silent: true });
 }
 
 function openAbout() {
@@ -10047,7 +10078,6 @@ function showV2UiRequest(data = {}) {
                         const value = String(option.value);
                         const currentIndex = selectedValues.indexOf(value);
                         if (currentIndex >= 0) {
-                            if (selectedValues.length <= minSelect) return;
                             selectedValues.splice(currentIndex, 1);
                             btn.classList.remove('selected');
                         } else {
@@ -10349,6 +10379,27 @@ async function fetchGalleryCardDefs({ force = false } = {}) {
     const nextDefs = await fetchPublicDataJson(`/api/cards?${buildGalleryModQueryString()}`);
     GALLERY_CARD_DEFS = nextDefs && typeof nextDefs === 'object' ? nextDefs : {};
     return GALLERY_CARD_DEFS;
+}
+
+function buildReplayExportModQueryString(replayInfo = {}) {
+    const params = new URLSearchParams();
+    params.set('include_all_mods', '1');
+    // A replay must not inherit the browser's current entertainment/DLC filters.
+    params.set('disabled_mods', '');
+    const meta = replayInfo && typeof replayInfo.meta === 'object' ? replayInfo.meta : {};
+    const communityMods = Array.isArray(meta.community_mods)
+        ? meta.community_mods
+        : (Array.isArray(replayInfo.community_mods) ? replayInfo.community_mods : []);
+    const modSource = String(meta.mod_source || replayInfo.mod_source || 'official');
+    params.set('mod_source', modSource === 'community' && communityMods.length ? 'community' : 'official');
+    if (modSource === 'community' && communityMods.length) {
+        params.set('community_mods', JSON.stringify(communityMods));
+    }
+    return params.toString();
+}
+
+async function fetchReplayExportCardDefs(replayInfo = {}) {
+    return fetchPublicDataJson(`/api/cards?${buildReplayExportModQueryString(replayInfo)}`);
 }
 
 function getGalleryOpeningEvents() {
@@ -11224,12 +11275,21 @@ function getArcticRubySelectableAttacks(sourceCard, hand = null, ownerState = nu
     const sourceId = sourceCard && sourceCard.instance_id;
     const elixir = Math.max(0, Number(owner.elixir || 0));
     const magic = Math.max(0, Number(owner.magic || 0));
+    const ownerHand = Array.isArray(owner.hand) ? owner.hand : [];
+    const liveSource = ownerHand.find(candidate => candidate && String(candidate.instance_id) === String(sourceId))
+        || cards.find(candidate => candidate && String(candidate.instance_id) === String(sourceId));
+    const sourceDef = liveSource ? getCardDef(liveSource.def_id) : null;
+    const sourceCosts = liveSource && sourceDef
+        ? getCardDisplayCosts(liveSource, sourceDef, owner)
+        : { totalE: 0, totalM: 0 };
+    const availableE = Math.max(0, elixir - Math.max(0, Number(sourceCosts.totalE || 0)));
+    const availableM = Math.max(0, magic - Math.max(0, Number(sourceCosts.totalM || 0)));
     return cards.filter(candidate => {
         if (!candidate || String(candidate.instance_id) === String(sourceId)) return false;
         const candidateDef = getCardDef(candidate.def_id);
         if (!candidateDef || candidateDef.card_type !== 'thorn' || cardHasSublimeFlag(candidate, candidateDef)) return false;
         const costs = getCardDisplayCosts(candidate, candidateDef, owner);
-        return costs.totalE <= elixir && costs.totalM <= magic;
+        return costs.totalE <= availableE && costs.totalM <= availableM;
     });
 }
 
@@ -20676,7 +20736,7 @@ async function loadReplayForVideoExport(payload, options = {}) {
     showEnglishCardNames = options.show_english_names !== false;
     localStorage.setItem('gtn_show_english_card_names', showEnglishCardNames ? '1' : '0');
     try {
-        const defs = await fetchGalleryCardDefs({ force: true });
+        const defs = await fetchReplayExportCardDefs(accountReplayData);
         if (defs && Object.keys(defs).length) CARD_DEFS = defs;
     } catch (error) {
         console.warn('[replay-export] failed to load all bundled card definitions', error);
@@ -20734,7 +20794,7 @@ async function loadReplayForVideoExport(payload, options = {}) {
 }
 
 window.GTNReplayVideoBridge = {
-    version: 12,
+    version: 13,
     async load(payload, options = {}) {
         return loadReplayForVideoExport(payload, options);
     },
@@ -23552,8 +23612,13 @@ async function startSoloTraining() {
         gameAlert(UI.notice, UI.solo_invalid_deck_cards);
         return;
     }
-    const event0 = soloEventA ? Number(soloEventA) : null;
-    const event1 = soloEventB ? Number(soloEventB) : null;
+    const normalizeSoloEventId = value => {
+        const text = String(value || '').trim();
+        if (!text) return null;
+        return /^\d+$/.test(text) ? Number(text) : text;
+    };
+    const event0 = normalizeSoloEventId(soloEventA);
+    const event1 = normalizeSoloEventId(soloEventB);
     const sub0 = await buildSoloEventSubChoice(event0, soloDeckA, UI.solo_deck_a);
     if (sub0 === false) return;
     const sub1 = await buildSoloEventSubChoice(event1, soloDeckB, UI.solo_deck_b);

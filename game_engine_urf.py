@@ -364,6 +364,9 @@ class GameEngineInfiniteFire(GameEngine):
         self._apply_late_round_fire_pressure()
         if self.game_over:
             return
+        # Keep the opening action owner visible even when a turn-start effect
+        # opens a choice before the ordinary action entry continuation.
+        self.phase = 'action'
         self._start_player_turn(self.first_player)
         return True
 

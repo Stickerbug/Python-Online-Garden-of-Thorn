@@ -884,9 +884,16 @@ def test_a_complete_three_stage_journey_can_reach_the_terminal_state():
             combat['card_play_limit'] = None
             combat['elixir'] = 999
             combat['magic'] = 999
-            target = next(
+            living_enemies = [
                 enemy for enemy in combat['enemies']
                 if int(enemy['health']) > 0
+            ]
+            target = next(
+                (
+                    enemy for enemy in living_enemies
+                    if enemy.get('def_id') == 'termite_mound'
+                ),
+                living_enemies[0],
             )
             target['health'] = 1
             target['shield'] = 0
@@ -1185,6 +1192,73 @@ def test_fission_does_not_consume_or_repeat_on_another_fission():
     )
     assert state['combat']['shield'] == 10
     assert state['combat']['next_skill_repeats'] == 0
+
+
+def test_fission_resolves_chromosome_card_moves_sequentially_without_duplicates():
+    seed = 'fission-chromosome-sequential-move'
+    state, _ = _begin_combat(seed)
+    combat = state['combat']
+    combat['hand'] = []
+    combat['draw_pile'] = [
+        _new_card(state, 'basic'),
+        _new_card(state, 'rose'),
+    ]
+    first_discard = _new_card(state, 'bur')
+    second_discard = _new_card(state, 'leaf')
+    combat['discard_pile'] = [first_discard, second_discard]
+    combat['elixir'] = 10
+    fission = _inject_hand_card(state, 'fission')
+    chromosome = _inject_hand_card(state, 'chromosome', upgraded=True)
+
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': fission['instance_id']},
+        seed,
+    )
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {
+            'card_instance_id': chromosome['instance_id'],
+            'selected_discard_ids': [first_discard['instance_id']],
+        },
+        seed,
+    )
+
+    combat = state['combat']
+    pending = combat.get('pending_card_choice') or {}
+    option_ids = {
+        option['instance_id']
+        for option in pending.get('cards', [])
+    }
+    assert pending.get('kind') == 'repeat_card_play'
+    assert first_discard['instance_id'] not in option_ids
+    assert second_discard['instance_id'] in option_ids
+    assert combat['shield'] == 7
+
+    state, _ = apply_story_action(
+        state,
+        'resolve_card_choice',
+        {'selected_card_ids': [second_discard['instance_id']]},
+        seed,
+    )
+
+    combat = state['combat']
+    assert not combat.get('pending_card_choice')
+    assert combat['shield'] == 14
+    assert combat['draw_pile'][-1]['instance_id'] == second_discard['instance_id']
+    assert any(
+        card['instance_id'] == first_discard['instance_id']
+        for card in combat['hand']
+    )
+    pile_cards = [
+        card
+        for pile_name in ('hand', 'draw_pile', 'discard_pile', 'exile_pile', 'equipment')
+        for card in combat.get(pile_name, [])
+    ]
+    instance_ids = [card['instance_id'] for card in pile_cards]
+    assert len(instance_ids) == len(set(instance_ids))
 
 
 def test_dandelion_seed_can_be_planted_at_a_rest_site():

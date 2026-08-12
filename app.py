@@ -32,7 +32,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash
-from game_engine import GameEngine
+from game_engine import GameEngine, qualifies_backwater_achievement
 from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
 from cards import (
@@ -417,9 +417,9 @@ GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 500
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
-GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1'
+GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
 GTN_DRAINING_ENV = os.environ.get('GTN_DRAINING', '').strip().lower()
@@ -950,11 +950,7 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
             user_flags = []
             ps = engine.players[pidx] if hasattr(engine, 'players') and pidx < len(engine.players) else None
             is_winner = pidx in winner_set
-            if is_winner and mode == '1v1' and ps is not None and (
-                bool(getattr(ps, 'invincible', False))
-                or bool(getattr(ps, 'bandage_active', False))
-                or bool(getattr(ps, 'bandage_death_pending', False))
-            ):
+            if qualifies_backwater_achievement(mode, is_winner, ps):
                 user_flags.append('flag_backwater_win')
             if ps is not None:
                 try:
@@ -4479,10 +4475,39 @@ def _clear_room_action_timer(room):
     room.action_timer_last_tick = time.time()
 
 
+def _recover_started_room_action_phase(room):
+    """Repair an opening turn left in the transient ``playing`` phase."""
+    engine = getattr(room, 'engine', None)
+    if (
+        engine is None
+        or getattr(room, 'started_at', None) is None
+        or getattr(engine, 'game_over', False)
+        or getattr(engine, 'phase', None) != 'playing'
+    ):
+        return False
+    current = getattr(engine, 'current_player', None)
+    try:
+        current = int(current)
+    except (TypeError, ValueError):
+        return False
+    if not 0 <= current < len(getattr(engine, 'players', []) or []):
+        return False
+    engine.phase = 'action'
+    if not getattr(room, '_opening_action_phase_recovered', False):
+        room._opening_action_phase_recovered = True
+        admin_event(
+            'warning',
+            f'recovered timerless opening turn room={getattr(room, "room_id", "?")} current={current}',
+            room_id=getattr(room, 'room_id', None),
+        )
+    return True
+
+
 def _sync_room_action_timer_after_state_change(room, now=None):
     """Reset the turn timer when engine-side auto flow changed the active player."""
     now = now or time.time()
     engine = getattr(room, 'engine', None)
+    _recover_started_room_action_phase(room)
     if engine is None or getattr(engine, 'game_over', False) or getattr(engine, 'phase', None) != 'action':
         _clear_room_action_timer(room)
         return None
@@ -4500,6 +4525,7 @@ def _sync_room_action_timer_after_state_change(room, now=None):
 def _ensure_room_action_timer_locked(room, now=None):
     now = now or time.time()
     engine = getattr(room, 'engine', None)
+    _recover_started_room_action_phase(room)
     if engine is None or getattr(engine, 'game_over', False) or getattr(engine, 'phase', None) != 'action':
         _clear_room_action_timer(room)
         return None
@@ -13634,7 +13660,7 @@ def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=N
         engine.allowed_card_ids = set(loadout.get('allowed_card_ids') or []) or None
     engine.player_names = list(player_names) if player_names else ['Player A', 'Player B']
     engine.phase = 'playing'
-    force_first = [idx for idx, event_id in enumerate((event0, event1)) if event_id == 7]
+    force_first = [idx for idx, event_id in enumerate((event0, event1)) if str(event_id) == '7']
     engine.first_player = force_first[0] if len(force_first) == 1 else 0
     engine.current_player = engine.first_player
     engine.round_num = 1
@@ -13654,19 +13680,20 @@ def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=N
     for i in range(2):
         if i == engine.first_player:
             hand_size = FIRST_PLAYER_HAND_SIZE
-            if engine.opening_event_picks[i] == 7 and len(force_first) == 1:
+            if str(engine.opening_event_picks[i]) == '7' and len(force_first) == 1:
                 hand_size = 4
                 engine.players[i].elixir += 3
-            if engine.opening_event_picks[i] == 5:
+            if str(engine.opening_event_picks[i]) == '5':
                 hand_size = max(0, hand_size - 1)
             engine.players[i].draw_cards(hand_size)
         else:
             hand_size = INITIAL_HAND_SIZE
-            if engine.opening_event_picks[i] == 5:
+            if str(engine.opening_event_picks[i]) == '5':
                 hand_size = max(0, hand_size - 1)
             engine.players[i].draw_cards(hand_size)
     engine.log_msg(f"{start_label}！{engine.pn(engine.first_player)}先手。")
     engine.log_msg(f"=== 第{engine.round_num}回合 ===")
+    engine.phase = 'action'
     engine._start_player_turn(engine.first_player)
     init_solo_history(engine)
     return engine
@@ -16260,11 +16287,18 @@ def health_full():
 
 @app.route('/api/changelog')
 def api_changelog():
-    return jsonify({
+    version = changelog_version()
+    response = jsonify({
         'success': True,
-        'version': changelog_version(),
+        'version': version,
         'items': read_changelog_items(request.args.get('limit', 20)),
     })
+    # The browser keeps the changelog in localStorage under its content hash.
+    # Do not let an HTTP cache from an older deployment replace that copy.
+    response.headers['Cache-Control'] = 'private, no-store, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['X-GTN-Changelog-Version'] = version
+    return response
 
 
 @app.route('/api/report', methods=['POST'])
@@ -20850,8 +20884,20 @@ def on_solo_start(data):
     try:
         deck0 = validate_solo_deck_entries(data.get('deck0', []), name='deck0')
         deck1 = validate_solo_deck_entries(data.get('deck1', []), name='deck1')
-        event0 = validate_int(data.get('event0'), default=None, minimum=0, maximum=9999, name='event0') if data.get('event0') is not None else None
-        event1 = validate_int(data.get('event1'), default=None, minimum=0, maximum=9999, name='event1') if data.get('event1') is not None else None
+        def _solo_event_id(value, name):
+            if value is None or value == '':
+                return None
+            text = validate_str(
+                value,
+                min_len=1,
+                max_len=80,
+                pattern=r'[A-Za-z0-9_.:\-/]+',
+                name=name,
+            )
+            return int(text) if text.isdigit() else text
+
+        event0 = _solo_event_id(data.get('event0'), 'event0')
+        event1 = _solo_event_id(data.get('event1'), 'event1')
         sub0 = validate_choice_payload(data.get('sub0'))
         sub1 = validate_choice_payload(data.get('sub1'))
     except ValueError as exc:

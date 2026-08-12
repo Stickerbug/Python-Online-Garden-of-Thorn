@@ -145,6 +145,7 @@ html.fonts-loaded-main {
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  font-synthesis: none;
 }
 
 button,
@@ -5231,6 +5232,12 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   padding: 2px 7px;
   border-radius: 7px;
   transform: none;
+}
+
+.story-codex-intent-entries .story-intent-entry img {
+  width: 1.18em;
+  height: 1.18em;
+  flex: 0 0 1.18em;
 }
 
 .story-codex-talent-detail,

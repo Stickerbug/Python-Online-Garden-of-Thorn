@@ -4,6 +4,9 @@ import unittest
 from unittest import mock
 
 import app as gtn
+from game_engine import GameEngine
+from game_engine_2v2 import GameEngine2v2
+from game_engine_urf import GameEngineInfiniteFire
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -93,6 +96,57 @@ class FirstTurnClientRecoveryTests(unittest.TestCase):
 
 
 class FirstTurnServerRecoveryTests(unittest.TestCase):
+    def test_every_multiplayer_engine_enters_action_before_opening_turn_can_pause(self):
+        engines = (
+            (GameEngine(), {'skip_pregame_validation': True}),
+            (GameEngine2v2(), {'skip_pregame_validation': True}),
+            (GameEngineInfiniteFire(), {}),
+        )
+        for engine, kwargs in engines:
+            entered_phases = []
+
+            def pause_opening_turn(player_id, current_engine=engine):
+                entered_phases.append(current_engine.phase)
+                current_engine.current_player = player_id
+                current_engine.pending_choice = {'player_id': player_id, 'choice_type': 'test'}
+
+            engine._start_player_turn = pause_opening_turn
+            with self.subTest(engine=type(engine).__name__):
+                self.assertTrue(engine.start_game(**kwargs))
+                self.assertEqual(entered_phases, ['action'])
+                self.assertEqual(engine.phase, 'action')
+
+    def test_timer_recovers_a_completed_start_left_in_playing_phase(self):
+        engine = types.SimpleNamespace(
+            phase='playing',
+            current_player=1,
+            players=[object(), object()],
+            game_over=False,
+            pending_response=None,
+            pending_choice={'player_id': 1, 'choice_type': 'opening_choice'},
+            pending_v2_ui=None,
+            pending_ally_request=None,
+        )
+        room = types.SimpleNamespace(
+            room_id=77,
+            engine=engine,
+            started_at=123.0,
+            action_timer_player=None,
+            action_timer_remaining=0,
+            action_timer_last_tick=0,
+            player_sids=[],
+            disconnected_players={},
+        )
+        with mock.patch.object(gtn, 'admin_event') as event:
+            current = gtn._sync_room_action_timer_after_state_change(room, now=456.0)
+
+        self.assertEqual(current, 1)
+        self.assertEqual(engine.phase, 'action')
+        self.assertEqual(room.action_timer_player, 1)
+        self.assertEqual(room.action_timer_remaining, float(gtn.ACTION_TURN_SECONDS))
+        self.assertFalse(gtn._room_timer_payload(room)['turn_timer_paused'])
+        event.assert_called_once()
+
     def test_initial_pending_response_is_emitted_after_game_start(self):
         room = types.SimpleNamespace(
             room_id=42,

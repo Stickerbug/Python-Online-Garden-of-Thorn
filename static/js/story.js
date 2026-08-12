@@ -3059,8 +3059,29 @@
         return (state?.combat?.enemies || []).filter((enemy) => Number(enemy.health) > 0);
     }
 
+    function selectableStoryEnemies(card, state = activeRun?.state) {
+        const values = cardValues(card);
+        let enemies = livingStoryEnemies(state);
+        const bulbs = enemies.filter((enemy) => Number(enemy.bulb) > 0);
+        if (bulbs.length) enemies = bulbs;
+        if (values?.type === 'thorn' && Number(state?.combat?.locked) > 0) {
+            enemies = enemies.filter((enemy) => String(enemy.def_id || '') === 'stick');
+        }
+        return enemies;
+    }
+
+    function storyEnemyIsSelectable(card, enemyId, state = activeRun?.state) {
+        const expected = String(enemyId || '');
+        return selectableStoryEnemies(card, state).some(
+            (enemy) => String(enemy.id || '') === expected,
+        );
+    }
+
     function storyPredictionTargetId(state = activeRun?.state) {
-        const living = livingStoryEnemies(state);
+        const selected = selectedCombatCard(state);
+        const living = selected && cardTargetKind(selected) === 'enemy'
+            ? selectableStoryEnemies(selected, state)
+            : livingStoryEnemies(state);
         if (living.length === 1) return String(living[0].id || '');
         if (living.some((enemy) => String(enemy.id) === String(hoveredPredictionTargetId))) {
             return String(hoveredPredictionTargetId);
@@ -3343,7 +3364,11 @@
         document.querySelectorAll('.story-actor.is-aim-hover').forEach((element) => {
             element.classList.remove('is-aim-hover');
         });
-        if (hovered?.dataset.targetKind === targetKind) hovered.classList.add('is-aim-hover');
+        const validEnemy = targetKind !== 'enemy'
+            || storyEnemyIsSelectable(card, hovered?.dataset.targetId, activeRun?.state);
+        if (hovered?.dataset.targetKind === targetKind && validEnemy) {
+            hovered.classList.add('is-aim-hover');
+        }
     }
 
     function updateAimArrow(state) {
@@ -3733,6 +3758,7 @@
         const state = activeRun.state || {};
         const card = selectedCombatCard(state);
         if (!card || cardTargetKind(card) !== targetKind) return;
+        if (targetKind === 'enemy' && !storyEnemyIsSelectable(card, targetId, state)) return;
         const wrapper = document.querySelector(`.story-hand-card[data-instance-id="${CSS.escape(String(card.instance_id))}"]`);
         const target = targetKind === 'enemy'
             ? document.querySelector(`.story-actor-enemy[data-target-id="${CSS.escape(String(targetId || ''))}"]`)
@@ -3763,6 +3789,7 @@
         if (cardPlayInFlight || actionInFlight || !activeRun) return;
         const card = selectedCombatCard(activeRun.state);
         if (!card || cardTargetKind(card) !== targetKind) return;
+        if (targetKind === 'enemy' && !storyEnemyIsSelectable(card, targetId, activeRun.state)) return;
         if (openCardSelection(card, targetKind, targetId)) return;
         performSelectedCombatCard(targetKind, targetId);
     }
@@ -4175,7 +4202,7 @@
         return String(storyTraitDefinition(traitKey)?.image_url || '').trim();
     }
 
-    const STORY_TRAIT_VALUE_KEYS = Object.freeze({
+    const STORY_TRAIT_VALUE_KEYS_FALLBACK = Object.freeze({
         sturdy: 'sturdy',
         shelter: 'shelter',
         hidden: 'hidden',
@@ -4187,15 +4214,33 @@
         limb_survival: 'regenerations',
         bandage: 'bandage',
         miracle: 'miracle',
+        psionic_connection: 'psionic_connection',
+        psionic_sustain: 'psionic_sustain',
+        endurance_shell: 'endurance_shell',
+        bulb: 'bulb',
+        hard_shell: 'hard_shell',
+        segments: 'segments',
+        magic_shield: 'magic_shield',
+        magic_blessing: 'magic',
+        magic_reflection: 'magic_reflection',
+        electric_web: 'electric_web',
+        super_beam: 'super_beam',
+        toxic_reflection: 'toxic_reflection',
+        disc: 'disc',
     });
 
-    const STORY_TRAIT_KEYS_BY_EFFECT = Object.freeze(Object.fromEntries(
-        Object.entries(STORY_TRAIT_VALUE_KEYS)
-            .map(([traitKey, effectKey]) => [effectKey, traitKey]),
-    ));
+    function storyTraitValueKeys() {
+        const configured = storyContent?.trait_value_keys;
+        return configured && typeof configured === 'object'
+            ? configured
+            : STORY_TRAIT_VALUE_KEYS_FALLBACK;
+    }
 
     function storyTraitKeyForEffectKey(effectKey) {
-        return STORY_TRAIT_KEYS_BY_EFFECT[String(effectKey || '')] || '';
+        const expected = String(effectKey || '');
+        return Object.entries(storyTraitValueKeys()).find(
+            ([, valueKey]) => String(valueKey || '') === expected,
+        )?.[0] || '';
     }
 
     function storyRelicDefinition(relicKey) {
@@ -5726,7 +5771,7 @@
         const key = String(traitKey || '');
         const definition = storyTraitDefinition(key);
         if (!definition) return null;
-        const effectKey = STORY_TRAIT_VALUE_KEYS[key];
+        const effectKey = storyTraitValueKeys()[key];
         const amount = Math.max(0, Number(rawAmount) || 0);
         const chip = document.createElement('span');
         chip.className = `story-effect story-trait story-trait-${key.replaceAll('_', '-')}`;
@@ -5758,9 +5803,10 @@
             .find((item) => item.dataset.storyEffectKey === key);
         const traitKey = storyTraitKeyForEffectKey(key);
         if (amount === 0) {
+            const zeroVisible = new Set(storyContent?.trait_zero_visible || ['bandage', 'miracle']);
             if (
                 chip?.dataset.storyEffectStatic === 'true'
-                && (traitKey === 'miracle' || traitKey === 'bandage')
+                && zeroVisible.has(traitKey)
             ) {
                 let value = chip.querySelector('strong');
                 if (!value) {
@@ -5768,8 +5814,7 @@
                     chip.append(value);
                 }
                 value.textContent = '0';
-            } else if (chip?.dataset.storyEffectStatic === 'true') chip.querySelector('strong')?.remove();
-            else chip?.remove();
+            } else chip?.remove();
             return;
         }
         if (!chip) {
@@ -5808,7 +5853,7 @@
         if (!container) return;
         const staticTraitKeys = new Set((traitIds || []).map((traitId) => String(traitId || '')));
         const visibleTraitKeys = new Set(staticTraitKeys);
-        Object.entries(STORY_TRAIT_VALUE_KEYS).forEach(([traitKey, effectKey]) => {
+        Object.entries(storyTraitValueKeys()).forEach(([traitKey, effectKey]) => {
             if (Number(actor?.[effectKey]) > 0 && storyTraitDefinition(traitKey)) {
                 visibleTraitKeys.add(traitKey);
             }
@@ -5816,8 +5861,10 @@
         visibleTraitKeys.forEach((key) => {
             const definition = storyTraitDefinition(key);
             if (!definition || (key === 'nourish' && actor?.nourished)) return;
-            const effectKey = STORY_TRAIT_VALUE_KEYS[key];
+            const effectKey = storyTraitValueKeys()[key];
             const value = Math.max(0, Number(actor?.[effectKey]) || 0);
+            const zeroVisible = new Set(storyContent?.trait_zero_visible || ['bandage', 'miracle']);
+            if (effectKey && value <= 0 && !zeroVisible.has(key)) return;
             const chip = createStoryTraitChip(key, value, staticTraitKeys.has(key));
             if (chip) container.append(chip);
         });
@@ -5920,14 +5967,17 @@
         return item;
     }
 
-    function createEnemyActor(enemy, selectedTargetKind) {
+    function createEnemyActor(enemy, selectedTargetKind, selectableTargetIds = null) {
         const definition = storyContent?.enemies?.[enemy?.def_id] || {};
         const actor = document.createElement('article');
         actor.className = 'story-actor story-actor-enemy classic-fighter';
         actor.dataset.targetKind = 'enemy';
         actor.dataset.targetId = String(enemy.id || '');
         actor.tabIndex = 0;
-        actor.classList.toggle('is-play-target', selectedTargetKind === 'enemy');
+        actor.classList.toggle(
+            'is-play-target',
+            selectedTargetKind === 'enemy' && selectableTargetIds?.has(String(enemy.id || '')),
+        );
 
         const name = document.createElement('div');
         name.className = 'story-actor-name classic-fighter-name';
@@ -5989,6 +6039,12 @@
             { key: 'entangle', label: '缠绕', value: enemy.entangle },
             { key: 'negative_status_immunity', label: '负面状态免疫', value: enemy.negative_status_immunity },
             { key: 'evil_eye', label: '邪眼', value: enemy.evil_eye },
+            { key: 'toxic_poison', label: '剧毒', value: enemy.toxic_poison },
+            { key: 'stagnation', label: '滞留', value: enemy.stagnation },
+            { key: 'bleed', label: '流血', value: enemy.bleed },
+            { key: 'fire', label: '灼烧', value: enemy.fire },
+            { key: 'fragment', label: '碎片', value: enemy.fragment },
+            { key: 'magic_shield_disabled', label: '魔力护盾失效', value: enemy.magic_shield_disabled },
         ]);
         renderTraitsInto(effects, definition.traits, enemy);
 
@@ -6038,6 +6094,11 @@
         const selectedValues = cardValues(previewedCombatCard(state));
         const blindActive = Boolean(combat.blind_active);
         const selectedTargetKind = selected && !storyCursorCardMode(selected) ? cardTargetKind(selected) : '';
+        const selectableTargetIds = new Set(
+            selectedTargetKind === 'enemy'
+                ? selectableStoryEnemies(selected, state).map((enemy) => String(enemy.id || ''))
+                : [],
+        );
         setText('story-round', `R${combat.round || 1}`);
         setText('story-phase', combat.turn === 'player' ? t.playerTurn : t.enemyTurn);
         setHealthBar('story-combat-player', player.health, player.max_health);
@@ -6077,12 +6138,18 @@
             { key: 'negative_status_immunity', label: '负面状态免疫', value: combat.negative_status_immunity },
             { key: 'evil_eye', label: '邪眼', value: combat.evil_eye },
             { key: 'sturdy', label: '坚固', value: combat.sturdy },
+            { key: 'toxic_poison', label: '剧毒', value: combat.toxic_poison },
+            { key: 'stagnation', label: '滞留', value: combat.stagnation },
+            { key: 'bleed', label: '流血', value: combat.bleed },
+            { key: 'fire', label: '灼烧', value: combat.fire },
+            { key: 'blockade', label: '封锁', value: combat.blockade },
+            { key: 'locked', label: '锁定', value: combat.locked },
         ]);
         renderStoryEquipment(combat.equipment);
         const enemyGroup = $('story-enemy-group');
         enemyGroup?.replaceChildren();
         livingEnemies.forEach((enemyItem) => {
-            enemyGroup?.append(createEnemyActor(enemyItem, selectedTargetKind));
+            enemyGroup?.append(createEnemyActor(enemyItem, selectedTargetKind, selectableTargetIds));
         });
         syncStoryEnemyGroupLayout();
         const hand = $('story-hand');
@@ -6095,7 +6162,10 @@
             const values = cardValues(card);
             const tags = new Set(values?.tags || []);
             const costE = values?.cost_e === 'X' ? 0 : Number(values?.cost_e || 0);
-            const playable = values
+            const authoritativePlayableIds = Array.isArray(combat.playable_card_ids)
+                ? new Set(combat.playable_card_ids.map(String))
+                : null;
+            const fallbackPlayable = values
                 && !tags.has('unplayable')
                 && Number(combat.elixir) >= costE
                 && Number(combat.magic) >= Number(values.cost_m || 0)
@@ -6105,6 +6175,9 @@
                 && (!frenzyForcesAttack || values.type === 'thorn')
                 && (combat.card_play_limit == null || Number(combat.cards_played_this_turn || 0) < Number(combat.card_play_limit))
                 && canSatisfyCardSelection(card, combat);
+            const playable = authoritativePlayableIds
+                ? authoritativePlayableIds.has(String(card.instance_id || ''))
+                : fallbackPlayable;
             const wrapper = document.createElement('div');
             wrapper.className = 'story-hand-card';
             wrapper.dataset.instanceId = String(card.instance_id || '');
@@ -6141,7 +6214,12 @@
         const cursorMode = selected ? storyCursorCardMode(selected) : '';
         $('story-player-target')?.classList.toggle('is-play-target', !cursorMode && targetKind === 'self');
         document.querySelectorAll('.story-actor-enemy').forEach((actor) => {
-            actor.classList.toggle('is-play-target', !cursorMode && targetKind === 'enemy');
+            actor.classList.toggle(
+                'is-play-target',
+                !cursorMode
+                    && targetKind === 'enemy'
+                    && selectableTargetIds.has(String(actor.dataset.targetId || '')),
+            );
         });
         $('story-play-lane')?.classList.toggle('is-armed', Boolean(selected));
         setText('story-play-hint', selected
@@ -7377,7 +7455,7 @@
         ) {
             const targetKind = cardTargetKind(selected);
             const selector = targetKind === 'enemy'
-                ? '.story-actor-enemy[data-target-id]'
+                ? '.story-actor-enemy.is-play-target[data-target-id]'
                 : '#story-player-target';
             return [...document.querySelectorAll(selector)].filter(storyElementVisible);
         }
@@ -7433,6 +7511,10 @@
             const targetKind = String(actor.dataset.targetKind || '');
             const card = selectedCombatCard(activeRun?.state);
             if (card && cardTargetKind(card) === targetKind) {
+                if (
+                    targetKind === 'enemy'
+                    && !storyEnemyIsSelectable(card, actor.dataset.targetId, activeRun?.state)
+                ) return false;
                 playSelectedCombatCard(targetKind, actor.dataset.targetId || '');
                 return true;
             }
@@ -7628,9 +7710,9 @@
                 if (targetKind === 'self') {
                     addStoryShortcutAction(context, 'target_self', [$('story-player-target')]);
                 } else {
-                    const enemies = livingStoryEnemies();
+                    const enemies = selectableStoryEnemies(card);
                     const enemyElements = [...document.querySelectorAll(
-                        '.story-actor-enemy[data-target-id]',
+                        '.story-actor-enemy.is-play-target[data-target-id]',
                     )].filter(storyElementVisible);
                     if (enemies[0] && enemyElements[0]) {
                         addStoryShortcutAction(context, 'target_enemy', [enemyElements[0]]);
@@ -7715,11 +7797,13 @@
         }
         case 'target_enemy':
         case 'target_enemy_2': {
-            const enemies = livingStoryEnemies();
+            const card = selectedCombatCard(activeRun?.state);
+            const enemies = card
+                ? selectableStoryEnemies(card)
+                : livingStoryEnemies();
             const index = actionId === 'target_enemy_2' ? 1 : 0;
             const enemy = enemies[index];
             if (!enemy) return false;
-            const card = selectedCombatCard(activeRun?.state);
             if (!card) {
                 setStoryPredictionTarget(enemy.id);
                 return true;

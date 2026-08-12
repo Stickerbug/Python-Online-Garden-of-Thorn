@@ -1,4 +1,5 @@
 import unittest
+import uuid
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -254,6 +255,8 @@ class SpectatorPresenceTests(unittest.TestCase):
                 app.players.pop(game_sid, None)
 
     def test_spectator_operation_resets_afk_timer_but_state_sync_does_not(self):
+        rate_limiter_patch = patch.object(app, 'rate_limiter', return_value=True)
+        rate_limiter_patch.start()
         client = app.socketio.test_client(app.app)
         room_id = 905_000 + (id(self) % 10_000)
         room = SimpleNamespace(
@@ -265,7 +268,7 @@ class SpectatorPresenceTests(unittest.TestCase):
         sid = None
         try:
             client.emit('login', {
-                'nickname': f'AfkSpec{id(self) % 100000}',
+                'nickname': f'AfkSpec{uuid.uuid4().hex[:8]}',
                 'mode': '1v1',
             })
             login_events = [
@@ -308,6 +311,7 @@ class SpectatorPresenceTests(unittest.TestCase):
                 app.rooms.pop(room_id, None)
             if client.is_connected():
                 client.disconnect()
+            rate_limiter_patch.stop()
 
     def test_lobby_lists_spectator_with_the_watched_mode(self):
         sid = f'spectator-list-{id(self)}'

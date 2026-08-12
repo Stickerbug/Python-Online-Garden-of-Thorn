@@ -34,6 +34,10 @@ def test_manual_story_saves_roll_three_slots_and_restore_rng(tmp_path, monkeypat
     original = _map_state(seed)
     original['player']['health'] = 91
     original['rng_counter'] = 7
+    original['rng_streams'] = {
+        'card_reward:combat': 2,
+        'relic_reward': 1,
+    }
     original['last_events'] = [{'type': 'transient'}]
     original['recovery_checkpoint'] = {'kind': 'transient'}
     run, created = db.create_story_run(
@@ -48,6 +52,7 @@ def test_manual_story_saves_roll_three_slots_and_restore_rng(tmp_path, monkeypat
     second = copy.deepcopy(original)
     second['player']['health'] = 72
     second['rng_counter'] = 21
+    second['rng_streams']['card_reward:combat'] = 5
     run, outcome = db.commit_story_run_action(
         user['id'], run['id'], 1, 'save-test-2', 'test', {}, second,
     )
@@ -81,6 +86,10 @@ def test_manual_story_saves_roll_three_slots_and_restore_rng(tmp_path, monkeypat
     assert restored['state']['phase'] == 'map'
     assert restored['state']['player']['health'] == 91
     assert restored['state']['rng_counter'] == 7
+    assert restored['state']['rng_streams'] == {
+        'card_reward:combat': 2,
+        'relic_reward': 1,
+    }
     assert restored['state']['last_events'] == []
     assert 'recovery_checkpoint' not in restored['state']
 

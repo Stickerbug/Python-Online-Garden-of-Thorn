@@ -88,10 +88,10 @@ def test_story_attack_prediction_does_not_change_effect_scale_on_hover():
 
 
 def test_story_card_typography_matches_gallery_primitives():
-    assert "--card-english-font: 5.55cqi;" in STORY_CSS
+    assert "--card-english-font: 5.75cqi;" in STORY_CSS
     assert ":lang(zh) .story-card.card" in STORY_CSS
     assert "-webkit-text-size-adjust: none;" in STORY_CSS
-    assert "--font-card: 'Kreadon Demi', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Kreadon CJK', 'Kreadon', sans-serif;" in STORY_CSS
+    assert "--font-card: 'Kreadon Demi', 'Kreadon CJK', 'Kreadon', 'Microsoft YaHei', sans-serif;" in STORY_CSS
     assert "document.documentElement.lang = lang;" in STORY_JS
 
 
@@ -203,7 +203,8 @@ def test_story_equipment_matches_classic_orbit_preview_and_terms():
 
 def test_story_patch_traits_and_gold_icon_are_visible_ui_assets():
     assert 'function renderTraitsInto(container, traitIds, actor = null)' in STORY_JS
-    assert 'const STORY_TRAIT_VALUE_KEYS = Object.freeze({' in STORY_JS
+    assert 'const STORY_TRAIT_VALUE_KEYS_FALLBACK = Object.freeze({' in STORY_JS
+    assert 'const configured = storyContent?.trait_value_keys;' in STORY_JS
     assert "sturdy: 'sturdy'" in STORY_JS
     assert 'function createStoryTraitChip(traitKey, rawAmount = 0, isStatic = false)' in STORY_JS
     assert 'if (Number(actor?.[effectKey]) > 0 && storyTraitDefinition(traitKey))' in STORY_JS
@@ -749,6 +750,13 @@ def test_story_codex_separates_intent_operations_and_omits_unnamed_blessing_head
     assert 'column-gap: 11px;' in STORY_CSS
     assert 'row-gap: 7px;' in STORY_CSS
     assert 'border-radius: 7px;' in STORY_CSS
+    codex_intent_icon_rule = STORY_CSS.split(
+        '.story-codex-intent-entries .story-intent-entry img {',
+        1,
+    )[1].split('}', 1)[0]
+    assert 'width: 1.18em;' in codex_intent_icon_rule
+    assert 'height: 1.18em;' in codex_intent_icon_rule
+    assert 'flex: 0 0 1.18em;' in codex_intent_icon_rule
     assert 'const nameText = localize(record.definition.name).trim();' in STORY_JS
     assert 'if (nameText) {' in STORY_JS
     assert "if (type === 'clear_status') return { kind: 'clear_status'" in STORY_JS

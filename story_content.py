@@ -32,6 +32,14 @@ STORY_BIOMES = {
         'name': {'zh': '海洋', 'en': 'Ocean'},
         'color': '#3A94C8',
     },
+    'jungle': {
+        'name': {'zh': '丛林', 'en': 'Jungle'},
+        'color': '#2E9A58',
+    },
+    'factory': {
+        'name': {'zh': '工厂', 'en': 'Factory'},
+        'color': '#68717A',
+    },
 }
 
 STORY_DIFFICULTIES = {
@@ -277,6 +285,65 @@ STORY_STATUSES = {
     },
 }
 
+STORY_STATUSES.update({
+    'toxic_poison': {
+        'name': {'zh': '剧毒', 'en': 'Toxic Poison'},
+        'description': {
+            'zh': '中毒结算后，获得等同于层数的中毒。',
+            'en': 'After Poison resolves, gain Poison equal to its stacks.',
+        },
+    },
+    'stagnation': {
+        'name': {'zh': '滞留', 'en': 'Stagnation'},
+        'description': {
+            'zh': '存在时，中毒结算后不会减半；回合结束时-1层。',
+            'en': 'Poison does not halve after resolving; lose 1 stack at turn end.',
+        },
+    },
+    'bleed': {
+        'name': {'zh': '流血', 'en': 'Bleed'},
+        'description': {
+            'zh': '打出攻击牌结算后受到等同于层数的伤害，然后层数向下取整减半。',
+            'en': 'After playing an Attack, take damage equal to its stacks, then halve them.',
+        },
+    },
+    'fire': {
+        'name': {'zh': '灼烧', 'en': 'Burn'},
+        'description': {
+            'zh': '回合开始时受到等同于层数的伤害。',
+            'en': 'At turn start, take damage equal to its stacks.',
+        },
+    },
+    'blockade': {
+        'name': {'zh': '封锁', 'en': 'Blockade'},
+        'description': {
+            'zh': '前X个奇数栏的手牌无法打出。',
+            'en': 'The first X odd-numbered hand slots cannot be played.',
+        },
+    },
+    'locked': {
+        'name': {'zh': '锁定', 'en': 'Locked'},
+        'description': {
+            'zh': '存在时，攻击生物的牌只能选择树枝；树枝死亡时-1层。',
+            'en': 'Cards that attack creatures can target only Sticks; lose 1 when a Stick dies.',
+        },
+    },
+    'fragment': {
+        'name': {'zh': '碎片', 'en': 'Fragment'},
+        'description': {
+            'zh': '供重构机的特殊行动消耗。',
+            'en': 'Consumed by the Reconstructor\'s special actions.',
+        },
+    },
+    'magic_shield_disabled': {
+        'name': {'zh': '魔力护盾失效', 'en': 'Magic Shield Disabled'},
+        'description': {
+            'zh': '存在时，魔力护盾不生效；玩家回合结束时清除。',
+            'en': 'Magic Shield does not work while present; clears at the end of the player turn.',
+        },
+    },
+})
+
 STORY_STATUS_IMAGE_URLS = {
     'entangle': '/static/assets/story-status-icons/entangle.svg',
     'endurance': '/static/assets/story-status-icons/endurance.svg',
@@ -289,6 +356,14 @@ STORY_STATUS_IMAGE_URLS = {
     'vulnerable': '/static/assets/story-status-icons/vulnerable.svg',
     'fragile': '/static/assets/story-status-icons/fragile.svg',
     'wither': '/static/assets/story-status-icons/wither.svg',
+    'toxic_poison': '/static/assets/status-icons/toxic_poison.svg',
+    'stagnation': '/static/assets/status-icons/stagnation.svg',
+    'bleed': '/static/assets/status-icons/bleed.svg',
+    'fire': '/static/assets/status-icons/fire.svg',
+    'blockade': '/static/assets/story-status-icons/blockade.svg',
+    'locked': '/static/assets/story-status-icons/locked.svg',
+    'fragment': '/static/assets/status-icons/fragment.svg',
+    'magic_shield_disabled': '/static/assets/story-status-icons/magic-shield-disabled.svg',
 }
 
 for _status_id, _image_url in STORY_STATUS_IMAGE_URLS.items():
@@ -465,6 +540,206 @@ STORY_TRAITS = {
         'image_url': '/static/assets/story-trait-icons/brittle.svg',
     },
 }
+
+STORY_TRAITS.update({
+    'psionic_connection': {
+        'name': {'zh': '灵能链接', 'en': 'Psionic Connection'},
+        'description': {
+            'zh': '一名具有灵能链接的生物受到伤害时，所有存活的灵能链接生物均摊该次伤害。',
+            'en': 'When one connected creature takes damage, all living creatures with Psionic Connection split it evenly.',
+        },
+    },
+    'psionic_sustain': {
+        'name': {'zh': '灵能维系', 'en': 'Psionic Sustain'},
+        'description': {
+            'zh': '白蚁丘存活时，H不会低于1；降至1H时眩晕2次，随后回复至满H。',
+            'en': 'While a Termite Mound lives, H cannot fall below 1; at 1 H, become stunned twice, then heal to full.',
+        },
+    },
+    'psionic_fountain': {
+        'name': {'zh': '灵能源泉', 'en': 'Psionic Fountain'},
+        'description': {
+            'zh': '战斗开始时，使所有白蚁失去灵能链接并获得灵能维系；死亡后令其立刻使用决意。',
+            'en': 'At combat start, replace termite Psionic Connection with Psionic Sustain; on death, make them use Resolve immediately.',
+        },
+    },
+    'nest_instinct': {
+        'name': {'zh': '巢穴本能', 'en': 'Nest Instinct'},
+        'description': {
+            'zh': '被攻击时，所有生物获得1层暂时力量；生物因灵能维系复活时，所有生物获得1层力量。',
+            'en': 'When attacked, all creatures gain 1 Temporary Power; a Psionic Sustain revival gives all creatures 1 Power.',
+        },
+    },
+    'endurance_shell': {
+        'name': {'zh': '叶甲', 'en': 'Leaf Carapace'},
+        'description': {
+            'zh': '玩家每打出1张技能牌，获得等同于层数的护盾。',
+            'en': 'Whenever the player plays a Skill, gain Shield equal to its stacks.',
+        },
+    },
+    'toxic_conversion': {
+        'name': {'zh': '毒素转化', 'en': 'Toxic Conversion'},
+        'description': {
+            'zh': '其他单位死亡时获得其全部中毒；自己的中毒结算改为回复等量H。',
+            'en': 'Gain all Poison from another unit when it dies; your Poison heals the same amount instead.',
+        },
+    },
+    'bulb': {
+        'name': {'zh': '灯泡', 'en': 'Bulb'},
+        'description': {
+            'zh': '存在时，原本可指向生物的牌只能指向具有灯泡的生物。',
+            'en': 'While present, cards that target creatures can target only creatures with Bulb.',
+        },
+    },
+    'hard_shell': {
+        'name': {'zh': '硬壳', 'en': 'Hard Shell'},
+        'description': {
+            'zh': '受到的物理伤害减少等同于层数的数值。',
+            'en': 'Reduce incoming physical damage by its stacks.',
+        },
+    },
+    'obstacle': {
+        'name': {'zh': '障碍', 'en': 'Obstacle'},
+        'description': {
+            'zh': '死亡时，使玩家的锁定-1层。',
+            'en': 'On death, remove 1 Locked from the player.',
+        },
+    },
+    'segments': {
+        'name': {'zh': '体节', 'en': 'Segments'},
+        'description': {
+            'zh': '死亡时，若层数大于0，召唤1个体节层数-1的同名生物。',
+            'en': 'On death, if above 0, summon another copy with 1 fewer Segment.',
+        },
+    },
+    'magic_shield': {
+        'name': {'zh': '魔力护盾', 'en': 'Magic Shield'},
+        'description': {
+            'zh': '受到伤害时，每消耗1M抵消等同于层数的伤害。',
+            'en': 'When damaged, spend 1 M to block damage equal to its stacks.',
+        },
+    },
+    'magic_blessing': {
+        'name': {'zh': '魔力加护', 'en': 'Magic Blessing'},
+        'description': {
+            'zh': '以自身的魔力供魔力护盾和特殊行动使用。',
+            'en': 'Stores M for Magic Shield and special actions.',
+        },
+    },
+    'magic_reflection': {
+        'name': {'zh': '魔力反射', 'en': 'Magic Reflection'},
+        'description': {
+            'zh': '受到攻击时，消耗1层并获得1M。',
+            'en': 'When attacked, spend 1 stack to gain 1 M.',
+        },
+    },
+    'electric_web': {
+        'name': {'zh': '电网', 'en': 'Electric Web'},
+        'description': {
+            'zh': '玩家在回合内每抽1张牌，获得1层缠绕；回合结束时-1层。',
+            'en': 'Whenever the player draws during their turn, apply 1 Entangle; lose 1 stack at turn end.',
+        },
+    },
+    'super_beam': {
+        'name': {'zh': '超级光束', 'en': 'Super Beam'},
+        'description': {
+            'zh': '倒计时结束时使用超级光束。',
+            'en': 'Use Super Beam when the countdown reaches zero.',
+        },
+    },
+    'toxic_reflection': {
+        'name': {'zh': '剧毒反射', 'en': 'Toxic Reflection'},
+        'description': {
+            'zh': '每次受到攻击时，对玩家施加等同于层数的中毒。',
+            'en': 'Whenever attacked, apply Poison to the player equal to its stacks.',
+        },
+    },
+    'reconstruction': {
+        'name': {'zh': '重构', 'en': 'Reconstruction'},
+        'description': {
+            'zh': '获得碎片时随机改变意图；连续2回合未从玩家获得碎片时使用自我拆解。',
+            'en': 'Randomize intent when gaining Fragment; use Self-Disassembly after 2 turns without a Fragment from the player.',
+        },
+    },
+    'integration': {
+        'name': {'zh': '整合', 'en': 'Integration'},
+        'description': {
+            'zh': '拥有至少5层碎片时，下一次行动改为雷神之锤。',
+            'en': 'At 5 or more Fragment, the next action becomes Mjolnir.',
+        },
+    },
+    'scrap': {
+        'name': {'zh': '废料', 'en': 'Scrap'},
+        'description': {
+            'zh': '行动开始时，将1张工厂废料加入玩家手牌。',
+            'en': 'At action start, add 1 Factory Waste to the player hand.',
+        },
+    },
+    'disc': {
+        'name': {'zh': '圆盘', 'en': 'Disc'},
+        'description': {
+            'zh': '受到的物理伤害除以层数，向下取整。',
+            'en': 'Divide incoming physical damage by its stacks, rounded down.',
+        },
+    },
+})
+
+STORY_TRAIT_VALUE_KEYS = {
+    'sturdy': 'sturdy',
+    'shelter': 'shelter',
+    'hidden': 'hidden',
+    'turn_shield': 'turn_shield',
+    'charging_up': 'charging',
+    'charged': 'charged',
+    'frenzied': 'frenzy',
+    'proliferation': 'proliferation',
+    'regeneration': 'regeneration',
+    'vampire': 'vampire',
+    'limb_survival': 'regenerations',
+    'bandage': 'bandage',
+    'miracle': 'miracle',
+    'psionic_connection': 'psionic_connection',
+    'psionic_sustain': 'psionic_sustain',
+    'endurance_shell': 'endurance_shell',
+    'bulb': 'bulb',
+    'hard_shell': 'hard_shell',
+    'segments': 'segments',
+    'magic_shield': 'magic_shield',
+    'magic_blessing': 'magic',
+    'magic_reflection': 'magic_reflection',
+    'electric_web': 'electric_web',
+    'super_beam': 'super_beam',
+    'toxic_reflection': 'toxic_reflection',
+    'disc': 'disc',
+}
+
+STORY_TRAIT_ZERO_VISIBLE = frozenset({'bandage', 'miracle', 'magic_blessing'})
+
+STORY_TRAIT_IMAGE_URLS = {
+    'psionic_connection': '/static/assets/story-trait-icons/psionic-connection.svg',
+    'psionic_sustain': '/static/assets/story-trait-icons/psionic-sustain.svg',
+    'psionic_fountain': '/static/assets/story-trait-icons/psionic-fountain.svg',
+    'nest_instinct': '/static/assets/story-trait-icons/nest-instinct.svg',
+    'endurance_shell': '/static/assets/story-trait-icons/leaf-carapace.svg',
+    'toxic_conversion': '/static/assets/story-trait-icons/toxic-conversion.svg',
+    'bulb': '/static/assets/story-trait-icons/bulb.svg',
+    'hard_shell': '/static/assets/story-trait-icons/hard-shell.svg',
+    'obstacle': '/static/assets/story-trait-icons/obstacle.svg',
+    'segments': '/static/assets/story-trait-icons/segments.svg',
+    'magic_shield': '/static/assets/story-trait-icons/magic-shield.svg',
+    'magic_blessing': '/static/assets/story-trait-icons/magic-blessing.svg',
+    'magic_reflection': '/static/assets/story-trait-icons/magic-reflection.svg',
+    'electric_web': '/static/assets/story-trait-icons/electric-web.svg',
+    'super_beam': '/static/assets/story-trait-icons/super-beam.svg',
+    'toxic_reflection': '/static/assets/story-trait-icons/toxic-reflection.svg',
+    'reconstruction': '/static/assets/story-trait-icons/reconstruction.svg',
+    'integration': '/static/assets/story-trait-icons/integration.svg',
+    'scrap': '/static/assets/story-trait-icons/scrap.svg',
+    'disc': '/static/assets/story-trait-icons/disc.svg',
+}
+
+for _trait_id, _image_url in STORY_TRAIT_IMAGE_URLS.items():
+    STORY_TRAITS[_trait_id]['image_url'] = _image_url
 
 
 STORY_BLESSINGS = {
@@ -1199,6 +1474,17 @@ STORY_CARDS = {
         effects=(),
         script='corruption',
     ),
+    'factory_waste': _card(
+        None,
+        '工厂废料',
+        'Factory Waste',
+        1,
+        'infect',
+        'special',
+        '回合结束时若仍在手牌中，受到6D；打出时，使重构机获得1层碎片和1层力量。',
+        effects=(),
+        script='factory_waste',
+    ),
 }
 
 STORY_CARD_IMAGE_URLS = {
@@ -1219,6 +1505,7 @@ STORY_CARD_IMAGE_URLS = {
     'soul_splitter': '/static/assets/story-card-art/soul-splitter.svg',
     'startled': '/static/assets/story-card-art/startled.svg',
     'static_electricity': '/static/assets/story-card-art/static-electricity.svg',
+    'factory_waste': '/static/assets/story-card-art/factory-waste.svg',
     'unrelenting': '/static/assets/story-card-art/unrelenting.svg',
 }
 
@@ -1368,6 +1655,7 @@ def _enemy(
     script=None,
     traits=(),
     initial=None,
+    lunatic_initial=None,
     lunatic_health=None,
 ):
     definition = {
@@ -1379,6 +1667,8 @@ def _enemy(
     }
     if initial:
         definition['initial'] = deepcopy(initial)
+    if lunatic_initial:
+        definition['lunatic_initial'] = deepcopy(lunatic_initial)
     if lunatic_health is not None:
         definition['lunatic_max_health'] = int(lunatic_health)
     return definition
@@ -1656,6 +1946,134 @@ STORY_ENEMIES.update({
     ), script='wreckage', traits=('brittle',), lunatic_health=13),
 })
 
+# Stage 2: Jungle. These definitions follow the fourth development workbook.
+STORY_ENEMIES.update({
+    'termite_soldier': _enemy('白兵蚁', 'Soldier Termite', 56, (
+        _move('啃咬', 'Bite', _effect('damage', 6, lunatic_amount=8), _effect('gain_shield', 8, lunatic_amount=10)),
+        _move('头锤', 'Headbutt', _effect('damage', 14, lunatic_amount=16), _effect('self_damage', 14, lunatic_amount=16)),
+        _move('振翅', 'Flutter', _effect('gain_power', 3, lunatic_amount=4), _effect('gain_shield', 12)),
+        _move('决意', 'Resolve', _effect('damage', 20, lunatic_amount=23), _effect('self_kill')),
+    ), traits=('psionic_connection',), initial={'psionic_connection': 1}, lunatic_health=62),
+    'termite_worker': _enemy('白工蚁', 'Worker Termite', 32, (
+        _move('舞动', 'Dance', _effect('damage', 4, lunatic_amount=5), _effect('allies_power', 1)),
+        _move('护卫', 'Guard', _effect('damage', 6, lunatic_amount=7), _effect('lowest_ally_shield', 8, lunatic_amount=9)),
+        _move('狂暴', 'Frenzy', _effect('damage', 3, hits=3, lunatic_amount=4), _effect('gain_power', 1)),
+        _move('决意', 'Resolve', _effect('damage', 16, lunatic_amount=19), _effect('self_kill')),
+    ), script='termite_worker', traits=('psionic_connection',), initial={'psionic_connection': 1}, lunatic_health=35),
+    'termite_overmind': _enemy('白蚁主宰者', 'Termite Overmind', 79, (
+        _move('心神震慑', 'Mind Shock', _effect('player_status', 1, status='weak'), _effect('player_status', 1, status='blockade')),
+        _move('灵能爆发', 'Psionic Burst', _effect('damage', 4, hits=3, lunatic_amount=5)),
+        _move('决意', 'Resolve', _effect('damage', 23, lunatic_amount=26), _effect('self_kill')),
+    ), traits=('psionic_connection',), initial={'psionic_connection': 1}, lunatic_health=86),
+    'leafbug': _enemy('叶虫', 'Leafbug', 36, (
+        _move('干扰', 'Interfere', _effect('gain_shield', 8, lunatic_amount=10), _effect('player_status', 1, status='weak')),
+        _move('盾击', 'Shield Bash', _effect('damage_from_shield', 6, divisor=4, lunatic_amount=7)),
+    ), traits=('endurance_shell', 'sturdy'), initial={'shield': 10, 'sturdy': 99, 'endurance_shell': 5},
+       lunatic_initial={'shield': 15, 'endurance_shell': 7}, lunatic_health=39),
+    'dark_ladybug': _enemy('深色瓢虫', 'Dark Ladybug', 84, (
+        _move('毒气', 'Poison Gas', _effect('player_status', 3, status='poison', lunatic_amount=5), _effect('player_status', 2, status='stagnation')),
+        _move('撞击', 'Collision', _effect('damage', 14, lunatic_amount=17), _effect('player_status', 4, status='poison')),
+    ), lunatic_health=91),
+    'jungle_firefly': _enemy('萤火虫', 'Firefly', 74, (
+        _move('吸引', 'Attract', _effect('gain_status', 3, status='reflection', lunatic_amount=4), _effect('gain_status', 1, status='bulb')),
+        _move('放电', 'Discharge', _effect('damage', 4, hits=3, lunatic_amount=5), _effect('gain_power', 2)),
+    ), traits=('bulb',), lunatic_health=81),
+    'jungle_wasp': _enemy('胡蜂', 'Wasp', 43, (
+        _move('蓄势', 'Ready', _effect('gain_shield', 11, lunatic_amount=14)),
+        _move('毒针', 'Poison Needle', _effect('damage', 13, lunatic_amount=15), _effect('player_status', 5, status='poison', lunatic_amount=6)),
+    ), lunatic_health=47),
+    'jungle_fly': _enemy('苍蝇', 'Fly', 46, (
+        _move('误导', 'Mislead', _effect('allies_status', 1, status='evade')),
+        _move('撞击', 'Collision', _effect('damage', 7, lunatic_amount=9)),
+    ), script='jungle_fly', initial={'evade': 1}, lunatic_initial={'evade': 2}, lunatic_health=51),
+    'jungle_mushroom': _enemy('蘑菇', 'Mushroom', 36, (
+        _move('毒素治疗', 'Poison Heal', _effect('allies_heal', 12, lunatic_amount=14), _effect('allies_shield', 12, lunatic_amount=14), _effect('allies_status', 6, status='poison', lunatic_amount=7)),
+        _move('爆裂', 'Burst', _effect('consume_status_damage', 0, status='poison', divisor=4, lunatic_divisor=3)),
+    ), script='jungle_mushroom', traits=('toxic_conversion',), initial={'shield': 20},
+       lunatic_initial={'shield': 35}, lunatic_health=40),
+    'pumpkin': _enemy('南瓜', 'Pumpkin', 54, (
+        _move('撞击', 'Collision', _effect('damage', 12, lunatic_amount=14), _effect('gain_power', 1)),
+        _move('狂击', 'Frenzy', _effect('damage', 7, hits=2, lunatic_amount=8)),
+    ), script='pumpkin', traits=('sturdy',), initial={'shield': 54, 'sturdy': 99},
+       lunatic_initial={'shield': 59}, lunatic_health=59),
+    'snail': _enemy('蜗牛', 'Snail', 89, (
+        _move('缩壳', 'Retract Shell', _effect('gain_status', 2, status='hard_shell', lunatic_amount=3), _effect('gain_power', 3, lunatic_amount=4)),
+        _move('冲刺', 'Sprint', _effect('damage', 19, lunatic_amount=22), _effect('clear_status', 0, status='hard_shell')),
+    ), traits=('hard_shell',), initial={'hard_shell': 2}, lunatic_initial={'hard_shell': 3}, lunatic_health=96),
+    'bush': _enemy('灌木', 'Bush', 156, (
+        _move('抖落', 'Shake Off', _effect('summon', 1, enemy_id='jungle_firefly', health_percent=50)),
+        _move('吸引', 'Attract', _effect('summon', 1, enemy_id='jungle_fly', health_percent=50), _effect('summon', 1, enemy_id='leafbug', health_percent=50)),
+        _move('养分', 'Nutrients', _effect('allies_power', 2, lunatic_amount=3), _effect('allies_heal', 20, lunatic_amount=24)),
+    ), traits=('turn_shield', 'sturdy', 'shelter'), initial={'turn_shield': 5, 'sturdy': 99, 'shelter': 15},
+       lunatic_initial={'turn_shield': 7, 'shelter': 20}, lunatic_health=170),
+    'spider_cave': _enemy('蜘蛛洞', 'Spider Cave', 110, (
+        _move('散网', 'Scatter Web', _effect('add_draw_card', 2, card_id='slimed'), _effect('player_status', 1, status='weak')),
+        _move('召唤', 'Summon', _effect('summon', 1, enemy_id='spider'), _effect('gain_frenzy', 1)),
+    ), script='spider_cave', traits=('sturdy', 'frenzied'), initial={'shield': 40, 'sturdy': 99},
+       lunatic_initial={'shield': 50}, lunatic_health=119),
+    'stickbug': _enemy('竹节虫', 'Stickbug', 164, (
+        _move('投掷', 'Launch', _effect('summon', 3, enemy_id='stick'), _effect('player_status', 3, status='locked')),
+        _move('生长', 'Growth', _effect('self_heal', 12, lunatic_amount=15), _effect('gain_power', 3, lunatic_amount=4)),
+        _move('猛击', 'Smash', _effect('damage', 20, lunatic_amount=22)),
+    ), script='stickbug', lunatic_health=180),
+    'stick': _enemy('树枝', 'Stick', 14, (
+        _move('防守', 'Defense', _effect('gain_shield', 8, lunatic_amount=10)),
+    ), traits=('obstacle',), initial={'shield': 12}, lunatic_initial={'shield': 14}, lunatic_health=16),
+    'termite_mound': _enemy('白蚁丘', 'Termite Mound', 221, (
+        _move('加固', 'Fortify', _effect('gain_shield', 12, lunatic_amount=15)),
+        _move('号令', 'Command', _effect('allies_power', 1)),
+    ), script='termite_mound', traits=('psionic_fountain', 'nest_instinct'), lunatic_health=238),
+    'evil_centipede': _enemy('邪恶蜈蚣', 'Evil Centipede', 113, (
+        _move('毒咬', 'Poison Bite', _effect('damage', 12), _effect('player_status', 1, status='toxic_poison', lunatic_amount=2)),
+        _move('毒气', 'Poison Gas', _effect('player_status', 3, status='poison', lunatic_amount=4), _effect('player_status', 1, status='stagnation')),
+        _move('毒爆', 'Poison Burst', _effect('damage_from_player_status', 6, status='poison', lunatic_amount=7), _effect('gain_power', 3, lunatic_amount=4)),
+    ), script='evil_centipede', traits=('segments',), initial={'segments': 2},
+       lunatic_initial={'segments': 3}, lunatic_health=97),
+    'magic_firefly': _enemy('魔法萤火虫', 'Magic Firefly', 308, (
+        _move('吸引', 'Attract', _effect('damage', 15, lunatic_amount=18), _effect('gain_status', 2, status='magic_reflection'), _effect('gain_status', 1, status='bulb'), _effect('disable_magic_shield', 1)),
+        _move('魔法球', 'Magic Orb', _effect('gain_magic', 5, lunatic_amount=6), _effect('gain_power', 2, lunatic_amount=3)),
+        _move('魔法尖刺', 'Magic Spike', _effect('consume_magic_damage', 12, multiplier=2, lunatic_amount=16)),
+    ), script='magic_firefly', traits=('magic_shield', 'magic_blessing', 'magic_reflection', 'bulb'),
+       initial={'magic_shield': 5, 'magic': 10}, lunatic_initial={'magic_shield': 6}, lunatic_health=331),
+})
+
+# Stage 3: Factory. The unfinished Mechanical Flower is intentionally omitted.
+STORY_ENEMIES.update({
+    'mechanical_spider': _enemy('机械蜘蛛', 'Mechanical Spider', 64, (
+        _move('放电', 'Discharge', _effect('add_draw_card', 2, card_id='static_electricity')),
+        _move('猛扑', 'Pounce', _effect('damage', 12, lunatic_amount=15), _effect('gain_power', 3)),
+    ), traits=('electric_web',), initial={'electric_web': 2}, lunatic_health=70),
+    'mechanical_crab': _enemy('机械螃蟹', 'Mechanical Crab', 189, (
+        _move('连击', 'Combo', _effect('damage', 7, hits=3, lunatic_amount=8)),
+        _move('冲击', 'Impact', _effect('damage', 16, lunatic_amount=18), _effect('gain_shield', 30, lunatic_amount=40)),
+        _move('充能', 'Charge', _effect('gain_power', 4, lunatic_amount=5)),
+        _move('超级光束', 'Super Beam', _effect('damage', 28, lunatic_amount=32), _effect('gain_status', 1, status='vulnerable'), _effect('gain_status', 1, status='stun')),
+    ), script='mechanical_crab', traits=('super_beam',), initial={'super_beam': 4}, lunatic_health=210),
+    'uranium_barrel': _enemy('铀桶', 'Uranium Barrel', 120, (
+        _move('辐射', 'Radiation', _effect('player_status', 3, status='toxic_poison', lunatic_amount=4)),
+        _move('幽光', 'Phantom Light', _effect('player_status', 1, status='toxic_poison', lunatic_amount=2), _effect('gain_status', 1, status='bulb')),
+    ), script='uranium_barrel', traits=('toxic_reflection', 'bulb'), initial={'toxic_reflection': 2},
+       lunatic_initial={'toxic_reflection': 3}, lunatic_health=133),
+    'reconstructor_enemy': _enemy('重构机', 'Reconstructor', 504, (
+        _move('锯片', 'Saw', _effect('damage', 17, lunatic_amount=19), _effect('player_status', 3, status='bleed', lunatic_amount=4)),
+        _move('激光器', 'Laser', _effect('damage', 9, hits=2, lunatic_amount=10), _effect('player_status', 2, status='fire', lunatic_amount=3)),
+        _move('碎片', 'Fragment', _effect('gain_power', 1, lunatic_amount=2), _effect('gain_status', 1, status='fragment', lunatic_amount=2), _effect('gain_shield', 50, lunatic_amount=60)),
+        _move('自我拆解', 'Self-Disassembly', _effect('self_damage', 50), _effect('gain_status', 3, status='fragment', lunatic_amount=4), _effect('gain_power', 5, lunatic_amount=6)),
+        _move('雷神之锤', 'Mjolnir', _effect('damage', 40, lunatic_amount=44), _effect('consume_status', 5, status='fragment')),
+    ), script='reconstructor_enemy', traits=('reconstruction', 'integration', 'scrap'),
+       initial={'rounds_without_factory_waste': 0}, lunatic_health=532),
+    'mechanical_wasp': _enemy('机械胡蜂', 'Mechanical Wasp', 189, (
+        _move('组装', 'Assemble', _effect('summon', 1, enemy_id='mechanical_missile')),
+        _move('改装打击', 'Modified Strike', _effect('damage', 11, lunatic_amount=13), _effect('named_allies_power', 3, enemy_id='mechanical_missile', lunatic_amount=4)),
+        _move('修理', 'Repair', _effect('heal_named_ally_percent', 50, enemy_id='mechanical_missile'), _effect('named_allies_power', 1, enemy_id='mechanical_missile', lunatic_amount=2)),
+        _move('狂轰', 'Frenzy', _effect('damage', 4, hits=5, lunatic_amount=5), _effect('gain_power', 1)),
+    ), script='mechanical_wasp', traits=('disc',), initial={'disc': 2}, lunatic_health=203),
+    'mechanical_missile': _enemy('机械导弹', 'Mechanical Missile', 102, (
+        _move('发射', 'Launch', _effect('damage', 10, lunatic_amount=11)),
+        _move('自爆', 'Self-Destruct', _effect('damage', 35, lunatic_amount=41), _effect('self_kill')),
+    ), script='mechanical_missile', lunatic_health=114),
+})
+
 # Explicit move orders preserve repeated moves without encoding them as
 # duplicate definitions. Encounter-specific ``move_index`` still controls the
 # first action for enemies that use the ordinary sequential order.
@@ -1682,6 +2100,16 @@ STORY_ENEMIES['ocean_shell']['move_order'] = (0, 0, 1)
 STORY_ENEMIES['starfish']['move_order'] = (0, 1)
 STORY_ENEMIES['starfish']['lunatic_initial'] = {'regenerations': 1, 'regeneration': 7}
 STORY_ENEMIES['shipwreck']['lunatic_initial'] = {'shield': 50}
+for _enemy_id in (
+    'leafbug', 'dark_ladybug',
+    'jungle_firefly', 'jungle_wasp', 'snail', 'bush', 'termite_mound',
+    'magic_firefly', 'mechanical_spider',
+):
+    STORY_ENEMIES[_enemy_id]['move_order'] = tuple(range(len(STORY_ENEMIES[_enemy_id]['moves'])))
+STORY_ENEMIES['termite_soldier']['move_order'] = (0, 1, 2)
+STORY_ENEMIES['termite_overmind']['move_order'] = (0, 1)
+STORY_ENEMIES['jungle_mushroom']['move_order'] = (0, 1)
+STORY_ENEMIES['mechanical_crab']['move_order'] = (0, 1, 2, 3)
 
 STORY_ENEMY_IMAGE_URLS = {
     'soldier_ant': '/static/assets/story-enemies/soldier-ant.svg',
@@ -1730,10 +2158,38 @@ STORY_ENEMY_IMAGE_URLS = {
     'squid': '/static/assets/story-enemies/squid.svg',
     'shipwreck': '/static/assets/story-enemies/shipwreck.svg',
     'wreckage': '/static/assets/story-enemies/wreckage.svg',
+    'termite_soldier': '/static/assets/story-enemies/soldier-termite.svg',
+    'termite_worker': '/static/assets/story-enemies/worker-termite.svg',
+    'termite_overmind': '/static/assets/story-enemies/termite-overmind.svg',
+    'leafbug': '/static/assets/story-enemies/leafbug.svg',
+    'dark_ladybug': '/static/assets/story-enemies/dark-ladybug.svg',
+    'jungle_firefly': '/static/assets/story-enemies/jungle-firefly.svg',
+    'jungle_wasp': '/static/assets/story-enemies/jungle-wasp.svg',
+    'jungle_fly': '/static/assets/story-enemies/jungle-fly.svg',
+    'jungle_mushroom': '/static/assets/story-enemies/jungle-mushroom.svg',
+    'pumpkin': '/static/assets/story-enemies/pumpkin.svg',
+    'snail': '/static/assets/story-enemies/snail.svg',
+    'bush': '/static/assets/story-enemies/jungle-bush.svg',
+    'spider_cave': '/static/assets/story-enemies/spider-cave.svg',
+    'stickbug': '/static/assets/story-enemies/stickbug.svg',
+    'stick': '/static/assets/story-enemies/stick.svg',
+    'termite_mound': '/static/assets/story-enemies/termite-mound.svg',
+    'evil_centipede': '/static/assets/story-enemies/evil-centipede-head.svg',
+    'magic_firefly': '/static/assets/story-enemies/magic-firefly.svg',
+    'mechanical_spider': '/static/assets/story-enemies/mechanical-spider.svg',
+    'mechanical_crab': '/static/assets/story-enemies/mechanical-crab.svg',
+    'uranium_barrel': '/static/assets/story-enemies/uranium-barrel.svg',
+    'reconstructor_enemy': '/static/assets/story-enemies/reconstructor.svg',
+    'mechanical_wasp': '/static/assets/story-enemies/mechanical-wasp.svg',
+    'mechanical_missile': '/static/assets/story-enemies/mechanical-missile.svg',
 }
 
 for _enemy_id, _image_url in STORY_ENEMY_IMAGE_URLS.items():
     STORY_ENEMIES[_enemy_id]['image_url'] = _image_url
+
+STORY_ENEMIES['evil_centipede']['segment_image_url'] = (
+    '/static/assets/story-enemies/evil-centipede-body.svg'
+)
 
 
 STORY_ENCOUNTERS = {
@@ -1823,6 +2279,50 @@ STORY_ENCOUNTERS = {
             ('squid',),
             ('jellyfish',),
             ('shipwreck',),
+        ),
+    },
+    'jungle': {
+        'simple': (
+            ({'def_id': 'termite_soldier', 'move_index': 0}, {'def_id': 'termite_soldier', 'move_index': 2}),
+            ('pumpkin',),
+            ('jungle_firefly',),
+        ),
+        'hard': (
+            ('jungle_fly', 'jungle_firefly'),
+            ('dark_ladybug', 'jungle_wasp'),
+            ({'def_id': 'jungle_mushroom', 'move_index': 0}, {'def_id': 'jungle_fly', 'move_index': 0}, {'def_id': 'jungle_fly', 'move_index': 1}),
+            ('snail',),
+            ('jungle_firefly', 'leafbug'),
+            ('pumpkin', 'leafbug'),
+            ('jungle_firefly', 'jungle_wasp'),
+            ('dark_ladybug', 'jungle_fly'),
+            ('termite_overmind', 'termite_worker', 'termite_worker'),
+        ),
+        'elite': (
+            ('stickbug',),
+            ('bush',),
+            ('spider_cave',),
+        ),
+        'boss': (
+            ('termite_overmind', 'termite_soldier', 'termite_worker', 'termite_mound'),
+            ('evil_centipede',),
+            ('magic_firefly',),
+        ),
+    },
+    'factory': {
+        'simple': (
+            ('mechanical_crab',),
+            ('uranium_barrel', 'mechanical_spider'),
+        ),
+        'hard': (
+            ('mechanical_crab', 'uranium_barrel'),
+            ('mechanical_crab', 'mechanical_spider'),
+        ),
+        'elite': (
+            ('mechanical_wasp',),
+        ),
+        'boss': (
+            ('reconstructor_enemy',),
         ),
     },
 }
@@ -1918,6 +2418,8 @@ def story_content_payload(card_defs=None):
         'tags': deepcopy(STORY_TAGS),
         'statuses': deepcopy(STORY_STATUSES),
         'traits': deepcopy(STORY_TRAITS),
+        'trait_value_keys': deepcopy(STORY_TRAIT_VALUE_KEYS),
+        'trait_zero_visible': sorted(STORY_TRAIT_ZERO_VISIBLE),
         'blessings': deepcopy(STORY_BLESSINGS),
         'cards': cards,
         'relics': deepcopy(STORY_RELICS),
@@ -1951,6 +2453,7 @@ def validate_story_content():
     card_scripts = {
         'azalea', 'azalea_plus', 'light_sprout', 'return_draw_top', 'slimed',
         'startled', 'static_electricity', 'unrelenting', 'corruption',
+        'factory_waste',
     }
     equipment_scripts = {
         'cannot_draw', 'disc', 'magic_acid', 'magic_pearl', 'pearl',
@@ -1985,7 +2488,10 @@ def validate_story_content():
         'lose_max_health_percent', 'lowest_ally_shield', 'player_status',
         'self_damage', 'self_heal', 'self_kill',
         'stun_if_player_shield', 'summon', 'summon_to_ant_count',
-        'summon_wreckage',
+        'summon_wreckage', 'allies_status', 'consume_magic_damage',
+        'consume_status', 'consume_status_damage', 'damage_from_player_status',
+        'damage_from_shield', 'disable_magic_shield', 'gain_magic',
+        'heal_named_ally_percent', 'named_allies_power',
     }
     enemy_scripts = {
         'ant_queen', 'bandage_beetle', 'centipede', 'desert_centipede',
@@ -1993,6 +2499,10 @@ def validate_story_content():
         'opening_reflection', 'persistent_shield', 'random_intent',
         'sandstone', 'shiny_ladybug', 'shipwreck', 'starfish', 'swell',
         'waterspout', 'worker_ant', 'worm', 'wreckage',
+        'termite_worker', 'jungle_fly', 'jungle_mushroom', 'pumpkin',
+        'spider_cave', 'stickbug', 'termite_mound', 'evil_centipede',
+        'magic_firefly', 'mechanical_crab', 'uranium_barrel',
+        'reconstructor_enemy', 'mechanical_wasp', 'mechanical_missile',
     }
 
     def validate_cost(owner, key, value):

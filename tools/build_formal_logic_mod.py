@@ -92,7 +92,7 @@ def theorem(
         flags.insert(0, "rebound")
     tags = ["debut"] if debut_effect else []
     effect_cn = (
-        f"每次打出时，自己获得3层护甲；前{substitutions}次打出时，使目标获得1层代入；"
+        f"每次打出时，自己获得3层护盾；前{substitutions}次打出时，使目标获得1层代入；"
         "再次打出时，使目标获得1层推理"
     )
     if reset_mode == "discard":
@@ -102,7 +102,7 @@ def theorem(
     if debut_text_cn:
         effect_cn += f"；登场：{debut_text_cn}"
     effect_en = (
-        f"Gain 3 Armor whenever played. The first {substitutions} plays grant the target 1 Substitution; "
+        f"Gain 3 Shield whenever played. The first {substitutions} plays grant the target 1 Substitution; "
         "the next play grants 1 Inference. Reset afterward."
     )
     if debut_text_en:
@@ -127,8 +127,8 @@ def theorem(
             "formula": formula,
             "formula_name": True,
             "substitutions": substitutions,
-            "armor_each_play": True,
-            "armor": 3,
+            "shield_each_play": True,
+            "shield": 3,
             "reset_mode": reset_mode,
             "special_formula": count == 0,
             "debut_effect": debut_effect,
@@ -234,9 +234,9 @@ cards = [
     card(
         "generalization", "条件概括元定理", "Generalization Metatheorem",
         0, 0, "thorn", 1,
-        "使目标所有符合条件的公式牌获得全称量词，持续至其回合结束；再选择另1名非其队友的目标，使其获得等同于被改变牌数的血债",
+        "使目标所有牌获得全称量词，持续至其回合结束；无法代入全称变量的牌在此期间失效；再选择另1名非其队友的目标，使其获得等同于被改变牌数的血债",
         "├∀NaN：最帅。",
-        effect_en="Universally quantify every eligible formula card owned by the target until that target's turn ends. Then choose another non-teammate target to gain Blood Debt equal to the number of changed cards.",
+        effect_en="Universally quantify all of the target's cards until that target's turn ends. Cards that cannot substitute the quantified variable are disabled. Then choose another non-teammate target to gain Blood Debt equal to the number changed.",
         flavor_en="├∀NaN: the coolest.",
         flags=["self_target"],
         events=target_steps(),

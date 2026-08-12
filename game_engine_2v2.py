@@ -405,6 +405,10 @@ class GameEngine2v2(GameEngine):
         self.log_msg(f"2v2游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"回合顺序：{' → '.join(self.pn(p) for p in self.turn_order)}")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        # A turn-start choice can suspend _start_player_turn().  Expose the
+        # selected action player before that suspension so nobody sees a
+        # timerless, unowned opening turn.
+        self.phase = 'action'
         self._start_player_turn(self.first_player)
         return True
 

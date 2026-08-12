@@ -218,6 +218,16 @@ def fresh_card_copy_from_dict(data: dict, fallback_def_id: str = '') -> CardInst
     return CardInstance(fallback_def_id or ERROR_CARD_ID)
 
 
+def qualifies_backwater_achievement(mode, is_winner, player_state):
+    """Require invincibility to be active at the instant a 1v1 is won."""
+    return bool(
+        is_winner
+        and mode == '1v1'
+        and player_state is not None
+        and getattr(player_state, 'invincible', False)
+    )
+
+
 class PlayerState:
     def __init__(self, player_id: int):
         self.player_id = player_id
@@ -4331,6 +4341,10 @@ class GameEngine:
         self.log_msg(f"游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._apply_late_round_fire_pressure()
+        # Turn-start effects may pause for a choice before
+        # _enter_player_action_phase() is reached.  The active player and their
+        # timer must already be authoritative while that choice is open.
+        self.phase = 'action'
         self._start_player_turn(self.first_player)
         return True
 
@@ -5995,15 +6009,50 @@ class GameEngine:
     ) -> List[CardInstance]:
         if not self._valid_player_id(player_id):
             return []
+        ps = self.players[player_id]
         source_iid = getattr(source_card, 'instance_id', None)
+        live_source = ps.find_hand_card(source_iid) if source_iid is not None else None
+        # Ruby pays its own real cost before paying the selected attack's cost.
+        # While it is still in hand, reserve that first payment when building or
+        # validating the picker. Once resolution has removed Ruby from the hand,
+        # only the selected attack still needs to be affordable.
+        reserved_e = (
+            max(0, int(live_source.cost_e) + self._get_extra_e_for_card(player_id, live_source))
+            if live_source is not None
+            else 0
+        )
+        reserved_m = max(0, int(live_source.cost_m)) if live_source is not None else 0
+        available_e = max(0, int(ps.elixir) - reserved_e)
+        available_m = max(0, int(ps.magic) - reserved_m)
         return [
             candidate
-            for candidate in self.players[player_id].hand
+            for candidate in ps.hand
             if getattr(candidate, 'instance_id', None) != source_iid
             and getattr(candidate, 'card_type', '') == 'thorn'
             and self._card_selectable_by_action(candidate)
-            and self._card_payable_now(player_id, candidate)
+            and max(0, int(candidate.cost_e) + self._get_extra_e_for_card(player_id, candidate)) <= available_e
+            and max(0, int(candidate.cost_m)) <= available_m
         ]
+
+    def _arctic_ruby_choice_is_valid(
+        self,
+        player_id: int,
+        source_card: CardInstance,
+        choice: Optional[dict],
+    ) -> bool:
+        if not self._valid_player_id(player_id) or not isinstance(choice, dict):
+            return False
+        try:
+            selected_iid = int(choice.get('target_instance_id'))
+        except (TypeError, ValueError):
+            return False
+        selected = self.players[player_id].find_hand_card(selected_iid)
+        if selected is None:
+            return False
+        return any(
+            getattr(candidate, 'instance_id', None) == selected_iid
+            for candidate in self._arctic_ruby_selectable_attacks(player_id, source_card)
+        )
 
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         if not self._valid_player_id(player_id):
@@ -6650,18 +6699,17 @@ class GameEngine:
                 return False
             return self._ocean_sapphire_choice_is_valid(owner_id, card, choice)
         if choice_type == 'choose_arctic_ruby':
-            try:
-                selected_iid = int(choice.get('target_instance_id'))
-            except Exception:
-                return False
-            selected_card = self._find_card_by_instance_id(selected_iid)
-            owner_id, zone_name, _ = self._find_card_location(selected_card)
+            owner_id, zone_name, _ = self._find_card_location(card)
             if owner_id is None or zone_name != 'hand':
-                return False
-            return any(
-                getattr(candidate, 'instance_id', None) == selected_iid
-                for candidate in self._arctic_ruby_selectable_attacks(owner_id, card)
-            )
+                try:
+                    selected_iid = int(choice.get('target_instance_id'))
+                except (TypeError, ValueError):
+                    return False
+                selected_card = self._find_card_by_instance_id(selected_iid)
+                owner_id, zone_name, _ = self._find_card_location(selected_card)
+                if owner_id is None or zone_name != 'hand':
+                    return False
+            return self._arctic_ruby_choice_is_valid(owner_id, card, choice)
         if choice_type in ('choose_card_from_discard',):
             return choice.get('target_def_id') is not None or choice.get('target_instance_id') is not None
         if choice_type in (
@@ -7736,6 +7784,16 @@ class GameEngine:
                 return {'success': False, 'error': '蓝宝石已不在手中，请取消后重试'}
             if not self._ocean_sapphire_choice_is_valid(player_id, live_card, choice):
                 return {'success': False, 'error': '蓝宝石的目标或攻击牌已失效，请重新选择'}
+            can_play, reason = self.can_play_card(player_id, live_card)
+            if not can_play:
+                return {'success': False, 'error': reason}
+            card = live_card
+        if choice_type == 'choose_arctic_ruby' and not choice_cancelled:
+            live_card = ps.find_hand_card(card.instance_id)
+            if live_card is None:
+                return {'success': False, 'error': '红宝石已不在手中，请重新选择'}
+            if not self._arctic_ruby_choice_is_valid(player_id, live_card, choice):
+                return {'success': False, 'error': '费用不足或所选攻击牌已失效，请重新选择'}
             can_play, reason = self.can_play_card(player_id, live_card)
             if not can_play:
                 return {'success': False, 'error': reason}

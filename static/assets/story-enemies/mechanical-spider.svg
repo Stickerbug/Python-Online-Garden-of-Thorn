@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #e7291d;
+        stroke-width: 8px;
+      }
+
+      .st0, .st1, .st2 {
+        stroke: #727171;
+        stroke-miterlimit: 10;
+      }
+
+      .st3 {
+        fill: #727171;
+      }
+
+      .st4 {
+        stroke: #1b1200;
+        stroke-linejoin: round;
+      }
+
+      .st4, .st1 {
+        fill: none;
+        stroke-linecap: round;
+      }
+
+      .st4, .st2 {
+        stroke-width: 10px;
+      }
+
+      .st1 {
+        stroke-width: 5px;
+      }
+
+      .st2 {
+        fill: #9fa0a0;
+      }
+    </style>
+  </defs>
+  <polyline class="st4" points="143.73 104.26 150.72 68.61 146.03 48.58"/>
+  <polyline class="st4" points="158.78 116.17 186.4 98.6 202.72 76.42"/>
+  <polyline class="st4" points="170.92 133.08 214.85 121.79 234.51 123.88"/>
+  <polyline class="st4" points="172.17 149.23 208.15 157.18 228.24 175.59"/>
+  <polyline class="st4" points="124.89 176 108.99 204.04 106.9 234.58"/>
+  <polyline class="st4" points="115.27 167.64 95.18 176.84 72.59 192.32"/>
+  <polyline class="st4" points="106.06 155.92 76.36 162.2 49.16 165.96"/>
+  <polyline class="st4" points="101.88 142.11 61.29 123.7 56.69 99.02"/>
+  <circle class="st2" cx="138.18" cy="142.47" r="42.52"/>
+  <line class="st1" x1="110.67" y1="169.98" x2="165.69" y2="114.96"/>
+  <circle class="st0" cx="138.09" cy="142.56" r="15.13"/>
+  <circle class="st3" cx="112.51" cy="152.57" r="4.34"/>
+  <circle class="st3" cx="128.49" cy="168.54" r="4.34"/>
+  <circle class="st3" cx="148.49" cy="116.58" r="4.34"/>
+  <circle class="st3" cx="164.47" cy="132.56" r="4.34"/>
+</svg>

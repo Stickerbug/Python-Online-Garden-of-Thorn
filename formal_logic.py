@@ -404,6 +404,28 @@ def substitute_formula(formula: ProofFormula, bindings: Mapping[str, LogicExpr])
     )
 
 
+def instantiate_expression(expr: LogicExpr, replacements: Mapping[str, LogicExpr]) -> LogicExpr:
+    """Replace variables once, without rewriting inside replacement values."""
+    if expr.kind == "var" and expr.value in replacements:
+        return replacements[expr.value]
+    if not expr.children:
+        return expr
+    return LogicExpr(
+        expr.kind,
+        expr.value,
+        tuple(instantiate_expression(child, replacements) for child in expr.children),
+    )
+
+
+def instantiate_formula(formula: ProofFormula, replacements: Mapping[str, LogicExpr]) -> ProofFormula:
+    result = ProofFormula(
+        tuple(instantiate_expression(expr, replacements) for expr in formula.premises),
+        instantiate_expression(formula.conclusion, replacements),
+    )
+    validate_formula(result)
+    return result
+
+
 def _occurs(variable: str, expr: LogicExpr, bindings: Mapping[str, LogicExpr]) -> bool:
     resolved = _resolve_binding(expr, bindings)
     if resolved.kind == "var":
@@ -463,6 +485,49 @@ def expressions_match(pattern: LogicExpr, candidate: LogicExpr, bindings: Option
     return unify_expressions(pattern, candidate, bindings)
 
 
+def match_expression_pattern(
+    pattern: LogicExpr,
+    candidate: LogicExpr,
+    bindings: Optional[Bindings] = None,
+) -> Optional[Bindings]:
+    """Match an inference pattern without collapsing distinct variables.
+
+    Formal Logic cards treat a repeated variable as an equality constraint and
+    different variables as an inequality constraint.  Ordinary first-order
+    unification is intentionally more permissive, so it cannot be used for mp:
+    it would allow ``$0>($1>$2)`` to match ``$0>($1>$0)`` by identifying two
+    variables that were distinct in the source formula.
+    """
+    result: Bindings = {
+        str(name): _strip_double_negation(value)
+        for name, value in dict(bindings or {}).items()
+    }
+
+    def match_pair(left: LogicExpr, right: LogicExpr) -> bool:
+        left = _strip_double_negation(left)
+        right = _strip_double_negation(right)
+        if left.kind == "var":
+            previous = result.get(left.value)
+            if previous is not None:
+                return _strip_double_negation(previous) == right
+            if any(
+                name != left.value and _strip_double_negation(value) == right
+                for name, value in result.items()
+            ):
+                return False
+            result[left.value] = right
+            return True
+        if (
+            left.kind != right.kind
+            or left.value != right.value
+            or len(left.children) != len(right.children)
+        ):
+            return False
+        return all(match_pair(a, b) for a, b in zip(left.children, right.children))
+
+    return result if match_pair(pattern, candidate) else None
+
+
 def implication_chain(expr: LogicExpr) -> Tuple[List[LogicExpr], LogicExpr]:
     antecedents: List[LogicExpr] = []
     current = expr
@@ -473,8 +538,20 @@ def implication_chain(expr: LogicExpr) -> Tuple[List[LogicExpr], LogicExpr]:
 
 
 def rename_variables(formula: ProofFormula, mapping: Mapping[str, str]) -> ProofFormula:
-    replacements = {name: LogicExpr.variable(target) for name, target in mapping.items()}
-    return substitute_formula(formula, replacements)
+    # Variable renaming is simultaneous.  Reusing substitute_formula here can
+    # cascade through the destination names (for example $2->$1->$0), merging
+    # variables that were distinct in the source formula.
+    def rename(expr: LogicExpr) -> LogicExpr:
+        if expr.kind == "var" and expr.value in mapping:
+            return LogicExpr.variable(mapping[expr.value])
+        if not expr.children:
+            return expr
+        return LogicExpr(expr.kind, expr.value, tuple(rename(child) for child in expr.children))
+
+    return ProofFormula(
+        tuple(rename(expr) for expr in formula.premises),
+        rename(formula.conclusion),
+    )
 
 
 def freshen_variables(formula: ProofFormula, used: Iterable[str]) -> ProofFormula:
@@ -635,7 +712,24 @@ def modus_ponens(first: ProofFormula, second: ProofFormula) -> ProofFormula:
     antecedent, consequent = conclusion.children
     if len(second.premises) > MAX_FORMULA_PREMISES:
         raise FormalLogicError("第二张牌的前提过多")
-    bindings = unify_mp_antecedent(antecedent, second.conclusion)
+    normalized_antecedent = _strip_double_negation(antecedent)
+    normalized_candidate = _strip_double_negation(second.conclusion)
+    if (
+        normalized_antecedent.kind == "unary"
+        and normalized_antecedent.value == "¬"
+        and len(normalized_antecedent.children) == 1
+    ):
+        if match_expression_pattern(normalized_antecedent, normalized_candidate) is not None:
+            bindings = None
+        else:
+            bindings = match_expression_pattern(
+                normalized_antecedent.children[0],
+                normalized_candidate,
+            )
+            if bindings is None:
+                bindings = {}
+    else:
+        bindings = match_expression_pattern(normalized_antecedent, normalized_candidate)
     if bindings is None:
         raise FormalLogicError("两张牌的中间公式无法合一")
     first_resolved = substitute_formula(first, bindings)

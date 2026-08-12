@@ -169,6 +169,45 @@ class ArcticFactoryNewCardsTests(unittest.TestCase):
         self.assertFalse(can_play)
         self.assertIn("没有可支付消耗", reason)
 
+    def test_ruby_reserves_its_frost_cost_and_finishes_two_step_choice(self):
+        engine = self.action_engine()
+        ruby = CardInstance("Ruby")
+        attack = CardInstance("Pinecone")
+        attack.cost_e_override = 1
+        engine.players[0].custom_statuses["arctic:frost"] = 20
+        engine.players[0].elixir = 3
+        engine.players[0].hand = [ruby, attack]
+
+        self.assertEqual(engine._get_extra_e_for_card(0, ruby), 2)
+        self.assertEqual(engine._get_extra_e_for_card(0, attack), 2)
+        self.assertEqual(engine._arctic_ruby_selectable_attacks(0, ruby), [])
+        can_play, reason = engine.can_play_card(0, ruby)
+        self.assertFalse(can_play)
+        self.assertIn("没有可支付消耗", reason)
+        blocked = engine.play_card(
+            0,
+            ruby.instance_id,
+            {"target_instance_id": attack.instance_id},
+        )
+        self.assertFalse(blocked.get("success"), blocked)
+        self.assertIn(ruby, engine.players[0].hand)
+        self.assertNotIn(ruby, engine.players[0].exile)
+        self.assertEqual(attack.fusion_level, 1)
+
+        engine.players[0].elixir = 5
+        self.assertEqual(engine._arctic_ruby_selectable_attacks(0, ruby), [attack])
+        queued = engine.play_card(0, ruby.instance_id)
+        self.assertTrue(queued.get("needs_choice"), queued)
+        resolved = engine.resolve_choice(0, {"target_instance_id": attack.instance_id})
+
+        self.assertTrue(resolved.get("success"), resolved)
+        self.assertFalse(resolved.get("needs_choice"), resolved)
+        self.assertIsNone(engine.pending_choice)
+        self.assertEqual(engine.players[0].elixir, 0)
+        self.assertEqual(attack.fusion_level, 2)
+        self.assertNotIn(ruby, engine.players[0].hand)
+        self.assertIn(ruby, engine.players[0].exile)
+
     def test_lithium_damages_on_play_and_owner_turn_start(self):
         engine = self.action_engine()
         lithium = CardInstance("Lithium")
@@ -221,6 +260,9 @@ class ArcticFactoryNewCardsTests(unittest.TestCase):
         self.assertIn("effect_arctic_pinecone_copy(", source)
         self.assertIn("drainArcticPineconeAutoPlayQueue(", source)
         self.assertIn("effect_arctic_ruby_fuse(", source)
+        self.assertIn("effect_arctic_apply_frost(", source)
+        self.assertIn("Math.floor(this.arcticFrostValue(playerId) / 10)", source)
+        self.assertIn("const reservedE = liveSource", source)
         self.assertIn("choiceType === 'choose_arctic_ruby'", source)
 
 

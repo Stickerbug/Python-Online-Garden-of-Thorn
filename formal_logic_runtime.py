@@ -25,6 +25,7 @@ from formal_logic import (
     formulas_alpha_equivalent,
     formulas_special_equivalent,
     implication_chain,
+    instantiate_formula,
     modus_ponens,
     next_fresh_variable,
     parse_formula,
@@ -107,6 +108,12 @@ def formula_for_card(card: Optional[CardInstance]) -> Optional[ProofFormula]:
         return _formula_from_resource(card)
     except FormalLogicError:
         return None
+
+
+def _proof_formula_for_card(card: Optional[CardInstance]) -> Optional[ProofFormula]:
+    if card is None:
+        return None
+    return formula_for_card(card) or constant_card_formula(str(getattr(card, "def_id", "") or ""))
 
 
 def logical_expression_for_card(card: CardInstance) -> LogicExpr:
@@ -470,6 +477,29 @@ def _run_formal_logic_actions(engine, state: dict) -> dict:
                 if action.get("log", True) and amount:
                     engine.log_msg(str(action.get("message") or f"{engine.pn(target_id)}获得{amount}护甲"))
             continue
+        if op == "add_shield":
+            target_id = _action_player_id(
+                state, action.get("target_id"), int(state.get("player_id", 0))
+            )
+            if _valid_player(engine, target_id):
+                amount = max(0, int(_action_value(state, action.get("amount"), 0) or 0))
+                if amount:
+                    adder = getattr(engine, "_add_custom_status_value", None)
+                    if callable(adder):
+                        adder(target_id, "jungle:shield", amount)
+                    else:
+                        statuses = engine.players[target_id].custom_statuses
+                        statuses["jungle:shield"] = max(
+                            0, int(statuses.get("jungle:shield", 0) or 0)
+                        ) + amount
+                    note_peak = getattr(engine, "_note_achievement_status_peak", None)
+                    if callable(note_peak):
+                        note_peak(target_id)
+                    if action.get("log", True):
+                        engine.log_msg(
+                            str(action.get("message") or f"{engine.pn(target_id)}获得{amount}层护盾")
+                        )
+            continue
         if op == "heal":
             target_id = _action_player_id(
                 state, action.get("target_id"), int(state.get("player_id", 0))
@@ -566,6 +596,12 @@ def _run_formal_logic_actions(engine, state: dict) -> dict:
                 if str(action.get("mode") or "set") == "add":
                     value = int(card.custom_vars.get(name, 0) or 0) + int(value or 0)
                 card.custom_vars[name] = value
+            continue
+        if op == "remove_card_var":
+            card = _action_card(engine, state, action)
+            name = str(action.get("name") or "")
+            if card is not None and name:
+                card.custom_vars.pop(name, None)
             continue
         if op == "set_card_cost":
             card = _action_card(engine, state, action)
@@ -762,7 +798,7 @@ def _is_inverse_deduction_candidate(card: CardInstance) -> bool:
 
 
 def _formal_formula_cards(engine, owner_id: int) -> List[CardInstance]:
-    return _candidate_cards(engine, owner_id, lambda card: formula_for_card(card) is not None)
+    return _candidate_cards(engine, owner_id, lambda card: _proof_formula_for_card(card) is not None)
 
 
 def _clone_with_formula(source: CardInstance, formula: ProofFormula) -> CardInstance:
@@ -1021,7 +1057,7 @@ def _handle_mp(engine, state: dict, action: dict) -> List[dict]:
     formula = None
     for left, right in ((first, second), (second, first)):
         try:
-            formula = modus_ponens(formula_for_card(left), formula_for_card(right))
+            formula = modus_ponens(_proof_formula_for_card(left), _proof_formula_for_card(right))
             break
         except (FormalLogicError, TypeError):
             continue
@@ -1160,16 +1196,26 @@ def _card_snapshot(card: CardInstance, choice: Optional[dict], target_id: int) -
     }
 
 
-def _grant_substitution(engine, target_id: int, source_card: CardInstance) -> None:
+def _grant_substitution(
+    engine,
+    target_id: int,
+    source_card: CardInstance,
+    source_owner_id: Optional[int] = None,
+) -> None:
     if not _valid_player(engine, target_id):
         return
     formula = formula_for_card(source_card)
     if formula is None:
         return
     player = engine.players[target_id]
+    located_owner_id, _ = _find_card_location(engine, source_card)
+    if source_owner_id is None:
+        source_owner_id = located_owner_id
     player.custom_statuses[SUBSTITUTION_STATUS] = 1
     player.custom_vars["formal_logic_substitution_state"] = {
         "source_card_instance_id": int(source_card.instance_id),
+        "source_owner_id": source_owner_id,
+        "status_owner_id": int(target_id),
         "source_formula": formula_to_data(formula),
     }
     engine.log_msg(f"{engine.pn(target_id)}获得1层代入")
@@ -1241,7 +1287,12 @@ def _next_inference_index(antecedents: Sequence[LogicExpr], start: int) -> int:
     return index
 
 
-def _grant_inference(engine, target_id: int, source_card: CardInstance) -> None:
+def _grant_inference(
+    engine,
+    target_id: int,
+    source_card: CardInstance,
+    source_owner_id: Optional[int] = None,
+) -> None:
     if not _valid_player(engine, target_id):
         return
     formula = formula_for_card(source_card)
@@ -1249,10 +1300,15 @@ def _grant_inference(engine, target_id: int, source_card: CardInstance) -> None:
         return
     antecedents, conclusion = implication_chain(formula.conclusion)
     player = engine.players[target_id]
+    located_owner_id, _ = _find_card_location(engine, source_card)
+    if source_owner_id is None:
+        source_owner_id = located_owner_id
     player.custom_statuses[INFERENCE_STATUS] = 1
     inference_index = _next_inference_index(antecedents, 0)
     player.custom_vars["formal_logic_inference_state"] = {
         "source_card_instance_id": int(source_card.instance_id),
+        "source_owner_id": source_owner_id,
+        "status_owner_id": int(target_id),
         "premises": [expression_to_data(expr) for expr in formula.premises],
         "antecedents": [expression_to_data(expr) for expr in antecedents],
         "conclusion": expression_to_data(conclusion),
@@ -1279,9 +1335,22 @@ def _apply_substitution(engine, player_id: int, played_card: CardInstance, paylo
         "status_id": SUBSTITUTION_STATUS,
         "payload_key": "formal_logic_substitution_state",
     }]
+    payload_owner_id = payload.get("status_owner_id")
+    if payload_owner_id is not None and int(payload_owner_id) != int(player_id):
+        operations.append({"op": "log", "message": f"{engine.pn(player_id)}的代入失效：状态所属玩家不一致"})
+        return operations
     source = _find_card(engine, payload.get("source_card_instance_id"))
     if source is None:
         operations.append({"op": "log", "message": f"{engine.pn(player_id)}的代入失败：来源牌不存在"})
+        return operations
+    expected_source_owner = payload.get("source_owner_id")
+    actual_source_owner, _ = _find_card_location(engine, source)
+    if (
+        expected_source_owner is not None
+        and actual_source_owner is not None
+        and int(expected_source_owner) != int(actual_source_owner)
+    ):
+        operations.append({"op": "log", "message": f"{engine.pn(player_id)}的代入失败：来源牌所属玩家不一致"})
         return operations
     formula = formula_for_card(source)
     if formula is None:
@@ -1296,7 +1365,15 @@ def _apply_substitution(engine, player_id: int, played_card: CardInstance, paylo
         return operations
     variable = variables[0]
     expression = logical_expression_for_card(played_card)
-    transformed = substitute_formula(formula, {variable: expression})
+    try:
+        transformed = instantiate_formula(formula, {variable: expression})
+    except FormalLogicError as exc:
+        operations.append({
+            "op": "log",
+            "message": f"{engine.pn(player_id)}的代入失败：{exc}",
+        })
+        operations.extend(_deduction_response_actions(engine, player_id, source, "noop"))
+        return operations
     bindings = copy.deepcopy(source.custom_vars.get("formal_logic_binding_cards", {}))
     if not isinstance(bindings, dict):
         bindings = {}
@@ -1344,6 +1421,10 @@ def _complete_inference(engine, player_id: int, payload: dict) -> List[dict]:
         "status_id": INFERENCE_STATUS,
         "payload_key": "formal_logic_inference_state",
     }]
+    payload_owner_id = payload.get("status_owner_id")
+    if payload_owner_id is not None and int(payload_owner_id) != int(player_id):
+        operations.append({"op": "log", "message": f"{engine.pn(player_id)}的推理失效：状态所属玩家不一致"})
+        return operations
     source = _find_card(engine, payload.get("source_card_instance_id"))
     reset_source_action = None
     if payload.get("reset_source_after_inference") and source is not None:
@@ -1435,6 +1516,15 @@ def _handle_inference_play_finish(engine, state: dict, action: dict) -> List[dic
 
 def _apply_inference(engine, player_id: int, played_card: CardInstance, payload: dict) -> List[dict]:
     player = engine.players[player_id]
+    payload_owner_id = payload.get("status_owner_id")
+    if payload_owner_id is not None and int(payload_owner_id) != int(player_id):
+        return [
+            {
+                "op": "clear_status", "player_id": player_id,
+                "status_id": INFERENCE_STATUS, "payload_key": "formal_logic_inference_state",
+            },
+            {"op": "log", "message": f"{engine.pn(player_id)}的推理失效：状态所属玩家不一致"},
+        ]
     premises = [expression_from_data(item) for item in (payload.get("premises") or [])]
     if not _matching_premise_cards(engine, player_id, premises):
         operations = [
@@ -1474,7 +1564,20 @@ def _apply_inference(engine, player_id: int, played_card: CardInstance, payload:
     }]
 
 
-def _formal_theorem_play(
+def _grant_theorem_play_shield(engine, player_id: int, card: CardInstance) -> None:
+    formal = _card_formal_resource(card)
+    if not bool(formal.get("shield_each_play", formal.get("armor_each_play", False))):
+        return
+    amount = max(0, int(formal.get("shield", formal.get("armor", 3)) or 3))
+    if amount:
+        start_formal_logic_actions(engine, player_id, [{
+            "op": "add_shield",
+            "target_id": player_id,
+            "amount": amount,
+        }])
+
+
+def _advance_formal_theorem_play(
     engine,
     player_id: int,
     card: CardInstance,
@@ -1494,19 +1597,52 @@ def _formal_theorem_play(
         ),
     )
     stage = max(0, int(card.custom_vars.get("formal_logic_stage", 0) or 0))
-    if bool(formal.get("armor_each_play", False)):
-        start_formal_logic_actions(engine, player_id, [{
-            "op": "add_armor",
-            "target_id": player_id,
-            "amount": max(0, int(formal.get("armor", 3) or 3)),
-        }])
     if stage < required:
-        _grant_substitution(engine, target_id, card)
+        _grant_substitution(engine, target_id, card, player_id)
         card.custom_vars["formal_logic_stage"] = stage + 1
         return
     card.disabled_flags.add("rebound")
     if not suppress_inference:
-        _grant_inference(engine, target_id, card)
+        _grant_inference(engine, target_id, card, player_id)
+
+
+def _formal_theorem_play(
+    engine,
+    player_id: int,
+    card: CardInstance,
+    target_id: int,
+    *,
+    suppress_inference: bool = False,
+) -> None:
+    _grant_theorem_play_shield(engine, player_id, card)
+    _advance_formal_theorem_play(
+        engine,
+        player_id,
+        card,
+        target_id,
+        suppress_inference=suppress_inference,
+    )
+
+
+def _handle_advance_deferred_theorem(engine, state: dict, action: dict) -> List[dict]:
+    player_id = int(action.get("player_id", state.get("player_id", 0)))
+    target_id = int(action.get("target_id", player_id))
+    card = _find_card(engine, action.get("card_instance_id"))
+    if card is None or not _valid_player(engine, player_id):
+        return []
+    _advance_formal_theorem_play(
+        engine,
+        player_id,
+        card,
+        target_id,
+        suppress_inference=bool(action.get("suppress_inference", False)),
+    )
+    formal = _card_formal_resource(card)
+    if str(formal.get("reset_mode") or "discard") == "discard":
+        _, zone = _find_card_location(engine, card)
+        if zone == "discard":
+            _reset_card_formula(card)
+    return []
 
 
 def _start_metatheorem_action(engine, player_id: int, card: CardInstance, kind: str, target_id: int) -> Optional[dict]:
@@ -1572,14 +1708,6 @@ def on_card_resolved_before_disposition(
     existing_substitution = _status_payload(player, "formal_logic_substitution_state")
     existing_inference = _status_payload(player, "formal_logic_inference_state")
     status_immune = bool(getattr(engine, "_is_status_immune", lambda _pid: False)(player_id))
-    if existing_substitution and not status_immune:
-        response_actions = _apply_substitution(engine, player_id, card, existing_substitution)
-        if response_actions:
-            start_formal_logic_actions(engine, player_id, response_actions)
-    elif existing_inference and not status_immune:
-        inference_actions = _apply_inference(engine, player_id, card, existing_inference)
-        if inference_actions:
-            start_formal_logic_actions(engine, player_id, inference_actions)
 
     custom = getattr(card, "custom_vars", {}) or {}
     macro_equipment_id = custom.get("formal_logic_macro_equipment_instance_id")
@@ -1594,18 +1722,73 @@ def on_card_resolved_before_disposition(
     kind = str(formal.get("kind") or "")
     if not formal_proxy_suppresses_effect(card):
         if kind == "theorem" or card.def_id == GENERATED_THEOREM_ID:
-            _formal_theorem_play(
-                engine,
-                player_id,
-                card,
-                target_id,
-                suppress_inference=bool(existing_inference),
+            _grant_theorem_play_shield(engine, player_id, card)
+            pending_substitution = existing_substitution if not status_immune else None
+            pending_inference = (
+                existing_inference
+                if not status_immune and not pending_substitution
+                else None
             )
+            if pending_substitution or pending_inference:
+                # A theorem can itself satisfy a pending logic state.  Let its
+                # current Rebound finish first so the source remains findable,
+                # then consume that state and advance this theorem's own stage.
+                card.custom_vars["formal_logic_deferred_resolution"] = {
+                    "player_id": int(player_id),
+                    "target_id": int(target_id),
+                    "substitution": copy.deepcopy(pending_substitution),
+                    "inference": copy.deepcopy(pending_inference),
+                    "suppress_inference": bool(existing_inference),
+                }
+            else:
+                _advance_formal_theorem_play(
+                    engine,
+                    player_id,
+                    card,
+                    target_id,
+                    suppress_inference=bool(existing_inference),
+                )
         elif kind in ("contraposition", "inverse_deduction", "macro", "generalization"):
+            status_actions: List[dict] = []
+            if existing_substitution and not status_immune:
+                status_actions.extend(_apply_substitution(engine, player_id, card, existing_substitution))
+            elif existing_inference and not status_immune:
+                status_actions.extend(_apply_inference(engine, player_id, card, existing_inference))
+            if status_actions:
+                start_formal_logic_actions(engine, player_id, status_actions)
             _start_metatheorem_action(engine, player_id, card, kind, target_id)
+        else:
+            status_actions = []
+            if existing_substitution and not status_immune:
+                status_actions.extend(_apply_substitution(engine, player_id, card, existing_substitution))
+            elif existing_inference and not status_immune:
+                status_actions.extend(_apply_inference(engine, player_id, card, existing_inference))
+            if status_actions:
+                start_formal_logic_actions(engine, player_id, status_actions)
 
 
 def finalize_card_used(engine, player_id: int, card: CardInstance) -> None:
+    deferred = (getattr(card, "custom_vars", {}) or {}).pop(
+        "formal_logic_deferred_resolution", None
+    )
+    if isinstance(deferred, dict):
+        actions: List[dict] = []
+        substitution = deferred.get("substitution")
+        inference = deferred.get("inference")
+        if isinstance(substitution, dict):
+            actions.extend(_apply_substitution(engine, player_id, card, substitution))
+        if isinstance(inference, dict):
+            actions.extend(_apply_inference(engine, player_id, card, inference))
+        actions.append({
+            "op": "call",
+            "name": "advance_deferred_theorem",
+            "player_id": int(deferred.get("player_id", player_id)),
+            "target_id": int(deferred.get("target_id", player_id)),
+            "card_instance_id": int(card.instance_id),
+            "suppress_inference": bool(deferred.get("suppress_inference", False)),
+        })
+        start_formal_logic_actions(engine, player_id, actions)
+        return
     formal = _card_formal_resource(card)
     kind = str(formal.get("kind") or "")
     if kind == "theorem" and str(formal.get("reset_mode") or "discard") == "discard":
@@ -1651,6 +1834,8 @@ def on_card_discarded(engine, owner_id: int, card: CardInstance, *, during_play:
 
 
 def can_play_formal_card(engine, player_id: int, card: CardInstance) -> Tuple[bool, str]:
+    if bool((getattr(card, "custom_vars", {}) or {}).get("formal_logic_generalization_invalid")):
+        return False, "此牌本回合因条件概括元定理失效"
     formal = _card_formal_resource(card)
     kind = str(formal.get("kind") or "")
     if card.def_id == DEDUCTION_META_ID:
@@ -1690,6 +1875,64 @@ def _generalize_formula(formula: ProofFormula) -> ProofFormula:
     )
     validate_formula(result)
     return result
+
+
+def _generalization_record(card: CardInstance, formula: ProofFormula) -> dict:
+    custom = getattr(card, "custom_vars", {}) or {}
+    return {
+        "instance_id": int(card.instance_id),
+        "formula": formula_to_data(formula),
+        "had_custom_formula": isinstance(custom.get("formal_logic_formula"), Mapping),
+        "custom_formula": copy.deepcopy(custom.get("formal_logic_formula")),
+        "had_display_name_cn": "display_name_cn" in custom,
+        "display_name_cn": custom.get("display_name_cn"),
+        "had_display_name_en": "display_name_en" in custom,
+        "display_name_en": custom.get("display_name_en"),
+        "had_previous_invalid": "formal_logic_generalization_invalid" in custom,
+        "previous_invalid": copy.deepcopy(custom.get("formal_logic_generalization_invalid")),
+    }
+
+
+def _apply_generalization_to_card(card: CardInstance, formula: ProofFormula) -> None:
+    generalized = _generalize_formula(formula)
+    set_card_formula(card, generalized, remember_original=False)
+    card.custom_vars["display_name_cn"] = _display_formula(generalized, "zh")
+    card.custom_vars["display_name_en"] = _display_formula(generalized, "en")
+    if not _formula_can_be_generalized(formula):
+        card.custom_vars["formal_logic_generalization_invalid"] = True
+
+
+def _restore_generalized_card(card: CardInstance, record: Mapping[str, Any]) -> None:
+    custom = getattr(card, "custom_vars", {}) or {}
+    card.custom_vars = custom
+    if record.get("had_custom_formula") and isinstance(record.get("custom_formula"), Mapping):
+        custom["formal_logic_formula"] = copy.deepcopy(record["custom_formula"])
+    else:
+        custom.pop("formal_logic_formula", None)
+    for key in ("display_name_cn", "display_name_en"):
+        if record.get(f"had_{key}"):
+            custom[key] = record.get(key)
+        else:
+            custom.pop(key, None)
+    if record.get("had_previous_invalid"):
+        custom["formal_logic_generalization_invalid"] = copy.deepcopy(record.get("previous_invalid"))
+    else:
+        custom.pop("formal_logic_generalization_invalid", None)
+
+
+def _generalization_tracked_instance_ids(effects: Any) -> set:
+    tracked = set()
+    for effect in effects if isinstance(effects, list) else []:
+        if not isinstance(effect, Mapping):
+            continue
+        for record in effect.get("cards", []) if isinstance(effect.get("cards"), list) else []:
+            if not isinstance(record, Mapping):
+                continue
+            try:
+                tracked.add(int(record.get("instance_id")))
+            except (TypeError, ValueError):
+                continue
+    return tracked
 
 
 def _generalization_second_targets(engine, actor_id: int, first_target: int) -> List[int]:
@@ -1751,19 +1994,19 @@ def _handle_generalization_apply(engine, state: dict, action: dict) -> List[dict
         return []
     changed: List[dict] = []
     operations: List[dict] = []
+    active_effects = engine.players[first_target].custom_vars.get(
+        "formal_logic_generalization_effects"
+    )
+    already_tracked = _generalization_tracked_instance_ids(active_effects)
     for zone in ("hand", "deck", "discard", "exile"):
         for card in _zone_cards(engine, first_target, zone):
-            if not _selectable(card):
+            if int(card.instance_id) in already_tracked or not _selectable(card):
                 continue
-            formula = formula_for_card(card)
-            if formula is None or not _formula_can_be_generalized(formula):
+            formula = _proof_formula_for_card(card)
+            if formula is None:
                 continue
-            changed.append({"instance_id": card.instance_id, "formula": formula_to_data(formula)})
-            operations.append({
-                "op": "set_card_formula", "instance_id": card.instance_id,
-                "formula": formula_to_data(_generalize_formula(formula)),
-                "remember_original": False,
-            })
+            changed.append(_generalization_record(card, formula))
+            _apply_generalization_to_card(card, formula)
     if changed:
         operations.extend([
             {
@@ -1788,7 +2031,7 @@ def _handle_generalization_apply(engine, state: dict, action: dict) -> List[dict
             },
         ])
     else:
-        operations.append({"op": "log", "message": "没有符合条件概括元定理的公式牌"})
+        operations.append({"op": "log", "message": "没有可被条件概括元定理改变的牌"})
     return operations
 
 
@@ -1800,8 +2043,8 @@ def on_turn_end(engine, player_id: int) -> None:
     for effect in effects if isinstance(effects, list) else []:
         for record in effect.get("cards", []) if isinstance(effect, dict) else []:
             card = _find_card(engine, record.get("instance_id"))
-            if card is not None and isinstance(record.get("formula"), Mapping):
-                set_card_formula(card, formula_from_data(record["formula"]), remember_original=False)
+            if card is not None and isinstance(record, Mapping):
+                _restore_generalized_card(card, record)
     for card in list(player.hand) + list(player.deck) + list(player.discard) + list(player.exile):
         custom = getattr(card, "custom_vars", {}) or {}
         custom.pop("formal_logic_temporary_cost_e", None)
@@ -1863,12 +2106,13 @@ def on_card_enter_hand(engine, player_id: int, card: CardInstance) -> None:
     player = engine.players[player_id]
     active_generalizations = player.custom_vars.get("formal_logic_generalization_effects")
     if isinstance(active_generalizations, list) and active_generalizations:
-        formula = formula_for_card(card)
-        if formula is not None and _formula_can_be_generalized(formula) and _selectable(card):
+        formula = _proof_formula_for_card(card)
+        tracked = _generalization_tracked_instance_ids(active_generalizations)
+        if formula is not None and int(card.instance_id) not in tracked and _selectable(card):
             active_generalizations[-1].setdefault("cards", []).append(
-                {"instance_id": card.instance_id, "formula": formula_to_data(formula)}
+                _generalization_record(card, formula)
             )
-            set_card_formula(card, _generalize_formula(formula), remember_original=False)
+            _apply_generalization_to_card(card, formula)
 
     formal = _card_formal_resource(card)
     debut_effect = str(formal.get("debut_effect") or "")
@@ -2037,6 +2281,7 @@ def formal_proxy_suppresses_effect(card: Optional[CardInstance]) -> bool:
 
 
 _ACTION_HANDLERS.update({
+    "advance_deferred_theorem": _handle_advance_deferred_theorem,
     "generalization_apply": _handle_generalization_apply,
     "play_catalog_card": _handle_play_catalog_card,
     "catalog_play_finish": _handle_catalog_play_finish,

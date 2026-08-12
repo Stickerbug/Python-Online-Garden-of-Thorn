@@ -4,14 +4,14 @@ import random
 from story_content import initial_story_player
 
 
-STORY_SCHEMA_VERSION = 8
-STORY_CONTENT_VERSION = 'story-redesign-8'
+STORY_SCHEMA_VERSION = 9
+STORY_CONTENT_VERSION = 'story-redesign-9'
 STORY_FLOOR_COUNT = 16
 
 STORY_STAGES = (
     {'stage': 1, 'biomes': ('garden', 'desert', 'ocean')},
-    {'stage': 2, 'biomes': ('garden', 'desert', 'ocean')},
-    {'stage': 3, 'biomes': ('garden', 'desert', 'ocean')},
+    {'stage': 2, 'biomes': ('jungle',)},
+    {'stage': 3, 'biomes': ('factory',)},
 )
 
 _NORMAL_ROOM_WEIGHTS = (
@@ -295,6 +295,8 @@ def build_initial_story_state(seed):
         },
         'reward': None,
         'rng_counter': 0,
+        'rng_version': 2,
+        'rng_streams': {},
         'normal_battles': 0,
         'stage_normal_battles': 0,
         'curses': {},

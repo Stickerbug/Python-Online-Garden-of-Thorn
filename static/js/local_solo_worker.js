@@ -6270,6 +6270,17 @@ class LocalSoloEngine {
         this.logMsg(log || `${this.pn(playerId)}消耗${paidE}E和${paidM}M，使${cardName(selected.def_id)}的聚变层数增加1`);
     }
 
+    effect_arctic_apply_frost(playerId, card, params, log, choice) {
+        const targetId = this.resolveTarget(playerId, params.target || 'target', choice);
+        if (!this.players[targetId]) return;
+        const amount = Math.max(0, this.evalInt(playerId, params.amount ?? params.value ?? 0, card, 0));
+        if (amount <= 0) return;
+        const before = this.arcticFrostValue(targetId);
+        this.setArcticFrostValue(targetId, before + amount);
+        const gained = Math.max(0, this.arcticFrostValue(targetId) - before);
+        if (gained > 0) this.logMsg(log || `${this.pn(targetId)}获得${gained}层霜冻`);
+    }
+
     runOceanAutoCardsTurnStart(playerId) {
         const ps = this.players[playerId];
         const entries = ps && Array.isArray(ps.custom_vars.ocean_auto_cards) ? ps.custom_vars.ocean_auto_cards : [];
@@ -7932,7 +7943,24 @@ class LocalSoloEngine {
             const otherBamboo = this.players[playerId].hand.filter(c => c !== card && this.cardIs(c, 'Bamboo', 'jungle:bamboo')).length;
             extra -= otherBamboo;
         }
+        if (!this.isStatusImmune(playerId)) extra += Math.floor(this.arcticFrostValue(playerId) / 10);
         return extra;
+    }
+
+    arcticFrostValue(playerId) {
+        return this.customStatusValue(playerId, 'arctic:frost', 'frost', '霜冻');
+    }
+
+    setArcticFrostValue(playerId, value) {
+        const ps = this.players[playerId];
+        if (!ps) return;
+        ps.custom_statuses = ps.custom_statuses || {};
+        ['arctic:frost', 'frost', '霜冻'].forEach(key => {
+            delete ps.custom_statuses[key];
+            delete ps[key];
+        });
+        const amount = Math.min(60, Math.max(0, toInt(value, 0)));
+        if (amount > 0) ps.custom_statuses['arctic:frost'] = amount;
     }
 
     cardLocalIds(card) {
@@ -8047,13 +8075,20 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         if (!ps) return [];
         const sourceId = sourceCard ? sourceCard.instance_id : null;
+        const liveSource = ps.hand.find(candidate => candidate && candidate.instance_id === sourceId);
+        const reservedE = liveSource
+            ? Math.max(0, liveSource.cost_e + this.getExtraEForCard(playerId, liveSource))
+            : 0;
+        const reservedM = liveSource ? Math.max(0, liveSource.cost_m) : 0;
+        const availableE = Math.max(0, ps.elixir - reservedE);
+        const availableM = Math.max(0, ps.magic - reservedM);
         return ps.hand.filter(candidate => (
             candidate
             && candidate.instance_id !== sourceId
             && candidate.card_type === 'thorn'
             && cardSelectableByAction(candidate)
-            && Math.max(0, candidate.cost_e + this.getExtraEForCard(playerId, candidate)) <= ps.elixir
-            && candidate.cost_m <= ps.magic
+            && Math.max(0, candidate.cost_e + this.getExtraEForCard(playerId, candidate)) <= availableE
+            && candidate.cost_m <= availableM
         ));
     }
 
@@ -8618,9 +8653,23 @@ class LocalSoloEngine {
                 ? { ...pending.original_choice, ...choice }
                 : { ...pending.original_choice };
         }
-        const card = new LocalCard(pending.card);
+        let card = new LocalCard(pending.card);
         const ps = this.players[playerId];
         const choiceCancelled = choice == null || (typeof choice === 'object' && (choice.cancelled || choice.cancel));
+        if (pending.choice_type === 'choose_arctic_ruby' && !choiceCancelled) {
+            const liveCard = ps.findHandCard(card.instance_id);
+            const validChoice = liveCard && this.choiceRequestSatisfied(
+                { type: 'request_card', params: { choice_type: 'choose_arctic_ruby' } },
+                choice,
+                liveCard,
+            );
+            const [canPlay, reason] = liveCard ? this.canPlayCard(playerId, liveCard) : [false, '红宝石已不在手中'];
+            if (!validChoice || !canPlay) {
+                this.pending_choice = pending;
+                return { success: false, error: validChoice ? reason : '费用不足或所选攻击牌已失效，请重新选择' };
+            }
+            card = liveCard;
+        }
         if (pending.choice_type === 'magic_salt_reflect') {
             if (choiceCancelled || !(choice && (choice.confirmed || choice.accepted))) {
                 return { success: true, cancelled: true };
@@ -8946,6 +8995,11 @@ class LocalSoloEngine {
         this.decayActionLimitStatus(playerId, 'attack_blocked', 'attack_blocked', '禁攻');
         this.decayActionLimitStatus(playerId, 'attack_only', 'attack_only', '仅攻击');
         this.decayActionLimitStatus(playerId, 'magic_blocked', 'magic_blocked', '魔力封锁', 'troll_cards:magic_blocked');
+        const frost = this.arcticFrostValue(playerId);
+        if (frost > 0) {
+            this.setArcticFrostValue(playerId, Math.floor(frost / 2));
+            if (this.arcticFrostValue(playerId) <= 0) this.logMsg(`${this.pn(playerId)}的霜冻效果消失`);
+        }
         if (ps.invincible && !ps.bandage_active && !ps.bandage_death_pending && this.shouldExpireInvincibleOnTurnEnd(playerId)) {
             this.clearInvincibleState(playerId);
             this.logMsg(`${this.pn(playerId)}的无敌效果结束`);

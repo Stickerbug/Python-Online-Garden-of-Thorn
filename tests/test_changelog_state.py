@@ -85,6 +85,48 @@ class ChangelogStateTests(unittest.TestCase):
         self.assertIn('writeChangelogReadReceipt(readVersion, readDate)', section)
         self.assertIn('localStorage.setItem(CHANGELOG_CACHE_KEY', section)
 
+    def test_stale_response_cannot_poison_current_changelog_cache(self):
+        helper = source_between(
+            GAME_JS,
+            'function isCurrentChangelogCache(',
+            'async function loadChangelog(',
+        )
+        self.assertIn("serverVersion === expectedVersion", helper)
+        self.assertIn("cache: 'no-store'", helper)
+        self.assertIn('serverVersion !== expectedVersion', helper)
+        self.assertIn('fetchCurrentChangelog(expectedVersion, true)', helper)
+
+        loader = source_between(
+            GAME_JS,
+            'async function loadChangelog(',
+            'function initChangelogBadge(',
+        )
+        mismatch_check = helper.index('serverVersion !== expectedVersion')
+        cache_write = loader.index('localStorage.setItem(CHANGELOG_CACHE_KEY')
+        self.assertGreaterEqual(mismatch_check, 0)
+        self.assertGreaterEqual(cache_write, 0)
+        self.assertIn('writeChangelogMarker(CHANGELOG_BOOT_VERSION_KEY, cacheVersion)', loader)
+
+    def test_boot_marker_is_not_written_before_refresh_succeeds(self):
+        section = source_between(
+            GAME_JS,
+            'function initChangelogBadge(',
+            'function openAbout(',
+        )
+        self.assertIn('isCurrentChangelogCache(cached, cacheVersion)', section)
+        marker_write = section.index('writeChangelogMarker(CHANGELOG_BOOT_VERSION_KEY, cacheVersion)')
+        refresh = section.index('loadChangelog(true, { silent: true })')
+        self.assertLess(marker_write, refresh)
+
+    def test_changelog_api_disables_http_caching(self):
+        section = source_between(
+            APP_PY,
+            "@app.route('/api/changelog')",
+            "@app.route('/api/report'",
+        )
+        self.assertIn("response.headers['Cache-Control'] = 'private, no-store, max-age=0'", section)
+        self.assertIn("response.headers['X-GTN-Changelog-Version'] = version", section)
+
 
 if __name__ == '__main__':
     unittest.main()

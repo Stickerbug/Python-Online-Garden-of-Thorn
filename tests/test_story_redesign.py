@@ -783,6 +783,52 @@ def test_story_events_do_not_repeat_until_every_eligible_event_is_seen():
     assert len(state['encounter_history']['event']) == 1
 
 
+def test_story_random_streams_isolate_events_and_loot_from_combat_randomness():
+    seed = 'isolated-story-random-streams'
+    baseline = _started_state(seed)
+    noisy = copy.deepcopy(baseline)
+
+    for _ in range(40):
+        story_engine._rng(noisy, seed, 'enemy_move:simulated').random()
+
+    assert noisy['rng_counter'] == baseline['rng_counter'] + 40
+    assert _reward_choices(noisy, seed, 'combat') == _reward_choices(
+        baseline,
+        seed,
+        'combat',
+    )
+    assert story_engine._random_relic(noisy, seed) == story_engine._random_relic(
+        baseline,
+        seed,
+    )
+    assert _make_story_event(noisy, seed)['event_id'] == _make_story_event(
+        baseline,
+        seed,
+    )['event_id']
+
+
+def test_story_random_stream_position_is_restored_with_a_save_snapshot():
+    seed = 'restored-story-random-streams'
+    snapshot = _started_state(seed)
+
+    first = copy.deepcopy(snapshot)
+    first_result = {
+        'cards': _reward_choices(first, seed, 'elite'),
+        'relic': story_engine._random_relic(first, seed),
+        'event': _make_story_event(first, seed)['event_id'],
+    }
+
+    restored = copy.deepcopy(snapshot)
+    restored_result = {
+        'cards': _reward_choices(restored, seed, 'elite'),
+        'relic': story_engine._random_relic(restored, seed),
+        'event': _make_story_event(restored, seed)['event_id'],
+    }
+
+    assert restored_result == first_result
+    assert restored['rng_streams'] == first['rng_streams']
+
+
 def test_events_cannot_convert_to_elites_on_the_first_nine_local_floors(monkeypatch):
     original_rng = story_engine._rng
 

@@ -292,7 +292,7 @@ class VoidDlcCardTests(unittest.TestCase):
         result = engine.play_card(2, attack.instance_id, self.target_choice(1))
 
         self.assertTrue(result.get("success"), result)
-        self.assertEqual(engine.players[0].health, 94)
+        self.assertEqual(engine.players[0].health, 92)
         self.assertEqual(engine.players[1].health, 100)
 
 

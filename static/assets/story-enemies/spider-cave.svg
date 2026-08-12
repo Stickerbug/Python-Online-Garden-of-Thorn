@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #898989;
+        stroke: #727171;
+      }
+
+      .st0, .st1 {
+        stroke-width: 20px;
+      }
+
+      .st0, .st1, .st2, .st3 {
+        stroke-miterlimit: 10;
+      }
+
+      .st1 {
+        fill: #595757;
+        stroke: #3e3a39;
+      }
+
+      .st2, .st3 {
+        fill: none;
+        opacity: .5;
+        stroke: #9fa0a0;
+        stroke-width: 10px;
+      }
+
+      .st3 {
+        stroke-linecap: round;
+      }
+    </style>
+  </defs>
+  <g>
+    <circle class="st1" cx="142.04" cy="141.73" r="63.63"/>
+    <circle class="st0" cx="142.04" cy="141.73" r="24.97"/>
+  </g>
+  <g>
+    <circle class="st2" cx="141.84" cy="141.58" r="63.78"/>
+    <circle class="st2" cx="141.84" cy="141.58" r="42.52"/>
+    <circle class="st2" cx="141.84" cy="141.58" r="21.26"/>
+    <line class="st3" x1="141.84" y1="56.54" x2="141.84" y2="226.62"/>
+    <line class="st3" x1="222.71" y1="115.3" x2="60.96" y2="167.86"/>
+    <line class="st3" x1="91.85" y1="72.78" x2="191.82" y2="210.38"/>
+    <line class="st3" x1="191.82" y1="72.78" x2="91.85" y2="210.38"/>
+    <line class="st3" x1="60.96" y1="115.3" x2="222.71" y2="167.86"/>
+  </g>
+</svg>
