@@ -4944,6 +4944,47 @@
         const amount = Math.max(0, Number(effect?.amount) || 0);
         const hits = Math.max(1, Number(effect?.hits) || 1);
         if (type === 'damage') return { kind: 'attack', amount, hits, target: 'player' };
+        if (type === 'damage_from_shield') {
+            const divisor = Math.max(1, Number(effect.divisor) || 1);
+            return {
+                kind: 'special', effect_type: type, target: 'player',
+                label: {
+                    zh: `造成(${amount}+护盾层数/${divisor})D`,
+                    en: `Deal (${amount} + Shield/${divisor}) D`,
+                },
+            };
+        }
+        if (type === 'damage_from_player_status') {
+            const status = storyIntentStatusLabel(effect.status);
+            return {
+                kind: 'special', effect_type: type, target: 'player',
+                label: {
+                    zh: `造成(${amount}+玩家${status}层数)D`,
+                    en: `Deal (${amount} + player ${status} stacks) D`,
+                },
+            };
+        }
+        if (type === 'consume_status_damage') {
+            const status = storyIntentStatusLabel(effect.status);
+            const divisor = Math.max(1, Number(effect.divisor) || 1);
+            return {
+                kind: 'special', effect_type: type, target: 'player',
+                label: {
+                    zh: `清除自身${status}，造成(层数/${divisor})D`,
+                    en: `Clear own ${status}; deal stacks/${divisor} D`,
+                },
+            };
+        }
+        if (type === 'consume_magic_damage') {
+            const multiplier = Math.max(0, Number(effect.multiplier) || 0);
+            return {
+                kind: 'special', effect_type: type, target: 'player',
+                label: {
+                    zh: `消耗全部M，造成(${amount}+消耗量×${multiplier})D`,
+                    en: `Spend all M; deal (${amount} + spent × ${multiplier}) D`,
+                },
+            };
+        }
         if (type === 'self_damage') return { kind: 'self_damage', amount, hits, target: 'self' };
         if (type === 'gain_power') return { kind: 'buff', stat: 'power', amount, target: 'self' };
         if (type === 'gain_shield') return { kind: 'defend', stat: 'shield', amount, target: 'self' };
@@ -4966,10 +5007,47 @@
         if (type === 'heal_to_full') return { kind: 'heal', full: true, target: 'self' };
         if (type === 'allies_heal') return { kind: 'heal', amount, target: 'all_enemies' };
         if (type === 'allies_power') return { kind: 'buff', stat: 'power', amount, target: 'all_enemies' };
+        if (type === 'allies_status') {
+            return { kind: 'status', status: effect.status, amount, target: 'all_enemies' };
+        }
+        if (type === 'named_allies_power') {
+            return {
+                kind: 'buff', stat: 'power', amount, target: 'named_enemy',
+                enemy_id: effect.enemy_id,
+                enemy_name: storyContent?.enemies?.[effect.enemy_id]?.name,
+            };
+        }
+        if (type === 'heal_named_ally_percent') {
+            return {
+                kind: 'heal', amount, percent: true, target: 'named_enemy',
+                enemy_id: effect.enemy_id,
+                enemy_name: storyContent?.enemies?.[effect.enemy_id]?.name,
+            };
+        }
         if (type === 'allies_shield' || type === 'lowest_ally_shield' || type === 'adjacent_shield') {
             return { kind: 'defend', stat: 'shield', amount, target: type === 'allies_shield' ? 'all_enemies' : type };
         }
-        if (type.startsWith('summon')) {
+        if (type === 'summon_to_ant_count') {
+            return {
+                kind: 'special', effect_type: type, amount, target: 'self',
+                label: {
+                    zh: `补充蚂蚁至${amount}只`,
+                    en: `Fill the ant group to ${amount}`,
+                },
+            };
+        }
+        if (type === 'summon_wreckage') {
+            return {
+                kind: 'summon', enemy_id: 'wreckage',
+                enemy_name: storyContent?.enemies?.wreckage?.name,
+                amount: amount || 1, target: 'self',
+                details: {
+                    zh: '死后依次召唤螃蟹、睡莲与海胆',
+                    en: 'Their deaths summon Crab, Lily Pad, and Urchin in order',
+                },
+            };
+        }
+        if (type === 'summon') {
             const enemyId = String(effect.enemy_id || (type === 'summon_wreckage' ? 'wreckage' : ''));
             return {
                 kind: 'summon', enemy_id: enemyId,
@@ -4978,9 +5056,27 @@
             };
         }
         if (type === 'add_draw_card' || type === 'delayed_hand_charge') {
-            return { kind: 'card', effect_type: type, amount: amount || 1, target: 'player' };
+            return {
+                kind: 'card', effect_type: type, card_id: effect.card_id,
+                amount: amount || 1, target: 'player',
+            };
         }
         if (type === 'consume_allies') return { kind: 'consume', target: 'all_enemies' };
+        if (type === 'consume_status') {
+            return { kind: 'consume_status', status: effect.status, amount, target: 'self' };
+        }
+        if (type === 'gain_magic') {
+            return { kind: 'resource', resource: 'magic', amount, target: 'self' };
+        }
+        if (type === 'disable_magic_shield') {
+            return {
+                kind: 'special', effect_type: type, amount, target: 'self',
+                label: {
+                    zh: '下回合魔力护盾失效',
+                    en: 'Magic Shield is disabled next turn',
+                },
+            };
+        }
         if (type === 'stun_if_player_shield') {
             return { kind: 'status', status: 'stun', amount: 1, target: 'player', conditional: 'shield' };
         }
@@ -4988,7 +5084,10 @@
             return { kind: 'special', effect_type: type, amount, target: type === 'lose_max_health_percent' ? 'self' : 'player' };
         }
         if (type === 'self_kill') return { kind: 'self_damage', target: 'self', lethal: true };
-        return { kind: 'special', effect_type: type, amount };
+        return {
+            kind: 'special', effect_type: type, amount,
+            label: { zh: '执行特殊行动', en: 'Perform a special action' },
+        };
     }
 
     function renderStoryCodexEnemyDetail(record, detail) {
@@ -5905,7 +6004,20 @@
             blind: lang === 'zh' ? '失明' : 'Blind',
             poison: lang === 'zh' ? '中毒' : 'Poison',
             entangle: lang === 'zh' ? '缠绕' : 'Entangle',
-        }[key] || key;
+            toxic_poison: lang === 'zh' ? '剧毒' : 'Toxic Poison',
+            stagnation: lang === 'zh' ? '滞留' : 'Stagnation',
+            bleed: lang === 'zh' ? '流血' : 'Bleed',
+            fire: lang === 'zh' ? '灼烧' : 'Burn',
+            blockade: lang === 'zh' ? '封锁' : 'Blockade',
+            locked: lang === 'zh' ? '锁定' : 'Locked',
+            fragment: lang === 'zh' ? '碎片' : 'Fragment',
+            evil_eye: lang === 'zh' ? '邪眼' : 'Evil Eye',
+            bulb: lang === 'zh' ? '灯泡' : 'Bulb',
+            hard_shell: lang === 'zh' ? '坚硬' : 'Hard Shell',
+            magic_reflection: lang === 'zh' ? '魔力反射' : 'Magic Reflection',
+            disc: lang === 'zh' ? '圆盘' : 'Disc',
+            magic: 'M',
+        }[key] || (lang === 'zh' ? '特殊效果' : key.replaceAll('_', ' '));
     }
 
     function createStoryIntentEntry(entry) {
@@ -5922,10 +6034,15 @@
             label = entry?.lethal
                 ? (lang === 'zh' ? '死亡' : 'Defeat self')
                 : `${amount}${hits > 1 ? `×${hits}` : ''}`;
+            if (entry?.conditional === 'pearls') {
+                label = lang === 'zh' ? `每颗珍珠 ${label}` : `${label} per Pearl`;
+            }
             if (kind === 'self_damage') label = `${t.self} ${label}`;
         } else if (kind === 'heal') {
             iconUrl = STORY_INLINE_ICONS.H;
-            label = entry?.full ? (lang === 'zh' ? '回满' : 'Full') : `+${amount}`;
+            label = entry?.full
+                ? (lang === 'zh' ? '回满' : 'Full')
+                : `+${amount}${entry?.percent ? '%' : ''}`;
         } else if (kind === 'defend') {
             label = `${storyIntentStatusLabel(entry.stat || 'shield')} +${amount}`;
         } else if (kind === 'buff') {
@@ -5945,11 +6062,27 @@
                 .filter(Boolean)
                 .join(' ');
         } else if (kind === 'card') {
-            label = entry?.effect_type === 'delayed_hand_charge'
-                ? (lang === 'zh' ? `下回合手牌电荷 +${amount}` : `Next turn hand Charge +${amount}`)
-                : t.addCard;
+            if (entry?.effect_type === 'delayed_hand_charge') {
+                label = lang === 'zh'
+                    ? `下回合手牌电荷 +${amount}`
+                    : `Next turn hand Charge +${amount}`;
+            } else {
+                const cardName = localize(storyContent?.cards?.[entry?.card_id]?.name);
+                label = cardName
+                    ? (lang === 'zh'
+                        ? `向抽牌堆加入${amount}张${cardName}`
+                        : `Add ${amount} ${cardName} to the draw pile`)
+                    : t.addCard;
+            }
         } else if (kind === 'consume') {
-            label = t.consume;
+            label = localize(entry?.label)
+                || (lang === 'zh' ? '吞噬其他生物' : 'Consume other creatures');
+        } else if (kind === 'consume_status') {
+            label = lang === 'zh'
+                ? `消耗${amount}层${storyIntentStatusLabel(entry.status)}`
+                : `Consume ${amount} ${storyIntentStatusLabel(entry.status)}`;
+        } else if (kind === 'resource') {
+            label = `+${amount}${storyIntentStatusLabel(entry.resource)}`;
         } else {
             const effectType = String(entry?.effect_type || '');
             if (effectType === 'lose_max_health_percent') {
@@ -5957,11 +6090,22 @@
             } else if (effectType === 'consume_pearls_damage') {
                 label = lang === 'zh' ? `每颗珍珠造成${amount}D` : `${amount}D per Pearl`;
             } else {
-                label = String(entry?.summary || effectType || '--');
+                label = localize(entry?.label)
+                    || String(entry?.summary || (lang === 'zh' ? '执行特殊行动' : 'Perform a special action'));
             }
         }
+        const details = localize(entry?.details);
+        if (details) label = `${label} · ${details}`;
         if (entry?.target === 'all_enemies') label = `${t.allies} · ${label}`;
         else if (entry?.target === 'player') label = `${t.playerSide || (lang === 'zh' ? '玩家方' : 'Player side')} · ${label}`;
+        else if (entry?.target === 'named_enemy') {
+            const targetName = localize(entry?.enemy_name) || (lang === 'zh' ? '指定生物' : 'Named creature');
+            label = `${targetName} · ${label}`;
+        } else if (entry?.target === 'lowest_ally_shield') {
+            label = `${lang === 'zh' ? 'H最低的生物' : 'Lowest-H creature'} · ${label}`;
+        } else if (entry?.target === 'adjacent_shield') {
+            label = `${lang === 'zh' ? '相邻生物' : 'Adjacent creatures'} · ${label}`;
+        }
         if (iconUrl) {
             const icon = document.createElement('img');
             icon.src = iconUrl;

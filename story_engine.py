@@ -18,6 +18,8 @@ from story_content import (
     STORY_REWARD_CARD_IDS,
     STORY_RULES,
     STORY_SHOP_CARD_IDS,
+    STORY_STATUSES,
+    STORY_TRAITS,
     STORY_TRAIT_VALUE_KEYS,
 )
 
@@ -299,6 +301,37 @@ def _localized(value, lang='zh'):
     if isinstance(value, dict):
         return value.get(lang) or value.get('en') or value.get('zh') or ''
     return str(value or '')
+
+
+def _story_term_name(key, lang='zh'):
+    key = str(key or '')
+    for registry in (STORY_STATUSES, STORY_TRAITS):
+        definition = registry.get(key)
+        if definition:
+            name = _localized(definition.get('name'), lang)
+            if name:
+                return name
+    # Enemy state fields and trait ids are not always identical (for example,
+    # ``charging`` is rendered by the ``charging_up`` trait). Resolve those
+    # aliases here so intent text never falls back to an internal state key.
+    for trait_id, value_key in STORY_TRAIT_VALUE_KEYS.items():
+        if value_key != key:
+            continue
+        definition = STORY_TRAITS.get(trait_id)
+        if definition:
+            name = _localized(definition.get('name'), lang)
+            if name:
+                return name
+    fallback = {
+        'health': {'zh': 'H', 'en': 'H'},
+        'magic': {'zh': 'M', 'en': 'M'},
+        'power': {'zh': '力量', 'en': 'Power'},
+        'temporary_power': {'zh': '暂时力量', 'en': 'Temporary Power'},
+        'shield': {'zh': '护盾', 'en': 'Shield'},
+    }.get(key)
+    if fallback:
+        return _localized(fallback, lang)
+    return '特殊效果' if lang == 'zh' else key.replace('_', ' ').title()
 
 
 def _node_lookup(state):
@@ -901,7 +934,15 @@ def _record_cards_drawn(state, card_instance_ids, events):
             })
 
 
-def _draw_cards(state, count, seed, events, autoplay_depth=0):
+def _draw_filter_matches(card, filter_name):
+    if not filter_name:
+        return True
+    if filter_name == 'zero_e':
+        return int(_card_values(card).get('cost_e') or 0) == 0
+    return False
+
+
+def _draw_cards(state, count, seed, events, autoplay_depth=0, card_filter=None):
     combat = state['combat']
     if combat.get('cannot_draw'):
         return []
@@ -915,7 +956,17 @@ def _draw_cards(state, count, seed, events, autoplay_depth=0):
             combat['discard_pile'] = []
             _rng(state, seed, 'reshuffle').shuffle(combat['draw_pile'])
             events.append({'type': 'reshuffle'})
-        card = combat['draw_pile'].pop()
+        draw_index = next(
+            (
+                index
+                for index in range(len(combat['draw_pile']) - 1, -1, -1)
+                if _draw_filter_matches(combat['draw_pile'][index], card_filter)
+            ),
+            None,
+        )
+        if draw_index is None:
+            break
+        card = combat['draw_pile'].pop(draw_index)
         if len(combat['hand']) >= int(STORY_RULES['hand_limit']):
             combat['discard_pile'].append(card)
             overflowed.append(card['instance_id'])
@@ -2052,6 +2103,7 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
             seed,
             events,
             context.get('autoplay_depth', 0),
+            effect.get('filter'),
         )
     elif effect_type == 'draw_to_limit':
         _draw_cards(state, max(0, int(STORY_RULES['hand_limit']) - len(combat['hand'])), seed, events, context.get('autoplay_depth', 0))
@@ -2580,8 +2632,8 @@ def _finalize_played_card(
         for target in _living_enemies(combat):
             if target.get('def_id') != 'reconstructor_enemy':
                 continue
-            target['rounds_without_factory_waste'] = 0
             target['received_factory_waste'] = True
+            target['missed_factory_waste_last_turn'] = False
             before_fragment = int(target.get('fragment') or 0)
             target['fragment'] = before_fragment + 1
             before_power = int(target.get('power') or 0)
@@ -2935,7 +2987,17 @@ def _enemy_intent(state, enemy):
                 enemy,
                 math.floor(max(0, int(enemy.get(str(effect.get('status') or '')) or 0)) / divisor),
             )
-            entries.append({'kind': 'attack', 'amount': value, 'hits': 1, 'target': 'player'})
+            status = str(effect.get('status') or '')
+            entries.append({
+                'kind': 'attack',
+                'amount': value,
+                'hits': 1,
+                'target': 'player',
+                'details': {
+                    'zh': f'清除自身{_story_term_name(status)}',
+                    'en': f'Clear own {_story_term_name(status, "en")}',
+                },
+            })
             parts.append(f'{value}D')
         elif effect_type == 'consume_magic_damage':
             value = _enemy_physical_hit_amount(
@@ -2943,8 +3005,14 @@ def _enemy_intent(state, enemy):
                 enemy,
                 amount + max(0, int(enemy.get('magic') or 0)) * max(0, int(effect.get('multiplier') or 0)),
             )
-            entries.append({'kind': 'attack', 'amount': value, 'hits': 1, 'target': 'player'})
-            parts.append(f'{value}D')
+            entries.append({
+                'kind': 'attack',
+                'amount': value,
+                'hits': 1,
+                'target': 'player',
+                'details': {'zh': '消耗全部M', 'en': 'Spend all M'},
+            })
+            parts.append(f'{value}D并消耗全部M')
         elif effect_type == 'self_damage':
             entries.append({
                 'kind': 'self_damage',
@@ -2960,23 +3028,50 @@ def _enemy_intent(state, enemy):
             entries.append({'kind': 'defend', 'stat': 'shield', 'amount': amount, 'target': 'self'})
             parts.append(f'获得{amount}层护盾')
         elif effect_type == 'gain_status':
+            status = str(effect.get('status') or '')
             entries.append({
                 'kind': 'status',
-                'status': str(effect.get('status') or ''),
+                'status': status,
                 'amount': amount,
                 'target': 'self',
             })
-            parts.append(f"获得{amount}层{effect.get('status')}")
+            parts.append(f'获得{amount}层{_story_term_name(status)}')
         elif effect_type == 'player_status':
-            labels = {'vulnerable': '易伤', 'weak': '虚弱', 'fragile': '脆弱', 'broken': '破损'}
+            status = str(effect.get('status') or '')
             entries.append({
                 'kind': 'status',
-                'status': str(effect.get('status') or ''),
+                'status': status,
                 'amount': amount,
                 'target': 'player',
             })
-            parts.append(f"施加{amount}层{labels.get(effect.get('status'), effect.get('status'))}")
-        elif effect_type.startswith('summon'):
+            parts.append(f'施加{amount}层{_story_term_name(status)}')
+        elif effect_type == 'summon_to_ant_count':
+            entries.append({
+                'kind': 'special',
+                'effect_type': effect_type,
+                'amount': amount,
+                'label': {
+                    'zh': f'补充蚂蚁至{amount}只',
+                    'en': f'Fill the ant group to {amount}',
+                },
+                'target': 'self',
+            })
+            parts.append(f'补充蚂蚁至{amount}只')
+        elif effect_type == 'summon_wreckage':
+            wreckage_definition = STORY_ENEMIES.get('wreckage') or {}
+            entries.append({
+                'kind': 'summon',
+                'enemy_id': 'wreckage',
+                'enemy_name': wreckage_definition.get('name') or '残骸',
+                'amount': amount,
+                'target': 'self',
+                'details': {
+                    'zh': '死后依次召唤螃蟹、睡莲与海胆',
+                    'en': 'Their deaths summon Crab, Lily Pad, and Urchin in order',
+                },
+            })
+            parts.append(f'召唤{amount}个残骸，死后依次召唤螃蟹、睡莲与海胆')
+        elif effect_type == 'summon':
             summoned_id = str(effect.get('enemy_id') or '')
             summoned_definition = STORY_ENEMIES.get(summoned_id) or {}
             summoned_name = _localized(summoned_definition.get('name')) or summoned_id
@@ -2990,17 +3085,17 @@ def _enemy_intent(state, enemy):
             })
             parts.append(f'召唤{summoned_count}只{summoned_name}')
         elif effect_type in ('allies_power', 'allies_shield', 'allies_heal'):
-            labels = {'allies_power': '力量', 'allies_shield': '护盾', 'allies_heal': 'H'}
+            stats = {'allies_power': 'power', 'allies_shield': 'shield', 'allies_heal': 'health'}
             entry_kind = 'heal' if effect_type == 'allies_heal' else (
                 'defend' if effect_type == 'allies_shield' else 'buff'
             )
             entries.append({
                 'kind': entry_kind,
-                'stat': labels[effect_type],
+                'stat': stats[effect_type],
                 'amount': amount,
                 'target': 'all_enemies',
             })
-            parts.append(f"全体生物+{amount}{labels[effect_type]}")
+            parts.append(f"全体生物+{amount}{_story_term_name(stats[effect_type])}")
         elif effect_type == 'allies_status':
             status = str(effect.get('status') or '')
             entries.append({
@@ -3009,23 +3104,31 @@ def _enemy_intent(state, enemy):
                 'amount': amount,
                 'target': 'all_enemies',
             })
-            parts.append(f'全体生物获得{amount}层{status}')
+            parts.append(f'全体生物获得{amount}层{_story_term_name(status)}')
         elif effect_type == 'named_allies_power':
+            named_id = str(effect.get('enemy_id') or '')
+            named_definition = STORY_ENEMIES.get(named_id) or {}
             entries.append({
                 'kind': 'buff',
                 'stat': 'power',
                 'amount': amount,
-                'target': 'all_enemies',
+                'target': 'named_enemy',
+                'enemy_id': named_id,
+                'enemy_name': named_definition.get('name') or named_id,
             })
-            parts.append(f'指定生物获得{amount}层力量')
+            parts.append(f'{_localized(named_definition.get("name")) or "指定生物"}获得{amount}层力量')
         elif effect_type == 'heal_named_ally_percent':
+            named_id = str(effect.get('enemy_id') or '')
+            named_definition = STORY_ENEMIES.get(named_id) or {}
             entries.append({
                 'kind': 'heal',
                 'amount': amount,
-                'target': 'all_enemies',
+                'target': 'named_enemy',
+                'enemy_id': named_id,
+                'enemy_name': named_definition.get('name') or named_id,
                 'percent': True,
             })
-            parts.append(f'指定生物回复{amount}%H')
+            parts.append(f'{_localized(named_definition.get("name")) or "指定生物"}回复{amount}%H')
         elif effect_type in ('lowest_ally_shield', 'adjacent_shield'):
             entries.append({
                 'kind': 'defend',
@@ -3060,18 +3163,47 @@ def _enemy_intent(state, enemy):
                 'gain_sturdy': 'sturdy',
             }[effect_type]
             entries.append({'kind': 'status', 'status': status, 'amount': amount, 'target': 'self'})
-            parts.append(f'获得{amount}层{status}')
+            parts.append(f'获得{amount}层{_story_term_name(status)}')
         elif effect_type == 'clear_status':
             status = str(effect.get('status') or '')
             entries.append({'kind': 'clear_status', 'status': status, 'target': 'self'})
-            parts.append(f'清除{status}')
+            parts.append(f'清除{_story_term_name(status)}')
         elif effect_type == 'delayed_hand_charge':
             entries.append({'kind': 'card', 'effect_type': effect_type, 'amount': amount, 'target': 'player'})
             parts.append(f'下回合使所有手牌获得{amount}层电荷')
         elif effect_type == 'delayed_player_status':
             status = str(effect.get('status') or '')
             entries.append({'kind': 'status', 'status': status, 'amount': amount, 'target': 'player', 'delayed': True})
-            parts.append(f'下回合施加{amount}层{status}')
+            parts.append(f'下回合施加{amount}层{_story_term_name(status)}')
+        elif effect_type == 'gain_magic':
+            entries.append({
+                'kind': 'resource',
+                'resource': 'magic',
+                'amount': amount,
+                'target': 'self',
+            })
+            parts.append(f'获得{amount}M')
+        elif effect_type == 'disable_magic_shield':
+            entries.append({
+                'kind': 'special',
+                'effect_type': effect_type,
+                'amount': amount,
+                'target': 'self',
+                'label': {
+                    'zh': '下回合魔力护盾失效',
+                    'en': 'Magic Shield is disabled next turn',
+                },
+            })
+            parts.append('下回合魔力护盾失效')
+        elif effect_type == 'consume_status':
+            status = str(effect.get('status') or '')
+            entries.append({
+                'kind': 'consume_status',
+                'status': status,
+                'amount': amount,
+                'target': 'self',
+            })
+            parts.append(f'消耗{amount}层{_story_term_name(status)}')
         elif effect_type == 'heal_to_full':
             entries.append({'kind': 'heal', 'target': 'self', 'full': True})
             parts.append('回复至满H')
@@ -3081,9 +3213,6 @@ def _enemy_intent(state, enemy):
         elif effect_type == 'consume_pearls_damage':
             entries.append({'kind': 'attack', 'amount': amount, 'target': 'player', 'conditional': 'pearls'})
             parts.append(f'每颗珍珠额外造成{amount}D')
-        elif effect_type == 'summon_wreckage':
-            entries.append({'kind': 'summon', 'enemy_id': 'wreckage', 'amount': amount, 'target': 'self'})
-            parts.append(f'召唤{amount}个残骸')
         elif effect_type == 'stun_if_player_shield':
             entries.append({'kind': 'status', 'status': 'stun', 'amount': 1, 'target': 'player', 'conditional': 'shield'})
             parts.append('若玩家仍有护盾则施加1层眩晕')
@@ -3091,8 +3220,17 @@ def _enemy_intent(state, enemy):
             entries.append({'kind': 'self_damage', 'target': 'self', 'lethal': True})
             parts.append('自身死亡')
         else:
-            entries.append({'kind': 'special', 'effect_type': effect_type, 'amount': amount})
-            parts.append(str(effect_type))
+            label = {
+                'zh': '执行特殊行动',
+                'en': 'Perform a special action',
+            }
+            entries.append({
+                'kind': 'special',
+                'effect_type': effect_type,
+                'amount': amount,
+                'label': label,
+            })
+            parts.append(label['zh'])
     return {
         'move_index': move_index,
         'name': move['name'],
@@ -3439,7 +3577,10 @@ def _next_enemy_move(state, enemy):
     elif definition.get('script') == 'reconstructor_enemy':
         if int(enemy.get('fragment') or 0) >= 5:
             move_index = 4
-        elif int(enemy.get('rounds_without_factory_waste') or 0) >= 2:
+        elif (
+            enemy.get('missed_factory_waste_last_turn')
+            and int(enemy.get('last_move_index') or -1) != 3
+        ):
             move_index = 3
         else:
             move_index = min(2, int(enemy.get('move_index') or 0))
@@ -3517,8 +3658,7 @@ def _advance_enemy_move(state, enemy, move_index, seed):
         enemy['move_index'] = 1 if move_index == 0 else (2 if move_index == 1 else 1)
         return
     if script == 'reconstructor_enemy':
-        if move_index == 3:
-            enemy['rounds_without_factory_waste'] = 0
+        enemy['last_move_index'] = move_index
         enemy['move_index'] = _rng(
             state,
             seed,
@@ -4050,6 +4190,21 @@ def _prepare_enemy_turn_defenses(combat):
             enemy['shield'] = 0
 
 
+def _finish_enemy_turn_effects(enemy, events):
+    """Resolve effects that decay when this creature's own turn ends."""
+    disc = max(0, int(enemy.get('disc') or 0))
+    if not disc:
+        return
+    enemy['disc'] = disc - 1
+    events.append({
+        'type': 'status_decay',
+        'target_id': enemy['id'],
+        'status': 'disc',
+        'before': disc,
+        'after': int(enemy['disc']),
+    })
+
+
 def _enemy_turn(state, seed, events):
     combat = state['combat']
     combat['turn'] = 'enemy'
@@ -4060,12 +4215,13 @@ def _enemy_turn(state, seed, events):
             continue
         definition = STORY_ENEMIES[enemy['def_id']]
         if definition.get('script') == 'reconstructor_enemy':
-            if enemy.pop('received_factory_waste', False):
-                enemy['rounds_without_factory_waste'] = 0
-            else:
-                enemy['rounds_without_factory_waste'] = int(
-                    enemy.get('rounds_without_factory_waste') or 0
-                ) + 1
+            received_waste = bool(enemy.pop('received_factory_waste', False))
+            turns_processed = max(0, int(enemy.get('reconstructor_turns_processed') or 0))
+            has_previous_player_turn = turns_processed > 0 or int(combat.get('round') or 1) > 1
+            enemy['missed_factory_waste_last_turn'] = bool(
+                has_previous_player_turn and not received_waste
+            )
+            enemy['reconstructor_turns_processed'] = turns_processed + 1
             _put_in_hand(state, _new_card(state, 'factory_waste'), events)
         if definition.get('script') == 'garden_rock':
             rockfall = int(enemy.get('rockfall') or 0)
@@ -4127,6 +4283,7 @@ def _enemy_turn(state, seed, events):
                         'after': int(ally['power']),
                         'source': 'nest_instinct',
                     })
+            _finish_enemy_turn_effects(enemy, events)
             if _check_combat_end(state, seed, events):
                 return
             continue
@@ -4173,6 +4330,7 @@ def _enemy_turn(state, seed, events):
                         f'{group_prefix}:hit:{hit_index}' if hit_index else group_prefix,
                     )
         _advance_enemy_move(state, enemy, move_index, seed)
+        _finish_enemy_turn_effects(enemy, events)
         if (
             definition.get('script') == 'bandage_beetle'
             and enemy.pop('bandage_invincible_pending', False)

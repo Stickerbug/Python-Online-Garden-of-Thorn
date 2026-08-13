@@ -617,10 +617,10 @@ STORY_TRAITS.update({
         },
     },
     'super_beam': {
-        'name': {'zh': '超级光束', 'en': 'Super Beam'},
+        'name': {'zh': '超能光束', 'en': 'Super Beam'},
         'description': {
-            'zh': '倒计时结束时使用超级光束。',
-            'en': 'Use Super Beam when the countdown reaches zero.',
+            'zh': '回合结束时-1层；层数结束时使用超能光束。',
+            'en': 'Lose 1 stack at turn end; use Super Beam when the countdown ends.',
         },
     },
     'toxic_reflection': {
@@ -633,8 +633,8 @@ STORY_TRAITS.update({
     'reconstruction': {
         'name': {'zh': '重构', 'en': 'Reconstruction'},
         'description': {
-            'zh': '获得碎片时随机改变意图；连续2回合未从玩家获得碎片时使用自我拆解。',
-            'en': 'Randomize intent when gaining Fragment; use Self-Disassembly after 2 turns without a Fragment from the player.',
+            'zh': '获得碎片时随机改变意图；玩家上回合未使用工厂废料时使用自分解，但不会连续使用。',
+            'en': 'Randomize intent when gaining Fragment. If the player did not use Factory Waste last turn, use Self-Disassembly, but never twice in a row.',
         },
     },
     'integration': {
@@ -654,8 +654,8 @@ STORY_TRAITS.update({
     'disc': {
         'name': {'zh': '圆盘', 'en': 'Disc'},
         'description': {
-            'zh': '受到的物理伤害除以层数，向下取整。',
-            'en': 'Divide incoming physical damage by its stacks, rounded down.',
+            'zh': '受到的物理伤害除以层数，向下取整；回合结束时-1层。',
+            'en': 'Divide incoming physical damage by its stacks, rounded down. Lose 1 stack at turn end.',
         },
     },
 })
@@ -1014,9 +1014,11 @@ STORY_CARDS = {
                                   'effects': (_effect('equipment', 3, script='magic_pearl'),)}),
     'magic_acid': _card('Magic Acid', '魔法酸', 'Magic Acid', 0, 'bloom', 'rare',
                         '主动丢弃自己任意张其他手牌，然后抽等量的牌。',
+                        tags=('exile',),
                         effects=(_effect('active_discard', 99, exact=False), _effect('draw_selected', 0)),
-                        upgrade={'description': {'zh': '主动丢弃自己任意张其他手牌，然后抽丢弃数量+1张牌。', 'en': 'Actively discard any number of other cards, then draw that many plus 1.'},
-                                 'effects': (_effect('active_discard', 99, exact=False), _effect('draw_selected', 1))}),
+                        upgrade={'description': {'zh': '主动丢弃自己任意张其他手牌，然后抽等量的牌。', 'en': 'Actively discard any number of other cards, then draw the same number.'},
+                                 'tags': (),
+                                 'effects': (_effect('active_discard', 99, exact=False), _effect('draw_selected', 0))}),
     'azalea': _card('Azalea', '杜鹃花', 'Azalea', 1, 'bloom', 'common',
                     '获得5层护盾；被主动丢弃时获得3层护盾。',
                     effects=(_effect('shield', 5),), script='azalea',
@@ -1320,11 +1322,11 @@ STORY_CARDS = {
     ),
     'wind': _card(
         'Wind', '风', 'Wind', 0, 'bloom', 'rare',
-        '主动丢弃自己所有当前E花费大于0的其他手牌，然后抽等量的牌。',
-        effects=(_effect('active_discard_all', filter='positive_e'), _effect('draw_selected', 0)),
+        '主动丢弃自己所有当前E花费大于0的其他手牌，然后抽等量的当前0E牌。',
+        effects=(_effect('active_discard_all', filter='positive_e'), _effect('draw_selected', 0, filter='zero_e')),
         upgrade={
-            'description': {'zh': '主动丢弃自己所有当前E花费大于0的其他手牌，然后抽丢弃数量+1张牌。', 'en': 'Actively discard all other cards costing more than 0 E, then draw that many plus 1.'},
-            'effects': (_effect('active_discard_all', filter='positive_e'), _effect('draw_selected', 1)),
+            'description': {'zh': '主动丢弃自己所有当前E花费大于0的其他手牌，然后抽丢弃数量+1张当前0E牌。', 'en': 'Actively discard all other cards currently costing more than 0 E, then draw that many plus 1 cards currently costing 0 E.'},
+            'effects': (_effect('active_discard_all', filter='positive_e'), _effect('draw_selected', 1, filter='zero_e')),
         },
     ),
     'ankh': _card(
@@ -1922,7 +1924,7 @@ STORY_ENEMIES.update({
     ), script='wreckage', traits=('brittle',), lunatic_health=13),
 })
 
-# Stage 2: Jungle. These definitions follow the fourth development workbook.
+# Stage 2: Jungle. These definitions follow the latest development workbook.
 STORY_ENEMIES.update({
     'termite_soldier': _enemy('白兵蚁', 'Soldier Termite', 56, (
         _move('啃咬', 'Bite', _effect('damage', 6, lunatic_amount=8), _effect('gain_shield', 8, lunatic_amount=10)),
@@ -1931,7 +1933,7 @@ STORY_ENEMIES.update({
         _move('决意', 'Resolve', _effect('damage', 20, lunatic_amount=23), _effect('self_kill')),
     ), traits=('psionic_connection',), initial={'psionic_connection': 1}, lunatic_health=62),
     'termite_worker': _enemy('白工蚁', 'Worker Termite', 32, (
-        _move('舞动', 'Dance', _effect('damage', 4, lunatic_amount=5), _effect('allies_power', 1)),
+        _move('鼓舞', 'Inspire', _effect('damage', 4, lunatic_amount=5), _effect('allies_power', 1)),
         _move('护卫', 'Guard', _effect('damage', 6, lunatic_amount=7), _effect('lowest_ally_shield', 8, lunatic_amount=9)),
         _move('狂暴', 'Frenzy', _effect('damage', 3, hits=3, lunatic_amount=4), _effect('gain_power', 1)),
         _move('决意', 'Resolve', _effect('damage', 16, lunatic_amount=19), _effect('self_kill')),
@@ -1988,19 +1990,19 @@ STORY_ENEMIES.update({
     ), script='spider_cave', traits=('sturdy', 'frenzied'), initial={'shield': 40, 'sturdy': 99},
        lunatic_initial={'shield': 50}, lunatic_health=119),
     'stickbug': _enemy('竹节虫', 'Stickbug', 164, (
-        _move('投掷', 'Launch', _effect('summon', 3, enemy_id='stick'), _effect('player_status', 3, status='locked')),
+        _move('发射', 'Launch', _effect('summon', 3, enemy_id='stick'), _effect('player_status', 3, status='locked')),
         _move('生长', 'Growth', _effect('self_heal', 12, lunatic_amount=15), _effect('gain_power', 3, lunatic_amount=4)),
-        _move('猛击', 'Smash', _effect('damage', 20, lunatic_amount=22)),
+        _move('砸击', 'Smash', _effect('damage', 20, lunatic_amount=22)),
     ), script='stickbug', lunatic_health=180),
     'stick': _enemy('树枝', 'Stick', 14, (
         _move('防守', 'Defense', _effect('gain_shield', 8, lunatic_amount=10)),
     ), traits=('obstacle',), initial={'shield': 12}, lunatic_initial={'shield': 14}, lunatic_health=16),
     'termite_mound': _enemy('白蚁丘', 'Termite Mound', 221, (
-        _move('加固', 'Fortify', _effect('gain_shield', 12, lunatic_amount=15)),
+        _move('固守', 'Hold Fast', _effect('gain_shield', 12, lunatic_amount=15)),
         _move('号令', 'Command', _effect('allies_power', 1)),
     ), script='termite_mound', traits=('psionic_fountain', 'nest_instinct'), lunatic_health=238),
     'evil_centipede': _enemy('邪恶蜈蚣', 'Evil Centipede', 113, (
-        _move('毒咬', 'Poison Bite', _effect('damage', 12), _effect('player_status', 1, status='toxic_poison', lunatic_amount=2)),
+        _move('毒噬', 'Poison Bite', _effect('damage', 12), _effect('player_status', 1, status='toxic_poison', lunatic_amount=2)),
         _move('毒气', 'Poison Gas', _effect('player_status', 3, status='poison', lunatic_amount=4), _effect('player_status', 1, status='stagnation')),
         _move('毒爆', 'Poison Burst', _effect('damage_from_player_status', 6, status='poison', lunatic_amount=7), _effect('gain_power', 3, lunatic_amount=4)),
     ), script='evil_centipede', traits=('segments',), initial={'segments': 2},
@@ -2023,30 +2025,31 @@ STORY_ENEMIES.update({
         _move('连击', 'Combo', _effect('damage', 7, hits=3, lunatic_amount=8)),
         _move('冲击', 'Impact', _effect('damage', 16, lunatic_amount=18), _effect('gain_shield', 30, lunatic_amount=40)),
         _move('充能', 'Charge', _effect('gain_power', 4, lunatic_amount=5)),
-        _move('超级光束', 'Super Beam', _effect('damage', 28, lunatic_amount=32), _effect('gain_status', 1, status='vulnerable'), _effect('gain_status', 1, status='stun')),
+        _move('超能光束', 'Super Beam', _effect('damage', 28, lunatic_amount=32), _effect('gain_status', 1, status='vulnerable'), _effect('gain_status', 1, status='stun')),
     ), script='mechanical_crab', traits=('super_beam',), initial={'super_beam': 4}, lunatic_health=210),
     'uranium_barrel': _enemy('铀桶', 'Uranium Barrel', 120, (
         _move('辐射', 'Radiation', _effect('player_status', 3, status='toxic_poison', lunatic_amount=4)),
-        _move('幽光', 'Phantom Light', _effect('player_status', 1, status='toxic_poison', lunatic_amount=2), _effect('gain_status', 1, status='bulb')),
+        _move('幻光', 'Phantom Light', _effect('player_status', 1, status='toxic_poison', lunatic_amount=2), _effect('gain_status', 1, status='bulb')),
     ), script='uranium_barrel', traits=('toxic_reflection', 'bulb'), initial={'toxic_reflection': 2},
        lunatic_initial={'toxic_reflection': 3}, lunatic_health=133),
     'reconstructor_enemy': _enemy('重构机', 'Reconstructor', 504, (
         _move('锯片', 'Saw', _effect('damage', 17, lunatic_amount=19), _effect('player_status', 3, status='bleed', lunatic_amount=4)),
         _move('激光器', 'Laser', _effect('damage', 9, hits=2, lunatic_amount=10), _effect('player_status', 2, status='fire', lunatic_amount=3)),
         _move('碎片', 'Fragment', _effect('gain_power', 1, lunatic_amount=2), _effect('gain_status', 1, status='fragment', lunatic_amount=2), _effect('gain_shield', 50, lunatic_amount=60)),
-        _move('自我拆解', 'Self-Disassembly', _effect('self_damage', 50), _effect('gain_status', 3, status='fragment', lunatic_amount=4), _effect('gain_power', 5, lunatic_amount=6)),
+        _move('自分解', 'Self-Disassembly', _effect('self_damage', 50), _effect('gain_status', 3, status='fragment', lunatic_amount=4), _effect('gain_power', 5, lunatic_amount=6)),
         _move('雷神之锤', 'Mjolnir', _effect('damage', 40, lunatic_amount=44), _effect('consume_status', 5, status='fragment')),
     ), script='reconstructor_enemy', traits=('reconstruction', 'integration', 'scrap'),
-       initial={'rounds_without_factory_waste': 0}, lunatic_health=532),
+       initial={'reconstructor_turns_processed': 0, 'missed_factory_waste_last_turn': False},
+       lunatic_health=532),
     'mechanical_wasp': _enemy('机械胡蜂', 'Mechanical Wasp', 189, (
         _move('组装', 'Assemble', _effect('summon', 1, enemy_id='mechanical_missile')),
         _move('改装打击', 'Modified Strike', _effect('damage', 11, lunatic_amount=13), _effect('named_allies_power', 3, enemy_id='mechanical_missile', lunatic_amount=4)),
-        _move('修理', 'Repair', _effect('heal_named_ally_percent', 50, enemy_id='mechanical_missile'), _effect('named_allies_power', 1, enemy_id='mechanical_missile', lunatic_amount=2)),
-        _move('狂轰', 'Frenzy', _effect('damage', 4, hits=5, lunatic_amount=5), _effect('gain_power', 1)),
+        _move('维修', 'Repair', _effect('heal_named_ally_percent', 50, enemy_id='mechanical_missile'), _effect('named_allies_power', 1, enemy_id='mechanical_missile', lunatic_amount=2)),
+        _move('狂暴', 'Frenzy', _effect('damage', 4, hits=5, lunatic_amount=5), _effect('gain_power', 1)),
     ), script='mechanical_wasp', traits=('disc',), initial={'disc': 2}, lunatic_health=203),
     'mechanical_missile': _enemy('机械导弹', 'Mechanical Missile', 102, (
         _move('发射', 'Launch', _effect('damage', 10, lunatic_amount=11)),
-        _move('自爆', 'Self-Destruct', _effect('damage', 35, lunatic_amount=41), _effect('self_kill')),
+        _move('自毁', 'Self-Destruct', _effect('damage', 35, lunatic_amount=41), _effect('self_kill')),
     ), script='mechanical_missile', lunatic_health=114),
 })
 
@@ -2155,7 +2158,7 @@ STORY_ENEMY_IMAGE_URLS = {
     'mechanical_spider': '/static/assets/story-enemies/mechanical-spider.svg',
     'mechanical_crab': '/static/assets/story-enemies/mechanical-crab.svg',
     'uranium_barrel': '/static/assets/story-enemies/uranium-barrel.svg',
-    'reconstructor_enemy': '/static/assets/story-enemies/reconstructor.svg',
+    'reconstructor_enemy': '/static/assets/story-enemies/reconstructor-card.svg',
     'mechanical_wasp': '/static/assets/story-enemies/mechanical-wasp.svg',
     'mechanical_missile': '/static/assets/story-enemies/mechanical-missile.svg',
 }
