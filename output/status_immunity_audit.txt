@@ -1,0 +1,605 @@
+game_engine_2v2.py-173-                    teammate_id,
+game_engine_2v2.py-174-                )
+game_engine_2v2.py-175-            teammate_blind = 0
+game_engine_2v2.py:176:            if not self._is_status_immune(teammate_id):
+game_engine_2v2.py-177-                teammate_blind = max(0, int(getattr(self.players[teammate_id], 'blind', 0) or 0))
+game_engine_2v2.py-178-            if teammate_blind > 0:
+game_engine_2v2.py-179-                teammate_data['hand'] = [
+--
+game_engine_2v2.py-757-                ]
+game_engine_2v2.py-758-                is_precision = pending.get('is_precision', False)
+game_engine_2v2.py-759-                if self._card_is(counter_removed, 'Bubble', 'vanilla:bubble'):
+game_engine_2v2.py:760:                    if self._is_status_immune(responder_id):
+game_engine_2v2.py-761-                        return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+game_engine_2v2.py-762-                    if is_precision:
+game_engine_2v2.py-763-                        self._execute_card_effect_half_damage(
+game_engine_2v2.py-764-                            player_id, card, choice, dodge_target_id=responder_id
+game_engine_2v2.py-765-                        )
+game_engine_2v2.py:766:                        if not self._is_status_immune(responder_id):
+game_engine_2v2.py-767-                            responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+game_engine_2v2.py-768-                        return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
+game_engine_2v2.py-769-                    self._execute_card_effect(player_id, card, choice)
+game_engine_2v2.py:770:                    if not self._is_status_immune(responder_id):
+game_engine_2v2.py-771-                        responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+game_engine_2v2.py-772-                    return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
+game_engine_2v2.py-773-                if self._card_is(counter_removed, 'MagicBubble', 'vanilla:magicbubble'):
+--
+game_engine_2v2.py-912-            self._is_valid_player_id(target_id)
+game_engine_2v2.py-913-            and self.is_enemy(player_id, target_id)
+game_engine_2v2.py-914-            and self.players[target_id].health > 0
+game_engine_2v2.py:915:            and not (bool(getattr(self.players[target_id], 'untargetable', False)) and not self._is_status_immune(target_id))
+game_engine_2v2.py-916-        )
+game_engine_2v2.py-917-
+game_engine_2v2.py-918-    def _is_valid_attack_target(self, player_id: int, target_id) -> bool:
+--
+game_engine_2v2.py-922-            self._is_valid_player_id(target_id)
+game_engine_2v2.py-923-            and target_id != player_id
+game_engine_2v2.py-924-            and self.players[target_id].health > 0
+game_engine_2v2.py:925:            and not (bool(getattr(self.players[target_id], 'untargetable', False)) and not self._is_status_immune(target_id))
+game_engine_2v2.py-926-        )
+game_engine_2v2.py-927-
+game_engine_2v2.py-928-    def _is_valid_effect_target(self, player_id: int, target_id) -> bool:
+--
+game_engine_2v2.py-933-            and self.players[target_id].health > 0
+game_engine_2v2.py-934-            and (
+game_engine_2v2.py-935-                target_id == player_id
+game_engine_2v2.py:936:                or not (bool(getattr(self.players[target_id], 'untargetable', False)) and not self._is_status_immune(target_id))
+game_engine_2v2.py-937-            )
+game_engine_2v2.py-938-        )
+game_engine_2v2.py-939-
+--
+game_engine_2v2.py-1350-                if (not self._is_valid_player_id(target_player_id)
+game_engine_2v2.py-1351-                        or (target_player_id != player_id
+game_engine_2v2.py-1352-                            and bool(getattr(self.players[target_player_id], 'untargetable', False))
+game_engine_2v2.py:1353:                            and not self._is_status_immune(target_player_id))):
+game_engine_2v2.py-1354-                    return {'success': False, 'error': '没有可选中的玩家'}
+game_engine_2v2.py-1355-            elif forced_target_id == target_player_id:
+game_engine_2v2.py-1356-                if not self._target_can_be_selected(player_id, target_player_id, allow_self=True):
+--
+game_engine_2v2.py-1469-        actual = amount
+game_engine_2v2.py-1470-        resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
+game_engine_2v2.py-1471-        resolved_damage_tag = damage_tag or (status_damage_tag(source) if resolved_damage_type == DAMAGE_TYPE_MAGIC else DAMAGE_TAG_DIRECT)
+game_engine_2v2.py:1472:        if str(resolved_damage_tag).strip() in (DAMAGE_TAG_POISON, DAMAGE_TAG_FIRE, 'poison', '中毒', 'fire', 'burn', '灼烧') and self._is_status_immune(player_id):
+game_engine_2v2.py-1473-            return 0
+game_engine_2v2.py-1474-        actual = self._apply_corruption_multiplier_to_damage(actual)
+game_engine_2v2.py-1475-        actual = self._apply_damage_dealt_equipment_multiplier(
+--
+game_engine_2v2.py-1618-    def _effect_triangle(self, player_id: int, card: CardInstance, choice=None):
+game_engine_2v2.py-1619-        target = self._attack_target(player_id, choice)
+game_engine_2v2.py-1620-        ps = self.players[player_id]
+game_engine_2v2.py:1621:        immune = self._is_status_immune(player_id) if hasattr(self, '_is_status_immune') else False
+game_engine_2v2.py-1622-        dmg = self._modified_attack_damage(6 + (0 if immune else 3 * ps.triangle_stacks), card)
+game_engine_2v2.py-1623-        if int(getattr(card, 'fission_hit', 0) or 0) == 0:
+game_engine_2v2.py-1624-            self._log_card_play(player_id, card)
+--
+game_engine_2v2.py-1761-        self._defer_turn_start_death_checks = True
+game_engine_2v2.py-1762-        forced_turn_skip = bool(getattr(ps, 'forced_skip_turn', 0))
+game_engine_2v2.py-1763-        ocean_action_skip = int(ps.custom_vars.get('ocean_action_skip_turns', 0) or 0)
+game_engine_2v2.py:1764:        turn_will_be_skipped = forced_turn_skip or ocean_action_skip > 0 or (bool(ps.skip_turn) and not self._is_status_immune(player_id))
+game_engine_2v2.py-1765-        turn_skip_reason = 'forced' if forced_turn_skip else ('ocean_action' if ocean_action_skip > 0 else ('stunned' if turn_will_be_skipped else ''))
+game_engine_2v2.py-1766-        if forced_turn_skip:
+game_engine_2v2.py-1767-            ps.forced_skip_turn = max(0, int(getattr(ps, 'forced_skip_turn', 0)) - 1)
+--
+game_engine_2v2.py-1771-            ps.skip_turn = max(0, int(ps.skip_turn) - 1)
+game_engine_2v2.py-1772-        skip_draw_recovery = turn_skip_reason == 'ocean_action'
+game_engine_2v2.py-1773-        if self.round_num > 1 and not skip_draw_recovery:
+game_engine_2v2.py:1774:            sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
+game_engine_2v2.py-1775-            draw_count = max(0, DRAW_PER_TURN - ps.enemy_draw_reduction - sluggish_reduction)
+game_engine_2v2.py-1776-            if ps.enemy_draw_reduction > 0:
+game_engine_2v2.py-1777-                ps.enemy_draw_reduction -= 1
+--
+game_engine_2v2.py-1818-            self._bio_apply_debt_after_recovery(player_id)
+game_engine_2v2.py-1819-            # Overload: deduct E at turn start, then clear
+game_engine_2v2.py-1820-            if ps.overload > 0:
+game_engine_2v2.py:1821:                if not self._is_status_immune(player_id):
+game_engine_2v2.py-1822-                    deduct = min(ps.overload, ps.elixir)
+game_engine_2v2.py-1823-                    ps.elixir -= deduct
+game_engine_2v2.py-1824-                    self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+--
+game_engine_2v2.py-1846-            self._defer_turn_start_death_checks = False
+game_engine_2v2.py-1847-            return
+game_engine_2v2.py-1848-        if ps.poison > 0:
+game_engine_2v2.py:1849:            if not self._is_status_immune(player_id):
+game_engine_2v2.py-1850-                self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
+game_engine_2v2.py-1851-            self._decay_poison_after_turn_start(player_id)
+game_engine_2v2.py-1852-            self._apply_toxic_poison_after_poison_settlement(player_id)
+game_engine_2v2.py:1853:        if ps.fire > 0 and not self._is_status_immune(player_id):
+game_engine_2v2.py-1854-            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
+game_engine_2v2.py-1855-        for owner_id, owner_state in enumerate(self.players):
+game_engine_2v2.py-1856-            for eq in list(owner_state.equipment):
+--
+game_engine_2v2.py-1938-        if self.round_num > 1:
+game_engine_2v2.py-1939-            draw_count = max(0, int((foresight_result or {}).get('draw_count', 0) or 0))
+game_engine_2v2.py-1940-            drawn = ps.draw_cards(draw_count)
+game_engine_2v2.py:1941:            if ps.sluggish > 0 and not self._is_status_immune(player_id):
+game_engine_2v2.py-1942-                self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
+game_engine_2v2.py-1943-            self._clear_sluggish_after_draw(player_id)
+game_engine_2v2.py-1944-            pincer_overload = sum(
+--
+game_engine_2v2.py-1972-            self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
+game_engine_2v2.py-1973-            self._bio_apply_debt_after_recovery(player_id)
+game_engine_2v2.py-1974-            if ps.overload > 0:
+game_engine_2v2.py:1975:                if not self._is_status_immune(player_id):
+game_engine_2v2.py-1976-                    deduct = min(ps.overload, ps.elixir)
+game_engine_2v2.py-1977-                    ps.elixir -= deduct
+game_engine_2v2.py-1978-                    self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+--
+game_engine_2v2.py-2000-            self._defer_turn_start_death_checks = False
+game_engine_2v2.py-2001-            return
+game_engine_2v2.py-2002-        if ps.poison > 0:
+game_engine_2v2.py:2003:            if not self._is_status_immune(player_id):
+game_engine_2v2.py-2004-                self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
+game_engine_2v2.py-2005-            self._decay_poison_after_turn_start(player_id)
+game_engine_2v2.py-2006-            self._apply_toxic_poison_after_poison_settlement(player_id)
+game_engine_2v2.py:2007:        if ps.fire > 0 and not self._is_status_immune(player_id):
+game_engine_2v2.py-2008-            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
+game_engine_2v2.py-2009-        for owner_id, owner_state in enumerate(self.players):
+game_engine_2v2.py-2010-            for eq in list(owner_state.equipment):
+--
+game_engine_2v2.py-2095-        ps = self.players[target_id]
+game_engine_2v2.py-2096-        if attacker_id < 0:
+game_engine_2v2.py-2097-            attacker_id = self._last_attacker.get(target_id, -1)
+game_engine_2v2.py:2098:        if ps.untargetable and not is_battery and not ignore_untargetable and not self._is_status_immune(target_id):
+game_engine_2v2.py-2099-            self.log_msg(f"{self.pn(target_id)}无法被攻击选中")
+game_engine_2v2.py-2100-            return 0
+game_engine_2v2.py-2101-        total_dealt = 0
+game_engine_2v2.py-2102-        if not isinstance(getattr(self, '_last_positive_damage_hits', None), list) or len(self._last_positive_damage_hits) != len(self.players):
+game_engine_2v2.py-2103-            self._last_positive_damage_hits = [0] * len(self.players)
+game_engine_2v2.py-2104-        self._last_positive_damage_hits[target_id] = 0
+game_engine_2v2.py:2105:        immune = self._is_status_immune(target_id)
+game_engine_2v2.py-2106-        for _ in range(hits):
+game_engine_2v2.py-2107-            precision_dodged = False
+game_engine_2v2.py-2108-            plank_blocks_attack = False
+--
+game_engine_2v2.py-2164-                break
+game_engine_2v2.py-2165-            # Weakness belongs to the attacker: it reduces physical damage they deal to others.
+game_engine_2v2.py-2166-            attacker_state = self.players[attacker_id] if 0 <= attacker_id < len(self.players) else None
+game_engine_2v2.py:2167:            attacker_immune = self._is_status_immune(attacker_id) if attacker_state is not None else False
+game_engine_2v2.py-2168-            if dmg > 0 and attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
+game_engine_2v2.py-2169-                reduction = min(0.6, 0.2 * attacker_state.weakness)
+game_engine_2v2.py-2170-                dmg = max(1, int(dmg * (1.0 - reduction)))
+--
+game_engine.py-1505-        if status in ('invincible', '无敌'):
+game_engine.py-1506-            return 0
+game_engine.py-1507-        if status in ('status_immune', 'immune', '状态免疫'):
+game_engine.py:1508:            return 1 if self._is_status_immune(target_id) else 0
+game_engine.py:1509:        if self._is_status_immune(target_id) and status not in ('status_immune', 'immune', '状态免疫'):
+game_engine.py-1510-            return 0
+game_engine.py-1511-        counts = {
+game_engine.py-1512-            'poison': ps.poison,
+--
+game_engine.py-1802-                continue
+game_engine.py-1803-            if int(getattr(target, 'health', 0) or 0) <= 0:
+game_engine.py-1804-                continue
+game_engine.py:1805:            if bool(getattr(target, 'untargetable', 0)) and not self._is_status_immune(target_id):
+game_engine.py-1806-                continue
+game_engine.py-1807-            candidates.append(target_id)
+game_engine.py-1808-        return candidates
+--
+game_engine.py-2075-        damage = self._apply_damage_dealt_equipment_multiplier(damage, attacker_id)
+game_engine.py-2076-        if 0 <= attacker_id < len(self.players):
+game_engine.py-2077-            attacker = self.players[attacker_id]
+game_engine.py:2078:            if attacker.weakness > 0 and not self._is_status_immune(attacker_id) and damage > 0:
+game_engine.py-2079-                reduction = min(0.6, 0.2 * attacker.weakness)
+game_engine.py-2080-                damage = max(1, int(damage * (1.0 - reduction)))
+game_engine.py-2081-        return max(0, int(damage or 0))
+--
+game_engine.py-2485-                    'attack_blocked', 'attack_only',
+game_engine.py-2486-                    'nazar_big_hits', 'sluggish', 'overload', 'foresight', 'fracture',
+game_engine.py-2487-                    'stagnation', 'blind', 'heal_block', 'weakness', 'bleed'):
+game_engine.py:2488:            if not include_suppressed and self._is_status_immune(target_id):
+game_engine.py-2489-                return 0
+game_engine.py-2490-            return int(getattr(ps, prop, 0))
+game_engine.py-2491-        if prop == 'dodge':
+game_engine.py:2492:            if not include_suppressed and self._is_status_immune(target_id):
+game_engine.py-2493-                return 0
+game_engine.py-2494-            return int(getattr(ps, prop, 0))
+game_engine.py-2495-        if prop in ('untargetable', 'bandage_active', 'sponge_active', 'shovel_active',
+game_engine.py-2496-                    'negate_next_skill', 'nazar_active'):
+game_engine.py:2497:            if not include_suppressed and self._is_status_immune(target_id):
+game_engine.py-2498-                return 0
+game_engine.py-2499-            return 1 if bool(getattr(ps, prop, False)) else 0
+game_engine.py-2500-        if prop == 'skip_turn':
+game_engine.py:2501:            if not include_suppressed and self._is_status_immune(target_id):
+game_engine.py-2502-                return 0
+game_engine.py-2503-            return int(getattr(ps, 'skip_turn', 0))
+game_engine.py-2504-        if prop == 'base_max_health':
+--
+game_engine.py-4756-            for target_id, target in enumerate(self.players):
+game_engine.py-4757-                if target_id == player_id or target.health <= 0:
+game_engine.py-4758-                    continue
+game_engine.py:4759:                if bool(getattr(target, 'untargetable', 0)) and not self._is_status_immune(target_id):
+game_engine.py-4760-                    continue
+game_engine.py-4761-                self.deal_attack_damage(
+game_engine.py-4762-                    target_id,
+--
+game_engine.py-4858-            self.log_msg(f"{self.pn(player_id)}被跳过本回合")
+game_engine.py-4859-            self._end_player_turn(player_id)
+game_engine.py-4860-            return
+game_engine.py:4861:        if ps.skip_turn > 0 and self._is_status_immune(player_id):
+game_engine.py-4862-            ps.skip_turn = max(0, int(ps.skip_turn) - 1)
+game_engine.py-4863-        elif ps.skip_turn > 0:
+game_engine.py-4864-            ps.skip_turn -= 1
+--
+game_engine.py-4999-        if not self._valid_player_id(player_id):
+game_engine.py-5000-            return True
+game_engine.py-5001-        ps = self.players[player_id]
+game_engine.py:5002:        return max(0, int(getattr(ps, 'skip_turn', 0) or 0)) > 0 and not self._is_status_immune(player_id)
+game_engine.py-5003-
+game_engine.py-5004-    def _continue_honey_control_if_needed(self, player_id: int):
+game_engine.py-5005-        if self.game_over or self.phase != 'action' or self.current_player != player_id:
+--
+game_engine.py-5072-        self._clear_electric_web_draw_records_for_target(player_id)
+game_engine.py-5073-        self._set_custom_status_value(player_id, 'jungle:fragile', 0)
+game_engine.py-5074-        self._set_custom_status_value(player_id, 'fragile', 0)
+game_engine.py:5075:        immune = self._is_status_immune(player_id)
+game_engine.py-5076-        shield_keys = ('jungle:shield', 'shield')
+game_engine.py-5077-        shield = self._custom_status_value(player_id, *shield_keys)
+game_engine.py-5078-        if shield > 0 and not self._garden_has_sunflower_targeting(player_id):
+--
+game_engine.py-5082-        if not (0 <= player_id < len(self.players)):
+game_engine.py-5083-            return
+game_engine.py-5084-        ps = self.players[player_id]
+game_engine.py:5085:        immune = self._is_status_immune(player_id)
+game_engine.py-5086-        heal_turn_keys = ('jungle:turn_heal_turns', 'turn_heal_turns')
+game_engine.py-5087-        heal_power_keys = ('jungle:turn_heal_power', 'turn_heal_power')
+game_engine.py-5088-        heal_turns = self._custom_status_value(player_id, *heal_turn_keys)
+--
+game_engine.py-5237-            self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
+game_engine.py-5238-            return 0
+game_engine.py-5239-        actual = amount
+game_engine.py:5240:        if str(resolved_damage_tag).strip() in (DAMAGE_TAG_POISON, DAMAGE_TAG_FIRE, 'poison', '中毒', 'fire', 'burn', '灼烧') and self._is_status_immune(player_id):
+game_engine.py-5241-            self._record_achievement_damage_output(source_id, actual)
+game_engine.py-5242-            return 0
+game_engine.py-5243-        actual = self._apply_corruption_multiplier_to_damage(actual)
+--
+game_engine.py-5371-        return ('hel:blazing_fire', 'blazing_fire', '烈火')
+game_engine.py-5372-
+game_engine.py-5373-    def _hel_luck_value(self, player_id: int) -> int:
+game_engine.py:5374:        if self._is_status_immune(player_id):
+game_engine.py-5375-            return 0
+game_engine.py-5376-        return self._custom_status_value(player_id, *self._hel_luck_keys())
+game_engine.py-5377-
+--
+game_engine.py-5481-
+game_engine.py-5482-    def _hel_apply_blazing_fire_turn_start(self, player_id: int):
+game_engine.py-5483-        stacks = self._custom_status_value(player_id, *self._hel_blazing_fire_keys())
+game_engine.py:5484:        if stacks <= 0 or self._is_status_immune(player_id):
+game_engine.py-5485-            return
+game_engine.py-5486-        self.players[player_id].fire += stacks
+game_engine.py-5487-        self._normalize_status_value(self.players[player_id], 'fire')
+--
+game_engine.py-5497-        return getattr(card, 'card_type', '') == 'guard' or bool(getattr(card.card_def, 'response_trigger', '') or '')
+game_engine.py-5498-
+game_engine.py-5499-    def _unable_counter_value(self, player_id: int) -> int:
+game_engine.py:5500:        if self._is_status_immune(player_id):
+game_engine.py-5501-            return 0
+game_engine.py-5502-        return self._custom_status_value(player_id, *self._unable_counter_keys())
+game_engine.py-5503-
+--
+game_engine.py-5537-            self.log_msg(f"{self.pn(player_id)}因无法反制将{discarded}张反制牌置入弃牌堆")
+game_engine.py-5538-
+game_engine.py-5539-    def _action_limit_status_value(self, player_id: int, attr: str, *aliases: str) -> int:
+game_engine.py:5540:        if not (0 <= player_id < len(self.players)) or self._is_status_immune(player_id):
+game_engine.py-5541-            return 0
+game_engine.py-5542-        ps = self.players[player_id]
+game_engine.py-5543-        return max(int(getattr(ps, attr, 0) or 0), self._custom_status_value(player_id, *aliases))
+--
+game_engine.py-5589-                damage = max(0, kept)
+game_engine.py-5590-        shield_keys = ('jungle:shield', 'shield')
+game_engine.py-5591-        shield = self._custom_status_value(target_id, *shield_keys)
+game_engine.py:5592:        if shield > 0 and not self._is_status_immune(target_id):
+game_engine.py-5593-            blocked = min(shield, damage)
+game_engine.py-5594-            damage -= blocked
+game_engine.py-5595-            self._set_custom_status_alias_group(target_id, 'jungle:shield', shield_keys, shield - blocked)
+--
+game_engine.py-5826-    def _check_yggdrasil(self, player_id: int):
+game_engine.py-5827-        ps = self.players[player_id]
+game_engine.py-5828-        if ps.health <= 0 and self._yggdrasil_check:
+game_engine.py:5829:            if ps.bandage_active and not self._is_status_immune(player_id):
+game_engine.py-5830-                ps.health = 1
+game_engine.py-5831-                self._note_achievement_health(player_id)
+game_engine.py-5832-                self._set_invincible_until_next_own_turn_end(player_id)
+--
+game_engine.py-5939-        auto_play_actor = getattr(self, '_allow_out_of_turn_auto_play_for', None)
+game_engine.py-5940-        if self.phase != 'action' or (self.current_player != player_id and auto_play_actor != player_id):
+game_engine.py-5941-            return False, "不是你的回合"
+game_engine.py:5942:        immune = self._is_status_immune(player_id)
+game_engine.py-5943-        if self._action_limit_status_value(player_id, 'attack_blocked', 'attack_blocked', '禁攻') > 0 and card_def.card_type == 'thorn' and not immune:
+game_engine.py-5944-            return False, "本回合无法使用攻击牌"
+game_engine.py-5945-        if self._action_limit_status_value(player_id, 'attack_only', 'attack_only', '仅攻击') > 0 and card_def.card_type != 'thorn' and not immune:
+--
+game_engine.py-5989-            except Exception:
+game_engine.py-5990-                other_bamboo = 0
+game_engine.py-5991-            extra -= other_bamboo
+game_engine.py:5992:        if not self._is_status_immune(player_id):
+game_engine.py-5993-            extra += self._arctic_frost_value(player_id) // 10
+game_engine.py-5994-        return extra
+game_engine.py-5995-
+--
+game_engine.py-6465-        if target_id == player_id:
+game_engine.py-6466-            return bool(allow_self)
+game_engine.py-6467-        target = self.players[target_id]
+game_engine.py:6468:        untargetable_active = bool(getattr(target, 'untargetable', False)) and not self._is_status_immune(target_id)
+game_engine.py-6469-        return (target.health > 0 or not alive_required) and not untargetable_active
+game_engine.py-6470-
+game_engine.py-6471-    def _choice_request_satisfied(self, effect: Optional[dict], choice: Optional[dict], card: Optional[CardInstance] = None) -> bool:
+--
+game_engine.py-7178-                self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
+game_engine.py-7179-                is_precision = pending.get('is_precision', False)
+game_engine.py-7180-                if self._card_is(counter_removed, 'Bubble', 'vanilla:bubble'):
+game_engine.py:7181:                    if self._is_status_immune(responder_id):
+game_engine.py-7182-                        return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+game_engine.py-7183-                    if is_precision:
+game_engine.py-7184-                        self._execute_card_effect_half_damage(
+game_engine.py-7185-                            player_id, card, choice, dodge_target_id=responder_id
+game_engine.py-7186-                        )
+game_engine.py:7187:                        if not self._is_status_immune(responder_id):
+game_engine.py-7188-                            responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+game_engine.py-7189-                        return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
+game_engine.py-7190-                    self._execute_card_effect(player_id, card, choice)
+game_engine.py:7191:                    if not self._is_status_immune(responder_id):
+game_engine.py-7192-                        responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+game_engine.py-7193-                    return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
+game_engine.py-7194-                if self._card_is(counter_removed, 'MagicBubble', 'vanilla:magicbubble'):
+--
+game_engine.py-9077-    def _atomic_batch_tag_remove(self, player_id, card, params, log, choice, context):
+game_engine.py-9078-        self._atomic_tag_remove_named(player_id, card, {'tag': params.get('tag', '')}, log, choice, context)
+game_engine.py-9079-
+game_engine.py:9080:    def _is_status_immune(self, player_id: int) -> bool:
+game_engine.py-9081-        if self._desert_topaz_count_targeting(player_id) > 0:
+game_engine.py-9082-            return True
+game_engine.py-9083-        ps = self.players[player_id]
+--
+game_engine.py-9146-            return False
+game_engine.py-9147-        if getattr(self, '_status_var_mutation_read', None) == (player_id, str(name)):
+game_engine.py-9148-            return False
+game_engine.py:9149:        if not self._is_status_immune(player_id):
+game_engine.py-9150-            return False
+game_engine.py-9151-        return str(name) in ('三角形层数', '\u4e09\u89d2\u5f62\u5c42\u6570')
+game_engine.py-9152-
+--
+game_engine.py-9218-
+game_engine.py-9219-    def _effect_triangle(self, player_id: int, card: CardInstance, choice=None):
+game_engine.py-9220-        ps = self.players[player_id]
+game_engine.py:9221:        immune = self._is_status_immune(player_id)
+game_engine.py-9222-        base = 6 + (0 if immune else 3 * ps.triangle_stacks)
+game_engine.py-9223-        dmg = self._modified_attack_damage(base, card)
+game_engine.py-9224-        if int(getattr(card, 'fission_hit', 0) or 0) == 0:
+--
+game_engine.py-9677-            return
+game_engine.py-9678-        ps = self.players[player_id]
+game_engine.py-9679-        lost = 0
+game_engine.py:9680:        if not self._is_status_immune(player_id):
+game_engine.py-9681-            lost = min(1, max(0, int(ps.elixir or 0)))
+game_engine.py-9682-            ps.elixir = max(0, int(ps.elixir or 0) - lost)
+game_engine.py-9683-        self._bio_set_status_value(player_id, 'debt', debt - 1)
+--
+game_engine.py-10001-        if amount <= 0:
+game_engine.py-10002-            return 0
+game_engine.py-10003-        extra_healing = self._bio_status_value(player_id, 'extra_healing')
+game_engine.py:10004:        if extra_healing > 0 and not self._is_status_immune(player_id):
+game_engine.py-10005-            amount += extra_healing
+game_engine.py-10006-        shield_conversion = self._bio_status_value(player_id, 'shield_conversion')
+game_engine.py:10007:        if shield_conversion > 0 and not self._is_status_immune(player_id):
+game_engine.py-10008-            shield = amount * shield_conversion
+game_engine.py-10009-            self._bio_set_status_value(player_id, 'shield_conversion', 0)
+game_engine.py-10010-            self._add_custom_status_value(player_id, 'jungle:shield', shield)
+--
+game_engine.py-10651-        if op == 'has_status_named':
+game_engine.py-10652-            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+game_engine.py-10653-            status = str(cond.get('status', '')).strip()
+game_engine.py:10654:            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫'):
+game_engine.py-10655-                return False
+game_engine.py-10656-            if status in ('邪眼', 'Nazar', 'nazar'):
+game_engine.py-10657-                return self._nazar_status_value(tid) > 0
+--
+game_engine.py-10677-        if op == 'has_status':
+game_engine.py-10678-            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+game_engine.py-10679-            status = str(cond.get('status', '')).strip()
+game_engine.py:10680:            if self._is_status_immune(tid) and status not in ('status_immune', 'immune', '状态免疫'):
+game_engine.py-10681-                return False
+game_engine.py-10682-            ps = self.players[tid]
+game_engine.py-10683-            status_map = {
+--
+game_engine.py-11758-        if isinstance(cond, dict) and cond.get('op') in ('has_status_named', 'has_status'):
+game_engine.py-11759-            target_id = self._resolve_target(player_id, cond.get('target', 'self'))
+game_engine.py-11760-            status_name = str(cond.get('name', cond.get('status', cond.get('id', ''))))
+game_engine.py:11761:            if self._is_status_immune(target_id) and status_name not in ('status_immune', 'immune', '状态免疫'):
+game_engine.py-11762-                return False
+game_engine.py-11763-        if isinstance(cond, dict) and cond.get('op') == 'list_contains':
+game_engine.py-11764-            values = self._eval_list(player_id, cond.get('list', []), card)
+--
+game_engine.py-12688-        if not (0 <= player_id < len(self.players)):
+game_engine.py-12689-            return False
+game_engine.py-12690-        ps = self.players[player_id]
+game_engine.py:12691:        if ps.invincible or (ps.bandage_active and not self._is_status_immune(player_id)):
+game_engine.py-12692-            return True
+game_engine.py-12693-        for card in list(ps.hand):
+game_engine.py-12694-            if getattr(card, 'def_id', '') == 'Yggdrasil':
+--
+game_engine.py-12704-        ps = self.players[player_id]
+game_engine.py-12705-        if ps.health <= 0:
+game_engine.py-12706-            return True
+game_engine.py:12707:        if self._is_status_immune(player_id):
+game_engine.py-12708-            return False
+game_engine.py-12709-        if self._has_fatal_prevention(player_id):
+game_engine.py-12710-            return False
+--
+game_engine.py-12718-    def _resolve_start_turn_status_damage_for_transition(self, player_id: int):
+game_engine.py-12719-        if not (0 <= player_id < len(self.players)):
+game_engine.py-12720-            return
+game_engine.py:12721:        if self._is_status_immune(player_id):
+game_engine.py-12722-            return
+game_engine.py-12723-        ps = self.players[player_id]
+game_engine.py-12724-        self._game_over_defer_depth += 1
+--
+game_engine.py-13048-        ps = self.players[player_id]
+game_engine.py-13049-        if ps.poison <= 0:
+game_engine.py-13050-            return
+game_engine.py:13051:        if getattr(ps, 'stagnation', 0) > 0 and not self._is_status_immune(player_id):
+game_engine.py-13052-            self.log_msg(f"{self.pn(player_id)}的滞留使中毒未减半")
+game_engine.py-13053-            return
+game_engine.py-13054-        ps.poison = ps.poison // 2
+--
+game_engine.py-13056-            self.log_msg(f"{self.pn(player_id)}中毒减半为{ps.poison}层")
+game_engine.py-13057-
+game_engine.py-13058-    def _apply_toxic_poison_after_poison_settlement(self, player_id: int):
+game_engine.py:13059:        if not (0 <= player_id < len(self.players)) or self._is_status_immune(player_id):
+game_engine.py-13060-            return
+game_engine.py-13061-        amount = self._custom_status_value(player_id, 'jungle:toxic_poison', 'toxic_poison', '剧毒')
+game_engine.py-13062-        if amount <= 0:
+--
+game_engine.py-13086-        blind_level = int(getattr(ps, 'blind', 0) or 0)
+game_engine.py-13087-        if blind_level <= 0:
+game_engine.py-13088-            return
+game_engine.py:13089:        if self._is_status_immune(player_id):
+game_engine.py-13090-            ps.blind = 0
+game_engine.py-13091-            return
+game_engine.py-13092-        if ps.hand:
+--
+game_engine.py-13125-        if not (0 <= player_id < len(self.players)):
+game_engine.py-13126-            return
+game_engine.py-13127-        ps = self.players[player_id]
+game_engine.py:13128:        immune = self._is_status_immune(player_id)
+game_engine.py-13129-        cleared = []
+game_engine.py-13130-        for attr, label in (('blind', '失明'), ('dodge', '闪避')):
+game_engine.py-13131-            value = int(getattr(ps, attr, 0) or 0)
+--
+game_engine.py-13344-            self._skip_current_turn_after_start = True
+game_engine.py-13345-        self._defer_turn_start_death_checks = True
+game_engine.py-13346-        if self.round_num > 1 and not skip_draw_recovery:
+game_engine.py:13347:            sluggish_reduction = ps.sluggish if not self._is_status_immune(player_id) else 0
+game_engine.py-13348-            draw_count = max(0, DRAW_PER_TURN - sluggish_reduction)
+game_engine.py-13349-            if self._queue_foresight_replace_choice(player_id, draw_count, 'turn_start_after_foresight'):
+game_engine.py-13350-                self._pending_turn_start_early_owner_equipment = set(early_owner_turn_start_equipment)
+--
+game_engine.py-13370-            return
+game_engine.py-13371-        self._hel_apply_blazing_fire_turn_start(player_id)
+game_engine.py-13372-        if ps.poison > 0:
+game_engine.py:13373:            if not self._is_status_immune(player_id):
+game_engine.py-13374-                dmg = ps.poison
+game_engine.py-13375-                self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
+game_engine.py-13376-            self._decay_poison_after_turn_start(player_id)
+game_engine.py-13377-            self._apply_toxic_poison_after_poison_settlement(player_id)
+game_engine.py:13378:        if ps.fire > 0 and not self._is_status_immune(player_id):
+game_engine.py-13379-            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
+game_engine.py-13380-        if self.round_num > 1 and not skip_draw_recovery:
+game_engine.py-13381-            elixir_recovery = ELIXIR_RECOVERY
+--
+game_engine.py-13395-            self._bio_apply_debt_after_recovery(player_id)
+game_engine.py-13396-        # Overload: deduct E at turn start, then clear
+game_engine.py-13397-        if ps.overload > 0:
+game_engine.py:13398:            if not self._is_status_immune(player_id):
+game_engine.py-13399-                deduct = min(ps.overload, ps.elixir)
+game_engine.py-13400-                ps.elixir -= deduct
+game_engine.py-13401-                self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+--
+game_engine.py-13448-        ps = self.players[player_id]
+game_engine.py-13449-        if ps.foresight <= 0:
+game_engine.py-13450-            return False
+game_engine.py:13451:        if self._is_status_immune(player_id) or not ps.deck or not ps.hand:
+game_engine.py-13452-            ps.foresight = 0
+game_engine.py-13453-            self.log_msg(f"{self.pn(player_id)}的预知效果清除")
+game_engine.py-13454-            return False
+--
+game_engine.py-13500-            draw_count = max(0, int((foresight_result or {}).get('draw_count', 0) or 0))
+game_engine.py-13501-            drawn = self._draw_cards_with_v2_hooks(player_id, draw_count, 'turn_start')
+game_engine.py-13502-            self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌")
+game_engine.py:13503:            if ps.sluggish > 0 and not self._is_status_immune(player_id):
+game_engine.py-13504-                self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
+game_engine.py-13505-            self._clear_sluggish_after_draw(player_id)
+game_engine.py-13506-        if ps.poison > 0:
+game_engine.py:13507:            if not self._is_status_immune(player_id):
+game_engine.py-13508-                dmg = ps.poison
+game_engine.py-13509-                self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
+game_engine.py-13510-            self._decay_poison_after_turn_start(player_id)
+game_engine.py-13511-            self._apply_toxic_poison_after_poison_settlement(player_id)
+game_engine.py:13512:        if ps.fire > 0 and not self._is_status_immune(player_id):
+game_engine.py-13513-            self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
+game_engine.py-13514-        if self.round_num > 1:
+game_engine.py-13515-            elixir_recovery = ELIXIR_RECOVERY
+--
+game_engine.py-13528-            self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
+game_engine.py-13529-            self._bio_apply_debt_after_recovery(player_id)
+game_engine.py-13530-        if ps.overload > 0:
+game_engine.py:13531:            if not self._is_status_immune(player_id):
+game_engine.py-13532-                deduct = min(ps.overload, ps.elixir)
+game_engine.py-13533-                ps.elixir -= deduct
+game_engine.py-13534-                self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
+--
+game_engine.py-13586-            self.log_msg(f"{self.pn(player_id)}被跳过本回合")
+game_engine.py-13587-            self._end_player_turn(player_id)
+game_engine.py-13588-            return
+game_engine.py:13589:        if ps.skip_turn > 0 and self._is_status_immune(player_id):
+game_engine.py-13590-            ps.skip_turn = max(0, int(ps.skip_turn) - 1)
+game_engine.py-13591-        elif ps.skip_turn > 0:
+game_engine.py-13592-            ps.skip_turn -= 1
+--
+game_engine.py-13623-            return 0
+game_engine.py-13624-        if attacker_id < 0:
+game_engine.py-13625-            attacker_id = 1 - target_id
+game_engine.py:13626:        if ps.untargetable and not is_battery and not ignore_untargetable and not self._is_status_immune(target_id):
+game_engine.py-13627-            self.log_msg(f"{self.pn(target_id)}无法被攻击选中")
+game_engine.py-13628-            return 0
+game_engine.py-13629-        total_dealt = 0
+game_engine.py-13630-        if not isinstance(getattr(self, '_last_positive_damage_hits', None), list) or len(self._last_positive_damage_hits) != len(self.players):
+game_engine.py-13631-            self._last_positive_damage_hits = [0] * len(self.players)
+game_engine.py-13632-        self._last_positive_damage_hits[target_id] = 0
+game_engine.py:13633:        immune = self._is_status_immune(target_id)
+game_engine.py-13634-        for _ in range(hits):
+game_engine.py-13635-            self._consume_action_work(4)
+game_engine.py-13636-            precision_dodged = False
+--
+game_engine.py-13722-            )
+game_engine.py-13723-            # Weakness belongs to the attacker: it reduces physical damage they deal to others.
+game_engine.py-13724-            attacker_state = self.players[attacker_id] if 0 <= attacker_id < len(self.players) else None
+game_engine.py:13725:            attacker_immune = self._is_status_immune(attacker_id) if attacker_state is not None else False
+game_engine.py-13726-            if dmg > 0 and attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
+game_engine.py-13727-                reduction = min(0.6, 0.2 * attacker_state.weakness)
+game_engine.py-13728-                dmg = max(1, int(dmg * (1.0 - reduction)))
+--
+game_engine.py-13928-                if not (0 <= opp_id < len(self.players)):
+game_engine.py-13929-                    continue
+game_engine.py-13930-                opp = self.players[opp_id]
+game_engine.py:13931:                magic_nazar_stacks = 0 if self._is_status_immune(opp_id) else int(opp.custom_statuses.get('magic_nazar', 0) or 0)
+game_engine.py-13932-                if magic_nazar_stacks <= 0:
+game_engine.py-13933-                    continue
+game_engine.py-13934-                card_cost_e = int(getattr(card, '_paid_e_this_play', getattr(card, 'cost_e', 0)) or 0)
+--
+game_engine.py-14010-                    'message': pending.get('message', ''),
+game_engine.py-14011-                }
+game_engine.py-14012-        # Fracture: take damage when playing a card
+game_engine.py:14013:        if ps.fracture > 0 and not self._is_status_immune(player_id):
+game_engine.py-14014-            frac_dmg = ps.fracture
+game_engine.py-14015-            self._deal_direct_damage(player_id, frac_dmg, '破损', player_id,
+game_engine.py-14016-                                     damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FRACTURE)
+game_engine.py-14017-        # Bleed: take damage when playing attack card
+game_engine.py:14018:        if ps.bleed > 0 and card.card_type == 'thorn' and not self._is_status_immune(player_id):
+game_engine.py-14019-            bleed_dmg = ps.bleed
+game_engine.py-14020-            self._deal_direct_damage(player_id, bleed_dmg, '流血', player_id,
+game_engine.py-14021-                                     damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_BLEED)
+--
+game_engine.py-15198-            if not (0 <= tid < len(self.players)):
+game_engine.py-15199-                continue
+game_engine.py-15200-            ps = self.players[tid]
+game_engine.py:15201:            if ps.hand and not self._is_status_immune(tid):
+game_engine.py-15202-                random.shuffle(ps.hand)
+game_engine.py-15203-                self.log_msg(log or f"{self.pn(tid)}因失明打乱手牌")
+game_engine.py-15204-
+--
+game_engine.py-16873-            return
+game_engine.py-16874-        fire = max(0, int(getattr(self.players[target_id], 'fire', 0) or 0))
+game_engine.py-16875-        dealt = 0
+game_engine.py:16876:        if fire > 0 and not self._is_status_immune(target_id):
+game_engine.py-16877-            dealt = self._deal_direct_damage(
+game_engine.py-16878-                target_id,
+game_engine.py-16879-                fire,
+--
+game_engine.py-17608-            return
+game_engine.py-17609-        ps = self.players[target_id]
+game_engine.py-17610-        fire = max(0, int(getattr(ps, 'fire', 0) or 0))
+game_engine.py:17611:        if fire > 0 and not self._is_status_immune(target_id):
+game_engine.py-17612-            self._deal_direct_damage(target_id, fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
+game_engine.py-17613-        if fire > 0:
+game_engine.py-17614-            ps.fire = max(0, fire - self._eval_int(player_id, params.get('reduce', 1), card, 1))

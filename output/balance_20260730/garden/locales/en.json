@@ -1,0 +1,178 @@
+{
+  "manifest": {
+    "name": "Garden Cards Addition",
+    "description": "Cards from the garden."
+  },
+  "cards": {
+    "garden:orange": {
+      "name": "Orange",
+      "effect_text": "Deal 7[[icon:D]]to the target",
+      "description": "Fibonacci oranges."
+    },
+    "garden:missile": {
+      "name": "Missile",
+      "effect_text": "Deal 10[[icon:D]]Response to attacker: Targeted by attack card",
+      "description": "Remote strike!"
+    },
+    "garden:corn": {
+      "name": "Corn",
+      "effect_text": "Deal 15[[icon:D]]to the target; when entering the hand, this card’s Swift stack +1",
+      "description": "The more you use it, the faster it gets."
+    },
+    "garden:soil": {
+      "name": "Soil",
+      "effect_text": "Increase the target's[[icon:H]]maximum by +40, and restore the target's 40[[icon:H]]; at the end of the target's turn, apply 1 stack of Sluggish to it.",
+      "description": "Making you bigger also makes it harder for you to move."
+    },
+    "garden:pollen": {
+      "name": "Pollen",
+      "effect_text": "Apply 4 stacks of damage to the target (4 sub-petals)",
+      "description": "Obstacles left on the ground."
+    },
+    "garden:web": {
+      "name": "Web",
+      "effect_text": "at the start of the target's turn, apply 1 stack of Sluggish to the target.",
+      "description": "A sticky web slows you down."
+    },
+    "garden:thirdeye": {
+      "name": "Third Eye",
+      "effect_text": "Choose an attack card in your hand; if it already has accuracy, make it invisible, otherwise make it acquire accuracy.",
+      "description": "The third eye allows you to hit your opponent more accurately."
+    },
+    "garden:magicorange": {
+      "name": "Magic Orange",
+      "effect_text": "Deal 3[[icon:D]]to the target",
+      "description": "The supply of magic power allows it to recover faster."
+    },
+    "garden:dandelion": {
+      "name": "Dandelion",
+      "effect_text": "Deal 2[[icon:D]]to the target; applies 2 stacks of forbidden healing to the target when causing damage.",
+      "description": "Dandelions flying everywhere make you itchy."
+    },
+    "garden:rock": {
+      "name": "Rock",
+      "effect_text": "Deal 8[[icon:D]]to the target; applies 1 stack of Weakness to the target when dealing damage",
+      "description": "Sharp rocks can scratch the target."
+    },
+    "garden:heavy": {
+      "name": "Heavy",
+      "effect_text": "Deal 40[[icon:D]]to the target; gives yourself 1 stack of stun",
+      "description": "It's so heavy that you have to stop and rest."
+    },
+    "garden:faster": {
+      "name": "Faster",
+      "effect_text": "at the start of the target's turn, the target gains 1 stack of Precognition.",
+      "description": "Faster, faster, faster!"
+    },
+    "garden:antennae": {
+      "name": "Antennae",
+      "effect_text": "Choose a target; while equipped, its hand is always visible to you.",
+      "description": "Sense everything about the enemy."
+    },
+    "garden:honey": {
+      "name": "Honey",
+      "effect_text": "Force the control target to automatically play attack cards from left to right in the next turn, attacking the surviving enemy player with the lowest[[icon:H]]; the turn ends when unable to attack",
+      "description": "Sweet bondage."
+    },
+    "garden:shovel": {
+      "name": "Shovel",
+      "effect_text": "You cannot act after using it until the start of your next turn; you gain 1 layer and is not selectable.",
+      "description": "Use this to dig a hole and hide."
+    },
+    "garden:glass": {
+      "name": "Glass",
+      "effect_text": "Deal 6[[icon:D]]to the target; at the start of your next turn, this card returns to your hand",
+      "description": "It penetrates the opponent and comes back?"
+    },
+    "garden:magicglass": {
+      "name": "Magic Glass",
+      "effect_text": "Deal 1[[icon:D]]×3 to the target; restores 1[[icon:M]]to yourself each time it hits; at the start of your next turn, this card returns to your hand",
+      "description": "The damage is reduced, but it can restore your magic power."
+    },
+    "garden:rice": {
+      "name": "Rice",
+      "effect_text": "Deal 6[[icon:D]]to the target; after use, it returns to the top of your deck.",
+      "description": "It's not very strong, but you'll still get it next time."
+    },
+    "garden:moon_rock": {
+      "name": "Moon Rock",
+      "effect_text": "Grant the target 40 Shield; apply 1 Stun to the target",
+      "description": "It offers protection, but slows your steps."
+    },
+    "garden:avocado": {
+      "name": "Avocado",
+      "effect_text": "Whenever the target takes [[icon:D]], restore 2[[icon:H]] to the target",
+      "description": "It grows with every hit."
+    },
+    "garden:magic_pollen": {
+      "name": "Magic Pollen",
+      "effect_text": "At the end of the equipment owner's turn, if they have at least 1[[icon:M]], automatically spend 1[[icon:M]] and apply 3 Fracture to the target (3 petals)",
+      "description": "Magic-grown pollen that slows every step."
+    },
+    "garden:magic_antennae": {
+      "name": "Magic Antennae",
+      "effect_text": "Reveal all cards in the target's starting deck to you once",
+      "description": "Magic lets you see farther."
+    },
+    "garden:cat_ears": {
+      "name": "Cat Ears",
+      "effect_text": "The first card the target plays each turn that enters their discard pile or deck returns to their hand after resolving",
+      "description": "The power of telepathy!"
+    },
+    "garden:sunflower": {
+      "name": "Sunflower",
+      "effect_text": "At the start of the target's turn, grant them 2 Shield; while equipped, their Shield does not decay naturally",
+      "description": "Absolute defense!"
+    },
+    "garden:beeswax": {
+      "name": "Beeswax",
+      "effect_text": "Grant the target 15 Shield; on their next turn, force them to play attack cards from left to right against the living enemy with the lowest [[icon:H]]; end the turn when no attack can be played",
+      "description": "Quick defense at the price of resistance."
+    },
+    "garden:magic_avocado": {
+      "name": "Magic Avocado",
+      "effect_text": "Whenever the target takes [[icon:D]], grant the target 3 Shield",
+      "description": "Turn wounds into momentum."
+    },
+    "garden:magic_rice": {
+      "name": "Magic Rice",
+      "effect_text": "Deal 1[[icon:D]] to the target; when it deals damage, restore 2[[icon:M]] to yourself; after resolving, put this card on top of your deck",
+      "description": "It is light enough to return to the top without costing energy."
+    },
+    "garden:magic_disc": {
+      "name": "Magic Disc",
+      "effect_text": "While equipped, grant the target 1[[icon:A]]; if the target has Shield, grant 2 additional [[icon:A]]",
+      "description": "Magical armor, stacked."
+    },
+    "garden:magic_cutter": {
+      "name": "Magic Cutter",
+      "effect_text": "Whenever the target deals [[icon:D]] to an enemy player, grant the target 2 Shield",
+      "description": "Turn an enemy's spilled blood into a shield."
+    },
+    "garden:kale": {
+      "name": "Kale",
+      "effect_text": "Deal 14[[icon:D]] to the target; when it deals actual damage, if the target's current [[icon:H]] is at most 20% of their maximum [[icon:H]], deal another 14[[icon:D]] to them",
+      "description": "Prey on the weak."
+    },
+    "garden:daisy": {
+      "name": "Daisy",
+      "effect_text": "Deal 9[[icon:D]] to the target; when it deals actual damage, at the start of the target's next turn, this card's user deals 4[[icon:D]] to them",
+      "description": "It hurts, though perhaps not immediately."
+    },
+    "garden:coal": {
+      "name": "Coal",
+      "effect_text": "Deal 9[[icon:D]] to the target; while this card is in your hand, its Power equals your [[icon:F]] stacks ×3",
+      "description": "It is on fire, and then some!"
+    },
+    "garden:grass": {
+      "name": "Grass",
+      "effect_text": "Once equipped for 1 turn, you may spend 1[[icon:E]] to trigger: restore 6[[icon:H]] to the target; at most once each turn",
+      "description": "Excellent healing, at a modest price."
+    },
+    "garden:candle": {
+      "name": "Candle",
+      "effect_text": "Apply 2 Bleed and 3 Vulnerable to the target",
+      "description": "Light it."
+    }
+  }
+}

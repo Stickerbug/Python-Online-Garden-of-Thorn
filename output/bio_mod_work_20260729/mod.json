@@ -1,0 +1,881 @@
+{
+  "format_version": 2,
+  "manifest": {
+    "id": "bio",
+    "name": "Bio Cards Addition",
+    "name_en": "Bio Cards Addition",
+    "name_cn": "生化卡补充包",
+    "version": "1.1.0",
+    "api_version": "2.0",
+    "author": "huanxiang0273, Eric, XinYu",
+    "description": "以生命、资源转换与连锁反应为主题的卡牌补充包。",
+    "description_en": "A card expansion about life, resource conversion, and chain reactions.",
+    "capabilities": [
+      "cards",
+      "statuses",
+      "logic.basic",
+      "logic.advanced"
+    ],
+    "default_language": "zh"
+  },
+  "registries": {
+    "tags": [],
+    "statuses": [
+      {
+        "id": "bio:debt",
+        "name_cn": "负债",
+        "name_en": "Debt",
+        "description": "自己回合开始时，在正常回复[[icon:E]]后失去1[[icon:E]]，然后层数-1。",
+        "color": "#B36B32",
+        "icon": "debt"
+      },
+      {
+        "id": "bio:extra_healing",
+        "name_cn": "额外回复",
+        "name_en": "Extra Healing",
+        "description": "每次回复[[icon:H]]后，额外回复等同于层数的[[icon:H]]；不自动减少。",
+        "color": "#D56A9B",
+        "icon": "extra_healing"
+      },
+      {
+        "id": "bio:shield_conversion",
+        "name_cn": "护盾转化",
+        "name_en": "Shield Conversion",
+        "description": "下次将回复[[icon:H]]时，若原回复量大于0，改为获得(原回复量×护盾转化层数)层护盾，然后清空护盾转化。",
+        "color": "#2E7D7D",
+        "icon": "shield_conversion"
+      }
+    ],
+    "cards": [
+      {
+        "id": "bio:dna",
+        "legacy_id": "DNA",
+        "name_cn": "DNA",
+        "name_en": "DNA",
+        "cost_e": 4,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Common",
+        "flags": [
+          "indestructible",
+          "infinite_exclude"
+        ],
+        "effect_text": "目标回合开始时，选择其1张当前[[icon:E]]消耗≤4[[icon:E]]的手牌，将其变换为随机1张基础[[icon:E]]消耗恰好高1[[icon:E]]的当前模组牌，并使其获得1层暂时迅捷",
+        "description": "生命具有无限可能。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/DNA.svg"
+        }
+      },
+      {
+        "id": "bio:magic_dna",
+        "legacy_id": "MagicDNA",
+        "name_cn": "魔法DNA",
+        "name_en": "Magic DNA",
+        "cost_e": 0,
+        "cost_m": 4,
+        "card_type": "root",
+        "count": 2,
+        "quality": "Unusual",
+        "flags": [
+          "indestructible"
+        ],
+        "effect_text": "目标即将回复超过1[[icon:M]]时，阻止该次回复，并使目标回复2[[icon:E]]",
+        "description": "魔法被自然扭曲。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/magic DNA.svg"
+        }
+      },
+      {
+        "id": "bio:rna",
+        "legacy_id": "RNA",
+        "name_cn": "RNA",
+        "name_en": "RNA",
+        "cost_e": 4,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 2,
+        "quality": "Common",
+        "flags": [],
+        "effect_text": "目标在自己的回合内每受到1次实际伤害，使其随机1张[[icon:E]]消耗不为0[[icon:E]]的手牌获得1层暂时迅捷",
+        "description": "生命也具有自己的速度。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/RNA.svg"
+        }
+      },
+      {
+        "id": "bio:magic_rna",
+        "legacy_id": "MagicRNA",
+        "name_cn": "魔法RNA",
+        "name_en": "Magic RNA",
+        "cost_e": 0,
+        "cost_m": 4,
+        "card_type": "root",
+        "count": 2,
+        "quality": "Unusual",
+        "flags": [],
+        "effect_text": "目标在自己的回合内每受到1次实际伤害，使其随机1张[[icon:M]]消耗不为0[[icon:M]]的手牌获得2层暂时魔力迅捷",
+        "description": "魔力亦不例外。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/magic RNA.svg"
+        }
+      },
+      {
+        "id": "bio:magic_cancer",
+        "legacy_id": "MagicCancer",
+        "name_cn": "魔法癌细胞",
+        "name_en": "Magic Cancer",
+        "cost_e": 0,
+        "cost_m": 4,
+        "card_type": "root",
+        "count": 2,
+        "quality": "Rare",
+        "flags": [],
+        "effect_text": "目标打出无放逐或唯一的攻击牌或技能牌时，若该牌实际消耗的[[icon:E]]不为0，且目标拥有不少于该消耗2倍的[[icon:M]]，则消耗对应[[icon:M]]，免费额外打出该牌1次",
+        "description": "魔力畸变的投影。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/magic cancer.svg"
+        }
+      },
+      {
+        "id": "bio:opal",
+        "legacy_id": "Opal",
+        "name_cn": "蛋白石",
+        "name_en": "Opal",
+        "cost_e": 4,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Rare",
+        "flags": [],
+        "effect_text": "目标每回合首次打出攻击牌后，若费用满足，自动打出其抽牌堆中最上方的攻击牌，并使该牌获得1层暂时迅捷；否则自动打出1张带有放逐的[[card:Light]]",
+        "description": "全自动袭击。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/opal.svg"
+        }
+      },
+      {
+        "id": "bio:chloroplast",
+        "legacy_id": "Chloroplast",
+        "name_cn": "叶绿体",
+        "name_en": "Chloroplast",
+        "cost_e": 3,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Common",
+        "flags": [],
+        "effect_text": "目标打出牌时，使其获得等同于该牌实际[[icon:E]]消耗的护盾",
+        "description": "让能量得到再利用。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/chloroplast.svg"
+        }
+      },
+      {
+        "id": "bio:blood_chloroplast",
+        "legacy_id": "BloodChloroplast",
+        "name_cn": "血叶绿体",
+        "name_en": "Blood Chloroplast",
+        "cost_e": 3,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Unusual",
+        "flags": [],
+        "effect_text": "目标打出牌时，使其获得等同于该牌实际[[icon:E]]与[[icon:M]]消耗之和的护盾，并对其造成2[[icon:D]]",
+        "description": "血液与魔力共鸣。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/bloody chloroplast.svg"
+        }
+      },
+      {
+        "id": "bio:blood_knife",
+        "legacy_id": "BloodKnife",
+        "name_cn": "血刃",
+        "name_en": "Blood Knife",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 2,
+        "quality": "Rare",
+        "flags": [
+          "self_only",
+          "rebound",
+          "symbiosis"
+        ],
+        "effect_text": "对自己造成5[[icon:D]]；每造成3[[icon:D]]，回复自己1[[icon:E]]",
+        "description": "决死无休。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_activate_blood_knife"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/bloody knife.svg"
+        }
+      },
+      {
+        "id": "bio:blood_chromosome",
+        "legacy_id": "BloodChromosome",
+        "name_cn": "血染色体",
+        "name_en": "Blood Chromosome",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 2,
+        "quality": "Unusual",
+        "flags": [
+          "self_only"
+        ],
+        "effect_text": "本回合内，自己打出本回合已打出过的同名非魔法牌时，对自己造成3[[icon:D]]并回复1[[icon:E]]",
+        "description": "让回旋再飞一会。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_activate_blood_chromosome"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/bloody chromosome.svg"
+        }
+      },
+      {
+        "id": "bio:hemoglobin",
+        "legacy_id": "Hemoglobin",
+        "name_cn": "血红蛋白",
+        "name_en": "Hemoglobin",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 1,
+        "quality": "Rare",
+        "flags": [
+          "exile"
+        ],
+        "effect_text": "对目标施加1层额外回复",
+        "description": "寻求生命的意义。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "bio_add_extra_healing",
+                "target": "target",
+                "amount": 1
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/hemoglobin.svg"
+        }
+      },
+      {
+        "id": "bio:job_application",
+        "legacy_id": "JobApplication",
+        "name_cn": "工作申请",
+        "name_en": "Job Application",
+        "cost_e": 3,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 2,
+        "quality": "Common",
+        "flags": [],
+        "effect_text": "使目标下个回合无法指向本牌打出者",
+        "description": "被生活控制了。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "bio_job_application",
+                "target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/job application.svg"
+        }
+      },
+      {
+        "id": "bio:indictment",
+        "legacy_id": "Indictment",
+        "name_cn": "起诉书",
+        "name_en": "Indictment",
+        "cost_e": 0,
+        "cost_m": 6,
+        "card_type": "guard",
+        "count": 3,
+        "quality": "Rare",
+        "flags": [],
+        "response_trigger": "thorn",
+        "effect_text": "将所响应攻击牌每次造成的物理伤害和电伤分别转化为等量护盾  响应：被作为攻击牌目标",
+        "description": "此地禁止腐败。",
+        "events": {
+          "on_response": {
+            "steps": [
+              {
+                "op": "bio_indictment_response"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/chargesheet.svg"
+        }
+      },
+      {
+        "id": "bio:ransom_money",
+        "legacy_id": "RansomMoney",
+        "name_cn": "赎身钱",
+        "name_en": "Ransom Money",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 5,
+        "quality": "Common",
+        "flags": [
+          "self_only",
+          "infinite_exclude"
+        ],
+        "effect_text": "对自己造成5[[icon:D]]；选择自己放逐区中1张牌，将其加入弃牌堆",
+        "description": "赎回虚无。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_card",
+                "target": "self",
+                "zone": "exile",
+                "choice_type": "choose_from_exile",
+                "cancellable": false,
+                "title": "选择要赎回的牌"
+              },
+              {
+                "op": "bio_ransom_money"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/ransom money.svg"
+        }
+      },
+      {
+        "id": "bio:high_yield_bond",
+        "legacy_id": "HighYieldBond",
+        "name_cn": "高额债券",
+        "name_en": "High-yield Bond",
+        "cost_e": 3,
+        "cost_m": 3,
+        "card_type": "bloom",
+        "count": 2,
+        "quality": "Rare",
+        "flags": [
+          "self_only",
+          "exile"
+        ],
+        "effect_text": "对自己造成25[[icon:D]]，施加10层负债，并回复10[[icon:E]]",
+        "description": "用血贷出来的钱。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_high_yield_bond"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/high-value bonds.svg"
+        }
+      },
+      {
+        "id": "bio:antibody",
+        "legacy_id": "Antibody",
+        "name_cn": "抗体",
+        "name_en": "Antibody",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 3,
+        "quality": "Common",
+        "flags": [
+          "rebound",
+          "sublime"
+        ],
+        "damage": 0,
+        "hits": 1,
+        "effect_text": "对目标造成0[[icon:D]]并施加1层易损",
+        "description": "让死亡继续。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "deal_damage",
+                "target": "target",
+                "amount": 0,
+                "hits": 1
+              },
+              {
+                "op": "apply_jungle_status",
+                "target": "target",
+                "status": "jungle:fragile",
+                "amount": 1,
+                "label": "易损"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/antibody.svg"
+        },
+        "effect_text_en": "Deal 0[[icon:D]] to the target and apply 1 Fragile"
+      },
+      {
+        "id": "bio:electron_missile",
+        "legacy_id": "ElectronMissile",
+        "name_cn": "电子导弹",
+        "name_en": "Electron Missile",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 3,
+        "quality": "Common",
+        "flags": [
+          "rebound"
+        ],
+        "damage": 3,
+        "hits": 1,
+        "effect_text": "对目标造成3[[icon:D]]；造成实际伤害时，使目标所有手牌获得1层电荷",
+        "description": "电荷被压缩在了一起。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_electron_missile",
+                "target": "target",
+                "amount": 3
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/electron missile.svg"
+        }
+      },
+      {
+        "id": "bio:magic_electron_missile",
+        "legacy_id": "MagicElectronMissile",
+        "name_cn": "魔法电子导弹",
+        "name_en": "Magic Electron Missile",
+        "cost_e": 0,
+        "cost_m": 1,
+        "card_type": "thorn",
+        "count": 3,
+        "quality": "Unusual",
+        "flags": [
+          "rebound",
+          "symbiosis"
+        ],
+        "damage": 1,
+        "hits": 1,
+        "effect_text": "对目标造成1[[icon:D]]；造成实际伤害时，使目标随机至多3张手牌获得1层电荷",
+        "description": "魔法降低了它的伤害，但是赋予了它生命的力量。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_electron_missile",
+                "target": "target",
+                "amount": 1,
+                "max_cards": 3
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/magic electron missile.svg"
+        }
+      },
+      {
+        "id": "bio:sugar",
+        "legacy_id": "Sugar",
+        "name_cn": "糖",
+        "name_en": "Sugar",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 5,
+        "quality": "Common",
+        "flags": [
+          "self_target"
+        ],
+        "damage": 3,
+        "hits": 4,
+        "effect_text": "对目标造成3[[icon:D]]×4（4子瓣）；每次造成实际伤害时，回复目标4[[icon:H]]",
+        "description": "疼痛中仍然具有甜味。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_sugar_attack",
+                "target": "target",
+                "amount": 3,
+                "hits": 4
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/sugar.svg",
+          "upgraded_image": "card-art/sugar+1.svg"
+        }
+      },
+      {
+        "id": "bio:blood_sugar",
+        "legacy_id": "BloodSugar",
+        "name_cn": "血糖",
+        "name_en": "Blood Sugar",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 3,
+        "quality": "Unusual",
+        "flags": [],
+        "damage": 1,
+        "hits": 5,
+        "effect_text": "选择1项：分别对目标造成1[[icon:electric_damage]]×5并对自己造成1[[icon:D]]×5；或分别对目标造成1[[icon:D]]×5并对自己造成1[[icon:electric_damage]]×5。每次造成实际伤害时，回复受伤者2[[icon:H]]（5子瓣）",
+        "description": "共伤，共生，共存。此牌的名字不是指血液中的葡萄糖含量。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_blood_sugar_attack",
+                "target": "target",
+                "hits": 5
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/bloody sugar.svg",
+          "upgraded_image": "card-art/bloody sugar+1.svg"
+        }
+      },
+      {
+        "id": "bio:diamond",
+        "legacy_id": "Diamond",
+        "name_cn": "钻石",
+        "name_en": "Diamond",
+        "cost_e": 2,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 5,
+        "quality": "Common",
+        "flags": [],
+        "damage": 10,
+        "hits": 1,
+        "effect_text": "对目标造成10[[icon:D]]；造成实际伤害时，额外打出1张[[card:Diamond|flag=wide_strike|flag=self_target|flag=exile|fission=3|swift=2]]",
+        "description": "世间之珍宝。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_diamond_attack",
+                "target": "target",
+                "amount": 10
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/diamond.svg"
+        }
+      },
+      {
+        "id": "bio:blood_diamond",
+        "legacy_id": "BloodDiamond",
+        "name_cn": "血钻石",
+        "name_en": "Blood Diamond",
+        "cost_e": 2,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 3,
+        "quality": "Unusual",
+        "flags": [
+          "self_target",
+          "wide_strike"
+        ],
+        "fission_level": 4,
+        "damage": 12,
+        "hits": 1,
+        "effect_text": "对目标造成12[[icon:D]]；造成实际伤害时，对目标施加2层流血",
+        "description": "血雾染红了珍宝。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_blood_diamond_attack",
+                "target": "target",
+                "amount": 12
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/bloody diamond.svg"
+        }
+      },
+      {
+        "id": "bio:cyanide_pill",
+        "legacy_id": "CyanidePill",
+        "name_cn": "氰化物药丸",
+        "name_en": "Cyanide Pill",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 3,
+        "quality": "Common",
+        "flags": [
+          "wide_strike",
+          "self_target"
+        ],
+        "effect_text": "清除目标所有[[icon:P]]和[[icon:F]]",
+        "description": "有时候，毒药也能救人。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "bio_clear_poison_fire",
+                "target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/cyanide pill.svg"
+        }
+      },
+      {
+        "id": "bio:stem_cell",
+        "legacy_id": "StemCell",
+        "name_cn": "干细胞",
+        "name_en": "Stem Cell",
+        "cost_e": 0,
+        "cost_m": 3,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Rare",
+        "flags": [],
+        "effect_text": "目标实际失去[[icon:H]]时，本装备获得等同于其失去[[icon:H]]的层数；若已装备一回合，可花费6[[icon:M]]，触发：摧毁此装备，回复目标向上取整(本装备层数×75%)的[[icon:H]]",
+        "description": "不要让你的救命稻草被污染。",
+        "trigger_cost_e": 0,
+        "trigger_cost_m": 6,
+        "trigger_uses_effect_target": true,
+        "events": {
+          "on_equipment_trigger": {
+            "steps": [
+              {
+                "op": "heal",
+                "target": "target",
+                "amount": {
+                  "op": "div",
+                  "a": {
+                    "op": "add",
+                    "a": {
+                      "op": "mul",
+                      "a": {
+                        "op": "equipment_prop",
+                        "property": "layers"
+                      },
+                      "b": 3
+                    },
+                    "b": 3
+                  },
+                  "b": 4
+                }
+              },
+              {
+                "op": "destroy_self_equipment"
+              }
+            ]
+          },
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/stem cell.svg"
+        }
+      },
+      {
+        "id": "bio:mitochondria",
+        "legacy_id": "Mitochondria",
+        "name_cn": "线粒体",
+        "name_en": "Mitochondria",
+        "cost_e": 2,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 3,
+        "quality": "Common",
+        "flags": [],
+        "effect_text": "对目标施加2层护盾转化",
+        "description": "细胞的中继器。",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "bio_add_shield_conversion",
+                "target": "target",
+                "amount": 2
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/mitochondria.svg"
+        }
+      }
+    ]
+  }
+}

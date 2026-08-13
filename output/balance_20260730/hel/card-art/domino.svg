@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: none;
+        stroke: #898989;
+      }
+
+      .st0, .st1 {
+        stroke-miterlimit: 10;
+        stroke-width: 8px;
+      }
+
+      .st1 {
+        fill: #fff;
+        stroke: #b5b5b6;
+      }
+
+      .st2 {
+        fill: #898989;
+      }
+    </style>
+  </defs>
+  <rect class="st1" x="106.3" y="70.87" width="70.87" height="141.73" rx="2.83" ry="2.83" transform="translate(-55.66 106.93) rotate(-35)"/>
+  <line class="st0" x1="119.31" y1="157.43" x2="164.15" y2="126.03"/>
+  <circle class="st2" cx="126.4" cy="90.18" r="7.09"/>
+  <circle class="st2" cx="118.04" cy="137.56" r="7.09"/>
+  <circle class="st2" cx="137.56" cy="165.42" r="7.09"/>
+  <circle class="st2" cx="165.42" cy="145.91" r="7.09"/>
+  <circle class="st2" cx="184.93" cy="173.77" r="7.09"/>
+  <circle class="st2" cx="157.07" cy="193.28" r="7.09"/>
+  <circle class="st2" cx="161.24" cy="169.6" r="7.09"/>
+</svg>

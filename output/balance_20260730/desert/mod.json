@@ -1,0 +1,901 @@
+{
+  "format_version": 2,
+  "manifest": {
+    "id": "desert_cards_addition",
+    "name": "Desert Cards Addition",
+    "version": "1.1.0",
+    "api_version": "2.0",
+    "author": "NetherDog, XinYu",
+    "description": "沙漠主题卡牌补充。",
+    "capabilities": [
+      "cards",
+      "statuses",
+      "logic.basic",
+      "logic.advanced"
+    ],
+    "name_en": "Desert Cards Addition",
+    "name_cn": "沙漠卡补充包",
+    "default_language": "zh"
+  },
+  "registries": {
+    "cards": [
+      {
+        "id": "desert_cards_addition:privet_berry",
+        "legacy_id": "PrivetBerry",
+        "name_cn": "女贞子",
+        "name_en": "Privet Berry",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 5,
+        "quality": "Unusual",
+        "description": "神奇而致命的果实。",
+        "effect_text": "对目标造成等同于目标[[icon:P]]层数的[[icon:D]]",
+        "flags": [],
+        "tags": [],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "not_self"
+              },
+              {
+                "op": "deal_damage",
+                "target": "target",
+                "amount": {
+                  "op": "status_stack",
+                  "target": "target",
+                  "status": "poison"
+                }
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/privet.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:cyanide",
+        "legacy_id": "Cyanide",
+        "name_cn": "氰化物",
+        "name_en": "Cyanide",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 4,
+        "quality": "Unusual",
+        "description": "小心剧毒。",
+        "effect_text": "对目标施加1层滞留",
+        "flags": [],
+        "tags": [],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "add_status",
+                "target": "target",
+                "status": "stagnation",
+                "amount": 1
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/cyanide.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:wind",
+        "legacy_id": "Wind",
+        "name_cn": "风",
+        "name_en": "Wind",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 3,
+        "quality": "Unusual",
+        "description": "把你吹飞。",
+        "effect_text": "丢弃全场所有[[icon:E]]消耗不超过本次实际花费+1的手牌",
+        "flags": [
+          "self_only",
+          "infinite_exclude"
+        ],
+        "tags": [
+          "self_only",
+          "infinite_exclude"
+        ],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "discard_hand_by_paid_e",
+                "target": "all_players",
+                "threshold": {
+                  "op": "add",
+                  "a": {
+                    "op": "card_prop",
+                    "card": "current_card",
+                    "property": "paid_e"
+                  },
+                  "b": 1
+                }
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/wind.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:cactus",
+        "legacy_id": "Cactus",
+        "name_cn": "仙人掌",
+        "name_en": "Cactus",
+        "cost_e": 3,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Epic",
+        "description": "给予你更多行动能力。",
+        "effect_text": "装备存在时，目标[[icon:E]]上限+5；目标回合开始时，回复目标1[[icon:E]]",
+        "flags": [],
+        "tags": [],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "player_prop_add",
+                "target": "choice_target",
+                "property": "max_elixir",
+                "amount": 5
+              }
+            ]
+          },
+          "on_equipment_destroy": {
+            "steps": [
+              {
+                "op": "player_prop_add",
+                "target": "target",
+                "property": "max_elixir",
+                "amount": -5
+              }
+            ]
+          },
+          "on_owner_turn_start": {
+            "steps": [
+              {
+                "op": "gain_e",
+                "target": "target",
+                "amount": 1
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/cactus.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:salt",
+        "legacy_id": "Salt",
+        "name_cn": "盐",
+        "name_en": "Salt",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "guard",
+        "count": 8,
+        "quality": "Common",
+        "description": "真的好疼……",
+        "effect_text": "对攻击者造成向上取整(本牌所响应攻击的首次伤害×60%)[[icon:D]]  响应：被作为攻击牌目标",
+        "flags": [],
+        "tags": [],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "thorn",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_response": {
+            "steps": [
+              {
+                "op": "counter_pending_attack_damage",
+                "target": "target",
+                "ratio": 0.6,
+                "source": "盐",
+                "damage_type": "physical"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/salt.svg"
+        },
+        "effect_text_en": "Response to a Thorn card: deal D to the attacker equal to 60% of the first damage instance you would take, rounded up."
+      },
+      {
+        "id": "desert_cards_addition:date",
+        "legacy_id": "Date",
+        "name_cn": "海枣",
+        "name_en": "Date",
+        "cost_e": 2,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 5,
+        "quality": "Common",
+        "description": "这不是很好，兄弟。",
+        "effect_text": "对目标造成8[[icon:D]]；若自己[[icon:H]]不高于上限的40%，则改为造成16[[icon:D]]",
+        "flags": [],
+        "tags": [],
+        "damage": 8,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "not_self"
+              },
+              {
+                "op": "if",
+                "condition": {
+                  "op": "<=",
+                  "a": {
+                    "op": "player_stat",
+                    "target": "self",
+                    "stat": "health"
+                  },
+                  "b": {
+                    "op": "mul",
+                    "a": {
+                      "op": "player_stat",
+                      "target": "self",
+                      "stat": "max_health"
+                    },
+                    "b": 0.4
+                  }
+                },
+                "then": [
+                  {
+                    "op": "deal_damage",
+                    "target": "target",
+                    "amount": 16
+                  }
+                ],
+                "else": [
+                  {
+                    "op": "deal_damage",
+                    "target": "target",
+                    "amount": 8
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/date.svg"
+        },
+        "effect_text_en": "Deal 8D to the target; if your H is no higher than 40% of max H, deal 16D instead"
+      },
+      {
+        "id": "desert_cards_addition:coconut",
+        "legacy_id": "Coconut",
+        "name_cn": "椰子",
+        "name_en": "Coconut",
+        "cost_e": 3,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Unusual",
+        "description": "坚硬的外壳，里面是什么呢？",
+        "effect_text": "目标受到[[icon:D]]时，本装备获得等同于实际伤害的层数；可花费0[[icon:E]]，触发：摧毁此装备，选择一个目标，对其造成向上取整(本装备层数/2)[[icon:D]]",
+        "flags": [],
+        "tags": [],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": 0,
+        "events": {
+          "on_damage_taken": {
+            "steps": [
+              {
+                "op": "equipment_prop_add",
+                "equipment": {
+                  "ref": "current_equipment"
+                },
+                "property": "layers",
+                "amount": {
+                  "op": "current_damage"
+                }
+              }
+            ]
+          },
+          "on_equipment_trigger": {
+            "steps": [
+              {
+                "op": "deal_damage",
+                "target": "target",
+                "amount": {
+                  "op": "ceil",
+                  "value": {
+                    "op": "div",
+                    "a": {
+                      "op": "equipment_prop",
+                      "equipment": {
+                        "ref": "current_equipment"
+                      },
+                      "property": "layers"
+                    },
+                    "b": 2
+                  }
+                }
+              },
+              {
+                "op": "destroy_self_equipment"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/coconut.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:blood_corn",
+        "legacy_id": "BloodCorn",
+        "name_cn": "血玉米",
+        "name_en": "Blood Corn",
+        "cost_e": 4,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 3,
+        "quality": "Epic",
+        "description": "以生命换来的攻击。",
+        "effect_text": "到手牌中时，此牌迅捷层数+1；对目标造成15[[icon:D]]；对自己造成3[[icon:D]]",
+        "flags": [],
+        "tags": [],
+        "damage": 15,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_enter_hand": {
+            "steps": [
+              {
+                "op": "card_prop_add",
+                "card": {
+                  "ref": "current_card"
+                },
+                "property": "swift_value",
+                "amount": 1
+              }
+            ]
+          },
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "not_self"
+              },
+              {
+                "op": "deal_damage",
+                "target": "target",
+                "amount": 15
+              },
+              {
+                "op": "lose_health",
+                "target": "self",
+                "amount": 3,
+                "source_text": "血玉米"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/blood corn.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:magic_salt",
+        "legacy_id": "MagicSalt",
+        "name_cn": "魔法盐",
+        "name_en": "Magic Salt",
+        "cost_e": 1,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 4,
+        "quality": "Epic",
+        "description": "真的好疼，为什么都被打啊？",
+        "effect_text": "装备存在时，目标受到攻击牌首次[[icon:D]]时，可支付1[[icon:M]]，对攻击者造成向上取整(所受[[icon:D]]×50%)的[[icon:D]]",
+        "flags": [],
+        "tags": [],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          },
+          "on_damage_taken": {
+            "steps": [
+              {
+                "op": "magic_salt_reflect",
+                "ratio": 0.5,
+                "cost_m": 1
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/magic salt.svg"
+        },
+        "effect_text_en": "While equipped, when the equipped player takes [[icon:D]], they may pay 1[[icon:M]] to deal [[icon:D]] to the attacker equal to 50% of that damage, rounded up."
+      },
+      {
+        "id": "desert_cards_addition:ankh",
+        "legacy_id": "Ankh",
+        "name_cn": "安卡",
+        "name_en": "Ankh",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 3,
+        "quality": "Ultra",
+        "description": "时光回溯！",
+        "effect_text": "使所有未阵亡玩家的[[icon:H]]、[[icon:E]]、[[icon:M]]回到各自对局开始时的数值，然后自己-2[[icon:E]]",
+        "flags": [
+          "exile",
+          "self_only",
+          "infinite_exclude"
+        ],
+        "tags": [
+          "exile",
+          "self_only",
+          "infinite_exclude"
+        ],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "restore_match_start_stats",
+                "target": "all_players",
+                "extra_self_e_loss": 2
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/ankh.svg"
+        },
+        "effect_text_en": "Set all non-defeated players' H, E, and M back to their own match-start values, then you lose 2E"
+      },
+      {
+        "id": "desert_cards_addition:dizzy",
+        "legacy_id": "Dizzy",
+        "name_cn": "眩晕",
+        "name_en": "Dizzy",
+        "cost_e": 3,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Ultra",
+        "description": "奥丁体验卡。",
+        "effect_text": "装备时和目标回合开始时，使目标获得1层失明；每张装备在目标上的眩晕使其造成的伤害+50%",
+        "flags": [
+          "indestructible",
+          "self_only"
+        ],
+        "tags": [
+          "indestructible",
+          "self_only"
+        ],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "add_status",
+                "target": "choice_target",
+                "status": "blind",
+                "amount": 1
+              },
+              {
+                "op": "shuffle_hand",
+                "target": "choice_target"
+              }
+            ]
+          },
+          "on_owner_turn_start": {
+            "steps": [
+              {
+                "op": "add_status",
+                "target": "target",
+                "status": "blind",
+                "amount": 1
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/dizzy.svg"
+        }
+      },
+      {
+        "name_cn": "磁铁",
+        "name_en": "Magnet",
+        "cost_e": 4,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 2,
+        "quality": "Epic",
+        "description": "我们在牌里安装了铁片，所以你可以用磁铁吸引它们。",
+        "effect_text": "展示目标所有手牌，从目标手牌中选择一张加入自己手牌",
+        "flags": [
+          "uncancellable",
+          "infinite_exclude"
+        ],
+        "damage": 0,
+        "hits": 0,
+        "heal": 0,
+        "draw": 0,
+        "gain_e": 0,
+        "gain_m": 0,
+        "armor": 0,
+        "dodge": 0,
+        "poison": 0,
+        "burn": 0,
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "response_trigger": "",
+        "id": "desert_cards_addition:magnet",
+        "legacy_id": "Magnet",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "not_self"
+              },
+              {
+                "op": "reveal_enemy_hand",
+                "target": "target"
+              },
+              {
+                "op": "request_card",
+                "target": "target",
+                "zone": "hand",
+                "choice_type": "choose_card_from_hand",
+                "cancellable": false
+              },
+              {
+                "op": "move_to_hand",
+                "card": "chosen_card",
+                "target": "self"
+              }
+            ]
+          }
+        },
+        "tags": [],
+        "assets": {
+          "image": "card-art/magnet.svg"
+        },
+        "effect_text_en": "Reveal all cards in the target's hand, then choose one card from that hand and add it to your hand"
+      },
+      {
+        "id": "desert_cards_addition:magic_compass",
+        "legacy_id": "MagicCompass",
+        "name_cn": "魔法指南针",
+        "name_en": "Magic Compass",
+        "cost_e": 0,
+        "cost_m": 0,
+        "card_type": "bloom",
+        "count": 5,
+        "quality": "Epic",
+        "description": "乾坤大挪移！",
+        "effect_text": "选择任意数量自己弃牌堆中的牌，随机置于自己抽牌堆顶",
+        "flags": [
+          "self_only"
+        ],
+        "tags": [
+          "self_only"
+        ],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_card",
+                "target": "self",
+                "zone": "discard",
+                "choice_type": "choose_cards_from_discard",
+                "multi": true,
+                "min_count": 0,
+                "cancellable": true
+              },
+              {
+                "op": "desert_magic_compass"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/magic compass.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:marble",
+        "legacy_id": "Marble",
+        "name_cn": "弹珠",
+        "name_en": "Marble",
+        "cost_e": 3,
+        "cost_m": 0,
+        "card_type": "thorn",
+        "count": 3,
+        "quality": "Unusual",
+        "description": "掉在地上，滚来滚去。",
+        "effect_text": "对目标造成9[[icon:D]]；前述伤害每次造成实际伤害时，随机对另一名可选中玩家造成23[[icon:D]]",
+        "flags": [
+          "self_target"
+        ],
+        "tags": [
+          "self_target"
+        ],
+        "damage": 9,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "desert_marble_attack",
+                "target": "target",
+                "amount": 9,
+                "extra_amount": 23
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/marble.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:emerald",
+        "legacy_id": "Emerald",
+        "name_cn": "绿宝石",
+        "name_en": "Emerald",
+        "cost_e": 4,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 3,
+        "quality": "Epic",
+        "description": "神秘的宝石，似乎有魔力。",
+        "effect_text": "存在期间，目标每累计消耗2[[icon:E]]，为装备者回复1[[icon:M]]",
+        "flags": [],
+        "tags": [],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          },
+          "on_resource_spent": {
+            "steps": [
+              {
+                "op": "desert_emerald_resource"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/emerald.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:topaz",
+        "legacy_id": "Topaz",
+        "name_cn": "黄玉",
+        "name_en": "Topaz",
+        "cost_e": 5,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 2,
+        "quality": "Epic",
+        "description": "它带给了你安全感，只是……",
+        "effect_text": "存在期间，使目标护甲+4，并获得状态免疫",
+        "flags": [],
+        "tags": [],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              },
+              {
+                "op": "desert_topaz_apply"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/topaz.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:citron",
+        "legacy_id": "Citron",
+        "name_cn": "黄水晶",
+        "name_en": "Citron",
+        "cost_e": 3,
+        "cost_m": 0,
+        "card_type": "root",
+        "count": 2,
+        "quality": "Epic",
+        "description": "会心一击。",
+        "effect_text": "存在期间，目标打出攻击牌时，使该牌获得精准；若已有精准，则改为获得隐匿",
+        "flags": [],
+        "tags": [],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "place_as_equip",
+                "effect_target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/citron.svg"
+        }
+      },
+      {
+        "id": "desert_cards_addition:magic_yggdrasil",
+        "legacy_id": "MagicYggdrasil",
+        "name_cn": "魔法世界树之叶",
+        "name_en": "Magic Yggdrasil",
+        "cost_e": 2,
+        "cost_m": 10,
+        "card_type": "bloom",
+        "count": 2,
+        "quality": "Ultra",
+        "description": "魔法的奇迹。",
+        "effect_text": "将1张[[card:Yggdrasil]]加入目标手中",
+        "flags": [
+          "exile",
+          "infinite_exclude"
+        ],
+        "tags": [
+          "exile",
+          "infinite_exclude"
+        ],
+        "damage": 0,
+        "hits": 1,
+        "response_trigger": "",
+        "trigger_cost_e": -1,
+        "trigger_effect_text": "",
+        "events": {
+          "on_play": {
+            "steps": [
+              {
+                "op": "request_target",
+                "allowed": "any"
+              },
+              {
+                "op": "desert_magic_yggdrasil",
+                "target": "target"
+              }
+            ]
+          }
+        },
+        "assets": {
+          "image": "card-art/magic yggdrasil.svg"
+        }
+      }
+    ],
+    "tags": [],
+    "statuses": [],
+    "opening_events": [],
+    "ui_components": []
+  },
+  "patches": [],
+  "compatibility": [],
+  "event_hooks": [],
+  "editor": {
+    "version": 1,
+    "workspaces": {},
+    "ui_layouts": {}
+  }
+}

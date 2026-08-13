@@ -1,0 +1,147 @@
+{
+  "manifest": {
+    "name": "生化卡补充包",
+    "description": "以生命、资源转换与连锁反应为主题的卡牌补充包。"
+  },
+  "statuses": {
+    "bio:debt": {
+      "name": "负债",
+      "description": "自己回合开始时，在正常回复[[icon:E]]后失去1[[icon:E]]，然后层数-1。"
+    },
+    "bio:extra_healing": {
+      "name": "额外回复",
+      "description": "每次回复[[icon:H]]后，额外回复等同于层数的[[icon:H]]；不自动减少。"
+    },
+    "bio:shield_conversion": {
+      "name": "护盾转化",
+      "description": "下次将回复[[icon:H]]时，若原回复量大于0，改为获得(原回复量×护盾转化层数)层护盾，然后清空护盾转化。"
+    }
+  },
+  "cards": {
+    "bio:dna": {
+      "name": "DNA",
+      "effect_text": "目标回合开始时，选择其1张当前[[icon:E]]消耗≤4[[icon:E]]的手牌，将其变换为随机1张基础[[icon:E]]消耗恰好高1[[icon:E]]的当前模组牌，并使其获得1层暂时迅捷",
+      "description": "生命具有无限可能。"
+    },
+    "bio:magic_dna": {
+      "name": "魔法DNA",
+      "effect_text": "目标即将回复超过1[[icon:M]]时，阻止该次回复，并使目标回复2[[icon:E]]",
+      "description": "魔法被自然扭曲。"
+    },
+    "bio:rna": {
+      "name": "RNA",
+      "effect_text": "目标在自己的回合内每受到1次实际伤害，使其随机1张[[icon:E]]消耗不为0[[icon:E]]的手牌获得1层暂时迅捷",
+      "description": "生命也具有自己的速度。"
+    },
+    "bio:magic_rna": {
+      "name": "魔法RNA",
+      "effect_text": "目标在自己的回合内每受到1次实际伤害，使其随机1张[[icon:M]]消耗不为0[[icon:M]]的手牌获得2层暂时魔力迅捷",
+      "description": "魔力亦不例外。"
+    },
+    "bio:magic_cancer": {
+      "name": "魔法癌细胞",
+      "effect_text": "目标打出无放逐或唯一的攻击牌或技能牌时，若该牌实际消耗的[[icon:E]]不为0，且目标拥有不少于该消耗2倍的[[icon:M]]，则消耗对应[[icon:M]]，免费额外打出该牌1次",
+      "description": "魔力畸变的投影。"
+    },
+    "bio:opal": {
+      "name": "蛋白石",
+      "effect_text": "目标每回合首次打出攻击牌后，若费用满足，自动打出其抽牌堆中最上方的攻击牌，并使该牌获得1层暂时迅捷；否则自动打出1张带有放逐的[[card:Light]]",
+      "description": "全自动袭击。"
+    },
+    "bio:chloroplast": {
+      "name": "叶绿体",
+      "effect_text": "目标打出牌时，使其获得等同于该牌实际[[icon:E]]消耗的护盾",
+      "description": "让能量得到再利用。"
+    },
+    "bio:blood_chloroplast": {
+      "name": "血叶绿体",
+      "effect_text": "目标打出牌时，使其获得等同于该牌实际[[icon:E]]与[[icon:M]]消耗之和的护盾，并对其造成2[[icon:D]]",
+      "description": "血液与魔力共鸣。"
+    },
+    "bio:blood_knife": {
+      "name": "血刃",
+      "effect_text": "对自己造成5[[icon:D]]；每造成3[[icon:D]]，回复自己1[[icon:E]]",
+      "description": "决死无休。"
+    },
+    "bio:blood_chromosome": {
+      "name": "血染色体",
+      "effect_text": "本回合内，自己打出本回合已打出过的同名非魔法牌时，对自己造成3[[icon:D]]并回复1[[icon:E]]",
+      "description": "让回旋再飞一会。"
+    },
+    "bio:hemoglobin": {
+      "name": "血红蛋白",
+      "effect_text": "对目标施加1层额外回复",
+      "description": "寻求生命的意义。"
+    },
+    "bio:job_application": {
+      "name": "工作申请",
+      "effect_text": "使目标下个回合无法指向本牌打出者",
+      "description": "被生活控制了。"
+    },
+    "bio:indictment": {
+      "name": "起诉书",
+      "effect_text": "将所响应攻击牌每次造成的物理伤害和电伤分别转化为等量护盾  响应：被作为攻击牌目标",
+      "description": "此地禁止腐败。"
+    },
+    "bio:ransom_money": {
+      "name": "赎身钱",
+      "effect_text": "对自己造成5[[icon:D]]；选择自己放逐区中1张牌，将其加入弃牌堆",
+      "description": "赎回虚无。"
+    },
+    "bio:high_yield_bond": {
+      "name": "高额债券",
+      "effect_text": "对自己造成25[[icon:D]]，施加10层负债，并回复10[[icon:E]]",
+      "description": "用血贷出来的钱。"
+    },
+    "bio:antibody": {
+      "name": "抗体",
+      "effect_text": "对目标造成0[[icon:D]]并施加1层易损",
+      "description": "让死亡继续。"
+    },
+    "bio:electron_missile": {
+      "name": "电子导弹",
+      "effect_text": "对目标造成3[[icon:D]]；造成实际伤害时，使目标所有手牌获得1层电荷",
+      "description": "电荷被压缩在了一起。"
+    },
+    "bio:magic_electron_missile": {
+      "name": "魔法电子导弹",
+      "effect_text": "对目标造成1[[icon:D]]；造成实际伤害时，使目标随机至多3张手牌获得1层电荷",
+      "description": "魔法降低了它的伤害，但是赋予了它生命的力量。"
+    },
+    "bio:sugar": {
+      "name": "糖",
+      "effect_text": "对目标造成3[[icon:D]]×4（4子瓣）；每次造成实际伤害时，回复目标4[[icon:H]]",
+      "description": "疼痛中仍然具有甜味。"
+    },
+    "bio:blood_sugar": {
+      "name": "血糖",
+      "effect_text": "选择1项：分别对目标造成1[[icon:electric_damage]]×5并对自己造成1[[icon:D]]×5；或分别对目标造成1[[icon:D]]×5并对自己造成1[[icon:electric_damage]]×5。每次造成实际伤害时，回复受伤者2[[icon:H]]（5子瓣）",
+      "description": "共伤，共生，共存。此牌的名字不是指血液中的葡萄糖含量。"
+    },
+    "bio:diamond": {
+      "name": "钻石",
+      "effect_text": "对目标造成10[[icon:D]]；造成实际伤害时，额外打出1张[[card:Diamond|flag=wide_strike|flag=self_target|flag=exile|fission=3|swift=2]]",
+      "description": "世间之珍宝。"
+    },
+    "bio:blood_diamond": {
+      "name": "血钻石",
+      "effect_text": "对目标造成12[[icon:D]]；造成实际伤害时，对目标施加2层流血",
+      "description": "血雾染红了珍宝。"
+    },
+    "bio:cyanide_pill": {
+      "name": "氰化物药丸",
+      "effect_text": "清除目标所有[[icon:P]]和[[icon:F]]",
+      "description": "有时候，毒药也能救人。"
+    },
+    "bio:stem_cell": {
+      "name": "干细胞",
+      "effect_text": "目标实际失去[[icon:H]]时，本装备获得等同于其失去[[icon:H]]的层数；若已装备一回合，可花费6[[icon:M]]，触发：回复目标向上取整(本装备层数×75%)的[[icon:H]]，摧毁此装备",
+      "description": "不要让你的救命稻草被污染。"
+    },
+    "bio:mitochondria": {
+      "name": "线粒体",
+      "effect_text": "对目标施加2层护盾转化",
+      "description": "细胞的中继器。"
+    }
+  }
+}

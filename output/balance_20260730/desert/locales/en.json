@@ -1,0 +1,98 @@
+{
+  "manifest": {
+    "name": "Desert Cards Addition",
+    "description": "Desert themed card supplement."
+  },
+  "cards": {
+    "desert_cards_addition:privet_berry": {
+      "name": "Privet Berry",
+      "effect_text": "Deal[[icon:D]]to the target equal to the target’s[[icon:P]]stacks",
+      "description": "Miraculous and deadly fruit."
+    },
+    "desert_cards_addition:cyanide": {
+      "name": "Cyanide",
+      "effect_text": "Apply 1 stack of linger to the target",
+      "description": "Beware of the poison."
+    },
+    "desert_cards_addition:wind": {
+      "name": "Wind",
+      "effect_text": "Discard all[[icon:E]]cards in the field that cost no more than the actual cost + 1.",
+      "description": "Blow you away."
+    },
+    "desert_cards_addition:cactus": {
+      "name": "Cactus",
+      "effect_text": "When the equipment exists, the target[[icon:E]]maximum +5; at the start of the target's turn, the target is restored 1[[icon:E]]",
+      "description": "Gives you more mobility."
+    },
+    "desert_cards_addition:salt": {
+      "name": "Salt",
+      "effect_text": "Deal rounding up to the attacker (first damage of the attack this card responds to × 60%)[[icon:D]]Response: Targeted by the attack card",
+      "description": "It really hurts..."
+    },
+    "desert_cards_addition:date": {
+      "name": "Date",
+      "effect_text": "Deal 8[[icon:D]]to the target; if your[[icon:H]]is not higher than 40% of the maximum, it will cause 16[[icon:D]]instead.",
+      "description": "That's not great, bro."
+    },
+    "desert_cards_addition:coconut": {
+      "name": "Coconut",
+      "effect_text": "When the target takes[[icon:D]], this equipment gains stacks equal to the actual damage; you may spend 0[[icon:E]] to trigger: destroy this equipment, choose a target, and deal rounded-up (this equipment's stacks/2)[[icon:D]] to them.",
+      "description": "Hard shell, what's inside?"
+    },
+    "desert_cards_addition:blood_corn": {
+      "name": "Blood Corn",
+      "effect_text": "When the card is in hand, this card's Swift stack +1; it will cause 15[[icon:D]]to the target; it will cause 3[[icon:D]]to yourself.",
+      "description": "Attack in exchange for life."
+    },
+    "desert_cards_addition:magic_salt": {
+      "name": "Magic Salt",
+      "effect_text": "When the equipment exists, when the target is attacked by a[[icon:D]]card for the first time, it can pay 1[[icon:M]]to cause a rounded-up ([[icon:D]]×50%)[[icon:D]]to the attacker.",
+      "description": "It really hurts. Why are you being beaten?"
+    },
+    "desert_cards_addition:ankh": {
+      "name": "Ankh",
+      "effect_text": "Return the[[icon:H]],[[icon:E]],[[icon:M]]of all undead players to the values ​​at the start of the respective games, and then -2[[icon:E]]",
+      "description": "Go back in time!"
+    },
+    "desert_cards_addition:dizzy": {
+      "name": "Dizzy",
+      "effect_text": "When equipped and at the start of the target's turn, the target gains 1 stack of Blind; each stun equipped on the target increases the damage dealt by 50%.",
+      "description": "Odin experience card."
+    },
+    "desert_cards_addition:magnet": {
+      "name": "Magnet",
+      "effect_text": "Display all cards in the target's hand, choose one card from the target's hand and add it to your own hand",
+      "description": "We installed iron pieces inside the cards so you can attract them with magnets."
+    },
+    "desert_cards_addition:magic_compass": {
+      "name": "Magic Compass",
+      "effect_text": "Choose any number of cards from your discard pile and put them on top of your draw pile in random order",
+      "description": "A grand shift of heaven and earth!"
+    },
+    "desert_cards_addition:marble": {
+      "name": "Marble",
+      "effect_text": "Deal 9[[icon:D]] to the target; each time that damage deals actual damage, deal 23[[icon:D]] to another random selectable player",
+      "description": "It rolls all over the floor."
+    },
+    "desert_cards_addition:emerald": {
+      "name": "Emerald",
+      "effect_text": "While this equipment exists, whenever the target cumulatively spends 2[[icon:E]], restore 1[[icon:M]] to the equipment owner",
+      "description": "A mysterious gem, seemingly filled with magic."
+    },
+    "desert_cards_addition:topaz": {
+      "name": "Topaz",
+      "effect_text": "While this equipment exists, the target gains 4 Armor and Status Immunity",
+      "description": "It makes you feel safe, except..."
+    },
+    "desert_cards_addition:citron": {
+      "name": "Citron",
+      "effect_text": "While this equipment exists, Attack cards played by the target gain Precision; if already Precise, they gain Stealth instead",
+      "description": "A critical strike."
+    },
+    "desert_cards_addition:magic_yggdrasil": {
+      "name": "Magic Yggdrasil",
+      "effect_text": "Add 1 [[card:Yggdrasil]] to the target's hand",
+      "description": "A miracle of magic."
+    }
+  }
+}

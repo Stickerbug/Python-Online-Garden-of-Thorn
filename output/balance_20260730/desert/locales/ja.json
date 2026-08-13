@@ -1,0 +1,98 @@
+{
+  "manifest": {
+    "name": "デザートカード ブースターパック",
+    "description": "砂漠をテーマにしたカードの付録。"
+  },
+  "cards": {
+    "desert_cards_addition:privet_berry": {
+      "name": "トウネズミモチ",
+      "effect_text": "ターゲットの[[icon:P]]スタックに等しい[[icon:D]]をターゲットに与えます",
+      "description": "奇跡的で恐ろしい果実。"
+    },
+    "desert_cards_addition:cyanide": {
+      "name": "シアン化物",
+      "effect_text": "ターゲットに1層の残留物を適用します",
+      "description": "毒に注意してください。"
+    },
+    "desert_cards_addition:wind": {
+      "name": "風",
+      "effect_text": "実際のコスト+1以下のコストの場の[[icon:E]]カードをすべて捨てる。",
+      "description": "あなたを吹き飛ばしてください。"
+    },
+    "desert_cards_addition:cactus": {
+      "name": "カクタス",
+      "effect_text": "装備が存在する場合、目標[[icon:E]]上限+5;ターゲットのターンの開始時に、ターゲットは回復します 1[[icon:E]]",
+      "description": "より機動性を高めます。"
+    },
+    "desert_cards_addition:salt": {
+      "name": "塩",
+      "effect_text": "攻撃者に切り上げを与える(このカードが反応した攻撃の最初のダメージ×60%)[[icon:D]]応答：攻撃カードの対象",
+      "description": "本当に痛いです..."
+    },
+    "desert_cards_addition:date": {
+      "name": "ナツメヤシ",
+      "effect_text": "対象に 8[[icon:D]]を与える。[[icon:H]]が上限の 40% を超えていない場合、代わりに 16[[icon:D]]が発生します。",
+      "description": "それは良くないよ、兄弟。"
+    },
+    "desert_cards_addition:coconut": {
+      "name": "ココナッツ",
+      "effect_text": "対象が[[icon:D]]を受けた時、この装備は実ダメージと同じ数の層を得る。0[[icon:E]]を消費して発動できる：この装備を破壊し、対象を1体選び、切り上げ(この装備の層数/2)[[icon:D]]を与える。",
+      "description": "硬い殻、中には何が入っているの？"
+    },
+    "desert_cards_addition:blood_corn": {
+      "name": "ブラッドコーン",
+      "effect_text": "このカードが手札にある時、このカードの素早さレイヤーを＋１する。ターゲットに 15[[icon:D]]をもたらします。それはあなた自身に 3[[icon:D]]をもたらします。",
+      "description": "命と引き換えに攻撃する。"
+    },
+    "desert_cards_addition:magic_salt": {
+      "name": "魔法の塩",
+      "effect_text": "装備が存在する場合、ターゲットが初めて[[icon:D]]カードで攻撃されたとき、1[[icon:M]]を支払うことで攻撃者に切り上げ([[icon:D]]×50%)[[icon:D]]を発生させることができます。",
+      "description": "本当に痛いです。なぜ殴られているのですか？"
+    },
+    "desert_cards_addition:ankh": {
+      "name": "アンク",
+      "effect_text": "すべてのアンデッドプレイヤーの[[icon:H]]、[[icon:E]]、[[icon:M]]をそれぞれのゲーム開始時の値に戻し、その後-2[[icon:E]]",
+      "description": "過去に戻ってください！"
+    },
+    "desert_cards_addition:dizzy": {
+      "name": "めまい",
+      "effect_text": "装備すると、ターゲットのターンの開始時に、ターゲットは 1 層の盲目状態を獲得します。ターゲットに装備されたスタンごとに、与えるダメージが 50% 増加します。",
+      "description": "オーディンのエクスペリエンスカード。"
+    },
+    "desert_cards_addition:magnet": {
+      "name": "磁石",
+      "effect_text": "ターゲットの手札を全て表示し、ターゲットの手札から1枚を選んで自分の手札に加える",
+      "description": "カードの内側に鉄片を設置し、磁石で吸着できるようにしました。"
+    },
+    "desert_cards_addition:magic_compass": {
+      "name": "魔法のコンパス",
+      "effect_text": "自分の捨て札から任意の枚数を選び、ランダムな順番で自分の山札の一番上に置く",
+      "description": "天地をひっくり返せ！"
+    },
+    "desert_cards_addition:marble": {
+      "name": "ビー玉",
+      "effect_text": "対象に9[[icon:D]]を与える。このダメージが実ダメージを与えるたび、別の選択可能なプレイヤー1人をランダムに選び23[[icon:D]]を与える",
+      "description": "床をころころ転がっていく。"
+    },
+    "desert_cards_addition:emerald": {
+      "name": "エメラルド",
+      "effect_text": "この装備が存在する間、対象が累計2[[icon:E]]を消費するたび、装備者は1[[icon:M]]を回復する",
+      "description": "不思議な魔力を秘めた宝石。"
+    },
+    "desert_cards_addition:topaz": {
+      "name": "トパーズ",
+      "effect_text": "この装備が存在する間、対象のアーマーを+4し、状態異常無効を与える",
+      "description": "安心を与えてくれる。ただし……"
+    },
+    "desert_cards_addition:citron": {
+      "name": "シトリン",
+      "effect_text": "この装備が存在する間、対象が使用する攻撃カードは精密を得る。すでに精密を持つ場合、代わりに隠密を得る",
+      "description": "会心の一撃。"
+    },
+    "desert_cards_addition:magic_yggdrasil": {
+      "name": "魔法のユグドラシル",
+      "effect_text": "対象の手札に[[card:Yggdrasil]]を1枚加える",
+      "description": "魔法の奇跡。"
+    }
+  }
+}

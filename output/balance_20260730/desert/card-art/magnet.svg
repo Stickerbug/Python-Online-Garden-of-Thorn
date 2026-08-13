@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #c6171e;
+        stroke: #b31e23;
+      }
+
+      .st0, .st1 {
+        stroke-miterlimit: 10;
+        stroke-width: 15px;
+      }
+
+      .st1 {
+        fill: #3061ad;
+        stroke: #19439a;
+      }
+    </style>
+  </defs>
+  <path class="st0" d="M121,119.67c-36.56,32.99,11.05,60.79,1.25,74.5-10.76,15.05-50.2-21.05-40.81-52.87,9.39-31.82,26.33-47.31,32.67-54.52,13.64-15.48,47.88-4.11,6.89,32.89Z"/>
+  <path class="st1" d="M98.19,189.23c11.96,10.59,32.19,18.61,49.4,11.44,30.62-12.77,44.19-31.28,50.67-38.37,13.91-15.23-1.08-48.05-33.44-3.3-16.9,23.37-35.14,17.85-49.89,11.52"/>
+</svg>

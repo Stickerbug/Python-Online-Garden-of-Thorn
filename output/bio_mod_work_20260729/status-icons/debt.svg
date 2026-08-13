@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #231815;
+        font-family: Ubuntu-Bold, Ubuntu;
+        font-size: 51.84px;
+        font-weight: 700;
+      }
+
+      .st1 {
+        fill: #094;
+        stroke: #7dbe2c;
+      }
+
+      .st1, .st2 {
+        stroke-miterlimit: 10;
+        stroke-width: 5px;
+      }
+
+      .st2 {
+        fill: #ffe200;
+        stroke: #f5e349;
+      }
+    </style>
+  </defs>
+  <rect class="st1" x="50.52" y="100.31" width="182.43" height="82.85"/>
+  <circle class="st2" cx="142.88" cy="141.73" r="27.82"/>
+  <text class="st0" transform="translate(127.97 158.79)"><tspan x="0" y="0">$</tspan></text>
+</svg>

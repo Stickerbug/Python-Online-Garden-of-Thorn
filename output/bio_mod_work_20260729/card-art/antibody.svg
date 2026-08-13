@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: none;
+        stroke: #3784c6;
+        stroke-miterlimit: 10;
+        stroke-width: 10px;
+      }
+    </style>
+  </defs>
+  <polyline class="st0" points="83.5 76.36 131.25 129.04 131.25 218.1"/>
+  <line class="st0" x1="74.41" y1="110.85" x2="107.38" y2="147.23"/>
+  <polyline class="st0" points="208.73 76.36 160.98 129.04 160.98 218.1"/>
+  <line class="st0" x1="217.83" y1="110.85" x2="184.86" y2="147.23"/>
+</svg>

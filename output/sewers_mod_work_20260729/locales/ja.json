@@ -1,0 +1,119 @@
+{
+  "manifest": {
+    "name": "下水道カード追加パック",
+    "description": "下水道をテーマにしたカード追加パック。"
+  },
+  "statuses": {
+    "sewers:sealed": {
+      "name": "封印",
+      "description": "存在する間、この装備の効果は発動せず、手動発動もできず、装備ターン数も増えない。装備アーマーは有効。装備者のターン開始時、その開始時効果を無効にした後、1層減少する。"
+    }
+  },
+  "cards": {
+    "sewers:lotus": {
+      "name": "蓮",
+      "effect_text": "5つのターゲット[[icon:H]]を回復し、さらに[[icon:H]]の2層で[[icon:P]]を回復します",
+      "description": "有毒な場所に生える花。"
+    },
+    "sewers:light_bulb": {
+      "name": "電球",
+      "effect_text": "自分の次のターン開始まで、プレイヤーを対象に選ぶすべてのカードは、このカードの使用者を対象にします。対象を選ばないカードは影響を受けません。このカードの使用者が選択不可の間、この効果は適用されません。",
+      "description": "あらゆる憎悪を引き寄せる。"
+    },
+    "sewers:talisman_of_evasion": {
+      "name": "回避のタリスマン",
+      "effect_text": "ターゲットのターンの開始時に、ターゲットに 1 層の回避を適用します。",
+      "description": "ウルトラダッシュ。"
+    },
+    "sewers:broccoli": {
+      "name": "ブロッコリー",
+      "effect_text": "対象に10[[icon:D]]を与えた後、このカードの威力を0にする。このカードが反制された場合、対象に追加で3[[icon:D]]×2を与える。追加ダメージは威力で増加しない",
+      "description": "とても栄養価が高い。"
+    },
+    "sewers:clay": {
+      "name": "粘土",
+      "effect_text": "対象に 5[[icon:D]]を与える。このカードが手札にある時、あなたが実ダメージ８以上を受ける度、このカードのパワーが＋３され、最大１８層パワーアップする。",
+      "description": "痛みから力を引き出す。"
+    },
+    "sewers:vampire_fang": {
+      "name": "吸血鬼の牙",
+      "effect_text": "敵カードによって対象に選ばれる度に3[[icon:H]]回復",
+      "description": "もう人間じゃないんだよ！"
+    },
+    "sewers:blood_rose": {
+      "name": "血のバラ",
+      "effect_text": "対象に 3[[icon:D]]を与える。攻撃が命中すると、ターゲットは次のターンの開始時に 3 層の盲目状態を獲得します。対象は回復します(実際のダメージ×5)[[icon:H]]",
+      "description": "これは幻覚剤を服用していたのでしょうか？"
+    },
+    "sewers:bubonic_plague": {
+      "name": "黒死病",
+      "effect_text": "ターゲットに6層の毒を適用します",
+      "description": "ヨーロッパを襲う病気。"
+    },
+    "sewers:poo": {
+      "name": "うんこ",
+      "effect_text": "ターゲットに1レベルの攻撃禁止を適用する",
+      "description": "誰も近づきたくないでしょう。"
+    },
+    "sewers:iodine": {
+      "name": "ヨウ素",
+      "effect_text": "装備者のターン開始時、選択可能な全対象の[[icon:H]]を5回復する。1ターン以上装備している場合、3[[icon:E]]を消費して発動できる：この装備を破壊し、対象を1人選び、12[[icon:D]]を与えて12[[icon:P]]を付与する",
+      "description": "毒かどうかは量で決まる。"
+    },
+    "sewers:cheese": {
+      "name": "チーズ",
+      "effect_text": "装備所持者が使用したカードを敵が反制した時、この装備を破壊する。その敵の次のターン、手札のThornカードを左から順に装備所持者へ強制使用させ、使用できなければターンを終了する",
+      "description": "みんな大好き。"
+    },
+    "sewers:perfume": {
+      "name": "香水",
+      "effect_text": "対象に攻撃禁止を1層付与する",
+      "description": "香りか悪臭か、それが問題だ。"
+    },
+    "sewers:acid_bomb": {
+      "name": "酸性爆弾",
+      "effect_text": "対象に8[[icon:D]]を与える。ダメージを与えた場合、対象に5[[icon:P]]を付与する",
+      "description": "実験室の安全規則を守ろう。"
+    },
+    "sewers:dung": {
+      "name": "糞",
+      "effect_text": "攻撃者に1[[icon:F]]を付与する  反応：Thornカードの対象にされた時",
+      "description": "できたて！"
+    },
+    "sewers:chitin": {
+      "name": "キチン",
+      "effect_text": "対象のターン開始時、対象に邪眼がなければ邪眼を1層付与する",
+      "description": "強力な守り。"
+    },
+    "sewers:whiskers": {
+      "name": "ひげ",
+      "effect_text": "対象が所有する全装備に封印を1層付与する",
+      "description": "厳かで堂々としている。"
+    },
+    "sewers:neem": {
+      "name": "ニーム",
+      "effect_text": "存在する間、対象以外のプレイヤーが毒によって[[icon:H]]を失った後、その実際の減少量の50%（切り捨て）に等しい[[icon:H]]を対象に回復する",
+      "description": "毒の達人と呼んでくれ。"
+    },
+    "sewers:basil": {
+      "name": "バジル",
+      "effect_text": "装備者のターン開始時、対象の[[icon:H]]を3回復する。解決前の対象の[[icon:H]]が最大値の40%以下なら、さらに5[[icon:H]]回復する",
+      "description": "蘇生の秘術！"
+    },
+    "sewers:neurotoxin": {
+      "name": "神経毒",
+      "effect_text": "対象に7[[icon:P]]を付与する。その後、対象の[[icon:P]]が22以上ならスタンを1層、それ以外なら弱体を1層付与する",
+      "description": "魂が抜け出す感覚。"
+    },
+    "sewers:toilet_paper": {
+      "name": "トイレットペーパー",
+      "effect_text": "対象に8[[icon:D]]を与える。このカードが手札にある間、自分が実際の物理ダメージを受けるたび、このカードは威力を1得る（この効果では最大24）",
+      "description": "誰でも持っている。大事なのは使いこなせるかどうか。"
+    },
+    "sewers:quartz": {
+      "name": "石英",
+      "effect_text": "現在の自分の手札すべてに一時迅捷:1を与える",
+      "description": "すべては琥珀王のために。"
+    }
+  }
+}

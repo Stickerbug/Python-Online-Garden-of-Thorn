@@ -1,0 +1,119 @@
+{
+  "manifest": {
+    "name": "Sewers Cards Addition",
+    "description": "A card expansion themed around sewers."
+  },
+  "statuses": {
+    "sewers:sealed": {
+      "name": "Sealed",
+      "description": "While present, this equipment's effects are inactive, it cannot be triggered, and its equipped-turn count does not increase; Equipment Armor remains active. At the start of its owner's turn, skip its effects for that start, then remove 1 stack."
+    }
+  },
+  "cards": {
+    "sewers:lotus": {
+      "name": "Lotus",
+      "effect_text": "Restore 5 targets[[icon:H]]and additionally[[icon:P]]with 2 stacks of[[icon:H]]",
+      "description": "A flower that grows in poisonous places."
+    },
+    "sewers:light_bulb": {
+      "name": "Light Bulb",
+      "effect_text": "Until the start of your next turn, every card that selects a player target is forced to target this card's user. Cards that do not select a target are unaffected. This effect does not apply while this card's user is not selectable.",
+      "description": "Attract all hatred."
+    },
+    "sewers:talisman_of_evasion": {
+      "name": "Talisman of Evasion",
+      "effect_text": "at the start of the target's turn, apply 1 stack of dodge to the target.",
+      "description": "Ultra Dash."
+    },
+    "sewers:broccoli": {
+      "name": "Broccoli",
+      "effect_text": "Deal 10[[icon:D]] to the target, then clear this card's Power; if this card is countered, deal an additional 3[[icon:D]]×2 to the target. The additional damage is not increased by Power",
+      "description": "Very nutritious."
+    },
+    "sewers:clay": {
+      "name": "Clay",
+      "effect_text": "Deal 5[[icon:D]]to the target; when this card is in hand, every time you receive ≥8 actual damage, the power of this card will be +3, and you can gain up to 18 stacks of power from this.",
+      "description": "Draw strength from pain."
+    },
+    "sewers:vampire_fang": {
+      "name": "Vampire Fang",
+      "effect_text": "Each time the target is selected as a target by an enemy card, recover 3[[icon:H]]",
+      "description": "I'm no longer a human being!"
+    },
+    "sewers:blood_rose": {
+      "name": "Blood Rose",
+      "effect_text": "Deal 3[[icon:D]]to the target; when hit, the target will gain 3 stacks of Blind at the start of the next turn; the target will be restored (actual damage × 5)[[icon:H]]",
+      "description": "Was this taking hallucinogenic drugs?"
+    },
+    "sewers:bubonic_plague": {
+      "name": "Bubonic Plague",
+      "effect_text": "Apply 6 stacks of poison to the target",
+      "description": "Diseases ravaging Europe."
+    },
+    "sewers:poo": {
+      "name": "Poo",
+      "effect_text": "Apply 1 level of attack ban to the target",
+      "description": "No one would want to go near it."
+    },
+    "sewers:iodine": {
+      "name": "Iodine",
+      "effect_text": "At the start of the equipment owner's turn, restore 5[[icon:H]] to every selectable target; after being equipped for 1 turn, you may spend 3[[icon:E]] to trigger: destroy this equipment, choose 1 target, deal 12[[icon:D]] to them, and apply 12[[icon:P]]",
+      "description": "The dose makes the poison."
+    },
+    "sewers:cheese": {
+      "name": "Cheese",
+      "effect_text": "When an enemy counters a card played by the equipment holder, destroy this equipment; on that enemy's next turn, force them to play Thorn cards from left to right against the equipment holder, ending the turn when none can be played",
+      "description": "Everyone loves it."
+    },
+    "sewers:perfume": {
+      "name": "Perfume",
+      "effect_text": "Apply 1 stack of Attack Blocked to the target",
+      "description": "Fragrant or foul—that is the question."
+    },
+    "sewers:acid_bomb": {
+      "name": "Acid Bomb",
+      "effect_text": "Deal 8[[icon:D]] to the target; when damage is dealt, apply 5[[icon:P]] to the target",
+      "description": "Please follow laboratory safety rules."
+    },
+    "sewers:dung": {
+      "name": "Dung",
+      "effect_text": "Apply 1[[icon:F]] to the attacker  Response: Targeted by a Thorn card",
+      "description": "Freshly made!"
+    },
+    "sewers:chitin": {
+      "name": "Chitin",
+      "effect_text": "At the start of the target's turn, if they have no Nazar, apply 1 Nazar to them",
+      "description": "Powerful protection."
+    },
+    "sewers:whiskers": {
+      "name": "Whiskers",
+      "effect_text": "Give every equipment owned by the target 1 stack of Sealed",
+      "description": "Solemn and dignified."
+    },
+    "sewers:neem": {
+      "name": "Neem",
+      "effect_text": "While present, after a player other than the target loses [[icon:H]] to Poison, restore [[icon:H]] to the target equal to 50% of the actual loss, rounded down",
+      "description": "Call me the master of poison."
+    },
+    "sewers:basil": {
+      "name": "Basil",
+      "effect_text": "At the start of the equipment owner's turn, restore 3[[icon:H]] to the target; if the target has no more than 40% of their maximum [[icon:H]] before this resolves, restore 5[[icon:H]] more",
+      "description": "The art of revival!"
+    },
+    "sewers:neurotoxin": {
+      "name": "Neurotoxin",
+      "effect_text": "Apply 7[[icon:P]] to the target; afterward, if they have at least 22[[icon:P]], apply 1 Stun, otherwise apply 1 Weakness",
+      "description": "An out-of-body experience."
+    },
+    "sewers:toilet_paper": {
+      "name": "Toilet Paper",
+      "effect_text": "Deal 8[[icon:D]] to the target; while this card is in your hand, each time you take actual physical damage, this card gains 1 Power (up to 24 Power from this effect)",
+      "description": "Everyone has it. The question is whether you know how to use it."
+    },
+    "sewers:quartz": {
+      "name": "Quartz",
+      "effect_text": "Give every card currently in your hand Temporary Swift:1",
+      "description": "Everything for the Amber King."
+    }
+  }
+}

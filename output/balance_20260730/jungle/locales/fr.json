@@ -1,0 +1,155 @@
+{
+  "manifest": {
+    "name": "Booster de cartes Jungle",
+    "description": "Supplément de carte sur le thème de la jungle."
+  },
+  "cards": {
+    "jungle:bamboo": {
+      "name": "bambou",
+      "effect_text": "Provoque 14[[icon:D]]à la cible ; pour chaque bambou supplémentaire dans votre main, cette carte coûte -1[[icon:E]]",
+      "description": "Plus c'est long, plus c'est rapide."
+    },
+    "jungle:bur": {
+      "name": "Bardane",
+      "effect_text": "Inflige 8[[icon:D]] à la cible ; à l’utilisation, applique 1 Fragilité à la cible ; quand elle inflige des dégâts, applique 1 Fragilité à la cible",
+      "description": "Elle colle à vous."
+    },
+    "jungle:cotton": {
+      "name": "coton",
+      "effect_text": "Au début du tour de la cible, celle-ci gagne 12 couches de boucliers.",
+      "description": "Doux, enveloppe-toi."
+    },
+    "jungle:magic_cotton": {
+      "name": "coton magique",
+      "effect_text": "Lorsque la cible est endommagée, utilisez la cible[[icon:M]]pour compenser les dégâts. Chaque point de[[icon:M]]peut compenser jusqu'à 4 points de dégâts.",
+      "description": "La magie sera tissée dans le coton."
+    },
+    "jungle:dahila": {
+      "name": "Dahlia",
+      "effect_text": "Applique 3 couches de récupération de tour de niveau 3 (3 sous-lobes) à la cible.",
+      "description": "Les fleurs fleuriront lentement."
+    },
+    "jungle:flower": {
+      "name": "fleurs",
+      "effect_text": "Lorsqu'il est équipé pendant 1 tour, il peut être déclenché : détruisez cet équipement, sélectionnez la cible, et appliquez-lui 16[[icon:P]].",
+      "description": "Dommages explosifs.",
+      "trigger_effect_text": "Détruisez cet équipement en appliquant 16[[icon:P]]à la cible"
+    },
+    "jungle:grapes": {
+      "name": "Raisin",
+      "effect_text": "Appliquez 4[[icon:P]]à la cible ; placez 3[[card:Grapes|flag=sprout|flag=exile]]au-dessus de votre pioche ; si cette carte est exilée, cet effet ne prendra pas effet",
+      "description": "Les raisins ne sont pas encore mûrs."
+    },
+    "jungle:magic_grapes": {
+      "name": "raisins magiques",
+      "effect_text": "Inflige 3[[icon:electric_damage]]à la cible, une fois supplémentaire pour chaque pièce d'équipement dont dispose la cible ; placez 3[[card:MagicGrapes|flag=sprout|flag=exile]]au-dessus de votre pioche ; si cette carte est exilée, cet effet ne prendra pas effet",
+      "description": "Il devient déchargeable."
+    },
+    "jungle:magic_bur": {
+      "name": "fruit d'épine magique",
+      "effect_text": "Appliquez une couche de vulnérabilité récapitulative (subira des dégâts/4 cette fois) à l'attaquant. Réponse : Ciblé par une carte d'attaque.",
+      "description": "Adhérence et élasticité."
+    },
+    "jungle:magic_dahila": {
+      "name": "dahlia magique",
+      "effect_text": "Applique 3 couches de récupération de tour magique de niveau 2 à la cible.",
+      "description": "La magie reviendra petit à petit."
+    },
+    "jungle:magic_tomato": {
+      "name": "tomate magique",
+      "effect_text": "Cause 8[[icon:D]]à la cible ; en main, chaque fois que vous utilisez une carte qui coûte[[icon:M]], la puissance de cette carte sera de +2",
+      "description": "Une tomate qui continue d'absorber la magie."
+    },
+    "jungle:plank": {
+      "name": "conseil",
+      "effect_text": "La cible ne subit aucun dégât provenant des cartes d'attaque dont le coût réel en [[icon:E]] est inférieur ou égal à 1[[icon:E]]",
+      "description": "Absorption d'énergie."
+    },
+    "jungle:seed": {
+      "name": "graine",
+      "effect_text": "Récupérer la cible 8[[icon:H]]; mettez un[[card:Seed|swift=2|flag=sprout]]au-dessus de votre pioche",
+      "description": "Les graines continueront à germer."
+    },
+    "jungle:magic_seed": {
+      "name": "graine magique",
+      "effect_text": "Répondez à la cible 4[[icon:M]]; mettez un[[card:MagicSeed|magic_swift=3|flag=sprout]]au-dessus de votre pioche",
+      "description": "Les graines magiques continueront à germer."
+    },
+    "jungle:rubber": {
+      "name": "caoutchouc",
+      "effect_text": "Une fois l'attaque de l'attaquant résolue, toutes les cartes dans sa main seront temporairement lourdes 1. Réponse : être ciblé par les cartes d'attaque.",
+      "description": "Rebondissez."
+    },
+    "jungle:magic_rubber": {
+      "name": "caoutchouc magique",
+      "effect_text": "Donnez temporairement à la carte[[icon:E]]le coût le plus élevé de votre main Rapidité 3. Réponse : Ciblé par une carte attaquante.",
+      "description": "Rebondissez."
+    },
+    "jungle:relic": {
+      "name": "relique",
+      "effect_text": "Lorsque la cible est endommagée, si le coéquipier survit, l'arrondi à l'inférieur (les dégâts qui auraient dû être reçus × 2/3) sera transféré au coéquipier, et la cible sera arrondie à l'inférieur (les dégâts qui auraient dû être reçus/3)",
+      "description": "D'étranges reliques anciennes."
+    },
+    "jungle:magic_relic": {
+      "name": "relique magique",
+      "effect_text": "Lorsque le coéquipier[[icon:M]]est au moins 2, il peut être déclenché un nombre illimité de fois : faisant passer le coéquipier à -2[[icon:M]]et vous redonnant 3[[icon:M]].",
+      "description": "Une ancienne relique imprégnée de magie.",
+      "trigger_effect_text": "Si le[[icon:M]]d'un coéquipier n'est pas inférieur à 2, réduisez son[[icon:M]]de 2 et restituez-vous 3[[icon:M]]."
+    },
+    "jungle:root": {
+      "name": "racine",
+      "effect_text": "Au début du tour du propriétaire de l'équipement, 2 couches de racines seront appliquées sur cet équipement ; lorsque la cible est touchée par[[icon:D]], cet équipement perdra 1 couche de racines ; l'armure de la cible augmentera du nombre de couches de racines de cet équipement.",
+      "description": "Plantez un arbre devant vous."
+    },
+    "jungle:yin_yang": {
+      "name": "le yin et le yang",
+      "effect_text": "Mettez toutes les cartes de la main de la cible au bas de la pioche et faites en sorte que la cible pioche le nombre de cartes de la pioche avant de jouer.",
+      "description": "Le monde est à l’envers !"
+    },
+    "jungle:poison_stinger": {
+      "name": "Dard",
+      "effect_text": "Inflige 12[[icon:D]]à la cible ; inflige 4[[icon:P]]à la cible lorsqu'il inflige des dégâts.",
+      "description": "Pointes venimeuses."
+    },
+    "jungle:magic_poison_stinger": {
+      "name": "Piqûre magique",
+      "effect_text": "Inflige 12[[icon:D]]à la cible ; consomme tous les[[icon:M]]lorsqu'il inflige des dégâts. Chaque[[icon:M]]supplémentaire consommé applique 1 couche de[[icon:P]]et 1 couche de poison à la cible.",
+      "description": "Poison béni par magie."
+    },
+    "jungle:peas": {
+      "name": "pois",
+      "effect_text": "Causez 6[[icon:D]]à la cible ; placez 3[[card:Peas|flag=sprout|flag=exile]]au-dessus de votre pioche ; si cette carte est exilée, cet effet ne prendra pas effet",
+      "description": "Il a explosé avec fracas."
+    },
+    "jungle:magic_peas": {
+      "name": "pois magique",
+      "effect_text": "Cause 1[[icon:D]]à la cible ; vous redonne 2[[icon:M]]lorsque vous infligez des dégâts ; place 3[[card:MagicPeas|flag=sprout|flag=exile]]au-dessus de votre pioche ; si cette carte est exilée, cet effet ne prendra pas effet.",
+      "description": "Il explose avec fracas, mais il peut restaurer le pouvoir magique."
+    },
+    "jungle:mushroom": {
+      "name": "champignon",
+      "effect_text": "Restaure 30[[icon:H]]à la cible et applique 10 charges de[[icon:P]]à la cible.",
+      "description": "Il est préférable de ne pas manger de champignons en forêt."
+    },
+    "jungle:tomato": {
+      "name": "tomate",
+      "effect_text": "Cause 8[[icon:D]]à la cible ; à la fin de votre tour, si cette carte est dans votre main, cette carte gagnera en puissance 3, jusqu'à 18 couches.",
+      "description": "Des tomates qui absorbent les nutriments à tout moment."
+    },
+    "jungle:monstera": {
+      "name": "Monstera",
+      "effect_text": "Au début du tour du propriétaire de l'équipement, rend 4[[icon:H]] à chaque joueur en vie de l'équipe de la cible de l'équipement",
+      "description": "Elle soigne les fleurs qui l'entourent."
+    },
+    "jungle:dianthus": {
+      "name": "Dianthus",
+      "effect_text": "Inflige 4[[icon:D]] à la cible ; après chaque utilisation, la prochaine fois que cette carte entre en main, elle gagne 3 Puissance, jusqu'à 12 Puissance grâce à cet effet",
+      "description": "Ses dégâts augmentent à chaque attaque."
+    },
+    "jungle:maple": {
+      "name": "Érable",
+      "effect_text": "Inflige 5[[icon:D]] à la cible ; ajoute 1 [[card:Maple|flag=symbiosis|flag=exile|flag=void]] à votre main",
+      "description": "Emportée par le vent."
+    }
+  }
+}

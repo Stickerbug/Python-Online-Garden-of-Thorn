@@ -1,0 +1,147 @@
+{
+  "manifest": {
+    "name": "生化カード追加パック",
+    "description": "生命、資源変換、連鎖反応をテーマにしたカード追加パック。"
+  },
+  "statuses": {
+    "bio:debt": {
+      "name": "負債",
+      "description": "自分のターン開始時、通常の[[icon:E]]回復後に1[[icon:E]]を失い、その後1層減少します。"
+    },
+    "bio:extra_healing": {
+      "name": "追加回復",
+      "description": "[[icon:H]]を回復した後、層数と同じ値の[[icon:H]]を追加で回復します。自然減少しません。"
+    },
+    "bio:shield_conversion": {
+      "name": "シールド変換",
+      "description": "次に[[icon:H]]を回復する時、元の回復量が0より大きければ、代わりに(元の回復量×シールド変換の層数)のシールドを得て、その後シールド変換を全て消去します。"
+    }
+  },
+  "cards": {
+    "bio:dna": {
+      "name": "DNA",
+      "effect_text": "対象のターン開始時、現在の[[icon:E]]コストが4[[icon:E]]以下の手札を1枚選びます。そのカードを、有効なMOD内から基本[[icon:E]]コストがちょうど1[[icon:E]]高いランダムなカードに変換し、一時迅捷:1を与えます",
+      "description": "生命には無限の可能性がある。"
+    },
+    "bio:magic_dna": {
+      "name": "魔法DNA",
+      "effect_text": "対象が1[[icon:M]]を超える魔力を回復する直前、その回復を無効にし、代わりに対象が2[[icon:E]]を回復します",
+      "description": "魔法は自然によって歪められる。"
+    },
+    "bio:rna": {
+      "name": "RNA",
+      "effect_text": "対象が自分のターン中に実ダメージを受けるたび、[[icon:E]]コストが0[[icon:E]]でないランダムな手札1枚に一時迅捷:1を与えます",
+      "description": "生命にも固有の速度がある。"
+    },
+    "bio:magic_rna": {
+      "name": "魔法RNA",
+      "effect_text": "対象が自分のターン中に実ダメージを受けるたび、[[icon:M]]コストが0[[icon:M]]でないランダムな手札1枚に一時魔力迅捷:2を与えます",
+      "description": "魔力も例外ではない。"
+    },
+    "bio:magic_cancer": {
+      "name": "魔法がん細胞",
+      "effect_text": "対象が放逐も唯一も持たないThornまたはBloomカードを使用した時、そのカードの実際の[[icon:E]]消費が0でなく、対象がその2倍以上の[[icon:M]]を持つなら、対応する[[icon:M]]を消費して同じカードを無料でもう1回使用します",
+      "description": "魔力による変異の投影。"
+    },
+    "bio:opal": {
+      "name": "オパール",
+      "effect_text": "対象が各ターン最初のThornカードを使用した後、コストを支払えるなら、抽牌堆の最も上にあるThornカードに一時迅捷:1を与えて自動使用します。支払えない場合、放逐を持つ[[card:Light]]を自動使用します",
+      "description": "全自動の襲撃。"
+    },
+    "bio:chloroplast": {
+      "name": "葉緑体",
+      "effect_text": "対象がカードを使用した時、そのカードが実際に消費した[[icon:E]]と同じ層数の護盾を対象に与えます",
+      "description": "エネルギーを再利用する。"
+    },
+    "bio:blood_chloroplast": {
+      "name": "血の葉緑体",
+      "effect_text": "対象がカードを使用した時、そのカードが実際に消費した[[icon:E]]と[[icon:M]]の合計と同じ層数の護盾を対象に与え、対象に2[[icon:D]]を与えます",
+      "description": "血液と魔力が共鳴する。"
+    },
+    "bio:blood_knife": {
+      "name": "血刃",
+      "effect_text": "自分に5[[icon:D]]を与える。与えた3[[icon:D]]ごとに、自分の1[[icon:E]]を回復する",
+      "description": "死力を尽くして戦い続ける。"
+    },
+    "bio:blood_chromosome": {
+      "name": "血染色体",
+      "effect_text": "このターン、すでに使用したものと同名の非魔法カードを使用した時、自分に3[[icon:D]]を与え、1[[icon:E]]を回復します",
+      "description": "循環をもう少し続けよう。"
+    },
+    "bio:hemoglobin": {
+      "name": "ヘモグロビン",
+      "effect_text": "対象に追加回復を1層付与します",
+      "description": "生命の意味を求めて。"
+    },
+    "bio:job_application": {
+      "name": "求人応募",
+      "effect_text": "対象は次の自分のターン中、このカードの使用者を対象に選べません",
+      "description": "日々の暮らしに支配される。"
+    },
+    "bio:indictment": {
+      "name": "起訴状",
+      "effect_text": "反応したThornカードが与える各物理ダメージと電撃ダメージを、同じ層数の護盾に変換します  反応：Thornカードの対象になった時",
+      "description": "ここでは腐敗を禁ずる。"
+    },
+    "bio:ransom_money": {
+      "name": "身代金",
+      "effect_text": "自分に5[[icon:D]]を与えます。自分の放逐区からカードを1枚選び、弃牌堆に移します",
+      "description": "虚無から買い戻す。"
+    },
+    "bio:high_yield_bond": {
+      "name": "高利回り債券",
+      "effect_text": "自分に25[[icon:D]]を与え、負債を10層付与し、10[[icon:E]]を回復します",
+      "description": "血で借りた金。"
+    },
+    "bio:antibody": {
+      "name": "抗体",
+      "effect_text": "対象に0[[icon:D]]を与え、易損1を付与する",
+      "description": "死を続かせる。"
+    },
+    "bio:electron_missile": {
+      "name": "電子ミサイル",
+      "effect_text": "対象に3[[icon:D]]を与えます。実ダメージを与えた時、対象のすべての手札に電荷:1を与えます",
+      "description": "電荷がひとつに圧縮されている。"
+    },
+    "bio:magic_electron_missile": {
+      "name": "魔法電子ミサイル",
+      "effect_text": "対象に1[[icon:D]]を与えます。実ダメージを与えた時、対象のランダムな手札最大3枚に電荷:1を与えます",
+      "description": "魔法は威力を下げた代わりに、生命の力を与えた。"
+    },
+    "bio:sugar": {
+      "name": "砂糖",
+      "effect_text": "対象に3[[icon:D]]×4を与える（4子弁）。実ダメージを与えるたび、対象は4[[icon:H]]回復する",
+      "description": "痛みの中にも甘さがある。"
+    },
+    "bio:blood_sugar": {
+      "name": "血糖",
+      "effect_text": "1つ選択：対象に1[[icon:electric_damage]]×5、自分に1[[icon:D]]×5を与える。または対象に1[[icon:D]]×5、自分に1[[icon:electric_damage]]×5を与えます。実ダメージを与えるたび、ダメージを受けたプレイヤーは2[[icon:H]]を回復します（5子瓣）",
+      "description": "共に傷つき、共生し、共存する。このカード名は血中ブドウ糖濃度を指すものではない。"
+    },
+    "bio:diamond": {
+      "name": "ダイヤモンド",
+      "effect_text": "対象に10[[icon:D]]を与えます。実ダメージを与えた時、[[card:Diamond|flag=wide_strike|flag=self_target|flag=exile|fission=3|swift=2]]を追加で1枚使用します",
+      "description": "この世の宝。"
+    },
+    "bio:blood_diamond": {
+      "name": "血のダイヤモンド",
+      "effect_text": "対象に12[[icon:D]]を与えます。実ダメージを与えるたび、対象に流血を2層付与します",
+      "description": "血の霧が宝を赤く染める。"
+    },
+    "bio:cyanide_pill": {
+      "name": "シアン化物錠剤",
+      "effect_text": "対象の[[icon:P]]と[[icon:F]]を全て消去します",
+      "description": "毒が命を救うこともある。"
+    },
+    "bio:stem_cell": {
+      "name": "幹細胞",
+      "effect_text": "対象が実際に[[icon:H]]を失うたび、この装備は失った[[icon:H]]と同じ層数を得ます。装備して1ターン経過後、6[[icon:M]]を消費して発動：対象の[[icon:H]]を切り上げ(この装備の層数×75%)回復し、この装備を破壊します",
+      "description": "最後の希望を汚染させてはいけない。"
+    },
+    "bio:mitochondria": {
+      "name": "ミトコンドリア",
+      "effect_text": "対象にシールド変換2層を付与します",
+      "description": "細胞の中継器。"
+    }
+  }
+}

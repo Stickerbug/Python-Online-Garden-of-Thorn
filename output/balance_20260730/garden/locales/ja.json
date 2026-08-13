@@ -1,0 +1,178 @@
+{
+  "manifest": {
+    "name": "ガーデンカード ブースターパック",
+    "description": "庭からのカード。"
+  },
+  "cards": {
+    "garden:orange": {
+      "name": "オレンジ",
+      "effect_text": "目標まで 7[[icon:D]]を取引します",
+      "description": "フィボナッチオレンジ。"
+    },
+    "garden:missile": {
+      "name": "ミサイル",
+      "effect_text": "取引 10[[icon:D]]攻撃者への対応: 攻撃カードの対象",
+      "description": "リモートストライク！"
+    },
+    "garden:corn": {
+      "name": "トウモロコシ",
+      "effect_text": "ターゲットに 15[[icon:D]]を与えます。手札に加わった時、このカードの素早さスタック+1",
+      "description": "使えば使うほど速くなります。"
+    },
+    "garden:soil": {
+      "name": "地球",
+      "effect_text": "対象の[[icon:H]]上限を+40し、対象の上限[[icon:H]]を40回復する。ターゲットのターン終了時に、それに1層の鈍化を適用します。",
+      "description": "体が大きくなると動きにくくなります。"
+    },
+    "garden:pollen": {
+      "name": "花粉",
+      "effect_text": "ターゲットに 4 層のダメージを適用します (4 つのサブローブ)",
+      "description": "地面に障害物が残っている。"
+    },
+    "garden:web": {
+      "name": "ネット",
+      "effect_text": "ターゲットのターンの開始時に、ターゲットに遅さのレイヤーを 1 層適用します。",
+      "description": "粘着性のあるウェブは速度を低下させます。"
+    },
+    "garden:thirdeye": {
+      "name": "第三の目",
+      "effect_text": "自分の手札から攻撃カードを１枚選ぶ。すでに精度がある場合は非表示にし、そうでない場合は精度を取得します。",
+      "description": "第三の目により、敵をより正確に攻撃できるようになります。"
+    },
+    "garden:magicorange": {
+      "name": "マジックオレンジ",
+      "effect_text": "目標まで 3[[icon:D]]を取引します",
+      "description": "魔力の供給により回復が早くなる。"
+    },
+    "garden:dandelion": {
+      "name": "タンポポ",
+      "effect_text": "対象に 2[[icon:D]]を与える。ダメージを与えると、ターゲットに2層の禁断の治癒を適用します。",
+      "description": "あちこちにタンポポが飛んでいてかゆくなります。"
+    },
+    "garden:rock": {
+      "name": "ロック",
+      "effect_text": "ターゲットに 8[[icon:D]]を与えます。ダメージを与えるときにターゲットに1層の弱点を適用します",
+      "description": "鋭い石はターゲットを傷つける可能性があります。"
+    },
+    "garden:heavy": {
+      "name": "重い",
+      "effect_text": "ターゲットに 40[[icon:D]]を与えます。自分自身に1層のスタンを与える",
+      "description": "とても重いので立ち止まって休む必要があります。"
+    },
+    "garden:faster": {
+      "name": "もっと早く",
+      "effect_text": "ターゲットのターンの開始時に、ターゲットは予知の 1 層を獲得します。",
+      "description": "もっと早く、もっと早く、もっと早く！"
+    },
+    "garden:antennae": {
+      "name": "アンテナ",
+      "effect_text": "対象を1人選ぶ。このカードの装備中、自分は対象の手札を常に確認できる。",
+      "description": "敵についてすべてを感知します。"
+    },
+    "garden:honey": {
+      "name": "ハニー",
+      "effect_text": "次のラウンドでコントロールターゲットに攻撃カードを左から右に自動的にプレイさせ、最も低い[[icon:H]]を持つ生き残った敵プレイヤーを攻撃します。攻撃できなくなったらラウンド終了",
+      "description": "甘い束縛。"
+    },
+    "garden:shovel": {
+      "name": "シャベル",
+      "effect_text": "使用後は次のターンの開始まで行動できません。レイヤーが 1 つ増えますが、選択できなくなります。",
+      "description": "これを使って穴を掘って隠れます。"
+    },
+    "garden:glass": {
+      "name": "ガラス",
+      "effect_text": "対象に 6[[icon:D]]を与える。次のあなたのターンの開始時、このカードは手札に戻る",
+      "description": "相手を貫通して戻ってくる？"
+    },
+    "garden:magicglass": {
+      "name": "魔法のガラス",
+      "effect_text": "対象に 1[[icon:D]]×3 を与える。ヒットするたびに自分に 1[[icon:M]]を回復します。次のあなたのターンの開始時、このカードは手札に戻る",
+      "description": "ダメージは減少しますが、魔力は回復します。"
+    },
+    "garden:rice": {
+      "name": "米",
+      "effect_text": "対象に 6[[icon:D]]を与える。使用後は山札の一番上に戻ります。",
+      "description": "それほど強くはありませんが、次回も入手できます。"
+    },
+    "garden:moon_rock": {
+      "name": "ムーンロック",
+      "effect_text": "対象に40シールドを与え、1スタンを付与する",
+      "description": "守りを与えるが、歩みも遅くする。"
+    },
+    "garden:avocado": {
+      "name": "アボカド",
+      "effect_text": "対象が[[icon:D]]を受けるたび、対象の[[icon:H]]を2回復する",
+      "description": "叩かれるほど大きくなる。"
+    },
+    "garden:magic_pollen": {
+      "name": "魔法の花粉",
+      "effect_text": "装備の所有者のターン終了時、1[[icon:M]]以上あるなら自動で1[[icon:M]]を消費し、対象に3破損を付与する（3子弁）",
+      "description": "魔力で育った花粉が歩みを鈍らせる。"
+    },
+    "garden:magic_antennae": {
+      "name": "魔法の触角",
+      "effect_text": "対象の初期デッキに含まれる全カードを一度だけ自分に公開する",
+      "description": "魔法でもっと遠くまで見通せる。"
+    },
+    "garden:cat_ears": {
+      "name": "猫耳",
+      "effect_text": "対象が各ターン最初に使い、捨て札またはデッキへ入るカードは、解決後に対象の手札へ戻る",
+      "description": "テレパシーの力！"
+    },
+    "garden:sunflower": {
+      "name": "ヒマワリ",
+      "effect_text": "対象のターン開始時、対象に2シールドを与える。装備中、対象のシールドは自然減少しない",
+      "description": "絶対防御！"
+    },
+    "garden:beeswax": {
+      "name": "蜜蝋",
+      "effect_text": "対象に15シールドを与える。対象の次のターン、攻撃カードを左から順に、生存中で[[icon:H]]が最も低い敵へ自動使用させ、使用不能ならターンを終了する",
+      "description": "素早い防御、その代償は抵抗できないこと。"
+    },
+    "garden:magic_avocado": {
+      "name": "魔法のアボカド",
+      "effect_text": "対象が[[icon:D]]を受けるたび、対象に3シールドを与える",
+      "description": "傷を前進する力へ変える。"
+    },
+    "garden:magic_rice": {
+      "name": "魔法の米",
+      "effect_text": "対象に1[[icon:D]]を与える。ダメージを与えた時、自分の[[icon:M]]を2回復する。解決後、このカードを自分のデッキの一番上に置く",
+      "description": "軽すぎて、エネルギーを使わず山札の上へ戻る。"
+    },
+    "garden:magic_disc": {
+      "name": "魔法の円盤",
+      "effect_text": "装備中、対象に1[[icon:A]]を与える。対象にシールドがあるなら、さらに2[[icon:A]]を与える",
+      "description": "魔法の装甲を重ねよう。"
+    },
+    "garden:magic_cutter": {
+      "name": "魔法の鋸刃",
+      "effect_text": "対象が敵プレイヤーに[[icon:D]]を与えるたび、対象に2シールドを与える",
+      "description": "敵の血を自分の盾へ変える。"
+    },
+    "garden:kale": {
+      "name": "ケール",
+      "effect_text": "対象に14[[icon:D]]を与える。実ダメージを与えた時、対象の現在[[icon:H]]が最大[[icon:H]]の20%以下なら、さらに対象に14[[icon:D]]を与える",
+      "description": "弱い者をくじく。"
+    },
+    "garden:daisy": {
+      "name": "デイジー",
+      "effect_text": "対象に9[[icon:D]]を与える。実ダメージを与えた時、対象の次のターン開始時に、このカードの使用者が対象に4[[icon:D]]を与える",
+      "description": "痛いが、すぐ効くとは限らない。"
+    },
+    "garden:coal": {
+      "name": "石炭",
+      "effect_text": "対象に9[[icon:D]]を与える。このカードが自分の手札にある間、威力は自分の[[icon:F]]層数×3になる",
+      "description": "燃えて、さらに燃え上がる！"
+    },
+    "garden:grass": {
+      "name": "草",
+      "effect_text": "装備して1ターン経過後、1[[icon:E]]を消費して発動できる：対象の[[icon:H]]を6回復する。各ターン1回まで",
+      "description": "優れた治療には少しの代価が必要。"
+    },
+    "garden:candle": {
+      "name": "ろうそく",
+      "effect_text": "対象に2出血と3脆弱を付与する",
+      "description": "火をつけよう。"
+    }
+  }
+}

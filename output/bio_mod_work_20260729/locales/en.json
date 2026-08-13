@@ -1,0 +1,147 @@
+{
+  "manifest": {
+    "name": "Bio Cards Addition",
+    "description": "A card expansion about life, resource conversion, and chain reactions."
+  },
+  "statuses": {
+    "bio:debt": {
+      "name": "Debt",
+      "description": "At the start of your turn, lose 1[[icon:E]] after normal [[icon:E]] recovery, then remove 1 stack."
+    },
+    "bio:extra_healing": {
+      "name": "Extra Healing",
+      "description": "After recovering [[icon:H]], recover additional [[icon:H]] equal to its stacks. Does not decay."
+    },
+    "bio:shield_conversion": {
+      "name": "Shield Conversion",
+      "description": "The next time [[icon:H]] would be restored, if the original amount is greater than 0, gain Shield equal to (original amount × Shield Conversion stacks) instead, then clear Shield Conversion."
+    }
+  },
+  "cards": {
+    "bio:dna": {
+      "name": "DNA",
+      "effect_text": "At the start of the target's turn, choose 1 card in their hand with a current [[icon:E]] cost of no more than 4[[icon:E]]. Transform it into a random card from the enabled mods whose base [[icon:E]] cost is exactly 1[[icon:E]] higher, then give it Temporary Swift:1",
+      "description": "Life holds endless possibilities."
+    },
+    "bio:magic_dna": {
+      "name": "Magic DNA",
+      "effect_text": "When the target would recover more than 1[[icon:M]], prevent that recovery and have the target recover 2[[icon:E]] instead",
+      "description": "Magic is distorted by nature."
+    },
+    "bio:rna": {
+      "name": "RNA",
+      "effect_text": "Each time the target takes actual damage during their own turn, give 1 random card in their hand whose [[icon:E]] cost is not 0[[icon:E]] Temporary Swift:1",
+      "description": "Life moves at its own pace."
+    },
+    "bio:magic_rna": {
+      "name": "Magic RNA",
+      "effect_text": "Each time the target takes actual damage during their own turn, give 1 random card in their hand whose [[icon:M]] cost is not 0[[icon:M]] Temporary Magic Swift:2",
+      "description": "Magic is no exception."
+    },
+    "bio:magic_cancer": {
+      "name": "Magic Cancer",
+      "effect_text": "When the target plays a Thorn or Bloom card without Exile or Unique, if its actual [[icon:E]] cost is nonzero and the target has at least twice that much [[icon:M]], spend that [[icon:M]] to play an extra copy of that card for free",
+      "description": "A projection of magical mutation."
+    },
+    "bio:opal": {
+      "name": "Opal",
+      "effect_text": "After the target plays their first Thorn card each turn, automatically play the topmost Thorn card in their deck with Temporary Swift:1 if they can pay its cost; otherwise, automatically play an [[card:Light]] with Exile",
+      "description": "A fully automated assault."
+    },
+    "bio:chloroplast": {
+      "name": "Chloroplast",
+      "effect_text": "When the target plays a card, give them Shield equal to that card's actual [[icon:E]] cost",
+      "description": "Put energy back to work."
+    },
+    "bio:blood_chloroplast": {
+      "name": "Blood Chloroplast",
+      "effect_text": "When the target plays a card, give them Shield equal to the sum of that card's actual [[icon:E]] and [[icon:M]] costs, then deal 2[[icon:D]] to them",
+      "description": "Blood resonates with magic."
+    },
+    "bio:blood_knife": {
+      "name": "Blood Knife",
+      "effect_text": "Deal 5[[icon:D]] to yourself; for every 3[[icon:D]] dealt, recover 1[[icon:E]]",
+      "description": "Fight without rest."
+    },
+    "bio:blood_chromosome": {
+      "name": "Blood Chromosome",
+      "effect_text": "For this turn, when you play a non-Magic card with the same name as one you already played this turn, deal 3[[icon:D]] to yourself and recover 1[[icon:E]]",
+      "description": "Let the cycle run a little longer."
+    },
+    "bio:hemoglobin": {
+      "name": "Hemoglobin",
+      "effect_text": "Apply 1 stack of Extra Healing to the target",
+      "description": "Searching for the meaning of life."
+    },
+    "bio:job_application": {
+      "name": "Job Application",
+      "effect_text": "During the target's next turn, they cannot choose this card's user as a target",
+      "description": "Controlled by everyday life."
+    },
+    "bio:indictment": {
+      "name": "Indictment",
+      "effect_text": "Convert each instance of physical or electric damage from the responded Thorn card into an equal amount of Shield  Response: Targeted by a Thorn card",
+      "description": "Corruption is prohibited here."
+    },
+    "bio:ransom_money": {
+      "name": "Ransom Money",
+      "effect_text": "Deal 5[[icon:D]] to yourself; choose 1 card in your exile zone and move it to your discard pile",
+      "description": "Ransom it from the void."
+    },
+    "bio:high_yield_bond": {
+      "name": "High-yield Bond",
+      "effect_text": "Deal 25[[icon:D]] to yourself, apply 10 stacks of Debt to yourself, and recover 10[[icon:E]]",
+      "description": "Money borrowed with blood."
+    },
+    "bio:antibody": {
+      "name": "Antibody",
+      "effect_text": "Deal 0[[icon:D]] to the target and apply 1 Fragile",
+      "description": "Let death continue."
+    },
+    "bio:electron_missile": {
+      "name": "Electron Missile",
+      "effect_text": "Deal 3[[icon:D]] to the target; when it deals actual damage, give every card in the target's hand Charge:1",
+      "description": "The charge is packed tightly together."
+    },
+    "bio:magic_electron_missile": {
+      "name": "Magic Electron Missile",
+      "effect_text": "Deal 1[[icon:D]] to the target; when it deals actual damage, give up to 3 random cards in the target's hand Charge:1",
+      "description": "Magic lowers its damage, but gives it the power of life."
+    },
+    "bio:sugar": {
+      "name": "Sugar",
+      "effect_text": "Deal 3[[icon:D]]×4 to the target (4 sub-petals); each time it deals actual damage, the target recovers 4[[icon:H]]",
+      "description": "There is sweetness even in pain."
+    },
+    "bio:blood_sugar": {
+      "name": "Blood Sugar",
+      "effect_text": "Choose 1: deal 1[[icon:electric_damage]]×5 to the target and 1[[icon:D]]×5 to yourself; or deal 1[[icon:D]]×5 to the target and 1[[icon:electric_damage]]×5 to yourself. After each instance of actual damage, the damaged player recovers 2[[icon:H]] (5 sub-petals)",
+      "description": "Shared pain, symbiosis, coexistence. This card's name does not refer to blood glucose concentration."
+    },
+    "bio:diamond": {
+      "name": "Diamond",
+      "effect_text": "Deal 10[[icon:D]] to the target; when it deals actual damage, play 1 extra [[card:Diamond|flag=wide_strike|flag=self_target|flag=exile|fission=3|swift=2]]",
+      "description": "A treasure of the mortal world."
+    },
+    "bio:blood_diamond": {
+      "name": "Blood Diamond",
+      "effect_text": "Deal 12[[icon:D]] to the target; whenever it deals actual damage, apply 2 stacks of Bleed to the target",
+      "description": "A blood mist stains the treasure red."
+    },
+    "bio:cyanide_pill": {
+      "name": "Cyanide Pill",
+      "effect_text": "Clear all [[icon:P]] and [[icon:F]] from the target",
+      "description": "Sometimes poison can save a life."
+    },
+    "bio:stem_cell": {
+      "name": "Stem Cell",
+      "effect_text": "Whenever the target actually loses [[icon:H]], this equipment gains stacks equal to the [[icon:H]] lost; after it has been equipped for one turn, pay 6[[icon:M]] and trigger: restore ceil(this equipment's stacks ×75%) [[icon:H]] to the target, then destroy this equipment",
+      "description": "Do not let your last hope become contaminated."
+    },
+    "bio:mitochondria": {
+      "name": "Mitochondria",
+      "effect_text": "Apply 2 Shield Conversion to the target",
+      "description": "The cell's relay station."
+    }
+  }
+}

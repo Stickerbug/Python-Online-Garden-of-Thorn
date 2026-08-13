@@ -1,0 +1,88 @@
+{
+  "manifest": {
+    "name": "Pack Booster de Cartes Underworld",
+    "description": "Pack booster de cartes sur le thème du monde souterrain."
+  },
+  "cards": {
+    "hel:dice": {
+      "name": "dés",
+      "effect_text": "Donnez-vous 2 couches de chance ; causer 6[[icon:D]]à la cible ; si ces dégâts sont un coup critique, les dégâts finaux seront de +3[[icon:D]]",
+      "description": "Lancez un six et gagnez gros !"
+    },
+    "hel:clover": {
+      "name": "Trèfle",
+      "effect_text": "Lorsque l'équipement existe, le multiplicateur de coup critique de la cible +0,5× ; au début du tour de la cible, appliquez-lui 3 couches de chance.",
+      "description": "Herbe porte-bonheur."
+    },
+    "hel:poker_card": {
+      "name": "carte",
+      "effect_text": "Gagnez 4 niveaux de chance pour vous-même ; causer 8[[icon:D]]à la cible ; si ces dégâts sont un coup critique, un effet de couleur aléatoire sera déclenché. Si votre chance dépasse 12 couches, choisissez plutôt :\n♥ Soi[[icon:H]]Récupérer 7[[icon:H]]lorsqu'il est inférieur à 50% de la limite supérieure\n♦ Les dégâts finaux cette fois sont de +6[[icon:D]]♠ Piochez 1 carte\n♣Appliquez 3[[icon:P]]à la cible",
+      "description": "Il existe en différentes couleurs."
+    },
+    "hel:poker_chip": {
+      "name": "puces",
+      "effect_text": "Gagnez 3 charges de Chance ; infligez 6[[icon:D]] à la cible. Ces dégâts ne peuvent pas être critiques.",
+      "description": "Pourquoi ne pas le faire si vous êtes sûr de réaliser du profit sans perdre d’argent ?"
+    },
+    "hel:domino": {
+      "name": "domino",
+      "effect_text": "Gagnez 2 niveaux de chance pour vous-même ; causer 6[[icon:D]]à la cible ; si ces dégâts sont un coup critique, cette fois vous obtiendrez des dégâts précis et finaux × 2",
+      "description": "réaction en chaîne!"
+    },
+    "hel:magic_clover": {
+      "name": "trèfle magique",
+      "effect_text": "Lorsqu'il est équipé pendant 1 tour, il peut être déclenché : sélectionnez la cible, augmentez son multiplicateur de coup critique de +1× ce tour et gagnez 8 couches de chance, puis détruisez cet équipement.",
+      "description": "La chance générée par la magie ne peut être arrêtée."
+    },
+    "hel:magic_dice": {
+      "name": "dés magiques",
+      "effect_text": "Cause 6[[icon:D]]à la cible ; si ces dégâts constituent un coup critique, toute la chance restante sera consommée. Chaque couche consommée entraînera 2[[icon:electric_damage]]à la cible.",
+      "description": "Échangez toute la chance contre des dégâts."
+    },
+    "hel:blood_dice": {
+      "name": "dés de sang",
+      "effect_text": "Donnez-vous 12 couches de chance ; causez 6[[icon:D]]à vous-même. Ces dégâts seront certainement un coup critique et ne consommeront pas de chance.",
+      "description": "Douloureux et heureux."
+    },
+    "hel:bugatti": {
+      "name": "bugatti",
+      "effect_text": "Lorsque l'équipement existe, le nombre maximum de cartes dans la main de la cible est de -1, et 2 cartes supplémentaires seront tirées à chaque tour.",
+      "description": "The Fast and Furious, mais pourquoi y a-t-il un peu de monde…"
+    },
+    "hel:magic_fire": {
+      "name": "feu magique",
+      "effect_text": "Applique 1 couche de Feu à la cible",
+      "description": "Les flammes alimentées par la magie continueront de croître."
+    },
+    "hel:gunpowder": {
+      "name": "poudre à canon",
+      "effect_text": "Cause 2[[icon:D]]×3 à la cible ; à chaque fois qu'elle touche, faites en sorte que la cible[[icon:F]]soit résolue immédiatement une fois, puis donnez-lui[[icon:F]]cumule -1",
+      "description": "Faites exploser votre feu."
+    },
+    "hel:magic_gunpowder": {
+      "name": "poudre à canon magique",
+      "effect_text": "Restaurez-vous[[icon:M]]égal aux niveaux[[icon:F]]de la cible",
+      "description": "La poudre à canon générée par la magie transforme les dégâts en son propre carburant."
+    },
+    "hel:hel_lightning": {
+      "name": "Foudre du monde souterrain",
+      "effect_text": "Appliquer (2 + nombre d'équipements cibles) les couches[[icon:F]]à la cible",
+      "description": "L'équipement dont vous êtes fier vous alourdira."
+    },
+    "hel:magma": {
+      "name": "magma",
+      "effect_text": "Inflige 6[[icon:D]]à la cible ; applique 1 pile de[[icon:F]]à la cible lorsqu'elle est touchée",
+      "description": "Vous êtes malade, buvez plus d'eau bouillie !"
+    },
+    "hel:lava": {
+      "name": "lave",
+      "effect_text": "Applique 4 piles de[[icon:F]]à toutes les cibles sélectionnables",
+      "description": "La passion de mourir ensemble."
+    },
+    "hel:deliverance": {
+      "name": "Délivrance",
+      "effect_text": "Inflige (nombre actuel de cartes dans la main de la cible ×2+2)[[icon:D]] à la cible",
+      "description": "Dans cette lumière, j'ai trouvé la délivrance."
+    }
+  }
+}
