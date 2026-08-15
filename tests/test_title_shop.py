@@ -40,13 +40,13 @@ class TitleShopTests(unittest.TestCase):
         self.assertEqual(first['set_id'], other['set_id'])
         self.assertEqual(len(first['offers']), 8)
         self.assertEqual(len({item['id'] for item in first['offers']}), 8)
-        self.assertEqual(first['refresh_cost'], 1000)
+        self.assertEqual(first['refresh_cost'], 700)
 
         refreshed, error = db.refresh_user_title_shop(self.user_a['id'])
         self.assertIsNone(error)
         self.assertNotEqual(refreshed['set_id'], first['set_id'])
-        self.assertEqual(refreshed['refresh_cost'], 1500)
-        self.assertEqual(refreshed['balance']['total'], first['balance']['total'] - 1000)
+        self.assertEqual(refreshed['refresh_cost'], 1000)
+        self.assertEqual(refreshed['balance']['total'], first['balance']['total'] - 700)
 
     def test_lock_survives_daily_rollover_and_unlock_uses_current_daily_set(self):
         refreshed, error = db.refresh_user_title_shop(self.user_a['id'])
@@ -61,7 +61,7 @@ class TitleShopTests(unittest.TestCase):
         next_day_daily, error = db.get_user_title_shop(self.user_b['id'])
         self.assertIsNone(error)
         self.assertEqual(next_day_locked['set_id'], locked_set_id)
-        self.assertEqual(next_day_locked['refresh_cost'], 1000)
+        self.assertEqual(next_day_locked['refresh_cost'], 700)
 
         unlocked, error = db.set_user_title_shop_locked(self.user_a['id'], False)
         self.assertIsNone(error)

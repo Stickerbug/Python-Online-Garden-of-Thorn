@@ -226,11 +226,12 @@ _DM_MARK_READ_LAST_AT = {}
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
 ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
 ROLE_COLOR_TOKENS = {'admin', 'bloom', 'guard', 'thorn', 'root', 'neutral'}
+ADMIN_ROLE_USERNAME_KEYS = frozenset({'stickerbug', 'eric', 'netherdog'})
 TITLE_COLOR_TOKENS = TITLE_STYLE_COLOR_TOKENS
 TITLE_MAX_EQUIPPED = 3
 TITLE_SHOP_OFFER_COUNT = 8
-TITLE_SHOP_REFRESH_BASE_COST = 1000
-TITLE_SHOP_REFRESH_COST_STEP = 500
+TITLE_SHOP_REFRESH_BASE_COST = 700
+TITLE_SHOP_REFRESH_COST_STEP = 300
 TITLE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9_.:-]{0,63}$')
 DEFAULT_SKIN_CONFIG = {
     'primary_color': '#FFE763',
@@ -7631,8 +7632,8 @@ def admin_set_user_role(identifier, role_type):
     if not normalized_type:
         return None, None, '身份类型必须是 admin/staff/contributor/sponsor/none'
     user_key = normalize_username_key(user['username'])
-    if normalized_type == 'admin' and user_key != 'stickerbug':
-        return None, None, '管理员身份只能授予 Stickerbug'
+    if normalized_type == 'admin' and user_key not in ADMIN_ROLE_USERNAME_KEYS:
+        return None, None, '管理员身份只能授予 Stickerbug、Eric 或 NetherDog'
     if user_key == 'stickerbug' and normalized_type != 'admin':
         return None, None, 'Stickerbug 必须保持管理员身份'
     defaults = _role_defaults(normalized_type)

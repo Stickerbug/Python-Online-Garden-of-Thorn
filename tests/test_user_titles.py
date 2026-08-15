@@ -107,6 +107,24 @@ class UserTitleTests(unittest.TestCase):
         remaining = db.get_user_title_center(self.user['id'])
         self.assertEqual([item['id'] for item in remaining['items']], ['test:custom'])
 
+    def test_admin_role_is_limited_to_the_three_developer_accounts(self):
+        for index, username in enumerate(('Stickerbug', 'Eric', 'NetherDog'), start=1):
+            candidate, error = db.create_user(f'AdminCandidate{index}', 'Aa1!aaaa')
+            self.assertIsNone(error)
+            with db.get_db_connection() as conn:
+                conn.execute(
+                    'UPDATE users SET username = ?, username_lower = ? WHERE id = ?',
+                    (username, db.normalize_username_key(username), candidate['id']),
+                )
+                conn.commit()
+            _, profile, error = db.admin_set_user_role(candidate['id'], 'admin')
+            self.assertIsNone(error)
+            self.assertEqual(profile['role_type'], 'admin')
+
+        _, profile, error = db.admin_set_user_role(self.user['id'], 'admin')
+        self.assertIsNone(profile)
+        self.assertIn('Stickerbug、Eric 或 NetherDog', error)
+
     def test_init_removes_legacy_role_generated_titles(self):
         with db.get_db_connection() as conn:
             now = db.utc_now()
