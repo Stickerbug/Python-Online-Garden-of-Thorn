@@ -9,6 +9,7 @@ AI_RUNTIME_ARCHIVE="${GTN_AI_RUNTIME_ARCHIVE:-}"
 AI_CHECKPOINT_NAME="${GTN_AI_CHECKPOINT_NAME:-structured-v2-search-dagger-v2.epoch-06.pt}"
 AI_CHECKPOINT="${GTN_AI_CHECKPOINT:-${AI_ROOT}/models/${AI_CHECKPOINT_NAME}}"
 BOOTSTRAP_PYTHON="${GTN_AI_BOOTSTRAP_PYTHON:-python3}"
+TORCH_INDEX_URL="${GTN_AI_TORCH_INDEX_URL:-https://mirrors.aliyun.com/pytorch-wheels/cpu}"
 
 if [[ -z "${AI_RUNTIME_ARCHIVE}" ]]; then
   echo "GTN_AI_RUNTIME_ARCHIVE must point to a production runtime bundle." >&2
@@ -48,7 +49,7 @@ fi
 "${BOOTSTRAP_PYTHON}" -m venv "${AI_VENV}"
 "${AI_VENV}/bin/python" -m pip install --upgrade pip setuptools wheel
 "${AI_VENV}/bin/python" -m pip install \
-  --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+  --index-url "${TORCH_INDEX_URL}" torch==2.10.0
 
 rm -rf "${AI_ROOT}.previous"
 if [[ -e "${AI_ROOT}" ]]; then mv "${AI_ROOT}" "${AI_ROOT}.previous"; fi
