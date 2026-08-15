@@ -47,6 +47,7 @@ fi
 
 "${BOOTSTRAP_PYTHON}" -m venv "${AI_VENV}"
 "${AI_VENV}/bin/python" -m pip install --upgrade pip setuptools wheel
+"${AI_VENV}/bin/python" -m pip install "numpy>=1.26,<3"
 PYTHON_TAG="$("${AI_VENV}/bin/python" -c \
   'import sys; print(f"cp{sys.version_info.major}{sys.version_info.minor}")')"
 TORCH_WHEEL_URL="${GTN_AI_TORCH_WHEEL_URL:-https://mirrors.aliyun.com/pytorch-wheels/cpu/torch-2.10.0%2Bcpu-${PYTHON_TAG}-${PYTHON_TAG}-manylinux_2_28_x86_64.whl}"
