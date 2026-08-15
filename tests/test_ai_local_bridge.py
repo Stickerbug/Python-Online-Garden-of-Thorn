@@ -1,3 +1,8 @@
+import os
+from pathlib import Path
+
+import pytest
+
 from ai_local_bridge import LocalAiWorkerClient
 from game_engine import GameEngine
 
@@ -35,7 +40,25 @@ def test_local_ai_bridge_discovers_posix_virtualenv(tmp_path) -> None:
 
     client = LocalAiWorkerClient(game_root=game_root, ai_root=ai_root)
 
-    assert client.python == python.resolve()
+    assert client.python == Path(os.path.abspath(python))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX venvs use python symlinks")
+def test_local_ai_bridge_preserves_virtualenv_python_symlink(tmp_path) -> None:
+    game_root = tmp_path / "game"
+    ai_root = tmp_path / "GTN-AI"
+    system_python = tmp_path / "system" / "python3"
+    venv_python = ai_root / ".venv" / "bin" / "python"
+    game_root.mkdir()
+    system_python.parent.mkdir()
+    system_python.write_text("", encoding="utf-8")
+    venv_python.parent.mkdir(parents=True)
+    venv_python.symlink_to(system_python)
+
+    client = LocalAiWorkerClient(game_root=game_root, ai_root=ai_root)
+
+    assert client.python == Path(os.path.abspath(venv_python))
+    assert client.python != system_python.resolve()
 
 
 def test_local_ai_bridge_accepts_server_paths_and_retention_settings(tmp_path) -> None:

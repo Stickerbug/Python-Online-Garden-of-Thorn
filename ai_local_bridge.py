@@ -108,7 +108,7 @@ class LocalAiWorkerClient:
     def _resolve_python(self, value: str | Path | None) -> Path:
         configured = value or os.environ.get("GTN_AI_PYTHON")
         if configured:
-            return Path(configured).expanduser().resolve()
+            return self._absolute_path(configured)
         candidates = [
             self.ai_root / ".venv" / "Scripts" / "python.exe",
             self.ai_root / ".venv" / "bin" / "python",
@@ -116,8 +116,14 @@ class LocalAiWorkerClient:
         ]
         for candidate in candidates:
             if candidate.is_file():
-                return candidate.resolve()
-        return candidates[0 if os.name == "nt" else 1].resolve()
+                return self._absolute_path(candidate)
+        return self._absolute_path(candidates[0 if os.name == "nt" else 1])
+
+    @staticmethod
+    def _absolute_path(value: str | Path) -> Path:
+        # Resolving a POSIX venv's python symlink produces /usr/bin/python and
+        # silently drops the venv site-packages. Keep the executable entry path.
+        return Path(os.path.abspath(os.fspath(Path(value).expanduser())))
 
     @staticmethod
     def encode_engine(engine) -> str:
