@@ -3187,6 +3187,8 @@ def _award_achievement_title_conn(conn, user_id, defn):
         title_id = _normalize_title_id(reward_title.get('id')) or f"achievement:{_normalize_title_id(defn.get('id'))}"
         if not title_id:
             return False
+        parent_revision_id = _ensure_title_catalog_revision_state_conn(conn)
+        before_snapshot = _title_catalog_snapshot_conn(conn)
         _upsert_title_catalog_conn(
             conn,
             title_id,
@@ -3196,6 +3198,14 @@ def _award_achievement_title_conn(conn, user_id, defn):
             source_ref=str(defn.get('id') or ''),
             purchasable=False,
             active=True,
+        )
+        _record_title_catalog_mutation_conn(
+            conn,
+            before_snapshot,
+            parent_revision_id,
+            actor={'username': 'system'},
+            kind='achievement-title',
+            message=f'Create achievement title {title_id}',
         )
     else:
         return False
@@ -6244,6 +6254,84 @@ def _write_title_catalog_backup(revision_id, snapshot, created_at=None):
     return paths
 
 
+def _record_title_catalog_mutation_conn(
+    conn,
+    before_snapshot,
+    parent_revision_id,
+    actor=None,
+    kind='admin',
+    message='',
+):
+    """Attach an already-applied catalog mutation to the revision chain."""
+    after_snapshot = _title_catalog_snapshot_conn(conn)
+    if _title_catalog_snapshot_hash(before_snapshot) == _title_catalog_snapshot_hash(after_snapshot):
+        return None
+
+    # Direct administrative edits can invalidate a saved nickname-color segment.
+    # Reapplying the snapshot performs the same reference cleanup as editor publishes.
+    _apply_title_catalog_snapshot_conn(conn, after_snapshot)
+    after_snapshot = _title_catalog_snapshot_conn(conn)
+    diff = _title_catalog_diff_conn(conn, before_snapshot, after_snapshot)
+    revision_id, revision_hash = _insert_title_catalog_revision_conn(
+        conn,
+        after_snapshot,
+        parent_revision_id=parent_revision_id,
+        kind=kind,
+        actor=actor,
+        message=message,
+    )
+    conn.execute(
+        '''UPDATE title_catalog_state
+           SET current_revision_id = ?, updated_at = ? WHERE singleton_id = 1''',
+        (revision_id, utc_now()),
+    )
+    _title_editor_audit_conn(
+        conn,
+        actor,
+        kind,
+        revision_id,
+        {
+            'message': str(message or '')[:500],
+            'summary': {
+                key: value for key, value in diff.items()
+                if key not in {'changes', 'changed_ids'}
+            },
+            'changes': diff['changes'],
+            'sha256': revision_hash,
+        },
+    )
+    result = {
+        'revision_id': revision_id,
+        'sha256': revision_hash,
+        'snapshot': after_snapshot,
+        'diff': diff,
+        'affected_user_ids': _title_editor_affected_user_ids_conn(conn, diff['changed_ids']),
+    }
+    _prune_title_editor_revisions_conn(conn)
+    return result
+
+
+def _write_title_catalog_change_backups(
+    prior_revision_id,
+    prior_snapshot,
+    prior_created_at,
+    result,
+):
+    if not result:
+        return []
+    errors = []
+    for revision_id, snapshot, created_at in (
+        (prior_revision_id, prior_snapshot, prior_created_at),
+        (result['revision_id'], result['snapshot'], utc_now()),
+    ):
+        try:
+            _write_title_catalog_backup(revision_id, snapshot, created_at)
+        except OSError as exc:
+            errors.append(str(exc))
+    result['backup_errors'] = errors
+    return errors
+
+
 def _grant_user_title_conn(
     conn,
     user_id,
@@ -6849,8 +6937,20 @@ def admin_grant_user_title(
     )
     if title_id and not normalized_id:
         return None, None, '称号 ID 仅可包含小写字母、数字及 . _ : -，且最长64个字符'
+    catalog_update = None
+    prior_revision_id = None
+    prior_snapshot = None
+    prior_created_at = None
     try:
         with get_db_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            prior_revision_id = _ensure_title_catalog_revision_state_conn(conn)
+            prior_revision = conn.execute(
+                'SELECT created_at FROM title_catalog_revisions WHERE revision_id = ?',
+                (prior_revision_id,),
+            ).fetchone()
+            prior_created_at = prior_revision['created_at'] if prior_revision else None
+            prior_snapshot = _title_catalog_snapshot_conn(conn)
             normalized_id = _upsert_title_catalog_conn(
                 conn,
                 normalized_id,
@@ -6863,6 +6963,14 @@ def admin_grant_user_title(
                 style=style,
                 style_markup=style_markup,
             )
+            catalog_update = _record_title_catalog_mutation_conn(
+                conn,
+                prior_snapshot,
+                prior_revision_id,
+                actor={'username': str(source_ref or source_type or 'admin')[:64]},
+                kind='admin-grant',
+                message=f'Create or update title {normalized_id}',
+            )
             _grant_user_title_conn(
                 conn,
                 user['id'],
@@ -6874,7 +6982,20 @@ def admin_grant_user_title(
                 allow_duplicate=True,
             )
             conn.commit()
-        return user, get_user_title_center(user['id']), None
+        _write_title_catalog_change_backups(
+            prior_revision_id,
+            prior_snapshot,
+            prior_created_at,
+            catalog_update,
+        )
+        center = get_user_title_center(user['id'])
+        if catalog_update:
+            center['_catalog_update'] = {
+                'revision_id': catalog_update['revision_id'],
+                'affected_user_ids': catalog_update.get('affected_user_ids') or [],
+                'backup_errors': catalog_update.get('backup_errors') or [],
+            }
+        return user, center, None
     except (TypeError, ValueError) as exc:
         return None, None, str(exc)
 
@@ -6940,7 +7061,19 @@ def admin_set_title_catalog_style(title_identifier, style_markup):
         style = parse_title_style(style_markup)
     except ValueError as exc:
         return None, str(exc)
+    catalog_update = None
+    prior_snapshot = None
+    prior_revision_id = None
+    prior_created_at = None
     with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        prior_revision_id = _ensure_title_catalog_revision_state_conn(conn)
+        prior_revision = conn.execute(
+            'SELECT created_at FROM title_catalog_revisions WHERE revision_id = ?',
+            (prior_revision_id,),
+        ).fetchone()
+        prior_created_at = prior_revision['created_at'] if prior_revision else None
+        prior_snapshot = _title_catalog_snapshot_conn(conn)
         row = conn.execute(
             '''
             SELECT * FROM title_catalog
@@ -6965,9 +7098,30 @@ def admin_set_title_catalog_style(title_identifier, style_markup):
                 str(style_markup or '')[:1000], utc_now(), row['title_id'],
             ),
         )
+        catalog_update = _record_title_catalog_mutation_conn(
+            conn,
+            prior_snapshot,
+            prior_revision_id,
+            actor={'username': 'adminconsole'},
+            kind='admin-style',
+            message=f'Update title style {row["title_id"]}',
+        )
         conn.commit()
         updated = conn.execute('SELECT * FROM title_catalog WHERE title_id = ?', (row['title_id'],)).fetchone()
-        return _title_row_payload(updated), None
+        item = _title_row_payload(updated)
+    _write_title_catalog_change_backups(
+        prior_revision_id,
+        prior_snapshot,
+        prior_created_at,
+        catalog_update,
+    )
+    if catalog_update:
+        item['_catalog_update'] = {
+            'revision_id': catalog_update['revision_id'],
+            'affected_user_ids': catalog_update.get('affected_user_ids') or [],
+            'backup_errors': catalog_update.get('backup_errors') or [],
+        }
+    return item, None
 
 
 def admin_list_title_catalog(query='', limit=100):

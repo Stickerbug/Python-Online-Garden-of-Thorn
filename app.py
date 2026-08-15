@@ -438,7 +438,7 @@ GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSIO
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -11622,7 +11622,11 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                 item, error = admin_set_title_catalog_style(parts[3], parts[4])
                 if error:
                     return {'success': False, 'output': error}
-                affected_user_ids = set()
+                catalog_update = item.pop('_catalog_update', {}) if isinstance(item, dict) else {}
+                affected_user_ids = {
+                    int(user_id) for user_id in catalog_update.get('affected_user_ids') or []
+                    if int(user_id) > 0
+                }
                 with _lock:
                     for player in players.values():
                         if any(str(title.get('id') or '') == str(item.get('id') or '') for title in player.get('equipped_titles') or []):
@@ -11634,9 +11638,21 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     if affected_id > 0:
                         refresh_online_user_titles(affected_id)
                 admin_event('admin', f"updated title style {item.get('id')}")
+                revision_text = (
+                    f"，目录修订 #{catalog_update['revision_id']}"
+                    if catalog_update.get('revision_id') else ''
+                )
+                backup_text = (
+                    f"；警告：{len(catalog_update['backup_errors'])} 个备份写入失败"
+                    if catalog_update.get('backup_errors') else ''
+                )
                 return {
                     'success': True,
-                    'output': f"已更新 {item.get('name')} ({item.get('id')}) 的样式，共 {len((item.get('style') or {}).get('segments') or [])} 段。",
+                    'output': (
+                        f"已更新 {item.get('name')} ({item.get('id')}) 的样式，共 "
+                        f"{len((item.get('style') or {}).get('segments') or [])} 段"
+                        f"{revision_text}{backup_text}。"
+                    ),
                 }
             return {'success': False, 'output': command_error(raw, len(raw), 'account title catalog <list|style> ...')}
         if len(parts) < 3:
@@ -11673,12 +11689,21 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             )
             if error:
                 return {'success': False, 'output': error}
+            catalog_update = center.pop('_catalog_update', {}) if isinstance(center, dict) else {}
             refresh_online_user_titles(granted_user['id'])
+            for affected_id in catalog_update.get('affected_user_ids') or []:
+                if int(affected_id) != int(granted_user['id']):
+                    refresh_online_user_titles(affected_id)
             admin_event(
                 'admin',
                 f"granted title {parts[3]} to account {granted_user['username']}#{granted_user['id']}",
             )
-            return {'success': True, 'output': format_user_titles(granted_user, center)}
+            output = format_user_titles(granted_user, center)
+            if catalog_update.get('revision_id'):
+                output += f"\n称号目录修订：#{catalog_update['revision_id']}"
+            if catalog_update.get('backup_errors'):
+                output += f"\n警告：{len(catalog_update['backup_errors'])} 个目录备份写入失败。"
+            return {'success': True, 'output': output}
         if sub == 'equip':
             if len(parts) < 4:
                 return {

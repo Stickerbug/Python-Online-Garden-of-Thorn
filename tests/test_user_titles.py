@@ -179,6 +179,38 @@ class UserTitleTests(unittest.TestCase):
         )
         self.assertIn('只能佩戴自己拥有', error)
 
+    def test_console_catalog_changes_keep_editor_revision_integrity(self):
+        before = db.get_title_editor_workspace(self.user['id'])
+        center = self.grant(
+            '修订测试',
+            '{color:#FF0000|id=left}修订{/}{color:#0000FF|id=right}测试{/}',
+            title_id='test:revisioned',
+        )
+        catalog_update = center.get('_catalog_update') or {}
+        self.assertGreater(
+            int(catalog_update.get('revision_id') or 0),
+            int(before['current_revision']['revision_id']),
+        )
+
+        center, error = db.set_user_title_name_style(
+            self.user['id'], 'test:revisioned', 'right',
+        )
+        self.assertIsNone(error)
+        self.assertIsNotNone(center['name_style'])
+
+        item, error = db.admin_set_title_catalog_style(
+            'test:revisioned',
+            '{gradient:90deg,#00AA66>#3366FF|id=main}修订测试{/}',
+        )
+        self.assertIsNone(error)
+        self.assertGreater(
+            int((item.get('_catalog_update') or {}).get('revision_id') or 0),
+            int(catalog_update.get('revision_id') or 0),
+        )
+        self.assertIsNone(db.get_user_title_center(self.user['id'])['name_style'])
+        after = db.get_title_editor_workspace(self.user['id'])
+        self.assertTrue(after['integrity_ok'])
+
 
 if __name__ == '__main__':
     unittest.main()

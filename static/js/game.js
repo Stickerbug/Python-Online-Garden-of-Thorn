@@ -16440,6 +16440,9 @@ function renderTitleCenter(panel, center) {
     const selectedNameTitleId = String(center?.name_style?.title_id || '');
     const selectedNameSegmentId = String(center?.name_style?.segment_id || '');
     const nameChoices = items.flatMap(item => titleStyleSegments(item).map(segment => ({ item, segment })));
+    const canOpenTitleEditor = ['admin', 'staff'].includes(
+        String(currentAccount?.role_type || '').toLowerCase(),
+    );
     panel.innerHTML = `
         <div class="title-center-head">
             <div>
@@ -16529,6 +16532,16 @@ function renderTitleCenter(panel, center) {
                         </button>`;
                     }).join('')}
                 </div>
+            </div>
+        ` : ''}
+        ${canOpenTitleEditor ? `
+            <div class="title-editor-entry">
+                <a href="/titleeditor" target="_blank" rel="noopener">${escapeHtml(lt({
+                    zh: '打开称号编辑器',
+                    en: 'Open title editor',
+                    fr: 'Ouvrir l’éditeur de titres',
+                    ja: '称号エディターを開く',
+                }))}</a>
             </div>
         ` : ''}
     `;

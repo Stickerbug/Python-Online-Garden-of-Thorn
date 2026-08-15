@@ -1722,6 +1722,33 @@ body {
   white-space: nowrap;
 }
 
+.title-editor-entry {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border-light);
+}
+
+.title-editor-entry a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.title-editor-entry a:hover {
+  border-color: #4f9864;
+  color: #3e8f65;
+}
+
 .title-paint-gradient {
   color: transparent !important;
   background-image: var(--title-paint-gradient);
