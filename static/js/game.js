@@ -922,6 +922,7 @@ const I18N = {
         mod_default_name: 'Mod {0}',
         mod_selection_force_vanilla: 'Enabled the vanilla card mod because the selected mods must contain at least one Thorn, Bloom, Root, and Guard card.',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire', mode_random_deck: 'Random Deck',
+        ai_1v1_test: 'Battle Phelren V1', ai_1v1_test_title: 'Battle Phelren V1', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating.', ai_1v1_test_loading: 'Loading Phelren V1...',
         form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
         team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
         team_disbanded_msg: 'Team disbanded', team_match_invite_msg: 'Team {0} challenges your team',
@@ -1026,6 +1027,7 @@ I18N.zh = { ...I18N.en,
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
+    ai_1v1_test: '对战 Phelren V1', ai_1v1_test_title: '对战 Phelren V1', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计花阶分。', ai_1v1_test_loading: '正在加载 Phelren V1…',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
     team_disbanded_msg: '队伍已解散', team_match_invite_msg: '队伍 {0} 向你们发起挑战',
@@ -1094,6 +1096,7 @@ I18N.fr = { ...I18N.en,
     choose_light_cards: 'Choisissez les cartes Attaque à convertir', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Faites glisser les cartes pour réorganiser votre pioche. La carte du haut sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
+    ai_1v1_test: 'Affronter Phelren V1', ai_1v1_test_title: 'Affronter Phelren V1', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating.', ai_1v1_test_loading: 'Chargement de Phelren V1…',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
     server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
     select_event_desc: "Choisir un événement de départ", opponent_selected: 'Adversaire a choisi', opponent_selecting: 'Adversaire choisit...',
@@ -1167,6 +1170,7 @@ I18N.ja = { ...I18N.en,
     choose_light_cards: '変化させる攻撃カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: 'カードをドラッグして山札の順序を変更します。一番上のカードから引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
+    ai_1v1_test: 'Phelren V1 と対戦', ai_1v1_test_title: 'Phelren V1 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動しません。', ai_1v1_test_loading: 'Phelren V1 を読み込んでいます…',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
     server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
     select_event_desc: 'オープニングイベントを選択', opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
@@ -1975,7 +1979,7 @@ Object.assign(I18N.en, {
     replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.',
     replay_loading_progress: 'Loaded {0}/{1} frames', replay_prepare: 'Preparing replay...',
     feedback_appeal: 'Match Appeal', feedback_replay_id: 'Replay ID',
-    feedback_replay_placeholder: 'Replay ID, e.g. R-12345'
+    feedback_replay_placeholder: 'Replay ID, e.g. R-12345 or P-12345'
 });
 Object.assign(I18N.zh, {
     account_replays: '最近回放', replay_viewer: '回放查看器', replay_view: '查看',
@@ -1986,7 +1990,7 @@ Object.assign(I18N.zh, {
     replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。',
     replay_loading_progress: '已加载 {0}/{1} 帧', replay_prepare: '正在准备回放...',
     feedback_appeal: '对局申诉', feedback_replay_id: '回放 ID',
-    feedback_replay_placeholder: '回放 ID，例如 R-12345'
+    feedback_replay_placeholder: '回放 ID，例如 R-12345 或 P-12345'
 });
 Object.assign(I18N.fr, {
     account_replays: 'Replays récents', replay_viewer: 'Lecteur de replay', replay_view: 'Voir',
@@ -1997,7 +2001,7 @@ Object.assign(I18N.fr, {
     replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.',
     replay_loading_progress: '{0}/{1} frames chargées', replay_prepare: 'Préparation du replay...',
     feedback_appeal: 'Contestation de partie', feedback_replay_id: 'ID du replay',
-    feedback_replay_placeholder: 'ID du replay, ex. R-12345'
+    feedback_replay_placeholder: 'ID du replay, ex. R-12345 ou P-12345'
 });
 Object.assign(I18N.ja, {
     account_replays: '最近のリプレイ', replay_viewer: 'リプレイビューア', replay_view: '表示',
@@ -2008,7 +2012,7 @@ Object.assign(I18N.ja, {
     replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。',
     replay_loading_progress: '{0}/{1}フレーム読込済み', replay_prepare: 'リプレイ準備中...',
     feedback_appeal: '対戦の異議申立て', feedback_replay_id: 'リプレイID',
-    feedback_replay_placeholder: 'リプレイID（例 R-12345）'
+    feedback_replay_placeholder: 'リプレイID（例 R-12345 / P-12345）'
 });
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.zh, { admin_prefix: '\u7ba1\u7406\u5458', login_admin_reserved: '\u6b64\u6635\u79f0\u88ab\u7ba1\u7406\u5458\u5360\u7528' });
@@ -2506,6 +2510,9 @@ document.documentElement.classList.toggle('landscape-mode-enabled', landscapeMod
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
 const HIDDEN_FEATURES_KEY = 'gtn_hidden_features_enabled';
 const STORY_TEST_WARNING_ACK_KEY = 'gtn_story_test_warning_ack_v1';
+let ai1v1TestGate = { authenticated: false, enabled: false, checkedAt: 0 };
+let ai1v1TestGateRequest = null;
+let ai1v1StartPending = false;
 function hiddenFeaturesEnabled() {
     try {
         return localStorage.getItem(HIDDEN_FEATURES_KEY) === '1';
@@ -2594,17 +2601,133 @@ function titleColorCss(color) {
         indestructible: '#D4AC0D',
         critical: '#D4AC0D',
         primary: '#7EEF6D',
-        common: '#FFE65D',
-        rare: '#861FDE',
+        common: '#7EEF6D',
+        unusual: '#FFE65D',
+        rare: '#4D52E3',
+        epic: '#861FDE',
+        legendary: '#DE1F1F',
+        mythic: '#1FDBDE',
         ultra: '#FF2B75',
         super: '#2BFFA3',
+        omega: '#F329D9',
+        eternal: '#EEEEEE',
+        unique: '#555555',
         milestone: '#5AA469',
         hidden: '#7257A8',
         neutral: 'var(--text-secondary)',
+        spectator: 'var(--text-muted)',
     };
     if (tokens[key]) return tokens[key];
-    if (/^#[0-9a-f]{6}$/i.test(key)) return key;
+    if (/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(key)) return key;
     return '';
+}
+
+function normalizeTitlePaint(paint, fallbackColor = 'neutral') {
+    if (!paint || typeof paint !== 'object') {
+        return { kind: 'solid', color: titleColorCss(paint || fallbackColor) || titleColorCss(fallbackColor) };
+    }
+    const kind = String(paint.kind || '').toLowerCase();
+    if (kind === 'solid') {
+        return { kind, color: titleColorCss(paint.color) || titleColorCss(fallbackColor) };
+    }
+    if (kind === 'gradient' || kind === 'rainbow') {
+        const colors = (Array.isArray(paint.colors) ? paint.colors : [])
+            .map(titleColorCss)
+            .filter(Boolean)
+            .slice(0, 12);
+        if (colors.length < 2) return { kind: 'solid', color: titleColorCss(fallbackColor) };
+        const numericAngle = Number(paint.angle);
+        const angle = Number.isFinite(numericAngle) ? ((numericAngle % 360) + 360) % 360 : 90;
+        return { kind, colors, angle };
+    }
+    if (kind === 'theme') {
+        return {
+            kind,
+            light: normalizeTitlePaint(paint.light, fallbackColor),
+            dark: normalizeTitlePaint(paint.dark, fallbackColor),
+        };
+    }
+    return { kind: 'solid', color: titleColorCss(fallbackColor) };
+}
+
+function titlePaintPresentation(rawPaint) {
+    const paint = normalizeTitlePaint(rawPaint);
+    if (paint.kind === 'gradient' || paint.kind === 'rainbow') {
+        return {
+            className: 'title-paint-gradient',
+            style: `--title-paint-gradient:linear-gradient(${paint.angle}deg,${paint.colors.join(',')})`,
+        };
+    }
+    if (paint.kind === 'theme') {
+        const light = paint.light?.color || titleColorCss('neutral');
+        const dark = paint.dark?.color || titleColorCss('neutral');
+        return {
+            className: 'title-paint-theme',
+            style: `--title-paint-light:${light};--title-paint-dark:${dark}`,
+        };
+    }
+    return { className: 'title-paint-solid', style: `color:${paint.color || titleColorCss('neutral')}` };
+}
+
+function applyTitlePaint(el, paint) {
+    if (!el) return;
+    const presentation = titlePaintPresentation(paint);
+    el.classList.remove('title-paint-solid', 'title-paint-gradient', 'title-paint-theme');
+    if (presentation.className) el.classList.add(presentation.className);
+    el.style.removeProperty('color');
+    el.style.removeProperty('--title-paint-gradient');
+    el.style.removeProperty('--title-paint-light');
+    el.style.removeProperty('--title-paint-dark');
+    presentation.style.split(';').filter(Boolean).forEach(rule => {
+        const separator = rule.indexOf(':');
+        if (separator > 0) el.style.setProperty(rule.slice(0, separator), rule.slice(separator + 1));
+    });
+}
+
+function titleStyleSegments(title) {
+    const segments = title?.style?.segments;
+    if (Array.isArray(segments) && segments.some(item => item && item.text != null)) {
+        return segments.slice(0, 24).map((item, index) => ({
+            id: String(item.id || `s${index + 1}`),
+            text: String(item.text || ''),
+            paint: normalizeTitlePaint(item.paint, title?.color || 'neutral'),
+        }));
+    }
+    return [{
+        id: 'legacy',
+        text: String(title?.name || ''),
+        paint: normalizeTitlePaint({ kind: 'solid', color: title?.color || 'neutral' }),
+    }];
+}
+
+function appendStyledTitle(parent, title, bracketed = true, className = 'player-title-inline') {
+    const segments = titleStyleSegments(title);
+    segments.forEach((segment, index) => {
+        const span = document.createElement('span');
+        span.className = `${className} title-style-segment`;
+        span.dataset.titleSegment = segment.id;
+        span.textContent = `${bracketed && index === 0 ? '[' : ''}${segment.text}${bracketed && index === segments.length - 1 ? ']' : ''}`;
+        applyTitlePaint(span, segment.paint);
+        parent.appendChild(span);
+    });
+}
+
+function styledTitleHtml(title, bracketed = true, className = 'player-title-inline') {
+    const segments = titleStyleSegments(title);
+    return segments.map((segment, index) => {
+        const presentation = titlePaintPresentation(segment.paint);
+        const text = `${bracketed && index === 0 ? '[' : ''}${segment.text}${bracketed && index === segments.length - 1 ? ']' : ''}`;
+        return `<span class="${escapeHtml(className)} title-style-segment ${presentation.className}" data-title-segment="${escapeHtml(segment.id)}" style="${escapeHtml(presentation.style)}">${escapeHtml(text)}</span>`;
+    }).join('');
+}
+
+function getPlayerNamePaint(player) {
+    if (player?.name_style?.paint) return normalizeTitlePaint(player.name_style.paint);
+    if (player?.name_color) return normalizeTitlePaint({ kind: 'solid', color: player.name_color });
+    if (player?.console_player || player?.special_role === 'console') {
+        return normalizeTitlePaint({ kind: 'solid', color: 'admin' });
+    }
+    return null;
 }
 
 function getEquippedTitles(player) {
@@ -2617,6 +2740,7 @@ function getEquippedTitles(player) {
                 id: String(item.id || `title-${index + 1}`),
                 name: String(item.name || ''),
                 color: String(item.color || ''),
+                style: item.style && typeof item.style === 'object' ? item.style : null,
                 equipped_slot: index + 1,
             }))
         : [];
@@ -2636,8 +2760,6 @@ function getSpecialRolePrefix(player) {
 
 function getSpecialRoleColor(player) {
     if (!player) return '';
-    const title = getEquippedTitles(player)[0];
-    if (title) return title.color;
     if (player.name_color) return player.name_color;
     if (player.console_player || player.special_role === 'console') return 'admin';
     return '';
@@ -2695,14 +2817,7 @@ function setPlayerNameContent(el, player, options = {}) {
     el.textContent = '';
     const titles = getEquippedTitles(player);
     if (adminPrefix && titles.length) {
-        titles.forEach(title => {
-            const titleSpan = document.createElement('span');
-            titleSpan.className = 'player-title-inline';
-            titleSpan.textContent = `[${title.name}]`;
-            const color = titleColorCss(title.color);
-            if (color) titleSpan.style.color = color;
-            el.appendChild(titleSpan);
-        });
+        titles.forEach(title => appendStyledTitle(el, title));
     } else if (adminPrefix) {
         const prefix = getSpecialRolePrefix(player);
         if (prefix) {
@@ -2717,8 +2832,8 @@ function setPlayerNameContent(el, player, options = {}) {
     const nameSpan = document.createElement('span');
     nameSpan.className = 'player-name-value';
     nameSpan.textContent = getPlayerBaseName(player);
-    const nameColor = titleColorCss(getSpecialRoleColor(player));
-    if (nameColor) nameSpan.style.color = nameColor;
+    const namePaint = getPlayerNamePaint(player);
+    if (namePaint) applyTitlePaint(nameSpan, namePaint);
     el.appendChild(nameSpan);
     el.classList.toggle('admin-name', false);
     el.classList.toggle('bloom-name', false);
@@ -2732,13 +2847,7 @@ function playerNameHtml(player, options = {}) {
     const titles = getEquippedTitles(player);
     const parts = [];
     if (adminPrefix && titles.length) {
-        titles.forEach(title => {
-            const color = titleColorCss(title.color);
-            parts.push(
-                `<span class="player-title-inline"${color ? ` style="color:${escapeHtml(color)}"` : ''}>`
-                + `[${escapeHtml(title.name)}]</span>`,
-            );
-        });
+        titles.forEach(title => parts.push(styledTitleHtml(title)));
     } else if (adminPrefix) {
         const prefix = getSpecialRolePrefix(player);
         const color = titleColorCss(getSpecialRoleColor(player));
@@ -2749,9 +2858,10 @@ function playerNameHtml(player, options = {}) {
             );
         }
     }
-    const nameColor = titleColorCss(getSpecialRoleColor(player));
+    const namePaint = getPlayerNamePaint(player);
+    const namePresentation = namePaint ? titlePaintPresentation(namePaint) : null;
     parts.push(
-        `<span class="player-name-value"${nameColor ? ` style="color:${escapeHtml(nameColor)}"` : ''}>`
+        `<span class="player-name-value${namePresentation ? ` ${namePresentation.className}` : ''}"${namePresentation ? ` style="${escapeHtml(namePresentation.style)}"` : ''}>`
         + `${escapeHtml(getPlayerBaseName(player))}</span>`,
     );
     return parts.join('');
@@ -4847,6 +4957,13 @@ let achievementLoading = false;
 let achievementLoadError = '';
 let achievementActiveTab = 'dew';
 let titleEquipSaving = false;
+let titleNameStyleSaving = false;
+let titleShop = null;
+let titleShopLoading = false;
+let titleShopError = '';
+let titleShopBusy = false;
+let titleShopLoadedAt = 0;
+let titleShopCountdownTimer = null;
 let achievementToastQueue = [];
 let achievementToastActive = false;
 let achievementToastTimer = null;
@@ -4900,6 +5017,8 @@ let accountReplayFrameFetches = new Map();
 let replayMode = false;
 const DEFAULT_SKIN_CONFIG = Object.freeze({ primary_color: '#FFE763', eye_shape: 'oval' });
 const SKIN_EYE_SHAPES = new Set(['oval', 'rectangle', 'diamond', 'hexagon']);
+const PHELREN_AVATAR_KIND = 'phelren';
+const PHELREN_AVATAR_FRAME_URL = '/static/assets/player-avatars/phelren-frame.svg';
 const DEFAULT_SKIN_LOOK = Object.freeze({ x: 0.707, y: -0.707 });
 const SKIN_LOOK_OFFSET_X_PERCENT = 38;
 const SKIN_LOOK_OFFSET_Y_PERCENT = 56;
@@ -4932,6 +5051,8 @@ let GALLERY_CARD_DEFS = null;
 let GALLERY_OPENING_EVENTS = null;
 let galleryDataLoadPromise = null;
 let galleryDataLoadedAt = 0;
+let galleryDataLoadKey = '';
+let galleryDataLoadedKey = '';
 let settingsModsLoadPromise = null;
 let settingsModsLoadedAt = 0;
 let settingsCommunityModsLoadPromise = null;
@@ -5687,6 +5808,60 @@ function applyLandscapeMode(value) {
     updateClassicMobileCanvas();
 }
 
+function updateAi1v1TestEntry(mode = null) {
+    const entry = $('ai-1v1-test-entry');
+    if (!entry) return;
+    const activeMode = mode || $('lobby-mode-tabs')?.querySelector('.mode-tab.active')?.getAttribute('data-mode') || '';
+    const visible = ai1v1TestGate.authenticated
+        && ai1v1TestGate.enabled
+        && activeMode === '1v1';
+    entry.classList.toggle('hidden', !visible);
+}
+
+function setAi1v1TestLoading(loading) {
+    ai1v1StartPending = !!loading;
+    const button = $('btn-ai-1v1-test');
+    const label = $('ai-1v1-test-label');
+    if (button) {
+        button.disabled = ai1v1StartPending;
+        button.classList.toggle('is-loading', ai1v1StartPending);
+        button.setAttribute('aria-busy', ai1v1StartPending ? 'true' : 'false');
+    }
+    if (label) {
+        label.textContent = ai1v1StartPending
+            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V1…')
+            : UI.ai_1v1_test;
+    }
+}
+
+async function refreshAi1v1TestAvailability({ force = false } = {}) {
+    if (!force && ai1v1TestGate.checkedAt && Date.now() - ai1v1TestGate.checkedAt < 60000) {
+        updateAi1v1TestEntry();
+        return ai1v1TestGate;
+    }
+    if (ai1v1TestGateRequest) return ai1v1TestGateRequest;
+    ai1v1TestGateRequest = fetch('/api/ai-1v1/status', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+    }).then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        ai1v1TestGate = {
+            authenticated: !!(response.ok && data.authenticated),
+            enabled: !!(response.ok && data.enabled),
+            checkedAt: Date.now(),
+        };
+        updateAi1v1TestEntry();
+        return ai1v1TestGate;
+    }).catch(() => {
+        ai1v1TestGate = { authenticated: false, enabled: false, checkedAt: Date.now() };
+        updateAi1v1TestEntry();
+        return ai1v1TestGate;
+    }).finally(() => {
+        ai1v1TestGateRequest = null;
+    });
+    return ai1v1TestGateRequest;
+}
+
 function updateStoryCardBordersInput() {
     const input = $('settings-story-hide-card-borders');
     if (input) input.checked = !!storyCardBordersHidden;
@@ -5925,6 +6100,12 @@ function updateStaticText() {
     if (bootStep && !bootStep.dataset.dynamic) bootStep.textContent = UI.init_scripts;
     const settingsTitle = $('settings-title');
     if (settingsTitle) settingsTitle.textContent = UI.settings_title;
+    const aiTestLabel = $('ai-1v1-test-label');
+    if (aiTestLabel) {
+        aiTestLabel.textContent = ai1v1StartPending
+            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V1…')
+            : UI.ai_1v1_test;
+    }
     const settingsTabAppearance = $('settings-tab-appearance');
     if (settingsTabAppearance) settingsTabAppearance.textContent = UI.settings_appearance;
     const settingsTabServer = $('settings-tab-server');
@@ -5955,7 +6136,7 @@ function updateStaticText() {
     const feedbackAppealOption = document.querySelector('#feedback-category option[value="appeal"]');
     if (feedbackAppealOption) feedbackAppealOption.textContent = UI.feedback_appeal || '对局申诉';
     const feedbackReplayInput = $('feedback-replay-id');
-    if (feedbackReplayInput) feedbackReplayInput.placeholder = UI.feedback_replay_placeholder || '回放 ID，例如 R-12345';
+    if (feedbackReplayInput) feedbackReplayInput.placeholder = UI.feedback_replay_placeholder || '回放 ID，例如 R-12345 或 P-12345';
     const gameoverReplayLabel = $('gameover-replay-label');
     if (gameoverReplayLabel) gameoverReplayLabel.textContent = UI.replay_id || '回放 ID';
     const settingsAudio = $('settings-section-audio');
@@ -6111,6 +6292,7 @@ function updateStaticText() {
     setIconButtonLabel('btn-friends-top', UI.friends);
     setIconButtonLabel('btn-skin-top', UI.skin);
     setIconButtonLabel('btn-changelog-top', UI.about_changelog || '更新日志');
+    setIconButtonLabel('btn-title-shop-top', lt({ zh: '商店', en: 'Shop', fr: 'Boutique', ja: 'ショップ' }));
     setIconButtonLabel('btn-card-gallery', UI.card_gallery || UI.gallery || '图鉴');
     setIconButtonLabel('btn-replays-top', UI.account_replays || UI.replay || '回放');
     setIconButtonLabel('btn-achievements-top', UI.achievements || '成就');
@@ -6118,6 +6300,10 @@ function updateStaticText() {
     if (achievementsTopText) achievementsTopText.textContent = UI.achievements || '成就';
     const achievementsTitle = $('achievements-popover-title');
     if (achievementsTitle) achievementsTitle.textContent = UI.achievements_title || '成就与荆露';
+    const titleShopTitle = $('title-shop-popover-title');
+    if (titleShopTitle) titleShopTitle.textContent = lt({ zh: '商店', en: 'Shop', fr: 'Boutique', ja: 'ショップ' });
+    const titleShopTab = $('title-shop-tab-titles');
+    if (titleShopTab) titleShopTab.textContent = lt({ zh: '称号', en: 'Titles', fr: 'Titres', ja: '称号' });
     document.querySelectorAll('[data-achievement-tab]').forEach(btn => {
         const tab = btn.dataset.achievementTab || '';
         const labels = {
@@ -6134,6 +6320,7 @@ function updateStaticText() {
     if (changelogCache && Array.isArray(changelogCache.items) && !$('changelog-popover')?.classList.contains('hidden')) {
         renderChangelogItems(changelogCache.items);
     }
+    if (!$('title-shop-popover')?.classList.contains('hidden')) renderTitleShop();
     setIconButtonLabel('btn-leaderboard-top', UI.leaderboard || '排行榜');
     const skinTitle = $('skin-title');
     if (skinTitle) skinTitle.textContent = UI.skin_title || UI.skin;
@@ -6613,12 +6800,13 @@ function formatClassicRoundLabel(gs) {
 }
 
 function battlePanelSupportsSpectators(gs = gameState) {
+    const aiMatch = !!(gs && gs.ai_test);
     return !!(
         gs
         && activeViewId === 'view-game'
-        && !soloMode
+        && (!soloMode || aiMatch)
         && !tutorialMode
-        && !gs.solo
+        && (!gs.solo || aiMatch)
         && !gs.tutorial
         && !replayMode
         && !gs.replay_mode
@@ -6748,6 +6936,8 @@ function updateTopActionButtons(viewId = activeViewId) {
     if (replayTop) replayTop.classList.toggle('hidden', !onHome);
     const achievementsTop = $('btn-achievements-top');
     if (achievementsTop) achievementsTop.classList.toggle('hidden', !onHome);
+    const titleShopTop = $('btn-title-shop-top');
+    if (titleShopTop) titleShopTop.classList.toggle('hidden', !onHome);
     const leaderboardTop = $('btn-leaderboard-top');
     if (leaderboardTop) leaderboardTop.classList.toggle('hidden', !onHome);
 }
@@ -6773,6 +6963,7 @@ function showView(viewId) {
         toggleStatsPopover(false);
         toggleChangelogPopover(false);
         toggleAchievementsPopover(false);
+        toggleTitleShopPopover(false);
         toggleLeaderboardPopover(false);
     }
     if (!sameView && viewId !== 'view-game') {
@@ -7446,6 +7637,7 @@ function toggleChangelogPopover(force) {
     if (shouldOpen) {
         toggleLeaderboardPopover(false);
         toggleAchievementsPopover(false);
+        toggleTitleShopPopover(false);
         if (typeof toggleAccountPopover === 'function') toggleAccountPopover(false);
         if (typeof toggleFriendsPopover === 'function') toggleFriendsPopover(false);
         Promise.resolve(loadChangelog()).then(markChangelogRead);
@@ -7543,6 +7735,8 @@ function setHiddenFeaturesEnabled(enabled) {
     }
     updateUiStyleAvailability();
     updateStoryEntryAvailability();
+    if (enabled) void refreshAi1v1TestAvailability({ force: true });
+    else updateAi1v1TestEntry();
 }
 
 function promptHiddenFeatureUnlock() {
@@ -7580,6 +7774,7 @@ function promptHiddenFeatureUnlock() {
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.success) throw new Error(data.error || '秘钥错误');
             setHiddenFeaturesEnabled(true);
+            await refreshAi1v1TestAvailability({ force: true });
             hideModal();
             flashStatus('隐藏功能已开启', 1800);
         } catch (err) {
@@ -10374,11 +10569,29 @@ function buildGalleryModQueryString() {
     return params.toString();
 }
 
-async function fetchGalleryCardDefs({ force = false } = {}) {
-    if (!force && GALLERY_CARD_DEFS && Object.keys(GALLERY_CARD_DEFS).length) return GALLERY_CARD_DEFS;
-    const nextDefs = await fetchPublicDataJson(`/api/cards?${buildGalleryModQueryString()}`);
-    GALLERY_CARD_DEFS = nextDefs && typeof nextDefs === 'object' ? nextDefs : {};
-    return GALLERY_CARD_DEFS;
+function currentGalleryDataKey() {
+    return buildGalleryModQueryString();
+}
+
+function invalidateGalleryData() {
+    GALLERY_CARD_DEFS = null;
+    GALLERY_OPENING_EVENTS = null;
+    galleryDataLoadPromise = null;
+    galleryDataLoadKey = '';
+    galleryDataLoadedKey = '';
+    galleryDataLoadedAt = 0;
+    gallerySelectedModKeys = null;
+}
+
+async function fetchGalleryCardDefs({ force = false, queryKey = currentGalleryDataKey() } = {}) {
+    if (
+        !force
+        && galleryDataLoadedKey === queryKey
+        && GALLERY_CARD_DEFS
+        && Object.keys(GALLERY_CARD_DEFS).length
+    ) return GALLERY_CARD_DEFS;
+    const nextDefs = await fetchPublicDataJson(`/api/cards?${queryKey}`);
+    return nextDefs && typeof nextDefs === 'object' ? nextDefs : {};
 }
 
 function buildReplayExportModQueryString(replayInfo = {}) {
@@ -10409,29 +10622,48 @@ function getGalleryOpeningEvents() {
     return openingEvents || [];
 }
 
-async function fetchGalleryOpeningEvents({ force = false } = {}) {
-    if (!force && Array.isArray(GALLERY_OPENING_EVENTS) && GALLERY_OPENING_EVENTS.length) return GALLERY_OPENING_EVENTS;
-    const data = await fetchPublicDataJson(`/api/opening-events?${buildGalleryModQueryString()}`);
-    GALLERY_OPENING_EVENTS = Array.isArray(data.events) ? data.events : [];
-    return GALLERY_OPENING_EVENTS;
+async function fetchGalleryOpeningEvents({ force = false, queryKey = currentGalleryDataKey() } = {}) {
+    if (
+        !force
+        && galleryDataLoadedKey === queryKey
+        && Array.isArray(GALLERY_OPENING_EVENTS)
+        && GALLERY_OPENING_EVENTS.length
+    ) return GALLERY_OPENING_EVENTS;
+    const data = await fetchPublicDataJson(`/api/opening-events?${queryKey}`);
+    return Array.isArray(data.events) ? data.events : [];
 }
 
 async function ensureGalleryDataLoaded({ force = false } = {}) {
     const now = Date.now();
+    const queryKey = currentGalleryDataKey();
     const hasData = GALLERY_CARD_DEFS && Object.keys(GALLERY_CARD_DEFS).length
         && Array.isArray(GALLERY_OPENING_EVENTS) && GALLERY_OPENING_EVENTS.length;
-    if (!force && hasData && now - galleryDataLoadedAt < 5 * 60 * 1000) {
+    if (
+        !force
+        && hasData
+        && galleryDataLoadedKey === queryKey
+        && now - galleryDataLoadedAt < 5 * 60 * 1000
+    ) {
         return { cards: GALLERY_CARD_DEFS, events: GALLERY_OPENING_EVENTS };
     }
-    if (!force && galleryDataLoadPromise) return galleryDataLoadPromise;
+    if (!force && galleryDataLoadPromise && galleryDataLoadKey === queryKey) return galleryDataLoadPromise;
+    galleryDataLoadKey = queryKey;
     galleryDataLoadPromise = Promise.all([
-        fetchGalleryCardDefs({ force }),
-        fetchGalleryOpeningEvents({ force }),
+        fetchGalleryCardDefs({ force, queryKey }),
+        fetchGalleryOpeningEvents({ force, queryKey }),
     ]).then(([cards, events]) => {
+        if (queryKey !== currentGalleryDataKey()) return { cards, events, stale: true };
+        GALLERY_CARD_DEFS = cards;
+        GALLERY_OPENING_EVENTS = events;
+        galleryDataLoadedKey = queryKey;
         galleryDataLoadedAt = Date.now();
+        gallerySelectedModKeys = null;
         return { cards, events };
     }).finally(() => {
-        galleryDataLoadPromise = null;
+        if (galleryDataLoadKey === queryKey) {
+            galleryDataLoadPromise = null;
+            galleryDataLoadKey = '';
+        }
     });
     return galleryDataLoadPromise;
 }
@@ -14787,6 +15019,22 @@ function connectSocket(serverUrl) {
     bindSocketEvent('team_match_accepted', () => {
         hideModal();
     });
+    bindSocketEvent('ai_1v1_status', (data = {}) => {
+        if (data.status === 'loading') {
+            setAi1v1TestLoading(true);
+            updateStatus(UI.ai_1v1_test_loading || '正在加载 AI 模型…');
+        } else if (data.status === 'ready') {
+            setAi1v1TestLoading(false);
+        } else if (data.status === 'error') {
+            setAi1v1TestLoading(false);
+            const rematch = $('btn-rematch');
+            if (phase === 'game_over' && gameState?.ai_test && rematch) {
+                rematch.textContent = UI.rematch;
+                rematch.disabled = false;
+            }
+            flashStatus(data.message || UI.operation_failed, 3600, 'error');
+        }
+    });
     bindSocketEvent('game_phase', (data) => {
         debugLog('[client] game_phase:', data.phase);
         const nextPhase = data.phase;
@@ -14797,7 +15045,9 @@ function connectSocket(serverUrl) {
             return;
         }
         if (nextPhase !== 'lobby') dismissLobbyInvitationModal();
-        if (!data.solo) soloMode = false;
+        // AI 1v1 uses the isolated solo transport, including during pregame.
+        // Set this explicitly so its draft actions are never routed to a room.
+        soloMode = !!data.solo;
         if (nextPhase === 'lobby' && transientMatchRecovery) {
             debugLog('[client] ignored lobby phase while restoring active match');
             return;
@@ -14842,6 +15092,7 @@ function connectSocket(serverUrl) {
             closePileViewerModal();
             updateStatus(UI.game_over);
         } else if (phase === 'lobby') {
+            setAi1v1TestLoading(false);
             allowLobbyTransition('game_phase:lobby');
             clearNetworkMatchStateForLobby();
             showView('view-lobby');
@@ -15138,6 +15389,7 @@ function connectSocket(serverUrl) {
         isSpectating = false;
         spectateCardDataKey = '';
         syncBattleLogMatch(data || {});
+        syncRoomChatHistory(data || {});
         gameState = data;
         phase = data.phase || phase;
         maybeRefreshCardDefsForPayload(data, 'solo_state');
@@ -15160,7 +15412,9 @@ function connectSocket(serverUrl) {
         const keepOptimisticForState = !!optimisticResourceOverride;
         clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
         if (phase === 'game_over') {
-            if (data.tutorial || tutorialMode) {
+            if (data.ai_test) {
+                renderGameOverAfterFinalAnimation(previousGameState, data, { fullScreen: true, tutorial: false });
+            } else if (data.tutorial || tutorialMode) {
                 renderGameOverAfterFinalAnimation(previousGameState, data, { fullScreen: true, tutorial: true });
             } else {
                 renderGameOverAfterFinalAnimation(previousGameState, data, { fullScreen: false, deferResultLabels: true });
@@ -15807,7 +16061,7 @@ function thornDewCenterHtml(user) {
             <div class="thorn-dew-head">
                 <div>
                     <div class="thorn-dew-title">${escapeHtml(UI.thorn_dew || '荆露')}</div>
-                    <div class="thorn-dew-balance">${escapeHtml(total)}</div>
+                    <div class="thorn-dew-balance">${thornDewAmountHtml(total)}</div>
                     <div class="thorn-dew-sub">${escapeHtml(lt({ zh: '可用于未来兑换内容', en: 'Available for future rewards', fr: 'Utilisable pour de futures récompenses', ja: '今後の報酬交換に使用できます' }))}</div>
                 </div>
             </div>
@@ -16063,20 +16317,32 @@ function titleSourceLabel(source) {
 
 function applyTitleCenterOrder(center, orderedIds) {
     const ids = (orderedIds || []).map(String);
-    const slotById = new Map(ids.map((id, index) => [id, index + 1]));
+    const slotsById = new Map();
+    ids.forEach((id, index) => {
+        if (!slotsById.has(id)) slotsById.set(id, []);
+        slotsById.get(id).push(index + 1);
+    });
     const items = Array.isArray(center?.items) ? center.items : [];
+    const nextItems = items.map(item => {
+        const slots = slotsById.get(String(item.id || '')) || [];
+        return {
+            ...item,
+            equipped_slots: slots,
+            equipped_count: slots.length,
+            equipped_slot: slots[0] || null,
+        };
+    }).sort((a, b) => {
+        const aSlot = Number(a.equipped_slot || 999);
+        const bSlot = Number(b.equipped_slot || 999);
+        if (aSlot !== bSlot) return aSlot - bSlot;
+        return String(a.name || '').localeCompare(String(b.name || ''), currentLang || 'zh');
+    });
+    const itemById = new Map(nextItems.map(item => [String(item.id || ''), item]));
     return {
         ...(center || {}),
         equipped: ids,
-        items: items.map(item => ({
-            ...item,
-            equipped_slot: slotById.get(String(item.id || '')) || null,
-        })).sort((a, b) => {
-            const aSlot = Number(a.equipped_slot || 999);
-            const bSlot = Number(b.equipped_slot || 999);
-            if (aSlot !== bSlot) return aSlot - bSlot;
-            return String(a.name || '').localeCompare(String(b.name || ''), currentLang || 'zh');
-        }),
+        equipped_items: ids.map(id => itemById.get(id)).filter(Boolean),
+        items: nextItems,
     };
 }
 
@@ -16111,19 +16377,69 @@ async function saveEquippedTitleOrder(orderedIds) {
     }
 }
 
+async function saveTitleNameStyle(titleId = '', segmentId = '') {
+    if (titleNameStyleSaving || !achievementCenter) return;
+    const center = achievementCenter.titles || { items: [], equipped: [], max_equipped: 3 };
+    const previous = JSON.parse(JSON.stringify(center));
+    const selectedItem = (center.items || []).find(item => String(item.id || '') === String(titleId || ''));
+    const selectedSegment = titleStyleSegments(selectedItem).find(segment => segment.id === String(segmentId || ''));
+    titleNameStyleSaving = true;
+    achievementCenter.titles = {
+        ...center,
+        name_style: selectedItem && selectedSegment ? {
+            title_id: String(selectedItem.id || ''),
+            segment_id: selectedSegment.id,
+            title_name: String(selectedItem.name || ''),
+            segment_text: selectedSegment.text,
+            paint: selectedSegment.paint,
+        } : null,
+    };
+    renderAchievementCenter();
+    try {
+        const data = await authRequest('/api/titles/name-style', {
+            title_id: titleId,
+            segment_id: segmentId,
+        }, { timeoutMs: 6000 });
+        achievementCenter.titles = data.titles || achievementCenter.titles;
+        if (data.user) {
+            currentAccount = data.user;
+            cacheAccount(currentAccount);
+        }
+    } catch (err) {
+        achievementCenter.titles = previous;
+        showActionToast(err.message || lt({
+            zh: '昵称颜色设置失败',
+            en: 'Failed to update name color',
+            fr: 'Échec de la couleur du nom',
+            ja: '名前の色を更新できませんでした',
+        }), 2600, 'error');
+    } finally {
+        titleNameStyleSaving = false;
+        renderAccountState();
+        renderAchievementCenter();
+    }
+}
+
 function renderTitleCenter(panel, center) {
     if (!panel) return;
     const items = Array.isArray(center?.items) ? center.items : [];
     const maxEquipped = Math.max(1, Number(center?.max_equipped || 3) || 3);
-    const equipped = items
-        .filter(item => item.equipped_slot != null)
-        .sort((a, b) => Number(a.equipped_slot) - Number(b.equipped_slot));
+    const fallbackEquipped = items.flatMap(item => (item.equipped_slots || []).map(slot => ({
+        slot: Number(slot),
+        id: String(item.id || ''),
+    }))).sort((a, b) => a.slot - b.slot).map(entry => entry.id);
+    const equippedIds = Array.isArray(center?.equipped) ? center.equipped.map(String) : fallbackEquipped;
+    const itemById = new Map(items.map(item => [String(item.id || ''), item]));
+    const equipped = equippedIds
+        .map((id, index) => ({ item: itemById.get(id), slot: index + 1 }))
+        .filter(entry => entry.item);
     const accountName = (currentAccount && (currentAccount.display_name || currentAccount.username)) || '?';
-    const previewTitles = equipped.map(item => {
-        const color = titleColorCss(item.color) || 'var(--text-secondary)';
-        return `<span class="title-preview-label" style="color:${escapeHtml(color)}">[${escapeHtml(item.name || '')}]</span>`;
-    }).join('');
-    const nameColor = titleColorCss(equipped[0]?.color) || '';
+    const previewTitles = equipped.map(entry => styledTitleHtml(entry.item, true, 'title-preview-label')).join('');
+    const namePaint = center?.name_style?.paint ? normalizeTitlePaint(center.name_style.paint) : null;
+    const namePresentation = namePaint ? titlePaintPresentation(namePaint) : null;
+    const selectedNameTitleId = String(center?.name_style?.title_id || '');
+    const selectedNameSegmentId = String(center?.name_style?.segment_id || '');
+    const nameChoices = items.flatMap(item => titleStyleSegments(item).map(segment => ({ item, segment })));
     panel.innerHTML = `
         <div class="title-center-head">
             <div>
@@ -16134,7 +16450,7 @@ function renderTitleCenter(panel, center) {
                     ja: '現在の表示',
                 }))}</div>
                 <div class="title-name-preview">
-                    ${previewTitles}<span class="title-preview-name"${nameColor ? ` style="color:${escapeHtml(nameColor)}"` : ''}>${escapeHtml(accountName)}</span>
+                    ${previewTitles}<span class="title-preview-name${namePresentation ? ` ${namePresentation.className}` : ''}"${namePresentation ? ` style="${escapeHtml(namePresentation.style)}"` : ''}>${escapeHtml(accountName)}</span>
                 </div>
             </div>
             <div class="title-center-limit">${escapeHtml(lt({
@@ -16145,27 +16461,46 @@ function renderTitleCenter(panel, center) {
             }))}</div>
         </div>
         <div class="title-center-hint">${escapeHtml(lt({
-            zh: '最多佩戴3个称号；昵称使用第一个称号的颜色，每个称号保留自己的颜色。',
-            en: 'Equip up to 3 titles. Your first title colors your name; each title keeps its own color.',
-            fr: 'Équipez jusqu’à 3 titres. Le premier colore votre nom ; chaque titre garde sa couleur.',
-            ja: '称号は3個まで装備できます。名前は先頭の称号色になり、各称号は固有色を保ちます。',
+            zh: '最多佩戴3个称号，可重复佩戴已拥有的副本。昵称颜色可从任一称号的色段中单独选择。',
+            en: 'Equip up to 3 titles, including duplicate copies. Choose your name color from any owned title segment.',
+            fr: 'Équipez jusqu’à 3 titres, doublons compris. Choisissez la couleur du nom parmi les segments possédés.',
+            ja: '称号は複製を含め3個まで装備できます。所持称号の色区間から名前色を選べます。',
         }))}</div>
+        <div class="title-equipped-list">
+            ${equipped.length ? equipped.map(({ item, slot }) => `
+                <div class="title-equipped-row">
+                    <span class="title-owned-slot">${slot}</span>
+                    <span class="title-equipped-name">${styledTitleHtml(item)}</span>
+                    <div class="title-order-actions">
+                        <button type="button" data-title-slot-move="up" data-title-slot="${slot - 1}" title="${escapeHtml(lt({ zh: '前移', en: 'Move up', fr: 'Monter', ja: '上へ' }))}" ${slot <= 1 || titleEquipSaving ? 'disabled' : ''}>↑</button>
+                        <button type="button" data-title-slot-move="down" data-title-slot="${slot - 1}" title="${escapeHtml(lt({ zh: '后移', en: 'Move down', fr: 'Descendre', ja: '下へ' }))}" ${slot >= equipped.length || titleEquipSaving ? 'disabled' : ''}>↓</button>
+                        <button type="button" data-title-slot-remove="${slot - 1}" title="${escapeHtml(lt({ zh: '卸下', en: 'Unequip', fr: 'Retirer', ja: '外す' }))}" ${titleEquipSaving ? 'disabled' : ''}>×</button>
+                    </div>
+                </div>
+            `).join('') : `<div class="title-center-empty title-center-empty-compact">${escapeHtml(lt({
+                zh: '尚未佩戴称号',
+                en: 'No title equipped',
+                fr: 'Aucun titre équipé',
+                ja: '称号は未装備です',
+            }))}</div>`}
+        </div>
         <div class="title-owned-list">
             ${items.length ? items.map(item => {
-                const selected = item.equipped_slot != null;
-                const color = titleColorCss(item.color) || 'var(--text-secondary)';
-                const slot = Number(item.equipped_slot || 0);
+                const quantity = Math.max(1, Number(item.quantity || 1) || 1);
+                const equippedCount = equippedIds.filter(id => id === String(item.id || '')).length;
+                const canEquip = equipped.length < maxEquipped && equippedCount < quantity;
                 return `
-                    <div class="title-owned-row ${selected ? 'is-equipped' : ''}" data-title-id="${escapeHtml(item.id || '')}">
-                        <label class="title-owned-select">
-                            <input type="checkbox" data-title-toggle="${escapeHtml(item.id || '')}" ${selected ? 'checked' : ''} ${titleEquipSaving ? 'disabled' : ''}>
-                            <span class="title-owned-slot">${selected ? slot : ''}</span>
-                            <span class="title-owned-name" style="color:${escapeHtml(color)}">[${escapeHtml(item.name || '')}]</span>
-                        </label>
+                    <div class="title-owned-row ${equippedCount ? 'is-equipped' : ''}" data-title-id="${escapeHtml(item.id || '')}">
+                        <span class="title-owned-name">${styledTitleHtml(item)}</span>
                         <span class="title-owned-source">${escapeHtml(titleSourceLabel(item.acquired_source || item.source_type))}</span>
-                        <div class="title-order-actions">
-                            <button type="button" data-title-move="up" data-title-id="${escapeHtml(item.id || '')}" title="${escapeHtml(lt({ zh: '前移', en: 'Move up', fr: 'Monter', ja: '上へ' }))}" ${!selected || slot <= 1 || titleEquipSaving ? 'disabled' : ''}>↑</button>
-                            <button type="button" data-title-move="down" data-title-id="${escapeHtml(item.id || '')}" title="${escapeHtml(lt({ zh: '后移', en: 'Move down', fr: 'Descendre', ja: '下へ' }))}" ${!selected || slot >= equipped.length || titleEquipSaving ? 'disabled' : ''}>↓</button>
+                        <span class="title-owned-count">${escapeHtml(lt({
+                            zh: `拥有 ${quantity} · 佩戴 ${equippedCount}`,
+                            en: `Owned ${quantity} · Equipped ${equippedCount}`,
+                            fr: `${quantity} possédé(s) · ${equippedCount} équipé(s)`,
+                            ja: `所持 ${quantity} · 装備 ${equippedCount}`,
+                        }))}</span>
+                        <div class="title-inventory-actions">
+                            <button type="button" data-title-equip-add="${escapeHtml(item.id || '')}" title="${escapeHtml(lt({ zh: '佩戴一份', en: 'Equip one', fr: 'Équiper', ja: '1つ装備' }))}" ${!canEquip || titleEquipSaving ? 'disabled' : ''}>＋</button>
                         </div>
                     </div>
                 `;
@@ -16176,39 +16511,56 @@ function renderTitleCenter(panel, center) {
                 ja: '所持している称号はまだありません。',
             }))}</div>`}
         </div>
+        ${items.length ? `
+            <div class="title-name-style-section">
+                <div class="title-name-style-title">${escapeHtml(lt({ zh: '昵称颜色', en: 'Name color', fr: 'Couleur du nom', ja: '名前の色' }))}</div>
+                <div class="title-name-style-options">
+                    <button type="button" class="title-name-style-option ${!selectedNameTitleId ? 'active' : ''}" data-title-name-id="" data-title-segment-id="" ${titleNameStyleSaving ? 'disabled' : ''}>
+                        <span class="title-name-style-swatch title-name-style-default">Aa</span>
+                        <span>${escapeHtml(lt({ zh: '默认', en: 'Default', fr: 'Par défaut', ja: '既定' }))}</span>
+                    </button>
+                    ${nameChoices.map(({ item, segment }) => {
+                        const active = String(item.id || '') === selectedNameTitleId && segment.id === selectedNameSegmentId;
+                        const presentation = titlePaintPresentation(segment.paint);
+                        const segmentSuffix = titleStyleSegments(item).length > 1 ? ` · ${escapeHtml(segment.text || segment.id)}` : '';
+                        return `<button type="button" class="title-name-style-option ${active ? 'active' : ''}" data-title-name-id="${escapeHtml(item.id || '')}" data-title-segment-id="${escapeHtml(segment.id)}" ${titleNameStyleSaving ? 'disabled' : ''}>
+                            <span class="title-name-style-swatch ${presentation.className}" style="${escapeHtml(presentation.style)}">Aa</span>
+                            <span class="title-name-style-label">${escapeHtml(item.name || '')}${segmentSuffix}</span>
+                        </button>`;
+                    }).join('')}
+                </div>
+            </div>
+        ` : ''}
     `;
-    panel.querySelectorAll('[data-title-toggle]').forEach(input => {
-        input.addEventListener('change', () => {
-            const titleId = String(input.dataset.titleToggle || '');
-            const ids = equipped.map(item => String(item.id || ''));
-            const index = ids.indexOf(titleId);
-            if (input.checked && index < 0) {
-                if (ids.length >= maxEquipped) {
-                    input.checked = false;
-                    showActionToast(lt({
-                        zh: '最多佩戴3个称号',
-                        en: 'You can equip up to 3 titles',
-                        fr: 'Vous pouvez équiper jusqu’à 3 titres',
-                        ja: '称号は3個まで装備できます',
-                    }), 1800, 'error');
-                    return;
-                }
-                ids.push(titleId);
-            } else if (!input.checked && index >= 0) {
-                ids.splice(index, 1);
-            }
+    panel.querySelectorAll('[data-title-equip-add]').forEach(button => {
+        button.addEventListener('click', () => {
+            saveEquippedTitleOrder([...equippedIds, String(button.dataset.titleEquipAdd || '')]);
+        });
+    });
+    panel.querySelectorAll('[data-title-slot-remove]').forEach(button => {
+        button.addEventListener('click', () => {
+            const ids = [...equippedIds];
+            ids.splice(Number(button.dataset.titleSlotRemove), 1);
             saveEquippedTitleOrder(ids);
         });
     });
-    panel.querySelectorAll('[data-title-move]').forEach(button => {
+    panel.querySelectorAll('[data-title-slot-move]').forEach(button => {
         button.addEventListener('click', () => {
-            const ids = equipped.map(item => String(item.id || ''));
-            const index = ids.indexOf(String(button.dataset.titleId || ''));
-            const delta = button.dataset.titleMove === 'up' ? -1 : 1;
+            const ids = [...equippedIds];
+            const index = Number(button.dataset.titleSlot);
+            const delta = button.dataset.titleSlotMove === 'up' ? -1 : 1;
             const nextIndex = index + delta;
             if (index < 0 || nextIndex < 0 || nextIndex >= ids.length) return;
             [ids[index], ids[nextIndex]] = [ids[nextIndex], ids[index]];
             saveEquippedTitleOrder(ids);
+        });
+    });
+    panel.querySelectorAll('[data-title-name-id]').forEach(button => {
+        button.addEventListener('click', () => {
+            saveTitleNameStyle(
+                String(button.dataset.titleNameId || ''),
+                String(button.dataset.titleSegmentId || ''),
+            );
         });
     });
 }
@@ -16283,7 +16635,7 @@ function renderAchievementCenter() {
                     ${item.stage_description ? `<div class="achievement-stage">${escapeHtml(item.stage_description)}</div>` : ''}
                 </div>
                 <div class="achievement-side">
-                    <span class="achievement-reward">+${escapeHtml(item.reward_dew || 0)} ${escapeHtml(UI.thorn_dew || '荆露')}</span>
+                    <span class="achievement-reward">+${thornDewAmountHtml(item.reward_dew || 0)}</span>
                     <span class="achievement-foot">${item.unlocked ? escapeHtml(formatAchievementUnlockedTime(item.unlocked_at)) : `${escapeHtml(progress)}/${escapeHtml(target)}`}</span>
                 </div>
                 <div class="achievement-progress" aria-hidden="true"><div class="achievement-progress-fill" style="width:${pct.toFixed(1)}%"></div></div>
@@ -16343,7 +16695,268 @@ function toggleAchievementsPopover(force) {
         toggleStatsPopover(false);
         toggleLeaderboardPopover(false);
         toggleChangelogPopover(false);
+        toggleTitleShopPopover(false);
         loadAchievementCenter(false);
+    }
+}
+
+function thornDewAmountHtml(amount, className = 'dew-amount') {
+    return `<span class="${escapeHtml(className)}"><img class="thorn-dew-icon" src="/static/assets/ui-icons/thorn-dew.svg" alt=""><span>${escapeHtml(Math.max(0, Number(amount || 0) || 0).toLocaleString())}</span></span>`;
+}
+
+function titleShopRemainingSeconds() {
+    if (!titleShop) return 0;
+    const elapsed = titleShopLoadedAt ? Math.floor((Date.now() - titleShopLoadedAt) / 1000) : 0;
+    return Math.max(0, Number(titleShop.seconds_to_daily_refresh || 0) - elapsed);
+}
+
+function titleShopCountdownText() {
+    const totalMinutes = Math.max(0, Math.ceil(titleShopRemainingSeconds() / 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const time = lt({
+        zh: `${hours}小时${minutes}分钟`,
+        en: `${hours}h ${minutes}m`,
+        fr: `${hours} h ${minutes} min`,
+        ja: `${hours}時間${minutes}分`,
+    });
+    return titleShop?.locked ? lt({
+        zh: `已锁定 · 刷新费用将在 ${time} 后重置`,
+        en: `Locked · Refresh price resets in ${time}`,
+        fr: `Verrouillée · Le prix est réinitialisé dans ${time}`,
+        ja: `ロック中 · 更新料金は${time}後にリセット`,
+    }) : lt({
+        zh: `每日刷新：${time}`,
+        en: `Daily refresh: ${time}`,
+        fr: `Actualisation quotidienne : ${time}`,
+        ja: `毎日更新：${time}`,
+    });
+}
+
+function updateTitleShopCountdown() {
+    const el = $('title-shop-countdown');
+    if (el) el.textContent = titleShop ? titleShopCountdownText() : '';
+    if (titleShop && titleShopRemainingSeconds() <= 0 && !titleShopLoading && !titleShopBusy) {
+        loadTitleShop(true);
+    }
+}
+
+function renderTitleShop() {
+    const grid = $('title-shop-grid');
+    const status = $('title-shop-status');
+    const balance = $('title-shop-balance');
+    const refreshButton = $('btn-title-shop-refresh');
+    const lockButton = $('btn-title-shop-lock');
+    if (!grid || !status || !balance || !refreshButton || !lockButton) return;
+
+    if (!currentAccount) {
+        balance.innerHTML = '';
+        status.textContent = UI.account_need_login || '请先登录账号';
+        grid.innerHTML = '';
+        refreshButton.disabled = true;
+        lockButton.disabled = true;
+        updateTitleShopCountdown();
+        return;
+    }
+    const shopBalance = titleShop?.balance?.total ?? currentAccount.thorn_dew_total ?? 0;
+    balance.innerHTML = thornDewAmountHtml(shopBalance);
+    refreshButton.disabled = titleShopBusy || titleShopLoading || !titleShop;
+    lockButton.disabled = titleShopBusy || titleShopLoading || !titleShop;
+    lockButton.classList.toggle('is-locked', !!titleShop?.locked);
+    lockButton.textContent = titleShop?.locked
+        ? lt({ zh: '解除锁定', en: 'Unlock', fr: 'Déverrouiller', ja: 'ロック解除' })
+        : lt({ zh: '锁定商店', en: 'Lock shop', fr: 'Verrouiller', ja: 'ショップをロック' });
+    refreshButton.innerHTML = titleShop
+        ? `${escapeHtml(lt({ zh: '刷新', en: 'Refresh', fr: 'Actualiser', ja: '更新' }))} · ${thornDewAmountHtml(titleShop.refresh_cost, 'dew-amount')}`
+        : escapeHtml(lt({ zh: '刷新', en: 'Refresh', fr: 'Actualiser', ja: '更新' }));
+    updateTitleShopCountdown();
+
+    if (titleShopLoading && !titleShop) {
+        status.textContent = UI.leaderboard_loading || '正在加载...';
+        grid.innerHTML = '';
+        return;
+    }
+    if (titleShopError) {
+        status.textContent = titleShopError;
+        grid.innerHTML = '';
+        return;
+    }
+    const offers = Array.isArray(titleShop?.offers) ? titleShop.offers : [];
+    status.textContent = titleShop?.locked ? lt({
+        zh: '当前商品已锁定，不会被每日刷新替换。',
+        en: 'These offers are locked and will not be replaced by the daily refresh.',
+        fr: 'Ces offres sont verrouillées et ne seront pas remplacées quotidiennement.',
+        ja: '現在の商品はロックされ、毎日更新では入れ替わりません。',
+    }) : '';
+    const accountName = String(currentAccount.display_name || currentAccount.username || '?');
+    grid.innerHTML = offers.map(offer => {
+        const purchased = !!offer.purchased;
+        const owned = Math.max(0, Number(offer.owned_quantity || 0) || 0);
+        return `
+            <div class="title-shop-item ${purchased ? 'is-purchased' : ''}">
+                <div class="title-shop-preview">${styledTitleHtml(offer)}<span class="title-shop-preview-name">${escapeHtml(accountName)}</span></div>
+                <div class="title-shop-item-meta">
+                    <span>${owned ? escapeHtml(lt({ zh: `已拥有 ${owned}`, en: `Owned ${owned}`, fr: `${owned} possédé(s)`, ja: `所持 ${owned}` })) : ''}</span>
+                    <span>${escapeHtml(titleSourceLabel('shop'))}</span>
+                </div>
+                <button type="button" class="title-shop-buy-btn" data-title-shop-buy="${Number(offer.slot || 0)}" ${purchased || titleShopBusy ? 'disabled' : ''}>
+                    ${purchased ? escapeHtml(lt({ zh: '本轮已购买', en: 'Purchased', fr: 'Acheté', ja: '購入済み' })) : thornDewAmountHtml(offer.price, 'dew-amount')}
+                </button>
+            </div>
+        `;
+    }).join('');
+    grid.querySelectorAll('[data-title-shop-buy]').forEach(button => {
+        button.addEventListener('click', () => purchaseTitleShopOffer(Number(button.dataset.titleShopBuy || 0)));
+    });
+}
+
+async function loadTitleShop(force = false) {
+    if (!currentAccount) {
+        titleShop = null;
+        titleShopError = '';
+        renderTitleShop();
+        return;
+    }
+    if (!force && titleShop) {
+        renderTitleShop();
+        return;
+    }
+    if (titleShopLoading) return;
+    titleShopLoading = true;
+    titleShopError = '';
+    renderTitleShop();
+    try {
+        const data = await authRequest('/api/title-shop', undefined, { timeoutMs: 6000 });
+        titleShop = data.shop || null;
+        titleShopLoadedAt = Date.now();
+    } catch (err) {
+        titleShopError = err.message || lt({ zh: '商店加载失败', en: 'Failed to load shop', fr: 'Échec du chargement', ja: 'ショップを読み込めませんでした' });
+    } finally {
+        titleShopLoading = false;
+        renderTitleShop();
+    }
+}
+
+async function refreshTitleShop() {
+    if (!titleShop || titleShopBusy) return;
+    const cost = Math.max(0, Number(titleShop.refresh_cost || 0) || 0);
+    const confirmed = await gameConfirm(
+        lt({ zh: '刷新商店', en: 'Refresh shop', fr: 'Actualiser la boutique', ja: 'ショップを更新' }),
+        lt({
+            zh: `花费 ${cost.toLocaleString()} 荆露刷新8个商品？本轮未购买的商品将被替换。`,
+            en: `Spend ${cost.toLocaleString()} Thorn Dew to refresh all 8 offers? Unpurchased offers will be replaced.`,
+            fr: `Dépenser ${cost.toLocaleString()} Rosée d’épines pour remplacer les 8 offres ?`,
+            ja: `${cost.toLocaleString()}ソーンデューで8商品を更新しますか？`,
+        }),
+    );
+    if (!confirmed) return;
+    titleShopBusy = true;
+    renderTitleShop();
+    try {
+        const data = await authRequest('/api/title-shop/refresh', {}, { timeoutMs: 8000 });
+        titleShop = data.shop || titleShop;
+        titleShopLoadedAt = Date.now();
+        if (data.user) {
+            currentAccount = data.user;
+            cacheAccount(currentAccount);
+        }
+        showActionToast(lt({ zh: '商店已刷新', en: 'Shop refreshed', fr: 'Boutique actualisée', ja: 'ショップを更新しました' }), 1600, 'info');
+    } catch (err) {
+        showActionToast(err.message || '刷新商店失败', 2600, 'error');
+    } finally {
+        titleShopBusy = false;
+        renderAccountState();
+        renderTitleShop();
+    }
+}
+
+async function toggleTitleShopLock() {
+    if (!titleShop || titleShopBusy) return;
+    titleShopBusy = true;
+    renderTitleShop();
+    try {
+        const data = await authRequest('/api/title-shop/lock', { locked: !titleShop.locked }, { timeoutMs: 6000 });
+        titleShop = data.shop || titleShop;
+        titleShopLoadedAt = Date.now();
+    } catch (err) {
+        showActionToast(err.message || '锁定商店失败', 2600, 'error');
+    } finally {
+        titleShopBusy = false;
+        renderTitleShop();
+    }
+}
+
+async function purchaseTitleShopOffer(slot) {
+    if (!titleShop || titleShopBusy) return;
+    const offer = (titleShop.offers || []).find(item => Number(item.slot) === Number(slot));
+    if (!offer || offer.purchased) return;
+    const confirmed = await gameConfirm(
+        lt({ zh: '购买称号', en: 'Buy title', fr: 'Acheter le titre', ja: '称号を購入' }),
+        lt({
+            zh: `花费 ${Number(offer.price || 0).toLocaleString()} 荆露购买“${offer.name || ''}”？`,
+            en: `Buy “${offer.name || ''}” for ${Number(offer.price || 0).toLocaleString()} Thorn Dew?`,
+            fr: `Acheter « ${offer.name || ''} » pour ${Number(offer.price || 0).toLocaleString()} Rosée d’épines ?`,
+            ja: `「${offer.name || ''}」を${Number(offer.price || 0).toLocaleString()}ソーンデューで購入しますか？`,
+        }),
+    );
+    if (!confirmed) return;
+    if (Number(offer.owned_quantity || 0) > 0) {
+        const duplicateConfirmed = await gameConfirm(
+            lt({ zh: '再次购买', en: 'Buy another copy', fr: 'Acheter un autre exemplaire', ja: '追加購入' }),
+            lt({
+                zh: `你已经拥有 ${Number(offer.owned_quantity)} 个“${offer.name || ''}”。仍要再购买一份吗？`,
+                en: `You already own ${Number(offer.owned_quantity)} copies of “${offer.name || ''}”. Buy another?`,
+                fr: `Vous possédez déjà ${Number(offer.owned_quantity)} exemplaire(s) de « ${offer.name || ''} ». Continuer ?`,
+                ja: `「${offer.name || ''}」を${Number(offer.owned_quantity)}個所持しています。追加購入しますか？`,
+            }),
+        );
+        if (!duplicateConfirmed) return;
+    }
+    titleShopBusy = true;
+    renderTitleShop();
+    try {
+        const data = await authRequest('/api/title-shop/purchase', {
+            set_id: titleShop.set_id,
+            slot: Number(slot),
+        }, { timeoutMs: 8000 });
+        titleShop = data.shop || titleShop;
+        titleShopLoadedAt = Date.now();
+        if (achievementCenter && data.titles) achievementCenter.titles = data.titles;
+        if (data.user) {
+            currentAccount = data.user;
+            cacheAccount(currentAccount);
+        }
+        showActionToast(lt({ zh: '称号已加入库存', en: 'Title added to inventory', fr: 'Titre ajouté à l’inventaire', ja: '称号を所持品に追加しました' }), 1800, 'info');
+    } catch (err) {
+        showActionToast(err.message || '购买失败', 2600, 'error');
+    } finally {
+        titleShopBusy = false;
+        renderAccountState();
+        renderAchievementCenter();
+        renderTitleShop();
+    }
+}
+
+function stopTitleShopCountdown() {
+    if (titleShopCountdownTimer) clearInterval(titleShopCountdownTimer);
+    titleShopCountdownTimer = null;
+}
+
+function toggleTitleShopPopover(force) {
+    const pop = $('title-shop-popover');
+    if (!pop) return;
+    const show = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
+    pop.classList.toggle('hidden', !show);
+    stopTitleShopCountdown();
+    if (show) {
+        toggleAccountPopover(false);
+        toggleFriendsPopover(false);
+        toggleStatsPopover(false);
+        toggleLeaderboardPopover(false);
+        toggleAchievementsPopover(false);
+        toggleChangelogPopover(false);
+        loadTitleShop(false);
+        titleShopCountdownTimer = setInterval(updateTitleShopCountdown, 15000);
     }
 }
 
@@ -16371,12 +16984,12 @@ function renderAccountInfoPanel(user) {
         [currentLang === 'zh' ? '胜率' : 'Win Rate', winRate],
         [currentLang === 'zh' ? '胜 / 负 / 平' : 'W / L / D', `${wins} / ${losses} / ${draws}`],
         [UI.account_online_time || '总对局时长', formatAccountPlayTime(user.play_seconds ?? 0)],
-        [UI.thorn_dew || '荆露', thornDewTotal],
+        [UI.thorn_dew || '荆露', thornDewTotal, true],
     ];
-    grid.innerHTML = items.map(([label, value]) => `
+    grid.innerHTML = items.map(([label, value, isDew]) => `
         <div class="account-info-item">
             <span class="account-info-label">${escapeHtml(label)}</span>
-            <span class="account-info-value">${escapeHtml(value)}</span>
+            <span class="account-info-value">${isDew ? thornDewAmountHtml(value) : escapeHtml(value)}</span>
         </div>
     `).join('') + `
         <div class="account-info-item account-gr-chart-item">
@@ -16398,6 +17011,12 @@ function normalizeSkinConfig(raw) {
     const eyeShape = String(data.eye_shape || data.eyeShape || '').trim().toLowerCase();
     if (SKIN_EYE_SHAPES.has(eyeShape)) skin.eye_shape = eyeShape;
     return skin;
+}
+
+function normalizePlayerAvatarKind(raw) {
+    return String(raw || '').trim().toLowerCase() === PHELREN_AVATAR_KIND
+        ? PHELREN_AVATAR_KIND
+        : '';
 }
 
 function loadLocalSkinConfig() {
@@ -16686,12 +17305,16 @@ function triggerSkinDamageMood(playerId, kind = 'damage', delay = 0, holdMs = SK
 
 function renderSkinAvatar(skinInput, options = {}) {
     const skin = normalizeSkinConfig(skinInput);
+    const avatarKind = normalizePlayerAvatarKind(options.avatarKind);
+    const isPhelren = avatarKind === PHELREN_AVATAR_KIND;
     const corrupted = !!options.corrupted;
     const corruptAnimateClass = options.animateCorruption ? ' skin-corruption-animate' : '';
-    const mainColor = skin.primary_color;
-    const border = deriveSkinBorderColor(mainColor);
-    const inverted = skinLuminance(skin.primary_color) < 0.22;
+    const mainColor = isPhelren ? '#898989' : skin.primary_color;
+    const border = isPhelren ? '#727171' : deriveSkinBorderColor(mainColor);
+    const inverted = !isPhelren && skinLuminance(mainColor) < 0.22;
     const invertedClass = inverted ? ' is-inverted' : '';
+    const avatarKindClass = isPhelren ? ' phelren-avatar' : '';
+    const eyeShape = isPhelren ? 'oval' : skin.eye_shape;
     const pid = normalizePlayerId(options.playerId);
     const look = options.look || (pid != null ? getSkinLookForPlayerId(pid) : localSkinLook);
     const defeated = !!options.defeated;
@@ -16710,13 +17333,17 @@ function renderSkinAvatar(skinInput, options = {}) {
     const defeatedSeed = String(options.defeatedSeed || options.playerId || options.lookOwner || skin.primary_color || 'skin');
     const defeatedRotate = 10 + (hashStringToHue(defeatedSeed) % 341);
     const mirrorLookX = !!options.mirrorLookX;
-    const style = `--skin-main:${escapeHtml(skin.primary_color)};--skin-border:${escapeHtml(border)};--skin-defeat-rotate:${defeatedRotate}deg;${skinLookCssVars(look, mirrorLookX)}`;
+    const style = `--skin-main:${escapeHtml(mainColor)};--skin-border:${escapeHtml(border)};--skin-defeat-rotate:${defeatedRotate}deg;${skinLookCssVars(look, mirrorLookX)}`;
     const ownerAttr = pid != null
         ? ` data-player-id="${pid}"`
         : ` data-look-owner="${escapeHtml(options.lookOwner || 'local')}"`;
     const mirrorAttr = mirrorLookX ? ' data-mirror-look-x="1"' : '';
+    const frame = isPhelren
+        ? `<img class="phelren-avatar-frame" src="${PHELREN_AVATAR_FRAME_URL}" alt="" aria-hidden="true">`
+        : '';
     return `
-        <div class="skin-avatar skin-eye-shape-${escapeHtml(skin.eye_shape)}${invertedClass}${defeatedClass}${defeatEnterClass}${corrupted ? ' is-corrupted' : ''}${corruptAnimateClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr}${mirrorAttr} style="${style}">
+        <div class="skin-avatar skin-eye-shape-${escapeHtml(eyeShape)}${avatarKindClass}${invertedClass}${defeatedClass}${defeatEnterClass}${corrupted ? ' is-corrupted' : ''}${corruptAnimateClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr}${mirrorAttr} style="${style}">
+            ${frame}
             <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
             <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
             <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
@@ -17354,7 +17981,8 @@ function renderAccountReplayList() {
         return;
     }
     list.innerHTML = accountReplayItems.map((item) => {
-        const replayRef = `R-${Number(item.id)}`;
+        const replayPrefix = String(item.replay_prefix || 'R').toUpperCase() === 'P' ? 'P' : 'R';
+        const replayRef = String(item.replay_ref || `${replayPrefix}-${Number(item.id)}`);
         const players = Array.isArray(item.players) ? item.players.join(' / ') : '';
         const winner = item.winner_name ? tf('replay_winner', item.winner_name) : '';
         const round = tf('replay_round', item.round_num || 0);
@@ -17368,8 +17996,8 @@ function renderAccountReplayList() {
                 </div>
                 <div class="account-replay-actions">
                     <button class="mini-btn" type="button" data-copy-text="${escapeHtml(replayRef)}" title="${escapeHtml(UI.replay_copy || '复制')}">${escapeHtml(replayRef)}</button>
-                    <button class="mini-btn" type="button" data-account-replay-download="${escapeHtml(item.id)}">${escapeHtml(UI.replay_download || '下载')}</button>
-                    <button class="mini-btn" type="button" data-account-replay-view="${escapeHtml(item.id)}">${escapeHtml(UI.replay_view)}</button>
+                    <button class="mini-btn" type="button" data-account-replay-download="${escapeHtml(replayRef)}">${escapeHtml(UI.replay_download || '下载')}</button>
+                    <button class="mini-btn" type="button" data-account-replay-view="${escapeHtml(replayRef)}">${escapeHtml(UI.replay_view)}</button>
                 </div>
             </div>
         `;
@@ -17848,7 +18476,12 @@ async function refreshAuthMe() {
     } catch (_) {
         currentAccount = currentAccount || loadCachedAccount();
     }
-    if ((currentAccount && currentAccount.id) !== previousId) thornDewCenter = null;
+    if ((currentAccount && currentAccount.id) !== previousId) {
+        thornDewCenter = null;
+        titleShop = null;
+        titleShopError = '';
+        titleShopLoadedAt = 0;
+    }
     renderAccountState();
     if (currentAccount) {
         loadFriends(false);
@@ -18051,6 +18684,7 @@ function toggleAccountPopover(force) {
         toggleStatsPopover(false);
         toggleLeaderboardPopover(false);
         toggleAchievementsPopover(false);
+        toggleTitleShopPopover(false);
         refreshAuthMe().then(() => {
             if (currentAccount) loadAccountReplays();
         });
@@ -18069,6 +18703,7 @@ function toggleStatsPopover(force) {
         toggleFriendsPopover(false);
         toggleLeaderboardPopover(false);
         toggleAchievementsPopover(false);
+        toggleTitleShopPopover(false);
         refreshAuthMe().then(() => {
             if (currentAccount) loadAccountReplays();
         });
@@ -18247,6 +18882,7 @@ function toggleLeaderboardPopover(force) {
         toggleFriendsPopover(false);
         toggleStatsPopover(false);
         toggleAchievementsPopover(false);
+        toggleTitleShopPopover(false);
         loadLeaderboard();
         startLeaderboardRefreshTimer();
     } else if (leaderboardRefreshTimerId) {
@@ -20832,9 +21468,10 @@ window.GTNReplayVideoBridge = {
 };
 
 function normalizedFeedbackReplayId(value) {
-    const text = String(value || '').trim().toUpperCase().replace(/^R-/, '');
-    if (!/^\d+$/.test(text) || Number(text) <= 0) return null;
-    return Number(text);
+    const text = String(value || '').trim().toUpperCase();
+    const match = text.match(/^(?:([RP])-)?(\d+)$/);
+    if (!match || Number(match[2]) <= 0) return null;
+    return match[1] ? `${match[1]}-${Number(match[2])}` : String(Number(match[2]));
 }
 
 function renderFeedbackReplayPreview() {
@@ -20848,14 +21485,15 @@ function renderFeedbackReplayPreview() {
         box.classList.add('hidden');
         return;
     }
-    const replayRef = `R-${replayId}`;
+    const replayPrefix = String(replay && replay.replay_prefix || 'R').toUpperCase() === 'P' ? 'P' : 'R';
+    const replayRef = String(replay && replay.replay_ref || `${replayPrefix}-${replayId}`);
     const players = replay && Array.isArray(replay.players) ? replay.players.join(' / ') : '';
     const detail = replay
         ? [formatCommunityTime(replay.created_at), replay.mode, players].filter(Boolean).join(' · ')
         : (currentLang === 'zh' ? '回放不存在或已过期' : 'Replay unavailable or expired');
     box.innerHTML = `
         <div class="feedback-replay-preview-main"><strong>${escapeHtml(replayRef)}</strong>${detail ? ` · ${escapeHtml(detail)}` : ''}</div>
-        ${replay ? `<button class="mini-btn" type="button" data-feedback-replay-open="${escapeHtml(replayId)}">${escapeHtml(UI.replay_view || '查看')}</button>` : ''}
+        ${replay ? `<button class="mini-btn" type="button" data-feedback-replay-open="${escapeHtml(replayRef)}">${escapeHtml(UI.replay_view || '查看')}</button>` : ''}
     `;
     box.classList.remove('hidden');
 }
@@ -21140,6 +21778,7 @@ function toggleFriendsPopover(force) {
         toggleAccountPopover(false);
         toggleStatsPopover(false);
         toggleLeaderboardPopover(false);
+        toggleTitleShopPopover(false);
         loadFriends(true);
     } else {
         stopSocialNetworkActivity();
@@ -21435,7 +22074,7 @@ function emitModeEvent(soloEventName, onlineEventName, payload = {}) {
 
 function performSoloHistoryAction(direction) {
     if (!soloMode || replayMode || isSpectating || tutorialMode) return false;
-    if (!gameState || !gameState.solo || gameState.phase === 'game_over') return false;
+    if (!gameState || !gameState.solo || gameState.ai_test || gameState.phase === 'game_over') return false;
     emitSoloEvent(direction === 'redo' ? 'solo_redo' : 'solo_undo', {});
     return true;
 }
@@ -21887,7 +22526,7 @@ function getGameShortcutContext() {
                     }
                 });
             }
-            if (soloMode) {
+            if (soloMode && !gameState?.ai_test) {
                 addShortcutSceneAction(scene, 'solo_undo');
                 addShortcutSceneAction(scene, 'solo_redo');
             } else if (socket && socket.connected) {
@@ -22511,7 +23150,7 @@ function refreshShortcutContext() {
         reroll.click();
         return true;
     }
-    if (activeViewId === 'view-game' && socket && socket.connected && !soloMode) {
+    if (activeViewId === 'view-game' && socket && socket.connected && (!soloMode || gameState?.ai_test)) {
         requestFullGameState('keyboard_refresh');
         return true;
     }
@@ -23703,6 +24342,7 @@ function renderLobby(data) {
                     if (!confirmed) return;
                 }
                 localStorage.setItem('preferred_mode', newMode);
+                updateAi1v1TestEntry(newMode);
                 socket.emit('set_mode', { mode: newMode });
             };
         });
@@ -23711,6 +24351,8 @@ function renderLobby(data) {
     const currentMode = (modeTabs && modeTabs.querySelector('.mode-tab.active'))
         ? modeTabs.querySelector('.mode-tab.active').getAttribute('data-mode')
         : (localStorage.getItem('preferred_mode') || '1v1');
+    updateAi1v1TestEntry(currentMode);
+    void refreshAi1v1TestAvailability();
 
     const playerBySid = new Map(lobbyPlayers.map(p => [p.sid, p]));
     const adminSort = (a, b) => {
@@ -25374,6 +26016,8 @@ function openPredictionTargetPicker() {
 
 function updateModeSpecificControls(gs) {
     const inSoloGame = !!gs?.solo;
+    const inAiTest = !!gs?.ai_test;
+    const inSoloTraining = inSoloGame && !inAiTest;
     const inTutorial = !!gs?.tutorial || tutorialMode;
     const gameOver = gs?.phase === 'game_over';
     const soloNextDrawBtn = $('btn-solo-next-draw');
@@ -25395,8 +26039,8 @@ function updateModeSpecificControls(gs) {
 
     const readonlyBattle = !!(isSpectating || gs?.spectating || replayMode || gs?.replay_mode);
     const activeSpectating = !!(isSpectating || gs?.spectating);
-    const showSoloNextDraw = inSoloGame && !inTutorial && !gameOver && !readonlyBattle;
-    const showSoloEdit = inSoloGame && !inTutorial && !readonlyBattle;
+    const showSoloNextDraw = inSoloTraining && !inTutorial && !gameOver && !readonlyBattle;
+    const showSoloEdit = inSoloTraining && !inTutorial && !readonlyBattle;
     const showSpectateControls = activeSpectating;
     const showGameControls = !readonlyBattle;
     const showPlayZone = !readonlyBattle;
@@ -25410,7 +26054,7 @@ function updateModeSpecificControls(gs) {
         soloEditBtn.style.display = showSoloEdit ? '' : 'none';
     }
     if (surrenderBtn) {
-        const showSurrender = !inSoloGame && !gameOver;
+        const showSurrender = (!inSoloGame || inAiTest) && !gameOver;
         surrenderBtn.classList.toggle('hidden', !showSurrender);
         surrenderBtn.style.display = showSurrender ? '' : 'none';
     }
@@ -25504,6 +26148,8 @@ function updateClassicExtraControls(gs) {
     const surrenderBtn = $('classic-surrender');
     const chatRow = $('classic-chat-row');
     const inSoloGame = !!gs?.solo;
+    const inAiTest = !!gs?.ai_test;
+    const inSoloTraining = inSoloGame && !inAiTest;
     const inTutorial = !!gs?.tutorial || tutorialMode;
     const gameOver = gs?.phase === 'game_over';
     const replayExportPlayerView = isReplayVideoExportPlayerView();
@@ -25517,7 +26163,7 @@ function updateClassicExtraControls(gs) {
         chatRow.style.display = showChat ? '' : 'none';
     }
     if (surrenderBtn) {
-        const showSurrender = !inSoloGame && !inTutorial && !gameOver && !isReadOnlyBattle;
+        const showSurrender = (!inSoloGame || inAiTest) && !inTutorial && !gameOver && !isReadOnlyBattle;
         surrenderBtn.classList.toggle('hidden', !showSurrender);
         surrenderBtn.style.display = showSurrender ? '' : 'none';
         surrenderBtn.title = UI.surrender || '投降';
@@ -25556,11 +26202,11 @@ function updateClassicExtraControls(gs) {
         text: replayMode ? (UI.close || '关闭') : (UI.leave_spectate || '退出观战'),
         disabled: false,
     })) visibleCount += 1;
-    if (setClassicControlButton('classic-solo-next-draw', inSoloGame && !inTutorial && !gameOver && !isSpectating, {
+    if (setClassicControlButton('classic-solo-next-draw', inSoloTraining && !inTutorial && !gameOver && !isSpectating, {
         text: UI.set_next_draw,
         disabled: busy,
     })) visibleCount += 1;
-    if (setClassicControlButton('classic-solo-edit', inSoloGame && !inTutorial && !isSpectating, {
+    if (setClassicControlButton('classic-solo-edit', inSoloTraining && !inTutorial && !isSpectating, {
         text: UI.pause_edit,
         disabled: busy,
     })) visibleCount += 1;
@@ -25641,6 +26287,22 @@ function getBattlePlayerId(gs, slot) {
     return null;
 }
 
+function resolveBattlePlayerAvatarKind(gs, playerId, playerData = {}, playerName = '') {
+    const id = normalizePlayerId(playerId);
+    const explicit = normalizePlayerAvatarKind(playerData && playerData.avatar_kind);
+    if (explicit) return explicit;
+    const kinds = Array.isArray(gs && gs.player_avatar_kinds) ? gs.player_avatar_kinds : [];
+    const indexed = id != null ? normalizePlayerAvatarKind(kinds[id]) : '';
+    if (indexed) return indexed;
+    const isAiMatch = !!(gs && (gs.ai_test || gs.ai_match || gs.match_kind === 'phelren' || gs.ai_policy_label));
+    if (!isAiMatch) return '';
+    const aiPlayerId = normalizePlayerId(gs && gs.ai_player_id);
+    if (aiPlayerId != null && id === aiPlayerId) return PHELREN_AVATAR_KIND;
+    return String(playerName || playerData.name || playerData.player_name || '').trim().toLowerCase() === 'phelren'
+        ? PHELREN_AVATAR_KIND
+        : '';
+}
+
 function normalizeBattlePlayer(gs, raw, slot) {
     const data = raw || {};
     const id = getBattlePlayerId(gs, slot);
@@ -25659,6 +26321,7 @@ function normalizeBattlePlayer(gs, raw, slot) {
         name: localizeCanonicalPlayerName(name),
         avatar_url: data.avatar_url || data.avatar || '',
         avatar_id: data.avatar_id || '',
+        avatar_kind: resolveBattlePlayerAvatarKind(gs, id, data, name),
         skin: normalizeSkinConfig(data.skin || (Array.isArray(gs.player_skins) && id != null ? gs.player_skins[id] : null)),
         skin_look: resolveSkinLookForPlayer(id, data.skin_look || (Array.isArray(gs.player_skin_looks) && id != null ? gs.player_skin_looks[id] : null)),
         hp: Number(data.health || 0),
@@ -25793,6 +26456,7 @@ function renderPlayerAvatar(player, options = {}) {
     const active = p.isCurrent ? ' is-current' : '';
     const defeated = p.isDefeated ? ' is-defeated' : '';
     const targetable = options.targetable ? ' is-targetable' : '';
+    const avatarKind = normalizePlayerAvatarKind(p.avatar_kind);
     const style = `--avatar-hue:${hue};--avatar-color:hsl(${hue} 62% 52%);--avatar-color-2:hsl(${(hue + 44) % 360} 70% 58%)`;
     const image = p.avatar_url ? `<img class="player-avatar-img" src="${escapeHtml(p.avatar_url)}" alt="">` : '';
     const skinHtml = renderSkinAvatar(p.skin || DEFAULT_SKIN_CONFIG, {
@@ -25803,8 +26467,9 @@ function renderPlayerAvatar(player, options = {}) {
         corrupted: !!p.hasCorruptionEquipment,
         animateCorruption: shouldAnimateSkinCorruption(p.id, !!p.hasCorruptionEquipment, 'classic'),
         mirrorLookX: !!options.mirrorLookX,
+        avatarKind,
     });
-    const skinClass = image ? '' : ' has-skin';
+    const skinClass = image ? '' : ` has-skin${avatarKind === PHELREN_AVATAR_KIND ? ' has-phelren-avatar' : ''}`;
     return `
         <div class="player-avatar${skinClass}${active}${defeated}${targetable}" style="${style}">
             ${image || skinHtml || `<div class="player-avatar-flower"><span>${escapeHtml(initial)}</span></div>`}
@@ -25812,12 +26477,13 @@ function renderPlayerAvatar(player, options = {}) {
     `;
 }
 
-function renderMiniPlayerSkin(containerId, playerData = {}, id = null) {
+function renderMiniPlayerSkin(containerId, playerData = {}, id = null, options = {}) {
     const el = $(containerId);
     if (!el) return;
     const data = playerData || {};
     const pid = normalizePlayerId(id != null ? id : data.player_id);
     const corrupted = playerHasCorruptionEquipment(data);
+    const avatarKind = resolveBattlePlayerAvatarKind(gameState, pid, data, options.name || '');
     el.innerHTML = renderSkinAvatar(data.skin || DEFAULT_SKIN_CONFIG, {
         playerId: pid,
         look: resolveSkinLookForPlayer(pid, data.skin_look),
@@ -25825,6 +26491,7 @@ function renderMiniPlayerSkin(containerId, playerData = {}, id = null) {
         defeatedSeed: `${pid ?? ''}:${data.name || data.player_name || ''}`,
         corrupted,
         animateCorruption: shouldAnimateSkinCorruption(pid, corrupted, containerId || 'mini'),
+        avatarKind,
     });
 }
 
@@ -26578,7 +27245,8 @@ function renderGame(data) {
             && !replayExportPlayerView
         ));
         gameContainer.classList.toggle('mode-tutorial', !!gs.tutorial || tutorialMode);
-        gameContainer.classList.toggle('mode-solo', !!gs.solo);
+        gameContainer.classList.toggle('mode-solo', !!gs.solo && !gs.ai_test);
+        gameContainer.classList.toggle('mode-ai-test', !!gs.ai_test);
         gameContainer.classList.toggle('mode-urf', gs.mode === 'urf');
         gameContainer.classList.toggle('mode-replay', (!!replayMode || !!gs.replay_mode) && !replayExportPlayerView);
     }
@@ -26636,7 +27304,7 @@ function renderGame(data) {
         if (oppLabel) setGameNameLabel(oppLabel, gs.opponent_name || UI.opponent, gs.opponent_is_admin_player, gs.opponent_special);
         if (youLabel) setGameNameLabel(youLabel, gs.your_name || UI.you, gs.your_is_admin_player, gs.your_special);
     }
-    if (!!gs.solo && gs.phase === 'game_over') {
+    if (!!gs.solo && !gs.ai_test && gs.phase === 'game_over') {
         const winner = gs.winner;
         const youResult = winner === -1 ? UI.draw : (winner === playerId ? UI.victory : UI.defeat);
         const oppResult = winner === -1 ? UI.draw : (winner === playerId ? UI.defeat : UI.victory);
@@ -26647,10 +27315,10 @@ function renderGame(data) {
     const yourPlayerId = getBattlePerspectivePlayerId(gs);
     const enemyIdsForSkin = Array.isArray(gs.enemy_ids) ? gs.enemy_ids.map(normalizePlayerId) : [];
     const opponentSkinId = is2v2 ? enemyIdsForSkin[0] : (yourPlayerId === 1 ? 0 : 1);
-    renderMiniPlayerSkin('opp-skin', opp, opponentSkinId);
-    renderMiniPlayerSkin('you-skin', you, yourPlayerId);
-    renderMiniPlayerSkin('opp2-skin', opp2, enemyIdsForSkin[1]);
-    renderMiniPlayerSkin('teammate-skin', teammate, gs.teammate_id);
+    renderMiniPlayerSkin('opp-skin', opp, opponentSkinId, { name: gs.opponent_name || gs.player2_name });
+    renderMiniPlayerSkin('you-skin', you, yourPlayerId, { name: gs.your_name || gs.player1_name });
+    renderMiniPlayerSkin('opp2-skin', opp2, enemyIdsForSkin[1], { name: (gs.opponent_names || [])[1] || gs.player4_name });
+    renderMiniPlayerSkin('teammate-skin', teammate, gs.teammate_id, { name: gs.teammate_name || gs.player2_name });
     updateBlindVisualClasses(gs);
 
     renderPlayerBars('opp-bars', opp);
@@ -26706,7 +27374,7 @@ function renderGame(data) {
         playZone.innerHTML = `<div class="play-zone-hint">${UI.drag_to_play}</div>`;
     }
     updateDropOverlayContent();
-    if (inSoloGame && gs.phase === 'game_over' && playZone) {
+    if (inSoloGame && !gs.ai_test && gs.phase === 'game_over' && playZone) {
         playZone.innerHTML = `
             <div class="solo-gameover-actions">
                 <button class="btn btn-primary" onclick="startSoloTraining()">${UI.rematch}</button>
@@ -31303,6 +31971,68 @@ function buildFusionCombosForGroup(group) {
     return dedupeCardCombos(combos);
 }
 
+function isFusionCardDict(cardDict, cardDef = null) {
+    const resolvedDef = cardDef || getCardDef((cardDict || {}).def_id);
+    return cardMatchesAnyLocalId(cardDict || {}, resolvedDef || {}, ['Fusion', 'fusion', 'vanilla:fusion'])
+        || !!(resolvedDef && (resolvedDef.name_cn === '聚变' || resolvedDef.name_en === 'Fusion'));
+}
+
+async function chooseOrderedFusionCards(cards, config = {}) {
+    const attacks = (Array.isArray(cards) ? cards : []).filter(card => {
+        const cardDef = getCardDef(card && card.def_id);
+        return card && cardDef && cardDef.card_type === 'thorn';
+    });
+    const groups = new Map();
+    attacks.forEach(card => {
+        const group = groups.get(card.def_id) || [];
+        group.push(card);
+        groups.set(card.def_id, group);
+    });
+    const primaryCandidates = attacks.filter(card => (groups.get(card.def_id) || []).length >= 2);
+    if (!primaryCandidates.length) return null;
+
+    const primaryMessage = lt({
+        zh: '这张牌将作为主体，并保留共生等自身标签。',
+        en: 'This card becomes the base and keeps its own tags, such as Symbiosis.',
+        fr: 'Cette carte devient la base et conserve ses propres tags, comme Symbiose.',
+        ja: 'このカードが主体となり、共生など自身のタグを保持します。',
+    });
+    const primaryIndex = await simpleChoice(
+        lt({
+            zh: '选择聚变后保留的牌',
+            en: 'Choose the card to keep after Fusion',
+            fr: 'Choisissez la carte conservee apres Fusion',
+            ja: '聚变後に残すカードを選択',
+        }),
+        primaryCandidates.map(card => cardChoiceOption(card)),
+        { ...config, message: [config.message, primaryMessage].filter(Boolean).join('\n') },
+    );
+    if (primaryIndex < 0 || primaryIndex >= primaryCandidates.length) return null;
+
+    const primary = primaryCandidates[primaryIndex];
+    const secondaryCandidates = (groups.get(primary.def_id) || []).filter(card => (
+        String(card.instance_id) !== String(primary.instance_id)
+    ));
+    const secondaryMessage = lt({
+        zh: '这张牌会被并入并离开手牌。',
+        en: 'This card is merged into the base and leaves your hand.',
+        fr: 'Cette carte fusionne avec la base et quitte votre main.',
+        ja: 'このカードは主体へ統合され、手札から離れます。',
+    });
+    const secondaryIndex = await simpleChoice(
+        lt({
+            zh: '选择并入主体的牌',
+            en: 'Choose the card to merge into it',
+            fr: 'Choisissez la carte a fusionner avec elle',
+            ja: '主体へ統合するカードを選択',
+        }),
+        secondaryCandidates.map(card => cardChoiceOption(card)),
+        { ...config, message: secondaryMessage },
+    );
+    if (secondaryIndex < 0 || secondaryIndex >= secondaryCandidates.length) return null;
+    return [primary, secondaryCandidates[secondaryIndex]];
+}
+
 async function onPlayCard(cardInstanceId, options = {}) {
     if (isSpectating) return;
     if (!canSendGameAction('play_card')) return;
@@ -31387,30 +32117,18 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         const sel = await simpleChoice(UI.choose_attack_for.replace('{0}', sourceCardName), options);
         if (sel < 0) return false;
         return { target_instance_id: attacks[sel].instance_id, target_instance_ids: [attacks[sel].instance_id] };
-    } else if (defId === 'Fusion') {
+    } else if (isFusionCardDict(cardDict, sourceCardDef)) {
         const attacks = hand.filter(c => {
             const cd = getCardDef(c.def_id);
             return cd && cd.card_type === 'thorn' && c.instance_id !== cardDict.instance_id;
         });
-        const groups = {};
-        attacks.forEach(a => {
-            const g = groups[a.def_id] || (groups[a.def_id] = []);
-            g.push(a);
-        });
-        const validGroups = Object.entries(groups).filter(([_, v]) => v.length >= 2);
-        if (!validGroups.length) { gameAlert(UI.notice, UI.no_same_attack); return false; }
-        let group = validGroups[0][1];
-        if (validGroups.length > 1) {
-            const groupOptions = validGroups.map(([k, v]) => cardChoiceOption(v[0], { detail: `x${v.length}` }));
-            const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', sourceCardName), groupOptions);
-            if (sel < 0) return false;
-            group = validGroups[sel][1];
-        }
-        const uniqueCombos = buildFusionCombosForGroup(group);
-        const comboOptions = uniqueCombos.map(combo => cardComboChoiceOption(combo));
-        const comboSel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', sourceCardName), comboOptions);
-        if (comboSel < 0) return false;
-        return { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
+        const hasValidPair = attacks.some(card => (
+            attacks.filter(other => other.def_id === card.def_id).length >= 2
+        ));
+        if (!hasValidPair) { gameAlert(UI.notice, UI.no_same_attack); return false; }
+        const selectedCards = await chooseOrderedFusionCards(attacks);
+        if (!selectedCards) return false;
+        return { target_instance_ids: selectedCards.map(c => c.instance_id) };
     } else if (isMimicCardDict(cardDict)) {
         const others = hand.filter(c => c.instance_id !== cardDict.instance_id && !cardHasSublimeFlag(c));
         if (!others.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
@@ -32408,25 +33126,13 @@ async function showChoiceUI(data) {
             const cd = getCardDef(c.def_id);
             return cd && cd.card_type === 'thorn';
         });
-        const groups = {};
-        attacks.forEach(a => { const g = groups[a.def_id] || (groups[a.def_id] = []); g.push(a); });
-        const validGroups = Object.entries(groups).filter(([_, v]) => v.length >= 2);
-        if (!validGroups.length) { gameAlert(UI.notice, UI.no_same_attack); }
+        const hasValidPair = attacks.some(card => (
+            attacks.filter(other => other.def_id === card.def_id).length >= 2
+        ));
+        if (!hasValidPair) { gameAlert(UI.notice, UI.no_same_attack); }
         else {
-            let group = validGroups[0][1];
-            let groupAccepted = true;
-            if (validGroups.length > 1) {
-                const groupOptions = validGroups.map(([k, v]) => cardChoiceOption(v[0], { detail: `x${v.length}` }));
-                const sel = await simpleChoice(UI.choose_attack_group_for.replace('{0}', cardName), groupOptions, choicePromptConfig);
-                groupAccepted = sel >= 0;
-                if (groupAccepted) group = validGroups[sel][1];
-            }
-            if (groupAccepted) {
-                const uniqueCombos = buildFusionCombosForGroup(group);
-                const comboOptions = uniqueCombos.map(combo => cardComboChoiceOption(combo));
-                const comboSel = await simpleChoice(choiceTitle(UI.choose_attack_group_for.replace('{0}', cardName)), comboOptions, choicePromptConfig);
-                if (comboSel >= 0) choiceResult = { target_instance_ids: uniqueCombos[comboSel].map(c => c.instance_id) };
-            }
+            const selectedCards = await chooseOrderedFusionCards(attacks, choicePromptConfig);
+            if (selectedCards) choiceResult = { target_instance_ids: selectedCards.map(c => c.instance_id) };
         }
     } else if (choiceType === 'choose_cards_from_hand') {
         const allCards = (choiceTargetData().hand || []).filter(c => (
@@ -32442,6 +33148,16 @@ async function showChoiceUI(data) {
         if (!cards.length && minCount <= 0) {
             choiceResult = { target_instance_ids: [] };
         } else if (!cards.length) { gameAlert(UI.notice, UI.no_valid_target || '没有可选择的卡牌'); }
+        else if (choiceParams.same_name && isFusionCardDict(cardDict, cardDef) && minCount === 2 && maxCount === 2) {
+            const selectedCards = await chooseOrderedFusionCards(cards, choicePromptConfig);
+            if (selectedCards) choiceResult = { target_instance_ids: selectedCards.map(c => c.instance_id) };
+            else {
+                const hasValidPair = cards.some(card => (
+                    cards.filter(other => other.def_id === card.def_id).length >= 2
+                ));
+                if (!hasValidPair) gameAlert(UI.notice, UI.no_same_attack);
+            }
+        }
         else if (choiceParams.same_name) {
             const groups = {};
             cards.forEach(c => { const g = groups[c.def_id] || (groups[c.def_id] = []); g.push(c); });
@@ -32859,6 +33575,7 @@ function renderGameOver(data) {
     showView('view-gameover');
     syncRematchStateFromGameState(gs);
     const isTutorialGameOver = !!gs.tutorial;
+    const isAiTestGameOver = !!gs.ai_test;
     const isSpectatorGameOver = !!(gs.spectating || isSpectating || gs.your_id === -1 || playerId === -1);
     const winner = gs.winner;
     const isDraw = winner === -1 || winner === null || winner === undefined;
@@ -32895,9 +33612,11 @@ function renderGameOver(data) {
     const replayBox = $('gameover-replay');
     const replayCopy = $('btn-copy-gameover-replay');
     const replayId = Number((gs.match_summary || gs.summary || {}).replay_id || gs.replay_id || 0);
-    if (replayBox) replayBox.classList.toggle('hidden', !(replayId > 0) || isTutorialGameOver || soloMode);
+    if (replayBox) replayBox.classList.toggle('hidden', !(replayId > 0) || isTutorialGameOver || (soloMode && !isAiTestGameOver));
     if (replayCopy) {
-        const replayRef = replayId > 0 ? `R-${replayId}` : '';
+        const replaySummary = gs.match_summary || gs.summary || {};
+        const replayPrefix = String(replaySummary.replay_prefix || gs.replay_prefix || 'R').toUpperCase() === 'P' ? 'P' : 'R';
+        const replayRef = replayId > 0 ? String(replaySummary.replay_ref || `${replayPrefix}-${replayId}`) : '';
         replayCopy.textContent = replayRef;
         replayCopy.title = UI.replay_copy || '复制';
         replayCopy.onclick = replayRef ? (async () => {
@@ -32919,6 +33638,16 @@ function renderGameOver(data) {
             rematchBtn.style.display = 'none';
             rematchBtn.disabled = true;
             rematchBtn.onclick = null;
+        } else if (isAiTestGameOver) {
+            rematchBtn.textContent = UI.rematch;
+            rematchBtn.disabled = false;
+            rematchBtn.onclick = () => {
+                if (!socket || !socket.connected || rematchBtn.disabled) return;
+                setAi1v1TestLoading(true);
+                rematchBtn.disabled = true;
+                rematchBtn.textContent = UI.ai_1v1_test_loading || '正在加载 Phelren V1…';
+                socket.emit('ai_1v1_rematch', {});
+            };
         } else if (isTutorialGameOver && isWin) {
             rematchBtn.classList.add('hidden');
             rematchBtn.style.display = 'none';
@@ -32982,8 +33711,10 @@ function returnToLobbyFromGameOver(expectedContext = {}) {
         requestFullGameState('stale_return_lobby_control');
         return;
     }
+    const returningFromAiTest = !!gameState?.ai_test;
     allowLobbyTransition('return_lobby_button');
     socket.emit('return_lobby', currentMatchActionContext(expectedContext));
+    if (returningFromAiTest) soloMode = false;
     clearNetworkMatchStateForLobby();
     showView('view-lobby');
     phase = 'lobby';
@@ -33111,7 +33842,8 @@ function onSurrender() {
     gameAlert(message, '', [
         { text: UI.ok, cls: 'btn-danger', action: () => {
             if (socket) {
-                emitModeEvent('solo_pause', 'surrender', {});
+                if (gameState?.ai_test) socket.emit('surrender', currentMatchActionContext());
+                else emitModeEvent('solo_pause', 'surrender', {});
             }
         }},
         { text: UI.cancel, cls: 'btn-secondary', action: () => {} }
@@ -34095,8 +34827,12 @@ function scheduleCardsAfterCommunityChange() {
 
 async function refreshCardsAfterModSettingsConfirmed() {
     try {
+        invalidateGalleryData();
         await fetchCardDefs({ useCache: false });
         await fetchOpeningEvents({ useCache: false });
+        if (getVisibleViewId() === 'view-card-gallery') {
+            await ensureGalleryDataLoaded({ force: true });
+        }
         loadSoloDecks(false);
         renderSoloBuilder();
         refreshCardDataViews();
@@ -34882,6 +35618,13 @@ async function init() {
     bindClickOnce('btn-solo-training', showSoloTraining);
     bindClickOnce('btn-connect', onLogin);
     bindClickOnce('btn-story-mode', openStoryMode);
+    bindClickOnce('btn-ai-1v1-test', async () => {
+        const confirmed = await gameConfirm(UI.ai_1v1_test_title, UI.ai_1v1_test_pending);
+        if (!confirmed || !socket || !socket.connected) return;
+        setAi1v1TestLoading(true);
+        updateStatus(UI.ai_1v1_test_loading || '正在加载 AI 模型…');
+        socket.emit('ai_1v1_start', {});
+    });
     bindClickOnce('btn-open-settings', openSettings);
     bindClickOnce('btn-card-gallery', () => showCardGallery());
     bindClickOnce('btn-open-about', openAbout);
@@ -34949,6 +35692,10 @@ async function init() {
     if ($('btn-replays-top')) $('btn-replays-top').addEventListener('click', () => toggleStatsPopover());
     if ($('btn-achievements-top')) $('btn-achievements-top').addEventListener('click', () => toggleAchievementsPopover());
     if ($('btn-achievements-popover-close')) $('btn-achievements-popover-close').addEventListener('click', () => toggleAchievementsPopover(false));
+    if ($('btn-title-shop-top')) $('btn-title-shop-top').addEventListener('click', () => toggleTitleShopPopover());
+    if ($('btn-title-shop-close')) $('btn-title-shop-close').addEventListener('click', () => toggleTitleShopPopover(false));
+    if ($('btn-title-shop-refresh')) $('btn-title-shop-refresh').addEventListener('click', refreshTitleShop);
+    if ($('btn-title-shop-lock')) $('btn-title-shop-lock').addEventListener('click', toggleTitleShopLock);
     document.querySelectorAll('[data-achievement-tab]').forEach((btn) => {
         btn.addEventListener('click', () => setAchievementTab(btn.dataset.achievementTab || 'dew'));
     });
@@ -35134,11 +35881,11 @@ async function init() {
         const downloadButton = event.target.closest('[data-account-replay-download]');
         if (downloadButton) {
             event.preventDefault();
-            const replayId = Number(downloadButton.dataset.accountReplayDownload) || 0;
-            if (replayId > 0) {
+            const replayRef = String(downloadButton.dataset.accountReplayDownload || '').trim().toUpperCase();
+            if (/^[RP]-\d+$/.test(replayRef) || /^\d+$/.test(replayRef)) {
                 const link = document.createElement('a');
-                link.href = `/api/replays/${encodeURIComponent(replayId)}/download`;
-                link.download = `GTN-R-${replayId}.gtnreplay`;
+                link.href = `/api/replays/${encodeURIComponent(replayRef)}/download`;
+                link.download = `GTN-${replayRef}.gtnreplay`;
                 document.body.appendChild(link);
                 link.click();
                 link.remove();

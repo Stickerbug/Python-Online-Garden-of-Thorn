@@ -1,5 +1,7 @@
 import gc
+import json
 import os
+import struct
 import tempfile
 import unittest
 
@@ -71,6 +73,63 @@ class ReplayExternalStorageTests(unittest.TestCase):
         self.assertTrue(package['payload'].startswith(replay_core.REPLAY_DOWNLOAD_MAGIC))
         timeline = replay_core.replay_timeline(replay_id)
         self.assertGreaterEqual(timeline['total_frames'], 1)
+
+    def test_phelren_replay_keeps_its_prefix_in_lists_timeline_and_download(self):
+        summary = self._summary()
+        summary['replay_prefix'] = 'P'
+        replay_id = replay_core.save_replay_snapshot(7, summary)
+
+        item = replay_core.get_replay(replay_id)
+        self.assertEqual(item['replay_prefix'], 'P')
+        self.assertEqual(item['replay_ref'], f'P-{replay_id}')
+
+        timeline = replay_core.replay_timeline(replay_id)
+        self.assertEqual(timeline['replay']['replay_prefix'], 'P')
+        self.assertEqual(timeline['replay']['replay_ref'], f'P-{replay_id}')
+
+        package = replay_core.build_replay_download_package(replay_id)
+        self.assertEqual(package['filename'], f'GTN-P-{replay_id}.gtnreplay')
+        header_start = len(replay_core.REPLAY_DOWNLOAD_MAGIC)
+        header_size = struct.unpack(
+            '>I',
+            package['payload'][header_start:header_start + 4],
+        )[0]
+        header = json.loads(
+            package['payload'][header_start + 4:header_start + 4 + header_size].decode('utf-8')
+        )
+        self.assertEqual(header['replay_prefix'], 'P')
+        self.assertEqual(header['replay_ref'], f'P-{replay_id}')
+
+    def test_regular_and_phelren_replays_share_one_non_repeating_sequence(self):
+        regular_id = replay_core.save_replay_snapshot(10, self._summary())
+        phelren_summary = self._summary()
+        phelren_summary['replay_prefix'] = 'P'
+        phelren_id = replay_core.save_replay_snapshot(11, phelren_summary)
+        next_regular_id = replay_core.save_replay_snapshot(12, self._summary())
+
+        self.assertGreater(regular_id, 0)
+        self.assertEqual(phelren_id, regular_id + 1)
+        self.assertEqual(next_regular_id, phelren_id + 1)
+
+        with db.get_db_connection() as conn:
+            conn.execute('DELETE FROM match_replays WHERE id = ?', (phelren_id,))
+            conn.commit()
+
+        later_phelren_summary = self._summary()
+        later_phelren_summary['replay_prefix'] = 'P'
+        later_phelren_id = replay_core.save_replay_snapshot(13, later_phelren_summary)
+        self.assertEqual(later_phelren_id, next_regular_id + 1)
+
+    def test_replay_reference_prefix_must_match_stored_prefix(self):
+        regular_id = replay_core.save_replay_snapshot(20, self._summary())
+        phelren_summary = self._summary()
+        phelren_summary['replay_prefix'] = 'P'
+        phelren_id = replay_core.save_replay_snapshot(21, phelren_summary)
+
+        self.assertEqual(replay_core.get_replay(f'R-{regular_id}')['id'], regular_id)
+        self.assertEqual(replay_core.get_replay(f'P-{phelren_id}')['id'], phelren_id)
+        self.assertIsNone(replay_core.get_replay(f'P-{regular_id}'))
+        self.assertIsNone(replay_core.get_replay(f'R-{phelren_id}'))
 
     def test_cleanup_removes_external_blob_file(self):
         replay_id = replay_core.save_replay_snapshot(

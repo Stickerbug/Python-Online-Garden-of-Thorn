@@ -9,6 +9,7 @@
 - 新实例建议端口：`127.0.0.1:5002`
 - 数据库仍共用 `/var/lib/gtn/gtn.sqlite3`
 - 不要同时开多个写入数据库的长期重型后台清理任务。临时新实例建议设置 `GTN_DB_MAINTENANCE_ENABLED=0`。
+- Phelren 配置统一从 `/etc/gtn/ai.env` 读取；蓝绿实例共享 `/opt/gtn-ai-runtime` 的只读推理包和 `/var/lib/gtn-ai` 的诊断数据，不要把它们复制进发布目录。
 
 ## 1. 准备新目录
 
@@ -26,6 +27,34 @@ cp /opt/gtn-next/scripts/gtn-blue-green.service.template /etc/systemd/system/gtn
 systemctl daemon-reload
 systemctl start gtn-release-next
 ```
+
+先在开发机的 `GTN-AI` 仓库生成仅含在线推理模块和最终模型的运行包：
+
+```bash
+python tools/build_runtime_bundle.py \
+  --checkpoint models/structured-v2-search-dagger-v2.epoch-06.pt
+```
+
+上传生成的 `dist/gtn-ai-runtime.tar.gz` 后，在服务器执行：
+
+```bash
+cd /opt/gtn-release
+GTN_AI_RUNTIME_ARCHIVE=/root/gtn-ai-runtime.tar.gz \
+  bash scripts/setup_gtn_ai.sh
+```
+
+服务器不克隆完整 `GTN-AI` 仓库，也不保存训练脚本、测试、数据集、缓存或历史检查点。
+`GTN_AI_RUNTIME_ARCHIVE` 也可以是私有 Release/OSS 的 HTTPS 下载地址。正式服务若不是由本模板创建，给
+`gtn-release.service` 增加以下 drop-in：
+
+```ini
+[Service]
+EnvironmentFile=-/etc/gtn/ai.env
+```
+
+然后运行 `systemctl daemon-reload`。默认最多同时保留 5 局未结束的 Phelren 对局，模型只加载一次，重型
+推理串行执行；诊断保留 14 天且总量上限 2 GiB。修改 `/etc/gtn/ai.env` 后需要重启游戏
+服务才会生效。
 
 检查：
 

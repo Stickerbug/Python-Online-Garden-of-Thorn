@@ -16,6 +16,7 @@ Environment=GTN_PORT=5002
 Environment=GTN_DRAIN_FILE=/tmp/gtn-release-5002-next.drain
 Environment=GTN_SYSTEMD_SERVICE=gtn-release-next
 Environment=GTN_DB_MAINTENANCE_ENABLED=0
+EnvironmentFile=-/etc/gtn/ai.env
 ExecStart=/opt/gtn-next/venv/bin/python /opt/gtn-next/app.py
 Restart=always
 RestartSec=3

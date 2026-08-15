@@ -250,7 +250,5 @@ def test_latest_monster_names_special_intents_and_reconstructor_art_are_visible(
 
     image_url = STORY_ENEMY_IMAGE_URLS['reconstructor_enemy']
     image_path = ROOT / 'static' / image_url.removeprefix('/static/').replace('/', '\\')
-    assert image_url == '/static/assets/story-enemies/reconstructor-card.svg'
+    assert image_url == '/static/assets/story-enemies/reconstructor.svg'
     assert image_path.is_file()
-    with zipfile.ZipFile(ROOT / 'mods' / 'Factory Cards Addition.gtnmod') as package:
-        assert image_path.read_bytes() == package.read('card-art/Assembler.svg')

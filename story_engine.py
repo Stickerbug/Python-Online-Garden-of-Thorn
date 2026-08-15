@@ -26,7 +26,7 @@ from story_content import (
 
 _NEGATIVE_STATUSES = frozenset({
     'blind', 'bleed', 'blockade', 'broken', 'entangle', 'fire', 'fragile',
-    'locked', 'poison', 'stagnation', 'toxic_poison', 'vulnerable', 'weak',
+    'poison', 'stagnation', 'toxic_poison', 'vulnerable', 'weak',
 })
 
 _PRESENTATION_EFFECT_KEYS = (
@@ -36,12 +36,12 @@ _PRESENTATION_EFFECT_KEYS = (
     'negative_status_immunity', 'evil_eye', 'sturdy', 'shelter',
     'hidden', 'turn_shield', 'charging', 'charged', 'frenzy', 'vampire',
     'proliferation', 'regeneration', 'regenerations', 'bandage', 'miracle',
-    'toxic_poison', 'stagnation', 'bleed', 'fire', 'blockade', 'locked',
+    'toxic_poison', 'stagnation', 'bleed', 'fire', 'blockade',
     'fragment', 'psionic_connection', 'psionic_sustain', 'psionic_fountain', 'nest_instinct',
     'endurance_shell', 'toxic_conversion', 'bulb', 'hard_shell', 'obstacle',
     'segments', 'magic_shield', 'magic_blessing', 'magic_reflection',
     'magic', 'electric_web', 'super_beam', 'toxic_reflection',
-    'reconstruction', 'integration', 'scrap', 'disc',
+    'reconstruction', 'integration', 'scrap', 'disc', 'toxic_pressure',
 )
 
 
@@ -160,6 +160,9 @@ def _normalize_legacy_story_state(state):
     if isinstance(room, dict) and room.get('type') == 'stage_choice':
         room.pop('curses', None)
         room.pop('allow_repeated_curses', None)
+    combat = state.get('combat')
+    if isinstance(combat, dict):
+        combat.pop('locked', None)
 
 
 def _turn_elixir_baseline(state, combat=None):
@@ -619,6 +622,17 @@ def _gain_shield(state, amount, events, source='card', enemy=None):
             'after': int(enemy['shield']),
             'source': source,
         })
+        if (
+            amount > 0
+            and STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
+            == 'mechanical_flower'
+        ):
+            _player_raw_damage(
+                state,
+                amount,
+                events,
+                'electronic_shield',
+            )
         return amount
     combat = state['combat']
     if source == 'card':
@@ -728,7 +742,7 @@ def _status_count(unit):
         'vulnerable', 'fragile', 'evade', 'poison',
         'reflection', 'wither', 'broken', 'rockfall', 'blind', 'entangle',
         'negative_status_immunity', 'evil_eye', 'toxic_poison', 'stagnation',
-        'bleed', 'fire', 'blockade', 'locked', 'fragment',
+        'bleed', 'fire', 'blockade', 'fragment',
     )
     return sum(1 for key in keys if int(unit.get(key) or 0) > 0)
 
@@ -768,8 +782,41 @@ def _apply_status(state, target, status, amount, events, source='card'):
             _gain_shield(state, int(effect.get('amount') or 0), events)
 
 
+def _mechanical_flowers(combat):
+    return [
+        enemy for enemy in _living_enemies(combat)
+        if STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
+        == 'mechanical_flower'
+    ]
+
+
+def _card_exiled_by_void(card):
+    modifiers = card.get('modifiers') or {}
+    return bool(modifiers.get('force_void') or 'void' in _card_tags(_card_values(card)))
+
+
 def _notify_exiled(state, card, events, seed):
-    events.append({'type': 'card_exiled', 'card_instance_id': card['instance_id'], 'def_id': card['def_id']})
+    combat = state.get('combat') or {}
+    flowers = _mechanical_flowers(combat)
+    if flowers and _card_exiled_by_void(card):
+        flower = flowers[0]
+        if card in combat.get('exile_pile', []):
+            combat['exile_pile'].remove(card)
+        card['track_persistent'] = False
+        card['track_captured'] = True
+        flower.setdefault('mechanical_track', []).insert(0, card)
+        events.append({
+            'type': 'mechanical_track_captured',
+            'enemy_id': flower['id'],
+            'card_instance_id': card['instance_id'],
+            'def_id': card['def_id'],
+        })
+        return
+    events.append({
+        'type': 'card_exiled',
+        'card_instance_id': card['instance_id'],
+        'def_id': card['def_id'],
+    })
 
 
 def _sync_persistent_card_modifier(state, card, key, amount):
@@ -942,6 +989,26 @@ def _draw_filter_matches(card, filter_name):
     return False
 
 
+def _apply_machine_learning_void(state, card, events, source):
+    combat = state.get('combat') or {}
+    flowers = _mechanical_flowers(combat)
+    if not flowers:
+        return False
+    modifiers = card.setdefault('modifiers', {})
+    if modifiers.get('force_void') or 'void' in _card_tags(_card_values(card)):
+        return False
+    modifiers['force_void'] = True
+    events.append({
+        'type': 'card_modified',
+        'card_instance_id': card['instance_id'],
+        'modifier': 'force_void',
+        'amount': 1,
+        'source': source,
+        'enemy_id': flowers[0]['id'],
+    })
+    return True
+
+
 def _draw_cards(state, count, seed, events, autoplay_depth=0, card_filter=None):
     combat = state['combat']
     if combat.get('cannot_draw'):
@@ -973,6 +1040,13 @@ def _draw_cards(state, count, seed, events, autoplay_depth=0, card_filter=None):
         else:
             combat['hand'].append(card)
             drawn.append(card['instance_id'])
+            if combat.get('draw_phase_complete'):
+                _apply_machine_learning_void(
+                    state,
+                    card,
+                    events,
+                    'machine_learning_draw',
+                )
             _on_card_drawn(state, card, seed, events, autoplay_depth)
     if drawn:
         _record_cards_drawn(state, drawn, events)
@@ -1207,6 +1281,9 @@ def _player_damage(state, amount, hits, events, source, attacker=None):
 
 def _apply_enemy_lethal_rules(state, enemy, before, dealt, events):
     """Apply one-use enemy survival mechanics and return recorded damage."""
+    if STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script') == 'broken_machine':
+        enemy['health'] = 1
+        return 0
     after = before - dealt
     if dealt > 0 and after <= 1 and int(enemy.get('psionic_sustain') or 0) > 0 and any(
         item.get('def_id') == 'termite_mound'
@@ -1294,6 +1371,52 @@ def _record_enemy_health_damage(enemy, dealt):
         enemy['fossil_awaken_pending'] = True
 
 
+def _reveal_rat_from_cover(state, cover, events):
+    for rat in _living_enemies(state['combat']):
+        if (
+            STORY_ENEMIES.get(rat.get('def_id'), {}).get('script')
+            != 'mechanical_rat'
+            or rat.get('hidden_cover_id') != cover.get('id')
+            or int(rat.get('hidden') or 0) <= 0
+        ):
+            continue
+        before = int(rat['hidden'])
+        rat['hidden'] = 0
+        rat.pop('hidden_fresh', None)
+        events.append({
+            'type': 'status_cleared',
+            'target_id': rat['id'],
+            'status': 'hidden',
+            'before': before,
+            'source': cover['id'],
+        })
+
+
+def _after_enemy_health_damage(state, enemy, dealt, events):
+    if dealt <= 0:
+        return
+    script = STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
+    if script != 'chimney':
+        return
+    progress = max(0, int(enemy.get('smoke_damage_progress') or 0)) + int(dealt)
+    summon_count, enemy['smoke_damage_progress'] = divmod(progress, 100)
+    for _ in range(summon_count):
+        _summon_enemy(
+            state,
+            'smoke',
+            events,
+            actor_id=enemy['id'],
+            source_definition_id=enemy['def_id'],
+        )
+    if summon_count:
+        events.append({
+            'type': 'chimney_smoke_triggered',
+            'enemy_id': enemy['id'],
+            'count': summon_count,
+            'remaining_damage': int(enemy['smoke_damage_progress']),
+        })
+
+
 def _enemy_raw_damage(
     state,
     enemy,
@@ -1343,6 +1466,7 @@ def _enemy_raw_damage(
     blocked = min(shield, amount)
     enemy['shield'] = shield - blocked
     dealt = amount - blocked
+    incoming_health_damage = dealt
     before = int(enemy['health'])
     dealt = _apply_enemy_lethal_rules(state, enemy, before, dealt, events)
     _record_enemy_health_damage(enemy, dealt)
@@ -1359,6 +1483,13 @@ def _enemy_raw_damage(
         'source': source,
     }
     events.append(damage_event)
+    if (
+        incoming_health_damage > 0
+        and STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
+        == 'broken_machine'
+    ):
+        _reveal_rat_from_cover(state, enemy, events)
+    _after_enemy_health_damage(state, enemy, dealt, events)
     if dealt and STORY_ENEMIES[enemy['def_id']].get('script') == 'swell':
         enemy['temporary_power'] = int(enemy.get('temporary_power') or 0) + 1
     if dealt and STORY_ENEMIES[enemy['def_id']].get('script') == 'centipede' and not propagate:
@@ -1585,6 +1716,7 @@ def _enemy_physical_damage(
         if not invincible:
             enemy['shield'] = shield - blocked
         dealt = 0 if invincible else amount - blocked
+        incoming_health_damage = dealt
         before = int(enemy['health'])
         dealt = _apply_enemy_lethal_rules(state, enemy, before, dealt, events)
         _record_enemy_health_damage(enemy, dealt)
@@ -1602,6 +1734,13 @@ def _enemy_physical_damage(
             'after': after,
             'source': source,
         })
+        if (
+            incoming_health_damage > 0
+            and STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
+            == 'broken_machine'
+        ):
+            _reveal_rat_from_cover(state, enemy, events)
+        _after_enemy_health_damage(state, enemy, dealt, events)
         reflection = int(enemy.get('reflection') or 0)
         if reflection > 0 and amount > 0:
             _player_damage(state, reflection, 1, events, 'reflection')
@@ -1653,7 +1792,7 @@ def _resolve_player_death(state, events):
         combat = state.get('combat') or {}
         for key in (
             'weak', 'vulnerable', 'fragile', 'poison', 'stun', 'broken',
-            'toxic_poison', 'stagnation', 'bleed', 'fire', 'blockade', 'locked',
+            'toxic_poison', 'stagnation', 'bleed', 'fire', 'blockade',
         ):
             combat[key] = 0
         events.append({'type': 'revive', 'source': 'world_tree_leaf'})
@@ -2027,11 +2166,6 @@ def _selectable_enemy_targets(combat, values):
     bulbs = [enemy for enemy in living if int(enemy.get('bulb') or 0) > 0]
     if bulbs:
         living = bulbs
-    if (
-        values.get('type') == 'thorn'
-        and int(combat.get('locked') or 0) > 0
-    ):
-        living = [enemy for enemy in living if enemy.get('def_id') == 'stick']
     return living
 
 
@@ -2332,6 +2466,18 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
             'modifier': 'swift',
             'amount': int(amount),
             'permanent': True,
+        })
+    elif effect_type == 'self_swift':
+        modifiers = card.setdefault('modifiers', {})
+        before = max(0, int(modifiers.get('swift') or 0))
+        modifiers['swift'] = before + max(0, int(amount))
+        events.append({
+            'type': 'card_modified',
+            'card_instance_id': card['instance_id'],
+            'modifier': 'swift',
+            'amount': max(0, int(amount)),
+            'before': before,
+            'after': int(modifiers['swift']),
         })
     elif effect_type == 'elixir_if_active_discard':
         if int(combat.get('active_discards_this_turn') or 0) > 0:
@@ -2943,6 +3089,54 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
 
 def _enemy_intent(state, enemy):
     definition = STORY_ENEMIES[enemy['def_id']]
+    if definition.get('script') == 'broken_machine':
+        return {
+            'move_index': -1,
+            'name': {'zh': '损坏', 'en': 'Broken'},
+            'entries': [],
+            'summary': '',
+        }
+    if definition.get('script') == 'mechanical_flower':
+        track = enemy.get('mechanical_track') or []
+        if not track:
+            return {
+                'move_index': 0,
+                'name': definition['moves'][0]['name'],
+                'entries': [],
+                'summary': '',
+            }
+        card = track[0]
+        values = _card_values(card)
+        damage, shield, can_draw = _mechanical_track_base_totals(card)
+        recycled = damage + shield < 10 and not can_draw
+        card_name = values.get('name') or card.get('def_id')
+        label = {
+            'zh': (
+                f'回收{_localized(card_name, "zh")}'
+                if recycled
+                else f'触发{_localized(card_name, "zh")}'
+            ),
+            'en': (
+                f'Recycle {_localized(card_name, "en")}'
+                if recycled
+                else f'Resolve {_localized(card_name, "en")}'
+            ),
+        }
+        return {
+            'move_index': 0,
+            'name': definition['moves'][0]['name'],
+            'entries': [{
+                'kind': 'card',
+                'effect_type': 'mechanical_track',
+                'card_id': card.get('def_id'),
+                'card': copy.deepcopy(card),
+                'amount': 1,
+                'target': 'player',
+                'label': label,
+                'recycled': recycled,
+            }],
+            'summary': label['zh'],
+        }
     move = _next_enemy_move(state, enemy)
     move_index = definition['moves'].index(move)
     parts = []
@@ -3171,6 +3365,23 @@ def _enemy_intent(state, enemy):
         elif effect_type == 'delayed_hand_charge':
             entries.append({'kind': 'card', 'effect_type': effect_type, 'amount': amount, 'target': 'player'})
             parts.append(f'下回合使所有手牌获得{amount}层电荷')
+        elif effect_type == 'all_cards_charge':
+            entries.append({
+                'kind': 'card',
+                'effect_type': effect_type,
+                'amount': amount,
+                'target': 'player',
+            })
+            parts.append(f'使所有牌获得{amount}层电荷')
+        elif effect_type == 'halve_player_status':
+            status = str(effect.get('status') or '')
+            entries.append({
+                'kind': 'consume_status',
+                'status': status,
+                'amount': math.ceil(max(0, int(state['combat'].get(status) or 0)) / 2),
+                'target': 'player',
+            })
+            parts.append(f'清除一半{_story_term_name(status)}')
         elif effect_type == 'delayed_player_status':
             status = str(effect.get('status') or '')
             entries.append({'kind': 'status', 'status': status, 'amount': amount, 'target': 'player', 'delayed': True})
@@ -3354,6 +3565,59 @@ def _encounter_specs(state, room_type, seed, category_override=None):
     return [spec if isinstance(spec, dict) else {'def_id': spec} for spec in encounter]
 
 
+def _initialize_mechanical_track(state, enemy, events):
+    if isinstance(enemy.get('mechanical_track'), list):
+        return
+    track = []
+    for card_id in ('mjolnir', 'cogwheel', 'bone', 'bone'):
+        card = _new_card(state, card_id)
+        card['track_persistent'] = True
+        track.append(card)
+    enemy['mechanical_track'] = track
+    events.append({
+        'type': 'mechanical_track_initialized',
+        'enemy_id': enemy['id'],
+        'card_ids': [card['def_id'] for card in track],
+    })
+
+
+def _resolve_enemy_entrance(state, enemy, events):
+    script = STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
+    if script == 'mechanical_flower':
+        _initialize_mechanical_track(state, enemy, events)
+    obstacle = max(0, int(enemy.get('obstacle') or 0))
+    if obstacle:
+        _apply_status(
+            state,
+            state['combat'],
+            'blockade',
+            obstacle,
+            events,
+            source=enemy.get('def_id'),
+        )
+
+
+def _machine_learning_turn_start(state, seed, events):
+    combat = state.get('combat') or {}
+    flowers = _mechanical_flowers(combat)
+    if not flowers:
+        return
+    hand = list(combat.get('hand') or ())
+    if not hand:
+        return
+    selected = _rng(state, seed, 'machine_learning_hand').sample(
+        hand,
+        min(2, len(hand)),
+    )
+    for card in selected:
+        _apply_machine_learning_void(
+            state,
+            card,
+            events,
+            'machine_learning_turn_start',
+        )
+
+
 def _start_combat(state, node, seed, events, encounter_override=None):
     specs = encounter_override or _encounter_specs(state, node['type'], seed)
     draw_pile = copy.deepcopy(state['player']['deck'])
@@ -3415,9 +3679,12 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'delayed_player_statuses': [],
         'next_turn_draw_delta': 0,
         'sewage_active': False,
+        'draw_phase_complete': False,
     }
     state['phase'] = 'combat'
     combat = state['combat']
+    for enemy in enemies:
+        _resolve_enemy_entrance(state, enemy, events)
     if any(enemy.get('def_id') == 'termite_mound' for enemy in enemies):
         for enemy in enemies:
             if int(enemy.get('psionic_connection') or 0) <= 0:
@@ -3487,7 +3754,9 @@ def _start_combat(state, node, seed, events, encounter_override=None):
             int(STORY_RELICS['dandelion_blessing']['amount']),
             events,
         )
+    _machine_learning_turn_start(state, seed, events)
     _draw_cards(state, draw_count, seed, events)
+    combat['draw_phase_complete'] = True
     _refresh_combat_projections(state)
     events.append({'type': 'combat_start', 'enemy_ids': [enemy['def_id'] for enemy in enemies]})
 
@@ -3495,6 +3764,8 @@ def _start_combat(state, node, seed, events, encounter_override=None):
 def _next_enemy_move(state, enemy):
     definition = STORY_ENEMIES[enemy['def_id']]
     moves = definition['moves']
+    if definition.get('script') == 'mechanical_rat':
+        return moves[0 if int(enemy.get('hidden') or 0) > 0 else 1]
     forced_move_index = enemy.get('forced_move_index')
     if forced_move_index is not None:
         return moves[int(forced_move_index) % len(moves)]
@@ -3716,6 +3987,7 @@ def _summon_enemy(
         'target_id': enemy['id'],
         'source_definition_id': source_definition_id,
     })
+    _resolve_enemy_entrance(state, enemy, events)
     return enemy
 
 
@@ -4052,6 +4324,33 @@ def _resolve_enemy_effect(state, enemy, effect, move, seed, events):
     elif effect_type == 'delayed_hand_charge':
         combat['delayed_hand_charge'] = int(combat.get('delayed_hand_charge') or 0) + amount
         events.append({'type': 'effect_delayed', 'effect_kind': 'hand_charge', 'amount': amount})
+    elif effect_type == 'all_cards_charge':
+        charged_ids = []
+        for pile_name in (
+            'hand', 'draw_pile', 'discard_pile', 'exile_pile', 'equipment',
+        ):
+            for card in combat.get(pile_name, []):
+                modifiers = card.setdefault('modifiers', {})
+                modifiers['charge'] = max(0, int(modifiers.get('charge') or 0)) + amount
+                charged_ids.append(card['instance_id'])
+        events.append({
+            'type': 'all_cards_charged',
+            'amount': amount,
+            'card_instance_ids': charged_ids,
+            'source': enemy['def_id'],
+        })
+    elif effect_type == 'halve_player_status':
+        status = str(effect.get('status') or '')
+        before = max(0, int(combat.get(status) or 0))
+        combat[status] = math.floor(before / 2)
+        events.append({
+            'type': 'status_decay',
+            'target_id': 'player',
+            'status': status,
+            'before': before,
+            'after': int(combat[status]),
+            'source': enemy['def_id'],
+        })
     elif effect_type == 'delayed_player_status':
         combat.setdefault('delayed_player_statuses', []).append({
             'status': str(effect.get('status') or ''),
@@ -4142,7 +4441,7 @@ def _enemy_move_target_ids(combat, enemy, move):
         'delayed_player_status', 'stun_if_player_shield',
         'consume_pearls_damage', 'damage_from_shield',
         'damage_from_player_status', 'consume_status_damage',
-        'consume_magic_damage',
+        'consume_magic_damage', 'all_cards_charge', 'halve_player_status',
     }):
         targets.append('player')
     if effect_types.intersection({
@@ -4190,19 +4489,263 @@ def _prepare_enemy_turn_defenses(combat):
             enemy['shield'] = 0
 
 
-def _finish_enemy_turn_effects(enemy, events):
+_MECHANICAL_TRACK_DRAW_EFFECTS = frozenset({
+    'draw', 'draw_attack_power', 'draw_selected', 'draw_target_status',
+    'draw_then_discard', 'draw_to_limit', 'inspect_draw_choose',
+    'swap_piles_draw',
+})
+
+
+def _mechanical_track_base_totals(card):
+    values = _card_values(card)
+    damage = 0
+    shield = 0
+    can_draw = False
+    for effect in values.get('effects') or ():
+        effect_type = str(effect.get('type') or '')
+        amount = max(0, int(effect.get('amount') or 0))
+        if effect_type in STORY_PLAYER_ATTACK_EFFECT_TYPES:
+            damage += amount * max(1, int(effect.get('hits') or 1))
+        elif effect_type in {
+            'shield', 'decaying_shield', 'shield_with_power',
+        }:
+            shield += amount
+        if effect_type in _MECHANICAL_TRACK_DRAW_EFFECTS:
+            can_draw = True
+    return damage, shield, can_draw
+
+
+def _mechanical_track_draw_rotations(state, effect):
+    effect_type = str(effect.get('type') or '')
+    if effect_type not in _MECHANICAL_TRACK_DRAW_EFFECTS:
+        return 0
+    amount = max(0, int(effect.get('amount') or 0))
+    if effect_type == 'draw_to_limit':
+        return int(STORY_RULES['hand_limit'])
+    if effect_type == 'draw_target_status':
+        status = str(effect.get('status') or '')
+        return max(0, int(state['combat'].get(status) or 0))
+    return amount
+
+
+def _mechanical_track_gain_power(enemy, amount, events, source):
+    amount = int(amount)
+    if not amount:
+        return
+    before = int(enemy.get('power') or 0)
+    enemy['power'] = max(0, before + amount)
+    events.append({
+        'type': 'enemy_gain',
+        'enemy_id': enemy['id'],
+        'effect_kind': 'power',
+        'amount': int(enemy['power']) - before,
+        'before': before,
+        'after': int(enemy['power']),
+        'source': source,
+    })
+
+
+def _mechanical_track_attack_segment(state, enemy, effect):
+    combat = state['combat']
+    effect_type = str(effect.get('type') or '')
+    amount = max(0, int(effect.get('amount') or 0))
+    if effect_type == 'damage':
+        return amount, max(1, int(effect.get('hits') or 1))
+    if effect_type == 'damage_from_shield':
+        return (
+            int(enemy.get('shield') or 0) * amount
+            + int(effect.get('bonus') or 0),
+            1,
+        )
+    if effect_type == 'damage_per_status':
+        return amount, max(0, int(effect.get('base_hits') or 0) + _status_count(combat))
+    if effect_type == 'damage_per_active_discard':
+        return amount + int(combat.get('active_discards_this_combat') or 0), 1
+    if effect_type == 'damage_per_elixir':
+        return amount, max(0, int(enemy.get('track_elixir') or 0))
+    return None
+
+
+def _resolve_mechanical_track_card(state, enemy, card, seed, events):
+    values = _card_values(card)
+    card_name = _localized(values.get('name'))
+    repeats = 1
+    if values.get('type') == 'bloom' and card.get('def_id') != 'fission':
+        repeats += max(0, int(enemy.pop('track_skill_repeats', 0) or 0))
+    extra_rotations = 0
+    for _ in range(repeats):
+        for effect in values.get('effects') or ():
+            effect_type = str(effect.get('type') or '')
+            rotations = _mechanical_track_draw_rotations(state, effect)
+            if rotations:
+                extra_rotations += rotations
+                continue
+            attack = _mechanical_track_attack_segment(state, enemy, effect)
+            if attack is not None:
+                amount, hits = attack
+                multiplier = float(enemy.pop('track_attack_multiplier', 1) or 1)
+                _player_damage(
+                    state,
+                    math.floor(amount * multiplier),
+                    hits,
+                    events,
+                    card_name,
+                    enemy,
+                )
+                continue
+            amount = int(effect.get('amount') or 0)
+            if effect_type in {'shield', 'decaying_shield'}:
+                _gain_shield(state, amount, events, source=card['def_id'], enemy=enemy)
+            elif effect_type == 'shield_with_power':
+                _gain_shield(
+                    state,
+                    amount + int(enemy.get('power') or 0),
+                    events,
+                    source=card['def_id'],
+                    enemy=enemy,
+                )
+            elif effect_type == 'shield_from_target_status':
+                status = str(effect.get('status') or '')
+                _gain_shield(
+                    state,
+                    max(0, int(state['combat'].get(status) or 0)) * amount,
+                    events,
+                    source=card['def_id'],
+                    enemy=enemy,
+                )
+            elif effect_type == 'power':
+                _mechanical_track_gain_power(enemy, amount, events, card['def_id'])
+            elif effect_type == 'status':
+                _apply_status(
+                    state,
+                    state['combat'],
+                    str(effect.get('status') or ''),
+                    amount,
+                    events,
+                    source=card['def_id'],
+                )
+            elif effect_type == 'status_self':
+                _apply_status(
+                    state,
+                    enemy,
+                    str(effect.get('status') or ''),
+                    amount,
+                    events,
+                    source=card['def_id'],
+                )
+            elif effect_type == 'elixir':
+                _mechanical_track_gain_power(enemy, amount, events, card['def_id'])
+            elif effect_type == 'elixir_if_active_discard':
+                if int(state['combat'].get('active_discards_this_turn') or 0) > 0:
+                    _mechanical_track_gain_power(enemy, amount, events, card['def_id'])
+            elif effect_type == 'lose_health':
+                _enemy_raw_damage(state, enemy, amount, events, card['def_id'])
+            elif effect_type == 'next_attack_multiplier':
+                enemy['track_attack_multiplier'] = max(
+                    float(enemy.get('track_attack_multiplier') or 1),
+                    float(amount or 1),
+                )
+            elif effect_type == 'next_skill_repeats':
+                enemy['track_skill_repeats'] = max(
+                    int(enemy.get('track_skill_repeats') or 0),
+                    amount,
+                )
+            elif effect_type == 'create_discard_copy':
+                copied = _new_card(state, card['def_id'], bool(card.get('upgraded')))
+                copied['track_persistent'] = False
+                enemy.setdefault('mechanical_track', []).append(copied)
+                events.append({
+                    'type': 'mechanical_track_card_created',
+                    'enemy_id': enemy['id'],
+                    'card_instance_id': copied['instance_id'],
+                    'def_id': copied['def_id'],
+                })
+    return extra_rotations
+
+
+def _mechanical_flower_turn(state, enemy, seed, events):
+    _initialize_mechanical_track(state, enemy, events)
+    track = enemy.setdefault('mechanical_track', [])
+    pending_rotations = 2
+    resolved = 0
+    while track and pending_rotations > 0 and resolved < 64:
+        pending_rotations -= 1
+        resolved += 1
+        card = track.pop(0)
+        values = _card_values(card)
+        damage, shield, can_draw = _mechanical_track_base_totals(card)
+        recycled = damage + shield < 10 and not can_draw
+        events.append({
+            'type': 'enemy_action',
+            'enemy_id': enemy['id'],
+            'move_index': 0,
+            'actor_id': enemy['id'],
+            'target_ids': ['player'],
+            'source_definition_id': enemy['def_id'],
+            'source_card_instance_id': card['instance_id'],
+            'track_card': copy.deepcopy(card),
+            'presentation': {'motion': 'gain' if recycled else 'attack'},
+        })
+        if recycled:
+            _mechanical_track_gain_power(enemy, 1, events, 'recycling')
+            pending_rotations += 1
+            events.append({
+                'type': 'mechanical_track_recycled',
+                'enemy_id': enemy['id'],
+                'card_instance_id': card['instance_id'],
+                'def_id': card['def_id'],
+            })
+        else:
+            pending_rotations += _resolve_mechanical_track_card(
+                state,
+                enemy,
+                card,
+                seed,
+                events,
+            )
+            if card.get('track_persistent'):
+                track.append(card)
+        if int(state['player'].get('health') or 0) <= 0:
+            break
+    if pending_rotations > 0:
+        events.append({
+            'type': 'mechanical_track_limited',
+            'enemy_id': enemy['id'],
+            'remaining': pending_rotations,
+        })
+
+
+def _finish_enemy_turn_effects(state, enemy, seed, events):
     """Resolve effects that decay when this creature's own turn ends."""
     disc = max(0, int(enemy.get('disc') or 0))
-    if not disc:
-        return
-    enemy['disc'] = disc - 1
-    events.append({
-        'type': 'status_decay',
-        'target_id': enemy['id'],
-        'status': 'disc',
-        'before': disc,
-        'after': int(enemy['disc']),
-    })
+    if disc:
+        enemy['disc'] = disc - 1
+        events.append({
+            'type': 'status_decay',
+            'target_id': enemy['id'],
+            'status': 'disc',
+            'before': disc,
+            'after': int(enemy['disc']),
+        })
+    if STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script') == 'mechanical_rat':
+        covers = [
+            item for item in _living_enemies(state['combat'])
+            if STORY_ENEMIES.get(item.get('def_id'), {}).get('script')
+            == 'broken_machine'
+        ]
+        if covers:
+            cover = _rng(state, seed, f'mechanical_rat_cover:{enemy["id"]}').choice(covers)
+            before = max(0, int(enemy.get('hidden') or 0))
+            enemy['hidden'] = max(1, before)
+            enemy['hidden_cover_id'] = cover['id']
+            enemy['hidden_fresh'] = True
+            events.append({
+                'type': 'enemy_hidden_in_cover',
+                'enemy_id': enemy['id'],
+                'cover_enemy_id': cover['id'],
+                'before': before,
+                'after': int(enemy['hidden']),
+            })
 
 
 def _enemy_turn(state, seed, events):
@@ -4283,7 +4826,16 @@ def _enemy_turn(state, seed, events):
                         'after': int(ally['power']),
                         'source': 'nest_instinct',
                     })
-            _finish_enemy_turn_effects(enemy, events)
+            _finish_enemy_turn_effects(state, enemy, seed, events)
+            if _check_combat_end(state, seed, events):
+                return
+            continue
+        if definition.get('script') == 'broken_machine':
+            _finish_enemy_turn_effects(state, enemy, seed, events)
+            continue
+        if definition.get('script') == 'mechanical_flower':
+            _mechanical_flower_turn(state, enemy, seed, events)
+            _finish_enemy_turn_effects(state, enemy, seed, events)
             if _check_combat_end(state, seed, events):
                 return
             continue
@@ -4330,7 +4882,7 @@ def _enemy_turn(state, seed, events):
                         f'{group_prefix}:hit:{hit_index}' if hit_index else group_prefix,
                     )
         _advance_enemy_move(state, enemy, move_index, seed)
-        _finish_enemy_turn_effects(enemy, events)
+        _finish_enemy_turn_effects(state, enemy, seed, events)
         if (
             definition.get('script') == 'bandage_beetle'
             and enemy.pop('bandage_invincible_pending', False)
@@ -4359,7 +4911,7 @@ def _discard_hand_at_turn_end(state, seed, events):
         elif script == 'unrelenting':
             _apply_status(state, combat, 'weak', 1, events, source='unrelenting')
         elif script == 'factory_waste':
-            _player_raw_damage(state, 6, events, 'factory_waste')
+            _player_raw_damage(state, 8, events, 'factory_waste')
         if 'void' in tags or modifiers.get('force_void'):
             combat['exile_pile'].append(card)
             _notify_exiled(state, card, events, seed)
@@ -4505,7 +5057,10 @@ def _turn_boundary(state, seed, events, extra=False):
         if int(enemy.get('health') or 0) <= 0:
             continue
         enemy['evade'] = max(0, int(enemy.get('evade') or 0) - 1)
-        enemy['hidden'] = max(0, int(enemy.get('hidden') or 0) - 1)
+        if enemy.pop('hidden_fresh', False):
+            pass
+        else:
+            enemy['hidden'] = max(0, int(enemy.get('hidden') or 0) - 1)
         turn_shield = max(0, int(enemy.get('turn_shield') or 0))
         if turn_shield:
             _gain_shield(state, turn_shield, events, source='turn_shield', enemy=enemy)
@@ -4591,6 +5146,7 @@ def _turn_boundary(state, seed, events, extra=False):
     retained_elixir = max(retained_elixir, int(combat.pop('retained_elixir', 0) or 0))
     combat['elixir'] = retained_elixir
     combat['magic'] = int(state['player'].get('magic') or 0)
+    combat['draw_phase_complete'] = False
     _gain_elixir(state, _turn_elixir_baseline(state, combat), events)
     if _has_relic(state, 'easy_peace'):
         _heal_player(
@@ -4603,6 +5159,7 @@ def _turn_boundary(state, seed, events, extra=False):
         combat['temporary_power'] += _relic_amount(state, 'accumulate')
     if _has_relic(state, 'support'):
         _gain_shield(state, int(STORY_RELICS['support']['amount']), events)
+    _machine_learning_turn_start(state, seed, events)
     _run_turn_start_equipment(state, seed, events)
     for equipment in combat.get('equipment', []):
         equipment['turns_equipped'] = int(equipment.get('turns_equipped') or 0) + 1
@@ -4626,6 +5183,7 @@ def _turn_boundary(state, seed, events, extra=False):
         turn_draw += _relic_amount(state, 'easy_tiger')
     turn_draw += int(combat.pop('next_turn_draw_delta', 0) or 0)
     _draw_cards(state, turn_draw, seed, events)
+    combat['draw_phase_complete'] = True
     if _has_relic(state, 'web_relic'):
         combat['cannot_draw'] = True
     delayed_charge = max(0, int(combat.get('delayed_hand_charge') or 0))
@@ -5005,6 +5563,15 @@ def _finish_combat(state, seed, events):
         })
         _complete_current_node(state, events)
         return
+    if state.get('journey_mode') == 'boss_rush' and room_type == 'boss':
+        state['reward'] = _new_boss_rush_elite_reward(state, seed)
+        state['phase'] = 'reward'
+        events.append({
+            'type': 'combat_victory',
+            'gold': int(state['reward'].get('gold') or 0),
+            'source': 'boss_rush_boss',
+        })
+        return
     rng = _rng(state, seed, 'combat_reward')
     if room_type == 'boss':
         gold = rng.randint(100, 120)
@@ -5030,15 +5597,11 @@ def _finish_combat(state, seed, events):
             events,
             'indomitable',
         )
-    if state.get('journey_mode') == 'boss_rush':
-        floor = int(node.get('floor') or state.get('current_floor') or 0)
-        relic = _random_relic(state, seed) if floor > 0 and floor % 5 == 0 else None
-    else:
-        relic = (
-            _boss_relic_choices(state, seed)
-            if room_type == 'boss'
-            else (_random_relic(state, seed) if room_type == 'elite' else None)
-        )
+    relic = (
+        _boss_relic_choices(state, seed)
+        if room_type == 'boss'
+        else (_random_relic(state, seed) if room_type == 'elite' else None)
+    )
     state['reward'] = _new_reward(
         gold,
         _reward_choices(state, seed, room_type),
@@ -5125,6 +5688,21 @@ def _resolve_termite_mound_death(state, mound, seed, events):
 def _resolve_enemy_death_hooks(state, seed, events):
     combat = state.get('combat') or {}
     while True:
+        for enemy in combat.get('enemies', []):
+            if (
+                int(enemy.get('health') or 0) <= 0
+                and STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
+                == 'broken_machine'
+            ):
+                enemy['health'] = 1
+                enemy['wither'] = 0
+                enemy.pop('death_hook_resolved', None)
+                enemy.pop('defeat_event_emitted', None)
+                events.append({
+                    'type': 'enemy_survived',
+                    'enemy_id': enemy['id'],
+                    'source': 'cover',
+                })
         defeated = [
             enemy
             for enemy in list(combat.get('enemies', []))
@@ -5172,17 +5750,28 @@ def _resolve_enemy_death_hooks(state, seed, events):
                 continue
             enemy['death_hook_resolved'] = True
             script = STORY_ENEMIES[enemy['def_id']].get('script')
-            if enemy.get('def_id') == 'stick':
-                before = max(0, int(combat.get('locked') or 0))
-                combat['locked'] = max(0, before - 1)
+            obstacle = max(0, int(enemy.get('obstacle') or 0))
+            if obstacle:
+                before = max(0, int(combat.get('blockade') or 0))
+                combat['blockade'] = max(0, before - obstacle)
                 events.append({
                     'type': 'status_decay',
                     'target_id': 'player',
-                    'status': 'locked',
+                    'status': 'blockade',
                     'before': before,
-                    'after': int(combat['locked']),
+                    'after': int(combat['blockade']),
                     'source': 'obstacle',
                 })
+            toxic_pressure = max(0, int(enemy.get('toxic_pressure') or 0))
+            if toxic_pressure:
+                _apply_status(
+                    state,
+                    combat,
+                    'toxic_poison',
+                    toxic_pressure,
+                    events,
+                    source=enemy.get('def_id'),
+                )
             if script == 'spider_cave':
                 summoned = _summon_enemy(
                     state,
@@ -5271,7 +5860,12 @@ def _check_combat_end(state, seed, events):
     _resolve_enemy_death_hooks(state, seed, events)
     if _resolve_player_death(state, events):
         return True
-    if not _living_enemies(combat):
+    threats = [
+        enemy for enemy in _living_enemies(combat)
+        if STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
+        != 'broken_machine'
+    ]
+    if not threats:
         _finish_combat(state, seed, events)
         return True
     return False
@@ -5410,6 +6004,27 @@ def _new_sequential_card_reward(
     return reward
 
 
+def _new_boss_rush_elite_reward(state, seed, round_index=1, round_total=2):
+    rng = _rng(state, seed, 'boss_rush_elite_gold')
+    gold = rng.randint(25, 35)
+    if _difficulty(state) in ('hard', 'lunatic'):
+        gold = math.floor(gold * 0.75)
+    for _, effect in _equipment_effects(state.get('combat') or {}, 'victory_gold'):
+        gold += int(effect.get('amount') or 0)
+    reward = _new_reward(
+        gold,
+        _reward_choices(state, seed, 'elite'),
+        _random_relic(state, seed),
+        'elite',
+    )
+    reward.update({
+        'source': 'boss_rush_boss_elite',
+        'round_index': max(1, int(round_index)),
+        'round_total': max(1, int(round_total)),
+    })
+    return reward
+
+
 def _roll_blessing_options(state, seed, namespace):
     options = [
         blessing_id for blessing_id in STORY_BLESSINGS
@@ -5496,6 +6111,14 @@ def _start_journey(state, payload, seed, events):
     ):
         _gain_deck_card(state, 'corruption', events, source='difficulty')
     if journey_mode == 'boss_rush':
+        amulet = next(
+            (
+                card for card in state['player'].get('deck', [])
+                if card.get('def_id') == 'amulet'
+            ),
+            None,
+        )
+        state['player']['deck'] = [amulet or _new_card(state, 'amulet')]
         first['status'] = 'locked'
     if difficulty == 'easy':
         _prepare_easy_relic_choice(state, seed)
@@ -6157,6 +6780,10 @@ def _enter_node(state, payload, seed, events):
     node['status'] = 'current'
     state['current_node_id'] = node_id
     state['current_floor'] = int(node['floor'])
+    if node['type'] == 'blessing':
+        _prepare_blessing(state, seed, f'boss_rush:{state.get("stage", 1)}')
+        events.append({'type': 'room_entered', 'room_type': 'blessing'})
+        return
     if node['type'] == 'elite' and _has_relic(state, 'avoid_elite'):
         encounter = _encounter_specs(
             state,
@@ -6848,6 +7475,8 @@ def _choose_reward(state, payload, seed, events):
             _gain_deck_card(state, card_id, events, upgraded, source='reward')
             reward['selected_card_id'] = card_id
         else:
+            if str(reward.get('source') or '') == 'boss_rush_start_cards':
+                _fail('CARD_REWARD_REQUIRED', 'Boss Rush 的起始牌奖励必须选择')
             if _has_relic(state, 'grab_every_card'):
                 _fail('CARD_REWARD_REQUIRED', '见牌就抓使你无法跳过卡牌奖励')
             reward['card_skipped'] = True
@@ -6884,7 +7513,19 @@ def _choose_reward(state, payload, seed, events):
         if source:
             round_index = max(1, int(reward.get('round_index') or 1))
             round_total = max(round_index, int(reward.get('round_total') or 1))
-            if round_index < round_total:
+            if source == 'boss_rush_boss_elite' and round_index < round_total:
+                state['reward'] = _new_boss_rush_elite_reward(
+                    state,
+                    seed,
+                    round_index + 1,
+                    round_total,
+                )
+                events.append({
+                    'type': 'boss_rush_elite_reward_started',
+                    'round_index': round_index + 1,
+                    'round_total': round_total,
+                })
+            elif round_index < round_total:
                 state['reward'] = _new_sequential_card_reward(
                     state,
                     seed,
@@ -6921,6 +7562,8 @@ def _choose_reward(state, payload, seed, events):
                 events.append({'type': 'boss_rush_start_relic_reward'})
             elif source == 'boss_rush_start_relic':
                 _activate_boss_rush_map(state)
+            elif source == 'boss_rush_boss_elite':
+                _complete_current_node(state, events)
             else:
                 _complete_current_node(state, events)
         else:
@@ -6949,6 +7592,11 @@ def _choose_reward(state, payload, seed, events):
             _fail('REWARD_INCOMPLETE', '请先处理全部奖励')
         finish_reward()
     elif reward_type == 'leave':
+        if (
+            str(reward.get('source') or '') == 'boss_rush_start_cards'
+            and not claims['card']
+        ):
+            _fail('CARD_REWARD_REQUIRED', 'Boss Rush 的起始牌奖励必须选择')
         if _has_relic(state, 'grab_every_card') and not claims['card']:
             _fail('CARD_REWARD_REQUIRED', '见牌就抓使你无法跳过卡牌奖励')
         skipped = [key for key, claimed in claims.items() if not claimed]
@@ -6957,7 +7605,12 @@ def _choose_reward(state, payload, seed, events):
         if 'card' in skipped:
             reward['card_skipped'] = True
         events.append({'type': 'reward_left', 'skipped': skipped})
-        if str(reward.get('source') or '') and int(reward.get('round_index') or 1) < int(reward.get('round_total') or 1):
+        if (
+            str(reward.get('source') or '')
+            and str(reward.get('source') or '') != 'boss_rush_boss_elite'
+            and int(reward.get('round_index') or 1)
+            < int(reward.get('round_total') or 1)
+        ):
             reward['round_index'] = int(reward.get('round_total') or 1)
         finish_reward()
     else:

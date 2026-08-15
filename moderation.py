@@ -35,8 +35,160 @@ NICKNAME_BLOCK_LEVEL = 3
 GUEST_NICKNAME_BLOCK_LEVEL = 2
 NICKNAME_ALWAYS_BLOCK_CATEGORIES = {'sexual', 'political'}
 
+_RESERVED_LONG_NICKNAMES = ('phelren', 'stickerbug', 'netherdog')
+_RESERVED_NICKNAME_DISPLAY = {
+    'phelren': 'Phelren',
+    'stickerbug': 'Stickerbug',
+    'netherdog': 'NetherDog',
+    'eric': 'Eric',
+}
+_NICKNAME_CHAR_EQUIVALENTS = {
+    '0': {'o'},
+    '1': {'i', 'l'},
+    '2': {'r'},
+    '3': {'e'},
+    '4': {'a', 'h'},
+    '5': {'s'},
+    '6': {'b', 'g'},
+    '7': {'t'},
+    '8': {'b'},
+    '9': {'g'},
+    'ρ': {'p'},
+    'р': {'p'},
+    'þ': {'p'},
+    'һ': {'h'},
+    'н': {'h'},
+    'е': {'e'},
+    'ε': {'e'},
+    'ӏ': {'i', 'l'},
+    'і': {'i', 'l'},
+    'ι': {'i', 'l'},
+    'ł': {'l'},
+    'г': {'r'},
+    'я': {'r'},
+    'ո': {'n'},
+    'η': {'n'},
+    'п': {'n'},
+    'ѕ': {'s'},
+    'т': {'t'},
+    'τ': {'t'},
+    'с': {'c'},
+    'κ': {'k'},
+    'к': {'k'},
+    'в': {'b'},
+    'υ': {'u'},
+    'ԍ': {'g'},
+    'ց': {'g'},
+    'ԁ': {'d'},
+    'ο': {'o'},
+    'о': {'o'},
+}
+_ERIC_DECORATION_TOKENS = (
+    'administrator', 'developer', 'official', 'oficial', 'admin', 'player', 'real',
+    'the', 'its', 'iam', 'im', 'dev', 'gtn', 'mr', 'ai', 'bot', 'user',
+    'true', 'x', 'v', '官方', '管理员', '管理', '开发者', '开发', '本人', '真的',
+)
+
 _CONTROL_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
 _REPEAT_RE = re.compile(r'(.)\1{2,}')
+
+
+def _nickname_identity_text(text):
+    value = unicodedata.normalize('NFKC', str(text or '')).casefold()
+    value = unicodedata.normalize('NFKD', value)
+    compact = []
+    for ch in value:
+        category = unicodedata.category(ch)
+        if category.startswith('M') or not ch.isalnum():
+            continue
+        if compact and compact[-1] == ch:
+            continue
+        compact.append(ch)
+    return ''.join(compact)
+
+
+def _nickname_chars_equal(actual, expected):
+    return actual == expected or expected in _NICKNAME_CHAR_EQUIVALENTS.get(actual, set())
+
+
+def _nickname_edit_distance(actual, expected, limit=1):
+    if abs(len(actual) - len(expected)) > limit:
+        return limit + 1
+    rows = [[0] * (len(expected) + 1) for _ in range(len(actual) + 1)]
+    for i in range(len(actual) + 1):
+        rows[i][0] = i
+    for j in range(len(expected) + 1):
+        rows[0][j] = j
+    for i in range(1, len(actual) + 1):
+        for j in range(1, len(expected) + 1):
+            substitution = 0 if _nickname_chars_equal(actual[i - 1], expected[j - 1]) else 1
+            rows[i][j] = min(
+                rows[i - 1][j] + 1,
+                rows[i][j - 1] + 1,
+                rows[i - 1][j - 1] + substitution,
+            )
+            if (
+                i > 1
+                and j > 1
+                and _nickname_chars_equal(actual[i - 1], expected[j - 2])
+                and _nickname_chars_equal(actual[i - 2], expected[j - 1])
+            ):
+                rows[i][j] = min(rows[i][j], rows[i - 2][j - 2] + 1)
+    return rows[-1][-1]
+
+
+def _matches_long_reserved_nickname(compact, target):
+    shortest = max(1, len(target) - 1)
+    longest = len(target) + 1
+    for start in range(len(compact)):
+        for size in range(shortest, longest + 1):
+            end = start + size
+            if end > len(compact):
+                continue
+            if _nickname_edit_distance(compact[start:end], target, limit=1) <= 1:
+                return True
+    return False
+
+
+def _is_eric_decoration(value):
+    if not value:
+        return True
+    reachable = {0}
+    for index in range(len(value) + 1):
+        if index not in reachable:
+            continue
+        if index < len(value) and value[index].isdigit():
+            reachable.add(index + 1)
+        for token in _ERIC_DECORATION_TOKENS:
+            if value.startswith(token, index):
+                reachable.add(index + len(token))
+    return len(value) in reachable
+
+
+def _matches_reserved_eric(compact):
+    target = 'eric'
+    for start in range(max(0, len(compact) - len(target)) + 1):
+        end = start + len(target)
+        if end > len(compact):
+            continue
+        segment = compact[start:end]
+        if not all(_nickname_chars_equal(ch, target[index]) for index, ch in enumerate(segment)):
+            continue
+        if _is_eric_decoration(compact[:start]) and _is_eric_decoration(compact[end:]):
+            return True
+    return False
+
+
+def match_reserved_nickname(text):
+    compact = _nickname_identity_text(text)
+    if not compact:
+        return None
+    for target in _RESERVED_LONG_NICKNAMES:
+        if _matches_long_reserved_nickname(compact, target):
+            return _RESERVED_NICKNAME_DISPLAY[target]
+    if _matches_reserved_eric(compact):
+        return _RESERVED_NICKNAME_DISPLAY['eric']
+    return None
 
 
 def normalize_message(text):
@@ -233,6 +385,17 @@ def check_message_risk(text):
 def check_nickname_risk(text, guest=False):
     """Apply the shared chat rules with stricter, nickname-specific thresholds."""
     result = check_message_risk(text)
+    reserved_name = match_reserved_nickname(text)
+    if reserved_name:
+        result['risk_level'] = max(4, int(result.get('risk_level') or 0))
+        result['action'] = 'reject_nickname'
+        result['matched_rules'] = list(result.get('matched_rules') or []) + [{
+            'id': f'reserved_nickname_{reserved_name.casefold()}',
+            'category': 'reserved_identity',
+            'level': 4,
+            'action': 'reject_nickname',
+            'matches': [reserved_name],
+        }]
     threshold = GUEST_NICKNAME_BLOCK_LEVEL if guest else NICKNAME_BLOCK_LEVEL
     matched_categories = {
         str(item.get('category') or '').strip().lower()
@@ -240,6 +403,8 @@ def check_nickname_risk(text, guest=False):
         if isinstance(item, dict)
     }
     blocked = (
+        bool(reserved_name)
+        or
         int(result.get('risk_level') or 0) >= threshold
         or bool(matched_categories & NICKNAME_ALWAYS_BLOCK_CATEGORIES)
     )
@@ -248,6 +413,7 @@ def check_nickname_risk(text, guest=False):
         'blocked': blocked,
         'threshold': threshold,
         'matched_categories': sorted(category for category in matched_categories if category),
+        'reserved_name': reserved_name,
     }
 
 

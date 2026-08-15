@@ -9,6 +9,7 @@ SHARED_AFK_CSS = (ROOT / 'static' / 'css' / 'shared-afk.css').read_text(encoding
 STORY_TEMPLATE = (ROOT / 'templates' / 'story.html').read_text(encoding='utf-8')
 INDEX_TEMPLATE = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
 RESOURCE_ORBS_JS = (ROOT / 'static' / 'js' / 'resource_orbs.js').read_text(encoding='utf-8')
+KEYBINDINGS_JS = (ROOT / 'static' / 'js' / 'keybindings.js').read_text(encoding='utf-8')
 
 
 def test_story_damage_floats_describe_lost_health():
@@ -484,8 +485,8 @@ def test_story_journey_setup_is_localized_and_centered():
     assert "name: 'Boss Rush'" in STORY_JS
     assert "(room.modes || ['standard']).forEach((modeId) =>" in STORY_JS
     assert 'mode: selectedMode,' in STORY_JS
-    assert '每10层选择下一区域，无限推进。' in STORY_JS
-    assert 'every 10 floors, choose the next region and continue endlessly.' in STORY_JS
+    assert '每轮依次经过赐福、3名首领、休息、宝箱与商店。' in STORY_JS
+    assert 'Each loop follows Blessing, 3 Bosses, Rest, Chests, and Shop.' in STORY_JS
     assert "storyContent?.curses" not in STORY_JS
     assert "room.boss_rush || state.journey_mode === 'boss_rush'" in STORY_JS
     assert "container?.classList.add('is-journey-setup');" in STORY_JS
@@ -555,7 +556,12 @@ def test_story_run_deck_and_talents_remain_available_during_combat():
     assert 'runDeck?.classList.toggle(\'hidden\', runDeckUnavailable);' in STORY_JS
     assert "$('story-talent-overview')?.classList.toggle('hidden', runDeckUnavailable);" in STORY_JS
     assert "$('story-run-deck')?.addEventListener('click', () => openStoryPile('deck'));" in STORY_JS
-    assert "cards.forEach((card, index) => grid?.append(createStoryPileTile(card, index + 1)));" in STORY_JS
+    assert 'storyPileCardGroups(cards).forEach(({ card, count }) =>' in STORY_JS
+    assert 'grid?.append(createStoryPileTile(card, count));' in STORY_JS
+    assert "if (key !== 'instance_id') result[key] = normalize(value[key]);" in STORY_JS
+    assert "countLabel.textContent = `×${count}`;" in STORY_JS
+    assert 'story-pile-order' not in STORY_JS
+    assert '.story-pile-count {' in STORY_CSS
     assert '.story-run-deck-command {' in STORY_CSS
 
 
@@ -1006,3 +1012,53 @@ def test_story_untargeted_cards_bypass_only_the_explicit_enemy_target_guard():
         guard = branch.split("targetKind === 'enemy'", 1)[1].split(') return;', 1)[0]
         assert '!storyCursorCardMode(card)' in guard
         assert '!storyEnemyIsSelectable(card, targetId' in guard
+
+
+def test_story_enter_confirms_instead_of_toggling_the_focused_choice():
+    dispatch = STORY_JS.split('function dispatchStoryShortcut(', 1)[1].split(
+        'window.GTN_SHORTCUT_HOST =',
+        1,
+    )[0]
+    assert "case 'confirm':\n            return confirmStorySurface();" in dispatch
+    assert "case 'toggle_focused':\n            return toggleFocusedStoryItem();" in dispatch
+
+    confirm = STORY_JS.split('function confirmStorySurface() {', 1)[1].split(
+        'function createStoryShortcutContext(',
+        1,
+    )[0]
+    dialog_confirm = confirm.index(
+        "'[value=\"confirm\"]:not(:disabled), .story-command-primary:not(:disabled)'"
+    )
+    focused_choice = confirm.index('focusedStoryKeyboardItem(dialog)')
+    assert dialog_confirm < focused_choice
+    assert (
+        "if (dialog.querySelector('[value=\"confirm\"], .story-command-primary')) return true;"
+        in confirm
+    )
+
+
+def test_story_enter_overrides_native_choice_button_activation_when_confirming():
+    host = STORY_JS.split('window.GTN_SHORTCUT_HOST = {', 1)[1].split(
+        'async function init()',
+        1,
+    )[0]
+    assert 'shouldOverrideNativeActivation(actionId)' in host
+    assert "if (actionId !== 'confirm') return false;" in host
+    assert "dialog?.querySelector('[value=\"confirm\"], .story-command-primary')" in host
+
+    keydown = KEYBINDINGS_JS.split('function handleKeydown(event) {', 1)[1].split(
+        'function handleKeyup(event)',
+        1,
+    )[0]
+    assert 'host.shouldOverrideNativeActivation?.(action.id, event, focusedButton)' in keydown
+    assert '&& !overrideNativeActivation' in keydown
+
+
+def test_story_explicit_page_confirmation_is_keyboard_reachable():
+    assert 'button.dataset.storyConfirmAction = \'1\';' in STORY_JS
+    for action in ("storyAction('start_journey'", "storyAction('choose_stage'"):
+        action_branch = STORY_JS.split(action, 1)[1][:400]
+        assert '{ primary: true }' in action_branch
+    assert '.story-reward-actions button:not(:disabled)' in STORY_JS
+    assert '#story-room:not(.hidden) .story-room-footer button:not(:disabled)' in STORY_JS
+    assert '#story-reward-continue:not(.hidden):not(:disabled)' in STORY_JS

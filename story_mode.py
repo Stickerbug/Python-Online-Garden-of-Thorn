@@ -216,26 +216,21 @@ def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
 
 
 def generate_boss_rush_map(seed, block=1, biome='garden', difficulty='normal'):
-    """Generate one ten-floor, single-route block of the endless Boss Rush."""
+    """Generate one fixed single-route block of the endless Boss Rush."""
     block = max(1, int(block))
     biome = str(biome or 'garden')
     difficulty = str(difficulty or 'normal')
-    rng = random.Random(_seed_int(seed, f'boss_rush:{block}:{biome}:{difficulty}'))
-    floor_offset = (block - 1) * 10
+    room_types = (
+        'blessing', 'boss', 'rest', 'chest', 'boss', 'rest',
+        'chest', 'boss', 'rest', 'chest', 'shop',
+    )
+    floor_offset = (block - 1) * len(room_types)
     floors = []
     edges = []
     previous_id = None
 
-    for local_floor in range(1, 11):
+    for local_floor, room_type in enumerate(room_types, start=1):
         global_floor = floor_offset + local_floor
-        roll = rng.random()
-        # Match the ordinary map's shop chance and halve its event chance.
-        if roll < (1 / 15):
-            room_type = 'shop'
-        elif roll < (2.5 / 15):
-            room_type = 'event'
-        else:
-            room_type = 'boss' if rng.random() < 0.5 else 'elite'
         node_id = f'br-b{block:03d}-f{global_floor:04d}'
         node = {
             'id': node_id,
@@ -245,8 +240,6 @@ def generate_boss_rush_map(seed, block=1, biome='garden', difficulty='normal'):
             'type': room_type,
             'status': 'locked',
         }
-        if room_type == 'elite':
-            node['enemy_health_multiplier'] = 3
         floors.append({'floor': global_floor, 'width': 1, 'nodes': [node]})
         if previous_id:
             edges.append({'from': previous_id, 'to': node_id})
@@ -258,7 +251,7 @@ def generate_boss_rush_map(seed, block=1, biome='garden', difficulty='normal'):
         'difficulty': difficulty,
         'mode': 'boss_rush',
         'floor_offset': floor_offset,
-        'floor_count': floor_offset + 10,
+        'floor_count': floor_offset + len(room_types),
         'floors': floors,
         'edges': edges,
     }

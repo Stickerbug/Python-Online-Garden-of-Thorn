@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="52 52 179.46 179.46" role="img" aria-label="">
+  <polygon
+    points="157.16 64.19 126.31 64.19 97.81 76 76 97.81 64.19 126.31 64.19 157.16 76 185.65 97.81 207.47 126.31 219.27 157.16 219.27 185.65 207.47 207.47 185.65 219.27 157.16 219.27 126.31 207.47 97.81 185.65 76 157.16 64.19"
+    fill="#898989"
+    stroke="#727171"
+    stroke-width="15"
+    stroke-linejoin="miter"
+    stroke-miterlimit="10"
+  />
+</svg>

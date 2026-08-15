@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0, .st1 {
+        fill: #ea5554;
+        stroke: #e71f19;
+      }
+
+      .st0, .st1, .st2, .st3 {
+        stroke-linejoin: round;
+      }
+
+      .st0, .st4 {
+        stroke-width: 2px;
+      }
+
+      .st1, .st2 {
+        stroke-width: 5px;
+      }
+
+      .st5, .st3 {
+        fill: #898989;
+        stroke: #727171;
+        stroke-width: 10px;
+      }
+
+      .st5, .st4 {
+        stroke-miterlimit: 10;
+      }
+
+      .st2, .st4 {
+        fill: #b5b5b6;
+        stroke: #9fa0a0;
+      }
+
+      .st6 {
+        fill: #231815;
+      }
+
+      .st7 {
+        fill: #fff100;
+      }
+
+      .st3 {
+        stroke-linecap: round;
+      }
+    </style>
+  </defs>
+  <path class="st2" d="M234.86,232.86l-71.5-89.27-19.76,19.76,89.27,71.5c1.32,1.06,3.05-.67,1.99-1.99Z"/>
+  <path class="st5" d="M149.78,73.16c29.17,29.17,45.56,60.06,14.5,91.13-30.92,30.92-61.96,14.67-91.13-14.5-20.12-20.12-32.1-66.72-11.09-87.72,21.15-21.15,65.39-11.24,87.72,11.09Z"/>
+  <g>
+    <path class="st3" d="M53.62,108.7c-.11.11-.23.2-.34.3-7.43,7.43-7.43,19.49,0,26.92s19.49,7.43,26.92,0,7.43-19.49,0-26.92c-.46-.46-.93-.89-1.43-1.29-8.43.71-16.84,1.85-25.16.98Z"/>
+    <path class="st3" d="M108.7,53.62c.11-.11.2-.23.3-.34,7.43-7.43,19.49-7.43,26.92,0,7.43,7.43,7.43,19.49,0,26.92s-19.49,7.43-26.92,0c-.46-.46-.89-.93-1.29-1.43.71-8.43,1.85-16.84.98-25.16Z"/>
+  </g>
+  <ellipse class="st4" cx="72.56" cy="72.56" rx="4.77" ry="3.14" transform="translate(-30.06 72.56) rotate(-45)"/>
+  <polygon class="st6" points="82.77 152 152 82.77 164.13 97.27 97.27 164.13 82.77 152"/>
+  <polyline class="st7" points="89.72 149.92 114.33 125.31 132.36 125.31 108.49 149.17"/>
+  <polyline class="st7" points="140.31 99.33 158.2 99.33 162.48 95.05 154.44 85.2"/>
+  <g>
+    <ellipse class="st0" cx="74.12" cy="90.96" rx="3.08" ry="3.25" transform="translate(-42.61 79.05) rotate(-45)"/>
+    <ellipse class="st0" cx="90.84" cy="74.24" rx="3.08" ry="3.25" transform="translate(-25.89 85.98) rotate(-45)"/>
+  </g>
+  <circle class="st1" cx="234.75" cy="234.75" r="6"/>
+</svg>

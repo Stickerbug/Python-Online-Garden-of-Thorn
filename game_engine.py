@@ -6652,6 +6652,28 @@ class GameEngine:
         if choice_type == 'choose_cards_from_hand':
             ids = choice.get('target_instance_ids')
             if isinstance(ids, list) and bool(ids):
+                if self._card_is(card, 'Fusion', 'vanilla:fusion'):
+                    try:
+                        normalized_ids = [int(instance_id) for instance_id in ids]
+                    except (TypeError, ValueError):
+                        return False
+                    if len(normalized_ids) != 2 or len(set(normalized_ids)) != 2:
+                        return False
+                    selected_cards = [self._find_card_by_instance_id(instance_id) for instance_id in normalized_ids]
+                    if any(selected_card is None for selected_card in selected_cards):
+                        return False
+                    selected_locations = [self._find_card_location(selected_card) for selected_card in selected_cards]
+                    selected_owner_ids = {location[0] for location in selected_locations}
+                    if len(selected_owner_ids) != 1 or any(location[1] != 'hand' for location in selected_locations):
+                        return False
+                    source_owner_id, _, _ = self._find_card_location(card)
+                    selected_owner_id = next(iter(selected_owner_ids))
+                    if source_owner_id is not None and selected_owner_id != source_owner_id:
+                        return False
+                    if any(selected_card.card_type != 'thorn' for selected_card in selected_cards):
+                        return False
+                    if selected_cards[0].def_id != selected_cards[1].def_id:
+                        return False
                 return True
             min_count = self._eval_int(0, params.get('min_count', 1), card, 1) if params else 1
             max_count = self._eval_int(0, params.get('max_count', min_count), card, min_count) if params else 1

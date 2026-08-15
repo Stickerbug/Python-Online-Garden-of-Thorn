@@ -2586,7 +2586,8 @@ class LocalSoloEngine {
             return null;
         }
         if (ref.ref === 'selected_card_at') {
-            const ids = (this._active_choice && this._active_choice.target_instance_ids) || [];
+            const choice = this._active_choice || {};
+            const ids = choice._selected_card_ids_snapshot || choice.target_instance_ids || [];
             const idx = this.evalInt(playerId, ref.index, currentCard, 1) - 1;
             return idx >= 0 && idx < ids.length ? this.findCardByInstanceId(ids[idx]) : null;
         }
@@ -3876,13 +3877,22 @@ class LocalSoloEngine {
 
     effect_for_each_selected_card(playerId, card, params, log, choice) {
         const ids = Array.isArray((choice || {}).target_instance_ids)
-            ? choice.target_instance_ids
+            ? [...choice.target_instance_ids]
             : ((choice || {}).target_instance_id != null ? [choice.target_instance_id] : []);
         for (const [idx, id] of ids.entries()) {
             try {
-                this.runEffectList(playerId, card, params.body || [], { ...(choice || {}), target_instance_id: id }, {
+                const selectedCard = this.findCardByInstanceId(id);
+                const childChoice = {
+                    ...(choice || {}),
+                    target_instance_id: id,
+                    _selected_card_index: idx + 1,
+                    _selected_card_ids_snapshot: ids,
+                };
+                this.runEffectList(playerId, card, params.body || [], childChoice, {
                     ...this._active_effect_context,
                     selected_card_index: idx + 1,
+                    selected_card: selectedCard,
+                    chosen_card: selectedCard,
                 });
             } catch (err) {
                 if (err instanceof ModLoopContinue) continue;

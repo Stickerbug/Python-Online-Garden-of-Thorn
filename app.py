@@ -32,6 +32,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash
+from ai_local_bridge import LocalAiBridgeError, get_local_ai_worker
 from game_engine import GameEngine, qualifies_backwater_achievement
 from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
@@ -59,6 +60,12 @@ from font_subsets import ensure_community_font_subset
 from card_i18n import apply_card_i18n_defaults, card_text, event_text
 from runtime_errors import set_mod_runtime_error_logger
 from runtime_budget import ActionWorkBudgetExceeded
+from title_styles import (
+    parse_title_style,
+    title_style_fallback_color,
+    title_style_plain_text,
+    title_style_json,
+)
 from story_content import story_content_payload
 from story_discovery import collect_story_discoveries
 from story_engine import StoryActionError, apply_story_action
@@ -85,8 +92,10 @@ from db import (
     admin_change_username,
     admin_clear_user_role,
     admin_grant_user_title,
+    admin_list_title_catalog,
     admin_grant_user_achievement,
     admin_remove_user_title,
+    admin_set_title_catalog_style,
     admin_adjust_user_gr,
     admin_change_user_password,
     admin_set_user_gr,
@@ -129,6 +138,8 @@ from db import (
     get_user_keybindings,
     get_user_thorn_dew,
     get_user_title_center,
+    get_user_title_shop,
+    get_title_editor_workspace,
     get_report_detail,
     get_user_by_id,
     get_user_role_profile,
@@ -197,6 +208,14 @@ from db import (
     set_user_mute,
     spend_user_thorn_dew,
     set_user_equipped_titles,
+    set_user_title_name_style,
+    set_user_title_shop_locked,
+    refresh_user_title_shop,
+    purchase_user_title_shop_offer,
+    publish_title_editor_draft,
+    rollback_title_catalog_revision,
+    save_title_editor_draft,
+    discard_title_editor_draft,
     soft_delete_user,
     upsert_content_disable,
     deactivate_content_disable,
@@ -419,8 +438,9 @@ GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSIO
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
+GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
 GTN_DRAINING_ENV = os.environ.get('GTN_DRAINING', '').strip().lower()
 _DRAIN_OVERRIDE = None
@@ -850,6 +870,9 @@ rooms = {}
 invites = {}
 solo_sessions = {}
 tutorial_sessions = set()
+ai_test_sessions = {}
+ai_test_starting = set()
+GTN_AI_1V1_MAX_ACTIVE = max(1, _env_int('GTN_AI_1V1_MAX_ACTIVE', 5))
 _STORY_PRESENCE_LOCK = threading.Lock()
 _STORY_PRESENCES = {}
 SOLO_HISTORY_LIMIT = 100
@@ -1669,6 +1692,41 @@ def is_feedback_handling_authenticated():
         return bool(feedback_is_staff(user_id))
     except Exception:
         return False
+
+
+def title_editor_actor(require_admin=False):
+    user = _current_account_user(allow_remember=False)
+    if not user:
+        return None
+    try:
+        profile = get_user_role_profile(user.get('id')) or {}
+    except Exception:
+        return None
+    role_type = str(profile.get('role_type') or '').strip().lower()
+    if role_type not in {'admin', 'staff'}:
+        return None
+    if require_admin and role_type != 'admin':
+        return None
+    return {
+        'user_id': int(user.get('id')),
+        'username': str(user.get('username') or ''),
+        'role_type': role_type,
+        'ip': _client_ip(),
+    }
+
+
+def title_editor_csrf_token():
+    token = str(session.get('title_editor_csrf') or '')
+    if not token:
+        token = secrets.token_urlsafe(24)
+        session['title_editor_csrf'] = token
+    return token
+
+
+def title_editor_csrf_valid():
+    expected = str(session.get('title_editor_csrf') or '')
+    provided = str(request.headers.get('X-Title-Editor-CSRF') or '')
+    return bool(expected and provided and secrets.compare_digest(expected, provided))
 
 
 def is_beta_authenticated():
@@ -3704,18 +3762,18 @@ def special_public_fields(player_or_profile):
         title_id = str(raw_title.get('id') or '').strip()
         title_name = str(raw_title.get('name') or '').strip()
         title_color = str(raw_title.get('color') or '').strip()
-        if not title_id or not title_name or not title_color:
+        title_style = raw_title.get('style') if isinstance(raw_title.get('style'), dict) else None
+        if not title_id or not title_name:
             continue
         equipped_titles.append({
             'id': title_id,
             'name': title_name,
-            'color': title_color,
+            'color': title_color or 'neutral',
+            'style': title_style,
             'equipped_slot': len(equipped_titles) + 1,
         })
-    name_color = (
-        str(source.get('name_color') or '').strip()
-        or (equipped_titles[0]['color'] if equipped_titles else '')
-    )
+    name_style = source.get('name_style') if isinstance(source.get('name_style'), dict) else None
+    name_color = str(source.get('name_color') or '').strip()
     return {
         'is_admin_player': bool(source.get('is_admin_player')),
         'is_special_player': bool(role or equipped_titles),
@@ -3727,6 +3785,7 @@ def special_public_fields(player_or_profile):
         'can_direct_friend': bool(source.get('can_direct_friend')),
         'chat_exempt': bool(source.get('chat_exempt')),
         'equipped_titles': equipped_titles,
+        'name_style': name_style,
         'name_color': name_color or None,
     }
 
@@ -3830,6 +3889,7 @@ def make_room_player_profile(source=None, sid=None, player_index=-1, room=None):
         'v2_load_order': list(source.get('v2_load_order', []) or []),
         'skin': public_skin_config(source.get('skin')),
         'skin_look': normalize_skin_look(source.get('skin_look')),
+        'avatar_kind': 'phelren' if str(source.get('avatar_kind') or '').strip().lower() == 'phelren' else '',
     }
     profile.update(special_public_fields(source))
     return profile
@@ -3984,16 +4044,24 @@ def player_skin_look_for_sid(sid, room=None):
     return normalize_skin_look(room_player_profile(room, sid).get('skin_look'))
 
 
+def player_avatar_kind_for_sid(sid, room=None):
+    kind = str(room_player_profile(room, sid).get('avatar_kind') or '').strip().lower()
+    return kind if kind == 'phelren' else ''
+
+
 def inject_player_skins(state, room, perspective):
     if not isinstance(state, dict) or room is None:
         return state
     player_skins = []
     player_skin_looks = []
+    player_avatar_kinds = []
     for psid in getattr(room, 'player_sids', []) or []:
         player_skins.append(player_skin_for_sid(psid, room))
         player_skin_looks.append(player_skin_look_for_sid(psid, room))
+        player_avatar_kinds.append(player_avatar_kind_for_sid(psid, room))
     state['player_skins'] = player_skins
     state['player_skin_looks'] = player_skin_looks
+    state['player_avatar_kinds'] = player_avatar_kinds
     try:
         pidx = int(perspective)
     except (TypeError, ValueError):
@@ -4002,6 +4070,7 @@ def inject_player_skins(state, room, perspective):
         if isinstance(state.get('you'), dict):
             state['you']['skin'] = player_skins[pidx]
             state['you']['skin_look'] = player_skin_looks[pidx]
+            state['you']['avatar_kind'] = player_avatar_kinds[pidx]
     if getattr(room, 'mode', '') == '2v2':
         engine = getattr(room, 'engine', None)
         teammate_id = getattr(engine, 'get_teammate', lambda _p: -1)(pidx) if pidx >= 0 else -1
@@ -4009,17 +4078,21 @@ def inject_player_skins(state, room, perspective):
         if isinstance(state.get('teammate'), dict) and 0 <= teammate_id < len(player_skins):
             state['teammate']['skin'] = player_skins[teammate_id]
             state['teammate']['skin_look'] = player_skin_looks[teammate_id]
+            state['teammate']['avatar_kind'] = player_avatar_kinds[teammate_id]
         if isinstance(state.get('opponent'), dict) and len(enemy_ids) > 0 and 0 <= enemy_ids[0] < len(player_skins):
             state['opponent']['skin'] = player_skins[enemy_ids[0]]
             state['opponent']['skin_look'] = player_skin_looks[enemy_ids[0]]
+            state['opponent']['avatar_kind'] = player_avatar_kinds[enemy_ids[0]]
         if isinstance(state.get('opponent2'), dict) and len(enemy_ids) > 1 and 0 <= enemy_ids[1] < len(player_skins):
             state['opponent2']['skin'] = player_skins[enemy_ids[1]]
             state['opponent2']['skin_look'] = player_skin_looks[enemy_ids[1]]
+            state['opponent2']['avatar_kind'] = player_avatar_kinds[enemy_ids[1]]
     else:
         opp_pidx = 1 - pidx
         if isinstance(state.get('opponent'), dict) and 0 <= opp_pidx < len(player_skins):
             state['opponent']['skin'] = player_skins[opp_pidx]
             state['opponent']['skin_look'] = player_skin_looks[opp_pidx]
+            state['opponent']['avatar_kind'] = player_avatar_kinds[opp_pidx]
     return state
 
 
@@ -4851,7 +4924,11 @@ def _auto_complete_draft_locked(room, pidx):
         if not success:
             break
         changed = True
-        if DB_AVAILABLE and room.mode in ('1v1', '2v2'):
+        if (
+            DB_AVAILABLE
+            and room.mode in ('1v1', '2v2')
+            and getattr(room, 'record_pregame_stats', True)
+        ):
             try:
                 enqueue_card_draft_pick(room.mode, options_before, def_id)
             except Exception as exc:
@@ -4876,10 +4953,11 @@ def _auto_select_opening_event_locked(room, pidx):
     event_id = first.get('id')
     if not engine.select_opening_event(pidx, event_id):
         return False
-    try:
-        enqueue_opening_event_pick(room.mode, [str(ev.get('id')) for ev in options if ev and ev.get('id') is not None], event_id)
-    except Exception as exc:
-        admin_event('error', f'auto opening event stats enqueue failed: {exc}', room_id=room.room_id)
+    if getattr(room, 'record_pregame_stats', True):
+        try:
+            enqueue_opening_event_pick(room.mode, [str(ev.get('id')) for ev in options if ev and ev.get('id') is not None], event_id)
+        except Exception as exc:
+            admin_event('error', f'auto opening event stats enqueue failed: {exc}', room_id=room.room_id)
     record_room_replay_action(room, 'select_opening_event', pidx, {
         'event_id': event_id,
         'sub_choice': None,
@@ -5368,6 +5446,9 @@ SOCKET_EVENT_LIMITS = {
     'solo_undo': (30, 60),
     'solo_redo': (30, 60),
     'solo_pause': (12, 60),
+    'ai_1v1_start': (6, 60),
+    'ai_1v1_rematch': (6, 60),
+    'ai_1v1_mark_decision': (30, 60),
     'skin_look': (80, 10),
 }
 SOCKET_DEFAULT_LIMIT = (80, 60)
@@ -5397,6 +5478,14 @@ SOFT_REJECT_EVENT_NAMES = {
     'solo_undo',
     'solo_redo',
 }
+AI_TEST_FORMAL_COMBAT_EVENTS = frozenset({
+    'play_card',
+    'response',
+    'resolve_choice',
+    'v2_ui_response',
+    'use_trigger',
+    'end_turn',
+})
 SOFT_REJECT_CODES = {
     'WAITING_FOR_RESPONSE',
     'PENDING_RESPONSE',
@@ -5763,6 +5852,14 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
             )
             return None
         _security_illegal(sid, event_name, '玩家未登录', emit_error=emit_error)
+        return None
+    if sid in ai_test_sessions and event_name in AI_TEST_FORMAL_COMBAT_EVENTS:
+        socketio.emit('action_rejected', {
+            'event': event_name,
+            'code': 'STATE_VERSION_OLD',
+            'message': '对局状态已更新，请按当前界面操作',
+        }, room=sid)
+        send_solo_state_with_pending(sid)
         return None
     if not allow_empty and data is None:
         _security_illegal(sid, event_name, '缺少参数', emit_error=emit_error)
@@ -7192,6 +7289,12 @@ def get_ongoing_games(beta_mode=None):
                 'beta_mode': bool(getattr(room, 'beta_mode', False)),
                 'can_spectate': phase in spectatable_phases,
             }
+            if getattr(room, 'ai_match', False):
+                game_info.update({
+                    'ai_match': True,
+                    'match_kind': 'phelren',
+                    'ai_policy_label': str(getattr(room, 'ai_policy_label', None) or 'Phelren V1'),
+                })
             if room.mode == '2v2':
                 game_info['player3'] = player_names[2] if len(player_names) > 2 else '?'
                 game_info['player4'] = player_names[3] if len(player_names) > 3 else '?'
@@ -8454,15 +8557,25 @@ ADMIN_COMMAND_TREE = {
             },
             'title': {
                 'summary': '管理玩家拥有的称号',
-                'usage': 'account title <list|grant|remove|equip> ...',
+                'usage': 'account title <list|grant|remove|equip|namecolor|catalog|preview> ...',
                 'children': {
                     'list': {'summary': '列出玩家拥有及佩戴的称号', 'usage': 'account title list <账号>'},
                     'grant': {
                         'summary': '给予称号',
-                        'usage': 'account title grant <账号> <称号名称> <颜色预设|#RRGGBB|RGB|HSV> [id=称号ID] [equip=true]',
+                        'usage': 'account title grant <账号> <称号名称> <颜色或样式语法> [id=称号ID] [count=数量] [equip=true]',
                     },
-                    'remove': {'summary': '删除玩家拥有的称号', 'usage': 'account title remove <账号> <称号ID|名称>'},
+                    'remove': {'summary': '删除玩家拥有的称号', 'usage': 'account title remove <账号> <称号ID|名称> [数量|all]'},
                     'equip': {'summary': '设置佩戴称号及顺序', 'usage': 'account title equip <账号> <称号ID1,称号ID2,称号ID3|none>'},
+                    'namecolor': {'summary': '设置昵称使用的称号颜色段', 'usage': 'account title namecolor <账号> <称号ID> <样式段ID|none>'},
+                    'catalog': {
+                        'summary': '管理称号目录与富文本样式',
+                        'usage': 'account title catalog <list|style> ...',
+                        'children': {
+                            'list': {'summary': '列出称号目录', 'usage': 'account title catalog list [搜索]'},
+                            'style': {'summary': '修改称号富文本样式', 'usage': 'account title catalog style <称号ID|名称> <样式语法>'},
+                        },
+                    },
+                    'preview': {'summary': '检查称号样式语法', 'usage': 'account title preview <样式语法>'},
                 },
             },
             'ban': {'summary': '封禁账号并踢下线', 'usage': 'account ban <账号> [时长] [原因]'},
@@ -8813,6 +8926,10 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('account', 'title', 'grant'): ('title', 'grant'),
     ('account', 'title', 'remove'): ('title', 'remove'),
     ('account', 'title', 'equip'): ('title', 'equip'),
+    ('account', 'title', 'namecolor'): ('title', 'namecolor'),
+    ('account', 'title', 'catalog', 'list'): ('title', 'catalog', 'list'),
+    ('account', 'title', 'catalog', 'style'): ('title', 'catalog', 'style'),
+    ('account', 'title', 'preview'): ('title', 'preview'),
     ('game', 'list'): 'rooms',
     ('game', 'info'): 'roomget',
     ('game', 'log'): 'roomlog',
@@ -9353,6 +9470,7 @@ def parse_title_grant_options(tokens):
     options = {
         'title_id': '',
         'equip': False,
+        'count': 1,
     }
     for token in tokens:
         key, sep, value = token.partition('=')
@@ -9367,6 +9485,11 @@ def parse_title_grant_options(tokens):
             options['title_id'] = value
         elif key in ('equip', 'wear', '佩戴'):
             options['equip'] = _parse_bool_option(value)
+        elif key in ('count', 'quantity', '数量'):
+            try:
+                options['count'] = max(1, min(int(value), 9999))
+            except (TypeError, ValueError):
+                raise ValueError('count 应为1至9999的整数')
         else:
             raise ValueError(f'未知参数：{key}')
     return options
@@ -9430,14 +9553,24 @@ def format_user_titles(user, center):
     header = f"{user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']})"
     if not items:
         return f'{header}\n暂无拥有的称号。'
-    lines = [header, f"称号 {len(items)} 个，最多佩戴 {(center or {}).get('max_equipped', 3)} 个："]
+    total = sum(max(0, int(item.get('quantity') or 0)) for item in items)
+    lines = [header, f"称号 {len(items)} 种/{total} 个，最多佩戴 {(center or {}).get('max_equipped', 3)} 个："]
     for item in items:
-        slot = item.get('equipped_slot')
-        worn = f'佩戴#{slot}' if slot is not None else '未佩戴'
+        slots = list(item.get('equipped_slots') or [])
+        worn = f"佩戴#{','.join(str(value) for value in slots)}" if slots else '未佩戴'
         lines.append(
             f"- {item.get('name') or '-'}  id={item.get('id') or '-'}  "
-            f"color={item.get('color') or '-'}  {worn}  来源={item.get('acquired_source') or item.get('source_type') or '-'}"
+            f"数量={item.get('quantity') or 0}  color={item.get('color') or '-'}  {worn}  "
+            f"来源={item.get('acquired_source') or item.get('source_type') or '-'}"
         )
+    name_style = (center or {}).get('name_style') or {}
+    if name_style:
+        lines.append(
+            f"昵称颜色：{name_style.get('title_name') or name_style.get('title_id')} / "
+            f"{name_style.get('segment_text') or name_style.get('segment_id')}"
+        )
+    else:
+        lines.append('昵称颜色：默认')
     return '\n'.join(lines)
 
 
@@ -10550,7 +10683,7 @@ def _format_replay_admin_detail(item):
         if hold.get('reason'):
             hold_text += f"，原因={hold.get('reason')}"
     return '\n'.join([
-        f"{format_replay_id(item.get('id'))} | match={item.get('match_id')} | {item.get('mode') or '-'} | {item.get('created_at') or '-'}",
+        f"{format_replay_id(item.get('id'), item.get('replay_prefix'))} | match={item.get('match_id')} | {item.get('mode') or '-'} | {item.get('created_at') or '-'}",
         f"玩家：{' / '.join(participants) or '-'}",
         f"结果：{item.get('result') or '-'} | 胜者={item.get('winner_name') or '-'} | 回合={item.get('round_num') or 0} | 时长={int(item.get('duration_ms') or 0) / 1000:.1f}s",
         f"模组：{item.get('mod_source') or 'official'} {item.get('community_mod_name') or ''}".rstrip(),
@@ -10617,7 +10750,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         for item in rows:
             players_text = ' / '.join(item.get('players') or item.get('player_names') or [])
             lines.append(
-                f"{format_replay_id(item.get('id'))}  {item.get('mode') or '-'}  "
+                f"{format_replay_id(item.get('id'), item.get('replay_prefix'))}  {item.get('mode') or '-'}  "
                 f"{players_text or '-'}  {item.get('created_at') or '-'}"
             )
         return {'success': True, 'output': '\n'.join(lines)}
@@ -10640,10 +10773,11 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             return {'success': False, 'output': '回放不存在或已被清理。'}
         if cmd == 'replayget':
             return {'success': True, 'output': _format_replay_admin_detail(detail)}
+        replay_ref = format_replay_id(replay_id, detail.get('replay_prefix'))
         if cmd == 'replayopen':
             output = _format_replay_admin_detail(detail)
-            output += f'\n摘要接口：/api/replays/{replay_id}?admin=1'
-            output += f'\n时间线接口：/api/replays/{replay_id}/timeline?admin=1'
+            output += f'\n摘要接口：/api/replays/{replay_ref}?admin=1'
+            output += f'\n时间线接口：/api/replays/{replay_ref}/timeline?admin=1'
             return {'success': True, 'output': output}
         actor = str(actor or 'adminconsole')
         if cmd == 'replayexport':
@@ -10653,14 +10787,14 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             return {
                 'success': bool(result),
                 'output': (
-                    f"已导出 {format_replay_id(replay_id)}\n{result.get('path')}\n"
+                    f"已导出 {result.get('replay_ref') or replay_ref}\n{result.get('path')}\n"
                     f"{result.get('bytes')} bytes | sha256={result.get('sha256')}"
                 ) if result else '回放导出失败。',
             }
         if cmd == 'replayrelease':
             released = release_replay_hold(replay_id)
             admin_event('admin', f'replay {replay_id} hold released={released}')
-            return {'success': True, 'output': f'{format_replay_id(replay_id)} ' + ('已解除保留。' if released else '原本没有保留记录。')}
+            return {'success': True, 'output': f'{replay_ref} ' + ('已解除保留。' if released else '原本没有保留记录。')}
         duration = str(parts[2] if len(parts) >= 3 else '180').strip().lower()
         if duration in ('permanent', 'forever', '永久'):
             days = None
@@ -10675,7 +10809,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         admin_event('admin', f'replay {replay_id} held until={(hold or {}).get("expires_at") or "permanent"}')
         return {
             'success': bool(hold),
-            'output': f"已保留 {format_replay_id(replay_id)} 至 {(hold or {}).get('expires_at') or '永久'}。",
+            'output': f"已保留 {replay_ref} 至 {(hold or {}).get('expires_at') or '永久'}。",
         }
     if cmd in ('contentdisable', 'contentenable', 'contentshow', 'contentedit'):
         if len(parts) < 3:
@@ -11445,9 +11579,68 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             return {'success': True, 'output': output}
         return {'success': False, 'output': command_error(raw, len(raw), 'account identity <list|get|set|clear>')}
     if cmd in ('title', 'titles', '称号'):
-        if len(parts) < 3:
-            return {'success': False, 'output': command_error(raw, len(raw), 'account title <list|grant|remove> <账号> ...')}
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'account title <list|grant|remove|equip|namecolor|catalog|preview> ...')}
         sub = parts[1].lower()
+        if sub == 'preview':
+            if len(parts) < 3:
+                return {'success': False, 'output': command_error(raw, len(raw), 'account title preview <样式语法>')}
+            try:
+                style = parse_title_style(parts[2])
+            except ValueError as exc:
+                return {'success': False, 'output': str(exc)}
+            segments = list(style.get('segments') or [])
+            lines = [
+                f"称号文字：{title_style_plain_text(style)}",
+                f"样式段：{len(segments)}",
+            ]
+            for item in segments:
+                lines.append(
+                    f"- id={item.get('id')} text={item.get('text')} "
+                    f"paint={json.dumps(item.get('paint') or {}, ensure_ascii=False, separators=(',', ':'))}"
+                )
+            lines.append(f"JSON：{title_style_json(style)}")
+            return {'success': True, 'output': '\n'.join(lines)}
+        if sub == 'catalog':
+            if len(parts) < 3:
+                return {'success': False, 'output': command_error(raw, len(raw), 'account title catalog <list|style> ...')}
+            action = parts[2].lower()
+            if action == 'list':
+                query = parts[3] if len(parts) > 3 else ''
+                items = admin_list_title_catalog(query=query, limit=100)
+                lines = [f'称号目录：{len(items)} 项']
+                for item in items:
+                    lines.append(
+                        f"- {item.get('name')} id={item.get('id')} color={item.get('color')} "
+                        f"价格={item.get('price_free') or 0} 权重={item.get('shop_weight') or 0} "
+                        f"状态={'启用' if item.get('active') else '停用'}"
+                    )
+                return {'success': True, 'output': '\n'.join(lines)}
+            if action == 'style':
+                if len(parts) < 5:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'account title catalog style <称号ID|名称> <样式语法>')}
+                item, error = admin_set_title_catalog_style(parts[3], parts[4])
+                if error:
+                    return {'success': False, 'output': error}
+                affected_user_ids = set()
+                with _lock:
+                    for player in players.values():
+                        if any(str(title.get('id') or '') == str(item.get('id') or '') for title in player.get('equipped_titles') or []):
+                            try:
+                                affected_user_ids.add(int(player.get('user_id') or 0))
+                            except (TypeError, ValueError):
+                                pass
+                for affected_id in affected_user_ids:
+                    if affected_id > 0:
+                        refresh_online_user_titles(affected_id)
+                admin_event('admin', f"updated title style {item.get('id')}")
+                return {
+                    'success': True,
+                    'output': f"已更新 {item.get('name')} ({item.get('id')}) 的样式，共 {len((item.get('style') or {}).get('segments') or [])} 段。",
+                }
+            return {'success': False, 'output': command_error(raw, len(raw), 'account title catalog <list|style> ...')}
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), f'account title {sub} <账号> ...')}
         user = find_user_for_admin(parts[2])
         if not user:
             return {'success': False, 'output': '账号不存在'}
@@ -11460,7 +11653,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     'output': command_error(
                         raw,
                         len(raw),
-                        'account title grant <账号> <称号名称> <颜色预设|#RRGGBB|RGB(r,g,b)|HSV(h,s,v)> [id=称号ID] [equip=true]',
+                        'account title grant <账号> <称号名称> <颜色或样式语法> [id=称号ID] [count=数量] [equip=true]',
                     ),
                 }
             try:
@@ -11476,6 +11669,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                 equip=options.get('equip', False),
                 source_type='admin',
                 source_ref=actor,
+                quantity=options.get('count', 1),
             )
             if error:
                 return {'success': False, 'output': error}
@@ -11501,10 +11695,32 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             refresh_online_user_titles(user['id'])
             admin_event('admin', f"equipped titles for account {user['username']}#{user['id']}: {','.join(title_ids) or '-'}")
             return {'success': True, 'output': format_user_titles(user, center)}
+        if sub in ('namecolor', 'name-color', '昵称颜色'):
+            if len(parts) < 4:
+                return {
+                    'success': False,
+                    'output': command_error(raw, len(raw), 'account title namecolor <账号> <称号ID> <样式段ID|none>'),
+                }
+            if str(parts[3]).lower() in ('none', 'clear', '-', '无'):
+                center, error = set_user_title_name_style(user['id'], '', '')
+            elif len(parts) < 5:
+                return {
+                    'success': False,
+                    'output': command_error(raw, len(raw), 'account title namecolor <账号> <称号ID> <样式段ID>'),
+                }
+            else:
+                center, error = set_user_title_name_style(user['id'], parts[3], parts[4])
+            if error:
+                return {'success': False, 'output': error}
+            refresh_online_user_titles(user['id'])
+            admin_event('admin', f"updated title name color for account {user['username']}#{user['id']}")
+            return {'success': True, 'output': format_user_titles(user, center)}
         if sub in ('remove', 'revoke', 'delete'):
             if len(parts) < 4:
-                return {'success': False, 'output': command_error(raw, len(raw), 'account title remove <账号> <称号ID|名称>')}
-            removed_user, center, error = admin_remove_user_title(user['id'], parts[3])
+                return {'success': False, 'output': command_error(raw, len(raw), 'account title remove <账号> <称号ID|名称> [数量|all]')}
+            removed_user, center, error = admin_remove_user_title(
+                user['id'], parts[3], parts[4] if len(parts) > 4 else 1
+            )
             if error:
                 return {'success': False, 'output': error}
             refresh_online_user_titles(removed_user['id'])
@@ -11513,7 +11729,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                 f"removed title {parts[3]} from account {removed_user['username']}#{removed_user['id']}",
             )
             return {'success': True, 'output': format_user_titles(removed_user, center)}
-        return {'success': False, 'output': command_error(raw, len(raw), 'account title <list|grant|remove|equip> ...')}
+        return {'success': False, 'output': command_error(raw, len(raw), 'account title <list|grant|remove|equip|namecolor|catalog|preview> ...')}
     if cmd in ('dew', 'thorndew', 'jinglu', '荆露'):
         if len(parts) < 3 or parts[1].lower() not in ('get', 'add', 'addpaid', 'paid', 'spend', 'tx', 'history'):
             return {'success': False, 'output': command_error(raw, len(raw), 'account dew <get|add|addpaid|spend|tx> <账号> [数量] [原因]')}
@@ -12129,6 +12345,37 @@ def admin_completions(line):
         except Exception:
             return []
 
+    def title_catalog_values():
+        if not DB_AVAILABLE:
+            return []
+        try:
+            values = []
+            for item in admin_list_title_catalog(query=token, limit=40):
+                values.extend((item.get('id'), item.get('name')))
+            return values
+        except Exception:
+            return []
+
+    def title_segment_values(account_token, title_token):
+        if not DB_AVAILABLE:
+            return []
+        try:
+            user = find_user_for_admin(account_token)
+            if not user:
+                return []
+            target = str(title_token or '').strip().lower()
+            for item in list_user_titles(user['id']):
+                if target not in {str(item.get('id') or '').lower(), str(item.get('name') or '').lower()}:
+                    continue
+                return [
+                    str(segment.get('id') or '')
+                    for segment in (item.get('style') or {}).get('segments') or []
+                    if segment.get('id')
+                ]
+        except Exception:
+            pass
+        return []
+
     def online_values(include_all=False):
         values = ['all'] if include_all else []
         with _lock:
@@ -12183,7 +12430,10 @@ def admin_completions(line):
             return []
         try:
             rows = list_replays(limit=30, offset=0).get('items', [])
-            return [format_replay_id(row.get('id')) for row in rows if row.get('id') is not None]
+            return [
+                format_replay_id(row.get('id'), row.get('replay_prefix'))
+                for row in rows if row.get('id') is not None
+            ]
         except Exception:
             return []
 
@@ -12281,24 +12531,56 @@ def admin_completions(line):
                 return filtered(['admin', 'staff', 'contributor', 'sponsor'])
         if sub == 'title':
             if position == 2:
-                return filtered(['list', 'grant', 'remove', 'equip'])
+                return filtered(['list', 'grant', 'remove', 'equip', 'namecolor', 'catalog', 'preview'])
+            action = parts[2].lower() if len(parts) > 2 else ''
+            if action == 'catalog':
+                if position == 3:
+                    return filtered(['list', 'style'])
+                catalog_action = parts[3].lower() if len(parts) > 3 else ''
+                if catalog_action == 'style' and position == 4:
+                    return filtered(title_catalog_values())
+                if catalog_action == 'style' and position == 5:
+                    return filtered([
+                        '{color:#FF0000}称号{/}',
+                        '{gradient:90deg,#FF0000>#0000FF}称号{/}',
+                        '{rainbow}称号{/}',
+                        '{theme:light=#FFFFFF;dark=#000000}称号{/}',
+                    ])
+                return []
+            if action == 'preview':
+                if position == 3:
+                    return filtered([
+                        '{color:#FF0000}称号{/}',
+                        '{gradient:90deg,#FF0000>#0000FF}称号{/}',
+                        '{rainbow}称号{/}',
+                        '{theme:light=#FFFFFF;dark=#000000}称号{/}',
+                    ])
+                return []
             if position == 3:
                 return filtered(account_values())
-            action = parts[2].lower() if len(parts) > 2 else ''
             account_token = parts[3] if len(parts) > 3 else ''
             if action == 'remove' and position == 4:
                 return filtered(title_values(account_token))
             if action == 'equip' and position == 4:
                 return filtered(['none', *title_values(account_token)])
+            if action == 'namecolor' and position == 4:
+                return filtered(['none', *title_values(account_token)])
+            if action == 'namecolor' and position == 5:
+                return filtered(title_segment_values(account_token, parts[4] if len(parts) > 4 else ''))
             if action == 'grant' and position == 5:
+                title_name = str(parts[4] if len(parts) > 4 else '称号')
                 return filtered([
                     *TITLE_COLOR_TOKENS,
                     '#2F80C8',
                     'RGB(47,128,200)',
                     'HSV(207,77,78)',
+                    f'{{color:#FF0000}}{title_name}{{/}}',
+                    f'{{gradient:90deg,#FF0000>#0000FF}}{title_name}{{/}}',
+                    f'{{rainbow}}{title_name}{{/}}',
+                    f'{{theme:light=#FFFFFF;dark=#000000}}{title_name}{{/}}',
                 ])
             if action == 'grant' and position >= 6:
-                return filtered(['id=', 'equip=true', 'equip=false'])
+                return filtered(['id=', 'count=', 'equip=true', 'equip=false'])
         if sub in ('get', 'username', 'password', 'ban', 'unban') and position == 2:
             return filtered(account_values())
 
@@ -12873,6 +13155,7 @@ def send_draft_state(room, pidx):
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
+        'player_avatar_kinds': [player_avatar_kind_for_sid(psid, room) for psid in room.player_sids],
         'selected_opening_events': _selected_opening_event_names(engine),
         'room_chat_history': room_chat_history_for_sid(room, sid),
         **_pregame_timer_payload(room, pidx, your_status),
@@ -12994,6 +13277,7 @@ def send_event_state(room, pidx):
         'enemy_ids': engine.get_all_enemies(pidx) if room.mode == '2v2' and hasattr(engine, 'get_all_enemies') else ([1 - pidx] if pidx in (0, 1) else []),
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
+        'player_avatar_kinds': [player_avatar_kind_for_sid(psid, room) for psid in room.player_sids],
         'selected_opening_events': _selected_opening_event_names(engine),
         'room_chat_history': room_chat_history_for_sid(room, sid),
         **_pregame_timer_payload(room, pidx, 'event_select'),
@@ -13087,6 +13371,23 @@ def room_spectator_players(room):
 def _broadcast_game_state_now(room):
     _broadcast_started = time.perf_counter()
     _broadcast_recipients = 0
+    if getattr(room, 'ai_match', False):
+        owner_sid = getattr(room, 'ai_owner_sid', None)
+        if owner_sid and room_player_session_is_current(room, owner_sid):
+            send_solo_state(
+                owner_sid,
+                getattr(room, 'ai_human_player_id', None),
+                broadcast_spectators=False,
+            )
+            _broadcast_recipients += 1
+        broadcast_spectate_state(room)
+        _broadcast_recipients += room_spectator_count(room)
+        record_socket_broadcast(
+            room,
+            (time.perf_counter() - _broadcast_started) * 1000,
+            _broadcast_recipients,
+        )
+        return
     _sync_disconnected_revived_players(room)
     _sync_room_action_timer_after_state_change(room)
     if room.engine.game_over and not getattr(room, '_history_recorded', False):
@@ -13184,7 +13485,10 @@ def _room_state_broadcast_worker(room):
                 finally:
                     if acquired_action_lock:
                         action_lock.release()
-                if not getattr(room, '_live_achievement_checking', False):
+                if (
+                    not getattr(room, 'ai_match', False)
+                    and not getattr(room, '_live_achievement_checking', False)
+                ):
                     room._live_achievement_checking = True
                     try:
                         check_live_achievements(room)
@@ -13454,6 +13758,8 @@ def on_request_pregame_state(data=None):
     data = socket_guard('request_pregame_state', data, require_player=True, allow_empty=True)
     if data is None:
         return
+    if send_ai_test_pregame_state(sid):
+        return
     recover_live_state = False
     with _lock:
         player = players.get(sid)
@@ -13486,6 +13792,9 @@ def on_request_game_state(data=None):
     sid = request.sid
     data = socket_guard('request_game_state', data, require_player=True, allow_empty=True)
     if data is None:
+        return
+    if sid in ai_test_sessions and sid in solo_sessions:
+        send_solo_state_with_pending(sid)
         return
     room = None
     pidx = -1
@@ -13766,7 +14075,7 @@ def init_solo_history(engine):
 
 
 def _solo_history_enabled(sid):
-    return sid not in tutorial_sessions
+    return sid not in tutorial_sessions and sid not in ai_test_sessions
 
 
 _SOLO_SNAPSHOT_MAGIC = b'GTNS1\0'
@@ -13810,13 +14119,50 @@ def _begin_solo_engine_action(sid, event_name):
         lock.release()
         socketio.emit('server_error', {'message': '训练场尚未开始'}, room=sid)
         return None, None
+    human_player = _ai_test_human_player(sid)
+    if human_player is not None and _solo_decision_player(engine, human_player) != human_player:
+        lock.release()
+        socketio.emit('action_rejected', {
+            'code': 'AI_THINKING',
+            'message': '正在等待 AI 完成操作',
+        }, room=sid)
+        return None, None
     return lock, engine
 
 
 def _drop_solo_session_locked(sid):
     solo_sessions.pop(sid, None)
     tutorial_sessions.discard(sid)
+    ai_test_starting.discard(sid)
+    ai_meta = ai_test_sessions.pop(sid, None)
     _SOLO_ACTION_LOCKS.pop(sid, None)
+    ai_room = ai_meta.get('replay_room') if isinstance(ai_meta, dict) else None
+    if isinstance(ai_room, GameRoom):
+        room_id = getattr(ai_room, 'room_id', None)
+        if rooms.get(room_id) is ai_room:
+            rooms.pop(room_id, None)
+        _cancel_game_over_cleanup_timer(ai_room)
+        _cancel_room_reconnect_timers(ai_room)
+        for spectator_sid in list(getattr(ai_room, 'spectators', []) or []):
+            spectator = players.get(spectator_sid)
+            if spectator and str(spectator.get('spectating_room')) == str(room_id):
+                spectator['spectating_room'] = None
+                spectator['spectate_perspective'] = 0
+                spectator['status'] = 'lobby'
+                socketio.emit('spectate_leave', {
+                    **room_event_context(ai_room),
+                    'reason': 'ai_match_closed',
+                }, room=spectator_sid)
+        ai_room.spectators = []
+        owner = players.get(sid)
+        if owner and str(owner.get('room_id')) == str(room_id):
+            owner['room_id'] = None
+    if ai_meta and not ai_meta.get('diagnostic_finished'):
+        _start_socket_background_task(
+            _finish_ai_test_diagnostics,
+            ai_meta,
+            {'reason': 'session_dropped'},
+        )
 
 
 def _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome='ok'):
@@ -14026,6 +14372,7 @@ def _solo_mutate_engine(sid, engine, fn, *, record_history=True):
         result = fn()
         if isinstance(result, dict) and getattr(engine, 'pending_response', None):
             result['_solo_response_request_payload'] = _build_solo_pending_response_payload(engine)
+        _flush_ai_test_human_replay_action(sid, engine, result)
         log = getattr(engine, 'log', None)
         if isinstance(log, list) and len(log) > SOLO_LOG_LIMIT:
             trim_count = len(log) - SOLO_LOG_LIMIT
@@ -14039,6 +14386,7 @@ def _solo_mutate_engine(sid, engine, fn, *, record_history=True):
                 int(getattr(engine, '_log_compaction_floor', 0) or 0) - trim_count,
             )
     except Exception:
+        _flush_ai_test_human_replay_action(sid, engine, None)
         if rollback_snapshot is not None:
             _solo_restore_snapshot(engine, rollback_snapshot)
         raise
@@ -14049,6 +14397,9 @@ def _solo_mutate_engine(sid, engine, fn, *, record_history=True):
 
 def _solo_emit_pending_after_state(sid, engine, response_payload=None):
     if not engine or getattr(engine, 'game_over', False):
+        return
+    if sid in ai_test_sessions and not _ai_test_pending_is_human(sid, engine):
+        schedule_ai_test_turn(sid)
         return
     pending = getattr(engine, 'pending_response', None)
     if pending:
@@ -14167,37 +14518,136 @@ def _tutorial_note_card_action(engine, player_id, card_before, choice, result):
     _tutorial_refresh_progress(engine)
 
 
-def send_solo_state(sid, perspective=None):
+def _solo_decision_player(engine, default=None):
+    if engine is None or getattr(engine, 'game_over', False):
+        return default
+    pending = getattr(engine, 'pending_response', None)
+    if isinstance(pending, dict):
+        try:
+            source = int(pending.get('player_id', -1))
+            target = int(pending.get('target_player_id', -1))
+        except (TypeError, ValueError):
+            source, target = -1, -1
+        if target in (0, 1) and target != source:
+            return target
+        if source in (0, 1):
+            return 1 - source
+    for attr in ('pending_choice', 'pending_v2_ui'):
+        pending = getattr(engine, attr, None)
+        if isinstance(pending, dict):
+            try:
+                actor = int(pending.get('player_id', -1))
+            except (TypeError, ValueError):
+                actor = -1
+            if actor in (0, 1):
+                return actor
+    current = getattr(engine, 'current_player', default)
+    return int(current) if current in (0, 1) else default
+
+
+def _ai_test_human_player(sid):
+    meta = ai_test_sessions.get(sid)
+    if not isinstance(meta, dict):
+        return None
+    value = meta.get('human_player_id')
+    return int(value) if value in (0, 1) else None
+
+
+def _solo_response_view_perspective(sid, responder_perspective):
+    human_player = _ai_test_human_player(sid)
+    if human_player in (0, 1):
+        return human_player
+    return responder_perspective
+
+
+def _ai_test_pending_is_human(sid, engine):
+    human_player = _ai_test_human_player(sid)
+    return human_player is None or _solo_decision_player(engine) == human_player
+
+
+def send_solo_state(sid, perspective=None, *, broadcast_spectators=True):
     engine = solo_sessions.get(sid)
     if not engine:
         return
     is_tutorial = sid in tutorial_sessions
+    ai_meta = ai_test_sessions.get(sid)
+    if ai_meta and engine.game_over:
+        _maybe_finish_ai_test_session(sid, engine)
     if perspective is None:
-        perspective = 0 if is_tutorial else (engine.current_player if not engine.game_over else 0)
+        if is_tutorial:
+            perspective = 0
+        elif ai_meta:
+            perspective = int(ai_meta.get('human_player_id', 0))
+        else:
+            perspective = engine.current_player if not engine.game_over else 0
     state = engine.get_public_state(perspective)
     log_offset = max(0, int(getattr(engine, '_solo_log_offset', 0) or 0))
     state['log_start'] = log_offset
     state['log_total'] = log_offset + len(state.get('log') or [])
     state['your_id'] = perspective
-    state['match_key'] = f"solo:{id(engine)}"
+    state['match_key'] = _ai_test_match_key(ai_meta) if ai_meta else f"solo:{id(engine)}"
+    ai_room = _ai_test_replay_room(sid) if ai_meta else None
     if is_tutorial:
         state['your_name'] = '你'
         state['opponent_name'] = '练习对手'
         state['tutorial'] = True
         state['tutorial_progress'] = dict(_tutorial_refresh_progress(engine))
         state['tutorial_step_total'] = len(TUTORIAL_PROGRESS_KEYS) + 1
+    elif ai_meta:
+        state['your_name'] = str(ai_meta.get('human_name') or engine.player_names[perspective])
+        state['opponent_name'] = str(ai_meta.get('ai_name') or engine.player_names[1 - perspective])
+        state['mode'] = '1v1'
+        state['ai_test'] = True
+        state['ai_player_id'] = int(ai_meta.get('ai_player_id', 1))
+        state['ai_thinking'] = bool(ai_meta.get('thinking'))
+        state['ai_policy_label'] = str(ai_meta.get('policy_label') or 'Phelren V1')
+        state['ai_diagnostic_session_id'] = str(ai_meta.get('session_id') or '')
+        if engine.game_over and isinstance(ai_meta.get('match_summary'), dict):
+            state['match_summary'] = dict(ai_meta['match_summary'])
+            state['replay_id'] = ai_meta['match_summary'].get('replay_id')
+            state['replay_prefix'] = ai_meta['match_summary'].get('replay_prefix', 'P')
+        if ai_room is not None:
+            with _lock:
+                ai_room.engine = engine
+                _sync_room_action_timer_after_state_change(ai_room)
+                state['room_id'] = ai_room.room_id
+                state['spectator_count'] = room_spectator_count(ai_room)
+                state['spectator_players'] = room_spectator_players(ai_room)
+                state['room_chat_history'] = room_chat_history_for_sid(ai_room, sid)
+                state.update(_room_timer_payload(ai_room))
+                state.update(room_mod_payload(ai_room))
+                state.update(_room_disconnect_state_payload(ai_room, sid))
+            human_sid = ai_room.player_sids[perspective]
+            opponent_sid = ai_room.player_sids[1 - perspective]
+            state['your_is_admin_player'] = player_is_admin(human_sid, ai_room)
+            state['your_special'] = player_special_fields(human_sid, ai_room)
+            state['opponent_is_admin_player'] = player_is_admin(opponent_sid, ai_room)
+            state['opponent_special'] = player_special_fields(opponent_sid, ai_room)
+            state['player_names'] = [
+                room_player_nickname(ai_room, player_sid, f'P{index + 1}')
+                for index, player_sid in enumerate(ai_room.player_sids)
+            ]
+            state.update(instance_payload())
     else:
         state['your_name'] = 'Player A' if perspective == 0 else 'Player B'
         state['opponent_name'] = 'Player B' if perspective == 0 else 'Player A'
-    owner_skin = players.get(sid, {}).get('skin') if sid in players else None
-    inject_solo_skins(state, owner_skin=owner_skin, perspective=perspective)
+    if ai_room is not None:
+        inject_player_skins(state, ai_room, perspective)
+    else:
+        owner_skin = players.get(sid, {}).get('skin') if sid in players else None
+        inject_solo_skins(state, owner_skin=owner_skin, perspective=perspective)
     state['solo'] = True
-    check_solo_achievements(sid, engine)
+    if not ai_meta:
+        check_solo_achievements(sid, engine)
     socketio.emit('solo_state', state, room=sid)
     # Check if engine has a pending choice (e.g. foresight_replace) and send choice_request
     pending = getattr(engine, 'pending_choice', None)
-    if pending and not engine.game_over:
+    if pending and not engine.game_over and _ai_test_pending_is_human(sid, engine):
         socketio.emit('choice_request', build_choice_request_payload(pending), room=sid)
+    if ai_meta and not engine.game_over:
+        schedule_ai_test_turn(sid)
+    if ai_room is not None and broadcast_spectators:
+        broadcast_spectate_state(ai_room)
 
 
 def _response_destroy_target_equipment(engine, played_card, pending):
@@ -14555,6 +15005,9 @@ def emit_pending_interaction_after_state_change(room, reason='state_change'):
 
 
 def emit_solo_response_request(sid, engine, pidx, played_card, payload=None):
+    if not _ai_test_pending_is_human(sid, engine):
+        schedule_ai_test_turn(sid)
+        return
     if isinstance(payload, dict):
         socketio.emit('response_request', payload, room=sid)
         return
@@ -14739,11 +15192,13 @@ def build_spectate_state(room, perspective=0):
         pdata['name'] = room_player_nickname(room, psid, f'P{i + 1}')
         pdata['skin'] = player_skin_for_sid(psid, room)
         pdata['skin_look'] = player_skin_look_for_sid(psid, room)
+        pdata['avatar_kind'] = player_avatar_kind_for_sid(psid, room)
         pdata['is_admin_player'] = player_is_admin(psid, room)
         pdata.update(player_special_fields(psid, room))
         full_players.append(pdata)
     base['spectate_players'] = full_players
     base['player_skin_looks'] = [player_skin_look_for_sid(psid, room) for psid in room.player_sids]
+    base['player_avatar_kinds'] = [player_avatar_kind_for_sid(psid, room) for psid in room.player_sids]
     base['player_names'] = [p.get('name', f'P{i + 1}') for i, p in enumerate(full_players)]
     for i, pdata in enumerate(full_players):
         base[f'player{i + 1}_name'] = pdata.get('name', f'P{i + 1}')
@@ -14755,6 +15210,11 @@ def build_spectate_state(room, perspective=0):
     base['room_chat_history'] = room_chat_history_for_sid(room, spectator=True)
     base.update(room_mod_payload(room))
     base.update(_room_disconnect_state_payload(room))
+    if getattr(room, 'ai_match', False):
+        base['ai_match'] = True
+        base['ai_test'] = True
+        base['ai_player_id'] = int(getattr(room, 'ai_player_id', 1))
+        base['ai_policy_label'] = str(getattr(room, 'ai_policy_label', None) or 'Phelren V1')
     if getattr(engine, 'game_over', False) or getattr(engine, 'phase', None) == 'game_over':
         base['match_summary'] = getattr(room, '_match_summary', None)
     try:
@@ -15652,6 +16112,9 @@ def hidden_features_unlock():
         data = request.get_json(silent=True) or {}
         key = str(data.get('key') or '')
         if key and check_password_hash(BETA_ACCESS_KEY_HASH, key):
+            session.permanent = True
+            session['hidden_features_unlocked'] = True
+            session['hidden_features_unlock_time'] = time.time()
             admin_event('security', f'hidden features unlocked from {_client_ip()}')
             return jsonify({'success': True})
         admin_event('security', f'hidden features unlock failed from {_client_ip()}')
@@ -15659,6 +16122,35 @@ def hidden_features_unlock():
     except Exception as exc:
         admin_event('error', f'hidden features unlock failed: {exc}')
         return jsonify({'success': False, 'error': '解锁失败'}), 500
+
+
+@app.route('/api/hidden-features/status')
+def hidden_features_status():
+    unlocked = bool(session.get('hidden_features_unlocked'))
+    response = jsonify({
+        'success': True,
+        'unlocked': unlocked,
+    })
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.route('/api/ai-1v1/status')
+def ai_1v1_public_status():
+    authenticated = bool(session.get('user_id'))
+    with _lock:
+        active = _ai_test_active_count_locked()
+    response = jsonify({
+        'success': True,
+        'authenticated': authenticated,
+        'enabled': bool(GTN_AI_1V1_TEST_ENABLED),
+        'available': bool(authenticated and GTN_AI_1V1_TEST_ENABLED),
+        'active': active,
+        'capacity': GTN_AI_1V1_MAX_ACTIVE,
+        'busy': active >= GTN_AI_1V1_MAX_ACTIVE,
+    })
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @app.route('/favicon.ico')
@@ -15706,6 +16198,18 @@ def admin_page():
 @app.route('/adminconsole')
 def admin_console_page():
     return render_template('adminconsole.html')
+
+
+@app.route('/titleeditor')
+def title_editor_page():
+    actor = title_editor_actor()
+    if not actor:
+        return 'Forbidden', 403
+    return render_template(
+        'titleeditor.html',
+        static_version=GTN_STATIC_VERSION,
+        can_publish=actor.get('role_type') == 'admin',
+    )
 
 
 @app.route('/feedback/handling-pane')
@@ -16716,16 +17220,20 @@ def api_replays():
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
-@app.route('/api/replays/<int:replay_id>')
-def api_replay_detail(replay_id):
+@app.route('/api/replays/<replay_ref>')
+def api_replay_detail(replay_ref):
     if not DB_AVAILABLE:
         return db_unavailable_response()
     if not replay_api_allowed():
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    try:
+        replay_id = normalize_replay_id(replay_ref)
+    except ValueError:
+        return jsonify({'success': False, 'error': '回放 ID 格式无效'}), 400
     admin_context = replay_admin_context_requested()
     if not admin_context and not session.get('user_id'):
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
-    item = get_replay(replay_id)
+    item = get_replay(replay_ref)
     if not item:
         return jsonify({'success': False, 'error': '回放不存在'}), 404
     if not replay_item_visible_to_current_user(item, admin_context=admin_context):
@@ -16733,16 +17241,20 @@ def api_replay_detail(replay_id):
     return jsonify({'success': True, 'replay': item})
 
 
-@app.route('/api/replays/<int:replay_id>/download')
-def api_replay_download(replay_id):
+@app.route('/api/replays/<replay_ref>/download')
+def api_replay_download(replay_ref):
     if not DB_AVAILABLE:
         return db_unavailable_response()
     if not replay_api_allowed():
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    try:
+        replay_id = normalize_replay_id(replay_ref)
+    except ValueError:
+        return jsonify({'success': False, 'error': '回放 ID 格式无效'}), 400
     admin_context = replay_admin_context_requested()
     if not admin_context and not session.get('user_id'):
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
-    item = get_replay(replay_id)
+    item = get_replay(replay_ref)
     if not item:
         return jsonify({'success': False, 'error': '回放不存在'}), 404
     if not replay_item_visible_to_current_user(item, admin_context=admin_context):
@@ -16770,16 +17282,20 @@ def api_replay_download(replay_id):
     return response
 
 
-@app.route('/api/replays/<int:replay_id>/timeline')
-def api_replay_timeline(replay_id):
+@app.route('/api/replays/<replay_ref>/timeline')
+def api_replay_timeline(replay_ref):
     if not DB_AVAILABLE:
         return db_unavailable_response()
     if not replay_api_allowed():
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    try:
+        replay_id = normalize_replay_id(replay_ref)
+    except ValueError:
+        return jsonify({'success': False, 'error': '回放 ID 格式无效'}), 400
     admin_context = replay_admin_context_requested()
     if not admin_context and not session.get('user_id'):
         return jsonify({'success': False, 'error': 'unauthorized'}), 401
-    item = get_replay(replay_id)
+    item = get_replay(replay_ref)
     if not item:
         return jsonify({'success': False, 'error': '回放不存在'}), 404
     if not replay_item_visible_to_current_user(item, admin_context=admin_context):
@@ -17237,6 +17753,280 @@ def api_titles_equip():
     except Exception as exc:
         admin_event('error', f'title equip failed: {exc}')
         return jsonify({'success': False, 'error': '称号设置失败'}), 500
+
+
+@app.route('/api/titles/name-style', methods=['POST'])
+def api_titles_name_style():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        center, error = set_user_title_name_style(
+            user.get('id'), data.get('title_id') or '', data.get('segment_id') or ''
+        )
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        refresh_online_user_titles(user.get('id'))
+        fresh = get_user_by_id(user.get('id')) or user
+        _set_account_session(fresh)
+        return jsonify({
+            'success': True,
+            'titles': center,
+            'user': auth_user_payload(fresh),
+        })
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'title name style failed: {exc}')
+        return jsonify({'success': False, 'error': '后台暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'title name style failed: {exc}')
+        return jsonify({'success': False, 'error': '昵称颜色设置失败'}), 500
+
+
+@app.route('/api/title-editor/workspace')
+def api_title_editor_workspace():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    actor = title_editor_actor()
+    if not actor:
+        return jsonify({'success': False, 'error': '权限不足'}), 403
+    try:
+        workspace = get_title_editor_workspace(actor['user_id'], history_limit=80)
+        return jsonify({
+            'success': True,
+            'workspace': workspace,
+            'csrf_token': title_editor_csrf_token(),
+            'permissions': {
+                'can_edit': True,
+                'can_publish': actor['role_type'] == 'admin',
+                'can_rollback': actor['role_type'] == 'admin',
+            },
+            'actor': {
+                'username': actor['username'],
+                'role_type': actor['role_type'],
+            },
+            'color_tokens': list(TITLE_COLOR_TOKENS),
+        })
+    except Exception as exc:
+        admin_event('error', f'title editor workspace failed: {exc}')
+        return jsonify({'success': False, 'error': '称号目录加载失败'}), 500
+
+
+@app.route('/api/title-editor/preview', methods=['POST'])
+def api_title_editor_preview():
+    actor = title_editor_actor()
+    if not actor:
+        return jsonify({'success': False, 'error': '权限不足'}), 403
+    if not title_editor_csrf_valid():
+        return jsonify({'success': False, 'error': '安全令牌已失效，请刷新页面'}), 403
+    data = request.get_json(silent=True) or {}
+    markup = str(data.get('style_markup') or '')
+    if len(markup) > 1000:
+        return jsonify({'success': False, 'error': '样式语法过长'}), 400
+    try:
+        style = parse_title_style(markup, fallback_color=str(data.get('fallback_color') or 'neutral'))
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    return jsonify({
+        'success': True,
+        'style': style,
+        'name': title_style_plain_text(style),
+        'color': title_style_fallback_color(style),
+        'style_json': title_style_json(style),
+    })
+
+
+@app.route('/api/title-editor/draft', methods=['POST', 'DELETE'])
+def api_title_editor_draft():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    actor = title_editor_actor()
+    if not actor:
+        return jsonify({'success': False, 'error': '权限不足'}), 403
+    if not title_editor_csrf_valid():
+        return jsonify({'success': False, 'error': '安全令牌已失效，请刷新页面'}), 403
+    if request.method == 'DELETE':
+        try:
+            discarded = discard_title_editor_draft(actor['user_id'], actor=actor)
+            return jsonify({'success': True, 'discarded': bool(discarded)})
+        except Exception as exc:
+            admin_event('error', f'title editor discard failed: {exc}')
+            return jsonify({'success': False, 'error': '放弃草稿失败'}), 500
+    if not rate_limiter(f'title-editor-draft:{actor["user_id"]}', limit=120, window=60):
+        return jsonify({'success': False, 'error': '保存过于频繁，请稍后重试'}), 429
+    data = request.get_json(silent=True) or {}
+    try:
+        draft, error = save_title_editor_draft(
+            actor['user_id'], data.get('base_revision_id'), data.get('catalog')
+        )
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        return jsonify({'success': True, 'draft': draft})
+    except Exception as exc:
+        admin_event('error', f'title editor draft save failed: {exc}')
+        return jsonify({'success': False, 'error': '草稿保存失败'}), 500
+
+
+@app.route('/api/title-editor/publish', methods=['POST'])
+def api_title_editor_publish():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    actor = title_editor_actor(require_admin=True)
+    if not actor:
+        return jsonify({'success': False, 'error': '仅管理员可以发布'}), 403
+    if not title_editor_csrf_valid():
+        return jsonify({'success': False, 'error': '安全令牌已失效，请刷新页面'}), 403
+    if not rate_limiter(f'title-editor-publish:{actor["user_id"]}', limit=10, window=3600):
+        admin_event('security', f'title editor publish rate limited for {actor["username"]}')
+        return jsonify({'success': False, 'error': '一小时内发布次数过多，请稍后再试'}), 429
+    data = request.get_json(silent=True) or {}
+    if str(data.get('confirm') or '').lower() != 'publish':
+        return jsonify({'success': False, 'error': '缺少发布确认'}), 400
+    try:
+        result, error = publish_title_editor_draft(
+            actor['user_id'], actor=actor, message=data.get('message') or ''
+        )
+        if error:
+            return jsonify({'success': False, 'error': error}), 409 if '其他人' in error else 400
+        for user_id in result.get('affected_user_ids') or []:
+            refresh_online_user_titles(user_id)
+        admin_event(
+            'security',
+            f'title catalog revision {result.get("revision_id")} published by {actor["username"]}',
+        )
+        return jsonify({'success': True, 'result': result})
+    except Exception as exc:
+        admin_event('error', f'title editor publish failed: {exc}')
+        return jsonify({'success': False, 'error': '发布失败，线上目录未改变'}), 500
+
+
+@app.route('/api/title-editor/rollback', methods=['POST'])
+def api_title_editor_rollback():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    actor = title_editor_actor(require_admin=True)
+    if not actor:
+        return jsonify({'success': False, 'error': '仅管理员可以回退'}), 403
+    if not title_editor_csrf_valid():
+        return jsonify({'success': False, 'error': '安全令牌已失效，请刷新页面'}), 403
+    if not rate_limiter(f'title-editor-rollback:{actor["user_id"]}', limit=6, window=3600):
+        admin_event('security', f'title editor rollback rate limited for {actor["username"]}')
+        return jsonify({'success': False, 'error': '一小时内回退次数过多，请稍后再试'}), 429
+    data = request.get_json(silent=True) or {}
+    if str(data.get('confirm') or '').lower() != 'rollback':
+        return jsonify({'success': False, 'error': '缺少回退确认'}), 400
+    try:
+        result, error = rollback_title_catalog_revision(
+            actor['user_id'], data.get('revision_id'), actor=actor,
+            message=data.get('message') or '',
+        )
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        for user_id in result.get('affected_user_ids') or []:
+            refresh_online_user_titles(user_id)
+        admin_event(
+            'security',
+            f'title catalog revision {result.get("revision_id")} rollback published by {actor["username"]}',
+        )
+        return jsonify({'success': True, 'result': result})
+    except Exception as exc:
+        admin_event('error', f'title editor rollback failed: {exc}')
+        return jsonify({'success': False, 'error': '回退失败，线上目录未改变'}), 500
+
+
+@app.route('/api/title-shop')
+def api_title_shop():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        shop, error = get_user_title_shop(user.get('id'))
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        return jsonify({'success': True, 'shop': shop})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'title shop load failed: {exc}')
+        return jsonify({'success': False, 'error': '商店暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'title shop load failed: {exc}')
+        return jsonify({'success': False, 'error': '商店加载失败'}), 500
+
+
+@app.route('/api/title-shop/refresh', methods=['POST'])
+def api_title_shop_refresh():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        shop, error = refresh_user_title_shop(user.get('id'))
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        fresh = get_user_by_id(user.get('id')) or user
+        _set_account_session(fresh)
+        return jsonify({'success': True, 'shop': shop, 'user': auth_user_payload(fresh)})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'title shop refresh failed: {exc}')
+        return jsonify({'success': False, 'error': '商店暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'title shop refresh failed: {exc}')
+        return jsonify({'success': False, 'error': '刷新商店失败'}), 500
+
+
+@app.route('/api/title-shop/lock', methods=['POST'])
+def api_title_shop_lock():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        shop, error = set_user_title_shop_locked(user.get('id'), bool(data.get('locked')))
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        return jsonify({'success': True, 'shop': shop})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'title shop lock failed: {exc}')
+        return jsonify({'success': False, 'error': '商店暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'title shop lock failed: {exc}')
+        return jsonify({'success': False, 'error': '锁定商店失败'}), 500
+
+
+@app.route('/api/title-shop/purchase', methods=['POST'])
+def api_title_shop_purchase():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        result, error = purchase_user_title_shop_offer(
+            user.get('id'), data.get('set_id'), data.get('slot')
+        )
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        refresh_online_user_titles(user.get('id'))
+        fresh = get_user_by_id(user.get('id')) or user
+        _set_account_session(fresh)
+        return jsonify({
+            'success': True,
+            **(result or {}),
+            'user': auth_user_payload(fresh),
+        })
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'title shop purchase failed: {exc}')
+        return jsonify({'success': False, 'error': '商店暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'title shop purchase failed: {exc}')
+        return jsonify({'success': False, 'error': '购买失败'}), 500
 
 
 @app.route('/api/leaderboard')
@@ -18583,6 +19373,8 @@ def on_draft_reroll(data=None):
     sid = request.sid
     data = socket_guard('draft_reroll', data, require_player=True, allow_empty=True)
     if data is None:
+        return
+    if _handle_ai_test_draft_reroll(sid):
         return
     pending_state = None
     pending_status_targets = None
@@ -20575,6 +21367,8 @@ def on_draft_pick(data):
     except ValueError as exc:
         _security_illegal(sid, 'draft_pick', str(exc))
         return
+    if _handle_ai_test_draft_pick(sid, def_id):
+        return
     with _lock:
         if sid not in players:
             return
@@ -20643,6 +21437,8 @@ def on_select_opening_event(data):
     except ValueError as exc:
         _security_illegal(sid, 'select_opening_event', str(exc))
         return
+    if _handle_ai_test_select_opening_event(sid, event_id):
+        return
     with _lock:
         if sid not in players:
             return
@@ -20680,6 +21476,8 @@ def on_confirm_opening_reveal(data=None):
     data = socket_guard('confirm_opening_reveal', data, require_player=True, allow_empty=True)
     if data is None:
         return
+    if _handle_ai_test_confirm_opening_reveal(sid):
+        return
     with _lock:
         if sid not in players:
             return
@@ -20714,6 +21512,8 @@ def on_reroll_opening_event(data=None):
     data = socket_guard('reroll_opening_event', data, require_player=True, allow_empty=True)
     if data is None:
         return
+    if _handle_ai_test_opening_reroll(sid):
+        return
     with _lock:
         if sid not in players:
             return
@@ -20742,6 +21542,8 @@ def on_submit_event_sub_choice(data):
         sub_choice = validate_choice_payload(data.get('sub_choice'))
     except ValueError as exc:
         _security_illegal(sid, 'submit_event_sub_choice', str(exc))
+        return
+    if _handle_ai_test_event_sub_choice(sid, sub_choice):
         return
     room = None
     pidx = -1
@@ -20873,6 +21675,1807 @@ def on_submit_event_sub_choice(data):
         schedule_pregame_status_update(room, targets=status_targets)
 
 
+AI_TEST_ACTION_DELAY_SECONDS = max(0.05, _env_float('GTN_AI_ACTION_DELAY_SECONDS', 0.38))
+AI_TEST_CARD_DELAY_MIN_SECONDS = max(0.05, _env_float('GTN_AI_CARD_DELAY_MIN_SECONDS', 1.0))
+AI_TEST_CARD_DELAY_MAX_SECONDS = max(
+    AI_TEST_CARD_DELAY_MIN_SECONDS,
+    _env_float('GTN_AI_CARD_DELAY_MAX_SECONDS', 2.0),
+)
+AI_TEST_PREGAME_DELAY_MIN_SECONDS = max(0.05, _env_float('GTN_AI_PREGAME_DELAY_MIN_SECONDS', 1.0))
+AI_TEST_PREGAME_DELAY_MAX_SECONDS = max(
+    AI_TEST_PREGAME_DELAY_MIN_SECONDS,
+    _env_float('GTN_AI_PREGAME_DELAY_MAX_SECONDS', 4.0),
+)
+AI_TEST_RECENT_DECISION_LIMIT = max(3, min(12, _env_int('GTN_AI_RECENT_DECISION_LIMIT', 8)))
+AI_TEST_MAX_CHAIN_ACTIONS = max(4, _env_int('GTN_AI_MAX_CHAIN_ACTIONS', 64))
+
+
+def _ai_test_action_target(action):
+    payload = (action or {}).get('payload') or {}
+    choice = payload.get('choice') if isinstance(payload.get('choice'), dict) else payload
+    for key in ('target_player_id', 'target_player', 'target_id'):
+        try:
+            if choice.get(key) is not None:
+                return int(choice[key])
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _ai_test_decision_summary(engine, player_id, action, decision_id, action_index):
+    payload = (action or {}).get('payload') or {}
+    kind = str((action or {}).get('kind') or '')
+    card_def_id = ''
+    if kind in ('play_card', 'respond') and payload.get('hand_slot') is not None:
+        try:
+            card_def_id = str(engine.players[player_id].hand[int(payload['hand_slot'])].def_id)
+        except (AttributeError, IndexError, TypeError, ValueError):
+            pass
+    elif kind == 'use_trigger' and payload.get('equipment_slot') is not None:
+        try:
+            equipment = engine.players[player_id].equipment[int(payload['equipment_slot'])]
+            card_def_id = str(equipment.card_instance.def_id)
+        except (AttributeError, IndexError, TypeError, ValueError):
+            pass
+    target_player_id = _ai_test_action_target(action)
+    return {
+        'decision_id': decision_id,
+        'action_index': int(action_index),
+        'kind': kind,
+        'card_def_id': card_def_id,
+        'target_player_id': target_player_id,
+        'target_relation': (
+            'self' if target_player_id == int(player_id)
+            else 'opponent' if target_player_id in (0, 1)
+            else ''
+        ),
+    }
+
+
+def _remember_ai_test_decision(meta, summary):
+    if not isinstance(meta, dict) or summary.get('decision_id') is None:
+        return
+    recent = list(meta.get('recent_ai_decisions') or [])
+    recent.append(dict(summary))
+    meta['recent_ai_decisions'] = recent[-AI_TEST_RECENT_DECISION_LIMIT:]
+    meta['latest_ai_decision_id'] = summary.get('decision_id')
+    meta['latest_decision_id'] = summary.get('decision_id')
+
+
+def _ai_test_visible_action_delay(action):
+    if str((action or {}).get('kind') or '') == 'play_card':
+        return random.uniform(AI_TEST_CARD_DELAY_MIN_SECONDS, AI_TEST_CARD_DELAY_MAX_SECONDS)
+    return AI_TEST_ACTION_DELAY_SECONDS
+
+
+def _ai_test_pregame_delay(action_kind='opening_event'):
+    if action_kind == 'draft_pick':
+        return random.uniform(AI_TEST_CARD_DELAY_MIN_SECONDS, AI_TEST_CARD_DELAY_MAX_SECONDS)
+    return random.uniform(AI_TEST_PREGAME_DELAY_MIN_SECONDS, AI_TEST_PREGAME_DELAY_MAX_SECONDS)
+
+
+def _ai_test_enabled_mod_filenames(disabled_mods):
+    disabled = set(disabled_mods or [])
+    return [
+        mod.filename for mod in sort_mods_for_display(load_all_mods())
+        if not mod.errors
+        and mod_category(mod) == 'official'
+        and mod.filename not in disabled
+    ]
+
+
+def _ai_test_loadout_for_player(sid):
+    player = players.get(sid) or {}
+    disabled = set(player.get('disabled_mods') or [])
+    for mod in load_all_mods():
+        if mod.errors or mod_category(mod) != 'official':
+            disabled.add(mod.filename)
+    loadout = build_mod_loadout(sorted(disabled), runtime_mode='1v1')
+    return loadout, _ai_test_enabled_mod_filenames(disabled)
+
+
+def _ai_test_match_key(meta):
+    room = (meta or {}).get('replay_room') if isinstance(meta, dict) else None
+    if isinstance(room, GameRoom):
+        return room_match_key(room)
+    return f"solo-ai:{str((meta or {}).get('session_id') or '')}"
+
+
+def _ai_test_mod_payload(sid):
+    player = players.get(sid) or {}
+    keys = (
+        'disabled_mods', 'mods_hash', 'loadout_hash', 'v2_loadout_hash',
+        'v2_load_order', 'mods_list', 'entertainment_mods', 'mod_source',
+        'community_mod_url', 'community_mod_hash', 'community_mod_name',
+        'community_mods', 'beta_mode',
+    )
+    return {key: copy.deepcopy(player.get(key)) for key in keys if key in player}
+
+
+def _create_ai_test_replay_room(sid, engine, meta, room_id=None):
+    """Build the replay surface shared by the live AI room and its spectators."""
+    human_player_id = int(meta.get('human_player_id', 0))
+    ai_player_id = int(meta.get('ai_player_id', 1))
+    ai_sid = f"__phelren__:{str(meta.get('session_id') or secrets.token_hex(4))}"
+    seat_sids = [ai_sid, ai_sid]
+    seat_sids[human_player_id] = sid
+    seat_sids[ai_player_id] = ai_sid
+    room = GameRoom(
+        room_id if room_id is not None else f"phelren:{str(meta.get('session_id') or secrets.token_hex(4))}",
+        seat_sids,
+        allowed_card_ids=getattr(engine, 'allowed_card_ids', None),
+        mode='1v1',
+        beta_mode=bool((players.get(sid) or {}).get('beta_mode')),
+    )
+    room.engine = engine
+    room.created_at = float(meta.get('created_at_ts') or time.time())
+    room.started_at = None
+    room.ai_match = True
+    room.ai_owner_sid = sid
+    room.ai_human_player_id = human_player_id
+    room.ai_player_id = ai_player_id
+    room.ai_sid = ai_sid
+    room.ai_policy_label = str(meta.get('policy_label') or 'Phelren V1')
+    room.action_lock = _solo_action_lock_for_sid(sid)
+    room.record_pregame_stats = False
+    room.match_mod_profile = copy.deepcopy(_ai_test_mod_payload(sid))
+    room.player_profiles[sid] = make_room_player_profile(
+        players.get(sid) or {},
+        sid=sid,
+        player_index=human_player_id,
+        room=room,
+    )
+    room.player_profiles[ai_sid] = make_room_player_profile(
+        {
+            'nickname': str(meta.get('ai_name') or 'Phelren'),
+            'is_registered_user': False,
+            'allow_guest_spectators': True,
+            'mod_source': 'official',
+            'avatar_kind': 'phelren',
+        },
+        sid=ai_sid,
+        player_index=ai_player_id,
+        room=room,
+    )
+    reset_room_replay(room)
+    record_room_replay_keyframe(room, 'event_select_start')
+    return room
+
+
+def _ai_test_replay_room(sid):
+    meta = ai_test_sessions.get(sid)
+    room = meta.get('replay_room') if isinstance(meta, dict) else None
+    return room if isinstance(room, GameRoom) else None
+
+
+def _ai_test_public_engine_result(result):
+    if not isinstance(result, dict):
+        return result
+    return {
+        key: value
+        for key, value in result.items()
+        if not str(key).startswith('_')
+    }
+
+
+def _ai_test_replay_action_type(action_kind):
+    kind = str(action_kind or '')
+    if kind == 'respond':
+        return 'response'
+    if kind in ('select_choice', 'default_choice', 'submit_choice'):
+        return 'resolve_choice'
+    return kind
+
+
+def _ai_test_enrich_replay_action_payload(engine, actor, action_kind, payload=None):
+    data = copy.deepcopy(payload or {})
+    kind = str(action_kind or '')
+    try:
+        actor = int(actor)
+        player_state = engine.players[actor]
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return data
+    if kind in ('play_card', 'respond') and data.get('hand_slot') is not None:
+        try:
+            card = player_state.hand[int(data['hand_slot'])]
+            data['card_instance_id'] = int(card.instance_id)
+            data['def_id'] = str(card.def_id)
+        except (AttributeError, IndexError, TypeError, ValueError):
+            pass
+    elif kind in ('play_card', 'respond') and data.get('card_instance_id') not in (None, ''):
+        try:
+            card = next(
+                card for card in player_state.hand
+                if str(card.instance_id) == str(data['card_instance_id'])
+            )
+            data['def_id'] = str(card.def_id)
+        except (AttributeError, StopIteration, TypeError, ValueError):
+            pass
+    elif kind == 'use_trigger' and data.get('equipment_slot') is not None:
+        try:
+            equipment = player_state.equipment[int(data['equipment_slot'])]
+            data['equipment_instance_id'] = int(equipment.card_instance.instance_id)
+            data['def_id'] = str(equipment.card_instance.def_id)
+        except (AttributeError, IndexError, TypeError, ValueError):
+            pass
+    elif kind == 'use_trigger' and data.get('equipment_instance_id') not in (None, ''):
+        try:
+            equipment = next(
+                equipment for equipment in player_state.equipment
+                if str(equipment.card_instance.instance_id) == str(data['equipment_instance_id'])
+            )
+            data['def_id'] = str(equipment.card_instance.def_id)
+        except (AttributeError, StopIteration, TypeError, ValueError):
+            pass
+    target_player_id = _ai_test_action_target({'payload': data})
+    if target_player_id is not None:
+        data['target_player_id'] = target_player_id
+    return data
+
+
+def _record_ai_test_replay_action(sid, action_kind, actor, payload=None, result=None, engine=None):
+    meta = ai_test_sessions.get(sid)
+    room = _ai_test_replay_room(sid)
+    current_engine = engine or solo_sessions.get(sid)
+    if not meta or room is None or current_engine is None:
+        return False
+    room.engine = current_engine
+    data = copy.deepcopy(payload or {})
+    public_result = _ai_test_public_engine_result(result)
+    if isinstance(public_result, dict):
+        data['result'] = public_result
+    data = enrich_replay_interaction_payload(
+        room,
+        data,
+        public_result if isinstance(public_result, dict) else None,
+    )
+    record_room_replay_action(
+        room,
+        _ai_test_replay_action_type(action_kind),
+        actor,
+        data,
+    )
+    if not getattr(current_engine, 'game_over', False):
+        completed_card = (
+            str(action_kind or '') == 'play_card'
+            and isinstance(public_result, dict)
+            and (
+                bool(public_result.get('needs_response'))
+                or (
+                    bool(public_result.get('success'))
+                    and not public_result.get('needs_choice')
+                    and not public_result.get('needs_v2_ui')
+                    and not public_result.get('needs_ally_consent')
+                )
+            )
+        )
+        try:
+            timer_actor = int(actor)
+        except (TypeError, ValueError):
+            timer_actor = actor
+        with _lock:
+            room.engine = current_engine
+            timer_player = _sync_room_action_timer_after_state_change(room)
+            if completed_card and timer_player == timer_actor:
+                room.action_timer_remaining = max(
+                    0.0,
+                    float(room.action_timer_remaining or 0)
+                    + float(ACTION_TURN_CARD_BONUS_SECONDS),
+                )
+    return True
+
+
+def _flush_ai_test_human_replay_action(sid, engine, result):
+    meta = ai_test_sessions.get(sid)
+    pending = meta.pop('_pending_human_replay_action', None) if isinstance(meta, dict) else None
+    if not isinstance(pending, dict):
+        return
+    accepted = result is not None
+    if isinstance(result, dict):
+        accepted = any(bool(result.get(key)) for key in (
+            'success', 'needs_response', 'needs_choice', 'needs_v2_ui',
+            'needs_ally_consent', 'cancelled',
+        ))
+    if not accepted:
+        return
+    _record_ai_test_replay_action(
+        sid,
+        pending.get('kind'),
+        pending.get('actor'),
+        pending.get('payload'),
+        result,
+        engine=engine,
+    )
+
+
+def _ai_test_pregame_common_payload(sid, engine, meta, timer_status=None):
+    human_player_id = int(meta.get('human_player_id', 0))
+    ai_player_id = int(meta.get('ai_player_id', 1))
+    room = _ai_test_replay_room(sid)
+    payload = {
+        'solo': True,
+        'ai_test': True,
+        'mode': '1v1',
+        'match_key': _ai_test_match_key(meta),
+        'your_id': human_player_id,
+        'enemy_ids': [ai_player_id],
+        'player_names': list(getattr(engine, 'player_names', []) or []),
+        'selected_opening_events': _selected_opening_event_names(engine),
+        'room_chat_history': room_chat_history_for_sid(room, sid) if room is not None else [],
+    }
+    if room is not None:
+        room.engine = engine
+        payload['room_id'] = room.room_id
+        payload['spectator_count'] = room_spectator_count(room)
+        payload['spectator_players'] = room_spectator_players(room)
+        status = timer_status or engine.get_player_status(human_player_id)
+        payload.update(_pregame_timer_payload(room, human_player_id, status))
+        payload.update(_watched_pregame_timer_payload(room, human_player_id))
+        payload['player_skins'] = [
+            player_skin_for_sid(player_sid, room) for player_sid in room.player_sids
+        ]
+        payload['player_skin_looks'] = [
+            player_skin_look_for_sid(player_sid, room) for player_sid in room.player_sids
+        ]
+        payload['player_avatar_kinds'] = [
+            player_avatar_kind_for_sid(player_sid, room) for player_sid in room.player_sids
+        ]
+        payload['ai_player_id'] = ai_player_id
+    else:
+        payload.update({
+            'pregame_timer_remaining': None,
+            'pregame_timer_total': None,
+            'pregame_timer_status': timer_status,
+            'pregame_timer_paused': False,
+        })
+    payload.update(instance_payload())
+    payload.update(_ai_test_mod_payload(sid))
+    return payload
+
+
+def _emit_ai_test_phase(sid, meta, phase):
+    payload = {
+        'phase': phase,
+        'solo': True,
+        'ai_test': True,
+        'mode': '1v1',
+        'match_key': _ai_test_match_key(meta),
+    }
+    room = meta.get('replay_room') if isinstance(meta, dict) else None
+    if isinstance(room, GameRoom):
+        payload['room_id'] = room.room_id
+    payload.update(instance_payload())
+    payload.update(_ai_test_mod_payload(sid))
+    socketio.emit('game_phase', payload, room=sid)
+
+
+def _send_ai_test_event_select(sid, engine, meta):
+    human_player_id = int(meta.get('human_player_id', 0))
+    ai_player_id = int(meta.get('ai_player_id', 1))
+    events = []
+    for event in list(engine.opening_event_options[human_player_id] or []):
+        payload = dict(event) if isinstance(event, dict) else event
+        event_id = payload.get('id') if isinstance(payload, dict) else None
+        if isinstance(payload, dict) and str(event_id).isdigit() and int(event_id) in GameEngine.OPENING_EVENTS:
+            payload = event_text(int(event_id), payload)
+        events.append(payload)
+    payload = _ai_test_pregame_common_payload(sid, engine, meta, 'event_select')
+    payload.update({
+        'events': events,
+        'others_selected': {
+            ai_player_id: engine.opening_event_picks[ai_player_id] is not None,
+        },
+        'my_pick': engine.opening_event_picks[human_player_id],
+        'magic_options': engine.opening_event_magic_options[human_player_id],
+        'rerolls': engine.draft_rerolls[human_player_id],
+        'draft_picks': engine.draft_picks[human_player_id],
+        'your_status': engine.get_player_status(human_player_id),
+    })
+    socketio.emit('event_select', payload, room=sid)
+
+
+def _send_ai_test_event_reveal(sid, engine, meta):
+    human_player_id = int(meta.get('human_player_id', 0))
+    picks = []
+    for player_id, picked_id in enumerate(engine.opening_event_picks):
+        picks.append({
+            'player_id': player_id,
+            'player_name': engine.player_names[player_id],
+            'event': _opening_event_by_id(engine, picked_id),
+            'ready': bool(engine.player_draft_started[player_id]),
+        })
+    payload = _ai_test_pregame_common_payload(sid, engine, meta, 'event_reveal')
+    payload.update({
+        'picks': picks,
+        'my_pick': engine.opening_event_picks[human_player_id],
+        'my_ready': bool(engine.player_draft_started[human_player_id]),
+        'your_status': engine.get_player_status(human_player_id),
+    })
+    socketio.emit('event_reveal', payload, room=sid)
+
+
+def _send_ai_test_draft_state(sid, engine, meta):
+    human_player_id = int(meta.get('human_player_id', 0))
+    ai_player_id = int(meta.get('ai_player_id', 1))
+    target_count = engine.draft_target_count(human_player_id)
+    payload = _ai_test_pregame_common_payload(sid, engine, meta)
+    payload.update({
+        'options': [card.to_dict() for card in (engine.draft_options[human_player_id] or [])],
+        'picks': list(engine.draft_picks[human_player_id]),
+        'setup_preview_cards': engine.preview_setup_cards(human_player_id),
+        'rerolls': engine.draft_rerolls[human_player_id],
+        'round': min(len(engine.draft_picks[human_player_id]) + 1, target_count),
+        'total_rounds': target_count,
+        'others_picks_count': {ai_player_id: len(engine.draft_picks[ai_player_id])},
+        'others_status': {ai_player_id: engine.get_player_status(ai_player_id)},
+        'others_total_rounds': {ai_player_id: engine.draft_target_count(ai_player_id)},
+        'opponent_picks_count': len(engine.draft_picks[ai_player_id]),
+        'your_status': engine.get_player_status(human_player_id),
+    })
+    socketio.emit('draft_state', payload, room=sid)
+
+
+def _send_ai_test_sub_choice(sid, engine, meta):
+    human_player_id = int(meta.get('human_player_id', 0))
+    event_id = engine.opening_event_picks[human_player_id]
+    selected_slot = next((
+        slot for slot, event in enumerate(engine.opening_event_options[human_player_id] or [])
+        if event and str(event.get('id')) == str(event_id)
+    ), None)
+    magic_options = []
+    if selected_slot is not None:
+        magic_options = engine.opening_event_magic_options[human_player_id][selected_slot]
+    payload = _ai_test_pregame_common_payload(sid, engine, meta, 'sub_choice')
+    payload.update({
+        'event_id': event_id,
+        'needs_sub_choice': engine.needs_sub_choice(human_player_id),
+        'draft_picks': list(engine.draft_picks[human_player_id]),
+        'fated_draw_pool': [
+            CardInstance(def_id=def_id).to_dict()
+            for def_id in engine.fated_draw_pool_defs()
+        ] if str(event_id) == '5' else [],
+        'magic_options': magic_options,
+        'your_status': engine.get_player_status(human_player_id),
+    })
+    socketio.emit('event_sub_choice', payload, room=sid)
+
+
+def send_ai_test_pregame_state(sid):
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        engine = solo_sessions.get(sid)
+        if not meta or engine is None:
+            return False
+        human_player_id = int(meta.get('human_player_id', 0))
+        phase = str(getattr(engine, 'phase', '') or '')
+        status = engine.get_player_status(human_player_id) if phase in ('event_select', 'event_reveal', 'draft') else ''
+        if phase == 'event_select' and not all(
+            pick is not None for pick in (getattr(engine, 'opening_event_picks', []) or [])
+        ):
+            status = 'event_select'
+    if phase not in ('event_select', 'event_reveal', 'draft'):
+        _emit_ai_test_phase(sid, meta, 'playing')
+        send_solo_state_with_pending(sid, human_player_id)
+        return True
+    if status == 'event_select':
+        _emit_ai_test_phase(sid, meta, 'event_select')
+        _send_ai_test_event_select(sid, engine, meta)
+    elif status == 'event_reveal':
+        _emit_ai_test_phase(sid, meta, 'event_reveal')
+        _send_ai_test_event_reveal(sid, engine, meta)
+    elif status == 'sub_choice':
+        _emit_ai_test_phase(sid, meta, 'draft')
+        _send_ai_test_sub_choice(sid, engine, meta)
+    else:
+        _emit_ai_test_phase(sid, meta, 'draft')
+        _send_ai_test_draft_state(sid, engine, meta)
+    return True
+
+
+def _emit_ai_test_pregame_timer_update(sid):
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        engine = solo_sessions.get(sid)
+        room = _ai_test_replay_room(sid)
+        if not meta or engine is None or room is None:
+            return False
+        if getattr(engine, 'phase', None) not in ('event_select', 'event_reveal', 'draft'):
+            return False
+        human_player_id = int(meta.get('human_player_id', 0))
+        status = engine.get_player_status(human_player_id)
+        room.engine = engine
+        payload = {
+            'solo': True,
+            'ai_test': True,
+            'mode': '1v1',
+            'room_id': room.room_id,
+            'match_key': _ai_test_match_key(meta),
+            'your_id': human_player_id,
+            'your_status': status,
+            **_pregame_timer_payload(room, human_player_id, status),
+        }
+        payload.update(_watched_pregame_timer_payload(room, human_player_id))
+        payload.update(instance_payload())
+    socketio.emit('pregame_timer_update', payload, room=sid)
+    return True
+
+
+def _emit_ai_test_turn_timer_update(sid):
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        engine = solo_sessions.get(sid)
+        room = _ai_test_replay_room(sid)
+        if not meta or engine is None or room is None:
+            return False
+        room.engine = engine
+        payload = {
+            'solo': True,
+            'ai_test': True,
+            'mode': '1v1',
+            'room_id': room.room_id,
+            'match_key': _ai_test_match_key(meta),
+            'phase': getattr(engine, 'phase', None),
+            'current_player': getattr(engine, 'current_player', None),
+            **_room_timer_payload(room),
+        }
+    socketio.emit('turn_timer_update', payload, room=sid)
+    for spectator_sid in list(getattr(room, 'spectators', []) or []):
+        if room_spectator_session_is_current(room, spectator_sid):
+            socketio.emit('turn_timer_update', payload, room=spectator_sid)
+    return True
+
+
+def _tick_ai_test_match_timer(sid, now=None):
+    now = time.time() if now is None else float(now)
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        engine = solo_sessions.get(sid)
+        room = _ai_test_replay_room(sid)
+        if not meta or engine is None or room is None:
+            return {'stop': True}
+        room.engine = engine
+        if getattr(engine, 'game_over', False):
+            return {'stop': True}
+        phase = str(getattr(engine, 'phase', '') or '')
+        if phase in ('event_select', 'event_reveal', 'draft'):
+            human_player_id = int(meta.get('human_player_id', 0))
+            status = engine.get_player_status(human_player_id)
+            timeout = _pregame_timeout_for_status(status, room, human_player_id)
+            if timeout is None:
+                return {'kind': 'pregame', 'status': status, 'advanced': False}
+            key = (human_player_id, status)
+            deadline = room.pregame_deadlines.get(key)
+            if deadline is None:
+                deadline = now + float(timeout)
+                room.pregame_deadlines[key] = deadline
+            if now < float(deadline):
+                return {'kind': 'pregame', 'status': status, 'advanced': False}
+
+            if status == 'event_select':
+                advanced = _auto_select_opening_event_locked(room, human_player_id)
+            elif status == 'event_reveal':
+                advanced = _auto_confirm_opening_reveal_locked(room, human_player_id)
+                if advanced:
+                    _ai_test_prepare_ai_draft(engine, meta)
+                    _reset_pregame_deadline(room, int(meta.get('ai_player_id', 1)), 'event_reveal')
+            elif status == 'drafting':
+                advanced = _auto_complete_draft_locked(room, human_player_id)
+            elif status == 'sub_choice':
+                advanced = _auto_submit_event_sub_choice_locked(room, human_player_id)
+            else:
+                advanced = False
+
+            started = False
+            error = ''
+            if advanced and all(bool(value) for value in engine.player_ready):
+                started, error = _ai_test_start_game_if_ready(engine, meta)
+            return {
+                'kind': 'pregame',
+                'status': status,
+                'advanced': bool(advanced),
+                'started': bool(started),
+                'error': error,
+                'schedule_ai': bool(advanced and _ai_test_pending_pregame_action(engine, meta)),
+            }
+        if phase == 'action':
+            return {
+                'kind': 'action',
+                'expired': bool(_tick_room_action_timer_locked(room, now)),
+            }
+        _sync_room_action_timer_after_state_change(room, now)
+        return {'kind': 'other'}
+
+
+def _expire_ai_test_action_turn(sid):
+    action_lock = _solo_action_lock_for_sid(sid)
+    if not action_lock.acquire(blocking=False):
+        return False
+    try:
+        with _lock:
+            meta = ai_test_sessions.get(sid)
+            engine = solo_sessions.get(sid)
+            room = _ai_test_replay_room(sid)
+            if not meta or engine is None or room is None:
+                return False
+            if (
+                getattr(engine, 'game_over', False)
+                or getattr(engine, 'phase', None) != 'action'
+                or _room_action_timer_paused(engine, room)
+            ):
+                return False
+            player_id = int(getattr(engine, 'current_player', -1))
+            if player_id not in (0, 1):
+                return False
+
+        def _timeout_action():
+            pending_choice = getattr(engine, 'pending_choice', None)
+            if isinstance(pending_choice, dict) and _pending_player_id(pending_choice, player_id) == player_id:
+                engine.resolve_choice(player_id, {'cancelled': True})
+                if getattr(engine, 'pending_choice', None) is not None:
+                    return {'success': False, 'error': 'pending_choice'}
+            pending_ui = getattr(engine, 'pending_v2_ui', None)
+            if isinstance(pending_ui, dict) and _pending_player_id(pending_ui, player_id) == player_id:
+                request_id = str(pending_ui.get('request_id') or '')
+                if request_id:
+                    _cancel_v2_ui_timeout(('solo', sid), request_id)
+                engine.handle_v2_ui_response(
+                    player_id,
+                    request_id,
+                    {'button': 'cancel', 'values': {}},
+                )
+                if getattr(engine, 'pending_v2_ui', None) is not None:
+                    return {'success': False, 'error': 'pending_v2_ui'}
+            return engine.end_turn(player_id)
+
+        result, _ = _solo_mutate_engine(
+            sid,
+            engine,
+            _timeout_action,
+            record_history=False,
+        )
+        if not isinstance(result, dict) or not result.get('success'):
+            return False
+        _record_ai_test_replay_action(
+            sid,
+            'end_turn',
+            player_id,
+            {'auto': True},
+            result,
+            engine=engine,
+        )
+        send_solo_state_with_pending(sid, player_id)
+        return True
+    except Exception as exc:
+        admin_event('error', f'Phelren turn timeout failed: {exc}', sid=sid)
+        return False
+    finally:
+        action_lock.release()
+
+
+def _run_ai_test_match_timer(sid):
+    try:
+        while True:
+            try:
+                socketio.sleep(max(0.25, ROOM_TIMER_TICK_SECONDS))
+            except Exception:
+                time.sleep(max(0.25, ROOM_TIMER_TICK_SECONDS))
+            tick = _tick_ai_test_match_timer(sid)
+            if tick.get('stop'):
+                return
+            if tick.get('kind') == 'pregame':
+                if tick.get('started') or tick.get('advanced') or tick.get('error'):
+                    _finish_ai_test_pregame_action(
+                        sid,
+                        started=bool(tick.get('started')),
+                        error=str(tick.get('error') or ''),
+                    )
+                    if tick.get('schedule_ai') and not tick.get('started'):
+                        schedule_ai_test_pregame(sid)
+                else:
+                    _emit_ai_test_pregame_timer_update(sid)
+            elif tick.get('kind') == 'action':
+                if tick.get('expired'):
+                    _expire_ai_test_action_turn(sid)
+                else:
+                    _emit_ai_test_turn_timer_update(sid)
+    finally:
+        with _lock:
+            meta = ai_test_sessions.get(sid)
+            if meta:
+                meta['timer_running'] = False
+
+
+def schedule_ai_test_match_timer(sid):
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        if not meta or meta.get('timer_running'):
+            return False
+        meta['timer_running'] = True
+    _start_socket_background_task(_run_ai_test_match_timer, sid)
+    return True
+
+
+def _ai_test_prepare_ai_draft(engine, meta):
+    ai_player_id = int(meta.get('ai_player_id', 1))
+    if not engine.player_draft_started[ai_player_id]:
+        if not engine.start_draft_for_player(ai_player_id):
+            raise RuntimeError('AI 无法开始选牌')
+
+
+def _ai_test_start_game_if_ready(engine, meta):
+    if not all(bool(value) for value in engine.player_ready):
+        return False, ''
+    validator = getattr(engine, 'validate_pregame_ready', None)
+    if callable(validator):
+        valid, reason, details = validator()
+        if not valid:
+            return False, f'{reason}: {details}'
+    if hasattr(engine, 'log'):
+        engine.log = []
+    if hasattr(engine, '_log_compaction_floor'):
+        engine._log_compaction_floor = 0
+    if engine.start_game() is False:
+        return False, '引擎拒绝开始对局'
+    human_player_id = int(meta.get('human_player_id', 0))
+    meta['diagnostic_metadata'].update({
+        'opening_events': list(engine.opening_event_picks),
+        'human_draft': list(engine.draft_picks[human_player_id]),
+        'ai_draft': list(engine.draft_picks[int(meta.get('ai_player_id', 1))]),
+    })
+    meta['pregame_complete'] = True
+    room = meta.get('replay_room')
+    if isinstance(room, GameRoom):
+        room.engine = engine
+        room.started_at = time.time()
+        _sync_room_action_timer_after_state_change(room)
+        record_room_replay_keyframe(room, 'game_start')
+    return True, ''
+
+
+def _ai_test_pending_pregame_action(engine, meta):
+    ai_player_id = int(meta.get('ai_player_id', 1))
+    phase = str(getattr(engine, 'phase', '') or '')
+    if phase == 'event_select' and engine.opening_event_picks[ai_player_id] is None:
+        return 'opening_event'
+    if phase == 'draft' and engine.player_draft_started[ai_player_id]:
+        if len(engine.draft_picks[ai_player_id]) < engine.draft_target_count(ai_player_id):
+            return 'draft_pick'
+    return ''
+
+
+def _run_ai_test_pregame(sid):
+    try:
+        while True:
+            with _lock:
+                meta = ai_test_sessions.get(sid)
+                engine = solo_sessions.get(sid)
+                if not meta or engine is None:
+                    return
+                pending_action = _ai_test_pending_pregame_action(engine, meta)
+            if not pending_action:
+                return
+
+            socketio.sleep(_ai_test_pregame_delay(pending_action))
+            action_lock = _solo_action_lock_for_sid(sid)
+            if not action_lock.acquire(timeout=2.0):
+                continue
+            started = False
+            error = ''
+            try:
+                with _lock:
+                    meta = ai_test_sessions.get(sid)
+                    engine = solo_sessions.get(sid)
+                    if not meta or engine is None:
+                        return
+                    pending_action = _ai_test_pending_pregame_action(engine, meta)
+                    if not pending_action:
+                        continue
+                    ai_player_id = int(meta.get('ai_player_id', 1))
+                    if pending_action == 'opening_event':
+                        event_id = meta.get('ai_opening_event_id')
+                        if event_id is None or not engine.select_opening_event(ai_player_id, event_id):
+                            raise RuntimeError('AI 配装倾向选择失败')
+                        room = _ai_test_replay_room(sid)
+                        if room is not None:
+                            _reset_pregame_deadline(room, ai_player_id, 'event_select')
+                        _record_ai_test_replay_action(
+                            sid,
+                            'select_opening_event',
+                            ai_player_id,
+                            {'event_id': event_id},
+                            {'success': True},
+                            engine=engine,
+                        )
+                    else:
+                        options = list(engine.draft_options[ai_player_id] or [])
+                        if not options:
+                            engine._generate_draft_options_for_player(ai_player_id)
+                            options = list(engine.draft_options[ai_player_id] or [])
+                        if not options:
+                            raise RuntimeError('AI 没有可选择的牌')
+                        pick_index = len(engine.draft_picks[ai_player_id])
+                        rng = random.Random(
+                            int(meta.get('seed', 0))
+                            ^ 0x47544E
+                            ^ ((pick_index + 1) * 0x9E3779B1)
+                        )
+                        selected = options[rng.randrange(len(options))]
+                        result = engine.draft_pick(ai_player_id, selected.def_id)
+                        success = bool(result.get('success')) if isinstance(result, dict) else bool(result)
+                        if not success:
+                            raise RuntimeError(f'AI 无法选择卡牌 {selected.def_id}')
+                        room = _ai_test_replay_room(sid)
+                        if room is not None:
+                            _add_draft_pick_time_bonus(room, ai_player_id)
+                        _record_ai_test_replay_action(
+                            sid,
+                            'draft_pick',
+                            ai_player_id,
+                            {'def_id': selected.def_id},
+                            result if isinstance(result, dict) else {'success': True},
+                            engine=engine,
+                        )
+                        if len(engine.draft_picks[ai_player_id]) >= engine.draft_target_count(ai_player_id):
+                            if room is not None:
+                                _reset_pregame_deadline(room, ai_player_id, 'drafting')
+                            if engine.needs_sub_choice(ai_player_id):
+                                engine.opening_event_sub_choices[ai_player_id] = _default_event_sub_choice(
+                                    engine,
+                                    ai_player_id,
+                                )
+                                if room is not None:
+                                    _reset_pregame_deadline(room, ai_player_id, 'sub_choice')
+                            engine.player_ready[ai_player_id] = True
+                            started, error = _ai_test_start_game_if_ready(engine, meta)
+                    meta['pregame_action_index'] = int(meta.get('pregame_action_index', 0)) + 1
+            except Exception as exc:
+                error = f'AI 选择失败：{exc}'
+            finally:
+                action_lock.release()
+
+            _finish_ai_test_pregame_action(sid, started=started, error=error)
+            if started or error:
+                return
+    finally:
+        with _lock:
+            meta = ai_test_sessions.get(sid)
+            if meta:
+                meta['pregame_ai_running'] = False
+
+
+def schedule_ai_test_pregame(sid):
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        engine = solo_sessions.get(sid)
+        if not meta or engine is None or meta.get('pregame_ai_running'):
+            return False
+        if not _ai_test_pending_pregame_action(engine, meta):
+            return False
+        meta['pregame_ai_running'] = True
+    _start_socket_background_task(_run_ai_test_pregame, sid)
+    return True
+
+
+def _create_ai_test_engine(sid, human_player_id, seed=0):
+    player = players.get(sid) or {}
+    loadout, enabled_mods = _ai_test_loadout_for_player(sid)
+    allowed_ids = set(loadout.get('allowed_card_ids') or ())
+    if runtime_card_pool_issue(allowed_ids, '1v1'):
+        raise ValueError('当前官方模组组合无法完成1v1选牌')
+    human_name = str(player.get('nickname') or 'Player')
+    ai_name = 'Phelren'
+    names = [ai_name, ai_name]
+    names[int(human_player_id)] = human_name
+    engine = GameEngine()
+    engine.available_builtin_setup_card_ids = apply_runtime_content_filter(BUILTIN_SETUP_CARD_IDS, '1v1')
+    apply_v2_loadout_to_engine(engine, loadout, '1v1')
+    engine.allowed_card_ids = apply_runtime_content_filter(allowed_ids, '1v1')
+    engine.player_names = names
+    engine.start_event_select_first()
+    ai_player_id = 1 - int(human_player_id)
+    ai_options = [event for event in (engine.opening_event_options[ai_player_id] or []) if event]
+    if not ai_options:
+        raise ValueError('AI 没有可选择的配装倾向')
+    selected_event = random.Random(int(seed) ^ 0x4149).choice(ai_options)
+    return engine, loadout, enabled_mods, human_name, ai_name, selected_event.get('id')
+
+
+def _ai_test_pregame_context(sid):
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        engine = solo_sessions.get(sid)
+        if not meta or engine is None:
+            return None
+        if getattr(engine, 'phase', None) not in ('event_select', 'event_reveal', 'draft'):
+            return None
+        return meta, engine, int(meta.get('human_player_id', 0))
+
+
+def _finish_ai_test_pregame_action(sid, started=False, error=''):
+    if error:
+        socketio.emit('server_error', {'message': error}, room=sid)
+    if started:
+        with _lock:
+            meta = ai_test_sessions.get(sid)
+        if meta:
+            _emit_ai_test_phase(sid, meta, 'playing')
+        send_solo_state_with_pending(sid)
+    else:
+        send_ai_test_pregame_state(sid)
+
+
+def _handle_ai_test_select_opening_event(sid, event_id):
+    context = _ai_test_pregame_context(sid)
+    if context is None:
+        return False
+    action_lock = _try_acquire_solo_action(sid, 'select_opening_event')
+    if action_lock is None:
+        return True
+    error = ''
+    try:
+        meta, engine, human_player_id = context
+        if engine.get_player_status(human_player_id) != 'event_select':
+            error = '当前不能选择配装倾向'
+        else:
+            offered = {
+                str(event.get('id')) for event in (engine.opening_event_options[human_player_id] or [])
+                if event and event.get('id') is not None
+            }
+            if str(event_id) not in offered or not engine.select_opening_event(human_player_id, event_id):
+                error = '无法选择该配装倾向'
+            else:
+                room = _ai_test_replay_room(sid)
+                if room is not None:
+                    _reset_pregame_deadline(room, human_player_id, 'event_select')
+                _record_ai_test_replay_action(
+                    sid,
+                    'select_opening_event',
+                    human_player_id,
+                    {'event_id': event_id},
+                    {'success': True},
+                    engine=engine,
+                )
+    finally:
+        action_lock.release()
+    _finish_ai_test_pregame_action(sid, error=error)
+    return True
+
+
+def _handle_ai_test_confirm_opening_reveal(sid):
+    context = _ai_test_pregame_context(sid)
+    if context is None:
+        return False
+    action_lock = _try_acquire_solo_action(sid, 'confirm_opening_reveal')
+    if action_lock is None:
+        return True
+    error = ''
+    schedule_pregame = False
+    try:
+        meta, engine, human_player_id = context
+        if engine.get_player_status(human_player_id) != 'event_reveal':
+            error = '当前不能进入选牌阶段'
+        elif not all(pick is not None for pick in engine.opening_event_picks):
+            error = '正在等待 AI 选择配装倾向'
+        elif not engine.start_draft_for_player(human_player_id):
+            error = '无法开始选牌'
+        else:
+            room = _ai_test_replay_room(sid)
+            if room is not None:
+                _reset_pregame_deadline(room, human_player_id, 'event_reveal')
+            _ai_test_prepare_ai_draft(engine, meta)
+            if room is not None:
+                _reset_pregame_deadline(room, int(meta.get('ai_player_id', 1)), 'event_reveal')
+            _record_ai_test_replay_action(
+                sid,
+                'confirm_opening_reveal',
+                human_player_id,
+                {},
+                {'success': True},
+                engine=engine,
+            )
+            schedule_pregame = True
+    except Exception as exc:
+        error = f'AI 选牌失败：{exc}'
+    finally:
+        action_lock.release()
+    _finish_ai_test_pregame_action(sid, error=error)
+    if schedule_pregame and not error:
+        schedule_ai_test_pregame(sid)
+    return True
+
+
+def _handle_ai_test_draft_pick(sid, def_id):
+    context = _ai_test_pregame_context(sid)
+    if context is None:
+        return False
+    action_lock = _try_acquire_solo_action(sid, 'draft_pick')
+    if action_lock is None:
+        return True
+    started = False
+    error = ''
+    try:
+        meta, engine, human_player_id = context
+        if engine.get_player_status(human_player_id) != 'drafting':
+            error = '当前不能选择卡牌'
+        else:
+            offered = [card.def_id for card in (engine.draft_options[human_player_id] or [])]
+            if def_id not in offered:
+                error = '这张牌不在当前选项中'
+            else:
+                result = engine.draft_pick(human_player_id, def_id)
+                success = bool(result.get('success')) if isinstance(result, dict) else bool(result)
+                if not success:
+                    error = '无法选择这张牌'
+                else:
+                    room = _ai_test_replay_room(sid)
+                    if room is not None:
+                        _add_draft_pick_time_bonus(room, human_player_id)
+                    _record_ai_test_replay_action(
+                        sid,
+                        'draft_pick',
+                        human_player_id,
+                        {'def_id': def_id},
+                        result if isinstance(result, dict) else {'success': True},
+                        engine=engine,
+                    )
+                    if len(engine.draft_picks[human_player_id]) >= engine.draft_target_count(human_player_id):
+                        if room is not None:
+                            _reset_pregame_deadline(room, human_player_id, 'drafting')
+                        if not engine.needs_sub_choice(human_player_id):
+                            engine.player_ready[human_player_id] = True
+                            started, error = _ai_test_start_game_if_ready(engine, meta)
+    except Exception as exc:
+        error = f'选择卡牌失败：{exc}'
+    finally:
+        action_lock.release()
+    _finish_ai_test_pregame_action(sid, started=started, error=error)
+    return True
+
+
+def _handle_ai_test_opening_reroll(sid):
+    context = _ai_test_pregame_context(sid)
+    if context is None:
+        return False
+    action_lock = _try_acquire_solo_action(sid, 'reroll_opening_event')
+    if action_lock is None:
+        return True
+    error = ''
+    try:
+        _, engine, human_player_id = context
+        if not engine.reroll_opening_event(human_player_id):
+            error = '无法刷新配装倾向'
+        else:
+            _record_ai_test_replay_action(
+                sid,
+                'reroll_opening_event',
+                human_player_id,
+                {},
+                {'success': True},
+                engine=engine,
+            )
+    finally:
+        action_lock.release()
+    _finish_ai_test_pregame_action(sid, error=error)
+    return True
+
+
+def _handle_ai_test_draft_reroll(sid):
+    context = _ai_test_pregame_context(sid)
+    if context is None:
+        return False
+    action_lock = _try_acquire_solo_action(sid, 'draft_reroll')
+    if action_lock is None:
+        return True
+    error = ''
+    try:
+        _, engine, human_player_id = context
+        result = engine.draft_reroll(human_player_id)
+        success = bool(result.get('success')) if isinstance(result, dict) else bool(result)
+        if not success:
+            error = '无法刷新：当前不是选牌阶段或刷新次数已用完'
+        else:
+            _record_ai_test_replay_action(
+                sid,
+                'draft_reroll',
+                human_player_id,
+                {},
+                result if isinstance(result, dict) else {'success': True},
+                engine=engine,
+            )
+    finally:
+        action_lock.release()
+    _finish_ai_test_pregame_action(sid, error=error)
+    return True
+
+
+def _handle_ai_test_event_sub_choice(sid, sub_choice):
+    context = _ai_test_pregame_context(sid)
+    if context is None:
+        return False
+    action_lock = _try_acquire_solo_action(sid, 'submit_event_sub_choice')
+    if action_lock is None:
+        return True
+    started = False
+    error = ''
+    try:
+        meta, engine, human_player_id = context
+        if engine.get_player_status(human_player_id) != 'sub_choice':
+            error = '当前没有待处理的配装选择'
+        else:
+            previous_choice = engine.opening_event_sub_choices[human_player_id]
+            engine.opening_event_sub_choices[human_player_id] = sub_choice or {}
+            engine.player_ready[human_player_id] = True
+            room = _ai_test_replay_room(sid)
+            if room is not None:
+                _reset_pregame_deadline(room, human_player_id, 'sub_choice')
+            _record_ai_test_replay_action(
+                sid,
+                'submit_event_sub_choice',
+                human_player_id,
+                {'sub_choice': copy.deepcopy(sub_choice or {})},
+                {'success': True},
+                engine=engine,
+            )
+            started, error = _ai_test_start_game_if_ready(engine, meta)
+            if error:
+                engine.player_ready[human_player_id] = False
+                engine.opening_event_sub_choices[human_player_id] = previous_choice
+    except Exception as exc:
+        error = f'配装处理失败：{exc}'
+    finally:
+        action_lock.release()
+    _finish_ai_test_pregame_action(sid, started=started, error=error)
+    return True
+
+
+def _ai_test_outcome(engine, human_player_id, reason='game_over'):
+    winner = getattr(engine, 'winner', None)
+    if winner not in (0, 1):
+        alive = [idx for idx, ps in enumerate(getattr(engine, 'players', []) or []) if ps.health > 0]
+        winner = alive[0] if len(alive) == 1 else None
+    return {
+        'reason': str(reason),
+        'winner': winner,
+        'human_player_id': int(human_player_id),
+        'human_won': winner == int(human_player_id),
+        'rounds': int(getattr(engine, 'round_num', 0) or 0),
+    }
+
+
+def _finalize_ai_test_replay(sid, engine, meta, reason='game_over'):
+    if not DB_AVAILABLE or not getattr(engine, 'game_over', False):
+        return None
+    if meta.get('replay_saved') and isinstance(meta.get('match_summary'), dict):
+        return meta['match_summary']
+    if meta.get('_replay_save_in_progress'):
+        return meta.get('match_summary')
+    room = meta.get('replay_room')
+    if not isinstance(room, GameRoom):
+        return None
+    meta['_replay_save_in_progress'] = True
+    try:
+        room.engine = engine
+        names = list(getattr(engine, 'player_names', []) or [])
+        while len(names) < 2:
+            names.append('Phelren' if len(names) == int(meta.get('ai_player_id', 1)) else 'Player')
+        winner = getattr(engine, 'winner', None)
+        if winner not in (0, 1):
+            alive = [
+                index for index, player_state in enumerate(getattr(engine, 'players', []) or [])
+                if int(getattr(player_state, 'health', 0) or 0) > 0
+            ]
+            winner = alive[0] if len(alive) == 1 else None
+        winner_name = names[winner] if winner in (0, 1) else 'draw'
+        human_player_id = int(meta.get('human_player_id', 0))
+        human_profile = players.get(sid) or room.player_profiles.get(sid) or {}
+        try:
+            human_user_id = int(human_profile.get('user_id') or 0) or None
+        except (TypeError, ValueError):
+            human_user_id = None
+        player_ids = [None, None]
+        player_ids[human_player_id] = human_user_id
+        started_ts = room.started_at or room.created_at
+        ended_at = iso_now()
+        mod_profile = dict(room.match_mod_profile or {})
+        summary = {
+            'room_id': room.room_id,
+            'mode': '1v1',
+            'match_kind': 'phelren',
+            'ai_match': True,
+            'ai_name': str(meta.get('ai_name') or 'Phelren'),
+            'ai_policy_label': str(meta.get('policy_label') or 'Phelren V1'),
+            'players': names[:2],
+            'player_ids': player_ids,
+            'winner_name': winner_name,
+            'winner_index': winner,
+            'rounds': int(getattr(engine, 'round_num', 0) or 0),
+            'phase': str(getattr(engine, 'phase', '') or ''),
+            'result': 'draw' if winner is None else 'win',
+            'reason': str(reason or 'game_over'),
+            'started_at': datetime.fromtimestamp(started_ts, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+            'ended_at': ended_at,
+            'duration_seconds': max(0, int(time.time() - started_ts)),
+            'mod_source': mod_profile.get('mod_source') or 'official',
+            'mod_hash': mod_profile.get('loadout_hash') or mod_profile.get('mods_hash') or '',
+            'community_mod_url': mod_profile.get('community_mod_url') or '',
+            'community_mod_name': mod_profile.get('community_mod_name') or '',
+            'community_mods': list(mod_profile.get('community_mods') or []),
+            'entertainment_mods': list(mod_profile.get('entertainment_mods') or []),
+            'valid_for_ranking': False,
+            'ranking_invalid_reason': 'phelren_ai_match',
+            'replay_prefix': 'P',
+            'draft_card_ids_by_player': [
+                list(cards or []) for cards in (getattr(engine, 'draft_picks', []) or [])[:2]
+            ],
+            'opening_event_ids_by_player': [
+                str(event_id) if event_id is not None else ''
+                for event_id in (getattr(engine, 'opening_event_picks', []) or [])[:2]
+            ],
+        }
+        actions = getattr(room, '_replay_actions', []) or []
+        if not actions or actions[-1].get('type') != 'game_over':
+            record_room_replay_action(room, 'game_over', None, {
+                'result': summary['result'],
+                'winner_name': winner_name,
+                'winner_index': winner,
+            })
+        match_id = meta.get('match_id')
+        if not match_id:
+            match_id = save_match_summary(summary)
+            meta['match_id'] = int(match_id)
+        replay_id = save_replay_snapshot(
+            int(match_id),
+            {**summary, 'replay': room_replay_data(room)},
+            card_defs=CARD_DEFS,
+            game_version=GAME_VERSION,
+        )
+        summary['match_id'] = int(match_id)
+        summary['replay_id'] = int(replay_id)
+        summary['replay_ref'] = format_replay_id(replay_id, 'P')
+        meta['match_summary'] = summary
+        meta['replay_id'] = int(replay_id)
+        meta['replay_saved'] = True
+        room._match_summary = summary
+        room._history_recorded = True
+        return summary
+    except Exception as exc:
+        meta['replay_save_error'] = f'{type(exc).__name__}: {exc}'
+        admin_event('error', f'failed to persist Phelren replay: {exc}', sid=sid)
+        return None
+    finally:
+        meta['_replay_save_in_progress'] = False
+
+
+def _finish_ai_test_diagnostics(meta, outcome=None):
+    if not isinstance(meta, dict) or not meta.get('session_id'):
+        return
+    try:
+        result = get_local_ai_worker().finish(
+            session_id=str(meta['session_id']),
+            outcome=dict(outcome or {}),
+        )
+        meta['diagnostic_export'] = result.get('export')
+    except Exception as exc:
+        admin_event('error', f'AI diagnostic finish failed: {exc}')
+
+
+def _maybe_finish_ai_test_session(sid, engine, reason='game_over'):
+    meta = ai_test_sessions.get(sid)
+    if not meta:
+        return
+    if getattr(engine, 'game_over', False) and not meta.get('replay_saved'):
+        _finalize_ai_test_replay(sid, engine, meta, reason)
+    if meta.get('diagnostic_finished'):
+        return
+    meta['diagnostic_finished'] = True
+    outcome = _ai_test_outcome(engine, meta.get('human_player_id', 0), reason)
+    _start_socket_background_task(_finish_ai_test_diagnostics, meta, outcome)
+
+
+def _ai_test_fallback_action(engine, ai_player_id):
+    pending = getattr(engine, 'pending_response', None)
+    if isinstance(pending, dict):
+        return engine.handle_response(ai_player_id, None), 'respond', {'hand_slot': None}
+    pending = getattr(engine, 'pending_choice', None)
+    if isinstance(pending, dict):
+        choice = engine._default_choice_for_pending(pending)
+        if not isinstance(choice, dict):
+            choice = {'cancelled': True}
+        return engine.resolve_choice(ai_player_id, choice), 'resolve_choice', {'choice': choice}
+    pending = getattr(engine, 'pending_v2_ui', None)
+    if isinstance(pending, dict):
+        payload = {
+            'request_id': str(pending.get('request_id') or ''),
+            'button': 'cancel',
+            'values': {},
+        }
+        return engine.handle_v2_ui_response(
+            ai_player_id,
+            payload['request_id'],
+            payload,
+        ), 'v2_ui_response', payload
+    return engine.end_turn(ai_player_id), 'end_turn', {}
+
+
+def _run_ai_test_turn(sid):
+    action_lock = _solo_action_lock_for_sid(sid)
+    if not action_lock.acquire(timeout=2.0):
+        with _lock:
+            meta = ai_test_sessions.get(sid)
+            if meta:
+                meta['thinking'] = False
+        return
+    try:
+        for _ in range(AI_TEST_MAX_CHAIN_ACTIONS):
+            stop_reason = None
+            with _lock:
+                meta = ai_test_sessions.get(sid)
+                engine = solo_sessions.get(sid)
+                if not meta or engine is None:
+                    return
+                ai_player_id = int(meta.get('ai_player_id', 1))
+                if getattr(engine, 'game_over', False):
+                    meta['thinking'] = False
+                    stop_reason = 'game_over'
+                elif _solo_decision_player(engine) != ai_player_id:
+                    meta['thinking'] = False
+                    stop_reason = 'human_decision'
+                else:
+                    action_seed = int(meta.get('seed', 0)) + int(meta.get('action_index', 0))
+                    session_id = str(meta.get('session_id') or '')
+                    enabled_mods = list(meta.get('enabled_mods') or [])
+                    session_metadata = dict(meta.get('diagnostic_metadata') or {})
+            if stop_reason == 'game_over':
+                _maybe_finish_ai_test_session(sid, engine)
+                action_lock.release()
+                action_lock = None
+                send_solo_state(sid)
+                return
+            if stop_reason == 'human_decision':
+                # The browser may act as soon as it receives this state.  Do not
+                # advertise the human turn while the AI still owns the action
+                # lock, otherwise a fast click is rejected as ACTION_BUSY and
+                # can leave the client waiting for an acknowledgement forever.
+                action_lock.release()
+                action_lock = None
+                send_solo_state_with_pending(sid)
+                return
+            try:
+                decision_engine = engine
+                updated_engine, result = get_local_ai_worker().decide_and_execute(
+                    engine,
+                    session_id=session_id,
+                    player_id=ai_player_id,
+                    seed=action_seed,
+                    enabled_mods=enabled_mods,
+                    session_metadata=session_metadata,
+                )
+                if not isinstance(updated_engine, GameEngine):
+                    raise LocalAiBridgeError('worker returned an invalid engine type')
+                raw_action = dict(result.get('action') or {})
+                raw_kind = str(raw_action.get('kind') or '')
+                replay_payload = _ai_test_enrich_replay_action_payload(
+                    decision_engine,
+                    ai_player_id,
+                    raw_kind,
+                    raw_action.get('payload') or {},
+                )
+                engine_result = (result.get('step_info') or {}).get('engine_result')
+                decision_summary = _ai_test_decision_summary(
+                    decision_engine,
+                    ai_player_id,
+                    raw_action,
+                    result.get('decision_id'),
+                    int(meta.get('action_index', 0)),
+                )
+                with _lock:
+                    if solo_sessions.get(sid) is not engine or ai_test_sessions.get(sid) is not meta:
+                        return
+                    solo_sessions[sid] = updated_engine
+                    engine = updated_engine
+                    meta['action_index'] = int(meta.get('action_index', 0)) + 1
+                    _remember_ai_test_decision(meta, decision_summary)
+                    meta['last_ai_elapsed_ms'] = result.get('elapsed_ms')
+                    meta['last_ai_action'] = result.get('action')
+                _record_ai_test_replay_action(
+                    sid,
+                    raw_kind,
+                    ai_player_id,
+                    replay_payload,
+                    engine_result,
+                    engine=updated_engine,
+                )
+            except Exception as exc:
+                admin_event('error', f'AI local decision failed: {type(exc).__name__}: {exc}', sid=sid)
+                try:
+                    fallback_result, fallback_kind, fallback_payload = _ai_test_fallback_action(engine, ai_player_id)
+                    _record_ai_test_replay_action(
+                        sid,
+                        fallback_kind,
+                        ai_player_id,
+                        fallback_payload,
+                        fallback_result,
+                        engine=engine,
+                    )
+                    with _lock:
+                        meta['action_index'] = int(meta.get('action_index', 0)) + 1
+                        meta['last_ai_error'] = str(exc)
+                        meta['last_ai_action'] = {'kind': 'fallback', 'payload': {}}
+                except Exception as fallback_exc:
+                    with _lock:
+                        meta['thinking'] = False
+                    socketio.emit('server_error', {
+                        'message': f'AI 操作失败：{fallback_exc}',
+                    }, room=sid)
+                    send_solo_state(sid)
+                    return
+            socketio.sleep(_ai_test_visible_action_delay(meta.get('last_ai_action')))
+            with _lock:
+                current_meta = ai_test_sessions.get(sid)
+                current_engine = solo_sessions.get(sid)
+                game_over = bool(current_engine and getattr(current_engine, 'game_over', False))
+                human_decision = bool(
+                    current_meta
+                    and current_engine
+                    and _solo_decision_player(current_engine) != int(current_meta.get('ai_player_id', 1))
+                )
+                if current_meta and (game_over or human_decision):
+                    current_meta['thinking'] = False
+            if game_over:
+                _maybe_finish_ai_test_session(sid, current_engine)
+                action_lock.release()
+                action_lock = None
+                send_solo_state(sid)
+                return
+            if human_decision:
+                action_lock.release()
+                action_lock = None
+                send_solo_state_with_pending(sid)
+                return
+            send_solo_state(sid)
+        with _lock:
+            meta = ai_test_sessions.get(sid)
+            if meta:
+                meta['thinking'] = False
+        socketio.emit('server_error', {'message': 'AI 连续操作过多，已暂停本次行动'}, room=sid)
+        send_solo_state(sid)
+    finally:
+        if action_lock is not None:
+            action_lock.release()
+
+
+def schedule_ai_test_turn(sid):
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        engine = solo_sessions.get(sid)
+        if not meta or engine is None or meta.get('thinking'):
+            return False
+        if getattr(engine, 'game_over', False):
+            _maybe_finish_ai_test_session(sid, engine)
+            return False
+        if _solo_decision_player(engine) != int(meta.get('ai_player_id', 1)):
+            return False
+        meta['thinking'] = True
+    _start_socket_background_task(_run_ai_test_turn, sid)
+    return True
+
+
+def _record_ai_test_human_action(sid, engine, action_kind, payload=None):
+    meta = ai_test_sessions.get(sid)
+    if not meta or engine is None:
+        return
+    human_player_id = int(meta.get('human_player_id', 0))
+    if _solo_decision_player(engine, human_player_id) != human_player_id:
+        return
+    meta['_pending_human_replay_action'] = {
+        'kind': str(action_kind),
+        'actor': human_player_id,
+        'payload': _ai_test_enrich_replay_action_payload(
+            engine,
+            human_player_id,
+            action_kind,
+            payload,
+        ),
+    }
+    try:
+        result = get_local_ai_worker().record_external(
+            engine,
+            session_id=str(meta.get('session_id') or ''),
+            player_id=human_player_id,
+            action={'kind': str(action_kind), 'payload': dict(payload or {})},
+            seed=int(meta.get('seed', 0)) + int(meta.get('action_index', 0)),
+            actor_kind='human',
+            session_metadata=dict(meta.get('diagnostic_metadata') or {}),
+        )
+        meta['latest_recorded_decision_id'] = result.get('decision_id')
+        meta['action_index'] = int(meta.get('action_index', 0)) + 1
+    except Exception as exc:
+        admin_event('error', f'AI human decision record failed: {exc}', sid=sid)
+
+
+def _start_ai_test_session(sid):
+    global _next_room_id
+    action_lock = _try_acquire_solo_action(sid, 'ai_1v1_start')
+    if action_lock is None:
+        with _lock:
+            ai_test_starting.discard(sid)
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'message': '上一项操作尚未完成，请稍后重试',
+        }, room=sid)
+        return
+    installed_session = False
+    try:
+        get_local_ai_worker().start()
+        with _lock:
+            player = players.get(sid)
+            if sid not in ai_test_starting:
+                return
+            if not player or player.get('status') != 'lobby' or player.get('room_id') is not None:
+                raise RuntimeError('玩家已离开大厅，已取消 Phelren 对局')
+            if not _is_registered_ai_player_locked(sid):
+                raise RuntimeError('请登录账号后再与 Phelren 对战')
+        human_player_id = secrets.randbelow(2)
+        seed = secrets.randbits(31)
+        engine, loadout, enabled_mods, human_name, ai_name, ai_opening_event_id = _create_ai_test_engine(
+            sid,
+            human_player_id,
+            seed,
+        )
+        session_id = f'ai-{int(time.time())}-{secrets.token_hex(4)}'
+        created_at_ts = time.time()
+        meta = {
+            'session_id': session_id,
+            'created_at_ts': created_at_ts,
+            'seed': seed,
+            'human_player_id': human_player_id,
+            'ai_player_id': 1 - human_player_id,
+            'human_name': human_name,
+            'ai_name': ai_name,
+            'enabled_mods': enabled_mods,
+            'action_index': 0,
+            'thinking': False,
+            'ai_opening_event_id': ai_opening_event_id,
+            'pregame_action_index': 0,
+            'pregame_ai_running': False,
+            'recent_ai_decisions': [],
+            'latest_ai_decision_id': None,
+            'policy_label': 'Phelren V1',
+            'diagnostic_metadata': {
+                'mode': 'formal_1v1_local_test',
+                'human_seat': human_player_id,
+                'official_mods': enabled_mods,
+                'loadout_hash': str(loadout.get('loadout_hash') or ''),
+            },
+        }
+        with _lock:
+            player = players.get(sid)
+            if sid not in ai_test_starting:
+                return
+            if not player or player.get('status') != 'lobby' or player.get('room_id') is not None:
+                raise RuntimeError('玩家已离开大厅，已取消 Phelren 对局')
+            if not _is_registered_ai_player_locked(sid):
+                raise RuntimeError('请登录账号后再与 Phelren 对战')
+            room_id = _next_room_id
+            _next_room_id += 1
+            room = _create_ai_test_replay_room(sid, engine, meta, room_id=room_id)
+            meta['replay_room'] = room
+            clear_pending_match_invites_for_sids_locked([sid])
+            tutorial_sessions.discard(sid)
+            ai_test_sessions[sid] = meta
+            solo_sessions[sid] = engine
+            rooms[room_id] = room
+            if sid in players:
+                players[sid]['status'] = 'in_game'
+                players[sid]['room_id'] = room_id
+            installed_session = True
+            admin_event(
+                'game',
+                f'room {room_id} created mode=1v1 ai=Phelren: {human_name} vs {ai_name}',
+                room_id=room_id,
+            )
+        broadcast_lobby()
+        send_ai_test_pregame_state(sid)
+        socketio.emit('ai_1v1_status', {
+            'status': 'ready',
+            'session_id': session_id,
+        }, room=sid)
+        schedule_ai_test_match_timer(sid)
+        schedule_ai_test_pregame(sid)
+    except Exception as exc:
+        if installed_session:
+            with _lock:
+                _drop_solo_session_locked(sid)
+                if sid in players:
+                    players[sid]['status'] = 'lobby'
+                    players[sid]['room_id'] = None
+            broadcast_lobby()
+        admin_event('error', f'AI test start failed: {type(exc).__name__}: {exc}', sid=sid)
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'message': str(exc),
+        }, room=sid)
+        socketio.emit('server_error', {'message': f'AI 测试启动失败：{exc}'}, room=sid)
+    finally:
+        with _lock:
+            ai_test_starting.discard(sid)
+        action_lock.release()
+
+
+def _start_ai_test_background_task(sid):
+    thread = threading.Thread(
+        target=_start_ai_test_session,
+        args=(sid,),
+        name=f'ai-test-start-{str(sid)[-8:]}',
+        daemon=True,
+    )
+    thread.start()
+
+
+def _ai_test_active_sids_locked():
+    active = set(ai_test_starting)
+    for session_sid in ai_test_sessions:
+        engine = solo_sessions.get(session_sid)
+        if engine is not None and not getattr(engine, 'game_over', False):
+            active.add(session_sid)
+    return active
+
+
+def _ai_test_active_count_locked():
+    return len(_ai_test_active_sids_locked())
+
+
+def _is_registered_ai_player_locked(sid):
+    player = players.get(sid) or {}
+    return bool(player.get('is_registered_user') and player.get('user_id'))
+
+
+def _queue_ai_test_start(sid):
+    with _lock:
+        player = players.get(sid)
+        if not player or player.get('status') != 'lobby' or player.get('room_id') is not None:
+            socketio.emit('server_error', {'message': '只有在大厅中才能开始 Phelren 对局'}, room=sid)
+            return False
+        if not _is_registered_ai_player_locked(sid):
+            socketio.emit('ai_1v1_status', {
+                'status': 'error',
+                'code': 'account_required',
+                'message': '请登录账号后再与 Phelren 对战',
+            }, room=sid)
+            return False
+        if sid in ai_test_starting:
+            socketio.emit('ai_1v1_status', {'status': 'loading'}, room=sid)
+            return True
+        if _ai_test_active_count_locked() >= GTN_AI_1V1_MAX_ACTIVE:
+            socketio.emit('ai_1v1_status', {
+                'status': 'error',
+                'code': 'capacity',
+                'message': 'Phelren 当前正在对战，请稍后再试',
+                'capacity': GTN_AI_1V1_MAX_ACTIVE,
+            }, room=sid)
+            return False
+        ai_test_starting.add(sid)
+    socketio.emit('ai_1v1_status', {'status': 'loading'}, room=sid)
+    try:
+        _start_ai_test_background_task(sid)
+    except Exception as exc:
+        with _lock:
+            ai_test_starting.discard(sid)
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'message': str(exc),
+        }, room=sid)
+        return False
+    return True
+
+
+@socketio.on('ai_1v1_start')
+def on_ai_1v1_start(data=None):
+    sid = request.sid
+    data = socket_guard('ai_1v1_start', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    if not GTN_AI_1V1_TEST_ENABLED:
+        _security_illegal(sid, 'ai_1v1_start', 'AI 对局入口未启用')
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'message': 'Phelren 对局入口未启用',
+        }, room=sid)
+        return
+    with _lock:
+        registered = _is_registered_ai_player_locked(sid)
+    if not registered:
+        _security_illegal(sid, 'ai_1v1_start', '登录账号方可开始 AI 对局')
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'code': 'account_required',
+            'message': '请登录账号后再与 Phelren 对战',
+        }, room=sid)
+        return
+    if reject_new_match_if_draining([sid], 'ai_1v1_start'):
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'message': '服务器正在更新，暂时不能开始新对局',
+        }, room=sid)
+        return
+    _queue_ai_test_start(sid)
+
+
+@socketio.on('ai_1v1_rematch')
+def on_ai_1v1_rematch(data=None):
+    sid = request.sid
+    data = socket_guard('ai_1v1_rematch', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    if not GTN_AI_1V1_TEST_ENABLED:
+        _security_illegal(sid, 'ai_1v1_rematch', 'AI 对局入口未启用')
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'message': 'Phelren 对局入口未启用',
+        }, room=sid)
+        return
+    with _lock:
+        registered = _is_registered_ai_player_locked(sid)
+    if not registered:
+        _security_illegal(sid, 'ai_1v1_rematch', '登录账号方可开始 AI 对局')
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'code': 'account_required',
+            'message': '请登录账号后再与 Phelren 对战',
+        }, room=sid)
+        return
+    if reject_new_match_if_draining([sid], 'ai_1v1_rematch'):
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'message': '服务器正在更新，暂时不能开始新对局',
+        }, room=sid)
+        return
+    with _lock:
+        player = players.get(sid)
+        engine = solo_sessions.get(sid)
+        if not player or sid not in ai_test_sessions or engine is None:
+            socketio.emit('server_error', {'message': '当前没有 Phelren 对局'}, room=sid)
+            return
+        if not getattr(engine, 'game_over', False):
+            socketio.emit('server_error', {'message': '对局尚未结束'}, room=sid)
+            return
+        _drop_solo_session_locked(sid)
+        player['room_id'] = None
+        player['status'] = 'lobby'
+    _queue_ai_test_start(sid)
+
+
+@socketio.on('ai_1v1_mark_decision')
+def on_ai_1v1_mark_decision(data=None):
+    sid = request.sid
+    data = socket_guard('ai_1v1_mark_decision', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        recent = list((meta or {}).get('recent_ai_decisions') or [])
+    if not meta:
+        emit('server_error', {'message': '当前没有 AI 测试对局'})
+        return
+    decision_id = data.get('decision_id')
+    if decision_id is None:
+        decision_id = meta.get('latest_ai_decision_id')
+    allowed_ids = {item.get('decision_id') for item in recent}
+    if decision_id not in allowed_ids:
+        emit('server_error', {'message': '该 AI 操作已不在最近记录中'})
+        return
+    try:
+        result = get_local_ai_worker().mark(
+            session_id=str(meta.get('session_id') or ''),
+            decision_id=decision_id,
+            label=str(data.get('label') or 'review'),
+            note=str(data.get('note') or ''),
+        )
+        emit('ai_1v1_decision_marked', result)
+    except Exception as exc:
+        emit('server_error', {'message': f'标记失败：{exc}'})
+
+
 @socketio.on('solo_start')
 def on_solo_start(data):
     sid = request.sid
@@ -20964,14 +23567,22 @@ def on_solo_start(data):
         if engine is None:
             emit('server_error', {'message': '训练场创建失败'})
             return
+        old_ai_meta = None
         with _lock:
             clear_pending_match_invites_for_sids_locked([sid])
             tutorial_sessions.discard(sid)
+            old_ai_meta = ai_test_sessions.pop(sid, None)
             solo_sessions[sid] = engine
             if sid in players:
                 players[sid]['disabled_mods'] = disabled_mods
                 players[sid]['allowed_card_ids'] = allowed_card_ids
                 players[sid]['status'] = 'solo'
+        if old_ai_meta:
+            _start_socket_background_task(
+                _finish_ai_test_diagnostics,
+                old_ai_meta,
+                {'reason': 'replaced_by_solo'},
+            )
         socketio.emit('game_phase', {'phase': 'playing', 'solo': True}, room=sid)
         send_solo_state(sid)
     finally:
@@ -21023,12 +23634,20 @@ def on_tutorial_start(data=None):
         ok, engine = _solo_safe_cpu_call(sid, 'tutorial_start', _create_tutorial_engine)
         if not ok or engine is None:
             return
+        old_ai_meta = None
         with _lock:
             clear_pending_match_invites_for_sids_locked([sid])
+            old_ai_meta = ai_test_sessions.pop(sid, None)
             tutorial_sessions.add(sid)
             solo_sessions[sid] = engine
             if sid in players:
                 players[sid]['status'] = 'tutorial'
+        if old_ai_meta:
+            _start_socket_background_task(
+                _finish_ai_test_diagnostics,
+                old_ai_meta,
+                {'reason': 'replaced_by_tutorial'},
+            )
         socketio.emit('game_phase', {'phase': 'playing', 'solo': True, 'tutorial': True}, room=sid)
         send_solo_state(sid, 0)
     finally:
@@ -21127,6 +23746,11 @@ def on_solo_play_card(data):
             choice.setdefault('target_player', target_player_id)
             choice.setdefault('target_player_id', target_player_id)
             choice.setdefault('target_id', target_player_id)
+        _record_ai_test_human_action(sid, engine, 'play_card', {
+            'card_instance_id': card_instance_id,
+            'choice': dict(choice or {}),
+            'target_player_id': target_player_id,
+        })
         tutorial_card_before = _tutorial_card_before_action(engine, pidx, card_instance_id) if sid in tutorial_sessions else None
 
         def _play():
@@ -21151,7 +23775,13 @@ def on_solo_play_card(data):
             if result.get('_tutorial_auto_responded'):
                 send_solo_state(sid, 0)
                 return
-            send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pidx)
+            send_solo_state(
+                sid,
+                _solo_response_view_perspective(
+                    sid,
+                    0 if sid in tutorial_sessions else 1 - pidx,
+                ),
+            )
             emit_solo_response_request(
                 sid,
                 engine,
@@ -21194,6 +23824,9 @@ def on_solo_response(data):
     try:
         had_pending_response = bool(getattr(engine, 'pending_response', None))
         responder = 1 - engine.pending_response['player_id'] if had_pending_response else engine.current_player
+        _record_ai_test_human_action(sid, engine, 'respond', {
+            'card_instance_id': card_instance_id,
+        })
         if sid in tutorial_sessions and responder != 0:
             card_instance_id = None
         tutorial_counter = (
@@ -21237,7 +23870,13 @@ def on_solo_response(data):
         pending = getattr(engine, 'pending_response', None)
         if pending:
             pending_player = int(pending.get('player_id', engine.current_player))
-            send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pending_player)
+            send_solo_state(
+                sid,
+                _solo_response_view_perspective(
+                    sid,
+                    0 if sid in tutorial_sessions else 1 - pending_player,
+                ),
+            )
             emit_solo_response_request(
                 sid,
                 engine,
@@ -21276,6 +23915,9 @@ def on_solo_resolve_choice(data):
             send_solo_state(sid)
             return
         pidx = engine.pending_choice.get('player_id', engine.current_player) if engine.pending_choice else engine.current_player
+        _record_ai_test_human_action(sid, engine, 'resolve_choice', {
+            'choice': dict(choice or {}),
+        })
 
         def _resolve():
             def _mutate():
@@ -21299,7 +23941,13 @@ def on_solo_resolve_choice(data):
             if result.get('_tutorial_auto_responded'):
                 send_solo_state(sid, 0)
                 return
-            send_solo_state(sid, 0 if sid in tutorial_sessions else 1 - pidx)
+            send_solo_state(
+                sid,
+                _solo_response_view_perspective(
+                    sid,
+                    0 if sid in tutorial_sessions else 1 - pidx,
+                ),
+            )
             emit_solo_response_request(
                 sid,
                 engine,
@@ -21347,6 +23995,7 @@ def on_solo_v2_ui_response(data):
         if not pending:
             return
         pidx = int(pending.get('player_id', engine.current_player))
+        _record_ai_test_human_action(sid, engine, 'v2_ui_response', clean_data)
         _cancel_v2_ui_timeout(('solo', sid), request_id)
 
         ok, outcome = _solo_safe_cpu_call(
@@ -21396,6 +24045,10 @@ def on_solo_use_trigger(data):
         return
     try:
         tutorial_equipment_def_id = ''
+        _record_ai_test_human_action(sid, engine, 'use_trigger', {
+            'equipment_instance_id': equipment_instance_id,
+            'target_player_id': target_player_id,
+        })
         if sid in tutorial_sessions and engine.current_player == 0:
             for eq in list(getattr(engine.players[0], 'equipment', []) or []):
                 if int(getattr(eq.card_instance, 'instance_id', -1)) == equipment_instance_id:
@@ -21442,6 +24095,7 @@ def on_solo_end_turn(data=None):
         return
     try:
         tutorial_player_id = engine.current_player
+        _record_ai_test_human_action(sid, engine, 'end_turn', {})
 
         def _end_turn():
             def _mutate():
@@ -21621,8 +24275,7 @@ def on_solo_pause(data=None):
         return
     try:
         with _lock:
-            solo_sessions.pop(sid, None)
-            tutorial_sessions.discard(sid)
+            _drop_solo_session_locked(sid)
             if sid in players:
                 players[sid]['status'] = 'lobby'
         socketio.emit('solo_paused', {}, room=sid)
@@ -22304,6 +24957,36 @@ def on_surrender(data):
     data = socket_guard('surrender', data, require_player=True, allow_empty=True)
     if data is None:
         return
+    if sid in ai_test_sessions:
+        action_lock = _try_acquire_solo_action(sid, 'surrender')
+        if action_lock is None:
+            return
+        try:
+            with _lock:
+                engine = solo_sessions.get(sid)
+                meta = ai_test_sessions.get(sid)
+            if engine is None or not meta:
+                emit('server_error', {'message': 'AI 对局不存在'})
+                return
+            human_player_id = int(meta.get('human_player_id', 0))
+            result = engine.surrender(human_player_id)
+            if not result.get('success'):
+                emit('server_error', {'message': result.get('error', '投降失败')})
+                return
+            _record_ai_test_replay_action(
+                sid,
+                'surrender',
+                human_player_id,
+                {},
+                result,
+                engine=engine,
+            )
+            meta['thinking'] = False
+            _emit_ai_test_phase(sid, meta, 'game_over')
+            send_solo_state(sid, human_player_id)
+        finally:
+            action_lock.release()
+        return
     try:
         with _lock:
             if sid not in players:
@@ -22585,6 +25268,40 @@ def on_return_lobby(data=None):
     sid = request.sid
     data = socket_guard('return_lobby', data, require_player=True, allow_empty=True)
     if data is None:
+        return
+    ai_returned = False
+    ai_stale_context = False
+    with _lock:
+        player = players.get(sid)
+        ai_meta = ai_test_sessions.get(sid)
+        if player is not None and (ai_meta is not None or sid in ai_test_starting):
+            supplied_match_key = str(data.get('match_key') or '').strip()
+            current_match_key = _ai_test_match_key(ai_meta) if ai_meta else ''
+            if supplied_match_key and current_match_key and supplied_match_key != current_match_key:
+                ai_stale_context = True
+            else:
+                _drop_solo_session_locked(sid)
+                player['room_id'] = None
+                player['status'] = 'lobby'
+                ai_returned = True
+    if ai_stale_context:
+        socketio.emit('action_rejected', {
+            'event': 'return_lobby',
+            'code': 'STATE_VERSION_OLD',
+            'message': '旧对局的返回操作已忽略',
+        }, room=sid)
+        send_solo_state_with_pending(sid)
+        return
+    if ai_returned:
+        payload = {
+            'phase': 'lobby',
+            'solo': False,
+            'ai_test': False,
+            'mode': '1v1',
+        }
+        payload.update(instance_payload())
+        socketio.emit('game_phase', payload, room=sid)
+        broadcast_lobby()
         return
     left_spectate = False
     left_spectate_room = None
@@ -22924,6 +25641,16 @@ ensure_friend_request_cleanup_started()
 ensure_dm_cleanup_started()
 
 
+def _prewarm_local_ai_worker():
+    try:
+        get_local_ai_worker().start()
+        admin_event('ai', 'Phelren worker prewarmed')
+    except Exception as exc:
+        # The test entry remains usable: a later click retries startup and
+        # reports the concrete error to that player.
+        admin_event('error', f'Phelren prewarm failed: {type(exc).__name__}: {exc}')
+
+
 if __name__ == '__main__':
     print(
         f"Starting GTN instance={GTN_INSTANCE} id={GTN_INSTANCE_ID} "
@@ -22931,4 +25658,10 @@ if __name__ == '__main__':
         f"bind={GTN_BIND_HOST}:{GTN_PORT} draining={is_instance_draining()}",
         flush=True,
     )
+    if GTN_AI_1V1_TEST_ENABLED:
+        threading.Thread(
+            target=_prewarm_local_ai_worker,
+            name='phelren-prewarm',
+            daemon=True,
+        ).start()
     socketio.run(app, host=GTN_BIND_HOST, port=GTN_PORT, debug=False)

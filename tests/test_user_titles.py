@@ -90,9 +90,16 @@ class UserTitleTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(profile['equipped_titles'][0]['id'], 'test:custom')
         self.assertEqual(profile['special_role_label'], '')
-        self.assertEqual(profile['name_color'], '#345678')
+        self.assertIsNone(profile['name_color'])
 
         center = db.get_user_title_center(self.user['id'])
+        segment_id = center['items'][0]['style']['segments'][0]['id']
+        center, error = db.set_user_title_name_style(self.user['id'], 'test:custom', segment_id)
+        self.assertIsNone(error)
+        self.assertEqual(center['name_style']['paint']['color'], '#345678')
+        profile = db.get_user_role_profile(self.user['username'])
+        self.assertEqual(profile['name_color'], '#345678')
+
         self.assertEqual([item['id'] for item in center['items']], ['test:custom'])
 
         _, clear_error = db.admin_clear_user_role(self.user['id'])
@@ -144,6 +151,33 @@ class UserTitleTests(unittest.TestCase):
         self.assertEqual(center['items'][0]['id'], 'achievement:test-title')
         self.assertEqual(center['items'][0]['acquired_source'], 'achievement')
         self.assertIsNone(center['items'][0]['equipped_slot'])
+
+    def test_rich_title_style_duplicate_inventory_and_duplicate_equip(self):
+        center = self.grant(
+            '双色称号',
+            '{color:#FF0000|id=left}双色{/}{gradient:90deg,#00FF00>#0000FF|id=right}称号{/}',
+            title_id='test:styled',
+            quantity=2,
+        )
+        item = center['items'][0]
+        self.assertEqual(item['quantity'], 2)
+        self.assertEqual([segment['id'] for segment in item['style']['segments']], ['left', 'right'])
+
+        center, error = db.set_user_equipped_titles(
+            self.user['id'], ['test:styled', 'test:styled'],
+        )
+        self.assertIsNone(error)
+        self.assertEqual(center['equipped'], ['test:styled', 'test:styled'])
+        self.assertEqual(center['items'][0]['equipped_slots'], [1, 2])
+
+        center, error = db.set_user_title_name_style(self.user['id'], 'test:styled', 'right')
+        self.assertIsNone(error)
+        self.assertEqual(center['name_style']['paint']['kind'], 'gradient')
+
+        _, error = db.set_user_equipped_titles(
+            self.user['id'], ['test:styled', 'test:styled', 'test:styled'],
+        )
+        self.assertIn('只能佩戴自己拥有', error)
 
 
 if __name__ == '__main__':

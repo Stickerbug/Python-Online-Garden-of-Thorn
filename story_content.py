@@ -297,13 +297,6 @@ STORY_STATUSES.update({
             'en': 'The first X odd-numbered hand slots cannot be played.',
         },
     },
-    'locked': {
-        'name': {'zh': '锁定', 'en': 'Locked'},
-        'description': {
-            'zh': '存在时，攻击生物的牌只能选择树枝；树枝死亡时-1层。',
-            'en': 'Cards that attack creatures can target only Sticks; lose 1 when a Stick dies.',
-        },
-    },
     'fragment': {
         'name': {'zh': '碎片', 'en': 'Fragment'},
         'description': {
@@ -337,7 +330,6 @@ STORY_STATUS_IMAGE_URLS = {
     'bleed': '/static/assets/status-icons/bleed.svg',
     'fire': '/static/assets/status-icons/fire.svg',
     'blockade': '/static/assets/story-status-icons/blockade.svg',
-    'locked': '/static/assets/story-status-icons/locked.svg',
     'fragment': '/static/assets/status-icons/fragment.svg',
     'magic_shield_disabled': '/static/assets/story-status-icons/magic-shield-disabled.svg',
 }
@@ -577,8 +569,8 @@ STORY_TRAITS.update({
     'obstacle': {
         'name': {'zh': '障碍', 'en': 'Obstacle'},
         'description': {
-            'zh': '死亡时，使玩家的锁定-1层。',
-            'en': 'On death, remove 1 Locked from the player.',
+            'zh': '死亡时，使玩家的封锁减少等同于层数的层数。',
+            'en': 'On death, remove Blockade from the player equal to its stacks.',
         },
     },
     'segments': {
@@ -658,6 +650,48 @@ STORY_TRAITS.update({
             'en': 'Divide incoming physical damage by its stacks, rounded down. Lose 1 stack at turn end.',
         },
     },
+    'machine_learning': {
+        'name': {'zh': '机器学习', 'en': 'Machine Learning'},
+        'description': {
+            'zh': '玩家回合开始时，对随机2张手牌施加虚无；抽牌阶段结束后，之后抽到的牌均获得虚无。因虚无被放逐的牌进入机械轨道。',
+            'en': 'At player turn start, give Void to 2 random cards in hand. Cards drawn after the draw phase gain Void, and cards exiled by Void enter the Mechanical Track.',
+        },
+    },
+    'mechanical_track': {
+        'name': {'zh': '机械轨道', 'en': 'Mechanical Track'},
+        'description': {
+            'zh': '初始含1张雷神之锤、1张齿轮与2张骨头。每次行动转动2次，依次触发轨道顶牌；初始牌移至轨道底，其他牌被消耗。抽牌改为额外转动等量次数，回复E改为获得等量力量。',
+            'en': 'Starts with 1 Mjolnir, 1 Cogwheel, and 2 Bones. Each action rotates twice and resolves the top card. Starting cards move to the bottom; other cards are consumed. Drawing becomes that many extra rotations, and recovering E grants that much Power.',
+        },
+    },
+    'recycling': {
+        'name': {'zh': '回收', 'en': 'Recycling'},
+        'description': {
+            'zh': '轨道顶牌的基础伤害与护盾之和小于10，且不含抽牌效果时，不触发该牌：将其消耗，获得1层力量并额外转动1次。',
+            'en': 'If the top card has less than 10 total base damage and Shield and cannot draw, consume it without resolving, gain 1 Power, and rotate once more.',
+        },
+    },
+    'electronic_shield': {
+        'name': {'zh': '电子护盾', 'en': 'Electronic Shield'},
+        'description': {
+            'zh': '获得护盾时，对玩家造成等量伤害。',
+            'en': 'Whenever this creature gains Shield, deal the same amount of damage to the player.',
+        },
+    },
+    'toxic_pressure': {
+        'name': {'zh': '剧毒压力', 'en': 'Toxic Pressure'},
+        'description': {
+            'zh': '死亡时，对玩家施加等同于层数的剧毒。',
+            'en': 'On death, apply Toxic Poison to the player equal to its stacks.',
+        },
+    },
+    'cover': {
+        'name': {'zh': '掩体', 'en': 'Cover'},
+        'description': {
+            'zh': '不会死亡；机械鼠藏入后，受到伤害时使其失去隐形。',
+            'en': 'Cannot die. When a Mechanical Rat hides here, taking damage removes its Hidden.',
+        },
+    },
 })
 
 STORY_TRAIT_VALUE_KEYS = {
@@ -679,6 +713,7 @@ STORY_TRAIT_VALUE_KEYS = {
     'endurance_shell': 'endurance_shell',
     'bulb': 'bulb',
     'hard_shell': 'hard_shell',
+    'obstacle': 'obstacle',
     'segments': 'segments',
     'magic_shield': 'magic_shield',
     'magic_blessing': 'magic',
@@ -687,6 +722,7 @@ STORY_TRAIT_VALUE_KEYS = {
     'super_beam': 'super_beam',
     'toxic_reflection': 'toxic_reflection',
     'disc': 'disc',
+    'toxic_pressure': 'toxic_pressure',
 }
 
 STORY_TRAIT_ZERO_VISIBLE = frozenset({'bandage', 'miracle', 'magic_blessing'})
@@ -712,6 +748,12 @@ STORY_TRAIT_IMAGE_URLS = {
     'integration': '/static/assets/story-trait-icons/integration.svg',
     'scrap': '/static/assets/story-trait-icons/scrap.svg',
     'disc': '/static/assets/story-trait-icons/disc.svg',
+    'machine_learning': '/static/assets/story-trait-icons/machine-learning.svg',
+    'mechanical_track': '/static/assets/story-trait-icons/mechanical-track.svg',
+    'recycling': '/static/assets/story-trait-icons/recycling.svg',
+    'electronic_shield': '/static/assets/story-trait-icons/electronic-shield.svg',
+    'toxic_pressure': '/static/assets/story-trait-icons/toxic-pressure.svg',
+    'cover': '/static/assets/story-trait-icons/cover.svg',
 }
 
 for _trait_id, _image_url in STORY_TRAIT_IMAGE_URLS.items():
@@ -1256,7 +1298,7 @@ STORY_CARDS = {
         },
     ),
     'bamboo': _card(
-        'Bamboo', '竹子', 'Bamboo', 2, 'bloom', 'ultra',
+        'Bamboo', '竹子', 'Bamboo', 2, 'thorn', 'ultra',
         '对目标造成8D；打出后，此牌在本次旅程中永久获得3点伤害。',
         tags=('exile',), target='enemy',
         effects=(_effect('damage', 8), _effect('permanent_damage_growth', 3)),
@@ -1401,12 +1443,12 @@ STORY_CARDS = {
     ),
     'seed': _card(
         'Seed', '种子', 'Seed', 3, 'bloom', 'rare',
-        '回复自己2E；此牌在本次旅程中永久获得1层迅捷。',
-        effects=(_effect('elixir', 2), _effect('permanent_swift', 1)),
+        '回复自己2E；此牌获得1层迅捷。',
+        effects=(_effect('elixir', 2), _effect('self_swift', 1)),
         upgrade={
             'cost_e': 2,
-            'description': {'zh': '回复自己2E；此牌在本次旅程中永久获得1层迅捷。', 'en': 'Recover 2 E; this card permanently gains 1 Swift for this journey.'},
-            'effects': (_effect('elixir', 2), _effect('permanent_swift', 1)),
+            'description': {'zh': '回复自己2E；此牌获得1层迅捷。', 'en': 'Recover 2 E; this card gains 1 Swift.'},
+            'effects': (_effect('elixir', 2), _effect('self_swift', 1)),
         },
     ),
     'sand_dust': _card(
@@ -1459,7 +1501,8 @@ STORY_CARDS = {
         1,
         'infect',
         'special',
-        '回合结束时若仍在手牌中，受到6D；打出时，使重构机获得1层碎片和1层力量。',
+        '回合结束时若仍在手牌中，受到8D；打出时，使重构机获得1层碎片和1层力量。',
+        tags=('exile',),
         effects=(),
         script='factory_waste',
     ),
@@ -1990,13 +2033,14 @@ STORY_ENEMIES.update({
     ), script='spider_cave', traits=('sturdy', 'frenzied'), initial={'shield': 40, 'sturdy': 99},
        lunatic_initial={'shield': 50}, lunatic_health=119),
     'stickbug': _enemy('竹节虫', 'Stickbug', 164, (
-        _move('发射', 'Launch', _effect('summon', 3, enemy_id='stick'), _effect('player_status', 3, status='locked')),
+        _move('发射', 'Launch', _effect('summon', 3, enemy_id='stick')),
         _move('生长', 'Growth', _effect('self_heal', 12, lunatic_amount=15), _effect('gain_power', 3, lunatic_amount=4)),
         _move('砸击', 'Smash', _effect('damage', 20, lunatic_amount=22)),
     ), script='stickbug', lunatic_health=180),
     'stick': _enemy('树枝', 'Stick', 14, (
         _move('防守', 'Defense', _effect('gain_shield', 8, lunatic_amount=10)),
-    ), traits=('obstacle',), initial={'shield': 12}, lunatic_initial={'shield': 14}, lunatic_health=16),
+    ), traits=('obstacle',), initial={'shield': 12, 'obstacle': 1},
+       lunatic_initial={'shield': 14}, lunatic_health=16),
     'termite_mound': _enemy('白蚁丘', 'Termite Mound', 221, (
         _move('固守', 'Hold Fast', _effect('gain_shield', 12, lunatic_amount=15)),
         _move('号令', 'Command', _effect('allies_power', 1)),
@@ -2015,8 +2059,14 @@ STORY_ENEMIES.update({
        initial={'magic_shield': 5, 'magic': 10}, lunatic_initial={'magic_shield': 6}, lunatic_health=331),
 })
 
-# Stage 3: Factory. The unfinished Mechanical Flower is intentionally omitted.
+# Stage 3: Factory.
 STORY_ENEMIES.update({
+    'mechanical_flower': _enemy('机械花', 'Mechanical Flower', 456, (
+        _move('机械轨道', 'Mechanical Track'),
+    ), script='mechanical_flower', traits=(
+        'machine_learning', 'mechanical_track', 'recycling',
+        'electronic_shield',
+    ), lunatic_health=480),
     'mechanical_spider': _enemy('机械蜘蛛', 'Mechanical Spider', 64, (
         _move('放电', 'Discharge', _effect('add_draw_card', 2, card_id='static_electricity')),
         _move('猛扑', 'Pounce', _effect('damage', 12, lunatic_amount=15), _effect('gain_power', 3)),
@@ -2034,10 +2084,10 @@ STORY_ENEMIES.update({
        lunatic_initial={'toxic_reflection': 3}, lunatic_health=133),
     'reconstructor_enemy': _enemy('重构机', 'Reconstructor', 504, (
         _move('锯片', 'Saw', _effect('damage', 17, lunatic_amount=19), _effect('player_status', 3, status='bleed', lunatic_amount=4)),
-        _move('激光器', 'Laser', _effect('damage', 9, hits=2, lunatic_amount=10), _effect('player_status', 2, status='fire', lunatic_amount=3)),
+        _move('激光器', 'Laser', _effect('damage', 6, hits=3, lunatic_amount=7), _effect('player_status', 2, status='fire', lunatic_amount=3)),
         _move('碎片', 'Fragment', _effect('gain_power', 1, lunatic_amount=2), _effect('gain_status', 1, status='fragment', lunatic_amount=2), _effect('gain_shield', 50, lunatic_amount=60)),
-        _move('自分解', 'Self-Disassembly', _effect('self_damage', 50), _effect('gain_status', 3, status='fragment', lunatic_amount=4), _effect('gain_power', 5, lunatic_amount=6)),
-        _move('雷神之锤', 'Mjolnir', _effect('damage', 40, lunatic_amount=44), _effect('consume_status', 5, status='fragment')),
+        _move('自分解', 'Self-Disassembly', _effect('self_damage', 50), _effect('gain_status', 4, status='fragment', lunatic_amount=5), _effect('gain_power', 4, lunatic_amount=5)),
+        _move('雷神之锤', 'Mjolnir', _effect('damage', 20, hits=2, lunatic_amount=22), _effect('consume_status', 5, status='fragment')),
     ), script='reconstructor_enemy', traits=('reconstruction', 'integration', 'scrap'),
        initial={'reconstructor_turns_processed': 0, 'missed_factory_waste_last_turn': False},
        lunatic_health=532),
@@ -2051,6 +2101,30 @@ STORY_ENEMIES.update({
         _move('发射', 'Launch', _effect('damage', 10, lunatic_amount=11)),
         _move('自毁', 'Self-Destruct', _effect('damage', 35, lunatic_amount=41), _effect('self_kill')),
     ), script='mechanical_missile', lunatic_health=114),
+    'smoke': _enemy('烟雾', 'Smoke', 44, (
+        _move('瘴气', 'Miasma', _effect('player_status', 5, status='poison', lunatic_amount=7)),
+        _move('闷燃', 'Smolder', _effect('gain_status', 2, status='toxic_pressure')),
+    ), script='smoke', traits=('toxic_pressure',), initial={'toxic_pressure': 2},
+       lunatic_initial={'toxic_pressure': 3}, lunatic_health=47),
+    'brick_pile': _enemy('砖堆', 'Brick Pile', 69, (
+        _move('阻碍', 'Obstruct', _effect('allies_shield', 16, lunatic_amount=20)),
+    ), script='brick_pile', traits=('obstacle',), initial={'obstacle': 2},
+       lunatic_health=75),
+    'mechanical_rat': _enemy('机械鼠', 'Mechanical Rat', 232, (
+        _move('伏击', 'Ambush', _effect('damage', 19, lunatic_amount=22), _effect('player_status', 1, status='weak')),
+        _move('强袭', 'Assault', _effect('damage', 26, lunatic_amount=30), _effect('gain_power', 2)),
+    ), script='mechanical_rat', initial={'hidden': 1}, lunatic_health=254),
+    'broken_machine': _enemy('损坏机器', 'Broken Machine', 1, (),
+        script='broken_machine', traits=('cover',)),
+    'chimney': _enemy('烟囱', 'Chimney', 456, (
+        _move('喷射', 'Jet', _effect('summon', 1, enemy_id='smoke'), _effect('player_status', 5, status='poison')),
+        _move('燃烧', 'Combustion', _effect('damage_from_player_status', 16, status='toxic_poison', lunatic_amount=21), _effect('halve_player_status', 0, status='toxic_poison')),
+    ), script='chimney', lunatic_health=489),
+    'generator': _enemy('发电机', 'Generator', 321, (
+        _move('反射护盾', 'Reflective Shield', _effect('gain_status', 4, status='reflection', lunatic_amount=5), _effect('gain_shield', 40, lunatic_amount=50)),
+        _move('漏电', 'Leakage', _effect('damage', 22, lunatic_amount=26), _effect('all_cards_charge', 2)),
+        _move('发电', 'Generate', _effect('gain_status', 3, status='reflection', lunatic_amount=4), _effect('gain_shield', 40, lunatic_amount=50)),
+    ), script='generator', lunatic_health=345),
 })
 
 # Explicit move orders preserve repeated moves without encoding them as
@@ -2089,6 +2163,10 @@ STORY_ENEMIES['termite_soldier']['move_order'] = (0, 1, 2)
 STORY_ENEMIES['termite_overmind']['move_order'] = (0, 1)
 STORY_ENEMIES['jungle_mushroom']['move_order'] = (0, 1)
 STORY_ENEMIES['mechanical_crab']['move_order'] = (0, 1, 2, 3)
+STORY_ENEMIES['smoke']['move_order'] = (0, 1)
+STORY_ENEMIES['brick_pile']['move_order'] = (0,)
+STORY_ENEMIES['chimney']['move_order'] = (0, 0, 1)
+STORY_ENEMIES['generator']['move_order'] = (0, 1, 2)
 
 STORY_ENEMY_IMAGE_URLS = {
     'soldier_ant': '/static/assets/story-enemies/soldier-ant.svg',
@@ -2158,9 +2236,16 @@ STORY_ENEMY_IMAGE_URLS = {
     'mechanical_spider': '/static/assets/story-enemies/mechanical-spider.svg',
     'mechanical_crab': '/static/assets/story-enemies/mechanical-crab.svg',
     'uranium_barrel': '/static/assets/story-enemies/uranium-barrel.svg',
-    'reconstructor_enemy': '/static/assets/story-enemies/reconstructor-card.svg',
+    'mechanical_flower': '/static/assets/story-enemies/mechanical-flower.svg',
+    'reconstructor_enemy': '/static/assets/story-enemies/reconstructor.svg',
     'mechanical_wasp': '/static/assets/story-enemies/mechanical-wasp.svg',
     'mechanical_missile': '/static/assets/story-enemies/mechanical-missile.svg',
+    'smoke': '/static/assets/story-enemies/smoke.svg',
+    'brick_pile': '/static/assets/story-enemies/brick-pile.svg',
+    'mechanical_rat': '/static/assets/story-enemies/mechanical-rat.svg',
+    'broken_machine': '/static/assets/story-enemies/broken-machine.svg',
+    'chimney': '/static/assets/story-enemies/chimney.svg',
+    'generator': '/static/assets/story-enemies/generator.svg',
 }
 
 for _enemy_id, _image_url in STORY_ENEMY_IMAGE_URLS.items():
@@ -2292,16 +2377,26 @@ STORY_ENCOUNTERS = {
         'simple': (
             ('mechanical_crab',),
             ('uranium_barrel', 'mechanical_spider'),
+            ('uranium_barrel', 'smoke'),
+            ('brick_pile', 'uranium_barrel'),
+            ('brick_pile', 'mechanical_spider', 'smoke'),
         ),
         'hard': (
             ('mechanical_crab', 'uranium_barrel'),
             ('mechanical_crab', 'mechanical_spider'),
+            ('uranium_barrel', 'smoke', 'smoke'),
+            ('brick_pile', 'brick_pile', 'mechanical_crab'),
+            ('smoke', 'smoke', 'mechanical_crab'),
         ),
         'elite': (
             ('mechanical_wasp',),
+            ('broken_machine', 'broken_machine', 'broken_machine', 'mechanical_rat'),
+            ('generator',),
         ),
         'boss': (
             ('reconstructor_enemy',),
+            ('mechanical_flower',),
+            ('chimney', 'smoke'),
         ),
     },
 }
@@ -2420,7 +2515,7 @@ def validate_story_content():
         'exile_hand_for_shield', 'first_use_power', 'next_attack_multiplier',
         'immediate_extra_turn', 'inspect_draw_choose', 'lose_health',
         'magic', 'make_card_free', 'next_skill_repeats', 'next_turn_draw',
-        'permanent_damage_growth', 'permanent_swift', 'power',
+        'permanent_damage_growth', 'permanent_swift', 'power', 'self_swift',
         'random_active_discard', 'random_damage_per_discards', 'random_exile',
         'recover_exiled', 'salt', 'shield', 'shield_from_target_status',
         'shield_selected', 'shield_with_power', 'shuffle_hand_redraw',
@@ -2470,6 +2565,7 @@ def validate_story_content():
         'consume_status', 'consume_status_damage', 'damage_from_player_status',
         'damage_from_shield', 'disable_magic_shield', 'gain_magic',
         'heal_named_ally_percent', 'named_allies_power',
+        'all_cards_charge', 'halve_player_status',
     }
     enemy_scripts = {
         'ant_queen', 'bandage_beetle', 'centipede', 'desert_centipede',
@@ -2481,6 +2577,8 @@ def validate_story_content():
         'spider_cave', 'stickbug', 'termite_mound', 'evil_centipede',
         'magic_firefly', 'mechanical_crab', 'uranium_barrel',
         'reconstructor_enemy', 'mechanical_wasp', 'mechanical_missile',
+        'mechanical_flower', 'smoke', 'brick_pile', 'mechanical_rat',
+        'broken_machine', 'chimney', 'generator',
     }
 
     def validate_cost(owner, key, value):

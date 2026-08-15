@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GTN 称号编辑器</title>
+<link rel="stylesheet" href="/static/css/titleeditor.css?v={{ static_version }}">
+</head>
+<body>
+<div id="title-editor-app" class="te-app" data-can-publish="{{ '1' if can_publish else '0' }}">
+  <header class="te-header">
+    <div class="te-brand">
+      <div class="te-kicker">Garden of Thorn</div>
+      <h1>称号编辑器</h1>
+    </div>
+    <div class="te-revision-block">
+      <span id="te-integrity" class="te-integrity"></span>
+      <span id="te-revision">正在载入目录</span>
+      <span id="te-save-state" class="te-save-state"></span>
+    </div>
+    <nav class="te-header-actions" aria-label="编辑器命令">
+      <button id="te-undo" type="button" title="撤销" aria-label="撤销">↶</button>
+      <button id="te-redo" type="button" title="重做" aria-label="重做">↷</button>
+      <button id="te-help" type="button">语法教学</button>
+      <button id="te-history" type="button">版本历史</button>
+      <button id="te-discard" type="button">放弃草稿</button>
+      <button id="te-publish" class="te-primary" type="button">发布</button>
+      <a href="/" class="te-exit">退出</a>
+    </nav>
+  </header>
+
+  <div id="te-alert" class="te-alert hidden" role="alert"></div>
+
+  <main class="te-workspace">
+    <aside class="te-catalog-pane" aria-label="称号目录">
+      <div class="te-pane-head">
+        <div>
+          <strong>全部称号</strong>
+          <span id="te-title-count" class="te-muted"></span>
+        </div>
+        <div class="te-pane-actions">
+          <button id="te-create" type="button">新建</button>
+          <button id="te-duplicate" type="button">复制</button>
+        </div>
+      </div>
+      <div class="te-filter-row">
+        <input id="te-search" type="search" placeholder="搜索名称或 ID" autocomplete="off">
+        <select id="te-filter-status" aria-label="状态筛选">
+          <option value="all">全部</option>
+          <option value="active">已启用</option>
+          <option value="inactive">已下架</option>
+          <option value="purchasable">商店可用</option>
+        </select>
+      </div>
+      <div id="te-title-list" class="te-title-list"></div>
+    </aside>
+
+    <section class="te-editor-pane" aria-label="称号属性">
+      <div id="te-empty" class="te-empty">从左侧选择一个称号</div>
+      <div id="te-editor" class="hidden">
+        <div class="te-section-head">
+          <div>
+            <h2 id="te-editing-name"></h2>
+            <code id="te-editing-id"></code>
+          </div>
+          <label class="te-switch"><input id="te-active" type="checkbox"><span>启用</span></label>
+        </div>
+
+        <section class="te-section">
+          <h3>目录信息</h3>
+          <div class="te-field-grid">
+            <label><span>来源类型</span><input id="te-source-type" maxlength="24"></label>
+            <label><span>来源标识</span><input id="te-source-ref" maxlength="96"></label>
+            <label><span>普通荆露价格</span><input id="te-price-free" type="number" min="0" step="1"></label>
+            <label><span>充值荆露价格</span><input id="te-price-paid" type="number" min="0" step="1"></label>
+            <label><span>商店刷新权重</span><input id="te-shop-weight" type="number" min="0" step="1"></label>
+            <label class="te-checkbox-field"><input id="te-purchasable" type="checkbox"><span>允许在商店出现</span></label>
+          </div>
+        </section>
+
+        <section class="te-section te-style-section">
+          <div class="te-section-title-row">
+            <div><h3>文字与样式段</h3><p>每个段 ID 会被玩家的昵称颜色设置引用，请保持稳定。</p></div>
+            <button id="te-add-segment" type="button">添加样式段</button>
+          </div>
+          <div id="te-segments" class="te-segments"></div>
+        </section>
+
+        <section class="te-section">
+          <div class="te-section-title-row">
+            <div><h3>高级语法</h3><p>结构化编辑会自动生成语法；也可以直接修改后解析。</p></div>
+            <button id="te-parse-markup" type="button">解析并应用</button>
+          </div>
+          <textarea id="te-markup" class="te-markup" rows="4" spellcheck="false"></textarea>
+          <div id="te-markup-error" class="te-field-error" aria-live="polite"></div>
+        </section>
+      </div>
+    </section>
+
+    <aside class="te-preview-pane" aria-label="预览与颜色调整">
+      <div class="te-preview-head">
+        <strong>实时预览</strong>
+        <div class="te-segmented" role="group" aria-label="预览主题">
+          <button id="te-theme-light" class="active" type="button">浅色</button>
+          <button id="te-theme-dark" type="button">深色</button>
+        </div>
+      </div>
+      <div id="te-preview" class="te-preview" data-theme="light">
+        <div class="te-preview-line"><span id="te-preview-title"></span><span class="te-preview-name">SamplePlayer</span></div>
+        <div class="te-preview-caption">大厅、聊天与对局中的组合预览</div>
+      </div>
+
+      <section class="te-color-lab">
+        <div class="te-section-title-row"><div><h3>颜色调整器</h3><p id="te-color-target">请选择一个颜色</p></div></div>
+        <div id="te-color-controls" class="te-color-controls is-disabled">
+          <div class="te-color-main-row">
+            <input id="te-color-picker" type="color" value="#5AA469" aria-label="颜色">
+            <input id="te-color-value" value="#5AA469" spellcheck="false" aria-label="颜色值">
+          </div>
+          <label><span>预设颜色</span><select id="te-color-token"><option value="">自定义颜色</option></select></label>
+          <div class="te-number-grid te-rgb-grid">
+            <label><span>R</span><input id="te-r" type="number" min="0" max="255"></label>
+            <label><span>G</span><input id="te-g" type="number" min="0" max="255"></label>
+            <label><span>B</span><input id="te-b" type="number" min="0" max="255"></label>
+          </div>
+          <div class="te-number-grid te-hsv-grid">
+            <label><span>H</span><input id="te-h" type="number" min="0" max="359"></label>
+            <label><span>S%</span><input id="te-s" type="number" min="0" max="100"></label>
+            <label><span>V%</span><input id="te-v" type="number" min="0" max="100"></label>
+          </div>
+          <label class="te-alpha-row"><span>透明度</span><input id="te-alpha" type="range" min="0" max="100" value="100"><output id="te-alpha-value">100%</output></label>
+        </div>
+      </section>
+
+      <section class="te-change-summary">
+        <h3>草稿影响</h3>
+        <div id="te-diff-summary" class="te-diff-summary">暂无修改</div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<dialog id="te-help-dialog" class="te-dialog te-help-dialog">
+  <form method="dialog" class="te-dialog-shell">
+    <header><div><div class="te-kicker">Safe title markup</div><h2>称号样式语法</h2></div><button value="cancel" aria-label="关闭">×</button></header>
+    <div class="te-dialog-body te-help-content">
+      <p>语法只描述文字颜色，不支持 HTML、CSS、脚本或嵌套样式。多个样式段直接相邻书写。</p>
+      <h3>纯色</h3><code>{color:#FF3344|id=left}红色文字{/}</code>
+      <h3>透明度</h3><code>{color:#3366CC80|id=soft}半透明蓝色{/}</code><p>也可写 <code>rgba(51,102,204,50%)</code> 或 <code>#3366CC@50%</code>。</p>
+      <h3>渐变</h3><code>{gradient:90deg,#FF3344&gt;#FFD43B&gt;#3BC9DB|id=rainbow}渐变文字{/}</code>
+      <h3>彩虹</h3><code>{rainbow:90|id=rainbow}彩虹文字{/}</code>
+      <h3>随查看者主题变化</h3><code>{theme:light=#FFFFFF;dark=#000000|id=theme}Momyx{/}</code>
+      <h3>稳定段 ID</h3><p><code>|id=...</code> 只允许字母、数字及 <code>. _ : -</code>。玩家可选择某一段作为昵称颜色，因此发布前请查看“昵称颜色将被重置”的人数。</p>
+      <h3>RGB / HSV</h3><p>颜色可使用 <code>rgb(255,0,0)</code>、<code>rgba(...)</code>、<code>hsv(210,70%,90%)</code> 或 <code>hsva(...)</code>，发布时会统一规范化。</p>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="te-history-dialog" class="te-dialog te-history-dialog">
+  <div class="te-dialog-shell">
+    <header><div><div class="te-kicker">Immutable revisions</div><h2>版本历史</h2></div><button class="te-dialog-close" type="button" aria-label="关闭">×</button></header>
+    <div id="te-history-list" class="te-dialog-body te-history-list"></div>
+  </div>
+</dialog>
+
+<dialog id="te-confirm-dialog" class="te-dialog te-confirm-dialog">
+  <div class="te-dialog-shell">
+    <header><div><div id="te-confirm-kicker" class="te-kicker"></div><h2 id="te-confirm-title"></h2></div><button class="te-dialog-close" type="button" aria-label="关闭">×</button></header>
+    <div class="te-dialog-body">
+      <div id="te-confirm-body" class="te-confirm-body"></div>
+      <label id="te-confirm-message-wrap"><span>修订说明</span><textarea id="te-confirm-message" rows="3" maxlength="500"></textarea></label>
+      <label id="te-confirm-phrase-wrap"><span id="te-confirm-phrase-label"></span><input id="te-confirm-phrase" autocomplete="off"></label>
+      <div class="te-dialog-actions"><button class="te-dialog-close" type="button">取消</button><button id="te-confirm-submit" class="te-danger" type="button">确认</button></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="te-create-dialog" class="te-dialog te-create-dialog">
+  <div class="te-dialog-shell">
+    <header><div><div class="te-kicker">Catalog entry</div><h2 id="te-create-title">新建称号</h2></div><button class="te-dialog-close" type="button" aria-label="关闭">×</button></header>
+    <div class="te-dialog-body">
+      <label><span>内部 ID</span><input id="te-new-id" maxlength="64" placeholder="shop.new-title"></label>
+      <label><span>显示名称</span><input id="te-new-name" maxlength="64"></label>
+      <div id="te-create-error" class="te-field-error"></div>
+      <div class="te-dialog-actions"><button class="te-dialog-close" type="button">取消</button><button id="te-create-submit" class="te-primary" type="button">创建</button></div>
+    </div>
+  </div>
+</dialog>
+
+<div id="te-toast" class="te-toast hidden" role="status"></div>
+<script>window.__GTN_STATIC_VERSION__ = {{ static_version|tojson }};</script>
+<script src="/static/js/titleeditor.js?v={{ static_version }}"></script>
+</body>
+</html>

@@ -3,6 +3,8 @@ from story_engine import (
     _advance_enemy_move,
     _enemy_physical_damage,
     _enemy_raw_damage,
+    _is_card_playable,
+    _new_card,
     _resolve_enemy_death_hooks,
     _selectable_enemy_targets,
     _start_combat,
@@ -143,7 +145,7 @@ def test_termite_mound_death_forces_each_living_termite_to_resolve():
     ) == 3
 
 
-def test_bulb_and_locked_restrict_attack_targets_without_changing_other_cards():
+def test_bulb_restricts_targets_while_obstacles_block_hand_slots():
     state, _ = _combat('jungle-targeting', 'jungle_firefly', 'termite_soldier', 'stick')
     combat = state['combat']
     firefly = _enemy(state, 'jungle_firefly')
@@ -155,9 +157,16 @@ def test_bulb_and_locked_restrict_attack_targets_without_changing_other_cards():
     assert _selectable_enemy_targets(combat, {'type': 'bloom'}) == [firefly]
 
     firefly['bulb'] = 0
-    combat['locked'] = 1
-    assert _selectable_enemy_targets(combat, {'type': 'thorn'}) == [stick]
+    assert _selectable_enemy_targets(combat, {'type': 'thorn'}) == [firefly, soldier, stick]
     assert _selectable_enemy_targets(combat, {'type': 'bloom'}) == [firefly, soldier, stick]
+    assert combat['blockade'] == 1
+
+    first = _new_card(state, 'basic')
+    second = _new_card(state, 'basic')
+    combat['hand'] = [first, second]
+    combat['elixir'] = 99
+    assert _is_card_playable(state, first) is False
+    assert _is_card_playable(state, second) is True
 
 
 def test_mechanical_crab_super_beam_countdown_tracks_its_four_move_cycle():

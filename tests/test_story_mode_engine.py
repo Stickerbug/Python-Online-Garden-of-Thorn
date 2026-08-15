@@ -600,7 +600,7 @@ def test_story_map_has_sixteen_floors_no_early_elites_and_no_crossing_edges():
                 ) >= 0
 
 
-def test_boss_rush_map_is_a_ten_floor_global_single_route_block():
+def test_boss_rush_map_is_an_eleven_room_fixed_single_route_block():
     story_map = generate_boss_rush_map(
         'boss-rush-map',
         block=3,
@@ -609,28 +609,25 @@ def test_boss_rush_map_is_a_ten_floor_global_single_route_block():
     )
 
     assert story_map['mode'] == 'boss_rush'
-    assert story_map['floor_offset'] == 20
-    assert story_map['floor_count'] == 30
-    assert [floor['floor'] for floor in story_map['floors']] == list(range(21, 31))
+    assert story_map['floor_offset'] == 22
+    assert story_map['floor_count'] == 33
+    assert [floor['floor'] for floor in story_map['floors']] == list(range(23, 34))
+    assert [floor['nodes'][0]['type'] for floor in story_map['floors']] == [
+        'blessing', 'boss', 'rest', 'chest', 'boss', 'rest',
+        'chest', 'boss', 'rest', 'chest', 'shop',
+    ]
     assert all(floor['width'] == 1 for floor in story_map['floors'])
-    assert len(story_map['edges']) == 9
+    assert len(story_map['edges']) == 10
     assert all(
         node['status'] == 'locked'
         for floor in story_map['floors']
         for node in floor['nodes']
-    )
-    assert all(
-        node.get('enemy_health_multiplier') == 3
-        for floor in story_map['floors']
-        for node in floor['nodes']
-        if node['type'] == 'elite'
     )
 
 
 def test_boss_rush_opens_after_ten_card_rewards_and_one_talent():
     seed = 'boss-rush-opening'
     state = build_initial_story_state(seed)
-    initial_deck_size = len(state['player']['deck'])
     initial_relic_count = len(state['player']['relics'])
 
     state, _ = apply_story_action(
@@ -645,6 +642,7 @@ def test_boss_rush_opens_after_ten_card_rewards_and_one_talent():
     assert state['reward']['source'] == 'boss_rush_start_cards'
     assert state['reward']['round_total'] == 10
     assert state['map']['floors'][0]['nodes'][0]['status'] == 'locked'
+    assert [card['def_id'] for card in state['player']['deck']] == ['amulet']
 
     for round_index in range(1, 11):
         reward = state['reward']
@@ -662,7 +660,7 @@ def test_boss_rush_opens_after_ten_card_rewards_and_one_talent():
             assert state['reward']['source'] == 'boss_rush_start_cards'
             assert state['reward']['round_index'] == round_index + 1
 
-    assert len(state['player']['deck']) == initial_deck_size + 10
+    assert len(state['player']['deck']) == 11
     assert state['phase'] == 'reward'
     assert state['reward']['source'] == 'boss_rush_start_relic'
     relic_id = state['reward']['relic']
@@ -710,8 +708,8 @@ def test_boss_rush_stage_choice_advances_endlessly_without_curses():
         first_node = state['map']['floors'][0]['nodes'][0]
         assert state['phase'] == 'map'
         assert state['stage'] == block
-        assert state['current_floor'] == (block - 1) * 10 + 1
-        assert state['map']['floor_count'] == block * 10
+        assert state['current_floor'] == (block - 1) * 11 + 1
+        assert state['map']['floor_count'] == block * 11
         assert first_node['status'] == 'available'
         assert 'curses' not in state
         assert any(
@@ -883,6 +881,7 @@ def test_a_complete_three_stage_journey_can_reach_the_terminal_state():
             living_enemies = [
                 enemy for enemy in combat['enemies']
                 if int(enemy['health']) > 0
+                and enemy.get('def_id') != 'broken_machine'
             ]
             target = next(
                 (

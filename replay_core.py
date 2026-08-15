@@ -33,7 +33,7 @@ REPLAY_EXTERNAL_BLOBS_ENABLED = str(
 REPLAY_ITEM_FIELDS = (
     'id', 'match_id', 'created_at', 'mode', 'player_names_json', 'winner_name', 'winner_index',
     'round_num', 'duration_ms', 'replay_version', 'replay_sha256', 'replay_size',
-    'mod_source', 'mod_hash', 'community_mod_name',
+    'mod_source', 'mod_hash', 'community_mod_name', 'replay_prefix',
 )
 REPLAY_ITEM_COLUMNS = ', '.join(REPLAY_ITEM_FIELDS)
 _TIMELINE_CACHE = OrderedDict()
@@ -241,17 +241,29 @@ def _row_dict(row):
     return dict(row) if row is not None else None
 
 
+def normalize_replay_prefix(value):
+    prefix = str(value or 'R').strip().upper().rstrip('-')
+    return 'P' if prefix == 'P' else 'R'
+
+
+def _requested_replay_prefix(value):
+    text = str(value or '').strip().upper()
+    if text.startswith(('R-', 'P-')):
+        return text[0]
+    return None
+
+
 def normalize_replay_id(value):
     text = str(value or '').strip().upper()
-    if text.startswith('R-'):
+    if text.startswith(('R-', 'P-')):
         text = text[2:]
     if not text.isdigit() or int(text) <= 0:
         raise ValueError('回放 ID 格式无效')
     return int(text)
 
 
-def format_replay_id(value):
-    return f'R-{normalize_replay_id(value)}'
+def format_replay_id(value, prefix='R'):
+    return f'{normalize_replay_prefix(prefix)}-{normalize_replay_id(value)}'
 
 
 def _qualified_replay_columns(alias='r'):
@@ -414,6 +426,7 @@ def save_replay_snapshot(match_id, summary, *, card_defs=None, game_version='', 
         'version': REPLAY_VERSION,
         'meta': {
             'match_id': match_id,
+            'replay_prefix': normalize_replay_prefix(data.get('replay_prefix')),
             'mode': data.get('mode'),
             'players': players,
             'winner_name': data.get('winner_name'),
@@ -452,14 +465,15 @@ def save_replay_snapshot(match_id, summary, *, card_defs=None, game_version='', 
         with get_db_connection() as conn:
             card_hash = _store_card_snapshot(conn, card_defs, game_version=game_version, git_sha=git_sha)
             mod_hashes = _store_community_mod_blobs(conn, data)
+            # Regular and Phelren replays intentionally share this AUTOINCREMENT key.
             cur = conn.execute(
                 '''
                 INSERT INTO match_replays (
                     match_id, created_at, mode, player_names_json, winner_name, winner_index,
                     round_num, duration_ms, replay_version, replay_sha256, replay_size, replay_blob,
-                    replay_blob_path, mod_source, mod_hash, community_mod_name
+                    replay_blob_path, mod_source, mod_hash, community_mod_name, replay_prefix
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''',
                 (
                     match_id,
@@ -478,6 +492,7 @@ def save_replay_snapshot(match_id, summary, *, card_defs=None, game_version='', 
                     data.get('mod_source') or 'official',
                     data.get('mod_hash') or '',
                     data.get('community_mod_name') or '',
+                    normalize_replay_prefix(data.get('replay_prefix')),
                 ),
             )
             replay_id = cur.lastrowid
@@ -1200,8 +1215,12 @@ def _replay_row_to_item(row):
             meta = _decode_replay_blob(row['replay_blob']).get('meta', {})
         except Exception:
             meta = {}
+    replay_prefix = normalize_replay_prefix(_row_get(row, 'replay_prefix') or meta.get('replay_prefix'))
+    replay_id = int(row['id'])
     return {
-        'id': row['id'],
+        'id': replay_id,
+        'replay_prefix': replay_prefix,
+        'replay_ref': format_replay_id(replay_id, replay_prefix),
         'match_id': row['match_id'],
         'created_at': row['created_at'],
         'mode': row['mode'],
@@ -1218,12 +1237,16 @@ def _replay_row_to_item(row):
 
 
 def get_replay(replay_id):
+    requested_prefix = _requested_replay_prefix(replay_id)
     replay_id = normalize_replay_id(replay_id)
     with get_db_connection() as conn:
         row = conn.execute(f'SELECT {REPLAY_ITEM_COLUMNS} FROM match_replays WHERE id = ?', (replay_id,)).fetchone()
     if row is None:
         return None
-    return _replay_row_to_item(row)
+    item = _replay_row_to_item(row)
+    if requested_prefix and item['replay_prefix'] != requested_prefix:
+        return None
+    return item
 
 
 def build_replay_download_package(replay_id):
@@ -1239,7 +1262,7 @@ def build_replay_download_package(replay_id):
             '''
             SELECT id, match_id, created_at, mode, player_names_json,
                    replay_version, replay_sha256, replay_size, replay_blob,
-                   replay_blob_path
+                   replay_blob_path, replay_prefix
             FROM match_replays WHERE id = ?
             ''',
             (replay_id,),
@@ -1256,6 +1279,8 @@ def build_replay_download_package(replay_id):
         'format_version': 1,
         'encoding': 'zlib-json',
         'replay_id': int(row['id']),
+        'replay_prefix': normalize_replay_prefix(_row_get(row, 'replay_prefix')),
+        'replay_ref': format_replay_id(row['id'], _row_get(row, 'replay_prefix')),
         'match_id': row['match_id'],
         'created_at': row['created_at'],
         'mode': row['mode'],
@@ -1268,7 +1293,7 @@ def build_replay_download_package(replay_id):
     payload = REPLAY_DOWNLOAD_MAGIC + struct.pack('>I', len(header_raw)) + header_raw + blob
     return {
         'replay_id': replay_id,
-        'filename': f'GTN-{format_replay_id(replay_id)}.gtnreplay',
+        'filename': f'GTN-{format_replay_id(replay_id, _row_get(row, "replay_prefix"))}.gtnreplay',
         'payload': payload,
         'sha256': row['replay_sha256'],
     }
@@ -1389,7 +1414,7 @@ def export_replay_json_file(replay_id, output_dir):
     with get_db_connection() as conn:
         row = conn.execute(
             '''
-            SELECT replay_blob, replay_blob_path, replay_size, replay_sha256
+            SELECT replay_blob, replay_blob_path, replay_size, replay_sha256, replay_prefix
             FROM match_replays WHERE id = ?
             ''',
             (replay_id,),
@@ -1398,7 +1423,8 @@ def export_replay_json_file(replay_id, output_dir):
         return None
     replay = _decode_replay_blob(load_replay_blob(row))
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.abspath(os.path.join(output_dir, f'replay-{format_replay_id(replay_id)}.json'))
+    replay_ref = format_replay_id(replay_id, _row_get(row, 'replay_prefix'))
+    output_path = os.path.abspath(os.path.join(output_dir, f'replay-{replay_ref}.json'))
     temp_path = f'{output_path}.tmp'
     with open(temp_path, 'w', encoding='utf-8', newline='\n') as handle:
         json.dump(replay, handle, ensure_ascii=False, indent=2)
@@ -1406,6 +1432,7 @@ def export_replay_json_file(replay_id, output_dir):
     os.replace(temp_path, output_path)
     return {
         'replay_id': replay_id,
+        'replay_ref': replay_ref,
         'path': output_path,
         'bytes': os.path.getsize(output_path),
         'sha256': row['replay_sha256'],
@@ -1833,8 +1860,9 @@ def _timeline_index_cache_get(row):
 
 
 def replay_timeline(replay_id, offset=None, limit=None):
+    replay_id = normalize_replay_id(replay_id)
     with get_db_connection() as conn:
-        row = conn.execute('SELECT * FROM match_replays WHERE id = ?', (int(replay_id),)).fetchone()
+        row = conn.execute('SELECT * FROM match_replays WHERE id = ?', (replay_id,)).fetchone()
     if row is None:
         return None
     sliced = False
@@ -1858,6 +1886,8 @@ def replay_timeline(replay_id, offset=None, limit=None):
     return {
         'replay': {
             'id': row['id'],
+            'replay_prefix': normalize_replay_prefix(_row_get(row, 'replay_prefix')),
+            'replay_ref': format_replay_id(row['id'], _row_get(row, 'replay_prefix')),
             'meta': replay.get('meta') or {},
             'rules': replay.get('rules') or {},
             'duration_ms': row['duration_ms'],

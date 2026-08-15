@@ -716,15 +716,21 @@
         const focusedButton = event.target && event.target.closest
             ? event.target.closest('button, [role="button"]')
             : null;
+        const binding = bindingFromEvent(event);
+        const action = binding ? actionForBinding(binding) : null;
+        const overrideNativeActivation = Boolean(
+            focusedButton
+            && action
+            && host.shouldOverrideNativeActivation?.(action.id, event, focusedButton)
+        );
         if (
             focusedButton
             && ['Enter', 'NumpadEnter', 'Space'].includes(event.code)
             && !host.hasVirtualFocus?.()
+            && !overrideNativeActivation
         ) return;
         if (handleFixedKeydown(event)) return;
-        const binding = bindingFromEvent(event);
         if (!binding || event.repeat) return;
-        const action = actionForBinding(binding);
         if (!action) return;
         const options = { secondPage: fixedSecondPageHeld };
         if (action.hold) {

@@ -97,6 +97,7 @@
 <button id="btn-changelog-top" class="top-icon-btn changelog-top-btn" type="button" aria-label="更新日志"><img src="/static/assets/ui-icons/log.svg" alt="" aria-hidden="true"><span class="top-icon-label">更新日志</span></button>
 <button id="btn-skin-top" class="top-icon-btn skin-top-btn" type="button" aria-label="皮肤"><img src="/static/assets/ui-icons/skins.svg" alt="" aria-hidden="true"><span class="top-icon-label">皮肤</span></button>
 <button id="btn-achievements-top" class="top-icon-btn achievements-top-btn" type="button" aria-label="成就"><img src="/static/assets/ui-icons/achievements.svg" alt="" aria-hidden="true"><span class="top-icon-label">成就</span></button>
+<button id="btn-title-shop-top" class="top-icon-btn title-shop-top-btn" type="button" aria-label="商店"><img src="/static/assets/ui-icons/shop.svg" alt="" aria-hidden="true"><span class="top-icon-label">商店</span></button>
 <button id="btn-card-gallery" class="top-icon-btn gallery-top-btn" type="button" aria-label="图鉴"><img src="/static/assets/ui-icons/gallery.svg" alt="" aria-hidden="true"><span class="top-icon-label">图鉴</span></button>
 <button id="btn-replays-top" class="top-icon-btn replay-top-btn" type="button" aria-label="回放"><img src="/static/assets/ui-icons/replay.svg" alt="" aria-hidden="true"><span class="top-icon-label">回放</span></button>
 <button id="btn-friends-top" class="top-icon-btn friends-top-btn hidden" type="button" aria-label="好友"><img src="/static/assets/ui-icons/friends.svg" alt="" aria-hidden="true"><span class="top-icon-label">好友</span></button>
@@ -238,6 +239,25 @@
   <div id="achievements-titles-panel" class="achievement-tab-panel title-center-panel hidden"></div>
   <div id="achievements-tasks-panel" class="achievement-tab-panel hidden"></div>
 </div>
+<div id="title-shop-popover" class="account-popover title-shop-popover hidden">
+  <div class="account-popover-head">
+    <div id="title-shop-popover-title" class="account-popover-title">商店</div>
+    <div id="title-shop-balance" class="title-shop-balance"></div>
+    <button id="btn-title-shop-close" class="account-close-btn" type="button">×</button>
+  </div>
+  <div class="account-mode-tabs title-shop-tabs">
+    <button id="title-shop-tab-titles" class="account-mode-tab active" type="button">称号</button>
+  </div>
+  <div class="title-shop-toolbar">
+    <span id="title-shop-countdown" class="title-shop-countdown"></span>
+    <div class="title-shop-toolbar-actions">
+      <button id="btn-title-shop-lock" class="mini-btn title-shop-lock-btn" type="button"></button>
+      <button id="btn-title-shop-refresh" class="mini-btn title-shop-refresh-btn" type="button"></button>
+    </div>
+  </div>
+  <div id="title-shop-status" class="account-replay-sub"></div>
+  <div id="title-shop-grid" class="title-shop-grid"></div>
+</div>
 <div id="friends-popover" class="account-popover friends-popover hidden">
   <div class="account-popover-head">
     <div id="friends-popover-title" class="account-popover-title">好友</div>
@@ -342,7 +362,7 @@
             <option value="other">其他</option>
           </select>
           <input id="feedback-title-input" type="text" maxlength="80" placeholder="标题">
-          <input id="feedback-replay-id" class="hidden" type="text" maxlength="24" inputmode="numeric" placeholder="回放 ID，例如 R-12345">
+          <input id="feedback-replay-id" class="hidden" type="text" maxlength="24" inputmode="text" placeholder="回放 ID，例如 R-12345 或 P-12345">
           <select id="feedback-status-select" class="hidden" aria-label="反馈状态">
             <option value="open">未处理</option>
             <option value="pending">已回复</option>
@@ -553,6 +573,11 @@
 <div class="mode-tab" data-mode="2v2">2v2</div>
 <div class="mode-tab" data-mode="urf">无限火力</div>
 <div class="mode-tab" data-mode="random_deck">随机卡组</div>
+</div>
+<div id="ai-1v1-test-entry" class="ai-1v1-test-entry hidden">
+<button id="btn-ai-1v1-test" class="btn ai-1v1-test-button" type="button">
+<span id="ai-1v1-test-label">对战 Phelren V1</span>
+</button>
 </div>
 </div>
 <div id="lobby-team-section" class="lobby-team-section"></div>

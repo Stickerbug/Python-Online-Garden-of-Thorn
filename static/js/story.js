@@ -3064,9 +3064,6 @@
         let enemies = livingStoryEnemies(state);
         const bulbs = enemies.filter((enemy) => Number(enemy.bulb) > 0);
         if (bulbs.length) enemies = bulbs;
-        if (values?.type === 'thorn' && Number(state?.combat?.locked) > 0) {
-            enemies = enemies.filter((enemy) => String(enemy.def_id || '') === 'stick');
-        }
         return enemies;
     }
 
@@ -3802,7 +3799,43 @@
         performSelectedCombatCard(targetKind, targetId);
     }
 
-    function createStoryPileTile(card, order) {
+    function storyPileCardIdentity(card) {
+        if (!card || typeof card !== 'object') return '';
+        const normalize = (value) => {
+            if (Array.isArray(value)) return value.map(normalize);
+            if (!value || typeof value !== 'object') return value;
+            return Object.keys(value).sort().reduce((result, key) => {
+                if (key !== 'instance_id') result[key] = normalize(value[key]);
+                return result;
+            }, {});
+        };
+        return JSON.stringify(normalize(card));
+    }
+
+    function storyPileCardGroups(cards) {
+        const groups = new Map();
+        cards.forEach((card) => {
+            const key = storyPileCardIdentity(card);
+            const group = groups.get(key) || { card, count: 0 };
+            group.count += 1;
+            groups.set(key, group);
+        });
+        return [...groups.values()].sort((left, right) => {
+            const leftValues = cardValues(left.card);
+            const rightValues = cardValues(right.card);
+            const leftRarity = STORY_RARITY_ORDER.indexOf(String(leftValues?.rarity || 'common'));
+            const rightRarity = STORY_RARITY_ORDER.indexOf(String(rightValues?.rarity || 'common'));
+            const rarityCompare = (leftRarity < 0 ? 999 : leftRarity)
+                - (rightRarity < 0 ? 999 : rightRarity);
+            if (rarityCompare) return rarityCompare;
+            const typeOrder = Object.keys(storyContent?.card_types || {});
+            const typeCompare = typeOrder.indexOf(leftValues?.type) - typeOrder.indexOf(rightValues?.type);
+            if (typeCompare) return typeCompare;
+            return localize(leftValues?.name).localeCompare(localize(rightValues?.name), lang);
+        });
+    }
+
+    function createStoryPileTile(card, count = 1) {
         const values = cardValues(card);
         if (!values) return document.createTextNode('');
         const entry = document.createElement('div');
@@ -3828,12 +3861,12 @@
             image.addEventListener('error', () => image.remove());
             art.append(image);
         }
-        const orderLabel = document.createElement('span');
-        orderLabel.className = 'story-pile-order';
-        orderLabel.textContent = `#${order}`;
+        const countLabel = document.createElement('span');
+        countLabel.className = 'story-pile-count';
+        countLabel.textContent = `×${count}`;
         inner.append(costs, name, art);
         tile.append(inner);
-        entry.append(tile, orderLabel);
+        entry.append(tile, countLabel);
         storyCardElementData.set(tile, card);
         return entry;
     }
@@ -3923,7 +3956,9 @@
             empty.textContent = t.pileEmpty;
             grid?.append(empty);
         } else {
-            cards.forEach((card, index) => grid?.append(createStoryPileTile(card, index + 1)));
+            storyPileCardGroups(cards).forEach(({ card, count }) => {
+                grid?.append(createStoryPileTile(card, count));
+            });
         }
         const dialog = $('story-pile-dialog');
         if (dialog) {
@@ -5608,8 +5643,8 @@
         setText(
             'story-room-copy',
             lang === 'zh'
-                ? '标准旅程包含3个阶段；Boss Rush 将不断生成新的10层路线。'
-                : 'Standard journeys have 3 stages; Boss Rush keeps generating new 10-floor routes.',
+                ? '标准旅程包含3个阶段；Boss Rush 将不断生成新的11房间固定路线。'
+                : 'Standard journeys have 3 stages; Boss Rush repeats a fixed 11-room route.',
         );
 
         let selectedBiome = String(room.biomes?.[0] || 'garden');
@@ -5638,8 +5673,8 @@
             boss_rush: {
                 name: 'Boss Rush',
                 description: lang === 'zh'
-                    ? '先获得10次卡牌奖励与1项天赋；每10层选择下一区域，无限推进。'
-                    : 'Begin with 10 card rewards and 1 talent; every 10 floors, choose the next region and continue endlessly.',
+                    ? '仅以护身符开局，先获得10次卡牌奖励与1项天赋；每轮依次经过赐福、3名首领、休息、宝箱与商店。'
+                    : 'Start with only Amulet, then gain 10 card rewards and 1 talent. Each loop follows Blessing, 3 Bosses, Rest, Chests, and Shop.',
             },
         };
         appendStoryChoiceHeading(container, lang === 'zh' ? '模式' : 'Mode');
@@ -5696,6 +5731,7 @@
                 difficulty: selectedDifficulty,
                 mode: selectedMode,
             }),
+            { primary: true },
         ));
         showView('story-room');
     }
@@ -6009,13 +6045,13 @@
             bleed: lang === 'zh' ? '流血' : 'Bleed',
             fire: lang === 'zh' ? '灼烧' : 'Burn',
             blockade: lang === 'zh' ? '封锁' : 'Blockade',
-            locked: lang === 'zh' ? '锁定' : 'Locked',
             fragment: lang === 'zh' ? '碎片' : 'Fragment',
             evil_eye: lang === 'zh' ? '邪眼' : 'Evil Eye',
             bulb: lang === 'zh' ? '灯泡' : 'Bulb',
             hard_shell: lang === 'zh' ? '坚硬' : 'Hard Shell',
             magic_reflection: lang === 'zh' ? '魔力反射' : 'Magic Reflection',
             disc: lang === 'zh' ? '圆盘' : 'Disc',
+            toxic_pressure: lang === 'zh' ? '剧毒压力' : 'Toxic Pressure',
             magic: 'M',
         }[key] || (lang === 'zh' ? '特殊效果' : key.replaceAll('_', ' '));
     }
@@ -6066,6 +6102,13 @@
                 label = lang === 'zh'
                     ? `下回合手牌电荷 +${amount}`
                     : `Next turn hand Charge +${amount}`;
+            } else if (entry?.effect_type === 'all_cards_charge') {
+                label = lang === 'zh'
+                    ? `所有牌电荷 +${amount}`
+                    : `All cards gain ${amount} Charge`;
+            } else if (entry?.effect_type === 'mechanical_track') {
+                label = localize(entry?.label)
+                    || (lang === 'zh' ? '触发机械轨道顶牌' : 'Resolve the top Mechanical Track card');
             } else {
                 const cardName = localize(storyContent?.cards?.[entry?.card_id]?.name);
                 label = cardName
@@ -6295,7 +6338,6 @@
             { key: 'bleed', label: '流血', value: combat.bleed },
             { key: 'fire', label: '灼烧', value: combat.fire },
             { key: 'blockade', label: '封锁', value: combat.blockade },
-            { key: 'locked', label: '锁定', value: combat.locked },
         ]);
         renderStoryEquipment(combat.equipment);
         const enemyGroup = $('story-enemy-group');
@@ -6455,10 +6497,11 @@
         container?.append(empty);
     }
 
-    function storyRoomFooterButton(label, onClick) {
+    function storyRoomFooterButton(label, onClick, options = {}) {
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'story-command';
+        button.className = `story-command${options.primary ? ' story-command-primary' : ''}`;
+        if (options.primary) button.dataset.storyConfirmAction = '1';
         button.textContent = label;
         button.addEventListener('click', onClick);
         return button;
@@ -6730,6 +6773,7 @@
                 () => storyAction('choose_stage', {
                     biome: selectedBiome,
                 }),
+                { primary: true },
             ));
         } else if (room.type === 'rest') {
             setText('story-room-title', t.restTitle);
@@ -7182,7 +7226,9 @@
             });
         }
         const skip = $('story-reward-skip');
-        const mustTakeCard = (state?.player?.relics || []).includes('grab_every_card');
+        const isMandatoryBossRushCard = reward.source === 'boss_rush_start_cards';
+        const mustTakeCard = isMandatoryBossRushCard
+            || (state?.player?.relics || []).includes('grab_every_card');
         skip?.classList.toggle('hidden', claims.card || mustTakeCard);
         const canContinue = Object.values(claims).every(Boolean);
         const continueButton = $('story-reward-continue');
@@ -7191,7 +7237,7 @@
         const leaveButton = $('story-reward-leave');
         if (leaveButton) {
             leaveButton.textContent = t.directLeave;
-            leaveButton.classList.toggle('hidden', canContinue);
+            leaveButton.classList.toggle('hidden', canContinue || isMandatoryBossRushCard);
         }
         showView('story-reward');
     }
@@ -7592,9 +7638,12 @@
         return [
             ...document.querySelectorAll(
                 '#story-hand .story-card:not(:disabled), '
-                + '.story-choice-screen:not(.hidden) .story-choice-option:not(:disabled), '
-                + '.story-choice-screen:not(.hidden) .story-card:not(:disabled), '
-                + '.story-map-node.is-actionable, '
+                 + '.story-choice-screen:not(.hidden) .story-choice-option:not(:disabled), '
+                 + '.story-choice-screen:not(.hidden) .story-card:not(:disabled), '
+                 + '.story-choice-screen:not(.hidden) [data-story-confirm-action="1"]:not(:disabled), '
+                 + '.story-choice-screen:not(.hidden) .story-reward-actions button:not(:disabled), '
+                 + '#story-room:not(.hidden) .story-room-footer button:not(:disabled), '
+                 + '.story-map-node.is-actionable, '
                 + '#story-terminal:not(.hidden) button:not(:disabled), '
                 + '#story-empty:not(.hidden) button:not(:disabled)',
             ),
@@ -7701,32 +7750,66 @@
         return cancelStoryCombatSelection(true);
     }
 
+    function focusedStoryKeyboardItem(container = null) {
+        if (
+            storyKeyboardFocus
+            && storyElementVisible(storyKeyboardFocus)
+            && (!container || container.contains(storyKeyboardFocus))
+        ) return storyKeyboardFocus;
+        const active = document.activeElement;
+        if (
+            active
+            && storyElementVisible(active)
+            && (!container || container.contains(active))
+            && storyKeyboardItems().includes(active)
+        ) return active;
+        return null;
+    }
+
+    function toggleFocusedStoryItem() {
+        return activateStoryElement(focusedStoryKeyboardItem());
+    }
+
     function confirmStorySurface() {
         const shortcutModal = $('modal');
         if (shortcutModal?.classList.contains('active')) {
-            const focused = shortcutModal.querySelector('.keyboard-nav-focus');
-            if (focused && activateStoryElement(focused)) return true;
-            return activateStoryElement(shortcutModal.querySelector(
+            const primary = shortcutModal.querySelector(
                 '.modal-buttons .btn-primary:not(:disabled), button:not(:disabled)',
-            ));
+            );
+            if (activateStoryElement(primary)) return true;
+            return activateStoryElement(focusedStoryKeyboardItem(shortcutModal));
         }
         const dialog = topmostStoryDialog();
         if (dialog) {
-            const focused = dialog.querySelector('.keyboard-nav-focus');
-            if (focused && activateStoryElement(focused)) return true;
             const confirm = dialog.querySelector(
                 '[value="confirm"]:not(:disabled), .story-command-primary:not(:disabled)',
             );
-            return activateStoryElement(confirm);
+            if (activateStoryElement(confirm)) return true;
+            // An incomplete selection must not turn Enter into another option toggle.
+            if (dialog.querySelector('[value="confirm"], .story-command-primary')) return true;
+            return activateStoryElement(focusedStoryKeyboardItem(dialog));
         }
-        if (storyKeyboardFocus && activateStoryElement(storyKeyboardFocus)) return true;
+        const explicitConfirm = document.querySelector(
+            '.story-choice-screen:not(.hidden) [data-story-confirm-action="1"]:not(:disabled), '
+            + '#story-reward-continue:not(.hidden):not(:disabled)',
+        );
+        if (activateStoryElement(explicitConfirm)) return true;
+        const focused = focusedStoryKeyboardItem();
+        if (focused && activateStoryElement(focused)) return true;
+        const blockedConfirm = document.querySelector(
+            '.story-choice-screen:not(.hidden) [data-story-confirm-action="1"], '
+            + '#story-reward-continue:not(.hidden)',
+        );
+        if (blockedConfirm) return true;
         const card = selectedCombatCard(activeRun?.state);
         if (card && storyCursorCardMode(card)) {
             playSelectedCombatCard(cardTargetKind(card));
             return true;
         }
-        const primary = document.querySelector(
-            '.story-choice-screen:not(.hidden) .is-primary:not(:disabled), '
+         const primary = document.querySelector(
+             '.story-choice-screen:not(.hidden) [data-story-confirm-action="1"]:not(:disabled), '
+             + '#story-reward-continue:not(.hidden):not(:disabled), '
+             + '.story-choice-screen:not(.hidden) .is-primary:not(:disabled), '
             + '#story-terminal:not(.hidden) .story-command-primary:not(:disabled), '
             + '#story-empty:not(.hidden) .story-command-primary:not(:disabled)',
         );
@@ -7882,7 +7965,8 @@
         const controls = storyKeyboardItems();
         addStoryNavigationActions(context, controls);
         const primary = document.querySelector(
-            '.story-choice-screen:not(.hidden) .is-primary:not(:disabled), '
+            '.story-choice-screen:not(.hidden) [data-story-confirm-action="1"]:not(:disabled), '
+            + '.story-choice-screen:not(.hidden) .is-primary:not(:disabled), '
             + '#story-terminal:not(.hidden) .story-command-primary:not(:disabled), '
             + '#story-empty:not(.hidden) .story-command-primary:not(:disabled)',
         );
@@ -7906,8 +7990,9 @@
             storySecondHandPage = options.active !== false;
             return true;
         case 'confirm':
-        case 'toggle_focused':
             return confirmStorySurface();
+        case 'toggle_focused':
+            return toggleFocusedStoryItem();
         case 'cancel':
             return cancelStorySurface();
         case 'refresh':
@@ -7971,6 +8056,15 @@
         getShortcutContext: getStoryShortcutContext,
         hasVirtualFocus() {
             return Boolean(storyKeyboardFocus?.isConnected);
+        },
+        shouldOverrideNativeActivation(actionId) {
+            if (actionId !== 'confirm') return false;
+            const dialog = topmostStoryDialog();
+            if (dialog?.querySelector('[value="confirm"], .story-command-primary')) return true;
+            return Boolean(document.querySelector(
+                '.story-choice-screen:not(.hidden) [data-story-confirm-action="1"], '
+                + '#story-reward-continue:not(.hidden)',
+            ));
         },
         getAccount() {
             return window.__STORY_ACCOUNT__ || null;

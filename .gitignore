@@ -3,6 +3,10 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+output/
+
+temp music folder/
+
 # C extensions
 *.so
 
