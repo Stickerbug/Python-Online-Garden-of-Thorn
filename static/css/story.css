@@ -4679,6 +4679,32 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   font-weight: inherit;
 }
 
+.title-paint-gradient {
+  color: transparent !important;
+  background-image: var(--title-paint-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.title-paint-theme {
+  color: var(--title-paint-light, currentColor) !important;
+}
+
+:root[data-theme='dark'] .title-paint-theme {
+  color: var(--title-paint-dark, currentColor) !important;
+}
+
+.player-title-inline,
+.player-name-value,
+.title-style-segment {
+  display: inline;
+}
+
+.story-player-title {
+  font-weight: 800;
+}
+
 .story-chat-origin {
   margin-right: 2px;
 }

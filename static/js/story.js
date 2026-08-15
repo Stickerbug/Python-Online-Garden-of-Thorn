@@ -1064,20 +1064,28 @@
         indestructible: '#D4AC0D',
         critical: '#D4AC0D',
         primary: '#7EEF6D',
-        common: '#FFE65D',
-        rare: '#861FDE',
+        common: '#7EEF6D',
+        unusual: '#FFE65D',
+        rare: '#4D52E3',
+        epic: '#861FDE',
+        legendary: '#DE1F1F',
+        mythic: '#1FDBDE',
         ultra: '#FF2B75',
         super: '#2BFFA3',
+        omega: '#F329D9',
+        eternal: '#EEEEEE',
+        unique: '#555555',
         milestone: '#5AA469',
         hidden: '#7257A8',
-        neutral: 'var(--story-muted)',
+        neutral: 'var(--text-secondary)',
+        spectator: 'var(--text-muted)',
     });
 
     function storyChatColorCss(value) {
         const raw = String(value || '').trim();
         const key = raw.toLowerCase();
         if (STORY_CHAT_TITLE_COLORS[key]) return STORY_CHAT_TITLE_COLORS[key];
-        if (/^#[0-9a-f]{6}$/i.test(raw)) return raw;
+        if (/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(raw)) return raw;
         if (
             globalThis.CSS?.supports?.('color', raw)
             && /^(?:rgb|hsl)a?\([^;{}]+\)$/i.test(raw)
@@ -1085,6 +1093,144 @@
             return raw;
         }
         return '';
+    }
+
+    function normalizeStoryTitlePaint(paint, fallbackColor = 'neutral') {
+        if (!paint || typeof paint !== 'object') {
+            return {
+                kind: 'solid',
+                color: storyChatColorCss(paint || fallbackColor)
+                    || storyChatColorCss(fallbackColor),
+            };
+        }
+        const kind = String(paint.kind || '').toLowerCase();
+        if (kind === 'solid') {
+            return {
+                kind,
+                color: storyChatColorCss(paint.color) || storyChatColorCss(fallbackColor),
+            };
+        }
+        if (kind === 'gradient' || kind === 'rainbow') {
+            const colors = (Array.isArray(paint.colors) ? paint.colors : [])
+                .map(storyChatColorCss)
+                .filter(Boolean)
+                .slice(0, 12);
+            if (colors.length < 2) {
+                return { kind: 'solid', color: storyChatColorCss(fallbackColor) };
+            }
+            const numericAngle = Number(paint.angle);
+            const angle = Number.isFinite(numericAngle)
+                ? ((numericAngle % 360) + 360) % 360
+                : 90;
+            return { kind, colors, angle };
+        }
+        if (kind === 'theme') {
+            return {
+                kind,
+                light: normalizeStoryTitlePaint(paint.light, fallbackColor),
+                dark: normalizeStoryTitlePaint(paint.dark, fallbackColor),
+            };
+        }
+        return { kind: 'solid', color: storyChatColorCss(fallbackColor) };
+    }
+
+    function applyStoryTitlePaint(element, rawPaint) {
+        if (!element) return;
+        const paint = normalizeStoryTitlePaint(rawPaint);
+        element.classList.remove('title-paint-solid', 'title-paint-gradient', 'title-paint-theme');
+        element.style.removeProperty('color');
+        element.style.removeProperty('--title-paint-gradient');
+        element.style.removeProperty('--title-paint-light');
+        element.style.removeProperty('--title-paint-dark');
+        if (paint.kind === 'gradient' || paint.kind === 'rainbow') {
+            element.classList.add('title-paint-gradient');
+            element.style.setProperty(
+                '--title-paint-gradient',
+                `linear-gradient(${paint.angle}deg,${paint.colors.join(',')})`,
+            );
+            return;
+        }
+        if (paint.kind === 'theme') {
+            element.classList.add('title-paint-theme');
+            element.style.setProperty(
+                '--title-paint-light',
+                paint.light?.color || storyChatColorCss('neutral'),
+            );
+            element.style.setProperty(
+                '--title-paint-dark',
+                paint.dark?.color || storyChatColorCss('neutral'),
+            );
+            return;
+        }
+        element.classList.add('title-paint-solid');
+        element.style.color = paint.color || storyChatColorCss('neutral');
+    }
+
+    function storyTitleSegments(title = {}) {
+        const rawSegments = title?.style?.segments;
+        if (Array.isArray(rawSegments) && rawSegments.some((item) => item && item.text != null)) {
+            return rawSegments.slice(0, 24).map((item, index) => ({
+                id: String(item.id || `s${index + 1}`),
+                text: String(item.text || ''),
+                paint: normalizeStoryTitlePaint(item.paint, title.color || 'neutral'),
+            }));
+        }
+        return [{
+            id: 'legacy',
+            text: String(title.name || ''),
+            paint: normalizeStoryTitlePaint(
+                { kind: 'solid', color: title.color || 'neutral' },
+            ),
+        }];
+    }
+
+    function appendStoryStyledTitle(
+        parent,
+        title,
+        bracketed = true,
+        className = 'story-chat-player-title',
+    ) {
+        const segments = storyTitleSegments(title);
+        segments.forEach((segment, index) => {
+            const element = document.createElement('span');
+            element.className = `${className} player-title-inline title-style-segment`;
+            element.dataset.titleSegment = segment.id;
+            element.textContent = `${bracketed && index === 0 ? '[' : ''}${segment.text}${bracketed && index === segments.length - 1 ? ']' : ''}`;
+            applyStoryTitlePaint(element, segment.paint);
+            parent.appendChild(element);
+        });
+    }
+
+    function storyEquippedTitles(identity = {}) {
+        return Array.isArray(identity.equipped_titles)
+            ? identity.equipped_titles.filter((item) => item?.name).slice(0, 3)
+            : [];
+    }
+
+    function storyPlayerNamePaint(identity = {}) {
+        if (identity?.name_style?.paint) {
+            return normalizeStoryTitlePaint(identity.name_style.paint);
+        }
+        if (identity?.name_color) {
+            return normalizeStoryTitlePaint({ kind: 'solid', color: identity.name_color });
+        }
+        return null;
+    }
+
+    function renderStoryPlayerIdentity() {
+        const container = $('story-player-name');
+        if (!container) return;
+        const account = window.__STORY_ACCOUNT__ || {};
+        container.replaceChildren();
+        storyEquippedTitles(account).forEach((title) => {
+            appendStoryStyledTitle(container, title, true, 'story-player-title');
+        });
+        const name = document.createElement('span');
+        name.className = 'player-name-value story-player-name-value';
+        name.textContent = String(account.display_name || account.username || '?');
+        const paint = storyPlayerNamePaint(account);
+        if (paint) applyStoryTitlePaint(name, paint);
+        container.appendChild(name);
     }
 
     function storyChatEntryKey(entry = {}) {
@@ -1288,16 +1434,9 @@
             parent.appendChild(spectator);
         }
 
-        const titles = Array.isArray(entry.equipped_titles)
-            ? entry.equipped_titles.filter((item) => item?.name).slice(0, 3)
-            : [];
+        const titles = storyEquippedTitles(entry);
         titles.forEach((title) => {
-            const titleElement = document.createElement('span');
-            titleElement.className = 'story-chat-player-title';
-            titleElement.textContent = `[${String(title.name)}]`;
-            const color = storyChatColorCss(title.color);
-            if (color) titleElement.style.color = color;
-            parent.appendChild(titleElement);
+            appendStoryStyledTitle(parent, title);
         });
         if (!titles.length && (entry.console_player || entry.special_role === 'console')) {
             const titleElement = document.createElement('span');
@@ -1317,12 +1456,14 @@
             || entry.username
             || '?',
         );
-        const nameColor = storyChatColorCss(
-            entry.name_color
-            || titles[0]?.color
-            || entry.special_role_color,
-        );
-        if (nameColor) name.style.color = nameColor;
+        let namePaint = storyPlayerNamePaint(entry);
+        if (!namePaint && entry.special_role_color) {
+            namePaint = normalizeStoryTitlePaint({
+                kind: 'solid',
+                color: entry.special_role_color,
+            });
+        }
+        if (namePaint) applyStoryTitlePaint(name, namePaint);
         parent.appendChild(name);
     }
 
@@ -8411,6 +8552,7 @@
 
     loadStoryMainFont();
     applyText();
+    renderStoryPlayerIdentity();
     renderPlayerSkin();
     bind();
     startStoryChat();

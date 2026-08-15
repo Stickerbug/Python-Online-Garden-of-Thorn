@@ -438,7 +438,7 @@ GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSIO
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -6167,6 +6167,19 @@ def _require_account_json():
     user_id, username = _current_account_identity()
     if not user_id:
         return None, None, _json_error('请先登录账号', 401)
+    return user_id, username, None
+
+
+def _require_staff_account_json():
+    user_id, username, error = _require_account_json()
+    if error:
+        return None, None, error
+    try:
+        allowed = bool(feedback_is_staff(user_id))
+    except Exception:
+        allowed = False
+    if not allowed:
+        return None, None, _json_error('权限不足', 403)
     return user_id, username, None
 
 
@@ -15519,17 +15532,24 @@ def story_page():
     user = _current_account_user()
     if not user:
         return redirect('/?story=login_required')
+    account = {
+        'id': user.get('id'),
+        'username': user.get('username'),
+        'display_name': user.get('display_name') or user.get('username'),
+        'player_id': user.get('player_id'),
+        'skin': public_skin_config(user.get('skin')),
+        'keybindings': user.get('keybindings'),
+    }
+    try:
+        profile = get_user_role_profile(user.get('id')) if DB_AVAILABLE else None
+        account.update(special_public_fields(profile or {}))
+    except Exception as exc:
+        app.logger.warning('failed to load story title identity for user %s: %s', user.get('id'), exc)
+        account.update(special_public_fields({}))
     return render_template(
         'story.html',
         static_version=GTN_STATIC_VERSION,
-        account={
-            'id': user.get('id'),
-            'username': user.get('username'),
-            'display_name': user.get('display_name') or user.get('username'),
-            'player_id': user.get('player_id'),
-            'skin': public_skin_config(user.get('skin')),
-            'keybindings': user.get('keybindings'),
-        },
+        account=account,
         story_dev_tools=_story_dev_tools_allowed(user.get('id')),
     )
 
@@ -16059,14 +16079,18 @@ def api_card_exporter_me():
 
 @app.route('/api/card-exporter/login', methods=['POST'])
 def api_card_exporter_login():
+    ip = _client_ip()
+    if _rate_limited(ip, 'card_exporter_login', limit=8, window=300):
+        admin_event('security', f'card exporter login rate limited from {ip}')
+        return jsonify({'success': False, 'error': '尝试次数过多，请稍后再试'}), 429
     data = request.get_json(silent=True) or {}
     key = str(data.get('key') or '')
     if key and check_password_hash(BETA_ACCESS_KEY_HASH, key):
         session['card_exporter_authenticated'] = True
         session['card_exporter_login_time'] = time.time()
-        admin_event('security', f'card exporter login success from {_client_ip()}')
+        admin_event('security', f'card exporter login success from {ip}')
         return jsonify({'success': True})
-    admin_event('security', f'card exporter login failed from {_client_ip()}')
+    admin_event('security', f'card exporter login failed from {ip}')
     return jsonify({'success': False, 'error': '密码错误'}), 401
 
 
@@ -16178,15 +16202,19 @@ def beta_logout():
 @app.route('/api/hidden-features/unlock', methods=['POST'])
 def hidden_features_unlock():
     try:
+        ip = _client_ip()
+        if _rate_limited(ip, 'hidden_features_unlock', limit=8, window=300):
+            admin_event('security', f'hidden features unlock rate limited from {ip}')
+            return jsonify({'success': False, 'error': '尝试次数过多，请稍后再试'}), 429
         data = request.get_json(silent=True) or {}
         key = str(data.get('key') or '')
         if key and check_password_hash(BETA_ACCESS_KEY_HASH, key):
             session.permanent = True
             session['hidden_features_unlocked'] = True
             session['hidden_features_unlock_time'] = time.time()
-            admin_event('security', f'hidden features unlocked from {_client_ip()}')
+            admin_event('security', f'hidden features unlocked from {ip}')
             return jsonify({'success': True})
-        admin_event('security', f'hidden features unlock failed from {_client_ip()}')
+        admin_event('security', f'hidden features unlock failed from {ip}')
         return jsonify({'success': False, 'error': '秘钥错误'}), 401
     except Exception as exc:
         admin_event('error', f'hidden features unlock failed: {exc}')
@@ -16782,6 +16810,22 @@ def healthz():
 
 @app.route('/api/health/full')
 def health_full():
+    forwarded = str(request.headers.get('X-Forwarded-For') or '').strip()
+    direct_loopback = not forwarded and str(request.remote_addr or '') in {'127.0.0.1', '::1'}
+    staff_account = False
+    account_user = _current_account_user(allow_remember=False) if session.get('user_id') else None
+    if account_user:
+        try:
+            staff_account = bool(feedback_is_staff(account_user.get('id')))
+        except Exception:
+            staff_account = False
+    if not (
+        direct_loopback
+        or staff_account
+        or is_admin_authenticated()
+        or is_admin_console_authenticated()
+    ):
+        return jsonify({'success': False, 'error': 'forbidden'}), 403
     db_ok = False
     db_error = ''
     try:
@@ -19000,6 +19044,12 @@ def api_community_mod_delete(sha256):
 
 @app.route('/api/community-mods/validate-url', methods=['POST'])
 def api_community_mod_validate_url():
+    _, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    ip = _client_ip()
+    if _rate_limited(ip, 'community_validate_url', limit=6, window=60):
+        return _json_error('校验过于频繁，请稍后再试', 429)
     data = request.get_json(silent=True) or {}
     public_url = str(data.get('public_url') or '').strip()
     if not public_url:
@@ -19014,6 +19064,9 @@ def api_community_mod_validate_url():
 
 @app.route('/api/font-subsets/community', methods=['POST'])
 def api_community_font_subset():
+    ip = _client_ip()
+    if _rate_limited(ip, 'community_font_subset', limit=60, window=60):
+        return _json_error('字体资源请求过于频繁，请稍后再试', 429)
     data = request.get_json(silent=True) or {}
     try:
         community_fields, community_mods = resolve_community_loadout(data)
@@ -19037,6 +19090,9 @@ def api_community_font_subset():
 
 @app.route('/api/mods/save', methods=['POST'])
 def api_mods_save():
+    _, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
     data = request.get_json(force=True)
     if not data:
         return jsonify({'success': False, 'error': 'invalid data'}), 400

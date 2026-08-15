@@ -179,6 +179,7 @@ drain off
 | `templates/index.html`、`static/js/game.js` | 主页、多人游戏和训练场前端 |
 | `templates/story.html`、`static/js/story.js` | 故事模式前端 |
 | `static/css/` | 游戏、故事模式和管理界面样式 |
+| `docs/` | API 权限清单、卡牌描述规范等开发文档 |
 | `scripts/` | 蓝绿部署、健康检查、备份和数据维护脚本 |
 | `tests/` | 对战规则、故事模式、接口与回归测试 |
 
@@ -187,7 +188,7 @@ drain off
 欢迎参与以下工作：
 
 - 试玩并通过游戏内反馈或交流群报告平衡问题、Bug 和功能建议。
-- 按现有卡牌描述规范设计新卡牌或模组。部分卡牌风格受 florr.io 启发。
+- 按[卡牌描述规范](docs/卡牌描述规范.md)设计新卡牌或模组。部分卡牌风格受 florr.io 启发。
 - 参与代码开发，认领 Issue 或发起 Pull Request。
 - 提供符合项目风格的美术、UI、音频和翻译素材。
 
