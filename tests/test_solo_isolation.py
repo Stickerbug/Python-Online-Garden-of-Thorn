@@ -1,6 +1,6 @@
 import copy
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import app
 from runtime_budget import ActionWorkBudgetExceeded
@@ -98,6 +98,40 @@ class SoloIsolationTests(unittest.TestCase):
         )
         self.assertTrue(ok)
         self.assertTrue(acquired)
+
+    def test_phelren_actions_do_not_compete_with_training_capacity(self):
+        app.ai_test_sessions[self.sid] = {'thinking': False}
+        self.assertTrue(app._SOLO_ACTION_CAPACITY.acquire(timeout=0.1))
+        try:
+            ok, value = app._solo_safe_cpu_call(
+                self.sid,
+                'phelren_capacity_probe',
+                lambda: 'ready',
+                offload=False,
+            )
+        finally:
+            app._SOLO_ACTION_CAPACITY.release()
+        self.assertTrue(ok)
+        self.assertEqual(value, 'ready')
+
+    def test_phelren_busy_message_does_not_refer_to_training(self):
+        app.ai_test_sessions[self.sid] = {'thinking': False}
+        unavailable = Mock()
+        unavailable.acquire.return_value = False
+        with (
+            patch.object(app, '_PHELREN_ACTION_CAPACITY', unavailable),
+            patch.object(app, 'soft_reject') as reject,
+        ):
+            ok, value = app._solo_safe_cpu_call(
+                self.sid,
+                'phelren_busy_probe',
+                lambda: None,
+                offload=False,
+            )
+        self.assertFalse(ok)
+        self.assertIsNone(value)
+        unavailable.acquire.assert_called_once_with(timeout=app.PHELREN_ACTION_QUEUE_WAIT_SECONDS)
+        self.assertEqual(reject.call_args.kwargs['message'], 'Phelren 运算繁忙，请稍后重试')
 
     def test_official_loadout_is_reused_between_guest_sessions(self):
         disabled_mods = ['test-disabled-mod.gtnmod']

@@ -878,12 +878,18 @@ _STORY_PRESENCES = {}
 SOLO_HISTORY_LIMIT = 100
 SOLO_MAX_CONCURRENT_ACTIONS = max(1, _env_int('GTN_SOLO_MAX_CONCURRENT_ACTIONS', 1))
 SOLO_ACTION_QUEUE_WAIT_SECONDS = max(0.0, _env_float('GTN_SOLO_ACTION_QUEUE_WAIT_SECONDS', 0.2))
+PHELREN_MAX_CONCURRENT_ACTIONS = max(1, _env_int('GTN_PHELREN_MAX_CONCURRENT_ACTIONS', 2))
+PHELREN_ACTION_QUEUE_WAIT_SECONDS = max(
+    0.0,
+    _env_float('GTN_PHELREN_ACTION_QUEUE_WAIT_SECONDS', 3.0),
+)
 SOLO_ACTION_SLOW_MS = max(1.0, _env_float('GTN_SOLO_ACTION_SLOW_MS', 250))
 SOLO_ACTION_WORK_BUDGET = max(1000, _env_int('GTN_SOLO_ACTION_WORK_BUDGET', 20000))
 SOLO_LOG_LIMIT = max(200, _env_int('GTN_SOLO_LOG_LIMIT', 1200))
 SOLO_ACTION_SAMPLES = deque(maxlen=500)
 _SOLO_ACTION_LOCKS = {}
 _SOLO_ACTION_CAPACITY = threading.BoundedSemaphore(SOLO_MAX_CONCURRENT_ACTIONS)
+_PHELREN_ACTION_CAPACITY = threading.BoundedSemaphore(PHELREN_MAX_CONCURRENT_ACTIONS)
 _SOLO_SLOW_LOG_LAST = {}
 _SOLO_LOADOUT_CACHE = OrderedDict()
 _SOLO_LOADOUT_CACHE_LOCK = threading.Lock()
@@ -8041,8 +8047,14 @@ def socket_metrics_payload():
         'solo_actions': {
             'active_sessions': len(solo_sessions),
             'max_concurrent': SOLO_MAX_CONCURRENT_ACTIONS,
+            'phelren_max_concurrent': PHELREN_MAX_CONCURRENT_ACTIONS,
+            'phelren_queue_wait_seconds': PHELREN_ACTION_QUEUE_WAIT_SECONDS,
             'work_budget': SOLO_ACTION_WORK_BUDGET,
             'count': len(solo_actions),
+            'by_scope': {
+                scope: sum(1 for item in solo_actions if item.get('scope', 'training') == scope)
+                for scope in ('training', 'phelren')
+            },
             'outcomes': {
                 outcome: sum(1 for item in solo_actions if item.get('outcome') == outcome)
                 for outcome in ('ok', 'budget_exceeded', 'exception')
@@ -14125,11 +14137,20 @@ def _try_acquire_solo_action(sid, event_name):
     lock = _solo_action_lock_for_sid(sid)
     if lock.acquire(blocking=False):
         return lock
+    ai_meta = ai_test_sessions.get(sid)
+    if ai_meta is not None:
+        message = (
+            'Phelren 正在思考，请稍后'
+            if ai_meta.get('thinking')
+            else 'Phelren 正在处理上一项操作，请稍后重试'
+        )
+    else:
+        message = '训练场正在处理上一项操作，请稍后重试'
     soft_reject(
         sid,
         event_name,
         'ACTION_BUSY',
-        message='训练场正在处理上一项操作，请稍后重试',
+        message=message,
     )
     return None
 
@@ -14190,7 +14211,7 @@ def _drop_solo_session_locked(sid):
         )
 
 
-def _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome='ok'):
+def _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome='ok', scope='training'):
     sample = {
         'ts': time.time(),
         'sid': sid,
@@ -14198,6 +14219,7 @@ def _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome='ok'):
         'elapsed_ms': round(float(elapsed_ms), 2),
         'ok': bool(ok),
         'outcome': str(outcome or ('ok' if ok else 'error')),
+        'scope': str(scope or 'training'),
     }
     SOLO_ACTION_SAMPLES.append(sample)
     if elapsed_ms < SOLO_ACTION_SLOW_MS:
@@ -14212,7 +14234,7 @@ def _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome='ok'):
             'perf',
             (
                 f'solo_action event={event_name} elapsed_ms={elapsed_ms:.1f} '
-                f'ok={bool(ok)} outcome={sample["outcome"]}'
+                f'ok={bool(ok)} outcome={sample["outcome"]} scope={sample["scope"]}'
             ),
             sid=sid,
             event_name=event_name,
@@ -14227,13 +14249,21 @@ def _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome='ok'):
 
 
 def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
-    acquired = _SOLO_ACTION_CAPACITY.acquire(timeout=SOLO_ACTION_QUEUE_WAIT_SECONDS)
+    is_phelren = sid in ai_test_sessions
+    scope = 'phelren' if is_phelren else 'training'
+    capacity = _PHELREN_ACTION_CAPACITY if is_phelren else _SOLO_ACTION_CAPACITY
+    queue_wait = PHELREN_ACTION_QUEUE_WAIT_SECONDS if is_phelren else SOLO_ACTION_QUEUE_WAIT_SECONDS
+    acquired = capacity.acquire(timeout=queue_wait)
     if not acquired:
         soft_reject(
             sid,
             event_name,
             'ACTION_BUSY',
-            message='训练场运算繁忙，请稍后重试',
+            message=(
+                'Phelren 运算繁忙，请稍后重试'
+                if is_phelren
+                else '训练场运算繁忙，请稍后重试'
+            ),
         )
         return False, None
     started = time.perf_counter()
@@ -14259,7 +14289,14 @@ def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
         )
         socketio.emit(
             'server_error',
-            {'message': '本次训练场结算过于复杂，已撤销该操作', 'code': 'SOLO_ACTION_TOO_COMPLEX'},
+            {
+                'message': (
+                    '本次 Phelren 对局结算过于复杂，已撤销该操作'
+                    if is_phelren
+                    else '本次训练场结算过于复杂，已撤销该操作'
+                ),
+                'code': 'SOLO_ACTION_TOO_COMPLEX',
+            },
             room=sid,
         )
         return False, None
@@ -14274,14 +14311,21 @@ def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
         )
         socketio.emit(
             'server_error',
-            {'message': '训练场操作失败，已恢复操作前状态', 'code': 'SOLO_ACTION_FAILED'},
+            {
+                'message': (
+                    'Phelren 对局操作失败，已恢复操作前状态'
+                    if is_phelren
+                    else '训练场操作失败，已恢复操作前状态'
+                ),
+                'code': 'SOLO_ACTION_FAILED',
+            },
             room=sid,
         )
         return False, None
     finally:
         elapsed_ms = (time.perf_counter() - started) * 1000
-        _SOLO_ACTION_CAPACITY.release()
-        _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome)
+        capacity.release()
+        _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome, scope)
 
 
 def _solo_engine_snapshot(engine):
