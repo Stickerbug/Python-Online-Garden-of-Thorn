@@ -1429,7 +1429,7 @@ a { font: inherit; }
   font-family: var(--font-card);
   font-size: .92em;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.2;
   text-overflow: ellipsis;
   vertical-align: -.08em;
   white-space: nowrap;
@@ -2038,12 +2038,12 @@ a { font: inherit; }
   position: relative;
   top: var(--card-english-margin-top);
   margin: 0 0 .2cqi;
-  padding: 0 var(--card-english-padding-x) .4cqi;
+  padding: 0 var(--card-english-padding-x) .9cqi;
   overflow: hidden;
   font-family: var(--font-main);
   font-size: var(--card-english-font);
   font-weight: 600;
-  line-height: 1.12;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2589,7 +2589,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .story-pile-tile-name {
   overflow: hidden;
   color: var(--tile-color, var(--story-text));
-  font: 700 8px/1.05 var(--font-card);
+  font: 700 8px/1.2 var(--font-card);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3031,7 +3031,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   transform: translateY(-6px);
   overflow: hidden;
   color: var(--tile-color, var(--story-text));
-  font: 900 8px/1.05 var(--font-card);
+  font: 900 8px/1.2 var(--font-card);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;

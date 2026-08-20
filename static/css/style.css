@@ -6977,7 +6977,7 @@ body {
 
 .opp-hand-chip .choice-card-name {
   --chip-max-width: min(132px, 30vw);
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .equip-row {
@@ -8135,7 +8135,7 @@ body {
   top: var(--card-english-margin-top);
   margin-top: 0;
   margin-bottom: 0.2cqi;
-  padding: 0 var(--card-english-padding-x) 0.8cqi;
+  padding: 0 var(--card-english-padding-x) 0.9cqi;
   font-family: var(--font-main);
   font-size: var(--card-english-font);
   font-weight: 600;
@@ -8359,7 +8359,7 @@ html.blind-level-4 .card-prediction-part.magic {
 
 .inline-card-chip.inline-card-chip-compact .choice-card-name {
   --chip-max-width: min(150px, 34vw);
-  line-height: 1;
+  line-height: 1.2;
 }
 
 .inline-card-chip.inline-card-chip-compact .choice-card-flags .card-flag {
@@ -10801,7 +10801,7 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 .log-entry .battle-log-card-chip .choice-card-name {
-  line-height: 1.05;
+  line-height: 1.2;
 }
 
 .log-entry .battle-log-card-chip .choice-card-flags .card-flag {
@@ -12189,7 +12189,7 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 .draft-pick-token .choice-card-name {
-  line-height: 1.08;
+  line-height: 1.2;
 }
 
 .draft-reroll-btn {
@@ -13609,7 +13609,7 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
   font-family: var(--font-card);
   font-size: 1em;
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.2;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -15704,7 +15704,7 @@ button:not(:disabled):active,
   font-size: var(--card-english-font);
   margin-top: var(--card-english-margin-top);
   margin-bottom: 0.2cqi;
-  padding: 0 var(--card-english-padding-x) 0.4cqi;
+  padding: 0 var(--card-english-padding-x) 0.9cqi;
 }
 
 .card-art {
@@ -18161,7 +18161,7 @@ html[data-ui-style="minimal"] .btn-end-turn {
   transform: translateY(-6px);
   font-size: 8px;
   font-weight: 900;
-  line-height: 1.05;
+  line-height: 1.2;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -18173,10 +18173,10 @@ html[data-ui-style="minimal"] .btn-end-turn {
   grid-template-rows: repeat(2, 1fr);
   align-items: center;
   justify-items: center;
-  min-height: 16px;
+  min-height: 18px;
   transform: translateY(-7px);
   font-size: 7px;
-  line-height: 1;
+  line-height: 1.18;
   white-space: normal;
   text-overflow: clip;
 }
@@ -19232,7 +19232,7 @@ button.armor-meter:focus-visible {
 .game-container.mode-spectate .card .card-english-name,
 .game-container.mode-urf .hand-area .card .card-english-name {
   font-size: var(--card-english-font) !important;
-  line-height: 1.12;
+  line-height: 1.2;
   min-height: 0;
   transform: translateZ(0);
 }
@@ -19514,8 +19514,8 @@ button.armor-meter:focus-visible {
 .choice-option-text .inline-card-chip .choice-card-name,
 .rules-body .inline-card-chip .choice-card-name {
   max-width: min(16em, 64vw);
-  min-height: 1.16em;
-  line-height: 1.02;
+  min-height: 1.24em;
+  line-height: 1.18;
 }
 
 .term-intro-panel .inline-card-chip .choice-card-extra-cost,
@@ -20489,8 +20489,8 @@ html.battle-mobile-input-focus.minimal-mobile-canvas[data-ui-style="minimal"] #v
 
 .card .card-effect .inline-card-chip .choice-card-name {
   max-width: var(--chip-max-width);
-  min-height: 1.12em;
-  line-height: 1.02;
+  min-height: 1.22em;
+  line-height: 1.18;
   justify-content: center;
   text-align: center;
 }
