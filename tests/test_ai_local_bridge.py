@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
-from ai_local_bridge import LocalAiWorkerClient
+from ai_local_bridge import LocalAiBridgeTimeout, LocalAiWorkerClient
 from game_engine import GameEngine
 
 
@@ -89,3 +90,27 @@ def test_local_ai_bridge_accepts_server_paths_and_retention_settings(tmp_path) -
     assert command[command.index("--max-diagnostic-bytes") + 1] == "123456"
     assert "--export-finished" not in command
     assert client.max_parallel_decisions == 2
+
+
+def test_local_ai_bridge_recycles_a_worker_after_decision_timeout(tmp_path) -> None:
+    game_root = tmp_path / "game"
+    ai_root = tmp_path / "ai"
+    game_root.mkdir()
+    ai_root.mkdir()
+    client = LocalAiWorkerClient(game_root=game_root, ai_root=ai_root)
+    engine = GameEngine()
+
+    with (
+        mock.patch.object(client, "start"),
+        mock.patch.object(client, "_request", side_effect=LocalAiBridgeTimeout("late")),
+        mock.patch.object(client, "stop") as stop,
+        pytest.raises(LocalAiBridgeTimeout),
+    ):
+        client.decide_and_execute(
+            engine,
+            session_id="timeout-test",
+            player_id=0,
+            seed=1,
+        )
+
+    stop.assert_called_once_with()

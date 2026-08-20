@@ -7,6 +7,7 @@ import json
 import os
 import pickle
 import secrets
+import socket
 import subprocess
 import threading
 import time
@@ -17,6 +18,10 @@ from typing import Any
 
 
 class LocalAiBridgeError(RuntimeError):
+    pass
+
+
+class LocalAiBridgeTimeout(LocalAiBridgeError):
     pass
 
 
@@ -267,7 +272,15 @@ class LocalAiWorkerClient:
             except Exception:
                 detail = str(exc)
             raise LocalAiBridgeError(f"GTN-AI request failed: {detail}") from exc
-        except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        except (TimeoutError, socket.timeout) as exc:
+            raise LocalAiBridgeTimeout(f"GTN-AI worker request timed out: {exc}") from exc
+        except urllib.error.URLError as exc:
+            if isinstance(getattr(exc, "reason", None), (TimeoutError, socket.timeout)):
+                raise LocalAiBridgeTimeout(
+                    f"GTN-AI worker request timed out: {exc.reason}"
+                ) from exc
+            raise LocalAiBridgeError(f"GTN-AI worker is unavailable: {exc}") from exc
+        except (OSError, json.JSONDecodeError) as exc:
             raise LocalAiBridgeError(f"GTN-AI worker is unavailable: {exc}") from exc
         if not result.get("success"):
             raise LocalAiBridgeError(str(result.get("error") or "GTN-AI request failed"))
@@ -289,17 +302,23 @@ class LocalAiWorkerClient:
         if not acquired:
             raise LocalAiBridgeError("Phelren decision capacity is busy")
         try:
-            result = self._request("POST", "/v1/live/decide", {
-                "session_id": session_id,
-                "engine_snapshot": self.encode_engine(engine),
-                "player_id": int(player_id),
-                "seed": int(seed),
-                "enabled_mods": list(enabled_mods or []),
-                "public_history": list(public_history or []),
-                "session_metadata": dict(session_metadata or {}),
-                "record": True,
-                "execute": True,
-            })
+            try:
+                result = self._request("POST", "/v1/live/decide", {
+                    "session_id": session_id,
+                    "engine_snapshot": self.encode_engine(engine),
+                    "player_id": int(player_id),
+                    "seed": int(seed),
+                    "enabled_mods": list(enabled_mods or []),
+                    "public_history": list(public_history or []),
+                    "session_metadata": dict(session_metadata or {}),
+                    "record": True,
+                    "execute": True,
+                })
+            except LocalAiBridgeTimeout:
+                # The worker thread may still be evaluating after urllib gives
+                # up. Recycle it so later turns do not queue behind stale work.
+                self.stop()
+                raise
         finally:
             self._decision_slots.release()
         snapshot = result.get("engine_snapshot")

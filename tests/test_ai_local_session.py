@@ -85,6 +85,53 @@ def test_ai_turn_executes_atomically_then_returns_control_to_human():
         gtn._SOLO_ACTION_LOCKS.pop(sid, None)
 
 
+def test_ai_turn_waits_for_the_scheduling_human_action_to_unlock():
+    sid = "ai-local-lock-handoff-test"
+    engine = _test_engine()
+    meta = {
+        "session_id": "ai-local-lock-handoff-session",
+        "seed": 12,
+        "human_player_id": 1,
+        "ai_player_id": 0,
+        "enabled_mods": [],
+        "action_index": 0,
+        "thinking": True,
+        "diagnostic_metadata": {},
+    }
+    gtn.solo_sessions[sid] = engine
+    gtn.ai_test_sessions[sid] = meta
+    meta["replay_room"] = gtn._create_ai_test_replay_room(sid, engine, meta)
+    action_lock = gtn._solo_action_lock_for_sid(sid)
+    assert action_lock.acquire(blocking=False)
+    released = False
+
+    def release_scheduling_action(_seconds):
+        nonlocal released
+        if not released:
+            released = True
+            action_lock.release()
+
+    try:
+        with (
+            mock.patch.object(gtn, "get_local_ai_worker", return_value=_EndTurnWorker()),
+            mock.patch.object(gtn, "send_solo_state"),
+            mock.patch.object(gtn, "send_solo_state_with_pending"),
+            mock.patch.object(gtn.socketio, "sleep", side_effect=release_scheduling_action),
+        ):
+            gtn._run_ai_test_turn(sid)
+
+        assert released is True
+        assert engine.current_player == 1
+        assert meta["action_index"] == 1
+        assert meta["thinking"] is False
+    finally:
+        if not released:
+            action_lock.release()
+        gtn.solo_sessions.pop(sid, None)
+        gtn.ai_test_sessions.pop(sid, None)
+        gtn._SOLO_ACTION_LOCKS.pop(sid, None)
+
+
 def test_ai_visible_delays_and_recent_decision_summary_use_the_requested_ranges():
     engine = _test_engine()
     card_action = {

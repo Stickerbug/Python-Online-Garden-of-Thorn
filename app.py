@@ -878,7 +878,10 @@ _STORY_PRESENCES = {}
 SOLO_HISTORY_LIMIT = 100
 SOLO_MAX_CONCURRENT_ACTIONS = max(1, _env_int('GTN_SOLO_MAX_CONCURRENT_ACTIONS', 1))
 SOLO_ACTION_QUEUE_WAIT_SECONDS = max(0.0, _env_float('GTN_SOLO_ACTION_QUEUE_WAIT_SECONDS', 0.2))
-PHELREN_MAX_CONCURRENT_ACTIONS = max(1, _env_int('GTN_PHELREN_MAX_CONCURRENT_ACTIONS', 2))
+PHELREN_MAX_CONCURRENT_ACTIONS = max(
+    1,
+    _env_int('GTN_PHELREN_MAX_CONCURRENT_ACTIONS', GTN_AI_1V1_MAX_ACTIVE),
+)
 PHELREN_ACTION_QUEUE_WAIT_SECONDS = max(
     0.0,
     _env_float('GTN_PHELREN_ACTION_QUEUE_WAIT_SECONDS', 3.0),
@@ -23122,13 +23125,42 @@ def _ai_test_fallback_action(engine, ai_player_id):
     return engine.end_turn(ai_player_id), 'end_turn', {}
 
 
-def _run_ai_test_turn(sid):
+def _wait_for_ai_test_action_lock(sid):
+    """Yield until the human action that scheduled this AI turn is committed."""
+
     action_lock = _solo_action_lock_for_sid(sid)
-    if not action_lock.acquire(timeout=2.0):
+    started = time.monotonic()
+    reported_wait = False
+    while not action_lock.acquire(blocking=False):
         with _lock:
             meta = ai_test_sessions.get(sid)
-            if meta:
+            engine = solo_sessions.get(sid)
+            if not meta or engine is None:
+                return None
+            ai_player_id = int(meta.get('ai_player_id', 1))
+            if (
+                getattr(engine, 'game_over', False)
+                or _solo_decision_player(engine) != ai_player_id
+            ):
                 meta['thinking'] = False
+                return None
+        if not reported_wait and time.monotonic() - started >= 5.0:
+            reported_wait = True
+            admin_event(
+                'warning',
+                'Phelren waited more than 5 seconds for the session action lock',
+                sid=sid,
+            )
+        try:
+            socketio.sleep(0.05)
+        except Exception:
+            time.sleep(0.05)
+    return action_lock
+
+
+def _run_ai_test_turn(sid):
+    action_lock = _wait_for_ai_test_action_lock(sid)
+    if action_lock is None:
         return
     try:
         for _ in range(AI_TEST_MAX_CHAIN_ACTIONS):
