@@ -1145,6 +1145,10 @@
         const paint = normalizeStoryTitlePaint(rawPaint);
         element.classList.remove('title-paint-solid', 'title-paint-gradient', 'title-paint-theme');
         element.style.removeProperty('color');
+        element.style.removeProperty('background-image');
+        element.style.removeProperty('background-clip');
+        element.style.removeProperty('-webkit-background-clip');
+        element.style.removeProperty('-webkit-text-fill-color');
         element.style.removeProperty('--title-paint-gradient');
         element.style.removeProperty('--title-paint-light');
         element.style.removeProperty('--title-paint-dark');
@@ -1170,6 +1174,8 @@
         }
         element.classList.add('title-paint-solid');
         element.style.color = paint.color || storyChatColorCss('neutral');
+        element.style.backgroundImage = 'none';
+        element.style.webkitTextFillColor = 'currentColor';
     }
 
     function storyTitleSegments(title = {}) {

@@ -2663,10 +2663,13 @@ function titlePaintPresentation(rawPaint) {
         const dark = paint.dark?.color || titleColorCss('neutral');
         return {
             className: 'title-paint-theme',
-            style: `--title-paint-light:${light};--title-paint-dark:${dark}`,
+            style: `--title-paint-light:${light};--title-paint-dark:${dark};background-image:none;-webkit-text-fill-color:currentColor`,
         };
     }
-    return { className: 'title-paint-solid', style: `color:${paint.color || titleColorCss('neutral')}` };
+    return {
+        className: 'title-paint-solid',
+        style: `color:${paint.color || titleColorCss('neutral')};background-image:none;-webkit-text-fill-color:currentColor`,
+    };
 }
 
 function applyTitlePaint(el, paint) {
@@ -2675,6 +2678,10 @@ function applyTitlePaint(el, paint) {
     el.classList.remove('title-paint-solid', 'title-paint-gradient', 'title-paint-theme');
     if (presentation.className) el.classList.add(presentation.className);
     el.style.removeProperty('color');
+    el.style.removeProperty('background-image');
+    el.style.removeProperty('background-clip');
+    el.style.removeProperty('-webkit-background-clip');
+    el.style.removeProperty('-webkit-text-fill-color');
     el.style.removeProperty('--title-paint-gradient');
     el.style.removeProperty('--title-paint-light');
     el.style.removeProperty('--title-paint-dark');

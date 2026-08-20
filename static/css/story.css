@@ -4832,6 +4832,14 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   -webkit-text-fill-color: transparent;
 }
 
+.title-paint-solid,
+.title-paint-theme {
+  background-image: none !important;
+  background-clip: border-box;
+  -webkit-background-clip: border-box;
+  -webkit-text-fill-color: currentColor;
+}
+
 .title-paint-theme {
   color: var(--title-paint-light, currentColor) !important;
 }

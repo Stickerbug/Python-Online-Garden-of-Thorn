@@ -418,9 +418,9 @@
       return { className: 'title-paint-gradient', properties: { '--title-paint-gradient': `linear-gradient(${normalized.angle}deg,${normalized.colors.map(titleColorCss).join(',')})` } };
     }
     if (normalized.kind === 'theme') {
-      return { className: 'title-paint-theme', properties: { '--title-paint-light': titleColorCss(normalized.light.color), '--title-paint-dark': titleColorCss(normalized.dark.color) } };
+      return { className: 'title-paint-theme', properties: { '--title-paint-light': titleColorCss(normalized.light.color), '--title-paint-dark': titleColorCss(normalized.dark.color), 'background-image': 'none', '-webkit-text-fill-color': 'currentColor' } };
     }
-    return { className: 'title-paint-solid', properties: { color: titleColorCss(normalized.color) } };
+    return { className: 'title-paint-solid', properties: { color: titleColorCss(normalized.color), 'background-image': 'none', '-webkit-text-fill-color': 'currentColor' } };
   }
 
   function applyPaint(node, paint) {
