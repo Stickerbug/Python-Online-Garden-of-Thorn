@@ -2792,14 +2792,28 @@
         });
     }
 
-    function mapPoint(node) {
+    function storyMapFloorBounds(map) {
+        const floorNumbers = (map?.floors || [])
+            .flatMap((floor) => (floor?.nodes || []).map((node) => Number(node?.floor)))
+            .filter(Number.isFinite);
+        if (!floorNumbers.length) return { minimum: 1, span: 15 };
+        const minimum = Math.min(...floorNumbers);
+        const maximum = Math.max(...floorNumbers);
+        return {
+            minimum,
+            span: Math.max(1, maximum - minimum),
+        };
+    }
+
+    function mapPoint(node, floorBounds = { minimum: 1, span: 15 }) {
         const width = 760;
         const height = 1040;
         const horizontalPadding = 56;
         const verticalPadding = 48;
+        const normalizedFloor = (Number(node.floor) - floorBounds.minimum) / floorBounds.span;
         return {
             x: horizontalPadding + node.x * (width - horizontalPadding * 2),
-            y: height - verticalPadding - ((node.floor - 1) / 15) * (height - verticalPadding * 2),
+            y: height - verticalPadding - normalizedFloor * (height - verticalPadding * 2),
         };
     }
 
@@ -2832,6 +2846,7 @@
         const svg = $('story-map');
         if (!svg || !map || !Array.isArray(map.floors)) return;
         svg.replaceChildren();
+        const floorBounds = storyMapFloorBounds(map);
         const nodes = new Map();
         map.floors.forEach((floor) => floor.nodes.forEach((node) => nodes.set(node.id, node)));
         const edgeGroup = svgElement('g', { 'aria-hidden': 'true' });
@@ -2839,8 +2854,8 @@
             const from = nodes.get(edge.from);
             const to = nodes.get(edge.to);
             if (!from || !to) return;
-            const start = mapPoint(from);
-            const end = mapPoint(to);
+            const start = mapPoint(from, floorBounds);
+            const end = mapPoint(to, floorBounds);
             const segment = mapEdgeSegment(start, end);
             if (!segment) return;
             const traversed = from.status === 'completed'
@@ -2857,7 +2872,7 @@
         svg.append(edgeGroup);
 
         map.floors.forEach((floor) => floor.nodes.forEach((node) => {
-            const point = mapPoint(node);
+            const point = mapPoint(node, floorBounds);
             const actionable = !options.readOnly && node.status === 'available';
             const routeCurrent = String(node.id) === String(currentNodeId);
             const group = svgElement('g', {
@@ -2904,7 +2919,7 @@
         if (focusNode && scroller) requestAnimationFrame(() => {
             const renderedHeight = svg.getBoundingClientRect().height;
             const scale = renderedHeight > 0 ? renderedHeight / 1040 : 1;
-            const targetY = mapPoint(focusNode).y * scale;
+            const targetY = mapPoint(focusNode, floorBounds).y * scale;
             scroller.scrollTop = Math.max(0, targetY - scroller.clientHeight / 2);
         });
     }

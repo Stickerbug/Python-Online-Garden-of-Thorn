@@ -957,6 +957,26 @@ def test_story_scrollable_lists_keep_position_when_the_same_view_rerenders():
         assert 'restoreStoryScrollPositions(scrollPositions);' in branch
 
 
+def test_boss_rush_map_positions_use_the_current_block_floor_range():
+    bounds = STORY_JS.split('function storyMapFloorBounds(map) {', 1)[1].split(
+        'function mapPoint(',
+        1,
+    )[0]
+    assert 'Math.min(...floorNumbers)' in bounds
+    assert 'Math.max(...floorNumbers)' in bounds
+    assert 'span: Math.max(1, maximum - minimum)' in bounds
+
+    map_render = STORY_JS.split('function renderMap(map, currentNodeId', 1)[1].split(
+        'function currentNode(',
+        1,
+    )[0]
+    assert 'const floorBounds = storyMapFloorBounds(map);' in map_render
+    assert 'mapPoint(from, floorBounds)' in map_render
+    assert 'mapPoint(to, floorBounds)' in map_render
+    assert 'mapPoint(node, floorBounds)' in map_render
+    assert 'mapPoint(focusNode, floorBounds)' in map_render
+
+
 def test_story_codex_uses_explicit_rarity_order():
     expected_order = (
         "'primary'",
