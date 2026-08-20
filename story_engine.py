@@ -167,6 +167,10 @@ def _normalize_legacy_story_state(state):
 
 def _turn_elixir_baseline(state, combat=None):
     combat = combat or state.get('combat') or {}
+    reward_room_type = combat.get('reward_room_type')
+    if not reward_room_type:
+        current_node = _node_lookup(state).get(state.get('current_node_id')) or {}
+        reward_room_type = current_node.get('type')
     amount = max(1, int(state.get('player', {}).get('max_elixir') or 1))
     for relic_id in state.get('player', {}).get('relics', []):
         relic = STORY_RELICS.get(relic_id) or {}
@@ -179,7 +183,7 @@ def _turn_elixir_baseline(state, combat=None):
             'turn_elixir',
         }:
             amount += bonus
-        elif script == 'elite_boss_elixir' and combat.get('reward_room_type') in ('elite', 'boss'):
+        elif script == 'elite_boss_elixir' and reward_room_type in ('elite', 'boss'):
             amount += bonus
     if _has_relic(state, 'cognitive_bias'):
         amount -= max(0, int(combat.get('cognitive_bias_loss') or 0))
@@ -3639,6 +3643,7 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'round': 1,
         'turn': 'player',
         'turn_kind': 'normal',
+        'reward_room_type': str(node.get('type') or 'combat'),
         'elixir': int(state['player']['max_elixir']),
         'magic': int(state['player']['magic']),
         'shield': 0,

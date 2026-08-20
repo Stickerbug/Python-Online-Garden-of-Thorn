@@ -8,6 +8,7 @@ from story_engine import (
     _resolve_enemy_death_hooks,
     _selectable_enemy_targets,
     _start_combat,
+    _turn_elixir_baseline,
 )
 from story_mode import build_initial_story_state
 
@@ -31,6 +32,33 @@ def _enemy(state, def_id):
         for enemy in state['combat']['enemies']
         if enemy['def_id'] == def_id
     )
+
+
+def test_strive_grants_elixir_against_elite_bush_and_legacy_elite_combat():
+    state = build_initial_story_state('strive-bush')
+    state['player']['relics'].append('strive')
+    state['biome'] = 'jungle'
+    events = []
+
+    _start_combat(
+        state,
+        {'type': 'elite'},
+        'strive-bush',
+        events,
+        encounter_override=[{'def_id': 'bush'}],
+    )
+
+    assert state['combat']['reward_room_type'] == 'elite'
+    assert state['combat']['elixir'] == state['player']['max_elixir'] + 1
+
+    # Existing runs created before reward_room_type was persisted still infer it
+    # from the active map node on later turns.
+    elite_node = state['map']['floors'][0]['nodes'][0]
+    elite_node['type'] = 'elite'
+    state['current_node_id'] = elite_node['id']
+    state['combat'].pop('reward_room_type')
+
+    assert _turn_elixir_baseline(state) == state['player']['max_elixir'] + 1
 
 
 def test_new_psionic_terms_use_new_internal_keys_without_renaming_soul_splitter():
