@@ -132,6 +132,7 @@
         wither: 'stagnation',
         broken: 'fracture',
         rockfall: 'root_status',
+        attack_blocked: 'attack_blocked',
     });
     const STORY_TERM_LONG_PRESS_MS = 430;
     const STORY_TERM_MOVE_CANCEL_PX = 12;
@@ -2944,7 +2945,7 @@
             : { ...definition };
         values.effects = (values.effects || []).map((effect) => ({ ...effect }));
         if (definition.upgrade?.infinite) {
-            const damage = Math.ceil(14 + 3 * upgradeLevel + (upgradeLevel ** 2) / 2);
+            const damage = 14 + 5 * upgradeLevel;
             values.effects = values.effects.map((effect) => (
                 effect.type === 'damage' ? { ...effect, amount: damage } : effect
             ));
@@ -2989,10 +2990,13 @@
         boostEffects(['damage', 'shield'], Number(modifiers.primary_bonus || 0));
         boostEffects(['damage'], Number(modifiers.damage_bonus || 0));
         if (values.rarity === 'primary' && Number(modifiers.primary_multiplier || 0) > 1) {
-            const multiplier = Math.max(1, Number(modifiers.primary_multiplier || 1));
+            const multiplier = Math.max(
+                1,
+                Number(storyContent?.relics?.return_to_origin?.amount || 1),
+            );
             values.effects = values.effects.map((effect) => (
                 ['damage', 'shield'].includes(String(effect.type || ''))
-                    ? { ...effect, amount: Math.max(0, Number(effect.amount || 0) * multiplier) }
+                    ? { ...effect, amount: Math.max(0, Math.floor(Number(effect.amount || 0) * multiplier)) }
                     : effect
             ));
         }
@@ -6201,6 +6205,7 @@
             bleed: lang === 'zh' ? '流血' : 'Bleed',
             fire: lang === 'zh' ? '灼烧' : 'Burn',
             blockade: lang === 'zh' ? '封锁' : 'Blockade',
+            attack_blocked: lang === 'zh' ? '禁攻' : 'Attack Blocked',
             fragment: lang === 'zh' ? '碎片' : 'Fragment',
             evil_eye: lang === 'zh' ? '邪眼' : 'Evil Eye',
             bulb: lang === 'zh' ? '灯泡' : 'Bulb',
@@ -6494,6 +6499,7 @@
             { key: 'bleed', label: '流血', value: combat.bleed },
             { key: 'fire', label: '灼烧', value: combat.fire },
             { key: 'blockade', label: '封锁', value: combat.blockade },
+            { key: 'attack_blocked', label: '禁攻', value: combat.attack_blocked },
         ]);
         renderStoryEquipment(combat.equipment);
         const enemyGroup = $('story-enemy-group');

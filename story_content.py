@@ -293,8 +293,15 @@ STORY_STATUSES.update({
     'blockade': {
         'name': {'zh': '封锁', 'en': 'Blockade'},
         'description': {
-            'zh': '前X个奇数栏的手牌无法打出。',
-            'en': 'The first X odd-numbered hand slots cannot be played.',
+            'zh': '前X个奇数栏的手牌无法打出；不会自然减少层数。',
+            'en': 'The first X odd-numbered hand slots cannot be played. Its stacks do not decay naturally.',
+        },
+    },
+    'attack_blocked': {
+        'name': {'zh': '禁攻', 'en': 'Attack Blocked'},
+        'description': {
+            'zh': '存在时，无法打出攻击牌；回合结束时-1层。',
+            'en': 'Attack cards cannot be played. Lose 1 stack at turn end.',
         },
     },
     'fragment': {
@@ -330,6 +337,7 @@ STORY_STATUS_IMAGE_URLS = {
     'bleed': '/static/assets/status-icons/bleed.svg',
     'fire': '/static/assets/status-icons/fire.svg',
     'blockade': '/static/assets/story-status-icons/blockade.svg',
+    'attack_blocked': '/static/assets/status-icons/attack_blocked.svg',
     'fragment': '/static/assets/status-icons/fragment.svg',
     'magic_shield_disabled': '/static/assets/story-status-icons/magic-shield-disabled.svg',
 }
@@ -660,8 +668,8 @@ STORY_TRAITS.update({
     'mechanical_track': {
         'name': {'zh': '机械轨道', 'en': 'Mechanical Track'},
         'description': {
-            'zh': '初始含1张雷神之锤、1张齿轮与2张骨头。每次行动转动2次，依次触发轨道顶牌；初始牌移至轨道底，其他牌被消耗。抽牌改为额外转动等量次数，回复E改为获得等量力量。',
-            'en': 'Starts with 1 Mjolnir, 1 Cogwheel, and 2 Bones. Each action rotates twice and resolves the top card. Starting cards move to the bottom; other cards are consumed. Drawing becomes that many extra rotations, and recovering E grants that much Power.',
+            'zh': '初始含1张雷神之锤、1张齿轮与1张骨头。每次行动转动2次，依次触发轨道顶牌；初始牌移至轨道底，其他牌被消耗。抽牌改为额外转动（抽牌数-1）次，回复E改为获得等量力量。',
+            'en': 'Starts with 1 Mjolnir, 1 Cogwheel, and 1 Bone. Each action rotates twice and resolves the top card. Starting cards move to the bottom; other cards are consumed. Drawing becomes one fewer extra rotation than the draw count, and recovering E grants that much Power.',
         },
     },
     'recycling': {
@@ -691,6 +699,14 @@ STORY_TRAITS.update({
             'zh': '不会死亡；机械鼠藏入后，受到伤害时使其失去隐形。',
             'en': 'Cannot die. When a Mechanical Rat hides here, taking damage removes its Hidden.',
         },
+    },
+    'hiding': {
+        'name': {'zh': '躲藏', 'en': 'Hiding'},
+        'description': {
+            'zh': '回合结束时，随机选择1个损坏机器躲藏（不展示所选目标）并获得1层隐形；该损坏机器受到伤害时失去隐形。',
+            'en': 'At turn end, secretly hide in a random Broken Machine and gain 1 Hidden. Lose Hidden when that machine takes damage.',
+        },
+        'image_url': '/static/assets/story-trait-icons/hiding.svg',
     },
 })
 
@@ -941,7 +957,7 @@ STORY_CARDS = {
                    effects=(_effect('damage', 9), _effect('active_discard', 1, exact=True), _effect('draw', 1)),
                    upgrade={'description': {'zh': '对目标造成11D；主动丢弃自己1张其他手牌，然后抽2张牌。', 'en': 'Deal 11 D; actively discard 1 other card, then draw 2.'},
                             'effects': (_effect('damage', 11), _effect('active_discard', 1, exact=True), _effect('draw', 2))}),
-    'antibody': _card('Antibody', '抗体', 'Antibody', 1, 'bloom', 'common',
+    'antibody': _card('Antibody', '抗体', 'Antibody', 1, 'bloom', 'rare',
                       '对目标施加1层易伤，然后抽等同于其易伤层数的牌。',
                       effects=(_effect('status', 1, status='vulnerable'), _effect('draw_target_status', status='vulnerable')),
                       target='enemy',
@@ -1238,8 +1254,8 @@ STORY_CARDS = {
         effects=(_effect('damage', 14),),
         upgrade={
             'infinite': True,
-            'description': {'zh': '对目标造成18D；此牌可无限升级。', 'en': 'Deal 18 D. This card can be upgraded indefinitely.'},
-            'effects': (_effect('damage', 18),),
+            'description': {'zh': '对目标造成19D；此牌可无限升级。', 'en': 'Deal 19 D. This card can be upgraded indefinitely.'},
+            'effects': (_effect('damage', 19),),
         },
     ),
     'chilly': _card(
@@ -1253,11 +1269,18 @@ STORY_CARDS = {
     ),
     'jelly': _card(
         'Jelly', '果冻', 'Jelly', 2, 'thorn', 'rare',
-        '对目标造成24D；失去2层力量。',
-        effects=(_effect('damage', 24), _effect('power', -2)),
+        '对目标造成20D；下回合开始时获得1层禁攻。',
+        tags=('wide',),
+        effects=(
+            _effect('damage', 20),
+            _effect('delayed_player_status', 1, status='attack_blocked'),
+        ),
         upgrade={
-            'description': {'zh': '对目标造成30D；失去2层力量。', 'en': 'Deal 30 D; lose 2 Power.'},
-            'effects': (_effect('damage', 30), _effect('power', -2)),
+            'description': {'zh': '对目标造成24D；下回合开始时获得1层禁攻。', 'en': 'Deal 24 D; gain 1 Attack Blocked at the start of your next turn.'},
+            'effects': (
+                _effect('damage', 24),
+                _effect('delayed_player_status', 1, status='attack_blocked'),
+            ),
         },
     ),
     'nitro': _card(
@@ -1613,7 +1636,7 @@ STORY_RELICS = {
     'world_tree_leaf': _relic('世界树之叶', 'World Tree Leaf', '本次旅程首次死亡时，清除效果并回复至满H。', rarity='special', script='revive'),
     'dandelion_blessing': _relic('蒲公英加护', 'Dandelion Blessing', '战斗开始时获得7层护盾。', rarity='special', script='opening_shield', amount=7),
     'coward_defense': _relic('懦夫才防', 'Cowardly Defense', '每回合多回复1E；卡牌奖励和商店中不再出现技能牌。', rarity='special', script='boss_no_bloom', amount=1),
-    'return_to_origin': _relic('返璞归真', 'Return to Origin', '所有基础牌的基础数值变为2倍。', rarity='special', script='primary_multiplier', amount=2),
+    'return_to_origin': _relic('返璞归真', 'Return to Origin', '所有基础牌的基础数值变为1.5倍。', rarity='special', script='primary_multiplier', amount=1.5),
     'last_stand': _relic('破釜沉舟', 'Last Stand', '每回合多回复1E；无法回复H。', rarity='special', script='boss_no_heal', amount=1),
     'quantized': _relic('量子化', 'Quantized', '每回合多回复2E；抽到牌时，其E花费随机变为0至3E。', rarity='special', script='quantized_cost', amount=2),
     'dizzy_relic': _relic('眩晕', 'Dizzy', '每回合多回复2E；回合开始时获得1层失明。', rarity='special', script='boss_blind', amount=2),
@@ -2113,7 +2136,7 @@ STORY_ENEMIES.update({
     'mechanical_rat': _enemy('机械鼠', 'Mechanical Rat', 232, (
         _move('伏击', 'Ambush', _effect('damage', 19, lunatic_amount=22), _effect('player_status', 1, status='weak')),
         _move('强袭', 'Assault', _effect('damage', 26, lunatic_amount=30), _effect('gain_power', 2)),
-    ), script='mechanical_rat', initial={'hidden': 1}, lunatic_health=254),
+    ), script='mechanical_rat', traits=('hiding',), initial={'hidden': 1}, lunatic_health=254),
     'broken_machine': _enemy('损坏机器', 'Broken Machine', 1, (),
         script='broken_machine', traits=('cover',)),
     'chimney': _enemy('烟囱', 'Chimney', 456, (

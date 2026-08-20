@@ -25,8 +25,9 @@ from story_content import (
 
 
 _NEGATIVE_STATUSES = frozenset({
-    'blind', 'bleed', 'blockade', 'broken', 'entangle', 'fire', 'fragile',
-    'poison', 'stagnation', 'toxic_poison', 'vulnerable', 'weak',
+    'attack_blocked', 'blind', 'bleed', 'blockade', 'broken', 'entangle',
+    'fire', 'fragile', 'poison', 'stagnation', 'toxic_poison', 'vulnerable',
+    'weak',
 })
 
 _PRESENTATION_EFFECT_KEYS = (
@@ -37,6 +38,7 @@ _PRESENTATION_EFFECT_KEYS = (
     'hidden', 'turn_shield', 'charging', 'charged', 'frenzy', 'vampire',
     'proliferation', 'regeneration', 'regenerations', 'bandage', 'miracle',
     'toxic_poison', 'stagnation', 'bleed', 'fire', 'blockade',
+    'attack_blocked',
     'fragment', 'psionic_connection', 'psionic_sustain', 'psionic_fountain', 'nest_instinct',
     'endurance_shell', 'toxic_conversion', 'bulb', 'hard_shell', 'obstacle',
     'segments', 'magic_shield', 'magic_blessing', 'magic_reflection',
@@ -384,8 +386,8 @@ def _new_card(state, def_id, upgraded=False, modifiers=None):
         and STORY_CARDS[def_id].get('rarity') == 'primary'
     ):
         card.setdefault('modifiers', {})['primary_multiplier'] = max(
-            1,
-            int(STORY_RELICS['return_to_origin']['amount']),
+            1.0,
+            float(STORY_RELICS['return_to_origin']['amount']),
         )
     return card
 
@@ -407,7 +409,7 @@ def _card_values(card):
     if upgrade_level:
         values.update(copy.deepcopy(definition.get('upgrade') or {}))
     if (definition.get('upgrade') or {}).get('infinite'):
-        damage = math.ceil(14 + 3 * upgrade_level + upgrade_level * upgrade_level / 2)
+        damage = 14 + 5 * upgrade_level
         values['effects'] = tuple(
             {**effect, 'amount': damage}
             if effect.get('type') == 'damage'
@@ -460,14 +462,17 @@ def _card_values(card):
         values.get('rarity') == 'primary'
         and modifiers.get('primary_multiplier')
     ):
-        multiplier = max(1, int(modifiers['primary_multiplier']))
+        multiplier = max(
+            1.0,
+            float(STORY_RELICS['return_to_origin']['amount']),
+        )
         multiplied_effects = []
         for effect in values.get('effects') or ():
             multiplied = copy.deepcopy(effect)
             if multiplied.get('type') in ('damage', 'shield'):
                 multiplied['amount'] = max(
                     0,
-                    int(multiplied.get('amount') or 0) * multiplier,
+                    math.floor(int(multiplied.get('amount') or 0) * multiplier),
                 )
             multiplied_effects.append(multiplied)
         values['effects'] = tuple(multiplied_effects)
@@ -746,7 +751,7 @@ def _status_count(unit):
         'vulnerable', 'fragile', 'evade', 'poison',
         'reflection', 'wither', 'broken', 'rockfall', 'blind', 'entangle',
         'negative_status_immunity', 'evil_eye', 'toxic_poison', 'stagnation',
-        'bleed', 'fire', 'blockade', 'fragment',
+        'bleed', 'fire', 'blockade', 'attack_blocked', 'fragment',
     )
     return sum(1 for key in keys if int(unit.get(key) or 0) > 0)
 
@@ -1854,6 +1859,10 @@ def _is_card_playable(state, card, automatic=False):
         or combat.get('opening_redraw_pending')
         or combat.get('pending_card_choice')
         or (not automatic and _must_play_attack_card(state, card))
+        or (
+            values.get('type') == 'thorn'
+            and int(combat.get('attack_blocked') or 0) > 0
+        )
     ):
         return False
     blockade = max(0, int(combat.get('blockade') or 0))
@@ -3573,7 +3582,7 @@ def _initialize_mechanical_track(state, enemy, events):
     if isinstance(enemy.get('mechanical_track'), list):
         return
     track = []
-    for card_id in ('mjolnir', 'cogwheel', 'bone', 'bone'):
+    for card_id in ('mjolnir', 'cogwheel', 'bone'):
         card = _new_card(state, card_id)
         card['track_persistent'] = True
         track.append(card)
@@ -3659,6 +3668,8 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'sturdy': 0,
         'broken': 0,
         'blind': 0,
+        'blockade': 0,
+        'attack_blocked': 0,
         'blind_active': False,
         'draw_pile': draw_pile,
         'hand': [],
@@ -4526,11 +4537,15 @@ def _mechanical_track_draw_rotations(state, effect):
         return 0
     amount = max(0, int(effect.get('amount') or 0))
     if effect_type == 'draw_to_limit':
-        return int(STORY_RULES['hand_limit'])
-    if effect_type == 'draw_target_status':
+        amount = max(
+            0,
+            int(STORY_RULES['hand_limit'])
+            - len(state['combat'].get('hand') or ()),
+        )
+    elif effect_type == 'draw_target_status':
         status = str(effect.get('status') or '')
-        return max(0, int(state['combat'].get(status) or 0))
-    return amount
+        amount = max(0, int(state['combat'].get(status) or 0))
+    return max(0, amount - 1)
 
 
 def _mechanical_track_gain_power(enemy, amount, events, source):
@@ -5222,17 +5237,8 @@ def _prepare_player_turn_end(state, seed, events, reason=None):
             int(combat.get('elixir') or 0),
             max(retain_limits),
         )
-    for status in ('weak', 'vulnerable', 'fragile'):
+    for status in ('weak', 'vulnerable', 'fragile', 'attack_blocked'):
         combat[status] = max(0, int(combat.get(status) or 0) - 1)
-    if int(combat.get('blockade') or 0) > 0:
-        before = int(combat['blockade'])
-        combat['blockade'] = 0
-        events.append({
-            'type': 'status_cleared',
-            'target_id': 'player',
-            'status': 'blockade',
-            'before': before,
-        })
     for enemy in combat.get('enemies', []):
         enemy['magic_shield_disabled'] = 0
     if int(combat.get('broken') or 0) > 0:
@@ -5414,7 +5420,8 @@ def _gain_relic(state, relic_id, seed, events):
     relic = STORY_RELICS[relic_id]
     player['relics'].append(relic_id)
     script = relic.get('script')
-    amount = int(relic.get('amount') or 0)
+    raw_amount = relic.get('amount') or 0
+    amount = int(raw_amount)
     if script == 'gain_gold':
         player['gold'] += amount
     elif script == 'gain_max_health':
@@ -5423,9 +5430,10 @@ def _gain_relic(state, relic_id, seed, events):
     elif script == 'gain_max_health_only':
         player['max_health'] += amount
     elif script == 'primary_multiplier':
+        multiplier = max(1.0, float(raw_amount))
         for card in player['deck']:
             if STORY_CARDS[card['def_id']].get('rarity') == 'primary':
-                card.setdefault('modifiers', {})['primary_multiplier'] = max(1, amount)
+                card.setdefault('modifiers', {})['primary_multiplier'] = multiplier
     operation = _queue_relic_operation(state, relic_id)
     events.append({'type': 'relic_gained', 'relic_id': relic_id})
     if operation:
@@ -5906,11 +5914,13 @@ def _complete_current_node(state, events):
         equipment.pop('turns_equipped', None)
     if int(node['floor']) >= int(state.get('map', {}).get('floor_count') or 16):
         if state.get('journey_mode') == 'boss_rush':
+            next_stage = int(state.get('stage') or 1) + 1
+            stage_cycle = STORY_STAGES[(next_stage - 1) % len(STORY_STAGES)]
             state['phase'] = 'stage_choice'
             state['room'] = {
                 'type': 'stage_choice',
-                'stage': int(state.get('stage') or 1) + 1,
-                'biomes': list(STORY_BIOMES),
+                'stage': next_stage,
+                'biomes': list(stage_cycle['biomes']),
                 'boss_rush': True,
             }
         elif int(state.get('stage') or 1) < len(STORY_STAGES):

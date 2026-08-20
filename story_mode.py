@@ -16,7 +16,7 @@ STORY_STAGES = (
 
 _NORMAL_ROOM_WEIGHTS = (
     ('shop', 1),
-    ('rest', 2),
+    ('rest', 1),
     ('elite', 3),
     ('event', 3),
     ('combat', 6),
@@ -24,9 +24,9 @@ _NORMAL_ROOM_WEIGHTS = (
 
 _HARD_ROOM_WEIGHTS = (
     ('shop', 2),
-    ('rest', 3),
+    ('rest', 2),
     ('elite', 8),
-    ('event', 5),
+    ('event', 6),
     ('combat', 12),
 )
 

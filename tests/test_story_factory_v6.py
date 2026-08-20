@@ -169,7 +169,7 @@ def test_mechanical_flower_captures_void_cards_and_recycles_weak_cards():
     combat = state['combat']
     flower = _enemy(state, 'mechanical_flower')
     assert [card['def_id'] for card in flower['mechanical_track']] == [
-        'mjolnir', 'cogwheel', 'bone', 'bone',
+        'mjolnir', 'cogwheel', 'bone',
     ]
 
     captured = _new_card(state, 'basic')
@@ -190,7 +190,7 @@ def test_mechanical_flower_captures_void_cards_and_recycles_weak_cards():
     _mechanical_flower_turn(state, flower, 'mechanical-track', events)
     assert captured not in flower['mechanical_track']
     assert [card['def_id'] for card in flower['mechanical_track']] == [
-        'mjolnir', 'cogwheel', 'bone', 'bone',
+        'mjolnir', 'cogwheel', 'bone',
     ]
     assert flower['power'] >= 1
     assert any(event.get('type') == 'mechanical_track_recycled' for event in events)
