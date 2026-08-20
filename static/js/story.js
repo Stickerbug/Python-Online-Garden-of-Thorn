@@ -66,6 +66,9 @@
     let storySkinMouthAnimation = null;
     let storySkinDamageTimer = 0;
     let storySkinDamageUntil = 0;
+    let storyMechanicalTrackFrame = 0;
+    const storyMechanicalTrackMotions = new Map();
+    const storyActiveMechanicalTrackCards = new Map();
     const storyCodexRarities = new Set();
     const storyCodexTypes = new Set();
     const STORY_AFK_ACTIVITY_REPORT_INTERVAL_MS = 20000;
@@ -95,6 +98,8 @@
     const STORY_SKIN_LOOK_OFFSET_X_PERCENT = 38;
     const STORY_SKIN_LOOK_OFFSET_Y_PERCENT = 56;
     const STORY_SKIN_DAMAGE_HOLD_MS = 3000;
+    const STORY_MECHANICAL_TRACK_PERIOD_MS = 22000;
+    const STORY_MECHANICAL_TRACK_TRIGGER_ANGLE = -90;
     const STORY_SKIN_MOUTH_NORMAL_POINTS = Object.freeze([20, 18, 36, 32, 64, 32, 80, 18]);
     const STORY_SKIN_MOUTH_HURT_POINTS = Object.freeze([20, 26, 36, 12, 64, 12, 80, 26]);
 
@@ -2590,6 +2595,10 @@
         const eventType = String(event?.type || event?.kind || '');
         if (!eventType) return;
         if (eventType === 'enemy_action') {
+            await settleAllStoryMechanicalTrackActivations();
+            if (event?.track_card || event?.source_card_instance_id) {
+                await animateStoryMechanicalTrackActivation(event);
+            }
             const motion = String(event.presentation?.motion || '');
             if (motion === 'attack' || (!motion && enemyMoveHasDamage(event))) {
                 await animateEnemyLunge(event.enemy_id);
@@ -2668,6 +2677,12 @@
             await animateStoryPileMove(event, 'exile');
         } else if (eventType === 'equipment_added') {
             spawnStoryFloat($('story-player-target'), localize(storyContent?.cards?.[event.def_id]?.name), 'equipment');
+        } else if (eventType === 'mechanical_track_captured') {
+            addStoryMechanicalTrackEventCard(event, 'start');
+        } else if (eventType === 'mechanical_track_card_created') {
+            addStoryMechanicalTrackEventCard(event);
+        } else if (eventType === 'mechanical_track_recycled') {
+            await settleStoryMechanicalTrackActivation(event.enemy_id);
         } else if (eventType === 'enemy_summoned') {
             await animateEnemySummon(event, nextRun);
         } else if (eventType === 'enemy_withered') {
@@ -2723,6 +2738,7 @@
                 await storySleep(32);
             }
         } finally {
+            await settleAllStoryMechanicalTrackActivations();
             delete document.body.dataset.enemyAnimating;
         }
     }
@@ -6050,6 +6066,271 @@
         });
     }
 
+    function storyMechanicalTrackMotionKey(enemyId) {
+        return `${activeRun?.id || 'story'}:${String(enemyId || '')}`;
+    }
+
+    function storyMechanicalTrackMotion(enemyId) {
+        const key = storyMechanicalTrackMotionKey(enemyId);
+        if (!storyMechanicalTrackMotions.has(key)) {
+            storyMechanicalTrackMotions.set(key, {
+                angle: STORY_MECHANICAL_TRACK_TRIGGER_ANGLE,
+                lastTimestamp: performance.now(),
+                animating: false,
+                paused: false,
+            });
+        }
+        return storyMechanicalTrackMotions.get(key);
+    }
+
+    function advanceStoryMechanicalTrackMotion(motion, timestamp = performance.now()) {
+        if (!motion) return;
+        const elapsed = Math.max(0, Math.min(80, timestamp - Number(motion.lastTimestamp || timestamp)));
+        if (!motion.animating && !motion.paused && !storyMechanicalTrackReducedMotion()) {
+            motion.angle += elapsed / STORY_MECHANICAL_TRACK_PERIOD_MS * 360;
+            if (Math.abs(motion.angle) > 36000) motion.angle %= 360;
+        }
+        motion.lastTimestamp = timestamp;
+    }
+
+    function applyStoryMechanicalTrackMotion(enemyId, motion = storyMechanicalTrackMotion(enemyId)) {
+        const actor = storyEnemyActor(enemyId);
+        const wheel = actor?.querySelector('.story-mechanical-track-wheel');
+        if (!wheel || !motion) return;
+        wheel.style.setProperty('--story-mechanical-track-rotation', `${motion.angle.toFixed(3)}deg`);
+    }
+
+    function tickStoryMechanicalTracks(timestamp) {
+        storyMechanicalTrackFrame = 0;
+        const wheels = [...document.querySelectorAll('.story-mechanical-track-wheel')];
+        if (!wheels.length) return;
+        wheels.forEach((wheel) => {
+            const enemyId = String(wheel.dataset.enemyId || '');
+            const motion = storyMechanicalTrackMotion(enemyId);
+            advanceStoryMechanicalTrackMotion(motion, timestamp);
+            wheel.style.setProperty('--story-mechanical-track-rotation', `${motion.angle.toFixed(3)}deg`);
+        });
+        storyMechanicalTrackFrame = window.requestAnimationFrame(tickStoryMechanicalTracks);
+    }
+
+    function ensureStoryMechanicalTrackFrame() {
+        if (storyMechanicalTrackFrame) return;
+        storyMechanicalTrackFrame = window.requestAnimationFrame(tickStoryMechanicalTracks);
+    }
+
+    function setStoryMechanicalTrackPaused(enemyId, paused) {
+        const motion = storyMechanicalTrackMotion(enemyId);
+        advanceStoryMechanicalTrackMotion(motion);
+        motion.paused = Boolean(paused);
+        applyStoryMechanicalTrackMotion(enemyId, motion);
+    }
+
+    function layoutStoryMechanicalTrackCards(wheel) {
+        if (!wheel) return;
+        const cards = [...wheel.querySelectorAll('.story-mechanical-track-card:not(.is-leaving)')];
+        const count = Math.max(1, cards.length);
+        const size = count > 12 ? 28 : (count > 8 ? 32 : 40);
+        wheel.style.setProperty('--story-mechanical-track-count', String(count));
+        wheel.style.setProperty('--story-mechanical-track-card-size', `${size}px`);
+        cards.forEach((item, index) => {
+            const angle = 360 / count * index;
+            item.dataset.trackIndex = String(index);
+            item.dataset.trackAngle = String(angle);
+            item.style.setProperty('--story-mechanical-track-card-angle', `${angle}deg`);
+        });
+    }
+
+    function createStoryMechanicalTrackCard(card, enemyId) {
+        const values = cardValues(card);
+        if (!values) return null;
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'story-mechanical-track-card';
+        item.dataset.instanceId = String(card.instance_id || '');
+        item.dataset.trackPersistent = card.track_persistent ? '1' : '0';
+        item.setAttribute(
+            'aria-label',
+            `${localize(values.name)}：${localize(values.description)}`,
+        );
+        const visual = document.createElement('span');
+        visual.className = 'story-mechanical-track-visual';
+        const icon = document.createElement('span');
+        icon.className = 'story-mechanical-track-icon';
+        const imageUrl = card.upgraded
+            ? (values.upgraded_image_url || values.image_url || '')
+            : (values.image_url || '');
+        if (imageUrl) {
+            const image = document.createElement('img');
+            image.className = 'story-mechanical-track-image';
+            image.src = imageUrl;
+            image.alt = '';
+            image.draggable = false;
+            image.setAttribute('aria-hidden', 'true');
+            icon.append(image);
+        } else {
+            const fallback = document.createElement('span');
+            fallback.className = 'story-mechanical-track-fallback';
+            fallback.textContent = localize(values.name).slice(0, 1);
+            icon.append(fallback);
+        }
+        visual.append(icon);
+        item.append(visual);
+        storyCardElementData.set(item, card);
+        attachStoryEquipmentPreview(item, card);
+        item.addEventListener('pointerenter', () => setStoryMechanicalTrackPaused(enemyId, true));
+        item.addEventListener('pointerleave', () => setStoryMechanicalTrackPaused(enemyId, false));
+        item.addEventListener('focus', () => setStoryMechanicalTrackPaused(enemyId, true));
+        item.addEventListener('blur', () => setStoryMechanicalTrackPaused(enemyId, false));
+        return item;
+    }
+
+    function renderStoryMechanicalTrack(portrait, enemy) {
+        const cards = Array.isArray(enemy?.mechanical_track) ? enemy.mechanical_track : [];
+        if (!portrait || !cards.length) return;
+        const shell = document.createElement('div');
+        shell.className = 'story-mechanical-track';
+        shell.setAttribute('aria-label', lang === 'zh' ? '机械轨道' : 'Mechanical Track');
+        const wheel = document.createElement('div');
+        wheel.className = 'story-mechanical-track-wheel';
+        wheel.dataset.enemyId = String(enemy.id || '');
+        cards.forEach((card) => {
+            const item = createStoryMechanicalTrackCard(card, enemy.id);
+            if (item) wheel.append(item);
+        });
+        layoutStoryMechanicalTrackCards(wheel);
+        const motion = storyMechanicalTrackMotion(enemy.id);
+        motion.paused = false;
+        motion.lastTimestamp = performance.now();
+        wheel.style.setProperty('--story-mechanical-track-rotation', `${motion.angle.toFixed(3)}deg`);
+        shell.append(wheel);
+        portrait.append(shell);
+        ensureStoryMechanicalTrackFrame();
+    }
+
+    function storyMechanicalTrackCardElement(enemyId, instanceId) {
+        if (!instanceId) return null;
+        return storyEnemyActor(enemyId)?.querySelector(
+            `.story-mechanical-track-card[data-instance-id="${CSS.escape(String(instanceId))}"]`,
+        ) || null;
+    }
+
+    function addStoryMechanicalTrackEventCard(event, placement = 'end') {
+        const enemyId = String(event?.enemy_id || '');
+        const actor = storyEnemyActor(enemyId);
+        const wheel = actor?.querySelector('.story-mechanical-track-wheel');
+        const instanceId = String(
+            event?.card_instance_id || event?.source_card_instance_id
+            || event?.track_card?.instance_id || '',
+        );
+        if (!wheel || !instanceId || storyMechanicalTrackCardElement(enemyId, instanceId)) return;
+        const card = event?.track_card || {
+            instance_id: instanceId,
+            def_id: String(event?.def_id || ''),
+            track_persistent: false,
+        };
+        const item = createStoryMechanicalTrackCard(card, enemyId);
+        if (!item) return;
+        item.classList.add('is-entering');
+        if (placement === 'start') wheel.prepend(item);
+        else wheel.append(item);
+        layoutStoryMechanicalTrackCards(wheel);
+        window.requestAnimationFrame(() => item.classList.remove('is-entering'));
+    }
+
+    function storyMechanicalTrackReducedMotion() {
+        return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+    }
+
+    function animateStoryMechanicalTrackRotation(enemyId, motion, targetAngle, duration) {
+        if (storyMechanicalTrackReducedMotion() || duration <= 1) {
+            motion.angle = targetAngle;
+            applyStoryMechanicalTrackMotion(enemyId, motion);
+            return Promise.resolve();
+        }
+        const startAngle = Number(motion.angle || 0);
+        const startedAt = performance.now();
+        return new Promise((resolve) => {
+            const step = (timestamp) => {
+                const progress = Math.max(0, Math.min(1, (timestamp - startedAt) / duration));
+                const eased = 1 - ((1 - progress) ** 3);
+                motion.angle = startAngle + (targetAngle - startAngle) * eased;
+                motion.lastTimestamp = timestamp;
+                applyStoryMechanicalTrackMotion(enemyId, motion);
+                if (progress < 1) window.requestAnimationFrame(step);
+                else resolve();
+            };
+            window.requestAnimationFrame(step);
+        });
+    }
+
+    async function settleStoryMechanicalTrackActivation(enemyId) {
+        const key = storyMechanicalTrackMotionKey(enemyId);
+        const active = storyActiveMechanicalTrackCards.get(key);
+        if (!active) return;
+        storyActiveMechanicalTrackCards.delete(key);
+        const { item, wheel, event } = active;
+        const motion = storyMechanicalTrackMotion(enemyId);
+        const recycled = String(event?.presentation?.motion || '') === 'gain';
+        const persistent = Boolean(event?.track_card?.track_persistent)
+            || item?.dataset.trackPersistent === '1';
+        item?.classList.remove('is-at-trigger');
+        if (item?.isConnected && (recycled || !persistent)) {
+            item.classList.add('is-leaving');
+            await storySleep(storyMechanicalTrackReducedMotion() ? 1 : 150);
+            item.remove();
+            layoutStoryMechanicalTrackCards(wheel);
+            await storySleep(storyMechanicalTrackReducedMotion() ? 1 : 130);
+        } else if (item?.isConnected) {
+            item.classList.remove('is-activating');
+            wheel.append(item);
+            layoutStoryMechanicalTrackCards(wheel);
+            await storySleep(storyMechanicalTrackReducedMotion() ? 1 : 220);
+        }
+        item?.classList.remove('is-activating', 'is-leaving');
+        wheel?.classList.remove('is-resolving');
+        motion.animating = false;
+        motion.lastTimestamp = performance.now();
+    }
+
+    async function settleAllStoryMechanicalTrackActivations() {
+        const enemyIds = [...storyActiveMechanicalTrackCards.values()]
+            .map((active) => String(active?.event?.enemy_id || ''))
+            .filter(Boolean);
+        await Promise.all(enemyIds.map((enemyId) => settleStoryMechanicalTrackActivation(enemyId)));
+    }
+
+    async function animateStoryMechanicalTrackActivation(event) {
+        const enemyId = String(event?.enemy_id || '');
+        const instanceId = String(
+            event?.source_card_instance_id || event?.track_card?.instance_id || '',
+        );
+        if (!enemyId || !instanceId) return;
+        await settleStoryMechanicalTrackActivation(enemyId);
+        addStoryMechanicalTrackEventCard(event);
+        const item = storyMechanicalTrackCardElement(enemyId, instanceId);
+        const wheel = item?.closest('.story-mechanical-track-wheel');
+        if (!item || !wheel) return;
+        const motion = storyMechanicalTrackMotion(enemyId);
+        advanceStoryMechanicalTrackMotion(motion);
+        motion.animating = true;
+        const cardAngle = Number(item.dataset.trackAngle || 0);
+        const absoluteAngle = cardAngle + Number(motion.angle || 0);
+        let delta = STORY_MECHANICAL_TRACK_TRIGGER_ANGLE - absoluteAngle;
+        delta = ((delta + 540) % 360) - 180;
+        const targetAngle = Number(motion.angle || 0) + delta;
+        const duration = Math.max(300, Math.min(620, 280 + Math.abs(delta) * 1.7));
+        wheel.classList.add('is-resolving');
+        item.classList.add('is-activating');
+        await animateStoryMechanicalTrackRotation(enemyId, motion, targetAngle, duration);
+        item.classList.add('is-at-trigger');
+        storyActiveMechanicalTrackCards.set(storyMechanicalTrackMotionKey(enemyId), {
+            item,
+            wheel,
+            event,
+        });
+        await storySleep(storyMechanicalTrackReducedMotion() ? 1 : 110);
+    }
+
     function createStoryEffectChip(item, amount) {
         const chip = document.createElement('span');
         const definition = storyStatusDefinition(item.key);
@@ -6327,6 +6608,10 @@
         const definition = storyContent?.enemies?.[enemy?.def_id] || {};
         const actor = document.createElement('article');
         actor.className = 'story-actor story-actor-enemy classic-fighter';
+        actor.classList.toggle(
+            'has-mechanical-track',
+            Array.isArray(enemy?.mechanical_track) && enemy.mechanical_track.length > 0,
+        );
         actor.dataset.targetKind = 'enemy';
         actor.dataset.targetId = String(enemy.id || '');
         actor.tabIndex = 0;
@@ -6352,6 +6637,7 @@
         } else {
             portrait.textContent = '?';
         }
+        renderStoryMechanicalTrack(portrait, enemy);
 
         const health = document.createElement('div');
         health.className = 'story-health-wrap';
@@ -8558,7 +8844,8 @@
             const cardElement = event.target?.closest?.(
                 '.story-card.card, .story-pile-tile, .story-event-card-chip',
             );
-            const equipmentElement = event.target?.closest?.('.story-equipment');
+            const equipmentElement = event.target?.closest?.('.story-equipment')
+                || event.target?.closest?.('.story-mechanical-track-card');
             const cardSourceElement = cardElement || equipmentElement;
             if (cardSourceElement?.dataset.storyBlind === '1') return;
             const card = cardSourceElement ? storyCardElementData.get(cardSourceElement) : null;

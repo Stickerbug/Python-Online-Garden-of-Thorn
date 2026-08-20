@@ -716,6 +716,23 @@ def test_story_event_animation_respects_server_sequence_metadata():
     assert 'playStoryPresentationEvent(event, nextRun)' in STORY_JS
 
 
+def test_mechanical_flower_track_orbits_and_resolves_cards_at_the_left_anchor():
+    assert 'const STORY_MECHANICAL_TRACK_TRIGGER_ANGLE = -90;' in STORY_JS
+    assert 'function renderStoryMechanicalTrack(portrait, enemy)' in STORY_JS
+    assert "item.dataset.instanceId = String(card.instance_id || '');" in STORY_JS
+    assert 'renderStoryMechanicalTrack(portrait, enemy);' in STORY_JS
+    assert 'await animateStoryMechanicalTrackActivation(event);' in STORY_JS
+    assert 'await settleAllStoryMechanicalTrackActivations();' in STORY_JS
+    assert "wheel.append(item);" in STORY_JS
+    assert "item.classList.add('is-leaving');" in STORY_JS
+    assert "event.target?.closest?.('.story-mechanical-track-card')" in STORY_JS
+
+    assert '.story-mechanical-track-wheel {' in STORY_CSS
+    assert 'transform: rotate(var(--story-mechanical-track-rotation));' in STORY_CSS
+    assert 'translateY(calc(-1 * var(--story-mechanical-track-radius)))' in STORY_CSS
+    assert '.story-mechanical-track-card.is-at-trigger::after {' in STORY_CSS
+
+
 def test_story_opening_lightning_stages_and_animates_combat_entrance():
     assert 'function createStoryCombatEntranceRun(run, events)' in STORY_JS
     assert "String(event?.source || '') === 'opening_lightning'" in STORY_JS

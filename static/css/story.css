@@ -3648,6 +3648,151 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   to { transform: rotate(360deg); }
 }
 
+.story-mechanical-track {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.story-mechanical-track-wheel {
+  --story-mechanical-track-rotation: -90deg;
+  --story-mechanical-track-card-size: 40px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  transform: rotate(var(--story-mechanical-track-rotation));
+  transform-origin: center;
+  will-change: transform;
+}
+
+.story-mechanical-track-card {
+  --story-mechanical-track-card-angle: 0deg;
+  --story-mechanical-track-radius: calc(var(--story-avatar-width) * .68);
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  width: var(--story-mechanical-track-card-size);
+  height: var(--story-mechanical-track-card-size);
+  padding: 0;
+  border: 0;
+  color: #fff;
+  background: transparent;
+  cursor: help;
+  opacity: 1;
+  pointer-events: auto;
+  transform:
+    rotate(var(--story-mechanical-track-card-angle))
+    translateY(calc(-1 * var(--story-mechanical-track-radius)))
+    rotate(calc(-1 * var(--story-mechanical-track-card-angle)))
+    translate(-50%, -50%);
+  transform-origin: 0 0;
+  transition:
+    transform 220ms cubic-bezier(.2, .78, .2, 1),
+    opacity 150ms ease,
+    filter 150ms ease;
+  will-change: transform, opacity;
+}
+
+.story-actor.has-mechanical-track > .story-actor-name,
+.story-actor.has-mechanical-track > .story-health-wrap,
+.story-actor.has-mechanical-track > .story-effect-list,
+.story-actor.has-mechanical-track > .story-intent {
+  position: relative;
+  z-index: 7;
+}
+
+.story-mechanical-track-visual,
+.story-mechanical-track-icon {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  transform-origin: center;
+}
+
+.story-mechanical-track-visual {
+  transform: rotate(calc(-1 * var(--story-mechanical-track-rotation)));
+}
+
+.story-mechanical-track-icon {
+  animation: storyMechanicalTrackIconSpin 19.8s linear infinite reverse;
+}
+
+.story-mechanical-track-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  background: transparent;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .34));
+  transition: filter 150ms ease;
+}
+
+.story-mechanical-track-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--thorn);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, .28);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.story-mechanical-track-wheel.is-resolving .story-mechanical-track-card:not(.is-activating) {
+  opacity: .74;
+}
+
+.story-mechanical-track-card.is-activating {
+  z-index: 8;
+  opacity: 1;
+}
+
+.story-mechanical-track-card.is-at-trigger .story-mechanical-track-image {
+  filter:
+    drop-shadow(0 2px 3px rgba(0, 0, 0, .34))
+    drop-shadow(0 0 7px rgba(255, 230, 93, .92));
+}
+
+.story-mechanical-track-card.is-at-trigger::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid rgba(255, 230, 93, .86);
+  border-radius: 50%;
+  box-shadow: 0 0 9px rgba(255, 230, 93, .5);
+  animation: storyMechanicalTrackPulse 620ms ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.story-mechanical-track-card.is-entering,
+.story-mechanical-track-card.is-leaving {
+  opacity: 0;
+}
+
+.story-mechanical-track-card:hover .story-mechanical-track-icon,
+.story-mechanical-track-card:focus-visible .story-mechanical-track-icon {
+  animation-play-state: paused;
+}
+
+@keyframes storyMechanicalTrackIconSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes storyMechanicalTrackPulse {
+  from { opacity: .45; transform: scale(.92); }
+  to { opacity: 1; transform: scale(1.05); }
+}
+
 .story-equipment-preview {
   position: fixed;
   z-index: 11800;
@@ -5429,6 +5574,8 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   .story-equipment,
   .story-equipment-visual,
   .story-equipment-icon,
+  .story-mechanical-track-card,
+  .story-mechanical-track-icon,
   .story-health-fill,
   .story-dialog[open],
   #modal.active,
