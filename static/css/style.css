@@ -13756,6 +13756,17 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
   cursor: pointer;
 }
 
+.settings-action-row {
+  margin-top: 2px;
+}
+
+.settings-inline-action {
+  min-width: 104px;
+  padding: 6px 12px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
 .settings-volume-row {
   display: grid;
   grid-template-columns: minmax(72px, 1fr) minmax(120px, 2fr) 46px;

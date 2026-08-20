@@ -1744,10 +1744,10 @@ Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card na
 Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_card_images: '显示卡牌图片', no_selectable_player: '没有可选中的玩家' });
 Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_card_images: 'Afficher les images des cartes', no_selectable_player: 'Aucun joueur ciblable' });
 Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_card_images: 'カード画像を表示', no_selectable_player: '選択可能なプレイヤーがいません' });
-Object.assign(I18N.en, { settings_landscape_mode: 'Enable landscape mode' });
-Object.assign(I18N.zh, { settings_landscape_mode: '开启横屏模式' });
-Object.assign(I18N.fr, { settings_landscape_mode: 'Activer le mode paysage' });
-Object.assign(I18N.ja, { settings_landscape_mode: '横画面モードを有効化' });
+Object.assign(I18N.en, { settings_landscape_mode: 'Enable landscape mode', settings_fullscreen: 'Fullscreen', settings_enter_fullscreen: 'Enter fullscreen', settings_exit_fullscreen: 'Exit fullscreen', settings_fullscreen_unsupported: 'Fullscreen unavailable', settings_fullscreen_failed: 'Could not change fullscreen mode' });
+Object.assign(I18N.zh, { settings_landscape_mode: '开启横屏模式', settings_fullscreen: '全屏', settings_enter_fullscreen: '进入全屏', settings_exit_fullscreen: '退出全屏', settings_fullscreen_unsupported: '浏览器不支持全屏', settings_fullscreen_failed: '无法切换全屏模式' });
+Object.assign(I18N.fr, { settings_landscape_mode: 'Activer le mode paysage', settings_fullscreen: 'Plein écran', settings_enter_fullscreen: 'Passer en plein écran', settings_exit_fullscreen: 'Quitter le plein écran', settings_fullscreen_unsupported: 'Plein écran indisponible', settings_fullscreen_failed: 'Impossible de changer le mode plein écran' });
+Object.assign(I18N.ja, { settings_landscape_mode: '横画面モードを有効化', settings_fullscreen: 'フルスクリーン', settings_enter_fullscreen: 'フルスクリーンにする', settings_exit_fullscreen: 'フルスクリーンを終了', settings_fullscreen_unsupported: 'フルスクリーン非対応', settings_fullscreen_failed: 'フルスクリーンを切り替えられませんでした' });
 Object.assign(I18N.en, { settings_story_hide_card_borders: 'Hide Story Mode card borders' });
 Object.assign(I18N.zh, { settings_story_hide_card_borders: '隐藏故事模式卡牌边框' });
 Object.assign(I18N.fr, { settings_story_hide_card_borders: 'Masquer les bordures des cartes du mode histoire' });
@@ -5808,6 +5808,60 @@ function applyLandscapeMode(value) {
     updateClassicMobileCanvas();
 }
 
+function getPageFullscreenElement() {
+    return document.fullscreenElement
+        || document.webkitFullscreenElement
+        || document.webkitCurrentFullScreenElement
+        || null;
+}
+
+function getPageFullscreenRequest() {
+    const root = document.documentElement;
+    return root.requestFullscreen
+        || root.webkitRequestFullscreen
+        || root.webkitRequestFullScreen
+        || null;
+}
+
+function getPageFullscreenExit() {
+    return document.exitFullscreen
+        || document.webkitExitFullscreen
+        || document.webkitCancelFullScreen
+        || null;
+}
+
+function updateFullscreenSettingButton() {
+    const button = $('btn-settings-fullscreen');
+    if (!button) return;
+    const active = !!getPageFullscreenElement();
+    const supported = active || !!getPageFullscreenRequest();
+    button.disabled = !supported;
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    button.textContent = !supported
+        ? (UI.settings_fullscreen_unsupported || '浏览器不支持全屏')
+        : active
+            ? (UI.settings_exit_fullscreen || '退出全屏')
+            : (UI.settings_enter_fullscreen || '进入全屏');
+}
+
+async function togglePageFullscreen() {
+    try {
+        const active = !!getPageFullscreenElement();
+        const action = active ? getPageFullscreenExit() : getPageFullscreenRequest();
+        if (!action) {
+            updateFullscreenSettingButton();
+            return;
+        }
+        const owner = active ? document : document.documentElement;
+        await Promise.resolve(action.call(owner));
+    } catch (error) {
+        console.warn('Fullscreen request failed:', error);
+        showActionToast(UI.settings_fullscreen_failed || '无法切换全屏模式', 2600, 'error');
+    } finally {
+        updateFullscreenSettingButton();
+    }
+}
+
 function updateAi1v1TestEntry(mode = null) {
     const entry = $('ai-1v1-test-entry');
     if (!entry) return;
@@ -6205,12 +6259,15 @@ function updateStaticText() {
     if (settingsPlayGestureLabel) settingsPlayGestureLabel.textContent = UI.settings_play_gesture_animation || '显示出牌操作演示';
     const settingsLandscapeModeLabel = $('settings-label-landscape-mode');
     if (settingsLandscapeModeLabel) settingsLandscapeModeLabel.textContent = UI.settings_landscape_mode;
+    const settingsFullscreenLabel = $('settings-label-fullscreen');
+    if (settingsFullscreenLabel) settingsFullscreenLabel.textContent = UI.settings_fullscreen || '全屏';
     const settingsStoryCardBordersLabel = $('settings-label-story-hide-card-borders');
     if (settingsStoryCardBordersLabel) settingsStoryCardBordersLabel.textContent = UI.settings_story_hide_card_borders;
     updateEnglishNameSettingVisibility();
     updateCardImageSettingInput();
     updatePlayGestureAnimationInput();
     updateLandscapeModeInput();
+    updateFullscreenSettingButton();
     updateStoryCardBordersInput();
     const themeSelect = $('settings-theme-select');
     if (themeSelect) {
@@ -36033,6 +36090,11 @@ async function init() {
         landscapeModeToggle.checked = landscapeModeEnabled;
         landscapeModeToggle.addEventListener('change', (e) => applyLandscapeMode(e.target.checked));
     }
+    const fullscreenButton = $('btn-settings-fullscreen');
+    if (fullscreenButton) fullscreenButton.addEventListener('click', togglePageFullscreen);
+    document.addEventListener('fullscreenchange', updateFullscreenSettingButton);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenSettingButton);
+    updateFullscreenSettingButton();
     const storyCardBordersToggle = $('settings-story-hide-card-borders');
     if (storyCardBordersToggle) {
         storyCardBordersToggle.checked = storyCardBordersHidden;
