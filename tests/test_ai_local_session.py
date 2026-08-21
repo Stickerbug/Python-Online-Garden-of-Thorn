@@ -373,6 +373,120 @@ def test_registered_socket_player_can_start_public_ai_match():
         client.disconnect()
 
 
+def test_active_ai_match_survives_disconnect_and_rejoins_through_normal_reconnect():
+    old_http = gtn.app.test_client()
+    old_client = gtn.socketio.test_client(gtn.app, flask_test_client=old_http)
+    room_map = gtn.socketio.server.manager.rooms["/"][None]
+    old_sid = next(key for key, value in room_map.items() if value == old_client.eio_sid)
+    room_id = max([int(key) for key in gtn.rooms if str(key).isdigit()] + [900000]) + 1
+    engine = _test_engine()
+    player = {
+        "nickname": "Reconnect Human",
+        "user_id": 1101,
+        "account_player_id": "reconnect-human",
+        "is_registered_user": True,
+        "status": "in_game",
+        "room_id": room_id,
+        "disabled_mods": [],
+        "skin": {},
+        "beta_mode": False,
+        "mode": "1v1",
+    }
+    meta = {
+        "session_id": "ai-reconnect-session",
+        "seed": 17,
+        "human_player_id": 1,
+        "ai_player_id": 0,
+        "human_name": player["nickname"],
+        "ai_name": "Phelren",
+        "enabled_mods": [],
+        "action_index": 0,
+        "thinking": False,
+        "timer_running": True,
+        "pregame_ai_running": False,
+        "diagnostic_finished": True,
+        "policy_label": "Phelren V1",
+        "diagnostic_metadata": {},
+    }
+    gtn.players[old_sid] = player
+    gtn.solo_sessions[old_sid] = engine
+    gtn.ai_test_sessions[old_sid] = meta
+    room = gtn._create_ai_test_replay_room(old_sid, engine, meta, room_id=room_id)
+    meta["replay_room"] = room
+    gtn.rooms[room_id] = room
+
+    new_client = None
+    new_sid = None
+    try:
+        old_client.disconnect()
+
+        assert room_id in gtn.rooms
+        assert old_sid in gtn.solo_sessions
+        assert old_sid in gtn.ai_test_sessions
+        assert old_sid in room.disconnected_players
+        assert gtn._tick_ai_test_match_timer(old_sid)["kind"] == "paused_disconnect"
+        candidate, candidate_sid = gtn.find_reconnect_candidate_locked(
+            nickname=player["nickname"],
+            user_id=player["user_id"],
+            account_player_id=player["account_player_id"],
+            beta_mode=False,
+        )
+        assert candidate is room
+        assert candidate_sid == old_sid
+
+        new_http = gtn.app.test_client()
+        new_client = gtn.socketio.test_client(gtn.app, flask_test_client=new_http)
+        room_map = gtn.socketio.server.manager.rooms["/"][None]
+        new_sid = next(key for key, value in room_map.items() if value == new_client.eio_sid)
+        gtn.players[new_sid] = {
+            **player,
+            "status": "reconnecting",
+            "room_id": None,
+        }
+        with (
+            mock.patch.object(gtn, "schedule_ai_test_match_timer") as schedule_timer,
+            mock.patch.object(gtn, "schedule_ai_test_pregame") as schedule_pregame,
+            mock.patch.object(gtn, "schedule_ai_test_turn") as schedule_turn,
+            mock.patch.object(gtn, "broadcast_lobby"),
+        ):
+            new_client.emit("reconnect_accept", {"room_id": room_id, "old_sid": old_sid})
+            received = new_client.get_received()
+
+        assert any(event["name"] == "solo_state" for event in received)
+        assert old_sid not in gtn.solo_sessions
+        assert old_sid not in gtn.ai_test_sessions
+        assert gtn.solo_sessions[new_sid] is engine
+        assert gtn.ai_test_sessions[new_sid] is meta
+        assert room.ai_owner_sid == new_sid
+        assert room.player_sids[1] == new_sid
+        assert old_sid not in room.disconnected_players
+        assert gtn.players[new_sid]["status"] == "in_game"
+        assert gtn.players[new_sid]["room_id"] == room_id
+        assert meta["owner_disconnected"] is False
+        assert meta["timer_running"] is False
+        schedule_timer.assert_called_once_with(new_sid)
+        schedule_pregame.assert_called_once_with(new_sid)
+        assert schedule_turn.call_count >= 1
+        assert all(call.args == (new_sid,) for call in schedule_turn.call_args_list)
+    finally:
+        for timer in list(room.reconnect_timers.values()):
+            timer.cancel()
+        with gtn._lock:
+            gtn._drop_solo_session_locked(new_sid or old_sid)
+            if new_sid:
+                gtn.players.pop(new_sid, None)
+            gtn.players.pop(old_sid, None)
+        if new_client is not None and new_client.is_connected():
+            new_client.disconnect()
+
+
+def test_ai_match_client_route_participates_in_network_recovery():
+    source = (Path(gtn.__file__).parent / "static" / "js" / "game.js").read_text(encoding="utf-8")
+    assert "const isAiMatch = !!(payload && (payload.ai_test || payload.ai_match));" in source
+    assert "(soloMode && !isAiMatch)" in source
+    assert "if (data && data.ai_test) rememberActiveMatchRoute(data, 'solo_state');" in source
+
+
 def test_live_ai_room_can_be_spectated_and_closes_spectators_with_owner():
     owner_http = gtn.app.test_client()
     spectator_http = gtn.app.test_client()

@@ -5436,7 +5436,8 @@ function clearActiveMatchRoute(reason = '') {
 }
 
 function rememberActiveMatchRoute(payload = {}, reason = '') {
-    if (soloMode || replayMode || !payload || payload.solo || payload.replay) return;
+    const isAiMatch = !!(payload && (payload.ai_test || payload.ai_match));
+    if ((soloMode && !isAiMatch) || replayMode || !payload || (payload.solo && !isAiMatch) || payload.replay) return;
     const phaseName = String(payload.phase || phase || '');
     if (payload.game_over || phaseName === 'game_over') {
         clearActiveMatchRoute(reason ? `game_over:${reason}` : 'game_over');
@@ -7147,7 +7148,12 @@ function clearTransientMatchRecovery(reason = '') {
 }
 
 function hasRecoverableNetworkMatchContext() {
-    if (soloMode || replayMode || isSpectating || phase === 'game_over') return false;
+    const isAiMatch = !!(
+        gameState?.ai_test
+        || draftState?.ai_test
+        || eventSelectData?.ai_test
+    );
+    if ((soloMode && !isAiMatch) || replayMode || isSpectating || phase === 'game_over') return false;
     if (readActiveMatchRoute()) return true;
     if (isNetworkMatchPhase(phase)) return true;
     return ['view-draft', 'view-event-select', 'view-game'].includes(activeViewId || '');
@@ -15445,6 +15451,7 @@ function connectSocket(serverUrl) {
         const previousPhase = phase;
         const previousGameState = gameState;
         data = preserveGameOverLogState(data, previousGameState);
+        if (data && data.ai_test) rememberActiveMatchRoute(data, 'solo_state');
         rememberTurnTimerSnapshot(data);
         prepareRuntimeForBattleEntry(previousPhase, data.phase);
         clearTargetPickUi();

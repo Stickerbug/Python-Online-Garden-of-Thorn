@@ -438,7 +438,7 @@ GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSIO
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
@@ -7244,7 +7244,8 @@ def _take_over_online_session_locked(old_sid, reason='login_reconnect'):
         room = rooms[spectating_room]
         if old_sid in room.spectators:
             room.spectators.remove(old_sid)
-    _drop_solo_session_locked(old_sid)
+    if not (takeover_info['prepared_reconnect'] and _preserve_ai_test_session_for_reconnect_locked(old_sid)):
+        _drop_solo_session_locked(old_sid)
     for inv_sid, target_sid in list(invites.items()):
         if inv_sid == old_sid or target_sid == old_sid:
             del invites[inv_sid]
@@ -13433,6 +13434,10 @@ def _broadcast_game_state_now(room):
                 broadcast_spectators=False,
             )
             _broadcast_recipients += 1
+        if getattr(room.engine, 'game_over', False):
+            if owner_sid in ai_test_sessions:
+                _maybe_finish_ai_test_session(owner_sid, room.engine, 'game_over')
+            _schedule_game_over_cleanup(room)
         broadcast_spectate_state(room)
         _broadcast_recipients += room_spectator_count(room)
         record_socket_broadcast(
@@ -13595,21 +13600,35 @@ def _schedule_game_over_cleanup(room):
                 rid = room.room_id
                 if rid not in rooms:
                     return
-                for psid in room.player_sids:
-                    if room_player_session_is_current(room, psid):
-                        players[psid]['room_id'] = None
-                        players[psid]['status'] = 'lobby'
+                if getattr(room, 'ai_match', False):
+                    owner_sid = getattr(room, 'ai_owner_sid', None)
+                    if owner_sid and room_player_session_is_current(room, owner_sid):
+                        players[owner_sid]['room_id'] = None
+                        players[owner_sid]['status'] = 'lobby'
                         pending_emits.append(('game_phase', {
                             'phase': 'lobby',
                             **room_event_context(room),
-                        }, psid))
-                for spid in list(room.spectators):
-                    if room_spectator_session_is_current(room, spid):
-                        players[spid]['spectating_room'] = None
-                        players[spid]['spectate_perspective'] = 0
-                        players[spid]['status'] = 'lobby'
-                        pending_emits.append(('spectate_leave', room_event_context(room), spid))
-                rooms.pop(rid, None)
+                        }, owner_sid))
+                    if owner_sid:
+                        _drop_solo_session_locked(owner_sid)
+                    else:
+                        rooms.pop(rid, None)
+                else:
+                    for psid in room.player_sids:
+                        if room_player_session_is_current(room, psid):
+                            players[psid]['room_id'] = None
+                            players[psid]['status'] = 'lobby'
+                            pending_emits.append(('game_phase', {
+                                'phase': 'lobby',
+                                **room_event_context(room),
+                            }, psid))
+                    for spid in list(room.spectators):
+                        if room_spectator_session_is_current(room, spid):
+                            players[spid]['spectating_room'] = None
+                            players[spid]['spectate_perspective'] = 0
+                            players[spid]['status'] = 'lobby'
+                            pending_emits.append(('spectate_leave', room_event_context(room), spid))
+                    rooms.pop(rid, None)
                 admin_event('game', f'room {rid} auto-cleaned after game_over timeout')
         except Exception as exc:
             admin_event('error', f'game_over_cleanup error: {exc}')
@@ -14225,6 +14244,54 @@ def _drop_solo_session_locked(sid):
             ai_meta,
             {'reason': 'session_dropped'},
         )
+
+
+def _preserve_ai_test_session_for_reconnect_locked(sid):
+    """Keep an active Phelren room alive while its human socket is replaced."""
+    meta = ai_test_sessions.get(sid)
+    engine = solo_sessions.get(sid)
+    room = meta.get('replay_room') if isinstance(meta, dict) else None
+    if (
+        not isinstance(room, GameRoom)
+        or not getattr(room, 'ai_match', False)
+        or rooms.get(getattr(room, 'room_id', None)) is not room
+        or engine is None
+        or getattr(engine, 'game_over', False)
+        or getattr(engine, 'phase', '') == 'game_over'
+    ):
+        return False
+    meta['owner_disconnected'] = True
+    return True
+
+
+def _rekey_ai_test_session_locked(old_sid, new_sid, room, player_index):
+    """Move a live Phelren session to the socket accepted by normal reconnect."""
+    if not getattr(room, 'ai_match', False):
+        return False
+    meta = ai_test_sessions.get(old_sid)
+    engine = solo_sessions.get(old_sid)
+    if not isinstance(meta, dict) or engine is None or meta.get('replay_room') is not room:
+        return False
+
+    action_lock = _SOLO_ACTION_LOCKS.pop(old_sid, None) or getattr(room, 'action_lock', None)
+    ai_test_sessions.pop(old_sid, None)
+    solo_sessions.pop(old_sid, None)
+    ai_test_sessions[new_sid] = meta
+    solo_sessions[new_sid] = engine
+    if action_lock is not None:
+        _SOLO_ACTION_LOCKS[new_sid] = action_lock
+        room.action_lock = action_lock
+
+    meta['owner_disconnected'] = False
+    # Background tasks are keyed by sid. The old tasks stop after the rekey;
+    # these flags let the new sid start replacements immediately.
+    meta['thinking'] = False
+    meta['timer_running'] = False
+    meta['pregame_ai_running'] = False
+    room.ai_owner_sid = new_sid
+    room.player_sids[int(player_index)] = new_sid
+    room.engine = engine
+    return True
 
 
 def _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome='ok', scope='training'):
@@ -20435,7 +20502,8 @@ def on_disconnect():
                 return
             player = players[sid]
             mark_player_session_last_seen_locked(player, exclude_sid=sid)
-            _drop_solo_session_locked(sid)
+            if not _preserve_ai_test_session_for_reconnect_locked(sid):
+                _drop_solo_session_locked(sid)
             room_id = player.get('room_id')
             nickname = player['nickname']
             admin_event('player', f'{nickname} disconnected', sid=sid, room_id=room_id)
@@ -20561,6 +20629,7 @@ def on_reconnect_accept(data):
     room = None
     pidx = -1
     other_sids = []
+    ai_reconnected = False
     with _lock:
         if sid not in players:
             return
@@ -20606,7 +20675,20 @@ def on_reconnect_accept(data):
             room.both_dc_timer.cancel()
             room.both_dc_timer = None
         pidx = dc_info['player_index']
-        room.player_sids[pidx] = sid
+        if getattr(room, 'ai_match', False):
+            ai_reconnected = _rekey_ai_test_session_locked(old_sid, sid, room, pidx)
+            if not ai_reconnected:
+                player['status'] = 'lobby'
+                player['room_id'] = None
+                admin_event(
+                    'error',
+                    f'Phelren reconnect failed: missing live session old_sid={old_sid}',
+                    sid=sid,
+                    room_id=room_id,
+                )
+                return
+        else:
+            room.player_sids[pidx] = sid
         room.player_profiles.pop(old_sid, None)
         room.store_player_profile(sid, pidx, player)
         del room.disconnected_players[old_sid]
@@ -20621,6 +20703,12 @@ def on_reconnect_accept(data):
     # Socket emits and pending-interaction recovery can yield or acquire the
     # global lock again. Keep them outside the state-mutation critical section.
     join_room(room_id)
+    if ai_reconnected:
+        send_ai_test_pregame_state(sid)
+        schedule_ai_test_match_timer(sid)
+        schedule_ai_test_pregame(sid)
+        broadcast_lobby()
+        return
     for other_sid in other_sids:
         socketio.emit('opponent_reconnected', {}, room=other_sid)
     send_game_state_to(room, pidx, recover_pending=False)
@@ -22364,6 +22452,8 @@ def _tick_ai_test_match_timer(sid, now=None):
         room.engine = engine
         if getattr(engine, 'game_over', False):
             return {'stop': True}
+        if _room_has_blocking_disconnect(room):
+            return {'kind': 'paused_disconnect'}
         phase = str(getattr(engine, 'phase', '') or '')
         if phase in ('event_select', 'event_reveal', 'draft'):
             human_player_id = int(meta.get('human_player_id', 0))
