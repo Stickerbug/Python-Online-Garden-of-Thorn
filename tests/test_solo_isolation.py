@@ -84,20 +84,52 @@ class SoloIsolationTests(unittest.TestCase):
         finally:
             first_lock.release()
 
+    @unittest.skipIf(app.eventlet is None, 'Eventlet is not installed')
     def test_cpu_worker_does_not_hold_the_global_state_lock(self):
-        def probe_global_lock():
-            acquired = app._lock.acquire(blocking=False)
-            if acquired:
-                app._lock.release()
-            return acquired
+        entered = app._NATIVE_THREADING.Event()
+        finish = app._NATIVE_THREADING.Event()
+        worker_thread_ids = []
 
-        ok, acquired = app._solo_safe_cpu_call(
+        def blocked_native_probe():
+            worker_thread_ids.append(app._NATIVE_THREADING.get_ident())
+            entered.set()
+            finish.wait(5)
+            return True
+
+        request_greenlet = app.eventlet.spawn(
+            app._solo_safe_cpu_call,
             self.sid,
             'test_global_lock_probe',
-            probe_global_lock,
+            blocked_native_probe,
         )
+        try:
+            for _ in range(200):
+                if entered.is_set():
+                    break
+                app.eventlet.sleep(0.01)
+            self.assertTrue(entered.is_set())
+
+            # Probe the Eventlet lock only from the hub thread.  Acquiring a
+            # green lock from the native tpool thread would itself violate the
+            # isolation contract this test is intended to protect.
+            acquired = app._lock.acquire(blocking=False)
+            self.assertTrue(acquired)
+            if acquired:
+                app._lock.release()
+
+            finish.set()
+            ok, value = request_greenlet.wait()
+        finally:
+            finish.set()
+            request_greenlet.kill()
+
         self.assertTrue(ok)
-        self.assertTrue(acquired)
+        self.assertTrue(value)
+        self.assertEqual(len(worker_thread_ids), 1)
+        self.assertNotEqual(
+            worker_thread_ids[0],
+            app._NATIVE_THREADING.get_ident(),
+        )
 
     def test_phelren_actions_do_not_compete_with_training_capacity(self):
         app.ai_test_sessions[self.sid] = {'thinking': False}
