@@ -114,6 +114,253 @@ class SoloIsolationTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(value, 'ready')
 
+    def test_phelren_capacity_is_owned_inside_eventlet_tpool(self):
+        app.ai_test_sessions[self.sid] = {
+            'thinking': False,
+            'session_id': 'phelren-tpool-ownership',
+        }
+        observed_inflight = []
+        with patch(
+            'eventlet.tpool.execute',
+            side_effect=lambda runner: runner(),
+        ) as execute:
+            ok, value = app._solo_safe_cpu_call(
+                self.sid,
+                'phelren_tpool_probe',
+                lambda: observed_inflight.append(
+                    app._solo_action_inflight_snapshot()['phelren']
+                ) or 'ready',
+            )
+
+        self.assertTrue(ok)
+        self.assertEqual(value, 'ready')
+        self.assertEqual(observed_inflight, [1])
+        self.assertEqual(app._solo_action_inflight_snapshot()['phelren'], 0)
+        execute.assert_called_once()
+
+    def test_phelren_worker_releases_capacity_if_request_greenlet_disappears(self):
+        class RequestCancelled(BaseException):
+            pass
+
+        app.ai_test_sessions[self.sid] = {
+            'thinking': False,
+            'session_id': 'phelren-cancelled-request',
+        }
+        capacity = Mock()
+        capacity.acquire.return_value = True
+
+        def execute_after_worker_finishes(runner):
+            runner()
+            raise RequestCancelled()
+
+        with (
+            patch.object(app, '_PHELREN_ACTION_CAPACITY', capacity),
+            patch('eventlet.tpool.execute', side_effect=execute_after_worker_finishes),
+        ):
+            with self.assertRaises(RequestCancelled):
+                app._solo_safe_cpu_call(
+                    self.sid,
+                    'phelren_cancelled_request_probe',
+                    lambda: 'finished',
+                )
+
+        capacity.release.assert_called_once_with()
+        self.assertEqual(app._solo_action_inflight_snapshot()['phelren'], 0)
+
+    @unittest.skipIf(app.eventlet is None, 'Eventlet is not installed')
+    def test_real_tpool_worker_survives_request_greenlet_cancellation(self):
+        app.ai_test_sessions[self.sid] = {
+            'thinking': False,
+            'session_id': 'phelren-real-cancel',
+        }
+        entered = app._NATIVE_THREADING.Event()
+        finish = app._NATIVE_THREADING.Event()
+
+        def native_action():
+            entered.set()
+            finish.wait(5)
+            return 'finished-after-cancel'
+
+        request_greenlet = app.eventlet.spawn(
+            app._solo_safe_cpu_call,
+            self.sid,
+            'phelren_real_cancel_probe',
+            native_action,
+        )
+        try:
+            for _ in range(200):
+                if entered.is_set():
+                    break
+                app.eventlet.sleep(0.01)
+            self.assertTrue(entered.is_set())
+            request_greenlet.kill()
+            finish.set()
+            for _ in range(200):
+                if app._solo_action_inflight_snapshot()['phelren'] == 0:
+                    break
+                app.eventlet.sleep(0.01)
+            self.assertEqual(app._solo_action_inflight_snapshot()['phelren'], 0)
+            self.assertTrue(app._PHELREN_ACTION_CAPACITY.acquire(timeout=0))
+            app._PHELREN_ACTION_CAPACITY.release()
+        finally:
+            finish.set()
+            request_greenlet.kill()
+
+    def test_stale_terminal_generation_rotates_without_cross_releasing(self):
+        entered = app._NATIVE_THREADING.Event()
+        finish = app._NATIVE_THREADING.Event()
+        results = []
+        waiter_results = []
+        waiter_executed = []
+        with app._PHELREN_ACTION_STATE_LOCK:
+            self.assertFalse(app._PHELREN_ACTION_INFLIGHT)
+            original_capacity = app._PHELREN_ACTION_CAPACITY
+            original_generation = app._PHELREN_ACTION_GENERATION
+            original_token = app._PHELREN_ACTION_TOKEN
+            original_retired_identities = set(app._PHELREN_RETIRED_IDENTITIES)
+            original_recovery_count = app._PHELREN_CAPACITY_RECOVERY_COUNT
+            original_last_recovery = app._PHELREN_CAPACITY_LAST_RECOVERY_AT
+            old_capacity = app._NATIVE_THREADING.BoundedSemaphore(1)
+            app._PHELREN_ACTION_CAPACITY = old_capacity
+            app._PHELREN_ACTION_GENERATION = original_generation + 100
+            app._PHELREN_CAPACITY_RECOVERY_COUNT = 0
+            app._PHELREN_CAPACITY_LAST_RECOVERY_AT = 0.0
+
+        identity = {
+            'sid': 'retired-phelren-sid',
+            'session_id': 'retired-phelren-session',
+            'room_id': 987654321,
+            'engine_id': -1,
+        }
+
+        def blocked_action():
+            entered.set()
+            finish.wait(5)
+            return 'late-result'
+
+        worker = app._NATIVE_THREADING.Thread(
+            target=lambda: results.append(
+                app._run_phelren_capacity_call(identity, 'retired_probe', blocked_action)
+            ),
+            daemon=True,
+        )
+        waiter = app._NATIVE_THREADING.Thread(
+            target=lambda: waiter_results.append(
+                app._run_phelren_capacity_call(
+                    {**identity, 'sid': 'retired-phelren-waiter'},
+                    'retired_waiter_probe',
+                    lambda: waiter_executed.append(True),
+                )
+            ),
+            daemon=True,
+        )
+        try:
+            with (
+                patch.object(app, 'PHELREN_MAX_CONCURRENT_ACTIONS', 1),
+                patch.object(app, 'PHELREN_ACTION_STALE_SECONDS', 0.0),
+                patch.object(app, 'PHELREN_CAPACITY_RECOVERY_COOLDOWN_SECONDS', 0.0),
+                patch.object(app, 'PHELREN_CAPACITY_MAX_RECOVERIES', 2),
+            ):
+                worker.start()
+                self.assertTrue(entered.wait(2))
+                waiter.start()
+                for _ in range(100):
+                    if app._phelren_action_state_snapshot()['current_waiting_count'] == 1:
+                        break
+                    app.time.sleep(0.01)
+                self.assertEqual(
+                    app._phelren_action_state_snapshot()['current_waiting_count'],
+                    1,
+                )
+                self.assertTrue(app._recover_stale_phelren_capacity())
+                replacement = app._PHELREN_ACTION_CAPACITY
+                self.assertIsNot(replacement, old_capacity)
+                self.assertTrue(replacement.acquire(timeout=0))
+                replacement.release()
+                finish.set()
+                worker.join(2)
+                waiter.join(2)
+
+            self.assertFalse(worker.is_alive())
+            self.assertFalse(waiter.is_alive())
+            self.assertEqual(results, [(app._PHELREN_CALL_ABANDONED, None)])
+            self.assertEqual(waiter_results, [(app._PHELREN_CALL_ABANDONED, None)])
+            self.assertEqual(waiter_executed, [])
+            self.assertTrue(old_capacity.acquire(timeout=0))
+            old_capacity.release()
+            self.assertTrue(replacement.acquire(timeout=0))
+            replacement.release()
+        finally:
+            finish.set()
+            worker.join(2)
+            waiter.join(2)
+            with app._PHELREN_ACTION_STATE_LOCK:
+                app._PHELREN_ACTION_INFLIGHT.clear()
+                app._PHELREN_ACTION_CAPACITY = original_capacity
+                app._PHELREN_ACTION_GENERATION = original_generation
+                app._PHELREN_ACTION_TOKEN = original_token
+                app._PHELREN_RETIRED_IDENTITIES.clear()
+                app._PHELREN_RETIRED_IDENTITIES.update(original_retired_identities)
+                app._PHELREN_CAPACITY_RECOVERY_COUNT = original_recovery_count
+                app._PHELREN_CAPACITY_LAST_RECOVERY_AT = original_last_recovery
+
+    def test_rekeyed_live_session_is_not_treated_as_an_orphan(self):
+        app.ai_test_sessions[self.sid] = {
+            'thinking': False,
+            'session_id': 'stable-logical-session',
+            'owner_disconnected': False,
+        }
+        with app._lock:
+            identity = app._phelren_action_identity_locked(self.sid)
+        identity['sid'] = 'obsolete-socket-id'
+
+        with app._PHELREN_ACTION_STATE_LOCK:
+            self.assertFalse(app._PHELREN_ACTION_INFLIGHT)
+            original_capacity = app._PHELREN_ACTION_CAPACITY
+            original_generation = app._PHELREN_ACTION_GENERATION
+            original_token = app._PHELREN_ACTION_TOKEN
+            original_recovery_count = app._PHELREN_CAPACITY_RECOVERY_COUNT
+            original_last_recovery = app._PHELREN_CAPACITY_LAST_RECOVERY_AT
+            test_capacity = app._NATIVE_THREADING.BoundedSemaphore(1)
+            app._PHELREN_ACTION_CAPACITY = test_capacity
+            app._PHELREN_ACTION_GENERATION = original_generation + 200
+            app._PHELREN_CAPACITY_RECOVERY_COUNT = 0
+            app._PHELREN_CAPACITY_LAST_RECOVERY_AT = 0.0
+
+        token = None
+        acquired = False
+        try:
+            token, capacity, generation = app._register_phelren_action_waiter(
+                identity,
+                'live_rekey_probe',
+            )
+            acquired = capacity.acquire(timeout=0)
+            self.assertTrue(acquired)
+            with app._PHELREN_ACTION_STATE_LOCK:
+                record = app._PHELREN_ACTION_INFLIGHT[token]
+                record['state'] = 'running'
+                record['started_at'] = app.time.monotonic() - 60
+            with (
+                patch.object(app, 'PHELREN_MAX_CONCURRENT_ACTIONS', 1),
+                patch.object(app, 'PHELREN_ACTION_STALE_SECONDS', 0.0),
+                patch.object(app, 'PHELREN_CAPACITY_RECOVERY_COOLDOWN_SECONDS', 0.0),
+                patch.object(app, 'PHELREN_CAPACITY_MAX_RECOVERIES', 2),
+            ):
+                self.assertFalse(app._recover_stale_phelren_capacity())
+                self.assertEqual(app._PHELREN_ACTION_GENERATION, generation)
+                self.assertIs(app._PHELREN_ACTION_CAPACITY, test_capacity)
+        finally:
+            with app._PHELREN_ACTION_STATE_LOCK:
+                if token is not None:
+                    app._PHELREN_ACTION_INFLIGHT.pop(token, None)
+                if acquired:
+                    test_capacity.release()
+                app._PHELREN_ACTION_CAPACITY = original_capacity
+                app._PHELREN_ACTION_GENERATION = original_generation
+                app._PHELREN_ACTION_TOKEN = original_token
+                app._PHELREN_CAPACITY_RECOVERY_COUNT = original_recovery_count
+                app._PHELREN_CAPACITY_LAST_RECOVERY_AT = original_last_recovery
+
     def test_phelren_busy_message_does_not_refer_to_training(self):
         app.ai_test_sessions[self.sid] = {'thinking': False}
         unavailable = Mock()
@@ -121,6 +368,7 @@ class SoloIsolationTests(unittest.TestCase):
         with (
             patch.object(app, '_PHELREN_ACTION_CAPACITY', unavailable),
             patch.object(app, 'soft_reject') as reject,
+            patch('eventlet.tpool.execute', side_effect=lambda runner: runner()),
         ):
             ok, value = app._solo_safe_cpu_call(
                 self.sid,

@@ -29,6 +29,21 @@ from functools import wraps
 from collections import deque, OrderedDict
 from datetime import datetime, timedelta, timezone
 
+try:
+    # Phelren work runs inside Eventlet's native tpool threads.  Capacity
+    # ownership must therefore use the unpatched threading primitives: a
+    # request greenlet may disappear after disconnect, while the native worker
+    # still has to be able to return its permit independently.
+    _NATIVE_THREADING = eventlet.patcher.original('threading') if eventlet is not None else threading
+except Exception:
+    _NATIVE_THREADING = threading
+    if eventlet is not None:
+        print(
+            '[startup] WARNING: native threading primitives unavailable; '
+            'Phelren capacity isolation is degraded',
+            flush=True,
+        )
+
 from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash
@@ -886,13 +901,34 @@ PHELREN_ACTION_QUEUE_WAIT_SECONDS = max(
     0.0,
     _env_float('GTN_PHELREN_ACTION_QUEUE_WAIT_SECONDS', 3.0),
 )
+PHELREN_ACTION_STALE_SECONDS = max(
+    30.0,
+    _env_float('GTN_PHELREN_ACTION_STALE_SECONDS', 120.0),
+)
+PHELREN_CAPACITY_RECOVERY_COOLDOWN_SECONDS = max(
+    30.0,
+    _env_float('GTN_PHELREN_CAPACITY_RECOVERY_COOLDOWN_SECONDS', 300.0),
+)
+PHELREN_CAPACITY_MAX_RECOVERIES = max(
+    0,
+    _env_int('GTN_PHELREN_CAPACITY_MAX_RECOVERIES', 2),
+)
 SOLO_ACTION_SLOW_MS = max(1.0, _env_float('GTN_SOLO_ACTION_SLOW_MS', 250))
 SOLO_ACTION_WORK_BUDGET = max(1000, _env_int('GTN_SOLO_ACTION_WORK_BUDGET', 20000))
 SOLO_LOG_LIMIT = max(200, _env_int('GTN_SOLO_LOG_LIMIT', 1200))
 SOLO_ACTION_SAMPLES = deque(maxlen=500)
 _SOLO_ACTION_LOCKS = {}
 _SOLO_ACTION_CAPACITY = threading.BoundedSemaphore(SOLO_MAX_CONCURRENT_ACTIONS)
-_PHELREN_ACTION_CAPACITY = threading.BoundedSemaphore(PHELREN_MAX_CONCURRENT_ACTIONS)
+_SOLO_ACTION_INFLIGHT_LOCK = threading.Lock()
+_SOLO_ACTION_INFLIGHT = {'training': 0}
+_PHELREN_ACTION_STATE_LOCK = _NATIVE_THREADING.Lock()
+_PHELREN_ACTION_CAPACITY = _NATIVE_THREADING.BoundedSemaphore(PHELREN_MAX_CONCURRENT_ACTIONS)
+_PHELREN_ACTION_GENERATION = 1
+_PHELREN_ACTION_TOKEN = 0
+_PHELREN_ACTION_INFLIGHT = {}
+_PHELREN_RETIRED_IDENTITIES = set()
+_PHELREN_CAPACITY_RECOVERY_COUNT = 0
+_PHELREN_CAPACITY_LAST_RECOVERY_AT = 0.0
 _SOLO_SLOW_LOG_LAST = {}
 _SOLO_LOADOUT_CACHE = OrderedDict()
 _SOLO_LOADOUT_CACHE_LOCK = threading.Lock()
@@ -4399,6 +4435,17 @@ def _pending_created_at(pending):
         return None
 
 
+def _room_is_terminal(room):
+    engine = getattr(room, 'engine', None) if room is not None else None
+    return bool(
+        engine is not None
+        and (
+            getattr(engine, 'game_over', False)
+            or getattr(engine, 'phase', '') == 'game_over'
+        )
+    )
+
+
 def _pending_interaction_watchdog_worker():
     while True:
         try:
@@ -4411,7 +4458,15 @@ def _pending_interaction_watchdog_worker():
             with _lock:
                 for room in list(rooms.values()):
                     engine = getattr(room, 'engine', None)
-                    if engine is None or getattr(engine, 'game_over', False):
+                    if engine is None:
+                        continue
+                    if _room_is_terminal(room):
+                        # State broadcasts normally arm this timer, but a room
+                        # whose action lock is wedged cannot reach the broadcast
+                        # path.  Always give terminal rooms an independent way
+                        # to leave the in-memory registry.
+                        if getattr(room, '_game_over_cleanup_timer', None) is None:
+                            pending_emits.append(('game_over_cleanup', room))
                         continue
                     _stamp_pending_interactions(room)
                     pending_response = getattr(engine, 'pending_response', None)
@@ -4487,10 +4542,14 @@ def _pending_interaction_watchdog_worker():
                 if kind == 'reconnect_timeout':
                     reconnect_timeout(item[1], item[2])
                     continue
+                if kind == 'game_over_cleanup':
+                    _schedule_game_over_cleanup(item[1])
+                    continue
                 room = item[1]
                 if kind == 'response':
                     emit_pending_response_requests(room)
                 broadcast_game_state(room)
+            _recover_stale_phelren_capacity()
         except Exception as exc:
             admin_event('error', f'pending interaction watchdog error: {exc}')
 
@@ -13591,14 +13650,12 @@ def broadcast_game_state(room):
 
 
 def _schedule_game_over_cleanup(room):
-    if getattr(room, '_game_over_cleanup_timer', None) is not None:
-        return
     def _cleanup():
         pending_emits = []
         try:
             with _lock:
                 rid = room.room_id
-                if rid not in rooms:
+                if rooms.get(rid) is not room:
                     return
                 if getattr(room, 'ai_match', False):
                     owner_sid = getattr(room, 'ai_owner_sid', None)
@@ -13640,8 +13697,25 @@ def _schedule_game_over_cleanup(room):
         broadcast_lobby()
     timer = threading.Timer(float(GAME_OVER_CLEANUP_SECONDS), _cleanup)
     timer.daemon = True
-    timer.start()
-    room._game_over_cleanup_timer = timer
+    # The watchdog, reconnect timeout, and state broadcaster may all discover
+    # the same terminal room.  Claim the timer under the registry lock before
+    # starting it so a zero-delay timer and concurrent callers remain
+    # idempotent.
+    with _lock:
+        rid = getattr(room, 'room_id', None)
+        if rooms.get(rid) is not room:
+            return False
+        if getattr(room, '_game_over_cleanup_timer', None) is not None:
+            return False
+        room._game_over_cleanup_timer = timer
+    try:
+        timer.start()
+    except Exception:
+        with _lock:
+            if getattr(room, '_game_over_cleanup_timer', None) is timer:
+                room._game_over_cleanup_timer = None
+        raise
+    return True
 
 
 def _cancel_game_over_cleanup_timer(room):
@@ -14331,29 +14405,374 @@ def _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome='ok', sc
         )
 
 
+def _change_solo_action_inflight(scope, delta):
+    if str(scope) != 'training':
+        return
+    with _SOLO_ACTION_INFLIGHT_LOCK:
+        current = int(_SOLO_ACTION_INFLIGHT.get('training', 0) or 0)
+        _SOLO_ACTION_INFLIGHT['training'] = max(0, current + int(delta))
+
+
+def _phelren_action_identity_locked(sid):
+    meta = ai_test_sessions.get(sid)
+    engine = solo_sessions.get(sid)
+    if not isinstance(meta, dict) or engine is None:
+        return None
+    room = meta.get('replay_room')
+    return {
+        'sid': sid,
+        'session_id': str(meta.get('session_id') or ''),
+        'room_id': getattr(room, 'room_id', None),
+        'engine_id': id(engine),
+    }
+
+
+def _find_phelren_identity_locked(identity):
+    if not isinstance(identity, dict):
+        return None
+    expected_session_id = str(identity.get('session_id') or '')
+    expected_engine_id = identity.get('engine_id')
+    expected_room_id = identity.get('room_id')
+    for current_sid, meta in list(ai_test_sessions.items()):
+        if not isinstance(meta, dict):
+            continue
+        if str(meta.get('session_id') or '') != expected_session_id:
+            continue
+        engine = solo_sessions.get(current_sid)
+        if engine is None or id(engine) != expected_engine_id:
+            continue
+        room = meta.get('replay_room')
+        if expected_room_id is not None and getattr(room, 'room_id', None) != expected_room_id:
+            continue
+        return current_sid, meta, engine, room
+    return None
+
+
+def _phelren_identity_recoverable_locked(identity):
+    current = _find_phelren_identity_locked(identity)
+    if current is None:
+        room = rooms.get(identity.get('room_id')) if isinstance(identity, dict) else None
+        # A reused or otherwise still-active room id is never safe to detach.
+        if room is not None and not _room_is_terminal(room):
+            return False, None
+        return True, None
+    current_sid, meta, engine, room = current
+    terminal = _room_is_terminal(room) if room is not None else bool(
+        getattr(engine, 'game_over', False)
+        or getattr(engine, 'phase', '') == 'game_over'
+    )
+    player = players.get(current_sid)
+    disconnected = bool(
+        meta.get('owner_disconnected')
+        or player is None
+        or player.get('status') == 'reconnecting'
+    )
+    return bool(terminal and disconnected), current
+
+
+def _register_phelren_action_waiter(identity, event_name):
+    global _PHELREN_ACTION_TOKEN
+    with _PHELREN_ACTION_STATE_LOCK:
+        _PHELREN_ACTION_TOKEN += 1
+        token = _PHELREN_ACTION_TOKEN
+        capacity = _PHELREN_ACTION_CAPACITY
+        generation = _PHELREN_ACTION_GENERATION
+        identity_key = (
+            str(identity.get('session_id') or ''),
+            identity.get('engine_id'),
+        )
+        retired = identity_key in _PHELREN_RETIRED_IDENTITIES
+        _PHELREN_ACTION_INFLIGHT[token] = {
+            'token': token,
+            'sid': identity.get('sid'),
+            'session_id': identity.get('session_id'),
+            'room_id': identity.get('room_id'),
+            'engine_id': identity.get('engine_id'),
+            'event': str(event_name or ''),
+            'generation': generation,
+            'capacity': capacity,
+            'state': 'waiting',
+            'queued_at': time.monotonic(),
+            'started_at': None,
+            'abandoned': retired,
+        }
+        return token, capacity, generation
+
+
+_PHELREN_CALL_OK = 'ok'
+_PHELREN_CALL_BUSY = 'busy'
+_PHELREN_CALL_ABANDONED = 'abandoned'
+
+
+def _run_phelren_capacity_call(identity, event_name, fn):
+    """Run inside a native tpool worker, which owns and releases the permit."""
+    token, capacity, generation = _register_phelren_action_waiter(identity, event_name)
+    acquired = False
+    try:
+        with _PHELREN_ACTION_STATE_LOCK:
+            record = _PHELREN_ACTION_INFLIGHT.get(token)
+            if record is None or record.get('abandoned'):
+                return _PHELREN_CALL_ABANDONED, None
+        acquired = capacity.acquire(timeout=PHELREN_ACTION_QUEUE_WAIT_SECONDS)
+        if not acquired:
+            return _PHELREN_CALL_BUSY, None
+        with _PHELREN_ACTION_STATE_LOCK:
+            record = _PHELREN_ACTION_INFLIGHT.get(token)
+            if (
+                record is None
+                or record.get('abandoned')
+                or generation != _PHELREN_ACTION_GENERATION
+                or capacity is not _PHELREN_ACTION_CAPACITY
+            ):
+                return _PHELREN_CALL_ABANDONED, None
+            record['state'] = 'running'
+            record['started_at'] = time.monotonic()
+        try:
+            value = fn()
+        except Exception:
+            with _PHELREN_ACTION_STATE_LOCK:
+                record = _PHELREN_ACTION_INFLIGHT.get(token)
+                abandoned = bool(
+                    record is None
+                    or record.get('abandoned')
+                    or generation != _PHELREN_ACTION_GENERATION
+                )
+            if abandoned:
+                return _PHELREN_CALL_ABANDONED, None
+            raise
+        with _PHELREN_ACTION_STATE_LOCK:
+            record = _PHELREN_ACTION_INFLIGHT.get(token)
+            abandoned = bool(
+                record is None
+                or record.get('abandoned')
+                or generation != _PHELREN_ACTION_GENERATION
+            )
+        if abandoned:
+            return _PHELREN_CALL_ABANDONED, None
+        return _PHELREN_CALL_OK, value
+    finally:
+        with _PHELREN_ACTION_STATE_LOCK:
+            _PHELREN_ACTION_INFLIGHT.pop(token, None)
+            if acquired:
+                # Always release the semaphore captured by this generation.
+                # A recovered call must never add a permit to the replacement.
+                capacity.release()
+
+
+def _phelren_action_state_snapshot(now=None):
+    check_time = time.monotonic() if now is None else float(now)
+    with _PHELREN_ACTION_STATE_LOCK:
+        generation = _PHELREN_ACTION_GENERATION
+        records = [dict(item) for item in _PHELREN_ACTION_INFLIGHT.values()]
+        recovery_count = _PHELREN_CAPACITY_RECOVERY_COUNT
+        retired_identity_count = len(_PHELREN_RETIRED_IDENTITIES)
+    current = [item for item in records if item.get('generation') == generation and not item.get('abandoned')]
+    running = [item for item in current if item.get('state') == 'running' and item.get('started_at') is not None]
+    waiting = [item for item in current if item.get('state') == 'waiting']
+    retired = [item for item in records if item.get('generation') != generation or item.get('abandoned')]
+    ages = [max(0.0, check_time - float(item['started_at'])) for item in running]
+    stale_count = sum(1 for age in ages if age >= PHELREN_ACTION_STALE_SECONDS)
+    return {
+        'generation': generation,
+        'total_count': len(records),
+        'current_running_count': len(running),
+        'current_waiting_count': len(waiting),
+        'retired_count': len(retired),
+        'retired_identity_count': retired_identity_count,
+        'stale_count': stale_count,
+        'oldest_running_age_seconds': round(max(ages), 1) if ages else None,
+        'recovery_count': recovery_count,
+        'recovery_exhausted': bool(
+            PHELREN_CAPACITY_MAX_RECOVERIES >= 0
+            and recovery_count >= PHELREN_CAPACITY_MAX_RECOVERIES
+        ),
+    }
+
+
+def _recover_stale_phelren_capacity(now=None):
+    """Detach terminal orphan sessions and rotate a fully wedged generation."""
+    global _PHELREN_ACTION_CAPACITY
+    global _PHELREN_ACTION_GENERATION
+    global _PHELREN_CAPACITY_RECOVERY_COUNT
+    global _PHELREN_CAPACITY_LAST_RECOVERY_AT
+
+    check_time = time.monotonic() if now is None else float(now)
+    dropped_sessions = []
+    old_generation = None
+    with _lock:
+        with _PHELREN_ACTION_STATE_LOCK:
+            if PHELREN_CAPACITY_MAX_RECOVERIES <= 0:
+                return False
+            if _PHELREN_CAPACITY_RECOVERY_COUNT >= PHELREN_CAPACITY_MAX_RECOVERIES:
+                return False
+            if (
+                _PHELREN_CAPACITY_LAST_RECOVERY_AT
+                and check_time - _PHELREN_CAPACITY_LAST_RECOVERY_AT
+                < PHELREN_CAPACITY_RECOVERY_COOLDOWN_SECONDS
+            ):
+                return False
+            generation = _PHELREN_ACTION_GENERATION
+            running = [
+                record
+                for record in _PHELREN_ACTION_INFLIGHT.values()
+                if (
+                    record.get('generation') == generation
+                    and not record.get('abandoned')
+                    and record.get('state') == 'running'
+                    and record.get('started_at') is not None
+                )
+            ]
+            # Only recover proven full exhaustion.  Partial degradation keeps
+            # serving and is safer to clear with the next controlled restart.
+            if len(running) < PHELREN_MAX_CONCURRENT_ACTIONS:
+                return False
+            if any(
+                check_time - float(record.get('started_at') or check_time)
+                < PHELREN_ACTION_STALE_SECONDS
+                for record in running
+            ):
+                return False
+            recoverable = []
+            for record in running:
+                safe, current = _phelren_identity_recoverable_locked(record)
+                if not safe:
+                    return False
+                recoverable.append(current)
+            replacement_capacity = _NATIVE_THREADING.BoundedSemaphore(
+                PHELREN_MAX_CONCURRENT_ACTIONS
+            )
+            old_generation = generation
+            for record in running:
+                _PHELREN_RETIRED_IDENTITIES.add((
+                    str(record.get('session_id') or ''),
+                    record.get('engine_id'),
+                ))
+            for record in _PHELREN_ACTION_INFLIGHT.values():
+                if record.get('generation') == generation:
+                    record['abandoned'] = True
+            _PHELREN_ACTION_CAPACITY = replacement_capacity
+            _PHELREN_ACTION_GENERATION = old_generation + 1
+            _PHELREN_CAPACITY_RECOVERY_COUNT += 1
+            _PHELREN_CAPACITY_LAST_RECOVERY_AT = check_time
+
+        # Capacity rotation is already committed.  Session detachment is
+        # best-effort and cannot leave the semaphore state half-transitioned.
+        # Retired logical identities keep pre-existing tpool submissions from
+        # executing against these engines while cleanup runs.
+        seen_session_ids = set()
+        for current in recoverable:
+            if current is None:
+                continue
+            current_sid, meta, _engine, _room = current
+            session_id = str(meta.get('session_id') or '')
+            if session_id in seen_session_ids:
+                continue
+            seen_session_ids.add(session_id)
+            try:
+                player = players.get(current_sid)
+                _drop_solo_session_locked(current_sid)
+                if player is not None:
+                    player['room_id'] = None
+                    player['status'] = 'lobby'
+                dropped_sessions.append(session_id)
+            except Exception as exc:
+                admin_event(
+                    'error',
+                    f'Phelren recovered session detach failed: {type(exc).__name__}: {exc}',
+                )
+
+        admin_event(
+            'warning',
+            (
+                f'Phelren capacity generation recovered '
+                f'{old_generation}->{_PHELREN_ACTION_GENERATION}; '
+                f'detached_sessions={len(dropped_sessions)}'
+            ),
+        )
+    if dropped_sessions:
+        broadcast_lobby()
+    return True
+
+
+def _solo_action_inflight_snapshot():
+    with _SOLO_ACTION_INFLIGHT_LOCK:
+        training_count = int(_SOLO_ACTION_INFLIGHT.get('training', 0) or 0)
+    phelren = _phelren_action_state_snapshot()
+    return {
+        'training': training_count,
+        'phelren': phelren['total_count'],
+        'phelren_state': phelren,
+    }
+
+
 def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
-    is_phelren = sid in ai_test_sessions
+    with _lock:
+        is_phelren = sid in ai_test_sessions
+        phelren_identity = _phelren_action_identity_locked(sid) if is_phelren else None
     scope = 'phelren' if is_phelren else 'training'
-    capacity = _PHELREN_ACTION_CAPACITY if is_phelren else _SOLO_ACTION_CAPACITY
-    queue_wait = PHELREN_ACTION_QUEUE_WAIT_SECONDS if is_phelren else SOLO_ACTION_QUEUE_WAIT_SECONDS
-    acquired = capacity.acquire(timeout=queue_wait)
-    if not acquired:
+    if is_phelren and phelren_identity is None:
         soft_reject(
             sid,
             event_name,
             'ACTION_BUSY',
-            message=(
-                'Phelren 运算繁忙，请稍后重试'
-                if is_phelren
-                else '训练场运算繁忙，请稍后重试'
-            ),
+            message='Phelren 对局状态已变化，请重试',
         )
         return False, None
+    capacity = None
+    acquired = False
+    if not is_phelren:
+        capacity = _SOLO_ACTION_CAPACITY
+        acquired = capacity.acquire(timeout=SOLO_ACTION_QUEUE_WAIT_SECONDS)
+        if not acquired:
+            soft_reject(
+                sid,
+                event_name,
+                'ACTION_BUSY',
+                message='训练场运算繁忙，请稍后重试',
+            )
+            return False, None
+        _change_solo_action_inflight(scope, 1)
     started = time.perf_counter()
     ok = False
     outcome = 'error'
     try:
-        if offload and eventlet is not None:
+        if is_phelren:
+            runner = lambda: _run_phelren_capacity_call(
+                phelren_identity,
+                event_name,
+                fn,
+            )
+            # Phelren capacity is owned by the native worker even for timer
+            # callbacks that request inline handling; blocking a native
+            # semaphore on the Eventlet hub would stall the whole site.
+            if eventlet is not None:
+                from eventlet import tpool
+                call_status, value = tpool.execute(runner)
+            else:
+                call_status, value = runner()
+            if call_status == _PHELREN_CALL_BUSY:
+                outcome = 'busy'
+                soft_reject(
+                    sid,
+                    event_name,
+                    'ACTION_BUSY',
+                    message='Phelren 运算繁忙，请稍后重试',
+                )
+                return False, None
+            if call_status == _PHELREN_CALL_ABANDONED:
+                outcome = 'abandoned'
+                admin_event(
+                    'warning',
+                    f'discarded retired Phelren action event={event_name}',
+                    sid=sid,
+                    event_name=event_name,
+                )
+                return False, None
+            with _lock:
+                if _find_phelren_identity_locked(phelren_identity) is None:
+                    outcome = 'stale_session'
+                    return False, None
+        elif offload and eventlet is not None:
             from eventlet import tpool
             value = tpool.execute(fn)
         else:
@@ -14407,7 +14826,9 @@ def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
         return False, None
     finally:
         elapsed_ms = (time.perf_counter() - started) * 1000
-        capacity.release()
+        if acquired and capacity is not None:
+            capacity.release()
+            _change_solo_action_inflight(scope, -1)
         _record_solo_action_sample(sid, event_name, elapsed_ms, ok, outcome, scope)
 
 
@@ -15446,6 +15867,7 @@ def _mark_disconnect_timeout_loss(room, player_index, nickname):
 def reconnect_timeout(room_id, old_sid):
     global _next_room_id
     pending_emits = []
+    terminal_room = None
     try:
         with _lock:
             if room_id not in rooms:
@@ -15463,6 +15885,8 @@ def reconnect_timeout(room_id, old_sid):
                 int(dc_info.get('player_index', -1)),
                 dc_info.get('nickname', '?'),
             )
+            if ended:
+                terminal_room = room
             record_room_replay_action(room, 'disconnect_timeout', int(dc_info.get('player_index', -1)), {
                 'nickname': dc_info.get('nickname', '?'),
                 'game_over': ended,
@@ -15540,6 +15964,13 @@ def reconnect_timeout(room_id, old_sid):
                 broadcast_lobby()
         except Exception as exc:
             admin_event('error', f'reconnect_timeout emit error: {exc}')
+    # Do not rely on a state broadcast to arm cleanup.  A timed-out Phelren
+    # turn may still own the action lock, which is precisely the failure mode
+    # that used to leave invisible game-over rooms behind.  Arm the timer only
+    # after terminal notifications so a deliberately short cleanup interval
+    # cannot suppress them.
+    if terminal_room is not None:
+        _schedule_game_over_cleanup(terminal_room)
     if not pending_emits:
         broadcast_lobby()
 
@@ -16909,8 +17340,12 @@ def health_full():
         db_error = str(exc)
     global_lock_busy = False
     global_lock_snapshot = _lock.snapshot() if hasattr(_lock, 'snapshot') else {}
-    room_count = player_count = lobby_count = 0
-    room_action_busy_count = pending_response_count = pending_choice_count = pending_v2_ui_count = 0
+    action_inflight = _solo_action_inflight_snapshot()
+    room_count = active_room_count = game_over_room_count = 0
+    ai_room_count = ai_active_room_count = 0
+    player_count = lobby_count = 0
+    room_action_busy_count = ai_action_busy_count = game_over_action_busy_count = 0
+    pending_response_count = pending_choice_count = pending_v2_ui_count = 0
     acquired_global_lock = _lock.acquire(blocking=False)
     if acquired_global_lock:
         try:
@@ -16918,6 +17353,17 @@ def health_full():
             player_count = len(players)
             lobby_count = sum(1 for p in players.values() if p.get('status') == 'lobby')
             for room in list(rooms.values()):
+                engine = getattr(room, 'engine', None)
+                game_over = _room_is_terminal(room)
+                ai_match = bool(getattr(room, 'ai_match', False))
+                if game_over:
+                    game_over_room_count += 1
+                else:
+                    active_room_count += 1
+                if ai_match:
+                    ai_room_count += 1
+                    if not game_over:
+                        ai_active_room_count += 1
                 lock = getattr(room, 'action_lock', None)
                 if lock is not None:
                     acquired = lock.acquire(blocking=False)
@@ -16925,7 +17371,10 @@ def health_full():
                         lock.release()
                     else:
                         room_action_busy_count += 1
-                engine = getattr(room, 'engine', None)
+                        if ai_match:
+                            ai_action_busy_count += 1
+                        if game_over:
+                            game_over_action_busy_count += 1
                 if engine is not None:
                     pending_response_count += 1 if getattr(engine, 'pending_response', None) else 0
                     pending_choice_count += 1 if getattr(engine, 'pending_choice', None) else 0
@@ -16960,11 +17409,29 @@ def health_full():
         'global_lock_depth': global_lock_snapshot.get('depth', 0),
         'global_lock_stack': global_lock_snapshot.get('stack', []),
         'room_count': room_count,
+        'active_room_count': active_room_count,
+        'game_over_room_count': game_over_room_count,
+        'ai_room_count': ai_room_count,
+        'ai_active_room_count': ai_active_room_count,
         'player_count': player_count,
         'lobby_player_count': lobby_count,
         'last_lobby_update_at': LAST_LOBBY_UPDATE_AT,
         'last_lobby_update_age_seconds': last_lobby_age_seconds,
         'room_action_busy_count': room_action_busy_count,
+        'ai_action_busy_count': ai_action_busy_count,
+        'game_over_action_busy_count': game_over_action_busy_count,
+        'solo_action_inflight_count': action_inflight['training'],
+        'phelren_action_inflight_count': action_inflight['phelren'],
+        'phelren_action_capacity': PHELREN_MAX_CONCURRENT_ACTIONS,
+        'phelren_action_generation': action_inflight['phelren_state']['generation'],
+        'phelren_action_running_count': action_inflight['phelren_state']['current_running_count'],
+        'phelren_action_waiting_count': action_inflight['phelren_state']['current_waiting_count'],
+        'phelren_action_retired_count': action_inflight['phelren_state']['retired_count'],
+        'phelren_retired_session_count': action_inflight['phelren_state']['retired_identity_count'],
+        'phelren_action_stale_count': action_inflight['phelren_state']['stale_count'],
+        'phelren_action_oldest_age_seconds': action_inflight['phelren_state']['oldest_running_age_seconds'],
+        'phelren_capacity_recovery_count': action_inflight['phelren_state']['recovery_count'],
+        'phelren_capacity_recovery_exhausted': action_inflight['phelren_state']['recovery_exhausted'],
         'pending_response_count': pending_response_count,
         'pending_choice_count': pending_choice_count,
         'pending_v2_ui_count': pending_v2_ui_count,
@@ -23563,7 +24030,10 @@ def _ai_test_active_sids_locked():
     active = set(ai_test_starting)
     for session_sid in ai_test_sessions:
         engine = solo_sessions.get(session_sid)
-        if engine is not None and not getattr(engine, 'game_over', False):
+        if engine is not None and not (
+            getattr(engine, 'game_over', False)
+            or getattr(engine, 'phase', '') == 'game_over'
+        ):
             active.add(session_sid)
     return active
 
