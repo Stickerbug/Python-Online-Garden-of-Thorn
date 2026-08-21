@@ -4457,6 +4457,19 @@ def _pending_interaction_watchdog_worker():
             pending_emits = []
             with _lock:
                 for room in list(rooms.values()):
+                    if getattr(room, 'ai_match', False):
+                        # Phelren rooms have their own action, pregame, and
+                        # reconnect timers.  The multiplayer watchdog does not
+                        # take their session action lock, so letting it resolve
+                        # pending engine state could race a native mutation.
+                        if _phelren_room_native_completion_pending(room):
+                            continue
+                        if (
+                            _room_is_terminal(room)
+                            and getattr(room, '_game_over_cleanup_timer', None) is None
+                        ):
+                            pending_emits.append(('game_over_cleanup', room))
+                        continue
                     engine = getattr(room, 'engine', None)
                     if engine is None:
                         continue
@@ -5159,6 +5172,11 @@ def _room_timer_worker():
             start_rooms = set()
             with _lock:
                 for room in list(rooms.values()):
+                    # Phelren rooms are driven by _run_ai_test_match_timer.
+                    # Running the multiplayer timer as well would mutate the
+                    # same engine without the Phelren session action lock.
+                    if getattr(room, 'ai_match', False):
+                        continue
                     engine = getattr(room, 'engine', None)
                     if engine is None or getattr(engine, 'game_over', False):
                         continue
@@ -7290,7 +7308,9 @@ def _take_over_online_session_locked(old_sid, reason='login_reconnect'):
     if room_id is not None and room_id in rooms:
         room = rooms[room_id]
         pidx = room.player_index(old_sid)
-        if pidx >= 0 and getattr(room.engine, 'phase', '') != 'game_over':
+        room_terminal = _room_is_terminal(room)
+        preserve_pending = _phelren_room_mutation_pending(room)
+        if pidx >= 0 and (not room_terminal or preserve_pending):
             takeover_info['had_room'] = True
             profile = room.store_player_profile(old_sid, pidx, player)
             profile['disconnect_time'] = time.time()
@@ -13481,11 +13501,19 @@ def room_spectator_players(room):
     return result
 
 
-def _broadcast_game_state_now(room):
+def _broadcast_game_state_now(room, *, action_lock_held=False):
     _broadcast_started = time.perf_counter()
     _broadcast_recipients = 0
     if getattr(room, 'ai_match', False):
-        owner_sid = getattr(room, 'ai_owner_sid', None)
+        with _lock:
+            owner_sid = getattr(room, 'ai_owner_sid', None)
+            owner_meta = ai_test_sessions.get(owner_sid)
+            if _phelren_native_completion_unfinalized(owner_meta):
+                owner_meta['_phelren_refresh_after_completion'] = True
+                return False
+        if not action_lock_held and _phelren_room_action_busy(room):
+            broadcast_game_state(room)
+            return False
         if owner_sid and room_player_session_is_current(room, owner_sid):
             send_solo_state(
                 owner_sid,
@@ -13497,7 +13525,10 @@ def _broadcast_game_state_now(room):
             if owner_sid in ai_test_sessions:
                 _maybe_finish_ai_test_session(owner_sid, room.engine, 'game_over')
             _schedule_game_over_cleanup(room)
-        broadcast_spectate_state(room)
+        broadcast_spectate_state(
+            room,
+            action_lock_held=action_lock_held,
+        )
         _broadcast_recipients += room_spectator_count(room)
         record_socket_broadcast(
             room,
@@ -13589,6 +13620,16 @@ def _room_state_broadcast_worker(room):
                 with _lock:
                     if rooms.get(getattr(room, 'room_id', None)) is not room:
                         return
+                    guarded_phelren = _phelren_room_native_completion_pending(room)
+                if guarded_phelren:
+                    with room.state_broadcast_lock:
+                        room.state_broadcast_dirty = True
+                    if ROOM_STATE_BROADCAST_DELAY_SECONDS <= 0:
+                        try:
+                            socketio.sleep(0.05)
+                        except Exception:
+                            time.sleep(0.05)
+                    continue
                 action_lock = getattr(room, 'action_lock', None)
                 acquired_action_lock = False
                 if action_lock is not None:
@@ -13598,7 +13639,10 @@ def _room_state_broadcast_worker(room):
                             room.state_broadcast_dirty = True
                         continue
                 try:
-                    _broadcast_game_state_now(room)
+                    _broadcast_game_state_now(
+                        room,
+                        action_lock_held=acquired_action_lock,
+                    )
                 finally:
                     if acquired_action_lock:
                         action_lock.release()
@@ -13652,12 +13696,24 @@ def broadcast_game_state(room):
 def _schedule_game_over_cleanup(room):
     def _cleanup():
         pending_emits = []
+        retry_guarded = False
         try:
             with _lock:
                 rid = room.room_id
-                if rooms.get(rid) is not room:
+                if (
+                    rooms.get(rid) is not room
+                    or getattr(room, '_game_over_cleanup_timer', None) is not timer
+                ):
                     return
-                if getattr(room, 'ai_match', False):
+                if not _room_is_terminal(room):
+                    room._game_over_cleanup_timer = None
+                    return
+                if (
+                    getattr(room, 'ai_match', False)
+                    and _phelren_room_native_completion_pending(room)
+                ):
+                    retry_guarded = True
+                elif getattr(room, 'ai_match', False):
                     owner_sid = getattr(room, 'ai_owner_sid', None)
                     if owner_sid and room_player_session_is_current(room, owner_sid):
                         players[owner_sid]['room_id'] = None
@@ -13668,7 +13724,7 @@ def _schedule_game_over_cleanup(room):
                         }, owner_sid))
                     if owner_sid:
                         _drop_solo_session_locked(owner_sid)
-                    else:
+                    if rooms.get(rid) is room:
                         rooms.pop(rid, None)
                 else:
                     for psid in room.player_sids:
@@ -13686,9 +13742,19 @@ def _schedule_game_over_cleanup(room):
                             players[spid]['status'] = 'lobby'
                             pending_emits.append(('spectate_leave', room_event_context(room), spid))
                     rooms.pop(rid, None)
-                admin_event('game', f'room {rid} auto-cleaned after game_over timeout')
+                if not retry_guarded:
+                    admin_event('game', f'room {rid} auto-cleaned after game_over timeout')
+            if retry_guarded:
+                retry_timer = threading.Timer(0.25, _cleanup)
+                retry_timer.daemon = True
+                retry_timer.start()
+                return
         except Exception as exc:
             admin_event('error', f'game_over_cleanup error: {exc}')
+            with _lock:
+                if getattr(room, '_game_over_cleanup_timer', None) is timer:
+                    room._game_over_cleanup_timer = None
+            return
         for emit_item in pending_emits:
             try:
                 socketio.emit(emit_item[0], emit_item[1], room=emit_item[2])
@@ -14242,11 +14308,64 @@ def _solo_action_lock_for_sid(sid):
         return lock
 
 
+def _phelren_native_completion_pending(meta):
+    return bool(
+        isinstance(meta, dict)
+        and isinstance(meta.get('_phelren_native_completion'), dict)
+    )
+
+
+def _phelren_native_completion_unfinalized(meta):
+    completion = (
+        meta.get('_phelren_native_completion')
+        if isinstance(meta, dict)
+        else None
+    )
+    return bool(
+        isinstance(completion, dict)
+        and not completion.get('replay_finalized')
+    )
+
+
+def _phelren_room_native_completion_pending(room):
+    if room is None or not getattr(room, 'ai_match', False):
+        return False
+    owner_sid = getattr(room, 'ai_owner_sid', None)
+    return _phelren_native_completion_pending(ai_test_sessions.get(owner_sid))
+
+
+def _phelren_room_action_busy(room):
+    if room is None or not getattr(room, 'ai_match', False):
+        return False
+    action_lock = getattr(room, 'action_lock', None)
+    if action_lock is None:
+        return False
+    acquired = action_lock.acquire(blocking=False)
+    if not acquired:
+        return True
+    action_lock.release()
+    return False
+
+
+def _phelren_room_mutation_pending(room):
+    return bool(
+        _phelren_room_native_completion_pending(room)
+        or _phelren_room_action_busy(room)
+    )
+
+
 def _try_acquire_solo_action(sid, event_name):
     lock = _solo_action_lock_for_sid(sid)
     if lock.acquire(blocking=False):
-        return lock
-    ai_meta = ai_test_sessions.get(sid)
+        with _lock:
+            ai_meta = ai_test_sessions.get(sid)
+            native_pending = _phelren_native_completion_pending(ai_meta)
+        if not native_pending:
+            return lock
+        lock.release()
+    else:
+        with _lock:
+            ai_meta = ai_test_sessions.get(sid)
     if ai_meta is not None:
         message = (
             'Phelren 正在思考，请稍后'
@@ -14325,13 +14444,20 @@ def _preserve_ai_test_session_for_reconnect_locked(sid):
     meta = ai_test_sessions.get(sid)
     engine = solo_sessions.get(sid)
     room = meta.get('replay_room') if isinstance(meta, dict) else None
+    valid_room = (
+        isinstance(room, GameRoom)
+        and getattr(room, 'ai_match', False)
+        and rooms.get(getattr(room, 'room_id', None)) is room
+        and engine is not None
+    )
+    if not valid_room:
+        return False
     if (
-        not isinstance(room, GameRoom)
-        or not getattr(room, 'ai_match', False)
-        or rooms.get(getattr(room, 'room_id', None)) is not room
-        or engine is None
-        or getattr(engine, 'game_over', False)
-        or getattr(engine, 'phase', '') == 'game_over'
+        (
+            getattr(engine, 'game_over', False)
+            or getattr(engine, 'phase', '') == 'game_over'
+        )
+        and not _phelren_room_mutation_pending(room)
     ):
         return False
     meta['owner_disconnected'] = True
@@ -14362,6 +14488,8 @@ def _rekey_ai_test_session_locked(old_sid, new_sid, room, player_index):
     meta['thinking'] = False
     meta['timer_running'] = False
     meta['pregame_ai_running'] = False
+    if _phelren_native_completion_pending(meta):
+        meta['_phelren_refresh_after_completion'] = True
     room.ai_owner_sid = new_sid
     room.player_sids[int(player_index)] = new_sid
     room.engine = engine
@@ -14705,10 +14833,295 @@ def _solo_action_inflight_snapshot():
     }
 
 
+def _phelren_replay_result(value):
+    if isinstance(value, tuple) and value:
+        value = value[0]
+    return value if isinstance(value, dict) else None
+
+
+def _finalize_phelren_replay_after_native_call(identity, value=None, *, accepted=False):
+    """Flush staged replay work only after returning to the Eventlet hub thread."""
+    try:
+        with _lock:
+            current = _find_phelren_identity_locked(identity)
+            if current is None:
+                return False
+            current_sid, meta, engine, _room = current
+            has_pending = isinstance(meta.get('_pending_human_replay_action'), dict)
+        if has_pending:
+            return bool(_flush_ai_test_human_replay_action(
+                current_sid,
+                engine,
+                _phelren_replay_result(value) if accepted else None,
+            ))
+        return True
+    except Exception as exc:
+        traceback.print_exc()
+        admin_event(
+            'error',
+            f'Phelren replay finalization failed: {type(exc).__name__}: {exc}',
+        )
+        return False
+
+
+def _new_phelren_call_completion():
+    return {
+        'started': _NATIVE_THREADING.Event(),
+        'done': _NATIVE_THREADING.Event(),
+        'status': None,
+        'value': None,
+        'error': None,
+        'claimed': False,
+        'finalized': False,
+        'replay_finalized': False,
+        'staging': False,
+        'owner_greenlet_id': None,
+        'refresh_after_finalize': False,
+        'finalization_retry_scheduled': False,
+    }
+
+
+def _run_phelren_with_completion(completion, runner):
+    completion['started'].set()
+    try:
+        status, value = runner()
+    except BaseException as exc:
+        completion['error'] = exc
+        completion['done'].set()
+        raise
+    completion['status'] = status
+    completion['value'] = value
+    completion['done'].set()
+    return status, value
+
+
+def _clear_phelren_completion_guard(identity, completion):
+    with _lock:
+        current = _find_phelren_identity_locked(identity)
+        if current is None:
+            return False
+        _current_sid, meta, _engine, _room = current
+        if meta.get('_phelren_native_completion') is completion:
+            meta.pop('_phelren_native_completion', None)
+            return True
+    return False
+
+
+def _finish_phelren_completion_guard(identity, completion, *, accepted):
+    if not completion.get('replay_finalized'):
+        if not _finalize_phelren_replay_after_native_call(
+            identity,
+            completion.get('value'),
+            accepted=accepted,
+        ):
+            completion['refresh_after_finalize'] = True
+            return False
+        completion['replay_finalized'] = True
+
+    refresh_sid = None
+    refresh_room = None
+    while True:
+        with _lock:
+            current = _find_phelren_identity_locked(identity)
+            if current is None:
+                completion['finalized'] = True
+                return True
+            current_sid, meta, _engine, room = current
+            if meta.get('_phelren_native_completion') is not completion:
+                completion['finalized'] = True
+                return True
+            refresh_requested = bool(
+                completion.get('refresh_after_finalize')
+                or meta.get('_phelren_refresh_after_completion')
+            )
+            owner_disconnected = bool(meta.get('owner_disconnected'))
+            if not refresh_requested or owner_disconnected:
+                meta.pop('_phelren_refresh_after_completion', None)
+                meta.pop('_phelren_native_completion', None)
+                completion['refresh_after_finalize'] = False
+                break
+            refresh_sid = current_sid
+            refresh_room = room
+
+        try:
+            refreshed = send_ai_test_pregame_state(refresh_sid)
+        except Exception as exc:
+            admin_event(
+                'error',
+                f'Phelren post-completion refresh failed: {type(exc).__name__}: {exc}',
+                sid=refresh_sid,
+            )
+            return False
+        if refreshed is False:
+            return False
+
+        # Rekey may occur while the emit yields.  Only consume the refresh
+        # request and clear the guard if the state went to the current owner;
+        # otherwise loop and send the stable state to the new sid as well.
+        with _lock:
+            latest = _find_phelren_identity_locked(identity)
+            if latest is None:
+                completion['finalized'] = True
+                return True
+            latest_sid, latest_meta, _engine, latest_room = latest
+            if latest_meta.get('_phelren_native_completion') is not completion:
+                completion['finalized'] = True
+                return True
+            if latest_sid != refresh_sid:
+                continue
+            latest_meta.pop('_phelren_refresh_after_completion', None)
+            latest_meta.pop('_phelren_native_completion', None)
+            completion['refresh_after_finalize'] = False
+            refresh_room = latest_room
+            break
+
+    completion['finalized'] = True
+    if refresh_sid is not None and not owner_disconnected:
+        def _resume_after_refresh():
+            schedule_ai_test_match_timer(refresh_sid)
+            schedule_ai_test_pregame(refresh_sid)
+            schedule_ai_test_turn(refresh_sid)
+            if refresh_room is not None:
+                broadcast_game_state(refresh_room)
+            broadcast_lobby()
+
+        if eventlet is not None:
+            eventlet.spawn(_resume_after_refresh)
+        else:
+            _resume_after_refresh()
+    return True
+
+
+def _retry_phelren_call_finalization(identity, completion):
+    completion['finalization_retry_scheduled'] = False
+    if completion.get('finalized') or not completion['done'].is_set():
+        return
+    try:
+        _finalize_phelren_call_completion(identity, completion)
+    except BaseException:
+        # _finalize_phelren_call_completion schedules the next independent
+        # retry before propagating cancellation or another transient failure.
+        return
+
+
+def _schedule_phelren_call_finalization_retry(identity, completion):
+    if completion.get('finalization_retry_scheduled') or completion.get('finalized'):
+        return False
+    if eventlet is None:
+        return False
+    completion['finalization_retry_scheduled'] = True
+    eventlet.spawn_after(
+        0.05,
+        _retry_phelren_call_finalization,
+        identity,
+        completion,
+    )
+    return True
+
+
+def _finalize_phelren_call_completion(identity, completion):
+    if not completion['done'].is_set():
+        return False
+    owns_claim = False
+    try:
+        with _lock:
+            # The preliminary read cannot live outside this critical section:
+            # two hub consumers may both observe claimed=False and then queue
+            # here.  Recheck and claim atomically after acquiring the lock.
+            if completion.get('claimed'):
+                return True
+            if _find_phelren_identity_locked(identity) is None:
+                completion['claimed'] = True
+                completion['finalized'] = True
+                return True
+            completion['claimed'] = True
+            owns_claim = True
+        accepted = (
+            completion.get('error') is None
+            and completion.get('status') == _PHELREN_CALL_OK
+        )
+        finished = _finish_phelren_completion_guard(
+            identity,
+            completion,
+            accepted=accepted,
+        )
+        if not finished:
+            completion['claimed'] = False
+            completion['refresh_after_finalize'] = True
+            _schedule_phelren_call_finalization_retry(identity, completion)
+            return False
+    except BaseException:
+        if owns_claim:
+            completion['claimed'] = False
+        if not completion.get('finalized'):
+            completion['refresh_after_finalize'] = True
+            _schedule_phelren_call_finalization_retry(identity, completion)
+        raise
+    return True
+
+
+def _reject_incomplete_phelren_call(identity, completion):
+    if completion.get('finalized'):
+        return True
+    if not completion['done'].is_set():
+        completion['status'] = _PHELREN_CALL_ABANDONED
+        completion['value'] = None
+        completion['done'].set()
+    return _finalize_phelren_call_completion(identity, completion)
+
+
+def _reject_staged_phelren_call_on_owner_exit(_owner, identity, completion):
+    if completion.get('staging') and not completion.get('claimed'):
+        try:
+            _reject_incomplete_phelren_call(identity, completion)
+        except BaseException:
+            return
+
+
+def _wait_for_phelren_native_completion(identity, completion):
+    while not completion['done'].is_set():
+        with _lock:
+            if _find_phelren_identity_locked(identity) is None:
+                return False
+        eventlet.sleep(0.05)
+    return True
+
+
+def _wait_for_phelren_call_completion(identity, completion):
+    """Finish replay on the hub if the original request greenlet disappears."""
+    if _wait_for_phelren_native_completion(identity, completion):
+        _finalize_phelren_call_completion(identity, completion)
+
+
 def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
+    phelren_completion = None
+    phelren_guard_busy = False
+    with _lock:
+        is_phelren = sid in ai_test_sessions
+    if is_phelren and eventlet is not None:
+        # Eventlet's first tpool setup yields before a job is submitted.  Do it
+        # before installing the stable-session guard so cancellation in that
+        # one-time setup window cannot leave a completion that will never run.
+        from eventlet import tpool
+        tpool.setup()
     with _lock:
         is_phelren = sid in ai_test_sessions
         phelren_identity = _phelren_action_identity_locked(sid) if is_phelren else None
+        if phelren_identity is not None:
+            meta = ai_test_sessions.get(sid)
+            current_completion = meta.get('_phelren_native_completion')
+            if isinstance(current_completion, dict):
+                if (
+                    current_completion.get('staging')
+                    and current_completion.get('owner_greenlet_id') == threading.get_ident()
+                ):
+                    phelren_completion = current_completion
+                    phelren_completion['staging'] = False
+                else:
+                    phelren_guard_busy = True
+            else:
+                phelren_completion = _new_phelren_call_completion()
+                meta['_phelren_native_completion'] = phelren_completion
     scope = 'phelren' if is_phelren else 'training'
     if is_phelren and phelren_identity is None:
         soft_reject(
@@ -14716,6 +15129,14 @@ def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
             event_name,
             'ACTION_BUSY',
             message='Phelren 对局状态已变化，请重试',
+        )
+        return False, None
+    if phelren_guard_busy:
+        soft_reject(
+            sid,
+            event_name,
+            'ACTION_BUSY',
+            message='Phelren 正在处理上一项操作，请稍后重试',
         )
         return False, None
     capacity = None
@@ -14735,21 +15156,77 @@ def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
     started = time.perf_counter()
     ok = False
     outcome = 'error'
+    wait_for_phelren_completion = False
     try:
         if is_phelren:
-            runner = lambda: _run_phelren_capacity_call(
-                phelren_identity,
-                event_name,
-                fn,
+            runner = lambda: _run_phelren_with_completion(
+                phelren_completion,
+                lambda: _run_phelren_capacity_call(
+                    phelren_identity,
+                    event_name,
+                    fn,
+                ),
             )
             # Phelren capacity is owned by the native worker even for timer
             # callbacks that request inline handling; blocking a native
             # semaphore on the Eventlet hub would stall the whole site.
-            if eventlet is not None:
-                from eventlet import tpool
-                call_status, value = tpool.execute(runner)
-            else:
-                call_status, value = runner()
+            try:
+                if eventlet is not None:
+                    from eventlet import tpool
+                    call_status, value = tpool.execute(runner)
+                else:
+                    call_status, value = runner()
+            except BaseException as exc:
+                delivery_error = isinstance(exc, Exception)
+                if (
+                    delivery_error
+                    and not phelren_completion['done'].is_set()
+                    and phelren_completion['started'].is_set()
+                    and eventlet is not None
+                ):
+                    # An infrastructure error while the worker is already
+                    # running cannot safely release the room lock or report a
+                    # result yet. Keep this hub greenlet alive until the native
+                    # outcome is known or the stable session is detached.
+                    _wait_for_phelren_native_completion(
+                        phelren_identity,
+                        phelren_completion,
+                    )
+                if (
+                    delivery_error
+                    and phelren_completion['done'].is_set()
+                    and phelren_completion.get('error') is None
+                ):
+                    # The native result is authoritative if only tpool's
+                    # delivery back to the hub failed. Reporting failure here
+                    # would invite the client to submit an already committed
+                    # action a second time.
+                    call_status = phelren_completion.get('status')
+                    value = phelren_completion.get('value')
+                    admin_event(
+                        'warning',
+                        (
+                            'Phelren recovered completed native result after '
+                            f'tpool delivery error: {type(exc).__name__}: {exc}'
+                        ),
+                        sid=sid,
+                        event_name=event_name,
+                    )
+                else:
+                    worker_error = phelren_completion.get('error')
+                    if delivery_error and isinstance(worker_error, BaseException):
+                        raise worker_error
+                    # Greenlet cancellation does not cancel a tpool worker.
+                    # Keep the stable-session guard until the actual result is
+                    # consumed on the hub.
+                    wait_for_phelren_completion = bool(
+                        not phelren_completion['done'].is_set()
+                        and (
+                            not delivery_error
+                            or phelren_completion['started'].is_set()
+                        )
+                    )
+                    raise
             if call_status == _PHELREN_CALL_BUSY:
                 outcome = 'busy'
                 soft_reject(
@@ -14825,6 +15302,30 @@ def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
         )
         return False, None
     finally:
+        if is_phelren and not _finalize_phelren_call_completion(
+            phelren_identity,
+            phelren_completion,
+        ):
+            if phelren_completion['done'].is_set():
+                phelren_completion['refresh_after_finalize'] = True
+                _schedule_phelren_call_finalization_retry(
+                    phelren_identity,
+                    phelren_completion,
+                )
+            elif wait_for_phelren_completion and eventlet is not None:
+                # This is deliberately an Eventlet greenlet: replay/timer work
+                # must never fall back to an OS thread that could touch _lock.
+                phelren_completion['refresh_after_finalize'] = True
+                eventlet.spawn(
+                    _wait_for_phelren_call_completion,
+                    phelren_identity,
+                    phelren_completion,
+                )
+            else:
+                _reject_incomplete_phelren_call(
+                    phelren_identity,
+                    phelren_completion,
+                )
         elapsed_ms = (time.perf_counter() - started) * 1000
         if acquired and capacity is not None:
             capacity.release()
@@ -14858,7 +15359,10 @@ def _solo_engine_snapshot(engine):
 
 
 def _solo_capture_undo_snapshot(sid, engine):
-    if not _solo_history_enabled(sid):
+    # Phelren engines keep this stable marker across socket rekeys.  Check it
+    # first so their native tpool mutation never consults Eventlet-owned global
+    # session dictionaries using an obsolete sid.
+    if getattr(engine, '_solo_history_disabled', False) or not _solo_history_enabled(sid):
         return None
     if not hasattr(engine, '_solo_undo_stack') or not hasattr(engine, '_solo_redo_stack'):
         init_solo_history(engine)
@@ -14945,7 +15449,6 @@ def _solo_mutate_engine(sid, engine, fn, *, record_history=True):
         result = fn()
         if isinstance(result, dict) and getattr(engine, 'pending_response', None):
             result['_solo_response_request_payload'] = _build_solo_pending_response_payload(engine)
-        _flush_ai_test_human_replay_action(sid, engine, result)
         log = getattr(engine, 'log', None)
         if isinstance(log, list) and len(log) > SOLO_LOG_LIMIT:
             trim_count = len(log) - SOLO_LOG_LIMIT
@@ -14959,7 +15462,6 @@ def _solo_mutate_engine(sid, engine, fn, *, record_history=True):
                 int(getattr(engine, '_log_compaction_floor', 0) or 0) - trim_count,
             )
     except Exception:
-        _flush_ai_test_human_replay_action(sid, engine, None)
         if rollback_snapshot is not None:
             _solo_restore_snapshot(engine, rollback_snapshot)
         raise
@@ -14994,12 +15496,14 @@ def _solo_emit_pending_after_state(sid, engine, response_payload=None):
 
 
 def send_solo_state_with_pending(sid, perspective=None, response_payload=None):
-    send_solo_state(sid, perspective)
+    if send_solo_state(sid, perspective) is False:
+        return False
     _solo_emit_pending_after_state(
         sid,
         solo_sessions.get(sid),
         response_payload=response_payload,
     )
+    return True
 
 
 TUTORIAL_PROGRESS_KEYS = (
@@ -15139,11 +15643,15 @@ def _ai_test_pending_is_human(sid, engine):
 
 
 def send_solo_state(sid, perspective=None, *, broadcast_spectators=True):
-    engine = solo_sessions.get(sid)
-    if not engine:
-        return
-    is_tutorial = sid in tutorial_sessions
-    ai_meta = ai_test_sessions.get(sid)
+    with _lock:
+        engine = solo_sessions.get(sid)
+        if not engine:
+            return False
+        is_tutorial = sid in tutorial_sessions
+        ai_meta = ai_test_sessions.get(sid)
+        if _phelren_native_completion_unfinalized(ai_meta):
+            ai_meta['_phelren_refresh_after_completion'] = True
+            return False
     if ai_meta and engine.game_over:
         _maybe_finish_ai_test_session(sid, engine)
     if perspective is None:
@@ -15221,6 +15729,7 @@ def send_solo_state(sid, perspective=None, *, broadcast_spectators=True):
         schedule_ai_test_turn(sid)
     if ai_room is not None and broadcast_spectators:
         broadcast_spectate_state(ai_room)
+    return True
 
 
 def _response_destroy_target_equipment(engine, played_card, pending):
@@ -15715,16 +16224,45 @@ def emit_room_v2_ui_request(room):
     return False
 
 
-def broadcast_spectate_state(room):
+def broadcast_spectate_state(room, *, action_lock_held=False):
     for spid in list(room.spectators):
         if not room_spectator_session_is_current(room, spid):
             continue
-        send_spectate_state_to(room, spid)
+        send_spectate_state_to(
+            room,
+            spid,
+            action_lock_held=action_lock_held,
+        )
 
 
-def send_spectate_state_to(room, sid):
+def _defer_phelren_spectate_state(room, *, action_lock_held=False):
+    if room is None or not getattr(room, 'ai_match', False):
+        return False
+    owner_sid = getattr(room, 'ai_owner_sid', None)
+    meta = ai_test_sessions.get(owner_sid)
+    native_unfinalized = _phelren_native_completion_unfinalized(meta)
+    action_busy = bool(
+        not action_lock_held
+        and _phelren_room_action_busy(room)
+    )
+    if not native_unfinalized and not action_busy:
+        return False
+    if native_unfinalized and isinstance(meta, dict):
+        meta['_phelren_refresh_after_completion'] = True
+    # The broadcast worker is guard-aware and remains dirty until the engine is
+    # stable, so spectators receive a complete state after finalization.
+    broadcast_game_state(room)
+    return True
+
+
+def send_spectate_state_to(room, sid, *, action_lock_held=False):
     if not room_spectator_session_is_current(room, sid):
         return
+    if _defer_phelren_spectate_state(
+        room,
+        action_lock_held=action_lock_held,
+    ):
+        return False
     perspective = players[sid].get('spectate_perspective', 0)
     state = build_spectate_state(room, perspective=perspective)
     state['your_id'] = -1
@@ -15735,6 +16273,7 @@ def send_spectate_state_to(room, sid):
     for i, psid in enumerate(room.player_sids):
         state[f'player{i + 1}_name'] = room_player_nickname(room, psid, '?')
     socketio.emit('state_update', state, room=sid)
+    return True
 
 
 def redact_error_cards_from_player_payload(payload):
@@ -15875,6 +16414,20 @@ def reconnect_timeout(room_id, old_sid):
             room = rooms[room_id]
             if old_sid not in room.disconnected_players:
                 return
+            if getattr(room, 'ai_match', False):
+                reconnect_arrived = bool(
+                    _phelren_reconnect_accept_reservation_locked(room, old_sid)
+                )
+                if reconnect_arrived or _phelren_room_mutation_pending(room):
+                    retry = threading.Timer(
+                        0.25,
+                        reconnect_timeout,
+                        args=[room_id, old_sid],
+                    )
+                    retry.daemon = True
+                    room.reconnect_timers[old_sid] = retry
+                    retry.start()
+                    return
             dc_info = room.disconnected_players[old_sid]
             timed_out_timer = room.reconnect_timers.pop(old_sid, None)
             if timed_out_timer:
@@ -20969,7 +21522,8 @@ def on_disconnect():
                 return
             player = players[sid]
             mark_player_session_last_seen_locked(player, exclude_sid=sid)
-            if not _preserve_ai_test_session_for_reconnect_locked(sid):
+            preserved_ai = _preserve_ai_test_session_for_reconnect_locked(sid)
+            if not preserved_ai:
                 _drop_solo_session_locked(sid)
             room_id = player.get('room_id')
             nickname = player['nickname']
@@ -20977,7 +21531,11 @@ def on_disconnect():
             if room_id is not None and room_id in rooms:
                 room = rooms[room_id]
                 pidx = room.player_index(sid)
-                if pidx >= 0 and room.engine.phase not in ('game_over',):
+                phelren_mutation_pending = _phelren_room_mutation_pending(room)
+                if pidx >= 0 and (
+                    not _room_is_terminal(room)
+                    or phelren_mutation_pending
+                ):
                     profile = room.store_player_profile(sid, pidx, player)
                     profile['disconnect_time'] = time.time()
                     dead_2v2_player = room.mode == '2v2' and _room_player_dead(room, pidx)
@@ -20989,7 +21547,7 @@ def on_disconnect():
                     current_phase = getattr(room.engine, 'phase', '')
                     pregame_disconnect = current_phase in ('draft', 'event_select', 'event_reveal')
                     unblocked_pending = False
-                    if not dead_2v2_player:
+                    if not dead_2v2_player and not phelren_mutation_pending:
                         unblocked_pending = _resolve_disconnect_blockers(room, pidx)
                     admin_event(
                         'player',
@@ -21019,7 +21577,7 @@ def on_disconnect():
                         pending_emits.append(('broadcast_game_state', room, None))
                         pending_emits.append(('emit_pending_response_requests', room, None))
                     pending_emits.append(('broadcast_lobby', None, None))
-                elif pidx >= 0 and room.engine.phase == 'game_over':
+                elif pidx >= 0 and _room_is_terminal(room):
                     room._rematch_votes.discard(sid)
                     for other_sid in room.player_sids:
                         if other_sid != sid and room_player_session_is_current(room, other_sid):
@@ -21080,6 +21638,145 @@ def on_disconnect():
             admin_event('error', f'on_disconnect emit error: {exc}')
 
 
+def _wait_for_phelren_staging_handoff(room_id, timeout=35.0):
+    deadline = time.monotonic() + max(0.0, float(timeout))
+    while True:
+        with _lock:
+            room = rooms.get(room_id)
+            if room is None or not getattr(room, 'ai_match', False):
+                return True
+            owner_sid = getattr(room, 'ai_owner_sid', None)
+            meta = ai_test_sessions.get(owner_sid)
+            completion = (
+                meta.get('_phelren_native_completion')
+                if isinstance(meta, dict)
+                else None
+            )
+            staging = bool(
+                isinstance(completion, dict)
+                and completion.get('staging')
+            )
+        if not staging:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        try:
+            socketio.sleep(0.05)
+        except Exception:
+            time.sleep(0.05)
+
+
+_PHELREN_RECONNECT_ACCEPT_WAIT_SECONDS = 35.0
+_PHELREN_RECONNECT_ACCEPT_RESERVATION_GRACE_SECONDS = 2.0
+
+
+def _phelren_reconnect_identity_matches(player, disconnected_info):
+    if not isinstance(player, dict) or not isinstance(disconnected_info, dict):
+        return False
+    return bool(
+        (
+            player.get('user_id')
+            and disconnected_info.get('user_id') == player.get('user_id')
+        )
+        or (
+            player.get('account_player_id')
+            and str(disconnected_info.get('account_player_id') or '')
+            == str(player.get('account_player_id') or '')
+        )
+        or normalize_username_key(disconnected_info.get('nickname', ''))
+        == normalize_username_key(player.get('nickname', ''))
+    )
+
+
+def _phelren_reconnect_accept_reservation_locked(room, old_sid):
+    reservations = getattr(room, '_phelren_reconnect_accept_pending', None)
+    if not isinstance(reservations, dict):
+        return None
+    reservation = reservations.get(old_sid)
+    if not isinstance(reservation, dict):
+        reservations.pop(old_sid, None)
+        return None
+    try:
+        expires_at = float(reservation.get('expires_at') or 0.0)
+    except (TypeError, ValueError):
+        expires_at = 0.0
+    if expires_at <= time.monotonic():
+        reservations.pop(old_sid, None)
+        return None
+    return reservation
+
+
+def _release_phelren_reconnect_accept_reservation_locked(room, old_sid, new_sid):
+    reservations = getattr(room, '_phelren_reconnect_accept_pending', None)
+    if not isinstance(reservations, dict):
+        return
+    reservation = reservations.get(old_sid)
+    if isinstance(reservation, dict) and reservation.get('sid') == new_sid:
+        reservations.pop(old_sid, None)
+
+
+def _reserve_phelren_reconnect_accept_locked(
+    room_id,
+    requested_old_sid,
+    new_sid,
+    wait_timeout,
+):
+    """Reserve an authenticated Phelren reconnect before waiting on staging."""
+    player = players.get(new_sid)
+    room = rooms.get(room_id)
+    if (
+        not isinstance(player, dict)
+        or room is None
+        or not getattr(room, 'ai_match', False)
+        or bool(getattr(room, 'beta_mode', False))
+        != bool(player.get('beta_mode', False))
+    ):
+        return requested_old_sid, False, False, False
+
+    old_sid = requested_old_sid
+    if old_sid not in room.disconnected_players:
+        fallback_old_sid = _find_disconnected_sid_for_player(room, player)
+        if fallback_old_sid:
+            old_sid = fallback_old_sid
+    disconnected_info = room.disconnected_players.get(old_sid)
+    if not _phelren_reconnect_identity_matches(player, disconnected_info):
+        return old_sid, False, False, False
+
+    guarded = _phelren_room_native_completion_pending(room)
+    if _room_is_terminal(room) and not guarded:
+        return old_sid, False, False, False
+
+    owner_sid = getattr(room, 'ai_owner_sid', None)
+    meta = ai_test_sessions.get(owner_sid)
+    completion = (
+        meta.get('_phelren_native_completion')
+        if isinstance(meta, dict)
+        else None
+    )
+    wait_for_staging = bool(
+        isinstance(completion, dict)
+        and completion.get('staging')
+    )
+
+    reservations = getattr(room, '_phelren_reconnect_accept_pending', None)
+    if not isinstance(reservations, dict):
+        reservations = {}
+        room._phelren_reconnect_accept_pending = reservations
+    existing = _phelren_reconnect_accept_reservation_locked(room, old_sid)
+    if isinstance(existing, dict) and existing.get('sid') != new_sid:
+        return old_sid, False, wait_for_staging, True
+
+    now = time.monotonic()
+    reservations[old_sid] = {
+        'sid': new_sid,
+        'arrived_at': now,
+        'expires_at': now
+        + max(0.0, float(wait_timeout))
+        + _PHELREN_RECONNECT_ACCEPT_RESERVATION_GRACE_SECONDS,
+    }
+    return old_sid, True, wait_for_staging, False
+
+
 @socketio.on('reconnect_accept')
 def on_reconnect_accept(data):
     global _next_room_id
@@ -21093,11 +21790,81 @@ def on_reconnect_accept(data):
     except ValueError as exc:
         _security_illegal(sid, 'reconnect_accept', str(exc))
         return
+
+    reservation_old_sid = old_sid
+    reconnect_reserved = False
+    wait_for_staging = False
+    reservation_conflict = False
+    with _lock:
+        (
+            reservation_old_sid,
+            reconnect_reserved,
+            wait_for_staging,
+            reservation_conflict,
+        ) = _reserve_phelren_reconnect_accept_locked(
+            room_id,
+            old_sid,
+            sid,
+            _PHELREN_RECONNECT_ACCEPT_WAIT_SECONDS,
+        )
+    if reservation_conflict:
+        soft_reject(
+            sid,
+            'reconnect_accept',
+            'ACTION_BUSY',
+            message='已有同一账号的重连请求正在处理中',
+        )
+        return
+    if reconnect_reserved:
+        old_sid = reservation_old_sid
+    if wait_for_staging and not _wait_for_phelren_staging_handoff(
+        room_id,
+        _PHELREN_RECONNECT_ACCEPT_WAIT_SECONDS,
+    ):
+        with _lock:
+            waiting_room = rooms.get(room_id)
+            if waiting_room is not None:
+                _release_phelren_reconnect_accept_reservation_locked(
+                    waiting_room,
+                    reservation_old_sid,
+                    sid,
+                )
+        soft_reject(
+            sid,
+            'reconnect_accept',
+            'ACTION_BUSY',
+            message='Phelren 正在记录上一项操作，请稍后重试重连',
+        )
+        return
     room = None
     pidx = -1
     other_sids = []
     ai_reconnected = False
+    ai_reconnect_deferred = False
     with _lock:
+        if reconnect_reserved:
+            reserved_room = rooms.get(room_id)
+            reservation = (
+                _phelren_reconnect_accept_reservation_locked(
+                    reserved_room,
+                    reservation_old_sid,
+                )
+                if reserved_room is not None
+                else None
+            )
+            if not isinstance(reservation, dict) or reservation.get('sid') != sid:
+                soft_reject(
+                    sid,
+                    'reconnect_accept',
+                    'ACTION_BUSY',
+                    message='重连请求已失效，请重新尝试',
+                )
+                return
+            _release_phelren_reconnect_accept_reservation_locked(
+                reserved_room,
+                reservation_old_sid,
+                sid,
+            )
         if sid not in players:
             return
         player = players[sid]
@@ -21108,9 +21875,21 @@ def on_reconnect_accept(data):
         if bool(getattr(room, 'beta_mode', False)) != bool(player.get('beta_mode', False)):
             player['status'] = 'lobby'
             return
-        if getattr(room.engine, 'game_over', False) or getattr(room.engine, 'phase', '') == 'game_over':
+        room_guarded = _phelren_room_native_completion_pending(room)
+        if _room_is_terminal(room) and not room_guarded:
             player['status'] = 'lobby'
             player['room_id'] = None
+            return
+        if (
+            getattr(room, 'ai_match', False)
+            and _phelren_room_action_busy(room)
+            and not room_guarded
+        ):
+            socketio.emit('action_rejected', {
+                'event': 'reconnect_accept',
+                'code': 'ACTION_BUSY',
+                'message': 'Phelren 正在完成上一项操作，请稍后重试重连',
+            }, room=sid)
             return
         if old_sid not in room.disconnected_players:
             fallback_old_sid = _find_disconnected_sid_for_player(room, player)
@@ -21127,11 +21906,7 @@ def on_reconnect_accept(data):
                 admin_event('error', f'reconnect_accept failed: no metadata for old_sid={old_sid} room={room_id}', sid=sid, room_id=room_id)
                 return
         dc_info = room.disconnected_players[old_sid]
-        same_identity = (
-            (player.get('user_id') and dc_info.get('user_id') == player.get('user_id'))
-            or (player.get('account_player_id') and str(dc_info.get('account_player_id') or '') == str(player.get('account_player_id') or ''))
-            or normalize_username_key(dc_info.get('nickname', '')) == normalize_username_key(player.get('nickname', ''))
-        )
+        same_identity = _phelren_reconnect_identity_matches(player, dc_info)
         if not same_identity:
             player['status'] = 'lobby'
             return
@@ -21154,6 +21929,7 @@ def on_reconnect_accept(data):
                     room_id=room_id,
                 )
                 return
+            ai_reconnect_deferred = _phelren_room_native_completion_pending(room)
         else:
             room.player_sids[pidx] = sid
         room.player_profiles.pop(old_sid, None)
@@ -21171,6 +21947,14 @@ def on_reconnect_accept(data):
     # global lock again. Keep them outside the state-mutation critical section.
     join_room(room_id)
     if ai_reconnected:
+        if ai_reconnect_deferred:
+            socketio.emit('ai_1v1_status', {
+                'status': 'processing',
+                'code': 'ACTION_BUSY',
+                'message': '正在恢复上一项操作，完成后会自动同步对局',
+            }, room=sid)
+            broadcast_lobby()
+            return
         send_ai_test_pregame_state(sid)
         schedule_ai_test_match_timer(sid)
         schedule_ai_test_pregame(sid)
@@ -21196,97 +21980,121 @@ def on_reconnect_decline(data):
     except ValueError as exc:
         _security_illegal(sid, 'reconnect_decline', str(exc))
         return
-    with _lock:
-        if sid not in players:
-            return
-        player = players[sid]
-        if room_id is None or room_id not in rooms:
-            player['status'] = 'lobby'
-            return
-        room = rooms[room_id]
-        if bool(getattr(room, 'beta_mode', False)) != bool(player.get('beta_mode', False)):
-            player['status'] = 'lobby'
-            player['room_id'] = None
-            return
-        if room.mode == '2v2':
-            dc_info = room.disconnected_players.get(old_sid, {})
-            dc_pidx = int(dc_info.get('player_index', -1)) if dc_info else -1
-            if _room_player_dead(room, dc_pidx):
+    ai_action_lock = None
+    try:
+        with _lock:
+            if sid not in players:
+                return
+            player = players[sid]
+            if room_id is None or room_id not in rooms:
+                player['status'] = 'lobby'
+                return
+            room = rooms[room_id]
+            if bool(getattr(room, 'beta_mode', False)) != bool(player.get('beta_mode', False)):
+                player['status'] = 'lobby'
+                player['room_id'] = None
+                return
+            if getattr(room, 'ai_match', False):
+                if _phelren_room_native_completion_pending(room):
+                    soft_reject(
+                        sid,
+                        'reconnect_decline',
+                        'ACTION_BUSY',
+                        message='Phelren 正在完成上一项操作，请稍后重试',
+                    )
+                    return
+                ai_action_lock = getattr(room, 'action_lock', None)
+                if ai_action_lock is not None and not ai_action_lock.acquire(blocking=False):
+                    ai_action_lock = None
+                    soft_reject(
+                        sid,
+                        'reconnect_decline',
+                        'ACTION_BUSY',
+                        message='Phelren 正在完成上一项操作，请稍后重试',
+                    )
+                    return
+            if room.mode == '2v2':
+                dc_info = room.disconnected_players.get(old_sid, {})
+                dc_pidx = int(dc_info.get('player_index', -1)) if dc_info else -1
+                if _room_player_dead(room, dc_pidx):
+                    if old_sid in room.reconnect_timers:
+                        room.reconnect_timers[old_sid].cancel()
+                        del room.reconnect_timers[old_sid]
+                    room.disconnected_players.pop(old_sid, None)
+                    player['status'] = 'lobby'
+                    player['room_id'] = None
+                    broadcast_lobby()
+                    return
+            if old_sid in room.disconnected_players:
+                dc_info = room.disconnected_players.get(old_sid, {})
+                dc_pidx = int(dc_info.get('player_index', -1)) if dc_info else -1
                 if old_sid in room.reconnect_timers:
                     room.reconnect_timers[old_sid].cancel()
                     del room.reconnect_timers[old_sid]
-                room.disconnected_players.pop(old_sid, None)
-                player['status'] = 'lobby'
-                player['room_id'] = None
-                broadcast_lobby()
-                return
-        if old_sid in room.disconnected_players:
-            dc_info = room.disconnected_players.get(old_sid, {})
-            dc_pidx = int(dc_info.get('player_index', -1)) if dc_info else -1
-            if old_sid in room.reconnect_timers:
-                room.reconnect_timers[old_sid].cancel()
-                del room.reconnect_timers[old_sid]
-            dc_name = dc_info.get('nickname', player.get('nickname', '?'))
-            if room.mode == '2v2':
-                room.disconnected_players.pop(old_sid, None)
-                _force_2v2_disconnect_death(room, dc_pidx, dc_name, '放弃重连')
-                ended = bool(getattr(room.engine, 'game_over', False))
-                record_room_replay_action(room, 'reconnect_decline', dc_pidx, {
-                    'nickname': dc_name,
-                    'game_over': ended,
-                    'player_defeated': True,
-                })
-                if ended:
-                    _cancel_room_reconnect_timers(room)
-                    for other_sid in room.player_sids:
-                        if room_player_session_is_current(room, other_sid):
-                            socketio.emit('opponent_disconnected', {
-                                'timeout': True,
-                                'game_over': True,
-                                **room_event_context(room),
-                            }, room=other_sid)
-                            emit_room_game_phase(room, other_sid, 'game_over')
-                else:
-                    for other_sid in room.player_sids:
-                        if room_player_session_is_current(room, other_sid):
-                            socketio.emit('opponent_disconnected', {
-                                'timeout': True,
-                                'game_over': False,
-                                'stay': True,
-                                'player_defeated': True,
-                                'opponent_nickname': dc_name,
-                                **room_event_context(room),
-                            }, room=other_sid)
-                broadcast_game_state(room)
-            else:
-                room.disconnected_players.pop(old_sid, None)
-                disconnected_teams = _room_disconnected_teams(room)
-                if len(disconnected_teams) >= 2:
-                    ended = _finish_room_by_health_tiebreak(room, '双方放弃重连')
-                else:
-                    ended = _finish_room_by_forfeit(
-                        room,
-                        dc_pidx,
-                        dc_name,
-                        '放弃重连',
-                    )
-                record_room_replay_action(room, 'reconnect_decline', dc_pidx, {
-                    'nickname': dc_name,
-                    'game_over': ended,
-                })
-                if ended:
-                    _cancel_room_reconnect_timers(room)
-                    for other_sid in room.player_sids:
-                        if room_player_session_is_current(room, other_sid):
-                            socketio.emit('opponent_disconnected', {
-                                'timeout': True,
-                                'game_over': True,
-                                **room_event_context(room),
-                            }, room=other_sid)
-                            emit_room_game_phase(room, other_sid, 'game_over')
+                dc_name = dc_info.get('nickname', player.get('nickname', '?'))
+                if room.mode == '2v2':
+                    room.disconnected_players.pop(old_sid, None)
+                    _force_2v2_disconnect_death(room, dc_pidx, dc_name, '放弃重连')
+                    ended = bool(getattr(room.engine, 'game_over', False))
+                    record_room_replay_action(room, 'reconnect_decline', dc_pidx, {
+                        'nickname': dc_name,
+                        'game_over': ended,
+                        'player_defeated': True,
+                    })
+                    if ended:
+                        _cancel_room_reconnect_timers(room)
+                        for other_sid in room.player_sids:
+                            if room_player_session_is_current(room, other_sid):
+                                socketio.emit('opponent_disconnected', {
+                                    'timeout': True,
+                                    'game_over': True,
+                                    **room_event_context(room),
+                                }, room=other_sid)
+                                emit_room_game_phase(room, other_sid, 'game_over')
+                    else:
+                        for other_sid in room.player_sids:
+                            if room_player_session_is_current(room, other_sid):
+                                socketio.emit('opponent_disconnected', {
+                                    'timeout': True,
+                                    'game_over': False,
+                                    'stay': True,
+                                    'player_defeated': True,
+                                    'opponent_nickname': dc_name,
+                                    **room_event_context(room),
+                                }, room=other_sid)
                     broadcast_game_state(room)
-        player['status'] = 'lobby'
-        player['room_id'] = None
+                else:
+                    room.disconnected_players.pop(old_sid, None)
+                    disconnected_teams = _room_disconnected_teams(room)
+                    if len(disconnected_teams) >= 2:
+                        ended = _finish_room_by_health_tiebreak(room, '双方放弃重连')
+                    else:
+                        ended = _finish_room_by_forfeit(
+                            room,
+                            dc_pidx,
+                            dc_name,
+                            '放弃重连',
+                        )
+                    record_room_replay_action(room, 'reconnect_decline', dc_pidx, {
+                        'nickname': dc_name,
+                        'game_over': ended,
+                    })
+                    if ended:
+                        _cancel_room_reconnect_timers(room)
+                        for other_sid in room.player_sids:
+                            if room_player_session_is_current(room, other_sid):
+                                socketio.emit('opponent_disconnected', {
+                                    'timeout': True,
+                                    'game_over': True,
+                                    **room_event_context(room),
+                                }, room=other_sid)
+                                emit_room_game_phase(room, other_sid, 'game_over')
+                        broadcast_game_state(room)
+            player['status'] = 'lobby'
+            player['room_id'] = None
+    finally:
+        if ai_action_lock is not None:
+            ai_action_lock.release()
     broadcast_lobby()
 
 
@@ -22477,6 +23285,7 @@ def _ai_test_mod_payload(sid):
 
 def _create_ai_test_replay_room(sid, engine, meta, room_id=None):
     """Build the replay surface shared by the live AI room and its spectators."""
+    engine._solo_history_disabled = True
     human_player_id = int(meta.get('human_player_id', 0))
     ai_player_id = int(meta.get('ai_player_id', 1))
     ai_sid = f"__phelren__:{str(meta.get('session_id') or secrets.token_hex(4))}"
@@ -22650,9 +23459,9 @@ def _record_ai_test_replay_action(sid, action_kind, actor, payload=None, result=
 
 def _flush_ai_test_human_replay_action(sid, engine, result):
     meta = ai_test_sessions.get(sid)
-    pending = meta.pop('_pending_human_replay_action', None) if isinstance(meta, dict) else None
+    pending = meta.get('_pending_human_replay_action') if isinstance(meta, dict) else None
     if not isinstance(pending, dict):
-        return
+        return True
     accepted = result is not None
     if isinstance(result, dict):
         accepted = any(bool(result.get(key)) for key in (
@@ -22660,15 +23469,52 @@ def _flush_ai_test_human_replay_action(sid, engine, result):
             'needs_ally_consent', 'cancelled',
         ))
     if not accepted:
-        return
-    _record_ai_test_replay_action(
-        sid,
-        pending.get('kind'),
-        pending.get('actor'),
-        pending.get('payload'),
-        result,
-        engine=engine,
-    )
+        if meta.get('_pending_human_replay_action') is pending:
+            meta.pop('_pending_human_replay_action', None)
+        return True
+
+    commit_token = str(pending.get('_phelren_replay_commit_token') or '')
+    if not commit_token:
+        commit_token = secrets.token_hex(12)
+        pending['_phelren_replay_commit_token'] = commit_token
+    room = _ai_test_replay_room(sid)
+
+    def _already_committed():
+        if room is None:
+            return False
+        actions = list(getattr(room, '_replay_actions', []) or [])
+        if (
+            getattr(room, '_history_recorded', False)
+            or getattr(room, '_replay_truncated', False)
+            or len(actions) >= REPLAY_MAX_ACTIONS
+        ):
+            if len(actions) >= REPLAY_MAX_ACTIONS:
+                room._replay_truncated = True
+            return True
+        return any(
+                str((action.get('payload') or {}).get('_phelren_replay_commit_token') or '')
+                == commit_token
+                for action in actions
+                if isinstance(action, dict)
+        )
+
+    if not _already_committed():
+        replay_payload = copy.deepcopy(pending.get('payload') or {})
+        replay_payload['_phelren_replay_commit_token'] = commit_token
+        if not _record_ai_test_replay_action(
+            sid,
+            pending.get('kind'),
+            pending.get('actor'),
+            replay_payload,
+            result,
+            engine=engine,
+        ):
+            return False
+        if not _already_committed():
+            return False
+    if meta.get('_pending_human_replay_action') is pending:
+        meta.pop('_pending_human_replay_action', None)
+    return True
 
 
 def _ai_test_pregame_common_payload(sid, engine, meta, timer_status=None):
@@ -22829,6 +23675,9 @@ def send_ai_test_pregame_state(sid):
         engine = solo_sessions.get(sid)
         if not meta or engine is None:
             return False
+        if _phelren_native_completion_unfinalized(meta):
+            meta['_phelren_refresh_after_completion'] = True
+            return False
         human_player_id = int(meta.get('human_player_id', 0))
         phase = str(getattr(engine, 'phase', '') or '')
         status = engine.get_player_status(human_player_id) if phase in ('event_select', 'event_reveal', 'draft') else ''
@@ -22910,65 +23759,73 @@ def _emit_ai_test_turn_timer_update(sid):
 
 def _tick_ai_test_match_timer(sid, now=None):
     now = time.time() if now is None else float(now)
-    with _lock:
-        meta = ai_test_sessions.get(sid)
-        engine = solo_sessions.get(sid)
-        room = _ai_test_replay_room(sid)
-        if not meta or engine is None or room is None:
-            return {'stop': True}
-        room.engine = engine
-        if getattr(engine, 'game_over', False):
-            return {'stop': True}
-        if _room_has_blocking_disconnect(room):
-            return {'kind': 'paused_disconnect'}
-        phase = str(getattr(engine, 'phase', '') or '')
-        if phase in ('event_select', 'event_reveal', 'draft'):
-            human_player_id = int(meta.get('human_player_id', 0))
-            status = engine.get_player_status(human_player_id)
-            timeout = _pregame_timeout_for_status(status, room, human_player_id)
-            if timeout is None:
-                return {'kind': 'pregame', 'status': status, 'advanced': False}
-            key = (human_player_id, status)
-            deadline = room.pregame_deadlines.get(key)
-            if deadline is None:
-                deadline = now + float(timeout)
-                room.pregame_deadlines[key] = deadline
-            if now < float(deadline):
-                return {'kind': 'pregame', 'status': status, 'advanced': False}
+    action_lock = _solo_action_lock_for_sid(sid)
+    if not action_lock.acquire(blocking=False):
+        return {'kind': 'guarded'}
+    try:
+        with _lock:
+            meta = ai_test_sessions.get(sid)
+            engine = solo_sessions.get(sid)
+            room = _ai_test_replay_room(sid)
+            if not meta or engine is None or room is None:
+                return {'stop': True}
+            if _phelren_native_completion_pending(meta):
+                return {'kind': 'guarded'}
+            room.engine = engine
+            if getattr(engine, 'game_over', False):
+                return {'stop': True}
+            if _room_has_blocking_disconnect(room):
+                return {'kind': 'paused_disconnect'}
+            phase = str(getattr(engine, 'phase', '') or '')
+            if phase in ('event_select', 'event_reveal', 'draft'):
+                human_player_id = int(meta.get('human_player_id', 0))
+                status = engine.get_player_status(human_player_id)
+                timeout = _pregame_timeout_for_status(status, room, human_player_id)
+                if timeout is None:
+                    return {'kind': 'pregame', 'status': status, 'advanced': False}
+                key = (human_player_id, status)
+                deadline = room.pregame_deadlines.get(key)
+                if deadline is None:
+                    deadline = now + float(timeout)
+                    room.pregame_deadlines[key] = deadline
+                if now < float(deadline):
+                    return {'kind': 'pregame', 'status': status, 'advanced': False}
 
-            if status == 'event_select':
-                advanced = _auto_select_opening_event_locked(room, human_player_id)
-            elif status == 'event_reveal':
-                advanced = _auto_confirm_opening_reveal_locked(room, human_player_id)
-                if advanced:
-                    _ai_test_prepare_ai_draft(engine, meta)
-                    _reset_pregame_deadline(room, int(meta.get('ai_player_id', 1)), 'event_reveal')
-            elif status == 'drafting':
-                advanced = _auto_complete_draft_locked(room, human_player_id)
-            elif status == 'sub_choice':
-                advanced = _auto_submit_event_sub_choice_locked(room, human_player_id)
-            else:
-                advanced = False
+                if status == 'event_select':
+                    advanced = _auto_select_opening_event_locked(room, human_player_id)
+                elif status == 'event_reveal':
+                    advanced = _auto_confirm_opening_reveal_locked(room, human_player_id)
+                    if advanced:
+                        _ai_test_prepare_ai_draft(engine, meta)
+                        _reset_pregame_deadline(room, int(meta.get('ai_player_id', 1)), 'event_reveal')
+                elif status == 'drafting':
+                    advanced = _auto_complete_draft_locked(room, human_player_id)
+                elif status == 'sub_choice':
+                    advanced = _auto_submit_event_sub_choice_locked(room, human_player_id)
+                else:
+                    advanced = False
 
-            started = False
-            error = ''
-            if advanced and all(bool(value) for value in engine.player_ready):
-                started, error = _ai_test_start_game_if_ready(engine, meta)
-            return {
-                'kind': 'pregame',
-                'status': status,
-                'advanced': bool(advanced),
-                'started': bool(started),
-                'error': error,
-                'schedule_ai': bool(advanced and _ai_test_pending_pregame_action(engine, meta)),
-            }
-        if phase == 'action':
-            return {
-                'kind': 'action',
-                'expired': bool(_tick_room_action_timer_locked(room, now)),
-            }
-        _sync_room_action_timer_after_state_change(room, now)
-        return {'kind': 'other'}
+                started = False
+                error = ''
+                if advanced and all(bool(value) for value in engine.player_ready):
+                    started, error = _ai_test_start_game_if_ready(engine, meta)
+                return {
+                    'kind': 'pregame',
+                    'status': status,
+                    'advanced': bool(advanced),
+                    'started': bool(started),
+                    'error': error,
+                    'schedule_ai': bool(advanced and _ai_test_pending_pregame_action(engine, meta)),
+                }
+            if phase == 'action':
+                return {
+                    'kind': 'action',
+                    'expired': bool(_tick_room_action_timer_locked(room, now)),
+                }
+            _sync_room_action_timer_after_state_change(room, now)
+            return {'kind': 'other'}
+    finally:
+        action_lock.release()
 
 
 def _expire_ai_test_action_turn(sid):
@@ -22981,6 +23838,8 @@ def _expire_ai_test_action_turn(sid):
             engine = solo_sessions.get(sid)
             room = _ai_test_replay_room(sid)
             if not meta or engine is None or room is None:
+                return False
+            if _phelren_native_completion_pending(meta):
                 return False
             if (
                 getattr(engine, 'game_over', False)
@@ -23073,7 +23932,11 @@ def _run_ai_test_match_timer(sid):
 def schedule_ai_test_match_timer(sid):
     with _lock:
         meta = ai_test_sessions.get(sid)
-        if not meta or meta.get('timer_running'):
+        if (
+            not meta
+            or meta.get('timer_running')
+            or _phelren_native_completion_pending(meta)
+        ):
             return False
         meta['timer_running'] = True
     _start_socket_background_task(_run_ai_test_match_timer, sid)
@@ -23152,6 +24015,8 @@ def _run_ai_test_pregame(sid):
                     engine = solo_sessions.get(sid)
                     if not meta or engine is None:
                         return
+                    if _phelren_native_completion_pending(meta):
+                        continue
                     pending_action = _ai_test_pending_pregame_action(engine, meta)
                     if not pending_action:
                         continue
@@ -23232,7 +24097,12 @@ def schedule_ai_test_pregame(sid):
     with _lock:
         meta = ai_test_sessions.get(sid)
         engine = solo_sessions.get(sid)
-        if not meta or engine is None or meta.get('pregame_ai_running'):
+        if (
+            not meta
+            or engine is None
+            or meta.get('pregame_ai_running')
+            or _phelren_native_completion_pending(meta)
+        ):
             return False
         if not _ai_test_pending_pregame_action(engine, meta):
             return False
@@ -23688,19 +24558,29 @@ def _wait_for_ai_test_action_lock(sid):
     action_lock = _solo_action_lock_for_sid(sid)
     started = time.monotonic()
     reported_wait = False
-    while not action_lock.acquire(blocking=False):
+    while True:
+        acquired = action_lock.acquire(blocking=False)
         with _lock:
             meta = ai_test_sessions.get(sid)
             engine = solo_sessions.get(sid)
             if not meta or engine is None:
+                if acquired:
+                    action_lock.release()
                 return None
+            native_pending = _phelren_native_completion_pending(meta)
             ai_player_id = int(meta.get('ai_player_id', 1))
             if (
                 getattr(engine, 'game_over', False)
                 or _solo_decision_player(engine) != ai_player_id
             ):
                 meta['thinking'] = False
+                if acquired:
+                    action_lock.release()
                 return None
+        if acquired and not native_pending:
+            return action_lock
+        if acquired:
+            action_lock.release()
         if not reported_wait and time.monotonic() - started >= 5.0:
             reported_wait = True
             admin_event(
@@ -23712,7 +24592,6 @@ def _wait_for_ai_test_action_lock(sid):
             socketio.sleep(0.05)
         except Exception:
             time.sleep(0.05)
-    return action_lock
 
 
 def _run_ai_test_turn(sid):
@@ -23766,6 +24645,7 @@ def _run_ai_test_turn(sid):
                 )
                 if not isinstance(updated_engine, GameEngine):
                     raise LocalAiBridgeError('worker returned an invalid engine type')
+                updated_engine._solo_history_disabled = True
                 raw_action = dict(result.get('action') or {})
                 raw_kind = str(raw_action.get('kind') or '')
                 replay_payload = _ai_test_enrich_replay_action_payload(
@@ -23864,6 +24744,8 @@ def schedule_ai_test_turn(sid):
         engine = solo_sessions.get(sid)
         if not meta or engine is None or meta.get('thinking'):
             return False
+        if _phelren_native_completion_pending(meta):
+            return False
         if getattr(engine, 'game_over', False):
             _maybe_finish_ai_test_session(sid, engine)
             return False
@@ -23875,13 +24757,15 @@ def schedule_ai_test_turn(sid):
 
 
 def _record_ai_test_human_action(sid, engine, action_kind, payload=None):
-    meta = ai_test_sessions.get(sid)
-    if not meta or engine is None:
-        return
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        identity = _phelren_action_identity_locked(sid) if meta else None
+    if not meta or engine is None or identity is None:
+        return False
     human_player_id = int(meta.get('human_player_id', 0))
     if _solo_decision_player(engine, human_player_id) != human_player_id:
-        return
-    meta['_pending_human_replay_action'] = {
+        return False
+    staged_action = {
         'kind': str(action_kind),
         'actor': human_player_id,
         'payload': _ai_test_enrich_replay_action_payload(
@@ -23891,6 +24775,27 @@ def _record_ai_test_human_action(sid, engine, action_kind, payload=None):
             payload,
         ),
     }
+    with _lock:
+        current = _find_phelren_identity_locked(identity)
+        if current is None or current[2] is not engine:
+            return False
+        current_sid, meta, _engine, _room = current
+        if _phelren_native_completion_pending(meta):
+            return False
+        completion = _new_phelren_call_completion()
+        completion['staging'] = True
+        completion['owner_greenlet_id'] = threading.get_ident()
+        meta['_phelren_native_completion'] = completion
+        meta['_pending_human_replay_action'] = staged_action
+
+    if eventlet is not None:
+        owner_greenlet = eventlet.getcurrent()
+        if hasattr(owner_greenlet, 'link'):
+            owner_greenlet.link(
+                _reject_staged_phelren_call_on_owner_exit,
+                identity,
+                completion,
+            )
     try:
         result = get_local_ai_worker().record_external(
             engine,
@@ -23904,7 +24809,11 @@ def _record_ai_test_human_action(sid, engine, action_kind, payload=None):
         meta['latest_recorded_decision_id'] = result.get('decision_id')
         meta['action_index'] = int(meta.get('action_index', 0)) + 1
     except Exception as exc:
-        admin_event('error', f'AI human decision record failed: {exc}', sid=sid)
+        admin_event('error', f'AI human decision record failed: {exc}', sid=current_sid)
+    except BaseException:
+        _reject_incomplete_phelren_call(identity, completion)
+        raise
+    return True
 
 
 def _start_ai_test_session(sid):
@@ -24147,19 +25056,28 @@ def on_ai_1v1_rematch(data=None):
             'message': '服务器正在更新，暂时不能开始新对局',
         }, room=sid)
         return
-    with _lock:
-        player = players.get(sid)
-        engine = solo_sessions.get(sid)
-        if not player or sid not in ai_test_sessions or engine is None:
-            socketio.emit('server_error', {'message': '当前没有 Phelren 对局'}, room=sid)
-            return
-        if not getattr(engine, 'game_over', False):
-            socketio.emit('server_error', {'message': '对局尚未结束'}, room=sid)
-            return
-        _drop_solo_session_locked(sid)
-        player['room_id'] = None
-        player['status'] = 'lobby'
-    _queue_ai_test_start(sid)
+    action_lock = _try_acquire_solo_action(sid, 'ai_1v1_rematch')
+    if action_lock is None:
+        return
+    should_queue = False
+    try:
+        with _lock:
+            player = players.get(sid)
+            engine = solo_sessions.get(sid)
+            if not player or sid not in ai_test_sessions or engine is None:
+                socketio.emit('server_error', {'message': '当前没有 Phelren 对局'}, room=sid)
+                return
+            if not getattr(engine, 'game_over', False):
+                socketio.emit('server_error', {'message': '对局尚未结束'}, room=sid)
+                return
+            _drop_solo_session_locked(sid)
+            player['room_id'] = None
+            player['status'] = 'lobby'
+            should_queue = True
+    finally:
+        action_lock.release()
+    if should_queue:
+        _queue_ai_test_start(sid)
 
 
 @socketio.on('ai_1v1_mark_decision')
@@ -25989,18 +26907,30 @@ def on_return_lobby(data=None):
     ai_returned = False
     ai_stale_context = False
     with _lock:
-        player = players.get(sid)
-        ai_meta = ai_test_sessions.get(sid)
-        if player is not None and (ai_meta is not None or sid in ai_test_starting):
-            supplied_match_key = str(data.get('match_key') or '').strip()
-            current_match_key = _ai_test_match_key(ai_meta) if ai_meta else ''
-            if supplied_match_key and current_match_key and supplied_match_key != current_match_key:
-                ai_stale_context = True
-            else:
-                _drop_solo_session_locked(sid)
-                player['room_id'] = None
-                player['status'] = 'lobby'
-                ai_returned = True
+        ai_context = bool(
+            players.get(sid) is not None
+            and (sid in ai_test_sessions or sid in ai_test_starting)
+        )
+    if ai_context:
+        action_lock = _try_acquire_solo_action(sid, 'return_lobby')
+        if action_lock is None:
+            return
+        try:
+            with _lock:
+                player = players.get(sid)
+                ai_meta = ai_test_sessions.get(sid)
+                if player is not None and (ai_meta is not None or sid in ai_test_starting):
+                    supplied_match_key = str(data.get('match_key') or '').strip()
+                    current_match_key = _ai_test_match_key(ai_meta) if ai_meta else ''
+                    if supplied_match_key and current_match_key and supplied_match_key != current_match_key:
+                        ai_stale_context = True
+                    else:
+                        _drop_solo_session_locked(sid)
+                        player['room_id'] = None
+                        player['status'] = 'lobby'
+                        ai_returned = True
+        finally:
+            action_lock.release()
     if ai_stale_context:
         socketio.emit('action_rejected', {
             'event': 'return_lobby',
@@ -26185,6 +27115,12 @@ def on_spectate(data):
         if not player.get('user_id') and not room_allows_guest_spectators(room):
             emit('server_error', {'message': '本场对局有玩家开启了禁止游客观战'})
             return
+        if _defer_phelren_spectate_state(room):
+            emit('server_error', {
+                'message': 'Phelren 正在完成上一项操作，请稍后重试观战',
+                'code': 'ACTION_BUSY',
+            })
+            return
         phase = room.engine.phase
         if phase in ('draft', 'event_select', 'event_reveal'):
             emit('server_error', {'message': '选牌或配装倾向阶段暂不能观战'})
@@ -26221,6 +27157,8 @@ def on_spectate(data):
 def _send_spectate_state_internal(spid, room):
     if not room_spectator_session_is_current(room, spid):
         return
+    if _defer_phelren_spectate_state(room):
+        return False
     perspective = players.get(spid, {}).get('spectate_perspective', 0)
     state = build_spectate_state(room, perspective=perspective)
     state['your_id'] = -1
@@ -26231,6 +27169,7 @@ def _send_spectate_state_internal(spid, room):
         state[f'player{i + 1}_is_admin_player'] = player_is_admin(psid, room)
         state[f'player{i + 1}_special'] = player_special_fields(psid, room)
     socketio.emit('state_update', state, room=spid)
+    return True
 
 
 def _handle_leave_spectate_internal(sid):

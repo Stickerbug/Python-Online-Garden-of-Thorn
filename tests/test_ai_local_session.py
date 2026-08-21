@@ -8,6 +8,10 @@ import app as gtn
 
 class _EndTurnWorker:
     def decide_and_execute(self, engine, **kwargs):
+        # A bridge replacement is not required to preserve app-only markers.
+        # The caller must restore Phelren's stable engine-local isolation flag.
+        if hasattr(engine, "_solo_history_disabled"):
+            delattr(engine, "_solo_history_disabled")
         actor = int(kwargs["player_id"])
         result = engine.end_turn(actor)
         assert result.get("success")
@@ -77,6 +81,7 @@ def test_ai_turn_executes_atomically_then_returns_control_to_human():
         assert meta["latest_ai_decision_id"] == 7
         assert meta["recent_ai_decisions"][0]["kind"] == "end_turn"
         assert meta["last_ai_action"]["kind"] == "end_turn"
+        assert engine._solo_history_disabled is True
         assert meta["replay_room"]._replay_actions[-1]["type"] == "end_turn"
         assert meta["replay_room"]._replay_actions[-1]["actor"] == 0
     finally:
@@ -460,6 +465,7 @@ def test_active_ai_match_survives_disconnect_and_rejoins_through_normal_reconnec
         assert room.ai_owner_sid == new_sid
         assert room.player_sids[1] == new_sid
         assert old_sid not in room.disconnected_players
+        assert not getattr(room, "_phelren_reconnect_accept_pending", {})
         assert gtn.players[new_sid]["status"] == "in_game"
         assert gtn.players[new_sid]["room_id"] == room_id
         assert meta["owner_disconnected"] is False
@@ -480,7 +486,7 @@ def test_active_ai_match_survives_disconnect_and_rejoins_through_normal_reconnec
             new_client.disconnect()
 
 
-def test_ai_disconnect_timeout_arms_cleanup_while_action_lock_is_busy():
+def test_ai_disconnect_timeout_waits_for_busy_action_before_cleanup():
     sid = "ai-disconnect-timeout-cleanup-test"
     room_id = max([int(key) for key in gtn.rooms if str(key).isdigit()] + [910000]) + 1
     engine = _test_engine()
@@ -512,34 +518,160 @@ def test_ai_disconnect_timeout_arms_cleanup_while_action_lock_is_busy():
     gtn.rooms[room_id] = room
     action_lock = gtn._solo_action_lock_for_sid(sid)
     assert action_lock.acquire(blocking=False)
+    timers = []
+
+    class DeferredTimer:
+        def __init__(self, interval, callback, args=None):
+            self.interval = interval
+            self.callback = callback
+            self.args = list(args or [])
+            self.daemon = False
+            self.started = False
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            self.started = True
+
+        def cancel(self):
+            self.cancelled = True
 
     try:
         with (
+            mock.patch.object(gtn.threading, "Timer", DeferredTimer),
             mock.patch.object(gtn, "_schedule_game_over_cleanup") as schedule_cleanup,
             mock.patch.object(gtn, "broadcast_game_state"),
             mock.patch.object(gtn, "broadcast_lobby"),
         ):
             gtn.reconnect_timeout(room_id, sid)
+            assert engine.game_over is False
+            schedule_cleanup.assert_not_called()
+            assert len(timers) == 1
+            assert timers[0].started is True
+            assert room.reconnect_timers[sid] is timers[0]
 
-        assert engine.game_over is True
-        assert engine.phase == "game_over"
-        schedule_cleanup.assert_called_once_with(room)
+            action_lock.release()
+            timers[0].callback(*timers[0].args)
 
-        health = gtn.app.test_client().get("/api/health/full")
-        assert health.status_code == 200
-        payload = health.get_json()
-        assert payload["ai_room_count"] >= 1
-        assert payload["game_over_room_count"] >= 1
-        assert payload["ai_action_busy_count"] >= 1
-        assert payload["game_over_action_busy_count"] >= 1
-        assert payload["phelren_action_capacity"] == gtn.PHELREN_MAX_CONCURRENT_ACTIONS
-        assert payload["phelren_action_inflight_count"] >= 0
+            assert engine.game_over is True
+            assert engine.phase == "game_over"
+            assert timers[0].cancelled is True
+            schedule_cleanup.assert_called_once_with(room)
     finally:
         if action_lock.locked():
             action_lock.release()
         with gtn._lock:
             gtn._drop_solo_session_locked(sid)
             gtn.rooms.pop(room_id, None)
+
+
+def test_ai_disconnect_timeout_yields_to_arrived_reconnect_accept():
+    old_sid = "ai-reconnect-reservation-old"
+    new_sid = "ai-reconnect-reservation-new"
+    room_id = max([int(key) for key in gtn.rooms if str(key).isdigit()] + [915000]) + 1
+    engine = _test_engine()
+    meta = {
+        "session_id": "ai-reconnect-reservation-session",
+        "seed": 29,
+        "human_player_id": 1,
+        "ai_player_id": 0,
+        "human_name": "Reserved Human",
+        "ai_name": "Phelren",
+        "enabled_mods": [],
+        "action_index": 0,
+        "thinking": False,
+        "diagnostic_finished": True,
+        "policy_label": "Phelren V1",
+        "diagnostic_metadata": {},
+    }
+    gtn.solo_sessions[old_sid] = engine
+    gtn.ai_test_sessions[old_sid] = meta
+    room = gtn._create_ai_test_replay_room(old_sid, engine, meta, room_id=room_id)
+    meta["replay_room"] = room
+    room.disconnected_players[old_sid] = {
+        "player_index": 1,
+        "nickname": meta["human_name"],
+        "user_id": 2201,
+        "account_player_id": "reserved-human",
+        "disconnect_time": gtn.time.time() - 60,
+        "disconnect_attempt": 1,
+        "reconnect_timeout": 30,
+    }
+    gtn.rooms[room_id] = room
+    gtn.players[new_sid] = {
+        "nickname": meta["human_name"],
+        "user_id": 2201,
+        "account_player_id": "reserved-human",
+        "status": "reconnecting",
+        "room_id": None,
+        "beta_mode": False,
+    }
+    timers = []
+
+    class DeferredTimer:
+        def __init__(self, interval, callback, args=None):
+            self.interval = interval
+            self.callback = callback
+            self.args = list(args or [])
+            self.daemon = False
+            self.started = False
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            self.started = True
+
+        def cancel(self):
+            self.cancelled = True
+
+    try:
+        with gtn._lock:
+            resolved_sid, reserved, wait_for_staging, conflict = (
+                gtn._reserve_phelren_reconnect_accept_locked(
+                    room_id,
+                    old_sid,
+                    new_sid,
+                    gtn._PHELREN_RECONNECT_ACCEPT_WAIT_SECONDS,
+                )
+            )
+        assert resolved_sid == old_sid
+        assert reserved is True
+        assert wait_for_staging is False
+        assert conflict is False
+
+        with (
+            mock.patch.object(gtn.threading, "Timer", DeferredTimer),
+            mock.patch.object(gtn, "_schedule_game_over_cleanup") as schedule_cleanup,
+            mock.patch.object(gtn, "broadcast_game_state"),
+            mock.patch.object(gtn, "broadcast_lobby"),
+        ):
+            # This simulates the timeout callback winning the lock immediately
+            # after the previous mutation clears. The already-arrived accept
+            # reservation must still win and keep the engine active.
+            gtn.reconnect_timeout(room_id, old_sid)
+            assert engine.game_over is False
+            schedule_cleanup.assert_not_called()
+            assert len(timers) == 1
+            assert timers[0].started is True
+            assert room.reconnect_timers[old_sid] is timers[0]
+
+            with gtn._lock:
+                gtn._release_phelren_reconnect_accept_reservation_locked(
+                    room,
+                    old_sid,
+                    new_sid,
+                )
+            timers[0].callback(*timers[0].args)
+
+            assert engine.game_over is True
+            assert engine.phase == "game_over"
+            assert timers[0].cancelled is True
+            schedule_cleanup.assert_called_once_with(room)
+    finally:
+        with gtn._lock:
+            gtn._drop_solo_session_locked(old_sid)
+            gtn.rooms.pop(room_id, None)
+            gtn.players.pop(new_sid, None)
 
 
 def test_ai_game_over_cleanup_is_idempotent_and_removes_session():
@@ -592,6 +724,71 @@ def test_ai_game_over_cleanup_is_idempotent_and_removes_session():
         assert sid not in gtn.solo_sessions
         assert sid not in gtn.ai_test_sessions
         assert timers[0].cancelled is True
+        broadcast_lobby.assert_called_once_with()
+    finally:
+        with gtn._lock:
+            gtn._drop_solo_session_locked(sid)
+            gtn.rooms.pop(room_id, None)
+
+
+def test_ai_game_over_cleanup_retries_until_native_guard_clears():
+    sid = "ai-game-over-cleanup-guard-test"
+    room_id = max([int(key) for key in gtn.rooms if str(key).isdigit()] + [925000]) + 1
+    engine = _test_engine()
+    engine.game_over = True
+    engine.phase = "game_over"
+    meta = {
+        "session_id": "ai-game-over-cleanup-guard-session",
+        "human_player_id": 1,
+        "ai_player_id": 0,
+        "diagnostic_finished": True,
+    }
+    completion = gtn._new_phelren_call_completion()
+    meta["_phelren_native_completion"] = completion
+    gtn.solo_sessions[sid] = engine
+    gtn.ai_test_sessions[sid] = meta
+    room = gtn._create_ai_test_replay_room(sid, engine, meta, room_id=room_id)
+    meta["replay_room"] = room
+    gtn.rooms[room_id] = room
+    timers = []
+
+    class DeferredTimer:
+        def __init__(self, interval, callback):
+            self.interval = interval
+            self.callback = callback
+            self.daemon = False
+            self.started = False
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            self.started = True
+
+        def cancel(self):
+            self.cancelled = True
+
+    try:
+        with (
+            mock.patch.object(gtn.threading, "Timer", DeferredTimer),
+            mock.patch.object(gtn, "broadcast_lobby") as broadcast_lobby,
+        ):
+            assert gtn._schedule_game_over_cleanup(room) is True
+            timers[0].callback()
+
+            assert room_id in gtn.rooms
+            assert sid in gtn.ai_test_sessions
+            assert room._game_over_cleanup_timer is timers[0]
+            assert len(timers) == 2
+            assert timers[1].interval == 0.25
+            assert timers[1].started is True
+            broadcast_lobby.assert_not_called()
+
+            meta.pop("_phelren_native_completion", None)
+            timers[1].callback()
+
+        assert room_id not in gtn.rooms
+        assert sid not in gtn.solo_sessions
+        assert sid not in gtn.ai_test_sessions
         broadcast_lobby.assert_called_once_with()
     finally:
         with gtn._lock:
@@ -663,6 +860,25 @@ def test_live_ai_room_can_be_spectated_and_closes_spectators_with_owner():
     try:
         owner_client.get_received()
         spectator_client.get_received()
+        original_phase = engine.phase
+        engine.phase = "draft"
+        meta["_phelren_native_completion"] = gtn._new_phelren_call_completion()
+        with mock.patch.object(gtn, "broadcast_game_state") as deferred_broadcast:
+            spectator_client.emit("spectate", {"room_id": room_id})
+            guarded_received = spectator_client.get_received()
+        assert not any(event["name"] == "spectate_enter" for event in guarded_received)
+        assert any(
+            event["name"] == "server_error"
+            and event["args"][0].get("code") == "ACTION_BUSY"
+            for event in guarded_received
+        )
+        assert gtn.players[spectator_sid]["status"] == "lobby"
+        assert gtn.players[spectator_sid]["spectating_room"] is None
+        assert spectator_sid not in room.spectators
+        deferred_broadcast.assert_called_once_with(room)
+        meta.pop("_phelren_native_completion", None)
+        engine.phase = original_phase
+
         spectator_client.emit("spectate", {"room_id": room_id})
         received = spectator_client.get_received()
 
@@ -1097,8 +1313,15 @@ def test_ai_match_runs_formal_event_and_card_draft_before_combat():
             gtn._run_ai_test_pregame(sid)
             client.get_received()
             total_rounds = int(draft_payload["total_rounds"])
+            engine = gtn.solo_sessions[sid]
+            meta = gtn.ai_test_sessions[sid]
+            human_player_id = int(meta["human_player_id"])
+            ai_player_id = int(meta["ai_player_id"])
+            ai_total_rounds = int(engine.draft_target_count(ai_player_id))
             assert total_rounds > 0
-            assert len(sleep_mock.call_args_list) == total_rounds + 1
+            assert ai_total_rounds > 0
+            assert int(next(iter(draft_payload["others_total_rounds"].values()))) == ai_total_rounds
+            assert len(sleep_mock.call_args_list) == ai_total_rounds + 1
             assert (
                 gtn.AI_TEST_PREGAME_DELAY_MIN_SECONDS
                 <= sleep_mock.call_args_list[0].args[0]
@@ -1134,8 +1357,6 @@ def test_ai_match_runs_formal_event_and_card_draft_before_combat():
 
             names = [event["name"] for event in final_events]
             if "event_sub_choice" in names:
-                engine = gtn.solo_sessions[sid]
-                human_player_id = int(gtn.ai_test_sessions[sid]["human_player_id"])
                 client.emit("submit_event_sub_choice", {
                     "sub_choice": gtn._default_event_sub_choice(engine, human_player_id),
                 })
@@ -1152,8 +1373,8 @@ def test_ai_match_runs_formal_event_and_card_draft_before_combat():
             assert state["turn_timer_player"] == state["current_player"]
             assert int(state["turn_timer_remaining"]) > 0
             assert int(state["turn_timer_total"]) == int(gtn.ACTION_TURN_SECONDS)
-            assert len(gtn.solo_sessions[sid].draft_picks[0]) == total_rounds
-            assert len(gtn.solo_sessions[sid].draft_picks[1]) == total_rounds
+            assert len(engine.draft_picks[human_player_id]) == total_rounds
+            assert len(engine.draft_picks[ai_player_id]) == ai_total_rounds
 
             client.emit("request_game_state", {})
             refresh_events = client.get_received()
