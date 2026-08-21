@@ -14,6 +14,7 @@ class SpectatorPresenceTests(unittest.TestCase):
             room_id=room_id,
             match_seq=1,
             created_at=1,
+            engine=SimpleNamespace(game_over=True, phase='game_over'),
             player_sids=[],
             spectators=[spectator_sid],
             _game_over_cleanup_timer=None,
@@ -30,7 +31,7 @@ class SpectatorPresenceTests(unittest.TestCase):
         try:
             with patch.object(app.threading, 'Timer') as timer_class:
                 timer = timer_class.return_value
-                app._schedule_game_over_cleanup(room)
+                self.assertTrue(app._schedule_game_over_cleanup(room))
                 cleanup = timer_class.call_args.args[1]
 
             with (
