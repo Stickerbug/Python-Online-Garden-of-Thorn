@@ -8,6 +8,7 @@ from story_engine import (
     _new_card,
     _prepare_player_turn_end,
     _start_combat,
+    _turn_boundary,
 )
 from story_mode import (
     STORY_STAGES,
@@ -65,11 +66,23 @@ def test_workbook_v7_card_and_relic_balance_values():
     assert _card_values(basic)['effects'][0]['amount'] == 9
 
 
-def test_blockade_persists_and_attack_blocked_expires_normally():
+def test_statuses_follow_the_workbook_decay_phases():
     state = _combat('workbook-v7-statuses')
     combat = state['combat']
     combat['blockade'] = 2
     combat['attack_blocked'] = 2
+    combat['weak'] = 2
+    combat['vulnerable'] = 2
+    combat['fragile'] = 2
+    persistent_at_turn_end = {
+        'evade': 2,
+        'shield': 11,
+        'poison': 6,
+        'fire': 4,
+        'stagnation': 2,
+        'temporary_power': 3,
+    }
+    combat.update(persistent_at_turn_end)
     attack = _new_card(state, 'basic')
     skill = _new_card(state, 'rose')
     combat['hand'] = [attack, skill]
@@ -80,6 +93,18 @@ def test_blockade_persists_and_attack_blocked_expires_normally():
     _prepare_player_turn_end(state, 'workbook-v7-statuses', [])
     assert combat['blockade'] == 2
     assert combat['attack_blocked'] == 1
+    assert combat['weak'] == 2
+    assert combat['vulnerable'] == 2
+    assert combat['fragile'] == 2
+    for status, expected in persistent_at_turn_end.items():
+        assert combat[status] == expected
+
+    _turn_boundary(state, 'workbook-v7-statuses:next-turn', [])
+    assert combat['blockade'] == 2
+    assert combat['attack_blocked'] == 1
+    assert combat['weak'] == 1
+    assert combat['vulnerable'] == 1
+    assert combat['fragile'] == 1
 
 
 def test_mechanical_track_uses_one_bone_and_draw_count_minus_one():

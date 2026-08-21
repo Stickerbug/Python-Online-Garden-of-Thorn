@@ -30,6 +30,11 @@ _NEGATIVE_STATUSES = frozenset({
     'weak',
 })
 
+# The story workbook defines these as start-of-turn decay. Keep the smaller
+# end-of-turn list explicit so unrelated statuses never decay by default.
+_TURN_START_DECAY_STATUSES = ('weak', 'vulnerable', 'fragile')
+_TURN_END_DECAY_STATUSES = ('attack_blocked',)
+
 _PRESENTATION_EFFECT_KEYS = (
     'shield', 'power', 'temporary_power', 'endurance', 'weak',
     'vulnerable', 'fragile', 'evade', 'poison', 'stun', 'reflection',
@@ -5016,6 +5021,8 @@ def _turn_boundary(state, seed, events, extra=False):
     combat['next_skill_repeats'] = 0
     _clear_temporary_card_modifiers(combat)
     combat['sewage_active'] = False
+    for status in _TURN_START_DECAY_STATUSES:
+        combat[status] = max(0, int(combat.get(status) or 0) - 1)
     if not extra:
         if _has_relic(state, 'dizzy_relic'):
             _apply_status(state, combat, 'blind', 1, events, source='dizzy_relic')
@@ -5027,9 +5034,8 @@ def _turn_boundary(state, seed, events, extra=False):
             combat['cognitive_bias_loss'] = int(combat.get('cognitive_bias_loss') or 0) + 1
     for enemy in combat['enemies']:
         enemy['temporary_power'] = 0
-        enemy['weak'] = max(0, int(enemy.get('weak') or 0) - 1)
-        enemy['vulnerable'] = max(0, int(enemy.get('vulnerable') or 0) - 1)
-        enemy['fragile'] = max(0, int(enemy.get('fragile') or 0) - 1)
+        for status in _TURN_START_DECAY_STATUSES:
+            enemy[status] = max(0, int(enemy.get(status) or 0) - 1)
         if int(enemy.get('wither') or 0) > 0:
             enemy['wither'] -= 1
             if enemy['wither'] <= 0:
@@ -5237,7 +5243,7 @@ def _prepare_player_turn_end(state, seed, events, reason=None):
             int(combat.get('elixir') or 0),
             max(retain_limits),
         )
-    for status in ('weak', 'vulnerable', 'fragile', 'attack_blocked'):
+    for status in _TURN_END_DECAY_STATUSES:
         combat[status] = max(0, int(combat.get(status) or 0) - 1)
     for enemy in combat.get('enemies', []):
         enemy['magic_shield_disabled'] = 0
