@@ -67,8 +67,8 @@ def test_new_psionic_terms_use_new_internal_keys_without_renaming_soul_splitter(
         'en': 'Psionic Connection',
     }
     assert STORY_TRAITS['psionic_sustain']['name'] == {
-        'zh': '灵能维系',
-        'en': 'Psionic Sustain',
+        'zh': '灵能绑定',
+        'en': 'Psionic Binding',
     }
     assert STORY_TRAITS['psionic_fountain']['name'] == {
         'zh': '灵能源泉',

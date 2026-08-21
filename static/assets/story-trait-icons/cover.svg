@@ -4,14 +4,12 @@
   <defs>
     <style>
       .st0 {
-        fill: #ec6a1a;
-        stroke: #e45b0d;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        stroke-width: 10px;
+        fill: #666464;
+        stroke: #4c4948;
+        stroke-miterlimit: 10;
+        stroke-width: 15px;
       }
     </style>
   </defs>
-  <polygon class="st0" points="141.73 68.78 98.91 194.99 184.55 194.99 141.73 68.78"/>
-  <rect class="st0" x="75.87" y="194.99" width="131.73" height="19.7"/>
+  <polygon class="st0" points="174.55 49.61 81.25 70.51 50.31 146.31 80.31 216 156.73 233.86 222.84 186.38 233.16 104.93 174.55 49.61"/>
 </svg>

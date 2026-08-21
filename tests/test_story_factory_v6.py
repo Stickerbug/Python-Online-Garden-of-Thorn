@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from story_content import STORY_CARDS, STORY_ENCOUNTERS, STORY_ENEMIES
+from story_content import STORY_CARDS, STORY_ENCOUNTERS, STORY_ENEMIES, STORY_TRAITS
 from story_engine import (
     StoryActionError,
     _check_combat_end,
@@ -52,6 +52,25 @@ def test_factory_v6_content_and_images_are_registered():
     for enemy_id in expected_enemies:
         definition = STORY_ENEMIES[enemy_id]
         assert (project_root / definition['image_url'].removeprefix('/')).is_file()
+
+    expected_trait_images = {
+        'toxic_pressure': 'toxic-pressure.svg',
+        'psionic_sustain': 'psionic-binding.svg',
+        'hiding': 'hiding.svg',
+        'cover': 'cover.svg',
+        'injured_summon': 'injured-summon.svg',
+    }
+    for trait_id, filename in expected_trait_images.items():
+        image_url = STORY_TRAITS[trait_id]['image_url']
+        assert image_url.endswith(filename)
+        assert (project_root / image_url.removeprefix('/')).is_file()
+
+    assert STORY_TRAITS['psionic_sustain']['name'] == {
+        'zh': '灵能绑定',
+        'en': 'Psionic Binding',
+    }
+    assert STORY_ENEMIES['chimney']['traits'] == ('injured_summon',)
+    assert STORY_ENEMIES['chimney']['initial']['injured_summon'] == 100
 
     factory_groups = STORY_ENCOUNTERS['factory']
     encountered = {
@@ -128,6 +147,7 @@ def test_broken_machine_reveals_its_rat_and_does_not_block_victory():
 def test_chimney_summons_smoke_for_each_100_health_damage():
     state, _ = _factory_combat(['chimney', 'soldier_ant'], 'chimney-smoke')
     chimney = _enemy(state, 'chimney')
+    assert chimney['injured_summon'] == 100
     events = []
 
     _enemy_raw_damage(state, chimney, 60, events, 'test', player_caused=True)

@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
   <defs>
     <style>
-      .outline { fill: none; stroke: #1a1900; }
-      .outline, .cross { stroke-width: 5px; }
-      .outline, .cross, .face { stroke-miterlimit: 10; }
-      .feature { fill: #1e1717; }
-      .highlight { fill: #ecf7fd; }
-      .cross { fill: #e7231d; opacity: .75; stroke: #da1617; }
-      .face { fill: #f5e23a; stroke: #f5d42e; stroke-width: 10px; }
+      .st0 {
+        fill: #ee7855;
+        stroke: #dc4912;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 8px;
+      }
     </style>
   </defs>
-  <circle class="face" cx="141.83" cy="142" r="85.04"/>
-  <ellipse class="feature" cx="119.88" cy="127.37" rx="9.14" ry="18.29"/>
-  <ellipse class="feature" cx="163.78" cy="127.37" rx="9.14" ry="18.29"/>
-  <ellipse class="highlight" cx="163.78" cy="121.27" rx="7.14" ry="9"/>
-  <ellipse class="highlight" cx="119.88" cy="121.27" rx="7.14" ry="9"/>
-  <path class="outline" d="M123.03,175.43c20.07,15.99,37.6,0,37.6,0"/>
-  <polygon class="cross" points="191.43 78.23 205.6 92.4 156 141.99 205.61 191.6 191.43 205.78 141.82 156.17 92.23 205.77 78.06 191.6 127.66 142.01 78.05 92.4 92.23 78.22 141.83 127.83 191.43 78.23"/>
+  <rect class="st0" x="97.23" y="89.57" width="59.66" height="30.48"/>
+  <polygon class="st0" points="120.73 155.29 62.32 143.34 68.65 113.49 127.06 125.45 120.73 155.29"/>
+  <rect class="st0" x="129.7" y="123.29" width="59.66" height="30.48"/>
+  <rect class="st0" x="47.52" y="154.61" width="59.66" height="30.48"/>
+  <polygon class="st0" points="167.76 193.89 109.35 181.94 115.68 152.09 174.09 164.05 167.76 193.89"/>
+  <polygon class="st0" points="235.94 161.36 183.16 188.69 168.7 161.72 221.48 134.39 235.94 161.36"/>
 </svg>

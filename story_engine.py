@@ -49,6 +49,7 @@ _PRESENTATION_EFFECT_KEYS = (
     'segments', 'magic_shield', 'magic_blessing', 'magic_reflection',
     'magic', 'electric_web', 'super_beam', 'toxic_reflection',
     'reconstruction', 'integration', 'scrap', 'disc', 'toxic_pressure',
+    'injured_summon',
 )
 
 
@@ -1412,8 +1413,9 @@ def _after_enemy_health_damage(state, enemy, dealt, events):
     script = STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
     if script != 'chimney':
         return
+    threshold = max(1, int(enemy.get('injured_summon') or 100))
     progress = max(0, int(enemy.get('smoke_damage_progress') or 0)) + int(dealt)
-    summon_count, enemy['smoke_damage_progress'] = divmod(progress, 100)
+    summon_count, enemy['smoke_damage_progress'] = divmod(progress, threshold)
     for _ in range(summon_count):
         _summon_enemy(
             state,

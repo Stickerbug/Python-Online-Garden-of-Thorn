@@ -526,7 +526,7 @@ STORY_TRAITS.update({
         },
     },
     'psionic_sustain': {
-        'name': {'zh': '灵能维系', 'en': 'Psionic Sustain'},
+        'name': {'zh': '灵能绑定', 'en': 'Psionic Binding'},
         'description': {
             'zh': '白蚁丘存活时，H不会低于1；降至1H时眩晕2次，随后回复至满H。',
             'en': 'While a Termite Mound lives, H cannot fall below 1; at 1 H, become stunned twice, then heal to full.',
@@ -535,15 +535,15 @@ STORY_TRAITS.update({
     'psionic_fountain': {
         'name': {'zh': '灵能源泉', 'en': 'Psionic Fountain'},
         'description': {
-            'zh': '战斗开始时，使所有白蚁失去灵能链接并获得灵能维系；死亡后令其立刻使用决意。',
-            'en': 'At combat start, replace termite Psionic Connection with Psionic Sustain; on death, make them use Resolve immediately.',
+            'zh': '战斗开始时，使所有白蚁失去灵能链接并获得灵能绑定；死亡后令其立刻使用决意。',
+            'en': 'At combat start, replace termite Psionic Connection with Psionic Binding; on death, make them use Resolve immediately.',
         },
     },
     'nest_instinct': {
         'name': {'zh': '巢穴本能', 'en': 'Nest Instinct'},
         'description': {
-            'zh': '被攻击时，所有生物获得1层暂时力量；生物因灵能维系复活时，所有生物获得1层力量。',
-            'en': 'When attacked, all creatures gain 1 Temporary Power; a Psionic Sustain revival gives all creatures 1 Power.',
+            'zh': '被攻击时，所有生物获得1层暂时力量；生物因灵能绑定复活时，所有生物获得1层力量。',
+            'en': 'When attacked, all creatures gain 1 Temporary Power; a Psionic Binding revival gives all creatures 1 Power.',
         },
     },
     'endurance_shell': {
@@ -693,6 +693,13 @@ STORY_TRAITS.update({
             'en': 'On death, apply Toxic Poison to the player equal to its stacks.',
         },
     },
+    'injured_summon': {
+        'name': {'zh': '受伤召唤', 'en': 'Injured Summon'},
+        'description': {
+            'zh': '每累计受到层数点生命值伤害，召唤1个烟，并重新累计。',
+            'en': 'After taking H damage equal to its stacks in total, summon 1 Smoke and begin counting again.',
+        },
+    },
     'cover': {
         'name': {'zh': '掩体', 'en': 'Cover'},
         'description': {
@@ -739,13 +746,14 @@ STORY_TRAIT_VALUE_KEYS = {
     'toxic_reflection': 'toxic_reflection',
     'disc': 'disc',
     'toxic_pressure': 'toxic_pressure',
+    'injured_summon': 'injured_summon',
 }
 
 STORY_TRAIT_ZERO_VISIBLE = frozenset({'bandage', 'miracle', 'magic_blessing'})
 
 STORY_TRAIT_IMAGE_URLS = {
     'psionic_connection': '/static/assets/story-trait-icons/psionic-connection.svg',
-    'psionic_sustain': '/static/assets/story-trait-icons/psionic-sustain.svg',
+    'psionic_sustain': '/static/assets/story-trait-icons/psionic-binding.svg',
     'psionic_fountain': '/static/assets/story-trait-icons/psionic-fountain.svg',
     'nest_instinct': '/static/assets/story-trait-icons/nest-instinct.svg',
     'endurance_shell': '/static/assets/story-trait-icons/leaf-carapace.svg',
@@ -769,6 +777,7 @@ STORY_TRAIT_IMAGE_URLS = {
     'recycling': '/static/assets/story-trait-icons/recycling.svg',
     'electronic_shield': '/static/assets/story-trait-icons/electronic-shield.svg',
     'toxic_pressure': '/static/assets/story-trait-icons/toxic-pressure.svg',
+    'injured_summon': '/static/assets/story-trait-icons/injured-summon.svg',
     'cover': '/static/assets/story-trait-icons/cover.svg',
 }
 
@@ -2142,7 +2151,8 @@ STORY_ENEMIES.update({
     'chimney': _enemy('烟囱', 'Chimney', 456, (
         _move('喷射', 'Jet', _effect('summon', 1, enemy_id='smoke'), _effect('player_status', 5, status='poison')),
         _move('燃烧', 'Combustion', _effect('damage_from_player_status', 16, status='toxic_poison', lunatic_amount=21), _effect('halve_player_status', 0, status='toxic_poison')),
-    ), script='chimney', lunatic_health=489),
+    ), script='chimney', traits=('injured_summon',),
+       initial={'injured_summon': 100}, lunatic_health=489),
     'generator': _enemy('发电机', 'Generator', 321, (
         _move('反射护盾', 'Reflective Shield', _effect('gain_status', 4, status='reflection', lunatic_amount=5), _effect('gain_shield', 40, lunatic_amount=50)),
         _move('漏电', 'Leakage', _effect('damage', 22, lunatic_amount=26), _effect('all_cards_charge', 2)),
