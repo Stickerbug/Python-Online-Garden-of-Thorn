@@ -9,7 +9,9 @@
 - 新实例建议端口：`127.0.0.1:5002`
 - 数据库仍共用 `/var/lib/gtn/gtn.sqlite3`
 - 不要同时开多个写入数据库的长期重型后台清理任务。临时新实例建议设置 `GTN_DB_MAINTENANCE_ENABLED=0`。
-- Phelren 配置统一从 `/etc/gtn/ai.env` 读取；蓝绿实例共享 `/opt/gtn-ai-runtime` 的只读推理包和 `/var/lib/gtn-ai` 的诊断数据，不要把它们复制进发布目录。
+- `/etc/gtn/shared.env`、`/etc/gtn/release.env`、`/etc/gtn/ai.env` 必须存在且可读。它们分别提供共享数据/密钥、正式版本标识和 Phelren 配置；不要把内容复制进发布目录。
+- 蓝绿实例共享 `/opt/gtn-ai-runtime` 的只读推理包和 `/var/lib/gtn-ai` 的诊断数据。
+- 新实例必须最后加载独立的 `/etc/gtn/gtn-release-next.env`，用 next 的实例 ID、提交、端口和 `GTN_DB_MAINTENANCE_ENABLED=0` 覆盖正式实例值。
 
 ## 1. 准备新目录
 
@@ -17,6 +19,8 @@
 cd /opt/gtn-release
 scripts/blue_green_prepare.sh /opt/gtn-release /opt/gtn-next 5002 release
 ```
+
+该脚本会原子生成权限为 `0640` 的 `/etc/gtn/gtn-release-next.env`；文件只含非敏感的实例覆盖项。目标目录是可覆盖的临时发布目录：首次准备时脚本会写入 `.gtn-blue-green-target` 标记，以后只有保留该标记的目录才允许执行 `rsync --delete`。不要把个人文件放进 `/opt/gtn-next`。
 
 ## 2. 启动新实例
 
@@ -27,6 +31,17 @@ cp /opt/gtn-next/scripts/gtn-blue-green.service.template /etc/systemd/system/gtn
 systemctl daemon-reload
 systemctl start gtn-release-next
 ```
+
+模板按以下顺序加载环境文件，越靠后的值优先级越高：
+
+```ini
+EnvironmentFile=/etc/gtn/shared.env
+EnvironmentFile=/etc/gtn/release.env
+EnvironmentFile=/etc/gtn/ai.env
+EnvironmentFile=/etc/gtn/gtn-release-next.env
+```
+
+不要用裸 `python app.py` 或只加载其中一部分环境文件启动 next；否则可能连接错误数据库、使用错误版本标识或丢失 Phelren 配置。
 
 先在开发机的 `GTN-AI` 仓库生成仅含在线推理模块和最终模型的运行包：
 
@@ -49,7 +64,9 @@ GTN_AI_RUNTIME_ARCHIVE=/root/gtn-ai-runtime.tar.gz \
 
 ```ini
 [Service]
-EnvironmentFile=-/etc/gtn/ai.env
+EnvironmentFile=/etc/gtn/shared.env
+EnvironmentFile=/etc/gtn/release.env
+EnvironmentFile=/etc/gtn/ai.env
 ```
 
 然后运行 `systemctl daemon-reload`。默认最多同时保留 5 局未结束的 Phelren 对局，模型只加载一次，重型
@@ -61,7 +78,10 @@ EnvironmentFile=-/etc/gtn/ai.env
 ```bash
 /opt/gtn-next/scripts/blue_green_status.sh 5000 5002
 curl -fsS http://127.0.0.1:5002/api/health/full
+curl -fsS http://127.0.0.1:5002/api/ai-1v1/status
 ```
+
+`/api/healthz` 必须显示预期的 next `instance_id`、`version`、`git_sha` 和端口，且 `draining=false`；`/api/health/full` 必须为 `db_ok=true`、`socket_ok=true`；Phelren 的配置门槛是 `enabled=true` 且容量大于 0。`gtn_prepare_next.sh` 会自动执行这些检查，但状态接口不能证明模型已经完成真实推理，切流前仍应实际开一局验证出牌。
 
 ## 3. 切 Nginx 新流量
 
