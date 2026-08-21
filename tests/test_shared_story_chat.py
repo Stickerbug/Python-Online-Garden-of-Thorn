@@ -221,7 +221,8 @@ def test_chat_origin_prefix_has_its_own_color_and_repeat_identity():
     assert '.chat-origin-story' in GAME_CSS
     assert '.story-chat-origin-multiplayer' in STORY_CSS
     assert '.story-chat-origin-story' in STORY_CSS
-    assert "name.style.color = nameColor;" in STORY_JS
+    assert "let namePaint = storyPlayerNamePaint(entry);" in STORY_JS
+    assert "if (namePaint) applyStoryTitlePaint(name, namePaint);" in STORY_JS
 
 
 def test_story_chat_matches_lobby_name_time_and_mention_rendering():
