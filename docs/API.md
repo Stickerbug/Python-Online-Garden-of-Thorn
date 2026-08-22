@@ -102,6 +102,23 @@
 | POST | <code>/api/story/run/load</code> | 读取 <code>save_id</code>；同时校验 <code>run_id</code> 与 <code>state_version</code> |
 | POST | <code>/api/story/run/reset-map</code> | Staff 开发工具；普通账号得到 404 |
 
+### 双人协作故事实验大厅
+
+以下接口全部要求已登录的 Staff/Admin 账号；普通账号统一得到 404。响应均使用
+<code>Cache-Control: private, no-store</code>。当前接口只开放队伍大厅、独立存档和
+首版无界面的战斗协调内核，不代表完整协作旅程已经可玩。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | <code>/api/story/coop/bootstrap</code> | 获取实验功能版本、人数与规则摘要 |
+| GET | <code>/api/story/coop/party</code> | 获取当前账号所在队伍、本人席位与活动旅程摘要 |
+| POST | <code>/api/story/coop/party</code> | 创建双人队伍并返回一次性邀请码 |
+| POST | <code>/api/story/coop/party/join</code> | 使用邀请码加入尚未开始的队伍 |
+| POST | <code>/api/story/coop/party/invite</code> | 队长按 <code>party_revision</code> 轮换一次性邀请码 |
+| POST | <code>/api/story/coop/party/leave</code> | 按 <code>party_revision</code> 离开或解散组队中的队伍 |
+| POST | <code>/api/story/coop/party/start</code> | 队长在两席就绪后按 <code>party_revision</code> 创建独立 v10 旅程 |
+| POST | <code>/api/story/coop/party/abandon</code> | 任一成员确认后按 <code>party_revision</code> 放弃活动旅程并解散队伍 |
+
 <code>action_id</code> 用于幂等与重放保护，<code>state_version</code> 用于拒绝过期页面覆盖新状态。客户端不应跳过它们。
 
 ## 社交、私信、反馈与举报

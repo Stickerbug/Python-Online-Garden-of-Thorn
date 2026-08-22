@@ -67,6 +67,17 @@
     let storySkinDamageTimer = 0;
     let storySkinDamageUntil = 0;
     let storyMechanicalTrackFrame = 0;
+    let storyCoopPartyBundle = { party: null, viewer: null, run: null };
+    let storyCoopPartyLoaded = false;
+    let storyCoopInviteCode = '';
+    let storyCoopPartyPollTimer = 0;
+    let storyCoopPartyLoadPromise = null;
+    let storyCoopPartyLoadEpoch = 0;
+    let storyCoopLobbyEpoch = 0;
+    let storyCoopMemberSignature = '';
+    let storyCoopMutationInFlight = false;
+    let storyCoopConfirmationInFlight = false;
+    let storyCoopBootstrapLoaded = false;
     const storyMechanicalTrackMotions = new Map();
     const storyActiveMechanicalTrackCards = new Map();
     const storyCodexRarities = new Set();
@@ -100,6 +111,7 @@
     const STORY_SKIN_DAMAGE_HOLD_MS = 3000;
     const STORY_MECHANICAL_TRACK_PERIOD_MS = 22000;
     const STORY_MECHANICAL_TRACK_TRIGGER_ANGLE = -90;
+    const STORY_COOP_PARTY_POLL_MS = 2500;
     const STORY_SKIN_MOUTH_NORMAL_POINTS = Object.freeze([20, 18, 36, 32, 64, 32, 80, 18]);
     const STORY_SKIN_MOUTH_HURT_POINTS = Object.freeze([20, 26, 36, 12, 64, 12, 80, 26]);
 
@@ -999,6 +1011,491 @@
                 await storySleep(retryDelays[attempt]);
             }
         }
+    }
+
+    function storyCoopDialogOpen() {
+        return Boolean(window.__STORY_COOP_ACCESS__ && $('story-coop-preview-dialog')?.open);
+    }
+
+    function storyCoopSetStatus(message, tone = '') {
+        const status = $('story-coop-lobby-status');
+        if (!status) return;
+        status.textContent = String(message || '');
+        if (tone) status.dataset.tone = tone;
+        else delete status.dataset.tone;
+    }
+
+    function storyCoopErrorMessage(error) {
+        return String(
+            error?.payload?.error
+            || error?.message
+            || '协作队伍请求失败，请稍后重试。',
+        );
+    }
+
+    function storyCoopHasBundle(payload) {
+        return Boolean(
+            payload
+            && typeof payload === 'object'
+            && Object.prototype.hasOwnProperty.call(payload, 'party')
+        );
+    }
+
+    function applyStoryCoopPartyPayload(payload) {
+        if (!storyCoopHasBundle(payload)) return false;
+        const previousPartyId = String(storyCoopPartyBundle.party?.id || '');
+        const nextParty = payload.party && typeof payload.party === 'object'
+            ? payload.party
+            : null;
+        const nextPartyId = String(nextParty?.id || '');
+        if (previousPartyId !== nextPartyId) storyCoopInviteCode = '';
+        storyCoopPartyBundle = {
+            party: nextParty,
+            viewer: payload.viewer && typeof payload.viewer === 'object' ? payload.viewer : null,
+            run: payload.run && typeof payload.run === 'object' ? payload.run : null,
+        };
+        storyCoopPartyLoaded = true;
+        const revealedCode = String(payload.invite_code || '').trim();
+        if (revealedCode) storyCoopInviteCode = revealedCode;
+        if (!nextParty || String(nextParty.status || '') !== 'forming') storyCoopInviteCode = '';
+        renderStoryCoopParty();
+        return true;
+    }
+
+    function renderStoryCoopMembers(party, viewer) {
+        const list = $('story-coop-members');
+        if (!list) return;
+        const members = Array.isArray(party?.members) ? party.members : [];
+        const maxPlayers = Math.min(4, Math.max(2, Number(party?.max_players) || 2));
+        const viewerSeat = Number(viewer?.seat);
+        const signature = JSON.stringify({
+            maxPlayers,
+            viewerSeat: Number.isFinite(viewerSeat) ? viewerSeat : null,
+            members: members.map((member) => ({
+                seat: member?.seat,
+                username: member?.username,
+                display_name: member?.display_name,
+                party_role: member?.party_role,
+            })),
+        });
+        if (storyCoopMemberSignature === signature) return;
+        storyCoopMemberSignature = signature;
+        const fragment = document.createDocumentFragment();
+
+        for (let seat = 0; seat < maxPlayers; seat += 1) {
+            const member = members.find((item) => Number(item?.seat) === seat);
+            const row = document.createElement('li');
+            row.className = `story-coop-member${member ? '' : ' is-empty'}`;
+
+            const seatLabel = document.createElement('span');
+            seatLabel.className = 'story-coop-seat';
+            seatLabel.textContent = `席位 ${seat + 1}`;
+            row.appendChild(seatLabel);
+
+            const identity = document.createElement('span');
+            identity.className = 'story-coop-member-identity';
+            const name = document.createElement('strong');
+            if (!member) {
+                name.textContent = '等待成员加入';
+                identity.appendChild(name);
+                row.appendChild(identity);
+                fragment.appendChild(row);
+                continue;
+            }
+
+            const displayName = String(member.display_name || member.username || `玩家 ${seat + 1}`);
+            const username = String(member.username || '');
+            name.textContent = displayName;
+            identity.appendChild(name);
+            if (username && username !== displayName) {
+                const account = document.createElement('small');
+                account.textContent = `@${username}`;
+                identity.appendChild(account);
+            }
+            row.appendChild(identity);
+
+            const badges = document.createElement('span');
+            badges.className = 'story-coop-member-badges';
+            if (Number.isFinite(viewerSeat) && viewerSeat === seat) {
+                const self = document.createElement('span');
+                self.className = 'story-coop-member-badge';
+                self.textContent = '你';
+                badges.appendChild(self);
+            }
+            if (String(member.party_role || '') === 'leader') {
+                const leader = document.createElement('span');
+                leader.className = 'story-coop-member-badge is-leader';
+                leader.textContent = '队长';
+                badges.appendChild(leader);
+            }
+            row.appendChild(badges);
+            fragment.appendChild(row);
+        }
+        list.replaceChildren(fragment);
+    }
+
+    function updateStoryCoopControls() {
+        const party = storyCoopPartyBundle.party;
+        const viewer = storyCoopPartyBundle.viewer;
+        const inviteInput = $('story-coop-invite-input');
+        const isLeader = String(viewer?.party_role || '') === 'leader';
+        const canStart = Boolean(
+            party
+            && String(party.status || '') === 'forming'
+            && isLeader
+            && viewer?.can_start
+        );
+        const disabled = storyCoopMutationInFlight || storyCoopConfirmationInFlight;
+        const create = $('story-coop-create');
+        const join = $('story-coop-join');
+        const rotate = $('story-coop-rotate-invite');
+        const start = $('story-coop-start');
+        const leave = $('story-coop-leave');
+        const abandon = $('story-coop-abandon');
+        const copy = $('story-coop-copy-invite');
+        if (create) create.disabled = disabled;
+        if (inviteInput) inviteInput.disabled = disabled;
+        if (join) join.disabled = disabled || !String(inviteInput?.value || '').trim();
+        if (rotate) rotate.disabled = disabled;
+        if (start) {
+            start.disabled = disabled || !canStart;
+            start.textContent = canStart ? '开始协作旅程' : '等待成员到齐';
+        }
+        if (leave) leave.disabled = disabled;
+        if (abandon) abandon.disabled = disabled;
+        if (copy) copy.disabled = disabled || !storyCoopInviteCode;
+        const form = $('story-coop-lobby-form');
+        if (form) form.setAttribute('aria-busy', disabled ? 'true' : 'false');
+    }
+
+    function renderStoryCoopParty() {
+        const party = storyCoopPartyBundle.party;
+        const viewer = storyCoopPartyBundle.viewer;
+        const run = storyCoopPartyBundle.run;
+        const status = String(party?.status || '');
+        const noParty = $('story-coop-no-party');
+        const forming = $('story-coop-forming');
+        const active = $('story-coop-active');
+        noParty?.classList.toggle('hidden', !storyCoopPartyLoaded || Boolean(party));
+        forming?.classList.toggle('hidden', status !== 'forming');
+        active?.classList.toggle('hidden', status !== 'active');
+
+        if (status === 'forming') {
+            setText('story-coop-party-revision', `Revision ${Number(party.revision) || '?'}`);
+            renderStoryCoopMembers(party, viewer);
+            const isLeader = String(viewer?.party_role || '') === 'leader';
+            $('story-coop-rotate-invite')?.classList.toggle('hidden', !isLeader);
+            $('story-coop-start')?.classList.toggle('hidden', !isLeader);
+            const reveal = $('story-coop-invite-reveal');
+            reveal?.classList.toggle('hidden', !storyCoopInviteCode);
+            setText('story-coop-invite-code', storyCoopInviteCode);
+        } else {
+            $('story-coop-invite-reveal')?.classList.add('hidden');
+            setText('story-coop-invite-code', '');
+        }
+
+        if (status === 'active') {
+            setText('story-coop-active-party-revision', `Revision ${Number(party.revision) || '?'}`);
+            setText('story-coop-run-id', String(run?.id || '--'));
+            setText('story-coop-run-revision', String(run?.revision ?? '--'));
+            setText('story-coop-run-status', String(run?.status || '正在建立'));
+        }
+        updateStoryCoopControls();
+    }
+
+    function stopStoryCoopPolling() {
+        clearTimeout(storyCoopPartyPollTimer);
+        storyCoopPartyPollTimer = 0;
+    }
+
+    function scheduleStoryCoopPolling() {
+        stopStoryCoopPolling();
+        if (!storyCoopDialogOpen() || storyCoopMutationInFlight) return;
+        storyCoopPartyPollTimer = setTimeout(() => {
+            storyCoopPartyPollTimer = 0;
+            loadStoryCoopParty({ silent: true }).catch(() => {});
+        }, STORY_COOP_PARTY_POLL_MS);
+    }
+
+    function loadStoryCoopParty({ silent = false } = {}) {
+        if (!storyCoopDialogOpen() || storyCoopMutationInFlight) return Promise.resolve(null);
+        const requestedEpoch = storyCoopLobbyEpoch;
+        if (storyCoopPartyLoadPromise) {
+            if (storyCoopPartyLoadEpoch === requestedEpoch) return storyCoopPartyLoadPromise;
+            const previousLoad = storyCoopPartyLoadPromise;
+            return previousLoad.catch(() => null).then(() => {
+                if (!storyCoopDialogOpen() || storyCoopLobbyEpoch !== requestedEpoch) return null;
+                return loadStoryCoopParty({ silent });
+            });
+        }
+        stopStoryCoopPolling();
+        let loadPromise;
+        loadPromise = (async () => {
+            try {
+                const payload = await requestJson('/api/story/coop/party');
+                if (!storyCoopDialogOpen() || storyCoopLobbyEpoch !== requestedEpoch) return payload;
+                applyStoryCoopPartyPayload(payload);
+                if (!silent) storyCoopSetStatus('队伍状态已同步。', 'success');
+                return payload;
+            } catch (error) {
+                if (storyCoopDialogOpen() && storyCoopLobbyEpoch === requestedEpoch) {
+                    storyCoopSetStatus(
+                        silent
+                            ? `${storyCoopErrorMessage(error)}；大厅会继续重试。`
+                            : storyCoopErrorMessage(error),
+                        'error',
+                    );
+                }
+                throw error;
+            } finally {
+                if (storyCoopPartyLoadPromise === loadPromise) storyCoopPartyLoadPromise = null;
+                if (storyCoopLobbyEpoch === requestedEpoch) scheduleStoryCoopPolling();
+            }
+        })();
+        storyCoopPartyLoadEpoch = requestedEpoch;
+        storyCoopPartyLoadPromise = loadPromise;
+        return loadPromise;
+    }
+
+    async function loadStoryCoopBootstrap() {
+        if (!storyCoopDialogOpen() || storyCoopBootstrapLoaded) return;
+        const requestedEpoch = storyCoopLobbyEpoch;
+        try {
+            const result = await requestJson('/api/story/coop/bootstrap');
+            if (!storyCoopDialogOpen() || storyCoopLobbyEpoch !== requestedEpoch) return;
+            storyCoopBootstrapLoaded = true;
+            setText('story-coop-schema-value', `v${Number(result.schema_version) || '?'}`);
+            setText('story-coop-mvp-value', `${Number(result.mvp_player_count) || 2} 人`);
+            setText('story-coop-max-value', `${Number(result.max_players) || 4} 人`);
+            setText(
+                'story-coop-preview-copy',
+                result.message || 'Staff / Admin 双人协作队伍实验已就绪。',
+            );
+        } catch (error) {
+            if (!storyCoopDialogOpen() || storyCoopLobbyEpoch !== requestedEpoch) return;
+            setText(
+                'story-coop-preview-copy',
+                `${storyCoopErrorMessage(error)}（队伍大厅仍可单独重试。）`,
+            );
+        }
+    }
+
+    async function performStoryCoopMutation(url, bodyFactory, pendingMessage, successMessage) {
+        if (!storyCoopDialogOpen() || storyCoopMutationInFlight) return null;
+        const mutationEpoch = storyCoopLobbyEpoch;
+        storyCoopMutationInFlight = true;
+        stopStoryCoopPolling();
+        updateStoryCoopControls();
+        storyCoopSetStatus(pendingMessage, 'busy');
+        try {
+            if (storyCoopPartyLoadPromise) {
+                try {
+                    await storyCoopPartyLoadPromise;
+                } catch (_) {
+                    // A mutation may still succeed even if the preceding poll failed.
+                }
+            }
+            if (!storyCoopDialogOpen() || storyCoopLobbyEpoch !== mutationEpoch) return null;
+            const body = typeof bodyFactory === 'function' ? bodyFactory() : (bodyFactory || {});
+            const payload = await requestJson(url, {
+                method: 'POST',
+                body: JSON.stringify(body),
+            });
+            if (storyCoopDialogOpen() && storyCoopLobbyEpoch === mutationEpoch) {
+                applyStoryCoopPartyPayload(payload);
+                const message = typeof successMessage === 'function'
+                    ? successMessage(payload)
+                    : successMessage;
+                storyCoopSetStatus(message, 'success');
+            }
+            return payload;
+        } catch (error) {
+            if (
+                storyCoopDialogOpen()
+                && storyCoopLobbyEpoch === mutationEpoch
+                && Number(error?.status) === 409
+                && storyCoopHasBundle(error?.payload)
+            ) {
+                applyStoryCoopPartyPayload(error.payload);
+            }
+            if (storyCoopDialogOpen() && storyCoopLobbyEpoch === mutationEpoch) {
+                storyCoopSetStatus(storyCoopErrorMessage(error), 'error');
+            }
+            return null;
+        } finally {
+            storyCoopMutationInFlight = false;
+            if (storyCoopDialogOpen() && storyCoopLobbyEpoch === mutationEpoch) {
+                renderStoryCoopParty();
+                scheduleStoryCoopPolling();
+            } else if (storyCoopDialogOpen()) {
+                loadStoryCoopParty().catch(() => {});
+            }
+        }
+    }
+
+    async function confirmStoryCoopAction(title, message) {
+        if (storyCoopConfirmationInFlight || storyCoopMutationInFlight) return false;
+        storyCoopConfirmationInFlight = true;
+        updateStoryCoopControls();
+        try {
+            const confirmHandler = window.GTN_SHORTCUT_HOST?.confirm;
+            if (typeof confirmHandler === 'function') {
+                return Boolean(await confirmHandler(title, message));
+            }
+            return window.confirm([title, message].filter(Boolean).join('\n\n'));
+        } finally {
+            storyCoopConfirmationInFlight = false;
+            updateStoryCoopControls();
+        }
+    }
+
+    function storyCoopPartyMutationTarget() {
+        const party = storyCoopPartyBundle.party;
+        return {
+            party_id: String(party?.id || ''),
+            party_revision: Number(party?.revision),
+        };
+    }
+
+    async function createStoryCoopParty() {
+        await performStoryCoopMutation(
+            '/api/story/coop/party',
+            {},
+            '正在创建双人队伍...',
+            (payload) => payload?.invite_code
+                ? '队伍已创建。请立即复制本次显示的邀请码。'
+                : '已恢复你现有的队伍；邀请码不会重复显示，丢失时请由队长轮换。',
+        );
+    }
+
+    async function joinStoryCoopParty() {
+        const input = $('story-coop-invite-input');
+        const inviteCode = String(input?.value || '').trim();
+        if (!inviteCode) {
+            storyCoopSetStatus('请输入邀请码。', 'error');
+            input?.focus();
+            return;
+        }
+        const result = await performStoryCoopMutation(
+            '/api/story/coop/party/join',
+            { invite_code: inviteCode },
+            '正在加入队伍...',
+            '已加入协作队伍。',
+        );
+        if (result && input) input.value = '';
+        updateStoryCoopControls();
+    }
+
+    async function rotateStoryCoopInvite() {
+        const target = storyCoopPartyMutationTarget();
+        const accepted = await confirmStoryCoopAction(
+            '轮换邀请码？',
+            '旧邀请码会立即失效。新邀请码也只会在本次响应中显示一次。',
+        );
+        if (!accepted) return;
+        await performStoryCoopMutation(
+            '/api/story/coop/party/invite',
+            target,
+            '正在轮换邀请码...',
+            '邀请码已轮换。请立即复制新邀请码。',
+        );
+    }
+
+    async function startStoryCoopRun() {
+        await performStoryCoopMutation(
+            '/api/story/coop/party/start',
+            () => ({
+                party_id: storyCoopPartyBundle.party?.id,
+                party_revision: storyCoopPartyBundle.party?.revision,
+            }),
+            '正在建立协作旅程...',
+            '协作旅程已建立。',
+        );
+    }
+
+    async function leaveStoryCoopParty() {
+        const target = storyCoopPartyMutationTarget();
+        const accepted = await confirmStoryCoopAction(
+            '解散当前队伍？',
+            '任一成员执行后，当前大厅会对全队关闭。',
+        );
+        if (!accepted) return;
+        await performStoryCoopMutation(
+            '/api/story/coop/party/leave',
+            target,
+            '正在解散队伍...',
+            '队伍已解散。',
+        );
+    }
+
+    async function abandonStoryCoopRun() {
+        const target = storyCoopPartyMutationTarget();
+        const accepted = await confirmStoryCoopAction(
+            '放弃协作旅程并释放全队？',
+            '这会立即结束协作旅程，让所有成员离开队伍；现有协作存档不可恢复。',
+        );
+        if (!accepted) return;
+        await performStoryCoopMutation(
+            '/api/story/coop/party/abandon',
+            target,
+            '正在放弃协作旅程...',
+            '协作旅程已放弃，全队已释放。',
+        );
+    }
+
+    async function copyStoryCoopInvite() {
+        if (!storyCoopInviteCode || storyCoopMutationInFlight) return;
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(storyCoopInviteCode);
+            } else {
+                const helper = document.createElement('textarea');
+                helper.value = storyCoopInviteCode;
+                helper.setAttribute('readonly', '');
+                helper.className = 'story-coop-copy-helper';
+                document.body.appendChild(helper);
+                let copied = false;
+                try {
+                    helper.select();
+                    copied = document.execCommand('copy');
+                } finally {
+                    helper.remove();
+                }
+                if (!copied) throw new Error('COPY_FAILED');
+            }
+            storyCoopSetStatus('邀请码已复制。', 'success');
+        } catch (_) {
+            storyCoopSetStatus('复制失败，请手动选择邀请码复制。', 'error');
+        }
+    }
+
+    function closeStoryCoopLobby() {
+        storyCoopLobbyEpoch += 1;
+        stopStoryCoopPolling();
+        storyCoopInviteCode = '';
+        storyCoopMemberSignature = '';
+        storyCoopPartyBundle = { party: null, viewer: null, run: null };
+        storyCoopPartyLoaded = false;
+        const input = $('story-coop-invite-input');
+        if (input) input.value = '';
+        renderStoryCoopParty();
+    }
+
+    function openCooperativeStoryPreview() {
+        if (!window.__STORY_COOP_ACCESS__) return;
+        const dialog = $('story-coop-preview-dialog');
+        if (!dialog) return;
+        storyCoopLobbyEpoch += 1;
+        stopStoryCoopPolling();
+        storyCoopInviteCode = '';
+        storyCoopMemberSignature = '';
+        storyCoopPartyBundle = { party: null, viewer: null, run: null };
+        storyCoopPartyLoaded = false;
+        storyCoopSetStatus('正在读取队伍状态...', 'busy');
+        renderStoryCoopParty();
+        if (!dialog.open) dialog.showModal();
+        loadStoryCoopBootstrap();
+        loadStoryCoopParty().catch(() => {});
     }
 
     function storyStatusText(run = activeRun) {
@@ -8581,6 +9078,23 @@
             if (event.target?.closest?.('img')) event.preventDefault();
         });
         $('story-start')?.addEventListener('click', startRun);
+        if (window.__STORY_COOP_ACCESS__) {
+            $('story-coop-entry')?.addEventListener('click', openCooperativeStoryPreview);
+            $('story-coop-preview-dialog')?.addEventListener('close', closeStoryCoopLobby);
+            $('story-coop-create')?.addEventListener('click', createStoryCoopParty);
+            $('story-coop-join')?.addEventListener('click', joinStoryCoopParty);
+            $('story-coop-rotate-invite')?.addEventListener('click', rotateStoryCoopInvite);
+            $('story-coop-copy-invite')?.addEventListener('click', copyStoryCoopInvite);
+            $('story-coop-start')?.addEventListener('click', startStoryCoopRun);
+            $('story-coop-leave')?.addEventListener('click', leaveStoryCoopParty);
+            $('story-coop-abandon')?.addEventListener('click', abandonStoryCoopRun);
+            $('story-coop-invite-input')?.addEventListener('input', updateStoryCoopControls);
+            $('story-coop-invite-input')?.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' || event.isComposing) return;
+                event.preventDefault();
+                joinStoryCoopParty();
+            });
+        }
         $('story-end-turn')?.addEventListener('click', () => storyAction('end_turn'));
         $('story-codex-open')?.addEventListener('click', openStoryCodex);
         $('story-codex-close')?.addEventListener('click', closeStoryCodex);

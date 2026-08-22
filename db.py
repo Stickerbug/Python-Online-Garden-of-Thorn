@@ -1590,6 +1590,132 @@ def init_db():
         )
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS story_coop_parties (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'forming'
+                    CHECK(status IN ('forming', 'active', 'completed', 'abandoned')),
+                max_players INTEGER NOT NULL DEFAULT 2
+                    CHECK(max_players BETWEEN 2 AND 4),
+                invite_code_hash TEXT NOT NULL UNIQUE
+                    CHECK(length(invite_code_hash) = 64),
+                revision INTEGER NOT NULL DEFAULT 1 CHECK(revision >= 1),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                closed_at TEXT,
+                CHECK(
+                    (status IN ('forming', 'active') AND closed_at IS NULL)
+                    OR
+                    (status IN ('completed', 'abandoned') AND closed_at IS NOT NULL)
+                )
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_coop_parties_updated '
+            'ON story_coop_parties(status, updated_at DESC)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_coop_party_members (
+                party_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                seat INTEGER NOT NULL CHECK(seat BETWEEN 0 AND 3),
+                party_role TEXT NOT NULL CHECK(party_role IN ('leader', 'member')),
+                membership_status TEXT NOT NULL DEFAULT 'active'
+                    CHECK(membership_status IN ('active', 'left')),
+                joined_at TEXT NOT NULL,
+                left_at TEXT,
+                PRIMARY KEY(party_id, user_id, seat),
+                UNIQUE(party_id, user_id),
+                UNIQUE(party_id, seat),
+                FOREIGN KEY(party_id) REFERENCES story_coop_parties(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE RESTRICT,
+                CHECK(
+                    (seat = 0 AND party_role = 'leader')
+                    OR
+                    (seat > 0 AND party_role = 'member')
+                ),
+                CHECK(
+                    (membership_status = 'active' AND left_at IS NULL)
+                    OR
+                    (membership_status = 'left' AND left_at IS NOT NULL)
+                )
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_story_coop_members_one_active '
+            'ON story_coop_party_members(user_id) WHERE membership_status = \'active\''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_coop_members_party '
+            'ON story_coop_party_members(party_id, membership_status, seat)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_coop_runs (
+                id TEXT PRIMARY KEY,
+                party_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active'
+                    CHECK(status IN ('active', 'completed', 'abandoned')),
+                schema_version INTEGER NOT NULL CHECK(schema_version = 10),
+                seed TEXT NOT NULL,
+                content_version TEXT NOT NULL,
+                revision INTEGER NOT NULL DEFAULT 1 CHECK(revision >= 1),
+                state_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                UNIQUE(id, party_id),
+                FOREIGN KEY(party_id) REFERENCES story_coop_parties(id) ON DELETE CASCADE,
+                CHECK(
+                    (status = 'active' AND completed_at IS NULL)
+                    OR
+                    (status IN ('completed', 'abandoned') AND completed_at IS NOT NULL)
+                )
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_story_coop_runs_one_active '
+            'ON story_coop_runs(party_id) WHERE status = \'active\''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_coop_runs_party_updated '
+            'ON story_coop_runs(party_id, updated_at DESC)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_coop_run_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                party_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                sequence INTEGER NOT NULL CHECK(sequence > 0),
+                action_id TEXT NOT NULL,
+                actor_user_id INTEGER NOT NULL,
+                actor_seat INTEGER NOT NULL CHECK(actor_seat BETWEEN 0 AND 3),
+                action_type TEXT NOT NULL,
+                request_fingerprint TEXT NOT NULL CHECK(length(request_fingerprint) = 64),
+                payload_json TEXT NOT NULL,
+                receipt_json TEXT NOT NULL,
+                resulting_revision INTEGER NOT NULL CHECK(resulting_revision > 1),
+                created_at TEXT NOT NULL,
+                UNIQUE(party_id, actor_user_id, action_id),
+                UNIQUE(run_id, sequence),
+                UNIQUE(run_id, resulting_revision),
+                FOREIGN KEY(run_id, party_id)
+                    REFERENCES story_coop_runs(id, party_id) ON DELETE CASCADE,
+                FOREIGN KEY(party_id, actor_user_id, actor_seat)
+                    REFERENCES story_coop_party_members(party_id, user_id, seat)
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_coop_actions_run '
+            'ON story_coop_run_actions(run_id, sequence)'
+        )
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS story_manual_saves (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id TEXT NOT NULL,
@@ -1649,6 +1775,1065 @@ def _story_run_payload(row):
         payload['state'] = {}
         payload.pop('state_json', None)
     return payload
+
+
+STORY_COOP_INVITE_RE = re.compile(r'^[A-Za-z0-9_-]{20,64}$')
+
+
+class StoryCoopDataError(ValueError):
+    """Fail-closed cooperative-story persistence error."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = str(code)
+        self.message = str(message)
+
+
+def _story_coop_positive_int(value, *, code, label):
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise StoryCoopDataError(code, f'{label}无效')
+    return value
+
+
+def _story_coop_revision(value):
+    return _story_coop_positive_int(
+        value,
+        code='INVALID_PARTY_VERSION',
+        label='队伍版本',
+    )
+
+
+def _story_coop_json(value, *, code, label):
+    try:
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(',', ':'),
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise StoryCoopDataError(code, f'{label}无法安全序列化') from exc
+
+
+def _story_coop_validate_state(state):
+    try:
+        from story_coop import validate_story_state_v10
+
+        validate_story_state_v10(state, expected_mode='coop')
+        if state.get('combat') is not None:
+            from story_coop_combat import validate_coop_combat_state
+
+            validate_coop_combat_state(state)
+    except StoryCoopDataError:
+        raise
+    except Exception as exc:
+        raise StoryCoopDataError(
+            'INVALID_COOP_STORY_STATE',
+            '多人故事状态未通过校验',
+        ) from exc
+    return True
+
+
+def _story_coop_state_json(state):
+    _story_coop_validate_state(state)
+    return _story_coop_json(
+        state,
+        code='INVALID_COOP_STORY_STATE',
+        label='多人故事状态',
+    )
+
+
+def _story_coop_run_payload(row):
+    if row is None:
+        return None
+    payload = dict(row)
+    try:
+        state = json.loads(payload.pop('state_json'))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise StoryCoopDataError(
+            'CORRUPT_COOP_STORY_STATE',
+            '多人故事存档不是有效 JSON',
+        ) from exc
+    try:
+        _story_coop_validate_state(state)
+    except StoryCoopDataError as exc:
+        raise StoryCoopDataError(
+            'CORRUPT_COOP_STORY_STATE',
+            '多人故事存档未通过校验',
+        ) from exc
+    payload['state'] = state
+    return payload
+
+
+def _story_coop_member_payload(row):
+    return {
+        'seat': int(row['seat']),
+        'user_id': int(row['user_id']),
+        'username': str(row['username']),
+        'display_name': str(row['username']),
+        'membership_status': str(row['membership_status']),
+        'party_role': str(row['party_role']),
+    }
+
+
+def _story_coop_member_rows_conn(conn, party_id, *, active_only=True):
+    status_clause = "AND m.membership_status = 'active'" if active_only else ''
+    return conn.execute(
+        f'''SELECT m.party_id, m.user_id, m.seat, m.party_role,
+                   m.membership_status, m.joined_at, m.left_at, u.username
+            FROM story_coop_party_members m
+            JOIN users u ON u.id = m.user_id
+            WHERE m.party_id = ? {status_clause}
+            ORDER BY m.seat ASC''',
+        (str(party_id),),
+    ).fetchall()
+
+
+def _story_coop_party_payload_conn(conn, party_row, *, member_rows=None):
+    if party_row is None:
+        return None
+    if member_rows is None:
+        member_rows = _story_coop_member_rows_conn(conn, party_row['id'])
+    return {
+        'id': str(party_row['id']),
+        'status': str(party_row['status']),
+        'revision': int(party_row['revision']),
+        'min_players': 2,
+        'max_players': int(party_row['max_players']),
+        'members': [_story_coop_member_payload(row) for row in member_rows],
+        'created_at': str(party_row['created_at']),
+        'updated_at': str(party_row['updated_at']),
+        'closed_at': party_row['closed_at'],
+    }
+
+
+def _story_coop_active_run_row_conn(conn, party_id):
+    return conn.execute(
+        '''SELECT * FROM story_coop_runs
+           WHERE party_id = ? AND status = 'active'
+           ORDER BY updated_at DESC LIMIT 1''',
+        (str(party_id),),
+    ).fetchone()
+
+
+def _story_coop_bundle_conn(conn, party_row, viewer_user_id):
+    if party_row is None:
+        return None
+    member_rows = _story_coop_member_rows_conn(conn, party_row['id'])
+    party = _story_coop_party_payload_conn(
+        conn,
+        party_row,
+        member_rows=member_rows,
+    )
+    viewer = None
+    for row in member_rows:
+        if int(row['user_id']) != int(viewer_user_id):
+            continue
+        viewer = {
+            'seat': int(row['seat']),
+            'party_role': str(row['party_role']),
+            'can_start': (
+                str(party_row['status']) == 'forming'
+                and str(row['party_role']) == 'leader'
+                and len(member_rows) == 2
+            ),
+        }
+        break
+    return {
+        'party': party,
+        'viewer': viewer,
+        'run': _story_coop_run_payload(
+            _story_coop_active_run_row_conn(conn, party_row['id'])
+        ),
+    }
+
+
+def _story_coop_active_party_row_for_user_conn(conn, user_id):
+    return conn.execute(
+        '''SELECT p.* FROM story_coop_parties p
+           JOIN story_coop_party_members m ON m.party_id = p.id
+           WHERE m.user_id = ? AND m.membership_status = 'active'
+             AND p.status IN ('forming', 'active')
+           ORDER BY p.updated_at DESC LIMIT 1''',
+        (int(user_id),),
+    ).fetchone()
+
+
+def _story_coop_user_eligible_conn(conn, user_id):
+    row = conn.execute(
+        'SELECT * FROM users WHERE id = ? LIMIT 1',
+        (int(user_id),),
+    ).fetchone()
+    if row is None or _user_row_is_deleted(row):
+        return False
+    if bool(row['banned']) if 'banned' in row.keys() else False:
+        ban_until = row['ban_until'] if 'ban_until' in row.keys() else None
+        if not ban_until:
+            return False
+        text = str(ban_until).strip()
+        try:
+            expires = datetime.fromisoformat(text.replace('Z', '+00:00'))
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            return False
+        if expires.astimezone(timezone.utc) > utc_now_dt():
+            return False
+    return _role_type_for_user_conn(conn, user_id) in {'admin', 'staff'}
+
+
+def _story_coop_state_matches_members(
+    state,
+    party_row,
+    member_rows,
+    *,
+    require_current_names=False,
+):
+    expected = [_story_coop_member_payload(row) for row in member_rows]
+    actual = state.get('party', {}).get('members')
+    if not isinstance(actual, list) or len(actual) != len(expected):
+        return False
+    identity_fields = ('seat', 'user_id', 'membership_status', 'party_role')
+    identities_match = all(
+        tuple(member.get(field) for field in identity_fields)
+        == tuple(expected_member[field] for field in identity_fields)
+        for member, expected_member in zip(actual, expected)
+    )
+    names_match = not require_current_names or all(
+        member.get('username') == expected_member['username']
+        and member.get('display_name') == expected_member['display_name']
+        for member, expected_member in zip(actual, expected)
+    )
+    return (
+        identities_match
+        and names_match
+        and state.get('party', {}).get('max_players') == int(party_row['max_players'])
+    )
+
+
+def get_active_story_coop_party(user_id):
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    with closing(get_db_connection()) as conn:
+        party_row = _story_coop_active_party_row_for_user_conn(conn, user_id)
+        return _story_coop_bundle_conn(conn, party_row, user_id)
+
+
+def create_story_coop_party(user_id, *, max_players=2):
+    """Create an MVP party and return its invite token exactly once."""
+
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    if (
+        isinstance(max_players, bool)
+        or not isinstance(max_players, int)
+        or max_players != 2
+    ):
+        raise StoryCoopDataError(
+            'INVALID_MAX_PLAYERS',
+            '当前多人故事实验仅支持双人队伍',
+        )
+    party_id = secrets.token_hex(16)
+    invite_code = secrets.token_urlsafe(18)
+    invite_code_hash = hashlib.sha256(invite_code.encode('utf-8')).hexdigest()
+    now = utc_now()
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if not _story_coop_user_eligible_conn(conn, user_id):
+            conn.rollback()
+            return None, None, 'ineligible'
+        existing = _story_coop_active_party_row_for_user_conn(conn, user_id)
+        if existing is not None:
+            bundle = _story_coop_bundle_conn(conn, existing, user_id)
+            conn.rollback()
+            return bundle, None, 'existing'
+        try:
+            conn.execute(
+                '''INSERT INTO story_coop_parties
+                   (id, status, max_players, invite_code_hash, revision,
+                    created_at, updated_at, closed_at)
+                   VALUES (?, 'forming', ?, ?, 1, ?, ?, NULL)''',
+                (party_id, max_players, invite_code_hash, now, now),
+            )
+            conn.execute(
+                '''INSERT INTO story_coop_party_members
+                   (party_id, user_id, seat, party_role, membership_status,
+                    joined_at, left_at)
+                   VALUES (?, ?, 0, 'leader', 'active', ?, NULL)''',
+                (party_id, user_id, now),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            existing = _story_coop_active_party_row_for_user_conn(conn, user_id)
+            if existing is None:
+                raise
+            return _story_coop_bundle_conn(conn, existing, user_id), None, 'existing'
+        party_row = conn.execute(
+            'SELECT * FROM story_coop_parties WHERE id = ?',
+            (party_id,),
+        ).fetchone()
+        return _story_coop_bundle_conn(conn, party_row, user_id), invite_code, 'created'
+
+
+def join_story_coop_party(user_id, invite_code):
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    token = str(invite_code or '').strip()
+    if not STORY_COOP_INVITE_RE.fullmatch(token):
+        raise StoryCoopDataError('INVALID_INVITE_CODE', '邀请码格式无效')
+    invite_code_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    now = utc_now()
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if not _story_coop_user_eligible_conn(conn, user_id):
+            conn.rollback()
+            return None, 'ineligible'
+        party_row = conn.execute(
+            '''SELECT * FROM story_coop_parties
+               WHERE invite_code_hash = ? AND status = 'forming' LIMIT 1''',
+            (invite_code_hash,),
+        ).fetchone()
+        if party_row is None:
+            conn.rollback()
+            return None, 'not_found'
+        existing = _story_coop_active_party_row_for_user_conn(conn, user_id)
+        if existing is not None:
+            bundle = _story_coop_bundle_conn(conn, existing, user_id)
+            conn.rollback()
+            if str(existing['id']) == str(party_row['id']):
+                return bundle, 'existing'
+            return bundle, 'already_joined'
+        member_rows = _story_coop_member_rows_conn(conn, party_row['id'])
+        max_players = int(party_row['max_players'])
+        if len(member_rows) >= max_players:
+            conn.rollback()
+            return None, 'full'
+        used_seats = {int(row['seat']) for row in member_rows}
+        seat = next((value for value in range(max_players) if value not in used_seats), None)
+        if seat is None:
+            conn.rollback()
+            return None, 'full'
+        conn.execute(
+            '''INSERT INTO story_coop_party_members
+               (party_id, user_id, seat, party_role, membership_status,
+                joined_at, left_at)
+               VALUES (?, ?, ?, 'member', 'active', ?, NULL)''',
+            (party_row['id'], user_id, seat, now),
+        )
+        cursor = conn.execute(
+            '''UPDATE story_coop_parties
+               SET revision = revision + 1, updated_at = ?
+               WHERE id = ? AND status = 'forming' AND revision = ?''',
+            (now, party_row['id'], int(party_row['revision'])),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return None, 'version'
+        conn.commit()
+        updated = conn.execute(
+            'SELECT * FROM story_coop_parties WHERE id = ?',
+            (party_row['id'],),
+        ).fetchone()
+        return _story_coop_bundle_conn(conn, updated, user_id), 'joined'
+
+
+def leave_story_coop_party(user_id, party_id, expected_revision):
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    party_id = str(party_id or '').strip()
+    if not re.fullmatch(r'[0-9a-f]{32}', party_id):
+        raise StoryCoopDataError('INVALID_PARTY_ID', '队伍编号无效')
+    expected_revision = _story_coop_revision(expected_revision)
+    now = utc_now()
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        party_row = conn.execute(
+            'SELECT * FROM story_coop_parties WHERE id = ? LIMIT 1',
+            (party_id,),
+        ).fetchone()
+        member_row = conn.execute(
+            '''SELECT * FROM story_coop_party_members
+               WHERE party_id = ? AND user_id = ? LIMIT 1''',
+            (party_id, user_id),
+        ).fetchone()
+        if party_row is None or member_row is None:
+            conn.rollback()
+            return None, 'not_found'
+        if (
+            str(member_row['membership_status']) != 'active'
+            or str(party_row['status']) in {'completed', 'abandoned'}
+        ):
+            conn.rollback()
+            return None, 'already_left'
+        if str(party_row['status']) == 'active':
+            bundle = _story_coop_bundle_conn(conn, party_row, user_id)
+            conn.rollback()
+            return bundle, 'already_started'
+        if int(party_row['revision']) != expected_revision:
+            bundle = _story_coop_bundle_conn(conn, party_row, user_id)
+            conn.rollback()
+            return bundle, 'version'
+        conn.execute(
+            '''UPDATE story_coop_party_members
+               SET membership_status = 'left', left_at = ?
+               WHERE party_id = ? AND membership_status = 'active' ''',
+            (now, party_id),
+        )
+        cursor = conn.execute(
+            '''UPDATE story_coop_parties
+               SET status = 'abandoned', revision = revision + 1,
+                   updated_at = ?, closed_at = ?
+               WHERE id = ? AND status = 'forming' AND revision = ?''',
+            (now, now, party_id, expected_revision),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return None, 'version'
+        conn.commit()
+        return None, 'left'
+
+
+def rotate_story_coop_invite(user_id, party_id, expected_revision):
+    """Replace a forming party's one-time invite token as its leader."""
+
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    party_id = str(party_id or '').strip()
+    if not re.fullmatch(r'[0-9a-f]{32}', party_id):
+        raise StoryCoopDataError('INVALID_PARTY_ID', '队伍编号无效')
+    expected_revision = _story_coop_revision(expected_revision)
+    invite_code = secrets.token_urlsafe(18)
+    invite_code_hash = hashlib.sha256(invite_code.encode('utf-8')).hexdigest()
+    now = utc_now()
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        party_row = conn.execute(
+            'SELECT * FROM story_coop_parties WHERE id = ? LIMIT 1',
+            (party_id,),
+        ).fetchone()
+        member_row = conn.execute(
+            '''SELECT * FROM story_coop_party_members
+               WHERE party_id = ? AND user_id = ?
+                 AND membership_status = 'active' LIMIT 1''',
+            (party_id, user_id),
+        ).fetchone()
+        if party_row is None or member_row is None:
+            conn.rollback()
+            return None, None, 'not_found'
+        if str(member_row['party_role']) != 'leader' or int(member_row['seat']) != 0:
+            bundle = _story_coop_bundle_conn(conn, party_row, user_id)
+            conn.rollback()
+            return bundle, None, 'leader_required'
+        if str(party_row['status']) != 'forming':
+            bundle = _story_coop_bundle_conn(conn, party_row, user_id)
+            conn.rollback()
+            return bundle, None, 'not_joinable'
+        if int(party_row['revision']) != expected_revision:
+            bundle = _story_coop_bundle_conn(conn, party_row, user_id)
+            conn.rollback()
+            return bundle, None, 'version'
+        cursor = conn.execute(
+            '''UPDATE story_coop_parties
+               SET invite_code_hash = ?, revision = revision + 1, updated_at = ?
+               WHERE id = ? AND status = 'forming' AND revision = ?''',
+            (invite_code_hash, now, party_id, expected_revision),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return None, None, 'version'
+        conn.commit()
+        updated = conn.execute(
+            'SELECT * FROM story_coop_parties WHERE id = ?',
+            (party_id,),
+        ).fetchone()
+        return _story_coop_bundle_conn(conn, updated, user_id), invite_code, 'rotated'
+
+
+def abandon_story_coop_run(user_id, party_id, expected_revision):
+    """Atomically close an active experimental run and release every member."""
+
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    party_id = str(party_id or '').strip()
+    if not re.fullmatch(r'[0-9a-f]{32}', party_id):
+        raise StoryCoopDataError('INVALID_PARTY_ID', '队伍编号无效')
+    expected_revision = _story_coop_revision(expected_revision)
+    now = utc_now()
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        party_row = conn.execute(
+            'SELECT * FROM story_coop_parties WHERE id = ? LIMIT 1',
+            (party_id,),
+        ).fetchone()
+        member_row = conn.execute(
+            '''SELECT * FROM story_coop_party_members
+               WHERE party_id = ? AND user_id = ? LIMIT 1''',
+            (party_id, user_id),
+        ).fetchone()
+        if party_row is None or member_row is None:
+            conn.rollback()
+            return None, 'not_found'
+        if str(party_row['status']) == 'abandoned':
+            conn.rollback()
+            return None, 'already_abandoned'
+        if (
+            str(party_row['status']) != 'active'
+            or str(member_row['membership_status']) != 'active'
+        ):
+            conn.rollback()
+            return None, 'not_active'
+        if int(party_row['revision']) != expected_revision:
+            bundle = _story_coop_bundle_conn(conn, party_row, user_id)
+            conn.rollback()
+            return bundle, 'version'
+        run_row = _story_coop_active_run_row_conn(conn, party_id)
+        if run_row is None:
+            conn.rollback()
+            return None, 'not_active'
+        run_cursor = conn.execute(
+            '''UPDATE story_coop_runs
+               SET status = 'abandoned', revision = revision + 1,
+                   updated_at = ?, completed_at = ?
+               WHERE id = ? AND party_id = ? AND status = 'active' ''',
+            (now, now, run_row['id'], party_id),
+        )
+        if run_cursor.rowcount != 1:
+            conn.rollback()
+            return None, 'not_active'
+        conn.execute(
+            '''UPDATE story_coop_party_members
+               SET membership_status = 'left', left_at = ?
+               WHERE party_id = ? AND membership_status = 'active' ''',
+            (now, party_id),
+        )
+        party_cursor = conn.execute(
+            '''UPDATE story_coop_parties
+               SET status = 'abandoned', revision = revision + 1,
+                   updated_at = ?, closed_at = ?
+               WHERE id = ? AND status = 'active' AND revision = ?''',
+            (now, now, party_id, expected_revision),
+        )
+        if party_cursor.rowcount != 1:
+            conn.rollback()
+            return None, 'version'
+        conn.commit()
+        return None, 'abandoned'
+
+
+def create_story_coop_run(
+    leader_user_id,
+    party_id,
+    expected_revision,
+    seed,
+    content_version,
+    state,
+):
+    leader_user_id = _story_coop_positive_int(
+        leader_user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    party_id = str(party_id or '').strip()
+    if not re.fullmatch(r'[0-9a-f]{32}', party_id):
+        raise StoryCoopDataError('INVALID_PARTY_ID', '队伍编号无效')
+    expected_revision = _story_coop_revision(expected_revision)
+    seed = str(seed or '').strip()
+    content_version = str(content_version or '').strip()
+    if not seed or len(seed) > 128 or not content_version or len(content_version) > 128:
+        raise StoryCoopDataError('INVALID_RUN_METADATA', '旅程种子或内容版本无效')
+    if str((state or {}).get('content_version') or '') != content_version:
+        raise StoryCoopDataError(
+            'INVALID_RUN_METADATA',
+            '旅程内容版本与状态快照不一致',
+        )
+    state_json = _story_coop_state_json(state)
+    run_id = secrets.token_hex(16)
+    now = utc_now()
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        party_row = conn.execute(
+            'SELECT * FROM story_coop_parties WHERE id = ? LIMIT 1',
+            (party_id,),
+        ).fetchone()
+        member_row = conn.execute(
+            '''SELECT * FROM story_coop_party_members
+               WHERE party_id = ? AND user_id = ?
+                 AND membership_status = 'active' LIMIT 1''',
+            (party_id, leader_user_id),
+        ).fetchone()
+        if party_row is None or member_row is None:
+            conn.rollback()
+            return None, 'not_found'
+        if str(member_row['party_role']) != 'leader' or int(member_row['seat']) != 0:
+            bundle = _story_coop_bundle_conn(conn, party_row, leader_user_id)
+            conn.rollback()
+            return bundle, 'leader_required'
+        if str(party_row['status']) == 'active':
+            bundle = _story_coop_bundle_conn(conn, party_row, leader_user_id)
+            conn.rollback()
+            return bundle, 'existing'
+        if str(party_row['status']) != 'forming':
+            conn.rollback()
+            return None, 'not_joinable'
+        if int(party_row['revision']) != expected_revision:
+            bundle = _story_coop_bundle_conn(conn, party_row, leader_user_id)
+            conn.rollback()
+            return bundle, 'version'
+        member_rows = _story_coop_member_rows_conn(conn, party_id)
+        if len(member_rows) != 2 or int(party_row['max_players']) != 2:
+            bundle = _story_coop_bundle_conn(conn, party_row, leader_user_id)
+            conn.rollback()
+            return bundle, 'not_ready'
+        if not all(
+            _story_coop_user_eligible_conn(conn, int(row['user_id']))
+            for row in member_rows
+        ):
+            bundle = _story_coop_bundle_conn(conn, party_row, leader_user_id)
+            conn.rollback()
+            return bundle, 'member_ineligible'
+        if not _story_coop_state_matches_members(
+            state,
+            party_row,
+            member_rows,
+            require_current_names=True,
+        ):
+            conn.rollback()
+            return None, 'state_members_mismatch'
+        conn.execute(
+            '''INSERT INTO story_coop_runs
+               (id, party_id, status, schema_version, seed, content_version,
+                revision, state_json, created_at, updated_at, completed_at)
+               VALUES (?, ?, 'active', 10, ?, ?, 1, ?, ?, ?, NULL)''',
+            (run_id, party_id, seed, content_version, state_json, now, now),
+        )
+        cursor = conn.execute(
+            '''UPDATE story_coop_parties
+               SET status = 'active', revision = revision + 1, updated_at = ?
+               WHERE id = ? AND status = 'forming' AND revision = ?''',
+            (now, party_id, expected_revision),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return None, 'version'
+        conn.commit()
+        updated = conn.execute(
+            'SELECT * FROM story_coop_parties WHERE id = ?',
+            (party_id,),
+        ).fetchone()
+        return _story_coop_bundle_conn(conn, updated, leader_user_id), 'created'
+
+
+def get_active_story_coop_run(user_id, party_id=None):
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    with closing(get_db_connection()) as conn:
+        if party_id is None:
+            party_row = _story_coop_active_party_row_for_user_conn(conn, user_id)
+        else:
+            party_row = conn.execute(
+                '''SELECT p.* FROM story_coop_parties p
+                   JOIN story_coop_party_members m ON m.party_id = p.id
+                   WHERE p.id = ? AND m.user_id = ?
+                     AND m.membership_status = 'active'
+                     AND p.status = 'active' LIMIT 1''',
+                (str(party_id), user_id),
+            ).fetchone()
+        if party_row is None:
+            return None
+        return _story_coop_run_payload(
+            _story_coop_active_run_row_conn(conn, party_row['id'])
+        )
+
+
+STORY_COOP_ACTION_ID_RE = re.compile(r'^[A-Za-z0-9._:-]{8,128}$')
+STORY_COOP_COMBAT_ID_RE = re.compile(r'^[A-Za-z0-9._:-]{1,96}$')
+
+
+def _story_coop_action_fingerprint(
+    actor_seat,
+    action_type,
+    action_payload,
+    request_context,
+):
+    action_type = str(action_type or '').strip()
+    if not action_type or len(action_type) > 64:
+        raise StoryCoopDataError('INVALID_ACTION_TYPE', '动作类型无效')
+    if not isinstance(action_payload, dict):
+        raise StoryCoopDataError('INVALID_ACTION_PAYLOAD', '动作参数必须是对象')
+    if request_context is None:
+        request_context = {}
+    if not isinstance(request_context, dict):
+        raise StoryCoopDataError('INVALID_ACTION_CONTEXT', '动作上下文无效')
+    if request_context and set(request_context) != {'combat_id', 'combat_round'}:
+        raise StoryCoopDataError('INVALID_ACTION_CONTEXT', '战斗动作上下文无效')
+    envelope = {
+        'actor_seat': int(actor_seat),
+        'action_type': action_type,
+        'payload': action_payload,
+    }
+    if request_context:
+        combat_id = str(request_context.get('combat_id') or '').strip()
+        combat_round = request_context.get('combat_round')
+        if not STORY_COOP_COMBAT_ID_RE.fullmatch(combat_id):
+            raise StoryCoopDataError('INVALID_ACTION_CONTEXT', '战斗编号无效')
+        if (
+            isinstance(combat_round, bool)
+            or not isinstance(combat_round, int)
+            or combat_round <= 0
+        ):
+            raise StoryCoopDataError('INVALID_ACTION_CONTEXT', '战斗回合无效')
+        envelope['combat_id'] = combat_id
+        envelope['combat_round'] = combat_round
+        request_context = {
+            'combat_id': combat_id,
+            'combat_round': combat_round,
+        }
+    canonical = _story_coop_json(
+        envelope,
+        code='INVALID_ACTION_PAYLOAD',
+        label='动作参数',
+    )
+    payload_json = _story_coop_json(
+        action_payload,
+        code='INVALID_ACTION_PAYLOAD',
+        label='动作参数',
+    )
+    return (
+        action_type,
+        payload_json,
+        hashlib.sha256(canonical.encode('utf-8')).hexdigest(),
+        dict(request_context),
+    )
+
+
+def _story_coop_receipt_json(
+    receipt,
+    *,
+    action_id,
+    action_type,
+    actor_user_id,
+    actor_seat,
+    sequence,
+    fingerprint,
+    request_context,
+):
+    if not isinstance(receipt, dict):
+        raise StoryCoopDataError('INVALID_ACTION_RECEIPT', '动作回执无效')
+    expected = {
+        'action_id': action_id,
+        'action_type': action_type,
+        'actor_user_id': actor_user_id,
+        'actor_seat': actor_seat,
+        'action_sequence': sequence,
+        'request_fingerprint': fingerprint,
+    }
+    if request_context:
+        expected.update(request_context)
+    missing = set(expected) - set(receipt)
+    if missing:
+        raise StoryCoopDataError('INVALID_ACTION_RECEIPT', '动作回执缺少权威字段')
+    for key, value in expected.items():
+        if key in receipt and receipt[key] != value:
+            raise StoryCoopDataError('INVALID_ACTION_RECEIPT', '动作回执与权威命令不一致')
+    receipt_copy = dict(receipt)
+    receipt_json = _story_coop_json(
+        receipt_copy,
+        code='INVALID_ACTION_RECEIPT',
+        label='动作回执',
+    )
+    return receipt_copy, receipt_json
+
+
+def _story_coop_action_row_payload(row):
+    if row is None:
+        return None
+    payload = dict(row)
+    try:
+        receipt = json.loads(payload.pop('receipt_json'))
+        action_payload = json.loads(payload.pop('payload_json'))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise StoryCoopDataError(
+            'CORRUPT_COOP_ACTION_RECEIPT',
+            '多人故事动作回执损坏',
+        ) from exc
+    if not isinstance(receipt, dict) or not isinstance(action_payload, dict):
+        raise StoryCoopDataError(
+            'CORRUPT_COOP_ACTION_RECEIPT',
+            '多人故事动作回执结构损坏',
+        )
+    authoritative = {
+        'action_id': str(row['action_id']),
+        'action_type': str(row['action_type']),
+        'actor_user_id': int(row['actor_user_id']),
+        'actor_seat': int(row['actor_seat']),
+        'action_sequence': int(row['sequence']),
+        'request_fingerprint': str(row['request_fingerprint']),
+    }
+    if set(authoritative) - set(receipt):
+        raise StoryCoopDataError(
+            'CORRUPT_COOP_ACTION_RECEIPT',
+            '多人故事动作回执缺少索引字段',
+        )
+    for key, value in authoritative.items():
+        if key in receipt and receipt[key] != value:
+            raise StoryCoopDataError(
+                'CORRUPT_COOP_ACTION_RECEIPT',
+                '多人故事动作回执与索引字段不一致',
+            )
+    payload['receipt'] = receipt
+    payload['payload'] = action_payload
+    return payload
+
+
+def get_story_coop_action_receipt(user_id, party_id, action_id):
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    party_id = str(party_id or '').strip()
+    action_id = str(action_id or '').strip()
+    if not STORY_COOP_ACTION_ID_RE.fullmatch(action_id):
+        raise StoryCoopDataError('INVALID_ACTION_ID', '动作编号无效')
+    with closing(get_db_connection()) as conn:
+        member = conn.execute(
+            '''SELECT 1 FROM story_coop_party_members
+               WHERE party_id = ? AND user_id = ? LIMIT 1''',
+            (party_id, user_id),
+        ).fetchone()
+        if member is None:
+            return None
+        row = conn.execute(
+            '''SELECT * FROM story_coop_run_actions
+               WHERE party_id = ? AND actor_user_id = ? AND action_id = ?
+               LIMIT 1''',
+            (party_id, user_id, action_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return _story_coop_action_row_payload(row)
+
+
+def commit_story_coop_run_action(
+    user_id,
+    party_id,
+    run_id,
+    expected_revision,
+    action_id,
+    action_type,
+    action_payload,
+    receipt,
+    next_state,
+    *,
+    request_context=None,
+):
+    """Persist one actor-aware action exactly once with revision CAS."""
+
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    party_id = str(party_id or '').strip()
+    run_id = str(run_id or '').strip()
+    action_id = str(action_id or '').strip()
+    if not re.fullmatch(r'[0-9a-f]{32}', party_id):
+        raise StoryCoopDataError('INVALID_PARTY_ID', '队伍编号无效')
+    if not re.fullmatch(r'[0-9a-f]{32}', run_id):
+        raise StoryCoopDataError('INVALID_RUN_ID', '旅程编号无效')
+    if not STORY_COOP_ACTION_ID_RE.fullmatch(action_id):
+        raise StoryCoopDataError('INVALID_ACTION_ID', '动作编号无效')
+    expected_revision = _story_coop_revision(expected_revision)
+    state_json = _story_coop_state_json(next_state)
+    now = utc_now()
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        member_row = conn.execute(
+            '''SELECT * FROM story_coop_party_members
+               WHERE party_id = ? AND user_id = ? LIMIT 1''',
+            (party_id, user_id),
+        ).fetchone()
+        if member_row is None:
+            conn.rollback()
+            return None, None, 'not_found'
+        action_type, payload_json, fingerprint, request_context = (
+            _story_coop_action_fingerprint(
+                int(member_row['seat']),
+                action_type,
+                action_payload,
+                request_context,
+            )
+        )
+        duplicate = conn.execute(
+            '''SELECT * FROM story_coop_run_actions
+               WHERE party_id = ? AND actor_user_id = ? AND action_id = ?
+               LIMIT 1''',
+            (party_id, user_id, action_id),
+        ).fetchone()
+        if duplicate is not None:
+            run_row = conn.execute(
+                'SELECT * FROM story_coop_runs WHERE id = ? AND party_id = ? LIMIT 1',
+                (run_id, party_id),
+            ).fetchone()
+            current = _story_coop_run_payload(run_row)
+            stored = _story_coop_action_row_payload(duplicate)
+            outcome = (
+                'duplicate'
+                if str(duplicate['request_fingerprint']) == fingerprint
+                else 'action_conflict'
+            )
+            conn.rollback()
+            return current, stored['receipt'], outcome
+        if str(member_row['membership_status']) != 'active':
+            conn.rollback()
+            return None, None, 'not_found'
+        run_row = conn.execute(
+            '''SELECT r.* FROM story_coop_runs r
+               JOIN story_coop_parties p ON p.id = r.party_id
+               WHERE r.id = ? AND r.party_id = ? AND r.status = 'active'
+                 AND p.status = 'active' LIMIT 1''',
+            (run_id, party_id),
+        ).fetchone()
+        if run_row is None:
+            conn.rollback()
+            return None, None, 'not_found'
+        if not _story_coop_user_eligible_conn(conn, user_id):
+            conn.rollback()
+            return None, None, 'ineligible'
+        current = _story_coop_run_payload(run_row)
+        if int(run_row['revision']) != expected_revision:
+            conn.rollback()
+            return current, None, 'version'
+        member_rows = _story_coop_member_rows_conn(conn, party_id)
+        party_row = conn.execute(
+            'SELECT * FROM story_coop_parties WHERE id = ?',
+            (party_id,),
+        ).fetchone()
+        if not _story_coop_state_matches_members(
+            current['state'],
+            party_row,
+            member_rows,
+        ):
+            conn.rollback()
+            raise StoryCoopDataError(
+                'CORRUPT_COOP_STORY_STATE',
+                '当前多人故事存档成员与队伍不一致',
+            )
+        if not _story_coop_state_matches_members(next_state, party_row, member_rows):
+            conn.rollback()
+            return None, None, 'state_members_mismatch'
+        sequence_row = conn.execute(
+            '''SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
+               FROM story_coop_run_actions WHERE run_id = ?''',
+            (run_id,),
+        ).fetchone()
+        sequence = int(sequence_row['next_sequence'])
+        if next_state.get('coordination', {}).get('action_sequence') != sequence:
+            conn.rollback()
+            return None, None, 'sequence_mismatch'
+        stored_receipt, receipt_json = _story_coop_receipt_json(
+            receipt,
+            action_id=action_id,
+            action_type=action_type,
+            actor_user_id=user_id,
+            actor_seat=int(member_row['seat']),
+            sequence=sequence,
+            fingerprint=fingerprint,
+            request_context=request_context,
+        )
+        resulting_revision = expected_revision + 1
+        terminal = str(next_state.get('phase') or '') in {'complete', 'game_over'}
+        cursor = conn.execute(
+            '''UPDATE story_coop_runs
+               SET state_json = ?, revision = ?, updated_at = ?, status = ?,
+                   completed_at = ?
+               WHERE id = ? AND party_id = ? AND status = 'active'
+                 AND revision = ?''',
+            (
+                state_json,
+                resulting_revision,
+                now,
+                'completed' if terminal else 'active',
+                now if terminal else None,
+                run_id,
+                party_id,
+                expected_revision,
+            ),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            current_row = conn.execute(
+                'SELECT * FROM story_coop_runs WHERE id = ? AND party_id = ?',
+                (run_id, party_id),
+            ).fetchone()
+            return _story_coop_run_payload(current_row), None, 'version'
+        conn.execute(
+            '''INSERT INTO story_coop_run_actions
+               (party_id, run_id, sequence, action_id, actor_user_id,
+                actor_seat, action_type, request_fingerprint, payload_json,
+                receipt_json, resulting_revision, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (
+                party_id,
+                run_id,
+                sequence,
+                action_id,
+                user_id,
+                int(member_row['seat']),
+                action_type,
+                fingerprint,
+                payload_json,
+                receipt_json,
+                resulting_revision,
+                now,
+            ),
+        )
+        if terminal:
+            conn.execute(
+                '''UPDATE story_coop_party_members
+                   SET membership_status = 'left', left_at = ?
+                   WHERE party_id = ? AND membership_status = 'active' ''',
+                (now, party_id),
+            )
+            party_cursor = conn.execute(
+                '''UPDATE story_coop_parties
+                   SET status = 'completed', revision = revision + 1,
+                       updated_at = ?, closed_at = ?
+                   WHERE id = ? AND status = 'active' ''',
+                (now, now, party_id),
+            )
+            if party_cursor.rowcount != 1:
+                conn.rollback()
+                return None, None, 'not_found'
+        conn.commit()
+        updated = conn.execute(
+            'SELECT * FROM story_coop_runs WHERE id = ? AND party_id = ?',
+            (run_id, party_id),
+        ).fetchone()
+        return _story_coop_run_payload(updated), stored_receipt, 'committed'
 
 
 def get_active_story_run(user_id):

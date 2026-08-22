@@ -48,6 +48,12 @@ from flask import Flask, render_template, jsonify, request, send_from_directory,
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash
 from ai_local_bridge import LocalAiBridgeError, get_local_ai_worker
+from ai_training_capture import (
+    append_public_history as append_ai_training_public_history,
+    capture_decision as capture_human_training_decision,
+    room_is_capture_eligible,
+    room_capture_summary,
+)
 from game_engine import GameEngine, qualifies_backwater_achievement
 from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
@@ -85,6 +91,14 @@ from story_content import story_content_payload
 from story_discovery import collect_story_discoveries
 from story_engine import StoryActionError, apply_story_action
 from story_mode import STORY_CONTENT_VERSION, build_initial_story_state
+from story_coop import (
+    COOP_STORY_MAX_PLAYERS,
+    COOP_STORY_MIN_PLAYERS,
+    COOP_STORY_MVP_MAX_PLAYERS,
+    COOP_STORY_SCHEMA_VERSION,
+    build_initial_coop_story_state,
+    coop_story_default_rules,
+)
 from r2_mods import (
     R2ConfigError,
     create_presigned_mod_upload,
@@ -101,8 +115,10 @@ from r2_mods import (
 )
 from db import (
     DB_PATH,
+    StoryCoopDataError,
     TITLE_COLOR_TOKENS,
     abandon_story_run,
+    abandon_story_coop_run,
     add_user_play_seconds,
     admin_change_username,
     admin_clear_user_role,
@@ -127,6 +143,8 @@ from db import (
     cleanup_expired_content_disables_once,
     cleanup_old_dm_messages_once,
     commit_story_run_action,
+    create_story_coop_party,
+    create_story_coop_run,
     create_story_manual_save,
     create_story_run,
     create_report_entry,
@@ -143,6 +161,7 @@ from db import (
     get_feedback_messages,
     get_admin_user_detail,
     get_active_story_run,
+    get_active_story_coop_party,
     get_story_run_action,
     get_chat_message_with_context,
     get_db_connection,
@@ -213,8 +232,11 @@ from db import (
     respond_friend_request,
     increment_user_stats,
     init_db,
+    join_story_coop_party,
+    leave_story_coop_party,
     list_admin_users,
     list_achievement_definitions,
+    rotate_story_coop_invite,
     save_match_summary,
     send_dm_message,
     send_feedback_message,
@@ -453,8 +475,9 @@ GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSIO
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1-player-name-descender-2-battle-chat-gradient-1-story-coop-headless-2-story-coop-lobby-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
+STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
 GTN_DRAINING_ENV = os.environ.get('GTN_DRAINING', '').strip().lower()
@@ -1522,6 +1545,7 @@ def admin_match_record(room, result='finished'):
             'ranking_invalid_reason': ranking_invalid_reason,
             'valid_action_counts': getattr(room, '_valid_action_counts', {}) or {},
             'valid_action_counts_by_side': room_valid_actions_by_side(room),
+            'ai_training_capture': room_capture_summary(room),
         }
         cards_played_by_player = []
         dodge_damage_prevented_by_player = []
@@ -2116,6 +2140,10 @@ def reset_room_replay(room):
     room._replay_state_bytes = 0
     room._replay_last_state = None
     room._replay_frame_seq = 0
+    room.__dict__.pop('_ai_training_capture_selected', None)
+    room.__dict__.pop('_ai_training_capture_stats', None)
+    room.__dict__.pop('_ai_training_enabled_mod_filenames', None)
+    room.__dict__.pop('_ai_training_public_history', None)
 
 
 def _next_room_replay_seq(room):
@@ -2161,7 +2189,7 @@ def _replay_payload(payload):
     return data
 
 
-def record_room_replay_action(room, action_type, actor=None, payload=None):
+def record_room_replay_action(room, action_type, actor=None, payload=None, ai_decision=None):
     try:
         if getattr(room, '_history_recorded', False):
             return
@@ -2186,7 +2214,16 @@ def record_room_replay_action(room, action_type, actor=None, payload=None):
             'payload': _replay_payload(payload or {}),
             'state': _replay_capture_budgeted_state(room, seq),
         }
+        if isinstance(ai_decision, dict):
+            action['ai_decision'] = _replay_json_safe(ai_decision)
         actions.append(action)
+        append_ai_training_public_history(
+            room,
+            actor,
+            action_type,
+            payload,
+            ai_decision=ai_decision,
+        )
     except Exception as exc:
         admin_event('error', f'replay action failed: {exc}')
 
@@ -2199,6 +2236,7 @@ def room_replay_data(room):
         'max_actions': REPLAY_MAX_ACTIONS,
         'state_bytes': int(getattr(room, '_replay_state_bytes', 0) or 0),
         'full_state_frames': int(getattr(room, '_replay_full_state_frames', 0) or 0),
+        'ai_training_capture': room_capture_summary(room),
     }
 
 
@@ -16581,6 +16619,29 @@ def _story_dev_tools_allowed(user_id):
         return False
 
 
+def _story_coop_allowed(user_id):
+    if not STORY_COOP_ENABLED or not user_id:
+        return False
+    try:
+        return bool(feedback_is_staff(user_id))
+    except Exception as exc:
+        app.logger.warning('failed to resolve cooperative story permission for user %s: %s', user_id, exc)
+        return False
+
+
+def _require_story_coop_account_json():
+    user_id, username, error = _require_account_json()
+    if error:
+        return None, None, error
+    if not _story_coop_allowed(user_id):
+        return None, None, _json_error(
+            '未找到此功能',
+            404,
+            code='COOP_STORY_DISABLED',
+        )
+    return user_id, username, None
+
+
 @app.route('/story')
 def story_page():
     user = _current_account_user()
@@ -16605,7 +16666,478 @@ def story_page():
         static_version=GTN_STATIC_VERSION,
         account=account,
         story_dev_tools=_story_dev_tools_allowed(user.get('id')),
+        story_coop_access=_story_coop_allowed(user.get('id')),
     )
+
+
+@app.route('/api/story/coop/bootstrap', methods=['GET'])
+def api_story_coop_bootstrap():
+    _, _, error = _require_story_coop_account_json()
+    if error:
+        return _story_coop_no_store(error)
+    response = jsonify({
+        'success': True,
+        'status': 'staff_party_lobby',
+        'message': '双人协作队伍大厅、独立存档与纯战斗协调内核已就绪。当前仍是 Staff / Admin 实验功能。',
+        'schema_version': COOP_STORY_SCHEMA_VERSION,
+        'min_players': COOP_STORY_MIN_PLAYERS,
+        'mvp_player_count': COOP_STORY_MVP_MAX_PLAYERS,
+        'max_players': COOP_STORY_MAX_PLAYERS,
+        'access': ['staff', 'admin'],
+        'rules': coop_story_default_rules(),
+        'combat_core_ready': True,
+        'party_api_ready': True,
+        'run_persistence_ready': True,
+    })
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
+def _story_coop_no_store(result):
+    response = result[0] if isinstance(result, tuple) else result
+    try:
+        response.headers['Cache-Control'] = 'private, no-store'
+    except Exception:
+        pass
+    return result
+
+
+def _story_coop_json(payload, status=200):
+    response = jsonify(payload)
+    response.status_code = int(status)
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
+def _story_coop_error(message, status, code, **extra):
+    return _story_coop_json({
+        'success': False,
+        'error': str(message),
+        'code': str(code),
+        **extra,
+    }, status)
+
+
+def _story_coop_revision_from_request(data):
+    value = data.get('party_revision') if isinstance(data, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise StoryCoopDataError('INVALID_PARTY_VERSION', '队伍版本无效')
+    return value
+
+
+def _story_coop_request_object():
+    data = request.get_json(silent=True)
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise StoryCoopDataError('INVALID_REQUEST', '请求数据必须是对象')
+    return data
+
+
+def _story_coop_storage_error(exc):
+    code = str(getattr(exc, 'code', '') or 'COOP_STORY_STORAGE_ERROR')
+    if code.startswith('CORRUPT_'):
+        app.logger.error('cooperative story data failed validation: %s', exc)
+        return _story_coop_error(
+            '多人故事记录暂时不可用',
+            503,
+            'COOP_STORY_DATA_UNAVAILABLE',
+        )
+    return _story_coop_error(str(exc), 400, code)
+
+
+def _story_coop_database_busy(exc):
+    if 'locked' not in str(exc).lower() and 'busy' not in str(exc).lower():
+        raise exc
+    return _story_coop_error(
+        '多人故事记录暂时繁忙，请稍后重试',
+        503,
+        'DATABASE_BUSY',
+    )
+
+
+def _story_coop_require_account():
+    user_id, username, error = _require_story_coop_account_json()
+    if error:
+        return None, None, _story_coop_no_store(error)
+    return user_id, username, None
+
+
+@app.route('/api/story/coop/party', methods=['GET'])
+def api_story_coop_party_get():
+    user_id, _, error = _story_coop_require_account()
+    if error:
+        return error
+    try:
+        bundle = get_active_story_coop_party(user_id)
+        return _story_coop_json({
+            'success': True,
+            **(bundle or {'party': None, 'viewer': None, 'run': None}),
+        })
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    except sqlite3.OperationalError as exc:
+        return _story_coop_database_busy(exc)
+
+
+@app.route('/api/story/coop/party', methods=['POST'])
+def api_story_coop_party_create():
+    user_id, _, error = _story_coop_require_account()
+    if error:
+        return error
+    try:
+        _story_coop_request_object()
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    if not rate_limiter(f'story-coop-create:{user_id}', limit=6, window=60):
+        return _story_coop_error(
+            '建队操作过于频繁，请稍后重试',
+            429,
+            'COOP_PARTY_RATE_LIMITED',
+        )
+    try:
+        bundle, invite_code, outcome = create_story_coop_party(user_id)
+        if outcome == 'ineligible':
+            return _story_coop_error('未找到此功能', 404, 'COOP_STORY_DISABLED')
+        return _story_coop_json({
+            'success': True,
+            'created': outcome == 'created',
+            'invite_code': invite_code,
+            **bundle,
+        })
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    except sqlite3.OperationalError as exc:
+        return _story_coop_database_busy(exc)
+
+
+@app.route('/api/story/coop/party/join', methods=['POST'])
+def api_story_coop_party_join():
+    user_id, _, error = _story_coop_require_account()
+    if error:
+        return error
+    if (
+        not rate_limiter(f'story-coop-join:user:{user_id}', limit=12, window=60)
+        or not rate_limiter(
+            f'story-coop-join:ip:{_client_ip()}',
+            limit=30,
+            window=60,
+        )
+    ):
+        return _story_coop_error(
+            '加入队伍操作过于频繁，请稍后重试',
+            429,
+            'COOP_INVITE_RATE_LIMITED',
+        )
+    try:
+        data = _story_coop_request_object()
+        invite_code = str(data.get('invite_code') or '').strip()
+        bundle, outcome = join_story_coop_party(user_id, invite_code)
+        if outcome in {'joined', 'existing'}:
+            return _story_coop_json({
+                'success': True,
+                'joined': outcome == 'joined',
+                **bundle,
+            })
+        if outcome == 'ineligible':
+            return _story_coop_error('未找到此功能', 404, 'COOP_STORY_DISABLED')
+        if outcome == 'not_found':
+            return _story_coop_error(
+                '邀请码无效或队伍已关闭',
+                404,
+                'COOP_PARTY_NOT_FOUND',
+            )
+        if outcome == 'already_joined':
+            return _story_coop_error(
+                '你已经在另一个协作队伍中',
+                409,
+                'COOP_PARTY_ALREADY_JOINED',
+                **(bundle or {}),
+            )
+        if outcome == 'full':
+            return _story_coop_error('队伍人数已满', 409, 'COOP_PARTY_FULL')
+        return _story_coop_error(
+            '队伍状态已经更新，请重试',
+            409,
+            'COOP_PARTY_VERSION_OLD',
+        )
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    except sqlite3.OperationalError as exc:
+        return _story_coop_database_busy(exc)
+
+
+@app.route('/api/story/coop/party/leave', methods=['POST'])
+def api_story_coop_party_leave():
+    user_id, _, error = _story_coop_require_account()
+    if error:
+        return error
+    try:
+        data = _story_coop_request_object()
+        party_id = str(data.get('party_id') or '').strip()
+        expected_revision = _story_coop_revision_from_request(data)
+        bundle, outcome = leave_story_coop_party(
+            user_id,
+            party_id,
+            expected_revision,
+        )
+        if outcome in {'left', 'already_left'}:
+            return _story_coop_json({
+                'success': True,
+                'left': outcome == 'left',
+                'dissolved': True,
+                'party': None,
+                'viewer': None,
+                'run': None,
+            })
+        if outcome == 'not_found':
+            return _story_coop_error(
+                '没有找到你的协作队伍',
+                404,
+                'COOP_PARTY_NOT_FOUND',
+            )
+        if outcome == 'already_started':
+            return _story_coop_error(
+                '协作旅程已经开始，不能从队伍大厅退出',
+                409,
+                'COOP_PARTY_ALREADY_STARTED',
+                **(bundle or {}),
+            )
+        if outcome == 'version':
+            return _story_coop_error(
+                '队伍状态已经更新',
+                409,
+                'COOP_PARTY_VERSION_OLD',
+                **(bundle or {}),
+            )
+        return _story_coop_error(
+            '队伍当前不能退出',
+            409,
+            'COOP_PARTY_NOT_JOINABLE',
+        )
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    except sqlite3.OperationalError as exc:
+        return _story_coop_database_busy(exc)
+
+
+@app.route('/api/story/coop/party/invite', methods=['POST'])
+def api_story_coop_party_invite_rotate():
+    user_id, _, error = _story_coop_require_account()
+    if error:
+        return error
+    if not rate_limiter(f'story-coop-invite:{user_id}', limit=6, window=60):
+        return _story_coop_error(
+            '邀请码轮换过于频繁，请稍后重试',
+            429,
+            'COOP_INVITE_RATE_LIMITED',
+        )
+    try:
+        data = _story_coop_request_object()
+        party_id = str(data.get('party_id') or '').strip()
+        expected_revision = _story_coop_revision_from_request(data)
+        bundle, invite_code, outcome = rotate_story_coop_invite(
+            user_id,
+            party_id,
+            expected_revision,
+        )
+        if outcome == 'rotated':
+            return _story_coop_json({
+                'success': True,
+                'rotated': True,
+                'invite_code': invite_code,
+                **bundle,
+            })
+        if outcome == 'leader_required':
+            return _story_coop_error(
+                '只有队长可以轮换邀请码',
+                403,
+                'COOP_PARTY_LEADER_REQUIRED',
+                **(bundle or {}),
+            )
+        if outcome == 'version':
+            return _story_coop_error(
+                '队伍状态已经更新',
+                409,
+                'COOP_PARTY_VERSION_OLD',
+                **(bundle or {}),
+            )
+        if outcome == 'not_found':
+            return _story_coop_error(
+                '没有找到你的协作队伍',
+                404,
+                'COOP_PARTY_NOT_FOUND',
+            )
+        return _story_coop_error(
+            '已开始的队伍不能轮换邀请码',
+            409,
+            'COOP_PARTY_NOT_JOINABLE',
+            **(bundle or {}),
+        )
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    except sqlite3.OperationalError as exc:
+        return _story_coop_database_busy(exc)
+
+
+@app.route('/api/story/coop/party/abandon', methods=['POST'])
+def api_story_coop_party_abandon():
+    user_id, _, error = _story_coop_require_account()
+    if error:
+        return error
+    try:
+        data = _story_coop_request_object()
+        party_id = str(data.get('party_id') or '').strip()
+        expected_revision = _story_coop_revision_from_request(data)
+        bundle, outcome = abandon_story_coop_run(
+            user_id,
+            party_id,
+            expected_revision,
+        )
+        if outcome in {'abandoned', 'already_abandoned'}:
+            return _story_coop_json({
+                'success': True,
+                'abandoned': outcome == 'abandoned',
+                'party': None,
+                'viewer': None,
+                'run': None,
+            })
+        if outcome == 'version':
+            return _story_coop_error(
+                '队伍状态已经更新',
+                409,
+                'COOP_PARTY_VERSION_OLD',
+                **(bundle or {}),
+            )
+        if outcome == 'not_found':
+            return _story_coop_error(
+                '没有找到你的协作队伍',
+                404,
+                'COOP_PARTY_NOT_FOUND',
+            )
+        return _story_coop_error(
+            '当前没有可放弃的协作旅程',
+            409,
+            'COOP_PARTY_NOT_ACTIVE',
+        )
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    except sqlite3.OperationalError as exc:
+        return _story_coop_database_busy(exc)
+
+
+@app.route('/api/story/coop/party/start', methods=['POST'])
+def api_story_coop_party_start():
+    user_id, _, error = _story_coop_require_account()
+    if error:
+        return error
+    if not rate_limiter(f'story-coop-start:{user_id}', limit=12, window=60):
+        return _story_coop_error(
+            '开始旅程操作过于频繁，请稍后重试',
+            429,
+            'COOP_PARTY_RATE_LIMITED',
+        )
+    try:
+        data = _story_coop_request_object()
+        party_id = str(data.get('party_id') or '').strip()
+        expected_revision = _story_coop_revision_from_request(data)
+        current = get_active_story_coop_party(user_id)
+        if not current or current['party']['id'] != party_id:
+            return _story_coop_error(
+                '没有找到你的协作队伍',
+                404,
+                'COOP_PARTY_NOT_FOUND',
+            )
+        if current['party']['status'] == 'active':
+            if current.get('viewer', {}).get('party_role') != 'leader':
+                return _story_coop_error(
+                    '只有队长可以开始协作旅程',
+                    403,
+                    'COOP_PARTY_LEADER_REQUIRED',
+                    **current,
+                )
+            if current.get('run') is None:
+                app.logger.error('active cooperative party has no active run party=%s', party_id)
+                return _story_coop_error(
+                    '多人故事记录暂时不可用',
+                    503,
+                    'COOP_STORY_DATA_UNAVAILABLE',
+                )
+            return _story_coop_json({
+                'success': True,
+                'started': False,
+                **current,
+            })
+        seed = secrets.token_hex(16)
+        state = build_initial_coop_story_state(
+            seed,
+            current['party']['members'],
+            max_players=current['party']['max_players'],
+        )
+        bundle, outcome = create_story_coop_run(
+            user_id,
+            party_id,
+            expected_revision,
+            seed,
+            STORY_CONTENT_VERSION,
+            state,
+        )
+        if outcome in {'created', 'existing'}:
+            return _story_coop_json({
+                'success': True,
+                'started': outcome == 'created',
+                **bundle,
+            })
+        if outcome == 'leader_required':
+            return _story_coop_error(
+                '只有队长可以开始协作旅程',
+                403,
+                'COOP_PARTY_LEADER_REQUIRED',
+                **(bundle or {}),
+            )
+        if outcome == 'version':
+            return _story_coop_error(
+                '队伍状态已经更新',
+                409,
+                'COOP_PARTY_VERSION_OLD',
+                **(bundle or {}),
+            )
+        if outcome == 'not_ready':
+            return _story_coop_error(
+                '双人队伍尚未到齐',
+                409,
+                'COOP_PARTY_NOT_READY',
+                **(bundle or {}),
+            )
+        if outcome == 'member_ineligible':
+            return _story_coop_error(
+                '队伍中有成员已失去实验资格',
+                409,
+                'COOP_PARTY_MEMBER_INELIGIBLE',
+                **(bundle or {}),
+            )
+        if outcome == 'not_found':
+            return _story_coop_error(
+                '没有找到你的协作队伍',
+                404,
+                'COOP_PARTY_NOT_FOUND',
+            )
+        if outcome == 'state_members_mismatch':
+            app.logger.error('cooperative story generated state/member mismatch party=%s', party_id)
+            return _story_coop_error(
+                '多人故事状态暂时无法创建',
+                503,
+                'COOP_STORY_DATA_UNAVAILABLE',
+            )
+        return _story_coop_error(
+            '队伍当前不能开始旅程',
+            409,
+            'COOP_PARTY_NOT_JOINABLE',
+        )
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    except sqlite3.OperationalError as exc:
+        return _story_coop_database_busy(exc)
 
 
 @app.route('/api/story/presence', methods=['POST'])
@@ -20607,10 +21139,11 @@ def on_draft_reroll(data=None):
             if pidx < 0:
                 return
             engine = room.engine
+            ai_decision = capture_room_ai_training_decision(room, pidx, 'draft_reroll', {})
             result = engine.draft_reroll(pidx)
             success = bool(result.get('success')) if isinstance(result, dict) else bool(result)
             if success:
-                record_room_replay_action(room, 'draft_reroll', pidx, {})
+                record_room_replay_action(room, 'draft_reroll', pidx, {}, ai_decision=ai_decision)
                 pending_state = (room, pidx)
                 pending_status_targets = (
                     room,
@@ -22875,12 +23408,24 @@ def on_draft_pick(data):
         if not def_id:
             return
         draft_options_before = [card.def_id for card in (engine.draft_options[pidx] or [])]
+        ai_decision = capture_room_ai_training_decision(
+            room,
+            pidx,
+            'draft_pick',
+            {'def_id': def_id},
+        )
         pick_result = engine.draft_pick(pidx, def_id)
         success = bool(pick_result.get('success')) if isinstance(pick_result, dict) else bool(pick_result)
         if not success:
             if not engine.draft_options[pidx]:
                 engine._generate_draft_options_for_player(pidx)
             draft_options_before = [card.def_id for card in (engine.draft_options[pidx] or [])]
+            ai_decision = capture_room_ai_training_decision(
+                room,
+                pidx,
+                'draft_pick',
+                {'def_id': def_id},
+            )
             pick_result = engine.draft_pick(pidx, def_id)
         success = bool(pick_result.get('success')) if isinstance(pick_result, dict) else bool(pick_result)
         if success:
@@ -22890,7 +23435,13 @@ def on_draft_pick(data):
                     enqueue_card_draft_pick(room.mode, draft_options_before, def_id)
                 except Exception as exc:
                     admin_event('error', f'draft stats enqueue failed: {exc}')
-            record_room_replay_action(room, 'draft_pick', pidx, {'def_id': def_id})
+            record_room_replay_action(
+                room,
+                'draft_pick',
+                pidx,
+                {'def_id': def_id},
+                ai_decision=ai_decision,
+            )
             # Check if THIS player finished drafting
             target_count = engine.draft_target_count(pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
             if len(engine.draft_picks[pidx]) >= target_count:
@@ -22945,6 +23496,12 @@ def on_select_opening_event(data):
         if event_id is None:
             return
         option_ids = [str(ev.get('id')) for ev in (getattr(engine, 'opening_event_options', [[]])[pidx] or []) if ev and ev.get('id') is not None]
+        ai_decision = capture_room_ai_training_decision(
+            room,
+            pidx,
+            'select_opening_event',
+            {'event_id': event_id},
+        )
         success = engine.select_opening_event(pidx, event_id)
         if success:
             enqueue_opening_event_pick(room.mode, option_ids, event_id)
@@ -22953,7 +23510,7 @@ def on_select_opening_event(data):
                 'event_id': event_id,
                 # Setup choices are accepted only after this player finishes drafting.
                 'sub_choice': None,
-            })
+            }, ai_decision=ai_decision)
             if all(pick is not None for pick in engine.opening_event_picks):
                 record_room_replay_keyframe(room, 'event_reveal')
             for pi in range(len(room.player_sids)):
@@ -22989,8 +23546,20 @@ def on_confirm_opening_reveal(data=None):
         already_started = bool(getattr(engine, 'player_draft_started', [False] * len(room.player_sids))[pidx])
         if not already_started:
             _reset_pregame_deadline(room, pidx, 'event_reveal')
+            ai_decision = capture_room_ai_training_decision(
+                room,
+                pidx,
+                'confirm_opening_reveal',
+                {},
+            )
             engine.start_draft_for_player(pidx)
-            record_room_replay_action(room, 'confirm_opening_reveal', pidx, {})
+            record_room_replay_action(
+                room,
+                'confirm_opening_reveal',
+                pidx,
+                {},
+                ai_decision=ai_decision,
+            )
             record_room_replay_keyframe(room, 'draft_start')
         for pi in range(len(room.player_sids)):
             schedule_pregame_state(room, pi)
@@ -23017,8 +23586,21 @@ def on_reroll_opening_event(data=None):
         if pidx < 0:
             return
         engine = room.engine
+        ai_decision = capture_room_ai_training_decision(
+            room,
+            pidx,
+            'reroll_opening_event',
+            {},
+        )
         success = engine.reroll_opening_event(pidx)
         if success:
+            record_room_replay_action(
+                room,
+                'reroll_opening_event',
+                pidx,
+                {},
+                ai_decision=ai_decision,
+            )
             schedule_event_state(room, pidx)
 
 
@@ -23253,6 +23835,41 @@ def _ai_test_enabled_mod_filenames(disabled_mods):
         and mod_category(mod) == 'official'
         and mod.filename not in disabled
     ]
+
+
+def _room_ai_training_enabled_mod_filenames(room):
+    cached = getattr(room, '_ai_training_enabled_mod_filenames', None)
+    if isinstance(cached, tuple):
+        return list(cached)
+    profile = dict(getattr(room, 'match_mod_profile', {}) or {})
+    enabled = tuple(_ai_test_enabled_mod_filenames(profile.get('disabled_mods') or []))
+    room._ai_training_enabled_mod_filenames = enabled
+    return list(enabled)
+
+
+def capture_room_ai_training_decision(room, actor, action_kind, payload=None):
+    """Capture one pre-action human decision without involving the AI worker."""
+
+    if not room_is_capture_eligible(room):
+        return None
+    before = int((getattr(room, '_ai_training_capture_stats', {}) or {}).get('failed', 0) or 0)
+    snapshot = capture_human_training_decision(
+        room,
+        actor,
+        action_kind,
+        payload,
+        enabled_mods=_room_ai_training_enabled_mod_filenames(room),
+        game_root=os.path.dirname(os.path.abspath(__file__)),
+    )
+    after_stats = getattr(room, '_ai_training_capture_stats', {}) or {}
+    after = int(after_stats.get('failed', 0) or 0)
+    if after > before and (after == 1 or after & (after - 1) == 0):
+        admin_event(
+            'warning',
+            f'ai_training_capture_failed count={after} error={after_stats.get("last_error", "")}',
+            room_id=getattr(room, 'room_id', None),
+        )
+    return snapshot
 
 
 def _ai_test_loadout_for_player(sid):
@@ -25968,6 +26585,18 @@ def on_play_card(data):
             replay_def_id = getattr(replay_card, 'def_id', '') or ''
         except Exception:
             replay_def_id = ''
+        capture_payload = {
+            'card_instance_id': card_instance_id,
+            'choice': choice,
+        }
+        if target_player_id >= 0:
+            capture_payload['target_player_id'] = target_player_id
+        ai_decision = capture_room_ai_training_decision(
+            room,
+            pidx,
+            'play_card',
+            capture_payload,
+        )
         if room.mode == '2v2':
             if target_player_id >= 0:
                 choice = dict(choice or {})
@@ -26016,7 +26645,13 @@ def on_play_card(data):
                 'from_name': player_name,
             }
         replay_action_payload = enrich_replay_interaction_payload(room, replay_action_payload, result)
-        record_room_replay_action(room, 'play_card', pidx, replay_action_payload)
+        record_room_replay_action(
+            room,
+            'play_card',
+            pidx,
+            replay_action_payload,
+            ai_decision=ai_decision,
+        )
     if result.get('needs_ally_consent'):
         broadcast_game_state(room)
         target_pidx = result.get('target_player_id')
@@ -26101,16 +26736,28 @@ def on_response(data):
             replay_def_id = getattr(replay_card, 'def_id', '') or ''
         except Exception:
             replay_def_id = ''
+        ai_decision = capture_room_ai_training_decision(
+            room,
+            pidx,
+            'response',
+            {'card_instance_id': card_instance_id},
+        )
         engine.handle_response(pidx, card_instance_id)
         _stamp_pending_interactions(room)
     finally:
         busy_lock.release()
     if card_instance_id:
         record_valid_player_action(room, pidx, 'response')
-    record_room_replay_action(room, 'response', pidx, enrich_replay_interaction_payload(room, {
-        'card_instance_id': card_instance_id,
-        'def_id': replay_def_id,
-    }))
+    record_room_replay_action(
+        room,
+        'response',
+        pidx,
+        enrich_replay_interaction_payload(room, {
+            'card_instance_id': card_instance_id,
+            'def_id': replay_def_id,
+        }),
+        ai_decision=ai_decision,
+    )
     with _lock:
         _sync_room_action_timer_after_state_change(room)
     emit_turn_timer_update(room)
@@ -26228,16 +26875,28 @@ def on_resolve_choice(data):
             admin_event('player', f'ignored resolve_choice from non-pending player room={room_id} pending={pending_player_id} got={pidx}', sid=sid, room_id=room_id)
             send_game_state_to(room, pidx)
             return
+        ai_decision = capture_room_ai_training_decision(
+            room,
+            pidx,
+            'resolve_choice',
+            {'choice': choice},
+        )
         result = engine.resolve_choice(pidx, choice)
         _stamp_pending_interactions(room)
     finally:
         busy_lock.release()
     if not result.get('cancelled'):
         record_valid_player_action(room, pidx, 'resolve_choice')
-    record_room_replay_action(room, 'resolve_choice', pidx, enrich_replay_interaction_payload(room, {
-        'choice': choice,
-        'result': result,
-    }, result))
+    record_room_replay_action(
+        room,
+        'resolve_choice',
+        pidx,
+        enrich_replay_interaction_payload(room, {
+            'choice': choice,
+            'result': result,
+        }, result),
+        ai_decision=ai_decision,
+    )
     with _lock:
         _sync_room_action_timer_after_state_change(room)
     if result.get('needs_response'):
@@ -26315,17 +26974,29 @@ def on_v2_ui_response(data):
         if pending_player_id != pidx or str(pending.get('request_id', '')) != str(request_id):
             soft_reject(sid, 'v2_ui_response', 'PENDING_V2_UI', '窗口状态已更新', room=room, pidx=pidx, send_state=True)
             return
+        ai_decision = capture_room_ai_training_decision(
+            room,
+            pidx,
+            'v2_ui_response',
+            {'button': button, 'values': values},
+        )
         _cancel_v2_ui_timeout(('room', room.room_id), request_id)
         result = engine.handle_v2_ui_response(pidx, request_id, clean_data)
         _stamp_pending_interactions(room)
     finally:
         busy_lock.release()
-    record_room_replay_action(room, 'v2_ui_response', pidx, enrich_replay_interaction_payload(room, {
-        'request_id': request_id,
-        'button': button,
-        'values': values,
-        'result': result,
-    }, result))
+    record_room_replay_action(
+        room,
+        'v2_ui_response',
+        pidx,
+        enrich_replay_interaction_payload(room, {
+            'request_id': request_id,
+            'button': button,
+            'values': values,
+            'result': result,
+        }, result),
+        ai_decision=ai_decision,
+    )
     with _lock:
         _sync_room_action_timer_after_state_change(room)
     emit_turn_timer_update(room)
@@ -26387,6 +27058,15 @@ def on_use_trigger(data):
                 return
         except Exception:
             replay_def_id = ''
+        capture_payload = {'equipment_instance_id': equipment_instance_id}
+        if target_player_id >= 0:
+            capture_payload['target_player_id'] = target_player_id
+        ai_decision = capture_room_ai_training_decision(
+            room,
+            pidx,
+            'use_trigger',
+            capture_payload,
+        )
         result = engine.use_trigger(pidx, equipment_instance_id, target_player_id=target_player_id)
         _stamp_pending_interactions(room)
     finally:
@@ -26410,6 +27090,7 @@ def on_use_trigger(data):
             'use_trigger',
             pidx,
             enrich_replay_interaction_payload(room, trigger_replay_payload, result),
+            ai_decision=ai_decision,
         )
         with _lock:
             _sync_room_action_timer_after_state_change(room)
@@ -26561,13 +27242,20 @@ def on_end_turn(data):
             if reject_code:
                 soft_reject(sid, 'end_turn', reject_code, room=room, pidx=pidx, send_state=True)
                 return
+            ai_decision = capture_room_ai_training_decision(room, pidx, 'end_turn', {})
             result = engine.end_turn(pidx)
             _stamp_pending_interactions(room)
         finally:
             busy_lock.release()
         if result.get('success'):
             record_valid_player_action(room, pidx, 'end_turn')
-            record_room_replay_action(room, 'end_turn', pidx, {})
+            record_room_replay_action(
+                room,
+                'end_turn',
+                pidx,
+                {},
+                ai_decision=ai_decision,
+            )
             with _lock:
                 _clear_room_action_timer(room)
                 _sync_room_action_timer_after_state_change(room)

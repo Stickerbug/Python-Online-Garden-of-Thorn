@@ -25846,6 +25846,7 @@ function updatePhaseChatPanelVisibility(viewId) {
 }
 
 function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
+    const nameStyle = meta.name_style || meta.nameStyle;
     return {
         type: 'chat',
         nick,
@@ -25863,6 +25864,10 @@ function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
         special_role_label: meta.special_role_label || '',
         equipped_titles: getEquippedTitles(meta),
         name_color: meta.name_color || getSpecialRoleColor(meta),
+        name_style: nameStyle && typeof nameStyle === 'object' ? nameStyle : null,
+        console_player: !!meta.console_player,
+        is_special_player: !!meta.is_special_player,
+        is_registered_user: !!meta.is_registered_user,
         channel: channelMeta.chat_channel || channelMeta.channel || '',
         targetName: channelMeta.chat_target_name || channelMeta.targetName || '',
         repeat_count: Number(meta.repeat_count || meta.repeatCount || 1),
@@ -25872,15 +25877,29 @@ function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
     };
 }
 
+function chatIdentitySignature(entry = {}) {
+    return JSON.stringify([
+        !!entry.system,
+        !!entry.is_spectator,
+        !!(entry.isAdmin || entry.is_admin_player),
+        entry.specialRoleColor || entry.special_role_color || '',
+        entry.special_role || '',
+        entry.name_color || '',
+        entry.name_style || entry.nameStyle || null,
+        (entry.equipped_titles || []).map(title => [
+            title && title.id,
+            title && title.color,
+            (title && title.style) || null,
+        ]),
+    ]);
+}
+
 function chatTimelineSignature(entry = {}) {
     return JSON.stringify([
         entry.type || 'chat',
         entry.nick || entry.nickname || '',
         entry.text || '',
-        !!entry.system,
-        !!entry.isAdmin,
-        entry.specialRoleColor || '',
-        (entry.equipped_titles || []).map(title => [title.id, title.color]),
+        chatIdentitySignature(entry),
         entry.channel || '',
         entry.targetName || '',
         !!entry.pregame,
@@ -25952,6 +25971,7 @@ function syncRoomChatHistory(data = {}) {
             item && item.chat_target_name,
             item && item.pregame,
             item && item.log_anchor,
+            item && chatIdentitySignature(item),
         ]),
     ]);
     if (signature === roomChatHistorySignature) return;
@@ -27177,7 +27197,7 @@ function renderClassicLog(vm) {
     const signature = `${currentLang}|${entries.map(entry => {
         if (!entry) return '';
         if (entry.type === 'chat') {
-            return `c:${entry.channel || ''}:${entry.nick || ''}:${entry.text || ''}:${entry.system ? 1 : 0}:${entry.isAdmin ? 1 : 0}:${entry.specialRoleColor || ''}`;
+            return `c:${entry.channel || ''}:${entry.nick || ''}:${entry.text || ''}:${chatIdentitySignature(entry)}`;
         }
         return `b:${entry.text || ''}`;
     }).join('\n')}`;

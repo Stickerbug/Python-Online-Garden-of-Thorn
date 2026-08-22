@@ -1778,6 +1778,23 @@ body {
   display: inline;
 }
 
+/* Rich nickname paint needs its own line box. Inline text uses only the font's
+   em box, which clips Kreadon descenders in compact/ellipsis containers. */
+.player-name-value {
+  display: inline-block;
+  line-height: 1.3;
+  overflow: visible;
+  vertical-align: baseline;
+}
+
+.title-preview-name,
+.title-shop-preview-name,
+.account-nickname-display,
+.account-replay-setup-player-name,
+.replay-player-name {
+  line-height: 1.3;
+}
+
 .chat-player-name {
   display: inline;
 }

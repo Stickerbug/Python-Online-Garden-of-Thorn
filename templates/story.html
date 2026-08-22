@@ -319,6 +319,9 @@
     <footer id="story-status-bar" class="story-status-bar">
       <span id="story-status-text">故事模式</span>
       <div class="story-status-center">
+        {% if story_coop_access %}
+        <button id="story-coop-entry" class="story-coop-entry" type="button" aria-haspopup="dialog" aria-controls="story-coop-preview-dialog">协作故事实验</button>
+        {% endif %}
         {% if story_dev_tools %}
         <button id="story-dev-toggle" class="story-dev-toggle" type="button" aria-expanded="false" aria-controls="story-dev-panel">开发人员模式</button>
         {% endif %}
@@ -529,10 +532,95 @@
     <dialog id="story-term-dialog" class="story-term-dialog">
       <div id="story-term-content" class="modal-inner story-card-terms-modal"></div>
     </dialog>
+
+    {% if story_coop_access %}
+    <dialog id="story-coop-preview-dialog" class="story-dialog story-coop-preview-dialog" aria-labelledby="story-coop-dialog-title">
+      <form method="dialog" id="story-coop-lobby-form">
+        <h2 id="story-coop-dialog-title">协作故事实验</h2>
+        <p id="story-coop-preview-copy">Staff / Admin 双人实验功能。协作旅程与单人故事存档彼此独立。</p>
+        <dl class="story-coop-contract">
+          <div><dt>状态结构</dt><dd id="story-coop-schema-value">--</dd></div>
+          <div><dt>首版人数</dt><dd id="story-coop-mvp-value">--</dd></div>
+          <div><dt>目标人数</dt><dd id="story-coop-max-value">--</dd></div>
+          <div><dt>访问范围</dt><dd>Staff / Admin</dd></div>
+        </dl>
+
+        <p id="story-coop-lobby-status" class="story-coop-lobby-status" role="status" aria-live="polite">正在读取队伍状态...</p>
+
+        <section id="story-coop-no-party" class="story-coop-section hidden" aria-labelledby="story-coop-new-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <h3 id="story-coop-new-title">建立双人队伍</h3>
+              <p>创建一个新队伍，或使用队长发来的邀请码加入。</p>
+            </div>
+          </div>
+          <button id="story-coop-create" class="story-command story-command-primary" type="button">创建队伍</button>
+          <div class="story-coop-join-row">
+            <label for="story-coop-invite-input">邀请码</label>
+            <div class="story-coop-inline-actions">
+              <input id="story-coop-invite-input" type="text" maxlength="128" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="粘贴邀请码" aria-describedby="story-coop-invite-help">
+              <button id="story-coop-join" class="story-command" type="button">加入队伍</button>
+            </div>
+            <small id="story-coop-invite-help">邀请码区分字符，请完整粘贴。</small>
+          </div>
+        </section>
+
+        <section id="story-coop-forming" class="story-coop-section hidden" aria-labelledby="story-coop-forming-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <h3 id="story-coop-forming-title">队伍大厅</h3>
+              <p>两名成员到齐后，由队长开始协作旅程。</p>
+            </div>
+            <span id="story-coop-party-revision" class="story-coop-revision">Revision --</span>
+          </div>
+
+          <ol id="story-coop-members" class="story-coop-members" aria-label="协作队伍成员" aria-live="polite"></ol>
+
+          <div id="story-coop-invite-reveal" class="story-coop-invite-reveal hidden">
+            <span class="story-coop-eyebrow">本次显示的邀请码</span>
+            <div class="story-coop-code-row">
+              <output id="story-coop-invite-code" aria-label="本次邀请码"></output>
+              <button id="story-coop-copy-invite" class="story-command" type="button">复制</button>
+            </div>
+            <p>邀请码只在创建或轮换响应中显示一次；关闭此窗口后无法恢复。若丢失，请由队长轮换。</p>
+          </div>
+
+          <div class="story-coop-forming-actions">
+            <button id="story-coop-rotate-invite" class="story-command hidden" type="button">轮换邀请码</button>
+            <button id="story-coop-start" class="story-command story-command-primary hidden" type="button">开始协作旅程</button>
+            <button id="story-coop-leave" class="story-command story-command-danger" type="button">解散队伍</button>
+          </div>
+          <p class="story-coop-danger-note">任一成员解散队伍后，当前大厅会对全队关闭。</p>
+        </section>
+
+        <section id="story-coop-active" class="story-coop-section hidden" aria-labelledby="story-coop-active-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <h3 id="story-coop-active-title">协作旅程已开始</h3>
+              <p>当前阶段仅开放队伍与存档基础能力。</p>
+            </div>
+            <span id="story-coop-active-party-revision" class="story-coop-revision">Revision --</span>
+          </div>
+          <dl class="story-coop-run-summary">
+            <div><dt>Run ID</dt><dd id="story-coop-run-id">--</dd></div>
+            <div><dt>Run revision</dt><dd id="story-coop-run-revision">--</dd></div>
+            <div><dt>状态</dt><dd id="story-coop-run-status">--</dd></div>
+          </dl>
+          <button id="story-coop-abandon" class="story-command story-command-danger" type="button">放弃并释放全队</button>
+          <p class="story-coop-danger-note">放弃会结束这次协作旅程，并让所有成员离开该队伍。此操作不可恢复。</p>
+        </section>
+
+        <div class="story-dialog-actions">
+          <button id="story-coop-close" class="story-command" value="cancel">关闭</button>
+        </div>
+      </form>
+    </dialog>
+    {% endif %}
   </div>
   <script>
     window.__STORY_ACCOUNT__ = {{ account|tojson }};
     window.__STORY_DEV_TOOLS__ = {{ story_dev_tools|tojson }};
+    window.__STORY_COOP_ACCESS__ = {{ story_coop_access|tojson }};
     window.GTN_STORAGE = window.GTN_STORAGE || (() => {
       const memory = new Map();
       let storage = null;

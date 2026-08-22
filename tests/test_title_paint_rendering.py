@@ -31,3 +31,13 @@ def test_story_and_editor_solid_title_paints_cannot_inherit_transparency():
 
 def test_title_color_fix_has_a_static_cache_version():
     assert 'title-solid-color-1' in APP_PY
+
+
+def test_battle_chat_timeline_preserves_gradient_name_style():
+    timeline_body = GAME_JS.split('function makeChatTimelineEntry(', 1)[1].split('\n}', 1)[0]
+    assert "const nameStyle = meta.name_style || meta.nameStyle;" in timeline_body
+    assert "name_style: nameStyle && typeof nameStyle === 'object' ? nameStyle : null" in timeline_body
+    assert 'function chatIdentitySignature(entry = {})' in GAME_JS
+    assert 'entry.name_style || entry.nameStyle || null' in GAME_JS
+    assert 'item && chatIdentitySignature(item)' in GAME_JS
+    assert 'chatIdentitySignature(entry)}`' in GAME_JS

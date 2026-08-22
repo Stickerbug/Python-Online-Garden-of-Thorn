@@ -310,6 +310,298 @@ a { font: inherit; }
 [data-theme="dark"] .story-dev-toggle:hover,
 [data-theme="dark"] .story-dev-toggle.is-active { background: #66571a; }
 
+.story-coop-entry {
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid #356c5b;
+  border-radius: 4px;
+  color: #173f34;
+  background: #bfe9d9;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.story-coop-entry + .story-dev-toggle { margin-left: 6px; }
+
+.story-coop-entry:hover { background: #9edbc5; }
+[data-theme="dark"] .story-coop-entry {
+  color: #d9fff0;
+  border-color: #6cb49b;
+  background: #214d3f;
+}
+[data-theme="dark"] .story-coop-entry:hover { background: #2c6754; }
+
+.story-dialog.story-coop-preview-dialog {
+  width: min(640px, calc(100vw - 30px));
+  max-height: min(820px, calc(100dvh - 28px));
+}
+
+.story-coop-preview-dialog #story-coop-lobby-form {
+  max-height: min(772px, calc(100dvh - 76px));
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+}
+
+.story-coop-preview-dialog h2,
+.story-coop-preview-dialog h3,
+.story-coop-preview-dialog p { margin-top: 0; }
+.story-coop-preview-dialog > form > h2 { margin-bottom: 0; }
+.story-coop-preview-dialog > form > #story-coop-preview-copy { margin-bottom: 0; }
+
+.story-coop-contract {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.story-coop-contract > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--story-line-soft);
+  border-radius: 6px;
+  background: var(--story-surface-muted);
+}
+.story-coop-contract dt { color: var(--story-muted); font-size: 11px; }
+.story-coop-contract dd { margin: 0; font-weight: 750; }
+
+.story-coop-lobby-status {
+  min-height: 38px;
+  margin: 0 !important;
+  padding: 9px 11px;
+  border: 1px solid var(--story-line-soft);
+  border-radius: var(--radius-md);
+  color: var(--story-text) !important;
+  background: var(--story-surface-muted);
+  line-height: 1.45;
+}
+
+.story-coop-lobby-status[data-tone='success'] {
+  border-color: color-mix(in srgb, var(--story-green) 58%, var(--story-line));
+  background: color-mix(in srgb, var(--story-green-soft) 68%, var(--story-surface));
+}
+
+.story-coop-lobby-status[data-tone='error'] {
+  border-color: color-mix(in srgb, var(--story-red) 58%, var(--story-line));
+  background: color-mix(in srgb, var(--story-red) 10%, var(--story-surface));
+}
+
+.story-coop-lobby-status[data-tone='busy'] { color: var(--story-muted) !important; }
+
+.story-coop-section {
+  display: grid;
+  gap: 13px;
+  padding: 14px;
+  border: 1px solid var(--story-line-soft);
+  border-radius: var(--radius-lg);
+  background: var(--story-surface);
+}
+
+.story-coop-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.story-coop-section-heading h3 { margin-bottom: 4px; font-size: 16px; }
+.story-coop-preview-dialog .story-coop-section-heading p,
+.story-coop-preview-dialog .story-coop-section > p,
+.story-coop-preview-dialog .story-coop-invite-reveal p {
+  margin: 0;
+  color: var(--story-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.story-coop-revision {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid var(--story-line-soft);
+  border-radius: 999px;
+  color: var(--story-muted);
+  background: var(--story-surface-muted);
+  font: 650 11px/1.35 ui-monospace, 'SFMono-Regular', Consolas, monospace;
+}
+
+.story-coop-join-row { display: grid; gap: 6px; }
+.story-coop-join-row label { font-size: 12px; font-weight: 700; }
+.story-coop-join-row small { color: var(--story-muted); font-size: 11px; }
+.story-coop-inline-actions,
+.story-coop-code-row,
+.story-coop-forming-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.story-coop-inline-actions input {
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--story-line);
+  border-radius: 4px;
+  color: var(--story-text);
+  background: var(--story-surface);
+  font: 600 13px/1.3 ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  outline: none;
+}
+
+.story-coop-inline-actions input:focus-visible {
+  border-color: var(--story-green);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--story-green) 24%, transparent);
+}
+
+.story-coop-inline-actions input:disabled { opacity: .58; }
+
+.story-coop-members {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.story-coop-member {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--story-green) 38%, var(--story-line-soft));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--story-green-soft) 45%, var(--story-surface));
+}
+
+.story-coop-member.is-empty {
+  border-style: dashed;
+  border-color: var(--story-line);
+  color: var(--story-muted);
+  background: var(--story-surface-muted);
+}
+
+.story-coop-seat {
+  display: grid;
+  place-items: center;
+  min-width: 47px;
+  min-height: 25px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: #fff;
+  background: var(--story-green);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.story-coop-member.is-empty .story-coop-seat {
+  color: var(--story-muted);
+  background: var(--story-surface);
+}
+
+.story-coop-member-identity { min-width: 0; display: grid; gap: 1px; }
+.story-coop-member-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.story-coop-member-identity small { overflow: hidden; color: var(--story-muted); text-overflow: ellipsis; white-space: nowrap; }
+.story-coop-member-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.story-coop-member-badge {
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: var(--story-text);
+  background: var(--story-surface);
+  font-size: 10px;
+  font-weight: 750;
+}
+.story-coop-member-badge.is-leader { color: #5c4700; background: #ffe89a; }
+[data-theme='dark'] .story-coop-member-badge.is-leader { color: #fff3bd; background: #66510d; }
+
+.story-coop-invite-reveal {
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--story-gold) 58%, var(--story-line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--story-gold) 11%, var(--story-surface));
+}
+
+.story-coop-eyebrow {
+  color: var(--story-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.story-coop-code-row output {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: block;
+  padding: 9px 10px;
+  border: 1px solid var(--story-line);
+  border-radius: 4px;
+  color: var(--story-text);
+  background: var(--story-surface);
+  font: 700 13px/1.4 ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.story-coop-forming-actions { flex-wrap: wrap; }
+.story-coop-forming-actions .story-command { flex: 1 1 135px; }
+.story-coop-danger-note { color: var(--story-red) !important; }
+
+.story-coop-run-summary {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.story-coop-run-summary > div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 4px;
+  background: var(--story-surface-muted);
+}
+.story-coop-run-summary dt { color: var(--story-muted); }
+.story-coop-run-summary dd {
+  min-width: 0;
+  margin: 0;
+  font: 650 12px/1.4 ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.story-coop-copy-helper {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+@media (max-width: 620px) {
+  .story-dialog.story-coop-preview-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+  .story-coop-preview-dialog #story-coop-lobby-form {
+    max-height: calc(100dvh - 62px);
+    padding: 15px;
+  }
+  .story-coop-contract { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .story-coop-members { grid-template-columns: 1fr; }
+  .story-coop-inline-actions { align-items: stretch; flex-direction: column; }
+  .story-coop-inline-actions .story-command { width: 100%; }
+  .story-coop-section-heading { flex-direction: column; gap: 7px; }
+  .story-coop-run-summary > div { grid-template-columns: 94px minmax(0, 1fr); }
+}
+
 .story-dev-panel {
   position: fixed;
   top: auto;
@@ -4852,6 +5144,15 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .player-name-value,
 .title-style-segment {
   display: inline;
+}
+
+/* Match the main UI's descender-safe nickname box. This is especially needed
+   for gradient names inside the clipped Classic-style actor label. */
+.player-name-value {
+  display: inline-block;
+  line-height: 1.3;
+  overflow: visible;
+  vertical-align: baseline;
 }
 
 .story-player-title {
