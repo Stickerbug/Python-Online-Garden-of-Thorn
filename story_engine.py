@@ -3777,8 +3777,8 @@ def _start_combat(state, node, seed, events, encounter_override=None):
             int(STORY_RELICS['dandelion_blessing']['amount']),
             events,
         )
-    _machine_learning_turn_start(state, seed, events)
     _draw_cards(state, draw_count, seed, events)
+    _machine_learning_turn_start(state, seed, events)
     combat['draw_phase_complete'] = True
     _refresh_combat_projections(state)
     events.append({'type': 'combat_start', 'enemy_ids': [enemy['def_id'] for enemy in enemies]})
@@ -5187,7 +5187,6 @@ def _turn_boundary(state, seed, events, extra=False):
         combat['temporary_power'] += _relic_amount(state, 'accumulate')
     if _has_relic(state, 'support'):
         _gain_shield(state, int(STORY_RELICS['support']['amount']), events)
-    _machine_learning_turn_start(state, seed, events)
     _run_turn_start_equipment(state, seed, events)
     for equipment in combat.get('equipment', []):
         equipment['turns_equipped'] = int(equipment.get('turns_equipped') or 0) + 1
@@ -5211,6 +5210,7 @@ def _turn_boundary(state, seed, events, extra=False):
         turn_draw += _relic_amount(state, 'easy_tiger')
     turn_draw += int(combat.pop('next_turn_draw_delta', 0) or 0)
     _draw_cards(state, turn_draw, seed, events)
+    _machine_learning_turn_start(state, seed, events)
     combat['draw_phase_complete'] = True
     if _has_relic(state, 'web_relic'):
         combat['cannot_draw'] = True

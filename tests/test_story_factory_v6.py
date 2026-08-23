@@ -222,6 +222,30 @@ def test_mechanical_flower_captures_void_cards_and_recycles_weak_cards():
     assert combat['hand'][0]['modifiers']['force_void'] is True
 
 
+def test_mechanical_flower_marks_normal_draw_and_captures_two_cards():
+    seed = 'mechanical-track-normal-draw'
+    state, _ = _factory_combat(['mechanical_flower'], seed)
+    combat = state['combat']
+    marked = [
+        card for card in combat['hand']
+        if (card.get('modifiers') or {}).get('force_void')
+    ]
+    assert len(combat['hand']) == 5
+    assert len(marked) == 2
+
+    marked_ids = {card['instance_id'] for card in marked}
+    next_state, events = apply_story_action(state, 'end_turn', {}, seed)
+    captured_ids = {
+        event['card_instance_id']
+        for event in events
+        if event.get('type') == 'mechanical_track_captured'
+    }
+    assert captured_ids == marked_ids
+    assert not marked_ids.intersection(
+        card['instance_id'] for card in next_state['combat']['exile_pile']
+    )
+
+
 def test_boss_rush_boss_grants_two_complete_elite_rewards():
     seed = 'boss-rush-double-elite'
     state = build_initial_story_state(seed)
