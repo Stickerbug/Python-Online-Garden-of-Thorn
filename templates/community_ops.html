@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>社区运营台 · Garden of Thorn</title>
+  <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/static/css/community_ops.css?v={{ static_version|default('dev')|urlencode }}">
+</head>
+<body>
+  <header class="ops-header">
+    <div>
+      <p class="ops-kicker">Garden of Thorn</p>
+      <h1>社区运营台</h1>
+      <p class="ops-subtitle">公告、限时投票、更新日志草稿与操作审计</p>
+    </div>
+    <div class="ops-header-actions">
+      <span class="ops-actor">{{ actor_username }} · {{ actor_role }}</span>
+      <button id="ops-refresh" class="ops-button is-secondary" type="button">刷新</button>
+      <a class="ops-button is-secondary" href="/">返回游戏</a>
+    </div>
+  </header>
+
+  <main class="ops-layout">
+    <div id="ops-status" class="ops-status" role="status" aria-live="polite">正在加载运营数据…</div>
+
+    <section class="ops-panel ops-create-panel" aria-labelledby="announcement-create-title">
+      <div class="ops-panel-head">
+        <div>
+          <p class="ops-kicker">Announcement</p>
+          <h2 id="announcement-create-title">创建公告</h2>
+        </div>
+      </div>
+      <form id="announcement-create-form" class="ops-form">
+        <label>标题<input id="announcement-title" type="text" maxlength="120" required></label>
+        <label class="is-wide">正文<textarea id="announcement-body" rows="6" maxlength="4000" required></textarea></label>
+        <label>开始时间<input id="announcement-start" type="datetime-local"></label>
+        <label>结束时间（可选）<input id="announcement-end" type="datetime-local"></label>
+        <div class="ops-checks is-wide">
+          <label><input id="announcement-pinned" type="checkbox"> 置顶</label>
+          <label><input id="announcement-publish" type="checkbox"> 创建后发布</label>
+          <label><input id="announcement-changelog" type="checkbox"> 同步为更新日志草稿</label>
+        </div>
+        <button class="ops-button" type="submit">创建公告</button>
+      </form>
+    </section>
+
+    <section class="ops-panel ops-create-panel" aria-labelledby="poll-create-title">
+      <div class="ops-panel-head">
+        <div>
+          <p class="ops-kicker">Poll</p>
+          <h2 id="poll-create-title">创建投票</h2>
+        </div>
+      </div>
+      <form id="poll-create-form" class="ops-form">
+        <label class="is-wide">问题<input id="poll-question" type="text" maxlength="240" required></label>
+        <label class="is-wide">选项（每行一个，2–8项）<textarea id="poll-options" rows="6" maxlength="1300" required></textarea></label>
+        <label>开始时间<input id="poll-start" type="datetime-local"></label>
+        <label>截止时间<input id="poll-end" type="datetime-local" required></label>
+        <label>未投票提醒窗口（小时）<input id="poll-reminder" type="number" min="1" max="168" value="24" required></label>
+        <div class="ops-checks">
+          <label><input id="poll-publish" type="checkbox"> 创建后发布</label>
+        </div>
+        <button class="ops-button" type="submit">创建投票</button>
+      </form>
+    </section>
+
+    <section class="ops-panel ops-span" aria-labelledby="announcement-list-title">
+      <div class="ops-panel-head">
+        <div><p class="ops-kicker">Live & Draft</p><h2 id="announcement-list-title">公告</h2></div>
+        <span id="announcement-count" class="ops-count">0</span>
+      </div>
+      <div id="announcement-list" class="ops-list"></div>
+    </section>
+
+    <section class="ops-panel ops-span" aria-labelledby="poll-list-title">
+      <div class="ops-panel-head">
+        <div><p class="ops-kicker">Decisions</p><h2 id="poll-list-title">投票</h2></div>
+        <span id="poll-count" class="ops-count">0</span>
+      </div>
+      <div id="poll-list" class="ops-list"></div>
+    </section>
+
+    <section class="ops-panel" aria-labelledby="draft-list-title">
+      <div class="ops-panel-head">
+        <div><p class="ops-kicker">Changelog</p><h2 id="draft-list-title">更新日志草稿</h2></div>
+        <span id="draft-count" class="ops-count">0</span>
+      </div>
+      <p class="ops-note">草稿仅保存在数据库中，需人工整理进 CHANGELOG.txt；网页不会改写仓库文件。</p>
+      <div id="draft-list" class="ops-list"></div>
+    </section>
+
+    <section class="ops-panel" aria-labelledby="audit-list-title">
+      <div class="ops-panel-head">
+        <div><p class="ops-kicker">Audit</p><h2 id="audit-list-title">最近操作</h2></div>
+        <span id="audit-count" class="ops-count">0</span>
+      </div>
+      <div id="audit-list" class="ops-list is-compact"></div>
+    </section>
+  </main>
+
+  <script src="/static/js/community_ops.js?v={{ static_version|default('dev')|urlencode }}"></script>
+</body>
+</html>

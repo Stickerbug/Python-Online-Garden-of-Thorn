@@ -1,8 +1,18 @@
+import json
+import shutil
+import subprocess
+import tempfile
 import unittest
+import zipfile
+from pathlib import Path
 
 from cards import CARD_DEFS, CardDef, CardInstance
 from game_engine import EquipmentInstance, GameEngine, PlayerState
 from game_engine_2v2 import GameEngine2v2
+from mod_loader import load_mod
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class TurnBoundarySettlementTests(unittest.TestCase):
@@ -19,56 +29,40 @@ class TurnBoundarySettlementTests(unittest.TestCase):
             player.discard = []
         return engine
 
-    def test_bandage_expires_after_next_allied_actionable_player_turn(self):
+    def test_pending_bandage_expires_at_owners_current_turn_end(self):
         engine = self._prime_1v1()
         player = engine.players[0]
         player.invincible = True
         player.bandage_death_pending = True
         player.bandage_trigger_boundary_id = 0
-
-        engine._end_player_turn(0)
-
-        self.assertFalse(engine.game_over)
-        self.assertEqual(engine.current_player, 1)
-        self.assertEqual(player.health, 100)
-
-        engine._end_player_turn(1)
-
-        self.assertFalse(engine.game_over)
-        self.assertEqual(engine.current_player, 0)
-        self.assertEqual(player.health, 100)
-        self.assertEqual(player.bandage_death_action_player_id, 0)
+        # A stale value from the previous rule must not defer settlement.
+        player.bandage_death_action_player_id = 1
 
         engine._end_player_turn(0)
 
         self.assertTrue(engine.game_over)
         self.assertEqual(engine.winner, 1)
         self.assertEqual(player.health, 0)
+        self.assertTrue(any('自己回合结束时死亡' in line for line in engine.log))
 
-    def test_stunned_turn_does_not_count_as_actionable(self):
+    def test_stunned_own_turn_still_settles_bandage_death(self):
         engine = self._prime_1v1()
+        engine.first_player = 1
+        engine.current_player = 1
         player = engine.players[0]
         player.invincible = True
         player.bandage_death_pending = True
         player.bandage_trigger_boundary_id = 0
-        engine.players[1].skip_turn = 1
+        player.skip_turn = 1
 
-        engine._end_player_turn(0)
-
-        self.assertFalse(engine.game_over)
-        self.assertEqual(engine.current_player, 0)
-        self.assertEqual(player.health, 100)
-        self.assertEqual(player.bandage_death_action_player_id, 0)
-
-        engine._end_player_turn(0)
+        engine._end_player_turn(1)
 
         self.assertTrue(engine.game_over)
         self.assertEqual(engine.winner, 1)
-        self.assertEqual(engine.players[1].skip_turn, 0)
+        self.assertEqual(player.skip_turn, 0)
         stun_index = next(i for i, line in enumerate(engine.log) if '被眩晕，跳过本回合' in line)
         bandage_index = next(i for i, line in enumerate(engine.log) if '的绷带效果结束' in line)
         self.assertLess(stun_index, bandage_index)
-        self.assertEqual(engine._turn_boundary_serial, 3)
 
     def test_turn_start_auto_effects_finish_before_bandage_death(self):
         engine = self._prime_1v1()
@@ -94,7 +88,7 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         self.assertLess(auto_index, bandage_index)
         self.assertTrue(engine.game_over)
 
-    def test_bandage_triggered_during_boundary_waits_one_more_action(self):
+    def test_bandage_triggered_on_other_turn_waits_for_owners_turn_end(self):
         engine = self._prime_1v1()
         engine._ensure_turn_boundary()
         player = engine.players[0]
@@ -106,6 +100,7 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         self.assertFalse(engine.game_over)
         self.assertEqual(player.health, 100)
         self.assertEqual(engine.phase, 'action')
+        self.assertEqual(player.bandage_death_action_player_id, 0)
 
         engine.first_player = 1
         engine.current_player = 1
@@ -122,7 +117,51 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         self.assertEqual(engine.winner, 1)
         self.assertEqual(player.health, 0)
 
-    def test_2v2_bandage_expiry_does_not_stop_surviving_team(self):
+    def test_2v2_teammate_turn_does_not_expire_bandage(self):
+        engine = GameEngine2v2()
+        engine.phase = 'action'
+        engine.round_num = 2
+        engine.turn_order = [0, 2, 1, 3]
+        engine.turn_index = 1
+        engine.current_player = 2
+        for player in engine.players:
+            player.health = 100
+            player.deck = []
+            player.hand = []
+            player.discard = []
+        player = engine.players[0]
+        player.invincible = True
+        player.bandage_death_pending = True
+        player.bandage_trigger_boundary_id = 0
+
+        engine._end_player_turn(2)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(player.health, 100)
+        self.assertEqual(engine.current_player, 1)
+        self.assertEqual(engine.phase, 'action')
+
+        engine._end_player_turn(1)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(engine.current_player, 3)
+        self.assertEqual(player.health, 100)
+        self.assertEqual(player.bandage_death_action_player_id, 0)
+
+        engine._end_player_turn(3)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(engine.current_player, 0)
+        self.assertEqual(player.health, 100)
+
+        engine._end_player_turn(0)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(player.health, 0)
+        self.assertEqual(engine.current_player, 2)
+        self.assertEqual(engine.phase, 'action')
+
+    def test_2v2_pending_bandages_expire_only_on_their_owners_turns(self):
         engine = GameEngine2v2()
         engine.phase = 'action'
         engine.round_num = 2
@@ -134,38 +173,6 @@ class TurnBoundarySettlementTests(unittest.TestCase):
             player.deck = []
             player.hand = []
             player.discard = []
-        player = engine.players[0]
-        player.invincible = True
-        player.bandage_death_pending = True
-        player.bandage_trigger_boundary_id = 0
-
-        engine._end_player_turn(0)
-
-        self.assertFalse(engine.game_over)
-        self.assertEqual(player.health, 100)
-        self.assertEqual(engine.current_player, 2)
-        self.assertEqual(engine.phase, 'action')
-
-        engine._end_player_turn(2)
-
-        self.assertFalse(engine.game_over)
-        self.assertEqual(engine.current_player, 1)
-        self.assertEqual(player.health, 100)
-        self.assertEqual(player.bandage_death_action_player_id, 1)
-
-        engine._end_player_turn(1)
-
-        self.assertFalse(engine.game_over)
-        self.assertEqual(player.health, 0)
-        self.assertEqual(engine.current_player, 3)
-        self.assertEqual(engine.phase, 'action')
-
-    def test_opposing_pending_bandages_expire_on_their_respective_team_turns(self):
-        engine = GameEngine2v2()
-        engine.phase = 'action'
-        engine.current_player = 0
-        engine.players[1].health = 0
-        engine.players[3].health = 0
         for player_id in (0, 2):
             player = engine.players[player_id]
             player.health = 1
@@ -174,20 +181,18 @@ class TurnBoundarySettlementTests(unittest.TestCase):
             player.bandage_trigger_boundary_id = 0
         engine._ensure_turn_boundary()
 
-        engine._enter_player_action_phase(0)
-
-        self.assertFalse(engine.game_over)
-        self.assertEqual(engine.players[0].health, 1)
-        self.assertEqual(engine.players[0].bandage_death_action_player_id, 0)
-        self.assertEqual(engine.players[2].bandage_death_action_player_id, -1)
-
         engine._end_player_turn(0)
 
-        self.assertTrue(engine.game_over)
-        self.assertEqual(engine.winner, 1)
-        self.assertEqual(engine.winning_team, 1)
+        self.assertFalse(engine.game_over)
         self.assertEqual(engine.players[0].health, 0)
         self.assertEqual(engine.players[2].health, 1)
+        self.assertEqual(engine.current_player, 2)
+
+        engine._end_player_turn(2)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(engine.players[2].health, 0)
+        self.assertEqual(engine.current_player, 1)
 
     def test_bandage_trigger_does_not_block_the_current_action_phase(self):
         engine = self._prime_1v1()
@@ -211,18 +216,6 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         self.assertTrue(player.bandage_death_pending)
         self.assertEqual(engine.phase, 'action')
         self.assertEqual(engine.current_player, 0)
-
-        engine._end_player_turn(0)
-
-        self.assertFalse(engine.game_over)
-        self.assertEqual(player.health, 1)
-        self.assertEqual(player.bandage_death_action_player_id, -1)
-
-        engine._end_player_turn(1)
-
-        self.assertFalse(engine.game_over)
-        self.assertEqual(engine.current_player, 0)
-        self.assertEqual(player.bandage_death_action_player_id, 0)
 
         engine._end_player_turn(0)
 
@@ -255,8 +248,65 @@ class TurnBoundarySettlementTests(unittest.TestCase):
 
         self.assertTrue(result.get('success'))
 
-    def test_bandage_action_assignment_survives_state_round_trip(self):
+        engine._end_player_turn(0)
+
+        self.assertTrue(engine.game_over)
+        self.assertEqual(player.health, 0)
+
+    def test_bandage_response_prediction_and_authoritative_timing(self):
+        package = load_mod(str(ROOT / 'mods' / 'Vanilla Cards.gtnmod'))
+        self.assertEqual([], package.errors)
+        bandage_def = next(card.to_card_def() for card in package.cards if card.id == 'Bandage')
+        previous = CARD_DEFS.get('Bandage')
+        CARD_DEFS['Bandage'] = bandage_def
+        try:
+            engine = self._prime_1v1()
+            attacker = CardInstance('Basic')
+            bandage = CardInstance('Bandage')
+            engine.players[0].hand = [attacker]
+            engine.players[1].health = 5
+            engine.players[1].hand = [bandage]
+
+            result = engine.play_card(
+                0,
+                attacker.instance_id,
+                {'target_player': 1, 'target_player_id': 1, 'target_id': 1},
+            )
+            self.assertTrue(result.get('needs_response'), result)
+
+            prediction = engine.build_response_damage_prediction(1, [bandage])
+            self.assertGreater(prediction['no_counter']['total'], 0)
+            self.assertEqual(
+                prediction['no_counter']['total'],
+                prediction['counters'][str(bandage.instance_id)]['after']['total'],
+            )
+            self.assertFalse(engine.players[1].bandage_active)
+            self.assertFalse(engine.players[1].bandage_death_pending)
+
+            response = engine.handle_response(1, bandage.instance_id)
+            self.assertTrue(response.get('success'), response)
+            saved = engine.players[1]
+            self.assertEqual(1, saved.health)
+            self.assertTrue(saved.invincible)
+            self.assertTrue(saved.bandage_death_pending)
+            self.assertEqual(1, saved.bandage_death_action_player_id)
+
+            engine._end_player_turn(0)
+            self.assertFalse(engine.game_over)
+            self.assertEqual(1, engine.current_player)
+            engine._end_player_turn(1)
+            self.assertTrue(engine.game_over)
+            self.assertEqual(0, saved.health)
+        finally:
+            if previous is None:
+                CARD_DEFS.pop('Bandage', None)
+            else:
+                CARD_DEFS['Bandage'] = previous
+
+    def test_bandage_pending_replay_state_survives_round_trip_and_expires(self):
         player = PlayerState(0)
+        player.health = 1
+        player.invincible = True
         player.bandage_death_pending = True
         player.bandage_death_action_player_id = 0
 
@@ -264,8 +314,88 @@ class TurnBoundarySettlementTests(unittest.TestCase):
 
         self.assertTrue(restored.bandage_death_pending)
         self.assertEqual(restored.bandage_death_action_player_id, 0)
+        engine = self._prime_1v1()
+        engine.players[0] = restored
+        engine._end_player_turn(0)
+        self.assertTrue(engine.game_over)
+        self.assertEqual(0, restored.health)
 
-    def test_2v2_actionable_teammate_death_still_expires_bandage(self):
+    def test_bandage_card_and_status_text_use_exact_own_turn_wording(self):
+        package = ROOT / 'mods' / 'Vanilla Cards.gtnmod'
+        with zipfile.ZipFile(package) as archive:
+            document = json.loads(archive.read('mod.json').decode('utf-8'))
+            zh_locale = json.loads(archive.read('locales/zh.json').decode('utf-8'))
+        bandage = next(
+            card
+            for card in document['registries']['cards']
+            if card.get('id') == 'vanilla:bandage'
+        )
+        exact_effect_text = '使自己获得绷带；绷带触发后自己回合结束时死亡  响应：被作为攻击牌目标'
+        self.assertEqual(exact_effect_text, bandage['effect_text'])
+        self.assertEqual(exact_effect_text, zh_locale['cards']['vanilla:bandage']['effect_text'])
+
+        client_source = (ROOT / 'static' / 'js' / 'game.js').read_text(encoding='utf-8')
+        description_spec = (ROOT / 'docs' / '卡牌描述规范.md').read_text(encoding='utf-8')
+        self.assertIn('自己回合结束时死亡', client_source)
+        self.assertIn('自己回合结束时死亡', description_spec)
+        self.assertNotIn('己方下一名可行动玩家回合结束后死亡', client_source)
+        self.assertNotIn('己方下一名可行动玩家回合结束后死亡', description_spec)
+
+    def test_local_solo_bandage_uses_owner_turn_end(self):
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('node is required for the local Bandage behavior test')
+        worker = (ROOT / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
+        harness = r'''
+const bandageEngine = Object.create(LocalSoloEngine.prototype);
+bandageEngine.players = [new LocalPlayer(0), new LocalPlayer(1)];
+bandageEngine.player_names = ['P1', 'P2'];
+bandageEngine.log = [];
+bandageEngine.logMsg = message => bandageEngine.log.push(String(message));
+bandageEngine.checkGameOver = () => {};
+bandageEngine._turn_boundary_active = false;
+bandageEngine._turn_boundary_serial = 7;
+bandageEngine.players[0].health = 1;
+bandageEngine.players[0].invincible = true;
+bandageEngine.markBandageDeathPending(0);
+const assignedOwner = bandageEngine.players[0].bandage_death_action_player_id;
+bandageEngine.expireBandagesAfterAction(1);
+const afterOtherTurn = bandageEngine.players[0].health;
+bandageEngine.expireBandagesAfterAction(0);
+process.stdout.write(JSON.stringify({
+    assignedOwner,
+    afterOtherTurn,
+    afterOwnTurn: bandageEngine.players[0].health,
+    wording: bandageEngine.log.some(line => line.includes('自己回合结束时死亡')),
+}));
+'''
+        with tempfile.TemporaryDirectory(prefix='gtn-bandage-worker-') as temp_dir:
+            script_path = Path(temp_dir) / 'bandage-worker-test.js'
+            script_path.write_text(
+                "globalThis.postMessage = () => {};\n" + worker + "\n" + harness,
+                encoding='utf-8',
+            )
+            completed = subprocess.run(
+                [node, str(script_path)],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                timeout=20,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(
+            {
+                'assignedOwner': 0,
+                'afterOtherTurn': 1,
+                'afterOwnTurn': 0,
+                'wording': True,
+            },
+            json.loads(completed.stdout),
+        )
+
+    def test_2v2_dead_teammate_turn_does_not_expire_bandage(self):
         engine = GameEngine2v2()
         engine.phase = 'action'
         engine.turn_order = [0, 2, 1, 3]
@@ -283,17 +413,17 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         advanced = engine._advance_dead_current_player_if_ready()
 
         self.assertTrue(advanced)
-        self.assertTrue(engine.game_over)
-        self.assertEqual(engine.winning_team, 1)
-        self.assertEqual(pending.health, 0)
+        self.assertFalse(engine.game_over)
+        self.assertEqual(pending.health, 1)
+        self.assertEqual(engine.current_player, 3)
 
-    def test_stunned_teammate_is_not_the_next_allied_actionable_player(self):
+    def test_2v2_stunned_owner_turn_still_expires_bandage(self):
         engine = GameEngine2v2()
         engine.phase = 'action'
         engine.round_num = 2
         engine.turn_order = [0, 2, 1, 3]
-        engine.turn_index = 0
-        engine.current_player = 0
+        engine.turn_index = 3
+        engine.current_player = 3
         for player in engine.players:
             player.health = 100
             player.deck = []
@@ -303,25 +433,14 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         pending.invincible = True
         pending.bandage_death_pending = True
         pending.bandage_trigger_boundary_id = 0
-        engine.players[1].skip_turn = 1
-
-        engine._end_player_turn(0)
-        engine._end_player_turn(2)
-
-        self.assertEqual(engine.current_player, 3)
-        self.assertEqual(pending.health, 100)
-        self.assertEqual(engine.players[1].skip_turn, 0)
+        pending.skip_turn = 1
 
         engine._end_player_turn(3)
 
-        self.assertEqual(pending.health, 100)
-        self.assertEqual(engine.current_player, 0)
-        self.assertEqual(pending.bandage_death_action_player_id, 0)
-
-        engine._end_player_turn(0)
-
         self.assertEqual(pending.health, 0)
         self.assertEqual(engine.current_player, 2)
+        self.assertEqual(pending.skip_turn, 0)
+        self.assertFalse(engine.game_over)
 
     def test_turn_start_death_does_not_skip_living_player_or_soil_turn_end(self):
         soil_id = 'test:r15236_soil'

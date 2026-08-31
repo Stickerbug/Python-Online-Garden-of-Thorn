@@ -202,7 +202,7 @@ CARD_I18N = {
     'Yggdrasil': {
         'name': _t('世界树之叶', 'Yggdrasil', 'Arbre-Monde', 'Árvore-Mundo', 'Мировое древо', '世界樹'),
         'desc': _t('神奇的树叶。可以使人死而复生。', 'A wondrous leaf that can bring the dead back to life.', 'Une feuille merveilleuse qui peut ramener les morts à la vie.', 'Uma folha milagrosa capaz de trazer alguém de volta da morte.', 'Чудесный лист, способный вернуть мёртвого к жизни.', '死者を蘇らせることができる不思議な葉。'),
-        'effect': _t('回复目标20H；自身受到致命伤害时将H设为5，抽3张牌，清除所有效果，无敌直到下一个自己回合结束，放逐此牌；可以选择一个阵亡玩家复活，并触发此效果', 'Heal the target for 20H; when you take lethal damage, set your H to 5, draw 3 cards, clear all effects, become invincible until the end of your next own turn, and exile this card; you may choose a defeated player to revive and trigger this effect', 'Soigne la cible de 20H ; lorsque vous subissez des dégâts mortels, fixe votre H à 5, pioche 3 cartes, nettoie tous les effets, vous rend invincible jusqu’à la fin de votre prochain tour à vous et exile cette carte ; vous pouvez choisir un joueur vaincu pour le ranimer et déclencher cet effet', '+20H; ao sofrer dano letal, se estiver na mão, limpa seus efeitos, define a vida como 5, fica invencível neste turno e exila esta carta', '+20H; при смертельном уроне, если карта в руке, очистить ваши эффекты, установить здоровье на 5, стать неуязвимым на этот ход и изгнать эту карту', '対象を20H回復する。自分が致命ダメージを受ける時、Hを5にし、カードを3枚引き、全ての効果を解除し、次の自分のターン終了まで無敵になり、このカードを放逐する。倒れたプレイヤーを選んで復活させ、この効果を発動できる'),
+        'effect': _t('回复目标25H；自身受到致命伤害时将H设为5，抽3张牌，清除所有效果，无敌直到下一个自己回合结束，放逐此牌；可以选择一个阵亡玩家复活，并触发此效果', 'Heal the target for 25H; when you take lethal damage, set your H to 5, draw 3 cards, clear all effects, become invincible until the end of your next own turn, and exile this card; you may choose a defeated player to revive and trigger this effect', 'Soigne la cible de 25H ; lorsque vous subissez des dégâts mortels, fixe votre H à 5, pioche 3 cartes, nettoie tous les effets, vous rend invincible jusqu’à la fin de votre prochain tour à vous et exile cette carte ; vous pouvez choisir un joueur vaincu pour le ranimer et déclencher cet effet', '+25H; ao sofrer dano letal, se estiver na mão, limpa seus efeitos, define a vida como 5, fica invencível neste turno e exila esta carta', '+25H; при смертельном уроне, если карта в руке, очистить ваши эффекты, установить здоровье на 5, стать неуязвимым на этот ход и изгнать эту карту', '対象を25H回復する。自分が致命ダメージを受ける時、Hを5にし、カードを3枚引き、全ての効果を解除し、次の自分のターン終了まで無敵になり、このカードを放逐する。倒れたプレイヤーを選んで復活させ、この効果を発動できる'),
     },
     'Corruption': {
         'name': _t('腐化', 'Corruption', 'Corruption', 'Corrupção', 'Порча', '腐化'),
@@ -256,7 +256,7 @@ OPENING_EVENT_I18N = {
     },
     4: {
         'name': _t('烈焰预兆', 'Flame Omen', 'Présage de flammes', 'Presságio Flamejante', 'Огненное знамение', '烈炎の兆し'),
-        'desc': _t('开局对所有敌方玩家施加4层灼烧', 'At game start, apply 4 Burn to all enemy players', 'Au début de la partie, applique 4 Brûlure à tous les joueurs ennemis', 'No início da partida, aplica 4 Queima a todos os jogadores inimigos', 'В начале игры наложите 4 Горения на всех вражеских игроков', '開始時、敵プレイヤー全員に灼焼4を付与'),
+        'desc': _t('开局对所有敌方玩家施加3层灼烧', 'At game start, apply 3 Burn to all enemy players', 'Au début de la partie, applique 3 Brûlure à tous les joueurs ennemis', 'No início da partida, aplica 3 Queima a todos os jogadores inimigos', 'В начале игры наложите 3 Горения на всех вражеских игроков', '開始時、敵プレイヤー全員に灼焼3を付与'),
     },
     5: {
         'name': _t('命运抽签', 'Fated Draw', 'Pioche du destin', 'Compra do Destino', 'Жребий судьбы', '運命のドロー'),
@@ -264,7 +264,14 @@ OPENING_EVENT_I18N = {
     },
     6: {
         'name': _t('能量涌动', 'Energy Surge', 'Poussée d’énergie', 'Surto de Energia', 'Всплеск энергии', 'エネルギー奔流'),
-        'desc': _t('每回合多回复1[[icon:E]]', 'Recover 1 extra [[icon:E]] each turn', 'Récupérez 1 [[icon:E]] supplémentaire à chaque tour', 'Recupere 1 [[icon:E]] extra a cada turno', 'Каждый ход восстанавливайте на 1 [[icon:E]] больше', '毎ターン追加で1[[icon:E]]回復'),
+        'desc': _t(
+            '每回合多回复2[[icon:E]]；自己回合结束时，受到等于剩余[[icon:E]]两倍的[[icon:D]]',
+            'Recover 2 extra [[icon:E]] each turn; at the end of your turn, take [[icon:D]] equal to twice your remaining [[icon:E]]',
+            'Récupérez 2 [[icon:E]] supplémentaires à chaque tour ; à la fin de votre tour, subissez des [[icon:D]] égaux au double de vos [[icon:E]] restants',
+            'Recupere 2 [[icon:E]] extras a cada turno; no fim do seu turno, sofra [[icon:D]] igual ao dobro do [[icon:E]] restante',
+            'Каждый ход восстанавливайте на 2 [[icon:E]] больше; в конце своего хода получите [[icon:D]] в размере удвоенного остатка [[icon:E]]',
+            '毎ターン追加で2[[icon:E]]回復する。自分のターン終了時、残り[[icon:E]]の2倍に等しい[[icon:D]]を受ける',
+        ),
     },
     7: {
         'name': _t('先手压制', 'Opening Pressure', 'Pression initiale', 'Pressão Inicial', 'Стартовое давление', '先手圧制'),

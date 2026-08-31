@@ -8,6 +8,7 @@ MAX_CARD_LAYER = 64
 MAX_CARD_EXTRA_HITS = 32
 MAX_DAMAGE_HITS = 100
 MAX_CARD_POWER = 1024
+YGGDRASIL_HEAL = 25
 
 
 def clamp_card_layer(value: Any, default: int = 1) -> int:
@@ -15,6 +16,16 @@ def clamp_card_layer(value: Any, default: int = 1) -> int:
         return min(MAX_CARD_LAYER, max(1, int(value)))
     except Exception:
         return max(1, min(MAX_CARD_LAYER, int(default or 1)))
+
+
+def fusion_adjusted_cost(cost: Any, fusion_level: Any) -> int:
+    """Apply Fusion's +50% cost per layer above the default layer, floored."""
+    try:
+        normalized_cost = max(0, int(cost))
+    except Exception:
+        normalized_cost = 0
+    level = clamp_card_layer(fusion_level)
+    return normalized_cost * (level + 1) // 2
 
 
 def clamp_card_extra_hits(value: Any) -> int:
@@ -272,7 +283,8 @@ class CardInstance:
         swift = self.swift_value if self.swift_value > 0 else self.card_def.swift_value
         temp_swift = max(0, int(self.temp_swift_value or 0))
         temp_heavy = max(0, int(self.temp_heavy_value or 0))
-        return max(0, base + temp_heavy - self.mimic_discount - swift - temp_swift)
+        cost = max(0, base + temp_heavy - self.mimic_discount - swift - temp_swift)
+        return fusion_adjusted_cost(cost, self.fusion_level)
 
     @property
     def cost_m(self) -> int:
@@ -286,7 +298,8 @@ class CardInstance:
         else:
             base = self.card_def.cost_m
         temp_magic_heavy = max(0, int(self.temp_magic_heavy_value or 0))
-        return max(0, base + temp_magic_heavy - max(0, int(self.magic_swift_value or 0)))
+        cost = max(0, base + temp_magic_heavy - max(0, int(self.magic_swift_value or 0)))
+        return fusion_adjusted_cost(cost, self.fusion_level)
 
     @property
     def card_type(self) -> str:
@@ -436,14 +449,14 @@ _reg(CardDef('MagicBone', 'Magic Bone', '魔法骨头', 0, 4, 'thorn', 5, 'Commo
 _reg(CardDef('MagicStinger', 'Magic Stinger', '魔法刺', 0, 8, 'thorn', 5, 'Common',
              '魔力加持的尖刺，威力巨大。', '造成30D', flags={'precision'}))
 
-_reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 2, 'Common',
+_reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 4, 'Common',
              '将一次攻击分裂为多次。', '选择一张手中的攻击牌，将其裂变层数增加2',
              flags={'exile', 'self_only'},
              image='card-art/Fission.svg', image_url='card-art/Fission.svg',
              upgraded_image='assets/cards/fission+1.svg', upgraded_image_url='assets/cards/fission+1.svg'))
 
-_reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 2, 'Common',
-             '将相同的攻击聚合为一击。', '选择自己手中2张同名攻击牌，将其聚变层数相加，其他特殊效果层数分别保留最大值，合并为1张牌',
+_reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 4, 'Common',
+             '将相同的攻击聚合为一击。', '选择自己手中2张同名攻击牌，将其聚变层数相加，其他特殊效果层数分别保留最大值，合并为1张牌；聚变层数每超过默认1层，所有花费增加50%（向下取整）',
              flags={'self_only'},
              image='card-art/Fusion.svg', image_url='card-art/Fusion.svg'))
 
@@ -486,7 +499,7 @@ _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Super',
              '神奇的树叶。可以使人死而复生。',
-             '回复目标20H；自身受到致命伤害时，将自身H设为5，抽3张牌，清除所有效果，无敌直到下一个自己回合结束，并放逐此牌；打出时可以选择阵亡玩家，使其复活并触发上述效果',
+             f'回复目标{YGGDRASIL_HEAL}H；自身受到致命伤害时，将自身H设为5，抽3张牌，清除所有效果，无敌直到下一个自己回合结束，并放逐此牌；打出时可以选择阵亡玩家，使其复活并触发上述效果',
              flags={'sublime'}))
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
@@ -663,8 +676,18 @@ def build_draft_pool(allowed_def_ids: Optional[Set[str]] = None) -> List[CardIns
     return pool
 
 
-def generate_draft_options(pool: List[CardInstance], card_type: str, count: int = 3, exclude_def_ids: List[str] = None) -> List[CardInstance]:
-    type_cards = [c for c in pool if c.card_def.card_type == card_type]
+def generate_draft_options(
+    pool: List[CardInstance],
+    card_type: str,
+    count: int = 3,
+    exclude_def_ids: List[str] = None,
+    forbidden_def_ids: Optional[Set[str]] = None,
+) -> List[CardInstance]:
+    forbidden = set(forbidden_def_ids or set())
+    type_cards = [
+        c for c in pool
+        if c.card_def.card_type == card_type and c.def_id not in forbidden
+    ]
     def weighted_unique_sample(cards: List[CardInstance], sample_count: int) -> List[CardInstance]:
         first_by_id = {}
         weights = {}
@@ -733,6 +756,23 @@ def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids:
         ids.append(def_id)
         weights.append(weight_value)
     picked: List[str] = []
+
+    def pick_with_unique_rule(ids: List[str], weights: List[float], amount: int) -> List[str]:
+        available_ids = list(ids)
+        available_weights = list(weights)
+        selected: List[str] = []
+        for _ in range(max(0, int(amount or 0))):
+            if not available_ids:
+                break
+            chosen = random.choices(available_ids, weights=available_weights, k=1)[0]
+            selected.append(chosen)
+            card_def = CARD_DEFS.get(chosen)
+            if card_def is not None and 'unique' in normalize_card_flags(getattr(card_def, 'flags', set()) or set()):
+                index = available_ids.index(chosen)
+                del available_ids[index]
+                del available_weights[index]
+        return selected
+
     for card_type, quota in DRAFT_RATIO.items():
         ids, weights = by_type.get(card_type, ([], []))
         if not ids:
@@ -742,7 +782,16 @@ def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids:
             picked.append('Sewage')
             quota -= 1
         if quota > 0:
-            picked.extend(random.choices(ids, weights=weights, k=quota))
+            type_candidates = list(zip(ids, weights))
+            if (
+                'Sewage' in picked
+                and 'Sewage' in CARD_DEFS
+                and 'unique' in normalize_card_flags(getattr(CARD_DEFS['Sewage'], 'flags', set()) or set())
+            ):
+                type_candidates = [item for item in type_candidates if item[0] != 'Sewage']
+            if type_candidates:
+                type_ids, type_weights = zip(*type_candidates)
+                picked.extend(pick_with_unique_rule(list(type_ids), list(type_weights), quota))
     if not picked:
         return []
     target_count = max(0, int(count or 0))
@@ -753,7 +802,20 @@ def create_random_weighted_deck_def_ids(count: int = DECK_SIZE, allowed_def_ids:
             all_ids.extend(ids)
             all_weights.extend(weights)
         if all_ids:
-            picked.extend(random.choices(all_ids, weights=all_weights, k=target_count - len(picked)))
+            already_unique = {
+                def_id
+                for def_id in picked
+                if def_id in CARD_DEFS
+                and 'unique' in normalize_card_flags(getattr(CARD_DEFS[def_id], 'flags', set()) or set())
+            }
+            filtered = [
+                (def_id, weight)
+                for def_id, weight in zip(all_ids, all_weights)
+                if def_id not in already_unique
+            ]
+            if filtered:
+                fill_ids, fill_weights = zip(*filtered)
+                picked.extend(pick_with_unique_rule(list(fill_ids), list(fill_weights), target_count - len(picked)))
     return picked[:target_count]
 
 

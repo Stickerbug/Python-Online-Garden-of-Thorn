@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/static/css/story.css?v={{ static_version }}">
   <link rel="stylesheet" href="/static/css/shared-afk.css?v={{ static_version }}">
   <link rel="stylesheet" href="/static/css/shared-lobby-chat.css?v={{ static_version }}">
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (() => {
       const readCookie = (key) => {
         try {
@@ -47,6 +47,7 @@
 </head>
 <body>
   <div id="story-app" class="story-app">
+    <div id="story-seeded-backdrop" class="story-seeded-backdrop" aria-hidden="true"></div>
     <a id="story-back" class="story-exit-command" href="/" aria-label="返回" title="返回"><span class="story-exit-glyph" aria-hidden="true"></span></a>
 
     <button id="story-chat-toggle" class="story-chat-toggle" type="button" aria-expanded="false" aria-controls="story-chat-panel">
@@ -55,6 +56,24 @@
     </button>
 
     <button id="story-surrender" class="story-surrender-command hidden" type="button">投降</button>
+
+    <aside id="story-persistent-hud" class="story-persistent-hud hidden" aria-label="旅程常驻信息">
+      <section class="story-persistent-player" aria-label="玩家信息">
+        <strong id="story-hud-player-name">{{ account.display_name }}</strong>
+        <span id="story-hud-location">第 1 阶段 · 第 1 层</span>
+        <dl>
+          <div><dt>H</dt><dd id="story-hud-health">--</dd></div>
+          <div><dt>E</dt><dd id="story-hud-elixir">--</dd></div>
+          <div><dt>M</dt><dd id="story-hud-magic">--</dd></div>
+          <div><dt>G</dt><dd id="story-hud-gold">0</dd></div>
+        </dl>
+      </section>
+      <nav class="story-persistent-actions" aria-label="旅程快捷操作">
+        <button id="story-hud-map" type="button"><span id="story-hud-map-label">地图</span></button>
+        <button id="story-hud-deck" type="button"><span id="story-hud-deck-label">总牌库</span></button>
+        <button id="story-hud-save" type="button"><span id="story-hud-save-label">存读档</span></button>
+      </nav>
+    </aside>
 
     {% if story_dev_tools %}
     <aside id="story-dev-panel" class="story-dev-panel hidden" aria-labelledby="story-dev-title">
@@ -93,7 +112,35 @@
       <section id="story-empty" class="story-empty hidden">
         <div class="story-empty-mark" aria-hidden="true">I</div>
         <h2 id="story-empty-title">一段新的旅程</h2>
+        <p id="story-character-title" class="story-character-title">选择角色</p>
+        <div id="story-character-options" class="story-character-options" role="list"></div>
+        <section id="story-character-detail" class="story-character-detail" aria-live="polite">
+          <div class="story-character-detail-copy">
+            <strong id="story-character-detail-name"></strong>
+            <p id="story-character-detail-design"></p>
+            <p><span id="story-character-unlock-label">解锁条件</span>：<span id="story-character-unlock"></span></p>
+          </div>
+          <div class="story-character-loadout">
+            <div>
+              <span id="story-character-deck-label" class="story-character-detail-label">初始牌组</span>
+              <div id="story-character-deck" class="story-character-detail-items"></div>
+            </div>
+            <div>
+              <span id="story-character-talent-label" class="story-character-detail-label">初始天赋</span>
+              <div id="story-character-talents" class="story-character-detail-items"></div>
+            </div>
+          </div>
+        </section>
+        <p id="story-character-not-ready" class="story-character-not-ready hidden" aria-live="polite"></p>
         <button id="story-start" class="story-command story-command-primary" type="button">开始</button>
+      </section>
+
+      <section id="story-version-old" class="story-empty hidden" aria-live="polite">
+        <div class="story-empty-mark" aria-hidden="true">V</div>
+        <h2 id="story-version-old-title">旧版本旅程已保留</h2>
+        <p id="story-version-old-copy">这段旅程不会被自动重置。结束旧旅程后，才能按当前内容版本开始新旅程。</p>
+        <p id="story-version-old-detail" class="story-muted"></p>
+        <button id="story-version-old-restart" class="story-command story-command-primary" type="button">结束旧旅程并开始新旅程</button>
       </section>
 
       <section id="story-blessing" class="story-choice-screen hidden">
@@ -363,7 +410,7 @@
         <div class="story-pile-heading">
           <div>
             <h2 id="story-save-title">旅程存档</h2>
-            <p id="story-save-copy">仅可在路线选择界面保存或读取，最多保留最近3份。</p>
+            <p id="story-save-copy">服务器完成当前操作后即可保存或读取，最多保留最近3份。</p>
           </div>
           <button id="story-save-close" class="story-pile-close" value="cancel" aria-label="关闭">×</button>
         </div>
@@ -379,6 +426,7 @@
       <div class="story-codex-shell">
         <header class="story-codex-header">
           <div class="story-codex-heading">
+            <button id="story-codex-back" class="story-codex-back hidden" type="button" aria-label="返回上一个图鉴条目">←</button>
             <h2 id="story-codex-title">故事图鉴</h2>
             <span id="story-codex-progress" class="story-codex-progress"></span>
           </div>
@@ -406,7 +454,7 @@
     <dialog id="story-save-load-dialog" class="story-dialog story-save-load-dialog">
       <form method="dialog">
         <h2 id="story-save-load-title">读取此存档？</h2>
-        <p id="story-save-load-copy">当前路线进度将被所选存档覆盖。</p>
+        <p id="story-save-load-copy">当前旅程状态将被所选存档覆盖。</p>
         <div class="story-dialog-actions">
           <button id="story-save-load-cancel" class="story-command" value="cancel">取消</button>
           <button id="story-save-load-confirm" class="story-command story-command-primary" value="confirm">读取</button>
@@ -576,6 +624,12 @@
 
           <ol id="story-coop-members" class="story-coop-members" aria-label="协作队伍成员" aria-live="polite"></ol>
 
+          <div class="story-coop-character-picker">
+            <label for="story-coop-character-select">队伍角色</label>
+            <select id="story-coop-character-select" aria-describedby="story-coop-character-help"></select>
+            <small id="story-coop-character-help">两名成员必须都已解锁所选角色。</small>
+          </div>
+
           <div id="story-coop-invite-reveal" class="story-coop-invite-reveal hidden">
             <span class="story-coop-eyebrow">本次显示的邀请码</span>
             <div class="story-coop-code-row">
@@ -597,7 +651,7 @@
           <div class="story-coop-section-heading">
             <div>
               <h3 id="story-coop-active-title">协作旅程已开始</h3>
-              <p>当前阶段仅开放队伍与存档基础能力。</p>
+              <p>可继续两人战斗、个人奖励与共享路线投票。</p>
             </div>
             <span id="story-coop-active-party-revision" class="story-coop-revision">Revision --</span>
           </div>
@@ -606,6 +660,9 @@
             <div><dt>Run revision</dt><dd id="story-coop-run-revision">--</dd></div>
             <div><dt>状态</dt><dd id="story-coop-run-status">--</dd></div>
           </dl>
+          <div class="story-coop-forming-actions">
+            <button id="story-coop-enter-combat" class="story-command story-command-primary" type="button">继续协作旅程</button>
+          </div>
           <button id="story-coop-abandon" class="story-command story-command-danger" type="button">放弃并释放全队</button>
           <p class="story-coop-danger-note">放弃会结束这次协作旅程，并让所有成员离开该队伍。此操作不可恢复。</p>
         </section>
@@ -615,9 +672,195 @@
         </div>
       </form>
     </dialog>
+
+    <dialog id="story-coop-combat-dialog" class="story-coop-combat-dialog" aria-labelledby="story-coop-combat-title">
+      <div id="story-coop-seeded-backdrop" class="story-seeded-backdrop story-coop-seeded-backdrop" aria-hidden="true"></div>
+      <section class="story-coop-combat-shell">
+        <header class="story-coop-combat-header">
+          <div>
+            <span class="story-coop-eyebrow">Staff / Admin 双人实验</span>
+            <h2 id="story-coop-combat-title">协作旅程</h2>
+          </div>
+          <button id="story-coop-combat-close" class="story-command" type="button" aria-label="关闭协作战斗界面">关闭</button>
+        </header>
+
+        <p id="story-coop-combat-status" class="story-coop-lobby-status" role="status" aria-live="polite">正在同步权威战斗状态...</p>
+        <dl class="story-coop-combat-meta" aria-label="协作战斗版本信息">
+          <div><dt>Run revision</dt><dd id="story-coop-combat-revision">--</dd></div>
+          <div><dt>动作序号</dt><dd id="story-coop-combat-sequence">--</dd></div>
+          <div><dt>回合</dt><dd id="story-coop-combat-round">--</dd></div>
+          <div><dt>阶段</dt><dd id="story-coop-combat-turn">--</dd></div>
+        </dl>
+
+        <ol id="story-coop-combat-players" class="story-coop-combat-players" aria-label="协作成员状态"></ol>
+
+        <section id="story-coop-setup-panel" class="story-coop-progression-panel story-coop-setup-panel hidden" aria-labelledby="story-coop-setup-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <span class="story-coop-eyebrow">队长设置</span>
+              <h3 id="story-coop-setup-title">选择花园难度</h3>
+              <p id="story-coop-setup-copy">难度由队长确定，随后双方分别选择自己的开局赐福。</p>
+            </div>
+          </div>
+          <div id="story-coop-setup-options" class="story-coop-progression-options story-coop-setup-options" role="group" aria-label="花园难度"></div>
+          <p id="story-coop-setup-easy-note" class="story-coop-setup-note">简单难度及其专属开局天赋尚未接入协作故事，本次不会显示为可选项。</p>
+        </section>
+
+        <section id="story-coop-opening-panel" class="story-coop-progression-panel story-coop-opening-panel hidden" aria-labelledby="story-coop-opening-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <span class="story-coop-eyebrow">个人开局</span>
+              <h3 id="story-coop-opening-title">选择你的开局赐福</h3>
+              <p>这里只显示服务器为你返回的选项；队友只能看到你是否完成。</p>
+            </div>
+          </div>
+          <div id="story-coop-opening-options" class="story-coop-progression-options story-coop-opening-options" role="group" aria-label="你的开局赐福"></div>
+          <ol id="story-coop-opening-party-status" class="story-coop-progression-status-list" aria-label="队伍开局赐福进度"></ol>
+        </section>
+
+        <section id="story-coop-reward-panel" class="story-coop-progression-panel hidden" aria-labelledby="story-coop-reward-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <span class="story-coop-eyebrow">个人奖励</span>
+              <h3 id="story-coop-reward-title">选择1张卡牌</h3>
+              <p>金币已自动发放。你的选项只对自己可见，队友只能看到是否完成。</p>
+            </div>
+          </div>
+          <div id="story-coop-reward-options" class="story-coop-progression-options" role="group" aria-label="你的协作卡牌奖励"></div>
+          <ol id="story-coop-reward-party-status" class="story-coop-progression-status-list" aria-label="队伍奖励进度"></ol>
+        </section>
+
+        <section id="story-coop-map-panel" class="story-coop-progression-panel hidden" aria-labelledby="story-coop-map-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <span class="story-coop-eyebrow">共享路线</span>
+              <h3 id="story-coop-map-title">投票选择下一个路线节点</h3>
+              <p>路线可能通往战斗、休息处、宝箱、商店或事件；意见不同时由该局确定性随机流在实际票选路线中裁定。</p>
+            </div>
+          </div>
+          <div id="story-coop-map-options" class="story-coop-progression-options" role="group" aria-label="可选协作路线"></div>
+          <ol id="story-coop-map-party-status" class="story-coop-progression-status-list" aria-label="队伍投票进度"></ol>
+        </section>
+
+        <section id="story-coop-rest-panel" class="story-coop-progression-panel hidden" aria-labelledby="story-coop-rest-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <span class="story-coop-eyebrow">共享休息点</span>
+              <h3 id="story-coop-rest-title">选择你的休息方式</h3>
+              <p>每位成员独立选择恢复、升级1张自己的未升级卡牌，或直接离开；队友只能看到是否完成。</p>
+            </div>
+          </div>
+          <div class="story-coop-rest-layout">
+            <section class="story-coop-rest-actions" aria-labelledby="story-coop-rest-actions-title">
+              <h4 id="story-coop-rest-actions-title">立即行动</h4>
+              <div id="story-coop-rest-options" class="story-coop-rest-options" role="group" aria-label="休息方式"></div>
+            </section>
+            <section id="story-coop-rest-upgrade" class="story-coop-rest-upgrade" aria-labelledby="story-coop-rest-upgrade-title">
+              <div class="story-coop-rest-upgrade-heading">
+                <div>
+                  <h4 id="story-coop-rest-upgrade-title">升级卡牌</h4>
+                  <p>这里只显示服务器为你返回的未升级牌。</p>
+                </div>
+                <button id="story-coop-rest-upgrade-confirm" class="story-command story-command-primary" type="button" disabled>确认升级</button>
+              </div>
+              <div id="story-coop-rest-deck" class="story-coop-rest-deck" role="listbox" aria-label="你的可升级卡牌"></div>
+            </section>
+          </div>
+          <ol id="story-coop-rest-party-status" class="story-coop-progression-status-list" aria-label="队伍休息进度"></ol>
+        </section>
+
+        <section id="story-coop-chest-panel" class="story-coop-progression-panel hidden" aria-labelledby="story-coop-chest-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <span class="story-coop-eyebrow">个人宝箱</span>
+              <h3 id="story-coop-chest-title">处理你的补给箱</h3>
+              <p>宝箱金币和遗物只对你显示；队友只能看到你是否完成选择。</p>
+            </div>
+          </div>
+          <div class="story-coop-private-room-layout">
+            <div class="story-coop-private-gold" aria-label="你的宝箱金币">
+              <span>你的宝箱</span>
+              <strong id="story-coop-chest-gold">--G</strong>
+            </div>
+            <div id="story-coop-chest-options" class="story-coop-progression-options" role="group" aria-label="宝箱选择"></div>
+          </div>
+          <ol id="story-coop-chest-party-status" class="story-coop-progression-status-list" aria-label="队伍宝箱进度"></ol>
+        </section>
+
+        <section id="story-coop-shop-panel" class="story-coop-progression-panel hidden" aria-labelledby="story-coop-shop-title">
+          <div class="story-coop-section-heading story-coop-shop-heading">
+            <div>
+              <span class="story-coop-eyebrow">个人商店</span>
+              <h3 id="story-coop-shop-title">购买卡牌、遗物或离开</h3>
+              <p>商品和金币只对你显示；可以连续购买，离开后不能再次购买。</p>
+            </div>
+            <div class="story-coop-shop-controls">
+              <div class="story-coop-private-gold" aria-label="你的商店金币">
+                <span>你的金币</span>
+                <strong id="story-coop-shop-gold">--G</strong>
+              </div>
+              <button id="story-coop-shop-leave" class="story-command" type="button" disabled>离开商店</button>
+            </div>
+          </div>
+          <div id="story-coop-shop-offers" class="story-coop-shop-offers" role="group" aria-label="你的商店商品"></div>
+          <ol id="story-coop-shop-party-status" class="story-coop-progression-status-list" aria-label="队伍商店进度"></ol>
+        </section>
+
+        <section id="story-coop-event-panel" class="story-coop-progression-panel hidden" aria-labelledby="story-coop-event-title">
+          <div class="story-coop-section-heading">
+            <div>
+              <span class="story-coop-eyebrow">共享事件</span>
+              <h3 id="story-coop-event-title">协作事件</h3>
+              <p id="story-coop-event-description">正在读取事件描述...</p>
+            </div>
+          </div>
+          <div id="story-coop-event-options" class="story-coop-progression-options story-coop-event-options" role="group" aria-label="协作事件选项"></div>
+          <ol id="story-coop-event-party-status" class="story-coop-progression-status-list" aria-label="队伍事件提交进度"></ol>
+        </section>
+
+        <section id="story-coop-complete-panel" class="story-coop-progression-panel story-coop-complete-panel hidden" aria-labelledby="story-coop-complete-title">
+          <span class="story-coop-eyebrow">章节结算</span>
+          <h3 id="story-coop-complete-title">协作第一阶段完成</h3>
+          <p id="story-coop-complete-copy">你们已经完成花园第一阶段。服务器仍保留本次权威结算记录。</p>
+        </section>
+
+        <div id="story-coop-combat-board" class="story-coop-combat-board">
+          <section class="story-coop-combat-enemy-panel" aria-labelledby="story-coop-combat-enemies-title">
+            <div class="story-coop-section-heading">
+              <div>
+                <h3 id="story-coop-combat-enemies-title">敌人</h3>
+                <p id="story-coop-combat-target-help">先选择一个存活敌人，再打出攻击牌。</p>
+              </div>
+            </div>
+            <div id="story-coop-combat-enemies" class="story-coop-combat-enemies" role="list"></div>
+          </section>
+
+          <section class="story-coop-combat-hand-panel" aria-labelledby="story-coop-combat-hand-title">
+            <div class="story-coop-section-heading">
+              <div>
+                <h3 id="story-coop-combat-hand-title">你的手牌</h3>
+                <p id="story-coop-combat-hand-help">每位存活成员可独立出牌；两人均准备后敌人才行动。</p>
+              </div>
+            </div>
+            <div id="story-coop-combat-hand" class="story-coop-combat-hand"></div>
+          </section>
+        </div>
+
+        <section id="story-coop-combat-events" class="story-coop-combat-events" aria-labelledby="story-coop-combat-events-title">
+          <h3 id="story-coop-combat-events-title">最近结算</h3>
+          <ol id="story-coop-combat-event-list" aria-live="polite"></ol>
+        </section>
+
+        <footer class="story-coop-combat-actions">
+          <button id="story-coop-combat-refresh" class="story-command" type="button">刷新状态</button>
+          <button id="story-coop-combat-play-selected" class="story-command hidden" type="button">确认打出所选卡牌</button>
+          <button id="story-coop-combat-ready" class="story-command story-command-primary" type="button">本回合准备完毕</button>
+        </footer>
+      </section>
+    </dialog>
     {% endif %}
   </div>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     window.__STORY_ACCOUNT__ = {{ account|tojson }};
     window.__STORY_DEV_TOOLS__ = {{ story_dev_tools|tojson }};
     window.__STORY_COOP_ACCESS__ = {{ story_coop_access|tojson }};

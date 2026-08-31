@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="82 42 90 70">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".6">
+    <g stroke="#6a3906" stroke-width="17.5">
+      <polyline points="159.66 57.05 129.55 69.5 112.33 96.69"/>
+      <line x1="93.31" y1="59.66" x2="128.61" y2="68.02"/>
+    </g>
+    <g stroke="#7f4f21" stroke-width="10">
+      <polyline points="159.66 57.05 129.55 69.5 112.33 96.69"/>
+      <line x1="93.31" y1="59.66" x2="128.61" y2="68.02"/>
+    </g>
+  </g>
+</svg>

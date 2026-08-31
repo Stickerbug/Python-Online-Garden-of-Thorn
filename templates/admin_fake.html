@@ -19,7 +19,7 @@
   </form>
   <div id="fake-admin-error" class="fake-error" aria-live="polite">{{ fake_error }}</div>
 </main>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.getElementById('fake-admin-form').addEventListener('submit', (event) => {
   event.preventDefault();
   const error = document.getElementById('fake-admin-error');

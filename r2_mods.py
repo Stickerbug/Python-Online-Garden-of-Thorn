@@ -1,6 +1,7 @@
 import copy
 import base64
 import hashlib
+import hmac
 import io
 import json
 import mimetypes
@@ -9,7 +10,6 @@ import posixpath
 import secrets
 import time
 import zipfile
-import copy
 from collections import deque
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -35,8 +35,17 @@ from font_subsets import community_font_report_for_data
 
 MAX_COMMUNITY_MOD_BYTES = 150_000
 MAX_COMMUNITY_PACKAGE_BYTES = int(os.environ.get('MAX_COMMUNITY_PACKAGE_BYTES', str(1024 * 1024)))
+MAX_COMMUNITY_PACKAGE_FILES = int(os.environ.get('MAX_COMMUNITY_PACKAGE_FILES', '256'))
+MAX_COMMUNITY_PACKAGE_UNCOMPRESSED_BYTES = int(
+    os.environ.get('MAX_COMMUNITY_PACKAGE_UNCOMPRESSED_BYTES', str(8 * 1024 * 1024))
+)
+MAX_COMMUNITY_ASSET_BYTES = int(os.environ.get('MAX_COMMUNITY_ASSET_BYTES', str(2 * 1024 * 1024)))
+MAX_COMMUNITY_ZIP_RATIO = float(os.environ.get('MAX_COMMUNITY_ZIP_RATIO', '100'))
 MAX_COMMUNITY_CARDS = 120
 MAX_COMMUNITY_EVENTS = 30
+COMMUNITY_UPLOAD_PREFIX = 'community/uploads/'
+COMMUNITY_UPLOAD_RECEIPT_VERSION = 2
+COMMUNITY_UPLOAD_RECEIPT_MAX_BYTES = 2048
 COMMUNITY_INDEX_KEY = 'community/index.json'
 COMMUNITY_TRASH_INDEX_KEY = 'community/trash/index.json'
 COMMUNITY_MOD_CACHE: Dict[str, Any] = {}
@@ -187,6 +196,10 @@ def _content_type_for_filename(filename: str) -> str:
     return 'application/zip' if str(filename or '').lower().endswith('.gtnmod') else 'application/json'
 
 
+def _max_upload_bytes_for_filename(filename: str) -> int:
+    return MAX_COMMUNITY_PACKAGE_BYTES if str(filename or '').lower().endswith('.gtnmod') else MAX_COMMUNITY_MOD_BYTES
+
+
 def _safe_zip_member(name: str) -> str:
     normalized = posixpath.normpath(str(name or '').replace('\\', '/')).lstrip('/')
     if not normalized or normalized == '.' or normalized.startswith('../') or '/..' in normalized:
@@ -203,6 +216,55 @@ def _find_gtnmod_main_file(zf: zipfile.ZipFile) -> str:
         if lowered.endswith('.json') and '/' not in lowered:
             return original
     return ''
+
+
+def _validate_gtnmod_archive(zf: zipfile.ZipFile) -> None:
+    infos = zf.infolist()
+    if len(infos) > MAX_COMMUNITY_PACKAGE_FILES:
+        raise ValueError(f'GTNMOD 包文件数量过多，最多允许 {MAX_COMMUNITY_PACKAGE_FILES} 个条目')
+    seen = set()
+    total_size = 0
+    total_compressed = 0
+    allowed_extensions = {'.json', '.svg', '.webp', '.png', '.jpg', '.jpeg'}
+    for info in infos:
+        member = _safe_zip_member(info.filename)
+        if not member:
+            raise ValueError('GTNMOD 包包含不安全路径')
+        canonical = member.lower()
+        if canonical in seen:
+            raise ValueError(f'GTNMOD 包包含重复路径: {member}')
+        seen.add(canonical)
+        if info.flag_bits & 0x1:
+            raise ValueError('GTNMOD 包不允许加密条目')
+        if info.is_dir():
+            continue
+        ext = os.path.splitext(member)[1].lower()
+        if ext not in allowed_extensions:
+            raise ValueError(f'GTNMOD 包包含不允许的文件类型: {ext or "无扩展名"}')
+        file_limit = MAX_COMMUNITY_MOD_BYTES if ext == '.json' else MAX_COMMUNITY_ASSET_BYTES
+        if info.file_size < 0 or info.file_size > file_limit:
+            raise ValueError(f'GTNMOD 条目过大: {member}')
+        if info.compress_size < 0:
+            raise ValueError(f'GTNMOD 条目压缩大小异常: {member}')
+        if info.file_size and (info.file_size / max(1, info.compress_size)) > MAX_COMMUNITY_ZIP_RATIO:
+            raise ValueError(f'GTNMOD 条目压缩比过高: {member}')
+        total_size += info.file_size
+        total_compressed += info.compress_size
+        if total_size > MAX_COMMUNITY_PACKAGE_UNCOMPRESSED_BYTES:
+            raise ValueError('GTNMOD 解压后总大小超过限制')
+    if total_size and (total_size / max(1, total_compressed)) > MAX_COMMUNITY_ZIP_RATIO:
+        raise ValueError('GTNMOD 总压缩比过高')
+
+
+def _read_zip_member_limited(zf: zipfile.ZipFile, member: str, max_bytes: int) -> bytes:
+    info = zf.getinfo(member)
+    if info.file_size > max_bytes:
+        raise ValueError(f'GTNMOD 条目过大: {member}')
+    with zf.open(info, 'r') as source:
+        raw = source.read(max_bytes + 1)
+    if len(raw) > max_bytes or len(raw) != info.file_size:
+        raise ValueError(f'GTNMOD 条目实际大小异常: {member}')
+    return raw
 
 
 def _candidate_asset_names(card: Dict[str, Any]) -> list:
@@ -238,7 +300,7 @@ def _candidate_asset_names(card: Dict[str, Any]) -> list:
 
 
 def _asset_data_url(zf: zipfile.ZipFile, member: str) -> str:
-    raw = zf.read(member)
+    raw = _read_zip_member_limited(zf, member, MAX_COMMUNITY_ASSET_BYTES)
     mime, _ = mimetypes.guess_type(member)
     if not mime:
         mime = 'image/svg+xml' if member.lower().endswith('.svg') else 'application/octet-stream'
@@ -292,8 +354,127 @@ def _public_url_for_key(key: str) -> str:
     return f'{base}/{quoted}'
 
 
-def create_presigned_mod_upload(filename: str) -> Dict[str, Any]:
+def _is_safe_community_upload_key(key: str) -> bool:
+    key = str(key or '').strip()
+    if not key.startswith(COMMUNITY_UPLOAD_PREFIX):
+        return False
+    if any(ord(ch) < 32 or ch == '\\' for ch in key):
+        return False
+    parts = key.split('/')
+    if any(part in ('', '.', '..') for part in parts):
+        return False
+    return key.lower().endswith(('.json', '.gtnmod'))
+
+
+def _upload_binding_is_valid(key: str, public_url: str) -> bool:
+    key = str(key or '').strip()
+    public_url = str(public_url or '').strip()
+    return _is_safe_community_upload_key(key) and hmac.compare_digest(
+        public_url.encode('utf-8'),
+        _public_url_for_key(key).encode('utf-8'),
+    )
+
+
+def _receipt_secret_bytes(receipt_secret: Any) -> bytes:
+    if isinstance(receipt_secret, bytes):
+        secret = receipt_secret
+    else:
+        secret = str(receipt_secret or '').encode('utf-8')
+    if len(secret) < 16:
+        raise R2ConfigError('社区模组上传签名密钥未配置或过短')
+    return secret
+
+
+def _b64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode('ascii').rstrip('=')
+
+
+def _b64url_decode(value: str) -> bytes:
+    value = str(value or '')
+    padding = '=' * (-len(value) % 4)
+    decoded = base64.b64decode(
+        (value + padding).encode('ascii'),
+        altchars=b'-_',
+        validate=True,
+    )
+    if not hmac.compare_digest(_b64url_encode(decoded), value):
+        raise ValueError('非规范 Base64URL 编码')
+    return decoded
+
+
+def _create_mod_upload_receipt(*, uploader_user_id: int, key: str, public_url: str,
+                               expires_at: int, expected_size: int, receipt_secret: Any) -> str:
+    payload = {
+        'v': COMMUNITY_UPLOAD_RECEIPT_VERSION,
+        'user_id': int(uploader_user_id),
+        'key': str(key),
+        'public_url': str(public_url),
+        'expires_at': int(expires_at),
+        'expected_size': int(expected_size),
+    }
+    encoded = _b64url_encode(json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+    ).encode('utf-8'))
+    signature = hmac.new(_receipt_secret_bytes(receipt_secret), encoded.encode('ascii'), hashlib.sha256).digest()
+    return f'{encoded}.{_b64url_encode(signature)}'
+
+
+def verify_mod_upload_receipt(receipt: str, *, uploader_user_id: int,
+                              receipt_secret: Any, now: Optional[int] = None) -> Dict[str, Any]:
+    receipt = str(receipt or '').strip()
+    if not receipt or len(receipt.encode('utf-8')) > COMMUNITY_UPLOAD_RECEIPT_MAX_BYTES:
+        raise ValueError('上传凭证缺失或过长')
+    try:
+        encoded, supplied_signature = receipt.split('.', 1)
+        expected_signature = hmac.new(
+            _receipt_secret_bytes(receipt_secret),
+            encoded.encode('ascii'),
+            hashlib.sha256,
+        ).digest()
+        if not hmac.compare_digest(_b64url_decode(supplied_signature), expected_signature):
+            raise ValueError('上传凭证签名无效')
+        payload = json.loads(_b64url_decode(encoded).decode('utf-8'))
+    except (ValueError, TypeError, UnicodeError, json.JSONDecodeError) as exc:
+        if isinstance(exc, ValueError) and str(exc).startswith('上传凭证'):
+            raise
+        raise ValueError('上传凭证格式无效') from exc
+    if not isinstance(payload, dict) or payload.get('v') != COMMUNITY_UPLOAD_RECEIPT_VERSION:
+        raise ValueError('上传凭证版本无效')
+    try:
+        receipt_user_id = int(payload.get('user_id'))
+        expires_at = int(payload.get('expires_at'))
+        expected_size = int(payload.get('expected_size'))
+    except (TypeError, ValueError) as exc:
+        raise ValueError('上传凭证字段无效') from exc
+    if receipt_user_id != int(uploader_user_id):
+        raise ValueError('上传凭证不属于当前账号')
+    if expires_at < int(time.time() if now is None else now):
+        raise ValueError('上传凭证已过期，请重新上传')
+    key = str(payload.get('key') or '').strip()
+    public_url = str(payload.get('public_url') or '').strip()
+    if not _upload_binding_is_valid(key, public_url):
+        raise ValueError('上传凭证中的对象地址无效')
+    if expected_size < 1 or expected_size > _max_upload_bytes_for_filename(key):
+        raise ValueError('上传凭证中的文件大小无效')
+    return {
+        'user_id': receipt_user_id,
+        'key': key,
+        'public_url': public_url,
+        'expires_at': expires_at,
+        'expected_size': expected_size,
+    }
+
+
+def create_presigned_mod_upload(filename: str, *, expected_size: int, uploader_user_id: int,
+                                receipt_secret: Any) -> Dict[str, Any]:
     safe = _safe_filename(filename)
+    expected_size = int(expected_size)
+    max_bytes = _max_upload_bytes_for_filename(safe)
+    if expected_size < 1 or expected_size > max_bytes:
+        raise ValueError(f'模组文件大小无效，最大允许 {max_bytes} 字节')
     now = int(time.time())
     token = secrets.token_hex(8)
     key = f'community/uploads/{now}-{token}-{safe}'
@@ -305,15 +486,28 @@ def create_presigned_mod_upload(filename: str) -> Dict[str, Any]:
             'Bucket': _bucket(),
             'Key': key,
             'ContentType': content_type,
+            'ContentLength': expected_size,
         },
         ExpiresIn=expires_in,
         HttpMethod='PUT',
     )
+    public_url = _public_url_for_key(key)
+    expires_at = now + expires_in
     return {
         'key': key,
         'put_url': put_url,
-        'public_url': _public_url_for_key(key),
+        'public_url': public_url,
         'expires_in': expires_in,
+        'expires_at': expires_at,
+        'expected_size': expected_size,
+        'upload_receipt': _create_mod_upload_receipt(
+            uploader_user_id=int(uploader_user_id),
+            key=key,
+            public_url=public_url,
+            expires_at=expires_at,
+            expected_size=expected_size,
+            receipt_secret=receipt_secret,
+        ),
         'content_type': content_type,
     }
 
@@ -334,11 +528,28 @@ def fetch_json_from_public_url(url: str, max_bytes: int = MAX_COMMUNITY_MOD_BYTE
         raise R2ConfigError('社区模组未配置 R2_PUBLIC_BASE_URL')
     if url.lower().split('?', 1)[0].endswith('.gtnmod') and max_bytes == MAX_COMMUNITY_MOD_BYTES:
         max_bytes = MAX_COMMUNITY_PACKAGE_BYTES
-    if not url.startswith(base + '/'):
+    parsed = urlparse(url)
+    base_parsed = urlparse(base)
+    if (
+        parsed.scheme.lower() != base_parsed.scheme.lower()
+        or parsed.hostname != base_parsed.hostname
+        or parsed.port != base_parsed.port
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+        or not parsed.path.startswith(base_parsed.path.rstrip('/') + '/')
+    ):
         raise ValueError('public_url 不属于当前 R2 公开域名')
     connect_timeout = float(os.environ.get('R2_PUBLIC_CONNECT_TIMEOUT', '3'))
     read_timeout = float(os.environ.get('R2_PUBLIC_READ_TIMEOUT', '8'))
-    with requests.get(url, stream=True, timeout=(connect_timeout, read_timeout)) as resp:
+    with requests.get(
+        url,
+        stream=True,
+        timeout=(connect_timeout, read_timeout),
+        allow_redirects=False,
+    ) as resp:
+        if 300 <= int(getattr(resp, 'status_code', 0) or 0) < 400:
+            raise ValueError('R2 文件地址不允许重定向')
         resp.raise_for_status()
         length = resp.headers.get('Content-Length')
         if length and int(length) > max_bytes:
@@ -358,31 +569,21 @@ def fetch_json_from_public_url(url: str, max_bytes: int = MAX_COMMUNITY_MOD_BYTE
     if is_gtnmod:
         try:
             with zipfile.ZipFile(io.BytesIO(raw), 'r') as zf:
+                _validate_gtnmod_archive(zf)
                 main_file = _find_gtnmod_main_file(zf)
                 if not main_file:
                     raise ValueError('GTNMOD 包缺少根目录 mod.json')
-                main_info = zf.getinfo(main_file)
-                if main_info.file_size > MAX_COMMUNITY_MOD_BYTES:
-                    raise ValueError(f'mod.json 过大，最大允许 {MAX_COMMUNITY_MOD_BYTES} 字节')
-                for info in zf.infolist():
-                    member = _safe_zip_member(info.filename)
-                    if not member:
-                        raise ValueError('GTNMOD 包包含不安全路径')
-                    ext = os.path.splitext(member)[1].lower()
-                    if ext and ext not in ('.json', '.svg', '.webp', '.png', '.jpg', '.jpeg'):
-                        raise ValueError(f'GTNMOD 包包含不允许的文件类型: {ext}')
-                raw_json = zf.read(main_file)
+                raw_json = _read_zip_member_limited(zf, main_file, MAX_COMMUNITY_MOD_BYTES)
+                data = json.loads(raw_json.decode('utf-8-sig'))
+                if not isinstance(data, dict):
+                    raise ValueError('模组根节点必须是对象')
+                data = _attach_gtnmod_data_urls(data, zf)
         except zipfile.BadZipFile as exc:
             raise ValueError(f'GTNMOD 压缩包读取失败: {exc}') from exc
-        try:
-            data = json.loads(raw_json.decode('utf-8-sig'))
-        except Exception as exc:
+        except json.JSONDecodeError as exc:
             raise ValueError(f'GTNMOD mod.json 解析错误: {exc}') from exc
-        if not isinstance(data, dict):
-            raise ValueError('模组根节点必须是对象')
-        with zipfile.ZipFile(io.BytesIO(raw), 'r') as zf:
-            data = _attach_gtnmod_data_urls(data, zf)
         data['_package_sha256'] = package_sha256
+        data['_package_size'] = len(raw)
         return data
     try:
         data = json.loads(raw.decode('utf-8-sig'))
@@ -390,6 +591,7 @@ def fetch_json_from_public_url(url: str, max_bytes: int = MAX_COMMUNITY_MOD_BYTE
         raise ValueError(f'JSON解析错误: {exc}') from exc
     if not isinstance(data, dict):
         raise ValueError('模组根节点必须是对象')
+    data['_package_size'] = len(raw)
     return data
 
 
@@ -592,7 +794,7 @@ def _delete_object_key(key: str) -> bool:
 
 def _move_object_to_trash(key: str, sha256: str = '') -> Optional[str]:
     key = str(key or '').strip()
-    if not key:
+    if not _is_safe_community_upload_key(key):
         return None
     safe_name = posixpath.basename(key) or f'{sha256 or secrets.token_hex(8)}.json'
     stamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
@@ -614,6 +816,8 @@ def _move_object_to_trash(key: str, sha256: str = '') -> Optional[str]:
 def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
     data = fetch_json_from_public_url(public_url)
     package_sha256 = str(data.pop('_package_sha256', '') or '').strip().lower() if isinstance(data, dict) else ''
+    if isinstance(data, dict):
+        data.pop('_package_size', None)
     candidate, strip_warnings = _community_validation_input(data)
     validation = _validate_community_mod_data(candidate, source=public_url)
     warnings = list(validation.warnings) + strip_warnings
@@ -645,9 +849,31 @@ def validate_community_mod_url(public_url: str) -> Dict[str, Any]:
 
 def register_community_mod(public_url: str, key: str, uploader_name: Optional[str] = None,
                            uploader_user_id: Optional[int] = None,
-                           replace_sha256: Optional[str] = None) -> Dict[str, Any]:
+                           replace_sha256: Optional[str] = None,
+                           upload_receipt: str = '', receipt_secret: Any = '') -> Dict[str, Any]:
+    if uploader_user_id is None:
+        return {'success': False, 'errors': ['社区模组上传必须绑定登录账号'], 'warnings': []}
+    try:
+        receipt = verify_mod_upload_receipt(
+            upload_receipt,
+            uploader_user_id=int(uploader_user_id),
+            receipt_secret=receipt_secret,
+        )
+    except (ValueError, R2ConfigError) as exc:
+        return {'success': False, 'errors': [str(exc)], 'warnings': []}
+    supplied_key = str(key or '').strip()
+    supplied_url = str(public_url or '').strip()
+    if supplied_key and not hmac.compare_digest(supplied_key.encode('utf-8'), receipt['key'].encode('utf-8')):
+        return {'success': False, 'errors': ['上传对象 key 与上传凭证不一致'], 'warnings': []}
+    if supplied_url and not hmac.compare_digest(supplied_url.encode('utf-8'), receipt['public_url'].encode('utf-8')):
+        return {'success': False, 'errors': ['public_url 与上传凭证不一致'], 'warnings': []}
+    key = receipt['key']
+    public_url = receipt['public_url']
     data = fetch_json_from_public_url(public_url)
     package_sha256 = str(data.pop('_package_sha256', '') or '').strip().lower() if isinstance(data, dict) else ''
+    package_size = int(data.pop('_package_size', -1)) if isinstance(data, dict) else -1
+    if package_size != int(receipt['expected_size']):
+        return {'success': False, 'errors': ['上传文件大小与签名凭证不一致'], 'warnings': []}
     candidate, strip_warnings = _community_validation_input(data)
     validation = _validate_community_mod_data(candidate, source=public_url)
     warnings = list(validation.warnings) + strip_warnings
@@ -672,6 +898,8 @@ def register_community_mod(public_url: str, key: str, uploader_name: Optional[st
             return {'success': False, 'errors': ['要更新的社区模组不存在'], 'warnings': warnings}
         if not _community_item_owned_by(replace_item, uploader_user_id, uploader_name):
             return {'success': False, 'errors': ['只能更新自己上传的社区模组'], 'warnings': warnings}
+        if not _upload_binding_is_valid(replace_item.get('key'), replace_item.get('public_url')):
+            return {'success': False, 'errors': ['旧模组对象绑定异常，已拒绝自动替换'], 'warnings': warnings}
     for item in mods:
         if isinstance(item, dict) and item.get('sha256') == sha256:
             if replace_item is not None and item is replace_item:
@@ -721,6 +949,8 @@ def delete_community_mod(sha256: str, uploader_user_id: Optional[int] = None,
     if not allow_any and not _community_item_owned_by(target, uploader_user_id, uploader_name):
         return {'success': False, 'error': '只能删除自己上传的社区模组'}
     key = str(target.get('key') or '').strip()
+    if not _upload_binding_is_valid(key, target.get('public_url')):
+        return {'success': False, 'error': '模组对象绑定异常，已拒绝自动删除'}
     trash_key = _move_object_to_trash(key, sha256)
     if key and not trash_key:
         return {'success': False, 'error': '移动到回收站失败，未删除模组'}
@@ -780,6 +1010,83 @@ def list_repository_objects(prefix: str = 'community/', max_keys: int = 300) -> 
         'objects': objects,
         'is_truncated': bool(response.get('IsTruncated')),
         'trash': trash.get('mods', []) if isinstance(trash, dict) and isinstance(trash.get('mods'), list) else [],
+    }
+
+
+def cleanup_orphaned_community_uploads(*, min_age_seconds: int = 3600,
+                                       dry_run: bool = True, max_scan: int = 5000) -> Dict[str, Any]:
+    min_age_seconds = max(900, min(int(min_age_seconds or 3600), 30 * 24 * 60 * 60))
+    max_scan = max(1, min(int(max_scan or 5000), 10_000))
+    index = get_community_index(force=True)
+    mods = index.get('mods', []) if isinstance(index, dict) else []
+    referenced = {
+        str(item.get('key') or '').strip()
+        for item in mods
+        if isinstance(item, dict) and _is_safe_community_upload_key(item.get('key'))
+    }
+    client = _client()
+    continuation = None
+    scanned = 0
+    candidates = []
+    deleted = []
+    scan_truncated = False
+    now = time.time()
+    while scanned < max_scan:
+        kwargs = {
+            'Bucket': _bucket(),
+            'Prefix': COMMUNITY_UPLOAD_PREFIX,
+            'MaxKeys': min(1000, max_scan - scanned),
+        }
+        if continuation:
+            kwargs['ContinuationToken'] = continuation
+        response = client.list_objects_v2(**kwargs)
+        contents = response.get('Contents', []) or []
+        if not isinstance(contents, list):
+            raise ValueError('R2 对象列表响应格式无效')
+        for item in contents:
+            scanned += 1
+            key = str((item or {}).get('Key') or '').strip() if isinstance(item, dict) else ''
+            modified = item.get('LastModified') if isinstance(item, dict) else None
+            if not _is_safe_community_upload_key(key) or key in referenced or modified is None:
+                continue
+            try:
+                age_seconds = max(0, int(now - float(modified.timestamp())))
+            except Exception:
+                continue
+            if age_seconds < min_age_seconds:
+                continue
+            candidate = {
+                'key': key,
+                'size': int(item.get('Size') or 0),
+                'age_seconds': age_seconds,
+            }
+            candidates.append(candidate)
+            if not dry_run:
+                client.delete_object(Bucket=_bucket(), Key=key)
+                deleted.append(key)
+            if scanned >= max_scan:
+                break
+        page_truncated = bool(response.get('IsTruncated'))
+        if scanned >= max_scan:
+            scan_truncated = page_truncated
+            break
+        if not page_truncated:
+            break
+        continuation = str(response.get('NextContinuationToken') or '').strip()
+        if not continuation:
+            scan_truncated = True
+            break
+    return {
+        'dry_run': bool(dry_run),
+        'min_age_seconds': min_age_seconds,
+        'scanned': scanned,
+        'referenced_count': len(referenced),
+        'candidate_count': len(candidates),
+        'candidate_bytes': sum(item['size'] for item in candidates),
+        'candidates': candidates,
+        'deleted_count': len(deleted),
+        'deleted_keys': deleted,
+        'scan_truncated': scan_truncated,
     }
 
 

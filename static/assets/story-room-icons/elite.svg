@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #efefef;
+        stroke-width: 8px;
+      }
+
+      .st0, .st1, .st2, .st3 {
+        stroke-miterlimit: 10;
+      }
+
+      .st0, .st2 {
+        stroke: #c9caca;
+      }
+
+      .st1 {
+        fill: #e72722;
+        stroke: #bd1c21;
+        stroke-width: 10px;
+      }
+
+      .st2 {
+        fill: none;
+        stroke-width: 7px;
+      }
+
+      .st2, .st3 {
+        stroke-linecap: round;
+      }
+
+      .st3 {
+        fill: #9fa0a0;
+        stroke: #9fa0a0;
+        stroke-width: 5px;
+      }
+
+      .st4 {
+        fill: #c9caca;
+      }
+    </style>
+  </defs>
+  <circle class="st1" cx="141.73" cy="141.73" r="106.3"/>
+  <g>
+    <path class="st3" d="M130.83,111.04c-6.29-19.36-21.9-30.78-27.36-36.11-8.65-8.44,26.94,4.87,36.08,23.06,9.14,18.18-2.42,32.43-8.71,13.05Z"/>
+    <path class="st3" d="M111.97,129.94c-19.31-6.3-30.7-21.96-36.02-27.43-8.42-8.68,4.86,27,23,36.17,18.14,9.16,32.35-2.42,13.02-8.73Z"/>
+  </g>
+  <path class="st0" d="M184.81,128.92c28.81,28.89,29.69,50.55,12.08,68.21-17.53,17.57-36.76,19.24-68.04-12.11-29.87-29.94-31.63-48.62-12.08-68.21,19.02-19.07,37.47-18.54,68.04,12.11Z"/>
+  <ellipse class="st4" cx="144.92" cy="168.9" rx="6.73" ry="6.75"/>
+  <ellipse class="st4" cx="168.73" cy="145.04" rx="6.73" ry="6.75"/>
+  <ellipse class="st4" cx="152.06" cy="128.33" rx="6.73" ry="6.75"/>
+  <ellipse class="st4" cx="128.26" cy="152.2" rx="6.73" ry="6.75"/>
+  <ellipse class="st4" cx="161.59" cy="185.61" rx="6.73" ry="6.75"/>
+  <ellipse class="st4" cx="185.39" cy="161.74" rx="6.73" ry="6.75"/>
+  <path class="st2" d="M145.27,143c1.87,3.61,5.23,9.27,10.84,15.27,6.03,6.44,12.01,10.46,15.7,12.65"/>
+</svg>

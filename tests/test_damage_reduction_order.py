@@ -118,11 +118,11 @@ class DamageReductionOrderTests(unittest.TestCase):
     def test_client_prediction_applies_armor_before_nazar(self):
         section = source_between(
             GAME_JS,
+            'function simulatePredictionAttackRawHits(',
             'function simulateNoCounterAttackHits(',
-            'function formatPredictionPart(',
         )
-        armor_index = section.index('dmg = Math.max(0, dmg - armor - rootArmor + fragile);')
-        nazar_index = section.index('if (dmg > 0 && nazarStacks > 0)')
+        armor_index = section.index('dmg = Math.max(0, dmg - target.armor - target.rootArmor + target.fragile);')
+        nazar_index = section.index('if (dmg > 0 && target.nazarStacks > 0)')
         self.assertLess(armor_index, nazar_index)
 
     def test_local_solo_engine_applies_armor_before_nazar(self):

@@ -432,6 +432,19 @@ def validate_coop_combat_state(state):
         _strict_int(health, code='INVALID_ENEMY_HEALTH', label='敌人生命', minimum=0)
         if health > max_health:
             _fail('INVALID_ENEMY_HEALTH', '敌人生命不能超过最大生命')
+        for field, label in (
+            ('shield', '敌人护盾'),
+            ('power', '敌人力量'),
+            ('move_index', '敌人行动序号'),
+            ('static', '敌人静电'),
+        ):
+            if field in enemy:
+                _strict_int(
+                    enemy.get(field),
+                    code='INVALID_ENEMY_STATE',
+                    label=label,
+                    minimum=0,
+                )
         stored_intent = enemy.get('intent')
         intent = _normalize_intent(stored_intent)
         if stored_intent != intent:
@@ -473,21 +486,78 @@ def damage_coop_enemy(state, *, actor_seat, enemy_id, amount, events, source='he
     enemy = next((item for item in state['combat']['enemies'] if item.get('id') == target_id), None)
     if enemy is None or int(enemy.get('health') or 0) <= 0:
         _fail('INVALID_ENEMY_TARGET', '指定敌人不存在或已经被击败')
+    shield_before = int(enemy.get('shield') or 0)
+    blocked = min(shield_before, amount)
+    enemy['shield'] = shield_before - blocked
+    remaining = amount - blocked
     before = int(enemy['health'])
-    dealt = min(before, amount)
+    dealt = min(before, remaining)
     enemy['health'] = before - dealt
-    events.append({
+    damage_event = {
         'type': 'enemy_damage',
         'actor_seat': actor_seat,
         'enemy_id': target_id,
         'amount': dealt,
+        'blocked': blocked,
         'before': before,
         'after': int(enemy['health']),
         'source': str(source or 'hero_action'),
-    })
+    }
+    if before > 0 and int(enemy['health']) == 0:
+        damage_event['lethal'] = True
+    events.append(damage_event)
     if before > 0 and int(enemy['health']) == 0:
         events.append({'type': 'enemy_defeated', 'actor_seat': actor_seat, 'enemy_id': target_id})
     return dealt
+
+
+def damage_coop_party_from_enemy(
+    state,
+    *,
+    enemy,
+    amount,
+    hits,
+    events,
+    attack_all=False,
+):
+    """Apply one trusted enemy attack using the shared seat damage rules."""
+
+    _strict_int(amount, code='INVALID_ENEMY_INTENT', label='敌人伤害', minimum=0)
+    _strict_int(hits, code='INVALID_ENEMY_INTENT', label='敌人攻击次数', minimum=1)
+    if not isinstance(enemy, dict) or enemy not in state['combat']['enemies']:
+        _fail('INVALID_ENEMY', '敌人状态无效')
+    if attack_all:
+        for target in list(_living_seats(state)):
+            _damage_seat(state, target, amount, hits, enemy, events, attack_all=True)
+            if not _living_seats(state):
+                break
+        return
+    intent = enemy.get('intent') or {}
+    original = intent.get('target_seat')
+    if isinstance(original, bool) or not isinstance(original, int):
+        _fail('INVALID_ENEMY_TARGET', '单体攻击必须锁定有效席位')
+    living = _living_seats(state)
+    target = original if original in living else _fallback_target_seat(original, living)
+    if target is None:
+        return
+    if target != original:
+        intent['target_seat'] = target
+        events.append({
+            'type': 'enemy_target_reassigned',
+            'enemy_id': enemy['id'],
+            'original_target_seat': original,
+            'target_seat': target,
+            'round': state['combat']['round'],
+        })
+    _damage_seat(
+        state,
+        target,
+        amount,
+        hits,
+        enemy,
+        events,
+        original_target_seat=original,
+    )
 
 
 def _damage_seat(
@@ -601,7 +671,13 @@ def _resolve_terminal_state(state, events):
     return False
 
 
-def _resolve_enemy_phase(state, run_seed, events):
+def _resolve_enemy_phase(
+    state,
+    run_seed,
+    events,
+    round_start_resolver=None,
+    enemy_action_resolver=None,
+):
     combat = state['combat']
     combat['turn'] = COOP_COMBAT_ENEMY_TURN
     events.append({'type': 'enemy_phase_started', 'combat_id': combat['id'], 'round': combat['round']})
@@ -610,6 +686,15 @@ def _resolve_enemy_phase(state, run_seed, events):
             continue
         if _resolve_terminal_state(state, events):
             return
+        if enemy_action_resolver is not None and enemy_action_resolver(
+            state,
+            enemy,
+            run_seed,
+            events,
+        ):
+            if _resolve_terminal_state(state, events):
+                return
+            continue
         intent = enemy.get('intent') or {}
         kind = intent.get('kind')
         amount = int(intent.get('amount') or 0)
@@ -654,6 +739,8 @@ def _resolve_enemy_phase(state, run_seed, events):
     combat['turn'] = COOP_COMBAT_HERO_TURN
     state['coordination']['combat_ready_seats'] = []
     state['coordination']['combat_ready_round'] = combat['round']
+    if round_start_resolver is not None:
+        round_start_resolver(state, run_seed, events)
     _lock_enemy_targets(state, run_seed, events)
     events.append({'type': 'hero_phase_started', 'combat_id': combat['id'], 'round': combat['round']})
 
@@ -691,12 +778,18 @@ def apply_coop_combat_command(
     combat_round,
     expected_sequence=None,
     hero_action_resolver=None,
+    round_start_resolver=None,
+    enemy_action_resolver=None,
 ):
     """Apply one authenticated combat command as an atomic pure transaction.
 
     ``hero_action_resolver`` is trusted server-side rules code.  Its signature is
     ``resolver(state, actor_seat, action_type, payload, run_seed, events)``.
-    Client payloads never select the acting seat.
+    ``round_start_resolver`` performs trusted content housekeeping after the
+    enemy phase and before new intents are exposed.  Client payloads never
+    select the acting seat.
+    ``enemy_action_resolver`` may execute a content-owned enemy move; returning
+    false preserves the generic attack/attack-all/idle fallback.
     """
 
     validate_coop_combat_state(source_state)
@@ -783,7 +876,13 @@ def apply_coop_combat_command(
             seat for seat in coordination.get('combat_ready_seats', []) if seat in living
         ]
         if living and coordination['combat_ready_seats'] == sorted(living):
-            _resolve_enemy_phase(state, run_seed, events)
+            _resolve_enemy_phase(
+                state,
+                run_seed,
+                events,
+                round_start_resolver=round_start_resolver,
+                enemy_action_resolver=enemy_action_resolver,
+            )
 
     accepted_sequence = current_sequence + 1
     coordination['action_sequence'] = accepted_sequence

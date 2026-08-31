@@ -1,4 +1,5 @@
 const $ = (id) => document.getElementById(id);
+const HANDLING_CSRF_TOKEN = document.querySelector('meta[name="gtn-feedback-handling-csrf"]')?.content || '';
 
 let currentTab = 'reports';
 let reports = [];
@@ -37,11 +38,15 @@ async function api(path, options = {}) {
   const timeoutMs = Number(options.timeoutMs || HANDLING_FETCH_TIMEOUT_MS);
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const { timeoutMs: _timeoutMs, headers = {}, ...fetchOptions } = options;
+  const method = String(fetchOptions.method || 'GET').toUpperCase();
+  const csrfHeaders = HANDLING_CSRF_TOKEN && !['GET', 'HEAD', 'OPTIONS'].includes(method)
+    ? { 'X-Feedback-Handling-CSRF': HANDLING_CSRF_TOKEN }
+    : {};
   let response;
   try {
     response = await fetch(path, {
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders, ...headers },
       ...fetchOptions,
       signal: controller.signal,
     });

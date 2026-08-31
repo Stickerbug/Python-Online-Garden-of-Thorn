@@ -65,6 +65,7 @@ install -d -m 0750 "${AI_DATA_ROOT}/runtime" "${AI_DATA_ROOT}/human-sessions" \
 
 cat >"${AI_ENV_FILE}" <<EOF
 GTN_AI_1V1_TEST_ENABLED=1
+GTN_AI_PUBLIC_ENTRY_ENABLED=0
 GTN_AI_ROOT=${AI_ROOT}
 GTN_AI_PYTHON=${AI_VENV}/bin/python
 GTN_AI_RUNTIME_ROOT=${AI_DATA_ROOT}/runtime

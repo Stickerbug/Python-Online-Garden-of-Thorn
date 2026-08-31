@@ -7,6 +7,11 @@ but their balance and rules are independent.
 
 from copy import deepcopy
 
+from story_character_content import (
+    STORY_CHARACTER_CARD_DESIGNS,
+    STORY_CHARACTER_RELIC_DESIGNS,
+)
+
 
 STORY_RULES = {
     'starting_health': 80,
@@ -17,6 +22,101 @@ STORY_RULES = {
     'draw_per_turn': 5,
     'hand_limit': 10,
     'stage_floor_count': 16,
+}
+
+STORY_CHARACTER_NOT_READY_MESSAGE = {
+    'zh': '这名角色还没准备好呢\n请期待开发组更新',
+    'en': 'This character is not ready yet.\nPlease look forward to a future update.',
+}
+
+STORY_CHARACTERS = {
+    'common_flower': {
+        'name': {'zh': '普通的花花', 'en': 'Common Flower'},
+        'design': '力量+易伤+抽牌+弃牌；不再使用消耗机制。',
+        'implementation_status': 'playable',
+        'starter_deck': (
+            {'card_id': 'basic', 'count': 5},
+            {'card_id': 'rose', 'count': 4},
+            {'card_id': 'amulet', 'count': 1},
+        ),
+        'starter_relics': ('energetic',),
+        'unlock': {
+            'kind': 'default',
+            'description': {'zh': '默认解锁', 'en': 'Unlocked by default'},
+        },
+    },
+    'orbiter': {
+        'name': {'zh': '轨道使', 'en': 'Orbiter'},
+        'design': (
+            '轨道机制：轨道X将牌置于耐久为X的轨道；旋转会顺时针旋转轨道、'
+            '触发转到的花瓣并使其耐久-1；每回合结束自动旋转一次。'
+        ),
+        'implementation_status': 'planned',
+        'unlock': {
+            'kind': 'complete_journey',
+            'character_id': 'mage',
+            'any_difficulty': True,
+            'description': {
+                'zh': '使用魔法师以任意难度通关全部阶段后解锁',
+                'en': 'Complete every stage with Mage on any difficulty',
+            },
+        },
+        'unavailable_message': deepcopy(STORY_CHARACTER_NOT_READY_MESSAGE),
+    },
+    'summoner': {
+        'name': {'zh': '召唤师', 'en': 'Summoner'},
+        'design': (
+            '拥有3个召唤槽；召唤物具有被动、主动和特殊效果；回合结束触发被动；'
+            '号令X依次触发首个召唤物的主动并移至队尾；溢出召唤物会被牺牲。'
+        ),
+        'implementation_status': 'planned',
+        'unlock': {
+            'kind': 'complete_journey',
+            'character_id': 'orbiter',
+            'any_difficulty': True,
+            'description': {
+                'zh': '使用轨道使以任意难度通关全部阶段后解锁',
+                'en': 'Complete every stage with Orbiter on any difficulty',
+            },
+        },
+        'unavailable_message': deepcopy(STORY_CHARACTER_NOT_READY_MESSAGE),
+    },
+    'mage': {
+        'name': {'zh': '魔法师', 'en': 'Mage'},
+        'design': '以魔力支付专属卡牌，并通过魔力源泉在每回合开始时回复1M。',
+        'implementation_status': 'playable',
+        'starter_deck': (
+            {'card_id': 'basic', 'count': 5},
+            {'card_id': 'rose', 'count': 5},
+            {'character_card_id': 'mage_basic', 'count': 1},
+        ),
+        'starter_relics': ('magic_source',),
+        'unlock': {
+            'kind': 'complete_journey',
+            'character_id': 'common_flower',
+            'any_difficulty': True,
+            'description': {
+                'zh': '使用普通的花花以任意难度通关全部阶段后解锁',
+                'en': 'Complete every stage with Common Flower on any difficulty',
+            },
+        },
+        'unavailable_message': deepcopy(STORY_CHARACTER_NOT_READY_MESSAGE),
+    },
+    'occultist': {
+        'name': {'zh': '邪术师', 'en': 'Occultist'},
+        'design': '腐化、各类异常效果、放逐与放血。',
+        'implementation_status': 'planned',
+        'unlock': {
+            'kind': 'complete_journey',
+            'character_id': 'summoner',
+            'any_difficulty': True,
+            'description': {
+                'zh': '使用召唤师以任意难度通关全部阶段后解锁',
+                'en': 'Complete every stage with Summoner on any difficulty',
+            },
+        },
+        'unavailable_message': deepcopy(STORY_CHARACTER_NOT_READY_MESSAGE),
+    },
 }
 
 STORY_BIOMES = {
@@ -116,6 +216,13 @@ STORY_TAGS = {
         'description': {
             'zh': '进入手牌或回合开始时，若满足使用条件则自动打出。',
             'en': 'When drawn or at turn start, play this automatically if it is playable.',
+        },
+    },
+    'innate': {
+        'name': {'zh': '固有', 'en': 'Innate'},
+        'description': {
+            'zh': '战斗开始时，这张牌必定出现在初始手牌中。',
+            'en': 'This card is guaranteed to appear in the opening hand.',
         },
     },
     'unplayable': {
@@ -222,6 +329,34 @@ STORY_STATUSES = {
         'description': {
             'zh': '每打出1张牌，受到等同于层数的伤害；自己的行动回合结束时清空。',
             'en': 'Take damage equal to its stacks whenever you play a card; clear it after your action turn.',
+        },
+    },
+    'overload': {
+        'name': {'zh': '超载', 'en': 'Overload'},
+        'description': {
+            'zh': '己方回合开始时扣除至多等同层数的E，然后清空。',
+            'en': 'At turn start, lose up to that much E, then clear it.',
+        },
+    },
+    'magic_overload': {
+        'name': {'zh': '魔力超载', 'en': 'Magic Overload'},
+        'description': {
+            'zh': '己方回合开始时扣除至多等同层数的M，然后清空。',
+            'en': 'At turn start, lose up to that much M, then clear it.',
+        },
+    },
+    'static': {
+        'name': {'zh': '静电', 'en': 'Static'},
+        'description': {
+            'zh': '受到电击伤害时消耗全部静电，并使该次伤害增加等同于原层数的数值。',
+            'en': 'Electric damage consumes all Static and adds its former stacks to that hit.',
+        },
+    },
+    'untargetable': {
+        'name': {'zh': '隐形', 'en': 'Invisible'},
+        'description': {
+            'zh': '敌方攻击无法命中；自己的下个回合开始时减少1层。',
+            'en': 'Enemy attacks cannot hit; lose 1 stack at the start of your next turn.',
         },
     },
     'rockfall': {
@@ -845,6 +980,64 @@ STORY_BLESSINGS = {
 }
 
 
+# Static event definitions live beside cards, relics and enemies so every
+# story executor can consume the same authored content.  Dynamic solo-only
+# events are still assembled by ``story_engine`` until their multi-step rules
+# have an equally strict shared contract.
+STORY_EVENTS = {
+    'coop_garden_crossroads': {
+        'title': {'zh': '岔路上的园丁车', 'en': "Gardener's Cart"},
+        'description': {
+            'zh': '一辆废弃园丁车挡在路边。你必须决定如何利用剩余物资。',
+            'en': 'An abandoned gardener cart offers a difficult choice.',
+        },
+        'speaker': {'zh': '废弃园丁车', 'en': "Gardener's Cart"},
+        'portrait': '+',
+        'biomes': ('garden',),
+        'modes': ('solo', 'coop'),
+        'coop': {
+            'enabled': True,
+            'policy': 'unanimous_then_seeded_random',
+            'effect_scope': 'all_players',
+        },
+        'options': (
+            {
+                'id': 'mend',
+                'label': {'zh': '修整工具', 'en': 'Mend the Tools'},
+                'description': {
+                    'zh': '回复15H。',
+                    'en': 'Recover 15 H.',
+                },
+                'effects': ({'type': 'heal', 'amount': 15},),
+            },
+            {
+                'id': 'supplies',
+                'label': {'zh': '搜集物资', 'en': 'Gather Supplies'},
+                'description': {
+                    'zh': '获得30G。',
+                    'en': 'Gain 30 G.',
+                },
+                'effects': ({'type': 'gold', 'amount': 30},),
+            },
+            {
+                'id': 'risk',
+                'label': {'zh': '冒险拆解', 'en': 'Risky Salvage'},
+                'description': {
+                    'zh': '失去8H（最低保留1H），并获得60G。',
+                    'en': 'Lose 8 H, but not below 1 H, and gain 60 G.',
+                },
+                'effects': (
+                    {'type': 'health_loss', 'amount': 8, 'nonlethal': True},
+                    {'type': 'gold', 'amount': 60},
+                ),
+                'requires_confirmation': True,
+                'risky': True,
+            },
+        ),
+    },
+}
+
+
 def _story_card_description(value):
     if isinstance(value, dict):
         return {
@@ -909,6 +1102,58 @@ def _effect(effect_type, amount=0, **values):
     return {'type': effect_type, 'amount': amount, **values}
 
 
+def _character_card(
+    card_id,
+    *,
+    effects=(),
+    upgrade_effects=(),
+    tags=(),
+    upgrade_tags=None,
+    upgrade_cost_e=None,
+    upgrade_cost_m=None,
+    script=None,
+    upgrade_script=None,
+    target=None,
+):
+    """Compile one audited character design into the executable card shape."""
+
+    design = STORY_CHARACTER_CARD_DESIGNS[card_id]
+    rarity = 'primary' if design.get('rarity') == 'starter' else design['rarity']
+    upgrade = None
+    if design.get('upgrade_text'):
+        upgrade = {
+            'description': {
+                'zh': design['upgrade_text'],
+                'en': design['upgrade_text'],
+            },
+            'effects': tuple(upgrade_effects),
+        }
+        if upgrade_tags is not None:
+            upgrade['tags'] = tuple(upgrade_tags)
+        if upgrade_cost_e is not None:
+            upgrade['cost_e'] = max(0, int(upgrade_cost_e))
+        if upgrade_cost_m is not None:
+            upgrade['cost_m'] = max(0, int(upgrade_cost_m))
+        if upgrade_script is not None:
+            upgrade['script'] = upgrade_script
+    return _card(
+        None,
+        design['name']['zh'],
+        design['name'].get('en') or design['name']['zh'],
+        int(design.get('cost_e') or 0),
+        design['card_type'],
+        rarity,
+        design['base_text'],
+        cost_m=int(design.get('cost_m') or 0),
+        effects=tuple(effects),
+        upgrade=upgrade,
+        tags=tuple(tags),
+        owner=design['character_id'],
+        script=script,
+        target=target,
+    )
+
+
 STORY_CARDS = {
     'basic': _card('Basic', '基本', 'Basic', 1, 'thorn', 'primary',
                    '对目标造成6D。', effects=(_effect('damage', 6),),
@@ -918,6 +1163,335 @@ STORY_CARDS = {
                   '获得5层护盾。', effects=(_effect('shield', 5),),
                   upgrade={'description': {'zh': '获得8层护盾。', 'en': 'Gain 8 Shield.'},
                            'effects': (_effect('shield', 8),)}),
+    'mage_basic': _character_card(
+        'mage_basic',
+        effects=(_effect('damage', 13),),
+        upgrade_effects=(_effect('damage', 18),),
+    ),
+    'mage_fries': _character_card(
+        'mage_fries',
+        effects=(_effect('heal', 7),),
+        upgrade_effects=(_effect('heal', 10),),
+        tags=('exile',),
+    ),
+    'mage_coffee': _character_card(
+        'mage_coffee',
+        effects=(_effect('magic', 4),),
+        upgrade_effects=(_effect('magic', 5),),
+        tags=('exile',),
+    ),
+    'mage_bone': _character_card(
+        'mage_bone',
+        effects=(_effect('damage', 9), _effect('shield', 6)),
+        upgrade_effects=(_effect('damage', 12), _effect('shield', 8)),
+    ),
+    'mage_palm_leaf': _character_card(
+        'mage_palm_leaf',
+        effects=(_effect('shield', 10), _effect('magic', 3)),
+        upgrade_effects=(_effect('shield', 14), _effect('magic', 3)),
+    ),
+    'mage_bubble_bomb': _character_card(
+        'mage_bubble_bomb',
+        effects=(_effect('damage', 14), _effect('status', 2, status='weak')),
+        upgrade_effects=(_effect('damage', 17), _effect('status', 3, status='weak')),
+        tags=('wide',),
+    ),
+    'mage_rock': _character_card(
+        'mage_rock',
+        effects=(_effect('damage', 7), _effect('status', 2, status='vulnerable')),
+        upgrade_effects=(_effect('damage', 9), _effect('status', 3, status='vulnerable')),
+    ),
+    'mage_missile': _character_card(
+        'mage_missile',
+        effects=(_effect('damage', 15), _effect('draw', 3)),
+        upgrade_effects=(_effect('damage', 17), _effect('draw', 4)),
+        tags=('ready',),
+    ),
+    'mage_rose': _character_card(
+        'mage_rose',
+        effects=(_effect('shield', 9),),
+        upgrade_effects=(_effect('shield', 12),),
+    ),
+    'mage_orange': _character_card(
+        'mage_orange',
+        effects=(_effect('damage', 5),),
+        upgrade_effects=(_effect('damage', 7),),
+        script='return_draw_top',
+        upgrade_script='return_draw_top',
+    ),
+    'mage_coral': _character_card(
+        'mage_coral',
+        effects=(
+            _effect('damage', 17),
+            _effect('create_draw_top_copies', 2, magic_swift=1, force_void=True),
+        ),
+        upgrade_effects=(
+            _effect('damage', 22),
+            _effect('create_draw_top_copies', 2, magic_swift=1, upgraded=True),
+        ),
+        tags=('exile',),
+    ),
+    'mage_leaf': _character_card(
+        'mage_leaf',
+        effects=(_effect('equipment', 1, script='magic_regeneration'),),
+        upgrade_effects=(_effect('equipment', 1, script='magic_regeneration'),),
+        upgrade_cost_e=0,
+    ),
+    'mage_compass': _character_card(
+        'mage_compass',
+        effects=(_effect('retrieve_from_piles', 1),),
+        upgrade_effects=(_effect('retrieve_from_piles', 1),),
+        tags=('exile',),
+        upgrade_tags=('exile', 'innate'),
+    ),
+    'mage_blood_blade': _character_card(
+        'mage_blood_blade',
+        effects=(_effect('magic', 2), _effect('status_self', 1, status='broken')),
+        upgrade_effects=(_effect('magic', 3), _effect('status_self', 1, status='broken')),
+        script='return_draw_top',
+        upgrade_script='return_draw_top',
+    ),
+    'mage_cotton': _character_card(
+        'mage_cotton',
+        effects=(_effect('equipment', 4, script='magic_shield'),),
+        upgrade_effects=(_effect('equipment', 4, script='magic_shield'),),
+        upgrade_tags=('innate',),
+    ),
+    'mage_sunflower': _character_card(
+        'mage_sunflower',
+        effects=(_effect('equipment', 2, script='elixir_spend_magic', magic=1),),
+        upgrade_effects=(_effect('equipment', 2, script='elixir_spend_magic', magic=1),),
+        upgrade_cost_e=0,
+    ),
+    'mage_quantum': _character_card(
+        'mage_quantum',
+        effects=(_effect('temporary_swap_costs'),),
+        upgrade_effects=(_effect('temporary_swap_costs'),),
+        tags=('void', 'exile'),
+        upgrade_tags=('exile',),
+    ),
+    'mage_wing': _character_card(
+        'mage_wing',
+        effects=(_effect('magic_extra_hits', 9, max_extra=4),),
+        upgrade_effects=(_effect('magic_extra_hits', 12, max_extra=4),),
+    ),
+    'mage_dahlia': _character_card(
+        'mage_dahlia',
+        effects=(
+            _effect('magic', 1),
+            _effect('equipment', 3, script='magic_recovery', power=1),
+        ),
+        upgrade_effects=(
+            _effect('magic', 1),
+            _effect('equipment', 4, script='magic_recovery', power=1),
+        ),
+    ),
+    'mage_soil': _character_card(
+        'mage_soil',
+        effects=(_effect('shield', 32), _effect('overload', 1)),
+        upgrade_effects=(_effect('shield', 40), _effect('overload', 1)),
+        tags=('exile',),
+    ),
+    'mage_tentacle': _character_card(
+        'mage_tentacle',
+        effects=(_effect('equipment', 1, script='turn_draw'),),
+        upgrade_effects=(_effect('equipment', 1, script='turn_draw'),),
+        upgrade_tags=('innate',),
+    ),
+    'mage_seed': _character_card(
+        'mage_seed',
+        effects=(_effect('self_magic_swift', 1), _effect('magic', 4)),
+        upgrade_effects=(_effect('self_magic_swift', 1), _effect('magic', 5)),
+    ),
+    'mage_tomato': _character_card(
+        'mage_tomato',
+        effects=(_effect('magic_spent_damage', 13),),
+        upgrade_effects=(_effect('magic_spent_damage', 18),),
+    ),
+    'mage_stick': _character_card(
+        'mage_stick',
+        effects=(_effect('magic_enemy_count', 2),),
+        upgrade_effects=(_effect('magic_enemy_count', 3),),
+    ),
+    'mage_iodine': _character_card(
+        'mage_iodine',
+        effects=(_effect('equipment', 7, script='end_electric_all'),),
+        upgrade_effects=(_effect('equipment', 7, script='end_electric_all'),),
+        upgrade_cost_e=0,
+    ),
+    'mage_basil': _character_card(
+        'mage_basil',
+        effects=(_effect('conditional_magic', 2, zero_amount=4),),
+        upgrade_effects=(_effect('conditional_magic', 2, zero_amount=6),),
+    ),
+    'mage_balsam': _character_card(
+        'mage_balsam',
+        effects=(_effect('generate_magic_cards', 3),),
+        upgrade_effects=(_effect('generate_magic_cards', 3, upgraded=True),),
+    ),
+    'mage_lightning': _character_card(
+        'mage_lightning',
+        effects=(_effect('electric_damage', 7, hits=2),),
+        upgrade_effects=(_effect('electric_damage', 10, hits=2),),
+        tags=('wide',),
+    ),
+    'mage_shovel': _character_card(
+        'mage_shovel',
+        effects=(_effect('untargetable', 1),),
+        upgrade_effects=(_effect('untargetable', 1),),
+        tags=('void', 'exile'),
+        upgrade_tags=('exile',),
+    ),
+    'mage_sponge': _character_card(
+        'mage_sponge',
+        effects=(_effect('magic', 8), _effect('magic_overload', 12)),
+        upgrade_effects=(_effect('magic', 8), _effect('magic_overload', 12)),
+        upgrade_tags=('retain',),
+    ),
+    'mage_pearl': _character_card(
+        'mage_pearl',
+        effects=(_effect('consume_magic_draw', 7, max_magic=10),),
+        upgrade_effects=(_effect('consume_magic_draw', 10, max_magic=10),),
+        tags=('exile',),
+        upgrade_tags=(),
+    ),
+    'mage_blueberry': _character_card(
+        'mage_blueberry',
+        effects=(_effect('equipment', 5, script='electric_on_m_card'),),
+        upgrade_effects=(_effect('equipment', 5, script='electric_on_m_card'),),
+        upgrade_cost_e=1,
+    ),
+    'mage_battery_delayed': _character_card(
+        'mage_battery_delayed',
+        effects=(_effect('equipment', 2, script='delayed_magic'),),
+        upgrade_effects=(_effect('equipment', 2, script='delayed_magic'),),
+        upgrade_cost_e=0,
+    ),
+    'mage_serration': _character_card(
+        'mage_serration',
+        effects=(_effect('turn_damage_multiplier', 2),),
+        upgrade_effects=(_effect('turn_damage_multiplier', 2),),
+        upgrade_tags=('retain',),
+    ),
+    'mage_starfish': _character_card(
+        'mage_starfish',
+        effects=(_effect('shield', 7), _effect('magic', 2)),
+        upgrade_effects=(_effect('shield', 10), _effect('magic', 2)),
+        script='requires_no_last_turn_damage',
+        upgrade_script='requires_no_last_turn_damage',
+    ),
+    'mage_honey_shield': _character_card(
+        'mage_honey_shield',
+        effects=(_effect('shield_remaining_magic', 12),),
+        upgrade_effects=(_effect('shield_remaining_magic', 16),),
+    ),
+    'mage_constellation': _character_card(
+        'mage_constellation',
+        effects=(_effect('damage', 34), _effect('temporary_magic_heavy', 1)),
+        upgrade_effects=(_effect('damage', 42), _effect('temporary_magic_heavy', 1)),
+    ),
+    'mage_mask': _character_card(
+        'mage_mask',
+        effects=(_effect('equipment', 3, script='magic_spend_shield'),),
+        upgrade_effects=(_effect('equipment', 3, script='magic_spend_shield'),),
+        tags=('exile',),
+        upgrade_tags=(),
+    ),
+    'mage_wind': _character_card(
+        'mage_wind',
+        effects=(_effect('discard_nonmagic_draw_magic', 0),),
+        upgrade_effects=(_effect('discard_nonmagic_draw_magic', 1),),
+    ),
+    'mage_chromosome': _character_card(
+        'mage_chromosome',
+        effects=(_effect('equipment', 2, script='magic_gain_shield'),),
+        upgrade_effects=(_effect('equipment', 3, script='magic_gain_shield'),),
+    ),
+    'mage_beeswax': _character_card(
+        'mage_beeswax',
+        effects=(_effect('shield_damage_halved', 1), _effect('shield', 5)),
+        upgrade_effects=(_effect('shield_damage_halved', 1), _effect('shield', 8)),
+    ),
+    'mage_balloon': _character_card(
+        'mage_balloon',
+        effects=(_effect('draw_then_topdeck', 3, choose=2),),
+        upgrade_effects=(_effect('draw_then_topdeck', 4, choose=2),),
+    ),
+    'mage_air': _character_card(
+        'mage_air',
+        effects=(_effect('multiply_shield', 2),),
+        upgrade_effects=(_effect('multiply_shield', 3),),
+    ),
+    'mage_rmb': _character_card(
+        'mage_rmb',
+        effects=(_effect('next_combat_magic', 2),),
+        upgrade_effects=(_effect('next_combat_magic', 2),),
+        upgrade_tags=('retain',),
+    ),
+    'capacitor': _character_card(
+        'capacitor',
+        effects=(_effect('equipment', 50, script='static_boost'),),
+        upgrade_effects=(_effect('equipment', 75, script='static_boost'),),
+    ),
+    'battery': _character_card(
+        'battery',
+        effects=(_effect('equipment', 4, script='static_on_attacked'),),
+        upgrade_effects=(_effect('equipment', 6, script='static_on_attacked'),),
+    ),
+    'plasma': _character_card(
+        'plasma',
+        effects=(_effect('electric_damage', 6, hits=5),),
+        upgrade_effects=(_effect('electric_damage', 8, hits=5),),
+    ),
+    'ruby': _character_card(
+        'ruby',
+        effects=(_effect('equipment', 8, script='static_damage'),),
+        upgrade_effects=(_effect('equipment', 11, script='static_damage'),),
+    ),
+    'mage_ruby': _character_card(
+        'mage_ruby',
+        effects=(_effect('equipment', 3, script='static_shield'),),
+        upgrade_effects=(_effect('equipment', 4, script='static_shield'),),
+    ),
+    'mage_capacitor': _character_card(
+        'mage_capacitor',
+        effects=(_effect('equipment', 1, script='static_magic'),),
+        upgrade_effects=(_effect('equipment', 1, script='static_magic'),),
+        upgrade_tags=('innate',),
+    ),
+    'copper_rod': _character_card(
+        'copper_rod',
+        effects=(_effect('shield', 8), _effect('static', 3)),
+        upgrade_effects=(_effect('shield', 10), _effect('static', 6)),
+        target='enemy',
+    ),
+    'mage_copper_rod': _character_card(
+        'mage_copper_rod',
+        effects=(_effect('multiply_static', 2),),
+        upgrade_effects=(_effect('multiply_static', 3),),
+        target='enemy',
+    ),
+    'mage_lithium': _character_card(
+        'mage_lithium',
+        effects=(_effect('equipment', 1, script='static_draw'),),
+        upgrade_effects=(_effect('equipment', 1, script='static_draw'),),
+        upgrade_cost_e=1,
+    ),
+    'electronic_missile': _character_card(
+        'electronic_missile',
+        effects=(_effect('electric_damage', 6), _effect('draw', 2)),
+        upgrade_effects=(_effect('electric_damage', 8), _effect('draw', 3)),
+        tags=('ready',),
+    ),
+    'mage_electronic_missile': _character_card(
+        'mage_electronic_missile',
+        effects=(_effect('electric_damage', 4),),
+        upgrade_effects=(_effect('electric_damage', 6),),
+        tags=('ready',),
+        upgrade_tags=('ready',),
+        script='return_draw_top',
+        upgrade_script='return_draw_top',
+    ),
     'amulet': _card('Amulet', '护身符', 'Amulet', 2, 'thorn', 'primary',
                     '对目标造成16D；主动丢弃自己1张其他手牌。',
                     effects=(_effect('damage', 16), _effect('active_discard', 1, exact=True)),
@@ -1541,16 +2115,43 @@ STORY_CARDS = {
 }
 
 STORY_CARD_IMAGE_URLS = {
+    'capacitor': '/static/assets/story-card-art/capacitor.svg',
     'confused': '/static/assets/story-card-art/confused.svg',
+    'copper_rod': '/static/assets/story-card-art/copper-rod.svg',
     'dandelion_seed': '/static/assets/story-card-art/dandelion-seed.svg',
     'enchanted_amulet': '/static/assets/story-card-art/enchanted-amulet.svg',
     'fatigued': '/static/assets/story-card-art/fatigued.svg',
     'injury': '/static/assets/story-card-art/injury.svg',
+    'mage_balsam': '/static/assets/story-card-art/mage-balsam.svg',
+    'mage_basic': '/static/assets/story-card-art/mage-basic.svg',
+    'mage_basil': '/static/assets/story-card-art/mage-basil.svg',
+    'mage_beeswax': '/static/assets/story-card-art/mage-beeswax.svg',
+    'mage_blood_blade': '/static/assets/story-card-art/mage-blood-blade.svg',
+    'mage_blueberry': '/static/assets/story-card-art/mage-blueberry.svg',
+    'mage_bubble_bomb': '/static/assets/story-card-art/mage-bubble-bomb.svg',
+    'mage_capacitor': '/static/assets/story-card-art/mage-capacitor.svg',
+    'mage_copper_rod': '/static/assets/story-card-art/mage-copper-rod.svg',
+    'mage_honey_shield': '/static/assets/story-card-art/mage-honey-shield.svg',
+    'mage_iodine': '/static/assets/story-card-art/mage-iodine.svg',
+    'mage_lithium': '/static/assets/story-card-art/mage-lithium.svg',
+    'mage_missile': '/static/assets/story-card-art/mage-missile.svg',
+    'mage_palm_leaf': '/static/assets/story-card-art/mage-palm-leaf.svg',
+    'mage_quantum': '/static/assets/story-card-art/mage-quantum.svg',
+    'mage_rmb': '/static/assets/story-card-art/mage-rmb.svg',
+    'mage_rose': '/static/assets/story-card-art/mage-rose.svg',
+    'mage_ruby': '/static/assets/story-card-art/mage-ruby.svg',
+    'mage_shovel': '/static/assets/story-card-art/mage-shovel.svg',
+    'mage_sponge': '/static/assets/story-card-art/mage-sponge.svg',
+    'mage_starfish': '/static/assets/story-card-art/mage-starfish.svg',
+    'mage_stick': '/static/assets/story-card-art/mage-stick.svg',
+    'mage_sunflower': '/static/assets/story-card-art/mage-sunflower.svg',
+    'mage_wind': '/static/assets/story-card-art/mage-wind.svg',
     'magic_acid': '/static/assets/story-card-art/magic-acid.svg',
     'magic_assembler': '/static/assets/story-card-art/magic-assembler.svg',
     'magic_feather': '/static/assets/story-card-art/magic-feather.svg',
     'magic_shell': '/static/assets/story-card-art/magic-shell.svg',
     'moon_rock': '/static/assets/story-card-art/moon-rock.svg',
+    'plasma': '/static/assets/story-card-art/plasma.svg',
     'rmb': '/static/assets/story-card-art/rmb.svg',
     'shell': '/static/assets/story-card-art/shell.svg',
     'sand_dust': '/static/assets/story-card-art/sand-dust.svg',
@@ -1562,9 +2163,16 @@ STORY_CARD_IMAGE_URLS = {
     'unrelenting': '/static/assets/story-card-art/unrelenting.svg',
 }
 
+STORY_CARD_UPGRADED_IMAGE_URLS = {
+    'mage_basic': '/static/assets/story-card-art/mage-basic-upgraded.svg',
+}
+
 for _card_id, _image_url in STORY_CARD_IMAGE_URLS.items():
     STORY_CARDS[_card_id]['image_url'] = _image_url
-    STORY_CARDS[_card_id]['upgraded_image_url'] = _image_url
+    STORY_CARDS[_card_id]['upgraded_image_url'] = STORY_CARD_UPGRADED_IMAGE_URLS.get(
+        _card_id,
+        _image_url,
+    )
 
 
 STORY_REWARD_CARD_IDS = tuple(
@@ -1581,7 +2189,30 @@ STORY_SHOP_CARD_IDS = tuple(
     for card_id, definition in STORY_CARDS.items()
     if definition['rarity'] in ('common', 'rare', 'ultra')
     and definition['type'] not in ('curse', 'infect')
+    and definition.get('owner') in ('primary', 'neutral')
 )
+
+
+def story_reward_card_ids(character_id='common_flower'):
+    owner = 'primary' if str(character_id or 'common_flower') == 'common_flower' else str(character_id)
+    return tuple(
+        card_id
+        for card_id, definition in STORY_CARDS.items()
+        if definition['rarity'] in ('common', 'rare', 'ultra')
+        and definition['type'] not in ('curse', 'infect')
+        and definition.get('owner') == owner
+    )
+
+
+def story_shop_card_ids(character_id='common_flower'):
+    owner = 'primary' if str(character_id or 'common_flower') == 'common_flower' else str(character_id)
+    return tuple(
+        card_id
+        for card_id, definition in STORY_CARDS.items()
+        if definition['rarity'] in ('common', 'rare', 'ultra')
+        and definition['type'] not in ('curse', 'infect')
+        and definition.get('owner') in (owner, 'neutral')
+    )
 
 
 def _relic(
@@ -1615,6 +2246,17 @@ STORY_RELICS = {
         rarity='special',
         script='floor_heal',
         amount=4,
+    ),
+    'magic_source': _relic(
+        STORY_CHARACTER_RELIC_DESIGNS['magic_source']['name']['zh'],
+        STORY_CHARACTER_RELIC_DESIGNS['magic_source']['name'].get('en')
+        or STORY_CHARACTER_RELIC_DESIGNS['magic_source']['name']['zh'],
+        STORY_CHARACTER_RELIC_DESIGNS['magic_source']['effect_text'],
+        rarity='special',
+        script='turn_magic',
+        amount=1,
+        stackable=False,
+        shop_excluded=True,
     ),
     'ruthless': _relic('无情猛击', 'Ruthless Strike', '战斗开始时获得1层力量。', script='opening_power', amount=1),
     'firm_defense': _relic('坚定防守', 'Firm Defense', '战斗开始时获得1层耐力。', script='opening_endurance', amount=1),
@@ -2435,8 +3077,25 @@ STORY_ENCOUNTERS = {
 }
 
 
-def initial_story_player():
-    deck_ids = ('basic',) * 5 + ('rose',) * 4 + ('amulet',)
+def initial_story_player(character_id='common_flower'):
+    character_id = str(character_id or 'common_flower')
+    character = STORY_CHARACTERS.get(character_id)
+    if not isinstance(character, dict):
+        raise ValueError('UNKNOWN_STORY_CHARACTER')
+    if character.get('implementation_status') != 'playable':
+        raise ValueError('STORY_CHARACTER_NOT_READY')
+    deck_ids = []
+    for entry in character.get('starter_deck') or ():
+        card_id = str(
+            entry.get('card_id') or entry.get('character_card_id') or ''
+        )
+        count = max(0, int(entry.get('count') or 0))
+        if not card_id or card_id not in STORY_CARDS or count <= 0:
+            raise ValueError('INVALID_STORY_CHARACTER_LOADOUT')
+        deck_ids.extend([card_id] * count)
+    starter_relics = list(character.get('starter_relics') or ())
+    if not deck_ids or any(relic_id not in STORY_RELICS for relic_id in starter_relics):
+        raise ValueError('INVALID_STORY_CHARACTER_LOADOUT')
     deck = [
         {'instance_id': f'sc-{index:04d}', 'def_id': def_id, 'upgraded': False}
         for index, def_id in enumerate(deck_ids, start=1)
@@ -2450,11 +3109,12 @@ def initial_story_player():
         'max_magic': STORY_RULES['max_magic'],
         'gold': 99,
         'deck': deck,
-        'relics': ['energetic'],
+        'relics': starter_relics,
         'blessing': None,
         'blessings': [],
         'opening_draw_bonus': 0,
         'next_card_serial': len(deck) + 1,
+        'character_id': character_id,
     }
 
 
@@ -2517,6 +3177,9 @@ def story_content_payload(card_defs=None):
                         definition['flavor'] = {'zh': source_flavor, 'en': source_flavor}
     return {
         'rules': deepcopy(STORY_RULES),
+        'characters': deepcopy(STORY_CHARACTERS),
+        'character_cards': deepcopy(STORY_CHARACTER_CARD_DESIGNS),
+        'character_relics': deepcopy(STORY_CHARACTER_RELIC_DESIGNS),
         'biomes': deepcopy(STORY_BIOMES),
         'difficulties': deepcopy(STORY_DIFFICULTIES),
         'rarities': deepcopy(STORY_RARITIES),
@@ -2527,6 +3190,7 @@ def story_content_payload(card_defs=None):
         'trait_value_keys': deepcopy(STORY_TRAIT_VALUE_KEYS),
         'trait_zero_visible': sorted(STORY_TRAIT_ZERO_VISIBLE),
         'blessings': deepcopy(STORY_BLESSINGS),
+        'events': deepcopy(STORY_EVENTS),
         'cards': cards,
         'relics': deepcopy(STORY_RELICS),
         'boss_relic_ids': list(STORY_BOSS_RELIC_IDS),
@@ -2546,7 +3210,7 @@ def validate_story_content():
         'draw_selected', 'draw_to_limit', 'elixir', 'elixir_from_hand', 'equipment',
         'elixir_if_active_discard',
         'exile_hand_for_shield', 'first_use_power', 'next_attack_multiplier',
-        'immediate_extra_turn', 'inspect_draw_choose', 'lose_health',
+        'heal', 'immediate_extra_turn', 'inspect_draw_choose', 'lose_health',
         'magic', 'make_card_free', 'next_skill_repeats', 'next_turn_draw',
         'permanent_damage_growth', 'permanent_swift', 'power', 'self_swift',
         'random_active_discard', 'random_damage_per_discards', 'random_exile',
@@ -2554,18 +3218,32 @@ def validate_story_content():
         'shield_selected', 'shield_with_power', 'shuffle_hand_redraw',
         'status', 'status_self', 'swap_piles_draw', 'temporary_cost_down',
         'temporary_effect',
+        'conditional_magic', 'consume_magic_draw', 'create_draw_top_copies',
+        'magic_extra_hits', 'magic_spent_damage',
+        'discard_nonmagic_draw_magic', 'draw_then_topdeck', 'electric_damage',
+        'generate_magic_cards', 'magic_enemy_count', 'magic_overload',
+        'multiply_shield', 'multiply_static', 'next_combat_magic', 'overload',
+        'retrieve_from_piles', 'self_magic_swift', 'shield_damage_halved',
+        'shield_remaining_magic', 'static', 'temporary_magic_heavy',
+        'temporary_swap_costs', 'turn_damage_multiplier', 'untargetable',
     }
     card_effect_types.update(STORY_PLAYER_ATTACK_EFFECT_TYPES)
     card_scripts = {
         'azalea', 'azalea_plus', 'light_sprout', 'return_draw_top', 'slimed',
         'startled', 'static_electricity', 'unrelenting', 'corruption',
-        'factory_waste',
+        'factory_waste', 'requires_no_last_turn_damage',
     }
     equipment_scripts = {
         'cannot_draw', 'disc', 'magic_acid', 'magic_pearl', 'pearl',
         'draw_power', 'retain_elixir', 'sewage', 'soul_splitter', 'sponge',
         'start_power', 'start_random_bloom', 'start_shield', 'turn_elixir',
         'victory_gold', 'vulnerable_shield',
+        'delayed_magic', 'electric_on_m_card', 'elixir_spend_magic',
+        'end_electric_all', 'magic_gain_shield', 'magic_recovery',
+        'magic_regeneration', 'magic_shield', 'magic_spend_shield',
+        'static_boost', 'static_damage', 'static_draw', 'static_magic',
+        'static_shield',
+        'static_on_attacked', 'turn_draw',
     }
     relic_scripts = {
         'attack_shield', 'avoid_elite', 'boss_blind', 'boss_broken', 'boss_frenzy',
@@ -2582,7 +3260,7 @@ def validate_story_content():
         'primary_multiplier', 'quantized_cost',
         'rest_gold', 'revive', 'round_power', 'skip_shop',
         'retain_elixir', 'shop_discount', 'shop_restock', 'support',
-        'turn_draw', 'turn_elixir', 'turn_heal',
+        'turn_draw', 'turn_elixir', 'turn_heal', 'turn_magic',
     }
     enemy_effect_types = {
         'add_draw_card', 'adjacent_shield', 'allies_heal', 'allies_power',
@@ -2725,6 +3403,39 @@ def validate_story_content():
                         errors.append(
                             f'encounters[{region}].{room_type}: unknown enemy {enemy_id}'
                         )
+    event_effect_types = {'gold', 'heal', 'health_loss'}
+    for event_id, definition in STORY_EVENTS.items():
+        if not isinstance(definition, dict):
+            errors.append(f'events[{event_id}]: invalid definition')
+            continue
+        if not definition.get('title') or not definition.get('description'):
+            errors.append(f'events[{event_id}]: missing presentation')
+        if not set(definition.get('biomes') or ()).issubset(STORY_BIOMES):
+            errors.append(f'events[{event_id}]: unknown biome')
+        if not set(definition.get('modes') or ()).issubset({'solo', 'coop'}):
+            errors.append(f'events[{event_id}]: invalid mode')
+        option_ids = []
+        for index, option in enumerate(definition.get('options') or ()):
+            owner = f'events[{event_id}].options[{index}]'
+            if not isinstance(option, dict) or not option.get('id'):
+                errors.append(f'{owner}: invalid option')
+                continue
+            option_ids.append(str(option['id']))
+            for effect_index, effect in enumerate(option.get('effects') or ()):
+                effect_owner = f'{owner}.effects[{effect_index}]'
+                if not isinstance(effect, dict):
+                    errors.append(f'{effect_owner}: invalid effect')
+                    continue
+                if effect.get('type') not in event_effect_types:
+                    errors.append(f'{effect_owner}: unknown effect')
+                if (
+                    not isinstance(effect.get('amount'), int)
+                    or isinstance(effect.get('amount'), bool)
+                    or int(effect.get('amount') or 0) < 0
+                ):
+                    errors.append(f'{effect_owner}: invalid amount')
+        if not option_ids or len(option_ids) != len(set(option_ids)):
+            errors.append(f'events[{event_id}]: invalid option ids')
     if errors:
         raise ValueError('Invalid story content: ' + '; '.join(errors))
 

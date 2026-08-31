@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 
 let adminState = null;
+let adminCsrfToken = '';
 let refreshTimer = null;
 let registeredRefreshTimer = null;
 let activeAdminTab = 'gui';
@@ -35,6 +36,7 @@ let reportState = { items: [], total: 0, selectedId: null };
 let statusRequestInFlight = false;
 let gameChatRequestInFlight = false;
 let registeredUsersRequestInFlight = false;
+let communityStorageActionInFlight = false;
 const ADMIN_STATUS_REFRESH_MS = 30000;
 const ADMIN_GAME_CHAT_REFRESH_MS = 15000;
 const ADMIN_FETCH_TIMEOUT_MS = 5000;
@@ -77,11 +79,15 @@ async function api(path, options = {}) {
   const timeoutMs = Number(options.timeoutMs || ADMIN_FETCH_TIMEOUT_MS);
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const { timeoutMs: _timeoutMs, headers = {}, ...fetchOptions } = options;
+  const method = String(fetchOptions.method || 'GET').toUpperCase();
+  const csrfHeaders = adminCsrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(method)
+    ? { 'X-Admin-CSRF': adminCsrfToken }
+    : {};
   let response;
   try {
     response = await fetch(path, {
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: { 'Content-Type': 'application/json', ...csrfHeaders, ...headers },
       ...fetchOptions,
       signal: controller.signal,
     });
@@ -419,16 +425,18 @@ function showShell(authenticated) {
 
 async function checkAuth() {
   const data = await api('/api/admin/me');
+  adminCsrfToken = data.csrf_token || '';
   showShell(!!data.authenticated);
 }
 
 async function login(password) {
   $('admin-login-error').textContent = '';
   try {
-    await api('/api/admin/login', {
+    const data = await api('/api/admin/login', {
       method: 'POST',
       body: JSON.stringify({ password }),
     });
+    adminCsrfToken = data.csrf_token || '';
     $('admin-password').value = '';
     appendTerminal('login', '管理员会话已开启。');
     showShell(true);
@@ -441,6 +449,7 @@ async function logout() {
   try {
     await api('/api/admin/logout', { method: 'POST', body: '{}' });
   } catch {}
+  adminCsrfToken = '';
   showShell(false);
 }
 
@@ -1279,6 +1288,40 @@ async function loadCommunityStorage() {
   }
 }
 
+async function runCommunityStorageAction(action) {
+  if (communityStorageActionInFlight) return;
+  if (action === 'refresh') {
+    await loadCommunityStorage();
+    return;
+  }
+  const execute = action === 'cleanup-orphans';
+  if (action !== 'preview-orphans' && !execute) return;
+  if (execute && !window.confirm('确认删除一小时前上传、但未登记进社区索引的 JSON/GTNMOD 对象？此操作不可撤销。')) return;
+
+  const resultBox = $('community-storage-result');
+  const buttons = Array.from(document.querySelectorAll('[data-community-storage-action]'));
+  communityStorageActionInFlight = true;
+  buttons.forEach((button) => { button.disabled = true; });
+  if (resultBox) resultBox.textContent = execute ? '正在清理……' : '正在试算……';
+  try {
+    const data = await api('/api/admin/community-mods/storage/cleanup-uploads', {
+      method: 'POST',
+      body: JSON.stringify({
+        dry_run: !execute,
+        confirm: execute,
+        min_age_seconds: 3600,
+      }),
+    });
+    if (resultBox) resultBox.textContent = JSON.stringify(data.result || data, null, 2);
+    await loadCommunityStorage();
+  } catch (error) {
+    if (resultBox) resultBox.textContent = `失败：${error.message}`;
+  } finally {
+    communityStorageActionInFlight = false;
+    buttons.forEach((button) => { button.disabled = false; });
+  }
+}
+
 async function deleteCommunityStorageObject(key) {
   if (!key) return;
   if (!window.confirm(`确认彻底删除 R2 对象？\n${key}`)) return;
@@ -2020,7 +2063,7 @@ function bindEvents() {
     btn.addEventListener('click', () => runStorageAction(btn.dataset.storageAction));
   });
   document.querySelectorAll('[data-community-storage-action]').forEach((btn) => {
-    btn.addEventListener('click', loadCommunityStorage);
+    btn.addEventListener('click', () => runCommunityStorageAction(btn.dataset.communityStorageAction));
   });
   $('replay-refresh')?.addEventListener('click', resetAndLoadReplays);
   $('replay-load-more')?.addEventListener('click', () => loadReplays(true));

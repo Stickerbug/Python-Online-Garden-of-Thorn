@@ -153,7 +153,12 @@ def _convert_base_state(base_state, members, *, mode, max_players):
     return state
 
 
-def build_initial_coop_story_state(seed, members, max_players=COOP_STORY_MVP_MAX_PLAYERS):
+def build_initial_coop_story_state(
+    seed,
+    members,
+    max_players=COOP_STORY_MVP_MAX_PLAYERS,
+    character_id='common_flower',
+):
     """Build a deterministic v10 cooperative run without touching live v9 data."""
 
     if isinstance(max_players, bool) or not isinstance(max_players, int):
@@ -168,7 +173,7 @@ def build_initial_coop_story_state(seed, members, max_players=COOP_STORY_MVP_MAX
         minimum=COOP_STORY_MIN_PLAYERS,
         maximum=max_players,
     )
-    base_state = build_initial_story_state(str(seed))
+    base_state = build_initial_story_state(str(seed), character_id=str(character_id))
     return _convert_base_state(
         base_state,
         normalized_members,

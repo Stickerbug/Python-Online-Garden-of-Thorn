@@ -11,6 +11,7 @@ from story_content import (
     STORY_EASY_RELIC_IDS,
     STORY_ENCOUNTERS,
     STORY_ENEMIES,
+    STORY_EVENTS,
     STORY_RELICS,
     STORY_REWARD_CARD_IDS,
     STORY_SHOP_CARD_IDS,
@@ -574,6 +575,7 @@ def test_story_event_pool_contains_the_new_event_rooms():
         'dandelion_seed_event',
         'farm',
         'card_trader',
+        'coop_garden_crossroads',
     }
     seen = set()
     original = _started_state('event-pool')
@@ -770,13 +772,39 @@ def test_story_events_do_not_repeat_until_every_eligible_event_is_seen():
     state = _started_state('event-draw-bag', biome='garden')
     event_ids = [
         _make_story_event(state, f'event-draw-bag:{index}')['event_id']
-        for index in range(10)
+        for index in range(11)
     ]
-    assert len(set(event_ids)) == 10
+    assert len(set(event_ids)) == 11
 
     repeated = _make_story_event(state, 'event-draw-bag:reset')['event_id']
     assert repeated in set(event_ids)
     assert len(state['encounter_history']['event']) == 1
+
+
+def test_authored_garden_crossroads_uses_canonical_definition_and_effects():
+    state = _event_state('coop_garden_crossroads', 'shared-garden-event')
+    definition = STORY_EVENTS['coop_garden_crossroads']
+    assert state['room']['title'] == definition['title']
+    assert state['room']['description'] == definition['description']
+    state['player']['health'] = 20
+    state['player']['gold'] = 0
+    state['player']['relics'] = []
+
+    state, events = apply_story_action(
+        state,
+        'resolve_room',
+        {'option': 'risk'},
+        'shared-garden-event:resolve',
+    )
+
+    assert state['player']['health'] == 12
+    assert state['player']['gold'] == 60
+    assert any(
+        event.get('type') == 'gold_gained'
+        and event.get('amount') == 60
+        and event.get('source') == 'coop_garden_crossroads'
+        for event in events
+    )
 
 
 def test_story_random_streams_isolate_events_and_loot_from_combat_randomness():

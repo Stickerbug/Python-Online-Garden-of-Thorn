@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="gtn-feedback-handling-csrf" content="{{ csrf_token|default('') }}">
 <title>举报处理</title>
   <link rel="stylesheet" href="/static/css/handling.css?v={{ static_version|default('dev')|urlencode }}">
 </head>

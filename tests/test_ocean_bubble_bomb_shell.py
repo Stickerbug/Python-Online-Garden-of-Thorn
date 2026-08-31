@@ -120,7 +120,7 @@ class OceanBubbleBombShellTests(unittest.TestCase):
         self.assertFalse(blocked.get("success", False), blocked)
         self.assertIn(second_attack, engine.players[0].hand)
 
-    def test_bubble_bomb_only_responds_for_attacked_player_in_2v2(self):
+    def test_bubble_bomb_can_respond_for_attacked_players_teammate_in_2v2(self):
         engine = self.action_engine(GameEngine2v2)
         attack = CardInstance("Basic")
         teammate_bomb = CardInstance("BubbleBomb")
@@ -129,9 +129,14 @@ class OceanBubbleBombShellTests(unittest.TestCase):
 
         result = engine.play_card(0, attack.instance_id, 3, self.target_choice(3))
 
-        self.assertFalse(result.get("needs_response", False), result)
-        self.assertIsNone(engine.pending_response)
-        self.assertLess(engine.players[3].health, 100)
+        self.assertTrue(result.get("needs_response", False), result)
+        self.assertEqual(
+            {2},
+            {
+                int(card["responder_id"])
+                for card in engine.pending_response.get("counter_cards", [])
+            },
+        )
 
     def test_bubble_bomb_targets_exact_attacker_in_2v2(self):
         engine = self.action_engine(GameEngine2v2)

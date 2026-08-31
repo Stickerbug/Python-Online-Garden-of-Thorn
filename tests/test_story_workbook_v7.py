@@ -142,10 +142,10 @@ def test_rat_hiding_trait_and_room_weights_match_workbook():
     assert 'hiding' in STORY_ENEMIES['mechanical_rat']['traits']
     assert STORY_TRAITS['hiding']['name']['zh'] == '躲藏'
     assert dict(_NORMAL_ROOM_WEIGHTS) == {
-        'shop': 1, 'rest': 1, 'elite': 3, 'event': 3, 'combat': 6,
+        'shop': 1, 'rest': 2, 'elite': 4, 'event': 4, 'combat': 6,
     }
     assert dict(_HARD_ROOM_WEIGHTS) == {
-        'shop': 2, 'rest': 2, 'elite': 8, 'event': 6, 'combat': 12,
+        'shop': 1, 'rest': 2, 'elite': 4, 'event': 4, 'combat': 6,
     }
 
 

@@ -8865,10 +8865,50 @@ html.blind-level-4 .card-prediction-part.magic {
 
 .term-intro-card-wrap {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   min-height: 310px;
   padding-left: clamp(0px, 2vw, 28px);
+}
+
+.term-intro-navigation {
+  width: min(260px, 100%);
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.term-intro-nav-button {
+  width: 42px;
+  height: 36px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 75%, var(--magic));
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.term-intro-nav-button:hover,
+.term-intro-nav-button:focus-visible {
+  border-color: var(--magic);
+  background: var(--bg-card-hover);
+  outline: 2px solid color-mix(in srgb, var(--magic) 65%, transparent);
+  outline-offset: 2px;
+}
+
+.term-intro-nav-progress {
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .term-intro-card-wrap .card.term-intro-card {
@@ -9395,6 +9435,16 @@ html.blind-level-4 .card-prediction-part.magic {
 .card-prediction-part.armor {
   color: var(--color-armor-text);
   background: var(--color-armor-bg);
+}
+
+.card-prediction-part.mitigation {
+  color: #7a5b1b;
+  background: rgba(196, 145, 42, 0.14);
+  font-size: 0.86em;
+}
+
+[data-theme="dark"] .card-prediction-part.mitigation {
+  color: #f0ca78;
 }
 
 [data-theme="dark"] .card-prediction-part {

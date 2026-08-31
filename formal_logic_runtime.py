@@ -221,6 +221,39 @@ def _move_card(engine, card: CardInstance, owner_id: int, zone: str, *, trigger_
         engine._discard_card(player, card)
 
 
+def _place_created_card(
+    engine,
+    card: CardInstance,
+    owner_id: int,
+    zone: str,
+    *,
+    trigger_hand: bool = True,
+    forced_copy: bool = False,
+) -> bool:
+    if forced_copy:
+        if zone == "hand" and hasattr(engine, "_add_forced_copy_to_hand"):
+            engine._add_forced_copy_to_hand(
+                owner_id,
+                card,
+                source_owned=True,
+                trigger_enter_hand=trigger_hand,
+            )
+            return True
+        if hasattr(engine, "_apply_forced_unique_copy_penalty"):
+            engine._apply_forced_unique_copy_penalty(owner_id, card, source_owned=True)
+        _move_card(engine, card, owner_id, zone, trigger_hand=trigger_hand)
+        return True
+    if hasattr(engine, "_can_normally_acquire_card"):
+        try:
+            if not engine._can_normally_acquire_card(owner_id, card):
+                engine.log_msg(f"{engine.pn(owner_id)}已拥有唯一牌{card.name_cn}，未获得额外实例")
+                return False
+        except Exception:
+            return False
+    _move_card(engine, card, owner_id, zone, trigger_hand=trigger_hand)
+    return True
+
+
 def _selectable(card: CardInstance) -> bool:
     return "sublime" not in getattr(card, "flags", set())
 
@@ -558,15 +591,17 @@ def _run_formal_logic_actions(engine, state: dict) -> dict:
                 state, action.get("owner_id"), int(state.get("player_id", 0))
             )
             if _valid_player(engine, owner_id):
-                _move_card(
+                placed = _place_created_card(
                     engine,
                     card,
                     owner_id,
                     str(action.get("zone") or "hand"),
                     trigger_hand=bool(action.get("trigger_hand", True)),
+                    forced_copy=bool(action.get("forced_copy", False)),
                 )
-                save_as = str(action.get("save_as") or "created_card")
-                state.setdefault("vars", {})[save_as] = int(card.instance_id)
+                if placed:
+                    save_as = str(action.get("save_as") or "created_card")
+                    state.setdefault("vars", {})[save_as] = int(card.instance_id)
             continue
         if op == "set_card_formula":
             card = _action_card(engine, state, action)
@@ -829,6 +864,7 @@ def _handle_contraposition(engine, state: dict, action: dict) -> List[dict]:
             "add_instance_flags": [INFERENCE_EXILE_FLAG],
             "owner_id": owner_id,
             "zone": "hand",
+            "forced_copy": True,
             "save_as": "contraposition_result",
         },
         {"op": "log", "message": f"{engine.pn(owner_id)}将{selected.name_cn}变换为{transformed_name}"},
@@ -869,6 +905,7 @@ def _finish_inverse_deduction(engine, state: dict, action: dict) -> List[dict]:
             "formula_is_original": True,
             "owner_id": owner_id,
             "zone": "hand",
+            "forced_copy": True,
             "save_as": "inverse_result",
         },
         {"op": "log", "message": f"{engine.pn(owner_id)}通过逆演绎元定理得到{transformed_name}"},
@@ -989,7 +1026,8 @@ def _handle_macro_create(engine, state: dict, action: dict) -> List[dict]:
         {"op": "move_card", "instance_id": selected.instance_id, "owner_id": owner_id, "zone": "exile"},
         {
             "op": "create_card", "snapshot": snapshot, "owner_id": owner_id,
-            "zone": "discard", "trigger_hand": False, "save_as": "macro_discard_copy",
+            "zone": "discard", "trigger_hand": False, "forced_copy": True,
+            "save_as": "macro_discard_copy",
         },
         {
             "op": "create_card", "def_id": MACRO_EQUIPMENT_ID, "owner_id": owner_id,
@@ -1038,6 +1076,7 @@ def _handle_macro_trigger(engine, state: dict, action: dict) -> List[dict]:
         {
             "op": "create_card", "snapshot": proxy_snapshot, "owner_id": owner_id,
             "zone": "hand", "custom_vars": proxy_vars, "add_instance_flags": ["void"],
+            "forced_copy": True,
             "save_as": "macro_proxy",
         },
         {"op": "log", "message": f"{engine.pn(owner_id)}通过宏定义获得{source.name_cn}"},
@@ -1469,7 +1508,8 @@ def _complete_inference(engine, player_id: int, payload: dict) -> List[dict]:
     operations.extend([
         {
             "op": "create_card", "snapshot": result_card.to_dict(), "owner_id": player_id,
-            "zone": "hand", "save_as": "inference_result_card",
+            "zone": "hand", "forced_copy": snapshot is not None,
+            "save_as": "inference_result_card",
         },
         {
             "op": "play_card", "instance_id": {"var": "inference_result_card"},

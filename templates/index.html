@@ -10,7 +10,8 @@
     <link rel="stylesheet" href="/static/css/style.css?v={{ static_version|default('dev')|urlencode }}">
     <link rel="stylesheet" href="/static/css/shared-afk.css?v={{ static_version|default('dev')|urlencode }}">
     <link rel="stylesheet" href="/static/css/shared-lobby-chat.css?v={{ static_version|default('dev')|urlencode }}">
-<script>
+    <link rel="stylesheet" href="/static/css/community.css?v={{ static_version|default('dev')|urlencode }}">
+<script nonce="{{ csp_nonce }}">
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
   const betaExactKeys = new Set(['gtn_theme', 'gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled', 'gtn_play_gesture_animation', 'gtn_landscape_mode', 'gtn_story_hide_card_borders']);
@@ -94,6 +95,7 @@
 <div class="top-action-buttons">
 <button id="btn-open-settings" class="top-icon-btn top-settings-btn" type="button" aria-label="设置"><img src="/static/assets/ui-icons/settings.svg" alt="" aria-hidden="true"><span class="top-icon-label">设置</span></button>
 <button id="btn-account-top" class="top-icon-btn account-top-btn" type="button" aria-label="账号"><img src="/static/assets/ui-icons/account.svg" alt="" aria-hidden="true"><span class="top-icon-label">账号</span></button>
+<button id="btn-community-top" class="top-icon-btn community-top-btn" type="button" aria-label="公告与投票"><img src="/static/assets/ui-icons/log.svg" alt="" aria-hidden="true"><span class="top-icon-label">公告</span></button>
 <button id="btn-changelog-top" class="top-icon-btn changelog-top-btn" type="button" aria-label="更新日志"><img src="/static/assets/ui-icons/log.svg" alt="" aria-hidden="true"><span class="top-icon-label">更新日志</span></button>
 <button id="btn-skin-top" class="top-icon-btn skin-top-btn" type="button" aria-label="皮肤"><img src="/static/assets/ui-icons/skins.svg" alt="" aria-hidden="true"><span class="top-icon-label">皮肤</span></button>
 <button id="btn-achievements-top" class="top-icon-btn achievements-top-btn" type="button" aria-label="成就"><img src="/static/assets/ui-icons/achievements.svg" alt="" aria-hidden="true"><span class="top-icon-label">成就</span></button>
@@ -103,6 +105,18 @@
 <button id="btn-friends-top" class="top-icon-btn friends-top-btn hidden" type="button" aria-label="好友"><img src="/static/assets/ui-icons/friends.svg" alt="" aria-hidden="true"><span class="top-icon-label">好友</span></button>
 <button id="btn-leaderboard-top" class="top-icon-btn leaderboard-top-btn" type="button" aria-label="排行榜"><img src="/static/assets/ui-icons/rank.svg" alt="" aria-hidden="true"><span class="top-icon-label">排行榜</span></button>
 </div>
+<section id="community-popover" class="community-popover account-popover hidden" aria-labelledby="community-popover-title">
+  <div class="account-popover-head">
+    <div id="community-popover-title" class="account-popover-title">公告与投票</div>
+    <div class="community-head-actions">
+      <a id="community-manage-link" class="community-manage-link hidden" href="/community-ops" target="_blank" rel="noopener">运营后台</a>
+      <button id="btn-community-refresh" class="account-close-btn" type="button" aria-label="刷新公告">↻</button>
+      <button id="btn-community-close" class="account-close-btn" type="button" aria-label="关闭公告">×</button>
+    </div>
+  </div>
+  <div id="community-status" class="community-status muted" role="status" aria-live="polite">正在加载…</div>
+  <div id="community-feed" class="community-feed"></div>
+</section>
 <div id="changelog-popover" class="changelog-popover account-popover hidden">
   <div class="account-popover-head">
     <div id="changelog-popover-title" class="account-popover-title">更新日志</div>
@@ -177,6 +191,8 @@
     <button id="btn-account-delete-start" class="btn btn-danger" type="button">注销账户</button>
     <div id="account-delete-warning" class="account-delete-warning hidden">
       <div>这是危险操作。确认后账号将被注销，并退出当前登录。</div>
+      <label for="input-account-delete-password">当前密码</label>
+      <input id="input-account-delete-password" type="password" maxlength="128" autocomplete="current-password" placeholder="输入当前密码以确认注销">
       <div id="account-delete-countdown" class="account-rule-text">请等待15秒</div>
       <div class="account-delete-actions">
         <button id="btn-account-delete-cancel" class="btn btn-secondary" type="button">取消</button>
@@ -574,11 +590,13 @@
 <div class="mode-tab" data-mode="urf">无限火力</div>
 <div class="mode-tab" data-mode="random_deck">随机卡组</div>
 </div>
+{% if ai_public_entry_enabled %}
 <div id="ai-1v1-test-entry" class="ai-1v1-test-entry hidden">
 <button id="btn-ai-1v1-test" class="btn ai-1v1-test-button" type="button">
 <span id="ai-1v1-test-label">对战 Phelren V1</span>
 </button>
 </div>
+{% endif %}
 </div>
 <div id="lobby-team-section" class="lobby-team-section"></div>
 <div class="lobby-body">
@@ -1144,7 +1162,7 @@
 
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (() => {
   const T = {
     en: {
@@ -1195,7 +1213,7 @@
   const app = document.getElementById('app'); if (app) app.style.visibility = 'visible';
 })();
 </script>
-<script>
+<script nonce="{{ csp_nonce }}">
 (() => {
   const loadMainFont = () => {
     if (!('FontFace' in window)) return;
@@ -1216,7 +1234,7 @@
 })();
 </script>
 <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       window.__GTN_INSTANCE_ID__ = {{ instance_id|default('local')|tojson }};
       window.__GTN_INSTANCE_PORT__ = {{ instance_port|default('')|tojson }};
       window.__GTN_APP_VERSION__ = {{ app_version|default('dev')|tojson }};
@@ -1226,5 +1244,6 @@
     <script src="/static/js/resource_orbs.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/game.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/keybindings.js?v={{ static_version|default('dev')|urlencode }}"></script>
+    <script src="/static/js/community.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>
 </html>

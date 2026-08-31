@@ -19,6 +19,8 @@ BASE_REGULAR_SUBSET = os.path.join(FONTS_DIR, 'Kreadon-Regular.subset.woff2')
 
 COMMUNITY_FONT_FAMILY = 'Kreadon Community'
 MAX_REPORTED_CHARS = 80
+MAX_COMMUNITY_FONT_CHARS = int(os.environ.get('MAX_COMMUNITY_FONT_CHARS', '4096'))
+MAX_COMMUNITY_FONT_FILES = int(os.environ.get('MAX_COMMUNITY_FONT_FILES', '512'))
 
 _font_lock = threading.Lock()
 
@@ -171,6 +173,20 @@ def ensure_community_font_subset(datas: Iterable[Any], hash_key: str = '', gener
     for data in datas or []:
         chars.update(extract_visible_text_chars(data))
 
+    if len(chars) > MAX_COMMUNITY_FONT_CHARS:
+        return {
+            'success': False,
+            'font_family': COMMUNITY_FONT_FAMILY,
+            'hash': '',
+            'url': '',
+            'missing_count': 0,
+            'missing_chars': [],
+            'unsupported_count': 0,
+            'unsupported_chars': [],
+            'warnings': [f'社区模组可见字符过多，字体子集最多处理 {MAX_COMMUNITY_FONT_CHARS} 个不同字符。'],
+            'generated': False,
+        }
+
     base_cmap = font_cmap(BASE_REGULAR_SUBSET)
     full_cmap = font_cmap(BASE_REGULAR_TTF)
     needed = {ch for ch in chars if ord(ch) not in base_cmap}
@@ -182,10 +198,21 @@ def ensure_community_font_subset(datas: Iterable[Any], hash_key: str = '', gener
     output_path = os.path.join(COMMUNITY_FONT_DIR, filename)
     url = f'{COMMUNITY_FONT_URL_PREFIX}/{filename}?v={safe_hash[:16]}' if supported_missing else ''
 
+    generation_blocked = False
     if generate and supported_missing and os.path.exists(BASE_REGULAR_TTF):
         with _font_lock:
             if not os.path.exists(output_path):
-                _subset_font(BASE_REGULAR_TTF, output_path, supported_missing)
+                try:
+                    cached_files = [
+                        name for name in os.listdir(COMMUNITY_FONT_DIR)
+                        if name.lower().endswith('.woff2')
+                    ] if os.path.isdir(COMMUNITY_FONT_DIR) else []
+                except OSError:
+                    cached_files = []
+                if len(cached_files) >= MAX_COMMUNITY_FONT_FILES:
+                    generation_blocked = True
+                else:
+                    _subset_font(BASE_REGULAR_TTF, output_path, supported_missing)
 
     warnings = []
     if supported_missing:
@@ -196,6 +223,8 @@ def ensure_community_font_subset(datas: Iterable[Any], hash_key: str = '', gener
         warnings.append(
             f'Kreadon 字体不支持 {len(unsupported)} 个字符，浏览器会使用系统字体兜底。'
         )
+    if generation_blocked:
+        warnings.append('社区字体缓存已达到上限，本次不再生成新的字体文件。')
 
     return {
         'success': True,

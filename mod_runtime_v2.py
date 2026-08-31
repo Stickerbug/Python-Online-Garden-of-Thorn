@@ -1366,9 +1366,16 @@ def _resolve_equipment(engine, context: Dict[str, Any], owner_id: int, selector:
     return None
 
 
-def _move_card(engine, card: CardInstance, owner_id: int, zone: str, already_detached: bool = False) -> None:
+def _move_card(engine, card: CardInstance, owner_id: int, zone: str, already_detached: bool = False) -> bool:
     if not _valid_player(engine, owner_id):
-        return
+        return False
+    if already_detached and hasattr(engine, "_can_normally_acquire_card"):
+        try:
+            if not engine._can_normally_acquire_card(owner_id, card):
+                engine.log_msg(f"{engine.pn(owner_id)}已拥有唯一牌{card.name_cn}，未获得额外实例")
+                return False
+        except Exception:
+            return False
     if not already_detached:
         _detach_card(engine, card)
     elif hasattr(engine, "_apply_setup_modifiers_to_card"):
@@ -1385,11 +1392,7 @@ def _move_card(engine, card: CardInstance, owner_id: int, zone: str, already_det
         ps.exile.append(card)
     else:
         ps.discard.append(card)
-    if zone in ("hand", "deck", "discard") and hasattr(engine, "_enforce_unique_cards_for_player"):
-        try:
-            engine._enforce_unique_cards_for_player(owner_id, preferred_card=card)
-        except Exception:
-            pass
+    return True
 
 
 def _detach_card(engine, card: CardInstance) -> None:

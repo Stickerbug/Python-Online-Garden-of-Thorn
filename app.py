@@ -20,6 +20,7 @@ import shutil
 import shlex
 import difflib
 import hashlib
+import ipaddress
 import secrets
 import platform
 import subprocess
@@ -28,6 +29,7 @@ import traceback
 from functools import wraps
 from collections import deque, OrderedDict
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 
 try:
     # Phelren work runs inside Eventlet's native tpool threads.  Capacity
@@ -46,7 +48,7 @@ except Exception:
 
 from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from ai_local_bridge import LocalAiBridgeError, get_local_ai_worker
 from ai_training_capture import (
     append_public_history as append_ai_training_public_history,
@@ -87,20 +89,42 @@ from title_styles import (
     title_style_plain_text,
     title_style_json,
 )
-from story_content import story_content_payload
+from story_content import STORY_CHARACTERS, story_content_payload
 from story_discovery import collect_story_discoveries
 from story_engine import StoryActionError, apply_story_action
 from story_mode import STORY_CONTENT_VERSION, build_initial_story_state
+from story_progress import (
+    story_character_is_unlocked,
+    story_coop_unlock_intersection,
+    story_journey_is_unlocked,
+)
 from story_coop import (
     COOP_STORY_MAX_PLAYERS,
     COOP_STORY_MIN_PLAYERS,
     COOP_STORY_MVP_MAX_PLAYERS,
     COOP_STORY_SCHEMA_VERSION,
+    CoopStoryStateError,
     build_initial_coop_story_state,
     coop_story_default_rules,
 )
+from story_coop_combat import CoopCombatError, apply_coop_combat_command
+from story_coop_content import COOP_STORY_CONTENT, CoopStoryContentError
+from story_coop_live import (
+    COOP_STORY_CONTENT_VERSION,
+    advance_coop_after_victory,
+    apply_coop_journey_command,
+    finalize_coop_action_events,
+    prepare_coop_stage1_setup,
+    prepare_intro_coop_round,
+    project_coop_bundle_for_viewer,
+    project_coop_events,
+    project_coop_run_for_viewer,
+    resolve_compiled_coop_enemy_action,
+    resolve_intro_coop_action,
+)
 from r2_mods import (
     R2ConfigError,
+    cleanup_orphaned_community_uploads,
     create_presigned_mod_upload,
     delete_community_mod,
     get_community_index,
@@ -143,6 +167,7 @@ from db import (
     cleanup_expired_content_disables_once,
     cleanup_old_dm_messages_once,
     commit_story_run_action,
+    commit_story_coop_run_action,
     create_story_coop_party,
     create_story_coop_run,
     create_story_manual_save,
@@ -162,7 +187,12 @@ from db import (
     get_admin_user_detail,
     get_active_story_run,
     get_active_story_coop_party,
+    get_story_coop_action_receipt,
+    get_story_coop_run_for_member,
+    story_coop_action_fingerprint,
     get_story_run_action,
+    get_story_progress,
+    get_story_progress_for_users,
     get_chat_message_with_context,
     get_db_connection,
     get_leaderboard_rank,
@@ -176,6 +206,7 @@ from db import (
     get_title_editor_workspace,
     get_report_detail,
     get_user_by_id,
+    get_user_by_id_for_session,
     get_user_role_profile,
     get_user_by_username,
     get_user_thorn_dew_center,
@@ -266,6 +297,17 @@ from db import (
     verify_remember_token,
     verify_user,
 )
+from community_ops import (
+    CommunityOpsError,
+    cast_community_poll_vote,
+    create_community_announcement,
+    create_community_poll,
+    get_community_feed,
+    list_community_ops_workspace,
+    mutate_community_announcement,
+    mutate_community_changelog_draft,
+    mutate_community_poll,
+)
 from moderation import (
     REPORT_CATEGORIES,
     VALID_MODERATION_ACTIONS,
@@ -299,6 +341,7 @@ from replay_core import (
     vacuum_db,
 )
 from security import (
+    clear_rate_limit,
     is_muted,
     mute_remaining_seconds,
     mute_user,
@@ -453,10 +496,47 @@ def reload_mod_card_defs(force=False):
 _MODS_SIGNATURE = current_mods_signature()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'garden_of_thorn_secret')
+_configured_secret_key = os.environ.get('SECRET_KEY', '')
+if not _configured_secret_key:
+    _configured_secret_key = secrets.token_urlsafe(48)
+    print(
+        '[startup] WARNING: SECRET_KEY is not configured; using an ephemeral key. '
+        'Sessions will be invalidated on restart.',
+        flush=True,
+    )
+app.config['SECRET_KEY'] = _configured_secret_key
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = str(
+    os.environ.get('GTN_SESSION_COOKIE_SECURE', '1')
+).strip().lower() not in {'0', 'false', 'no', 'off'}
+_trusted_hosts_raw = str(os.environ.get('GTN_TRUSTED_HOSTS', '') or '').strip()
+if _trusted_hosts_raw:
+    app.config['TRUSTED_HOSTS'] = [
+        host.strip() for host in _trusted_hosts_raw.split(',') if host.strip()
+    ]
+try:
+    app.config['MAX_CONTENT_LENGTH'] = max(
+        64 * 1024,
+        min(int(os.environ.get('GTN_MAX_REQUEST_BYTES', str(1024 * 1024))), 8 * 1024 * 1024),
+    )
+except (TypeError, ValueError):
+    app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=int(os.environ.get('GTN_SESSION_DAYS', '30')))
 REMEMBER_COOKIE_NAME = 'gtn_remember'
+
+
+def _request_csp_nonce():
+    nonce = str(getattr(g, '_csp_nonce', '') or '')
+    if not nonce:
+        nonce = secrets.token_urlsafe(24)
+        g._csp_nonce = nonce
+    return nonce
+
+
+@app.context_processor
+def inject_csp_nonce():
+    return {'csp_nonce': _request_csp_nonce()}
 
 
 def _normalize_instance(value):
@@ -475,10 +555,13 @@ GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSIO
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1-player-name-descender-2-battle-chat-gradient-1-story-coop-headless-2-story-coop-lobby-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1-player-name-descender-2-battle-chat-gradient-1-story-coop-headless-2-story-coop-lobby-1-pvp-damage-prediction-parity-1-story-coop-combat-1-story-coop-progression-1-story-coop-stage1-garden-1-story-coop-opening-1-story-coop-content-1-story-coop-enemy-content-1-story-coop-relic-content-1-story-coop-card-effects-1-security-hardening-1-story-coop-shared-events-1-ai-public-entry-toggle-1-csp-nonce-1-story-seeded-background-2-story-character-details-1-story-coop-mage-1-dead-multihit-1-story-card-motion-1-story-persistent-hud-1-story-all-phase-saves-1-story-boss-node-portraits-1-story-map-columns-1-story-codex-links-1-story-map-room-icons-1-story-mage-card-art-1-story-card-browser-nav-1-pvp-gallery-card-browser-nav-1-community-ops-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
+GTN_AI_PUBLIC_ENTRY_ENABLED = os.environ.get('GTN_AI_PUBLIC_ENTRY_ENABLED', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+AI_TEMPORARILY_DISABLED_CODE = 'AI_TEMPORARILY_DISABLED'
+AI_TEMPORARILY_DISABLED_MESSAGE = 'Phelren 正在进行平衡性调整，暂时不可进入'
 GTN_DRAIN_FILE = os.environ.get('GTN_DRAIN_FILE', os.path.join('/tmp', f'gtn-{GTN_INSTANCE_ID}.drain')).strip()
 GTN_DRAINING_ENV = os.environ.get('GTN_DRAINING', '').strip().lower()
 _DRAIN_OVERRIDE = None
@@ -590,9 +673,19 @@ def instance_payload():
     }
 
 
+_socket_allowed_origins_raw = str(os.environ.get('GTN_SOCKET_ALLOWED_ORIGINS', '') or '').strip()
+SOCKET_ALLOWED_ORIGINS = (
+    [origin.strip() for origin in _socket_allowed_origins_raw.split(',') if origin.strip()]
+    if _socket_allowed_origins_raw
+    else None
+)
+
+
 socketio = SocketIO(
     app,
-    cors_allowed_origins="*",
+    # None keeps Flask-SocketIO's same-origin protection. Additional explicit
+    # HTTPS origins may be supplied as a comma-separated environment value.
+    cors_allowed_origins=SOCKET_ALLOWED_ORIGINS,
     async_mode='eventlet' if eventlet is not None else 'threading',
     ping_interval=int(os.environ.get('GTN_SOCKET_PING_INTERVAL', '25')),
     ping_timeout=int(os.environ.get('GTN_SOCKET_PING_TIMEOUT', '60')),
@@ -684,7 +777,6 @@ _event_loop_watchdog_started = False
 _pending_interaction_watchdog_started = False
 _room_timer_worker_started = False
 _next_room_id = 0
-_COMMUNITY_API_RATE: dict = {}
 PENDING_AFK_CHECKS: dict = {}
 SERVER_STARTED_AT = time.time()
 RECONNECT_TIMEOUT_SEQUENCE = tuple(
@@ -709,10 +801,25 @@ AFK_ACTIVITY_IGNORED_EVENTS = frozenset({
     'request_pregame_state',
     'set_mode',
 })
-DEFAULT_ADMIN_PASSWORD_HASH = 'pbkdf2:sha256:260000$82e7gAIa0D6034Qq$a0c9a5ad6028ce6c8798abc1314bc74b099b2441c3f39c3b3e6255ea2156f06b'
-ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', DEFAULT_ADMIN_PASSWORD_HASH)
-DEFAULT_ADMIN_CONSOLE_PASSWORD_HASH = 'scrypt:32768:8:1$37ezeWM6dBx97XH0$733f3b74ee3092ac5422eb19df05ff626cb251150a74ed3e03a6e7dd7799607d18123cf6e4b7d518e78e50c1700240f34c9411eb52761b1f9d695ff71c4309af'
-ADMIN_CONSOLE_PASSWORD_HASH = os.environ.get('ADMIN_CONSOLE_PASSWORD_HASH', DEFAULT_ADMIN_CONSOLE_PASSWORD_HASH)
+def _configured_credential_hash(name):
+    configured = str(os.environ.get(name, '') or '').strip()
+    if configured:
+        return configured
+    print(
+        f'[startup] WARNING: {name} is not configured; this login surface is disabled '
+        'until the environment variable is set.',
+        flush=True,
+    )
+    return generate_password_hash(secrets.token_urlsafe(48))
+
+
+ADMIN_PASSWORD_HASH = _configured_credential_hash('ADMIN_PASSWORD_HASH')
+ADMIN_CONSOLE_PASSWORD_HASH = _configured_credential_hash('ADMIN_CONSOLE_PASSWORD_HASH')
+ADMIN_IDLE_TIMEOUT_SECONDS = max(300, int(os.environ.get('ADMIN_IDLE_TIMEOUT_SECONDS', '1800')))
+ADMIN_MAX_SESSION_SECONDS = max(
+    ADMIN_IDLE_TIMEOUT_SECONDS,
+    int(os.environ.get('ADMIN_MAX_SESSION_SECONDS', '28800')),
+)
 ADMIN_CONSOLE_IDLE_TIMEOUT_SECONDS = max(300, int(os.environ.get('ADMIN_CONSOLE_IDLE_TIMEOUT_SECONDS', '1800')))
 ADMIN_CONSOLE_MAX_SESSION_SECONDS = max(
     ADMIN_CONSOLE_IDLE_TIMEOUT_SECONDS,
@@ -726,8 +833,7 @@ ADMIN_CONSOLE_JOB_RETENTION_SECONDS = max(
     300,
     int(os.environ.get('ADMIN_CONSOLE_JOB_RETENTION_SECONDS', '3600')),
 )
-DEFAULT_BETA_ACCESS_KEY_HASH = 'scrypt:32768:8:1$GIMYfhSs9RpKMGUK$6f592ac96112ce2f7323012956fc2624890779b9f540c4b7601aff88e3635b3aea26157143eb26874b11cbe30f7da33b25e46285f1f547a846a3f12dc740eb0b'
-BETA_ACCESS_KEY_HASH = os.environ.get('BETA_ACCESS_KEY_HASH', DEFAULT_BETA_ACCESS_KEY_HASH)
+BETA_ACCESS_KEY_HASH = _configured_credential_hash('BETA_ACCESS_KEY_HASH')
 ADMIN_PLAYER_DISPLAY_NAME = 'Stickerbug'
 ADMIN_NICKNAME_RESERVED_REASON = 'Admin nickname reserved'
 SPECIAL_ACCOUNT_PROFILES = [
@@ -768,9 +874,6 @@ SPECIAL_PLAYER_PROFILES = SPECIAL_ACCOUNT_PROFILES
 BUILTIN_SPECIAL_ACCOUNT_NAMES = {profile['display_name'].lower() for profile in SPECIAL_ACCOUNT_PROFILES}
 ADMIN_EVENTS = deque(maxlen=300)
 MATCH_HISTORY = deque(maxlen=120)
-ADMIN_LOGIN_FAILURES = {}
-BETA_LOGIN_FAILURES = {}
-AUTH_LOGIN_FAILURES = {}
 LOBBY_CHAT_CACHE = {
     'release': deque(maxlen=500),
     'beta': deque(maxlen=500),
@@ -813,6 +916,46 @@ def _env_bool(name, default=True):
     return str(value).strip().lower() not in {'0', 'false', 'no', 'off'}
 
 
+HTTP_RATE_WINDOW_SECONDS = max(1, _env_int('GTN_HTTP_RATE_WINDOW_SECONDS', 60))
+HTTP_SERVER_LIMIT = max(100, _env_int('GTN_HTTP_SERVER_LIMIT', 6000))
+HTTP_GLOBAL_IP_LIMIT = max(10, _env_int('GTN_HTTP_GLOBAL_IP_LIMIT', 300))
+HTTP_GLOBAL_USER_LIMIT = max(10, _env_int('GTN_HTTP_GLOBAL_USER_LIMIT', 360))
+HTTP_DB_SERVER_LIMIT = max(50, _env_int('GTN_HTTP_DB_SERVER_LIMIT', 1800))
+HTTP_DB_IP_LIMIT = max(10, _env_int('GTN_HTTP_DB_IP_LIMIT', 180))
+HTTP_DB_USER_LIMIT = max(10, _env_int('GTN_HTTP_DB_USER_LIMIT', 180))
+HTTP_UNREAD_SERVER_LIMIT = max(10, _env_int('GTN_HTTP_UNREAD_SERVER_LIMIT', 600))
+HTTP_UNREAD_IP_LIMIT = max(2, _env_int('GTN_HTTP_UNREAD_IP_LIMIT', 30))
+HTTP_UNREAD_USER_LIMIT = max(2, _env_int('GTN_HTTP_UNREAD_USER_LIMIT', 20))
+GTN_TRUSTED_PROXY_HOPS = max(0, min(_env_int('GTN_TRUSTED_PROXY_HOPS', 1), 8))
+GTN_TRUSTED_PROXY_CIDRS = tuple(
+    token.strip()
+    for token in os.environ.get('GTN_TRUSTED_PROXY_CIDRS', '127.0.0.0/8,::1/128').split(',')
+    if token.strip()
+)
+
+
+def _trusted_proxy_networks(cidrs):
+    networks = []
+    for token in cidrs:
+        try:
+            networks.append(ipaddress.ip_network(str(token), strict=False))
+        except ValueError:
+            print(f'[startup] WARNING: ignoring invalid trusted proxy CIDR: {token!r}', flush=True)
+    return tuple(networks)
+
+
+_TRUSTED_PROXY_NETWORKS = _trusted_proxy_networks(GTN_TRUSTED_PROXY_CIDRS)
+
+_IP_BAN_CACHE = OrderedDict()
+_IP_BAN_CACHE_LOCK = threading.Lock()
+_IP_BAN_CACHE_SECONDS = max(0.25, _env_float('GTN_IP_BAN_CACHE_SECONDS', 2.0))
+_IP_BAN_CACHE_MAX_ENTRIES = max(128, _env_int('GTN_IP_BAN_CACHE_MAX_ENTRIES', 4096))
+_SOCIAL_UNREAD_CACHE = OrderedDict()
+_SOCIAL_UNREAD_CACHE_LOCK = threading.Lock()
+_SOCIAL_UNREAD_CACHE_SECONDS = max(0.25, _env_float('GTN_SOCIAL_UNREAD_CACHE_SECONDS', 3.0))
+_SOCIAL_UNREAD_CACHE_MAX_ENTRIES = max(128, _env_int('GTN_SOCIAL_UNREAD_CACHE_MAX_ENTRIES', 4096))
+
+
 def db_maintenance_enabled():
     return _env_bool('GTN_DB_MAINTENANCE_ENABLED', True)
 
@@ -852,6 +995,7 @@ DRAFT_TIMEOUT_SECONDS = _env_float('GTN_DRAFT_TIMEOUT_SECONDS', 240)
 EVENT_SELECT_TIMEOUT_SECONDS = _env_float('GTN_EVENT_SELECT_TIMEOUT_SECONDS', 40)
 EVENT_REVEAL_TIMEOUT_SECONDS = _env_float('GTN_EVENT_REVEAL_TIMEOUT_SECONDS', 40)
 EVENT_SUB_CHOICE_TIMEOUT_SECONDS = _env_float('GTN_EVENT_SUB_CHOICE_TIMEOUT_SECONDS', 60)
+FLORAL_ARRANGEMENT_TIMEOUT_BONUS_SECONDS = 30
 ROOM_TIMER_TICK_SECONDS = _env_float('GTN_ROOM_TIMER_TICK_SECONDS', 1)
 PREGAME_STATE_RESEND_SECONDS = _env_float('GTN_PREGAME_STATE_RESEND_SECONDS', 8)
 _LOBBY_BROADCAST_LOCK = threading.Lock()
@@ -1678,8 +1822,50 @@ def admin_match_record(room, result='finished'):
         admin_event('error', f'failed to record match history: {exc}')
 
 
+def _clear_admin_session():
+    for key in (
+        'admin_authenticated',
+        'admin_login_time',
+        'admin_last_seen',
+        'admin_csrf',
+    ):
+        session.pop(key, None)
+
+
 def is_admin_authenticated():
-    return bool(session.get('admin_authenticated'))
+    if not session.get('admin_authenticated'):
+        return False
+    now = time.time()
+    try:
+        login_time = float(session.get('admin_login_time') or 0)
+        last_seen = float(session.get('admin_last_seen') or login_time or 0)
+    except (TypeError, ValueError):
+        _clear_admin_session()
+        return False
+    if (
+        login_time <= 0
+        or now - login_time > ADMIN_MAX_SESSION_SECONDS
+        or now - last_seen > ADMIN_IDLE_TIMEOUT_SECONDS
+    ):
+        _clear_admin_session()
+        return False
+    if now - last_seen >= 30:
+        session['admin_last_seen'] = now
+    return True
+
+
+def admin_csrf_token():
+    token = str(session.get('admin_csrf') or '')
+    if not token:
+        token = secrets.token_urlsafe(24)
+        session['admin_csrf'] = token
+    return token
+
+
+def admin_csrf_valid():
+    expected = str(session.get('admin_csrf') or '')
+    provided = str(request.headers.get('X-Admin-CSRF') or '')
+    return bool(expected and provided and secrets.compare_digest(expected, provided))
 
 
 def _clear_admin_console_session():
@@ -1763,6 +1949,20 @@ def is_feedback_handling_authenticated():
         return False
 
 
+def feedback_handling_csrf_token():
+    token = str(session.get('feedback_handling_csrf') or '')
+    if not token:
+        token = secrets.token_urlsafe(24)
+        session['feedback_handling_csrf'] = token
+    return token
+
+
+def feedback_handling_csrf_valid():
+    expected = str(session.get('feedback_handling_csrf') or '')
+    provided = str(request.headers.get('X-Feedback-Handling-CSRF') or '')
+    return bool(expected and provided and secrets.compare_digest(expected, provided))
+
+
 def title_editor_actor(require_admin=False):
     user = _current_account_user(allow_remember=False)
     if not user:
@@ -1798,6 +1998,34 @@ def title_editor_csrf_valid():
     return bool(expected and provided and secrets.compare_digest(expected, provided))
 
 
+def community_csrf_token():
+    token = str(session.get('community_csrf') or '')
+    if not token:
+        token = secrets.token_urlsafe(24)
+        session['community_csrf'] = token
+    return token
+
+
+def community_csrf_valid():
+    expected = str(session.get('community_csrf') or '')
+    provided = str(request.headers.get('X-Community-CSRF') or '')
+    return bool(expected and provided and secrets.compare_digest(expected, provided))
+
+
+def community_ops_csrf_token():
+    token = str(session.get('community_ops_csrf') or '')
+    if not token:
+        token = secrets.token_urlsafe(24)
+        session['community_ops_csrf'] = token
+    return token
+
+
+def community_ops_csrf_valid():
+    expected = str(session.get('community_ops_csrf') or '')
+    provided = str(request.headers.get('X-Community-Ops-CSRF') or '')
+    return bool(expected and provided and secrets.compare_digest(expected, provided))
+
+
 def is_beta_authenticated():
     return bool(session.get('beta_authenticated'))
 
@@ -1810,51 +2038,66 @@ def feedback_handling_unauthorized():
     return jsonify({'success': False, 'error': '权限不足'}), 403
 
 
-def should_rate_limit_admin_login(ip):
-    now = time.time()
-    failures = [ts for ts in ADMIN_LOGIN_FAILURES.get(ip, []) if now - ts < 300]
-    ADMIN_LOGIN_FAILURES[ip] = failures
-    return len(failures) >= 8
+def _login_failure_key(surface, identity):
+    return f'login-failure:{str(surface or "unknown")}:{str(identity or "unknown")}'
 
 
-def record_admin_login_failure(ip):
-    failures = ADMIN_LOGIN_FAILURES.setdefault(ip, [])
-    failures.append(time.time())
-    ADMIN_LOGIN_FAILURES[ip] = [ts for ts in failures if time.time() - ts < 300]
+def _login_failure_limited(surface, identity, *, limit):
+    return not rate_limiter(
+        _login_failure_key(surface, identity),
+        limit=limit,
+        window=300,
+        consume=False,
+    )
 
 
-def should_rate_limit_beta_login(ip):
-    now = time.time()
-    failures = [ts for ts in BETA_LOGIN_FAILURES.get(ip, []) if now - ts < 300]
-    BETA_LOGIN_FAILURES[ip] = failures
-    return len(failures) >= 10
+def _record_login_failure(surface, identity, *, limit):
+    rate_limiter(
+        _login_failure_key(surface, identity),
+        limit=limit,
+        window=300,
+        consume=True,
+    )
 
 
-def record_beta_login_failure(ip):
-    failures = BETA_LOGIN_FAILURES.setdefault(ip, [])
-    failures.append(time.time())
-    BETA_LOGIN_FAILURES[ip] = [ts for ts in failures if time.time() - ts < 300]
+def _clear_login_failures(surface, identity):
+    clear_rate_limit(_login_failure_key(surface, identity))
 
 
-def clear_beta_login_failures(ip):
-    BETA_LOGIN_FAILURES.pop(ip, None)
+def should_rate_limit_admin_login(identity):
+    return _login_failure_limited('admin', identity, limit=8)
 
 
-def should_rate_limit_auth_login(ip):
-    now = time.time()
-    failures = [ts for ts in AUTH_LOGIN_FAILURES.get(ip, []) if now - ts < 300]
-    AUTH_LOGIN_FAILURES[ip] = failures
-    return len(failures) >= 10
+def record_admin_login_failure(identity):
+    _record_login_failure('admin', identity, limit=8)
 
 
-def record_auth_login_failure(ip):
-    failures = AUTH_LOGIN_FAILURES.setdefault(ip, [])
-    failures.append(time.time())
-    AUTH_LOGIN_FAILURES[ip] = [ts for ts in failures if time.time() - ts < 300]
+def clear_admin_login_failures(identity):
+    _clear_login_failures('admin', identity)
 
 
-def clear_auth_login_failures(ip):
-    AUTH_LOGIN_FAILURES.pop(ip, None)
+def should_rate_limit_beta_login(identity):
+    return _login_failure_limited('beta', identity, limit=10)
+
+
+def record_beta_login_failure(identity):
+    _record_login_failure('beta', identity, limit=10)
+
+
+def clear_beta_login_failures(identity):
+    _clear_login_failures('beta', identity)
+
+
+def should_rate_limit_auth_login(identity):
+    return _login_failure_limited('account', identity, limit=10)
+
+
+def record_auth_login_failure(identity):
+    _record_login_failure('account', identity, limit=10)
+
+
+def clear_auth_login_failures(identity):
+    _clear_login_failures('account', identity)
 
 
 def moderation_duration_text(remaining_seconds=None, permanent=False):
@@ -2280,9 +2523,157 @@ def build_community_replay_snapshots(community_mods):
     return snapshots
 
 
+def _rate_limit_response(message='请求过于频繁，请稍后再试', *, retry_after=None):
+    response = jsonify({'success': False, 'error': str(message), 'rate_limited': True})
+    response.status_code = 429
+    response.headers['Retry-After'] = str(max(1, int(retry_after or HTTP_RATE_WINDOW_SECONDS)))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+def _direct_request_is_loopback():
+    if request.headers.get('X-Forwarded-For'):
+        return False
+    try:
+        return ipaddress.ip_address(str(request.remote_addr or '').split('%', 1)[0]).is_loopback
+    except ValueError:
+        return False
+
+
+def _http_request_rate_limit(path):
+    if request.method == 'OPTIONS':
+        return None
+    if app.testing and not app.config.get('GTN_TEST_HTTP_RATE_LIMITS', False):
+        return None
+    if (
+        path.startswith('/static/')
+        or path.startswith('/fonts/')
+        or path.startswith('/socket.io')
+        or path == '/favicon.ico'
+    ):
+        return None
+    if path in {'/api/healthz', '/api/health/full'} and _direct_request_is_loopback():
+        return None
+
+    ip = _client_ip()
+    checks = [
+        ('http:server:all', HTTP_SERVER_LIMIT),
+        (f'http:ip:{ip}:all', HTTP_GLOBAL_IP_LIMIT),
+    ]
+    user_id = session.get('user_id')
+    if user_id:
+        checks.append((f'http:user:{user_id}:all', HTTP_GLOBAL_USER_LIMIT))
+
+    db_heavy = (
+        path.startswith('/api/social/')
+        or path.startswith('/api/feedback/')
+        or path.startswith('/api/replays')
+        or path.startswith('/api/story/')
+    )
+    if db_heavy:
+        checks.append(('http:server:db', HTTP_DB_SERVER_LIMIT))
+        checks.append((f'http:ip:{ip}:db', HTTP_DB_IP_LIMIT))
+        if user_id:
+            checks.append((f'http:user:{user_id}:db', HTTP_DB_USER_LIMIT))
+    if path == '/api/social/unread':
+        checks.append(('http:server:social-unread', HTTP_UNREAD_SERVER_LIMIT))
+        checks.append((f'http:ip:{ip}:social-unread', HTTP_UNREAD_IP_LIMIT))
+        if user_id:
+            checks.append((f'http:user:{user_id}:social-unread', HTTP_UNREAD_USER_LIMIT))
+
+    for key, limit in checks:
+        if not rate_limiter(key, limit=limit, window=HTTP_RATE_WINDOW_SECONDS):
+            return _rate_limit_response()
+    return None
+
+
+def _get_ip_ban_status_cached(ip):
+    token = str(ip or 'unknown')
+    if token == 'unknown':
+        return {'banned': False}
+    now = time.monotonic()
+    with _IP_BAN_CACHE_LOCK:
+        cached = _IP_BAN_CACHE.get(token)
+        if cached and cached[0] > now:
+            _IP_BAN_CACHE.move_to_end(token)
+            return dict(cached[1])
+        if cached:
+            _IP_BAN_CACHE.pop(token, None)
+    status = get_ip_ban_status(token)
+    safe_status = dict(status or {'banned': False})
+    with _IP_BAN_CACHE_LOCK:
+        _IP_BAN_CACHE[token] = (now + _IP_BAN_CACHE_SECONDS, safe_status)
+        _IP_BAN_CACHE.move_to_end(token)
+        while len(_IP_BAN_CACHE) > _IP_BAN_CACHE_MAX_ENTRIES:
+            _IP_BAN_CACHE.popitem(last=False)
+    return dict(safe_status)
+
+
+def _clear_ip_ban_status_cache(ip=None):
+    with _IP_BAN_CACHE_LOCK:
+        if ip is None:
+            _IP_BAN_CACHE.clear()
+        else:
+            _IP_BAN_CACHE.pop(str(ip), None)
+
+
+def _normalized_http_origin(value):
+    try:
+        parsed = urlsplit(str(value or '').strip())
+    except ValueError:
+        return ''
+    if parsed.scheme.lower() not in {'http', 'https'} or not parsed.netloc:
+        return ''
+    if parsed.username is not None or parsed.password is not None:
+        return ''
+    host = (parsed.hostname or '').lower()
+    try:
+        port = parsed.port
+    except ValueError:
+        return ''
+    default_port = 443 if parsed.scheme.lower() == 'https' else 80
+    port_suffix = '' if port in (None, default_port) else f':{port}'
+    return f'{parsed.scheme.lower()}://{host}{port_suffix}'
+
+
+def _same_origin_mutation_allowed():
+    if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+        return True
+    fetch_site = str(request.headers.get('Sec-Fetch-Site') or '').strip().lower()
+    if fetch_site == 'cross-site':
+        return False
+    configured = str(os.environ.get('GTN_HTTP_ALLOWED_ORIGINS', '') or '')
+    allowed = {
+        _normalized_http_origin(value)
+        for value in configured.split(',')
+        if str(value or '').strip()
+    }
+    for value in (GTN_RELEASE_PUBLIC_URL, GTN_BETA_PUBLIC_URL):
+        normalized = _normalized_http_origin(value)
+        if normalized:
+            allowed.add(normalized)
+    allowed.add(_normalized_http_origin(request.host_url))
+    allowed.discard('')
+    origin = str(request.headers.get('Origin') or '').strip()
+    if origin:
+        return _normalized_http_origin(origin) in allowed
+    referer = str(request.headers.get('Referer') or '').strip()
+    if referer:
+        return _normalized_http_origin(referer) in allowed
+    return True
+
+
 @app.before_request
 def protect_admin_api():
     path = request.path.rstrip('/')
+    if not _same_origin_mutation_allowed():
+        response = jsonify({'success': False, 'error': 'cross-site request rejected'})
+        response.status_code = 403
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    rate_error = _http_request_rate_limit(path)
+    if rate_error is not None:
+        return rate_error
     if path.startswith('/api/admin/'):
         g._admin_api_started = time.perf_counter()
         g._admin_api_timing_logged = False
@@ -2294,7 +2685,7 @@ def protect_admin_api():
     )
     if DB_AVAILABLE and not admin_surface and not path.startswith('/static/') and not path.startswith('/fonts/') and path != '/favicon.ico':
         try:
-            ip_status = get_ip_ban_status(_client_ip())
+            ip_status = _get_ip_ban_status_cached(_client_ip())
         except Exception as exc:
             admin_event('error', f'ip ban check failed: {exc}')
             ip_status = {'banned': False}
@@ -2308,11 +2699,24 @@ def protect_admin_api():
     public_paths = {'/api/admin/login', '/api/admin/me'}
     if path.startswith('/api/admin/') and path not in public_paths and not is_admin_authenticated():
         return admin_unauthorized()
+    if (
+        path.startswith('/api/admin/')
+        and path != '/api/admin/login'
+        and request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}
+        and not admin_csrf_valid()
+    ):
+        return jsonify({'success': False, 'error': 'csrf validation failed'}), 403
     console_public_paths = {'/api/adminconsole/login', '/api/adminconsole/me'}
     if path.startswith('/api/adminconsole/') and path not in console_public_paths and not is_admin_console_authenticated():
         return admin_unauthorized()
     if path.startswith('/api/feedback/handling/') and not is_feedback_handling_authenticated():
         return feedback_handling_unauthorized()
+    if (
+        path.startswith('/api/feedback/handling/')
+        and request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}
+        and not feedback_handling_csrf_valid()
+    ):
+        return jsonify({'success': False, 'error': 'csrf validation failed'}), 403
 
 
 @app.after_request
@@ -2332,6 +2736,23 @@ def log_slow_admin_api(response):
                     )
     except Exception:
         pass
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    response.headers.setdefault('Referrer-Policy', 'same-origin')
+    response.headers.setdefault(
+        'Permissions-Policy',
+        'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    )
+    response.headers.setdefault(
+        'Content-Security-Policy',
+        f"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; "
+        f"form-action 'self'; script-src 'self' 'nonce-{_request_csp_nonce()}'; script-src-attr 'none'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
+        "frame-src 'self'; media-src 'self' data: blob:; worker-src 'self' blob:",
+    )
+    if request.is_secure or str(request.headers.get('X-Forwarded-Proto') or '').lower() == 'https':
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     return response
 
 
@@ -2767,23 +3188,41 @@ def _resolve_pending_response_for_disconnect(room, player_index):
         return False
 
     if room.mode == '2v2':
-        counter_cards = [
-            c for c in (pending.get('counter_cards') or [])
-            if _counter_card_responder_id(c) != disconnected_idx
-        ]
-        if len(counter_cards) == len(pending.get('counter_cards') or []):
+        if not any(
+            _counter_card_responder_id(card) == disconnected_idx
+            for card in (pending.get('counter_cards') or [])
+        ):
             return False
-        pending['counter_cards'] = counter_cards
-        online_indices = _online_room_player_indices(room)
-        remaining_responders = {
-            _counter_card_responder_id(c)
-            for c in counter_cards
-            if _counter_card_responder_id(c) >= 0
-        }
-        if any(ridx in online_indices for ridx in remaining_responders):
-            return True
         try:
-            engine.handle_response(disconnected_idx, None)
+            before_count = len(pending.get('counter_cards') or [])
+            result = engine.handle_response(disconnected_idx, None)
+            if (
+                getattr(engine, 'pending_response', None) is pending
+                and (
+                    not isinstance(result, dict)
+                    or not result.get('success')
+                    or len(pending.get('counter_cards') or []) >= before_count
+                )
+            ):
+                raise RuntimeError('2v2 disconnected response pass made no progress')
+            while getattr(engine, 'pending_response', None) is pending:
+                remaining_responders = _pending_response_responder_ids(room, pending)
+                online_indices = _online_room_player_indices(room)
+                if any(ridx in online_indices for ridx in remaining_responders):
+                    break
+                if not remaining_responders:
+                    raise RuntimeError('2v2 response window has no eligible responder')
+                before_count = len(pending.get('counter_cards') or [])
+                result = engine.handle_response(remaining_responders[0], None)
+                if (
+                    getattr(engine, 'pending_response', None) is pending
+                    and (
+                        not isinstance(result, dict)
+                        or not result.get('success')
+                        or len(pending.get('counter_cards') or []) >= before_count
+                    )
+                ):
+                    raise RuntimeError('2v2 disconnected response pass made no progress')
         except Exception as exc:
             admin_event('error', f'auto-resolve pending 2v2 response failed: {exc}', room_id=getattr(room, 'room_id', None))
             engine.pending_response = None
@@ -3374,11 +3813,42 @@ def _extract_lobby_mentions(text, beta_mode=False):
     return mentions
 
 
+def _social_unread_counts_cached(user_id, *, force=False):
+    key = str(user_id or '')
+    if not key:
+        return {}, '账号不存在'
+    now = time.monotonic()
+    if not force:
+        with _SOCIAL_UNREAD_CACHE_LOCK:
+            cached = _SOCIAL_UNREAD_CACHE.get(key)
+            if cached and cached[0] > now:
+                _SOCIAL_UNREAD_CACHE.move_to_end(key)
+                return dict(cached[1]), None
+            if cached:
+                _SOCIAL_UNREAD_CACHE.pop(key, None)
+    data, error = social_unread_counts(user_id)
+    if error:
+        return data, error
+    safe_data = dict(data or {})
+    with _SOCIAL_UNREAD_CACHE_LOCK:
+        _SOCIAL_UNREAD_CACHE[key] = (now + _SOCIAL_UNREAD_CACHE_SECONDS, safe_data)
+        _SOCIAL_UNREAD_CACHE.move_to_end(key)
+        while len(_SOCIAL_UNREAD_CACHE) > _SOCIAL_UNREAD_CACHE_MAX_ENTRIES:
+            _SOCIAL_UNREAD_CACHE.popitem(last=False)
+    return dict(safe_data), None
+
+
+def _invalidate_social_unread_cache(*user_ids):
+    with _SOCIAL_UNREAD_CACHE_LOCK:
+        for user_id in user_ids:
+            _SOCIAL_UNREAD_CACHE.pop(str(user_id or ''), None)
+
+
 def _emit_dm_update_for_user(user_id):
     if not user_id:
         return
     try:
-        counts, error = social_unread_counts(user_id) if DB_AVAILABLE else ({}, None)
+        counts, error = _social_unread_counts_cached(user_id, force=True) if DB_AVAILABLE else ({}, None)
         if error:
             return
     except Exception as exc:
@@ -4528,15 +4998,25 @@ def _pending_interaction_watchdog_worker():
                         if age >= 120:
                             try:
                                 if room.mode == '2v2':
-                                    responders = sorted({
-                                        _counter_card_responder_id(c)
-                                        for c in (pending_response.get('counter_cards') or [])
-                                        if _counter_card_responder_id(c) >= 0
-                                    })
-                                    responder = responders[0] if responders else int(pending_response.get('player_id', 0))
+                                    while getattr(engine, 'pending_response', None) is pending_response:
+                                        responders = _pending_response_responder_ids(room, pending_response)
+                                        if not responders:
+                                            raise RuntimeError('2v2 response window has no eligible responder')
+                                        before_count = len(pending_response.get('counter_cards') or [])
+                                        result = engine.handle_response(responders[0], None)
+                                        after_count = len(pending_response.get('counter_cards') or [])
+                                        if (
+                                            getattr(engine, 'pending_response', None) is pending_response
+                                            and (
+                                                not isinstance(result, dict)
+                                                or not result.get('success')
+                                                or after_count >= before_count
+                                            )
+                                        ):
+                                            raise RuntimeError('2v2 response pass made no progress')
                                 else:
                                     responder = 1 - int(pending_response.get('player_id', 0))
-                                engine.handle_response(responder, None)
+                                    engine.handle_response(responder, None)
                                 admin_event('warning', f'auto_resolve_pending_response room={room.room_id} age={age:.1f}', room_id=room.room_id)
                                 pending_emits.append(('state', room))
                             except Exception as exc:
@@ -4855,6 +5335,21 @@ def _draft_timer_total_for_player(engine, pidx):
     return max(1.0, total)
 
 
+def _event_sub_choice_timeout_for_player(room=None, pidx=None):
+    timeout = float(EVENT_SUB_CHOICE_TIMEOUT_SECONDS)
+    if room is None or pidx is None:
+        return timeout
+    engine = getattr(room, 'engine', None)
+    picks = getattr(engine, 'opening_event_picks', []) if engine is not None else []
+    try:
+        event_id = picks[int(pidx)]
+    except (IndexError, TypeError, ValueError):
+        event_id = None
+    if str(event_id) == '11':
+        timeout += float(FLORAL_ARRANGEMENT_TIMEOUT_BONUS_SECONDS)
+    return max(1.0, timeout)
+
+
 def _pregame_timeout_for_status(status, room=None, pidx=None):
     if status == 'event_select':
         return EVENT_SELECT_TIMEOUT_SECONDS
@@ -4867,7 +5362,7 @@ def _pregame_timeout_for_status(status, room=None, pidx=None):
                 return _draft_timer_total_for_player(engine, pidx)
         return DRAFT_TIMEOUT_SECONDS
     if status == 'sub_choice':
-        return EVENT_SUB_CHOICE_TIMEOUT_SECONDS
+        return _event_sub_choice_timeout_for_player(room, pidx)
     return None
 
 
@@ -5241,15 +5736,7 @@ def _room_timer_worker():
                     for pidx in range(player_count):
                         status = engine.get_player_status(pidx) if hasattr(engine, 'get_player_status') else None
                         pregame_statuses.append(status)
-                        timeout = None
-                        if status == 'event_select':
-                            timeout = EVENT_SELECT_TIMEOUT_SECONDS
-                        elif status == 'event_reveal':
-                            timeout = EVENT_REVEAL_TIMEOUT_SECONDS
-                        elif status == 'drafting':
-                            timeout = _draft_timer_total_for_player(engine, pidx)
-                        elif status == 'sub_choice':
-                            timeout = EVENT_SUB_CHOICE_TIMEOUT_SECONDS
+                        timeout = _pregame_timeout_for_status(status, room, pidx)
                         if timeout is None:
                             continue
                         force_progress = pidx in timeout_defeated
@@ -5472,11 +5959,47 @@ def _community_combined_names(entries):
     return ' / '.join([name for name in names if name])[:240]
 
 
+def _canonical_ip(raw):
+    token = str(raw or '').strip()
+    if not token:
+        return None
+    try:
+        address = ipaddress.ip_address(token.split('%', 1)[0])
+    except ValueError:
+        return None
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return str(address)
+
+
+def _ip_is_trusted_proxy(ip):
+    try:
+        address = ipaddress.ip_address(str(ip))
+    except ValueError:
+        return False
+    return any(address in network for network in _TRUSTED_PROXY_NETWORKS)
+
+
 def _client_ip():
+    direct_ip = _canonical_ip(request.remote_addr) or 'unknown'
     forwarded = request.headers.get('X-Forwarded-For', '')
-    if forwarded:
-        return forwarded.split(',')[0].strip()
-    return request.remote_addr or 'unknown'
+    if (
+        not forwarded
+        or GTN_TRUSTED_PROXY_HOPS <= 0
+        or direct_ip == 'unknown'
+        or not _ip_is_trusted_proxy(direct_ip)
+    ):
+        return direct_ip
+    forwarded_ips = [_canonical_ip(part) for part in forwarded.split(',')]
+    if any(ip is None for ip in forwarded_ips) or len(forwarded_ips) < GTN_TRUSTED_PROXY_HOPS:
+        return direct_ip
+    candidate_index = len(forwarded_ips) - GTN_TRUSTED_PROXY_HOPS
+    # Every forwarded hop closer to us than the selected client must itself be
+    # a trusted proxy.  Otherwise an unexpected intermediary cannot choose the
+    # rate-limit or ban identity.
+    if any(not _ip_is_trusted_proxy(ip) for ip in forwarded_ips[candidate_index + 1:]):
+        return direct_ip
+    return forwarded_ips[candidate_index] or direct_ip
 
 
 def record_account_ip_event_async(user_id, username, ip, source='game_enter'):
@@ -5576,6 +6099,11 @@ SOCKET_EVENT_LIMITS = {
     'skin_look': (80, 10),
 }
 SOCKET_DEFAULT_LIMIT = (80, 60)
+SOCKET_TOTAL_SERVER_LIMIT = max(500, _env_int('GTN_SOCKET_TOTAL_SERVER_LIMIT', 6000))
+SOCKET_CONNECT_SERVER_LIMIT = max(30, _env_int('GTN_SOCKET_CONNECT_SERVER_LIMIT', 300))
+SOCKET_TOTAL_SID_LIMIT = max(60, _env_int('GTN_SOCKET_TOTAL_SID_LIMIT', 240))
+SOCKET_TOTAL_USER_LIMIT = max(120, _env_int('GTN_SOCKET_TOTAL_USER_LIMIT', 480))
+SOCKET_TOTAL_IP_LIMIT = max(240, _env_int('GTN_SOCKET_TOTAL_IP_LIMIT', 1200))
 SOCKET_ILLEGAL_KICK_LIMIT = 12
 SOCKET_ILLEGAL_WINDOW = 300
 SOFT_REJECT_EVENT_NAMES = {
@@ -5888,12 +6416,25 @@ def _stamp_pending_interactions(room):
 
 
 def _socket_rate_allowed(sid, event_name, *, exempt=False):
+    if not rate_limiter('socket:server:all', limit=SOCKET_TOTAL_SERVER_LIMIT, window=60):
+        return False
     if exempt:
         return True
+    if not rate_limiter(f'socket:sid:{sid}:all', limit=SOCKET_TOTAL_SID_LIMIT, window=60):
+        return False
+    ip = _client_ip()
+    if not rate_limiter(f'socket:ip:{ip}:all', limit=SOCKET_TOTAL_IP_LIMIT, window=60):
+        return False
+    user_id = _security_user_id_for_sid(sid)
+    if user_id and not rate_limiter(
+        f'socket:user:{user_id}:all',
+        limit=SOCKET_TOTAL_USER_LIMIT,
+        window=60,
+    ):
+        return False
     limit, window = SOCKET_EVENT_LIMITS.get(event_name, SOCKET_DEFAULT_LIMIT)
     if not rate_limiter(f'socket:sid:{sid}:{event_name}', limit=limit, window=window):
         return False
-    user_id = _security_user_id_for_sid(sid)
     if user_id and not rate_limiter(f'socket:user:{user_id}:{event_name}', limit=limit * 2, window=window):
         return False
     return True
@@ -6173,6 +6714,10 @@ def _clear_account_session():
     session.pop('user_id', None)
     session.pop('username', None)
     session.pop('password_changed_at', None)
+    session.pop('feedback_handling_csrf', None)
+    session.pop('title_editor_csrf', None)
+    session.pop('community_csrf', None)
+    session.pop('community_ops_csrf', None)
 
 
 def _account_session_is_current(user):
@@ -6211,6 +6756,7 @@ def _attach_remember_cookie(response, user):
             token,
             max_age=60 * 60 * 24 * 60,
             httponly=True,
+            secure=bool(app.config.get('SESSION_COOKIE_SECURE')),
             samesite='Lax',
         )
     return response
@@ -6222,16 +6768,20 @@ def _clear_remember_cookie(response):
             revoke_remember_token(request.cookies.get(REMEMBER_COOKIE_NAME, ''))
         except Exception as exc:
             admin_event('error', f'failed to revoke remember token: {exc}')
-    response.delete_cookie(REMEMBER_COOKIE_NAME, samesite='Lax')
+    response.delete_cookie(
+        REMEMBER_COOKIE_NAME,
+        secure=bool(app.config.get('SESSION_COOKIE_SECURE')),
+        samesite='Lax',
+    )
     return response
 
 
 def _current_account_user(allow_remember=True):
     if not DB_AVAILABLE:
         return None
-    user = get_user_by_id(session.get('user_id'))
+    user = get_user_by_id_for_session(session.get('user_id'))
     if user:
-        if user.get('deleted'):
+        if user.get('deleted') or user.get('banned'):
             _clear_account_session()
             return None
         if not _account_session_is_current(user):
@@ -6244,7 +6794,7 @@ def _current_account_user(allow_remember=True):
         return None
     user = verify_remember_token(request.cookies.get(REMEMBER_COOKIE_NAME, ''))
     if user:
-        if user.get('deleted'):
+        if user.get('deleted') or user.get('banned'):
             return None
         _set_account_session(user)
         return user
@@ -6252,21 +6802,27 @@ def _current_account_user(allow_remember=True):
 
 
 def _rate_limited(ip, bucket, limit=3, window=60):
-    now = time.time()
-    key = (bucket, ip)
-    hits = [ts for ts in _COMMUNITY_API_RATE.get(key, []) if now - ts < window]
-    if len(hits) >= limit:
-        _COMMUNITY_API_RATE[key] = hits
-        return True
-    hits.append(now)
-    _COMMUNITY_API_RATE[key] = hits
-    return False
+    return not rate_limiter(
+        f'community:{str(bucket or "unknown")}:{str(ip or "unknown")}',
+        limit=limit,
+        window=window,
+    )
 
 
 def _json_error(message, status=400, **extra):
     payload = {'success': False, 'error': str(message)}
     payload.update(extra)
     return jsonify(payload), status
+
+
+def _bounded_credential_from_request(field, *, max_length=128):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None
+    value = data.get(field, '')
+    if not isinstance(value, str) or len(value) > max_length:
+        return None
+    return value
 
 
 def _current_account_identity():
@@ -8801,6 +9357,40 @@ ADMIN_COMMAND_TREE = {
             'broadcast': {'summary': '发送服务器广播', 'usage': 'lobby broadcast <内容>'},
         },
     },
+    'community': {
+        'summary': '社区公告、投票与运营记录',
+        'usage': 'community <list|announcement|poll> ...',
+        'children': {
+            'list': {'summary': '列出近期公告、投票和审计', 'usage': 'community list'},
+            'announcement': {
+                'summary': '管理公告',
+                'usage': 'community announcement <create|publish|retract|pin|unpin> ...',
+                'children': {
+                    'create': {
+                        'summary': '创建公告草稿或定时公告',
+                        'usage': 'community announcement create <标题> <正文> [publish] [pin] [changelog] [start=ISO] [end=ISO]',
+                    },
+                    'publish': {'summary': '发布公告', 'usage': 'community announcement publish <ID>'},
+                    'retract': {'summary': '撤回公告', 'usage': 'community announcement retract <ID>'},
+                    'pin': {'summary': '置顶公告', 'usage': 'community announcement pin <ID>'},
+                    'unpin': {'summary': '取消置顶', 'usage': 'community announcement unpin <ID>'},
+                },
+            },
+            'poll': {
+                'summary': '管理投票',
+                'usage': 'community poll <create|publish|close|retract> ...',
+                'children': {
+                    'create': {
+                        'summary': '创建投票草稿或定时投票',
+                        'usage': 'community poll create <问题> <选项1> <选项2> [...] end=ISO [start=ISO] [reminder=24] [publish]',
+                    },
+                    'publish': {'summary': '发布投票', 'usage': 'community poll publish <ID>'},
+                    'close': {'summary': '立即结束投票', 'usage': 'community poll close <ID>'},
+                    'retract': {'summary': '撤回投票', 'usage': 'community poll retract <ID>'},
+                },
+            },
+        },
+    },
     'moderation': {
         'summary': '处罚与安全记录',
         'usage': 'moderation <mute|ban|unban|ip|warning|report|suspicious> ...',
@@ -9089,6 +9679,16 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('game', 'pending', 'get'): 'gamepending',
     ('lobby', 'broadcast'): 'broadcast',
     ('lobby', 'chat'): 'lobbychat',
+    ('community', 'list'): 'community-list',
+    ('community', 'announcement', 'create'): 'community-announcement-create',
+    ('community', 'announcement', 'publish'): ('community-announcement-action', 'publish'),
+    ('community', 'announcement', 'retract'): ('community-announcement-action', 'retract'),
+    ('community', 'announcement', 'pin'): ('community-announcement-action', 'pin'),
+    ('community', 'announcement', 'unpin'): ('community-announcement-action', 'unpin'),
+    ('community', 'poll', 'create'): 'community-poll-create',
+    ('community', 'poll', 'publish'): ('community-poll-action', 'publish'),
+    ('community', 'poll', 'close'): ('community-poll-action', 'close'),
+    ('community', 'poll', 'retract'): ('community-poll-action', 'retract'),
     ('moderation', 'mute'): 'mutechat',
     ('moderation', 'ban'): 'banuser',
     ('moderation', 'unban'): 'unbanuser',
@@ -10865,6 +11465,145 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         return execute_admin_command(translated, _internal=True, actor=actor)
     if cmd == 'clear':
         return {'success': True, 'output': '', 'clear': True}
+    if cmd in {
+        'community-list',
+        'community-announcement-create',
+        'community-announcement-action',
+        'community-poll-create',
+        'community-poll-action',
+    }:
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        console_actor = {
+            'user_id': None,
+            'username': str(actor or 'adminconsole')[:80] or 'adminconsole',
+            'role_type': 'adminconsole',
+        }
+        try:
+            if cmd == 'community-list':
+                workspace = list_community_ops_workspace(audit_limit=20)
+                lines = [
+                    f"公告 {len(workspace.get('announcements') or [])} 条｜投票 {len(workspace.get('polls') or [])} 条｜更新日志草稿 {len(workspace.get('changelog_drafts') or [])} 条",
+                    '',
+                    '近期公告：',
+                ]
+                announcements = (workspace.get('announcements') or [])[:10]
+                lines.extend(
+                    f"  #{item.get('id')} [{item.get('state')}] {'[置顶] ' if item.get('pinned') else ''}{item.get('title')}"
+                    for item in announcements
+                )
+                if not announcements:
+                    lines.append('  （无）')
+                lines.extend(['', '近期投票：'])
+                polls = (workspace.get('polls') or [])[:10]
+                lines.extend(
+                    f"  #{item.get('id')} [{item.get('effective_state')}] {item.get('question')}｜{item.get('total_votes', 0)} 票"
+                    for item in polls
+                )
+                if not polls:
+                    lines.append('  （无）')
+                return {'success': True, 'output': '\n'.join(lines)}
+
+            if cmd == 'community-announcement-create':
+                if len(parts) < 3:
+                    return {
+                        'success': False,
+                        'output': command_error(raw, len(raw), 'community announcement create <标题> <正文> [publish] [pin] [changelog] [start=ISO] [end=ISO]'),
+                    }
+                flags = {'publish': False, 'pin': False, 'changelog': False, 'start': None, 'end': None}
+                for token in parts[3:]:
+                    key, separator, value = str(token).partition('=')
+                    key = key.lower()
+                    if separator and key in {'start', 'end'}:
+                        flags[key] = value
+                    elif not separator and key in {'publish', 'pin', 'changelog'}:
+                        flags[key] = True
+                    else:
+                        raise CommunityOpsError('INVALID_REQUEST', f'未知公告参数：{token}')
+                item = create_community_announcement(
+                    console_actor,
+                    title=parts[1],
+                    body=parts[2],
+                    starts_at=flags['start'],
+                    ends_at=flags['end'],
+                    pinned=flags['pin'],
+                    publish=flags['publish'],
+                    changelog_draft=flags['changelog'],
+                )
+                return {
+                    'success': True,
+                    'output': f"公告 #{item.get('id')} 已创建，状态={item.get('state')}，开始={item.get('starts_at')}。",
+                }
+
+            if cmd == 'community-announcement-action':
+                if len(parts) != 3:
+                    return {
+                        'success': False,
+                        'output': command_error(raw, len(raw), 'community announcement <publish|retract|pin|unpin> <ID>'),
+                    }
+                item, duplicate = mutate_community_announcement(
+                    console_actor,
+                    parts[2],
+                    parts[1],
+                )
+                return {
+                    'success': True,
+                    'output': f"公告 #{item.get('id')} 已{parts[1]}{'（状态未变化）' if duplicate else ''}。",
+                }
+
+            if cmd == 'community-poll-create':
+                if len(parts) < 5:
+                    return {
+                        'success': False,
+                        'output': command_error(raw, len(raw), 'community poll create <问题> <选项1> <选项2> [...] end=ISO [start=ISO] [reminder=24] [publish]'),
+                    }
+                options = []
+                flags = {'publish': False, 'start': None, 'end': None, 'reminder': 24}
+                for token in parts[2:]:
+                    key, separator, value = str(token).partition('=')
+                    key = key.lower()
+                    if separator and key in {'start', 'end', 'reminder'}:
+                        flags[key] = value
+                    elif not separator and key == 'publish':
+                        flags['publish'] = True
+                    elif separator:
+                        raise CommunityOpsError('INVALID_REQUEST', f'未知投票参数：{token}')
+                    else:
+                        options.append(token)
+                item = create_community_poll(
+                    console_actor,
+                    question=parts[1],
+                    options=options,
+                    starts_at=flags['start'],
+                    ends_at=flags['end'],
+                    reminder_hours=flags['reminder'],
+                    publish=flags['publish'],
+                )
+                return {
+                    'success': True,
+                    'output': f"投票 #{item.get('id')} 已创建，状态={item.get('state')}，截止={item.get('ends_at')}。",
+                }
+
+            if len(parts) != 3:
+                return {
+                    'success': False,
+                    'output': command_error(raw, len(raw), 'community poll <publish|close|retract> <ID>'),
+                }
+            item, duplicate = mutate_community_poll(
+                console_actor,
+                parts[2],
+                parts[1],
+            )
+            return {
+                'success': True,
+                'output': f"投票 #{item.get('id')} 已{parts[1]}{'（状态未变化）' if duplicate else ''}。",
+            }
+        except CommunityOpsError as exc:
+            return {'success': False, 'output': exc.message}
+        except sqlite3.OperationalError as exc:
+            if 'locked' in str(exc).lower() or 'busy' in str(exc).lower():
+                return {'success': False, 'output': '社区运营数据库暂时繁忙，请稍后再试。'}
+            raise
     if cmd == 'replaylist':
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
@@ -12062,6 +12801,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         row, error = set_ip_ban(parts[1], True, reason, duration_seconds=duration, banned_by='console')
         if error:
             return {'success': False, 'output': error}
+        _clear_ip_ban_status_cache()
         kicked = []
         with _lock:
             for sid, player in list(players.items()):
@@ -12082,6 +12822,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         _row, error = set_ip_ban(parts[1], False)
         if error:
             return {'success': False, 'output': error}
+        _clear_ip_ban_status_cache()
         admin_event('moderation', f'console unbanned ip {parts[1]}')
         return {'success': True, 'output': f'已解除 IP {parts[1]} 的封禁。'}
     if cmd == 'warninglist':
@@ -16073,19 +16814,32 @@ def _auto_resolve_unreachable_pending_response(room, reason='unreachable'):
     pending = getattr(engine, 'pending_response', None) if engine is not None else None
     if not pending:
         return False
-    responders = _pending_response_responder_ids(room, pending)
-    if any(_room_player_index_online(room, ridx) for ridx in responders):
-        return False
-    if not responders:
-        try:
-            player_id = int(pending.get('player_id', -1))
-        except Exception:
-            player_id = -1
-        responders = [1 - player_id] if player_id in (0, 1) else [player_id]
-    responder_id = responders[0] if responders else 0
     try:
-        engine.handle_response(responder_id, None)
-        admin_event('warning', f'auto_resolve_unreachable_pending_response room={getattr(room, "room_id", "?")} responder={responder_id} reason={reason}', room_id=getattr(room, 'room_id', None))
+        while getattr(engine, 'pending_response', None) is pending:
+            responders = _pending_response_responder_ids(room, pending)
+            if any(_room_player_index_online(room, ridx) for ridx in responders):
+                return False
+            if not responders:
+                try:
+                    player_id = int(pending.get('player_id', -1))
+                except Exception:
+                    player_id = -1
+                responders = [1 - player_id] if player_id in (0, 1) else [player_id]
+            responder_id = responders[0] if responders else 0
+            before_count = len(pending.get('counter_cards') or [])
+            result = engine.handle_response(responder_id, None)
+            admin_event('warning', f'auto_resolve_unreachable_pending_response room={getattr(room, "room_id", "?")} responder={responder_id} reason={reason}', room_id=getattr(room, 'room_id', None))
+            if getattr(room, 'mode', '') != '2v2':
+                break
+            if (
+                getattr(engine, 'pending_response', None) is pending
+                and (
+                    not isinstance(result, dict)
+                    or not result.get('success')
+                    or len(pending.get('counter_cards') or []) >= before_count
+                )
+            ):
+                raise RuntimeError('2v2 response pass made no progress')
     except Exception as exc:
         admin_event('error', f'auto_resolve_unreachable_pending_response failed room={getattr(room, "room_id", "?")}: {exc}', room_id=getattr(room, 'room_id', None))
         engine.pending_response = None
@@ -16606,6 +17360,7 @@ def index():
         instance_port=GTN_PORT,
         app_version=GTN_VERSION,
         changelog_version=changelog_version(),
+        ai_public_entry_enabled=GTN_AI_PUBLIC_ENTRY_ENABLED,
     )
 
 
@@ -16677,8 +17432,8 @@ def api_story_coop_bootstrap():
         return _story_coop_no_store(error)
     response = jsonify({
         'success': True,
-        'status': 'staff_party_lobby',
-        'message': '双人协作队伍大厅、独立存档与纯战斗协调内核已就绪。当前仍是 Staff / Admin 实验功能。',
+        'status': 'staff_stage1_experiment',
+        'message': '双人协作花园第一阶段已就绪：包含权威战斗、个人房间、共享投票与阶段结算。当前仍是 Staff / Admin 实验功能。',
         'schema_version': COOP_STORY_SCHEMA_VERSION,
         'min_players': COOP_STORY_MIN_PLAYERS,
         'mvp_player_count': COOP_STORY_MVP_MAX_PLAYERS,
@@ -16686,6 +17441,12 @@ def api_story_coop_bootstrap():
         'access': ['staff', 'admin'],
         'rules': coop_story_default_rules(),
         'combat_core_ready': True,
+        'combat_api_ready': True,
+        'reward_api_ready': True,
+        'route_vote_api_ready': True,
+        'room_api_ready': True,
+        'stage1_map_ready': True,
+        'public_snapshot_ready': True,
         'party_api_ready': True,
         'run_persistence_ready': True,
     })
@@ -16725,6 +17486,20 @@ def _story_coop_revision_from_request(data):
     return value
 
 
+def _story_coop_run_revision_from_request(data):
+    value = data.get('run_revision') if isinstance(data, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise StoryCoopDataError('INVALID_RUN_VERSION', '旅程版本无效')
+    return value
+
+
+def _story_coop_sequence_from_request(data):
+    value = data.get('expected_sequence') if isinstance(data, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise StoryCoopDataError('INVALID_ACTION_SEQUENCE', '动作序号无效')
+    return value
+
+
 def _story_coop_request_object():
     data = request.get_json(silent=True)
     if data is None:
@@ -16743,6 +17518,8 @@ def _story_coop_storage_error(exc):
             503,
             'COOP_STORY_DATA_UNAVAILABLE',
         )
+    if code.startswith('STALE_'):
+        return _story_coop_error(str(exc), 409, code)
     return _story_coop_error(str(exc), 400, code)
 
 
@@ -16763,6 +17540,46 @@ def _story_coop_require_account():
     return user_id, username, None
 
 
+def _story_coop_public_bundle(bundle, user_id):
+    try:
+        return project_coop_bundle_for_viewer(bundle, user_id)
+    except (CoopCombatError, CoopStoryStateError) as exc:
+        raise StoryCoopDataError(
+            'CORRUPT_COOP_STORY_STATE',
+            '多人故事公开快照无法生成',
+        ) from exc
+
+
+def _story_coop_public_run(run, user_id):
+    try:
+        return project_coop_run_for_viewer(run, user_id)
+    except (CoopCombatError, CoopStoryStateError) as exc:
+        raise StoryCoopDataError(
+            'CORRUPT_COOP_STORY_STATE',
+            '多人故事公开快照无法生成',
+        ) from exc
+
+
+def _story_coop_public_receipt(receipt):
+    if not isinstance(receipt, dict):
+        return None
+    public_fields = {
+        'action_id',
+        'action_type',
+        'actor_user_id',
+        'actor_seat',
+        'action_sequence',
+        'combat_id',
+        'combat_round',
+        'resulting_revision',
+    }
+    return {
+        key: value
+        for key, value in receipt.items()
+        if key in public_fields
+    }
+
+
 @app.route('/api/story/coop/party', methods=['GET'])
 def api_story_coop_party_get():
     user_id, _, error = _story_coop_require_account()
@@ -16772,7 +17589,7 @@ def api_story_coop_party_get():
         bundle = get_active_story_coop_party(user_id)
         return _story_coop_json({
             'success': True,
-            **(bundle or {'party': None, 'viewer': None, 'run': None}),
+            **_story_coop_public_bundle(bundle, user_id),
         })
     except StoryCoopDataError as exc:
         return _story_coop_storage_error(exc)
@@ -16803,7 +17620,7 @@ def api_story_coop_party_create():
             'success': True,
             'created': outcome == 'created',
             'invite_code': invite_code,
-            **bundle,
+            **_story_coop_public_bundle(bundle, user_id),
         })
     except StoryCoopDataError as exc:
         return _story_coop_storage_error(exc)
@@ -16837,7 +17654,7 @@ def api_story_coop_party_join():
             return _story_coop_json({
                 'success': True,
                 'joined': outcome == 'joined',
-                **bundle,
+                **_story_coop_public_bundle(bundle, user_id),
             })
         if outcome == 'ineligible':
             return _story_coop_error('未找到此功能', 404, 'COOP_STORY_DISABLED')
@@ -16852,7 +17669,7 @@ def api_story_coop_party_join():
                 '你已经在另一个协作队伍中',
                 409,
                 'COOP_PARTY_ALREADY_JOINED',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         if outcome == 'full':
             return _story_coop_error('队伍人数已满', 409, 'COOP_PARTY_FULL')
@@ -16901,14 +17718,14 @@ def api_story_coop_party_leave():
                 '协作旅程已经开始，不能从队伍大厅退出',
                 409,
                 'COOP_PARTY_ALREADY_STARTED',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         if outcome == 'version':
             return _story_coop_error(
                 '队伍状态已经更新',
                 409,
                 'COOP_PARTY_VERSION_OLD',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         return _story_coop_error(
             '队伍当前不能退出',
@@ -16946,21 +17763,21 @@ def api_story_coop_party_invite_rotate():
                 'success': True,
                 'rotated': True,
                 'invite_code': invite_code,
-                **bundle,
+                **_story_coop_public_bundle(bundle, user_id),
             })
         if outcome == 'leader_required':
             return _story_coop_error(
                 '只有队长可以轮换邀请码',
                 403,
                 'COOP_PARTY_LEADER_REQUIRED',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         if outcome == 'version':
             return _story_coop_error(
                 '队伍状态已经更新',
                 409,
                 'COOP_PARTY_VERSION_OLD',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         if outcome == 'not_found':
             return _story_coop_error(
@@ -16972,7 +17789,7 @@ def api_story_coop_party_invite_rotate():
             '已开始的队伍不能轮换邀请码',
             409,
             'COOP_PARTY_NOT_JOINABLE',
-            **(bundle or {}),
+            **_story_coop_public_bundle(bundle, user_id),
         )
     except StoryCoopDataError as exc:
         return _story_coop_storage_error(exc)
@@ -17007,7 +17824,7 @@ def api_story_coop_party_abandon():
                 '队伍状态已经更新',
                 409,
                 'COOP_PARTY_VERSION_OLD',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         if outcome == 'not_found':
             return _story_coop_error(
@@ -17054,7 +17871,7 @@ def api_story_coop_party_start():
                     '只有队长可以开始协作旅程',
                     403,
                     'COOP_PARTY_LEADER_REQUIRED',
-                    **current,
+                    **_story_coop_public_bundle(current, user_id),
                 )
             if current.get('run') is None:
                 app.logger.error('active cooperative party has no active run party=%s', party_id)
@@ -17066,55 +17883,111 @@ def api_story_coop_party_start():
             return _story_coop_json({
                 'success': True,
                 'started': False,
-                **current,
+                **_story_coop_public_bundle(current, user_id),
             })
         seed = secrets.token_hex(16)
+        character_id = str(data.get('character_id') or 'common_flower').strip()
+        character = STORY_CHARACTERS.get(character_id)
+        if not isinstance(character, dict):
+            return _story_coop_error(
+                '故事角色不存在',
+                400,
+                'UNKNOWN_STORY_CHARACTER',
+                **_story_coop_public_bundle(current, user_id),
+            )
+        if character.get('implementation_status') != 'playable':
+            message = character.get('unavailable_message') or {}
+            return _story_coop_error(
+                str(message.get('zh') or '这名角色还没准备好呢\n请期待开发组更新'),
+                409,
+                'STORY_CHARACTER_NOT_READY',
+                character_id=character_id,
+                **_story_coop_public_bundle(current, user_id),
+            )
+        try:
+            coop_character_capability = COOP_STORY_CONTENT.capability(
+                'character',
+                character_id,
+            )
+        except CoopStoryContentError:
+            coop_character_capability = {'state': 'deferred'}
+        if coop_character_capability.get('state') != 'supported':
+            return _story_coop_error(
+                '这名角色的协作故事还没准备好呢\n请期待开发组更新',
+                409,
+                'COOP_STORY_CHARACTER_NOT_READY',
+                character_id=character_id,
+                **_story_coop_public_bundle(current, user_id),
+            )
+        member_user_ids = [
+            int(member.get('user_id'))
+            for member in current['party'].get('members', [])
+            if isinstance(member, dict) and member.get('membership_status') == 'active'
+        ]
+        progress_by_user = get_story_progress_for_users(member_user_ids)
+        shared_unlocks = story_coop_unlock_intersection(
+            progress_by_user,
+            character_id,
+        )
+        if not shared_unlocks.get('difficulties'):
+            return _story_coop_error(
+                '队伍中仍有成员尚未解锁该故事角色',
+                409,
+                'COOP_STORY_CHARACTER_LOCKED',
+                character_id=character_id,
+                **_story_coop_public_bundle(current, user_id),
+            )
         state = build_initial_coop_story_state(
             seed,
             current['party']['members'],
             max_players=current['party']['max_players'],
+            character_id=character_id,
+        )
+        state = prepare_coop_stage1_setup(
+            state,
+            available_difficulties=shared_unlocks['difficulties'],
         )
         bundle, outcome = create_story_coop_run(
             user_id,
             party_id,
             expected_revision,
             seed,
-            STORY_CONTENT_VERSION,
+            COOP_STORY_CONTENT_VERSION,
             state,
         )
         if outcome in {'created', 'existing'}:
             return _story_coop_json({
                 'success': True,
                 'started': outcome == 'created',
-                **bundle,
+                **_story_coop_public_bundle(bundle, user_id),
             })
         if outcome == 'leader_required':
             return _story_coop_error(
                 '只有队长可以开始协作旅程',
                 403,
                 'COOP_PARTY_LEADER_REQUIRED',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         if outcome == 'version':
             return _story_coop_error(
                 '队伍状态已经更新',
                 409,
                 'COOP_PARTY_VERSION_OLD',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         if outcome == 'not_ready':
             return _story_coop_error(
                 '双人队伍尚未到齐',
                 409,
                 'COOP_PARTY_NOT_READY',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         if outcome == 'member_ineligible':
             return _story_coop_error(
                 '队伍中有成员已失去实验资格',
                 409,
                 'COOP_PARTY_MEMBER_INELIGIBLE',
-                **(bundle or {}),
+                **_story_coop_public_bundle(bundle, user_id),
             )
         if outcome == 'not_found':
             return _story_coop_error(
@@ -17134,6 +18007,336 @@ def api_story_coop_party_start():
             409,
             'COOP_PARTY_NOT_JOINABLE',
         )
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    except CoopCombatError as exc:
+        app.logger.error('failed to initialize cooperative story combat: %s', exc)
+        return _story_coop_error(
+            '协作首战暂时无法创建',
+            503,
+            'COOP_COMBAT_UNAVAILABLE',
+        )
+    except sqlite3.OperationalError as exc:
+        return _story_coop_database_busy(exc)
+
+
+@app.route('/api/story/coop/run/<run_id>', methods=['GET'])
+def api_story_coop_run_get(run_id):
+    user_id, _, error = _story_coop_require_account()
+    if error:
+        return error
+    try:
+        run = get_story_coop_run_for_member(user_id, run_id)
+        if run is None:
+            return _story_coop_error(
+                '没有找到你的协作旅程',
+                404,
+                'COOP_RUN_NOT_FOUND',
+            )
+        return _story_coop_json({
+            'success': True,
+            'compatible': str(run.get('content_version') or '') == COOP_STORY_CONTENT_VERSION,
+            'run': _story_coop_public_run(run, user_id),
+        })
+    except StoryCoopDataError as exc:
+        return _story_coop_storage_error(exc)
+    except sqlite3.OperationalError as exc:
+        return _story_coop_database_busy(exc)
+
+
+def _story_coop_action_error(exc, *, run=None, user_id=None):
+    code = str(getattr(exc, 'code', '') or 'COOP_COMBAT_ACTION_REJECTED')
+    conflict_codes = {
+        'ACTION_ID_CONFLICT',
+        'ACTOR_ALREADY_READY',
+        'ACTOR_DOWN',
+        'CARD_NOT_IN_ACTOR_HAND',
+        'COMBAT_ACTION_NOT_ALLOWED',
+        'INSUFFICIENT_CARD_RESOURCES',
+        'INVALID_CARD_SELECTION',
+        'INVALID_ENEMY_TARGET',
+        'INVALID_REWARD_CARD',
+        'INVALID_COOP_ROUTE',
+        'INVALID_DECK_CARD',
+        'INVALID_ROOM_OPTION',
+        'INVALID_SHOP_OFFER',
+        'MAP_VOTE_ALREADY_CAST',
+        'MAP_VOTE_NOT_ALLOWED',
+        'OPENING_ACTION_NOT_ALLOWED',
+        'OPENING_ALREADY_RESOLVED',
+        'ROOM_ACTION_NOT_ALLOWED',
+        'ROOM_ALREADY_RESOLVED',
+        'SHOP_ACTION_NOT_ALLOWED',
+        'SHOP_OFFER_ALREADY_PURCHASED',
+        'INSUFFICIENT_STORY_GOLD',
+        'REWARD_ACTION_NOT_ALLOWED',
+        'REWARD_ALREADY_CHOSEN',
+        'CARD_NOT_UPGRADABLE',
+        'STALE_ACTION_SEQUENCE',
+        'STALE_COMBAT',
+        'STALE_COMBAT_ROUND',
+        'STALE_COOP_MAP_VOTE',
+        'STALE_COOP_REWARD',
+        'STALE_COOP_ROOM',
+        'SETUP_ACTION_NOT_ALLOWED',
+    }
+    status = 409 if code in conflict_codes else 400
+    if code == 'NOT_PARTY_MEMBER':
+        status = 404
+        code = 'COOP_RUN_NOT_FOUND'
+    elif code == 'COOP_PARTY_LEADER_REQUIRED':
+        status = 403
+    extra = {}
+    if run is not None and user_id is not None:
+        extra['run'] = _story_coop_public_run(run, user_id)
+    return _story_coop_error(str(exc), status, code, **extra)
+
+
+@app.route('/api/story/coop/run/<run_id>/action', methods=['POST'])
+def api_story_coop_run_action(run_id):
+    user_id, _, error = _story_coop_require_account()
+    if error:
+        return error
+    if not rate_limiter(f'story-coop-action:{user_id}', limit=180, window=60):
+        return _story_coop_error(
+            '协作旅程操作过于频繁，请稍后重试',
+            429,
+            'COOP_ACTION_RATE_LIMITED',
+        )
+    try:
+        data = _story_coop_request_object()
+        allowed_fields = {
+            'party_id',
+            'run_id',
+            'run_revision',
+            'action_id',
+            'action_type',
+            'combat_id',
+            'combat_round',
+            'expected_sequence',
+            'payload',
+        }
+        forbidden_fields = {
+            'actor_user_id',
+            'actor_seat',
+            'damage',
+            'next_state',
+            'state',
+            'receipt',
+            'events',
+            'seed',
+        }
+        if forbidden_fields.intersection(data):
+            raise StoryCoopDataError('FORGED_ACTION_STATE', '客户端不能提交权威战斗状态')
+        if set(data) - allowed_fields:
+            raise StoryCoopDataError('INVALID_ACTION_REQUEST', '协作动作包含不支持的字段')
+        party_id = str(data.get('party_id') or '').strip()
+        body_run_id = str(data.get('run_id') or '').strip()
+        if body_run_id != str(run_id or '').strip():
+            raise StoryCoopDataError('STALE_RUN', '协作旅程标识已经过期')
+        expected_revision = _story_coop_run_revision_from_request(data)
+        expected_sequence = _story_coop_sequence_from_request(data)
+        action_id = str(data.get('action_id') or '').strip()
+        action_type = str(data.get('action_type') or '').strip().lower()
+        payload = data.get('payload', {})
+        if not isinstance(payload, dict):
+            raise StoryCoopDataError('INVALID_ACTION_PAYLOAD', '协作动作参数必须是对象')
+        combat_actions = {'play_card', 'combat_ready'}
+        journey_actions = {
+            'setup_start', 'opening_choose', 'reward_choose', 'map_vote',
+            'room_choose', 'shop_buy',
+        }
+        if action_type not in combat_actions | journey_actions:
+            raise StoryCoopDataError('INVALID_ACTION_TYPE', '当前协作旅程不支持该动作')
+        request_context = None
+        combat_id = ''
+        combat_round = None
+        if action_type in combat_actions:
+            combat_id = str(data.get('combat_id') or '').strip()
+            combat_round = data.get('combat_round')
+            if (
+                isinstance(combat_round, bool)
+                or not isinstance(combat_round, int)
+                or combat_round <= 0
+            ):
+                raise StoryCoopDataError('INVALID_COMBAT_ROUND', '协作战斗回合无效')
+            if action_type == 'combat_ready' and payload:
+                raise StoryCoopDataError('INVALID_ACTION_PAYLOAD', '结束回合动作不能携带额外参数')
+            request_context = {
+                'combat_id': combat_id,
+                'combat_round': combat_round,
+            }
+        elif 'combat_id' in data or 'combat_round' in data:
+            raise StoryCoopDataError(
+                'INVALID_ACTION_REQUEST',
+                '非战斗旅程动作不能携带战斗上下文',
+            )
+        stored_action = get_story_coop_action_receipt(user_id, party_id, action_id)
+        if stored_action is not None:
+            stored_receipt = stored_action.get('receipt') or {}
+            request_fingerprint = story_coop_action_fingerprint(
+                stored_action.get('actor_seat'),
+                action_type,
+                payload,
+                request_context,
+            )
+            same_request = (
+                str(stored_action.get('run_id') or '') == body_run_id
+                and str(stored_action.get('request_fingerprint') or '') == request_fingerprint
+            )
+            if not same_request:
+                return _story_coop_error(
+                    '同一动作标识不能提交不同内容',
+                    409,
+                    'ACTION_ID_CONFLICT',
+                )
+            duplicate_run = get_story_coop_run_for_member(
+                user_id,
+                body_run_id,
+                party_id=party_id,
+            )
+            if duplicate_run is None:
+                return _story_coop_error(
+                    '没有找到你的协作旅程',
+                    404,
+                    'COOP_RUN_NOT_FOUND',
+                )
+            return _story_coop_json({
+                'success': True,
+                'duplicate': True,
+                'events': [],
+                'receipt': _story_coop_public_receipt(stored_receipt),
+                'run': _story_coop_public_run(duplicate_run, user_id),
+            })
+
+        run = get_story_coop_run_for_member(
+            user_id,
+            body_run_id,
+            party_id=party_id,
+        )
+        if run is None or str(run.get('status') or '') != 'active':
+            return _story_coop_error(
+                '没有找到可操作的协作旅程',
+                404,
+                'COOP_RUN_NOT_FOUND',
+            )
+        if str(run.get('content_version') or '') != COOP_STORY_CONTENT_VERSION:
+            return _story_coop_error(
+                '协作旅程内容版本与当前服务器不兼容',
+                409,
+                'COOP_CONTENT_VERSION_OLD',
+                run=_story_coop_public_run(run, user_id),
+            )
+        if int(run.get('revision') or 0) != expected_revision:
+            return _story_coop_error(
+                '协作旅程状态已经更新',
+                409,
+                'COOP_RUN_VERSION_OLD',
+                run=_story_coop_public_run(run, user_id),
+            )
+
+        if action_type in combat_actions:
+            next_state, events, receipt = apply_coop_combat_command(
+                run['state'],
+                authenticated_user_id=user_id,
+                action_id=action_id,
+                action_type=action_type,
+                payload=payload,
+                run_seed=str(run.get('seed') or ''),
+                combat_id=combat_id,
+                combat_round=combat_round,
+                expected_sequence=expected_sequence,
+                hero_action_resolver=resolve_intro_coop_action,
+                round_start_resolver=prepare_intro_coop_round,
+                enemy_action_resolver=resolve_compiled_coop_enemy_action,
+            )
+            transition_events = advance_coop_after_victory(
+                next_state,
+                run_seed=str(run.get('seed') or ''),
+            ) if next_state.get('combat', {}).get('outcome') == 'victory' else []
+            if transition_events:
+                events = finalize_coop_action_events(
+                    [*events, *transition_events],
+                    receipt['action_sequence'],
+                )
+        else:
+            next_state, events, receipt = apply_coop_journey_command(
+                run['state'],
+                authenticated_user_id=user_id,
+                action_id=action_id,
+                action_type=action_type,
+                payload=payload,
+                run_seed=str(run.get('seed') or ''),
+                expected_sequence=expected_sequence,
+            )
+        next_state['last_events'] = copy.deepcopy(events)
+        # Live idempotency is bounded by story_coop_run_actions.  The pure
+        # engine ledger is intentionally removed before persistence so it can
+        # neither grow without limit nor enter a viewer snapshot.
+        next_state['coordination']['action_receipts'] = {}
+        stored_receipt = {
+            **receipt,
+            'events': copy.deepcopy(events),
+            'resulting_revision': expected_revision + 1,
+        }
+        updated, committed_receipt, outcome = commit_story_coop_run_action(
+            user_id,
+            party_id,
+            body_run_id,
+            expected_revision,
+            action_id,
+            action_type,
+            payload,
+            stored_receipt,
+            next_state,
+            request_context=request_context,
+        )
+        if outcome in {'committed', 'duplicate'}:
+            authoritative_receipt = committed_receipt or stored_receipt
+            return _story_coop_json({
+                'success': True,
+                'duplicate': outcome == 'duplicate',
+                'events': (
+                    []
+                    if outcome == 'duplicate'
+                    else project_coop_events(authoritative_receipt.get('events') or [])
+                ),
+                'receipt': _story_coop_public_receipt(authoritative_receipt),
+                'run': _story_coop_public_run(updated, user_id),
+            })
+        if outcome == 'action_conflict':
+            return _story_coop_error(
+                '同一动作标识不能提交不同内容',
+                409,
+                'ACTION_ID_CONFLICT',
+            )
+        if outcome in {'version', 'sequence_mismatch', 'content_version'}:
+            return _story_coop_error(
+                '协作旅程状态已经更新',
+                409,
+                'COOP_RUN_VERSION_OLD' if outcome != 'content_version' else 'COOP_CONTENT_VERSION_OLD',
+                run=_story_coop_public_run(updated, user_id) if updated else None,
+            )
+        if outcome in {'not_found', 'ineligible'}:
+            return _story_coop_error(
+                '没有找到可操作的协作旅程',
+                404,
+                'COOP_RUN_NOT_FOUND',
+            )
+        app.logger.error('unexpected cooperative journey action outcome=%s run=%s', outcome, body_run_id)
+        return _story_coop_error(
+            '协作旅程状态暂时无法保存',
+            503,
+            'COOP_JOURNEY_SAVE_FAILED',
+        )
+    except CoopCombatError as exc:
+        try:
+            current_run = get_story_coop_run_for_member(user_id, run_id)
+            return _story_coop_action_error(exc, run=current_run, user_id=user_id)
+        except StoryCoopDataError as storage_exc:
+            return _story_coop_storage_error(storage_exc)
+        except sqlite3.OperationalError as storage_exc:
+            return _story_coop_database_busy(storage_exc)
     except StoryCoopDataError as exc:
         return _story_coop_storage_error(exc)
     except sqlite3.OperationalError as exc:
@@ -17203,22 +18406,41 @@ def api_story_afk_check():
 
 
 def _current_story_run(user_id):
-    run = get_active_story_run(user_id)
-    if not run or str(run.get('content_version') or '') == STORY_CONTENT_VERSION:
-        return run
-    seed = secrets.token_hex(16)
-    state = build_initial_story_state(seed)
-    return reset_story_run_map(
-        user_id,
-        seed,
-        STORY_CONTENT_VERSION,
-        state,
-        run_id=run.get('id'),
+    return _story_run_with_compatibility(get_active_story_run(user_id))
+
+
+def _story_run_with_compatibility(run):
+    if run is None:
+        return None
+    payload = dict(run)
+    stored_version = str(payload.get('content_version') or '')
+    state = payload.get('state')
+    state_content_version = (
+        str(state.get('content_version') or '') if isinstance(state, dict) else ''
+    )
+    payload['compatible'] = (
+        stored_version == STORY_CONTENT_VERSION
+        and state_content_version == stored_version
+    )
+    payload['expected_content_version'] = STORY_CONTENT_VERSION
+    return payload
+
+
+def _story_content_version_error(run):
+    return _json_error(
+        '这段旅程使用旧版故事内容，已保留为只读记录；结束旧旅程后可开始新版旅程',
+        409,
+        code='STORY_CONTENT_VERSION_OLD',
+        run=_story_run_with_compatibility(run),
     )
 
 
 def _sync_story_discoveries(user_id, run):
-    if not run or not isinstance(run.get('state'), dict):
+    if (
+        not run
+        or run.get('compatible') is False
+        or not isinstance(run.get('state'), dict)
+    ):
         return []
     try:
         discoveries = collect_story_discoveries(run.get('state') or {})
@@ -17245,6 +18467,21 @@ def _list_story_discoveries_without_blocking(user_id):
             user_id,
         )
         return []
+
+
+def _story_progress_without_blocking(user_id):
+    try:
+        return get_story_progress(user_id)
+    except sqlite3.OperationalError as exc:
+        if 'locked' not in str(exc).lower():
+            raise
+        app.logger.warning(
+            'story progress read skipped because database is locked user=%s',
+            user_id,
+        )
+        from story_progress import build_story_progress_payload
+
+        return build_story_progress_payload()
 
 
 @app.route('/api/story/discoveries', methods=['GET'])
@@ -17286,6 +18523,7 @@ def api_story_run_get():
         return jsonify({
             'success': True,
             'run': run,
+            'progress': _story_progress_without_blocking(user_id),
             'discoveries': _list_story_discoveries_without_blocking(user_id),
             'new_discoveries': new_discoveries,
         })
@@ -17308,17 +18546,46 @@ def api_story_run_create():
                 'success': True,
                 'created': False,
                 'run': existing,
+                'progress': _story_progress_without_blocking(user_id),
                 'discoveries': _list_story_discoveries_without_blocking(user_id),
                 'new_discoveries': new_discoveries,
             })
+        data = request.get_json(silent=True)
+        if data is None:
+            data = {}
+        if not isinstance(data, dict):
+            return _json_error('故事创建参数无效', 400, code='INVALID_STORY_RUN_REQUEST')
+        character_id = str(data.get('character_id') or 'common_flower').strip()
+        character = STORY_CHARACTERS.get(character_id)
+        if not isinstance(character, dict):
+            return _json_error('故事角色不存在', 400, code='UNKNOWN_STORY_CHARACTER')
+        if character.get('implementation_status') != 'playable':
+            message = character.get('unavailable_message') or {}
+            return _json_error(
+                str(message.get('zh') or '这名角色还没准备好呢\n请期待开发组更新'),
+                409,
+                code='STORY_CHARACTER_NOT_READY',
+                character_id=character_id,
+            )
+        progress = _story_progress_without_blocking(user_id)
+        if not story_character_is_unlocked(progress, character_id):
+            return _json_error(
+                '请先使用前一名角色以任意难度通关全部阶段',
+                409,
+                code='STORY_CHARACTER_LOCKED',
+                character_id=character_id,
+                progress=progress,
+            )
         seed = secrets.token_hex(16)
-        state = build_initial_story_state(seed)
+        state = build_initial_story_state(seed, character_id=character_id)
         run, created = create_story_run(user_id, seed, STORY_CONTENT_VERSION, state)
+        run = _story_run_with_compatibility(run)
         new_discoveries = _sync_story_discoveries(user_id, run)
         return jsonify({
             'success': True,
             'created': created,
             'run': run,
+            'progress': progress,
             'discoveries': _list_story_discoveries_without_blocking(user_id),
             'new_discoveries': new_discoveries,
         })
@@ -17337,6 +18604,7 @@ def api_story_content_get():
         'success': True,
         'content_version': STORY_CONTENT_VERSION,
         'content': story_content_payload(CARD_DEFS),
+        'progress': _story_progress_without_blocking(user_id),
         'discoveries': _list_story_discoveries_without_blocking(user_id),
     })
 
@@ -17377,12 +18645,15 @@ def api_story_run_action():
                 'duplicate': True,
                 'run': current,
                 'events': [],
+                'progress': _story_progress_without_blocking(user_id),
                 'discoveries': _list_story_discoveries_without_blocking(user_id),
             })
 
         run = _current_story_run(user_id)
         if not run or run.get('id') != run_id:
             return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
+        if run.get('compatible') is False:
+            return _story_content_version_error(run)
         if int(run.get('state_version') or 0) != expected_version:
             return _json_error(
                 '故事状态已更新',
@@ -17390,6 +18661,33 @@ def api_story_run_action():
                 code='STATE_VERSION_OLD',
                 run=run,
             )
+
+        if action_type == 'start_journey':
+            run_state = run.get('state') or {}
+            character_id = str(
+                run_state.get('character_id')
+                or (run_state.get('player') or {}).get('character_id')
+                or 'common_flower'
+            )
+            difficulty = str(payload.get('difficulty') or '').strip().lower()
+            journey_mode = str(payload.get('mode') or 'standard').strip().lower()
+            progress = _story_progress_without_blocking(user_id)
+            if not story_journey_is_unlocked(
+                progress,
+                character_id,
+                difficulty,
+                journey_mode,
+            ):
+                return _json_error(
+                    '该角色尚未解锁此难度或旅程模式',
+                    409,
+                    code='STORY_DIFFICULTY_LOCKED',
+                    character_id=character_id,
+                    difficulty=difficulty,
+                    journey_mode=journey_mode,
+                    progress=progress,
+                    run=run,
+                )
 
         next_state, events = apply_story_action(
             run.get('state') or {},
@@ -17413,8 +18711,18 @@ def api_story_run_action():
                 '故事状态已更新',
                 409,
                 code='STATE_VERSION_OLD',
-                run=updated,
+                run=_story_run_with_compatibility(updated),
             )
+        if outcome == 'content_version':
+            return _story_content_version_error(updated)
+        if outcome == 'invalid_state':
+            return _json_error(
+                '当前故事存档已损坏，无法继续操作',
+                400,
+                code='INVALID_STORY_STATE',
+                run=_story_run_with_compatibility(updated),
+            )
+        updated = _story_run_with_compatibility(updated)
         new_discoveries = (
             [] if outcome == 'duplicate'
             else _sync_story_discoveries(user_id, updated)
@@ -17424,6 +18732,7 @@ def api_story_run_action():
             'duplicate': outcome == 'duplicate',
             'run': updated,
             'events': [] if outcome == 'duplicate' else events,
+            'progress': _story_progress_without_blocking(user_id),
             'new_discoveries': new_discoveries,
             **(
                 {'discoveries': _list_story_discoveries_without_blocking(user_id)}
@@ -17432,7 +18741,7 @@ def api_story_run_action():
             ),
         })
     except StoryActionError as exc:
-        current = get_active_story_run(user_id)
+        current = _story_run_with_compatibility(get_active_story_run(user_id))
         return _json_error(exc.message, 400, code=exc.code, run=current)
     except sqlite3.OperationalError as exc:
         if 'locked' in str(exc).lower():
@@ -17495,6 +18804,11 @@ def api_story_run_save():
     if not run_id or len(run_id) > 64:
         return _json_error('故事旅程编号无效', 400, code='INVALID_RUN_ID')
     try:
+        current = _current_story_run(user_id)
+        if not current or current.get('id') != run_id:
+            return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
+        if current.get('compatible') is False:
+            return _story_content_version_error(current)
         result, outcome = create_story_manual_save(
             user_id,
             run_id,
@@ -17504,14 +18818,17 @@ def api_story_run_save():
             return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
         if outcome == 'version':
             return _json_error(
-                '故事状态已更新', 409, code='STATE_VERSION_OLD', run=result,
+                '故事状态已更新', 409, code='STATE_VERSION_OLD',
+                run=_story_run_with_compatibility(result),
             )
+        if outcome == 'content_version':
+            return _story_content_version_error(result)
         if outcome == 'phase':
             return _json_error(
-                '只能在路线选择界面保存进度',
+                '当前故事状态尚未稳定，暂时无法保存',
                 400,
                 code='MANUAL_SAVE_NOT_ALLOWED',
-                run=result,
+                run=_story_run_with_compatibility(result),
             )
         if outcome != 'saved':
             return _json_error('当前故事进度无法保存', 400, code='INVALID_STORY_STATE')
@@ -17565,6 +18882,11 @@ def api_story_run_load():
     if not run_id or len(run_id) > 64 or save_id <= 0:
         return _json_error('故事存档参数无效', 400, code='INVALID_SAVE_REQUEST')
     try:
+        current = _current_story_run(user_id)
+        if not current or current.get('id') != run_id:
+            return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
+        if current.get('compatible') is False:
+            return _story_content_version_error(current)
         run, outcome = load_story_manual_save(
             user_id,
             run_id,
@@ -17577,17 +18899,21 @@ def api_story_run_load():
             return _json_error('该故事存档不存在', 404, code='SAVE_NOT_FOUND')
         if outcome == 'version':
             return _json_error(
-                '故事状态已更新', 409, code='STATE_VERSION_OLD', run=run,
+                '故事状态已更新', 409, code='STATE_VERSION_OLD',
+                run=_story_run_with_compatibility(run),
             )
+        if outcome == 'content_version':
+            return _story_content_version_error(run)
         if outcome == 'phase':
             return _json_error(
-                '只能在路线选择界面读取进度',
+                '当前故事状态尚未稳定，暂时无法读取',
                 400,
                 code='MANUAL_LOAD_NOT_ALLOWED',
-                run=run,
+                run=_story_run_with_compatibility(run),
             )
         if outcome != 'loaded':
             return _json_error('该故事存档无法读取', 400, code='INVALID_STORY_SAVE')
+        run = _story_run_with_compatibility(run)
         new_discoveries = _sync_story_discoveries(user_id, run)
         return jsonify({
             'success': True,
@@ -17645,6 +18971,7 @@ def beta_entry_response():
             instance_port=GTN_PORT,
             app_version=GTN_VERSION,
             changelog_version=changelog_version(),
+            ai_public_entry_enabled=GTN_AI_PUBLIC_ENTRY_ENABLED,
         )
     return render_template('beta_gate.html')
 
@@ -17669,8 +18996,7 @@ def api_card_exporter_login():
     if _rate_limited(ip, 'card_exporter_login', limit=8, window=300):
         admin_event('security', f'card exporter login rate limited from {ip}')
         return jsonify({'success': False, 'error': '尝试次数过多，请稍后再试'}), 429
-    data = request.get_json(silent=True) or {}
-    key = str(data.get('key') or '')
+    key = _bounded_credential_from_request('key')
     if key and check_password_hash(BETA_ACCESS_KEY_HASH, key):
         session['card_exporter_authenticated'] = True
         session['card_exporter_login_time'] = time.time()
@@ -17763,9 +19089,8 @@ def beta_login():
     if should_rate_limit_beta_login(ip):
         admin_event('security', f'beta login rate limited from {ip}')
         return jsonify({'success': False, 'error': '尝试次数过多，请稍后再试'}), 429
-    data = request.get_json(silent=True) or {}
-    key = str(data.get('key') or '')
-    if check_password_hash(BETA_ACCESS_KEY_HASH, key):
+    key = _bounded_credential_from_request('key')
+    if key is not None and check_password_hash(BETA_ACCESS_KEY_HASH, key):
         session.permanent = True
         session['beta_authenticated'] = True
         session['beta_login_time'] = time.time()
@@ -17792,8 +19117,7 @@ def hidden_features_unlock():
         if _rate_limited(ip, 'hidden_features_unlock', limit=8, window=300):
             admin_event('security', f'hidden features unlock rate limited from {ip}')
             return jsonify({'success': False, 'error': '尝试次数过多，请稍后再试'}), 429
-        data = request.get_json(silent=True) or {}
-        key = str(data.get('key') or '')
+        key = _bounded_credential_from_request('key')
         if key and check_password_hash(BETA_ACCESS_KEY_HASH, key):
             session.permanent = True
             session['hidden_features_unlocked'] = True
@@ -17823,11 +19147,14 @@ def ai_1v1_public_status():
     authenticated = bool(session.get('user_id'))
     with _lock:
         active = _ai_test_active_count_locked()
+    public_entry_enabled = bool(GTN_AI_PUBLIC_ENTRY_ENABLED)
+    model_enabled = bool(GTN_AI_1V1_TEST_ENABLED)
     response = jsonify({
         'success': True,
         'authenticated': authenticated,
-        'enabled': bool(GTN_AI_1V1_TEST_ENABLED),
-        'available': bool(authenticated and GTN_AI_1V1_TEST_ENABLED),
+        'enabled': model_enabled,
+        'public_entry_enabled': public_entry_enabled,
+        'available': bool(authenticated and model_enabled and public_entry_enabled),
         'active': active,
         'capacity': GTN_AI_1V1_MAX_ACTIVE,
         'busy': active >= GTN_AI_1V1_MAX_ACTIVE,
@@ -17899,28 +19226,53 @@ def title_editor_page():
 def feedback_handling_pane():
     if not is_feedback_handling_authenticated():
         return 'Forbidden', 403
-    return render_template('feedback_handling.html', static_version=GTN_STATIC_VERSION)
+    return render_template(
+        'feedback_handling.html',
+        static_version=GTN_STATIC_VERSION,
+        csrf_token=feedback_handling_csrf_token(),
+    )
+
+
+@app.route('/community-ops')
+def community_ops_page():
+    actor = title_editor_actor()
+    if not actor:
+        return 'Forbidden', 403
+    return render_template(
+        'community_ops.html',
+        static_version=GTN_STATIC_VERSION,
+        actor_username=actor.get('username') or '',
+        actor_role=actor.get('role_type') or '',
+    )
 
 
 @app.route('/api/admin/me')
 def admin_me():
-    return jsonify({'authenticated': is_admin_authenticated()})
+    authenticated = is_admin_authenticated()
+    return jsonify({
+        'authenticated': authenticated,
+        'csrf_token': admin_csrf_token() if authenticated else '',
+        'idle_timeout_seconds': ADMIN_IDLE_TIMEOUT_SECONDS,
+        'max_session_seconds': ADMIN_MAX_SESSION_SECONDS,
+    })
 
 
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
-    data = request.get_json(silent=True) or {}
-    password = data.get('password', '')
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+    ip = _client_ip()
     if should_rate_limit_admin_login(ip):
         admin_event('security', f'admin login rate limited from {ip}')
         return jsonify({'success': False, 'error': 'too many attempts'}), 429
+    password = _bounded_credential_from_request('password')
     if password and check_password_hash(ADMIN_PASSWORD_HASH, password):
+        now = time.time()
         session['admin_authenticated'] = True
-        session['admin_login_time'] = time.time()
-        ADMIN_LOGIN_FAILURES.pop(ip, None)
+        session['admin_login_time'] = now
+        session['admin_last_seen'] = now
+        session['admin_csrf'] = secrets.token_urlsafe(24)
+        clear_admin_login_failures(ip)
         admin_event('security', f'admin login success from {ip}')
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'csrf_token': session['admin_csrf']})
     record_admin_login_failure(ip)
     admin_event('security', f'admin login failed from {ip}')
     return jsonify({'success': False, 'error': 'invalid password'}), 401
@@ -17928,8 +19280,7 @@ def admin_login():
 
 @app.route('/api/admin/logout', methods=['POST'])
 def admin_logout():
-    session.pop('admin_authenticated', None)
-    session.pop('admin_login_time', None)
+    _clear_admin_session()
     admin_event('security', 'admin logout')
     return jsonify({'success': True})
 
@@ -17948,13 +19299,12 @@ def admin_console_me():
 
 @app.route('/api/adminconsole/login', methods=['POST'])
 def admin_console_login():
-    data = request.get_json(silent=True) or {}
-    password = data.get('password', '')
     ip = _client_ip()
     rate_key = f'adminconsole:{ip}'
     if should_rate_limit_admin_login(rate_key):
         admin_event('security', f'admin console login rate limited from {ip}')
         return jsonify({'success': False, 'error': 'too many attempts'}), 429
+    password = _bounded_credential_from_request('password')
     if password and check_password_hash(ADMIN_CONSOLE_PASSWORD_HASH, password):
         now = time.time()
         session['admin_console_authenticated'] = True
@@ -17962,7 +19312,7 @@ def admin_console_login():
         session['admin_console_last_seen'] = now
         session['admin_console_session_id'] = secrets.token_urlsafe(18)
         session['admin_console_csrf'] = secrets.token_urlsafe(24)
-        ADMIN_LOGIN_FAILURES.pop(rate_key, None)
+        clear_admin_login_failures(rate_key)
         admin_event('security', f'admin console login success from {ip}')
         return jsonify({'success': True, 'csrf_token': session['admin_console_csrf']})
     record_admin_login_failure(rate_key)
@@ -18260,6 +19610,7 @@ def handling_set_ip_ban():
     row, error = set_ip_ban(ip, True, reason, duration_seconds=duration_seconds or None, banned_by=session.get('username') or 'handling')
     if error:
         return _json_error(error, 400)
+    _clear_ip_ban_status_cache()
     kicked = []
     with _lock:
         for sid, player in list(players.items()):
@@ -18290,11 +19641,13 @@ def handling_unban_ip(ip):
         row, error = update_active_ip_ban(ip, reason, duration_seconds=duration_seconds or None)
         if error:
             return _json_error(error, 400)
+        _clear_ip_ban_status_cache()
         admin_event('moderation', f'handling updated ip ban {ip}: {reason or "-"}')
         return jsonify({'success': True, 'ip_ban': row, 'kicked': 0})
     row, error = set_ip_ban(ip, False)
     if error:
         return _json_error(error, 400)
+    _clear_ip_ban_status_cache()
     admin_event('moderation', f'handling unbanned ip {ip}')
     return jsonify({'success': True, 'ip_ban': row})
 
@@ -18376,7 +19729,22 @@ def admin_security_suspicious():
 
 @app.route('/api/healthz')
 def healthz():
-    return jsonify({
+    detailed = _direct_request_is_loopback() or is_admin_authenticated() or is_admin_console_authenticated()
+    if not detailed and session.get('user_id'):
+        account_user = _current_account_user(allow_remember=False)
+        if account_user:
+            try:
+                detailed = bool(feedback_is_staff(account_user.get('id')))
+            except Exception:
+                detailed = False
+    if not detailed:
+        response = jsonify({
+            'success': True,
+            'draining': is_instance_draining(),
+        })
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    response = jsonify({
         'success': True,
         'instance': GTN_INSTANCE,
         'instance_id': GTN_INSTANCE_ID,
@@ -18392,6 +19760,8 @@ def healthz():
         'rooms': len(rooms),
         'psutil_available': psutil is not None,
     })
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @app.route('/api/health/full')
@@ -18924,6 +20294,38 @@ def admin_community_mod_storage_delete():
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
+@app.route('/api/admin/community-mods/storage/cleanup-uploads', methods=['POST'])
+def admin_community_mod_cleanup_uploads():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'error': '请求格式无效'}), 400
+    dry_run = bool(data.get('dry_run', True))
+    if not dry_run and data.get('confirm') is not True:
+        return jsonify({'success': False, 'error': '执行清理需要 confirm=true'}), 400
+    try:
+        min_age_seconds = validate_int(
+            data.get('min_age_seconds', 3600),
+            default=3600,
+            minimum=900,
+            maximum=30 * 24 * 60 * 60,
+            name='min_age_seconds',
+        )
+        result = cleanup_orphaned_community_uploads(
+            min_age_seconds=min_age_seconds,
+            dry_run=dry_run,
+        )
+        admin_event(
+            'admin',
+            f'{"试算" if dry_run else "执行"}清理未登记社区上传: '
+            f'candidates={result.get("candidate_count", 0)} deleted={result.get("deleted_count", 0)}',
+        )
+        return jsonify({'success': True, 'result': result})
+    except Exception as exc:
+        record_r2_failure('cleanup_orphaned_uploads', exc)
+        admin_event('error', f'cleanup orphaned community uploads failed: {exc}')
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
 @app.route('/api/replays')
 def api_replays():
     if not DB_AVAILABLE:
@@ -19184,11 +20586,16 @@ def api_auth_register():
     ip = _client_ip()
     if not rate_limiter(f'auth-register:{ip}', limit=5, window=300):
         record_suspicious_event('auth_register_rate', 'register rate limited', ip=ip, severity='high')
-        admin_event('security', f'auth register rate limited from {ip}')
-        return jsonify({'success': False, 'error': '注册过于频繁，请稍后再试'}), 429
-    data = request.get_json(silent=True) or {}
+        return _rate_limit_response('注册过于频繁，请稍后再试', retry_after=300)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'error': '请求格式无效'}), 400
     username = data.get('username', '')
     password = data.get('password', '')
+    if not isinstance(username, str) or len(username) > 128:
+        return jsonify({'success': False, 'error': '用户名格式无效'}), 400
+    if not isinstance(password, str) or len(password) > 128:
+        return jsonify({'success': False, 'error': '密码格式无效'}), 400
     if 'password_confirm' in data and str(password) != str(data.get('password_confirm', '')):
         return jsonify({'success': False, 'error': '两次输入的密码不一致'}), 400
     user, error = create_user(username, password)
@@ -19211,21 +20618,31 @@ def api_auth_login():
     ip = _client_ip()
     if not rate_limiter(f'auth-login:{ip}', limit=30, window=300):
         record_suspicious_event('auth_login_rate', 'login request rate limited', ip=ip, severity='high')
-        admin_event('security', f'auth login rate limited from {ip}')
-        return jsonify({'success': False, 'error': '登录过于频繁，请稍后再试'}), 429
-    if should_rate_limit_auth_login(ip):
-        return jsonify({'success': False, 'error': '登录失败次数过多，请稍后再试'}), 429
-    data = request.get_json(silent=True) or {}
-    user, error = verify_user(data.get('username', ''), data.get('password', ''))
+        return _rate_limit_response('登录过于频繁，请稍后再试', retry_after=300)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'error': '请求格式无效'}), 400
+    username = data.get('username', '')
+    password = data.get('password', '')
+    if not isinstance(username, str) or len(username) > 128:
+        return jsonify({'success': False, 'error': '用户名格式无效'}), 400
+    if not isinstance(password, str) or len(password) > 128:
+        return jsonify({'success': False, 'error': '密码格式无效'}), 400
+    username_key = normalize_username_key(username) or 'empty'
+    account_failure_identity = f'account:{username_key}'
+    if should_rate_limit_auth_login(f'ip:{ip}') or should_rate_limit_auth_login(account_failure_identity):
+        return _rate_limit_response('登录失败次数过多，请稍后再试', retry_after=300)
+    user, error = verify_user(username, password)
     if error:
-        record_auth_login_failure(ip)
+        record_auth_login_failure(f'ip:{ip}')
+        record_auth_login_failure(account_failure_identity)
         if str(error).startswith('账号已被封禁'):
-            status = get_user_ban_status(username=data.get('username', ''))
+            status = get_user_ban_status(username=username)
             payload = ban_error_payload(status, reason_key='error') if status.get('banned') else {'error': error}
             payload['success'] = False
             return jsonify(payload), 401
         return jsonify({'success': False, 'error': error}), 401
-    clear_auth_login_failures(ip)
+    clear_auth_login_failures(account_failure_identity)
     begin_user_online_session(user.get('id'))
     try:
         record_user_ip_event(user.get('id'), user.get('username'), ip, source='login')
@@ -19311,7 +20728,11 @@ def api_auth_delete_account():
     user_id = current_user.get('id') if current_user else None
     if not user_id:
         return jsonify({'success': False, 'error': '请先登录账号'}), 401
-    user, error = soft_delete_user(user_id)
+    data = request.get_json(silent=True) or {}
+    password = str(data.get('password') or '')
+    if not password or len(password) > 128:
+        return jsonify({'success': False, 'error': '请输入当前密码'}), 400
+    user, error = soft_delete_user(user_id, password)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     _clear_account_session()
@@ -19671,6 +21092,228 @@ def api_title_editor_rollback():
         return jsonify({'success': False, 'error': '回退失败，线上目录未改变'}), 500
 
 
+def _community_json(payload, status=200):
+    response = jsonify(payload)
+    response.status_code = int(status)
+    response.headers['Cache-Control'] = 'private, no-store, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return response
+
+
+def _community_error(exc):
+    if isinstance(exc, CommunityOpsError):
+        return _community_json({
+            'success': False,
+            'error': exc.message,
+            'code': exc.code,
+        }, exc.status)
+    if isinstance(exc, sqlite3.OperationalError) and 'locked' in str(exc).lower():
+        return _community_json({
+            'success': False,
+            'error': '社区功能暂时繁忙，请稍后再试',
+            'code': 'DATABASE_BUSY',
+        }, 503)
+    raise exc
+
+
+def _community_request_object():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise CommunityOpsError('INVALID_REQUEST', '请求内容必须是对象')
+    return data
+
+
+def _community_boolean(data, key, *, default=False):
+    value = data.get(key, default)
+    if not isinstance(value, bool):
+        raise CommunityOpsError('INVALID_REQUEST', f'{key}必须是布尔值')
+    return value
+
+
+def _community_ops_actor():
+    actor = title_editor_actor()
+    if not actor:
+        raise CommunityOpsError('FORBIDDEN', '权限不足', 403)
+    if not community_ops_csrf_valid():
+        raise CommunityOpsError('CSRF_FAILED', '安全令牌已失效，请刷新页面', 403)
+    return actor
+
+
+@app.route('/api/community/feed')
+def api_community_feed():
+    if not DB_AVAILABLE:
+        return _community_json({'success': False, 'error': DB_INIT_ERROR}, 503)
+    user = _current_account_user()
+    user_id = user.get('id') if user else None
+    try:
+        actor = title_editor_actor() if user else None
+        feed = get_community_feed(user_id, can_manage=bool(actor))
+        return _community_json({
+            'success': True,
+            **feed,
+            'csrf_token': community_csrf_token() if user else '',
+        })
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/polls/<int:poll_id>/vote', methods=['POST'])
+def api_community_poll_vote(poll_id):
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    if not community_csrf_valid():
+        return _community_json({
+            'success': False,
+            'error': '安全令牌已失效，请刷新公告',
+            'code': 'CSRF_FAILED',
+        }, 403)
+    if not rate_limiter(f'community-vote-user:{user_id}', limit=20, window=60):
+        return _community_json({'success': False, 'error': '操作过于频繁', 'code': 'RATE_LIMITED'}, 429)
+    if not rate_limiter(f'community-vote-ip:{_client_ip()}', limit=60, window=60):
+        return _community_json({'success': False, 'error': '操作过于频繁', 'code': 'RATE_LIMITED'}, 429)
+    try:
+        data = _community_request_object()
+        poll, duplicate = cast_community_poll_vote(user_id, poll_id, data.get('option_id'))
+        return _community_json({
+            'success': True,
+            'duplicate': bool(duplicate),
+            'poll': poll,
+        })
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/ops/workspace')
+def api_community_ops_workspace():
+    if not DB_AVAILABLE:
+        return _community_json({'success': False, 'error': DB_INIT_ERROR}, 503)
+    actor = title_editor_actor()
+    if not actor:
+        return _community_json({'success': False, 'error': '权限不足', 'code': 'FORBIDDEN'}, 403)
+    try:
+        return _community_json({
+            'success': True,
+            'workspace': list_community_ops_workspace(audit_limit=120),
+            'csrf_token': community_ops_csrf_token(),
+            'actor': {
+                'username': actor['username'],
+                'role_type': actor['role_type'],
+            },
+            'permissions': {
+                'can_manage_announcements': True,
+                'can_manage_polls': True,
+                'can_manage_changelog_drafts': True,
+            },
+        })
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/ops/announcements', methods=['POST'])
+def api_community_ops_create_announcement():
+    try:
+        actor = _community_ops_actor()
+        if not rate_limiter(f'community-ops-announcement:{actor["user_id"]}', limit=30, window=3600):
+            raise CommunityOpsError('RATE_LIMITED', '一小时内公告操作次数过多', 429)
+        data = _community_request_object()
+        announcement = create_community_announcement(
+            actor,
+            title=data.get('title'),
+            body=data.get('body'),
+            starts_at=data.get('starts_at'),
+            ends_at=data.get('ends_at'),
+            pinned=_community_boolean(data, 'pinned'),
+            publish=_community_boolean(data, 'publish'),
+            changelog_draft=_community_boolean(data, 'changelog_draft'),
+        )
+        return _community_json({'success': True, 'announcement': announcement}, 201)
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/ops/announcements/<int:announcement_id>/action', methods=['POST'])
+def api_community_ops_announcement_action(announcement_id):
+    try:
+        actor = _community_ops_actor()
+        if not rate_limiter(f'community-ops-announcement:{actor["user_id"]}', limit=30, window=3600):
+            raise CommunityOpsError('RATE_LIMITED', '一小时内公告操作次数过多', 429)
+        data = _community_request_object()
+        announcement, duplicate = mutate_community_announcement(
+            actor,
+            announcement_id,
+            data.get('action'),
+            starts_at=data.get('starts_at'),
+            ends_at=data.get('ends_at'),
+        )
+        return _community_json({
+            'success': True,
+            'duplicate': bool(duplicate),
+            'announcement': announcement,
+        })
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/ops/polls', methods=['POST'])
+def api_community_ops_create_poll():
+    try:
+        actor = _community_ops_actor()
+        if not rate_limiter(f'community-ops-poll:{actor["user_id"]}', limit=20, window=3600):
+            raise CommunityOpsError('RATE_LIMITED', '一小时内投票操作次数过多', 429)
+        data = _community_request_object()
+        poll = create_community_poll(
+            actor,
+            question=data.get('question'),
+            options=data.get('options'),
+            starts_at=data.get('starts_at'),
+            ends_at=data.get('ends_at'),
+            reminder_hours=data.get('reminder_hours', 24),
+            publish=_community_boolean(data, 'publish'),
+        )
+        return _community_json({'success': True, 'poll': poll}, 201)
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/ops/polls/<int:poll_id>/action', methods=['POST'])
+def api_community_ops_poll_action(poll_id):
+    try:
+        actor = _community_ops_actor()
+        if not rate_limiter(f'community-ops-poll:{actor["user_id"]}', limit=20, window=3600):
+            raise CommunityOpsError('RATE_LIMITED', '一小时内投票操作次数过多', 429)
+        data = _community_request_object()
+        poll, duplicate = mutate_community_poll(
+            actor,
+            poll_id,
+            data.get('action'),
+            starts_at=data.get('starts_at'),
+            ends_at=data.get('ends_at'),
+        )
+        return _community_json({
+            'success': True,
+            'duplicate': bool(duplicate),
+            'poll': poll,
+        })
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/ops/changelog-drafts/<int:draft_id>/action', methods=['POST'])
+def api_community_ops_changelog_draft_action(draft_id):
+    try:
+        actor = _community_ops_actor()
+        data = _community_request_object()
+        draft, duplicate = mutate_community_changelog_draft(actor, draft_id, data.get('action'))
+        return _community_json({
+            'success': True,
+            'duplicate': bool(duplicate),
+            'draft': draft,
+        })
+    except Exception as exc:
+        return _community_error(exc)
+
+
 @app.route('/api/title-shop')
 def api_title_shop():
     if not DB_AVAILABLE:
@@ -19886,7 +21529,7 @@ def api_social_unread():
         return auth_error
     try:
         started = time.perf_counter()
-        data, error = social_unread_counts(user_id)
+        data, error = _social_unread_counts_cached(user_id)
         db_slow_log('/api/social/unread', (time.perf_counter() - started) * 1000, 'social_unread')
     except sqlite3.OperationalError as exc:
         return _db_busy_response(exc)
@@ -20073,14 +21716,36 @@ def api_feedback_messages():
         limit = max(1, min(int(request.args.get('limit', 100) or 100), 200))
     except Exception:
         limit = 100
-    mark_read = str(request.args.get('mark_read', '1')).lower() in ('1', 'true', 'yes')
     try:
-        data, error = get_feedback_messages(user_id, request.args.get('thread_id'), mark_read=mark_read, limit=limit)
+        data, error = get_feedback_messages(user_id, request.args.get('thread_id'), mark_read=False, limit=limit)
     except sqlite3.OperationalError as exc:
         return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, **(data or {})})
+
+
+@app.route('/api/feedback/messages/read', methods=['POST'])
+def api_feedback_messages_read():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        limit = max(1, min(int(data.get('limit', 100) or 100), 200))
+        result, error = get_feedback_messages(
+            user_id,
+            data.get('thread_id'),
+            mark_read=True,
+            limit=limit,
+        )
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, **(result or {})})
 
 
 @app.route('/api/feedback/send', methods=['POST'])
@@ -20218,27 +21883,48 @@ def api_social_dm_messages():
         limit = max(1, min(int(request.args.get('limit', 50) or 50), 50))
     except Exception:
         limit = 50
-    mark_read = str(request.args.get('mark_read', '0')).lower() in ('1', 'true', 'yes')
     try:
         data, error = get_dm_messages(
             user_id,
             request.args.get('thread_id'),
-            mark_read=mark_read,
+            mark_read=False,
             limit=limit,
         )
     except sqlite3.OperationalError as exc:
         return _db_busy_response(exc)
     if error:
         return jsonify({'success': False, 'error': error}), 400
-    if mark_read:
-        for key in list(SOCIAL_DM_THREADS_CACHE.keys()):
-            try:
-                if int(key[0]) == int(user_id):
-                    SOCIAL_DM_THREADS_CACHE.pop(key, None)
-            except Exception:
-                continue
-        _emit_dm_update_for_user(user_id)
     return jsonify({'success': True, **(data or {})})
+
+
+@app.route('/api/social/dm/messages/read', methods=['POST'])
+def api_social_dm_messages_read():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        limit = max(1, min(int(data.get('limit', 50) or 50), 50))
+        result, error = get_dm_messages(
+            user_id,
+            data.get('thread_id'),
+            mark_read=True,
+            limit=limit,
+        )
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    for key in list(SOCIAL_DM_THREADS_CACHE.keys()):
+        try:
+            if int(key[0]) == int(user_id):
+                SOCIAL_DM_THREADS_CACHE.pop(key, None)
+        except Exception:
+            continue
+    _emit_dm_update_for_user(user_id)
+    return jsonify({'success': True, **(result or {})})
 
 
 @app.route('/api/social/dm/send', methods=['POST'])
@@ -20577,6 +22263,7 @@ def api_community_mods():
             if _current_account_can_manage_all_community_mods():
                 can_manage = True
             row.pop('uploader_user_id', None)
+            row.pop('key', None)
             row['can_manage'] = can_manage
             visible_mods.append(row)
         return jsonify({'success': True, 'mods': visible_mods, 'authenticated': bool(user_id)})
@@ -20587,18 +22274,31 @@ def api_community_mods():
 
 @app.route('/api/community-mods/upload-url', methods=['POST'])
 def api_community_mod_upload_url():
-    _, _, auth_error = _require_account_json()
+    user_id, _, auth_error = _require_account_json()
     if auth_error:
         return auth_error
     ip = _client_ip()
-    if _rate_limited(ip, 'community_upload_url'):
+    if (
+        _rate_limited(ip, 'community_upload_url')
+        or not rate_limiter(f'community-upload:user:{user_id}', limit=3, window=60)
+        or not rate_limiter('community-upload:server', limit=30, window=60)
+    ):
         return _json_error('上传过于频繁，请稍后再试', 429)
     data = request.get_json(silent=True) or {}
     filename = str(data.get('filename') or '').strip()
     if not filename.lower().endswith(('.json', '.gtnmod')):
-        return _json_error('只允许上传 .json 文件')
+        return _json_error('只允许上传 .json 或 .gtnmod 文件')
     try:
-        result = create_presigned_mod_upload(filename)
+        expected_size = int(data.get('size_bytes'))
+    except (TypeError, ValueError):
+        return _json_error('缺少有效的文件大小')
+    try:
+        result = create_presigned_mod_upload(
+            filename,
+            expected_size=expected_size,
+            uploader_user_id=user_id,
+            receipt_secret=app.config['SECRET_KEY'],
+        )
         return jsonify({'success': True, **result})
     except Exception as exc:
         record_r2_failure('upload_url', exc)
@@ -20617,10 +22317,11 @@ def api_community_mod_register():
     data = request.get_json(silent=True) or {}
     public_url = str(data.get('public_url') or '').strip()
     key = str(data.get('key') or '').strip()
+    upload_receipt = str(data.get('upload_receipt') or '').strip()
     replace_sha256 = str(data.get('replace_sha256') or '').strip()
     uploader_name = username
-    if not public_url or not key:
-        return _json_error('缺少 key 或 public_url')
+    if not public_url or not key or not upload_receipt:
+        return _json_error('缺少 key、public_url 或 upload_receipt')
     try:
         result = register_community_mod(
             public_url,
@@ -20628,6 +22329,8 @@ def api_community_mod_register():
             uploader_name,
             uploader_user_id=user_id,
             replace_sha256=replace_sha256,
+            upload_receipt=upload_receipt,
+            receipt_secret=app.config['SECRET_KEY'],
         )
         if not result.get('success'):
             record_r2_failure('register_validation', result.get('errors') or result.get('error') or '')
@@ -20686,8 +22389,15 @@ def api_community_mod_validate_url():
 
 @app.route('/api/font-subsets/community', methods=['POST'])
 def api_community_font_subset():
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
     ip = _client_ip()
-    if _rate_limited(ip, 'community_font_subset', limit=60, window=60):
+    if (
+        not rate_limiter(f'community-font:user:{user_id}', limit=4, window=60)
+        or not rate_limiter(f'community-font:ip:{ip}', limit=12, window=60)
+        or not rate_limiter('community-font:server', limit=30, window=60)
+    ):
         return _json_error('字体资源请求过于频繁，请稍后再试', 429)
     data = request.get_json(silent=True) or {}
     try:
@@ -20699,11 +22409,19 @@ def api_community_font_subset():
             for mod in (community_mods or [])
             if getattr(mod, 'community_data', None) is not None
         ]
-        report = ensure_community_font_subset(
+        max_font_mods = max(1, int(os.environ.get('MAX_COMMUNITY_FONT_MODS', '4')))
+        if len(mod_datas) > max_font_mods:
+            return _json_error(f'一次最多为 {max_font_mods} 个社区模组生成字体资源')
+        subset_args = (
             mod_datas,
-            hash_key=community_fields.get('community_mod_hash', ''),
-            generate=True,
+            community_fields.get('community_mod_hash', ''),
+            True,
         )
+        if eventlet is not None:
+            from eventlet import tpool
+            report = tpool.execute(ensure_community_font_subset, *subset_args)
+        else:
+            report = ensure_community_font_subset(*subset_args)
         return jsonify({'success': True, 'font_subset': report})
     except Exception as exc:
         admin_event('error', f'community font subset failed: {exc}')
@@ -20965,9 +22683,17 @@ def on_connect():
         ensure_pending_interaction_watchdog_started()
         ensure_room_timer_worker_started()
         ip = _client_ip()
+        if (
+            not rate_limiter('socket:connect:server', limit=SOCKET_CONNECT_SERVER_LIMIT, window=60)
+            or not rate_limiter(f'connect-ip:{ip}', limit=30, window=60)
+        ):
+            ok = False
+            record_suspicious_event('connect_rate', 'Socket connect rate limited', sid=sid, ip=ip, severity='high')
+            socketio.server.disconnect(sid)
+            return
         if DB_AVAILABLE:
             try:
-                ip_status = get_ip_ban_status(ip)
+                ip_status = _get_ip_ban_status_cached(ip)
             except Exception as exc:
                 admin_event('error', f'socket ip ban check failed: {exc}')
                 ip_status = {'banned': False}
@@ -20976,11 +22702,6 @@ def on_connect():
                 record_suspicious_event('connect_ip_banned', 'banned IP tried to connect', sid=sid, ip=ip, severity='high')
                 socketio.server.disconnect(sid)
                 return
-        if not rate_limiter(f'connect-ip:{_client_ip()}', limit=30, window=60):
-            ok = False
-            record_suspicious_event('connect_rate_ip', 'Socket connect IP rate limited', sid=sid, ip=_client_ip(), severity='high')
-            socketio.server.disconnect(sid)
-            return
         join_room(sid)
     finally:
         elapsed_ms = (time.perf_counter() - started) * 1000
@@ -25573,7 +27294,22 @@ def _is_registered_ai_player_locked(sid):
     return bool(player.get('is_registered_user') and player.get('user_id'))
 
 
+def _ai_public_match_enabled():
+    return bool(GTN_AI_1V1_TEST_ENABLED and GTN_AI_PUBLIC_ENTRY_ENABLED)
+
+
+def _emit_ai_public_entry_disabled(sid):
+    socketio.emit('ai_1v1_status', {
+        'status': 'error',
+        'code': AI_TEMPORARILY_DISABLED_CODE,
+        'message': AI_TEMPORARILY_DISABLED_MESSAGE,
+    }, room=sid)
+
+
 def _queue_ai_test_start(sid):
+    if not _ai_public_match_enabled():
+        _emit_ai_public_entry_disabled(sid)
+        return False
     with _lock:
         player = players.get(sid)
         if not player or player.get('status') != 'lobby' or player.get('room_id') is not None:
@@ -25618,12 +27354,8 @@ def on_ai_1v1_start(data=None):
     data = socket_guard('ai_1v1_start', data, require_player=True, allow_empty=True)
     if data is None:
         return
-    if not GTN_AI_1V1_TEST_ENABLED:
-        _security_illegal(sid, 'ai_1v1_start', 'AI 对局入口未启用')
-        socketio.emit('ai_1v1_status', {
-            'status': 'error',
-            'message': 'Phelren 对局入口未启用',
-        }, room=sid)
+    if not _ai_public_match_enabled():
+        _emit_ai_public_entry_disabled(sid)
         return
     with _lock:
         registered = _is_registered_ai_player_locked(sid)
@@ -25650,12 +27382,8 @@ def on_ai_1v1_rematch(data=None):
     data = socket_guard('ai_1v1_rematch', data, require_player=True, allow_empty=True)
     if data is None:
         return
-    if not GTN_AI_1V1_TEST_ENABLED:
-        _security_illegal(sid, 'ai_1v1_rematch', 'AI 对局入口未启用')
-        socketio.emit('ai_1v1_status', {
-            'status': 'error',
-            'message': 'Phelren 对局入口未启用',
-        }, room=sid)
+    if not _ai_public_match_enabled():
+        _emit_ai_public_entry_disabled(sid)
         return
     with _lock:
         registered = _is_registered_ai_player_locked(sid)
@@ -26742,7 +28470,19 @@ def on_response(data):
             'response',
             {'card_instance_id': card_instance_id},
         )
-        engine.handle_response(pidx, card_instance_id)
+        result = engine.handle_response(pidx, card_instance_id)
+        if not isinstance(result, dict) or not result.get('success'):
+            error = result.get('error') if isinstance(result, dict) else None
+            soft_reject(
+                sid,
+                'response',
+                normalize_soft_reject_code(error) or 'CARD_NOT_PLAYABLE_NOW',
+                error or '反制失败',
+                room=room,
+                pidx=pidx,
+                send_state=True,
+            )
+            return
         _stamp_pending_interactions(room)
     finally:
         busy_lock.release()

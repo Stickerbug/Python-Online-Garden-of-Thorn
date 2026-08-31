@@ -17,7 +17,9 @@ const FIRST_PLAYER_HAND_SIZE = 4;
 const SOLO_TRAINING_MIN_DECK_SIZE = 0;
 const SOLO_TRAINING_MAX_DECK_SIZE = 50;
 const ERROR_CARD_ID = 'Error';
+const MAX_CARD_LAYER = 64;
 const MAX_CARD_POWER = 1024;
+const YGGDRASIL_HEAL = 25;
 const MOD_RUNTIME_ERROR_MESSAGE = '模组执行出现了一个意外错误。请联系管理员。';
 const CORRUPTION_DAMAGE_MULTIPLIER = 1.5;
 const LATE_ROUND_FIRE_START = 10;
@@ -52,6 +54,15 @@ const VANILLA_FLAGS = new Set([
 
 class ModLoopBreak extends Error {}
 class ModLoopContinue extends Error {}
+
+function clampCardLayer(value) {
+    return Math.min(MAX_CARD_LAYER, Math.max(1, toInt(value, 1)));
+}
+
+function fusionAdjustedCost(cost, fusionLevel) {
+    const normalizedCost = Math.max(0, toInt(cost, 0));
+    return Math.floor(normalizedCost * (clampCardLayer(fusionLevel) + 1) / 2);
+}
 
 const TUTORIAL_DECKS = [
     [
@@ -392,8 +403,8 @@ class LocalCard {
         this.cost_m_override = source.cost_m_override ?? null;
         this.fission_count = toInt(source.fission_count, 0);
         this.fusion_multiplier = Number(source.fusion_multiplier ?? 1) || 1;
-        this.fission_level = Math.max(1, toInt(source.fission_level ?? (this.fission_count + 1), 1));
-        this.fusion_level = Math.max(1, toInt(source.fusion_level ?? this.fusion_multiplier, 1));
+        this.fission_level = clampCardLayer(source.fission_level ?? (this.fission_count + 1));
+        this.fusion_level = clampCardLayer(source.fusion_level ?? this.fusion_multiplier);
         this.mimic_discount = toInt(source.mimic_discount, 0);
         this.fission_hit = toInt(source.fission_hit, 0);
         this.instance_flags = new Set(normalizeCardFlags(source.instance_flags || []));
@@ -431,13 +442,29 @@ class LocalCard {
     }
 
     get cost_e() {
-        const base = this.cost_e_override != null ? this.cost_e_override : toInt(this.def().cost_e, 0);
-        return Math.max(0, base + this.temp_heavy_value - this.mimic_discount - this.swift_value - this.temp_swift_value);
+        const custom = this.custom_vars && typeof this.custom_vars === 'object' ? this.custom_vars : {};
+        const base = custom.formal_logic_temporary_cost_e != null
+            ? toInt(custom.formal_logic_temporary_cost_e, 0)
+            : (this.cost_e_override != null
+                ? this.cost_e_override
+                : (custom.formal_logic_permanent_cost_e != null
+                    ? toInt(custom.formal_logic_permanent_cost_e, 0)
+                    : toInt(this.def().cost_e, 0)));
+        const cost = Math.max(0, base + this.temp_heavy_value - this.mimic_discount - this.swift_value - this.temp_swift_value);
+        return fusionAdjustedCost(cost, this.fusion_level);
     }
 
     get cost_m() {
-        const base = this.cost_m_override != null ? this.cost_m_override : toInt(this.def().cost_m, 0);
-        return Math.max(0, base + Math.max(0, toInt(this.temp_magic_heavy_value, 0)) - Math.max(0, toInt(this.magic_swift_value, 0)));
+        const custom = this.custom_vars && typeof this.custom_vars === 'object' ? this.custom_vars : {};
+        const base = custom.formal_logic_temporary_cost_m != null
+            ? toInt(custom.formal_logic_temporary_cost_m, 0)
+            : (this.cost_m_override != null
+                ? this.cost_m_override
+                : (custom.formal_logic_permanent_cost_m != null
+                    ? toInt(custom.formal_logic_permanent_cost_m, 0)
+                    : toInt(this.def().cost_m, 0)));
+        const cost = Math.max(0, base + Math.max(0, toInt(this.temp_magic_heavy_value, 0)) - Math.max(0, toInt(this.magic_swift_value, 0)));
+        return fusionAdjustedCost(cost, this.fusion_level);
     }
 
     get flags() {
@@ -1067,7 +1094,10 @@ class LocalSoloEngine {
                 copyCard.instance_flags.add('exile');
                 copyCard.disabled_flags.add('copy');
                 this.applySetupModifiersToCard(playerId, copyCard);
-                player.addToHand(copyCard, { triggerEnterHand: false });
+                this.addForcedCopyToHand(playerId, copyCard, {
+                    sourceOwned: true,
+                    triggerEnterHand: false,
+                });
                 added += 1;
             }
             if (added > 0) {
@@ -1116,32 +1146,85 @@ class LocalSoloEngine {
         });
     }
 
-    enforceUniqueCardsForPlayer(playerId, preferredCard = null) {
+    playerOwnedCards(playerId) {
         const ps = this.players[playerId];
-        if (!ps) return;
-        const groups = new Map();
-        [ps.hand, ps.deck, ps.discard].forEach(zone => {
-            zone.slice().forEach(card => {
-                if (!card || !card.flags || !card.flags.has('unique')) return;
-                if (!groups.has(card.def_id)) groups.set(card.def_id, []);
-                groups.get(card.def_id).push({ zone, card });
+        if (!ps) return [];
+        const owned = [];
+        [ps.hand, ps.deck, ps.discard, ps.exile].forEach(zone => {
+            (zone || []).forEach(card => {
+                if (card) owned.push(card);
             });
         });
-        groups.forEach(entries => {
-            if (entries.length <= 1) return;
-            let keep = null;
-            if (preferredCard) {
-                keep = entries.find(entry => entry.card === preferredCard || entry.card.instance_id === preferredCard.instance_id);
+        (ps.equipment || []).forEach(equipment => {
+            if (equipment && equipment.card_instance) owned.push(equipment.card_instance);
+        });
+        return owned;
+    }
+
+    playerOwnsCardDef(playerId, defId, excludingInstanceId = null) {
+        return this.playerOwnedCards(playerId).some(owned => (
+            owned.def_id === defId
+            && (excludingInstanceId == null || toInt(owned.instance_id, -1) !== toInt(excludingInstanceId, -1))
+        ));
+    }
+
+    canNormallyAcquireCard(playerId, card) {
+        if (!card || !card.flags || !card.flags.has('unique')) return true;
+        return !this.playerOwnsCardDef(playerId, card.def_id, card.instance_id);
+    }
+
+    forcedUniqueCopyNeedsPenalty(playerId, copiedCard, sourceOwned = false) {
+        if (!copiedCard || !copiedCard.flags || !copiedCard.flags.has('unique')) return false;
+        return !!sourceOwned || this.playerOwnsCardDef(playerId, copiedCard.def_id, copiedCard.instance_id);
+    }
+
+    applyForcedUniqueCopyPenalty(playerId, copiedCard, sourceOwned = false) {
+        if (!this.forcedUniqueCopyNeedsPenalty(playerId, copiedCard, sourceOwned)) return false;
+        const voidDefId = this.voidResolveCardId(playerId, 'void:void', 'Void', copiedCard);
+        if (!voidDefId || !cardDef(voidDefId)) {
+            throw new Error('强制复制唯一牌时无法创建虚空惩罚牌');
+        }
+        const penalty = new LocalCard(voidDefId);
+        const deck = this.players[playerId].deck;
+        deck.splice(Math.floor(Math.random() * (deck.length + 1)), 0, penalty);
+        this.logMsg(`${this.pn(playerId)}强制复制唯一牌${cardName(copiedCard.def_id)}，将1张虚空加入牌组`);
+        return true;
+    }
+
+    addForcedCopyToHand(playerId, copiedCard, options = {}) {
+        const sourceOwned = !!options.sourceOwned;
+        const needsPenalty = this.forcedUniqueCopyNeedsPenalty(playerId, copiedCard, sourceOwned);
+        this.players[playerId].addToHand(copiedCard, {
+            triggerEnterHand: options.triggerEnterHand !== false,
+        });
+        if (needsPenalty) this.applyForcedUniqueCopyPenalty(playerId, copiedCard, true);
+        return needsPenalty;
+    }
+
+    removeOwnedCardInstance(playerId, card) {
+        const ps = this.players[playerId];
+        if (!ps || !card) return false;
+        for (const zone of [ps.hand, ps.deck, ps.discard, ps.exile]) {
+            const index = zone.findIndex(owned => (
+                owned === card || toInt(owned.instance_id, -1) === toInt(card.instance_id, -1)
+            ));
+            if (index >= 0) {
+                zone.splice(index, 1);
+                return true;
             }
-            if (!keep) keep = entries[Math.floor(Math.random() * entries.length)];
-            entries.forEach(entry => {
-                if (entry === keep || entry.card.instance_id === keep.card.instance_id) return;
-                const idx = entry.zone.indexOf(entry.card);
-                if (idx >= 0) entry.zone.splice(idx, 1);
-                this.putCardInExile(playerId, entry.card);
-                this.logMsg(`${this.pn(playerId)}的唯一牌${cardName(entry.card.def_id)}多余副本被放逐`);
-            });
-        });
+        }
+        return false;
+    }
+
+    enforceUniqueCardsForPlayer(playerId, preferredCard = null) {
+        if (!this.players[playerId]) return false;
+        if (!preferredCard || !preferredCard.flags || !preferredCard.flags.has('unique')) return true;
+        if (!this.playerOwnsCardDef(playerId, preferredCard.def_id, preferredCard.instance_id)) return true;
+        const removed = this.removeOwnedCardInstance(playerId, preferredCard);
+        if (removed) {
+            this.logMsg(`${this.pn(playerId)}已拥有唯一牌${cardName(preferredCard.def_id)}，未获得额外实例`);
+        }
+        return !removed;
     }
 
     pn(playerId) {
@@ -1556,8 +1639,8 @@ class LocalSoloEngine {
             this.logMsg(`${this.pn(playerId)}【光之洗礼】：${converted}张牌变为[[card:Light|flag=sprout|flag=symbiosis]]`);
         } else if (eventId === 4) {
             if (!this.statusApplicationBlocked(1 - playerId, 'fire')) {
-                opp.fire += 4;
-                this.logMsg(`${this.pn(playerId)}【烈焰预兆】：敌方+4灼烧`);
+                opp.fire += 3;
+                this.logMsg(`${this.pn(playerId)}【烈焰预兆】：敌方+3灼烧`);
             }
         } else if (eventId === 5) {
             const picked = (sub.add_def_ids || sub.def_ids || []).slice(0, 1);
@@ -1571,7 +1654,7 @@ class LocalSoloEngine {
             if (added > 0) shuffleInPlace(ps.deck);
             this.logMsg(`${this.pn(playerId)}【命运抽签】：少抽1张牌，${added}张牌洗入牌库`);
         } else if (eventId === 6) {
-            this.logMsg(`${this.pn(playerId)}【能量涌动】：每回合多回复1E`);
+            this.logMsg(`${this.pn(playerId)}【能量涌动】：每回合多回复2E；自己回合结束时受到剩余E两倍的D`);
         } else if (eventId === 7) {
             this.logMsg(`${this.pn(playerId)}【先手压制】：先手回复7E并抽5张牌`);
         } else if (eventId === 8) {
@@ -1994,9 +2077,7 @@ class LocalSoloEngine {
                 else if (eq.def_id === 'Pincer') recovery -= 1;
             });
             recovery = Math.max(0, recovery - ps.enemy_e_reduction);
-            if (this.opening_event_picks[playerId] === 6) {
-                recovery += 1;
-            }
+            recovery += this.openingEventElixirRecoveryBonus(playerId);
             ps.gainElixir(recovery);
             this.logMsg(`${this.pn(playerId)}回复${recovery}E`);
         }
@@ -2050,6 +2131,21 @@ class LocalSoloEngine {
             this._game_over_defer_depth = Math.max(0, this._game_over_defer_depth - 1);
         }
         this.checkGameOver();
+    }
+
+    openingEventElixirRecoveryBonus(playerId) {
+        return toInt(this.opening_event_picks[playerId], -1) === 6 ? 2 : 0;
+    }
+
+    applyEnergySurgeTurnEnd(playerId) {
+        if (toInt(this.opening_event_picks[playerId], -1) !== 6) return;
+        const ps = this.players[playerId];
+        if (!ps) return;
+        const remainingElixir = Math.max(0, toInt(ps.elixir, 0));
+        const damage = remainingElixir * 2;
+        this.logMsg(`${this.pn(playerId)}的能量涌动反噬：剩余${remainingElixir}E，受到${damage}D`);
+        if (damage <= 0) return;
+        this.dealAttackDamage(playerId, damage, 1, false, playerId, null);
     }
 
     applyToxicPoisonAfterPoisonSettlement(playerId) {
@@ -4738,7 +4834,7 @@ class LocalSoloEngine {
         const copy = original.copy ? original.copy() : new LocalCard(original.def_id);
         copy.instance_id = randintId();
         copy.instance_flags.add('exile');
-        this.players[playerId].addToHand(copy);
+        this.addForcedCopyToHand(playerId, copy);
         this._last_created_card_instance_id = copy.instance_id;
         this._active_effect_context.last_created_card_instance_id = copy.instance_id;
         if (log) this.logMsg(log);
@@ -5031,7 +5127,10 @@ class LocalSoloEngine {
         copied.fission_count = 2;
         copied.swift_value = 2;
         const ps = this.players[playerId];
-        ps.addToHand(copied, { triggerEnterHand: false });
+        this.addForcedCopyToHand(playerId, copied, {
+            sourceOwned: true,
+            triggerEnterHand: false,
+        });
         const previousAutoActor = this.allowOutOfTurnAutoPlayFor;
         const previousAutoChoice = this._auto_resolve_choices_for;
         this.allowOutOfTurnAutoPlayFor = playerId;
@@ -5613,8 +5712,7 @@ class LocalSoloEngine {
         } else {
             this.applySetupModifiersToCard(playerId, copy);
         }
-        this.players[playerId].addToHand(copy);
-        this.enforceUniqueCardsForPlayer(playerId, copy);
+        this.addForcedCopyToHand(playerId, copy, { sourceOwned: target === card });
         this._last_created_card_instance_id = copy.instance_id;
         this._active_effect_context.last_created_card_instance_id = copy.instance_id;
         if (log) this.logMsg(log);
@@ -5629,8 +5727,11 @@ class LocalSoloEngine {
         if ((def.id || cardId) !== ERROR_CARD_ID && !target.canAddToHand()) return;
         const newCard = new LocalCard(def.id || cardId);
         this.applySetupModifiersToCard(targetId, newCard);
+        if (!this.canNormallyAcquireCard(targetId, newCard)) {
+            this.logMsg(`${this.pn(targetId)}已拥有唯一牌${cardName(newCard.def_id)}，未获得额外实例`);
+            return;
+        }
         target.addToHand(newCard);
-        this.enforceUniqueCardsForPlayer(targetId, newCard);
         this._last_created_card_instance_id = newCard.instance_id;
         this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
         if (log && newCard.def_id !== ERROR_CARD_ID) this.logMsg(log);
@@ -5644,6 +5745,10 @@ class LocalSoloEngine {
         if (!def) return;
         const newCard = new LocalCard(def.id || cardId);
         this.applySetupModifiersToCard(targetId, newCard);
+        if (!this.canNormallyAcquireCard(targetId, newCard)) {
+            this.logMsg(`${this.pn(targetId)}已拥有唯一牌${cardName(newCard.def_id)}，未获得额外实例`);
+            return;
+        }
         const position = params.position || 'top';
         if (position === 'bottom') target.deck.push(newCard);
         else if (position === 'random') target.deck.splice(Math.floor(Math.random() * (target.deck.length + 1)), 0, newCard);
@@ -5661,6 +5766,10 @@ class LocalSoloEngine {
         if (!def) return;
         const newCard = new LocalCard(def.id || cardId);
         this.applySetupModifiersToCard(targetId, newCard);
+        if (!this.canNormallyAcquireCard(targetId, newCard)) {
+            this.logMsg(`${this.pn(targetId)}已拥有唯一牌${cardName(newCard.def_id)}，未获得额外实例`);
+            return;
+        }
         this.discardCard(target, newCard);
         this._last_created_card_instance_id = newCard.instance_id;
         this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
@@ -5700,6 +5809,11 @@ class LocalSoloEngine {
                 newCard.setup_modifiers.add('explicit_extra_hits');
             }
             this.applySetupModifiersToCard(targetId, newCard);
+            this.applyForcedUniqueCopyPenalty(
+                targetId,
+                newCard,
+                !!card && card.def_id === (def.id || cardId),
+            );
             target.deck.unshift(newCard);
             this._last_created_card_instance_id = newCard.instance_id;
             this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
@@ -6191,8 +6305,11 @@ class LocalSoloEngine {
         const newCard = new LocalCard(def.id || 'Maple');
         ['symbiosis', 'exile', 'void'].forEach(flag => newCard.instance_flags.add(flag));
         this.applySetupModifiersToCard(targetId, newCard);
+        if (!this.canNormallyAcquireCard(targetId, newCard)) {
+            this.logMsg(`${this.pn(targetId)}已拥有唯一牌${cardName(newCard.def_id)}，未获得额外实例`);
+            return;
+        }
         target.addToHand(newCard);
-        this.enforceUniqueCardsForPlayer(targetId, newCard);
         this._last_created_card_instance_id = newCard.instance_id;
         if (this._active_effect_context) {
             this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
@@ -6299,6 +6416,21 @@ class LocalSoloEngine {
         delete ps.custom_vars.arctic_ready_queue;
     }
 
+    effect_arctic_snowflake_copy(playerId, card, params, log) {
+        if (!card || card.flags.has('wide_strike')) return;
+        const copied = card.copy();
+        copied.instance_id = randintId();
+        copied.swift_value = Math.max(3, toInt(copied.swift_value, 0));
+        copied.fission_level = Math.max(3, toInt(copied.fission_level, 1));
+        copied.fission_count = copied.fission_level - 1;
+        ['swift', 'wide_strike', 'arctic:ready', 'exile'].forEach(flag => {
+            copied.instance_flags.add(flag);
+            copied.disabled_flags.delete(flag);
+        });
+        this.addForcedCopyToHand(playerId, copied, { sourceOwned: true });
+        this.logMsg(log || `${this.pn(playerId)}将一张强化的雪花复制加入手中`);
+    }
+
     effect_arctic_pinecone_copy(playerId, card, params, log, choice) {
         if (!card || card.setup_modifiers.has('arctic_pinecone_copy')) return;
         const copied = card.copy();
@@ -6312,7 +6444,10 @@ class LocalSoloEngine {
         copied.fission_count = 2;
         copied.fission_hit = 0;
         copied.swift_value = Math.max(2, toInt(copied.swift_value, 0));
-        this.players[playerId].addToHand(copied, { triggerEnterHand: false });
+        this.addForcedCopyToHand(playerId, copied, {
+            sourceOwned: true,
+            triggerEnterHand: false,
+        });
         if (!Array.isArray(this.arcticPineconeAutoPlayQueue)) this.arcticPineconeAutoPlayQueue = [];
         this.arcticPineconeAutoPlayQueue.push({
             playerId,
@@ -6320,6 +6455,17 @@ class LocalSoloEngine {
             choice: { ...(choice || {}) },
         });
         this.logMsg(log || `${this.pn(playerId)}的松果额外打出一张复制`);
+    }
+
+    effect_arctic_icicle_shuffle_discard(playerId, card, params, log) {
+        if (!card || !this.players[playerId]) return;
+        const copied = card.copy();
+        copied.instance_id = randintId();
+        this.resetCardAfterPlay(copied);
+        this.applyForcedUniqueCopyPenalty(playerId, copied, true);
+        const discard = this.players[playerId].discard;
+        discard.splice(Math.floor(Math.random() * (discard.length + 1)), 0, copied);
+        this.logMsg(log || `${this.pn(playerId)}将一张冰锥洗入弃牌堆`);
     }
 
     drainArcticPineconeAutoPlayQueue() {
@@ -7777,7 +7923,9 @@ class LocalSoloEngine {
         const ps = this.players[playerId];
         if (!ps) return;
         ps.bandage_death_pending = true;
-        ps.bandage_death_action_player_id = -1;
+        // Preserve the legacy field in snapshots, but anchor it to the owner:
+        // Bandage now expires at this player's own turn end.
+        ps.bandage_death_action_player_id = playerId;
         ps.bandage_trigger_boundary_id = this._turn_boundary_active
             ? toInt(this._turn_boundary_id, -1)
             : toInt(this._turn_boundary_serial, 0);
@@ -7786,10 +7934,7 @@ class LocalSoloEngine {
     armBandagesForAction(actionPlayerId = this.current_player) {
         this.players.forEach((ps, playerId) => {
             if (!ps || !ps.bandage_death_pending) return;
-            if (playerId !== actionPlayerId) return;
-            if (toInt(ps.bandage_death_action_player_id, -1) < 0) {
-                ps.bandage_death_action_player_id = actionPlayerId;
-            }
+            ps.bandage_death_action_player_id = playerId;
         });
     }
 
@@ -7798,13 +7943,13 @@ class LocalSoloEngine {
         let expired = false;
         this.players.forEach((ps, playerId) => {
             if (!ps || !ps.bandage_death_pending) return;
-            if (toInt(ps.bandage_death_action_player_id, -1) !== actionPlayerId) return;
+            if (playerId !== actionPlayerId) return;
             ps.health = 0;
             ps.bandage_death_pending = false;
             ps.bandage_trigger_boundary_id = -1;
             ps.bandage_death_action_player_id = -1;
             this.clearInvincibleState(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带效果结束，在己方下一名可行动玩家回合结束后死亡！`);
+            this.logMsg(`${this.pn(playerId)}的绷带效果结束，自己回合结束时死亡！`);
             expired = true;
         });
         if (expired) this.checkGameOver();
@@ -7885,8 +8030,8 @@ class LocalSoloEngine {
         if (this.players[targetId].health <= 0) {
             this.triggerYggdrasilEffect(targetId, card, playerId, { exilePlayedCard: true });
         } else {
-            this.players[targetId].heal(20);
-            this.logMsg(`${this.pn(playerId)}使用世界树之叶！${this.pn(targetId)}回复20H`);
+            this.players[targetId].heal(YGGDRASIL_HEAL);
+            this.logMsg(`${this.pn(playerId)}使用世界树之叶！${this.pn(targetId)}回复${YGGDRASIL_HEAL}H`);
         }
     }
 
@@ -7898,7 +8043,7 @@ class LocalSoloEngine {
             this.setInvincibleUntilNextOwnTurnEnd(playerId);
             ps.bandage_active = false;
             this.markBandageDeathPending(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带发动！在己方下一名可行动玩家回合结束后死亡`);
+            this.logMsg(`${this.pn(playerId)}的绷带发动！自己回合结束时死亡`);
             return;
         }
         const idx = ps.hand.findIndex(card => card.def_id === 'Yggdrasil');
@@ -8442,7 +8587,7 @@ class LocalSoloEngine {
             ps.removeHandCard(instanceId);
             return { success: true, card: card.toDict(), ignored: true };
         }
-        if (this.pending_response) return { success: false, error: '等待对手反制响应' };
+        if (this.pending_response) return { success: false, error: '等待反制响应' };
         if (card.def().card_type === 'thorn') {
             const spikeballBoosted = this.cardIs(card, 'Spikeball', 'ocean:spikeball') && ps.hand.length < 4;
             if ((card.flags && card.flags.has('wide_strike')) || spikeballBoosted) {
@@ -9072,7 +9217,7 @@ class LocalSoloEngine {
 
     endTurn(playerId) {
         if (this.current_player !== playerId) return { success: false, error: '不是你的回合' };
-        if (this.pending_response) return { success: false, error: '等待对手反制响应' };
+        if (this.pending_response) return { success: false, error: '等待反制响应' };
         this.endPlayerTurn(playerId);
         return { success: true };
     }
@@ -9090,11 +9235,13 @@ class LocalSoloEngine {
         if (this.game_over || this.pending_choice) return;
         this.applyEqualSufferingTurnEnd(playerId);
         if (this.game_over) return;
+        this.applyEnergySurgeTurnEnd(playerId);
+        if (this.game_over) return;
         this.decayEquipmentArmorEndTurn(playerId);
         if (ps.bandage_active && ps.invincible) {
             ps.bandage_active = false;
             this.markBandageDeathPending(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带将在己方下一名可行动玩家回合结束后使其死亡`);
+            this.logMsg(`${this.pn(playerId)}的绷带已触发：自己回合结束时死亡`);
         }
         this.returnCogwheelCardsNow(playerId);
         [...ps.hand].forEach(card => {

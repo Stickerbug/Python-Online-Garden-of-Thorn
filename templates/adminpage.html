@@ -274,7 +274,10 @@
       </div>
       <div class="storage-actions">
         <button class="ghost-btn" type="button" data-community-storage-action="refresh">刷新仓库</button>
+        <button class="ghost-btn" type="button" data-community-storage-action="preview-orphans">试算未登记上传</button>
+        <button class="ghost-btn danger" type="button" data-community-storage-action="cleanup-orphans">清理未登记上传</button>
       </div>
+      <pre id="community-storage-result" class="admin-json-result"></pre>
       <div id="community-storage-table" class="admin-table"></div>
     </section>
   </section>

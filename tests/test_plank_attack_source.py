@@ -60,10 +60,10 @@ class PlankAttackSourceTests(unittest.TestCase):
                 CARD_DEFS[key] = old_value
 
     @staticmethod
-    def equip_plank(engine, target_id):
-        equipment = EquipmentInstance(CardInstance('jungle:plank'), target_id)
-        equipment.effect_target = target_id
-        engine.players[target_id].equipment.append(equipment)
+    def equip_plank(engine, owner_id, effect_target=None):
+        equipment = EquipmentInstance(CardInstance('jungle:plank'), owner_id)
+        equipment.effect_target = owner_id if effect_target is None else effect_target
+        engine.players[owner_id].equipment.append(equipment)
 
     def assert_plank_only_blocks_attack_cards(self, engine, attacker_id, target_id):
         self.equip_plank(engine, target_id)
@@ -90,6 +90,50 @@ class PlankAttackSourceTests(unittest.TestCase):
 
     def test_two_vs_two(self):
         self.assert_plank_only_blocks_attack_cards(GameEngine2v2(), 0, 2)
+
+    def test_redirected_plank_protects_effect_target_not_owner_in_one_vs_one(self):
+        engine = GameEngine()
+        self.equip_plank(engine, 1, effect_target=0)
+        for player in engine.players:
+            player.health = 100
+
+        engine.deal_attack_damage(
+            1,
+            10,
+            attacker_id=0,
+            source_card=CardInstance('test:low_cost_attack'),
+        )
+        self.assertEqual(engine.players[1].health, 90)
+
+        engine.deal_attack_damage(
+            0,
+            10,
+            attacker_id=1,
+            source_card=CardInstance('test:low_cost_attack'),
+        )
+        self.assertEqual(engine.players[0].health, 100)
+
+    def test_redirected_plank_protects_effect_target_not_owner_in_two_vs_two(self):
+        engine = GameEngine2v2()
+        self.equip_plank(engine, 2, effect_target=3)
+        for player in engine.players:
+            player.health = 100
+
+        engine.deal_attack_damage(
+            2,
+            10,
+            attacker_id=0,
+            source_card=CardInstance('test:low_cost_attack'),
+        )
+        self.assertEqual(engine.players[2].health, 90)
+
+        engine.deal_attack_damage(
+            3,
+            10,
+            attacker_id=0,
+            source_card=CardInstance('test:low_cost_attack'),
+        )
+        self.assertEqual(engine.players[3].health, 100)
 
     def test_plank_uses_actual_paid_energy(self):
         for engine, target_id in ((GameEngine(), 1), (GameEngine2v2(), 2)):

@@ -45,7 +45,7 @@
 | GET | <code>/api/mod-assets/&lt;asset_id&gt;</code> | 公开 | 读取已登记的模组图片资源 |
 | POST | <code>/api/font-subsets/community</code> | 公开、限流 | 为已登记社区模组准备缺字字体子集；仅接受模组选择数据 |
 | GET | <code>/api/hidden-features/status</code> | 公开 | 当前会话是否已解锁隐藏入口 |
-| GET | <code>/api/ai-1v1/status</code> | 公开 | Phelren 测试入口是否启用、是否拥挤；只有登录账号会得到可用状态 |
+| GET | <code>/api/ai-1v1/status</code> | 公开 | Phelren 模型状态、公共入口开关与容量；`enabled` 表示模型功能，`public_entry_enabled` 表示玩家入口，只有登录账号且两者均开启时 `available=true` |
 
 公开读取只覆盖页面渲染所需资料，不包含账号私有数据、完整回放、服务器诊断或写入能力。
 
@@ -102,11 +102,16 @@
 | POST | <code>/api/story/run/load</code> | 读取 <code>save_id</code>；同时校验 <code>run_id</code> 与 <code>state_version</code> |
 | POST | <code>/api/story/run/reset-map</code> | Staff 开发工具；普通账号得到 404 |
 
-### 双人协作故事实验大厅
+### 双人协作故事实验
 
 以下接口全部要求已登录的 Staff/Admin 账号；普通账号统一得到 404。响应均使用
-<code>Cache-Control: private, no-store</code>。当前接口只开放队伍大厅、独立存档和
-首版无界面的战斗协调内核，不代表完整协作旅程已经可玩。
+<code>Cache-Control: private, no-store</code>。当前接口开放队伍大厅、独立存档和
+Garden 第一阶段实验：队长选择普通/困难/疯狂难度，双方分别完成私密开局赐福，
+随后进行服务器权威战斗、个人奖励/休息/宝箱/商店（含当前兼容的个人遗物）、共享事件与路线投票，以及第 16 层
+协作专用 Boss 后的阶段结算。简单难度的个人天赋尚未接入，因此当前拒绝选择 Easy；
+该实验也不等同于单人故事全部内容。协作奖励与商店会从单人故事权威牌池编译当前执行器能够精确结算的卡牌；
+伤害、护盾、主动丢弃、抽牌、灵药与放逐等已接入语义会随单人内容和内容指纹更新，未知脚本或效果默认拒绝进入协作存档。
+园丁车等兼容共享事件也来自同一权威事件定义；快照只投影本地化选项说明与提交状态，不公开服务端效果表或未结算的具体投票。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -116,10 +121,30 @@
 | POST | <code>/api/story/coop/party/join</code> | 使用邀请码加入尚未开始的队伍 |
 | POST | <code>/api/story/coop/party/invite</code> | 队长按 <code>party_revision</code> 轮换一次性邀请码 |
 | POST | <code>/api/story/coop/party/leave</code> | 按 <code>party_revision</code> 离开或解散组队中的队伍 |
-| POST | <code>/api/story/coop/party/start</code> | 队长在两席就绪后按 <code>party_revision</code> 创建独立 v10 旅程 |
+| POST | <code>/api/story/coop/party/start</code> | 队长在两席就绪后按 <code>party_revision</code> 创建独立 v10 旅程；新旅程先停在队长设置阶段 |
 | POST | <code>/api/story/coop/party/abandon</code> | 任一成员确认后按 <code>party_revision</code> 放弃活动旅程并解散队伍 |
+| GET | <code>/api/story/coop/run/&lt;run_id&gt;</code> | 当前或历史成员读取按本人投影的公开旅程快照；个人奖励、遗物、宝箱与商店内容仅对本人展开，不返回 seed、RNG、抽牌顺序或内部回执表 |
+| POST | <code>/api/story/coop/run/&lt;run_id&gt;/action</code> | 提交 <code>run_revision</code>、<code>action_id</code>、<code>expected_sequence</code> 及战斗/奖励/路线/房间/商店意图；仅战斗动作携带 <code>combat_id/combat_round</code>，行动席位由登录账号决定 |
 
-<code>action_id</code> 用于幂等与重放保护，<code>state_version</code> 用于拒绝过期页面覆盖新状态。客户端不应跳过它们。
+<code>action_id</code> 用于幂等与重放保护，<code>run_revision</code> 与
+<code>expected_sequence</code> 用于拒绝过期页面覆盖新状态。网络结果不确定时，客户端必须以完全相同的请求体和同一 <code>action_id</code> 重试。
+
+动作类型与最小 <code>payload</code>：
+
+- <code>setup_start</code>：仅队长可提交，payload 仅含服务端公开的
+  <code>difficulty</code>（<code>normal</code> / <code>hard</code> / <code>lunatic</code>）。
+- <code>opening_choose</code>：<code>room_id</code>、本人公开选项中的
+  <code>option_id</code>；另一席只能看见是否完成，不能读取选项或选择。
+- <code>play_card</code> / <code>combat_ready</code>：必须携带当前
+  <code>combat_id</code> 与 <code>combat_round</code>；后者的 payload 必须为空。
+- <code>reward_choose</code>：<code>reward_id</code>、<code>card_id</code>，空 card 表示跳过。
+- <code>map_vote</code>：<code>vote_id</code>、服务端当前公开的 <code>node_id</code>。
+- <code>room_choose</code>：<code>room_id</code>、<code>choice</code>；仅休息升级可额外携带
+  <code>card_instance_id</code>。宝箱、事件和离开商店均只提交标识与选择。
+- <code>shop_buy</code>：<code>room_id</code>、<code>offer_id</code>。
+
+客户端不得提交 <code>actor_user_id</code>、<code>actor_seat</code>、price、gold、damage、
+healing、事件效果、下一状态、回执、事件或 seed；这些值均由服务器按当前阶段重新计算。
 
 ## 社交、私信、反馈与举报
 
@@ -134,11 +159,13 @@
 | POST | <code>/api/social/friends/remove</code> | 删除 <code>user_id</code> |
 | POST | <code>/api/social/settings</code> | 保存社交与游客观战设置 |
 | GET | <code>/api/social/dm/threads</code> | 私信会话列表；<code>limit</code> |
-| GET | <code>/api/social/dm/messages</code> | <code>thread_id</code>、<code>limit</code>、<code>mark_read</code> |
+| GET | <code>/api/social/dm/messages</code> | 只读获取；<code>thread_id</code>、<code>limit</code> |
+| POST | <code>/api/social/dm/messages/read</code> | 显式标记 <code>thread_id</code> 已读 |
 | POST | <code>/api/social/dm/send</code> | <code>identifier</code> 或 <code>target_user_id</code>、<code>text</code> |
 | GET | <code>/api/feedback/summary</code> | 反馈摘要与未读数 |
 | GET | <code>/api/feedback/threads</code> | 反馈工单列表；<code>status</code>、<code>limit</code>；Staff 可使用受控的 <code>staff</code> 视图 |
-| GET | <code>/api/feedback/messages</code> | <code>thread_id</code>、<code>limit</code>、<code>mark_read</code> |
+| GET | <code>/api/feedback/messages</code> | 只读获取；<code>thread_id</code>、<code>limit</code> |
+| POST | <code>/api/feedback/messages/read</code> | 显式标记 <code>thread_id</code> 已读 |
 | POST | <code>/api/feedback/send</code> | 新建或回复反馈；<code>thread_id</code>、<code>category</code>、<code>title</code>、<code>text</code>、<code>replay_id</code> |
 | POST | <code>/api/feedback/status</code> | 更新自己有权处理的 <code>thread_id</code> 状态 |
 | POST | <code>/api/report</code> | 举报玩家、消息或对局；<code>object_type</code>、<code>object_id</code>、<code>category</code>、<code>reason_text</code> |
@@ -163,11 +190,11 @@
 | 方法 | 路径 | 权限 | 用途 |
 | --- | --- | --- | --- |
 | GET | <code>/api/community-mods</code> | 可选账号 | 公开目录；不会向普通调用方返回上传者账号编号 |
-| POST | <code>/api/community-mods/upload-url</code> | 账号、限流 | 为 <code>filename</code> 创建短期上传地址 |
-| POST | <code>/api/community-mods/register</code> | 账号、限流 | 登记 <code>key</code>、<code>public_url</code>；可带 <code>replace_sha256</code> |
+| POST | <code>/api/community-mods/upload-url</code> | 账号、限流 | 为 <code>filename</code>、<code>size_bytes</code> 创建绑定账号和大小的短期上传地址 |
+| POST | <code>/api/community-mods/register</code> | 账号、限流 | 用 <code>upload_receipt</code> 登记绑定的 <code>key</code>、<code>public_url</code>；可带 <code>replace_sha256</code> |
 | DELETE | <code>/api/community-mods/&lt;sha256&gt;</code> | 账号、限流 | 仅上传者或有全局管理权的账号可删除 |
 | POST | <code>/api/community-mods/validate-url</code> | 账号、限流 | 校验当前 R2 公开域名中的 <code>public_url</code> |
-| POST | <code>/api/font-subsets/community</code> | 公开、限流 | 生成/读取已登记内容所需字体子集 |
+| POST | <code>/api/font-subsets/community</code> | 账号、限流 | 生成/读取已登记内容所需字体子集 |
 | POST | <code>/api/mods/save</code> | Staff | 开发环境写入内置 Mod Spec v2；不能由普通账号或游客调用 |
 
 远程校验只允许配置中的社区模组公开域名，并限制文件尺寸与连接时间；它不是任意 URL 代理。
@@ -229,7 +256,7 @@
 - 账号：<code>GET /api/admin/users</code>、<code>GET /api/admin/users/&lt;user_id&gt;</code>
 - 统计：<code>GET /api/admin/draft-stats</code>、<code>GET /api/admin/opening-event-stats</code>、<code>POST /api/admin/draft-stats/rebuild-wins</code>
 - 存储：<code>GET /api/admin/storage/summary</code>、<code>POST /api/admin/storage/cleanup-old</code>、<code>POST /api/admin/storage/cleanup-orphans</code>、<code>POST /api/admin/storage/vacuum</code>
-- 社区文件：<code>GET /api/admin/community-mods/storage</code>、<code>POST /api/admin/community-mods/storage/delete</code>
+- 社区文件：<code>GET /api/admin/community-mods/storage</code>、<code>POST /api/admin/community-mods/storage/delete</code>、<code>POST /api/admin/community-mods/storage/cleanup-uploads</code>（默认试算；实际删除要求 <code>confirm=true</code>）
 - 命令：<code>POST /api/admin/command</code>、<code>GET /api/admin/complete</code>
 - 对局维护：<code>GET /api/admin/ls</code>、<code>POST /api/admin/kick</code>、<code>POST /api/admin/broadcast</code>、<code>GET /api/admin/game-chat</code>、<code>POST /api/admin/game-chat/send</code>、<code>POST /api/admin/room/&lt;room_id&gt;/skip</code>、<code>POST /api/admin/room/&lt;room_id&gt;/endgame</code>、<code>POST /api/admin/room/&lt;room_id&gt;/draftfill</code>、<code>POST /api/admin/room/&lt;room_id&gt;/set</code>
 
@@ -254,6 +281,23 @@
 - Web 管理页或独立管理终端会话。
 
 公网监控只应使用 <code>/api/healthz</code>。详细诊断含数据库、锁和待处理流程信息，不应公开。
+
+## 社区公告、投票与运营后台
+
+公开读取使用 <code>Cache-Control: private, no-store</code>，不会返回运营审计、创建人账号、投票指纹或尚未结束投票的选项票数。
+
+- <code>GET /api/community/feed</code>：匿名可读当前公告、进行中投票及最近结束的投票；登录账号额外得到自己的已选选项、是否需要临近截止提醒及投票 CSRF。
+- <code>POST /api/community/polls/&lt;poll_id&gt;/vote</code>：仅登录账号；请求头 <code>X-Community-CSRF</code>，JSON 仅含整数 <code>option_id</code>。同一账号对同一选项重试是幂等成功，不能改票。
+- <code>GET /community-ops</code> 与 <code>GET /api/community/ops/workspace</code>：仅 Staff/Admin；工作区返回公告、投票完整结果、更新日志草稿和最近审计。
+- <code>POST /api/community/ops/announcements</code>
+- <code>POST /api/community/ops/announcements/&lt;announcement_id&gt;/action</code>
+- <code>POST /api/community/ops/polls</code>
+- <code>POST /api/community/ops/polls/&lt;poll_id&gt;/action</code>
+- <code>POST /api/community/ops/changelog-drafts/&lt;draft_id&gt;/action</code>
+
+所有运营写接口要求 <code>X-Community-Ops-CSRF</code>，并再次在服务端检查 Staff/Admin 身份和独立限流。时间字段必须是包含时区的 ISO 8601；更新日志同步只生成数据库草稿，运行时不会写仓库文件。
+
+管理员控制台对应命令为 <code>community list</code>、<code>community announcement ...</code> 与 <code>community poll ...</code>；控制台动作和网页动作写入同一审计表。
 
 ## Socket.IO
 

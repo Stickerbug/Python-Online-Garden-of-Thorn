@@ -111,10 +111,14 @@ def test_full_staff_party_http_lifecycle_uses_authoritative_database(
     assert started_payload['started'] is True
     assert started_payload['party']['status'] == 'active'
     assert started_payload['run']['schema_version'] == 10
-    assert started_payload['run']['seed'] != 'client-must-not-control-this'
+    assert 'seed' not in started_payload['run']
+    assert 'state' not in started_payload['run']
+    assert started_payload['run']['snapshot']['phase'] == 'journey_setup'
+    assert started_payload['run']['snapshot']['combat'] is None
+    assert started_payload['run']['snapshot']['room']['difficulties'] == ['normal']
     assert [
         member['user_id']
-        for member in started_payload['run']['state']['party']['members']
+        for member in started_payload['run']['snapshot']['party']['members']
     ] == [leader_id, member_id]
 
     with _as_staff(member_id, 'HttpMember'):

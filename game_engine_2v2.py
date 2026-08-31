@@ -323,6 +323,8 @@ class GameEngine2v2(GameEngine):
                 break
         if found is None:
             return {'success': False, 'error': '该牌不在选项中'}
+        if self._draft_unique_pick_is_duplicate(player_id, card_def_id):
+            return {'success': False, 'error': '唯一牌已被选择'}
         self.draft_picks[player_id].append(card_def_id)
         if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
             pass
@@ -530,13 +532,16 @@ class GameEngine2v2(GameEngine):
         self._apply_equal_suffering_turn_end(player_id)
         if self.game_over:
             return
+        self._apply_energy_surge_turn_end(player_id)
+        if self.game_over:
+            return
         from void_dlc_runtime import cleanup_turn_end
         cleanup_turn_end(self, player_id)
         self._decay_equipment_armor_end_turn(player_id)
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             self._mark_bandage_death_pending(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带将在己方下一名可行动玩家回合结束后使其死亡")
+            self.log_msg(f"{self.pn(player_id)}的绷带已触发：自己回合结束时死亡")
         # Fracture: clear at end of own turn
         if ps.fracture > 0:
             ps.fracture = 0
@@ -709,7 +714,13 @@ class GameEngine2v2(GameEngine):
         if self._would_heal(played_card) and counter_card.card_def.response_trigger == 'heal':
             return True
         if self._would_destroy_equipment(played_card) and counter_card.card_def.response_trigger == 'equipment_destroy':
-            return True
+            return (
+                responder_id is not None
+                and self._counter_card_can_counter_pending(
+                    int(responder_id),
+                    counter_card,
+                )
+            )
         if counter_card.card_def.response_trigger == 'hand_charge':
             from void_dlc_runtime import card_applies_hand_charge
             return (
@@ -720,6 +731,54 @@ class GameEngine2v2(GameEngine):
             )
         return False
 
+    @staticmethod
+    def _pending_counter_responder_id(entry) -> int:
+        if not isinstance(entry, dict):
+            return -1
+        try:
+            return int(entry.get('responder_id', -1))
+        except (TypeError, ValueError):
+            return -1
+
+    def _pending_counter_entries_for_responder(self, pending: dict, responder_id: int) -> List[dict]:
+        return [
+            entry for entry in (pending.get('counter_cards') or [])
+            if self._pending_counter_responder_id(entry) == responder_id
+        ]
+
+    def _pending_response_has_payable_counter(self, pending: dict) -> bool:
+        for entry in pending.get('counter_cards') or []:
+            responder_id = self._pending_counter_responder_id(entry)
+            if not self._is_valid_player_id(responder_id):
+                continue
+            try:
+                instance_id = int(entry.get('instance_id'))
+            except (AttributeError, TypeError, ValueError):
+                continue
+            counter_card = self.players[responder_id].find_hand_card(instance_id)
+            if counter_card is not None and self._can_pay_counter_card(responder_id, counter_card):
+                return True
+        return False
+
+    def _pass_pending_response(self, responder_id: int, pending: dict) -> Optional[dict]:
+        responder_entries = self._pending_counter_entries_for_responder(pending, responder_id)
+        if not responder_entries:
+            return {'success': False, 'error': '该玩家不在本次反制范围内'}
+        pending['counter_cards'] = [
+            entry for entry in (pending.get('counter_cards') or [])
+            if self._pending_counter_responder_id(entry) != responder_id
+        ]
+        passed = pending.setdefault('passed_responder_ids', [])
+        if responder_id not in passed:
+            passed.append(responder_id)
+        if self._pending_response_has_payable_counter(pending):
+            return {
+                'success': True,
+                'response_passed': True,
+                'needs_response': True,
+            }
+        return None
+
     def handle_response(self, responder_id: int, card_instance_id: Optional[int]) -> dict:
         if self.pending_response is None:
             return {'success': False, 'error': '没有待响应的操作'}
@@ -728,6 +787,26 @@ class GameEngine2v2(GameEngine):
         if self.players[responder_id].health <= 0 and card_instance_id is not None:
             return {'success': False, 'error': '阵亡玩家无法进行反制'}
         pending = self.pending_response
+        responder_entries = self._pending_counter_entries_for_responder(pending, responder_id)
+        if not responder_entries:
+            return {'success': False, 'error': '该玩家不在本次反制范围内'}
+        if card_instance_id is None:
+            pass_result = self._pass_pending_response(responder_id, pending)
+            if pass_result is not None:
+                return pass_result
+        else:
+            try:
+                selected_instance_id = int(card_instance_id)
+            except (TypeError, ValueError):
+                return {'success': False, 'error': '无效反制牌'}
+            eligible_instance_ids = set()
+            for entry in responder_entries:
+                try:
+                    eligible_instance_ids.add(int(entry.get('instance_id')))
+                except (AttributeError, TypeError, ValueError):
+                    continue
+            if selected_instance_id not in eligible_instance_ids:
+                return {'success': False, 'error': '该牌不在本次反制范围内'}
         pending_damage_prediction = self._simulate_pending_response_damage(responder_id, None) if card_instance_id is not None else {'total': 0, 'parts': []}
         self.pending_response = None
         player_id = pending['player_id']
@@ -745,19 +824,23 @@ class GameEngine2v2(GameEngine):
             responder = self.players[responder_id]
             counter_card = responder.find_hand_card(card_instance_id)
             if counter_card is None:
-                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+                self.pending_response = pending
+                return {'success': False, 'error': '反制牌已不在手牌中'}
             counter_cost_e = int(getattr(counter_card, 'cost_e', 0) or 0)
             counter_cost_m = int(getattr(counter_card, 'cost_m', 0) or 0)
             if counter_cost_e > responder.elixir or counter_cost_m > responder.magic:
-                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+                self.pending_response = pending
+                return {'success': False, 'error': '资源不足，无法反制'}
             validation_target_id = responder_id
             if not self._card_can_counter(counter_card, card, responder_id=responder_id, target_player_id=validation_target_id):
-                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+                self.pending_response = pending
+                return {'success': False, 'error': '该牌不能反制当前行动'}
             self._spend_resource(responder_id, 'elixir', counter_cost_e, counter_card)
             self._spend_resource(responder_id, 'magic', counter_cost_m, counter_card)
             counter_removed = responder.remove_hand_card(card_instance_id)
             if counter_removed is None:
-                return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+                self.pending_response = pending
+                return {'success': False, 'error': '反制牌已不在手牌中'}
             if self._card_is(card, 'Broccoli', 'sewers:broccoli'):
                 card._sewers_was_countered_this_play = True
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}{self._card_log_marker(counter_removed)}进行反制！")
@@ -874,7 +957,12 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '没有重选次数'}
         self.draft_rerolls[player_id] -= 1
         card_type = self.draft_type_order[len(self.draft_picks[player_id])]
-        self.draft_options[player_id] = generate_draft_options(self.draft_pool, card_type, 3)
+        self.draft_options[player_id] = generate_draft_options(
+            self.draft_pool,
+            card_type,
+            3,
+            forbidden_def_ids=self._draft_unique_def_ids_for_player(player_id),
+        )
         return {'success': True, 'rerolls_left': self.draft_rerolls[player_id]}
 
     def _generate_draft_options_for_player(self, player_id: int):
@@ -888,13 +976,22 @@ class GameEngine2v2(GameEngine):
             return
         draft_index = len(self.draft_picks[player_id])
         card_type = self.draft_type_order[draft_index]
-        options = generate_draft_options(self.draft_pool, card_type, 3)
-        self.draft_options[player_id] = ensure_first_bloom_draft_includes_sewage(
+        unique_owned = self._draft_unique_def_ids_for_player(player_id)
+        options = generate_draft_options(
+            self.draft_pool,
+            card_type,
+            3,
+            forbidden_def_ids=unique_owned,
+        )
+        ensured = ensure_first_bloom_draft_includes_sewage(
             self.draft_pool,
             options,
             card_type,
             self.draft_type_order[:draft_index],
         )
+        self.draft_options[player_id] = [
+            option for option in ensured if option.def_id not in unique_owned
+        ]
 
     def _generate_opening_events(self):
         pool = self._all_opening_events()
@@ -1216,31 +1313,14 @@ class GameEngine2v2(GameEngine):
         equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
         counter_cards = []
         has_payable_counter = False
-        target_responders = [
-            tid for tid in target_ids
-            if self._is_valid_player_id(tid)
-            and self.is_enemy(player_id, tid)
-            and self.players[tid].health > 0
+        # A Guard may be used whenever its trigger occurs outside the holder's
+        # own turn.  In 2v2 this includes the acting player's teammate as well
+        # as both opponents; target-specific Guards are still filtered by
+        # _card_can_counter below.
+        responder_ids = [
+            responder_id for responder_id in range(len(self.players))
+            if responder_id != player_id and self.players[responder_id].health > 0
         ]
-        from void_dlc_runtime import card_applies_hand_charge
-        if card_applies_hand_charge(card):
-            target_responders = [
-                tid for tid in target_ids
-                if self._is_valid_player_id(tid)
-                and tid != player_id
-                and self.players[tid].health > 0
-            ]
-        global_response_responders = []
-        if getattr(card, 'card_type', '') == 'bloom' or self._would_heal(card):
-            global_response_responders = [
-                enemy_id for enemy_id in self.get_all_enemies(player_id)
-                if self._is_valid_player_id(enemy_id) and self.players[enemy_id].health > 0
-            ]
-        responder_ids = list(dict.fromkeys([
-            *target_responders,
-            *equipment_destroy_responders,
-            *global_response_responders,
-        ]))
 
         try:
             for responder_id in responder_ids:
@@ -1287,16 +1367,22 @@ class GameEngine2v2(GameEngine):
             if owner_id not in owners:
                 owners.append(owner_id)
 
-        def has_destroyable_equipment(owner_id: int) -> bool:
-            if not self._is_valid_player_id(owner_id):
-                return False
-            return any('indestructible' not in eq.card_instance.flags for eq in self.players[owner_id].equipment)
+        def has_threatened_equipment(
+                owner_id: int,
+                *,
+                target_instance_id=None,
+                destroy_all: bool = False) -> bool:
+            return self._equipment_owner_has_imminent_destruction(
+                owner_id,
+                target_instance_id=target_instance_id,
+                destroy_all=destroy_all,
+            )
 
         card_id = str(getattr(card, 'def_id', '') or '').lower()
         legacy_id = str(getattr(getattr(card, 'card_def', None), 'legacy_id', '') or '').lower()
         if card_id in ('magicsewage', 'vanilla:magicsewage') or legacy_id == 'magicsewage':
             for owner_id in range(len(self.players)):
-                if has_destroyable_equipment(owner_id):
+                if has_threatened_equipment(owner_id, destroy_all=True):
                     add_owner(owner_id)
             return owners
 
@@ -1304,11 +1390,12 @@ class GameEngine2v2(GameEngine):
         if not self._is_valid_player_id(target_id):
             return []
         if isinstance(choice, dict) and choice.get('target_instance_id') is not None:
-            eq = self.players[target_id].find_equipment(choice.get('target_instance_id'))
-            if eq is not None and 'indestructible' not in eq.card_instance.flags:
+            if has_threatened_equipment(
+                    target_id,
+                    target_instance_id=choice.get('target_instance_id')):
                 add_owner(target_id)
             return owners
-        if has_destroyable_equipment(target_id):
+        if has_threatened_equipment(target_id):
             add_owner(target_id)
         return owners
 
@@ -1332,7 +1419,7 @@ class GameEngine2v2(GameEngine):
             ps.remove_hand_card(card_instance_id)
             return {'success': True, 'card': card.to_dict(), 'ignored': True}
         if self.pending_response is not None:
-            return {'success': False, 'error': '等待对手反制响应'}
+            return {'success': False, 'error': '等待反制响应'}
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': False, 'error': 'Waiting for mod UI response'}
         choice, forced_target_id = self._sewers_apply_forced_target_choice(player_id, card, choice)
@@ -1498,7 +1585,7 @@ class GameEngine2v2(GameEngine):
                             damage_type: Optional[str] = None, damage_tag: Optional[str] = None):
         if not self._is_valid_player_id(player_id):
             return 0
-        from void_dlc_runtime import maybe_defer_direct_damage
+        from void_dlc_runtime import blocks_special_effect_damage, maybe_defer_direct_damage, try_magic_copper_rod_absorb
         if maybe_defer_direct_damage(
             self,
             player_id,
@@ -1539,6 +1626,9 @@ class GameEngine2v2(GameEngine):
             return 0
         if actual <= 0:
             return 0
+        if blocks_special_effect_damage(self, player_id):
+            self.log_msg(f"{self.pn(player_id)}的口罩免受{source}伤害")
+            return 0
         if self._bio_indictment_converts_damage(
             player_id,
             actual,
@@ -1549,6 +1639,8 @@ class GameEngine2v2(GameEngine):
             return 0
         actual = self._apply_universal_damage_shields(player_id, actual, source_id, source, resolved_damage_type)
         if actual <= 0:
+            return 0
+        if try_magic_copper_rod_absorb(self, player_id, actual):
             return 0
         old_health = ps.health
         ps.health -= actual
@@ -1858,8 +1950,7 @@ class GameEngine2v2(GameEngine):
                         if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
                             aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
             elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction + aura_delta)
-            if self.opening_event_picks[player_id] == 6:
-                elixir_recovery += 1
+            elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
             self._bio_apply_debt_after_recovery(player_id)
@@ -2016,8 +2107,7 @@ class GameEngine2v2(GameEngine):
                         if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
                             aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
             elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction + aura_delta)
-            if self.opening_event_picks[player_id] == 6:
-                elixir_recovery += 1
+            elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
             self._bio_apply_debt_after_recovery(player_id)
@@ -2271,6 +2361,12 @@ class GameEngine2v2(GameEngine):
                 and int(getattr(self, '_prediction_first_attack_damage', 0) or 0) <= 0
             ):
                 self._prediction_first_attack_damage = int(dmg)
+            if dmg > 0:
+                from void_dlc_runtime import consume_lightning_rod_absorb, try_magic_copper_rod_absorb
+                if consume_lightning_rod_absorb(self, target_id, source_card, dmg):
+                    continue
+                if try_magic_copper_rod_absorb(self, target_id, dmg):
+                    continue
             old_health = ps.health
             ps.health -= dmg
             health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))

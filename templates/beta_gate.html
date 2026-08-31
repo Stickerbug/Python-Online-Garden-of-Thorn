@@ -125,7 +125,7 @@ button:active {
   </form>
   <div class="beta-note">内测模式使用同一账号与好友系统，但本地设置与正式入口分离。</div>
 </main>
-<script>
+<script nonce="{{ csp_nonce }}">
 const form = document.getElementById('beta-form');
 const input = document.getElementById('beta-key');
 const error = document.getElementById('beta-error');

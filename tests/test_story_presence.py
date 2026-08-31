@@ -97,7 +97,9 @@ class StoryPresenceTests(unittest.TestCase):
             response = self.client.post(
                 '/api/story/presence',
                 json={'client_id': 'story-client-route'},
-                headers={'X-Forwarded-For': '203.0.113.9, 10.0.0.1'},
+                # The release proxy overwrites X-Forwarded-For instead of
+                # preserving attacker-supplied hops.
+                headers={'X-Forwarded-For': '203.0.113.9'},
             )
 
         self.assertEqual(response.status_code, 200)

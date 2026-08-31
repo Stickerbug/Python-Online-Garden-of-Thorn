@@ -3,6 +3,7 @@ from unittest import mock
 
 import app as gtn
 from db import StoryCoopDataError
+from story_progress import build_story_progress_payload
 
 
 def _bundle(*, status='forming', revision=2, viewer_role='leader', run=None):
@@ -71,6 +72,9 @@ def test_all_party_routes_fail_closed_before_storage_for_regular_accounts():
         'rotate_story_coop_invite',
         'abandon_story_coop_run',
         'create_story_coop_run',
+        'get_story_coop_run_for_member',
+        'get_story_coop_action_receipt',
+        'commit_story_coop_run_action',
     )
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.object(
@@ -103,6 +107,21 @@ def test_all_party_routes_fail_closed_before_storage_for_regular_accounts():
             client.post(
                 '/api/story/coop/party/abandon',
                 json={'party_id': 'a' * 32, 'party_revision': 1},
+            ),
+            client.get('/api/story/coop/run/' + ('b' * 32)),
+            client.post(
+                '/api/story/coop/run/' + ('b' * 32) + '/action',
+                json={
+                    'party_id': 'a' * 32,
+                    'run_id': 'b' * 32,
+                    'run_revision': 1,
+                    'action_id': 'regular-action-1',
+                    'action_type': 'combat_ready',
+                    'combat_id': 'combat-1',
+                    'combat_round': 1,
+                    'expected_sequence': 0,
+                    'payload': {},
+                },
             ),
         ]
 
@@ -214,11 +233,24 @@ def test_start_builds_state_from_server_party_members_and_maps_success():
     gtn.app.config.update(TESTING=True)
     client = gtn.app.test_client()
     forming = _bundle()
-    active = _bundle(
-        status='active',
-        revision=3,
-        run={'id': 'b' * 32, 'revision': 1, 'schema_version': 10, 'state': {}},
-    )
+
+    def create_run_result(*args):
+        state = args[5]
+        return (_bundle(
+            status='active',
+            revision=3,
+            run={
+                'id': 'b' * 32,
+                'party_id': 'a' * 32,
+                'status': 'active',
+                'revision': 1,
+                'schema_version': 10,
+                'content_version': state['content_version'],
+                'seed': args[3],
+                'state': state,
+            },
+        ), 'created')
+
     with (
         _staff_request_context(),
         mock.patch.object(gtn, 'get_active_story_coop_party', return_value=forming),
@@ -226,7 +258,7 @@ def test_start_builds_state_from_server_party_members_and_maps_success():
         mock.patch.object(
             gtn,
             'create_story_coop_run',
-            return_value=(active, 'created'),
+            side_effect=create_run_result,
         ) as create_run,
     ):
         response = client.post(
@@ -240,12 +272,103 @@ def test_start_builds_state_from_server_party_members_and_maps_success():
         )
 
     assert response.status_code == 200
-    assert response.get_json()['started'] is True
+    response_payload = response.get_json()
+    assert response_payload['started'] is True
+    assert 'seed' not in response_payload['run']
+    assert 'state' not in response_payload['run']
+    assert response_payload['run']['snapshot']['phase'] == 'journey_setup'
+    assert response_payload['run']['snapshot']['combat'] is None
+    assert response_payload['run']['snapshot']['room']['biomes'] == ['garden']
+    assert response_payload['run']['snapshot']['room']['difficulties'] == ['normal']
     args = create_run.call_args.args
-    assert args[:5] == (41, 'a' * 32, 2, 'server-seed', gtn.STORY_CONTENT_VERSION)
+    assert args[:5] == (
+        41,
+        'a' * 32,
+        2,
+        'server-seed',
+        gtn.COOP_STORY_CONTENT_VERSION,
+    )
     generated_state = args[5]
     assert [member['user_id'] for member in generated_state['party']['members']] == [41, 52]
     assert generated_state['party']['leader_seat'] == 0
+
+
+def test_start_accepts_mage_only_when_every_member_has_unlocked_it():
+    gtn.app.config.update(TESTING=True)
+    client = gtn.app.test_client()
+    forming = _bundle()
+    mage_progress = build_story_progress_payload([{
+        'character_id': 'common_flower',
+        'difficulty': 'normal',
+        'standard_clears': 1,
+    }])
+
+    def create_run_result(*args):
+        state = args[5]
+        return (_bundle(
+            status='active',
+            revision=3,
+            run={
+                'id': 'b' * 32,
+                'party_id': 'a' * 32,
+                'status': 'active',
+                'revision': 1,
+                'schema_version': 10,
+                'content_version': state['content_version'],
+                'seed': args[3],
+                'state': state,
+            },
+        ), 'created')
+
+    with (
+        _staff_request_context(),
+        mock.patch.object(gtn, 'get_active_story_coop_party', return_value=forming),
+        mock.patch.object(
+            gtn,
+            'get_story_progress_for_users',
+            return_value={41: mage_progress, 52: mage_progress},
+        ),
+        mock.patch.object(gtn, 'create_story_coop_run', side_effect=create_run_result),
+    ):
+        response = client.post(
+            '/api/story/coop/party/start',
+            json={
+                'party_id': 'a' * 32,
+                'party_revision': 2,
+                'character_id': 'mage',
+            },
+        )
+
+    assert response.status_code == 200
+    snapshot = response.get_json()['run']['snapshot']
+    assert snapshot['character_id'] == 'mage'
+    assert snapshot['room']['difficulties'] == ['normal']
+
+    with (
+        _staff_request_context(),
+        mock.patch.object(gtn, 'get_active_story_coop_party', return_value=forming),
+        mock.patch.object(
+            gtn,
+            'get_story_progress_for_users',
+            return_value={
+                41: mage_progress,
+                52: build_story_progress_payload(),
+            },
+        ),
+        mock.patch.object(gtn, 'create_story_coop_run') as create_run,
+    ):
+        locked = client.post(
+            '/api/story/coop/party/start',
+            json={
+                'party_id': 'a' * 32,
+                'party_revision': 2,
+                'character_id': 'mage',
+            },
+        )
+
+    assert locked.status_code == 409
+    assert locked.get_json()['code'] == 'COOP_STORY_CHARACTER_LOCKED'
+    create_run.assert_not_called()
 
 
 def test_leave_requires_strict_integer_revision_and_maps_version_conflict():

@@ -1,18 +1,21 @@
 import html
 import re
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 from threading import RLock
 
 
 SUSPICIOUS_EVENTS = deque(maxlen=500)
-_RATE_BUCKETS = defaultdict(deque)
-_ILLEGAL_BUCKETS = defaultdict(deque)
-_MUTES = {}
+_RATE_BUCKETS = OrderedDict()
+_ILLEGAL_BUCKETS = OrderedDict()
+_MUTES = OrderedDict()
 _LOCK = RLock()
 
 DEFAULT_ILLEGAL_LIMIT = 12
 DEFAULT_ILLEGAL_WINDOW = 300
+MAX_RATE_BUCKET_KEYS = 50_000
+MAX_ILLEGAL_BUCKET_KEYS = 20_000
+MAX_MUTE_KEYS = 20_000
 
 
 def _now():
@@ -62,15 +65,45 @@ def escape_text(value):
 def rate_limiter(key, *, limit, window, now=None, consume=True):
     if not key:
         return False
+    try:
+        safe_limit = max(1, int(limit))
+        safe_window = max(0.001, float(window))
+    except (TypeError, ValueError):
+        return False
     now = _now() if now is None else float(now)
+    token = str(key)
     with _LOCK:
-        bucket = _RATE_BUCKETS[str(key)]
-        while bucket and now - bucket[0] >= window:
+        bucket = _RATE_BUCKETS.get(token)
+        if bucket is None:
+            if not consume:
+                return True
+            bucket = deque()
+            _RATE_BUCKETS[token] = bucket
+        else:
+            _RATE_BUCKETS.move_to_end(token)
+        while bucket and now - bucket[0] >= safe_window:
             bucket.popleft()
-        allowed = len(bucket) < limit
+        if not bucket and not consume:
+            _RATE_BUCKETS.pop(token, None)
+            return True
+        allowed = len(bucket) < safe_limit
         if allowed and consume:
             bucket.append(now)
+        while len(_RATE_BUCKETS) > MAX_RATE_BUCKET_KEYS:
+            _RATE_BUCKETS.popitem(last=False)
         return allowed
+
+
+def clear_rate_limit(key):
+    if not key:
+        return
+    with _LOCK:
+        _RATE_BUCKETS.pop(str(key), None)
+
+
+def rate_limit_bucket_count():
+    with _LOCK:
+        return len(_RATE_BUCKETS)
 
 
 def record_suspicious_event(kind, message, *, sid=None, user_id=None, ip=None, severity='medium', extra=None):
@@ -108,6 +141,8 @@ def is_muted(identifier):
         if until and until <= now:
             _MUTES.pop(key, None)
             return False
+        if until:
+            _MUTES.move_to_end(key)
         return bool(until and until > now)
 
 
@@ -121,6 +156,8 @@ def mute_remaining_seconds(identifier):
         if until and until <= now:
             _MUTES.pop(key, None)
             return 0
+        if until:
+            _MUTES.move_to_end(key)
         return max(0, int(round(until - now))) if until else 0
 
 
@@ -135,6 +172,9 @@ def mute_user(identifier, seconds=600, reason=''):
     key = str(identifier)
     with _LOCK:
         _MUTES[key] = until
+        _MUTES.move_to_end(key)
+        while len(_MUTES) > MAX_MUTE_KEYS:
+            _MUTES.popitem(last=False)
     record_suspicious_event('mute', f'muted {key}: {reason}', user_id=identifier if str(identifier).isdigit() else None)
     return until
 
@@ -147,12 +187,20 @@ def record_illegal_operation(key, *, limit=DEFAULT_ILLEGAL_LIMIT, window=DEFAULT
     if not key:
         return 0, False
     now = _now()
+    token = str(key)
     with _LOCK:
-        bucket = _ILLEGAL_BUCKETS[str(key)]
+        bucket = _ILLEGAL_BUCKETS.get(token)
+        if bucket is None:
+            bucket = deque()
+            _ILLEGAL_BUCKETS[token] = bucket
+        else:
+            _ILLEGAL_BUCKETS.move_to_end(token)
         while bucket and now - bucket[0] >= window:
             bucket.popleft()
         bucket.append(now)
         count = len(bucket)
+        while len(_ILLEGAL_BUCKETS) > MAX_ILLEGAL_BUCKET_KEYS:
+            _ILLEGAL_BUCKETS.popitem(last=False)
     return count, count >= limit
 
 

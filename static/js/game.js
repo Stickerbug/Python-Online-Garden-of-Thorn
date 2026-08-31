@@ -11,6 +11,24 @@ const MAX_CLIENT_DAMAGE_HITS = 100;
 const MAX_CLIENT_DAMAGE_SEGMENTS = MAX_CLIENT_CARD_LAYER * MAX_CLIENT_DAMAGE_HITS;
 const GTN_ROUTE_COOKIE = 'gtn_route_port';
 const GTN_ACTIVE_ROUTE_KEY = 'gtn_active_route';
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('error', (event) => {
+        const image = event && event.target;
+        if (!image || String(image.tagName || '').toUpperCase() !== 'IMG') return;
+        const mode = String(image.dataset?.imageFallback || '');
+        if (mode === 'inline-token') {
+            image.closest('.inline-token-icon-wrap')?.classList.add('icon-load-failed');
+        } else if (mode === 'equipment') {
+            image.classList.add('hidden');
+            image.nextElementSibling?.classList.remove('hidden');
+        } else if (mode === 'card-art') {
+            image.closest('.card-art')?.classList.add('hidden');
+        } else if (mode === 'classic-card-art') {
+            image.style.display = 'none';
+        }
+    }, true);
+}
 const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_theme',
     'gtn_lang',
@@ -258,6 +276,12 @@ function clampClientCardLayer(value) {
     const n = Math.floor(Number(value));
     if (!Number.isFinite(n)) return 1;
     return Math.min(MAX_CLIENT_CARD_LAYER, Math.max(1, n));
+}
+
+function fusionAdjustedCost(cost, fusionLevel) {
+    const normalizedCost = Math.max(0, Math.floor(Number(cost) || 0));
+    const level = clampClientCardLayer(fusionLevel);
+    return Math.floor(normalizedCost * (level + 1) / 2);
 }
 
 function clampClientExtraHits(value) {
@@ -839,7 +863,7 @@ const I18N = {
         classic_play_self_anywhere: 'Click anywhere to play on yourself',
         classic_play_anywhere: 'Click anywhere to play',
         classic_equip_stage: 'Click your side to equip',
-        cannot_play: 'Cannot Play', enemy_attack: 'Enemy Attack', enemy_skill: 'Enemy Skill', enemy_destroy_equip: ', destroys equipment',
+        cannot_play: 'Cannot Play', enemy_attack: 'Thorn card', enemy_skill: 'Bloom card', enemy_destroy_equip: ', destroys equipment',
         use_card: 'Use', insufficient_resources: 'Insufficient resources', choose_attack_for: 'Choose an attack for {0}', choose_equip_for: 'Choose equipment',
         choose_discard_for: 'Choose a discard for {0}', choose_from_deck_for: 'Choose from deck', choose_from_discard_for: 'Choose from discard for {0}',
         choose_hand_for: 'Choose from hand for {0}', choose_from_enemy_hand_for: 'Choose from enemy hand', choose_attack_group_for: 'Choose attack group for {0}',
@@ -887,7 +911,7 @@ const I18N = {
         hand_deck_zero_you: 'Hand:0 Deck:0 Discard:0',
         rotate_hint_sub: 'Rotate to Landscape',
         error_game_over: 'The game is over',
-        error_waiting_counter: 'Waiting for the opponent to respond',
+        error_waiting_counter: 'Waiting for counter responses',
         error_card_not_in_hand: 'Card is not in hand',
         error_remove_from_hand_failed: 'Failed to remove card from hand',
         error_no_pending_response: 'No pending response',
@@ -948,7 +972,7 @@ I18N.zh = { ...I18N.en,
     invite_sent: '邀请已发送', invite_received: '收到邀请', invite_message: '邀请你进行对战', invite_declined: '邀请被拒绝',
     ongoing_games: '进行中的对局', spectate: '观战', draft_info: '选牌', draft_complete: '选牌完成', draft_waiting: '等待对方完成选牌',
     draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对方选择事件', event_reroll: '刷新', status_event_select: '选择配装', status_drafting: '选牌中', status_sub_choice: '配装处理', status_ready: '已完成',
-    drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '敌方攻击', enemy_skill: '敌方技能', enemy_destroy_equip: '，摧毁装备',
+    drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '攻击牌', enemy_skill: '技能牌', enemy_destroy_equip: '，摧毁装备',
     drag_to_play_full: '拖动到此处以出牌', tap_play_hint: '点击手牌后确认出牌', confirm_play: '打出 {0}', cancel_play: '取消出牌',
     classic_select_card: '选择一张手牌',
     prediction_target: '对目标',
@@ -1007,7 +1031,7 @@ I18N.zh = { ...I18N.en,
     hand_deck_zero_you: '手牌:0 牌堆:0 弃牌:0',
     rotate_hint_sub: '请旋转至横屏',
     error_game_over: '游戏已结束',
-    error_waiting_counter: '等待对手反制响应',
+    error_waiting_counter: '等待反制响应',
     error_card_not_in_hand: '卡牌不在手中',
     error_remove_from_hand_failed: '移出手牌失败',
     error_no_pending_response: '没有待响应的操作',
@@ -1072,7 +1096,7 @@ I18N.fr = { ...I18N.en,
     ongoing_games: 'Parties en cours', spectate: 'Observer', draft_info: 'Draft', draft_complete: 'Draft terminé', draft_waiting: "En attente de l'adversaire",
     draft_cost: 'Coût', select_this_event: 'Choisir cet événement', event_selected: 'Événement choisi', event_waiting: "En attente du choix de l'adversaire",
     drag_to_play: 'Glisser pour jouer', cannot_play: 'Impossible de jouer',
-    enemy_attack: 'Attaque ennemie', enemy_skill: 'Compétence ennemie', enemy_destroy_equip: "Destruction d'équipement ennemi",
+    enemy_attack: 'Carte Épine', enemy_skill: 'Carte Floraison', enemy_destroy_equip: "Destruction d'équipement",
     use_card: 'Utiliser', insufficient_resources: 'Ressources insuffisantes', choose_attack_for: 'Choisir une attaque pour', choose_equip_for: 'Choisir un équipement',
     choose_discard_for: 'Choisir une carte à défausser', choose_from_deck_for: 'Choisir depuis le deck', choose_from_discard_for: 'Choisir depuis la défausse', choose_hand_for: 'Choisir depuis la main',
     choose_from_enemy_hand_for: 'Choisir depuis la main ennemie', choose_attack_group_for: "Choisir un groupe d'attaque",
@@ -1146,7 +1170,7 @@ I18N.ja = { ...I18N.en,
     ongoing_games: '進行中の対戦', spectate: '観戦', draft_info: 'ドラフト', draft_complete: 'ドラフト完了', draft_waiting: '相手のドラフト完了を待っています',
     draft_cost: 'コスト', select_this_event: 'このイベントを選択', event_selected: 'イベント選択済み', event_waiting: '相手のイベント選択を待っています',
     drag_to_play: 'ドラッグしてプレイ', cannot_play: 'プレイ不可',
-    enemy_attack: '敵の攻撃', enemy_skill: '敵のスキル', enemy_destroy_equip: '敵の装備破壊',
+    enemy_attack: '攻撃カード', enemy_skill: 'スキルカード', enemy_destroy_equip: '、装備を破壊',
     use_card: '使用', insufficient_resources: 'リソース不足', choose_attack_for: '攻撃カードを選択', choose_equip_for: '装備を選択',
     choose_discard_for: '捨て札を選択', choose_from_deck_for: 'デッキから選択', choose_from_discard_for: '捨て札から選択', choose_hand_for: '手札から選択',
     choose_from_enemy_hand_for: '相手の手札から選択', choose_attack_group_for: '攻撃グループを選択',
@@ -1429,7 +1453,7 @@ Object.assign(I18N.zh, {
     rules_mode_1v1_title: '1v1',
     rules_mode_1v1_text: '两名玩家进行标准对决。双方选择配装与卡牌并完成开局处理后轮流行动；攻击通常指向对手，其他效果按卡面选择目标。先使对手阵亡的一方获胜。这是学习目标、资源、反制、装备和状态结算的主要模式。',
     rules_mode_2v2_title: '2v2',
-    rules_mode_2v2_text: '四名玩家分成两队，按既定顺序轮流行动。卡牌可能选择敌方、自己或队友；反制只由符合响应范围的玩家使用。玩家阵亡后跳过其回合，但仍可能被复活；一队全部阵亡时另一队获胜。',
+    rules_mode_2v2_text: '四名玩家分成两队，按既定顺序轮流行动。卡牌可能选择敌方、自己或队友；反制牌可在非自己的回合、且响应条件满足时使用，因此也能响应队友的行动。玩家阵亡后跳过其回合，但仍可能被复活；一队全部阵亡时另一队获胜。',
     rules_mode_urf_title: '无限火力',
     rules_mode_urf_text: '1v1快速模式，不进行配装和选牌。双方从当前模组的加权随机牌池获得手牌，牌库不会耗尽；每回合可替换1张手牌，并可售卖1件可售装备。手牌上限为10，装备上限为3，部分会破坏模式循环的牌不会进入牌池。',
     rules_mode_random_title: '随机卡组',
@@ -1453,7 +1477,7 @@ Object.assign(I18N.zh, {
     tag_desc_uncancellable: '此牌弹出选择窗口时不能取消，玩家必须完成选择。',
     tag_desc_infinite_exclude: '此牌不会进入无限火力的随机牌库。',
     tag_desc_copy: '此牌进入手中时，将对应层数张带有放逐的复制加入手中。',
-    tag_desc_unique: '同一玩家不能同时保留多张同名唯一牌，多余实例会被放逐。',
+    tag_desc_unique: '同一玩家通常只能获得1张同名唯一牌；已拥有时不会再次出现在选牌中。强制复制仍会保留副本，但每个多余副本会向牌组加入1张虚空。',
     tag_desc_swift: '此牌的E花费减少X，最低为0E。',
     tag_desc_rebound: '此牌打出并结算后立即回到使用者手中，并经历一次弃牌堆清理。',
     tag_desc_stealth: '此牌不会触发任何反制窗口。',
@@ -1482,7 +1506,7 @@ Object.assign(I18N.en, {
     rules_mode_1v1_title: '1v1',
     rules_mode_1v1_text: 'A standard duel between two players. After loadouts, drafting, and setup, players alternate turns. Attacks usually target the opponent, while other cards follow their target text. The first player to defeat the opponent wins.',
     rules_mode_2v2_title: '2v2',
-    rules_mode_2v2_text: 'Four players form two teams and act in a fixed order. Cards may target enemies, yourself, or allies, and only players inside a response card’s range may counter. Defeated players skip turns but may be revived. A team loses when all its players are defeated.',
+    rules_mode_2v2_text: 'Four players form two teams and act in a fixed order. Cards may target enemies, yourself, or allies. A Guard may be used outside its holder’s own turn when its response condition is met, including during an ally’s action. Defeated players skip turns but may be revived. A team loses when all its players are defeated.',
     rules_mode_urf_title: 'Infinite Fire',
     rules_mode_urf_text: 'A fast 1v1 mode without loadouts or drafting. Both players draw from an endless weighted pool built from the selected mods. Once per turn, replace one hand card and sell one eligible equipment. Hand limit is 10, equipment limit is 3, and cards that break the mode loop are excluded.',
     rules_mode_random_title: 'Random Deck',
@@ -1522,7 +1546,7 @@ Object.assign(I18N.en, {
     tag_desc_uncancellable: 'Choice keyword. Selection windows from this card do not show a cancel button; the player must complete the choice. This prevents checking hidden information for 0 cost and canceling, such as with Magnet.',
     tag_desc_infinite_exclude: 'Mode keyword. This card is excluded from Infinite Fire random pools because it conflicts with that mode.',
     tag_desc_copy: 'Draw keyword. When this card enters your hand, add N exile copies to your hand.',
-    tag_desc_unique: 'Deck keyword. Only one copy of this card is allowed in your deck; extras are exiled.',
+    tag_desc_unique: 'Normally, you can obtain only one copy of a Unique card, and owned cards are removed from later draft choices. Forced copies remain, but each extra copy adds 1 Void to your deck.',
     tag_desc_swift: 'Cost keyword. This card\'s E cost is reduced by X (minimum 0E).',
     tag_desc_rebound: 'Resolution keyword. After being played and resolved, this card immediately returns to its user’s hand.',
     tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.',
@@ -1542,7 +1566,7 @@ Object.assign(I18N.fr, {
     rules_resource_health: 'Vie', rules_resource_elixir: 'Élixir', rules_resource_magic: 'Magie',
     rules_resources_text: 'Un joueur est vaincu lorsque {health} atteint 0. {elixir} paie la plupart des cartes, tandis que {magic} paie les cartes magiques. Lors d’une transition, les effets de fin du tour précédent se résolvent avant ceux du début du tour suivant. Le prochain joueur capable d’agir ne commence qu’après cette résolution.',
     rules_types_title: 'Types de cartes',
-    rules_types_text: 'Les cartes {thornRaw} infligent des dégâts directs, comme {basic} et {bone}. Les cartes {bloomRaw} soignent, appliquent des états, modifient les ressources ou changent la situation, comme {fire}. Les cartes {rootRaw} fournissent des effets continus ou déclenchés après avoir été jouées, comme {leaf}. Les cartes {guardRaw} sont des contres : elles répondent à une action adverse qui remplit leur condition.',
+    rules_types_text: 'Les cartes {thornRaw} infligent des dégâts directs, comme {basic} et {bone}. Les cartes {bloomRaw} soignent, appliquent des états, modifient les ressources ou changent la situation, comme {fire}. Les cartes {rootRaw} fournissent des effets continus ou déclenchés après avoir été jouées, comme {leaf}. Les cartes {guardRaw} sont des contres utilisables hors de votre propre tour lorsque leur condition est remplie.',
     rules_flow_title: 'Déroulement',
     rules_flow_text: 'Un match standard suit la sélection et la révélation des équipements initiaux, le draft, les choix liés à ces équipements, puis la pioche initiale. Pendant le combat, seul le joueur actif peut jouer une carte ou déclencher un équipement disponible. Lorsqu’une cible est requise, choisissez un joueur légal en surbrillance. Le temps du joueur actif est suspendu pendant les réponses, les choix adverses et les reconnexions.',
     rules_target_title: 'Cartes et cibles',
@@ -1551,7 +1575,7 @@ Object.assign(I18N.fr, {
     rules_mode_1v1_title: '1v1',
     rules_mode_1v1_text: 'Duel standard entre deux joueurs. Après la préparation et le draft, les joueurs agissent à tour de rôle. Le premier à vaincre son adversaire gagne.',
     rules_mode_2v2_title: '2v2',
-    rules_mode_2v2_text: 'Quatre joueurs forment deux équipes et jouent dans un ordre fixe. Les cartes peuvent viser ennemis, soi-même ou alliés selon leur texte. Un joueur vaincu saute ses tours mais peut être ressuscité. Une équipe perd lorsque tous ses joueurs sont vaincus.',
+    rules_mode_2v2_text: 'Quatre joueurs forment deux équipes et jouent dans un ordre fixe. Les cartes peuvent viser ennemis, soi-même ou alliés selon leur texte. Un contre peut être utilisé hors de votre propre tour si sa condition est remplie, y compris pendant l’action d’un allié. Un joueur vaincu saute ses tours mais peut être ressuscité. Une équipe perd lorsque tous ses joueurs sont vaincus.',
     rules_mode_urf_title: 'Feu infini',
     rules_mode_urf_text: 'Mode 1v1 rapide sans préparation ni draft. Les cartes viennent d’une réserve aléatoire pondérée et inépuisable créée avec les mods sélectionnés. Une fois par tour, vous pouvez remplacer une carte et vendre un équipement valide. La main est limitée à 10 cartes et les équipements à 3.',
     rules_mode_random_title: 'Deck aléatoire',
@@ -1596,7 +1620,7 @@ Object.assign(I18N.ja, {
     rules_resource_health: '生命', rules_resource_elixir: 'エネルギー', rules_resource_magic: '魔力',
     rules_resources_text: '{health}が0になるとプレイヤーは倒れます。{elixir}は多くのカード、{magic}は魔法カードの支払いに使います。ターン交替では、直前のターン終了時効果を先に、次のターン開始時効果を後に解決します。すべての解決後、次に行動可能なプレイヤーが行動を始めます。',
     rules_types_title: 'カードタイプ',
-    rules_types_text: '{thornRaw} は直接ダメージを与えるカードで、例は {basic}、{bone} です。{bloomRaw} は回復、状態付与、リソース調整などを行うカードで、例は {fire} です。{rootRaw} は使用後に継続効果や発動効果を持つカードで、例は {leaf} です。{guardRaw} は相手の行動が条件を満たしたときに反応するカウンターです。',
+    rules_types_text: '{thornRaw} は直接ダメージを与えるカードで、例は {basic}、{bone} です。{bloomRaw} は回復、状態付与、リソース調整などを行うカードで、例は {fire} です。{rootRaw} は使用後に継続効果や発動効果を持つカードで、例は {leaf} です。{guardRaw} は自分以外の手番に条件を満たすと使用できるカウンターです。',
     rules_flow_title: 'ターンの流れ',
     rules_flow_text: '標準対局は、配装の選択と公開、カード選択、配装処理、初期ドローの順に進みます。対局中は手番プレイヤーだけが手札を使い、条件を満たす装備を発動できます。対象が必要な場合は、強調表示された選択可能なプレイヤーを選びます。反制、他プレイヤーの選択、再接続待ちの間は手番時間が停止します。',
     rules_target_title: 'カードと対象',
@@ -1605,7 +1629,7 @@ Object.assign(I18N.ja, {
     rules_mode_1v1_title: '1v1',
     rules_mode_1v1_text: '2人で行う標準対局です。配装、カード選択、準備の後に交互に行動し、先に相手を倒した側が勝利します。',
     rules_mode_2v2_title: '2v2',
-    rules_mode_2v2_text: '4人が2チームに分かれ、決められた順番で行動します。カード本文に従って敵、自分、味方を対象にできます。倒れたプレイヤーの手番は飛ばされますが、復活することがあります。チーム全員が倒れると敗北です。',
+    rules_mode_2v2_text: '4人が2チームに分かれ、決められた順番で行動します。カード本文に従って敵、自分、味方を対象にできます。反制カードは自分以外の手番に条件を満たせば、味方の行動中でも使用できます。倒れたプレイヤーの手番は飛ばされますが、復活することがあります。チーム全員が倒れると敗北です。',
     rules_mode_urf_title: '無限火力',
     rules_mode_urf_text: '配装とカード選択を行わない高速1v1です。選択中のModから作られた、重み付きで枯渇しないランダムカードプールを使います。各ターンに手札1枚を交換し、売却可能な装備1個を売れます。手札上限は10、装備上限は3です。',
     rules_mode_random_title: 'ランダムデッキ',
@@ -1652,7 +1676,7 @@ Object.assign(I18N.fr, {
     tag_desc_uncancellable: 'Mot-clé de choix. Les fenêtres de choix de cette carte n’affichent pas de bouton Annuler ; le joueur doit terminer le choix. Cela évite de consulter une information cachée gratuitement puis d’annuler, par exemple avec Aimant.',
     tag_desc_infinite_exclude: 'Mot-clé de mode. Cette carte est exclue de la réserve aléatoire d’Infinite Fire car elle entre en conflit avec ce mode.',
     tag_desc_copy: 'Mot-clé de pioche. Quand cette carte entre en main, ajoute N copies exilées.',
-    tag_desc_unique: 'Mot-clé de deck. Une seule copie autorisée; les excédentaires sont exilées.',
+    tag_desc_unique: 'Vous ne pouvez normalement obtenir qu’un exemplaire d’une carte Unique, qui disparaît ensuite des choix. Une copie forcée reste, mais ajoute 1 Vide à votre deck pour chaque exemplaire excédentaire.',
     tag_desc_swift: 'Mot-clé de coût. Le coût E de cette carte est réduit de X (minimum 0E).',
     tag_desc_rebound: 'Mot-clé de résolution. Après avoir été jouée et résolue, cette carte revient immédiatement dans la main de son utilisateur.',
     tag_desc_default: 'Tag de mod ou d\'extension. Son sens exact est défini par le mod ou l\'effet de carte correspondant.',
@@ -1692,7 +1716,7 @@ Object.assign(I18N.ja, {
     tag_desc_uncancellable: '選択制限キーワード。このカードの選択画面にはキャンセルボタンが表示されず、必ず選択を完了します。Magnet のように0コストで非公開情報を見てからキャンセルすることを防ぎます。',
     tag_desc_infinite_exclude: 'モード制限キーワード。このカードは Infinite Fire のランダムカードプールに入りません。',
     tag_desc_copy: 'ドローキーワード。このカードが手札に入った時、追放コピーをN枚手札に加える。',
-    tag_desc_unique: 'デッキキーワード。デッキに1枚のみ許可され、超過分は追放される。',
+    tag_desc_unique: '通常、同名の唯一カードは1枚だけ獲得でき、所持後は選択肢に出ません。強制複製は残りますが、余分な1枚ごとにデッキへ虚空を1枚加えます。',
     tag_desc_swift: 'コストキーワード。このカードのE消費がX減少（最低0E）。',
     tag_desc_rebound: '解決先キーワード。打ち出して解決した後、ただちに使用者の手札へ戻ります。',
     tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。',
@@ -1721,22 +1745,22 @@ Object.assign(I18N.ja, {
 
 Object.assign(I18N.zh, {
     gallery_related_cards: '相关卡牌',
-    tag_desc_fusion_layer: '特殊机制，不是普通标签。聚变层数与裂变层数共同决定攻击牌下一次打出时的结算：总伤害先按聚变层数放大，再按裂变层数拆成多次伤害，每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。打出聚变时，选择2张同名攻击牌，将聚变层数相加，裂变层数取最大，合并为一张牌。牌进入弃牌堆后会恢复为默认聚变1。',
+    tag_desc_fusion_layer: '特殊机制，不是普通标签。默认聚变层数为1；每超过默认1层，牌自身的所有花费增加50%（向下取整）。聚变层数与裂变层数共同决定攻击牌下一次打出时的结算：总伤害先按聚变层数放大，再按裂变层数拆成多次伤害，每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。打出聚变时，选择2张同名攻击牌，将聚变层数相加，裂变层数取最大，合并为一张牌。牌进入弃牌堆后会恢复为默认聚变1。',
     tag_desc_fission_layer: '特殊机制，不是普通标签。裂变层数表示攻击牌打出时会拆成多少次结算，并与聚变层数共同作用：每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。如果卡牌每次命中都会改变后续伤害，例如三角形，每一次裂变命中都会按当时的层数重新计算。牌进入弃牌堆后会恢复为默认裂变1。'
 });
 Object.assign(I18N.en, {
     gallery_related_cards: 'Related cards',
-    tag_desc_fusion_layer: 'Special mechanic, not a normal tag. Fusion and Fission work together when an attack is next played: total damage is first scaled by Fusion, then split into Fission hits. Each hit deals ceil(base damage × Fusion / Fission). Playing Fusion chooses 2 same-name attacks, adds their Fusion levels, keeps the highest Fission level, and merges them into one card. When the card enters the discard pile, Fusion resets to the default 1.',
+    tag_desc_fusion_layer: 'Special mechanic, not a normal tag. The default Fusion level is 1; each level above 1 increases all of the card\'s own costs by 50%, rounded down. Fusion and Fission work together when an attack is next played: total damage is first scaled by Fusion, then split into Fission hits. Each hit deals ceil(base damage × Fusion / Fission). Playing Fusion chooses 2 same-name attacks, adds their Fusion levels, keeps the highest Fission level, and merges them into one card. When the card enters the discard pile, Fusion resets to the default 1.',
     tag_desc_fission_layer: 'Special mechanic, not a normal tag. Fission is the number of hits an attack is split into, and it works together with Fusion: each hit deals ceil(base damage × Fusion / Fission). If a card changes later damage after each hit, such as Triangle, every Fission hit recalculates from the current layer count. When the card enters the discard pile, Fission resets to the default 1.'
 });
 Object.assign(I18N.fr, {
     gallery_related_cards: 'Cartes liées',
-    tag_desc_fusion_layer: 'Mécanique spéciale, pas un tag normal. Fusion et Fission agissent ensemble quand une attaque est jouée : les dégâts totaux sont d’abord multipliés par Fusion, puis divisés en plusieurs touches de Fission. Chaque touche inflige ceil(dégâts de base × Fusion / Fission). Jouer Fusion choisit 2 attaques de même nom, additionne leurs niveaux de Fusion, garde le plus haut niveau de Fission et les fusionne en une carte. Quand la carte va dans la défausse, Fusion revient à 1.',
+    tag_desc_fusion_layer: 'Mécanique spéciale, pas un tag normal. Le niveau de Fusion par défaut est 1 ; chaque niveau au-dessus de 1 augmente tous les coûts propres de la carte de 50 %, arrondis à l’entier inférieur. Fusion et Fission agissent ensemble quand une attaque est jouée : les dégâts totaux sont d’abord multipliés par Fusion, puis divisés en plusieurs touches de Fission. Chaque touche inflige ceil(dégâts de base × Fusion / Fission). Jouer Fusion choisit 2 attaques de même nom, additionne leurs niveaux de Fusion, garde le plus haut niveau de Fission et les fusionne en une carte. Quand la carte va dans la défausse, Fusion revient à 1.',
     tag_desc_fission_layer: 'Mécanique spéciale, pas un tag normal. Fission indique en combien de touches une attaque est divisée, et agit avec Fusion : chaque touche inflige ceil(dégâts de base × Fusion / Fission). Si une carte modifie les dégâts suivants à chaque touche, comme Triangle, chaque touche de Fission recalcule avec les couches actuelles. Quand la carte va dans la défausse, Fission revient à 1.'
 });
 Object.assign(I18N.ja, {
     gallery_related_cards: '関連カード',
-    tag_desc_fusion_layer: '通常のタグではなく特殊な仕組みです。融合と分裂は攻撃カードを次に打ち出す時に共同で作用します。総ダメージはまず融合層で拡大され、その後分裂層の回数に分けられます。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。融合を使うと同名攻撃カード2枚を選び、融合層を合計し、分裂層は最大値を取り、1枚のカードにします。カードが捨て札に入ると融合は既定値1に戻ります。',
+    tag_desc_fusion_layer: '通常のタグではなく特殊な仕組みです。融合の既定値は1です。1を超える層ごとに、そのカード自身のすべてのコストが50%増加し、端数は切り捨てます。融合と分裂は攻撃カードを次に打ち出す時に共同で作用します。総ダメージはまず融合層で拡大され、その後分裂層の回数に分けられます。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。融合を使うと同名攻撃カード2枚を選び、融合層を合計し、分裂層は最大値を取り、1枚のカードにします。カードが捨て札に入ると融合は既定値1に戻ります。',
     tag_desc_fission_layer: '通常のタグではなく特殊な仕組みです。分裂層は攻撃カードが何回に分かれて解決されるかを表し、融合層と共同で作用します。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。三角形のようにヒットごとに以後のダメージが変わるカードは、各分裂ヒットでその時点の層数を使って再計算します。カードが捨て札に入ると分裂は既定値1に戻ります。'
 });
 
@@ -3806,7 +3830,7 @@ function renderInlineIconHtml(iconKey, label = '') {
     const safeLabel = String(label || iconKey || '').trim();
     if (!url) return safeLabel ? `<span class="inline-token-icon-fallback">${escapeHtml(safeLabel)}</span>` : '';
     const title = safeLabel ? ` title="${escapeHtml(safeLabel)}"` : '';
-    return `<span class="inline-token-icon-wrap"><img class="inline-token-icon" src="${escapeHtml(url)}" alt="" aria-hidden="true"${title} onerror="this.closest('.inline-token-icon-wrap')?.classList.add('icon-load-failed')"><span class="inline-token-icon-fallback">${escapeHtml(safeLabel)}</span></span>`;
+    return `<span class="inline-token-icon-wrap"><img class="inline-token-icon" src="${escapeHtml(url)}" alt="" aria-hidden="true"${title} data-image-fallback="inline-token"><span class="inline-token-icon-fallback">${escapeHtml(safeLabel)}</span></span>`;
 }
 
 function getIconTermKey(iconKey) {
@@ -4870,7 +4894,7 @@ function translateServerMessage(message) {
     if (message === '有玩家已返回大厅') return UI.rematch_unavailable_returned || message;
     if (message === '游戏已结束') return UI.error_game_over;
     if (message === '游戏已经结束') return UI.error_game_already_over || UI.error_game_over;
-    if (message === '等待对手反制响应') return UI.error_waiting_counter;
+    if (message === '等待反制响应' || message === '等待对手反制响应') return UI.error_waiting_counter;
     if (message === '卡牌不在手中') return UI.error_card_not_in_hand;
     if (message === '手牌中没有这张牌') return UI.error_card_not_in_hand_alt || UI.error_card_not_in_hand;
     if (message === '该牌不在选项中') return UI.error_card_not_in_options || UI.operation_failed;
@@ -5219,6 +5243,9 @@ function pendingResponseExpectsCurrentPlayer(state = {}) {
     const pending = state.pending_response;
     const ownId = Number(state.your_id);
     if (!pending || !Number.isFinite(ownId)) return false;
+    if (typeof pending.viewer_can_respond === 'boolean') {
+        return pending.viewer_can_respond;
+    }
     const responders = (Array.isArray(pending.counter_cards) ? pending.counter_cards : [])
         .map((entry) => Number(entry && entry.responder_id))
         .filter(Number.isFinite);
@@ -5909,7 +5936,7 @@ async function refreshAi1v1TestAvailability({ force = false } = {}) {
         const data = await response.json().catch(() => ({}));
         ai1v1TestGate = {
             authenticated: !!(response.ok && data.authenticated),
-            enabled: !!(response.ok && data.enabled),
+            enabled: !!(response.ok && data.enabled && data.public_entry_enabled),
             checkedAt: Date.now(),
         };
         updateAi1v1TestEntry();
@@ -7242,6 +7269,90 @@ let galleryShowMultiPetalPreview = false;
 let gallerySelectedModKeys = null;
 let gallerySelectedTypeKeys = null;
 let galleryCardRenderToken = 0;
+let galleryTermNavigation = null;
+let galleryTermWheelLockedUntil = 0;
+let galleryTermPointerStart = null;
+
+function clearGalleryTermNavigation() {
+    galleryTermNavigation = null;
+    galleryTermPointerStart = null;
+    galleryTermWheelLockedUntil = 0;
+}
+
+function openGalleryTermIntro(cardIds, index, sourceEl = null) {
+    const defs = getGalleryCardDefs();
+    const cards = (Array.isArray(cardIds) ? cardIds : [])
+        .map(id => defs[id])
+        .filter(isPublicCardDef)
+        .map(makeGalleryCardPreviewDict);
+    if (!cards.length) return;
+    const normalizedIndex = Math.min(Math.max(0, Number(index) || 0), cards.length - 1);
+    galleryTermNavigation = { cards, index: normalizedIndex };
+    showTermIntroForCard(cards[normalizedIndex], {
+        sourceRect: getTermIntroSourceRect(sourceEl),
+        galleryNavigation: galleryTermNavigation,
+    });
+}
+
+function navigateGalleryTermIntro(offset, options = {}) {
+    const navigation = galleryTermNavigation;
+    if (!navigation || !Array.isArray(navigation.cards) || navigation.cards.length < 2) return false;
+    const total = navigation.cards.length;
+    navigation.index = (navigation.index + Number(offset || 0) + total) % total;
+    showTermIntroForCard(navigation.cards[navigation.index], {
+        galleryNavigation: navigation,
+    });
+    if (options.focusButton) {
+        const direction = Number(offset || 0) < 0 ? 'previous' : 'next';
+        requestAnimationFrame(() => {
+            termIntroOverlayEl?.querySelector(`[data-gallery-term-direction="${direction}"]`)?.focus();
+        });
+    }
+    return true;
+}
+
+function createGalleryTermNavigationControls() {
+    const navigation = galleryTermNavigation;
+    if (!navigation || !Array.isArray(navigation.cards) || navigation.cards.length < 2) return null;
+    const controls = document.createElement('nav');
+    controls.className = 'term-intro-navigation';
+    controls.setAttribute('aria-label', lt({ zh: '图鉴卡牌导航', en: 'Gallery card navigation', fr: 'Navigation des cartes', ja: '図鑑カードナビゲーション' }));
+    const previous = document.createElement('button');
+    previous.type = 'button';
+    previous.className = 'term-intro-nav-button';
+    previous.dataset.galleryTermDirection = 'previous';
+    previous.setAttribute('aria-label', lt({ zh: '上一张卡', en: 'Previous card', fr: 'Carte précédente', ja: '前のカード' }));
+    previous.title = previous.getAttribute('aria-label');
+    previous.textContent = '‹';
+    const progress = document.createElement('span');
+    progress.className = 'term-intro-nav-progress';
+    progress.setAttribute('aria-live', 'polite');
+    progress.textContent = lt({
+        zh: `第 ${navigation.index + 1} / ${navigation.cards.length} 张`,
+        en: `${navigation.index + 1} / ${navigation.cards.length}`,
+        fr: `${navigation.index + 1} / ${navigation.cards.length}`,
+        ja: `${navigation.index + 1} / ${navigation.cards.length}`,
+    });
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'term-intro-nav-button';
+    next.dataset.galleryTermDirection = 'next';
+    next.setAttribute('aria-label', lt({ zh: '下一张卡', en: 'Next card', fr: 'Carte suivante', ja: '次のカード' }));
+    next.title = next.getAttribute('aria-label');
+    next.textContent = '›';
+    previous.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        navigateGalleryTermIntro(-1, { focusButton: true });
+    });
+    next.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        navigateGalleryTermIntro(1, { focusButton: true });
+    });
+    controls.append(previous, progress, next);
+    return controls;
+}
 
 function bindRulesCardChips(root) {
     if (!root) return;
@@ -8081,8 +8192,8 @@ function makeGalleryFlagHtml(flag) {
     if (custom) return customTagHtml(normalized);
     const style = CARD_FLAG_STYLES[normalized];
     const label = getFlagLabel(normalized);
-    if (style) return `<span class="card-flag ${style.cls}">${label}</span>`;
-    return `<span class="card-flag">${label}</span>`;
+    if (style) return `<span class="card-flag ${style.cls}">${escapeHtml(label)}</span>`;
+    return `<span class="card-flag">${escapeHtml(label)}</span>`;
 }
 
 function getGalleryFlagDescription(flag) {
@@ -8551,7 +8662,7 @@ function renderCardGallery() {
                         event.preventDefault();
                         event.stopPropagation();
                     }
-                    showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
+                    openGalleryTermIntro(ids, i, wrap);
                 };
                 const toggleIntro = (event) => {
                     if (event) {
@@ -8562,7 +8673,7 @@ function renderCardGallery() {
                         hideTermIntroOverlay();
                         return;
                     }
-                    showTermIntroForCard(cardDict, { sourceRect: getTermIntroSourceRect(wrap) });
+                    openGalleryTermIntro(ids, i, wrap);
                 };
                 wrap.addEventListener('click', openIntro);
                 wrap.addEventListener('contextmenu', toggleIntro);
@@ -8605,7 +8716,7 @@ function renderTagGallery(list, detail, q) {
         const usedBy = getGalleryFlagUsers(flag);
         const row = document.createElement('div');
         row.className = 'gallery-card-row' + (flag === gallerySelectedId ? ' active' : '');
-        row.innerHTML = `<div class="gallery-row-title">${getFlagLabel(flag)}</div><div class="gallery-row-meta">${tf('gallery_card_count', usedBy.length)}</div>`;
+        row.innerHTML = `<div class="gallery-row-title">${escapeHtml(getFlagLabel(flag))}</div><div class="gallery-row-meta">${escapeHtml(tf('gallery_card_count', usedBy.length))}</div>`;
         row.onclick = () => { gallerySelectedId = flag; renderCardGallery(); };
         list.appendChild(row);
     });
@@ -8622,11 +8733,11 @@ function renderTagGallery(list, detail, q) {
         getIntroFlagDescription(gallerySelectedId, getCustomTagDef(gallerySelectedId)) || ''
     );
     detail.innerHTML = `<div class="gallery-simple-detail">
-        <h3>${getFlagLabel(gallerySelectedId)}</h3>
+        <h3>${escapeHtml(getFlagLabel(gallerySelectedId))}</h3>
         <div class="gallery-tag-list">${makeGalleryFlagHtml(gallerySelectedId)}</div>
-        <p><b>ID：</b>${gallerySelectedId}</p>
-        <p><b>${UI.gallery_explanation}：</b>${descriptionHtml}</p>
-        <p><b>${relatedLabel}：</b>${usedBy.length ? usedBy.map(getCardName).join(' / ') : '-'}</p>
+        <p><b>ID：</b>${escapeHtml(gallerySelectedId)}</p>
+        <p><b>${escapeHtml(UI.gallery_explanation)}：</b>${descriptionHtml}</p>
+        <p><b>${escapeHtml(relatedLabel)}：</b>${usedBy.length ? usedBy.map(getCardName).map(escapeHtml).join(' / ') : '-'}</p>
     </div>`;
     bindGalleryTermDescriptionInteractions(detail);
 }
@@ -8654,7 +8765,7 @@ function renderOpeningEventGallery(list, detail, q) {
         row.innerHTML = `<div class="gallery-opening-event-row">
             ${renderOpeningEventIconHtml(ev, 'gallery-opening-event-icon')}
             <div class="gallery-opening-event-copy">
-                <div class="gallery-row-title">${getLocalizedEventText(ev, 'name') || '?'}</div>
+                <div class="gallery-row-title">${escapeHtml(getLocalizedEventText(ev, 'name') || '?')}</div>
                 <div class="gallery-row-meta">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>
             </div>
         </div>`;
@@ -8672,8 +8783,8 @@ function renderOpeningEventGallery(list, detail, q) {
     detail.innerHTML = `<div class="gallery-simple-detail gallery-opening-event-detail">
         ${renderOpeningEventIconHtml(ev, 'gallery-opening-event-detail-icon')}
         <div class="gallery-opening-event-detail-copy">
-            <h3>${getLocalizedEventText(ev, 'name') || '?'}</h3>
-            <p><b>ID：</b>${ev.id}</p>
+            <h3>${escapeHtml(getLocalizedEventText(ev, 'name') || '?')}</h3>
+            <p><b>ID：</b>${escapeHtml(ev.id)}</p>
             <p>${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</p>
         </div>
     </div>`;
@@ -8726,7 +8837,7 @@ function getAllStatusDefs() {
         { key: 'attack_blocked', label: UI.status_attack_blocked, desc: '不能打出攻击牌，直到层数或持续时间结束。', color: COLORS.damage },
         { key: 'attack_only', label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         { key: 'untargetable', label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
-        { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；在己方下一名可行动玩家回合结束后死亡。', color: '#1E8449' },
+        { key: 'bandage', label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；自己回合结束时死亡。', color: '#1E8449' },
         { key: 'sluggish', label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         { key: 'overload', label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -8850,7 +8961,7 @@ function renderStatusGallery(list, detail, q) {
         const row = document.createElement('div');
         row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
         const statusColorStyle = `--status-fg:${escapeHtml(s.color || COLORS.text_primary)}`;
-        const sourceTag = s.source === 'vanilla' ? '' : `<span class="gallery-row-meta gallery-status-source" style="${statusColorStyle}">${s.source}</span>`;
+        const sourceTag = s.source === 'vanilla' ? '' : `<span class="gallery-row-meta gallery-status-source" style="${statusColorStyle}">${escapeHtml(s.source)}</span>`;
         row.innerHTML = `<div class="gallery-row-title gallery-status-title" style="${statusColorStyle}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-row')}${escapeHtml(s.label)}</div>${sourceTag}`;
         row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
         list.appendChild(row);
@@ -8864,8 +8975,8 @@ function renderStatusGallery(list, detail, q) {
     gallerySelectedId = `status:${s.key}`;
     detail.innerHTML = `<div class="gallery-simple-detail">
         <h3 class="gallery-status-heading" style="--status-fg:${escapeHtml(s.color || COLORS.text_primary)}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-detail')}${escapeHtml(s.label)}</h3>
-        <p><b>ID：</b>${s.key}</p>
-        <p><b>来源：</b>${s.source === 'vanilla' ? '原版' : s.source}</p>
+        <p><b>ID：</b>${escapeHtml(s.key)}</p>
+        <p><b>来源：</b>${escapeHtml(s.source === 'vanilla' ? '原版' : s.source)}</p>
         <p>${colorizeCardText(s.desc || '')}</p>
     </div>`;
     bindGalleryTermDescriptionInteractions(detail);
@@ -10935,8 +11046,21 @@ function getFlagLabel(flag) {
 }
 
 function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
-    const baseE = cardDict.cost_e_override != null ? cardDict.cost_e_override : cardDef.cost_e;
-    const baseM = cardDict.cost_m_override != null ? cardDict.cost_m_override : cardDef.cost_m;
+    const customVars = cardDict.custom_vars && typeof cardDict.custom_vars === 'object' ? cardDict.custom_vars : {};
+    const baseE = customVars.formal_logic_temporary_cost_e != null
+        ? Number(customVars.formal_logic_temporary_cost_e || 0)
+        : (cardDict.cost_e_override != null
+            ? cardDict.cost_e_override
+            : (customVars.formal_logic_permanent_cost_e != null
+                ? Number(customVars.formal_logic_permanent_cost_e || 0)
+                : cardDef.cost_e));
+    const baseM = customVars.formal_logic_temporary_cost_m != null
+        ? Number(customVars.formal_logic_temporary_cost_m || 0)
+        : (cardDict.cost_m_override != null
+            ? cardDict.cost_m_override
+            : (customVars.formal_logic_permanent_cost_m != null
+                ? Number(customVars.formal_logic_permanent_cost_m || 0)
+                : cardDef.cost_m));
     const mimicDiscount = Number(cardDict.mimic_discount || 0);
     const flags = new Set([...normalizeFlagList(cardDef.flags || []), ...normalizeFlagList(cardDict.instance_flags || [])]);
     normalizeFlagList(cardDict.disabled_flags || []).forEach(flag => flags.delete(flag));
@@ -10961,7 +11085,11 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
-    const effectiveBaseE = Math.max(0, baseE + tempHeavyValue - mimicDiscount - swiftValue - tempSwiftValue);
+    const fusionLevel = clampClientCardLayer(cardDict.fusion_level || cardDict.fusion_multiplier || cardDef.fusion_level || 1);
+    const effectiveBaseE = fusionAdjustedCost(
+        Math.max(0, baseE + tempHeavyValue - mimicDiscount - swiftValue - tempSwiftValue),
+        fusionLevel,
+    );
     let extraE = flags.has('symbiosis') ? 0 : dup;
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Bamboo', 'jungle:bamboo'])) {
         const hand = Array.isArray(ownerState && ownerState.hand) ? ownerState.hand : [];
@@ -10975,7 +11103,10 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
         extraE += Math.floor(frost / 10);
     }
     const totalE = Math.max(0, effectiveBaseE + extraE);
-    const totalM = Math.max(0, baseM + Math.max(0, tempMagicHeavyValue) - Math.max(0, magicSwiftValue));
+    const totalM = fusionAdjustedCost(
+        Math.max(0, baseM + Math.max(0, tempMagicHeavyValue) - Math.max(0, magicSwiftValue)),
+        fusionLevel,
+    );
     return { totalE, totalM, flags };
 }
 
@@ -11072,7 +11203,7 @@ function getEquipmentIconHtml(cardInst, cardDef) {
     const style = `--equip-icon-color:${typeColor}`;
     const fallback = `<span class="equip-icon-fallback${imageUrl ? ' hidden' : ''}">${escapeHtml(fallbackText)}</span>`;
     const img = imageUrl
-        ? `<img class="equip-icon-img" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden')">`
+        ? `<img class="equip-icon-img" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" data-image-fallback="equipment">`
         : '';
     return `<span class="equip-icon" style="${style}">${img}${fallback}</span>`;
 }
@@ -11380,7 +11511,7 @@ function createCardElement(cardDict, options = {}) {
     el.classList.add(englishName ? 'card-has-english' : 'card-no-english');
     el.classList.add(imageUrl ? 'card-has-art' : 'card-no-art');
     const cardArtHtml = imageUrl
-        ? `<div class="card-art"><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.closest('.card-art').classList.add('hidden')"></div>`
+        ? `<div class="card-art"><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" data-image-fallback="card-art"></div>`
         : '';
     const predictionOptions = options.prediction || options.predictionOptions || {};
     const cardOwnerState = options.ownerState || options.attackerState || predictionOptions.attackerState || getCardOwnerStateForPrediction(cardDict) || (gameState && gameState.you);
@@ -11867,7 +11998,7 @@ function createClassicCardTile(cardDict, options = {}) {
                 <span class="classic-card-tile-cost cost-m">${blinded ? '?' : costs.totalM}</span>
             </span>
             <span class="classic-card-tile-name">${tileNameHtml(displayName)}</span>
-            <span class="classic-card-tile-art">${blinded ? '' : `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">`}</span>
+            <span class="classic-card-tile-art">${blinded ? '' : `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" data-image-fallback="classic-card-art">`}</span>
             ${flagsHtml ? `<span class="classic-card-tile-flags choice-card-flags">${flagsHtml}</span>` : ''}
         </span>
     `;
@@ -12426,60 +12557,128 @@ function cardHasEffectiveFlagForPrediction(cardDict, cardDef, flag) {
     return sets.effective.has(flag);
 }
 
+function predictionEquipmentRuntimeActive(eq = {}) {
+    const custom = (eq && eq.custom_vars && typeof eq.custom_vars === 'object')
+        ? eq.custom_vars
+        : {};
+    const sealedLayers = Math.max(0, Number(custom.sewers_sealed || 0));
+    return !(sealedLayers > 0 || custom._sewers_sealed_suspended);
+}
+
+function predictionEquipmentMatches(eq, ...ids) {
+    const wanted = new Set(ids.map(id => String(id || '').toLowerCase()).filter(Boolean));
+    const card = eq && (eq.card_instance || eq.card || eq);
+    const id = String(card && card.def_id || '').toLowerCase();
+    return wanted.has(id) || Array.from(wanted).some(w => id.endsWith(`:${w}`));
+}
+
+function getPredictionEquipmentEntries() {
+    const players = getPredictionPlayerRefs().slice().sort((left, right) => {
+        const leftId = normalizePlayerId(left && (left.player_id ?? left.id));
+        const rightId = normalizePlayerId(right && (right.player_id ?? right.id));
+        if (leftId == null) return rightId == null ? 0 : 1;
+        if (rightId == null) return -1;
+        return leftId - rightId;
+    });
+    const entries = [];
+    players.forEach((ownerState, playerIndex) => {
+        const ownerId = normalizePlayerId(ownerState && (ownerState.player_id ?? ownerState.id));
+        (Array.isArray(ownerState && ownerState.equipment) ? ownerState.equipment : []).forEach((eq, slotIndex) => {
+            entries.push({
+                eq,
+                ownerState,
+                ownerId: ownerId != null ? ownerId : normalizePlayerId(eq && eq.owner),
+                playerIndex,
+                slotIndex,
+            });
+        });
+    });
+    let nextFallbackOrder = entries.reduce((highest, entry) => {
+        const custom = (entry.eq && entry.eq.custom_vars) || {};
+        const order = Math.max(0, Math.floor(Number(custom.non_stack_equipped_order || 0)));
+        return Number.isFinite(order) ? Math.max(highest, order) : highest;
+    }, 0) + 1;
+    entries.forEach((entry, index) => {
+        const custom = (entry.eq && entry.eq.custom_vars) || {};
+        const explicit = Math.max(0, Math.floor(Number(custom.non_stack_equipped_order || 0)));
+        entry.globalIndex = index;
+        entry.nonStackOrder = Number.isFinite(explicit) && explicit > 0 ? explicit : nextFallbackOrder++;
+    });
+    return entries;
+}
+
+function predictionEquipmentUsesNonStackRule(eq = {}) {
+    const card = eq && (eq.card_instance || eq.card || eq);
+    const cardDef = getCardDef((card && card.def_id) || '');
+    const effective = getEffectiveCardFlagSets(card || {}, cardDef || {}).effective;
+    return effective.has('non_stackable') || effective.has('tag_non_stackable');
+}
+
+function getPredictionActiveEquipmentEntries() {
+    const entries = getPredictionEquipmentEntries();
+    return entries.filter(entry => {
+        if (!predictionEquipmentRuntimeActive(entry.eq)) return false;
+        if (!predictionEquipmentUsesNonStackRule(entry.eq)) return true;
+        const card = entry.eq && (entry.eq.card_instance || entry.eq.card || entry.eq);
+        const defId = String(card && card.def_id || '').toLowerCase();
+        return !entries.some(candidate => {
+            if (candidate === entry) return false;
+            if (!predictionEquipmentUsesNonStackRule(candidate.eq)) return false;
+            const candidateCard = candidate.eq && (candidate.eq.card_instance || candidate.eq.card || candidate.eq);
+            if (String(candidateCard && candidateCard.def_id || '').toLowerCase() !== defId) return false;
+            return candidate.nonStackOrder < entry.nonStackOrder
+                || (candidate.nonStackOrder === entry.nonStackOrder && candidate.globalIndex < entry.globalIndex);
+        });
+    });
+}
+
+function predictionEquipmentEffectTarget(entry) {
+    const explicitTarget = normalizePlayerId(entry && entry.eq && entry.eq.effect_target);
+    return explicitTarget != null ? explicitTarget : normalizePlayerId(entry && entry.ownerId);
+}
+
+function getPredictionEquipmentTargeting(playerState = {}, ...ids) {
+    const targetId = normalizePlayerId(playerState && (playerState.player_id ?? playerState.id));
+    if (targetId == null) {
+        return getPredictionActiveEquipmentEntries().filter(entry => (
+            entry.ownerState === playerState && predictionEquipmentMatches(entry.eq, ...ids)
+        ));
+    }
+    return getPredictionActiveEquipmentEntries().filter(entry => (
+        predictionEquipmentEffectTarget(entry) === targetId
+        && predictionEquipmentMatches(entry.eq, ...ids)
+    ));
+}
+
+function countPredictionEquipmentTargeting(playerState = {}, ...ids) {
+    return getPredictionEquipmentTargeting(playerState, ...ids).length;
+}
+
 function countActiveCorruptionEquipment() {
     if (!gameState) return 0;
-    const players = Array.isArray(gameState.spectate_players) && gameState.spectate_players.length
-        ? gameState.spectate_players
-        : [gameState.you, gameState.teammate, gameState.opponent, gameState.opponent2].filter(Boolean);
     const seenEquipment = new Set();
     let count = 0;
-    players.forEach((player, playerIndex) => {
-        const ownerId = normalizePlayerId(player && player.player_id);
-        (Array.isArray(player && player.equipment) ? player.equipment : []).forEach(eq => {
-            const card = eq && (eq.card_instance || eq.card || eq);
-            if (!card || card.def_id !== 'Corruption' || !eq.corruption_active) return;
-            const instanceId = eq.instance_id ?? eq.equipment_instance_id ?? card.instance_id ?? card.instanceId;
-            const key = instanceId != null && instanceId !== ''
-                ? `eq:${instanceId}`
-                : `owner:${ownerId != null ? ownerId : playerIndex}:slot:${(player.equipment || []).indexOf(eq)}`;
-            if (seenEquipment.has(key)) return;
-            seenEquipment.add(key);
-            count += 1;
-        });
+    getPredictionActiveEquipmentEntries().forEach(entry => {
+        const eq = entry.eq;
+        const card = eq && (eq.card_instance || eq.card || eq);
+        if (!predictionEquipmentMatches(eq, 'Corruption', 'vanilla:corruption') || !eq.corruption_active) return;
+        const instanceId = eq.instance_id ?? eq.equipment_instance_id ?? card.instance_id ?? card.instanceId;
+        const key = instanceId != null && instanceId !== ''
+            ? `eq:${instanceId}`
+            : `owner:${entry.ownerId != null ? entry.ownerId : entry.playerIndex}:slot:${entry.slotIndex}`;
+        if (seenEquipment.has(key)) return;
+        seenEquipment.add(key);
+        count += 1;
     });
     return count;
 }
 
 function countDizzyEquipmentForPrediction(attackerState = {}) {
-    let count = 0;
-    const attackerId = normalizePlayerId(attackerState && attackerState.player_id);
-    const players = [gameState && gameState.you, gameState && gameState.teammate, gameState && gameState.opponent, gameState && gameState.opponent2].filter(Boolean);
-    players.forEach(player => {
-        (Array.isArray(player && player.equipment) ? player.equipment : []).forEach(eq => {
-            const card = eq && (eq.card_instance || eq.card || eq);
-            const id = String(card && card.def_id || '').toLowerCase();
-            const effectTarget = normalizePlayerId(eq && eq.effect_target);
-            if (effectTarget != null && attackerId != null && effectTarget !== attackerId) return;
-            if (id === 'dizzy' || id.endsWith(':dizzy')) count += 1;
-        });
-    });
-    return count;
+    return countPredictionEquipmentTargeting(attackerState, 'Dizzy');
 }
 
 function countCutterEquipmentForPrediction(attackerState = {}) {
-    let count = 0;
-    const attackerId = normalizePlayerId(attackerState && attackerState.player_id);
-    const players = [gameState && gameState.you, gameState && gameState.teammate, gameState && gameState.opponent, gameState && gameState.opponent2].filter(Boolean);
-    players.forEach(player => {
-        (Array.isArray(player && player.equipment) ? player.equipment : []).forEach(eq => {
-            const card = eq && (eq.card_instance || eq.card || eq);
-            const id = String(card && card.def_id || '').toLowerCase();
-            const effectTarget = normalizePlayerId(eq && eq.effect_target);
-            if (effectTarget != null && attackerId != null && effectTarget !== attackerId) return;
-            if (id === 'cutter' || id.endsWith(':cutter')) count += 1;
-        });
-    });
-    return count;
+    return countPredictionEquipmentTargeting(attackerState, 'Cutter');
 }
 
 function getPredictionCustomStatusValue(playerState = {}, ...keys) {
@@ -12504,58 +12703,296 @@ function isPredictionStatusImmune(playerState = {}) {
 }
 
 function predictionPlayerHasEquipment(playerState = {}, ...ids) {
-    const wanted = new Set(ids.map(id => String(id || '').toLowerCase()));
-    return (Array.isArray(playerState && playerState.equipment) ? playerState.equipment : []).some(eq => {
-        const card = eq && (eq.card_instance || eq.card || eq);
-        const id = String(card && card.def_id || '').toLowerCase();
-        return wanted.has(id) || Array.from(wanted).some(w => w && id.endsWith(`:${w}`));
-    });
+    return countPredictionEquipmentTargeting(playerState, ...ids) > 0;
 }
 
-function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState = {}) {
+function getPredictionVisibleHandCards(playerState = {}) {
+    const zones = [playerState.hand, playerState.revealed_hand, playerState.revealed_tag_cards];
+    const seen = new Set();
+    const cards = [];
+    zones.forEach((zone, zoneIndex) => {
+        (Array.isArray(zone) ? zone : []).forEach((card, cardIndex) => {
+            if (!card) return;
+            const instanceId = card.instance_id ?? card.instanceId;
+            const key = instanceId != null && instanceId !== ''
+                ? `card:${instanceId}`
+                : `zone:${zoneIndex}:slot:${cardIndex}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            cards.push(card);
+        });
+    });
+    return cards;
+}
+
+function createPredictionDamageRuntime(attackerState = {}, targetState = {}, options = {}) {
+    const playerStates = new Map();
+    const addPlayer = state => {
+        const id = normalizePlayerId(state && (state.player_id ?? state.id));
+        if (id != null && !playerStates.has(id)) playerStates.set(id, state);
+    };
+    getPredictionPlayerRefs().forEach(addPlayer);
+    addPlayer(attackerState);
+    addPlayer(targetState);
+    const magicByPlayer = new Map();
+    playerStates.forEach((state, id) => {
+        magicByPlayer.set(id, Math.max(0, Number(state && (state.magic ?? state.m) || 0)));
+    });
+    const attackerId = normalizePlayerId(attackerState && (attackerState.player_id ?? attackerState.id));
+    const paidMagic = Math.max(0, Number(options.paidMagic || 0));
+    if (attackerId != null && paidMagic > 0) {
+        magicByPlayer.set(attackerId, Math.max(0, Number(magicByPlayer.get(attackerId) || 0) - paidMagic));
+    }
+    const attackerVars = (attackerState && attackerState.custom_vars) || {};
+    return {
+        attackerId,
+        targetId: normalizePlayerId(targetState && (targetState.player_id ?? targetState.id)),
+        playerStates,
+        playerDamageStates: new Map(),
+        equipmentEntries: getPredictionActiveEquipmentEntries(),
+        magicByPlayer,
+        resourceDeltas: new Map(),
+        mitigations: [],
+        redirectedDamage: new Map(),
+        spongePoisonByPlayer: new Map(),
+        attackPositiveHitsByPlayer: new Map(),
+        attackDamageMultiplier: Number(attackerState && attackerState.damage_multiplier || 1) || 1,
+        puppeteerDamageMultiplier: Number(attackerVars.void_puppeteer_damage_multiplier || 1) || 1,
+    };
+}
+
+function ensurePredictionDamagePlayer(runtime, playerOrId) {
+    const id = typeof playerOrId === 'object'
+        ? normalizePlayerId(playerOrId && (playerOrId.player_id ?? playerOrId.id))
+        : normalizePlayerId(playerOrId);
+    if (id == null) return null;
+    if (runtime.playerDamageStates.has(id)) return runtime.playerDamageStates.get(id);
+    const state = (typeof playerOrId === 'object' && playerOrId) || runtime.playerStates.get(id) || {};
+    runtime.playerStates.set(id, state);
+    if (!runtime.magicByPlayer.has(id)) {
+        runtime.magicByPlayer.set(id, Math.max(0, Number(state && (state.magic ?? state.m) || 0)));
+    }
+    const immune = isPredictionStatusImmune(state);
+    let nazarStacks = immune ? 0 : getPredictionCustomStatusValue(state, 'nazar', '邪眼', 'Nazar');
+    if (!immune && state && state.nazar_active) {
+        nazarStacks += Math.max(0, 2 - Math.max(0, Number(state.nazar_big_hits || 0)));
+    }
+    const maxHealth = readPlayerHealthValue(state, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
+    const amberCards = getPredictionVisibleHandCards(state)
+        .filter(card => predictionEquipmentMatches({ card_instance: card }, 'Amber', 'jurassic:amber'))
+        .map(card => ({ card, power: Number(card.power_value || 0) || 0 }));
+    const damageState = {
+        id,
+        state,
+        immune,
+        dodge: immune ? 0 : Math.max(0, Number(state && state.dodge || 0)),
+        invincible: !!(state && state.invincible),
+        armor: Math.max(0, Number(state && state.armor || 0)),
+        rootArmor: immune ? 0 : getPredictionCustomStatusValue(state, 'jungle:root', 'jungle:root_status', 'root_status'),
+        fragile: immune ? 0 : getPredictionCustomStatusValue(state, 'jungle:fragile', 'fragile'),
+        shield: immune ? 0 : getPredictionCustomStatusValue(state, 'jungle:shield', 'shield'),
+        sponge: immune ? false : !!(state && state.sponge_active),
+        nazarStacks,
+        turnDamageTaken: Math.max(0, Number(state && state.turn_damage_taken || 0)),
+        maxHealth,
+        health: readPlayerHealthValue(state, ['health', 'hp', 'h'], maxHealth),
+        amberCards,
+    };
+    runtime.playerDamageStates.set(id, damageState);
+    return damageState;
+}
+
+function predictionEquipmentEntriesTargeting(runtime, targetId, ...ids) {
+    return runtime.equipmentEntries.filter(entry => (
+        predictionEquipmentEffectTarget(entry) === targetId
+        && predictionEquipmentMatches(entry.eq, ...ids)
+    ));
+}
+
+function recordPredictionMitigation(runtime, playerId, kind, prevented, details = {}) {
+    const amount = Math.max(0, Math.floor(Number(prevented || 0)));
+    if (amount <= 0) return;
+    runtime.mitigations.push({ playerId, kind, prevented: amount, ...details });
+}
+
+function recordPredictionMagicSpend(runtime, playerId, amount) {
+    const spend = Math.max(0, Math.floor(Number(amount || 0)));
+    if (playerId == null || spend <= 0) return;
+    runtime.magicByPlayer.set(playerId, Math.max(0, Number(runtime.magicByPlayer.get(playerId) || 0) - spend));
+    const current = runtime.resourceDeltas.get(playerId) || { magic: 0 };
+    current.magic -= spend;
+    runtime.resourceDeltas.set(playerId, current);
+}
+
+function predictionOutgoingDamage(runtime, sourceId, damage, { includeCutter = false, includeDizzy = true } = {}) {
+    let amount = Math.max(0, Math.ceil(Number(damage || 0)));
+    const corruptionCount = runtime.equipmentEntries.filter(entry => (
+        predictionEquipmentMatches(entry.eq, 'Corruption', 'vanilla:corruption')
+        && !!entry.eq.corruption_active
+    )).length;
+    if (corruptionCount > 0) amount = Math.ceil(amount * (1.5 ** corruptionCount));
+    if (includeDizzy) {
+        const dizzyCount = runtime.equipmentEntries.filter(entry => (
+            predictionEquipmentEffectTarget(entry) === sourceId
+            && predictionEquipmentMatches(entry.eq, 'Dizzy')
+        )).length;
+        if (dizzyCount > 0) amount = Math.ceil(amount * (1 + 0.5 * dizzyCount));
+    }
+    if (includeCutter) {
+        const cutterCount = runtime.equipmentEntries.filter(entry => (
+            predictionEquipmentEffectTarget(entry) === sourceId
+            && predictionEquipmentMatches(entry.eq, 'Cutter')
+        )).length;
+        amount += cutterCount * 2;
+    }
+    return amount;
+}
+
+function predictionTeammateId(playerId) {
+    if (!gameState || gameState.mode !== '2v2') return null;
+    if (![0, 1, 2, 3].includes(playerId)) return null;
+    return playerId % 2 === 0 ? playerId + 1 : playerId - 1;
+}
+
+function tryPredictionMagicCopperRod(runtime, target, damage) {
+    if (damage <= 0 || !target) return damage;
+    const equipment = predictionEquipmentEntriesTargeting(
+        runtime,
+        target.id,
+        'MagicCopperRod',
+        'void:magic_copper_rod',
+    ).find(entry => entry.ownerId != null && Number(runtime.magicByPlayer.get(entry.ownerId) || 0) >= 1);
+    if (!equipment) return damage;
+    recordPredictionMagicSpend(runtime, equipment.ownerId, 1);
+    recordPredictionMitigation(runtime, target.id, 'magic_copper_rod', damage, {
+        ownerPlayerId: equipment.ownerId,
+    });
+    return 0;
+}
+
+function applyPredictionUniversalDamageShields(runtime, target, damage, options = {}) {
+    let amount = Math.max(0, Math.floor(Number(damage || 0)));
+    if (!target || amount <= 0) return amount;
+    const allowRelic = options.allowRelic !== false && options.sourceKind !== 'relic_transfer';
+    if (
+        allowRelic
+        && predictionEquipmentEntriesTargeting(runtime, target.id, 'Relic', 'jungle:relic').length > 0
+    ) {
+        const teammateId = predictionTeammateId(target.id);
+        const teammate = teammateId == null ? null : ensurePredictionDamagePlayer(runtime, teammateId);
+        if (teammate && teammate.health > 0) {
+            const transfer = Math.floor(amount * 2 / 3);
+            const kept = Math.floor(amount / 3);
+            if (transfer > 0) {
+                const redirected = simulatePredictionDirectDamageHit(
+                    runtime,
+                    target.id,
+                    teammate,
+                    transfer,
+                    {
+                        sourceKind: 'relic_transfer',
+                        damageType: options.damageType || 'physical',
+                        damageTag: 'direct',
+                        allowRelic: false,
+                    },
+                );
+                const redirectedHits = runtime.redirectedDamage.get(teammate.id) || [];
+                redirectedHits.push(redirected);
+                runtime.redirectedDamage.set(teammate.id, redirectedHits);
+            }
+            recordPredictionMitigation(runtime, target.id, 'relic_transfer', amount - kept, {
+                toPlayerId: teammate.id,
+                transferred: transfer,
+            });
+            amount = kept;
+        }
+    }
+    if (target.shield > 0 && amount > 0) {
+        const blocked = Math.min(target.shield, amount);
+        target.shield -= blocked;
+        amount -= blocked;
+        recordPredictionMitigation(runtime, target.id, 'shield', blocked);
+    }
+    if (
+        amount > 0
+        && predictionEquipmentEntriesTargeting(runtime, target.id, 'MagicCotton', 'jungle:magic_cotton').length > 0
+    ) {
+        const magic = Math.max(0, Number(runtime.magicByPlayer.get(target.id) || 0));
+        if (magic > 0) {
+            const spent = Math.min(magic, Math.ceil(amount / 4));
+            const blocked = Math.min(amount, spent * 4);
+            recordPredictionMagicSpend(runtime, target.id, spent);
+            amount -= blocked;
+            recordPredictionMitigation(runtime, target.id, 'magic_cotton', blocked);
+        }
+    }
+    if (amount > 0 && target.turnDamageTaken >= 10) {
+        const scales = predictionEquipmentEntriesTargeting(runtime, target.id, 'Scales', 'jurassic:scales');
+        scales.forEach(() => {
+            const before = amount;
+            amount = Math.max(0, Math.floor(amount / 2));
+            recordPredictionMitigation(runtime, target.id, 'scales', before - amount);
+        });
+    }
+    if (amount > 0) {
+        target.amberCards.forEach(amber => {
+            if (amount <= 0 || amber.power <= -12) return;
+            const before = amount;
+            amount = Math.max(0, before - Math.floor(before / 5));
+            const prevented = before - amount;
+            if (prevented <= 0) return;
+            amber.power -= prevented * 3;
+            recordPredictionMitigation(runtime, target.id, 'amber', prevented);
+        });
+    }
+    return amount;
+}
+
+function simulatePredictionDirectDamageHit(runtime, sourceId, target, rawDamage, options = {}) {
+    let damage = Math.max(0, Math.ceil(Number(rawDamage || 0)));
+    if (!target || damage <= 0 || target.invincible) return 0;
+    const damageTag = String(options.damageTag || 'direct').toLowerCase();
+    if (target.immune && ['poison', 'fire', 'burn', 'gtn:poison', 'gtn:fire'].includes(damageTag)) return 0;
+    const includeCutter = String(options.damageType || 'physical').toLowerCase() === 'physical'
+        && ['physical', 'gtn:physical'].includes(damageTag);
+    const includeDizzy = !['poison', 'fire', 'fracture', 'bleed', 'gtn:poison', 'gtn:fire', 'gtn:fracture', 'gtn:bleed']
+        .includes(damageTag);
+    damage = predictionOutgoingDamage(runtime, sourceId, damage, { includeCutter, includeDizzy });
+    if (
+        damage > 0
+        && predictionEquipmentEntriesTargeting(runtime, target.id, 'Mask', 'bio:mask', 'MagicMask', 'bio:magic_mask').length > 0
+    ) {
+        recordPredictionMitigation(runtime, target.id, 'mask', damage);
+        return 0;
+    }
+    damage = applyPredictionUniversalDamageShields(runtime, target, damage, options);
+    damage = tryPredictionMagicCopperRod(runtime, target, damage);
+    if (damage > 0) {
+        target.health = Math.max(0, target.health - damage);
+        target.turnDamageTaken += damage;
+    }
+    return damage;
+}
+
+function simulatePredictionAttackRawHits(rawHits, cardDict, attackerState, targetState, runtime = null) {
     const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
-    const rawHits = getActualAttackDamageHits(cardDict || {}, attackerState || {}, targetState || {});
-    if (!rawHits.length) return [];
+    const shadow = runtime || createPredictionDamageRuntime(attackerState, targetState);
+    const target = ensurePredictionDamagePlayer(shadow, targetState);
     const hits = [];
-    let spongePoison = 0;
-    const immune = isPredictionStatusImmune(targetState);
     const attackerImmune = isPredictionStatusImmune(attackerState);
-    let dodge = immune ? 0 : Math.max(0, Number(targetState && targetState.dodge || 0));
-    const armor = Math.max(0, Number(targetState && targetState.armor || 0));
-    const invincible = !!(targetState && targetState.invincible);
-    const sponge = immune ? false : !!(targetState && targetState.sponge_active);
-    const rootArmor = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:root', 'jungle:root_status', 'root_status');
-    const fragile = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:fragile', 'fragile');
-    let shield = immune ? 0 : getPredictionCustomStatusValue(targetState, 'jungle:shield', 'shield');
     const weakness = attackerImmune ? 0 : Math.max(0, Number(attackerState && attackerState.weakness || 0));
     const actualCardCostE = getCardDisplayCosts(cardDict || {}, cardDef || {}, attackerState || {}).totalE;
     const plankBlocks = predictionPlayerHasEquipment(targetState, 'Plank', 'jungle:plank')
         && String(cardDict && cardDict.card_type || cardDef && cardDef.card_type || '').toLowerCase() === 'thorn'
         && actualCardCostE <= 1;
-    let nazarStacks = immune ? 0 : getPredictionCustomStatusValue(targetState, 'nazar', '邪眼', 'Nazar');
-    if (!immune && targetState && targetState.nazar_active) {
-        nazarStacks += Math.max(0, 2 - Math.max(0, Number(targetState.nazar_big_hits || 0)));
-    }
-    const corruptionMult = 1.5 ** countActiveCorruptionEquipment();
-    const dizzyMult = 1 + 0.5 * countDizzyEquipmentForPrediction(attackerState);
-    const cutterBonus = countCutterEquipmentForPrediction(attackerState);
     const precision = cardHasEffectiveFlagForPrediction(cardDict || {}, cardDef || {}, 'precision');
     const kale = cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Kale', 'garden:kale']);
-    const targetMaxHealth = readPlayerHealthValue(
-        targetState,
-        ['max_health', 'maxHp', 'maxH', 'max_h'],
-        0,
-    );
-    let targetHealth = readPlayerHealthValue(
-        targetState,
-        ['health', 'hp', 'h'],
-        targetMaxHealth,
-    );
     const resolveRawHit = raw => {
         let dmg = Math.max(0, Math.ceil(Number(raw || 0)));
         let precisionDodged = false;
-        if (dodge > 0) {
-            dodge -= 1;
+        if (!target) return 0;
+        if (target.dodge > 0) {
+            target.dodge -= 1;
             if (precision) {
                 precisionDodged = true;
             } else {
@@ -12563,53 +13000,80 @@ function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState =
                 return 0;
             }
         }
-        if (invincible) {
+        if (target.invincible) {
             hits.push(0);
             return 0;
         }
-        if (dizzyMult > 1) dmg = Math.ceil(dmg * dizzyMult);
-        if (corruptionMult > 1) dmg = Math.ceil(dmg * corruptionMult);
-        if (cutterBonus > 0) dmg += cutterBonus * 2;
-        if (plankBlocks) dmg = 0;
-        if (weakness > 0) {
+        if (shadow.attackDamageMultiplier !== 1) {
+            dmg = Math.ceil(dmg * shadow.attackDamageMultiplier);
+            shadow.attackDamageMultiplier = 1;
+        }
+        if (shadow.puppeteerDamageMultiplier !== 1) {
+            dmg = Math.ceil(dmg * shadow.puppeteerDamageMultiplier);
+        }
+        dmg = predictionOutgoingDamage(shadow, shadow.attackerId, dmg, { includeCutter: true });
+        if (plankBlocks && dmg > 0) {
+            recordPredictionMitigation(shadow, target.id, 'plank', dmg);
+            dmg = 0;
+        }
+        if (dmg > 0 && weakness > 0) {
             const reduction = Math.min(0.6, 0.2 * weakness);
             dmg = Math.max(1, Math.floor(dmg * (1 - reduction)));
         }
         if (precisionDodged) dmg = Math.ceil(dmg / 2);
-        dmg = Math.max(0, dmg - armor - rootArmor + fragile);
-        if (dmg > 0 && nazarStacks > 0) {
+        dmg = Math.max(0, dmg - target.armor - target.rootArmor + target.fragile);
+        if (dmg > 0 && target.nazarStacks > 0) {
             const original = dmg;
             dmg = Math.max(1, dmg - 9);
             if (original >= 10) {
-                nazarStacks = Math.max(0, nazarStacks - 1);
+                target.nazarStacks = Math.max(0, target.nazarStacks - 1);
             }
         }
-        if (sponge && dmg > 0) {
-            spongePoison += Math.min(10, Math.floor(dmg / 2));
+        if (target.sponge && dmg > 0) {
+            const converted = Math.min(10, Math.floor(dmg / 2));
+            shadow.spongePoisonByPlayer.set(
+                target.id,
+                Number(shadow.spongePoisonByPlayer.get(target.id) || 0) + converted,
+            );
             dmg = 0;
         }
-        if (shield > 0 && dmg > 0) {
-            const blocked = Math.min(shield, dmg);
-            shield -= blocked;
-            dmg = Math.max(0, dmg - blocked);
-        }
+        dmg = applyPredictionUniversalDamageShields(shadow, target, dmg, {
+            sourceKind: 'attack',
+            damageType: 'physical',
+        });
+        dmg = tryPredictionMagicCopperRod(shadow, target, dmg);
         hits.push(dmg);
-        targetHealth -= dmg;
+        if (dmg > 0) {
+            target.health = Math.max(0, target.health - dmg);
+            target.turnDamageTaken += dmg;
+            if (target.rootArmor > 0) target.rootArmor -= 1;
+            shadow.attackPositiveHitsByPlayer.set(
+                target.id,
+                Number(shadow.attackPositiveHitsByPlayer.get(target.id) || 0) + 1,
+            );
+        }
         return dmg;
     };
-    rawHits.forEach(raw => {
+    (Array.isArray(rawHits) ? rawHits : []).forEach(raw => {
         const dealt = resolveRawHit(raw);
         if (
             kale
             && dealt > 0
-            && targetMaxHealth > 0
-            && targetHealth * 5 <= targetMaxHealth
+            && target
+            && target.maxHealth > 0
+            && target.health * 5 <= target.maxHealth
         ) {
             resolveRawHit(raw);
         }
     });
-    hits.spongePoison = spongePoison;
+    hits.spongePoison = target ? Number(shadow.spongePoisonByPlayer.get(target.id) || 0) : 0;
+    hits.predictionRuntime = shadow;
     return hits;
+}
+
+function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState = {}, runtime = null) {
+    const rawHits = getActualAttackDamageHits(cardDict || {}, attackerState || {}, targetState || {});
+    return simulatePredictionAttackRawHits(rawHits, cardDict, attackerState, targetState, runtime);
 }
 
 function formatPredictionPart(value, suffix, cls) {
@@ -12648,6 +13112,110 @@ function formatPredictionSelfPart(values, suffix, cls) {
     return `<span class="card-prediction-part ${cls}">${escapeHtml(text)}</span>`;
 }
 
+function formatPredictionResourceDelta(value, suffix, cls) {
+    const amount = Math.trunc(Number(value || 0));
+    if (!Number.isFinite(amount) || amount === 0) return '';
+    const sign = amount > 0 ? '+' : '';
+    return `<span class="card-prediction-part ${cls}">${escapeHtml(`${sign}${amount}${suffix}`)}</span>`;
+}
+
+function predictionMitigationName(kind) {
+    const names = {
+        plank: { zh: '木板', en: 'Plank', fr: 'Planche', ja: '木の板' },
+        shield: { zh: '护盾', en: 'Shield', fr: 'Bouclier', ja: 'シールド' },
+        magic_cotton: { zh: '魔法棉花', en: 'Magic Cotton', fr: 'Coton magique', ja: '魔法の綿' },
+        scales: { zh: '鳞甲', en: 'Scales', fr: 'Écailles', ja: '鱗' },
+        amber: { zh: '琥珀', en: 'Amber', fr: 'Ambre', ja: '琥珀' },
+        magic_copper_rod: { zh: '魔法铜棒', en: 'Magic Copper Rod', fr: 'Tige de cuivre magique', ja: '魔法の銅棒' },
+        mask: { zh: '口罩', en: 'Mask', fr: 'Masque', ja: 'マスク' },
+        relic_transfer: { zh: '遗物', en: 'Relic', fr: 'Relique', ja: '遺物' },
+    };
+    return lt(names[kind] || {}, String(kind || ''));
+}
+
+function formatPredictionMitigations(mitigations) {
+    const grouped = new Map();
+    (Array.isArray(mitigations) ? mitigations : []).forEach(item => {
+        if (!item || !item.kind) return;
+        const toPlayerId = normalizePlayerId(item.toPlayerId);
+        const ownerPlayerId = normalizePlayerId(item.ownerPlayerId);
+        const key = `${item.kind}:${toPlayerId ?? ''}:${ownerPlayerId ?? ''}`;
+        const current = grouped.get(key) || {
+            kind: item.kind,
+            prevented: 0,
+            transferred: 0,
+            toPlayerId,
+            ownerPlayerId,
+        };
+        current.prevented += Math.max(0, Math.floor(Number(item.prevented || 0)));
+        current.transferred += Math.max(0, Math.floor(Number(item.transferred || 0)));
+        grouped.set(key, current);
+    });
+    return Array.from(grouped.values()).map(item => {
+        const name = predictionMitigationName(item.kind);
+        const text = item.kind === 'relic_transfer' && item.toPlayerId != null
+            ? `${name}→${getPlayerNameById(item.toPlayerId)} ${item.transferred}D`
+            : `${name} -${item.prevented}D`;
+        return `<span class="card-prediction-part mitigation">${escapeHtml(text)}</span>`;
+    }).join('');
+}
+
+function createPredictionRecipient(playerId = null) {
+    return {
+        playerId: normalizePlayerId(playerId),
+        damageHits: [],
+        electricHits: [],
+        poison: 0,
+        fire: 0,
+        heal: [],
+        elixir: [],
+        magic: [],
+        armor: [],
+        resourceDeltas: { magic: 0 },
+        mitigations: [],
+    };
+}
+
+function ensurePredictionRecipient(prediction, playerId, preferredRole = 'other') {
+    const normalized = normalizePlayerId(playerId);
+    if (preferredRole === 'target') {
+        if (prediction.target.playerId == null) prediction.target.playerId = normalized;
+        return prediction.target;
+    }
+    if (preferredRole === 'self') {
+        if (prediction.self.playerId == null) prediction.self.playerId = normalized;
+        return prediction.self;
+    }
+    const known = [prediction.target, prediction.self, ...(prediction.others || [])]
+        .find(recipient => normalized != null && normalizePlayerId(recipient && recipient.playerId) === normalized);
+    if (known) return known;
+    const recipient = createPredictionRecipient(normalized);
+    prediction.others.push(recipient);
+    return recipient;
+}
+
+function applyPredictionDamageRuntime(prediction, runtime, attackerState, targetState) {
+    if (!runtime) return;
+    const attackerId = normalizePlayerId(attackerState && (attackerState.player_id ?? attackerState.id));
+    const targetId = normalizePlayerId(targetState && (targetState.player_id ?? targetState.id));
+    ensurePredictionRecipient(prediction, attackerId, 'self');
+    ensurePredictionRecipient(prediction, targetId, 'target');
+    runtime.redirectedDamage.forEach((hits, playerId) => {
+        const recipient = ensurePredictionRecipient(prediction, playerId);
+        (Array.isArray(hits) ? hits : []).forEach(value => {
+            recipient.damageHits.push(Math.max(0, Math.ceil(Number(value || 0))));
+        });
+    });
+    runtime.resourceDeltas.forEach((deltas, playerId) => {
+        const recipient = ensurePredictionRecipient(prediction, playerId);
+        recipient.resourceDeltas.magic += Math.trunc(Number(deltas && deltas.magic || 0));
+    });
+    runtime.mitigations.forEach(item => {
+        const recipient = ensurePredictionRecipient(prediction, item && item.playerId);
+        recipient.mitigations.push({ ...item });
+    });
+}
+
 function pushPositiveValue(list, value, count = 1) {
     const amount = Math.max(0, Math.ceil(Number(value || 0)));
     const rawCount = Number(count);
@@ -12673,12 +13241,49 @@ function pushDamageValue(list, value, count = 1) {
     for (let i = 0; i < times; i++) list.push(amount);
 }
 
-function collectSelfStatusDamagePrediction(prediction, cardDef, selfState) {
+function appendSelfDirectDamagePrediction(prediction, runtime, selfState, amount, hits = 1, params = {}) {
+    const raw = Math.max(0, Math.ceil(Number(amount || 0)));
+    const count = Math.max(1, Math.floor(Number(hits || 1)));
+    if (raw <= 0) return [];
+    if (!runtime) {
+        const fallback = Array.from({ length: count }, () => raw);
+        fallback.forEach(value => prediction.self.damageHits.push(value));
+        return fallback;
+    }
+    const self = ensurePredictionDamagePlayer(runtime, selfState);
+    const sourceId = normalizePlayerId(selfState && (selfState.player_id ?? selfState.id));
+    const damageTag = getPredictionDirectDamageTag(params);
+    const resolved = Array.from({ length: count }, () => simulatePredictionDirectDamageHit(
+        runtime,
+        sourceId,
+        self,
+        raw,
+        {
+            sourceKind: 'direct',
+            damageType: getPredictionDirectDamageType(params, damageTag),
+            damageTag,
+        },
+    ));
+    resolved.forEach(value => prediction.self.damageHits.push(Math.max(0, Math.ceil(Number(value || 0)))));
+    return resolved;
+}
+
+function collectSelfStatusDamagePrediction(prediction, cardDef, selfState, runtime = null) {
     if (!prediction || !prediction.self || !cardDef || !selfState || isPredictionStatusImmune(selfState)) return;
     const fracture = getPredictionStatusMaxValue(selfState, 'fracture', '破损');
-    if (fracture > 0) pushDamageValue(prediction.self.damageHits, fracture);
+    if (fracture > 0) {
+        appendSelfDirectDamagePrediction(prediction, runtime, selfState, fracture, 1, {
+            damage_type: 'magic',
+            damage_tag: 'fracture',
+        });
+    }
     const bleed = getPredictionStatusMaxValue(selfState, 'bleed', '流血');
-    if (bleed > 0 && cardDef.card_type === 'thorn') pushDamageValue(prediction.self.damageHits, bleed);
+    if (bleed > 0 && cardDef.card_type === 'thorn') {
+        appendSelfDirectDamagePrediction(prediction, runtime, selfState, bleed, 1, {
+            damage_type: 'magic',
+            damage_tag: 'bleed',
+        });
+    }
 }
 
 function applyHealBlockToPrediction(value, recipientState) {
@@ -12703,7 +13308,7 @@ function effectTargetIsSelf(target) {
     return false;
 }
 
-function collectSelfPredictionFromEffects(prediction, cardDict, cardDef, selfState, positiveHitCount) {
+function collectSelfPredictionFromEffects(prediction, cardDict, cardDef, selfState, positiveHitCount, runtime = null) {
     const effects = Array.isArray(cardDef && cardDef.effects) ? cardDef.effects : [];
     effects.forEach(effect => {
         if (!effect || typeof effect !== 'object') return;
@@ -12718,11 +13323,29 @@ function collectSelfPredictionFromEffects(prediction, cardDict, cardDef, selfSta
             return;
         }
         if (type === 'direct_damage' || type === 'deal_direct_damage') {
-            if (params.target != null && effectTargetIsSelf(params.target)) pushDamageValue(prediction.self.damageHits, firstNumericEffectValue(params.amount));
+            if (params.target != null && effectTargetIsSelf(params.target)) {
+                appendSelfDirectDamagePrediction(
+                    prediction,
+                    runtime,
+                    selfState,
+                    firstNumericEffectValue(params.amount),
+                    firstNumericEffectValue(params.hits) || 1,
+                    params,
+                );
+            }
             return;
         }
         if (!effectTargetIsSelf(params.target)) return;
-        if (type === 'lose_health' || type === 'self_damage' || type === 'direct_self_damage') {
+        if (type === 'direct_self_damage') {
+            appendSelfDirectDamagePrediction(
+                prediction,
+                runtime,
+                selfState,
+                firstNumericEffectValue(params.amount),
+                firstNumericEffectValue(params.hits) || 1,
+                params,
+            );
+        } else if (type === 'lose_health' || type === 'self_damage') {
             pushDamageValue(prediction.self.damageHits, firstNumericEffectValue(params.amount));
         } else if (type === 'heal') {
             pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.amount), selfState));
@@ -12823,7 +13446,7 @@ function predictionConditionLikelyTrue(cond, context = {}) {
     return false;
 }
 
-function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positiveHitCount, context = null) {
+function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positiveHitCount, context = null, options = {}) {
     const localContext = context || {
         lastDamage: prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
         lastPositiveHits: positiveHitCount,
@@ -12844,7 +13467,7 @@ function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positive
             const branch = predictionConditionLikelyTrue(step.condition || params.condition, localContext)
                 ? (step.then || params.then || [])
                 : (step.else || params.else || []);
-            collectSelfPredictionFromV2Steps(prediction, branch, selfState, positiveHitCount, localContext);
+            collectSelfPredictionFromV2Steps(prediction, branch, selfState, positiveHitCount, localContext, options);
             return;
         }
         if (op === 'lifesteal_damage') {
@@ -12857,12 +13480,28 @@ function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positive
         }
         if (op === 'direct_damage' || op === 'deal_direct_damage') {
             if (params.target != null && effectTargetIsSelf(params.target)) {
-                pushDamageValue(prediction.self.damageHits, evalPredictionNumberExpr(params.amount, localContext));
+                appendSelfDirectDamagePrediction(
+                    prediction,
+                    options.damageRuntime,
+                    selfState,
+                    evalPredictionNumberExpr(params.amount, localContext),
+                    evalPredictionNumberExpr(params.hits ?? 1, localContext),
+                    params,
+                );
             }
             return;
         }
         if (!effectTargetIsSelf(params.target)) return;
-        if (op === 'lose_health' || op === 'self_damage' || op === 'direct_self_damage') {
+        if (op === 'direct_self_damage') {
+            appendSelfDirectDamagePrediction(
+                prediction,
+                options.damageRuntime,
+                selfState,
+                evalPredictionNumberExpr(params.amount, localContext),
+                evalPredictionNumberExpr(params.hits ?? 1, localContext),
+                params,
+            );
+        } else if (op === 'lose_health' || op === 'self_damage') {
             pushDamageValue(prediction.self.damageHits, evalPredictionNumberExpr(params.amount, localContext));
         } else if (op === 'heal') {
             pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(Math.floor(evalPredictionNumberExpr(params.amount, localContext)), selfState));
@@ -12897,6 +13536,67 @@ function stepLooksLikeElectricDamage(params = {}) {
     return tag.includes('electric') || tag.includes('battery') || tag.includes('电');
 }
 
+function getPredictionDirectDamageTag(params = {}) {
+    const explicit = String(params.damage_tag || params.tag || '').trim().toLowerCase();
+    if (explicit) return explicit;
+    const source = String(params.source || params.source_text || '').trim().toLowerCase();
+    if (source.includes('poison') || source.includes('中毒')) return 'gtn:poison';
+    if (source.includes('fire') || source.includes('burn') || source.includes('灼烧')) return 'gtn:fire';
+    if (source.includes('fracture') || source.includes('破损')) return 'gtn:fracture';
+    if (source.includes('bleed') || source.includes('流血')) return 'gtn:bleed';
+    if (stepLooksLikeElectricDamage(params)) return 'gtn:battery';
+    return 'gtn:direct';
+}
+
+function getPredictionDirectDamageType(params = {}, damageTag = getPredictionDirectDamageTag(params)) {
+    const explicit = String(params.damage_type || '').trim().toLowerCase();
+    if (explicit) return explicit;
+    return ['gtn:poison', 'gtn:fire', 'gtn:fracture', 'gtn:bleed', 'gtn:battery', 'poison', 'fire', 'fracture', 'bleed', 'battery']
+        .includes(String(damageTag || '').toLowerCase())
+        ? 'magic'
+        : 'physical';
+}
+
+function appendTargetDamagePrediction(prediction, amount, hits, kind, params, options) {
+    const count = Math.max(1, Math.floor(Number(hits || 1)));
+    const raw = Math.max(0, Math.ceil(Number(amount || 0)));
+    if (raw <= 0) return [];
+    const attackerState = options.attackerState || options.ownerState || {};
+    const targetState = options.targetState || {};
+    const runtime = options.damageRuntime || createPredictionDamageRuntime(attackerState, targetState);
+    options.damageRuntime = runtime;
+    let resolved;
+    if (kind === 'direct') {
+        const target = ensurePredictionDamagePlayer(runtime, targetState);
+        const sourceId = normalizePlayerId(attackerState && (attackerState.player_id ?? attackerState.id));
+        const damageTag = getPredictionDirectDamageTag(params);
+        resolved = Array.from({ length: count }, () => simulatePredictionDirectDamageHit(
+            runtime,
+            sourceId,
+            target,
+            raw,
+            {
+                sourceKind: 'direct',
+                damageType: getPredictionDirectDamageType(params, damageTag),
+                damageTag,
+            },
+        ));
+    } else {
+        resolved = simulatePredictionAttackRawHits(
+            Array.from({ length: count }, () => raw),
+            options.cardDict || {},
+            attackerState,
+            targetState,
+            runtime,
+        );
+    }
+    const destination = kind === 'direct' && stepLooksLikeElectricDamage(params)
+        ? prediction.target.electricHits
+        : prediction.target.damageHits;
+    resolved.forEach(value => destination.push(Math.max(0, Math.ceil(Number(value || 0)))));
+    return resolved;
+}
+
 function collectTargetPredictionFromV2Steps(prediction, steps, context = null, options = {}) {
     const localContext = context || {
         lastDamage: prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
@@ -12925,14 +13625,29 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             const extraLimit = Math.max(0, Math.floor(evalPredictionNumberExpr(params.extra_limit ?? 4, localContext)));
             const ownerState = options.ownerState || options.attackerState || {};
             const cardCostM = Math.max(0, Number(options.cardCostM || 0));
-            const availableMagic = Math.max(0, Number(ownerState.magic || ownerState.m || 0) - cardCostM);
+            const runtime = options.damageRuntime || createPredictionDamageRuntime(
+                ownerState,
+                options.targetState || {},
+                { paidMagic: cardCostM },
+            );
+            options.damageRuntime = runtime;
+            const ownerId = normalizePlayerId(ownerState && (ownerState.player_id ?? ownerState.id));
+            const availableMagic = ownerId == null
+                ? Math.max(0, Number(ownerState.magic || ownerState.m || 0) - cardCostM)
+                : Math.max(0, Number(runtime.magicByPlayer.get(ownerId) || 0));
             const spend = Math.min(extraLimit, availableMagic);
+            if (ownerId != null && spend > 0) recordPredictionMagicSpend(runtime, ownerId, spend);
             if (amount > 0) {
-                for (let index = 0; index < 1 + spend; index += 1) {
-                    prediction.target.damageHits.push(amount);
-                }
-                localContext.lastDamage = amount;
-                localContext.lastPositiveHits = 1 + spend;
+                const resolved = appendTargetDamagePrediction(
+                    prediction,
+                    amount,
+                    1 + spend,
+                    'attack',
+                    params,
+                    options,
+                );
+                localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+                localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
             }
             return;
         }
@@ -12940,9 +13655,9 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             if (options.skipPhysicalDamage) return;
             const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount ?? 10, localContext)));
             if (amount > 0) {
-                prediction.target.damageHits.push(amount);
-                localContext.lastDamage = amount;
-                localContext.lastPositiveHits = 1;
+                const resolved = appendTargetDamagePrediction(prediction, amount, 1, 'attack', params, options);
+                localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+                localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
             }
             return;
         }
@@ -12953,9 +13668,11 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             const base = evalPredictionNumberExpr(params.base ?? (op === 'void_turn_count_damage' ? 6 : 28), localContext);
             const per = evalPredictionNumberExpr(params.per ?? (op === 'void_turn_count_damage' ? 4 : -5), localContext);
             const amount = Math.max(0, Math.ceil(base + per * playedCount));
-            if (amount > 0) prediction.target.damageHits.push(amount);
-            localContext.lastDamage = amount;
-            localContext.lastPositiveHits = amount > 0 ? 1 : 0;
+            const resolved = amount > 0
+                ? appendTargetDamagePrediction(prediction, amount, 1, 'attack', params, options)
+                : [];
+            localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+            localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
             return;
         }
         if (op === 'void_scythe_damage') {
@@ -12967,9 +13684,11 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             const base = evalPredictionNumberExpr(params.base ?? 40, localContext);
             const per = evalPredictionNumberExpr(params.per_hand ?? 5, localContext);
             const amount = Math.max(0, Math.ceil(base - per * Math.max(0, handCount - 1)));
-            if (amount > 0) prediction.target.damageHits.push(amount);
-            localContext.lastDamage = amount;
-            localContext.lastPositiveHits = amount > 0 ? 1 : 0;
+            const resolved = amount > 0
+                ? appendTargetDamagePrediction(prediction, amount, 1, 'attack', params, options)
+                : [];
+            localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+            localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
             return;
         }
         if (op === 'arctic_nuke') {
@@ -12987,14 +13706,15 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
             const repeats = fission + Math.max(0, Math.floor(Number(card.extra_hits || 0)));
             const bonus = Math.max(0, Math.floor(Number(card.bonus_damage || 0)));
             const power = Math.floor(Number(card.power_value || 0));
-            let health = Math.max(0, Number(targetState.health || 0));
+            const runtime = options.damageRuntime || createPredictionDamageRuntime(ownerState, targetState);
+            options.damageRuntime = runtime;
+            const targetRuntime = ensurePredictionDamagePlayer(runtime, targetState);
             let firstAttack = true;
-            for (let i = 0; i < spend && health > 0; i++) {
-                for (let hit = 0; hit < repeats && health > 0; hit++) {
-                    const base = Math.max(minimum, Math.ceil(health * percent));
+            for (let i = 0; i < spend && targetRuntime && targetRuntime.health > 0; i++) {
+                for (let hit = 0; hit < repeats && targetRuntime.health > 0; hit++) {
+                    const base = Math.max(minimum, Math.ceil(targetRuntime.health * percent));
                     const amount = Math.max(0, Math.ceil((base + bonus) * fusion / fission) + (firstAttack ? power : 0));
-                    prediction.target.damageHits.push(amount);
-                    health = Math.max(0, health - amount);
+                    appendTargetDamagePrediction(prediction, amount, 1, 'attack', params, options);
                     firstAttack = false;
                 }
             }
@@ -13009,13 +13729,16 @@ function collectTargetPredictionFromV2Steps(prediction, steps, context = null, o
         const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount, localContext)));
         if (amount <= 0) return;
         const hits = Math.max(1, Math.floor(evalPredictionNumberExpr(params.hits ?? 1, localContext)));
-        if (isElectric) {
-            for (let i = 0; i < hits; i++) prediction.target.electricHits.push(amount);
-        } else {
-            for (let i = 0; i < hits; i++) prediction.target.damageHits.push(amount);
-        }
-        localContext.lastDamage = amount * hits;
-        localContext.lastPositiveHits = amount > 0 ? hits : 0;
+        const resolved = appendTargetDamagePrediction(
+            prediction,
+            amount,
+            hits,
+            op === 'direct_damage' || op === 'deal_direct_damage' ? 'direct' : 'attack',
+            params,
+            options,
+        );
+        localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+        localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
     });
 }
 
@@ -13074,8 +13797,9 @@ function addKnownSelfPrediction(prediction, cardDict, cardDef, selfState) {
 
 function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     const result = {
-        target: { damageHits: [], electricHits: [], poison: 0, fire: 0 },
-        self: { damageHits: [], heal: [], elixir: [], magic: [], armor: [] },
+        target: createPredictionRecipient(),
+        self: createPredictionRecipient(),
+        others: [],
         damageHits: [],
         electricHits: [],
         poison: 0,
@@ -13089,45 +13813,60 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     }
     const attackerState = options.attackerState || options.ownerState || getCardOwnerStateForPrediction(cardDict) || gameState.you || {};
     const targetState = options.targetState || getDefaultPredictionTargetState(cardDict, attackerState);
+    result.self.playerId = normalizePlayerId(attackerState && (attackerState.player_id ?? attackerState.id));
+    result.target.playerId = normalizePlayerId(targetState && (targetState.player_id ?? targetState.id));
     const hasDamageOverride = Object.prototype.hasOwnProperty.call(options, 'damageHits');
+    const cardCosts = getCardDisplayCosts(cardDict, cardDef, attackerState);
+    const damageRuntime = hasDamageOverride
+        ? null
+        : createPredictionDamageRuntime(attackerState, targetState, { paidMagic: cardCosts.totalM });
     if (cardDef.card_type === 'thorn') {
         const simulatedHits = hasDamageOverride
             ? (Array.isArray(options.damageHits) ? options.damageHits : [])
-            : simulateNoCounterAttackHits(cardDict, attackerState, targetState);
+            : simulateNoCounterAttackHits(cardDict, attackerState, targetState, damageRuntime);
         result.target.damageHits = simulatedHits
             .map(v => Math.max(0, Math.ceil(Number(v || 0))))
             .filter(v => Number.isFinite(v));
-        if (!hasDamageOverride && Number(simulatedHits && simulatedHits.spongePoison || 0) > 0) {
-            result.target.poison += Math.ceil(Number(simulatedHits.spongePoison || 0));
-            result.target.damageHits = result.target.damageHits.filter(v => Number(v) > 0);
-        }
-        const targetImmune = isPredictionStatusImmune(targetState);
-        const toxic = targetImmune ? 0 : Math.max(0, Number(targetState && targetState.toxic || 0));
-        const positiveHits = result.target.damageHits.filter(v => Number(v) > 0).length;
-        if (toxic > 0 && positiveHits > 0) {
-            result.target.poison += toxic * positiveHits;
-        }
     } else if (cardDict.def_id === 'Iris') {
         result.target.poison = 10;
     } else if (cardDict.def_id === 'Fire') {
         result.target.fire = 2;
     }
     const positiveHitCount = result.target.damageHits.filter(v => Number(v) > 0).length;
-    collectSelfPredictionFromEffects(result, cardDict, cardDef, attackerState, positiveHitCount);
+    collectSelfPredictionFromEffects(result, cardDict, cardDef, attackerState, positiveHitCount, damageRuntime);
     const onPlay = cardDef.v2_events && cardDef.v2_events.on_play;
     const steps = onPlay && (onPlay.steps || onPlay);
-    collectTargetPredictionFromV2Steps(result, steps, null, {
+    const collectorOptions = {
         skipPhysicalDamage: cardDef.card_type === 'thorn' && result.target.damageHits.length > 0,
         ownerState: attackerState,
         attackerState,
         targetState,
         cardDict,
-        cardCostE: getCardDisplayCosts(cardDict, cardDef, attackerState).totalE,
-        cardCostM: getCardDisplayCosts(cardDict, cardDef, attackerState).totalM,
+        cardCostE: cardCosts.totalE,
+        cardCostM: cardCosts.totalM,
+        damageRuntime,
+    };
+    collectTargetPredictionFromV2Steps(result, steps, null, collectorOptions);
+    const resolvedRuntime = collectorOptions.damageRuntime || damageRuntime;
+    collectSelfPredictionFromV2Steps(result, steps, attackerState, positiveHitCount, null, {
+        damageRuntime: resolvedRuntime,
     });
-    collectSelfPredictionFromV2Steps(result, steps, attackerState, positiveHitCount);
     addKnownSelfPrediction(result, cardDict, cardDef, attackerState);
-    collectSelfStatusDamagePrediction(result, cardDef, attackerState);
+    collectSelfStatusDamagePrediction(result, cardDef, attackerState, resolvedRuntime);
+    applyPredictionDamageRuntime(result, resolvedRuntime, attackerState, targetState);
+    const targetId = normalizePlayerId(targetState && (targetState.player_id ?? targetState.id));
+    if (!hasDamageOverride && resolvedRuntime && targetId != null) {
+        result.target.poison += Math.max(0, Math.ceil(Number(resolvedRuntime.spongePoisonByPlayer.get(targetId) || 0)));
+        const targetImmune = isPredictionStatusImmune(targetState);
+        const toxic = targetImmune ? 0 : Math.max(0, Number(targetState && targetState.toxic || 0));
+        const positiveAttackHits = Math.max(0, Number(resolvedRuntime.attackPositiveHitsByPlayer.get(targetId) || 0));
+        if (toxic > 0 && positiveAttackHits > 0) result.target.poison += toxic * positiveAttackHits;
+    } else if (hasDamageOverride) {
+        const targetImmune = isPredictionStatusImmune(targetState);
+        const toxic = targetImmune ? 0 : Math.max(0, Number(targetState && targetState.toxic || 0));
+        const positiveHits = result.target.damageHits.filter(v => Number(v) > 0).length;
+        if (toxic > 0 && positiveHits > 0) result.target.poison += toxic * positiveHits;
+    }
     result.damageHits = result.target.damageHits;
     result.electricHits = result.target.electricHits;
     result.poison = result.target.poison;
@@ -13157,26 +13896,32 @@ function shouldShowCardPlayEffectPrediction(cardDict, options = {}) {
 function getCardPlayEffectPredictionHtml(cardDict, options = {}) {
     if (!shouldShowCardPlayEffectPrediction(cardDict, options)) return '';
     const prediction = getCardPlayEffectPredictionParts(cardDict, options);
-    const targetParts = [];
-    const selfParts = [];
-    if (prediction.target.damageHits.length) targetParts.push(formatPredictionDamagePart(prediction.target.damageHits));
-    if (prediction.target.electricHits.length) targetParts.push(formatPredictionElectricDamagePart(prediction.target.electricHits));
-    if (prediction.target.poison > 0) targetParts.push(formatPredictionPart(prediction.target.poison, 'P', 'poison'));
-    if (prediction.target.fire > 0) targetParts.push(formatPredictionPart(prediction.target.fire, 'F', 'fire'));
-    if (prediction.self.damageHits.length) selfParts.push(formatPredictionDamagePart(prediction.self.damageHits));
-    selfParts.push(formatPredictionSelfPart(prediction.self.heal, 'H', 'heal'));
-    selfParts.push(formatPredictionSelfPart(prediction.self.elixir, 'E', 'elixir'));
-    selfParts.push(formatPredictionSelfPart(prediction.self.magic, 'M', 'magic'));
-    selfParts.push(formatPredictionSelfPart(prediction.self.armor, 'A', 'armor'));
-    const sections = [];
-    const targetHtml = targetParts.filter(Boolean).join('');
-    const selfHtml = selfParts.filter(Boolean).join('');
-    if (targetHtml) {
-        sections.push(`<span class="card-prediction-section"><span class="card-prediction-label">${escapeHtml(UI.prediction_target || '对目标')}:</span>${targetHtml}</span>`);
-    }
-    if (selfHtml) {
-        sections.push(`<span class="card-prediction-section"><span class="card-prediction-label">${escapeHtml(UI.prediction_self || '对自己')}:</span>${selfHtml}</span>`);
-    }
+    const recipientParts = recipient => {
+        const parts = [];
+        if (recipient.damageHits.length) parts.push(formatPredictionDamagePart(recipient.damageHits));
+        if (recipient.electricHits.length) parts.push(formatPredictionElectricDamagePart(recipient.electricHits));
+        if (recipient.poison > 0) parts.push(formatPredictionPart(recipient.poison, 'P', 'poison'));
+        if (recipient.fire > 0) parts.push(formatPredictionPart(recipient.fire, 'F', 'fire'));
+        parts.push(formatPredictionSelfPart(recipient.heal, 'H', 'heal'));
+        parts.push(formatPredictionSelfPart(recipient.elixir, 'E', 'elixir'));
+        parts.push(formatPredictionSelfPart(recipient.magic, 'M', 'magic'));
+        parts.push(formatPredictionSelfPart(recipient.armor, 'A', 'armor'));
+        parts.push(formatPredictionResourceDelta(recipient.resourceDeltas && recipient.resourceDeltas.magic, 'M', 'magic'));
+        parts.push(formatPredictionMitigations(recipient.mitigations));
+        return parts.filter(Boolean).join('');
+    };
+    const sections = [
+        { recipient: prediction.target, label: UI.prediction_target || '对目标' },
+        { recipient: prediction.self, label: UI.prediction_self || '对自己' },
+        ...(prediction.others || []).map(recipient => ({
+            recipient,
+            label: getPlayerNameById(recipient.playerId),
+        })),
+    ].map(({ recipient, label }) => {
+        const parts = recipientParts(recipient);
+        if (!parts) return '';
+        return `<span class="card-prediction-section"><span class="card-prediction-label">${escapeHtml(label)}:</span>${parts}</span>`;
+    }).filter(Boolean);
     const html = sections.join('');
     return html ? `<div class="card-prediction">${html}</div>` : '';
 }
@@ -13406,7 +14151,7 @@ function getTermIntroLibrary() {
         card_type_thorn: { label: getCardTypeLabel('thorn') || 'Thorn', desc: lt({ zh: '攻击牌。需要选择目标，主要用来压低对方 H；2v2 中也可以攻击队友。', en: 'Attack cards. They choose a target and mainly reduce the opposing side’s H; in 2v2 they can also target allies.', fr: 'Cartes d’attaque. Elles choisissent une cible et servent surtout à réduire le H adverse ; en 2v2 elles peuvent aussi cibler les alliés.', ja: '攻撃カード。対象を選び、主に相手側の H を下げます。2v2 では味方も対象にできます。' }), color: CARD_TYPE_COLORS.thorn },
         card_type_bloom: { label: getCardTypeLabel('bloom') || 'Bloom', desc: lt({ zh: '技能牌。用于回血、抽牌、加状态、调整 E/M 或改变场面。', en: 'Skill cards. They heal, draw, apply states, adjust E/M, or change the board.', fr: 'Cartes de compétence. Elles soignent, piochent, appliquent des états, modifient E/M ou changent la situation.', ja: '技能カード。回復、ドロー、状態付与、E/M 調整、盤面変更に使います。' }), color: CARD_TYPE_COLORS.bloom },
         card_type_root: { label: getCardTypeLabel('root') || 'Root', desc: lt({ zh: '装备牌。有些过一回合后才能主动触发，有些能持续提供效果。', en: 'Equipment cards. Some can be triggered after one turn; others provide continuous effects.', fr: 'Cartes d’équipement. Certaines se déclenchent après un tour ; d’autres donnent un effet continu.', ja: '装備カード。1ターン後に発動できるものや、継続効果を持つものがあります。' }), color: CARD_TYPE_COLORS.root },
-        card_type_guard: { label: getCardTypeLabel('guard') || 'Guard', desc: lt({ zh: '反制牌。仅对方行动弹出反制窗口时可使用，用来闪避、保护装备或减少伤害。', en: 'Counter cards. They are used only when the response window appears, often to dodge, protect equipment, or reduce damage.', fr: 'Cartes de contre. Elles ne s’utilisent que dans une fenêtre de réponse, pour esquiver, protéger un équipement ou réduire les dégâts.', ja: '反制カード。応答ウィンドウが出た時だけ使え、回避、装備保護、ダメージ軽減に使います。' }), color: CARD_TYPE_COLORS.guard },
+        card_type_guard: { label: getCardTypeLabel('guard') || 'Guard', desc: lt({ zh: '反制牌。可在非自己的回合、且响应条件满足时使用，用来闪避、保护装备或改变行动结果。', en: 'Counter cards. They may be used outside your own turn when their response condition is met, often to dodge, protect equipment, or change an action’s result.', fr: 'Cartes de contre. Elles peuvent être utilisées hors de votre tour lorsque leur condition est remplie, pour esquiver, protéger un équipement ou modifier le résultat d’une action.', ja: '反制カード。自分以外の手番に条件を満たすと使用でき、回避、装備保護、行動結果の変更に使います。' }), color: CARD_TYPE_COLORS.guard },
         D: { label: lt({ zh: 'D：物理伤害(Damage)', en: 'D: Physical Damage', fr: 'D : dégâts physiques', ja: 'D：物理ダメージ' }), desc: lt({ zh: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', en: 'Affected by armor, equipment, dodges, and counters. Effects such as Toxic or Fang healing only trigger when damage is actually dealt.', fr: 'Affecté par l’armure, les équipements, l’esquive et les contres. Toxic ou le soin de Fang ne se déclenchent que si des dégâts sont réellement infligés.', ja: '護甲、装備、回避、反制の影響を受けます。実際にダメージを与えた時だけ淬毒や牙の回復などが発動します。' }), color: COLORS.damage },
         electric_damage: { label: lt({ zh: '电伤：电击伤害(Electric Damage)', en: 'Electric Damage', fr: 'Dégâts électriques', ja: '電撃ダメージ' }), desc: `${lt({ zh: '一种类似于物理伤害的魔法伤害。', en: 'A kind of magic damage that behaves similarly to physical damage. ', fr: 'Un type de dégâts magiques qui se comporte comme des dégâts physiques. ', ja: '物理ダメージに近い挙動をする魔法ダメージです。' })}${magicDamageDesc}`, color: COLORS.damage },
         magic_damage: { label: lt({ zh: '魔法伤害(Magic Damage)', en: 'Magic Damage', fr: 'Dégâts magiques', ja: '魔法ダメージ' }), desc: magicDamageDesc, color: COLORS.magic },
@@ -13421,7 +14166,7 @@ function getTermIntroLibrary() {
         overcap: { label: lt({ zh: '爆费', en: 'Resource Overflow', fr: 'Excès de ressource', ja: 'リソース超過' }), desc: lt({ zh: 'E 或 M 回复超过上限时，超过部分直接丢失；提前规划资源可以避免浪费。', en: 'Recovered E or M beyond the maximum is lost. Planning resource use prevents waste.', fr: 'Le E ou M récupéré au-delà du maximum est perdu. Planifier les ressources évite le gaspillage.', ja: '上限を超えて回復した E/M は失われます。事前に使うと無駄を防げます。' }), color: COLORS.elixir },
         deck: { label: lt({ zh: '牌堆', en: 'Deck', fr: 'Deck', ja: 'デッキ' }), desc: lt({ zh: '未抽到的牌所在区域。抽牌通常从牌堆顶进入手牌；查看牌堆只能看到抽牌堆。', en: 'The zone for cards not yet drawn. Draw usually moves cards from the top of the deck into hand.', fr: 'Zone des cartes non piochées. La pioche déplace généralement la carte du dessus du deck vers la main.', ja: 'まだ引いていないカードの領域です。通常、デッキ上から手札へ移動します。' }), color: COLORS.text_primary },
         discard: { label: lt({ zh: '弃牌堆', en: 'Discard', fr: 'Défausse', ja: '捨て札' }), desc: lt({ zh: '大多数打出后的牌会进入弃牌堆，之后会被重新洗回牌堆。', en: 'Most played cards go here and may later be shuffled back into the deck.', fr: 'La plupart des cartes jouées y vont, puis peuvent être remélangées dans le deck.', ja: '多くの使用済みカードが入り、後でデッキに戻ることがあります。' }), color: COLORS.text_secondary },
-        response: { label: UI.counter || lt({ zh: '反制', en: 'Counter', fr: 'Contre', ja: '反制' }), desc: lt({ zh: '对方行动满足条件时会出现响应机会。反制能改变对方行动的结果。', en: 'A response chance appears when an opponent action meets its condition. Counters can change that action’s result.', fr: 'Une fenêtre de réponse apparaît quand l’action adverse remplit la condition. Un contre peut modifier le résultat.', ja: '相手の行動が条件を満たすと応答機会が出ます。反制はその結果を変えます。' }), color: CARD_TYPE_COLORS.guard },
+        response: { label: UI.counter || lt({ zh: '反制', en: 'Counter', fr: 'Contre', ja: '反制' }), desc: lt({ zh: '非自己的回合中，其他玩家的行动满足条件时会出现响应机会；2v2 中也可以响应队友行动。', en: 'Outside your own turn, a response chance appears when another player’s action meets the condition; in 2v2 this also includes ally actions.', fr: 'Hors de votre tour, une fenêtre de réponse apparaît lorsqu’une action d’un autre joueur remplit la condition ; en 2v2, cela inclut aussi les actions alliées.', ja: '自分以外の手番に、ほかのプレイヤーの行動が条件を満たすと応答できます。2v2では味方の行動も含みます。' }), color: CARD_TYPE_COLORS.guard },
         turn_transition: { label: lt({ zh: '回合交替结算', en: 'Turn Transition Settlement', fr: 'Résolution de transition de tour', ja: 'ターン交替解決' }), desc: lt({ zh: '前一名玩家的回合结束与下一名玩家的回合开始属于同一结算时点。先结算回合结束效果，再结算回合开始效果；期间新产生且属于该时点的效果继续结算，同一来源最多结算一次。需要选择时暂停，完成选择后继续，直至下一名可行动玩家开始行动。', en: 'The previous player’s turn end and the next player’s turn start form one settlement point. Turn-end effects resolve first, then turn-start effects. Newly created effects for that point continue resolving, while each source resolves at most once. Choices pause settlement; it resumes afterward until the next player who can act begins acting.', fr: 'La fin du tour précédent et le début du tour suivant forment un même point de résolution. Les effets de fin de tour se résolvent avant ceux de début de tour. Les nouveaux effets de ce point continuent à se résoudre, chaque source au plus une fois. Un choix met la résolution en pause, puis elle reprend jusqu’à ce que le prochain joueur capable d’agir commence son action.', ja: '直前のプレイヤーのターン終了と次のプレイヤーのターン開始は同じ解決時点です。終了時効果、開始時効果の順に解決し、その時点で新たに生じた効果も続けて解決します。同じ発生源は1回までです。選択が必要な場合は一時停止し、完了後、次に行動可能なプレイヤーが行動を始めるまで再開します。' }), color: COLORS.text_primary },
         same_name_penalty: { label: lt({ zh: '同名卡惩罚', en: 'Same-name penalty', fr: 'Pénalité de même nom', ja: '同名カードペナルティ' }), desc: lt({ zh: '同一回合重复使用同名卡会额外消耗 E；共生牌不受影响。', en: 'Playing the same card name repeatedly in one turn costs extra E. Symbiosis ignores it.', fr: 'Jouer plusieurs fois le même nom pendant un tour coûte du E supplémentaire. Symbiose l’ignore.', ja: '同一ターンに同名カードを繰り返すと追加 E が必要です。共生は無視します。' }), color: COLORS.elixir },
         revealed: { label: UI.tag_revealed || lt({ zh: '被揭示', en: 'Revealed', fr: 'Révélé', ja: '公開' }), desc: lt({ zh: '在手中时永久对对手展示。', en: 'While in hand, this card is always visible to opponents.', fr: 'Tant qu’elle est en main, cette carte reste visible pour les adversaires.', ja: '手札にある間、相手に常に見えます。' }), color: '#E74C3C' },
@@ -13505,7 +14250,7 @@ function getIntroFlagDescription(flag, custom = null) {
         infinite_exclude: lt({ zh: '不会进入无限火力随机牌池。', en: 'Excluded from the Infinite Fire random pool.', fr: 'Exclue de la réserve aléatoire Infinite Fire.', ja: 'Infinite Fire のランダムプールに入りません。' }),
         rebound: lt({ zh: '打出并结算后立即回到手中。', en: 'Returns to hand immediately after being played and resolved.', fr: 'Revient en main immédiatement après avoir été jouée et résolue.', ja: '使用・解決後すぐ手札に戻ります。' }),
         copy: lt({ zh: '进入手中时，将层数张放逐复制加入手中。', en: 'When entering hand, adds that many exiled copies to hand.', fr: 'En entrant en main, ajoute autant de copies exilées en main.', ja: '手札に入る時、その層数分の放逐コピーを手札に加えます。' }),
-        unique: lt({ zh: '整场对局自己总牌库中仅允许出现一张，多余的将被放逐。', en: 'Only one copy may exist in your total deck during the match; extras are exiled.', fr: 'Une seule copie peut exister dans votre deck total pendant la partie ; les autres sont exilées.', ja: '対局中、自分の総デッキに1枚だけ存在できます。余分は放逐されます。' }),
+        unique: lt({ zh: '通常只能获得1张同名唯一牌；已拥有时不再出现在选牌中。强制复制会保留副本，但每个多余副本会向牌组加入1张虚空。', en: 'Normally only one copy can be obtained; once owned, it no longer appears in draft choices. Forced copies remain, but each extra copy adds 1 Void to the deck.', fr: 'Un seul exemplaire peut normalement être obtenu et disparaît ensuite des choix. Les copies forcées restent, mais chacune ajoute 1 Vide au deck.', ja: '通常は同名を1枚だけ獲得でき、所持後は選択肢に出ません。強制複製は残りますが、余分な1枚ごとに虚空を1枚デッキへ加えます。' }),
         swift: lt({ zh: 'E花费减少X，最少为0。', en: 'E cost is reduced by X, minimum 0.', fr: 'Le coût E est réduit de X, minimum 0.', ja: 'E コストをX減らします。最低0。' }),
         magic_swift: lt({ zh: 'M花费减少X，最少为0。', en: 'M cost is reduced by X, minimum 0.', fr: 'Le coût M est réduit de X, minimum 0.', ja: 'M コストをX減らします。最低0。' }),
         temp_swift: lt({ zh: '本次打出时E花费减少X，打出后清除。', en: 'For this play only, E cost is reduced by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E est réduit de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX減らし、使用後に消えます。' }),
@@ -13887,7 +14632,7 @@ function getStatusIntroItem(statusInfo) {
         attack_only: { label: UI.status_attack_only, desc: '只能打出攻击牌，直到层数或持续时间结束。', color: '#D35400' },
         magic_blocked: { label: '魔力封锁', desc: '存在时，不能打出带有魔力消耗的卡牌。回合结束时层数-1。', color: COLORS.magic_text },
         untargetable: { label: UI.status_untargetable, desc: '不能被部分选择目标的效果指定。自己回合开始时层数-1。', color: '#1A5276' },
-        bandage: { label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；在己方下一名可行动玩家回合结束后死亡。', color: '#1E8449' },
+        bandage: { label: UI.status_bandage, desc: '受到致命伤害时，将[[icon:H]]设为1并获得无敌；自己回合结束时死亡。', color: '#1E8449' },
         sluggish: { label: UI.status_sluggish, desc: '每回合少抽层数张牌。', color: '#E67E22' },
         overload: { label: UI.status_overload, desc: '回合开始时扣除对应层数E，到0为止，然后清除全部层数。', color: '#C0392B' },
         foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
@@ -13935,7 +14680,7 @@ function getStatusIntroItem(statusInfo) {
         blood_debt: { label: lt({ zh: '血债', en: 'Blood Debt', fr: 'Dette de sang', ja: '血債' }), desc: lt({ zh: builtIns.blood_debt.desc, en: 'When physical damage is taken, this effect clears and the attacker gains E equal to its stacks.', fr: 'Quand des dégâts physiques sont subis, cet effet disparaît et l’attaquant gagne E égal aux charges.', ja: '物理ダメージを受けるとこの効果は消え、攻撃者は層数分のEを得ます。' }) },
         unable_counter: { label: lt({ zh: '无法反制', en: 'Unable to Counter', fr: 'Contre impossible', ja: '反制不能' }), desc: lt({ zh: builtIns.unable_counter.desc, en: 'Discards counter cards from left to right equal to its stacks, then reduces those stacks. If stacks remain, drawn counter cards are discarded and reduce stacks.', fr: 'Défausse de gauche à droite autant de contres que de charges, puis réduit ces charges. S’il en reste, les contres piochés sont défaussés et réduisent les charges.', ja: '層数分だけ左から反制牌を弃牌に置き、その分層数を減らします。層数が残る間、引いた反制牌も弃牌に置かれ層数が減ります。' }) },
         untargetable: { label: UI.status_untargetable, desc: lt({ zh: builtIns.untargetable.desc, en: 'Cannot be selected by some targeted effects. Loses 1 stack at the start of your turn.', fr: 'Ne peut pas être choisi par certains effets ciblés. Perd 1 charge au début de votre tour.', ja: '一部の対象指定効果で選べません。自分ターン開始時に1層減ります。' }) },
-        bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'When lethal damage is taken, set H to 1 and become invincible; die after the next player on your team who can act ends their turn.', fr: 'En subissant des dégâts mortels, fixe H à 1 et devient invincible ; meurt à la fin du tour du prochain joueur de votre équipe capable d’agir.', ja: '致命ダメージを受ける時、Hを1にして無敵になります。次に行動可能な味方プレイヤーのターン終了後に死亡します。' }) },
+        bandage: { label: UI.status_bandage, desc: lt({ zh: builtIns.bandage.desc, en: 'When lethal damage is taken, set H to 1 and become invincible; die at the end of your turn.', fr: 'En subissant des dégâts mortels, fixe H à 1 et devient invincible ; meurt à la fin de votre tour.', ja: '致命ダメージを受ける時、Hを1にして無敵になります。自分のターン終了時に死亡します。' }) },
         sluggish: { label: UI.status_sluggish, desc: lt({ zh: builtIns.sluggish.desc, en: 'Draw that many fewer cards each turn.', fr: 'Pioche autant de cartes en moins à chaque tour.', ja: '毎ターンその層数分だけドローが減ります。' }) },
         overload: { label: UI.status_overload, desc: lt({ zh: builtIns.overload.desc, en: 'At turn start, lose E equal to its stacks down to 0, then clear it.', fr: 'Au début du tour, perdez E égal aux charges jusqu’à 0, puis l’état disparaît.', ja: 'ターン開始時、層数分のEを0まで失い、その後消えます。' }) },
         foresight: { label: UI.status_foresight, desc: lt({ zh: builtIns.foresight.desc, en: 'At turn-start draw, you may discard up to that many hand cards, then draw the same number.', fr: 'Lors de la pioche de début de tour, vous pouvez défausser jusqu’à autant de cartes en main, puis en piocher autant.', ja: 'ターン開始ドロー時、層数まで手札を捨て、その枚数を引けます。' }) },
@@ -14005,8 +14750,56 @@ function ensureTermIntroOverlay() {
         event.preventDefault();
         hideTermIntroOverlay();
     });
+    const cardWrap = overlay.querySelector('#term-intro-card');
+    cardWrap?.addEventListener('wheel', (event) => {
+        if (!galleryTermNavigation) return;
+        const delta = Math.abs(Number(event.deltaY || 0)) >= Math.abs(Number(event.deltaX || 0))
+            ? Number(event.deltaY || 0)
+            : Number(event.deltaX || 0);
+        if (!Number.isFinite(delta) || Math.abs(delta) < 4) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const now = performance.now();
+        if (now < galleryTermWheelLockedUntil) return;
+        if (navigateGalleryTermIntro(delta < 0 ? -1 : 1)) {
+            galleryTermWheelLockedUntil = now + 220;
+        }
+    }, { passive: false });
+    cardWrap?.addEventListener('pointerdown', (event) => {
+        if (!galleryTermNavigation || !['touch', 'pen'].includes(event.pointerType)) return;
+        if (event.button != null && event.button !== 0) return;
+        galleryTermPointerStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    });
+    cardWrap?.addEventListener('pointerup', (event) => {
+        const start = galleryTermPointerStart;
+        galleryTermPointerStart = null;
+        if (!start || start.pointerId !== event.pointerId || !galleryTermNavigation) return;
+        const dx = event.clientX - start.x;
+        const dy = event.clientY - start.y;
+        if (Math.abs(dx) < 42 || Math.abs(dx) <= Math.abs(dy) * 1.15) return;
+        event.preventDefault();
+        event.stopPropagation();
+        navigateGalleryTermIntro(dx < 0 ? 1 : -1);
+    });
+    cardWrap?.addEventListener('pointercancel', () => {
+        galleryTermPointerStart = null;
+    });
     document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && !overlay.classList.contains('hidden')) hideTermIntroOverlay();
+        if (overlay.classList.contains('hidden')) return;
+        if (event.key === 'Escape') {
+            hideTermIntroOverlay();
+            return;
+        }
+        const target = event.target;
+        const editing = target && (
+            ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+            || target.isContentEditable
+        );
+        if (editing || !galleryTermNavigation) return;
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            navigateGalleryTermIntro(event.key === 'ArrowLeft' ? -1 : 1);
+        }
     });
     termIntroOverlayEl = overlay;
     return overlay;
@@ -14019,6 +14812,7 @@ function hideTermIntroOverlay() {
     termIntroOverlayEl.classList.remove('card-flying');
     termIntroOverlayEl.classList.add('hidden');
     termIntroOverlayEl.setAttribute('aria-hidden', 'true');
+    clearGalleryTermNavigation();
 }
 
 function isTermIntroOverlayVisible() {
@@ -14149,6 +14943,8 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
     const sourceRect = cardOptions.sourceRect || null;
     const termIntroDepth = Math.max(0, Number(cardOptions.termIntroDepth || 0) || 0);
     const allowNestedTermIntro = termIntroDepth < 1;
+    if (cardOptions.galleryNavigation) galleryTermNavigation = cardOptions.galleryNavigation;
+    else clearGalleryTermNavigation();
     removeFloatingCardPreview();
     removeCardHoldPreview();
     if (typeof cleanupDragState === 'function') cleanupDragState();
@@ -14167,6 +14963,8 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
     card.classList.add('term-intro-card');
     if (isUsableRect(sourceRect)) card.classList.add('term-intro-card-hidden');
     cardSlot.appendChild(card);
+    const navigationControls = createGalleryTermNavigationControls();
+    if (navigationControls) cardSlot.appendChild(navigationControls);
     title.textContent = blinded ? '? · ?' : `${getCardInstanceName(cardDict, cardDef)} · ${lt({ zh: '术语说明', en: 'Term Guide', fr: 'Guide des termes', ja: '用語説明' })}`;
     list.innerHTML = buildCardIntroTermsHtml(introCardDict);
     overlay.dataset.termIntroDepth = String(termIntroDepth);
@@ -14183,6 +14981,7 @@ function showTermIntroForCard(cardDict, cardOptions = {}) {
 }
 
 function showTermIntroForStatus(statusInfo) {
+    clearGalleryTermNavigation();
     const overlay = ensureTermIntroOverlay();
     removeFloatingCardPreview();
     removeCardHoldPreview();
@@ -14244,6 +15043,7 @@ function showTermIntroForTokenKey(termKey, sourceEl = null) {
 
 function showTermIntroForStandaloneItem(item, sourceEl = null, titleText = '') {
     if (!item) return;
+    clearGalleryTermNavigation();
     const overlay = ensureTermIntroOverlay();
     removeFloatingCardPreview();
     removeCardHoldPreview();
@@ -15966,6 +16766,8 @@ function resetAccountDeleteWarning() {
     if (confirmBtn) confirmBtn.disabled = true;
     const countdown = $('account-delete-countdown');
     if (countdown) countdown.textContent = '请等待15秒';
+    const passwordInput = $('input-account-delete-password');
+    if (passwordInput) passwordInput.value = '';
 }
 
 function accountStatsText(user) {
@@ -18698,10 +19500,17 @@ function startAccountDeleteWarning() {
 
 async function onAccountDeleteConfirm() {
     setAccountError('');
+    const passwordInput = $('input-account-delete-password');
+    const password = String(passwordInput?.value || '');
+    if (!password) {
+        setAccountError('请输入当前密码');
+        passwordInput?.focus();
+        return;
+    }
     const ok = await gameConfirm(UI.notice || '提示', '确认注销账户吗？\n账号将被注销。');
     if (!ok) return;
     try {
-        await authRequest('/api/auth/delete-account', {});
+        await authRequest('/api/auth/delete-account', { password });
         currentAccount = null;
         socialData = { friends: [], incoming: [], outgoing: [], settings: null, unread_count: 0 };
         dmData = { threads: [], unread_count: 0 };
@@ -19649,12 +20458,18 @@ async function openDmThread(threadId, options = {}) {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     dmMessagesAbortController = controller;
     const signal = controller ? controller.signal : undefined;
-    const requestPath = `/api/social/dm/messages?thread_id=${encodeURIComponent(tid)}&limit=50&mark_read=${markRead ? '1' : '0'}`;
+    const requestPath = markRead
+        ? '/api/social/dm/messages/read'
+        : `/api/social/dm/messages?thread_id=${encodeURIComponent(tid)}&limit=50`;
     warnSocialEndpointStorm(requestPath);
     let promise;
     promise = (async () => {
     try {
-        const data = await authRequest(requestPath, undefined, { signal, timeoutMs: 7000 });
+        const data = await authRequest(
+            requestPath,
+            markRead ? { thread_id: tid, limit: 50 } : undefined,
+            { signal, timeoutMs: 7000 },
+        );
         if (
             selectionRevision !== dmSelectionRevision
             || String(activeDmThreadId || '') !== tid
@@ -21709,7 +22524,11 @@ async function openFeedbackThread(threadId) {
     if (!threadId) return;
     activeFeedbackThreadId = threadId;
     try {
-        const data = await authRequest(`/api/feedback/messages?thread_id=${encodeURIComponent(threadId)}&limit=100&mark_read=1`, undefined, { timeoutMs: 7000 });
+        const data = await authRequest(
+            '/api/feedback/messages/read',
+            { thread_id: threadId, limit: 100 },
+            { timeoutMs: 7000 },
+        );
         feedbackState.is_staff = !!data.is_staff;
         feedbackState.unread_count = Number(data.unread_count || 0);
         feedbackState.messages = Array.isArray(data.messages) ? data.messages : [];
@@ -23971,7 +24790,7 @@ function renderSoloBuilder() {
                 row.className = 'solo-card-row';
                 const cd = CARD_DEFS[defId];
                 const displayCostE = getCardDisplayCostELabel({ def_id: defId }, cd, cd.cost_e);
-                row.innerHTML = `<span>${getCardName(cd)}</span><small>${getCardTypeLabel(cd.card_type)} ${displayCostE}E/${cd.cost_m}M</small>`;
+                row.innerHTML = `<span>${escapeHtml(getCardName(cd))}</span><small>${escapeHtml(getCardTypeLabel(cd.card_type))} ${escapeHtml(displayCostE)}E/${escapeHtml(cd.cost_m)}M</small>`;
                 row.onclick = () => addSoloCard(defId);
                 list.appendChild(row);
             });
@@ -24020,12 +24839,12 @@ function renderSoloDeck(which, deck) {
         row.className = `solo-deck-card${invalid ? ' invalid' : ''}`;
         row.innerHTML = `
             <div class="solo-deck-card-main">
-                <span>${idx + 1}. ${cd ? getCardName(cd) : escapeHtml(card.def_id || '?')}</span>
-                ${invalid ? `<small class="solo-invalid-card">${UI.solo_invalid_card}</small>` : (flagText ? `<small>${flagText}</small>` : '')}
+                <span>${idx + 1}. ${cd ? escapeHtml(getCardName(cd)) : escapeHtml(card.def_id || '?')}</span>
+                ${invalid ? `<small class="solo-invalid-card">${escapeHtml(UI.solo_invalid_card)}</small>` : (flagText ? `<small>${escapeHtml(flagText)}</small>` : '')}
             </div>
             <div class="solo-deck-card-actions">
-                ${invalid ? '' : `<button class="btn btn-small solo-tag-btn">${UI.edit_tags}</button>`}
-                <button class="btn btn-small">${UI.cancel}</button>
+                ${invalid ? '' : `<button class="btn btn-small solo-tag-btn">${escapeHtml(UI.edit_tags)}</button>`}
+                <button class="btn btn-small">${escapeHtml(UI.cancel)}</button>
             </div>`;
         const tagBtn = row.querySelector('.solo-tag-btn');
         if (tagBtn) {
@@ -25123,7 +25942,7 @@ function renderEventSelect(data) {
         for (const ev of events) {
             if (ev && String(ev.id) === String(myPick)) { eventName = getLocalizedEventText(ev, 'name') || '?'; break; }
         }
-        container.innerHTML = `<div class="event-selected">${UI.event_selected.replace('{0}', eventName)}</div>`;
+        container.innerHTML = `<div class="event-selected">${escapeHtml(UI.event_selected.replace('{0}', eventName))}</div>`;
         container.dataset.eventSelectSignature = '';
         return;
     }
@@ -25159,13 +25978,13 @@ function renderEventSelect(data) {
     events.forEach((ev, i) => {
         if (!ev) return;
         const borderColors = { 1: COLORS.health, 2: COLORS.magic, 3: COLORS.magic, 4: COLORS.fire, 5: COLORS.fire, 6: COLORS.fire, 7: COLORS.fire, 8: COLORS.magic };
-        const bc = ev.color || borderColors[ev.id] || COLORS.magic;
+        const bc = safeRegistryColor(ev.color || borderColors[ev.id], COLORS.magic);
         const card = document.createElement('div');
         card.className = 'event-card';
         card.style.borderColor = bc;
 
         card.innerHTML = `
-            <div class="event-header" style="background:${bc}"><span>${i + 1}. ${getLocalizedEventText(ev, 'name') || '?'}</span></div>
+            <div class="event-header" style="background:${escapeHtml(bc)}"><span>${i + 1}. ${escapeHtml(getLocalizedEventText(ev, 'name') || '?')}</span></div>
             <div class="event-card-body">
                 ${renderOpeningEventIconHtml(ev)}
                 <div class="event-desc">${colorizeCardText(getLocalizedEventText(ev, 'desc') || '')}</div>
@@ -25223,13 +26042,13 @@ function renderEventReveal(data) {
     eventsRow.className = 'event-options event-reveal-options';
     picks.forEach((item) => {
         const ev = item.event || {};
-        const bc = ev.color || COLORS.magic;
+        const bc = safeRegistryColor(ev.color, COLORS.magic);
         const card = document.createElement('div');
         card.className = 'event-card event-reveal-card';
         card.style.borderColor = bc;
         const playerName = item.player_name || `P${(item.player_id || 0) + 1}`;
         card.innerHTML = `
-            <div class="event-header" style="background:${bc}"><span>${escapeHtml(playerName)}</span></div>
+            <div class="event-header" style="background:${escapeHtml(bc)}"><span>${escapeHtml(playerName)}</span></div>
             <div class="event-card-body">
                 ${renderOpeningEventIconHtml(ev)}
                 <div class="event-card-copy">
@@ -27481,10 +28300,12 @@ function renderGame(data) {
     if (inSoloGame && !gs.ai_test && gs.phase === 'game_over' && playZone) {
         playZone.innerHTML = `
             <div class="solo-gameover-actions">
-                <button class="btn btn-primary" onclick="startSoloTraining()">${UI.rematch}</button>
-                <button class="btn btn-secondary" onclick="showSoloTraining()">${UI.return_lobby}</button>
+                <button class="btn btn-primary" type="button" data-solo-gameover-action="rematch">${escapeHtml(UI.rematch)}</button>
+                <button class="btn btn-secondary" type="button" data-solo-gameover-action="return">${escapeHtml(UI.return_lobby)}</button>
             </div>
         `;
+        playZone.querySelector('[data-solo-gameover-action="rematch"]')?.addEventListener('click', startSoloTraining);
+        playZone.querySelector('[data-solo-gameover-action="return"]')?.addEventListener('click', showSoloTraining);
     }
     updateModeSpecificControls(gs);
     const oppInfo = $('opp-info');
@@ -35156,7 +35977,7 @@ async function uploadCommunityModFile(file) {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename: file.name }),
+            body: JSON.stringify({ filename: file.name, size_bytes: file.size }),
         });
         const urlData = await urlResp.json().catch(() => ({}));
         if (!urlResp.ok || !urlData.success) throw new Error(urlData.error || UI.community_upload_url_failed);
@@ -35170,7 +35991,11 @@ async function uploadCommunityModFile(file) {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: urlData.key, public_url: urlData.public_url, uploader_name: currentAccount.username || '' }),
+            body: JSON.stringify({
+                key: urlData.key,
+                public_url: urlData.public_url,
+                upload_receipt: urlData.upload_receipt,
+            }),
         });
         const registerData = await registerResp.json().catch(() => ({}));
         if (!registerResp.ok || !registerData.success) {

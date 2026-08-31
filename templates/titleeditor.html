@@ -188,7 +188,7 @@
 </dialog>
 
 <div id="te-toast" class="te-toast hidden" role="status"></div>
-<script>window.__GTN_STATIC_VERSION__ = {{ static_version|tojson }};</script>
+<script nonce="{{ csp_nonce }}">window.__GTN_STATIC_VERSION__ = {{ static_version|tojson }};</script>
 <script src="/static/js/titleeditor.js?v={{ static_version }}"></script>
 </body>
 </html>

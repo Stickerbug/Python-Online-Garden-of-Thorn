@@ -23,14 +23,19 @@ class VoidDlcCardTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.mods = [load_mod(str(ROOT / "mods" / filename)) for filename in PACKAGES]
-        errors = [error for mod in cls.mods for error in mod.errors]
+        cls.vanilla_support = load_mod(str(ROOT / "mods" / "Vanilla Cards.gtnmod"))
+        errors = [error for mod in [*cls.mods, cls.vanilla_support] for error in mod.errors]
         if errors:
             raise AssertionError(errors)
         cls.mod_cards = {card.id: card for mod in cls.mods for card in mod.cards}
+        cls.runtime_cards = {
+            **{card.id: card for card in cls.vanilla_support.cards},
+            **cls.mod_cards,
+        }
 
     def setUp(self):
-        self.previous_defs = {card_id: CARD_DEFS.get(card_id) for card_id in self.mod_cards}
-        for card_id, card in self.mod_cards.items():
+        self.previous_defs = {card_id: CARD_DEFS.get(card_id) for card_id in self.runtime_cards}
+        for card_id, card in self.runtime_cards.items():
             CARD_DEFS[card_id] = card.to_card_def()
 
     def tearDown(self):

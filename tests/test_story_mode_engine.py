@@ -145,7 +145,7 @@ def test_story_resources_can_exceed_legacy_display_maximums():
     )
 
 
-def test_story_resources_reset_to_turn_baselines_instead_of_carrying_over():
+def test_story_turn_start_resets_elixir_without_lowering_current_magic():
     seed = 'story-resource-reset'
     state, _ = _begin_combat(seed)
     state['combat']['opening_redraw_pending'] = False
@@ -161,7 +161,22 @@ def test_story_resources_reset_to_turn_baselines_instead_of_carrying_over():
 
     assert state['phase'] == 'combat'
     assert state['combat']['elixir'] == 7
-    assert state['combat']['magic'] == 3
+    assert state['combat']['magic'] == 29
+
+
+def test_story_turn_start_does_not_refill_magic_to_player_baseline():
+    seed = 'story-magic-no-free-refill'
+    state, _ = _begin_combat(seed)
+    state['player']['health'] = state['player']['max_health'] = 999
+    state['player']['magic'] = 9
+    state['combat']['magic'] = 1
+    for enemy in state['combat']['enemies']:
+        enemy['stun'] = 1
+
+    state, _ = apply_story_action(state, 'end_turn', {}, seed)
+
+    assert state['phase'] == 'combat'
+    assert state['combat']['magic'] == 1
 
 
 def test_story_surrender_directly_ends_run_without_revive():
@@ -204,6 +219,76 @@ def test_story_draw_reshuffles_discard_during_the_same_draw_action():
     assert combat['discard_pile'] == []
     assert any(event.get('type') == 'reshuffle' for event in events)
     assert any(event.get('type') == 'draw' and event.get('count') == 3 for event in events)
+
+
+def test_story_draw_stops_at_hand_limit_without_burning_or_reshuffling():
+    seed = 'story-full-hand-stops-draw'
+    state, _ = _begin_combat(seed)
+    combat = state['combat']
+    combat['hand'] = [_new_card(state, 'basic') for _ in range(10)]
+    top_card = _new_card(state, 'rose')
+    discard_card = _new_card(state, 'heavy')
+    combat['draw_pile'] = [top_card]
+    combat['discard_pile'] = [discard_card]
+    streams_before = copy.deepcopy(state.get('rng_streams'))
+    events = []
+
+    drawn = _draw_cards(state, 4, seed, events)
+
+    assert drawn == []
+    assert len(combat['hand']) == 10
+    assert combat['draw_pile'] == [top_card]
+    assert combat['discard_pile'] == [discard_card]
+    assert state.get('rng_streams') == streams_before
+    assert not any(event.get('type') in {'draw', 'reshuffle', 'hand_overflow'} for event in events)
+
+
+def test_story_batch_draw_only_fills_remaining_hand_capacity():
+    seed = 'story-partial-hand-capacity'
+    state, _ = _begin_combat(seed)
+    combat = state['combat']
+    combat['hand'] = [_new_card(state, 'basic') for _ in range(9)]
+    lower_card = _new_card(state, 'rose')
+    top_card = _new_card(state, 'heavy')
+    combat['draw_pile'] = [lower_card, top_card]
+    combat['discard_pile'] = []
+    events = []
+
+    drawn = _draw_cards(state, 3, seed, events)
+
+    assert drawn == [top_card['instance_id']]
+    assert len(combat['hand']) == 10
+    assert combat['draw_pile'] == [lower_card]
+    assert combat['discard_pile'] == []
+    assert not any(event.get('type') == 'hand_overflow' for event in events)
+    assert next(event for event in events if event.get('type') == 'draw')['count'] == 1
+
+
+def test_story_card_draw_effect_does_not_burn_cards_while_hand_is_full():
+    seed = 'story-full-hand-card-draw'
+    state, _ = _begin_combat(seed)
+    combat = state['combat']
+    feather = _new_card(state, 'feather')
+    combat['hand'] = [feather] + [_new_card(state, 'basic') for _ in range(9)]
+    top_card = _new_card(state, 'rose')
+    combat['draw_pile'] = [top_card]
+    combat['discard_pile'] = []
+    combat['elixir'] = 10
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': feather['instance_id']},
+        seed,
+    )
+
+    combat = state['combat']
+    assert len(combat['hand']) == 10
+    assert combat['hand'][-1] == top_card
+    assert combat['draw_pile'] == []
+    assert any(card['instance_id'] == feather['instance_id'] for card in combat['discard_pile'])
+    assert any(event.get('type') == 'draw' and event.get('count') == 1 for event in events)
+    assert not any(event.get('type') == 'hand_overflow' for event in events)
 
 
 def test_story_content_is_valid_and_reward_pool_excludes_special_cards():
@@ -577,6 +662,28 @@ def test_story_map_has_sixteen_floors_no_early_elites_and_no_crossing_edges():
     assert story_map['floors'][0]['nodes'][0]['type'] == 'blessing'
     assert story_map['floors'][-1]['nodes'][0]['type'] == 'boss'
     assert all(
+        3 <= floor['width'] <= 7
+        for floor in story_map['floors'][1:14]
+    )
+    final_rest_floor = story_map['floors'][14]
+    assert final_rest_floor['width'] == 3
+    assert {node['type'] for node in final_rest_floor['nodes']} == {'rest'}
+    boss_node = story_map['floors'][15]['nodes'][0]
+    assert {
+        (edge['from'], edge['to'])
+        for edge in story_map['edges']
+        if edge['from'] in {node['id'] for node in final_rest_floor['nodes']}
+    } == {
+        (node['id'], boss_node['id'])
+        for node in final_rest_floor['nodes']
+    }
+    incoming_final_rest_ids = {
+        edge['to']
+        for edge in story_map['edges']
+        if edge['to'] in {node['id'] for node in final_rest_floor['nodes']}
+    }
+    assert incoming_final_rest_ids == {node['id'] for node in final_rest_floor['nodes']}
+    assert all(
         node['type'] != 'elite'
         for floor in story_map['floors'][:6]
         for node in floor['nodes']
@@ -598,6 +705,36 @@ def test_story_map_has_sixteen_floors_no_early_elites_and_no_crossing_edges():
                     (left_source['x'] - right_source['x'])
                     * (left_target['x'] - right_target['x'])
                 ) >= 0
+
+
+def test_story_map_avoids_adjacent_shop_rest_and_elite_nodes_across_many_seeds():
+    restricted = {'shop', 'rest', 'elite'}
+    generated_widths = set()
+    for seed_index in range(96):
+        story_map = generate_story_map(
+            f'map-adjacency-{seed_index}',
+            stage=1 + seed_index % 3,
+            biome=('garden', 'desert', 'ocean', 'jungle', 'factory')[seed_index % 5],
+            difficulty=('normal', 'hard', 'lunatic')[seed_index % 3],
+        )
+        nodes = {
+            node['id']: node
+            for floor in story_map['floors']
+            for node in floor['nodes']
+        }
+        generated_widths.update(
+            floor['width'] for floor in story_map['floors'][1:14]
+        )
+        for floor in story_map['floors']:
+            for left, right in zip(floor['nodes'], floor['nodes'][1:]):
+                if floor['floor'] == 15 and left['type'] == right['type'] == 'rest':
+                    continue
+                assert not (left['type'] == right['type'] and left['type'] in restricted)
+        for edge in story_map['edges']:
+            source = nodes[edge['from']]
+            target = nodes[edge['to']]
+            assert not (source['type'] == target['type'] and source['type'] in restricted)
+    assert generated_widths == {3, 4, 5, 6, 7}
 
 
 def test_boss_rush_map_is_an_eleven_room_fixed_single_route_block():
@@ -625,6 +762,51 @@ def test_boss_rush_map_is_an_eleven_room_fixed_single_route_block():
     )
 
 
+def test_visible_boss_node_freezes_and_runs_the_same_seeded_encounter():
+    seed = 'boss-map-preview'
+    state = _journey_state(seed)
+    repeated = _journey_state(seed)
+    boss_node = next(
+        node
+        for floor in state['map']['floors']
+        for node in floor['nodes']
+        if node['type'] == 'boss'
+    )
+    repeated_boss = next(
+        node
+        for floor in repeated['map']['floors']
+        for node in floor['nodes']
+        if node['type'] == 'boss'
+    )
+    assert boss_node['boss_def_id'] in STORY_ENEMIES
+    assert boss_node['encounter_specs'] == repeated_boss['encounter_specs']
+    assert boss_node['boss_def_id'] == boss_node['encounter_specs'][0]['def_id']
+
+    state, _ = apply_story_action(
+        state,
+        'choose_blessing',
+        {'blessing_id': 'max_health'},
+        seed,
+    )
+    boss_node = next(
+        node
+        for floor in state['map']['floors']
+        for node in floor['nodes']
+        if node['type'] == 'boss'
+    )
+    encounter_counter = state['rng_streams']['encounter:boss']
+    expected_ids = [spec['def_id'] for spec in boss_node['encounter_specs']]
+    state, _ = apply_story_action(
+        state,
+        'dev_jump_node',
+        {'node_id': boss_node['id']},
+        seed,
+    )
+
+    assert [enemy['def_id'] for enemy in state['combat']['enemies']] == expected_ids
+    assert state['rng_streams']['encounter:boss'] == encounter_counter
+
+
 def test_boss_rush_opens_after_ten_card_rewards_and_one_talent():
     seed = 'boss-rush-opening'
     state = build_initial_story_state(seed)
@@ -643,6 +825,15 @@ def test_boss_rush_opens_after_ten_card_rewards_and_one_talent():
     assert state['reward']['round_total'] == 10
     assert state['map']['floors'][0]['nodes'][0]['status'] == 'locked'
     assert [card['def_id'] for card in state['player']['deck']] == ['amulet']
+    boss_nodes = [
+        node
+        for floor in state['map']['floors']
+        for node in floor['nodes']
+        if node['type'] == 'boss'
+    ]
+    assert len(boss_nodes) == 3
+    assert all(node.get('boss_def_id') in STORY_ENEMIES for node in boss_nodes)
+    assert state['rng_streams']['encounter:boss'] == len(boss_nodes)
 
     for round_index in range(1, 11):
         reward = state['reward']
@@ -1353,18 +1544,22 @@ def test_occultist_life_choice_loses_thirty_percent_max_health():
     assert 'world_tree_leaf' in state['player']['relics']
 
 
-def test_turn_start_resets_elixir_and_magic_instead_of_carrying_them():
+def test_magic_is_preserved_through_extra_and_skipped_story_turns():
     state, _ = _begin_combat('turn-resources')
     state['player']['health'] = 999
     state['player']['max_health'] = 999
     state['combat']['elixir'] = 7
     state['combat']['magic'] = 14
+    splitter = _new_card(state, 'soul_splitter')
+    splitter['turns_equipped'] = 1
+    state['combat']['equipment'] = [splitter]
 
     state, events = apply_story_action(state, 'end_turn', {}, 'turn-resources')
 
     assert state['phase'] == 'combat'
+    assert state['combat']['turn_kind'] == 'extra'
     assert state['combat']['elixir'] == state['player']['max_elixir'] == 3
-    assert state['combat']['magic'] == state['player']['magic'] == 0
+    assert state['combat']['magic'] == 14
     assert any(
         event.get('type') == 'elixir'
         and event.get('amount') == 3
@@ -1372,6 +1567,22 @@ def test_turn_start_resets_elixir_and_magic_instead_of_carrying_them():
         and event.get('after') == 3
         for event in events
     )
+
+    # End the equipment-granted extra turn, then make the following normal
+    # player turn auto-skip through Stun.  Neither boundary may rewrite M.
+    state, _ = apply_story_action(state, 'end_turn', {}, 'turn-resources-extra')
+    state['combat']['stun'] = 1
+    state, skipped_events = apply_story_action(
+        state,
+        'end_turn',
+        {},
+        'turn-resources-stunned',
+    )
+
+    assert state['phase'] == 'combat'
+    assert state['combat']['turn'] == 'player'
+    assert state['combat']['magic'] == 14
+    assert any(event.get('type') == 'player_skipped' for event in skipped_events)
 
 
 def test_nuke_spends_all_elixir_and_hits_once_per_point():
@@ -1439,6 +1650,57 @@ def test_nuke_damage_and_prediction_receive_fusion_multiplier():
     assert [event['amount'] for event in damage] == [18, 18]
     assert before - state['combat']['enemies'][0]['health'] == 36
     assert state['combat']['next_attack_multiplier'] == 1
+
+
+def test_multihit_stops_at_lethal_hit_without_dead_target_reactions():
+    seed = 'story-multihit-lethal-stop'
+    state, _ = _begin_combat(seed)
+    state['combat']['opening_redraw_pending'] = False
+    state['combat']['elixir'] = 3
+    state['combat']['shield'] = 0
+    state['player']['health'] = state['player']['max_health'] = 100
+    target = state['combat']['enemies'][0]
+    target.update({
+        'health': 10,
+        'max_health': 10,
+        'shield': 0,
+        'reflection': 2,
+        'evade': 0,
+        'hidden': 0,
+        'evil_eye': 0,
+        'vulnerable': 0,
+    })
+    card = _inject_hand_card(state, 'nuke')
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id'], 'target_id': target['id']},
+        seed,
+    )
+
+    damage = [
+        event for event in events
+        if event.get('type') == 'enemy_damage'
+        and event.get('enemy_id') == target['id']
+    ]
+    reflected = [
+        event for event in events
+        if event.get('type') == 'player_damage'
+        and event.get('source') == 'reflection'
+    ]
+    defeat = next(
+        event for event in events
+        if event.get('type') == 'enemy_defeated'
+        and event.get('enemy_id') == target['id']
+    )
+
+    assert [event['hit_index'] for event in damage] == [1, 2]
+    assert len(reflected) == 1
+    assert damage[-1]['lethal'] is True
+    assert damage[-1]['presentation'] == {'motion': 'none', 'float': 'none'}
+    assert damage[-1]['sequence'] < defeat['sequence']
+    assert defeat['presentation']['motion'] == 'defeat'
 
 
 def test_enemy_dodge_consumes_one_stack_per_multihit_segment():

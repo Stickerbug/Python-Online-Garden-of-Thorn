@@ -15,6 +15,7 @@ from cards import (
     ensure_first_bloom_draft_includes_sewage,
     create_deck_from_draft, ERROR_CARD_ID, normalize_card_flag, normalize_card_flags,
     clamp_card_layer, clamp_card_extra_hits, clamp_card_power, clamp_damage_hits, _new_instance_id,
+    YGGDRASIL_HEAL,
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
@@ -823,9 +824,14 @@ class GameEngine:
         2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'position': 2},
         3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多5张攻击牌转化为[[card:Light|flag=sprout|flag=symbiosis]]', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
-        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加4层灼烧', 'position': 3},
+        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加3层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '少抽1张牌，然后从总抽牌库选择1张牌洗入牌库', 'position': 3},
-        6: {'id': 6, 'name': '能量涌动', 'desc': '每回合多回复1[[icon:E]]', 'position': 3},
+        6: {
+            'id': 6,
+            'name': '能量涌动',
+            'desc': '每回合多回复2[[icon:E]]；自己回合结束时，受到等于剩余[[icon:E]]两倍的[[icon:D]]',
+            'position': 3,
+        },
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
@@ -1074,13 +1080,17 @@ class GameEngine:
             return
         ps = self.players[player_id]
         ps.bandage_death_pending = True
-        ps.bandage_death_action_player_id = -1
+        # Keep the legacy serialized field, but pin it to the Bandage owner.
+        # The effect now expires at that player's own turn end, including the
+        # turn in which it triggered and turns whose action phase was skipped.
+        ps.bandage_death_action_player_id = player_id
         if bool(getattr(self, '_turn_boundary_active', False)):
             ps.bandage_trigger_boundary_id = int(getattr(self, '_turn_boundary_id', -1) or -1)
         else:
             ps.bandage_trigger_boundary_id = int(getattr(self, '_turn_boundary_serial', 0) or 0)
 
     def _arm_bandages_for_action(self, action_player_id: Optional[int] = None):
+        """Normalize pending Bandages loaded from the previous team-turn rule."""
         if action_player_id is None:
             action_player_id = int(getattr(self, 'current_player', -1) or 0)
         if not (0 <= action_player_id < len(self.players)):
@@ -1088,10 +1098,7 @@ class GameEngine:
         for player_id, ps in enumerate(self.players):
             if not bool(getattr(ps, 'bandage_death_pending', False)):
                 continue
-            if not self._same_timer_side(player_id, action_player_id):
-                continue
-            if int(getattr(ps, 'bandage_death_action_player_id', -1)) < 0:
-                ps.bandage_death_action_player_id = action_player_id
+            ps.bandage_death_action_player_id = player_id
 
     def _expire_bandages_after_action(self, action_player_id: Optional[int] = None):
         if action_player_id is None:
@@ -1102,14 +1109,14 @@ class GameEngine:
         for player_id, ps in enumerate(self.players):
             if not bool(getattr(ps, 'bandage_death_pending', False)):
                 continue
-            if int(getattr(ps, 'bandage_death_action_player_id', -1)) != action_player_id:
+            if player_id != action_player_id:
                 continue
             ps.health = 0
             ps.bandage_death_pending = False
             ps.bandage_trigger_boundary_id = -1
             ps.bandage_death_action_player_id = -1
             self._clear_invincible_state(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，在己方下一名可行动玩家回合结束后死亡！")
+            self.log_msg(f"{self.pn(player_id)}的绷带效果结束，自己回合结束时死亡！")
             expired.append(player_id)
         if not expired:
             return
@@ -1972,24 +1979,46 @@ class GameEngine:
             source_id = int(pending.get('player_id', -1))
         except (TypeError, ValueError):
             source_id = -1
-        is_responder = for_player != source_id
         counter_entries = pending.get('counter_cards') or []
+        public = pending
+        is_responder = for_player != source_id
         if counter_entries:
             responder_ids = set()
+            has_explicit_responders = False
             for entry in counter_entries:
                 if not isinstance(entry, dict):
                     continue
                 try:
-                    responder_ids.add(int(entry.get('responder_id', -1)))
+                    responder_id = int(entry.get('responder_id', -1))
                 except (TypeError, ValueError):
                     continue
+                if responder_id < 0:
+                    continue
+                has_explicit_responders = True
+                responder_ids.add(responder_id)
+            if has_explicit_responders:
+                public = copy.deepcopy(pending)
+                own_counter_entries = []
+                for entry in counter_entries:
+                    if not isinstance(entry, dict):
+                        continue
+                    try:
+                        responder_id = int(entry.get('responder_id', -1))
+                    except (TypeError, ValueError):
+                        continue
+                    if responder_id == for_player:
+                        own_counter_entries.append(copy.deepcopy(entry))
+                public['counter_cards'] = own_counter_entries
+                public['responder_ids'] = sorted(responder_ids)
+                public['viewer_can_respond'] = for_player in responder_ids
             is_responder = for_player in responder_ids
         if not is_responder:
-            return pending
-        disguised = self._sewers_confusion_disguise(for_player, pending.get('card') or {})
+            return public
+        disguised = self._sewers_confusion_disguise(for_player, public.get('card') or {})
         if not disguised:
-            return pending
-        public = copy.deepcopy(pending)
+            return public
+        if public is pending:
+            public = copy.deepcopy(pending)
         public['card'] = disguised
         return public
 
@@ -3663,7 +3692,11 @@ class GameEngine:
                 self._apply_setup_modifiers_to_card(player_id, copy_card)
                 from void_dlc_runtime import prepare_copy_card
                 prepare_copy_card(card, copy_card)
-                ps.add_to_hand(copy_card, trigger_enter_hand=False)
+                self._add_forced_copy_to_hand(
+                    player_id,
+                    copy_card,
+                    trigger_enter_hand=False,
+                )
                 added += 1
             if added > 0:
                 self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因副本效果加入{added}张放逐复制")
@@ -3955,12 +3988,39 @@ class GameEngine:
         card_type = self.draft_type_order[draft_index]
         from formal_logic_runtime import boosted_draft_pool
         player_pool = boosted_draft_pool(self, player_id, self.draft_pool)
-        options = generate_draft_options(player_pool, card_type, 3)
-        self.draft_options[player_id] = ensure_first_bloom_draft_includes_sewage(
+        unique_owned = self._draft_unique_def_ids_for_player(player_id)
+        options = generate_draft_options(
+            player_pool,
+            card_type,
+            3,
+            forbidden_def_ids=unique_owned,
+        )
+        ensured = ensure_first_bloom_draft_includes_sewage(
             player_pool,
             options,
             card_type,
             self.draft_type_order[:draft_index],
+        )
+        self.draft_options[player_id] = [
+            option for option in ensured if option.def_id not in unique_owned
+        ]
+
+    def _draft_unique_def_ids_for_player(self, player_id: int) -> Set[str]:
+        if not (0 <= player_id < len(self.draft_picks)):
+            return set()
+        result = set()
+        for def_id in self.draft_picks[player_id] or []:
+            card_def = CARD_DEFS.get(def_id)
+            if card_def is not None and 'unique' in normalize_card_flags(getattr(card_def, 'flags', set()) or set()):
+                result.add(def_id)
+        return result
+
+    def _draft_unique_pick_is_duplicate(self, player_id: int, def_id: str) -> bool:
+        card_def = CARD_DEFS.get(def_id)
+        return bool(
+            card_def is not None
+            and 'unique' in normalize_card_flags(getattr(card_def, 'flags', set()) or set())
+            and def_id in (self.draft_picks[player_id] or [])
         )
 
     def _generate_draft_options(self):
@@ -3984,6 +4044,8 @@ class GameEngine:
                 break
         if found is None:
             return False
+        if self._draft_unique_pick_is_duplicate(player_id, def_id):
+            return False
         self.draft_picks[player_id].append(def_id)
         self._generate_draft_options_for_player(player_id)
         return True
@@ -4002,7 +4064,13 @@ class GameEngine:
         card_type = self.draft_type_order[len(self.draft_picks[player_id])]
         from formal_logic_runtime import boosted_draft_pool
         player_pool = boosted_draft_pool(self, player_id, self.draft_pool)
-        options = generate_draft_options(player_pool, card_type, 3, exclude_def_ids=old_ids)
+        options = generate_draft_options(
+            player_pool,
+            card_type,
+            3,
+            exclude_def_ids=old_ids,
+            forbidden_def_ids=self._draft_unique_def_ids_for_player(player_id),
+        )
         self.draft_options[player_id] = options
         return True
 
@@ -4269,6 +4337,13 @@ class GameEngine:
             for def_id in self.draft_picks[player_id]:
                 if def_id not in CARD_DEFS or not self._card_allowed(def_id):
                     return False, f'draft_card_invalid:{player_id}', details
+            if len(self._draft_unique_def_ids_for_player(player_id)) != sum(
+                1
+                for def_id in self.draft_picks[player_id]
+                if def_id in CARD_DEFS
+                and 'unique' in normalize_card_flags(getattr(CARD_DEFS[def_id], 'flags', set()) or set())
+            ):
+                return False, f'draft_unique_duplicate:{player_id}', details
             if self.opening_event_requires_sub_choice(player_id):
                 if self.opening_event_sub_choices[player_id] is None:
                     return False, f'sub_choice_missing:{player_id}', details
@@ -4717,9 +4792,9 @@ class GameEngine:
             for target_id in target_ids:
                 if self._status_application_blocked(target_id, 'fire'):
                     continue
-                self.players[target_id].fire += 4
+                self.players[target_id].fire += 3
             target_label = "敌方全体" if len(target_ids) > 1 else "敌方"
-            self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：{target_label}+4灼烧")
+            self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：{target_label}+3灼烧")
         elif event_id == 5:
             picked = []
             if isinstance(sub, dict):
@@ -4733,7 +4808,10 @@ class GameEngine:
                 random.shuffle(ps.deck)
             self.log_msg(f"{self.pn(player_id)}【命运抽签】：少抽1张牌，{added}张牌洗入牌库")
         elif event_id == 6:
-            self.log_msg(f"{self.pn(player_id)}【能量涌动】：每回合多回复1E")
+            self.log_msg(
+                f"{self.pn(player_id)}【能量涌动】：每回合多回复2E；"
+                "自己回合结束时受到剩余E两倍的D"
+            )
         elif event_id == 7:
             self.log_msg(f"{self.pn(player_id)}【先手压制】：先手回复7E并抽5张牌")
         elif event_id == 8:
@@ -4818,6 +4896,34 @@ class GameEngine:
         finally:
             self._game_over_defer_depth = max(0, self._game_over_defer_depth - 1)
         self._check_game_over()
+
+    def _opening_event_elixir_recovery_bonus(self, player_id: int) -> int:
+        if not self._valid_player_id(player_id):
+            return 0
+        picks = getattr(self, 'opening_event_picks', []) or []
+        if player_id >= len(picks):
+            return 0
+        return 2 if str(picks[player_id]) == '6' else 0
+
+    def _apply_energy_surge_turn_end(self, player_id: int):
+        if not self._valid_player_id(player_id):
+            return
+        picks = getattr(self, 'opening_event_picks', []) or []
+        if player_id >= len(picks) or str(picks[player_id]) != '6':
+            return
+        remaining_elixir = max(0, int(getattr(self.players[player_id], 'elixir', 0) or 0))
+        damage = remaining_elixir * 2
+        self.log_msg(
+            f"{self.pn(player_id)}的能量涌动反噬：剩余{remaining_elixir}E，受到{damage}D"
+        )
+        if damage <= 0:
+            return
+        self.deal_attack_damage(
+            player_id,
+            damage,
+            attacker_id=player_id,
+            source_card=None,
+        )
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
         if event_id is None:
@@ -5542,12 +5648,37 @@ class GameEngine:
         return crit_damage, True
 
     def _hel_apply_domino_final_damage(self, dmg: int, source_card: Optional[CardInstance], was_crit: bool) -> int:
-        if dmg <= 0 or not was_crit or source_card is None:
+        if not was_crit or source_card is None:
             return max(0, int(dmg or 0))
         if not self._card_is(source_card, 'Domino', 'hel:domino'):
             return max(0, int(dmg or 0))
         source_card.instance_flags.add('precision')
+        if dmg <= 0:
+            return 0
         return max(0, int(math.ceil(int(dmg) * 2)))
+
+    def _hel_domino_will_crit_before_dodge(
+            self,
+            attacker_id: int,
+            amount: int,
+            hits: int,
+            source_card: Optional[CardInstance]) -> bool:
+        """Predict Domino's authoritative luck check before Dodge can skip the hit."""
+        if source_card is None or not self._card_is(source_card, 'Domino', 'hel:domino'):
+            return False
+        estimated = self._estimate_avoided_attack_damage(
+            amount,
+            hits,
+            attacker_id,
+            source_card,
+        )
+        if estimated <= 0:
+            return False
+        if bool(getattr(source_card, '_hel_force_crit', False)):
+            return True
+        if bool(getattr(source_card, '_hel_no_luck_crit', False)):
+            return False
+        return self._hel_luck_value(attacker_id) >= estimated
 
     def _hel_apply_blazing_fire_turn_start(self, player_id: int):
         stacks = self._custom_status_value(player_id, *self._hel_blazing_fire_keys())
@@ -5655,7 +5786,7 @@ class GameEngine:
                 kept = int(math.floor(damage / 3))
                 if transfer > 0:
                     self.log_msg(f"{self.pn(target_id)}的遗物将{transfer}点伤害转给{self.pn(mate_id)}")
-                    self._deal_direct_damage(mate_id, transfer, source or '遗物转移', target_id, damage_type=damage_type, damage_tag=DAMAGE_TAG_DIRECT)
+                    self._deal_direct_damage(mate_id, transfer, '遗物转移', target_id, damage_type=damage_type, damage_tag=DAMAGE_TAG_DIRECT)
                 damage = max(0, kept)
         shield_keys = ('jungle:shield', 'shield')
         shield = self._custom_status_value(target_id, *shield_keys)
@@ -5902,7 +6033,7 @@ class GameEngine:
                 self._set_invincible_until_next_own_turn_end(player_id)
                 ps.bandage_active = False
                 self._mark_bandage_death_pending(player_id)
-                self.log_msg(f"{self.pn(player_id)}的绷带发动！在己方下一名可行动玩家回合结束后死亡")
+                self.log_msg(f"{self.pn(player_id)}的绷带发动！自己回合结束时死亡")
                 self._check_game_over()
                 return
             for card in ps.hand[:]:
@@ -6475,33 +6606,132 @@ class GameEngine:
             return
         ps.custom_vars['achievement_creative_mode_mana_pool'] = 1
 
-    def _enforce_unique_cards_for_player(self, player_id: int, preferred_card: Optional[CardInstance] = None):
+    def _iter_player_owned_cards(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
             return
         ps = self.players[player_id]
-        zones = (ps.hand, ps.deck, ps.discard)
-        grouped = {}
-        for zone in zones:
-            for card in list(zone):
-                if 'unique' in self._effective_card_flags(card):
-                    grouped.setdefault(card.def_id, []).append((zone, card))
-        for def_id, entries in grouped.items():
-            if len(entries) <= 1:
+        for zone in (ps.hand, ps.deck, ps.discard, ps.exile):
+            for owned in list(zone or []):
+                if isinstance(owned, CardInstance):
+                    yield owned
+        for equipment in list(ps.equipment or []):
+            owned = getattr(equipment, 'card_instance', None)
+            if isinstance(owned, CardInstance):
+                yield owned
+
+    def _player_owns_card_def(self, player_id: int, def_id: str, *, excluding_instance_id: Optional[int] = None) -> bool:
+        for owned in self._iter_player_owned_cards(player_id) or ():
+            if excluding_instance_id is not None and int(getattr(owned, 'instance_id', -1)) == int(excluding_instance_id):
                 continue
-            preferred_entry = None
-            if preferred_card is not None:
-                for entry in entries:
-                    if entry[1] is preferred_card or entry[1].instance_id == preferred_card.instance_id:
-                        preferred_entry = entry
-                        break
-            keep_zone, keep_card = preferred_entry or random.choice(entries)
-            for zone, card in entries:
-                if card is keep_card or card.instance_id == keep_card.instance_id:
-                    continue
-                if card in zone:
-                    zone.remove(card)
-                self._put_card_in_exile(ps.player_id, card)
-                self.log_msg(f"{self.pn(player_id)}的唯一牌{card.name_cn}多余副本被放逐")
+            if getattr(owned, 'def_id', None) == def_id:
+                return True
+        return False
+
+    def _can_normally_acquire_card(self, player_id: int, card: Optional[CardInstance]) -> bool:
+        if card is None or 'unique' not in self._effective_card_flags(card):
+            return True
+        return not self._player_owns_card_def(
+            player_id,
+            card.def_id,
+            excluding_instance_id=getattr(card, 'instance_id', None),
+        )
+
+    def _forced_unique_copy_needs_penalty(
+        self,
+        player_id: int,
+        copied_card: Optional[CardInstance],
+        *,
+        source_owned: bool = False,
+    ) -> bool:
+        if copied_card is None or 'unique' not in self._effective_card_flags(copied_card):
+            return False
+        return bool(
+            source_owned
+            or self._player_owns_card_def(
+                player_id,
+                copied_card.def_id,
+                excluding_instance_id=getattr(copied_card, 'instance_id', None),
+            )
+        )
+
+    def _apply_forced_unique_copy_penalty(
+        self,
+        player_id: int,
+        copied_card: Optional[CardInstance],
+        *,
+        source_owned: bool = False,
+    ) -> bool:
+        if not self._forced_unique_copy_needs_penalty(
+            player_id,
+            copied_card,
+            source_owned=source_owned,
+        ):
+            return False
+        void_def_id = self._void_resolve_card_def_id('void:void') or self._void_resolve_card_def_id('Void')
+        if not void_def_id or void_def_id not in CARD_DEFS:
+            raise RuntimeError('强制复制唯一牌时无法创建虚空惩罚牌')
+        penalty = CardInstance(void_def_id)
+        self._void_add_card_to_deck_random(player_id, penalty)
+        self.log_msg(f"{self.pn(player_id)}强制复制唯一牌{copied_card.name_cn}，将1张虚空加入牌组")
+        return True
+
+    def _add_forced_copy_to_hand(
+        self,
+        player_id: int,
+        copied_card: CardInstance,
+        *,
+        source_owned: bool = False,
+        trigger_enter_hand: bool = True,
+    ) -> bool:
+        needs_penalty = self._forced_unique_copy_needs_penalty(
+            player_id,
+            copied_card,
+            source_owned=source_owned,
+        )
+        self.players[player_id].add_to_hand(
+            copied_card,
+            trigger_enter_hand=trigger_enter_hand,
+        )
+        if needs_penalty:
+            self._apply_forced_unique_copy_penalty(
+                player_id,
+                copied_card,
+                source_owned=True,
+            )
+        return needs_penalty
+
+    def _remove_owned_card_instance(self, player_id: int, card: CardInstance) -> bool:
+        if not (0 <= player_id < len(self.players)):
+            return False
+        ps = self.players[player_id]
+        for zone in (ps.hand, ps.deck, ps.discard, ps.exile):
+            for index, owned in enumerate(list(zone or [])):
+                if owned is card or getattr(owned, 'instance_id', None) == getattr(card, 'instance_id', None):
+                    del zone[index]
+                    return True
+        return False
+
+    def _enforce_unique_cards_for_player(self, player_id: int, preferred_card: Optional[CardInstance] = None):
+        """Reject a newly generated duplicate; never delete already-owned copies.
+
+        Drafting prevents normal duplicate acquisition before it happens. Forced
+        copy effects bypass this helper and use `_add_forced_copy_to_hand`, which
+        keeps every copy and adds the Void penalty instead.
+        """
+        if not (0 <= player_id < len(self.players)):
+            return False
+        if preferred_card is None or 'unique' not in self._effective_card_flags(preferred_card):
+            return True
+        if not self._player_owns_card_def(
+            player_id,
+            preferred_card.def_id,
+            excluding_instance_id=getattr(preferred_card, 'instance_id', None),
+        ):
+            return True
+        removed = self._remove_owned_card_instance(player_id, preferred_card)
+        if removed:
+            self.log_msg(f"{self.pn(player_id)}已拥有唯一牌{preferred_card.name_cn}，未获得额外实例")
+        return not removed
 
     def _enforce_unique_cards_for_all(self):
         for pid in range(len(self.players)):
@@ -7059,7 +7289,7 @@ class GameEngine:
             ps.remove_hand_card(card_instance_id)
             return {'success': True, 'card': card.to_dict(), 'ignored': True}
         if self.pending_response is not None:
-            return {'success': False, 'error': '等待对手反制响应'}
+            return {'success': False, 'error': '等待反制响应'}
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': False, 'error': 'Waiting for mod UI response'}
         choice, forced_target_id = self._sewers_apply_forced_target_choice(player_id, card, choice)
@@ -7268,6 +7498,26 @@ class GameEngine:
             return False
 
     def _counter_card_can_counter_pending(self, player_id: int, counter_card: CardInstance) -> bool:
+        if getattr(getattr(counter_card, 'card_def', None), 'response_trigger', '') == 'equipment_destroy':
+            pending = self.pending_response or getattr(self, '_pending_response_preview', None) or {}
+            played_card_data = pending.get('card')
+            try:
+                played_card = (
+                    CardInstance.from_dict(played_card_data)
+                    if isinstance(played_card_data, dict)
+                    else None
+                )
+                source_id = int(pending.get('player_id', -1))
+            except (TypeError, ValueError, KeyError):
+                return False
+            if played_card is None:
+                return False
+            eligible_owners = self._equipment_destroy_response_player_ids(
+                source_id,
+                played_card,
+                pending.get('original_choice'),
+            )
+            return player_id in eligible_owners
         if self._is_magic_antimatter_card(counter_card):
             pending = self.pending_response or getattr(self, '_pending_response_preview', None) or {}
             try:
@@ -7279,6 +7529,78 @@ class GameEngine:
 
     def _would_destroy_equipment(self, card: CardInstance) -> bool:
         return card.def_id in ('Sewage', 'MagicSewage')
+
+    def _equipment_owner_has_imminent_destruction(
+            self,
+            owner_id: int,
+            *,
+            target_instance_id=None,
+            destroy_all: bool = False) -> bool:
+        """Return whether this action will actually destroy this owner's equipment."""
+        if not self._valid_player_id(owner_id):
+            return False
+        owner = self.players[owner_id]
+        candidates = [
+            eq for eq in owner.equipment
+            if 'indestructible' not in eq.card_instance.flags
+        ]
+        if target_instance_id is not None:
+            try:
+                selected_id = int(target_instance_id)
+            except (TypeError, ValueError):
+                return False
+            candidates = [
+                eq for eq in candidates
+                if getattr(eq.card_instance, 'instance_id', None) == selected_id
+            ]
+        elif not destroy_all:
+            candidates = candidates[:1]
+        if not candidates:
+            return False
+
+        remaining_shared_protection = max(
+            0,
+            int(getattr(owner, 'equipment_protection', 0) or 0),
+        )
+        for equipment in candidates:
+            if int(getattr(equipment, 'armor', 0) or 0) > 0:
+                continue
+            if remaining_shared_protection > 0:
+                remaining_shared_protection -= 1
+                continue
+            return True
+        return False
+
+    def _equipment_destroy_response_player_ids(
+            self,
+            player_id: int,
+            card: Optional[CardInstance],
+            choice: Optional[dict] = None) -> List[int]:
+        if card is None or not self._would_destroy_equipment(card):
+            return []
+        card_id = str(getattr(card, 'def_id', '') or '').lower()
+        legacy_id = str(
+            getattr(getattr(card, 'card_def', None), 'legacy_id', '') or ''
+        ).lower()
+        if card_id in ('magicsewage', 'vanilla:magicsewage') or legacy_id == 'magicsewage':
+            return [
+                owner_id for owner_id in range(len(self.players))
+                if self._equipment_owner_has_imminent_destruction(
+                    owner_id,
+                    destroy_all=True,
+                )
+            ]
+
+        target_id = self._choice_target_from_choice(choice, 1 - player_id)
+        if not self._valid_player_id(target_id):
+            return []
+        target_instance_id = (
+            choice.get('target_instance_id') if isinstance(choice, dict) else None
+        )
+        return [target_id] if self._equipment_owner_has_imminent_destruction(
+            target_id,
+            target_instance_id=target_instance_id,
+        ) else []
 
     def _would_heal(self, card: CardInstance) -> bool:
         if card is None:
@@ -7461,6 +7783,17 @@ class GameEngine:
             sim._prediction_capture_target_id = sim_target_id
             sim._prediction_first_attack_damage = 0
             log_start = len(sim.log)
+            if card_instance_id is None and isinstance(sim.pending_response, dict):
+                counter_entries = sim.pending_response.get('counter_cards') or []
+                if any(
+                    isinstance(entry, dict) and 'responder_id' in entry
+                    for entry in counter_entries
+                ):
+                    sim.pending_response['counter_cards'] = [
+                        entry for entry in counter_entries
+                        if isinstance(entry, dict)
+                        and str(entry.get('responder_id')) == str(responder_id)
+                    ]
             sim.handle_response(responder_id, card_instance_id)
             parts = sim._prediction_damage_parts_from_log(log_start, sim_target_id)
             total = sum(parts)
@@ -8179,7 +8512,7 @@ class GameEngine:
         if self._status_application_blocked(player_id, 'bandage_active'):
             return
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；在己方下一名可行动玩家回合结束后死亡")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；自己回合结束时死亡")
 
     def _atomic_equip_sponge(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
@@ -8235,7 +8568,7 @@ class GameEngine:
         if self._status_application_blocked(player_id, 'bandage_active'):
             return
         self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；在己方下一名可行动玩家回合结束后死亡")
+        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；自己回合结束时死亡")
 
     def _atomic_on_fatal_set_health_exile(self, player_id, card, params, log, choice, context):
         health_amount = params.get('health', 5)
@@ -8397,8 +8730,11 @@ class GameEngine:
             else:
                 new_card = target.copy()
                 self._apply_setup_modifiers_to_card(player_id, new_card)
-            ps.add_to_hand(new_card)
-            self._enforce_unique_cards_for_player(player_id, preferred_card=new_card)
+            self._add_forced_copy_to_hand(
+                player_id,
+                new_card,
+                source_owned=(target is card),
+            )
             self._remember_created_card(new_card, context)
             self._note_creative_mode_mana_pool(player_id, card, target)
             if log:
@@ -8452,8 +8788,10 @@ class GameEngine:
                 return
             new_card = CardInstance(def_id=card_def.id)
             self._apply_setup_modifiers_to_card(target_id, new_card)
+            if not self._can_normally_acquire_card(target_id, new_card):
+                self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
+                return
             ts.add_to_hand(new_card)
-            self._enforce_unique_cards_for_player(target_id, preferred_card=new_card)
             self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
@@ -8489,6 +8827,9 @@ class GameEngine:
                 return
             new_card = CardInstance(def_id=card_def.id)
             self._apply_setup_modifiers_to_card(target_id, new_card)
+            if not self._can_normally_acquire_card(target_id, new_card):
+                self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
+                return
             if position == 'bottom':
                 ts.deck.append(new_card)
             elif position == 'random':
@@ -8511,6 +8852,9 @@ class GameEngine:
                 return
             new_card = CardInstance(def_id=card_def.id)
             self._apply_setup_modifiers_to_card(target_id, new_card)
+            if not self._can_normally_acquire_card(target_id, new_card):
+                self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
+                return
             self._discard_card(ts, new_card)
             self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
@@ -9656,8 +10000,7 @@ class GameEngine:
                 copy_card = self._make_mimic_copy_card(target)
                 copy_card.mimic_discount = 0
                 if ps.can_add_to_hand():
-                    ps.add_to_hand(copy_card)
-                    self._enforce_unique_cards_for_player(player_id, preferred_card=copy_card)
+                    self._add_forced_copy_to_hand(player_id, copy_card)
                     self._note_creative_mode_mana_pool(player_id, card, target)
                     self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}")
                 else:
@@ -9670,8 +10013,11 @@ class GameEngine:
         if self.players[target_id].health <= 0:
             self._trigger_yggdrasil_effect(target_id, card, source_player_id=player_id, exile_played_card=True)
         else:
-            self.players[target_id].heal(20)
-            self.log_msg(f"{self.pn(player_id)}使用世界树之叶！{self.pn(target_id)}回复20H")
+            self.players[target_id].heal(YGGDRASIL_HEAL)
+            self.log_msg(
+                f"{self.pn(player_id)}使用世界树之叶！"
+                f"{self.pn(target_id)}回复{YGGDRASIL_HEAL}H"
+            )
 
     def _effect_leaf(self, player_id: int, card: CardInstance, choice=None):
         pass
@@ -10475,7 +10821,7 @@ class GameEngine:
         if self.current_player != player_id:
             return {'success': False, 'error': '不是你的回合'}
         if self.pending_response is not None:
-            return {'success': False, 'error': '等待对手反制响应'}
+            return {'success': False, 'error': '等待反制响应'}
         self._end_player_turn(player_id)
         return {'success': True}
 
@@ -10510,13 +10856,16 @@ class GameEngine:
         self._apply_equal_suffering_turn_end(player_id)
         if self.game_over:
             return
+        self._apply_energy_surge_turn_end(player_id)
+        if self.game_over:
+            return
         from void_dlc_runtime import cleanup_turn_end
         cleanup_turn_end(self, player_id)
         self._decay_equipment_armor_end_turn(player_id)
         if ps.bandage_active and ps.invincible:
             ps.bandage_active = False
             self._mark_bandage_death_pending(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带将在己方下一名可行动玩家回合结束后使其死亡")
+            self.log_msg(f"{self.pn(player_id)}的绷带已触发：自己回合结束时死亡")
         # Fracture: clear at end of own turn. Status immunity suppresses the effect, not decay.
         if ps.fracture > 0:
             ps.fracture = 0
@@ -13672,8 +14021,7 @@ class GameEngine:
                 if eq.def_id == 'Pincer':
                     ps.overload += 1
                     self.log_msg(f"{self.pn(player_id)}被螫针施加1层超载")
-            if self.opening_event_picks[player_id] == 6:
-                elixir_recovery += 1
+            elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
             self._bio_apply_debt_after_recovery(player_id)
@@ -13811,8 +14159,7 @@ class GameEngine:
                 if eq.def_id == 'Pincer':
                     ps.overload += 1
                     self.log_msg(f"{self.pn(player_id)}被螫针施加1层超载")
-            if self.opening_event_picks[player_id] == 6:
-                elixir_recovery += 1
+            elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
             self._bio_apply_debt_after_recovery(player_id)
@@ -14690,8 +15037,7 @@ class GameEngine:
         copy_card = self._make_mimic_copy_card(target)
         default_discount = 0 if card is not None and card.def_id == 'Mimic' else 1
         copy_card.mimic_discount = self._eval_int(player_id, params.get('discount_e', default_discount), card, default_discount)
-        ps.add_to_hand(copy_card)
-        self._enforce_unique_cards_for_player(player_id, preferred_card=copy_card)
+        self._add_forced_copy_to_hand(player_id, copy_card)
         self._note_creative_mode_mana_pool(player_id, card, target)
         if log:
             self.log_msg(log)
@@ -15316,6 +15662,11 @@ class GameEngine:
                 new_card.extra_hits = extra_hits
                 new_card.setup_modifiers.add('explicit_extra_hits')
             self._apply_setup_modifiers_to_card(target_id, new_card)
+            self._apply_forced_unique_copy_penalty(
+                target_id,
+                new_card,
+                source_owned=(card is not None and getattr(card, 'def_id', None) == def_id),
+            )
             ps.deck.insert(0, new_card)
             made.append(new_card)
         if log:
@@ -15447,8 +15798,10 @@ class GameEngine:
         new_card = CardInstance(card_def.id)
         new_card.instance_flags.update(normalize_card_flags(('symbiosis', 'exile', 'void')))
         self._apply_setup_modifiers_to_card(target_id, new_card)
+        if not self._can_normally_acquire_card(target_id, new_card):
+            self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
+            return
         self.players[target_id].add_to_hand(new_card)
-        self._enforce_unique_cards_for_player(target_id, preferred_card=new_card)
         self._remember_created_card(new_card, context)
         self.log_msg(
             log
@@ -16060,7 +16413,7 @@ class GameEngine:
             return
         copy_card = original.copy()
         copy_card.instance_flags.add('exile')
-        self.players[player_id].add_to_hand(copy_card)
+        self._add_forced_copy_to_hand(player_id, copy_card)
         self._last_created_card_instance_id = copy_card.instance_id
         if log:
             self.log_msg(log)
@@ -17578,6 +17931,7 @@ class GameEngine:
         copied.fission_level = 3
         copied.fission_count = 2
         copied.swift_value = 2
+        self._apply_forced_unique_copy_penalty(player_id, copied, source_owned=True)
         self._bio_queue_auto_play(player_id, copied, choice, no_cost=False, source='diamond')
         self.log_msg(log or f"{self.pn(player_id)}的钻石额外打出一张复制")
 
@@ -17608,7 +17962,7 @@ class GameEngine:
         copied.fission_count = copied.fission_level - 1
         copied.instance_flags.update({'swift', 'wide_strike', 'arctic:ready', 'exile'})
         copied.disabled_flags.difference_update({'swift', 'wide_strike', 'arctic:ready', 'exile'})
-        self.players[player_id].add_to_hand(copied)
+        self._add_forced_copy_to_hand(player_id, copied, source_owned=True)
         self.log_msg(log or f"{self.pn(player_id)}将一张强化的雪花复制加入手中")
 
     def _atomic_arctic_pinecone_copy(self, player_id, card, params, log, choice, context):
@@ -17626,6 +17980,7 @@ class GameEngine:
         copied.fission_count = 2
         copied.fission_hit = 0
         copied.swift_value = max(2, int(getattr(copied, 'swift_value', 0) or 0))
+        self._apply_forced_unique_copy_penalty(player_id, copied, source_owned=True)
         self._bio_queue_auto_play(player_id, copied, choice, no_cost=False, source='pinecone')
         self.log_msg(log or f"{self.pn(player_id)}的松果额外打出一张复制")
 
@@ -17713,6 +18068,7 @@ class GameEngine:
             return
         copied = card.copy()
         reset_card_after_play(copied)
+        self._apply_forced_unique_copy_penalty(player_id, copied, source_owned=True)
         discard = self.players[player_id].discard
         discard.insert(random.randint(0, len(discard)), copied)
         self._note_achievement_enemy_card_total(player_id)
@@ -17886,6 +18242,9 @@ class GameEngine:
         hits = self._card_total_hits(card, self._eval_int(player_id, params.get('hits', 1), card, 1))
         is_precision = bool(params.get('is_precision')) or 'precision' in self._effective_card_flags(card)
         amount = self._modified_attack_damage(amount, card)
+        if not is_precision and self._hel_domino_will_crit_before_dodge(
+                player_id, amount, hits, card):
+            is_precision = True
         prev_hits = getattr(self, '_hel_current_crit_hits', 0)
         self._hel_current_crit_hits = 0
         self._hel_last_hit_was_crit = False

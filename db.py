@@ -31,6 +31,10 @@ from title_styles import (
 
 DEFAULT_DB_PATH = '/var/lib/gtn/gtn.sqlite3'
 DB_PATH = os.environ.get('GTN_DB_PATH', DEFAULT_DB_PATH)
+try:
+    DB_BUSY_TIMEOUT_MS = max(100, min(int(os.environ.get('GTN_DB_BUSY_TIMEOUT_MS', '1500')), 10_000))
+except (TypeError, ValueError):
+    DB_BUSY_TIMEOUT_MS = 1500
 TITLE_CATALOG_BACKUP_DIR = os.environ.get(
     'GTN_TITLE_CATALOG_BACKUP_DIR',
     os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), 'title-catalog-backups'),
@@ -394,14 +398,13 @@ _FRIEND_CLEANUP_INTERVAL_SECONDS = 600
 
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=5)
+    conn = sqlite3.connect(DB_PATH, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys=ON;')
-    try:
-        conn.execute('PRAGMA journal_mode=WAL;')
-    except sqlite3.OperationalError:
-        pass
-    conn.execute('PRAGMA busy_timeout=5000;')
+    # WAL mode is persistent and is enabled once by init_db(). Reissuing the
+    # journal-mode transition for every request connection adds lock work to
+    # the hottest read paths and makes request floods more expensive.
+    conn.execute(f'PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};')
     conn.execute('PRAGMA synchronous=NORMAL;')
     conn.execute('PRAGMA temp_store=MEMORY;')
     return conn
@@ -1762,6 +1765,165 @@ def init_db():
             'CREATE INDEX IF NOT EXISTS idx_story_discoveries_unread '
             'ON story_discoveries(user_id, viewed_at, first_seen_at DESC)'
         )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_progress (
+                user_id INTEGER NOT NULL,
+                character_id TEXT NOT NULL,
+                difficulty TEXT NOT NULL,
+                standard_clears INTEGER NOT NULL DEFAULT 0 CHECK(standard_clears >= 0),
+                boss_rush_clears INTEGER NOT NULL DEFAULT 0 CHECK(boss_rush_clears >= 0),
+                first_cleared_at TEXT,
+                last_cleared_at TEXT,
+                PRIMARY KEY(user_id, character_id, difficulty),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_progress_completions (
+                source_kind TEXT NOT NULL CHECK(source_kind IN ('solo', 'coop')),
+                source_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                character_id TEXT NOT NULL,
+                difficulty TEXT NOT NULL,
+                journey_mode TEXT NOT NULL CHECK(journey_mode IN ('standard', 'boss_rush')),
+                completed_at TEXT NOT NULL,
+                PRIMARY KEY(source_kind, source_id, user_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_progress_user '
+            'ON story_progress(user_id, character_id, difficulty)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS community_announcements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
+                body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 4000),
+                state TEXT NOT NULL DEFAULT 'draft'
+                    CHECK(state IN ('draft', 'published', 'retracted')),
+                pinned INTEGER NOT NULL DEFAULT 0 CHECK(pinned IN (0, 1)),
+                starts_at TEXT NOT NULL,
+                ends_at TEXT,
+                created_by INTEGER,
+                updated_by INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                published_at TEXT,
+                retracted_at TEXT,
+                FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY(updated_by) REFERENCES users(id) ON DELETE SET NULL,
+                CHECK(ends_at IS NULL OR ends_at > starts_at)
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_community_announcements_feed '
+            'ON community_announcements(state, pinned DESC, starts_at DESC)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS community_polls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL CHECK(length(question) BETWEEN 1 AND 240),
+                state TEXT NOT NULL DEFAULT 'draft'
+                    CHECK(state IN ('draft', 'published', 'closed', 'retracted')),
+                starts_at TEXT NOT NULL,
+                ends_at TEXT NOT NULL,
+                reminder_hours INTEGER NOT NULL DEFAULT 24
+                    CHECK(reminder_hours BETWEEN 1 AND 168),
+                created_by INTEGER,
+                updated_by INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                published_at TEXT,
+                closed_at TEXT,
+                retracted_at TEXT,
+                FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY(updated_by) REFERENCES users(id) ON DELETE SET NULL,
+                CHECK(ends_at > starts_at)
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_community_polls_feed '
+            'ON community_polls(state, starts_at DESC, ends_at DESC)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS community_poll_options (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                poll_id INTEGER NOT NULL,
+                position INTEGER NOT NULL CHECK(position BETWEEN 0 AND 7),
+                label TEXT NOT NULL CHECK(length(label) BETWEEN 1 AND 160),
+                UNIQUE(poll_id, position),
+                UNIQUE(id, poll_id),
+                FOREIGN KEY(poll_id) REFERENCES community_polls(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS community_poll_votes (
+                poll_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                option_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(poll_id, user_id),
+                FOREIGN KEY(poll_id) REFERENCES community_polls(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(option_id, poll_id)
+                    REFERENCES community_poll_options(id, poll_id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_community_poll_votes_option '
+            'ON community_poll_votes(poll_id, option_id)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS community_changelog_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                announcement_id INTEGER NOT NULL UNIQUE,
+                title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
+                body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 4000),
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending', 'applied', 'discarded')),
+                created_by INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(announcement_id)
+                    REFERENCES community_announcements(id) ON DELETE CASCADE,
+                FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS community_ops_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                actor_user_id INTEGER,
+                actor_username TEXT NOT NULL CHECK(length(actor_username) BETWEEN 1 AND 80),
+                actor_role TEXT NOT NULL CHECK(length(actor_role) BETWEEN 1 AND 32),
+                action TEXT NOT NULL CHECK(length(action) BETWEEN 1 AND 64),
+                object_type TEXT NOT NULL CHECK(length(object_type) BETWEEN 1 AND 32),
+                object_id TEXT NOT NULL CHECK(length(object_id) BETWEEN 1 AND 80),
+                detail_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_community_ops_audit_created '
+            'ON community_ops_audit(created_at DESC, id DESC)'
+        )
         conn.commit()
 
 
@@ -1821,7 +1983,11 @@ def _story_coop_validate_state(state):
         from story_coop import validate_story_state_v10
 
         validate_story_state_v10(state, expected_mode='coop')
-        if state.get('combat') is not None:
+        if state.get('coop_progression') is not None:
+            from story_coop_live import validate_coop_live_state
+
+            validate_coop_live_state(state)
+        elif state.get('combat') is not None:
             from story_coop_combat import validate_coop_combat_state
 
             validate_coop_combat_state(state)
@@ -1855,6 +2021,13 @@ def _story_coop_run_payload(row):
             'CORRUPT_COOP_STORY_STATE',
             '多人故事存档不是有效 JSON',
         ) from exc
+    row_content_version = str(payload.get('content_version') or '')
+    state_content_version = str((state or {}).get('content_version') or '')
+    if state_content_version and row_content_version != state_content_version:
+        raise StoryCoopDataError(
+            'CORRUPT_COOP_CONTENT_VERSION',
+            '多人故事存档内容版本与索引不一致',
+        )
     try:
         _story_coop_validate_state(state)
     except StoryCoopDataError as exc:
@@ -2468,6 +2641,39 @@ def get_active_story_coop_run(user_id, party_id=None):
         )
 
 
+def get_story_coop_run_for_member(user_id, run_id, party_id=None):
+    """Read an active or terminal run for one current or historical member."""
+
+    user_id = _story_coop_positive_int(
+        user_id,
+        code='INVALID_MEMBER_USER_ID',
+        label='成员账号编号',
+    )
+    run_id = str(run_id or '').strip()
+    if not re.fullmatch(r'[0-9a-f]{32}', run_id):
+        raise StoryCoopDataError('INVALID_RUN_ID', '旅程编号无效')
+    normalized_party_id = None
+    if party_id is not None:
+        normalized_party_id = str(party_id or '').strip()
+        if not re.fullmatch(r'[0-9a-f]{32}', normalized_party_id):
+            raise StoryCoopDataError('INVALID_PARTY_ID', '队伍编号无效')
+    with closing(get_db_connection()) as conn:
+        parameters = [user_id, run_id]
+        party_clause = ''
+        if normalized_party_id is not None:
+            party_clause = 'AND r.party_id = ?'
+            parameters.append(normalized_party_id)
+        row = conn.execute(
+            f'''SELECT r.* FROM story_coop_runs r
+                JOIN story_coop_party_members m
+                  ON m.party_id = r.party_id AND m.user_id = ?
+                WHERE r.id = ? {party_clause}
+                LIMIT 1''',
+            tuple(parameters),
+        ).fetchone()
+        return _story_coop_run_payload(row)
+
+
 STORY_COOP_ACTION_ID_RE = re.compile(r'^[A-Za-z0-9._:-]{8,128}$')
 STORY_COOP_COMBAT_ID_RE = re.compile(r'^[A-Za-z0-9._:-]{1,96}$')
 
@@ -2527,6 +2733,22 @@ def _story_coop_action_fingerprint(
         hashlib.sha256(canonical.encode('utf-8')).hexdigest(),
         dict(request_context),
     )
+
+
+def story_coop_action_fingerprint(actor_seat, action_type, action_payload, request_context=None):
+    """Return the canonical action identity shared by API and persistence.
+
+    Keeping the preflight duplicate path on this exact serializer prevents
+    Python equality quirks (notably ``True == 1``) from accepting a different
+    request before the transaction-level fingerprint check can run.
+    """
+
+    return _story_coop_action_fingerprint(
+        actor_seat,
+        action_type,
+        action_payload,
+        request_context,
+    )[2]
 
 
 def _story_coop_receipt_json(
@@ -2727,6 +2949,18 @@ def commit_story_coop_run_action(
         if int(run_row['revision']) != expected_revision:
             conn.rollback()
             return current, None, 'version'
+        row_content_version = str(run_row['content_version'] or '')
+        current_content_version = str(current['state'].get('content_version') or '')
+        next_content_version = str(next_state.get('content_version') or '')
+        if current_content_version != row_content_version:
+            conn.rollback()
+            raise StoryCoopDataError(
+                'CORRUPT_COOP_STORY_STATE',
+                '当前多人故事存档内容版本与索引不一致',
+            )
+        if next_content_version != row_content_version:
+            conn.rollback()
+            return current, None, 'content_version'
         member_rows = _story_coop_member_rows_conn(conn, party_id)
         party_row = conn.execute(
             'SELECT * FROM story_coop_parties WHERE id = ?',
@@ -2765,7 +2999,11 @@ def commit_story_coop_run_action(
             request_context=request_context,
         )
         resulting_revision = expected_revision + 1
-        terminal = str(next_state.get('phase') or '') in {'complete', 'game_over'}
+        terminal = str(next_state.get('phase') or '') in {
+            'complete',
+            'stage_complete',
+            'game_over',
+        }
         cursor = conn.execute(
             '''UPDATE story_coop_runs
                SET state_json = ?, revision = ?, updated_at = ?, status = ?,
@@ -2845,6 +3083,124 @@ def get_active_story_run(user_id):
             (int(user_id),),
         ).fetchone()
     return _story_run_payload(row)
+
+
+def _record_story_completion_conn(
+    conn,
+    *,
+    source_kind,
+    source_id,
+    user_id,
+    character_id,
+    difficulty,
+    journey_mode,
+    completed_at,
+):
+    from story_progress import (
+        normalize_story_character_id,
+        normalize_story_difficulty,
+        normalize_story_journey_mode,
+    )
+
+    source_kind = str(source_kind or '').strip().lower()
+    source_id = str(source_id or '').strip()
+    user_id = int(user_id)
+    if source_kind not in {'solo', 'coop'} or not source_id or len(source_id) > 96:
+        raise ValueError('INVALID_STORY_COMPLETION_SOURCE')
+    character_id = normalize_story_character_id(character_id)
+    difficulty = normalize_story_difficulty(difficulty)
+    journey_mode = normalize_story_journey_mode(journey_mode)
+    cursor = conn.execute(
+        '''INSERT OR IGNORE INTO story_progress_completions
+           (source_kind, source_id, user_id, character_id, difficulty,
+            journey_mode, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)''',
+        (
+            source_kind,
+            source_id,
+            user_id,
+            character_id,
+            difficulty,
+            journey_mode,
+            completed_at,
+        ),
+    )
+    if cursor.rowcount != 1:
+        return False
+    standard_delta = 1 if journey_mode == 'standard' else 0
+    boss_rush_delta = 1 if journey_mode == 'boss_rush' else 0
+    conn.execute(
+        '''INSERT INTO story_progress
+           (user_id, character_id, difficulty, standard_clears,
+            boss_rush_clears, first_cleared_at, last_cleared_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(user_id, character_id, difficulty) DO UPDATE SET
+               standard_clears = story_progress.standard_clears + excluded.standard_clears,
+               boss_rush_clears = story_progress.boss_rush_clears + excluded.boss_rush_clears,
+               first_cleared_at = COALESCE(story_progress.first_cleared_at, excluded.first_cleared_at),
+               last_cleared_at = excluded.last_cleared_at''',
+        (
+            user_id,
+            character_id,
+            difficulty,
+            standard_delta,
+            boss_rush_delta,
+            completed_at,
+            completed_at,
+        ),
+    )
+    return True
+
+
+def record_story_completion(
+    source_kind,
+    source_id,
+    user_id,
+    character_id,
+    difficulty,
+    journey_mode='standard',
+):
+    """Record one full-journey clear exactly once."""
+
+    now = utc_iso(utc_now_dt())
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        recorded = _record_story_completion_conn(
+            conn,
+            source_kind=source_kind,
+            source_id=source_id,
+            user_id=user_id,
+            character_id=character_id,
+            difficulty=difficulty,
+            journey_mode=journey_mode,
+            completed_at=now,
+        )
+        conn.commit()
+    return recorded
+
+
+def get_story_progress(user_id):
+    from story_progress import build_story_progress_payload
+
+    user_id = int(user_id)
+    with closing(get_db_connection()) as conn:
+        rows = conn.execute(
+            '''SELECT character_id, difficulty, standard_clears,
+                      boss_rush_clears, first_cleared_at, last_cleared_at
+               FROM story_progress
+               WHERE user_id = ?
+               ORDER BY character_id ASC, difficulty ASC''',
+            (user_id,),
+        ).fetchall()
+    return build_story_progress_payload([dict(row) for row in rows])
+
+
+def get_story_progress_for_users(user_ids):
+    normalized_ids = sorted({int(user_id) for user_id in (user_ids or ())})
+    return {
+        user_id: get_story_progress(user_id)
+        for user_id in normalized_ids
+    }
 
 
 def list_story_discoveries(user_id):
@@ -2956,11 +3312,60 @@ def get_story_run_action(user_id, run_id, action_id):
     return dict(row) if row is not None else None
 
 
+_STORY_MANUAL_SAVE_STABLE_PHASES = frozenset({
+    'journey_setup',
+    'easy_relic',
+    'blessing',
+    'map',
+    'combat',
+    'room',
+    'reward',
+    'stage_choice',
+    'complete',
+    'game_over',
+})
+
+
+def _story_manual_save_state_is_stable(state):
+    """Return whether a persisted solo state is a complete UI checkpoint.
+
+    Story actions are committed as one SQLite transaction. Every recognized
+    phase in an active run is therefore authoritative between requests; client
+    animations and partially built action results never enter ``state_json``.
+    """
+    return (
+        isinstance(state, dict)
+        and isinstance(state.get('player'), dict)
+        and str(state.get('phase') or '') in _STORY_MANUAL_SAVE_STABLE_PHASES
+    )
+
+
+def _story_manual_save_snapshot(state):
+    snapshot = json.loads(json.dumps(state, ensure_ascii=False))
+    snapshot['last_events'] = []
+    snapshot.pop('recovery_checkpoint', None)
+    phase = str(snapshot.get('phase') or '')
+    if phase in {'combat', 'room', 'reward'}:
+        checkpoint_state = json.loads(json.dumps(snapshot, ensure_ascii=False))
+        snapshot['recovery_checkpoint'] = {
+            'version': 1,
+            'kind': f'manual_{phase}',
+            'node_id': snapshot.get('current_node_id'),
+            'state': checkpoint_state,
+        }
+    return snapshot
+
+
 def _story_manual_save_payload(row):
     if row is None:
         return None
     payload = dict(row)
-    payload.pop('state_json', None)
+    raw_state = payload.pop('state_json', None)
+    try:
+        state = json.loads(raw_state or '{}')
+    except (TypeError, ValueError, json.JSONDecodeError):
+        state = {}
+    payload['phase'] = str(state.get('phase') or '')
     return payload
 
 
@@ -2972,7 +3377,7 @@ def list_story_manual_saves(user_id, run_id):
     with closing(get_db_connection()) as conn:
         rows = conn.execute(
             '''SELECT id, run_id, user_id, slot_index, source_state_version,
-                      stage, floor, node_id, created_at
+                      state_json, stage, floor, node_id, created_at
                FROM story_manual_saves
                WHERE user_id = ? AND run_id = ?
                ORDER BY slot_index ASC''',
@@ -2982,7 +3387,7 @@ def list_story_manual_saves(user_id, run_id):
 
 
 def create_story_manual_save(user_id, run_id, expected_state_version):
-    """Store the current map state, retaining the newest three snapshots."""
+    """Store one committed UI state, retaining the newest three snapshots."""
     user_id = int(user_id)
     run_id = str(run_id or '').strip()
     expected_state_version = int(expected_state_version)
@@ -3005,13 +3410,14 @@ def create_story_manual_save(user_id, run_id, expected_state_version):
         except (TypeError, ValueError, json.JSONDecodeError):
             conn.rollback()
             return _story_run_payload(run_row), 'invalid_state'
-        if str(state.get('phase') or '') != 'map':
+        if str(state.get('content_version') or '') != str(run_row['content_version'] or ''):
+            conn.rollback()
+            return _story_run_payload(run_row), 'content_version'
+        if not _story_manual_save_state_is_stable(state):
             conn.rollback()
             return _story_run_payload(run_row), 'phase'
 
-        snapshot = dict(state)
-        snapshot['last_events'] = []
-        snapshot.pop('recovery_checkpoint', None)
+        snapshot = _story_manual_save_snapshot(state)
         snapshot_json = json.dumps(
             snapshot, ensure_ascii=False, separators=(',', ':'),
         )
@@ -3098,7 +3504,7 @@ def load_story_manual_save(
     save_id,
     expected_state_version,
 ):
-    """Restore a map snapshot without touching account-level currencies."""
+    """Restore a committed UI snapshot without touching account currencies."""
     user_id = int(user_id)
     run_id = str(run_id or '').strip()
     save_id = int(save_id)
@@ -3122,7 +3528,11 @@ def load_story_manual_save(
         except (TypeError, ValueError, json.JSONDecodeError):
             conn.rollback()
             return _story_run_payload(run_row), 'invalid_state'
-        if str(current_state.get('phase') or '') != 'map':
+        row_content_version = str(run_row['content_version'] or '')
+        if str(current_state.get('content_version') or '') != row_content_version:
+            conn.rollback()
+            return _story_run_payload(run_row), 'content_version'
+        if not _story_manual_save_state_is_stable(current_state):
             conn.rollback()
             return _story_run_payload(run_row), 'phase'
         save_row = conn.execute(
@@ -3138,11 +3548,13 @@ def load_story_manual_save(
         except (TypeError, ValueError, json.JSONDecodeError):
             conn.rollback()
             return _story_run_payload(run_row), 'invalid_save'
-        if str(restored.get('phase') or '') != 'map':
+        if str(restored.get('content_version') or '') != row_content_version:
+            conn.rollback()
+            return _story_run_payload(run_row), 'content_version'
+        if not _story_manual_save_state_is_stable(restored):
             conn.rollback()
             return _story_run_payload(run_row), 'invalid_save'
-        restored['last_events'] = []
-        restored.pop('recovery_checkpoint', None)
+        restored = _story_manual_save_snapshot(restored)
         state_json = json.dumps(
             restored, ensure_ascii=False, separators=(',', ':'),
         )
@@ -3203,6 +3615,19 @@ def commit_story_run_action(
             conn.rollback()
             return _story_run_payload(row), 'duplicate'
 
+        try:
+            current_state = json.loads(row['state_json'] or '{}')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            conn.rollback()
+            return _story_run_payload(row), 'invalid_state'
+        row_content_version = str(row['content_version'] or '')
+        if (
+            str(current_state.get('content_version') or '') != row_content_version
+            or str((next_state or {}).get('content_version') or '') != row_content_version
+        ):
+            conn.rollback()
+            return _story_run_payload(row), 'content_version'
+
         if int(row['state_version']) != expected_state_version:
             conn.rollback()
             return _story_run_payload(row), 'version'
@@ -3225,6 +3650,23 @@ def commit_story_run_action(
                WHERE id = ? AND user_id = ? AND status = 'active' ''',
             (state_json, now, run_id, user_id),
         )
+        if (
+            str((next_state or {}).get('phase') or '') == 'complete'
+            and (next_state or {}).get('completed') is True
+        ):
+            player = (next_state or {}).get('player') or {}
+            _record_story_completion_conn(
+                conn,
+                source_kind='solo',
+                source_id=run_id,
+                user_id=user_id,
+                character_id=(next_state or {}).get('character_id')
+                or player.get('character_id')
+                or 'common_flower',
+                difficulty=(next_state or {}).get('difficulty') or 'normal',
+                journey_mode=(next_state or {}).get('journey_mode') or 'standard',
+                completed_at=now,
+            )
         conn.commit()
         updated = conn.execute(
             'SELECT * FROM story_runs WHERE id = ?', (run_id,),
@@ -3458,14 +3900,19 @@ def _find_user_row_by_username_key(conn, username, searchable_by_nickname=None):
     key = normalize_username_key(username)
     if not key:
         return None
-    rows = conn.execute('SELECT * FROM users').fetchall()
-    for row in rows:
-        if normalize_username_key(row['username']) != key:
-            continue
-        if searchable_by_nickname is not None and bool(row['searchable_by_nickname']) != bool(searchable_by_nickname):
-            continue
-        return row
-    return None
+    if searchable_by_nickname is None:
+        return conn.execute(
+            'SELECT * FROM users WHERE username_lower = ? LIMIT 1',
+            (key,),
+        ).fetchone()
+    return conn.execute(
+        '''
+        SELECT * FROM users
+        WHERE username_lower = ? AND searchable_by_nickname = ?
+        LIMIT 1
+        ''',
+        (key, 1 if searchable_by_nickname else 0),
+    ).fetchone()
 
 
 def validate_username(username):
@@ -5188,14 +5635,24 @@ def _gr_season_activity_random():
 
 
 def _calculate_gr_season_activity_reward(season_gr, random_value):
+    """Calculate the previous season's activity reward in whole hundreds.
+
+    The input random value is sampled once per account and season, persisted in
+    ``gr_season_activity_rewards``, and then reused by every retry. Keeping this
+    function pure makes the curve, clamping, rounding, and cap independently
+    testable without consuming a second random value.
+    """
     try:
         x = max(0.0, float(season_gr))
     except (TypeError, ValueError):
         x = float(GR_INITIAL)
     try:
-        random_factor = max(0.0, min(1.0, float(random_value)))
+        random_factor = float(random_value)
     except (TypeError, ValueError):
         random_factor = 0.0
+    if not math.isfinite(random_factor):
+        random_factor = 0.0
+    random_factor = max(0.0, min(1.0, random_factor))
     low_rating_curve = math.pow(1.0098, x - 100.0) if x <= 800.0 else 0.0
     try:
         high_rating_curve = 10.0 * x - 7000.0 + math.pow(1.02, x - 890.0)
@@ -5568,13 +6025,19 @@ def create_user(username, password):
         return None, '用户名已存在'
 
 
+_DUMMY_LOGIN_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
+
+
 def verify_user(username, password):
     name = sanitize_username(username)
     if not name:
+        check_password_hash(_DUMMY_LOGIN_PASSWORD_HASH, str(password or ''))
         return None, '用户名或密码错误'
     with get_db_connection() as conn:
         row = _find_user_row_by_username_key(conn, name)
-        if row is None or not check_password_hash(row['password_hash'], str(password or '')):
+        password_hash = row['password_hash'] if row is not None else _DUMMY_LOGIN_PASSWORD_HASH
+        password_ok = check_password_hash(password_hash, str(password or ''))
+        if row is None or not password_ok:
             return None, '用户名或密码错误'
         if 'deleted_at' in row.keys() and row['deleted_at']:
             return None, '账号已注销'
@@ -5707,7 +6170,7 @@ def change_username(user_id, new_username):
         return row_to_user(row), None
 
 
-def soft_delete_user(user_id):
+def soft_delete_user(user_id, password):
     try:
         uid = int(user_id)
     except (TypeError, ValueError):
@@ -5717,6 +6180,8 @@ def soft_delete_user(user_id):
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if row is None:
             return None, '请先登录账号'
+        if not check_password_hash(row['password_hash'], str(password or '')):
+            return None, '当前密码错误'
         if 'deleted_at' in row.keys() and row['deleted_at']:
             return row_to_user(row), None
         conn.execute(
@@ -8893,6 +9358,34 @@ def get_user_by_id(user_id):
         row = _clear_expired_user_ban(conn, row)
         conn.commit()
         return row_to_user(row)
+
+
+def get_user_by_id_for_session(user_id):
+    """Read the session identity without turning a request into maintenance.
+
+    Season rollover and expired-ban cleanup remain in ``get_user_by_id`` and
+    scheduled/admin flows. Hot authenticated reads only need the current user
+    row and must not acquire a write lock merely to validate a cookie.
+    """
+
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
+    user = row_to_user(row)
+    if not user or not user.get('banned') or not user.get('ban_until'):
+        return user
+    remaining = _remaining_seconds_until(user.get('ban_until'))
+    if remaining is not None and remaining <= 0:
+        user.update({
+            'banned': False,
+            'ban_reason': None,
+            'banned_at': None,
+            'ban_until': None,
+        })
+    return user
 
 
 def get_user_by_username(username):

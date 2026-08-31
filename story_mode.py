@@ -2,10 +2,11 @@ import hashlib
 import random
 
 from story_content import initial_story_player
+from story_content_model import STORY_CONTENT_FINGERPRINT
 
 
 STORY_SCHEMA_VERSION = 9
-STORY_CONTENT_VERSION = 'story-redesign-9'
+STORY_CONTENT_VERSION = f'story-redesign-10-{STORY_CONTENT_FINGERPRINT[:12]}'
 STORY_FLOOR_COUNT = 16
 
 STORY_STAGES = (
@@ -16,19 +17,21 @@ STORY_STAGES = (
 
 _NORMAL_ROOM_WEIGHTS = (
     ('shop', 1),
-    ('rest', 1),
-    ('elite', 3),
-    ('event', 3),
+    ('rest', 2),
+    ('elite', 4),
+    ('event', 4),
     ('combat', 6),
 )
 
 _HARD_ROOM_WEIGHTS = (
-    ('shop', 2),
+    ('shop', 1),
     ('rest', 2),
-    ('elite', 8),
-    ('event', 6),
-    ('combat', 12),
+    ('elite', 4),
+    ('event', 4),
+    ('combat', 6),
 )
+
+_NO_ADJACENT_ROOM_TYPES = frozenset({'shop', 'rest', 'elite'})
 
 
 def _seed_int(seed, namespace=''):
@@ -54,18 +57,13 @@ def story_floor_count(stage, difficulty):
 def _floor_widths(rng, floor_count):
     widths = [1]
     for floor in range(2, floor_count):
+        if floor == 15:
+            widths.append(3)
+            continue
         if floor >= 16:
             widths.append(1)
             continue
-        previous = widths[-1]
-        minimum = max(2, previous - 2)
-        maximum = min(5, previous + 2, previous * 2)
-        if floor == 2:
-            minimum, maximum = 2, 3
-        elif floor == 15:
-            maximum = min(maximum, 3)
-        choices = list(range(minimum, maximum + 1))
-        widths.append(rng.choice(choices))
+        widths.append(rng.randint(3, 7))
     widths.append(1)
     return widths
 
@@ -158,12 +156,55 @@ def _connect_floors(rng, previous_nodes, next_nodes):
     ]
 
 
+def _assign_story_room_types(floors, edges, rng, room_weights):
+    nodes = {
+        node['id']: node
+        for floor in floors
+        for node in floor['nodes']
+    }
+    incoming = {node_id: [] for node_id in nodes}
+    outgoing = {node_id: [] for node_id in nodes}
+    for edge in edges:
+        source = nodes[edge['from']]
+        target = nodes[edge['to']]
+        incoming[target['id']].append(source)
+        outgoing[source['id']].append(target)
+
+    for floor in floors:
+        floor_number = int(floor['floor'])
+        previous_type = None
+        for node in floor['nodes']:
+            if node.get('type'):
+                previous_type = node['type']
+                continue
+            choices = tuple(
+                item for item in room_weights
+                if floor_number > 6 or item[0] != 'elite'
+            )
+            blocked = {
+                parent.get('type')
+                for parent in incoming[node['id']]
+                if parent.get('type') in _NO_ADJACENT_ROOM_TYPES
+            }
+            blocked.update(
+                child.get('type')
+                for child in outgoing[node['id']]
+                if child.get('type') in _NO_ADJACENT_ROOM_TYPES
+            )
+            if previous_type in _NO_ADJACENT_ROOM_TYPES:
+                blocked.add(previous_type)
+            eligible = tuple(item for item in choices if item[0] not in blocked)
+            node['type'] = _weighted_choice(rng, eligible or choices)
+            previous_type = node['type']
+
+
 def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
     stage = int(stage)
     biome = str(biome or 'garden')
     difficulty = str(difficulty or 'normal')
     map_difficulty = 'normal' if difficulty == 'easy' else difficulty
     rng = random.Random(_seed_int(seed, f'map:{stage}:{biome}:{map_difficulty}'))
+    room_rng = random.Random(_seed_int(seed, f'map-rooms:{stage}:{biome}:{map_difficulty}'))
     floor_count = story_floor_count(stage, difficulty)
     widths = _floor_widths(rng, floor_count)
     floors = []
@@ -185,8 +226,7 @@ def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
         elif floor >= 16:
             room_types = ['boss'] * width
         else:
-            choices = tuple(item for item in room_weights if floor > 6 or item[0] != 'elite')
-            room_types = [_weighted_choice(rng, choices) for _ in range(width)]
+            room_types = [None] * width
 
         nodes = []
         for index, room_type in enumerate(room_types):
@@ -203,6 +243,8 @@ def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
     edges = []
     for index in range(len(floors) - 1):
         edges.extend(_connect_floors(rng, floors[index]['nodes'], floors[index + 1]['nodes']))
+
+    _assign_story_room_types(floors, edges, room_rng, room_weights)
 
     floors[0]['nodes'][0]['status'] = 'current'
     return {
@@ -257,7 +299,8 @@ def generate_boss_rush_map(seed, block=1, biome='garden', difficulty='normal'):
     }
 
 
-def build_initial_story_state(seed):
+def build_initial_story_state(seed, character_id='common_flower'):
+    character_id = str(character_id or 'common_flower')
     story_map = generate_story_map(
         seed,
         stage=1,
@@ -268,6 +311,7 @@ def build_initial_story_state(seed):
     return {
         'schema_version': STORY_SCHEMA_VERSION,
         'content_version': STORY_CONTENT_VERSION,
+        'character_id': character_id,
         'phase': 'journey_setup',
         'stage': 1,
         'biome': 'garden',
@@ -277,7 +321,7 @@ def build_initial_story_state(seed):
         'current_node_id': first_node['id'],
         'available_stages': list(STORY_STAGES),
         'map': story_map,
-        'player': initial_story_player(),
+        'player': initial_story_player(character_id),
         'combat': None,
         'room': {
             'type': 'journey_setup',

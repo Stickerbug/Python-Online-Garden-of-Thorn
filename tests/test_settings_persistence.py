@@ -83,7 +83,7 @@ class SettingsPersistenceTests(unittest.TestCase):
         self.assertIn("gtnPersistentStorage.getItem(mapped) !== text", section)
 
     def test_bootstrap_reads_language_theme_from_fallback_storage(self):
-        section = source_between(INDEX_HTML, '<script>', '</script>')
+        section = source_between(INDEX_HTML, '<script nonce="{{ csp_nonce }}">', '</script>')
         cookie_read = section.index('const cookieValue = readCookie(key)')
         persistent_read = section.index('window.localStorage.getItem(key)')
         self.assertLess(cookie_read, persistent_read)

@@ -136,6 +136,32 @@ def test_two_seats_share_hero_phase_and_actor_comes_from_authenticated_user():
     assert second_state['coordination']['action_sequence'] == 2
 
 
+def test_enemy_shield_absorbs_hero_damage_before_health():
+    state = _combat_state(enemies=[{
+        'id': 'shielded-enemy',
+        'health': 20,
+        'max_health': 20,
+        'shield': 5,
+        'intent': {'kind': 'idle'},
+    }])
+    events = []
+
+    dealt = damage_coop_enemy(
+        state,
+        actor_seat=0,
+        enemy_id='shielded-enemy',
+        amount=7,
+        events=events,
+        source='test',
+    )
+
+    assert dealt == 2
+    assert state['combat']['enemies'][0]['shield'] == 0
+    assert state['combat']['enemies'][0]['health'] == 18
+    assert events[0]['blocked'] == 5
+    validate_coop_combat_state(state)
+
+
 def test_client_cannot_forge_actor_fields_and_rejection_is_atomic():
     state = _combat_state()
     before = copy.deepcopy(state)

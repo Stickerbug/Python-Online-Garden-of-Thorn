@@ -1,11 +1,14 @@
 import json
+import shutil
+import subprocess
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 
 from cards import CARD_DEFS, CardDef, CardInstance
 from card_i18n import CARD_I18N, OPENING_EVENT_I18N
-from game_engine import GameEngine
+from game_engine import GameEngine, PlayerState
 from game_engine_2v2 import GameEngine2v2
 
 
@@ -225,13 +228,190 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
             ],
         )
 
-    def test_flame_omen_applies_four_fire(self):
+    def test_flame_omen_applies_three_fire_and_stacks_through_status_immunity(self):
         engine = GameEngine()
         engine.opening_event_picks[0] = 4
+        engine.players[1].fire = 2
+        engine.players[1].custom_statuses['status_immune'] = 1
 
         engine._apply_opening_event(0)
 
-        self.assertEqual(engine.players[1].fire, 4)
+        self.assertEqual(engine.players[1].fire, 5)
+        restored = PlayerState.from_dict(engine.players[1].to_dict())
+        self.assertEqual(restored.fire, 5)
+        self.assertEqual(GameEngine.OPENING_EVENTS[4]['desc'], '开局对所有敌方玩家施加3层灼烧')
+        for language in ('zh', 'en', 'fr', 'ja'):
+            description = OPENING_EVENT_I18N[4]['desc'][language]
+            self.assertIn('3', description, language)
+            self.assertNotIn('4', description, language)
+
+    def test_flame_omen_applies_to_both_2v2_enemies_and_not_the_ally(self):
+        engine = GameEngine2v2()
+        engine.opening_event_picks[0] = 4
+        engine.players[1].fire = 7
+        engine.players[2].fire = 1
+        engine.players[3].fire = 2
+        engine.players[3].custom_statuses['status_immune'] = 1
+
+        engine._apply_opening_event(0)
+
+        self.assertEqual([player.fire for player in engine.players], [0, 7, 4, 5])
+        self.assertTrue(any('敌方全体+3灼烧' in line for line in engine.log))
+
+    def test_local_worker_flame_omen_matches_server(self):
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('node is required for the local opening-event behavior test')
+        worker = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
+        harness = r'''
+const omenEngine = Object.create(LocalSoloEngine.prototype);
+omenEngine.players = [new LocalPlayer(0), new LocalPlayer(1)];
+omenEngine.player_names = ['P1', 'P2'];
+omenEngine.opening_event_picks = [4, null];
+omenEngine.opening_event_sub_choices = [null, null];
+omenEngine.log = [];
+omenEngine.logMsg = message => omenEngine.log.push(String(message));
+omenEngine.players[1].fire = 2;
+omenEngine.players[1].custom_statuses.status_immune = 1;
+omenEngine.applyOpeningEvent(0);
+process.stdout.write(JSON.stringify({ fire: omenEngine.players[1].fire, log: omenEngine.log }));
+'''
+        with tempfile.TemporaryDirectory(prefix='gtn-flame-omen-worker-') as temp_dir:
+            script_path = Path(temp_dir) / 'flame-omen-test.js'
+            script_path.write_text(
+                "globalThis.postMessage = () => {};\n" + worker + "\n" + harness,
+                encoding='utf-8',
+            )
+            completed = subprocess.run(
+                [node, str(script_path)],
+                cwd=Path(__file__).resolve().parents[1],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                timeout=20,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result['fire'], 5)
+        self.assertTrue(any('敌方+3灼烧' in line for line in result['log']))
+
+    def test_energy_surge_recovers_two_extra_elixir_and_backlashes_in_one_vs_one(self):
+        engine = GameEngine()
+        engine.round_num = 2
+        engine.opening_event_picks[0] = '6'
+        player = engine.players[0]
+        player.elixir = 0
+
+        engine._apply_turn_start_effects(0)
+
+        self.assertEqual(player.elixir, 7)
+        player.elixir = 3
+        player.health = 100
+        engine._apply_energy_surge_turn_end(0)
+        self.assertEqual(player.health, 94)
+        self.assertEqual(player.elixir, 3)
+
+        player.elixir = 0
+        engine._apply_energy_surge_turn_end(0)
+        self.assertEqual(player.health, 94)
+        self.assertTrue(any('剩余0E，受到0D' in line for line in engine.log))
+
+    def test_energy_surge_uses_turn_end_elixir_and_settles_each_own_turn(self):
+        engine = GameEngine()
+        engine.opening_event_picks[0] = 6
+        engine.first_player = 0
+        engine.current_player = 0
+        engine.phase = 'action'
+        engine.players[0].health = 100
+        engine.players[0].elixir = 1
+        engine._start_player_turn = lambda _player_id: None
+
+        engine._end_player_turn(0)
+        self.assertEqual(engine.players[0].health, 98)
+
+        engine.current_player = 0
+        engine.phase = 'action'
+        engine.players[0].elixir = 2
+        engine._end_player_turn(0)
+        self.assertEqual(engine.players[0].health, 94)
+
+    def test_energy_surge_matches_two_vs_two_recovery_and_turn_end_damage(self):
+        engine = GameEngine2v2()
+        engine.round_num = 2
+        engine.opening_event_picks[0] = 6
+        engine.players[0].elixir = 0
+
+        engine._apply_turn_start_effects_2v2(0)
+
+        self.assertEqual(engine.players[0].elixir, 7)
+        engine.players[0].health = 100
+        engine.players[0].elixir = 4
+        engine._apply_energy_surge_turn_end(0)
+        self.assertEqual([player.health for player in engine.players], [92, 100, 100, 100])
+
+    def test_energy_surge_text_matches_the_authoritative_rule(self):
+        expected = '每回合多回复2[[icon:E]]；自己回合结束时，受到等于剩余[[icon:E]]两倍的[[icon:D]]'
+        self.assertEqual(GameEngine.OPENING_EVENTS[6]['desc'], expected)
+        self.assertEqual(OPENING_EVENT_I18N[6]['desc']['zh'], expected)
+        for language in ('zh', 'en', 'fr', 'ja'):
+            description = OPENING_EVENT_I18N[6]['desc'][language]
+            self.assertIn('2', description, language)
+            self.assertIn('[[icon:E]]', description, language)
+            self.assertIn('[[icon:D]]', description, language)
+
+    def test_local_worker_energy_surge_matches_server_formula(self):
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('node is required for the local opening-event behavior test')
+        worker = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
+        harness = r'''
+const surgeEngine = Object.create(LocalSoloEngine.prototype);
+surgeEngine.players = [new LocalPlayer(0), new LocalPlayer(1)];
+surgeEngine.player_names = ['P1', 'P2'];
+surgeEngine.opening_event_picks = ['6', null];
+surgeEngine.log = [];
+surgeEngine.logMsg = message => surgeEngine.log.push(String(message));
+surgeEngine.players[0].health = 100;
+surgeEngine.players[0].elixir = 3;
+const damageCalls = [];
+surgeEngine.dealAttackDamage = (targetId, amount) => {
+    damageCalls.push({ targetId, amount });
+    surgeEngine.players[targetId].health -= amount;
+    return amount;
+};
+const bonus = surgeEngine.openingEventElixirRecoveryBonus(0);
+surgeEngine.applyEnergySurgeTurnEnd(0);
+surgeEngine.players[0].elixir = 0;
+surgeEngine.applyEnergySurgeTurnEnd(0);
+process.stdout.write(JSON.stringify({
+    bonus,
+    health: surgeEngine.players[0].health,
+    damageCalls,
+    log: surgeEngine.log,
+}));
+'''
+        with tempfile.TemporaryDirectory(prefix='gtn-energy-surge-worker-') as temp_dir:
+            script_path = Path(temp_dir) / 'energy-surge-test.js'
+            script_path.write_text(
+                "globalThis.postMessage = () => {};\n" + worker + "\n" + harness,
+                encoding='utf-8',
+            )
+            completed = subprocess.run(
+                [node, str(script_path)],
+                cwd=Path(__file__).resolve().parents[1],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                timeout=20,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result['bonus'], 2)
+        self.assertEqual(result['health'], 94)
+        self.assertEqual(result['damageCalls'], [{'targetId': 0, 'amount': 6}])
+        self.assertTrue(any('剩余0E，受到0D' in line for line in result['log']))
 
     def test_equal_suffering_hits_other_players_at_turn_end(self):
         engine = GameEngine()
@@ -363,7 +543,7 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         self.assertTrue(result and result.get('needs_response'))
         self.assertIsNotNone(engine.pending_response)
 
-    def test_two_vs_two_self_targeted_attack_does_not_offer_enemy_response(self):
+    def test_two_vs_two_self_targeted_attack_offers_non_actor_response(self):
         engine = GameEngine2v2()
         card = CardInstance('test:self_attack')
         engine.players[2].hand = [CardInstance('test:thorn_counter')]
@@ -375,8 +555,14 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
             {'target_player': 0, 'target_player_id': 0, 'target_id': 0},
         )
 
-        self.assertIsNone(result)
-        self.assertIsNone(engine.pending_response)
+        self.assertTrue(result and result.get('needs_response'))
+        self.assertEqual(
+            {2, 3},
+            {
+                int(entry['responder_id'])
+                for entry in engine.pending_response.get('counter_cards', [])
+            },
+        )
 
     def test_foresight_does_not_disable_magic_block(self):
         for engine_type in (GameEngine, GameEngine2v2):

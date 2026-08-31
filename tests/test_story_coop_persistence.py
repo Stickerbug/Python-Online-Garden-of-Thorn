@@ -792,18 +792,20 @@ def test_persisted_receipt_missing_authoritative_fields_fails_closed(
     assert exc_info.value.code == 'CORRUPT_COOP_ACTION_RECEIPT'
 
 
+@pytest.mark.parametrize('terminal_phase', ['game_over', 'stage_complete'])
 def test_terminal_commit_closes_party_and_duplicate_survives_membership_release(
     isolated_story_db,
+    terminal_phase,
 ):
     leader_id, _, bundle, _ = _started_party()
     party_id = bundle['party']['id']
     run_id = bundle['run']['id']
     terminal_state = copy.deepcopy(bundle['run']['state'])
-    terminal_state['phase'] = 'game_over'
+    terminal_state['phase'] = terminal_phase
     terminal_state['coordination']['action_sequence'] = 1
     terminal_payload = {'reason': 'test'}
     receipt_input = _generic_receipt(
-        action_id='terminal-action-id',
+        action_id=f'terminal-{terminal_phase}-id',
         action_type='test_terminal',
         actor_user_id=leader_id,
         actor_seat=0,
@@ -817,7 +819,7 @@ def test_terminal_commit_closes_party_and_duplicate_survives_membership_release(
         party_id,
         run_id,
         1,
-        'terminal-action-id',
+        f'terminal-{terminal_phase}-id',
         'test_terminal',
         terminal_payload,
         receipt_input,
@@ -835,7 +837,7 @@ def test_terminal_commit_closes_party_and_duplicate_survives_membership_release(
         party_id,
         run_id,
         1,
-        'terminal-action-id',
+        f'terminal-{terminal_phase}-id',
         'test_terminal',
         terminal_payload,
         {'ignored': True},
@@ -844,3 +846,8 @@ def test_terminal_commit_closes_party_and_duplicate_survives_membership_release(
     assert duplicate_outcome == 'duplicate'
     assert duplicate['status'] == 'completed'
     assert duplicate_receipt == receipt_input
+def test_story_coop_action_fingerprint_distinguishes_json_boolean_and_number():
+    numeric = db.story_coop_action_fingerprint(0, 'room_submit', {'value': 1})
+    boolean = db.story_coop_action_fingerprint(0, 'room_submit', {'value': True})
+
+    assert numeric != boolean

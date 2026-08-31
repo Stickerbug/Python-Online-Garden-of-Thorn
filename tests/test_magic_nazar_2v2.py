@@ -83,7 +83,7 @@ class MagicNazar2v2Tests(unittest.TestCase):
                 self.assertEqual(getattr(engine.players[2], status_name), expected_stacks)
                 self.assertEqual(engine.players[2].custom_statuses.get('magic_nazar'), 2)
 
-    def test_attack_counter_stays_limited_to_the_attacked_player(self):
+    def test_attacked_players_teammate_can_open_attack_counter_window(self):
         engine = self.build_engine()
         attack = CardInstance('Basic')
         teammate_bubble = CardInstance('Bubble')
@@ -92,8 +92,14 @@ class MagicNazar2v2Tests(unittest.TestCase):
 
         result = engine.play_card(0, attack.instance_id, 3, target_choice(3))
 
-        self.assertFalse(result.get('needs_response', False))
-        self.assertIsNone(engine.pending_response)
+        self.assertTrue(result.get('needs_response', False))
+        self.assertEqual(
+            {2},
+            {
+                int(card['responder_id'])
+                for card in engine.pending_response.get('counter_cards', [])
+            },
+        )
 
     def test_temporary_swift_counter_keeps_instance_cost_in_response_window(self):
         engine = self.build_engine()

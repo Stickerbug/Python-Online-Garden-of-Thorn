@@ -156,6 +156,39 @@ class GrSeasonActivityRewardTests(unittest.TestCase):
         self.assertEqual(db._calculate_gr_season_activity_reward(1000, 0.5), 3100)
         self.assertEqual(db._calculate_gr_season_activity_reward(1800, 0.5), 100000)
 
+    def test_formula_clamps_random_value_and_handles_non_finite_input(self):
+        self.assertEqual(
+            db._calculate_gr_season_activity_reward(1000, -1),
+            db._calculate_gr_season_activity_reward(1000, 0),
+        )
+        self.assertEqual(
+            db._calculate_gr_season_activity_reward(1000, 2),
+            db._calculate_gr_season_activity_reward(1000, 1),
+        )
+        self.assertEqual(
+            db._calculate_gr_season_activity_reward(1000, float('nan')),
+            db._calculate_gr_season_activity_reward(1000, 0),
+        )
+        self.assertEqual(
+            db._calculate_gr_season_activity_reward(1000, float('inf')),
+            db._calculate_gr_season_activity_reward(1000, 0),
+        )
+
+    def test_formula_curve_boundary_and_cap_are_stable(self):
+        samples = (
+            (799.999, 0.0, 1100),
+            (800.0, 0.0, 1100),
+            (800.001, 0.0, 1100),
+            (1799.0, 0.0, 100000),
+            (1000000.0, 1.0, 100000),
+        )
+        for season_gr, random_value, expected in samples:
+            with self.subTest(season_gr=season_gr, random_value=random_value):
+                self.assertEqual(
+                    db._calculate_gr_season_activity_reward(season_gr, random_value),
+                    expected,
+                )
+
     def test_valid_match_counter_uses_normal_effective_match_rules(self):
         valid_summary = {
             'mode': '1v1',

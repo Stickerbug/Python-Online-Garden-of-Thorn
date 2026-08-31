@@ -34,6 +34,30 @@ def test_story_damage_floats_describe_lost_health():
     assert 'event.amount) || 0)}D' not in enemy_branch
 
 
+def test_story_lethal_enemy_damage_skips_hit_animation_before_defeat():
+    presentation = STORY_JS.split(
+        'async function playStoryPresentationEvent(event, nextRun) {',
+        1,
+    )[1].split(
+        'async function playStoryEventSequence(events, nextRun, actionType) {',
+        1,
+    )[0]
+    enemy_damage = presentation.split(
+        "} else if (eventType === 'enemy_damage') {",
+        1,
+    )[1].split(
+        "} else if (eventType === 'enemy_gain') {",
+        1,
+    )[0]
+
+    assert 'event?.lethal === true' in enemy_damage
+    assert 'Number(event.after) <= 0' in enemy_damage
+    assert 'if (lethal)' in enemy_damage
+    assert enemy_damage.index('if (lethal)') < enemy_damage.index("'is-taking-hit'")
+    assert 'updateAnimatedEnemyHealth(event, nextRun);' in enemy_damage
+    assert 'return;' in enemy_damage
+
+
 def test_story_player_uses_classic_hurt_mouth_animation():
     assert 'STORY_SKIN_MOUTH_NORMAL_POINTS = Object.freeze([20, 18, 36, 32, 64, 32, 80, 18])' in STORY_JS
     assert 'STORY_SKIN_MOUTH_HURT_POINTS = Object.freeze([20, 26, 36, 12, 64, 12, 80, 26])' in STORY_JS
@@ -65,6 +89,18 @@ def test_story_card_types_are_always_rendered_in_english():
 
     assert "typeLabel.textContent = blinded ? '?' : (STORY_CARD_TYPE_LABELS[cardType] || cardType);" in STORY_JS
     assert 'typeLabel.textContent = t.cardTypes?.[cardType] || cardType;' not in STORY_JS
+
+
+def test_story_map_uses_supplied_icons_for_weighted_room_types():
+    for room_type in ('combat', 'elite', 'event', 'rest', 'shop'):
+        assert f"{room_type}: '/static/assets/story-room-icons/{room_type}.svg'" in STORY_JS
+        assert (ROOT / 'static' / 'assets' / 'story-room-icons' / f'{room_type}.svg').is_file()
+    assert "const nodeImageUrl = bossImageUrl || roomIconUrl;" in STORY_JS
+    assert 'if (!roomIconUrl) {' in STORY_JS
+    assert "bossImageUrl ? 'story-map-boss-icon' : 'story-map-room-icon'" in STORY_JS
+    assert 'const nodeImageSize = bossImageUrl ? 40 : STORY_MAP_NODE_RADIUS * 2;' in STORY_JS
+    assert '.story-map-room-icon {' in STORY_CSS
+    assert '.story-map-node.is-actionable:hover .story-map-room-icon,' in STORY_CSS
 
 
 def test_story_cards_use_gallery_spacing_tokens():
@@ -136,7 +172,7 @@ def test_story_globally_suppresses_context_menu_and_opens_card_terms():
     )[0]
     assert 'event.preventDefault();' in context_menu_branch
     assert "'.story-card.card, .story-pile-tile, .story-event-card-chip'," in context_menu_branch
-    assert 'openStoryCardTerms(card);' in context_menu_branch
+    assert 'openStoryCardTermsFromElement(cardSourceElement' in context_menu_branch
     assert 'story-card-terms-modal' in STORY_CSS
     assert '<dialog id="story-term-dialog" class="story-term-dialog">' in STORY_TEMPLATE
     assert 'if (!dialog.open) dialog.showModal();' in STORY_JS
@@ -308,6 +344,24 @@ def test_story_card_terms_switch_between_base_and_upgraded_versions():
     assert 'const termItems = storyCardTermItems(displayCard);' in STORY_JS
     assert '.story-card-version-tabs {' in STORY_CSS
     assert '.story-card-version-tab.is-active {' in STORY_CSS
+
+
+def test_enlarged_story_cards_can_switch_with_buttons_wheel_keys_and_swipes():
+    assert 'function storyCardTermNavigationFromElement(sourceElement, options = {})' in STORY_JS
+    assert 'function navigateStoryCardTerms(direction, options = {})' in STORY_JS
+    assert "previous.dataset.storyCardNavDirection = 'previous';" in STORY_JS
+    assert "next.dataset.storyCardNavDirection = 'next';" in STORY_JS
+    assert "position.setAttribute('aria-live', 'polite');" in STORY_JS
+    assert "addEventListener('wheel', handleStoryCardTermWheel, { passive: false })" in STORY_JS
+    assert "event.key !== 'ArrowLeft' && event.key !== 'ArrowRight'" in STORY_JS
+    assert "'.story-card-version-tabs, input, textarea, select, [contenteditable=\"true\"]'" in STORY_JS
+    assert "!['touch', 'pen'].includes(String(event.pointerType || ''))" in STORY_JS
+    assert 'Math.abs(deltaX) < 42' in STORY_JS
+    assert 'clearStoryCardTermNavigation();' in STORY_JS
+    assert '.story-card-terms-preview-column {' in STORY_CSS
+    assert 'touch-action: pan-y;' in STORY_CSS
+    assert '.story-card-terms-navigation {' in STORY_CSS
+    assert '.story-card-terms-nav-button:focus-visible {' in STORY_CSS
 
 
 def test_story_upgrade_actions_preview_the_upgraded_card_on_hover():
@@ -597,6 +651,15 @@ def test_story_combat_map_is_read_only_and_can_return_to_combat():
     assert "$('story-map-return')?.addEventListener('click', returnToStoryCombat);" in STORY_JS
 
 
+def test_story_map_boss_node_uses_the_frozen_encounter_portrait():
+    assert "storyContent?.enemies?.[String(node.boss_def_id || '')]" in STORY_JS
+    assert "bossImageUrl ? 'story-map-boss-icon' : 'story-map-room-icon'" in STORY_JS
+    assert 'href: nodeImageUrl' in STORY_JS
+    assert "bossName" in STORY_JS
+    assert "text.textContent = t.roomMarks[node.type] || '?';" in STORY_JS
+    assert '.story-map-boss-icon {' in STORY_CSS
+
+
 def test_story_floor_restart_is_confirmed_and_available_after_combat_failure():
     assert 'id="story-save-open-global"' in STORY_TEMPLATE
     assert 'id="story-restart-floor"' in STORY_TEMPLATE
@@ -612,8 +675,33 @@ def test_story_manual_save_delete_is_confirmed_and_refreshes_list():
     assert 'story-save-delete' in STORY_JS
     assert '/api/story/run/save/delete' in STORY_JS
     assert 'function deleteManualStorySave(saveId)' in STORY_JS
-    assert "renderManualStorySaves(payload.saves, activeRun.state?.phase === 'map');" in STORY_JS
+    assert 'renderManualStorySaves(payload.saves' in STORY_JS
     assert ".story-save-row-actions {" in STORY_CSS
+
+
+def test_story_manual_saves_cover_every_committed_ui_phase_and_block_animations():
+    for phase in (
+        'journey_setup', 'easy_relic', 'blessing', 'map', 'combat',
+        'room', 'reward', 'stage_choice', 'complete', 'game_over',
+    ):
+        assert f"'{phase}'" in STORY_JS.split(
+            'const STORY_MANUAL_SAVE_STABLE_PHASES = new Set([',
+            1,
+        )[1].split(']);', 1)[0]
+    blocker = STORY_JS.split(
+        'function storyManualSaveOperationBlocked(run = activeRun) {',
+        1,
+    )[1].split(
+        'function updateStoryManualSaveControls(run = activeRun) {',
+        1,
+    )[0]
+    assert 'actionInFlight' in blocker
+    assert 'cardPlayInFlight' in blocker
+    assert 'storyCombatEntranceAnimating' in blocker
+    assert 'storyManualSaveInFlight' in blocker
+    assert "document.body.dataset.enemyAnimating === 'true'" in blocker
+    assert "activeRun.state?.phase !== 'map'" not in STORY_JS
+    assert "save.phase || ''" in STORY_JS
 
 
 def test_story_cards_use_rarity_frames_type_tints_and_blind_concealment():
@@ -706,6 +794,51 @@ def test_story_refresh_uses_recovery_checkpoints_and_rewards_are_layered():
     assert '.story-reward-claims {' in STORY_CSS
 
 
+def test_story_persistent_hud_keeps_player_map_deck_and_save_controls_available():
+    for element_id in (
+        'story-persistent-hud',
+        'story-hud-player-name',
+        'story-hud-location',
+        'story-hud-health',
+        'story-hud-elixir',
+        'story-hud-magic',
+        'story-hud-gold',
+        'story-hud-map',
+        'story-hud-deck',
+        'story-hud-save',
+    ):
+        assert f'id="{element_id}"' in STORY_TEMPLATE
+    assert 'function renderStoryPersistentHud(run)' in STORY_JS
+    assert 'renderStoryPersistentHud(run);' in STORY_JS
+    assert "$('story-hud-map')?.addEventListener('click', openStoryCombatMap);" in STORY_JS
+    assert "$('story-hud-deck')?.addEventListener('click', () => openStoryPile('deck'));" in STORY_JS
+    assert "$('story-hud-save')?.addEventListener('click', openManualStorySaves);" in STORY_JS
+    assert 'if (!storyMapPreviewOpen || !activeRun?.state) return;' in STORY_JS
+    assert '.story-persistent-hud {' in STORY_CSS
+    assert '.story-persistent-actions {' in STORY_CSS
+
+
+def test_story_character_selector_disable_logic_stays_in_the_coop_control_scope():
+    controls = STORY_JS.split(
+        'function updateStoryCoopControls() {',
+        1,
+    )[1].split(
+        'function renderStoryCoopParty() {',
+        1,
+    )[0]
+    character_details = STORY_JS.split(
+        'function renderStoryCharacterOptions() {',
+        1,
+    )[1].split(
+        'function storyCoopCombatDialogOpen() {',
+        1,
+    )[0]
+
+    assert "const characterSelect = $('story-coop-character-select');" in controls
+    assert 'if (characterSelect) characterSelect.disabled = disabled || !canStart;' in controls
+    assert 'if (characterSelect)' not in character_details
+
+
 def test_story_event_animation_respects_server_sequence_metadata():
     assert '.sort((left, right) => {' in STORY_JS
     assert 'const leftSequence = Number(left.event?.sequence);' in STORY_JS
@@ -714,6 +847,24 @@ def test_story_event_animation_respects_server_sequence_metadata():
     assert 'String(event?.parallel_group || \'\')' in STORY_JS
     assert 'await Promise.all(' in STORY_JS
     assert 'playStoryPresentationEvent(event, nextRun)' in STORY_JS
+
+
+def test_story_card_zone_events_have_distinct_play_draw_discard_and_insert_motion():
+    assert 'async function animateStoryCardPlayed(event)' in STORY_JS
+    assert 'async function animateStoryCardInserted(event)' in STORY_JS
+    assert "eventType === 'card_played'" in STORY_JS
+    assert "['card_created', 'cards_created', 'enemy_card_added'].includes(eventType)" in STORY_JS
+    assert "await animateStoryPileMove(event, 'discard');" in STORY_JS
+    assert 'await animateStoryDraw(event);' in STORY_JS
+    assert '.story-card-flight.is-flying {' in STORY_CSS
+    assert '@keyframes storyCardPlayFlight {' in STORY_CSS
+    assert '@keyframes storyCardInsertFlight {' in STORY_CSS
+    assert '@keyframes storyCardDiscardFlight {' in STORY_CSS
+    assert "'card_created': {'motion': 'insert'}" in STORY_ENGINE
+    assert "'cards_created': {'motion': 'insert'}" in STORY_ENGINE
+    assert "'enemy_card_added': {'motion': 'insert'}" in STORY_ENGINE
+    assert "'destination': 'hand'" in STORY_ENGINE
+    assert "'actor_id': enemy['id']" in STORY_ENGINE
 
 
 def test_mechanical_flower_track_orbits_and_resolves_cards_at_the_left_anchor():
@@ -785,6 +936,30 @@ def test_story_codex_separates_intent_operations_and_omits_unnamed_blessing_head
     assert 'if (nameText) {' in STORY_JS
     assert "if (type === 'clear_status') return { kind: 'clear_status'" in STORY_JS
     assert "} else if (kind === 'clear_status') {" in STORY_JS
+
+
+def test_story_codex_cross_links_only_discovered_content_and_supports_back_navigation():
+    assert 'id="story-codex-back"' in STORY_TEMPLATE
+    assert 'let storyCodexHistory = [];' in STORY_JS
+    assert 'function storyCodexTargetIsDiscovered(mode, id, kind = \'\')' in STORY_JS
+    assert "storyCodexDiscoveredIds('term').has(`${String(kind || '')}:${targetId}`)" in STORY_JS
+    assert 'function navigateStoryCodex(mode, id = \'\', options = {})' in STORY_JS
+    assert 'function returnStoryCodexHistory()' in STORY_JS
+    assert "$('story-codex-back')?.addEventListener('click', returnStoryCodexHistory);" in STORY_JS
+
+    assert 'function storyCodexDefinitionReferences(definition)' in STORY_JS
+    assert 'function storyCodexEnemyReferences(record)' in STORY_JS
+    assert 'function storyCodexBacklinksForTerm(record)' in STORY_JS
+    assert 'appendStoryCodexRelated(intents, storyCodexEnemyReferences(record));' in STORY_JS
+    assert 'appendStoryCodexRelated(list, storyCodexBacklinksForTerm(record));' in STORY_JS
+    assert 'appendStoryCodexRelated(copy, storyCodexBacklinksForCard(displayCard.def_id));' in STORY_JS
+    assert "navigateStoryCodex('terms', traitId" in STORY_JS
+
+    assert '.story-codex-back {' in STORY_CSS
+    assert '.story-codex-related {' in STORY_CSS
+    assert '.story-codex-reference {' in STORY_CSS
+    assert '.story-term-codex-link {' in STORY_CSS
+    assert '.story-card.card.is-related-target {' in STORY_CSS
 
 
 def test_story_presentation_syncs_each_event_and_cannot_block_final_state_render():

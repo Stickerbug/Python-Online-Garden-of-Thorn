@@ -172,6 +172,7 @@ def test_ai_session_uses_formal_room_presence_with_solo_state_protocol():
     assert "players[sid]['status'] = 'ai_test'" not in source
     assert "_env_int('GTN_AI_1V1_MAX_ACTIVE', 5)" in source
     assert "os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1')" in source
+    assert "os.environ.get('GTN_AI_PUBLIC_ENTRY_ENABLED', '0')" in source
 
 
 def test_ai_response_windows_keep_the_human_perspective():
@@ -331,6 +332,7 @@ def test_registered_socket_player_can_start_public_ai_match():
     try:
         with (
             mock.patch.object(gtn, "GTN_AI_1V1_TEST_ENABLED", True),
+            mock.patch.object(gtn, "GTN_AI_PUBLIC_ENTRY_ENABLED", True),
             mock.patch.object(gtn, "get_local_ai_worker", return_value=_StartOnlyWorker()),
             mock.patch.object(gtn.secrets, "randbelow", return_value=0),
             mock.patch.object(gtn, "_start_socket_background_task", return_value=None),
@@ -964,6 +966,7 @@ def test_ai_start_emits_loading_before_background_worker_is_ready():
     try:
         with (
             mock.patch.object(gtn, "GTN_AI_1V1_TEST_ENABLED", True),
+            mock.patch.object(gtn, "GTN_AI_PUBLIC_ENTRY_ENABLED", True),
             mock.patch.object(
                 gtn,
                 "_start_ai_test_background_task",
@@ -1000,7 +1003,10 @@ def test_guest_socket_cannot_start_public_ai_match():
         "is_registered_user": False,
     }
     try:
-        with mock.patch.object(gtn, "GTN_AI_1V1_TEST_ENABLED", True):
+        with (
+            mock.patch.object(gtn, "GTN_AI_1V1_TEST_ENABLED", True),
+            mock.patch.object(gtn, "GTN_AI_PUBLIC_ENTRY_ENABLED", True),
+        ):
             client.get_received()
             client.emit("ai_1v1_start", {})
             received = client.get_received()
@@ -1042,6 +1048,7 @@ def test_ai_start_rejects_when_active_capacity_is_full():
     try:
         with (
             mock.patch.object(gtn, "GTN_AI_1V1_TEST_ENABLED", True),
+            mock.patch.object(gtn, "GTN_AI_PUBLIC_ENTRY_ENABLED", True),
             mock.patch.object(gtn, "GTN_AI_1V1_MAX_ACTIVE", 1),
         ):
             client.get_received()
@@ -1217,6 +1224,7 @@ def test_ai_game_over_rematch_queues_a_fresh_session():
     try:
         with (
             mock.patch.object(gtn, "GTN_AI_1V1_TEST_ENABLED", True),
+            mock.patch.object(gtn, "GTN_AI_PUBLIC_ENTRY_ENABLED", True),
             mock.patch.object(
                 gtn,
                 "_start_ai_test_background_task",
@@ -1267,6 +1275,7 @@ def test_ai_match_runs_formal_event_and_card_draft_before_combat():
     try:
         with (
             mock.patch.object(gtn, "GTN_AI_1V1_TEST_ENABLED", True),
+            mock.patch.object(gtn, "GTN_AI_PUBLIC_ENTRY_ENABLED", True),
             mock.patch.object(gtn, "get_local_ai_worker", return_value=_StartOnlyWorker()),
             mock.patch.object(gtn.secrets, "randbelow", return_value=0),
             mock.patch.object(gtn.secrets, "randbits", return_value=81723),
