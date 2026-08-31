@@ -21,7 +21,7 @@ proxy_set_header X-Forwarded-For $remote_addr;
 - `GTN_TRUSTED_HOSTS`：生产环境建议显式列出允许的 Host（逗号分隔）。
 - `GTN_HTTP_ALLOWED_ORIGINS`：确需跨域提交时才列出完整 Origin；默认只接受同源。
 
-所有有副作用的 HTTP 方法会检查 `Sec-Fetch-Site`、`Origin` 或 `Referer`。
+所有有副作用的 HTTP 方法会检查 `Sec-Fetch-Site`、`Origin` 或 `Referer`。部署在 HTTPS 反向代理后时，只从命中受信 CIDR 且满足配置跳数的直连代理读取 `X-Forwarded-Proto`，用于还原外部同源协议；非受信来源伪造该头不会进入允许列表。
 响应还会设置 CSP、禁止 MIME 嗅探、限制 iframe 来源，并在 HTTPS 下启用 HSTS。
 
 ## 必需凭据与 Cookie

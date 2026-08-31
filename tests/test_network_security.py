@@ -261,6 +261,44 @@ def test_same_origin_mutation_is_not_blocked_by_origin_guard():
     assert response.status_code == 401
 
 
+def test_trusted_proxy_https_origin_is_treated_as_same_origin():
+    gtn.app.config.update(TESTING=True)
+    client = gtn.app.test_client()
+    with mock.patch.object(gtn, 'verify_user', return_value=(None, '用户名或密码错误')):
+        response = client.post(
+            '/api/auth/login',
+            json={'username': 'Player', 'password': 'password'},
+            headers={
+                'Origin': 'https://game.example',
+                'Sec-Fetch-Site': 'same-origin',
+                'X-Forwarded-Proto': 'https',
+            },
+            base_url='http://game.example',
+            environ_base={'REMOTE_ADDR': '127.0.0.1'},
+        )
+    assert response.status_code == 401
+
+
+def test_untrusted_peer_cannot_forge_forwarded_https_origin():
+    gtn.app.config.update(TESTING=True)
+    client = gtn.app.test_client()
+    with mock.patch.object(gtn, 'verify_user') as verify:
+        response = client.post(
+            '/api/auth/login',
+            json={'username': 'Player', 'password': 'password'},
+            headers={
+                'Origin': 'https://game.example',
+                'Sec-Fetch-Site': 'same-origin',
+                'X-Forwarded-Proto': 'https',
+            },
+            base_url='http://game.example',
+            environ_base={'REMOTE_ADDR': '198.51.100.25'},
+        )
+    assert response.status_code == 403
+    assert response.get_json()['error'] == 'cross-site request rejected'
+    verify.assert_not_called()
+
+
 def test_legacy_admin_session_expires_and_clears_privileged_state():
     gtn.app.config.update(TESTING=True)
     client = gtn.app.test_client()

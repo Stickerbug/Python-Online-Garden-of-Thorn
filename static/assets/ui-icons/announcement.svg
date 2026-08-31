@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: none;
+      }
+
+      .st0, .st1, .st2, .st3 {
+        stroke-width: 15px;
+      }
+
+      .st0, .st2, .st3 {
+        stroke: #c9caca;
+        stroke-linejoin: round;
+      }
+
+      .st1 {
+        fill: #e94c5c;
+        stroke: #d11442;
+        stroke-miterlimit: 10;
+      }
+
+      .st2 {
+        stroke-linecap: round;
+      }
+
+      .st2, .st3 {
+        fill: #efefef;
+      }
+    </style>
+  </defs>
+  <rect class="st1" x="7.09" y="7.09" width="269.29" height="269.29" rx="22.68" ry="22.68"/>
+  <g>
+    <rect class="st3" x="160.25" y="117.2" width="44.26" height="35.74"/>
+    <polygon class="st3" points="110.04 162.31 176.42 195.5 176.42 75.5 110.04 109.33 110.04 162.31"/>
+    <rect class="st3" x="64.08" y="110.82" width="44.26" height="48.51"/>
+    <polygon class="st2" points="64.08 159.33 36 215.07 79.83 215.07 108.34 159.33 64.08 159.33"/>
+    <line class="st0" x1="228.16" y1="135.07" x2="254.97" y2="135.07"/>
+    <line class="st0" x1="217.09" y1="83.21" x2="234.12" y2="66.19"/>
+    <line class="st0" x1="217.09" y1="186.93" x2="234.12" y2="203.96"/>
+  </g>
+</svg>

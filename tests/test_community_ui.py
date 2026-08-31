@@ -14,11 +14,13 @@ def test_main_page_has_public_announcement_and_poll_surface():
         'id="community-popover"',
         'id="community-feed"',
         'id="community-manage-link"',
+        '/static/assets/ui-icons/announcement.svg',
         '/static/js/community.js',
         '/static/css/community.css',
     )
     for marker in required:
         assert marker in INDEX
+    assert (ROOT / 'static' / 'assets' / 'ui-icons' / 'announcement.svg').is_file()
 
 
 def test_public_client_uses_safe_dom_and_private_vote_results_contract():

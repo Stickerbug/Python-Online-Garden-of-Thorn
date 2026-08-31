@@ -555,7 +555,7 @@ GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSIO
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1-player-name-descender-2-battle-chat-gradient-1-story-coop-headless-2-story-coop-lobby-1-pvp-damage-prediction-parity-1-story-coop-combat-1-story-coop-progression-1-story-coop-stage1-garden-1-story-coop-opening-1-story-coop-content-1-story-coop-enemy-content-1-story-coop-relic-content-1-story-coop-card-effects-1-security-hardening-1-story-coop-shared-events-1-ai-public-entry-toggle-1-csp-nonce-1-story-seeded-background-2-story-character-details-1-story-coop-mage-1-dead-multihit-1-story-card-motion-1-story-persistent-hud-1-story-all-phase-saves-1-story-boss-node-portraits-1-story-map-columns-1-story-codex-links-1-story-map-room-icons-1-story-mage-card-art-1-story-card-browser-nav-1-pvp-gallery-card-browser-nav-1-community-ops-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1-player-name-descender-2-battle-chat-gradient-1-story-coop-headless-2-story-coop-lobby-1-pvp-damage-prediction-parity-1-story-coop-combat-1-story-coop-progression-1-story-coop-stage1-garden-1-story-coop-opening-1-story-coop-content-1-story-coop-enemy-content-1-story-coop-relic-content-1-story-coop-card-effects-1-security-hardening-1-story-coop-shared-events-1-ai-public-entry-toggle-1-csp-nonce-1-story-seeded-background-2-story-character-details-1-story-coop-mage-1-dead-multihit-1-story-card-motion-1-story-persistent-hud-1-story-all-phase-saves-1-story-boss-node-portraits-1-story-map-columns-1-story-codex-links-1-story-map-room-icons-1-story-mage-card-art-1-story-card-browser-nav-1-pvp-gallery-card-browser-nav-1-community-ops-1-community-announcement-icon-1-proxy-origin-1-story-contract-reset-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -761,7 +761,7 @@ class TrackedLock:
 DB_AVAILABLE = True
 DB_INIT_ERROR = ''
 try:
-    init_db()
+    init_db(STORY_CONTENT_VERSION, COOP_STORY_CONTENT_VERSION)
 except Exception as exc:
     DB_AVAILABLE = False
     DB_INIT_ERROR = str(exc)
@@ -2636,6 +2636,28 @@ def _normalized_http_origin(value):
     return f'{parsed.scheme.lower()}://{host}{port_suffix}'
 
 
+def _trusted_forwarded_request_origin():
+    """Return the external origin supplied by a configured trusted proxy."""
+    direct_ip = str(request.remote_addr or '').strip()
+    if (
+        GTN_TRUSTED_PROXY_HOPS <= 0
+        or not direct_ip
+        or not _ip_is_trusted_proxy(direct_ip)
+    ):
+        return ''
+    forwarded = [
+        token.strip().lower()
+        for token in str(request.headers.get('X-Forwarded-Proto') or '').split(',')
+        if token.strip()
+    ]
+    if len(forwarded) < GTN_TRUSTED_PROXY_HOPS:
+        return ''
+    scheme = forwarded[len(forwarded) - GTN_TRUSTED_PROXY_HOPS]
+    if scheme not in {'http', 'https'}:
+        return ''
+    return _normalized_http_origin(f'{scheme}://{request.host}')
+
+
 def _same_origin_mutation_allowed():
     if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
         return True
@@ -2653,6 +2675,7 @@ def _same_origin_mutation_allowed():
         if normalized:
             allowed.add(normalized)
     allowed.add(_normalized_http_origin(request.host_url))
+    allowed.add(_trusted_forwarded_request_origin())
     allowed.discard('')
     origin = str(request.headers.get('Origin') or '').strip()
     if origin:
@@ -18428,7 +18451,7 @@ def _story_run_with_compatibility(run):
 
 def _story_content_version_error(run):
     return _json_error(
-        '这段旅程使用旧版故事内容，已保留为只读记录；结束旧旅程后可开始新版旅程',
+        '检测到未完成迁移的旧版故事数据，请刷新页面；服务器会在版本迁移时自动清理旧旅程和进度',
         409,
         code='STORY_CONTENT_VERSION_OLD',
         run=_story_run_with_compatibility(run),

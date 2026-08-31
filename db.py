@@ -579,7 +579,49 @@ def _seed_builtin_user_roles(conn):
         _ensure_builtin_role_for_row(conn, row)
 
 
-def init_db():
+def _reset_story_data_for_contract_if_needed_conn(
+    conn,
+    story_content_version,
+    coop_story_content_version,
+):
+    """Reset version-bound story data while preserving the compendium."""
+    solo_version = str(story_content_version or '').strip()
+    coop_version = str(coop_story_content_version or '').strip()
+    if not solo_version or not coop_version:
+        return False
+    current = conn.execute(
+        '''SELECT story_content_version, coop_story_content_version
+           FROM story_data_contract_state WHERE id = 1'''
+    ).fetchone()
+    if (
+        current is not None
+        and str(current['story_content_version'] or '') == solo_version
+        and str(current['coop_story_content_version'] or '') == coop_version
+    ):
+        return False
+
+    # Mutable progress belongs to one exact content contract. Root deletion
+    # cascades through run actions and saves. story_discoveries is deliberately
+    # retained so a content update never erases the player's compendium.
+    conn.execute('DELETE FROM story_coop_parties')
+    conn.execute('DELETE FROM story_runs')
+    conn.execute('DELETE FROM story_progress_completions')
+    conn.execute('DELETE FROM story_progress')
+    now = utc_now()
+    conn.execute(
+        '''INSERT INTO story_data_contract_state
+           (id, story_content_version, coop_story_content_version, reset_at)
+           VALUES (1, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+               story_content_version = excluded.story_content_version,
+               coop_story_content_version = excluded.coop_story_content_version,
+               reset_at = excluded.reset_at''',
+        (solo_version, coop_version, now),
+    )
+    return True
+
+
+def init_db(story_content_version=None, coop_story_content_version=None):
     parent = os.path.dirname(os.path.abspath(DB_PATH))
     if parent:
         os.makedirs(parent, exist_ok=True)
@@ -1801,6 +1843,16 @@ def init_db():
         )
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS story_data_contract_state (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                story_content_version TEXT NOT NULL,
+                coop_story_content_version TEXT NOT NULL,
+                reset_at TEXT NOT NULL
+            )
+            '''
+        )
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS community_announcements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
@@ -1923,6 +1975,11 @@ def init_db():
         conn.execute(
             'CREATE INDEX IF NOT EXISTS idx_community_ops_audit_created '
             'ON community_ops_audit(created_at DESC, id DESC)'
+        )
+        _reset_story_data_for_contract_if_needed_conn(
+            conn,
+            story_content_version,
+            coop_story_content_version,
         )
         conn.commit()
 
