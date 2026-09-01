@@ -6,6 +6,7 @@ INDEX = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
 OPS = (ROOT / 'templates' / 'community_ops.html').read_text(encoding='utf-8')
 PUBLIC_JS = (ROOT / 'static' / 'js' / 'community.js').read_text(encoding='utf-8')
 OPS_JS = (ROOT / 'static' / 'js' / 'community_ops.js').read_text(encoding='utf-8')
+STYLE = (ROOT / 'static' / 'css' / 'style.css').read_text(encoding='utf-8')
 
 
 def test_main_page_has_public_announcement_and_poll_surface():
@@ -21,6 +22,7 @@ def test_main_page_has_public_announcement_and_poll_surface():
     for marker in required:
         assert marker in INDEX
     assert (ROOT / 'static' / 'assets' / 'ui-icons' / 'announcement.svg').is_file()
+    assert '.community-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/announcement.svg"); }' in STYLE
 
 
 def test_public_client_uses_safe_dom_and_private_vote_results_contract():

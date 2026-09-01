@@ -2,19 +2,19 @@
 
 Status: schema foundation (`v10`), deterministic combat coordination,
 independent party/run/action persistence, viewer-specific HTTP snapshots and a
-staff/admin-only Garden stage-one experiment are implemented locally. The
+staff/admin-only three-stage experiment are implemented locally. The
 current two-seat flow uses HTTP polling, begins with a leader-owned difficulty
-selection and two private personal blessings, then traverses a deterministic
-16-floor map through curated combat/elite encounters, personal rewards, rest,
-chests and shops, shared hidden event/route votes, a cooperative-specific boss
-and an explicit `stage_complete` result.
+selection and two private personal blessings, then traverses deterministic
+Garden, Jungle and Factory maps through curated combat/elite encounters,
+personal rewards, rest, chests and shops, shared event/route decisions and
+cooperative-specific bosses. Each stage ends at an explicit two-seat barrier;
+only the third barrier produces the final `complete` result.
 
-This is a complete loop for the current Garden Normal/Hard/Lunatic experimental contract,
+This is a complete three-stage Normal/Hard/Lunatic experimental contract,
 not parity with every single-player card, relic, event, shop service, enemy or
 boss script. Easy is fail-closed until its five per-seat talents are implemented.
-Other biomes, stage two and later, ordered
-Socket.IO reconnect, three/four-player play, matchmaking and spectators remain
-pending.
+Ordered Socket.IO reconnect, three/four-player play, Boss Rush, matchmaking and
+spectators remain pending.
 
 The cooperative mode extends the existing server-authoritative story state
 machine. It does not reuse the PvP `GameEngine`/`GameEngine2v2` combat core and
@@ -88,7 +88,8 @@ consume v10 safely.
   process-global randomness.
 - Rewards, rest choices, chest contents and shop inventories are personal.
   Route votes and the current event decision are shared; submitted choices stay
-  hidden until the last required vote resolves.
+  hidden until every required seat submits. A split shared-event vote applies
+  no effect, consumes no RNG and reopens the choice until the party agrees.
 - Cooperative card rewards and shop offers are compiled from the canonical
   single-player card pools.  The current executor accepts the exact shared
   damage, shield, active-discard, draw, elixir and exile semantics; changing a
@@ -135,7 +136,8 @@ Illustrative v10 shape:
     "rules": {
       "turn_model": "shared_hero_phase",
       "action_ordering": "server_serialized",
-      "route_vote_policy": "seeded_random"
+      "route_vote_policy": "seeded_random",
+      "event_vote_policy": "unanimous_required"
     }
   },
   "players": {
@@ -426,19 +428,19 @@ invalid. Every party response uses `Cache-Control: private, no-store`.
     deck/options, chest amount or shop offers; teammate state is reduced to a
     completion bit. The last seat to finish atomically opens the next route
     vote.
-19. Event votes expose only submitted bits before resolution. Unanimous event
-    choices consume no RNG; a split consumes one named `coop_event_vote:*`
-    stream step and resolves only among submitted choices.
-20. The Garden boss uses a distinct cooperative definition and deliberately
-    simplified rules. Winning it marks the floor-16 node complete, persists
-    `stage_complete`, closes the active party/run transactionally and keeps a
-    historical viewer snapshot readable to both former members.
+19. Event votes expose only submitted bits before resolution. Only a unanimous
+    shared-event choice may apply effects. A split applies nothing, consumes no
+    RNG, clears that decision round and reopens the same choices for every seat.
+20. Each biome boss uses a distinct cooperative definition and deliberately
+    scoped rules. Winning marks the terminal node complete and persists
+    `stage_complete` while the run and party remain active. Each member submits
+    one `stage_ready`; only the second confirmation advances atomically.
 21. Public snapshots and event batches never include the run seed, RNG stream
     counters, draw-pile order, internal action receipts/fingerprints, another
     seat's reward selection, private room inventory or unresolved vote target.
 22. Persisted content versions are routed through explicit validators. Frozen
     and historical fingerprinted contracts remain readable, but only the exact
-    current Garden content fingerprint accepts new HTTP actions.
+    current full-journey content fingerprint accepts new HTTP actions.
 23. A newly started run remains in `journey_setup`. Only the authenticated
     leader seat may submit `setup_start`, and only one of the server-advertised
     Normal, Hard or Lunatic identifiers is accepted. Easy is rejected rather
@@ -455,6 +457,31 @@ invalid. Every party response uses `Cache-Control: private, no-store`.
     scales curated enemy maximum H and attack intent by 125 percent. These are
     explicit cooperative rules, not a claim of full single-player difficulty
     parity.
+27. Stage one and two confirmations heal each member by the same transition
+    rule as solo story (full on Normal; at least 80 percent on Hard/Lunatic),
+    generate the next biome map from the same run seed and start a new private
+    blessing barrier. Decks, relics, gold and health otherwise persist.
+28. Only stage-three dual confirmation sets `completed=true`. The final action,
+    action receipt, run close, party/member release and one idempotent
+    `story_progress_completions` row per member are committed in one SQLite
+    transaction. Stage barriers, defeat and identical retries cannot award a
+    clear twice.
+29. Jungle and Factory canonical encounters are still `deferred` when their
+    solo scripts/traits cannot be expressed exactly. Their playable fallback
+    encounters use distinct `coop_*` ids and explicit cooperative values, so a
+   simplified adapter is never presented as the original solo enemy. Compiler
+   coverage still expands automatically when canonical mechanics become exact.
+30. Enchantment books are cooperative-story progression only. Each member owns
+    at most three private book instances, may discard them in or out of combat,
+    and receives private combat/shop offers. Card enchantments share the solo
+    definitions, including Puncture replay, Fire turn-start damage, Snatch's
+    two private card-reward rounds and automatic Magic Yggdrasil protection.
+    Books and book discovery are never projected into PvP state or the PvP
+    compendium.
+31. Solo story is the source of truth for all non-cooperative-specific content,
+    rules, presentation and UI behavior. Cooperative story reuses those shared
+    definitions and components; only party coordination, ownership/privacy,
+    voting, synchronization and other inherently multiplayer rules may diverge.
 
 ## v9 compatibility
 
@@ -483,10 +510,11 @@ invalid. Every party response uses `Cache-Control: private, no-store`.
    dialog are implemented. Personal rewards, private completion status, shared
    route voting and atomic node transitions are implemented.
    Ordered Socket.IO commands and reconnect remain a later realtime enhancement.
-5. **Garden first-stage loop**: leader difficulty selection, private personal
+5. **Three-stage loop**: leader difficulty selection, private personal
    blessings, deterministic map traversal, personal rest,
-   chest and shop rooms, one shared hidden-vote event, curated normal/elite
-   combats, a cooperative-specific boss and `stage_complete` are implemented.
+   chest and shop rooms, one shared hidden-vote consensus event, curated normal/elite
+   combats, cooperative-specific bosses, stage barriers and final per-member
+   progress commits are implemented across Garden, Jungle and Factory.
    Safe cards, reward/shop pools, opening blessings and compatible ordinary
    enemies/encounters compile from the single-player content catalog. Scripted
    elite/Boss encounters, relic/shop-service/event parity remain later content
@@ -495,8 +523,8 @@ invalid. Every party response uses `Cache-Control: private, no-store`.
    combat/reward/route/room panels and responsive layouts are implemented;
    richer enemy rules, configurable scaling and browser playtest tuning remain
    pending.
-7. **Expansion**: three/four players, full journey, Boss Rush, matchmaking and
-   spectator mode only after the two-player gates pass.
+7. **Expansion**: three/four players, Boss Rush, matchmaking and spectator mode
+   only after the two-player gates pass.
 
 Each phase must preserve deterministic replay, action idempotency, actor
 authorization, old-revision behavior, disconnect recovery and unchanged v9

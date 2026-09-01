@@ -240,6 +240,9 @@ def test_coop_combat_reuses_card_motion_without_exposing_private_card_ids():
     assert "eventType === 'coop_cards_drawn'" in combat_block
     assert 'body?.payload?.card_instance_id' in combat_block
     assert 'await playStoryCoopActionPresentation(result.events, body, snapshot);' in combat_block
+    assert 'await animateStoryCardFlight(' in combat_block
+    assert 'async function animateStoryCardPlayed(event)' in SCRIPT
+    assert SCRIPT.count('async function animateStoryCardFlight(') == 1
     assert combat_block.index('await playStoryCoopActionPresentation(') < combat_block.index('storyCoopCombatApplyRun(session, result.run, true);')
     assert 'button.dataset.instanceId = instanceId;' in combat_block
     assert "button.dataset.enemyId = String(enemy.id || '');" in combat_block
@@ -255,8 +258,12 @@ def test_coop_terminal_rendering_uses_the_authoritative_phase_not_completed_stat
     assert "const failed = phase === 'game_over' || combat?.outcome === 'defeat';" in combat_block
     assert "complete = phase === 'complete' ||" not in combat_block
     assert "'协作旅程失败'" in combat_block
-    assert "'协作第一阶段完成'" in combat_block
-    assert "['complete', 'stage_complete', 'game_over'].includes" in combat_block
+    assert '`协作第${Math.max(1, Number(snapshot?.stage) || 1)}阶段完成`' in combat_block
+    assert "['complete', 'game_over'].includes" in combat_block
+    assert "['complete', 'stage_complete', 'game_over'].includes" not in combat_block
+    assert "normalizedType === 'stage_ready' && storyCoopStageCanReady(session)" in combat_block
+    assert "storyCoopCombatAction('stage_ready'" in combat_block
+    assert 'id="story-coop-stage-ready"' in TEMPLATE
     assert 'incomingRevision > Number(session.notice.runRevision || 0)' in combat_block
     assert "incomingPhase !== String(session.notice.phase || '')" in combat_block
 
@@ -373,6 +380,10 @@ def test_coop_route_copy_covers_noncombat_nodes():
     assert "chest: '宝箱节点'" in SCRIPT
     assert "shop: '商店节点'" in SCRIPT
     assert '请选择你希望进入的下一个路线节点。' in SCRIPT
+    assert 'STORY_MAP_ROOM_ICON_URLS[routeType]' in SCRIPT
+    assert "routeType === 'chest' ? '🎁'" in SCRIPT
+    assert 'id.textContent = nodeId' not in SCRIPT
+    assert '.story-coop-map-choice-icon' in STYLES
 
 
 def test_coop_event_uses_public_copy_and_submission_status_without_leaking_votes():
@@ -411,9 +422,46 @@ def test_coop_event_uses_public_copy_and_submission_status_without_leaking_votes
         assert forbidden not in room_action
     assert '.story-coop-event-options .story-coop-progression-choice.is-risk' in STYLES
     assert "case 'coop_event_vote_cast':" in combat_block
+    assert "case 'coop_event_consensus_required':" in combat_block
     assert "case 'coop_event_resolved':" in combat_block
     assert 'storyContent?.events?.[String(event.content_id' in combat_block
     assert "case 'coop_stage_completed':" in combat_block
+    assert '只有选择一致时才会结算' in TEMPLATE
+    assert "lastEventType === 'coop_event_consensus_required'" in combat_block
+
+
+def test_coop_player_facing_hud_uses_progress_labels_and_collapsible_party_hands():
+    combat_block = SCRIPT[
+        SCRIPT.index('function storyCoopCombatDialogOpen()'):
+        SCRIPT.index('function storyStatusText(')
+    ]
+
+    assert '<dt>旅程进度</dt><dd id="story-coop-combat-revision">' in TEMPLATE
+    assert '<dt>难度</dt><dd id="story-coop-combat-sequence">' in TEMPLATE
+    assert '<dt>当前步骤</dt><dd id="story-coop-combat-turn">' in TEMPLATE
+    assert 'id="story-coop-combat-eyebrow"' in TEMPLATE
+    assert "setText('story-coop-combat-eyebrow', `双人协作 · ${biomeLabel}`);" in SCRIPT
+    assert 'storyCoopProgressLabel(snapshot)' in combat_block
+    assert 'storyCoopSnapshotDifficultyLabel(snapshot)' in combat_block
+    assert 'storyCoopPhaseLabel(snapshot)' in combat_block
+    assert "['opening', 'rest', 'chest', 'shop', 'event'].includes(roomType)" in combat_block
+    assert "document.createElement('details')" in combat_block
+    assert 'story-coop-combat-enemy-image' in combat_block
+    assert '.story-coop-combat-enemy-image' in STYLES
+    assert '.story-coop-combat-shell > * { flex: 0 0 auto; }' in STYLES
+    assert "return `队伍路线已确定，前往${storyCoopProgressLabel(snapshot)}`;" in combat_block
+    assert "String(event.node_id || '未知节点')" not in combat_block
+
+
+def test_coop_lobby_explains_player_decisions_without_internal_contract_jargon():
+    assert '<dt>队伍人数</dt><dd id="story-coop-mvp-value">' in TEMPLATE
+    assert '<dt>共同决定</dt><dd id="story-coop-schema-value">路线 / 事件</dd>' in TEMPLATE
+    assert '<dt>共同承担</dt><dd>战斗结果</dd>' in TEMPLATE
+    assert '<dt>个人决定</dt><dd id="story-coop-max-value">奖励 / 休息 / 宝箱 / 商店</dd>' in TEMPLATE
+    assert '<dt>状态结构</dt>' not in TEMPLATE
+    assert '<dt>目标人数</dt>' not in TEMPLATE
+    assert '正在同步权威战斗状态' not in TEMPLATE
+    assert '权威状态已同步' not in SCRIPT
 
 
 def test_lobby_close_reopen_invalidates_old_confirmations_and_loads():

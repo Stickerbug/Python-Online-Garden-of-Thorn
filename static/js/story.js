@@ -6,11 +6,13 @@
     const STORY_MAP_NODE_RADIUS = 25;
     const STORY_MAP_EDGE_INSET = STORY_MAP_NODE_RADIUS + 4;
     const STORY_MAP_ROOM_ICON_URLS = Object.freeze({
+        blessing: '/static/assets/story-room-icons/blessing.svg',
         combat: '/static/assets/story-room-icons/combat.svg',
         elite: '/static/assets/story-room-icons/elite.svg',
         event: '/static/assets/story-room-icons/event.svg',
         rest: '/static/assets/story-room-icons/rest.svg',
         shop: '/static/assets/story-room-icons/shop.svg',
+        chest: '/static/assets/story-room-icons/chest.svg',
     });
     const VIEWS = [
         'story-loading', 'story-empty', 'story-version-old', 'story-blessing', 'story-run',
@@ -67,6 +69,7 @@
     let storyCardTermPointerStart = null;
     let storyCombatEntranceAnimating = false;
     let storyMapPreviewOpen = false;
+    let storyPlaybackRate = document.documentElement.classList.contains('story-speed-2x') ? 2 : 1;
     let pendingStorySaveId = 0;
     let storyManualSaveInFlight = false;
     let storyDiscoveries = [];
@@ -294,13 +297,16 @@
     function renderStorySeededBackdrop(run, containerId = 'story-seeded-backdrop') {
         const container = typeof containerId === 'string' ? $(containerId) : containerId;
         if (!container) return;
+        const mainBackdrop = container.id === 'story-seeded-backdrop';
         const state = run?.state;
         const biome = String(state?.biome || '');
         const visualSeed = String(run?.visual_seed || run?.seed || run?.id || '');
         if (!state || !STORY_BACKDROP_BIOMES.includes(biome) || !visualSeed) {
             clearStorySeededBackdrop(container);
+            if (mainBackdrop) delete document.body.dataset.storyBiome;
             return;
         }
+        if (mainBackdrop) document.body.dataset.storyBiome = biome;
         const signature = [
             STORY_BACKDROP_LAYOUT_VERSION,
             visualSeed,
@@ -449,7 +455,7 @@
             talentTotal: (count) => `${count} talent(s)`, noTalents: 'No talents acquired',
             runDeck: 'Full Deck', viewRunDeck: 'View Full Deck',
             codexTitle: 'Story Compendium', viewCodex: 'View Story Compendium',
-            codexCards: 'Cards', codexEnemies: 'Enemies', codexTalents: 'Talents', codexTerms: 'Terms',
+            codexCards: 'Cards', codexEnemies: 'Enemies', codexTalents: 'Talents', codexBooks: 'Enchantment Books', codexTerms: 'Terms',
             codexSearch: 'Search discovered content', codexRarity: 'Rarity', codexType: 'Type',
             codexAll: 'All', codexClear: 'Clear', codexResults: (count) => `${count} result(s)`,
             codexDiscovered: (found, total) => `Discovered ${found}/${total}`,
@@ -462,6 +468,9 @@
             battleWon: 'Battle won', chooseCard: 'Choose a card', skip: 'Skip card',
             rewards: 'Battle rewards', rewardCopy: 'Claim each reward before continuing.',
             claim: 'Claim', claimed: 'Claimed', cardReward: 'Card reward', talentReward: 'Talent',
+            enchantmentBooks: 'Enchantment Books', enchantmentBookReward: 'Enchantment Book',
+            enchantmentBookCopy: 'Up to 3. Discard anywhere; use during your combat turn.',
+            useBook: 'Use', discardBook: 'Discard', replaceBook: 'Replace', bookSlotsFull: 'Choose a book to replace.',
             directLeave: 'Leave without taking more', claimChestGold: 'Take Gold', claimChestTalent: 'Take Talent',
             cannotRemove: 'Cannot be removed',
             continueJourney: 'Continue', gainedGold: (value) => `Gained ${value} G.`,
@@ -483,7 +492,7 @@
             eventTitle: 'Garden Event', eventCopy: 'Choose one outcome.', takeGold: 'Take 20 Gold',
             recoverHealth: 'Recover 15 H', shopTitle: 'Shop', shopCopy: 'Spend Gold or leave.',
             buy: (value) => `Buy · ${value}`, leave: 'Leave', journeyComplete: 'Journey complete',
-            journeyCompleteCopy: 'You crossed the Garden route.', journeyFailed: 'Journey ended',
+            journeyCompleteCopy: 'You crossed every stage of the journey.', journeyFailed: 'Journey ended',
             journeyFailedCopy: 'Your route ends here, but the next map is waiting.', newJourney: 'New Journey',
             requestFailed: 'Story data is temporarily unavailable', stateUpdated: 'State synchronized',
             upgraded: 'Upgraded', shield: 'Shield', power: 'Power', weak: 'Weak', vulnerable: 'Vulnerable',
@@ -548,7 +557,7 @@
             talentTotal: (count) => `共 ${count} 项天赋`, noTalents: '尚未获得天赋',
             runDeck: '总牌库', viewRunDeck: '查看总牌库',
             codexTitle: '故事图鉴', viewCodex: '查看故事图鉴',
-            codexCards: '卡牌', codexEnemies: '生物', codexTalents: '天赋', codexTerms: '术语',
+            codexCards: '卡牌', codexEnemies: '生物', codexTalents: '天赋', codexBooks: '附魔书', codexTerms: '术语',
             codexSearch: '搜索已发现内容', codexRarity: '稀有度', codexType: '类型',
             codexAll: '全选', codexClear: '清空', codexResults: (count) => `${count} 项`,
             codexDiscovered: (found, total) => `已发现 ${found}/${total}`,
@@ -561,6 +570,9 @@
             battleWon: '战斗胜利', chooseCard: '选择一张牌',
             skip: '跳过卡牌', rewards: '战斗奖励', rewardCopy: '逐项领取奖励后继续前进。',
             claim: '领取', claimed: '已领取', cardReward: '卡牌奖励', talentReward: '天赋',
+            enchantmentBooks: '附魔书', enchantmentBookReward: '附魔书',
+            enchantmentBookCopy: '最多持有3本；可随时丢弃，战斗中的玩家回合可使用。',
+            useBook: '使用', discardBook: '丢弃', replaceBook: '替换', bookSlotsFull: '附魔书槽已满，请选择要替换的一本。',
             directLeave: '直接离开', claimChestGold: '领取金币', claimChestTalent: '领取天赋',
             cannotRemove: '无法删除',
             continueJourney: '继续前进', gainedGold: (value) => `获得 ${value}G。`,
@@ -581,7 +593,7 @@
             upgradePrice: '升级费用', none: '无',
             eventCopy: '选择一种结果。', takeGold: '获得20金币', recoverHealth: '回复15H', shopTitle: '商店',
             shopCopy: '消耗金币购买物品，也可以直接离开。', buy: (value) => `购买 · ${value}`, leave: '离开',
-            journeyComplete: '旅程完成', journeyCompleteCopy: '你已经穿过了花园路线。', journeyFailed: '旅程结束',
+            journeyComplete: '旅程完成', journeyCompleteCopy: '你已经穿过了旅程的全部阶段。', journeyFailed: '旅程结束',
             journeyFailedCopy: '本次路线止步于此，下一张地图仍在等待。', newJourney: '开始新旅程',
             requestFailed: '故事记录暂时不可用', stateUpdated: '状态已同步', upgraded: '已升级',
             shield: '护盾', power: '力量', weak: '虚弱', vulnerable: '易损', floor: (value) => `第 ${value} 层`,
@@ -641,7 +653,7 @@
             talentTotal: (count) => `${count} talent(s)`, noTalents: 'Aucun talent obtenu',
             runDeck: 'Deck complet', viewRunDeck: 'Voir le deck complet', battleWon: 'Victoire',
             codexTitle: 'Compendium', viewCodex: 'Voir le compendium',
-            codexCards: 'Cartes', codexEnemies: 'Ennemis', codexTalents: 'Talents', codexTerms: 'Termes',
+            codexCards: 'Cartes', codexEnemies: 'Ennemis', codexTalents: 'Talents', codexBooks: 'Livres enchantés', codexTerms: 'Termes',
             codexSearch: 'Rechercher le contenu découvert', codexRarity: 'Rareté', codexType: 'Type',
             codexAll: 'Tout', codexClear: 'Effacer', codexResults: (count) => `${count} résultat(s)`,
             codexDiscovered: (found, total) => `Découvert ${found}/${total}`,
@@ -654,6 +666,9 @@
             chooseCard: 'Choisissez une carte', skip: 'Passer la carte', room: 'Salle', newJourney: 'Nouveau voyage',
             rewards: 'Récompenses du combat', rewardCopy: 'Récupérez chaque récompense avant de continuer.',
             claim: 'Récupérer', claimed: 'Récupéré', cardReward: 'Carte', talentReward: 'Talent',
+            enchantmentBooks: 'Livres enchantés', enchantmentBookReward: 'Livre enchanté',
+            enchantmentBookCopy: 'Maximum 3. Jetables partout, utilisables pendant votre tour de combat.',
+            useBook: 'Utiliser', discardBook: 'Jeter', replaceBook: 'Remplacer', bookSlotsFull: 'Choisissez un livre à remplacer.',
             directLeave: 'Partir sans rien prendre de plus', claimChestGold: 'Prendre l’or', claimChestTalent: 'Prendre le talent',
             continueJourney: 'Continuer', goldReward: (value) => `${value} G`,
             summon: 'Invocation', allies: 'Toutes les créatures', playerSide: 'Camp joueur', self: 'Soi', addCard: 'Ajouter une carte', consume: 'Absorber',
@@ -716,7 +731,7 @@
             talentTotal: (count) => `天賦 ${count}個`, noTalents: '天賦を獲得していません',
             runDeck: '全デッキ', viewRunDeck: '全デッキを見る',
             codexTitle: '物語図鑑', viewCodex: '物語図鑑を見る',
-            codexCards: 'カード', codexEnemies: '敵', codexTalents: '天賦', codexTerms: '用語',
+            codexCards: 'カード', codexEnemies: '敵', codexTalents: '天賦', codexBooks: 'エンチャント本', codexTerms: '用語',
             codexSearch: '発見済みを検索', codexRarity: 'レア度', codexType: 'タイプ',
             codexAll: 'すべて', codexClear: '解除', codexResults: (count) => `${count}件`,
             codexDiscovered: (found, total) => `発見 ${found}/${total}`,
@@ -729,6 +744,9 @@
             battleWon: '戦闘勝利', chooseCard: 'カードを選択', skip: 'カードをスキップ', room: '部屋',
             rewards: '戦闘報酬', rewardCopy: 'すべての報酬を受け取ってから先へ進みます。',
             claim: '受け取る', claimed: '受取済み', cardReward: 'カード報酬', talentReward: '天賦',
+            enchantmentBooks: 'エンチャント本', enchantmentBookReward: 'エンチャント本',
+            enchantmentBookCopy: '最大3冊。いつでも破棄でき、戦闘中の自分のターンに使用できます。',
+            useBook: '使用', discardBook: '破棄', replaceBook: '交換', bookSlotsFull: '交換する本を選んでください。',
             directLeave: '残りを受け取らず退出', claimChestGold: 'ゴールドを受け取る', claimChestTalent: '天賦を受け取る',
             continueJourney: '進む', goldReward: (value) => `${value} G`,
             summon: '召喚', allies: '全生物', playerSide: 'プレイヤー側', self: '自身', addCard: 'カード追加', consume: '吸収',
@@ -955,7 +973,12 @@
             'story-map-return': t.returnToCombat,
             'story-hud-map-label': t.viewMap,
             'story-hud-deck-label': t.runDeck,
+            'story-hud-books-label': `${t.enchantmentBooks} 0/3`,
             'story-hud-save-label': t.saveManager,
+            'story-hud-settings-label': ({ zh: '设置', en: 'Settings', fr: 'Réglages', ja: '設定' }[lang] || '设置'),
+            'story-hud-surrender-label': t.surrender,
+            'story-settings-cancel': t.cancel,
+            'story-settings-confirm': t.confirm,
             'story-save-title': t.saveManager,
             'story-save-copy': t.saveCopy,
             'story-save-create': t.saveCurrent,
@@ -985,7 +1008,10 @@
             'story-codex-tab-cards': t.codexCards,
             'story-codex-tab-enemies': t.codexEnemies,
             'story-codex-tab-talents': t.codexTalents,
+            'story-codex-tab-enchantment-books': t.codexBooks,
             'story-codex-tab-terms': t.codexTerms,
+            'story-enchantment-books-title': t.enchantmentBooks,
+            'story-enchantment-books-copy': t.enchantmentBookCopy,
             'story-reset-map': t.resetMap,
             'story-reset-title': t.resetTitle, 'story-reset-message': t.resetMessage,
             'story-reset-cancel': t.cancel, 'story-reset-confirm': t.confirm,
@@ -1014,6 +1040,7 @@
         updateStoryPresenceDisplay();
         updateStoryStatusBar();
         updateStorySurrenderControl();
+        updateStorySettingsControls();
         const back = $('story-back');
         if (back) {
             back.title = t.back;
@@ -1438,7 +1465,8 @@
         active?.classList.toggle('hidden', status !== 'active');
 
         if (status === 'forming') {
-            setText('story-coop-party-revision', `Revision ${Number(party.revision) || '?'}`);
+            const memberCount = Array.isArray(party?.members) ? party.members.length : 0;
+            setText('story-coop-party-revision', `${memberCount} / ${Number(party?.max_players) || 2} 人`);
             renderStoryCoopMembers(party, viewer);
             renderStoryCoopCharacterSelect();
             const isLeader = String(viewer?.party_role || '') === 'leader';
@@ -1453,10 +1481,10 @@
         }
 
         if (status === 'active') {
-            setText('story-coop-active-party-revision', `Revision ${Number(party.revision) || '?'}`);
-            setText('story-coop-run-id', String(run?.id || '--'));
-            setText('story-coop-run-revision', String(run?.revision ?? '--'));
-            setText('story-coop-run-status', String(run?.status || '正在建立'));
+            setText('story-coop-active-party-revision', '双人队伍 · 进行中');
+            setText('story-coop-run-id', storyCoopProgressLabel(run?.snapshot));
+            setText('story-coop-run-revision', storyCoopSnapshotDifficultyLabel(run?.snapshot));
+            setText('story-coop-run-status', storyCoopPhaseLabel(run?.snapshot));
         }
         updateStoryCoopControls();
     }
@@ -1517,9 +1545,9 @@
             const result = await requestJson('/api/story/coop/bootstrap');
             if (!storyCoopDialogOpen() || storyCoopLobbyEpoch !== requestedEpoch) return;
             storyCoopBootstrapLoaded = true;
-            setText('story-coop-schema-value', `v${Number(result.schema_version) || '?'}`);
+            setText('story-coop-schema-value', '路线 / 事件');
             setText('story-coop-mvp-value', `${Number(result.mvp_player_count) || 2} 人`);
-            setText('story-coop-max-value', `${Number(result.max_players) || 4} 人`);
+            setText('story-coop-max-value', '奖励 / 休息 / 宝箱 / 商店');
             setText(
                 'story-coop-preview-copy',
                 result.message || 'Staff / Admin 双人协作队伍实验已就绪。',
@@ -1922,6 +1950,66 @@
         return String(member?.display_name || member?.username || `席位 ${Number(seat) + 1}`);
     }
 
+    function storyCoopDifficultyLabel(difficulty) {
+        return ({
+            easy: '简单',
+            normal: '普通',
+            hard: '困难',
+            lunatic: '疯狂',
+        })[String(difficulty || '').toLowerCase()] || '尚未选择';
+    }
+
+    function storyCoopSnapshotDifficultyLabel(snapshot) {
+        return String(snapshot?.phase || '') === 'journey_setup'
+            ? '尚未选择'
+            : storyCoopDifficultyLabel(snapshot?.difficulty);
+    }
+
+    function storyCoopProgressLabel(snapshot) {
+        if (!snapshot) return '正在建立旅程';
+        const floor = Math.max(1, Number(snapshot.current_floor) || 1);
+        const maximum = Math.max(floor, Number(snapshot.progression?.max_floor) || floor);
+        if (String(snapshot.phase || '') === 'journey_setup') return '花园 · 准备中';
+        const biome = ({ garden: '花园', jungle: '丛林', factory: '工厂' })[
+            String(snapshot.biome || '')
+        ] || '未知区域';
+        const stage = Math.max(1, Number(snapshot.stage) || 1);
+        return `第 ${stage} 阶段 · ${biome} · 第 ${floor} / ${maximum} 层`;
+    }
+
+    function storyCoopPhaseLabel(snapshot) {
+        const phase = String(snapshot?.phase || '');
+        const roomType = String(snapshot?.room?.type || '');
+        if (phase === 'journey_setup') return '选择难度';
+        if (phase === 'combat') return snapshot?.combat?.turn === 'enemies' ? '敌人行动' : '共同战斗';
+        if (phase === 'reward') return '领取个人奖励';
+        if (phase === 'map') return '全队路线投票';
+        if (phase === 'stage_complete') return `第${Math.max(1, Number(snapshot?.stage) || 1)}阶段完成`;
+        if (phase === 'complete') return '完整旅程完成';
+        if (phase === 'game_over') return '旅程失败';
+        if (phase === 'room') {
+            return ({
+                opening: '选择个人赐福',
+                rest: '处理个人休息',
+                chest: '领取个人宝箱',
+                shop: '浏览个人商店',
+                event: '全队事件表决',
+            })[roomType] || '处理当前房间';
+        }
+        return '同步中';
+    }
+
+    function storyCoopWaitingNames(snapshot, seats, completedKey) {
+        return (Array.isArray(seats) ? seats : [])
+            .filter((item) => !Boolean(item?.[completedKey]))
+            .map((item) => storyCoopCombatMemberName(snapshot, item?.seat));
+    }
+
+    function storyCoopWaitingMessage(snapshot, seats, completedKey, fallback = '队友') {
+        const names = storyCoopWaitingNames(snapshot, seats, completedKey);
+        return names.length ? names.join('、') : fallback;
+    }
+
     function storyCoopCombatCanAct(session = storyCoopCombatSession) {
         const snapshot = storyCoopCombatSnapshot(session);
         const viewer = storyCoopCombatViewer(session);
@@ -2012,6 +2100,110 @@
         );
     }
 
+    function storyCoopViewerBooks(session = storyCoopCombatSession) {
+        const viewer = storyCoopCombatViewer(session);
+        return Array.isArray(viewer?.enchantment_books) ? viewer.enchantment_books : [];
+    }
+
+    function storyCoopBookDefinition(book) {
+        const bookId = String(book?.book_id || book || '');
+        return storyContent?.enchantment_books?.[bookId] || {};
+    }
+
+    function chooseStoryCoopBookReplacement(session = storyCoopCombatSession) {
+        const books = storyCoopViewerBooks(session);
+        if (books.length < Number(storyContent?.rules?.enchantment_book_slots || 3)) return '';
+        const labels = books.map((book, index) => {
+            const definition = storyCoopBookDefinition(book);
+            return `${index + 1}. ${localize(definition.name) || book.book_id}`;
+        });
+        const raw = window.prompt(`附魔书槽已满，请输入要替换的序号：\n${labels.join('\n')}`);
+        if (raw == null) return null;
+        const selected = books[Number.parseInt(raw, 10) - 1];
+        return selected ? String(selected.instance_id || '') : null;
+    }
+
+    function chooseStoryCoopCards(cards, { minimum = 1, maximum = 1, label = '卡牌' } = {}) {
+        const source = Array.isArray(cards) ? cards : [];
+        const lines = source.map((card, index) => (
+            `${index + 1}. ${String(card?.label || '') || storyCoopCombatCardLabel(card)}`
+        ));
+        const promptText = minimum === maximum
+            ? `请选择${minimum}张${label}，输入序号（多张用逗号分隔）：`
+            : `请选择${minimum}至${maximum}张${label}，输入序号（可留空）：`;
+        const raw = window.prompt(`${promptText}\n${lines.join('\n')}`);
+        if (raw == null) return null;
+        const indexes = String(raw).trim()
+            ? [...new Set(String(raw).split(/[,，\s]+/).map((item) => Number.parseInt(item, 10) - 1))]
+            : [];
+        const selected = indexes.map((index) => source[index]).filter(Boolean);
+        if (selected.length !== indexes.length || selected.length < minimum || selected.length > maximum) {
+            storyCoopCombatSetStatus('附魔书的卡牌选择无效，请重新操作。', 'error');
+            return null;
+        }
+        return selected;
+    }
+
+    function useStoryCoopEnchantmentBook(book) {
+        const session = storyCoopCombatSession;
+        const snapshot = storyCoopCombatSnapshot(session);
+        const viewer = storyCoopCombatViewer(session);
+        if (!session || snapshot?.phase !== 'combat' || !storyCoopCombatCanAct(session)) return;
+        const definition = storyCoopBookDefinition(book);
+        const target = String(definition?.target || '');
+        const payload = { book_instance_id: String(book?.instance_id || '') };
+        if (target === 'book') {
+            const candidates = storyCoopViewerBooks(session).filter(
+                (item) => String(item?.instance_id || '') !== String(book?.instance_id || ''),
+            );
+            const selected = chooseStoryCoopCards(
+                candidates.map((item) => ({
+                    ...item,
+                    def_id: '',
+                    label: localize(storyCoopBookDefinition(item).name) || item.book_id,
+                })),
+                { label: '附魔书' },
+            );
+            if (!selected) return;
+            const original = candidates.find(
+                (item) => String(item?.instance_id || '') === String(selected[0]?.instance_id || ''),
+            );
+            if (!original) return;
+            payload.target_book_instance_id = String(original.instance_id || '');
+        } else if (target) {
+            const hand = Array.isArray(viewer?.hand) ? viewer.hand : [];
+            const eligible = hand.filter((card) => {
+                const values = cardValues(card);
+                const tags = new Set(values?.tags || []);
+                if (target === 'attack_card') return values?.type === 'thorn';
+                if (target === 'skill_card') return values?.type === 'bloom';
+                if (target === 'exile_card') return tags.has('exile');
+                if (target === 'cost_card') return Number(values?.cost_e || 0) + Number(values?.cost_m || 0) > 0;
+                return true;
+            });
+            const minimum = target === 'three_cards' ? 3 : (target === 'any_cards' ? 0 : 1);
+            const maximum = target === 'any_cards' ? eligible.length : minimum;
+            const selected = chooseStoryCoopCards(eligible, { minimum, maximum });
+            if (selected == null) return;
+            payload.selected_card_ids = selected.map((card) => String(card.instance_id || ''));
+        }
+        storyCoopCombatAction('use_enchantment_book', payload);
+    }
+
+    function discardStoryCoopEnchantmentBook(book) {
+        const session = storyCoopCombatSession;
+        const snapshot = storyCoopCombatSnapshot(session);
+        if (!session || !snapshot || !storyCoopRunCanSubmit(session)) return;
+        const definition = storyCoopBookDefinition(book);
+        if (!window.confirm(`确定丢弃“${localize(definition.name) || book.book_id}”吗？`)) return;
+        storyCoopCombatAction(
+            snapshot.phase === 'combat'
+                ? 'discard_combat_enchantment_book'
+                : 'discard_enchantment_book',
+            { book_instance_id: String(book?.instance_id || '') },
+        );
+    }
+
     function storyCoopMapCanVote(session = storyCoopCombatSession) {
         const snapshot = storyCoopCombatSnapshot(session);
         const viewerVote = snapshot?.map_vote?.seats?.find(
@@ -2022,6 +2214,17 @@
             && snapshot?.phase === 'map'
             && snapshot?.map_vote
             && !viewerVote?.submitted
+        );
+    }
+
+    function storyCoopStageCanReady(session = storyCoopCombatSession) {
+        const snapshot = storyCoopCombatSnapshot(session);
+        return Boolean(
+            storyCoopRunCanSubmit(session)
+            && snapshot?.phase === 'stage_complete'
+            && snapshot?.room_state?.type === 'stage_complete'
+            && snapshot?.room_state?.status === 'pending'
+            && snapshot?.room_state?.room_id
         );
     }
 
@@ -2085,7 +2288,11 @@
         const options = storyCoopRoomOptionSet(roomState);
         return Boolean(
             storyCoopRoomCanChoose(session, 'shop')
-            && (options.has('buy_card') || options.has('buy_relic'))
+            && (
+                options.has('buy_card')
+                || options.has('buy_relic')
+                || options.has('buy_enchantment_book')
+            )
         );
     }
 
@@ -2110,6 +2317,7 @@
             chest: resolved ? '宝箱已处理' : '处理个人宝箱',
             shop: resolved ? '已离开商店' : '浏览个人商店',
             event: resolved ? '已提交事件选择' : '选择事件中',
+            stage_complete: resolved ? '已确认继续' : '等待确认继续',
         };
         return labels[String(roomType || '')] || (resolved ? '已完成' : '处理中');
     }
@@ -2135,7 +2343,7 @@
         const values = cardValues(card);
         if ((values?.tags || []).includes('wide')) return false;
         return (values?.effects || []).some(
-            (effect) => String(effect?.type || '') === 'damage',
+            (effect) => ['damage', 'electric_damage'].includes(String(effect?.type || '')),
         );
     }
 
@@ -2211,18 +2419,46 @@
             return localize(storyContent?.enemies?.[enemy?.def_id]?.name) || enemy?.def_id || enemyId || '敌人';
         };
         switch (String(event?.type || '')) {
+        case 'coop_opening_started':
+            return '全队开始选择各自的开局赐福';
+        case 'coop_opening_resolved':
+            return `${seatName(event.actor_seat)}已完成个人开局赐福`;
+        case 'coop_combat_started':
+            return `第${Number(event.round) || 1}回合协作战斗开始`;
         case 'coop_card_played':
             return `${seatName(event.actor_seat)}打出${localize(storyContent?.cards?.[event.def_id]?.name) || event.def_id}`;
         case 'enemy_damage':
             return `${enemyName(event.enemy_id)}受到${Number(event.amount) || 0}点伤害`;
+        case 'enemy_defeated':
+            return `${enemyName(event.enemy_id)}被击败`;
         case 'coop_shield_gained':
             return `${seatName(event.actor_seat)}获得${Number(event.amount) || 0}层护盾`;
+        case 'coop_shield_cleared':
+            return `${seatName(event.actor_seat)}的${Number(event.amount) || 0}层护盾在回合开始时清除`;
         case 'coop_card_discarded':
             return `${seatName(event.actor_seat)}主动丢弃1张牌`;
+        case 'coop_hand_discarded':
+            return `${seatName(event.actor_seat)}将${Number(event.count) || 0}张剩余手牌置入弃牌堆`;
+        case 'coop_discard_shuffled':
+            return `${seatName(event.actor_seat)}将弃牌堆洗回抽牌堆`;
         case 'combat_seat_ready':
-            return `${seatName(event.actor_seat)}已准备完毕`;
+            return `${seatName(event.actor_seat)}已结束本回合`;
         case 'enemy_phase_started':
             return '所有存活成员均已准备，敌人开始行动';
+        case 'enemy_action':
+            return `${enemyName(event.enemy_id)}开始行动`;
+        case 'enemy_idle':
+            return `${enemyName(event.enemy_id)}本回合没有行动`;
+        case 'enemy_target_locked':
+            return `${enemyName(event.enemy_id)}锁定${seatName(event.target_seat)}`;
+        case 'enemy_target_reassigned':
+            return `${enemyName(event.enemy_id)}改为攻击${seatName(event.target_seat)}`;
+        case 'enemy_shield_gained':
+            return `${enemyName(event.enemy_id)}获得${Number(event.amount) || 0}层护盾`;
+        case 'enemy_power_gained':
+            return `${enemyName(event.enemy_id)}获得${Number(event.amount) || 0}层力量`;
+        case 'enemy_self_damage':
+            return `${enemyName(event.enemy_id)}受到${Number(event.amount) || 0}点自身伤害`;
         case 'player_damage':
             return `${seatName(event.target_seat)}受到${Number(event.amount) || 0}点伤害`;
         case 'player_down':
@@ -2231,6 +2467,16 @@
             return `${seatName(event.actor_seat)}抽取${Number(event.count) || 0}张牌`;
         case 'coop_elixir_gained':
             return `${seatName(event.actor_seat)}回复${Number(event.amount) || 0}E`;
+        case 'coop_magic_gained':
+            return `${seatName(event.actor_seat)}获得${Number(event.amount) || 0}M`;
+        case 'coop_static_applied':
+            return `${enemyName(event.enemy_id)}被施加${Number(event.amount) || 0}层静电`;
+        case 'coop_static_triggered':
+            return `${enemyName(event.enemy_id)}触发${Number(event.amount) || 0}层静电`;
+        case 'coop_enemy_intent_advanced':
+            return `${enemyName(event.enemy_id)}准备了新的行动`;
+        case 'coop_seat_turn_started':
+            return `${seatName(event.actor_seat)}已进入第${Number(event.round) || '?'}回合`;
         case 'hero_phase_started':
             return `第${Number(event.round) || '?'}回合英雄阶段开始`;
         case 'combat_victory':
@@ -2246,7 +2492,7 @@
         case 'coop_route_vote_cast':
             return `${seatName(event.actor_seat)}已提交路线投票`;
         case 'coop_route_vote_resolved':
-            return `队伍路线已确定：${String(event.node_id || '未知节点')}`;
+            return `队伍路线已确定，前往${storyCoopProgressLabel(snapshot)}`;
         case 'coop_room_started': {
             const labels = {
                 rest: '协作休息处',
@@ -2272,6 +2518,8 @@
             return `${seatName(event.actor_seat)}已完成当前房间选择`;
         case 'coop_event_vote_cast':
             return `${seatName(event.actor_seat)}已提交事件选择`;
+        case 'coop_event_consensus_required':
+            return '事件选择不一致，本轮不结算并重新表决';
         case 'coop_event_resolved': {
             const eventDefinition = storyContent?.events?.[String(event.content_id || '')];
             const option = (eventDefinition?.options || []).find(
@@ -2280,7 +2528,13 @@
             return `队伍事件结果：${localize(option?.label) || '已结算'}`;
         }
         case 'coop_stage_completed':
-            return '协作花园第一阶段完成';
+            return `协作第${Math.max(1, Number(event.stage) || 1)}阶段完成`;
+        case 'coop_stage_ready':
+            return `${seatName(event.actor_seat)}已确认阶段结算`;
+        case 'coop_stage_started':
+            return `协作第${Math.max(1, Number(event.stage) || 1)}阶段开始`;
+        case 'coop_journey_completed':
+            return '协作完整旅程完成';
         case 'coop_chapter_completed':
             return '协作试玩章节完成';
         case 'party_defeated':
@@ -2389,49 +2643,115 @@
             const roomStatus = snapshot?.room_state?.seats?.find(
                 (item) => Number(item?.seat) === Number(player.seat),
             );
-            state.textContent = player.down
-                ? '倒地'
-                : (
-                    snapshot?.phase === 'reward'
-                        ? (rewardStatus?.resolved ? '已选奖励' : '选择奖励中')
-                        : (
-                            snapshot?.phase === 'map'
-                                ? (voteStatus?.submitted ? '已投票' : '等待投票')
-                                : (
-                                    snapshot?.phase === 'room'
-                                        && ['rest', 'chest', 'shop', 'event'].includes(String(snapshot?.room?.type || ''))
-                                        ? storyCoopRoomSeatStatus(
-                                            snapshot.room.type,
-                                            Boolean(roomStatus?.submitted ?? roomStatus?.resolved),
-                                        )
-                                        : (
-                                            snapshot?.phase === 'stage_complete'
-                                                ? '阶段完成'
-                                                : (snapshot?.phase === 'complete' ? '章节完成' : (player.ready ? '已准备' : '行动中'))
-                                        )
-                                )
-                        )
+            const phase = String(snapshot?.phase || '');
+            const roomType = String(snapshot?.room?.type || '');
+            const isLeader = Number(player.seat) === Number(snapshot?.party?.leader_seat);
+            if (player.down) state.textContent = '倒地 · 战斗胜利后复苏';
+            else if (phase === 'journey_setup') state.textContent = isLeader ? '选择难度中' : '等待队长';
+            else if (phase === 'reward') state.textContent = rewardStatus?.resolved ? '个人奖励已完成' : '选择个人奖励';
+            else if (phase === 'map') state.textContent = voteStatus?.submitted ? '路线投票已提交' : '选择希望路线';
+            else if (phase === 'room' && ['opening', 'rest', 'chest', 'shop', 'event'].includes(roomType)) {
+                state.textContent = storyCoopRoomSeatStatus(
+                    roomType,
+                    Boolean(roomStatus?.submitted ?? roomStatus?.resolved),
                 );
+            } else if (phase === 'stage_complete') state.textContent = roomStatus?.resolved ? '已确认继续' : '等待确认继续';
+            else if (phase === 'complete') state.textContent = '完整旅程完成';
+            else if (phase === 'game_over') state.textContent = '旅程失败';
+            else state.textContent = player.ready ? '已结束本回合' : '本回合行动中';
             const stats = document.createElement('div');
             stats.className = 'story-coop-combat-player-stats';
-            [
+            const statLabels = [
                 `${Number(player.health) || 0}/${Number(player.max_health) || 0}H`,
-                `${Number(player.elixir) || 0}E`,
-                `${Number(player.magic) || 0}M`,
                 `${Number(player.gold) || 0}G`,
-                `${Number(player.shield) || 0}护盾`,
-                `抽牌堆${Number(player.draw_count) || 0}`,
-            ].forEach((text) => {
+            ];
+            if (phase === 'combat') {
+                statLabels.push(
+                    `${Number(player.elixir) || 0}E`,
+                    `${Number(player.magic) || 0}M`,
+                    `${Number(player.shield) || 0}护盾`,
+                    `手牌${Number(player.hand_count) || 0}`,
+                    `抽牌${Number(player.draw_count) || 0}`,
+                    `弃牌${Array.isArray(player.discard_pile) ? player.discard_pile.length : 0}`,
+                    `放逐${Array.isArray(player.exile_pile) ? player.exile_pile.length : 0}`,
+                );
+            }
+            if (Array.isArray(player.enchantment_books)) {
+                statLabels.push(`附魔书${player.enchantment_books.length}/3`);
+            }
+            statLabels.forEach((text) => {
                 const badge = document.createElement('span');
                 badge.textContent = text;
                 stats.appendChild(badge);
             });
-            const hand = document.createElement('div');
-            hand.className = 'story-coop-combat-player-hand';
-            hand.textContent = Array.isArray(player.hand)
-                ? `手牌：${player.hand.map(storyCoopCombatCardLabel).join('、') || '无'}`
-                : `手牌：${Number(player.hand_count) || 0}张`;
-            row.append(name, state, stats, hand);
+            row.append(name, state, stats);
+            if (phase === 'combat' && Array.isArray(player.hand) && player.hand.length) {
+                const hand = document.createElement('details');
+                hand.className = 'story-coop-combat-player-hand';
+                const summary = document.createElement('summary');
+                summary.textContent = Number(player.seat) === Number(snapshot.viewer_seat)
+                    ? '查看你的手牌名称'
+                    : `查看${storyCoopCombatMemberName(snapshot, player.seat)}的手牌`;
+                const cards = document.createElement('span');
+                cards.textContent = player.hand.map(storyCoopCombatCardLabel).join('、');
+                hand.append(summary, cards);
+                row.appendChild(hand);
+            }
+            if (Array.isArray(player.enchantment_books)) {
+                const inventory = document.createElement('details');
+                inventory.className = 'story-coop-enchantment-books';
+                const summary = document.createElement('summary');
+                summary.textContent = `你的附魔书（${player.enchantment_books.length}/3）`;
+                const books = document.createElement('div');
+                books.className = 'story-coop-enchantment-book-list';
+                player.enchantment_books.forEach((book) => {
+                    const definition = storyCoopBookDefinition(book);
+                    const item = document.createElement('article');
+                    item.className = `story-coop-enchantment-book is-${String(definition?.rarity || 'common')}`;
+                    const imageUrl = String(definition?.image_url || '');
+                    if (imageUrl) {
+                        const image = document.createElement('img');
+                        image.src = imageUrl;
+                        image.alt = '';
+                        item.appendChild(image);
+                    }
+                    const content = document.createElement('div');
+                    const title = document.createElement('strong');
+                    title.textContent = localize(definition?.name) || String(book?.book_id || '附魔书');
+                    const copy = document.createElement('small');
+                    copy.textContent = localize(definition?.description) || '';
+                    const actions = document.createElement('span');
+                    actions.className = 'story-coop-enchantment-book-actions';
+                    if (phase === 'combat' && String(definition?.script || '') !== 'lethal_guard') {
+                        const use = document.createElement('button');
+                        use.type = 'button';
+                        use.className = 'story-command story-command-primary';
+                        use.textContent = '使用';
+                        use.disabled = !storyCoopCombatCanAct(storyCoopCombatSession);
+                        use.addEventListener('click', () => useStoryCoopEnchantmentBook(book));
+                        actions.appendChild(use);
+                    }
+                    const discard = document.createElement('button');
+                    discard.type = 'button';
+                    discard.className = 'story-command story-command-danger';
+                    discard.textContent = '丢弃';
+                    discard.disabled = phase === 'combat'
+                        ? !storyCoopCombatCanAct(storyCoopCombatSession)
+                        : !storyCoopRunCanSubmit(storyCoopCombatSession);
+                    discard.addEventListener('click', () => discardStoryCoopEnchantmentBook(book));
+                    actions.appendChild(discard);
+                    content.append(title, copy, actions);
+                    item.appendChild(content);
+                    books.appendChild(item);
+                });
+                if (!player.enchantment_books.length) {
+                    const empty = document.createElement('small');
+                    empty.textContent = '尚未获得附魔书。';
+                    books.appendChild(empty);
+                }
+                inventory.append(summary, books);
+                row.appendChild(inventory);
+            }
             fragment.appendChild(row);
         });
         list.replaceChildren(fragment);
@@ -2460,6 +2780,19 @@
             health.className = 'story-coop-combat-enemy-health';
             health.textContent = `${Number(enemy.health) || 0}/${Number(enemy.max_health) || 0}H`;
             top.append(name, health);
+            const imageUrl = String(
+                enemy.image_url
+                || storyContent?.enemies?.[enemy.def_id]?.image_url
+                || '',
+            ).trim();
+            if (imageUrl) {
+                const image = document.createElement('img');
+                image.className = 'story-coop-combat-enemy-image';
+                image.src = imageUrl;
+                image.alt = '';
+                image.loading = 'eager';
+                button.appendChild(image);
+            }
             const intent = document.createElement('span');
             intent.className = 'story-coop-combat-enemy-intent';
             const target = enemy.intent?.target_seat;
@@ -2472,6 +2805,9 @@
             const enemyEffects = [
                 Number(enemy.shield) > 0 ? `${Number(enemy.shield)}S` : '',
                 Number(enemy.power) > 0 ? `${Number(enemy.power)}力量` : '',
+                Number(enemy.statuses?.weak) > 0 ? `${Number(enemy.statuses.weak)}虚弱` : '',
+                Number(enemy.statuses?.vulnerable) > 0 ? `${Number(enemy.statuses.vulnerable)}易伤` : '',
+                Number(enemy.statuses?.fire) > 0 ? `${Number(enemy.statuses.fire)}烈火` : '',
             ].filter(Boolean);
             const effectText = enemyEffects.length ? ` · ${enemyEffects.join(' / ')}` : '';
             intent.textContent = enemy.intent?.kind === 'attack'
@@ -2501,7 +2837,8 @@
         (viewer?.hand || []).forEach((card) => {
             const values = cardValues(card);
             const affordable = Number(viewer.elixir || 0) >= Number(values?.cost_e || 0)
-                && Number(viewer.magic || 0) >= Number(values?.cost_m || 0);
+                && Number(viewer.magic || 0) >= Number(values?.cost_m || 0)
+                && Number(viewer.health || 0) > Number(card?.modifiers?.enchantment_health_cost || 0);
             const instanceId = String(card?.instance_id || '');
             const button = createStoryCard(card, {
                 compact: true,
@@ -2674,6 +3011,14 @@
         const statuses = $('story-coop-reward-party-status');
         if (!options || !statuses) return;
         const canChoose = storyCoopRewardCanChoose(session);
+        const canChooseCard = canChoose && reward?.card_status === 'pending';
+        const canChooseBook = canChoose && reward?.book_status === 'pending';
+        setText(
+            'story-coop-reward-title',
+            Number(reward?.card_round_total || 1) > 1
+                ? `选择第${Number(reward?.card_round_index || 1)}/${Number(reward?.card_round_total || 1)}张卡牌${reward?.enchantment_book_id ? '并处理附魔书' : ''}`
+                : (reward?.enchantment_book_id ? '选择卡牌并处理附魔书' : '选择1张卡牌'),
+        );
         const fragment = document.createDocumentFragment();
         (reward?.options || []).forEach((option) => {
             const cardId = String(option?.card_id || '');
@@ -2682,7 +3027,7 @@
             button.type = 'button';
             button.className = 'story-coop-progression-choice';
             button.dataset.coopChoiceKey = `reward:${cardId}`;
-            button.disabled = !canChoose;
+            button.disabled = !canChooseCard;
             button.setAttribute('aria-pressed', String(reward?.selected_card_id === cardId));
             const name = document.createElement('strong');
             name.textContent = `${option?.upgraded ? '+' : ''}${localize(values.name) || cardId}`;
@@ -2694,9 +3039,10 @@
             cost.textContent = `${Number(values.cost_e) || 0}E · ${Number(values.cost_m) || 0}M`;
             button.append(name, description, cost);
             button.addEventListener('click', () => {
-                if (!storyCoopRewardCanChoose(session)) return;
+                if (!storyCoopRewardCanChoose(session) || reward?.card_status !== 'pending') return;
                 storyCoopCombatAction('reward_choose', {
                     reward_id: String(reward.reward_id || ''),
+                    choice_kind: 'card',
                     card_id: cardId,
                 });
             });
@@ -2706,7 +3052,7 @@
         skip.type = 'button';
         skip.className = 'story-coop-progression-choice is-skip';
         skip.dataset.coopChoiceKey = 'reward:skip';
-        skip.disabled = !canChoose;
+        skip.disabled = !canChooseCard;
         skip.setAttribute('aria-pressed', String(Boolean(reward?.skipped)));
         const skipName = document.createElement('strong');
         skipName.textContent = '跳过选卡';
@@ -2714,13 +3060,68 @@
         skipDescription.textContent = '不获得卡牌，保持当前卡组规模。';
         skip.append(skipName, skipDescription);
         skip.addEventListener('click', () => {
-            if (!storyCoopRewardCanChoose(session)) return;
+            if (!storyCoopRewardCanChoose(session) || reward?.card_status !== 'pending') return;
             storyCoopCombatAction('reward_choose', {
                 reward_id: String(reward?.reward_id || ''),
+                choice_kind: 'card',
                 card_id: '',
             });
         });
         fragment.appendChild(skip);
+
+        const bookId = String(reward?.enchantment_book_id || '');
+        if (bookId) {
+            const definition = storyCoopBookDefinition(bookId);
+            const book = document.createElement('article');
+            book.className = `story-coop-enchantment-book story-coop-enchantment-book-reward is-${String(definition?.rarity || 'common')}`;
+            const imageUrl = String(definition?.image_url || '');
+            if (imageUrl) {
+                const image = document.createElement('img');
+                image.src = imageUrl;
+                image.alt = '';
+                book.appendChild(image);
+            }
+            const content = document.createElement('div');
+            const name = document.createElement('strong');
+            name.textContent = localize(definition?.name) || bookId;
+            const description = document.createElement('small');
+            description.textContent = localize(definition?.description) || '故事模式附魔书';
+            const actions = document.createElement('span');
+            actions.className = 'story-coop-enchantment-book-actions';
+            const take = document.createElement('button');
+            take.type = 'button';
+            take.className = 'story-command story-command-primary';
+            take.textContent = reward?.book_status === 'resolved' ? '已处理' : '收下附魔书';
+            take.disabled = !canChooseBook;
+            take.addEventListener('click', () => {
+                if (!storyCoopRewardCanChoose(session) || reward?.book_status !== 'pending') return;
+                const replacement = chooseStoryCoopBookReplacement(session);
+                if (replacement == null) return;
+                storyCoopCombatAction('reward_choose', {
+                    reward_id: String(reward?.reward_id || ''),
+                    choice_kind: 'enchantment_book',
+                    book_id: bookId,
+                    ...(replacement ? { replace_book_instance_id: replacement } : {}),
+                });
+            });
+            const skipBook = document.createElement('button');
+            skipBook.type = 'button';
+            skipBook.className = 'story-command';
+            skipBook.textContent = '放弃附魔书';
+            skipBook.disabled = !canChooseBook;
+            skipBook.addEventListener('click', () => {
+                if (!storyCoopRewardCanChoose(session) || reward?.book_status !== 'pending') return;
+                storyCoopCombatAction('reward_choose', {
+                    reward_id: String(reward?.reward_id || ''),
+                    choice_kind: 'enchantment_book',
+                    book_id: '',
+                });
+            });
+            actions.append(take, skipBook);
+            content.append(name, description, actions);
+            book.appendChild(content);
+            fragment.appendChild(book);
+        }
         replaceStoryCoopProgressionOptions(options, fragment);
 
         const statusFragment = document.createDocumentFragment();
@@ -2742,16 +3143,30 @@
         const fragment = document.createDocumentFragment();
         (vote?.options || []).forEach((option, index) => {
             const nodeId = String(option?.node_id || '');
+            const routeType = String(option?.type || '');
             const button = document.createElement('button');
             button.type = 'button';
-            button.className = 'story-coop-progression-choice';
+            button.className = `story-coop-progression-choice story-coop-map-choice is-${routeType || 'unknown'}`;
             button.dataset.coopChoiceKey = `route:${nodeId}`;
             button.disabled = !canVote;
             button.setAttribute('aria-pressed', String(vote?.viewer_node_id === nodeId));
+            const iconUrl = String(STORY_MAP_ROOM_ICON_URLS[routeType] || '').trim();
+            if (iconUrl) {
+                const icon = document.createElement('img');
+                icon.className = 'story-coop-map-choice-icon';
+                icon.src = iconUrl;
+                icon.alt = '';
+                button.appendChild(icon);
+            } else {
+                const icon = document.createElement('span');
+                icon.className = 'story-coop-map-choice-symbol';
+                icon.setAttribute('aria-hidden', 'true');
+                icon.textContent = routeType === 'chest' ? '🎁' : (routeType === 'boss' ? '♛' : '◆');
+                button.appendChild(icon);
+            }
             const name = document.createElement('strong');
-            name.textContent = `路线 ${index + 1} · 第${Number(option?.floor) || '?'}层`;
+            name.textContent = `第${Number(option?.floor) || '?'}层 · 路线 ${index + 1}`;
             const description = document.createElement('small');
-            const routeType = String(option?.type || '');
             const routeLabels = {
                 combat: '战斗节点',
                 elite: '精英战斗',
@@ -2761,10 +3176,8 @@
                 event: '事件节点',
                 boss: '首领战斗',
             };
-            description.textContent = `${routeLabels[routeType] || '未知节点'} · 投票结束后进入该节点`;
-            const id = document.createElement('small');
-            id.textContent = nodeId;
-            button.append(name, description, id);
+            description.textContent = routeLabels[routeType] || '未知节点';
+            button.append(name, description);
             button.addEventListener('click', () => {
                 if (!storyCoopMapCanVote(session)) return;
                 storyCoopCombatAction('map_vote', {
@@ -2954,6 +3367,7 @@
             const kind = String(offer?.kind || 'card');
             const cardId = String(offer?.card_id || '');
             const relicId = String(offer?.relic_id || '');
+            const bookId = String(offer?.book_id || '');
             const status = String(offer?.status || '');
             const rawPrice = Number(offer?.price);
             const validPrice = Number.isFinite(rawPrice) && rawPrice >= 0;
@@ -2980,9 +3394,14 @@
                     || currentPrice < 0
                     || currentGold < currentPrice
                 ) return;
+                const replacement = kind === 'enchantment_book'
+                    ? chooseStoryCoopBookReplacement(session)
+                    : '';
+                if (replacement == null) return;
                 storyCoopCombatAction('shop_buy', {
                     room_id: String(current.room_id || ''),
                     offer_id: String(currentOffer.offer_id || ''),
+                    ...(replacement ? { replace_book_instance_id: replacement } : {}),
                 });
             };
             let button;
@@ -3000,6 +3419,30 @@
                 priceLabel.className = 'story-coop-shop-offer-price';
                 priceLabel.textContent = note;
                 button.append(name, description, priceLabel);
+                button.addEventListener('click', buyOffer);
+            } else if (kind === 'enchantment_book') {
+                const definition = storyCoopBookDefinition(bookId);
+                button = document.createElement('button');
+                button.type = 'button';
+                button.className = `story-coop-enchantment-book story-coop-shop-book is-${String(definition?.rarity || 'common')}`;
+                button.disabled = !canBuy || !available || !affordable;
+                const imageUrl = String(definition?.image_url || '');
+                if (imageUrl) {
+                    const image = document.createElement('img');
+                    image.src = imageUrl;
+                    image.alt = '';
+                    button.appendChild(image);
+                }
+                const content = document.createElement('span');
+                const name = document.createElement('strong');
+                name.textContent = localize(definition?.name) || bookId || '附魔书';
+                const description = document.createElement('small');
+                description.textContent = localize(definition?.description) || '故事模式附魔书';
+                const priceLabel = document.createElement('span');
+                priceLabel.className = 'story-coop-shop-offer-price';
+                priceLabel.textContent = note;
+                content.append(name, description, priceLabel);
+                button.appendChild(content);
                 button.addEventListener('click', buyOffer);
             } else {
                 button = createStoryCard({
@@ -3127,6 +3570,12 @@
         const complete = phase === 'complete';
         const stageComplete = phase === 'stage_complete';
         const failed = phase === 'game_over' || combat?.outcome === 'defeat';
+        const lastEvents = Array.isArray(snapshot?.last_events) ? snapshot.last_events : [];
+        const lastEventType = String(lastEvents[lastEvents.length - 1]?.type || '');
+        const biomeLabel = ({ garden: '花园', jungle: '丛林', factory: '工厂' })[
+            String(snapshot?.biome || '')
+        ] || '未知区域';
+        setText('story-coop-combat-eyebrow', `双人协作 · ${biomeLabel}`);
         let dialogTitle = '协作战斗';
         if (inSetup) dialogTitle = '协作旅程设置';
         else if (inOpening) dialogTitle = '协作开局赐福';
@@ -3136,17 +3585,17 @@
         else if (inEvent) dialogTitle = '协作事件';
         else if (inReward) dialogTitle = '协作奖励';
         else if (onMap) dialogTitle = '协作路线投票';
-        else if (stageComplete) dialogTitle = '协作第一阶段完成';
-        else if (complete) dialogTitle = '协作章节完成';
+        else if (stageComplete) dialogTitle = `协作第${Math.max(1, Number(snapshot?.stage) || 1)}阶段完成`;
+        else if (complete) dialogTitle = '协作完整旅程完成';
         else if (failed) dialogTitle = '协作旅程失败';
         setText(
             'story-coop-combat-title',
             dialogTitle,
         );
-        setText('story-coop-combat-revision', String(run?.revision ?? '--'));
-        setText('story-coop-combat-sequence', String(snapshot?.action_sequence ?? '--'));
+        setText('story-coop-combat-revision', storyCoopProgressLabel(snapshot));
+        setText('story-coop-combat-sequence', storyCoopSnapshotDifficultyLabel(snapshot));
         setText('story-coop-combat-round', String(combat?.round ?? '--'));
-        setText('story-coop-combat-turn', combat?.outcome || combat?.turn || phase || '--');
+        setText('story-coop-combat-turn', storyCoopPhaseLabel(snapshot));
         renderStoryCoopCombatPlayers(snapshot);
         $('story-coop-combat-board')?.classList.toggle('hidden', !inCombat);
         $('story-coop-setup-panel')?.classList.toggle('hidden', !inSetup);
@@ -3160,14 +3609,35 @@
         $('story-coop-complete-panel')?.classList.toggle('hidden', !complete && !stageComplete);
         setText(
             'story-coop-complete-title',
-            stageComplete ? '协作第一阶段完成' : '协作试玩章节完成',
+            stageComplete
+                ? (localize(snapshot?.room?.title) || `协作第${Math.max(1, Number(snapshot?.stage) || 1)}阶段完成`)
+                : '协作完整旅程完成',
         );
         setText(
             'story-coop-complete-copy',
             stageComplete
-                ? '你们已经完成第一阶段。该阶段的服务器权威记录仍可读取。'
-                : '你们已经完成奖励、路线投票和两场服务器权威战斗。',
+                ? (localize(snapshot?.room?.description) || '双方确认后继续旅程。')
+                : '你们已经通关全部三个阶段；通关与角色解锁进度已分别记入双方账号。',
         );
+        const stageReady = $('story-coop-stage-ready');
+        stageReady?.classList.toggle('hidden', !stageComplete);
+        if (stageReady) {
+            stageReady.disabled = !storyCoopStageCanReady(session);
+            stageReady.textContent = snapshot?.room_state?.status === 'resolved'
+                ? '已确认，等待队友...'
+                : (Number(snapshot?.stage) >= 3 ? '确认完成旅程' : '确认并进入下一阶段');
+        }
+        const stagePartyStatus = $('story-coop-stage-party-status');
+        stagePartyStatus?.classList.toggle('hidden', !stageComplete);
+        if (stageComplete) {
+            renderStoryCoopRoomPartyStatuses(
+                'story-coop-stage-party-status',
+                snapshot,
+                snapshot.room_state,
+            );
+        } else {
+            stagePartyStatus?.replaceChildren();
+        }
         if (inCombat) {
             renderStoryCoopCombatEnemies(session, snapshot);
             renderStoryCoopCombatHand(session, snapshot);
@@ -3220,39 +3690,81 @@
         } else if (inSetup) {
             storyCoopCombatSetStatus('请选择普通、困难或疯狂难度。简单难度尚未接入协作故事。', 'success');
         } else if (inOpening && snapshot.room_state.status === 'resolved') {
-            storyCoopCombatSetStatus('你已选择开局赐福，正在等待队友。', 'busy');
+            storyCoopCombatSetStatus(
+                `你已选择开局赐福，正在等待${storyCoopWaitingMessage(snapshot, snapshot.room_state.seats, 'resolved')}。`,
+                'busy',
+            );
         } else if (inOpening) {
             storyCoopCombatSetStatus('请选择一项只属于你的开局赐福。', 'success');
         } else if (complete) {
-            storyCoopCombatSetStatus('协作试玩章节已完成。本次旅程的权威记录仍可读取。', 'success');
+            storyCoopCombatSetStatus('协作完整旅程已完成，双方通关进度已分别结算。', 'success');
         } else if (stageComplete) {
-            storyCoopCombatSetStatus('协作第一阶段已完成。你可以关闭界面，权威记录仍可读取。', 'success');
+            if (snapshot.room_state?.status === 'resolved') {
+                storyCoopCombatSetStatus(
+                    `你已确认，正在等待${storyCoopWaitingMessage(snapshot, snapshot.room_state?.seats, 'resolved')}。`,
+                    'busy',
+                );
+            } else {
+                storyCoopCombatSetStatus(
+                    Number(snapshot?.stage) >= 3
+                        ? '请确认最终结算；双方确认后才会记录完整通关。'
+                        : '请确认继续；双方确认后进入下一阶段并分别选择新赐福。',
+                    'success',
+                );
+            }
         } else if (failed) {
             storyCoopCombatSetStatus('全队已经倒下，本次协作旅程结束。', 'error');
         } else if (inReward && snapshot.reward.status === 'resolved') {
-            storyCoopCombatSetStatus('你已完成奖励选择，正在等待队友。', 'busy');
+            storyCoopCombatSetStatus(
+                `你已完成奖励选择，正在等待${storyCoopWaitingMessage(snapshot, snapshot.reward.seats, 'resolved')}。`,
+                'busy',
+            );
         } else if (inReward) {
-            storyCoopCombatSetStatus(`已获得${Number(snapshot.reward.gold) || 0}金币；请选择1张卡牌或跳过。`, 'success');
+            const pendingParts = [
+                snapshot.reward.card_status === 'pending' ? '选择1张卡牌或跳过' : '',
+                snapshot.reward.book_status === 'pending' ? '收下或放弃附魔书' : '',
+            ].filter(Boolean);
+            storyCoopCombatSetStatus(
+                `已获得${Number(snapshot.reward.gold) || 0}金币；请${pendingParts.join('，并')}。`,
+                'success',
+            );
         } else if (onMap && snapshot.map_vote.viewer_node_id) {
-            storyCoopCombatSetStatus('你已提交路线投票，正在等待队友。', 'busy');
+            storyCoopCombatSetStatus(
+                `你已提交路线投票，正在等待${storyCoopWaitingMessage(snapshot, snapshot.map_vote.seats, 'submitted')}。`,
+                'busy',
+            );
         } else if (onMap) {
             storyCoopCombatSetStatus('请选择你希望进入的下一个路线节点。', 'success');
         } else if (inRest && snapshot.room_state.status === 'resolved') {
-            storyCoopCombatSetStatus('你已完成休息选择，正在等待队友。', 'busy');
+            storyCoopCombatSetStatus(
+                `你已完成休息选择，正在等待${storyCoopWaitingMessage(snapshot, snapshot.room_state.seats, 'resolved')}。`,
+                'busy',
+            );
         } else if (inRest && session.selectedRestCardId) {
             storyCoopCombatSetStatus('已选择1张未升级卡牌；确认后将由服务器执行升级。', 'busy');
         } else if (inRest) {
             storyCoopCombatSetStatus('请选择恢复、升级1张自己的卡牌，或直接离开。', 'success');
         } else if (inChest && snapshot.room_state.status === 'resolved') {
-            storyCoopCombatSetStatus('你已处理个人宝箱，正在等待队友。', 'busy');
+            storyCoopCombatSetStatus(
+                `你已处理个人宝箱，正在等待${storyCoopWaitingMessage(snapshot, snapshot.room_state.seats, 'resolved')}。`,
+                'busy',
+            );
         } else if (inChest) {
             storyCoopCombatSetStatus('请选择领取你的宝箱金币，或放弃并离开。', 'success');
         } else if (inShop && snapshot.room_state.status === 'resolved') {
-            storyCoopCombatSetStatus('你已离开个人商店，正在等待队友。', 'busy');
+            storyCoopCombatSetStatus(
+                `你已离开个人商店，正在等待${storyCoopWaitingMessage(snapshot, snapshot.room_state.seats, 'resolved')}。`,
+                'busy',
+            );
         } else if (inShop) {
             storyCoopCombatSetStatus('你可以连续购买自己的商品；完成后请选择离开商店。', 'success');
         } else if (inEvent && snapshot.room_state.status === 'resolved') {
-            storyCoopCombatSetStatus('你已提交事件选择，正在等待队友；双方选项在决议前保持隐藏。', 'busy');
+            storyCoopCombatSetStatus(
+                `你已提交事件选择，正在等待${storyCoopWaitingMessage(snapshot, snapshot.room_state.seats, 'submitted')}；双方选项在决议前保持隐藏。`,
+                'busy',
+            );
+        } else if (inEvent && lastEventType === 'coop_event_consensus_required') {
+            storyCoopCombatSetStatus('双方选择不一致：本轮没有产生任何效果，请沟通后重新选择同一方案。', 'error');
         } else if (inEvent) {
             storyCoopCombatSetStatus('请选择一项团队事件方案；这里只显示队友是否已提交。', 'success');
         } else if (inCombat && pendingCard) {
@@ -3261,9 +3773,12 @@
                 'busy',
             );
         } else if (inCombat && viewer?.ready) {
-            storyCoopCombatSetStatus('你已准备完毕，正在等待其他存活成员。', 'busy');
+            const waiting = (snapshot.players || [])
+                .filter((player) => !player?.down && !player?.ready)
+                .map((player) => storyCoopCombatMemberName(snapshot, player?.seat));
+            storyCoopCombatSetStatus(`你已结束本回合，正在等待${waiting.join('、') || '其他存活成员'}。`, 'busy');
         } else if (inCombat) {
-            storyCoopCombatSetStatus('权威状态已同步。你可以出牌或结束本回合。', 'success');
+            storyCoopCombatSetStatus('战斗状态已同步。你可以出牌或结束本回合。', 'success');
         } else {
             storyCoopCombatSetStatus('正在同步协作旅程阶段...', 'busy');
         }
@@ -3277,7 +3792,7 @@
             || !storyCoopCombatDialogOpen()
             || session.loadPromise
             || session.actionPromise
-            || ['complete', 'stage_complete', 'game_over'].includes(String(storyCoopCombatSnapshot(session)?.phase || ''))
+            || ['complete', 'game_over'].includes(String(storyCoopCombatSnapshot(session)?.phase || ''))
             || String(session.run?.status || '') !== 'active'
         ) return;
         session.pollTimer = setTimeout(() => {
@@ -3336,11 +3851,16 @@
         const snapshot = storyCoopCombatSnapshot(session);
         const combat = snapshot?.combat;
         const normalizedType = String(actionType || '');
-        const combatAction = ['play_card', 'combat_ready'].includes(normalizedType);
+        const combatAction = [
+            'play_card', 'combat_ready', 'use_enchantment_book',
+            'discard_combat_enchantment_book',
+        ].includes(normalizedType);
         const allowed = combatAction
             ? storyCoopCombatCanAct(session)
             : (
-                normalizedType === 'setup_start'
+                normalizedType === 'discard_enchantment_book'
+                    ? Boolean(storyCoopRunCanSubmit(session) && snapshot?.phase !== 'combat')
+                    : normalizedType === 'setup_start'
                     ? storyCoopSetupCanChoose(session)
                     : (
                         normalizedType === 'opening_choose'
@@ -3354,7 +3874,11 @@
                                             : (
                                                 normalizedType === 'room_choose'
                                                     ? storyCoopRoomCanChoose(session)
-                                                    : (normalizedType === 'shop_buy' && storyCoopShopCanBuy(session))
+                                                    : (
+                                                        normalizedType === 'shop_buy'
+                                                            ? storyCoopShopCanBuy(session)
+                                                            : (normalizedType === 'stage_ready' && storyCoopStageCanReady(session))
+                                                    )
                                             )
                                     )
                             )
@@ -3446,6 +3970,27 @@
         }
     }
 
+    function addStoryCoopRetrieveSelections(card, viewer, payload) {
+        if (!card?.modifiers?.enchantment_retrieve_once) return true;
+        const drawChoices = Array.isArray(viewer?.rapids_draw_choices)
+            ? viewer.rapids_draw_choices
+            : [];
+        const discardChoices = Array.isArray(viewer?.discard_pile)
+            ? viewer.discard_pile
+            : [];
+        if (drawChoices.length) {
+            const selected = chooseStoryCoopCards(drawChoices, { label: '抽牌堆卡牌' });
+            if (!selected) return false;
+            payload.retrieve_draw_card_id = String(selected[0]?.instance_id || '');
+        }
+        if (discardChoices.length) {
+            const selected = chooseStoryCoopCards(discardChoices, { label: '弃牌堆卡牌' });
+            if (!selected) return false;
+            payload.retrieve_discard_card_id = String(selected[0]?.instance_id || '');
+        }
+        return true;
+    }
+
     function selectStoryCoopCombatCard(instanceId) {
         const session = storyCoopCombatSession;
         const viewer = storyCoopCombatViewer(session);
@@ -3486,6 +4031,7 @@
             }
             payload.target_enemy_id = session.selectedEnemyId;
         }
+        if (!addStoryCoopRetrieveSelections(card, viewer, payload)) return;
         storyCoopCombatAction('play_card', payload);
     }
 
@@ -3512,11 +4058,20 @@
             }
             payload.target_enemy_id = session.selectedEnemyId;
         }
+        if (!addStoryCoopRetrieveSelections(card, viewer, payload)) return;
         storyCoopCombatAction('play_card', payload);
     }
 
     function readyStoryCoopCombatSeat() {
         storyCoopCombatAction('combat_ready', {});
+    }
+
+    function readyStoryCoopStage() {
+        const roomState = storyCoopCombatSnapshot(storyCoopCombatSession)?.room_state;
+        if (!storyCoopStageCanReady(storyCoopCombatSession)) return;
+        storyCoopCombatAction('stage_ready', {
+            room_id: String(roomState?.room_id || ''),
+        });
     }
 
     function confirmStoryCoopRestUpgrade() {
@@ -3574,7 +4129,7 @@
             notice: null,
         };
         storyCoopCombatSession = session;
-        storyCoopCombatSetStatus('正在同步权威战斗状态...', 'busy');
+        storyCoopCombatSetStatus('正在同步协作战斗状态...', 'busy');
         if (!dialog.open) dialog.showModal();
         storyCoopCombatApplyRun(session, run, true);
         loadStoryCoopCombat().catch(() => {});
@@ -3630,7 +4185,7 @@
     }
 
     function updateStorySurrenderControl(run = activeRun) {
-        const button = $('story-surrender');
+        const button = $('story-hud-surrender');
         if (!button) return;
         const phase = String(run?.state?.phase || '');
         const visible = Boolean(run)
@@ -4807,6 +5362,7 @@
         element.classList.remove(className);
         void element.offsetWidth;
         element.classList.add(className);
+        element.style.animationDuration = `${Math.max(1, duration / storyPlaybackRate)}ms`;
         return new Promise((resolve) => {
             let finished = false;
             let fallbackTimer = 0;
@@ -4816,15 +5372,19 @@
                 window.clearTimeout(fallbackTimer);
                 element.removeEventListener('animationend', complete);
                 element.classList.remove(className);
+                element.style.removeProperty('animation-duration');
                 resolve();
             };
             element.addEventListener('animationend', complete, { once: true });
-            fallbackTimer = window.setTimeout(complete, duration + 80);
+            fallbackTimer = window.setTimeout(complete, duration / storyPlaybackRate + 80);
         });
     }
 
     function storySleep(duration) {
-        return new Promise((resolve) => window.setTimeout(resolve, duration));
+        return new Promise((resolve) => window.setTimeout(
+            resolve,
+            Math.max(0, Number(duration) || 0) / storyPlaybackRate,
+        ));
     }
 
     function storyNextPaint() {
@@ -5026,6 +5586,30 @@
         return $('story-enemy-group') || $('story-combat-stage');
     }
 
+    function storyCardFlightDimensions(sourceRect) {
+        const defaultAspect = .72;
+        const measuredAspect = Number(sourceRect?.width) / Number(sourceRect?.height);
+        const sourceLooksLikeCard = Number.isFinite(measuredAspect)
+            && measuredAspect >= .54
+            && measuredAspect <= .86;
+        const aspect = sourceLooksLikeCard ? measuredAspect : defaultAspect;
+        let width = sourceLooksLikeCard
+            ? Math.max(42, Math.min(132, Number(sourceRect.width) || 84))
+            : 84;
+        let height = width / aspect;
+        if (height > 184) {
+            height = 184;
+            width = height * aspect;
+        } else if (height < 58) {
+            height = 58;
+            width = height * aspect;
+        }
+        return { width, height, aspect };
+    }
+
+    // Solo and cooperative story presentations deliberately share this path.
+    // A non-card source (for example a teammate rail) receives a normal card
+    // silhouette instead of inheriting the source element's flattened ratio.
     async function animateStoryCardFlight(
         source,
         target,
@@ -5038,23 +5622,29 @@
             || $('story-player-target')?.getBoundingClientRect();
         const targetRect = target.getBoundingClientRect();
         if (!sourceRect) return;
+        const dimensions = storyCardFlightDimensions(sourceRect);
+        const sourceCenterX = sourceRect.left + sourceRect.width / 2;
+        const sourceCenterY = sourceRect.top + sourceRect.height / 2;
+        const targetCenterX = targetRect.left + targetRect.width / 2;
+        const targetCenterY = targetRect.top + targetRect.height / 2;
         const ghost = useSourceVisual && source
             ? source.cloneNode(true)
             : document.createElement('span');
         ghost.classList.add('story-card-flight', `is-${mode}`);
         if (!useSourceVisual || !source) ghost.classList.add('story-pile-motion-back');
         if (Number(count) > 1) ghost.dataset.count = String(count);
-        ghost.style.left = `${sourceRect.left}px`;
-        ghost.style.top = `${sourceRect.top}px`;
-        ghost.style.width = `${Math.max(42, Math.min(132, sourceRect.width))}px`;
-        ghost.style.height = `${Math.max(58, Math.min(184, sourceRect.height))}px`;
+        ghost.style.left = `${sourceCenterX - dimensions.width / 2}px`;
+        ghost.style.top = `${sourceCenterY - dimensions.height / 2}px`;
+        ghost.style.width = `${dimensions.width}px`;
+        ghost.style.height = `${dimensions.height}px`;
+        ghost.style.setProperty('--story-card-flight-aspect', String(dimensions.aspect));
         ghost.style.setProperty(
             '--story-card-flight-x',
-            `${targetRect.left + targetRect.width / 2 - sourceRect.left - sourceRect.width / 2}px`,
+            `${targetCenterX - sourceCenterX}px`,
         );
         ghost.style.setProperty(
             '--story-card-flight-y',
-            `${targetRect.top + targetRect.height / 2 - sourceRect.top - sourceRect.height / 2}px`,
+            `${targetCenterY - sourceCenterY}px`,
         );
         document.body.append(ghost);
         await waitForStoryAnimation(ghost, 'is-flying', 380);
@@ -5473,6 +6063,7 @@
         } finally {
             actionInFlight = false;
             delete document.body.dataset.actionInFlight;
+            renderStoryPersistentHud(activeRun);
             updateStoryManualSaveControls();
             updateStorySurrenderControl();
         }
@@ -5722,6 +6313,7 @@
         };
         boostEffects(['damage', 'shield'], Number(modifiers.primary_bonus || 0));
         boostEffects(['damage'], Number(modifiers.damage_bonus || 0));
+        boostEffects(['shield'], Number(modifiers.enchantment_shield_bonus_once || 0));
         if (values.rarity === 'primary' && Number(modifiers.primary_multiplier || 0) > 1) {
             const multiplier = Math.max(
                 1,
@@ -5734,9 +6326,14 @@
             ));
         }
         const tags = new Set(Array.isArray(values.tags) ? values.tags : []);
+        if (modifiers.remove_exile) {
+            tags.delete('exile');
+            tags.delete('void');
+        }
         if (modifiers.force_exile) tags.add('exile');
         if (modifiers.force_void) tags.add('void');
         if (modifiers.retain) tags.add('retain');
+        (modifiers.extra_tags || []).forEach((tag) => tags.add(String(tag)));
         values.tags = [...tags];
         return values;
     }
@@ -5906,7 +6503,8 @@
         const predictionHeightLimit = cardElement.classList.contains('card-effect-fit-prediction')
             ? baseLineHeight * 3.7
             : Infinity;
-        const minimumScale = 0.6;
+        const minimumReadableScale = 0.76;
+        const minimumSpacingScale = 0.9;
         let scale = 1;
 
         for (let pass = 0; pass < 14; pass += 1) {
@@ -5923,6 +6521,9 @@
             const needsBreathingRoom = spareGap + 0.5 < baseLineHeight * 0.18;
             const predictionTooTall = naturalTextHeight > predictionHeightLimit + 0.5;
             if (!overflowed && !needsBreathingRoom && !predictionTooTall) break;
+            const minimumScale = !overflowed && !predictionTooTall
+                ? minimumSpacingScale
+                : minimumReadableScale;
             if (scale <= minimumScale + 0.001) break;
 
             let nextScale = scale - 0.04;
@@ -6663,21 +7264,9 @@
             && !storyCursorCardMode(card)
             && !storyEnemyIsSelectable(card, targetId, state)
         ) return;
-        const wrapper = document.querySelector(`.story-hand-card[data-instance-id="${CSS.escape(String(card.instance_id))}"]`);
-        const target = targetKind === 'enemy'
-            ? document.querySelector(`.story-actor-enemy[data-target-id="${CSS.escape(String(targetId || ''))}"]`)
-            : $('story-player-target');
         cardPlayInFlight = true;
         updateStoryManualSaveControls();
         destroyStoryCursorCard();
-        if (wrapper && target) {
-            const sourceRect = wrapper.getBoundingClientRect();
-            const targetRect = target.querySelector('.story-portrait')?.getBoundingClientRect() || target.getBoundingClientRect();
-            wrapper.style.setProperty('--play-x', `${targetRect.left + targetRect.width / 2 - sourceRect.left - sourceRect.width / 2}px`);
-            wrapper.style.setProperty('--play-y', `${targetRect.top + targetRect.height / 2 - sourceRect.top - sourceRect.height / 2}px`);
-            wrapper.classList.add('is-playing');
-            await new Promise((resolve) => setTimeout(resolve, 210));
-        }
         selectedCombatCardId = '';
         try {
             await storyAction('play_card', {
@@ -6687,6 +7276,7 @@
             });
         } finally {
             cardPlayInFlight = false;
+            renderStoryPersistentHud(activeRun);
             updateStoryManualSaveControls();
         }
     }
@@ -6870,6 +7460,216 @@
             dialog.dataset.pileKind = kind;
             dialog.showModal();
         }
+    }
+
+    function storyEnchantmentBookDefinition(bookOrId) {
+        const bookId = typeof bookOrId === 'string'
+            ? bookOrId
+            : String(bookOrId?.book_id || '');
+        return storyContent?.enchantment_books?.[bookId] || null;
+    }
+
+    function storyEnchantmentEligibleHand(definition, state) {
+        const hand = Array.isArray(state?.combat?.hand) ? state.combat.hand : [];
+        const target = String(definition?.target || 'none');
+        return hand.filter((card) => {
+            const values = cardValues(card);
+            if (!values) return false;
+            if (target === 'attack_card') return values.type === 'thorn';
+            if (target === 'skill_card') return values.type === 'bloom';
+            if (target === 'exile_card') return (values.tags || []).includes('exile');
+            if (target === 'cost_card') {
+                return Number(values.cost_e === 'X' ? 0 : values.cost_e || 0)
+                    + Number(values.cost_m || 0) > 0;
+            }
+            return true;
+        });
+    }
+
+    function openEnchantmentCardSelection(book) {
+        const definition = storyEnchantmentBookDefinition(book);
+        const dialog = $('story-card-choice-dialog');
+        const grid = $('story-card-choice-grid');
+        if (!definition || !dialog || !grid || dialog.open) return false;
+        const target = String(definition.target || 'none');
+        const source = storyEnchantmentEligibleHand(definition, activeRun?.state);
+        const minimum = target === 'three_cards' ? 3 : (target === 'any_cards' ? 0 : 1);
+        const maximum = target === 'three_cards' ? 3 : (target === 'any_cards' ? source.length : 1);
+        if (source.length < minimum) {
+            showToast(lang === 'zh' ? '当前没有足够的合适手牌' : 'Not enough eligible cards');
+            return false;
+        }
+        if (!source.length && minimum === 0) {
+            storyAction('use_enchantment_book', {
+                book_instance_id: book.instance_id,
+                selected_card_ids: [],
+            });
+            return true;
+        }
+        setStoryCardChoiceRequired(false);
+        cardChoiceContext = {
+            mode: 'enchantment_book',
+            bookInstanceId: String(book.instance_id || ''),
+            spec: { source, payloadKey: 'selected_card_ids', minimum, maximum },
+            selected: new Set(),
+        };
+        setText('story-card-choice-title', localize(definition.name) || t.enchantmentBooks);
+        setText(
+            'story-card-choice-copy',
+            minimum === maximum ? t.chooseExact(maximum) : t.chooseUpTo(maximum),
+        );
+        grid.replaceChildren();
+        source.forEach((choiceCard) => {
+            const wrapper = document.createElement('button');
+            wrapper.type = 'button';
+            wrapper.className = 'story-card-choice-select-item';
+            wrapper.dataset.instanceId = String(choiceCard.instance_id || '');
+            wrapper.append(createStoryCard(choiceCard, { interactive: false, compact: true }));
+            wrapper.addEventListener('click', () => {
+                toggleStoryCardChoice(wrapper, String(choiceCard.instance_id || ''), maximum);
+                const count = cardChoiceContext?.selected.size || 0;
+                $('story-card-choice-confirm').disabled = count < minimum || count > maximum;
+            });
+            grid.append(wrapper);
+        });
+        $('story-card-choice-confirm').disabled = minimum > 0;
+        $('story-enchantment-books-dialog')?.close();
+        dialog.showModal();
+        return true;
+    }
+
+    function createStoryEnchantmentBookTile(book, options = {}) {
+        const definition = storyEnchantmentBookDefinition(book);
+        const article = document.createElement('article');
+        article.className = `story-enchantment-book story-enchantment-book-${String(definition?.rarity || 'common')}`;
+        if (!definition) return article;
+        const image = document.createElement('img');
+        image.src = String(definition.image_url || '');
+        image.alt = '';
+        const copy = document.createElement('div');
+        const title = document.createElement('h3');
+        title.textContent = localize(definition.name) || String(book.book_id || '');
+        const rarity = document.createElement('small');
+        rarity.textContent = localize(storyContent?.rarities?.[definition.rarity]?.name)
+            || String(definition.rarity || '');
+        const description = document.createElement('p');
+        appendStoryRichText(description, localize(definition.description));
+        copy.append(title, rarity, description);
+        article.append(image, copy);
+        if (options.actions !== false) {
+            const actions = document.createElement('div');
+            actions.className = 'story-enchantment-book-actions';
+            const canUse = activeRun?.state?.phase === 'combat'
+                && activeRun?.state?.combat?.turn === 'player'
+                && !activeRun?.state?.combat?.pending_card_choice
+                && definition.script !== 'lethal_guard'
+                && (!definition.character_id
+                    || definition.character_id === activeRun?.state?.player?.character_id);
+            if (definition.script === 'copy_book') {
+                const select = document.createElement('select');
+                (activeRun?.state?.player?.enchantment_books || [])
+                    .filter((item) => item.instance_id !== book.instance_id)
+                    .forEach((item) => {
+                        const option = document.createElement('option');
+                        option.value = item.instance_id;
+                        option.textContent = localize(storyEnchantmentBookDefinition(item)?.name) || item.book_id;
+                        select.append(option);
+                    });
+                select.disabled = !canUse || !select.options.length;
+                actions.append(select);
+                const use = document.createElement('button');
+                use.type = 'button';
+                use.textContent = t.useBook;
+                use.disabled = select.disabled;
+                use.addEventListener('click', () => {
+                    $('story-enchantment-books-dialog')?.close();
+                    storyAction('use_enchantment_book', {
+                        book_instance_id: book.instance_id,
+                        target_book_instance_id: select.value,
+                    });
+                });
+                actions.append(use);
+            } else {
+                const use = document.createElement('button');
+                use.type = 'button';
+                use.textContent = definition.script === 'lethal_guard'
+                    ? (lang === 'zh' ? '自动触发' : 'Automatic')
+                    : t.useBook;
+                use.disabled = !canUse;
+                use.addEventListener('click', () => {
+                    if (definition.target && definition.target !== 'none') {
+                        openEnchantmentCardSelection(book);
+                        return;
+                    }
+                    $('story-enchantment-books-dialog')?.close();
+                    storyAction('use_enchantment_book', { book_instance_id: book.instance_id });
+                });
+                actions.append(use);
+            }
+            const discard = document.createElement('button');
+            discard.type = 'button';
+            discard.className = 'is-danger';
+            discard.textContent = t.discardBook;
+            discard.disabled = actionInFlight;
+            discard.addEventListener('click', async () => {
+                await storyAction('discard_enchantment_book', {
+                    book_instance_id: book.instance_id,
+                });
+                renderStoryEnchantmentBooks();
+            });
+            actions.append(discard);
+            article.append(actions);
+        }
+        return article;
+    }
+
+    function renderStoryEnchantmentBooks() {
+        const grid = $('story-enchantment-books-grid');
+        if (!grid) return;
+        grid.replaceChildren();
+        const books = activeRun?.state?.player?.enchantment_books || [];
+        if (!books.length) {
+            const empty = document.createElement('p');
+            empty.className = 'story-codex-empty';
+            empty.textContent = lang === 'zh' ? '尚未获得附魔书' : 'No enchantment books acquired';
+            grid.append(empty);
+            return;
+        }
+        books.forEach((book) => grid.append(createStoryEnchantmentBookTile(book)));
+    }
+
+    function openStoryEnchantmentBooks() {
+        if (!activeRun?.state?.player) return;
+        setText('story-enchantment-books-copy', t.enchantmentBookCopy);
+        renderStoryEnchantmentBooks();
+        $('story-enchantment-books-dialog')?.showModal();
+    }
+
+    function chooseStoryEnchantmentBookReplacement(callback) {
+        const books = activeRun?.state?.player?.enchantment_books || [];
+        if (books.length < 3) {
+            callback('');
+            return;
+        }
+        const grid = $('story-enchantment-books-grid');
+        if (!grid) return;
+        setText('story-enchantment-books-copy', t.bookSlotsFull);
+        grid.replaceChildren();
+        books.forEach((book) => {
+            const tile = createStoryEnchantmentBookTile(book, { actions: false });
+            const replace = document.createElement('button');
+            replace.type = 'button';
+            replace.className = 'story-command story-command-primary';
+            replace.textContent = t.replaceBook;
+            replace.addEventListener('click', () => {
+                $('story-enchantment-books-dialog')?.close();
+                setText('story-enchantment-books-copy', t.enchantmentBookCopy);
+                callback(String(book.instance_id || ''));
+            });
+            tile.append(replace);
+            grid.append(tile);
+        });
+        $('story-enchantment-books-dialog')?.showModal();
     }
 
     function createStoryCard(card, options = {}) {
@@ -7798,6 +8598,9 @@
         if (contentType === 'card') return localize(storyContent?.cards?.[contentId]?.name) || contentId;
         if (contentType === 'enemy') return localize(storyContent?.enemies?.[contentId]?.name) || contentId;
         if (contentType === 'relic') return localize(storyContent?.relics?.[contentId]?.name) || contentId;
+        if (contentType === 'enchantment_book') {
+            return localize(storyContent?.enchantment_books?.[contentId]?.name) || contentId;
+        }
         if (contentType === 'blessing') {
             return localize(storyContent?.blessings?.[contentId]?.name)
                 || localize(storyContent?.blessings?.[contentId]?.description)
@@ -7918,6 +8721,9 @@
             const contentType = kind === 'blessing' ? 'blessing' : 'relic';
             return storyCodexDiscoveredIds(contentType).has(targetId);
         }
+        if (mode === 'enchantment_books') {
+            return storyCodexDiscoveredIds('enchantment_book').has(targetId);
+        }
         if (mode === 'terms') {
             return storyCodexDiscoveredIds('term').has(`${String(kind || '')}:${targetId}`);
         }
@@ -7925,7 +8731,7 @@
     }
 
     function navigateStoryCodex(mode, id = '', options = {}) {
-        const targetMode = ['cards', 'enemies', 'talents', 'terms'].includes(mode) ? mode : 'cards';
+        const targetMode = ['cards', 'enemies', 'talents', 'enchantment_books', 'terms'].includes(mode) ? mode : 'cards';
         const targetId = String(id || '');
         const targetKind = String(options.kind || '');
         if (!storyCodexTargetIsDiscovered(targetMode, targetId, targetKind)) return false;
@@ -7973,6 +8779,9 @@
             const catalog = reference.kind === 'blessing' ? storyContent?.blessings : storyContent?.relics;
             return localize(catalog?.[id]?.name) || localize(catalog?.[id]?.description) || id;
         }
+        if (reference?.mode === 'enchantment_books') {
+            return localize(storyContent?.enchantment_books?.[id]?.name) || id;
+        }
         if (reference?.mode === 'terms') {
             return localize(storyCodexTermDefinition(reference.kind, id)?.name) || id;
         }
@@ -8003,7 +8812,9 @@
             icon.alt = '';
             marker.append(icon);
         } else {
-            marker.textContent = reference.mode === 'cards' ? '▣' : (reference.mode === 'talents' ? '★' : '•');
+            marker.textContent = reference.mode === 'cards'
+                ? '▣'
+                : (reference.mode === 'talents' ? '★' : (reference.mode === 'enchantment_books' ? '◆' : '•'));
         }
         const label = document.createElement('span');
         label.textContent = storyCodexReferenceLabel(reference);
@@ -8815,6 +9626,64 @@
         renderStoryCodexTalentDetail(records.find((record) => record.id === storyCodexSelectedId), detail);
     }
 
+    function storyCodexEnchantmentBookRecords() {
+        const discovered = storyCodexDiscoveredIds('enchantment_book');
+        return [...discovered]
+            .map((id) => ({ id, definition: storyContent?.enchantment_books?.[id] }))
+            .filter((record) => (
+                record.definition
+                && storyCodexSearchMatches(record.id, record.definition)
+            ))
+            .sort((left, right) => {
+                const rarityOrder = STORY_RARITY_ORDER.indexOf(String(left.definition.rarity || 'common'))
+                    - STORY_RARITY_ORDER.indexOf(String(right.definition.rarity || 'common'));
+                return rarityOrder || localize(left.definition.name)
+                    .localeCompare(localize(right.definition.name), lang);
+            });
+    }
+
+    function renderStoryCodexEnchantmentBooks(sidebar, detail) {
+        const records = storyCodexEnchantmentBookRecords();
+        const list = document.createElement('div');
+        list.className = 'story-codex-entry-list';
+        list.dataset.storyScrollKey = 'codex-enchantment-book-list';
+        records.forEach((record) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `story-codex-entry-row${storyCodexSelectedId === record.id ? ' is-active' : ''}`;
+            const image = document.createElement('img');
+            image.src = String(record.definition.image_url || '');
+            image.alt = '';
+            const copy = document.createElement('span');
+            const name = document.createElement('strong');
+            name.textContent = localize(record.definition.name) || record.id;
+            const rarity = document.createElement('small');
+            rarity.textContent = localize(storyContent?.rarities?.[record.definition.rarity]?.name)
+                || String(record.definition.rarity || '');
+            copy.append(name, rarity);
+            button.append(image, copy);
+            button.addEventListener('click', () => {
+                storyCodexSelectedId = record.id;
+                renderStoryCodex();
+            });
+            list.append(button);
+        });
+        sidebar.append(list);
+        if (!records.length) {
+            detail.append(storyCodexEmpty());
+            return;
+        }
+        if (!records.some((record) => record.id === storyCodexSelectedId)) {
+            storyCodexSelectedId = records[0].id;
+        }
+        const record = records.find((item) => item.id === storyCodexSelectedId);
+        const wrapper = document.createElement('article');
+        wrapper.className = 'story-codex-enchantment-book-detail';
+        wrapper.append(createStoryEnchantmentBookTile({ book_id: record.id }, { actions: false }));
+        appendStoryCodexRelated(wrapper, storyCodexDefinitionReferences(record.definition));
+        detail.append(wrapper);
+    }
+
     function storyCodexTermDefinition(kind, id) {
         if (kind === 'status') return storyContent?.statuses?.[id] || null;
         if (kind === 'tag') return storyContent?.tags?.[id] || null;
@@ -8915,6 +9784,12 @@
             const total = Object.keys(storyContent?.relics || {}).length + Object.keys(storyContent?.blessings || {}).length;
             return [found, total];
         }
+        if (mode === 'enchantment_books') {
+            return [
+                storyCodexDiscoveredIds('enchantment_book').size,
+                Object.keys(storyContent?.enchantment_books || {}).length,
+            ];
+        }
         const found = storyCodexDiscoveredIds('term').size;
         const total = Object.keys(storyContent?.statuses || {}).length
             + Object.keys(storyContent?.tags || {}).length
@@ -8947,6 +9822,7 @@
         if (storyCodexMode === 'cards') renderStoryCodexCards(sidebar, detail);
         else if (storyCodexMode === 'enemies') renderStoryCodexEnemies(sidebar, detail);
         else if (storyCodexMode === 'talents') renderStoryCodexTalents(sidebar, detail);
+        else if (storyCodexMode === 'enchantment_books') renderStoryCodexEnchantmentBooks(sidebar, detail);
         else renderStoryCodexTerms(sidebar, detail);
         const subtype = storyCodexMode === 'talents'
             ? storyCodexTalentKind
@@ -9025,7 +9901,10 @@
             container?.replaceChildren();
             container?.classList.add('story-card-choice-grid');
             (state.player?.deck || [])
-                .filter((card) => blessing.script !== 'remove_card' || !cardValues(card)?.tags?.includes('eternal'))
+                .filter((card) => (
+                    !['remove_card', 'transform_card'].includes(blessing.script)
+                    || !cardValues(card)?.tags?.includes('eternal')
+                ))
                 .forEach((card) => {
                     container?.append(createStoryCard(card, {
                         compact: true,
@@ -9291,11 +10170,16 @@
         }
         renderMap(state.map, state.current_node_id, { readOnly: combatPreview });
         showView('story-run');
+        renderStoryPersistentHud(activeRun);
     }
 
     function openStoryCombatMap() {
         const state = activeRun?.state;
         if (!state?.map || actionInFlight || cardPlayInFlight) return;
+        if (storyMapPreviewOpen) {
+            returnToStoryCombat();
+            return;
+        }
         if (state.phase === 'map') {
             renderMapView(state);
             return;
@@ -9323,6 +10207,8 @@
         if (!visible) return;
         const player = state.player || {};
         const combat = state.combat || {};
+        const difficulty = storyContent?.difficulties?.[String(state.difficulty || '')];
+        setText('story-hud-difficulty', localize(difficulty?.name) || String(state.difficulty || ''));
         setText('story-hud-health', `${stateValue(player.health)}/${stateValue(player.max_health)}`);
         setText('story-hud-elixir', stateValue(combat.elixir ?? player.elixir ?? player.max_elixir));
         setText('story-hud-magic', stateValue(combat.magic ?? player.magic));
@@ -9333,10 +10219,20 @@
         );
         const mapButton = $('story-hud-map');
         const deckButton = $('story-hud-deck');
-        const saveButton = $('story-hud-save');
+        const booksButton = $('story-hud-books');
+        const settingsButton = $('story-hud-settings');
+        const mapOpen = storyMapPreviewOpen || String(state.phase || '') === 'map';
         if (mapButton) mapButton.disabled = !state.map || actionInFlight || cardPlayInFlight;
+        mapButton?.classList.toggle('is-map-open', mapOpen);
+        mapButton?.setAttribute('aria-expanded', mapOpen ? 'true' : 'false');
         if (deckButton) deckButton.disabled = !Array.isArray(player.deck) || actionInFlight || cardPlayInFlight;
-        if (saveButton) saveButton.disabled = storyManualSaveOperationBlocked(run);
+        const bookCount = Array.isArray(player.enchantment_books) ? player.enchantment_books.length : 0;
+        setText('story-hud-books-label', `${t.enchantmentBooks} ${bookCount}/3`);
+        if (booksButton) booksButton.disabled = actionInFlight || cardPlayInFlight;
+        if (settingsButton) settingsButton.disabled = actionInFlight || cardPlayInFlight;
+        updateStoryManualSaveControls(run);
+        updateStorySurrenderControl(run);
+        updateStorySettingsControls(run);
     }
 
     function renderEffects(containerId, values) {
@@ -10760,6 +11656,35 @@
                     },
                 },
                 {
+                    id: 'shop-enchantment-books',
+                    label: t.enchantmentBooks,
+                    mode: 'choices',
+                    render: (target) => {
+                        const available = (room.enchantment_books || []).filter((item) => !item.sold);
+                        if (!available.length) appendStoryRoomEmpty(target, t.codexEmpty);
+                        available.forEach((item) => {
+                            const tile = createStoryEnchantmentBookTile(
+                                { book_id: item.book_id },
+                                { actions: false },
+                            );
+                            const buy = document.createElement('button');
+                            buy.type = 'button';
+                            buy.className = 'story-command story-command-primary';
+                            buy.textContent = `${t.claim} · ${Number(item.price || 0)}G`;
+                            buy.disabled = Number(player.gold || 0) < Number(item.price || 0);
+                            buy.addEventListener('click', () => chooseStoryEnchantmentBookReplacement(
+                                (replaceId) => storyAction('resolve_room', {
+                                    option: 'buy_enchantment_book',
+                                    item_id: item.id,
+                                    ...(replaceId ? { replace_book_instance_id: replaceId } : {}),
+                                }),
+                            ));
+                            tile.append(buy);
+                            target.append(tile);
+                        });
+                    },
+                },
+                {
                     id: 'shop-remove',
                     label: t.remove,
                     mode: 'cards',
@@ -10965,12 +11890,14 @@
                 gold: Boolean(claims.gold) || Number(reward.gold || 0) <= 0,
                 card: Boolean(claims.card) || !(reward.cards || []).length,
                 relic: Boolean(claims.relic) || !(reward.relics || []).length && !reward.relic,
+                enchantment_book: Boolean(claims.enchantment_book) || !reward.enchantment_book,
             };
         }
         return {
             gold: true,
             card: !(reward?.cards || []).length,
             relic: !(reward?.relics || []).length && !reward?.relic,
+            enchantment_book: !reward?.enchantment_book,
         };
     }
 
@@ -11036,6 +11963,42 @@
                 ));
             });
         }
+        if (reward.enchantment_book) {
+            const bookDefinition = storyEnchantmentBookDefinition(reward.enchantment_book);
+            if (claims.enchantment_book) {
+                const claimedBook = storyEnchantmentBookDefinition(
+                    reward.selected_enchantment_book_id || reward.enchantment_book,
+                );
+                claimContainer?.append(rewardClaimButton(
+                    `${t.enchantmentBookReward} · ${localize(claimedBook?.name) || reward.enchantment_book}`,
+                    reward.selected_enchantment_book_id ? t.claimed : t.skip,
+                    true,
+                    () => {},
+                ));
+            } else {
+                const claimBook = rewardClaimButton(
+                    `${t.enchantmentBookReward} · ${localize(bookDefinition?.name) || reward.enchantment_book}`,
+                    localize(bookDefinition?.description),
+                    false,
+                    () => chooseStoryEnchantmentBookReplacement((replaceId) => storyAction(
+                        'choose_reward',
+                        {
+                            reward_type: 'enchantment_book',
+                            book_id: reward.enchantment_book,
+                            ...(replaceId ? { replace_book_instance_id: replaceId } : {}),
+                        },
+                    )),
+                );
+                if (bookDefinition?.image_url) {
+                    const image = document.createElement('img');
+                    image.className = 'story-reward-book-image';
+                    image.src = bookDefinition.image_url;
+                    image.alt = '';
+                    claimBook.prepend(image);
+                }
+                claimContainer?.append(claimBook);
+            }
+        }
         if (claims.card) {
             const selected = (reward.cards || []).find((choice) => {
                 const defId = typeof choice === 'string' ? choice : choice.card_id;
@@ -11091,6 +12054,10 @@
         setText('story-terminal-title', complete ? t.journeyComplete : t.journeyFailed);
         setText('story-terminal-copy', complete ? t.journeyCompleteCopy : t.journeyFailedCopy);
         $('story-terminal-mark')?.classList.toggle('is-failure', !complete);
+        setText('story-terminal-new', ({
+            zh: '返回角色选择', en: 'Return to Character Select',
+            fr: 'Retour au choix du personnage', ja: 'キャラクター選択へ戻る',
+        })[lang] || '返回角色选择');
         showView('story-terminal');
     }
 
@@ -11107,8 +12074,6 @@
         if (!run) {
             selectedCombatCardId = '';
             renderStoryPersistentHud(null);
-            $('story-save-open-global')?.classList.add('hidden');
-            $('story-map-return')?.classList.add('hidden');
             destroyStoryCursorCard();
             $('story-aim-layer')?.classList.add('hidden');
             renderStoryCharacterOptions();
@@ -11123,9 +12088,7 @@
             renderStoryPersistentHud(null);
             destroyStoryCursorCard();
             $('story-aim-layer')?.classList.add('hidden');
-            $('story-save-open-global')?.classList.add('hidden');
-            $('story-map-return')?.classList.add('hidden');
-            $('story-surrender')?.classList.add('hidden');
+            $('story-hud-surrender')?.classList.add('hidden');
             const copy = {
                 zh: '这段旅程不会被自动重置。结束旧旅程后，才能按当前内容版本开始新旅程。',
                 en: 'This journey will not be reset automatically. End it explicitly before starting with the current content version.',
@@ -11163,29 +12126,6 @@
         restoreStoryScrollPositions(scrollPositions);
     }
 
-    async function resumeRunFromCheckpoint(run) {
-        const checkpoint = run?.state?.recovery_checkpoint;
-        const phase = String(run?.state?.phase || '');
-        if (!checkpoint?.state || !['combat', 'room', 'reward'].includes(phase)) return run;
-        try {
-            const result = await requestJson('/api/story/run/action', {
-                method: 'POST',
-                body: JSON.stringify({
-                    run_id: run.id,
-                    state_version: run.state_version,
-                    action_id: createActionId(),
-                    action_type: 'resume_node',
-                    payload: {},
-                }),
-            });
-            ingestStoryDiscoveryPayload(result);
-            return result.run || run;
-        } catch (error) {
-            if (error.payload?.run) return error.payload.run;
-            throw error;
-        }
-    }
-
     async function loadRun() {
         showView('story-loading');
         try {
@@ -11197,9 +12137,7 @@
             contentVersion = contentPayload.content_version || '';
             ingestStoryDiscoveryPayload(contentPayload);
             ingestStoryDiscoveryPayload(runPayload);
-            let run = runPayload.run || null;
-            run = await resumeRunFromCheckpoint(run);
-            renderRun(run);
+            renderRun(runPayload.run || null);
         } catch (error) {
             if (error.message === 'AUTH_REQUIRED') return;
             showView('story-empty');
@@ -11278,7 +12216,7 @@
                 body: JSON.stringify({ run_id: activeRun.id }),
             });
             ingestStoryDiscoveryPayload(payload);
-            renderRun(payload.run || null);
+            renderRun(null);
             if (!silent) showToast(t.mapReset);
         } catch (error) {
             if (error.message !== 'AUTH_REQUIRED') showToast(error.message);
@@ -11291,6 +12229,98 @@
         if (!run || run.compatible === false || !run.state) return false;
         if (contentVersion && run.content_version !== contentVersion) return false;
         return STORY_MANUAL_SAVE_STABLE_PHASES.has(String(run.state.phase || ''));
+    }
+
+    function storyStorePreference(key, value) {
+        try {
+            (window.GTN_STORAGE || window.localStorage)?.setItem(key, String(value));
+        } catch (_) {}
+    }
+
+    function storySettingsStrings() {
+        return ({
+            zh: {
+                title: '旅程设置', copy: '界面偏好仅影响当前设备。',
+                fullscreenEnter: '进入全屏', fullscreenExit: '退出全屏',
+                hideBorders: '隐藏界面与卡牌边框', speed: '2倍演出速度',
+            },
+            en: {
+                title: 'Journey Settings', copy: 'Display preferences only affect this device.',
+                fullscreenEnter: 'Enter Fullscreen', fullscreenExit: 'Exit Fullscreen',
+                hideBorders: 'Hide UI and Card Borders', speed: '2× Presentation Speed',
+            },
+            fr: {
+                title: 'Réglages du voyage', copy: "Les préférences d'affichage ne concernent que cet appareil.",
+                fullscreenEnter: 'Plein écran', fullscreenExit: 'Quitter le plein écran',
+                hideBorders: "Masquer les bordures de l'interface et des cartes", speed: 'Vitesse de présentation ×2',
+            },
+            ja: {
+                title: '旅の設定', copy: '表示設定はこの端末にのみ適用されます。',
+                fullscreenEnter: '全画面表示', fullscreenExit: '全画面を終了',
+                hideBorders: 'UIとカードの枠を隠す', speed: '演出速度2倍',
+            },
+        })[lang] || null;
+    }
+
+    function updateStorySettingsControls(run = activeRun) {
+        const copy = storySettingsStrings();
+        if (copy) {
+            setText('story-settings-title', copy.title);
+            setText('story-settings-copy', copy.copy);
+            setText(
+                'story-settings-fullscreen-label',
+                document.fullscreenElement ? copy.fullscreenExit : copy.fullscreenEnter,
+            );
+            setText('story-settings-hide-borders-label', copy.hideBorders);
+            setText('story-settings-speed-label', copy.speed);
+        }
+    }
+
+    function syncStorySettingsDraft() {
+        const hideBorders = $('story-settings-hide-borders');
+        if (hideBorders) {
+            hideBorders.checked = document.documentElement.classList.contains('story-hide-card-borders');
+        }
+        const speed = $('story-settings-speed');
+        if (speed) speed.checked = storyPlaybackRate === 2;
+    }
+
+    function openStorySettings() {
+        if (!activeRun || actionInFlight || cardPlayInFlight) return;
+        updateStorySettingsControls(activeRun);
+        syncStorySettingsDraft();
+        const dialog = $('story-settings-dialog');
+        if (!dialog) return;
+        dialog.returnValue = 'cancel';
+        dialog.showModal();
+    }
+
+    async function toggleStoryFullscreen() {
+        try {
+            if (document.fullscreenElement) await document.exitFullscreen();
+            else await document.documentElement.requestFullscreen();
+        } catch (_) {
+            showToast(lang === 'zh' ? '当前浏览器无法切换全屏' : 'Fullscreen is unavailable');
+        } finally {
+            updateStorySettingsControls(activeRun);
+        }
+    }
+
+    function setStoryBordersHidden(hidden) {
+        document.documentElement.classList.toggle('story-hide-card-borders', hidden);
+        document.documentElement.classList.toggle('story-hide-ui-borders', hidden);
+        storyStorePreference('gtn_story_hide_card_borders', hidden ? '1' : '0');
+    }
+
+    function setStoryPlaybackRate(fast) {
+        storyPlaybackRate = fast ? 2 : 1;
+        document.documentElement.classList.toggle('story-speed-2x', fast);
+        storyStorePreference('gtn_story_speed_2x', fast ? '1' : '0');
+    }
+
+    function commitStorySettingsDraft() {
+        setStoryBordersHidden(Boolean($('story-settings-hide-borders')?.checked));
+        setStoryPlaybackRate(Boolean($('story-settings-speed')?.checked));
     }
 
     function storyManualSaveOperationBlocked(run = activeRun) {
@@ -11306,14 +12336,15 @@
     }
 
     function updateStoryManualSaveControls(run = activeRun) {
-        const stable = storyManualSavePhaseIsStable(run);
         const blocked = storyManualSaveOperationBlocked(run);
-        const phase = String(run?.state?.phase || '');
-        const globalButton = $('story-save-open-global');
-        globalButton?.classList.toggle('hidden', !stable || phase === 'map');
-        if (globalButton) globalButton.disabled = blocked;
         const hudButton = $('story-hud-save');
-        if (hudButton) hudButton.disabled = blocked;
+        const label = `${t.saveManager} · S ${Math.max(0, Number(run?.manual_save_count) || 0)} · L ${Math.max(0, Number(run?.manual_load_count) || 0)}`;
+        setText('story-hud-save-label', label);
+        if (hudButton) {
+            hudButton.disabled = blocked;
+            hudButton.title = label;
+            hudButton.setAttribute('aria-label', label);
+        }
         const createButton = $('story-save-create');
         if (createButton) createButton.disabled = blocked;
         document.querySelectorAll('.story-save-load').forEach((button) => {
@@ -11430,7 +12461,9 @@
             const payload = await requestJson(
                 `/api/story/run/saves?run_id=${encodeURIComponent(activeRun.id)}`,
             );
+            if (payload.run) activeRun = payload.run;
             renderManualStorySaves(payload.saves);
+            updateStorySettingsControls(activeRun);
         } catch (error) {
             if (error.message !== 'AUTH_REQUIRED') showToast(error.message || t.requestFailed);
             renderManualStorySaves([], false);
@@ -11466,7 +12499,9 @@
                     state_version: activeRun.state_version,
                 }),
             });
+            if (payload.run) activeRun = payload.run;
             renderManualStorySaves(payload.saves);
+            updateStorySettingsControls(activeRun);
             showToast(t.saveSucceeded);
         } catch (error) {
             if (error.payload?.run) renderRun(error.payload.run);
@@ -11537,8 +12572,7 @@
     async function startNewJourney() {
         const button = $('story-terminal-new');
         if (button) button.disabled = true;
-        const ended = await abandonRun(false);
-        if (ended) await startRun();
+        await abandonRun(true);
         if (button) button.disabled = false;
     }
 
@@ -12099,6 +13133,7 @@
             });
             $('story-coop-combat-play-selected')?.addEventListener('click', confirmStoryCoopCombatCard);
             $('story-coop-combat-ready')?.addEventListener('click', readyStoryCoopCombatSeat);
+            $('story-coop-stage-ready')?.addEventListener('click', readyStoryCoopStage);
             $('story-coop-rest-upgrade-confirm')?.addEventListener('click', confirmStoryCoopRestUpgrade);
             $('story-coop-shop-leave')?.addEventListener('click', leaveStoryCoopShop);
             $('story-coop-invite-input')?.addEventListener('input', updateStoryCoopControls);
@@ -12142,15 +13177,19 @@
             renderStoryCodex();
         });
         $('story-talent-overview')?.addEventListener('click', openStoryTalentOverview);
-        $('story-run-deck')?.addEventListener('click', () => openStoryPile('deck'));
         $('story-draw-pile')?.addEventListener('click', () => openStoryPile('draw'));
         $('story-discard-pile')?.addEventListener('click', () => openStoryPile('discard'));
         $('story-exile-pile')?.addEventListener('click', () => openStoryPile('exile'));
-        $('story-combat-map')?.addEventListener('click', openStoryCombatMap);
         $('story-hud-map')?.addEventListener('click', openStoryCombatMap);
         $('story-hud-deck')?.addEventListener('click', () => openStoryPile('deck'));
-        $('story-hud-save')?.addEventListener('click', openManualStorySaves);
-        $('story-map-return')?.addEventListener('click', returnToStoryCombat);
+        $('story-hud-books')?.addEventListener('click', openStoryEnchantmentBooks);
+        $('story-enchantment-books-close')?.addEventListener('click', () => {
+            $('story-enchantment-books-dialog')?.close();
+        });
+        $('story-enchantment-books-dialog')?.addEventListener('click', (event) => {
+            if (event.target === event.currentTarget) event.currentTarget.close();
+        });
+        $('story-hud-settings')?.addEventListener('click', openStorySettings);
         $('story-player-target')?.addEventListener('click', (event) => {
             if (event.target?.closest?.('.story-portrait')) playSelectedCombatCard('self');
         });
@@ -12217,6 +13256,16 @@
                 storyAction('resolve_card_choice', { selected_card_ids: selected });
                 return;
             }
+            if (context.mode === 'enchantment_book') {
+                setStoryCardChoiceRequired(false);
+                if (event.target.returnValue !== 'confirm') return;
+                if (selected.length < context.spec.minimum || selected.length > context.spec.maximum) return;
+                storyAction('use_enchantment_book', {
+                    book_instance_id: context.bookInstanceId,
+                    selected_card_ids: selected,
+                });
+                return;
+            }
             setStoryCardChoiceRequired(false);
             if (context.mode === 'opening_redraw') {
                 storyAction('opening_redraw', {
@@ -12252,9 +13301,12 @@
             reward_type: 'continue',
         }));
         $('story-terminal-new')?.addEventListener('click', startNewJourney);
-        $('story-surrender')?.addEventListener('click', () => {
+        $('story-hud-surrender')?.addEventListener('click', () => {
             if (actionInFlight || !activeRun) return;
-            $('story-surrender-dialog')?.showModal();
+            const dialog = $('story-surrender-dialog');
+            if (!dialog) return;
+            dialog.returnValue = 'cancel';
+            dialog.showModal();
         });
         $('story-surrender-dialog')?.addEventListener('close', (event) => {
             if (event.target.returnValue !== 'confirm') return;
@@ -12277,8 +13329,17 @@
         $('story-reset-dialog')?.addEventListener('close', (event) => {
             if (event.target.returnValue === 'confirm') resetMap();
         });
-        $('story-save-open')?.addEventListener('click', openManualStorySaves);
-        $('story-save-open-global')?.addEventListener('click', openManualStorySaves);
+        $('story-hud-save')?.addEventListener('click', openManualStorySaves);
+        $('story-settings-fullscreen')?.addEventListener('click', toggleStoryFullscreen);
+        $('story-settings-dialog')?.addEventListener('click', (event) => {
+            if (event.target === event.currentTarget) event.currentTarget.close('cancel');
+        });
+        $('story-settings-dialog')?.addEventListener('close', (event) => {
+            if (event.target.returnValue === 'confirm') commitStorySettingsDraft();
+            syncStorySettingsDraft();
+            updateStorySettingsControls(activeRun);
+        });
+        document.addEventListener('fullscreenchange', () => updateStorySettingsControls(activeRun));
         $('story-save-create')?.addEventListener('click', createManualStorySave);
         $('story-restart-floor')?.addEventListener('click', () => {
             $('story-restart-floor-dialog')?.showModal();

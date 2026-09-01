@@ -268,7 +268,12 @@ def test_boss_rush_boss_grants_two_complete_elite_rewards():
     assert state['reward']['cards']
     assert state['reward']['relics']
 
-    state['reward']['claims'] = {'gold': True, 'card': True, 'relic': True}
+    state['reward']['claims'] = {
+        'gold': True,
+        'card': True,
+        'relic': True,
+        'enchantment_book': True,
+    }
     state, _ = apply_story_action(
         state,
         'choose_reward',
@@ -278,7 +283,12 @@ def test_boss_rush_boss_grants_two_complete_elite_rewards():
     assert state['reward']['source'] == 'boss_rush_boss_elite'
     assert state['reward']['round_index'] == 2
 
-    state['reward']['claims'] = {'gold': True, 'card': True, 'relic': True}
+    state['reward']['claims'] = {
+        'gold': True,
+        'card': True,
+        'relic': True,
+        'enchantment_book': True,
+    }
     state, _ = apply_story_action(
         state,
         'choose_reward',

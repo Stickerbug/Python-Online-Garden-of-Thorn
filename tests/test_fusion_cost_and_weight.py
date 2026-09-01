@@ -11,6 +11,7 @@ from cards import (
     MAX_CARD_LAYER,
     build_draft_pool,
     fusion_adjusted_cost,
+    fusion_cost_surcharge,
     same_type_draw_probabilities,
 )
 from game_engine import GameEngine
@@ -67,8 +68,10 @@ class FusionCostAndWeightTests(unittest.TestCase):
         self.assertEqual(fusion_adjusted_cost(3, 10_000), 3 * (MAX_CARD_LAYER + 1) // 2)
         self.assertEqual(fusion_adjusted_cost(-3, 2), 0)
         self.assertEqual(fusion_adjusted_cost("invalid", "invalid"), 0)
+        self.assertEqual(fusion_cost_surcharge(3, 2), 1)
+        self.assertEqual(fusion_cost_surcharge(3, 3), 3)
 
-    def test_card_cost_applies_fusion_after_intrinsic_e_and_m_modifiers(self):
+    def test_card_cost_calculates_fusion_from_original_cost_before_other_modifiers(self):
         card = CardInstance("MagicBone")
         card.fusion_level = 2
         card.cost_e_override = 4
@@ -80,8 +83,10 @@ class FusionCostAndWeightTests(unittest.TestCase):
         card.temp_magic_heavy_value = 1
         card.magic_swift_value = 2
 
-        self.assertEqual(card.cost_e, 3)  # floor((4 + 2 - 1 - 2 - 1) * 1.5)
-        self.assertEqual(card.cost_m, 9)  # floor((7 + 1 - 2) * 1.5)
+        # Magic Bone's original costs are 0E/4M. Fusion adds 0E/2M first;
+        # overrides, Heavy, Swift and Temporary Swift are applied afterward.
+        self.assertEqual(card.cost_e, 2)
+        self.assertEqual(card.cost_m, 8)
 
         card.custom_vars.update({
             "formal_logic_permanent_cost_e": 9,
@@ -89,8 +94,13 @@ class FusionCostAndWeightTests(unittest.TestCase):
             "formal_logic_temporary_cost_e": 6,
             "formal_logic_temporary_cost_m": 5,
         })
-        self.assertEqual(card.cost_e, 6)
+        self.assertEqual(card.cost_e, 4)
         self.assertEqual(card.cost_m, 6)
+
+        card.temp_swift_value = 0
+        self.assertEqual(card.cost_e, 5)
+        card.temp_swift_value = 1
+        self.assertEqual(card.cost_e, 4)
 
     def test_server_1v1_and_2v2_require_and_pay_the_increased_cost(self):
         for engine_type, target_id in ((GameEngine, 1), (GameEngine2v2, 2)):
@@ -145,14 +155,14 @@ class FusionCostAndWeightTests(unittest.TestCase):
 
     def test_package_and_term_copy_explain_the_new_cost_rule(self):
         fusion = self.package_cards["Fusion"]
-        self.assertIn("每超过默认1层", fusion.effect_text)
+        self.assertIn("原始花费", fusion.effect_text)
         self.assertIn("增加50%", fusion.effect_text)
         self.assertIn("向下取整", fusion.effect_text)
         for language in ("zh", "en", "fr", "ja"):
             localized = fusion.effect_text_i18n.get(language, "")
             self.assertTrue(localized, language)
-        self.assertIn("每超过默认1层", GAME_JS)
-        self.assertIn("玩家状态产生的额外E花费", CARD_STYLE_GUIDE)
+        self.assertIn("其他花费修改在此后结算", GAME_JS)
+        self.assertIn("其他花费修改在此后结算", CARD_STYLE_GUIDE)
 
     def test_multiplayer_cost_display_matches_server_and_does_not_scale_player_penalties(self):
         helpers = GAME_JS.split("function clampClientCardLayer", 1)[1].split(
@@ -176,7 +186,7 @@ const cardDef = { id: 'Cost', cost_e: 3, cost_m: 5, swift_value: 1, magic_swift_
 const owner = { player_id: 0, cards_played_this_turn: { Cost: 2 }, hand: [], custom_statuses: {} };
 const ordinary = getCardDisplayCosts({
     def_id: 'Cost', fusion_level: 2, mimic_discount: 1,
-    temp_heavy_value: 1, temp_magic_heavy_value: 1,
+    temp_swift_value: 1, temp_heavy_value: 1, temp_magic_heavy_value: 1,
     instance_flags: [], disabled_flags: [],
 }, cardDef, owner);
 const formal = getCardDisplayCosts({
@@ -192,10 +202,10 @@ const formal = getCardDisplayCosts({
 process.stdout.write(JSON.stringify({ ordinary, formal }));
 '''
         result = _run_node(self, f"{display}\n{costs}\n{harness}")
-        self.assertEqual(result["ordinary"]["totalE"], 5)
+        self.assertEqual(result["ordinary"]["totalE"], 4)
         self.assertEqual(result["ordinary"]["totalM"], 7)
-        self.assertEqual(result["formal"]["totalE"], 6)
-        self.assertEqual(result["formal"]["totalM"], 4)
+        self.assertEqual(result["formal"]["totalE"], 4)
+        self.assertEqual(result["formal"]["totalM"], 3)
 
     def test_local_worker_uses_the_same_fusion_cost_formula(self):
         harness = r'''
@@ -206,7 +216,7 @@ cardDefs = {
 const card = new LocalCard({
     def_id: 'Cost', fusion_level: 2, mimic_discount: 1,
     temp_heavy_value: 1, temp_magic_heavy_value: 1,
-    swift_value: 1, magic_swift_value: 1,
+    swift_value: 1, temp_swift_value: 1, magic_swift_value: 1,
 });
 const formal = new LocalCard({
     def_id: 'Cost', fusion_level: 2, cost_e_override: 9, cost_m_override: 9,
@@ -228,8 +238,8 @@ process.stdout.write(JSON.stringify({
             self,
             "globalThis.postMessage = () => {};\n" + LOCAL_WORKER_JS + "\n" + harness,
         )
-        self.assertEqual(result["ordinary"], [3, 7])
-        self.assertEqual(result["formal"], [6, 4])
+        self.assertEqual(result["ordinary"], [2, 7])
+        self.assertEqual(result["formal"], [5, 5])
         self.assertEqual(result["cappedLevel"], MAX_CARD_LAYER)
 
 

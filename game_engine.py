@@ -824,7 +824,7 @@ class GameEngine:
         2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'position': 2},
         3: {'id': 3, 'name': '光之洗礼', 'desc': '将最多5张攻击牌转化为[[card:Light|flag=sprout|flag=symbiosis]]', 'position': 2},
         8: {'id': 8, 'name': '绝境求生', 'desc': '最大生命值-20，将一张牌变化为世界树之叶', 'position': 2},
-        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对所有敌方玩家施加3层灼烧', 'position': 3},
+        4: {'id': 4, 'name': '烈焰预兆', 'desc': '开局对随机1名敌方玩家施加3层灼烧', 'position': 3},
         5: {'id': 5, 'name': '命运抽签', 'desc': '少抽1张牌，然后从总抽牌库选择1张牌洗入牌库', 'position': 3},
         6: {
             'id': 6,
@@ -4793,8 +4793,7 @@ class GameEngine:
                 if self._status_application_blocked(target_id, 'fire'):
                     continue
                 self.players[target_id].fire += 3
-            target_label = "敌方全体" if len(target_ids) > 1 else "敌方"
-            self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：{target_label}+3灼烧")
+            self.log_msg(f"{self.pn(player_id)}【烈焰预兆】：随机敌方+3灼烧")
         elif event_id == 5:
             picked = []
             if isinstance(sub, dict):
@@ -7794,6 +7793,18 @@ class GameEngine:
                         if isinstance(entry, dict)
                         and str(entry.get('responder_id')) == str(responder_id)
                     ]
+            if isinstance(sim.pending_response, dict):
+                explicit_responders = {
+                    int(item)
+                    for item in (sim.pending_response.get('responder_ids') or [])
+                    if isinstance(item, int) or str(item).lstrip('-').isdigit()
+                }
+                if explicit_responders:
+                    sim.pending_response['responder_ids'] = (
+                        [int(responder_id)]
+                        if int(responder_id) in explicit_responders
+                        else []
+                    )
             sim.handle_response(responder_id, card_instance_id)
             parts = sim._prediction_damage_parts_from_log(log_start, sim_target_id)
             total = sum(parts)

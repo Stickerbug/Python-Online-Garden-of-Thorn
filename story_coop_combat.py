@@ -526,6 +526,8 @@ def damage_coop_party_from_enemy(
     _strict_int(hits, code='INVALID_ENEMY_INTENT', label='敌人攻击次数', minimum=1)
     if not isinstance(enemy, dict) or enemy not in state['combat']['enemies']:
         _fail('INVALID_ENEMY', '敌人状态无效')
+    if int(enemy.get('weak') or 0) > 0:
+        amount = max(0, math.floor(amount * 0.75))
     if attack_all:
         for target in list(_living_seats(state)):
             _damage_seat(state, target, amount, hits, enemy, events, attack_all=True)
@@ -598,11 +600,45 @@ def _damage_seat(
         seat_state = state['combat']['seat_states'][str(current_seat)]
         if int(player.get('health') or 0) <= 0:
             break
+        statuses = seat_state.setdefault('statuses', {})
+        if int(statuses.get('invincible') or 0) > 0:
+            events.append({
+                'type': 'player_damage_prevented',
+                'enemy_id': enemy['id'],
+                'target_seat': current_seat,
+                'amount': amount,
+                'source': 'invincible',
+            })
+            continue
+        resolved_amount = amount
+        if int(statuses.get('vulnerable') or 0) > 0:
+            resolved_amount = max(0, math.ceil(resolved_amount * 1.5))
+        if int(statuses.get('disc') or 0) > 0:
+            resolved_amount = max(0, math.floor(resolved_amount / 2))
+            statuses['disc'] = max(0, int(statuses.get('disc') or 0) - 1)
         shield_before = int(seat_state.get('shield') or 0)
-        blocked = min(shield_before, amount)
+        blocked = min(shield_before, resolved_amount)
         seat_state['shield'] = shield_before - blocked
-        dealt = amount - blocked
+        dealt = resolved_amount - blocked
         before = int(player['health'])
+        if dealt >= before and before > 0:
+            books = player.get('enchantment_books') or []
+            leaf = next((
+                book for book in books
+                if str((book or {}).get('book_id') or '') == 'magic_yggdrasil'
+            ), None)
+            if leaf is not None:
+                books.remove(leaf)
+                statuses['invincible'] = max(1, int(statuses.get('invincible') or 0))
+                statuses['regeneration'] = int(statuses.get('regeneration') or 0) + 8
+                events.append({
+                    'type': 'coop_enchantment_book_triggered',
+                    'target_seat': current_seat,
+                    'amount': dealt,
+                    'source': 'magic_yggdrasil',
+                })
+                dealt = 0
+                blocked = resolved_amount
         player['health'] = max(0, before - dealt)
         events.append({
             'type': 'player_damage',
@@ -622,6 +658,28 @@ def _damage_seat(
                 'target_seat': current_seat,
                 'enemy_id': enemy['id'],
             })
+        reflection = max(0, int(statuses.get('reflection') or 0))
+        if dealt > 0 and reflection and int(enemy.get('health') or 0) > 0:
+            enemy_before = int(enemy.get('health') or 0)
+            reflected = min(enemy_before, reflection)
+            enemy['health'] = enemy_before - reflected
+            events.append({
+                'type': 'enemy_damage',
+                'target_seat': current_seat,
+                'enemy_id': enemy['id'],
+                'amount': reflected,
+                'blocked': 0,
+                'before': enemy_before,
+                'after': int(enemy['health']),
+                'source': 'reflection',
+            })
+            if enemy_before > 0 and int(enemy['health']) == 0:
+                events.append({
+                    'type': 'enemy_defeated',
+                    'target_seat': current_seat,
+                    'enemy_id': enemy['id'],
+                    'source': 'reflection',
+                })
 
 
 def _set_party_defeat(state, events):
@@ -684,6 +742,27 @@ def _resolve_enemy_phase(
     for enemy in list(combat['enemies']):
         if int(enemy.get('health') or 0) <= 0:
             continue
+        fire = max(0, int(enemy.get('fire') or 0))
+        if fire:
+            before = int(enemy.get('health') or 0)
+            dealt = min(before, fire)
+            enemy['health'] = before - dealt
+            events.append({
+                'type': 'enemy_damage',
+                'enemy_id': str(enemy.get('id') or ''),
+                'amount': dealt,
+                'blocked': 0,
+                'before': before,
+                'after': int(enemy['health']),
+                'source': 'fire',
+                'lethal': before > 0 and int(enemy['health']) == 0,
+            })
+            if before > 0 and int(enemy['health']) == 0:
+                events.append({
+                    'type': 'enemy_defeated',
+                    'enemy_id': str(enemy.get('id') or ''),
+                    'source': 'fire',
+                })
         if _resolve_terminal_state(state, events):
             return
         if enemy_action_resolver is not None and enemy_action_resolver(
@@ -849,6 +928,9 @@ def apply_coop_combat_command(
     events = []
     coordination = state['coordination']
     if action_type == 'combat_ready':
+        statuses = state['combat']['seat_states'][str(actor_seat)].setdefault('statuses', {})
+        if int(statuses.get('invincible') or 0) > 0:
+            statuses['invincible'] = max(0, int(statuses['invincible']) - 1)
         coordination['combat_ready_seats'] = sorted(
             set(coordination.get('combat_ready_seats', [])) | {actor_seat}
         )

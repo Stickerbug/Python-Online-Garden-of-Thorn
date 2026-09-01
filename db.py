@@ -64,16 +64,22 @@ GR_SEASON_MIN_GAMES = 8
 GR_TOTAL_MIN_GAMES = 20
 GR_2V2_FACTOR = 0.85
 GR_SEASON_TIMEZONE = timezone(timedelta(hours=8))
+GR_RANKED_ERA = 'R1'
+REPUTATION_INITIAL = 85
+REPUTATION_MAX = 100
+REPUTATION_TIMEZONE = timezone(timedelta(hours=8))
+ACCOUNT_LINK_RULE_VERSION = '1'
+ACCOUNT_LINK_SHARED_NETWORK_USERS = 8
 THORN_DEW_TIMEZONE = timezone(timedelta(hours=8))
 THORN_DEW_SIGNIN_REWARDS = (40, 45, 50, 55, 60, 70, 100)
 THORN_DEW_MODE_REWARDS = {
-    '1v1': 30,
-    '2v2': 40,
+    '1v1': 60,
+    '2v2': 60,
     'random_deck': 25,
     'urf': 25,
 }
-THORN_DEW_WIN_BONUS = 15
-THORN_DEW_DRAW_BONUS = 8
+THORN_DEW_WIN_BONUS = 40
+THORN_DEW_DRAW_BONUS = 0
 KEYBINDINGS_SCHEMA_VERSION = 1
 KEYBINDING_ACTION_IDS = frozenset({
     'confirm',
@@ -350,7 +356,7 @@ def current_gr_season(now=None):
     local_dt = dt.astimezone(GR_SEASON_TIMEZONE)
     year = local_dt.year
     month = local_dt.month
-    season_id = 'S1' if year == 2026 and month == 7 else f'S{year}{month:02d}'
+    season_id = f'{GR_RANKED_ERA}-S{year}{month:02d}'
     start = datetime(year, month, 1, tzinfo=GR_SEASON_TIMEZONE)
     if month == 12:
         end = datetime(year + 1, 1, 1, tzinfo=GR_SEASON_TIMEZONE)
@@ -358,7 +364,7 @@ def current_gr_season(now=None):
         end = datetime(year, month + 1, 1, tzinfo=GR_SEASON_TIMEZONE)
     return {
         'id': season_id,
-        'name': season_id,
+        'name': f'{GR_RANKED_ERA} · {year}-{month:02d}',
         'starts_at': utc_iso(start),
         'ends_at': utc_iso(end - timedelta(seconds=1)),
         'next_starts_at': utc_iso(end),
@@ -700,6 +706,12 @@ def init_db(story_content_version=None, coop_story_content_version=None):
             conn.execute('ALTER TABLE users ADD COLUMN keybindings_json TEXT')
         if 'keybindings_revision' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN keybindings_revision INTEGER DEFAULT 0')
+        if 'reputation' not in existing_columns:
+            conn.execute(f'ALTER TABLE users ADD COLUMN reputation INTEGER DEFAULT {REPUTATION_INITIAL}')
+        if 'reputation_initialized_at' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN reputation_initialized_at TEXT')
+        if 'reputation_last_recovery_date' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN reputation_last_recovery_date TEXT')
         _assign_missing_player_ids(conn)
         season = current_gr_season()
         conn.execute(
@@ -710,9 +722,9 @@ def init_db(story_content_version=None, coop_story_content_version=None):
                 highest_gr = MAX(COALESCE(highest_gr, ?), COALESCE(total_gr, ?), COALESCE(season_gr, ?)),
                 total_ranked_games = COALESCE(total_ranked_games, 0),
                 season_ranked_games = COALESCE(season_ranked_games, 0),
-                gr_season_id = COALESCE(gr_season_id, ?)
+                gr_season_id = COALESCE(gr_season_id, 'S1')
             ''',
-            (GR_INITIAL, GR_INITIAL, GR_INITIAL, GR_INITIAL, GR_INITIAL, season['id']),
+            (GR_INITIAL, GR_INITIAL, GR_INITIAL, GR_INITIAL, GR_INITIAL),
         )
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_player_id ON users(player_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login_at)')
@@ -1248,6 +1260,16 @@ def init_db(story_content_version=None, coop_story_content_version=None):
         conn.execute('CREATE INDEX IF NOT EXISTS idx_gr_match_results_match ON gr_match_results(match_id)')
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS gr_match_settlements (
+                match_id INTEGER PRIMARY KEY,
+                request_fingerprint TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            '''
+        )
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS gr_daily_snapshots (
                 snapshot_date TEXT NOT NULL,
                 user_id INTEGER NOT NULL,
@@ -1262,6 +1284,24 @@ def init_db(story_content_version=None, coop_story_content_version=None):
             '''
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_gr_daily_snapshots_user ON gr_daily_snapshots(user_id, snapshot_date)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS gr_rating_archives (
+                user_id INTEGER NOT NULL,
+                era_id TEXT NOT NULL,
+                season_id TEXT NOT NULL,
+                season_gr REAL NOT NULL,
+                total_gr REAL NOT NULL,
+                highest_gr REAL NOT NULL,
+                season_ranked_games INTEGER NOT NULL DEFAULT 0,
+                total_ranked_games INTEGER NOT NULL DEFAULT 0,
+                archived_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, era_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_gr_rating_archives_era ON gr_rating_archives(era_id, archived_at)')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS gr_season_activity_rewards (
@@ -1435,6 +1475,208 @@ def init_db(story_content_version=None, coop_story_content_version=None):
         conn.execute('CREATE INDEX IF NOT EXISTS idx_moderation_actions_active ON moderation_actions(action_type, expires_at)')
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS reputation_ledger (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                business_id TEXT NOT NULL UNIQUE,
+                user_id INTEGER,
+                link_group_id INTEGER,
+                delta INTEGER NOT NULL,
+                value_before INTEGER NOT NULL,
+                value_after INTEGER NOT NULL,
+                reason_code TEXT NOT NULL,
+                match_id INTEGER,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                reputation_date TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                CHECK((user_id IS NOT NULL) != (link_group_id IS NOT NULL)),
+                CHECK(value_before BETWEEN 0 AND 100),
+                CHECK(value_after BETWEEN 0 AND 100),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE SET NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_reputation_ledger_user ON reputation_ledger(user_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_reputation_ledger_group ON reputation_ledger(link_group_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_reputation_ledger_date ON reputation_ledger(reputation_date, reason_code)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS team_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                match_id INTEGER NOT NULL,
+                generic_report_id INTEGER,
+                reporter_user_id INTEGER NOT NULL,
+                target_user_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending_confirmation'
+                    CHECK(status IN ('pending_confirmation', 'confirmed', 'withdrawn', 'expired', 'revoked')),
+                reason_text TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                confirmation_expires_at TEXT NOT NULL,
+                confirmed_by_user_id INTEGER,
+                confirmed_at TEXT,
+                resolved_at TEXT,
+                resolution_note TEXT NOT NULL DEFAULT '',
+                UNIQUE(match_id, reporter_user_id, target_user_id),
+                FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE,
+                FOREIGN KEY(generic_report_id) REFERENCES reports(id) ON DELETE SET NULL,
+                FOREIGN KEY(reporter_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(target_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(confirmed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_team_reports_status_expiry ON team_reports(status, confirmation_expires_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_team_reports_participants ON team_reports(reporter_user_id, target_user_id, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS team_report_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                team_report_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                actor_user_id INTEGER,
+                actor_name TEXT NOT NULL DEFAULT '',
+                old_status TEXT,
+                new_status TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(team_report_id) REFERENCES team_reports(id) ON DELETE CASCADE,
+                FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_team_report_audit_report ON team_report_audit(team_report_id, id)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS account_identity_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                device_hash TEXT NOT NULL DEFAULT '',
+                network_hash TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL,
+                event_day TEXT NOT NULL,
+                is_registration INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, device_hash, network_hash, source, event_day),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_identity_device ON account_identity_events(device_hash, event_day, user_id)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_identity_network ON account_identity_events(network_hash, event_day, user_id)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_identity_user_created ON account_identity_events(user_id, created_at)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS account_link_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                status TEXT NOT NULL DEFAULT 'confirmed'
+                    CHECK(status IN ('confirmed', 'appealed', 'dismissed')),
+                reputation INTEGER NOT NULL DEFAULT 85 CHECK(reputation BETWEEN 0 AND 100),
+                highest_total_gr REAL NOT NULL DEFAULT 0,
+                risk_score INTEGER NOT NULL DEFAULT 0,
+                rule_version TEXT NOT NULL,
+                last_recovery_date TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                closed_at TEXT
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS account_link_members (
+                group_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'removed')),
+                joined_at TEXT NOT NULL,
+                removed_at TEXT,
+                PRIMARY KEY(group_id, user_id),
+                FOREIGN KEY(group_id) REFERENCES account_link_groups(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_account_link_member_one_active ON account_link_members(user_id) WHERE status = 'active'")
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_link_members_group ON account_link_members(group_id, status, user_id)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS account_link_decisions (
+                user_id_low INTEGER NOT NULL,
+                user_id_high INTEGER NOT NULL,
+                state TEXT NOT NULL CHECK(state IN ('none', 'suspected', 'probable', 'confirmed', 'dismissed', 'appealed')),
+                risk_score INTEGER NOT NULL,
+                categories_json TEXT NOT NULL,
+                reasons_json TEXT NOT NULL,
+                input_fingerprint TEXT NOT NULL,
+                recompute_id TEXT NOT NULL,
+                rule_version TEXT NOT NULL,
+                group_id INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(user_id_low, user_id_high),
+                FOREIGN KEY(user_id_low) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id_high) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(group_id) REFERENCES account_link_groups(id) ON DELETE SET NULL,
+                CHECK(user_id_low < user_id_high)
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_link_decisions_state ON account_link_decisions(state, risk_score DESC, updated_at DESC)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS account_link_decision_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                recompute_id TEXT NOT NULL UNIQUE,
+                user_id_low INTEGER NOT NULL,
+                user_id_high INTEGER NOT NULL,
+                old_state TEXT,
+                new_state TEXT NOT NULL,
+                risk_score INTEGER NOT NULL,
+                categories_json TEXT NOT NULL,
+                reasons_json TEXT NOT NULL,
+                input_fingerprint TEXT NOT NULL,
+                rule_version TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS account_link_appeals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                appellant_user_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'rejected')),
+                reason TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                resolved_at TEXT,
+                resolved_by TEXT,
+                resolution_note TEXT,
+                FOREIGN KEY(group_id) REFERENCES account_link_groups(id) ON DELETE CASCADE,
+                FOREIGN KEY(appellant_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_link_appeals_status ON account_link_appeals(status, created_at DESC)')
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS account_link_admin_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER,
+                action TEXT NOT NULL,
+                actor_user_id INTEGER,
+                actor_username TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                old_value_json TEXT NOT NULL DEFAULT '{}',
+                new_value_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(group_id) REFERENCES account_link_groups(id) ON DELETE SET NULL,
+                FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_link_admin_audit_group ON account_link_admin_audit(group_id, created_at DESC)')
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS ip_bans (
                 ip TEXT PRIMARY KEY,
                 reason TEXT,
@@ -1597,6 +1839,8 @@ def init_db(story_content_version=None, coop_story_content_version=None):
                 seed TEXT NOT NULL,
                 content_version TEXT NOT NULL,
                 state_version INTEGER NOT NULL DEFAULT 1,
+                manual_save_count INTEGER NOT NULL DEFAULT 0,
+                manual_load_count INTEGER NOT NULL DEFAULT 0,
                 state_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -1807,6 +2051,17 @@ def init_db(story_content_version=None, coop_story_content_version=None):
             'CREATE INDEX IF NOT EXISTS idx_story_discoveries_unread '
             'ON story_discoveries(user_id, viewed_at, first_seen_at DESC)'
         )
+        story_run_columns = {
+            row['name'] for row in conn.execute('PRAGMA table_info(story_runs)').fetchall()
+        }
+        if 'manual_save_count' not in story_run_columns:
+            conn.execute(
+                'ALTER TABLE story_runs ADD COLUMN manual_save_count INTEGER NOT NULL DEFAULT 0'
+            )
+        if 'manual_load_count' not in story_run_columns:
+            conn.execute(
+                'ALTER TABLE story_runs ADD COLUMN manual_load_count INTEGER NOT NULL DEFAULT 0'
+            )
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS story_progress (
@@ -1975,6 +2230,46 @@ def init_db(story_content_version=None, coop_story_content_version=None):
         conn.execute(
             'CREATE INDEX IF NOT EXISTS idx_community_ops_audit_created '
             'ON community_ops_audit(created_at DESC, id DESC)'
+        )
+        conn.execute('''CREATE TABLE IF NOT EXISTS pvp_economy_accounts (
+            user_id INTEGER PRIMARY KEY REFERENCES users(id),
+            valid_games INTEGER NOT NULL DEFAULT 0 CHECK(valid_games>=0),
+            win_streak INTEGER NOT NULL DEFAULT 0 CHECK(win_streak>=0),
+            initialized_at TEXT NOT NULL)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS pvp_reward_settlements (
+            settlement_key TEXT PRIMARY KEY, match_id INTEGER NOT NULL REFERENCES matches(id),
+            request_fingerprint TEXT NOT NULL, result_json TEXT NOT NULL, created_at TEXT NOT NULL)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS pvp_reward_participants (
+            settlement_key TEXT NOT NULL REFERENCES pvp_reward_settlements(settlement_key),
+            user_id INTEGER NOT NULL REFERENCES users(id), opponent_ids_json TEXT NOT NULL,
+            amount INTEGER NOT NULL CHECK(amount>=0), outcome TEXT NOT NULL, played_at TEXT NOT NULL,
+            PRIMARY KEY(settlement_key,user_id))''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_pvp_rewards_user_date ON pvp_reward_participants(user_id,played_at)')
+        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_pvp_rewards_match ON pvp_reward_settlements(match_id)')
+        conn.execute('''INSERT OR IGNORE INTO pvp_economy_accounts(user_id,valid_games,win_streak,initialized_at)
+            SELECT id,MAX(0,COALESCE(games_played,0)),0,? FROM users''', (utc_now(),))
+        reputation_today = datetime.now(REPUTATION_TIMEZONE).date().isoformat()
+        reputation_now = utc_now()
+        conn.execute(
+            '''
+            UPDATE users
+            SET reputation = MIN(?, MAX(0, COALESCE(reputation, ?))),
+                reputation_initialized_at = COALESCE(reputation_initialized_at, ?),
+                reputation_last_recovery_date = COALESCE(reputation_last_recovery_date, ?)
+            ''',
+            (REPUTATION_MAX, REPUTATION_INITIAL, reputation_now, reputation_today),
+        )
+        conn.execute(
+            '''
+            INSERT OR IGNORE INTO reputation_ledger (
+                business_id, user_id, link_group_id, delta, value_before, value_after,
+                reason_code, metadata_json, reputation_date, created_at
+            )
+            SELECT 'reputation:init:user:' || id, id, NULL, 0, reputation, reputation,
+                   'initialization', '{}', ?, ?
+            FROM users
+            ''',
+            (reputation_today, reputation_now),
         )
         _reset_story_data_for_contract_if_needed_conn(
             conn,
@@ -3056,11 +3351,32 @@ def commit_story_coop_run_action(
             request_context=request_context,
         )
         resulting_revision = expected_revision + 1
-        terminal = str(next_state.get('phase') or '') in {
-            'complete',
-            'stage_complete',
-            'game_over',
-        }
+        phase = str(next_state.get('phase') or '')
+        terminal = phase in {'complete', 'game_over'}
+        full_clear = phase == 'complete'
+        if full_clear:
+            progression = next_state.get('coop_progression')
+            completed_stages = (
+                progression.get('completed_stages')
+                if isinstance(progression, dict)
+                else None
+            )
+            if (
+                next_state.get('completed') is not True
+                or next_state.get('journey_mode') != 'standard'
+                or next_state.get('stage') != 3
+                or next_state.get('biome') != 'factory'
+                or next_state.get('completed_stage') != 3
+                or not isinstance(progression, dict)
+                or progression.get('contract_version') != 3
+                or progression.get('chapter') != 3
+                or completed_stages != [1, 2, 3]
+            ):
+                conn.rollback()
+                raise StoryCoopDataError(
+                    'INVALID_COOP_COMPLETION',
+                    '多人故事完整通关状态无效',
+                )
         cursor = conn.execute(
             '''UPDATE story_coop_runs
                SET state_json = ?, revision = ?, updated_at = ?, status = ?,
@@ -3106,6 +3422,20 @@ def commit_story_coop_run_action(
                 now,
             ),
         )
+        if full_clear:
+            character_id = str(next_state.get('character_id') or 'common_flower')
+            difficulty = str(next_state.get('difficulty') or 'normal')
+            for completion_member in member_rows:
+                _record_story_completion_conn(
+                    conn,
+                    source_kind='coop',
+                    source_id=run_id,
+                    user_id=int(completion_member['user_id']),
+                    character_id=character_id,
+                    difficulty=difficulty,
+                    journey_mode='standard',
+                    completed_at=now,
+                )
         if terminal:
             conn.execute(
                 '''UPDATE story_coop_party_members
@@ -3508,6 +3838,13 @@ def create_story_manual_save(user_id, run_id, expected_state_version):
                 now,
             ),
         )
+        conn.execute(
+            '''UPDATE story_runs
+               SET manual_save_count = manual_save_count + 1,
+                   updated_at = ?
+               WHERE id = ? AND user_id = ? AND status = 'active' ''',
+            (now, run_id, user_id),
+        )
         conn.commit()
     return list_story_manual_saves(user_id, run_id), 'saved'
 
@@ -3618,6 +3955,7 @@ def load_story_manual_save(
         conn.execute(
             '''UPDATE story_runs
                SET state_json = ?, state_version = state_version + 1,
+                   manual_load_count = manual_load_count + 1,
                    updated_at = ?
                WHERE id = ? AND user_id = ? AND status = 'active' ''',
             (state_json, now, run_id, user_id),
@@ -4050,6 +4388,7 @@ def row_to_user(row):
         'searchable_by_player_id': bool(row['searchable_by_player_id']) if 'searchable_by_player_id' in row.keys() else True,
         'allow_guest_spectators': bool(row['allow_guest_spectators']) if 'allow_guest_spectators' in row.keys() else False,
         'false_report_count': int(row['false_report_count'] or 0) if 'false_report_count' in row.keys() else 0,
+        'reputation': int(row['reputation'] if row['reputation'] is not None else REPUTATION_INITIAL) if 'reputation' in row.keys() else REPUTATION_INITIAL,
         'banned': bool(row['banned']) if 'banned' in row.keys() else False,
         'ban_reason': row['ban_reason'] if 'ban_reason' in row.keys() else None,
         'banned_at': row['banned_at'] if 'banned_at' in row.keys() else None,
@@ -4188,6 +4527,16 @@ def _thorn_dew_payload(row_or_user):
     except Exception:
         paid = 0
     return {'free': free, 'paid': paid, 'total': free + paid}
+
+
+def _earned_dew_amount_conn(conn, user_id, amount):
+    from account_integrity import reward_amount_conn
+    return reward_amount_conn(conn, int(user_id), amount)
+
+
+def _reputation_allows_achievement_conn(conn, user_id):
+    from account_integrity import profile_conn
+    return profile_conn(conn, int(user_id))['can_achievements']
 
 
 def get_user_thorn_dew(user_id):
@@ -4377,6 +4726,7 @@ def _thorn_dew_same_opponent_multiplier(count_before):
 
 
 def get_user_thorn_dew_center(user_id):
+    from pvp_economy import profile_conn as newcomer_profile_conn
     try:
         uid = int(user_id)
     except (TypeError, ValueError):
@@ -4410,11 +4760,12 @@ def get_user_thorn_dew_center(user_id):
             'today': today,
             'checked_in_today': checkin is not None,
             'streak_day': int(checkin['streak_day'] or 0) if checkin else int(next_streak),
-            'next_checkin_reward': int(THORN_DEW_SIGNIN_REWARDS[reward_index]),
+            'next_checkin_reward': _earned_dew_amount_conn(conn, uid, THORN_DEW_SIGNIN_REWARDS[reward_index]),
             'checkin_rewards': list(THORN_DEW_SIGNIN_REWARDS),
             'match_rewards': dict(THORN_DEW_MODE_REWARDS),
             'win_bonus': int(THORN_DEW_WIN_BONUS),
             'draw_bonus': int(THORN_DEW_DRAW_BONUS),
+            'newcomer': newcomer_profile_conn(conn, uid),
             'transactions': list_user_thorn_dew_transactions(uid, limit=20),
         }
 
@@ -4427,6 +4778,7 @@ def claim_user_daily_checkin(user_id):
     today = _thorn_dew_date()
     now = utc_now()
     with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
         user = conn.execute('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
         if user is None:
             return None, '账号不存在'
@@ -4443,6 +4795,7 @@ def claim_user_daily_checkin(user_id):
         ).fetchone()
         streak = int(prev['streak_day'] or 0) + 1 if prev is not None else 1
         reward = int(THORN_DEW_SIGNIN_REWARDS[(streak - 1) % len(THORN_DEW_SIGNIN_REWARDS)])
+        reward = _earned_dew_amount_conn(conn, uid, reward)
         free_before = max(0, int(user['thorn_dew_free'] or 0))
         paid_before = max(0, int(user['thorn_dew_paid'] or 0))
         free_after = free_before + reward
@@ -4466,149 +4819,18 @@ def claim_user_daily_checkin(user_id):
 
 
 def award_match_thorn_dew(match_id, summary, award_time=None):
-    if not summary or summary.get('result') not in ('win', 'draw'):
-        return {'awarded': [], 'skipped': 'result'}
-    if not summary.get('valid_for_ranking', True):
-        return {'awarded': [], 'skipped': summary.get('ranking_invalid_reason') or 'not_valid'}
-    try:
-        mid = int(match_id)
-    except (TypeError, ValueError):
-        return {'awarded': [], 'skipped': 'match_id'}
-    mode = str(summary.get('mode') or '').strip()
-    base = int(THORN_DEW_MODE_REWARDS.get(mode, 20))
-    player_ids = summary.get('player_ids') or []
-    winner_ids = {int(uid) for uid in (summary.get('winner_user_ids') or []) if uid is not None}
-    is_draw = summary.get('result') == 'draw'
-    registered_ids = []
-    for uid in player_ids:
-        if uid is None:
-            continue
-        try:
-            registered_ids.append(int(uid))
-        except (TypeError, ValueError):
-            continue
-    if not registered_ids:
-        return {'awarded': [], 'skipped': 'no_registered'}
-    award_dt = _parse_utc_datetime(award_time) if award_time else datetime.now(timezone.utc)
-    today = _thorn_dew_date(award_dt)
-    day_start, day_end = _thorn_dew_day_bounds_utc(today)
-    now = utc_iso(award_dt)
-    awarded = []
-    with get_db_connection() as conn:
-        for uid in registered_ids:
-            source_type = 'match_reward'
-            opponents = sorted(str(other) for other in registered_ids if other != uid)
-            opp_hash = hashlib.sha256(','.join(opponents).encode('utf-8')).hexdigest()[:12] if opponents else 'solo'
-            source_id = f'match:{mid}:u:{uid}:opp:{opp_hash}'
-            if _currency_source_exists(conn, uid, source_type, source_id):
-                continue
-            user = conn.execute('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
-            if user is None:
-                continue
-            daily_count = conn.execute(
-                '''
-                SELECT COUNT(*) FROM user_currency_transactions
-                WHERE user_id = ? AND currency = 'thorn_dew' AND source_type = 'match_reward'
-                  AND created_at >= ? AND created_at < ?
-                ''',
-                (uid, day_start, day_end),
-            ).fetchone()[0]
-            same_count = conn.execute(
-                '''
-                SELECT COUNT(*) FROM user_currency_transactions
-                WHERE user_id = ? AND currency = 'thorn_dew' AND source_type = 'match_reward'
-                  AND source_id LIKE ? AND created_at >= ? AND created_at < ?
-                ''',
-                (uid, f'%:opp:{opp_hash}', day_start, day_end),
-            ).fetchone()[0]
-            bonus = THORN_DEW_DRAW_BONUS if is_draw else (THORN_DEW_WIN_BONUS if uid in winner_ids else 0)
-            raw_amount = base + int(bonus)
-            multiplier = min(_thorn_dew_daily_multiplier(daily_count), _thorn_dew_same_opponent_multiplier(same_count))
-            amount = max(1, int(math.floor(raw_amount * multiplier)))
-            free_before = max(0, int(user['thorn_dew_free'] or 0))
-            paid_before = max(0, int(user['thorn_dew_paid'] or 0))
-            free_after = free_before + amount
-            reason = f'有效对局奖励 {mode}'
-            if bonus:
-                reason += ' 平局' if is_draw else ' 胜利'
-            if multiplier < 1:
-                reason += f' ×{multiplier:g}'
-            conn.execute('UPDATE users SET thorn_dew_free = ? WHERE id = ?', (free_after, uid))
-            conn.execute(
-                '''
-                INSERT INTO user_currency_transactions (
-                    user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
-                    balance_free_after, balance_paid_after, admin_username, created_at
-                )
-                VALUES (?, 'thorn_dew', ?, 0, ?, ?, ?, ?, ?, '', ?)
-                ''',
-                (uid, amount, reason, source_type, source_id, free_after, paid_before, now),
-            )
-            awarded.append({'user_id': uid, 'amount': amount, 'multiplier': multiplier, 'reason': reason})
-        conn.commit()
-    return {'awarded': awarded, 'skipped': None}
+    from pvp_economy import award_match
+    return award_match(match_id, summary, award_time)
 
 
 def _estimate_match_thorn_dew_awards_for_conn(conn, match_id, summary, award_time=None):
-    if not summary or summary.get('result') not in ('win', 'draw'):
-        return {'awarded': [], 'skipped': 'result'}
-    if not summary.get('valid_for_ranking', True):
-        return {'awarded': [], 'skipped': summary.get('ranking_invalid_reason') or 'not_valid'}
+    from pvp_economy import settle_conn
+    conn.execute('SAVEPOINT pvp_reward_preview')
     try:
-        mid = int(match_id)
-    except (TypeError, ValueError):
-        return {'awarded': [], 'skipped': 'match_id'}
-    mode = str(summary.get('mode') or '').strip()
-    base = int(THORN_DEW_MODE_REWARDS.get(mode, 20))
-    player_ids = summary.get('player_ids') or []
-    winner_ids = {int(uid) for uid in (summary.get('winner_user_ids') or []) if uid is not None}
-    is_draw = summary.get('result') == 'draw'
-    registered_ids = []
-    for uid in player_ids:
-        if uid is None:
-            continue
-        try:
-            registered_ids.append(int(uid))
-        except (TypeError, ValueError):
-            continue
-    if not registered_ids:
-        return {'awarded': [], 'skipped': 'no_registered'}
-    award_dt = _parse_utc_datetime(award_time) if award_time else datetime.now(timezone.utc)
-    today = _thorn_dew_date(award_dt)
-    day_start, day_end = _thorn_dew_day_bounds_utc(today)
-    awarded = []
-    for uid in registered_ids:
-        source_type = 'match_reward'
-        opponents = sorted(str(other) for other in registered_ids if other != uid)
-        opp_hash = hashlib.sha256(','.join(opponents).encode('utf-8')).hexdigest()[:12] if opponents else 'solo'
-        source_id = f'match:{mid}:u:{uid}:opp:{opp_hash}'
-        if _currency_source_exists(conn, uid, source_type, source_id):
-            continue
-        user = conn.execute('SELECT id FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
-        if user is None:
-            continue
-        daily_count = conn.execute(
-            '''
-            SELECT COUNT(*) FROM user_currency_transactions
-            WHERE user_id = ? AND currency = 'thorn_dew' AND source_type = 'match_reward'
-              AND created_at >= ? AND created_at < ?
-            ''',
-            (uid, day_start, day_end),
-        ).fetchone()[0]
-        same_count = conn.execute(
-            '''
-            SELECT COUNT(*) FROM user_currency_transactions
-            WHERE user_id = ? AND currency = 'thorn_dew' AND source_type = 'match_reward'
-              AND source_id LIKE ? AND created_at >= ? AND created_at < ?
-            ''',
-            (uid, f'%:opp:{opp_hash}', day_start, day_end),
-        ).fetchone()[0]
-        bonus = THORN_DEW_DRAW_BONUS if is_draw else (THORN_DEW_WIN_BONUS if uid in winner_ids else 0)
-        raw_amount = base + int(bonus)
-        multiplier = min(_thorn_dew_daily_multiplier(daily_count), _thorn_dew_same_opponent_multiplier(same_count))
-        amount = max(1, int(math.floor(raw_amount * multiplier)))
-        awarded.append({'user_id': uid, 'amount': amount, 'multiplier': multiplier, 'source_id': source_id})
-    return {'awarded': awarded, 'skipped': None}
+        return settle_conn(conn, match_id, summary, award_time)
+    finally:
+        conn.execute('ROLLBACK TO pvp_reward_preview')
+        conn.execute('RELEASE pvp_reward_preview')
 
 
 def _prepare_match_thorn_dew_summary(conn, row, user_ids, username_key_to_id):
@@ -4826,6 +5048,8 @@ def get_user_achievement_center(user_id, lang='zh'):
 
 def _award_achievement_reward_conn(conn, user_id, defn, now=None):
     uid = int(user_id)
+    if not _reputation_allows_achievement_conn(conn, uid):
+        return False
     reward = int(defn.get('reward_dew') or 0)
     already_awarded = _achievement_currency_awarded(conn, uid, defn['id'])
     reward_delta = max(0, reward - already_awarded)
@@ -4915,6 +5139,8 @@ def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=N
     if not defn:
         return None
     uid = int(user_id)
+    if not _reputation_allows_achievement_conn(conn, uid):
+        return None
     now = now or utc_now()
     target = int(defn.get('target') or 1)
     progress_value = max(target, int(progress if progress is not None else target))
@@ -4971,6 +5197,8 @@ def _unlock_achievement_conn(conn, user_id, achievement_id, progress=None, now=N
 
 def _update_achievement_progress_conn(conn, user_id, defn, value, now):
     uid = int(user_id)
+    if not _reputation_allows_achievement_conn(conn, uid):
+        return None
     target = int(defn.get('target') or 1)
     current = max(0, int(value or 0))
     row = conn.execute(
@@ -5593,7 +5821,7 @@ def _gr_season_period(season_id, fallback_end_at=None):
         start = datetime(2026, 7, 1, tzinfo=GR_SEASON_TIMEZONE)
         end = datetime(2026, 8, 1, tzinfo=GR_SEASON_TIMEZONE)
         return utc_iso(start), utc_iso(end)
-    matched = re.fullmatch(r'S(\d{4})(\d{2})', season_key)
+    matched = re.fullmatch(r'(?:R\d+-)?S(\d{4})(\d{2})', season_key)
     if matched:
         year = int(matched.group(1))
         month = int(matched.group(2))
@@ -5657,6 +5885,9 @@ def _gr_season_valid_match_counts_for_conn(
     ).fetchall()
     for row in rows:
         summary = _safe_json_loads(row['summary_json'], {})
+        if str(season_id or '').startswith(f'{GR_RANKED_ERA}-'):
+            if str(summary.get('match_type') or '').lower() != 'ranked':
+                continue
         result = str(row['result'] or summary.get('result') or '').lower()
         if result not in ('win', 'draw', 'finished'):
             continue
@@ -5755,6 +5986,7 @@ def _award_gr_season_activity_reward_for_conn(
     if reward_row is None:
         random_value = _gr_season_activity_random()
         reward = _calculate_gr_season_activity_reward(old_value, random_value)
+        reward = _earned_dew_amount_conn(conn, uid, reward)
         conn.execute(
             '''
             INSERT INTO gr_season_activity_rewards (
@@ -5833,7 +6065,8 @@ def ensure_current_gr_season_for_conn(conn, user_ids=None):
             params = safe_ids
     rows = conn.execute(
         f'''
-        SELECT id, season_gr, gr_season_id
+        SELECT id, season_gr, total_gr, highest_gr,
+               season_ranked_games, total_ranked_games, gr_season_id
         FROM users
         {where}
         ''',
@@ -5862,17 +6095,55 @@ def ensure_current_gr_season_for_conn(conn, user_ids=None):
     for row in pending_rows:
         previous_season_id = str(row['gr_season_id'] or '')
         old_gr = float(row['season_gr']) if row['season_gr'] is not None else float(GR_INITIAL)
-        new_gr = _soft_reset_gr(old_gr)
-        conn.execute(
-            '''
-            UPDATE users
-            SET season_gr = ?,
-                season_ranked_games = 0,
-                gr_season_id = ?
-            WHERE id = ?
-            ''',
-            (new_gr, season['id'], row['id']),
+        entering_ranked_era = (
+            str(season.get('id') or '').startswith(f'{GR_RANKED_ERA}-')
+            and not previous_season_id.startswith(f'{GR_RANKED_ERA}-')
         )
+        if entering_ranked_era:
+            conn.execute(
+                '''
+                INSERT OR IGNORE INTO gr_rating_archives (
+                    user_id, era_id, season_id, season_gr, total_gr, highest_gr,
+                    season_ranked_games, total_ranked_games, archived_at
+                )
+                VALUES (?, 'legacy', ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    row['id'],
+                    previous_season_id or 'legacy',
+                    old_gr,
+                    float(row['total_gr'] or GR_INITIAL),
+                    float(row['highest_gr'] or GR_INITIAL),
+                    int(row['season_ranked_games'] or 0),
+                    int(row['total_ranked_games'] or 0),
+                    now,
+                ),
+            )
+            new_gr = float(GR_INITIAL)
+            conn.execute(
+                '''
+                UPDATE users
+                SET season_gr = ?,
+                    total_gr = ?,
+                    season_ranked_games = 0,
+                    total_ranked_games = 0,
+                    gr_season_id = ?
+                WHERE id = ?
+                ''',
+                (new_gr, GR_INITIAL, season['id'], row['id']),
+            )
+        else:
+            new_gr = _soft_reset_gr(old_gr)
+            conn.execute(
+                '''
+                UPDATE users
+                SET season_gr = ?,
+                    season_ranked_games = 0,
+                    gr_season_id = ?
+                WHERE id = ?
+                ''',
+                (new_gr, season['id'], row['id']),
+            )
         _award_gr_season_activity_reward_for_conn(
             conn,
             row['id'],
@@ -6074,6 +6345,8 @@ def create_user(username, password):
                 (name, normalize_username_key(name), password_hash, now, player_id),
             )
             row = conn.execute('SELECT * FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
+            from account_integrity import initialize_user_conn
+            initialize_user_conn(conn, cur.lastrowid, now)
             _ensure_builtin_role_for_row(conn, row)
             conn.commit()
             row = conn.execute('SELECT * FROM users WHERE id = ?', (cur.lastrowid,)).fetchone()
@@ -12465,13 +12738,15 @@ def preview_gr_match_result(mode, player_ids, viewer_user_id=None):
         by_id = {int(row['id']): row for row in rows}
         if len(by_id) != len(ids):
             return {'applied': False, 'reason': 'unknown_user'}
+        from pvp_economy import protected_loss_conn
+        protected = {uid:protected_loss_conn(conn,uid) for uid in ids}
         repeat_rows = conn.execute(
             '''
             SELECT team_a_ids_json, team_b_ids_json
             FROM gr_match_results
-            WHERE played_at >= ? AND played_at < ? AND mode = ?
+            WHERE played_at >= ? AND played_at < ? AND mode = ? AND season_id = ?
             ''',
-            (utc_iso(day_start), utc_iso(day_end), mode),
+            (utc_iso(day_start), utc_iso(day_end), mode, season['id']),
         ).fetchall()
     repeat_count = 0
     for row in repeat_rows:
@@ -12499,7 +12774,10 @@ def preview_gr_match_result(mode, player_ids, viewer_user_id=None):
                 score = 1.0 if (winner_side == 0 and on_a) or (winner_side == 1 and not on_a) else 0.0
             expected = _gr_expected(own_rating, other_rating)
             k = _gr_k_factor(by_id[uid]['total_ranked_games'])
-            deltas[str(uid)] = round(k * mode_factor * repeat_factor * (score - expected), 1)
+            delta = k * mode_factor * repeat_factor * (score - expected)
+            if score == 0 and protected[uid]:
+                delta = max(0,delta)
+            deltas[str(uid)] = round(delta, 1)
         outcomes[str(winner_side)] = deltas
     viewer = None
     try:
@@ -12582,6 +12860,12 @@ def _simulate_gr_from_matches(conn):
     for row in rows:
         summary, recovered = _gr_prepare_match_summary(conn, row, user_ids, username_key_to_id)
         recovered_player_refs += recovered
+        if str(summary.get('match_type') or '').lower() != 'ranked':
+            skip('casual_or_legacy_match')
+            continue
+        if str(summary.get('match_mode') or '').lower() != f"ranked_{str(summary.get('mode') or '').lower()}":
+            skip('invalid_match_mode')
+            continue
         if summary.get('result') not in ('win', 'draw', 'finished'):
             skip('abnormal_result')
             continue
@@ -12644,6 +12928,11 @@ def _simulate_gr_from_matches(conn):
             k = _gr_k_factor(ratings[uid]['total_ranked_games'])
             season_delta = k * mode_factor * repeat_factor * (score - season_expected)
             total_delta = k * mode_factor * repeat_factor * (score - total_expected)
+            # Historical rebuilds reuse the original protection decision, not
+            # today's account age or account-link state.
+            if score == 0 and uid in (summary.get('gr_result') or {}).get('newcomer_protected_user_ids', []):
+                season_delta = max(0,season_delta)
+                total_delta = max(0,total_delta)
             before[str(uid)] = {
                 'season_gr': round(ratings[uid]['season_gr'], 1),
                 'total_gr': round(ratings[uid]['total_gr'], 1),
@@ -12670,6 +12959,8 @@ def _simulate_gr_from_matches(conn):
             'before': before,
             'after': after,
         }
+        if 'newcomer_protected_user_ids' in (summary.get('gr_result') or {}):
+            result_payload['newcomer_protected_user_ids'] = list(summary['gr_result']['newcomer_protected_user_ids'])
         match_results.append({
             'match_id': int(row['id']),
             'summary': summary,
@@ -12728,6 +13019,7 @@ def rebuild_gr_from_matches(dry_run=True):
                 gr_season_id = ?
             ''', (GR_INITIAL, GR_INITIAL, GR_INITIAL, season['id']))
         conn.execute('DELETE FROM gr_match_results')
+        conn.execute('DELETE FROM gr_match_settlements')
         conn.execute('DELETE FROM gr_daily_snapshots')
         for uid, values in result['ratings'].items():
             conn.execute(
@@ -12819,6 +13111,11 @@ def apply_gr_match_result(match_id, summary):
     intentionally return a non-scoring reason instead of raising.
     """
     data = dict(summary or {})
+    if str(data.get('match_type') or '').lower() != 'ranked':
+        return {'applied': False, 'reason': 'casual_match'}
+    expected_match_mode = f"ranked_{str(data.get('mode') or '').lower()}"
+    if str(data.get('match_mode') or '').lower() != expected_match_mode:
+        return {'applied': False, 'reason': 'invalid_match_mode'}
     if not data.get('valid_for_ranking', True):
         return {'applied': False, 'reason': data.get('ranking_invalid_reason') or 'not_valid_for_ranking'}
     if str(data.get('result') or '').lower() not in ('win', 'draw', 'finished'):
@@ -12834,6 +13131,16 @@ def apply_gr_match_result(match_id, summary):
     all_ids = team_a + team_b
     if len(set(all_ids)) != len(all_ids):
         return {'applied': False, 'reason': 'duplicate_player'}
+    settlement_fingerprint = hashlib.sha256(json.dumps({
+        'mode': mode,
+        'match_type': data.get('match_type'),
+        'match_mode': data.get('match_mode'),
+        'player_ids': data.get('player_ids') or [],
+        'winner_user_ids': data.get('winner_user_ids') or [],
+        'winner_index': data.get('winner_index'),
+        'result': data.get('result'),
+        'ended_at': data.get('ended_at'),
+    }, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
     season = current_gr_season()
     played_at = data.get('ended_at') or utc_now()
     try:
@@ -12866,6 +13173,53 @@ def apply_gr_match_result(match_id, summary):
         if winner_side is None:
             return {'applied': False, 'reason': 'unknown_winner'}
     with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if match_id:
+            settled = conn.execute(
+                'SELECT request_fingerprint, result_json FROM gr_match_settlements WHERE match_id = ?',
+                (match_id,),
+            ).fetchone()
+            if settled is not None:
+                if str(settled['request_fingerprint'] or '') != settlement_fingerprint:
+                    conn.rollback()
+                    return {'applied': False, 'reason': 'settlement_conflict'}
+                duplicate = _safe_json_loads(settled['result_json'], {})
+                duplicate['duplicate'] = True
+                conn.commit()
+                return duplicate
+            legacy_result = conn.execute(
+                '''
+                SELECT season_id, repeat_count, repeat_factor, total_deltas_json,
+                       season_deltas_json, before_json, after_json
+                FROM gr_match_results
+                WHERE match_id = ?
+                ORDER BY id ASC
+                LIMIT 1
+                ''',
+                (match_id,),
+            ).fetchone()
+            if legacy_result is not None:
+                duplicate = {
+                    'applied': True,
+                    'season_id': legacy_result['season_id'],
+                    'repeat_count': int(legacy_result['repeat_count'] or 0),
+                    'repeat_factor': float(legacy_result['repeat_factor'] or 1),
+                    'total_deltas': _safe_json_loads(legacy_result['total_deltas_json'], {}),
+                    'season_deltas': _safe_json_loads(legacy_result['season_deltas_json'], {}),
+                    'before': _safe_json_loads(legacy_result['before_json'], {}),
+                    'after': _safe_json_loads(legacy_result['after_json'], {}),
+                }
+                conn.execute(
+                    '''
+                    INSERT INTO gr_match_settlements (
+                        match_id, request_fingerprint, result_json, created_at
+                    ) VALUES (?, ?, ?, ?)
+                    ''',
+                    (match_id, settlement_fingerprint, json.dumps(duplicate, ensure_ascii=False), utc_now()),
+                )
+                duplicate['duplicate'] = True
+                conn.commit()
+                return duplicate
         ensure_current_gr_season_for_conn(conn, all_ids)
         rows = conn.execute(
             f"SELECT * FROM users WHERE id IN ({','.join(['?'] * len(all_ids))})",
@@ -12878,9 +13232,9 @@ def apply_gr_match_result(match_id, summary):
             '''
             SELECT participant_ids_json, team_a_ids_json, team_b_ids_json
             FROM gr_match_results
-            WHERE played_at >= ? AND played_at < ? AND mode = ?
+            WHERE played_at >= ? AND played_at < ? AND mode = ? AND season_id = ?
             ''',
-            (utc_iso(day_start), utc_iso(day_end), mode),
+            (utc_iso(day_start), utc_iso(day_end), mode, season['id']),
         ).fetchall()
         repeat_count = 0
         for row in repeat_rows:
@@ -12901,6 +13255,9 @@ def apply_gr_match_result(match_id, summary):
         after = {}
         season_deltas = {}
         total_deltas = {}
+        from pvp_economy import protected_loss_conn
+        protected = {uid:protected_loss_conn(conn,uid) for uid in all_ids}
+        protected_users = []
         for uid in all_ids:
             row = by_id[uid]
             on_a = uid in team_a
@@ -12913,6 +13270,10 @@ def apply_gr_match_result(match_id, summary):
             k = _gr_k_factor(row['total_ranked_games'])
             season_delta = k * mode_factor * repeat_factor * (score - season_expected)
             total_delta = k * mode_factor * repeat_factor * (score - total_expected)
+            if score == 0 and protected[uid]:
+                season_delta = max(0,season_delta)
+                total_delta = max(0,total_delta)
+                protected_users.append(uid)
             old_season = float(row['season_gr'] or GR_INITIAL)
             old_total = float(row['total_gr'] or GR_INITIAL)
             new_season = max(0.0, old_season + season_delta)
@@ -12959,6 +13320,7 @@ def apply_gr_match_result(match_id, summary):
             'before': before,
             'after': after,
         }
+        result_payload['newcomer_protected_user_ids'] = protected_users
         conn.execute(
             '''
             INSERT INTO gr_match_results (
@@ -12991,6 +13353,19 @@ def apply_gr_match_result(match_id, summary):
             conn.execute(
                 'UPDATE matches SET summary_json = ? WHERE id = ?',
                 (json.dumps(data, ensure_ascii=False), match_id),
+            )
+            conn.execute(
+                '''
+                INSERT INTO gr_match_settlements (
+                    match_id, request_fingerprint, result_json, created_at
+                ) VALUES (?, ?, ?, ?)
+                ''',
+                (
+                    match_id,
+                    settlement_fingerprint,
+                    json.dumps(result_payload, ensure_ascii=False),
+                    utc_now(),
+                ),
             )
         conn.commit()
     return result_payload

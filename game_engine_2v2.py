@@ -119,7 +119,8 @@ class GameEngine2v2(GameEngine):
         return enemies
 
     def _opening_event_enemy_targets(self, player_id: int):
-        return self.get_all_enemies(player_id)
+        enemies = self.get_enemies(player_id)
+        return [random.choice(enemies)] if enemies else []
 
     def is_ally(self, player_id: int, other_id: int) -> bool:
         return self.team_of(player_id) == self.team_of(other_id)
@@ -1312,7 +1313,6 @@ class GameEngine2v2(GameEngine):
         }
         equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
         counter_cards = []
-        has_payable_counter = False
         # A Guard may be used whenever its trigger occurs outside the holder's
         # own turn.  In 2v2 this includes the acting player's teammate as well
         # as both opponents; target-specific Guards are still filtered by
@@ -1336,14 +1336,12 @@ class GameEngine2v2(GameEngine):
                     if not target_match and responder_id in equipment_destroy_responders:
                         target_match = self._card_can_counter(c, card, responder_id=responder_id, target_player_id=responder_id)
                     if target_match:
-                        if self._can_pay_counter_card(responder_id, c):
-                            has_payable_counter = True
                         counter_entry = c.to_dict()
                         counter_entry['responder_id'] = responder_id
                         counter_cards.append(counter_entry)
         finally:
             self._pending_response_preview = prev_preview
-        if not has_payable_counter:
+        if not self._pending_response_has_payable_counter({'counter_cards': counter_cards}):
             return None
         return {
             'player_id': player_id,

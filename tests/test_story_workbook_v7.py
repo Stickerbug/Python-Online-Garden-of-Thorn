@@ -35,6 +35,10 @@ def _combat(seed='workbook-v7'):
 
 def test_workbook_v7_card_and_relic_balance_values():
     assert STORY_CARDS['antibody']['rarity'] == 'rare'
+    assert STORY_CARDS['bur']['effects'] == (
+        {'type': 'damage', 'amount': 8},
+        {'type': 'status', 'amount': 1, 'status': 'vulnerable'},
+    )
 
     jelly = STORY_CARDS['jelly']
     assert jelly['tags'] == ('wide',)
@@ -63,7 +67,7 @@ def test_workbook_v7_card_and_relic_balance_values():
     # Existing runs stored the old 2x value on each card. Presence of the
     # modifier now opts into the current relic definition instead.
     basic['modifiers']['primary_multiplier'] = 2
-    assert _card_values(basic)['effects'][0]['amount'] == 9
+    assert _card_values(basic)['effects'][0]['amount'] == 12
 
 
 def test_statuses_follow_the_workbook_decay_phases():
@@ -142,23 +146,22 @@ def test_rat_hiding_trait_and_room_weights_match_workbook():
     assert 'hiding' in STORY_ENEMIES['mechanical_rat']['traits']
     assert STORY_TRAITS['hiding']['name']['zh'] == '躲藏'
     assert dict(_NORMAL_ROOM_WEIGHTS) == {
-        'shop': 1, 'rest': 2, 'elite': 4, 'event': 4, 'combat': 6,
+        'shop': 1, 'rest': 1, 'elite': 4, 'event': 4, 'combat': 6,
     }
     assert dict(_HARD_ROOM_WEIGHTS) == {
-        'shop': 1, 'rest': 2, 'elite': 4, 'event': 4, 'combat': 6,
+        'shop': 2, 'rest': 2, 'elite': 9, 'event': 6, 'combat': 12,
     }
 
 
-def test_boss_rush_cycles_through_standard_stage_biomes():
+def test_boss_rush_ends_after_the_third_stage():
     state = build_initial_story_state('workbook-v7-boss-rush')
     state['journey_mode'] = 'boss_rush'
 
     expected = (
         STORY_STAGES[1]['biomes'],
         STORY_STAGES[2]['biomes'],
-        STORY_STAGES[0]['biomes'],
     )
-    for stage, expected_biomes in zip((1, 2, 3), expected):
+    for stage, expected_biomes in zip((1, 2), expected):
         state['stage'] = stage
         state['map'] = generate_boss_rush_map(
             'workbook-v7-boss-rush',
@@ -175,3 +178,20 @@ def test_boss_rush_cycles_through_standard_stage_biomes():
 
         assert state['phase'] == 'stage_choice'
         assert tuple(state['room']['biomes']) == tuple(expected_biomes)
+
+    state['stage'] = 3
+    state['map'] = generate_boss_rush_map(
+        'workbook-v7-boss-rush',
+        3,
+        STORY_STAGES[2]['biomes'][0],
+        'normal',
+    )
+    final_node = state['map']['floors'][-1]['nodes'][0]
+    final_node['status'] = 'current'
+    state['current_node_id'] = final_node['id']
+    state['current_floor'] = final_node['floor']
+
+    _complete_current_node(state, [])
+
+    assert state['phase'] == 'complete'
+    assert state['completed'] is True

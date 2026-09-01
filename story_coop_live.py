@@ -1,17 +1,19 @@
-"""Playable, server-authoritative Garden stage for cooperative story mode.
+"""Playable, server-authoritative cooperative story journey.
 
 The v10 schema and coordination core deliberately stay content-agnostic.  This
-module supplies the current two-seat Garden-stage contract: curated combat,
+module supplies the current two-seat three-stage contract: curated combat,
 personal rewards and rooms, shared hidden votes, deterministic map progression,
-and the only public projection that cooperative HTTP clients may receive.
+stage barriers, and the only public projection that cooperative HTTP clients
+may receive.
 """
 
 from copy import deepcopy
 import hashlib
 import json
+import math
 import re
 
-from story_content import STORY_RULES
+from story_content import STORY_ENCHANTMENT_BOOKS, STORY_RULES
 from story_coop_content import (
     COOP_CHEST_RELIC_IDS,
     COOP_CONTENT_FINGERPRINT,
@@ -53,23 +55,10 @@ COOP_LEGACY_CONTENT_VERSION = STORY_CONTENT_VERSION
 COOP_STAGE1_REST_CONTENT_VERSION = f'{STORY_CONTENT_VERSION}-coop-stage1-rest-1'
 COOP_STAGE1_GARDEN_V1_CONTENT_VERSION = f'{STORY_CONTENT_VERSION}-coop-stage1-garden-1'
 COOP_STAGE1_OPENING_V1_CONTENT_VERSION = f'{STORY_CONTENT_VERSION}-coop-stage1-garden-opening-1'
-COOP_STORY_CONTENT_VERSION = (
-    f'{STORY_CONTENT_VERSION}-coop-stage1-shared-content-1-'
-    f'{COOP_CONTENT_FINGERPRINT[:12]}'
-)
-COOP_STAGE1_OPENING_CONTENT_VERSIONS = frozenset({
-    COOP_STAGE1_OPENING_V1_CONTENT_VERSION,
-    COOP_STORY_CONTENT_VERSION,
-})
 COOP_SHARED_CONTENT_VERSION_RE = re.compile(
-    r'[A-Za-z0-9._:-]+-coop-stage1-shared-content-1-[0-9a-f]{12}'
+    r'[A-Za-z0-9._:-]+-coop-(?:stage1-shared-content|full-journey)-1-[0-9a-f]{12}'
 )
-COOP_STAGE1_CONTENT_VERSIONS = frozenset({
-    COOP_STAGE1_REST_CONTENT_VERSION,
-    COOP_STAGE1_GARDEN_V1_CONTENT_VERSION,
-    *COOP_STAGE1_OPENING_CONTENT_VERSIONS,
-})
-COOP_STAGE1_CONTRACT_VERSION = 2
+COOP_STAGE1_CONTRACT_VERSION = 3
 COOP_STAGE1_MAX_FLOOR = 16
 COOP_STAGE1_DIFFICULTIES = ('normal', 'hard', 'lunatic')
 COOP_STAGE1_SUPPORTED_NODE_TYPES = frozenset({
@@ -83,6 +72,164 @@ COOP_STAGE1_SUPPORTED_NODE_TYPES = frozenset({
 })
 COOP_GARDEN_EVENT_ID = 'coop_garden_crossroads'
 COOP_GARDEN_EVENT_OPTIONS = ('mend', 'supplies', 'risk')
+COOP_STORY_STAGES = {
+    1: {
+        'biome': 'garden',
+        'name': {'zh': '花园', 'en': 'Garden'},
+        'complete_title': {'zh': '花园阶段完成', 'en': 'Garden Stage Complete'},
+    },
+    2: {
+        'biome': 'jungle',
+        'name': {'zh': '丛林', 'en': 'Jungle'},
+        'complete_title': {'zh': '丛林阶段完成', 'en': 'Jungle Stage Complete'},
+    },
+    3: {
+        'biome': 'factory',
+        'name': {'zh': '工厂', 'en': 'Factory'},
+        'complete_title': {'zh': '神秘人物', 'en': 'Mysterious Person'},
+    },
+}
+COOP_FINAL_STAGE = max(COOP_STORY_STAGES)
+COOP_ADAPTED_EVENT_DEFINITIONS = {
+    'jungle': {
+        'id': 'coop_jungle_waystation',
+        'title': {'zh': '藤蔓驿站', 'en': 'Vine Waystation'},
+        'description': {
+            'zh': '潮湿的驿站里还留着一些可共同使用的补给。',
+            'en': 'A damp waystation still holds supplies the party can share.',
+        },
+        'speaker': {'zh': '藤蔓驿站', 'en': 'Vine Waystation'},
+        'portrait': 'jungle',
+        'biomes': ('jungle',),
+        'modes': ('coop',),
+        'coop': {
+            'enabled': True,
+            'policy': 'unanimous_required',
+            'effect_scope': 'all_players',
+        },
+        'options': (
+            {
+                'id': 'rest',
+                'label': {'zh': '整顿队伍', 'en': 'Regroup'},
+                'description': {'zh': '团队每位成员回复18H。', 'en': 'Each member recovers 18 H.'},
+                'effects': ({'type': 'heal', 'amount': 18},),
+            },
+            {
+                'id': 'forage',
+                'label': {'zh': '搜寻物资', 'en': 'Forage'},
+                'description': {'zh': '团队每位成员获得38G。', 'en': 'Each member gains 38 G.'},
+                'effects': ({'type': 'gold', 'amount': 38},),
+            },
+        ),
+    },
+    'factory': {
+        'id': 'coop_factory_salvage',
+        'title': {'zh': '废料传送带', 'en': 'Salvage Conveyor'},
+        'description': {
+            'zh': '停摆的传送带上散落着还能使用的零件。',
+            'en': 'Useful parts remain scattered across a stalled conveyor.',
+        },
+        'speaker': {'zh': '废料传送带', 'en': 'Salvage Conveyor'},
+        'portrait': 'factory',
+        'biomes': ('factory',),
+        'modes': ('coop',),
+        'coop': {
+            'enabled': True,
+            'policy': 'unanimous_required',
+            'effect_scope': 'all_players',
+        },
+        'options': (
+            {
+                'id': 'repair',
+                'label': {'zh': '修复护具', 'en': 'Repair Gear'},
+                'description': {'zh': '团队每位成员回复20H。', 'en': 'Each member recovers 20 H.'},
+                'effects': ({'type': 'heal', 'amount': 20},),
+            },
+            {
+                'id': 'salvage',
+                'label': {'zh': '拆取零件', 'en': 'Salvage Parts'},
+                'description': {'zh': '团队每位成员获得45G。', 'en': 'Each member gains 45 G.'},
+                'effects': ({'type': 'gold', 'amount': 45},),
+            },
+        ),
+    },
+}
+COOP_ADAPTED_ENCOUNTERS = {
+    ('jungle', 'combat'): (
+        'coop_jungle_patrol',
+        ({'slug': 'termite-scout', 'def_id': 'coop_jungle_termite_scout',
+          'name': {'zh': '协作白蚁斥候', 'en': 'Co-op Termite Scout'},
+          'image_url': '/static/assets/story-enemies/soldier-termite.svg',
+          'health': 62, 'intent': {'kind': 'attack', 'amount': 8, 'hits': 1}},),
+    ),
+    ('jungle', 'elite'): (
+        'coop_jungle_elite',
+        ({'slug': 'canopy-stalker', 'def_id': 'coop_canopy_stalker',
+          'name': {'zh': '协作树冠猎手', 'en': 'Co-op Canopy Stalker'},
+          'image_url': '/static/assets/story-enemies/stickbug.svg',
+          'health': 150, 'intent': {'kind': 'attack', 'amount': 12, 'hits': 1}},),
+    ),
+    ('jungle', 'boss'): (
+        'coop_jungle_boss',
+        ({'slug': 'centipede-warden', 'def_id': 'coop_centipede_warden',
+          'name': {'zh': '协作百足守卫', 'en': 'Co-op Centipede Warden'},
+          'image_url': '/static/assets/story-enemies/evil-centipede-head.svg',
+          'health': 270, 'intent': {'kind': 'attack_all', 'amount': 10, 'hits': 1}},),
+    ),
+    ('factory', 'combat'): (
+        'coop_factory_patrol',
+        ({'slug': 'mechanical-crab', 'def_id': 'coop_mechanical_crab_sentry',
+          'name': {'zh': '协作机械蟹哨兵', 'en': 'Co-op Mechanical Crab Sentry'},
+          'image_url': '/static/assets/story-enemies/mechanical-crab.svg',
+          'health': 190, 'intent': {'kind': 'attack', 'amount': 13, 'hits': 1}},),
+    ),
+    ('factory', 'elite'): (
+        'coop_factory_elite',
+        ({'slug': 'mechanical-wasp', 'def_id': 'coop_mechanical_wasp_guard',
+          'name': {'zh': '协作机械蜂守卫', 'en': 'Co-op Mechanical Wasp Guard'},
+          'image_url': '/static/assets/story-enemies/mechanical-wasp.svg',
+          'health': 245, 'intent': {'kind': 'attack_all', 'amount': 11, 'hits': 1}},),
+    ),
+    ('factory', 'boss'): (
+        'coop_factory_boss',
+        ({'slug': 'mechanical-flower', 'def_id': 'coop_mechanical_flower_core',
+          'name': {'zh': '协作机械花核心', 'en': 'Co-op Mechanical Flower Core'},
+          'image_url': '/static/assets/story-enemies/mechanical-flower.svg',
+          'health': 480, 'intent': {'kind': 'attack_all', 'amount': 15, 'hits': 1}},),
+    ),
+}
+_COOP_ADAPTED_MANIFEST = {
+    'events': COOP_ADAPTED_EVENT_DEFINITIONS,
+    'encounters': {
+        f'{biome}:{room_type}': value
+        for (biome, room_type), value in COOP_ADAPTED_ENCOUNTERS.items()
+    },
+}
+COOP_FULL_JOURNEY_FINGERPRINT = hashlib.sha256(
+    (
+        COOP_CONTENT_FINGERPRINT
+        + json.dumps(
+            _COOP_ADAPTED_MANIFEST,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(',', ':'),
+        )
+    ).encode('utf-8')
+).hexdigest()
+COOP_STORY_CONTENT_VERSION = (
+    f'{STORY_CONTENT_VERSION}-coop-full-journey-1-'
+    f'{COOP_FULL_JOURNEY_FINGERPRINT[:12]}'
+)
+COOP_STAGE1_OPENING_CONTENT_VERSIONS = frozenset({
+    COOP_STAGE1_OPENING_V1_CONTENT_VERSION,
+    COOP_STORY_CONTENT_VERSION,
+})
+COOP_STAGE1_CONTENT_VERSIONS = frozenset({
+    COOP_STAGE1_REST_CONTENT_VERSION,
+    COOP_STAGE1_GARDEN_V1_CONTENT_VERSION,
+    *COOP_STAGE1_OPENING_CONTENT_VERSIONS,
+})
 COOP_LEGACY_GARDEN_EVENT_DEFINITION = {
     'title': {'zh': '岔路上的园丁车', 'en': "Gardener's Cart"},
     'description': {
@@ -201,6 +348,39 @@ def _card_values(card):
     _strict_nonnegative_int(cost_e, code='INVALID_CARD_COST', label='卡牌灵药费用')
     _strict_nonnegative_int(cost_m, code='INVALID_CARD_COST', label='卡牌魔法费用')
     values['effects'] = [deepcopy(effect) for effect in effects]
+    modifiers = card.get('modifiers') if isinstance(card.get('modifiers'), dict) else {}
+    if modifiers:
+        values['cost_e'] = max(
+            0,
+            int(values.get('cost_e') or 0)
+            + int(modifiers.get('cost_e_delta') or 0)
+            - int(modifiers.get('swift') or 0),
+        )
+        values['cost_m'] = max(
+            0,
+            int(values.get('cost_m') or 0)
+            + int(modifiers.get('cost_m_delta') or 0)
+            - int(modifiers.get('magic_swift') or 0),
+        )
+        damage_bonus = int(modifiers.get('damage_bonus') or 0)
+        shield_bonus = int(modifiers.get('enchantment_shield_bonus_once') or 0)
+        for effect in values['effects']:
+            if effect.get('type') in {'damage', 'electric_damage'} and damage_bonus:
+                effect['amount'] = max(0, int(effect.get('amount') or 0) + damage_bonus)
+            if effect.get('type') == 'shield' and shield_bonus:
+                effect['amount'] = max(0, int(effect.get('amount') or 0) + shield_bonus)
+        tags = set(str(tag) for tag in values.get('tags') or ())
+        if modifiers.get('remove_exile'):
+            tags.discard('exile')
+            tags.discard('void')
+        if modifiers.get('force_exile'):
+            tags.add('exile')
+        if modifiers.get('force_void'):
+            tags.add('void')
+        if modifiers.get('retain'):
+            tags.add('retain')
+        tags.update(str(tag) for tag in modifiers.get('extra_tags') or ())
+        values['tags'] = sorted(tags)
     return def_id, values
 
 
@@ -225,6 +405,228 @@ def _validate_persisted_card(card, content_version):
         code='INVALID_CARD_STATE',
         label='卡牌升级等级',
     )
+
+
+def _coop_book_instance(state, seat, instance_id):
+    player = state.get('players', {}).get(str(seat)) or {}
+    return next((
+        item for item in player.get('enchantment_books') or []
+        if str((item or {}).get('instance_id') or '') == str(instance_id or '')
+    ), None)
+
+
+def _remove_coop_enchantment_book(state, seat, instance_id, events, reason):
+    player = state['players'][str(seat)]
+    books = player.setdefault('enchantment_books', [])
+    book = _coop_book_instance(state, seat, instance_id)
+    if book is None:
+        _fail('INVALID_ENCHANTMENT_BOOK', '未持有该附魔书')
+    books.remove(book)
+    events.append({
+        'type': 'coop_enchantment_book_removed',
+        'actor_seat': int(seat),
+        'book_id': book['book_id'],
+        'book_instance_id': book['instance_id'],
+        'reason': str(reason or 'used'),
+    })
+    return book
+
+
+def _gain_coop_enchantment_book(
+        state, seat, book_id, events, *, source, replace_instance_id=''):
+    book_id = str(book_id or '')
+    if book_id not in STORY_ENCHANTMENT_BOOKS:
+        _fail('UNKNOWN_ENCHANTMENT_BOOK', '未知附魔书')
+    player = state['players'][str(seat)]
+    books = player.setdefault('enchantment_books', [])
+    if len(books) >= int(STORY_RULES['enchantment_book_slots']):
+        replacement = _coop_book_instance(state, seat, replace_instance_id)
+        if replacement is None:
+            _fail('ENCHANTMENT_BOOK_SLOTS_FULL', '附魔书槽已满，请选择要替换的附魔书')
+        _remove_coop_enchantment_book(
+            state,
+            seat,
+            replacement['instance_id'],
+            events,
+            'replaced',
+        )
+    serial = max(1, int(player.get('next_enchantment_book_serial') or 1))
+    player['next_enchantment_book_serial'] = serial + 1
+    book = {'instance_id': f'coop-seb-{int(seat)}-{serial:05d}', 'book_id': book_id}
+    books.append(book)
+    events.append({
+        'type': 'coop_enchantment_book_gained',
+        'actor_seat': int(seat),
+        'book_id': book_id,
+        'book_instance_id': book['instance_id'],
+        'source': str(source or 'reward'),
+    })
+    return book
+
+
+def _coop_enchantment_selected_cards(state, seat, payload, target_kind):
+    seat_state = state['combat']['seat_states'][str(seat)]
+    raw_ids = payload.get('selected_card_ids')
+    if raw_ids is None and payload.get('card_instance_id'):
+        raw_ids = [payload.get('card_instance_id')]
+    if isinstance(raw_ids, str):
+        raw_ids = [raw_ids]
+    if not isinstance(raw_ids, list):
+        raw_ids = []
+    selected = []
+    for instance_id in dict.fromkeys(str(item or '') for item in raw_ids if str(item or '')):
+        card = next((
+            item for item in seat_state.get('hand') or []
+            if _card_instance_id(item) == instance_id
+        ), None)
+        if card is None:
+            _fail('INVALID_ENCHANTMENT_CARD', '所选卡牌不在你的手牌中')
+        selected.append(card)
+    minimum = 3 if target_kind == 'three_cards' else (0 if target_kind == 'any_cards' else 1)
+    maximum = len(seat_state.get('hand') or []) if target_kind == 'any_cards' else minimum
+    if not minimum <= len(selected) <= maximum:
+        _fail('ENCHANTMENT_CARD_SELECTION_REQUIRED', f'请选择{minimum}至{maximum}张手牌')
+    if selected:
+        _, values = _card_values(selected[0])
+        tags = set(values.get('tags') or ())
+        if target_kind == 'attack_card' and values.get('type') != 'thorn':
+            _fail('INVALID_ENCHANTMENT_CARD_TYPE', '请选择攻击牌')
+        if target_kind == 'skill_card' and values.get('type') != 'bloom':
+            _fail('INVALID_ENCHANTMENT_CARD_TYPE', '请选择技能牌')
+        if target_kind == 'exile_card' and 'exile' not in tags:
+            _fail('INVALID_ENCHANTMENT_CARD_TYPE', '请选择具有放逐的牌')
+        if target_kind == 'cost_card' and (
+            int(values.get('cost_e') or 0) + int(values.get('cost_m') or 0) <= 0
+        ):
+            _fail('INVALID_ENCHANTMENT_CARD_TYPE', '请选择非0E0M牌')
+    return selected
+
+
+def _resolve_coop_enchantment_book_action(
+        state, actor_seat, action_type, payload, run_seed, events):
+    if action_type in {'discard_enchantment_book', 'discard_combat_enchantment_book'}:
+        if set(payload) - {'book_instance_id'}:
+            _fail('INVALID_ACTION_PAYLOAD', '丢弃附魔书包含不支持的字段')
+        _remove_coop_enchantment_book(
+            state,
+            actor_seat,
+            payload.get('book_instance_id'),
+            events,
+            'discarded',
+        )
+        return
+    allowed = {
+        'book_instance_id', 'selected_card_ids', 'card_instance_id',
+        'target_book_instance_id',
+    }
+    if set(payload) - allowed:
+        _fail('INVALID_ACTION_PAYLOAD', '使用附魔书包含不支持的字段')
+    combat = state.get('combat') or {}
+    if state.get('phase') != 'combat' or combat.get('turn') != COOP_COMBAT_HERO_TURN:
+        _fail('ENCHANTMENT_BOOK_ACTION_NOT_ALLOWED', '当前不能使用附魔书')
+    book = _coop_book_instance(state, actor_seat, payload.get('book_instance_id'))
+    if book is None:
+        _fail('INVALID_ENCHANTMENT_BOOK', '未持有该附魔书')
+    definition = STORY_ENCHANTMENT_BOOKS[book['book_id']]
+    character_id = str(state['players'][str(actor_seat)].get('character_id') or '')
+    if definition.get('character_id') and definition['character_id'] != character_id:
+        _fail('ENCHANTMENT_BOOK_CHARACTER_RESTRICTED', '当前角色无法使用该附魔书')
+    script = str(definition.get('script') or '')
+    if script == 'lethal_guard':
+        _fail('ENCHANTMENT_BOOK_AUTOMATIC', '魔法世界树之叶会自动触发')
+    if script == 'escape':
+        node = _coop_map_nodes(state).get(str(state.get('current_node_id') or '')) or {}
+        if node.get('type') == 'boss':
+            _fail('BOSS_ESCAPE_FORBIDDEN', '无法逃离首领战')
+        _remove_coop_enchantment_book(state, actor_seat, book['instance_id'], events, 'used')
+        player = state['players'][str(actor_seat)]
+        player['health'] = max(1, int(player.get('health') or 0) - int(definition.get('amount') or 0))
+        combat['escaped_without_reward'] = True
+        for enemy in combat.get('enemies') or []:
+            enemy['health'] = 0
+        events.append({'type': 'coop_combat_escaped', 'actor_seat': int(actor_seat)})
+        return
+    if script == 'copy_book':
+        target = _coop_book_instance(state, actor_seat, payload.get('target_book_instance_id'))
+        if target is None or target is book:
+            _fail('ENCHANTMENT_BOOK_TARGET_REQUIRED', '请选择另一本要复制的附魔书')
+        copied_id = target['book_id']
+        _remove_coop_enchantment_book(state, actor_seat, book['instance_id'], events, 'used')
+        _gain_coop_enchantment_book(
+            state,
+            actor_seat,
+            copied_id,
+            events,
+            source='unlimited',
+        )
+        return
+    selected = _coop_enchantment_selected_cards(
+        state,
+        actor_seat,
+        payload,
+        definition.get('target'),
+    )
+    amount = max(0, int(definition.get('amount') or 0))
+    one_shot_keys = {
+        'draw_to_full_once': 'enchantment_draw_to_full_once',
+        'disc_once': 'enchantment_disc_once',
+        'fire_on_hit_once': 'enchantment_fire_on_hit_once',
+        'immunity_once': 'enchantment_immunity_once',
+        'repeat_on_kill': 'enchantment_repeat_on_kill',
+        'weak_once': 'enchantment_weak_once',
+        'double_reward_on_kill': 'enchantment_double_reward_on_kill',
+        'repeat_once': 'enchantment_repeat_once',
+        'power_once': 'enchantment_power_once',
+        'impact_once': 'enchantment_impact_once',
+        'retrieve_once': 'enchantment_retrieve_once',
+        'reflection_once': 'enchantment_reflection_once',
+        'vulnerable_once': 'enchantment_vulnerable_once',
+    }
+    for card in selected:
+        modifiers = card.setdefault('modifiers', {})
+        if script == 'damage_bonus':
+            modifiers['damage_bonus'] = int(modifiers.get('damage_bonus') or 0) + amount
+        elif script == 'shield_bonus_once':
+            modifiers['enchantment_shield_bonus_once'] = int(modifiers.get('enchantment_shield_bonus_once') or 0) + amount
+        elif script == 'remove_exile':
+            modifiers['remove_exile'] = True
+        elif script == 'swift':
+            modifiers['swift'] = int(modifiers.get('swift') or 0) + amount
+        elif script == 'temporary_swift':
+            modifiers['swift'] = int(modifiers.get('swift') or 0) + amount
+            modifiers['temporary_swift'] = int(modifiers.get('temporary_swift') or 0) + amount
+        elif script == 'wide':
+            modifiers['extra_tags'] = sorted(set(modifiers.get('extra_tags') or ()) | {'wide'})
+        elif script == 'armor_break':
+            modifiers['enchantment_armor_break'] = True
+        elif script == 'electric_damage':
+            modifiers['enchantment_electric_damage'] = int(modifiers.get('enchantment_electric_damage') or 0) + amount
+        elif script == 'retain':
+            modifiers['retain'] = True
+        elif script == 'exile_void':
+            modifiers['force_exile'] = True
+            modifiers['force_void'] = True
+        elif script == 'dense':
+            modifiers['damage_bonus'] = int(modifiers.get('damage_bonus') or 0) + amount
+            modifiers['cost_e_delta'] = int(modifiers.get('cost_e_delta') or 0) + 1
+            modifiers['temporary_heavy'] = int(modifiers.get('temporary_heavy') or 0) + 1
+        elif script == 'health_cost':
+            _, values = _card_values(card)
+            key = 'cost_e_delta' if int(values.get('cost_e') or 0) > 0 else 'cost_m_delta'
+            modifiers[key] = int(modifiers.get(key) or 0) - 1
+            modifiers['enchantment_health_cost'] = int(modifiers.get('enchantment_health_cost') or 0) + amount
+        elif script == 'rebound':
+            modifiers['enchantment_rebound'] = True
+        elif script in one_shot_keys:
+            modifiers[one_shot_keys[script]] = max(1, amount) if amount else True
+    _remove_coop_enchantment_book(state, actor_seat, book['instance_id'], events, 'used')
+    events.append({
+        'type': 'coop_enchantment_book_used',
+        'actor_seat': int(actor_seat),
+        'book_id': book['book_id'],
+        'book_instance_id': book['instance_id'],
+        'card_instance_ids': [_card_instance_id(card) for card in selected],
+    })
 
 
 def _compiled_pool_contains(state, card_id, pool):
@@ -330,12 +732,99 @@ def _coop_opening_room_id(state):
 
 
 def _coop_opening_options_for_seat(state, seat, run_seed):
+    stage = int(state.get('stage') or 1)
     return _deterministic_value_order(
         state,
         COOP_OPENING_BLESSING_IDS,
         str(run_seed),
-        f'coop_opening_blessing:stage:1:seat:{int(seat)}',
+        f'coop_opening_blessing:stage:{stage}:seat:{int(seat)}',
     )[:3]
+
+
+def _coop_stage_definition(stage):
+    try:
+        stage = int(stage)
+    except (TypeError, ValueError):
+        _fail('INVALID_COOP_STAGE', '协作旅程阶段无效')
+    definition = COOP_STORY_STAGES.get(stage)
+    if definition is None:
+        _fail('INVALID_COOP_STAGE', '协作旅程阶段无效')
+    return stage, definition
+
+
+def _start_coop_stage_opening(state, *, run_seed, stage):
+    """Enter one deterministic stage and create its private blessing barrier."""
+
+    stage, definition = _coop_stage_definition(stage)
+    biome = str(definition['biome'])
+    state['stage'] = stage
+    state['biome'] = biome
+    state['map'] = generate_story_map(
+        str(run_seed),
+        stage=stage,
+        biome=biome,
+        difficulty=str(state.get('difficulty') or 'normal'),
+    )
+    first = state['map']['floors'][0]['nodes'][0]
+    state['current_floor'] = 1
+    state['current_node_id'] = str(first['id'])
+    state['phase'] = 'room'
+    state['completed'] = False
+    state['combat'] = None
+    state['last_combat'] = None
+    state['shared_reward'] = None
+    state['rewards_by_player'] = None
+    progression = state.setdefault('coop_progression', {})
+    completed_stages = progression.get('completed_stages') or []
+    progression.update({
+        'contract_version': COOP_STAGE1_CONTRACT_VERSION,
+        'chapter': stage,
+        'encounter_index': 0,
+        'max_floor': int(state['map']['floor_count']),
+        'completed_combat_ids': [],
+        'completed_node_ids': [],
+        'completed_stages': list(completed_stages),
+    })
+    room_id = _coop_opening_room_id(state)
+    state['room'] = {
+        'id': room_id,
+        'type': 'opening',
+        'node_id': str(first['id']),
+        'stage': 'blessing',
+        'journey_stage': stage,
+        'title': {
+            'zh': f'第{stage}阶段：选择个人开局赐福',
+            'en': f'Stage {stage}: Choose a Personal Starting Blessing',
+        },
+        'description': {
+            'zh': f'进入{definition["name"]["zh"]}前，两名成员分别选择一项赐福。',
+            'en': f'Each member chooses a blessing before entering {definition["name"]["en"]}.',
+        },
+        'policy': 'per_player_private_barrier',
+    }
+    state['room_states_by_player'] = {
+        seat_key: {
+            'status': 'pending',
+            'stage': 'blessing',
+            'options': _coop_opening_options_for_seat(state, int(seat_key), str(run_seed)),
+            'selected_option': None,
+        }
+        for seat_key in sorted(state['players'], key=int)
+    }
+    state['coordination']['combat_ready_seats'] = []
+    state['coordination']['combat_ready_round'] = None
+    state['coordination']['map_vote'] = None
+    state['coordination']['room_decision'] = {
+        'decision_id': room_id,
+        'room_id': room_id,
+        'policy': 'per_player_private_barrier',
+        'resolved_seats': [],
+    }
+    return [{
+        'type': 'coop_opening_started',
+        'stage': stage,
+        'count': len(state['players']),
+    }]
 
 
 def prepare_coop_stage1_setup(source_state, *, available_difficulties=None):
@@ -359,6 +848,7 @@ def prepare_coop_stage1_setup(source_state, *, available_difficulties=None):
         'max_floor': int((state.get('map') or {}).get('floor_count') or COOP_STAGE1_MAX_FLOOR),
         'completed_combat_ids': [],
         'completed_node_ids': [],
+        'completed_stages': [],
     }
     if available_difficulties is None:
         difficulties = list(COOP_STAGE1_DIFFICULTIES)
@@ -413,72 +903,28 @@ def start_coop_stage1_opening(source_state, *, run_seed, difficulty='normal'):
 
     state = deepcopy(source_state)
     state['content_version'] = COOP_STORY_CONTENT_VERSION
-    state['stage'] = 1
-    state['biome'] = 'garden'
     state['difficulty'] = difficulty
     state['journey_mode'] = 'standard'
-    state['map'] = generate_story_map(
-        str(run_seed),
-        stage=1,
-        biome='garden',
-        difficulty=difficulty,
-    )
-    first = state['map']['floors'][0]['nodes'][0]
-    state['current_floor'] = 1
-    state['current_node_id'] = str(first['id'])
-    state['phase'] = 'room'
-    state['completed'] = False
-    state['combat'] = None
-    state['last_combat'] = None
-    state['shared_reward'] = None
-    state['rewards_by_player'] = None
     state['completed_stage'] = None
     state['coop_progression'] = {
         'contract_version': COOP_STAGE1_CONTRACT_VERSION,
         'chapter': 1,
         'encounter_index': 0,
-        'max_floor': int(state['map']['floor_count']),
+        'max_floor': COOP_STAGE1_MAX_FLOOR,
         'completed_combat_ids': [],
         'completed_node_ids': [],
+        'completed_stages': [],
     }
-    room_id = _coop_opening_room_id(state)
-    state['room'] = {
-        'id': room_id,
-        'type': 'opening',
-        'node_id': str(first['id']),
-        'stage': 'blessing',
-        'title': {'zh': '选择个人开局赐福', 'en': 'Choose a Personal Starting Blessing'},
-        'description': {
-            'zh': '两名成员分别从自己的三个选项中选择一项。',
-            'en': 'Each member chooses one of their three private options.',
-        },
-        'policy': 'per_player_private_barrier',
-    }
-    state['room_states_by_player'] = {
-        seat_key: {
-            'status': 'pending',
-            'stage': 'blessing',
-            'options': _coop_opening_options_for_seat(state, int(seat_key), str(run_seed)),
-            'selected_option': None,
-        }
-        for seat_key in sorted(state['players'], key=int)
-    }
-    state['coordination']['combat_ready_seats'] = []
-    state['coordination']['combat_ready_round'] = None
-    state['coordination']['map_vote'] = None
-    state['coordination']['room_decision'] = {
-        'decision_id': room_id,
-        'room_id': room_id,
-        'policy': 'per_player_private_barrier',
-        'resolved_seats': [],
-    }
+    events = _start_coop_stage_opening(
+        state,
+        run_seed=str(run_seed),
+        stage=1,
+    )
     events = [{
-        'type': 'coop_opening_started',
-        'stage': 1,
-        'count': len(state['players']),
+        **event,
         'action_sequence': 0,
-        'event_index': 0,
-    }]
+        'event_index': index,
+    } for index, event in enumerate(events)]
     state['last_events'] = deepcopy(events)
     validate_coop_live_state(state)
     return state, events
@@ -529,6 +975,7 @@ def start_intro_coop_combat(source_state, *, run_seed):
         'max_floor': int((state.get('map') or {}).get('floor_count') or 16),
         'completed_combat_ids': [],
         'completed_node_ids': [],
+        'completed_stages': [],
     }
     state['room_states_by_player'] = None
     state['room'] = {
@@ -551,27 +998,58 @@ def start_intro_coop_combat(source_state, *, run_seed):
     return state, deepcopy(opening_events)
 
 
-def resolve_intro_coop_action(state, actor_seat, action_type, payload, run_seed, events):
+def resolve_intro_coop_action(
+        state, actor_seat, action_type, payload, run_seed, events,
+        *, _replay_card=None, _puncture_depth=0):
     """Resolve one trusted hero command for the curated Garden-stage deck."""
 
+    replaying = _replay_card is not None
+    if not replaying and action_type in {
+        'use_enchantment_book', 'discard_combat_enchantment_book',
+    }:
+        if not isinstance(payload, dict):
+            _fail('INVALID_ACTION_PAYLOAD', '协作战斗动作数据无效')
+        _resolve_coop_enchantment_book_action(
+            state,
+            actor_seat,
+            action_type,
+            payload,
+            str(run_seed),
+            events,
+        )
+        return
     if action_type != 'play_card':
         _fail('UNSUPPORTED_COMBAT_ACTION', f'当前协作战斗暂不支持动作 {action_type}')
     if not isinstance(payload, dict):
         _fail('INVALID_ACTION_PAYLOAD', '协作战斗动作数据无效')
-    allowed_keys = {'card_instance_id', 'target_enemy_id', 'discard_card_instance_ids'}
+    allowed_keys = {
+        'card_instance_id', 'target_enemy_id', 'discard_card_instance_ids',
+        'retrieve_draw_card_id', 'retrieve_discard_card_id',
+    }
     if set(payload) - allowed_keys:
         _fail('INVALID_ACTION_PAYLOAD', '协作出牌包含不支持的字段')
     seat_key = str(actor_seat)
     seat_state = state['combat']['seat_states'][seat_key]
-    instance_id = str(payload.get('card_instance_id') or '').strip()
-    card = next(
-        (item for item in seat_state['hand'] if _card_instance_id(item) == instance_id),
-        None,
-    )
-    if card is None:
-        _fail('CARD_NOT_IN_ACTOR_HAND', '行动席位手牌中不存在该牌')
+    if replaying:
+        card = _replay_card
+        instance_id = _card_instance_id(card)
+    else:
+        instance_id = str(payload.get('card_instance_id') or '').strip()
+        card = next(
+            (item for item in seat_state['hand'] if _card_instance_id(item) == instance_id),
+            None,
+        )
+        if card is None:
+            _fail('CARD_NOT_IN_ACTOR_HAND', '行动席位手牌中不存在该牌')
     def_id, values = _card_values(card)
-    if seat_state['elixir'] < values['cost_e'] or seat_state['magic'] < values['cost_m']:
+    modifiers = card.get('modifiers') if isinstance(card.get('modifiers'), dict) else {}
+    health_cost = max(0, int(modifiers.get('enchantment_health_cost') or 0))
+    player = state['players'][seat_key]
+    if not replaying and (
+        seat_state['elixir'] < values['cost_e']
+        or seat_state['magic'] < values['cost_m']
+        or int(player.get('health') or 0) <= health_cost
+    ):
         _fail('INSUFFICIENT_CARD_RESOURCES', '没有足够的资源打出这张牌')
 
     discard_effects = [effect for effect in values['effects'] if effect.get('type') == 'active_discard']
@@ -612,22 +1090,78 @@ def resolve_intro_coop_action(state, actor_seat, action_type, payload, run_seed,
     if enemy_effects and 'wide' not in tags and not target_enemy_id:
         _fail('INVALID_ENEMY_TARGET', '攻击牌必须指定一个存活敌人')
 
-    seat_state['elixir'] -= values['cost_e']
-    seat_state['magic'] -= values['cost_m']
-    events.append({
-        'type': 'coop_card_played',
-        'actor_seat': actor_seat,
-        'card_instance_id': instance_id,
-        'def_id': def_id,
-        'cost_e': values['cost_e'],
-        'cost_m': values['cost_m'],
-    })
+    target_ids = (
+        [
+            str(enemy.get('id') or '')
+            for enemy in state['combat']['enemies']
+            if int(enemy.get('health') or 0) > 0
+        ]
+        if 'wide' in tags
+        else ([target_enemy_id] if target_enemy_id else [])
+    )
+    if modifiers.get('enchantment_armor_break'):
+        for effect_target_id in target_ids:
+            target = next((
+                enemy for enemy in state['combat']['enemies']
+                if str(enemy.get('id') or '') == effect_target_id
+                and int(enemy.get('health') or 0) > 0
+            ), None)
+            before_shield = int((target or {}).get('shield') or 0)
+            if target is not None and before_shield:
+                target['shield'] = 0
+                events.append({
+                    'type': 'coop_enemy_shield_broken',
+                    'actor_seat': actor_seat,
+                    'enemy_id': effect_target_id,
+                    'amount': before_shield,
+                    'source': 'armor_break',
+                })
+
+    if not replaying:
+        seat_state['elixir'] -= values['cost_e']
+        seat_state['magic'] -= values['cost_m']
+        if health_cost:
+            health_before = int(player.get('health') or 0)
+            player['health'] = health_before - health_cost
+            events.append({
+                'type': 'coop_player_health_paid',
+                'actor_seat': actor_seat,
+                'amount': health_cost,
+                'before': health_before,
+                'after': int(player['health']),
+                'source': 'experience_patch',
+            })
+        events.append({
+            'type': 'coop_card_played',
+            'actor_seat': actor_seat,
+            'card_instance_id': instance_id,
+            'def_id': def_id,
+            'cost_e': values['cost_e'],
+            'cost_m': values['cost_m'],
+        })
+    else:
+        events.append({
+            'type': 'coop_card_replayed',
+            'actor_seat': actor_seat,
+            'card_instance_id': instance_id,
+            'def_id': def_id,
+            'source': 'puncture',
+            'repeat_index': int(_puncture_depth),
+        })
     # Match the single-player reducer: the played card leaves the hand before
     # its effects resolve.  Its vacated slot is therefore available to draw
     # effects, while the card itself reaches its destination only after all
     # effects finish.
-    seat_state['hand'].remove(card)
-    for effect in values['effects']:
+    if not replaying:
+        seat_state['hand'].remove(card)
+    enchantment_event_start = len(events)
+    enemy_health_before = {
+        str(enemy.get('id') or ''): int(enemy.get('health') or 0)
+        for enemy in state['combat']['enemies']
+    }
+    repeat_count = 1 + max(0, int(modifiers.get('enchantment_repeat_once') or 0))
+    effects_to_resolve = list(values['effects']) * repeat_count
+    for effect in effects_to_resolve:
         effect_type = effect.get('type')
         amount = effect.get('amount', 0)
         _strict_nonnegative_int(amount, code='INVALID_CARD_EFFECT', label='卡牌效果数值')
@@ -678,6 +1212,11 @@ def resolve_intro_coop_action(state, actor_seat, action_type, payload, run_seed,
                         })
                     else:
                         resolved_amount = amount
+                    power = max(0, int((seat_state.get('statuses') or {}).get('power') or 0))
+                    resolved_amount += power
+                    vulnerable = max(0, int(target.get('vulnerable') or 0))
+                    if vulnerable:
+                        resolved_amount = max(1, math.ceil(resolved_amount * 1.5))
                     damage_coop_enemy(
                         state,
                         actor_seat=actor_seat,
@@ -751,8 +1290,253 @@ def resolve_intro_coop_action(state, actor_seat, action_type, payload, run_seed,
 
     if selected_cards:
         _fail('INVALID_CARD_EFFECT', '主动丢弃效果没有被协作执行器结算')
-    destination = 'exile_pile' if 'exile' in tags else 'discard_pile'
-    seat_state[destination].append(card)
+
+    electric = max(0, int(modifiers.get('enchantment_electric_damage') or 0))
+    if electric:
+        for effect_target_id in target_ids:
+            target = next((
+                enemy for enemy in state['combat']['enemies']
+                if str(enemy.get('id') or '') == effect_target_id
+                and int(enemy.get('health') or 0) > 0
+            ), None)
+            if target is not None:
+                static = max(0, int(target.get('static') or 0))
+                if static <= 0:
+                    target['static'] = electric
+                    events.append({
+                        'type': 'coop_static_applied',
+                        'actor_seat': actor_seat,
+                        'enemy_id': effect_target_id,
+                        'amount': electric,
+                        'source': 'attract_lightning',
+                    })
+                else:
+                    target['static'] = 0
+                    before = int(target.get('health') or 0)
+                    dealt = min(before, electric + static)
+                    target['health'] = before - dealt
+                    events.append({
+                        'type': 'enemy_damage',
+                        'actor_seat': actor_seat,
+                        'enemy_id': effect_target_id,
+                        'amount': dealt,
+                        'blocked': 0,
+                        'before': before,
+                        'after': int(target['health']),
+                        'source': 'attract_lightning',
+                        'lethal': before > 0 and int(target['health']) == 0,
+                    })
+                    events.append({
+                        'type': 'coop_static_triggered',
+                        'actor_seat': actor_seat,
+                        'enemy_id': effect_target_id,
+                        'amount': static,
+                        'source': 'attract_lightning',
+                    })
+                    if before > 0 and int(target['health']) == 0:
+                        events.append({
+                            'type': 'enemy_defeated',
+                            'actor_seat': actor_seat,
+                            'enemy_id': effect_target_id,
+                            'source': 'attract_lightning',
+                        })
+
+    damaged_target = next((
+        enemy for enemy in state['combat']['enemies']
+        if int(enemy.get('health') or 0) > 0
+        and any(
+            event.get('type') == 'enemy_damage'
+            and event.get('enemy_id') == enemy.get('id')
+            and int(event.get('amount') or 0) > 0
+            for event in events[enchantment_event_start:]
+        )
+    ), None)
+    fire = max(0, int(modifiers.get('enchantment_fire_on_hit_once') or 0))
+    if fire and damaged_target is not None:
+        damaged_target['fire'] = int(damaged_target.get('fire') or 0) + fire
+        modifiers.pop('enchantment_fire_on_hit_once', None)
+        events.append({
+            'type': 'coop_enemy_status_applied',
+            'actor_seat': actor_seat,
+            'enemy_id': str(damaged_target.get('id') or ''),
+            'amount': fire,
+            'source': 'flame_bonus',
+        })
+
+    enemy_health_after = {
+        str(enemy.get('id') or ''): int(enemy.get('health') or 0)
+        for enemy in state['combat']['enemies']
+    }
+    killed_ids = [
+        enemy_id
+        for enemy_id, before in enemy_health_before.items()
+        if before > 0 and enemy_health_after.get(enemy_id, 0) <= 0
+    ]
+    if killed_ids and modifiers.get('enchantment_double_reward_on_kill'):
+        state['combat']['double_card_reward'] = True
+
+    if (
+        killed_ids
+        and modifiers.get('enchantment_repeat_on_kill')
+        and not discard_effects
+        and int(_puncture_depth) < len(state['combat']['enemies'])
+    ):
+        living_ids = [
+            str(enemy.get('id') or '')
+            for enemy in state['combat']['enemies']
+            if int(enemy.get('health') or 0) > 0
+        ]
+        if living_ids:
+            repeat_index = int(_puncture_depth) + 1
+            repeat_target_id = _deterministic_value_order(
+                state,
+                living_ids,
+                str(run_seed),
+                (
+                    f'coop_enchantment_puncture:{state["combat"]["id"]}:'
+                    f'{instance_id}:{repeat_index}'
+                ),
+            )[0]
+            repeat_card = deepcopy(card)
+            repeat_modifiers = repeat_card.setdefault('modifiers', {})
+            for key in (
+                'enchantment_shield_bonus_once', 'enchantment_draw_to_full_once',
+                'enchantment_disc_once', 'enchantment_fire_on_hit_once',
+                'enchantment_immunity_once', 'enchantment_repeat_once',
+                'enchantment_power_once', 'enchantment_impact_once',
+                'enchantment_retrieve_once', 'enchantment_reflection_once',
+                'enchantment_vulnerable_once', 'enchantment_weak_once',
+            ):
+                repeat_modifiers.pop(key, None)
+            resolve_intro_coop_action(
+                state,
+                actor_seat,
+                'play_card',
+                {'target_enemy_id': repeat_target_id},
+                str(run_seed),
+                events,
+                _replay_card=repeat_card,
+                _puncture_depth=repeat_index,
+            )
+
+    living_targets = [
+        enemy for enemy in state['combat']['enemies']
+        if str(enemy.get('id') or '') in target_ids and int(enemy.get('health') or 0) > 0
+    ]
+    status_targets = living_targets if target_ids else [seat_state]
+    for target in status_targets:
+        weak = max(0, int(modifiers.get('enchantment_weak_once') or 0))
+        impact = max(0, int(modifiers.get('enchantment_impact_once') or 0))
+        vulnerable = max(0, int(modifiers.get('enchantment_vulnerable_once') or 0))
+        target_statuses = (
+            target.setdefault('statuses', {}) if target is seat_state else target
+        )
+        applied = 0
+        for status, status_amount in (
+            ('weak', weak + impact),
+            ('vulnerable', vulnerable + impact),
+        ):
+            if status_amount <= 0:
+                continue
+            immunity = max(0, int(target_statuses.get('negative_status_immunity') or 0))
+            if immunity:
+                target_statuses['negative_status_immunity'] = immunity - 1
+                events.append({
+                    'type': 'coop_status_blocked',
+                    'actor_seat': actor_seat,
+                    'target_id': (
+                        f'seat:{actor_seat}'
+                        if target is seat_state
+                        else str(target.get('id') or '')
+                    ),
+                    'status': status,
+                    'amount': status_amount,
+                    'source': 'enchantment_book',
+                })
+                continue
+            target_statuses[status] = int(target_statuses.get(status) or 0) + status_amount
+            applied += status_amount
+        if applied:
+            events.append({
+                'type': (
+                    'coop_player_status_applied'
+                    if target is seat_state
+                    else 'coop_enemy_status_applied'
+                ),
+                'actor_seat': actor_seat,
+                'target_id': (
+                    f'seat:{actor_seat}'
+                    if target is seat_state
+                    else str(target.get('id') or '')
+                ),
+                'enemy_id': (
+                    None if target is seat_state else str(target.get('id') or '')
+                ),
+                'amount': applied,
+                'source': 'enchantment_book',
+            })
+
+    statuses = seat_state.setdefault('statuses', {})
+    for key, status in (
+        ('enchantment_disc_once', 'disc'),
+        ('enchantment_immunity_once', 'negative_status_immunity'),
+        ('enchantment_power_once', 'power'),
+        ('enchantment_reflection_once', 'reflection'),
+    ):
+        status_amount = max(0, int(modifiers.get(key) or 0))
+        if status_amount:
+            statuses[status] = int(statuses.get(status) or 0) + status_amount
+
+    if modifiers.get('enchantment_draw_to_full_once'):
+        _draw_cards(
+            state,
+            actor_seat,
+            str(run_seed),
+            max(0, int(STORY_RULES['hand_limit']) - len(seat_state['hand'])),
+            events,
+        )
+
+    if modifiers.get('enchantment_retrieve_once'):
+        for pile_key, payload_key in (
+            ('draw_pile', 'retrieve_draw_card_id'),
+            ('discard_pile', 'retrieve_discard_card_id'),
+        ):
+            pile = seat_state[pile_key]
+            if not pile:
+                continue
+            selected_id = str(payload.get(payload_key) or '')
+            selected = next((
+                item for item in pile if _card_instance_id(item) == selected_id
+            ), None)
+            if selected is None:
+                _fail('ENCHANTMENT_RETRIEVE_SELECTION_REQUIRED', '激流需要从抽牌堆和弃牌堆各选择一张牌')
+            pile.remove(selected)
+            if len(seat_state['hand']) < int(STORY_RULES['hand_limit']):
+                seat_state['hand'].append(selected)
+            else:
+                seat_state['discard_pile'].append(selected)
+
+    for key in (
+        'enchantment_shield_bonus_once', 'enchantment_draw_to_full_once',
+        'enchantment_disc_once', 'enchantment_immunity_once',
+        'enchantment_repeat_once', 'enchantment_power_once',
+        'enchantment_impact_once', 'enchantment_retrieve_once',
+        'enchantment_reflection_once', 'enchantment_vulnerable_once',
+        'enchantment_weak_once',
+    ):
+        modifiers.pop(key, None)
+
+    destination = (
+        'exile_pile'
+        if modifiers.get('force_exile') or ('exile' in tags and not modifiers.get('remove_exile'))
+        else 'hand'
+        if modifiers.get('enchantment_rebound')
+        else 'discard_pile'
+    )
+    if destination == 'hand' and len(seat_state['hand']) >= int(STORY_RULES['hand_limit']):
+        destination = 'discard_pile'
+    if not replaying:
+        seat_state[destination].append(card)
 
 
 def prepare_intro_coop_round(state, run_seed, events):
@@ -778,10 +1562,29 @@ def prepare_intro_coop_round(state, run_seed, events):
             'enemy_id': str(enemy.get('id') or ''),
             'move_index': int(enemy['move_index']),
         })
+        for status in ('weak', 'vulnerable'):
+            if int(enemy.get(status) or 0) > 0:
+                enemy[status] = max(0, int(enemy[status]) - 1)
     for seat_key in sorted(state['players'], key=int):
         seat = int(seat_key)
         player = state['players'][seat_key]
         seat_state = combat['seat_states'][seat_key]
+        for zone in ('hand', 'draw_pile', 'discard_pile', 'exile_pile'):
+            for zone_card in seat_state.get(zone) or []:
+                modifiers = zone_card.get('modifiers')
+                if not isinstance(modifiers, dict):
+                    continue
+                temporary_swift = max(0, int(modifiers.pop('temporary_swift', 0) or 0))
+                temporary_heavy = max(0, int(modifiers.pop('temporary_heavy', 0) or 0))
+                if temporary_swift:
+                    modifiers['swift'] = max(
+                        0,
+                        int(modifiers.get('swift') or 0) - temporary_swift,
+                    )
+                if temporary_heavy:
+                    modifiers['cost_e_delta'] = int(modifiers.get('cost_e_delta') or 0) - temporary_heavy
+                if not any(value not in (0, False, None, [], {}) for value in modifiers.values()):
+                    zone_card.pop('modifiers', None)
         old_shield = int(seat_state.get('shield') or 0)
         seat_state['shield'] = 0
         if old_shield:
@@ -791,9 +1594,21 @@ def prepare_intro_coop_round(state, run_seed, events):
                 'amount': old_shield,
             })
         if seat_state['hand']:
-            discarded = [_card_instance_id(card) for card in seat_state['hand']]
-            seat_state['discard_pile'].extend(seat_state['hand'])
-            seat_state['hand'] = []
+            retained = []
+            discarded_cards = []
+            voided = []
+            for hand_card in seat_state['hand']:
+                modifiers = hand_card.get('modifiers') or {}
+                if modifiers.get('force_void'):
+                    voided.append(hand_card)
+                elif modifiers.get('retain'):
+                    retained.append(hand_card)
+                else:
+                    discarded_cards.append(hand_card)
+            discarded = [_card_instance_id(card) for card in discarded_cards]
+            seat_state['discard_pile'].extend(discarded_cards)
+            seat_state['exile_pile'].extend(voided)
+            seat_state['hand'] = retained
             events.append({
                 'type': 'coop_hand_discarded',
                 'actor_seat': seat,
@@ -818,6 +1633,22 @@ def prepare_intro_coop_round(state, run_seed, events):
                 'before': before_magic,
                 'after': int(seat_state['magic']),
                 'source': 'turn_start_relic',
+            })
+        statuses = seat_state.setdefault('statuses', {})
+        regeneration = max(0, int(statuses.get('regeneration') or 0))
+        if regeneration and int(player.get('health') or 0) > 0:
+            before_health = int(player.get('health') or 0)
+            player['health'] = min(
+                int(player.get('max_health') or before_health),
+                before_health + regeneration,
+            )
+            events.append({
+                'type': 'coop_player_healed',
+                'actor_seat': seat,
+                'amount': int(player['health']) - before_health,
+                'before': before_health,
+                'after': int(player['health']),
+                'source': 'regeneration',
             })
         if int(player.get('health') or 0) > 0:
             _draw_cards(
@@ -871,6 +1702,48 @@ def _deterministic_int(state, run_seed, namespace, minimum, maximum):
     return minimum + value % (maximum - minimum + 1)
 
 
+def _coop_enchantment_book_offer(state, seat, run_seed, namespace, *, node_type=None, rarity=None):
+    """Return one deterministic personal book offer, or ``None`` on a missed drop."""
+
+    if rarity is None:
+        chance = {'combat': 30, 'elite': 60, 'boss': 100}.get(str(node_type or ''), 0)
+        if chance <= 0 or _deterministic_int(
+            state,
+            str(run_seed),
+            f'{namespace}:drop:seat:{int(seat)}',
+            1,
+            100,
+        ) > chance:
+            return None
+        rarity_roll = _deterministic_int(
+            state,
+            str(run_seed),
+            f'{namespace}:rarity:seat:{int(seat)}',
+            1,
+            100,
+        )
+        rarity = 'common' if rarity_roll <= 60 else 'rare' if rarity_roll <= 90 else 'ultra'
+    rarity = str(rarity or '')
+    pool = [
+        book_id
+        for book_id, definition in STORY_ENCHANTMENT_BOOKS.items()
+        if definition.get('rarity') == rarity
+        and (
+            not definition.get('character_id')
+            or definition.get('character_id')
+            == str(state['players'][str(seat)].get('character_id') or '')
+        )
+    ]
+    if not pool:
+        _fail('INVALID_ENCHANTMENT_BOOK_POOL', '协作附魔书池无可用内容')
+    return _deterministic_value_order(
+        state,
+        pool,
+        str(run_seed),
+        f'{namespace}:book:seat:{int(seat)}:{rarity}',
+    )[0]
+
+
 def _coop_map_nodes(state):
     story_map = state.get('map')
     if not isinstance(story_map, dict) or not isinstance(story_map.get('floors'), list):
@@ -890,7 +1763,7 @@ def _coop_map_nodes(state):
 
 
 def _validate_current_stage_map(state):
-    """Validate the complete Garden-stage graph before any node transition."""
+    """Validate the complete current-stage graph before any node transition."""
 
     story_map = state.get('map')
     if not isinstance(story_map, dict):
@@ -903,22 +1776,29 @@ def _validate_current_stage_map(state):
         else {'normal'}
     )
     difficulty = str(state.get('difficulty') or '')
+    stage = state.get('stage')
+    stage_definition = (
+        COOP_STORY_STAGES.get(stage)
+        if not isinstance(stage, bool) and isinstance(stage, int)
+        else None
+    )
+    floor_count = story_map.get('floor_count')
     if (
-        isinstance(state.get('stage'), bool)
-        or not isinstance(state.get('stage'), int)
-        or state.get('stage') != 1
-        or state.get('biome') != 'garden'
+        stage_definition is None
+        or state.get('biome') != stage_definition['biome']
         or difficulty not in allowed_difficulties
         or isinstance(story_map.get('stage'), bool)
         or not isinstance(story_map.get('stage'), int)
-        or story_map.get('stage') != 1
-        or story_map.get('biome') != 'garden'
+        or story_map.get('stage') != stage
+        or story_map.get('biome') != stage_definition['biome']
         or story_map.get('difficulty') != difficulty
-        or story_map.get('floor_count') != COOP_STAGE1_MAX_FLOOR
+        or isinstance(floor_count, bool)
+        or not isinstance(floor_count, int)
+        or floor_count not in ({16, 17} if stage == 3 else {16})
         or not isinstance(floors, list)
-        or len(floors) != COOP_STAGE1_MAX_FLOOR
+        or len(floors) != floor_count
     ):
-        _fail('INVALID_COOP_MAP', '协作花园第一阶段地图元数据无效')
+        _fail('INVALID_COOP_MAP', '协作阶段地图元数据无效')
 
     nodes = _coop_map_nodes(state)
     nodes_by_floor = {}
@@ -959,11 +1839,11 @@ def _validate_current_stage_map(state):
     if (
         len(nodes_by_floor[1]) != 1
         or nodes[nodes_by_floor[1][0]].get('type') != 'blessing'
-        or len(nodes_by_floor[COOP_STAGE1_MAX_FLOOR]) != 1
-        or nodes[nodes_by_floor[COOP_STAGE1_MAX_FLOOR][0]].get('type') != 'boss'
+        or len(nodes_by_floor[floor_count]) != 1
+        or nodes[nodes_by_floor[floor_count][0]].get('type') != 'boss'
         or any(
             nodes[node_id].get('type') in {'blessing', 'boss'}
-            for floor in range(2, COOP_STAGE1_MAX_FLOOR)
+            for floor in range(2, floor_count)
             for node_id in nodes_by_floor[floor]
         )
     ):
@@ -994,7 +1874,7 @@ def _validate_current_stage_map(state):
         _fail('INVALID_COOP_MAP', '协作地图路线不能重复')
 
     start_id = nodes_by_floor[1][0]
-    boss_id = nodes_by_floor[COOP_STAGE1_MAX_FLOOR][0]
+    boss_id = nodes_by_floor[floor_count][0]
     if any(
         (node_id != boss_id and not outgoing[node_id])
         or (node_id != start_id and not incoming[node_id])
@@ -1071,7 +1951,7 @@ def _coop_card_pool_for_player(state, seat, pool, *, include_neutral=False):
     return tuple(result)
 
 
-def _reward_options_for_seat(state, seat, run_seed, combat_id):
+def _reward_options_for_seat(state, seat, run_seed, combat_id, round_index=1):
     pool = _coop_card_pool_for_player(state, seat, COOP_REWARD_CARD_IDS)
     if len(pool) < 3:
         _fail('UNSUPPORTED_COOP_CHARACTER', '该角色没有足够的协作奖励卡牌')
@@ -1079,7 +1959,7 @@ def _reward_options_for_seat(state, seat, run_seed, combat_id):
         state,
         pool,
         run_seed,
-        f'coop_reward:{combat_id}:seat:{seat}',
+        f'coop_reward:{combat_id}:seat:{seat}:round:{int(round_index)}',
     )
     return [
         {'card_id': card_id, 'upgraded': False}
@@ -1111,7 +1991,7 @@ def finalize_coop_action_events(events, action_sequence):
 
 
 def advance_coop_after_victory(state, *, run_seed):
-    """Atomically leave a won combat for rewards or finish cooperative stage 1."""
+    """Atomically leave a won combat for rewards or enter a stage barrier."""
 
     validate_coop_combat_state(state)
     combat = state['combat']
@@ -1133,6 +2013,7 @@ def advance_coop_after_victory(state, *, run_seed):
         'encounter_id': str(combat.get('encounter_id') or ''),
         'outcome': 'victory',
         'round': int(combat.get('round') or 1),
+        'double_card_reward': bool(combat.get('double_card_reward')),
     }
     state['last_combat'] = summary
     state['coordination']['combat_ready_seats'] = []
@@ -1159,6 +2040,8 @@ def advance_coop_after_victory(state, *, run_seed):
         and encounter_index >= int(progression.get('max_encounters') or COOP_DEMO_MAX_ENCOUNTERS)
     )
     if stage_complete:
+        stage = int(state.get('stage') or 1)
+        _, stage_definition = _coop_stage_definition(stage)
         current_node['status'] = 'completed'
         completed_nodes = progression.setdefault('completed_node_ids', [])
         if current_node_id in completed_nodes:
@@ -1166,21 +2049,47 @@ def advance_coop_after_victory(state, *, run_seed):
         completed_nodes.append(current_node_id)
         state['phase'] = 'stage_complete'
         state['completed'] = False
-        state['completed_stage'] = 1
+        state['completed_stage'] = stage
+        completed_stages = progression.setdefault('completed_stages', [])
+        if not isinstance(completed_stages, list) or stage in completed_stages:
+            _fail('INVALID_COOP_PROGRESSION', '协作阶段完成记录无效')
+        completed_stages.append(stage)
+        room_id = f'stage-complete:{stage}'
         state['room'] = {
+            'id': room_id,
             'type': 'stage_complete',
-            'stage': 1,
-            'title': {'zh': '花园阶段完成', 'en': 'Garden Stage Complete'},
+            'stage': stage,
+            'title': deepcopy(stage_definition['complete_title']),
+            'description': (
+                {
+                    'zh': '两名成员都确认后，将进入下一阶段并分别选择新的开局赐福。',
+                    'en': 'Both members must confirm before the next stage and its blessings begin.',
+                }
+                if stage < COOP_FINAL_STAGE
+                else {
+                    'zh': '你们遇见了一朵腐化的花花。双方确认后完成本次协作旅程。',
+                    'en': 'A corrupted flower awaits. Both members must confirm to finish this journey.',
+                }
+            ),
+            'policy': 'all_members_ready',
         }
         state['shared_reward'] = None
         state['rewards_by_player'] = None
-        state['room_states_by_player'] = None
         state['coordination']['map_vote'] = None
-        state['coordination']['room_decision'] = None
+        state['room_states_by_player'] = {
+            seat_key: {'status': 'pending'}
+            for seat_key in sorted(state['players'], key=int)
+        }
+        state['coordination']['room_decision'] = {
+            'decision_id': room_id,
+            'room_id': room_id,
+            'policy': 'all_members_ready',
+            'resolved_seats': [],
+        }
         events = [{
             'type': 'coop_stage_completed',
             'combat_id': combat_id,
-            'stage': 1,
+            'stage': stage,
             'floor': current_floor,
         }]
         validate_coop_live_state(state)
@@ -1203,6 +2112,15 @@ def advance_coop_after_victory(state, *, run_seed):
         validate_coop_live_state(state)
         return events
 
+    if combat.get('escaped_without_reward'):
+        events = [{
+            'type': 'coop_combat_escaped_without_reward',
+            'combat_id': combat_id,
+        }]
+        _begin_route_vote(state, events)
+        validate_coop_live_state(state)
+        return events
+
     node_type = str(current_node.get('type') or 'combat')
     reward_gold = 25 if node_type == 'elite' else COOP_REWARD_GOLD
     if str(state.get('difficulty') or 'normal') in {'hard', 'lunatic'}:
@@ -1211,16 +2129,38 @@ def advance_coop_after_victory(state, *, run_seed):
     for seat_key in sorted(state['players'], key=int):
         seat = int(seat_key)
         reward_id = f'reward:{combat_id}:seat:{seat}'
-        options = _reward_options_for_seat(state, seat, str(run_seed), combat_id)
+        card_round_total = 2 if summary['double_card_reward'] else 1
+        options = _reward_options_for_seat(
+            state,
+            seat,
+            str(run_seed),
+            combat_id,
+            1,
+        )
+        book_id = _coop_enchantment_book_offer(
+            state,
+            seat,
+            str(run_seed),
+            f'coop_reward:{combat_id}',
+            node_type=node_type,
+        )
         player = state['players'][seat_key]
         player['gold'] = int(player.get('gold') or 0) + reward_gold
         rewards[seat_key] = {
             'reward_id': reward_id,
             'status': 'pending',
+            'card_status': 'pending',
+            'card_round_index': 1,
+            'card_round_total': card_round_total,
+            'card_choices': [],
+            'book_status': 'pending' if book_id else 'resolved',
             'gold': reward_gold,
             'options': options,
             'selected_card_id': None,
             'skipped': False,
+            'enchantment_book_id': book_id,
+            'selected_enchantment_book_id': None,
+            'skipped_enchantment_book': False,
         }
     state['phase'] = 'reward'
     state['room'] = {
@@ -1243,6 +2183,92 @@ def advance_coop_after_victory(state, *, run_seed):
     }]
     validate_coop_live_state(state)
     return events
+
+
+def _heal_coop_players_for_stage_transition(state, events):
+    difficulty = str(state.get('difficulty') or 'normal')
+    for seat_key, player in sorted(state['players'].items(), key=lambda item: int(item[0])):
+        maximum = max(1, int(player.get('max_health') or 1))
+        before = max(0, int(player.get('health') or 0))
+        target = (
+            (maximum * 4 + 4) // 5
+            if difficulty in {'hard', 'lunatic'}
+            else maximum
+        )
+        player['health'] = min(maximum, max(before, target))
+        if int(player['health']) > before:
+            events.append({
+                'type': 'coop_player_healed',
+                'actor_seat': int(seat_key),
+                'amount': int(player['health']) - before,
+                'source': 'stage_transition',
+            })
+
+
+def _resolve_stage_ready(state, actor_seat, payload, run_seed, events):
+    if set(payload) - {'room_id'}:
+        _fail('INVALID_ACTION_PAYLOAD', '阶段确认包含不支持的字段')
+    room = state.get('room') or {}
+    decision = state.get('coordination', {}).get('room_decision')
+    room_states = state.get('room_states_by_player')
+    room_id = str(payload.get('room_id') or '').strip()
+    if (
+        state.get('phase') != 'stage_complete'
+        or room.get('type') != 'stage_complete'
+        or room_id != str(room.get('id') or '')
+        or not isinstance(decision, dict)
+        or not isinstance(room_states, dict)
+    ):
+        _fail('STAGE_READY_NOT_ALLOWED', '当前不能确认协作阶段')
+    private = room_states.get(str(actor_seat))
+    resolved = decision.get('resolved_seats')
+    if not isinstance(private, dict) or private.get('status') != 'pending':
+        _fail('STAGE_ALREADY_READY', '你已经确认过当前阶段')
+    if not isinstance(resolved, list) or int(actor_seat) in resolved:
+        _fail('INVALID_COOP_COMPLETION', '协作阶段确认状态无效')
+    private['status'] = 'resolved'
+    resolved.append(int(actor_seat))
+    resolved.sort()
+    stage = int(state.get('stage') or 1)
+    events.append({
+        'type': 'coop_stage_ready',
+        'actor_seat': int(actor_seat),
+        'room_id': room_id,
+        'stage': stage,
+    })
+    if set(resolved) != {int(seat) for seat in state['players']}:
+        return
+    state['room_states_by_player'] = None
+    state['coordination']['room_decision'] = None
+    if stage < COOP_FINAL_STAGE:
+        _heal_coop_players_for_stage_transition(state, events)
+        next_stage = stage + 1
+        events.extend(_start_coop_stage_opening(
+            state,
+            run_seed=str(run_seed),
+            stage=next_stage,
+        ))
+        events.append({
+            'type': 'coop_stage_started',
+            'stage': next_stage,
+            'source': 'stage_transition',
+        })
+        return
+    state['phase'] = 'complete'
+    state['completed'] = True
+    state['room'] = {
+        'type': 'coop_complete',
+        'stage': COOP_FINAL_STAGE,
+        'title': {'zh': '协作旅程完成', 'en': 'Cooperative Journey Complete'},
+        'description': {
+            'zh': '你们以任意难度通关了全部三个阶段；通关与角色解锁已分别记入双方账号。',
+            'en': 'All three stages are complete. Clear and unlock progress is recorded for both accounts.',
+        },
+    }
+    events.append({
+        'type': 'coop_journey_completed',
+        'stage': COOP_FINAL_STAGE,
+    })
 
 
 def _begin_route_vote(state, events):
@@ -1399,8 +2425,6 @@ def _record_coop_blessing(player, blessing_id):
     if not isinstance(history, list):
         history = []
         player['blessings'] = history
-    if blessing_id in history:
-        _fail('OPENING_ALREADY_RESOLVED', '该开局赐福已经生效')
     history.append(blessing_id)
     player['blessing'] = blessing_id
 
@@ -1416,31 +2440,31 @@ def _apply_coop_opening_blessing(state, actor_seat, blessing_id, run_seed, room_
         player['max_health'] = int(player.get('max_health') or 0) + amount
     elif script == 'gain_gold':
         player['gold'] = int(player.get('gold') or 0) + amount
-    elif script == 'gain_random_rare_card':
-        rare_ids = [
+    elif script == 'gain_random_ultra_card':
+        ultra_ids = [
             card_id
             for card_id in _coop_card_pool_for_player(
                 state,
                 actor_seat,
                 COOP_REWARD_CARD_IDS,
             )
-            if str((COOP_STORY_CONTENT.card_definition(card_id) or {}).get('rarity') or '') == 'rare'
+            if str((COOP_STORY_CONTENT.card_definition(card_id) or {}).get('rarity') or '') == 'ultra'
         ]
         ordered = _deterministic_value_order(
             state,
-            rare_ids,
+            ultra_ids,
             str(run_seed),
-            f'coop_opening_rare:{room_id}:seat:{int(actor_seat)}',
+            f'coop_opening_ultra:{room_id}:seat:{int(actor_seat)}',
         )
         if not ordered:
-            _fail('NO_OPENING_REWARD_CARD', '当前没有可用于协作赐福的稀有牌')
+            _fail('NO_OPENING_REWARD_CARD', '当前没有可用于协作赐福的究极牌')
         _gain_reward_card(
             state,
             actor_seat,
             ordered[0],
             False,
             str(run_seed),
-            f'{room_id}:rare',
+            f'{room_id}:ultra',
         )
     elif script == 'wealth_and_basics':
         player['gold'] = int(player.get('gold') or 0) + amount
@@ -1503,7 +2527,10 @@ def _resolve_opening_choice(state, actor_seat, payload, run_seed, events):
 
 
 def _resolve_reward_choice(state, actor_seat, payload, run_seed, events):
-    if set(payload) - {'reward_id', 'card_id'}:
+    if set(payload) - {
+        'reward_id', 'choice_kind', 'card_id', 'book_id',
+        'replace_book_instance_id',
+    }:
         _fail('INVALID_ACTION_PAYLOAD', '协作奖励选择包含不支持的字段')
     rewards = state.get('rewards_by_player')
     if not isinstance(rewards, dict) or set(rewards) != set(state['players']):
@@ -1514,6 +2541,56 @@ def _resolve_reward_choice(state, actor_seat, payload, run_seed, events):
         _fail('STALE_COOP_REWARD', '协作奖励标识已经过期')
     if reward.get('status') != 'pending':
         _fail('REWARD_ALREADY_CHOSEN', '你已经处理过这份奖励')
+    legacy_card_choice = 'choice_kind' not in payload
+    choice_kind = str(payload.get('choice_kind') or 'card').strip().lower()
+    if choice_kind not in {'card', 'enchantment_book'}:
+        _fail('INVALID_REWARD_CHOICE', '协作奖励类型无效')
+    if choice_kind == 'enchantment_book':
+        if set(payload) - {
+            'reward_id', 'choice_kind', 'book_id', 'replace_book_instance_id',
+        }:
+            _fail('INVALID_ACTION_PAYLOAD', '附魔书奖励选择包含不支持的字段')
+        if reward.get('book_status') != 'pending':
+            _fail('REWARD_ALREADY_CHOSEN', '你已经处理过这份附魔书奖励')
+        offered_id = str(reward.get('enchantment_book_id') or '')
+        book_id = str(payload.get('book_id') or '').strip().lower()
+        if not offered_id:
+            _fail('INVALID_ENCHANTMENT_BOOK_REWARD', '当前奖励没有附魔书')
+        if book_id:
+            if book_id != offered_id:
+                _fail('INVALID_ENCHANTMENT_BOOK_REWARD', '该附魔书不在你的协作奖励中')
+            _gain_coop_enchantment_book(
+                state,
+                actor_seat,
+                book_id,
+                events,
+                source='combat_reward',
+                replace_instance_id=payload.get('replace_book_instance_id'),
+            )
+            reward['selected_enchantment_book_id'] = book_id
+            reward['skipped_enchantment_book'] = False
+        else:
+            reward['selected_enchantment_book_id'] = None
+            reward['skipped_enchantment_book'] = True
+        reward['book_status'] = 'resolved'
+        reward['status'] = (
+            'resolved'
+            if reward.get('card_status') == 'resolved'
+            else 'pending'
+        )
+        events.append({
+            'type': 'coop_enchantment_book_reward_resolved',
+            'actor_seat': actor_seat,
+            'reward_id': reward_id,
+            'skipped': not bool(book_id),
+        })
+        if all(item.get('status') == 'resolved' for item in rewards.values()):
+            _begin_route_vote(state, events)
+        return
+    if set(payload) - {'reward_id', 'choice_kind', 'card_id'}:
+        _fail('INVALID_ACTION_PAYLOAD', '卡牌奖励选择包含不支持的字段')
+    if reward.get('card_status') != 'pending':
+        _fail('REWARD_ALREADY_CHOSEN', '你已经处理过这份卡牌奖励')
     card_id = str(payload.get('card_id') or '').strip().lower()
     options = reward.get('options')
     if not isinstance(options, list):
@@ -1539,7 +2616,46 @@ def _resolve_reward_choice(state, actor_seat, payload, run_seed, events):
     else:
         reward['selected_card_id'] = None
         reward['skipped'] = True
-    reward['status'] = 'resolved'
+    card_round_index = int(reward.get('card_round_index') or 1)
+    card_round_total = int(reward.get('card_round_total') or 1)
+    reward.setdefault('card_choices', []).append({
+        'round_index': card_round_index,
+        'card_id': card_id or None,
+        'skipped': not bool(card_id),
+    })
+    if legacy_card_choice and reward.get('book_status') == 'pending':
+        # Older clients know only the original one-step card reward contract.
+        # Preserve their progression by treating an unaddressed book as declined.
+        reward['book_status'] = 'resolved'
+        reward['selected_enchantment_book_id'] = None
+        reward['skipped_enchantment_book'] = True
+    if card_round_index < card_round_total:
+        reward['card_round_index'] = card_round_index + 1
+        reward['options'] = _reward_options_for_seat(
+            state,
+            actor_seat,
+            str(run_seed),
+            str((state.get('room') or {}).get('combat_id') or ''),
+            card_round_index + 1,
+        )
+        reward['selected_card_id'] = None
+        reward['skipped'] = False
+        reward['status'] = 'pending'
+        events.append({
+            'type': 'coop_reward_round_resolved',
+            'actor_seat': actor_seat,
+            'reward_id': reward_id,
+            'round_index': card_round_index,
+            'round_total': card_round_total,
+            'skipped': not bool(card_id),
+        })
+        return
+    reward['card_status'] = 'resolved'
+    reward['status'] = (
+        'resolved'
+        if reward.get('book_status') == 'resolved'
+        else 'pending'
+    )
     # The selected card is deliberately absent from this shared event.  Other
     # party members may see completion, but never another seat's reward choice.
     events.append({
@@ -1735,6 +2851,35 @@ def resolve_compiled_coop_enemy_action(state, enemy, run_seed, events):
     return True
 
 
+def _adapted_biome_encounter(biome, room_type, node_id, floor):
+    """Return explicit co-op adaptations when canonical mechanics are not executable.
+
+    These definitions use distinct ``coop_*`` ids, so clients never present a
+    reduced cooperative move set as the exact single-player enemy contract.
+    """
+
+    biome = str(biome or '')
+    room_type = str(room_type or '')
+    entry = COOP_ADAPTED_ENCOUNTERS.get((biome, room_type))
+    if entry is None:
+        _fail('UNSUPPORTED_COOP_ENCOUNTER', '当前生物群系没有可执行的协作遭遇')
+    encounter_prefix, members = entry
+    encounter_id = f'{encounter_prefix}_f{int(floor):02d}'
+    enemies = []
+    for index, member in enumerate(members, start=1):
+        health = int(member['health'])
+        enemies.append({
+            'id': f'{node_id}-{member["slug"]}-{index}',
+            'def_id': str(member['def_id']),
+            'name': deepcopy(member['name']),
+            'image_url': str(member['image_url']),
+            'health': health,
+            'max_health': health,
+            'intent': deepcopy(member['intent']),
+        })
+    return encounter_id, enemies
+
+
 def _start_coop_combat_for_node(state, node_id, run_seed):
     nodes = _coop_map_nodes(state)
     node = nodes.get(str(node_id))
@@ -1744,10 +2889,18 @@ def _start_coop_combat_for_node(state, node_id, run_seed):
     room_type = str(node.get('type') or '')
     if room_type not in {'combat', 'elite', 'boss'} or floor <= 0:
         _fail('UNSUPPORTED_COOP_ROUTE', '当前节点不是可执行的协作战斗')
-    combat_id = f'garden-route-{node_id}'
+    biome = str(state.get('biome') or 'garden')
+    combat_id = f'{biome}-route-{node_id}'
     staging = deepcopy(state)
     seat_states = _intro_seat_states(staging, str(run_seed), combat_id=combat_id)
-    if room_type == 'boss':
+    if biome != 'garden':
+        encounter_id, enemies = _adapted_biome_encounter(
+            biome,
+            room_type,
+            str(node_id),
+            floor,
+        )
+    elif room_type == 'boss':
         encounter_id = f'garden_boss_f{floor:02d}'
         health = 180
         enemies = [{
@@ -1771,17 +2924,17 @@ def _start_coop_combat_for_node(state, node_id, run_seed):
         }]
     else:
         preferred_tier = 'hard' if floor >= 10 else 'simple'
-        encounter_ids = COOP_STORY_CONTENT.encounter_ids('garden', preferred_tier)
+        encounter_ids = COOP_STORY_CONTENT.encounter_ids(biome, preferred_tier)
         if not encounter_ids:
-            encounter_ids = COOP_STORY_CONTENT.encounter_ids('garden', 'simple')
+            encounter_ids = COOP_STORY_CONTENT.encounter_ids(biome, 'simple')
         ordered_ids = _deterministic_value_order(
             staging,
             encounter_ids,
             str(run_seed),
-            f'coop_encounter:garden:{preferred_tier}:{node_id}',
+            f'coop_encounter:{biome}:{preferred_tier}:{node_id}',
         )
         if not ordered_ids:
-            _fail('UNSUPPORTED_COOP_ENCOUNTER', '花园没有可执行的协作遭遇')
+            _fail('UNSUPPORTED_COOP_ENCOUNTER', '当前生物群系没有可执行的协作遭遇')
         encounter_id = ordered_ids[0]
         enemies = _instantiate_compiled_encounter(staging, encounter_id, str(node_id))
     _apply_coop_enemy_difficulty(staging, enemies)
@@ -1808,7 +2961,7 @@ def _start_coop_combat_for_node(state, node_id, run_seed):
                 else (
                     {'zh': '协作精英战', 'en': 'Cooperative Elite Battle'}
                     if room_type == 'elite'
-                    else {'zh': '花园遭遇', 'en': 'Garden Encounter'}
+                    else deepcopy(COOP_STORY_STAGES[int(state.get('stage') or 1)]['name'])
                 )
             )
         ),
@@ -1976,6 +3129,25 @@ def _shop_relic_price(relic_id, difficulty='normal', player=None):
     return _apply_shop_price_rules(prices[rarity], difficulty, player)
 
 
+def _shop_enchantment_book_price(
+        book_id, difficulty='normal', player=None, *, listed_base=None):
+    definition = STORY_ENCHANTMENT_BOOKS.get(str(book_id)) or {}
+    rarity = str(definition.get('rarity') or '')
+    prices = {'common': 45, 'rare': 70, 'ultra': 130}
+    if rarity not in prices:
+        _fail('UNKNOWN_ENCHANTMENT_BOOK', '协作商店附魔书稀有度无效')
+    base = prices[rarity]
+    if listed_base is not None:
+        if (
+            isinstance(listed_base, bool)
+            or not isinstance(listed_base, int)
+            or not math.floor(base * 0.9) <= listed_base <= math.ceil(base * 1.1)
+        ):
+            _fail('INVALID_COOP_ROOM', '协作商店附魔书浮动价格无效')
+        base = listed_base
+    return _apply_shop_price_rules(base, difficulty, player)
+
+
 def _refresh_available_shop_prices(private, player, difficulty):
     for offer in private.get('offers') or []:
         if not isinstance(offer, dict) or offer.get('status') != 'available':
@@ -1986,6 +3158,13 @@ def _refresh_available_shop_prices(private, player, difficulty):
             _shop_card_price(item_id, difficulty, player)
             if kind == 'card'
             else _shop_relic_price(item_id, difficulty, player)
+            if kind == 'relic'
+            else _shop_enchantment_book_price(
+                item_id,
+                difficulty,
+                player,
+                listed_base=offer.get('base_price'),
+            )
         )
 
 
@@ -2029,6 +3208,16 @@ def _start_coop_shop_room(state, node_id, run_seed):
             str(run_seed),
             f'coop_shop_relic:{node_id}:seat:{seat}',
         )[:1] if current_content else []
+        books = [
+            _coop_enchantment_book_offer(
+                state,
+                seat,
+                str(run_seed),
+                f'coop_shop:{node_id}',
+                rarity=rarity,
+            )
+            for rarity in ('common', 'rare', 'ultra')
+        ] if current_content else []
         if current_content:
             offers = [
                 {
@@ -2055,6 +3244,31 @@ def _start_coop_shop_room(state, node_id, run_seed):
                 }
                 for index, relic_id in enumerate(relics)
             )
+            for index, book_id in enumerate(books):
+                rarity = STORY_ENCHANTMENT_BOOKS[book_id]['rarity']
+                base = {'common': 45, 'rare': 70, 'ultra': 130}[rarity]
+                listed_base = _deterministic_int(
+                    state,
+                    str(run_seed),
+                    f'coop_shop_book_price:{node_id}:seat:{seat}:{book_id}',
+                    math.floor(base * 0.9),
+                    math.ceil(base * 1.1),
+                )
+                offers.append({
+                    'offer_id': f'shop:{node_id}:seat:{seat}:enchantment_book:{index}:{book_id}',
+                    'kind': 'enchantment_book',
+                    'item_id': book_id,
+                    'book_id': book_id,
+                    'base_price': listed_base,
+                    'price': _shop_enchantment_book_price(
+                        book_id,
+                        state.get('difficulty'),
+                        player,
+                        listed_base=listed_base,
+                    ),
+                    'status': 'available',
+                    'item_instance_id': None,
+                })
         else:
             offers = [
                 {
@@ -2071,6 +3285,13 @@ def _start_coop_shop_room(state, node_id, run_seed):
             'status': 'pending',
             'options': (
                 ['buy_card', *(['buy_relic'] if relics else []), 'leave']
+                if not books
+                else [
+                    'buy_card',
+                    *(['buy_relic'] if relics else []),
+                    'buy_enchantment_book',
+                    'leave',
+                ]
                 if current_content
                 else ['buy_card', 'leave']
             ),
@@ -2095,8 +3316,19 @@ def _start_coop_shop_room(state, node_id, run_seed):
 
 def _coop_event_definition_for_state(state, event_id, stored_definition=None):
     if str(state.get('content_version') or '') == COOP_STORY_CONTENT_VERSION:
-        definition = COOP_STORY_CONTENT.event_definition(event_id)
+        adapted = COOP_ADAPTED_EVENT_DEFINITIONS.get(str(state.get('biome') or ''))
+        definition = (
+            adapted
+            if isinstance(adapted, dict) and str(adapted.get('id') or '') == str(event_id or '')
+            else COOP_STORY_CONTENT.event_definition(event_id)
+        )
         if not isinstance(definition, dict):
+            _fail('UNSUPPORTED_COOP_EVENT', '共享故事事件已经不再兼容当前协作执行器')
+        if 'id' in definition:
+            definition = {key: deepcopy(value) for key, value in definition.items() if key != 'id'}
+        try:
+            definition = validate_compiled_coop_event_definition(event_id, definition)
+        except CoopStoryContentError:
             _fail('UNSUPPORTED_COOP_EVENT', '共享故事事件已经不再兼容当前协作执行器')
         if stored_definition is not None and stored_definition != definition:
             _fail('INVALID_COOP_ROOM', '协作事件快照与当前内容版本不一致')
@@ -2126,7 +3358,11 @@ def _start_coop_event_room(state, node_id, run_seed):
         _fail('UNSUPPORTED_COOP_ROUTE', '当前节点不是协作事件房')
     room_id = f'event:{node_id}'
     if str(state.get('content_version') or '') == COOP_STORY_CONTENT_VERSION:
-        event_ids = COOP_STORY_CONTENT.event_ids(state.get('biome'))
+        biome = str(state.get('biome') or '')
+        event_ids = list(COOP_STORY_CONTENT.event_ids(biome))
+        adapted = COOP_ADAPTED_EVENT_DEFINITIONS.get(biome)
+        if not event_ids and isinstance(adapted, dict):
+            event_ids.append(str(adapted.get('id') or ''))
         if not event_ids:
             _fail('UNSUPPORTED_COOP_EVENT', '当前生物群系没有兼容的共享故事事件')
         content_id = (
@@ -2365,7 +3601,7 @@ def _resolve_chest_choice(state, actor_seat, payload, events):
 
 
 def _resolve_shop_buy(state, actor_seat, payload, run_seed, events):
-    if set(payload) - {'room_id', 'offer_id'}:
+    if set(payload) - {'room_id', 'offer_id', 'replace_book_instance_id'}:
         _fail('INVALID_ACTION_PAYLOAD', '协作商店购买包含不支持的字段')
     room = state.get('room')
     room_states = state.get('room_states_by_player')
@@ -2408,6 +3644,13 @@ def _resolve_shop_buy(state, actor_seat, payload, run_seed, events):
         if kind == 'card'
         else _shop_relic_price(item_id, state.get('difficulty'), player)
         if kind == 'relic'
+        else _shop_enchantment_book_price(
+            item_id,
+            state.get('difficulty'),
+            player,
+            listed_base=offer.get('base_price'),
+        )
+        if kind == 'enchantment_book'
         else None
     )
     if price != expected_price:
@@ -2426,7 +3669,7 @@ def _resolve_shop_buy(state, actor_seat, payload, run_seed, events):
             events,
         )
         item_instance_id = _card_instance_id(item)
-    else:
+    elif kind == 'relic':
         _gain_compiled_relic(
             state,
             actor_seat,
@@ -2435,6 +3678,16 @@ def _resolve_shop_buy(state, actor_seat, payload, run_seed, events):
             f'shop:{offer_id}',
         )
         item_instance_id = item_id
+    else:
+        item = _gain_coop_enchantment_book(
+            state,
+            actor_seat,
+            item_id,
+            events,
+            source='shop',
+            replace_instance_id=payload.get('replace_book_instance_id'),
+        )
+        item_instance_id = item['instance_id']
     offer['status'] = 'purchased'
     if current_content:
         offer['item_instance_id'] = item_instance_id
@@ -2530,16 +3783,23 @@ def _resolve_event_choice(state, actor_seat, payload, run_seed, events):
     if set(votes) != set(state['players']):
         return
     voted_options = sorted(set(votes.values()))
-    selected = (
-        voted_options[0]
-        if len(voted_options) == 1
-        else _deterministic_value_order(
-            state,
-            voted_options,
-            str(run_seed),
-            f'coop_event_vote:{room_id}',
-        )[0]
-    )
+    if len(voted_options) != 1:
+        # Shared events change the whole party, so disagreement must never
+        # silently force one player's risky choice onto the other.  Once every
+        # seat has submitted, clear only this decision round and let the party
+        # vote again.  No effect or RNG stream is consumed.
+        for seat_private in room_states.values():
+            seat_private['status'] = 'pending'
+            seat_private['selected_option'] = None
+        votes.clear()
+        resolved.clear()
+        events.append({
+            'type': 'coop_event_consensus_required',
+            'room_id': room_id,
+            'room_type': 'event',
+        })
+        return
+    selected = voted_options[0]
     decision['resolved_option_id'] = selected
     definition = _coop_event_definition_for_state(
         state,
@@ -2576,7 +3836,7 @@ def _resolve_event_choice(state, actor_seat, payload, run_seed, events):
         'room_type': 'event',
         'choice': selected,
         'content_id': str(room.get('content_id') or ''),
-        'reason': 'unanimous' if len(voted_options) == 1 else 'seeded_random',
+        'reason': 'unanimous',
     })
     state['room_states_by_player'] = None
     state['coordination']['room_decision'] = None
@@ -2678,7 +3938,7 @@ def apply_coop_journey_command(
     action_type = str(action_type or '').strip().lower()
     if action_type not in {
         'setup_start', 'opening_choose', 'reward_choose', 'map_vote',
-        'room_choose', 'shop_buy'
+        'room_choose', 'shop_buy', 'stage_ready', 'discard_enchantment_book'
     }:
         _fail('UNSUPPORTED_COOP_ACTION', '当前协作旅程不支持该动作')
     if not isinstance(payload, dict):
@@ -2704,6 +3964,8 @@ def apply_coop_journey_command(
         _fail('OPENING_ACTION_NOT_ALLOWED', '当前不能提交协作开局选择')
     if action_type == 'map_vote' and source_state.get('phase') != 'map':
         _fail('MAP_VOTE_NOT_ALLOWED', '当前不能提交协作路线投票')
+    if action_type == 'stage_ready' and source_state.get('phase') != 'stage_complete':
+        _fail('STAGE_READY_NOT_ALLOWED', '当前不能确认协作阶段')
     if action_type == 'room_choose' and source_state.get('phase') != 'room':
         _fail('ROOM_ACTION_NOT_ALLOWED', '当前不能提交协作房间选择')
     if action_type == 'shop_buy' and (
@@ -2711,6 +3973,8 @@ def apply_coop_journey_command(
         or (source_state.get('room') or {}).get('type') != 'shop'
     ):
         _fail('SHOP_ACTION_NOT_ALLOWED', '当前不能在协作商店购买')
+    if action_type == 'discard_enchantment_book' and source_state.get('phase') == 'combat':
+        _fail('ENCHANTMENT_BOOK_ACTION_NOT_ALLOWED', '战斗中请使用战斗附魔书动作')
 
     state = deepcopy(source_state)
     events = []
@@ -2731,8 +3995,19 @@ def apply_coop_journey_command(
         _resolve_reward_choice(state, actor_seat, payload, str(run_seed), events)
     elif action_type == 'map_vote':
         state = _resolve_route_vote(state, actor_seat, payload, str(run_seed), events)
+    elif action_type == 'stage_ready':
+        _resolve_stage_ready(state, actor_seat, payload, str(run_seed), events)
     elif action_type == 'shop_buy':
         _resolve_shop_buy(state, actor_seat, payload, str(run_seed), events)
+    elif action_type == 'discard_enchantment_book':
+        _resolve_coop_enchantment_book_action(
+            state,
+            actor_seat,
+            action_type,
+            payload,
+            str(run_seed),
+            events,
+        )
     elif (state.get('room') or {}).get('type') == 'rest':
         _resolve_rest_choice(state, actor_seat, payload, events)
     elif (state.get('room') or {}).get('type') == 'chest':
@@ -2765,7 +4040,10 @@ def _public_card(card):
         _fail('INVALID_CARD_STATE', '公开卡牌定义标识无效')
     return {
         key: deepcopy(card[key])
-        for key in ('instance_id', 'def_id', 'upgraded', 'upgrade_level', 'charge_value', 'power_value')
+        for key in (
+            'instance_id', 'def_id', 'upgraded', 'upgrade_level',
+            'charge_value', 'power_value', 'modifiers',
+        )
         if key in card
     }
 
@@ -2793,12 +4071,17 @@ def _public_intent(intent):
 
 
 def _validate_current_compiled_combat(state, room):
+    combat = state.get('combat') or {}
     if (
         str(state.get('content_version') or '') != COOP_STORY_CONTENT_VERSION
         or str(room.get('node_type') or '') != 'combat'
+        or not (combat.get('enemies') or [])
+        or any(
+            enemy.get('content_source') != 'story_content'
+            for enemy in combat.get('enemies') or []
+        )
     ):
         return
-    combat = state.get('combat') or {}
     encounter = COOP_STORY_CONTENT.encounter_definition(combat.get('encounter_id'))
     enemies = combat.get('enemies') or []
     members = (encounter or {}).get('members')
@@ -3161,6 +4444,35 @@ def _validate_current_player_decks(state):
         serial = player.get('next_card_serial')
         if isinstance(serial, bool) or not isinstance(serial, int) or serial <= 0:
             _fail('INVALID_PLAYER_DECK', '协作卡牌实例序号无效')
+        books = player.get('enchantment_books')
+        book_serial = player.get('next_enchantment_book_serial')
+        if (
+            not isinstance(books, list)
+            or len(books) > int(STORY_RULES['enchantment_book_slots'])
+            or isinstance(book_serial, bool)
+            or not isinstance(book_serial, int)
+            or book_serial <= 0
+        ):
+            _fail('INVALID_ENCHANTMENT_BOOK_STATE', '协作玩家附魔书状态无效')
+        book_instance_ids = []
+        for book in books:
+            if not isinstance(book, dict):
+                _fail('INVALID_ENCHANTMENT_BOOK_STATE', '协作玩家附魔书实例无效')
+            instance_id = str(book.get('instance_id') or '')
+            book_id = str(book.get('book_id') or '')
+            definition = STORY_ENCHANTMENT_BOOKS.get(book_id)
+            if (
+                not re.fullmatch(r'[A-Za-z0-9._:-]{1,128}', instance_id)
+                or not isinstance(definition, dict)
+                or (
+                    definition.get('character_id')
+                    and definition.get('character_id') != character_id
+                )
+            ):
+                _fail('INVALID_ENCHANTMENT_BOOK_STATE', '协作玩家附魔书实例无效')
+            book_instance_ids.append(instance_id)
+        if len(book_instance_ids) != len(set(book_instance_ids)):
+            _fail('INVALID_ENCHANTMENT_BOOK_STATE', '协作玩家附魔书实例重复')
 
 
 def _validate_current_reward_state(state, nodes, current_node, completed_combat_ids):
@@ -3194,14 +4506,31 @@ def _validate_current_reward_state(state, nodes, current_node, completed_combat_
         if not isinstance(reward, dict):
             _fail('INVALID_COOP_REWARD', '协作个人奖励无效')
         status = reward.get('status')
+        card_status = reward.get('card_status')
+        book_status = reward.get('book_status')
         options = reward.get('options')
+        card_round_index = reward.get('card_round_index')
+        card_round_total = reward.get('card_round_total')
+        card_choices = reward.get('card_choices')
         if (
             status not in {'pending', 'resolved'}
+            or card_status not in {'pending', 'resolved'}
+            or book_status not in {'pending', 'resolved'}
+            or (status == 'resolved') != (
+                card_status == 'resolved' and book_status == 'resolved'
+            )
             or str(reward.get('reward_id') or '')
             != f'reward:{combat_id}:seat:{int(seat_key)}'
             or reward.get('gold') != expected_gold
             or not isinstance(options, list)
             or len(options) != 3
+            or isinstance(card_round_index, bool)
+            or not isinstance(card_round_index, int)
+            or isinstance(card_round_total, bool)
+            or not isinstance(card_round_total, int)
+            or card_round_total not in {1, 2}
+            or not 1 <= card_round_index <= card_round_total
+            or not isinstance(card_choices, list)
         ):
             _fail('INVALID_COOP_REWARD', '协作个人奖励状态无效')
         option_ids = []
@@ -3226,17 +4555,59 @@ def _validate_current_reward_state(state, nodes, current_node, completed_combat_
             option_ids.append(card_id)
         if len(option_ids) != len(set(option_ids)):
             _fail('INVALID_COOP_REWARD', '协作奖励选项重复')
+        completed_card_rounds = (
+            card_round_total if card_status == 'resolved' else card_round_index - 1
+        )
+        if len(card_choices) != completed_card_rounds:
+            _fail('INVALID_COOP_REWARD', '协作卡牌奖励轮次记录无效')
+        for index, card_choice in enumerate(card_choices, 1):
+            if (
+                not isinstance(card_choice, dict)
+                or card_choice.get('round_index') != index
+                or not isinstance(card_choice.get('skipped'), bool)
+            ):
+                _fail('INVALID_COOP_REWARD', '协作卡牌奖励轮次记录无效')
+            chosen_id = card_choice.get('card_id')
+            if (
+                (chosen_id is None) != bool(card_choice.get('skipped'))
+                or (
+                    chosen_id is not None
+                    and str(chosen_id or '') not in character_reward_pool
+                )
+            ):
+                _fail('INVALID_COOP_REWARD', '协作卡牌奖励轮次选择无效')
         selected = reward.get('selected_card_id')
         skipped = reward.get('skipped')
         if not isinstance(skipped, bool):
             _fail('INVALID_COOP_REWARD', '协作奖励选择状态无效')
-        if status == 'pending' and (selected is not None or skipped):
+        if card_status == 'pending' and (selected is not None or skipped):
             _fail('INVALID_COOP_REWARD', '未处理的协作奖励不能包含选择')
-        if status == 'resolved' and (
+        if card_status == 'resolved' and (
             (selected is None and not skipped)
             or (selected is not None and (skipped or selected not in option_ids))
         ):
             _fail('INVALID_COOP_REWARD', '已处理的协作奖励选择无效')
+        book_id = reward.get('enchantment_book_id')
+        selected_book_id = reward.get('selected_enchantment_book_id')
+        skipped_book = reward.get('skipped_enchantment_book')
+        if (
+            book_id is not None
+            and str(book_id or '') not in STORY_ENCHANTMENT_BOOKS
+        ) or not isinstance(skipped_book, bool):
+            _fail('INVALID_COOP_REWARD', '协作附魔书奖励无效')
+        if book_id is None:
+            if book_status != 'resolved' or selected_book_id is not None or skipped_book:
+                _fail('INVALID_COOP_REWARD', '无附魔书掉落时不能包含附魔书选择')
+        elif book_status == 'pending' and (selected_book_id is not None or skipped_book):
+            _fail('INVALID_COOP_REWARD', '未处理的附魔书奖励不能包含选择')
+        elif book_status == 'resolved' and (
+            (selected_book_id is None and not skipped_book)
+            or (
+                selected_book_id is not None
+                and (skipped_book or selected_book_id != book_id)
+            )
+        ):
+            _fail('INVALID_COOP_REWARD', '已处理的附魔书奖励选择无效')
 
 
 def _validate_current_map_state(state, nodes, current_node):
@@ -3467,6 +4838,7 @@ def _validate_current_shop_state(state, nodes, current_node):
                     )
                     else []
                 ),
+                'buy_enchantment_book',
                 'leave',
             ]
         )
@@ -3478,7 +4850,7 @@ def _validate_current_shop_state(state, nodes, current_node):
             or (
                 len(offers) != 3
                 if historical_shared
-                else not 3 <= len(offers) <= 4
+                else not 6 <= len(offers) <= 7
             )
         ):
             _fail('INVALID_COOP_ROOM', '协作商店个人状态无效')
@@ -3504,7 +4876,7 @@ def _validate_current_shop_state(state, nodes, current_node):
             and item.get('status') == 'purchased'
             for item in offers
         ) if not historical_shared else False
-        kind_indexes = {'card': 0, 'relic': 0}
+        kind_indexes = {'card': 0, 'relic': 0, 'enchantment_book': 0}
         for index, offer in enumerate(offers):
             if not isinstance(offer, dict):
                 _fail('INVALID_COOP_ROOM', '协作商店商品无效')
@@ -3550,13 +4922,25 @@ def _validate_current_shop_state(state, nodes, current_node):
                     ):
                         _fail('INVALID_COOP_ROOM', '协作商店卡牌商品无效')
                     current_price = _shop_card_price(item_id, state.get('difficulty'), player)
-                else:
+                elif kind == 'relic':
                     if (
                         offer.get('relic_id') != item_id
                         or item_id not in COOP_SHOP_RELIC_IDS
                     ):
                         _fail('INVALID_COOP_ROOM', '协作商店遗物商品无效')
                     current_price = _shop_relic_price(item_id, state.get('difficulty'), player)
+                else:
+                    if (
+                        offer.get('book_id') != item_id
+                        or item_id not in STORY_ENCHANTMENT_BOOKS
+                    ):
+                        _fail('INVALID_COOP_ROOM', '协作商店附魔书商品无效')
+                    current_price = _shop_enchantment_book_price(
+                        item_id,
+                        state.get('difficulty'),
+                        player,
+                        listed_base=offer.get('base_price'),
+                    )
                 if status == 'available' and price != current_price:
                     _fail('INVALID_COOP_ROOM', '协作商店可购商品价格无效')
                 if status == 'purchased':
@@ -3569,6 +4953,13 @@ def _validate_current_shop_state(state, nodes, current_node):
                         _shop_card_price(item_id, state.get('difficulty'), player_without_discount)
                         if kind == 'card'
                         else _shop_relic_price(item_id, state.get('difficulty'), player_without_discount)
+                        if kind == 'relic'
+                        else _shop_enchantment_book_price(
+                            item_id,
+                            state.get('difficulty'),
+                            player_without_discount,
+                            listed_base=offer.get('base_price'),
+                        )
                     )
                     allowed_prices = {current_price}
                     if purchased_bargaining_here:
@@ -3586,6 +4977,11 @@ def _validate_current_shop_state(state, nodes, current_node):
                 instance_id != item_id or item_id not in (player.get('relics') or [])
             ):
                 _fail('INVALID_COOP_ROOM', '已购遗物与个人遗物状态不一致')
+            if status == 'purchased' and kind == 'enchantment_book' and not re.fullmatch(
+                r'[A-Za-z0-9._:-]{1,128}',
+                str(instance_id or ''),
+            ):
+                _fail('INVALID_COOP_ROOM', '已购附魔书实例无效')
             if status == 'available' and kind == 'relic' and item_id in (player.get('relics') or []):
                 _fail('INVALID_COOP_ROOM', '已拥有遗物不能继续作为可购商品')
             offer_ids.append(offer_id)
@@ -3610,7 +5006,11 @@ def _validate_current_event_state(state, nodes, current_node):
     expected_room_id = f'event:{current_node_id}'
     content_id = str((room or {}).get('content_id') or '')
     current_content = str(state.get('content_version') or '') == COOP_STORY_CONTENT_VERSION
-    if current_content and content_id not in COOP_STORY_CONTENT.event_ids(state.get('biome')):
+    adapted = COOP_ADAPTED_EVENT_DEFINITIONS.get(str(state.get('biome') or ''))
+    allowed_event_ids = set(COOP_STORY_CONTENT.event_ids(state.get('biome')))
+    if isinstance(adapted, dict):
+        allowed_event_ids.add(str(adapted.get('id') or ''))
+    if current_content and content_id not in allowed_event_ids:
         _fail('INVALID_COOP_ROOM', '协作事件不在当前生物群系内容池中')
     definition = _coop_event_definition_for_state(
         state,
@@ -3736,22 +5136,27 @@ def _validate_current_opening_state(state, nodes, current_node):
             _fail('INVALID_COOP_OPENING', '协作开局个人选项无效')
         player = state['players'][seat_key]
         blessing_history = player.get('blessings')
+        stage = int(state.get('stage') or 1)
+        expected_previous_count = stage - 1
         if (
             not isinstance(blessing_history, list)
             or (is_resolved and (
                 player.get('blessing') != selected
-                or blessing_history != [selected]
+                or len(blessing_history) != expected_previous_count + 1
+                or blessing_history[-1:] != [selected]
             ))
             or (not is_resolved and (
-                player.get('blessing') is not None
-                or blessing_history != []
+                len(blessing_history) != expected_previous_count
+                or player.get('blessing') != (
+                    blessing_history[-1] if blessing_history else None
+                )
             ))
         ):
             _fail('INVALID_COOP_OPENING', '协作开局赐福记录无效')
 
 
 def _validate_coop_live_state_current(state):
-    """Validate the stage-one node contract without exposing legacy looseness."""
+    """Validate the three-stage journey without exposing legacy looseness."""
 
     validate_story_state_v10(state, expected_mode='coop')
     content_version = str(state.get('content_version') or '')
@@ -3760,20 +5165,30 @@ def _validate_coop_live_state_current(state):
     opening_contract = _is_opening_content_version(content_version)
     phase = str(state.get('phase') or '')
     if phase not in {
-        'journey_setup', 'combat', 'reward', 'map', 'room', 'stage_complete', 'game_over'
+        'journey_setup', 'combat', 'reward', 'map', 'room',
+        'stage_complete', 'complete', 'game_over'
     }:
         _fail('INVALID_COOP_PHASE', '协作旅程阶段无效')
-    if state.get('completed') is not False:
-        _fail('INVALID_COOP_PROGRESSION', '第一阶段完成不能标记整段旅程结束')
+    if not isinstance(state.get('completed'), bool) or state.get('completed') != (phase == 'complete'):
+        _fail('INVALID_COOP_PROGRESSION', '协作旅程完成标记与阶段不一致')
     progression = state.get('coop_progression')
     story_map = state.get('map')
     if not isinstance(progression, dict) or not isinstance(story_map, dict):
-        _fail('INVALID_COOP_PROGRESSION', '协作第一阶段进度无效')
+        _fail('INVALID_COOP_PROGRESSION', '协作阶段进度无效')
     floor_count = story_map.get('floor_count')
     encounter_index = progression.get('encounter_index')
+    stage = state.get('stage')
+    stage_definition = (
+        COOP_STORY_STAGES.get(stage)
+        if not isinstance(stage, bool) and isinstance(stage, int)
+        else None
+    )
+    if stage_definition is None:
+        _fail('INVALID_COOP_MAP', '协作阶段地图元数据无效')
     if (
         progression.get('contract_version') != COOP_STAGE1_CONTRACT_VERSION
-        or progression.get('chapter') != 1
+        or progression.get('chapter') != stage
+        or state.get('biome') != stage_definition['biome']
         or isinstance(floor_count, bool)
         or not isinstance(floor_count, int)
         or floor_count <= 1
@@ -3782,7 +5197,7 @@ def _validate_coop_live_state_current(state):
         or not isinstance(encounter_index, int)
         or encounter_index < (0 if opening_contract else 1)
     ):
-        _fail('INVALID_COOP_PROGRESSION', '协作第一阶段进度无效')
+        _fail('INVALID_COOP_PROGRESSION', '协作阶段进度无效')
     completed_combat_ids = _validated_string_list(
         progression.get('completed_combat_ids'),
         code='INVALID_COOP_PROGRESSION',
@@ -3793,6 +5208,22 @@ def _validate_coop_live_state_current(state):
         code='INVALID_COOP_PROGRESSION',
         label='协作节点完成记录',
     )
+    completed_stages = _validated_string_list(
+        [str(value) for value in progression.get('completed_stages', [])]
+        if isinstance(progression.get('completed_stages'), list)
+        else progression.get('completed_stages'),
+        code='INVALID_COOP_PROGRESSION',
+        label='协作阶段完成记录',
+    )
+    try:
+        completed_stages = [int(value) for value in completed_stages]
+    except (TypeError, ValueError):
+        _fail('INVALID_COOP_PROGRESSION', '协作阶段完成记录无效')
+    expected_completed_stages = list(range(1, stage))
+    if phase in {'stage_complete', 'complete'}:
+        expected_completed_stages.append(stage)
+    if completed_stages != expected_completed_stages:
+        _fail('INVALID_COOP_PROGRESSION', '协作阶段完成记录不是连续旅程')
     expected_encounter_index = len(completed_combat_ids) + (
         1 if phase in {'combat', 'game_over'} else 0
     )
@@ -3826,7 +5257,7 @@ def _validate_coop_live_state_current(state):
         or current_floor != current_node.get('floor')
     ):
         _fail('INVALID_COOP_MAP', '协作当前节点与楼层不一致')
-    completed_through_current = phase in {'map', 'stage_complete'}
+    completed_through_current = phase in {'map', 'stage_complete', 'complete'}
     expected_completed_count = current_floor if completed_through_current else current_floor - 1
     if (
         expected_completed_count < 0
@@ -3862,7 +5293,7 @@ def _validate_coop_live_state_current(state):
         node_id for node_id, node in nodes.items() if node.get('status') == 'current'
     }
     expected_current_ids = (
-        set() if phase in {'map', 'stage_complete'} else {current_node_id}
+        set() if phase in {'map', 'stage_complete', 'complete'} else {current_node_id}
     )
     if current_status_ids != expected_current_ids:
         _fail('INVALID_COOP_MAP', '协作地图当前节点状态不唯一')
@@ -3872,12 +5303,12 @@ def _validate_coop_live_state_current(state):
         if not opening_contract and int(node.get('floor') or 0) == 1:
             expected_completed_combat_ids.append(COOP_INTRO_COMBAT_ID)
         elif str(node.get('type') or '') in {'combat', 'elite', 'boss'}:
-            expected_completed_combat_ids.append(f'garden-route-{node_id}')
+            expected_completed_combat_ids.append(f'{state["biome"]}-route-{node_id}')
     if phase == 'reward' and current_node_id not in completed_node_ids:
         expected_completed_combat_ids.append(
             COOP_INTRO_COMBAT_ID
             if not opening_contract and current_floor == 1
-            else f'garden-route-{current_node_id}'
+            else f'{state["biome"]}-route-{current_node_id}'
         )
     if completed_combat_ids != expected_completed_combat_ids:
         _fail('INVALID_COOP_PROGRESSION', '协作战斗完成记录与地图路径不一致')
@@ -3920,7 +5351,7 @@ def _validate_coop_live_state_current(state):
         expected_combat_id = (
             COOP_INTRO_COMBAT_ID
             if not opening_contract and current_floor == 1
-            else f'garden-route-{current_node_id}'
+            else f'{state["biome"]}-route-{current_node_id}'
         )
         expected_encounter = (
             COOP_INTRO_ENCOUNTER_ID
@@ -3998,21 +5429,61 @@ def _validate_coop_live_state_current(state):
             _validate_current_event_state(state, nodes, current_node)
         else:
             _fail('INVALID_COOP_ROOM', '协作房间类型尚未接入')
-    elif room_states is not None or room_decision is not None:
+    elif phase != 'stage_complete' and (room_states is not None or room_decision is not None):
         _fail('INVALID_COOP_ROOM', '非房间阶段不能保留房间私有状态')
     if phase == 'stage_complete':
+        expected_seats = {int(seat_key) for seat_key in state['players']}
+        resolved = room_decision.get('resolved_seats') if isinstance(room_decision, dict) else None
         if (
             room.get('type') != 'stage_complete'
-            or room.get('stage') != 1
-            or state.get('completed_stage') != 1
+            or room.get('id') != f'stage-complete:{stage}'
+            or room.get('stage') != stage
+            or room.get('policy') != 'all_members_ready'
+            or state.get('completed_stage') != stage
             or current_floor != floor_count
             or current_node.get('type') != 'boss'
             or current_node.get('status') != 'completed'
             or current_node_id not in completed_node_ids
+            or not isinstance(room_states, dict)
+            or set(room_states) != set(state['players'])
+            or any(
+                not isinstance(private, dict)
+                or set(private) != {'status'}
+                or private.get('status') not in {'pending', 'resolved'}
+                for private in room_states.values()
+            )
+            or not isinstance(room_decision, dict)
+            or set(room_decision) != {
+                'decision_id', 'room_id', 'policy', 'resolved_seats'
+            }
+            or room_decision.get('decision_id') != room.get('id')
+            or room_decision.get('room_id') != room.get('id')
+            or room_decision.get('policy') != 'all_members_ready'
+            or not isinstance(resolved, list)
+            or resolved != sorted(set(resolved))
+            or any(seat not in expected_seats for seat in resolved)
+            or set(resolved) == expected_seats
+            or any(
+                (private.get('status') == 'resolved') != (int(seat_key) in resolved)
+                for seat_key, private in room_states.items()
+            )
         ):
-            _fail('INVALID_COOP_COMPLETION', '协作第一阶段完成状态无效')
-    elif state.get('completed_stage') is not None:
-        _fail('INVALID_COOP_COMPLETION', '未完成阶段不能保留完成标记')
+            _fail('INVALID_COOP_COMPLETION', '协作阶段完成状态无效')
+    elif phase == 'complete':
+        if (
+            stage != COOP_FINAL_STAGE
+            or room.get('type') != 'coop_complete'
+            or room.get('stage') != COOP_FINAL_STAGE
+            or state.get('completed_stage') != COOP_FINAL_STAGE
+            or current_floor != floor_count
+            or current_node.get('type') != 'boss'
+            or current_node.get('status') != 'completed'
+            or room_states is not None
+            or room_decision is not None
+        ):
+            _fail('INVALID_COOP_COMPLETION', '协作完整旅程完成状态无效')
+    elif state.get('completed_stage') != (completed_stages[-1] if completed_stages else None):
+        _fail('INVALID_COOP_COMPLETION', '协作已完成阶段标记无效')
     if phase in {'combat', 'game_over'} and (
         rewards is not None or map_vote is not None or room_states is not None or room_decision is not None
     ):
@@ -4137,6 +5608,16 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
             'hand': [_public_card(card) for card in hand] if show_hand else None,
             'hand_count': len(hand),
             'draw_count': len(seat_state.get('draw_pile') or []),
+            # Rapids may inspect the set of drawable cards without revealing
+            # their authoritative order.  Sort only the viewer's projection.
+            'rapids_draw_choices': (
+                sorted(
+                    [_public_card(card) for card in seat_state.get('draw_pile') or []],
+                    key=lambda card: str(card.get('instance_id') or ''),
+                )
+                if seat == viewer_seat
+                else None
+            ),
             'discard_pile': [_public_card(card) for card in seat_state.get('discard_pile') or []],
             'exile_pile': [_public_card(card) for card in seat_state.get('exile_pile') or []],
             'equipment': [
@@ -4147,6 +5628,11 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
             # viewer needs their own list for rest/shop affordances, while a
             # teammate only receives combat-safe aggregate state.
             'relics': list(player.get('relics') or []) if seat == viewer_seat else None,
+            'enchantment_books': (
+                deepcopy(player.get('enchantment_books') or [])
+                if seat == viewer_seat
+                else None
+            ),
         })
     snapshot = {
         'schema_version': int(state['schema_version']),
@@ -4190,6 +5676,7 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
                 'node_type',
                 'policy',
                 'stage',
+                'journey_stage',
                 'content_id',
                 'description',
                 'biomes',
@@ -4208,7 +5695,8 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
             'max_floor': int(progression.get('max_floor') or 1),
             'completed_node_count': len(progression.get('completed_node_ids') or []),
             'completed_stage': state.get('completed_stage'),
-            'completed': False,
+            'completed_stages': list(progression.get('completed_stages') or []),
+            'completed': bool(state.get('completed')),
         }
     else:
         snapshot['progression'] = {
@@ -4234,6 +5722,11 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
                 'shield': int(enemy.get('shield') or 0),
                 'power': int(enemy.get('power') or 0),
                 'static': int(enemy.get('static') or 0),
+                'statuses': {
+                    key: int(enemy.get(key) or 0)
+                    for key in ('weak', 'vulnerable', 'fire')
+                    if int(enemy.get(key) or 0) > 0
+                },
                 'intent': _public_intent(enemy.get('intent')),
             } for enemy in combat.get('enemies') or []],
         }
@@ -4243,6 +5736,10 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
         snapshot['reward'] = {
             'reward_id': str(viewer_reward.get('reward_id') or ''),
             'status': str(viewer_reward.get('status') or ''),
+            'card_status': str(viewer_reward.get('card_status') or ''),
+            'card_round_index': int(viewer_reward.get('card_round_index') or 1),
+            'card_round_total': int(viewer_reward.get('card_round_total') or 1),
+            'book_status': str(viewer_reward.get('book_status') or ''),
             'gold': int(viewer_reward.get('gold') or 0),
             'options': [
                 {
@@ -4253,6 +5750,13 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
             ],
             'selected_card_id': viewer_reward.get('selected_card_id'),
             'skipped': bool(viewer_reward.get('skipped')),
+            'enchantment_book_id': viewer_reward.get('enchantment_book_id'),
+            'selected_enchantment_book_id': viewer_reward.get(
+                'selected_enchantment_book_id'
+            ),
+            'skipped_enchantment_book': bool(
+                viewer_reward.get('skipped_enchantment_book')
+            ),
             'seats': [
                 {
                     'seat': int(seat_key),
@@ -4331,6 +5835,7 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
                         'item_id',
                         'card_id',
                         'relic_id',
+                        'book_id',
                         'upgraded',
                         'price',
                         'status',
@@ -4369,6 +5874,21 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
                 {'seat': int(seat_key), 'resolved': int(seat_key) in resolved}
                 for seat_key in sorted(state['players'], key=int)
             ]
+    if state.get('phase') == 'stage_complete':
+        room_states = state.get('room_states_by_player') or {}
+        decision = state['coordination'].get('room_decision') or {}
+        resolved = set(decision.get('resolved_seats') or [])
+        viewer_state = room_states.get(str(viewer_seat)) or {}
+        snapshot['room_state'] = {
+            'room_id': str((state.get('room') or {}).get('id') or ''),
+            'type': 'stage_complete',
+            'status': str(viewer_state.get('status') or ''),
+            'options': ['continue'],
+            'seats': [
+                {'seat': int(seat_key), 'resolved': int(seat_key) in resolved}
+                for seat_key in sorted(state['players'], key=int)
+            ],
+        }
     return snapshot
 
 

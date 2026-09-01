@@ -1,3 +1,26 @@
+.reputation-badge { display: inline-block; margin-inline-end: .35em; padding: .06em .3em; border-radius: .25em; font-size: .75em; font-weight: 700; vertical-align: middle; }
+.reputation-yellow { color: #664500; background: #ffe6a1; }
+.reputation-orange { color: #702400; background: #ffbf88; }
+.reputation-red { color: #fff; background: #a92335; }
+.newcomer-badge { color: #164524; background: #bceac6; }
+.account-integrity-dialog { width: min(760px, 94vw); max-height: 88vh; overflow: auto; border: 1px solid #67735f; border-radius: 14px; padding: 20px; color: #e7eadf; background: #20271f; }
+.account-integrity-dialog::backdrop { background: rgb(0 0 0 / 65%); }
+.account-integrity-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.account-integrity-dialog h2 { margin: 0; font-size: 1.3rem; }
+.account-integrity-dialog section { border-top: 1px solid #52614b; margin-top: 18px; padding-top: 12px; }
+.account-integrity-dialog p { line-height: 1.55; overflow-wrap: anywhere; }
+.account-integrity-dialog form, .account-integrity-dialog label { display: grid; gap: 8px; }
+.account-integrity-dialog form { gap: 12px; }
+.account-integrity-dialog input, .account-integrity-dialog select, .account-integrity-dialog textarea { width: 100%; box-sizing: border-box; color: inherit; background: #11190f; border: 1px solid #718369; border-radius: 5px; padding: 8px; font: inherit; }
+.account-integrity-dialog textarea { min-height: 65px; resize: vertical; }
+.account-integrity-dialog .btn { min-height: 36px; }
+.integrity-entry { padding: 10px 0; border-bottom: 1px solid #43513d; overflow-wrap: anywhere; }
+.integrity-entry .btn { margin: 5px; }
+.integrity-ledger-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 8px 0; }
+.integrity-ledger-row time, .integrity-help { font-size: .85em; opacity: .82; }
+#integrity-status { color: #ffe6a1; min-height: 1.5em; }
+@media(max-width: 600px) { .account-integrity-dialog { padding: 12px; } .integrity-ledger-row time { width: 100%; } }
+
 @font-face {
   font-family: 'Kreadon';
   src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
@@ -645,6 +668,7 @@ body {
 
 .top-settings-btn::before { --ui-icon-url: url("/static/assets/ui-icons/settings.svg"); }
 .account-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/account.svg"); }
+.community-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/announcement.svg"); }
 .friends-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/friends.svg"); }
 .skin-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/skins.svg"); }
 .changelog-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/log.svg"); }
@@ -14065,7 +14089,7 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
     overflow-y: hidden;
     border: 1px solid var(--border-color);
     background: var(--bg-card);
-    width: min(100%, 546px);
+    width: min(100%, 860px);
     min-width: min(100%, 468px);
     scrollbar-width: thin;
 }
@@ -14117,6 +14141,14 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
     color: #fff;
 }
 
+.mode-tab-ranked:not(.active) {
+    color: color-mix(in srgb, var(--magic) 82%, var(--text-primary));
+}
+
+.mode-tab-ranked.active {
+    background: linear-gradient(135deg, var(--magic), color-mix(in srgb, var(--magic) 55%, #8a5b24));
+}
+
 .mode-tab:not(.active):hover {
     background: var(--bg-card-hover);
     color: var(--text-primary);
@@ -14134,7 +14166,7 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
 }
 
 .lobby-header-with-tabs .mode-tabs {
-    width: min(100%, 546px);
+    width: min(100%, 860px);
     max-width: 100%;
 }
 

@@ -21,6 +21,7 @@ from story_content import (
     STORY_DIFFICULTIES,
     STORY_ENCOUNTERS,
     STORY_ENEMIES,
+    STORY_ENCHANTMENT_BOOKS,
     STORY_EVENTS,
     STORY_RELICS,
     STORY_RULES,
@@ -36,9 +37,9 @@ from story_character_content import (
 
 
 STORY_CONTENT_MODEL_VERSION = 1
-STORY_WORKBOOK_FILE = 'Garden of Thorn 卡牌数据8.xlsx'
+STORY_WORKBOOK_FILE = 'Garden of Thorn 卡牌数据9.xlsx'
 STORY_WORKBOOK_SHA256 = (
-    '2c3f1a54d695dd6b1c3bf7fa9df22f5150029f1988caf4804444213e4cfd9546'
+    'd0554d0b7f43b0477c2fbe471c1c311ce1095c2a6693668eb000a990b2cf3c05'
 )
 STORY_WORKBOOK_SOURCE_VERSION = f'xlsx-sha256:{STORY_WORKBOOK_SHA256}'
 
@@ -60,6 +61,7 @@ STORY_CONTENT_KINDS = frozenset({
     'enemy',
     'encounter',
     'event',
+    'enchantment_book',
 })
 _CONTENT_ID_RE = re.compile(r'[a-z0-9][a-z0-9_.:-]{0,127}')
 _CELL_RANGE_RE = re.compile(
@@ -358,6 +360,8 @@ def _source_for(kind, content_id, *, row=None):
         return (_workbook_source('爬塔天赋设计', f'A{row}:D{row}'),)
     if kind == 'enemy':
         return (_workbook_source('爬塔怪物设计', f'A{row}:P{row}'),)
+    if kind == 'enchantment_book':
+        return (_workbook_source('附魔书设计', f'A{row}:D{row}'),)
     if kind == 'encounter':
         return (_workbook_source('战斗列表', f'A{row}:D{row}'),)
     if kind == 'card_type':
@@ -396,6 +400,7 @@ def build_story_content_registry(
         card_types=None,
         tags=None, statuses=None, traits=None, blessings=None, cards=None,
         relics=None, enemies=None, encounters=None, events=None,
+        enchantment_books=None,
         character_cards=None, character_relics=None, terms=None):
     catalogs = {
         'rule': {'global': deepcopy(STORY_RULES if rules is None else rules)},
@@ -424,6 +429,10 @@ def build_story_content_registry(
         'relic': deepcopy(STORY_RELICS if relics is None else relics),
         'enemy': deepcopy(STORY_ENEMIES if enemies is None else enemies),
         'event': deepcopy(STORY_EVENTS if events is None else events),
+        'enchantment_book': deepcopy(
+            STORY_ENCHANTMENT_BOOKS
+            if enchantment_books is None else enchantment_books
+        ),
     }
     encounter_catalog = deepcopy(STORY_ENCOUNTERS if encounters is None else encounters)
     records = []
@@ -445,6 +454,8 @@ def build_story_content_registry(
             elif kind == 'term':
                 row = 157 + index
             elif kind == 'blessing':
+                row = index + 1
+            elif kind == 'enchantment_book':
                 row = index + 1
             elif kind in precise_rows:
                 row = precise_rows[kind].get(content_id)
@@ -510,6 +521,7 @@ def validate_story_content_model():
             for specs in tiers.values()
         ),
         'event': len(STORY_EVENTS),
+        'enchantment_book': len(STORY_ENCHANTMENT_BOOKS),
     }
     for kind, count in expected.items():
         actual = len(STORY_CONTENT_REGISTRY.keys(kind))

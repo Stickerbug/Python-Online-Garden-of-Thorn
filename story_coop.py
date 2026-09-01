@@ -31,7 +31,7 @@ COOP_STORY_DEFAULT_RULES = MappingProxyType({
     'turn_model': 'shared_hero_phase',
     'action_ordering': 'server_serialized',
     'route_vote_policy': 'seeded_random',
-    'event_vote_policy': 'unanimous_then_seeded_random',
+    'event_vote_policy': 'unanimous_required',
     'reward_scope': 'per_player',
     'gold_scope': 'per_player',
     'hand_visibility': 'party',

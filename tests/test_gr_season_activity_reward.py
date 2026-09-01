@@ -254,8 +254,8 @@ class GrSeasonActivityRewardTests(unittest.TestCase):
             datetime(2026, 7, 31, 16, 0, 0, tzinfo=timezone.utc)
         )
 
-        self.assertEqual(before['id'], 'S1')
-        self.assertEqual(after['id'], 'S202608')
+        self.assertEqual(before['id'], 'R1-S202607')
+        self.assertEqual(after['id'], 'R1-S202608')
         self.assertEqual(after['starts_at'], '2026-07-31T16:00:00Z')
 
 

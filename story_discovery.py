@@ -7,6 +7,7 @@ from story_content import (
     STORY_BLESSINGS,
     STORY_CARDS,
     STORY_ENEMIES,
+    STORY_ENCHANTMENT_BOOKS,
     STORY_RELICS,
     STORY_STATUSES,
     STORY_TAGS,
@@ -145,6 +146,19 @@ def collect_story_discoveries(state):
         add('blessing', blessing_id)
         add_definition_terms(definition)
 
+    def add_enchantment_book(book_or_id):
+        book_id = (
+            book_or_id.get('book_id')
+            if isinstance(book_or_id, dict)
+            else book_or_id
+        )
+        book_id = str(book_id or '')
+        definition = STORY_ENCHANTMENT_BOOKS.get(book_id)
+        if not definition:
+            return
+        add('enchantment_book', book_id)
+        add_definition_terms(definition)
+
     def add_enemy(enemy):
         if not isinstance(enemy, dict):
             return
@@ -184,6 +198,8 @@ def collect_story_discoveries(state):
         add_blessing(blessing_id)
     if player.get('blessing'):
         add_blessing(player.get('blessing'))
+    for book in player.get('enchantment_books') or ():
+        add_enchantment_book(book)
 
     combat = state.get('combat') if isinstance(state.get('combat'), dict) else {}
     for key in _CARD_COLLECTION_KEYS:
@@ -202,6 +218,8 @@ def collect_story_discoveries(state):
         add_relic(relic_id)
     add_relic(reward.get('relic'))
     add_relic(reward.get('selected_relic_id'))
+    add_enchantment_book(reward.get('enchantment_book'))
+    add_enchantment_book(reward.get('selected_enchantment_book_id'))
     selected_card_id = reward.get('selected_card_id')
     if selected_card_id:
         selected = next(
@@ -219,6 +237,10 @@ def collect_story_discoveries(state):
     for relic in room.get('relics') or ():
         add_relic(relic.get('relic_id') if isinstance(relic, dict) else relic)
     add_relic(room.get('relic'))
+    for book in room.get('enchantment_books') or ():
+        add_enchantment_book(
+            book.get('book_id') if isinstance(book, dict) else book
+        )
 
     # Current event results may reveal generated content without adding it to
     # the deck. Restrict this recursive scan to the active room and last events.
@@ -234,6 +256,11 @@ def collect_story_discoveries(state):
                 add_term('status', value)
             elif key in ('trait', 'trait_id'):
                 add_term('trait', value)
+            elif key in (
+                'book_id', 'enchantment_book',
+                'selected_enchantment_book_id',
+            ):
+                add_enchantment_book(value)
 
     for blessing_id in state.get('blessing_options') or ():
         add_blessing(blessing_id)

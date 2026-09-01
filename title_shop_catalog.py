@@ -128,6 +128,7 @@ TITLE_SHOP_CATALOG = [
     _styled('rainbow', '彩虹', 50000, '{rainbow}彩虹{/}', 5),
     _solid('cannot-hold', '绷不住', 20000, '#E6DF7F', 20),
     _solid('newcomer', '新手', 2000, RARITY_COLORS['unusual'], 30),
+    _solid('dealer', '发牌员', 40000, '#000000', 20),
 ]
 
 

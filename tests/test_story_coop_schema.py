@@ -46,6 +46,7 @@ def test_coop_schema_contract_constants_and_rules_are_stable():
     assert COOP_STORY_DEFAULT_RULES['turn_model'] == 'shared_hero_phase'
     assert COOP_STORY_DEFAULT_RULES['action_ordering'] == 'server_serialized'
     assert COOP_STORY_DEFAULT_RULES['route_vote_policy'] == 'seeded_random'
+    assert COOP_STORY_DEFAULT_RULES['event_vote_policy'] == 'unanimous_required'
     assert COOP_STORY_DEFAULT_RULES['reward_scope'] == 'per_player'
     assert COOP_STORY_DEFAULT_RULES['gold_scope'] == 'per_player'
     assert COOP_STORY_DEFAULT_RULES['allow_mid_combat_join'] is False

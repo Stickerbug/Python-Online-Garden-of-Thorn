@@ -64,6 +64,11 @@ function fusionAdjustedCost(cost, fusionLevel) {
     return Math.floor(normalizedCost * (clampCardLayer(fusionLevel) + 1) / 2);
 }
 
+function fusionCostSurcharge(originalCost, fusionLevel) {
+    const normalizedCost = fusionAdjustedCost(originalCost, 1);
+    return fusionAdjustedCost(normalizedCost, fusionLevel) - normalizedCost;
+}
+
 const TUTORIAL_DECKS = [
     [
         'Basic', 'Rose', 'Leaf', 'Bone', 'Bubble',
@@ -450,8 +455,8 @@ class LocalCard {
                 : (custom.formal_logic_permanent_cost_e != null
                     ? toInt(custom.formal_logic_permanent_cost_e, 0)
                     : toInt(this.def().cost_e, 0)));
-        const cost = Math.max(0, base + this.temp_heavy_value - this.mimic_discount - this.swift_value - this.temp_swift_value);
-        return fusionAdjustedCost(cost, this.fusion_level);
+        const fusionExtra = fusionCostSurcharge(this.def().cost_e, this.fusion_level);
+        return Math.max(0, base + fusionExtra + this.temp_heavy_value - this.mimic_discount - this.swift_value - this.temp_swift_value);
     }
 
     get cost_m() {
@@ -463,8 +468,8 @@ class LocalCard {
                 : (custom.formal_logic_permanent_cost_m != null
                     ? toInt(custom.formal_logic_permanent_cost_m, 0)
                     : toInt(this.def().cost_m, 0)));
-        const cost = Math.max(0, base + Math.max(0, toInt(this.temp_magic_heavy_value, 0)) - Math.max(0, toInt(this.magic_swift_value, 0)));
-        return fusionAdjustedCost(cost, this.fusion_level);
+        const fusionExtra = fusionCostSurcharge(this.def().cost_m, this.fusion_level);
+        return Math.max(0, base + fusionExtra + Math.max(0, toInt(this.temp_magic_heavy_value, 0)) - Math.max(0, toInt(this.magic_swift_value, 0)));
     }
 
     get flags() {

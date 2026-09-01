@@ -93,6 +93,9 @@ def test_manual_story_saves_roll_three_slots_and_restore_rng(tmp_path, monkeypat
     }
     assert restored['state']['last_events'] == []
     assert 'recovery_checkpoint' not in restored['state']
+    counted = db.get_active_story_run(user['id'])
+    assert counted['manual_save_count'] == 3
+    assert counted['manual_load_count'] == 1
 
 
 def test_manual_story_save_delete_compacts_remaining_slots(tmp_path, monkeypatch):

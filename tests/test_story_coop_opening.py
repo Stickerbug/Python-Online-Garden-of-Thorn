@@ -252,7 +252,7 @@ def test_each_supported_opening_blessing_applies_only_to_the_acting_seat(blessin
         assert added_cards == []
     elif blessing_id == 'rare_card':
         assert len(added_cards) == 1
-        assert STORY_CARDS[added_cards[0]['def_id']]['rarity'] == 'rare'
+        assert STORY_CARDS[added_cards[0]['def_id']]['rarity'] == 'ultra'
     else:
         assert player['gold'] == before_player['gold'] + 250
         assert [card['def_id'] for card in added_cards] == ['basic', 'rose']

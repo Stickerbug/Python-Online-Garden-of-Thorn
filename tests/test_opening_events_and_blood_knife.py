@@ -239,13 +239,14 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         self.assertEqual(engine.players[1].fire, 5)
         restored = PlayerState.from_dict(engine.players[1].to_dict())
         self.assertEqual(restored.fire, 5)
-        self.assertEqual(GameEngine.OPENING_EVENTS[4]['desc'], '开局对所有敌方玩家施加3层灼烧')
+        self.assertEqual(GameEngine.OPENING_EVENTS[4]['desc'], '开局对随机1名敌方玩家施加3层灼烧')
         for language in ('zh', 'en', 'fr', 'ja'):
             description = OPENING_EVENT_I18N[4]['desc'][language]
             self.assertIn('3', description, language)
+            self.assertIn('1', description, language)
             self.assertNotIn('4', description, language)
 
-    def test_flame_omen_applies_to_both_2v2_enemies_and_not_the_ally(self):
+    def test_flame_omen_applies_to_one_random_2v2_enemy_and_not_the_ally(self):
         engine = GameEngine2v2()
         engine.opening_event_picks[0] = 4
         engine.players[1].fire = 7
@@ -255,8 +256,10 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
 
         engine._apply_opening_event(0)
 
-        self.assertEqual([player.fire for player in engine.players], [0, 7, 4, 5])
-        self.assertTrue(any('敌方全体+3灼烧' in line for line in engine.log))
+        fire = [player.fire for player in engine.players]
+        self.assertEqual(fire[:2], [0, 7])
+        self.assertEqual(sorted((fire[2] - 1, fire[3] - 2)), [0, 3])
+        self.assertTrue(any('随机敌方+3灼烧' in line for line in engine.log))
 
     def test_local_worker_flame_omen_matches_server(self):
         node = shutil.which('node')

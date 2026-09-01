@@ -83,13 +83,25 @@ def test_garden_backdrop_keeps_readability_and_reduced_motion_contracts():
     assert '@media (prefers-reduced-motion: reduce)' in STORY_CSS
     assert '.story-seeded-backdrop-patch.is-dark' in STORY_CSS
     assert '.story-seeded-backdrop-landmark' in STORY_CSS
-    assert 'opacity: .16;' in STORY_CSS
-    assert 'opacity: .2;' in STORY_CSS
-    assert 'rgba(251, 251, 247, .72)' in STORY_CSS
+    assert 'opacity: .22;' in STORY_CSS
+    assert 'opacity: .26;' in STORY_CSS
+    assert '--story-backdrop-wash: rgba(245, 245, 240, .3);' in STORY_CSS
+    assert '--story-backdrop-wash: rgba(10, 14, 20, .48);' in STORY_CSS
     for biome in ('garden', 'desert', 'ocean', 'jungle', 'factory'):
         assert f".story-seeded-backdrop[data-biome='{biome}']" in STORY_CSS
     for filename in ('jungle-tile.svg', 'ocean-tile.svg', 'factory-tile.svg'):
         assert f"/static/assets/story-backgrounds/{filename}" in STORY_CSS
+
+
+def test_story_combat_reuses_the_seeded_biome_without_the_old_grid():
+    combat_block = STORY_CSS.split('/* Keep Story combat on the same visual grammar', 1)[1].split(
+        '.story-round,', 1,
+    )[0]
+    assert '.story-coop-seeded-backdrop.is-active { opacity: .72; }' in STORY_CSS
+    assert 'rgba(251, 251, 247, .34)' in combat_block
+    assert 'rgba(16, 20, 33, .28)' in combat_block
+    assert '48px 48px' not in combat_block
+    assert combat_block.count('background: none;') == 2
 
 
 def test_garden_backdrop_uses_dense_small_motifs():

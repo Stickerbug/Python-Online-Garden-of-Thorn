@@ -8,6 +8,7 @@
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=3" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/static/css/style.css?v={{ static_version|default('dev')|urlencode }}">
+    <link rel="stylesheet" href="/static/css/card_compat.css?v={{ static_version|default('dev')|urlencode }}">
     <link rel="stylesheet" href="/static/css/shared-afk.css?v={{ static_version|default('dev')|urlencode }}">
     <link rel="stylesheet" href="/static/css/shared-lobby-chat.css?v={{ static_version|default('dev')|urlencode }}">
     <link rel="stylesheet" href="/static/css/community.css?v={{ static_version|default('dev')|urlencode }}">
@@ -160,6 +161,7 @@
   <div id="account-info-panel" class="account-auth-form account-info-panel hidden">
     <div class="account-form-title">账号信息</div>
     <div id="account-info-grid" class="account-info-grid"></div>
+    <button id="btn-account-integrity" class="btn btn-secondary" type="button">信誉与队友举报</button>
   </div>
   <div id="account-username-change-form" class="account-auth-form hidden">
     <div id="account-username-change-title" class="account-form-title">设置用户名</div>
@@ -585,10 +587,12 @@
 <div class="lobby-header lobby-header-with-tabs">
 <h2>大厅</h2>
 <div class="mode-tabs" id="lobby-mode-tabs">
-<div class="mode-tab active" data-mode="1v1">1v1</div>
-<div class="mode-tab" data-mode="2v2">2v2</div>
-<div class="mode-tab" data-mode="urf">无限火力</div>
-<div class="mode-tab" data-mode="random_deck">随机卡组</div>
+<div class="mode-tab active" data-mode="casual_1v1">娱乐 1v1</div>
+<div class="mode-tab" data-mode="casual_2v2">娱乐 2v2</div>
+<div class="mode-tab mode-tab-ranked" data-mode="ranked_1v1">天梯 1v1</div>
+<div class="mode-tab mode-tab-ranked" data-mode="ranked_2v2">天梯 2v2</div>
+<div class="mode-tab" data-mode="casual_urf">无限火力</div>
+<div class="mode-tab" data-mode="casual_random_deck">随机卡组</div>
 </div>
 {% if ai_public_entry_enabled %}
 <div id="ai-1v1-test-entry" class="ai-1v1-test-entry hidden">
@@ -842,6 +846,34 @@
 <div id="response-panel" class="response-panel hidden"></div>
 </div>
 
+<dialog id="account-integrity-dialog" class="account-integrity-dialog" aria-labelledby="account-integrity-title">
+  <header><h2 id="account-integrity-title">信誉与账号关联</h2><button id="integrity-close" type="button" class="btn btn-secondary" aria-label="关闭">×</button></header>
+  <p id="integrity-status" role="status" aria-live="polite"></p>
+  <div id="integrity-profile"></div>
+  <p class="integrity-help">初始85，最高100。低于80显示低信誉标记；低于60暂停成就且荆露减半；低于40不能参加排位或获得荆露。北京时间每日检查前一天：未扣分且参加过排位可恢复5点；低于40时不要求排位。</p>
+  <button id="integrity-refresh" class="btn btn-secondary" type="button">刷新</button>
+  <section><h3>举报本局队友</h3><p>仅限结束后10分钟内的2v2对局；24小时内由任一对手确认后成立。娱乐赛单次最多扣1点。</p>
+    <form id="integrity-report-form"><label>对局与队友 <select id="integrity-report-match" required></select></label>
+      <label>理由 <textarea id="integrity-report-reason" maxlength="300" required></textarea></label>
+      <button type="submit" class="btn btn-danger">提交举报</button></form>
+  </section>
+  <section><h3>待确认及我的举报</h3><div id="integrity-reports"></div></section>
+  <section id="integrity-appeal-section" hidden><h3>关联申诉</h3><p>关联由多信号自动判断，同一网络不会单独确认。申诉由Staff/Admin复核，处理前仍保留当前信誉规则。</p>
+    <form id="integrity-appeal-form"><label>申诉说明 <textarea id="integrity-appeal-reason" maxlength="500" required></textarea></label>
+      <button type="submit" class="btn btn-secondary">提交申诉</button></form>
+  </section>
+  <section><h3>最近信誉流水</h3><div id="integrity-ledger"></div></section>
+  <section id="integrity-staff-section" hidden><h3>Staff/Admin 审核</h3>
+    <button id="integrity-staff-load" class="btn btn-secondary" type="button">载入关联证据、申诉与举报</button>
+    <div id="integrity-staff-cases"></div>
+    <form id="integrity-staff-form"><label>处理操作 <select id="integrity-staff-action"><option value="unlink">解除账号关联</option><option value="merge">按明确证据合并账号</option><option value="accept">接受关联申诉</option><option value="reject">驳回关联申诉</option><option value="revoke">撤销已成立举报</option></select></label>
+      <label>账号ID / 申诉ID / 举报ID（合并用逗号分隔账号ID）<input id="integrity-staff-target" required maxlength="120"></label>
+      <label>解除后的起始信誉（解除或接受申诉必填）<input id="integrity-staff-reputation" type="number" min="0" max="100" step="1"></label>
+      <label>证据与处理理由 <textarea id="integrity-staff-reason" maxlength="500" required></textarea></label>
+      <button type="submit" class="btn btn-danger">确认处理</button></form>
+  </section>
+</dialog>
+
 <div id="view-gameover" class="view hidden">
 <div class="gameover-container">
 <h1 id="gameover-title" class="gameover-text"></h1>
@@ -855,6 +887,7 @@
 <div class="gameover-buttons">
 <button id="btn-rematch" class="btn btn-bloom">再来一局</button>
 <button id="btn-report-match" class="btn btn-danger hidden">举报本局</button>
+<button id="btn-report-teammate" class="btn btn-secondary hidden" type="button">举报队友 / 确认举报</button>
 <button id="btn-return-lobby" class="btn btn-secondary">返回大厅</button>
 </div>
 </div>
@@ -1241,6 +1274,7 @@
       window.__GTN_STATIC_VERSION__ = {{ static_version|default('dev')|tojson }};
       window.__GTN_CHANGELOG_VERSION__ = {{ changelog_version|default('')|tojson }};
     </script>
+    <script src="/static/js/card_compat.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/resource_orbs.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/game.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/keybindings.js?v={{ static_version|default('dev')|urlencode }}"></script>

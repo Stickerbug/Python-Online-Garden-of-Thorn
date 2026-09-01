@@ -68,6 +68,23 @@ class StoryDeveloperPermissionTests(unittest.TestCase):
             response = self.client.post("/api/story/run/reset-map", json={"run_id": "test-run"})
         self.assertEqual(response.status_code, 404)
 
+    def test_staff_reset_abandons_the_run_and_returns_to_character_selection(self):
+        with (
+            mock.patch.object(gtn, "_require_account_json", return_value=(41, "StoryTester", None)),
+            mock.patch.object(gtn, "feedback_is_staff", return_value=True),
+            mock.patch.object(gtn, "STORY_DEV_TOOLS_ENABLED", True),
+            mock.patch.object(gtn, "abandon_story_run", return_value=True) as abandon,
+            mock.patch.object(gtn, "_list_story_discoveries_without_blocking", return_value=[]),
+        ):
+            response = self.client.post(
+                "/api/story/run/reset-map",
+                json={"run_id": "test-run"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.get_json()["run"])
+        abandon.assert_called_once_with(41, "test-run")
+
 
 if __name__ == "__main__":
     unittest.main()

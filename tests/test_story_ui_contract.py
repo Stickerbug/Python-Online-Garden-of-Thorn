@@ -124,6 +124,23 @@ def test_story_attack_prediction_does_not_change_effect_scale_on_hover():
     assert 'font-size: calc(var(--card-effect-font-scale) * .92);' not in STORY_CSS
 
 
+def test_story_card_effect_fit_keeps_a_readable_floor_and_limits_spacing_shrink():
+    fit_branch = STORY_JS.split(
+        'function fitStoryCardEffect(cardElement) {',
+        1,
+    )[1].split(
+        'function scheduleStoryCardEffectFit(cardElement) {',
+        1,
+    )[0]
+
+    assert 'const minimumReadableScale = 0.76;' in fit_branch
+    assert 'const minimumSpacingScale = 0.9;' in fit_branch
+    assert 'resetStoryCardEffectFit(effect);' in fit_branch
+    assert "effect.style.removeProperty('font-size');" in STORY_JS
+    assert 'const minimumScale = !overflowed && !predictionTooTall' in fit_branch
+    assert 'scale = Math.max(minimumScale, nextScale);' in fit_branch
+
+
 def test_story_card_typography_matches_gallery_primitives():
     assert "--card-english-font: 5.75cqi;" in STORY_CSS
     assert ":lang(zh) .story-card.card" in STORY_CSS
@@ -206,12 +223,15 @@ def test_story_talents_show_their_copy_without_redundant_term_interactions():
 
 
 def test_story_surrender_button_requires_confirmation_and_uses_action():
-    assert 'id="story-surrender"' in STORY_TEMPLATE
+    assert 'id="story-surrender"' not in STORY_TEMPLATE
+    assert 'id="story-settings-surrender"' not in STORY_TEMPLATE
+    assert 'id="story-hud-surrender"' in STORY_TEMPLATE
     assert 'id="story-surrender-dialog"' in STORY_TEMPLATE
     assert "storyAction('surrender')" in STORY_JS
     assert "['journey_setup', 'complete', 'game_over'].includes(phase)" in STORY_JS
     assert "'story-surrender-confirm': t.surrender" in STORY_JS
-    assert '.story-surrender-command {' in STORY_CSS
+    assert "$('story-hud-surrender')?.addEventListener('click'" in STORY_JS
+    assert "dialog.returnValue = 'cancel';" in STORY_JS
 
 
 def test_story_equipment_matches_classic_orbit_preview_and_terms():
@@ -601,15 +621,14 @@ def test_story_surfaces_use_the_regular_ui_border_palette():
 
 
 def test_story_run_deck_and_talents_remain_available_during_combat():
-    assert 'id="story-run-deck"' in STORY_TEMPLATE
+    assert 'id="story-run-deck"' not in STORY_TEMPLATE
+    assert 'id="story-hud-deck"' in STORY_TEMPLATE
     assert 'src="/static/assets/ui-icons/total-pile.svg"' in STORY_TEMPLATE
     assert "runDeck: '总牌库', viewRunDeck: '查看总牌库'" in STORY_JS
     assert "deck: { source: state?.player?.deck, title: t.runDeck, reverse: false }" in STORY_JS
     assert "if (kind === 'deck' && state?.phase === 'combat') return;" not in STORY_JS
-    assert 'const runDeckUnavailable = !activeRun?.state;' in STORY_JS
-    assert 'runDeck?.classList.toggle(\'hidden\', runDeckUnavailable);' in STORY_JS
     assert "$('story-talent-overview')?.classList.toggle('hidden', runDeckUnavailable);" in STORY_JS
-    assert "$('story-run-deck')?.addEventListener('click', () => openStoryPile('deck'));" in STORY_JS
+    assert "$('story-hud-deck')?.addEventListener('click', () => openStoryPile('deck'));" in STORY_JS
     assert 'storyPileCardGroups(cards).forEach(({ card, count }) =>' in STORY_JS
     assert 'grid?.append(createStoryPileTile(card, count));' in STORY_JS
     assert "if (key !== 'instance_id') result[key] = normalize(value[key]);" in STORY_JS
@@ -627,7 +646,9 @@ def test_story_talent_overview_sits_before_deck_and_is_self_explanatory():
         '</div>',
         1,
     )[0]
-    assert status_actions.index('id="story-talent-overview"') < status_actions.index('id="story-run-deck"')
+    assert 'id="story-talent-overview"' in status_actions
+    assert 'id="story-run-deck"' not in status_actions
+    assert STORY_TEMPLATE.index('id="story-hud-deck"') < STORY_TEMPLATE.index('id="story-talent-overview"')
     assert 'id="story-talent-overview-label"' in STORY_TEMPLATE
     assert '/static/assets/ui-icons/achievements.svg' in STORY_TEMPLATE
     assert 'function openStoryTalentOverview()' in STORY_JS
@@ -643,12 +664,17 @@ def test_story_talent_overview_sits_before_deck_and_is_self_explanatory():
 
 
 def test_story_combat_map_is_read_only_and_can_return_to_combat():
-    assert 'id="story-combat-map"' in STORY_TEMPLATE
-    assert 'id="story-map-return"' in STORY_TEMPLATE
+    assert 'id="story-combat-map"' not in STORY_TEMPLATE
+    assert 'id="story-map-return"' not in STORY_TEMPLATE
+    assert 'id="story-hud-map"' in STORY_TEMPLATE
+    assert '/static/assets/story-ui-icons/map.svg' in STORY_TEMPLATE
     assert 'const actionable = !options.readOnly && node.status === \'available\';' in STORY_JS
     assert 'renderMap(state.map, state.current_node_id, { readOnly: combatPreview });' in STORY_JS
-    assert "$('story-combat-map')?.addEventListener('click', openStoryCombatMap);" in STORY_JS
-    assert "$('story-map-return')?.addEventListener('click', returnToStoryCombat);" in STORY_JS
+    assert 'scheduleStoryAutoEnter' not in STORY_JS
+    assert "$('story-hud-map')?.addEventListener('click', openStoryCombatMap);" in STORY_JS
+    assert 'if (storyMapPreviewOpen)' in STORY_JS
+    assert "mapButton?.classList.toggle('is-map-open', mapOpen);" in STORY_JS
+    assert '.story-persistent-actions button.is-map-open {' in STORY_CSS
 
 
 def test_story_map_boss_node_uses_the_frozen_encounter_portrait():
@@ -661,7 +687,9 @@ def test_story_map_boss_node_uses_the_frozen_encounter_portrait():
 
 
 def test_story_floor_restart_is_confirmed_and_available_after_combat_failure():
-    assert 'id="story-save-open-global"' in STORY_TEMPLATE
+    assert 'id="story-save-open-global"' not in STORY_TEMPLATE
+    assert 'id="story-settings-save"' not in STORY_TEMPLATE
+    assert 'id="story-hud-save"' in STORY_TEMPLATE
     assert 'id="story-restart-floor"' in STORY_TEMPLATE
     assert 'id="story-restart-floor-dialog"' in STORY_TEMPLATE
     assert "await storyAction('restart_floor', {});" in STORY_JS
@@ -720,6 +748,11 @@ def test_story_cards_use_rarity_frames_type_tints_and_blind_concealment():
 def test_empty_exact_exile_selection_skips_the_choice_dialog():
     assert "type === 'choose_exile' && source.length === 0" in STORY_JS
     assert 'if (!spec.source.length && spec.minimum === 0) return false;' in STORY_JS
+
+
+def test_eternal_cards_are_hidden_from_blessing_transform_choices():
+    assert "['remove_card', 'transform_card'].includes(blessing.script)" in STORY_JS
+    assert "cardValues(card)?.tags?.includes('eternal')" in STORY_JS
 
 
 def test_story_keyboard_card_selection_preserves_the_last_pointer_position():
@@ -783,8 +816,7 @@ def test_story_resources_use_fixed_tracks_and_shared_classic_compression():
 
 
 def test_story_refresh_uses_recovery_checkpoints_and_rewards_are_layered():
-    assert "action_type: 'resume_node'" in STORY_JS
-    assert "['combat', 'room', 'reward'].includes(phase)" in STORY_JS
+    assert "action_type: 'resume_node'" not in STORY_JS
     assert 'id="story-reward-claims"' in STORY_TEMPLATE
     assert 'id="story-reward-continue"' in STORY_TEMPLATE
     assert "reward_type: 'gold'" in STORY_JS
@@ -794,10 +826,24 @@ def test_story_refresh_uses_recovery_checkpoints_and_rewards_are_layered():
     assert '.story-reward-claims {' in STORY_CSS
 
 
-def test_story_persistent_hud_keeps_player_map_deck_and_save_controls_available():
+def test_enchantment_book_reward_rendering_stays_inside_reward_view():
+    render_reward = STORY_JS.split('function renderReward(state) {', 1)[1].split(
+        'function renderTerminal(state) {', 1
+    )[0]
+    render_run = STORY_JS.split('function renderRun(run) {', 1)[1].split(
+        'async function loadRun()', 1
+    )[0]
+
+    assert 'if (reward.enchantment_book) {' in render_reward
+    assert "reward_type: 'enchantment_book'" in render_reward
+    assert 'if (reward.enchantment_book) {' not in render_run
+
+
+def test_story_persistent_hud_keeps_player_map_deck_and_settings_available():
     for element_id in (
         'story-persistent-hud',
         'story-hud-player-name',
+        'story-hud-difficulty',
         'story-hud-location',
         'story-hud-health',
         'story-hud-elixir',
@@ -806,6 +852,8 @@ def test_story_persistent_hud_keeps_player_map_deck_and_save_controls_available(
         'story-hud-map',
         'story-hud-deck',
         'story-hud-save',
+        'story-hud-settings',
+        'story-hud-surrender',
     ):
         assert f'id="{element_id}"' in STORY_TEMPLATE
     assert 'function renderStoryPersistentHud(run)' in STORY_JS
@@ -813,9 +861,50 @@ def test_story_persistent_hud_keeps_player_map_deck_and_save_controls_available(
     assert "$('story-hud-map')?.addEventListener('click', openStoryCombatMap);" in STORY_JS
     assert "$('story-hud-deck')?.addEventListener('click', () => openStoryPile('deck'));" in STORY_JS
     assert "$('story-hud-save')?.addEventListener('click', openManualStorySaves);" in STORY_JS
+    assert "$('story-hud-settings')?.addEventListener('click', openStorySettings);" in STORY_JS
+    assert 'manual_save_count' in STORY_JS
+    assert 'manual_load_count' in STORY_JS
+    assert 'id="story-settings-fullscreen"' in STORY_TEMPLATE
+    assert 'id="story-settings-hide-borders"' in STORY_TEMPLATE
+    assert 'id="story-settings-speed"' in STORY_TEMPLATE
     assert 'if (!storyMapPreviewOpen || !activeRun?.state) return;' in STORY_JS
     assert '.story-persistent-hud {' in STORY_CSS
     assert '.story-persistent-actions {' in STORY_CSS
+
+
+def test_story_settings_only_commits_display_preferences_after_confirmation():
+    settings = STORY_TEMPLATE.split(
+        '<dialog id="story-settings-dialog"',
+        1,
+    )[1].split('</dialog>', 1)[0]
+
+    assert 'id="story-settings-save"' not in settings
+    assert 'id="story-settings-surrender"' not in settings
+    assert 'id="story-settings-close"' not in settings
+    assert 'id="story-settings-cancel"' in settings
+    assert 'id="story-settings-confirm"' in settings
+    assert 'value="cancel"' in settings
+    assert 'value="confirm"' in settings
+    assert 'function commitStorySettingsDraft()' in STORY_JS
+    assert "event.target.returnValue === 'confirm'" in STORY_JS
+    assert "$('story-settings-hide-borders')?.addEventListener('change'" not in STORY_JS
+    assert "$('story-settings-speed')?.addEventListener('change'" not in STORY_JS
+
+
+def test_story_card_play_unlocks_persistent_hud_after_action_settles():
+    perform_card = STORY_JS.split(
+        'async function performSelectedCombatCard(',
+        1,
+    )[1].split(
+        'function playSelectedCombatCard(',
+        1,
+    )[0]
+    settled = perform_card.split('cardPlayInFlight = false;', 1)[1]
+
+    assert 'renderStoryPersistentHud(activeRun);' in settled
+    assert settled.index('renderStoryPersistentHud(activeRun);') < settled.index(
+        'updateStoryManualSaveControls();'
+    )
 
 
 def test_story_character_selector_disable_logic_stays_in_the_coop_control_scope():
@@ -852,11 +941,16 @@ def test_story_event_animation_respects_server_sequence_metadata():
 def test_story_card_zone_events_have_distinct_play_draw_discard_and_insert_motion():
     assert 'async function animateStoryCardPlayed(event)' in STORY_JS
     assert 'async function animateStoryCardInserted(event)' in STORY_JS
+    assert 'function storyCardFlightDimensions(sourceRect)' in STORY_JS
+    assert 'Solo and cooperative story presentations deliberately share this path.' in STORY_JS
+    assert "wrapper.classList.add('is-playing')" not in STORY_JS
+    assert '.story-hand-card.is-playing {' not in STORY_CSS
     assert "eventType === 'card_played'" in STORY_JS
     assert "['card_created', 'cards_created', 'enemy_card_added'].includes(eventType)" in STORY_JS
     assert "await animateStoryPileMove(event, 'discard');" in STORY_JS
     assert 'await animateStoryDraw(event);' in STORY_JS
     assert '.story-card-flight.is-flying {' in STORY_CSS
+    assert 'aspect-ratio: var(--story-card-flight-aspect, .72);' in STORY_CSS
     assert '@keyframes storyCardPlayFlight {' in STORY_CSS
     assert '@keyframes storyCardInsertFlight {' in STORY_CSS
     assert '@keyframes storyCardDiscardFlight {' in STORY_CSS
@@ -1274,3 +1368,8 @@ def test_story_explicit_page_confirmation_is_keyboard_reachable():
     assert '.story-reward-actions button:not(:disabled)' in STORY_JS
     assert '#story-room:not(.hidden) .story-room-footer button:not(:disabled)' in STORY_JS
     assert '#story-reward-continue:not(.hidden):not(:disabled)' in STORY_JS
+
+
+def test_standard_journey_terminal_copy_describes_all_stages():
+    assert "journeyCompleteCopy: '你已经穿过了旅程的全部阶段。'" in STORY_JS
+    assert '你已经穿过了花园路线。' not in STORY_JS

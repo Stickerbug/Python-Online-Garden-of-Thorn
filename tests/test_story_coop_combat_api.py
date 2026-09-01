@@ -979,7 +979,7 @@ def test_personal_chest_api_redacts_other_seat_amount_and_rejects_forged_gold(
     _assert_no_server_state(payload)
 
 
-def test_shared_event_api_hides_first_vote_and_resolves_only_server_effects(
+def test_shared_event_api_hides_votes_and_requires_consensus_before_effects(
     coop_combat_api,
 ):
     client = coop_combat_api
@@ -1030,23 +1030,56 @@ def test_shared_event_api_hides_first_vote_and_resolves_only_server_effects(
         {'room_id': room['room_id'], 'choice': 'risk'},
     )
     with _as_staff(member_id, 'CombatMember'):
-        resolved = client.post(
+        split = client.post(
             f'/api/story/coop/run/{run_id}/action',
             json=member_body,
+        )
+    assert split.status_code == 200
+    split_payload = split.get_json()
+    assert split_payload['run']['snapshot']['phase'] == 'room'
+    assert split_payload['run']['snapshot']['room_state']['seats'] == [
+        {'seat': 0, 'submitted': False},
+        {'seat': 1, 'submitted': False},
+    ]
+    assert [event['type'] for event in split_payload['events']] == [
+        'coop_event_vote_cast',
+        'coop_event_consensus_required',
+    ]
+    assert all('choice' not in event for event in split_payload['events'])
+
+    with _as_staff(leader_id, 'CombatLeader'):
+        retry_leader_run = client.get(f'/api/story/coop/run/{run_id}').get_json()['run']
+        retry_leader = client.post(
+            f'/api/story/coop/run/{run_id}/action',
+            json=_journey_action_body(
+                retry_leader_run,
+                'http-event-retry-leader',
+                'room_choose',
+                {'room_id': room['room_id'], 'choice': 'mend'},
+            ),
+        )
+    assert retry_leader.status_code == 200
+    with _as_staff(member_id, 'CombatMember'):
+        retry_member_run = client.get(f'/api/story/coop/run/{run_id}').get_json()['run']
+        resolved = client.post(
+            f'/api/story/coop/run/{run_id}/action',
+            json=_journey_action_body(
+                retry_member_run,
+                'http-event-retry-member',
+                'room_choose',
+                {'room_id': room['room_id'], 'choice': 'mend'},
+            ),
         )
     assert resolved.status_code == 200
     resolved_payload = resolved.get_json()
     assert resolved_payload['run']['snapshot']['phase'] == 'map'
-    event = next(
-        event for event in resolved_payload['events']
-        if event['type'] == 'coop_event_resolved'
-    )
-    assert event['choice'] in {'mend', 'risk'}
-    assert event['reason'] == 'seeded_random'
+    event = next(event for event in resolved_payload['events'] if event['type'] == 'coop_event_resolved')
+    assert event['choice'] == 'mend'
+    assert event['reason'] == 'unanimous'
     _assert_no_server_state(resolved_payload)
 
 
-def test_final_boss_action_atomically_completes_stage_and_keeps_history_readable(
+def test_final_boss_action_keeps_run_active_until_both_members_start_stage_two(
     coop_combat_api,
 ):
     client = coop_combat_api
@@ -1069,7 +1102,7 @@ def test_final_boss_action_atomically_completes_stage_and_keeps_history_readable
     assert completed.status_code == 200
     completed_payload = completed.get_json()
     completed_run = completed_payload['run']
-    assert completed_run['status'] == 'completed'
+    assert completed_run['status'] == 'active'
     assert completed_run['snapshot']['phase'] == 'stage_complete'
     assert completed_run['snapshot']['progression']['completed_stage'] == 1
     assert any(
@@ -1083,13 +1116,47 @@ def test_final_boss_action_atomically_completes_stage_and_keeps_history_readable
         party = client.get('/api/story/coop/party')
     assert historical.status_code == 200
     assert historical.get_json()['run']['snapshot']['phase'] == 'stage_complete'
-    assert party.get_json()['party'] is None
+    assert party.get_json()['party']['status'] == 'active'
 
     with _as_staff(leader_id, 'CombatLeader'):
         duplicate = client.post(f'/api/story/coop/run/{run_id}/action', json=body)
     assert duplicate.status_code == 200
     assert duplicate.get_json()['duplicate'] is True
     assert duplicate.get_json()['events'] == []
+
+    room_id = completed_run['snapshot']['room']['id']
+    with _as_staff(leader_id, 'CombatLeader'):
+        current = client.get(f'/api/story/coop/run/{run_id}').get_json()['run']
+        leader_ready = client.post(
+            f'/api/story/coop/run/{run_id}/action',
+            json=_journey_action_body(
+                current,
+                'http-stage1-ready-leader',
+                'stage_ready',
+                {'room_id': room_id},
+            ),
+        )
+    assert leader_ready.status_code == 200
+    assert leader_ready.get_json()['run']['snapshot']['phase'] == 'stage_complete'
+
+    with _as_staff(member_id, 'CombatMember'):
+        current = client.get(f'/api/story/coop/run/{run_id}').get_json()['run']
+        member_ready = client.post(
+            f'/api/story/coop/run/{run_id}/action',
+            json=_journey_action_body(
+                current,
+                'http-stage1-ready-member',
+                'stage_ready',
+                {'room_id': room_id},
+            ),
+        )
+    assert member_ready.status_code == 200
+    stage_two = member_ready.get_json()['run']
+    assert stage_two['status'] == 'active'
+    assert stage_two['snapshot']['phase'] == 'room'
+    assert stage_two['snapshot']['room']['type'] == 'opening'
+    assert stage_two['snapshot']['stage'] == 2
+    assert stage_two['snapshot']['biome'] == 'jungle'
 
 
 def test_reward_route_vote_and_followup_combat_share_one_authoritative_action_log(coop_combat_api):

@@ -42,7 +42,7 @@ CARD_I18N = {
     'Fusion': {
         'name': _t('聚变', 'Fusion', 'Fusion', 'Fusão', 'Слияние', '融合'),
         'desc': _t('将相同的攻击聚合为一击。', 'Fuse identical attacks into one strike.', 'Fusionne des attaques identiques en une frappe.', 'Funde ataques iguais em um golpe.', 'Сливает одинаковые атаки в один удар.', '同じ攻撃を一撃へ融合する。'),
-        'effect': _t('选择手中2-3张同名攻击牌，将它们的聚变层数相加，裂变层数取最大值，变为一张牌', 'Choose 2-3 same-name attack cards in hand; add their Fusion, keep the highest Fission, and turn them into one card', 'Choisissez 2-3 cartes d’attaque du même nom en main ; additionnez leur Fusion, gardez la Fission la plus élevée, et transformez-les en une carte', 'Escolha 2-3 cartas de ataque com o mesmo nome na mão; some a Fusão, mantenha a maior Fissão e transforme-as em uma carta', 'Выберите 2-3 одноимённые карты атаки в руке; сложите их Слияние, оставьте наибольшее Деление и превратите их в одну карту', '手札の同名攻撃カード2-3枚を選び、融合を合計し、分裂は最大値を取り、1枚のカードにする'),
+        'effect': _t('选择手中2张同名攻击牌，聚变层数相加，其他特殊效果取最高，合并为1张；每层额外聚变使原始花费增加50%（向下取整）', 'Choose 2 same-name attacks in hand; add their Fusion, keep the highest other special effects, and merge them. Each extra Fusion level increases original costs by 50%, rounded down.', 'Choisissez 2 attaques du même nom en main ; additionnez leur Fusion, gardez les autres effets spéciaux les plus élevés et fusionnez-les. Chaque niveau de Fusion supplémentaire augmente les coûts d’origine de 50 %, arrondis à l’inférieur.', 'Escolha 2 ataques de mesmo nome na mão; some a Fusão, mantenha os maiores outros efeitos especiais e funda-os. Cada nível extra de Fusão aumenta os custos originais em 50%, arredondando para baixo.', 'Выберите 2 одноимённые атаки в руке; сложите их Слияние, сохраните максимальные прочие особые эффекты и объедините. Каждый дополнительный уровень Слияния увеличивает исходную стоимость на 50% с округлением вниз.', '手札の同名攻撃カード2枚を選び、融合を合計し、他の特殊効果は最大値を残して1枚にする。追加の融合1層ごとに元のコストが50%増加し、端数は切り捨てる。'),
     },
     'Sand': {
         'name': _t('沙子', 'Sand', 'Sable', 'Areia', 'Песок', '砂'),
@@ -256,7 +256,7 @@ OPENING_EVENT_I18N = {
     },
     4: {
         'name': _t('烈焰预兆', 'Flame Omen', 'Présage de flammes', 'Presságio Flamejante', 'Огненное знамение', '烈炎の兆し'),
-        'desc': _t('开局对所有敌方玩家施加3层灼烧', 'At game start, apply 3 Burn to all enemy players', 'Au début de la partie, applique 3 Brûlure à tous les joueurs ennemis', 'No início da partida, aplica 3 Queima a todos os jogadores inimigos', 'В начале игры наложите 3 Горения на всех вражеских игроков', '開始時、敵プレイヤー全員に灼焼3を付与'),
+        'desc': _t('开局对随机1名敌方玩家施加3层灼烧', 'At game start, apply 3 Burn to 1 random enemy player', 'Au début de la partie, applique 3 Brûlure à 1 joueur ennemi aléatoire', 'No início da partida, aplica 3 Queima a 1 jogador inimigo aleatório', 'В начале игры наложите 3 Горения на 1 случайного вражеского игрока', '開始時、ランダムな敵プレイヤー1人に灼焼3を付与'),
     },
     5: {
         'name': _t('命运抽签', 'Fated Draw', 'Pioche du destin', 'Compra do Destino', 'Жребий судьбы', '運命のドロー'),

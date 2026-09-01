@@ -20,6 +20,7 @@ import shutil
 import shlex
 import difflib
 import hashlib
+import hmac
 import ipaddress
 import secrets
 import platform
@@ -308,6 +309,7 @@ from community_ops import (
     mutate_community_changelog_draft,
     mutate_community_poll,
 )
+import account_integrity
 from moderation import (
     REPORT_CATEGORIES,
     VALID_MODERATION_ACTIONS,
@@ -370,6 +372,15 @@ BUILTIN_SETUP_CARD_IDS = set(GameEngine.BUILTIN_SETUP_CARD_IDS)
 REQUIRED_CARD_TYPES = ('thorn', 'bloom', 'root', 'guard')
 PVP_MODES = ('1v1', '2v2', 'urf', 'random_deck')
 DUEL_INVITE_MODES = ('1v1', 'urf', 'random_deck')
+PVP_MATCH_MODES = (
+    'casual_1v1',
+    'casual_2v2',
+    'ranked_1v1',
+    'ranked_2v2',
+    'casual_urf',
+    'casual_random_deck',
+)
+RANKED_MATCH_MODES = ('ranked_1v1', 'ranked_2v2')
 CHAT_CACHE_LIMIT = 1000
 LOBBY_CHAT_VISIBLE_LIMIT = 300
 ADMIN_GAME_CHAT_VISIBLE_LIMIT = 500
@@ -391,6 +402,67 @@ _PUBLIC_DATA_CACHE_SECONDS = 300.0
 _PUBLIC_DATA_CACHE_MAX_ENTRIES = 16
 _PUBLIC_DATA_CACHE = OrderedDict()
 _PUBLIC_DATA_CACHE_LOCK = threading.Lock()
+
+
+def normalize_pvp_match_mode(value, default='casual_1v1'):
+    """Return the canonical matchmaking mode while preserving legacy clients.
+
+    ``mode`` remains the engine topology (1v1/2v2/urf/random_deck).  Ranked
+    intent is carried separately so an old client can never become ranked by
+    accident.
+    """
+    raw = str(value or '').strip().lower().replace('-', '_')
+    aliases = {
+        '1v1': 'casual_1v1',
+        '2v2': 'casual_2v2',
+        'urf': 'casual_urf',
+        'random': 'casual_random_deck',
+        'randomdeck': 'casual_random_deck',
+        'random_deck': 'casual_random_deck',
+    }
+    canonical = aliases.get(raw, raw)
+    if canonical in PVP_MATCH_MODES:
+        return canonical
+    fallback = str(default or 'casual_1v1').strip().lower().replace('-', '_')
+    return aliases.get(fallback, fallback) if aliases.get(fallback, fallback) in PVP_MATCH_MODES else 'casual_1v1'
+
+
+def pvp_match_mode_parts(value):
+    match_mode = normalize_pvp_match_mode(value)
+    if match_mode.startswith('ranked_'):
+        return match_mode.removeprefix('ranked_'), 'ranked', match_mode
+    return match_mode.removeprefix('casual_'), 'casual', match_mode
+
+
+def player_match_mode(player):
+    player = player or {}
+    explicit = player.get('match_mode')
+    if explicit:
+        return normalize_pvp_match_mode(explicit)
+    engine_mode = str(player.get('mode') or '1v1')
+    match_type = str(player.get('match_type') or 'casual').strip().lower()
+    prefix = 'ranked' if match_type == 'ranked' and engine_mode in ('1v1', '2v2') else 'casual'
+    return normalize_pvp_match_mode(f'{prefix}_{engine_mode}')
+
+
+def room_match_type(room):
+    return 'ranked' if str(getattr(room, 'match_type', 'casual')).lower() == 'ranked' else 'casual'
+
+
+def room_match_mode(room):
+    explicit = getattr(room, 'match_mode', None)
+    if explicit:
+        return normalize_pvp_match_mode(explicit)
+    prefix = 'ranked' if room_match_type(room) == 'ranked' else 'casual'
+    return normalize_pvp_match_mode(f'{prefix}_{getattr(room, "mode", "1v1")}')
+
+
+def room_match_payload(room):
+    return {
+        'match_type': room_match_type(room),
+        'match_mode': room_match_mode(room),
+        'ranked': room_match_type(room) == 'ranked',
+    }
 
 
 def _public_data_query_key():
@@ -555,7 +627,21 @@ GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSIO
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1-player-name-descender-2-battle-chat-gradient-1-story-coop-headless-2-story-coop-lobby-1-pvp-damage-prediction-parity-1-story-coop-combat-1-story-coop-progression-1-story-coop-stage1-garden-1-story-coop-opening-1-story-coop-content-1-story-coop-enemy-content-1-story-coop-relic-content-1-story-coop-card-effects-1-security-hardening-1-story-coop-shared-events-1-ai-public-entry-toggle-1-csp-nonce-1-story-seeded-background-2-story-character-details-1-story-coop-mage-1-dead-multihit-1-story-card-motion-1-story-persistent-hud-1-story-all-phase-saves-1-story-boss-node-portraits-1-story-map-columns-1-story-codex-links-1-story-map-room-icons-1-story-mage-card-art-1-story-card-browser-nav-1-pvp-gallery-card-browser-nav-1-community-ops-1-community-announcement-icon-1-proxy-origin-1-story-contract-reset-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1-player-name-descender-2-battle-chat-gradient-1-story-coop-headless-2-story-coop-lobby-1-pvp-damage-prediction-parity-1-story-coop-combat-1-story-coop-progression-1-story-coop-stage1-garden-1-story-coop-opening-1-story-coop-content-1-story-coop-enemy-content-1-story-coop-relic-content-1-story-coop-card-effects-1-security-hardening-1-story-coop-shared-events-1-ai-public-entry-toggle-1-csp-nonce-1-story-seeded-background-2-story-character-details-1-story-coop-mage-1-dead-multihit-1-story-card-motion-1-story-persistent-hud-1-story-all-phase-saves-1-story-boss-node-portraits-1-story-map-columns-1-story-codex-links-1-story-map-room-icons-1-story-mage-card-art-1-story-card-browser-nav-1-pvp-gallery-card-browser-nav-1-community-ops-1-community-announcement-icon-1-proxy-origin-1-story-contract-reset-1-ranked-modes-1-story-coop-full-journey-1'
+GTN_STATIC_VERSION += '-account-integrity-1-pvp-economy-1-story-terminal-stage-copy-1-story-coop-biome-label-1'
+GTN_STATIC_VERSION += '-story-workbook-v9-ui-1'
+GTN_STATIC_VERSION += '-story-enchantment-books-1'
+GTN_STATIC_VERSION += '-story-shared-card-flight-1'
+GTN_STATIC_VERSION += '-story-combat-seeded-backdrop-1'
+GTN_STATIC_VERSION += '-card-legacy-compat-1'
+GTN_STATIC_VERSION += '-fusion-original-cost-1'
+GTN_STATIC_VERSION += '-story-enchantment-reward-scope-1'
+GTN_STATIC_VERSION += '-community-announcement-icon-2'
+GTN_STATIC_VERSION += '-story-manual-map-choice-1'
+GTN_STATIC_VERSION += '-story-hud-card-play-unlock-1'
+GTN_STATIC_VERSION += '-story-external-save-surrender-1'
+GTN_STATIC_VERSION += '-story-card-effect-fit-floor-1'
+GTN_STATIC_VERSION += '-ranked-entertainment-auto-disable-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -1647,10 +1733,12 @@ def admin_match_record(room, result='finished'):
         community_mods = first_meta.get('community_mods', []) if isinstance(first_meta.get('community_mods', []), list) else []
         entertainment_mods = list(first_meta.get('entertainment_mods', []) or [])
         valid_for_ranking, ranking_invalid_reason = is_room_valid_for_ranking(room, result)
+        valid_for_stats = is_room_valid_for_stats(room, result)
         history_entry = {
             'time': iso_now(),
             'room_id': room.room_id,
             'mode': room.mode,
+            **room_match_payload(room),
             'players': names,
             'winner': winner_label,
             'round': getattr(e, 'round_num', 0),
@@ -1661,15 +1749,21 @@ def admin_match_record(room, result='finished'):
             'ended_at': ended_at,
             'duration_seconds': duration_seconds,
             'valid_for_ranking': valid_for_ranking,
+            'valid_for_stats': valid_for_stats,
+            'ended_by_surrender': bool(getattr(room, '_ended_by_surrender', False)),
             'ranking_invalid_reason': ranking_invalid_reason,
             'entertainment_mods': entertainment_mods,
         }
         MATCH_HISTORY.appendleft(history_entry)
         summary = {
             'room_id': room.room_id,
+            'match_key': room_match_key(room),
             'mode': room.mode,
+            **room_match_payload(room),
             'players': names,
             'player_ids': player_user_ids,
+            'teams': copy.deepcopy(getattr(e, 'teams', [[0], [1]])),
+            'surrender_player_indices': list(getattr(room, '_surrender_player_indices', []) or []),
             'winner_name': winner_label,
             'winner_user_ids': stats_winner_user_ids,
             'winner_index': winner_index,
@@ -1686,6 +1780,8 @@ def admin_match_record(room, result='finished'):
             'community_mods': community_mods,
             'entertainment_mods': entertainment_mods,
             'valid_for_ranking': valid_for_ranking,
+            'valid_for_stats': valid_for_stats,
+            'ended_by_surrender': bool(getattr(room, '_ended_by_surrender', False)),
             'ranking_invalid_reason': ranking_invalid_reason,
             'valid_action_counts': getattr(room, '_valid_action_counts', {}) or {},
             'valid_action_counts_by_side': room_valid_actions_by_side(room),
@@ -1765,6 +1861,17 @@ def admin_match_record(room, result='finished'):
             try:
                 match_id = save_match_summary(summary)
                 summary['match_id'] = int(match_id)
+                if summary['ended_by_surrender'] and duration_seconds < 60:
+                    for surrendered in summary['surrender_player_indices']:
+                        if 0 <= surrendered < len(player_user_ids) and player_user_ids[surrendered]:
+                            try:
+                                account_integrity.apply_match_penalty(
+                                    player_user_ids[surrendered], 'early_surrender',
+                                    f'reputation:early-surrender:{room_match_key(room)}:{surrendered}',
+                                    ranked=room_match_type(room) == 'ranked', match_id=match_id,
+                                )
+                            except Exception as reputation_exc:
+                                admin_event('error', f'early surrender reputation failed: {reputation_exc}')
                 try:
                     dew_result = award_match_thorn_dew(match_id, summary)
                     summary['thorn_dew_result'] = dew_result
@@ -1779,9 +1886,11 @@ def admin_match_record(room, result='finished'):
                 summary['replay_id'] = int(replay_id)
                 history_entry['match_id'] = int(match_id)
                 history_entry['replay_id'] = int(replay_id)
+                should_update_stats = bool(valid_for_stats and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'))
+                if should_update_stats:
+                    increment_user_stats(registered_user_ids, stats_winner_user_ids, stats_result)
                 should_score_gr = bool(valid_for_ranking and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'))
                 if should_score_gr:
-                    increment_user_stats(registered_user_ids, stats_winner_user_ids, stats_result)
                     try:
                         gr_result = apply_gr_match_result(match_id, summary)
                         summary['gr_result'] = gr_result
@@ -1818,6 +1927,8 @@ def admin_match_record(room, result='finished'):
                 admin_event('error', f'failed to persist match summary: {db_exc}')
         room._match_summary = summary
         room._history_recorded = True
+        if DB_AVAILABLE and registered_user_ids:
+            socketio.start_background_task(refresh_online_reputation, registered_user_ids)
     except Exception as exc:
         admin_event('error', f'failed to record match history: {exc}')
 
@@ -2472,7 +2583,7 @@ def record_room_replay_action(room, action_type, actor=None, payload=None, ai_de
 
 
 def room_replay_data(room):
-    return {
+    payload = {
         'keyframes': getattr(room, '_replay_keyframes', []) or [],
         'actions': getattr(room, '_replay_actions', []) or [],
         'truncated': bool(getattr(room, '_replay_truncated', False)),
@@ -2481,6 +2592,8 @@ def room_replay_data(room):
         'full_state_frames': int(getattr(room, '_replay_full_state_frames', 0) or 0),
         'ai_training_capture': room_capture_summary(room),
     }
+    payload.update(room_match_payload(room))
+    return payload
 
 
 def build_community_replay_snapshots(community_mods):
@@ -2780,10 +2893,25 @@ def log_slow_admin_api(response):
 
 
 class GameRoom:
-    def __init__(self, room_id, player_sids, allowed_card_ids=None, mode='1v1', beta_mode=False):
+    def __init__(
+        self,
+        room_id,
+        player_sids,
+        allowed_card_ids=None,
+        mode='1v1',
+        beta_mode=False,
+        match_type='casual',
+        match_mode=None,
+    ):
         self.room_id = room_id
         self.player_sids = list(player_sids)
         self.mode = mode
+        requested_match_mode = match_mode or f'{match_type}_{mode}'
+        canonical_mode, canonical_type, canonical_match_mode = pvp_match_mode_parts(requested_match_mode)
+        if canonical_mode != mode:
+            raise ValueError('对局类型与引擎模式不一致')
+        self.match_type = canonical_type
+        self.match_mode = canonical_match_mode
         self.beta_mode = bool(beta_mode)
         if mode == '2v2':
             self.engine = GameEngine2v2()
@@ -2938,10 +3066,12 @@ def repair_stale_spectator_state_locked(sid):
 
 
 def room_event_context(room):
-    return {
+    payload = {
         'room_id': getattr(room, 'room_id', None),
         'match_key': room_match_key(room),
     }
+    payload.update(room_match_payload(room))
+    return payload
 
 
 def room_mod_payload(room):
@@ -2956,8 +3086,8 @@ def room_mod_payload(room):
                 first = profile
                 break
     if not first:
-        return {}
-    return {
+        return room_match_payload(room)
+    payload = {
         'disabled_mods': list(first.get('disabled_mods', [])),
         'mods_hash': first.get('mods_hash', ''),
         'loadout_hash': first.get('loadout_hash', '') or first.get('mods_hash', ''),
@@ -2972,6 +3102,8 @@ def room_mod_payload(room):
         'community_mods': list(first.get('community_mods', [])),
         'beta_mode': bool(getattr(room, 'beta_mode', False)),
     }
+    payload.update(room_match_payload(room))
+    return payload
 
 
 def apply_v2_loadout_to_engine(engine, player_meta=None, runtime_mode=None):
@@ -3054,6 +3186,7 @@ def emit_room_game_phase(room, sid, phase, **extra):
         'room_id': room.room_id,
         'match_key': room_match_key(room),
     }
+    payload.update(room_match_payload(room))
     payload.update(instance_payload())
     payload.update(room_mod_payload(room))
     payload.update(extra)
@@ -4350,7 +4483,7 @@ def special_public_fields(player_or_profile):
         })
     name_style = source.get('name_style') if isinstance(source.get('name_style'), dict) else None
     name_color = str(source.get('name_color') or '').strip()
-    return {
+    fields = {
         'is_admin_player': bool(source.get('is_admin_player')),
         'is_special_player': bool(role or equipped_titles),
         'special_role': role or None,
@@ -4364,6 +4497,11 @@ def special_public_fields(player_or_profile):
         'name_style': name_style,
         'name_color': name_color or None,
     }
+    reputation = source.get('reputation_profile')
+    if isinstance(reputation, dict):
+        fields['reputation_profile'] = {key: reputation.get(key) for key in ('level','label','linked_gr_band')}
+        fields['reputation_profile']['newcomer'] = {'is_newcomer': bool((reputation.get('newcomer') or {}).get('is_newcomer'))}
+    return fields
 
 
 def refresh_online_user_titles(user_id):
@@ -4408,6 +4546,35 @@ def refresh_online_user_titles(user_id):
             broadcast_game_state(room)
         except Exception as exc:
             admin_event('error', f'failed to refresh title display room={getattr(room, "room_id", None)}: {exc}')
+
+
+def refresh_online_reputation(recompute_user_ids=None):
+    if not DB_AVAILABLE:
+        return
+    try:
+        for uid in set(recompute_user_ids or []):
+            account_integrity.recompute_account_links(uid)
+        with _lock:
+            online = {p.get('user_id') for p in players.values() if p.get('is_registered_user') and p.get('user_id')}
+        profiles = {uid:account_integrity.get_reputation_profile(uid) for uid in online}
+        changed = []
+        with _lock:
+            for sid, player in players.items():
+                profile = profiles.get(player.get('user_id'))
+                if profile and player.get('reputation_profile') != profile:
+                    player['reputation_profile'] = profile
+                    changed.append((sid,profile))
+            for room in rooms.values():
+                for stored in list(getattr(room,'player_profiles',{}).values()) + list(getattr(room,'disconnected_players',{}).values()):
+                    profile = profiles.get(stored.get('user_id'))
+                    if profile:
+                        stored['reputation_profile'] = profile
+        for sid,profile in changed:
+            socketio.emit('reputation_updated', {'profile':profile}, room=sid)
+        if changed:
+            broadcast_lobby()
+    except Exception as exc:
+        admin_event('error', f'account integrity refresh failed: {type(exc).__name__}')
 
 
 def refresh_chat_special_fields(chat_payload):
@@ -4466,6 +4633,9 @@ def make_room_player_profile(source=None, sid=None, player_index=-1, room=None):
         'skin': public_skin_config(source.get('skin')),
         'skin_look': normalize_skin_look(source.get('skin_look')),
         'avatar_kind': 'phelren' if str(source.get('avatar_kind') or '').strip().lower() == 'phelren' else '',
+        'mode': source.get('mode', getattr(room, 'mode', '1v1') if room is not None else '1v1'),
+        'match_type': source.get('match_type', room_match_type(room) if room is not None else 'casual'),
+        'match_mode': source.get('match_mode', room_match_mode(room) if room is not None else 'casual_1v1'),
     }
     profile.update(special_public_fields(source))
     return profile
@@ -4561,6 +4731,11 @@ def auth_user_payload(user):
     if not user:
         return None
     payload = dict(user)
+    if DB_AVAILABLE and user.get('id'):
+        account_integrity.recover_reputation_daily(user_id=user['id'])
+        payload['reputation_profile'] = account_integrity.get_reputation_profile(user['id'])
+        payload['reputation'] = payload['reputation_profile']['value']
+        payload['team_reports'] = account_integrity.list_team_reports(user['id'])
     payload.pop('online_seconds', None)
     payload.pop('online_session_started_at', None)
     payload.pop('online_seconds_total', None)
@@ -4742,6 +4917,12 @@ def public_player_info(sid, player=None):
         spectated_room = rooms.get(spectating_room)
         if spectated_room is not None:
             spectating_mode = getattr(spectated_room, 'mode', None)
+    _, match_type, match_mode = pvp_match_mode_parts(player_match_mode(p))
+    spectating_match_mode = None
+    if status == 'spectating' and spectating_room is not None:
+        spectated_room = rooms.get(spectating_room)
+        if spectated_room is not None:
+            spectating_match_mode = room_match_mode(spectated_room)
     info = {
         'sid': sid,
         'nickname': p.get('nickname', '?'),
@@ -4749,12 +4930,20 @@ def public_player_info(sid, player=None):
         'status': status,
         'spectating_room': spectating_room,
         'spectating_mode': spectating_mode,
+        'match_type': match_type,
+        'match_mode': match_mode,
+        'spectating_match_mode': spectating_match_mode,
         'user_id': p.get('user_id'),
         'is_registered_user': bool(p.get('is_registered_user')),
-        'season_gr': p.get('season_gr'),
-        'total_gr': p.get('total_gr'),
+        'season_gr': p.get('season_gr') if match_type == 'ranked' else None,
+        'total_gr': p.get('total_gr') if match_type == 'ranked' else None,
         'skin': public_skin_config(p.get('skin')),
         'skin_look': normalize_skin_look(p.get('skin_look')),
+        'reputation_profile': {
+            **{key: (p.get('reputation_profile') or {}).get(key)
+               for key in ('level', 'label', 'linked_gr_band')},
+            'newcomer': {'is_newcomer':bool(((p.get('reputation_profile') or {}).get('newcomer') or {}).get('is_newcomer'))},
+        },
     }
     info.update(special_public_fields(p))
     return info
@@ -4806,11 +4995,9 @@ def _lobby_idle_cleanup_worker():
                 if result:
                     sent += 1
                 elif error:
-                    admin_event('error', f'auto afk check failed for {sid}: {error}')
-            if sent:
-                admin_event('player', f'auto afk check sent to {sent} lobby/spectator player(s)')
+                    app.logger.warning('auto afk check failed for %s: %s', sid, error)
         except Exception as exc:
-            admin_event('error', f'auto afk check worker error: {exc}')
+            app.logger.warning('auto afk check worker error: %s', exc)
 
 
 def ensure_lobby_idle_cleanup_started():
@@ -4848,9 +5035,8 @@ def _afk_check_timeout_worker(sid, request_id, timeout_seconds):
         if should_kick:
             socketio.emit('kicked', {'reason': '挂机检测超时，已断开连接'}, room=sid)
             socketio.server.disconnect(sid)
-            admin_event('player', f'afk check timed out: {nickname} sid={sid}')
     except Exception as exc:
-        admin_event('error', f'afk check timeout worker failed: {exc}')
+        app.logger.warning('afk check timeout worker failed: %s', exc)
 
 
 def send_afk_check_to_player(sid, reason='admin command', timeout_seconds=None, lobby_only=False):
@@ -4886,7 +5072,6 @@ def send_afk_check_to_player(sid, reason='admin command', timeout_seconds=None, 
         socketio.start_background_task(_afk_check_timeout_worker, sid, request_id, timeout_seconds)
     except Exception:
         threading.Thread(target=_afk_check_timeout_worker, args=(sid, request_id, timeout_seconds), daemon=True).start()
-    admin_event('admin', f'afk check sent to {nickname} sid={sid} reason={reason}')
     return {'nickname': nickname, 'sid': sid, 'request_id': request_id, 'timeout_seconds': timeout_seconds}, None
 
 
@@ -4899,6 +5084,10 @@ def _friend_request_cleanup_worker():
                 time.sleep(600)
             if not DB_AVAILABLE:
                 continue
+            account_integrity.recover_reputation_daily()
+            account_integrity.expire_team_reports()
+            account_integrity.refresh_recent_account_links()
+            refresh_online_reputation()
             ok, error = cleanup_expired_friend_requests_once(force=True)
             if not ok and error:
                 admin_event('db', f'friend request cleanup skipped: {error}')
@@ -5852,6 +6041,10 @@ def _room_timer_worker():
                             _sync_room_action_timer_after_state_change(room)
                     if result.get('success'):
                         record_room_replay_action(room, 'end_turn', pidx, {'auto': True})
+                        try:
+                            record_player_timeout_reputation(room, pidx)
+                        except Exception as reputation_exc:
+                            admin_event('error', f'timeout reputation failed: {reputation_exc}', room_id=room.room_id)
                         admin_event('game', f'auto_end_turn room={room.room_id} pidx={pidx}', room_id=room.room_id)
                     broadcast_game_state(room)
                 except Exception as exc:
@@ -6688,6 +6881,8 @@ def record_valid_player_action(room, player_index, action):
         counts = {}
         room._valid_action_counts = counts
     counts[player_index] = int(counts.get(player_index, 0)) + 1
+    if action == 'end_turn':
+        getattr(room, '_reputation_timeout_streaks', {}).pop(player_index, None)
     room._last_valid_action = {
         'player_index': player_index,
         'action': action,
@@ -6705,23 +6900,98 @@ def room_valid_actions_by_side(room):
     return [int(counts.get(0, 0)), int(counts.get(1, 0))]
 
 
+def record_player_timeout_reputation(room, player_index):
+    if not DB_AVAILABLE or getattr(room, 'ai_match', False):
+        return
+    streaks = getattr(room, '_reputation_timeout_streaks', None)
+    if not isinstance(streaks, dict):
+        streaks = room._reputation_timeout_streaks = {}
+    streaks[player_index] = int(streaks.get(player_index, 0)) + 1
+    if streaks[player_index] < 2:
+        return
+    profile = room_player_profile(room, room.player_sids[player_index])
+    if not profile.get('user_id'):
+        return
+    serials = getattr(room, '_reputation_timeout_serials', None)
+    if not isinstance(serials, dict):
+        serials = room._reputation_timeout_serials = {}
+    serial = int(serials.get(player_index, 0)) + 1
+    account_integrity.apply_match_penalty(
+        profile['user_id'], 'consecutive_timeouts',
+        f'reputation:timeout:{room_match_key(room)}:{player_index}:{serial}',
+        ranked=room_match_type(room) == 'ranked',
+    )
+    serials[player_index] = serial
+    streaks[player_index] = 0
+    socketio.start_background_task(refresh_online_reputation)
+
+
+def ranked_match_eligibility(participants, check_reputation=True):
+    participant_meta = list(participants or [])
+    if not participant_meta:
+        return False, 'missing_participants'
+    if any(not meta.get('is_registered_user') or not meta.get('user_id') for meta in participant_meta):
+        return False, 'guest_participant'
+    if any(str(meta.get('mod_source') or 'official') != 'official' for meta in participant_meta):
+        return False, 'community_mod'
+    if any(meta.get('entertainment_mods') for meta in participant_meta):
+        return False, 'entertainment_mod'
+    if check_reputation:
+        for meta in participant_meta:
+            try:
+                value = (account_integrity.get_reputation_profile(meta['user_id'])['value']
+                         if DB_AVAILABLE else int(meta.get('reputation', 85)))
+            except Exception:
+                return False, 'reputation_unavailable'
+            if value < 40:
+                return False, 'low_reputation'
+    return True, ''
+
+
+def ranked_match_eligibility_for_sids(sids):
+    return ranked_match_eligibility([players.get(psid) or {} for psid in sids or []])
+
+
 def is_room_valid_for_ranking(room, result='finished'):
     if not room or str(result) != 'finished':
         return False, 'abnormal_result'
+    if room_match_type(room) != 'ranked':
+        return False, 'casual_match'
     if not getattr(getattr(room, 'engine', None), 'game_over', False):
         return False, 'not_game_over'
     participant_meta = [room_player_profile(room, psid) for psid in getattr(room, 'player_sids', [])]
-    if not participant_meta or not any(meta.get('is_registered_user') for meta in participant_meta):
-        return False, 'no_registered_player'
+    eligible, reason = ranked_match_eligibility(participant_meta, check_reputation=False)
+    if not eligible:
+        return False, reason
+    if not bool(getattr(room, '_ended_by_surrender', False)):
+        started_ts = getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())
+        if time.time() - started_ts < RANKING_MIN_DURATION_SECONDS:
+            return False, 'too_short'
+        side_counts = room_valid_actions_by_side(room)
+        if len(side_counts) < 2 or any(count < RANKING_MIN_ACTIONS_PER_SIDE for count in side_counts[:2]):
+            return False, 'not_enough_actions'
+    return True, ''
+
+
+def is_room_valid_for_stats(room, result='finished'):
+    if not room or str(result) != 'finished':
+        return False
+    if not getattr(getattr(room, 'engine', None), 'game_over', False):
+        return False
+    if getattr(room, 'mode', '') not in ('1v1', '2v2'):
+        return False
+    participant_meta = [room_player_profile(room, psid) for psid in getattr(room, 'player_sids', [])]
+    if not any(meta.get('is_registered_user') for meta in participant_meta):
+        return False
     if any(meta.get('entertainment_mods') for meta in participant_meta):
-        return False, 'entertainment_mod'
+        return False
+    if bool(getattr(room, '_ended_by_surrender', False)):
+        return True
     started_ts = getattr(room, 'started_at', None) or getattr(room, 'created_at', time.time())
     if time.time() - started_ts < RANKING_MIN_DURATION_SECONDS:
-        return False, 'too_short'
+        return False
     side_counts = room_valid_actions_by_side(room)
-    if len(side_counts) < 2 or any(count < RANKING_MIN_ACTIONS_PER_SIDE for count in side_counts[:2]):
-        return False, 'not_enough_actions'
-    return True, ''
+    return len(side_counts) >= 2 and all(count >= RANKING_MIN_ACTIONS_PER_SIDE for count in side_counts[:2])
 
 
 def _set_account_session(user):
@@ -7299,15 +7569,17 @@ def get_card_mod_sources(disabled_mods=None):
     return sources
 
 
-def disabled_entertainment_mod_filenames(disabled_mods=None):
-    disabled = set(normalize_disabled_mods(disabled_mods))
+def entertainment_mod_filenames():
     return {
         mod.filename
         for mod in load_all_mods()
-        if not mod.errors
-        and mod.filename in disabled
-        and mod_category(mod) == 'entertainment'
+        if not mod.errors and mod_category(mod) == 'entertainment'
     }
+
+
+def disabled_entertainment_mod_filenames(disabled_mods=None):
+    disabled = set(normalize_disabled_mods(disabled_mods))
+    return entertainment_mod_filenames().intersection(disabled)
 
 
 def hidden_disabled_entertainment_card_ids(disabled_mods=None):
@@ -7446,9 +7718,26 @@ def register_v2_loadout_cards(v2_loadout):
     return registered
 
 
-def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='', community_mods=None, runtime_mode=None):
+def build_mod_loadout(
+    disabled_mods=None,
+    community_mod=None,
+    community_hash='',
+    community_mods=None,
+    runtime_mode=None,
+    match_mode=None,
+):
     mods = load_all_mods()
-    disabled = set(normalize_disabled_mods(disabled_mods))
+    preferred_disabled = set(normalize_disabled_mods(disabled_mods))
+    disabled = set(preferred_disabled)
+    automatically_disabled = set()
+    if normalize_pvp_match_mode(match_mode).startswith('ranked_'):
+        ranked_entertainment = {
+            mod.filename
+            for mod in mods
+            if not mod.errors and mod_category(mod) == 'entertainment'
+        }
+        automatically_disabled = ranked_entertainment.difference(disabled)
+        disabled.update(ranked_entertainment)
     counts = {card_type: 0 for card_type in REQUIRED_CARD_TYPES}
     has_enabled_official_mod = False
     for mod in mods:
@@ -7462,6 +7751,7 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
         counts['bloom'] += 1
     if not all(counts.get(card_type, 0) > 0 for card_type in REQUIRED_CARD_TYPES):
         disabled.discard(VANILLA_MOD_FILENAME)
+        preferred_disabled.discard(VANILLA_MOD_FILENAME)
     disabled = sorted(disabled)
     disabled_set = set(disabled)
     runtime_disabled = runtime_disabled_content(runtime_mode)
@@ -7524,6 +7814,8 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
     })
     return {
         'disabled_mods': disabled,
+        'preferred_disabled_mods': sorted(preferred_disabled),
+        'automatically_disabled_mods': sorted(automatically_disabled),
         'mods_hash': legacy_hash,
         'loadout_hash': combined_loadout_hash,
         'v2_loadout_hash': v2_loadout.loadout_hash,
@@ -7544,6 +7836,9 @@ def build_mod_loadout(disabled_mods=None, community_mod=None, community_hash='',
 def apply_mod_loadout_to_player(player, loadout, community_fields=None):
     community_fields = community_fields or {}
     player['disabled_mods'] = loadout['disabled_mods']
+    player['preferred_disabled_mods'] = list(
+        loadout.get('preferred_disabled_mods', loadout['disabled_mods'])
+    )
     player['mods_hash'] = loadout['mods_hash']
     player['loadout_hash'] = loadout['loadout_hash']
     player['v2_loadout_hash'] = loadout.get('v2_loadout_hash', '')
@@ -7605,8 +7900,34 @@ def resolve_mod_loadout_payload(data, fallback_payload=None, require_disabled_mo
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
         runtime_mode=payload.get('_runtime_mode') or payload.get('mode'),
+        match_mode=payload.get('_match_mode') or payload.get('match_mode'),
     )
     return community_fields, loadout
+
+
+def player_mod_preference_payload(player, match_mode=None):
+    player = player or {}
+    canonical_match_mode = normalize_pvp_match_mode(match_mode or player_match_mode(player))
+    engine_mode, _, _ = pvp_match_mode_parts(canonical_match_mode)
+    return {
+        'disabled_mods': list(
+            player.get('preferred_disabled_mods', player.get('disabled_mods', [])) or []
+        ),
+        'mod_source': player.get('mod_source', 'official') or 'official',
+        'community_mods': list(player.get('community_mods', []) or []),
+        'community_mod_url': player.get('community_mod_url', '') or '',
+        'community_mod_hash': player.get('community_mod_hash', '') or '',
+        'community_mod_name': player.get('community_mod_name', '') or '',
+        '_runtime_mode': engine_mode,
+        '_match_mode': canonical_match_mode,
+    }
+
+
+def resolve_player_match_mode_loadout(player, match_mode):
+    return resolve_mod_loadout_payload(
+        {},
+        fallback_payload=player_mod_preference_payload(player, match_mode),
+    )
 
 
 def validated_match_allowed_card_ids(player, runtime_mode):
@@ -8005,9 +8326,12 @@ def get_ongoing_games(beta_mode=None):
                 'phase': phase,
                 'both_disconnected': both_disconnected,
                 'mode': room.mode,
+                **room_match_payload(room),
                 'beta_mode': bool(getattr(room, 'beta_mode', False)),
-                'can_spectate': phase in spectatable_phases,
+                'can_spectate': phase in spectatable_phases and room_match_type(room) != 'ranked',
             }
+            if room_match_type(room) == 'ranked':
+                game_info['spectate_disabled_reason'] = 'ranked_no_spectators'
             if getattr(room, 'ai_match', False):
                 game_info.update({
                     'ai_match': True,
@@ -10378,6 +10702,14 @@ def gr_preview_text_for_sids(mode, sids, viewer_sid):
 
 
 def gr_preview_payload_for_sids(mode, sids, viewer_sid):
+    engine_mode, match_type, match_mode = pvp_match_mode_parts(mode)
+    if match_type != 'ranked':
+        return {
+            'applied': False,
+            'reason': 'casual_match',
+            'match_mode': match_mode,
+            'text': '娱乐赛不计花阶分',
+        }
     if not DB_AVAILABLE:
         return {}
     user_ids = []
@@ -10393,7 +10725,7 @@ def gr_preview_payload_for_sids(mode, sids, viewer_sid):
     viewer = players.get(viewer_sid) or {}
     viewer_user_id = viewer.get('user_id') if viewer.get('is_registered_user') else None
     try:
-        preview = preview_gr_match_result(mode, user_ids, viewer_user_id=viewer_user_id)
+        preview = preview_gr_match_result(engine_mode, user_ids, viewer_user_id=viewer_user_id)
     except Exception as exc:
         admin_event('error', f'failed to preview GR invite: {exc}')
         return {}
@@ -13929,7 +14261,8 @@ def _build_lobby_update_payloads_locked():
     scope_payload_cache = {}
 
     def mode_counts_for_scope(beta_mode):
-        counts = {mode: 0 for mode in PVP_MODES}
+        counts = {mode: 0 for mode in PVP_MATCH_MODES}
+        counts.update({mode: 0 for mode in PVP_MODES})
         excluded_statuses = {'solo', 'tutorial', 'spectating'}
         for player in players.values():
             if bool(player.get('beta_mode', False)) != bool(beta_mode):
@@ -13937,6 +14270,8 @@ def _build_lobby_update_payloads_locked():
             if player.get('status') in excluded_statuses:
                 continue
             mode = player.get('mode', '1v1')
+            match_mode = player_match_mode(player)
+            counts[match_mode] += 1
             if mode in counts:
                 counts[mode] += 1
         return counts
@@ -13994,6 +14329,8 @@ def _build_lobby_update_payloads_locked():
                 'your_team': teams[sid]['members'] if sid in teams else None,
                 'your_team_leader': teams[sid]['leader'] if sid in teams else None,
                 'your_mode': p.get('mode', '1v1'),
+                'your_match_type': p.get('match_type', 'casual'),
+                'your_match_mode': player_match_mode(p),
                 'beta_mode': bool(p.get('beta_mode', False)),
                 'chat_history': base['chat_history'],
             }))
@@ -16655,7 +16992,11 @@ def emit_pending_response_requests(room, only_player_index=None):
         player_id = -1
     sent = 0
     if room.mode == '2v2':
-        by_responder = {}
+        by_responder = {
+            responder_id: []
+            for responder_id in _pending_response_responder_ids(room, pending)
+            if only_player_index is None or responder_id == only_player_index
+        }
         for counter_card in pending.get('counter_cards', []) or []:
             if not isinstance(counter_card, dict):
                 continue
@@ -16729,7 +17070,10 @@ def build_replay_pending_response_requests(room):
         player_id = -1
     requests = []
     if room.mode == '2v2':
-        by_responder = {}
+        by_responder = {
+            responder_id: []
+            for responder_id in _pending_response_responder_ids(room, pending)
+        }
         for counter_card in pending.get('counter_cards', []) or []:
             if not isinstance(counter_card, dict):
                 continue
@@ -16807,6 +17151,13 @@ def _pending_response_responder_ids(room, pending):
         return []
     if getattr(room, 'mode', '') == '2v2':
         responders = []
+        for raw_responder_id in pending.get('responder_ids', []) or []:
+            try:
+                responder_id = int(raw_responder_id)
+            except Exception:
+                continue
+            if responder_id >= 0 and responder_id not in responders:
+                responders.append(responder_id)
         for counter_card in pending.get('counter_cards', []) or []:
             responder_id = _counter_card_responder_id(counter_card)
             if responder_id >= 0 and responder_id not in responders:
@@ -17130,6 +17481,7 @@ def build_spectate_state(room, perspective=0):
     for i, pdata in enumerate(full_players):
         base[f'player{i + 1}_name'] = pdata.get('name', f'P{i + 1}')
     base['mode'] = room.mode
+    base.update(room_match_payload(room))
     base['room_id'] = room.room_id
     base['match_key'] = room_match_key(room)
     base['spectator_count'] = room_spectator_count(room)
@@ -17455,8 +17807,8 @@ def api_story_coop_bootstrap():
         return _story_coop_no_store(error)
     response = jsonify({
         'success': True,
-        'status': 'staff_stage1_experiment',
-        'message': '双人协作花园第一阶段已就绪：包含权威战斗、个人房间、共享投票与阶段结算。当前仍是 Staff / Admin 实验功能。',
+        'status': 'staff_full_journey_experiment',
+        'message': '双人协作完整旅程已就绪：共同通过花园、丛林和工厂三个阶段，分别领取个人奖励并一起决定路线与事件。当前仅供 Staff / Admin 体验。',
         'schema_version': COOP_STORY_SCHEMA_VERSION,
         'min_players': COOP_STORY_MIN_PLAYERS,
         'mvp_player_count': COOP_STORY_MVP_MAX_PLAYERS,
@@ -17469,6 +17821,8 @@ def api_story_coop_bootstrap():
         'route_vote_api_ready': True,
         'room_api_ready': True,
         'stage1_map_ready': True,
+        'full_journey_ready': True,
+        'member_progress_commit_ready': True,
         'public_snapshot_ready': True,
         'party_api_ready': True,
         'run_persistence_ready': True,
@@ -18164,10 +18518,13 @@ def api_story_coop_run_action(run_id):
         payload = data.get('payload', {})
         if not isinstance(payload, dict):
             raise StoryCoopDataError('INVALID_ACTION_PAYLOAD', '协作动作参数必须是对象')
-        combat_actions = {'play_card', 'combat_ready'}
+        combat_actions = {
+            'play_card', 'combat_ready', 'use_enchantment_book',
+            'discard_combat_enchantment_book',
+        }
         journey_actions = {
             'setup_start', 'opening_choose', 'reward_choose', 'map_vote',
-            'room_choose', 'shop_buy',
+            'room_choose', 'shop_buy', 'stage_ready', 'discard_enchantment_book',
         }
         if action_type not in combat_actions | journey_actions:
             raise StoryCoopDataError('INVALID_ACTION_TYPE', '当前协作旅程不支持该动作')
@@ -18806,6 +19163,7 @@ def api_story_run_saves():
         return jsonify({
             'success': True,
             'saves': list_story_manual_saves(user_id, run_id),
+            'run': _story_run_with_compatibility(run),
         })
     except sqlite3.OperationalError as exc:
         if 'locked' in str(exc).lower():
@@ -18855,7 +19213,11 @@ def api_story_run_save():
             )
         if outcome != 'saved':
             return _json_error('当前故事进度无法保存', 400, code='INVALID_STORY_STATE')
-        return jsonify({'success': True, 'saves': result})
+        return jsonify({
+            'success': True,
+            'saves': result,
+            'run': _story_run_with_compatibility(_current_story_run(user_id)),
+        })
     except sqlite3.OperationalError as exc:
         if 'locked' in str(exc).lower():
             return _json_error('故事记录暂时不可用，请稍后重试', 503)
@@ -18960,23 +19322,14 @@ def api_story_run_reset_map():
         return _json_error('未找到此功能', 404)
     data = request.get_json(silent=True) or {}
     try:
-        seed = secrets.token_hex(16)
-        state = build_initial_story_state(seed)
-        run = reset_story_run_map(
-            user_id,
-            seed,
-            STORY_CONTENT_VERSION,
-            state,
-            run_id=data.get('run_id'),
-        )
-        if run is None:
+        abandoned = abandon_story_run(user_id, data.get('run_id'))
+        if not abandoned:
             return _json_error('没有进行中的故事旅程', 404)
-        new_discoveries = _sync_story_discoveries(user_id, run)
         return jsonify({
             'success': True,
-            'run': run,
+            'run': None,
             'discoveries': _list_story_discoveries_without_blocking(user_id),
-            'new_discoveries': new_discoveries,
+            'new_discoveries': [],
         })
     except sqlite3.OperationalError as exc:
         if 'locked' in str(exc).lower():
@@ -19787,6 +20140,47 @@ def healthz():
     return response
 
 
+def _account_identity_key():
+    configured = os.environ.get('GTN_ACCOUNT_LINK_HMAC_KEY')
+    if configured:
+        return configured.encode('utf-8')
+    secret = app.secret_key
+    if not secret:
+        raise RuntimeError('account identity requires a configured signing secret')
+    raw = secret if isinstance(secret, bytes) else str(secret).encode('utf-8')
+    return hmac.new(raw, b'gtn-account-link-key-v1', hashlib.sha256).digest()
+
+
+def _prepare_account_identity(user, source):
+    key = _account_identity_key()
+    cookie = str(request.cookies.get('gtn_device', ''))
+    token, separator, signature = cookie.partition('.')
+    expected = hmac.new(key, ('cookie:' + token).encode(), hashlib.sha256).hexdigest()
+    if not separator or not re.fullmatch(r'[A-Za-z0-9_-]{43}', token) or not hmac.compare_digest(expected, signature):
+        token = secrets.token_urlsafe(32)
+        signature = hmac.new(key, ('cookie:' + token).encode(), hashlib.sha256).hexdigest()
+    g.account_device_cookie = token + '.' + signature
+    device_hash = hmac.new(key, ('device:' + token).encode(), hashlib.sha256).hexdigest()
+    network_hash = ''
+    try:
+        address = ipaddress.ip_address(_client_ip())
+        network = str(address) if address.version == 4 else str(ipaddress.ip_network(f'{address}/64', strict=False))
+        network_hash = hmac.new(key, ('network:' + network).encode(), hashlib.sha256).hexdigest()
+    except ValueError:
+        pass
+    account_integrity.record_identity_event(user['id'], device_hash, network_hash, source=source)
+
+
+@app.after_request
+def _attach_account_device_cookie(response):
+    cookie = getattr(g, 'account_device_cookie', None)
+    if cookie:
+        response.set_cookie('gtn_device', cookie, max_age=365*86400, httponly=True,
+                            secure=bool(request.is_secure or app.config.get('SESSION_COOKIE_SECURE')), samesite='Lax')
+        response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
 @app.route('/api/health/full')
 def health_full():
     forwarded = str(request.headers.get('X-Forwarded-For') or '').strip()
@@ -19984,6 +20378,108 @@ def api_report():
         return _json_error(error, 429 if '频繁' in error or '上限' in error or '重复' in error else 400)
     admin_event('report', f"{username} reported {object_type}:{object_id} category={category}", user_id=user_id)
     return jsonify({'success': True, 'report': report})
+
+
+def _integrity_response(operation):
+    try:
+        response = jsonify({'success': True, **operation()})
+        if request.method == 'POST':
+            socketio.start_background_task(refresh_online_reputation)
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+    except account_integrity.IntegrityRuleError as exc:
+        return jsonify({'success': False, 'error': str(exc), 'code': exc.code}), exc.status
+    except sqlite3.OperationalError:
+        return jsonify({'success': False, 'error': '信誉服务暂时忙碌，请稍后重试', 'code': 'INTEGRITY_BUSY'}), 503
+
+
+def _integrity_body(allowed, required=None):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data)-set(allowed) or set(required or allowed)-set(data):
+        raise account_integrity.IntegrityRuleError('INVALID_REQUEST', '请求字段无效')
+    return data
+
+
+def _integrity_account(staff=False):
+    if not DB_AVAILABLE:
+        return None, db_unavailable_response()
+    uid, _, error = _require_staff_account_json() if staff else _require_account_json()
+    if error:
+        return None, error
+    if not rate_limiter(f'integrity:{uid}', limit=30, window=60):
+        return None, _rate_limit_response('操作过于频繁，请稍后重试', retry_after=60)
+    return uid, None
+
+
+@app.route('/api/account-integrity', methods=['GET'])
+def api_account_integrity():
+    uid, error = _integrity_account()
+    if error:
+        return error
+    return _integrity_response(lambda: account_integrity.get_account_integrity_center(uid))
+
+
+@app.route('/api/account-integrity/team-reports', methods=['POST'])
+def api_integrity_report_create():
+    uid, error = _integrity_account()
+    if error:
+        return error
+    def operation():
+        data = _integrity_body({'match_id','target_user_id','reason'})
+        return {'report': account_integrity.create_team_report(uid,data['match_id'],data['target_user_id'],data['reason'])}
+    return _integrity_response(operation)
+
+
+@app.route('/api/account-integrity/team-reports/<int:report_id>/<action>', methods=['POST'])
+def api_integrity_report_action(report_id, action):
+    uid, error = _integrity_account(staff=action == 'revoke')
+    if error:
+        return error
+    def operation():
+        data = _integrity_body({'reason'} if action == 'revoke' else set())
+        report = (account_integrity.revoke_team_report(uid,report_id,data['reason']) if action == 'revoke'
+                  else account_integrity.mutate_team_report(uid,report_id,action))
+        return {'report':report}
+    return _integrity_response(operation)
+
+
+@app.route('/api/account-integrity/appeal', methods=['POST'])
+def api_integrity_appeal():
+    uid, error = _integrity_account()
+    if error:
+        return error
+    def operation():
+        data = _integrity_body({'reason'})
+        return {'appeal':account_integrity.appeal_account_link(uid,data['reason'])}
+    return _integrity_response(operation)
+
+
+@app.route('/api/account-integrity/staff', methods=['GET'])
+def api_integrity_staff():
+    uid, error = _integrity_account(staff=True)
+    if error:
+        return error
+    return _integrity_response(lambda: {**account_integrity.list_account_link_cases(uid),
+                                        'reports':account_integrity.list_team_reports(uid,admin=True)})
+
+
+@app.route('/api/account-integrity/staff/<action>', methods=['POST'])
+def api_integrity_staff_action(action):
+    uid, error = _integrity_account(staff=True)
+    if error:
+        return error
+    def operation():
+        if action == 'merge':
+            data = _integrity_body({'user_ids','reason'})
+            return {'result':account_integrity.admin_merge_accounts(uid,data['user_ids'],data['reason'])}
+        if action == 'unlink':
+            data = _integrity_body({'user_id','starting_reputation','reason'})
+            return {'result':account_integrity.admin_unlink_account(uid,data['user_id'],data['starting_reputation'],data['reason'])}
+        if action == 'resolve-appeal':
+            data = _integrity_body({'appeal_id','accepted','reason','starting_reputation'}, {'appeal_id','accepted','reason'})
+            return {'result':account_integrity.resolve_account_link_appeal(uid,data['appeal_id'],data['accepted'],data['reason'],starting_reputation=data.get('starting_reputation'))}
+        raise account_integrity.IntegrityRuleError('INVALID_ACTION','操作无效')
+    return _integrity_response(operation)
 
 
 @app.route('/api/admin/reports')
@@ -20631,6 +21127,7 @@ def api_auth_register():
         admin_event('warning', f'record register ip failed: {exc}')
     user = get_user_by_id(user.get('id')) or user
     _set_account_session(user)
+    _prepare_account_identity(user, 'register')
     return _attach_remember_cookie(jsonify({'success': True, 'user': auth_user_payload(user)}), user)
 
 
@@ -20673,6 +21170,7 @@ def api_auth_login():
         admin_event('warning', f'record login ip failed: {exc}')
     user = get_user_by_id(user.get('id')) or user
     _set_account_session(user)
+    _prepare_account_identity(user, 'login')
     return _attach_remember_cookie(jsonify({'success': True, 'user': auth_user_payload(user)}), user)
 
 
@@ -20834,6 +21332,7 @@ def api_auth_me():
         return _clear_remember_cookie(jsonify(payload))
     user = get_user_by_id(user.get('id')) or user
     _set_account_session(user)
+    _prepare_account_identity(user, 'session')
     response = jsonify({'authenticated': True, 'db_available': True, 'user': auth_user_payload(user)})
     if not request.cookies.get(REMEMBER_COOKIE_NAME):
         return _attach_remember_cookie(response, user)
@@ -22044,6 +22543,7 @@ def api_cards():
         return _json_error(str(exc), 400)
     include_all_mods = str(request.args.get('include_all_mods', '')).strip().lower() in {'1', 'true', 'yes', 'all'}
     runtime_mode = str(request.args.get('mode', '') or '').strip().lower() or None
+    match_mode = request.args.get('match_mode')
     entertainment_disabled = disabled_entertainment_mod_filenames(disabled_mods) if include_all_mods else set()
     loadout_disabled_mods = sorted(entertainment_disabled) if include_all_mods else disabled_mods
     loadout = build_mod_loadout(
@@ -22051,6 +22551,7 @@ def api_cards():
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
         runtime_mode=runtime_mode,
+        match_mode=match_mode,
     )
     hidden_entertainment_cards = hidden_disabled_entertainment_card_ids(disabled_mods) if include_all_mods else set()
     allowed_card_ids = (set(CARD_DEFS.keys()) - hidden_entertainment_cards) if include_all_mods else loadout['allowed_card_ids']
@@ -22170,11 +22671,14 @@ def api_opening_events():
         return _json_error(str(exc), 400)
     include_all_mods = str(request.args.get('include_all_mods', '')).strip().lower() in {'1', 'true', 'yes', 'all'}
     disabled_mods = request.args.get('disabled_mods', '')
+    match_mode = request.args.get('match_mode')
     entertainment_disabled = disabled_entertainment_mod_filenames(disabled_mods) if include_all_mods else set()
     loadout = build_mod_loadout(
         sorted(entertainment_disabled) if include_all_mods else disabled_mods,
         community_mod=community_mod,
         community_hash=community_fields.get('community_mod_hash', ''),
+        runtime_mode=str(request.args.get('mode', '') or '').strip().lower() or None,
+        match_mode=match_mode,
     )
     allowed_card_ids = loadout['allowed_card_ids']
     events = []
@@ -22815,8 +23319,6 @@ def on_afk_check_response(data=None):
                 result_payload = {'success': True, 'message': '挂机检测已通过'}
                 passed = True
     emit('afk_check_result', result_payload or {'success': False, 'retry': False, 'message': '挂机检测失败'})
-    if passed:
-        admin_event('player', f'afk check passed: {nickname} sid={sid} hold_ms={hold_ms}')
 
 
 @socketio.on('afk_activity')
@@ -22923,7 +23425,11 @@ def on_login(data):
     account_user = _current_account_user() if DB_AVAILABLE else None
     try:
         raw_name = validate_str(data.get('nickname', ''), max_len=64, name='nickname')
-        preferred_mode = validate_str(data.get('mode', '1v1'), max_len=16, name='mode')
+        preferred_match_mode_raw = validate_str(
+            data.get('match_mode') or data.get('mode', '1v1'),
+            max_len=32,
+            name='match_mode',
+        )
         desired_instance_id = validate_str(data.get('desired_instance_id', ''), max_len=96, pattern=r'[A-Za-z0-9_.:\-]*', name='desired_instance_id')
         desired_instance_port = validate_str(data.get('desired_instance_port', ''), max_len=8, pattern=r'[0-9]*', name='desired_instance_port')
         desired_room_text = validate_str(data.get('desired_room_id', ''), max_len=12, pattern=r'[0-9]*', name='desired_room_id')
@@ -22968,6 +23474,14 @@ def on_login(data):
     if wants_account_login and not account_user:
         emit('login_fail', {'reason': 'Account session expired'})
         return
+    login_reputation_profile = {}
+    if account_user and DB_AVAILABLE:
+        try:
+            login_reputation_profile = account_integrity.get_reputation_profile(account_user['id'])
+        except Exception:
+            app.logger.exception('Failed to load account reputation before socket login')
+            emit('login_fail', {'reason': '账号信誉服务暂不可用，请稍后重试'})
+            return
     if account_user:
         special_profile = get_special_account_profile(account_user['username'])
         name = special_profile['display_name'] if special_profile else account_user['username']
@@ -23014,9 +23528,11 @@ def on_login(data):
         if not reconnect_allowed:
             emit('login_fail', drain_reject_payload())
             return
+    preferred_mode, preferred_match_type, preferred_match_mode = pvp_match_mode_parts(preferred_match_mode_raw)
+    if preferred_match_type == 'ranked' and not is_registered_user:
+        preferred_match_type = 'casual'
+        preferred_match_mode = normalize_pvp_match_mode(f'casual_{preferred_mode}')
     disabled_mods = ensure_valid_disabled_mods(normalize_disabled_mods_with_default(data.get('disabled_mods')))
-    if preferred_mode not in PVP_MODES:
-        preferred_mode = '1v1'
     try:
         community_fields, community_mod = resolve_community_loadout(data)
         loadout = build_mod_loadout(
@@ -23024,6 +23540,7 @@ def on_login(data):
             community_mod=community_mod,
             community_hash=community_fields.get('community_mod_hash', ''),
             runtime_mode=preferred_mode,
+            match_mode=preferred_match_mode,
         )
     except Exception as exc:
         emit('login_fail', {'reason': f'社区模组加载失败: {exc}'})
@@ -23105,8 +23622,11 @@ def on_login(data):
             'mods_list': loadout['mods_list'],
             'entertainment_mods': list(loadout.get('entertainment_mods', [])),
             'disabled_mods': loadout['disabled_mods'],
+            'preferred_disabled_mods': list(loadout.get('preferred_disabled_mods', disabled_mods)),
             'allowed_card_ids': loadout['allowed_card_ids'],
             'mode': preferred_mode,
+            'match_type': preferred_match_type,
+            'match_mode': preferred_match_mode,
             'is_admin_player': is_admin_player,
             'user_id': user_id,
             'account_player_id': account_user.get('player_id') if account_user else '',
@@ -23115,6 +23635,7 @@ def on_login(data):
             'allow_guest_spectators': bool(account_user.get('allow_guest_spectators')) if account_user else False,
             'season_gr': account_user.get('season_gr') if account_user else None,
             'total_gr': account_user.get('total_gr') if account_user else None,
+            'reputation_profile': login_reputation_profile,
             'mod_source': community_fields.get('mod_source', 'official'),
             'community_mod_url': community_fields.get('community_mod_url', ''),
             'community_mod_hash': community_fields.get('community_mod_hash', ''),
@@ -23126,9 +23647,28 @@ def on_login(data):
             'skin': skin_config,
             'skin_look': dict(DEFAULT_SKIN_LOOK),
         }
+        if players[sid]['match_type'] == 'ranked':
+            ranked_eligible, _ = ranked_match_eligibility([players[sid]])
+            if not ranked_eligible:
+                players[sid]['match_type'] = 'casual'
+                players[sid]['match_mode'] = normalize_pvp_match_mode(f'casual_{preferred_mode}')
+                casual_loadout = build_mod_loadout(
+                    players[sid].get('preferred_disabled_mods', disabled_mods),
+                    community_mod=community_mod,
+                    community_hash=community_fields.get('community_mod_hash', ''),
+                    runtime_mode=preferred_mode,
+                    match_mode=players[sid]['match_mode'],
+                )
+                apply_mod_loadout_to_player(players[sid], casual_loadout, community_fields)
         if special_profile:
             players[sid].update(special_public_fields(special_profile))
-        admin_event('player', f'{"[beta] " if is_beta_mode else ""}{name} joined as {initial_status}', sid=sid, mode=preferred_mode)
+        admin_event(
+            'player',
+            f'{"[beta] " if is_beta_mode else ""}{name} joined as {initial_status}',
+            sid=sid,
+            mode=preferred_mode,
+            match_mode=preferred_match_mode,
+        )
     finally:
         _lock.release()
     takeover_notice = {
@@ -23168,6 +23708,7 @@ def on_login(data):
             'room_id': reconnect_room.room_id,
             'match_key': room_match_key(reconnect_room),
             'mode': reconnect_room.mode,
+            **room_match_payload(reconnect_room),
             'old_sid': reconnect_old_sid,
             'opponent_nickname': opponent_nickname,
         })
@@ -23196,6 +23737,7 @@ def on_login(data):
         'status': players.get(sid, {}).get('status', initial_status),
         'authenticated': bool(is_registered_user),
         'disabled_mods': players.get(sid, {}).get('disabled_mods', []),
+        'preferred_disabled_mods': players.get(sid, {}).get('preferred_disabled_mods', []),
         'mods_hash': players.get(sid, {}).get('mods_hash', ''),
         'loadout_hash': players.get(sid, {}).get('loadout_hash', '') or players.get(sid, {}).get('mods_hash', ''),
         'v2_loadout_hash': players.get(sid, {}).get('v2_loadout_hash', ''),
@@ -23208,6 +23750,9 @@ def on_login(data):
         'community_mods': players.get(sid, {}).get('community_mods', []),
         'beta_mode': players.get(sid, {}).get('beta_mode', False),
         'skin': players.get(sid, {}).get('skin', DEFAULT_PUBLIC_SKIN),
+        'mode': players.get(sid, {}).get('mode', preferred_mode),
+        'match_type': players.get(sid, {}).get('match_type', preferred_match_type),
+        'match_mode': players.get(sid, {}).get('match_mode', preferred_match_mode),
     }
     if is_registered_user:
         login_payload['user'] = auth_user_payload(account_user)
@@ -23237,7 +23782,11 @@ def on_form_team(data):
         if not player_accepts_game_invites(players[target_sid]):
             emit('server_error', {'message': '该玩家已关闭对局邀请', 'reason': 'game_invites_disabled'})
             return
-        if players[sid].get('mode') != '2v2' or players[target_sid].get('mode') != '2v2':
+        if (
+            players[sid].get('mode') != '2v2'
+            or players[target_sid].get('mode') != '2v2'
+            or player_match_mode(players[sid]) != player_match_mode(players[target_sid])
+        ):
             return
         if not same_runtime_scope_players(sid, target_sid):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
@@ -23254,17 +23803,54 @@ def on_set_mode(data):
     if data is None:
         return
     try:
-        mode = validate_str(data.get('mode', '1v1'), min_len=1, max_len=16, name='mode')
+        requested = validate_str(
+            data.get('match_mode') or data.get('mode', '1v1'),
+            min_len=1,
+            max_len=32,
+            name='match_mode',
+        )
     except ValueError as exc:
         _security_illegal(sid, 'set_mode', str(exc))
         return
     with _lock:
         if sid not in players:
             return
-        if mode not in PVP_MODES:
+        mode, match_type, match_mode = pvp_match_mode_parts(requested)
+        if match_mode not in PVP_MATCH_MODES:
             return
+        try:
+            community_fields, mode_loadout = resolve_player_match_mode_loadout(players[sid], match_mode)
+        except Exception as exc:
+            emit('server_error', {
+                'message': f'切换模式时无法生成有效模组配置：{exc}',
+                'reason': 'mod_loadout_build_failed',
+            })
+            return
+        candidate_player = dict(players[sid])
+        apply_mod_loadout_to_player(candidate_player, mode_loadout, community_fields)
+        candidate_player['mode'] = mode
+        candidate_player['match_type'] = match_type
+        candidate_player['match_mode'] = match_mode
+        if match_type == 'ranked':
+            eligible, reason = ranked_match_eligibility([candidate_player])
+            if not eligible:
+                messages = {
+                    'guest_participant': '游客不能进入天梯模式，请先登录账号',
+                    'community_mod': '天梯模式仅允许官方模组配置',
+                    'low_reputation': '信誉低于40，暂时不能参加天梯',
+                    'reputation_unavailable': '信誉服务暂不可用，请稍后再试',
+                }
+                emit('server_error', {
+                    'message': messages.get(reason, '当前配置不能进入天梯模式'),
+                    'reason': reason,
+                })
+                return
+        previous_match_mode = player_match_mode(players[sid])
+        apply_mod_loadout_to_player(players[sid], mode_loadout, community_fields)
         players[sid]['mode'] = mode
-        if mode != '2v2' and sid in teams:
+        players[sid]['match_type'] = match_type
+        players[sid]['match_mode'] = match_mode
+        if (mode != '2v2' or previous_match_mode != match_mode) and sid in teams:
             team = teams[sid]
             leader = team['leader']
             members = list(team['members'])
@@ -23316,6 +23902,7 @@ def on_update_mod_settings(data):
         player = players.get(sid)
         current_disabled_mods = list(player.get('disabled_mods', [])) if player else []
         runtime_mode = player.get('mode', '1v1') if player else '1v1'
+        match_mode = player_match_mode(player) if player else 'casual_1v1'
         player_status = player.get('status') if player else ''
         user_id = player.get('user_id') if player else None
         latest_requested_revision = int(player.get('_mod_settings_latest_requested_revision', -1)) if player else -1
@@ -23361,6 +23948,7 @@ def on_update_mod_settings(data):
         )
 
     data['_runtime_mode'] = runtime_mode
+    data['_match_mode'] = match_mode
     try:
         community_fields, loadout = resolve_mod_loadout_payload(data, require_disabled_mods=True)
     except Exception as exc:
@@ -23452,11 +24040,18 @@ def on_update_mod_settings(data):
             else:
                 if client_revision is not None:
                     player['_mod_settings_applied_revision'] = client_revision
+                ranked_downgraded = False
+                if player.get('match_type') == 'ranked':
+                    eligible, _ = ranked_match_eligibility([player])
+                    if not eligible:
+                        player['match_type'] = 'casual'
+                        player['match_mode'] = normalize_pvp_match_mode(f"casual_{player.get('mode', '1v1')}")
+                        ranked_downgraded = True
                 invites.pop(sid, None)
                 for inviter_sid, target_sid in list(invites.items()):
                     if target_sid == sid:
                         del invites[inviter_sid]
-                if sid in teams and old_hash != loadout['loadout_hash']:
+                if sid in teams and (old_hash != loadout['loadout_hash'] or ranked_downgraded):
                     team = teams[sid]
                     leader = team['leader']
                     members = list(team['members'])
@@ -23476,12 +24071,16 @@ def on_update_mod_settings(data):
                     request_id=request_id,
                     disabled_mods=loadout['disabled_mods'],
                     requested_disabled_mods=requested_disabled_mods,
+                    preferred_disabled_mods=loadout.get('preferred_disabled_mods', requested_disabled_mods),
                     client_revision=client_revision,
                     details={
                         'requested_count': len(requested_disabled_mods),
                         'applied_count': len(loadout['disabled_mods']),
                         'forced_enabled_mods': forced_enabled_mods,
+                        'automatically_disabled_mods': loadout.get('automatically_disabled_mods', []),
                         'unknown_mods': unknown_mods,
+                        'ranked_downgraded': ranked_downgraded,
+                        'match_mode': player_match_mode(player),
                     },
                     loadout_hash=loadout['loadout_hash'],
                     v2_loadout_hash=loadout.get('v2_loadout_hash', ''),
@@ -23529,7 +24128,7 @@ def on_accept_team(data):
     pending_loadout = None
     with _lock:
         current_player = players.get(sid)
-        fallback_mod_payload = player_mod_match_payload(current_player) if current_player else None
+        fallback_mod_payload = player_mod_preference_payload(current_player) if current_player else None
     if has_mod_loadout_payload(data):
         try:
             pending_loadout = resolve_mod_loadout_payload(data, fallback_payload=fallback_mod_payload)
@@ -23545,6 +24144,18 @@ def on_accept_team(data):
         if pending_loadout:
             community_fields, loadout = pending_loadout
             apply_mod_loadout_to_player(players[sid], loadout, community_fields)
+        if (
+            players[sid].get('mode') != '2v2'
+            or players[leader_sid].get('mode') != '2v2'
+            or player_match_mode(players[sid]) != player_match_mode(players[leader_sid])
+        ):
+            emit('server_error', {'message': '组队邀请已失效：双方模式不一致'})
+            return
+        if player_match_mode(players[sid]) == 'ranked_2v2':
+            eligible, reason = ranked_match_eligibility([players[sid], players[leader_sid]])
+            if not eligible:
+                emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
+                return
         if not same_runtime_scope_players(sid, leader_sid):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
@@ -23638,11 +24249,20 @@ def on_invite_team(data):
         if not same_runtime_scope_sids(all_invite_sids):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
-        my_team_all_2v2 = all(players.get(ms, {}).get('mode') == '2v2' for ms in my_team['members'] if ms in players)
-        target_team_all_2v2 = all(players.get(ms, {}).get('mode') == '2v2' for ms in target_team['members'] if ms in players)
-        if not my_team_all_2v2 or not target_team_all_2v2:
-            return
         all_match_sids = my_team['members'] + target_team['members']
+        match_modes = {player_match_mode(players.get(ms)) for ms in all_match_sids if ms in players}
+        if (
+            len(match_modes) != 1
+            or next(iter(match_modes), '') not in ('casual_2v2', 'ranked_2v2')
+            or any(players.get(ms, {}).get('mode') != '2v2' for ms in all_match_sids)
+        ):
+            return
+        match_mode = next(iter(match_modes))
+        if match_mode == 'ranked_2v2':
+            eligible, reason = ranked_match_eligibility_for_sids(all_match_sids)
+            if not eligible:
+                emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
+                return
         if not same_mod_loadout(all_match_sids):
             reference_sid = my_team['leader']
             reference_player = players.get(reference_sid, {})
@@ -23655,7 +24275,7 @@ def on_invite_team(data):
                      max(my_team['leader'], target_team['leader']))
         if match_key in pending_team_matches:
             return
-        inviter_preview = gr_preview_payload_for_sids('2v2', all_match_sids, sid)
+        inviter_preview = gr_preview_payload_for_sids(match_mode, all_match_sids, sid)
         if not bool(data.get('confirmed')):
             socketio.emit('team_match_confirm_required', {
                 'target_team_leader': target_team_leader,
@@ -23663,23 +24283,25 @@ def on_invite_team(data):
                 'target_team_sids': target_team['members'],
                 'gr_preview': inviter_preview,
                 'gr_preview_text': inviter_preview.get('text', ''),
+                'match_mode': match_mode,
             }, room=sid)
             return
         pending_team_matches[match_key] = True
         for member_sid in my_team['members']:
             if member_sid in players:
-                preview = gr_preview_payload_for_sids('2v2', all_match_sids, member_sid)
+                preview = gr_preview_payload_for_sids(match_mode, all_match_sids, member_sid)
                 if preview.get('text'):
                     socketio.emit('invite_gr_preview', {'text': preview.get('text'), 'gr_preview': preview}, room=member_sid)
         for member_sid in target_team['members']:
             if member_sid in players:
-                preview = gr_preview_payload_for_sids('2v2', all_match_sids, member_sid)
+                preview = gr_preview_payload_for_sids(match_mode, all_match_sids, member_sid)
                 socketio.emit('team_match_invite', {
                     'from_leader': my_team['leader'],
                     'from_team': [players[ms]['nickname'] for ms in my_team['members'] if ms in players],
                     'from_team_sids': my_team['members'],
                     'gr_preview_text': preview.get('text', ''),
                     'gr_preview': preview,
+                    'match_mode': match_mode,
                 }, room=member_sid)
 
 
@@ -23717,6 +24339,17 @@ def on_accept_team_match(data):
         if not same_runtime_scope_sids(all_sids):
             emit_match_start_failed(all_sids, runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
             return
+        match_modes = {player_match_mode(players.get(psid)) for psid in all_sids if psid in players}
+        if len(match_modes) != 1 or next(iter(match_modes), '') not in ('casual_2v2', 'ranked_2v2'):
+            emit_match_start_failed(all_sids, '队伍邀请已失效：对局类型不一致', reason='match_mode_mismatch')
+            return
+        match_mode = next(iter(match_modes))
+        _, match_type, match_mode = pvp_match_mode_parts(match_mode)
+        if match_type == 'ranked':
+            eligible, reason = ranked_match_eligibility_for_sids(all_sids)
+            if not eligible:
+                emit_match_start_failed(all_sids, '当前玩家或模组配置不符合天梯资格', reason=reason)
+                return
         if not same_mod_loadout(all_sids):
             reference_sid = all_sids[0]
             reference_player = players.get(reference_sid, {})
@@ -23741,11 +24374,19 @@ def on_accept_team_match(data):
             emit_match_start_failed(all_sids, pool_issue, reason='content_temporarily_disabled')
             return
         clear_pending_match_invites_for_sids_locked(all_sids)
-        room = GameRoom(room_id, all_sids, allowed, mode='2v2', beta_mode=bool(players[first_sid].get('beta_mode', False)))
+        room = GameRoom(
+            room_id,
+            all_sids,
+            allowed,
+            mode='2v2',
+            beta_mode=bool(players[first_sid].get('beta_mode', False)),
+            match_type=match_type,
+            match_mode=match_mode,
+        )
         capture_room_match_loadout(room, players[first_sid])
         apply_v2_loadout_to_engine(room.engine, players.get(first_sid, {}), room.mode)
         rooms[room_id] = room
-        admin_event('game', f"room {room_id} created mode=2v2: {' / '.join(players[s]['nickname'] for s in all_sids)}")
+        admin_event('game', f"room {room_id} created mode={match_mode}: {' / '.join(players[s]['nickname'] for s in all_sids)}")
         for s in all_sids:
             players[s]['status'] = 'in_game'
             players[s]['room_id'] = room_id
@@ -24209,6 +24850,9 @@ def on_reconnect_accept(data):
             ai_reconnect_deferred = _phelren_room_native_completion_pending(room)
         else:
             room.player_sids[pidx] = sid
+        player['mode'] = room.mode
+        player['match_type'] = room_match_type(room)
+        player['match_mode'] = room_match_mode(room)
         room.player_profiles.pop(old_sid, None)
         room.store_player_profile(sid, pidx, player)
         del room.disconnected_players[old_sid]
@@ -24391,6 +25035,7 @@ def on_invite(data):
     target_name = '?'
     inviter_name = '?'
     inviter_mode = '1v1'
+    inviter_match_mode = 'casual_1v1'
     match_sids = [sid, target_sid]
     mod_mismatch_payload = None
     with _lock:
@@ -24418,10 +25063,20 @@ def on_invite(data):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
         inviter_mode = inviter.get('mode', '1v1')
+        inviter_match_mode = player_match_mode(inviter)
         target_mode = target.get('mode', '1v1')
-        if inviter_mode not in DUEL_INVITE_MODES or target_mode != inviter_mode:
+        if (
+            inviter_mode not in DUEL_INVITE_MODES
+            or target_mode != inviter_mode
+            or player_match_mode(target) != inviter_match_mode
+        ):
             emit('server_error', {'message': '双方模式不一致，无法邀请'})
             return
+        if inviter_match_mode in RANKED_MATCH_MODES:
+            eligible, reason = ranked_match_eligibility([inviter, target])
+            if not eligible:
+                emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
+                return
         if player_loadout_hash(inviter) != player_loadout_hash(target):
             message = '模组组合不一致，无法开始对局'
             mod_mismatch_payload = {
@@ -24438,13 +25093,14 @@ def on_invite(data):
         socketio.emit('server_error', {'message': mod_mismatch_payload['message'], 'reason': 'mod_mismatch'}, room=sid)
         return
 
-    inviter_gr_preview = gr_preview_payload_for_sids(inviter_mode, match_sids, sid)
-    target_gr_preview = gr_preview_payload_for_sids(inviter_mode, match_sids, target_sid)
+    inviter_gr_preview = gr_preview_payload_for_sids(inviter_match_mode, match_sids, sid)
+    target_gr_preview = gr_preview_payload_for_sids(inviter_match_mode, match_sids, target_sid)
     if not bool(data.get('confirmed')):
         socketio.emit('invite_confirm_required', {
             'target_sid': target_sid,
             'target_name': target_name,
             'mode': inviter_mode,
+            'match_mode': inviter_match_mode,
             'gr_preview_text': inviter_gr_preview.get('text', ''),
             'gr_preview': inviter_gr_preview,
         }, room=sid)
@@ -24470,9 +25126,19 @@ def on_invite(data):
         if not same_runtime_scope_players(inviter, target):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
-        if inviter.get('mode', '1v1') != inviter_mode or target.get('mode', '1v1') != inviter_mode:
+        if (
+            inviter.get('mode', '1v1') != inviter_mode
+            or target.get('mode', '1v1') != inviter_mode
+            or player_match_mode(inviter) != inviter_match_mode
+            or player_match_mode(target) != inviter_match_mode
+        ):
             emit('server_error', {'message': '双方模式不一致，无法邀请'})
             return
+        if inviter_match_mode in RANKED_MATCH_MODES:
+            eligible, reason = ranked_match_eligibility([inviter, target])
+            if not eligible:
+                emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
+                return
         if player_loadout_hash(inviter) != player_loadout_hash(target):
             emit('server_error', {'message': '模组组合不一致，无法开始对局', 'reason': 'mod_mismatch'})
             return
@@ -24486,6 +25152,8 @@ def on_invite(data):
         'inviter_name': inviter_name,
         'gr_preview_text': target_gr_preview.get('text', ''),
         'gr_preview': target_gr_preview,
+        'mode': inviter_mode,
+        'match_mode': inviter_match_mode,
     }, room=target_sid)
 
     def _invite_timeout(inviter_sid):
@@ -24515,7 +25183,7 @@ def on_accept_invite(data):
     pending_loadout = None
     with _lock:
         current_player = players.get(sid)
-        fallback_mod_payload = player_mod_match_payload(current_player) if current_player else None
+        fallback_mod_payload = player_mod_preference_payload(current_player) if current_player else None
     if has_mod_loadout_payload(data):
         try:
             pending_loadout = resolve_mod_loadout_payload(data, fallback_payload=fallback_mod_payload)
@@ -24536,6 +25204,19 @@ def on_accept_invite(data):
         if pending_loadout:
             community_fields, loadout = pending_loadout
             apply_mod_loadout_to_player(accepter, loadout, community_fields)
+        inviter_match_mode = player_match_mode(inviter)
+        if player_match_mode(accepter) != inviter_match_mode:
+            emit_match_start_failed([inviter_sid, sid], '邀请已失效：双方模式不一致', reason='match_mode_mismatch')
+            return
+        engine_mode, match_type, canonical_match_mode = pvp_match_mode_parts(inviter_match_mode)
+        if engine_mode != inviter.get('mode') or engine_mode != accepter.get('mode'):
+            emit_match_start_failed([inviter_sid, sid], '邀请已失效：对局类型不一致', reason='match_mode_mismatch')
+            return
+        if match_type == 'ranked':
+            eligible, reason = ranked_match_eligibility([inviter, accepter])
+            if not eligible:
+                emit_match_start_failed([inviter_sid, sid], '当前玩家或模组配置不符合天梯资格', reason=reason)
+                return
         if not same_runtime_scope_players(inviter, accepter):
             emit_match_start_failed([inviter_sid, sid], runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
             return
@@ -24555,11 +25236,19 @@ def on_accept_invite(data):
             emit_match_start_failed([inviter_sid, sid], pool_issue, reason='content_temporarily_disabled')
             return
         clear_pending_match_invites_for_sids_locked([inviter_sid, sid])
-        room = GameRoom(room_id, [inviter_sid, sid], allowed_card_ids, mode=inviter.get('mode', '1v1'), beta_mode=bool(inviter.get('beta_mode', False)))
+        room = GameRoom(
+            room_id,
+            [inviter_sid, sid],
+            allowed_card_ids,
+            mode=engine_mode,
+            beta_mode=bool(inviter.get('beta_mode', False)),
+            match_type=match_type,
+            match_mode=canonical_match_mode,
+        )
         capture_room_match_loadout(room, inviter)
         apply_v2_loadout_to_engine(room.engine, inviter, room.mode)
         rooms[room_id] = room
-        admin_event('game', f"room {room_id} created mode={room.mode}: {inviter['nickname']} vs {accepter['nickname']}")
+        admin_event('game', f"room {room_id} created mode={room.match_mode}: {inviter['nickname']} vs {accepter['nickname']}")
         inviter['room_id'] = room_id
         inviter['status'] = 'in_game'
         accepter['room_id'] = room_id
@@ -28472,7 +29161,7 @@ def on_response(data):
             soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
             return
         if room.mode == '2v2':
-            allowed = any(int(cc.get('responder_id', -1)) == pidx for cc in (pending_response.get('counter_cards') or []) if isinstance(cc, dict))
+            allowed = pidx in _pending_response_responder_ids(room, pending_response)
         else:
             try:
                 allowed = pidx == 1 - int(pending_response.get('player_id', -1))
@@ -29094,6 +29783,8 @@ def on_surrender(data):
             def finalize_surrender(skip_reason=None):
                 result = engine.surrender(pidx)
                 if result.get('success'):
+                    room._ended_by_surrender = True
+                    room._surrender_player_indices = [pidx]
                     replay_payload = {'result': result}
                     if skip_reason:
                         replay_payload['teammate_consent_skipped'] = skip_reason
@@ -29206,6 +29897,8 @@ def on_surrender_consent_response(data):
                 return
             result = room.engine.surrender(requester_id)
             if result.get('success'):
+                room._ended_by_surrender = True
+                room._surrender_player_indices = [requester_id]
                 record_room_replay_action(room, 'surrender', requester_id, {
                     'consented_by': pidx,
                     'result': result,
@@ -29557,6 +30250,12 @@ def on_spectate(data):
             emit('server_error', {'message': '对局不存在'})
             return
         room = rooms[room_id]
+        if room_match_type(room) == 'ranked':
+            emit('server_error', {
+                'message': '天梯对局不允许观战',
+                'reason': 'ranked_no_spectators',
+            })
+            return
         if bool(getattr(room, 'beta_mode', False)) != bool(player.get('beta_mode', False)):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return

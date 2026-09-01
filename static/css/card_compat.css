@@ -1,0 +1,103 @@
+/* Legacy-only card layout fallbacks. Modern card rendering is intentionally
+   untouched: none of these selectors match unless card_compat.js detects a
+   missing container unit implementation or a broken nested flex layout. */
+
+html.gtn-card-layout-legacy .card {
+  height: var(--gtn-legacy-card-height, 176px);
+  aspect-ratio: auto;
+}
+
+html.gtn-card-layout-legacy .card .card-costs {
+  min-height: var(--gtn-card-header-height, 25px);
+  padding: var(--gtn-card-cost-padding-top, 2.5px) var(--gtn-card-cost-padding-x, 2.5px) var(--gtn-card-cost-padding-bottom, .6px);
+}
+
+html.gtn-card-layout-legacy .card .card-costs .card-name {
+  padding-right: var(--gtn-card-name-padding-x, .6px);
+  padding-left: var(--gtn-card-name-padding-x, .6px);
+  text-align: center;
+}
+
+html.gtn-card-layout-legacy .story-card .card-english-name {
+  top: var(--card-english-margin-top, -2px);
+  margin-bottom: var(--gtn-card-english-margin-bottom, .25px);
+  padding: 0 var(--card-english-padding-x, 1.8px) var(--gtn-card-english-padding-bottom, 1.1px);
+  text-align: center;
+}
+
+html.gtn-card-layout-legacy .card:not(.story-card) .card-english-name {
+  margin-top: var(--card-english-margin-top, -2px);
+  margin-bottom: var(--gtn-card-english-margin-bottom, .25px);
+  padding: 0 var(--card-english-padding-x, 1.8px) var(--gtn-card-english-padding-bottom, 1.1px);
+  text-align: center;
+}
+
+html.gtn-card-layout-legacy .card .card-art {
+  margin: var(--gtn-card-art-margin-top, -.2px) auto var(--gtn-card-art-margin-bottom, .35px);
+  border-radius: var(--gtn-card-art-radius, 2.8px);
+}
+
+html.gtn-card-layout-legacy .card.card-has-art.card-no-english .card-art {
+  margin-bottom: var(--gtn-card-art-no-english-margin-bottom, -1.45px);
+}
+
+html.gtn-card-layout-legacy .card .card-type-label-wrap {
+  padding-right: var(--gtn-card-type-padding-x, 3.8px);
+  padding-left: var(--gtn-card-type-padding-x, 3.8px);
+  text-align: center;
+}
+
+html.gtn-card-layout-legacy .card .card-type-label {
+  padding: var(--gtn-card-type-padding-y, .6px) var(--gtn-card-type-padding-x, 3.8px);
+  text-align: center;
+}
+
+html.gtn-card-layout-legacy .card .card-flags {
+  gap: var(--gtn-card-flags-gap, 1.9px);
+  padding: var(--gtn-card-flags-padding-top, 1.9px) var(--gtn-card-flags-padding-x, 3.8px) var(--gtn-card-flags-padding-bottom, 3.8px);
+}
+
+/* Some older WebKit builds parse flex but place nested flex contents at the
+   start edge. Only a failed real-layout probe enables this absolute header
+   fallback; the rules-text body deliberately remains left aligned. */
+html.gtn-card-flex-legacy .card .card-costs {
+  position: relative;
+  display: block;
+}
+
+html.gtn-card-flex-legacy .card .card-costs .cost-e,
+html.gtn-card-flex-legacy .card .card-costs .cost-m {
+  position: absolute;
+  top: var(--gtn-card-cost-padding-top, 2.5px);
+  display: block;
+  display: -webkit-box;
+  -webkit-box-align: center;
+  -webkit-box-pack: center;
+  text-align: center;
+}
+
+html.gtn-card-flex-legacy .card .card-costs .cost-e { left: var(--gtn-card-cost-padding-x, 2.5px); }
+html.gtn-card-flex-legacy .card .card-costs .cost-m { right: var(--gtn-card-cost-padding-x, 2.5px); }
+
+html.gtn-card-flex-legacy .card .card-costs .card-name {
+  position: absolute;
+  top: var(--gtn-card-title-top, 2.5px);
+  right: var(--gtn-card-title-side-space, 25px);
+  left: var(--gtn-card-title-side-space, 25px);
+  width: auto;
+  display: block;
+  display: -webkit-box;
+  -webkit-box-align: center;
+  -webkit-box-pack: center;
+  text-align: center;
+}
+
+html.gtn-card-flex-legacy .card .card-english-name,
+html.gtn-card-flex-legacy .card .card-type-label {
+  text-align: center;
+}
+
+html.gtn-card-flex-legacy .card .card-type-label-wrap {
+  display: block;
+  text-align: center;
+}

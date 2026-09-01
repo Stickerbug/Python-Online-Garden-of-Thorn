@@ -65,6 +65,19 @@
 
 账号接口只允许操作当前会话对应的账号。玩家编号、用户名或请求体中的其他身份字段不能替代服务端会话。
 
+## 信誉、举报与账号关联
+
+| 方法 | 路径 | 权限 | 行为 |
+| --- | --- | --- | --- |
+| GET | <code>/api/account-integrity</code> | 账号 | 自己的信誉、流水、相关举报与10分钟内可举报的2v2对局 |
+| POST | <code>/api/account-integrity/team-reports</code> | 账号 | <code>match_id</code>、<code>target_user_id</code>、<code>reason</code>；仅可举报刚结束对局中的队友 |
+| POST | <code>/api/account-integrity/team-reports/&lt;report_id&gt;/&lt;action&gt;</code> | 账号 / Staff | 对手确认、本人撤回；Staff可撤销已成立举报并返还实际扣分 |
+| POST | <code>/api/account-integrity/appeal</code> | 账号 | 提交自己的关联误判申诉，必须填写理由 |
+| GET | <code>/api/account-integrity/staff</code> | Staff | 查看风险解释、待处理申诉与举报，不返回设备或网络标识 |
+| POST | <code>/api/account-integrity/staff/&lt;action&gt;</code> | Staff | 有审计的合并、解除和申诉处理；解除时须明确起始信誉与理由 |
+
+写入采用严格字段白名单、当前会话身份与独立账号限流，受全局同源保护。对手确认期为结算后24小时；已过期、撤回或处理完毕的举报不能重新扣分。完整规则与自动识别方法见 [信誉与关联账号](ACCOUNT_INTEGRITY.md)。私有响应禁止缓存；公开身份只包含信誉等级及50分档关联花阶，不包含精确信誉流水、关联成员或识别摘要。
+
 ## 荆露、成就、称号与商店
 
 | 方法 | 路径 | 权限 | 用途 |
@@ -106,9 +119,10 @@
 
 以下接口全部要求已登录的 Staff/Admin 账号；普通账号统一得到 404。响应均使用
 <code>Cache-Control: private, no-store</code>。当前接口开放队伍大厅、独立存档和
-Garden 第一阶段实验：队长选择普通/困难/疯狂难度，双方分别完成私密开局赐福，
-随后进行服务器权威战斗、个人奖励/休息/宝箱/商店（含当前兼容的个人遗物）、共享事件与路线投票，以及第 16 层
-协作专用 Boss 后的阶段结算。简单难度的个人天赋尚未接入，因此当前拒绝选择 Easy；
+花园、丛林与工厂三阶段实验：队长选择普通/困难/疯狂难度，双方在每阶段分别完成私密开局赐福，
+随后进行服务器权威战斗、个人奖励/休息/宝箱/商店（含当前兼容的个人遗物）、共享事件与路线投票。每阶段 Boss 后
+双方分别提交继续确认；第一、二阶段保持活动旅程并进入下一张地图，第三阶段双方确认后才完成整段旅程。最终动作会在
+同一事务中分别记录两名成员的角色与难度通关进度，动作重试不会重复累计。简单难度的个人天赋尚未接入，因此当前拒绝选择 Easy；
 该实验也不等同于单人故事全部内容。协作奖励与商店会从单人故事权威牌池编译当前执行器能够精确结算的卡牌；
 伤害、护盾、主动丢弃、抽牌、灵药与放逐等已接入语义会随单人内容和内容指纹更新，未知脚本或效果默认拒绝进入协作存档。
 园丁车等兼容共享事件也来自同一权威事件定义；快照只投影本地化选项说明与提交状态，不公开服务端效果表或未结算的具体投票。
@@ -124,7 +138,7 @@ Garden 第一阶段实验：队长选择普通/困难/疯狂难度，双方分�
 | POST | <code>/api/story/coop/party/start</code> | 队长在两席就绪后按 <code>party_revision</code> 创建独立 v10 旅程；新旅程先停在队长设置阶段 |
 | POST | <code>/api/story/coop/party/abandon</code> | 任一成员确认后按 <code>party_revision</code> 放弃活动旅程并解散队伍 |
 | GET | <code>/api/story/coop/run/&lt;run_id&gt;</code> | 当前或历史成员读取按本人投影的公开旅程快照；个人奖励、遗物、宝箱与商店内容仅对本人展开，不返回 seed、RNG、抽牌顺序或内部回执表 |
-| POST | <code>/api/story/coop/run/&lt;run_id&gt;/action</code> | 提交 <code>run_revision</code>、<code>action_id</code>、<code>expected_sequence</code> 及战斗/奖励/路线/房间/商店意图；仅战斗动作携带 <code>combat_id/combat_round</code>，行动席位由登录账号决定 |
+| POST | <code>/api/story/coop/run/&lt;run_id&gt;/action</code> | 提交 <code>run_revision</code>、<code>action_id</code>、<code>expected_sequence</code> 及战斗/奖励/路线/房间/商店/阶段确认意图；仅战斗动作携带 <code>combat_id/combat_round</code>，行动席位由登录账号决定 |
 
 <code>action_id</code> 用于幂等与重放保护，<code>run_revision</code> 与
 <code>expected_sequence</code> 用于拒绝过期页面覆盖新状态。网络结果不确定时，客户端必须以完全相同的请求体和同一 <code>action_id</code> 重试。
@@ -142,6 +156,8 @@ Garden 第一阶段实验：队长选择普通/困难/疯狂难度，双方分�
 - <code>room_choose</code>：<code>room_id</code>、<code>choice</code>；仅休息升级可额外携带
   <code>card_instance_id</code>。宝箱、事件和离开商店均只提交标识与选择。
 - <code>shop_buy</code>：<code>room_id</code>、<code>offer_id</code>。
+- <code>stage_ready</code>：仅在 <code>stage_complete</code> 提交当前 <code>room_id</code>；
+  两名成员都确认后才进入下一阶段或完成最终通关。
 
 客户端不得提交 <code>actor_user_id</code>、<code>actor_seat</code>、price、gold、damage、
 healing、事件效果、下一状态、回执、事件或 seed；这些值均由服务器按当前阶段重新计算。

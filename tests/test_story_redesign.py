@@ -34,6 +34,7 @@ from story_engine import (
     _next_enemy_move,
     _player_damage,
     _player_raw_damage,
+    _resolve_player_death,
     _resolve_enemy_effect,
     _reward_choices,
     _start_combat,
@@ -254,6 +255,68 @@ def test_second_floor_uses_the_general_non_crossing_connection_rules():
             if edge['from'] == first_floor[0]['id']
         ]
         assert {edge['to'] for edge in outgoing} == {node['id'] for node in second_floor}
+
+
+def test_solo_story_unlocks_connected_nodes_and_waits_for_player_choice():
+    seed = 'manual-map-choice'
+    state = _started_state(seed)
+    first_node_id = state['current_node_id']
+    state['blessing_options'] = ['max_health']
+
+    state, events = apply_story_action(
+        state,
+        'choose_blessing',
+        {'blessing_id': 'max_health'},
+        seed,
+    )
+
+    first_choices = {
+        edge['to'] for edge in state['map']['edges']
+        if edge['from'] == first_node_id
+    }
+    available = {
+        node['id']
+        for floor in state['map']['floors']
+        for node in floor['nodes']
+        if node['status'] == 'available'
+    }
+    assert state['phase'] == 'map'
+    assert len(first_choices) > 1
+    assert available == first_choices
+    assert not any(event.get('type') == 'node_auto_selected' for event in events)
+
+    second_floor = state['map']['floors'][1]['nodes']
+    selected = max(
+        second_floor,
+        key=lambda node: sum(
+            edge['from'] == node['id'] for edge in state['map']['edges']
+        ),
+    )
+    next_choices = {
+        edge['to'] for edge in state['map']['edges']
+        if edge['from'] == selected['id']
+    }
+    assert len(next_choices) > 1
+    for node in second_floor:
+        node['status'] = 'available' if node is selected else 'locked'
+    state['current_node_id'] = selected['id']
+    state['current_floor'] = selected['floor']
+    state['phase'] = 'combat'
+    state['combat'] = {'equipment': []}
+    edges_before = copy.deepcopy(state['map']['edges'])
+    later_events = []
+
+    story_engine._complete_current_node(state, later_events, seed)
+
+    available_next = {
+        node['id']
+        for node in state['map']['floors'][2]['nodes']
+        if node['status'] == 'available'
+    }
+    assert state['phase'] == 'map'
+    assert available_next == next_choices
+    assert state['map']['edges'] == edges_before
+    assert not any(event.get('type') == 'node_auto_selected' for event in later_events)
 
 
 def test_enemy_builder_ignores_removed_legacy_run_curses():
@@ -737,7 +800,7 @@ def test_normal_rewards_are_primary_but_shops_can_offer_neutral_cards():
     )
 
 
-def test_relic_pools_exclude_owned_items_and_shop_excluded_rich():
+def test_relic_pools_allow_owned_stackable_items_and_shop_excludes_rich():
     state = _started_state('relic-pool-rules')
     assert 'rich' not in story_engine._natural_relic_pool(state, for_shop=True)
     natural_ids = [
@@ -746,11 +809,13 @@ def test_relic_pools_exclude_owned_items_and_shop_excluded_rich():
         if relic.get('rarity') != 'special'
     ]
     state['player']['relics'].extend(natural_ids)
-    assert story_engine._random_relic(state, 'relic-pool-rules') == 'consolation'
-    assert _make_shop(state, 'relic-pool-rules')['relics'][0]['relic_id'] == 'consolation'
+    assert story_engine._random_relic(state, 'relic-pool-rules') in natural_ids
+    assert _make_shop(state, 'relic-pool-rules')['relics'][0]['relic_id'] in natural_ids
 
     state['player']['relics'].extend(STORY_BOSS_RELIC_IDS)
-    assert _boss_relic_choices(state, 'relic-pool-rules') == ['consolation']
+    boss_choices = _boss_relic_choices(state, 'relic-pool-rules')
+    assert boss_choices
+    assert all(relic_id in STORY_BOSS_RELIC_IDS for relic_id in boss_choices)
 
 
 def test_elite_encounters_do_not_repeat_until_the_biome_pool_is_exhausted():
@@ -1084,7 +1149,7 @@ def test_wreckage_burst_death_summons_at_full_health_without_stun():
     assert crab['stun'] == 0
 
 
-def test_duplicate_relics_become_consolation_instead_of_stacking():
+def test_duplicate_relics_stack_instead_of_becoming_consolation():
     state = _started_state('stacking-relics')
     events = []
     health_before = state['player']['health']
@@ -1094,11 +1159,11 @@ def test_duplicate_relics_become_consolation_instead_of_stacking():
     _gain_relic(state, 'circulation', 'stacking-relics:3', events)
     _gain_relic(state, 'circulation', 'stacking-relics:4', events)
 
-    assert state['player']['relics'].count('ruthless') == 1
-    assert state['player']['relics'].count('circulation') == 1
-    assert state['player']['relics'].count('consolation') == 2
+    assert state['player']['relics'].count('ruthless') == 2
+    assert state['player']['relics'].count('circulation') == 2
+    assert state['player']['relics'].count('consolation') == 0
     assert state['player']['health'] == health_before
-    assert state['player']['max_health'] == max_health_before + 2
+    assert state['player']['max_health'] == max_health_before
     _start_combat(
         state,
         {'type': 'combat'},
@@ -1106,7 +1171,30 @@ def test_duplicate_relics_become_consolation_instead_of_stacking():
         [],
         encounter_override=[{'def_id': 'soldier_ant'}],
     )
-    assert state['combat']['power'] == 1
+    assert state['combat']['power'] == 2
+
+
+def test_two_world_tree_leaves_each_prevent_one_death():
+    state = _started_state('stacked-world-tree-leaves')
+    state['player']['relics'].extend(['world_tree_leaf', 'world_tree_leaf'])
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'stacked-world-tree-leaves',
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    events = []
+
+    state['player']['health'] = 0
+    assert _resolve_player_death(state, events) is False
+    state['player']['health'] = 0
+    assert _resolve_player_death(state, events) is False
+    state['player']['health'] = 0
+    assert _resolve_player_death(state, events) is True
+
+    revives = [event for event in events if event.get('type') == 'revive']
+    assert [(event['charge'], event['charges']) for event in revives] == [(1, 2), (2, 2)]
 
 
 def test_restart_floor_restores_the_immutable_node_entry_state_even_after_death():

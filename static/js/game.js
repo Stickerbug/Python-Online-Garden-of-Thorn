@@ -284,6 +284,11 @@ function fusionAdjustedCost(cost, fusionLevel) {
     return Math.floor(normalizedCost * (level + 1) / 2);
 }
 
+function fusionCostSurcharge(originalCost, fusionLevel) {
+    const normalizedCost = fusionAdjustedCost(originalCost, 1);
+    return fusionAdjustedCost(normalizedCost, fusionLevel) - normalizedCost;
+}
+
 function clampClientExtraHits(value) {
     const n = Math.floor(Number(value));
     if (!Number.isFinite(n)) return 0;
@@ -946,6 +951,7 @@ const I18N = {
         mod_default_name: 'Mod {0}',
         mod_selection_force_vanilla: 'Enabled the vanilla card mod because the selected mods must contain at least one Thorn, Bloom, Root, and Guard card.',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire', mode_random_deck: 'Random Deck',
+        mode_casual_1v1: 'Casual 1v1', mode_casual_2v2: 'Casual 2v2', mode_ranked_1v1: 'Ranked 1v1', mode_ranked_2v2: 'Ranked 2v2', mode_casual_urf: 'Infinite Fire', mode_casual_random_deck: 'Random Deck',
         ai_1v1_test: 'Battle Phelren V1', ai_1v1_test_title: 'Battle Phelren V1', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating.', ai_1v1_test_loading: 'Loading Phelren V1...',
         form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
         team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
@@ -1051,6 +1057,7 @@ I18N.zh = { ...I18N.en,
     gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
+    mode_casual_1v1: '娱乐 1v1', mode_casual_2v2: '娱乐 2v2', mode_ranked_1v1: '天梯 1v1', mode_ranked_2v2: '天梯 2v2', mode_casual_urf: '无限火力', mode_casual_random_deck: '随机卡组',
     ai_1v1_test: '对战 Phelren V1', ai_1v1_test_title: '对战 Phelren V1', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计花阶分。', ai_1v1_test_loading: '正在加载 Phelren V1…',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
@@ -1745,22 +1752,22 @@ Object.assign(I18N.ja, {
 
 Object.assign(I18N.zh, {
     gallery_related_cards: '相关卡牌',
-    tag_desc_fusion_layer: '特殊机制，不是普通标签。默认聚变层数为1；每超过默认1层，牌自身的所有花费增加50%（向下取整）。聚变层数与裂变层数共同决定攻击牌下一次打出时的结算：总伤害先按聚变层数放大，再按裂变层数拆成多次伤害，每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。打出聚变时，选择2张同名攻击牌，将聚变层数相加，裂变层数取最大，合并为一张牌。牌进入弃牌堆后会恢复为默认聚变1。',
+    tag_desc_fusion_layer: '特殊机制，不是普通标签。默认聚变层数为1；每层额外聚变使该牌的原始花费增加50%（向下取整），其他花费修改在此后结算。聚变层数与裂变层数共同决定攻击牌下一次打出时的结算：总伤害先按聚变层数放大，再按裂变层数拆成多次伤害，每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。打出聚变时，选择2张同名攻击牌，将聚变层数相加，裂变层数取最大，合并为一张牌。牌进入弃牌堆后会恢复为默认聚变1。',
     tag_desc_fission_layer: '特殊机制，不是普通标签。裂变层数表示攻击牌打出时会拆成多少次结算，并与聚变层数共同作用：每次伤害为 ceil(原始伤害×聚变层数/裂变层数)。如果卡牌每次命中都会改变后续伤害，例如三角形，每一次裂变命中都会按当时的层数重新计算。牌进入弃牌堆后会恢复为默认裂变1。'
 });
 Object.assign(I18N.en, {
     gallery_related_cards: 'Related cards',
-    tag_desc_fusion_layer: 'Special mechanic, not a normal tag. The default Fusion level is 1; each level above 1 increases all of the card\'s own costs by 50%, rounded down. Fusion and Fission work together when an attack is next played: total damage is first scaled by Fusion, then split into Fission hits. Each hit deals ceil(base damage × Fusion / Fission). Playing Fusion chooses 2 same-name attacks, adds their Fusion levels, keeps the highest Fission level, and merges them into one card. When the card enters the discard pile, Fusion resets to the default 1.',
+    tag_desc_fusion_layer: 'Special mechanic, not a normal tag. The default Fusion level is 1; each extra level increases the card\'s original costs by 50%, rounded down, then other cost modifiers apply. Fusion and Fission work together when an attack is next played: total damage is first scaled by Fusion, then split into Fission hits. Each hit deals ceil(base damage × Fusion / Fission). Playing Fusion chooses 2 same-name attacks, adds their Fusion levels, keeps the highest Fission level, and merges them into one card. When the card enters the discard pile, Fusion resets to the default 1.',
     tag_desc_fission_layer: 'Special mechanic, not a normal tag. Fission is the number of hits an attack is split into, and it works together with Fusion: each hit deals ceil(base damage × Fusion / Fission). If a card changes later damage after each hit, such as Triangle, every Fission hit recalculates from the current layer count. When the card enters the discard pile, Fission resets to the default 1.'
 });
 Object.assign(I18N.fr, {
     gallery_related_cards: 'Cartes liées',
-    tag_desc_fusion_layer: 'Mécanique spéciale, pas un tag normal. Le niveau de Fusion par défaut est 1 ; chaque niveau au-dessus de 1 augmente tous les coûts propres de la carte de 50 %, arrondis à l’entier inférieur. Fusion et Fission agissent ensemble quand une attaque est jouée : les dégâts totaux sont d’abord multipliés par Fusion, puis divisés en plusieurs touches de Fission. Chaque touche inflige ceil(dégâts de base × Fusion / Fission). Jouer Fusion choisit 2 attaques de même nom, additionne leurs niveaux de Fusion, garde le plus haut niveau de Fission et les fusionne en une carte. Quand la carte va dans la défausse, Fusion revient à 1.',
+    tag_desc_fusion_layer: 'Mécanique spéciale, pas un tag normal. Le niveau de Fusion par défaut est 1 ; chaque niveau supplémentaire augmente les coûts d’origine de la carte de 50 %, arrondis à l’inférieur, puis les autres modificateurs de coût s’appliquent. Fusion et Fission agissent ensemble quand une attaque est jouée : les dégâts totaux sont d’abord multipliés par Fusion, puis divisés en plusieurs touches de Fission. Chaque touche inflige ceil(dégâts de base × Fusion / Fission). Jouer Fusion choisit 2 attaques de même nom, additionne leurs niveaux de Fusion, garde le plus haut niveau de Fission et les fusionne en une carte. Quand la carte va dans la défausse, Fusion revient à 1.',
     tag_desc_fission_layer: 'Mécanique spéciale, pas un tag normal. Fission indique en combien de touches une attaque est divisée, et agit avec Fusion : chaque touche inflige ceil(dégâts de base × Fusion / Fission). Si une carte modifie les dégâts suivants à chaque touche, comme Triangle, chaque touche de Fission recalcule avec les couches actuelles. Quand la carte va dans la défausse, Fission revient à 1.'
 });
 Object.assign(I18N.ja, {
     gallery_related_cards: '関連カード',
-    tag_desc_fusion_layer: '通常のタグではなく特殊な仕組みです。融合の既定値は1です。1を超える層ごとに、そのカード自身のすべてのコストが50%増加し、端数は切り捨てます。融合と分裂は攻撃カードを次に打ち出す時に共同で作用します。総ダメージはまず融合層で拡大され、その後分裂層の回数に分けられます。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。融合を使うと同名攻撃カード2枚を選び、融合層を合計し、分裂層は最大値を取り、1枚のカードにします。カードが捨て札に入ると融合は既定値1に戻ります。',
+    tag_desc_fusion_layer: '通常のタグではなく特殊な仕組みです。融合の既定値は1です。追加の1層ごとにカードの元のコストが50%増加し、端数を切り捨てた後、他のコスト修正を適用します。融合と分裂は攻撃カードを次に打ち出す時に共同で作用します。総ダメージはまず融合層で拡大され、その後分裂層の回数に分けられます。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。融合を使うと同名攻撃カード2枚を選び、融合層を合計し、分裂層は最大値を取り、1枚のカードにします。カードが捨て札に入ると融合は既定値1に戻ります。',
     tag_desc_fission_layer: '通常のタグではなく特殊な仕組みです。分裂層は攻撃カードが何回に分かれて解決されるかを表し、融合層と共同で作用します。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。三角形のようにヒットごとに以後のダメージが変わるカードは、各分裂ヒットでその時点の層数を使って再計算します。カードが捨て札に入ると分裂は既定値1に戻ります。'
 });
 
@@ -2560,8 +2567,14 @@ function tf(key, ...values) { return t(key).replace(/\{(\d+)\}/g, (_, i) => valu
 const UI = new Proxy({}, { get: (_, key) => t(key) });
 
 function getModeLabel(mode) {
-    const key = `mode_${String(mode || '1v1')}`;
+    const key = `mode_${String(mode || 'casual_1v1')}`;
     return UI[key] || {
+        casual_1v1: currentLang === 'zh' ? '娱乐 1v1' : 'Casual 1v1',
+        casual_2v2: currentLang === 'zh' ? '娱乐 2v2' : 'Casual 2v2',
+        ranked_1v1: currentLang === 'zh' ? '天梯 1v1' : 'Ranked 1v1',
+        ranked_2v2: currentLang === 'zh' ? '天梯 2v2' : 'Ranked 2v2',
+        casual_urf: currentLang === 'zh' ? '无限火力' : 'Infinite Fire',
+        casual_random_deck: currentLang === 'zh' ? '随机卡组' : 'Random Deck',
         '1v1': '1v1',
         '2v2': '2v2',
         urf: currentLang === 'zh' ? '无限火力' : 'Infinite Fire',
@@ -2575,6 +2588,34 @@ function normalizeGameModeKey(mode) {
     const raw = String(mode || '1v1');
     if (raw === 'randomDeck' || raw === 'random-deck' || raw === 'random') return 'random_deck';
     return raw;
+}
+
+function normalizeMatchModeKey(mode) {
+    const raw = normalizeGameModeKey(mode || 'casual_1v1');
+    if (raw === '1v1' || raw === '2v2' || raw === 'urf' || raw === 'random_deck') return `casual_${raw}`;
+    return ['casual_1v1', 'casual_2v2', 'ranked_1v1', 'ranked_2v2', 'casual_urf', 'casual_random_deck'].includes(raw)
+        ? raw
+        : 'casual_1v1';
+}
+
+function engineModeForMatchMode(mode) {
+    return normalizeMatchModeKey(mode).replace(/^(casual|ranked)_/, '');
+}
+
+function isRankedMatchMode(mode) {
+    return normalizeMatchModeKey(mode).startsWith('ranked_');
+}
+
+function getCurrentPvpMatchMode() {
+    return normalizeMatchModeKey(activePvpMatchMode || localStorage.getItem('preferred_mode') || 'casual_1v1');
+}
+
+function entertainmentModsAvailableInSettings() {
+    return !isRankedMatchMode(getCurrentPvpMatchMode());
+}
+
+function isTwoVsTwoMatchMode(mode) {
+    return engineModeForMatchMode(mode) === '2v2';
 }
 
 function renderLobbyModeTabLabel(tab, mode, count = null) {
@@ -2593,8 +2634,8 @@ function renderLobbyModeTabLabel(tab, mode, count = null) {
 }
 
 function shouldShowLobbyGameModeBadge(mode) {
-    const key = normalizeGameModeKey(mode);
-    return key !== '1v1' && key !== '2v2';
+    const key = normalizeMatchModeKey(mode);
+    return key !== 'casual_1v1' && key !== 'casual_2v2';
 }
 
 function isAdminPlayer(player) {
@@ -2846,6 +2887,8 @@ function setPlayerNameContent(el, player, options = {}) {
     if (!el) return;
     const { adminPrefix = true } = options;
     el.textContent = '';
+    const reputationHtml = playerReputationBadgeHtml(player);
+    if (reputationHtml) el.insertAdjacentHTML('beforeend', reputationHtml);
     const titles = getEquippedTitles(player);
     if (adminPrefix && titles.length) {
         titles.forEach(title => appendStyledTitle(el, title));
@@ -2876,7 +2919,7 @@ function setPlayerNameContent(el, player, options = {}) {
 function playerNameHtml(player, options = {}) {
     const { adminPrefix = true } = options;
     const titles = getEquippedTitles(player);
-    const parts = [];
+    const parts = [playerReputationBadgeHtml(player)];
     if (adminPrefix && titles.length) {
         titles.forEach(title => parts.push(styledTitleHtml(title)));
     } else if (adminPrefix) {
@@ -2896,6 +2939,16 @@ function playerNameHtml(player, options = {}) {
         + `${escapeHtml(getPlayerBaseName(player))}</span>`,
     );
     return parts.join('');
+}
+
+function playerReputationBadgeHtml(player) {
+    const profile = player?.reputation_profile;
+    const newcomer = profile?.newcomer?.is_newcomer === true
+        ? `<span class="reputation-badge newcomer-badge">${currentLang === 'zh' ? '新人' : 'Newcomer'}</span>` : '';
+    const level = String(profile?.level || '');
+    if (!['yellow', 'orange', 'red'].includes(level)) return newcomer;
+    const label = currentLang === 'zh' ? '低信誉' : 'Low reputation';
+    return newcomer + `<span class="reputation-badge reputation-${level}">${escapeHtml(label)}</span>`;
 }
 
 function appendPlayerNameNode(parent, player, options = {}) {
@@ -5093,6 +5146,7 @@ let activeCardDataCacheKey = '';
 let activeOpeningEventsCacheKey = '';
 const publicDataRequests = new Map();
 let gameState = {};
+let activePvpMatchMode = normalizeMatchModeKey(localStorage.getItem('preferred_mode') || 'casual_1v1');
 let lastGameStateResyncRequestAt = 0;
 let gameStateResyncTimer = null;
 let gameStateResyncNeeded = false;
@@ -10592,7 +10646,13 @@ function getEffectiveDisabledModsForData() {
     if (isSpectating && gameState && Array.isArray(gameState.disabled_mods)) {
         return gameState.disabled_mods.map(item => String(item || '')).filter(Boolean);
     }
-    return shouldUseAllOfficialModsForViewing() ? [] : getDisabledMods();
+    const disabled = shouldUseAllOfficialModsForViewing() ? [] : getDisabledMods();
+    if (!isRankedMatchMode(getCurrentPvpMatchMode())) return disabled;
+    const entertainment = (Array.isArray(settingsMods) ? settingsMods : [])
+        .filter(mod => String(mod && mod.category || '').toLowerCase() === 'entertainment')
+        .map(mod => String(mod && mod.filename || ''))
+        .filter(Boolean);
+    return Array.from(new Set([...disabled, ...entertainment]));
 }
 
 function getEffectiveCommunityModSelectionForData() {
@@ -10614,7 +10674,7 @@ function getDataCacheKey(kind) {
     const disabled = getEffectiveDisabledModsForData().slice().sort().join(',') || 'none';
     const community = getEffectiveCommunityModSelectionForData();
     const communityKey = community.mod_source === 'community' ? community.community_mod_hash : 'official';
-    return `gtn_${kind}_cache_${DATA_CACHE_VERSION}_${disabled}_${communityKey}`;
+    return `gtn_${kind}_cache_${DATA_CACHE_VERSION}_${getCurrentPvpMatchMode()}_${disabled}_${communityKey}`;
 }
 
 function markActiveDataCacheKey(kind) {
@@ -11086,9 +11146,10 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
     const fusionLevel = clampClientCardLayer(cardDict.fusion_level || cardDict.fusion_multiplier || cardDef.fusion_level || 1);
-    const effectiveBaseE = fusionAdjustedCost(
-        Math.max(0, baseE + tempHeavyValue - mimicDiscount - swiftValue - tempSwiftValue),
-        fusionLevel,
+    const fusionExtraE = fusionCostSurcharge(cardDef.cost_e, fusionLevel);
+    const effectiveBaseE = Math.max(
+        0,
+        baseE + fusionExtraE + tempHeavyValue - mimicDiscount - swiftValue - tempSwiftValue,
     );
     let extraE = flags.has('symbiosis') ? 0 : dup;
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Bamboo', 'jungle:bamboo'])) {
@@ -11103,9 +11164,10 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
         extraE += Math.floor(frost / 10);
     }
     const totalE = Math.max(0, effectiveBaseE + extraE);
-    const totalM = fusionAdjustedCost(
-        Math.max(0, baseM + Math.max(0, tempMagicHeavyValue) - Math.max(0, magicSwiftValue)),
-        fusionLevel,
+    const fusionExtraM = fusionCostSurcharge(cardDef.cost_m, fusionLevel);
+    const totalM = Math.max(
+        0,
+        baseM + fusionExtraM + Math.max(0, tempMagicHeavyValue) - Math.max(0, magicSwiftValue),
     );
     return { totalE, totalM, flags };
 }
@@ -15489,10 +15551,12 @@ function startLatencyMonitor() {
 
 function emitSocketLogin() {
     if (!socket || !socket.connected) return false;
-    const preferredMode = localStorage.getItem('preferred_mode') || '1v1';
+    const preferredMode = normalizeMatchModeKey(localStorage.getItem('preferred_mode') || 'casual_1v1');
+    localStorage.setItem('preferred_mode', preferredMode);
     socket.emit('login', {
         nickname: loginCredential || nickname,
-        mode: preferredMode,
+        mode: engineModeForMatchMode(preferredMode),
+        match_mode: preferredMode,
         account_login: !!currentAccount,
         beta_mode: GTN_BETA_MODE,
         skin: getCurrentSkinConfig(),
@@ -15596,6 +15660,16 @@ function connectSocket(serverUrl) {
             flashStatus(UI.server_no_response, 3000, 'error');
         }
     });
+    bindSocketEvent('reputation_updated', (data = {}) => {
+        if (!currentAccount || !data.profile) return;
+        currentAccount.reputation_profile = data.profile;
+        currentAccount.reputation = data.profile.value;
+        cacheAccount(currentAccount);
+        renderAccountInfoPanel(currentAccount);
+        if (accountIntegritySession && accountIntegrityIsCurrent(accountIntegritySession) && !accountIntegritySession.busy) {
+            loadAccountIntegrity(accountIntegritySession);
+        }
+    });
     bindSocketEvent('account_session_replaced', (data = {}) => {
         if (isReplacementNoticeForCurrentSocket(data)) {
             debugLog('[client] ignored stale self account replacement notice');
@@ -15686,6 +15760,10 @@ function connectSocket(serverUrl) {
         const nickInput = $('input-nickname');
         if (nickInput) nickInput.value = nickname;
         localStorage.setItem('gtn_nickname', nickname);
+        if (data.match_mode) {
+            activePvpMatchMode = normalizeMatchModeKey(data.match_mode);
+            localStorage.setItem('preferred_mode', activePvpMatchMode);
+        }
         if (pendingTutorialStart) {
             pendingTutorialStart = false;
             emitTutorialStart();
@@ -16406,8 +16484,11 @@ function connectSocket(serverUrl) {
             return;
         }
         if (data && data.ok) {
-            if (Array.isArray(data.disabled_mods)) {
-                writeDisabledModsPreference(data.disabled_mods);
+            const preferenceDisabledMods = Array.isArray(data.preferred_disabled_mods)
+                ? data.preferred_disabled_mods
+                : data.disabled_mods;
+            if (Array.isArray(preferenceDisabledMods)) {
+                writeDisabledModsPreference(preferenceDisabledMods);
                 renderOfficialModList();
             }
             const refreshed = await refreshCardsAfterModSettingsConfirmed();
@@ -16989,44 +17070,21 @@ function thornDewCheckinHtml() {
 }
 
 function thornDewDailyTasksHtml() {
-    const center = thornDewCenter || {};
-    const rewards = center.match_rewards && typeof center.match_rewards === 'object' ? center.match_rewards : {};
-    const winBonus = Number(center.win_bonus || 0) || 0;
-    const drawBonus = Number(center.draw_bonus || 0) || 0;
-    const rows = [
-        ['1v1', rewards['1v1'] ?? 30],
-        ['2v2', rewards['2v2'] ?? 40],
-        [UI.mode_random_deck || '随机卡组', rewards.random_deck ?? 25],
-        [UI.mode_urf || '无限火力', rewards.urf ?? 25],
-    ];
+    const newcomer = thornDewCenter?.newcomer || currentAccount?.reputation_profile?.newcomer || {};
     const lines = [
-        [
-            lt({ zh: '有效对局', en: 'Valid Matches', fr: 'Parties valides', ja: '有効な対戦' }),
-            rows.map(([label, value]) => `${label} +${value}`).join(currentLang === 'zh' ? '　' : ' / '),
-        ],
-        [
-            lt({ zh: '胜场奖励', en: 'Result Bonus', fr: 'Bonus de résultat', ja: '結果ボーナス' }),
-            lt({ zh: `胜利 +${winBonus}　平局 +${drawBonus}`, en: `Win +${winBonus} / Draw +${drawBonus}`, fr: `Victoire +${winBonus} / Nul +${drawBonus}`, ja: `勝利 +${winBonus} / 引分 +${drawBonus}` }),
-        ],
-        [
-            lt({ zh: '每日节奏', en: 'Daily Pace', fr: 'Rythme quotidien', ja: 'デイリー進行' }),
-            lt({ zh: '每天前10局完整获得，之后奖励逐步降低', en: 'First 10 matches each day give full rewards; later rewards scale down', fr: 'Les 10 premières parties quotidiennes donnent la récompense complète, puis elle diminue progressivement', ja: '毎日最初の10戦は満額、その後は報酬が徐々に減少します' }),
-        ],
-        [
-            lt({ zh: '即将开放', en: 'Coming Soon', fr: 'Bientôt disponible', ja: '近日公開' }),
-            lt({ zh: '更多每日任务和限时加成会继续加入', en: 'More daily tasks and limited boosts will arrive later', fr: 'D’autres missions quotidiennes et bonus temporaires seront ajoutés', ja: 'デイリー任務と期間限定ボーナスを今後追加します' }),
-        ],
+        [lt({zh:'有效对局奖励',en:'Valid match rewards'}),
+         lt({zh:'娱乐与天梯1v1/2v2：胜利100，失败或平局60荆露；开局60秒内投降双方无奖励。',
+             en:'Casual/ranked 1v1 and 2v2: win 100, loss/draw 60 Dew. Surrender within 60 seconds gives neither side rewards.'})],
+        [lt({zh:'连胜',en:'Win streak'}),
+         lt({zh:'每次连续获胜额外+10，最多+100；失败或平局重置。',en:'Each consecutive win adds 10, capped at +100. A loss or draw resets the streak.'})],
+        [lt({zh:'新人权益',en:'Newcomer benefits'}),
+         lt({zh:`前10场有效PvP最多2倍，不与头衔重复叠乘；20场后移除新人头衔。前三场排位掉分保护剩余 ${Number(newcomer.protected_ranked_remaining || 0)} 场。`,
+             en:`First 10 valid PvP games grant up to 2x, never stacked with the title. The title ends at 20 games. Protected ranked games remaining: ${Number(newcomer.protected_ranked_remaining || 0)}.`})],
+        [lt({zh:'信誉与防刷',en:'Reputation and repeat limits'}),
+         lt({zh:'信誉低于60荆露减半，低于40不发放。每日超10场、重复对手会衰减；确认关联账号共享额度，互相对局不刷奖励。',
+             en:'Below 60 reputation: half Dew; below 40: none. Daily/repeated-opponent decay and confirmed linked-account limits apply.'})],
     ];
-    return `
-        <div class="daily-task-grid">
-            ${lines.map(([title, desc]) => `
-                <div class="daily-task-card">
-                    <div class="daily-task-title">${escapeHtml(title)}</div>
-                    <div class="daily-task-desc">${escapeHtml(desc)}</div>
-                </div>
-            `).join('')}
-        </div>
-    `;
+    return `<div class="daily-task-grid">${lines.map(([title,desc]) => `<div class="daily-task-card"><div class="daily-task-title">${escapeHtml(title)}</div><div class="daily-task-desc">${escapeHtml(desc)}</div></div>`).join('')}</div>`;
 }
 
 async function loadThornDewCenter(force = false) {
@@ -17846,6 +17904,182 @@ function toggleTitleShopPopover(force) {
     }
 }
 
+let accountIntegritySession = null;
+
+function clearAccountIntegrity() {
+    accountIntegritySession = null;
+    const dialog = $('account-integrity-dialog');
+    if (!dialog) return;
+    if (dialog.open) dialog.close();
+    dialog.querySelectorAll('form').forEach(form => form.reset());
+    ['integrity-profile','integrity-status','integrity-reports','integrity-ledger','integrity-staff-cases','integrity-report-match'].forEach(id => { $(id).textContent = ''; });
+    $('integrity-staff-section').hidden = true;
+    $('integrity-appeal-section').hidden = true;
+}
+
+function accountIntegrityIsCurrent(session) {
+    return !!session && accountIntegritySession === session && $('account-integrity-dialog')?.open
+        && Number(currentAccount?.id) === session.userId;
+}
+
+function renderAccountIntegrity(session) {
+    if (!accountIntegrityIsCurrent(session)) return;
+    const data = session.data || {};
+    const profile = data.profile;
+    $('integrity-status').textContent = session.notice || (session.busy ? '正在处理…' : '');
+    $('integrity-profile').innerHTML = profile ? `<strong>信誉 ${Number(profile.value)} / 100</strong> ${playerReputationBadgeHtml({reputation_profile: profile})}`
+        + (profile.linked ? `<p>已自动关联 · 组内最高总花阶分 ${escapeHtml(profile.linked_gr_band?.label || '')}</p>` : '<p>未确认账号关联</p>') : '';
+    if (profile?.newcomer) {
+        const newbie = profile.newcomer;
+        $('integrity-profile').insertAdjacentHTML('beforeend', `<p>新人头衔剩余 ${Number(newbie.title_remaining)} 场 · 对局奖励倍率 ${Number(newbie.reward_multiplier)} · 排位掉分保护剩余 ${Number(newbie.protected_ranked_remaining)} 场</p>`);
+    }
+    const matches = data.reportable_matches || [];
+    $('integrity-report-match').innerHTML = matches.length ? matches.map(item =>
+        `<option value="${Number(item.match_id)}" data-target="${Number(item.target_user_id)}">#${Number(item.match_id)} · ${escapeHtml(item.target_name)}</option>`).join('') : '<option value="">没有可举报的近期2v2对局</option>';
+    const statuses = {pending_confirmation:'等待对手确认',confirmed:'已成立',withdrawn:'已撤回',expired:'已过期',revoked:'已撤销'};
+    $('integrity-reports').innerHTML = (data.reports || []).map(report => `<article class="integrity-entry">
+        <strong>#${Number(report.id)} · ${escapeHtml(report.reporter_name)} → ${escapeHtml(report.target_name)}</strong>
+        <p>${escapeHtml(report.reason_text)}</p><span>${escapeHtml(statuses[report.status] || report.status)}</span>
+        ${report.can_confirm ? `<button type="button" class="btn btn-danger" data-integrity-report="${Number(report.id)}" data-action="confirm">作为对手确认</button>` : ''}
+        ${report.can_withdraw ? `<button type="button" class="btn btn-secondary" data-integrity-report="${Number(report.id)}" data-action="withdraw">撤回</button>` : ''}</article>`).join('') || '<p>暂无举报记录。</p>';
+    $('integrity-appeal-section').hidden = !profile?.linked;
+    const reasonNames = {initialization:'初始信誉',daily_recovery:'每日恢复',early_surrender:'开局投降',consecutive_timeouts:'连续两次超时结束回合',team_report:'队友举报成立',team_report_revoked:'举报撤销返还',account_link_group:'关联组建立/合并',account_unlinked:'解除关联起始信誉'};
+    $('integrity-ledger').innerHTML = (data.ledger || []).map(item => `<div class="integrity-ledger-row"><time>${escapeHtml(item.created_at)}</time><span>${escapeHtml(reasonNames[item.reason_code] || item.reason_code)}</span><strong>${Number(item.delta)>0?'+':''}${Number(item.delta)} → ${Number(item.value_after)}</strong></div>`).join('');
+    $('integrity-staff-section').hidden = !data.is_staff;
+    if (session.staff) {
+        const reasonLabels = {same_server_device_token:'同一服务端设备令牌',same_device_three_days:'设备跨3日重复',shared_network_capped:'共享网络已降权',repeated_network_or_registration:'多日同网/短期注册',repeated_short_surrender_three_days:'跨3日反复短局投降',new_account_similar_50_gr_band:'新账号50分档相似',staff_evidence:'人工明确证据',manual_separation_or_pending_appeal:'人工解除/申诉保护'};
+        const cases = (session.staff.cases || []).map(item => `<article class="integrity-entry"><strong>${escapeHtml(item.low_name)} #${Number(item.user_id_low)} ↔ ${escapeHtml(item.high_name)} #${Number(item.user_id_high)}</strong><p>${escapeHtml(item.state)} · ${Number(item.risk_score)}分</p><p>${(item.reasons || []).map(reason => `${escapeHtml(reasonLabels[reason.code] || reason.code)} +${Number(reason.points)}`).join('；')}</p></article>`).join('');
+        const appeals = (session.staff.appeals || []).map(item => `<p>申诉 #${Number(item.id)} · 用户 #${Number(item.appellant_user_id)}：${escapeHtml(item.reason)}</p>`).join('');
+        const reports = (session.staff.reports || []).filter(item => item.status==='confirmed').map(item => `<p>已成立举报 #${Number(item.id)} · ${escapeHtml(item.target_name)}：${escapeHtml(item.reason_text)}</p>`).join('');
+        $('integrity-staff-cases').innerHTML = cases + appeals + reports || '<p>暂无待审记录。</p>';
+    } else $('integrity-staff-cases').textContent = '';
+    $('account-integrity-dialog').querySelectorAll('button,input,textarea,select').forEach(el => {
+        if (el.id !== 'integrity-close') el.disabled = !!session.busy;
+    });
+    if (!session.busy) {
+        $('integrity-report-form').querySelector('button').disabled = !matches.length;
+        $('integrity-appeal-form').querySelector('button').disabled = profile?.appeal_status === 'pending';
+    }
+}
+
+async function loadAccountIntegrity(session, staffOnly = false) {
+    if (!accountIntegrityIsCurrent(session) || session.busy) return;
+    session.busy = true;
+    session.notice = '';
+    renderAccountIntegrity(session);
+    try {
+        const data = await authRequest(staffOnly ? '/api/account-integrity/staff' : '/api/account-integrity', undefined, {timeoutMs:10000});
+        if (!accountIntegrityIsCurrent(session)) return;
+        if (staffOnly) session.staff = data;
+        else session.data = data;
+    } catch (error) {
+        if (accountIntegrityIsCurrent(session)) session.notice = error.message || '加载失败';
+    } finally {
+        if (accountIntegrityIsCurrent(session)) {
+            session.busy = false;
+            renderAccountIntegrity(session);
+        }
+    }
+}
+
+async function submitAccountIntegrity(path, body, confirmation) {
+    const session = accountIntegritySession;
+    if (!accountIntegrityIsCurrent(session) || session.busy) return;
+    const frozenBody = JSON.parse(JSON.stringify(body));
+    // Native confirmation remains above this native dialog's top layer.
+    if (confirmation && !window.confirm(confirmation)) return;
+    if (!accountIntegrityIsCurrent(session)) return;
+    session.busy = true;
+    session.notice = '';
+    renderAccountIntegrity(session);
+    try {
+        await authRequest(path, frozenBody, {timeoutMs:10000});
+        const data = await authRequest('/api/account-integrity', undefined, {timeoutMs:10000});
+        if (!accountIntegrityIsCurrent(session)) return;
+        session.data = data;
+        session.notice = '操作已完成。';
+        if (currentAccount) {
+            currentAccount.reputation_profile = data.profile;
+            currentAccount.reputation = data.profile.value;
+            cacheAccount(currentAccount);
+            renderAccountInfoPanel(currentAccount);
+        }
+        if (session.staff && data.is_staff) {
+            const staff = await authRequest('/api/account-integrity/staff', undefined, {timeoutMs:10000});
+            if (accountIntegrityIsCurrent(session)) session.staff = staff;
+        }
+    } catch (error) {
+        if (accountIntegrityIsCurrent(session)) session.notice = error.message || '操作未完成，请刷新确认结果后再试。';
+    } finally {
+        if (accountIntegrityIsCurrent(session)) {
+            session.busy = false;
+            renderAccountIntegrity(session);
+        }
+    }
+}
+
+function openAccountIntegrity() {
+    if (!currentAccount) return;
+    const dialog = $('account-integrity-dialog');
+    if (!dialog || dialog.open) return;
+    clearAccountIntegrity();
+    accountIntegritySession = {userId:Number(currentAccount.id),busy:false,data:null,staff:null,notice:''};
+    dialog.showModal();
+    loadAccountIntegrity(accountIntegritySession);
+}
+
+function setupAccountIntegrityUi() {
+    const dialog = $('account-integrity-dialog');
+    if (!dialog || dialog.dataset.integrityBound) return;
+    dialog.dataset.integrityBound = '1';
+    $('btn-account-integrity')?.addEventListener('click', openAccountIntegrity);
+    $('integrity-close').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => { if (!dialog.open) clearAccountIntegrity(); });
+    $('integrity-refresh').addEventListener('click', () => loadAccountIntegrity(accountIntegritySession));
+    $('integrity-staff-load').addEventListener('click', () => loadAccountIntegrity(accountIntegritySession, true));
+    $('integrity-report-form').addEventListener('submit', event => {
+        event.preventDefault();
+        const option = $('integrity-report-match').selectedOptions[0];
+        if (!option?.value) return;
+        submitAccountIntegrity('/api/account-integrity/team-reports', {match_id:Number(option.value),target_user_id:Number(option.dataset.target),reason:$('integrity-report-reason').value.trim()}, '举报只应针对真实违规。确认向对手发起核实？');
+    });
+    $('integrity-reports').addEventListener('click', event => {
+        const button = event.target.closest('[data-integrity-report]');
+        if (!button || button.disabled) return;
+        const action = button.dataset.action;
+        if (!['confirm','withdraw'].includes(action)) return;
+        submitAccountIntegrity(`/api/account-integrity/team-reports/${Number(button.dataset.integrityReport)}/${action}`, {}, action==='confirm' ? '确认你作为对手观察到了该违规？成立后会扣除被举报者信誉。' : '确认撤回此举报？');
+    });
+    $('integrity-appeal-form').addEventListener('submit', event => {
+        event.preventDefault();
+        submitAccountIntegrity('/api/account-integrity/appeal', {reason:$('integrity-appeal-reason').value.trim()});
+    });
+    $('integrity-staff-form').addEventListener('submit', event => {
+        event.preventDefault();
+        const action = $('integrity-staff-action').value;
+        const target = $('integrity-staff-target').value.trim();
+        const reason = $('integrity-staff-reason').value.trim();
+        const reputationText = $('integrity-staff-reputation').value;
+        const starting = reputationText === '' ? null : Number(reputationText);
+        if (['unlink','accept'].includes(action) && (!Number.isInteger(starting) || starting<0 || starting>100)) {
+            accountIntegritySession.notice = '请明确填写解除后的起始信誉（0至100）。';
+            renderAccountIntegrity(accountIntegritySession);
+            return;
+        }
+        let path = `/api/account-integrity/staff/${action}`;
+        const body = {reason};
+        if (action==='merge') body.user_ids = target.split(/[,，\s]+/).filter(Boolean).map(Number);
+        else if (action==='unlink') Object.assign(body,{user_id:Number(target),starting_reputation:starting});
+        else if (action==='accept' || action==='reject') {
+            path = '/api/account-integrity/staff/resolve-appeal';
+            Object.assign(body,{appeal_id:Number(target),accepted:action==='accept'});
+            if (action==='accept') body.starting_reputation = starting;
+        } else if (action==='revoke') path = `/api/account-integrity/team-reports/${Number(target)}/revoke`;
+        else return;
+        submitAccountIntegrity(path,body,`确认执行 ${action}（目标 ${target}）？此操作会写入管理审计。`);
+    });
+}
+
 function renderAccountInfoPanel(user) {
     const grid = $('account-info-grid');
     if (!grid) return;
@@ -17862,6 +18096,8 @@ function renderAccountInfoPanel(user) {
     const thornDewPaid = Math.max(0, Number(user.thorn_dew_paid || 0) || 0);
     const thornDewTotal = Math.max(0, Number(user.thorn_dew_total ?? (thornDewFree + thornDewPaid)) || 0);
     const items = [
+        [currentLang === 'zh' ? '信誉' : 'Reputation', user.reputation_profile?.value ?? user.reputation ?? 85],
+        ...(user.reputation_profile?.linked_gr_band ? [[currentLang === 'zh' ? '关联组最高总花阶分' : 'Linked highest GR', user.reputation_profile.linked_gr_band.label]] : []),
         [currentLang === 'zh' ? '赛季花阶分' : 'Season GR', formatGrValue(user.season_gr)],
         [currentLang === 'zh' ? '总花阶分' : 'Total GR', formatGrValue(user.total_gr)],
         [currentLang === 'zh' ? '历史最高' : 'Best GR', formatGrValue(user.highest_gr)],
@@ -19179,6 +19415,7 @@ function loadCachedAccount() {
 }
 
 function cacheAccount(user) {
+    if (accountIntegritySession && Number(user?.id) !== accountIntegritySession.userId) clearAccountIntegrity();
     try {
         if (user && user.username) {
             const safeUser = {
@@ -25212,22 +25449,29 @@ function renderLobby(data) {
     const teamList = data.teams || [];
     const myTeam = data.your_team || null;
     const myTeamLeader = data.your_team_leader || null;
-    const serverMode = data.your_mode || '1v1';
+    const serverMode = normalizeMatchModeKey(data.your_match_mode || data.your_mode || 'casual_1v1');
+    const previousPvpMatchMode = activePvpMatchMode;
+    activePvpMatchMode = serverMode;
+    localStorage.setItem('preferred_mode', serverMode);
+    if (previousPvpMatchMode !== serverMode) {
+        renderModSourceControls();
+        void refreshCardsAfterModSettingsConfirmed();
+    }
     debugLog('[client] renderLobby: players=', lobbyPlayers.length, 'mySid=', mySid, 'myTeam=', myTeam, 'mode=', serverMode);
     const modeCounts = data.mode_counts && typeof data.mode_counts === 'object'
         ? data.mode_counts
         : lobbyPlayers.reduce((acc, player) => {
             if (player.status === 'spectating') return acc;
-            const mode = player.mode || '1v1';
-            if (mode === '1v1' || mode === '2v2' || mode === 'urf' || mode === 'random_deck') {
+            const mode = normalizeMatchModeKey(player.match_mode || player.mode || 'casual_1v1');
+            if (['casual_1v1', 'casual_2v2', 'ranked_1v1', 'ranked_2v2', 'casual_urf', 'casual_random_deck'].includes(mode)) {
                 acc[mode] = (acc[mode] || 0) + 1;
             }
             return acc;
-        }, { '1v1': 0, '2v2': 0, urf: 0, random_deck: 0 });
+        }, { casual_1v1: 0, casual_2v2: 0, ranked_1v1: 0, ranked_2v2: 0, casual_urf: 0, casual_random_deck: 0 });
 
     const modeTabs = $('lobby-mode-tabs');
     if (modeTabs) {
-        const cachedMode = localStorage.getItem('preferred_mode') || '1v1';
+        const cachedMode = normalizeMatchModeKey(localStorage.getItem('preferred_mode') || 'casual_1v1');
         const currentMode = serverMode || cachedMode;
         modeTabs.querySelectorAll('.mode-tab').forEach(tab => {
             const tabMode = tab.getAttribute('data-mode');
@@ -25240,21 +25484,21 @@ function renderLobby(data) {
             tab.onclick = async () => {
                 const newMode = tab.getAttribute('data-mode');
                 if (newMode === currentMode) return;
-                if (myTeam && newMode !== '2v2') {
+                if (myTeam && !isTwoVsTwoMatchMode(newMode)) {
                     const confirmed = await gameConfirm(UI.notice || '', UI.mode_switch_confirm);
                     if (!confirmed) return;
                 }
                 localStorage.setItem('preferred_mode', newMode);
-                updateAi1v1TestEntry(newMode);
-                socket.emit('set_mode', { mode: newMode });
+                updateAi1v1TestEntry(engineModeForMatchMode(newMode));
+                socket.emit('set_mode', { mode: engineModeForMatchMode(newMode), match_mode: newMode });
             };
         });
     }
 
     const currentMode = (modeTabs && modeTabs.querySelector('.mode-tab.active'))
         ? modeTabs.querySelector('.mode-tab.active').getAttribute('data-mode')
-        : (localStorage.getItem('preferred_mode') || '1v1');
-    updateAi1v1TestEntry(currentMode);
+        : normalizeMatchModeKey(localStorage.getItem('preferred_mode') || 'casual_1v1');
+    updateAi1v1TestEntry(engineModeForMatchMode(currentMode));
     void refreshAi1v1TestAvailability();
 
     const playerBySid = new Map(lobbyPlayers.map(p => [p.sid, p]));
@@ -25273,8 +25517,8 @@ function renderLobby(data) {
     const teamHasAdmin = (team) => teamSpecialRank(team) < 99;
     const filteredPlayers = lobbyPlayers.filter(p => {
         const pMode = p.status === 'spectating'
-            ? (p.spectating_mode || p.mode || '1v1')
-            : (p.mode || '1v1');
+            ? normalizeMatchModeKey(p.spectating_match_mode || p.spectating_mode || p.match_mode || p.mode || 'casual_1v1')
+            : normalizeMatchModeKey(p.match_mode || p.mode || 'casual_1v1');
         return pMode === currentMode;
     }).sort(adminSort);
 
@@ -25284,7 +25528,7 @@ function renderLobby(data) {
     const teamSection = $('lobby-team-section');
     if (teamSection) {
         teamSection.innerHTML = '';
-        if (myTeam && currentMode === '2v2') {
+        if (myTeam && isTwoVsTwoMatchMode(currentMode)) {
             const teamMembers = myTeam.map(sid => playerBySid.get(sid) || { nickname: '?' });
             const teamInfoDiv = document.createElement('div');
             teamInfoDiv.className = 'team-info';
@@ -25319,7 +25563,7 @@ function renderLobby(data) {
             badge.textContent = UI.spectating_status || '观战中';
             row.appendChild(badge);
         }
-        if (p.is_registered_user && p.season_gr != null) {
+        if (isRankedMatchMode(currentMode) && p.is_registered_user && p.season_gr != null) {
             const gr = document.createElement('span');
             gr.className = 'lobby-player-gr';
             gr.textContent = currentLang === 'zh' ? `花阶分 ${formatGrValue(p.season_gr)}` : `GR ${formatGrValue(p.season_gr)}`;
@@ -25382,11 +25626,11 @@ function renderLobby(data) {
         list.appendChild(row);
     };
 
-    if (currentMode === '2v2') {
+    if (isTwoVsTwoMatchMode(currentMode)) {
         const teamsInMode = teamList.filter(t => {
             return t.member_sids.some(sid => {
                 const p = playerBySid.get(sid);
-                return p && p.status !== 'spectating' && (p.mode || '1v1') === '2v2';
+                return p && p.status !== 'spectating' && normalizeMatchModeKey(p.match_mode || p.mode) === currentMode;
             });
         }).sort((a, b) => {
             const rankDelta = teamSpecialRank(a) - teamSpecialRank(b);
@@ -25430,10 +25674,11 @@ function renderLobby(data) {
                     return `${UI.round}${roundNum}`;
                 })();
                 let gameLabel;
-                const modeLabel = getModeLabel(g.mode);
+                const gameMatchMode = normalizeMatchModeKey(g.match_mode || g.mode);
+                const modeLabel = getModeLabel(gameMatchMode);
                 if (g.mode === '2v2') {
-                    gameLabel = `${g.player1} & ${g.player2} vs ${g.player3 || '?'} & ${g.player4 || '?'} (${phaseLabel})`;
-                } else if (shouldShowLobbyGameModeBadge(g.mode)) {
+                    gameLabel = `${g.player1} & ${g.player2} vs ${g.player3 || '?'} & ${g.player4 || '?'} [${modeLabel}] (${phaseLabel})`;
+                } else if (shouldShowLobbyGameModeBadge(gameMatchMode)) {
                     gameLabel = `${g.player1} vs ${g.player2} [${modeLabel}] (${phaseLabel})`;
                 } else {
                     gameLabel = `${g.player1} vs ${g.player2} (${phaseLabel})`;
@@ -26684,6 +26929,7 @@ function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
         equipped_titles: getEquippedTitles(meta),
         name_color: meta.name_color || getSpecialRoleColor(meta),
         name_style: nameStyle && typeof nameStyle === 'object' ? nameStyle : null,
+        reputation_profile: meta.reputation_profile || null,
         console_player: !!meta.console_player,
         is_special_player: !!meta.is_special_player,
         is_registered_user: !!meta.is_registered_user,
@@ -26705,6 +26951,7 @@ function chatIdentitySignature(entry = {}) {
         entry.special_role || '',
         entry.name_color || '',
         entry.name_style || entry.nameStyle || null,
+        entry.reputation_profile || null,
         (entry.equipped_titles || []).map(title => [
             title && title.id,
             title && title.color,
@@ -34599,6 +34846,12 @@ function renderGameOver(data) {
             title: UI.report_match,
         })) : null;
     }
+    const teammateReportBtn = $('btn-report-teammate');
+    if (teammateReportBtn) {
+        const available = !!currentAccount && gs.mode === '2v2' && !soloMode;
+        teammateReportBtn.classList.toggle('hidden', !available);
+        teammateReportBtn.onclick = available ? openAccountIntegrity : null;
+    }
     const returnLobbyBtn = $('btn-return-lobby');
     if (returnLobbyBtn) {
         if (isTutorialGameOver) {
@@ -35372,6 +35625,9 @@ async function syncModSelectionBeforeInviteAccept() {
 function buildModQueryString() {
     const params = new URLSearchParams();
     params.set('disabled_mods', getEffectiveDisabledModsForData().join(','));
+    const matchMode = getCurrentPvpMatchMode();
+    params.set('match_mode', matchMode);
+    params.set('mode', engineModeForMatchMode(matchMode));
     const community = getEffectiveCommunityModSelectionForData();
     params.set('mod_source', community.mod_source);
     if (community.mod_source === 'community') {
@@ -35698,6 +35954,7 @@ function renderOfficialModList() {
 
 function setSettingsModSourceTab(tab) {
     if (tab === 'community' && !hiddenFeaturesEnabled()) tab = 'official';
+    if (tab === 'entertainment' && !entertainmentModsAvailableInSettings()) tab = 'official';
     settingsActiveModTab = ['official', 'entertainment', 'community'].includes(tab) ? tab : 'official';
     localStorage.setItem('gtn_settings_mod_tab', settingsActiveModTab);
     renderModSourceControls();
@@ -35705,6 +35962,7 @@ function setSettingsModSourceTab(tab) {
 
 function renderModSourceTabs() {
     const hidden = hiddenFeaturesEnabled();
+    const entertainmentAvailable = entertainmentModsAvailableInSettings();
     ['official', 'entertainment', 'community'].forEach(kind => {
         const btn = $(`settings-mod-tab-${kind}`);
         if (!btn) return;
@@ -35713,6 +35971,7 @@ function renderModSourceTabs() {
         btn.setAttribute('aria-pressed', active ? 'true' : 'false');
         // Hide community tab when hidden features disabled
         if (kind === 'community') btn.classList.toggle('hidden', !hidden);
+        if (kind === 'entertainment') btn.classList.toggle('hidden', !entertainmentAvailable);
     });
 }
 
@@ -35721,11 +35980,15 @@ function renderModSourceControls() {
     const entertainmentBox = $('settings-entertainment-mods');
     const communityBox = $('settings-community-mods');
     const hidden = hiddenFeaturesEnabled();
+    const entertainmentAvailable = entertainmentModsAvailableInSettings();
     // Force official tab when hidden features disabled
     if (!hidden && settingsActiveModTab === 'community') settingsActiveModTab = 'official';
+    if (!entertainmentAvailable && settingsActiveModTab === 'entertainment') settingsActiveModTab = 'official';
     renderModSourceTabs();
     if (officialBox) officialBox.classList.toggle('hidden', settingsActiveModTab !== 'official');
-    if (entertainmentBox) entertainmentBox.classList.toggle('hidden', settingsActiveModTab !== 'entertainment');
+    if (entertainmentBox) entertainmentBox.classList.toggle(
+        'hidden', settingsActiveModTab !== 'entertainment' || !entertainmentAvailable
+    );
     if (communityBox) communityBox.classList.toggle('hidden', settingsActiveModTab !== 'community' || !hidden);
     renderCommunityCurrent();
 }
@@ -36695,6 +36958,7 @@ async function init() {
     }
     if ($('feedback-status-select')) $('feedback-status-select').addEventListener('change', updateFeedbackStatus);
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
+    setupAccountIntegrityUi();
     if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
     if ($('btn-social-detail-close')) $('btn-social-detail-close').addEventListener('click', () => toggleSocialDetailModal(false));
     document.querySelectorAll('[data-social-detail-tab]').forEach(btn => {

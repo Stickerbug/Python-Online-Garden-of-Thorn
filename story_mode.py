@@ -17,18 +17,18 @@ STORY_STAGES = (
 
 _NORMAL_ROOM_WEIGHTS = (
     ('shop', 1),
-    ('rest', 2),
+    ('rest', 1),
     ('elite', 4),
     ('event', 4),
     ('combat', 6),
 )
 
 _HARD_ROOM_WEIGHTS = (
-    ('shop', 1),
+    ('shop', 2),
     ('rest', 2),
-    ('elite', 4),
-    ('event', 4),
-    ('combat', 6),
+    ('elite', 9),
+    ('event', 6),
+    ('combat', 12),
 )
 
 _NO_ADJACENT_ROOM_TYPES = frozenset({'shop', 'rest', 'elite'})
@@ -258,7 +258,7 @@ def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
 
 
 def generate_boss_rush_map(seed, block=1, biome='garden', difficulty='normal'):
-    """Generate one fixed single-route block of the endless Boss Rush."""
+    """Generate one fixed single-route stage of the three-stage Boss Rush."""
     block = max(1, int(block))
     biome = str(biome or 'garden')
     difficulty = str(difficulty or 'normal')
@@ -337,6 +337,7 @@ def build_initial_story_state(seed, character_id='common_flower'):
         'normal_battles': 0,
         'stage_normal_battles': 0,
         'event_miss_streak': 0,
+        'rare_card_pity_offset': -0.05,
         'encounter_history': {
             'elite': {},
             'event': [],

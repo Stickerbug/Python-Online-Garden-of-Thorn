@@ -22,6 +22,9 @@ STORY_RULES = {
     'draw_per_turn': 5,
     'hand_limit': 10,
     'stage_floor_count': 16,
+    'enchantment_book_slots': 3,
+    'rare_card_pity_initial': -0.05,
+    'rare_card_pity_cap': 0.40,
 }
 
 STORY_CHARACTER_NOT_READY_MESSAGE = {
@@ -930,8 +933,8 @@ STORY_BLESSINGS = {
     },
     'rare_card': {
         'name': {'zh': '', 'en': ''},
-        'description': {'zh': '获得随机1张稀有牌', 'en': 'Gain 1 random Rare card'},
-        'script': 'gain_random_rare_card',
+        'description': {'zh': '获得随机1张究级牌', 'en': 'Gain 1 random Ultra card'},
+        'script': 'gain_random_ultra_card',
         'amount': 1,
         'order': 2,
     },
@@ -997,7 +1000,7 @@ STORY_EVENTS = {
         'modes': ('solo', 'coop'),
         'coop': {
             'enabled': True,
-            'policy': 'unanimous_then_seeded_random',
+            'policy': 'unanimous_required',
             'effect_scope': 'all_players',
         },
         'options': (
@@ -1531,8 +1534,8 @@ STORY_CARDS = {
                     '回复自己3E。', effects=(_effect('elixir', 3),), tags=('exile',),
                     owner='neutral', upgrade={'cost_e': 0}),
     'bur': _card('Bur', '刺果', 'Bur', 1, 'thorn', 'common',
-                 '对目标造成6D，并施加1层易伤。',
-                 effects=(_effect('damage', 6), _effect('status', 1, status='vulnerable')),
+                 '对目标造成8D，并施加1层易伤。',
+                 effects=(_effect('damage', 8), _effect('status', 1, status='vulnerable')),
                  upgrade={'description': {'zh': '对目标造成8D，并施加2层易伤。', 'en': 'Deal 8 D and apply 2 Vulnerable.'},
                           'effects': (_effect('damage', 8), _effect('status', 2, status='vulnerable'))}),
     'torch': _card('Torch', '火把', 'Torch', 1, 'thorn', 'common',
@@ -2175,6 +2178,53 @@ for _card_id, _image_url in STORY_CARD_IMAGE_URLS.items():
     )
 
 
+def _enchantment_book(zh, en, description_zh, description_en, rarity, script,
+                      *, target='none', amount=0, character_id=None, image=''):
+    return {
+        'name': {'zh': zh, 'en': en},
+        'description': {'zh': description_zh, 'en': description_en},
+        'rarity': rarity,
+        'script': script,
+        'target': target,
+        'amount': amount,
+        'character_id': character_id,
+        'image_url': f'/static/assets/story-enchantment-books/{image}',
+    }
+
+
+STORY_ENCHANTMENT_BOOKS = {
+    'sharp': _enchantment_book('锋利', 'Sharpness', '选择一张手中的攻击牌，使其在本场战斗中获得威力15。', 'Choose an Attack in hand. It gains 15 Potency for this combat.', 'common', 'damage_bonus', target='attack_card', amount=15, image='sharp.svg'),
+    'protection': _enchantment_book('保护', 'Protection', '选择一张手中的技能牌，使其在本场战斗中获得牢固8；使用后清空。', 'Choose a Skill in hand. It gains 8 Firmness for this combat, cleared after use.', 'common', 'shield_bonus_once', target='skill_card', amount=8, image='defend.svg'),
+    'durability': _enchantment_book('耐久', 'Durability', '选择一张手中的放逐牌，使其在本场战斗中失去放逐。', 'Choose an Exile card in hand. It loses Exile for this combat.', 'ultra', 'remove_exile', target='exile_card', image='durability.svg'),
+    'efficiency': _enchantment_book('效率', 'Efficiency', '选择一张手中的牌，使其在本场战斗中获得迅捷1。', 'Choose a card in hand. It gains Swift 1 for this combat.', 'rare', 'swift', target='card', amount=1, image='efficiency.svg'),
+    'underwater_rapid_digging': _enchantment_book('水下速掘', 'Underwater Rapid Digging', '选择一张手中的牌，使其在本回合获得暂时迅捷3。', 'Choose a card in hand. It gains Temporary Swift 3 this turn.', 'rare', 'temporary_swift', target='card', amount=3, image='underwater rapid digging.svg'),
+    'sweeping_blade': _enchantment_book('横扫之刃', 'Sweeping Blade', '选择一张手中的攻击牌，使其在本场战斗中获得广域打击。', 'Choose an Attack in hand. It gains Wide Strike for this combat.', 'rare', 'wide', target='attack_card', image='sweeping blade.svg'),
+    'armor_break': _enchantment_book('破甲', 'Armor Break', '选择一张手中的攻击牌，使其在本场战斗中获得破甲：使用时先清除目标护盾，再结算后续效果。', 'Choose an Attack in hand. It breaks the target Shield before resolving its effects.', 'rare', 'armor_break', target='attack_card', image='armor break.svg'),
+    'attract_lightning': _enchantment_book('引雷', 'Attract Lightning', '选择一张手中的攻击牌，使其在本场战斗中获得电击威力15。仅限魔法师。', 'Choose an Attack in hand. It gains 15 Electric Potency for this combat. Mage only.', 'common', 'electric_damage', target='attack_card', amount=15, character_id='mage', image='attract lightning.svg'),
+    'binding_curse': _enchantment_book('绑定诅咒', 'Binding Curse', '选择3张手中的牌，使其在本场战斗中获得保留。', 'Choose 3 cards in hand. They gain Retain for this combat.', 'rare', 'retain', target='three_cards', image='binding curse.svg'),
+    'vanishing_curse': _enchantment_book('消失诅咒', 'Vanishing Curse', '选择任意张手中的牌，使其在本场战斗中获得放逐与虚无。', 'Choose any number of cards in hand. They gain Exile and Void for this combat.', 'rare', 'exile_void', target='any_cards', image='vanishing curse.svg'),
+    'dense': _enchantment_book('致密', 'Dense', '选择一张手中的攻击牌，使其在本回合获得暂时沉重1，并在本场战斗中获得威力30。', 'Choose an Attack in hand. It gains Temporary Heavy 1 this turn and 30 Potency for this combat.', 'rare', 'dense', target='attack_card', amount=30, image='dense.svg'),
+    'charge': _enchantment_book('突进', 'Charge', '选择一张手中的牌，使其下一次使用时抽牌至手牌满。', 'Choose a card in hand. The next time it is used, draw until the hand is full.', 'rare', 'draw_to_full_once', target='card', image='charge.svg'),
+    'magic_yggdrasil': _enchantment_book('魔法世界树之叶', 'Magic Yggdrasil Leaf', '受到致命伤害时自动消耗：免疫该次伤害，无敌一回合并获得再生8。', 'Automatically consumed on lethal damage: prevent it, become invincible for one round, and gain 8 Regeneration.', 'ultra', 'lethal_guard', amount=8, image='magic yggdrasil.svg'),
+    'fall_cushioning': _enchantment_book('摔落缓冲', 'Fall Cushioning', '选择一张手中的牌，使其下一次使用时获得1层圆盘。', 'Choose a card in hand. The next time it is used, gain 1 Disc.', 'common', 'disc_once', target='card', amount=1, image='fall cushioning.svg'),
+    'flame_bonus': _enchantment_book('火焰附加', 'Flame Bonus', '选择一张手中的攻击牌，使其下一次命中时施加8层烈火。', 'Choose an Attack in hand. Its next hit applies 8 Fire.', 'rare', 'fire_on_hit_once', target='attack_card', amount=8, image='flame bonus.svg'),
+    'fire_protection': _enchantment_book('火焰保护', 'Fire Protection', '选择一张手中的牌，使其下一次使用时获得3层负面状态免疫。', 'Choose a card in hand. The next time it is used, gain 3 Negative Status Immunity.', 'rare', 'immunity_once', target='card', amount=3, image='fire protection.svg'),
+    'puncture': _enchantment_book('穿刺', 'Puncture', '选择一张手中的攻击牌，使其在本场战斗中击杀敌人时随机对另一名敌人再使用一次。', 'Choose an Attack in hand. When it kills an enemy this combat, use it again on another random enemy.', 'rare', 'repeat_on_kill', target='attack_card', image='puncture.svg'),
+    'unlimited': _enchantment_book('无限', 'Unlimited', '选择一本你持有的附魔书，获得它的复制。', 'Choose an enchantment book you own and gain a copy of it.', 'ultra', 'copy_book', target='book', image='unlimited.svg'),
+    'repel': _enchantment_book('击退', 'Repel', '选择一张手中的牌，使其下一次使用时对目标施加4层虚弱。', 'Choose a card in hand. The next time it is used, apply 4 Weak to the target.', 'rare', 'weak_once', target='card', amount=4, image='repel.svg'),
+    'snatch': _enchantment_book('抢夺', 'Snatch', '选择一张手中的攻击牌，使其在本场战斗中击杀敌人时令战斗结束后的卡牌奖励翻倍。', 'Choose an Attack in hand. If it kills an enemy this combat, double the post-combat card reward.', 'ultra', 'double_reward_on_kill', target='attack_card', image='snatch.svg'),
+    'loyalty': _enchantment_book('忠诚', 'Loyalty', '选择一张手中的非0E0M牌，使其在本场战斗中获得回转。', 'Choose a non-zero-cost card in hand. It returns to hand after use for this combat.', 'ultra', 'rebound', target='cost_card', image='loyalty.svg'),
+    'experience_patch': _enchantment_book('经验修补', 'Experience Patch', '选择一张手中的牌，使其在本场战斗中改为用1H支付一点花费。', 'Choose a card in hand. For this combat, pay 1 H for one point of its cost.', 'rare', 'health_cost', target='cost_card', amount=1, image='experience patch.svg'),
+    'multiple_shots': _enchantment_book('多重射击', 'Multiple Shots', '选择一张手中的牌，使其下一次使用时再使用一次。', 'Choose a card in hand. The next time it is used, use it one additional time.', 'ultra', 'repeat_once', target='card', amount=1, image='multiple shots.svg'),
+    'strength': _enchantment_book('力量', 'Strength', '选择一张手中的牌，使其下一次使用时获得3力量。', 'Choose a card in hand. The next time it is used, gain 3 Power.', 'rare', 'power_once', target='card', amount=3, image='strength.svg'),
+    'impact': _enchantment_book('冲击', 'Impact', '选择一张手中的牌，使其下一次使用时对目标施加2层虚弱和2层易伤。', 'Choose a card in hand. The next time it is used, apply 2 Weak and 2 Vulnerable to the target.', 'rare', 'impact_once', target='card', amount=2, image='impact.svg'),
+    'rapids': _enchantment_book('激流', 'Rapids', '选择一张手中的牌，使其下一次使用时从抽牌堆和弃牌堆分别选择1张牌加入手中。', 'Choose a card in hand. The next time it is used, choose 1 card each from draw and discard piles and add them to hand.', 'rare', 'retrieve_once', target='card', image='rapids.svg'),
+    'thorns': _enchantment_book('荆棘', 'Thorns', '选择一张手中的牌，使其下一次使用时获得3层反射。', 'Choose a card in hand. The next time it is used, gain 3 Reflection.', 'rare', 'reflection_once', target='card', amount=3, image='thorns.svg'),
+    'wind_blast': _enchantment_book('风爆', 'Wind Blast', '选择一张手中的牌，使其下一次使用时对目标施加4层易伤。', 'Choose a card in hand. The next time it is used, apply 4 Vulnerable to the target.', 'rare', 'vulnerable_once', target='card', amount=4, image='wind blast.svg'),
+    'warp': _enchantment_book('传送器', 'Warp', '逃离一场非首领战斗，失去10H且不获得奖励。', 'Escape a non-boss combat, lose 10 H, and receive no reward.', 'rare', 'escape', amount=10, image='warp.svg'),
+}
+
+
 STORY_REWARD_CARD_IDS = tuple(
     card_id
     for card_id, definition in STORY_CARDS.items()
@@ -2225,8 +2275,9 @@ def _relic(
     stackable=None,
     shop_excluded=False,
 ):
-    if stackable is None:
-        stackable = rarity != 'special'
+    # Every talent may stack, including character and boss talents that are
+    # normally unique. This public field must mirror the engine rule.
+    stackable = True
     return {
         'name': {'zh': zh, 'en': en},
         'description': {'zh': description, 'en': description},
@@ -2268,7 +2319,7 @@ STORY_RELICS = {
     'opening_lightning': _relic('开幕雷击', 'Opening Lightning', '战斗开始时对所有生物造成9D。', rarity='rare', script='opening_damage', amount=9),
     'solid_barrier': _relic('坚固壁垒', 'Solid Barrier', '本场战斗第一次受伤时回复2E。', rarity='rare', script='first_hit_elixir', amount=2),
     'sharpen': _relic('磨刀', 'Sharpen', '获得时升级2张牌。', rarity='rare', script='gain_upgrade', amount=2),
-    'blade': _relic('利刃', 'Blade', '本场战斗第一次攻击时，对目标施加1层易伤。', rarity='rare', script='first_attack_vulnerable', amount=1),
+    'blade': _relic('利刃', 'Blade', '本场战斗第一次造成伤害后，对目标施加1层易伤。', rarity='rare', script='first_attack_vulnerable', amount=1),
     'steady': _relic('稳扎稳打', 'Steady', '所有基础牌的数值+2。', rarity='rare', script='primary_bonus', amount=2),
     'rich': _relic(
         '富裕',
@@ -2284,7 +2335,7 @@ STORY_RELICS = {
     'indomitable': _relic('愈挫愈勇', 'Indomitable', '普通战斗失去超过15H时，随机升级1张牌。', rarity='rare', script='loss_upgrade', amount=15),
     'support': _relic('支援', 'Support', '第一回合少抽1张牌；每回合获得3层护盾。', rarity='special', script='support', amount=3),
     'bargaining': _relic('讨价还价', 'Bargaining', '商店价格降低50%。', rarity='rare', script='shop_discount', amount=50, stackable=False),
-    'world_tree_leaf': _relic('世界树之叶', 'World Tree Leaf', '本次旅程首次死亡时，清除效果并回复至满H。', rarity='special', script='revive'),
+    'world_tree_leaf': _relic('世界树之叶', 'World Tree Leaf', '每片世界树之叶可在本次旅程中抵消1次死亡，清除效果并回复至满H。', rarity='special', script='revive'),
     'dandelion_blessing': _relic('蒲公英加护', 'Dandelion Blessing', '战斗开始时获得7层护盾。', rarity='special', script='opening_shield', amount=7),
     'coward_defense': _relic('懦夫才防', 'Cowardly Defense', '每回合多回复1E；卡牌奖励和商店中不再出现技能牌。', rarity='special', script='boss_no_bloom', amount=1),
     'return_to_origin': _relic('返璞归真', 'Return to Origin', '所有基础牌的基础数值变为1.5倍。', rarity='special', script='primary_multiplier', amount=1.5),
@@ -2606,11 +2657,11 @@ STORY_ENEMIES.update({
     ), traits=('vampire',), initial={'vampire': 2}, lunatic_health=59),
     'shark': _enemy('鲨鱼', 'Shark', 86, (
         _move('追猎', 'Hunt', _effect('damage', 9, lunatic_amount=12), _effect('player_status', 1, status='vulnerable'), _effect('gain_power', 1)),
-        _move('撕咬', 'Bite', _effect('damage', 2, hits=7, lunatic_hits=8)),
+        _move('撕咬', 'Bite', _effect('damage', 7, hits=2, lunatic_amount=8)),
     ), traits=('bloodthirsty',), lunatic_health=93),
     'ocean_shell': _enemy('贝壳', 'Shell', 114, (
         _move('吐出', 'Spit Out', _effect('damage', 11, lunatic_amount=13), _effect('summon', 1, enemy_id='ocean_pearl')),
-        _move('拉回', 'Pull Back', _effect('damage', 2, hits=7, lunatic_hits=8), _effect('gain_power', 2, lunatic_amount=3), _effect('consume_pearls_damage', 7, lunatic_amount=8)),
+        _move('拉回', 'Pull Back', _effect('damage', 7, hits=2, lunatic_amount=8), _effect('gain_power', 2, lunatic_amount=3), _effect('consume_pearls_damage', 7, lunatic_amount=8)),
     ), script='ocean_shell', lunatic_health=125),
     'ocean_pearl': _enemy('珍珠', 'Pearl', 11, (
         _move('闪耀', 'Shine', _effect('allies_power', 1)),
@@ -3115,38 +3166,75 @@ def initial_story_player(character_id='common_flower'):
         'opening_draw_bonus': 0,
         'next_card_serial': len(deck) + 1,
         'character_id': character_id,
+        'enchantment_books': [],
+        'next_enchantment_book_serial': 1,
     }
 
 
-def _find_source(card_defs, source_id):
-    if not source_id or not card_defs:
+def _find_source(card_defs, source_id=None, source_names=()):
+    if not card_defs:
         return None
+
     def normalize(value):
         return ''.join(ch for ch in str(value).lower() if ch.isalnum())
 
-    candidates = (
-        source_id,
-        str(source_id).lower(),
-        str(source_id).replace(' ', '_'),
-        str(source_id).lower().replace(' ', '_'),
-    )
-    for candidate in candidates:
-        source = card_defs.get(candidate)
-        if source is not None:
-            return source
-    source_key = normalize(source_id)
-    source_aliases = {
-        'chilly': 'chilli',
-        'magicchilly': 'magicchilli',
-        'magicacid': 'acid',
-        'redemptionmoney': 'ransommoney',
-        'magicassembler': 'assembler',
-    }
-    alias_key = source_aliases.get(source_key, source_key)
-    for key, source in card_defs.items():
-        key_value = normalize(str(key).split(':')[-1])
-        if key_value == source_key or key_value == alias_key:
-            return source
+    if source_id:
+        candidates = (
+            source_id,
+            str(source_id).lower(),
+            str(source_id).replace(' ', '_'),
+            str(source_id).lower().replace(' ', '_'),
+        )
+        for candidate in candidates:
+            source = card_defs.get(candidate)
+            if source is not None:
+                return source
+        source_key = normalize(source_id)
+        source_aliases = {
+            'chilly': 'chilli',
+            'magicchilly': 'magicchilli',
+            'magicacid': 'acid',
+            'redemptionmoney': 'ransommoney',
+            'magicassembler': 'assembler',
+        }
+        alias_key = source_aliases.get(source_key, source_key)
+        for key, source in card_defs.items():
+            key_value = normalize(str(key).split(':')[-1])
+            if key_value == source_key or key_value == alias_key:
+                return source
+
+    if isinstance(source_names, dict):
+        source_names = source_names.values()
+    elif isinstance(source_names, str):
+        source_names = (source_names,)
+    wanted_names = {normalize(name) for name in source_names if normalize(name)}
+    if not wanted_names:
+        return None
+
+    matches = []
+    matched_source_ids = set()
+    for source in card_defs.values():
+        candidate_names = {
+            normalize(getattr(source, 'name_cn', '')),
+            normalize(getattr(source, 'name_en', '')),
+        }
+        localized_names = getattr(source, 'name_i18n', None)
+        if isinstance(localized_names, dict):
+            candidate_names.update(
+                normalize(name) for name in localized_names.values()
+            )
+        candidate_names.discard('')
+        if not wanted_names.intersection(candidate_names):
+            continue
+        source_identity = str(getattr(source, 'id', '') or id(source))
+        if source_identity in matched_source_ids:
+            continue
+        matched_source_ids.add(source_identity)
+        matches.append(source)
+
+    # A duplicated localized name must not silently bind the wrong card art.
+    if len(matches) == 1:
+        return matches[0]
     return None
 
 
@@ -3154,7 +3242,11 @@ def story_content_payload(card_defs=None):
     cards = deepcopy(STORY_CARDS)
     if card_defs:
         for definition in cards.values():
-            source = _find_source(card_defs, definition.get('source_card_id'))
+            source = _find_source(
+                card_defs,
+                definition.get('source_card_id'),
+                definition.get('name') or {},
+            )
             if source is None:
                 continue
             image_url = str(getattr(source, 'image_url', '') or getattr(source, 'image', '') or '')
@@ -3196,6 +3288,7 @@ def story_content_payload(card_defs=None):
         'boss_relic_ids': list(STORY_BOSS_RELIC_IDS),
         'easy_relic_ids': list(STORY_EASY_RELIC_IDS),
         'enemies': deepcopy(STORY_ENEMIES),
+        'enchantment_books': deepcopy(STORY_ENCHANTMENT_BOOKS),
     }
 
 
@@ -3364,6 +3457,21 @@ def validate_story_content():
             errors.append(f'{relic_id}: invalid relic rarity')
         if definition.get('script') not in relic_scripts:
             errors.append(f'{relic_id}: unknown relic script {definition.get("script")}')
+
+    book_scripts = {
+        'damage_bonus', 'shield_bonus_once', 'remove_exile', 'swift',
+        'temporary_swift', 'wide', 'armor_break', 'electric_damage',
+        'retain', 'exile_void', 'dense', 'draw_to_full_once', 'lethal_guard',
+        'disc_once', 'fire_on_hit_once', 'immunity_once', 'repeat_on_kill',
+        'copy_book', 'weak_once', 'double_reward_on_kill', 'rebound',
+        'health_cost', 'repeat_once', 'power_once', 'impact_once',
+        'retrieve_once', 'reflection_once', 'vulnerable_once', 'escape',
+    }
+    for book_id, definition in STORY_ENCHANTMENT_BOOKS.items():
+        if definition.get('rarity') not in ('common', 'rare', 'ultra'):
+            errors.append(f'{book_id}: invalid enchantment book rarity')
+        if definition.get('script') not in book_scripts:
+            errors.append(f'{book_id}: invalid enchantment book script')
 
     for enemy_id, definition in STORY_ENEMIES.items():
         script = definition.get('script')

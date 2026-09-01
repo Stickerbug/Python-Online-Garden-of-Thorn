@@ -1,7 +1,9 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from mod_loader import load_all_mods
 from story_character_content import STORY_CHARACTER_CARD_DESIGNS
 from story_content import (
     STORY_CARDS,
@@ -9,6 +11,7 @@ from story_content import (
     STORY_CARD_UPGRADED_IMAGE_URLS,
     STORY_REWARD_CARD_IDS,
     STORY_SHOP_CARD_IDS,
+    story_content_payload,
     story_reward_card_ids,
     story_shop_card_ids,
 )
@@ -49,6 +52,68 @@ def test_supplied_mage_and_neutral_card_art_is_bound_to_stable_card_ids():
         ROOT
         / STORY_CARDS['mage_basic']['upgraded_image_url'].removeprefix('/')
     ).is_file()
+
+
+def test_story_card_art_falls_back_to_one_matching_localized_name():
+    source = SimpleNamespace(
+        id='MagicFries',
+        name_cn='魔法薯条',
+        name_en='Magic Fries',
+        name_i18n={'zh': '魔法薯条', 'en': 'Magic Fries'},
+        image_url='/static/assets/mod-card-art/magic-fries.svg',
+        image='',
+        upgraded_image_url='',
+        upgraded_image='',
+        description='',
+        description_i18n={},
+    )
+
+    card = story_content_payload({'unrelated-runtime-id': source})['cards']['mage_fries']
+
+    assert card['image_url'] == source.image_url
+    assert card['upgraded_image_url'] == source.image_url
+
+
+def test_story_card_art_name_fallback_rejects_ambiguous_sources():
+    sources = {
+        key: SimpleNamespace(
+            id=key,
+            name_cn='魔法薯条',
+            name_en='Magic Fries',
+            name_i18n={},
+            image_url=f'/static/assets/mod-card-art/{key}.svg',
+            image='',
+            upgraded_image_url='',
+            upgraded_image='',
+            description='',
+            description_i18n={},
+        )
+        for key in ('magic-fries-a', 'magic-fries-b')
+    }
+
+    card = story_content_payload(sources)['cards']['mage_fries']
+
+    assert 'image_url' not in card
+    assert 'upgraded_image_url' not in card
+
+
+def test_packaged_card_catalog_provides_valid_art_for_every_story_card():
+    runtime_card_defs = {}
+    for mod in load_all_mods():
+        if mod.errors:
+            continue
+        for mod_card in mod.cards:
+            runtime_card_defs[mod_card.id] = mod_card.to_card_def()
+
+    cards = story_content_payload(runtime_card_defs)['cards']
+    missing = [card_id for card_id, card in cards.items() if not card.get('image_url')]
+
+    assert missing == []
+    assert len(cards) == len(STORY_CARDS) == 150
+    for card in cards.values():
+        image_url = card['image_url']
+        assert image_url.startswith('/static/')
+        assert (ROOT / image_url.removeprefix('/')).is_file()
 
 
 def _combat_state(seed='mage-card-test'):

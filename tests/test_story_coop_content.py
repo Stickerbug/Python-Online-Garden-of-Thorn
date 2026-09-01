@@ -27,7 +27,11 @@ from story_coop_content import (
     CoopStoryContentError,
     compile_coop_story_content,
 )
-from story_coop_live import COOP_STORY_CONTENT_VERSION, _card_values
+from story_coop_live import (
+    COOP_FULL_JOURNEY_FINGERPRINT,
+    COOP_STORY_CONTENT_VERSION,
+    _card_values,
+)
 from story_content_model import (
     STORY_CONTENT_REGISTRY,
     build_story_content_registry,
@@ -100,7 +104,9 @@ def test_current_catalog_compiles_to_expected_safe_pools():
     assert COOP_STORY_CONTENT.event_ids('garden') == ('coop_garden_crossroads',)
     assert len(COOP_CONTENT_FINGERPRINT) == 64
     int(COOP_CONTENT_FINGERPRINT, 16)
-    assert COOP_STORY_CONTENT_VERSION.endswith(COOP_CONTENT_FINGERPRINT[:12])
+    assert len(COOP_FULL_JOURNEY_FINGERPRINT) == 64
+    int(COOP_FULL_JOURNEY_FINGERPRINT, 16)
+    assert COOP_STORY_CONTENT_VERSION.endswith(COOP_FULL_JOURNEY_FINGERPRINT[:12])
     assert (
         COOP_STORY_CONTENT.manifest()['content_model_fingerprint']
         == STORY_CONTENT_REGISTRY.fingerprint

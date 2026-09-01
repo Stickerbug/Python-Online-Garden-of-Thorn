@@ -28,6 +28,12 @@ def fusion_adjusted_cost(cost: Any, fusion_level: Any) -> int:
     return normalized_cost * (level + 1) // 2
 
 
+def fusion_cost_surcharge(original_cost: Any, fusion_level: Any) -> int:
+    """Return only the Fusion surcharge calculated from a card's original cost."""
+    normalized_cost = fusion_adjusted_cost(original_cost, 1)
+    return fusion_adjusted_cost(normalized_cost, fusion_level) - normalized_cost
+
+
 def clamp_card_extra_hits(value: Any) -> int:
     try:
         return min(MAX_CARD_EXTRA_HITS, max(0, int(value)))
@@ -283,8 +289,8 @@ class CardInstance:
         swift = self.swift_value if self.swift_value > 0 else self.card_def.swift_value
         temp_swift = max(0, int(self.temp_swift_value or 0))
         temp_heavy = max(0, int(self.temp_heavy_value or 0))
-        cost = max(0, base + temp_heavy - self.mimic_discount - swift - temp_swift)
-        return fusion_adjusted_cost(cost, self.fusion_level)
+        fusion_extra = fusion_cost_surcharge(self.card_def.cost_e, self.fusion_level)
+        return max(0, base + fusion_extra + temp_heavy - self.mimic_discount - swift - temp_swift)
 
     @property
     def cost_m(self) -> int:
@@ -298,8 +304,8 @@ class CardInstance:
         else:
             base = self.card_def.cost_m
         temp_magic_heavy = max(0, int(self.temp_magic_heavy_value or 0))
-        cost = max(0, base + temp_magic_heavy - max(0, int(self.magic_swift_value or 0)))
-        return fusion_adjusted_cost(cost, self.fusion_level)
+        fusion_extra = fusion_cost_surcharge(self.card_def.cost_m, self.fusion_level)
+        return max(0, base + fusion_extra + temp_magic_heavy - max(0, int(self.magic_swift_value or 0)))
 
     @property
     def card_type(self) -> str:
@@ -456,7 +462,7 @@ _reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 4, 'Common',
              upgraded_image='assets/cards/fission+1.svg', upgraded_image_url='assets/cards/fission+1.svg'))
 
 _reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 4, 'Common',
-             '将相同的攻击聚合为一击。', '选择自己手中2张同名攻击牌，将其聚变层数相加，其他特殊效果层数分别保留最大值，合并为1张牌；聚变层数每超过默认1层，所有花费增加50%（向下取整）',
+             '将相同的攻击聚合为一击。', '选择自己手中2张同名攻击牌，将其聚变层数相加，其他特殊效果层数分别保留最大值，合并为1张牌；每层额外聚变使原始花费增加50%（向下取整）',
              flags={'self_only'},
              image='card-art/Fusion.svg', image_url='card-art/Fusion.svg'))
 

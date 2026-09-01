@@ -8,7 +8,14 @@ import pytest
 
 import db
 from story_coop import build_initial_coop_story_state
-from story_coop_combat import _canonical_request_fingerprint
+from story_coop_combat import COOP_COMBAT_ENDED, _canonical_request_fingerprint
+from story_coop_live import (
+    COOP_STORY_CONTENT_VERSION,
+    advance_coop_after_victory,
+    apply_coop_journey_command,
+    prepare_coop_stage1_setup,
+    start_coop_stage1_opening,
+)
 from story_mode import build_initial_story_state
 
 
@@ -76,6 +83,88 @@ def _started_party():
     )
     assert outcome == 'created'
     return leader_id, member_id, bundle, invite_code
+
+
+def _completed_current_journey_state(seed, members, leader_id, member_id):
+    state = prepare_coop_stage1_setup(
+        build_initial_coop_story_state(seed, members),
+    )
+    state, _ = start_coop_stage1_opening(
+        state,
+        run_seed=seed,
+        difficulty='normal',
+    )
+    action_serial = 0
+
+    def action(user_id, action_type, payload):
+        nonlocal state, action_serial
+        action_serial += 1
+        state, _, _ = apply_coop_journey_command(
+            state,
+            authenticated_user_id=user_id,
+            action_id=f'persistence-full-{action_serial:04d}',
+            action_type=action_type,
+            payload=payload,
+            run_seed=seed,
+            expected_sequence=state['coordination']['action_sequence'],
+        )
+
+    for seat, user_id in ((0, leader_id), (1, member_id)):
+        private = state['room_states_by_player'][str(seat)]
+        action(user_id, 'opening_choose', {
+            'room_id': state['room']['id'],
+            'option_id': private['options'][0],
+        })
+    for _ in range(900):
+        phase = state['phase']
+        if phase == 'complete':
+            return state
+        if phase == 'combat':
+            for enemy in state['combat']['enemies']:
+                enemy['health'] = 0
+            state['combat']['turn'] = COOP_COMBAT_ENDED
+            state['combat']['outcome'] = 'victory'
+            state['coordination']['combat_ready_seats'] = []
+            state['coordination']['combat_ready_round'] = None
+            advance_coop_after_victory(state, run_seed=seed)
+        elif phase == 'reward':
+            for seat, user_id in ((0, leader_id), (1, member_id)):
+                reward = state['rewards_by_player'][str(seat)]
+                action(user_id, 'reward_choose', {
+                    'reward_id': reward['reward_id'],
+                    'card_id': '',
+                })
+        elif phase == 'map':
+            vote = state['coordination']['map_vote']
+            node_id = vote['option_node_ids'][0]
+            for user_id in (leader_id, member_id):
+                action(user_id, 'map_vote', {
+                    'vote_id': vote['vote_id'],
+                    'node_id': node_id,
+                })
+        elif phase == 'room':
+            room_type = state['room']['type']
+            room_id = state['room']['id']
+            for seat, user_id in ((0, leader_id), (1, member_id)):
+                private = state['room_states_by_player'][str(seat)]
+                if room_type == 'opening':
+                    action(user_id, 'opening_choose', {
+                        'room_id': room_id,
+                        'option_id': private['options'][0],
+                    })
+                else:
+                    choice = 'leave' if 'leave' in private['options'] else private['options'][0]
+                    action(user_id, 'room_choose', {
+                        'room_id': room_id,
+                        'choice': choice,
+                    })
+        elif phase == 'stage_complete':
+            room_id = state['room']['id']
+            for user_id in (leader_id, member_id):
+                action(user_id, 'stage_ready', {'room_id': room_id})
+        else:
+            raise AssertionError(f'unexpected cooperative journey phase {phase}')
+    raise AssertionError('cooperative journey did not reach complete')
 
 
 def _combat_receipt(
@@ -792,11 +881,10 @@ def test_persisted_receipt_missing_authoritative_fields_fails_closed(
     assert exc_info.value.code == 'CORRUPT_COOP_ACTION_RECEIPT'
 
 
-@pytest.mark.parametrize('terminal_phase', ['game_over', 'stage_complete'])
 def test_terminal_commit_closes_party_and_duplicate_survives_membership_release(
     isolated_story_db,
-    terminal_phase,
 ):
+    terminal_phase = 'game_over'
     leader_id, _, bundle, _ = _started_party()
     party_id = bundle['party']['id']
     run_id = bundle['run']['id']
@@ -846,6 +934,138 @@ def test_terminal_commit_closes_party_and_duplicate_survives_membership_release(
     assert duplicate_outcome == 'duplicate'
     assert duplicate['status'] == 'completed'
     assert duplicate_receipt == receipt_input
+
+
+def test_stage_complete_commit_keeps_run_and_party_active(isolated_story_db):
+    leader_id, _, bundle, _ = _started_party()
+    party_id = bundle['party']['id']
+    run_id = bundle['run']['id']
+    stage_state = copy.deepcopy(bundle['run']['state'])
+    stage_state['phase'] = 'stage_complete'
+    stage_state['coordination']['action_sequence'] = 1
+    payload = {'room_id': 'stage-complete:1'}
+    receipt_input = _generic_receipt(
+        action_id='stage-complete-active-id',
+        action_type='stage_ready',
+        actor_user_id=leader_id,
+        actor_seat=0,
+        sequence=1,
+        payload=payload,
+    )
+
+    updated, _, outcome = db.commit_story_coop_run_action(
+        leader_id,
+        party_id,
+        run_id,
+        1,
+        'stage-complete-active-id',
+        'stage_ready',
+        payload,
+        receipt_input,
+        stage_state,
+    )
+
+    assert outcome == 'committed'
+    assert updated['status'] == 'active'
+    assert updated['completed_at'] is None
+    assert db.get_active_story_coop_party(leader_id)['run']['status'] == 'active'
+
+
+def test_full_coop_clear_records_each_member_once_in_terminal_transaction(
+    isolated_story_db,
+):
+    leader_id, member_id, _, member_bundle, _ = _forming_party()
+    party = member_bundle['party']
+    party_id = party['id']
+    seed = 'coop-full-persistence-seed'
+    initial_state = prepare_coop_stage1_setup(
+        build_initial_coop_story_state(seed, party['members']),
+    )
+    bundle, create_outcome = db.create_story_coop_run(
+        leader_id,
+        party_id,
+        party['revision'],
+        seed,
+        COOP_STORY_CONTENT_VERSION,
+        initial_state,
+    )
+    assert create_outcome == 'created'
+    run_id = bundle['run']['id']
+    completed_state = _completed_current_journey_state(
+        seed,
+        party['members'],
+        leader_id,
+        member_id,
+    )
+    completed_state['coordination']['action_sequence'] = 1
+    payload = {'room_id': 'stage-complete:3'}
+    receipt_input = _generic_receipt(
+        action_id='full-coop-clear-id',
+        action_type='stage_ready',
+        actor_user_id=leader_id,
+        actor_seat=0,
+        sequence=1,
+        payload=payload,
+    )
+
+    completed, receipt, outcome = db.commit_story_coop_run_action(
+        leader_id,
+        party_id,
+        run_id,
+        1,
+        'full-coop-clear-id',
+        'stage_ready',
+        payload,
+        receipt_input,
+        completed_state,
+    )
+
+    assert outcome == 'committed'
+    assert completed['status'] == 'completed'
+    assert receipt == receipt_input
+    with db.get_db_connection() as conn:
+        completions = conn.execute(
+            '''SELECT source_kind, source_id, user_id
+               FROM story_progress_completions
+               WHERE source_kind = 'coop' AND source_id = ?
+               ORDER BY user_id''',
+            (run_id,),
+        ).fetchall()
+        progress = conn.execute(
+            '''SELECT user_id, standard_clears
+               FROM story_progress
+               WHERE character_id = 'common_flower' AND difficulty = 'normal'
+               ORDER BY user_id'''
+        ).fetchall()
+    assert [int(row['user_id']) for row in completions] == sorted([leader_id, member_id])
+    assert all(str(row['source_id']) == run_id for row in completions)
+    assert [
+        (int(row['user_id']), int(row['standard_clears']))
+        for row in progress
+    ] == [(user_id, 1) for user_id in sorted([leader_id, member_id])]
+
+    duplicate, duplicate_receipt, duplicate_outcome = db.commit_story_coop_run_action(
+        leader_id,
+        party_id,
+        run_id,
+        1,
+        'full-coop-clear-id',
+        'stage_ready',
+        payload,
+        {'ignored': True},
+        completed_state,
+    )
+    assert duplicate_outcome == 'duplicate'
+    assert duplicate['status'] == 'completed'
+    assert duplicate_receipt == receipt_input
+    with db.get_db_connection() as conn:
+        assert conn.execute(
+            '''SELECT COUNT(*) AS total FROM story_progress_completions
+               WHERE source_kind = 'coop' AND source_id = ?''',
+            (run_id,),
+        ).fetchone()['total'] == 2
+
+
 def test_story_coop_action_fingerprint_distinguishes_json_boolean_and_number():
     numeric = db.story_coop_action_fingerprint(0, 'room_submit', {'value': 1})
     boolean = db.story_coop_action_fingerprint(0, 'room_submit', {'value': True})

@@ -379,7 +379,7 @@ def test_immediate_blessings_apply_the_latest_defined_rewards():
         if event.get('type') == 'card_gained'
     )
     assert len(rare_state['player']['deck']) == initial_deck_size + 1
-    assert STORY_CARDS[gained_rare['card_id']]['rarity'] == 'rare'
+    assert STORY_CARDS[gained_rare['card_id']]['rarity'] == 'ultra'
 
     gold_state = _journey_state(seed)
     gold_state, _ = apply_story_action(
@@ -464,6 +464,26 @@ def test_blessing_can_transform_or_remove_the_selected_deck_instance():
     )
 
 
+def test_eternal_cards_are_not_valid_blessing_transform_targets():
+    seed = 'story-eternal-transform-lock'
+    state = _journey_state(seed)
+    eternal = _new_card(state, 'corruption')
+    state['player']['deck'].append(eternal)
+
+    with pytest.raises(StoryActionError) as error:
+        apply_story_action(
+            state,
+            'choose_blessing',
+            {
+                'blessing_id': 'transform_card',
+                'card_instance_id': eternal['instance_id'],
+            },
+            seed,
+        )
+
+    assert error.value.code == 'ETERNAL_CARD_LOCKED'
+
+
 def test_double_card_reward_blessing_resolves_two_complete_reward_rounds():
     seed = 'story-blessing-double-reward'
     state = _journey_state(seed)
@@ -523,7 +543,7 @@ def test_double_card_reward_blessing_resolves_two_complete_reward_rounds():
 
 def test_updated_story_card_balance_matches_the_latest_design():
     assert STORY_CARDS['coffee']['effects'][0]['amount'] == 3
-    assert STORY_CARDS['bur']['effects'][0]['amount'] == 6
+    assert STORY_CARDS['bur']['effects'][0]['amount'] == 8
     assert STORY_CARDS['shell']['upgrade']['cost_e'] == 1
     assert STORY_CARDS['sponge']['cost_e'] == 1
     assert STORY_CARDS['sponge']['upgrade']['cost_e'] == 0
@@ -2212,6 +2232,43 @@ def test_opening_lightning_emits_parallel_damage_for_combat_entrance():
     assert len(damage_events) == len(state['combat']['enemies'])
     assert all(event.get('amount') == 9 for event in damage_events)
     assert all(event.get('parallel_group') == 'opening_lightning' for event in damage_events)
+
+
+def test_opening_talents_resolve_after_enemy_entrances_and_lightning_hits_shield():
+    seed = 'opening-effects-after-enemy-entrance'
+    state = _journey_state(seed)
+    state['player']['relics'].append('opening_lightning')
+    events = []
+
+    _start_combat(
+        state,
+        {'type': 'elite'},
+        seed,
+        events,
+        encounter_override=[
+            {'def_id': 'mechanical_flower'},
+            {'def_id': 'leafbug'},
+        ],
+    )
+
+    leafbug = next(enemy for enemy in state['combat']['enemies'] if enemy['def_id'] == 'leafbug')
+    lightning = next(
+        event for event in events
+        if event.get('type') == 'enemy_damage'
+        and event.get('source') == 'opening_lightning'
+        and event.get('enemy_id') == leafbug['id']
+    )
+    entrance_index = next(
+        index for index, event in enumerate(events)
+        if event.get('type') == 'mechanical_track_initialized'
+    )
+    lightning_index = events.index(lightning)
+
+    assert entrance_index < lightning_index
+    assert leafbug['health'] == leafbug['max_health']
+    assert leafbug['shield'] == 1
+    assert lightning['amount'] == 0
+    assert lightning['history'][0]['blocked'] == 9
 
 
 def test_occultist_event_adds_the_defined_cards_and_completes():

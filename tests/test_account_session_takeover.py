@@ -32,6 +32,7 @@ class AccountSessionTakeoverTests(unittest.TestCase):
                 patch.object(app, '_current_account_user', return_value=account),
                 patch.object(app, 'auth_user_payload', side_effect=lambda user: dict(user)),
                 patch.object(app, 'record_account_game_entry_async'),
+                patch.object(app.account_integrity, 'get_reputation_profile', return_value={'value':85,'can_ranked':True}),
             ):
                 client = app.socketio.test_client(app.app)
                 payload = {
@@ -83,6 +84,7 @@ class AccountSessionTakeoverTests(unittest.TestCase):
                 patch.object(app, '_current_account_user', return_value=account),
                 patch.object(app, 'auth_user_payload', side_effect=lambda user: dict(user)),
                 patch.object(app, 'record_account_game_entry_async'),
+                patch.object(app.account_integrity, 'get_reputation_profile', return_value={'value':85,'can_ranked':True}),
             ):
                 old_client = app.socketio.test_client(app.app)
                 new_client = app.socketio.test_client(app.app)

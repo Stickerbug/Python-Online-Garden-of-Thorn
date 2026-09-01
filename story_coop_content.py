@@ -34,7 +34,7 @@ COOP_CARD_TAGS = frozenset({'exile', 'precise', 'wide'})
 COOP_OPENING_BLESSING_SCRIPTS = frozenset({
     'gain_gold',
     'gain_max_health',
-    'gain_random_rare_card',
+    'gain_random_ultra_card',
     'wealth_and_basics',
 })
 COOP_ENEMY_EFFECT_TYPES = frozenset({
@@ -43,7 +43,7 @@ COOP_ENEMY_EFFECT_TYPES = frozenset({
     'gain_shield',
     'self_damage',
 })
-COOP_ENCOUNTER_BIOMES = ('garden',)
+COOP_ENCOUNTER_BIOMES = ('garden', 'jungle', 'factory')
 COOP_ENCOUNTER_TIERS = ('simple', 'hard')
 COOP_EVENT_EFFECT_TYPES = frozenset({'gold', 'heal', 'health_loss'})
 COOP_RELIC_SCRIPTS = frozenset({
@@ -540,7 +540,7 @@ def _event_compatibility_reason(event_id, definition):
         not isinstance(policy, dict)
         or set(policy) != {'enabled', 'policy', 'effect_scope'}
         or policy.get('enabled') is not True
-        or policy.get('policy') != 'unanimous_then_seeded_random'
+        or policy.get('policy') != 'unanimous_required'
         or policy.get('effect_scope') != 'all_players'
     ):
         return '事件协作策略无效'
@@ -924,8 +924,8 @@ def compile_coop_story_content(
         )
         for biome in COOP_ENCOUNTER_BIOMES
     )
-    if any(not event_ids for _, event_ids in event_ids_by_biome):
-        raise CoopStoryContentError('协作生物群系至少需要1个兼容共享事件')
+    if not dict(event_ids_by_biome).get('garden'):
+        raise CoopStoryContentError('协作花园至少需要1个兼容共享事件')
     relic_reasons = {
         relic_id: _relic_compatibility_reason(relic_id, definition)
         for relic_id, definition in relics.items()

@@ -9,6 +9,7 @@ from story_content import (
     STORY_CHARACTER_NOT_READY_MESSAGE,
     STORY_ENCOUNTERS,
     STORY_ENEMIES,
+    STORY_ENCHANTMENT_BOOKS,
     STORY_RELICS,
 )
 from story_content_model import (
@@ -48,14 +49,17 @@ def test_normalized_registry_covers_every_authoritative_catalog_entry():
         for tiers in STORY_ENCOUNTERS.values()
         for specs in tiers.values()
     ) == 83
+    assert len(STORY_CONTENT_REGISTRY.catalog('enchantment_book')) == (
+        len(STORY_ENCHANTMENT_BOOKS)
+    ) == 29
     assert len(STORY_CONTENT_FINGERPRINT) == 64
     int(STORY_CONTENT_FINGERPRINT, 16)
 
 
 def test_workbook_sources_use_the_frozen_file_hash_and_precise_rows():
-    assert STORY_WORKBOOK_FILE == 'Garden of Thorn 卡牌数据8.xlsx'
+    assert STORY_WORKBOOK_FILE == 'Garden of Thorn 卡牌数据9.xlsx'
     assert STORY_WORKBOOK_SHA256 == (
-        '2c3f1a54d695dd6b1c3bf7fa9df22f5150029f1988caf4804444213e4cfd9546'
+        'd0554d0b7f43b0477c2fbe471c1c311ce1095c2a6693668eb000a990b2cf3c05'
     )
     expected = {
         ('card', 'basic'): ('爬塔卡牌设计', 'A3:K3'),
@@ -66,6 +70,7 @@ def test_workbook_sources_use_the_frozen_file_hash_and_precise_rows():
         ('relic', 'world_tree_leaf'): ('爬塔天赋设计', 'A33:D33'),
         ('enemy', 'wasp'): ('爬塔怪物设计', 'A6:P6'),
         ('enemy', 'mechanical_rat'): ('爬塔怪物设计', 'A76:P76'),
+        ('enchantment_book', 'sharp'): ('附魔书设计', 'A2:D2'),
         ('encounter', 'factory:simple:003'): ('战斗列表', 'A80:D80'),
         ('encounter', 'garden:elite:001'): ('战斗列表', 'A2:D2'),
     }

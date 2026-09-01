@@ -909,7 +909,7 @@ def test_shared_event_hides_votes_and_resolves_unanimously_without_rng():
     assert outcome['reason'] == 'unanimous'
 
 
-def test_split_event_vote_consumes_one_rng_value_and_applies_one_outcome():
+def test_split_event_vote_applies_nothing_and_requires_unanimous_retry():
     event = _event_state()
     event['players']['0']['health'] = 50
     event['players']['1']['health'] = 50
@@ -923,29 +923,51 @@ def test_split_event_vote_consumes_one_rng_value_and_applies_one_outcome():
         'room_choose',
         {'room_id': room_id, 'choice': 'supplies'},
     )
-    resolved, events, _ = _journey_action(
+    retry, events, _ = _journey_action(
         after_first,
         202,
         'event-split-member',
         'room_choose',
         {'room_id': room_id, 'choice': 'risk'},
     )
-    assert resolved['rng_streams'][stream] == 1
-    outcome = next(item for item in events if item['type'] == 'coop_event_resolved')
-    assert outcome['choice'] in {'supplies', 'risk'}
-    assert outcome['reason'] == 'seeded_random'
-    if outcome['choice'] == 'supplies':
-        assert all(player['health'] == 50 for player in resolved['players'].values())
-        assert all(
-            resolved['players'][seat]['gold'] == before_gold[seat] + 30
-            for seat in resolved['players']
-        )
-    else:
-        assert all(player['health'] == 42 for player in resolved['players'].values())
-        assert all(
-            resolved['players'][seat]['gold'] == before_gold[seat] + 60
-            for seat in resolved['players']
-        )
+    assert stream not in retry['rng_streams']
+    assert retry['phase'] == 'room'
+    assert retry['coordination']['room_decision']['votes_by_seat'] == {}
+    assert retry['coordination']['room_decision']['resolved_seats'] == []
+    assert all(
+        private['status'] == 'pending' and private['selected_option'] is None
+        for private in retry['room_states_by_player'].values()
+    )
+    assert all(player['health'] == 50 for player in retry['players'].values())
+    assert {seat: player['gold'] for seat, player in retry['players'].items()} == before_gold
+    assert [event['type'] for event in events] == [
+        'coop_event_vote_cast',
+        'coop_event_consensus_required',
+    ]
+
+    agreed_first, _, _ = _journey_action(
+        retry,
+        101,
+        'event-retry-leader',
+        'room_choose',
+        {'room_id': room_id, 'choice': 'supplies'},
+    )
+    resolved, resolved_events, _ = _journey_action(
+        agreed_first,
+        202,
+        'event-retry-member',
+        'room_choose',
+        {'room_id': room_id, 'choice': 'supplies'},
+    )
+    assert stream not in resolved['rng_streams']
+    assert resolved['phase'] == 'map'
+    outcome = next(item for item in resolved_events if item['type'] == 'coop_event_resolved')
+    assert outcome['choice'] == 'supplies'
+    assert outcome['reason'] == 'unanimous'
+    assert all(
+        resolved['players'][seat]['gold'] == before_gold[seat] + 30
+        for seat in resolved['players']
+    )
 
 
 def test_compiled_story_event_edit_changes_new_coop_run_resolution(monkeypatch):
@@ -999,6 +1021,8 @@ def test_previous_shared_event_snapshot_keeps_frozen_definition():
     event['room'].pop('content_snapshot', None)
     event['room']['title'] = deepcopy(legacy['title'])
     event['room']['description'] = deepcopy(legacy['description'])
+    event['room']['policy'] = legacy['coop']['policy']
+    event['coordination']['room_decision']['policy'] = legacy['coop']['policy']
 
     assert validate_coop_live_state(event) is True
     snapshot = project_coop_run_for_viewer(_public_run(event), 101)['snapshot']
@@ -1090,6 +1114,64 @@ def _complete_controlled_stage():
     return state, final_events, action_index
 
 
+def _complete_current_stage(state, *, prefix='current-stage'):
+    action_index = 0
+    final_events = []
+    for _ in range(160):
+        phase = state['phase']
+        if phase == 'combat':
+            state, final_events = _finish_current_combat(state)
+        elif phase == 'reward':
+            for seat, user_id in ((0, 101), (1, 202)):
+                reward = state['rewards_by_player'][str(seat)]
+                action_index += 1
+                state, final_events, _ = _journey_action(
+                    state,
+                    user_id,
+                    f'{prefix}-reward-{action_index:04d}',
+                    'reward_choose',
+                    {'reward_id': reward['reward_id'], 'card_id': ''},
+                )
+        elif phase == 'map':
+            vote = state['coordination']['map_vote']
+            node_id = vote['option_node_ids'][0]
+            for user_id in (101, 202):
+                action_index += 1
+                state, final_events, _ = _journey_action(
+                    state,
+                    user_id,
+                    f'{prefix}-route-{action_index:04d}',
+                    'map_vote',
+                    {'vote_id': vote['vote_id'], 'node_id': node_id},
+                )
+        elif phase == 'room':
+            room_type = state['room']['type']
+            room_id = state['room']['id']
+            for seat, user_id in ((0, 101), (1, 202)):
+                private = state['room_states_by_player'][str(seat)]
+                action_index += 1
+                if room_type == 'opening':
+                    action_type = 'opening_choose'
+                    payload = {'room_id': room_id, 'option_id': private['options'][0]}
+                else:
+                    action_type = 'room_choose'
+                    choice = 'leave' if 'leave' in private['options'] else private['options'][0]
+                    payload = {'room_id': room_id, 'choice': choice}
+                state, final_events, _ = _journey_action(
+                    state,
+                    user_id,
+                    f'{prefix}-room-{action_index:04d}',
+                    action_type,
+                    payload,
+                )
+        elif phase == 'stage_complete':
+            return state, final_events, action_index
+        else:
+            raise AssertionError(f'unexpected controlled stage phase: {phase}')
+        validate_coop_live_state(state)
+    raise AssertionError('controlled current cooperative stage did not terminate')
+
+
 def test_controlled_stage_one_path_reaches_explicit_stage_complete_without_dead_ends():
     state, final_events, action_index = _complete_controlled_stage()
 
@@ -1106,6 +1188,48 @@ def test_controlled_stage_one_path_reaches_explicit_stage_complete_without_dead_
     )['snapshot']
     assert public['phase'] == 'stage_complete'
     assert public['progression']['completed_stage'] == 1
+
+
+def test_both_members_must_confirm_before_stage_two_map_and_blessing_begin():
+    state, _, action_index = _complete_current_stage(_current_initial_map_state())
+    assert state['phase'] == 'stage_complete'
+    assert state['coop_progression']['completed_stages'] == [1]
+    for player in state['players'].values():
+        player['health'] = 10
+    room_id = state['room']['id']
+
+    leader_ready, _, _ = _journey_action(
+        state,
+        101,
+        f'current-stage-ready-{action_index + 1:04d}',
+        'stage_ready',
+        {'room_id': room_id},
+    )
+    assert leader_ready['phase'] == 'stage_complete'
+    assert leader_ready['room_states_by_player']['0']['status'] == 'resolved'
+    assert leader_ready['room_states_by_player']['1']['status'] == 'pending'
+
+    stage_two, events, _ = _journey_action(
+        leader_ready,
+        202,
+        f'current-stage-ready-{action_index + 2:04d}',
+        'stage_ready',
+        {'room_id': room_id},
+    )
+    assert stage_two['phase'] == 'room'
+    assert stage_two['room']['type'] == 'opening'
+    assert stage_two['stage'] == 2
+    assert stage_two['biome'] == 'jungle'
+    assert stage_two['map']['stage'] == 2
+    assert stage_two['map']['biome'] == 'jungle'
+    assert stage_two['coop_progression']['completed_stages'] == [1]
+    assert stage_two['completed_stage'] == 1
+    assert all(
+        player['health'] == player['max_health']
+        for player in stage_two['players'].values()
+    )
+    assert any(event['type'] == 'coop_stage_started' for event in events)
+    assert validate_coop_live_state(stage_two) is True
 
 
 def test_stage_complete_rejects_a_skipped_completed_route_even_when_ids_match():

@@ -8,6 +8,7 @@
   <link rel="preload" href="/fonts/Kreadon-Regular.subset.woff2?v=3" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=3" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/css/story.css?v={{ static_version }}">
+  <link rel="stylesheet" href="/static/css/card_compat.css?v={{ static_version }}">
   <link rel="stylesheet" href="/static/css/shared-afk.css?v={{ static_version }}">
   <link rel="stylesheet" href="/static/css/shared-lobby-chat.css?v={{ static_version }}">
   <script nonce="{{ csp_nonce }}">
@@ -42,6 +43,14 @@
         'story-hide-card-borders',
         readPreference('gtn_story_hide_card_borders') === '1',
       );
+      document.documentElement.classList.toggle(
+        'story-hide-ui-borders',
+        readPreference('gtn_story_hide_card_borders') === '1',
+      );
+      document.documentElement.classList.toggle(
+        'story-speed-2x',
+        readPreference('gtn_story_speed_2x') === '1',
+      );
     })();
   </script>
 </head>
@@ -55,11 +64,10 @@
       <span id="story-chat-unread" class="story-chat-unread hidden" aria-label="0 条未读消息">0</span>
     </button>
 
-    <button id="story-surrender" class="story-surrender-command hidden" type="button">投降</button>
-
     <aside id="story-persistent-hud" class="story-persistent-hud hidden" aria-label="旅程常驻信息">
       <section class="story-persistent-player" aria-label="玩家信息">
         <strong id="story-hud-player-name">{{ account.display_name }}</strong>
+        <b id="story-hud-difficulty" class="story-hud-difficulty">普通</b>
         <span id="story-hud-location">第 1 阶段 · 第 1 层</span>
         <dl>
           <div><dt>H</dt><dd id="story-hud-health">--</dd></div>
@@ -69,9 +77,12 @@
         </dl>
       </section>
       <nav class="story-persistent-actions" aria-label="旅程快捷操作">
-        <button id="story-hud-map" type="button"><span id="story-hud-map-label">地图</span></button>
-        <button id="story-hud-deck" type="button"><span id="story-hud-deck-label">总牌库</span></button>
-        <button id="story-hud-save" type="button"><span id="story-hud-save-label">存读档</span></button>
+        <button id="story-hud-map" type="button" aria-expanded="false"><img src="/static/assets/story-ui-icons/map.svg" alt=""><span id="story-hud-map-label">地图</span></button>
+        <button id="story-hud-deck" type="button"><img src="/static/assets/ui-icons/total-pile.svg" alt=""><span id="story-hud-deck-label">总牌库</span></button>
+        <button id="story-hud-books" type="button" aria-haspopup="dialog" aria-controls="story-enchantment-books-dialog"><img src="/static/assets/story-enchantment-books/sharp.svg" alt=""><span id="story-hud-books-label">附魔书 0/3</span></button>
+        <button id="story-hud-save" type="button" aria-haspopup="dialog" aria-controls="story-save-dialog"><img src="/static/assets/ui-icons/reload.svg" alt=""><span id="story-hud-save-label">存读档</span></button>
+        <button id="story-hud-settings" type="button" aria-haspopup="dialog" aria-controls="story-settings-dialog"><img src="/static/assets/ui-icons/settings.svg" alt=""><span id="story-hud-settings-label">设置</span></button>
+        <button id="story-hud-surrender" type="button" aria-haspopup="dialog" aria-controls="story-surrender-dialog"><img src="/static/assets/ui-icons/surrender.svg" alt=""><span id="story-hud-surrender-label">投降</span></button>
       </nav>
     </aside>
 
@@ -153,33 +164,10 @@
       </section>
 
       <section id="story-run" class="story-run hidden">
-        <aside class="story-run-sidebar">
-          <div class="story-run-stage">
-            <span id="story-stage-label">阶段</span>
-            <strong id="story-stage-value">1</strong>
-          </div>
-          <div class="story-run-biome">
-            <span id="story-biome-label">区域</span>
-            <strong id="story-biome-value">花园</strong>
-          </div>
-          <dl class="story-player-summary">
-            <div><dt>H</dt><dd id="story-health-value">--</dd></div>
-            <div><dt>E</dt><dd id="story-elixir-value">--</dd></div>
-            <div><dt>M</dt><dd id="story-magic-value">--</dd></div>
-            <div><dt id="story-gold-label">金币</dt><dd id="story-gold-value">0</dd></div>
-          </dl>
-          <div class="story-current-room">
-            <span id="story-floor-value">第 1 层</span>
-            <strong id="story-room-value">赐福</strong>
-          </div>
-        </aside>
-
         <section class="story-map-panel" aria-labelledby="story-map-title">
           <div class="story-map-heading">
             <h2 id="story-map-title">路线</h2>
             <div class="story-map-heading-actions">
-              <button id="story-map-return" class="story-save-open hidden" type="button">返回战斗</button>
-              <button id="story-save-open" class="story-save-open" type="button">存读档</button>
               <div id="story-map-legend" class="story-map-legend"></div>
             </div>
           </div>
@@ -251,7 +239,6 @@
           <button class="story-command story-pile-command" id="story-exile-pile" type="button" aria-label="查看放逐区" title="查看放逐区">
             <img src="/static/assets/ui-icons/exile-pile.svg" alt="" aria-hidden="true"><span id="story-exile-pile-label">查看放逐区</span>
           </button>
-          <button class="story-command story-pile-command" id="story-combat-map" type="button">查看地图</button>
           <button class="story-command story-command-primary" id="story-end-turn" type="button">结束回合</button>
         </div>
       </section>
@@ -374,9 +361,6 @@
         {% endif %}
       </div>
       <div class="story-status-actions">
-        <button id="story-save-open-global" class="story-run-deck-command hidden" type="button" aria-label="存读档" title="存读档">
-          <span id="story-save-open-global-label">存读档</span>
-        </button>
         <button id="story-codex-open" class="story-run-deck-command story-codex-command" type="button" aria-label="查看故事图鉴" title="查看故事图鉴">
           <img src="/static/assets/ui-icons/gallery.svg" alt="" aria-hidden="true">
           <span id="story-codex-open-label">故事图鉴</span>
@@ -385,10 +369,6 @@
         <button id="story-talent-overview" class="story-run-deck-command hidden" type="button" aria-label="查看天赋总览" title="查看天赋总览">
           <img src="/static/assets/ui-icons/achievements.svg" alt="" aria-hidden="true">
           <span id="story-talent-overview-label">天赋总览</span>
-        </button>
-        <button id="story-run-deck" class="story-run-deck-command hidden" type="button" aria-label="查看总牌库" title="查看总牌库">
-          <img src="/static/assets/ui-icons/total-pile.svg" alt="" aria-hidden="true">
-          <span id="story-run-deck-label">总牌库</span>
         </button>
         <span id="story-status-online">在线玩家：--</span>
       </div>
@@ -403,6 +383,19 @@
           <button id="story-pile-close" class="story-command story-command-danger" value="cancel">关闭</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="story-enchantment-books-dialog" class="story-dialog story-enchantment-books-dialog">
+      <div class="story-enchantment-books-shell">
+        <header class="story-pile-heading">
+          <div>
+            <h2 id="story-enchantment-books-title">附魔书</h2>
+            <p id="story-enchantment-books-copy">最多持有3本；可随时丢弃，战斗中可使用。</p>
+          </div>
+          <button id="story-enchantment-books-close" class="story-pile-close" type="button" aria-label="关闭">×</button>
+        </header>
+        <div id="story-enchantment-books-grid" class="story-enchantment-books-grid"></div>
+      </div>
     </dialog>
 
     <dialog id="story-save-dialog" class="story-dialog story-save-dialog">
@@ -436,6 +429,7 @@
           <button class="story-codex-tab is-active" type="button" role="tab" aria-selected="true" data-story-codex-mode="cards" id="story-codex-tab-cards">卡牌</button>
           <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="enemies" id="story-codex-tab-enemies">生物</button>
           <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="talents" id="story-codex-tab-talents">天赋</button>
+          <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="enchantment_books" id="story-codex-tab-enchantment-books">附魔书</button>
           <button class="story-codex-tab" type="button" role="tab" aria-selected="false" data-story-codex-mode="terms" id="story-codex-tab-terms">术语</button>
         </nav>
         <div class="story-codex-body">
@@ -585,12 +579,12 @@
     <dialog id="story-coop-preview-dialog" class="story-dialog story-coop-preview-dialog" aria-labelledby="story-coop-dialog-title">
       <form method="dialog" id="story-coop-lobby-form">
         <h2 id="story-coop-dialog-title">协作故事实验</h2>
-        <p id="story-coop-preview-copy">Staff / Admin 双人实验功能。协作旅程与单人故事存档彼此独立。</p>
+        <p id="story-coop-preview-copy">Staff / Admin 双人实验功能。两人共同战斗并决定路线与事件，个人奖励仍由各自选择；协作旅程与单人故事存档彼此独立。</p>
         <dl class="story-coop-contract">
-          <div><dt>状态结构</dt><dd id="story-coop-schema-value">--</dd></div>
-          <div><dt>首版人数</dt><dd id="story-coop-mvp-value">--</dd></div>
-          <div><dt>目标人数</dt><dd id="story-coop-max-value">--</dd></div>
-          <div><dt>访问范围</dt><dd>Staff / Admin</dd></div>
+          <div><dt>队伍人数</dt><dd id="story-coop-mvp-value">--</dd></div>
+          <div><dt>共同决定</dt><dd id="story-coop-schema-value">路线 / 事件</dd></div>
+          <div><dt>共同承担</dt><dd>战斗结果</dd></div>
+          <div><dt>个人决定</dt><dd id="story-coop-max-value">奖励 / 休息 / 宝箱 / 商店</dd></div>
         </dl>
 
         <p id="story-coop-lobby-status" class="story-coop-lobby-status" role="status" aria-live="polite">正在读取队伍状态...</p>
@@ -656,9 +650,9 @@
             <span id="story-coop-active-party-revision" class="story-coop-revision">Revision --</span>
           </div>
           <dl class="story-coop-run-summary">
-            <div><dt>Run ID</dt><dd id="story-coop-run-id">--</dd></div>
-            <div><dt>Run revision</dt><dd id="story-coop-run-revision">--</dd></div>
-            <div><dt>状态</dt><dd id="story-coop-run-status">--</dd></div>
+            <div><dt>旅程进度</dt><dd id="story-coop-run-id">--</dd></div>
+            <div><dt>难度</dt><dd id="story-coop-run-revision">--</dd></div>
+            <div><dt>当前步骤</dt><dd id="story-coop-run-status">--</dd></div>
           </dl>
           <div class="story-coop-forming-actions">
             <button id="story-coop-enter-combat" class="story-command story-command-primary" type="button">继续协作旅程</button>
@@ -673,23 +667,51 @@
       </form>
     </dialog>
 
+    <dialog id="story-settings-dialog" class="story-dialog story-settings-dialog">
+      <form method="dialog">
+        <div class="story-pile-heading">
+          <div>
+            <h2 id="story-settings-title">旅程设置</h2>
+            <p id="story-settings-copy">界面偏好仅影响当前设备。</p>
+          </div>
+        </div>
+        <div class="story-settings-list">
+          <button id="story-settings-fullscreen" class="story-settings-row" type="button">
+            <span id="story-settings-fullscreen-label">进入全屏</span>
+          </button>
+          <label class="story-settings-row">
+            <span id="story-settings-hide-borders-label">隐藏界面与卡牌边框</span>
+            <input id="story-settings-hide-borders" type="checkbox">
+          </label>
+          <label class="story-settings-row">
+            <span id="story-settings-speed-label">2倍演出速度</span>
+            <input id="story-settings-speed" type="checkbox">
+          </label>
+        </div>
+        <div class="story-dialog-actions">
+          <button id="story-settings-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-settings-confirm" class="story-command story-command-primary" value="confirm">确定</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="story-coop-combat-dialog" class="story-coop-combat-dialog" aria-labelledby="story-coop-combat-title">
       <div id="story-coop-seeded-backdrop" class="story-seeded-backdrop story-coop-seeded-backdrop" aria-hidden="true"></div>
       <section class="story-coop-combat-shell">
         <header class="story-coop-combat-header">
           <div>
-            <span class="story-coop-eyebrow">Staff / Admin 双人实验</span>
+            <span id="story-coop-combat-eyebrow" class="story-coop-eyebrow">双人协作 · 花园</span>
             <h2 id="story-coop-combat-title">协作旅程</h2>
           </div>
           <button id="story-coop-combat-close" class="story-command" type="button" aria-label="关闭协作战斗界面">关闭</button>
         </header>
 
-        <p id="story-coop-combat-status" class="story-coop-lobby-status" role="status" aria-live="polite">正在同步权威战斗状态...</p>
-        <dl class="story-coop-combat-meta" aria-label="协作战斗版本信息">
-          <div><dt>Run revision</dt><dd id="story-coop-combat-revision">--</dd></div>
-          <div><dt>动作序号</dt><dd id="story-coop-combat-sequence">--</dd></div>
+        <p id="story-coop-combat-status" class="story-coop-lobby-status" role="status" aria-live="polite">正在同步协作战斗状态...</p>
+        <dl class="story-coop-combat-meta" aria-label="协作旅程进度">
+          <div><dt>旅程进度</dt><dd id="story-coop-combat-revision">--</dd></div>
+          <div><dt>难度</dt><dd id="story-coop-combat-sequence">--</dd></div>
           <div><dt>回合</dt><dd id="story-coop-combat-round">--</dd></div>
-          <div><dt>阶段</dt><dd id="story-coop-combat-turn">--</dd></div>
+          <div><dt>当前步骤</dt><dd id="story-coop-combat-turn">--</dd></div>
         </dl>
 
         <ol id="story-coop-combat-players" class="story-coop-combat-players" aria-label="协作成员状态"></ol>
@@ -791,7 +813,7 @@
           <div class="story-coop-section-heading story-coop-shop-heading">
             <div>
               <span class="story-coop-eyebrow">个人商店</span>
-              <h3 id="story-coop-shop-title">购买卡牌、遗物或离开</h3>
+              <h3 id="story-coop-shop-title">购买卡牌、遗物、附魔书或离开</h3>
               <p>商品和金币只对你显示；可以连续购买，离开后不能再次购买。</p>
             </div>
             <div class="story-coop-shop-controls">
@@ -812,6 +834,7 @@
               <span class="story-coop-eyebrow">共享事件</span>
               <h3 id="story-coop-event-title">协作事件</h3>
               <p id="story-coop-event-description">正在读取事件描述...</p>
+              <p class="story-coop-event-rule">事件结果会影响全队，只有选择一致时才会结算；意见不同将重新表决。</p>
             </div>
           </div>
           <div id="story-coop-event-options" class="story-coop-progression-options story-coop-event-options" role="group" aria-label="协作事件选项"></div>
@@ -820,8 +843,10 @@
 
         <section id="story-coop-complete-panel" class="story-coop-progression-panel story-coop-complete-panel hidden" aria-labelledby="story-coop-complete-title">
           <span class="story-coop-eyebrow">章节结算</span>
-          <h3 id="story-coop-complete-title">协作第一阶段完成</h3>
-          <p id="story-coop-complete-copy">你们已经完成花园第一阶段。服务器仍保留本次权威结算记录。</p>
+          <h3 id="story-coop-complete-title">协作阶段完成</h3>
+          <p id="story-coop-complete-copy">双方确认后继续旅程。</p>
+          <ol id="story-coop-stage-party-status" class="story-coop-progression-status-list" aria-label="队伍阶段确认进度"></ol>
+          <button id="story-coop-stage-ready" class="story-command story-command-primary" type="button">确认并继续</button>
         </section>
 
         <div id="story-coop-combat-board" class="story-coop-combat-board">
@@ -886,9 +911,10 @@
       }
       const supportsCookie = (key) => {
         const value = String(key || '');
-        return value === 'gtn_theme'
+          return value === 'gtn_theme'
           || value === 'gtn_lang'
           || value === 'gtn_story_hide_card_borders'
+          || value === 'gtn_story_speed_2x'
           || value.startsWith('gtn_keybindings_');
       };
       const readCookie = (key) => {
@@ -961,6 +987,7 @@
     })();
   </script>
   <script src="/static/vendor/socket.io.min.js?v=4.7.2" defer></script>
+  <script src="/static/js/card_compat.js?v={{ static_version }}" defer></script>
   <script src="/static/js/resource_orbs.js?v={{ static_version }}" defer></script>
   <script src="/static/js/story.js?v={{ static_version }}" defer></script>
   <script src="/static/js/keybindings.js?v={{ static_version }}" defer></script>

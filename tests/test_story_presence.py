@@ -221,6 +221,7 @@ class StoryPresenceTests(unittest.TestCase):
         with (
             mock.patch.object(gtn, '_current_account_user', return_value=user),
             mock.patch.object(gtn, 'is_beta_instance', return_value=False),
+            mock.patch.object(gtn, 'admin_event') as admin_event,
         ):
             check_response = self.client.post(
                 '/api/story/presence',
@@ -249,6 +250,7 @@ class StoryPresenceTests(unittest.TestCase):
         self.assertTrue(too_short_response.get_json()['retry'])
         self.assertEqual(passed_response.status_code, 200)
         self.assertEqual(passed_response.get_json()['result'], 'passed')
+        admin_event.assert_not_called()
         with gtn._STORY_PRESENCE_LOCK:
             self.assertIsNone(gtn._STORY_PRESENCES[key]['afk_check'])
             self.assertGreater(gtn._STORY_PRESENCES[key]['afk_next_check_at'], time.time())
@@ -272,6 +274,7 @@ class StoryPresenceTests(unittest.TestCase):
         with (
             mock.patch.object(gtn, '_current_account_user', return_value=user),
             mock.patch.object(gtn, 'is_beta_instance', return_value=False),
+            mock.patch.object(gtn, 'admin_event') as admin_event,
         ):
             response = self.client.post(
                 '/api/story/presence',
@@ -283,6 +286,7 @@ class StoryPresenceTests(unittest.TestCase):
         self.assertTrue(payload['afk_timed_out'])
         self.assertEqual(payload['story_online_count'], 0)
         self.assertEqual(gtn._active_story_presences(beta_mode=False), [])
+        admin_event.assert_not_called()
 
 
 if __name__ == '__main__':
