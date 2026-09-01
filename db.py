@@ -609,6 +609,7 @@ def _reset_story_data_for_contract_if_needed_conn(
     # Mutable progress belongs to one exact content contract. Root deletion
     # cascades through run actions and saves. story_discoveries is deliberately
     # retained so a content update never erases the player's compendium.
+    conn.execute('DELETE FROM story_admin_mutations')
     conn.execute('DELETE FROM story_coop_parties')
     conn.execute('DELETE FROM story_runs')
     conn.execute('DELETE FROM story_progress_completions')
@@ -2095,6 +2096,35 @@ def init_db(story_content_version=None, coop_story_content_version=None):
         conn.execute(
             'CREATE INDEX IF NOT EXISTS idx_story_progress_user '
             'ON story_progress(user_id, character_id, difficulty)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS story_admin_mutations (
+                operation_id TEXT PRIMARY KEY,
+                actor TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                target_kind TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                command_json TEXT NOT NULL,
+                before_json TEXT NOT NULL,
+                after_json TEXT NOT NULL,
+                before_revision INTEGER,
+                after_revision INTEGER,
+                created_at TEXT NOT NULL,
+                undone_at TEXT,
+                undone_by TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_admin_mutations_user_created '
+            'ON story_admin_mutations(user_id, created_at DESC)'
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_story_admin_mutations_target '
+            'ON story_admin_mutations(target_kind, target_id, created_at DESC)'
         )
         conn.execute(
             '''

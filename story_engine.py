@@ -9424,6 +9424,131 @@ def _dev_jump_node(state, payload, seed, events):
     _enter_node(state, {'node_id': node_id}, seed, events)
 
 
+def build_story_admin_jump_state(
+    source_state,
+    seed,
+    *,
+    stage=None,
+    floor=None,
+    node_id='',
+    node_index=0,
+    biome='',
+):
+    """Build a legal solo state at a requested stage/floor for admin tooling."""
+
+    from story_mode import STORY_STAGES, generate_boss_rush_map, generate_story_map
+
+    state = copy.deepcopy(source_state or {})
+    _normalize_legacy_story_state(state)
+    journey_mode = str(state.get('journey_mode') or 'standard')
+    target_stage = int(stage if stage is not None else state.get('stage') or 1)
+    if target_stage < 1 or target_stage > len(STORY_STAGES):
+        _fail('INVALID_DEV_STAGE', f'阶段必须在 1-{len(STORY_STAGES)} 之间')
+    allowed_biomes = tuple(STORY_STAGES[target_stage - 1]['biomes'])
+    target_biome = str(biome or '').strip() or (
+        str(state.get('biome') or '') if target_stage == int(state.get('stage') or 1) else ''
+    )
+    if target_biome not in allowed_biomes:
+        target_biome = allowed_biomes[0]
+    difficulty = _difficulty(state)
+    story_map = (
+        generate_boss_rush_map(seed, target_stage, target_biome, difficulty)
+        if journey_mode == 'boss_rush'
+        else generate_story_map(seed, target_stage, target_biome, difficulty)
+    )
+    state['stage'] = target_stage
+    state['biome'] = target_biome
+    state['map'] = story_map
+    state['stage_normal_battles'] = 0
+    state['completed'] = False
+    state['combat'] = None
+    state['room'] = None
+    state['reward'] = None
+    for key in (
+        'pending_deck_operations', 'blessing_options', 'easy_relic_options',
+        'recovery_checkpoint', 'floor_entry_checkpoint',
+    ):
+        state.pop(key, None)
+    _prepare_boss_node_encounters(state, seed)
+
+    floors = list(story_map.get('floors') or [])
+    if not floors:
+        _fail('INVALID_DEV_MAP', '目标阶段没有可用地图')
+    if node_id and floor is None:
+        target_floor_data = next(
+            (
+                floor_data for floor_data in floors
+                if any(
+                    str(item.get('id') or '') == str(node_id)
+                    for item in floor_data.get('nodes') or []
+                )
+            ),
+            None,
+        )
+        if target_floor_data is None:
+            _fail('UNKNOWN_DEV_NODE', '目标阶段不存在该房间')
+    elif floor is None:
+        target_floor_data = floors[0]
+    else:
+        requested_floor = int(floor)
+        target_floor_data = next(
+            (item for item in floors if int(item.get('floor') or 0) == requested_floor),
+            None,
+        )
+        if target_floor_data is None and journey_mode == 'boss_rush' and 1 <= requested_floor <= len(floors):
+            target_floor_data = floors[requested_floor - 1]
+        if target_floor_data is None:
+            available = ','.join(str(item.get('floor')) for item in floors)
+            _fail('INVALID_DEV_FLOOR', f'目标阶段可用层数：{available}')
+    target_nodes = list(target_floor_data.get('nodes') or [])
+    if not target_nodes:
+        _fail('INVALID_DEV_FLOOR', '目标层没有房间')
+    if node_id:
+        target = next(
+            (item for item in target_nodes if str(item.get('id') or '') == str(node_id)),
+            None,
+        )
+        if target is None:
+            _fail('UNKNOWN_DEV_NODE', '目标层不存在该房间')
+    else:
+        try:
+            target = target_nodes[int(node_index)]
+        except (IndexError, TypeError, ValueError):
+            _fail('INVALID_DEV_NODE_INDEX', f'房间序号必须在 0-{len(target_nodes) - 1} 之间')
+
+    target_floor = int(target['floor'])
+    for item in (node for floor_data in floors for node in floor_data.get('nodes') or []):
+        item_floor = int(item.get('floor') or 0)
+        item['status'] = 'completed' if item_floor < target_floor else 'locked'
+    state['current_floor'] = target_floor
+    state['current_node_id'] = target['id']
+
+    if target.get('type') == 'blessing':
+        target['status'] = 'current'
+        _prepare_blessing(state, seed, f'admin-stage:{target_stage}')
+        events = _StoryEventList(state)
+        events.append({
+            'type': 'dev_stage_jump',
+            'stage': target_stage,
+            'floor': target_floor,
+            'node_id': target['id'],
+        })
+        events.capture_pending()
+        finalized = _finalize_story_events(state, events)
+        state['last_events'] = finalized[-40:]
+        return state, finalized
+
+    state['phase'] = 'map'
+    target['status'] = 'available'
+    jumped, events = apply_story_action(
+        state,
+        'dev_jump_node',
+        {'node_id': target['id']},
+        seed,
+    )
+    return jumped, events
+
+
 def _story_event_target_ids(event):
     targets = event.get('target_ids')
     if isinstance(targets, (list, tuple)):

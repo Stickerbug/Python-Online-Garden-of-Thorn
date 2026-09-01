@@ -94,6 +94,10 @@ from story_content import STORY_CHARACTERS, story_content_payload
 from story_discovery import collect_story_discoveries
 from story_engine import StoryActionError, apply_story_action
 from story_mode import STORY_CONTENT_VERSION, build_initial_story_state
+from story_admin import (
+    execute_story_admin_command,
+    story_admin_content_values,
+)
 from story_progress import (
     story_character_is_unlocked,
     story_coop_unlock_intersection,
@@ -9631,6 +9635,139 @@ ADMIN_COMMAND_TREE = {
             'unban': {'summary': '解除账号封禁', 'usage': 'account unban <账号>'},
         },
     },
+    'story': {
+        'summary': '查询、修改与修复故事模式存档',
+        'usage': 'story <run|resource|card|relic|talent|book|jump|save|progress|discovery|content|audit|coop> ...',
+        'children': {
+            'run': {
+                'summary': '管理单人旅程',
+                'usage': 'story run <list|get|actions|create|validate|repair|recover|abandon> ...',
+                'children': {
+                    'list': {'summary': '列出旅程', 'usage': 'story run list <账号> [all]'},
+                    'get': {'summary': '查看旅程摘要或完整状态', 'usage': 'story run get <账号> [run=旅程ID] [full]'},
+                    'actions': {'summary': '查看旅程操作记录', 'usage': 'story run actions <账号> [数量] [run=旅程ID]'},
+                    'create': {'summary': '创建新旅程', 'usage': 'story run create <账号> [character=角色] [seed=种子] <preview|confirm=令牌>'},
+                    'validate': {'summary': '校验存档结构', 'usage': 'story run validate <账号> [run=旅程ID]'},
+                    'repair': {'summary': '安全修复可确定的结构问题', 'usage': 'story run repair <账号> [run=旅程ID] <preview|confirm=令牌>'},
+                    'recover': {'summary': '恢复节点或本层检查点', 'usage': 'story run recover <账号> <latest|floor> <preview|confirm=令牌>'},
+                    'abandon': {'summary': '放弃生效旅程', 'usage': 'story run abandon <账号> <preview|confirm=令牌>'},
+                },
+            },
+            'resource': {
+                'summary': '查看或修改H、E、M与金币',
+                'usage': 'story resource <get|set|add> ...',
+                'children': {
+                    'get': {'summary': '查看资源', 'usage': 'story resource get <账号>'},
+                    'set': {'summary': '设置资源', 'usage': 'story resource set <账号> <资源> <数值> <preview|confirm=令牌>'},
+                    'add': {'summary': '增减资源', 'usage': 'story resource add <账号> <资源> <数值> <preview|confirm=令牌>'},
+                },
+            },
+            'card': {
+                'summary': '管理永久牌组',
+                'usage': 'story card <list|add|remove|upgrade|replace> ...',
+                'children': {
+                    'list': {'summary': '列出牌组', 'usage': 'story card list <账号>'},
+                    'add': {'summary': '加入卡牌', 'usage': 'story card add <账号> <卡牌ID> [count=N] [upgraded=true] <preview|confirm=令牌>'},
+                    'remove': {'summary': '按实例或卡牌ID删除', 'usage': 'story card remove <账号> <实例ID|卡牌ID> [count=N|all] <preview|confirm=令牌>'},
+                    'upgrade': {'summary': '升级卡牌', 'usage': 'story card upgrade <账号> <实例ID|卡牌ID> [count=N|all] <preview|confirm=令牌>'},
+                    'replace': {'summary': '替换卡牌实例', 'usage': 'story card replace <账号> <实例ID> <新卡牌ID> [upgraded=true] <preview|confirm=令牌>'},
+                },
+            },
+            'relic': {
+                'summary': '管理天赋与遗物',
+                'usage': 'story relic <list|add|remove> ...',
+                'children': {
+                    'list': {'summary': '列出天赋与遗物', 'usage': 'story relic list <账号>'},
+                    'add': {'summary': '加入天赋或遗物', 'usage': 'story relic add <账号> <ID> [count=N] <preview|confirm=令牌>'},
+                    'remove': {'summary': '删除天赋或遗物', 'usage': 'story relic remove <账号> <ID> [count=N] <preview|confirm=令牌>'},
+                },
+            },
+            'talent': {
+                'summary': '天赋命令（relic 的别名）',
+                'usage': 'story talent <list|add|remove> ...',
+                'children': {
+                    'list': {'summary': '列出天赋', 'usage': 'story talent list <账号>'},
+                    'add': {'summary': '加入天赋', 'usage': 'story talent add <账号> <ID> [count=N] <preview|confirm=令牌>'},
+                    'remove': {'summary': '删除天赋', 'usage': 'story talent remove <账号> <ID> [count=N] <preview|confirm=令牌>'},
+                },
+            },
+            'book': {
+                'summary': '管理附魔书',
+                'usage': 'story book <list|add|remove> ...',
+                'children': {
+                    'list': {'summary': '列出附魔书', 'usage': 'story book list <账号>'},
+                    'add': {'summary': '加入附魔书', 'usage': 'story book add <账号> <附魔书ID> [count=N] <preview|confirm=令牌>'},
+                    'remove': {'summary': '删除附魔书', 'usage': 'story book remove <账号> <附魔书ID|实例ID> [count=N] <preview|confirm=令牌>'},
+                },
+            },
+            'jump': {
+                'summary': '直接跳转阶段、层或房间',
+                'usage': 'story jump <stage|floor|node> ...',
+                'children': {
+                    'stage': {'summary': '跳转到阶段及指定层', 'usage': 'story jump stage <账号> <1|2|3> [floor=N] [biome=ID] [node=N] <preview|confirm=令牌>'},
+                    'floor': {'summary': '跳转到当前或指定阶段的一层', 'usage': 'story jump floor <账号> <层> [stage=N] [biome=ID] [node=N] <preview|confirm=令牌>'},
+                    'node': {'summary': '跳转到房间ID', 'usage': 'story jump node <账号> <房间ID> [stage=N] [floor=N] [biome=ID] <preview|confirm=令牌>'},
+                },
+            },
+            'save': {
+                'summary': '管理手动存档',
+                'usage': 'story save <list|get|create|load|delete|copy> ...',
+                'children': {
+                    'list': {'summary': '列出手动存档', 'usage': 'story save list <账号> [run=旅程ID]'},
+                    'get': {'summary': '查看手动存档', 'usage': 'story save get <账号> <存档ID> [full]'},
+                    'create': {'summary': '从当前状态创建手动存档', 'usage': 'story save create <账号> <preview|confirm=令牌>'},
+                    'load': {'summary': '载入手动存档', 'usage': 'story save load <账号> <存档ID> <preview|confirm=令牌>'},
+                    'delete': {'summary': '删除手动存档', 'usage': 'story save delete <账号> <存档ID> <preview|confirm=令牌>'},
+                    'copy': {'summary': '复制手动存档为最新槽位', 'usage': 'story save copy <账号> <存档ID> <preview|confirm=令牌>'},
+                },
+            },
+            'progress': {
+                'summary': '管理通关与解锁进度',
+                'usage': 'story progress <get|set|add> ...',
+                'children': {
+                    'get': {'summary': '查看通关进度', 'usage': 'story progress get <账号>'},
+                    'set': {'summary': '设置通关次数', 'usage': 'story progress set <账号> <角色> <难度> <standard|boss_rush> <数量> <preview|confirm=令牌>'},
+                    'add': {'summary': '增减通关次数', 'usage': 'story progress add <账号> <角色> <难度> <standard|boss_rush> <数量> <preview|confirm=令牌>'},
+                },
+            },
+            'discovery': {
+                'summary': '管理故事图鉴发现',
+                'usage': 'story discovery <list|add|remove|read> ...',
+                'children': {
+                    'list': {'summary': '列出图鉴发现', 'usage': 'story discovery list <账号> [类型]'},
+                    'add': {'summary': '加入图鉴发现', 'usage': 'story discovery add <账号> <类型> <内容ID> [variant=base] <preview|confirm=令牌>'},
+                    'remove': {'summary': '删除图鉴发现', 'usage': 'story discovery remove <账号> <类型> <内容ID> [variant=base] <preview|confirm=令牌>'},
+                    'read': {'summary': '全部标为已读', 'usage': 'story discovery read <账号> <preview|confirm=令牌>'},
+                },
+            },
+            'content': {
+                'summary': '查询可用故事内容ID',
+                'usage': 'story content list <类型> [搜索]',
+                'children': {
+                    'list': {'summary': '列出内容ID', 'usage': 'story content list <card|relic|book|character|biome|difficulty|enemy|blessing> [搜索]'},
+                },
+            },
+            'audit': {
+                'summary': '查看或撤销故事存档管理操作',
+                'usage': 'story audit <list|show|undo> ...',
+                'children': {
+                    'list': {'summary': '列出操作记录', 'usage': 'story audit list <账号> [数量]'},
+                    'show': {'summary': '查看操作前后状态', 'usage': 'story audit show <操作号>'},
+                    'undo': {'summary': '安全撤销尚未被后续游戏覆盖的操作', 'usage': 'story audit undo <操作号> <preview|confirm=令牌>'},
+                },
+            },
+            'coop': {
+                'summary': '查询和校验协作故事存档',
+                'usage': 'story coop <list|get|validate|repair> ...',
+                'children': {
+                    'list': {'summary': '列出协作旅程', 'usage': 'story coop list <账号>'},
+                    'get': {'summary': '查看协作旅程摘要', 'usage': 'story coop get <账号> [run=旅程ID] [full]'},
+                    'validate': {'summary': '严格校验协作存档', 'usage': 'story coop validate <账号> [run=旅程ID]'},
+                    'repair': {'summary': '仅执行可证明无损的安全修复', 'usage': 'story coop repair <账号> [run=旅程ID]'},
+                },
+            },
+        },
+    },
     'game': {
         'summary': '房间、对局及对局内对象',
         'usage': 'game <list|info|log|chat|state|history|action|player|pending> ...',
@@ -10102,6 +10239,17 @@ def _install_admin_command_translations():
             node = meta.get('children', {})
         meta['internal_parts'] = list(internal_command) if isinstance(internal_command, (tuple, list)) else [internal_command]
 
+    def install_story_leaves(children, path=()):
+        for name, meta in children.items():
+            current = (*path, name)
+            nested = meta.get('children', {}) or {}
+            if nested:
+                install_story_leaves(nested, current)
+            else:
+                meta['internal_parts'] = ['storyadmin', *current]
+
+    install_story_leaves(ADMIN_COMMAND_TREE['story']['children'])
+
 
 _install_admin_command_translations()
 
@@ -10357,6 +10505,8 @@ def _translate_structured_admin_command(parts):
     sub = parts[1].lower() if len(parts) > 1 else ''
     if not sub:
         return None, render_admin_help([cmd])
+    if cmd == 'story':
+        return _quote_admin_parts(['storyadmin', *parts[1:]]), None
     if cmd == 'game' and sub == 'player':
         rest = parts[2:]
         if len(rest) < 3:
@@ -11820,6 +11970,16 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         return execute_admin_command(translated, _internal=True, actor=actor)
     if cmd == 'clear':
         return {'success': True, 'output': '', 'clear': True}
+    if cmd == 'storyadmin':
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        result = execute_story_admin_command(parts[1:], actor=actor)
+        if result.get('success') and result.get('story_admin_audit'):
+            admin_event(
+                'admin',
+                f"story admin operation {result['story_admin_audit']} by {actor}",
+            )
+        return result
     if cmd in {
         'community-list',
         'community-announcement-create',
@@ -13850,6 +14010,93 @@ def admin_completions(line):
                 return filtered(['id=', 'count=', 'equip=true', 'equip=false'])
         if sub in ('get', 'username', 'password', 'ban', 'unban') and position == 2:
             return filtered(account_values())
+
+    if cmd == 'story':
+        domain = sub
+        domain_node = (root.get('children', {}) or {}).get(domain) or {}
+        if position == 2:
+            return filtered(visible_children(domain_node))
+        action = parts[2].lower() if len(parts) > 2 else ''
+        if domain == 'content':
+            if action == 'list' and position == 3:
+                return filtered(['card', 'relic', 'book', 'character', 'biome', 'difficulty', 'enemy', 'blessing'])
+            if action == 'list' and position == 4 and len(parts) > 3:
+                return story_admin_content_values(parts[3], token)[:40]
+            return []
+        if domain == 'audit':
+            if action == 'list' and position == 3:
+                return filtered(account_values())
+            if action == 'undo' and position >= 4:
+                return filtered(['preview', 'confirm='])
+            return []
+        if domain == 'coop':
+            if position == 3:
+                return filtered(account_values())
+            if position >= 4:
+                return filtered(['run=', 'full'])
+            return []
+        if position == 3:
+            return filtered(account_values())
+        if domain == 'run':
+            if action == 'recover' and position == 4:
+                return filtered(['latest', 'floor'])
+            if action == 'create' and position >= 4:
+                return filtered(['character=common_flower', 'character=mage', 'seed=', 'preview', 'confirm='])
+            if action in {'repair', 'recover', 'abandon'} and position >= 4:
+                return filtered(['run=', 'preview', 'confirm='])
+            if action in {'get', 'actions', 'validate', 'list'} and position >= 4:
+                return filtered(['run=', 'full', 'all'])
+        if domain == 'resource':
+            if action in {'set', 'add'} and position == 4:
+                return filtered(['health', 'max_health', 'elixir', 'max_elixir', 'magic', 'max_magic', 'gold'])
+            if action in {'set', 'add'} and position >= 6:
+                return filtered(['preview', 'confirm='])
+        if domain == 'card':
+            if action == 'add' and position == 4:
+                return story_admin_content_values('card', token)[:40]
+            if action == 'replace' and position == 5:
+                return story_admin_content_values('card', token)[:40]
+            if action in {'add', 'remove', 'upgrade', 'replace'} and position >= 5:
+                return filtered(['count=1', 'count=all', 'upgraded=true', 'upgraded=false', 'preview', 'confirm='])
+        if domain in {'relic', 'talent'}:
+            if action in {'add', 'remove'} and position == 4:
+                return story_admin_content_values('relic', token)[:40]
+            if action in {'add', 'remove'} and position >= 5:
+                return filtered(['count=1', 'preview', 'confirm='])
+        if domain == 'book':
+            if action == 'add' and position == 4:
+                return story_admin_content_values('book', token)[:40]
+            if action in {'add', 'remove'} and position >= 5:
+                return filtered(['count=1', 'preview', 'confirm='])
+        if domain == 'jump':
+            if position == 4:
+                if action == 'stage':
+                    return filtered(['1', '2', '3'])
+                if action == 'floor':
+                    return filtered([str(value) for value in range(1, 18)])
+            if position >= 5:
+                return filtered(['stage=1', 'stage=2', 'stage=3', 'floor=', 'biome=garden', 'biome=desert', 'biome=ocean', 'biome=jungle', 'biome=factory', 'node=0', 'preview', 'confirm='])
+        if domain == 'save':
+            if action in {'create', 'load', 'delete', 'copy'} and position >= 4:
+                return filtered(['run=', 'preview', 'confirm='])
+            if action in {'list', 'get'} and position >= 4:
+                return filtered(['run=', 'full'])
+        if domain == 'progress':
+            if action in {'set', 'add'} and position == 4:
+                return story_admin_content_values('character', token)[:40]
+            if action in {'set', 'add'} and position == 5:
+                return filtered(['easy', 'normal', 'hard', 'lunatic'])
+            if action in {'set', 'add'} and position == 6:
+                return filtered(['standard', 'boss_rush'])
+            if action in {'set', 'add'} and position >= 8:
+                return filtered(['preview', 'confirm='])
+        if domain == 'discovery':
+            if action in {'add', 'remove'} and position == 4:
+                return filtered(['card', 'relic', 'blessing', 'enemy', 'enchantment_book', 'term'])
+            if action in {'add', 'remove'} and position == 5 and len(parts) > 4:
+                return story_admin_content_values(parts[4], token)[:40]
+            if action in {'add', 'remove', 'read'} and position >= 5:
+                return filtered(['variant=base', 'variant=upgraded', 'preview', 'confirm='])
 
     if cmd == 'replay':
         if sub == 'list' and position >= 2:
