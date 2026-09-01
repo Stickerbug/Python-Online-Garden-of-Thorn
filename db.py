@@ -6119,18 +6119,14 @@ def ensure_current_gr_season_for_conn(conn, user_ids=None):
                     now,
                 ),
             )
-            new_gr = float(GR_INITIAL)
+            new_gr = old_gr
             conn.execute(
                 '''
                 UPDATE users
-                SET season_gr = ?,
-                    total_gr = ?,
-                    season_ranked_games = 0,
-                    total_ranked_games = 0,
-                    gr_season_id = ?
+                SET gr_season_id = ?
                 WHERE id = ?
                 ''',
-                (new_gr, GR_INITIAL, season['id'], row['id']),
+                (season['id'], row['id']),
             )
         else:
             new_gr = _soft_reset_gr(old_gr)
@@ -13102,6 +13098,297 @@ def rebuild_gr_from_matches(dry_run=True):
         preview.pop('ratings', None)
         preview.pop('match_results', None)
         return preview
+
+
+def _legacy_gr_archive_restore_plan_for_conn(conn):
+    """Build an idempotent replay plan from the pre-R1 rating archive."""
+    season = current_gr_season()
+    season_id = str(season.get('id') or '')
+    if not season_id.startswith(f'{GR_RANKED_ERA}-'):
+        raise RuntimeError('legacy GR archives can only be restored during the ranked era')
+
+    archive_rows = conn.execute(
+        '''
+        SELECT user_id, season_gr, total_gr, highest_gr,
+               season_ranked_games, total_ranked_games
+        FROM gr_rating_archives
+        WHERE era_id = 'legacy'
+        ORDER BY user_id
+        '''
+    ).fetchall()
+    if not archive_rows:
+        raise RuntimeError('no legacy GR archives are available')
+
+    ratings = {
+        int(row['user_id']): {
+            'season_gr': float(row['season_gr']),
+            'total_gr': float(row['total_gr']),
+            'highest_gr': float(row['highest_gr']),
+            'season_ranked_games': int(row['season_ranked_games'] or 0),
+            'total_ranked_games': int(row['total_ranked_games'] or 0),
+        }
+        for row in archive_rows
+    }
+    user_rows = conn.execute(
+        '''
+        SELECT users.id, users.season_gr, users.total_gr, users.highest_gr,
+               users.season_ranked_games, users.total_ranked_games
+        FROM users
+        INNER JOIN gr_rating_archives
+            ON gr_rating_archives.user_id = users.id
+           AND gr_rating_archives.era_id = 'legacy'
+        '''
+    ).fetchall()
+    current_by_id = {int(row['id']): row for row in user_rows}
+    missing_users = sorted(set(ratings) - set(current_by_id))
+    if missing_users:
+        raise RuntimeError(f'{len(missing_users)} archived users are missing')
+
+    match_rows = conn.execute(
+        '''
+        SELECT *
+        FROM gr_match_results
+        WHERE season_id = ?
+        ORDER BY played_at, id
+        ''',
+        (season_id,),
+    ).fetchall()
+    match_updates = []
+    participant_ids = set()
+    for row in match_rows:
+        try:
+            all_ids = [int(value) for value in json.loads(row['participant_ids_json'] or '[]')]
+            team_a = [int(value) for value in json.loads(row['team_a_ids_json'] or '[]')]
+            team_b = [int(value) for value in json.loads(row['team_b_ids_json'] or '[]')]
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"invalid participant data for GR match {row['match_id']}") from exc
+        if not all_ids or sorted(all_ids) != sorted(team_a + team_b) or len(set(all_ids)) != len(all_ids):
+            raise RuntimeError(f"invalid teams for GR match {row['match_id']}")
+        missing_archives = sorted(set(all_ids) - set(ratings))
+        if missing_archives:
+            raise RuntimeError(
+                f"GR match {row['match_id']} has {len(missing_archives)} participant(s) without legacy archives"
+            )
+        participant_ids.update(all_ids)
+
+        mode = str(row['mode'] or '').lower()
+        if mode not in ('1v1', '2v2'):
+            raise RuntimeError(f"unsupported mode for GR match {row['match_id']}")
+        is_draw = bool(row['is_draw'])
+        winner_side = row['winner_side']
+        if not is_draw and winner_side not in (0, 1):
+            raise RuntimeError(f"missing winner for GR match {row['match_id']}")
+
+        protected_users = []
+        if row['match_id'] is not None:
+            settlement = conn.execute(
+                'SELECT result_json FROM gr_match_settlements WHERE match_id = ?',
+                (row['match_id'],),
+            ).fetchone()
+            if settlement is not None:
+                protected_users = [
+                    int(value)
+                    for value in _safe_json_loads(settlement['result_json'], {}).get(
+                        'newcomer_protected_user_ids',
+                        [],
+                    )
+                ]
+            else:
+                match_row = conn.execute(
+                    'SELECT summary_json FROM matches WHERE id = ?',
+                    (row['match_id'],),
+                ).fetchone()
+                if match_row is not None:
+                    protected_users = [
+                        int(value)
+                        for value in _safe_json_loads(match_row['summary_json'], {}).get(
+                            'gr_result',
+                            {},
+                        ).get('newcomer_protected_user_ids', [])
+                    ]
+        protected_set = set(protected_users)
+        repeat_count = int(row['repeat_count'] or 0)
+        repeat_factor = float(row['repeat_factor'] or 1.0)
+        mode_factor = GR_2V2_FACTOR if mode == '2v2' else 1.0
+        team_a_season = sum(ratings[uid]['season_gr'] for uid in team_a) / len(team_a)
+        team_b_season = sum(ratings[uid]['season_gr'] for uid in team_b) / len(team_b)
+        team_a_total = sum(ratings[uid]['total_gr'] for uid in team_a) / len(team_a)
+        team_b_total = sum(ratings[uid]['total_gr'] for uid in team_b) / len(team_b)
+        before = {}
+        after = {}
+        season_deltas = {}
+        total_deltas = {}
+        for uid in all_ids:
+            values = ratings[uid]
+            on_a = uid in team_a
+            score = 0.5 if is_draw else (
+                1.0 if (winner_side == 0 and on_a) or (winner_side == 1 and not on_a) else 0.0
+            )
+            season_expected = _gr_expected(
+                team_a_season if on_a else team_b_season,
+                team_b_season if on_a else team_a_season,
+            )
+            total_expected = _gr_expected(
+                team_a_total if on_a else team_b_total,
+                team_b_total if on_a else team_a_total,
+            )
+            k = _gr_k_factor(values['total_ranked_games'])
+            season_delta = k * mode_factor * repeat_factor * (score - season_expected)
+            total_delta = k * mode_factor * repeat_factor * (score - total_expected)
+            if score == 0 and uid in protected_set:
+                season_delta = max(0.0, season_delta)
+                total_delta = max(0.0, total_delta)
+            before[str(uid)] = {
+                'season_gr': round(values['season_gr'], 1),
+                'total_gr': round(values['total_gr'], 1),
+            }
+            values['season_gr'] = max(0.0, values['season_gr'] + season_delta)
+            values['total_gr'] = max(0.0, values['total_gr'] + total_delta)
+            values['season_ranked_games'] += 1
+            values['total_ranked_games'] += 1
+            values['highest_gr'] = max(
+                values['highest_gr'],
+                values['season_gr'],
+                values['total_gr'],
+            )
+            after[str(uid)] = {
+                'season_gr': round(values['season_gr'], 1),
+                'total_gr': round(values['total_gr'], 1),
+            }
+            season_deltas[str(uid)] = round(season_delta, 1)
+            total_deltas[str(uid)] = round(total_delta, 1)
+        payload = {
+            'applied': True,
+            'season_id': season_id,
+            'repeat_count': repeat_count,
+            'repeat_factor': repeat_factor,
+            'season_deltas': season_deltas,
+            'total_deltas': total_deltas,
+            'before': before,
+            'after': after,
+            'newcomer_protected_user_ids': protected_users,
+        }
+        match_updates.append({
+            'row_id': int(row['id']),
+            'match_id': int(row['match_id']) if row['match_id'] is not None else None,
+            'payload': payload,
+        })
+
+    changed_users = 0
+    for uid, values in ratings.items():
+        current = current_by_id[uid]
+        if (
+            not math.isclose(float(current['season_gr']), values['season_gr'], abs_tol=1e-9)
+            or not math.isclose(float(current['total_gr']), values['total_gr'], abs_tol=1e-9)
+            or not math.isclose(float(current['highest_gr']), values['highest_gr'], abs_tol=1e-9)
+            or int(current['season_ranked_games'] or 0) != values['season_ranked_games']
+            or int(current['total_ranked_games'] or 0) != values['total_ranked_games']
+        ):
+            changed_users += 1
+    summary = {
+        'dry_run': True,
+        'season_id': season_id,
+        'archived_users': len(ratings),
+        'changed_users': changed_users,
+        'matches_replayed': len(match_updates),
+        'match_participants': len(participant_ids),
+        'minimum_season_gr': min(values['season_gr'] for values in ratings.values()),
+        'maximum_season_gr': max(values['season_gr'] for values in ratings.values()),
+        'minimum_total_gr': min(values['total_gr'] for values in ratings.values()),
+        'maximum_total_gr': max(values['total_gr'] for values in ratings.values()),
+    }
+    return summary, ratings, match_updates
+
+
+def restore_legacy_gr_archives(dry_run=True):
+    """Restore pre-R1 ratings and replay current-era settlements atomically."""
+    with get_db_connection() as conn:
+        if dry_run:
+            summary, _, _ = _legacy_gr_archive_restore_plan_for_conn(conn)
+            return summary
+        conn.execute('BEGIN IMMEDIATE')
+        try:
+            summary, ratings, match_updates = _legacy_gr_archive_restore_plan_for_conn(conn)
+            season_id = summary['season_id']
+            for uid, values in ratings.items():
+                conn.execute(
+                    '''
+                    UPDATE users
+                    SET season_gr = ?, total_gr = ?, highest_gr = ?,
+                        season_ranked_games = ?, total_ranked_games = ?, gr_season_id = ?
+                    WHERE id = ?
+                    ''',
+                    (
+                        values['season_gr'],
+                        values['total_gr'],
+                        values['highest_gr'],
+                        values['season_ranked_games'],
+                        values['total_ranked_games'],
+                        season_id,
+                        uid,
+                    ),
+                )
+            for item in match_updates:
+                payload = item['payload']
+                conn.execute(
+                    '''
+                    UPDATE gr_match_results
+                    SET total_deltas_json = ?, season_deltas_json = ?,
+                        before_json = ?, after_json = ?
+                    WHERE id = ?
+                    ''',
+                    (
+                        json.dumps(payload['total_deltas'], ensure_ascii=False),
+                        json.dumps(payload['season_deltas'], ensure_ascii=False),
+                        json.dumps(payload['before'], ensure_ascii=False),
+                        json.dumps(payload['after'], ensure_ascii=False),
+                        item['row_id'],
+                    ),
+                )
+                if item['match_id'] is None:
+                    continue
+                match_row = conn.execute(
+                    'SELECT summary_json FROM matches WHERE id = ?',
+                    (item['match_id'],),
+                ).fetchone()
+                if match_row is not None:
+                    match_summary = _safe_json_loads(match_row['summary_json'], {})
+                    match_summary['gr_result'] = payload
+                    conn.execute(
+                        'UPDATE matches SET summary_json = ? WHERE id = ?',
+                        (json.dumps(match_summary, ensure_ascii=False), item['match_id']),
+                    )
+                conn.execute(
+                    'UPDATE gr_match_settlements SET result_json = ? WHERE match_id = ?',
+                    (json.dumps(payload, ensure_ascii=False), item['match_id']),
+                )
+            snapshot_date = datetime.now(timezone.utc).date().isoformat()
+            created_at = utc_now()
+            for uid, values in ratings.items():
+                conn.execute(
+                    '''
+                    INSERT OR REPLACE INTO gr_daily_snapshots
+                        (snapshot_date, user_id, season_id, season_gr, total_gr,
+                         season_ranked_games, total_ranked_games, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''',
+                    (
+                        snapshot_date,
+                        uid,
+                        season_id,
+                        values['season_gr'],
+                        values['total_gr'],
+                        values['season_ranked_games'],
+                        values['total_ranked_games'],
+                        created_at,
+                    ),
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+    summary['dry_run'] = False
+    return summary
 
 
 def apply_gr_match_result(match_id, summary):

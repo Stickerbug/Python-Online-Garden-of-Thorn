@@ -161,6 +161,7 @@ def test_legacy_ranked_games_do_not_reset_protection(accounts):
         conn.execute("UPDATE users SET gr_season_id='S202608',total_ranked_games=25,games_played=30 WHERE id=2")
         conn.commit()
     db.ensure_current_gr_season([2])
+    assert profile(2)['ranked_games']==25
     assert profile(2)['protected_ranked_remaining']==0
     assert not profile(2)['is_newcomer']
 

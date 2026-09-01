@@ -1,3 +1,4 @@
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -280,7 +281,7 @@ def test_lobby_ui_exposes_four_core_match_modes_and_keeps_special_modes_casual()
     assert "preferred_disabled_mods" in source
 
 
-def test_new_ranked_era_archives_legacy_rating_and_starts_from_zero_games(tmp_path):
+def test_new_ranked_era_archives_legacy_rating_without_resetting_it(tmp_path):
     old_path = db.DB_PATH
     db.DB_PATH = str(tmp_path / 'ranked-era.sqlite3')
     try:
@@ -315,16 +316,146 @@ def test_new_ranked_era_archives_legacy_rating_and_starts_from_zero_games(tmp_pa
                 'SELECT * FROM gr_rating_archives WHERE user_id = ?',
                 (user['id'],),
             ).fetchall()
-        assert current['season_gr'] == db.GR_INITIAL
-        assert current['total_gr'] == db.GR_INITIAL
-        assert current['season_ranked_games'] == 0
-        assert current['total_ranked_games'] == 0
+        assert current['season_gr'] == 1375
+        assert current['total_gr'] == 1420
+        assert current['season_ranked_games'] == 31
+        assert current['total_ranked_games'] == 85
         assert current['highest_gr'] == 1500
         assert current['gr_season_id'] == season['id']
         assert len(archives) == 1
         assert archives[0]['season_gr'] == 1375
         assert archives[0]['total_gr'] == 1420
         assert archives[0]['total_ranked_games'] == 85
+    finally:
+        db.DB_PATH = old_path
+
+
+def test_archived_rating_restore_replays_current_era_matches_and_is_idempotent(tmp_path):
+    old_path = db.DB_PATH
+    db.DB_PATH = str(tmp_path / 'ranked-restore.sqlite3')
+    season = {
+        'id': 'R1-S202609',
+        'name': 'R1 · 2026-09',
+        'starts_at': '2026-08-31T16:00:00Z',
+        'ends_at': '2026-09-30T15:59:59Z',
+        'next_starts_at': '2026-09-30T16:00:00Z',
+    }
+    try:
+        db.init_db()
+        user_a, error_a = db.create_user('RestoreA', 'Aa1!aaaa')
+        user_b, error_b = db.create_user('RestoreB', 'Aa1!aaaa')
+        assert error_a is None and error_b is None
+        summary = {
+            'mode': '1v1',
+            'match_type': 'ranked',
+            'match_mode': 'ranked_1v1',
+            'player_ids': [user_a['id'], user_b['id']],
+            'winner_user_ids': [],
+            'winner_index': -1,
+            'result': 'draw',
+            'valid_for_ranking': True,
+            'ended_at': '2026-09-01T01:00:00Z',
+        }
+        with db.get_db_connection() as conn:
+            conn.execute(
+                '''
+                UPDATE users
+                SET season_gr = 1000, total_gr = 1000, highest_gr = 1300,
+                    season_ranked_games = 0, total_ranked_games = 0,
+                    gr_season_id = ?
+                WHERE id IN (?, ?)
+                ''',
+                (season['id'], user_a['id'], user_b['id']),
+            )
+            conn.executemany(
+                '''
+                INSERT INTO gr_rating_archives (
+                    user_id, era_id, season_id, season_gr, total_gr, highest_gr,
+                    season_ranked_games, total_ranked_games, archived_at
+                ) VALUES (?, 'legacy', 'S202608', ?, ?, ?, ?, ?, '2026-09-01T00:00:00Z')
+                ''',
+                [
+                    (user_a['id'], 1100, 1200, 1300, 10, 100),
+                    (user_b['id'], 900, 800, 1000, 12, 150),
+                ],
+            )
+            cursor = conn.execute(
+                '''
+                INSERT INTO matches (
+                    mode, started_at, ended_at, duration_seconds,
+                    player_names_json, player_ids_json, winner_index, result, summary_json
+                ) VALUES ('1v1', '2026-09-01T00:55:00Z', '2026-09-01T01:00:00Z', 300,
+                          '[]', ?, -1, 'draw', ?)
+                ''',
+                (json.dumps(summary['player_ids']), json.dumps(summary)),
+            )
+            match_id = int(cursor.lastrowid)
+            conn.commit()
+        with patch.object(db, 'current_gr_season', return_value=season):
+            db.apply_gr_match_result(match_id, summary)
+            preview = db.restore_legacy_gr_archives(dry_run=True)
+            assert preview['dry_run'] is True
+            assert preview['archived_users'] == 2
+            assert preview['matches_replayed'] == 1
+            with db.get_db_connection() as conn:
+                untouched = conn.execute(
+                    'SELECT season_gr, total_gr FROM users WHERE id = ?',
+                    (user_a['id'],),
+                ).fetchone()
+            assert untouched['season_gr'] == 1000
+            assert untouched['total_gr'] == 1000
+
+            applied = db.restore_legacy_gr_archives(dry_run=False)
+            assert applied['dry_run'] is False
+            first_state = []
+            with db.get_db_connection() as conn:
+                for uid in (user_a['id'], user_b['id']):
+                    first_state.append(dict(conn.execute(
+                        '''
+                        SELECT season_gr, total_gr, highest_gr,
+                               season_ranked_games, total_ranked_games, gr_season_id
+                        FROM users WHERE id = ?
+                        ''',
+                        (uid,),
+                    ).fetchone()))
+                result_row = conn.execute(
+                    'SELECT before_json, after_json FROM gr_match_results WHERE match_id = ?',
+                    (match_id,),
+                ).fetchone()
+                settlement = json.loads(conn.execute(
+                    'SELECT result_json FROM gr_match_settlements WHERE match_id = ?',
+                    (match_id,),
+                ).fetchone()['result_json'])
+                stored_summary = json.loads(conn.execute(
+                    'SELECT summary_json FROM matches WHERE id = ?',
+                    (match_id,),
+                ).fetchone()['summary_json'])
+            assert first_state[0]['season_ranked_games'] == 11
+            assert first_state[0]['total_ranked_games'] == 101
+            assert first_state[1]['season_ranked_games'] == 13
+            assert first_state[1]['total_ranked_games'] == 151
+            assert first_state[0]['gr_season_id'] == season['id']
+            assert first_state[0]['season_gr'] < 1100
+            assert first_state[0]['total_gr'] < 1200
+            assert first_state[1]['season_gr'] > 900
+            assert first_state[1]['total_gr'] > 800
+            before = json.loads(result_row['before_json'])
+            assert before[str(user_a['id'])] == {'season_gr': 1100.0, 'total_gr': 1200.0}
+            assert before[str(user_b['id'])] == {'season_gr': 900.0, 'total_gr': 800.0}
+            assert settlement == stored_summary['gr_result']
+            assert settlement['after'] == json.loads(result_row['after_json'])
+
+            db.restore_legacy_gr_archives(dry_run=False)
+            with db.get_db_connection() as conn:
+                second_state = [dict(conn.execute(
+                    '''
+                    SELECT season_gr, total_gr, highest_gr,
+                           season_ranked_games, total_ranked_games, gr_season_id
+                    FROM users WHERE id = ?
+                    ''',
+                    (uid,),
+                ).fetchone()) for uid in (user_a['id'], user_b['id'])]
+            assert second_state == first_state
     finally:
         db.DB_PATH = old_path
 

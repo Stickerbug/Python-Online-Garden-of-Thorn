@@ -14,8 +14,7 @@ def _account(conn, uid):
     row = integrity._user(conn, uid)
     progress = conn.execute('SELECT * FROM pvp_economy_accounts WHERE user_id=?',(uid,)).fetchone()
     valid = max(int(row['games_played'] or 0), int(progress['valid_games'] if progress else 0))
-    legacy = conn.execute('SELECT MAX(total_ranked_games) FROM gr_rating_archives WHERE user_id=?',(uid,)).fetchone()[0]
-    ranked = int(row['total_ranked_games'] or 0) + (int(legacy or 0) if str(row['gr_season_id'] or '').startswith('R1-') else 0)
+    ranked = int(row['total_ranked_games'] or 0)
     return row, valid, ranked, int(progress['win_streak'] if progress else 0)
 
 
