@@ -15,7 +15,12 @@ from story_content import (
     story_reward_card_ids,
     story_shop_card_ids,
 )
-from story_engine import _start_combat, apply_story_action
+from story_engine import (
+    _player_damage,
+    _player_raw_damage,
+    _start_combat,
+    apply_story_action,
+)
 from story_mode import build_initial_story_state
 
 
@@ -291,6 +296,42 @@ def test_magic_and_overload_resources_are_uncapped_and_settle_at_turn_start():
     assert combat['magic'] >= 245
     assert combat['elixir'] >= 0
     assert combat['magic'] > 10
+
+
+@pytest.mark.parametrize('damage_kind', ('physical', 'raw'))
+def test_mage_cotton_uses_normal_shield_before_spending_magic(damage_kind):
+    state = _combat_state(f'mage-cotton-shield-order-{damage_kind}')
+    combat = state['combat']
+    combat['equipment'] = [
+        {'instance_id': 'mage-cotton', 'def_id': 'mage_cotton', 'upgraded': False},
+    ]
+    combat['shield'] = 3
+    combat['magic'] = 2
+    health_before = int(state['player']['health'])
+    events = []
+
+    if damage_kind == 'physical':
+        dealt = _player_damage(
+            state,
+            6,
+            1,
+            events,
+            'mage_cotton_order_test',
+            attacker={'id': 'test-enemy'},
+        )
+    else:
+        dealt = _player_raw_damage(state, 6, events, 'mage_cotton_order_test')
+
+    assert dealt == 0
+    assert state['player']['health'] == health_before
+    assert combat['shield'] == 0
+    assert combat['magic'] == 1
+    assert any(
+        event.get('type') == 'player_magic_shield'
+        and event.get('amount') == 3
+        and event.get('magic_spent') == 1
+        for event in events
+    )
 
 
 def test_innate_mage_upgrades_are_kept_on_top_of_the_opening_draw_pile():

@@ -1670,12 +1670,12 @@ def _player_physical_hit(state, base_amount, attacker, events, source):
         return 0, amount, health_before
     if combat.get('disc_active'):
         amount = math.floor(amount / 2)
-    amount, magic_blocked = _player_magic_shield(state, amount, events, source)
     amount, beeswax_blocked = _halve_damage_to_player_shield(combat, amount, events, source)
     shield = int(combat.get('shield') or 0)
     blocked = min(shield, amount)
     combat['shield'] = shield - blocked
-    dealt = amount - blocked
+    amount -= blocked
+    dealt, magic_blocked = _player_magic_shield(state, amount, events, source)
     if _equipment_effects(combat, 'sponge'):
         poison = math.ceil(dealt / 2)
         if poison:
@@ -1712,12 +1712,12 @@ def _player_physical_hit(state, base_amount, attacker, events, source):
 def _player_raw_damage(state, amount, events, source):
     amount = max(0, int(amount))
     combat = state['combat']
-    amount, magic_blocked = _player_magic_shield(state, amount, events, source)
     amount, beeswax_blocked = _halve_damage_to_player_shield(combat, amount, events, source)
     shield = int(combat.get('shield') or 0)
     blocked = min(shield, amount)
     combat['shield'] = shield - blocked
-    dealt = amount - blocked
+    amount -= blocked
+    dealt, magic_blocked = _player_magic_shield(state, amount, events, source)
     if dealt > 0 and _has_relic(state, 'fearless_pain'):
         reduction = min(dealt, _relic_amount(state, 'fearless_pain'))
         dealt -= reduction
