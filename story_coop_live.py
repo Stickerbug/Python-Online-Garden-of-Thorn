@@ -2373,7 +2373,7 @@ def _gain_compiled_relic(state, seat, relic_id, events, source):
     relics = player.get('relics')
     if not isinstance(relics, list):
         _fail('INVALID_PLAYER_RELICS', '协作玩家遗物状态无效')
-    if relic_id in relics:
+    if relic_id in relics and not definition.get('stackable'):
         _fail('COOP_RELIC_ALREADY_OWNED', '你已经拥有该遗物')
     relics.append(relic_id)
     amount = int(definition.get('amount') or 0)
@@ -3059,7 +3059,11 @@ def _start_coop_chest_room(state, node_id, run_seed):
         relic_order = (
             _deterministic_value_order(
                 state,
-                [relic_id for relic_id in COOP_CHEST_RELIC_IDS if relic_id not in owned],
+                [
+                    relic_id for relic_id in COOP_CHEST_RELIC_IDS
+                    if relic_id not in owned
+                    or (COOP_STORY_CONTENT.relic_definition(relic_id) or {}).get('stackable')
+                ],
                 str(run_seed),
                 f'coop_chest_relic:{node_id}:seat:{int(seat_key)}',
             )
@@ -3098,20 +3102,23 @@ def _start_coop_chest_room(state, node_id, run_seed):
     }]
 
 
-def _shop_discount_percent(player):
+def _shop_discount_ratio(player):
     discounts = _compiled_player_relics(player, 'shop_discount') if player else []
-    return max(
-        (int(definition.get('amount') or 0) for _, definition in discounts),
-        default=0,
-    )
+    numerator = 1
+    denominator = 1
+    for _, definition in discounts:
+        discount = min(100, max(0, int(definition.get('amount') or 0)))
+        numerator *= 100 - discount
+        denominator *= 100
+    return numerator, denominator
 
 
 def _apply_shop_price_rules(value, difficulty='normal', player=None):
     if str(difficulty or 'normal') in {'hard', 'lunatic'}:
         value = (int(value) * 11 + 9) // 10
-    discount = min(99, _shop_discount_percent(player))
-    if discount:
-        value = max(1, int(value) * (100 - discount) // 100)
+    numerator, denominator = _shop_discount_ratio(player)
+    if numerator < denominator:
+        value = max(1, int(value) * numerator // denominator)
     return int(value)
 
 
@@ -3208,6 +3215,7 @@ def _start_coop_shop_room(state, node_id, run_seed):
             [
                 relic_id for relic_id in COOP_SHOP_RELIC_IDS
                 if relic_id not in set(player.get('relics') or [])
+                or (COOP_STORY_CONTENT.relic_definition(relic_id) or {}).get('stackable')
             ],
             str(run_seed),
             f'coop_shop_relic:{node_id}:seat:{seat}',
@@ -3512,7 +3520,7 @@ def _resolve_rest_choice(state, actor_seat, payload, events):
         relics = _compiled_player_relics(player, 'rest_gold')
         if not relics:
             _fail('INVALID_ROOM_OPTION', '你没有可在休息处换取金币的遗物')
-        amount = max(int(definition.get('amount') or 0) for _, definition in relics)
+        amount = sum(int(definition.get('amount') or 0) for _, definition in relics)
         player['gold'] = int(player.get('gold') or 0) + amount
         events.append({
             'type': 'coop_rest_gold_gained',
@@ -4788,8 +4796,13 @@ def _validate_current_chest_state(state, nodes, current_node):
         if not is_resolved and selected is not None:
             _fail('INVALID_COOP_ROOM', '未完成的协作宝箱席位不能包含选择')
         owns_relic = relic_id in (state['players'][seat_key].get('relics') or [])
-        if current_content and owns_relic != (selected == 'claim_relic'):
-            _fail('INVALID_COOP_ROOM', '协作宝箱遗物归属与选择不一致')
+        relic_definition = COOP_STORY_CONTENT.relic_definition(relic_id) or {}
+        if current_content:
+            if relic_definition.get('stackable'):
+                if selected == 'claim_relic' and not owns_relic:
+                    _fail('INVALID_COOP_ROOM', '协作宝箱遗物归属与选择不一致')
+            elif owns_relic != (selected == 'claim_relic'):
+                _fail('INVALID_COOP_ROOM', '协作宝箱遗物归属与选择不一致')
 
 
 def _validate_current_shop_state(state, nodes, current_node):
@@ -4873,13 +4886,13 @@ def _validate_current_shop_state(state, nodes, current_node):
             for card in deck
             if isinstance(card, dict)
         }
-        purchased_bargaining_here = any(
+        purchased_bargaining_here = sum(
             isinstance(item, dict)
             and item.get('kind') == 'relic'
             and item.get('item_id') == 'bargaining'
             and item.get('status') == 'purchased'
             for item in offers
-        ) if not historical_shared else False
+        ) if not historical_shared else 0
         kind_indexes = {'card': 0, 'relic': 0, 'enchantment_book': 0}
         for index, offer in enumerate(offers):
             if not isinstance(offer, dict):
@@ -4948,26 +4961,41 @@ def _validate_current_shop_state(state, nodes, current_node):
                 if status == 'available' and price != current_price:
                     _fail('INVALID_COOP_ROOM', '协作商店可购商品价格无效')
                 if status == 'purchased':
-                    player_without_discount = deepcopy(player)
-                    player_without_discount['relics'] = [
+                    non_bargaining_relics = [
                         relic_id for relic_id in player.get('relics') or []
                         if relic_id != 'bargaining'
                     ]
-                    undiscounted = (
-                        _shop_card_price(item_id, state.get('difficulty'), player_without_discount)
-                        if kind == 'card'
-                        else _shop_relic_price(item_id, state.get('difficulty'), player_without_discount)
-                        if kind == 'relic'
-                        else _shop_enchantment_book_price(
-                            item_id,
-                            state.get('difficulty'),
-                            player_without_discount,
-                            listed_base=offer.get('base_price'),
-                        )
+                    final_bargaining_count = sum(
+                        relic_id == 'bargaining'
+                        for relic_id in player.get('relics') or []
                     )
-                    allowed_prices = {current_price}
-                    if purchased_bargaining_here:
-                        allowed_prices.add(undiscounted)
+                    initial_bargaining_count = max(
+                        0,
+                        final_bargaining_count - purchased_bargaining_here,
+                    )
+                    allowed_prices = set()
+                    for bargaining_count in range(
+                        initial_bargaining_count,
+                        final_bargaining_count + 1,
+                    ):
+                        price_player = deepcopy(player)
+                        price_player['relics'] = [
+                            *non_bargaining_relics,
+                            *(['bargaining'] * bargaining_count),
+                        ]
+                        historical_price = (
+                            _shop_card_price(item_id, state.get('difficulty'), price_player)
+                            if kind == 'card'
+                            else _shop_relic_price(item_id, state.get('difficulty'), price_player)
+                            if kind == 'relic'
+                            else _shop_enchantment_book_price(
+                                item_id,
+                                state.get('difficulty'),
+                                price_player,
+                                listed_base=offer.get('base_price'),
+                            )
+                        )
+                        allowed_prices.add(historical_price)
                     if price not in allowed_prices:
                         _fail('INVALID_COOP_ROOM', '协作商店成交价格无效')
                 instance_id = offer.get('item_instance_id')
@@ -4987,7 +5015,9 @@ def _validate_current_shop_state(state, nodes, current_node):
             ):
                 _fail('INVALID_COOP_ROOM', '已购附魔书实例无效')
             if status == 'available' and kind == 'relic' and item_id in (player.get('relics') or []):
-                _fail('INVALID_COOP_ROOM', '已拥有遗物不能继续作为可购商品')
+                definition = COOP_STORY_CONTENT.relic_definition(item_id) or {}
+                if not definition.get('stackable'):
+                    _fail('INVALID_COOP_ROOM', '已拥有遗物不能继续作为可购商品')
             offer_ids.append(offer_id)
             item_keys.append((kind, item_id))
         if len(offer_ids) != len(set(offer_ids)) or len(item_keys) != len(set(item_keys)):
@@ -5820,8 +5850,8 @@ def project_coop_state_for_viewer(state, authenticated_user_id):
                 'rest_gold',
             )
             snapshot['room_state']['rest_gold'] = max(
-                (int(definition.get('amount') or 0) for _, definition in rest_gold),
-                default=0,
+                0,
+                sum(int(definition.get('amount') or 0) for _, definition in rest_gold),
             )
         elif room_type == 'chest':
             snapshot['room_state']['gold'] = int(private.get('gold') or 0)

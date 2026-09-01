@@ -748,10 +748,10 @@ def test_compiled_chest_relic_immediate_effects_match_authoritative_catalog(reli
 
 
 def test_greedy_adds_private_rest_gold_choice_and_server_authoritatively_pays_it():
-    rest = _current_room_state('rest', seat_relics={0: ['greedy']})
+    rest = _current_room_state('rest', seat_relics={0: ['greedy', 'greedy']})
     leader_private = rest['room_states_by_player']['0']
     member_private = rest['room_states_by_player']['1']
-    amount = COOP_STORY_CONTENT.relic_definition('greedy')['amount']
+    amount = COOP_STORY_CONTENT.relic_definition('greedy')['amount'] * 2
     before_gold = rest['players']['0']['gold']
 
     assert 'gold' in leader_private['options']
@@ -841,6 +841,43 @@ def test_buying_bargaining_reprices_remaining_personal_shop_offers():
     for offer in current['offers']:
         if offer['kind'] == 'card' and offer['status'] == 'available':
             assert offer['price'] == max(1, before_prices[offer['offer_id']] // 2)
+
+
+def test_buying_second_bargaining_stacks_and_keeps_shop_state_valid():
+    from story_coop_live import _shop_relic_price
+
+    shop = _current_room_state('shop', seat_relics={0: ['bargaining']})
+    player = shop['players']['0']
+    player['gold'] = 1000
+    private = shop['room_states_by_player']['0']
+    relic_offer = next(offer for offer in private['offers'] if offer['kind'] == 'relic')
+    relic_offer.update({
+        'offer_id': f"shop:{shop['current_node_id']}:seat:0:relic:0:bargaining",
+        'item_id': 'bargaining',
+        'relic_id': 'bargaining',
+        'price': _shop_relic_price('bargaining', shop['difficulty'], player),
+    })
+    before_prices = {
+        offer['offer_id']: offer['price']
+        for offer in private['offers']
+        if offer['kind'] == 'card'
+    }
+    validate_coop_live_state(shop)
+
+    bought, _, _ = _journey_action(
+        shop,
+        101,
+        'shop-buy-second-bargaining',
+        'shop_buy',
+        {'room_id': shop['room']['id'], 'offer_id': relic_offer['offer_id']},
+    )
+
+    assert bought['players']['0']['relics'].count('bargaining') == 2
+    current = bought['room_states_by_player']['0']
+    for offer in current['offers']:
+        if offer['kind'] == 'card' and offer['status'] == 'available':
+            assert offer['price'] == max(1, before_prices[offer['offer_id']] // 2)
+    validate_coop_live_state(bought)
 
 
 def test_current_relic_and_shop_corruption_fail_closed_without_mutating_source():

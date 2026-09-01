@@ -954,6 +954,16 @@ def _relic_multiplier(state, relic_id):
     return max(1.0, float(relic.get('amount') or 1)) ** count
 
 
+def _stacked_percentage_reduction(value, percent, count):
+    value = max(0, int(value or 0))
+    percent = min(100, max(0, int(percent or 0)))
+    count = max(0, int(count or 0))
+    if value <= 0 or percent <= 0 or count <= 0:
+        return value
+    remaining = 100 - percent
+    return value * (remaining ** count) // (100 ** count)
+
+
 def _trigger_blade(state, enemy, dealt, events):
     combat = state.get('combat') or {}
     if dealt <= 0 or not enemy or combat.get('blade_used') or not _has_relic(state, 'blade'):
@@ -2226,7 +2236,7 @@ def _player_attack_hit_amount(
         amount = math.floor(amount * float(effect['damage_multiplier']))
     if _has_relic(state, 'frenzy_relic'):
         amount = math.floor(
-            amount * float(STORY_RELICS['frenzy_relic']['amount'])
+            amount * _relic_multiplier(state, 'frenzy_relic')
         )
     if int(combat.get('weak') or 0) > 0:
         amount = math.floor(amount * 0.75)
@@ -5126,11 +5136,18 @@ def _start_combat(state, node, seed, events, encounter_override=None):
     if _has_relic(state, 'first_strike'):
         draw_count += _relic_amount(state, 'first_strike')
     if _has_relic(state, 'grab_every_card'):
-        draw_count += 1
+        draw_count += _relic_count(state, 'grab_every_card')
     if _has_relic(state, 'support'):
         draw_count -= _relic_count(state, 'support')
     if _has_relic(state, 'easy_tiger'):
         draw_count += _relic_amount(state, 'easy_tiger')
+    if _has_relic(state, 'support'):
+        _gain_shield(
+            state,
+            _relic_amount(state, 'support'),
+            events,
+            source='support',
+        )
     if _has_relic(state, 'dandelion_blessing'):
         _gain_shield(
             state,
@@ -7817,9 +7834,11 @@ def _shop_price(state, base, rng, neutral=False):
         value = math.ceil(value * 1.2)
     if _difficulty(state) in ('hard', 'lunatic'):
         value = math.ceil(value * 1.1)
-    if _has_relic(state, 'bargaining'):
-        discount = min(100, max(0, _relic_amount(state, 'bargaining')))
-        value = math.floor(value * (100 - discount) / 100)
+    value = _stacked_percentage_reduction(
+        value,
+        STORY_RELICS['bargaining']['amount'],
+        _relic_count(state, 'bargaining'),
+    )
     return max(1, value)
 
 
@@ -7905,8 +7924,16 @@ def _make_shop(state, seed):
         'cards': cards,
         'relics': relics,
         'enchantment_books': enchantment_books,
-        'remove_price': 75 + 25 * int(state.get('shop_removals') or 0),
-        'upgrade_price': 50 + 25 * int(state.get('shop_upgrades') or 0),
+        'remove_price': max(1, _stacked_percentage_reduction(
+            75 + 25 * int(state.get('shop_removals') or 0),
+            STORY_RELICS['bargaining']['amount'],
+            _relic_count(state, 'bargaining'),
+        )),
+        'upgrade_price': max(1, _stacked_percentage_reduction(
+            50 + 25 * int(state.get('shop_upgrades') or 0),
+            STORY_RELICS['bargaining']['amount'],
+            _relic_count(state, 'bargaining'),
+        )),
         'service_used': False,
     }
 
@@ -8575,6 +8602,26 @@ def _restock_shop_item(state, item, seed, events, item_type):
     })
 
 
+def _apply_new_bargaining_stack_to_shop(room):
+    discount = STORY_RELICS['bargaining']['amount']
+    for collection in ('cards', 'relics', 'enchantment_books'):
+        for item in room.get(collection) or []:
+            if item.get('sold'):
+                continue
+            item['price'] = max(1, _stacked_percentage_reduction(
+                item.get('price'),
+                discount,
+                1,
+            ))
+    if not room.get('service_used'):
+        for price_key in ('remove_price', 'upgrade_price'):
+            room[price_key] = max(1, _stacked_percentage_reduction(
+                room.get(price_key),
+                discount,
+                1,
+            ))
+
+
 def _upgrade_cards(state, cards, seed, events, namespace, apply_fast_learning=True):
     upgraded = []
     seen = set()
@@ -9087,8 +9134,11 @@ def _resolve_room(state, payload, seed, events):
             if not item:
                 _fail('INVALID_SHOP_RELIC', '商店中没有该遗物')
             _pay_gold(player, item['price'])
-            _gain_relic(state, item['relic_id'], seed, events)
+            purchased_relic_id = item['relic_id']
+            _gain_relic(state, purchased_relic_id, seed, events)
             item['sold'] = True
+            if purchased_relic_id == 'bargaining':
+                _apply_new_bargaining_stack_to_shop(room)
             _restock_shop_item(state, item, seed, events, 'relic')
         elif option == 'buy_enchantment_book':
             item = next((

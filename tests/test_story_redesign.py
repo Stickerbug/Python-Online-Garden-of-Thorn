@@ -14,6 +14,7 @@ from story_content import (
     STORY_EVENTS,
     STORY_RELICS,
     STORY_REWARD_CARD_IDS,
+    STORY_RULES,
     STORY_SHOP_CARD_IDS,
     STORY_STATUSES,
 )
@@ -480,6 +481,28 @@ def test_frenzy_doubles_attacks_and_requires_attacks_to_be_played_first():
     combat['hand'].remove(attack)
     assert _is_card_playable(state, skill)
     assert 'frenzy_relic' in STORY_BOSS_RELIC_IDS
+
+
+def test_stacked_frenzy_multiplies_physical_and_raw_damage_consistently():
+    state = _started_state('stacked-frenzy-relic')
+    state['player']['relics'].extend(['frenzy_relic', 'frenzy_relic'])
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'stacked-frenzy-relic',
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    enemy = state['combat']['enemies'][0]
+    enemy['shield'] = 0
+
+    before = enemy['health']
+    _enemy_physical_damage(state, enemy, 3, 1, [], 'test')
+    assert before - enemy['health'] == 12
+
+    before = enemy['health']
+    _enemy_raw_damage(state, enemy, 2, [], 'test', player_caused=True)
+    assert before - enemy['health'] == 8
 
 
 def test_bandage_and_shiny_ladybug_survival_rules_are_distinct():
@@ -1172,6 +1195,82 @@ def test_duplicate_relics_stack_instead_of_becoming_consolation():
         encounter_override=[{'def_id': 'soldier_ant'}],
     )
     assert state['combat']['power'] == 2
+
+
+def test_stacked_opening_draw_and_support_effects_use_every_talent_copy():
+    grab_state = _started_state('stacked-grab-every-card')
+    grab_state['player']['relics'].extend(['grab_every_card', 'grab_every_card'])
+    _start_combat(
+        grab_state,
+        {'type': 'combat'},
+        'stacked-grab-every-card',
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    assert len(grab_state['combat']['hand']) == STORY_RULES['draw_per_turn'] + 2
+
+    support_state = _started_state('stacked-support')
+    support_state['player']['relics'].extend(['support', 'support'])
+    _start_combat(
+        support_state,
+        {'type': 'combat'},
+        'stacked-support',
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    assert len(support_state['combat']['hand']) == STORY_RULES['draw_per_turn'] - 2
+    assert support_state['combat']['shield'] == 6
+
+
+def test_stacked_bargaining_uses_multiplicative_prices_and_reprices_current_shop():
+    class FixedPriceRng:
+        @staticmethod
+        def uniform(_minimum, _maximum):
+            return 1.0
+
+    state = _started_state('stacked-bargaining')
+    state['player']['relics'].extend(['bargaining', 'bargaining'])
+    assert story_engine._shop_price(state, 100, FixedPriceRng()) == 25
+
+    shop = _make_shop(state, 'stacked-bargaining:shop')
+    assert shop['remove_price'] == 18
+    assert shop['upgrade_price'] == 12
+
+    purchase_state = _started_state('buy-second-bargaining')
+    purchase_state['player']['relics'].append('bargaining')
+    purchase_state['player']['gold'] = 10_000
+    purchase_state['phase'] = 'room'
+    purchase_state['room'] = _make_shop(
+        purchase_state,
+        'buy-second-bargaining:shop',
+    )
+    purchased_item = purchase_state['room']['relics'][0]
+    purchased_item['relic_id'] = 'bargaining'
+    before_prices = {
+        item['id']: item['price']
+        for collection in ('cards', 'relics', 'enchantment_books')
+        for item in purchase_state['room'][collection]
+        if item is not purchased_item
+    }
+    before_remove = purchase_state['room']['remove_price']
+    before_upgrade = purchase_state['room']['upgrade_price']
+
+    purchased, _ = apply_story_action(
+        purchase_state,
+        'resolve_room',
+        {'option': 'buy_relic', 'item_id': purchased_item['id']},
+        'buy-second-bargaining',
+    )
+
+    assert purchased['player']['relics'].count('bargaining') == 2
+    assert purchased['room']['remove_price'] == max(1, before_remove // 2)
+    assert purchased['room']['upgrade_price'] == max(1, before_upgrade // 2)
+    for collection in ('cards', 'relics', 'enchantment_books'):
+        for item in purchased['room'][collection]:
+            if item['id'] == purchased_item['id']:
+                assert item['sold'] is True
+            else:
+                assert item['price'] == max(1, before_prices[item['id']] // 2)
 
 
 def test_two_world_tree_leaves_each_prevent_one_death():
