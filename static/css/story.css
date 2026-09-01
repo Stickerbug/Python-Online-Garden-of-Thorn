@@ -3172,6 +3172,12 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
 }
 .story-map-node.is-actionable:hover circle,
 .story-map-node.is-actionable:focus circle { fill: var(--story-green-soft); stroke-width: 8; }
+.story-map-node.is-actionable circle.story-map-node-hitbox {
+  fill: transparent;
+  stroke: none;
+  filter: none;
+  pointer-events: all;
+}
 .story-map-node.is-actionable:focus { outline: none; }
 .story-map-node[data-status='completed'] { opacity: .44; }
 

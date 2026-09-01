@@ -6212,6 +6212,15 @@
                     preserveAspectRatio: 'xMidYMid meet',
                     'aria-hidden': 'true',
                 }));
+                if (actionable) {
+                    group.append(svgElement('circle', {
+                        class: 'story-map-node-hitbox',
+                        cx: 0,
+                        cy: 0,
+                        r: STORY_MAP_NODE_RADIUS,
+                        'aria-hidden': 'true',
+                    }));
+                }
             } else {
                 const text = svgElement('text', { x: 0, y: 1 });
                 text.textContent = t.roomMarks[node.type] || '?';

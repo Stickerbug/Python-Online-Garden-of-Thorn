@@ -103,6 +103,19 @@ def test_story_map_uses_supplied_icons_for_weighted_room_types():
     assert '.story-map-node.is-actionable:hover .story-map-room-icon,' in STORY_CSS
 
 
+def test_story_map_icon_nodes_keep_an_invisible_pointer_hitbox():
+    map_render = STORY_JS.split('function renderMap(map, currentNodeId', 1)[1].split(
+        'function currentNode(',
+        1,
+    )[0]
+
+    assert "class: 'story-map-node-hitbox'" in map_render
+    assert "if (actionable) {" in map_render
+    assert '.story-map-node.is-actionable circle.story-map-node-hitbox {' in STORY_CSS
+    assert 'fill: transparent;' in STORY_CSS
+    assert 'pointer-events: all;' in STORY_CSS
+
+
 def test_story_cards_use_gallery_spacing_tokens():
     assert '--card-effect-padding-y: 6cqi;' in STORY_CSS
     assert '--card-effect-padding-x: 2.5cqi;' in STORY_CSS
