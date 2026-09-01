@@ -281,6 +281,19 @@ def test_lobby_ui_exposes_four_core_match_modes_and_keeps_special_modes_casual()
     assert "preferred_disabled_mods" in source
 
 
+def test_ranked_mode_tabs_are_rendered_before_casual_mode_tabs():
+    template = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
+    ordered_modes = (
+        'ranked_1v1',
+        'ranked_2v2',
+        'casual_1v1',
+        'casual_2v2',
+    )
+
+    positions = [template.index(f'data-mode="{mode}"') for mode in ordered_modes]
+    assert positions == sorted(positions)
+
+
 def test_new_ranked_era_archives_legacy_rating_without_resetting_it(tmp_path):
     old_path = db.DB_PATH
     db.DB_PATH = str(tmp_path / 'ranked-era.sqlite3')
