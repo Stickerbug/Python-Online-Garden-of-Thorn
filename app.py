@@ -646,6 +646,7 @@ GTN_STATIC_VERSION += '-story-hud-card-play-unlock-1'
 GTN_STATIC_VERSION += '-story-external-save-surrender-1'
 GTN_STATIC_VERSION += '-story-card-effect-fit-floor-1'
 GTN_STATIC_VERSION += '-ranked-entertainment-auto-disable-1'
+GTN_STATIC_VERSION += '-story-card-effect-fit-cache-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')

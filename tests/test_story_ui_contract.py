@@ -137,7 +137,7 @@ def test_story_attack_prediction_does_not_change_effect_scale_on_hover():
     assert 'font-size: calc(var(--card-effect-font-scale) * .92);' not in STORY_CSS
 
 
-def test_story_card_effect_fit_keeps_a_readable_floor_and_limits_spacing_shrink():
+def test_story_card_effect_fit_is_cached_and_only_shrinks_for_real_overflow():
     fit_branch = STORY_JS.split(
         'function fitStoryCardEffect(cardElement) {',
         1,
@@ -146,12 +146,33 @@ def test_story_card_effect_fit_keeps_a_readable_floor_and_limits_spacing_shrink(
         1,
     )[0]
 
-    assert 'const minimumReadableScale = 0.76;' in fit_branch
-    assert 'const minimumSpacingScale = 0.9;' in fit_branch
+    assert 'const storyCardEffectFitCache = new Map();' in STORY_JS
+    assert 'const storyCardEffectFitState = new WeakMap();' in STORY_JS
+    assert "if (previousFit?.inputKey === inputKey)" in fit_branch
+    assert "cardElement.dataset.effectFitSource = 'unchanged';" in fit_branch
+    assert 'const cachedScale = storyCardEffectFitCache.get(cacheKey);' in fit_branch
+    assert "cardElement.dataset.effectFitSource = 'cache';" in fit_branch
+    assert 'const minimumReadableScale = 0.82;' in fit_branch
+    assert 'const effectOverflows = () => effect.scrollHeight > effect.clientHeight + 0.75;' in fit_branch
     assert 'resetStoryCardEffectFit(effect);' in fit_branch
     assert "effect.style.removeProperty('font-size');" in STORY_JS
-    assert 'const minimumScale = !overflowed && !predictionTooTall' in fit_branch
-    assert 'scale = Math.max(minimumScale, nextScale);' in fit_branch
+    assert 'needsBreathingRoom' not in fit_branch
+    assert 'predictionHeightLimit' not in fit_branch
+    assert 'for (let pass = 0; pass < 8; pass += 1)' in fit_branch
+    assert 'rememberStoryCardEffectScale(cacheKey, scale);' in fit_branch
+
+
+def test_story_card_effect_fit_invalidates_for_fonts_and_bottom_layout_changes():
+    assert 'invalidateStoryCardEffectFitCache();' in STORY_JS
+    prediction_refresh = STORY_JS.split(
+        'function refreshStoryCardPredictions() {',
+        1,
+    )[1].split(
+        'function setStoryPredictionTarget(targetId) {',
+        1,
+    )[0]
+    assert 'scheduleStoryCardEffectFit(element);' in prediction_refresh
+    assert "image.addEventListener('error', () => {" in STORY_JS
 
 
 def test_story_card_typography_matches_gallery_primitives():

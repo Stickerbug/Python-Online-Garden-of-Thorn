@@ -800,6 +800,7 @@
         Promise.all(fonts.map((font) => font.load())).then((loadedFonts) => {
             loadedFonts.forEach((loaded) => document.fonts.add(loaded));
             document.documentElement.classList.add('fonts-loaded-main');
+            invalidateStoryCardEffectFitCache();
             scheduleVisibleStoryCardEffectFits();
         }).catch(() => {});
     }
@@ -6480,7 +6481,11 @@
     }
 
     const pendingStoryCardEffectFits = new Set();
+    const storyCardEffectFitCache = new Map();
+    const storyCardEffectFitState = new WeakMap();
+    const STORY_CARD_EFFECT_FIT_CACHE_LIMIT = 512;
     let pendingStoryCardEffectFitFrame = 0;
+    let storyCardEffectFitRevision = 0;
 
     function resetStoryCardEffectFit(effect) {
         if (!effect) return;
@@ -6491,65 +6496,115 @@
         effect.style.removeProperty('padding-left');
     }
 
+    function invalidateStoryCardEffectFitCache() {
+        storyCardEffectFitRevision += 1;
+        storyCardEffectFitCache.clear();
+    }
+
+    function storyCardEffectFitInputKey(cardElement, effect) {
+        const cardStyle = getComputedStyle(cardElement);
+        const effectStyle = getComputedStyle(effect);
+        const siblingLayout = [...cardElement.children]
+            .filter((child) => child !== effect && !child.classList.contains('story-card-note'))
+            .map((child) => `${child.className}:${child.offsetHeight}`)
+            .join('|');
+        return [
+            storyCardEffectFitRevision,
+            parseFloat(cardStyle.width).toFixed(2),
+            parseFloat(cardStyle.height).toFixed(2),
+            effect.clientWidth,
+            effectStyle.getPropertyValue('--card-effect-font-scale').trim(),
+            effectStyle.getPropertyValue('--card-effect-line-height').trim(),
+            effectStyle.getPropertyValue('--card-effect-padding-y').trim(),
+            effectStyle.getPropertyValue('--card-effect-padding-x').trim(),
+            effect.innerHTML,
+            siblingLayout,
+        ].join('\u001f');
+    }
+
+    function applyStoryCardEffectScale(effect, cardElement, baseMetrics, scale) {
+        resetStoryCardEffectFit(effect);
+        if (scale < 0.999) {
+            effect.style.fontSize = `${baseMetrics.fontSize * scale}px`;
+            effect.style.paddingTop = `${baseMetrics.padding.top * scale}px`;
+            effect.style.paddingRight = `${baseMetrics.padding.right * scale}px`;
+            effect.style.paddingBottom = `${baseMetrics.padding.bottom * scale}px`;
+            effect.style.paddingLeft = `${baseMetrics.padding.left * scale}px`;
+        }
+        cardElement.dataset.effectFitScale = scale.toFixed(3);
+    }
+
+    function rememberStoryCardEffectScale(cacheKey, scale) {
+        if (storyCardEffectFitCache.has(cacheKey)) storyCardEffectFitCache.delete(cacheKey);
+        storyCardEffectFitCache.set(cacheKey, scale);
+        if (storyCardEffectFitCache.size <= STORY_CARD_EFFECT_FIT_CACHE_LIMIT) return;
+        storyCardEffectFitCache.delete(storyCardEffectFitCache.keys().next().value);
+    }
+
     function fitStoryCardEffect(cardElement) {
         if (!cardElement?.isConnected) return;
         const effect = cardElement.querySelector(':scope > .card-effect');
         if (!effect) return;
-        resetStoryCardEffectFit(effect);
-        cardElement.dataset.effectFitScale = '1';
-        const cardRect = cardElement.getBoundingClientRect();
-        if (cardRect.width < 20 || cardRect.height < 20 || effect.getClientRects().length === 0) return;
+        if (cardElement.offsetWidth < 20 || cardElement.offsetHeight < 20 || effect.getClientRects().length === 0) return;
 
+        const inputKey = storyCardEffectFitInputKey(cardElement, effect);
+        const previousFit = storyCardEffectFitState.get(cardElement);
+        if (previousFit?.inputKey === inputKey) {
+            cardElement.dataset.effectFitSource = 'unchanged';
+            return;
+        }
+
+        resetStoryCardEffectFit(effect);
         const baseStyle = getComputedStyle(effect);
-        const baseFontSize = parseFloat(baseStyle.fontSize) || 1;
-        const baseLineHeight = parseFloat(baseStyle.lineHeight) || (baseFontSize * 1.2);
-        const basePadding = {
-            top: parseFloat(baseStyle.paddingTop) || 0,
-            right: parseFloat(baseStyle.paddingRight) || 0,
-            bottom: parseFloat(baseStyle.paddingBottom) || 0,
-            left: parseFloat(baseStyle.paddingLeft) || 0,
+        const baseMetrics = {
+            fontSize: parseFloat(baseStyle.fontSize) || 1,
+            lineHeight: parseFloat(baseStyle.lineHeight) || 1,
+            padding: {
+                top: parseFloat(baseStyle.paddingTop) || 0,
+                right: parseFloat(baseStyle.paddingRight) || 0,
+                bottom: parseFloat(baseStyle.paddingBottom) || 0,
+                left: parseFloat(baseStyle.paddingLeft) || 0,
+            },
         };
-        const predictionHeightLimit = cardElement.classList.contains('card-effect-fit-prediction')
-            ? baseLineHeight * 3.7
-            : Infinity;
-        const minimumReadableScale = 0.76;
-        const minimumSpacingScale = 0.9;
+        const cacheKey = [
+            inputKey,
+            effect.clientWidth,
+            baseMetrics.fontSize.toFixed(3),
+            baseMetrics.lineHeight.toFixed(3),
+            Object.values(baseMetrics.padding).map((value) => value.toFixed(3)).join(','),
+        ].join('\u001e');
+        const cachedScale = storyCardEffectFitCache.get(cacheKey);
+        if (Number.isFinite(cachedScale)) {
+            applyStoryCardEffectScale(effect, cardElement, baseMetrics, cachedScale);
+            storyCardEffectFitState.set(cardElement, { inputKey, cacheKey, scale: cachedScale });
+            cardElement.dataset.effectFitSource = 'cache';
+            return;
+        }
+
+        const minimumReadableScale = 0.82;
+        const effectOverflows = () => effect.scrollHeight > effect.clientHeight + 0.75;
         let scale = 1;
 
-        for (let pass = 0; pass < 14; pass += 1) {
-            const style = getComputedStyle(effect);
-            const paddingY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
-            const naturalTextHeight = Math.max(0, effect.scrollHeight - paddingY);
-            const overflowed = effect.scrollHeight > effect.clientHeight + 0.75;
-            const nextElement = effect.nextElementSibling;
-            const effectRect = effect.getBoundingClientRect();
-            const nextTop = nextElement
-                ? nextElement.getBoundingClientRect().top
-                : cardElement.getBoundingClientRect().bottom;
-            const spareGap = Math.max(0, nextTop - effectRect.bottom);
-            const needsBreathingRoom = spareGap + 0.5 < baseLineHeight * 0.18;
-            const predictionTooTall = naturalTextHeight > predictionHeightLimit + 0.5;
-            if (!overflowed && !needsBreathingRoom && !predictionTooTall) break;
-            const minimumScale = !overflowed && !predictionTooTall
-                ? minimumSpacingScale
-                : minimumReadableScale;
-            if (scale <= minimumScale + 0.001) break;
-
-            let nextScale = scale - 0.04;
-            if (predictionTooTall && naturalTextHeight > 0) {
-                nextScale = Math.min(
-                    nextScale,
-                    scale * predictionHeightLimit / naturalTextHeight * 0.985,
-                );
+        if (effectOverflows()) {
+            let low = minimumReadableScale;
+            let high = 1;
+            applyStoryCardEffectScale(effect, cardElement, baseMetrics, low);
+            if (!effectOverflows()) {
+                for (let pass = 0; pass < 8; pass += 1) {
+                    const midpoint = (low + high) / 2;
+                    applyStoryCardEffectScale(effect, cardElement, baseMetrics, midpoint);
+                    if (effectOverflows()) high = midpoint;
+                    else low = midpoint;
+                }
+                scale = Math.floor(low * 1000) / 1000;
+            } else {
+                scale = minimumReadableScale;
             }
-            scale = Math.max(minimumScale, nextScale);
-            effect.style.fontSize = `${baseFontSize * scale}px`;
-            effect.style.paddingTop = `${basePadding.top * scale}px`;
-            effect.style.paddingRight = `${basePadding.right * scale}px`;
-            effect.style.paddingBottom = `${basePadding.bottom * scale}px`;
-            effect.style.paddingLeft = `${basePadding.left * scale}px`;
-            cardElement.dataset.effectFitScale = scale.toFixed(3);
         }
+        applyStoryCardEffectScale(effect, cardElement, baseMetrics, scale);
+        rememberStoryCardEffectScale(cacheKey, scale);
+        storyCardEffectFitState.set(cardElement, { inputKey, cacheKey, scale });
+        cardElement.dataset.effectFitSource = 'measured';
     }
 
     function scheduleStoryCardEffectFit(cardElement) {
@@ -6679,6 +6734,7 @@
             element.querySelector('.card-bottom-zone')?.remove();
             const bottom = createStoryCardBottom(card, values, targetId, true);
             if (bottom) element.append(bottom);
+            scheduleStoryCardEffectFit(element);
         });
     }
 
@@ -7750,7 +7806,10 @@
             image.src = imageUrl;
             image.alt = '';
             image.decoding = 'async';
-            image.addEventListener('error', () => art.classList.add('hidden'));
+            image.addEventListener('error', () => {
+                art.classList.add('hidden');
+                scheduleStoryCardEffectFit(element);
+            });
             art.append(image);
             element.append(art);
         }
