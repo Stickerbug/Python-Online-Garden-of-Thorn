@@ -833,7 +833,18 @@ class GameEngine2v2(GameEngine):
                 self.pending_response = pending
                 return {'success': False, 'error': '资源不足，无法反制'}
             validation_target_id = responder_id
-            if not self._card_can_counter(counter_card, card, responder_id=responder_id, target_player_id=validation_target_id):
+            previous_response_preview = getattr(self, '_pending_response_preview', None)
+            self._pending_response_preview = pending
+            try:
+                counter_is_eligible = self._card_can_counter(
+                    counter_card,
+                    card,
+                    responder_id=responder_id,
+                    target_player_id=validation_target_id,
+                )
+            finally:
+                self._pending_response_preview = previous_response_preview
+            if not counter_is_eligible:
                 self.pending_response = pending
                 return {'success': False, 'error': '该牌不能反制当前行动'}
             self._spend_resource(responder_id, 'elixir', counter_cost_e, counter_card)

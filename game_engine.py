@@ -7644,7 +7644,16 @@ class GameEngine:
                 return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
             can_respond = False
             played_card_def = card.card_def
-            if not self._counter_card_can_counter_pending(responder_id, counter_card):
+            previous_response_preview = getattr(self, '_pending_response_preview', None)
+            self._pending_response_preview = pending
+            try:
+                counter_is_eligible = self._counter_card_can_counter_pending(
+                    responder_id,
+                    counter_card,
+                )
+            finally:
+                self._pending_response_preview = previous_response_preview
+            if not counter_is_eligible:
                 can_respond = False
             elif played_card_def.card_type == 'thorn' and counter_card.card_def.response_trigger == 'thorn':
                 can_respond = True
@@ -7907,6 +7916,15 @@ class GameEngine:
                 magic_nazar_stacks = int(ps.custom_statuses.get('magic_nazar', 0) or 0) + 2
                 ps.custom_statuses['magic_nazar'] = magic_nazar_stacks
                 self.log_msg(f"{self.pn(responder_id)}获得2层魔法邪眼（共{magic_nazar_stacks}层）")
+        elif self._card_is(counter_card, 'GoldenNazar', 'vanilla:goldennazar'):
+            self._atomic_add_equipment_armor(
+                responder_id,
+                counter_card,
+                {'target': 'self', 'amount': 2},
+                '',
+                None,
+                {'target_id': responder_id},
+            )
         elif self._card_is(counter_card, 'MagicBubble', 'vanilla:magicbubble'):
             if not self._status_application_blocked(responder_id, 'negate_next_skill'):
                 ps.negate_next_skill = True

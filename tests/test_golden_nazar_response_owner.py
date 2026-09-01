@@ -13,6 +13,57 @@ def _equip(engine, owner_id, def_id='Disc', *, armor=0):
 
 
 class GoldenNazarResponseOwnerTests(unittest.TestCase):
+    def test_one_vs_one_response_adds_armor_before_targeted_destruction(self):
+        engine = GameEngine()
+        targeted = _equip(engine, 1)
+        untouched = _equip(engine, 1, def_id='Leaf')
+        golden_nazar = CardInstance('GoldenNazar')
+        engine.players[1].hand.append(golden_nazar)
+        engine.players[1].elixir = golden_nazar.cost_e
+        engine.pending_response = {
+            'card': CardInstance('Sewage').to_dict(),
+            'player_id': 0,
+            'target_player_id': 1,
+            'original_choice': {
+                'target_player_id': 1,
+                'target_instance_id': targeted.card_instance.instance_id,
+            },
+        }
+
+        result = engine.handle_response(1, golden_nazar.instance_id)
+
+        self.assertTrue(result['success'])
+        self.assertNotIn(golden_nazar, engine.players[1].hand)
+        self.assertIn(golden_nazar, engine.players[1].discard)
+        self.assertIn(targeted, engine.players[1].equipment)
+        self.assertEqual(1, targeted.armor)
+        self.assertEqual(2, untouched.armor)
+
+    def test_two_vs_two_response_adds_armor_before_global_destruction(self):
+        engine = GameEngine2v2()
+        first = _equip(engine, 2)
+        second = _equip(engine, 2, def_id='Leaf')
+        golden_nazar = CardInstance('GoldenNazar')
+        engine.players[2].hand.append(golden_nazar)
+        engine.players[2].elixir = golden_nazar.cost_e
+        engine.pending_response = {
+            'card': CardInstance('MagicSewage').to_dict(),
+            'player_id': 0,
+            'target_player_id': 1,
+            'original_choice': {'target_player_id': 1},
+            'counter_cards': [dict(golden_nazar.to_dict(), responder_id=2)],
+        }
+
+        result = engine.handle_response(2, golden_nazar.instance_id)
+
+        self.assertTrue(result['success'])
+        self.assertNotIn(golden_nazar, engine.players[2].hand)
+        self.assertIn(golden_nazar, engine.players[2].discard)
+        self.assertIn(first, engine.players[2].equipment)
+        self.assertIn(second, engine.players[2].equipment)
+        self.assertEqual(1, first.armor)
+        self.assertEqual(1, second.armor)
+
     def test_one_vs_one_opponent_cannot_respond_when_only_source_equipment_is_threatened(self):
         engine = GameEngine()
         _equip(engine, 0)
