@@ -3171,6 +3171,19 @@ def initial_story_player(character_id='common_flower'):
     }
 
 
+def story_combat_starting_magic(player):
+    """Reset battle-only magic and consume an explicit one-combat bonus."""
+
+    baseline = max(0, int(STORY_RULES.get('starting_magic') or 0))
+    if not isinstance(player, dict):
+        return baseline
+    # ``player.magic`` remains in the save schema for compatibility and admin
+    # inspection, but ordinary combat magic must never become a run resource.
+    player['magic'] = baseline
+    bonus = max(0, int(player.pop('next_combat_magic_bonus', 0) or 0))
+    return baseline + bonus
+
+
 def _find_source(card_defs, source_id=None, source_names=()):
     if not card_defs:
         return None

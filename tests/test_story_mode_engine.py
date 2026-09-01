@@ -82,6 +82,43 @@ def _inject_hand_card(state, def_id, upgraded=False):
     return card
 
 
+@pytest.mark.parametrize(
+    ('character_id', 'relic_magic'),
+    (('common_flower', 0), ('mage', 1)),
+)
+def test_story_magic_resets_between_combats_but_keeps_explicit_next_combat_bonus(
+    character_id,
+    relic_magic,
+):
+    seed = f'story-combat-magic-reset-{character_id}'
+    state = build_initial_story_state(seed, character_id=character_id)
+    state['player']['magic'] = 37
+    state['player']['next_combat_magic_bonus'] = 2
+
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        seed,
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+
+    assert state['combat']['magic'] == 2 + relic_magic
+    assert state['player']['magic'] == 0
+    assert 'next_combat_magic_bonus' not in state['player']
+
+    state['combat'] = None
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        f'{seed}-second',
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+
+    assert state['combat']['magic'] == relic_magic
+
+
 def test_story_disc_halves_enemy_physical_damage_until_next_player_turn():
     state = build_initial_story_state('story-disc')
     _start_combat(

@@ -13,7 +13,11 @@ import json
 import math
 import re
 
-from story_content import STORY_ENCHANTMENT_BOOKS, STORY_RULES
+from story_content import (
+    STORY_ENCHANTMENT_BOOKS,
+    STORY_RULES,
+    story_combat_starting_magic,
+)
 from story_coop_content import (
     COOP_CHEST_RELIC_IDS,
     COOP_CONTENT_FINGERPRINT,
@@ -715,7 +719,7 @@ def _intro_seat_states(state, run_seed, combat_id=COOP_INTRO_COMBAT_ID):
         )
         seat_states[seat_key] = {
             'elixir': max(0, int(player.get('max_elixir') or player.get('elixir') or 0)),
-            'magic': max(0, int(player.get('magic') or 0)) + opening_magic,
+            'magic': story_combat_starting_magic(player) + opening_magic,
             'shield': 0,
             'statuses': {},
             'hand': shuffled[:int(STORY_RULES['draw_per_turn'])],

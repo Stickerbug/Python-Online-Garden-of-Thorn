@@ -13,6 +13,7 @@ import json
 import math
 import re
 
+from story_content import story_combat_starting_magic
 from story_coop import story_seat_for_user, validate_story_state_v10
 
 
@@ -98,7 +99,7 @@ def _living_enemies(state):
 def _default_seat_state(player):
     return {
         'elixir': max(0, int(player.get('max_elixir') or player.get('elixir') or 0)),
-        'magic': max(0, int(player.get('magic') or 0)),
+        'magic': story_combat_starting_magic(player),
         'shield': 0,
         'statuses': {},
         'hand': [],

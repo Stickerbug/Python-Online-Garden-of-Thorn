@@ -13,6 +13,7 @@ from story_coop_live import (
     COOP_OPENING_BLESSING_IDS,
     COOP_STAGE1_DIFFICULTIES,
     COOP_STORY_CONTENT_VERSION,
+    _intro_seat_states,
     _shop_card_price,
     advance_coop_after_victory,
     apply_coop_journey_command,
@@ -132,6 +133,31 @@ def _play_combat_card(
         round_start_resolver=prepare_intro_coop_round,
         enemy_action_resolver=resolve_compiled_coop_enemy_action,
     )
+
+
+@pytest.mark.parametrize(
+    ('character_id', 'relic_magic'),
+    (('common_flower', 0), ('mage', 1)),
+)
+def test_coop_magic_resets_between_combats_but_keeps_explicit_next_combat_bonus(
+    character_id,
+    relic_magic,
+):
+    seed = f'coop-combat-magic-reset-{character_id}'
+    state = build_initial_coop_story_state(seed, MEMBERS, character_id=character_id)
+    for player in state['players'].values():
+        player['magic'] = 37
+        player['next_combat_magic_bonus'] = 2
+
+    first = _intro_seat_states(state, seed, combat_id='magic-reset-first')
+
+    assert all(seat_state['magic'] == 2 + relic_magic for seat_state in first.values())
+    assert all(player['magic'] == 0 for player in state['players'].values())
+    assert all('next_combat_magic_bonus' not in player for player in state['players'].values())
+
+    second = _intro_seat_states(state, seed, combat_id='magic-reset-second')
+
+    assert all(seat_state['magic'] == relic_magic for seat_state in second.values())
 
 
 @pytest.mark.parametrize('difficulty', COOP_STAGE1_DIFFICULTIES)

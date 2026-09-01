@@ -21,6 +21,7 @@ from story_content import (
     STORY_STATUSES,
     STORY_TRAITS,
     STORY_TRAIT_VALUE_KEYS,
+    story_combat_starting_magic,
     story_reward_card_ids,
     story_shop_card_ids,
 )
@@ -4982,10 +4983,7 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'turn_kind': 'normal',
         'reward_room_type': str(node.get('type') or 'combat'),
         'elixir': int(state['player']['max_elixir']),
-        'magic': int(state['player']['magic']) + max(
-            0,
-            int(state['player'].pop('next_combat_magic_bonus', 0) or 0),
-        ),
+        'magic': story_combat_starting_magic(state['player']),
         'shield': 0,
         'power': 0,
         'temporary_power': 0,
