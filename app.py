@@ -6326,6 +6326,14 @@ SOCKET_TOTAL_USER_LIMIT = max(120, _env_int('GTN_SOCKET_TOTAL_USER_LIMIT', 480))
 SOCKET_TOTAL_IP_LIMIT = max(240, _env_int('GTN_SOCKET_TOTAL_IP_LIMIT', 1200))
 SOCKET_ILLEGAL_KICK_LIMIT = 12
 SOCKET_ILLEGAL_WINDOW = 300
+SOCKET_ISOLATED_EVENT_SERVER_LIMITS = {
+    # Eye tracking is a lossy cosmetic stream.  Keep it out of the aggregate
+    # action buckets so ordinary pointer movement cannot block gameplay.
+    'skin_look': (max(1000, _env_int('GTN_SOCKET_SKIN_LOOK_SERVER_LIMIT', 24000)), 60),
+}
+SILENT_RATE_LIMIT_EVENT_NAMES = {
+    'skin_look',
+}
 SOFT_REJECT_EVENT_NAMES = {
     'play_card',
     'response',
@@ -6424,22 +6432,37 @@ def _security_record(kind, message, *, sid=None, severity='medium', extra=None):
     return event
 
 
-def _security_illegal(sid, event_name, message, *, severity='medium', emit_error=True, extra=None):
+def _security_illegal(
+    sid,
+    event_name,
+    message,
+    *,
+    severity='medium',
+    emit_error=True,
+    extra=None,
+    count_toward_kick=None,
+):
     user_id = _security_user_id_for_sid(sid)
     player = _security_player_for_sid(sid)
     room_id = player.get('room_id') if player else None
     engine_phase = None
     if room_id is not None and room_id in rooms:
         engine_phase = getattr(getattr(rooms.get(room_id), 'engine', None), 'phase', None)
-    key = f'user:{user_id}' if user_id else f'sid:{sid}'
-    count, should_kick = record_illegal_operation(
-        key,
-        limit=SOCKET_ILLEGAL_KICK_LIMIT,
-        window=SOCKET_ILLEGAL_WINDOW,
-    )
+    if count_toward_kick is None:
+        count_toward_kick = str(severity or '').strip().lower() not in ('info', 'low')
+    count = 0
+    should_kick = False
+    if count_toward_kick:
+        key = f'user:{user_id}' if user_id else f'sid:{sid}'
+        count, should_kick = record_illegal_operation(
+            key,
+            limit=SOCKET_ILLEGAL_KICK_LIMIT,
+            window=SOCKET_ILLEGAL_WINDOW,
+        )
     extra_payload = dict(extra or {})
     extra_payload.update({
-        'hard_illegal': True,
+        'hard_illegal': bool(count_toward_kick),
+        'counts_toward_kick': bool(count_toward_kick),
         'illegal_count': count,
         'event_name': event_name,
         'room_id': room_id,
@@ -6466,6 +6489,22 @@ def _security_illegal(sid, event_name, message, *, severity='medium', emit_error
         socketio.start_background_task(_kick_later, sid)
         return True
     return False
+
+
+def _security_rate_limited(sid, event_name):
+    """Record a throttled diagnostic without treating rate pressure as tampering."""
+    if rate_limiter(f'security-log-rate:{sid}:{event_name}', limit=1, window=10):
+        _security_record(
+            f'{event_name}_rate',
+            'socket event rate limited',
+            sid=sid,
+            severity='low',
+            extra={
+                'hard_illegal': False,
+                'counts_toward_kick': False,
+                'event_name': event_name,
+            },
+        )
 
 
 def _soft_reject_context(room=None, pidx=None):
@@ -6636,6 +6675,20 @@ def _stamp_pending_interactions(room):
 
 
 def _socket_rate_allowed(sid, event_name, *, exempt=False):
+    isolated_server_limit = SOCKET_ISOLATED_EVENT_SERVER_LIMITS.get(event_name)
+    if isolated_server_limit is not None:
+        limit, window = SOCKET_EVENT_LIMITS.get(event_name, SOCKET_DEFAULT_LIMIT)
+        if not rate_limiter(f'socket:sid:{sid}:{event_name}', limit=limit, window=window):
+            return False
+        user_id = _security_user_id_for_sid(sid)
+        if user_id and not rate_limiter(f'socket:user:{user_id}:{event_name}', limit=limit * 2, window=window):
+            return False
+        server_limit, server_window = isolated_server_limit
+        return rate_limiter(
+            f'socket:server:{event_name}',
+            limit=server_limit,
+            window=server_window,
+        )
     if not rate_limiter('socket:server:all', limit=SOCKET_TOTAL_SERVER_LIMIT, window=60):
         return False
     if exempt:
@@ -6767,7 +6820,9 @@ def socket_guard(event_name, data=None, *, require_player=True, allow_empty=Fals
         if event_name in SOFT_REJECT_EVENT_NAMES:
             soft_reject(sid, event_name, 'ACTION_TOO_FAST')
         else:
-            _security_illegal(sid, event_name, '操作过于频繁', emit_error=emit_error, severity='high')
+            _security_rate_limited(sid, event_name)
+            if emit_error and event_name not in SILENT_RATE_LIMIT_EVENT_NAMES:
+                emit('server_error', {'message': '操作过于频繁', 'code': 'ACTION_TOO_FAST'})
         return None
     if (
         _player_uses_automatic_afk_check(player)
@@ -23582,7 +23637,10 @@ def on_afk_activity(data=None):
 @socketio.on('skin_look')
 def on_skin_look(data=None):
     sid = request.sid
-    data = socket_guard('skin_look', data, require_player=True, emit_error=False)
+    # A reconnect may make the browser's cosmetic pointer stream arrive just
+    # before login has rebuilt ``players[sid]``.  That race is harmless and
+    # must not be counted as an authentication violation.
+    data = socket_guard('skin_look', data, require_player=False, emit_error=False)
     if data is None:
         return
     look = normalize_skin_look(data)
