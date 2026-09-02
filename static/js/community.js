@@ -27,6 +27,13 @@
     return `${id}:${publishedAt}`;
   }
 
+  function pollReceipt(item) {
+    const id = Number(item?.id || 0);
+    if (!Number.isInteger(id) || id <= 0) return '';
+    const publishedAt = String(item?.published_at || item?.starts_at || '');
+    return `poll:${id}:${publishedAt}`;
+  }
+
   function readAnnouncementReceipts() {
     const receipts = new Set(announcementReadMemory);
     const key = announcementStorageKey();
@@ -52,23 +59,27 @@
     });
   }
 
-  function currentAnnouncementReceipts() {
-    const items = Array.isArray(state.feed?.announcements) ? state.feed.announcements : [];
-    return items.map(announcementReceipt).filter(Boolean);
+  function currentCommunityReceipts() {
+    const announcements = Array.isArray(state.feed?.announcements) ? state.feed.announcements : [];
+    const polls = Array.isArray(state.feed?.polls) ? state.feed.polls : [];
+    return [
+      ...announcements.map(announcementReceipt),
+      ...polls.map(pollReceipt),
+    ].filter(Boolean);
   }
 
   function updateAnnouncementBadge() {
     const button = byId('btn-community-top');
     if (!button) return;
     const read = readAnnouncementReceipts();
-    const hasUnread = currentAnnouncementReceipts().some((receipt) => !read.has(receipt));
+    const hasUnread = currentCommunityReceipts().some((receipt) => !read.has(receipt));
     button.classList.toggle('has-unread', hasUnread);
-    button.setAttribute('aria-label', hasUnread ? '公告与投票（有新公告）' : '公告与投票');
+    button.setAttribute('aria-label', hasUnread ? '公告与投票（有新内容）' : '公告与投票');
   }
 
-  function markAnnouncementsRead() {
+  function markCommunityItemsRead() {
     const receipts = readAnnouncementReceipts();
-    currentAnnouncementReceipts().forEach((receipt) => receipts.add(receipt));
+    currentCommunityReceipts().forEach((receipt) => receipts.add(receipt));
     writeAnnouncementReceipts(receipts);
     updateAnnouncementBadge();
   }
@@ -208,7 +219,7 @@
         state.csrfToken = String(payload.csrf_token || '');
         renderFeed();
         updateAnnouncementBadge();
-        if (isCommunityPopoverOpen()) markAnnouncementsRead();
+        if (isCommunityPopoverOpen()) markCommunityItemsRead();
         if (!silent) setStatus('');
       })
       .catch((error) => {
