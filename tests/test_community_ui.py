@@ -7,6 +7,7 @@ OPS = (ROOT / 'templates' / 'community_ops.html').read_text(encoding='utf-8')
 PUBLIC_JS = (ROOT / 'static' / 'js' / 'community.js').read_text(encoding='utf-8')
 OPS_JS = (ROOT / 'static' / 'js' / 'community_ops.js').read_text(encoding='utf-8')
 STYLE = (ROOT / 'static' / 'css' / 'style.css').read_text(encoding='utf-8')
+OPS_STYLE = (ROOT / 'static' / 'css' / 'community_ops.css').read_text(encoding='utf-8')
 
 
 def test_main_page_has_public_announcement_and_poll_surface():
@@ -60,6 +61,12 @@ def test_ops_page_has_no_changelog_controls():
     assert '更新日志草稿' not in OPS
     assert 'changelog_draft' not in OPS_JS
     assert '/api/community/ops/changelog-drafts/' not in OPS_JS
+
+
+def test_ops_refresh_button_keeps_a_readable_width():
+    assert '#ops-refresh' in OPS_STYLE
+    assert 'min-width: 68px' in OPS_STYLE
+    assert 'white-space: nowrap' in OPS_STYLE
 
 
 def test_new_announcements_and_polls_have_a_persistent_unread_dot():

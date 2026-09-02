@@ -112,6 +112,7 @@ body {
 .ops-button.is-secondary { background: transparent; color: var(--ops-text); border-color: var(--ops-border); }
 .ops-button.is-danger { background: transparent; color: var(--ops-danger); border-color: color-mix(in srgb, var(--ops-danger) 45%, var(--ops-border)); }
 .ops-button:disabled { opacity: .55; cursor: wait; }
+#ops-refresh { flex: 0 0 auto; min-width: 68px; padding-inline: 16px; white-space: nowrap; }
 
 .ops-list { display: grid; gap: 10px; }
 .ops-empty { padding: 20px; border: 1px dashed var(--ops-border); border-radius: 9px; color: var(--ops-muted); text-align: center; }
