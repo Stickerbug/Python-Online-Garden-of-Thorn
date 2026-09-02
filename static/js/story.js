@@ -6731,9 +6731,12 @@
             const card = activeRun.state.combat.hand.find((item) => String(item.instance_id) === instanceId);
             if (!card) return;
             const values = cardValues(card);
-            element.querySelector('.card-bottom-zone')?.remove();
+            const currentBottom = element.querySelector(':scope > .card-bottom-zone');
             const bottom = createStoryCardBottom(card, values, targetId, true);
-            if (bottom) element.append(bottom);
+            if (currentBottom?.outerHTML === bottom?.outerHTML) return;
+            if (currentBottom && bottom) currentBottom.replaceWith(bottom);
+            else if (currentBottom) currentBottom.remove();
+            else if (bottom) element.append(bottom);
             scheduleStoryCardEffectFit(element);
         });
     }

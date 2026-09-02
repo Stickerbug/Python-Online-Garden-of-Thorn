@@ -171,6 +171,9 @@ def test_story_card_effect_fit_invalidates_for_fonts_and_bottom_layout_changes()
         'function setStoryPredictionTarget(targetId) {',
         1,
     )[0]
+    assert "const currentBottom = element.querySelector(':scope > .card-bottom-zone');" in prediction_refresh
+    assert 'if (currentBottom?.outerHTML === bottom?.outerHTML) return;' in prediction_refresh
+    assert 'if (currentBottom && bottom) currentBottom.replaceWith(bottom);' in prediction_refresh
     assert 'scheduleStoryCardEffectFit(element);' in prediction_refresh
     assert "image.addEventListener('error', () => {" in STORY_JS
 
