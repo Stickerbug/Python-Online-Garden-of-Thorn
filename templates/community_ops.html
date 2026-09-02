@@ -12,7 +12,7 @@
     <div>
       <p class="ops-kicker">Garden of Thorn</p>
       <h1>社区运营台</h1>
-      <p class="ops-subtitle">公告、限时投票、更新日志草稿与操作审计</p>
+      <p class="ops-subtitle">公告、限时投票与操作审计</p>
     </div>
     <div class="ops-header-actions">
       <span class="ops-actor">{{ actor_username }} · {{ actor_role }}</span>
@@ -39,7 +39,6 @@
         <div class="ops-checks is-wide">
           <label><input id="announcement-pinned" type="checkbox"> 置顶</label>
           <label><input id="announcement-publish" type="checkbox"> 创建后发布</label>
-          <label><input id="announcement-changelog" type="checkbox"> 同步为更新日志草稿</label>
         </div>
         <button class="ops-button" type="submit">创建公告</button>
       </form>
@@ -81,16 +80,7 @@
       <div id="poll-list" class="ops-list"></div>
     </section>
 
-    <section class="ops-panel" aria-labelledby="draft-list-title">
-      <div class="ops-panel-head">
-        <div><p class="ops-kicker">Changelog</p><h2 id="draft-list-title">更新日志草稿</h2></div>
-        <span id="draft-count" class="ops-count">0</span>
-      </div>
-      <p class="ops-note">草稿仅保存在数据库中，需人工整理进 CHANGELOG.txt；网页不会改写仓库文件。</p>
-      <div id="draft-list" class="ops-list"></div>
-    </section>
-
-    <section class="ops-panel" aria-labelledby="audit-list-title">
+    <section class="ops-panel ops-span" aria-labelledby="audit-list-title">
       <div class="ops-panel-head">
         <div><p class="ops-kicker">Audit</p><h2 id="audit-list-title">最近操作</h2></div>
         <span id="audit-count" class="ops-count">0</span>

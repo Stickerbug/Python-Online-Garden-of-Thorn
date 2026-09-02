@@ -8,8 +8,75 @@
     votePromise: null,
     epoch: 0,
   };
+  const ANNOUNCEMENT_READ_KEY = 'gtn_community_announcement_reads_v1';
+  const announcementReadMemory = new Set();
 
   const byId = (id) => document.getElementById(id);
+
+  function announcementStorageKey() {
+    if (typeof window.gtnBetaStorageKey === 'function') {
+      return String(window.gtnBetaStorageKey(ANNOUNCEMENT_READ_KEY));
+    }
+    return ANNOUNCEMENT_READ_KEY;
+  }
+
+  function announcementReceipt(item) {
+    const id = Number(item?.id || 0);
+    if (!Number.isInteger(id) || id <= 0) return '';
+    const publishedAt = String(item?.published_at || item?.starts_at || '');
+    return `${id}:${publishedAt}`;
+  }
+
+  function readAnnouncementReceipts() {
+    const receipts = new Set(announcementReadMemory);
+    const key = announcementStorageKey();
+    ['localStorage', 'sessionStorage'].forEach((name) => {
+      try {
+        const storage = window[name];
+        const values = JSON.parse(storage.getItem(key) || '[]');
+        if (Array.isArray(values)) values.forEach((value) => receipts.add(String(value || '')));
+      } catch (_) {}
+    });
+    receipts.delete('');
+    return receipts;
+  }
+
+  function writeAnnouncementReceipts(receipts) {
+    const values = Array.from(receipts).filter(Boolean).slice(-120);
+    announcementReadMemory.clear();
+    values.forEach((value) => announcementReadMemory.add(value));
+    const serialized = JSON.stringify(values);
+    const key = announcementStorageKey();
+    ['localStorage', 'sessionStorage'].forEach((name) => {
+      try { window[name].setItem(key, serialized); } catch (_) {}
+    });
+  }
+
+  function currentAnnouncementReceipts() {
+    const items = Array.isArray(state.feed?.announcements) ? state.feed.announcements : [];
+    return items.map(announcementReceipt).filter(Boolean);
+  }
+
+  function updateAnnouncementBadge() {
+    const button = byId('btn-community-top');
+    if (!button) return;
+    const read = readAnnouncementReceipts();
+    const hasUnread = currentAnnouncementReceipts().some((receipt) => !read.has(receipt));
+    button.classList.toggle('has-unread', hasUnread);
+    button.setAttribute('aria-label', hasUnread ? '公告与投票（有新公告）' : '公告与投票');
+  }
+
+  function markAnnouncementsRead() {
+    const receipts = readAnnouncementReceipts();
+    currentAnnouncementReceipts().forEach((receipt) => receipts.add(receipt));
+    writeAnnouncementReceipts(receipts);
+    updateAnnouncementBadge();
+  }
+
+  function isCommunityPopoverOpen() {
+    const popover = byId('community-popover');
+    return Boolean(popover && !popover.classList.contains('hidden'));
+  }
 
   function setStatus(message, kind = '') {
     const node = byId('community-status');
@@ -130,21 +197,23 @@
     return payload;
   }
 
-  async function loadFeed(force = false) {
-    if (state.loadPromise && !force) return state.loadPromise;
+  async function loadFeed({ silent = false } = {}) {
+    if (state.loadPromise) return state.loadPromise;
     const epoch = state.epoch;
-    setStatus('正在加载…');
+    if (!silent) setStatus('正在加载…');
     const promise = requestJson('/api/community/feed')
       .then((payload) => {
         if (epoch !== state.epoch) return;
         state.feed = payload;
         state.csrfToken = String(payload.csrf_token || '');
         renderFeed();
-        setStatus('');
+        updateAnnouncementBadge();
+        if (isCommunityPopoverOpen()) markAnnouncementsRead();
+        if (!silent) setStatus('');
       })
       .catch((error) => {
         if (epoch !== state.epoch) return;
-        setStatus(error.message || '公告加载失败', 'error');
+        if (!silent) setStatus(error.message || '公告加载失败', 'error');
       })
       .finally(() => {
         if (state.loadPromise === promise) state.loadPromise = null;
@@ -204,7 +273,7 @@
     document.querySelectorAll('.account-popover:not(#community-popover)').forEach((node) => node.classList.add('hidden'));
     state.epoch += 1;
     popover.classList.remove('hidden');
-    loadFeed(true);
+    loadFeed();
   }
 
   function togglePopover() {
@@ -216,7 +285,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     byId('btn-community-top')?.addEventListener('click', togglePopover);
     byId('btn-community-close')?.addEventListener('click', closePopover);
-    byId('btn-community-refresh')?.addEventListener('click', () => loadFeed(true));
+    byId('btn-community-refresh')?.addEventListener('click', () => loadFeed());
     byId('community-feed')?.addEventListener('click', (event) => {
       const button = event.target.closest('[data-poll-id][data-option-id]');
       if (!button || button.disabled) return;
@@ -233,6 +302,12 @@
       closePopover();
       byId('btn-community-top')?.focus();
     }, true);
+    updateAnnouncementBadge();
+    loadFeed({ silent: true });
+    window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadFeed({ silent: true });
+    }, 60000);
+    window.addEventListener('focus', () => loadFeed({ silent: true }));
   });
 
   window.toggleCommunityPopover = (force) => {

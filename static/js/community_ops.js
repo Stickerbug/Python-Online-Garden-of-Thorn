@@ -129,29 +129,6 @@
     });
   }
 
-  function renderDrafts() {
-    const list = byId('draft-list');
-    const items = Array.isArray(state.workspace?.changelog_drafts) ? state.workspace.changelog_drafts : [];
-    byId('draft-count').textContent = String(items.length);
-    if (!items.length) return emptyList(list, '尚无更新日志草稿。');
-    list.textContent = '';
-    items.forEach((item) => {
-      const card = element('article', 'ops-item');
-      const head = element('div', 'ops-item-head');
-      head.appendChild(element('h3', 'ops-item-title', `#${item.id} ${item.title || ''}`));
-      head.appendChild(element('span', 'ops-item-state', item.status || 'pending'));
-      card.appendChild(head);
-      card.appendChild(element('p', 'ops-item-body', item.body || ''));
-      card.appendChild(element('div', 'ops-item-meta', `来源公告 #${item.announcement_id} · ${formatTime(item.created_at)}`));
-      if (item.status === 'pending') {
-        const actions = element('div', 'ops-item-actions');
-        actions.appendChild(actionButton('丢弃草稿', 'changelog-draft', item.id, 'discard', true));
-        card.appendChild(actions);
-      }
-      list.appendChild(card);
-    });
-  }
-
   function renderAudit() {
     const list = byId('audit-list');
     const items = Array.isArray(state.workspace?.audit) ? state.workspace.audit : [];
@@ -171,7 +148,6 @@
   function renderWorkspace() {
     renderAnnouncements();
     renderPolls();
-    renderDrafts();
     renderAudit();
     document.querySelectorAll('form input, form textarea, form button').forEach((node) => {
       node.disabled = state.loading || state.mutating;
@@ -215,7 +191,7 @@
   }
 
   function actionNeedsConfirmation(type, action) {
-    return action === 'retract' || action === 'close' || (type === 'changelog-draft' && action === 'discard');
+    return action === 'retract' || action === 'close';
   }
 
   function handleListAction(event) {
@@ -229,8 +205,6 @@
       mutate(`/api/community/ops/announcements/${encodeURIComponent(id)}/action`, { action }, `公告 #${id} 已更新。`);
     } else if (type === 'poll') {
       mutate(`/api/community/ops/polls/${encodeURIComponent(id)}/action`, { action }, `投票 #${id} 已更新。`);
-    } else if (type === 'changelog-draft') {
-      mutate(`/api/community/ops/changelog-drafts/${encodeURIComponent(id)}/action`, { action }, `更新日志草稿 #${id} 已丢弃。`);
     }
   }
 
@@ -238,7 +212,6 @@
     byId('ops-refresh')?.addEventListener('click', () => loadWorkspace());
     byId('announcement-list')?.addEventListener('click', handleListAction);
     byId('poll-list')?.addEventListener('click', handleListAction);
-    byId('draft-list')?.addEventListener('click', handleListAction);
 
     byId('announcement-create-form')?.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -258,7 +231,6 @@
         ends_at: endsAt,
         pinned: byId('announcement-pinned').checked,
         publish: byId('announcement-publish').checked,
-        changelog_draft: byId('announcement-changelog').checked,
       }, '公告已创建。').then(() => {
         if (!state.mutating && !byId('ops-status').classList.contains('is-error')) byId('announcement-create-form').reset();
       });

@@ -40,7 +40,6 @@ def test_ops_page_and_client_cover_all_operations():
         'poll-create-form',
         'announcement-list',
         'poll-list',
-        'draft-list',
         'audit-list',
     )
     for item in required_ids:
@@ -49,13 +48,23 @@ def test_ops_page_and_client_cover_all_operations():
         '/api/community/ops/workspace',
         '/api/community/ops/announcements',
         '/api/community/ops/polls',
-        '/api/community/ops/changelog-drafts/',
     ):
         assert endpoint in OPS_JS
     assert "'X-Community-Ops-CSRF'" in OPS_JS
     assert '.innerHTML' not in OPS_JS
 
 
-def test_runtime_changelog_sync_is_explicitly_draft_only():
-    assert '需人工整理进 CHANGELOG.txt' in OPS
-    assert '网页不会改写仓库文件' in OPS
+def test_ops_page_has_no_changelog_controls():
+    assert 'announcement-changelog' not in OPS
+    assert 'draft-list' not in OPS
+    assert '更新日志草稿' not in OPS
+    assert 'changelog_draft' not in OPS_JS
+    assert '/api/community/ops/changelog-drafts/' not in OPS_JS
+
+
+def test_new_announcements_have_a_persistent_unread_dot():
+    assert 'gtn_community_announcement_reads_v1' in PUBLIC_JS
+    assert 'function updateAnnouncementBadge()' in PUBLIC_JS
+    assert "button.classList.toggle('has-unread', hasUnread)" in PUBLIC_JS
+    assert 'function markAnnouncementsRead()' in PUBLIC_JS
+    assert '.community-top-btn.has-unread::after' in STYLE

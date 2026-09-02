@@ -105,7 +105,7 @@ class CommunityApiTests(unittest.TestCase):
                     'body': '娱乐模式仍然发放对局奖励。',
                     'pinned': True,
                     'publish': True,
-                    'changelog_draft': True,
+                    'changelog_draft': False,
                 },
             )
         self.assertEqual(created.status_code, 201)
@@ -114,6 +114,34 @@ class CommunityApiTests(unittest.TestCase):
         self.assertEqual(feed['announcements'][0]['title'], '娱乐赛奖励保留')
         self.assertNotIn('created_by', feed['announcements'][0])
         self.assertNotIn('audit', feed)
+
+    def test_ops_workspace_cannot_create_or_mutate_changelog_drafts(self):
+        token = self.ops_token()
+        with mock.patch.object(gtn, 'title_editor_actor', return_value=self.actor):
+            workspace = self.client.get('/api/community/ops/workspace').get_json()
+            create = self.client.post(
+                '/api/community/ops/announcements',
+                headers={'X-Community-Ops-CSRF': token},
+                json={
+                    'title': '只发布公告',
+                    'body': '不能同步更新日志。',
+                    'pinned': False,
+                    'publish': True,
+                    'changelog_draft': True,
+                },
+            )
+            mutate = self.client.post(
+                '/api/community/ops/changelog-drafts/1/action',
+                headers={'X-Community-Ops-CSRF': token},
+                json={'action': 'discard'},
+            )
+        self.assertNotIn('changelog_drafts', workspace['workspace'])
+        self.assertFalse(workspace['permissions']['can_manage_changelog_drafts'])
+        self.assertEqual(create.status_code, 403)
+        self.assertEqual(create.get_json()['code'], 'CHANGELOG_DISABLED')
+        self.assertEqual(mutate.status_code, 403)
+        self.assertEqual(mutate.get_json()['code'], 'CHANGELOG_DISABLED')
+        self.assertEqual(gtn.list_community_ops_workspace()['changelog_drafts'], [])
 
     def test_account_vote_uses_csrf_is_idempotent_and_cannot_change(self):
         poll = self.create_poll()

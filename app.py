@@ -310,7 +310,6 @@ from community_ops import (
     get_community_feed,
     list_community_ops_workspace,
     mutate_community_announcement,
-    mutate_community_changelog_draft,
     mutate_community_poll,
 )
 import account_integrity
@@ -641,6 +640,7 @@ GTN_STATIC_VERSION += '-card-legacy-compat-1'
 GTN_STATIC_VERSION += '-fusion-original-cost-1'
 GTN_STATIC_VERSION += '-story-enchantment-reward-scope-1'
 GTN_STATIC_VERSION += '-community-announcement-icon-2'
+GTN_STATIC_VERSION += '-community-announcement-unread-1-community-ops-no-changelog-1'
 GTN_STATIC_VERSION += '-story-manual-map-choice-1'
 GTN_STATIC_VERSION += '-story-hud-card-play-unlock-1'
 GTN_STATIC_VERSION += '-story-external-save-surrender-1'
@@ -22017,9 +22017,11 @@ def api_community_ops_workspace():
     if not actor:
         return _community_json({'success': False, 'error': '权限不足', 'code': 'FORBIDDEN'}, 403)
     try:
+        workspace = list_community_ops_workspace(audit_limit=120)
+        workspace.pop('changelog_drafts', None)
         return _community_json({
             'success': True,
-            'workspace': list_community_ops_workspace(audit_limit=120),
+            'workspace': workspace,
             'csrf_token': community_ops_csrf_token(),
             'actor': {
                 'username': actor['username'],
@@ -22028,7 +22030,7 @@ def api_community_ops_workspace():
             'permissions': {
                 'can_manage_announcements': True,
                 'can_manage_polls': True,
-                'can_manage_changelog_drafts': True,
+                'can_manage_changelog_drafts': False,
             },
         })
     except Exception as exc:
@@ -22042,6 +22044,8 @@ def api_community_ops_create_announcement():
         if not rate_limiter(f'community-ops-announcement:{actor["user_id"]}', limit=30, window=3600):
             raise CommunityOpsError('RATE_LIMITED', '一小时内公告操作次数过多', 429)
         data = _community_request_object()
+        if _community_boolean(data, 'changelog_draft'):
+            raise CommunityOpsError('CHANGELOG_DISABLED', '运营后台不支持更新日志操作', 403)
         announcement = create_community_announcement(
             actor,
             title=data.get('title'),
@@ -22050,7 +22054,7 @@ def api_community_ops_create_announcement():
             ends_at=data.get('ends_at'),
             pinned=_community_boolean(data, 'pinned'),
             publish=_community_boolean(data, 'publish'),
-            changelog_draft=_community_boolean(data, 'changelog_draft'),
+            changelog_draft=False,
         )
         return _community_json({'success': True, 'announcement': announcement}, 201)
     except Exception as exc:
@@ -22127,14 +22131,8 @@ def api_community_ops_poll_action(poll_id):
 @app.route('/api/community/ops/changelog-drafts/<int:draft_id>/action', methods=['POST'])
 def api_community_ops_changelog_draft_action(draft_id):
     try:
-        actor = _community_ops_actor()
-        data = _community_request_object()
-        draft, duplicate = mutate_community_changelog_draft(actor, draft_id, data.get('action'))
-        return _community_json({
-            'success': True,
-            'duplicate': bool(duplicate),
-            'draft': draft,
-        })
+        _community_ops_actor()
+        raise CommunityOpsError('CHANGELOG_DISABLED', '运营后台不支持更新日志操作', 403)
     except Exception as exc:
         return _community_error(exc)
 
