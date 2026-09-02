@@ -895,10 +895,18 @@ AFK_ACTIVITY_IGNORED_EVENTS = frozenset({
     'request_pregame_state',
     'set_mode',
 })
-def _configured_credential_hash(name):
+def _configured_credential_hash(name, *, fallback_name=None):
     configured = str(os.environ.get(name, '') or '').strip()
     if configured:
         return configured
+    if fallback_name:
+        fallback = str(os.environ.get(fallback_name, '') or '').strip()
+        if fallback:
+            print(
+                f'[startup] INFO: {name} is not configured; using {fallback_name}.',
+                flush=True,
+            )
+            return fallback
     print(
         f'[startup] WARNING: {name} is not configured; this login surface is disabled '
         'until the environment variable is set.',
@@ -908,7 +916,10 @@ def _configured_credential_hash(name):
 
 
 ADMIN_PASSWORD_HASH = _configured_credential_hash('ADMIN_PASSWORD_HASH')
-ADMIN_CONSOLE_PASSWORD_HASH = _configured_credential_hash('ADMIN_CONSOLE_PASSWORD_HASH')
+ADMIN_CONSOLE_PASSWORD_HASH = _configured_credential_hash(
+    'ADMIN_CONSOLE_PASSWORD_HASH',
+    fallback_name='ADMIN_PASSWORD_HASH',
+)
 ADMIN_IDLE_TIMEOUT_SECONDS = max(300, int(os.environ.get('ADMIN_IDLE_TIMEOUT_SECONDS', '1800')))
 ADMIN_MAX_SESSION_SECONDS = max(
     ADMIN_IDLE_TIMEOUT_SECONDS,

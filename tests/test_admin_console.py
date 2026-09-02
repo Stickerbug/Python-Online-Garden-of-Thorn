@@ -10,6 +10,98 @@ import app
 import db
 
 
+class AdminCredentialConfigurationTests(unittest.TestCase):
+    def test_console_uses_shared_admin_hash_when_its_own_hash_is_missing(self):
+        with mock.patch.object(app.os, 'environ', {'ADMIN_PASSWORD_HASH': 'shared-hash'}):
+            configured = app._configured_credential_hash(
+                'ADMIN_CONSOLE_PASSWORD_HASH',
+                fallback_name='ADMIN_PASSWORD_HASH',
+            )
+
+        self.assertEqual(configured, 'shared-hash')
+
+    def test_console_specific_hash_takes_precedence(self):
+        with mock.patch.object(app.os, 'environ', {
+            'ADMIN_PASSWORD_HASH': 'shared-hash',
+            'ADMIN_CONSOLE_PASSWORD_HASH': 'console-hash',
+        }):
+            configured = app._configured_credential_hash(
+                'ADMIN_CONSOLE_PASSWORD_HASH',
+                fallback_name='ADMIN_PASSWORD_HASH',
+            )
+
+        self.assertEqual(configured, 'console-hash')
+
+    def test_missing_shared_and_console_hashes_still_fail_closed(self):
+        with (
+            mock.patch.object(app.os, 'environ', {}),
+            mock.patch.object(app.secrets, 'token_urlsafe', return_value='disabled-secret'),
+            mock.patch.object(app, 'generate_password_hash', return_value='disabled-hash') as hasher,
+        ):
+            configured = app._configured_credential_hash(
+                'ADMIN_CONSOLE_PASSWORD_HASH',
+                fallback_name='ADMIN_PASSWORD_HASH',
+            )
+
+        self.assertEqual(configured, 'disabled-hash')
+        hasher.assert_called_once_with('disabled-secret')
+
+
+class AdminSurfaceAuthenticationTests(unittest.TestCase):
+    def setUp(self):
+        app.app.config.update(TESTING=True)
+        self.client = app.app.test_client()
+        shared_hash = app.generate_password_hash('shared-admin-password')
+        self.patchers = [
+            mock.patch.object(app, 'ADMIN_PASSWORD_HASH', shared_hash),
+            mock.patch.object(app, 'ADMIN_CONSOLE_PASSWORD_HASH', shared_hash),
+            mock.patch.object(app, 'should_rate_limit_admin_login', return_value=False),
+            mock.patch.object(app, 'record_admin_login_failure'),
+            mock.patch.object(app, 'clear_admin_login_failures'),
+            mock.patch.object(app, 'admin_event'),
+        ]
+        for patcher in self.patchers:
+            patcher.start()
+
+    def tearDown(self):
+        for patcher in reversed(self.patchers):
+            patcher.stop()
+
+    def test_shared_password_authenticates_both_surfaces_and_runs_commands(self):
+        admin_login = self.client.post(
+            '/api/admin/login',
+            json={'password': 'shared-admin-password'},
+        )
+        self.assertEqual(admin_login.status_code, 200)
+        admin_csrf = admin_login.get_json()['csrf_token']
+
+        console_login = self.client.post(
+            '/api/adminconsole/login',
+            json={'password': 'shared-admin-password'},
+        )
+        self.assertEqual(console_login.status_code, 200)
+        console_csrf = console_login.get_json()['csrf_token']
+
+        self.assertTrue(self.client.get('/api/admin/me').get_json()['authenticated'])
+        self.assertTrue(self.client.get('/api/adminconsole/me').get_json()['authenticated'])
+
+        admin_command = self.client.post(
+            '/api/admin/command',
+            json={'line': 'help'},
+            headers={'X-Admin-CSRF': admin_csrf},
+        )
+        self.assertEqual(admin_command.status_code, 200)
+        self.assertTrue(admin_command.get_json()['success'])
+
+        console_command = self.client.post(
+            '/api/adminconsole/command',
+            json={'line': 'help', 'request_id': 'shared-auth-test'},
+            headers={'X-Admin-Console-CSRF': console_csrf},
+        )
+        self.assertEqual(console_command.status_code, 200)
+        self.assertTrue(console_command.get_json()['success'])
+
+
 class AdminConsoleCommandTests(unittest.TestCase):
     def test_every_visible_leaf_has_an_execution_mapping(self):
         missing = []
