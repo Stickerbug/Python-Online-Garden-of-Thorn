@@ -5,6 +5,10 @@ __pycache__/
 
 output/
 
+.playwright-cli/
+
+tmp/
+
 temp music folder/
 
 # C extensions
