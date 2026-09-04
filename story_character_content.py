@@ -1181,7 +1181,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
     },
     "nether_lightning": {
         "character_id": "mage",
-        "name": {"zh": "冥界闪电", "en": "Nether Lightning"},
+        "name": {"zh": "冥界闪电", "en": "Hel Lightning"},
         "cost_e": 2,
         "cost_m": 0,
         "card_type": "thorn",
@@ -1197,7 +1197,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
     },
     "magic_nether_lightning": {
         "character_id": "mage",
-        "name": {"zh": "魔法冥界闪电", "en": "Magic Nether Lightning"},
+        "name": {"zh": "魔法冥界闪电", "en": "Magic Hel Lightning"},
         "cost_e": 1,
         "cost_m": 2,
         "card_type": "root",

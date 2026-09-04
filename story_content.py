@@ -2254,11 +2254,12 @@ STORY_CARDS = {
     ),
 }
 
+STORY_CARDS['nether_lightning']['source_card_id'] = 'HelLightning'
+
 STORY_CARD_IMAGE_URLS = {
     'capacitor': '/static/assets/story-card-art/capacitor.svg',
     'confused': '/static/assets/story-card-art/confused.svg',
     'copper_rod': '/static/assets/story-card-art/copper-rod.svg',
-    'daisy': '/static/assets/story-card-art/daisy.svg',
     'dandelion_seed': '/static/assets/story-card-art/dandelion-seed.svg',
     'elemental_force': '/static/assets/story-card-art/elemental-force.svg',
     'enchanted_magic_basic': '/static/assets/story-card-art/enchanted-magic-basic.svg',
@@ -2268,7 +2269,6 @@ STORY_CARD_IMAGE_URLS = {
     'magic_nether_lightning': '/static/assets/story-card-art/magic-nether-lightning.svg',
     'magic_orb': '/static/assets/story-card-art/magic-orb.svg',
     'magic_usain_bolt': '/static/assets/story-card-art/magic-usain-bolt.svg',
-    'nether_lightning': '/static/assets/story-card-art/nether-lightning.svg',
     'orb': '/static/assets/story-card-art/orb.svg',
     'usain_bolt': '/static/assets/story-card-art/usain-bolt.svg',
     'enchanted_amulet': '/static/assets/story-card-art/enchanted-amulet.svg',
