@@ -53,7 +53,7 @@ _PRESENTATION_EFFECT_KEYS = (
     'segments', 'magic_shield', 'magic_blessing', 'magic_reflection',
     'magic', 'electric_web', 'super_beam', 'toxic_reflection',
     'reconstruction', 'integration', 'scrap', 'disc', 'toxic_pressure',
-    'injured_summon', 'invincible',
+    'injured_summon', 'invincible', 'pressure',
 )
 
 
@@ -1141,6 +1141,14 @@ def _spend_magic(state, amount, events, source='card'):
             events,
             source=equipment.get('def_id') or 'magic_spend_shield',
         )
+    turn_shield = max(0, int(combat.get('magic_spend_shield_turn') or 0))
+    if turn_shield:
+        _gain_shield(
+            state,
+            spent * turn_shield,
+            events,
+            source='mage_mask',
+        )
     return spent
 
 
@@ -1989,6 +1997,29 @@ def _after_enemy_health_damage(state, enemy, dealt, events):
         })
 
 
+def _propagate_centipede_linked(state, enemy, dealt, events):
+    """紧连：受到伤害（含致死一击）时相邻体节承受一半实际伤害。"""
+    if not dealt or STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script') != 'centipede':
+        return
+    enemies = state['combat']['enemies']
+    try:
+        index = enemies.index(enemy)
+    except ValueError:
+        return
+    for adjacent_index in (index - 1, index + 1):
+        if 0 <= adjacent_index < len(enemies):
+            adjacent = enemies[adjacent_index]
+            if STORY_ENEMIES.get(adjacent.get('def_id'), {}).get('script') == 'centipede':
+                _enemy_raw_damage(
+                    state,
+                    adjacent,
+                    math.floor(dealt / 2),
+                    events,
+                    'linked',
+                    propagate=True,
+                )
+
+
 def _enemy_raw_damage(
     state,
     enemy,
@@ -2056,6 +2087,8 @@ def _enemy_raw_damage(
         damage_event['lethal'] = True
     events.append(damage_event)
     if int(enemy.get('health') or 0) <= 0:
+        if not propagate:
+            _propagate_centipede_linked(state, enemy, dealt, events)
         if player_caused and not propagate:
             _trigger_blade(state, enemy, dealt, events)
         return dealt
@@ -2068,14 +2101,8 @@ def _enemy_raw_damage(
     _after_enemy_health_damage(state, enemy, dealt, events)
     if dealt and STORY_ENEMIES[enemy['def_id']].get('script') == 'swell':
         enemy['temporary_power'] = int(enemy.get('temporary_power') or 0) + 1
-    if dealt and STORY_ENEMIES[enemy['def_id']].get('script') == 'centipede' and not propagate:
-        enemies = state['combat']['enemies']
-        index = enemies.index(enemy)
-        for adjacent_index in (index - 1, index + 1):
-            if 0 <= adjacent_index < len(enemies):
-                adjacent = enemies[adjacent_index]
-                if STORY_ENEMIES[adjacent['def_id']].get('script') == 'centipede':
-                    _enemy_raw_damage(state, adjacent, math.floor(dealt / 2), events, 'linked', propagate=True)
+    if not propagate:
+        _propagate_centipede_linked(state, enemy, dealt, events)
     if player_caused and not propagate:
         _trigger_blade(state, enemy, dealt, events)
     return dealt
@@ -2427,6 +2454,7 @@ def _enemy_physical_damage(
             damage_event['lethal'] = True
         events.append(damage_event)
         if after <= 0:
+            _propagate_centipede_linked(state, enemy, dealt, events)
             break
         if (
             incoming_health_damage > 0
@@ -2439,14 +2467,7 @@ def _enemy_physical_damage(
         if reflection > 0 and amount > 0:
             _player_damage(state, reflection, 1, events, 'reflection')
         _trigger_enemy_attack_reactions(state, enemy, amount, events, source)
-        if dealt and STORY_ENEMIES[enemy['def_id']].get('script') == 'centipede':
-            enemies = combat['enemies']
-            index = enemies.index(enemy)
-            for adjacent_index in (index - 1, index + 1):
-                if 0 <= adjacent_index < len(enemies):
-                    adjacent = enemies[adjacent_index]
-                    if STORY_ENEMIES[adjacent['def_id']].get('script') == 'centipede':
-                        _enemy_raw_damage(state, adjacent, math.floor(dealt / 2), events, 'linked', propagate=True)
+        _propagate_centipede_linked(state, enemy, dealt, events)
     if resolved_hit:
         _trigger_blade(state, enemy, total, events)
     if not resolved_hit:
@@ -2958,6 +2979,8 @@ def _selectable_enemy_targets(combat, values):
     living = _living_enemies(combat)
     if not living:
         return []
+    if 'wide' in _card_tags(values):
+        return living
     bulbs = [enemy for enemy in living if int(enemy.get('bulb') or 0) > 0]
     if bulbs:
         living = bulbs
@@ -3159,6 +3182,12 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
         combat['next_attack_multiplier'] = max(float(combat.get('next_attack_multiplier') or 1), float(amount))
     elif effect_type == 'next_skill_repeats':
         combat['next_skill_repeats'] = max(int(combat.get('next_skill_repeats') or 0), int(amount))
+    elif effect_type == 'magic_spend_shield_turn':
+        # 魔法口罩：本回合你每消耗1M，获得X层护盾。
+        combat['magic_spend_shield_turn'] = max(
+            int(combat.get('magic_spend_shield_turn') or 0),
+            max(0, int(amount)),
+        )
     elif effect_type == 'temporary_effect':
         script = str(effect.get('script') or '')
         if script == 'sewage':
@@ -3936,8 +3965,11 @@ def _apply_enchantment_post_card_use(
         if vulnerable:
             _apply_status(state, target, 'vulnerable', vulnerable, events, source='wind_blast')
 
+    if modifiers.get('enchantment_disc_once'):
+        # 摔落缓冲：下一次使用时获得一层圆盘，
+        # 等同圆盘卡的效果（本回合受到的物理伤害向下取整减半）。
+        combat['disc_active'] = True
     player_effects = (
-        ('enchantment_disc_once', 'disc', 'fall_cushioning'),
         ('enchantment_immunity_once', 'negative_status_immunity', 'fire_protection'),
         ('enchantment_power_once', 'power', 'strength'),
         ('enchantment_reflection_once', 'reflection', 'thorns'),
@@ -6446,6 +6478,7 @@ def _turn_boundary(state, seed, events, extra=False):
     combat['blind_active'] = False
     combat['temporary_power'] = 0
     combat['disc_active'] = False
+    combat['magic_spend_shield_turn'] = 0
     combat['cannot_draw'] = False
     combat['next_attack_multiplier'] = 1
     combat['next_skill_repeats'] = 0
@@ -6536,7 +6569,8 @@ def _turn_boundary(state, seed, events, extra=False):
                 player_caused=True,
             )
         enemy['stagnation'] = max(0, int(enemy.get('stagnation') or 0) - 1)
-        enemy['electric_web'] = max(0, int(enemy.get('electric_web') or 0) - 1)
+        if _difficulty(state) != 'lunatic':
+            enemy['electric_web'] = max(0, int(enemy.get('electric_web') or 0) - 1)
         if int(enemy.get('health') or 0) <= 0:
             continue
         enemy['evade'] = max(0, int(enemy.get('evade') or 0) - 1)
@@ -6592,15 +6626,7 @@ def _turn_boundary(state, seed, events, extra=False):
         enemy['damage_taken_round'] = 0
     combat['evade'] = max(0, int(combat.get('evade') or 0) - 1)
     if int(combat.get('entangle') or 0) > 0:
-        entangle = int(combat['entangle'])
-        _player_raw_damage(state, entangle, events, 'entangle')
-        combat['entangle'] = 0
-        events.append({
-            'type': 'status_cleared',
-            'target_id': 'player',
-            'status': 'entangle',
-            'before': entangle,
-        })
+        _player_raw_damage(state, int(combat['entangle']), events, 'entangle')
     poison = max(0, int(combat.get('poison') or 0))
     if poison:
         _player_raw_damage(state, poison, events, 'poison')
@@ -6862,13 +6888,19 @@ def _reward_choices(state, seed, room_type='combat', count=3):
 
 
 def _natural_relic_pool(state, rarity=None, for_shop=False):
-    return [
+    pool = [
         relic_id
         for relic_id, relic in STORY_RELICS.items()
         if relic.get('rarity') != 'special'
         and (rarity is None or relic.get('rarity') == rarity)
         and not (for_shop and relic.get('shop_excluded'))
     ]
+    # 不允许再次遇到相同天赋；全部已持有时回退全池（叠加仍允许）。
+    unowned = [
+        relic_id for relic_id in pool
+        if not _has_relic(state, relic_id)
+    ]
+    return unowned or pool
 
 
 def _random_relic(state, seed):
@@ -6890,6 +6922,12 @@ def _boss_relic_choices(state, seed, count=3):
             and _has_relic(state, 'grab_every_card')
         )
     ]
+    # Boss 天赋 3 选 1 不出现已持有的天赋；全部已持有时回退全池。
+    unowned = [
+        relic_id for relic_id in pool
+        if not _has_relic(state, relic_id)
+    ]
+    pool = unowned or pool
     _rng(state, seed, 'boss_relic_choices').shuffle(pool)
     choices = pool[:max(0, int(count))]
     return choices or ['consolation']
@@ -7342,6 +7380,15 @@ def _resolve_enemy_death_hooks(state, seed, events):
                     events,
                     source=enemy.get('def_id'),
                 )
+            pressure = max(0, int(enemy.get('pressure') or 0))
+            if pressure:
+                _player_damage(
+                    state,
+                    pressure,
+                    1,
+                    events,
+                    'pressure:%s' % enemy.get('def_id'),
+                )
             if script == 'spider_cave':
                 summoned = _summon_enemy(
                     state,
@@ -7779,8 +7826,12 @@ def _choose_blessing(state, payload, seed, events):
                 _fail('NO_TRANSFORM_CARD', '当前没有可变化为的牌')
             previous_def_id = card['def_id']
             previous_upgraded = bool(card.get('upgraded'))
-            card['def_id'] = _rng(state, seed, 'blessing_transform').choice(pool)
-            card['upgraded'] = False
+            new_def_id = _rng(state, seed, 'blessing_transform').choice(pool)
+            card['def_id'] = new_def_id
+            card['upgraded'] = bool(
+                _has_relic(state, 'easy_study')
+                and STORY_CARDS[new_def_id].get('upgrade')
+            )
             card.pop('modifiers', None)
             events.append({
                 'type': 'card_transformed',
@@ -7788,7 +7839,7 @@ def _choose_blessing(state, payload, seed, events):
                 'from_def_id': previous_def_id,
                 'from_upgraded': previous_upgraded,
                 'to_def_id': card['def_id'],
-                'to_upgraded': False,
+                'to_upgraded': bool(card.get('upgraded')),
                 'source': 'blessing',
             })
     elif script == 'gain_max_health':

@@ -379,8 +379,8 @@ STORY_STATUSES = {
     'entangle': {
         'name': {'zh': '缠绕', 'en': 'Entangle'},
         'description': {
-            'zh': '回合结束时受到等同于层数的伤害，然后清空。',
-            'en': 'At turn end, take damage equal to its stacks, then clear it.',
+            'zh': '回合结束时受到等同于层数的伤害。',
+            'en': 'At turn end, take damage equal to its stacks.',
         },
     },
     'negative_status_immunity': {
@@ -831,6 +831,13 @@ STORY_TRAITS.update({
             'en': 'On death, apply Toxic Poison to the player equal to its stacks.',
         },
     },
+    'pressure': {
+        'name': {'zh': '压力', 'en': 'Pressure'},
+        'description': {
+            'zh': '死亡时，对玩家造成等同于层数的伤害。',
+            'en': 'On death, deal damage to the player equal to its stacks.',
+        },
+    },
     'injured_summon': {
         'name': {'zh': '受伤召唤', 'en': 'Injured Summon'},
         'description': {
@@ -884,6 +891,7 @@ STORY_TRAIT_VALUE_KEYS = {
     'toxic_reflection': 'toxic_reflection',
     'disc': 'disc',
     'toxic_pressure': 'toxic_pressure',
+    'pressure': 'pressure',
     'injured_summon': 'injured_summon',
 }
 
@@ -915,6 +923,7 @@ STORY_TRAIT_IMAGE_URLS = {
     'recycling': '/static/assets/story-trait-icons/recycling.svg',
     'electronic_shield': '/static/assets/story-trait-icons/electronic-shield.svg',
     'toxic_pressure': '/static/assets/story-trait-icons/toxic-pressure.svg',
+    'pressure': '/static/assets/story-trait-icons/pressure.svg',
     'injured_summon': '/static/assets/story-trait-icons/injured-summon.svg',
     'cover': '/static/assets/story-trait-icons/cover.svg',
 }
@@ -1395,8 +1404,8 @@ STORY_CARDS = {
     ),
     'mage_mask': _character_card(
         'mage_mask',
-        effects=(_effect('equipment', 3, script='magic_spend_shield'),),
-        upgrade_effects=(_effect('equipment', 3, script='magic_spend_shield'),),
+        effects=(_effect('magic_spend_shield_turn', 3),),
+        upgrade_effects=(_effect('magic_spend_shield_turn', 3),),
         tags=('exile',),
         upgrade_tags=(),
     ),
@@ -1482,14 +1491,14 @@ STORY_CARDS = {
     ),
     'electronic_missile': _character_card(
         'electronic_missile',
-        effects=(_effect('electric_damage', 6), _effect('draw', 2)),
-        upgrade_effects=(_effect('electric_damage', 8), _effect('draw', 3)),
+        effects=(_effect('electric_damage', 9), _effect('draw', 2)),
+        upgrade_effects=(_effect('electric_damage', 11), _effect('draw', 3)),
         tags=('ready',),
     ),
     'mage_electronic_missile': _character_card(
         'mage_electronic_missile',
-        effects=(_effect('electric_damage', 4),),
-        upgrade_effects=(_effect('electric_damage', 6),),
+        effects=(_effect('electric_damage', 5), _effect('draw', 1)),
+        upgrade_effects=(_effect('electric_damage', 7), _effect('draw', 1)),
         tags=('ready',),
         upgrade_tags=('ready',),
         script='return_draw_top',
@@ -2207,7 +2216,7 @@ STORY_ENCHANTMENT_BOOKS = {
     'charge': _enchantment_book('突进', 'Charge', '选择一张手中的牌，使其下一次使用时抽牌至手牌满。', 'Choose a card in hand. The next time it is used, draw until the hand is full.', 'rare', 'draw_to_full_once', target='card', image='charge.svg'),
     'magic_yggdrasil': _enchantment_book('魔法世界树之叶', 'Magic Yggdrasil Leaf', '受到致命伤害时自动消耗：免疫该次伤害，无敌一回合并获得再生8。', 'Automatically consumed on lethal damage: prevent it, become invincible for one round, and gain 8 Regeneration.', 'ultra', 'lethal_guard', amount=8, image='magic yggdrasil.svg'),
     'fall_cushioning': _enchantment_book('摔落缓冲', 'Fall Cushioning', '选择一张手中的牌，使其下一次使用时获得1层圆盘。', 'Choose a card in hand. The next time it is used, gain 1 Disc.', 'common', 'disc_once', target='card', amount=1, image='fall cushioning.svg'),
-    'flame_bonus': _enchantment_book('火焰附加', 'Flame Bonus', '选择一张手中的攻击牌，使其下一次命中时施加8层烈火。', 'Choose an Attack in hand. Its next hit applies 8 Fire.', 'rare', 'fire_on_hit_once', target='attack_card', amount=8, image='flame bonus.svg'),
+    'flame_bonus': _enchantment_book('火焰附加', 'Flame Bonus', '选择一张手中的攻击牌，使其下一次命中时施加8层灼烧。', 'Choose an Attack in hand. Its next hit applies 8 Burn.', 'rare', 'fire_on_hit_once', target='attack_card', amount=8, image='flame bonus.svg'),
     'fire_protection': _enchantment_book('火焰保护', 'Fire Protection', '选择一张手中的牌，使其下一次使用时获得3层负面状态免疫。', 'Choose a card in hand. The next time it is used, gain 3 Negative Status Immunity.', 'rare', 'immunity_once', target='card', amount=3, image='fire protection.svg'),
     'puncture': _enchantment_book('穿刺', 'Puncture', '选择一张手中的攻击牌，使其在本场战斗中击杀敌人时随机对另一名敌人再使用一次。', 'Choose an Attack in hand. When it kills an enemy this combat, use it again on another random enemy.', 'rare', 'repeat_on_kill', target='attack_card', image='puncture.svg'),
     'unlimited': _enchantment_book('无限', 'Unlimited', '选择一本你持有的附魔书，获得它的复制。', 'Choose an enchantment book you own and gain a copy of it.', 'ultra', 'copy_book', target='book', image='unlimited.svg'),
@@ -2623,9 +2632,9 @@ STORY_ENEMIES.update({
     ), script='desert_centipede', lunatic_health=65),
 
     'ocean_bubble': _enemy('泡泡', 'Bubble', 11, (
-        _move('膨胀', 'Inflate', _effect('gain_charging', 4, lunatic_amount=5)),
+        _move('膨胀', 'Inflate', _effect('gain_status', 4, status='pressure', lunatic_amount=5)),
         _move('爆炸', 'Explode', _effect('damage', 7, lunatic_amount=9), _effect('self_kill', reason='burst')),
-    ), script='ocean_bubble', traits=('charging_up',), initial={'shield': 10}, lunatic_health=13),
+    ), script='ocean_bubble', traits=('pressure',), initial={'shield': 10}, lunatic_health=13),
     'crab': _enemy('螃蟹', 'Crab', 57, (
         _move('蓄力', 'Power Up', _effect('gain_power', 4)),
         _move('猛击', 'Slam', _effect('damage', 9, lunatic_amount=11)),
@@ -3332,6 +3341,7 @@ def validate_story_content():
         'retrieve_from_piles', 'self_magic_swift', 'shield_damage_halved',
         'shield_remaining_magic', 'static', 'temporary_magic_heavy',
         'temporary_swap_costs', 'turn_damage_multiplier', 'untargetable',
+        'magic_spend_shield_turn',
     }
     card_effect_types.update(STORY_PLAYER_ATTACK_EFFECT_TYPES)
     card_scripts = {

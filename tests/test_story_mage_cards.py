@@ -231,14 +231,18 @@ def test_electric_damage_applies_then_consumes_static_authoritatively():
     state, first_events = _play(state, 'electronic_missile', suffix='first')
     enemy = state['combat']['enemies'][0]
     assert enemy['health'] == before
-    assert enemy['static'] == 6
-    assert any(event.get('type') == 'electric_damage' and event.get('static_applied') == 6 for event in first_events)
+    assert enemy['static'] == 9
+    assert any(event.get('type') == 'electric_damage' and event.get('static_applied') == 9 for event in first_events)
 
     state, second_events = _play(state, 'mage_electronic_missile', suffix='second')
     enemy = state['combat']['enemies'][0]
-    assert enemy['static'] == 0
-    assert enemy['health'] == before - 10
-    assert any(event.get('type') == 'electric_damage' and event.get('amount') == 10 for event in second_events)
+    # The trigger consumed all nine Static (5 + 9 = 14 damage). The new draw
+    # effect then reshuffles the discard pile and redraws the ready
+    # Electronic Missile, which auto-plays and re-primes a fresh 9 Static.
+    assert enemy['static'] == 9
+    assert enemy['health'] == before - 14
+    assert any(event.get('type') == 'electric_damage' and event.get('amount') == 14 for event in second_events)
+    assert any(event.get('type') == 'electric_damage' and event.get('static_consumed') == 9 for event in second_events)
 
 
 def test_capacitor_and_static_trigger_equipment_share_one_resolution_chain():
@@ -251,31 +255,31 @@ def test_capacitor_and_static_trigger_equipment_share_one_resolution_chain():
         {'instance_id': 'mage-cap', 'def_id': 'mage_capacitor', 'upgraded': False},
         {'instance_id': 'lithium', 'def_id': 'mage_lithium', 'upgraded': False},
     ]
-    combat['magic'] = 1
+    combat['magic'] = 3
     combat['shield'] = 0
     enemy = combat['enemies'][0]
     before = enemy['health']
 
     state, _ = _play(state, 'mage_electronic_missile', suffix='prime')
     enemy = state['combat']['enemies'][0]
-    assert enemy['static'] == 6
+    assert enemy['static'] == 7
 
-    state['combat']['magic'] = 1
+    state['combat']['magic'] = 3
     state, trigger_events = _play(state, 'mage_electronic_missile', suffix='trigger')
     combat = state['combat']
     enemy = combat['enemies'][0]
     # Lithium draws the previous Ready missile after the trigger. It resolves
-    # immediately and primes the same target with a fresh six Static.
-    assert enemy['static'] == 6
-    assert enemy['health'] == before - 18
+    # immediately and primes the same target with a fresh seven Static.
+    assert enemy['static'] == 7
+    assert enemy['health'] == before - 20
     assert combat['shield'] == 3
     # Mage Capacitor restores 1 M; the Ready missile drawn by Lithium spends it.
     assert combat['magic'] == 0
     electric_events = [
         event for event in trigger_events if event.get('type') == 'electric_damage'
     ]
-    assert any(event.get('amount') == 10 for event in electric_events)
-    assert any(event.get('static_applied') == 6 for event in electric_events)
+    assert any(event.get('amount') == 12 for event in electric_events)
+    assert any(event.get('static_applied') == 7 for event in electric_events)
 
 
 def test_magic_and_overload_resources_are_uncapped_and_settle_at_turn_start():
@@ -332,6 +336,74 @@ def test_mage_cotton_uses_normal_shield_before_spending_magic(damage_kind):
         and event.get('magic_spent') == 1
         for event in events
     )
+
+
+def test_mage_mask_gains_shield_per_magic_spent_this_turn():
+    state = _combat_state('mage-mask-turn-shield')
+    combat = state['combat']
+    combat['magic'] = 10
+    combat['shield'] = 0
+
+    # 打出魔法口罩：本回合每消耗1M获得3层护盾（口罩本身0费，不触发）。
+    combat['hand'] = [
+        {'instance_id': 'mage-mask-turn', 'def_id': 'mage_mask', 'upgraded': False},
+    ]
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {
+            'card_instance_id': 'mage-mask-turn',
+            'target_enemy_id': combat['enemies'][0]['id'],
+        },
+        'mage-mask-turn-play',
+    )
+    combat = state['combat']
+    assert combat.get('magic_spend_shield_turn') == 3
+    assert combat['shield'] == 0
+
+    # 之后打出一张消耗3M的卡（魔法导弹），应当获得9层护盾。
+    combat['hand'] = [
+        {'instance_id': 'mage-mask-followup', 'def_id': 'mage_missile', 'upgraded': False},
+    ]
+    combat['magic'] = 10
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {
+            'card_instance_id': 'mage-mask-followup',
+            'target_enemy_id': combat['enemies'][0]['id'],
+        },
+        'mage-mask-followup-play',
+    )
+    combat = state['combat']
+    assert combat['shield'] == 9
+    assert any(
+        event.get('type') == 'shield'
+        and event.get('source') == 'mage_mask'
+        for event in events
+    )
+
+    # 回合边界后不再生效。
+    state['combat']['shield'] = 0
+    state, events = apply_story_action(state, 'end_turn', {}, 'mage-mask-end-turn')
+    state['combat']['hand'] = [
+        {'instance_id': 'mage-mask-next', 'def_id': 'mage_missile', 'upgraded': False},
+    ]
+    state['combat']['magic'] = 10
+    state['combat']['elixir'] = 100
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {
+            'card_instance_id': 'mage-mask-next',
+            'target_enemy_id': state['combat']['enemies'][0]['id'],
+        },
+        'mage-mask-next-play',
+    )
+    assert state['combat'].get('magic_spend_shield_turn') is None or (
+        state['combat'].get('magic_spend_shield_turn') == 0
+    )
+    assert state['combat']['shield'] == 0
 
 
 def test_innate_mage_upgrades_are_kept_on_top_of_the_opening_draw_pile():

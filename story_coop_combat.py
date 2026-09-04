@@ -614,9 +614,9 @@ def _damage_seat(
         resolved_amount = amount
         if int(statuses.get('vulnerable') or 0) > 0:
             resolved_amount = max(0, math.ceil(resolved_amount * 1.5))
-        if int(statuses.get('disc') or 0) > 0:
+        if statuses.get('disc_active'):
+            # 圆盘（含摔落缓冲附魔）：本回合受到的物理伤害向下取整减半。
             resolved_amount = max(0, math.floor(resolved_amount / 2))
-            statuses['disc'] = max(0, int(statuses.get('disc') or 0) - 1)
         shield_before = int(seat_state.get('shield') or 0)
         blocked = min(shield_before, resolved_amount)
         seat_state['shield'] = shield_before - blocked

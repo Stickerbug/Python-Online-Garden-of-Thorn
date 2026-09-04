@@ -1481,8 +1481,11 @@ def resolve_intro_coop_action(
             })
 
     statuses = seat_state.setdefault('statuses', {})
+    if modifiers.get('enchantment_disc_once'):
+        # 摔落缓冲：下一次使用时获得一层圆盘，
+        # 等同圆盘卡的效果（本回合受到的物理伤害向下取整减半）。
+        statuses['disc_active'] = True
     for key, status in (
-        ('enchantment_disc_once', 'disc'),
         ('enchantment_immunity_once', 'negative_status_immunity'),
         ('enchantment_power_once', 'power'),
         ('enchantment_reflection_once', 'reflection'),
@@ -1639,6 +1642,7 @@ def prepare_intro_coop_round(state, run_seed, events):
                 'source': 'turn_start_relic',
             })
         statuses = seat_state.setdefault('statuses', {})
+        statuses.pop('disc_active', None)
         regeneration = max(0, int(statuses.get('regeneration') or 0))
         if regeneration and int(player.get('health') or 0) > 0:
             before_health = int(player.get('health') or 0)

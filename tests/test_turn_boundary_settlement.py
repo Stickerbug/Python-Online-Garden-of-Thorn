@@ -395,6 +395,187 @@ process.stdout.write(JSON.stringify({
             json.loads(completed.stdout),
         )
 
+    def test_2v2_pill_status_immunity_blocks_bandage_save(self):
+        package = load_mod(str(ROOT / 'mods' / 'Vanilla Cards.gtnmod'))
+        self.assertEqual([], package.errors)
+        pill_def = next(card.to_card_def() for card in package.cards if card.id == 'Pill')
+        previous = CARD_DEFS.get('Pill')
+        CARD_DEFS['Pill'] = pill_def
+        try:
+            engine = GameEngine2v2()
+            engine.phase = 'action'
+            engine.current_player = 0
+            for player in engine.players:
+                player.health = 100
+                player.deck = []
+                player.hand = []
+                player.discard = []
+                player.exile = []
+                player.equipment = []
+            # 攻击者把药丸装到目标（玩家2）身上：目标获得状态免疫。
+            pill = EquipmentInstance(CardInstance('Pill'), 0)
+            pill.effect_target = 2
+            engine.players[0].equipment.append(pill)
+            engine.players[2].custom_statuses['status_immune'] = 1
+            # 目标此前反制获得了绷带；致死攻击落下时，
+            # 死亡结算必须先于装备清除——绷带应被免疫阻止。
+            engine.players[2].bandage_active = True
+            engine.players[2].health = 6
+            attack = CardInstance('Bone')
+            engine.players[0].hand.append(attack)
+
+            result = engine.play_card(
+                0,
+                attack.instance_id,
+                2,
+                {'target_player': 2, 'target_player_id': 2, 'target_id': 2},
+            )
+
+            self.assertTrue(result.get('success'), result)
+            saved = engine.players[2]
+            # 状态免疫阻止绷带：目标死亡（引擎惯例保持负血量）。
+            self.assertLessEqual(saved.health, 0)
+            self.assertFalse(saved.bandage_active)
+            self.assertFalse(saved.bandage_death_pending)
+            # 指向已死亡玩家的装备随之移除。
+            self.assertEqual([], engine.players[0].equipment)
+        finally:
+            if previous is None:
+                CARD_DEFS.pop('Pill', None)
+            else:
+                CARD_DEFS['Pill'] = previous
+
+    def test_2v2_bandage_still_saves_when_not_status_immune(self):
+        engine = GameEngine2v2()
+        engine.phase = 'action'
+        engine.current_player = 0
+        for player in engine.players:
+            player.health = 100
+            player.deck = []
+            player.hand = []
+            player.discard = []
+            player.exile = []
+            player.equipment = []
+        engine.players[2].bandage_active = True
+        engine.players[2].health = 6
+        engine.players[2].equipment.append(EquipmentInstance(CardInstance('Disc'), 2))
+        attack = CardInstance('Bone')
+        engine.players[0].hand.append(attack)
+
+        result = engine.play_card(
+            0,
+            attack.instance_id,
+            2,
+            {'target_player': 2, 'target_player_id': 2, 'target_id': 2},
+        )
+
+        self.assertTrue(result.get('success'), result)
+        saved = engine.players[2]
+        self.assertEqual(1, saved.health)
+        self.assertTrue(saved.invincible)
+        self.assertTrue(saved.bandage_death_pending)
+        # 被绷带救回：装备不被死亡清除。
+        self.assertEqual(1, len(saved.equipment))
+
+    def test_2v2_attack_counter_only_target_can_respond(self):
+        engine = GameEngine2v2()
+        engine.phase = 'action'
+        engine.current_player = 0
+        for player in engine.players:
+            player.health = 100
+            player.deck = []
+            player.hand = []
+            player.discard = []
+            player.exile = []
+            player.equipment = []
+        # 三名非行动玩家（含攻击者队友）都持有泡泡（thorn 响应牌）。
+        bubbles = {}
+        for responder_id in (1, 2, 3):
+            bubble = CardInstance('Bubble')
+            engine.players[responder_id].hand.append(bubble)
+            bubbles[responder_id] = bubble
+        attack = CardInstance('Bone')
+        engine.players[0].hand.append(attack)
+
+        result = engine.play_card(
+            0,
+            attack.instance_id,
+            2,
+            {'target_player': 2, 'target_player_id': 2, 'target_id': 2},
+        )
+
+        self.assertTrue(result.get('success'), result)
+        self.assertTrue(result.get('needs_response'), result)
+        pending = engine.pending_response
+        self.assertIsNotNone(pending)
+        responder_ids = {
+            entry.get('responder_id')
+            for entry in (pending.get('counter_cards') or [])
+        }
+        # 攻击牌只有被攻击者本人（玩家2）在反制范围内。
+        self.assertEqual({2}, responder_ids)
+
+        # 攻击者的队友（玩家1）无法反制。
+        rejected_teammate = engine.handle_response(1, bubbles[1].instance_id)
+        self.assertFalse(rejected_teammate.get('success'), rejected_teammate)
+        # 未被攻击的另一个敌人（玩家3）也无法反制。
+        rejected_bystander = engine.handle_response(3, bubbles[3].instance_id)
+        self.assertFalse(rejected_bystander.get('success'), rejected_bystander)
+        # 拒绝不影响待反制状态。
+        self.assertIsNotNone(engine.pending_response)
+
+        # 被攻击者本人可以反制。
+        accepted = engine.handle_response(2, bubbles[2].instance_id)
+        self.assertTrue(accepted.get('success'), accepted)
+
+    def test_2v2_skill_counter_only_enemies_can_respond(self):
+        engine = GameEngine2v2()
+        engine.phase = 'action'
+        engine.current_player = 0
+        for player in engine.players:
+            player.health = 100
+            player.deck = []
+            player.hand = []
+            player.discard = []
+            player.exile = []
+            player.equipment = []
+        # 行动方队友（玩家1）与两名敌人（玩家2、3）都持有
+        # 魔法邪眼（bloom 响应牌，文案为“敌方使用技能牌”）。
+        nazars = {}
+        for responder_id in (1, 2, 3):
+            nazar = CardInstance('MagicNazar')
+            engine.players[responder_id].hand.append(nazar)
+            nazars[responder_id] = nazar
+        skill = CardInstance('Rose')
+        engine.players[0].hand.append(skill)
+
+        result = engine.play_card(
+            0,
+            skill.instance_id,
+            0,
+            {'target_player': 0, 'target_player_id': 0, 'target_id': 0},
+        )
+
+        self.assertTrue(result.get('success'), result)
+        self.assertTrue(result.get('needs_response'), result)
+        pending = engine.pending_response
+        self.assertIsNotNone(pending)
+        responder_ids = {
+            entry.get('responder_id')
+            for entry in (pending.get('counter_cards') or [])
+        }
+        # 技能牌只有敌方（玩家2、3）在反制范围内；队友（玩家1）不在。
+        self.assertEqual({2, 3}, responder_ids)
+
+        # 攻击者的队友无法反制。
+        rejected_teammate = engine.handle_response(1, nazars[1].instance_id)
+        self.assertFalse(rejected_teammate.get('success'), rejected_teammate)
+        self.assertIsNotNone(engine.pending_response)
+
+        # 敌方玩家可以反制。
+        accepted = engine.handle_response(3, nazars[3].instance_id)
+        self.assertTrue(accepted.get('success'), accepted)
+
     def test_2v2_dead_teammate_turn_does_not_expire_bandage(self):
         engine = GameEngine2v2()
         engine.phase = 'action'

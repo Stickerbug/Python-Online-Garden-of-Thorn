@@ -918,8 +918,8 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "card_type": "thorn",
         "type_code": "T",
         "tags_text": "\u84c4\u52bf\u5f85\u53d1",
-        "base_text": "\u9020\u62106\u70b9\u7535\u51fb\u4f24\u5bb3\u62bd2\u5f20\u724c",
-        "upgrade_text": "\u9020\u62108\u70b9\u7535\u51fb\u4f24\u5bb3\u62bd3\u5f20\u724c",
+        "base_text": "\u9020\u62109\u70b9\u7535\u51fb\u4f24\u5bb3\u62bd2\u5f20\u724c",
+        "upgrade_text": "\u9020\u621011\u70b9\u7535\u51fb\u4f24\u5bb3\u62bd3\u5f20\u724c",
         "rarity": "common",
         "authored_rarity": "\u666e\u901a",
         "implementation_status": "authored"
@@ -931,12 +931,12 @@ STORY_CHARACTER_CARD_DESIGNS = {
             "en": ""
         },
         "cost_e": 0,
-        "cost_m": 1,
+        "cost_m": 2,
         "card_type": "thorn",
         "type_code": "T",
         "tags_text": "\u84c4\u52bf\u5f85\u53d1\uff0c\u56de\u8f6c",
-        "base_text": "\u9020\u62104\u70b9\u7535\u51fb\u4f24\u5bb3",
-        "upgrade_text": "\u9020\u62106\u70b9\u7535\u51fb\u4f24\u5bb3",
+        "base_text": "\u9020\u62105\u70b9\u7535\u51fb\u4f24\u5bb3\uff0c\u62bd\u4e00\u5f20\u724c",
+        "upgrade_text": "\u9020\u62107\u70b9\u7535\u51fb\u4f24\u5bb3\uff0c\u62bd\u4e00\u5f20\u724c",
         "rarity": "rare",
         "authored_rarity": "\u7a00\u6709",
         "implementation_status": "authored"

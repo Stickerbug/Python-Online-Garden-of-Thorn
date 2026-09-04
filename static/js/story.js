@@ -2808,7 +2808,7 @@
                 Number(enemy.power) > 0 ? `${Number(enemy.power)}力量` : '',
                 Number(enemy.statuses?.weak) > 0 ? `${Number(enemy.statuses.weak)}虚弱` : '',
                 Number(enemy.statuses?.vulnerable) > 0 ? `${Number(enemy.statuses.vulnerable)}易伤` : '',
-                Number(enemy.statuses?.fire) > 0 ? `${Number(enemy.statuses.fire)}烈火` : '',
+                Number(enemy.statuses?.fire) > 0 ? `${Number(enemy.statuses.fire)}灼烧` : '',
             ].filter(Boolean);
             const effectText = enemyEffects.length ? ` · ${enemyEffects.join(' / ')}` : '';
             intent.textContent = enemy.intent?.kind === 'attack'

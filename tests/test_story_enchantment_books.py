@@ -8,9 +8,11 @@ from story_engine import (
     _card_values,
     _gain_enchantment_book,
     _new_card,
+    _player_physical_hit,
     _player_raw_damage,
     _reward_rarity,
     _start_combat,
+    _turn_boundary,
     apply_story_action,
 )
 from story_mode import build_initial_story_state
@@ -155,6 +157,40 @@ def test_magic_yggdrasil_auto_consumes_on_lethal_damage():
     assert state['combat']['regeneration'] == 8
     assert state['player']['enchantment_books'] == []
     assert any(event['type'] == 'enchantment_book_triggered' for event in events)
+
+
+def test_fall_cushioning_grants_disc_halving_on_next_use():
+    state = _combat_state('book-fall-cushioning')
+    state['player']['health'] = 40
+    card = _hand_card(state, 'basic')
+    book = _book(state, 'fall_cushioning')
+    state, _ = apply_story_action(
+        state,
+        'use_enchantment_book',
+        {'book_instance_id': book['instance_id'], 'card_instance_id': card['instance_id']},
+        'book-fall-cushioning-use',
+    )
+    card = state['combat']['hand'][0]
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id']},
+        'book-fall-cushioning-play',
+    )
+    assert state['combat']['disc_active'] is True
+
+    events = []
+    _player_physical_hit(state, 9, state['combat']['enemies'][0], events, 'test')
+    assert state['player']['health'] == 40 - 4
+    assert state['combat']['shield'] == 0
+
+    # 圆盘是本回合效果：回合边界后失效。
+    _turn_boundary(state, 'book-fall-cushioning-boundary', events)
+    assert state['combat']['disc_active'] is False
+    _player_physical_hit(
+        state, 9, state['combat']['enemies'][0], events, 'test-after-boundary'
+    )
+    assert state['player']['health'] == 40 - 4 - 9
 
 
 def test_armor_break_clears_shield_before_damage_and_prediction():

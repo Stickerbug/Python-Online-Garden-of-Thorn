@@ -207,6 +207,31 @@ def test_easy_difficulty_uses_normal_map_and_precedes_blessing_with_a_talent():
     assert any(event.get('type') == 'easy_relic_chosen' for event in events)
 
 
+def test_talent_pools_and_boss_choices_exclude_owned_relics():
+    state = build_initial_story_state('relic-dedupe')
+    owned = ['ruthless', 'firm_defense', 'prepared', 'sharpen', 'blade', 'steady']
+    state['player']['relics'] = list(owned)
+
+    choices = _boss_relic_choices(state, 'relic-dedupe')
+    assert choices
+    assert not set(choices) & set(owned)
+
+    shop_pool = story_engine._natural_relic_pool(state, for_shop=True)
+    assert shop_pool
+    assert not set(shop_pool) & set(owned)
+
+    # 天赋池耗尽时回退全池，叠加仍然可行。
+    state['player']['relics'] = [
+        relic_id for relic_id in STORY_RELICS
+        if STORY_RELICS[relic_id].get('rarity') != 'special'
+    ]
+    fallback = story_engine._natural_relic_pool(state, for_shop=True)
+    assert fallback
+    events = []
+    story_engine._gain_relic(state, fallback[0], 'relic-dedupe', events)
+    assert state['player']['relics'].count(fallback[0]) == 2
+
+
 def test_lunatic_stage_three_has_two_consecutive_boss_floors():
     story_map = generate_story_map('lunatic-stage-three', 3, 'ocean', 'lunatic')
     assert story_map['floor_count'] == 17

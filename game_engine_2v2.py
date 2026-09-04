@@ -1324,14 +1324,32 @@ class GameEngine2v2(GameEngine):
         }
         equipment_destroy_responders = self._equipment_destroy_response_player_ids(player_id, card, choice)
         counter_cards = []
-        # A Guard may be used whenever its trigger occurs outside the holder's
-        # own turn.  In 2v2 this includes the acting player's teammate as well
-        # as both opponents; target-specific Guards are still filtered by
-        # _card_can_counter below.
-        responder_ids = [
-            responder_id for responder_id in range(len(self.players))
-            if responder_id != player_id and self.players[responder_id].health > 0
-        ]
+        # 反制权限：攻击牌（thorn）只有被攻击的目标玩家可以反制；
+        # 其他卡牌只有行动方的敌方可反制（队友不能反制自己队伍的出牌，
+        # 反制文案均为“敌方使用……时”）。装备即将被摧毁的玩家（无论
+        # 敌我）保持可响应，用于守护自己的装备。
+        if getattr(card, 'card_type', '') == 'thorn':
+            responder_ids = [
+                tid for tid in (target_ids or [target_id])
+                if self._is_valid_player_id(tid)
+                and tid != player_id
+                and self.players[tid].health > 0
+            ]
+        else:
+            responder_ids = [
+                responder_id for responder_id in range(len(self.players))
+                if responder_id != player_id
+                and self.players[responder_id].health > 0
+                and self.is_enemy(player_id, responder_id)
+            ]
+        for responder_id in equipment_destroy_responders:
+            if (
+                self._is_valid_player_id(responder_id)
+                and responder_id != player_id
+                and self.players[responder_id].health > 0
+                and responder_id not in responder_ids
+            ):
+                responder_ids.append(responder_id)
 
         try:
             for responder_id in responder_ids:
@@ -1680,8 +1698,18 @@ class GameEngine2v2(GameEngine):
 
     def _on_player_death(self, player_id: int):
         ps = self.players[player_id]
+        # 死亡结算（绷带/世界树）必须先于装备清除：
+        # 药丸等装备赋予的状态免疫在结算时仍然生效；
+        # 若先清装备，安全网复查（_check_game_over）会在免疫
+        # 已失效的情况下让绷带错误复活玩家。
+        self._check_yggdrasil(player_id)
+        if ps.health > 0:
+            return
         self._note_achievement_death(player_id)
         self._clear_turn_card_tracking(player_id)
+        # 绷带已在死亡结算中完成评估（含被状态免疫阻止的情况），
+        # 死亡定案后清空，防止后续复查再次触发。
+        ps.bandage_active = False
         surviving_equip = []
         for eq in ps.equipment:
             if 'indestructible' in eq.card_instance.flags:
