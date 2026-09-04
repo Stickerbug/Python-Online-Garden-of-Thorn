@@ -115,6 +115,55 @@ class CommunityApiTests(unittest.TestCase):
         self.assertNotIn('created_by', feed['announcements'][0])
         self.assertNotIn('audit', feed)
 
+    def test_account_read_marker_persists_in_feed(self):
+        poll = self.create_poll()
+        with mock.patch.object(gtn, 'title_editor_actor', return_value=self.actor):
+            self.client.post(
+                '/api/community/ops/announcements',
+                headers={'X-Community-Ops-CSRF': self.ops_token()},
+                json={
+                    'title': '已读标记测试',
+                    'body': '打开公告面板后应只亮一次红点。',
+                    'pinned': False,
+                    'publish': True,
+                    'changelog_draft': False,
+                },
+            )
+        voter_public = {
+            'id': self.voter['id'],
+            'username': self.voter['username'],
+        }
+        with mock.patch.object(gtn, '_current_account_user', return_value=voter_public):
+            before = self.client.get('/api/community/feed').get_json()
+        self.assertEqual(before['viewer']['read']['announcements'], [])
+        self.assertEqual(before['viewer']['read']['polls'], [])
+
+        with mock.patch.object(
+            gtn,
+            '_require_account_json',
+            return_value=(self.voter['id'], self.voter['username'], None),
+        ):
+            missing_csrf = self.client.post('/api/community/read', json={})
+        with mock.patch.object(gtn, '_current_account_user', return_value=voter_public):
+            token = self.client.get('/api/community/feed').get_json()['csrf_token']
+        with mock.patch.object(
+            gtn,
+            '_require_account_json',
+            return_value=(self.voter['id'], self.voter['username'], None),
+        ):
+            marked = self.client.post(
+                '/api/community/read',
+                headers={'X-Community-CSRF': token},
+                json={},
+            )
+        self.assertEqual(missing_csrf.status_code, 403)
+        self.assertTrue(marked.get_json()['success'])
+
+        with mock.patch.object(gtn, '_current_account_user', return_value=voter_public):
+            after = self.client.get('/api/community/feed').get_json()
+        self.assertIn(poll['id'], after['viewer']['read']['polls'])
+        self.assertTrue(after['viewer']['read']['announcements'])
+
     def test_ops_workspace_cannot_create_or_mutate_changelog_drafts(self):
         token = self.ops_token()
         with mock.patch.object(gtn, 'title_editor_actor', return_value=self.actor):

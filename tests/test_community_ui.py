@@ -72,7 +72,10 @@ def test_ops_refresh_button_keeps_a_readable_width():
 def test_new_announcements_and_polls_have_a_persistent_unread_dot():
     assert 'gtn_community_announcement_reads_v1' in PUBLIC_JS
     assert 'function pollReceipt(item)' in PUBLIC_JS
-    assert '...polls.map(pollReceipt)' in PUBLIC_JS
+    assert 'function currentFeedItems()' in PUBLIC_JS
+    assert 'function applyServerRead(payload)' in PUBLIC_JS
+    assert "'/api/community/read'" in PUBLIC_JS
+    assert 'gtn_community_reads_v1' in PUBLIC_JS
     assert 'function updateAnnouncementBadge()' in PUBLIC_JS
     assert "button.classList.toggle('has-unread', hasUnread)" in PUBLIC_JS
     assert 'function markCommunityItemsRead()' in PUBLIC_JS

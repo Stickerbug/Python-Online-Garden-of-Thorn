@@ -312,6 +312,7 @@ from community_ops import (
     create_community_announcement,
     create_community_poll,
     get_community_feed,
+    mark_community_feed_read,
     list_community_ops_workspace,
     mutate_community_announcement,
     mutate_community_poll,
@@ -647,6 +648,7 @@ GTN_STATIC_VERSION += '-community-announcement-icon-2'
 GTN_STATIC_VERSION += '-community-announcement-unread-1-community-ops-no-changelog-1'
 GTN_STATIC_VERSION += '-community-poll-unread-1'
 GTN_STATIC_VERSION += '-community-ops-refresh-button-1'
+GTN_STATIC_VERSION += '-community-server-reads-1'
 GTN_STATIC_VERSION += '-story-prediction-fit-isolation-1'
 GTN_STATIC_VERSION += '-story-card-i18n-tokens-1'
 GTN_STATIC_VERSION += '-story-manual-map-choice-1'
@@ -22000,6 +22002,33 @@ def api_community_feed():
             'success': True,
             **feed,
             'csrf_token': community_csrf_token() if user else '',
+        })
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/read', methods=['POST'])
+def api_community_read():
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    if not community_csrf_valid():
+        return _community_json({
+            'success': False,
+            'error': '安全令牌已失效，请刷新公告',
+            'code': 'CSRF_FAILED',
+        }, 403)
+    if not rate_limiter(f'community-read-user:{user_id}', limit=30, window=60):
+        return _community_json({
+            'success': False,
+            'error': '操作过于频繁',
+            'code': 'RATE_LIMITED',
+        }, 429)
+    try:
+        feed = mark_community_feed_read(user_id)
+        return _community_json({
+            'success': True,
+            'viewer': feed.get('viewer') or {},
         })
     except Exception as exc:
         return _community_error(exc)

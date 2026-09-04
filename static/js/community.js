@@ -9,7 +9,11 @@
     epoch: 0,
   };
   const ANNOUNCEMENT_READ_KEY = 'gtn_community_announcement_reads_v1';
+  const ANNOUNCEMENT_READ_COOKIE = 'gtn_community_reads_v1';
   const announcementReadMemory = new Set();
+  const serverReadAnnouncementIds = new Set();
+  const serverReadPollIds = new Set();
+  let serverReadRequest = null;
 
   const byId = (id) => document.getElementById(id);
 
@@ -44,6 +48,16 @@
         if (Array.isArray(values)) values.forEach((value) => receipts.add(String(value || '')));
       } catch (_) {}
     });
+    try {
+      const cookieValue = document.cookie
+        .split(';')
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(`${ANNOUNCEMENT_READ_COOKIE}=`));
+      if (cookieValue) {
+        const values = JSON.parse(decodeURIComponent(cookieValue.slice(ANNOUNCEMENT_READ_COOKIE.length + 1)) || '[]');
+        if (Array.isArray(values)) values.forEach((value) => receipts.add(String(value || '')));
+      }
+    } catch (_) {}
     receipts.delete('');
     return receipts;
   }
@@ -57,31 +71,72 @@
     ['localStorage', 'sessionStorage'].forEach((name) => {
       try { window[name].setItem(key, serialized); } catch (_) {}
     });
+    try {
+      document.cookie = `${ANNOUNCEMENT_READ_COOKIE}=${encodeURIComponent(serialized)}; path=/; max-age=15552000; SameSite=Lax`;
+    } catch (_) {}
   }
 
-  function currentCommunityReceipts() {
+  function currentFeedItems() {
     const announcements = Array.isArray(state.feed?.announcements) ? state.feed.announcements : [];
     const polls = Array.isArray(state.feed?.polls) ? state.feed.polls : [];
     return [
-      ...announcements.map(announcementReceipt),
-      ...polls.map(pollReceipt),
-    ].filter(Boolean);
+      ...announcements.map((item) => ({ type: 'announcements', receipt: announcementReceipt(item), id: Number(item?.id || 0) })),
+      ...polls.map((item) => ({ type: 'polls', receipt: pollReceipt(item), id: Number(item?.id || 0) })),
+    ].filter((item) => item.receipt && item.id > 0);
+  }
+
+  function serverReadIds(type) {
+    return type === 'polls' ? serverReadPollIds : serverReadAnnouncementIds;
+  }
+
+  function applyServerRead(payload) {
+    const read = payload?.viewer?.read;
+    serverReadAnnouncementIds.clear();
+    serverReadPollIds.clear();
+    if (!read) return;
+    (Array.isArray(read.announcements) ? read.announcements : [])
+      .forEach((value) => serverReadAnnouncementIds.add(Number(value)));
+    (Array.isArray(read.polls) ? read.polls : [])
+      .forEach((value) => serverReadPollIds.add(Number(value)));
   }
 
   function updateAnnouncementBadge() {
     const button = byId('btn-community-top');
     if (!button) return;
     const read = readAnnouncementReceipts();
-    const hasUnread = currentCommunityReceipts().some((receipt) => !read.has(receipt));
+    const hasUnread = currentFeedItems().some((item) => (
+      !read.has(item.receipt) && !serverReadIds(item.type).has(item.id)
+    ));
     button.classList.toggle('has-unread', hasUnread);
     button.setAttribute('aria-label', hasUnread ? '公告与投票（有新内容）' : '公告与投票');
   }
 
-  function markCommunityItemsRead() {
+  async function markCommunityItemsRead() {
+    const authenticated = Boolean(state.feed?.viewer?.authenticated);
+    const csrf = state.csrfToken;
+    if (authenticated && csrf) {
+      if (serverReadRequest) return serverReadRequest;
+      serverReadRequest = requestJson('/api/community/read', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Community-CSRF': csrf,
+        },
+        body: '{}',
+      })
+        .then((payload) => {
+          applyServerRead(payload);
+          updateAnnouncementBadge();
+        })
+        .catch(() => {})
+        .finally(() => { serverReadRequest = null; });
+      return serverReadRequest;
+    }
     const receipts = readAnnouncementReceipts();
-    currentCommunityReceipts().forEach((receipt) => receipts.add(receipt));
+    currentFeedItems().forEach((item) => receipts.add(item.receipt));
     writeAnnouncementReceipts(receipts);
     updateAnnouncementBadge();
+    return null;
   }
 
   function isCommunityPopoverOpen() {
@@ -217,6 +272,7 @@
         if (epoch !== state.epoch) return;
         state.feed = payload;
         state.csrfToken = String(payload.csrf_token || '');
+        applyServerRead(payload);
         renderFeed();
         updateAnnouncementBadge();
         if (isCommunityPopoverOpen()) markCommunityItemsRead();

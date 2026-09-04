@@ -2374,6 +2374,19 @@ def init_db(
         )
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS community_reads (
+                user_id INTEGER NOT NULL,
+                content_type TEXT NOT NULL
+                    CHECK(content_type IN ('announcement', 'poll')),
+                content_id INTEGER NOT NULL,
+                read_at TEXT NOT NULL,
+                PRIMARY KEY(user_id, content_type, content_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS community_changelog_drafts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 announcement_id INTEGER NOT NULL UNIQUE,

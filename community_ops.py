@@ -200,6 +200,10 @@ def get_community_feed(viewer_user_id=None, *, can_manage=False):
     now = _utc_now()
     now_iso = _iso(now)
     closed_cutoff = _iso(now - timedelta(days=COMMUNITY_CLOSED_POLL_RETENTION_DAYS))
+    read_state = {
+        'announcements': set(),
+        'polls': set(),
+    }
     with closing(db.get_db_connection()) as conn:
         announcements = conn.execute(
             '''
@@ -229,6 +233,21 @@ def get_community_feed(viewer_user_id=None, *, can_manage=False):
             _poll_payload(conn, row, viewer_user_id=viewer_user_id, now=now)
             for row in polls
         ]
+        if viewer_user_id:
+            rows = conn.execute(
+                '''SELECT content_type, content_id
+                   FROM community_reads
+                   WHERE user_id = ?''',
+                (int(viewer_user_id),),
+            ).fetchall()
+            for row in rows:
+                content_type = str(row['content_type'])
+                target_key = {
+                    'announcement': 'announcements',
+                    'poll': 'polls',
+                }.get(content_type)
+                if target_key in read_state:
+                    read_state[target_key].add(int(row['content_id']))
     return {
         'announcements': [_announcement_payload(row) for row in announcements],
         'polls': poll_payloads,
@@ -236,9 +255,54 @@ def get_community_feed(viewer_user_id=None, *, can_manage=False):
             'authenticated': bool(viewer_user_id),
             'can_vote': bool(viewer_user_id),
             'can_manage': bool(can_manage),
+            'read': {
+                'announcements': sorted(read_state['announcements']),
+                'polls': sorted(read_state['polls']),
+            },
         },
         'server_time': now_iso,
     }
+
+
+def mark_community_feed_read(user_id):
+    """Record the current visible feed as read for one account."""
+
+    user_id = _positive_id(user_id, label='账号')
+    now = _utc_now()
+    now_iso = _iso(now)
+    closed_cutoff = _iso(now - timedelta(days=COMMUNITY_CLOSED_POLL_RETENTION_DAYS))
+    with closing(db.get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute(
+            '''
+            INSERT OR IGNORE INTO community_reads(
+                user_id, content_type, content_id, read_at
+            )
+            SELECT ?, 'announcement', id, ?
+            FROM community_announcements
+            WHERE state = 'published'
+              AND starts_at <= ?
+              AND (ends_at IS NULL OR ends_at > ?)
+            ''',
+            (user_id, now_iso, now_iso, now_iso),
+        )
+        conn.execute(
+            '''
+            INSERT OR IGNORE INTO community_reads(
+                user_id, content_type, content_id, read_at
+            )
+            SELECT ?, 'poll', id, ?
+            FROM community_polls
+            WHERE (
+                state = 'published' AND starts_at <= ? AND ends_at > ?
+            ) OR (
+                state IN ('published', 'closed') AND ends_at <= ? AND ends_at >= ?
+            )
+            ''',
+            (user_id, now_iso, now_iso, now_iso, now_iso, closed_cutoff),
+        )
+        conn.commit()
+    return get_community_feed(user_id)
 
 
 def get_community_poll(poll_id, viewer_user_id=None, *, reveal_results=False):
