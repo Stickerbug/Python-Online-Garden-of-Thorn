@@ -4967,6 +4967,19 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .story-inline-token-h { color: #2ecc71; }
 .story-inline-token-e { color: #e0b000; }
 .story-inline-token-m { color: #3498db; }
+.story-inline-token-s { color: #2e7d7d; }
+.story-inline-token-g { color: var(--story-gold); }
+.story-inline-token-electric_damage { color: #c0392b; }
+
+.story-inline-status {
+  font-weight: 800;
+}
+
+.story-inline-status-shield { color: #2e7d7d; }
+.story-inline-status-armor { color: #515a5a; }
+.story-inline-status-fragile { color: #8e5a2a; }
+.story-inline-status-weakness { color: #8e44ad; }
+.story-inline-status-poison { color: #8e44ad; }
 
 .story-inline-token-icon-wrap {
   width: 1.36em;

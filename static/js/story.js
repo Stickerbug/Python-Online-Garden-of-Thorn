@@ -341,6 +341,9 @@
         H: '/static/assets/ui-icons/hit-point.svg',
         E: '/static/assets/ui-icons/elixir.svg',
         M: '/static/assets/ui-icons/magic.svg',
+        S: '/static/assets/status-icons/shield.svg',
+        G: '/static/assets/story-ui-icons/gold.svg',
+        electric_damage: '/static/assets/ui-icons/electric_damage.svg',
     });
 
     const STORY_STATUS_ICONS = Object.freeze({
@@ -6381,12 +6384,16 @@
     }
 
     function createStoryInlineIcon(unit) {
-        const normalizedUnit = String(unit || '').toUpperCase();
+        const rawUnit = String(unit || '').trim();
+        const iconKey = STORY_INLINE_ICONS[rawUnit]
+            ? rawUnit
+            : (STORY_INLINE_ICONS[rawUnit.toUpperCase()] ? rawUnit.toUpperCase() : '');
+        const normalizedUnit = iconKey || rawUnit.toUpperCase();
         const wrapper = document.createElement('span');
         wrapper.className = 'story-inline-token-icon-wrap';
         const icon = document.createElement('img');
         icon.className = 'story-inline-token-icon';
-        icon.src = STORY_INLINE_ICONS[normalizedUnit] || '';
+        icon.src = STORY_INLINE_ICONS[iconKey] || '';
         icon.alt = normalizedUnit;
         const fallback = document.createElement('span');
         fallback.className = 'story-inline-token-icon-fallback';
@@ -6399,33 +6406,94 @@
     function appendStoryValueRichText(container, value) {
         if (!container) return;
         const text = String(value || '');
-        const pattern = /(\d+(?:\.\d+)?)\s*(?:(?:\[\[icon:([DHEM])\]\]|([DHEM]))\s*([×xX*])\s*(\d+)|([×xX*])\s*(\d+)\s*(?:\[\[icon:([DHEM])\]\]|([DHEM]))|(?:\[\[icon:([DHEM])\]\]|([DHEM])))(?![A-Za-z])/gi;
+        const STATUS_TOKEN_RULES = [
+            { key: 'shield', re: /^(?:护盾|Shields?|Boucliers?|シールド)/ },
+            { key: 'armor', re: /^(?:护甲|Armou?r|Armure|防具|アーマー)/ },
+            { key: 'fragile', re: /^(?:易伤|易损|脆弱|Vulnerab(?:le|ility)|Vulnérabilit(?:é|e)s?|脆弱性)/ },
+            { key: 'weakness', re: /^(?:虚弱|Weak(?:ness)?|Faiblesse|弱体化)/ },
+            { key: 'poison', re: /^(?:中毒|Poison(?:ed)?|Veneno|毒)/ },
+        ];
         let cursor = 0;
-        let match = null;
-        while ((match = pattern.exec(text))) {
-            if (match.index > cursor) container.append(document.createTextNode(text.slice(cursor, match.index)));
-            const unit = String(match[2] || match[3] || match[8] || match[9] || match[10] || match[11] || '').toUpperCase();
-            const token = document.createElement('span');
-            token.className = `story-inline-token story-inline-token-${unit.toLowerCase()}`;
-            const amount = document.createElement('span');
-            amount.textContent = match[1];
-            token.append(amount);
-            if (match[6] && match[7]) {
-                const multiplier = document.createElement('span');
-                multiplier.textContent = `×${match[7]}`;
-                token.append(multiplier, createStoryInlineIcon(unit));
-            } else {
-                token.append(createStoryInlineIcon(unit));
-                if (match[4] && match[5]) {
+        while (cursor < text.length) {
+            const rest = text.slice(cursor);
+            const unitMatch = rest.match(
+                /^([+\-−]?\d+(?:\.\d+)?)\s*(?:\[\[icon:([A-Za-z0-9_]+)\]\]|([DHEMSG]))(?![A-Za-z])/i,
+            );
+            if (unitMatch) {
+                const amount = unitMatch[1];
+                const rawUnit = String(unitMatch[2] || unitMatch[3] || '');
+                const unit = rawUnit.toUpperCase();
+                const iconKey = rawUnit.toLowerCase() === 'm' ? 'M' : rawUnit;
+                let consumed = unitMatch[0].length;
+                const suffix = rest.slice(consumed).match(/^\s*[×xX*]\s*(\d+(?:\.\d+)?)/);
+                const token = document.createElement('span');
+                token.className = `story-inline-token story-inline-token-${unit.toLowerCase()}`;
+                const amountNode = document.createElement('span');
+                amountNode.textContent = amount;
+                token.append(amountNode);
+                if (suffix) {
                     const multiplier = document.createElement('span');
-                    multiplier.textContent = `×${match[5]}`;
-                    token.append(multiplier);
+                    multiplier.textContent = `×${suffix[1]}`;
+                    token.append(createStoryInlineIcon(iconKey), multiplier);
+                    consumed += suffix[0].length;
+                } else {
+                    token.append(createStoryInlineIcon(iconKey));
                 }
+                container.append(token);
+                cursor += consumed;
+                continue;
             }
-            container.append(token);
-            cursor = pattern.lastIndex;
+            const prefixMultiplier = rest.match(
+                /^([+\-−]?\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)\s*(?:\[\[icon:([A-Za-z0-9_]+)\]\]|([DHEMSG]))(?![A-Za-z])/i,
+            );
+            if (prefixMultiplier) {
+                const rawUnit = String(prefixMultiplier[3] || prefixMultiplier[4] || '');
+                const unit = rawUnit.toUpperCase();
+                const iconKey = rawUnit.toLowerCase() === 'm' ? 'M' : rawUnit;
+                const token = document.createElement('span');
+                token.className = `story-inline-token story-inline-token-${unit.toLowerCase()}`;
+                const amountNode = document.createElement('span');
+                amountNode.textContent = prefixMultiplier[1];
+                const multiplier = document.createElement('span');
+                multiplier.textContent = `×${prefixMultiplier[2]}`;
+                token.append(amountNode, multiplier, createStoryInlineIcon(iconKey));
+                container.append(token);
+                cursor += prefixMultiplier[0].length;
+                continue;
+            }
+            const electricMatch = rest.match(
+                /^([+\-−]?\d+(?:\.\d+)?)\s*(?:点)?(?:电伤|电伤害|电击伤害)\s*(?:[×xX*]\s*(\d+(?:\.\d+)?))?/,
+            );
+            if (electricMatch) {
+                const token = document.createElement('span');
+                token.className = 'story-inline-token story-inline-token-electric_damage';
+                const amountNode = document.createElement('span');
+                amountNode.textContent = electricMatch[1];
+                token.append(amountNode);
+                if (electricMatch[2]) {
+                    const multiplier = document.createElement('span');
+                    multiplier.textContent = `×${electricMatch[2]}`;
+                    token.append(createStoryInlineIcon('electric_damage'), multiplier);
+                } else {
+                    token.append(createStoryInlineIcon('electric_damage'));
+                }
+                container.append(token);
+                cursor += electricMatch[0].length;
+                continue;
+            }
+            const statusRule = STATUS_TOKEN_RULES.find((rule) => rule.re.test(rest));
+            if (statusRule) {
+                const statusMatch = rest.match(statusRule.re);
+                const status = document.createElement('span');
+                status.className = `story-inline-status story-inline-status-${statusRule.key}`;
+                status.textContent = statusMatch[0];
+                container.append(status);
+                cursor += statusMatch[0].length;
+                continue;
+            }
+            container.append(document.createTextNode(text[cursor]));
+            cursor += 1;
         }
-        if (cursor < text.length) container.append(document.createTextNode(text.slice(cursor)));
     }
 
     function createStoryInlineCardChip(defId) {

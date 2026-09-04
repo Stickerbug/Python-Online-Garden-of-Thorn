@@ -10,7 +10,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u57fa\u672c",
-            "en": ""
+            "en": "Magic Basic"
         },
         "cost_e": 1,
         "cost_m": 2,
@@ -27,7 +27,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u6a59\u5b50",
-            "en": ""
+            "en": "Magic Orange"
         },
         "cost_e": 0,
         "cost_m": 1,
@@ -44,7 +44,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u73ca\u745a",
-            "en": ""
+            "en": "Magic Coral"
         },
         "cost_e": 1,
         "cost_m": 2,
@@ -61,7 +61,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u53f6",
-            "en": ""
+            "en": "Magic Leaf"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -78,7 +78,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u6307\u5357\u9488",
-            "en": ""
+            "en": "Magic Compass"
         },
         "cost_e": 0,
         "cost_m": 1,
@@ -95,7 +95,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u85af\u6761",
-            "en": ""
+            "en": "Magic Fries"
         },
         "cost_e": 1,
         "cost_m": 2,
@@ -112,7 +112,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u5496\u5561",
-            "en": ""
+            "en": "Magic Coffee"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -129,7 +129,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u8840\u5203",
-            "en": ""
+            "en": "Magic Blood Blade"
         },
         "cost_e": 0,
         "cost_m": 0,
@@ -146,7 +146,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u68c9\u82b1",
-            "en": ""
+            "en": "Magic Cotton"
         },
         "cost_e": 1,
         "cost_m": 1,
@@ -163,7 +163,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u5411\u65e5\u8475",
-            "en": ""
+            "en": "Magic Sunflower"
         },
         "cost_e": 1,
         "cost_m": 1,
@@ -180,7 +180,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u91cf\u5b50",
-            "en": ""
+            "en": "Magic Quantum"
         },
         "cost_e": 2,
         "cost_m": 0,
@@ -197,7 +197,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u7fc5\u8180",
-            "en": ""
+            "en": "Magic Wing"
         },
         "cost_e": 1,
         "cost_m": 2,
@@ -214,7 +214,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u9aa8\u5934",
-            "en": ""
+            "en": "Magic Bone"
         },
         "cost_e": 0,
         "cost_m": 3,
@@ -231,7 +231,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u5927\u4e3d\u82b1",
-            "en": ""
+            "en": "Magic Dahlia"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -248,7 +248,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u571f",
-            "en": ""
+            "en": "Magic Soil"
         },
         "cost_e": 0,
         "cost_m": 4,
@@ -265,7 +265,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u89e6\u89d2",
-            "en": ""
+            "en": "Magic Tentacle"
         },
         "cost_e": 0,
         "cost_m": 2,
@@ -282,7 +282,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u79cd\u5b50",
-            "en": ""
+            "en": "Magic Seed"
         },
         "cost_e": 1,
         "cost_m": 2,
@@ -299,7 +299,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u756a\u8304",
-            "en": ""
+            "en": "Magic Tomato"
         },
         "cost_e": 2,
         "cost_m": 0,
@@ -316,7 +316,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u6728\u68cd",
-            "en": ""
+            "en": "Magic Stick"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -333,7 +333,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u68d5\u6988\u53f6",
-            "en": ""
+            "en": "Magic Palm Leaf"
         },
         "cost_e": 2,
         "cost_m": 0,
@@ -350,7 +350,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u7898",
-            "en": ""
+            "en": "Magic Iodine"
         },
         "cost_e": 1,
         "cost_m": 3,
@@ -367,7 +367,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u7f57\u52d2",
-            "en": ""
+            "en": "Magic Basil"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -384,7 +384,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u9999\u8102",
-            "en": ""
+            "en": "Magic Balsam"
         },
         "cost_e": 0,
         "cost_m": 2,
@@ -401,7 +401,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u6ce1\u6ce1\u70b8\u5f39",
-            "en": ""
+            "en": "Magic Bubble Bomb"
         },
         "cost_e": 1,
         "cost_m": 3,
@@ -418,7 +418,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u95ea\u7535",
-            "en": ""
+            "en": "Magic Lightning"
         },
         "cost_e": 0,
         "cost_m": 4,
@@ -435,7 +435,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u94f2\u5b50",
-            "en": ""
+            "en": "Magic Shovel"
         },
         "cost_e": 0,
         "cost_m": 8,
@@ -452,7 +452,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u6d77\u7ef5",
-            "en": ""
+            "en": "Magic Sponge"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -469,7 +469,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u73cd\u73e0",
-            "en": ""
+            "en": "Magic Pearl"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -486,7 +486,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u77f3\u5934",
-            "en": ""
+            "en": "Magic Rock"
         },
         "cost_e": 0,
         "cost_m": 3,
@@ -503,7 +503,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u84dd\u8393",
-            "en": ""
+            "en": "Magic Blueberry"
         },
         "cost_e": 2,
         "cost_m": 3,
@@ -520,7 +520,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u7535\u6c60",
-            "en": ""
+            "en": "Magic Battery"
         },
         "cost_e": 1,
         "cost_m": 3,
@@ -537,7 +537,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u952f\u9f7f",
-            "en": ""
+            "en": "Magic Serration"
         },
         "cost_e": 0,
         "cost_m": 5,
@@ -554,7 +554,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u6d77\u661f",
-            "en": ""
+            "en": "Magic Starfish"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -571,7 +571,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u8702\u871c",
-            "en": ""
+            "en": "Magic Honey"
         },
         "cost_e": 1,
         "cost_m": 1,
@@ -588,7 +588,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u661f\u5ea7",
-            "en": ""
+            "en": "Magic Constellation"
         },
         "cost_e": 2,
         "cost_m": 2,
@@ -605,7 +605,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u53e3\u7f69",
-            "en": ""
+            "en": "Magic Mask"
         },
         "cost_e": 0,
         "cost_m": 0,
@@ -622,7 +622,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u5bfc\u5f39",
-            "en": ""
+            "en": "Magic Missile"
         },
         "cost_e": 1,
         "cost_m": 3,
@@ -639,7 +639,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u98ce",
-            "en": ""
+            "en": "Magic Wind"
         },
         "cost_e": 0,
         "cost_m": 0,
@@ -656,7 +656,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u67d3\u8272\u4f53",
-            "en": ""
+            "en": "Magic Chromosome"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -673,7 +673,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u73ab\u7470",
-            "en": ""
+            "en": "Magic Rose"
         },
         "cost_e": 0,
         "cost_m": 2,
@@ -690,7 +690,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u8702\u8721",
-            "en": ""
+            "en": "Magic Beeswax"
         },
         "cost_e": 1,
         "cost_m": 2,
@@ -707,7 +707,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u6c14\u7403",
-            "en": ""
+            "en": "Magic Balloon"
         },
         "cost_e": 0,
         "cost_m": 2,
@@ -724,7 +724,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u7a7a\u6c14",
-            "en": ""
+            "en": "Magic Air"
         },
         "cost_e": 1,
         "cost_m": 3,
@@ -741,7 +741,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u4eba\u6c11\u5e01",
-            "en": ""
+            "en": "Magic RMB"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -758,7 +758,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u7535\u5bb9\u5668",
-            "en": ""
+            "en": "Capacitor"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -775,7 +775,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u7535\u6c60",
-            "en": ""
+            "en": "Battery"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -792,7 +792,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u7b49\u79bb\u5b50\u4f53",
-            "en": ""
+            "en": "Plasma"
         },
         "cost_e": 3,
         "cost_m": 0,
@@ -809,7 +809,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u7ea2\u5b9d\u77f3",
-            "en": ""
+            "en": "Ruby"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -826,7 +826,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u7ea2\u5b9d\u77f3",
-            "en": ""
+            "en": "Magic Ruby"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -843,7 +843,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u7535\u5bb9\u5668",
-            "en": ""
+            "en": "Magic Capacitor"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -860,7 +860,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u94dc\u68d2",
-            "en": ""
+            "en": "Copper Rod"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -877,7 +877,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u94dc\u68d2",
-            "en": ""
+            "en": "Magic Copper Rod"
         },
         "cost_e": 0,
         "cost_m": 4,
@@ -894,7 +894,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u9502",
-            "en": ""
+            "en": "Magic Lithium"
         },
         "cost_e": 2,
         "cost_m": 0,
@@ -911,7 +911,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u7535\u5b50\u5bfc\u5f39",
-            "en": ""
+            "en": "Electronic Missile"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -928,7 +928,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u7535\u5b50\u5bfc\u5f39",
-            "en": ""
+            "en": "Magic Electronic Missile"
         },
         "cost_e": 0,
         "cost_m": 2,

@@ -186,10 +186,24 @@ def test_story_card_typography_matches_gallery_primitives():
     assert "document.documentElement.lang = lang;" in STORY_JS
 
 
+def test_story_inline_tokens_cover_shield_gold_and_electric_damage():
+    assert "S: '/static/assets/status-icons/shield.svg'" in STORY_JS
+    assert "G: '/static/assets/story-ui-icons/gold.svg'" in STORY_JS
+    assert "electric_damage: '/static/assets/ui-icons/electric_damage.svg'" in STORY_JS
+    assert 'STATUS_TOKEN_RULES' in STORY_JS
+    assert '(?:电伤|电伤害|电击伤害)' in STORY_JS
+    assert '.story-inline-token-s { color: #2e7d7d; }' in STORY_CSS
+    assert '.story-inline-token-g { color: var(--story-gold); }' in STORY_CSS
+    assert '.story-inline-token-electric_damage { color: #c0392b; }' in STORY_CSS
+    assert '.story-inline-status-shield { color: #2e7d7d; }' in STORY_CSS
+
+
 def test_story_rich_text_colors_icon_suffix_multipliers():
-    assert r"\[\[icon:([DHEM])\]\]" in STORY_JS
-    assert "multiplier.textContent = `×${match[5]}`;" in STORY_JS
-    assert "token.append(multiplier);" in STORY_JS
+    assert r"\[\[icon:([A-Za-z0-9_]+)\]\]" in STORY_JS
+    assert "multiplier.textContent = `×${suffix[1]}`;" in STORY_JS
+    assert "multiplier.textContent = `×${prefixMultiplier[2]}`;" in STORY_JS
+    assert 'token.append(createStoryInlineIcon(iconKey), multiplier);' in STORY_JS
+    assert 'token.append(amountNode, multiplier, createStoryInlineIcon(iconKey));' in STORY_JS
     assert '.story-inline-token {' in STORY_CSS
     assert 'font-weight: 800;' in STORY_CSS
 

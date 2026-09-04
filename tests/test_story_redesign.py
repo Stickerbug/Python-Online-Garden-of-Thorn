@@ -1366,3 +1366,18 @@ def test_restart_floor_restores_the_immutable_node_entry_state_even_after_death(
     assert state['floor_entry_checkpoint']['node_id'] == node['id']
     assert state['recovery_checkpoint']['kind'] == 'combat_entry'
     assert any(event.get('type') == 'floor_restarted' for event in events)
+
+
+def test_every_story_card_has_a_real_localized_name():
+    for card_id, card in STORY_CARDS.items():
+        name = card.get('name') or {}
+        zh = str(name.get('zh') or '').strip()
+        en = str(name.get('en') or '').strip()
+        assert zh, card_id
+        assert en, card_id
+        if card_id not in {'dna', 'rna'}:
+            assert en != zh, card_id
+    assert STORY_CARDS['mage_rmb']['name']['en'] == 'Magic RMB'
+    assert STORY_CARDS['mage_honey_shield']['name']['en'] == 'Magic Honey'
+    assert STORY_CARDS['capacitor']['name']['en'] == 'Capacitor'
+    assert STORY_CARDS['electronic_missile']['name']['en'] == 'Electronic Missile'

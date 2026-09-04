@@ -644,6 +644,7 @@ GTN_STATIC_VERSION += '-community-announcement-unread-1-community-ops-no-changel
 GTN_STATIC_VERSION += '-community-poll-unread-1'
 GTN_STATIC_VERSION += '-community-ops-refresh-button-1'
 GTN_STATIC_VERSION += '-story-prediction-fit-isolation-1'
+GTN_STATIC_VERSION += '-story-card-i18n-tokens-1'
 GTN_STATIC_VERSION += '-story-manual-map-choice-1'
 GTN_STATIC_VERSION += '-story-hud-card-play-unlock-1'
 GTN_STATIC_VERSION += '-story-external-save-surrender-1'
