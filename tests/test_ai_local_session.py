@@ -311,6 +311,34 @@ def test_replay_api_accepts_phelren_prefixed_references():
     get_timeline.assert_called_once_with(81, offset=None, limit=None)
 
 
+def test_replay_api_public_scope_and_id_search_use_31_day_window():
+    client = gtn.app.test_client()
+    with client.session_transaction() as session:
+        session["user_id"] = 4242
+        session["username"] = "Replay Human"
+    replay_item = {
+        "id": 81,
+        "replay_prefix": "P",
+        "replay_ref": "P-81",
+        "players": ["Phelren", "Replay Human"],
+    }
+    with (
+        mock.patch.object(gtn, "DB_AVAILABLE", True),
+        mock.patch.object(gtn, "replay_api_allowed", return_value=True),
+        mock.patch.object(gtn, "list_replays", return_value={"items": [replay_item]}) as list_mock,
+    ):
+        public_response = client.get("/api/replays?scope=public&limit=10")
+        search_response = client.get("/api/replays?scope=public&replay_id=P-81")
+
+    assert public_response.status_code == 200
+    assert public_response.get_json()["items"] == [replay_item]
+    assert search_response.status_code == 200
+    assert search_response.get_json()["items"] == [replay_item]
+    assert list_mock.call_args_list[0].kwargs["retention_days"] == 31
+    assert list_mock.call_args_list[0].kwargs["player_user_id"] is None
+    assert list_mock.call_args_list[1].kwargs["replay_ref"] == "P-81"
+
+
 def test_registered_socket_player_can_start_public_ai_match():
     http_client = gtn.app.test_client()
     with http_client.session_transaction() as session:

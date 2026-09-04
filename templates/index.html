@@ -222,6 +222,15 @@
       <span id="account-replays-title">最近回放</span>
       <button id="btn-account-replays-refresh" class="mini-btn" type="button">刷新</button>
     </div>
+    <div id="account-replays-tabs" class="account-mode-tabs replay-scope-tabs">
+      <button class="account-mode-tab active" type="button" data-account-replay-scope="mine">我的对局</button>
+      <button class="account-mode-tab" type="button" data-account-replay-scope="public">公共回放</button>
+      <button class="account-mode-tab" type="button" data-account-replay-scope="search">搜索回放</button>
+    </div>
+    <div id="account-replay-search-row" class="account-replay-search-row hidden">
+      <input id="input-account-replay-search" class="account-replay-search-input" type="text" maxlength="24" placeholder="回放编号，例如 R-12345">
+      <button id="btn-account-replay-search" class="mini-btn" type="button">查看</button>
+    </div>
     <div id="account-replays-list" class="account-replays-list"></div>
   </div>
 </div>

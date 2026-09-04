@@ -787,6 +787,7 @@ def list_replays(
     mod_source='',
     retention_days=None,
     player_user_id=None,
+    replay_ref='',
 ):
     safe_limit = max(1, min(int(limit or 50), 100))
     safe_offset = max(0, int(offset or 0))
@@ -818,6 +819,13 @@ def list_replays(
     if mod_source:
         where.append('COALESCE(mod_source, ?) = ?')
         params.extend(['official', str(mod_source)])
+    requested_replay_prefix = ''
+    replay_id_filter = None
+    if str(replay_ref or '').strip():
+        requested_replay_prefix = _requested_replay_prefix(replay_ref)
+        replay_id_filter = normalize_replay_id(replay_ref)
+        where.append('id = ?')
+        params.append(replay_id_filter)
     where_sql = ' AND '.join(where)
     with get_db_connection() as conn:
         rows = conn.execute(
@@ -830,6 +838,11 @@ def list_replays(
             params + [safe_limit + 1, safe_offset],
         ).fetchall()
     items = [_replay_row_to_item(row) for row in rows[:safe_limit]]
+    if requested_replay_prefix:
+        items = [
+            item for item in items
+            if item.get('replay_prefix') == requested_replay_prefix
+        ]
     return {
         'items': items,
         'next_offset': safe_offset + len(items),

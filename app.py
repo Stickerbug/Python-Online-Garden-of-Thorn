@@ -636,7 +636,7 @@ GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSIO
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
 _GTN_STATIC_VERSION_BASE = os.environ.get('GTN_STATIC_VERSION', GTN_VERSION).strip() or GTN_VERSION
-GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1-player-name-descender-2-battle-chat-gradient-1-story-coop-headless-2-story-coop-lobby-1-pvp-damage-prediction-parity-1-story-coop-combat-1-story-coop-progression-1-story-coop-stage1-garden-1-story-coop-opening-1-story-coop-content-1-story-coop-enemy-content-1-story-coop-relic-content-1-story-coop-card-effects-1-security-hardening-1-story-coop-shared-events-1-ai-public-entry-toggle-1-csp-nonce-1-story-seeded-background-2-story-character-details-1-story-coop-mage-1-dead-multihit-1-story-card-motion-1-story-persistent-hud-1-story-all-phase-saves-1-story-boss-node-portraits-1-story-map-columns-1-story-codex-links-1-story-map-room-icons-1-story-mage-card-art-1-story-card-browser-nav-1-pvp-gallery-card-browser-nav-1-community-ops-1-community-announcement-icon-1-proxy-origin-1-story-contract-reset-1-ranked-modes-1-story-coop-full-journey-1'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}-formal-logic-mod-1-feedback-handling-search-1-story-card-font-parity-1-replay-export-bridge-13-changelog-version-guard-1-ai-local-test-5-ai-replay-1-formal-timers-1-title-shop-rich-titles-2-title-editor-1-ai-public-account-1-ai-spectate-room-1-phelren-avatar-2-ai-mark-button-removed-1-phelren-surrender-result-1-story-title-identity-1-descender-safe-text-1-fullscreen-setting-1-title-solid-color-1-phelren-reconnect-1-player-name-descender-2-battle-chat-gradient-1-story-coop-headless-2-story-coop-lobby-1-pvp-damage-prediction-parity-1-story-coop-combat-1-story-coop-progression-1-story-coop-stage1-garden-1-story-coop-opening-1-story-coop-content-1-story-coop-enemy-content-1-story-coop-relic-content-1-story-coop-card-effects-1-security-hardening-1-story-coop-shared-events-1-ai-public-entry-toggle-1-csp-nonce-1-story-seeded-background-2-story-character-details-1-story-coop-mage-1-dead-multihit-1-story-card-motion-1-story-persistent-hud-1-story-all-phase-saves-1-story-boss-node-portraits-1-story-map-columns-1-story-codex-links-1-story-map-room-icons-1-story-mage-card-art-1-story-card-browser-nav-1-pvp-gallery-card-browser-nav-1-community-ops-1-community-announcement-icon-1-proxy-origin-1-story-contract-reset-1-ranked-modes-1-story-coop-full-journey-1-replay-scope-tabs-1'
 GTN_STATIC_VERSION += '-account-integrity-1-pvp-economy-1-story-terminal-stage-copy-1-story-coop-biome-label-1'
 GTN_STATIC_VERSION += '-story-workbook-v9-ui-1'
 GTN_STATIC_VERSION += '-story-enchantment-books-1'
@@ -21285,9 +21285,12 @@ def api_replays():
         admin_context = replay_admin_context_requested()
         if not admin_context and not session.get('user_id'):
             return jsonify({'success': False, 'error': 'unauthorized'}), 401
+        scope = str(request.args.get('scope', 'mine') or 'mine').strip().lower()
+        replay_ref = str(request.args.get('replay_id', '') or '').strip()
+        public_scope = scope in ('public', 'search') or bool(replay_ref)
         player_filter = request.args.get('player', '')
         player_user_id = None
-        if not admin_context:
+        if not admin_context and not public_scope:
             player_filter = ''
             player_user_id = session.get('user_id')
         data = list_replays(
@@ -21297,8 +21300,10 @@ def api_replays():
             player=player_filter,
             mod_source=request.args.get('mod_source', ''),
             player_user_id=player_user_id,
+            retention_days=31 if public_scope else None,
+            replay_ref=replay_ref,
         )
-        if not admin_context:
+        if not admin_context and not public_scope:
             data['items'] = [item for item in data.get('items', []) if replay_item_visible_to_current_user(item)]
         return jsonify({'success': True, **data})
     except Exception as exc:
@@ -21322,8 +21327,6 @@ def api_replay_detail(replay_ref):
     item = get_replay(replay_ref)
     if not item:
         return jsonify({'success': False, 'error': '回放不存在'}), 404
-    if not replay_item_visible_to_current_user(item, admin_context=admin_context):
-        return jsonify({'success': False, 'error': 'forbidden'}), 403
     return jsonify({'success': True, 'replay': item})
 
 
@@ -21343,8 +21346,6 @@ def api_replay_download(replay_ref):
     item = get_replay(replay_ref)
     if not item:
         return jsonify({'success': False, 'error': '回放不存在'}), 404
-    if not replay_item_visible_to_current_user(item, admin_context=admin_context):
-        return jsonify({'success': False, 'error': 'forbidden'}), 403
     limited_response = _replay_download_rate_limit_response(replay_id, item=item, admin_context=admin_context)
     if limited_response is not None:
         return limited_response
@@ -21384,8 +21385,6 @@ def api_replay_timeline(replay_ref):
     item = get_replay(replay_ref)
     if not item:
         return jsonify({'success': False, 'error': '回放不存在'}), 404
-    if not replay_item_visible_to_current_user(item, admin_context=admin_context):
-        return jsonify({'success': False, 'error': 'forbidden'}), 403
     try:
         has_slice_args = 'offset' in request.args or 'limit' in request.args
         data = replay_timeline(

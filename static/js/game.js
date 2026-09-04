@@ -2005,6 +2005,10 @@ Object.assign(I18N.en, {
     account_replays: 'Recent Replays', replay_viewer: 'Replay Viewer', replay_view: 'View',
     replay_id: 'Replay ID', replay_copy: 'Copy', replay_copied: 'Replay ID copied',
     replay_empty: 'No replay in the last 90 days.', replay_loading: 'Loading replays...',
+    replay_mine: 'My Matches', replay_public: 'Public Replays', replay_search: 'Search Replay',
+    replay_search_placeholder: 'Replay ID, e.g. R-12345',
+    replay_public_empty: 'No public replays in the last 31 days.',
+    replay_not_found: 'Replay not found or older than 31 days.',
     replay_load_failed: 'Failed to load replay', replay_prev: 'Prev', replay_play: 'Play',
     replay_pause: 'Pause', replay_next: 'Next', replay_instant: 'Instant',
     replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.',
@@ -2016,6 +2020,10 @@ Object.assign(I18N.zh, {
     account_replays: '最近回放', replay_viewer: '回放查看器', replay_view: '查看',
     replay_id: '回放 ID', replay_copy: '复制', replay_copied: '已复制回放 ID',
     replay_empty: '最近90天暂无回放。', replay_loading: '正在读取回放...',
+    replay_mine: '我的对局', replay_public: '公共回放', replay_search: '搜索回放',
+    replay_search_placeholder: '回放编号，例如 R-12345',
+    replay_public_empty: '最近31天暂无公共回放。',
+    replay_not_found: '未找到该回放，或已超过31天。',
     replay_load_failed: '回放加载失败', replay_prev: '上一步', replay_play: '播放',
     replay_pause: '暂停', replay_next: '下一步', replay_instant: '立即',
     replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。',
@@ -2027,6 +2035,10 @@ Object.assign(I18N.fr, {
     account_replays: 'Replays récents', replay_viewer: 'Lecteur de replay', replay_view: 'Voir',
     replay_id: 'ID du replay', replay_copy: 'Copier', replay_copied: 'ID du replay copié',
     replay_empty: 'Aucun replay sur 90 jours.', replay_loading: 'Chargement...',
+    replay_mine: 'Mes parties', replay_public: 'Replays publics', replay_search: 'Rechercher',
+    replay_search_placeholder: 'ID du replay, ex. R-12345',
+    replay_public_empty: 'Aucun replay public sur 31 jours.',
+    replay_not_found: 'Replay introuvable ou vieux de plus de 31 jours.',
     replay_load_failed: 'Échec du replay', replay_prev: 'Préc.', replay_play: 'Lire',
     replay_pause: 'Pause', replay_next: 'Suiv.', replay_instant: 'Instant',
     replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.',
@@ -2038,6 +2050,10 @@ Object.assign(I18N.ja, {
     account_replays: '最近のリプレイ', replay_viewer: 'リプレイビューア', replay_view: '表示',
     replay_id: 'リプレイID', replay_copy: 'コピー', replay_copied: 'リプレイIDをコピーしました',
     replay_empty: '90日以内のリプレイはありません。', replay_loading: '読み込み中...',
+    replay_mine: '自分の対局', replay_public: '公開リプレイ', replay_search: 'リプレイ検索',
+    replay_search_placeholder: 'リプレイID（例 R-12345）',
+    replay_public_empty: '31日以内の公開リプレイはありません。',
+    replay_not_found: 'リプレイが見つからないか、31日より古いです。',
     replay_load_failed: 'リプレイ読み込み失敗', replay_prev: '前へ', replay_play: '再生',
     replay_pause: '一時停止', replay_next: '次へ', replay_instant: '即時',
     replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。',
@@ -5086,6 +5102,7 @@ let lobbyMentionMenu = null;
 let lobbyMentionActiveRange = null;
 const readLobbyMentionIds = new Set();
 let accountReplayItems = [];
+let accountReplayScope = 'mine';
 let accountReplayTimeline = [];
 let accountReplayFrameIndex = 0;
 let accountReplaySpeed = 1;
@@ -6592,6 +6609,22 @@ function updateStaticText() {
     if (accountReplaysTitle) accountReplaysTitle.textContent = UI.account_replays;
     const accountReplaysRefresh = $('btn-account-replays-refresh');
     if (accountReplaysRefresh) accountReplaysRefresh.textContent = UI.refresh;
+    document.querySelectorAll('[data-account-replay-scope]').forEach((btn) => {
+        const key = btn.dataset.accountReplayScope;
+        const label = key === 'public'
+            ? (UI.replay_public || '公共回放')
+            : key === 'search'
+                ? (UI.replay_search || '搜索回放')
+                : (UI.replay_mine || '我的对局');
+        btn.textContent = label;
+    });
+    const replaySearchInput = $('input-account-replay-search');
+    if (replaySearchInput) {
+        replaySearchInput.placeholder = UI.replay_search_placeholder
+            || '回放编号，例如 R-12345';
+    }
+    const replaySearchBtn = $('btn-account-replay-search');
+    if (replaySearchBtn) replaySearchBtn.textContent = UI.replay_view || '查看';
     const accountReplayTitle = $('account-replay-title');
     if (accountReplayTitle) accountReplayTitle.textContent = UI.replay_viewer;
     document.querySelectorAll('[data-account-replay-control="prev"]').forEach((btn) => { btn.title = UI.replay_prev; if (btn.classList.contains('replay-icon-btn')) btn.textContent = '‹'; });
@@ -19099,7 +19132,12 @@ function renderAccountReplayList() {
         return;
     }
     if (!accountReplayItems.length) {
-        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.replay_empty)}</div>`;
+        const emptyText = accountReplayScope === 'public'
+            ? (UI.replay_public_empty || '最近31天暂无公共回放。')
+            : accountReplayScope === 'search'
+                ? (UI.replay_not_found || '未找到该回放，或已超过31天。')
+                : (UI.replay_empty || '最近90天暂无回放。');
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(emptyText)}</div>`;
         return;
     }
     list.innerHTML = accountReplayItems.map((item) => {
@@ -19129,13 +19167,69 @@ function renderAccountReplayList() {
 async function loadAccountReplays() {
     const list = $('account-replays-list');
     if (!currentAccount || !list) return;
+    const scope = ['mine', 'public'].includes(accountReplayScope) ? accountReplayScope : 'mine';
+    accountReplayItems = [];
     list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.replay_loading)}</div>`;
     try {
-        const data = await authRequest('/api/replays?limit=8');
+        const url = scope === 'public'
+            ? '/api/replays?scope=public&limit=10'
+            : '/api/replays?limit=8';
+        const data = await authRequest(url);
         accountReplayItems = Array.isArray(data.items) ? data.items : [];
         renderAccountReplayList();
     } catch (err) {
         list.innerHTML = `<div class="account-replay-sub">${escapeHtml(`${UI.replay_load_failed}: ${err.message || ''}`)}</div>`;
+    }
+}
+
+function setAccountReplayScope(scope) {
+    if (!['mine', 'public', 'search'].includes(scope)) scope = 'mine';
+    accountReplayScope = scope;
+    document.querySelectorAll('[data-account-replay-scope]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.accountReplayScope === scope);
+    });
+    const searchRow = $('account-replay-search-row');
+    if (searchRow) searchRow.classList.toggle('hidden', scope !== 'search');
+    accountReplayItems = [];
+    if (scope === 'mine' || scope === 'public') {
+        loadAccountReplays();
+    } else {
+        renderAccountReplayList();
+    }
+}
+
+async function searchAccountReplay() {
+    const input = $('input-account-replay-search');
+    if (!currentAccount) {
+        flashStatus(UI.account_need_login || '请先登录账号', 3000);
+        return;
+    }
+    const raw = String((input && input.value) || '').trim().toUpperCase();
+    if (!raw) return;
+    const numeric = raw.replace(/^[RP]-/, '');
+    if (!/^\d+$/.test(numeric) || Number(numeric) <= 0) {
+        flashStatus(UI.replay_not_found || '回放编号格式无效', 3000);
+        return;
+    }
+    const list = $('account-replays-list');
+    accountReplayItems = [];
+    if (list) list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.replay_loading)}</div>`;
+    try {
+        const data = await authRequest(
+            `/api/replays?scope=public&limit=1&replay_id=${encodeURIComponent(raw)}`
+        );
+        const items = Array.isArray(data.items) ? data.items : [];
+        if (!items.length) {
+            accountReplayItems = [];
+            renderAccountReplayList();
+            return;
+        }
+        const item = items[0];
+        const prefix = String(item.replay_prefix || 'R').toUpperCase() === 'P' ? 'P' : 'R';
+        const replayRef = String(item.replay_ref || `${prefix}-${Number(item.id)}`);
+        openAccountReplay(replayRef);
+    } catch (err) {
+        if (list) list.innerHTML = `<div class="account-replay-sub">${escapeHtml(`${UI.replay_load_failed}: ${err.message || ''}`)}</div>`;
     }
 }
 
@@ -37045,6 +37139,17 @@ async function init() {
         }
     });
     if ($('btn-account-replays-refresh')) $('btn-account-replays-refresh').addEventListener('click', loadAccountReplays);
+    document.querySelectorAll('[data-account-replay-scope]').forEach((btn) => {
+        btn.addEventListener('click', () => setAccountReplayScope(btn.dataset.accountReplayScope));
+    });
+    const replaySearchBtn = $('btn-account-replay-search');
+    if (replaySearchBtn) replaySearchBtn.addEventListener('click', searchAccountReplay);
+    const replaySearchInput = $('input-account-replay-search');
+    if (replaySearchInput) {
+        replaySearchInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') searchAccountReplay();
+        });
+    }
     if ($('btn-stats-popover-close')) $('btn-stats-popover-close').addEventListener('click', () => toggleStatsPopover(false));
     if ($('btn-leaderboard-popover-close')) $('btn-leaderboard-popover-close').addEventListener('click', () => toggleLeaderboardPopover(false));
     if ($('btn-account-replay-close')) $('btn-account-replay-close').addEventListener('click', closeAccountReplayModal);

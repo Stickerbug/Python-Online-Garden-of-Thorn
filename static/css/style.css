@@ -2194,6 +2194,10 @@ body {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.replay-scope-tabs.account-mode-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .account-panel-tabs {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -3575,6 +3579,28 @@ body {
   gap: 6px;
   max-height: 190px;
   overflow: auto;
+}
+
+.account-replay-search-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.account-replay-search-row.hidden {
+  display: none;
+}
+
+.account-replay-search-input {
+  min-width: 0;
+  flex: 1;
+  padding: 7px 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 12px;
 }
 
 .account-replay-item {

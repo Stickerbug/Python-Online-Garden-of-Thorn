@@ -192,16 +192,16 @@ healing、事件效果、下一状态、回执、事件或 seed；这些值均�
 
 ## 回放
 
-所有回放接口都要求登录。普通账号只能读取自己有权查看的回放；Staff/Admin 才能进入管理上下文。
+所有回放接口都要求登录。普通账号默认读取自己的回放；使用 `scope=public` 可读取最近 31 天的公共回放列表，`replay_id` 可在同一窗口内按回放编号精确搜索。公共查看与 ID 搜索不再限制为对局参与者。
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| GET | <code>/api/replays</code> | 当前账号的回放列表；<code>limit</code>、<code>offset</code>、<code>mode</code>、<code>mod_source</code> |
+| GET | <code>/api/replays</code> | 回放列表；默认当前账号，<code>scope=public</code> 为最近 31 天公共列表，<code>replay_id</code> 按编号搜索；其余参数：<code>limit</code>、<code>offset</code>、<code>mode</code>、<code>mod_source</code> |
 | GET | <code>/api/replays/&lt;replay_ref&gt;</code> | 回放元数据与快照 |
 | GET | <code>/api/replays/&lt;replay_ref&gt;/timeline</code> | 时间线；可使用 <code>offset</code>、<code>limit</code> 分页 |
-| GET | <code>/api/replays/&lt;replay_ref&gt;/download</code> | 下载 <code>.gtnreplay</code>；执行归属检查与单账号/IP 限流 |
+| GET | <code>/api/replays/&lt;replay_ref&gt;/download</code> | 下载 <code>.gtnreplay</code>；执行单账号/IP 限流 |
 
-外部提交任意回放编号不会绕过 <code>replay_visible_to_user</code>。
+登录用户可以按回放编号查看或下载任一已保存回放；公共列表与编号搜索限定在最近 31 天内。
 
 ## 社区模组
 
