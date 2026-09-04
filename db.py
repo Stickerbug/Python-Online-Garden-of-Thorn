@@ -5111,6 +5111,106 @@ def backfill_match_thorn_dew_from_matches(dry_run=True, limit=None):
     return result
 
 
+LEGACY_RANKED_SPLIT_CUTOFF_ISO = '2026-09-01T13:56:28Z'
+LEGACY_MATCH_COMPENSATION_REASON = '旧对局荆露补偿'
+LEGACY_MATCH_COMPENSATION_SOURCE_ID = 'legacy-match-dew-comp-v1'
+
+
+def compensate_legacy_match_thorn_dew(
+    dry_run=True,
+    *,
+    cutoff_iso=LEGACY_RANKED_SPLIT_CUTOFF_ISO,
+    per_match=40,
+):
+    """One-time dew compensation for 1v1/2v2 matches before the ranked split."""
+
+    try:
+        per_match = max(1, int(per_match))
+    except (TypeError, ValueError):
+        per_match = 40
+    try:
+        cutoff = datetime.fromisoformat(
+            str(cutoff_iso or LEGACY_RANKED_SPLIT_CUTOFF_ISO)
+            .strip()
+            .replace('Z', '+00:00')
+        )
+    except ValueError:
+        return {'error': 'cutoff_iso 格式无效'}
+    if cutoff.tzinfo is None:
+        cutoff = cutoff.replace(tzinfo=timezone.utc)
+    cutoff_iso_value = cutoff.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    result = {
+        'dry_run': bool(dry_run),
+        'cutoff_iso': cutoff_iso_value,
+        'per_match': per_match,
+        'players': 0,
+        'matches_counted': 0,
+        'total_dew': 0,
+        'already_compensated': 0,
+        'errors': [],
+    }
+    with get_db_connection() as conn:
+        user_ids = {
+            int(row['id'])
+            for row in conn.execute(
+                'SELECT id FROM users WHERE deleted_at IS NULL'
+            ).fetchall()
+        }
+        match_rows = conn.execute(
+            '''SELECT id, mode, ended_at, player_ids_json, summary_json
+               FROM matches
+               WHERE mode IN ('1v1', '2v2')
+                 AND ended_at IS NOT NULL
+                 AND ended_at < ?''',
+            (cutoff_iso_value,),
+        ).fetchall()
+    counts = {}
+    for row in match_rows:
+        try:
+            player_ids = json.loads(row['player_ids_json'] or '[]')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            player_ids = []
+        registered = [uid for uid in player_ids if isinstance(uid, int) and uid in user_ids]
+        if not registered:
+            continue
+        result['matches_counted'] += 1
+        for uid in registered:
+            counts[uid] = counts.get(uid, 0) + 1
+    if dry_run:
+        result['players'] = len(counts)
+        result['total_dew'] = sum(count * per_match for count in counts.values())
+        return result
+
+    for uid, match_count in sorted(counts.items()):
+        amount = match_count * per_match
+        try:
+            with get_db_connection() as conn:
+                already = conn.execute(
+                    '''SELECT 1 FROM user_currency_transactions
+                       WHERE user_id = ? AND source_type = 'legacy_compensation'
+                         AND source_id = ?''',
+                    (uid, LEGACY_MATCH_COMPENSATION_SOURCE_ID),
+                ).fetchone()
+            if already:
+                result['already_compensated'] += 1
+                continue
+            updated, error = adjust_user_thorn_dew(
+                uid,
+                free_delta=amount,
+                reason=LEGACY_MATCH_COMPENSATION_REASON,
+                source_type='legacy_compensation',
+                source_id=LEGACY_MATCH_COMPENSATION_SOURCE_ID,
+                admin_username='adminconsole',
+            )
+            if error or not updated:
+                raise RuntimeError(str(error or 'adjust_user_thorn_dew failed'))
+            result['players'] += 1
+            result['total_dew'] += amount
+        except Exception as exc:
+            result['errors'].append({'user_id': uid, 'error': str(exc)})
+    return result
+
+
 def _achievement_localized_text(defn, field, lang='zh'):
     language = str(lang or 'zh').lower()
     if language not in {'zh', 'en', 'fr', 'ja'}:

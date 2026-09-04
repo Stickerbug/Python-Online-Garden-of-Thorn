@@ -129,6 +129,8 @@ def settle_conn(conn,match_id,summary,award_time=None):
         return {'awarded':[],'skipped':'invalid_teams'}
     is_draw=data['result']=='draw'
     winners=data.get('winner_user_ids') or []
+    match_type=str(data.get('match_type') or data.get('match_mode') or '').lower()
+    casual = match_type == 'casual' or match_type.startswith('casual_')
     if any(type(uid) is not int or uid not in registered for uid in winners):
         return {'awarded':[],'skipped':'unknown_winner'}
     winner_side=data.get('winner_index')
@@ -157,7 +159,8 @@ def settle_conn(conn,match_id,summary,award_time=None):
         if mode not in ('1v1','2v2'):
             base=db.THORN_DEW_MODE_REWARDS[mode]+(db.THORN_DEW_WIN_BONUS if outcome=='win' else 0)
         streak_bonus=10*next_streak if outcome=='win' and not early else 0
-        amount=math.floor((base+streak_bonus)*profile['reward_multiplier']*multiplier)
+        casual_amount=math.floor((base+streak_bonus)*(0.75 if casual else 1))
+        amount=math.floor(casual_amount*profile['reward_multiplier']*multiplier)
         amount=integrity.reward_amount_conn(conn,uid,amount)
         allowed=integrity.match_reward_allowed_conn(conn,uid,registered,int(data.get('duration_seconds') or 0),same_count)
         if early or not allowed:
@@ -172,7 +175,11 @@ def settle_conn(conn,match_id,summary,award_time=None):
             SET valid_games=excluded.valid_games,win_streak=excluded.win_streak''',(uid,valid+1,next_streak,now))
         free=max(0,int(user['thorn_dew_free'] or 0))+amount
         paid=max(0,int(user['thorn_dew_paid'] or 0))
-        reason=f'有效对局奖励 {mode} {outcome}；基础{base} 连胜+{streak_bonus} 新人×{profile["reward_multiplier"]} 衰减×{multiplier:g}'
+        reward_note='娱乐×0.75 ' if casual else ''
+        reason=(
+            f'有效对局奖励 {mode} {outcome}；{reward_note}'
+            f'基础{base} 连胜+{streak_bonus} 新人×{profile["reward_multiplier"]} 衰减×{multiplier:g}'
+        )
         source=f'match:{mid}:u:{uid}:pvp-v1'
         conn.execute('UPDATE users SET thorn_dew_free=? WHERE id=?',(free,uid))
         conn.execute('''INSERT INTO user_currency_transactions

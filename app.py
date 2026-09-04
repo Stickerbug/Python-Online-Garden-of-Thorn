@@ -261,6 +261,7 @@ from db import (
     backfill_achievements_from_matches,
     backfill_cards_played_achievements_from_matches,
     backfill_match_thorn_dew_from_matches,
+    compensate_legacy_match_thorn_dew,
     rebuild_gr_from_matches,
     rebuild_user_stats_from_matches,
     rebuild_user_play_seconds_from_matches,
@@ -10070,6 +10071,10 @@ ADMIN_COMMAND_TREE = {
             },
             'rebuildstats': {'summary': '重建账号统计', 'usage': 'data rebuildstats confirm'},
             'dewbackfill': {'summary': '补发历史对局荆露', 'usage': 'data dewbackfill <preview|confirm>'},
+            'legacydew': {
+                'summary': '旧对局荆露补偿（一次性）',
+                'usage': 'data legacydew <preview|confirm> [cutoff=2026-09-01T13:56:28Z]',
+            },
             'achievementbackfill': {'summary': '补发可重算成就', 'usage': 'data achievementbackfill <preview|confirm>'},
             'cardsbackfill': {'summary': '按账号或全服校正花牌流转进度', 'usage': 'data cardsbackfill <preview|confirm> <账号|all> [批次数]'},
         },
@@ -10290,6 +10295,7 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('data', 'draftwins'): 'draftwins',
     ('data', 'rebuildstats'): 'rebuildstats',
     ('data', 'dewbackfill'): 'dewbackfill',
+    ('data', 'legacydew'): 'legacydew',
     ('data', 'achievementbackfill'): 'achievementbackfill',
     ('data', 'cardsbackfill'): 'cardsbackfill',
     ('data', 'rating', 'season'): 'rating-season',
@@ -12912,6 +12918,47 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                 admin_event('error', f'thorn dew backfill failed: {exc}')
                 return {'success': False, 'output': f'荆露补发失败：{exc}'}
         return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'data dewbackfill <preview|confirm>')}
+    if cmd in ('legacydew', '旧对局荆露补偿'):
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        sub = parts[1].lower() if len(parts) > 1 else 'preview'
+        if sub not in ('preview', 'dryrun', 'dry-run', '试算', '预览', 'confirm', '确认'):
+            return {
+                'success': False,
+                'output': command_error(
+                    raw,
+                    len(parts[0]) + 1,
+                    'data legacydew <preview|confirm> [cutoff=2026-09-01T13:56:28Z]',
+                ),
+            }
+        cutoff_iso = None
+        for token in parts[2:]:
+            key, separator, value = str(token).partition('=')
+            if separator and key.lower() == 'cutoff':
+                cutoff_iso = value
+        try:
+            dry_run = sub in ('preview', 'dryrun', 'dry-run', '试算', '预览')
+            result = compensate_legacy_match_thorn_dew(
+                dry_run=dry_run,
+                cutoff_iso=cutoff_iso,
+            )
+        except Exception as exc:
+            admin_event('error', f'legacy match dew compensation failed: {exc}')
+            return {'success': False, 'output': f'旧对局荆露补偿失败：{exc}'}
+        prefix = '旧对局荆露补偿试算' if result.get('dry_run') else '旧对局荆露补偿已完成'
+        lines = [
+            prefix,
+            f"截止：{result.get('cutoff_iso', '-')}",
+            f"计入旧对局：{result.get('matches_counted', 0)}",
+            f"补偿玩家：{result.get('players', 0)}",
+            f"共补荆露：{result.get('total_dew', 0)}",
+            f"已补偿跳过：{result.get('already_compensated', 0)}",
+        ]
+        if result.get('errors'):
+            lines.append(f"错误：{len(result['errors'])} 个")
+        if result.get('dry_run'):
+            lines.append('确认执行请输入：/data legacydew confirm')
+        return {'success': True, 'output': '\n'.join(lines)}
     if cmd in ('cardsbackfill', 'backfillcards', '补发花牌流转'):
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}

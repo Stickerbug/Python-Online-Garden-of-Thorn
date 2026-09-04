@@ -59,8 +59,10 @@ def balances():
 def test_newcomer_base_rewards_and_no_title_double_multiplier(accounts,ids,ranked):
     result=award(ids,ranked=ranked)
     amounts={row['user_id']:row['amount'] for row in result['awarded']}
-    assert amounts[1]==220  # (100 + first-win bonus 10) * 2, not *4.
-    assert amounts[ids[-1]]==120
+    expected_win=220 if ranked else 164  # casual keeps 75% of the ranked result.
+    expected_lose=120 if ranked else 90
+    assert amounts[1]==expected_win
+    assert amounts[ids[-1]]==expected_lose
     assert profile(1)['valid_games']==1
     assert profile(1)['win_streak']==1
 
@@ -68,7 +70,7 @@ def test_newcomer_base_rewards_and_no_title_double_multiplier(accounts,ids,ranke
 def test_bonus_tenth_game_and_title_twentieth_boundaries(accounts):
     for n in range(1,22):
         result=award(win=-1,day=n)
-        assert result['awarded'][0]['amount']==(120 if n<=10 else 60)
+        assert result['awarded'][0]['amount']==(90 if n<=10 else 45)
         assert profile(1)['is_newcomer']==(n<20)
     assert profile(1)['title_remaining']==0
 
@@ -94,7 +96,7 @@ def test_early_surrender_no_rewards_and_breaks_loser_streak(accounts):
     assert profile(2)['win_streak']==0
 
 
-@pytest.mark.parametrize('value,amount',[(60,220),(59,110),(40,110),(39,0)])
+@pytest.mark.parametrize('value,amount',[(60,164),(59,82),(40,82),(39,0)])
 def test_reputation_applies_after_all_bonuses(accounts,value,amount):
     integrity.change_reputation(1,value-85,'test','set',now=NOW)
     assert award()['awarded'][0]['amount']==amount
@@ -105,7 +107,7 @@ def test_reconnect_retry_conflict_and_concurrent_settlement(accounts):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results=list(pool.map(lambda _:db.award_match_thorn_dew(mid,data,award_time=data['ended_at']),range(2)))
     assert sorted(bool(r.get('duplicate')) for r in results)==[False,True]
-    assert balances()[:2]==[220,120]
+    assert balances()[:2]==[164,90]
     assert profile(1)['valid_games']==1
     duplicate_mid=db.save_match_summary(data)
     assert db.award_match_thorn_dew(duplicate_mid,data)['duplicate']
@@ -198,6 +200,24 @@ def test_old_currency_receipt_cannot_be_paid_again(accounts):
     result=db.award_match_thorn_dew(mid,data)
     assert 1 not in [r['user_id'] for r in result['awarded']]
     assert balances()[0]==45
+
+
+def test_legacy_match_dew_compensation_is_one_time(accounts):
+    mid, _data = game(ids=(1, 2), day=-3)
+    preview = db.compensate_legacy_match_thorn_dew(dry_run=True)
+    assert preview['matches_counted'] == 1
+    assert preview['players'] == 2
+    assert preview['total_dew'] == 80
+
+    confirmed = db.compensate_legacy_match_thorn_dew(dry_run=False)
+    assert confirmed['players'] == 2
+    assert confirmed['total_dew'] == 80
+    assert balances()[:2] == [40, 40]
+
+    again = db.compensate_legacy_match_thorn_dew(dry_run=False)
+    assert again['players'] == 0
+    assert again['already_compensated'] == 2
+    assert balances()[:2] == [40, 40]
 
 
 def test_guest_nickname_changes_use_one_repeat_bucket(accounts):
