@@ -1073,6 +1073,7 @@ def _card(
     rarity,
     description,
     *,
+    description_en=None,
     cost_m=0,
     effects=(),
     upgrade=None,
@@ -1083,6 +1084,11 @@ def _card(
     script=None,
 ):
     description = _story_card_description(description)
+    description_en = (
+        _story_card_description(description_en)
+        if description_en is not None
+        else description
+    )
     definition = {
         'source_card_id': source_card_id,
         'name': {'zh': zh, 'en': en},
@@ -1091,7 +1097,7 @@ def _card(
         'owner': owner,
         'cost_e': cost_e,
         'cost_m': cost_m,
-        'description': {'zh': description, 'en': description},
+        'description': {'zh': description, 'en': description_en},
         'effects': tuple(effects),
         'tags': tuple(tags),
         'target': target or ('enemy' if card_type in ('thorn', 'guard') else 'self'),
@@ -1136,7 +1142,7 @@ def _character_card(
         upgrade = {
             'description': {
                 'zh': design['upgrade_text'],
-                'en': design['upgrade_text'],
+                'en': design.get('upgrade_text_en') or design['upgrade_text'],
             },
             'effects': tuple(upgrade_effects),
         }
@@ -1156,6 +1162,7 @@ def _character_card(
         design['card_type'],
         rarity,
         design['base_text'],
+        description_en=design.get('base_text_en'),
         cost_m=int(design.get('cost_m') or 0),
         effects=tuple(effects),
         upgrade=upgrade,

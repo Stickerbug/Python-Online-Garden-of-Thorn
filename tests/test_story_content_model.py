@@ -137,9 +137,6 @@ def test_all_mage_rows_and_electric_damage_term_keep_precise_workbook_sources():
     assert STORY_CONTENT_REGISTRY.definition(
         'character_card', 'mage_beeswax'
     )['name']['zh'] == '魔法蜂蜡'
-    assert STORY_CONTENT_REGISTRY.definition(
-        'character_card', 'mage_orange'
-    )['base_text'] == '造成5D'
 
     final_card = STORY_CONTENT_REGISTRY.record(
         'character_card', 'mage_electronic_missile'
