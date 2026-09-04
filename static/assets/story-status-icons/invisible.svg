@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: none;
+        stroke: #1a1900;
+      }
+
+      .st0, .st1 {
+        stroke-width: 5px;
+      }
+
+      .st0, .st1, .st2 {
+        stroke-miterlimit: 10;
+      }
+
+      .st3 {
+        fill: #1e1717;
+      }
+
+      .st4 {
+        fill: #ecf7fd;
+      }
+
+      .st1 {
+        fill: #e7231d;
+        opacity: .75;
+        stroke: #da1617;
+      }
+
+      .st2 {
+        fill: #f5e23a;
+        stroke: #f5d42e;
+        stroke-width: 10px;
+      }
+    </style>
+  </defs>
+  <circle class="st2" cx="141.83" cy="142" r="85.04"/>
+  <ellipse class="st3" cx="119.88" cy="127.37" rx="9.14" ry="18.29"/>
+  <ellipse class="st3" cx="163.78" cy="127.37" rx="9.14" ry="18.29"/>
+  <ellipse class="st4" cx="163.78" cy="121.27" rx="7.14" ry="9"/>
+  <ellipse class="st4" cx="119.88" cy="121.27" rx="7.14" ry="9"/>
+  <path class="st0" d="M123.03,175.43c20.07,15.99,37.6,0,37.6,0"/>
+  <polygon class="st1" points="191.43 78.23 205.6 92.4 156 141.99 205.61 191.6 191.43 205.78 141.82 156.17 92.23 205.77 78.06 191.6 127.66 142.01 78.05 92.4 92.23 78.22 141.83 127.83 191.43 78.23"/>
+</svg>

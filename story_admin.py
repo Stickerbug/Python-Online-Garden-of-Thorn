@@ -1313,6 +1313,67 @@ def _discovery_row_conn(conn, user_id, content_type, content_id, variant):
     return dict(row) if row is not None else None
 
 
+def _discovery_rows_conn(conn, user_id):
+    rows = conn.execute(
+        '''SELECT user_id, content_type, content_id, variant, first_run_id,
+                  first_seen_at, last_seen_at, seen_count, viewed_at
+           FROM story_discoveries
+           WHERE user_id=?
+           ORDER BY content_type ASC, content_id ASC, variant ASC''',
+        (int(user_id),),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _all_discovery_targets():
+    """Return every discovery key currently visible in the story compendium."""
+    targets = []
+    for card_id in sorted(STORY_CARDS):
+        targets.append(('card', card_id, 'base'))
+        if isinstance((STORY_CARDS[card_id] or {}).get('upgrade'), dict):
+            targets.append(('card', card_id, 'upgraded'))
+    for relic_id in sorted(STORY_RELICS):
+        targets.append(('relic', relic_id, 'base'))
+    for blessing_id in sorted(STORY_BLESSINGS):
+        targets.append(('blessing', blessing_id, 'base'))
+    for enemy_id in sorted(STORY_ENEMIES):
+        targets.append(('enemy', enemy_id, 'base'))
+        moves = (STORY_ENEMIES[enemy_id] or {}).get('moves') or ()
+        for move_index in range(len(moves)):
+            targets.append(('enemy', enemy_id, f'intent:{move_index}'))
+    for book_id in sorted(STORY_ENCHANTMENT_BOOKS):
+        targets.append(('enchantment_book', book_id, 'base'))
+    for kind, catalog in (
+        ('tag', STORY_TAGS),
+        ('status', STORY_STATUSES),
+        ('trait', STORY_TRAITS),
+    ):
+        for term_id in sorted(catalog):
+            targets.append(('term', f'{kind}:{term_id}', 'base'))
+    for resource_id in ('D', 'H', 'E', 'M'):
+        targets.append(('term', f'resource:{resource_id}', 'base'))
+    return targets
+
+
+def _discovery_type_count_label(counts):
+    labels = {
+        'card': '卡牌（含升级）',
+        'relic': '天赋',
+        'blessing': '赐福',
+        'enemy': '生物（含意图）',
+        'enchantment_book': '附魔书',
+        'term': '术语',
+    }
+    return '、'.join(
+        f'{count} 条{label}'
+        for label, count in (
+            (labels[key], counts.get(key, 0))
+            for key in ('card', 'relic', 'blessing', 'enemy', 'enchantment_book', 'term')
+        )
+        if count
+    )
+
+
 def _validate_discovery(content_type, content_id, variant):
     if content_type == 'term':
         term_kind, separator, term_id = content_id.partition(':')
@@ -1342,9 +1403,103 @@ def _validate_discovery(content_type, content_id, variant):
         raise StoryAdminError('该内容类型只支持 base variant')
 
 
+def _execute_discovery_grant_all(parts, actor):
+    gated, mode, confirmation = _mutation_gate(parts[1:])
+    if len(gated) != 1:
+        raise StoryAdminError('用法：story discovery grant-all <账号> preview')
+    user = _resolve_user(gated[0])
+    targets = _all_discovery_targets()
+    with closing(get_db_connection()) as conn:
+        before = _discovery_rows_conn(conn, user['id'])
+    existing = {
+        (row['content_type'], row['content_id'], row['variant'])
+        for row in before
+    }
+    pending = [target for target in targets if target not in existing]
+    if not pending:
+        return {'success': True, 'output': f'{user["username"]} 已拥有当前全部故事图鉴内容，无需执行。'}
+    spec = {'command': f'discovery grant-all {gated[0]}', 'kind': 'discovery_all'}
+    token = _confirmation_token(user['id'], 'discovery_all', 'all', None, before, spec)
+    if mode == 'preview':
+        counts = {}
+        for content_type, content_id, variant in pending:
+            counts[content_type] = counts.get(content_type, 0) + 1
+        return {
+            'success': True,
+            'output': (
+                f'预览：为 {user["username"]} 补全当前全部故事图鉴\n'
+                f'当前已发现 {len(before)} 条，将新增 {len(pending)} 条：'
+                f'{_discovery_type_count_label(counts)}\n'
+                '确认令牌：' + token + '\n'
+                f'执行：/story discovery grant-all {gated[0]} confirm={token}\n'
+                '说明：只补全当前内容池，已存在的条目保持不变；新增条目直接视为已读。'
+            ),
+        }
+    if confirmation != token:
+        raise StoryAdminError('确认令牌无效或图鉴已变化，请重新 preview')
+    operation_id = f'SAM-{secrets.token_hex(8)}'
+    now = _now_iso()
+    added_rows = []
+    for content_type, content_id, variant in pending:
+        added_rows.append({
+            'user_id': int(user['id']),
+            'content_type': content_type,
+            'content_id': content_id,
+            'variant': variant,
+            'first_run_id': None,
+            'first_seen_at': now,
+            'last_seen_at': now,
+            'seen_count': 1,
+            'viewed_at': now,
+        })
+    after = sorted(
+        [dict(row) for row in before] + added_rows,
+        key=lambda row: (row['content_type'], row['content_id'], row['variant']),
+    )
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if _hash(_discovery_rows_conn(conn, user['id'])) != _hash(before):
+            conn.rollback()
+            raise StoryAdminError('图鉴数据已变化，请重新 preview')
+        conn.executemany(
+            '''INSERT INTO story_discoveries
+               (user_id, content_type, content_id, variant, first_run_id,
+                first_seen_at, last_seen_at, seen_count, viewed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            [
+                (
+                    int(user['id']), content_type, content_id, variant,
+                    None, now, now, 1, now,
+                )
+                for content_type, content_id, variant in pending
+            ],
+        )
+        _insert_audit_conn(
+            conn,
+            operation_id=operation_id,
+            actor=actor,
+            user_id=user['id'],
+            target_kind='discovery_all',
+            target_id='all',
+            action_type='discovery_all',
+            spec=spec,
+            before=before,
+            after=after,
+        )
+        conn.commit()
+    return {
+        'success': True,
+        'output': (
+            f'已为 {user["username"]} 补全故事图鉴：新增 {len(pending)} 条，'
+            f'现共 {len(after)} 条\n操作号：{operation_id}'
+        ),
+        'story_admin_audit': operation_id,
+    }
+
+
 def _execute_discovery(parts, actor):
     if not parts:
-        raise StoryAdminError('用法：story discovery <list|add|remove|read> ...')
+        raise StoryAdminError('用法：story discovery <list|add|remove|grant-all|read> ...')
     action = parts[0].lower()
     if action == 'list':
         if len(parts) < 2:
@@ -1378,6 +1533,8 @@ def _execute_discovery(parts, actor):
             conn.execute('UPDATE story_discoveries SET viewed_at=COALESCE(viewed_at, ?) WHERE user_id=?', (_now_iso(), int(user['id'])))
             conn.commit()
         return {'success': True, 'output': f'已把 {len(unread)} 条故事图鉴发现标为已读'}
+    if action == 'grant-all':
+        return _execute_discovery_grant_all(parts, actor)
     if action not in {'add', 'remove'}:
         raise StoryAdminError(f'未知 story discovery 子命令：{action}')
     gated, mode, confirmation = _mutation_gate(parts[1:])
@@ -1439,6 +1596,18 @@ def _restore_discovery_conn(conn, user_id, spec, row):
         key,
     )
     if row is not None:
+        conn.execute(
+            '''INSERT INTO story_discoveries
+               (user_id, content_type, content_id, variant, first_run_id,
+                first_seen_at, last_seen_at, seen_count, viewed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (int(user_id), row['content_type'], row['content_id'], row['variant'], row.get('first_run_id'), row['first_seen_at'], row['last_seen_at'], int(row.get('seen_count') or 1), row.get('viewed_at')),
+        )
+
+
+def _restore_discovery_rows_conn(conn, user_id, rows):
+    conn.execute('DELETE FROM story_discoveries WHERE user_id=?', (int(user_id),))
+    for row in rows or ():
         conn.execute(
             '''INSERT INTO story_discoveries
                (user_id, content_type, content_id, variant, first_run_id,
@@ -1545,6 +1714,12 @@ def _execute_audit(parts, actor):
         if _hash(current_value) != _hash(after):
             raise StoryAdminError('图鉴数据在该操作后又发生了变化，拒绝覆盖')
         revision = None
+    elif target_kind == 'discovery_all':
+        with closing(get_db_connection()) as conn:
+            current_value = _discovery_rows_conn(conn, user_id)
+        if _hash(current_value) != _hash(after):
+            raise StoryAdminError('图鉴数据在该操作后又发生了变化，拒绝覆盖')
+        revision = None
     else:
         raise StoryAdminError(f'该操作类型暂不支持撤销：{target_kind}')
     undo_spec = {'command': f'audit undo {operation_id}', 'kind': 'undo', 'source_operation_id': operation_id}
@@ -1609,6 +1784,12 @@ def _execute_audit(parts, actor):
                 raise StoryAdminError('手动存档已变化，请重新 preview')
             _restore_manual_saves_conn(conn, user_id, row['target_id'], before)
             _insert_audit_conn(conn, operation_id=undo_id, actor=actor, user_id=user_id, target_kind='manual_saves', target_id=row['target_id'], action_type=f'undo:{operation_id}', spec=undo_spec, before=after, after=before, before_revision=int(current_row['state_version']), after_revision=int(current_row['state_version']))
+        elif target_kind == 'discovery_all':
+            if _hash(_discovery_rows_conn(conn, user_id)) != _hash(after):
+                conn.rollback()
+                raise StoryAdminError('图鉴数据已变化，请重新 preview')
+            _restore_discovery_rows_conn(conn, user_id, before)
+            _insert_audit_conn(conn, operation_id=undo_id, actor=actor, user_id=user_id, target_kind='discovery_all', target_id=row['target_id'], action_type=f'undo:{operation_id}', spec=undo_spec, before=after, after=before)
         else:
             current = _discovery_row_conn(conn, user_id, spec['content_type'], spec['content_id'], spec['variant'])
             if _hash(current) != _hash(after):

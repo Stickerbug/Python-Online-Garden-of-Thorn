@@ -4,6 +4,16 @@ import db
 from story_admin import execute_story_admin_command, validate_story_run_state
 from story_engine import apply_story_action
 from story_mode import STORY_CONTENT_VERSION, build_initial_story_state
+from story_content import (
+    STORY_BLESSINGS,
+    STORY_CARDS,
+    STORY_ENCHANTMENT_BOOKS,
+    STORY_ENEMIES,
+    STORY_RELICS,
+    STORY_STATUSES,
+    STORY_TAGS,
+    STORY_TRAITS,
+)
 
 
 def _token(result):
@@ -185,6 +195,67 @@ def test_progress_and_discovery_mutations_are_undoable(tmp_path, monkeypatch):
     assert not any(item['content_id'] == 'basic' and item['variant'] == 'upgraded' for item in db.list_story_discoveries(user['id']))
     _preview_confirm(['audit', 'undo', progress_id])
     assert db.get_story_progress(user['id'])['characters']['common_flower']['clears']['normal']['standard'] == 0
+
+
+def test_discovery_grant_all_unlocks_everything_and_is_undoable(tmp_path, monkeypatch):
+    user, _run = _story_account(tmp_path, monkeypatch, 'DiscoveryGrant')
+    expected = set()
+    for card_id in STORY_CARDS:
+        expected.add(('card', card_id, 'base'))
+        if isinstance(STORY_CARDS[card_id].get('upgrade'), dict):
+            expected.add(('card', card_id, 'upgraded'))
+    for relic_id in STORY_RELICS:
+        expected.add(('relic', relic_id, 'base'))
+    for blessing_id in STORY_BLESSINGS:
+        expected.add(('blessing', blessing_id, 'base'))
+    for enemy_id in STORY_ENEMIES:
+        expected.add(('enemy', enemy_id, 'base'))
+        for move_index in range(len(STORY_ENEMIES[enemy_id].get('moves') or ())):
+            expected.add(('enemy', enemy_id, f'intent:{move_index}'))
+    for book_id in STORY_ENCHANTMENT_BOOKS:
+        expected.add(('enchantment_book', book_id, 'base'))
+    for kind, catalog in (
+        ('tag', STORY_TAGS),
+        ('status', STORY_STATUSES),
+        ('trait', STORY_TRAITS),
+    ):
+        for term_id in catalog:
+            expected.add(('term', f'{kind}:{term_id}', 'base'))
+    for resource_id in ('D', 'H', 'E', 'M'):
+        expected.add(('term', f'resource:{resource_id}', 'base'))
+
+    preview = execute_story_admin_command(
+        ['discovery', 'grant-all', user['username'], 'preview'],
+        actor='test-admin',
+    )
+    assert preview['success'], preview['output']
+    assert '将新增' in preview['output']
+    token = _token(preview)
+    confirmed = execute_story_admin_command(
+        ['discovery', 'grant-all', user['username'], f'confirm={token}'],
+        actor='test-admin',
+    )
+    assert confirmed['success'], confirmed['output']
+    operation_id = re.search(r'操作号：(SAM-[0-9a-f]+)', confirmed['output']).group(1)
+
+    rows = db.list_story_discoveries(user['id'])
+    keys = {
+        (row['content_type'], row['content_id'], row['variant'])
+        for row in rows
+    }
+    assert keys == expected
+    assert len(rows) == len(expected)
+    assert all(row['viewed_at'] for row in rows)
+
+    already = execute_story_admin_command(
+        ['discovery', 'grant-all', user['username'], 'preview'],
+        actor='test-admin',
+    )
+    assert already['success'], already['output']
+    assert '无需执行' in already['output']
+
+    _preview_confirm(['audit', 'undo', operation_id])
+    assert db.list_story_discoveries(user['id']) == []
 
 
 def test_manual_save_console_commands_create_and_load(tmp_path, monkeypatch):

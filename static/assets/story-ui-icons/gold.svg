@@ -21,8 +21,8 @@
       }
     </style>
   </defs>
-  <circle class="st2" cx="148.26" cy="144.9" r="70.87"/>
-  <g>
+  <circle class="st2" cx="141.73" cy="141.73" r="92"/>
+  <g transform="translate(141.73 141.73) scale(1.298) translate(-148.26 -144.9)">
     <text class="st1" transform="translate(111.78 178.19)"><tspan x="0" y="0">G</tspan></text>
     <rect class="st0" x="142.04" y="98.39" width="12.45" height="17.17"/>
     <rect class="st0" x="142.04" y="174.25" width="12.45" height="17.17"/>

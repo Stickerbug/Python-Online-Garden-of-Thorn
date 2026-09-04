@@ -3,6 +3,7 @@ from copy import deepcopy
 import pytest
 
 from story_content import (
+    _cn_cardinal_to_arabic,
     STORY_BLESSINGS,
     STORY_CARDS,
     STORY_CHARACTERS,
@@ -12,6 +13,14 @@ from story_content import (
     STORY_ENCHANTMENT_BOOKS,
     STORY_RELICS,
 )
+
+
+def test_cn_cardinal_to_arabic_only_rewrites_numeric_contexts():
+    assert _cn_cardinal_to_arabic('获得一层力量；翻三倍') == '获得1层力量；翻3倍'
+    assert _cn_cardinal_to_arabic('第二回合开始时获得两点护盾') == '第2回合开始时获得2点护盾'
+    assert _cn_cardinal_to_arabic(
+        '三叉戟、三角形、下一次、一次、一半保持不变'
+    ) == '三叉戟、三角形、下一次、一次、一半保持不变'
 from story_content_model import (
     STORY_CONTENT_FINGERPRINT,
     STORY_CONTENT_REGISTRY,

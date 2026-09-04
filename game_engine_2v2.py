@@ -539,10 +539,6 @@ class GameEngine2v2(GameEngine):
         from void_dlc_runtime import cleanup_turn_end
         cleanup_turn_end(self, player_id)
         self._decay_equipment_armor_end_turn(player_id)
-        if ps.bandage_active and ps.invincible:
-            ps.bandage_active = False
-            self._mark_bandage_death_pending(player_id)
-            self.log_msg(f"{self.pn(player_id)}的绷带已触发：自己回合结束时死亡")
         # Fracture: clear at end of own turn
         if ps.fracture > 0:
             ps.fracture = 0
@@ -589,7 +585,6 @@ class GameEngine2v2(GameEngine):
         )
         if (
             ps.invincible
-            and not ps.bandage_active
             and not ps.bandage_death_pending
             and self._should_expire_invincible_on_turn_end(player_id)
         ):

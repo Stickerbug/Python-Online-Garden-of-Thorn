@@ -459,6 +459,15 @@ STORY_STATUSES.update({
 })
 
 STORY_STATUS_IMAGE_URLS = {
+    'shield': '/static/assets/status-icons/shield.svg',
+    'weak': '/static/assets/status-icons/weakness.svg',
+    'evade': '/static/assets/status-icons/dodge.svg',
+    'poison': '/static/assets/status-icons/poison.svg',
+    'stun': '/static/assets/status-icons/stunned.svg',
+    'broken': '/static/assets/status-icons/fracture.svg',
+    'overload': '/static/assets/status-icons/overload.svg',
+    'untargetable': '/static/assets/story-status-icons/invisible.svg',
+    'blind': '/static/assets/status-icons/blind.svg',
     'entangle': '/static/assets/story-status-icons/entangle.svg',
     'endurance': '/static/assets/story-status-icons/endurance.svg',
     'evil_eye': '/static/assets/status-icons/nazar.svg',
@@ -1063,7 +1072,70 @@ def _story_card_description(value):
     text = value.rstrip()
     while text.endswith(('。', '.')):
         text = text[:-1].rstrip()
-    return text
+    return _cn_cardinal_to_arabic(text)
+
+
+_CN_DIGITS = {
+    '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4,
+    '五': 5, '六': 6, '七': 7, '八': 8, '九': 9,
+}
+_CN_UNITS = {'十': 10, '百': 100, '千': 1000}
+_CN_NUM_RE = __import__('re').compile(
+    r'[零一二两三四五六七八九十百千]+'
+)
+_CN_NUMERIC_SUFFIXES = (
+    '层', '点', '张', '级', '倍', '名', '份', '块', '滴', '阶段',
+)
+
+
+def _cn_number_value(text):
+    """Parse common Chinese number phrases used in card text (<=9999)."""
+    total = 0
+    section = 0
+    current = 0
+    for char in text:
+        if char in _CN_DIGITS:
+            current = _CN_DIGITS[char]
+        elif char == '十':
+            section += (current or 1) * 10
+            current = 0
+        elif char == '百':
+            section += (current or 1) * 100
+            current = 0
+        elif char == '千':
+            section += (current or 1) * 1000
+            current = 0
+        elif char == '零':
+            current = 0
+    return section + current
+
+
+def _cn_cardinal_to_arabic(text):
+    """Convert Chinese quantities in card descriptions to Arabic numerals.
+
+    Only true numeric contexts are rewritten: ordinal ``第X`` and quantities
+    followed by a unit such as 层/点/张/倍/回合.  Names and idiomatic wording
+    (三叉戟, 三角形, 下一次, 一次, 一半...) stay unchanged.
+    """
+    if not any(char in text for char in _CN_DIGITS):
+        return text
+
+    def replace(match):
+        phrase = match.group(0)
+        start = match.start()
+        end = match.end()
+        previous = text[start - 1] if start > 0 else ''
+        following = text[end:end + 2] if end < len(text) else ''
+        first = following[:1]
+        if previous == '第':
+            return str(_cn_number_value(phrase))
+        if first in _CN_NUMERIC_SUFFIXES:
+            return str(_cn_number_value(phrase))
+        if first == '回' and following[1:2] == '合':
+            return str(_cn_number_value(phrase))
+        return phrase
+
+    return _CN_NUM_RE.sub(replace, text)
 
 
 def _card(

@@ -45,6 +45,49 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         self.assertEqual(player.health, 0)
         self.assertTrue(any('自己回合结束时死亡' in line for line in engine.log))
 
+    def test_bandage_active_with_unrelated_invincible_does_not_kill_1v1(self):
+        engine = self._prime_1v1()
+        player = engine.players[0]
+        player.health = 17
+        player.invincible = True
+        player.bandage_active = True
+        player.bandage_death_pending = False
+
+        engine._end_player_turn(0)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(player.health, 17)
+        self.assertFalse(player.invincible)
+        self.assertFalse(player.bandage_death_pending)
+
+    def test_bandage_active_with_unrelated_invincible_does_not_kill_2v2(self):
+        engine = GameEngine2v2()
+        engine.phase = 'action'
+        engine.round_num = 2
+        engine.turn_order = [0, 2, 1, 3]
+        engine.turn_index = 0
+        engine.current_player = 0
+        for player in engine.players:
+            player.health = 100
+            player.deck = []
+            player.hand = []
+            player.discard = []
+            player.exile = []
+            player.equipment = []
+        player = engine.players[0]
+        player.health = 17
+        player.invincible = True
+        player.bandage_active = True
+        player.bandage_death_pending = False
+
+        engine._end_player_turn(0)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(player.health, 17)
+        self.assertFalse(player.invincible)
+        self.assertFalse(player.bandage_death_pending)
+        self.assertEqual(engine.current_player, 2)
+
     def test_stunned_own_turn_still_settles_bandage_death(self):
         engine = self._prime_1v1()
         engine.first_player = 1

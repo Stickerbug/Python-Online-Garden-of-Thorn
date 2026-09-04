@@ -9243,11 +9243,6 @@ class LocalSoloEngine {
         this.applyEnergySurgeTurnEnd(playerId);
         if (this.game_over) return;
         this.decayEquipmentArmorEndTurn(playerId);
-        if (ps.bandage_active && ps.invincible) {
-            ps.bandage_active = false;
-            this.markBandageDeathPending(playerId);
-            this.logMsg(`${this.pn(playerId)}的绷带已触发：自己回合结束时死亡`);
-        }
         this.returnCogwheelCardsNow(playerId);
         [...ps.hand].forEach(card => {
             if (card.flags.has('void')) {
@@ -9268,7 +9263,7 @@ class LocalSoloEngine {
             this.setArcticFrostValue(playerId, Math.floor(frost / 2));
             if (this.arcticFrostValue(playerId) <= 0) this.logMsg(`${this.pn(playerId)}的霜冻效果消失`);
         }
-        if (ps.invincible && !ps.bandage_active && !ps.bandage_death_pending && this.shouldExpireInvincibleOnTurnEnd(playerId)) {
+        if (ps.invincible && !ps.bandage_death_pending && this.shouldExpireInvincibleOnTurnEnd(playerId)) {
             this.clearInvincibleState(playerId);
             this.logMsg(`${this.pn(playerId)}的无敌效果结束`);
         }

@@ -80,6 +80,26 @@
     let storyCodexTermKind = 'status';
     let storyCodexHistory = [];
     let storyCodexCardFiltersReady = false;
+    const STORY_TERM_MODE_KIND = Object.freeze({
+        statuses: 'status',
+        tags: 'tag',
+        traits: 'trait',
+        resources: 'resource',
+    });
+    const STORY_TERM_KIND_MODE = Object.freeze({
+        status: 'statuses',
+        tag: 'tags',
+        trait: 'traits',
+        resource: 'resources',
+    });
+
+    function storyTermModeKind(mode) {
+        return STORY_TERM_MODE_KIND[mode] || '';
+    }
+
+    function storyTermKindMode(kind) {
+        return STORY_TERM_KIND_MODE[kind] || 'statuses';
+    }
     let storySkinMouthAnimation = null;
     let storySkinDamageTimer = 0;
     let storySkinDamageUntil = 0;
@@ -367,6 +387,19 @@
         rockfall: 'root_status',
         attack_blocked: 'attack_blocked',
     });
+    const STORY_STATUS_COLORS = Object.freeze({
+        shield: '#2e7d7d', power: '#c0392b', temporary_power: '#e74c3c',
+        endurance: '#515a5a', weak: '#8e44ad', vulnerable: '#8e5a2a',
+        fragile: '#b9770e', evade: '#2980b9', poison: '#8e44ad',
+        stun: '#c0392b', reflection: '#3498db', wither: '#9b59b6',
+        broken: '#7f8c8d', overload: '#c0392b', magic_overload: '#6c5ce7',
+        static: '#4e9dcc', untargetable: '#1a5276', rockfall: '#6e8b3d',
+        blind: '#2c3e50', entangle: '#8e44ad',
+        negative_status_immunity: '#16a085', toxic_poison: '#5e8c31',
+        stagnation: '#9b59b6', bleed: '#922b21', fire: '#e67e22',
+        blockade: '#c0392b', attack_blocked: '#c0392b',
+        fragment: '#795548', magic_shield_disabled: '#6c5ce7',
+    });
     const STORY_TERM_LONG_PRESS_MS = 430;
     const STORY_TERM_MOVE_CANCEL_PX = 12;
 
@@ -470,7 +503,7 @@
             codexRelics: 'Talents', codexBlessings: 'Blessings', codexStatuses: 'Statuses',
             codexTags: 'Tags', codexTraits: 'Enemy effects', codexResources: 'Resources',
             codexHealth: 'Health', codexObservedIntents: (count) => `${count} observed intent(s)`,
-            codexBack: 'Back to previous entry', codexRelated: 'Related discoveries', codexViewRelated: 'View in compendium',
+            codexBack: 'Back', codexRelated: 'Related discoveries', codexViewRelated: 'View in compendium',
             codexNew: 'New compendium entry', codexNewCount: (count) => `${count} new compendium entries`,
             battleWon: 'Battle won', chooseCard: 'Choose a card', skip: 'Skip card',
             rewards: 'Battle rewards', rewardCopy: 'Claim each reward before continuing.',
@@ -572,7 +605,7 @@
             codexRelics: '天赋', codexBlessings: '赐福', codexStatuses: '状态',
             codexTags: '标签', codexTraits: '生物特殊效果', codexResources: '资源',
             codexHealth: '生命', codexObservedIntents: (count) => `已观察 ${count} 个意图`,
-            codexBack: '返回上一个图鉴条目', codexRelated: '相关图鉴', codexViewRelated: '在图鉴中查看',
+            codexBack: '返回', codexRelated: '相关图鉴', codexViewRelated: '在图鉴中查看',
             codexNew: '发现了新的图鉴内容', codexNewCount: (count) => `发现了 ${count} 项新的图鉴内容`,
             battleWon: '战斗胜利', chooseCard: '选择一张牌',
             skip: '跳过卡牌', rewards: '战斗奖励', rewardCopy: '逐项领取奖励后继续前进。',
@@ -668,7 +701,7 @@
             codexRelics: 'Talents', codexBlessings: 'Bénédictions', codexStatuses: 'États',
             codexTags: 'Étiquettes', codexTraits: 'Effets ennemis', codexResources: 'Ressources',
             codexHealth: 'Vie', codexObservedIntents: (count) => `${count} intention(s) observée(s)`,
-            codexBack: 'Revenir à l’entrée précédente', codexRelated: 'Découvertes liées', codexViewRelated: 'Voir dans le compendium',
+            codexBack: 'Retour', codexRelated: 'Découvertes liées', codexViewRelated: 'Voir dans le compendium',
             codexNew: 'Nouvelle entrée du compendium', codexNewCount: (count) => `${count} nouvelles entrées du compendium`,
             chooseCard: 'Choisissez une carte', skip: 'Passer la carte', room: 'Salle', newJourney: 'Nouveau voyage',
             rewards: 'Récompenses du combat', rewardCopy: 'Récupérez chaque récompense avant de continuer.',
@@ -746,7 +779,7 @@
             codexRelics: '天賦', codexBlessings: '祝福', codexStatuses: '状態',
             codexTags: 'タグ', codexTraits: '敵の特殊効果', codexResources: 'リソース',
             codexHealth: '生命', codexObservedIntents: (count) => `確認済み意図 ${count}個`,
-            codexBack: '前の図鑑項目に戻る', codexRelated: '関連する発見', codexViewRelated: '図鑑で見る',
+            codexBack: '戻る', codexRelated: '関連する発見', codexViewRelated: '図鑑で見る',
             codexNew: '図鑑に新しい項目を発見', codexNewCount: (count) => `図鑑に${count}件を新発見`,
             battleWon: '戦闘勝利', chooseCard: 'カードを選択', skip: 'カードをスキップ', room: '部屋',
             rewards: '戦闘報酬', rewardCopy: 'すべての報酬を受け取ってから先へ進みます。',
@@ -1017,7 +1050,10 @@
             'story-codex-tab-enemies': t.codexEnemies,
             'story-codex-tab-talents': t.codexTalents,
             'story-codex-tab-enchantment-books': t.codexBooks,
-            'story-codex-tab-terms': t.codexTerms,
+            'story-codex-tab-statuses': t.codexStatuses,
+            'story-codex-tab-tags': t.codexTags,
+            'story-codex-tab-traits': t.codexTraits,
+            'story-codex-tab-resources': t.codexResources,
             'story-enchantment-books-title': t.enchantmentBooks,
             'story-enchantment-books-copy': t.enchantmentBookCopy,
             'story-reset-map': t.resetMap,
@@ -1068,6 +1104,11 @@
         if (codexSearch) {
             codexSearch.placeholder = t.codexSearch;
             codexSearch.setAttribute('aria-label', t.codexSearch);
+        }
+        const codexBack = $('story-codex-back');
+        if (codexBack) {
+            codexBack.title = t.codexBack;
+            codexBack.setAttribute('aria-label', t.codexBack);
         }
         $('story-codex-close')?.setAttribute('aria-label', t.close);
         const talentOverview = $('story-talent-overview');
@@ -5301,7 +5342,8 @@
         if (identity.startsWith('story-codex')) {
             const subtype = storyCodexMode === 'talents'
                 ? storyCodexTalentKind
-                : (storyCodexMode === 'terms' ? storyCodexTermKind : '');
+                : (storyTermModeKind(storyCodexMode)
+                    || (storyCodexMode === 'terms' ? storyCodexTermKind : ''));
             const selected = identity === 'story-codex-detail' ? storyCodexSelectedId : '';
             return `codex:${storyCodexMode}:${subtype}:${selected}:${identity}`;
         }
@@ -6407,16 +6449,253 @@
         return wrapper;
     }
 
+    function escapeStoryRegex(value) {
+        return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function storyStatusIconUrl(statusId, definition) {
+        if (definition && definition.image_url) return definition.image_url;
+        const iconKey = STORY_STATUS_ICONS[statusId];
+        if (iconKey) return `/static/assets/status-icons/${iconKey}.svg`;
+        return '';
+    }
+
+    function storyStatusRichDefs() {
+        const serverStatuses = (storyContent && storyContent.statuses) || {};
+        const defs = [];
+        const alias = {
+            shield: ['Shields', 'Bouclier', 'Boucliers', 'シールド'],
+            fragile: ['Vulnerable', 'Vulnérable', '脆弱性'],
+            vulnerable: ['易损', 'Vulnérable'],
+            weak: ['Weakness', 'Faiblesse', '弱体化'],
+            poison: ['Poisoned', 'Veneno', 'Toxique', '毒'],
+            fire: ['Burn', 'Brûlure', '灼焼'],
+            toxic_poison: ['Toxic', 'Toxique', '劇毒'],
+            stun: ['Stunned', 'Étourdi', 'スタン'],
+            static: ['Électrostatique', '静電気'],
+        };
+        for (const [statusId, definition] of Object.entries(serverStatuses)) {
+            const name = (definition && definition.name) || {};
+            const labels = new Set();
+            Object.values(name).filter(Boolean).forEach((value) => labels.add(String(value)));
+            (alias[statusId] || []).forEach((value) => labels.add(value));
+            if (!labels.size) continue;
+            defs.push({
+                id: statusId,
+                labels: [...labels].sort((a, b) => b.length - a.length),
+                definition,
+            });
+        }
+        return defs.sort(
+            (a, b) => Math.max(...b.labels.map((x) => x.length))
+                - Math.max(...a.labels.map((x) => x.length))
+        );
+    }
+
+    function matchStoryRichStatus(rest) {
+        const quantity = String.raw`(?:[+\-−]?\d+(?:\.\d+)?\s*(?:层|层数|stack(?:s)?|点)?\s*)?`;
+        for (const def of storyStatusRichDefs()) {
+            const labels = def.labels.map(escapeStoryRegex).join('|');
+            const match = rest.match(
+                new RegExp(`^${quantity}(${labels})(?![A-Za-z])`, 'i')
+            );
+            if (!match || !match[0]) continue;
+            const labelMatch = match[0];
+            const matchedLabel = match[1];
+            const prefixLength = labelMatch.length - matchedLabel.length;
+            return {
+                raw: labelMatch,
+                prefix: labelMatch.slice(0, prefixLength),
+                label: matchedLabel,
+                def,
+            };
+        }
+        return null;
+    }
+
+    function matchStoryCompositeStatus(rest) {
+        // 海绵：等同于伤害向上取整一半的<中毒>
+        for (const prefix of [
+            '等同于伤害向上取整一半的',
+            '等同于伤害向下取整一半的',
+        ]) {
+            if (!rest.startsWith(prefix)) continue;
+            const inner = matchStoryRichStatus(rest.slice(prefix.length));
+            if (inner && inner.raw === inner.label && inner.def.id === 'poison') {
+                return {
+                    kind: 'compound',
+                    raw: prefix + inner.raw,
+                    outer: inner.def,
+                    inner: null,
+                    segments: [{ text: prefix }, { text: inner.label, inner: inner.def }],
+                };
+            }
+        }
+        // 魔法刺果：其<易伤>层数×3的<护盾>
+        if (rest.startsWith('其')) {
+            const afterInner = rest.slice(1);
+            const inner = matchStoryRichStatus(afterInner);
+            if (inner && inner.raw === inner.label && inner.def.id === 'vulnerable') {
+                const middle = afterInner.slice(inner.raw.length).match(
+                    /^层数(?:[×xX*]\d+(?:\.\d+)?)?的/
+                );
+                if (middle) {
+                    const finalStatus = matchStoryRichStatus(
+                        afterInner.slice(inner.raw.length + middle[0].length)
+                    );
+                    if (
+                        finalStatus
+                        && finalStatus.raw === finalStatus.label
+                        && finalStatus.def.id === 'shield'
+                    ) {
+                        return {
+                            kind: 'compound',
+                            raw: `其${inner.raw}${middle[0]}${finalStatus.raw}`,
+                            outer: finalStatus.def,
+                            inner,
+                            segments: [
+                                { text: '其' },
+                                { text: inner.raw, inner: inner.def },
+                                {
+                                    text: `${middle[0]}${finalStatus.raw}`,
+                                },
+                            ],
+                        };
+                    }
+                }
+            }
+        }
+        // 归属/作用范围前缀：自身的护盾、目标的静电、此牌获得的护盾…
+        const scope = rest.match(
+            /^(本回合自己的|此牌获得的|此牌受到的|自身的|目标的)/
+        );
+        if (scope) {
+            const afterScope = rest.slice(scope[0].length);
+            const status = matchStoryRichStatus(afterScope);
+            if (status && status.raw === status.label) {
+                let suffix = '';
+                const afterStatus = afterScope.slice(status.raw.length);
+                if (
+                    scope[0] === '此牌获得的'
+                    && /^[+\-−]?\d+(?:\.\d+)?/.test(afterStatus)
+                ) {
+                    suffix = afterStatus.match(/^[+\-−]?\d+(?:\.\d+)?/)[0];
+                }
+                return {
+                    kind: 'compound',
+                    raw: scope[0] + status.raw + suffix,
+                    outer: status.def,
+                    inner: null,
+                    segments: [
+                        { text: scope[0] + status.raw + suffix },
+                    ],
+                };
+            }
+        }
+        return null;
+    }
+
+    function storyStatusIconNode(match) {
+        const iconUrl = storyStatusIconUrl(match.def.id, match.def.definition);
+        if (!iconUrl) return null;
+        const wrapper = document.createElement('span');
+        wrapper.className = 'story-inline-token-icon-wrap story-inline-status-icon-wrap';
+        const icon = document.createElement('img');
+        icon.className = 'story-inline-token-icon story-inline-status-icon';
+        icon.src = iconUrl;
+        icon.alt = '';
+        const fallback = document.createElement('span');
+        fallback.className = 'story-inline-token-icon-fallback';
+        fallback.textContent = match.label;
+        icon.addEventListener('error', () => wrapper.classList.add('icon-load-failed'), { once: true });
+        wrapper.append(icon, fallback);
+        return wrapper;
+    }
+
+    function appendStoryInnerStatus(container, def, text) {
+        const inner = document.createElement('span');
+        inner.className = `story-inline-status story-inline-status-${def.id}`;
+        inner.textContent = text;
+        container.append(inner);
+    }
+
+    function appendStoryStatusRichToken(container, match) {
+        const token = document.createElement('span');
+        token.className = `story-inline-status story-inline-status-${match.def.id}`;
+        token.textContent = `${match.prefix}${match.label}`;
+        const icon = storyStatusIconNode(match);
+        if (icon) token.append(icon);
+        container.append(token);
+    }
+
+    function appendStoryCompositeToken(container, match) {
+        const outer = document.createElement('span');
+        outer.className = `story-inline-status story-inline-status-${match.outer.id}`;
+        for (const segment of match.segments) {
+            if (segment.inner) {
+                appendStoryInnerStatus(outer, segment.inner, segment.text);
+            } else {
+                outer.appendChild(document.createTextNode(segment.text));
+            }
+        }
+        const icon = storyStatusIconNode({ def: match.outer, label: '' });
+        if (icon) outer.append(icon);
+        container.append(outer);
+    }
+
+    function storyShieldWord() {
+        return String(t.shield || (lang === 'zh' ? '护盾' : 'Shield'));
+    }
+
+    function matchStoryResourceFormula(rest) {
+        const parenthesized = rest.match(
+            /^([（(][^（）()\r\n]*[）)])\s*([DHEMSG])(?![A-Za-z])/
+        );
+        if (parenthesized) {
+            return {
+                raw: parenthesized[0],
+                prefix: parenthesized[1],
+                unit: parenthesized[2].toUpperCase(),
+            };
+        }
+        const equivalent = rest.match(
+            /^等同于([^。；！？\r\n]+?)的([DHEMSG])(?![A-Za-z])/
+        );
+        if (equivalent) {
+            return {
+                raw: equivalent[0],
+                prefix: equivalent[0].slice(0, -1),
+                unit: equivalent[2].toUpperCase(),
+            };
+        }
+        return null;
+    }
+
+    function appendStoryResourceUnit(container, unit, includeShieldWord = false) {
+        const token = document.createElement('span');
+        token.className = `story-inline-token story-inline-token-${unit.toLowerCase()}`;
+        if (includeShieldWord || unit === 'S') {
+            token.appendChild(document.createTextNode(storyShieldWord()));
+        }
+        token.append(createStoryInlineIcon(unit));
+        container.append(token);
+        return token;
+    }
+
+    function appendStoryResourceFormulaToken(container, match) {
+        const token = document.createElement('span');
+        token.className = `story-inline-token story-inline-token-${match.unit.toLowerCase()}`;
+        if (match.prefix) appendStoryValueRichText(token, match.prefix);
+        if (match.unit === 'S') {
+            token.appendChild(document.createTextNode(storyShieldWord()));
+        }
+        token.append(createStoryInlineIcon(match.unit));
+        container.append(token);
+    }
+
     function appendStoryValueRichText(container, value) {
         if (!container) return;
         const text = String(value || '');
-        const STATUS_TOKEN_RULES = [
-            { key: 'shield', re: /^(?:护盾|Shields?|Boucliers?|シールド)/ },
-            { key: 'armor', re: /^(?:护甲|Armou?r|Armure|防具|アーマー)/ },
-            { key: 'fragile', re: /^(?:易伤|易损|脆弱|Vulnerab(?:le|ility)|Vulnérabilit(?:é|e)s?|脆弱性)/ },
-            { key: 'weakness', re: /^(?:虚弱|Weak(?:ness)?|Faiblesse|弱体化)/ },
-            { key: 'poison', re: /^(?:中毒|Poison(?:ed)?|Veneno|毒)/ },
-        ];
         let cursor = 0;
         while (cursor < text.length) {
             const rest = text.slice(cursor);
@@ -6438,9 +6717,11 @@
                 if (suffix) {
                     const multiplier = document.createElement('span');
                     multiplier.textContent = `×${suffix[1]}`;
+                    if (unit === 'S') token.appendChild(document.createTextNode(storyShieldWord()));
                     token.append(createStoryInlineIcon(iconKey), multiplier);
                     consumed += suffix[0].length;
                 } else {
+                    if (unit === 'S') token.appendChild(document.createTextNode(storyShieldWord()));
                     token.append(createStoryInlineIcon(iconKey));
                 }
                 container.append(token);
@@ -6460,6 +6741,7 @@
                 amountNode.textContent = prefixMultiplier[1];
                 const multiplier = document.createElement('span');
                 multiplier.textContent = `×${prefixMultiplier[2]}`;
+                if (unit === 'S') token.appendChild(document.createTextNode(storyShieldWord()));
                 token.append(amountNode, multiplier, createStoryInlineIcon(iconKey));
                 container.append(token);
                 cursor += prefixMultiplier[0].length;
@@ -6485,14 +6767,32 @@
                 cursor += electricMatch[0].length;
                 continue;
             }
-            const statusRule = STATUS_TOKEN_RULES.find((rule) => rule.re.test(rest));
-            if (statusRule) {
-                const statusMatch = rest.match(statusRule.re);
-                const status = document.createElement('span');
-                status.className = `story-inline-status story-inline-status-${statusRule.key}`;
-                status.textContent = statusMatch[0];
-                container.append(status);
-                cursor += statusMatch[0].length;
+            const resourceFormula = matchStoryResourceFormula(rest);
+            if (resourceFormula) {
+                appendStoryResourceFormulaToken(container, resourceFormula);
+                cursor += resourceFormula.raw.length;
+                continue;
+            }
+            const bareUnit = rest.match(/^([DHEMSG])(?![A-Za-z])/);
+            if (bareUnit) {
+                appendStoryResourceUnit(
+                    container,
+                    bareUnit[1].toUpperCase(),
+                    bareUnit[1].toUpperCase() === 'S',
+                );
+                cursor += 1;
+                continue;
+            }
+            const statusMatch = matchStoryRichStatus(rest);
+            const compositeMatch = statusMatch ? null : matchStoryCompositeStatus(rest);
+            if (compositeMatch) {
+                appendStoryCompositeToken(container, compositeMatch);
+                cursor += compositeMatch.raw.length;
+                continue;
+            }
+            if (statusMatch) {
+                appendStoryStatusRichToken(container, statusMatch);
+                cursor += statusMatch.raw.length;
                 continue;
             }
             container.append(document.createTextNode(text[cursor]));
@@ -8062,6 +8362,12 @@
     function appendStoryTermRow(container, item) {
         const row = document.createElement('section');
         row.className = `story-term-row story-term-row-${item.kind}`;
+        const rowColor = item.kind === 'status'
+            ? STORY_STATUS_COLORS[item.id]
+            : (item.kind === 'tag'
+                ? ((STORY_TAG_STYLES[String(item.id || '').toLowerCase()] || {}).color || '')
+                : '');
+        if (rowColor) row.style.setProperty('--story-term-color', rowColor);
         const heading = document.createElement('h3');
         if (item.kind === 'tag') {
             const badge = storyTagElement(item.id);
@@ -8085,6 +8391,9 @@
         } else {
             const badge = document.createElement('span');
             badge.className = 'story-term-status';
+            if (item.kind === 'status') {
+                badge.classList.add(`story-inline-status-${item.id}`);
+            }
             const icon = document.createElement('img');
             icon.src = item.kind === 'trait'
                 ? storyTraitIconUrl(item.id)
@@ -8097,10 +8406,10 @@
             heading.append(badge);
         }
         if (['tag', 'resource', 'status', 'trait'].includes(item.kind)) {
-            const reference = { mode: 'terms', kind: item.kind, id: item.id };
+            const reference = { mode: storyTermKindMode(item.kind), kind: item.kind, id: item.id };
             const currentReference = {
                 mode: storyCodexMode,
-                kind: storyCodexMode === 'terms' ? storyCodexTermKind : '',
+                kind: storyTermModeKind(storyCodexMode) || storyCodexTermKind,
                 id: storyCodexSelectedId,
             };
             const isCurrent = $('story-codex-dialog')?.open
@@ -8911,16 +9220,21 @@
         if (mode === 'enchantment_books') {
             return storyCodexDiscoveredIds('enchantment_book').has(targetId);
         }
-        if (mode === 'terms') {
-            return storyCodexDiscoveredIds('term').has(`${String(kind || '')}:${targetId}`);
+        const termModeKind = storyTermModeKind(mode);
+        if (termModeKind || mode === 'terms') {
+            const effectiveKind = kind || termModeKind;
+            return storyCodexDiscoveredIds('term').has(`${effectiveKind}:${targetId}`);
         }
         return false;
     }
 
     function navigateStoryCodex(mode, id = '', options = {}) {
-        const targetMode = ['cards', 'enemies', 'talents', 'enchantment_books', 'terms'].includes(mode) ? mode : 'cards';
+        const targetMode = [
+            'cards', 'enemies', 'talents', 'enchantment_books',
+            'statuses', 'tags', 'traits', 'resources', 'terms',
+        ].includes(mode) ? mode : 'cards';
         const targetId = String(id || '');
-        const targetKind = String(options.kind || '');
+        const targetKind = String(options.kind || storyTermModeKind(targetMode) || '');
         if (!storyCodexTargetIsDiscovered(targetMode, targetId, targetKind)) return false;
         if (options.push !== false && $('story-codex-dialog')?.open) {
             storyCodexHistory.push(storyCodexSnapshot());
@@ -8929,6 +9243,7 @@
         storyCodexMode = targetMode;
         storyCodexSelectedId = targetId;
         if (targetMode === 'talents' && targetKind) storyCodexTalentKind = targetKind;
+        if (storyTermModeKind(targetMode) && targetKind) storyCodexTermKind = targetKind;
         if (targetMode === 'terms' && targetKind) storyCodexTermKind = targetKind;
         if (!options.preserveSearch) {
             storyCodexSearch = '';
@@ -8969,7 +9284,7 @@
         if (reference?.mode === 'enchantment_books') {
             return localize(storyContent?.enchantment_books?.[id]?.name) || id;
         }
-        if (reference?.mode === 'terms') {
+        if (storyTermModeKind(reference?.mode) || reference?.mode === 'terms') {
             return localize(storyCodexTermDefinition(reference.kind, id)?.name) || id;
         }
         return id;
@@ -8983,12 +9298,12 @@
         button.dataset.storyCodexReference = storyCodexReferenceKey(reference);
         const marker = document.createElement('span');
         marker.className = 'story-codex-reference-marker';
-        if (reference.mode === 'terms' && reference.kind === 'status') {
+        if (storyTermKindMode(reference.kind) === reference.mode && reference.kind === 'status') {
             const icon = document.createElement('img');
             icon.src = storyStatusIconUrl(reference.id);
             icon.alt = '';
             marker.append(icon);
-        } else if (reference.mode === 'terms' && reference.kind === 'trait') {
+        } else if (storyTermKindMode(reference.kind) === reference.mode && reference.kind === 'trait') {
             const icon = document.createElement('img');
             icon.src = storyTraitIconUrl(reference.id);
             icon.alt = '';
@@ -9023,9 +9338,8 @@
         if (!container) return false;
         const currentKey = storyCodexReferenceKey({
             mode: storyCodexMode,
-            kind: storyCodexMode === 'terms'
-                ? storyCodexTermKind
-                : (storyCodexMode === 'talents' ? storyCodexTalentKind : ''),
+            kind: storyTermModeKind(storyCodexMode)
+                || (storyCodexMode === 'talents' ? storyCodexTalentKind : ''),
             id: storyCodexSelectedId,
         });
         const unique = new Map();
@@ -9070,10 +9384,10 @@
             const key = storyCodexReferenceKey(reference);
             if (key) references.set(key, reference);
         };
-        (definition.tags || []).forEach((id) => add({ mode: 'terms', kind: 'tag', id }));
+        (definition.tags || []).forEach((id) => add({ mode: storyTermKindMode('tag'), kind: 'tag', id }));
         const statusIds = new Set();
         collectStoryStatusIds(definition.effects, statusIds);
-        statusIds.forEach((id) => add({ mode: 'terms', kind: 'status', id }));
+        statusIds.forEach((id) => add({ mode: storyTermKindMode('status'), kind: 'status', id }));
 
         const textValues = ['name', 'description', 'flavor']
             .flatMap((field) => {
@@ -9084,13 +9398,13 @@
         Object.entries(storyContent?.statuses || {}).forEach(([id, term]) => {
             const names = Object.values(term?.name || {}).map((value) => String(value || '')).filter(Boolean);
             if (names.some((name) => textValues.some((text) => text.includes(name)))) {
-                add({ mode: 'terms', kind: 'status', id });
+                add({ mode: storyTermKindMode('status'), kind: 'status', id });
             }
         });
         Object.entries(storyContent?.tags || {}).forEach(([id, term]) => {
             const names = Object.values(term?.name || {}).map((value) => String(value || '')).filter(Boolean);
             if (names.some((name) => textValues.some((text) => text.includes(name)))) {
-                add({ mode: 'terms', kind: 'tag', id });
+                add({ mode: storyTermKindMode('tag'), kind: 'tag', id });
             }
         });
         textValues.forEach((text) => {
@@ -9099,11 +9413,11 @@
             while ((cardMatch = cardPattern.exec(text))) add({ mode: 'cards', id: cardMatch[1] });
             Object.keys(STORY_RESOURCE_TERMS).forEach((unit) => {
                 const marker = new RegExp(`\\[\\[icon:${unit}\\]\\]|(?:^|[^A-Za-z])${unit}(?:$|[^A-Za-z])`, 'i');
-                if (marker.test(text)) add({ mode: 'terms', kind: 'resource', id: unit });
+                if (marker.test(text)) add({ mode: storyTermKindMode('resource'), kind: 'resource', id: unit });
             });
         });
-        if (definition.cost_e != null) add({ mode: 'terms', kind: 'resource', id: 'E' });
-        if (definition.cost_m != null) add({ mode: 'terms', kind: 'resource', id: 'M' });
+        if (definition.cost_e != null) add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'E' });
+        if (definition.cost_m != null) add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'M' });
 
         const damageTypes = new Set([
             'damage', 'damage_per_status', 'damage_from_shield', 'damage_from_player_status',
@@ -9111,15 +9425,15 @@
         ]);
         const healTypes = new Set(['heal', 'self_heal', 'allies_heal', 'heal_to_full']);
         storyCodexWalkDefinition(definition.effects || [], (key, value) => {
-            if (key === 'status' && typeof value === 'string') add({ mode: 'terms', kind: 'status', id: value });
+            if (key === 'status' && typeof value === 'string') add({ mode: storyTermKindMode('status'), kind: 'status', id: value });
             if (key === 'card_id' && typeof value === 'string') add({ mode: 'cards', id: value });
             if (key === 'enemy_id' && typeof value === 'string') add({ mode: 'enemies', id: value });
             if (key !== 'type' || typeof value !== 'string') return;
-            if (damageTypes.has(value)) add({ mode: 'terms', kind: 'resource', id: 'D' });
-            if (healTypes.has(value)) add({ mode: 'terms', kind: 'resource', id: 'H' });
-            if (['elixir', 'turn_elixir'].includes(value)) add({ mode: 'terms', kind: 'resource', id: 'E' });
+            if (damageTypes.has(value)) add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'D' });
+            if (healTypes.has(value)) add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'H' });
+            if (['elixir', 'turn_elixir'].includes(value)) add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'E' });
             if (['magic', 'turn_magic', 'gain_magic', 'consume_magic_damage'].includes(value)) {
-                add({ mode: 'terms', kind: 'resource', id: 'M' });
+                add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'M' });
             }
         });
         return [...references.values()];
@@ -9127,7 +9441,7 @@
 
     function storyCodexCardReferences(card) {
         const references = storyCardTermItems(card).map((item) => ({
-            mode: 'terms', kind: item.kind, id: item.id,
+            mode: storyTermKindMode(item.kind), kind: item.kind, id: item.id,
         }));
         return [...references, ...storyCodexDefinitionReferences(cardValues(card))];
     }
@@ -9135,7 +9449,7 @@
     function storyCodexEnemyReferences(record) {
         if (!record?.definition) return [];
         const references = (record.definition.traits || []).map((id) => ({
-            mode: 'terms', kind: 'trait', id,
+            mode: storyTermKindMode('trait'), kind: 'trait', id,
         }));
         [...(record.intents || [])].forEach((index) => {
             const move = record.definition.moves?.[index];
@@ -9149,7 +9463,7 @@
     }
 
     function storyCodexReferenceMatchesTerm(reference, record) {
-        return reference?.mode === 'terms'
+        return (storyTermModeKind(reference?.mode) || reference?.mode === 'terms')
             && String(reference.kind || '') === String(record?.kind || '')
             && String(reference.id || '') === String(record?.id || '');
     }
@@ -9634,7 +9948,7 @@
                 label.textContent = localize(traitDefinition.name);
                 button.append(icon, label);
                 button.title = t.codexViewRelated;
-                button.addEventListener('click', () => navigateStoryCodex('terms', traitId, {
+                button.addEventListener('click', () => navigateStoryCodex(storyTermKindMode('trait'), traitId, {
                     kind: 'trait',
                     push: true,
                 }));
@@ -9906,17 +10220,9 @@
     }
 
     function renderStoryCodexTerms(sidebar, detail) {
-        sidebar.append(storyCodexSegmented([
-            { id: 'status', label: t.codexStatuses },
-            { id: 'tag', label: t.codexTags },
-            { id: 'trait', label: t.codexTraits },
-            { id: 'resource', label: t.codexResources },
-        ], storyCodexTermKind, (kind) => {
-            storyCodexTermKind = kind;
-            storyCodexSelectedId = '';
-            renderStoryCodex();
-        }));
-        const records = storyCodexTermRecords(storyCodexTermKind);
+        const termKind = storyTermModeKind(storyCodexMode) || storyCodexTermKind;
+        storyCodexTermKind = termKind;
+        const records = storyCodexTermRecords(termKind);
         const list = document.createElement('div');
         list.className = 'story-codex-entry-list';
         list.dataset.storyScrollKey = `codex-term-list:${storyCodexTermKind}`;
@@ -9924,7 +10230,19 @@
             const button = document.createElement('button');
             button.type = 'button';
             button.className = `story-codex-entry-row is-term${storyCodexSelectedId === record.id ? ' is-active' : ''}`;
-            if (record.kind === 'status' || record.kind === 'trait') {
+            if (record.kind === 'status' || record.kind === 'tag') {
+                const listColor = record.kind === 'status'
+                    ? STORY_STATUS_COLORS[record.id]
+                    : ((STORY_TAG_STYLES[String(record.id || '').toLowerCase()] || {}).color || '');
+                if (listColor) {
+                    button.classList.add('is-term-color');
+                    button.style.setProperty('--story-term-color', listColor);
+                }
+            }
+            if (record.kind === 'tag') {
+                const tag = storyTagElement(record.id);
+                if (tag) button.append(tag);
+            } else if (record.kind === 'status' || record.kind === 'trait') {
                 const icon = document.createElement('img');
                 icon.src = record.kind === 'status'
                     ? storyStatusIconUrl(record.id)
@@ -9934,9 +10252,14 @@
             } else if (record.kind === 'resource') {
                 button.append(createStoryInlineIcon(record.id));
             }
-            const name = document.createElement('strong');
-            name.textContent = localize(record.definition.name) || record.id;
-            button.append(name);
+            if (record.kind !== 'tag') {
+                const name = document.createElement('strong');
+                name.textContent = localize(record.definition.name) || record.id;
+                if (record.kind === 'status') {
+                    name.classList.add(`story-inline-status-${record.id}`);
+                }
+                button.append(name);
+            }
             button.addEventListener('click', () => {
                 storyCodexSelectedId = record.id;
                 renderStoryCodex();
@@ -9977,12 +10300,29 @@
                 Object.keys(storyContent?.enchantment_books || {}).length,
             ];
         }
+        const termKind = storyTermModeKind(mode);
+        if (termKind) {
+            const catalog = {
+                status: storyContent?.statuses || {},
+                tag: storyContent?.tags || {},
+                trait: storyContent?.traits || {},
+                resource: STORY_RESOURCE_TERMS,
+            }[termKind];
+            const records = storyCodexTermRecords(termKind);
+            return [
+                records.length,
+                Object.keys(catalog || {}).length,
+            ];
+        }
+        if (mode === 'terms') {
+            const total = Object.keys(storyContent?.statuses || {}).length
+                + Object.keys(storyContent?.tags || {}).length
+                + Object.keys(storyContent?.traits || {}).length
+                + Object.keys(STORY_RESOURCE_TERMS).length;
+            return [storyCodexDiscoveredIds('term').size, total];
+        }
         const found = storyCodexDiscoveredIds('term').size;
-        const total = Object.keys(storyContent?.statuses || {}).length
-            + Object.keys(storyContent?.tags || {}).length
-            + Object.keys(storyContent?.traits || {}).length
-            + Object.keys(STORY_RESOURCE_TERMS).length;
-        return [found, total];
+        return [found, found];
     }
 
     function renderStoryCodex() {
@@ -10013,7 +10353,8 @@
         else renderStoryCodexTerms(sidebar, detail);
         const subtype = storyCodexMode === 'talents'
             ? storyCodexTalentKind
-            : (storyCodexMode === 'terms' ? storyCodexTermKind : '');
+            : (storyTermModeKind(storyCodexMode)
+                || (storyCodexMode === 'terms' ? storyCodexTermKind : ''));
         sidebar.dataset.storyScrollKey = `codex-sidebar:${storyCodexMode}:${subtype}`;
         detail.dataset.storyScrollKey = `codex-detail:${storyCodexMode}:${subtype}:${storyCodexSelectedId}`;
         scheduleVisibleStoryCardEffectFits();

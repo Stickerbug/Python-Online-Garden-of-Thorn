@@ -190,7 +190,8 @@ def test_story_inline_tokens_cover_shield_gold_and_electric_damage():
     assert "S: '/static/assets/status-icons/shield.svg'" in STORY_JS
     assert "G: '/static/assets/story-ui-icons/gold.svg'" in STORY_JS
     assert "electric_damage: '/static/assets/ui-icons/electric_damage.svg'" in STORY_JS
-    assert 'STATUS_TOKEN_RULES' in STORY_JS
+    assert 'storyStatusRichDefs' in STORY_JS
+    assert 'matchStoryRichStatus' in STORY_JS
     assert '(?:电伤|电伤害|电击伤害)' in STORY_JS
     assert '.story-inline-token-s { color: #2e7d7d; }' in STORY_CSS
     assert '.story-inline-token-g { color: var(--story-gold); }' in STORY_CSS
@@ -1087,7 +1088,7 @@ def test_story_codex_cross_links_only_discovered_content_and_supports_back_navig
     assert 'id="story-codex-back"' in STORY_TEMPLATE
     assert 'let storyCodexHistory = [];' in STORY_JS
     assert 'function storyCodexTargetIsDiscovered(mode, id, kind = \'\')' in STORY_JS
-    assert "storyCodexDiscoveredIds('term').has(`${String(kind || '')}:${targetId}`)" in STORY_JS
+    assert "storyCodexDiscoveredIds('term').has(`${effectiveKind}:${targetId}`)" in STORY_JS
     assert 'function navigateStoryCodex(mode, id = \'\', options = {})' in STORY_JS
     assert 'function returnStoryCodexHistory()' in STORY_JS
     assert "$('story-codex-back')?.addEventListener('click', returnStoryCodexHistory);" in STORY_JS
@@ -1098,7 +1099,7 @@ def test_story_codex_cross_links_only_discovered_content_and_supports_back_navig
     assert 'appendStoryCodexRelated(intents, storyCodexEnemyReferences(record));' in STORY_JS
     assert 'appendStoryCodexRelated(list, storyCodexBacklinksForTerm(record));' in STORY_JS
     assert 'appendStoryCodexRelated(copy, storyCodexBacklinksForCard(displayCard.def_id));' in STORY_JS
-    assert "navigateStoryCodex('terms', traitId" in STORY_JS
+    assert "navigateStoryCodex(storyTermKindMode('trait'), traitId" in STORY_JS
 
     assert '.story-codex-back {' in STORY_CSS
     assert '.story-codex-related {' in STORY_CSS
