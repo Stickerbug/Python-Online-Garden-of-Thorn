@@ -1,4 +1,5 @@
 from copy import deepcopy
+import re
 
 import pytest
 
@@ -12,6 +13,9 @@ from story_content import (
     STORY_ENEMIES,
     STORY_ENCHANTMENT_BOOKS,
     STORY_RELICS,
+    STORY_STATUSES,
+    STORY_TAGS,
+    STORY_TRAITS,
 )
 
 
@@ -21,6 +25,40 @@ def test_cn_cardinal_to_arabic_only_rewrites_numeric_contexts():
     assert _cn_cardinal_to_arabic(
         '三叉戟、三角形、下一次、一次、一半保持不变'
     ) == '三叉戟、三角形、下一次、一次、一半保持不变'
+
+
+def test_story_damage_type_words_use_explicit_icon_markers():
+    catalogs = (
+        STORY_CARDS,
+        STORY_RELICS,
+        STORY_BLESSINGS,
+        STORY_ENCHANTMENT_BOOKS,
+        STORY_STATUSES,
+        STORY_TAGS,
+        STORY_TRAITS,
+        STORY_CHARACTER_CARD_DESIGNS,
+    )
+    pattern = re.compile(
+        r'物理伤害|电击伤害|电伤害|电伤|physical damage|electric damage',
+        re.IGNORECASE,
+    )
+    found = []
+
+    def walk(value, path):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                walk(item, path + [str(key)])
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                walk(item, path + [str(index)])
+        elif isinstance(value, str) and pattern.search(value):
+            found.append((' / '.join(path), value))
+
+    for catalog in catalogs:
+        for content_id, definition in catalog.items():
+            walk(definition, [content_id])
+
+    assert found == []
 from story_content_model import (
     STORY_CONTENT_FINGERPRINT,
     STORY_CONTENT_REGISTRY,

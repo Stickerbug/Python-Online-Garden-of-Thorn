@@ -268,8 +268,8 @@ STORY_TAGS = {
     'charge': {
         'name': {'zh': '电荷', 'en': 'Charge'},
         'description': {
-            'zh': '打出时对自己造成等同于层数的电伤。',
-            'en': 'When played, deal electric damage to yourself equal to its stacks.',
+            'zh': '打出时对自己造成等同于层数的[[icon:electric_damage]]。',
+            'en': 'When played, deal [[icon:electric_damage]] to yourself equal to its stacks.',
         },
     },
 }
@@ -281,7 +281,7 @@ STORY_STATUSES = {
     },
     'power': {
         'name': {'zh': '力量', 'en': 'Power'},
-        'description': {'zh': '每层使每次物理伤害+1。', 'en': 'Each stack adds 1 to each physical hit.'},
+        'description': {'zh': '每层使每次[[icon:D]]+1。', 'en': 'Each stack adds 1 to each [[icon:D]] hit.'},
     },
     'temporary_power': {
         'name': {'zh': '暂时力量', 'en': 'Temporary Power'},
@@ -293,11 +293,11 @@ STORY_STATUSES = {
     },
     'weak': {
         'name': {'zh': '虚弱', 'en': 'Weak'},
-        'description': {'zh': '造成的物理伤害向下取整减少25%；回合开始时-1层。', 'en': 'Deal 25% less physical damage; lose 1 at turn start.'},
+        'description': {'zh': '造成的[[icon:D]]向下取整减少25%；回合开始时-1层。', 'en': 'Deal 25% less [[icon:D]]; lose 1 at turn start.'},
     },
     'vulnerable': {
         'name': {'zh': '易伤', 'en': 'Vulnerable'},
-        'description': {'zh': '受到的物理伤害向下取整增加50%；回合开始时-1层。', 'en': 'Take 50% more physical damage; lose 1 at turn start.'},
+        'description': {'zh': '受到的[[icon:D]]向下取整增加50%；回合开始时-1层。', 'en': 'Take 50% more [[icon:D]]; lose 1 at turn start.'},
     },
     'fragile': {
         'name': {'zh': '脆弱', 'en': 'Fragile'},
@@ -351,8 +351,8 @@ STORY_STATUSES = {
     'static': {
         'name': {'zh': '静电', 'en': 'Static'},
         'description': {
-            'zh': '受到电击伤害时消耗全部静电，并使该次伤害增加等同于原层数的数值。',
-            'en': 'Electric damage consumes all Static and adds its former stacks to that hit.',
+            'zh': '受到[[icon:electric_damage]]时消耗全部静电，并使该次伤害增加等同于原层数的数值。',
+            'en': '[[icon:electric_damage]] consumes all Static and adds its former stacks to that hit.',
         },
     },
     'untargetable': {
@@ -393,8 +393,8 @@ STORY_STATUSES = {
     'evil_eye': {
         'name': {'zh': '邪眼', 'en': 'Evil Eye'},
         'description': {
-            'zh': '受到不超过9D的物理伤害时改为受到1D；受到至少10D时使其-9D并消耗1层。',
-            'en': 'Physical damage up to 9 becomes 1; damage of at least 10 is reduced by 9 and consumes 1 stack.',
+            'zh': '受到不超过9[[icon:D]]时改为受到1[[icon:D]]；受到至少10[[icon:D]]时使其-9[[icon:D]]并消耗1层。',
+            'en': '[[icon:D]] up to 9 becomes 1; [[icon:D]] of at least 10 is reduced by 9 and consumes 1 stack.',
         },
     },
 }
@@ -719,8 +719,8 @@ STORY_TRAITS.update({
     'hard_shell': {
         'name': {'zh': '硬壳', 'en': 'Hard Shell'},
         'description': {
-            'zh': '受到的物理伤害减少等同于层数的数值。',
-            'en': 'Reduce incoming physical damage by its stacks.',
+            'zh': '受到的[[icon:D]]减少等同于层数的数值。',
+            'en': 'Reduce incoming [[icon:D]] by its stacks.',
         },
     },
     'obstacle': {
@@ -803,8 +803,8 @@ STORY_TRAITS.update({
     'disc': {
         'name': {'zh': '圆盘', 'en': 'Disc'},
         'description': {
-            'zh': '受到的物理伤害除以层数，向下取整；回合结束时-1层。',
-            'en': 'Divide incoming physical damage by its stacks, rounded down. Lose 1 stack at turn end.',
+            'zh': '受到的[[icon:D]]除以层数，向下取整；回合结束时-1层。',
+            'en': 'Divide incoming [[icon:D]] by its stacks, rounded down. Lose 1 stack at turn end.',
         },
     },
     'machine_learning': {
@@ -1767,9 +1767,9 @@ STORY_CARDS = {
                    upgrade={'description': {'zh': '对目标造成30D；此牌受到的力量加成变为6倍。', 'en': 'Deal 30 D; Power applies 6 times.'},
                             'effects': (_effect('damage', 30, power_scale=6),)}),
     'disc': _card('Disc', '圆盘', 'Disc', 2, 'bloom', 'rare',
-                  '本回合受到的物理伤害向下取整减半。',
+                  '本回合受到的[[icon:D]]向下取整减半。',
                   effects=(_effect('temporary_effect', script='disc'),),
-                  upgrade={'description': {'zh': '本回合受到的物理伤害向下取整减半；获得5层护盾。', 'en': 'Halve physical damage this turn; gain 5 Shield.'},
+                  upgrade={'description': {'zh': '本回合受到的[[icon:D]]向下取整减半；获得5层护盾。', 'en': 'Halve [[icon:D]] this turn; gain 5 Shield.'},
                            'effects': (_effect('temporary_effect', script='disc'), _effect('shield', 5))}),
     'salt': _card('Salt', '盐', 'Salt', 1, 'bloom', 'rare',
                   '获得3层护盾；将下一次受到的实际伤害等量返还给伤害来源。',
@@ -1957,7 +1957,7 @@ STORY_CARDS = {
     'mark': _card('Mark', '标记', 'Mark', 2, 'bloom', 'super',
                   '将目标的下一次意图改为眩晕。', owner='neutral', tags=('exile', 'sublime'), target='enemy',
                   effects=(_effect('status', 1, status='stun'),), upgrade={'cost_e': 1}),
-    'dandelion_seed': _card('Dandelion', '蒲公英种子', 'Dandelion Seed', 0, 'infect', 'special',
+    'dandelion_seed': _card('Dandelion', '蒲公英种子', 'Dandelion Seed', 0, 'curse', 'special',
                             '可在休息区种植：永久移除此牌，并获得蒲公英加护。',
                             owner='neutral', tags=('unplayable',), effects=()),
     'yin_yang': _card('Yin-Yang', '阴阳', 'Yin-Yang', 0, 'bloom', 'rare',
@@ -3582,7 +3582,31 @@ def _find_source(card_defs, source_id=None, source_names=()):
     return None
 
 
-def story_content_payload(card_defs=None):
+def _story_asset_url_with_version(url, asset_version):
+    if not isinstance(url, str) or not url.strip() or not asset_version:
+        return url
+    if not url.startswith('/static/'):
+        return url
+    separator = '&' if '?' in url else '?'
+    return f'{url}{separator}v={asset_version}'
+
+
+def _append_story_asset_versions(value, asset_version):
+    if not asset_version:
+        return
+    if isinstance(value, dict):
+        for key, item in list(value.items()):
+            if key == 'image_url' or key.endswith('image_url'):
+                if isinstance(item, str) and item.startswith('/static/'):
+                    value[key] = _story_asset_url_with_version(item, asset_version)
+            else:
+                _append_story_asset_versions(item, asset_version)
+    elif isinstance(value, list):
+        for item in value:
+            _append_story_asset_versions(item, asset_version)
+
+
+def story_content_payload(card_defs=None, asset_version=''):
     cards = deepcopy(STORY_CARDS)
     if card_defs:
         for definition in cards.values():
@@ -3611,7 +3635,7 @@ def story_content_payload(card_defs=None):
                     source_flavor = str(getattr(source, 'description', '') or '').strip()
                     if source_flavor:
                         definition['flavor'] = {'zh': source_flavor, 'en': source_flavor}
-    return {
+    payload = {
         'rules': deepcopy(STORY_RULES),
         'characters': deepcopy(STORY_CHARACTERS),
         'character_cards': deepcopy(STORY_CHARACTER_CARD_DESIGNS),
@@ -3634,6 +3658,8 @@ def story_content_payload(card_defs=None):
         'enemies': deepcopy(STORY_ENEMIES),
         'enchantment_books': deepcopy(STORY_ENCHANTMENT_BOOKS),
     }
+    _append_story_asset_versions(payload, asset_version)
+    return payload
 
 
 def validate_story_content():
@@ -3928,7 +3954,7 @@ STORY_CARD_BASE_DESCRIPTION_EN = {
     'stinger': 'Deal 32 D to the target',
     'fries': 'Gain 14 Shield; actively discard 1 other card of yours',
     'heavy': 'Deal 26 D to the target; Power bonuses to this card are multiplied by 4',
-    'disc': 'Halve the physical damage you take this turn, rounded down',
+    'disc': 'Halve the [[icon:D]] you take this turn, rounded down',
     'salt': 'Gain 3 Shield; reflect the next actual damage you take to its source',
     'magic_shell': 'Draw 2; gain 4 Shield',
     'pearl': 'Whenever you actively discard a card, deal 5 D to a random creature',
@@ -4029,7 +4055,7 @@ STORY_CARD_UPGRADE_DESCRIPTION_EN = {
     'stinger': 'Deal 44 D to the target',
     'fries': 'Gain 18 Shield; actively discard up to 1 other card of yours, then draw 1',
     'heavy': 'Deal 30 D to the target; Power bonuses to this card are multiplied by 6',
-    'disc': 'Halve the physical damage you take this turn, rounded down; gain 5 Shield',
+    'disc': 'Halve the [[icon:D]] you take this turn, rounded down; gain 5 Shield',
     'salt': 'Gain 6 Shield; reflect the next actual damage you take to its source',
     'magic_shell': 'Draw 3; gain 4 Shield',
     'pearl': 'Whenever you actively discard a card, deal 5 D to a random creature',

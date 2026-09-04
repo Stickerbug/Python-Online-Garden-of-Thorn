@@ -658,6 +658,7 @@ GTN_STATIC_VERSION += '-story-external-save-surrender-1'
 GTN_STATIC_VERSION += '-story-card-effect-fit-floor-1'
 GTN_STATIC_VERSION += '-ranked-entertainment-auto-disable-1'
 GTN_STATIC_VERSION += '-story-card-effect-fit-cache-1'
+GTN_STATIC_VERSION += '-story-explicit-icon-markers-1-story-tag-codex-1-story-usain-name-fit-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -19361,7 +19362,7 @@ def api_story_content_get():
     return jsonify({
         'success': True,
         'content_version': STORY_CONTENT_VERSION,
-        'content': story_content_payload(CARD_DEFS),
+        'content': story_content_payload(CARD_DEFS, asset_version=GTN_STATIC_VERSION),
         'progress': _story_progress_without_blocking(user_id),
         'discoveries': _list_story_discoveries_without_blocking(user_id),
     })

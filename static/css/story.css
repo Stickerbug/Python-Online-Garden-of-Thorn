@@ -3370,6 +3370,16 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
   --card-name-font-scale: 8.5cqi;
 }
 
+:lang(zh) .story-card.card[data-def-id="usain_bolt"],
+[lang="zh"] .story-card.card[data-def-id="usain_bolt"] {
+  --card-name-font-scale: 10cqi;
+}
+
+:lang(zh) .story-card.card[data-def-id="magic_usain_bolt"],
+[lang="zh"] .story-card.card[data-def-id="magic_usain_bolt"] {
+  --card-name-font-scale: 7.5cqi;
+}
+
 .story-card.card::after {
   content: '';
   position: absolute;
@@ -7137,6 +7147,26 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .story-codex-entry-row.is-term { grid-template-columns: 30px minmax(0, 1fr); min-height: 39px; }
 .story-codex-entry-row.is-term > img,
 .story-codex-entry-row.is-term > .story-inline-token-icon-wrap { width: 25px; height: 25px; }
+.story-codex-entry-row > .card-flag {
+  grid-column: 1 / -1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--custom-tag-color, #34495e);
+  background: color-mix(in srgb, currentColor 13%, var(--story-surface));
+}
+.story-codex-entry-row > .card-flag.precision { color: #546e7a; }
+.story-codex-entry-row > .card-flag.exile { color: #6c3483; }
+.story-codex-entry-row > .card-flag.void { color: #37474f; }
+.story-codex-entry-row > .card-flag.wide-strike { color: #1f9d8a; }
 .story-codex-entry-row:hover,
 .story-codex-entry-row.is-active {
   border-color: var(--magic);

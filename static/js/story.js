@@ -406,7 +406,7 @@
     const STORY_RESOURCE_TERMS = Object.freeze({
         D: {
             name: { zh: '物理伤害', en: 'Physical Damage' },
-            description: { zh: '物理伤害会减少目标的H', en: 'Physical damage reduces the target’s H' },
+            description: { zh: '[[icon:D]]会减少目标的H', en: '[[icon:D]] reduces the target’s H' },
         },
         H: {
             name: { zh: '生命', en: 'Health' },
@@ -6333,8 +6333,8 @@
                 effect.type === 'damage' ? { ...effect, amount: damage } : effect
             ));
             values.description = {
-                zh: `对目标造成${damage}D；此牌可无限升级。`,
-                en: `Deal ${damage} D. This card can be upgraded indefinitely.`,
+                zh: `对目标造成${damage}[[icon:D]]；此牌可无限升级。`,
+                en: `Deal ${damage}[[icon:D]]. This card can be upgraded indefinitely.`,
             };
         }
         const modifiers = card?.modifiers && typeof card.modifiers === 'object' ? card.modifiers : {};
@@ -6649,23 +6649,28 @@
 
     function matchStoryResourceFormula(rest) {
         const parenthesized = rest.match(
-            /^([（(][^（）()\r\n]*[）)])\s*([DHEMSG])(?![A-Za-z])/
+            /^([（(][^（）()\r\n]*[）)])\s*(?:\[\[icon:([A-Za-z0-9_]+)\]\]|([DHEMSG]))(?![A-Za-z])/
         );
         if (parenthesized) {
+            const iconKey = String(parenthesized[2] || parenthesized[3] || '');
             return {
                 raw: parenthesized[0],
                 prefix: parenthesized[1],
-                unit: parenthesized[2].toUpperCase(),
+                unit: iconKey.length === 1 ? iconKey.toUpperCase() : iconKey,
             };
         }
         const equivalent = rest.match(
-            /^等同于([^。；！？\r\n]+?)的([DHEMSG])(?![A-Za-z])/
+            /^等同于([^。；！？\r\n]+?)的(?:\[\[icon:([A-Za-z0-9_]+)\]\]|([DHEMSG]))(?![A-Za-z])/
         );
         if (equivalent) {
+            const iconKey = String(equivalent[2] || equivalent[3] || '');
+            const tokenText = equivalent[2]
+                ? `[[icon:${equivalent[2]}]]`
+                : equivalent[3];
             return {
                 raw: equivalent[0],
-                prefix: equivalent[0].slice(0, -1),
-                unit: equivalent[2].toUpperCase(),
+                prefix: equivalent[0].slice(0, -tokenText.length),
+                unit: iconKey.length === 1 ? iconKey.toUpperCase() : iconKey,
             };
         }
         return null;
@@ -6771,6 +6776,22 @@
             if (resourceFormula) {
                 appendStoryResourceFormulaToken(container, resourceFormula);
                 cursor += resourceFormula.raw.length;
+                continue;
+            }
+            const explicitBareMarker = rest.match(
+                /^\[\[icon:([A-Za-z0-9_]+)\]\]/
+            );
+            if (explicitBareMarker) {
+                const iconKey = String(explicitBareMarker[1] || '');
+                const displayUnit = iconKey.length === 1
+                    ? iconKey.toUpperCase()
+                    : iconKey;
+                appendStoryResourceUnit(
+                    container,
+                    displayUnit,
+                    displayUnit === 'S',
+                );
+                cursor += explicitBareMarker[0].length;
                 continue;
             }
             const bareUnit = rest.match(/^([DHEMSG])(?![A-Za-z])/);
