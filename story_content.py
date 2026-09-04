@@ -857,8 +857,8 @@ STORY_TRAITS.update({
     'hiding': {
         'name': {'zh': '躲藏', 'en': 'Hiding'},
         'description': {
-            'zh': '回合结束时，随机选择1个损坏机器躲藏（不展示所选目标）并获得1层隐形；该损坏机器受到伤害时失去隐形。',
-            'en': 'At turn end, secretly hide in a random Broken Machine and gain 1 Hidden. Lose Hidden when that machine takes damage.',
+            'zh': '回合结束时，随机选择1个砖堆躲藏（不展示所选目标）并获得1层隐形；该砖堆受到伤害时失去隐形。',
+            'en': 'At turn end, secretly hide in a random Brick Pile and gain 1 Hidden. Lose Hidden when that pile takes damage.',
         },
         'image_url': '/static/assets/story-trait-icons/hiding.svg',
     },
@@ -1139,6 +1139,8 @@ def _character_card(
 
     design = STORY_CHARACTER_CARD_DESIGNS[card_id]
     rarity = 'primary' if design.get('rarity') == 'starter' else design['rarity']
+    raw_cost_m = design.get('cost_m') or 0
+    cost_m = raw_cost_m if raw_cost_m in ('X', 'x') else int(raw_cost_m)
     upgrade = None
     if design.get('upgrade_text'):
         upgrade = {
@@ -1165,7 +1167,7 @@ def _character_card(
         rarity,
         design['base_text'],
         description_en=design.get('base_text_en'),
-        cost_m=int(design.get('cost_m') or 0),
+        cost_m=cost_m,
         effects=tuple(effects),
         upgrade=upgrade,
         tags=tuple(tags),
@@ -1513,6 +1515,61 @@ STORY_CARDS = {
         script='return_draw_top',
         upgrade_script='return_draw_top',
     ),
+    'enchanted_magic_basic': _character_card(
+        'enchanted_magic_basic',
+        effects=(_effect('magic', 2), _effect('electric_damage', 13)),
+        upgrade_effects=(_effect('magic', 3), _effect('electric_damage', 18)),
+    ),
+    'fractal_lightning': _character_card(
+        'fractal_lightning',
+        effects=(_effect('equipment', 3, script='electric_hit_static'),),
+        upgrade_effects=(_effect('equipment', 4, script='electric_hit_static'),),
+    ),
+    'magic_fractal_lightning': _character_card(
+        'magic_fractal_lightning',
+        effects=(_effect('static_hold_double_trigger', 1),),
+        upgrade_effects=(_effect('static_hold_double_trigger', 1),),
+        upgrade_cost_m=1,
+        target='enemy',
+    ),
+    'orb': _character_card(
+        'orb',
+        effects=(_effect('electric_damage', 33),),
+        upgrade_effects=(_effect('electric_damage', 40),),
+    ),
+    'magic_orb': _character_card(
+        'magic_orb',
+        effects=(_effect('magic_x_electric_damage', 6),),
+        upgrade_effects=(_effect('magic_x_electric_damage', 8),),
+    ),
+    'magic_elemental_force': _character_card(
+        'magic_elemental_force',
+        effects=(_effect('equipment', 1, script='magic_gain_temp_power'),),
+        upgrade_effects=(_effect('equipment', 1, script='magic_gain_temp_power'),),
+        upgrade_tags=('innate',),
+    ),
+    'usain_bolt': _character_card(
+        'usain_bolt',
+        effects=(_effect('equipment', 1, script='electric_hit_trigger_static'),),
+        upgrade_effects=(_effect('equipment', 1, script='electric_hit_trigger_static'),),
+        upgrade_tags=('innate',),
+    ),
+    'magic_usain_bolt': _character_card(
+        'magic_usain_bolt',
+        effects=(_effect('static_preserve_next', 1),),
+        upgrade_effects=(_effect('static_preserve_next', 2),),
+        target='enemy',
+    ),
+    'nether_lightning': _character_card(
+        'nether_lightning',
+        effects=(_effect('random_electric_damage', 7, hits=3),),
+        upgrade_effects=(_effect('random_electric_damage', 9, hits=3),),
+    ),
+    'magic_nether_lightning': _character_card(
+        'magic_nether_lightning',
+        effects=(_effect('equipment', 3, script='magic_random_static'),),
+        upgrade_effects=(_effect('equipment', 4, script='magic_random_static'),),
+    ),
     'amulet': _card('Amulet', '护身符', 'Amulet', 2, 'thorn', 'primary',
                     '对目标造成16D；主动丢弃自己1张其他手牌。',
                     effects=(_effect('damage', 16), _effect('active_discard', 1, exact=True)),
@@ -1613,7 +1670,7 @@ STORY_CARDS = {
                        },
                        'effects': (_effect('damage', 4, hits=2),),
                    }),
-    'missile': _card('Missile', '导弹', 'Missile', 1, 'thorn', 'rare',
+    'missile': _card('Missile', '导弹', 'Missile', 1, 'thorn', 'common',
                      '对目标造成10D；抽1张牌。', tags=('ready',),
                      effects=(_effect('damage', 10), _effect('draw', 1)),
                      upgrade={'description': {'zh': '对目标造成12D；抽2张牌。', 'en': 'Deal 12 D; draw 2.'},
@@ -1658,9 +1715,16 @@ STORY_CARDS = {
                          upgrade={'description': {'zh': '抽3张牌；获得4层护盾。', 'en': 'Draw 3; gain 4 Shield.'},
                                   'effects': (_effect('draw', 3), _effect('shield', 4))}),
     'pearl': _card('Pearl', '珍珠', 'Pearl', 2, 'root', 'ultra',
-        '每主动丢弃1张牌，对随机生物造成3D。',
-                   effects=(_effect('equipment', script='pearl'),), target='self',
-                   upgrade={'cost_e': 1}),
+        '每主动丢弃1张牌，对随机生物造成5D。',
+                   effects=(_effect('equipment', 5, script='pearl'),), target='self',
+                   upgrade={
+                       'cost_e': 1,
+                       'description': {
+                           'zh': '每主动丢弃1张牌，对随机生物造成5D。',
+                           'en': 'Whenever you actively discard a card, deal 5 D to a random creature.',
+                       },
+                       'effects': (_effect('equipment', 5, script='pearl'),),
+                   }),
     'crystal_leaf': _card('Crystal Leaf', '水晶叶', 'Crystal Leaf', 3, 'root', 'ultra',
                            '回合开始时获得2层力量。',
                           effects=(_effect('equipment', 2, script='start_power'),), target='self',
@@ -1669,12 +1733,12 @@ STORY_CARDS = {
                                 '获得3层力量。', effects=(_effect('power', 3),),
                                 upgrade={'description': {'zh': '获得5层力量。', 'en': 'Gain 5 Power.'},
                                          'effects': (_effect('power', 5),)}),
-    'magic_pearl': _card('Magic Pearl', '魔法珍珠', 'Magic Pearl', 2, 'root', 'ultra',
+    'magic_pearl': _card('Magic Pearl', '魔法珍珠', 'Magic Pearl', 2, 'root', 'rare',
                          '每主动丢弃1张牌，获得2层护盾。',
                          effects=(_effect('equipment', 2, script='magic_pearl'),), target='self',
                          upgrade={'description': {'zh': '每主动丢弃1张牌，获得3层护盾。', 'en': 'Whenever you actively discard a card, gain 3 Shield.'},
                                   'effects': (_effect('equipment', 3, script='magic_pearl'),)}),
-    'magic_acid': _card('Magic Acid', '魔法酸', 'Magic Acid', 0, 'bloom', 'rare',
+    'magic_acid': _card('Magic Acid', '魔法酸', 'Magic Acid', 0, 'root', 'rare',
                         '主动丢弃自己任意张其他手牌，然后抽等量的牌。',
                         tags=('exile',),
                         effects=(_effect('active_discard', 99, exact=False), _effect('draw_selected', 0)),
@@ -1824,7 +1888,7 @@ STORY_CARDS = {
     'dandelion_seed': _card('Dandelion', '蒲公英种子', 'Dandelion Seed', 0, 'infect', 'special',
                             '可在休息区种植：永久移除此牌，并获得蒲公英加护。',
                             owner='neutral', tags=('unplayable',), effects=()),
-    'yin_yang': _card('Yin-Yang', '阴阳', 'Yin-Yang', 0, 'bloom', 'special',
+    'yin_yang': _card('Yin-Yang', '阴阳', 'Yin-Yang', 0, 'bloom', 'rare',
                       '将自己全部其他手牌洗入抽牌堆，然后抽等同于洗入数量+1的牌。',
                       owner='neutral', tags=('exile',), effects=(_effect('shuffle_hand_redraw', 1),),
                       upgrade={
@@ -1840,7 +1904,7 @@ STORY_CARDS = {
         'Sewage',
         3,
         'bloom',
-        'rare',
+        'ultra',
         '本回合打出卡牌不消耗E；每打出1张牌，随机主动丢弃自己1张其他手牌。',
         tags=('exile',),
         effects=(_effect('temporary_effect', script='sewage'),),
@@ -2133,13 +2197,80 @@ STORY_CARDS = {
         effects=(),
         script='factory_waste',
     ),
+    'daisy': _card(
+        'Daisy',
+        '雏菊',
+        'Daisy',
+        2,
+        'thorn',
+        'rare',
+        '对目标造成9D；下回合开始时，对所有生物造成18D。',
+        effects=(
+            _effect('damage', 9),
+            _effect('delayed_all_enemy_damage', 18),
+        ),
+        upgrade={
+            'description': {
+                'zh': '对目标造成11D；下回合开始时，对所有生物造成22D。',
+                'en': 'Deal 11 D to the target; at the start of the next round, deal 22 D to all creatures.',
+            },
+            'effects': (
+                _effect('damage', 11),
+                _effect('delayed_all_enemy_damage', 22),
+            ),
+        },
+    ),
+    'elemental_force': _card(
+        'Elemental Force',
+        '元素之力',
+        'Elemental Force',
+        0,
+        'bloom',
+        'ultra',
+        '获得1E与1M；抽1张牌；获得1层力量与3层护盾。',
+        owner='neutral',
+        tags=('exile',),
+        effects=(
+            _effect('elixir', 1),
+            _effect('magic', 1),
+            _effect('draw', 1),
+            _effect('power', 1),
+            _effect('shield', 3),
+        ),
+        upgrade={
+            'description': {
+                'zh': '获得1E与1M；抽1张牌；获得1层力量与3层护盾；选择其中一项再次触发。',
+                'en': 'Gain 1 E and 1 M; draw 1; gain 1 Power and 3 Shield; choose one of those effects to trigger again.',
+            },
+            'effects': (
+                _effect('elixir', 1),
+                _effect('magic', 1),
+                _effect('draw', 1),
+                _effect('power', 1),
+                _effect('shield', 3),
+                _effect('elemental_force_repeat'),
+            ),
+        },
+    ),
 }
 
 STORY_CARD_IMAGE_URLS = {
     'capacitor': '/static/assets/story-card-art/capacitor.svg',
     'confused': '/static/assets/story-card-art/confused.svg',
     'copper_rod': '/static/assets/story-card-art/copper-rod.svg',
+    'daisy': '/static/assets/story-card-art/daisy.svg',
     'dandelion_seed': '/static/assets/story-card-art/dandelion-seed.svg',
+    'elemental_force': '/static/assets/story-card-art/elemental-force.svg',
+    'enchanted_magic_basic': '/static/assets/story-card-art/enchanted-magic-basic.svg',
+    'fractal_lightning': '/static/assets/story-card-art/fractal-lightning.svg',
+    'magic_elemental_force': '/static/assets/story-card-art/magic-elemental-force.svg',
+    'magic_fractal_lightning': '/static/assets/story-card-art/magic-fractal-lightning.svg',
+    'magic_nether_lightning': '/static/assets/story-card-art/magic-nether-lightning.svg',
+    'magic_orb': '/static/assets/story-card-art/magic-orb.svg',
+    'magic_usain_bolt': '/static/assets/story-card-art/magic-usain-bolt.svg',
+    'nether_lightning': '/static/assets/story-card-art/nether-lightning.svg',
+    'orb': '/static/assets/story-card-art/orb.svg',
+    'usain_bolt': '/static/assets/story-card-art/usain-bolt.svg',
     'enchanted_amulet': '/static/assets/story-card-art/enchanted-amulet.svg',
     'fatigued': '/static/assets/story-card-art/fatigued.svg',
     'injury': '/static/assets/story-card-art/injury.svg',
@@ -2311,10 +2442,10 @@ STORY_RELICS = {
     'energetic': _relic(
         '精力充沛',
         'Energetic',
-        '每经过1层，回复4H。',
+        '每经过1层，回复3H。',
         rarity='special',
         script='floor_heal',
-        amount=4,
+        amount=3,
     ),
     'magic_source': _relic(
         STORY_CHARACTER_RELIC_DESIGNS['magic_source']['name']['zh'],
@@ -2768,7 +2899,7 @@ STORY_ENEMIES.update({
         _move('抖落', 'Shake Off', _effect('summon', 1, enemy_id='jungle_firefly', health_percent=50)),
         _move('吸引', 'Attract', _effect('summon', 1, enemy_id='jungle_fly', health_percent=50), _effect('summon', 1, enemy_id='leafbug', health_percent=50)),
         _move('养分', 'Nutrients', _effect('allies_power', 2, lunatic_amount=3), _effect('allies_heal', 20, lunatic_amount=24)),
-    ), traits=('turn_shield', 'sturdy', 'shelter'), initial={'turn_shield': 5, 'sturdy': 99, 'shelter': 15},
+    ), script='bush', traits=('turn_shield', 'sturdy', 'shelter'), initial={'turn_shield': 5, 'sturdy': 99, 'shelter': 15},
        lunatic_initial={'turn_shield': 7, 'shelter': 20}, lunatic_health=170),
     'spider_cave': _enemy('蜘蛛洞', 'Spider Cave', 110, (
         _move('散网', 'Scatter Web', _effect('add_draw_card', 2, card_id='slimed'), _effect('player_status', 1, status='weak')),
@@ -2857,8 +2988,6 @@ STORY_ENEMIES.update({
         _move('伏击', 'Ambush', _effect('damage', 19, lunatic_amount=22), _effect('player_status', 1, status='weak')),
         _move('强袭', 'Assault', _effect('damage', 26, lunatic_amount=30), _effect('gain_power', 2)),
     ), script='mechanical_rat', traits=('hiding',), initial={'hidden': 1}, lunatic_health=254),
-    'broken_machine': _enemy('损坏机器', 'Broken Machine', 1, (),
-        script='broken_machine', traits=('cover',)),
     'chimney': _enemy('烟囱', 'Chimney', 456, (
         _move('喷射', 'Jet', _effect('summon', 1, enemy_id='smoke'), _effect('player_status', 5, status='poison')),
         _move('燃烧', 'Combustion', _effect('damage_from_player_status', 16, status='toxic_poison', lunatic_amount=21), _effect('halve_player_status', 0, status='toxic_poison')),
@@ -2911,6 +3040,115 @@ STORY_ENEMIES['smoke']['move_order'] = (0, 1)
 STORY_ENEMIES['brick_pile']['move_order'] = (0,)
 STORY_ENEMIES['chimney']['move_order'] = (0, 0, 1)
 STORY_ENEMIES['generator']['move_order'] = (0, 1, 2)
+
+# Workbook 11 sync: numeric/status adjustments kept separate so balance and
+# behavior edits stay auditable in one place.
+_MOVE_EFFECT = (
+    lambda enemy_id, move_index, effect_index, key, value: STORY_ENEMIES[
+        enemy_id
+    ]['moves'][move_index]['effects'][effect_index].__setitem__(key, value)
+)
+
+_MOVE_EFFECT('young_ant', 1, 0, 'hits', 2)
+_MOVE_EFFECT('young_ant', 1, 0, 'lunatic_hits', 2)
+_MOVE_EFFECT('bee', 0, 0, 'amount', 2)
+_MOVE_EFFECT('bee', 0, 0, 'lunatic_amount', 3)
+_MOVE_EFFECT('bee', 1, 0, 'amount', 7)
+_MOVE_EFFECT('bee', 1, 0, 'lunatic_amount', 9)
+_MOVE_EFFECT('ladybug', 0, 0, 'amount', 11)
+_MOVE_EFFECT('ladybug', 0, 0, 'lunatic_amount', 13)
+_MOVE_EFFECT('ladybug', 1, 0, 'amount', 7)
+_MOVE_EFFECT('ladybug', 1, 0, 'lunatic_amount', 8)
+_MOVE_EFFECT('garden_rock', 1, 0, 'amount', 6)
+_MOVE_EFFECT('garden_rock', 1, 0, 'lunatic_amount', 8)
+_MOVE_EFFECT('dandelion', 1, 0, 'amount', 6)
+_MOVE_EFFECT('dandelion', 1, 0, 'lunatic_amount', 7)
+_MOVE_EFFECT('cicada', 0, 0, 'amount', 7)
+_MOVE_EFFECT('cicada', 0, 0, 'lunatic_amount', 8)
+_MOVE_EFFECT('cicada', 1, 0, 'amount', 8)
+_MOVE_EFFECT('cicada', 1, 0, 'lunatic_amount', 9)
+_MOVE_EFFECT('sandstone', 0, 0, 'amount', 8)
+_MOVE_EFFECT('sandstone', 0, 0, 'lunatic_amount', 9)
+_MOVE_EFFECT('desert_centipede', 0, 0, 'amount', 6)
+_MOVE_EFFECT('desert_centipede', 0, 0, 'lunatic_amount', 8)
+_MOVE_EFFECT('desert_centipede', 2, 1, 'amount', 1)
+_MOVE_EFFECT('desert_centipede', 3, 0, 'amount', 3)
+_MOVE_EFFECT('crab', 0, 0, 'amount', 3)
+_MOVE_EFFECT('leafbug', 1, 0, 'amount', 5)
+_MOVE_EFFECT('leafbug', 1, 0, 'lunatic_amount', 6)
+_MOVE_EFFECT('dark_ladybug', 1, 0, 'amount', 12)
+_MOVE_EFFECT('dark_ladybug', 1, 0, 'lunatic_amount', 15)
+_MOVE_EFFECT('jungle_firefly', 0, 0, 'amount', 2)
+_MOVE_EFFECT('jungle_firefly', 0, 0, 'lunatic_amount', 3)
+_MOVE_EFFECT('pumpkin', 1, 0, 'amount', 6)
+_MOVE_EFFECT('pumpkin', 1, 0, 'lunatic_amount', 7)
+_MOVE_EFFECT('mechanical_crab', 0, 0, 'amount', 6)
+_MOVE_EFFECT('mechanical_crab', 0, 0, 'lunatic_amount', 7)
+_MOVE_EFFECT('mechanical_crab', 1, 0, 'amount', 14)
+_MOVE_EFFECT('mechanical_crab', 1, 0, 'lunatic_amount', 17)
+_MOVE_EFFECT('mechanical_crab', 2, 0, 'amount', 4)
+_MOVE_EFFECT('mechanical_crab', 2, 0, 'lunatic_amount', 5)
+_MOVE_EFFECT('mechanical_crab', 3, 0, 'amount', 28)
+_MOVE_EFFECT('mechanical_crab', 3, 0, 'lunatic_amount', 32)
+_MOVE_EFFECT('mechanical_rat', 0, 0, 'amount', 17)
+_MOVE_EFFECT('mechanical_rat', 0, 0, 'lunatic_amount', 20)
+_MOVE_EFFECT('mechanical_rat', 1, 0, 'amount', 22)
+_MOVE_EFFECT('mechanical_rat', 1, 0, 'lunatic_amount', 26)
+_MOVE_EFFECT('generator', 0, 0, 'amount', 2)
+_MOVE_EFFECT('generator', 0, 0, 'lunatic_amount', 3)
+_MOVE_EFFECT('generator', 2, 0, 'amount', 2)
+_MOVE_EFFECT('generator', 2, 0, 'lunatic_amount', 3)
+
+_HEALTH = {
+    'sandstone': (23, 26),
+    'fossil': (65, 74),
+    'shiny_ladybug': (98, 104),
+    'jungle_firefly': (65, 74),
+    'jungle_wasp': (39, 43),
+    'jungle_fly': (41, 46),
+    'bush': (146, 157),
+    'termite_mound': (291, 308),
+    'mechanical_flower': (423, 445),
+    'mechanical_spider': (54, 60),
+    'uranium_barrel': (110, 123),
+    'reconstructor_enemy': (480, 502),
+    'smoke': (39, 42),
+    'mechanical_rat': (214, 230),
+    'chimney': (414, 432),
+    'generator': (278, 298),
+}
+for _enemy_id, (_hp, _lunatic_hp) in _HEALTH.items():
+    STORY_ENEMIES[_enemy_id]['max_health'] = _hp
+    STORY_ENEMIES[_enemy_id]['lunatic_max_health'] = _lunatic_hp
+
+STORY_ENEMIES['electric_eel']['initial'] = {'charged': 1}
+STORY_ENEMIES['leafbug']['initial'] = {
+    'shield': 5,
+    'sturdy': 99,
+    'endurance_shell': 4,
+}
+STORY_ENEMIES['leafbug']['lunatic_initial'] = {
+    'shield': 10,
+    'endurance_shell': 6,
+}
+STORY_ENEMIES['mechanical_crab']['initial'] = {'super_beam': 5}
+STORY_ENEMIES['mechanical_crab']['lunatic_initial'] = {'super_beam': 4}
+STORY_ENEMIES['mechanical_crab']['moves'][2]['name']['zh'] = '超载'
+STORY_ENEMIES['mechanical_crab']['moves'][2]['name']['en'] = 'Overload'
+STORY_ENEMIES['mechanical_crab']['moves'][2]['effects'] += (
+    _effect('gain_status', 1, status='vulnerable'),
+)
+STORY_ENEMIES['mechanical_crab']['moves'][3]['effects'] = (
+    STORY_ENEMIES['mechanical_crab']['moves'][3]['effects'][0],
+    STORY_ENEMIES['mechanical_crab']['moves'][3]['effects'][2],
+)
+STORY_ENEMIES['mechanical_crab']['move_order'] = (0, 1, 0, 2, 3)
+STORY_ENEMIES['mechanical_crab']['lunatic_move_order'] = (0, 1, 2, 3)
+STORY_ENEMIES['mechanical_rat']['name']['zh'] = '机械老鼠'
+STORY_ENEMIES['smoke']['name']['zh'] = '烟'
+STORY_ENEMIES['chimney']['moves'][0]['name']['zh'] = '喷气'
+STORY_ENEMIES['chimney']['moves'][1]['name']['zh'] = '助燃'
+del _MOVE_EFFECT, _HEALTH
 
 STORY_ENEMY_IMAGE_URLS = {
     'soldier_ant': '/static/assets/story-enemies/soldier-ant.svg',
@@ -2987,7 +3225,6 @@ STORY_ENEMY_IMAGE_URLS = {
     'smoke': '/static/assets/story-enemies/smoke.svg',
     'brick_pile': '/static/assets/story-enemies/brick-pile.svg',
     'mechanical_rat': '/static/assets/story-enemies/mechanical-rat.svg',
-    'broken_machine': '/static/assets/story-enemies/broken-machine.svg',
     'chimney': '/static/assets/story-enemies/chimney.svg',
     'generator': '/static/assets/story-enemies/generator.svg',
 }
@@ -3024,7 +3261,7 @@ STORY_ENCOUNTERS = {
             ('avocado',),
         ),
         'boss': (
-            ('ant_queen', 'worker_ant', 'young_ant', 'young_ant'),
+            ('ant_queen', 'worker_ant', 'worker_ant', 'young_ant'),
             ('hive', 'bee'),
             ('digger',),
         ),
@@ -3076,7 +3313,6 @@ STORY_ENCOUNTERS = {
                 {'def_id': 'urchin', 'move_index': 1},
                 'waterspout',
             ),
-            ('urchin', 'turtle'),
         ),
         'elite': (
             ('shark',),
@@ -3134,7 +3370,12 @@ STORY_ENCOUNTERS = {
         ),
         'elite': (
             ('mechanical_wasp',),
-            ('broken_machine', 'broken_machine', 'broken_machine', 'mechanical_rat'),
+            (
+                {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 1.5},
+                {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 1.5},
+                {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 1.5},
+                'mechanical_rat',
+            ),
             ('generator',),
         ),
         'boss': (
@@ -3330,6 +3571,7 @@ def validate_story_content():
         'choose_exile', 'copy_hand_card', 'decaying_shield',
         'choose_random_generated', 'create_discard_copy',
         'delayed_copy', 'delayed_player_status', 'discard_to_draw_top',
+        'delayed_all_enemy_damage',
         'draw', 'draw_attack_power', 'draw_target_status', 'draw_then_discard',
         'draw_selected', 'draw_to_limit', 'elixir', 'elixir_from_hand', 'equipment',
         'elixir_if_active_discard',
@@ -3351,6 +3593,9 @@ def validate_story_content():
         'shield_remaining_magic', 'static', 'temporary_magic_heavy',
         'temporary_swap_costs', 'turn_damage_multiplier', 'untargetable',
         'magic_spend_shield_turn',
+        'elemental_force_repeat', 'magic_x_electric_damage',
+        'random_electric_damage', 'static_hold_double_trigger',
+        'static_preserve_next',
     }
     card_effect_types.update(STORY_PLAYER_ATTACK_EFFECT_TYPES)
     card_scripts = {
@@ -3369,6 +3614,8 @@ def validate_story_content():
         'static_boost', 'static_damage', 'static_draw', 'static_magic',
         'static_shield',
         'static_on_attacked', 'turn_draw',
+        'electric_hit_static', 'electric_hit_trigger_static',
+        'magic_gain_temp_power', 'magic_random_static',
     }
     relic_scripts = {
         'attack_shield', 'avoid_elite', 'boss_blind', 'boss_broken', 'boss_frenzy',
@@ -3414,7 +3661,7 @@ def validate_story_content():
         'magic_firefly', 'mechanical_crab', 'uranium_barrel',
         'reconstructor_enemy', 'mechanical_wasp', 'mechanical_missile',
         'mechanical_flower', 'smoke', 'brick_pile', 'mechanical_rat',
-        'broken_machine', 'chimney', 'generator',
+        'bush', 'chimney', 'generator',
     }
 
     def validate_cost(owner, key, value):
@@ -3612,7 +3859,7 @@ STORY_CARD_BASE_DESCRIPTION_EN = {
     'disc': 'Halve the physical damage you take this turn, rounded down',
     'salt': 'Gain 3 Shield; reflect the next actual damage you take to its source',
     'magic_shell': 'Draw 2; gain 4 Shield',
-    'pearl': 'Whenever you actively discard a card, deal 3 D to a random creature',
+    'pearl': 'Whenever you actively discard a card, deal 5 D to a random creature',
     'crystal_leaf': 'At the start of your turn, gain 2 Power',
     'magic_crystal_leaf': 'Gain 3 Power',
     'magic_pearl': 'Whenever you actively discard a card, gain 2 Shield',
@@ -3713,6 +3960,7 @@ STORY_CARD_UPGRADE_DESCRIPTION_EN = {
     'disc': 'Halve the physical damage you take this turn, rounded down; gain 5 Shield',
     'salt': 'Gain 6 Shield; reflect the next actual damage you take to its source',
     'magic_shell': 'Draw 3; gain 4 Shield',
+    'pearl': 'Whenever you actively discard a card, deal 5 D to a random creature',
     'magic_crystal_leaf': 'Gain 5 Power',
     'magic_pearl': 'Whenever you actively discard a card, gain 3 Shield',
     'magic_acid': 'Actively discard any number of other cards of yours, then draw that many',

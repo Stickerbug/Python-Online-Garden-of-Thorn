@@ -69,18 +69,18 @@ def _json_shape(value):
 
 def test_current_catalog_compiles_to_expected_safe_pools():
     assert COOP_REWARD_CARD_IDS == (
-        'bone', 'torch', 'sand', 'lightning', 'stinger', 'fries',
-        'magic_shell', 'leaf', 'feather', 'mjolnir',
-        'mage_fries', 'mage_coffee', 'mage_bone', 'mage_palm_leaf',
-        'mage_rose', 'mage_lightning', 'plasma',
-    )
+            'bone', 'torch', 'sand', 'lightning', 'stinger', 'fries',
+            'magic_shell', 'leaf', 'feather', 'mjolnir',
+            'mage_fries', 'mage_coffee', 'mage_bone', 'mage_palm_leaf',
+            'mage_rose', 'mage_lightning', 'plasma', 'orb',
+        )
     assert COOP_SHOP_CARD_IDS == (
         'bone', 'coffee', 'torch', 'sand', 'lightning', 'stinger',
         'fries', 'magic_shell', 'dust', 'leaf', 'feather', 'bubble',
-        'mjolnir',
-        'mage_fries', 'mage_coffee', 'mage_bone', 'mage_palm_leaf',
-        'mage_rose', 'mage_lightning', 'plasma',
-    )
+            'mjolnir',
+            'mage_fries', 'mage_coffee', 'mage_bone', 'mage_palm_leaf',
+            'mage_rose', 'mage_lightning', 'plasma', 'orb',
+        )
     assert COOP_SUPPORTED_CARD_IDS == frozenset({
         'basic', 'rose', 'amulet', 'mage_basic',
         *COOP_REWARD_CARD_IDS, *COOP_SHOP_CARD_IDS,

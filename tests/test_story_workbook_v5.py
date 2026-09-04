@@ -219,7 +219,7 @@ def test_latest_monster_names_special_intents_and_reconstructor_art_are_visible(
         'stickbug': ('发射', '生长', '砸击'),
         'termite_mound': ('固守', '号令'),
         'evil_centipede': ('毒噬', '毒气', '毒爆'),
-        'mechanical_crab': ('连击', '冲击', '充能', '超能光束'),
+            'mechanical_crab': ('连击', '冲击', '超载', '超能光束'),
         'uranium_barrel': ('辐射', '幻光'),
         'reconstructor_enemy': ('锯片', '激光器', '碎片', '自分解', '雷神之锤'),
         'mechanical_wasp': ('组装', '改装打击', '维修', '狂暴'),

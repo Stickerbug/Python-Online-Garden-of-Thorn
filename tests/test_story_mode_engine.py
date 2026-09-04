@@ -630,11 +630,11 @@ def test_updated_story_relic_and_garden_enemy_balance():
     assert STORY_ENEMIES['hive']['max_health'] == 172
     assert STORY_ENEMIES['hive']['moves'][0]['effects'][0]['wither'] == 4
     assert STORY_ENCOUNTERS['garden']['boss'][0] == (
-        'ant_queen',
-        'worker_ant',
-        'young_ant',
-        'young_ant',
-    )
+            'ant_queen',
+            'worker_ant',
+            'worker_ant',
+            'young_ant',
+        )
 
 
 def test_story_rarity_default_colors():
@@ -1129,7 +1129,6 @@ def test_a_complete_three_stage_journey_can_reach_the_terminal_state():
             living_enemies = [
                 enemy for enemy in combat['enemies']
                 if int(enemy['health']) > 0
-                and enemy.get('def_id') != 'broken_machine'
             ]
             target = next(
                 (
@@ -2012,7 +2011,7 @@ def test_enemy_applied_broken_survives_until_the_player_uses_it():
     })
     state['combat']['enemies'] = [enemy]
     state, _ = apply_story_action(state, 'end_turn', {}, 'broken-duration')
-    assert state['combat']['broken'] == 3
+    assert state['combat']['broken'] == 2
     state['combat']['shield'] = 2
     health = state['player']['health']
     card = _inject_hand_card(state, 'basic')
@@ -2022,7 +2021,7 @@ def test_enemy_applied_broken_survives_until_the_player_uses_it():
         {'card_instance_id': card['instance_id'], 'target_id': enemy['id']},
         'broken-duration',
     )
-    assert state['player']['health'] == health - 1
+    assert state['player']['health'] == health
     assert state['combat']['shield'] == 0
     broken_damage = next(
         event
@@ -2036,14 +2035,16 @@ def test_enemy_applied_broken_survives_until_the_player_uses_it():
     )
     broken_damage_index = events.index(broken_damage)
     assert target_damage_index < broken_damage_index
-    assert broken_damage['amount'] == 1
+    assert broken_damage['amount'] == 0
     assert broken_damage['history'] == [{
         'before': health,
-        'after': health - 1,
+        'after': health,
         'blocked': 2,
     }]
     assert broken_damage['presentation_patch']['combat']['effects']['shield'] == 0
-    assert broken_damage['presentation_patch']['player']['health'] == health - 1
+    assert broken_damage['presentation_patch'].get('player', {}).get(
+        'health', health
+    ) == health
 
 
 def test_player_shield_also_blocks_poison_damage():
@@ -2302,10 +2303,10 @@ def test_opening_talents_resolve_after_enemy_entrances_and_lightning_hits_shield
     lightning_index = events.index(lightning)
 
     assert entrance_index < lightning_index
-    assert leafbug['health'] == leafbug['max_health']
-    assert leafbug['shield'] == 1
-    assert lightning['amount'] == 0
-    assert lightning['history'][0]['blocked'] == 9
+    assert leafbug['health'] == leafbug['max_health'] - 4
+    assert leafbug['shield'] == 0
+    assert lightning['amount'] == 4
+    assert lightning['history'][0]['blocked'] == 5
 
 
 def test_occultist_event_adds_the_defined_cards_and_completes():

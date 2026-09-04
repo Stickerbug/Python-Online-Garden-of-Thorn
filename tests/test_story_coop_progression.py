@@ -802,8 +802,8 @@ def test_diligent_heals_on_personal_card_reward_and_energetic_heals_on_node_comp
         {'reward_id': member_reward['reward_id'], 'card_id': ''},
     )
     assert on_map['phase'] == 'map'
-    assert on_map['players']['0']['health'] == 49
-    assert on_map['players']['1']['health'] == 44
+    assert on_map['players']['0']['health'] == 48
+    assert on_map['players']['1']['health'] == 43
     assert sum(event['type'] == 'coop_player_healed' for event in events) == 2
 
 

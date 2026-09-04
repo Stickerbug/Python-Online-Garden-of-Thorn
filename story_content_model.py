@@ -37,9 +37,9 @@ from story_character_content import (
 
 
 STORY_CONTENT_MODEL_VERSION = 1
-STORY_WORKBOOK_FILE = 'Garden of Thorn 卡牌数据9.xlsx'
+STORY_WORKBOOK_FILE = 'Garden of Thorn 卡牌数据11.xlsx'
 STORY_WORKBOOK_SHA256 = (
-    'd0554d0b7f43b0477c2fbe471c1c311ce1095c2a6693668eb000a990b2cf3c05'
+    'D8EB0B4D1BDA96E1E3C5A0CAD8BC55A901FCF0E6010567B0E5F9FB24446C1B82'
 )
 STORY_WORKBOOK_SOURCE_VERSION = f'xlsx-sha256:{STORY_WORKBOOK_SHA256}'
 
@@ -263,6 +263,10 @@ _CARD_ROWS.update({
     content_id: index + 103
     for index, content_id in enumerate(STORY_CHARACTER_CARD_DESIGNS)
 })
+_CARD_ROWS.update({
+    'daisy': 97,
+    'elemental_force': 159,
+})
 
 _RELIC_ROWS = {
     'energetic': 3, 'ruthless': 14, 'firm_defense': 15,
@@ -306,7 +310,7 @@ _ENEMY_ROWS = {
     'mechanical_spider': 68, 'mechanical_crab': 69,
     'uranium_barrel': 70, 'reconstructor_enemy': 71,
     'mechanical_wasp': 72, 'mechanical_missile': 73, 'smoke': 74,
-    'brick_pile': 75, 'mechanical_rat': 76, 'broken_machine': 77,
+    'brick_pile': 75, 'mechanical_rat': 76,
     'chimney': 78, 'generator': 79,
 }
 
@@ -320,7 +324,7 @@ _ENCOUNTER_ROWS = {
     ('desert', 'elite'): (22, 23, 24),
     ('desert', 'boss'): (19, 20, 21),
     ('ocean', 'simple'): (41, 42, 43),
-    ('ocean', 'hard'): (44, 45, 46, 47, 48, 49, 50),
+    ('ocean', 'hard'): (44, 45, 46, 47, 48, 49),
     ('ocean', 'elite'): (38, 39, 40),
     ('ocean', 'boss'): (35, 36, 37),
     ('jungle', 'simple'): (52, 53, 54),

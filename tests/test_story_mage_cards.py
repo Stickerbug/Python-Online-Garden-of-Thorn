@@ -114,7 +114,7 @@ def test_packaged_card_catalog_provides_valid_art_for_every_story_card():
     missing = [card_id for card_id, card in cards.items() if not card.get('image_url')]
 
     assert missing == []
-    assert len(cards) == len(STORY_CARDS) == 150
+    assert len(cards) == len(STORY_CARDS) == 162
     for card in cards.values():
         image_url = card['image_url']
         assert image_url.startswith('/static/')
@@ -177,8 +177,8 @@ def _play(state, card_id, *, upgraded=False, suffix='play'):
 
 
 def test_every_authored_mage_card_has_one_executable_source_backed_definition():
-    assert len(MAGE_CARD_IDS) == 55
-    assert len(set(MAGE_CARD_IDS)) == 55
+    assert len(MAGE_CARD_IDS) == 65
+    assert len(set(MAGE_CARD_IDS)) == 65
     for card_id, authored in STORY_CHARACTER_CARD_DESIGNS.items():
         card = STORY_CARDS[card_id]
         assert card['owner'] == 'mage'
@@ -200,7 +200,7 @@ def test_character_card_pools_are_isolated_and_keep_neutral_shop_cards():
 
     assert mage_rewards == {
         card_id for card_id in MAGE_CARD_IDS
-        if STORY_CARDS[card_id]['rarity'] != 'primary'
+        if STORY_CARDS[card_id]['rarity'] not in ('primary', 'super')
     }
     assert set(STORY_REWARD_CARD_IDS) == common_rewards
     assert not mage_rewards & common_rewards

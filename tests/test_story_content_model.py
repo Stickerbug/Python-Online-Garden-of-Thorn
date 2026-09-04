@@ -34,21 +34,21 @@ def test_normalized_registry_covers_every_authoritative_catalog_entry():
     assert validate_story_content_model() is True
     assert len(STORY_CONTENT_REGISTRY.catalog('character')) == 5
     assert len(STORY_CHARACTERS) == 5
-    assert len(STORY_CONTENT_REGISTRY.catalog('character_card')) == 55
-    assert len(STORY_CHARACTER_CARD_DESIGNS) == 55
+    assert len(STORY_CONTENT_REGISTRY.catalog('character_card')) == 65
+    assert len(STORY_CHARACTER_CARD_DESIGNS) == 65
     assert len(STORY_CONTENT_REGISTRY.catalog('character_relic')) == 1
     assert len(STORY_CHARACTER_RELIC_DESIGNS) == 1
     assert len(STORY_CONTENT_REGISTRY.catalog('term')) == 1
     assert len(STORY_CHARACTER_TERMS) == 1
     assert len(STORY_CONTENT_REGISTRY.catalog('card')) == len(STORY_CARDS)
-    assert len(STORY_CARDS) == 150
+    assert len(STORY_CARDS) == 162
     assert len(STORY_CONTENT_REGISTRY.catalog('relic')) == len(STORY_RELICS) == 50
-    assert len(STORY_CONTENT_REGISTRY.catalog('enemy')) == len(STORY_ENEMIES) == 77
+    assert len(STORY_CONTENT_REGISTRY.catalog('enemy')) == len(STORY_ENEMIES) == 76
     assert len(STORY_CONTENT_REGISTRY.catalog('encounter')) == sum(
         len(specs)
         for tiers in STORY_ENCOUNTERS.values()
         for specs in tiers.values()
-    ) == 83
+    ) == 82
     assert len(STORY_CONTENT_REGISTRY.catalog('enchantment_book')) == (
         len(STORY_ENCHANTMENT_BOOKS)
     ) == 29
@@ -57,9 +57,9 @@ def test_normalized_registry_covers_every_authoritative_catalog_entry():
 
 
 def test_workbook_sources_use_the_frozen_file_hash_and_precise_rows():
-    assert STORY_WORKBOOK_FILE == 'Garden of Thorn 卡牌数据9.xlsx'
+    assert STORY_WORKBOOK_FILE == 'Garden of Thorn 卡牌数据11.xlsx'
     assert STORY_WORKBOOK_SHA256 == (
-        'd0554d0b7f43b0477c2fbe471c1c311ce1095c2a6693668eb000a990b2cf3c05'
+        'D8EB0B4D1BDA96E1E3C5A0CAD8BC55A901FCF0E6010567B0E5F9FB24446C1B82'
     )
     expected = {
         ('card', 'basic'): ('爬塔卡牌设计', 'A3:K3'),
@@ -113,7 +113,9 @@ def test_all_mage_rows_and_electric_damage_term_keep_precise_workbook_sources():
         assert definition['character_id'] == 'mage'
         assert definition['implementation_status'] == 'authored'
         assert definition['card_type'] in {'thorn', 'bloom', 'root'}
-        assert definition['rarity'] in {'starter', 'common', 'rare', 'ultra'}
+        assert definition['rarity'] in {
+            'starter', 'common', 'rare', 'ultra', 'super',
+        }
 
     first = STORY_CONTENT_REGISTRY.record('character_card', 'mage_basic')
     assert first.sources[0].sheet == '爬塔卡牌设计'

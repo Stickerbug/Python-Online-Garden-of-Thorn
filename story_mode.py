@@ -326,6 +326,7 @@ def build_initial_story_state(seed, character_id='common_flower'):
         'schema_version': STORY_SCHEMA_VERSION,
         'content_version': STORY_CONTENT_VERSION,
         'rules_version': STORY_RULES_VERSION,
+        'journey_seed': seed,
         'character_id': character_id,
         'phase': 'journey_setup',
         'stage': 1,

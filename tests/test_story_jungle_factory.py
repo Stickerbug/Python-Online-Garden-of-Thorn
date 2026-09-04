@@ -206,4 +206,4 @@ def test_mechanical_crab_super_beam_countdown_tracks_its_four_move_cycle():
         _advance_enemy_move(state, crab, move_index, 'mechanical-crab')
         countdowns.append(crab['super_beam'])
 
-    assert countdowns == [3, 2, 1, 4]
+    assert countdowns == [4, 3, 2, 5]

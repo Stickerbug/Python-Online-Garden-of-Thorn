@@ -48,6 +48,7 @@ _PRESENTATION_EFFECT_KEYS = (
     'toxic_poison', 'stagnation', 'bleed', 'fire', 'blockade',
     'attack_blocked',
     'overload', 'magic_overload', 'static', 'untargetable',
+    'static_hold', 'static_preserve',
     'fragment', 'psionic_connection', 'psionic_sustain', 'psionic_fountain', 'nest_instinct',
     'endurance_shell', 'toxic_conversion', 'bulb', 'hard_shell', 'obstacle',
     'segments', 'magic_shield', 'magic_blessing', 'magic_reflection',
@@ -869,6 +870,9 @@ def _build_enemy(state, def_id, serial, spec=None):
     definition = STORY_ENEMIES[def_id]
     base_health = _enemy_base_health(state, definition, spec)
     max_health = base_health
+    health_multiplier = float(spec.get('health_multiplier') or 1)
+    if health_multiplier > 0 and health_multiplier != 1:
+        max_health = max(1, math.ceil(base_health * health_multiplier))
     initial = copy.deepcopy(definition.get('initial') or {})
     if _difficulty(state) == 'lunatic':
         initial.update(copy.deepcopy(definition.get('lunatic_initial') or {}))
@@ -1117,6 +1121,48 @@ def _gain_magic(state, amount, events):
                 events,
                 source=equipment.get('def_id') or 'magic_gain_shield',
             )
+        for equipment, effect in list(
+            _equipment_effects(combat, 'magic_gain_temp_power')
+        ):
+            power_gain = gained * max(0, int(effect.get('amount') or 0))
+            if power_gain:
+                before = int(combat.get('temporary_power') or 0)
+                combat['temporary_power'] = before + power_gain
+                events.append({
+                    'type': 'status',
+                    'target_id': 'player',
+                    'status': 'temporary_power',
+                    'amount': power_gain,
+                    'before': before,
+                    'after': int(combat['temporary_power']),
+                    'source': equipment.get('def_id') or 'magic_elemental_force',
+                })
+        random_static = list(
+            _equipment_effects(combat, 'magic_random_static')
+        )
+        if random_static and gained:
+            rng_seed = str(
+                state.get('journey_seed')
+                or state.get('content_version')
+                or 'story'
+            )
+            for _ in range(gained):
+                living = _living_enemies(combat)
+                if not living:
+                    break
+                target = _rng(
+                    state,
+                    rng_seed,
+                    'magic_random_static',
+                ).choice(living)
+                for _, effect in random_static:
+                    _apply_static(
+                        state,
+                        target,
+                        max(0, int(effect.get('amount') or 0)),
+                        events,
+                        source='magic_nether_lightning',
+                    )
     return gained
 
 
@@ -1453,7 +1499,8 @@ def _draw_filter_matches(card, filter_name):
     if filter_name == 'zero_e':
         return int(_card_values(card).get('cost_e') or 0) == 0
     if filter_name == 'positive_m':
-        return int(_card_values(card).get('cost_m') or 0) > 0
+        raw_m = _card_values(card).get('cost_m')
+        return raw_m in ('X', 'x') or int(raw_m or 0) > 0
     return False
 
 
@@ -1863,9 +1910,6 @@ def _player_damage(state, amount, hits, events, source, attacker=None):
 
 def _apply_enemy_lethal_rules(state, enemy, before, dealt, events):
     """Apply one-use enemy survival mechanics and return recorded damage."""
-    if STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script') == 'broken_machine':
-        enemy['health'] = 1
-        return 0
     after = before - dealt
     if dealt > 0 and after <= 1 and int(enemy.get('psionic_sustain') or 0) > 0 and any(
         item.get('def_id') == 'termite_mound'
@@ -2098,7 +2142,8 @@ def _enemy_raw_damage(
     if (
         incoming_health_damage > 0
         and STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
-        == 'broken_machine'
+        == 'brick_pile'
+        and bool(enemy.get('cover_enemy'))
     ):
         _reveal_rat_from_cover(state, enemy, events)
     _after_enemy_health_damage(state, enemy, dealt, events)
@@ -2165,6 +2210,36 @@ def _trigger_static_equipment(state, enemy, stacks, seed, events):
         )
 
 
+def _trigger_enemy_static_once(state, enemy, seed, events, source='static'):
+    if not enemy or int(enemy.get('health') or 0) <= 0:
+        return 0
+    stacks = max(0, int(enemy.get('static') or 0))
+    if stacks <= 0:
+        return 0
+    preserve = max(0, int(enemy.get('static_preserve') or 0))
+    if preserve:
+        enemy['static_preserve'] = preserve - 1
+    else:
+        enemy['static'] = 0
+    dealt = _enemy_raw_damage(
+        state,
+        enemy,
+        stacks,
+        events,
+        source,
+        player_caused=True,
+    )
+    _trigger_static_equipment(state, enemy, stacks, seed, events)
+    events.append({
+        'type': 'static_triggered_once',
+        'enemy_id': enemy.get('id'),
+        'amount': stacks,
+        'dealt': dealt,
+        'preserved': bool(preserve),
+    })
+    return dealt
+
+
 def _enemy_electric_damage(state, enemy, amount, hits, seed, events, source):
     if not enemy or int(enemy.get('health') or 0) <= 0:
         return 0
@@ -2179,6 +2254,8 @@ def _enemy_electric_damage(state, enemy, amount, hits, seed, events, source):
             base_amount * float(combat.get('turn_damage_multiplier') or 1)
         )
         static = max(0, int(enemy.get('static') or 0))
+        if static > 0 and int(enemy.get('static_hold') or 0) > 0:
+            static = 0
         if static <= 0:
             boost = sum(
                 max(0, int(effect.get('amount') or 0))
@@ -2195,6 +2272,22 @@ def _enemy_electric_damage(state, enemy, amount, hits, seed, events, source):
                 'hit_count': hit_count,
                 'source': source,
             })
+            for _, effect in list(_equipment_effects(combat, 'electric_hit_static')):
+                _apply_static(
+                    state,
+                    enemy,
+                    max(0, int(effect.get('amount') or 0)),
+                    events,
+                    source='fractal_lightning',
+                )
+            if _equipment_effects(combat, 'electric_hit_trigger_static'):
+                _trigger_enemy_static_once(
+                    state,
+                    enemy,
+                    seed,
+                    events,
+                    source='usain_bolt',
+                )
             continue
         enemy['static'] = 0
         dealt = _enemy_raw_damage(
@@ -2216,6 +2309,22 @@ def _enemy_electric_damage(state, enemy, amount, hits, seed, events, source):
             'source': source,
         })
         _trigger_static_equipment(state, enemy, static, seed, events)
+        for _, effect in list(_equipment_effects(combat, 'electric_hit_static')):
+            _apply_static(
+                state,
+                enemy,
+                max(0, int(effect.get('amount') or 0)),
+                events,
+                source='fractal_lightning',
+            )
+        if _equipment_effects(combat, 'electric_hit_trigger_static'):
+            _trigger_enemy_static_once(
+                state,
+                enemy,
+                seed,
+                events,
+                source='usain_bolt',
+            )
     return total
 
 
@@ -2462,7 +2571,8 @@ def _enemy_physical_damage(
         if (
             incoming_health_damage > 0
             and STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
-            == 'broken_machine'
+            == 'brick_pile'
+            and bool(enemy.get('cover_enemy'))
         ):
             _reveal_rat_from_cover(state, enemy, events)
         _after_enemy_health_damage(state, enemy, dealt, events)
@@ -2620,13 +2730,16 @@ def _is_card_playable(state, card, automatic=False):
     cost_e = values.get('cost_e')
     if cost_e == 'X':
         cost_e = 0
+    cost_m = values.get('cost_m')
+    if cost_m in ('X', 'x'):
+        cost_m = 0
     health_cost = max(
         0,
         int((card.get('modifiers') or {}).get('enchantment_health_cost') or 0),
     )
     return (
         int(combat.get('elixir') or 0) >= int(cost_e or 0)
-        and int(combat.get('magic') or 0) >= int(values.get('cost_m') or 0)
+        and int(combat.get('magic') or 0) >= int(cost_m or 0)
         and int(state.get('player', {}).get('health') or 0) > health_cost
     )
 
@@ -3463,6 +3576,84 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
                 events,
                 _localized(values.get('name')),
             )
+    elif effect_type == 'magic_x_electric_damage':
+        x_magic = max(0, int(context.get('x_magic_cost') or 0))
+        if x_magic:
+            total = x_magic * max(0, int(amount))
+            for target in targets:
+                _enemy_electric_damage(
+                    state,
+                    target,
+                    total,
+                    1,
+                    seed,
+                    events,
+                    _localized(values.get('name')),
+                )
+    elif effect_type == 'random_electric_damage':
+        hit_count = max(1, int(effect.get('hits') or 1))
+        living = _living_enemies(combat)
+        for _ in range(hit_count):
+            if not living:
+                break
+            target = _rng(
+                state,
+                seed,
+                f'random_electric_damage:{card.get("def_id") or "card"}',
+            ).choice(living)
+            _enemy_electric_damage(
+                state,
+                target,
+                int(amount),
+                1,
+                seed,
+                events,
+                _localized(values.get('name')),
+            )
+            living = _living_enemies(combat)
+    elif effect_type == 'delayed_all_enemy_damage':
+        combat.setdefault('delayed_all_enemy_damages', []).append({
+            'amount': max(0, int(amount)),
+        })
+    elif effect_type == 'static_hold_double_trigger':
+        for target in targets:
+            if target is not combat and int(target.get('health') or 0) > 0:
+                target['static_hold'] = 1
+    elif effect_type == 'static_preserve_next':
+        for target in targets:
+            if target is not combat:
+                target['static_preserve'] = max(
+                    0,
+                    int(target.get('static_preserve') or 0) + max(0, int(amount)),
+                )
+    elif effect_type == 'elemental_force_repeat':
+        choice = str(payload.get('elemental_repeat_choice') or '').strip()
+        if choice == 'elixir':
+            _gain_elixir(state, 1, events)
+        elif choice == 'magic':
+            _gain_magic(state, 1, events)
+        elif choice == 'draw':
+            _draw_cards(
+                state,
+                1,
+                seed,
+                events,
+                context.get('autoplay_depth', 0),
+            )
+        elif choice == 'power':
+            before = int(combat.get('power') or 0)
+            combat['power'] = before + 1
+            events.append({
+                'type': 'status',
+                'target_id': 'player',
+                'status': 'power',
+                'amount': 1,
+                'before': before,
+                'after': int(combat['power']),
+                'source': card.get('def_id') or 'elemental_force',
+            })
+        elif choice == 'shield':
+            _gain_shield(state, 3, events)
     elif effect_type == 'magic_extra_hits':
         extra = _spend_magic(
             state,
@@ -3566,8 +3757,10 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
         pool = [
             card_id for card_id in story_shop_card_ids(character_id)
             for definition in (STORY_CARDS[card_id],)
-            if isinstance(definition.get('cost_m'), int)
-            and int(definition.get('cost_m') or 0) > 0
+            if (
+                definition.get('cost_m') in ('X', 'x')
+                or int(definition.get('cost_m') or 0) > 0
+            )
             and definition.get('type') not in ('curse', 'infect')
             and 'unplayable' not in set(definition.get('tags') or ())
         ]
@@ -3639,7 +3832,8 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
     elif effect_type == 'discard_nonmagic_draw_magic':
         discarded = []
         for hand_card in list(combat.get('hand', [])):
-            if int(_card_values(hand_card).get('cost_m') or 0) > 0:
+            raw_m = _card_values(hand_card).get('cost_m')
+            if raw_m in ('X', 'x') or int(raw_m or 0) > 0:
                 continue
             combat['hand'].remove(hand_card)
             combat['discard_pile'].append(hand_card)
@@ -4342,9 +4536,21 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
                 })
     cost_e = values.get('cost_e')
     x_cost = int(combat.get('elixir') or 0) if cost_e == 'X' else int(cost_e or 0)
-    cost_m = int(values.get('cost_m') or 0)
+    raw_cost_m = values.get('cost_m')
+    if raw_cost_m in ('X', 'x'):
+        x_magic_cost = _spend_magic(
+            state,
+            max(0, int(combat.get('magic') or 0)),
+            events,
+            source=card.get('def_id') or 'card',
+        )
+        cost_m = x_magic_cost
+    else:
+        x_magic_cost = 0
+        cost_m = int(raw_cost_m or 0)
     _spend_elixir(state, x_cost, events, source=card.get('def_id') or 'card')
-    _spend_magic(state, cost_m, events, source=card.get('def_id') or 'card')
+    if raw_cost_m not in ('X', 'x'):
+        _spend_magic(state, cost_m, events, source=card.get('def_id') or 'card')
     health_cost = max(0, int(modifiers.get('enchantment_health_cost') or 0))
     if health_cost:
         health_before = int(state['player'].get('health') or 0)
@@ -4423,6 +4629,7 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
         combat['next_skill_repeats'] = 0
     context = {
         'x_cost': x_cost,
+        'x_magic_cost': x_magic_cost,
         'attack_multiplier': attack_multiplier,
         'autoplay_depth': autoplay_depth,
         'enchantment_event_start': len(events),
@@ -4460,10 +4667,13 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
 
 def _enemy_intent(state, enemy):
     definition = STORY_ENEMIES[enemy['def_id']]
-    if definition.get('script') == 'broken_machine':
+    if (
+        definition.get('script') == 'brick_pile'
+        and bool(enemy.get('cover_enemy'))
+    ):
         return {
             'move_index': -1,
-            'name': {'zh': '损坏', 'en': 'Broken'},
+            'name': {'zh': '掩护', 'en': 'Cover'},
             'entries': [],
             'summary': '',
         }
@@ -5101,6 +5311,7 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'opening_redraw_pending': _has_relic(state, 'cooldown'),
         'delayed_hand_charge': 0,
         'delayed_player_statuses': [],
+        'delayed_all_enemy_damages': [],
         'next_turn_draw_delta': 0,
         'sewage_active': False,
         'draw_phase_complete': False,
@@ -5280,7 +5491,19 @@ def _next_enemy_move(state, enemy):
     elif definition.get('script') == 'pumpkin':
         move_index = 0 if int(enemy.get('shield') or 0) > 0 else 1
     elif definition.get('script') == 'spider_cave':
-        move_index = 0 if int(enemy.get('shield') or 0) > 0 else 1
+        move_index = (
+            0
+            if int(enemy.get('shield') or 0) > 0
+            and int(enemy.get('spider_web_uses') or 0) < 3
+            else 1
+        )
+    elif definition.get('script') == 'bush':
+        spawned = sum(
+            item.get('def_id') in {'jungle_firefly', 'jungle_fly', 'leafbug'}
+            for item in _living_enemies(state['combat'])
+        )
+        if move_index in (0, 1) and spawned >= 3:
+            move_index = 2
     elif definition.get('script') == 'stickbug':
         living_sticks = sum(
             item.get('def_id') == 'stick'
@@ -5369,11 +5592,27 @@ def _advance_enemy_move(state, enemy, move_index, seed):
         enemy['move_index'] = 2 if len(_living_enemies(state['combat'])) <= 1 else (move_index + 1) % 2
         return
     if script == 'mechanical_crab':
-        enemy['super_beam'] = 4 if move_index == 3 else max(
+        beam_initial = (
+            STORY_ENEMIES['mechanical_crab'].get('lunatic_initial')
+            if _difficulty(state) == 'lunatic'
+            else STORY_ENEMIES['mechanical_crab'].get('initial')
+        ) or {}
+        if not isinstance(beam_initial, dict):
+            beam_initial = {}
+        reset_beam = int(beam_initial.get('super_beam') or 5)
+        enemy['super_beam'] = reset_beam if move_index == 3 else max(
             1,
-            int(enemy.get('super_beam') or 4) - 1,
+            int(enemy.get('super_beam') or reset_beam) - 1,
         )
         enemy['move_step'] = int(enemy.get('move_step') or 0) + 1
+        return
+    if script == 'spider_cave':
+        if move_index == 0:
+            enemy['spider_web_uses'] = int(enemy.get('spider_web_uses') or 0) + 1
+        enemy['last_move_index'] = move_index
+        return
+    if script == 'bush':
+        enemy['last_move_index'] = move_index
         return
     if script in ('jungle_fly', 'pumpkin', 'evil_centipede', 'uranium_barrel', 'mechanical_missile'):
         enemy['last_move_index'] = move_index
@@ -6204,7 +6443,8 @@ def _finish_enemy_turn_effects(state, enemy, seed, events):
         covers = [
             item for item in _living_enemies(state['combat'])
             if STORY_ENEMIES.get(item.get('def_id'), {}).get('script')
-            == 'broken_machine'
+            == 'brick_pile'
+            and bool(item.get('cover_enemy'))
         ]
         if covers:
             cover = _rng(state, seed, f'mechanical_rat_cover:{enemy["id"]}').choice(covers)
@@ -6303,7 +6543,10 @@ def _enemy_turn(state, seed, events):
             if _check_combat_end(state, seed, events):
                 return
             continue
-        if definition.get('script') == 'broken_machine':
+        if (
+            definition.get('script') == 'brick_pile'
+            and bool(enemy.get('cover_enemy'))
+        ):
             _finish_enemy_turn_effects(state, enemy, seed, events)
             continue
         if definition.get('script') == 'mechanical_flower':
@@ -6671,6 +6914,34 @@ def _turn_boundary(state, seed, events, extra=False):
             source=str(delayed.get('source') or 'delayed'),
         )
     combat['delayed_player_statuses'] = []
+    for delayed in list(combat.get('delayed_all_enemy_damages', [])):
+        amount = max(0, int(delayed.get('amount') or 0))
+        if amount:
+            for enemy in _living_enemies(combat):
+                _enemy_physical_damage(
+                    state,
+                    enemy,
+                    amount,
+                    1,
+                    events,
+                    'daisy',
+                    player_caused=True,
+                    seed=seed,
+                )
+    combat['delayed_all_enemy_damages'] = []
+    for enemy in _living_enemies(combat):
+        if int(enemy.get('static_hold') or 0) > 0:
+            enemy['static_hold'] = 0
+            stacks = max(0, int(enemy.get('static') or 0))
+            if stacks:
+                enemy['static'] = stacks * 2
+                _trigger_enemy_static_once(
+                    state,
+                    enemy,
+                    seed,
+                    events,
+                    source='magic_fractal_lightning',
+                )
     for delayed in list(combat.get('delayed_copies', [])):
         delayed['turns'] = int(delayed.get('turns') or 0) - 1
         if delayed['turns'] <= 0:
@@ -7326,21 +7597,6 @@ def _resolve_termite_mound_death(state, mound, seed, events):
 def _resolve_enemy_death_hooks(state, seed, events):
     combat = state.get('combat') or {}
     while True:
-        for enemy in combat.get('enemies', []):
-            if (
-                int(enemy.get('health') or 0) <= 0
-                and STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
-                == 'broken_machine'
-            ):
-                enemy['health'] = 1
-                enemy['wither'] = 0
-                enemy.pop('death_hook_resolved', None)
-                enemy.pop('defeat_event_emitted', None)
-                events.append({
-                    'type': 'enemy_survived',
-                    'enemy_id': enemy['id'],
-                    'source': 'cover',
-                })
         defeated = [
             enemy
             for enemy in list(combat.get('enemies', []))
@@ -7509,8 +7765,11 @@ def _check_combat_end(state, seed, events):
         return True
     threats = [
         enemy for enemy in _living_enemies(combat)
-        if STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
-        != 'broken_machine'
+        if not (
+            STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
+            == 'brick_pile'
+            and bool(enemy.get('cover_enemy'))
+        )
     ]
     if not threats:
         _finish_combat(state, seed, events)
