@@ -4,7 +4,12 @@ from unittest import mock
 
 import app as gtn
 import db
-from story_mode import STORY_CONTENT_VERSION, build_initial_story_state
+from story_mode import (
+    STORY_CONTENT_VERSION,
+    STORY_RULES_CHANGELOG,
+    STORY_RULES_VERSION,
+    build_initial_story_state,
+)
 from story_content_model import STORY_CONTENT_FINGERPRINT
 
 
@@ -30,12 +35,23 @@ def test_current_solo_content_version_is_bound_to_the_normalized_catalog():
     assert state['content_version'] == STORY_CONTENT_VERSION
 
 
-def test_story_contract_migration_clears_progress_but_preserves_discoveries(
+def test_rules_version_bump_requires_one_explicit_compatibility_check():
+    entry = STORY_RULES_CHANGELOG.get(STORY_RULES_VERSION)
+    assert entry is not None, (
+        '修改故事模式规则前必须检查兼容性：请先阅读 '
+        'docs/故事模式数据版本与迁移.md，为 STORY_RULES_VERSION 的新值补一条 '
+        'STORY_RULES_CHANGELOG 说明，再继续实现。'
+    )
+    assert isinstance(entry, dict)
+    assert entry.get('note')
+
+
+def test_story_contract_display_update_preserves_rows_and_relabels_runs(
     tmp_path,
     monkeypatch,
 ):
     monkeypatch.setattr(db, 'DB_PATH', str(tmp_path / 'story-contract-reset.sqlite3'))
-    db.init_db('solo-v1', 'coop-v1')
+    db.init_db('story-redesign-10-solo-v1', 'story-redesign-10-coop-v1', 1)
     user, error = db.create_user('ContractReset', 'Aa1!aaaa')
     assert error is None
     user_id = int(user['id'])
@@ -48,8 +64,8 @@ def test_story_contract_migration_clears_progress_but_preserves_discoveries(
             '''INSERT INTO story_runs
                (id, user_id, status, seed, content_version, state_version,
                 state_json, created_at, updated_at)
-               VALUES (?, ?, 'active', 'seed', 'solo-v1', 1, ?, ?, ?)''',
-            (run_id, user_id, json.dumps({'content_version': 'solo-v1'}), now, now),
+                   VALUES (?, ?, 'active', 'seed', 'story-redesign-10-solo-v1', 1, ?, ?, ?)''',
+            (run_id, user_id, json.dumps({'content_version': 'story-redesign-10-solo-v1'}), now, now),
         )
         conn.execute(
             '''INSERT INTO story_run_actions
@@ -62,7 +78,7 @@ def test_story_contract_migration_clears_progress_but_preserves_discoveries(
                (run_id, user_id, slot_index, source_state_version, state_json,
                 stage, floor, created_at)
                VALUES (?, ?, 0, 1, ?, 1, 1, ?)''',
-            (run_id, user_id, json.dumps({'content_version': 'solo-v1'}), now),
+            (run_id, user_id, json.dumps({'content_version': 'story-redesign-10-solo-v1'}), now),
         )
         conn.execute(
             '''INSERT INTO story_progress
@@ -102,7 +118,7 @@ def test_story_contract_migration_clears_progress_but_preserves_discoveries(
             '''INSERT INTO story_coop_runs
                (id, party_id, status, schema_version, seed, content_version,
                 revision, state_json, created_at, updated_at)
-               VALUES (?, ?, 'active', 10, 'coop-seed', 'coop-v1', 1, '{}', ?, ?)''',
+                   VALUES (?, ?, 'active', 10, 'coop-seed', 'story-redesign-10-coop-v1', 1, '{}', ?, ?)''',
             (coop_run_id, party_id, now, now),
         )
         conn.execute(
@@ -115,34 +131,108 @@ def test_story_contract_migration_clears_progress_but_preserves_discoveries(
         )
         conn.commit()
 
-    db.init_db('solo-v1', 'coop-v1')
+    db.init_db('story-redesign-10-solo-v1', 'story-redesign-10-coop-v1', 1)
     with db.get_db_connection() as conn:
         assert conn.execute('SELECT COUNT(*) FROM story_runs').fetchone()[0] == 1
         assert conn.execute('SELECT COUNT(*) FROM story_coop_runs').fetchone()[0] == 1
 
-    db.init_db('solo-v2', 'coop-v1')
+    db.init_db('story-redesign-10-solo-v2', 'story-redesign-10-coop-v1', 1)
     with db.get_db_connection() as conn:
-        for table in (
-            'story_run_actions',
-            'story_manual_saves',
-            'story_runs',
-            'story_coop_run_actions',
-            'story_coop_runs',
-            'story_coop_party_members',
-            'story_coop_parties',
-            'story_progress_completions',
-            'story_progress',
-        ):
-            assert conn.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0] == 0
+        expected_counts = {
+            'story_run_actions': 1,
+            'story_manual_saves': 1,
+            'story_runs': 1,
+            'story_coop_run_actions': 1,
+            'story_coop_runs': 1,
+            'story_coop_party_members': 1,
+            'story_coop_parties': 1,
+            'story_progress_completions': 1,
+            'story_progress': 1,
+        }
+        for table, expected in expected_counts.items():
+            assert conn.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0] == expected
         assert conn.execute('SELECT COUNT(*) FROM story_discoveries').fetchone()[0] == 1
+        run_row = conn.execute(
+            'SELECT content_version, state_json FROM story_runs WHERE id = ?',
+            (run_id,),
+        ).fetchone()
+        assert run_row['content_version'] == 'story-redesign-10-solo-v2'
+        assert json.loads(run_row['state_json'])['content_version'] == (
+            'story-redesign-10-solo-v2'
+        )
+        save_state = json.loads(
+            conn.execute(
+                'SELECT state_json FROM story_manual_saves WHERE run_id = ?',
+                (run_id,),
+            ).fetchone()['state_json']
+        )
+        assert save_state['content_version'] == 'story-redesign-10-solo-v2'
+        coop_row = conn.execute(
+            'SELECT content_version FROM story_coop_runs WHERE id = ?',
+            (coop_run_id,),
+        ).fetchone()
+        assert coop_row['content_version'] == 'story-redesign-10-coop-v1'
         contract = conn.execute(
-            '''SELECT story_content_version, coop_story_content_version
+            '''SELECT story_content_version, coop_story_content_version,
+                      story_rules_version
                FROM story_data_contract_state WHERE id = 1'''
         ).fetchone()
-        assert tuple(contract) == ('solo-v2', 'coop-v1')
+        assert tuple(contract) == (
+            'story-redesign-10-solo-v2',
+            'story-redesign-10-coop-v1',
+            1,
+        )
 
 
-def test_first_contract_marker_clears_preexisting_story_data_but_keeps_compendium(
+def test_rules_version_bump_preserves_old_runs_and_progress(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(db, 'DB_PATH', str(tmp_path / 'story-rules-bump.sqlite3'))
+    db.init_db('story-redesign-10-solo-v1', 'story-redesign-10-coop-v1', 1)
+    user, error = db.create_user('RulesBump', 'Aa1!aaaa')
+    assert error is None
+    now = db.utc_now()
+    with db.get_db_connection() as conn:
+        conn.execute(
+            '''INSERT INTO story_runs
+               (id, user_id, status, seed, content_version, state_version,
+                state_json, created_at, updated_at)
+               VALUES ('rules-old-run', ?, 'active', 'seed',
+                       'story-redesign-10-solo-v1', 1, ?, ?, ?)''',
+            (
+                user['id'],
+                json.dumps({'content_version': 'story-redesign-10-solo-v1'}),
+                now,
+                now,
+            ),
+        )
+        conn.execute(
+            '''INSERT INTO story_progress
+               (user_id, character_id, difficulty, standard_clears,
+                boss_rush_clears, first_cleared_at, last_cleared_at)
+               VALUES (?, 'common_flower', 'normal', 1, 0, ?, ?)''',
+            (user['id'], now, now),
+        )
+        conn.commit()
+
+    db.init_db('story-redesign-10-solo-v2', 'story-redesign-10-coop-v1', 2)
+    with db.get_db_connection() as conn:
+        assert conn.execute('SELECT COUNT(*) FROM story_runs').fetchone()[0] == 1
+        assert conn.execute('SELECT COUNT(*) FROM story_progress').fetchone()[0] == 1
+        row = conn.execute(
+            'SELECT content_version FROM story_runs WHERE id = ?',
+            ('rules-old-run',),
+        ).fetchone()
+        assert row['content_version'] == 'story-redesign-10-solo-v1'
+        contract = conn.execute(
+            '''SELECT story_rules_version
+               FROM story_data_contract_state WHERE id = 1'''
+        ).fetchone()
+        assert contract['story_rules_version'] == 2
+
+
+def test_first_contract_marker_preserves_preexisting_story_data_and_compendium(
     tmp_path,
     monkeypatch,
 ):
@@ -170,9 +260,10 @@ def test_first_contract_marker_clears_preexisting_story_data_but_keeps_compendiu
         )
         conn.commit()
 
-    db.init_db('solo-current', 'coop-current')
+    db.init_db('solo-current', 'coop-current', 1)
     with db.get_db_connection() as conn:
-        assert conn.execute('SELECT COUNT(*) FROM story_runs').fetchone()[0] == 0
+        run = conn.execute('SELECT content_version FROM story_runs').fetchone()
+        assert run['content_version'] == 'legacy'
         discovery = conn.execute(
             '''SELECT content_type, content_id, first_run_id
                FROM story_discoveries'''

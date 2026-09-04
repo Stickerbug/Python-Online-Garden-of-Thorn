@@ -31,7 +31,7 @@ from story_coop_content import (
     CoopStoryContentError,
     validate_compiled_coop_event_definition,
 )
-from story_mode import STORY_CONTENT_VERSION, generate_story_map
+from story_mode import STORY_CONTENT_VERSION, STORY_RULES_VERSION, generate_story_map
 from story_coop import (
     COOP_STORY_DEFAULT_RULES,
     story_seat_for_user,
@@ -839,6 +839,7 @@ def prepare_coop_stage1_setup(source_state, *, available_difficulties=None):
         _fail('COOP_SETUP_NOT_AVAILABLE', '当前旅程不能进入协作开局设置')
     state = deepcopy(source_state)
     state['content_version'] = COOP_STORY_CONTENT_VERSION
+    state['rules_version'] = STORY_RULES_VERSION
     state['completed'] = False
     state['combat'] = None
     state['last_combat'] = None
@@ -907,6 +908,7 @@ def start_coop_stage1_opening(source_state, *, run_seed, difficulty='normal'):
 
     state = deepcopy(source_state)
     state['content_version'] = COOP_STORY_CONTENT_VERSION
+    state['rules_version'] = STORY_RULES_VERSION
     state['difficulty'] = difficulty
     state['journey_mode'] = 'standard'
     state['completed_stage'] = None

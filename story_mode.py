@@ -9,6 +9,20 @@ STORY_SCHEMA_VERSION = 9
 STORY_CONTENT_VERSION = f'story-redesign-10-{STORY_CONTENT_FINGERPRINT[:12]}'
 STORY_FLOOR_COUNT = 16
 
+# Rules contract version.  Increment ONLY when a change can alter an active
+# run's generation, validation, or settlement semantics.  Text, names, images,
+# rarity and other presentation-only content changes must NOT bump it.
+# When you bump it, add an entry to STORY_RULES_CHANGELOG explaining whether the
+# new version is display/action compatible with the previous one; incompatible
+# changes preserve old runs but require the player's explicit replacement.
+STORY_RULES_VERSION = 1
+STORY_RULES_CHANGELOG = {
+    1: {
+        'compatible_with': None,
+        'note': 'Initial rules contract after separating presentation from rules versioning.',
+    },
+}
+
 STORY_STAGES = (
     {'stage': 1, 'biomes': ('garden', 'desert', 'ocean')},
     {'stage': 2, 'biomes': ('jungle',)},
@@ -311,6 +325,7 @@ def build_initial_story_state(seed, character_id='common_flower'):
     return {
         'schema_version': STORY_SCHEMA_VERSION,
         'content_version': STORY_CONTENT_VERSION,
+        'rules_version': STORY_RULES_VERSION,
         'character_id': character_id,
         'phase': 'journey_setup',
         'stage': 1,

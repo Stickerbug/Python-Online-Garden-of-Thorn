@@ -93,7 +93,11 @@ from title_styles import (
 from story_content import STORY_CHARACTERS, story_content_payload
 from story_discovery import collect_story_discoveries
 from story_engine import StoryActionError, apply_story_action
-from story_mode import STORY_CONTENT_VERSION, build_initial_story_state
+from story_mode import (
+    STORY_CONTENT_VERSION,
+    STORY_RULES_VERSION,
+    build_initial_story_state,
+)
 from story_admin import (
     execute_story_admin_command,
     story_admin_content_values,
@@ -856,7 +860,11 @@ class TrackedLock:
 DB_AVAILABLE = True
 DB_INIT_ERROR = ''
 try:
-    init_db(STORY_CONTENT_VERSION, COOP_STORY_CONTENT_VERSION)
+    init_db(
+        STORY_CONTENT_VERSION,
+        COOP_STORY_CONTENT_VERSION,
+        STORY_RULES_VERSION,
+    )
 except Exception as exc:
     DB_AVAILABLE = False
     DB_INIT_ERROR = str(exc)

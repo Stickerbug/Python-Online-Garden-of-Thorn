@@ -585,50 +585,187 @@ def _seed_builtin_user_roles(conn):
         _ensure_builtin_role_for_row(conn, row)
 
 
-def _reset_story_data_for_contract_if_needed_conn(
+_STORY_RULES_ERA_PREFIX = 'story-redesign-10-'
+
+
+def _relabel_story_content_conn(conn, solo_version, coop_version, rules_version):
+    """Relabel runs whose content differs only in the presentation layer.
+
+    Rule-compatible runs keep their map, deck and action history and simply
+    receive the new content/display version so the player can continue.
+    """
+
+    relabeled = 0
+    rows = conn.execute(
+        'SELECT id, content_version, state_json FROM story_runs'
+    ).fetchall()
+    for row in rows:
+        old_version = str(row['content_version'] or '')
+        if not old_version.startswith(_STORY_RULES_ERA_PREFIX):
+            continue
+        state = _parse_json_obj(row['state_json'])
+        if state is None:
+            continue
+        state['content_version'] = solo_version
+        state['rules_version'] = int(rules_version)
+        conn.execute(
+            '''UPDATE story_runs
+               SET content_version = ?, state_json = ?
+               WHERE id = ?''',
+            (solo_version, json.dumps(state, ensure_ascii=False), row['id']),
+        )
+        relabeled += 1
+
+    save_rows = conn.execute(
+        'SELECT id, state_json FROM story_manual_saves'
+    ).fetchall()
+    for row in save_rows:
+        state = _parse_json_obj(row['state_json'])
+        if state is None:
+            continue
+        old_version = str(state.get('content_version') or '')
+        if not old_version.startswith(_STORY_RULES_ERA_PREFIX):
+            continue
+        state['content_version'] = solo_version
+        state['rules_version'] = int(rules_version)
+        conn.execute(
+            'UPDATE story_manual_saves SET state_json = ? WHERE id = ?',
+            (json.dumps(state, ensure_ascii=False), row['id']),
+        )
+
+    coop_rows = conn.execute(
+        'SELECT id, content_version, state_json FROM story_coop_runs'
+    ).fetchall()
+    for row in coop_rows:
+        old_version = str(row['content_version'] or '')
+        if not old_version.startswith(_STORY_RULES_ERA_PREFIX):
+            continue
+        state = _parse_json_obj(row['state_json'])
+        if state is not None:
+            state['content_version'] = coop_version
+            state['rules_version'] = int(rules_version)
+            state_json = json.dumps(state, ensure_ascii=False)
+        else:
+            state_json = row['state_json']
+        conn.execute(
+            '''UPDATE story_coop_runs
+               SET content_version = ?, state_json = ?
+               WHERE id = ?''',
+            (coop_version, state_json, row['id']),
+        )
+        relabeled += 1
+    return relabeled
+
+
+def _parse_json_obj(raw):
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _migrate_story_data_for_contract_if_needed_conn(
     conn,
     story_content_version,
     coop_story_content_version,
+    story_rules_version=None,
 ):
-    """Reset version-bound story data while preserving the compendium."""
+    """Migrate story data instead of deleting it when content changes.
+
+    - Presentation/display changes relabel compatible runs and keep every row.
+    - Rules-contract changes preserve progress, runs, saves and the compendium;
+      runs that are no longer valid remain untouched and fail closed through the
+      existing old-version replacement flow instead of being wiped.
+    """
+
     solo_version = str(story_content_version or '').strip()
     coop_version = str(coop_story_content_version or '').strip()
     if not solo_version or not coop_version:
-        return False
+        return {'relabeled': 0, 'preserved_old_runs': 0}
+    rules_version = (
+        int(story_rules_version)
+        if story_rules_version not in (None, '')
+        else None
+    )
+    now = utc_now()
     current = conn.execute(
-        '''SELECT story_content_version, coop_story_content_version
+        '''SELECT story_content_version, coop_story_content_version,
+                  story_rules_version
            FROM story_data_contract_state WHERE id = 1'''
     ).fetchone()
-    if (
-        current is not None
-        and str(current['story_content_version'] or '') == solo_version
-        and str(current['coop_story_content_version'] or '') == coop_version
-    ):
-        return False
+    if current is None:
+        conn.execute(
+            '''INSERT INTO story_data_contract_state
+               (id, story_content_version, coop_story_content_version,
+                story_rules_version, reset_at)
+               VALUES (1, ?, ?, ?, ?)''',
+            (solo_version, coop_version, rules_version, now),
+        )
+        return {'relabeled': 0, 'preserved_old_runs': 0}
 
-    # Mutable progress belongs to one exact content contract. Root deletion
-    # cascades through run actions and saves. story_discoveries is deliberately
-    # retained so a content update never erases the player's compendium.
-    conn.execute('DELETE FROM story_admin_mutations')
-    conn.execute('DELETE FROM story_coop_parties')
-    conn.execute('DELETE FROM story_runs')
-    conn.execute('DELETE FROM story_progress_completions')
-    conn.execute('DELETE FROM story_progress')
-    now = utc_now()
+    old_solo = str(current['story_content_version'] or '')
+    old_coop = str(current['coop_story_content_version'] or '')
+    old_rules = current['story_rules_version']
+    rules_before = int(old_rules) if old_rules not in (None, '') else None
+    display_changed = old_solo != solo_version or old_coop != coop_version
+    # First run after adding the rules column: treat existing redesign-era runs
+    # as display-compatible so the deployment does not strand current players.
+    if rules_before is None:
+        rules_before = rules_version
+    rules_changed = (
+        rules_before is not None
+        and rules_version is not None
+        and rules_before != rules_version
+    )
+    relabeled = 0
+    if display_changed and not rules_changed:
+        relabeled = _relabel_story_content_conn(
+            conn,
+            solo_version,
+            coop_version,
+            rules_version if rules_version is not None else rules_before,
+        )
+    preserved_old_runs = 0
+    if rules_changed:
+        preserved_old_runs = int(
+            conn.execute(
+                '''SELECT COUNT(*) FROM story_runs
+                   WHERE status = ?''',
+                ('active',),
+            ).fetchone()[0]
+        ) + int(
+            conn.execute(
+                '''SELECT COUNT(*) FROM story_coop_runs
+                   WHERE status = ?''',
+                ('active',),
+            ).fetchone()[0]
+        )
     conn.execute(
         '''INSERT INTO story_data_contract_state
-           (id, story_content_version, coop_story_content_version, reset_at)
-           VALUES (1, ?, ?, ?)
+           (id, story_content_version, coop_story_content_version,
+            story_rules_version, reset_at)
+           VALUES (1, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
                story_content_version = excluded.story_content_version,
                coop_story_content_version = excluded.coop_story_content_version,
+               story_rules_version = excluded.story_rules_version,
                reset_at = excluded.reset_at''',
-        (solo_version, coop_version, now),
+        (solo_version, coop_version, rules_version, now),
     )
-    return True
+    return {
+        'relabeled': relabeled,
+        'preserved_old_runs': preserved_old_runs,
+    }
 
 
-def init_db(story_content_version=None, coop_story_content_version=None):
+def init_db(
+    story_content_version=None,
+    coop_story_content_version=None,
+    story_rules_version=None,
+):
     parent = os.path.dirname(os.path.abspath(DB_PATH))
     if parent:
         os.makedirs(parent, exist_ok=True)
@@ -2132,10 +2269,22 @@ def init_db(story_content_version=None, coop_story_content_version=None):
                 id INTEGER PRIMARY KEY CHECK(id = 1),
                 story_content_version TEXT NOT NULL,
                 coop_story_content_version TEXT NOT NULL,
+                story_rules_version INTEGER,
                 reset_at TEXT NOT NULL
             )
             '''
         )
+        contract_columns = {
+            row['name']
+            for row in conn.execute(
+                'PRAGMA table_info(story_data_contract_state)'
+            ).fetchall()
+        }
+        if 'story_rules_version' not in contract_columns:
+            conn.execute(
+                'ALTER TABLE story_data_contract_state '
+                'ADD COLUMN story_rules_version INTEGER'
+            )
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS community_announcements (
@@ -2301,10 +2450,11 @@ def init_db(story_content_version=None, coop_story_content_version=None):
             ''',
             (reputation_today, reputation_now),
         )
-        _reset_story_data_for_contract_if_needed_conn(
+        _migrate_story_data_for_contract_if_needed_conn(
             conn,
             story_content_version,
             coop_story_content_version,
+            story_rules_version,
         )
         conn.commit()
 
