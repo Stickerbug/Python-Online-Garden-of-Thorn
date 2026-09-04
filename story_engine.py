@@ -370,8 +370,11 @@ def _use_enchantment_book(state, payload, seed, events):
         })
         return
     selected = _enchantment_card_selection(state, payload, definition.get('target'))
+    book_id = book['book_id']
     for card in selected:
         modifiers = card.setdefault('modifiers', {})
+        labels = modifiers.setdefault('enchantment_labels', {})
+        labels[str(definition.get('script') or book_id)] = book_id
         amount = max(0, int(definition.get('amount') or 0))
         if script == 'damage_bonus':
             modifiers['damage_bonus'] = int(modifiers.get('damage_bonus') or 0) + amount
@@ -432,7 +435,7 @@ def _use_enchantment_book(state, payload, seed, events):
     _remove_enchantment_book(state, book['instance_id'], events, reason='used')
     events.append({
         'type': 'enchantment_book_used',
-        'book_id': book['book_id'],
+        'book_id': book_id,
         'book_instance_id': book['instance_id'],
         'card_instance_ids': [card['instance_id'] for card in selected],
     })
@@ -2601,9 +2604,10 @@ def _is_card_playable(state, card, automatic=False):
         if (
             effect_type in ('active_discard', 'random_active_discard')
             and effect.get('exact')
-            and len(selectable_hand) < max(0, int(effect.get('amount') or 0))
         ):
-            return False
+            # Play stays legal even when fewer discardable cards are available;
+            # resolution discards whatever exists instead of blocking the play.
+            pass
         if effect_type == 'recover_exiled' and not any(
             'sublime' not in _card_tags(_card_values(item))
             for item in combat.get('exile_pile', [])
@@ -2661,7 +2665,12 @@ def _validate_card_selections(combat, card, values, payload):
                 item for item in combat['hand']
                 if item is not card and 'sublime' not in _card_tags(_card_values(item))
             ])
-            required = 0 if effect_type == 'choose_exile' and available == 0 else maximum
+            if effect_type == 'choose_exile' and available == 0:
+                required = 0
+            elif effect_type == 'active_discard' and available < maximum:
+                required = available
+            else:
+                required = maximum
             if exact and available < required:
                 _fail('CARD_NOT_PLAYABLE', '没有足够的可选择手牌')
             if exact and len(selected) != required:
@@ -2717,7 +2726,11 @@ def _repeated_card_selection_spec(combat, card, values):
             required = (
                 0
                 if effect_type == 'choose_exile' and not cards
-                else (requested if exact else 0)
+                else (
+                    (requested if len(cards) >= requested else len(cards))
+                    if effect_type == 'active_discard' and exact
+                    else (requested if exact else 0)
+                )
             )
             return {
                 'possible': len(cards) >= required,
@@ -2759,7 +2772,7 @@ def _repeated_card_selection_spec(combat, card, values):
             ]
             requested = max(0, int(effect.get('amount') or 0))
             return {
-                'possible': len(cards) >= requested,
+                'possible': True,
                 'payload_key': '',
                 'minimum': 0,
                 'maximum': 0,
@@ -3090,8 +3103,6 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
             if item is not card and 'sublime' not in _card_tags(_card_values(item))
         ]
         requested = max(0, int(amount))
-        if effect.get('exact') and len(candidates) < requested:
-            _fail('CARD_NOT_PLAYABLE', '没有足够的可丢弃手牌')
         selected = _rng(state, seed, 'random_active_discard').sample(
             candidates,
             min(requested, len(candidates)),
@@ -3712,6 +3723,8 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
 def _destination_for_card(values, card):
     modifiers = card.get('modifiers') or {}
     tags = _card_tags(values)
+    if values.get('type') == 'root':
+        return 'equipment'
     if modifiers.get('force_exile'):
         return 'exile_pile'
     if modifiers.get('enchantment_rebound'):
@@ -3720,8 +3733,6 @@ def _destination_for_card(values, card):
         return 'exile_pile'
     if values.get('script') == 'return_draw_top':
         return 'draw_pile'
-    if values.get('type') == 'root':
-        return 'equipment'
     return 'discard_pile'
 
 
@@ -3998,6 +4009,17 @@ def _apply_enchantment_post_card_use(
         'enchantment_weak_once',
     ):
         modifiers.pop(key, None)
+    enchantment_label_keys = (
+        'shield_bonus_once', 'draw_to_full_once', 'disc_once',
+        'fire_on_hit_once', 'immunity_once', 'repeat_on_kill',
+        'weak_once', 'double_reward_on_kill', 'repeat_once',
+        'power_once', 'impact_once', 'retrieve_once',
+        'reflection_once', 'vulnerable_once',
+    )
+    labels = modifiers.get('enchantment_labels')
+    if isinstance(labels, dict):
+        for label_key in enchantment_label_keys:
+            labels.pop(label_key, None)
     if not modifiers:
         card.pop('modifiers', None)
     return retrieve
@@ -7267,6 +7289,14 @@ def _resolve_termite_mound_death(state, mound, seed, events):
     combat = state['combat']
     for termite in list(_living_enemies(combat)):
         if not str(termite.get('def_id') or '').startswith('termite_'):
+            continue
+        if int(termite.get('stun') or 0) > 0:
+            events.append({
+                'type': 'enemy_skipped',
+                'enemy_id': termite['id'],
+                'reason': 'stun',
+                'source_trigger': 'psionic_fountain',
+            })
             continue
         definition = STORY_ENEMIES[termite['def_id']]
         resolve_move = definition['moves'][-1]

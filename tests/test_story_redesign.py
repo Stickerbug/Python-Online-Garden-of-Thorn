@@ -1053,7 +1053,7 @@ def test_shop_upgrade_and_remove_share_one_service_slot_and_separate_prices():
     assert next_shop['upgrade_price'] == 75
 
 
-def test_exact_active_discard_card_is_unplayable_without_another_card():
+def test_exact_active_discard_card_stays_playable_without_another_card():
     state = _started_state('empty-exile-selection')
     _start_combat(
         state,
@@ -1073,17 +1073,15 @@ def test_exact_active_discard_card_is_unplayable_without_another_card():
     target = combat['enemies'][0]
     target['health'] = target['max_health'] = 999
 
-    with pytest.raises(StoryActionError) as error:
-        apply_story_action(
-            state,
-            'play_card',
-            {'card_instance_id': amulet['instance_id'], 'target_id': target['id']},
-            'empty-exile-selection',
-        )
+    state, _events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': amulet['instance_id'], 'target_id': target['id']},
+        'empty-exile-selection',
+    )
 
-    assert error.value.code == 'CARD_NOT_PLAYABLE'
-    assert state['combat']['hand'] == [amulet]
-    assert target['health'] == 999
+    assert amulet not in state['combat']['hand']
+    assert state['combat']['enemies'][0]['health'] == 983
 
 
 def test_upgraded_fragment_discards_other_card_instead_of_exiling_it():

@@ -1109,7 +1109,10 @@ async function loadReportDetail(reportId) {
   }
 }
 
+let currentReportTargetUserId = 0;
+
 function renderReportDetail(report) {
+  currentReportTargetUserId = Number(report.target_user_id || 0);
   const detailBox = $('report-detail');
   if (!detailBox) return;
   const evidence = Array.isArray(report.evidence) ? report.evidence : [];
@@ -1162,7 +1165,66 @@ function renderReportDetail(report) {
         <h3>已执行动作</h3>
         <pre class="admin-json-result">${escapeHtml(JSON.stringify(actions, null, 2))}</pre>
       </section>
+    </div>
+    <div class="report-detail-grid">
+      <section>
+        <h3>信誉分</h3>
+        <div id="report-reputation">加载中…</div>
+      </section>
     </div>`;
+  loadReportReputation(report.target_user_id);
+}
+
+async function loadReportReputation(userId) {
+  const box = $('report-reputation');
+  if (!box) return;
+  if (!userId) {
+    box.textContent = '该举报没有关联账号。';
+    return;
+  }
+  try {
+    const data = await api(`/api/admin/reputation?user_id=${encodeURIComponent(userId)}`);
+    renderReportReputation(box, data);
+  } catch (error) {
+    box.textContent = `信誉分加载失败：${error.message}`;
+  }
+}
+
+function renderReportReputation(box, data) {
+  const profile = data.profile || {};
+  const ledger = Array.isArray(data.ledger) ? data.ledger : [];
+  const rows = ledger.map((entry) => (
+    `<li>${escapeHtml(entry.reason_code || '')} ${Number(entry.delta || 0) >= 0 ? '+' : ''}${escapeHtml(String(entry.delta ?? 0))} → ${escapeHtml(String(entry.value_after ?? entry.value_before ?? ''))} · ${escapeHtml(formatAdminTime(entry.created_at))}</li>`
+  )).join('');
+  box.innerHTML = [
+    `<p><b>当前信誉：</b>${escapeHtml(profile.value ?? '-')}　`,
+    `<b>档位：</b>${escapeHtml(profile.level ?? '-')} ${escapeHtml(profile.label || '')}</p>`,
+    `<p><b>可打天梯：</b>${profile.can_ranked ? '是' : '否'}　`,
+    `<b>荆露倍率：</b>${escapeHtml(String(profile.dew_multiplier ?? '-'))}</p>`,
+    `<h4>信誉流水</h4>`,
+    rows ? `<ul class="report-reputation-ledger">${rows}</ul>` : '<p>暂无流水。</p>',
+    `<div class="report-reputation-adjust">`,
+    `<label>调整 <input id="report-reputation-delta" type="number" min="-100" max="100" value="0"></label>`,
+    `<label>原因 <input id="report-reputation-reason" type="text" maxlength="120" placeholder="例如：恶意举报扣分"></label>`,
+    `<button class="ghost-btn" type="button" data-report-reputation-adjust>调整信誉</button>`,
+    `</div>`,
+  ].join('');
+  box.querySelector('[data-report-reputation-adjust]')?.addEventListener('click', () => {
+    adjustReportReputation().catch((error) => {
+      box.textContent = `信誉调整失败：${error.message}`;
+    });
+  });
+}
+
+async function adjustReportReputation() {
+  const delta = Number($('report-reputation-delta')?.value || 0);
+  const reason = String($('report-reputation-reason')?.value || '').trim();
+  const data = await api('/api/admin/reputation/adjust', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: Number(currentReportTargetUserId), delta, reason }),
+  });
+  const box = $('report-reputation');
+  if (box) renderReportReputation(box, data);
 }
 
 async function resolveSelectedReport(reportId) {

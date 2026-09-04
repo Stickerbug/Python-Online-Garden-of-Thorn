@@ -478,6 +478,8 @@ STORY_STATUS_IMAGE_URLS = {
     'attack_blocked': '/static/assets/status-icons/attack_blocked.svg',
     'fragment': '/static/assets/status-icons/fragment.svg',
     'magic_shield_disabled': '/static/assets/story-status-icons/magic-shield-disabled.svg',
+    'magic_overload': '/static/assets/story-status-icons/magic-overload.svg',
+    'static': '/static/assets/story-status-icons/static-electricity.svg',
 }
 
 for _status_id, _image_url in STORY_STATUS_IMAGE_URLS.items():

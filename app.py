@@ -20875,6 +20875,61 @@ def admin_reports():
         return jsonify({'success': False, 'error': str(exc)}), 500
 
 
+@app.route('/api/admin/reputation')
+def admin_reputation_get():
+    if not is_admin_authenticated():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        user_id = validate_int(request.args.get('user_id'), default=None, name='user_id')
+        if not user_id or not get_user_by_id(user_id):
+            return jsonify({'success': False, 'error': '账号不存在'}), 404
+        center = account_integrity.get_account_integrity_center(user_id)
+        return jsonify({
+            'success': True,
+            'profile': center.get('profile'),
+            'ledger': center.get('ledger') or [],
+        })
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/admin/reputation/adjust', methods=['POST'])
+def admin_reputation_adjust():
+    if not is_admin_authenticated():
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    data = request.get_json(silent=True) or {}
+    try:
+        user_id = int(data.get('user_id') or 0)
+        delta = int(data.get('delta') or 0)
+        reason = str(data.get('reason') or '').strip()[:120]
+        if user_id <= 0 or not get_user_by_id(user_id):
+            return jsonify({'success': False, 'error': '账号不存在'}), 404
+        if not -100 <= delta <= 100 or delta == 0:
+            return jsonify({'success': False, 'error': '信誉调整必须是 -100~100 的非零整数'}), 400
+        if not reason:
+            return jsonify({'success': False, 'error': '请填写调整原因'}), 400
+        business_id = f'admin-rep:{user_id}:{time.time_ns()}:{secrets.token_hex(6)}'
+        account_integrity.change_reputation(
+            user_id,
+            delta,
+            reason,
+            business_id,
+            metadata={'admin_username': 'adminconsole'},
+        )
+        center = account_integrity.get_account_integrity_center(user_id)
+        return jsonify({
+            'success': True,
+            'profile': center.get('profile'),
+            'ledger': center.get('ledger') or [],
+        })
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
 @app.route('/api/admin/reports/<int:report_id>')
 def admin_report_detail(report_id):
     if not is_admin_authenticated():

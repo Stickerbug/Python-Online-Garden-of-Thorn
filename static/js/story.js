@@ -140,6 +140,10 @@
     const STORY_BACKDROP_LAYOUT_VERSION = 'story-backdrop-v3';
     const STORY_BACKDROP_BIOMES = Object.freeze(['garden', 'desert', 'ocean', 'jungle', 'factory']);
     const STORY_BACKDROP_LANDMARKS = Object.freeze({
+        desert: Object.freeze([
+            Object.freeze({ className: 'is-desert-dune', src: '/static/assets/story-backgrounds/desert-dune.svg', rotation: [-30, 30] }),
+            Object.freeze({ className: 'is-desert-stone', src: '/static/assets/story-backgrounds/desert-stone.svg', rotation: [-40, 40] }),
+        ]),
         garden: Object.freeze([
             Object.freeze({ className: 'is-sunflower', src: '/static/assets/story-backgrounds/garden-sunflower.svg', rotation: [-165, 165] }),
             Object.freeze({ className: 'is-rock', src: '/static/assets/story-backgrounds/garden-rock.svg', rotation: [-165, 165] }),
@@ -6754,6 +6758,19 @@
         const prediction = supportsPrediction ? storyCardPrediction(card, targetId) : null;
         const flags = document.createElement('div');
         flags.className = 'card-flags';
+        const enchantmentLabels = card?.modifiers?.enchantment_labels;
+        if (enchantmentLabels && typeof enchantmentLabels === 'object') {
+            Object.values(enchantmentLabels).forEach((bookId) => {
+                const definition = storyContent?.enchantment_books?.[String(bookId || '')];
+                if (!definition) return;
+                const label = document.createElement('span');
+                label.className = 'card-flag story-card-enchant-label';
+                label.textContent = localize(definition.name) || String(bookId);
+                const copy = localize(definition.description);
+                if (copy) label.title = copy;
+                flags.append(label);
+            });
+        }
         (values?.tags || []).forEach((tagId) => {
             const tag = storyTagElement(tagId);
             if (tag) flags.append(tag);
@@ -7772,6 +7789,37 @@
             return;
         }
         books.forEach((book) => grid.append(createStoryEnchantmentBookTile(book)));
+    }
+
+    function renderStoryBookSlots() {
+        const slots = $('story-hud-book-slots');
+        if (!slots) return;
+        const books = activeRun?.state?.player?.enchantment_books || [];
+        const limit = 3;
+        const fragment = document.createDocumentFragment();
+        for (let index = 0; index < limit; index += 1) {
+            const book = books[index] || null;
+            const slot = document.createElement('button');
+            slot.type = 'button';
+            slot.className = 'story-hud-book-slot';
+            const definition = book ? (storyContent?.enchantment_books?.[String(book.book_id || '')] || null) : null;
+            if (book && definition) {
+                slot.dataset.bookInstanceId = String(book.instance_id || '');
+                slot.title = localize(definition.name) || t.enchantmentBooks;
+                if (definition.image_url) {
+                    const image = document.createElement('img');
+                    image.src = definition.image_url;
+                    image.alt = '';
+                    slot.append(image);
+                }
+                slot.classList.add(`is-${String(definition.rarity || 'common')}`);
+            } else {
+                slot.textContent = '＋';
+                slot.setAttribute('aria-label', t.enchantmentBooks);
+            }
+            fragment.append(slot);
+        }
+        slots.replaceChildren(fragment);
     }
 
     function openStoryEnchantmentBooks() {
@@ -10358,16 +10406,13 @@
         );
         const mapButton = $('story-hud-map');
         const deckButton = $('story-hud-deck');
-        const booksButton = $('story-hud-books');
         const settingsButton = $('story-hud-settings');
         const mapOpen = storyMapPreviewOpen || String(state.phase || '') === 'map';
         if (mapButton) mapButton.disabled = !state.map || actionInFlight || cardPlayInFlight;
         mapButton?.classList.toggle('is-map-open', mapOpen);
         mapButton?.setAttribute('aria-expanded', mapOpen ? 'true' : 'false');
         if (deckButton) deckButton.disabled = !Array.isArray(player.deck) || actionInFlight || cardPlayInFlight;
-        const bookCount = Array.isArray(player.enchantment_books) ? player.enchantment_books.length : 0;
-        setText('story-hud-books-label', `${t.enchantmentBooks} ${bookCount}/3`);
-        if (booksButton) booksButton.disabled = actionInFlight || cardPlayInFlight;
+        renderStoryBookSlots();
         if (settingsButton) settingsButton.disabled = actionInFlight || cardPlayInFlight;
         updateStoryManualSaveControls(run);
         updateStorySurrenderControl(run);
@@ -13321,7 +13366,9 @@
         $('story-exile-pile')?.addEventListener('click', () => openStoryPile('exile'));
         $('story-hud-map')?.addEventListener('click', openStoryCombatMap);
         $('story-hud-deck')?.addEventListener('click', () => openStoryPile('deck'));
-        $('story-hud-books')?.addEventListener('click', openStoryEnchantmentBooks);
+        $('story-hud-book-slots')?.addEventListener('click', (event) => {
+            if (event.target?.closest?.('.story-hud-book-slot')) openStoryEnchantmentBooks();
+        });
         $('story-enchantment-books-close')?.addEventListener('click', () => {
             $('story-enchantment-books-dialog')?.close();
         });

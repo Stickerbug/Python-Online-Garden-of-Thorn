@@ -11335,6 +11335,15 @@ def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
             token_params.append(f'%{int(ip_row["user_id"])}%')
         where.append('(' + ' OR '.join(clauses) + ')')
         params.extend(token_params)
+    # Moderation search should only review ranked, human, mod-free matches.
+    where.append(
+        "COALESCE(json_extract(m.summary_json, '$.match_type'), 'ranked') <> 'casual'"
+    )
+    where.append(
+        "COALESCE(json_extract(m.summary_json, '$.ai_match'), 0) = 0"
+        " AND COALESCE(json_extract(m.summary_json, '$.match_kind'), '') <> 'phelren'"
+    )
+    where.append("(m.mod_source IS NULL OR TRIM(m.mod_source) = '')")
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     with get_db_connection() as conn:
         total_row = conn.execute(

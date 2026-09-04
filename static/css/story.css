@@ -243,11 +243,8 @@ a { font: inherit; }
 }
 
 .story-seeded-backdrop-base.is-desert {
-  opacity: .38;
-  background-image:
-    radial-gradient(ellipse at 32% 38%, rgba(255, 232, 179, .34) 0 14%, transparent 15%),
-    radial-gradient(ellipse at 76% 72%, rgba(133, 82, 42, .2) 0 9%, transparent 10%),
-    linear-gradient(18deg, transparent 42%, rgba(255, 221, 157, .18) 43% 49%, transparent 50%);
+  opacity: .34;
+  background-image: url('/static/assets/story-backgrounds/desert.svg');
 }
 
 .story-seeded-backdrop-base.is-jungle {
@@ -295,6 +292,8 @@ a { font: inherit; }
 .story-seeded-backdrop-landmark.is-ocean-lily { opacity: .22; }
 .story-seeded-backdrop-landmark.is-factory-plate,
 .story-seeded-backdrop-landmark.is-factory-gear { opacity: .23; }
+.story-seeded-backdrop-landmark.is-desert-dune,
+.story-seeded-backdrop-landmark.is-desert-stone { opacity: .25; }
 
 .story-coop-enchantment-books {
   grid-column: 1 / -1;
@@ -532,6 +531,43 @@ a { font: inherit; }
   display: flex;
   gap: 4px;
   padding: 5px;
+}
+
+.story-hud-book-slots {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 3px;
+  padding-right: 4px;
+  border-right: 1px solid var(--story-line-soft);
+}
+
+.story-hud-book-slots .story-hud-book-slot {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 3px;
+  border-radius: 50%;
+  color: var(--story-muted);
+  background: color-mix(in srgb, var(--story-surface-muted) 86%, transparent);
+  font-size: 13px;
+}
+
+.story-hud-book-slots .story-hud-book-slot img {
+  width: 28px;
+  height: 28px;
+}
+
+.story-hud-book-slots .story-hud-book-slot.is-common {
+  border-color: color-mix(in srgb, var(--story-green) 55%, var(--story-line));
+}
+
+.story-hud-book-slots .story-hud-book-slot.is-rare {
+  border-color: #7a6fd0;
+}
+
+.story-hud-book-slots .story-hud-book-slot.is-ultra {
+  border-color: #d4a907;
 }
 
 .story-persistent-actions button {
@@ -4948,6 +4984,13 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   color: #1f9d8a;
   background: rgba(31, 157, 138, .14);
   border-color: rgba(31, 157, 138, .32);
+}
+
+.story-card .card-flag.story-card-enchant-label {
+  color: #8e5bd6;
+  background: rgba(142, 91, 214, .13);
+  border-color: rgba(142, 91, 214, .34);
+  font-weight: 850;
 }
 
 .story-card .card-flag.custom {
