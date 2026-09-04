@@ -120,18 +120,18 @@ class OceanBubbleBombShellTests(unittest.TestCase):
         self.assertFalse(blocked.get("success", False), blocked)
         self.assertIn(second_attack, engine.players[0].hand)
 
-    def test_bubble_bomb_can_respond_for_attacked_players_teammate_in_2v2(self):
+    def test_bubble_bomb_can_respond_for_attacked_player_in_2v2(self):
         engine = self.action_engine(GameEngine2v2)
         attack = CardInstance("Basic")
         teammate_bomb = CardInstance("BubbleBomb")
         engine.players[0].hand = [attack]
-        engine.players[2].hand = [teammate_bomb]
+        engine.players[3].hand = [teammate_bomb]
 
         result = engine.play_card(0, attack.instance_id, 3, self.target_choice(3))
 
         self.assertTrue(result.get("needs_response", False), result)
         self.assertEqual(
-            {2},
+            {3},
             {
                 int(card["responder_id"])
                 for card in engine.pending_response.get("counter_cards", [])

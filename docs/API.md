@@ -75,6 +75,8 @@
 | POST | <code>/api/account-integrity/appeal</code> | 账号 | 提交自己的关联误判申诉，必须填写理由 |
 | GET | <code>/api/account-integrity/staff</code> | Staff | 查看风险解释、待处理申诉与举报，不返回设备或网络标识 |
 | POST | <code>/api/account-integrity/staff/&lt;action&gt;</code> | Staff | 有审计的合并、解除和申诉处理；解除时须明确起始信誉与理由 |
+| GET | <code>/api/admin/reputation</code> | Admin | 按 <code>user_id</code> 查看目标信誉与信誉流水 |
+| POST | <code>/api/admin/reputation/adjust</code> | Admin | 以 <code>user_id</code>、<code>delta</code>、<code>reason</code> 手动调整信誉并写入审计流水 |
 
 写入采用严格字段白名单、当前会话身份与独立账号限流，受全局同源保护。对手确认期为结算后24小时；已过期、撤回或处理完毕的举报不能重新扣分。完整规则与自动识别方法见 [信誉与关联账号](ACCOUNT_INTEGRITY.md)。私有响应禁止缓存；公开身份只包含信誉等级及50分档关联花阶，不包含精确信誉流水、关联成员或识别摘要。
 
@@ -303,6 +305,7 @@ healing、事件效果、下一状态、回执、事件或 seed；这些值均�
 公开读取使用 <code>Cache-Control: private, no-store</code>，不会返回运营审计、创建人账号、投票指纹或尚未结束投票的选项票数。
 
 - <code>GET /api/community/feed</code>：匿名可读当前公告、进行中投票及最近结束的投票；登录账号额外得到自己的已选选项、是否需要临近截止提醒及投票 CSRF。
+- <code>POST /api/community/read</code>：仅登录账号，带 <code>X-Community-CSRF</code>；把当前可见公告与投票标记为已读并返回新的已读集合。
 - <code>POST /api/community/polls/&lt;poll_id&gt;/vote</code>：仅登录账号；请求头 <code>X-Community-CSRF</code>，JSON 仅含整数 <code>option_id</code>。同一账号对同一选项重试是幂等成功，不能改票。
 - <code>GET /community-ops</code> 与 <code>GET /api/community/ops/workspace</code>：仅 Staff/Admin；工作区返回公告、投票完整结果、更新日志草稿和最近审计。
 - <code>POST /api/community/ops/announcements</code>

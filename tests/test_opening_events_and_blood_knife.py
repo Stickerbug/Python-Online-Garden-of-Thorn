@@ -546,7 +546,7 @@ process.stdout.write(JSON.stringify({
         self.assertTrue(result and result.get('needs_response'))
         self.assertIsNotNone(engine.pending_response)
 
-    def test_two_vs_two_self_targeted_attack_offers_non_actor_response(self):
+    def test_two_vs_two_self_targeted_attack_offers_no_response(self):
         engine = GameEngine2v2()
         card = CardInstance('test:self_attack')
         engine.players[2].hand = [CardInstance('test:thorn_counter')]
@@ -558,14 +558,8 @@ process.stdout.write(JSON.stringify({
             {'target_player': 0, 'target_player_id': 0, 'target_id': 0},
         )
 
-        self.assertTrue(result and result.get('needs_response'))
-        self.assertEqual(
-            {2, 3},
-            {
-                int(entry['responder_id'])
-                for entry in engine.pending_response.get('counter_cards', [])
-            },
-        )
+        self.assertIsNone(result)
+        self.assertIsNone(engine.pending_response)
 
     def test_foresight_does_not_disable_magic_block(self):
         for engine_type in (GameEngine, GameEngine2v2):

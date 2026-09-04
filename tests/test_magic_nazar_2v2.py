@@ -83,18 +83,18 @@ class MagicNazar2v2Tests(unittest.TestCase):
                 self.assertEqual(getattr(engine.players[2], status_name), expected_stacks)
                 self.assertEqual(engine.players[2].custom_statuses.get('magic_nazar'), 2)
 
-    def test_attacked_players_teammate_can_open_attack_counter_window(self):
+    def test_attacked_player_can_open_attack_counter_window(self):
         engine = self.build_engine()
         attack = CardInstance('Basic')
         teammate_bubble = CardInstance('Bubble')
         engine.players[0].hand = [attack]
-        engine.players[2].hand = [teammate_bubble]
+        engine.players[3].hand = [teammate_bubble]
 
         result = engine.play_card(0, attack.instance_id, 3, target_choice(3))
 
         self.assertTrue(result.get('needs_response', False))
         self.assertEqual(
-            {2},
+            {3},
             {
                 int(card['responder_id'])
                 for card in engine.pending_response.get('counter_cards', [])

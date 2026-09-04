@@ -54,8 +54,8 @@ class AllyCounterEngineTests(unittest.TestCase):
             target_choice(target_id),
         )
 
-    def test_all_other_living_players_can_receive_matching_counter_window(self):
-        engine, attack, bubbles = self.engine_with_bubbles(0, 1, 2, 3)
+    def test_only_targeted_player_receives_matching_counter_window(self):
+        engine, attack, bubbles = self.engine_with_bubbles(0, 2)
 
         result = self.play_attack(engine, attack)
 
@@ -64,70 +64,54 @@ class AllyCounterEngineTests(unittest.TestCase):
             int(entry['responder_id'])
             for entry in engine.pending_response['counter_cards']
         }
-        self.assertEqual({1, 2, 3}, responders)
+        self.assertEqual({2}, responders)
         self.assertNotIn(
             bubbles[0].instance_id,
             {int(entry['instance_id']) for entry in engine.pending_response['counter_cards']},
         )
 
-    def test_each_responder_passes_independently_before_action_resolves(self):
-        engine, attack, _bubbles = self.engine_with_bubbles(1, 2, 3)
+    def test_target_pass_resolves_the_attack(self):
+        engine, attack, _bubbles = self.engine_with_bubbles(2)
         result = self.play_attack(engine, attack)
         self.assertTrue(result.get('needs_response'), result)
         pending = engine.pending_response
 
-        first_pass = engine.handle_response(1, None)
-        self.assertTrue(first_pass.get('needs_response'), first_pass)
-        self.assertIs(pending, engine.pending_response)
-        self.assertEqual(100, engine.players[2].health)
-        self.assertEqual(
-            {2, 3},
-            {int(entry['responder_id']) for entry in pending['counter_cards']},
-        )
-
-        second_pass = engine.handle_response(2, None)
-        self.assertTrue(second_pass.get('needs_response'), second_pass)
-        self.assertIs(pending, engine.pending_response)
-        self.assertEqual(100, engine.players[2].health)
-
-        final_pass = engine.handle_response(3, None)
+        final_pass = engine.handle_response(2, None)
         self.assertTrue(final_pass.get('success'), final_pass)
         self.assertFalse(final_pass.get('needs_response', False), final_pass)
         self.assertIsNone(engine.pending_response)
         self.assertEqual(92, engine.players[2].health)
 
-    def test_actual_counter_by_actor_teammate_resolves_once(self):
-        engine, attack, bubbles = self.engine_with_bubbles(1, 2)
+    def test_actual_counter_by_target_resolves_once(self):
+        engine, attack, bubbles = self.engine_with_bubbles(2)
         result = self.play_attack(engine, attack)
         self.assertTrue(result.get('needs_response'), result)
 
-        response = engine.handle_response(1, bubbles[1].instance_id)
+        response = engine.handle_response(2, bubbles[2].instance_id)
 
         self.assertTrue(response.get('success'), response)
         self.assertIsNone(engine.pending_response)
-        self.assertIn(bubbles[1], engine.players[1].discard)
-        self.assertIn(bubbles[2], engine.players[2].hand)
-        self.assertEqual(92, engine.players[2].health)
+        self.assertIn(bubbles[2], engine.players[2].discard)
 
     def test_forged_actor_or_unlisted_card_cannot_consume_response_window(self):
-        engine, attack, bubbles = self.engine_with_bubbles(1, 2)
+        engine, attack, bubbles = self.engine_with_bubbles(2)
         result = self.play_attack(engine, attack)
         self.assertTrue(result.get('needs_response'), result)
         pending = engine.pending_response
         unlisted = CardInstance('Bubble')
-        engine.players[1].hand.append(unlisted)
+        engine.players[2].hand.append(unlisted)
 
-        actor_result = engine.handle_response(0, bubbles[1].instance_id)
-        forged_result = engine.handle_response(1, unlisted.instance_id)
+        actor_result = engine.handle_response(0, bubbles[2].instance_id)
+        forged_result = engine.handle_response(2, unlisted.instance_id)
 
         self.assertFalse(actor_result.get('success'), actor_result)
         self.assertFalse(forged_result.get('success'), forged_result)
         self.assertIs(pending, engine.pending_response)
         self.assertEqual(100, engine.players[2].health)
-        self.assertIn(bubbles[1], engine.players[1].hand)
+        self.assertIn(bubbles[2], engine.players[2].hand)
 
     def test_public_pending_response_only_contains_viewers_own_cards(self):
-        engine, attack, bubbles = self.engine_with_bubbles(1, 2, 3)
+        engine, attack, bubbles = self.engine_with_bubbles(2)
         result = self.play_attack(engine, attack)
         self.assertTrue(result.get('needs_response'), result)
 
@@ -135,13 +119,13 @@ class AllyCounterEngineTests(unittest.TestCase):
             with self.subTest(viewer_id=viewer_id):
                 public = engine._public_pending_response(viewer_id)
                 entries = public.get('counter_cards') or []
-                expected = [] if viewer_id == 0 else [bubbles[viewer_id].instance_id]
+                expected = [bubbles[2].instance_id] if viewer_id == 2 else []
                 self.assertEqual(expected, [int(entry['instance_id']) for entry in entries])
-                self.assertEqual(viewer_id != 0, public.get('viewer_can_respond'))
-                self.assertEqual([1, 2, 3], public.get('responder_ids'))
+                self.assertEqual(viewer_id == 2, public.get('viewer_can_respond'))
+                self.assertEqual([2], public.get('responder_ids'))
 
     def test_response_prediction_resolves_the_other_players_as_passed(self):
-        engine, attack, bubbles = self.engine_with_bubbles(1, 2)
+        engine, attack, bubbles = self.engine_with_bubbles(2)
         result = self.play_attack(engine, attack)
         self.assertTrue(result.get('needs_response'), result)
         nonresponder_view = engine._public_pending_response(3)
@@ -149,22 +133,19 @@ class AllyCounterEngineTests(unittest.TestCase):
         self.assertEqual([], nonresponder_view.get('counter_cards'))
 
         target_prediction = engine.build_response_damage_prediction(2, [bubbles[2]])
-        ally_prediction = engine.build_response_damage_prediction(1, [bubbles[1]])
 
         self.assertEqual(8, target_prediction['no_counter']['total'])
         self.assertEqual(0, target_prediction['counters'][str(bubbles[2].instance_id)]['after']['total'])
-        self.assertEqual(8, ally_prediction['no_counter']['total'])
-        self.assertEqual(8, ally_prediction['counters'][str(bubbles[1].instance_id)]['after']['total'])
 
     def test_replay_response_requests_are_partitioned_by_responder(self):
-        engine, attack, _bubbles = self.engine_with_bubbles(1, 2, 3)
+        engine, attack, _bubbles = self.engine_with_bubbles(2)
         result = self.play_attack(engine, attack)
         self.assertTrue(result.get('needs_response'), result)
         room = SimpleNamespace(mode='2v2', engine=engine)
 
         requests = gtn.build_replay_pending_response_requests(room)
 
-        self.assertEqual({1, 2, 3}, {int(item['responder_id']) for item in requests})
+        self.assertEqual({2}, {int(item['responder_id']) for item in requests})
         for item in requests:
             responder_id = int(item['responder_id'])
             self.assertTrue(item['data']['counter_cards'])
@@ -176,12 +157,12 @@ class AllyCounterEngineTests(unittest.TestCase):
                 },
             )
 
-        engine.handle_response(1, None)
+        engine.handle_response(2, None)
         remaining = gtn.build_replay_pending_response_requests(room)
-        self.assertEqual({2, 3}, {int(item['responder_id']) for item in remaining})
+        self.assertEqual(set(), {int(item['responder_id']) for item in remaining})
 
     def test_disconnect_passes_only_unreachable_responders(self):
-        engine, attack, _bubbles = self.engine_with_bubbles(1, 2, 3)
+        engine, attack, _bubbles = self.engine_with_bubbles(2)
         result = self.play_attack(engine, attack)
         self.assertTrue(result.get('needs_response'), result)
         pending = engine.pending_response
@@ -195,15 +176,6 @@ class AllyCounterEngineTests(unittest.TestCase):
         )
         gtn.players[sids[2]] = {'status': 'in_game'}
         try:
-            self.assertTrue(gtn._resolve_pending_response_for_disconnect(room, 1))
-            self.assertIs(pending, engine.pending_response)
-            self.assertEqual(
-                {2, 3},
-                {int(entry['responder_id']) for entry in pending['counter_cards']},
-            )
-            self.assertEqual(100, engine.players[2].health)
-
-            gtn.players.pop(sids[2], None)
             self.assertTrue(gtn._resolve_pending_response_for_disconnect(room, 2))
             self.assertIsNone(engine.pending_response)
             self.assertEqual(92, engine.players[2].health)
@@ -212,7 +184,7 @@ class AllyCounterEngineTests(unittest.TestCase):
                 gtn.players.pop(sid, None)
 
     def test_unreachable_response_window_passes_every_responder_once(self):
-        engine, attack, _bubbles = self.engine_with_bubbles(1, 2, 3)
+        engine, attack, _bubbles = self.engine_with_bubbles(2)
         result = self.play_attack(engine, attack)
         self.assertTrue(result.get('needs_response'), result)
         room = SimpleNamespace(
@@ -265,7 +237,7 @@ class AllyCounterSocketTests(unittest.TestCase):
         self.attack = CardInstance('Basic')
         self.bubble = CardInstance('Bubble')
         engine.players[0].hand.append(self.attack)
-        engine.players[1].hand.append(self.bubble)
+        engine.players[2].hand.append(self.bubble)
         result = engine.play_card(
             0,
             self.attack.instance_id,
@@ -312,17 +284,16 @@ class AllyCounterSocketTests(unittest.TestCase):
             ]
             self.assertTrue(rejected)
             self.assertIsNotNone(self.room.engine.pending_response)
-            self.assertIn(self.bubble, self.room.engine.players[1].hand)
+            self.assertIn(self.bubble, self.room.engine.players[2].hand)
 
-            self.clients[1].emit('response', {
+            self.clients[2].emit('response', {
                 **context,
                 'card_instance_id': self.bubble.instance_id,
             })
             gtn.socketio.sleep(0.02)
 
         self.assertIsNone(self.room.engine.pending_response)
-        self.assertIn(self.bubble, self.room.engine.players[1].discard)
-        self.assertEqual(92, self.room.engine.players[2].health)
+        self.assertIn(self.bubble, self.room.engine.players[2].discard)
 
 
 if __name__ == '__main__':
