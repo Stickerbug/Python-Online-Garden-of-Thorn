@@ -952,7 +952,7 @@ const I18N = {
         mod_selection_force_vanilla: 'Enabled the vanilla card mod because the selected mods must contain at least one Thorn, Bloom, Root, and Guard card.',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire', mode_random_deck: 'Random Deck',
         mode_casual_1v1: 'Casual 1v1', mode_casual_2v2: 'Casual 2v2', mode_ranked_1v1: 'Ranked 1v1', mode_ranked_2v2: 'Ranked 2v2', mode_casual_urf: 'Infinite Fire', mode_casual_random_deck: 'Random Deck',
-        ai_1v1_test: 'Battle Phelren V1', ai_1v1_test_title: 'Battle Phelren V1', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating.', ai_1v1_test_loading: 'Loading Phelren V1...',
+        ai_1v1_test: 'Battle Phelren V1', ai_1v1_test_title: 'Battle Phelren V1', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating and uses the vanilla card set only.', ai_1v1_test_loading: 'Loading Phelren V1...',
         form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
         team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
         team_disbanded_msg: 'Team disbanded', team_match_invite_msg: 'Team {0} challenges your team',
@@ -1058,7 +1058,7 @@ I18N.zh = { ...I18N.en,
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
     mode_casual_1v1: '娱乐 1v1', mode_casual_2v2: '娱乐 2v2', mode_ranked_1v1: '天梯 1v1', mode_ranked_2v2: '天梯 2v2', mode_casual_urf: '无限火力', mode_casual_random_deck: '随机卡组',
-    ai_1v1_test: '对战 Phelren V1', ai_1v1_test_title: '对战 Phelren V1', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计花阶分。', ai_1v1_test_loading: '正在加载 Phelren V1…',
+    ai_1v1_test: '对战 Phelren V1', ai_1v1_test_title: '对战 Phelren V1', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计花阶分，且仅使用原版模组。', ai_1v1_test_loading: '正在加载 Phelren V1…',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
     team_disbanded_msg: '队伍已解散', team_match_invite_msg: '队伍 {0} 向你们发起挑战',
@@ -1127,7 +1127,7 @@ I18N.fr = { ...I18N.en,
     choose_light_cards: 'Choisissez les cartes Attaque à convertir', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Faites glisser les cartes pour réorganiser votre pioche. La carte du haut sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
-    ai_1v1_test: 'Affronter Phelren V1', ai_1v1_test_title: 'Affronter Phelren V1', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating.', ai_1v1_test_loading: 'Chargement de Phelren V1…',
+    ai_1v1_test: 'Affronter Phelren V1', ai_1v1_test_title: 'Affronter Phelren V1', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating et utilise uniquement le jeu de base Vanilla.', ai_1v1_test_loading: 'Chargement de Phelren V1…',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
     server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
     select_event_desc: "Choisir un événement de départ", opponent_selected: 'Adversaire a choisi', opponent_selecting: 'Adversaire choisit...',
@@ -1201,7 +1201,7 @@ I18N.ja = { ...I18N.en,
     choose_light_cards: '変化させる攻撃カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: 'カードをドラッグして山札の順序を変更します。一番上のカードから引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
-    ai_1v1_test: 'Phelren V1 と対戦', ai_1v1_test_title: 'Phelren V1 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動しません。', ai_1v1_test_loading: 'Phelren V1 を読み込んでいます…',
+    ai_1v1_test: 'Phelren V1 と対戦', ai_1v1_test_title: 'Phelren V1 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動せず、Vanilla カードのみを使用します。', ai_1v1_test_loading: 'Phelren V1 を読み込んでいます…',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
     server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
     select_event_desc: 'オープニングイベントを選択', opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
@@ -1941,7 +1941,9 @@ Object.assign(I18N.en, {
     social_search_id: 'Allow adding me by ID', social_accept_game_invites: 'Accept match invitations', social_allow_guest_spectators: 'Allow guest spectators',
     social_game_invites_disabled: 'This player has disabled match invitations.',
     social_settings_saved: 'Social settings saved',
-    feedback: 'Feedback', feedback_send: 'Send Feedback', feedback_staff: 'View Feedback', feedback_handling: 'Moderation',
+    feedback: 'Support / Report', feedback_send: 'Contact Support', feedback_staff: 'View Support Tickets', feedback_handling: 'Moderation',
+    feedback_center: 'Feedback Center',
+    feedback_account: 'Account support', feedback_report: 'Report / Dispute', feedback_appeal: 'Match appeal',
     feedback_login_required: 'Sign in to send feedback.', feedback_empty: 'No feedback yet.',
     feedback_staff_empty: 'No player feedback.', feedback_sent: 'Feedback sent',
     last_login: 'Last seen: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches',
@@ -1959,7 +1961,9 @@ Object.assign(I18N.zh, {
     social_search_id: '允许通过ID添加我', social_accept_game_invites: '接受对局邀请', social_allow_guest_spectators: '允许游客观战',
     social_game_invites_disabled: '该玩家已关闭对局邀请',
     social_settings_saved: '社交设置已保存',
-    feedback: '反馈', feedback_send: '发送反馈', feedback_staff: '查看反馈', feedback_handling: '举报处理',
+    feedback: '客服/申诉', feedback_send: '联系客服', feedback_staff: '查看工单', feedback_handling: '举报处理',
+    feedback_center: '反馈中心',
+    feedback_account: '账号问题', feedback_report: '举报/纠纷', feedback_appeal: '对局申诉',
     feedback_login_required: '登录账号后可以发送反馈。', feedback_empty: '暂无反馈。',
     feedback_staff_empty: '暂无玩家反馈。', feedback_sent: '反馈已发送',
     last_login: '上次下线：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局',
@@ -1977,7 +1981,9 @@ Object.assign(I18N.fr, {
     social_search_id: 'Autoriser par ID', social_accept_game_invites: 'Accepter les invitations de partie', social_allow_guest_spectators: 'Autoriser les spectateurs invités',
     social_game_invites_disabled: 'Ce joueur a désactivé les invitations de partie.',
     social_settings_saved: 'Réglages enregistrés',
-    feedback: 'Feedback', feedback_send: 'Envoyer', feedback_staff: 'Voir les feedbacks', feedback_handling: 'Modération',
+    feedback: 'Aide / Signalement', feedback_send: 'Contacter', feedback_staff: 'Voir les tickets', feedback_handling: 'Modération',
+    feedback_center: 'Centre de signalements',
+    feedback_account: 'Problème de compte', feedback_report: 'Signalement / litige', feedback_appeal: 'Appel de partie',
     feedback_login_required: 'Connectez-vous pour envoyer un feedback.', feedback_empty: 'Aucun feedback.',
     feedback_staff_empty: 'Aucun feedback joueur.', feedback_sent: 'Feedback envoyé',
     last_login: 'Dernière activité : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes',
@@ -1995,7 +2001,9 @@ Object.assign(I18N.ja, {
     social_search_id: 'IDで追加を許可', social_accept_game_invites: '対戦招待を受け取る', social_allow_guest_spectators: 'ゲスト観戦を許可',
     social_game_invites_disabled: 'このプレイヤーは対戦招待を無効にしています。',
     social_settings_saved: '設定を保存しました',
-    feedback: 'フィードバック', feedback_send: '送信', feedback_staff: '確認', feedback_handling: '通報管理',
+    feedback: 'サポート・通報', feedback_send: '問い合わせ', feedback_staff: 'チケット確認', feedback_handling: '通報管理',
+    feedback_center: 'フィードバックセンター',
+    feedback_account: 'アカウント問題', feedback_report: '通報・紛争', feedback_appeal: '対戦申立',
     feedback_login_required: 'ログインすると送信できます。', feedback_empty: 'まだありません。',
     feedback_staff_empty: 'プレイヤー feedback はありません。', feedback_sent: '送信しました',
     last_login: '最終退出: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦',
@@ -2448,6 +2456,8 @@ Object.assign(I18N.en, {
     report_category_inappropriate_name: 'Inappropriate name',
     report_category_bug_abuse: 'Bug abuse',
     report_category_abnormal_match: 'Abnormal match',
+    report_category_misleading: 'Misleading',
+    report_category_duplicate: 'Duplicate / already reported',
     report_category_other: 'Other',
     settings_play_gesture_animation: 'Show play gesture demo',
 });
@@ -2477,6 +2487,8 @@ Object.assign(I18N.zh, {
     report_category_inappropriate_name: '不当昵称',
     report_category_bug_abuse: '利用漏洞',
     report_category_abnormal_match: '异常对局',
+    report_category_misleading: '误导/虚假',
+    report_category_duplicate: '重复/已存在',
     report_category_other: '其他',
     settings_play_gesture_animation: '显示出牌操作演示',
 });
@@ -3033,6 +3045,8 @@ const REPORT_CATEGORIES = {
     chat_message: ['abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment', 'other'],
     player: ['cheating', 'smurfing', 'boosting', 'stalling', 'inappropriate_name', 'harassment', 'other'],
     match: ['cheating', 'bug_abuse', 'boosting', 'stalling', 'abnormal_match', 'other'],
+    public_issue: ['abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment', 'misleading', 'duplicate', 'other'],
+    public_issue_comment: ['abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment', 'misleading', 'duplicate', 'other'],
 };
 
 function reportCategoryLabel(category) {
@@ -5971,10 +5985,14 @@ async function togglePageFullscreen() {
 function updateAi1v1TestEntry(mode = null) {
     const entry = $('ai-1v1-test-entry');
     if (!entry) return;
-    const activeMode = mode || $('lobby-mode-tabs')?.querySelector('.mode-tab.active')?.getAttribute('data-mode') || '';
+    const activeMode = mode
+        || $('lobby-mode-tabs')?.querySelector('.mode-tab.active')?.getAttribute('data-mode')
+        || normalizeMatchModeKey(localStorage.getItem('preferred_mode') || 'casual_1v1');
+    const normalized = normalizeMatchModeKey(activeMode);
     const visible = ai1v1TestGate.authenticated
         && ai1v1TestGate.enabled
-        && activeMode === '1v1';
+        && !isRankedMatchMode(normalized)
+        && engineModeForMatchMode(normalized) === '1v1';
     entry.classList.toggle('hidden', !visible);
 }
 
@@ -6285,6 +6303,8 @@ function updateStaticText() {
     if (settingsSocial) settingsSocial.textContent = UI.social;
     const feedbackBtn = $('btn-open-feedback');
     if (feedbackBtn) feedbackBtn.textContent = UI.feedback;
+    const publicFeedbackCenter = $('btn-public-feedback-center');
+    if (publicFeedbackCenter) publicFeedbackCenter.textContent = UI.feedback_center || '反馈中心';
     const feedbackTitle = $('feedback-title');
     if (feedbackTitle) feedbackTitle.textContent = UI.feedback;
     const feedbackSendTab = $('feedback-tab-send');
@@ -6295,6 +6315,10 @@ function updateStaticText() {
     if (feedbackHandlingTab) feedbackHandlingTab.textContent = UI.feedback_handling || '举报处理';
     const feedbackAppealOption = document.querySelector('#feedback-category option[value="appeal"]');
     if (feedbackAppealOption) feedbackAppealOption.textContent = UI.feedback_appeal || '对局申诉';
+    const feedbackAccountOption = document.querySelector('#feedback-category option[value="account"]');
+    if (feedbackAccountOption) feedbackAccountOption.textContent = UI.feedback_account || '账号问题';
+    const feedbackReportOption = document.querySelector('#feedback-category option[value="report"]');
+    if (feedbackReportOption) feedbackReportOption.textContent = UI.feedback_report || '举报/纠纷';
     const feedbackReplayInput = $('feedback-replay-id');
     if (feedbackReplayInput) feedbackReplayInput.placeholder = UI.feedback_replay_placeholder || '回放 ID，例如 R-12345 或 P-12345';
     const gameoverReplayLabel = $('gameover-replay-label');
@@ -7119,6 +7143,8 @@ function updateTopActionButtons(viewId = activeViewId) {
     if (titleShopTop) titleShopTop.classList.toggle('hidden', !onHome);
     const leaderboardTop = $('btn-leaderboard-top');
     if (leaderboardTop) leaderboardTop.classList.toggle('hidden', !onHome);
+    const communityTop = $('btn-community-top');
+    if (communityTop) communityTop.classList.toggle('hidden', !onHome);
 }
 
 function showView(viewId) {
@@ -7144,6 +7170,7 @@ function showView(viewId) {
         toggleAchievementsPopover(false);
         toggleTitleShopPopover(false);
         toggleLeaderboardPopover(false);
+        if (window.toggleCommunityPopover) window.toggleCommunityPopover(false);
     }
     if (!sameView && viewId !== 'view-game') {
         const logContainer = $('battle-log');
@@ -19664,7 +19691,7 @@ async function authRequest(path, body, options = {}) {
     const signal = options.signal || (controller ? controller.signal : undefined);
     try {
         const res = await fetch(path, {
-            method: body === undefined ? 'GET' : 'POST',
+            method: options.method || (body === undefined ? 'GET' : 'POST'),
             headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: body === undefined ? undefined : JSON.stringify(body),
@@ -25583,7 +25610,7 @@ function renderLobby(data) {
                     if (!confirmed) return;
                 }
                 localStorage.setItem('preferred_mode', newMode);
-                updateAi1v1TestEntry(engineModeForMatchMode(newMode));
+                updateAi1v1TestEntry(newMode);
                 socket.emit('set_mode', { mode: engineModeForMatchMode(newMode), match_mode: newMode });
             };
         });
@@ -25592,7 +25619,7 @@ function renderLobby(data) {
     const currentMode = (modeTabs && modeTabs.querySelector('.mode-tab.active'))
         ? modeTabs.querySelector('.mode-tab.active').getAttribute('data-mode')
         : normalizeMatchModeKey(localStorage.getItem('preferred_mode') || 'casual_1v1');
-    updateAi1v1TestEntry(engineModeForMatchMode(currentMode));
+    updateAi1v1TestEntry(currentMode);
     void refreshAi1v1TestAvailability();
 
     const playerBySid = new Map(lobbyPlayers.map(p => [p.sid, p]));

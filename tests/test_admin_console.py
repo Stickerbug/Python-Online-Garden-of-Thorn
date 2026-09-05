@@ -7,6 +7,7 @@ import unittest
 from unittest import mock
 
 import app
+import account_integrity
 import db
 
 
@@ -334,6 +335,65 @@ class AdminWarningPersistenceTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(item['reason'], '原始警告原因')
         self.assertFalse(item['active'])
+
+
+class ReputationConsoleCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.old_db_path = db.DB_PATH
+        db.DB_PATH = os.path.join(self.temp_dir.name, 'reputation.sqlite3')
+        db.init_db()
+        self.user, error = db.create_user('ReputationUser', 'Aa1!aaaa')
+        self.assertIsNone(error)
+        with db.get_db_connection() as connection:
+            account_integrity.initialize_user_conn(connection, self.user['id'])
+            connection.commit()
+
+    def tearDown(self):
+        db.DB_PATH = self.old_db_path
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def run_command(self, line):
+        return app.execute_admin_command(line, actor='test-console')
+
+    def test_reputation_info_ledger_add_set(self):
+        info = self.run_command(f'account reputation info {self.user["username"]}')
+        self.assertTrue(info['success'], info['output'])
+        self.assertIn('85/100', info['output'])
+
+        added = self.run_command(
+            f'account reputation add {self.user["username"]} -5 控制台测试扣分',
+        )
+        self.assertTrue(added['success'], added['output'])
+        self.assertIn('80', added['output'])
+        profile = account_integrity.get_reputation_profile(self.user['id'])
+        self.assertEqual(profile['value'], 80)
+
+        ledger = self.run_command(
+            f'account reputation ledger {self.user["username"]} 5',
+        )
+        self.assertTrue(ledger['success'], ledger['output'])
+        self.assertIn('控制台测试扣分', ledger['output'])
+
+        settled = self.run_command(
+            f'account reputation set {self.user["username"]} 100 测试修正',
+        )
+        self.assertTrue(settled['success'], settled['output'])
+        self.assertIn('100', settled['output'])
+
+    def test_reputation_recover_preview_and_confirm(self):
+        preview = self.run_command(
+            f'account reputation recover {self.user["username"]} preview',
+        )
+        self.assertTrue(preview['success'], preview['output'])
+        self.assertIn('每日信誉恢复预览', preview['output'])
+
+        confirmed = self.run_command(
+            f'account reputation recover {self.user["username"]} confirm',
+        )
+        self.assertTrue(confirmed['success'], confirmed['output'])
+        self.assertIn('每日信誉恢复已执行', confirmed['output'])
 
 
 if __name__ == '__main__':

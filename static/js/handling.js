@@ -419,7 +419,10 @@ function reportPartyName(name, id) {
 }
 
 function reportObjectText(report) {
-  const typeMap = { chat_message: '聊天消息', player: '玩家', match: '对局', replay: '回放', mod: '模组' };
+  const typeMap = {
+    chat_message: '聊天消息', player: '玩家', match: '对局', replay: '回放', mod: '模组',
+    public_issue: '公开反馈', public_issue_comment: '公开评论',
+  };
   const type = typeMap[report.object_type] || report.object_type || '对象';
   return report.object_id ? `${type} ${report.object_id}` : type;
 }

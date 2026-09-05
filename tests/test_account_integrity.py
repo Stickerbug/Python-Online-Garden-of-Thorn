@@ -87,6 +87,20 @@ def test_daily_recovery_beijing_boundary_and_under40_exception(accounts):
     assert integrity.recover_reputation_daily(user_id=2,now=NOW+timedelta(days=8)) == []
 
 
+def test_recovery_preview_matches_later_execution(accounts):
+    integrity.change_reputation(1, -55, 'test', 'low', now=NOW)
+    now = datetime(2026, 9, 2, 16, tzinfo=timezone.utc)
+    preview = integrity.preview_recover_reputation(user_id=1, now=now)
+    assert len(preview) == 1
+    item = preview[0]
+    assert item['current'] == 30
+    assert item['recoverable_days'] == 1
+    assert item['recovery_amount'] == 5
+    actual = integrity.recover_reputation_daily(user_id=1, now=now)
+    assert len(actual) == 1
+    assert actual[0]['value_after'] == 35
+
+
 def test_daily_recovery_requires_ranked_participation(accounts):
     with db.get_db_connection() as conn:
         conn.execute('''INSERT INTO gr_match_results(season_id,played_at,participant_ids_json,team_a_ids_json,team_b_ids_json,total_deltas_json,season_deltas_json,before_json,after_json)

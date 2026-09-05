@@ -1378,4 +1378,4 @@ def test_every_story_card_has_a_real_localized_name():
     assert STORY_CARDS['mage_rmb']['name']['en'] == 'Magic RMB'
     assert STORY_CARDS['mage_honey_shield']['name']['en'] == 'Magic Honey'
     assert STORY_CARDS['capacitor']['name']['en'] == 'Capacitor'
-    assert STORY_CARDS['electronic_missile']['name']['en'] == 'Electronic Missile'
+    assert STORY_CARDS['electronic_missile']['name']['en'] == 'Electron Missile'

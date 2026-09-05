@@ -1441,7 +1441,7 @@ def test_ai_match_uses_formal_controls_without_training_tools():
     assert "setAi1v1TestLoading(true)" in source
     assert "markRecentAiDecision" not in source
     assert "ai-test-mark-decision" not in source
-    assert "确认与 Phelren 进行 1v1 对局？本场对局不计花阶分。" in source
+    assert "确认与 Phelren 进行 1v1 对局？本场对局不计花阶分，且仅使用原版模组。" in source
     assert "if (!!gs.solo && !gs.ai_test && gs.phase === 'game_over')" in source
     assert "if (inSoloGame && !gs.ai_test && gs.phase === 'game_over' && playZone)" in source
     assert "const aiMatch = !!(gs && gs.ai_test);" in source

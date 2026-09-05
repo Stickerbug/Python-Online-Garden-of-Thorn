@@ -152,13 +152,60 @@ class Ai1v1TestGateTests(unittest.TestCase):
         self.assertIn('{% if ai_public_entry_enabled %}', template)
         self.assertIn('id="ai-1v1-test-entry" class="ai-1v1-test-entry hidden"', template)
         self.assertNotIn('class="mode-tab" data-mode="ai', template)
-        self.assertIn("activeMode === '1v1'", script)
+        self.assertIn("!isRankedMatchMode(normalized)", script)
+        self.assertIn("engineModeForMatchMode(normalized) === '1v1'", script)
         self.assertIn("fetch('/api/ai-1v1/status'", script)
         self.assertIn('ai1v1TestGate.authenticated', script)
         self.assertIn('data.enabled && data.public_entry_enabled', script)
         self.assertIn("socket.emit('ai_1v1_start'", script)
         self.assertNotIn('ai-1v1-test-badge', template)
         self.assertNotIn('尚未接入实际对局', script)
+
+    def test_ai_match_loadout_always_forces_vanilla_only(self):
+        class FakeMod:
+            def __init__(self, filename, errors=False):
+                self.filename = filename
+                self.errors = errors
+
+        vanilla = FakeMod(gtn.VANILLA_MOD_FILENAME)
+        arctic = FakeMod('Arctic Cards Addition.gtnmod')
+        broken_official = FakeMod('Broken Official.gtnmod', errors=True)
+        community = FakeMod('Community Pack.gtnmod')
+        sid = 'vanilla-force-test'
+        with (
+            mock.patch.object(
+                gtn, 'players', {sid: {'disabled_mods': ['Arctic Cards Addition.gtnmod']}}
+            ),
+            mock.patch.object(
+                gtn,
+                'load_all_mods',
+                return_value=[vanilla, arctic, broken_official, community],
+            ),
+            mock.patch.object(gtn, 'sort_mods_for_display', side_effect=lambda mods: list(mods)),
+            mock.patch.object(
+                gtn,
+                'mod_category',
+                side_effect=lambda mod: (
+                    'official'
+                    if mod.filename != 'Community Pack.gtnmod'
+                    else 'community'
+                ),
+            ),
+            mock.patch.object(
+                gtn,
+                'build_mod_loadout',
+                side_effect=lambda disabled, runtime_mode=None: {
+                    'forced_disabled': sorted(disabled),
+                },
+            ),
+        ):
+            loadout, enabled = gtn._ai_test_loadout_for_player(sid)
+        self.assertNotIn(gtn.VANILLA_MOD_FILENAME, loadout['forced_disabled'])
+        self.assertEqual(
+            loadout['forced_disabled'],
+            sorted(['Arctic Cards Addition.gtnmod', 'Broken Official.gtnmod', 'Community Pack.gtnmod']),
+        )
+        self.assertEqual(enabled, [gtn.VANILLA_MOD_FILENAME])
 
 
 if __name__ == '__main__':

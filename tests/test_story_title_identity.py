@@ -73,6 +73,7 @@ class StoryTitleIdentityTests(unittest.TestCase):
     def test_story_client_supports_rich_title_paints_in_combat_and_chat(self):
         self.assertIn('function renderStoryPlayerIdentity()', STORY_JS)
         self.assertIn('function appendStoryStyledTitle(', STORY_JS)
+        self.assertIn('function appendStoryReputationBadges(', STORY_JS)
         self.assertIn('identity?.name_style?.paint', STORY_JS)
         self.assertIn("element.classList.add('title-paint-gradient')", STORY_JS)
         self.assertIn("epic: '#861FDE'", STORY_JS)
@@ -80,6 +81,30 @@ class StoryTitleIdentityTests(unittest.TestCase):
         self.assertIn("unique: '#555555'", STORY_JS)
         self.assertIn('.title-paint-gradient', STORY_CSS)
         self.assertIn(":root[data-theme='dark'] .title-paint-theme", STORY_CSS)
+
+    def test_story_page_embeds_reputation_and_newcomer_markers(self):
+        reputation = {
+            'level': 'yellow',
+            'label': '低信誉用户',
+            'linked_gr_band': None,
+            'newcomer': {'is_newcomer': True},
+        }
+        with (
+            mock.patch.object(gtn, '_current_account_user', return_value=self.user),
+            mock.patch.object(gtn, 'get_user_role_profile', return_value=None),
+            mock.patch.object(gtn, 'feedback_is_staff', return_value=False),
+            mock.patch.object(gtn, 'reputation_public_payload', return_value=reputation),
+        ):
+            response = self.client.get('/story')
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        match = re.search(r'window\.__STORY_ACCOUNT__ = (.*?);\s*\n', html)
+        self.assertIsNotNone(match)
+        account = json.loads(match.group(1))
+        self.assertEqual(account['reputation_profile']['level'], 'yellow')
+        self.assertTrue(account['reputation_profile']['newcomer']['is_newcomer'])
+        self.assertIn('.story-reputation-badge.is-yellow', STORY_CSS)
+        self.assertIn('.story-reputation-badge.is-newcomer', STORY_CSS)
 
 
 if __name__ == '__main__':

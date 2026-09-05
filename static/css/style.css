@@ -4252,6 +4252,20 @@ body {
   display: none;
 }
 
+#btn-public-feedback-center {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+#btn-public-feedback-center::before {
+  display: none;
+}
+
+#btn-public-feedback-center:hover {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
 .home-footer {
   position: fixed;
   left: 24px;

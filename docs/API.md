@@ -186,6 +186,30 @@ healing、事件效果、下一状态、回执、事件或 seed；这些值均�
 | POST | <code>/api/feedback/messages/read</code> | 显式标记 <code>thread_id</code> 已读 |
 | POST | <code>/api/feedback/send</code> | 新建或回复反馈；<code>thread_id</code>、<code>category</code>、<code>title</code>、<code>text</code>、<code>replay_id</code> |
 | POST | <code>/api/feedback/status</code> | 更新自己有权处理的 <code>thread_id</code> 状态 |
+| GET | <code>/api/public-feedback/summary</code> | 公开反馈中心摘要：是否登录、是否 Staff、作者/Staff 未读数 |
+| GET | <code>/api/public-feedback/issues</code> | 公开问题列表；<code>kind</code>、<code>status</code>、<code>q</code>（标题/正文搜索）、<code>sort</code>、<code>page</code>、<code>per_page</code>；Staff 可带 <code>include_hidden</code> |
+| POST | <code>/api/public-feedback/issues</code> | 登录后发布漏洞/建议；<code>kind</code>、<code>title</code>、<code>body</code>、可选 <code>replay_id</code> |
+| GET | <code>/api/public-feedback/issues/&lt;issue_id&gt;</code> | 公开问题详情与状态历史；游客仅返回前 3 条评论 |
+| POST | <code>/api/public-feedback/issues/&lt;issue_id&gt;/comments</code> | 发表公开评论 |
+| PATCH | <code>/api/public-feedback/comments/&lt;comment_id&gt;</code> | 作者 5 分钟内编辑自己的评论 |
+| DELETE | <code>/api/public-feedback/comments/&lt;comment_id&gt;</code> | 作者 5 分钟内删除自己的评论 |
+| POST | <code>/api/public-feedback/issues/&lt;issue_id&gt;/vote</code> | 投票/取消投票；probable 及以上关联账号按同组拦截并实时去重 |
+| POST | <code>/api/public-feedback/issues/&lt;issue_id&gt;/watch</code> | 关注/取消关注，返回关注数 |
+| POST | <code>/api/public-feedback/issues/&lt;issue_id&gt;/not-fixed</code> | 玩家对已修复问题提交“仍未修复”，待 Staff 复核 |
+| GET | <code>/api/public-feedback/issues/&lt;issue_id&gt;/private</code> | 作者/Staff 读取私密补充并标记已读 |
+| POST | <code>/api/public-feedback/issues/&lt;issue_id&gt;/private</code> | 作者/Staff 发送私密补充 |
+| POST | <code>/api/public-feedback/issues/&lt;issue_id&gt;/read</code> | 作者/Staff 标记当前问题已读 |
+| POST | <code>/api/public-feedback/admin/issues/&lt;issue_id&gt;/status</code> | Staff 状态流转并写公开状态历史 |
+| POST | <code>/api/public-feedback/admin/issues/&lt;issue_id&gt;/priority</code> | Staff 调整优先级、置顶、人工排序 |
+| POST | <code>/api/public-feedback/admin/issues/&lt;issue_id&gt;/tags</code> | Staff 整体替换问题标签 |
+| POST | <code>/api/public-feedback/admin/issues/&lt;issue_id&gt;/links</code> | Staff 添加关联问题 |
+| DELETE | <code>/api/public-feedback/admin/links/&lt;link_id&gt;</code> | Staff 删除关联问题 |
+| POST | <code>/api/public-feedback/admin/issues/&lt;issue_id&gt;/fix-version</code> | Staff 设置预计/实际修复版本 |
+| POST | <code>/api/public-feedback/admin/reopen-requests/&lt;request_id&gt;</code> | Staff 接受/拒绝“仍未修复”请求并可重新开启 |
+| POST | <code>/api/public-feedback/admin/issues/&lt;issue_id&gt;/hide</code> | Staff 隐藏/恢复公开问题 |
+| POST | <code>/api/public-feedback/admin/comments/&lt;comment_id&gt;/hide</code> | Staff 隐藏/恢复评论 |
+| GET, POST | <code>/api/public-feedback/admin/issues/&lt;issue_id&gt;/notes</code> | Staff 内部备注列表/新增 |
+| POST | <code>/api/public-feedback/admin/issues/&lt;issue_id&gt;/votes/&lt;target_user_id&gt;</code> | Staff 作废/恢复指定账号的票 |
 | POST | <code>/api/report</code> | 举报玩家、消息或对局；<code>object_type</code>、<code>object_id</code>、<code>category</code>、<code>reason_text</code> |
 
 举报证据由服务器按对象重新收集。请求体中的目标昵称和说明不能直接变成处罚依据。

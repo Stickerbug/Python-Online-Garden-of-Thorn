@@ -153,6 +153,56 @@ def get_reputation_profile(user_id):
         return profile_conn(conn, _id(user_id))
 
 
+def get_reputation_context(user_id):
+    """Read-only profile plus optional linked-group summary for consoles."""
+    uid = _id(user_id)
+    with closing(db.get_db_connection()) as conn:
+        profile = profile_conn(conn, uid)
+        group = _group(conn, uid)
+        members = []
+        if group:
+            rows = conn.execute(
+                '''SELECT u.id, u.username, m.status
+                   FROM account_link_members m
+                   JOIN users u ON u.id = m.user_id
+                   WHERE m.group_id=? AND m.status='active'
+                   ORDER BY u.id''',
+                (int(group['id']),),
+            ).fetchall()
+            members = [dict(row) for row in rows]
+        return {
+            'profile': profile,
+            'group': (
+                {
+                    'group_id': int(group['id']),
+                    'status': group['status'],
+                    'reputation': int(group['reputation']),
+                    'last_recovery_date': group['last_recovery_date'],
+                }
+                if group is not None
+                else None
+            ),
+            'members': members,
+        }
+
+
+def get_reputation_ledger(user_id, limit=20):
+    """Read the latest reputation ledger for a user or their linked group."""
+    uid = _id(user_id)
+    limit = max(1, min(100, int(limit or 20)))
+    with closing(db.get_db_connection()) as conn:
+        group = _group(conn, uid)
+        rows = conn.execute(
+            '''SELECT delta, value_before, value_after, reason_code,
+                      match_id, reputation_date, created_at
+               FROM reputation_ledger
+               WHERE user_id=? OR link_group_id=?
+               ORDER BY id DESC LIMIT ?''',
+            (uid, int(group['id']) if group is not None else None, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def reward_amount_conn(conn, uid, amount):
     """Only earned/free rewards use this; purchases/refunds/admin grants do not."""
     return int(max(0, int(amount)) * profile_conn(conn, uid)['dew_multiplier'])
@@ -274,6 +324,96 @@ def recover_reputation_daily(*, now=None, user_id=None):
             else:
                 conn.execute('UPDATE users SET reputation_last_recovery_date=? WHERE id=?', (today.isoformat(), uid))
     return results
+
+
+def preview_recover_reputation(*, now=None, user_id=None):
+    """Read-only preview of what recover_reputation_daily would restore."""
+    now = _time(now)
+    today = now.astimezone(BJ).date()
+    entities = []
+    with closing(db.get_db_connection()) as conn:
+        ids = (
+            [_id(user_id)]
+            if user_id is not None
+            else [
+                int(row['id'])
+                for row in conn.execute(
+                    'SELECT id FROM users WHERE deleted_at IS NULL'
+                ).fetchall()
+            ]
+        )
+        seen = set()
+        for uid in ids:
+            row = _user(conn, uid)
+            group = _group(conn, uid)
+            gid = int(group['id']) if group is not None else None
+            entity = ('group', gid) if gid else ('user', uid)
+            if entity in seen:
+                continue
+            seen.add(entity)
+            last_text = (
+                group['last_recovery_date']
+                if group is not None
+                else row['reputation_last_recovery_date']
+            )
+            last = datetime.fromisoformat(last_text or today.isoformat()).date()
+            member_ids = _members(conn, gid) if gid else [uid]
+            member_rows = conn.execute(
+                'SELECT id, username FROM users WHERE id IN (%s)' % ','.join('?' for _ in member_ids),
+                member_ids,
+            ).fetchall()
+            members = [
+                {'user_id': int(item['id']), 'username': item['username']}
+                for item in member_rows
+            ]
+            simulated = int(profile_conn(conn, uid)['value'])
+            days = []
+            for offset in range(1, max(0, (today - last).days) + 1):
+                recovery_day = last + timedelta(days=offset)
+                activity_day = recovery_day - timedelta(days=1)
+                placeholders = ','.join('?' for _ in member_ids)
+                entries = conn.execute(
+                    f'''SELECT delta,metadata_json FROM reputation_ledger WHERE reputation_date=? AND
+                        (user_id IN ({placeholders}) OR link_group_id IN
+                         (SELECT group_id FROM account_link_members WHERE user_id IN ({placeholders})))''',
+                    (activity_day.isoformat(), *member_ids, *member_ids),
+                )
+                deduction = any(
+                    int(entry['delta']) < 0
+                    or int(json.loads(entry['metadata_json']).get('requested_delta', 0)) < 0
+                    for entry in entries
+                )
+                eligible = simulated < 40
+                if not deduction and not eligible and simulated < 100:
+                    start = datetime.combine(activity_day, datetime.min.time(), BJ)
+                    matches = conn.execute(
+                        'SELECT participant_ids_json FROM gr_match_results WHERE played_at>=? AND played_at<?',
+                        (_iso(start), _iso(start + timedelta(days=1))),
+                    )
+                    eligible = any(
+                        set(json.loads(item['participant_ids_json'])) & set(member_ids)
+                        for item in matches
+                    )
+                if not deduction and eligible and simulated < 100:
+                    delta = min(5, 100 - simulated)
+                    simulated += delta
+                    days.append({
+                        'recovery_day': recovery_day.isoformat(),
+                        'delta': delta,
+                        'value_after': simulated,
+                    })
+            entities.append({
+                'entity': entity[0],
+                'entity_id': entity[1],
+                'member_ids': member_ids,
+                'members': members,
+                'current': int(profile_conn(conn, uid)['value']),
+                'last_recovery_date': last.isoformat(),
+                'recoverable_days': len(days),
+                'recovery_amount': sum(int(item['delta']) for item in days),
+                'days': days,
+            })
+    return entities
 
 
 def _match(conn, match_id):
@@ -776,3 +916,117 @@ def get_account_integrity_center(user_id, *, now=None):
         role=conn.execute('SELECT role_type FROM user_roles WHERE user_id=?',(uid,)).fetchone()
         return {'profile':profile,'ledger':ledger,'reports':reports,'reportable_matches':reportable,
                 'is_staff':bool(role and role['role_type'] in ('staff','admin'))}
+
+
+def voting_entity_components_conn(conn, user_ids):
+    """Partition user IDs into anti-vote-fraud components.
+
+    Confirmed/appealed groups and probable/confirmed/appealed pair decisions are
+    treated as one voting identity (transitively).  Suspected-only pairs are
+    intentionally not included so they cannot block real users.
+    """
+    ids = []
+    for value in user_ids or []:
+        try:
+            uid = int(value)
+        except (TypeError, ValueError):
+            continue
+        if uid > 0 and uid not in ids:
+            ids.append(uid)
+    ids.sort()
+    if not ids:
+        return []
+    if len(ids) == 1:
+        return [[ids[0]]]
+
+    parent = {uid: uid for uid in ids}
+
+    def find(uid):
+        root = uid
+        while parent[root] != root:
+            root = parent[root]
+        while parent[uid] != uid:
+            nxt = parent[uid]
+            parent[uid] = root
+            uid = nxt
+        return root
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    placeholders = ','.join('?' for _ in ids)
+    rows = conn.execute(
+        f'''
+        SELECT m.user_id AS uid, g.id AS gid
+        FROM account_link_members m
+        JOIN account_link_groups g ON g.id = m.group_id
+        WHERE m.status = 'active'
+          AND g.status IN ('confirmed', 'appealed')
+          AND m.user_id IN ({placeholders})
+        ''',
+        ids,
+    ).fetchall()
+    group_by_user = {}
+    for row in rows:
+        group_by_user[int(row['uid'])] = int(row['gid'])
+    if group_by_user:
+        group_ids = sorted({gid for gid in group_by_user.values()})
+        group_ph = ','.join('?' for _ in group_ids)
+        member_rows = conn.execute(
+            f'''
+            SELECT m.group_id AS gid, m.user_id AS uid
+            FROM account_link_members m
+            JOIN account_link_groups g ON g.id = m.group_id
+            WHERE m.status = 'active'
+              AND g.status IN ('confirmed', 'appealed')
+              AND m.group_id IN ({group_ph})
+              AND m.user_id IN ({placeholders})
+            ''',
+            group_ids + ids,
+        ).fetchall()
+        group_members = {}
+        for row in member_rows:
+            group_members.setdefault(int(row['gid']), []).append(int(row['uid']))
+        for uid, gid in group_by_user.items():
+            for other in group_members.get(gid, []):
+                if other != uid:
+                    union(uid, other)
+
+    rows = conn.execute(
+        f'''
+        SELECT user_id_low AS low, user_id_high AS high
+        FROM account_link_decisions
+        WHERE state IN ('confirmed', 'appealed', 'probable')
+          AND (user_id_low IN ({placeholders}) OR user_id_high IN ({placeholders}))
+        ''',
+        ids + ids,
+    ).fetchall()
+    for row in rows:
+        low, high = int(row['low']), int(row['high'])
+        if low in parent and high in parent:
+            union(low, high)
+
+    roots = {}
+    for uid in ids:
+        roots.setdefault(find(uid), []).append(uid)
+    return [sorted(members) for members in roots.values()]
+
+
+def voting_entity_components(user_ids):
+    """Open a read connection and partition user IDs into voting entities."""
+    with closing(db.get_db_connection()) as conn:
+        return voting_entity_components_conn(conn, user_ids)
+
+
+def are_same_voting_entity(user_a, user_b):
+    """True when two accounts are treated as the same voting identity."""
+    try:
+        a, b = _id(user_a), _id(user_b)
+    except IntegrityRuleError:
+        return False
+    if a == b:
+        return True
+    components = voting_entity_components([a, b])
+    return len(components) == 1

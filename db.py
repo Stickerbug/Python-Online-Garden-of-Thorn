@@ -1949,6 +1949,272 @@ def init_db(
         conn.execute('CREATE INDEX IF NOT EXISTS idx_feedback_messages_thread ON feedback_messages(thread_id, created_at)')
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS public_issues (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL,
+                status TEXT NOT NULL,
+                author_user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                normalized_body TEXT,
+                risk_level INTEGER DEFAULT 0,
+                replay_id TEXT,
+                game_version TEXT,
+                fix_version TEXT,
+                priority INTEGER NOT NULL DEFAULT 0,
+                pinned INTEGER NOT NULL DEFAULT 0,
+                sort_order REAL NOT NULL DEFAULT 0,
+                visible INTEGER NOT NULL DEFAULT 1,
+                author_read_at TEXT,
+                staff_read_at TEXT,
+                author_private_read_at TEXT,
+                staff_private_read_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                status_changed_at TEXT,
+                closed_at TEXT,
+                FOREIGN KEY(author_user_id) REFERENCES users(id)
+            )
+            '''
+        )
+        public_issue_columns = {
+            row['name'] for row in conn.execute('PRAGMA table_info(public_issues)').fetchall()
+        }
+        if 'author_read_at' not in public_issue_columns:
+            conn.execute('ALTER TABLE public_issues ADD COLUMN author_read_at TEXT')
+        if 'staff_read_at' not in public_issue_columns:
+            conn.execute('ALTER TABLE public_issues ADD COLUMN staff_read_at TEXT')
+        if 'author_private_read_at' not in public_issue_columns:
+            conn.execute('ALTER TABLE public_issues ADD COLUMN author_private_read_at TEXT')
+        if 'staff_private_read_at' not in public_issue_columns:
+            conn.execute('ALTER TABLE public_issues ADD COLUMN staff_private_read_at TEXT')
+        if 'game_version' not in public_issue_columns:
+            conn.execute('ALTER TABLE public_issues ADD COLUMN game_version TEXT')
+        if 'fix_version' not in public_issue_columns:
+            conn.execute('ALTER TABLE public_issues ADD COLUMN fix_version TEXT')
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issues_kind_status '
+            'ON public_issues(kind, status, updated_at)'
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issues_author '
+            'ON public_issues(author_user_id, created_at)'
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issues_staff_queue '
+            'ON public_issues(kind, visible, pinned, priority, sort_order, created_at)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id INTEGER NOT NULL,
+                author_user_id INTEGER NOT NULL,
+                body TEXT NOT NULL,
+                normalized_body TEXT,
+                risk_level INTEGER DEFAULT 0,
+                hidden INTEGER DEFAULT 0,
+                hidden_by_user_id INTEGER,
+                hidden_at TEXT,
+                created_at TEXT NOT NULL,
+                edited_at TEXT,
+                FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_comments_issue '
+            'ON public_issue_comments(issue_id, created_at)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_votes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                invalidated_by INTEGER,
+                invalidated_at TEXT,
+                UNIQUE(issue_id, user_id),
+                FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_votes_issue '
+            'ON public_issue_votes(issue_id, active)'
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_votes_user '
+            'ON public_issue_votes(user_id, created_at)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_vote_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                reason_code TEXT,
+                actor_user_id INTEGER,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_vote_events_user '
+            'ON public_issue_vote_events(user_id, created_at)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_private_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id INTEGER NOT NULL,
+                sender_user_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                normalized_message TEXT,
+                risk_level INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_private_issue '
+            'ON public_issue_private_messages(issue_id, created_at)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_staff_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id INTEGER NOT NULL,
+                staff_user_id INTEGER NOT NULL,
+                note TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_staff_notes_issue '
+            'ON public_issue_staff_notes(issue_id, created_at)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_status_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id INTEGER NOT NULL,
+                actor_user_id INTEGER NOT NULL,
+                from_status TEXT,
+                to_status TEXT NOT NULL,
+                reason TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_status_history_issue '
+            'ON public_issue_status_history(issue_id, id)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_tags (
+                issue_id INTEGER NOT NULL,
+                tag TEXT NOT NULL,
+                PRIMARY KEY(issue_id, tag),
+                FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_tags_tag '
+            'ON public_issue_tags(tag, issue_id)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_issue_id INTEGER NOT NULL,
+                to_issue_id INTEGER NOT NULL,
+                relation TEXT NOT NULL
+                    CHECK(relation IN ('related', 'duplicates', 'fix_caused')),
+                note TEXT,
+                created_by_user_id INTEGER,
+                created_at TEXT NOT NULL,
+                UNIQUE(from_issue_id, to_issue_id, relation),
+                FOREIGN KEY(from_issue_id) REFERENCES public_issues(id) ON DELETE CASCADE,
+                FOREIGN KEY(to_issue_id) REFERENCES public_issues(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_links_from '
+            'ON public_issue_links(from_issue_id, created_at)'
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_links_to '
+            'ON public_issue_links(to_issue_id, created_at)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_watchers (
+                issue_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                last_seen_at TEXT,
+                PRIMARY KEY(issue_id, user_id),
+                FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_watchers_user '
+            'ON public_issue_watchers(user_id, last_seen_at)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_issue_reopen_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                replay_id TEXT,
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending', 'accepted', 'rejected')),
+                created_at TEXT NOT NULL,
+                reviewed_by_user_id INTEGER,
+                reviewed_at TEXT,
+                review_note TEXT,
+                FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_reopen_requests_issue '
+            'ON public_issue_reopen_requests(issue_id, status, created_at)'
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_public_issue_reopen_requests_status '
+            'ON public_issue_reopen_requests(status, created_at)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS public_release_states (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                last_version TEXT,
+                last_finalized_at TEXT
+            )
+            '''
+        )
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS content_disables (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 content_type TEXT NOT NULL,
@@ -2584,8 +2850,8 @@ def _story_coop_run_payload(row):
     return payload
 
 
-def _story_coop_member_payload(row):
-    return {
+def _story_coop_member_payload(row, conn=None):
+    payload = {
         'seat': int(row['seat']),
         'user_id': int(row['user_id']),
         'username': str(row['username']),
@@ -2593,6 +2859,21 @@ def _story_coop_member_payload(row):
         'membership_status': str(row['membership_status']),
         'party_role': str(row['party_role']),
     }
+    if conn is not None:
+        try:
+            import account_integrity as _integrity
+            reputation = _integrity.profile_conn(conn, int(row['user_id']))
+            if isinstance(reputation, dict):
+                payload['reputation_profile'] = {
+                    key: reputation.get(key)
+                    for key in ('level', 'label', 'linked_gr_band')
+                }
+                payload['reputation_profile']['newcomer'] = {
+                    'is_newcomer': bool((reputation.get('newcomer') or {}).get('is_newcomer')),
+                }
+        except Exception:
+            payload['reputation_profile'] = None
+    return payload
 
 
 def _story_coop_member_rows_conn(conn, party_id, *, active_only=True):
@@ -2619,7 +2900,10 @@ def _story_coop_party_payload_conn(conn, party_row, *, member_rows=None):
         'revision': int(party_row['revision']),
         'min_players': 2,
         'max_players': int(party_row['max_players']),
-        'members': [_story_coop_member_payload(row) for row in member_rows],
+        'members': [
+            _story_coop_member_payload(row, conn)
+            for row in member_rows
+        ],
         'created_at': str(party_row['created_at']),
         'updated_at': str(party_row['updated_at']),
         'closed_at': party_row['closed_at'],
@@ -12371,6 +12655,7 @@ def send_dm_message(sender_user_id, target_identifier=None, target_user_id=None,
 
 FEEDBACK_CATEGORIES = {'bug', 'suggestion', 'account', 'report', 'appeal', 'other'}
 FEEDBACK_STATUSES = {'open', 'pending', 'closed'}
+FEEDBACK_DEPRECATED_PUBLIC_CATEGORIES = frozenset({'bug', 'suggestion', 'other'})
 
 
 def _role_type_for_user_conn(conn, user_id):
@@ -12616,6 +12901,7 @@ def feedback_unread_count(user_id):
                 SELECT t.id, t.user_id, COALESCE(t.staff_read_at, '') AS read_at
                 FROM feedback_threads t
                 WHERE t.status <> 'closed'
+                  AND t.category NOT IN ('bug', 'suggestion', 'other')
                 '''
             ).fetchall()
             count = 0
@@ -12638,6 +12924,7 @@ def feedback_unread_count(user_id):
             FROM feedback_messages m
             JOIN feedback_threads t ON t.id = m.thread_id
             WHERE t.user_id = ? AND m.sender_user_id <> ? AND m.hidden = 0
+              AND t.category NOT IN ('bug', 'suggestion', 'other')
               AND (t.user_read_at IS NULL OR m.created_at > t.user_read_at)
             ''',
             (uid, uid),
@@ -12661,6 +12948,7 @@ def list_feedback_threads(user_id, staff_view=False, status='', limit=50):
         status_key = str(status or '').strip().lower()
         params = []
         where = []
+        where.append("category NOT IN ('bug', 'suggestion', 'other')")
         if staff_view:
             if status_key in FEEDBACK_STATUSES:
                 where.append('status = ?')
@@ -12696,6 +12984,8 @@ def get_feedback_messages(user_id, thread_id, mark_read=True, limit=100):
     with get_db_connection() as conn:
         thread = conn.execute('SELECT * FROM feedback_threads WHERE id = ?', (tid,)).fetchone()
         if thread is None:
+            return None, '反馈不存在'
+        if str(thread['category'] or '').lower() in FEEDBACK_DEPRECATED_PUBLIC_CATEGORIES:
             return None, '反馈不存在'
         can_staff = _role_type_for_user_conn(conn, uid) in {'admin', 'staff'}
         is_owner = int(thread['user_id']) == uid
@@ -12752,6 +13042,8 @@ def send_feedback_message(
     category_key = str(category or 'other').strip().lower()
     if category_key not in FEEDBACK_CATEGORIES:
         category_key = 'other'
+    if thread_id in (None, '') and category_key in FEEDBACK_DEPRECATED_PUBLIC_CATEGORIES:
+        return None, 'Bug 与建议请到主页“反馈中心”提交'
     saved_thread_id = None
     with get_db_connection() as conn:
         user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
@@ -12768,6 +13060,8 @@ def send_feedback_message(
                 return None, '反馈不存在'
             thread = conn.execute('SELECT * FROM feedback_threads WHERE id = ?', (tid,)).fetchone()
             if thread is None:
+                return None, '反馈不存在'
+            if str(thread['category'] or '').lower() in FEEDBACK_DEPRECATED_PUBLIC_CATEGORIES:
                 return None, '反馈不存在'
             if int(thread['user_id']) != uid and not can_staff:
                 return None, '权限不足'
@@ -12826,7 +13120,7 @@ def update_feedback_status(user_id, thread_id, status):
         if _role_type_for_user_conn(conn, uid) not in {'admin', 'staff'}:
             return None, '权限不足'
         row = conn.execute('SELECT * FROM feedback_threads WHERE id = ?', (tid,)).fetchone()
-        if row is None:
+        if row is None or str(row['category'] or '').lower() in FEEDBACK_DEPRECATED_PUBLIC_CATEGORIES:
             return None, '反馈不存在'
         now = utc_now()
         conn.execute(

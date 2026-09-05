@@ -295,7 +295,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u89e6\u89d2",
-            "en": "Magic Tentacle"
+            "en": "Magic Antennae"
         },
         "cost_e": 0,
         "cost_m": 2,
@@ -599,7 +599,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u952f\u9f7f",
-            "en": "Magic Serration"
+            "en": "Magic Cutter"
         },
         "cost_e": 0,
         "cost_m": 5,
@@ -656,7 +656,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u661f\u5ea7",
-            "en": "Magic Constellation"
+            "en": "Magic Zodiac"
         },
         "cost_e": 2,
         "cost_m": 2,
@@ -1017,7 +1017,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u7535\u5b50\u5bfc\u5f39",
-            "en": "Electronic Missile"
+            "en": "Electron Missile"
         },
         "cost_e": 1,
         "cost_m": 0,
@@ -1036,7 +1036,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
         "character_id": "mage",
         "name": {
             "zh": "\u9b54\u6cd5\u7535\u5b50\u5bfc\u5f39",
-            "en": "Magic Electronic Missile"
+            "en": "Magic Electron Missile"
         },
         "cost_e": 0,
         "cost_m": 2,
@@ -1101,7 +1101,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
     },
     "orb": {
         "character_id": "mage",
-        "name": {"zh": "球", "en": "Orb"},
+        "name": {"zh": "球", "en": "Mysterious Orb"},
         "cost_e": 3,
         "cost_m": 0,
         "card_type": "thorn",
@@ -1117,7 +1117,7 @@ STORY_CHARACTER_CARD_DESIGNS = {
     },
     "magic_orb": {
         "character_id": "mage",
-        "name": {"zh": "魔法球", "en": "Magic Orb"},
+        "name": {"zh": "魔法球", "en": "Mana Orb"},
         "cost_e": 0,
         "cost_m": "X",
         "card_type": "thorn",

@@ -1419,6 +1419,7 @@
                 leader.textContent = '队长';
                 badges.appendChild(leader);
             }
+            appendStoryReputationBadges(badges, member);
             row.appendChild(badges);
             fragment.appendChild(row);
         }
@@ -4418,6 +4419,23 @@
             : [];
     }
 
+    function appendStoryReputationBadges(parent, identity = {}) {
+        const profile = identity?.reputation_profile;
+        if (!profile || !parent) return;
+        if (profile?.newcomer?.is_newcomer === true) {
+            const badge = document.createElement('span');
+            badge.className = 'story-reputation-badge is-newcomer';
+            badge.textContent = lang === 'zh' ? '新人' : 'Newcomer';
+            parent.appendChild(badge);
+        }
+        const level = String(profile?.level || '');
+        if (!['yellow', 'orange', 'red'].includes(level)) return;
+        const badge = document.createElement('span');
+        badge.className = `story-reputation-badge is-${level}`;
+        badge.textContent = lang === 'zh' ? '低信誉' : 'Low reputation';
+        parent.appendChild(badge);
+    }
+
     function storyPlayerNamePaint(identity = {}) {
         if (identity?.name_style?.paint) {
             return normalizeStoryTitlePaint(identity.name_style.paint);
@@ -4436,6 +4454,7 @@
         storyEquippedTitles(account).forEach((title) => {
             appendStoryStyledTitle(container, title, true, 'story-player-title');
         });
+        appendStoryReputationBadges(container, account);
         const name = document.createElement('span');
         name.className = 'player-name-value story-player-name-value';
         name.textContent = String(account.display_name || account.username || '?');
@@ -4649,6 +4668,7 @@
         titles.forEach((title) => {
             appendStoryStyledTitle(parent, title);
         });
+        appendStoryReputationBadges(parent, entry);
         if (!titles.length && (entry.console_player || entry.special_role === 'console')) {
             const titleElement = document.createElement('span');
             titleElement.className = 'story-chat-player-title player-title-inline';
@@ -11178,7 +11198,7 @@
         chip.title = `${label}: ${amount}`;
         chip.setAttribute('aria-label', chip.title);
         const icon = document.createElement('img');
-        icon.src = storyStatusIconUrl(item.key);
+        icon.src = storyStatusIconUrl(item.key, definition);
         icon.alt = '';
         icon.setAttribute('aria-hidden', 'true');
         const value = document.createElement('strong');
@@ -11523,6 +11543,7 @@
             { key: 'bleed', label: '流血', value: enemy.bleed },
             { key: 'fire', label: '灼烧', value: enemy.fire },
             { key: 'fragment', label: '碎片', value: enemy.fragment },
+            { key: 'static', label: '静电', value: enemy.static },
             { key: 'magic_shield_disabled', label: '魔力护盾失效', value: enemy.magic_shield_disabled },
         ]);
         renderTraitsInto(effects, definition.traits, enemy);

@@ -28,6 +28,7 @@ import subprocess
 import sqlite3
 import traceback
 from functools import wraps
+from contextlib import closing
 from collections import deque, OrderedDict
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
@@ -319,6 +320,7 @@ from community_ops import (
     mutate_community_poll,
 )
 import account_integrity
+import public_feedback as public_feedback
 from moderation import (
     REPORT_CATEGORIES,
     VALID_MODERATION_ACTIONS,
@@ -632,6 +634,18 @@ _default_bind_host = '127.0.0.1'
 GTN_BIND_HOST = os.environ.get('GTN_BIND_HOST', _default_bind_host).strip() or _default_bind_host
 GTN_PORT = int(os.environ.get('PORT', os.environ.get('GTN_PORT', '5000')) or 5000)
 GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}').strip() or f'{GTN_INSTANCE}-{GTN_PORT}'
+
+
+def current_public_game_version():
+    configured = os.environ.get('GTN_PUBLIC_VERSION', '').strip()
+    if configured:
+        return configured
+    beijing = datetime.now(timezone(timedelta(hours=8))).date().isoformat()
+    if GTN_INSTANCE == 'release':
+        return beijing
+    return f'本地-{beijing}'
+
+
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
 GTN_GIT_SHA = os.environ.get('GTN_GIT_SHA', '').strip()
 GTN_STATIC_CACHE_BUST = 'ui-20260727-fated-draw-timeout-log-i18n-story-input-6-story-resources-same-name-cleanup-light-baptism-feedback-handling-sapphire-preflight-nuke-x-spectator-status-story-upgrade-preview-story-room-tabs-spectator-afk-story-p3-shortcut-slots-3-changelog-receipt-story-modal-motion-no-music-notice-settings-persistence-spectate-escape-heal-zero-log-computed-text-color-bio-diamond-swift2-custom-status-color-desert-cards-name-wrap-story-public-warning-long-card-name-story-presence-spectate-reentry-storage-cookie-sync-self-login-takeover-minimal-hand-wrap-urf-unique-draw-spectator-hand-readonly-card-source-probability-gallery-dynamic-draw-probability-story-run-deck-view-story-afk-check-story-online-count-shared-story-chat-story-formal-ui-afk-parity-story-fixed-footer-chat-layout-shared-lobby-chat-ui-mod-dlc-split-grid-balance-story-save-chat-parity-mentions-story-compendium-1-story-status-nan-1-story-card-term-rarity-flavor-1-story-live-intent-sync-1-story-intent-labels-round-1-story-single-choice-switch-1-response-equipment-target-1-magic-nazar-response-preview-1-sapphire-choice-atomic-1-story-load-recovery-1-20260807-story-main-font-1-story-card-type-colors-1-story-multi-enemy-portrait-1-story-setup-localize-center-1-story-card-selection-layout-1-story-bandage-once-1-story-rarity-order-1-story-player-hurt-mouth-1-story-equipment-preview-size-1-story-run-tools-combat-1-story-scroll-preserve-1-story-dynamic-traits-1-status-immunity-icon-spectate-leave-merged-mod-v110-1-story-rarity-frame-tint-2-gallery-entertainment-filter-1-story-surrender-1-gallery-mod-scroll-1-story-save-delete-1-story-creature-terms-1-story-codex-intent-icon-scale-1-story-cjk-bold-synthesis-1-story-run-curses-removed-1'
@@ -658,7 +672,15 @@ GTN_STATIC_VERSION += '-story-external-save-surrender-1'
 GTN_STATIC_VERSION += '-story-card-effect-fit-floor-1'
 GTN_STATIC_VERSION += '-ranked-entertainment-auto-disable-1'
 GTN_STATIC_VERSION += '-story-card-effect-fit-cache-1'
-GTN_STATIC_VERSION += '-story-explicit-icon-markers-1-story-tag-codex-1-story-usain-name-fit-1'
+GTN_STATIC_VERSION += '-story-explicit-icon-markers-1-story-tag-codex-1-story-usain-name-fit-1-story-static-status-1-community-announcement-home-1'
+GTN_STATIC_VERSION += '-public-feedback-center-1'
+GTN_STATIC_VERSION += '-public-feedback-center-2-standalone'
+GTN_STATIC_VERSION += '-public-feedback-mojira-css-1'
+GTN_STATIC_VERSION += '-public-feedback-split-mojira-1'
+GTN_STATIC_VERSION += '-public-feedback-skin-zh-1'
+GTN_STATIC_VERSION += '-public-feedback-kind-tabs-1'
+GTN_STATIC_VERSION += '-story-reputation-badges-1'
+GTN_STATIC_VERSION += '-feedback-center-route-full-info-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -873,6 +895,20 @@ except Exception as exc:
     DB_AVAILABLE = False
     DB_INIT_ERROR = str(exc)
     print(f'[startup] database init failed: {type(exc).__name__}: {exc}')
+
+if DB_AVAILABLE:
+    try:
+        _release_result = public_feedback.finalize_public_release_fixes(
+            current_public_game_version()
+        )
+        if _release_result.get('changed'):
+            print(
+                f'[startup] public feedback auto-fixed {_release_result.get("changed")} '
+                f'issues in version {_release_result.get("version")}',
+                flush=True,
+            )
+    except Exception as exc:
+        print(f'[startup] public feedback release finalize failed: {exc}', flush=True)
 
 _lock = TrackedLock('global_state')
 _replay_cleanup_lock = threading.Lock()
@@ -3928,6 +3964,70 @@ def _validate_chat_text_for_sender(raw_text, *, exempt=False):
     }
 
 
+def _public_feedback_mute_error(user_id, message=''):
+    muted, mute_info = is_user_muted_db(user_id)
+    if not muted:
+        return None
+    remaining = 0
+    try:
+        until_dt = datetime.fromisoformat(str(mute_info.get('muted_until') or '').replace('Z', '+00:00'))
+        remaining = max(0, int((until_dt - datetime.now(timezone.utc)).total_seconds()))
+    except Exception:
+        remaining = 0
+    return jsonify({
+        'success': False,
+        **muted_error_payload(remaining, message=message),
+    }), 403
+
+
+def _validate_public_feedback_content(
+    user_id,
+    user,
+    raw_text,
+    *,
+    maximum,
+    label='内容',
+    allow_newlines=True,
+):
+    if not isinstance(raw_text, str):
+        raise public_feedback.PublicFeedbackError('INVALID_CONTENT', f'{label}格式无效')
+    if allow_newlines:
+        text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', raw_text)
+    else:
+        text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\r\n\t]+', ' ', raw_text)
+    text = text.strip()
+    if not text or len(text) > maximum:
+        raise public_feedback.PublicFeedbackError(
+            'INVALID_CONTENT',
+            f'{label}长度必须为1-{maximum}个字符',
+        )
+    exempt = bool(_chat_exempt_from_user_id(user_id))
+    risk = check_message_risk(text)
+    risk_level = int(risk.get('risk_level') or 0)
+    risk_action = str(risk.get('action') or '')
+    if risk_action == 'reject_mute' or risk_level >= 4:
+        try:
+            set_user_mute(user_id, user or '', 300, 'severe public feedback risk', 'system')
+        except Exception as exc:
+            admin_event('error', f'failed to persist severe public feedback mute: {exc}')
+        raise public_feedback.PublicFeedbackError(
+            'RISK_REJECTED',
+            '消息包含高风险内容，已被拦截并临时禁言',
+            403,
+        )
+    if risk_action == 'mask_flag' or risk_level >= 3:
+        text = risk.get('sanitized_text') or text
+    return text, risk.get('normalized_message') or normalize_message(text), risk_level
+
+
+def _public_feedback_error_response(exc):
+    return jsonify({
+        'success': False,
+        'error': exc.message if hasattr(exc, 'message') else str(exc),
+        'code': getattr(exc, 'code', 'PUBLIC_FEEDBACK_ERROR'),
+    }), int(getattr(exc, 'status', 400) or 400)
+
+
 def _online_lobby_mention_candidates(beta_mode=False):
     items = []
     seen = set()
@@ -4492,6 +4592,22 @@ def get_special_account_profile(username):
         if lower == profile['display_name'].lower():
             return profile
     return None
+
+
+def reputation_public_payload(user_id):
+    if not DB_AVAILABLE or not user_id:
+        return None
+    try:
+        reputation = account_integrity.get_reputation_profile(int(user_id))
+    except Exception as exc:
+        admin_event('error', f'failed to load reputation for story identity {user_id}: {exc}')
+        return None
+    if not isinstance(reputation, dict):
+        return None
+    payload = {key: reputation.get(key) for key in ('level', 'label', 'linked_gr_band')}
+    payload['newcomer'] = {'is_newcomer': bool((reputation.get('newcomer') or {}).get('is_newcomer'))}
+    return payload
+
 
 def special_public_fields(player_or_profile):
     source = player_or_profile or {}
@@ -9646,7 +9762,7 @@ ADMIN_COMMAND_TREE = {
     },
     'account': {
         'summary': '账号与持久数据',
-        'usage': 'account <list|get|username|password|achievement|dew|rating|identity|title|ban|unban> ...',
+        'usage': 'account <list|get|username|password|achievement|dew|rating|reputation|identity|title|ban|unban> ...',
         'children': {
             'list': {'summary': '搜索注册账号', 'usage': 'account list [搜索] [数量]'},
             'get': {'summary': '查看注册账号详情', 'usage': 'account get <ID|注册顺序|用户名>'},
@@ -9679,6 +9795,17 @@ ADMIN_COMMAND_TREE = {
                     'set': {'summary': '设置花阶分', 'usage': 'account rating set <账号> <season|total|both> <数值> [原因]'},
                     'add': {'summary': '增减花阶分', 'usage': 'account rating add <账号> <season|total|both> <数值> [原因]'},
                     'snapshot': {'summary': '写入今日分数快照', 'usage': 'account rating snapshot <账号>'},
+                },
+            },
+            'reputation': {
+                'summary': '管理信誉分',
+                'usage': 'account reputation <info|ledger|add|set|recover> ...',
+                'children': {
+                    'info': {'summary': '查看账号信誉与关联组', 'usage': 'account reputation info <账号>'},
+                    'ledger': {'summary': '查看信誉流水', 'usage': 'account reputation ledger <账号> [数量]'},
+                    'add': {'summary': '增减信誉分', 'usage': 'account reputation add <账号> <±数值> [原因]'},
+                    'set': {'summary': '设置信誉分', 'usage': 'account reputation set <账号> <0-100> [原因]'},
+                    'recover': {'summary': '手动执行每日信誉恢复', 'usage': 'account reputation recover <账号|all> <preview|confirm>'},
                 },
             },
             'identity': {
@@ -9923,6 +10050,46 @@ ADMIN_COMMAND_TREE = {
         'children': {
             'chat': {'summary': '查看大厅聊天缓存', 'usage': 'lobby chat [数量]'},
             'broadcast': {'summary': '发送服务器广播', 'usage': 'lobby broadcast <内容>'},
+        },
+    },
+    'publicfeedback': {
+        'summary': '公开反馈中心的漏洞与建议管理',
+        'usage': 'publicfeedback <list|get|status|priority|note|tags|link|unlink|fixversion|reopen|votes|hide|audit> ...',
+        'children': {
+            'list': {'summary': '列出公开反馈', 'usage': 'publicfeedback list <bug|suggestion> [状态] [数量]'},
+            'get': {'summary': '查看公开反馈详情', 'usage': 'publicfeedback get <问题ID>'},
+            'status': {'summary': '修改问题状态并写公开原因', 'usage': 'publicfeedback status <问题ID> <目标状态> [原因]'},
+            'priority': {'summary': '设置优先级与人工排序', 'usage': 'publicfeedback priority <问题ID> <0-5> [sort=数值] [pin] [unpin]'},
+            'note': {'summary': '添加 Staff 内部备注', 'usage': 'publicfeedback note <问题ID> <备注>'},
+            'tags': {'summary': '替换问题标签', 'usage': 'publicfeedback tags <问题ID> <标签...>'},
+            'link': {'summary': '添加关联问题', 'usage': 'publicfeedback link <来源ID> <目标ID> [related|duplicates|fix_caused] [原因]'},
+            'unlink': {'summary': '删除关联问题', 'usage': 'publicfeedback unlink <关联ID>'},
+            'fixversion': {'summary': '设置修复版本', 'usage': 'publicfeedback fixversion <问题ID> [版本]'},
+            'reopen': {'summary': '处理仍未修复请求', 'usage': 'publicfeedback reopen <请求ID> <accept|reject> [原因]'},
+            'votes': {
+                'summary': '作废或恢复某账号的票',
+                'usage': 'publicfeedback votes <invalid|restore> <问题ID> <账号ID|用户名>',
+                'children': {
+                    'invalid': {'summary': '作废某账号的票', 'usage': 'publicfeedback votes invalid <问题ID> <账号>'},
+                    'restore': {'summary': '恢复某账号的票', 'usage': 'publicfeedback votes restore <问题ID> <账号>'},
+                },
+            },
+            'hide': {
+                'summary': '隐藏或恢复问题/评论',
+                'usage': 'publicfeedback hide <issue|comment> <ID> [unhide]',
+                'children': {
+                    'issue': {'summary': '隐藏/恢复问题', 'usage': 'publicfeedback hide issue <ID> [unhide]'},
+                    'comment': {'summary': '隐藏/恢复评论', 'usage': 'publicfeedback hide comment <ID> [unhide]'},
+                },
+            },
+            'audit': {'summary': '查看投票事件与状态历史', 'usage': 'publicfeedback audit <问题ID>'},
+            'oldfeedback': {
+                'summary': '只读审计旧版公开反馈工单',
+                'usage': 'publicfeedback oldfeedback list [数量]',
+                'children': {
+                    'list': {'summary': '列出旧 Bug/建议工单', 'usage': 'publicfeedback oldfeedback list [数量]'},
+                },
+            },
         },
     },
     'community': {
@@ -10226,6 +10393,11 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('account', 'rating', 'set'): 'rating-set',
     ('account', 'rating', 'add'): 'rating-add',
     ('account', 'rating', 'snapshot'): 'rating-snapshot',
+    ('account', 'reputation', 'info'): 'reputation-info',
+    ('account', 'reputation', 'ledger'): 'reputation-ledger',
+    ('account', 'reputation', 'add'): 'reputation-add',
+    ('account', 'reputation', 'set'): 'reputation-set',
+    ('account', 'reputation', 'recover'): 'reputation-recover',
     ('account', 'identity', 'list'): ('identity', 'list'),
     ('account', 'identity', 'get'): ('identity', 'get'),
     ('account', 'identity', 'set'): ('identity', 'set'),
@@ -10261,6 +10433,22 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('community', 'poll', 'publish'): ('community-poll-action', 'publish'),
     ('community', 'poll', 'close'): ('community-poll-action', 'close'),
     ('community', 'poll', 'retract'): ('community-poll-action', 'retract'),
+    ('publicfeedback', 'list'): 'publicfeedback-list',
+    ('publicfeedback', 'get'): 'publicfeedback-get',
+    ('publicfeedback', 'status'): 'publicfeedback-status',
+    ('publicfeedback', 'priority'): 'publicfeedback-priority',
+    ('publicfeedback', 'note'): 'publicfeedback-note',
+    ('publicfeedback', 'tags'): 'publicfeedback-tags',
+    ('publicfeedback', 'link'): 'publicfeedback-link',
+    ('publicfeedback', 'unlink'): 'publicfeedback-unlink',
+    ('publicfeedback', 'fixversion'): 'publicfeedback-fixversion',
+    ('publicfeedback', 'reopen'): 'publicfeedback-reopen',
+    ('publicfeedback', 'votes', 'invalid'): ('publicfeedback-votes', 'invalid'),
+    ('publicfeedback', 'votes', 'restore'): ('publicfeedback-votes', 'restore'),
+    ('publicfeedback', 'hide', 'issue'): ('publicfeedback-hide', 'issue'),
+    ('publicfeedback', 'hide', 'comment'): ('publicfeedback-hide', 'comment'),
+    ('publicfeedback', 'audit'): 'publicfeedback-audit',
+    ('publicfeedback', 'oldfeedback', 'list'): ('publicfeedback-oldfeedback', 'list'),
     ('moderation', 'mute'): 'mutechat',
     ('moderation', 'ban'): 'banuser',
     ('moderation', 'unban'): 'unbanuser',
@@ -11016,6 +11204,81 @@ def format_rating_user(user):
         f"历史最高：{format_rating_value(user.get('highest_gr'))}",
         f"有效对局：{user.get('games_played', 0)} 胜/负/平={user.get('wins', 0)}/{user.get('losses', 0)}/{user.get('draws', 0)}",
     ])
+
+
+def format_reputation_user(user, context):
+    if not user:
+        return '账号不存在'
+    profile = (context or {}).get('profile') or {}
+    group = (context or {}).get('group')
+    members = list((context or {}).get('members') or [])
+    level_text = {
+        'normal': '正常',
+        'yellow': '低信誉（黄）',
+        'orange': '低信誉（橙）',
+        'red': '低信誉（红）',
+    }.get(profile.get('level'), str(profile.get('level') or '-'))
+    lines = [
+        f"{user.get('username')} (ID:{user.get('player_id') or '-'} 注册顺序：{user.get('id')})",
+        f"信誉：{profile.get('value', '-')}/100（{level_text}）",
+        f"可排位：{'是' if profile.get('can_ranked') else '否'}  "
+        f"可获成就：{'是' if profile.get('can_achievements') else '否'}  "
+        f"荆露倍率：{profile.get('dew_multiplier', '-')}",
+        f"关联组状态：{group.get('status') if group else '无关联'}",
+    ]
+    if group:
+        lines.append(
+            f"关联组信誉：{group.get('reputation')}/100  "
+            f"最近恢复日期：{group.get('last_recovery_date') or '-'}"
+        )
+        if members:
+            lines.append('关联组成员：' + '、'.join(
+                f"{item.get('username')}#{item.get('user_id') or item.get('id')}"
+                for item in members
+            ))
+    return '\n'.join(lines)
+
+
+def format_reputation_ledger(user, rows):
+    lines = [
+        f"{user.get('username')} (ID:{user.get('player_id') or '-'} 注册顺序：{user.get('id')})",
+        f"最近信誉流水 {len(rows)} 条：",
+    ]
+    if not rows:
+        lines.append('暂无流水。')
+    for row in rows:
+        delta = int(row.get('delta') or 0)
+        lines.append(
+            f"{admin_display_time(row.get('created_at'))}  "
+            f"{delta:+d}  {row.get('value_before')}→{row.get('value_after')}  "
+            f"原因={row.get('reason_code') or '-'}"
+            + (f"  对局={row.get('match_id')}" if row.get('match_id') else '')
+        )
+    return '\n'.join(lines)
+
+
+def format_reputation_recover_preview(entities, detailed=False):
+    if not entities:
+        return '没有可执行每日恢复的目标。'
+    total_days = sum(int(item.get('recoverable_days') or 0) for item in entities)
+    total_amount = sum(int(item.get('recovery_amount') or 0) for item in entities)
+    lines = [
+        f'每日信誉恢复预览：目标 {len(entities)} 个，可恢复 {total_days} 天，预计共 +{total_amount} 信誉。',
+    ]
+    shown = entities if detailed else entities[:10]
+    for item in shown:
+        names = '、'.join(
+            f"{member.get('username') or member.get('user_id')}#{member.get('user_id') or member.get('id')}"
+            for member in (item.get('members') or [])
+        ) or str(item.get('entity_id'))
+        lines.append(
+            f"- {names}：当前 {item.get('current')}，可恢复 {item.get('recoverable_days')} 天 "
+            f"(+{item.get('recovery_amount') or 0})，最近恢复日期 {item.get('last_recovery_date') or '-'}"
+        )
+    if not detailed and len(entities) > 10:
+        lines.append(f'… 其余 {len(entities) - 10} 个目标略。')
+    lines.append('确认执行请输入：/account reputation recover <账号|all> confirm')
+    return '\n'.join(lines)
 
 
 def admin_rating_list_output(scope='season', limit=20):
@@ -12208,6 +12471,314 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             if 'locked' in str(exc).lower() or 'busy' in str(exc).lower():
                 return {'success': False, 'output': '社区运营数据库暂时繁忙，请稍后再试。'}
             raise
+    if cmd in {
+        'publicfeedback-list',
+        'publicfeedback-get',
+        'publicfeedback-status',
+        'publicfeedback-priority',
+        'publicfeedback-note',
+        'publicfeedback-tags',
+        'publicfeedback-link',
+        'publicfeedback-unlink',
+        'publicfeedback-fixversion',
+        'publicfeedback-reopen',
+        'publicfeedback-votes',
+        'publicfeedback-hide',
+        'publicfeedback-audit',
+        'publicfeedback-oldfeedback',
+    }:
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        status_names = {
+            'new': '待确认', 'needs_info': '需补充', 'confirmed': '已确认',
+            'in_progress': '修复中', 'fixed': '已修复', 'duplicate': '重复',
+            'unreproducible': '无法复现', 'by_design': '设计如此', 'invalid': '不予处理',
+            'under_review': '审核中', 'accepted': '已采纳', 'planned': '已规划',
+            'rejected': '已拒绝',
+        }
+        try:
+            if cmd == 'publicfeedback-oldfeedback':
+                try:
+                    limit = max(1, min(int(parts[2] if len(parts) >= 3 else '30'), 100))
+                except (TypeError, ValueError):
+                    limit = 30
+                with closing(get_db_connection()) as conn:
+                    rows = conn.execute(
+                        '''
+                        SELECT t.id, t.user_id, t.category, t.title, t.status,
+                               t.updated_at,
+                               (SELECT COUNT(*) FROM feedback_messages m
+                                WHERE m.thread_id = t.id AND m.hidden = 0) AS message_count,
+                               (SELECT m.message FROM feedback_messages m
+                                WHERE m.thread_id = t.id AND m.hidden = 0
+                                ORDER BY m.id DESC LIMIT 1) AS last_message
+                        FROM feedback_threads t
+                        WHERE t.category IN ('bug', 'suggestion')
+                        ORDER BY t.updated_at DESC, t.id DESC
+                        LIMIT ?
+                        ''',
+                        (limit,),
+                    ).fetchall()
+                if not rows:
+                    return {'success': True, 'output': '没有旧版 Bug/建议工单。'}
+                lines = [f'旧版工单：{len(rows)} 条（只读审计，常规界面不可见）']
+                for row in rows:
+                    last = str(row['last_message'] or '').replace('\n', ' ')[:80]
+                    lines.append(
+                        f"  #{row['id']} [{row['category']}] user={row['user_id']} {row['title']} "
+                        f"状态={row['status']} 消息={row['message_count']} 更新={row['updated_at']}"
+                        + (f" 最新：{last}" if last else '')
+                    )
+                return {'success': True, 'output': '\n'.join(lines)}
+            if cmd == 'publicfeedback-list':
+                if len(parts) < 2 or str(parts[1]).lower() not in ('bug', 'suggestion'):
+                    return {
+                        'success': False,
+                        'output': command_error(raw, len(raw), 'publicfeedback list <bug|suggestion> [状态] [数量]'),
+                    }
+                kind = str(parts[1]).lower()
+                status = parts[2] if len(parts) >= 3 and parts[2].lower() != 'all' else ''
+                try:
+                    per_page = max(1, min(int(parts[3] if len(parts) >= 4 else '20'), 50))
+                except (TypeError, ValueError):
+                    per_page = 20
+                page = public_feedback.list_public_issues(
+                    None,
+                    kind=kind,
+                    status=status,
+                    include_hidden=True,
+                    sort='priority',
+                    page=1,
+                    per_page=per_page,
+                )
+                items = page.get('items') or []
+                if not items:
+                    return {'success': True, 'output': f'没有 {kind} 公开反馈。'}
+                lines = [f"{kind} 公开反馈：{page.get('total')} 条（显示前 {len(items)}）"]
+                for item in items:
+                    author = (item.get('author') or {}).get('username') or '已注销玩家'
+                    hidden = ' [已隐藏]' if not item.get('visible') else ''
+                    lines.append(
+                        f"  #{item['id']} [{status_names.get(item['status'], item['status'])}] "
+                        f"P{item.get('priority') or 0} {item.get('vote_count', 0)}票 {item.get('comment_count', 0)}评论 "
+                        f"{author} {item.get('title')}{hidden}"
+                    )
+                return {'success': True, 'output': '\n'.join(lines)}
+
+            if cmd == 'publicfeedback-get':
+                if len(parts) < 2:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback get <问题ID>')}
+                detail = public_feedback.get_public_issue(None, parts[1], include_hidden=True)
+                author = (detail.get('author') or {}).get('username') or '已注销玩家'
+                body = detail.get('body') or ''
+                if len(body) > 800:
+                    body = body[:800] + '\n…（正文已截断）'
+                lines = [
+                    f"#{detail['id']} [{status_names.get(detail.get('status'), detail.get('status'))}] "
+                    f"{'suggestion' if detail.get('kind') == 'suggestion' else 'bug'}",
+                    f"标题：{detail.get('title')}",
+                    f"作者：{author} | 可见={detail.get('visible')} | 置顶={detail.get('pinned')} | "
+                    f"优先级={detail.get('priority') or 0} | 票数={detail.get('vote_count')} | 评论={detail.get('comment_count')}",
+                    f"创建={detail.get('created_at')} | 更新={detail.get('updated_at')}",
+                ]
+                if detail.get('replay_id'):
+                    lines.append(f"回放：{detail['replay_id']}")
+                lines.extend(['', body])
+                if detail.get('status_history'):
+                    lines.extend(['', '状态历史：'])
+                    for entry in detail['status_history']:
+                        actor = (entry.get('actor') or {}).get('username') or 'adminconsole'
+                        reason = f"：{entry.get('reason')}" if entry.get('reason') else ''
+                        lines.append(
+                            f"  {actor} {status_names.get(entry.get('from_status'), entry.get('from_status') or '-')}"
+                            f" → {status_names.get(entry.get('to_status'), entry.get('to_status'))}"
+                            f"{reason} @ {entry.get('created_at')}"
+                        )
+                if detail.get('staff_notes'):
+                    lines.extend([f"内部备注 {len(detail['staff_notes'])} 条（详情见网页端）"])
+                return {'success': True, 'output': '\n'.join(lines)}
+
+            if cmd == 'publicfeedback-status':
+                if len(parts) < 3:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback status <问题ID> <目标状态> [原因]')}
+                reason = ' '.join(parts[3:]) if len(parts) > 3 else ''
+                result = public_feedback.set_public_issue_status(actor, parts[1], parts[2], reason=reason)
+                admin_event('admin', f'publicfeedback status #{parts[1]} -> {parts[2]} by {actor}')
+                return {
+                    'success': True,
+                    'output': f"问题 #{result.get('id')} 状态已改为 {status_names.get(result.get('status'), result.get('status'))}。",
+                }
+
+            if cmd == 'publicfeedback-priority':
+                if len(parts) < 3:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback priority <问题ID> <0-5> [sort=数值] [pin] [unpin]')}
+                try:
+                    priority = int(parts[2])
+                except (TypeError, ValueError):
+                    return {'success': False, 'output': '优先级必须为0-5的整数。'}
+                pinned = None
+                sort_order = None
+                for token in parts[3:]:
+                    key, sep, value = str(token).partition('=')
+                    key = key.lower()
+                    if not sep and key in ('pin', 'unpin'):
+                        if pinned in (0, 1) and bool(pinned) != (key == 'pin'):
+                            return {'success': False, 'output': 'pin 与 unpin 不能同时出现。'}
+                        pinned = 1 if key == 'pin' else 0
+                    elif sep and key == 'sort':
+                        try:
+                            sort_order = float(value)
+                        except ValueError:
+                            return {'success': False, 'output': 'sort 必须是数值。'}
+                    else:
+                        return {'success': False, 'output': f'未知参数：{token}'}
+                result = public_feedback.set_public_issue_priority(
+                    actor,
+                    parts[1],
+                    priority=priority,
+                    pinned=pinned,
+                    sort_order=sort_order,
+                )
+                admin_event('admin', f'publicfeedback priority #{result.get("id")} = {priority} by {actor}')
+                return {
+                    'success': True,
+                    'output': f"问题 #{result.get('id')} 优先级={result.get('priority')} 置顶={result.get('pinned')}。",
+                }
+
+            if cmd == 'publicfeedback-note':
+                if len(parts) < 3:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback note <问题ID> <备注>')}
+                note = public_feedback._add_staff_note(actor, parts[1], ' '.join(parts[2:]))
+                admin_event('admin', f'publicfeedback note #{note.get("issue_id")} by {actor}')
+                return {'success': True, 'output': f"已为问题 #{note.get('issue_id')} 添加内部备注 #{note.get('id')}。"}
+
+            if cmd == 'publicfeedback-tags':
+                if len(parts) < 2:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback tags <问题ID> <标签...>')}
+                result = public_feedback.set_public_issue_tags(actor, parts[1], parts[2:])
+                admin_event('admin', f'publicfeedback tags issue={parts[1]} by {actor}')
+                return {'success': True, 'output': f"问题 #{parts[1]} 标签：{'、'.join(result['tags']) or '（无）'}"}
+
+            if cmd == 'publicfeedback-link':
+                if len(parts) < 3:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback link <来源ID> <目标ID> [related|duplicates|fix_caused] [原因]')}
+                relation = parts[3] if len(parts) > 3 and parts[3] in ('related', 'duplicates', 'fix_caused') else 'related'
+                note_index = 4 if len(parts) > 3 and parts[3] in ('related', 'duplicates', 'fix_caused') else 3
+                result = public_feedback.link_public_issues(
+                    actor,
+                    parts[1],
+                    parts[2],
+                    relation=relation,
+                    note=' '.join(parts[note_index:]) if len(parts) > note_index else '',
+                )
+                admin_event('admin', f'publicfeedback link {result.get("from_issue_id")} -> {result.get("to_issue_id")} by {actor}')
+                return {'success': True, 'output': f"已添加关联 #{result.get('link_id')}。"}
+
+            if cmd == 'publicfeedback-unlink':
+                if len(parts) < 2:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback unlink <关联ID>')}
+                result = public_feedback.unlink_public_issue(actor, parts[1])
+                admin_event('admin', f'publicfeedback unlink {parts[1]} by {actor}')
+                return {'success': True, 'output': '关联已删除。'}
+
+            if cmd == 'publicfeedback-fixversion':
+                if len(parts) < 2:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback fixversion <问题ID> [版本]')}
+                result = public_feedback.set_public_issue_fix_version(
+                    actor,
+                    parts[1],
+                    ' '.join(parts[2:]) if len(parts) > 2 else '',
+                )
+                admin_event('admin', f'publicfeedback fixversion issue={parts[1]} by {actor}')
+                return {'success': True, 'output': f"问题 #{result.get('issue_id')} 修复版本={result.get('fix_version') or '（未设置）'}"}
+
+            if cmd == 'publicfeedback-reopen':
+                if len(parts) < 3 or str(parts[2]).lower() not in ('accept', 'reject'):
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback reopen <请求ID> <accept|reject> [原因]')}
+                result = public_feedback.review_public_reopen_request(
+                    actor,
+                    parts[1],
+                    str(parts[2]).lower(),
+                    reason=' '.join(parts[3:]) if len(parts) > 3 else '',
+                )
+                admin_event('admin', f'publicfeedback reopen {parts[1]} {parts[2]} by {actor}')
+                return {
+                    'success': True,
+                    'output': f"仍未修复请求 #{result.get('request_id')} 已{'接受并重新开启' if result.get('status') == 'accepted' else '拒绝'}。",
+                }
+
+            if cmd == 'publicfeedback-votes':
+                if len(parts) < 4 or str(parts[1]).lower() not in ('invalid', 'restore'):
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback votes <invalid|restore> <问题ID> <账号>')}
+                restore = str(parts[1]).lower() == 'restore'
+                user = find_user_for_admin(parts[3])
+                if user is None:
+                    return {'success': False, 'output': '找不到该账号。'}
+                result = public_feedback.invalidate_public_vote(actor, parts[2], user['id'], restore=restore)
+                admin_event('admin', f'publicfeedback vote {parts[1]} issue={parts[2]} user={user["id"]} by {actor}')
+                return {
+                    'success': True,
+                    'output': f"问题 #{parts[2]} 的账号 {user['username']}（#{user['id']}）投票已"
+                    f"{'恢复' if restore else '作废'}。",
+                }
+
+            if cmd == 'publicfeedback-hide':
+                if len(parts) < 3 or str(parts[1]).lower() not in ('issue', 'comment'):
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback hide <issue|comment> <ID> [unhide]')}
+                object_kind = str(parts[1]).lower()
+                hidden = not (len(parts) > 3 and str(parts[3]).lower() in ('unhide', 'restore', 'show'))
+                if object_kind == 'issue':
+                    result = public_feedback.hide_public_issue(actor, parts[2], hidden=hidden)
+                else:
+                    result = public_feedback.hide_public_comment(actor, parts[2], hidden=hidden)
+                admin_event('admin', f'publicfeedback hide {object_kind} #{parts[2]} hidden={hidden} by {actor}')
+                return {'success': True, 'output': f"已{'隐藏' if hidden else '恢复'}{'问题' if object_kind == 'issue' else '评论'} #{parts[2]}。"}
+
+            if cmd == 'publicfeedback-audit':
+                if len(parts) < 2:
+                    return {'success': False, 'output': command_error(raw, len(raw), 'publicfeedback audit <问题ID>')}
+                detail = public_feedback.get_public_issue(None, parts[1], include_hidden=True)
+                lines = [f"问题 #{detail.get('id')} 审计", '']
+                with closing(get_db_connection()) as conn:
+                    votes = conn.execute(
+                        '''
+                        SELECT id, user_id, active, created_at, invalidated_by, invalidated_at
+                        FROM public_issue_votes WHERE issue_id = ?
+                        ORDER BY id DESC LIMIT 100
+                        ''',
+                        (int(detail['id']),),
+                    ).fetchall()
+                    events = conn.execute(
+                        '''
+                        SELECT * FROM public_issue_vote_events
+                        WHERE issue_id = ? ORDER BY id DESC LIMIT 200
+                        ''',
+                        (int(detail['id']),),
+                    ).fetchall()
+                    private_count = conn.execute(
+                        'SELECT COUNT(*) AS count FROM public_issue_private_messages WHERE issue_id = ?',
+                        (int(detail['id']),),
+                    ).fetchone()[0]
+                lines.append(f"投票记录：{len(votes)} 条")
+                for row in votes[:30]:
+                    lines.append(
+                        f"  #{row['id']} user={row['user_id']} active={row['active']} "
+                        f"created={row['created_at']} invalidated_by={row['invalidated_by'] or '-'}"
+                    )
+                lines.extend(['', f"投票事件：{len(events)} 条"])
+                for row in events[:40]:
+                    lines.append(
+                        f"  #{row['id']} user={row['user_id']} {row['action']} "
+                        f"{row['reason_code'] or ''} actor={row['actor_user_id'] or '-'} @ {row['created_at']}"
+                    )
+                lines.append(f"私密补充消息数：{private_count}")
+                return {'success': True, 'output': '\n'.join(lines)}
+        except public_feedback.PublicFeedbackError as exc:
+            return {'success': False, 'output': exc.message}
+        except sqlite3.OperationalError as exc:
+            if 'locked' in str(exc).lower() or 'busy' in str(exc).lower():
+                return {'success': False, 'output': '公开反馈数据库暂时繁忙，请稍后再试。'}
+            raise
     if cmd == 'replaylist':
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
@@ -12629,6 +13200,150 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             scope = 'season'
         count = parse_int_token(count_token, 'count') if str(count_token).strip() else 20
         return {'success': True, 'output': admin_rating_list_output(scope, count)}
+    if cmd in ('reputation-info', 'reputation-ledger'):
+        if len(parts) < 2:
+            usage = (
+                'account reputation info <账号>'
+                if cmd == 'reputation-info'
+                else 'account reputation ledger <账号> [数量]'
+            )
+            return {'success': False, 'output': command_error(raw, len(raw), usage)}
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        user = find_user_for_admin(parts[1])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        if cmd == 'reputation-info':
+            context = account_integrity.get_reputation_context(user['id'])
+            return {'success': True, 'output': format_reputation_user(user, context)}
+        limit = 20
+        if len(parts) > 2:
+            try:
+                limit = max(1, min(100, int(parts[2])))
+            except (TypeError, ValueError):
+                return {'success': False, 'output': '数量必须是 1-100 的整数'}
+        rows = account_integrity.get_reputation_ledger(user['id'], limit=limit)
+        return {'success': True, 'output': format_reputation_ledger(user, rows)}
+    if cmd in ('reputation-add', 'reputation-set'):
+        usage = (
+            'account reputation add <账号> <±数值> [原因]'
+            if cmd == 'reputation-add'
+            else 'account reputation set <账号> <0-100> [原因]'
+        )
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), usage)}
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        user = find_user_for_admin(parts[1])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        try:
+            parsed = int(parts[2])
+        except (TypeError, ValueError):
+            return {'success': False, 'output': '数值必须是整数'}
+        current = int((account_integrity.get_reputation_profile(user['id']) or {}).get('value') or 0)
+        if cmd == 'reputation-add':
+            delta = parsed
+            action_label = '增加' if delta >= 0 else '扣除'
+            if not -100 <= delta <= 100 or delta == 0:
+                return {'success': False, 'output': '信誉增减必须是 -100~100 的非零整数'}
+        else:
+            action_label = '设置'
+            if not 0 <= parsed <= 100:
+                return {'success': False, 'output': '信誉值必须在 0-100 之间'}
+            delta = parsed - current
+            if delta == 0:
+                context = account_integrity.get_reputation_context(user['id'])
+                return {
+                    'success': True,
+                    'output': f'信誉已是 {current}，无需修改。\n{format_reputation_user(user, context)}',
+                }
+        reason = ' '.join(parts[3:]).strip() or 'admin command'
+        business_id = f'reputation:console:{user["id"]}:{secrets.token_hex(8)}'
+        try:
+            result = account_integrity.change_reputation(
+                user['id'],
+                delta,
+                reason,
+                business_id,
+                metadata={'admin_username': str(actor or 'console')[:120]},
+            )
+        except Exception as exc:
+            return {'success': False, 'output': f'信誉修改失败：{exc}'}
+        context = account_integrity.get_reputation_context(user['id'])
+        group_count = len(context.get('members') or [])
+        group_note = (
+            f'已同步关联组，共影响 {group_count} 个成员。'
+            if group_count
+            else '该账号未关联其他账号。'
+        )
+        admin_event(
+            'admin',
+            f"reputation {action_label} user={user['username']}#{user['id']} "
+            f"delta={result.get('delta')} value={result.get('value_after')} reason={reason}",
+        )
+        return {
+            'success': True,
+            'output': (
+                f"已{action_label}信誉：{result.get('value_before')}→{result.get('value_after')}"
+                f"（实际增量 {result.get('delta'):+d}）\n{group_note}\n"
+                f'{format_reputation_user(user, context)}'
+            ),
+        }
+    if cmd == 'reputation-recover':
+        if len(parts) < 3:
+            return {
+                'success': False,
+                'output': command_error(raw, len(raw), 'account reputation recover <账号|all> <preview|confirm>'),
+            }
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        target = parts[1]
+        is_all = str(target).lower() in ('all', '*', '全部', '全服')
+        mode = str(parts[2]).lower()
+        if mode not in ('preview', 'confirm', '确认'):
+            return {
+                'success': False,
+                'output': command_error(raw, len(raw), 'account reputation recover <账号|all> <preview|confirm>'),
+            }
+        user = None if is_all else find_user_for_admin(target)
+        if not is_all and not user:
+            return {'success': False, 'output': '账号不存在'}
+        try:
+            if mode == 'preview':
+                entities = account_integrity.preview_recover_reputation(
+                    user_id=user['id'] if user is not None else None,
+                )
+                return {
+                    'success': True,
+                    'output': format_reputation_recover_preview(
+                        entities,
+                        detailed=user is not None,
+                    ),
+                }
+            results = account_integrity.recover_reputation_daily(
+                user_id=user['id'] if user is not None else None,
+            )
+        except Exception as exc:
+            return {'success': False, 'output': f'信誉恢复失败：{exc}'}
+        admin_event(
+            'admin',
+            f"reputation recover target={'all' if is_all else user['username'] + '#' + str(user['id'])} "
+            f"entries={len(results)}",
+        )
+        if is_all:
+            return {
+                'success': True,
+                'output': f'全服每日信誉恢复已执行，新增流水 {len(results)} 条。',
+            }
+        context = account_integrity.get_reputation_context(user['id'])
+        return {
+            'success': True,
+            'output': (
+                f'每日信誉恢复已执行，新增流水 {len(results)} 条。\n'
+                f'{format_reputation_user(user, context)}'
+            ),
+        }
     if cmd == 'rating-info':
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), 'account rating info <账号>')}
@@ -13964,6 +14679,19 @@ def admin_completions(line):
         except Exception:
             return []
 
+    def public_feedback_issue_values():
+        if not DB_AVAILABLE:
+            return []
+        try:
+            page = public_feedback.list_public_issues(
+                None,
+                include_hidden=True,
+                per_page=30,
+            )
+            return [str(item.get('id')) for item in (page.get('items') or []) if item.get('id') is not None]
+        except Exception:
+            return []
+
     def warning_values():
         if not DB_AVAILABLE:
             return []
@@ -14051,6 +14779,38 @@ def admin_completions(line):
         return filtered(visible_children(root))
     sub = parts[1].lower() if len(parts) > 1 else ''
 
+    if cmd == 'publicfeedback':
+        if position == 2:
+            if sub == 'list':
+                return filtered(['bug', 'suggestion'])
+            if sub == 'get':
+                return filtered(public_feedback_issue_values())
+            if sub == 'status':
+                return filtered(public_feedback_issue_values())
+            if sub == 'priority':
+                return filtered(public_feedback_issue_values())
+            if sub == 'note':
+                return filtered(public_feedback_issue_values())
+            if sub == 'audit':
+                return filtered(public_feedback_issue_values())
+            if sub == 'votes':
+                return filtered(['invalid', 'restore'])
+            if sub == 'hide':
+                return filtered(['issue', 'comment'])
+            if sub == 'oldfeedback':
+                return filtered(['list'])
+        if sub == 'votes':
+            if position == 3:
+                return filtered(public_feedback_issue_values())
+            if position == 4:
+                return filtered(account_values())
+        if sub == 'hide' and position == 3:
+            return filtered(['issue', 'comment'])
+        if sub in ('status', 'priority', 'note', 'audit') and position == 3:
+            return filtered(public_feedback_issue_values())
+        if sub == 'list' and position == 3:
+            return filtered(['all', 'new', 'needs_info', 'confirmed', 'in_progress', 'fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid', 'under_review', 'accepted', 'planned', 'rejected'])
+
     if cmd == 'player' and position == 2:
         values = online_values(include_all=sub == 'afkcheck')
         if sub == 'get':
@@ -14074,6 +14834,14 @@ def admin_completions(line):
                 return filtered(account_values())
             if position == 4 and len(parts) > 2 and parts[2].lower() in ('set', 'add'):
                 return filtered(['season', 'total', 'both'])
+        if sub == 'reputation':
+            if position == 2:
+                return filtered(['info', 'ledger', 'add', 'set', 'recover'])
+            if position == 3:
+                values = ['all', *account_values()]
+                return filtered(values) if parts[2].lower() == 'recover' else filtered(account_values())
+            if position == 4 and len(parts) > 2 and parts[2].lower() == 'recover':
+                return filtered(['preview', 'confirm'])
         if sub == 'dew':
             if position == 2:
                 return filtered(['get', 'add', 'addpaid', 'spend', 'tx'])
@@ -18170,6 +18938,9 @@ def story_page():
     except Exception as exc:
         app.logger.warning('failed to load story title identity for user %s: %s', user.get('id'), exc)
         account.update(special_public_fields({}))
+    reputation = reputation_public_payload(user.get('id'))
+    if reputation:
+        account['reputation_profile'] = reputation
     return render_template(
         'story.html',
         static_version=GTN_STATIC_VERSION,
@@ -19985,6 +20756,34 @@ def feedback_handling_pane():
         'feedback_handling.html',
         static_version=GTN_STATIC_VERSION,
         csrf_token=feedback_handling_csrf_token(),
+    )
+
+
+@app.route('/feedback-center')
+def feedback_center_redirect():
+    return redirect('/feedback-center/bug')
+
+
+@app.route('/feedback-center/bug')
+@app.route('/feedback-center/suggestion')
+def feedback_center_browse(kind=None):
+    kind = kind or str(request.path).rstrip('/').split('/')[-1]
+    if kind not in ('bug', 'suggestion'):
+        return redirect('/feedback-center/bug')
+    return render_template(
+        'feedback_center.html',
+        static_version=GTN_STATIC_VERSION,
+    )
+
+
+@app.route('/feedback-center/issues/<path:issue_key>')
+def feedback_center_issue_page(issue_key):
+    key = str(issue_key or '').strip()
+    if not re.fullmatch(r'(?:GB|GS)-\d+', key):
+        return redirect('/feedback-center/bug')
+    return render_template(
+        'feedback_center.html',
+        static_version=GTN_STATIC_VERSION,
     )
 
 
@@ -22822,6 +23621,631 @@ def api_feedback_status():
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, **(result or {})})
+
+
+@app.route('/api/public-feedback/summary')
+def api_public_feedback_summary():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user = _current_account_user()
+    user_id = user.get('id') if user else None
+    try:
+        is_staff = bool(user_id and feedback_is_staff(user_id))
+        return jsonify({
+            'success': True,
+            'authenticated': bool(user),
+            'is_staff': is_staff,
+            'author_unread_count': (
+                public_feedback.public_feedback_author_unread_count(user_id)
+                if user_id
+                else 0
+            ),
+            'staff_unread_count': (
+                public_feedback.public_feedback_staff_unread_count()
+                if is_staff
+                else 0
+            ),
+            'watcher_unread_count': (
+                public_feedback.public_feedback_watcher_unread_count(user_id)
+                if user_id
+                else 0
+            ),
+            'game_version': current_public_game_version(),
+        })
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues')
+def api_public_feedback_issues():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user = _current_account_user()
+    viewer_id = user.get('id') if user else None
+    include_hidden = (
+        str(request.args.get('include_hidden') or '').lower() in ('1', 'true', 'yes')
+        and bool(viewer_id and feedback_is_staff(viewer_id))
+    )
+    try:
+        result = public_feedback.list_public_issues(
+            viewer_id,
+            kind=request.args.get('kind', 'all'),
+            status=request.args.get('status', ''),
+            search=request.args.get('q', request.args.get('search', '')),
+            include_hidden=include_hidden,
+            sort=request.args.get('sort', 'priority'),
+            page=request.args.get('page', 1),
+            per_page=request.args.get('per_page', public_feedback.PUBLIC_ISSUE_PAGE_SIZE),
+        )
+        return jsonify({'success': True, **result})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues/<int:issue_id>')
+def api_public_feedback_issue_detail(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user = _current_account_user()
+    viewer_id = user.get('id') if user else None
+    include_hidden = (
+        str(request.args.get('include_hidden') or '').lower() in ('1', 'true', 'yes')
+        and bool(viewer_id and feedback_is_staff(viewer_id))
+    )
+    try:
+        payload = public_feedback.get_public_issue(
+            viewer_id,
+            issue_id,
+            include_hidden=include_hidden,
+        )
+        return jsonify({'success': True, 'issue': payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues', methods=['POST'])
+def api_public_feedback_issue_create():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, user, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    muted_response = _public_feedback_mute_error(user_id, message='当前无法发送反馈')
+    if muted_response is not None:
+        return muted_response
+    exempt = _chat_exempt_from_user_id(user_id)
+    if not exempt:
+        if not rate_limiter(f'public-feedback-create:{user_id}:fast', limit=1, window=10):
+            return jsonify({'success': False, 'error': '发送过快'}), 429
+        if not rate_limiter(f'public-feedback-create:{user_id}:day', limit=30, window=86400):
+            return jsonify({'success': False, 'error': '今日发布数量已达上限'}), 429
+    data = request.get_json(silent=True) or {}
+    try:
+        kind = str(data.get('kind') or 'bug').strip().lower()
+        title, _, _ = _validate_public_feedback_content(
+            user_id,
+            user,
+            data.get('title', ''),
+            maximum=public_feedback.ISSUE_TITLE_MAX,
+            label='标题',
+            allow_newlines=False,
+        )
+        body, normalized_body, risk_level = _validate_public_feedback_content(
+            user_id,
+            user,
+            data.get('body', ''),
+            maximum=public_feedback.ISSUE_BODY_MAX,
+            label='内容',
+            allow_newlines=True,
+        )
+        replay_id = data.get('replay_id')
+        if replay_id not in (None, ''):
+            try:
+                replay_id = normalize_replay_id(replay_id)
+            except ValueError as exc:
+                return jsonify({'success': False, 'error': str(exc)}), 400
+            if not feedback_is_staff(user_id) and not replay_visible_to_user(replay_id, user_id, user):
+                return jsonify({'success': False, 'error': '回放不存在，或你不是该局参与者'}), 403
+        payload = public_feedback.create_public_issue(
+            user_id,
+            kind=kind,
+            title=title,
+            body=body,
+            replay_id=replay_id,
+            game_version=current_public_game_version(),
+            normalized_body=normalized_body,
+            risk_level=risk_level,
+        )
+        if replay_id:
+            try:
+                hold_replay(
+                    replay_id,
+                    days=365,
+                    reason=f'public-feedback:{payload.get("id")}',
+                    created_by=f'user:{user_id}',
+                )
+            except Exception as exc:
+                admin_event('error', f'failed to hold public feedback replay {replay_id}: {exc}', user_id=user_id)
+        return jsonify({'success': True, 'issue': payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues/<int:issue_id>/comments', methods=['POST'])
+def api_public_feedback_comment_create(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, user, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    muted_response = _public_feedback_mute_error(user_id, message='当前无法发表评论')
+    if muted_response is not None:
+        return muted_response
+    exempt = _chat_exempt_from_user_id(user_id)
+    if not exempt:
+        if not rate_limiter(f'public-feedback-comment:{user_id}:fast', limit=1, window=5):
+            return jsonify({'success': False, 'error': '发送过快'}), 429
+        if not rate_limiter(f'public-feedback-comment:{user_id}:minute', limit=30, window=60):
+            return jsonify({'success': False, 'error': '发送过快'}), 429
+    data = request.get_json(silent=True) or {}
+    try:
+        body, normalized_body, risk_level = _validate_public_feedback_content(
+            user_id,
+            user,
+            data.get('body', ''),
+            maximum=public_feedback.COMMENT_MAX,
+            label='评论',
+            allow_newlines=True,
+        )
+        payload = public_feedback.post_public_comment(
+            user_id,
+            issue_id,
+            body,
+            normalized_body=normalized_body,
+            risk_level=risk_level,
+        )
+        return jsonify({'success': True, 'comment': payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/comments/<int:comment_id>', methods=['PATCH', 'DELETE'])
+def api_public_feedback_comment_mutate(comment_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, user, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    muted_response = _public_feedback_mute_error(user_id, message='当前无法操作评论')
+    if muted_response is not None:
+        return muted_response
+    exempt = _chat_exempt_from_user_id(user_id)
+    if not exempt:
+        if not rate_limiter(f'public-feedback-comment-mutate:{user_id}:fast', limit=1, window=2):
+            return jsonify({'success': False, 'error': '操作过快'}), 429
+    try:
+        if request.method == 'PATCH':
+            data = request.get_json(silent=True) or {}
+            body, normalized_body, risk_level = _validate_public_feedback_content(
+                user_id,
+                user,
+                data.get('body', ''),
+                maximum=public_feedback.COMMENT_MAX,
+                label='评论',
+                allow_newlines=True,
+            )
+            payload = public_feedback.edit_public_comment(
+                user_id,
+                comment_id,
+                body,
+                normalized_body=normalized_body,
+                risk_level=risk_level,
+            )
+            return jsonify({'success': True, 'comment': payload})
+        payload = public_feedback.remove_public_comment(user_id, comment_id)
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues/<int:issue_id>/vote', methods=['POST'])
+def api_public_feedback_vote(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    if not rate_limiter(f'public-feedback-vote:{user_id}:fast', limit=1, window=2):
+        return jsonify({'success': False, 'error': '操作过快'}), 429
+    if not rate_limiter(f'public-feedback-vote:{user_id}:minute', limit=60, window=60):
+        return jsonify({'success': False, 'error': '操作过快'}), 429
+    try:
+        payload = public_feedback.toggle_public_vote(user_id, issue_id)
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues/<int:issue_id>/watch', methods=['POST'])
+def api_public_feedback_watch(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    if not rate_limiter(f'public-feedback-watch:{user_id}:fast', limit=1, window=2):
+        return jsonify({'success': False, 'error': '操作过快'}), 429
+    try:
+        payload = public_feedback.toggle_public_watch(user_id, issue_id)
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues/<int:issue_id>/not-fixed', methods=['POST'])
+def api_public_feedback_not_fixed(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, user, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    muted_response = _public_feedback_mute_error(user_id, message='当前无法提交“仍未修复”')
+    if muted_response is not None:
+        return muted_response
+    exempt = _chat_exempt_from_user_id(user_id)
+    if not exempt:
+        if not rate_limiter(f'public-feedback-reopen:{user_id}:fast', limit=1, window=15):
+            return jsonify({'success': False, 'error': '发送过快'}), 429
+        if not rate_limiter(f'public-feedback-reopen:{user_id}:day', limit=10, window=86400):
+            return jsonify({'success': False, 'error': '今日提交次数已达上限'}), 429
+    data = request.get_json(silent=True) or {}
+    try:
+        message, _, _ = _validate_public_feedback_content(
+            user_id,
+            user,
+            data.get('message', ''),
+            maximum=1000,
+            label='仍未修复说明',
+            allow_newlines=True,
+        )
+        replay_id = data.get('replay_id')
+        if replay_id not in (None, ''):
+            try:
+                replay_id = normalize_replay_id(replay_id)
+            except ValueError as exc:
+                return jsonify({'success': False, 'error': str(exc)}), 400
+            if not feedback_is_staff(user_id) and not replay_visible_to_user(replay_id, user_id, user):
+                return jsonify({'success': False, 'error': '回放不存在，或你不是该局参与者'}), 403
+        payload = public_feedback.submit_public_reopen_request(
+            user_id,
+            issue_id,
+            message,
+            replay_id=replay_id,
+        )
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues/<int:issue_id>/private')
+def api_public_feedback_private_list(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        payload = public_feedback.list_public_issue_private(user_id, issue_id)
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues/<int:issue_id>/private', methods=['POST'])
+def api_public_feedback_private_send(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, user, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    muted_response = _public_feedback_mute_error(user_id, message='当前无法发送私密补充')
+    if muted_response is not None:
+        return muted_response
+    exempt = _chat_exempt_from_user_id(user_id)
+    if not exempt:
+        if not rate_limiter(f'public-feedback-private:{user_id}:fast', limit=1, window=5):
+            return jsonify({'success': False, 'error': '发送过快'}), 429
+        if not rate_limiter(f'public-feedback-private:{user_id}:minute', limit=20, window=60):
+            return jsonify({'success': False, 'error': '发送过快'}), 429
+    data = request.get_json(silent=True) or {}
+    try:
+        message, normalized_message, risk_level = _validate_public_feedback_content(
+            user_id,
+            user,
+            data.get('message', ''),
+            maximum=public_feedback.PRIVATE_MAX,
+            label='私密补充',
+            allow_newlines=True,
+        )
+        payload = public_feedback.send_public_issue_private(
+            user_id,
+            issue_id,
+            message,
+            normalized_message=normalized_message,
+            risk_level=risk_level,
+        )
+        return jsonify({'success': True, 'message': payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/issues/<int:issue_id>/read', methods=['POST'])
+def api_public_feedback_read(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        payload = public_feedback.mark_public_feedback_read(user_id, issue_id)
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/issues/<int:issue_id>/status', methods=['POST'])
+def api_public_feedback_admin_status(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = public_feedback.set_public_issue_status(
+            user_id,
+            issue_id,
+            data.get('status', ''),
+            reason=data.get('reason', ''),
+        )
+        return jsonify({'success': True, 'issue': payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/issues/<int:issue_id>/priority', methods=['POST'])
+def api_public_feedback_admin_priority(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = public_feedback.set_public_issue_priority(
+            user_id,
+            issue_id,
+            priority=data.get('priority') if 'priority' in data else None,
+            pinned=data.get('pinned') if 'pinned' in data else None,
+            sort_order=data.get('sort_order') if 'sort_order' in data else None,
+        )
+        return jsonify({'success': True, 'issue': payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/issues/<int:issue_id>/tags', methods=['POST'])
+def api_public_feedback_admin_tags(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = public_feedback.set_public_issue_tags(
+            user_id,
+            issue_id,
+            data.get('tags', []),
+        )
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/issues/<int:issue_id>/links', methods=['POST'])
+def api_public_feedback_admin_links(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = public_feedback.link_public_issues(
+            user_id,
+            issue_id,
+            data.get('to_issue_id', ''),
+            relation=data.get('relation', 'related'),
+            note=data.get('note', ''),
+        )
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/links/<int:link_id>', methods=['DELETE'])
+def api_public_feedback_admin_unlink(link_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        payload = public_feedback.unlink_public_issue(user_id, link_id)
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/issues/<int:issue_id>/fix-version', methods=['POST'])
+def api_public_feedback_admin_fix_version(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = public_feedback.set_public_issue_fix_version(
+            user_id,
+            issue_id,
+            data.get('fix_version', ''),
+        )
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/reopen-requests/<int:request_id>', methods=['POST'])
+def api_public_feedback_admin_reopen_review(request_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = public_feedback.review_public_reopen_request(
+            user_id,
+            request_id,
+            data.get('action', ''),
+            reason=data.get('reason', ''),
+            reopen_status=data.get('reopen_status', 'confirmed'),
+        )
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/issues/<int:issue_id>/hide', methods=['POST'])
+def api_public_feedback_admin_hide_issue(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        hidden = bool(data.get('hidden', True))
+        payload = public_feedback.hide_public_issue(user_id, issue_id, hidden=hidden)
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/comments/<int:comment_id>/hide', methods=['POST'])
+def api_public_feedback_admin_hide_comment(comment_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        hidden = bool(data.get('hidden', True))
+        payload = public_feedback.hide_public_comment(user_id, comment_id, hidden=hidden)
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/admin/issues/<int:issue_id>/notes', methods=['GET', 'POST'])
+def api_public_feedback_admin_notes(issue_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        if request.method == 'POST':
+            data = request.get_json(silent=True) or {}
+            note = public_feedback._add_staff_note(user_id, issue_id, data.get('note', ''))
+            return jsonify({'success': True, 'note': note})
+        detail = public_feedback.get_public_issue(user_id, issue_id, include_hidden=True)
+        return jsonify({'success': True, 'notes': detail.get('staff_notes') or []})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route(
+    '/api/public-feedback/admin/issues/<int:issue_id>/votes/<int:target_user_id>',
+    methods=['POST'],
+)
+def api_public_feedback_admin_vote_mutate(issue_id, target_user_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_staff_account_json()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    try:
+        restore = bool(data.get('restore', False))
+        payload = public_feedback.invalidate_public_vote(
+            user_id,
+            issue_id,
+            target_user_id,
+            restore=restore,
+        )
+        return jsonify({'success': True, **payload})
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
 
 
 @app.route('/api/social/dm/threads')
@@ -25766,6 +27190,11 @@ def on_decline_invite(data):
 
 def _story_chat_sender_profile(user):
     source = dict(user or {})
+    reputation = reputation_public_payload(
+        source.get('id') or (user or {}).get('id')
+    )
+    if reputation:
+        source['reputation_profile'] = reputation
     try:
         role_profile = get_special_account_profile(
             source.get('username') or source.get('display_name')
@@ -26767,11 +28196,13 @@ def capture_room_ai_training_decision(room, actor, action_kind, payload=None):
 
 
 def _ai_test_loadout_for_player(sid):
-    player = players.get(sid) or {}
-    disabled = set(player.get('disabled_mods') or [])
-    for mod in load_all_mods():
-        if mod.errors or mod_category(mod) != 'official':
-            disabled.add(mod.filename)
+    # Phelren matches are vanilla-only: ignore the player's selected mod
+    # combination and disable every package except the official vanilla set.
+    disabled = {
+        mod.filename
+        for mod in load_all_mods()
+        if mod.filename != VANILLA_MOD_FILENAME or mod.errors
+    }
     loadout = build_mod_loadout(sorted(disabled), runtime_mode='1v1')
     return loadout, _ai_test_enabled_mod_filenames(disabled)
 

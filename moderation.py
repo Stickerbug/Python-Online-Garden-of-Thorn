@@ -14,6 +14,8 @@ REPORT_CATEGORIES = {
     'match': {'cheating', 'bug_abuse', 'boosting', 'stalling', 'abnormal_match', 'other'},
     'replay': {'cheating', 'bug_abuse', 'boosting', 'stalling', 'abnormal_match', 'other'},
     'mod': {'malicious_mod', 'stolen_content', 'offensive_content', 'bug_abuse', 'other'},
+    'public_issue': {'abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment', 'misleading', 'duplicate', 'other'},
+    'public_issue_comment': {'abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment', 'misleading', 'duplicate', 'other'},
 }
 
 VALID_REPORT_OBJECT_TYPES = set(REPORT_CATEGORIES)

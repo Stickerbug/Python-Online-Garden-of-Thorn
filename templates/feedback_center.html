@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>反馈中心 · 荆棘花园</title>
+  <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
+  <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/feedback_center.css?v={{ static_version|default('dev')|urlencode }}">
+</head>
+<body>
+  <header class="fc-topbar">
+    <div class="fc-topbar-inner">
+      <a class="fc-brand" href="/" target="_blank" rel="noopener">
+        <span class="fc-brand-mark">荆棘</span>
+        <span class="fc-brand-text">
+          <strong>荆棘花园</strong>
+          <small id="fc-brand-sub">反馈中心</small>
+        </span>
+      </a>
+
+      <nav class="fc-tabs" role="tablist" aria-label="反馈分类">
+        <button id="fc-tab-bug" class="fc-tab is-active" type="button" data-kind="bug" role="tab">漏洞</button>
+        <button id="fc-tab-suggestion" class="fc-tab" type="button" data-kind="suggestion" role="tab">建议</button>
+      </nav>
+
+      <div class="fc-top-actions">
+        <button id="fc-create" class="fc-button fc-button-primary" type="button" hidden>新建反馈</button>
+        <div id="fc-account" class="fc-account">
+          <span class="fc-account-loading">账号…</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="fc-toolbar">
+    <div class="fc-toolbar-left">
+      <label class="fc-search">
+          <span id="fc-search-label">输入筛选</span>
+        <input id="fc-search" type="search" placeholder="搜索标题与正文" autocomplete="off">
+      </label>
+      <label class="fc-field-inline">
+        <span id="fc-status-label">状态</span>
+        <select id="fc-status-filter"></select>
+      </label>
+      <label class="fc-field-inline">
+        <span id="fc-sort-label">Sort By</span>
+        <select id="fc-sort"></select>
+      </label>
+    </div>
+  </div>
+
+  <main class="fc-main">
+    <div class="fc-split">
+      <aside class="fc-issue-pane" aria-label="issue-list">
+        <div class="fc-pane-head">
+          <h6 id="fc-open-title">全部问题</h6>
+          <button id="fc-list-create" class="fc-button fc-button-secondary fc-button-small" type="button" hidden>新建反馈</button>
+        </div>
+        <div id="fc-issue-list" class="fc-issue-grid" aria-live="polite"></div>
+        <div class="fc-pagination">
+          <button id="fc-prev" class="fc-button fc-button-secondary fc-button-small" type="button">Previous</button>
+          <span id="fc-page" class="fc-muted">1 / 1</span>
+          <button id="fc-next" class="fc-button fc-button-secondary fc-button-small" type="button">Next</button>
+        </div>
+      </aside>
+
+      <section id="fc-detail" class="fc-detail-pane">
+        <div id="fc-detail-empty" class="fc-empty">
+          <div class="fc-empty-kicker">荆棘花园反馈</div>
+          <h2>请选择一个问题查看详情</h2>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="fc-create-dialog" class="fc-dialog">
+    <form id="fc-create-form" method="dialog">
+      <div class="fc-dialog-head">
+        <div>
+          <h2 id="fc-create-title">新建反馈</h2>
+          <p id="fc-create-subtitle" class="fc-muted">描述越清楚，越容易确认。</p>
+        </div>
+        <button class="fc-dialog-close" type="button" data-close-dialog aria-label="关闭">×</button>
+      </div>
+      <label class="fc-field">
+        <span>类型</span>
+        <select id="fc-create-kind">
+          <option value="bug">漏洞</option>
+          <option value="suggestion">建议</option>
+        </select>
+      </label>
+      <label class="fc-field">
+        <span>标题</span>
+        <input id="fc-create-title-input" type="text" maxlength="80" autocomplete="off">
+      </label>
+      <label class="fc-field">
+        <span>详细描述</span>
+        <textarea id="fc-create-body" rows="9" maxlength="4000"></textarea>
+      </label>
+      <label class="fc-field">
+        <span>回放 ID（可选）</span>
+        <input id="fc-create-replay" type="text" maxlength="40" placeholder="R-12345 或 P-12345" autocomplete="off">
+      </label>
+      <p id="fc-create-error" class="fc-error" role="alert"></p>
+      <div class="fc-dialog-actions">
+        <button class="fc-button fc-button-secondary" type="button" data-close-dialog>取消</button>
+        <button id="fc-create-submit" class="fc-button fc-button-primary" type="submit">提交</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="fc-report-dialog" class="fc-dialog">
+    <form id="fc-report-form" method="dialog">
+      <div class="fc-dialog-head">
+        <div>
+          <h2 id="fc-report-title">举报</h2>
+          <p id="fc-report-target" class="fc-muted"></p>
+        </div>
+        <button class="fc-dialog-close" type="button" data-close-report aria-label="关闭">×</button>
+      </div>
+      <label class="fc-field">
+        <span>分类</span>
+        <select id="fc-report-category"></select>
+      </label>
+      <label class="fc-field">
+        <span>说明</span>
+        <textarea id="fc-report-reason" rows="4" maxlength="300"></textarea>
+      </label>
+      <p id="fc-report-error" class="fc-error" role="alert"></p>
+      <div class="fc-dialog-actions">
+        <button class="fc-button fc-button-secondary" type="button" data-close-report>取消</button>
+        <button id="fc-report-submit" class="fc-button fc-button-danger" type="submit">提交举报</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer class="fc-footer">
+    <a href="/" target="_blank" rel="noopener">返回游戏主页</a>
+    <span>反馈中心以新标签页打开，不影响你的对局。</span>
+  </footer>
+
+  <script src="/static/js/feedback_center.js?v={{ static_version|default('dev')|urlencode }}"></script>
+</body>
+</html>

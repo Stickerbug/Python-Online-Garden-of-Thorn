@@ -1989,7 +1989,7 @@ STORY_CARDS = {
         },
     ),
     'mjolnir': _card(
-        'Mjolnir', '雷神之锤', 'Mjolnir', 2, 'thorn', 'rare',
+        'Mjolnir', '雷神之锤', 'Mjölnir', 2, 'thorn', 'rare',
         '对目标造成14D；此牌可无限升级。',
         effects=(_effect('damage', 14),),
         upgrade={
@@ -1999,7 +1999,7 @@ STORY_CARDS = {
         },
     ),
     'chilly': _card(
-        'Chilly', '辣椒', 'Chilly', 1, 'bloom', 'rare',
+        'Chilly', '辣椒', 'Chilli', 1, 'bloom', 'rare',
         '抽1张牌并获得2层暂时力量；若抽到攻击牌，回复自己1E。',
         effects=(_effect('draw_attack_power', 1, power=2, elixir=1),),
         upgrade={
@@ -2052,7 +2052,7 @@ STORY_CARDS = {
         },
     ),
     'beeswax': _card(
-        'Beeswax', '蜜蜡', 'Beeswax', 1, 'bloom', 'ultra',
+        'Beeswax', '蜂蜡', 'Beeswax', 1, 'bloom', 'ultra',
         '获得8层护盾；此牌同时受到力量与耐力加成。',
         effects=(_effect('shield_with_power', 8),),
         upgrade={
@@ -2098,7 +2098,7 @@ STORY_CARDS = {
         },
     ),
     'redemption_money': _card(
-        'Redemption Money', '赎身钱', 'Redemption Money', 0, 'bloom', 'rare',
+        'Redemption Money', '赎身钱', 'Ransom Money', 0, 'bloom', 'rare',
         '失去5H；选择放逐区1张牌加入手牌，使其获得虚无与放逐。',
         owner='neutral', tags=('exile',),
         effects=(_effect('lose_health', 5), _effect('recover_exiled', 1, exact=True)),
@@ -2178,7 +2178,7 @@ STORY_CARDS = {
         },
     ),
     'magic_chilly': _card(
-        'Magic Chilly', '魔法辣椒', 'Magic Chilly', 1, 'bloom', 'rare',
+        'Magic Chilly', '魔法辣椒', 'Magic Chilli', 1, 'bloom', 'rare',
         '抽4张牌，然后主动丢弃自己4张手牌；不足则全部丢弃。',
         effects=(_effect('draw_then_discard', 4, discard=4),),
         upgrade={

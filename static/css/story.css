@@ -24,6 +24,38 @@
   unicode-range: U+2E80-30FF, U+31F0-31FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
 }
 
+/* Reputation and newcomer markers shown in story player names */
+.story-reputation-badge {
+  display: inline-block;
+  margin-inline-end: 0.35em;
+  padding: 0.06em 0.3em;
+  border-radius: 0.25em;
+  font-size: 0.7em;
+  font-weight: 700;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
+.story-reputation-badge.is-yellow {
+  color: #664500;
+  background: #ffe6a1;
+}
+
+.story-reputation-badge.is-orange {
+  color: #702400;
+  background: #ffbf88;
+}
+
+.story-reputation-badge.is-red {
+  color: #fff;
+  background: #a92335;
+}
+
+.story-reputation-badge.is-newcomer {
+  color: #164524;
+  background: #bceac6;
+}
+
 :root {
   --story-bg: #f5f5f0;
   --story-surface: #fff;

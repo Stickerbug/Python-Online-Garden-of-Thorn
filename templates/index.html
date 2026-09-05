@@ -381,12 +381,9 @@
       <section class="feedback-chat">
         <div class="feedback-compose-row">
           <select id="feedback-category" aria-label="反馈分类">
-            <option value="bug">Bug</option>
-            <option value="suggestion">建议</option>
             <option value="account">账号问题</option>
             <option value="report">举报/纠纷</option>
             <option value="appeal">对局申诉</option>
-            <option value="other">其他</option>
           </select>
           <input id="feedback-title-input" type="text" maxlength="80" placeholder="标题">
           <input id="feedback-replay-id" class="hidden" type="text" maxlength="24" inputmode="text" placeholder="回放 ID，例如 R-12345 或 P-12345">
@@ -500,6 +497,7 @@
 <button id="btn-solo-training" class="btn btn-magic">单人训练场</button>
 </div>
 <div class="form-row login-utility-row">
+<a id="btn-public-feedback-center" class="btn-settings" href="/feedback-center" target="_blank" rel="noopener">反馈中心</a>
 <button id="btn-open-feedback" class="btn-settings">反馈</button>
 <button id="btn-open-about" class="btn-settings">关于</button>
 </div>
@@ -510,6 +508,78 @@
   <a class="home-icp" href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">皖ICP备2026016693号-1</a>
 </div>
 </div>
+</div>
+
+<div id="view-public-feedback" class="view hidden">
+  <div class="public-feedback-page">
+    <header class="public-feedback-page-head">
+      <div>
+        <h2 id="public-feedback-title">反馈中心</h2>
+        <span id="public-feedback-subtitle" class="pf-hint">漏洞与建议</span>
+      </div>
+      <div class="public-feedback-actions">
+        <button id="pf-new-issue" class="btn btn-primary hidden" type="button">发布</button>
+        <button id="pf-back" class="btn btn-secondary" type="button">返回</button>
+      </div>
+    </header>
+
+    <div id="pf-compose" class="hidden">
+      <div class="pf-compose-grid">
+        <label for="pf-compose-kind" id="pf-kind-label">类型</label>
+        <select id="pf-compose-kind">
+          <option value="bug">Bug</option>
+          <option value="suggestion">建议</option>
+        </select>
+      </div>
+      <div class="pf-compose-grid">
+        <label for="pf-compose-title" id="pf-title-label">标题</label>
+        <input id="pf-compose-title" type="text" maxlength="80" autocomplete="off">
+      </div>
+      <div class="pf-compose-grid">
+        <label for="pf-compose-body" id="pf-body-label">详细描述</label>
+        <textarea id="pf-compose-body" maxlength="4000"></textarea>
+      </div>
+      <div class="pf-compose-grid">
+        <label for="pf-compose-replay" id="pf-replay-label">回放 ID（可选）</label>
+        <input id="pf-compose-replay" type="text" maxlength="40" placeholder="R-12345 或 P-12345">
+      </div>
+      <div class="pf-small-actions">
+        <button id="pf-compose-submit" class="btn btn-primary" type="button">提交</button>
+        <button id="pf-compose-cancel" class="btn btn-secondary" type="button">取消</button>
+        <span id="pf-compose-error" class="error-text"></span>
+      </div>
+    </div>
+
+    <div class="public-feedback-layout">
+      <aside class="public-feedback-list-panel">
+        <div class="pf-tabs">
+          <button id="pf-tab-bug" class="pf-tab active" type="button" data-pf-kind="bug">漏洞</button>
+          <button id="pf-tab-suggestion" class="pf-tab" type="button" data-pf-kind="suggestion">建议</button>
+        </div>
+        <div class="pf-filters">
+          <select id="pf-status-filter" aria-label="状态筛选"></select>
+          <select id="pf-sort" aria-label="排序">
+            <option value="priority">优先级</option>
+            <option value="recent">最新</option>
+            <option value="votes">票数</option>
+            <option value="updated">最近更新</option>
+          </select>
+        </div>
+        <div id="pf-issues-list" class="pf-issues-list">
+          <div class="pf-empty">加载中…</div>
+        </div>
+        <div class="pf-pagination">
+          <button id="pf-page-prev" class="btn btn-secondary" type="button">上一页</button>
+          <span id="pf-page-info">1 / 1</span>
+          <button id="pf-page-next" class="btn btn-secondary" type="button">下一页</button>
+        </div>
+      </aside>
+
+      <main class="public-feedback-detail-panel">
+        <div id="pf-detail-content" class="pf-empty">选择一个问题查看详情</div>
+      </main>
+    </div>
+  </div>
 </div>
 
 <div id="view-solo" class="view hidden">
