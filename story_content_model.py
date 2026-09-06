@@ -344,6 +344,16 @@ _ENCOUNTER_ROWS = {
 }
 
 
+_CODE_ADDED_TAG_IDS = frozenset({
+    'power', 'electric_power', 'swift', 'temporary_swift',
+    'magic_swift', 'temporary_heavy', 'firmness', 'armor_break',
+    'rebound',
+})
+_CODE_ADDED_STATUS_IDS = frozenset({
+    'disc', 'sturdy', 'regeneration', 'invincible',
+})
+
+
 def _encounter_members(spec):
     return [
         deepcopy(member) if isinstance(member, dict) else {'def_id': str(member)}
@@ -377,11 +387,21 @@ def _source_for(kind, content_id, *, row=None):
     if kind == 'card_type':
         return (_workbook_source('爬塔卡牌设计', 'E3:E158'),)
     if kind == 'tag':
+        if content_id in _CODE_ADDED_TAG_IDS:
+            return (_code_source(
+                f'story_content.STORY_TAGS[{content_id!r}]',
+                '代码新增 PvP 风格卡牌效果标签；工作簿中没有对应单元格。',
+            ),)
         return (
             _workbook_source('爬塔卡牌设计', 'G3:G158'),
             _workbook_source('标签', 'A1:B14'),
         )
     if kind == 'status':
+        if content_id in _CODE_ADDED_STATUS_IDS:
+            return (_code_source(
+                f'story_content.STORY_STATUSES[{content_id!r}]',
+                '代码新增玩家状态；工作簿中没有对应单元格。',
+            ),)
         return (
             _workbook_source('爬塔卡牌设计', 'N3:O158'),
             _workbook_source('效果', 'A2:B23'),

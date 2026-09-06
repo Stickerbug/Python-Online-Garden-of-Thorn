@@ -68,10 +68,8 @@ def test_factory_v6_content_and_images_are_registered():
         assert image_url.endswith(filename)
         assert (project_root / image_url.removeprefix('/')).is_file()
 
-    assert STORY_TRAITS['psionic_sustain']['name'] == {
-        'zh': '灵能绑定',
-        'en': 'Psionic Binding',
-    }
+    assert STORY_TRAITS['psionic_sustain']['name']['zh'] == '灵能绑定'
+    assert STORY_TRAITS['psionic_sustain']['name']['en'] == 'Psionic Binding'
     assert STORY_ENEMIES['chimney']['traits'] == ('injured_summon',)
     assert STORY_ENEMIES['chimney']['initial']['injured_summon'] == 100
 

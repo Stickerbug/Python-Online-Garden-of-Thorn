@@ -30,9 +30,11 @@ from story_engine import (
     _gain_enchantment_book,
     _gain_elixir,
     _gain_magic,
+    _is_card_playable,
     _new_card,
     _new_event_room,
     _refresh_combat_projections,
+    _reward_choices,
     _start_combat,
     apply_story_action,
 )
@@ -345,6 +347,67 @@ def test_story_content_is_valid_and_reward_pool_excludes_special_cards():
     assert initial_player['relics'] == ['energetic']
     assert initial_player['gold'] == 99
     assert STORY_RELICS['energetic']['script'] == 'floor_heal'
+
+
+def test_duplicate_termite_soldiers_start_on_their_configured_moves():
+    seed = 'termite-pair-intents'
+    state = _journey_state(seed)
+    state, _ = apply_story_action(
+        state,
+        'choose_blessing',
+        {'blessing_id': 'max_health'},
+        seed,
+    )
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        seed,
+        [],
+        encounter_override=[
+            {'def_id': 'termite_soldier', 'move_index': 0},
+            {'def_id': 'termite_soldier', 'move_index': 2},
+        ],
+    )
+    enemies = state['combat']['enemies']
+    assert len(enemies) == 2
+    assert enemies[0]['move_step'] == 0
+    assert enemies[1]['move_step'] == 2
+    assert enemies[0]['intent']['move_index'] == 0
+    assert enemies[1]['intent']['move_index'] == 2
+
+
+def test_card_rewards_never_offer_the_same_card_twice():
+    state = _journey_state('unique-card-rewards')
+    choices = _reward_choices(state, 'unique-card-rewards', 'combat', count=6)
+    assert len(choices) == 6
+    card_ids = [choice['card_id'] for choice in choices]
+    assert len(card_ids) == len(set(card_ids))
+
+
+def test_rigid_uses_blockade_for_the_first_five_even_hand_slots():
+    seed = 'rigid-not-deadlock'
+    state = _journey_state(seed)
+    state['player']['relics'].append('rigid')
+    state, _ = apply_story_action(
+        state,
+        'choose_blessing',
+        {'blessing_id': 'max_health'},
+        seed,
+    )
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        seed,
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    hand = state['combat']['hand']
+    assert len(hand) >= 1
+    assert state['combat']['blockade'] == 5
+    assert state['combat'].get('locked') is None
+    for index, card in enumerate(hand):
+        expected_blocked = index % 2 == 1 and index // 2 < 5
+        assert _is_card_playable(state, card) == (not expected_blocked)
 
 
 def test_story_attack_effect_types_share_one_calculation_contract():

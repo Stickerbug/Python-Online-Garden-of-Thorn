@@ -1340,6 +1340,24 @@ body {
   opacity: 0.9;
 }
 
+.leaderboard-hide-titles-btn {
+  flex: none;
+  margin-right: 4px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.leaderboard-hide-titles-btn:hover {
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color) 7%, transparent);
+}
+
 .leaderboard-tabs {
   margin: 7px 0 8px;
 }
@@ -16912,6 +16930,16 @@ html[data-ui-style="minimal"] .btn-end-turn {
   --skin-pupil: #111;
   background: #BF2D29;
   border-color: #BF2D29;
+}
+
+.skin-avatar.phelren-avatar.is-corrupted {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.skin-avatar.phelren-avatar.skin-corruption-animate {
+  animation: none;
 }
 
 .skin-avatar.skin-corruption-animate {

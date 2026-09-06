@@ -692,6 +692,18 @@ GTN_STATIC_VERSION += '-feedback-account-popover-avatar-look-1'
 GTN_STATIC_VERSION += '-feedback-titles-avatar-size-1'
 GTN_STATIC_VERSION += '-feedback-list-status-1'
 GTN_STATIC_VERSION += '-feedback-status-key-colors-1'
+GTN_STATIC_VERSION += '-feedback-messages-page-read-avatar-invert-1'
+GTN_STATIC_VERSION += '-feedback-font-idle-1'
+GTN_STATIC_VERSION += '-leaderboard-hide-titles-1'
+GTN_STATIC_VERSION += '-feedback-fixes-phelren-rigid-termite-1'
+GTN_STATIC_VERSION += '-story-term-center-1'
+GTN_STATIC_VERSION += '-story-status-colors-1'
+GTN_STATIC_VERSION += '-magic-sewage-response-equipment-list-1'
+GTN_STATIC_VERSION += '-story-multilingual-ui-content-1'
+GTN_STATIC_VERSION += '-story-modifier-tags-status-codex-1'
+GTN_STATIC_VERSION += '-story-term-inline-refs-1'
+GTN_STATIC_VERSION += '-story-talent-event-option-terms-1'
+GTN_STATIC_VERSION += '-story-card-machine-offer-cards-1'
 GTN_STATIC_VERSION += '-solo-response-perspective-reset-1'
 GTN_STATIC_VERSION += '-storage-session-before-persistent-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -1001,6 +1013,10 @@ ADMIN_CONSOLE_JOB_RETENTION_SECONDS = max(
     int(os.environ.get('ADMIN_CONSOLE_JOB_RETENTION_SECONDS', '3600')),
 )
 BETA_ACCESS_KEY_HASH = _configured_credential_hash('BETA_ACCESS_KEY_HASH')
+CARD_EXPORTER_PASSWORD_HASH = _configured_credential_hash(
+    'CARD_EXPORTER_PASSWORD_HASH',
+    fallback_name='BETA_ACCESS_KEY_HASH',
+)
 ADMIN_PLAYER_DISPLAY_NAME = 'Stickerbug'
 ADMIN_NICKNAME_RESERVED_REASON = 'Admin nickname reserved'
 SPECIAL_ACCOUNT_PROFILES = [
@@ -18035,25 +18051,63 @@ def send_solo_state(sid, perspective=None, *, broadcast_spectators=True):
     return True
 
 
-def _response_destroy_target_equipment(engine, played_card, pending):
+def _response_destroy_target_equipments(engine, played_card, pending, responder_id):
     choice = pending.get('original_choice') if isinstance(pending, dict) else None
-    if not isinstance(choice, dict) or choice.get('target_instance_id') is None:
-        return None
     try:
         source_card = CardInstance.from_dict(played_card)
         destroys_equipment = bool(engine._would_destroy_equipment(source_card))
-        target_instance_id = int(choice.get('target_instance_id'))
     except (AttributeError, TypeError, ValueError, KeyError):
-        return None
+        return []
     if not destroys_equipment:
-        return None
-    for owner_id, player_state in enumerate(getattr(engine, 'players', []) or []):
-        equipment = player_state.find_equipment(target_instance_id)
-        if equipment is not None:
-            serialized = equipment.to_dict()
-            serialized['owner_id'] = owner_id
-            return serialized
-    return None
+        return []
+    try:
+        player_state = getattr(engine, 'players', [])[responder_id]
+    except (IndexError, TypeError):
+        return []
+    card_id = str(getattr(source_card, 'def_id', '') or '').lower()
+    legacy_id = str(
+        getattr(getattr(source_card, 'card_def', None), 'legacy_id', '') or ''
+    ).lower()
+    is_magic_sewage = (
+        card_id in ('magicsewage', 'vanilla:magicsewage')
+        or legacy_id == 'magicsewage'
+    )
+    candidates = [
+        eq for eq in player_state.equipment
+        if 'indestructible' not in eq.card_instance.flags
+    ]
+    if is_magic_sewage:
+        pass
+    else:
+        target_instance_id = None
+        if isinstance(choice, dict) and choice.get('target_instance_id') is not None:
+            try:
+                target_instance_id = int(choice['target_instance_id'])
+            except (TypeError, ValueError):
+                return []
+        if target_instance_id is not None:
+            candidates = [
+                eq for eq in candidates
+                if getattr(eq.card_instance, 'instance_id', None) == target_instance_id
+            ]
+        else:
+            candidates = candidates[:1]
+
+    remaining_protection = max(
+        0,
+        int(getattr(player_state, 'equipment_protection', 0) or 0),
+    )
+    destroyed = []
+    for equipment in candidates:
+        if int(getattr(equipment, 'armor', 0) or 0) > 0:
+            continue
+        if remaining_protection > 0:
+            remaining_protection -= 1
+            continue
+        serialized = equipment.to_dict()
+        serialized['owner_id'] = responder_id
+        destroyed.append(serialized)
+    return destroyed
 
 
 def build_response_request_payload(engine, responder_id, played_card, player_id, counter_cards, target_player_id=None):
@@ -18081,9 +18135,16 @@ def build_response_request_payload(engine, responder_id, played_card, player_id,
         'target_player_id': target_player_id,
         'counter_cards': serialized_cards,
     }
-    destroy_target_equipment = _response_destroy_target_equipment(engine, played_card, pending)
-    if destroy_target_equipment is not None:
-        payload['destroy_target_equipment'] = destroy_target_equipment
+    destroy_target_equipments = _response_destroy_target_equipments(
+        engine,
+        played_card,
+        pending,
+        responder_id,
+    )
+    if destroy_target_equipments:
+        payload['destroy_target_equipments'] = destroy_target_equipments
+        if len(destroy_target_equipments) == 1:
+            payload['destroy_target_equipment'] = destroy_target_equipments[0]
     predictor = getattr(engine, 'build_response_damage_prediction', None)
     if is_confusion_disguise:
         predictor = getattr(engine, 'build_sewers_confusion_damage_prediction', predictor)
@@ -20548,7 +20609,7 @@ def api_card_exporter_login():
         admin_event('security', f'card exporter login rate limited from {ip}')
         return jsonify({'success': False, 'error': '尝试次数过多，请稍后再试'}), 429
     key = _bounded_credential_from_request('key')
-    if key and check_password_hash(BETA_ACCESS_KEY_HASH, key):
+    if key and check_password_hash(CARD_EXPORTER_PASSWORD_HASH, key):
         session['card_exporter_authenticated'] = True
         session['card_exporter_login_time'] = time.time()
         admin_event('security', f'card exporter login success from {ip}')
@@ -20795,6 +20856,14 @@ def feedback_center_browse(kind=None):
     kind = kind or str(request.path).rstrip('/').split('/')[-1]
     if kind not in ('bug', 'suggestion'):
         return redirect('/feedback-center/bug')
+    return render_template(
+        'feedback_center.html',
+        static_version=GTN_STATIC_VERSION,
+    )
+
+
+@app.route('/feedback-center/messages')
+def feedback_center_messages():
     return render_template(
         'feedback_center.html',
         static_version=GTN_STATIC_VERSION,

@@ -503,10 +503,14 @@ def _character_manifest_and_capabilities(
 
 
 def _localized_value_is_valid(value):
-    return (
-        isinstance(value, dict)
-        and set(value) == {'zh', 'en'}
-        and all(isinstance(text, str) and text.strip() for text in value.values())
+    if not isinstance(value, dict):
+        return False
+    supported = {'zh', 'en', 'fr', 'ja'}
+    if not {'zh', 'en'} <= set(value) <= supported:
+        return False
+    return all(
+        isinstance(text, str) and text.strip()
+        for text in value.values()
     )
 
 

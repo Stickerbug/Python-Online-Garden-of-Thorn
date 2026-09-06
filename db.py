@@ -2207,6 +2207,7 @@ def init_db(
                 created_at TEXT NOT NULL,
                 reviewed_by_user_id INTEGER,
                 reviewed_at TEXT,
+                staff_viewed_at TEXT,
                 review_note TEXT,
                 FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE,
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -2221,6 +2222,17 @@ def init_db(
             'CREATE INDEX IF NOT EXISTS idx_public_issue_reopen_requests_status '
             'ON public_issue_reopen_requests(status, created_at)'
         )
+        reopen_request_columns = {
+            row['name']
+            for row in conn.execute(
+                'PRAGMA table_info(public_issue_reopen_requests)'
+            ).fetchall()
+        }
+        if 'staff_viewed_at' not in reopen_request_columns:
+            conn.execute(
+                'ALTER TABLE public_issue_reopen_requests '
+                'ADD COLUMN staff_viewed_at TEXT'
+            )
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS public_release_states (

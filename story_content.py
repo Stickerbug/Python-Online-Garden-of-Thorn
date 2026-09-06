@@ -11,6 +11,7 @@ from story_character_content import (
     STORY_CHARACTER_CARD_DESIGNS,
     STORY_CHARACTER_RELIC_DESIGNS,
 )
+from story_events_12 import STORY_EVENTS_12 as STORY_EVENTS_12_SOURCE
 
 
 STORY_RULES = {
@@ -30,6 +31,8 @@ STORY_RULES = {
 STORY_CHARACTER_NOT_READY_MESSAGE = {
     'zh': '这名角色还没准备好呢\n请期待开发组更新',
     'en': 'This character is not ready yet.\nPlease look forward to a future update.',
+    'fr': 'Ce personnage n’est pas encore prêt.\nMerci de patienter pour une prochaine mise à jour.',
+    'ja': 'このキャラクターはまだ準備できていません。\n今後のアップデートをお待ちください。',
 }
 
 STORY_CHARACTERS = {
@@ -272,6 +275,87 @@ STORY_TAGS = {
             'en': 'When played, deal [[icon:electric_damage]] to yourself equal to its stacks.',
         },
     },
+    'power': {
+        'name': {'zh': '威力', 'en': 'Power', 'fr': 'Puissance', 'ja': '威力'},
+        'description': {
+            'zh': '此牌的[[icon:D]]伤害效果获得对应层数的加成。',
+            'en': 'This card’s [[icon:D]] damage effects gain bonus damage equal to its stacks.',
+            'fr': 'Les effets de dégâts [[icon:D]] de cette carte gagnent une quantité égale à ses charges.',
+            'ja': 'このカードの[[icon:D]]ダメージ効果が層数ぶん増加します。',
+        },
+    },
+    'electric_power': {
+        'name': {'zh': '电击威力', 'en': 'Electric Potency', 'fr': 'Puissance électrique', 'ja': '電撃威力'},
+        'description': {
+            'zh': '使用后，对目标的每次命中额外造成对应数值的[[icon:electric_damage]]。',
+            'en': 'After use, deal extra [[icon:electric_damage]] equal to its value on each hit to the target.',
+            'fr': 'Après utilisation, chaque coup inflige à la cible des [[icon:electric_damage]] supplémentaires égaux à sa valeur.',
+            'ja': '使用後、命中ごとに対象に値と等しい[[icon:electric_damage]]を追加で与えます。',
+        },
+    },
+    'swift': {
+        'name': {'zh': '迅捷', 'en': 'Swift', 'fr': 'Rapidité', 'ja': '迅捷'},
+        'description': {
+            'zh': '此牌的E花费减少对应层数，最低为0E。',
+            'en': 'This card’s E cost is reduced by its stacks, to a minimum of 0 E.',
+            'fr': 'Le coût E de cette carte est réduit de ses charges, avec un minimum de 0 E.',
+            'ja': 'このカードのEコストが層数ぶん減ります（最低0E）。',
+        },
+    },
+    'temporary_swift': {
+        'name': {'zh': '暂时迅捷', 'en': 'Temporary Swift', 'fr': 'Rapidité temporaire', 'ja': '一時迅捷'},
+        'description': {
+            'zh': '本回合内此牌的E花费减少对应层数；回合结束时清除。',
+            'en': 'This turn, this card’s E cost is reduced by its stacks; it clears at turn end.',
+            'fr': 'Ce tour, le coût E de cette carte est réduit de ses charges ; disparaît à la fin du tour.',
+            'ja': 'このターン中、このカードのEコストが層数ぶん減ります。ターン終了時に消えます。',
+        },
+    },
+    'magic_swift': {
+        'name': {'zh': '魔力迅捷', 'en': 'Magic Swift', 'fr': 'Rapidité magique', 'ja': '魔力迅捷'},
+        'description': {
+            'zh': '此牌的M花费减少对应层数，最低为0M。',
+            'en': 'This card’s M cost is reduced by its stacks, to a minimum of 0 M.',
+            'fr': 'Le coût M de cette carte est réduit de ses charges, avec un minimum de 0 M.',
+            'ja': 'このカードのMコストが層数ぶん減ります（最低0M）。',
+        },
+    },
+    'temporary_heavy': {
+        'name': {'zh': '暂时沉重', 'en': 'Temporary Heavy', 'fr': 'Lourdeur temporaire', 'ja': '一時鈍重'},
+        'description': {
+            'zh': '本回合内此牌的E花费增加对应层数；回合结束时清除。',
+            'en': 'This turn, this card’s E cost is increased by its stacks; it clears at turn end.',
+            'fr': 'Ce tour, le coût E de cette carte augmente de ses charges ; disparaît à la fin du tour.',
+            'ja': 'このターン中、このカードのEコストが層数ぶん増えます。ターン終了時に消えます。',
+        },
+    },
+    'firmness': {
+        'name': {'zh': '牢固', 'en': 'Firmness', 'fr': 'Solidité', 'ja': '堅牢'},
+        'description': {
+            'zh': '此牌的护盾效果获得对应层数的加成；使用后清空。',
+            'en': 'This card’s Shield effects gain bonus equal to its stacks, then clear after use.',
+            'fr': 'Les effets de Bouclier de cette carte gagnent une quantité égale à ses charges, puis disparaissent après utilisation.',
+            'ja': 'このカードのシールド効果が層数ぶん増えます。使用後に消えます。',
+        },
+    },
+    'armor_break': {
+        'name': {'zh': '破甲', 'en': 'Armor Break', 'fr': 'Brisure d’armure', 'ja': '鎧破壊'},
+        'description': {
+            'zh': '使用时先清除目标护盾，再结算后续效果。',
+            'en': 'When used, clear the target’s Shield before resolving the rest of the card.',
+            'fr': 'À l’utilisation, dissipe le Bouclier de la cible avant de résoudre le reste de la carte.',
+            'ja': '使用時、残りの効果を解決する前に目標のシールドを除去します。',
+        },
+    },
+    'rebound': {
+        'name': {'zh': '回转', 'en': 'Rebound', 'fr': 'Retour', 'ja': '回転'},
+        'description': {
+            'zh': '打出并结算后立即回到手牌。',
+            'en': 'Returns to hand immediately after being played and resolved.',
+            'fr': 'Revient en main immédiatement après avoir été jouée et résolue.',
+            'ja': '使用・解決後、すぐに手札へ戻ります。',
+        },
+    },
 }
 
 STORY_STATUSES = {
@@ -456,6 +540,42 @@ STORY_STATUSES.update({
             'en': 'Magic Shield does not work while present; clears at the end of the player turn.',
         },
     },
+    'disc': {
+        'name': {'zh': '圆盘', 'en': 'Disc', 'fr': 'Disque', 'ja': '円盤'},
+        'description': {
+            'zh': '本回合受到的[[icon:D]]减半（向下取整）；回合结束时清除。',
+            'en': '[[icon:D]] taken this turn is halved, rounded down. Clears at turn end.',
+            'fr': 'Les [[icon:D]] subis ce tour sont divisés par deux, arrondis à l’inférieur. Disparaît à la fin du tour.',
+            'ja': 'このターン受ける[[icon:D]]が半分になります（切り捨て）。ターン終了時に消えます。',
+        },
+    },
+    'sturdy': {
+        'name': {'zh': '坚固', 'en': 'Sturdy', 'fr': 'Solide', 'ja': '頑丈'},
+        'description': {
+            'zh': '护盾不会自然清空；回合结束时-1层。',
+            'en': 'Shield does not clear naturally. Lose 1 stack at turn end.',
+            'fr': 'Le Bouclier ne disparaît pas naturellement. Perd 1 charge à la fin du tour.',
+            'ja': 'シールドは自然に消えません。ターン終了時に-1層。',
+        },
+    },
+    'regeneration': {
+        'name': {'zh': '再生', 'en': 'Regeneration', 'fr': 'Régénération', 'ja': '再生'},
+        'description': {
+            'zh': '回合开始时，回复等同于层数的H。',
+            'en': 'At turn start, heal H equal to its stacks.',
+            'fr': 'Au début du tour, récupère un H égal à ses charges.',
+            'ja': 'ターン開始時、層数と等しいHを回復します。',
+        },
+    },
+    'invincible': {
+        'name': {'zh': '无敌', 'en': 'Invincible', 'fr': 'Invincible', 'ja': '無敵'},
+        'description': {
+            'zh': '免疫所有伤害；每回合结束减少1层。',
+            'en': 'Immune to all damage. Lose 1 stack at each turn end.',
+            'fr': 'Immunisé contre tous les dégâts. Perd 1 charge à la fin de chaque tour.',
+            'ja': 'すべてのダメージを無効化します。各ターン終了時に-1層。',
+        },
+    },
 })
 
 STORY_STATUS_IMAGE_URLS = {
@@ -489,6 +609,10 @@ STORY_STATUS_IMAGE_URLS = {
     'magic_shield_disabled': '/static/assets/story-status-icons/magic-shield-disabled.svg',
     'magic_overload': '/static/assets/story-status-icons/magic-overload.svg',
     'static': '/static/assets/story-status-icons/static-electricity.svg',
+    'disc': '/static/assets/story-status-icons/disc.svg',
+    'sturdy': '/static/assets/story-status-icons/sturdy.svg',
+    'regeneration': '/static/assets/story-status-icons/regeneration.svg',
+    'invincible': '/static/assets/status-icons/invincible.svg',
 }
 
 for _status_id, _image_url in STORY_STATUS_IMAGE_URLS.items():
@@ -1958,7 +2082,7 @@ STORY_CARDS = {
                   '将目标的下一次意图改为眩晕。', owner='neutral', tags=('exile', 'sublime'), target='enemy',
                   effects=(_effect('status', 1, status='stun'),), upgrade={'cost_e': 1}),
     'dandelion_seed': _card('Dandelion', '蒲公英种子', 'Dandelion Seed', 0, 'curse', 'special',
-                            '可在休息区种植：永久移除此牌，并获得蒲公英加护。',
+                            '可在休息区种植：永久移除此牌，并获得[[talent:dandelion_blessing]]。',
                             owner='neutral', tags=('unplayable',), effects=()),
     'yin_yang': _card('Yin-Yang', '阴阳', 'Yin-Yang', 0, 'bloom', 'rare',
                       '将自己全部其他手牌洗入抽牌堆，然后抽等同于洗入数量+1的牌。',
@@ -2414,34 +2538,34 @@ def _enchantment_book(zh, en, description_zh, description_en, rarity, script,
 
 
 STORY_ENCHANTMENT_BOOKS = {
-    'sharp': _enchantment_book('锋利', 'Sharpness', '选择一张手中的攻击牌，使其在本场战斗中获得威力15。', 'Choose an Attack in hand. It gains 15 Potency for this combat.', 'common', 'damage_bonus', target='attack_card', amount=15, image='sharp.svg'),
-    'protection': _enchantment_book('保护', 'Protection', '选择一张手中的技能牌，使其在本场战斗中获得牢固8；使用后清空。', 'Choose a Skill in hand. It gains 8 Firmness for this combat, cleared after use.', 'common', 'shield_bonus_once', target='skill_card', amount=8, image='defend.svg'),
-    'durability': _enchantment_book('耐久', 'Durability', '选择一张手中的放逐牌，使其在本场战斗中失去放逐。', 'Choose an Exile card in hand. It loses Exile for this combat.', 'ultra', 'remove_exile', target='exile_card', image='durability.svg'),
-    'efficiency': _enchantment_book('效率', 'Efficiency', '选择一张手中的牌，使其在本场战斗中获得迅捷1。', 'Choose a card in hand. It gains Swift 1 for this combat.', 'rare', 'swift', target='card', amount=1, image='efficiency.svg'),
-    'underwater_rapid_digging': _enchantment_book('水下速掘', 'Underwater Rapid Digging', '选择一张手中的牌，使其在本回合获得暂时迅捷3。', 'Choose a card in hand. It gains Temporary Swift 3 this turn.', 'rare', 'temporary_swift', target='card', amount=3, image='underwater rapid digging.svg'),
-    'sweeping_blade': _enchantment_book('横扫之刃', 'Sweeping Blade', '选择一张手中的攻击牌，使其在本场战斗中获得广域打击。', 'Choose an Attack in hand. It gains Wide Strike for this combat.', 'rare', 'wide', target='attack_card', image='sweeping blade.svg'),
-    'armor_break': _enchantment_book('破甲', 'Armor Break', '选择一张手中的攻击牌，使其在本场战斗中获得破甲：使用时先清除目标护盾，再结算后续效果。', 'Choose an Attack in hand. It breaks the target Shield before resolving its effects.', 'rare', 'armor_break', target='attack_card', image='armor break.svg'),
-    'attract_lightning': _enchantment_book('引雷', 'Attract Lightning', '选择一张手中的攻击牌，使其在本场战斗中获得电击威力15。仅限魔法师。', 'Choose an Attack in hand. It gains 15 Electric Potency for this combat. Mage only.', 'common', 'electric_damage', target='attack_card', amount=15, character_id='mage', image='attract lightning.svg'),
-    'binding_curse': _enchantment_book('绑定诅咒', 'Binding Curse', '选择3张手中的牌，使其在本场战斗中获得保留。', 'Choose 3 cards in hand. They gain Retain for this combat.', 'rare', 'retain', target='three_cards', image='binding curse.svg'),
-    'vanishing_curse': _enchantment_book('消失诅咒', 'Vanishing Curse', '选择任意张手中的牌，使其在本场战斗中获得放逐与虚无。', 'Choose any number of cards in hand. They gain Exile and Void for this combat.', 'rare', 'exile_void', target='any_cards', image='vanishing curse.svg'),
-    'dense': _enchantment_book('致密', 'Dense', '选择一张手中的攻击牌，使其在本回合获得暂时沉重1，并在本场战斗中获得威力30。', 'Choose an Attack in hand. It gains Temporary Heavy 1 this turn and 30 Potency for this combat.', 'rare', 'dense', target='attack_card', amount=30, image='dense.svg'),
+    'sharp': _enchantment_book('锋利', 'Sharpness', '选择一张手中的攻击牌，使其在本场战斗中获得15层[[tag:power]]。', 'Choose an Attack in hand. It gains 15 [[tag:power]] for this combat.', 'common', 'damage_bonus', target='attack_card', amount=15, image='sharp.svg'),
+    'protection': _enchantment_book('保护', 'Protection', '选择一张手中的技能牌，使其在本场战斗中获得8层[[tag:firmness]]；使用后清空。', 'Choose a Skill in hand. It gains 8 [[tag:firmness]] for this combat, cleared after use.', 'common', 'shield_bonus_once', target='skill_card', amount=8, image='defend.svg'),
+    'durability': _enchantment_book('耐久', 'Durability', '选择一张手中的[[tag:exile]]牌，使其在本场战斗中失去[[tag:exile]]。', 'Choose a card with [[tag:exile]] in hand. It loses [[tag:exile]] for this combat.', 'ultra', 'remove_exile', target='exile_card', image='durability.svg'),
+    'efficiency': _enchantment_book('效率', 'Efficiency', '选择一张手中的牌，使其在本场战斗中获得[[tag:swift]]1。', 'Choose a card in hand. It gains [[tag:swift]] 1 for this combat.', 'rare', 'swift', target='card', amount=1, image='efficiency.svg'),
+    'underwater_rapid_digging': _enchantment_book('水下速掘', 'Underwater Rapid Digging', '选择一张手中的牌，使其在本回合获得[[tag:temporary_swift]]3。', 'Choose a card in hand. It gains [[tag:temporary_swift]] 3 this turn.', 'rare', 'temporary_swift', target='card', amount=3, image='underwater rapid digging.svg'),
+    'sweeping_blade': _enchantment_book('横扫之刃', 'Sweeping Blade', '选择一张手中的攻击牌，使其在本场战斗中获得[[tag:wide]]。', 'Choose an Attack in hand. It gains [[tag:wide]] for this combat.', 'rare', 'wide', target='attack_card', image='sweeping blade.svg'),
+    'armor_break': _enchantment_book('破甲', 'Armor Break', '选择一张手中的攻击牌，使其在本场战斗中获得[[tag:armor_break]]：使用时先清除目标护盾，再结算后续效果。', 'Choose an Attack in hand. It gains [[tag:armor_break]] and clears the target Shield before resolving its effects.', 'rare', 'armor_break', target='attack_card', image='armor break.svg'),
+    'attract_lightning': _enchantment_book('引雷', 'Attract Lightning', '选择一张手中的攻击牌，使其在本场战斗中获得15层[[tag:electric_power]]。仅限魔法师。', 'Choose an Attack in hand. It gains 15 [[tag:electric_power]] for this combat. Mage only.', 'common', 'electric_damage', target='attack_card', amount=15, character_id='mage', image='attract lightning.svg'),
+    'binding_curse': _enchantment_book('绑定诅咒', 'Binding Curse', '选择3张手中的牌，使其在本场战斗中获得[[tag:retain]]。', 'Choose 3 cards in hand. They gain [[tag:retain]] for this combat.', 'rare', 'retain', target='three_cards', image='binding curse.svg'),
+    'vanishing_curse': _enchantment_book('消失诅咒', 'Vanishing Curse', '选择任意张手中的牌，使其在本场战斗中获得[[tag:exile]]与[[tag:void]]。', 'Choose any number of cards in hand. They gain [[tag:exile]] and [[tag:void]] for this combat.', 'rare', 'exile_void', target='any_cards', image='vanishing curse.svg'),
+    'dense': _enchantment_book('致密', 'Dense', '选择一张手中的攻击牌，使其在本回合获得[[tag:temporary_heavy]]1，并在本场战斗中获得30层[[tag:power]]。', 'Choose an Attack in hand. It gains [[tag:temporary_heavy]] 1 this turn and 30 [[tag:power]] for this combat.', 'rare', 'dense', target='attack_card', amount=30, image='dense.svg'),
     'charge': _enchantment_book('突进', 'Charge', '选择一张手中的牌，使其下一次使用时抽牌至手牌满。', 'Choose a card in hand. The next time it is used, draw until the hand is full.', 'rare', 'draw_to_full_once', target='card', image='charge.svg'),
-    'magic_yggdrasil': _enchantment_book('魔法世界树之叶', 'Magic Yggdrasil Leaf', '受到致命伤害时自动消耗：免疫该次伤害，无敌一回合并获得再生8。', 'Automatically consumed on lethal damage: prevent it, become invincible for one round, and gain 8 Regeneration.', 'ultra', 'lethal_guard', amount=8, image='magic yggdrasil.svg'),
-    'fall_cushioning': _enchantment_book('摔落缓冲', 'Fall Cushioning', '选择一张手中的牌，使其下一次使用时获得1层圆盘。', 'Choose a card in hand. The next time it is used, gain 1 Disc.', 'common', 'disc_once', target='card', amount=1, image='fall cushioning.svg'),
-    'flame_bonus': _enchantment_book('火焰附加', 'Flame Bonus', '选择一张手中的攻击牌，使其下一次命中时施加8层灼烧。', 'Choose an Attack in hand. Its next hit applies 8 Burn.', 'rare', 'fire_on_hit_once', target='attack_card', amount=8, image='flame bonus.svg'),
-    'fire_protection': _enchantment_book('火焰保护', 'Fire Protection', '选择一张手中的牌，使其下一次使用时获得3层负面状态免疫。', 'Choose a card in hand. The next time it is used, gain 3 Negative Status Immunity.', 'rare', 'immunity_once', target='card', amount=3, image='fire protection.svg'),
+    'magic_yggdrasil': _enchantment_book('魔法世界树之叶', 'Magic Yggdrasil Leaf', '受到致命伤害时自动消耗：免疫该次伤害，获得1层[[status:invincible]]并获得8层[[status:regeneration]]。', 'Automatically consumed on lethal damage: prevent it, gain 1 [[status:invincible]] and 8 [[status:regeneration]].', 'ultra', 'lethal_guard', amount=8, image='magic yggdrasil.svg'),
+    'fall_cushioning': _enchantment_book('摔落缓冲', 'Fall Cushioning', '选择一张手中的牌，使其下一次使用时获得1层[[status:disc]]。', 'Choose a card in hand. The next time it is used, gain 1 [[status:disc]].', 'common', 'disc_once', target='card', amount=1, image='fall cushioning.svg'),
+    'flame_bonus': _enchantment_book('火焰附加', 'Flame Bonus', '选择一张手中的攻击牌，使其下一次命中时施加8层[[status:fire]]。', 'Choose an Attack in hand. Its next hit applies 8 [[status:fire]].', 'rare', 'fire_on_hit_once', target='attack_card', amount=8, image='flame bonus.svg'),
+    'fire_protection': _enchantment_book('火焰保护', 'Fire Protection', '选择一张手中的牌，使其下一次使用时获得3层[[status:negative_status_immunity]]。', 'Choose a card in hand. The next time it is used, gain 3 [[status:negative_status_immunity]].', 'rare', 'immunity_once', target='card', amount=3, image='fire protection.svg'),
     'puncture': _enchantment_book('穿刺', 'Puncture', '选择一张手中的攻击牌，使其在本场战斗中击杀敌人时随机对另一名敌人再使用一次。', 'Choose an Attack in hand. When it kills an enemy this combat, use it again on another random enemy.', 'rare', 'repeat_on_kill', target='attack_card', image='puncture.svg'),
     'unlimited': _enchantment_book('无限', 'Unlimited', '选择一本你持有的附魔书，获得它的复制。', 'Choose an enchantment book you own and gain a copy of it.', 'ultra', 'copy_book', target='book', image='unlimited.svg'),
-    'repel': _enchantment_book('击退', 'Repel', '选择一张手中的牌，使其下一次使用时对目标施加4层虚弱。', 'Choose a card in hand. The next time it is used, apply 4 Weak to the target.', 'rare', 'weak_once', target='card', amount=4, image='repel.svg'),
+    'repel': _enchantment_book('击退', 'Repel', '选择一张手中的牌，使其下一次使用时对目标施加4层[[status:weak]]。', 'Choose a card in hand. The next time it is used, apply 4 [[status:weak]] to the target.', 'rare', 'weak_once', target='card', amount=4, image='repel.svg'),
     'snatch': _enchantment_book('抢夺', 'Snatch', '选择一张手中的攻击牌，使其在本场战斗中击杀敌人时令战斗结束后的卡牌奖励翻倍。', 'Choose an Attack in hand. If it kills an enemy this combat, double the post-combat card reward.', 'ultra', 'double_reward_on_kill', target='attack_card', image='snatch.svg'),
-    'loyalty': _enchantment_book('忠诚', 'Loyalty', '选择一张手中的非0E0M牌，使其在本场战斗中获得回转。', 'Choose a non-zero-cost card in hand. It returns to hand after use for this combat.', 'ultra', 'rebound', target='cost_card', image='loyalty.svg'),
+    'loyalty': _enchantment_book('忠诚', 'Loyalty', '选择一张手中的非0E0M牌，使其在本场战斗中获得[[tag:rebound]]。', 'Choose a non-zero-cost card in hand. It gains [[tag:rebound]] for this combat.', 'ultra', 'rebound', target='cost_card', image='loyalty.svg'),
     'experience_patch': _enchantment_book('经验修补', 'Experience Patch', '选择一张手中的牌，使其在本场战斗中改为用1H支付一点花费。', 'Choose a card in hand. For this combat, pay 1 H for one point of its cost.', 'rare', 'health_cost', target='cost_card', amount=1, image='experience patch.svg'),
     'multiple_shots': _enchantment_book('多重射击', 'Multiple Shots', '选择一张手中的牌，使其下一次使用时再使用一次。', 'Choose a card in hand. The next time it is used, use it one additional time.', 'ultra', 'repeat_once', target='card', amount=1, image='multiple shots.svg'),
-    'strength': _enchantment_book('力量', 'Strength', '选择一张手中的牌，使其下一次使用时获得3力量。', 'Choose a card in hand. The next time it is used, gain 3 Power.', 'rare', 'power_once', target='card', amount=3, image='strength.svg'),
-    'impact': _enchantment_book('冲击', 'Impact', '选择一张手中的牌，使其下一次使用时对目标施加2层虚弱和2层易伤。', 'Choose a card in hand. The next time it is used, apply 2 Weak and 2 Vulnerable to the target.', 'rare', 'impact_once', target='card', amount=2, image='impact.svg'),
+    'strength': _enchantment_book('力量', 'Strength', '选择一张手中的牌，使其下一次使用时获得3层[[status:power]]。', 'Choose a card in hand. The next time it is used, gain 3 [[status:power]].', 'rare', 'power_once', target='card', amount=3, image='strength.svg'),
+    'impact': _enchantment_book('冲击', 'Impact', '选择一张手中的牌，使其下一次使用时对目标施加2层[[status:weak]]和2层[[status:vulnerable]]。', 'Choose a card in hand. The next time it is used, apply 2 [[status:weak]] and 2 [[status:vulnerable]] to the target.', 'rare', 'impact_once', target='card', amount=2, image='impact.svg'),
     'rapids': _enchantment_book('激流', 'Rapids', '选择一张手中的牌，使其下一次使用时从抽牌堆和弃牌堆分别选择1张牌加入手中。', 'Choose a card in hand. The next time it is used, choose 1 card each from draw and discard piles and add them to hand.', 'rare', 'retrieve_once', target='card', image='rapids.svg'),
-    'thorns': _enchantment_book('荆棘', 'Thorns', '选择一张手中的牌，使其下一次使用时获得3层反射。', 'Choose a card in hand. The next time it is used, gain 3 Reflection.', 'rare', 'reflection_once', target='card', amount=3, image='thorns.svg'),
-    'wind_blast': _enchantment_book('风爆', 'Wind Blast', '选择一张手中的牌，使其下一次使用时对目标施加4层易伤。', 'Choose a card in hand. The next time it is used, apply 4 Vulnerable to the target.', 'rare', 'vulnerable_once', target='card', amount=4, image='wind blast.svg'),
+    'thorns': _enchantment_book('荆棘', 'Thorns', '选择一张手中的牌，使其下一次使用时获得3层[[status:reflection]]。', 'Choose a card in hand. The next time it is used, gain 3 [[status:reflection]].', 'rare', 'reflection_once', target='card', amount=3, image='thorns.svg'),
+    'wind_blast': _enchantment_book('风爆', 'Wind Blast', '选择一张手中的牌，使其下一次使用时对目标施加4层[[status:vulnerable]]。', 'Choose a card in hand. The next time it is used, apply 4 [[status:vulnerable]] to the target.', 'rare', 'vulnerable_once', target='card', amount=4, image='wind blast.svg'),
     'warp': _enchantment_book('传送器', 'Warp', '逃离一场非首领战斗，失去10H且不获得奖励。', 'Escape a non-boss combat, lose 10 H, and receive no reward.', 'rare', 'escape', amount=10, image='warp.svg'),
 }
 
@@ -2586,7 +2710,7 @@ STORY_RELICS = {
     'easy_godhood': _relic('神格', 'Divinity', '战斗开始时获得3E；未使用的E保留至下回合。', rarity='special', script='retain_elixir', amount=3),
     'consolation': _relic('安慰', 'Consolation', '获得时H上限+1。', rarity='special', script='gain_max_health_only', amount=1, stackable=True),
     'training': _relic('练起来', 'Training', '你可以在休息处锻炼：失去3点H上限，每场战斗开始时多抽1张牌。', rarity='special', script='training', amount=3),
-    'rigid': _relic('死板', 'Rigid', '每回合多回复2E；你永久获得5层锁定。', rarity='special', script='boss_locked', amount=2),
+    'rigid': _relic('死板', 'Rigid', '每回合多回复2E；你永久获得5层封锁。', rarity='special', script='boss_locked', amount=2),
     'story_pill': _relic('药丸', 'Pill', '你免疫大部分效果（当前为所有负面效果）。', rarity='special', script='boss_effect_immune', amount=1),
     'nimble': _relic('灵巧', 'Nimble', '每回合开始时，随机2张手牌获得暂时灵巧1，回合结束时移除。', rarity='special', script='boss_temporary_swift', amount=2),
     'blessing_rest': _relic('保佑', 'Blessing', '随机事件若是战斗，则改为休息处。', rarity='common', script='event_to_rest'),
@@ -3670,6 +3794,7 @@ def story_content_payload(card_defs=None, asset_version=''):
         'trait_zero_visible': sorted(STORY_TRAIT_ZERO_VISIBLE),
         'blessings': deepcopy(STORY_BLESSINGS),
         'events': deepcopy(STORY_EVENTS),
+        'events12': deepcopy(STORY_EVENTS_12_SOURCE),
         'cards': cards,
         'relics': deepcopy(STORY_RELICS),
         'boss_relic_ids': list(STORY_BOSS_RELIC_IDS),
@@ -4018,7 +4143,7 @@ STORY_CARD_BASE_DESCRIPTION_EN = {
     'bubble': 'Draw 3',
     'magic_bubble': 'Draw until your hand is full',
     'mark': 'Change the target\'s next intent to Stun',
-    'dandelion_seed': 'Can be planted at Rest Sites: permanently remove this card and gain Dandelion Blessing',
+    'dandelion_seed': 'Can be planted at Rest Sites: permanently remove this card and gain [[talent:dandelion_blessing]]',
     'yin_yang': 'Shuffle all other cards in your hand into the draw pile, then draw 1 more card than the number shuffled',
     'sewage': 'Cards you play cost no E this turn; for each card you play, randomly actively discard 1 other card of yours',
     'mjolnir': 'Deal 14 D to the target; this card can be upgraded indefinitely',
@@ -4141,3 +4266,531 @@ for _story_card_id, _story_card_en in STORY_CARD_UPGRADE_DESCRIPTION_EN.items():
     _story_upgrade = _story_card_def.get('upgrade') if _story_card_def is not None else None
     if _story_upgrade is not None and isinstance(_story_upgrade.get('description'), dict):
         _story_upgrade['description']['en'] = _story_card_description(_story_card_en)
+
+
+def _term_locales(name, description, fr_name, fr_description, ja_name, ja_description):
+    """Add French and Japanese presentation copies to one term definition."""
+    if isinstance(name, dict):
+        name['fr'] = fr_name
+        name['ja'] = ja_name
+    if isinstance(description, dict) and fr_description:
+        description['fr'] = fr_description
+    if isinstance(description, dict) and ja_description:
+        description['ja'] = ja_description
+
+
+def _apply_story_tag_locales():
+    _term_locales(
+        STORY_TAGS['precise']['name'], STORY_TAGS['precise']['description'],
+        'Précision', 'Les attaques Précises ne peuvent pas être esquivées.',
+        '精密', '精密攻撃は回避できません。')
+    _term_locales(
+        STORY_TAGS['exile']['name'], STORY_TAGS['exile']['description'],
+        'Exil', 'Exile cette carte après l’avoir jouée.',
+        '追放', 'このカードはプレイ後に追放されます。')
+    _term_locales(
+        STORY_TAGS['ready']['name'], STORY_TAGS['ready']['description'],
+        'Prêt', 'Quand elle entre en main ou au début du tour, jouez-la automatiquement si elle est jouable.',
+        '即時', '手札に入るかターン開始時、使用可能なら自動的にプレイされます。')
+    _term_locales(
+        STORY_TAGS['innate']['name'], STORY_TAGS['innate']['description'],
+        'Innée', 'Cette carte apparaît toujours dans la main de départ.',
+        '固有', 'このカードは戦闘開始時の初期手札に必ず含まれます。')
+    _term_locales(
+        STORY_TAGS['unplayable']['name'], STORY_TAGS['unplayable']['description'],
+        'Injouable', 'Cette carte ne peut pas être jouée.',
+        '使用不可', 'このカードはプレイできません。')
+    _term_locales(
+        STORY_TAGS['retain']['name'], STORY_TAGS['retain']['description'],
+        'Conservation', 'Gardez cette carte en main à la fin du tour.',
+        '保留', 'ターン終了時、このカードを手札に残します。')
+    _term_locales(
+        STORY_TAGS['void']['name'], STORY_TAGS['void']['description'],
+        'Néant', 'Si cette carte est encore en main à la fin du tour, exilez-la.',
+        '虚無', 'ターン終了時に手札にあれば、このカードを追放します。')
+    _term_locales(
+        STORY_TAGS['wide']['name'], STORY_TAGS['wide']['description'],
+        'Frappe large', 'Applique l’effet à chaque créature sélectionnable.',
+        '広域打撃', '選択可能なすべての生物に効果を適用します。')
+    _term_locales(
+        STORY_TAGS['recovery']['name'], STORY_TAGS['recovery']['description'],
+        'Récupération', 'Retire définitivement cette carte du deck après le nombre de combats indiqué.',
+        '回復', '指定された回数の戦闘後、このカードをデッキから永久に取り除きます。')
+    _term_locales(
+        STORY_TAGS['sublime']['name'], STORY_TAGS['sublime']['description'],
+        'Sublime', 'Ne peut être sélectionnée par aucune action, sauf pour être jouée.',
+        '崇高', 'プレイ以外の方法では選択できません。')
+    _term_locales(
+        STORY_TAGS['eternal']['name'], STORY_TAGS['eternal']['description'],
+        'Éternel', 'Ne peut pas être retirée du deck.',
+        '永続', 'デッキから削除できません。')
+    _term_locales(
+        STORY_TAGS['charge']['name'], STORY_TAGS['charge']['description'],
+        'Charge', 'Quand elle est jouée, inflige-toi [[icon:electric_damage]] égal à ses charges.',
+        '電荷', 'プレイ時、自身に層数と等しい[[icon:electric_damage]]を与えます。')
+
+
+_apply_story_tag_locales()
+
+
+def _apply_story_status_locales():
+    _term_locales(
+        STORY_STATUSES['shield']['name'], STORY_STATUSES['shield']['description'],
+        'Bouclier', 'Bloque une quantité de dégâts égale, puis se dissipe au début du tour.',
+        'シールド', '同量のダメージを防ぎ、ターン開始時に消えます。')
+    _term_locales(
+        STORY_STATUSES['power']['name'], STORY_STATUSES['power']['description'],
+        'Puissance', 'Chaque charge ajoute 1 à chaque segment de [[icon:D]].',
+        '威力', '1層ごとに各[[icon:D]]のダメージが+1されます。')
+    _term_locales(
+        STORY_STATUSES['temporary_power']['name'], STORY_STATUSES['temporary_power']['description'],
+        'Puissance temporaire', 'Agit comme Puissance et se dissipe à la fin du tour.',
+        '一時威力', '威力と同じ効果ですが、ターン終了時に消えます。')
+    _term_locales(
+        STORY_STATUSES['endurance']['name'], STORY_STATUSES['endurance']['description'],
+        'Endurance', 'Chaque charge ajoute 1 au Bouclier obtenu par des cartes.',
+        '耐久力', 'カードからシールドを得る時、1層ごとに+1します。')
+    _term_locales(
+        STORY_STATUSES['weak']['name'], STORY_STATUSES['weak']['description'],
+        'Faiblesse', 'Inflige 25% de [[icon:D]] en moins, arrondi à l’inférieur. Perd 1 charge au début du tour.',
+        '虚弱', '与える[[icon:D]]が25%減少します（切り捨て）。ターン開始時に-1層。')
+    _term_locales(
+        STORY_STATUSES['vulnerable']['name'], STORY_STATUSES['vulnerable']['description'],
+        'Vulnérable', 'Subit 50% de [[icon:D]] en plus, arrondi à l’inférieur. Perd 1 charge au début du tour.',
+        '脆弱', '受ける[[icon:D]]が50%増加します（切り捨て）。ターン開始時に-1層。')
+    _term_locales(
+        STORY_STATUSES['fragile']['name'], STORY_STATUSES['fragile']['description'],
+        'Fragile', 'Gagne 25% de Bouclier en moins depuis les cartes, arrondi à l’inférieur. Perd 1 charge au début du tour.',
+        '脆い', 'カードから得るシールドが25%減少します（切り捨て）。ターン開始時に-1層。')
+    _term_locales(
+        STORY_STATUSES['evade']['name'], STORY_STATUSES['evade']['description'],
+        'Esquive', 'Dépense 1 charge pour esquiver une attaque. Perd 1 charge au début du tour.',
+        '回避', '攻撃を受ける時、1層消費してその攻撃を回避します。ターン開始時に-1層。')
+    _term_locales(
+        STORY_STATUSES['poison']['name'], STORY_STATUSES['poison']['description'],
+        'Poison', 'Au début du tour, subit des dégâts égaux aux charges, puis les charges sont divisées par deux.',
+        '毒', 'ターン開始時に層数と等しいダメージを受け、その後層数が半分になります（切り捨て）。')
+    _term_locales(
+        STORY_STATUSES['stun']['name'], STORY_STATUSES['stun']['description'],
+        'Étourdissement', 'Saute autant de tours jouables que de charges. Étourdissement est une action, pas un état.',
+        'スタン', '層数ぶんの行動可能ターンをスキップします。スタンは行動であり、状態ではありません。')
+    _term_locales(
+        STORY_STATUSES['reflection']['name'], STORY_STATUSES['reflection']['description'],
+        'Réflexion', 'Quand il est attaqué, inflige des dégâts égaux aux charges à l’attaquant.',
+        '反射', '攻撃を受けるたび、攻撃者に層数と等しいダメージを与えます。')
+    _term_locales(
+        STORY_STATUSES['wither']['name'], STORY_STATUSES['wither']['description'],
+        'Flétrissure', 'Perd 1 charge à la fin du tour et meurt quand elle expire.',
+        '萎凋', 'ターン終了時に-1層。層がなくなると死亡します。')
+    _term_locales(
+        STORY_STATUSES['broken']['name'], STORY_STATUSES['broken']['description'],
+        'Cassé', 'Subit des dégâts égaux aux charges chaque fois qu’il joue une carte. Se dissipe après son tour d’action.',
+        '破損', 'カードをプレイするたびに層数と等しいダメージを受けます。自分の行動ターン終了時に消えます。')
+    _term_locales(
+        STORY_STATUSES['overload']['name'], STORY_STATUSES['overload']['description'],
+        'Surcharge', 'Au début de votre tour, perdez jusqu’à autant de E que de charges, puis dissipez l’état.',
+        '過負荷', '自分のターン開始時、層数までのEを失い、その後消えます。')
+    _term_locales(
+        STORY_STATUSES['magic_overload']['name'], STORY_STATUSES['magic_overload']['description'],
+        'Surcharge magique', 'Au début de votre tour, perdez jusqu’à autant de M que de charges, puis dissipez l’état.',
+        '魔力過負荷', '自分のターン開始時、層数までのMを失い、その後消えます。')
+    _term_locales(
+        STORY_STATUSES['static']['name'], STORY_STATUSES['static']['description'],
+        'Statique', '[[icon:electric_damage]] consomme toute la Statique et ajoute ses anciennes charges à ce coup.',
+        '静電気', '[[icon:electric_damage]]を受ける時、静電気をすべて消費し、元の層数をそのダメージに加えます。')
+    _term_locales(
+        STORY_STATUSES['untargetable']['name'], STORY_STATUSES['untargetable']['description'],
+        'Invisible', 'Les attaques ennemies ne peuvent pas toucher. Perd 1 charge au début de votre prochain tour.',
+        '不可視', '敵の攻撃は命中しません。自分の次のターン開始時に-1層。')
+    _term_locales(
+        STORY_STATUSES['rockfall']['name'], STORY_STATUSES['rockfall']['description'],
+        'Chute de rochers', 'Au début d’une action, inflige des D égaux à ses charges, puis gagne 2 charges de Chute de rochers.',
+        '落石', '行動開始時、層数と等しいDを与え、その後落石を2層得ます。')
+    _term_locales(
+        STORY_STATUSES['blind']['name'], STORY_STATUSES['blind']['description'],
+        'Aveuglement', 'Cache les informations de la main. Perd 1 charge au début du tour.',
+        '失明', '手札の情報を隠します。ターン開始時に-1層。')
+    _term_locales(
+        STORY_STATUSES['entangle']['name'], STORY_STATUSES['entangle']['description'],
+        'Entrave', 'À la fin du tour, subit des dégâts égaux à ses charges.',
+        '拘束', 'ターン終了時、層数と等しいダメージを受けます。')
+    _term_locales(
+        STORY_STATUSES['negative_status_immunity']['name'], STORY_STATUSES['negative_status_immunity']['description'],
+        'Immunité aux états négatifs', 'Annule la prochaine application d’un état négatif, puis perd 1 charge.',
+        '負の状態免疫', '次に受ける負の状態の付与を無効化し、その後-1層。')
+    _term_locales(
+        STORY_STATUSES['evil_eye']['name'], STORY_STATUSES['evil_eye']['description'],
+        'Mauvais œil', '[[icon:D]] jusqu’à 9 devient 1 ; un [[icon:D]] d’au moins 10 est réduit de 9 et consomme 1 charge.',
+        '邪眼', '9以下の[[icon:D]]は1になります。10以上の[[icon:D]]は9減少し、1層消費します。')
+    _term_locales(
+        STORY_STATUSES['toxic_poison']['name'], STORY_STATUSES['toxic_poison']['description'],
+        'Poison toxique', 'Après la résolution du Poison, gagne du Poison égal à ses charges.',
+        '猛毒', '毒の解決後、層数と等しい毒を得ます。')
+    _term_locales(
+        STORY_STATUSES['stagnation']['name'], STORY_STATUSES['stagnation']['description'],
+        'Stagnation', 'Le Poison ne se divise plus par deux après sa résolution. Perd 1 charge à la fin du tour.',
+        '滞留', '存在する間、毒は解決後に半減しません。ターン終了時に-1層。')
+    _term_locales(
+        STORY_STATUSES['bleed']['name'], STORY_STATUSES['bleed']['description'],
+        'Saignement', 'Après avoir joué une Attaque, subit des dégâts égaux aux charges, puis les divise par deux.',
+        '出血', '攻撃カードをプレイして解決後、層数と等しいダメージを受け、その後半分になります（切り捨て）。')
+    _term_locales(
+        STORY_STATUSES['fire']['name'], STORY_STATUSES['fire']['description'],
+        'Brûlure', 'Au début du tour, subit des dégâts égaux à ses charges.',
+        '火傷', 'ターン開始時、層数と等しいダメージを受けます。')
+    _term_locales(
+        STORY_STATUSES['blockade']['name'], STORY_STATUSES['blockade']['description'],
+        'Blocus', 'Les X premiers emplacements de main pairs ne peuvent pas être joués. Ses charges ne diminuent pas naturellement.',
+        '封鎖', '手札の前X個の偶数スロットはプレイできません。層数は自然に減りません。')
+    _term_locales(
+        STORY_STATUSES['attack_blocked']['name'], STORY_STATUSES['attack_blocked']['description'],
+        'Attaque bloquée', 'Les cartes d’Attaque ne peuvent pas être jouées. Perd 1 charge à la fin du tour.',
+        '攻撃封印', '存在する間、攻撃カードをプレイできません。ターン終了時に-1層。')
+    _term_locales(
+        STORY_STATUSES['fragment']['name'], STORY_STATUSES['fragment']['description'],
+        'Fragment', 'Consommé par les actions spéciales du Reconstructeur.',
+        '破片', '再構築機の特殊行動によって消費されます。')
+    _term_locales(
+        STORY_STATUSES['magic_shield_disabled']['name'], STORY_STATUSES['magic_shield_disabled']['description'],
+        'Bouclier magique désactivé', 'Le Bouclier magique ne fonctionne pas tant que l’état est présent ; il disparaît à la fin du tour du joueur.',
+        '魔力シールド無効', '存在する間、魔力シールドは効果を発揮しません。プレイヤーターン終了時に消えます。')
+
+
+_apply_story_status_locales()
+
+
+def _apply_story_trait_locales_first():
+    _term_locales(
+        STORY_TRAITS['adjacent']['name'], STORY_TRAITS['adjacent']['description'],
+        'Chaîné', 'Quand il subit des dégâts, les segments adjacents subissent la moitié des dégâts réels, arrondie à l’inférieur.',
+        '連鎖', 'ダメージを受ける時、隣接する体節も実際のダメージの半分（切り捨て）を受けます。')
+    _term_locales(
+        STORY_TRAITS['nourish']['name'], STORY_TRAITS['nourish']['description'],
+        'Nourrir', 'Une fois sous 40% de H : vainc tous les alliés ; pour chacun, gagne 2 Puissance et soigne son H maximum.',
+        '滋養', 'Hが40%未満になると一度だけ発動：すべての生物を撃破し、1体ごとに威力2を得て、その最大Hを回復します。')
+    _term_locales(
+        STORY_TRAITS['sturdy']['name'], STORY_TRAITS['sturdy']['description'],
+        'Solide', 'Le Bouclier ne se dissipe pas naturellement. Perd 1 charge à la fin du tour.',
+        '頑丈', 'シールドは自然に消えません。ターン終了時に-1層。')
+    _term_locales(
+        STORY_TRAITS['summon_after_death']['name'], STORY_TRAITS['summon_after_death']['description'],
+        'Invocation à la mort', 'À sa mort, invoque une Guêpe dont la première action est Tir, puis lui donne 4 Flétrissure.',
+        '死亡時召喚', '死亡時、最初の行動が「射撃」のハチを1体召喚し、萎凋4を付与します。')
+    _term_locales(
+        STORY_TRAITS['swell']['name'], STORY_TRAITS['swell']['description'],
+        'Gonflement', 'Gagne 1 Puissance temporaire à chaque attaque subie.',
+        '膨張', '攻撃を受けるたび、一時威力を1層得ます。')
+    _term_locales(
+        STORY_TRAITS['miracle']['name'], STORY_TRAITS['miracle']['description'],
+        'Miracle', 'Avant que le joueur joue sa deuxième carte, dépense 1 usage pour gagner 1 Esquive.',
+        '奇跡', 'プレイヤーが2枚目のカードをプレイする前に、使用を1回消費して回避を1層得ます。')
+    _term_locales(
+        STORY_TRAITS['bandage']['name'], STORY_TRAITS['bandage']['description'],
+        'Bandage', 'La première attaque mortelle laisse 1 H, octroie l’invincibilité pour un tour et transforme l’action suivante en Frappe frénétique.',
+        '包帯', '初めて致命ダメージを受けた時、Hを1残し、1ターン無敵を得て、次の行動を狂乱攻撃に変更します。')
+    _term_locales(
+        STORY_TRAITS['chaos']['name'], STORY_TRAITS['chaos']['description'],
+        'Chaos', 'Après avoir été attaqué, bascule vers une autre intention aléatoire.',
+        '混乱', '攻撃を受けた後、別の意図へランダムに切り替わります。')
+    _term_locales(
+        STORY_TRAITS['shelter']['name'], STORY_TRAITS['shelter']['description'],
+        'Abri', 'À la fin du tour, si aucune créature n’a subi de dégâts réels ce tour, toutes les créatures gagnent un Bouclier égal aux charges.',
+        '庇護', 'ターン終了時、このターン実際のダメージを受けていなければ、すべての生物は層数と等しいシールドを得ます。')
+    _term_locales(
+        STORY_TRAITS['frenzied']['name'], STORY_TRAITS['frenzied']['description'],
+        'Frénésie', 'Modifie les actions ou invocations selon ses charges.',
+        '狂乱', '層数に応じて行動や召喚の効果が変化します。')
+    _term_locales(
+        STORY_TRAITS['hidden']['name'], STORY_TRAITS['hidden']['description'],
+        'Caché', 'Subit au plus 1 dégât par coup. Perd 1 charge à la fin du tour.',
+        '隠れ', '1回の攻撃で受けるダメージは最大1です。ターン終了時に-1層。')
+    _term_locales(
+        STORY_TRAITS['turn_shield']['name'], STORY_TRAITS['turn_shield']['description'],
+        'Bouclier de tour', 'Au début du tour, gagne un Bouclier égal à ses charges.',
+        'ターンシールド', 'ターン開始時、層数と等しいシールドを得ます。')
+    _term_locales(
+        STORY_TRAITS['charging_up']['name'], STORY_TRAITS['charging_up']['description'],
+        'Charge montante', 'La prochaine attaque gagne des dégâts égaux à ses charges, puis l’état disparaît.',
+        '蓄力', '次の攻撃のダメージが層数ぶん増加し、その後消えます。')
+    _term_locales(
+        STORY_TRAITS['charged']['name'], STORY_TRAITS['charged']['description'],
+        'Chargé', 'Quand il est attaqué, ajoute à chaque carte de la main du joueur une Charge égale à ses charges.',
+        '帯電', '攻撃を受ける時、プレイヤーの手札すべてに層数と等しい電荷を付与します。')
+    _term_locales(
+        STORY_TRAITS['proliferation']['name'], STORY_TRAITS['proliferation']['description'],
+        'Prolifération', 'Quand un autre ennemi meurt, soigne tous les ennemis et leur donne un Bouclier égal à ses charges, plus 1 Solide.',
+        '増殖', '他の敵が死亡する時、すべての敵のHを回復し、層数と等しいシールドと頑丈1を付与します。')
+    _term_locales(
+        STORY_TRAITS['regeneration']['name'], STORY_TRAITS['regeneration']['description'],
+        'Régénération', 'Au début du tour, soigne un H égal à ses charges.',
+        '再生', 'ターン開始時、層数と等しいHを回復します。')
+    _term_locales(
+        STORY_TRAITS['vampire']['name'], STORY_TRAITS['vampire']['description'],
+        'Vampire', 'Après avoir infligé des dégâts au H, se soigne des dégâts réels multipliés par ses charges.',
+        '吸血', 'Hダメージを与えた後、実際のダメージ×層数のHを回復します。')
+
+
+_apply_story_trait_locales_first()
+
+
+def _apply_story_trait_locales_second():
+    _term_locales(
+        STORY_TRAITS['bloodthirsty']['name'], STORY_TRAITS['bloodthirsty']['description'],
+        'Assoiffé de sang', 'Gagne 1 Puissance chaque fois qu’il inflige des dégâts au H.',
+        '嗜血', 'Hダメージを与えるたび、威力を1層得ます。')
+    _term_locales(
+        STORY_TRAITS['limb_survival']['name'], STORY_TRAITS['limb_survival']['description'],
+        'Survivre avec un membre perdu', 'Utilise Membre sectionné sous 30% de H, jusqu’à 5 fois.',
+        '断臂生存', 'Hが30%未満になると断臂を発動します。最大5回。')
+    _term_locales(
+        STORY_TRAITS['yggdrasil_power']['name'], STORY_TRAITS['yggdrasil_power']['description'],
+        'Pouvoir d’Yggdrasil', 'À la première mort, ressuscite au H maximum après avoir sauté une action et devient invincible pour un tour.',
+        '世界樹の力', '初めて死亡した時、1回の行動をスキップした後、満Hで復活し、1ラウンド無敵になります。')
+    _term_locales(
+        STORY_TRAITS['brittle']['name'], STORY_TRAITS['brittle']['description'],
+        'Fragile', 'S’il ne meurt pas d’une Explosion, sa créature invoquée à la mort a la moitié du H et gagne 1 Étourdissement.',
+        '脆い', '爆裂以外で死亡した場合、死亡時召喚の生物はHが半分になり、スタン1を得ます。')
+    _term_locales(
+        STORY_TRAITS['psionic_connection']['name'], STORY_TRAITS['psionic_connection']['description'],
+        'Connexion psionique', 'Quand une créature connectée subit des dégâts, toutes les créatures vivantes avec Connexion psionique les partagent équitablement.',
+        '霊能連結', '霊能連結を持つ生物がダメージを受ける時、生きているすべての霊能連結生物がそのダメージを均等に分け合います。')
+    _term_locales(
+        STORY_TRAITS['psionic_sustain']['name'], STORY_TRAITS['psionic_sustain']['description'],
+        'Lien psionique', 'Tant qu’une Termitière vit, le H ne peut pas tomber sous 1 ; à 1 H, il est étourdi deux fois, puis guérit au maximum.',
+        '霊能縛定', 'シロアリ塚が生存している間、Hは1未満になりません。Hが1になるとスタン2を受け、その後満Hまで回復します。')
+    _term_locales(
+        STORY_TRAITS['psionic_fountain']['name'], STORY_TRAITS['psionic_fountain']['description'],
+        'Fontaine psionique', 'Au début du combat, remplace la Connexion psionique des termites par Lien psionique ; à leur mort, leur fait utiliser Résolution immédiatement.',
+        '霊能源泉', '戦闘開始時、すべてのシロアリの霊能連結を霊能縛定に置き換えます。死亡時、即座に「決意」を使用させます。')
+    _term_locales(
+        STORY_TRAITS['nest_instinct']['name'], STORY_TRAITS['nest_instinct']['description'],
+        'Instinct de nid', 'Quand il est attaqué, toutes les créatures gagnent 1 Puissance temporaire ; une renaissance par Lien psionique donne 1 Puissance à toutes les créatures.',
+        '巣の本能', '攻撃を受ける時、すべての生物が一時威力1を得ます。霊能縛定による復活時、すべての生物が威力1を得ます。')
+    _term_locales(
+        STORY_TRAITS['endurance_shell']['name'], STORY_TRAITS['endurance_shell']['description'],
+        'Carapace feuillue', 'Chaque fois que le joueur joue une compétence, gagne un Bouclier égal à ses charges.',
+        '葉甲', 'プレイヤーがスキルカードをプレイするたび、層数と等しいシールドを得ます。')
+    _term_locales(
+        STORY_TRAITS['toxic_conversion']['name'], STORY_TRAITS['toxic_conversion']['description'],
+        'Conversion toxique', 'Gagne tout le Poison d’une autre unité quand elle meurt ; son propre Poison soigne la même quantité de H.',
+        '毒素変換', '他のユニットが死亡する時、その毒をすべて獲得します。自分の毒の解決は同量のH回復に変わります。')
+    _term_locales(
+        STORY_TRAITS['bulb']['name'], STORY_TRAITS['bulb']['description'],
+        'Ampoule', 'Tant qu’elle est présente, les cartes ciblant des créatures ne peuvent cibler que celles avec Ampoule.',
+        '電球', '存在する間、生物を対象にするカードは電球を持つ生物にしか使用できません。')
+    _term_locales(
+        STORY_TRAITS['hard_shell']['name'], STORY_TRAITS['hard_shell']['description'],
+        'Carapace dure', 'Réduit les [[icon:D]] reçus d’un montant égal à ses charges.',
+        '硬殻', '受ける[[icon:D]]を層数ぶん減少させます。')
+    _term_locales(
+        STORY_TRAITS['obstacle']['name'], STORY_TRAITS['obstacle']['description'],
+        'Obstacle', 'À sa mort, retire au joueur un Blocus égal à ses charges.',
+        '障害', '死亡時、プレイヤーの封鎖を層数ぶん減らします。')
+    _term_locales(
+        STORY_TRAITS['segments']['name'], STORY_TRAITS['segments']['description'],
+        'Segments', 'À sa mort, si les charges sont supérieures à 0, invoque une copie de même nom avec 1 Segment de moins.',
+        '体節', '死亡時、層数が0より大きければ、体節が1少ない同名の生物を召喚します。')
+    _term_locales(
+        STORY_TRAITS['magic_shield']['name'], STORY_TRAITS['magic_shield']['description'],
+        'Bouclier magique', 'Quand il subit des dégâts, dépense 1 M pour bloquer des dégâts égaux à ses charges.',
+        '魔力シールド', 'ダメージを受ける時、Mを1消費して層数と等しいダメージを防ぎます。')
+    _term_locales(
+        STORY_TRAITS['magic_blessing']['name'], STORY_TRAITS['magic_blessing']['description'],
+        'Bénédiction magique', 'Conserve du M pour le Bouclier magique et les actions spéciales.',
+        '魔力加護', '魔力シールドと特殊行動のために自身のMを蓄えます。')
+    _term_locales(
+        STORY_TRAITS['magic_reflection']['name'], STORY_TRAITS['magic_reflection']['description'],
+        'Réflexion magique', 'Quand il est attaqué, dépense 1 charge pour gagner 1 M.',
+        '魔力反射', '攻撃を受ける時、1層消費してMを1得ます。')
+
+
+_apply_story_trait_locales_second()
+
+
+def _apply_story_trait_locales_third():
+    _term_locales(
+        STORY_TRAITS['electric_web']['name'], STORY_TRAITS['electric_web']['description'],
+        'Toile électrique', 'Chaque carte piochée par le joueur pendant son tour applique 1 Entrave ; perd 1 charge à la fin du tour.',
+        '電網', 'プレイヤーが自分のターン中にカードを1枚引くたび、拘束を1層付与します。ターン終了時に-1層。')
+    _term_locales(
+        STORY_TRAITS['super_beam']['name'], STORY_TRAITS['super_beam']['description'],
+        'Super rayon', 'Perd 1 charge à la fin du tour ; utilise Super rayon quand le compte à rebours se termine.',
+        '超ビーム', 'ターン終了時に-1層。層がなくなると超ビームを使用します。')
+    _term_locales(
+        STORY_TRAITS['toxic_reflection']['name'], STORY_TRAITS['toxic_reflection']['description'],
+        'Réflexion toxique', 'Chaque fois qu’il est attaqué, applique au joueur un Poison égal à ses charges.',
+        '猛毒反射', '攻撃を受けるたび、プレイヤーに層数と等しい毒を付与します。')
+    _term_locales(
+        STORY_TRAITS['reconstruction']['name'], STORY_TRAITS['reconstruction']['description'],
+        'Reconstruction', 'Change aléatoirement d’intention en gagnant des Fragments. Si le joueur n’a pas utilisé Déchet d’usine au tour précédent, utilise Auto-désassemblage, jamais deux fois de suite.',
+        '再構築', '破片を得る時、意図をランダムに変更します。プレイヤーが前ターンに工場廃棄物を使用していなければ自己分解を使用しますが、連続では使用しません。')
+    _term_locales(
+        STORY_TRAITS['integration']['name'], STORY_TRAITS['integration']['description'],
+        'Intégration', 'Avec au moins 5 Fragments, la prochaine action devient Mjolnir.',
+        '統合', '破片が5層以上ある時、次の行動がミョルニルになります。')
+    _term_locales(
+        STORY_TRAITS['scrap']['name'], STORY_TRAITS['scrap']['description'],
+        'Déchet', 'Au début d’une action, ajoute 1 Déchet d’usine à la main du joueur.',
+        '廃棄物', '行動開始時、プレイヤーの手札に工場廃棄物を1枚加えます。')
+    _term_locales(
+        STORY_TRAITS['disc']['name'], STORY_TRAITS['disc']['description'],
+        'Disque', 'Divise les [[icon:D]] reçus par ses charges, arrondi à l’inférieur. Perd 1 charge à la fin du tour.',
+        '円盤', '受ける[[icon:D]]を層数で割ります（切り捨て）。ターン終了時に-1層。')
+    _term_locales(
+        STORY_TRAITS['machine_learning']['name'], STORY_TRAITS['machine_learning']['description'],
+        'Apprentissage automatique', 'Au début du tour du joueur, donne Néant à 2 cartes aléatoires de sa main. Les cartes piochées après la phase de pioche gagnent Néant, et celles exilées par Néant entrent dans le Mécanisme.',
+        '機械学習', 'プレイヤーターン開始時、手札のランダム2枚に虚無を付与します。ドロー段階の後に引いたカードはすべて虚無を得、虚無で追放されたカードは機械軌道に入ります。')
+    _term_locales(
+        STORY_TRAITS['mechanical_track']['name'], STORY_TRAITS['mechanical_track']['description'],
+        'Mécanisme', 'Commence avec 1 Mjolnir, 1 Roue dentée et 1 Os. Chaque action fait tourner le mécanisme deux fois et résout la carte du dessus. Les cartes initiales passent dessous ; les autres sont consommées. Piocher provoque une rotation supplémentaire de moins que le nombre de cartes piochées, et récupérer du E accorde autant de Puissance.',
+        '機械軌道', '初期にミョルニル1枚、歯車1枚、骨1枚を含みます。行動ごとに2回回転し、軌道の先頭カードを発動します。初期カードは軌道の底へ移り、他のカードは消費されます。ドローは（引く枚数-1）回の追加回転となり、E回復は同量の威力獲得に変わります。')
+    _term_locales(
+        STORY_TRAITS['recycling']['name'], STORY_TRAITS['recycling']['description'],
+        'Recyclage', 'Si la carte du dessus a moins de 10 de dégâts et Bouclier de base combinés et ne peut pas piocher, ne la résolvez pas : consommez-la, gagnez 1 Puissance et tournez une fois de plus.',
+        'リサイクル', '軌道の先頭カードの基本ダメージとシールドの合計が10未満で、ドロー効果がない場合、発動せずに消費して威力1を得て、さらに1回回転します。')
+    _term_locales(
+        STORY_TRAITS['electronic_shield']['name'], STORY_TRAITS['electronic_shield']['description'],
+        'Bouclier électronique', 'Chaque fois que cette créature gagne un Bouclier, inflige autant de dégâts au joueur.',
+        '電子シールド', 'この生物がシールドを得るたび、プレイヤーに同量のダメージを与えます。')
+    _term_locales(
+        STORY_TRAITS['toxic_pressure']['name'], STORY_TRAITS['toxic_pressure']['description'],
+        'Pression toxique', 'À sa mort, applique au joueur un Poison toxique égal à ses charges.',
+        '猛毒圧力', '死亡時、プレイヤーに層数と等しい猛毒を付与します。')
+    _term_locales(
+        STORY_TRAITS['pressure']['name'], STORY_TRAITS['pressure']['description'],
+        'Pression', 'À sa mort, inflige au joueur des dégâts égaux à ses charges.',
+        '圧力', '死亡時、プレイヤーに層数と等しいダメージを与えます。')
+    _term_locales(
+        STORY_TRAITS['injured_summon']['name'], STORY_TRAITS['injured_summon']['description'],
+        'Invocation blessée', 'Après avoir subi un total de dégâts au H égal à ses charges, invoque 1 Fumée et recommence à compter.',
+        '負傷召喚', '累計で層数と等しいHダメージを受けるたび、煙を1体召喚して再び数え始めます。')
+    _term_locales(
+        STORY_TRAITS['cover']['name'], STORY_TRAITS['cover']['description'],
+        'Abri', 'Ne peut pas mourir. Quand un Rat mécanique s’y cache, subir des dégâts lui retire son Caché.',
+        '掩体', '死亡しません。機械ネズミが隠れた後、この掩体がダメージを受けるとその隠れを失わせます。')
+    _term_locales(
+        STORY_TRAITS['hiding']['name'], STORY_TRAITS['hiding']['description'],
+        'Dissimulation', 'À la fin du tour, se cache secrètement dans un Tas de briques aléatoire et gagne 1 Caché. Perd Caché quand ce tas subit des dégâts.',
+        '潜伏', 'ターン終了時、ランダムなレンガの山に（対象を表示せず）隠れて不可視1を得ます。その山がダメージを受けると不可視を失います。')
+
+
+_apply_story_trait_locales_third()
+
+
+def _apply_story_basic_locales():
+    for content_id, fr, ja in (
+        ('common_flower', 'Fleur commune', '普通のフラワー'),
+        ('orbiter', 'Orbiteur', 'オービター'),
+        ('summoner', 'Invocateur', '召喚士'),
+        ('mage', 'Mage', '魔法使い'),
+        ('occultist', 'Occultiste', 'オカルティスト'),
+    ):
+        _add_plain_locale(STORY_CHARACTERS[content_id]['name'], fr, ja)
+    for content_id, fr, ja in (
+        ('garden', 'Jardin', 'ガーデン'),
+        ('desert', 'Désert', '砂漠'),
+        ('ocean', 'Océan', '海洋'),
+        ('jungle', 'Jungle', 'ジャングル'),
+        ('factory', 'Usine', '工場'),
+    ):
+        _add_plain_locale(STORY_BIOMES[content_id]['name'], fr, ja)
+    for content_id, fr_name, fr_desc, ja_name, ja_desc in (
+        ('easy', 'Facile',
+         'Utilise la carte Normale et choisissez 1 des 3 talents Faciles avant la bénédiction initiale.',
+         '簡単', '通常マップを使用し、開始祝福の前に簡単天賦3つから1つ選びます。'),
+        ('normal', 'Normal',
+         'Carte, récompenses et force des créatures standard.',
+         '普通', '標準のマップ、報酬、敵の強さを使用します。'),
+        ('hard', 'Difficile',
+         'Plus de salles dangereuses, moins d’or et de cartes améliorées, et des prix plus élevés en boutique.',
+         '困難', '危険な部屋が増え、ゴールドと強化カードが減り、ショップの価格が高くなります。'),
+        ('lunatic', 'Lunatique',
+         'Inclut les règles Difficiles et renforce le H, les dégâts et les actions des créatures.',
+         '狂気', '困難のルールに加え、敵のH・ダメージ・行動が強化されます。'),
+    ):
+        _term_locales(
+            STORY_DIFFICULTIES[content_id]['name'], STORY_DIFFICULTIES[content_id]['description'],
+            fr_name, fr_desc, ja_name, ja_desc)
+        _add_plain_locale(STORY_DIFFICULTIES[content_id]['abbreviation'], fr_name[0], ja_name[0])
+    for content_id, fr, ja in (
+        ('thorn', 'Épine', '攻撃'),
+        ('bloom', 'Floraison', 'スキル'),
+        ('root', 'Racine', '装備'),
+        ('guard', 'Garde', 'カウンター'),
+        ('curse', 'Malédiction', '呪い'),
+        ('infect', 'État', '状態'),
+    ):
+        _add_plain_locale(STORY_CARD_TYPES[content_id]['name'], fr, ja)
+    for content_id, fr, ja in (
+        ('primary', 'Primaire', '初期'),
+        ('common', 'Commune', 'コモン'),
+        ('rare', 'Rare', 'レア'),
+        ('ultra', 'Ultra', 'ウルトラ'),
+        ('super', 'Super', 'スーパー'),
+    ):
+        _add_plain_locale(STORY_RARITIES[content_id]['name'], fr, ja)
+    for content_id, fr, ja in (
+        ('max_health', 'Gagnez 15 H maximum', '最大H+15'),
+        ('rare_card', 'Gagnez 1 carte Ultra aléatoire', 'ランダムなウルトラカードを1枚得る'),
+        ('gold', 'Gagnez 100 G', '100ゴールドを得る'),
+        ('relic_and_fatigue', 'Gagnez 1 talent aléatoire et ajoutez 1 Fatigué à votre deck', 'ランダムな天賦1つを得て、疲労1枚をデッキに加える'),
+        ('transform_card', 'Transformez 1 carte', 'カード1枚を変化させる'),
+        ('double_card_reward', 'Gagnez 2 récompenses de carte', 'カード報酬を2回得る'),
+        ('remove_card', 'Retirez 1 carte', 'カード1枚を削除する'),
+        ('wealth_and_basics', 'Gagnez 250 G et ajoutez 1 Basic et 1 Rose à votre deck', '250ゴールドを得て、ベーシック1枚とローズ1枚をデッキに加える'),
+    ):
+        _term_locales(
+            STORY_BLESSINGS[content_id].get('name') or {}, STORY_BLESSINGS[content_id]['description'],
+            '', fr, '', ja)
+
+
+def _add_plain_locale(field, fr, ja):
+    if isinstance(field, dict):
+        field['fr'] = fr
+        field['ja'] = ja
+
+
+_apply_story_basic_locales()
+
+
+def _apply_story_character_locales():
+    for content_id, fr_unlock, ja_unlock in (
+        ('common_flower', 'Débloqué par défaut', '最初から解放済み'),
+        ('orbiter', 'Terminez toutes les étapes avec Mage en toute difficulté', '魔法使いで任意の難易度で全ステージをクリアする'),
+        ('summoner', 'Terminez toutes les étapes avec Orbiter en toute difficulté', 'オービターで任意の難易度で全ステージをクリアする'),
+        ('mage', 'Terminez toutes les étapes avec Fleur commune en toute difficulté', '普通のフラワーで任意の難易度で全ステージをクリアする'),
+        ('occultist', 'Terminez toutes les étapes avec Invocateur en toute difficulté', '召喚士で任意の難易度で全ステージをクリアする'),
+    ):
+        unlock = STORY_CHARACTERS[content_id].get('unlock') or {}
+        if isinstance(unlock.get('description'), dict):
+            _add_plain_locale(unlock['description'], fr_unlock, ja_unlock)
+        unavail = STORY_CHARACTERS[content_id].get('unavailable_message')
+        if isinstance(unavail, dict):
+            _add_plain_locale(
+                unavail,
+                'Ce personnage n’est pas encore prêt.\nMerci de patienter pour une prochaine mise à jour.',
+                'このキャラクターはまだ準備できていません。\n今後のアップデートをお待ちください。')
+
+
+_apply_story_character_locales()
+
+
+def _apply_story_event_locales():
+    event = STORY_EVENTS['coop_garden_crossroads']
+    _term_locales(
+        event['title'], event['description'],
+        'Chariot du jardinier', 'Un chariot de jardinier abandonné offre un choix difficile.',
+        '庭師のカート', '捨てられた庭師のカートが難しい選択を迫ってくる。')
+    _add_plain_locale(event['speaker'], 'Chariot du jardinier', '捨てられた庭師のカート')
+    option_locales = {
+        'mend': ('Réparer les outils', 'Récupérez 15 H.', '道具を修理する', 'Hを15回復する。'),
+        'supplies': ('Rassembler des provisions', 'Gagnez 30 G.', '物資を集める', '30ゴールドを得る。'),
+        'risk': ('Récupération risquée', 'Perdez 8 H, sans descendre sous 1 H, et gagnez 60 G.', '危険な分解', 'H8を失う（最低1Hは残る）。60ゴールドを得る。'),
+    }
+    for option in event['options']:
+        fr_label, fr_desc, ja_label, ja_desc = option_locales[option['id']]
+        _add_plain_locale(option['label'], fr_label, ja_label)
+        _add_plain_locale(option['description'], fr_desc, ja_desc)
+
+
+_apply_story_event_locales()

@@ -352,12 +352,24 @@
         precise: { className: 'precision', color: '#546E7A' },
         exile: { className: 'exile', color: '#6C3483' },
         ready: { className: 'custom story-ready', color: '#B9770E' },
+        innate: { className: 'custom story-innate', color: '#D4AC0D' },
         unplayable: { className: 'custom story-unplayable', color: '#922B21' },
         retain: { className: 'custom story-retain', color: '#2874A6' },
         void: { className: 'void', color: '#37474F' },
         wide: { className: 'wide-strike', color: '#1F9D8A' },
+        recovery: { className: 'custom story-recovery', color: '#2E7D32' },
+        sublime: { className: 'custom story-sublime', color: '#9A7A12' },
         eternal: { className: 'custom story-eternal', color: '#8E44AD' },
-        charge: { className: 'custom story-charge', color: '#2471A3' },
+        charge: { className: 'custom story-charge', color: '#4BA3FF' },
+        power: { className: 'custom story-power', color: '#C0392B' },
+        electric_power: { className: 'custom story-electric-power', color: '#4BA3FF' },
+        swift: { className: 'custom story-swift', color: '#0984E3' },
+        temporary_swift: { className: 'custom story-temp-swift', color: '#0EA5E9' },
+        magic_swift: { className: 'custom story-magic-swift', color: '#6C5CE7' },
+        temporary_heavy: { className: 'custom story-temp-heavy', color: '#795548' },
+        firmness: { className: 'custom story-firmness', color: '#515A5A' },
+        armor_break: { className: 'custom story-armor-break', color: '#8D6E63' },
+        rebound: { className: 'custom story-rebound', color: '#9B59B6' },
     });
 
     const STORY_INLINE_ICONS = Object.freeze({
@@ -399,6 +411,9 @@
         stagnation: '#9b59b6', bleed: '#922b21', fire: '#e67e22',
         blockade: '#c0392b', attack_blocked: '#c0392b',
         fragment: '#795548', magic_shield_disabled: '#6c5ce7',
+        evil_eye: '#3498db',
+        disc: '#8a6337', sturdy: '#515a5a', regeneration: '#27ae60',
+        invincible: '#d4ac0d',
     });
     const STORY_TERM_LONG_PRESS_MS = 430;
     const STORY_TERM_MOVE_CANCEL_PX = 12;
@@ -730,6 +745,46 @@
             currentHealth: 'H actuels', restRecovery: 'Récupération', chestGold: 'Or',
             chestTalent: 'Talent', shopWallet: 'Or disponible', removePrice: 'Retrait',
             upgradePrice: 'Amélioration', none: 'Aucun', defeated: 'Vaincu',
+            abandonTitle: 'Terminer ce voyage ?',
+            abandonMessage: 'Cette partie sera marquée comme terminée.',
+            resetMap: 'Réinitialiser la carte', mapReset: 'Carte réinitialisée',
+            resetTitle: 'Réinitialiser la carte ?',
+            resetMessage: 'Un nouvel itinéraire sera généré depuis l’étage 1.',
+            cancel: 'Annuler', confirm: 'Confirmer', close: 'Fermer',
+            viewMap: 'Voir la carte', returnToCombat: 'Retour au combat',
+            restartFloor: 'Recommencer l’étage', restartFloorTitle: 'Recommencer cet étage ?',
+            restartFloorCopy: 'Toutes les actions de cet étage seront annulées. Les mêmes résultats aléatoires seront utilisés.',
+            restartFloorSucceeded: 'Étage recommencé',
+            shopServiceUsed: 'Le service de paquet de cette boutique a déjà été utilisé',
+            playerTurn: 'À votre tour', enemyTurn: 'Tour ennemi',
+            restTitle: 'Aire de repos', restCopy: 'Récupérez du H ou améliorez une carte.',
+            heal: 'Récupérer du H', upgrade: 'Améliorer', upgraded: 'Améliorée',
+            chestTitle: 'Coffre',
+            chestCopy: 'Prenez les récompenses que vous voulez ou laissez-les.',
+            openChest: 'Ouvrir', eventTitle: 'Événement du jardin',
+            eventCopy: 'Choisissez une issue.', takeGold: 'Prendre 20 or',
+            recoverHealth: 'Récupérer 15 H', shopTitle: 'Boutique',
+            shopCopy: 'Dépensez de l’or ou partez.',
+            buy: (value) => `Acheter · ${value}`, leave: 'Partir',
+            journeyComplete: 'Voyage terminé',
+            journeyCompleteCopy: 'Vous avez traversé toutes les étapes du voyage.',
+            journeyFailed: 'Voyage terminé',
+            journeyFailedCopy: 'Votre route s’arrête ici, mais une prochaine carte vous attend.',
+            requestFailed: 'Les données de l’histoire sont temporairement indisponibles',
+            stateUpdated: 'État synchronisé',
+            shield: 'Bouclier', power: 'Puissance', weak: 'Faiblesse',
+            vulnerable: 'Vulnérable', damagePrediction: 'Dégâts',
+            chooseCardHint: 'Choisissez une carte', chooseCards: 'Choisissez des cartes',
+            chooseExact: (value) => `Choisissez ${value} carte(s).`,
+            chooseUpTo: (value) => `Choisissez jusqu’à ${value} carte(s).`,
+            chooseEnemy: 'Choisissez l’ennemi', chooseSelf: 'Choisissez vous-même',
+            playAnywhere: 'Cliquez n’importe où pour jouer',
+            playSelfAnywhere: 'Cliquez n’importe où pour jouer sur vous',
+            pileEmpty: 'Aucune carte ici',
+            pileTotal: (label, count) => `${label} : ${count} carte(s)`,
+            cannotRemove: 'Ne peut pas être retirée',
+            gainedGold: (value) => `Vous gagnez ${value} or.`,
+            cardTypes: { thorn: 'Épine', bloom: 'Floraison', root: 'Racine', guard: 'Garde', curse: 'Malédiction', infect: 'Carte d’état' },
             garden: 'Jardin', floor: (value) => `Étage ${value}`,
             rooms: { journey_setup: 'Nouveau voyage', blessing: 'Bénédiction', combat: 'Combat', elite: 'Élite', event: 'Événement', rest: 'Repos', shop: 'Boutique', chest: 'Coffre', boss: 'Boss' },
             roomMarks: { blessing: 'B', combat: 'C', elite: 'É', event: '?', rest: 'R', shop: '$', chest: 'T', boss: 'X' },
@@ -808,6 +863,44 @@
             currentHealth: '現在のH', restRecovery: '回復量', chestGold: 'ゴールド',
             chestTalent: '天賦', shopWallet: '所持ゴールド', removePrice: '削除費用',
             upgradePrice: '強化費用', none: 'なし', defeated: '撃破',
+            abandonTitle: 'この旅を終了しますか？',
+            abandonMessage: 'この周回は終了扱いとして記録されます。',
+            resetMap: 'マップをリセット', mapReset: 'マップをリセットしました',
+            resetTitle: 'マップをリセットしますか？',
+            resetMessage: '階層1から新しいルートが生成されます。',
+            cancel: 'キャンセル', confirm: '確定', close: '閉じる',
+            viewMap: 'マップを見る', returnToCombat: '戦闘へ戻る',
+            restartFloor: 'この階をやり直す', restartFloorTitle: 'この階をやり直しますか？',
+            restartFloorCopy: 'この階のすべての操作は取り消され、同じランダム結果でやり直します。',
+            restartFloorSucceeded: '階をやり直しました',
+            shopServiceUsed: 'このショップのデッキサービスは使用済みです',
+            playerTurn: 'あなたのターン', enemyTurn: '敵のターン',
+            restTitle: '休憩所', restCopy: 'Hを回復するか、カード1枚を強化します。',
+            heal: 'Hを回復', upgrade: '強化', upgraded: '強化済み',
+            chestTitle: '宝箱',
+            chestCopy: '欲しい報酬だけ受け取るか、何も取らずに進めます。',
+            openChest: '開ける', eventTitle: 'ガーデンイベント',
+            eventCopy: '結果を1つ選びます。', takeGold: 'ゴールド20を受け取る',
+            recoverHealth: 'Hを15回復', shopTitle: 'ショップ',
+            shopCopy: 'ゴールドを使って買うか、そのまま立ち去ります。',
+            buy: (value) => `購入・${value}`, leave: '立ち去る',
+            journeyComplete: '旅の完了', journeyCompleteCopy: '旅の全ステージを踏破しました。',
+            journeyFailed: '旅の終了',
+            journeyFailedCopy: 'このルートはここで終わりですが、次のマップが待っています。',
+            requestFailed: 'ストーリーデータを一時的に利用できません', stateUpdated: '状態を同期しました',
+            shield: 'シールド', power: '威力', weak: '虚弱',
+            vulnerable: '脆弱', damagePrediction: 'ダメージ予測',
+            chooseCardHint: 'カードを1枚選択', chooseCards: 'カードを選択',
+            chooseExact: (value) => `カードを${value}枚選択してください。`,
+            chooseUpTo: (value) => `カードを最大${value}枚選択してください。`,
+            chooseEnemy: '敵を選択', chooseSelf: '自分自身を選択',
+            playAnywhere: '好きな場所をクリックしてプレイ',
+            playSelfAnywhere: '好きな場所をクリックして自分に使用',
+            pileEmpty: 'ここにカードはありません',
+            pileTotal: (label, count) => `${label}：${count}枚`,
+            cannotRemove: '削除できません',
+            gainedGold: (value) => `${value}ゴールドを獲得しました。`,
+            cardTypes: { thorn: '攻撃', bloom: 'スキル', root: '装備', guard: 'カウンター', curse: '呪い', infect: '状態カード' },
             newJourney: '新しい旅', garden: 'ガーデン', floor: (value) => `${value}階`,
             rooms: { journey_setup: '新しい旅', blessing: '祝福', combat: '戦闘', elite: 'エリート', event: 'イベント', rest: '休憩', shop: 'ショップ', chest: '宝箱', boss: 'ボス' },
             roomMarks: { blessing: '祝', combat: '戦', elite: '精', event: '？', rest: '休', shop: '店', chest: '宝', boss: '首' },
@@ -6415,7 +6508,43 @@
         if (modifiers.force_void) tags.add('void');
         if (modifiers.retain) tags.add('retain');
         (modifiers.extra_tags || []).forEach((tag) => tags.add(String(tag)));
+        const modifierTagAmounts = {};
+        const modifierTags = [];
+        const addModifierTag = (tagId, amount = null) => {
+            if (!storyContent?.tags?.[tagId]) return;
+            modifierTags.push(tagId);
+            if (amount !== null && Number(amount) > 0) {
+                modifierTagAmounts[tagId] = Math.floor(Number(amount));
+            }
+        };
+        const swiftTotal = Math.max(0, Number(modifiers.swift || 0));
+        const temporarySwift = Math.max(0, Number(modifiers.temporary_swift || 0));
+        const permanentSwift = Math.max(0, swiftTotal - temporarySwift);
+        if (permanentSwift > 0) addModifierTag('swift', permanentSwift);
+        if (temporarySwift > 0) addModifierTag('temporary_swift', temporarySwift);
+        if (Number(modifiers.magic_swift || 0) > 0) {
+            addModifierTag('magic_swift', Number(modifiers.magic_swift));
+        }
+        if (Number(modifiers.temporary_heavy || 0) > 0) {
+            addModifierTag('temporary_heavy', Number(modifiers.temporary_heavy));
+        }
+        if (Number(modifiers.damage_bonus || 0) > 0) {
+            addModifierTag('power', Number(modifiers.damage_bonus));
+        }
+        if (Number(modifiers.enchantment_electric_damage || 0) > 0) {
+            addModifierTag('electric_power', Number(modifiers.enchantment_electric_damage));
+        }
+        if (Number(modifiers.enchantment_shield_bonus_once || 0) > 0) {
+            addModifierTag('firmness', Number(modifiers.enchantment_shield_bonus_once));
+        }
+        if (modifiers.enchantment_armor_break) addModifierTag('armor_break');
+        if (modifiers.enchantment_rebound) addModifierTag('rebound');
+        if (Number(modifiers.charge || 0) > 0) {
+            addModifierTag('charge', Number(modifiers.charge));
+        }
+        modifierTags.forEach((tagId) => tags.add(tagId));
         values.tags = [...tags];
+        values._modifierTagAmounts = modifierTagAmounts;
         return values;
     }
 
@@ -6485,22 +6614,47 @@
     function storyStatusRichDefs() {
         const serverStatuses = (storyContent && storyContent.statuses) || {};
         const defs = [];
-        const alias = {
-            shield: ['Shields', 'Bouclier', 'Boucliers', 'シールド'],
-            fragile: ['Vulnerable', 'Vulnérable', '脆弱性'],
-            vulnerable: ['易损', 'Vulnérable'],
-            weak: ['Weakness', 'Faiblesse', '弱体化'],
-            poison: ['Poisoned', 'Veneno', 'Toxique', '毒'],
-            fire: ['Burn', 'Brûlure', '灼焼'],
-            toxic_poison: ['Toxic', 'Toxique', '劇毒'],
-            stun: ['Stunned', 'Étourdi', 'スタン'],
-            static: ['Électrostatique', '静電気'],
+        const aliasByLang = {
+            zh: {
+                vulnerable: ['易损'],
+                fire: ['灼焼'],
+            },
+            en: {
+                shield: ['Shields'],
+                fragile: ['Vulnerable', 'Vulnerability'],
+                weak: ['Weakness'],
+                poison: ['Poisoned'],
+                fire: ['Burn'],
+                toxic_poison: ['Toxic'],
+                stun: ['Stunned'],
+            },
+            fr: {
+                shield: ['Boucliers'],
+                fragile: ['Vulnérable'],
+                weak: ['Faiblesse'],
+                poison: ['Toxique'],
+                fire: ['Brûlure'],
+                toxic_poison: ['Toxique'],
+                stun: ['Étourdi'],
+                static: ['Électrostatique'],
+            },
+            ja: {
+                shield: ['シールド'],
+                weak: ['弱体化'],
+                poison: ['毒'],
+                fire: ['火傷'],
+                toxic_poison: ['劇毒'],
+                stun: ['スタン'],
+                static: ['静電気'],
+                vulnerable: ['脆弱性'],
+            },
         };
         for (const [statusId, definition] of Object.entries(serverStatuses)) {
             const name = (definition && definition.name) || {};
             const labels = new Set();
-            Object.values(name).filter(Boolean).forEach((value) => labels.add(String(value)));
-            (alias[statusId] || []).forEach((value) => labels.add(value));
+            const localized = String(name[lang] || name.en || name.zh || '').trim();
+            if (localized) labels.add(localized);
+            ((aliasByLang[lang] || {})[statusId] || []).forEach((value) => labels.add(value));
             if (!labels.size) continue;
             defs.push({
                 id: statusId,
@@ -6638,6 +6792,8 @@
         const inner = document.createElement('span');
         inner.className = `story-inline-status story-inline-status-${def.id}`;
         inner.textContent = text;
+        const innerColor = storyStatusColor(def.id);
+        if (innerColor) inner.style.color = innerColor;
         container.append(inner);
     }
 
@@ -6645,14 +6801,19 @@
         const token = document.createElement('span');
         token.className = `story-inline-status story-inline-status-${match.def.id}`;
         token.textContent = `${match.prefix}${match.label}`;
+        const color = storyStatusColor(match.def.id);
+        if (color) token.style.color = color;
         const icon = storyStatusIconNode(match);
         if (icon) token.append(icon);
         container.append(token);
+        attachStoryGenericTermAccess(token, 'status', match.def.id);
     }
 
     function appendStoryCompositeToken(container, match) {
         const outer = document.createElement('span');
         outer.className = `story-inline-status story-inline-status-${match.outer.id}`;
+        const outerColor = storyStatusColor(match.outer.id);
+        if (outerColor) outer.style.color = outerColor;
         for (const segment of match.segments) {
             if (segment.inner) {
                 appendStoryInnerStatus(outer, segment.inner, segment.text);
@@ -6663,6 +6824,7 @@
         const icon = storyStatusIconNode({ def: match.outer, label: '' });
         if (icon) outer.append(icon);
         container.append(outer);
+        attachStoryGenericTermAccess(container.lastElementChild, 'status', match.outer.id);
     }
 
     function storyShieldWord() {
@@ -6706,6 +6868,7 @@
         }
         token.append(createStoryInlineIcon(unit));
         container.append(token);
+        attachStoryGenericTermAccess(token, 'resource', unit);
         return token;
     }
 
@@ -6718,6 +6881,7 @@
         }
         token.append(createStoryInlineIcon(match.unit));
         container.append(token);
+        attachStoryGenericTermAccess(token, 'resource', match.unit);
     }
 
     function appendStoryValueRichText(container, value) {
@@ -6879,15 +7043,44 @@
         return chip;
     }
 
+    function createStoryInlineTermChip(kind, id) {
+        const normalizedKind = String(kind || '').toLowerCase();
+        const definition = storyTermCatalog(normalizedKind, id);
+        if (!definition) return null;
+        const name = storyTermName(definition, normalizedKind) || String(id || '');
+        const chip = document.createElement('span');
+        chip.className = `story-event-card-chip story-term-chip story-term-chip-${normalizedKind}`;
+        chip.textContent = name;
+        chip.dataset.storyTermKind = normalizedKind;
+        chip.dataset.storyTermKey = String(id || '');
+        chip.setAttribute('role', 'button');
+        chip.setAttribute(
+            'aria-label',
+            `${name} · ${storyTermKindLabel(normalizedKind)}`,
+        );
+        chip.tabIndex = 0;
+        chip.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openStoryTermDetail(normalizedKind, String(id || ''));
+        });
+        attachStoryGenericTermAccess(chip, normalizedKind, String(id || ''));
+        return chip;
+    }
+
     function appendStoryRichText(container, value) {
         if (!container) return;
         const text = String(value || '');
-        const pattern = /\[\[card:([a-z0-9_-]+)\]\]/gi;
+        const pattern = /\[\[(card|status|trait|tag|relic|talent|enchantment_book|book|event|blessing|enemy|resource):([a-z0-9_.:-]+)\]\]/gi;
         let cursor = 0;
         let match = null;
         while ((match = pattern.exec(text))) {
             if (match.index > cursor) appendStoryValueRichText(container, text.slice(cursor, match.index));
-            const chip = createStoryInlineCardChip(match[1]);
+            const kind = String(match[1]).toLowerCase();
+            const id = match[2];
+            const chip = kind === 'card'
+                ? createStoryInlineCardChip(id)
+                : createStoryInlineTermChip(kind, id);
             if (chip) container.append(chip);
             else appendStoryValueRichText(container, match[1]);
             cursor = pattern.lastIndex;
@@ -7076,7 +7269,7 @@
         return prediction.by_target?.[String(targetId)] || null;
     }
 
-    function storyTagElement(tagId) {
+    function storyTagElement(tagId, amount = null) {
         const definition = storyContent?.tags?.[tagId];
         if (!definition) return null;
         const style = STORY_TAG_STYLES[String(tagId || '').toLowerCase()] || {
@@ -7086,6 +7279,9 @@
         const tag = document.createElement('span');
         tag.className = `card-flag ${style.className}`;
         tag.textContent = localize(definition.name);
+        if (amount !== null && Number(amount) > 0) {
+            tag.textContent += `: ${Math.floor(Number(amount))}`;
+        }
         tag.title = localize(definition.description);
         if (style.className.includes('custom')) tag.style.setProperty('--custom-tag-color', style.color);
         return tag;
@@ -7115,17 +7311,10 @@
             });
         }
         (values?.tags || []).forEach((tagId) => {
-            const tag = storyTagElement(tagId);
+            const amount = values?._modifierTagAmounts?.[tagId] ?? null;
+            const tag = storyTagElement(tagId, amount);
             if (tag) flags.append(tag);
         });
-        const charge = Math.max(0, Number(card?.modifiers?.charge) || 0);
-        if (charge) {
-            const tag = storyTagElement('charge');
-            if (tag) {
-                tag.textContent = `${localize(storyContent?.tags?.charge?.name) || 'Charge'}: ${charge}`;
-                flags.append(tag);
-            }
-        }
         if (!flags.childElementCount) flags.classList.add('card-flags-empty');
         if (!supportsPrediction && !flags.childElementCount) return null;
 
@@ -7908,6 +8097,7 @@
         index.className = 'story-talent-overview-order';
         index.textContent = String(order);
         item.append(marker, copy, index);
+        attachStoryGenericTermAccess(item, 'relic', key);
         return item;
     }
 
@@ -8058,6 +8248,11 @@
         const article = document.createElement('article');
         article.className = `story-enchantment-book story-enchantment-book-${String(definition?.rarity || 'common')}`;
         if (!definition) return article;
+        attachStoryGenericTermAccess(
+            article,
+            'enchantment_book',
+            String(book?.book_id || ''),
+        );
         const image = document.createElement('img');
         image.src = String(definition.image_url || '');
         image.alt = '';
@@ -8070,6 +8265,12 @@
         const description = document.createElement('p');
         appendStoryRichText(description, localize(definition.description));
         copy.append(title, rarity, description);
+        appendStoryInlineReferences(
+            copy,
+            localize(definition.description),
+            'enchantment_book',
+            String(book?.book_id || ''),
+        );
         article.append(image, copy);
         if (options.actions !== false) {
             const actions = document.createElement('div');
@@ -8417,10 +8618,13 @@
         collectStoryStatusIds(values.effects, statusIds);
         const description = localize(values.description);
         Object.entries(storyContent?.statuses || {}).forEach(([statusId, definition]) => {
-            const names = Object.values(definition?.name || {})
-                .map((name) => String(name || '').trim())
-                .filter(Boolean);
-            if (names.some((name) => description.includes(name))) statusIds.add(statusId);
+            const localizedName = String(
+                definition?.name?.[lang]
+                || definition?.name?.en
+                || definition?.name?.zh
+                || '',
+            ).trim();
+            if (localizedName && description.includes(localizedName)) statusIds.add(statusId);
         });
         statusIds.forEach((statusId) => {
             add('status', statusId, storyContent?.statuses?.[statusId]);
@@ -8711,6 +8915,10 @@
         return storyContent?.statuses?.[String(statusKey || '')] || null;
     }
 
+    function storyStatusColor(statusKey) {
+        return STORY_STATUS_COLORS[String(statusKey || '')] || '';
+    }
+
     function storyStatusIconUrl(statusKey) {
         const key = String(statusKey || '');
         const imageUrl = String(storyStatusDefinition(key)?.image_url || '').trim();
@@ -8724,6 +8932,69 @@
 
     function storyTraitIconUrl(traitKey) {
         return String(storyTraitDefinition(traitKey)?.image_url || '').trim();
+    }
+
+    function storyTermCatalog(kind, id) {
+        const key = String(kind || '').toLowerCase();
+        const catalogs = {
+            card: storyContent?.cards,
+            status: storyContent?.statuses,
+            trait: storyContent?.traits,
+            tag: storyContent?.tags,
+            relic: storyContent?.relics,
+            talent: storyContent?.relics,
+            enchantment_book: storyContent?.enchantment_books,
+            book: storyContent?.enchantment_books,
+            event: storyContent?.events12?.[String(id || '')]
+                || storyContent?.events?.[String(id || '')],
+            blessing: storyContent?.blessings,
+            enemy: storyContent?.enemies,
+            card_type: storyContent?.card_types,
+            rarity: storyContent?.rarities,
+            resource: STORY_RESOURCE_TERMS,
+        };
+        const catalog = catalogs[key] || null;
+        return catalog?.[String(id || '')] || null;
+    }
+
+    function storyTermKindLabel(kind) {
+        return ({
+            status: lang === 'zh' ? '状态' : 'Status',
+            trait: lang === 'zh' ? '效果' : 'Trait',
+            tag: lang === 'zh' ? '标签' : 'Tag',
+            relic: lang === 'zh' ? '天赋' : 'Talent',
+            talent: lang === 'zh' ? '天赋' : 'Talent',
+            enchantment_book: lang === 'zh' ? '附魔书' : 'Enchantment Book',
+            book: lang === 'zh' ? '附魔书' : 'Enchantment Book',
+            event: lang === 'zh' ? '事件' : 'Event',
+            blessing: lang === 'zh' ? '赐福' : 'Blessing',
+            enemy: lang === 'zh' ? '生物' : 'Creature',
+            resource: lang === 'zh' ? '资源' : 'Resource',
+        })[kind] || String(kind || '');
+    }
+
+    function storyTermName(definition, kind) {
+        if (!definition) return '';
+        if (typeof definition.name === 'object' && definition.name) {
+            return localize(definition.name);
+        }
+        if (typeof definition.title === 'object' && definition.title) {
+            return localize(definition.title);
+        }
+        return String(definition.name || definition.title || '');
+    }
+
+    function storyTermDescription(definition, kind) {
+        if (!definition) return '';
+        if (kind === 'event') {
+            return localize(definition.body || definition.description);
+        }
+        return localize(
+            definition.description
+            || definition.body
+            || definition.effect_text
+            || '',
+        );
     }
 
     const STORY_TRAIT_VALUE_KEYS_FALLBACK = Object.freeze({
@@ -8897,6 +9168,54 @@
         });
     }
 
+    function attachStoryGenericTermAccess(element, kind, id) {
+        if (!element || !storyTermCatalog(kind, id)) return;
+        element.dataset.storyTermKind = String(kind || '');
+        element.dataset.storyTermKey = String(id || '');
+        element.setAttribute('role', 'button');
+        element.tabIndex = 0;
+        let timer = 0;
+        let start = null;
+        const cancel = () => {
+            if (timer) window.clearTimeout(timer);
+            timer = 0;
+            start = null;
+        };
+        element.addEventListener('pointerdown', (event) => {
+            if (event.button != null && event.button !== 0) return;
+            cancel();
+            start = { x: event.clientX, y: event.clientY };
+            timer = window.setTimeout(() => {
+                timer = 0;
+                start = null;
+                if (selectedCombatCardId && activeRun?.state) {
+                    cancelStoryCombatSelection(true);
+                    return;
+                }
+                element.dataset.storyTermLongPress = '1';
+                window.setTimeout(() => {
+                    delete element.dataset.storyTermLongPress;
+                }, 1200);
+                openStoryTermDetail(String(kind || ''), String(id || ''));
+            }, STORY_TERM_LONG_PRESS_MS);
+        });
+        element.addEventListener('pointermove', (event) => {
+            if (!timer || !start) return;
+            if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > STORY_TERM_MOVE_CANCEL_PX) {
+                cancel();
+            }
+        });
+        ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'].forEach((eventName) => {
+            element.addEventListener(eventName, cancel);
+        });
+        element.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            event.stopPropagation();
+            openStoryTermDetail(String(kind || ''), String(id || ''));
+        });
+    }
+
     function openStoryTraitTerms(traitKey) {
         removeStoryCardHoverPreview();
         clearStoryCardTermNavigation();
@@ -9000,6 +9319,126 @@
             event.stopPropagation();
             openStoryTraitTerms(traitKey);
         });
+    }
+
+    function appendStoryInlineReferences(container, sourceText, currentKind = '', currentId = '') {
+        if (!container) return;
+        const markerPattern = /\[\[(tag|status|trait|relic|talent|enchantment_book|book|event|blessing|enemy|resource|card):([a-z0-9_.:-]+)\]\]/gi;
+        const allowedKinds = new Set([
+            'tag', 'status', 'trait', 'resource',
+            'relic', 'talent', 'enchantment_book', 'book',
+            'event', 'blessing',
+        ]);
+        const seen = new Set();
+        const entries = [];
+        let match = null;
+        while ((match = markerPattern.exec(String(sourceText || '')))) {
+            const kind = String(match[1]).toLowerCase();
+            const id = String(match[2]);
+            const key = `${kind}:${id}`;
+            if (!allowedKinds.has(kind) || seen.has(key)) continue;
+            if (String(currentKind || '').toLowerCase() === kind && String(currentId || '') === id) {
+                continue;
+            }
+            seen.add(key);
+            const definition = storyTermCatalog(kind, id);
+            if (!definition) continue;
+            const name = storyTermName(definition, kind) || id;
+            let description = storyTermDescription(definition, kind);
+            description = String(description || '').replace(
+                markerPattern,
+                (_, nestedKind, nestedId) => {
+                    const nested = storyTermCatalog(
+                        String(nestedKind).toLowerCase(),
+                        nestedId,
+                    );
+                    return nested
+                        ? (storyTermName(nested, String(nestedKind).toLowerCase()) || nestedId)
+                        : nestedId;
+                },
+            );
+            if (description) entries.push({ kind, name, description });
+        }
+        if (!entries.length) return;
+        const title = document.createElement('div');
+        title.className = 'story-term-references-title';
+        title.textContent = ({
+            zh: '引用说明',
+            en: 'Referenced Terms',
+            fr: 'Termes référencés',
+            ja: '参照用語',
+        }[lang] || 'Referenced Terms');
+        container.append(title);
+        entries.forEach((entry) => {
+            const row = document.createElement('div');
+            row.className = `story-term-reference story-term-reference-${entry.kind}`;
+            const name = document.createElement('strong');
+            name.textContent = entry.name;
+            const description = document.createElement('span');
+            description.textContent = entry.description;
+            row.append(name, description);
+            container.append(row);
+        });
+    }
+
+    function openStoryTermDetail(kind, id) {
+        const normalizedKind = String(kind || '').toLowerCase();
+        const key = String(id || '');
+        if (normalizedKind === 'status') return openStoryStatusTerms(key);
+        if (normalizedKind === 'trait') return openStoryTraitTerms(key);
+        const definition = storyTermCatalog(normalizedKind, key);
+        const dialog = $('story-term-dialog');
+        const content = $('story-term-content');
+        if (!definition || !dialog || !content) return false;
+        const termKey = `${normalizedKind}:${key}`;
+        if (dialog.open && dialog.dataset.storyTermKey === termKey) {
+            closeStoryCardTerms();
+            return true;
+        }
+
+        content.className = 'modal-inner story-card-terms-modal story-status-terms-modal';
+        content.replaceChildren();
+
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'story-term-close';
+        close.setAttribute('aria-label', t.close);
+        close.textContent = '×';
+        close.addEventListener('click', closeStoryCardTerms);
+
+        const layout = document.createElement('div');
+        layout.className = 'story-status-terms-layout';
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'story-status-terms-icon';
+        const badge = document.createElement('span');
+        badge.className = `story-term-generic story-term-${normalizedKind}`;
+        badge.textContent = storyTermName(definition, normalizedKind) || key;
+        iconWrap.append(badge);
+
+        const copy = document.createElement('div');
+        copy.className = 'story-status-terms-copy';
+        const title = document.createElement('h2');
+        title.textContent = storyTermKindLabel(normalizedKind);
+        const description = document.createElement('p');
+        description.className = 'story-term-description';
+        appendStoryRichText(
+            description,
+            storyTermDescription(definition, normalizedKind),
+        );
+        copy.append(title, description);
+        appendStoryInlineReferences(
+            copy,
+            storyTermDescription(definition, normalizedKind),
+            normalizedKind,
+            key,
+        );
+        layout.append(iconWrap, copy);
+        content.append(close, layout);
+
+        dialog.dataset.storyTermKey = termKey;
+        delete dialog.dataset.storyTermUpgrade;
+        if (!dialog.open) dialog.showModal();
+        return true;
     }
 
     function openStoryCardTerms(card, options = {}) {
@@ -10826,7 +11265,7 @@
 
     function renderEffects(containerId, values) {
         const container = $(containerId);
-        renderEffectsInto(container, values);
+        renderEffectsInto(container, values, { preferStatus: true });
     }
 
     function removeStoryEquipmentPreview() {
@@ -10926,12 +11365,27 @@
                 ? (values.upgraded_image_url || values.image_url || '')
                 : (values.image_url || '');
             if (imageUrl) {
-                const image = document.createElement('img');
-                image.className = 'story-equipment-image';
-                image.src = imageUrl;
-                image.alt = '';
-                image.setAttribute('aria-hidden', 'true');
-                icon.append(image);
+                const halves = Array.isArray(card?.generated?.image_halves)
+                    ? card.generated.image_halves.filter(Boolean)
+                    : [];
+                if (halves.length >= 2) {
+                    icon.classList.add('is-forged');
+                    halves.forEach((halfUrl) => {
+                        const image = document.createElement('img');
+                        image.className = 'story-equipment-image';
+                        image.src = String(halfUrl);
+                        image.alt = '';
+                        image.setAttribute('aria-hidden', 'true');
+                        icon.append(image);
+                    });
+                } else {
+                    const image = document.createElement('img');
+                    image.className = 'story-equipment-image';
+                    image.src = imageUrl;
+                    image.alt = '';
+                    image.setAttribute('aria-hidden', 'true');
+                    icon.append(image);
+                }
             } else {
                 const fallback = document.createElement('span');
                 fallback.className = 'story-equipment-fallback';
@@ -11040,13 +11494,29 @@
             ? (values.upgraded_image_url || values.image_url || '')
             : (values.image_url || '');
         if (imageUrl) {
-            const image = document.createElement('img');
-            image.className = 'story-mechanical-track-image';
-            image.src = imageUrl;
-            image.alt = '';
-            image.draggable = false;
-            image.setAttribute('aria-hidden', 'true');
-            icon.append(image);
+            const halves = Array.isArray(card?.generated?.image_halves)
+                ? card.generated.image_halves.filter(Boolean)
+                : [];
+            if (halves.length >= 2) {
+                icon.classList.add('is-forged');
+                halves.forEach((halfUrl) => {
+                    const image = document.createElement('img');
+                    image.className = 'story-mechanical-track-image';
+                    image.src = String(halfUrl);
+                    image.alt = '';
+                    image.draggable = false;
+                    image.setAttribute('aria-hidden', 'true');
+                    icon.append(image);
+                });
+            } else {
+                const image = document.createElement('img');
+                image.className = 'story-mechanical-track-image';
+                image.src = imageUrl;
+                image.alt = '';
+                image.draggable = false;
+                image.setAttribute('aria-hidden', 'true');
+                icon.append(image);
+            }
         } else {
             const fallback = document.createElement('span');
             fallback.className = 'story-mechanical-track-fallback';
@@ -11217,6 +11687,8 @@
         const categoryClass = definition?.category === 'action' ? 'story-action' : 'story-status';
         chip.className = `story-effect ${categoryClass} story-effect-${item.key}`;
         chip.dataset.storyEffectKey = String(item.key || '');
+        const color = storyStatusColor(item.key);
+        if (color) chip.style.color = color;
         const label = definition ? localize(definition.name) : (item.label || storyIntentStatusLabel(item.key));
         chip.title = `${label}: ${amount}`;
         chip.setAttribute('aria-label', chip.title);
@@ -11282,7 +11754,11 @@
             return;
         }
         if (!chip) {
-            const traitChip = traitKey ? createStoryTraitChip(traitKey, amount) : null;
+            const preferStatus = container?.id === 'story-player-effects'
+                && Boolean(storyStatusDefinition(key));
+            const traitChip = !preferStatus && traitKey
+                ? createStoryTraitChip(traitKey, amount)
+                : null;
             container.append(traitChip || createStoryEffectChip({
                 key,
                 label: storyIntentStatusLabel(key),
@@ -11301,14 +11777,18 @@
         chip.setAttribute('aria-label', chip.title);
     }
 
-    function renderEffectsInto(container, values) {
+    function renderEffectsInto(container, values, options = {}) {
         if (!container) return;
         container.replaceChildren();
         values.forEach((item) => {
             const amount = Number(item.value);
             if (!Number.isFinite(amount) || amount === 0) return;
             const traitKey = storyTraitKeyForEffectKey(item.key);
-            const traitChip = traitKey ? createStoryTraitChip(traitKey, amount) : null;
+            const preferStatus = Boolean(options.preferStatus)
+                && Boolean(storyStatusDefinition(item.key));
+            const traitChip = !preferStatus && traitKey
+                ? createStoryTraitChip(traitKey, amount)
+                : null;
             container.append(traitChip || createStoryEffectChip(item, amount));
         });
     }
@@ -11661,6 +12141,15 @@
             { key: 'negative_status_immunity', label: '负面状态免疫', value: combat.negative_status_immunity },
             { key: 'evil_eye', label: '邪眼', value: combat.evil_eye },
             { key: 'sturdy', label: '坚固', value: combat.sturdy },
+            { key: 'regeneration', label: '再生', value: combat.regeneration },
+            {
+                key: 'disc',
+                label: '圆盘',
+                value: combat.disc_active
+                    ? Math.max(1, Number(combat.disc) || 1)
+                    : Number(combat.disc),
+            },
+            { key: 'invincible', label: '无敌', value: combat.invincible },
             { key: 'toxic_poison', label: '剧毒', value: combat.toxic_poison },
             { key: 'stagnation', label: '滞留', value: combat.stagnation },
             { key: 'bleed', label: '流血', value: combat.bleed },
@@ -11997,6 +12486,7 @@
             appendStoryRichText(item, result);
             history?.append(item);
         });
+        attachStoryGenericTermAccess(context, 'event', room.event_id);
     }
 
     function renderStoryRoomContext(state, room) {
@@ -12365,6 +12855,25 @@
                     ))
                 );
                 const resolveOption = () => storyAction('resolve_room', { option: optionId });
+                if (optionId.startsWith('machine_offer_')) {
+                    const offerIndex = Number(optionId.slice('machine_offer_'.length));
+                    const machineOffers = Array.isArray(room.machine_offers)
+                        ? room.machine_offers
+                        : [];
+                    const cardId = machineOffers[offerIndex];
+                    if (cardId) {
+                        target.append(createStoryCard({
+                            instance_id: `story-machine-offer-${room.event_id || 'card_machine'}-${offerIndex}`,
+                            def_id: cardId,
+                            upgraded: false,
+                        }, {
+                            compact: true,
+                            disabled,
+                            onClick: () => resolveOption(),
+                        }));
+                        return;
+                    }
+                }
                 target.append(choiceButton(
                     localize(option.label) || optionId,
                     () => {
@@ -12392,10 +12901,13 @@
                 const usedEventTabIds = new Set();
                 const actionOptions = options.filter((option) => !option.selection);
                 if (actionOptions.length) {
+                    const showsMachineOffers = actionOptions.some((option) => (
+                        String(option.id || '').startsWith('machine_offer_')
+                    ));
                     eventTabs.push({
                         id: 'event-actions',
                         label: t.roomActions,
-                        mode: 'choices',
+                        mode: showsMachineOffers ? 'cards' : 'choices',
                         render: (target) => renderEventActions(target, actionOptions),
                     });
                 }
@@ -14022,6 +14534,18 @@
                 cancelStoryCombatSelection(true);
                 return;
             }
+            const genericTermElement = event.target?.closest?.('[data-story-term-kind]');
+            if (genericTermElement) {
+                if (genericTermElement.dataset.storyTermLongPress === '1') {
+                    delete genericTermElement.dataset.storyTermLongPress;
+                    return;
+                }
+                openStoryTermDetail(
+                    genericTermElement.dataset.storyTermKind,
+                    genericTermElement.dataset.storyTermKey,
+                );
+                return;
+            }
             const statusElement = event.target?.closest?.('[data-story-status-key]');
             if (statusElement) {
                 if (statusElement.dataset.storyTermLongPress === '1') {
@@ -14054,6 +14578,13 @@
                 return;
             }
         });
+        document.addEventListener('click', (event) => {
+            const longPressed = event.target?.closest?.('[data-story-term-long-press]');
+            if (!longPressed) return;
+            event.preventDefault();
+            event.stopPropagation();
+            delete longPressed.dataset.storyTermLongPress;
+        }, true);
     }
 
     loadStoryMainFont();

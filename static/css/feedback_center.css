@@ -19,6 +19,8 @@
   --fc-danger-soft: #feecec;
   --fc-radius: 3px;
   --fc-shadow: 0 1px 3px rgba(9, 30, 66, 0.13), 0 8px 24px rgba(9, 30, 66, 0.08);
+  --fc-font-main: 'Kreadon', 'PingFang SC', 'Microsoft YaHei',
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 * {
@@ -32,8 +34,7 @@ body {
   min-height: 100%;
   color: var(--fc-text);
   background: var(--fc-bg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--fc-font-main);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -220,10 +221,12 @@ a:hover {
   background: transparent;
   cursor: pointer;
   color: inherit;
+  text-decoration: none;
 }
 
 .fc-account-chip:hover {
   background: rgba(9, 30, 66, 0.06);
+  text-decoration: none;
 }
 
 .fc-account-avatar {
@@ -1124,6 +1127,78 @@ a:hover {
   background: var(--fc-bg);
 }
 
+.fc-messages {
+  width: 100%;
+  max-width: 860px;
+  min-height: calc(100vh - 140px);
+  margin: 0 auto;
+  padding: 24px 20px;
+  box-sizing: border-box;
+}
+
+.fc-messages-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.fc-messages-head h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.fc-messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fc-message-item {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fc-message-item:hover {
+  border-color: #b6c5d9;
+  background: #f7f9fc;
+  text-decoration: none;
+}
+
+.fc-message-item .fc-message-key {
+  color: #0040c8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fc-message-item .fc-message-title {
+  display: block;
+  font-weight: 600;
+}
+
+.fc-message-item .fc-message-meta {
+  display: block;
+  color: var(--fc-muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.fc-message-item time {
+  color: var(--fc-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .fc-split {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
@@ -1429,6 +1504,11 @@ a:hover {
   box-shadow: inset 0 4px 12px rgba(255, 255, 255, 0.18), inset 0 -8px 20px rgba(0, 0, 0, 0.08);
   flex-shrink: 0;
   container-type: inline-size;
+}
+
+.fc-skin-avatar.is-inverted {
+  --skin-feature: #fff;
+  --skin-pupil: #111;
 }
 
 .fc-skin-avatar .skin-eye {

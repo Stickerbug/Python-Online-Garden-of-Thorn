@@ -1856,7 +1856,7 @@ def public_feedback_staff_unread_count():
             '''
             SELECT COUNT(DISTINCT issue_id) AS count
             FROM public_issue_reopen_requests
-            WHERE status = 'pending'
+            WHERE status = 'pending' AND staff_viewed_at IS NULL
             '''
         ).fetchone()
         count += int(pending_reopens['count'] or 0)
@@ -1982,6 +1982,7 @@ def public_feedback_notifications(user_id, limit=50):
                 FROM public_issue_reopen_requests r
                 JOIN public_issues i ON i.id = r.issue_id
                 WHERE r.status = 'pending'
+                  AND r.staff_viewed_at IS NULL
                 ORDER BY r.created_at DESC LIMIT ?
                 ''',
                 (safe_limit,),
@@ -2021,6 +2022,14 @@ def mark_public_feedback_read(viewer_user_id, issue_id):
                 WHERE id = ?
                 ''',
                 (now_iso, now_iso, issue_id),
+            )
+            conn.execute(
+                '''
+                UPDATE public_issue_reopen_requests
+                SET staff_viewed_at = COALESCE(staff_viewed_at, ?)
+                WHERE issue_id = ? AND status = 'pending'
+                ''',
+                (now_iso, issue_id),
             )
         elif int(issue['author_user_id']) == uid:
             conn.execute(

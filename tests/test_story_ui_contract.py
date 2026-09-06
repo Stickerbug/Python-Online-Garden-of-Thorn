@@ -319,7 +319,7 @@ def test_story_patch_traits_and_gold_icon_are_visible_ui_assets():
     assert 'if (Number(actor?.[effectKey]) > 0 && storyTraitDefinition(traitKey))' in STORY_JS
     assert 'visibleTraitKeys.add(traitKey);' in STORY_JS
     assert 'const traitKey = storyTraitKeyForEffectKey(key);' in STORY_JS
-    assert 'traitKey ? createStoryTraitChip(traitKey, amount) : null' in STORY_JS
+    assert 'const traitChip = !preferStatus && traitKey' in STORY_JS
     assert 'function openStoryTraitTerms(traitKey)' in STORY_JS
     assert 'attachStoryTraitTermAccess(chip, key);' in STORY_JS
     assert 'renderTraitsInto(effects, definition.traits, enemy);' in STORY_JS
@@ -346,11 +346,17 @@ def test_story_cards_do_not_open_enlarged_hover_previews_and_keep_optional_borde
     assert "preview.className = 'story-card-hover-preview';" not in STORY_JS
     assert '.story-card-hover-preview {' not in STORY_CSS
     assert 'Number(card?.modifiers?.charge)' in STORY_JS
-    assert "storyTagElement('charge')" in STORY_JS
+    assert "addModifierTag('charge', Number(modifiers.charge))" in STORY_JS
     assert '.story-hide-card-borders .story-card.card::after {' in STORY_CSS
     assert 'gtn_story_hide_card_borders' in STORY_TEMPLATE
     assert 'gtn_story_hide_card_borders' in INDEX_TEMPLATE
     assert 'settings-story-hide-card-borders' in INDEX_TEMPLATE
+
+
+def test_story_card_machine_offers_render_as_real_cards():
+    assert "optionId.startsWith('machine_offer_')" in STORY_JS
+    assert 'story-machine-offer-' in STORY_JS
+    assert "mode: showsMachineOffers ? 'cards' : 'choices'" in STORY_JS
 
 
 def test_story_status_scale_difficulty_labels_and_reward_escape_are_visible():

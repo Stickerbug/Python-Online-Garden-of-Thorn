@@ -16,9 +16,52 @@ from story_content import (
 
 
 _RESOURCE_PATTERN = re.compile(r"\[\[icon:([DHEM])\]\]|(?<![A-Za-z])([DHEM])(?![A-Za-z])")
+_TERM_MARKER_PATTERN = re.compile(
+    r"\[\[(tag|status|trait|relic|talent|enchantment_book|book|event|blessing|enemy|card):([a-z0-9_.:-]+)\]\]",
+    re.IGNORECASE,
+)
 _CARD_COLLECTION_KEYS = (
     'deck', 'hand', 'draw_pile', 'discard_pile', 'exile_pile', 'equipment',
 )
+
+_ENCHANTMENT_TERM_GRANTS = {
+    'damage_bonus': (('tag', 'power'),),
+    'electric_damage': (('tag', 'electric_power'),),
+    'shield_bonus_once': (('tag', 'firmness'),),
+    'armor_break': (('tag', 'armor_break'),),
+    'swift': (('tag', 'swift'),),
+    'temporary_swift': (('tag', 'temporary_swift'),),
+    'dense': (('tag', 'power'), ('tag', 'temporary_heavy')),
+    'rebound': (('tag', 'rebound'),),
+    'wide': (('tag', 'wide'),),
+    'retain': (('tag', 'retain'),),
+    'exile_void': (('tag', 'exile'), ('tag', 'void')),
+    'disc_once': (('status', 'disc'),),
+    'fire_on_hit_once': (('status', 'fire'),),
+    'immunity_once': (('status', 'negative_status_immunity'),),
+    'weak_once': (('status', 'weak'),),
+    'power_once': (('status', 'power'),),
+    'impact_once': (('status', 'weak'), ('status', 'vulnerable')),
+    'reflection_once': (('status', 'reflection'),),
+    'vulnerable_once': (('status', 'vulnerable'),),
+    'lethal_guard': (('status', 'invincible'), ('status', 'regeneration')),
+}
+
+_CARD_MODIFIER_TERM_GRANTS = {
+    'retain': (('tag', 'retain'),),
+    'force_exile': (('tag', 'exile'),),
+    'force_void': (('tag', 'void'),),
+    'charge': (('tag', 'charge'),),
+    'damage_bonus': (('tag', 'power'),),
+    'enchantment_electric_damage': (('tag', 'electric_power'),),
+    'enchantment_shield_bonus_once': (('tag', 'firmness'),),
+    'enchantment_armor_break': (('tag', 'armor_break'),),
+    'enchantment_rebound': (('tag', 'rebound'),),
+    'swift': (('tag', 'swift'),),
+    'temporary_swift': (('tag', 'temporary_swift'),),
+    'magic_swift': (('tag', 'magic_swift'),),
+    'temporary_heavy': (('tag', 'temporary_heavy'),),
+}
 
 
 def _localized_values(value):
@@ -96,6 +139,17 @@ def collect_story_discoveries(state):
         for text in text_values:
             for match in _RESOURCE_PATTERN.finditer(text):
                 add_term('resource', match.group(1) or match.group(2))
+            for match in _TERM_MARKER_PATTERN.finditer(text):
+                marker_kind = match.group(1).lower()
+                marker_id = match.group(2)
+                if marker_kind in {'tag', 'status', 'trait', 'resource'}:
+                    add_term(marker_kind, marker_id)
+                elif marker_kind in {'relic', 'talent'}:
+                    add('relic', marker_id)
+                elif marker_kind in {'enchantment_book', 'book'}:
+                    add_enchantment_book(marker_id)
+                elif marker_kind in {'card', 'enemy', 'event', 'blessing'}:
+                    add(marker_kind, marker_id)
         for key, value in _walk_values(definition.get('effects') or ()):
             if isinstance(value, str):
                 if value in STORY_STATUSES:
@@ -117,7 +171,9 @@ def collect_story_discoveries(state):
                 add_term('resource', 'M')
 
     def add_card(card_or_id, upgraded=None):
+        card_object = None
         if isinstance(card_or_id, dict):
+            card_object = card_or_id
             card_id = card_or_id.get('def_id') or card_or_id.get('card_id')
             is_upgraded = bool(card_or_id.get('upgraded'))
         else:
@@ -129,6 +185,28 @@ def collect_story_discoveries(state):
             return
         add('card', card_id, 'upgraded' if is_upgraded else 'base')
         add_definition_terms(definition)
+        if isinstance(card_object, dict) and isinstance(
+            card_object.get('modifiers'), dict
+        ):
+            modifiers = card_object['modifiers']
+            for tag_id in modifiers.get('extra_tags') or ():
+                add_term('tag', tag_id)
+            for key, grants in _CARD_MODIFIER_TERM_GRANTS.items():
+                value = modifiers.get(key)
+                if key == 'charge':
+                    try:
+                        active = int(value or 0) > 0
+                    except (TypeError, ValueError):
+                        active = False
+                else:
+                    active = bool(value)
+                if active:
+                    for kind, term_id in grants:
+                        add_term(kind, term_id)
+            labels = modifiers.get('enchantment_labels')
+            if isinstance(labels, dict):
+                for book_id in labels.values():
+                    add_enchantment_book(book_id)
 
     def add_relic(relic_id):
         relic_id = str(relic_id or '')
@@ -158,6 +236,10 @@ def collect_story_discoveries(state):
             return
         add('enchantment_book', book_id)
         add_definition_terms(definition)
+        for kind, term_id in _ENCHANTMENT_TERM_GRANTS.get(
+            definition.get('script') or '', ()
+        ):
+            add_term(kind, term_id)
 
     def add_enemy(enemy):
         if not isinstance(enemy, dict):
@@ -208,7 +290,10 @@ def collect_story_discoveries(state):
     for enemy in combat.get('enemies') or ():
         add_enemy(enemy)
     for status_id in STORY_STATUSES:
-        if _status_is_visible(combat.get(status_id)):
+        status_value = combat.get(status_id)
+        if status_id == 'disc' and combat.get('disc_active'):
+            status_value = 1
+        if _status_is_visible(status_value):
             add_term('status', status_id)
 
     reward = state.get('reward') if isinstance(state.get('reward'), dict) else {}

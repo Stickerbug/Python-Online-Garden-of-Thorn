@@ -215,8 +215,12 @@ def _normalize_legacy_story_state(state):
         room.pop('allow_repeated_curses', None)
     combat = state.get('combat')
     if isinstance(combat, dict):
-        if not any(str(relic_id) == 'rigid' for relic_id in state.get('player', {}).get('relics', [])):
-            combat.pop('locked', None)
+        legacy_locked = combat.pop('locked', None)
+        if legacy_locked:
+            combat['blockade'] = max(0, int(combat.get('blockade') or 0)) + max(
+                0,
+                int(legacy_locked),
+            )
 
 
 def _book_instance(state, instance_id):
@@ -923,7 +927,7 @@ def _build_enemy(state, def_id, serial, spec=None):
         'reflection': 0,
         'wither': 0,
         'move_index': int(spec.get('move_index') or 0),
-        'move_step': 0,
+        'move_step': _initial_move_step(def_id, spec.get('move_index') or 0),
         'damage_taken_round': 0,
     }
     for key, value in initial.items():
@@ -937,6 +941,20 @@ def _build_enemy(state, def_id, serial, spec=None):
             int(enemy.get('segment_origin') or 0),
         )
     return enemy
+
+
+def _initial_move_step(def_id, move_index):
+    """Map an explicit starting move into a move_order position."""
+    definition = STORY_ENEMIES.get(str(def_id) or '') or {}
+    order = definition.get('move_order') or definition.get('lunatic_move_order')
+    if not order:
+        return 0
+    moves = definition.get('moves') or ()
+    target = int(move_index or 0) % max(1, len(moves))
+    for step, ordered_index in enumerate(order):
+        if int(ordered_index or 0) % max(1, len(moves)) == target:
+            return step
+    return 0
 
 
 def _find_enemy(combat, enemy_id):
@@ -5523,7 +5541,6 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'broken': 0,
         'blind': 0,
         'blockade': 0,
-        'locked': 0,
         'attack_blocked': 0,
         'blind_active': False,
         'draw_pile': draw_pile,
@@ -5611,7 +5628,7 @@ def _start_combat(state, node, seed, events, encounter_override=None):
     if _has_relic(state, 'firm_defense'):
         combat['endurance'] += _relic_amount(state, 'firm_defense')
     if _has_relic(state, 'rigid'):
-        combat['locked'] += 5 * _relic_count(state, 'rigid')
+        combat['blockade'] += 5 * _relic_count(state, 'rigid')
     if _has_relic(state, 'many_cards'):
         groups = len(state['player'].get('deck', [])) // max(1, int(STORY_RELICS['many_cards']['amount']))
         if groups > 0:
@@ -7475,18 +7492,23 @@ def _reward_choices(state, seed, room_type='combat', count=3):
             and STORY_CARDS[card_id].get('type') == 'bloom'
         )
     ]
+    used_card_ids = set()
     for _ in range(count):
         rarity = _reward_rarity(state, room_type, rng)
         pool = [
             card_id for card_id in eligible_ids
             if STORY_CARDS[card_id]['rarity'] == rarity
+            and card_id not in used_card_ids
         ]
         if not pool:
-            pool = list(eligible_ids)
+            pool = [
+                card_id for card_id in eligible_ids
+                if card_id not in used_card_ids
+            ]
         if not pool:
             break
-        available = [card_id for card_id in pool if card_id not in choices] or pool
-        card_id = rng.choice(available)
+        card_id = rng.choice(pool)
+        used_card_ids.add(card_id)
         upgraded_chance = {1: 0, 2: 0.25, 3: 0.5, 4: 1}.get(int(state.get('stage') or 1), 0)
         if _difficulty(state) in ('hard', 'lunatic'):
             upgraded_chance *= 0.5
@@ -8770,17 +8792,22 @@ def _new_event_room(event_id):
             'id': str(option.get('id') or ''),
             'label': copy.deepcopy(option.get('label') or {}),
         }
+        if option.get('description'):
+            choice['description'] = copy.deepcopy(option.get('description') or {})
         if option.get('needs_confirmation'):
             choice['requires_confirmation'] = True
         if option.get('selection'):
             choice['selection'] = str(option['selection'])
         choices.append(choice)
+    title = copy.deepcopy(definition['title'])
+    body = copy.deepcopy(definition.get('body') or definition['title'])
+    speaker = copy.deepcopy(definition.get('speaker') or definition['title'])
     return _story_event_room(
         event_id,
-        copy.deepcopy(definition['title']),
-        copy.deepcopy(definition['title']),
-        copy.deepcopy(definition['title']),
-        '?',
+        title,
+        body,
+        speaker,
+        str(definition.get('scene_mark') or '?'),
         choices,
     )
 
@@ -8853,7 +8880,7 @@ def _make_story_event(state, seed):
             '!',
             [
                 _event_option('fight_help_spider', '帮助蜘蛛', 'Help the Spider', '与半血蜘蛛尤巴战斗，胜利后随机升级2张牌并获得1张[[card:startled]]。'),
-                _event_option('fight_help_yoba', '帮助蜘蛛尤巴', 'Help Yoba Spider', '与两只蜘蛛战斗，胜利后学习支援天赋并获得1张[[card:injury]]与1张[[card:fatigued]]。'),
+                _event_option('fight_help_yoba', '帮助蜘蛛尤巴', 'Help Yoba Spider', '与两只蜘蛛战斗，胜利后学习[[talent:support]]并获得1张[[card:injury]]与1张[[card:fatigued]]。'),
                 _event_option('fight_both', '这样才对', 'Fight Both', '同时挑战蜘蛛与满血蜘蛛尤巴，胜利后获得更好的奖励。'),
                 _event_option(
                     'fight_leave',
@@ -8910,8 +8937,8 @@ def _make_story_event(state, seed):
                     'occult_life',
                     '祈求更多生命',
                     'Ask for More Life',
-                    '获得世界树之叶，失去30%最大生命值。',
-                    'Gain World Tree Leaf and lose 30% of your maximum H.',
+                    '获得[[talent:world_tree_leaf]]，失去30%最大生命值。',
+                    'Gain [[talent:world_tree_leaf]] and lose 30% of your maximum H.',
                     requires_confirmation=True,
                 ),
                 _event_option(
@@ -9679,11 +9706,17 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
                     'rare': {'zh': '稀有', 'en': 'Rare'},
                     'ultra': {'zh': '究极', 'en': 'Ultra'},
                 }[rarity_name]
+                rarity_base_cost = 25 if card_type == 'root' else 0
+                rarity_total_cost = rarity_base_cost + extra_cost
                 rarity_choices.append({
                     'id': rarity_id,
                     'label': {
-                        'zh': f'制作{rarity_label["zh"]}牌（+{extra_cost}G）',
-                        'en': f'Make a {rarity_label["en"]} card (+{extra_cost} G)',
+                        'zh': f'制作{rarity_label["zh"]}牌',
+                        'en': f'Make a {rarity_label["en"]} Card',
+                    },
+                    'description': {
+                        'zh': f'总费用{rarity_total_cost}G，随后从3张牌中选择1张',
+                        'en': f'Costs {rarity_total_cost} G total; then pick 1 of 3 cards',
                     },
                     'cost_gold': extra_cost,
                 })
@@ -9741,8 +9774,12 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
                 offer_choices.append({
                     'id': f'machine_offer_{index}',
                     'label': {
-                        'zh': f'获得{_localized(definition["name"], "zh")}',
-                        'en': f'Gain {_localized(definition["name"], "en")}',
+                        'zh': _localized(definition["name"], 'zh'),
+                        'en': _localized(definition["name"], 'en'),
+                    },
+                    'description': {
+                        'zh': '选择并免费获得这张卡牌',
+                        'en': 'Choose and gain this card',
                     },
                 })
             room['choices'] = offer_choices
@@ -9764,18 +9801,26 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
         _pay_gold(player, 150)
         relic_id = _random_relic(state, seed)
         room['talent_offer'] = relic_id
-        relic_name = _localized(STORY_RELICS[relic_id]['name'])
+        relic_token = f'[[talent:{relic_id}]]'
         room['choices'] = [
             {
                 'id': 'accept_talent',
                 'label': {
-                    'zh': f'就是这个了：获得{relic_name}',
-                    'en': f'Accept this one: gain {relic_name}',
+                    'zh': '就是这个了',
+                    'en': 'Take This One',
+                },
+                'description': {
+                    'zh': f'获得天赋{relic_token}',
+                    'en': f'Gain the {relic_token} talent',
                 },
             },
             {
                 'id': 'refresh_talent',
-                'label': {'zh': '不想要，花费50G刷新', 'en': 'Refresh for 50 G'},
+                'label': {'zh': '刷新', 'en': 'Refresh'},
+                'description': {
+                    'zh': '花费50G，重新抽取一个随机天赋',
+                    'en': 'Pay 50 G and draw another random talent',
+                },
                 'cost_gold': 50,
             },
             {
@@ -9786,8 +9831,8 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
         room['options'] = room['choices']
         room['keep_open'] = True
         _record_event_progress(room, option_id, {
-            'zh': f'抽到了一个天赋：{relic_name}。',
-            'en': f'You drew a talent: {relic_name}.',
+            'zh': f'抽到了一个天赋：{relic_token}。',
+            'en': f'You drew a talent: {relic_token}.',
         })
         return
     if event_id == 'talent_lottery' and option_id == 'accept_talent':
@@ -9805,15 +9850,19 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
                 break
             relic_id = _random_relic(state, seed)
         room['talent_offer'] = relic_id
-        relic_name = _localized(STORY_RELICS[relic_id]['name'])
+        relic_token = f'[[talent:{relic_id}]]'
         room['choices'][0]['label'] = {
-            'zh': f'就是这个了：获得{relic_name}',
-            'en': f'Accept this one: gain {relic_name}',
+            'zh': '就是这个了',
+            'en': 'Take This One',
+        }
+        room['choices'][0]['description'] = {
+            'zh': f'获得天赋{relic_token}',
+            'en': f'Gain the {relic_token} talent',
         }
         room['keep_open'] = True
         _record_event_progress(room, option_id, {
-            'zh': f'刷新出的天赋：{relic_name}。',
-            'en': f'New talent drawn: {relic_name}.',
+            'zh': f'刷新出的天赋：{relic_token}。',
+            'en': f'New talent drawn: {relic_token}.',
         })
         return
     if event_id == 'library' and hint == 'lose_book_remove_card':
@@ -9829,8 +9878,12 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
             choices.append({
                 'id': f'library_book_{index}',
                 'label': {
-                    'zh': f'失去{book_name}',
-                    'en': f'Lose {book_name}',
+                    'zh': book_name,
+                    'en': book_name,
+                },
+                'description': {
+                    'zh': '失去这本附魔书',
+                    'en': 'Lose this enchantment book',
                 },
             })
         choices.append({
@@ -10030,13 +10083,21 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
         room['choices'] = [
             {
                 'id': 'pay_leave',
-                'label': {'zh': '交钱离开-失去30G', 'en': 'Pay 30 G and leave'},
+                'label': {'zh': '交钱离开', 'en': 'Pay and Leave'},
+                'description': {
+                    'zh': '失去30G',
+                    'en': 'Lose 30 G',
+                },
             },
             {
                 'id': 'refuse',
                 'label': {
-                    'zh': '拒不付钱-离开，下场战斗获得1层虚弱',
-                    'en': 'Refuse to pay; next battle starts with 1 Weak',
+                    'zh': '拒不付钱',
+                    'en': 'Refuse to Pay',
+                },
+                'description': {
+                    'zh': '离开此处，下场战斗开始时获得1层虚弱',
+                    'en': 'Leave; your next battle starts with 1 Weak',
                 },
             },
         ]

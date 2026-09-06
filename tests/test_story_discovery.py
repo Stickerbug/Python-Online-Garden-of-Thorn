@@ -146,6 +146,72 @@ def test_visible_traits_statuses_and_blessing_options_unlock_their_entries():
         assert ('term', f'trait:{trait_id}', 'base') in keys
 
 
+def test_enchantment_effects_and_card_modifiers_unlock_tags_and_statuses():
+    state = build_initial_story_state('story-discovery-enchantment-terms')
+    state['player']['enchantment_books'] = [
+        {'book_id': 'binding_curse', 'instance_id': 'book-1'},
+        {'book_id': 'attract_lightning', 'instance_id': 'book-2'},
+        {'book_id': 'fall_cushioning', 'instance_id': 'book-3'},
+    ]
+    state['combat'] = {
+        'hand': [{
+            'def_id': 'bone',
+            'instance_id': 'hand-1',
+            'modifiers': {
+                'retain': True,
+                'damage_bonus': 15,
+                'enchantment_electric_damage': 15,
+                'enchantment_shield_bonus_once': 8,
+                'enchantment_armor_break': True,
+                'enchantment_rebound': True,
+                'charge': 3,
+                'enchantment_labels': {
+                    'retain': 'binding_curse',
+                    'electric_damage': 'attract_lightning',
+                },
+            },
+        }],
+        'draw_pile': [],
+        'discard_pile': [],
+        'exile_pile': [],
+        'equipment': [],
+        'enemies': [],
+        'disc_active': True,
+        'regeneration': 8,
+        'invincible': 1,
+        'sturdy': 1,
+    }
+
+    keys = _keys(collect_story_discoveries(state))
+
+    for term_id in (
+        'tag:retain',
+        'tag:power',
+        'tag:electric_power',
+        'tag:firmness',
+        'tag:armor_break',
+        'tag:rebound',
+        'tag:charge',
+        'status:disc',
+        'status:regeneration',
+        'status:invincible',
+        'status:sturdy',
+    ):
+        assert ('term', term_id, 'base') in keys
+
+
+def test_explicit_talent_markers_unlock_the_referenced_talent():
+    state = build_initial_story_state('story-discovery-talent-marker')
+    state['player']['deck'].append({
+        'def_id': 'dandelion_seed',
+        'instance_id': 'dandelion-1',
+    })
+
+    keys = _keys(collect_story_discoveries(state))
+
+    assert ('relic', 'dandelion_blessing', 'base') in keys
+
+
 def test_story_discovery_storage_is_idempotent_and_can_mark_unread(tmp_path, monkeypatch):
     monkeypatch.setattr(db, 'DB_PATH', str(tmp_path / 'story-discovery.sqlite3'))
     db.init_db()

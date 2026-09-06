@@ -19,6 +19,9 @@
       unhide_issue: '恢复反馈', hide_comment: '隐藏评论', unhide_comment: '恢复评论',
       internal_note: '内部备注', history: '状态历史', deleted_player: '已注销玩家',
       author: '发布者', updated: '更新于 {0}', login: '去登录', account_label: '账号',
+      messages_title: '消息', messages_empty: '暂无新消息',
+      messages_login: '请先登录账号后查看消息。', messages_back: '返回反馈列表',
+      notification_staff: '待处理请求', notification_watched: '关注更新', notification_author: '你的反馈更新',
       report: '举报', report_comment: '举报评论', report_title: '举报', submit_report: '提交举报',
       replay_hint: '回放 ID：{0}（登录游戏后可查看）', need_login: '请先登录账号。',
       own_issue: '不能给自己的问题投票',
@@ -48,6 +51,9 @@
       unhide_issue: 'Restore report', hide_comment: 'Hide comment', unhide_comment: 'Restore comment',
       internal_note: 'Internal note', history: 'Status history', deleted_player: 'Deleted Player',
       author: 'Reported by', updated: 'Updated {0}', login: 'Sign in', account_label: 'Account',
+      messages_title: 'Messages', messages_empty: 'No new messages',
+      messages_login: 'Sign in to view your messages.', messages_back: 'Back to reports',
+      notification_staff: 'Pending request', notification_watched: 'Watched update', notification_author: 'Your report update',
       report: 'Report', report_comment: 'Report comment', report_title: 'Report', submit_report: 'Submit report',
       replay_hint: 'Replay ID: {0} (viewable in game)', need_login: 'Sign in to continue.',
       own_issue: 'You cannot vote on your own report',
@@ -350,6 +356,17 @@
     return rgbToHex({ r: rgb.r * 0.81, g: rgb.g * 0.81, b: rgb.b * 0.81 });
   }
 
+  function skinLuminance(color) {
+    const { r, g, b } = hexToRgb(color);
+    const srgb = [r, g, b].map((value) => {
+      const channel = value / 255;
+      return channel <= 0.03928
+        ? channel / 12.92
+        : Math.pow((channel + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+  }
+
   function skinMouthPath() {
     return 'M 20 18 C 36 32 64 32 80 18';
   }
@@ -359,7 +376,8 @@
     const main = skin.primary_color;
     const border = deriveSkinBorderColor(main);
     const eyeShape = skin.eye_shape;
-    return `<div class="fc-skin-avatar skin-eye-shape-${esc(eyeShape)}" style="` +
+    const inverted = skinLuminance(main) < 0.22 ? ' is-inverted' : '';
+    return `<div class="fc-skin-avatar skin-eye-shape-${esc(eyeShape)}${inverted}" style="` +
       `--skin-main:${esc(main)};--skin-border:${esc(border)};` +
       `--skin-look-x:26.9%;--skin-look-y:-39.6%;">` +
       `<div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>` +
@@ -464,9 +482,15 @@
       ? Number(state.staffUnread || 0)
       : Number(state.authorUnread || 0) + Number(state.watcherUnread || 0);
     const badge = unread > 0 ? `<span class="fc-badge">${unread > 99 ? '99+' : unread}</span>` : '';
-    container.innerHTML = `<button type="button" class="fc-account-chip">` +
+    container.innerHTML = `<a class="fc-account-chip" href="/feedback-center/messages" title="${esc(t('messages_title'))}">` +
       `<span class="fc-account-avatar-host">${skinAvatarHtml(user.skin)}</span>` +
-      `<span class="fc-account-name-wrap">${fcTitlesHtml(user)}<span class="fc-account-name">${fcNameHtml(user)}${badge}</span></span></button>`;
+      `<span class="fc-account-name-wrap">${fcTitlesHtml(user)}<span class="fc-account-name">${fcNameHtml(user)}${badge}</span></span></a>`;
+  }
+
+  async function refreshFeedbackUnread() {
+    await loadAccount();
+    state.notificationsLoaded = false;
+    await loadNotifications({ force: true });
   }
 
   async function loadNotifications({ force = false } = {}) {
@@ -510,6 +534,65 @@
     }).join('');
     panel.innerHTML = `<div class="fc-account-popover-head">消息</div><div class="fc-account-popover-list">${items}</div>` +
       `<a class="fc-account-popover-link" href="/" target="_blank" rel="noopener">返回游戏主页</a>`;
+  }
+
+  function notificationTypeText(item) {
+    if (item?.type === 'staff') return t('notification_staff');
+    if (item?.type === 'watched') return t('notification_watched');
+    return t('notification_author');
+  }
+
+  function notificationSummary(item) {
+    if (item?.action === 'private') return String(item?.message || '');
+    if (item?.action === 'reopen_request') return String(item?.message || '');
+    return `${String(item?.from_status || '—')} → ${String(item?.to_status || '')}`;
+  }
+
+  async function renderMessagesView() {
+    const messages = $('fc-messages');
+    const toolbar = $('fc-toolbar');
+    const split = $('fc-split');
+    if (!messages) return;
+    messages.classList.remove('hidden');
+    toolbar?.classList.add('hidden');
+    split?.classList.add('hidden');
+    applyStaticText();
+    document.title = `${t('messages_title')} · ${t('feedback_center')} · 荆棘花园`;
+    if (!state.account) {
+      messages.innerHTML = `<div class="fc-messages-head"><h2>${esc(t('messages_title'))}</h2></div>` +
+        `<div class="fc-empty"><p>${esc(t('messages_login'))}</p>` +
+        `<a class="fc-button fc-button-primary" href="/" target="_blank" rel="noopener">${esc(t('login'))}</a></div>`;
+      return;
+    }
+    messages.innerHTML = `<div class="fc-messages-head"><h2>${esc(t('messages_title'))}</h2>` +
+      `<a class="fc-button fc-button-secondary fc-button-small" href="${esc(canonicalListPath(state.kind))}">${esc(t('messages_back'))}</a></div>` +
+      `<div class="fc-messages-list fc-muted">${esc(t('loading'))}</div>`;
+    try {
+      const data = await api('/api/public-feedback/notifications?limit=100');
+      const items = Array.isArray(data.items) ? data.items : [];
+      state.notifications = items;
+      state.notificationsLoaded = true;
+      const list = messages.querySelector('.fc-messages-list');
+      if (!items.length) {
+        list.className = 'fc-messages-list';
+        list.innerHTML = `<div class="fc-account-popover-empty">${esc(t('messages_empty'))}</div>`;
+        return;
+      }
+      list.className = 'fc-messages-list';
+      list.innerHTML = items.map((item) => {
+        const issue = item.issue || {};
+        const typeText = notificationTypeText(item);
+        const reason = notificationSummary(item);
+        return `<a class="fc-message-item" href="${esc(canonicalIssuePath(issue))}">` +
+          `<span class="fc-message-key">${esc(issue.key || `#${issue.id || ''}`)}</span>` +
+          `<span><strong class="fc-message-title">${esc(issue.title || '')}</strong>` +
+          `<small class="fc-message-meta">${esc(typeText)} · ${esc(reason)}</small></span>` +
+          `<time datetime="${esc(item.created_at || '')}">${esc(fmt(item.created_at))}</time></a>`;
+      }).join('');
+    } catch (err) {
+      const list = messages.querySelector('.fc-messages-list');
+      if (list) list.innerHTML = `<div class="fc-error">${esc(err.message || 'error')}</div>`;
+    }
   }
 
   function toggleAccountPopover(force) {
@@ -577,7 +660,10 @@
       renderDetail();
       renderIssues();
       if (state.detail && (state.detail.can_private || state.detail.is_staff || state.detail.watching)) {
-        api(`/api/public-feedback/issues/${Number(issueId)}/read`, { method: 'POST', body: {} }).catch(() => {});
+        try {
+          await api(`/api/public-feedback/issues/${Number(issueId)}/read`, { method: 'POST', body: {} });
+        } catch (_) {}
+        await refreshFeedbackUnread();
       }
     } catch (err) {
       const detail = $('fc-detail');
@@ -596,7 +682,17 @@
     renderIssues();
   }
 
+  function showFeedbackSplitView() {
+    const messages = $('fc-messages');
+    const toolbar = $('fc-toolbar');
+    const split = $('fc-split');
+    messages?.classList.add('hidden');
+    toolbar?.classList.remove('hidden');
+    split?.classList.remove('hidden');
+  }
+
   function showBrowse() {
+    showFeedbackSplitView();
     closeIssue();
   }
 
@@ -647,11 +743,19 @@
         kind: String(kindMatch[1]).toLowerCase(),
       };
     }
+    if (path === '/feedback-center/messages') {
+      return { view: 'messages', kind: 'bug' };
+    }
     return { view: 'list', kind: 'bug' };
   }
 
   async function applyLocationRoute() {
     const route = parseLocationRoute();
+    if (route.view === 'messages') {
+      await renderMessagesView();
+      return;
+    }
+    showFeedbackSplitView();
     if (route.view === 'issue') {
       state.kind = route.kind;
       applyStaticText();
@@ -678,6 +782,7 @@
   }
 
   function navigateKind(kind) {
+    showFeedbackSplitView();
     state.kind = kind === 'suggestion' ? 'suggestion' : 'bug';
     state.status = '';
     state.search = '';
@@ -1124,15 +1229,6 @@
 
   function bindEvents() {
     let searchTimer = null;
-    $('fc-account').addEventListener('click', (event) => {
-      if (event.target.closest('.fc-account-chip')) {
-        event.stopPropagation();
-        toggleAccountPopover();
-      }
-    });
-    document.addEventListener('click', (event) => {
-      if (!event.target.closest('.fc-top-actions')) toggleAccountPopover(false);
-    });
     $('fc-tab-bug').addEventListener('click', () => {
       navigateKind('bug');
     });
@@ -1182,7 +1278,6 @@
       const issueId = Number(event.target.closest('[data-open-issue]')?.dataset.openIssue || 0);
       if (issueId > 0) {
         event.preventDefault();
-        toggleAccountPopover(false);
         openIssue(issueId);
         return;
       }
@@ -1253,9 +1348,34 @@
     await loadAccount();
     await loadNotifications();
     await applyLocationRoute();
-    window.addEventListener('focus', () => { loadAccount(); });
+    window.addEventListener('focus', () => { refreshFeedbackUnread(); });
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') loadAccount();
+      if (document.visibilityState === 'visible') refreshFeedbackUnread();
     });
   });
+
+  function loadFeedbackCenterFont() {
+    if (!('FontFace' in window) || !document.fonts) return;
+    try {
+      if (document.fonts.check('14px "Kreadon"')) return;
+    } catch (_) {}
+    const font = new FontFace(
+      'Kreadon',
+      "url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2')",
+      { weight: '400', style: 'normal' },
+    );
+    font.load()
+      .then((loaded) => {
+        if (loaded && document.fonts) document.fonts.add(loaded);
+      })
+      .catch(() => {});
+  }
+
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(loadFeedbackCenterFont, { timeout: 2500 });
+  } else {
+    window.addEventListener('load', () => {
+      setTimeout(loadFeedbackCenterFont, 800);
+    }, { once: true });
+  }
 })();

@@ -1868,7 +1868,7 @@ Object.assign(I18N.en, {
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
     account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Total Match Time', thorn_dew: 'Thorn Dew', account_delete: 'Delete Account', stats: 'Stats',
     achievements: 'Achievements', achievements_title: 'Achievements & Thorn Dew', achievements_empty: 'No achievements yet.', achievements_hidden: 'Hidden achievement. Unlock it to reveal.',
-    leaderboard: 'Leaderboard', leaderboard_note: 'Ranked by Garden Rating. Season board needs 8 ranked games; total board needs 20.', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Refresh in {0}', leaderboard_gr: 'GR', leaderboard_season: 'Season', leaderboard_total: 'All-time', leaderboard_raw_rate: 'Win %',
+    leaderboard: 'Leaderboard', leaderboard_note: 'Ranked by Garden Rating. Season board needs 8 ranked games; total board needs 20.', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Refresh in {0}', leaderboard_gr: 'GR', leaderboard_season: 'Season', leaderboard_total: 'All-time', leaderboard_raw_rate: 'Win %', leaderboard_hide_titles: 'Hide Titles', leaderboard_show_titles: 'Show Titles',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -1880,7 +1880,7 @@ Object.assign(I18N.zh, {
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
     account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '总对局时长', thorn_dew: '荆露', account_delete: '注销账户', stats: '统计',
     achievements: '成就', achievements_title: '成就与荆露', achievements_empty: '暂无成就。', achievements_hidden: '隐藏成就，达成后揭晓。',
-    leaderboard: '排行榜', leaderboard_note: '排行按照花阶分计算。赛季榜需本赛季至少8场计分对局，总榜需至少20场计分对局。', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '刷新倒计时 {0}', leaderboard_gr: '花阶分', leaderboard_season: '赛季榜', leaderboard_total: '总榜', leaderboard_raw_rate: '胜率',
+    leaderboard: '排行榜', leaderboard_note: '排行按照花阶分计算。赛季榜需本赛季至少8场计分对局，总榜需至少20场计分对局。', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '刷新倒计时 {0}', leaderboard_gr: '花阶分', leaderboard_season: '赛季榜', leaderboard_total: '总榜', leaderboard_raw_rate: '胜率', leaderboard_hide_titles: '隐藏称号', leaderboard_show_titles: '显示称号',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -1893,7 +1893,7 @@ Object.assign(I18N.fr, {
     account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps total en match', thorn_dew: 'Rosée d’épines',
     achievements: 'Succès', achievements_title: 'Succès et Rosée', achievements_empty: 'Aucun succès.', achievements_hidden: 'Succès caché.',
     account_delete: 'Supprimer le compte', stats: 'Stats',
-    leaderboard: 'Classement', leaderboard_note: 'Classement par Garden Rating. Saison: 8 parties classées; total: 20.', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Actualisation {0}', leaderboard_gr: 'GR', leaderboard_season: 'Saison', leaderboard_total: 'Total', leaderboard_raw_rate: 'Victoire',
+    leaderboard: 'Classement', leaderboard_note: 'Classement par Garden Rating. Saison: 8 parties classées; total: 20.', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Actualisation {0}', leaderboard_gr: 'GR', leaderboard_season: 'Saison', leaderboard_total: 'Total', leaderboard_raw_rate: 'Victoire', leaderboard_hide_titles: 'Masquer les titres', leaderboard_show_titles: 'Afficher les titres',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
@@ -1906,7 +1906,7 @@ Object.assign(I18N.ja, {
     account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: '総対戦時間', thorn_dew: 'ソーンデュー',
     achievements: '実績', achievements_title: '実績とソーンデュー', achievements_empty: '実績はありません。', achievements_hidden: '隠し実績です。',
     account_delete: 'アカウント削除', stats: '統計',
-    leaderboard: 'ランキング', leaderboard_note: 'Garden Ratingで順位を計算します。シーズン榜は8戦、総合榜は20戦以上が必要です。', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '更新まで {0}', leaderboard_gr: 'GR', leaderboard_season: 'シーズン', leaderboard_total: '総合', leaderboard_raw_rate: '勝率',
+    leaderboard: 'ランキング', leaderboard_note: 'Garden Ratingで順位を計算します。シーズン榜は8戦、総合榜は20戦以上が必要です。', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '更新まで {0}', leaderboard_gr: 'GR', leaderboard_season: 'シーズン', leaderboard_total: '総合', leaderboard_raw_rate: '勝率', leaderboard_hide_titles: '称号を隠す', leaderboard_show_titles: '称号を表示',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
@@ -2956,12 +2956,12 @@ function setPlayerNameContent(el, player, options = {}) {
 }
 
 function playerNameHtml(player, options = {}) {
-    const { adminPrefix = true } = options;
+    const { adminPrefix = true, showTitles = true } = options;
     const titles = getEquippedTitles(player);
     const parts = [playerReputationBadgeHtml(player)];
-    if (adminPrefix && titles.length) {
+    if (adminPrefix && showTitles && titles.length) {
         titles.forEach(title => parts.push(styledTitleHtml(title)));
-    } else if (adminPrefix) {
+    } else if (adminPrefix && showTitles) {
         const prefix = getSpecialRolePrefix(player);
         const color = titleColorCss(getSpecialRoleColor(player));
         if (prefix) {
@@ -5145,6 +5145,7 @@ const DEFAULT_SKIN_CONFIG = Object.freeze({ primary_color: '#FFE763', eye_shape:
 const SKIN_EYE_SHAPES = new Set(['oval', 'rectangle', 'diamond', 'hexagon']);
 const PHELREN_AVATAR_KIND = 'phelren';
 const PHELREN_AVATAR_FRAME_URL = '/static/assets/player-avatars/phelren-frame.svg';
+const PHELREN_AVATAR_CORRUPT_FRAME_URL = '/static/assets/player-avatars/phelren-frame-corrupted.svg';
 const DEFAULT_SKIN_LOOK = Object.freeze({ x: 0.707, y: -0.707 });
 const SKIN_LOOK_OFFSET_X_PERCENT = 38;
 const SKIN_LOOK_OFFSET_Y_PERCENT = 56;
@@ -6580,6 +6581,7 @@ function updateStaticText() {
             ? (UI.leaderboard_total || '总榜')
             : (UI.leaderboard_season || '赛季榜');
     });
+    updateLeaderboardHideTitlesButton();
     updateLeaderboardRefreshMeta();
     const accountModeLogin = $('btn-account-mode-login');
     if (accountModeLogin) accountModeLogin.textContent = UI.account_login;
@@ -18543,7 +18545,7 @@ function renderSkinAvatar(skinInput, options = {}) {
         : ` data-look-owner="${escapeHtml(options.lookOwner || 'local')}"`;
     const mirrorAttr = mirrorLookX ? ' data-mirror-look-x="1"' : '';
     const frame = isPhelren
-        ? `<img class="phelren-avatar-frame" src="${PHELREN_AVATAR_FRAME_URL}" alt="" aria-hidden="true">`
+        ? `<img class="phelren-avatar-frame" src="${corrupted ? PHELREN_AVATAR_CORRUPT_FRAME_URL : PHELREN_AVATAR_FRAME_URL}" alt="" aria-hidden="true">`
         : '';
     return `
         <div class="skin-avatar skin-eye-shape-${escapeHtml(eyeShape)}${avatarKindClass}${invertedClass}${defeatedClass}${defeatEnterClass}${corrupted ? ' is-corrupted' : ''}${corruptAnimateClass}${damageMood ? ` ${damageMood}` : ''}"${ownerAttr}${mirrorAttr} style="${style}">
@@ -19983,12 +19985,36 @@ function toggleStatsPopover(force) {
     }
 }
 
+let leaderboardHideTitles = false;
+try {
+    leaderboardHideTitles = localStorage.getItem('gtn_leaderboard_hide_titles') === '1';
+} catch (_) {}
+
 function leaderboardRankClass(rank) {
     const value = Number(rank);
     if (value === 1) return 'leaderboard-rank-gold';
     if (value === 2) return 'leaderboard-rank-silver';
     if (value === 3) return 'leaderboard-rank-bronze';
     return '';
+}
+
+function updateLeaderboardHideTitlesButton() {
+    const button = $('btn-leaderboard-hide-titles');
+    if (!button) return;
+    button.textContent = leaderboardHideTitles
+        ? (UI.leaderboard_show_titles || '显示称号')
+        : (UI.leaderboard_hide_titles || '隐藏称号');
+}
+
+function toggleLeaderboardHideTitles() {
+    leaderboardHideTitles = !leaderboardHideTitles;
+    try {
+        localStorage.setItem('gtn_leaderboard_hide_titles', leaderboardHideTitles ? '1' : '0');
+    } catch (_) {}
+    updateLeaderboardHideTitlesButton();
+    if (leaderboardCache) {
+        renderLeaderboardItems(leaderboardCache.items || [], leaderboardCache.selfRank || null);
+    }
 }
 
 function leaderboardRowHtml(item, rank, extraClass = '') {
@@ -20004,7 +20030,7 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
     return `
         <div class="leaderboard-row${extraClass ? ` ${extraClass}` : ''}">
             <span class="leaderboard-rank ${rankClass}">${escapeHtml(String(rank || '-'))}</span>
-            <span class="leaderboard-name ${rankClass}">${playerNameHtml(item || {}, { adminPrefix: true })}</span>
+            <span class="leaderboard-name ${rankClass}">${playerNameHtml(item || {}, { adminPrefix: true, showTitles: !leaderboardHideTitles })}</span>
             <span class="leaderboard-rate leaderboard-gr">${escapeHtml(grText)}</span>
             <span class="leaderboard-rate">${escapeHtml(rateText)}</span>
             <span class="leaderboard-games">${games}</span>
@@ -33634,7 +33660,12 @@ function showResponseUI(data) {
     container.classList.add('visible');
     const cardDict = data.card || {};
     const cardDef = getCardDef(cardDict.def_id);
-    const destroyTargetEquipment = data.destroy_target_equipment || null;
+    const destroyTargetEquipments = Array.isArray(data.destroy_target_equipments)
+        ? data.destroy_target_equipments
+        : [];
+    const destroyTargetEquipment = data.destroy_target_equipment
+        || destroyTargetEquipments[0]
+        || null;
     const destroyTargetCard = destroyTargetEquipment && destroyTargetEquipment.card_instance
         ? destroyTargetEquipment.card_instance
         : null;
@@ -33662,10 +33693,21 @@ function showResponseUI(data) {
     prefix.className = 'response-trigger-prefix';
     prefix.textContent = triggerDesc ? `${triggerDesc}:` : '';
     if (prefix.textContent) label.appendChild(prefix);
-    label.appendChild(createCardChoiceChip(
-        destroyTargetCard || cardDict,
-        destroyTargetCard || blindLevel <= 0 ? {} : { blindForSelf: true, blindLevel },
-    ));
+    if (destroyTargetEquipments.length) {
+        destroyTargetEquipments.forEach((item) => {
+            const targetCard = item && item.card_instance ? item.card_instance : null;
+            if (!targetCard) return;
+            label.appendChild(createCardChoiceChip(
+                targetCard,
+                blindLevel <= 0 ? {} : { blindForSelf: true, blindLevel },
+            ));
+        });
+    } else {
+        label.appendChild(createCardChoiceChip(
+            destroyTargetCard || cardDict,
+            destroyTargetCard || blindLevel <= 0 ? {} : { blindForSelf: true, blindLevel },
+        ));
+    }
     const prediction = data.damage_prediction || {};
     const noCounterPrediction = prediction.no_counter || {};
     const baseEffectPrediction = getResponseBaseEffectPrediction(data, cardDict, noCounterPrediction);
@@ -37039,6 +37081,9 @@ async function init() {
     document.querySelectorAll('[data-leaderboard-scope]').forEach((btn) => {
         btn.addEventListener('click', () => setLeaderboardScope(btn.dataset.leaderboardScope || 'season'));
     });
+    if ($('btn-leaderboard-hide-titles')) {
+        $('btn-leaderboard-hide-titles').addEventListener('click', toggleLeaderboardHideTitles);
+    }
     if ($('btn-skin-back')) $('btn-skin-back').addEventListener('click', () => showView('view-login'));
     if ($('btn-skin-save')) $('btn-skin-save').addEventListener('click', saveSkinFromEditor);
     if ($('btn-skin-reset')) $('btn-skin-reset').addEventListener('click', resetSkinEditor);

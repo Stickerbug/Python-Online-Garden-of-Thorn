@@ -32,6 +32,7 @@ proxy_set_header X-Forwarded-For $remote_addr;
 - `ADMIN_PASSWORD_HASH`
 - `ADMIN_CONSOLE_PASSWORD_HASH`
 - `BETA_ACCESS_KEY_HASH`
+- `CARD_EXPORTER_PASSWORD_HASH`（可选；未设置时导出器使用 `BETA_ACCESS_KEY_HASH`）
 
 缺少这些值时，应用会生成仅本进程有效的随机值：已知源码默认密码不会
 生效，但会话会在重启后失效，对应管理入口也无法登录。禁止把明文密码或

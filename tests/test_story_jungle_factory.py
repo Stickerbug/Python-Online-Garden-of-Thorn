@@ -96,25 +96,17 @@ def test_strive_grants_elixir_against_elite_bush_and_legacy_elite_combat():
 
 
 def test_new_psionic_terms_use_new_internal_keys_without_renaming_soul_splitter():
-    assert STORY_TRAITS['psionic_connection']['name'] == {
-        'zh': '灵能链接',
-        'en': 'Psionic Connection',
-    }
-    assert STORY_TRAITS['psionic_sustain']['name'] == {
-        'zh': '灵能绑定',
-        'en': 'Psionic Binding',
-    }
-    assert STORY_TRAITS['psionic_fountain']['name'] == {
-        'zh': '灵能源泉',
-        'en': 'Psionic Fountain',
-    }
+    assert STORY_TRAITS['psionic_connection']['name']['zh'] == '灵能链接'
+    assert STORY_TRAITS['psionic_connection']['name']['en'] == 'Psionic Connection'
+    assert STORY_TRAITS['psionic_sustain']['name']['zh'] == '灵能绑定'
+    assert STORY_TRAITS['psionic_sustain']['name']['en'] == 'Psionic Binding'
+    assert STORY_TRAITS['psionic_fountain']['name']['zh'] == '灵能源泉'
+    assert STORY_TRAITS['psionic_fountain']['name']['en'] == 'Psionic Fountain'
     assert 'soul_bound' not in STORY_TRAITS
     assert 'soul_fountain' not in STORY_TRAITS
     assert STORY_CARDS['soul_splitter']['name']['zh'] == '灵魂分裂'
-    assert STORY_ENEMIES['termite_overmind']['moves'][1]['name'] == {
-        'zh': '灵能爆发',
-        'en': 'Psionic Burst',
-    }
+    assert STORY_ENEMIES['termite_overmind']['moves'][1]['name']['zh'] == '灵能爆发'
+    assert STORY_ENEMIES['termite_overmind']['moves'][1]['name']['en'] == 'Psionic Burst'
 
 
 def test_termite_resolve_moves_are_not_part_of_the_normal_cycle():
