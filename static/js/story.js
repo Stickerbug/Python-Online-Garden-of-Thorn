@@ -2873,7 +2873,7 @@
                     const title = document.createElement('strong');
                     title.textContent = localize(definition?.name) || String(book?.book_id || '附魔书');
                     const copy = document.createElement('small');
-                    copy.textContent = localize(definition?.description) || '';
+                    appendStoryRichText(copy, localize(definition?.description) || '');
                     const actions = document.createElement('span');
                     actions.className = 'story-coop-enchantment-book-actions';
                     if (phase === 'combat' && String(definition?.script || '') !== 'lethal_guard') {
@@ -3239,7 +3239,7 @@
             const name = document.createElement('strong');
             name.textContent = localize(definition?.name) || bookId;
             const description = document.createElement('small');
-            description.textContent = localize(definition?.description) || '故事模式附魔书';
+            appendStoryRichText(description, localize(definition?.description) || '故事模式附魔书');
             const actions = document.createElement('span');
             actions.className = 'story-coop-enchantment-book-actions';
             const take = document.createElement('button');
@@ -3591,7 +3591,7 @@
                 const name = document.createElement('strong');
                 name.textContent = localize(definition?.name) || bookId || '附魔书';
                 const description = document.createElement('small');
-                description.textContent = localize(definition?.description) || '故事模式附魔书';
+                appendStoryRichText(description, localize(definition?.description) || '故事模式附魔书');
                 const priceLabel = document.createElement('span');
                 priceLabel.className = 'story-coop-shop-offer-price';
                 priceLabel.textContent = note;
@@ -9375,6 +9375,10 @@
             'relic', 'talent', 'enchantment_book', 'book',
             'event', 'blessing',
         ]);
+        const rowSupportedKinds = new Set([
+            'tag', 'status', 'trait', 'resource',
+            'relic', 'talent',
+        ]);
         const seen = new Set();
         const entries = [];
         let match = null;
@@ -9403,7 +9407,7 @@
                         : nestedId;
                 },
             );
-            if (description) entries.push({ kind, name, description });
+            if (description) entries.push({ kind, id, definition, name, description });
         }
         if (!entries.length) return;
         const title = document.createElement('div');
@@ -9415,7 +9419,17 @@
             ja: '参照用語',
         }[lang] || 'Referenced Terms');
         container.append(title);
+        const list = document.createElement('div');
+        list.className = 'story-card-terms-list';
         entries.forEach((entry) => {
+            if (rowSupportedKinds.has(entry.kind)) {
+                appendStoryTermRow(list, {
+                    kind: entry.kind === 'talent' ? 'relic' : entry.kind,
+                    id: entry.id,
+                    definition: entry.definition,
+                });
+                return;
+            }
             const row = document.createElement('div');
             row.className = `story-term-reference story-term-reference-${entry.kind}`;
             const name = document.createElement('strong');
@@ -9425,6 +9439,7 @@
             row.append(name, description);
             container.append(row);
         });
+        if (list.childElementCount) container.append(list);
     }
 
     function openStoryTermDetail(kind, id) {
