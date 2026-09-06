@@ -37,9 +37,9 @@ from story_character_content import (
 
 
 STORY_CONTENT_MODEL_VERSION = 1
-STORY_WORKBOOK_FILE = 'Garden of Thorn 卡牌数据11.xlsx'
+STORY_WORKBOOK_FILE = 'Garden of Thorn 卡牌数据12.xlsx'
 STORY_WORKBOOK_SHA256 = (
-    'D8EB0B4D1BDA96E1E3C5A0CAD8BC55A901FCF0E6010567B0E5F9FB24446C1B82'
+    'C79CF2633562ACCED7649C1B791E0779B31981A5FFDE47CDCA50A1AF461F618'
 )
 STORY_WORKBOOK_SOURCE_VERSION = f'xlsx-sha256:{STORY_WORKBOOK_SHA256}'
 
@@ -285,6 +285,12 @@ _RELIC_ROWS = {
     'perfection': 54, 'frenzy_relic': 55, 'easy_miracle': 69,
     'easy_peace': 70, 'easy_study': 71, 'easy_tiger': 72,
     'easy_godhood': 74, 'consolation': 75, 'magic_source': 4,
+    'training': 13,
+    'rigid': 56, 'story_pill': 57, 'nimble': 58,
+    'blessing_rest': 76, 'book_slots': 77, 'revenge': 78, 'brutal': 79,
+    'foresight': 80, 'blitz': 81, 'split_wide': 82, 'favorite': 83,
+    'discard_mine': 84, 'infect': 85, 'kill_flow': 86, 'many_cards': 87,
+    'shop_refresh': 88, 'innate_thought': 89,
 }
 
 _ENEMY_ROWS = {

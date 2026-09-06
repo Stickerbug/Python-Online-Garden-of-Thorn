@@ -96,6 +96,8 @@ def settle_conn(conn,match_id,summary,award_time=None):
     data=dict(summary or {})
     if data.get('result') not in ('win','draw'):
         return {'awarded':[],'skipped':'result'}
+    if bool(data.get('ai_match')) or str(data.get('match_kind') or '').lower() == 'phelren':
+        return {'awarded':[],'skipped':'phelren_ai_match'}
     if not data.get('valid_for_stats',data.get('valid_for_ranking',True)):
         return {'awarded':[],'skipped':data.get('ranking_invalid_reason') or 'not_valid'}
     early=bool(data.get('ended_by_surrender')) and int(data.get('duration_seconds') or 0)<60

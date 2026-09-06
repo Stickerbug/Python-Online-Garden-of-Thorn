@@ -1017,6 +1017,17 @@ def toggle_public_vote(actor_user_id, issue_id):
             (issue_id, uid, uid, now_iso),
         )
         conn.commit()
+        # A new vote is a fresh platform-behavior signal for account linking.
+        try:
+            with db.get_db_connection() as probe:
+                has_identity = probe.execute(
+                    'SELECT 1 FROM account_identity_events WHERE user_id=? LIMIT 1',
+                    (uid,),
+                ).fetchone()
+            if has_identity:
+                account_integrity.recompute_account_links(uid)
+        except Exception:
+            pass
         return {
             'voted': True,
             'vote_count': _effective_vote_count_conn(conn, issue_id, author_id),
@@ -1870,6 +1881,122 @@ def public_feedback_watcher_unread_count(user_id):
             (uid,),
         ).fetchone()
         return int(row['count'] or 0)
+
+
+def _issue_brief_payload_conn(conn, row):
+    return {
+        'id': int(row['id']),
+        'key': public_issue_key(row['kind'], int(row['id'])),
+        'kind': str(row['kind']),
+        'status': str(row['status']),
+        'title': str(row['title']),
+    }
+
+
+def public_feedback_notifications(user_id, limit=50):
+    uid = _positive_id(user_id, label='用户')
+    safe_limit = max(1, min(int(limit or 50), 100))
+    now_iso = _iso(_utc_now())
+    with closing(db.get_db_connection()) as conn:
+        items = []
+
+        rows = conn.execute(
+            '''
+            SELECT * FROM public_issues
+            WHERE author_user_id = ? AND visible = 1
+            ORDER BY updated_at DESC LIMIT ?
+            ''',
+            (uid, safe_limit * 4),
+        ).fetchall()
+        for row in rows:
+            issue_id = int(row['id'])
+            read_at = row['author_read_at']
+            status = conn.execute(
+                '''
+                SELECT h.* FROM public_issue_status_history h
+                WHERE h.issue_id = ?
+                  AND (? IS NULL OR h.created_at > ?)
+                ORDER BY h.id DESC LIMIT 1
+                ''',
+                (issue_id, read_at, read_at),
+            ).fetchone()
+            if status:
+                items.append({
+                    'type': 'author',
+                    'action': 'status',
+                    'issue': _issue_brief_payload_conn(conn, row),
+                    'from_status': status['from_status'],
+                    'to_status': status['to_status'],
+                    'reason': status['reason'],
+                    'created_at': status['created_at'],
+                })
+            private = conn.execute(
+                '''
+                SELECT * FROM public_issue_private_messages
+                WHERE issue_id = ? AND sender_user_id <> ?
+                  AND (? IS NULL OR created_at > ?)
+                ORDER BY id DESC LIMIT 1
+                ''',
+                (issue_id, uid, read_at, read_at),
+            ).fetchone()
+            if private:
+                items.append({
+                    'type': 'author',
+                    'action': 'private',
+                    'issue': _issue_brief_payload_conn(conn, row),
+                    'message': str(private['message'])[:120],
+                    'created_at': private['created_at'],
+                })
+
+        watcher_rows = conn.execute(
+            '''
+            SELECT w.last_seen_at AS seen_at, w.created_at AS watch_created_at,
+                   i.*, h.to_status, h.reason, h.created_at AS history_at,
+                   h.from_status AS history_from
+            FROM public_issue_watchers w
+            JOIN public_issues i ON i.id = w.issue_id AND i.visible = 1
+            LEFT JOIN public_issue_status_history h ON h.issue_id = i.id
+            WHERE w.user_id = ?
+              AND h.id IS NOT NULL
+              AND h.created_at > COALESCE(w.last_seen_at, w.created_at)
+            ORDER BY h.created_at DESC LIMIT ?
+            ''',
+            (uid, safe_limit),
+        ).fetchall()
+        for row in watcher_rows:
+            items.append({
+                'type': 'watched',
+                'action': 'status',
+                'issue': _issue_brief_payload_conn(conn, row),
+                'from_status': row['history_from'],
+                'to_status': row['to_status'],
+                'reason': row['reason'],
+                'created_at': row['history_at'],
+            })
+
+        if _is_staff_conn(conn, uid):
+            pending = conn.execute(
+                '''
+                SELECT r.id AS request_id, r.message, r.created_at,
+                       i.*
+                FROM public_issue_reopen_requests r
+                JOIN public_issues i ON i.id = r.issue_id
+                WHERE r.status = 'pending'
+                ORDER BY r.created_at DESC LIMIT ?
+                ''',
+                (safe_limit,),
+            ).fetchall()
+            for row in pending:
+                items.append({
+                    'type': 'staff',
+                    'action': 'reopen_request',
+                    'issue': _issue_brief_payload_conn(conn, row),
+                    'message': str(row['message'])[:120],
+                    'created_at': row['created_at'],
+                })
+
+        items.sort(key=lambda item: item.get('created_at') or '', reverse=True)
+        return {'items': items[:safe_limit]}
 
 
 def mark_public_feedback_read(viewer_user_id, issue_id):

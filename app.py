@@ -202,6 +202,7 @@ from db import (
     story_coop_action_fingerprint,
     get_story_run_action,
     get_story_progress,
+    get_story_bank,
     get_story_progress_for_users,
     get_chat_message_with_context,
     get_db_connection,
@@ -285,6 +286,7 @@ from db import (
     social_unread_counts,
     set_ip_ban,
     set_user_mute,
+    set_story_bank,
     spend_user_thorn_dew,
     set_user_equipped_titles,
     set_user_title_name_style,
@@ -312,11 +314,14 @@ from community_ops import (
     CommunityOpsError,
     cast_community_poll_vote,
     create_community_announcement,
+    create_community_chain,
     create_community_poll,
     get_community_feed,
+    join_community_chain,
     mark_community_feed_read,
     list_community_ops_workspace,
     mutate_community_announcement,
+    mutate_community_chain,
     mutate_community_poll,
 )
 import account_integrity
@@ -682,6 +687,13 @@ GTN_STATIC_VERSION += '-public-feedback-kind-tabs-1'
 GTN_STATIC_VERSION += '-story-reputation-badges-1'
 GTN_STATIC_VERSION += '-feedback-center-route-full-info-1'
 GTN_STATIC_VERSION += '-feedback-admin-wording-1'
+GTN_STATIC_VERSION += '-community-chain-1-story-trait-chip-size-1-story-bush-cycle-1'
+GTN_STATIC_VERSION += '-feedback-account-popover-avatar-look-1'
+GTN_STATIC_VERSION += '-feedback-titles-avatar-size-1'
+GTN_STATIC_VERSION += '-feedback-list-status-1'
+GTN_STATIC_VERSION += '-feedback-status-key-colors-1'
+GTN_STATIC_VERSION += '-solo-response-perspective-reset-1'
+GTN_STATIC_VERSION += '-storage-session-before-persistent-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -7159,6 +7171,8 @@ def ranked_match_eligibility_for_sids(sids):
 def is_room_valid_for_ranking(room, result='finished'):
     if not room or str(result) != 'finished':
         return False, 'abnormal_result'
+    if getattr(room, 'ai_match', False):
+        return False, 'phelren_ai_match'
     if room_match_type(room) != 'ranked':
         return False, 'casual_match'
     if not getattr(getattr(room, 'engine', None), 'game_over', False):
@@ -7181,6 +7195,8 @@ def is_room_valid_for_stats(room, result='finished'):
     if not room or str(result) != 'finished':
         return False
     if not getattr(getattr(room, 'engine', None), 'game_over', False):
+        return False
+    if getattr(room, 'ai_match', False):
         return False
     if getattr(room, 'mode', '') not in ('1v1', '2v2'):
         return False
@@ -13746,14 +13762,14 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                 return {'success': False, 'output': f'成就补发失败：{exc}'}
         return {'success': False, 'output': command_error(raw, len(parts[0]) + 1, 'data achievementbackfill <preview|confirm>')}
     if cmd == 'broadcast':
-        msg = raw[len(parts[0]):].strip()
+        msg = ' '.join(parts[1:]).strip()
         if not msg:
             return {'success': False, 'output': command_error(raw, len(raw), '<内容>')}
         sent = send_system_broadcast(msg)
         admin_event('admin', f'broadcast: {msg}')
         return {'success': True, 'output': f'已发送广播：{msg}'}
     if cmd == 'gamechatmessage':
-        msg = raw[len(parts[0]):].strip()
+        msg = ' '.join(parts[1:]).strip()
         if not msg:
             return {'success': False, 'output': command_error(raw, len(raw), 'game message <内容>')}
         result, error = send_admin_game_chat_message(msg)
@@ -20109,6 +20125,7 @@ def api_story_run_create():
             )
         seed = secrets.token_hex(16)
         state = build_initial_story_state(seed, character_id=character_id)
+        state['event_bank'] = get_story_bank(user_id)
         run, created = create_story_run(user_id, seed, STORY_CONTENT_VERSION, state)
         run = _story_run_with_compatibility(run)
         new_discoveries = _sync_story_discoveries(user_id, run)
@@ -20220,11 +20237,16 @@ def api_story_run_action():
                     run=run,
                 )
 
+        run_state = run.get('state') or {}
+        run_state['event_bank'] = get_story_bank(user_id)
         next_state, events = apply_story_action(
-            run.get('state') or {},
+            run_state,
             action_type,
             payload,
             run.get('seed') or '',
+        )
+        next_state['event_bank'] = int(
+            next_state.get('event_bank') or get_story_bank(user_id)
         )
         updated, outcome = commit_story_run_action(
             user_id,
@@ -20253,6 +20275,8 @@ def api_story_run_action():
                 code='INVALID_STORY_STATE',
                 run=_story_run_with_compatibility(updated),
             )
+        if outcome == 'committed':
+            set_story_bank(user_id, int(next_state.get('event_bank') or 0))
         updated = _story_run_with_compatibility(updated)
         new_discoveries = (
             [] if outcome == 'duplicate'
@@ -21347,7 +21371,21 @@ def _prepare_account_identity(user, source):
         network_hash = hmac.new(key, ('network:' + network).encode(), hashlib.sha256).hexdigest()
     except ValueError:
         pass
-    account_integrity.record_identity_event(user['id'], device_hash, network_hash, source=source)
+    online_user_ids = set()
+    with _lock:
+        for player in players.values():
+            if player.get('is_registered_user') and player.get('user_id'):
+                try:
+                    online_user_ids.add(int(player['user_id']))
+                except (TypeError, ValueError):
+                    continue
+    account_integrity.record_identity_event(
+        user['id'],
+        device_hash,
+        network_hash,
+        source=source,
+        online_user_ids=sorted(online_user_ids),
+    )
 
 
 @app.after_request
@@ -22987,6 +23025,7 @@ def api_community_ops_workspace():
             'permissions': {
                 'can_manage_announcements': True,
                 'can_manage_polls': True,
+                'can_manage_chains': True,
                 'can_manage_changelog_drafts': False,
             },
         })
@@ -23080,6 +23119,80 @@ def api_community_ops_poll_action(poll_id):
             'success': True,
             'duplicate': bool(duplicate),
             'poll': poll,
+        })
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/chains/<int:chain_id>/join', methods=['POST'])
+def api_community_chain_join(chain_id):
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    if not community_csrf_valid():
+        return _community_json({
+            'success': False,
+            'error': '安全令牌已失效，请刷新公告',
+            'code': 'CSRF_FAILED',
+        }, 403)
+    if not rate_limiter(f'community-chain-join-user:{user_id}', limit=20, window=60):
+        return _community_json({'success': False, 'error': '操作过于频繁', 'code': 'RATE_LIMITED'}, 429)
+    if not rate_limiter(f'community-chain-join-ip:{_client_ip()}', limit=60, window=60):
+        return _community_json({'success': False, 'error': '操作过于频繁', 'code': 'RATE_LIMITED'}, 429)
+    try:
+        data = _community_request_object()
+        chain, duplicate = join_community_chain(
+            user_id,
+            chain_id,
+            data.get('content'),
+        )
+        return _community_json({
+            'success': True,
+            'duplicate': bool(duplicate),
+            'chain': chain,
+        })
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/ops/chains', methods=['POST'])
+def api_community_ops_create_chain():
+    try:
+        actor = _community_ops_actor()
+        if not rate_limiter(f'community-ops-chain:{actor["user_id"]}', limit=20, window=3600):
+            raise CommunityOpsError('RATE_LIMITED', '一小时内接龙操作次数过多', 429)
+        data = _community_request_object()
+        chain = create_community_chain(
+            actor,
+            title=data.get('title'),
+            description=data.get('description'),
+            starts_at=data.get('starts_at'),
+            ends_at=data.get('ends_at'),
+            publish=_community_boolean(data, 'publish'),
+        )
+        return _community_json({'success': True, 'chain': chain}, 201)
+    except Exception as exc:
+        return _community_error(exc)
+
+
+@app.route('/api/community/ops/chains/<int:chain_id>/action', methods=['POST'])
+def api_community_ops_chain_action(chain_id):
+    try:
+        actor = _community_ops_actor()
+        if not rate_limiter(f'community-ops-chain:{actor["user_id"]}', limit=20, window=3600):
+            raise CommunityOpsError('RATE_LIMITED', '一小时内接龙操作次数过多', 429)
+        data = _community_request_object()
+        chain, duplicate = mutate_community_chain(
+            actor,
+            chain_id,
+            data.get('action'),
+            starts_at=data.get('starts_at'),
+            ends_at=data.get('ends_at'),
+        )
+        return _community_json({
+            'success': True,
+            'duplicate': bool(duplicate),
+            'chain': chain,
         })
     except Exception as exc:
         return _community_error(exc)
@@ -23653,6 +23766,25 @@ def api_public_feedback_summary():
             ),
             'game_version': current_public_game_version(),
         })
+    except public_feedback.PublicFeedbackError as exc:
+        return _public_feedback_error_response(exc)
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/public-feedback/notifications')
+def api_public_feedback_notifications():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        result = public_feedback.public_feedback_notifications(
+            user_id,
+            limit=request.args.get('limit', 50),
+        )
+        return jsonify({'success': True, **result})
     except public_feedback.PublicFeedbackError as exc:
         return _public_feedback_error_response(exc)
     except sqlite3.OperationalError as exc:
@@ -32126,10 +32258,20 @@ def on_spectate(data):
     if data is None:
         return
     try:
-        room_id = validate_int(data.get('room_id'), minimum=0, maximum=10**9, name='room_id')
-    except ValueError as exc:
-        _security_illegal(sid, 'spectate', str(exc))
-        return
+        raw_room_id = data.get('room_id')
+        room_id = validate_int(
+            raw_room_id,
+            minimum=0,
+            maximum=10**9,
+            name='room_id',
+        )
+    except ValueError:
+        # Phelren replay rooms use a stable string key such as
+        # ``phelren:<session>`` while ordinary matches use numeric ids.
+        room_id = str(raw_room_id or '').strip()
+        if not re.fullmatch(r'[A-Za-z0-9:_-]{1,96}', room_id):
+            _security_illegal(sid, 'spectate', 'invalid room id')
+            return
     previous_spectate_room = None
     with _lock:
         if sid not in players:

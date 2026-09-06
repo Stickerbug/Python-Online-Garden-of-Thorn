@@ -6,6 +6,7 @@
     csrfToken: '',
     loadPromise: null,
     votePromise: null,
+    chainPromise: null,
     epoch: 0,
   };
   const ANNOUNCEMENT_READ_KEY = 'gtn_community_announcement_reads_v1';
@@ -13,6 +14,7 @@
   const announcementReadMemory = new Set();
   const serverReadAnnouncementIds = new Set();
   const serverReadPollIds = new Set();
+  const serverReadChainIds = new Set();
   let serverReadRequest = null;
 
   const byId = (id) => document.getElementById(id);
@@ -36,6 +38,13 @@
     if (!Number.isInteger(id) || id <= 0) return '';
     const publishedAt = String(item?.published_at || item?.starts_at || '');
     return `poll:${id}:${publishedAt}`;
+  }
+
+  function chainReceipt(item) {
+    const id = Number(item?.id || 0);
+    if (!Number.isInteger(id) || id <= 0) return '';
+    const publishedAt = String(item?.published_at || item?.starts_at || '');
+    return `chain:${id}:${publishedAt}`;
   }
 
   function readAnnouncementReceipts() {
@@ -79,25 +88,32 @@
   function currentFeedItems() {
     const announcements = Array.isArray(state.feed?.announcements) ? state.feed.announcements : [];
     const polls = Array.isArray(state.feed?.polls) ? state.feed.polls : [];
+    const chains = Array.isArray(state.feed?.chains) ? state.feed.chains : [];
     return [
       ...announcements.map((item) => ({ type: 'announcements', receipt: announcementReceipt(item), id: Number(item?.id || 0) })),
       ...polls.map((item) => ({ type: 'polls', receipt: pollReceipt(item), id: Number(item?.id || 0) })),
+      ...chains.map((item) => ({ type: 'chains', receipt: chainReceipt(item), id: Number(item?.id || 0) })),
     ].filter((item) => item.receipt && item.id > 0);
   }
 
   function serverReadIds(type) {
-    return type === 'polls' ? serverReadPollIds : serverReadAnnouncementIds;
+    if (type === 'polls') return serverReadPollIds;
+    if (type === 'chains') return serverReadChainIds;
+    return serverReadAnnouncementIds;
   }
 
   function applyServerRead(payload) {
     const read = payload?.viewer?.read;
     serverReadAnnouncementIds.clear();
     serverReadPollIds.clear();
+    serverReadChainIds.clear();
     if (!read) return;
     (Array.isArray(read.announcements) ? read.announcements : [])
       .forEach((value) => serverReadAnnouncementIds.add(Number(value)));
     (Array.isArray(read.polls) ? read.polls : [])
       .forEach((value) => serverReadPollIds.add(Number(value)));
+    (Array.isArray(read.chains) ? read.chains : [])
+      .forEach((value) => serverReadChainIds.add(Number(value)));
   }
 
   function updateAnnouncementBadge() {
@@ -226,17 +242,60 @@
     return article;
   }
 
+  function renderChain(item) {
+    const article = createElement('article', 'community-card community-chain');
+    const heading = createElement('div', 'community-card-heading');
+    heading.appendChild(createElement('h3', '', item.title || '接龙'));
+    if (item.effective_state === 'closed') heading.appendChild(createElement('span', 'community-badge', '已结束'));
+    else if (item.effective_state === 'scheduled') heading.appendChild(createElement('span', 'community-badge', '未开始'));
+    article.appendChild(heading);
+    article.appendChild(createElement('p', 'community-card-body', item.description || ''));
+
+    const entries = createElement('ol', 'community-chain-entries');
+    (Array.isArray(item.entries) ? item.entries : []).forEach((entry) => {
+      const line = createElement('li', '');
+      line.appendChild(createElement('b', '', `${entry.nickname || '已注销玩家'}：`));
+      line.appendChild(document.createTextNode(entry.content || ''));
+      entries.appendChild(line);
+    });
+    article.appendChild(entries);
+
+    let footer = `共 ${Number(item.entry_count || 0)} 人接龙`;
+    const viewer = state.feed?.viewer;
+    if (item.can_join) {
+      const joinRow = createElement('div', 'community-chain-join');
+      const input = createElement('input', 'community-chain-input');
+      input.type = 'text';
+      input.maxLength = 500;
+      input.placeholder = item.my_entry ? '修改我的接龙内容' : '写一条接龙内容';
+      if (item.my_entry) input.value = item.my_entry;
+      const button = createElement('button', 'community-poll-option', item.my_entry ? '更新' : '接龙');
+      button.type = 'button';
+      button.dataset.chainId = String(item.id);
+      button.dataset.chainJoin = 'true';
+      button.disabled = Boolean(state.chainPromise);
+      joinRow.append(input, button);
+      article.appendChild(joinRow);
+    } else if (!viewer?.authenticated) {
+      footer += ' · 登录后可接龙';
+    }
+    article.appendChild(createElement('div', 'community-card-meta', footer));
+    return article;
+  }
+
   function renderFeed() {
     const feed = byId('community-feed');
     if (!feed) return;
     feed.textContent = '';
     const announcements = Array.isArray(state.feed?.announcements) ? state.feed.announcements : [];
     const polls = Array.isArray(state.feed?.polls) ? state.feed.polls : [];
-    if (!announcements.length && !polls.length) {
-      feed.appendChild(createElement('p', 'community-empty muted', '目前没有正在展示的公告或投票。'));
+    const chains = Array.isArray(state.feed?.chains) ? state.feed.chains : [];
+    if (!announcements.length && !polls.length && !chains.length) {
+      feed.appendChild(createElement('p', 'community-empty muted', '目前没有正在展示的公告、投票或接龙。'));
     } else {
       announcements.forEach((item) => feed.appendChild(renderAnnouncement(item)));
       polls.forEach((item) => feed.appendChild(renderPoll(item)));
+      chains.forEach((item) => feed.appendChild(renderChain(item)));
     }
     const manage = byId('community-manage-link');
     if (manage) manage.classList.toggle('hidden', !state.feed?.viewer?.can_manage);
@@ -327,6 +386,49 @@
     await promise;
   }
 
+  async function joinChain(chainId, content) {
+    if (state.chainPromise) return;
+    const value = String(content || '').trim();
+    if (!value) {
+      setStatus('请先写一条接龙内容。', 'error');
+      return;
+    }
+    if (!state.csrfToken) {
+      setStatus('请先登录账号再参与接龙。', 'error');
+      return;
+    }
+    renderFeed();
+    setStatus('正在提交接龙…');
+    const epoch = state.epoch;
+    const promise = requestJson(`/api/community/chains/${encodeURIComponent(chainId)}/join`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Community-CSRF': state.csrfToken,
+      },
+      body: JSON.stringify({ content: value }),
+    })
+      .then((payload) => {
+        if (epoch !== state.epoch) return;
+        const chains = Array.isArray(state.feed?.chains) ? state.feed.chains : [];
+        const index = chains.findIndex((item) => Number(item.id) === Number(payload.chain?.id));
+        if (index >= 0) chains.splice(index, 1, payload.chain);
+        renderFeed();
+        setStatus(payload.duplicate ? '已更新你的接龙内容。' : '接龙成功。', 'success');
+      })
+      .catch((error) => {
+        if (epoch !== state.epoch) return;
+        setStatus(error.message || '接龙提交失败', 'error');
+      })
+      .finally(() => {
+        if (state.chainPromise === promise) state.chainPromise = null;
+        if (epoch === state.epoch) renderFeed();
+      });
+    state.chainPromise = promise;
+    renderFeed();
+    await promise;
+  }
+
   function closePopover() {
     const popover = byId('community-popover');
     if (!popover) return;
@@ -357,6 +459,13 @@
       const button = event.target.closest('[data-poll-id][data-option-id]');
       if (!button || button.disabled) return;
       vote(button.dataset.pollId, button.dataset.optionId);
+    });
+    byId('community-feed')?.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-chain-id][data-chain-join]');
+      if (!button || button.disabled) return;
+      const article = button.closest('.community-chain');
+      const input = article?.querySelector('.community-chain-input');
+      joinChain(button.dataset.chainId, input?.value || '');
     });
     document.addEventListener('click', (event) => {
       const otherTopButton = event.target.closest('.top-icon-btn:not(#btn-community-top)');

@@ -2047,8 +2047,6 @@ class GameEngine2v2(GameEngine):
                                                    {'source_id': owner_id, 'target_id': player_id}) or handled
                 if handled or eq.card_def.effects:
                     continue
-                if eq.corruption_active:
-                    self._deal_direct_damage(player_id, 1, eq.card_def.name_cn)
                 if eq.def_id == 'Leaf':
                     ps.heal(2)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2H")
@@ -2203,8 +2201,6 @@ class GameEngine2v2(GameEngine):
                                                    {'source_id': owner_id, 'target_id': player_id}) or handled
                 if handled or eq.card_def.effects:
                     continue
-                if eq.corruption_active:
-                    self._deal_direct_damage(player_id, 1, eq.card_def.name_cn)
                 if eq.def_id == 'Leaf':
                     ps.heal(2)
                     self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2H")

@@ -16,9 +16,15 @@ import db
 
 
 BJ = timezone(timedelta(hours=8))
-RULE_VERSION = '1'
+RULE_VERSION = '2'
 IDENTITY_WINDOW_DAYS = 30
 SHARED_NETWORK_USERS = 8
+RAPID_ALTERNATION_WINDOW_SECONDS = 15 * 60
+NETWORK_EXCLUSION_MIN_DAYS = 2
+NETWORK_EXCLUSION_MIN_SWITCHES = 3
+SUSPICIOUS_SAME_DAY_SHORT_MATCHES = 5
+SUSPICIOUS_SHARED_VOTE_ISSUES = 3
+REGISTRATION_PROXIMITY_WINDOW_DAYS = 7
 
 
 class IntegrityRuleError(ValueError):
@@ -633,11 +639,91 @@ def _merge_group_conn(conn, ids, score, now, *, explicit=False):
     return gid
 
 
+def _overlap_user_ids(row):
+    try:
+        values = json.loads(row['overlap_user_ids_json'] or '[]')
+        return {int(value) for value in values if str(value).isdigit()}
+    except (TypeError, ValueError):
+        return set()
+
+
+def _rapid_device_alternation_detected(conn, low, high, cutoff):
+    """True when one device shows A-B-A (or B-A-B) within the rapid window."""
+    devices = [r['device_hash'] for r in conn.execute(
+        '''SELECT DISTINCT device_hash FROM account_login_events
+           WHERE user_id IN (?,?) AND created_at>=? AND device_hash!='' ''',
+        (low, high, cutoff),
+    )]
+    for device_hash in devices:
+        events = list(conn.execute(
+            '''SELECT user_id,created_at FROM account_login_events
+               WHERE device_hash=? AND created_at>=? ORDER BY created_at,id''',
+            (device_hash, cutoff),
+        ))
+        if len(events) < 3:
+            continue
+        for index in range(len(events) - 2):
+            first, middle, last = events[index:index + 3]
+            users = {int(first['user_id']), int(middle['user_id'])}
+            if users != {low, high} or first['user_id'] == middle['user_id']:
+                continue
+            if last['user_id'] != first['user_id']:
+                continue
+            if (_time(last['created_at']) - _time(first['created_at'])).total_seconds() <= RAPID_ALTERNATION_WINDOW_SECONDS:
+                return True
+    return False
+
+
+def _network_exclusion_switch_days(conn, low, high, cutoff, network_keys):
+    """Count exclusive A<->B switches per Beijing day on private networks."""
+    switch_days = {}
+    for network_hash in network_keys:
+        last_pair = None
+        last_user_id = None
+        for row in conn.execute(
+            '''SELECT user_id,overlap_user_ids_json,created_at FROM account_login_events
+               WHERE network_hash=? AND created_at>=? ORDER BY created_at,id''',
+            (network_hash, cutoff),
+        ):
+            uid = int(row['user_id'])
+            if uid in (low, high):
+                if last_pair is not None and uid != int(last_pair['user_id']) and last_user_id == int(last_pair['user_id']):
+                    earlier_user = int(last_pair['user_id'])
+                    later_user = uid
+                    # Concurrent presence of the other account weakens the
+                    # "one person alternating" inference, so skip that switch.
+                    if (
+                        later_user not in _overlap_user_ids(last_pair)
+                        and earlier_user not in _overlap_user_ids(row)
+                    ):
+                        day = _time(row['created_at']).astimezone(BJ).date().isoformat()
+                        switch_days[day] = switch_days.get(day, 0) + 1
+                last_pair = row
+            last_user_id = uid
+    return switch_days
+
+
+def _shared_issue_vote_count(conn, low, high, cutoff):
+    try:
+        row = conn.execute(
+            '''SELECT COUNT(DISTINCT v1.issue_id) AS n
+               FROM public_issue_votes v1
+               JOIN public_issue_votes v2
+                 ON v2.issue_id=v1.issue_id AND v2.user_id=?
+               WHERE v1.user_id=? AND v1.active=1 AND v2.active=1
+                 AND v1.created_at>=? AND v2.created_at>=?''',
+            (high, low, cutoff, cutoff),
+        ).fetchone()
+    except Exception:
+        return 0
+    return int(row['n'] or 0) if row else 0
+
+
 def _pair_signals(conn, low, high, now):
     cutoff = _iso(now - timedelta(days=IDENTITY_WINDOW_DAYS))
-    rows = list(conn.execute('''SELECT user_id,device_hash,network_hash,event_day,is_registration,created_at
+    daily_rows = list(conn.execute('''SELECT user_id,device_hash,network_hash,event_day,is_registration,created_at
         FROM account_identity_events WHERE user_id IN (?,?) AND created_at>=? ORDER BY id''', (low, high, cutoff)))
-    a, b = ([r for r in rows if r['user_id'] == uid] for uid in (low, high))
+    a, b = ([r for r in daily_rows if r['user_id'] == uid] for uid in (low, high))
     devices = {r['device_hash'] for r in a if r['device_hash']} & {r['device_hash'] for r in b if r['device_hash']}
     stable_device_days = max((len({r['event_day'] for r in a if r['device_hash']==key} &
                                   {r['event_day'] for r in b if r['device_hash']==key}) for key in devices), default=0)
@@ -645,30 +731,54 @@ def _pair_signals(conn, low, high, now):
     network_days = max((len({r['event_day'] for r in a if r['network_hash']==key} &
                             {r['event_day'] for r in b if r['network_hash']==key}) for key in networks), default=0)
     shared = False
+    shared_network_keys = set()
     for key in networks:
         # Campus/cafe networks are assessed per day, not by an all-time count.
         row = conn.execute('''SELECT COUNT(DISTINCT user_id) AS n FROM account_identity_events
             WHERE network_hash=? AND created_at>=? GROUP BY event_day ORDER BY n DESC LIMIT 1''', (key, cutoff)).fetchone()
-        shared = shared or bool(row and row['n'] >= SHARED_NETWORK_USERS)
+        if row and row['n'] >= SHARED_NETWORK_USERS:
+            shared = True
+            shared_network_keys.add(key)
     registration_overlap = any(
         x['is_registration'] and y['is_registration'] and x['network_hash'] and x['network_hash']==y['network_hash']
         and abs((_time(x['created_at'])-_time(y['created_at'])).total_seconds()) <= 86400 for x in a for y in b)
+    registration_proximity = any(
+        x['is_registration'] and y['is_registration'] and x['network_hash'] and x['network_hash']==y['network_hash']
+        and abs((_time(x['created_at'])-_time(y['created_at'])).total_seconds())
+        <= REGISTRATION_PROXIMITY_WINDOW_DAYS * 86400 for x in a for y in b)
     # Sustained suspicious play is corroboration only. Normal long games and
     # simply sharing opponents never supply this signal.
     short_days = set()
     short_count = 0
+    feed_by_day = {}
     for match in conn.execute('''SELECT ended_at,summary_json FROM matches
         WHERE ended_at>=? AND duration_seconds>=0 AND duration_seconds<60''', (cutoff,)):
         data = json.loads(match['summary_json'] or '{}')
         participants = data.get('player_ids') or []
         if low in participants and high in participants and data.get('ended_by_surrender'):
             short_count += 1
-            short_days.add(_time(match['ended_at']).astimezone(BJ).date().isoformat())
+            day = _time(match['ended_at']).astimezone(BJ).date().isoformat()
+            short_days.add(day)
+            feed_by_day[day] = feed_by_day.get(day, 0) + 1
     behavior = short_count >= 4 and len(short_days) >= 3
+    same_day_feed = max(feed_by_day.values(), default=0) >= SUSPICIOUS_SAME_DAY_SHORT_MATCHES
     users = [_user(conn, uid) for uid in (low, high)]
     games = [int(u['total_ranked_games'] or 0) for u in users]
     rating = (any(1 <= n <= 10 for n in games) and any(n > 10 for n in games)
               and math.floor(float(users[0]['total_gr'] or 0)/50) == math.floor(float(users[1]['total_gr'] or 0)/50))
+    rapid_alternation = _rapid_device_alternation_detected(conn, low, high, cutoff)
+    switch_days = _network_exclusion_switch_days(
+        conn,
+        low,
+        high,
+        cutoff,
+        networks - shared_network_keys,
+    )
+    network_mutual = (
+        sum(switch_days.values()) >= NETWORK_EXCLUSION_MIN_SWITCHES
+        and len(switch_days) >= NETWORK_EXCLUSION_MIN_DAYS
+    )
+    shared_votes = _shared_issue_vote_count(conn, low, high, cutoff)
     score, categories, reasons = 0, set(), []
     def add(points, category, reason):
         nonlocal score
@@ -679,19 +789,37 @@ def _pair_signals(conn, low, high, now):
         add(50, 'device', 'same_server_device_token')
     if stable_device_days >= 3:
         add(25, 'device', 'same_device_three_days')
-    network_score = (15 if network_days >= 3 else 0) + (10 if registration_overlap else 0)
+    network_score = (40 if network_days >= 3 else 0)
+    if registration_proximity:
+        network_score += 10
+    if registration_overlap:
+        network_score += 10
     if network_score:
         add(min(5, network_score) if shared else network_score, 'network', 'shared_network_capped' if shared else 'repeated_network_or_registration')
     if behavior:
         add(20, 'behavior', 'repeated_short_surrender_three_days')
+    elif same_day_feed:
+        add(20, 'behavior', 'same_day_short_match_cluster')
+    if rapid_alternation:
+        add(60, 'behavior', 'rapid_device_alternation')
+    if network_mutual:
+        add(30, 'network', 'network_mutual_exclusion_alternation')
     if rating:
         add(10, 'rating', 'new_account_similar_50_gr_band')
-    can_confirm = (score >= 90 and len(categories) >= 2 and bool(categories & {'device','behavior'})
-                   and (not shared or behavior))
+    if shared_votes >= SUSPICIOUS_SHARED_VOTE_ISSUES:
+        add(15, 'platform', 'shared_issue_votes')
+    can_confirm = (score >= 90 and len(categories) >= 2 and (not shared or 'behavior' in categories))
     state = 'confirmed' if can_confirm else 'probable' if score >= 70 else 'suspected' if score >= 40 else 'none'
     facts = {'shared_device': bool(devices), 'stable_device_days': stable_device_days,
              'network_days': network_days, 'shared_network': shared, 'registration_overlap': registration_overlap,
-             'short_match_count': short_count, 'short_match_days': len(short_days), 'rating_band_match': rating}
+             'registration_proximity_seven_days': registration_proximity,
+             'short_match_count': short_count, 'short_match_days': len(short_days),
+             'same_day_short_match_cluster': same_day_feed,
+             'rapid_device_alternation': rapid_alternation,
+             'network_mutual_exclusion_days': len(switch_days),
+             'network_mutual_exclusion_switches': sum(switch_days.values()),
+             'shared_issue_votes': shared_votes,
+             'rating_band_match': rating}
     return score, sorted(categories), reasons, state, facts
 
 
@@ -748,22 +876,37 @@ def recompute_account_links(user_id, *, now=None):
         return results
 
 
-def record_identity_event(user_id, device_hash, network_hash, *, source='login', now=None):
+def record_identity_event(user_id, device_hash, network_hash, *, source='login', now=None, online_user_ids=None):
     uid, now = _id(user_id), _time(now)
     for value in (device_hash, network_hash):
         if not isinstance(value, str) or (value and not re.fullmatch(r'[a-f0-9]{64}', value)):
             raise IntegrityRuleError('INVALID_IDENTITY_DIGEST', '仅接受服务端生成的标识摘要')
     if source not in ('register','login','session') or not device_hash:
         raise IntegrityRuleError('INVALID_IDENTITY_EVENT', '账号标识事件无效')
+    online = set()
+    for value in (online_user_ids or []):
+        try:
+            other_uid = int(value)
+        except (TypeError, ValueError):
+            continue
+        if other_uid > 0:
+            online.add(other_uid)
     with _transaction() as conn:
         initialize_user_conn(conn, uid, now)
         cursor = conn.execute('''INSERT OR IGNORE INTO account_identity_events
             (user_id,device_hash,network_hash,source,event_day,is_registration,created_at) VALUES (?,?,?,?,?,?,?)''',
             (uid, device_hash, network_hash, source, now.astimezone(BJ).date().isoformat(), int(source=='register'), _iso(now)))
         inserted = cursor.rowcount > 0
-    if inserted:
+        login_inserted = False
+        if source in ('login','register'):
+            login_cursor = conn.execute('''INSERT INTO account_login_events
+                (user_id,device_hash,network_hash,source,overlap_user_ids_json,created_at)
+                VALUES (?,?,?,?,?,?)''',
+                (uid, device_hash, network_hash, source, _json(sorted(online)), _iso(now)))
+            login_inserted = login_cursor.rowcount > 0
+    if inserted or login_inserted:
         recompute_account_links(uid, now=now)
-    return inserted
+    return inserted or login_inserted
 
 
 def refresh_recent_account_links(*, now=None):

@@ -4822,7 +4822,7 @@
                 || item.nickname.toLowerCase().includes(query)
                 || item.player_id.toLowerCase().includes(query)
             ))
-            .slice(0, 8);
+            .slice(0, 50);
         if (!storyMentionCandidates.length) {
             menu.classList.add('hidden');
             return;
@@ -6337,7 +6337,9 @@
     }
 
     function cardValues(card) {
-        const definition = storyContent?.cards?.[card?.def_id];
+        const definition = (card?.generated && typeof card.generated === 'object')
+            ? card.generated
+            : storyContent?.cards?.[card?.def_id];
         if (!definition) return null;
         const upgradeLevel = Math.max(
             Number(card?.upgrade_level || 0),
@@ -7703,6 +7705,11 @@
             upgrade: t.upgrade,
             remove: t.remove,
             enchant_amulet: lang === 'zh' ? '附魔护身符' : 'Enchant Amulet',
+            make_wide: lang === 'zh' ? '获得广域打击' : 'Gain Wide Strike',
+            grant_innate: lang === 'zh' ? '获得固有' : 'Gain Innate',
+            favorite_card: lang === 'zh' ? '获得钟爱' : 'Gain Favorite',
+            infect_card: lang === 'zh' ? '获得传染' : 'Gain Infect',
+            titan_forge: lang === 'zh' ? '泰坦锻造：选择2张同类型牌' : 'Titan Forge: choose 2 same-type cards',
         };
         const spec = {
             source,
@@ -7844,11 +7851,25 @@
         art.className = 'story-pile-tile-art';
         const imageUrl = card.upgraded ? (values.upgraded_image_url || values.image_url) : values.image_url;
         if (imageUrl) {
-            const image = document.createElement('img');
-            image.src = imageUrl;
-            image.alt = '';
-            image.addEventListener('error', () => image.remove());
-            art.append(image);
+            const halves = Array.isArray(card?.generated?.image_halves)
+                ? card.generated.image_halves.filter(Boolean)
+                : [];
+            if (halves.length >= 2) {
+                art.classList.add('is-forged');
+                halves.forEach((halfUrl) => {
+                    const image = document.createElement('img');
+                    image.src = String(halfUrl);
+                    image.alt = '';
+                    image.addEventListener('error', () => image.remove());
+                    art.append(image);
+                });
+            } else {
+                const image = document.createElement('img');
+                image.src = imageUrl;
+                image.alt = '';
+                image.addEventListener('error', () => image.remove());
+                art.append(image);
+            }
         }
         const countLabel = document.createElement('span');
         countLabel.className = 'story-pile-count';
@@ -8262,15 +8283,30 @@
         if (imageUrl) {
             const art = document.createElement('div');
             art.className = 'card-art';
-            const image = document.createElement('img');
-            image.src = imageUrl;
-            image.alt = '';
-            image.decoding = 'async';
-            image.addEventListener('error', () => {
-                art.classList.add('hidden');
-                scheduleStoryCardEffectFit(element);
-            });
-            art.append(image);
+            const halves = Array.isArray(card?.generated?.image_halves)
+                ? card.generated.image_halves.filter(Boolean)
+                : [];
+            if (halves.length >= 2) {
+                art.classList.add('is-forged');
+                halves.forEach((halfUrl) => {
+                    const image = document.createElement('img');
+                    image.src = String(halfUrl);
+                    image.alt = '';
+                    image.decoding = 'async';
+                    image.addEventListener('error', () => image.remove());
+                    art.append(image);
+                });
+            } else {
+                const image = document.createElement('img');
+                image.src = imageUrl;
+                image.alt = '';
+                image.decoding = 'async';
+                image.addEventListener('error', () => {
+                    art.classList.add('hidden');
+                    scheduleStoryCardEffectFit(element);
+                });
+                art.append(image);
+            }
             element.append(art);
         }
         const typeWrap = document.createElement('div');
@@ -10594,12 +10630,12 @@
         setStoryRoomGridMode(container);
         container?.classList.add('is-journey-setup');
         setText('story-room-kicker', lang === 'zh' ? '新旅程' : 'New Journey');
-        setText('story-room-title', lang === 'zh' ? '选择旅程模式、起始区域与难度' : 'Choose a journey mode, region, and difficulty');
+        setText('story-room-title', lang === 'zh' ? '选择旅程模式与难度' : 'Choose a journey mode and difficulty');
         setText(
             'story-room-copy',
             lang === 'zh'
-                ? '标准旅程包含3个阶段；Boss Rush 将不断生成新的11房间固定路线。'
-                : 'Standard journeys have 3 stages; Boss Rush repeats a fixed 11-room route.',
+                ? '起始区域将在进入旅程时随机决定；标准旅程包含3个阶段；Boss Rush 使用固定的11房间路线。'
+                : 'Your starting region is chosen randomly when the journey begins. Standard journeys have 3 stages; Boss Rush uses a fixed 11-room route.',
         );
 
         let selectedBiome = String(room.biomes?.[0] || 'garden');
@@ -10662,19 +10698,6 @@
             selectionButtons.push({ button, kind: 'mode', id: String(modeId) });
             container?.append(button);
         });
-        appendStoryChoiceHeading(container, lang === 'zh' ? '区域' : 'Region');
-        (room.biomes || []).forEach((biomeId) => {
-            const definition = storyContent?.biomes?.[biomeId] || {};
-            const button = choiceButton(
-                localize(definition.name) || String(biomeId),
-                () => {
-                    selectedBiome = String(biomeId);
-                    refreshSelections();
-                },
-            );
-            selectionButtons.push({ button, kind: 'biome', id: String(biomeId) });
-            container?.append(button);
-        });
         appendStoryChoiceHeading(container, lang === 'zh' ? '难度' : 'Difficulty');
         (room.difficulties || []).forEach((difficultyId) => {
             const definition = storyContent?.difficulties?.[difficultyId] || {};
@@ -10706,7 +10729,7 @@
         footer?.append(storyRoomFooterButton(
             lang === 'zh' ? '开始旅程' : 'Start Journey',
             () => storyAction('start_journey', {
-                biome: selectedBiome,
+                biome: '',
                 difficulty: selectedDifficulty,
                 mode: selectedMode,
             }),
@@ -11887,9 +11910,11 @@
             'story-deck-change-title',
             kind === 'remove'
                 ? t.confirmRemoveTitle
+                : (kind === 'copy'
+                    ? (lang === 'zh' ? '确认复制卡牌' : 'Confirm card copy')
                 : (kind === 'transform'
                     ? (lang === 'zh' ? '确认变化卡牌' : 'Confirm card transformation')
-                    : t.confirmUpgradeTitle),
+                    : t.confirmUpgradeTitle)),
         );
         setText(
             'story-deck-change-copy',
@@ -11908,6 +11933,13 @@
             removed.className = 'story-deck-change-removed';
             removed.textContent = t.removedFromDeck;
             after.append(removed);
+        } else if (kind === 'copy') {
+            const copied = document.createElement('div');
+            copied.className = 'story-deck-change-removed';
+            copied.textContent = lang === 'zh'
+                ? '复制4张并额外获得2张玫瑰与2张基本'
+                : 'Copy it 4 times, plus 2 Rose and 2 Basic cards';
+            after.append(copied);
         } else if (kind === 'transform') {
             const transformed = document.createElement('div');
             transformed.className = 'story-deck-change-removed';
@@ -12040,44 +12072,23 @@
             setText(
                 'story-room-title',
                 bossRush
-                    ? (lang === 'zh' ? `Boss Rush：选择第 ${block} 轮区域` : `Boss Rush: Choose Block ${block} Region`)
-                    : (lang === 'zh' ? `选择第 ${room.stage || ''} 阶段区域` : `Choose Stage ${room.stage || ''} region`),
+                    ? (lang === 'zh' ? `Boss Rush：第 ${block} 轮区域随机` : `Boss Rush: Block ${block} Region Random`)
+                    : (lang === 'zh' ? `第 ${room.stage || ''} 阶段区域随机` : `Stage ${room.stage || ''} Region Random`),
             );
             setText(
                 'story-room-copy',
                 bossRush
                     ? (lang === 'zh'
-                        ? `选择下一区域，随后进入第 ${floorStart}-${floorEnd} 层。`
-                        : `Choose the next region, then enter Floors ${floorStart}-${floorEnd}.`)
+                        ? `区域将随机生成，随后进入第 ${floorStart}-${floorEnd} 层。`
+                        : `The region is chosen randomly, then enter Floors ${floorStart}-${floorEnd}.`)
                     : (lang === 'zh'
-                        ? '选择下一区域，随后生成新的16层路线。'
-                        : 'Choose the next region, then generate a new 16-floor route.'),
+                        ? '区域将随机生成，然后生成新的16层路线。'
+                        : 'The region is chosen randomly, then generate a new 16-floor route.'),
             );
-            let selectedBiome = String(room.biomes?.[0] || 'garden');
-            const selectionButtons = [];
-            const refreshSelections = () => {
-                selectionButtons.forEach(({ button, id }) => {
-                    button.classList.toggle('is-selected', id === selectedBiome);
-                });
-            };
-            appendStoryChoiceHeading(container, lang === 'zh' ? '区域' : 'Region');
-            (room.biomes || []).forEach((biome) => {
-                const definition = storyContent?.biomes?.[biome] || {};
-                const button = choiceButton(
-                    localize(definition.name) || String(biome),
-                    () => {
-                        selectedBiome = String(biome);
-                        refreshSelections();
-                    },
-                );
-                selectionButtons.push({ button, id: String(biome) });
-                container?.append(button);
-            });
-            refreshSelections();
             footer?.append(storyRoomFooterButton(
                 t.confirm,
                 () => storyAction('choose_stage', {
-                    biome: selectedBiome,
+                    biome: '',
                 }),
                 { primary: true },
             ));
@@ -12178,6 +12189,21 @@
             setText('story-room-title', t.shopTitle);
             setText('story-room-copy', t.shopCopy);
             renderStoryRoomTabs(state, [
+                {
+                    id: 'shop-refresh',
+                    label: lang === 'zh' ? '刷新商店' : 'Refresh Shop',
+                    mode: 'choices',
+                    render: (target) => target.append(choiceButton(
+                        `${lang === 'zh' ? '刷新' : 'Refresh'} · ${Number(room.refresh_price || 0)}G`,
+                        () => storyAction('resolve_room', { option: 'refresh' }),
+                        {
+                            description: lang === 'zh'
+                                ? '重新生成商店的卡牌、天赋与附魔书。'
+                                : 'Regenerate shop cards, talents, and enchantment books.',
+                            disabled: Number(player.gold || 0) < Number(room.refresh_price || 0),
+                        },
+                    )),
+                },
                 {
                     id: 'shop-cards',
                     label: t.shopCards,
@@ -12307,8 +12333,9 @@
                     },
                 },
             ].filter((definition) => (
-                definition.id !== 'shop-remove'
-                || (room.options || []).includes('remove_card')
+                definition.id === 'shop-refresh'
+                    ? (room.options || []).includes('refresh')
+                    : (definition.id !== 'shop-remove' || (room.options || []).includes('remove_card'))
             )));
             footer?.append(storyRoomFooterButton(
                 t.leave,

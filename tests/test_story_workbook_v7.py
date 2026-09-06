@@ -89,7 +89,9 @@ def test_statuses_follow_the_workbook_decay_phases():
     combat.update(persistent_at_turn_end)
     attack = _new_card(state, 'basic')
     skill = _new_card(state, 'rose')
-    combat['hand'] = [attack, skill]
+    # Blockade locks even-numbered hand slots, so the skill is placed in the
+    # first (odd) slot while the attack stays restricted by attack_blocked.
+    combat['hand'] = [skill, attack]
 
     assert _is_card_playable(state, attack) is False
     assert _is_card_playable(state, skill) is True

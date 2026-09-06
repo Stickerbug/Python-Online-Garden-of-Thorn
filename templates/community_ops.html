@@ -64,6 +64,25 @@
       </form>
     </section>
 
+    <section class="ops-panel ops-create-panel" aria-labelledby="chain-create-title">
+      <div class="ops-panel-head">
+        <div>
+          <p class="ops-kicker">Chain</p>
+          <h2 id="chain-create-title">创建接龙</h2>
+        </div>
+      </div>
+      <form id="chain-create-form" class="ops-form">
+        <label class="is-wide">标题<input id="chain-title" type="text" maxlength="120" required></label>
+        <label class="is-wide">接龙说明与规则<textarea id="chain-description" rows="5" maxlength="4000" required></textarea></label>
+        <label>开始时间<input id="chain-start" type="datetime-local"></label>
+        <label>结束时间（可选）<input id="chain-end" type="datetime-local"></label>
+        <div class="ops-checks">
+          <label><input id="chain-publish" type="checkbox"> 创建后发布</label>
+        </div>
+        <button class="ops-button" type="submit">创建接龙</button>
+      </form>
+    </section>
+
     <section class="ops-panel ops-span" aria-labelledby="announcement-list-title">
       <div class="ops-panel-head">
         <div><p class="ops-kicker">Live & Draft</p><h2 id="announcement-list-title">公告</h2></div>
@@ -78,6 +97,14 @@
         <span id="poll-count" class="ops-count">0</span>
       </div>
       <div id="poll-list" class="ops-list"></div>
+    </section>
+
+    <section class="ops-panel ops-span" aria-labelledby="chain-list-title">
+      <div class="ops-panel-head">
+        <div><p class="ops-kicker">Relay</p><h2 id="chain-list-title">接龙</h2></div>
+        <span id="chain-count" class="ops-count">0</span>
+      </div>
+      <div id="chain-list" class="ops-list"></div>
     </section>
 
     <section class="ops-panel ops-span" aria-labelledby="audit-list-title">

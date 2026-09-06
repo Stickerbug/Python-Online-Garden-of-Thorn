@@ -220,16 +220,14 @@ def test_talent_pools_and_boss_choices_exclude_owned_relics():
     assert shop_pool
     assert not set(shop_pool) & set(owned)
 
-    # 天赋池耗尽时回退全池，叠加仍然可行。
+    # 普通天赋池耗尽后不再重复发放；等待中的奖励改为安慰。
     state['player']['relics'] = [
         relic_id for relic_id in STORY_RELICS
         if STORY_RELICS[relic_id].get('rarity') != 'special'
     ]
     fallback = story_engine._natural_relic_pool(state, for_shop=True)
-    assert fallback
-    events = []
-    story_engine._gain_relic(state, fallback[0], 'relic-dedupe', events)
-    assert state['player']['relics'].count(fallback[0]) == 2
+    assert fallback == []
+    assert story_engine._random_relic(state, 'relic-dedupe') == 'consolation'
 
 
 def test_lunatic_stage_three_has_two_consecutive_boss_floors():
@@ -848,7 +846,7 @@ def test_normal_rewards_are_primary_but_shops_can_offer_neutral_cards():
     )
 
 
-def test_relic_pools_allow_owned_stackable_items_and_shop_excludes_rich():
+def test_relic_pools_exhaust_into_consolation_and_shop_excludes_rich():
     state = _started_state('relic-pool-rules')
     assert 'rich' not in story_engine._natural_relic_pool(state, for_shop=True)
     natural_ids = [
@@ -857,8 +855,8 @@ def test_relic_pools_allow_owned_stackable_items_and_shop_excludes_rich():
         if relic.get('rarity') != 'special'
     ]
     state['player']['relics'].extend(natural_ids)
-    assert story_engine._random_relic(state, 'relic-pool-rules') in natural_ids
-    assert _make_shop(state, 'relic-pool-rules')['relics'][0]['relic_id'] in natural_ids
+    assert story_engine._random_relic(state, 'relic-pool-rules') == 'consolation'
+    assert _make_shop(state, 'relic-pool-rules')['relics'][0]['relic_id'] == 'consolation'
 
     state['player']['relics'].extend(STORY_BOSS_RELIC_IDS)
     boss_choices = _boss_relic_choices(state, 'relic-pool-rules')
@@ -883,14 +881,18 @@ def test_elite_encounters_do_not_repeat_until_the_biome_pool_is_exhausted():
 
 def test_story_events_do_not_repeat_until_every_eligible_event_is_seen():
     state = _started_state('event-draw-bag', biome='garden')
-    event_ids = [
-        _make_story_event(state, f'event-draw-bag:{index}')['event_id']
-        for index in range(11)
-    ]
-    assert len(set(event_ids)) == 11
+    event_ids = []
+    for index in range(200):
+        event_id = _make_story_event(state, f'event-draw-bag:{index}')['event_id']
+        if event_id in event_ids:
+            repeated = event_id
+            break
+        event_ids.append(event_id)
+    else:
+        raise AssertionError('event pool never reset after exhaustion')
 
-    repeated = _make_story_event(state, 'event-draw-bag:reset')['event_id']
-    assert repeated in set(event_ids)
+    assert len(set(event_ids)) == len(event_ids) > 0
+    assert repeated in event_ids
     assert len(state['encounter_history']['event']) == 1
 
 
@@ -1242,7 +1244,7 @@ def test_stacked_opening_draw_and_support_effects_use_every_talent_copy():
         encounter_override=[{'def_id': 'soldier_ant'}],
     )
     assert len(support_state['combat']['hand']) == STORY_RULES['draw_per_turn'] - 2
-    assert support_state['combat']['shield'] == 6
+    assert support_state['combat']['shield'] == 10
 
 
 def test_stacked_bargaining_uses_multiplicative_prices_and_reprices_current_shop():

@@ -65,7 +65,10 @@ def _weighted_choice(rng, values):
 
 
 def story_floor_count(stage, difficulty):
-    return 17 if int(stage) == 3 and str(difficulty).lower() == 'lunatic' else STORY_FLOOR_COUNT
+    diff = str(difficulty).lower()
+    if int(stage) == 3 and diff == 'lunatic':
+        return 17
+    return STORY_FLOOR_COUNT
 
 
 def _floor_widths(rng, floor_count):

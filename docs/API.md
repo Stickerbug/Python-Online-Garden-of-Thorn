@@ -187,6 +187,7 @@ healing、事件效果、下一状态、回执、事件或 seed；这些值均�
 | POST | <code>/api/feedback/send</code> | 新建或回复反馈；<code>thread_id</code>、<code>category</code>、<code>title</code>、<code>text</code>、<code>replay_id</code> |
 | POST | <code>/api/feedback/status</code> | 更新自己有权处理的 <code>thread_id</code> 状态 |
 | GET | <code>/api/public-feedback/summary</code> | 公开反馈中心摘要：是否登录、是否 Staff、作者/Staff 未读数 |
+| GET | <code>/api/public-feedback/notifications</code> | 当前账号的未读通知（作者更新、关注更新、Staff 待处理请求） |
 | GET | <code>/api/public-feedback/issues</code> | 公开问题列表；<code>kind</code>、<code>status</code>、<code>q</code>（标题/正文搜索）、<code>sort</code>、<code>page</code>、<code>per_page</code>；Staff 可带 <code>include_hidden</code> |
 | POST | <code>/api/public-feedback/issues</code> | 登录后发布漏洞/建议；<code>kind</code>、<code>title</code>、<code>body</code>、可选 <code>replay_id</code> |
 | GET | <code>/api/public-feedback/issues/&lt;issue_id&gt;</code> | 公开问题详情与状态历史；游客仅返回前 3 条评论 |
@@ -337,6 +338,9 @@ healing、事件效果、下一状态、回执、事件或 seed；这些值均�
 - <code>POST /api/community/ops/polls</code>
 - <code>POST /api/community/ops/polls/&lt;poll_id&gt;/action</code>
 - <code>POST /api/community/ops/changelog-drafts/&lt;draft_id&gt;/action</code>
+- <code>POST /api/community/chains/&lt;chain_id&gt;/join</code>：仅登录账号，带 <code>X-Community-CSRF</code>；为当前接龙追加一条内容，同一账号重复提交相同内容返回幂等结果。
+- <code>POST /api/community/ops/chains</code>：仅 Staff/Admin；创建接龙，支持 <code>title</code>、<code>description</code>、带时区的 <code>starts_at</code>/<code>ends_at</code> 与 <code>publish</code>。
+- <code>POST /api/community/ops/chains/&lt;chain_id&gt;/action</code>：仅 Staff/Admin；对接龙执行发布、修改、关闭等操作。
 
 所有运营写接口要求 <code>X-Community-Ops-CSRF</code>，并再次在服务端检查 Staff/Admin 身份和独立限流。时间字段必须是包含时区的 ISO 8601；更新日志同步只生成数据库草稿，运行时不会写仓库文件。
 

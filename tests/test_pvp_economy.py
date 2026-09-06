@@ -96,6 +96,26 @@ def test_early_surrender_no_rewards_and_breaks_loser_streak(accounts):
     assert profile(2)['win_streak']==0
 
 
+def test_phelren_ai_match_never_awards_or_mutates_win_streak(accounts):
+    award()
+    assert profile(1)['win_streak'] == 1
+    before = balances()
+
+    _, data = game()
+    data.update({
+        'ai_match': True,
+        'match_kind': 'phelren',
+        'valid_for_stats': False,
+        'valid_for_ranking': False,
+        'ranking_invalid_reason': 'phelren_ai_match',
+    })
+    result = economy.award_match(data.get('match_id') or 999999, data, award_time=data['ended_at'])
+
+    assert result == {'awarded': [], 'skipped': 'phelren_ai_match'}
+    assert balances() == before
+    assert profile(1)['win_streak'] == 1
+
+
 @pytest.mark.parametrize('value,amount',[(60,164),(59,82),(40,82),(39,0)])
 def test_reputation_applies_after_all_bonuses(accounts,value,amount):
     integrity.change_reputation(1,value-85,'test','set',now=NOW)

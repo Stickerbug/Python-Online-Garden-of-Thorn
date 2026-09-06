@@ -178,6 +178,62 @@ class SpectatorPresenceTests(unittest.TestCase):
                 app.rooms.pop(old_room_id, None)
                 app.rooms.pop(new_room_id, None)
 
+    def test_phelren_string_room_id_can_be_spectated(self):
+        client = app.socketio.test_client(app.app)
+        room_id = f'phelren:spectate-{id(self) % 100000}'
+        room = SimpleNamespace(
+            room_id=room_id,
+            match_seq=1,
+            created_at=1,
+            mode='1v1',
+            beta_mode=False,
+            ai_match=True,
+            ai_owner_sid='phelren-owner',
+            player_sids=[],
+            spectators=[],
+            engine=SimpleNamespace(phase='action', player_names=[]),
+        )
+        sid = None
+        try:
+            room_map = app.socketio.server.manager.rooms['/'][None]
+            sid = next(
+                key for key, value in room_map.items()
+                if value == client.eio_sid
+            )
+            with app._lock:
+                app.players[sid] = {
+                    'nickname': f'PhelrenSpec{id(self) % 100000}',
+                    'status': 'lobby',
+                    'room_id': None,
+                    'user_id': 1,
+                    'beta_mode': False,
+                    'spectating_room': None,
+                    'spectate_perspective': 0,
+                }
+                app.rooms[room_id] = room
+
+            with (
+                patch.object(app, '_send_spectate_state_internal'),
+                patch.object(app, 'broadcast_game_state') as broadcast_state,
+                patch.object(app, 'broadcast_lobby') as broadcast_lobby,
+            ):
+                client.emit('spectate', {'room_id': room_id})
+
+            received_names = [event['name'] for event in client.get_received()]
+            self.assertIn('spectate_enter', received_names)
+            self.assertNotIn('server_error', received_names)
+            self.assertIn(sid, room.spectators)
+            self.assertEqual(app.players[sid]['spectating_room'], room_id)
+            broadcast_state.assert_any_call(room)
+            broadcast_lobby.assert_called_once()
+        finally:
+            if client.is_connected():
+                client.disconnect()
+            with app._lock:
+                if sid is not None:
+                    app.players.pop(sid, None)
+                app.rooms.pop(room_id, None)
+
     def test_spectators_share_the_automatic_afk_activity_timer(self):
         spectator_sid = f'spectator-afk-{id(self)}'
         game_sid = f'player-afk-{id(self)}'

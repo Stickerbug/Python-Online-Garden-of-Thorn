@@ -129,6 +129,41 @@
     });
   }
 
+  function renderChains() {
+    const list = byId('chain-list');
+    const items = Array.isArray(state.workspace?.chains) ? state.workspace.chains : [];
+    byId('chain-count').textContent = String(items.length);
+    if (!items.length) return emptyList(list, '尚无接龙。');
+    list.textContent = '';
+    items.forEach((item) => {
+      const card = element('article', 'ops-item');
+      const head = element('div', 'ops-item-head');
+      head.appendChild(element('h3', 'ops-item-title', `#${item.id} ${item.title || ''}`));
+      head.appendChild(element('span', 'ops-item-state', item.effective_state || item.state));
+      card.appendChild(head);
+      card.appendChild(element('p', 'ops-item-body', item.description || ''));
+      const entries = element('ol', 'ops-option-list');
+      (Array.isArray(item.entries) ? item.entries : []).slice(0, 10).forEach((entry) => {
+        entries.appendChild(element(
+          'li',
+          '',
+          `${entry.nickname || '已注销玩家'}：${entry.content || ''}`,
+        ));
+      });
+      if (Number(item.entry_count || 0) > (Array.isArray(item.entries) ? item.entries.length : 0)) {
+        entries.appendChild(element('li', '', `……共 ${item.entry_count} 条`));
+      }
+      card.appendChild(entries);
+      card.appendChild(element('div', 'ops-item-meta', `开始 ${formatTime(item.starts_at)} · 结束 ${item.ends_at ? formatTime(item.ends_at) : '长期'} · 共 ${Number(item.entry_count || 0)}条`));
+      const actions = element('div', 'ops-item-actions');
+      if (item.state === 'draft') actions.appendChild(actionButton('发布', 'chain', item.id, 'publish'));
+      if (item.state === 'published' && item.effective_state !== 'closed') actions.appendChild(actionButton('立即结束', 'chain', item.id, 'close', true));
+      if (!['closed', 'retracted'].includes(item.state)) actions.appendChild(actionButton('撤回', 'chain', item.id, 'retract', true));
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+
   function renderAudit() {
     const list = byId('audit-list');
     const items = Array.isArray(state.workspace?.audit) ? state.workspace.audit : [];
@@ -148,6 +183,7 @@
   function renderWorkspace() {
     renderAnnouncements();
     renderPolls();
+    renderChains();
     renderAudit();
     document.querySelectorAll('form input, form textarea, form button').forEach((node) => {
       node.disabled = state.loading || state.mutating;
@@ -205,6 +241,8 @@
       mutate(`/api/community/ops/announcements/${encodeURIComponent(id)}/action`, { action }, `公告 #${id} 已更新。`);
     } else if (type === 'poll') {
       mutate(`/api/community/ops/polls/${encodeURIComponent(id)}/action`, { action }, `投票 #${id} 已更新。`);
+    } else if (type === 'chain') {
+      mutate(`/api/community/ops/chains/${encodeURIComponent(id)}/action`, { action }, `接龙 #${id} 已更新。`);
     }
   }
 
@@ -212,6 +250,7 @@
     byId('ops-refresh')?.addEventListener('click', () => loadWorkspace());
     byId('announcement-list')?.addEventListener('click', handleListAction);
     byId('poll-list')?.addEventListener('click', handleListAction);
+    byId('chain-list')?.addEventListener('click', handleListAction);
 
     byId('announcement-create-form')?.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -257,6 +296,28 @@
         publish: byId('poll-publish').checked,
       }, '投票已创建。').then(() => {
         if (!state.mutating && !byId('ops-status').classList.contains('is-error')) byId('poll-create-form').reset();
+      });
+    });
+
+    byId('chain-create-form')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      let startsAt;
+      let endsAt;
+      try {
+        startsAt = localDateToIso(byId('chain-start').value);
+        endsAt = localDateToIso(byId('chain-end').value);
+      } catch (error) {
+        setStatus(error.message, 'error');
+        return;
+      }
+      mutate('/api/community/ops/chains', {
+        title: byId('chain-title').value,
+        description: byId('chain-description').value,
+        starts_at: startsAt,
+        ends_at: endsAt,
+        publish: byId('chain-publish').checked,
+      }, '接龙已创建。').then(() => {
+        if (!state.mutating && !byId('ops-status').classList.contains('is-error')) byId('chain-create-form').reset();
       });
     });
 

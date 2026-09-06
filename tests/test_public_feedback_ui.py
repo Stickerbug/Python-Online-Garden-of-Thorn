@@ -21,6 +21,7 @@ def test_standalone_page_has_all_surfaces_and_account_bar():
         '<title>反馈中心 · 荆棘花园</title>',
         'class="fc-topbar"',
         'id="fc-account"',
+        'id="fc-account-popover"',
         'id="fc-tab-bug"',
         'id="fc-tab-suggestion"',
         'id="fc-status-filter"',
@@ -54,4 +55,6 @@ def test_standalone_client_uses_all_core_endpoints():
     assert 'data-open-issue' in JS
     assert 'data-action' in JS
     assert 'fc-skin-avatar' in JS
+    assert 'toggleAccountPopover' in JS
+    assert "loadNotifications" in JS
     assert '.fc-skin-avatar' in CSS

@@ -207,19 +207,30 @@ const localStorage = Object.freeze({
         if (gtnStorageMemory.has(mapped)) return gtnStorageMemory.get(mapped);
         const cookieValue = readStorageFallbackCookie(mapped);
         if (cookieValue != null) return cookieValue;
-        if (gtnPersistentStorage) {
-            try {
-                const stored = gtnPersistentStorage.getItem(mapped);
-                if (stored != null) return stored;
-            } catch (_) {}
-        }
-        if (gtnSessionStorage) {
+        // Solo decks mirror into session storage so a failed persistent write
+        // (common on phones with a full or restricted localStorage) cannot make
+        // a reload resurrect an older saved deck.
+        const sessionPreferred = normalizeStorageFallbackKey(mapped) === 'gtn_solo_decks';
+        const sessionRead = () => {
+            if (!gtnSessionStorage) return null;
             try {
                 const stored = gtnSessionStorage.getItem(mapped);
                 if (stored != null) return stored;
             } catch (_) {}
+            return null;
+        };
+        const persistentRead = () => {
+            if (!gtnPersistentStorage) return null;
+            try {
+                const stored = gtnPersistentStorage.getItem(mapped);
+                if (stored != null) return stored;
+            } catch (_) {}
+            return null;
+        };
+        if (sessionPreferred) {
+            return sessionRead() ?? persistentRead() ?? readStorageFallbackCookie(mapped);
         }
-        return readStorageFallbackCookie(mapped);
+        return persistentRead() ?? sessionRead() ?? readStorageFallbackCookie(mapped);
     },
     setItem(key, value) {
         const mapped = String(gtnBetaStorageKey(key));
@@ -9423,6 +9434,15 @@ function clearPendingServerAction(options = {}) {
     document.body.classList.remove('server-action-pending');
 }
 
+function discardMismatchedOptimisticState(data) {
+    if (!optimisticResourceOverride) return;
+    const statePlayerId = normalizePlayerId(data && data.your_id);
+    if (statePlayerId == null || normalizePlayerId(optimisticResourceOverride.playerId) !== statePlayerId) {
+        optimisticResourceOverride = null;
+        pendingOptimisticResourceCosts = [];
+    }
+}
+
 function beginPendingServerAction(name, options = {}) {
     clearPendingServerAction();
     pendingServerAction = {
@@ -16351,6 +16371,7 @@ function connectSocket(serverUrl) {
                 pendingPlayCard = null;
             }
         }
+        discardMismatchedOptimisticState(data);
         const keepOptimisticForState = !!optimisticResourceOverride;
         clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
         if (phase === 'game_over') {
@@ -16418,6 +16439,7 @@ function connectSocket(serverUrl) {
             invalidateChoiceRequest();
         }
         schedulePendingChoiceRecoveryFromState(data);
+        discardMismatchedOptimisticState(data);
         const keepOptimisticForState = !!optimisticResourceOverride;
         clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
         if (phase === 'game_over') {
@@ -23235,6 +23257,7 @@ function handleLocalSoloState(data) {
         invalidateChoiceRequest();
     }
     schedulePendingChoiceRecoveryFromState(data);
+    discardMismatchedOptimisticState(data);
     const keepOptimisticForState = !!optimisticResourceOverride;
     clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
     if (phase === 'game_over') {
@@ -32753,7 +32776,7 @@ function updateLobbyMentionMenu() {
     const query = String(range.query || '').toLowerCase();
     lobbyMentionCandidates = getLobbyMentionCandidates()
         .filter(item => !query || String(item.nickname).toLowerCase().includes(query) || String(item.player_id).toLowerCase().includes(query))
-        .slice(0, 8);
+        .slice(0, 50);
     if (!lobbyMentionCandidates.length) {
         menu.classList.add('hidden');
         return;

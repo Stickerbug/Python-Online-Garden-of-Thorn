@@ -393,3 +393,15 @@ def test_not_fixed_request_requires_staff_reopen(accounts):
     assert detail['status'] == 'confirmed'
     with pytest.raises(feedback.PublicFeedbackError, match='已经处理'):
         feedback.review_public_reopen_request(10, request['id'], 'accept')
+
+
+def test_notifications_cover_watched_status_updates(accounts):
+    issue = create_issue()
+    feedback.toggle_public_watch(2, issue['id'])
+    feedback._utc_now = lambda: NOW + timedelta(minutes=1)
+    feedback.set_public_issue_status(10, issue['id'], 'confirmed', reason='已复现')
+    notifications = feedback.public_feedback_notifications(2)
+    watched = [item for item in notifications['items'] if item['type'] == 'watched']
+    assert any(item['issue']['id'] == issue['id'] for item in watched)
+    feedback.mark_public_feedback_read(2, issue['id'])
+    assert feedback.public_feedback_watcher_unread_count(2) == 0

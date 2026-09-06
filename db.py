@@ -68,7 +68,7 @@ GR_RANKED_ERA = 'R1'
 REPUTATION_INITIAL = 85
 REPUTATION_MAX = 100
 REPUTATION_TIMEZONE = timezone(timedelta(hours=8))
-ACCOUNT_LINK_RULE_VERSION = '1'
+ACCOUNT_LINK_RULE_VERSION = '2'
 ACCOUNT_LINK_SHARED_NETWORK_USERS = 8
 THORN_DEW_TIMEZONE = timezone(timedelta(hours=8))
 THORN_DEW_SIGNIN_REWARDS = (40, 45, 50, 55, 60, 70, 100)
@@ -1704,6 +1704,23 @@ def init_db(
         conn.execute('CREATE INDEX IF NOT EXISTS idx_account_identity_user_created ON account_identity_events(user_id, created_at)')
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS account_login_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                device_hash TEXT NOT NULL DEFAULT '',
+                network_hash TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL,
+                overlap_user_ids_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_login_events_user_created ON account_login_events(user_id, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_login_events_device_created ON account_login_events(device_hash, created_at)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_account_login_events_network_created ON account_login_events(network_hash, created_at)')
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS account_link_groups (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 status TEXT NOT NULL DEFAULT 'confirmed'
@@ -2432,6 +2449,16 @@ def init_db(
         )
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS story_bank_accounts (
+                user_id INTEGER PRIMARY KEY,
+                deposit INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS story_discoveries (
                 user_id INTEGER NOT NULL,
                 content_type TEXT NOT NULL,
@@ -2666,6 +2693,65 @@ def init_db(
                 FOREIGN KEY(announcement_id)
                     REFERENCES community_announcements(id) ON DELETE CASCADE,
                 FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS community_chains (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
+                description TEXT NOT NULL
+                    CHECK(length(description) BETWEEN 1 AND 4000),
+                state TEXT NOT NULL DEFAULT 'draft'
+                    CHECK(state IN ('draft', 'published', 'closed', 'retracted')),
+                starts_at TEXT NOT NULL,
+                ends_at TEXT,
+                created_by INTEGER,
+                updated_by INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                published_at TEXT,
+                closed_at TEXT,
+                retracted_at TEXT,
+                FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY(updated_by) REFERENCES users(id) ON DELETE SET NULL,
+                CHECK(ends_at IS NULL OR ends_at > starts_at)
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_community_chains_feed '
+            'ON community_chains(state, starts_at DESC)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS community_chain_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chain_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 500),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(chain_id, user_id),
+                FOREIGN KEY(chain_id) REFERENCES community_chains(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_community_chain_entries_chain '
+            'ON community_chain_entries(chain_id, id ASC)'
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS community_chain_reads (
+                user_id INTEGER NOT NULL,
+                chain_id INTEGER NOT NULL,
+                read_at TEXT NOT NULL,
+                PRIMARY KEY(user_id, chain_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(chain_id) REFERENCES community_chains(id) ON DELETE CASCADE
             )
             '''
         )
@@ -4544,6 +4630,47 @@ def commit_story_run_action(
             'SELECT * FROM story_runs WHERE id = ?', (run_id,),
         ).fetchone()
     return _story_run_payload(updated), 'committed'
+
+
+def get_story_bank(user_id):
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return 0
+    with get_db_connection() as conn:
+        row = conn.execute(
+            '''
+            SELECT deposit FROM story_bank_accounts
+            WHERE user_id = ?
+            ''',
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return 0
+    try:
+        return max(0, int(row['deposit'] or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_story_bank(user_id, deposit):
+    try:
+        user_id = int(user_id)
+        deposit = max(0, int(deposit or 0))
+    except (TypeError, ValueError):
+        return 0
+    with get_db_connection() as conn:
+        conn.execute(
+            '''
+            INSERT INTO story_bank_accounts (user_id, deposit, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                deposit = excluded.deposit,
+                updated_at = excluded.updated_at
+            ''',
+            (user_id, deposit, utc_now()),
+        )
+    return deposit
 
 
 def create_story_run(user_id, seed, content_version, state):

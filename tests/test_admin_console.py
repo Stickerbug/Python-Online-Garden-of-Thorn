@@ -396,5 +396,44 @@ class ReputationConsoleCommandTests(unittest.TestCase):
         self.assertIn('每日信誉恢复已执行', confirmed['output'])
 
 
+class ConsoleBroadcastCommandTests(unittest.TestCase):
+    def run_command(self, line):
+        return app.execute_admin_command(line, actor='test-console')
+
+    def test_lobby_broadcast_does_not_leak_shell_quoting(self):
+        with (
+            mock.patch.object(app, 'send_system_broadcast') as send,
+            mock.patch.object(app, 'admin_event'),
+        ):
+            result = self.run_command('lobby broadcast notice(test)!')
+
+        self.assertTrue(result['success'], result['output'])
+        self.assertEqual(send.call_args[0][0], 'notice(test)!')
+
+    def test_lobby_broadcast_unquotes_typed_single_quoted_phrase(self):
+        with (
+            mock.patch.object(app, 'send_system_broadcast') as send,
+            mock.patch.object(app, 'admin_event'),
+        ):
+            result = self.run_command("lobby broadcast 'hello world'")
+
+        self.assertTrue(result['success'], result['output'])
+        self.assertEqual(send.call_args[0][0], 'hello world')
+
+    def test_game_message_does_not_leak_shell_quoting(self):
+        with (
+            mock.patch.object(
+                app,
+                'send_admin_game_chat_message',
+                return_value=({'sent': 0, 'text': 'ok'}, None),
+            ) as send,
+            mock.patch.object(app, 'admin_event'),
+        ):
+            result = self.run_command('game message notice(test)!')
+
+        self.assertTrue(result['success'], result['output'])
+        self.assertEqual(send.call_args[0][0], 'notice(test)!')
+
+
 if __name__ == '__main__':
     unittest.main()

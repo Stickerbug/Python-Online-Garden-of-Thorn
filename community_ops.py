@@ -196,6 +196,89 @@ def _poll_payload(conn, row, *, viewer_user_id=None, reveal_results=False, now=N
     return payload
 
 
+def _effective_chain_state(row, now):
+    state = str(row['state'] if isinstance(row, sqlite3.Row) else row.get('state') or '')
+    if state in {'draft', 'retracted', 'closed'}:
+        return state
+    starts_at = _parse_timestamp(row['starts_at'], label='开始时间')
+    if now < starts_at:
+        return 'scheduled'
+    ends_at = row['ends_at']
+    if ends_at and now >= _parse_timestamp(ends_at, label='结束时间'):
+        return 'closed'
+    return 'active'
+
+
+def _chain_entry_payload(row):
+    username = str(row['username'] or '').strip()
+    nickname = username or '已注销玩家'
+    payload = {
+        'id': int(row['id']),
+        'content': str(row['content']),
+        'nickname': nickname,
+        'player_id': row['player_id'],
+        'created_at': str(row['created_at']),
+        'updated_at': str(row['updated_at']),
+    }
+    if not username:
+        payload['deleted_user'] = True
+    return payload
+
+
+def _chain_payload(conn, row, *, viewer_user_id=None, now=None):
+    if row is None:
+        return None
+    now = now or _utc_now()
+    chain_id = int(row['id'])
+    effective_state = _effective_chain_state(row, now)
+    entry_rows = conn.execute(
+        '''
+        SELECT e.id, e.content, e.created_at, e.updated_at,
+               u.username, u.player_id
+        FROM community_chain_entries e
+        LEFT JOIN users u ON u.id = e.user_id
+        WHERE e.chain_id = ?
+        ORDER BY e.id ASC
+        LIMIT 200
+        ''',
+        (chain_id,),
+    ).fetchall()
+    entries = [_chain_entry_payload(row) for row in entry_rows]
+    count_row = conn.execute(
+        'SELECT COUNT(*) AS count FROM community_chain_entries WHERE chain_id = ?',
+        (chain_id,),
+    ).fetchone()
+    entry_count = int(count_row['count'] or 0)
+    my_entry = None
+    if viewer_user_id:
+        own = conn.execute(
+            'SELECT content FROM community_chain_entries '
+            'WHERE chain_id = ? AND user_id = ?',
+            (chain_id, int(viewer_user_id)),
+        ).fetchone()
+        if own is not None:
+            my_entry = str(own['content'])
+    ends_at = row['ends_at']
+    return {
+        'id': chain_id,
+        'title': str(row['title']),
+        'description': str(row['description']),
+        'state': str(row['state']),
+        'effective_state': effective_state,
+        'starts_at': str(row['starts_at']),
+        'ends_at': ends_at,
+        'entry_count': entry_count,
+        'entries': entries,
+        'my_entry': my_entry,
+        'can_join': bool(viewer_user_id and effective_state == 'active'),
+        'created_at': str(row['created_at']),
+        'updated_at': str(row['updated_at']),
+        'published_at': row['published_at'],
+        'closed_at': row['closed_at'],
+        'retracted_at': row['retracted_at'],
+    }
+
+
 def get_community_feed(viewer_user_id=None, *, can_manage=False):
     now = _utc_now()
     now_iso = _iso(now)
@@ -203,6 +286,7 @@ def get_community_feed(viewer_user_id=None, *, can_manage=False):
     read_state = {
         'announcements': set(),
         'polls': set(),
+        'chains': set(),
     }
     with closing(db.get_db_connection()) as conn:
         announcements = conn.execute(
@@ -229,9 +313,27 @@ def get_community_feed(viewer_user_id=None, *, can_manage=False):
             ''',
             (now_iso, now_iso, now_iso, closed_cutoff),
         ).fetchall()
+        chains = conn.execute(
+            '''
+            SELECT * FROM community_chains
+            WHERE (
+                state = 'published' AND starts_at <= ?
+                AND (ends_at IS NULL OR ends_at > ?)
+            ) OR (
+                state = 'closed' AND closed_at IS NOT NULL AND closed_at >= ?
+            )
+            ORDER BY starts_at DESC, id DESC
+            LIMIT 20
+            ''',
+            (now_iso, now_iso, closed_cutoff),
+        ).fetchall()
         poll_payloads = [
             _poll_payload(conn, row, viewer_user_id=viewer_user_id, now=now)
             for row in polls
+        ]
+        chain_payloads = [
+            _chain_payload(conn, row, viewer_user_id=viewer_user_id, now=now)
+            for row in chains
         ]
         if viewer_user_id:
             rows = conn.execute(
@@ -248,9 +350,17 @@ def get_community_feed(viewer_user_id=None, *, can_manage=False):
                 }.get(content_type)
                 if target_key in read_state:
                     read_state[target_key].add(int(row['content_id']))
+            chain_read_rows = conn.execute(
+                'SELECT chain_id FROM community_chain_reads WHERE user_id = ?',
+                (int(viewer_user_id),),
+            ).fetchall()
+            read_state['chains'].update(
+                int(row['chain_id']) for row in chain_read_rows
+            )
     return {
         'announcements': [_announcement_payload(row) for row in announcements],
         'polls': poll_payloads,
+        'chains': chain_payloads,
         'viewer': {
             'authenticated': bool(viewer_user_id),
             'can_vote': bool(viewer_user_id),
@@ -258,6 +368,7 @@ def get_community_feed(viewer_user_id=None, *, can_manage=False):
             'read': {
                 'announcements': sorted(read_state['announcements']),
                 'polls': sorted(read_state['polls']),
+                'chains': sorted(read_state['chains']),
             },
         },
         'server_time': now_iso,
@@ -300,6 +411,20 @@ def mark_community_feed_read(user_id):
             )
             ''',
             (user_id, now_iso, now_iso, now_iso, now_iso, closed_cutoff),
+        )
+        conn.execute(
+            '''
+            INSERT OR IGNORE INTO community_chain_reads(user_id, chain_id, read_at)
+            SELECT ?, id, ?
+            FROM community_chains
+            WHERE (
+                state = 'published' AND starts_at <= ?
+                AND (ends_at IS NULL OR ends_at > ?)
+            ) OR (
+                state = 'closed' AND closed_at IS NOT NULL AND closed_at >= ?
+            )
+            ''',
+            (user_id, now_iso, now_iso, now_iso, closed_cutoff),
         )
         conn.commit()
     return get_community_feed(user_id)
@@ -697,6 +822,220 @@ def cast_community_poll_vote(user_id, poll_id, option_id):
         return result, duplicate
 
 
+def create_community_chain(
+    actor,
+    *,
+    title,
+    description,
+    starts_at=None,
+    ends_at=None,
+    publish=False,
+):
+    title = _bounded_text(title, label='接龙标题', maximum=120)
+    description = _bounded_text(description, label='接龙说明', maximum=4000)
+    now = _utc_now()
+    start = _parse_timestamp(starts_at, label='开始时间', default=now)
+    end = _parse_timestamp(ends_at, label='结束时间', required=False)
+    if end is not None and end <= start:
+        raise CommunityOpsError('INVALID_SCHEDULE', '结束时间必须晚于开始时间')
+    actor_user_id, _, _ = _actor_fields(actor)
+    state = 'published' if publish else 'draft'
+    now_iso = _iso(now)
+    with closing(db.get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        cursor = conn.execute(
+            '''
+            INSERT INTO community_chains(
+                title, description, state, starts_at, ends_at,
+                created_by, updated_by, created_at, updated_at, published_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                title,
+                description,
+                state,
+                _iso(start),
+                _iso(end) if end else None,
+                actor_user_id,
+                actor_user_id,
+                now_iso,
+                now_iso,
+                now_iso if publish else None,
+            ),
+        )
+        chain_id = int(cursor.lastrowid)
+        _insert_audit(
+            conn,
+            actor,
+            'chain_create',
+            'chain',
+            chain_id,
+            {
+                'state': state,
+                'starts_at': _iso(start),
+                'ends_at': _iso(end) if end else None,
+            },
+            now=now,
+        )
+        row = conn.execute(
+            'SELECT * FROM community_chains WHERE id = ?',
+            (chain_id,),
+        ).fetchone()
+        result = _chain_payload(conn, row, now=now)
+        conn.commit()
+        return result
+
+
+def mutate_community_chain(actor, chain_id, action, *, starts_at=None, ends_at=None):
+    chain_id = _positive_id(chain_id, label='接龙编号')
+    action = str(action or '').strip().lower()
+    if action not in {'publish', 'schedule', 'close', 'retract'}:
+        raise CommunityOpsError('INVALID_ACTION', '接龙操作无效')
+    now = _utc_now()
+    now_iso = _iso(now)
+    actor_user_id, _, _ = _actor_fields(actor)
+    with closing(db.get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute(
+            'SELECT * FROM community_chains WHERE id = ?',
+            (chain_id,),
+        ).fetchone()
+        if row is None:
+            conn.rollback()
+            raise CommunityOpsError('CHAIN_NOT_FOUND', '接龙不存在', 404)
+        current_state = str(row['state'])
+        changed = True
+        detail = {'previous_state': current_state}
+        if action in {'publish', 'schedule'}:
+            if current_state in {'closed', 'retracted'}:
+                conn.rollback()
+                raise CommunityOpsError('INVALID_STATE', '已结束或撤回的接龙不能重新发布', 409)
+            if action == 'schedule' and not str(starts_at or '').strip():
+                conn.rollback()
+                raise CommunityOpsError('INVALID_SCHEDULE', '定时发布必须填写开始时间')
+            start = _parse_timestamp(
+                starts_at,
+                label='开始时间',
+                required=action == 'schedule',
+                default=_parse_timestamp(row['starts_at'], label='开始时间'),
+            )
+            end = _parse_timestamp(
+                ends_at if ends_at not in (None, '') else row['ends_at'],
+                label='结束时间',
+                required=False,
+            )
+            if end is not None and end <= start:
+                conn.rollback()
+                raise CommunityOpsError('INVALID_SCHEDULE', '结束时间必须晚于开始时间')
+            conn.execute(
+                '''
+                UPDATE community_chains
+                SET state = 'published', starts_at = ?, ends_at = ?, updated_by = ?,
+                    updated_at = ?, published_at = COALESCE(published_at, ?),
+                    closed_at = NULL, retracted_at = NULL
+                WHERE id = ?
+                ''',
+                (_iso(start), _iso(end) if end else None, actor_user_id, now_iso, now_iso, chain_id),
+            )
+            detail.update({
+                'state': 'published',
+                'starts_at': _iso(start),
+                'ends_at': _iso(end) if end else None,
+            })
+        elif action == 'close':
+            if current_state == 'retracted':
+                conn.rollback()
+                raise CommunityOpsError('INVALID_STATE', '已撤回接龙不能关闭', 409)
+            changed = current_state != 'closed'
+            conn.execute(
+                '''
+                UPDATE community_chains
+                SET state = 'closed', updated_by = ?, updated_at = ?, closed_at = ?
+                WHERE id = ?
+                ''',
+                (actor_user_id, now_iso, now_iso, chain_id),
+            )
+            detail['state'] = 'closed'
+        else:
+            changed = current_state != 'retracted'
+            conn.execute(
+                '''
+                UPDATE community_chains
+                SET state = 'retracted', updated_by = ?, updated_at = ?, retracted_at = ?
+                WHERE id = ?
+                ''',
+                (actor_user_id, now_iso, now_iso, chain_id),
+            )
+            detail['state'] = 'retracted'
+        if changed:
+            _insert_audit(
+                conn,
+                actor,
+                f'chain_{action}',
+                'chain',
+                chain_id,
+                detail,
+                now=now,
+            )
+        updated = conn.execute(
+            'SELECT * FROM community_chains WHERE id = ?',
+            (chain_id,),
+        ).fetchone()
+        result = _chain_payload(conn, updated, now=now)
+        conn.commit()
+        return result, not changed
+
+
+def join_community_chain(user_id, chain_id, content):
+    user_id = _positive_id(user_id, label='账号编号')
+    chain_id = _positive_id(chain_id, label='接龙编号')
+    content = _bounded_text(content, label='接龙内容', maximum=500)
+    now = _utc_now()
+    now_iso = _iso(now)
+    with closing(db.get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute(
+            'SELECT * FROM community_chains WHERE id = ?',
+            (chain_id,),
+        ).fetchone()
+        if row is None or str(row['state']) in {'draft', 'retracted'}:
+            conn.rollback()
+            raise CommunityOpsError('CHAIN_NOT_FOUND', '接龙不存在', 404)
+        if _effective_chain_state(row, now) != 'active':
+            conn.rollback()
+            raise CommunityOpsError('CHAIN_NOT_ACTIVE', '接龙尚未开始或已经结束', 409)
+        existing = conn.execute(
+            'SELECT id FROM community_chain_entries WHERE chain_id = ? AND user_id = ?',
+            (chain_id, user_id),
+        ).fetchone()
+        duplicate = existing is not None
+        if existing is None:
+            conn.execute(
+                '''
+                INSERT INTO community_chain_entries(
+                    chain_id, user_id, content, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ''',
+                (chain_id, user_id, content, now_iso, now_iso),
+            )
+        else:
+            conn.execute(
+                '''
+                UPDATE community_chain_entries
+                SET content = ?, updated_at = ?
+                WHERE chain_id = ? AND user_id = ?
+                ''',
+                (content, now_iso, chain_id, user_id),
+            )
+        updated = conn.execute(
+            'SELECT * FROM community_chains WHERE id = ?',
+            (chain_id,),
+        ).fetchone()
+        result = _chain_payload(conn, updated, viewer_user_id=user_id, now=now)
+        conn.commit()
+        return result, duplicate
+
+
 def list_community_ops_workspace(*, audit_limit=100):
     try:
         audit_limit = max(1, min(int(audit_limit), 300))
@@ -708,6 +1047,9 @@ def list_community_ops_workspace(*, audit_limit=100):
             'SELECT * FROM community_announcements ORDER BY id DESC LIMIT 100'
         ).fetchall()
         polls = conn.execute('SELECT * FROM community_polls ORDER BY id DESC LIMIT 100').fetchall()
+        chains = conn.execute(
+            'SELECT * FROM community_chains ORDER BY id DESC LIMIT 100'
+        ).fetchall()
         changelog = conn.execute(
             '''
             SELECT id, announcement_id, title, body, status, created_at, updated_at
@@ -724,6 +1066,10 @@ def list_community_ops_workspace(*, audit_limit=100):
             'polls': [
                 _poll_payload(conn, row, reveal_results=True, now=now)
                 for row in polls
+            ],
+            'chains': [
+                _chain_payload(conn, row, now=now)
+                for row in chains
             ],
             'changelog_drafts': [dict(row) for row in changelog],
             'audit': [

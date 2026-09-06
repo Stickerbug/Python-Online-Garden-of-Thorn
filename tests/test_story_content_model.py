@@ -89,7 +89,7 @@ def test_normalized_registry_covers_every_authoritative_catalog_entry():
     assert len(STORY_CHARACTER_TERMS) == 1
     assert len(STORY_CONTENT_REGISTRY.catalog('card')) == len(STORY_CARDS)
     assert len(STORY_CARDS) == 162
-    assert len(STORY_CONTENT_REGISTRY.catalog('relic')) == len(STORY_RELICS) == 50
+    assert len(STORY_CONTENT_REGISTRY.catalog('relic')) == len(STORY_RELICS) == 68
     assert len(STORY_CONTENT_REGISTRY.catalog('enemy')) == len(STORY_ENEMIES) == 76
     assert len(STORY_CONTENT_REGISTRY.catalog('encounter')) == sum(
         len(specs)
@@ -104,9 +104,9 @@ def test_normalized_registry_covers_every_authoritative_catalog_entry():
 
 
 def test_workbook_sources_use_the_frozen_file_hash_and_precise_rows():
-    assert STORY_WORKBOOK_FILE == 'Garden of Thorn 卡牌数据11.xlsx'
+    assert STORY_WORKBOOK_FILE == 'Garden of Thorn 卡牌数据12.xlsx'
     assert STORY_WORKBOOK_SHA256 == (
-        'D8EB0B4D1BDA96E1E3C5A0CAD8BC55A901FCF0E6010567B0E5F9FB24446C1B82'
+        'C79CF2633562ACCED7649C1B791E0779B31981A5FFDE47CDCA50A1AF461F618'
     )
     expected = {
         ('card', 'basic'): ('爬塔卡牌设计', 'A3:K3'),

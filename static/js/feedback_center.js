@@ -134,6 +134,9 @@
     authorUnread: 0,
     staffUnread: 0,
     watcherUnread: 0,
+    notifications: [],
+    notificationsLoaded: false,
+    accountOpen: false,
     reportContext: null,
   };
 
@@ -211,6 +214,112 @@
     return String(skin.primary_color || '#FFE763').trim();
   }
 
+  const FC_TITLE_COLORS = Object.freeze({
+    admin: '#C0392B', thorn: '#C0392B', bloom: '#1ABC9C',
+    root: '#8D6E63', guard: '#2980B9', curse: '#704B87',
+    infect: '#7E9638', health: '#2ECC71', elixir: '#F1C40F',
+    energy: '#F1C40F', magic: '#3498DB', damage: '#C0392B',
+    electric: '#4BA3FF', poison: '#8E44AD', fire: '#E67E22',
+    armor: '#95A5A6', precision: '#546E7A', banish: '#6C3483',
+    indestructible: '#D4AC0D', critical: '#D4AC0D', primary: '#7EEF6D',
+    common: '#7EEF6D', unusual: '#FFE65D', rare: '#4D52E3',
+    epic: '#861FDE', legendary: '#DE1F1F', mythic: '#1FDBDE',
+    ultra: '#FF2B75', super: '#2BFFA3', omega: '#F329D9',
+    eternal: '#EEEEEE', unique: '#555555', milestone: '#5AA469',
+    hidden: '#7257A8', neutral: '#7F8C8D', spectator: '#95A5A6',
+  });
+
+  function fcTitleColorCss(value) {
+    const raw = String(value || '').trim();
+    const key = raw.toLowerCase();
+    if (FC_TITLE_COLORS[key]) return FC_TITLE_COLORS[key];
+    if (/^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$/.test(raw)) return raw;
+    try {
+      if (window.CSS && window.CSS.supports && window.CSS.supports('color', raw)) return raw;
+    } catch (_) {}
+    return '';
+  }
+
+  function normalizeFcTitlePaint(paint, fallbackColor = 'neutral') {
+    if (!paint || typeof paint !== 'object') {
+      return { kind: 'solid', color: fcTitleColorCss(paint || fallbackColor) || fcTitleColorCss(fallbackColor) };
+    }
+    const kind = String(paint.kind || '').toLowerCase();
+    if (kind === 'solid') {
+      return { kind, color: fcTitleColorCss(paint.color) || fcTitleColorCss(fallbackColor) };
+    }
+    if (kind === 'gradient' || kind === 'rainbow') {
+      const colors = (Array.isArray(paint.colors) ? paint.colors : [])
+        .map(fcTitleColorCss).filter(Boolean).slice(0, 12);
+      if (colors.length < 2) return { kind: 'solid', color: fcTitleColorCss(fallbackColor) };
+      const numericAngle = Number(paint.angle);
+      const angle = Number.isFinite(numericAngle) ? ((numericAngle % 360) + 360) % 360 : 90;
+      return { kind, colors, angle };
+    }
+    if (kind === 'theme') {
+      return {
+        kind,
+        light: normalizeFcTitlePaint(paint.light, fallbackColor),
+        dark: normalizeFcTitlePaint(paint.dark, fallbackColor),
+      };
+    }
+    return { kind: 'solid', color: fcTitleColorCss(fallbackColor) };
+  }
+
+  function fcTitlePaintAttrs(rawPaint) {
+    const paint = normalizeFcTitlePaint(rawPaint);
+    if (paint.kind === 'gradient' || paint.kind === 'rainbow') {
+      return {
+        cls: 'title-paint-gradient',
+        style: `--title-paint-gradient:linear-gradient(${paint.angle}deg,${paint.colors.join(',')});`,
+      };
+    }
+    if (paint.kind === 'theme') {
+      return {
+        cls: 'title-paint-theme',
+        style: `--title-paint-light:${paint.light?.color || fcTitleColorCss('neutral')};` +
+          `--title-paint-dark:${paint.dark?.color || fcTitleColorCss('neutral')};`,
+      };
+    }
+    return { cls: 'title-paint-solid', style: `color:${paint.color || fcTitleColorCss('neutral')};` };
+  }
+
+  function fcTitleSegments(title = {}) {
+    const rawSegments = title?.style?.segments;
+    if (Array.isArray(rawSegments) && rawSegments.some((item) => item && item.text != null)) {
+      return rawSegments.slice(0, 24).map((item, index) => ({
+        id: String(item.id || `s${index + 1}`),
+        text: String(item.text || ''),
+        paint: normalizeFcTitlePaint(item.paint, title.color || 'neutral'),
+      }));
+    }
+    return [{
+      id: 'legacy',
+      text: String(title.name || ''),
+      paint: normalizeFcTitlePaint({ kind: 'solid', color: title.color || 'neutral' }),
+    }];
+  }
+
+  function fcTitlesHtml(identity = {}) {
+    return (Array.isArray(identity?.equipped_titles) ? identity.equipped_titles : [])
+      .filter((title) => title?.name)
+      .slice(0, 3)
+      .map((title) => fcTitleSegments(title).map((segment, index) => {
+        const attrs = fcTitlePaintAttrs(segment.paint);
+        const bracket = index === 0 ? '[' : '';
+        const close = index === fcTitleSegments(title).length - 1 ? ']' : '';
+        return `<span class="fc-title-segment ${attrs.cls}" style="${esc(attrs.style)}">${esc(bracket + segment.text + close)}</span>`;
+      }).join('')).join('');
+  }
+
+  function fcNameHtml(identity = {}) {
+    const name = String(identity?.display_name || identity?.username || '?');
+    const paint = identity?.name_style?.paint;
+    if (!paint) return esc(name);
+    const attrs = fcTitlePaintAttrs(paint);
+    return `<span class="fc-name-paint ${attrs.cls}" style="${esc(attrs.style)}">${esc(name)}</span>`;
+  }
+
   function normalizeSkinConfig(raw) {
     const data = (raw && typeof raw === 'object') ? raw : {};
     const color = String(data.primary_color || data.primaryColor || '#FFE763').trim();
@@ -251,7 +360,8 @@
     const border = deriveSkinBorderColor(main);
     const eyeShape = skin.eye_shape;
     return `<div class="fc-skin-avatar skin-eye-shape-${esc(eyeShape)}" style="` +
-      `--skin-main:${esc(main)};--skin-border:${esc(border)};--skin-look-x:0%;--skin-look-y:0%;">` +
+      `--skin-main:${esc(main)};--skin-border:${esc(border)};` +
+      `--skin-look-x:26.9%;--skin-look-y:-39.6%;">` +
       `<div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>` +
       `<div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>` +
       `<svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">` +
@@ -262,15 +372,24 @@
     if (!author) return '';
     const name = author.deleted
       ? `<span class="fc-deleted-user">${esc(t('deleted_player'))}</span>`
-      : esc(author.username || '?');
+      : `${fcTitlesHtml(author)}<span class="fc-user-name">${fcNameHtml(author)}</span>`;
     const cls = author.deleted ? 'fc-avatar-mini fc-avatar-deleted' : 'fc-avatar-mini';
     return `<span class="fc-user-line${author.deleted ? ' fc-deleted-user' : ''}">` +
       `<span class="${cls}">${skinAvatarHtml(author.skin)}</span>` +
-      `<span>${name}</span></span>`;
+      `<span class="fc-user-text">${name}</span></span>`;
+  }
+
+  function statusToken(status) {
+    return String(status || '').replace(/-/g, '_');
+  }
+
+  function statusAttr(status) {
+    const token = statusToken(status);
+    return token ? ` data-fc-status="${esc(token)}"` : '';
   }
 
   function statusChip(kind, status) {
-    const css = String(status || '').replace(/-/g, '_');
+    const css = statusToken(status);
     return `<span class="fc-status fc-status-${esc(css)}">${esc(statusLabel(kind, status))}</span>`;
   }
 
@@ -345,9 +464,62 @@
       ? Number(state.staffUnread || 0)
       : Number(state.authorUnread || 0) + Number(state.watcherUnread || 0);
     const badge = unread > 0 ? `<span class="fc-badge">${unread > 99 ? '99+' : unread}</span>` : '';
-    container.innerHTML = `<span class="fc-account-chip">` +
+    container.innerHTML = `<button type="button" class="fc-account-chip">` +
       `<span class="fc-account-avatar-host">${skinAvatarHtml(user.skin)}</span>` +
-      `<span class="fc-account-name">${esc(user.username || '')}${badge}</span></span>`;
+      `<span class="fc-account-name-wrap">${fcTitlesHtml(user)}<span class="fc-account-name">${fcNameHtml(user)}${badge}</span></span></button>`;
+  }
+
+  async function loadNotifications({ force = false } = {}) {
+    if (!state.account) return;
+    if (!force && state.notificationsLoaded) return;
+    try {
+      const data = await api('/api/public-feedback/notifications?limit=50');
+      state.notifications = Array.isArray(data.items) ? data.items : [];
+      state.notificationsLoaded = true;
+      renderAccount();
+      renderNotifications();
+    } catch (_) {}
+  }
+
+  function renderNotifications() {
+    const panel = $('fc-account-popover');
+    if (!panel) return;
+    if (!state.account) {
+      panel.classList.add('hidden');
+      return;
+    }
+    if (!Array.isArray(state.notifications) || !state.notifications.length) {
+      panel.innerHTML = `<div class="fc-account-popover-head">消息</div>` +
+        `<div class="fc-account-popover-empty">暂无新消息</div>` +
+        `<a class="fc-account-popover-link" href="/" target="_blank" rel="noopener">返回游戏主页</a>`;
+      return;
+    }
+    const items = state.notifications.map((item) => {
+      const typeText = item.type === 'staff'
+        ? '待处理请求'
+        : item.type === 'watched' ? '关注更新' : '你的反馈更新';
+      const reason = item.action === 'reopen_request'
+        ? esc(item.message || '')
+        : item.action === 'private'
+          ? esc(item.message || '')
+          : `${esc(item.from_status || '—')} → ${esc(item.to_status || '')}`;
+      return `<button type="button" class="fc-account-popover-item" data-open-issue="${Number(item.issue?.id || 0)}">` +
+        `<strong>${esc(item.issue?.key || '')}</strong>` +
+        `<span>${esc(item.issue?.title || '')}</span>` +
+        `<small>${esc(typeText)} · ${esc(reason || '')}</small></button>`;
+    }).join('');
+    panel.innerHTML = `<div class="fc-account-popover-head">消息</div><div class="fc-account-popover-list">${items}</div>` +
+      `<a class="fc-account-popover-link" href="/" target="_blank" rel="noopener">返回游戏主页</a>`;
+  }
+
+  function toggleAccountPopover(force) {
+    const panel = $('fc-account-popover');
+    if (!panel || !state.account) return;
+    const open = force === undefined ? !state.accountOpen : !!force;
+    state.accountOpen = open;
+    panel.classList.toggle('hidden', !open);
+    if (open) loadNotifications({ force: true });
+    else panel.classList.add('hidden');
   }
 
   async function loadIssues({ reset = false } = {}) {
@@ -386,8 +558,9 @@
         ? `<img class="fc-row-icon" src="/static/assets/icons/bug.svg" alt="Bug 图标">`
         : `<span class="fc-row-icon fc-row-icon-suggestion" aria-hidden="true">✦</span>`;
       return `<a class="fc-issue-row${selected}" href="${esc(canonicalIssuePath(issue))}" data-open-issue="${issue.id}">` +
-        `<span class="fc-issue-top">${icon}<span class="fc-issue-key">${esc(issue.key || `#${issue.id}`)}</span></span>` +
-        `<span class="fc-issue-summary">${esc(issue.title)}</span></a>`;
+        `<span class="fc-issue-top">${icon}<span class="fc-issue-key"${statusAttr(issue.status)}>${esc(issue.key || `#${issue.id}`)}</span></span>` +
+        `<span class="fc-issue-summary">${esc(issue.title)}</span>` +
+        `<span class="fc-issue-status-line">${statusChip(issue.kind, issue.status)}</span></a>`;
     }).join('');
   }
 
@@ -636,7 +809,7 @@
           const relationText = { related: '相关', duplicates: '重复', fix_caused: '由修复引起' }[item.relation] || item.relation;
           const unlink = detail.is_staff
             ? `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="admin-unlink" data-link="${item.link_id}">移除关联</button>` : '';
-          return `<div class="fc-related-item"><a href="${esc(canonicalIssuePath(item.issue))}" data-open-issue="${item.issue.id}">${esc(item.issue.key)}</a>` +
+          return `<div class="fc-related-item"><a href="${esc(canonicalIssuePath(item.issue))}" data-open-issue="${item.issue.id}"${statusAttr(item.issue.status)}>${esc(item.issue.key)}</a>` +
             `<span class="fc-muted">${esc(item.issue.title)}</span><span class="fc-tag">${esc(relationText)}</span>${unlink}</div>`;
         }).join('')}</div>`
       : '<span class="fc-muted">—</span>';
@@ -667,7 +840,7 @@
     container.innerHTML = `<div class="fc-detail-nav"><button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="back">← ${esc(t('back_list'))}</button>` +
       `<a href="/" target="_blank" rel="noopener">${esc(t('back_game'))}</a></div>` +
       `<div class="fc-detail-head"><div class="fc-detail-title-wrap">` +
-      `<div class="fc-detail-key">${esc(detail.key)} · ${state.kind === 'suggestion' ? '建议' : '漏洞'}</div>` +
+      `<div class="fc-detail-key"><span class="fc-detail-key-value"${statusAttr(detail.status)}>${esc(detail.key)}</span> · ${state.kind === 'suggestion' ? '建议' : '漏洞'}</div>` +
       `<h2>${esc(detail.title)}</h2></div>` +
       `<div class="fc-detail-side">${statusChip(detail.kind, detail.status)}` +
       `${canReport ? `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="report-issue">${esc(t('report'))}</button>` : ''}</div></div>` +
@@ -951,6 +1124,15 @@
 
   function bindEvents() {
     let searchTimer = null;
+    $('fc-account').addEventListener('click', (event) => {
+      if (event.target.closest('.fc-account-chip')) {
+        event.stopPropagation();
+        toggleAccountPopover();
+      }
+    });
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.fc-top-actions')) toggleAccountPopover(false);
+    });
     $('fc-tab-bug').addEventListener('click', () => {
       navigateKind('bug');
     });
@@ -1000,6 +1182,7 @@
       const issueId = Number(event.target.closest('[data-open-issue]')?.dataset.openIssue || 0);
       if (issueId > 0) {
         event.preventDefault();
+        toggleAccountPopover(false);
         openIssue(issueId);
         return;
       }
@@ -1068,6 +1251,7 @@
   document.addEventListener('DOMContentLoaded', async () => {
     bindEvents();
     await loadAccount();
+    await loadNotifications();
     await applyLocationRoute();
     window.addEventListener('focus', () => { loadAccount(); });
     document.addEventListener('visibilitychange', () => {

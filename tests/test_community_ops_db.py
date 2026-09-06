@@ -9,10 +9,13 @@ from community_ops import (
     CommunityOpsError,
     cast_community_poll_vote,
     create_community_announcement,
+    create_community_chain,
     create_community_poll,
     get_community_feed,
+    join_community_chain,
     list_community_ops_workspace,
     mutate_community_announcement,
+    mutate_community_chain,
     mutate_community_poll,
 )
 
@@ -122,6 +125,58 @@ class CommunityOpsPersistenceTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(CommunityOpsError, '必须填写开始时间'):
             mutate_community_poll(self.actor, poll['id'], 'schedule')
+
+    def test_chain_join_is_once_per_user_and_feed_marks_own_entry(self):
+        second, error = db.create_user('ChainTwo', 'Aa1!aaaa')
+        self.assertIsNone(error)
+        chain = create_community_chain(
+            self.actor,
+            title='希望增加的玩法',
+            description='每人接龙一条自己的建议。',
+            publish=True,
+        )
+        self.assertEqual(chain['effective_state'], 'active')
+
+        feed = get_community_feed(self.voter['id'])
+        public_chain = feed['chains'][0]
+        self.assertTrue(public_chain['can_join'])
+        self.assertIsNone(public_chain['my_entry'])
+
+        joined, duplicate = join_community_chain(
+            self.voter['id'],
+            chain['id'],
+            '我想玩无尽模式',
+        )
+        self.assertFalse(duplicate)
+        self.assertEqual(joined['entry_count'], 1)
+        self.assertEqual(joined['my_entry'], '我想玩无尽模式')
+
+        joined, duplicate = join_community_chain(
+            self.voter['id'],
+            chain['id'],
+            '我改成了团队合作模式',
+        )
+        self.assertTrue(duplicate)
+        self.assertEqual(joined['entry_count'], 1)
+        self.assertEqual(joined['my_entry'], '我改成了团队合作模式')
+
+        second_chain, _ = join_community_chain(
+            second['id'],
+            chain['id'],
+            '我想要每日任务',
+        )
+        self.assertEqual(second_chain['entry_count'], 2)
+        self.assertEqual(second_chain['entries'][1]['nickname'], second['username'])
+
+        workspace = list_community_ops_workspace()
+        self.assertEqual(workspace['chains'][0]['id'], chain['id'])
+        self.assertEqual(workspace['audit'][0]['action'], 'chain_create')
+
+        closed, duplicate = mutate_community_chain(self.actor, chain['id'], 'close')
+        self.assertFalse(duplicate)
+        self.assertEqual(closed['effective_state'], 'closed')
+        with self.assertRaisesRegex(CommunityOpsError, '已经结束'):
+            join_community_chain(self.staff['id'], chain['id'], '不能继续接龙')
 
 
 if __name__ == '__main__':

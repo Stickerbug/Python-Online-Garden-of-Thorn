@@ -3555,6 +3555,20 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
   display: block;
   object-fit: contain;
 }
+.story-card .card-art.is-forged {
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+}
+.story-card .card-art.is-forged img {
+  width: 50%;
+  height: 100%;
+  object-fit: cover;
+}
+.story-card .card-art.is-forged img:first-child {
+  border-inline-end: 1px solid
+    color-mix(in srgb, var(--story-card-type-color) 55%, var(--story-line));
+}
 .story-card.card-has-art.card-no-english .card-art { margin-bottom: -1.15cqi; }
 
 .story-card .card-type-label-wrap {
@@ -4075,6 +4089,16 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 }
 .story-pile-tile-art { min-height: 0; display: grid; place-items: center; }
 .story-pile-tile-art img { width: 88%; height: 34px; object-fit: contain; }
+.story-pile-tile-art.is-forged { display: flex; overflow: hidden; }
+.story-pile-tile-art.is-forged img {
+  width: 50%;
+  height: 34px;
+  flex: 1 1 0;
+  object-fit: cover;
+}
+.story-pile-tile-art.is-forged img:first-child {
+  border-inline-end: 1px solid color-mix(in srgb, var(--tile-color) 55%, var(--story-line));
+}
 .story-pile-count {
   position: absolute;
   z-index: 8;
@@ -4425,9 +4449,28 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 }
 
 .story-effect.story-trait {
+  width: 46.5px;
+  height: 46.5px;
+  border-radius: 10px;
   color: #bd686e;
   border-color: color-mix(in srgb, currentColor 68%, transparent);
-  background: color-mix(in srgb, currentColor 10%, var(--story-surface));
+  background: #f8e9ea;
+}
+
+.story-effect.story-trait img {
+  width: 34.5px;
+  height: 34.5px;
+}
+
+.story-effect.story-trait strong {
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+}
+
+:root[data-theme='dark'] .story-effect.story-trait {
+  border-color: rgba(189, 104, 110, .72);
+  background: #4b3033;
 }
 
 .story-intent {
@@ -4619,6 +4662,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 }
 .story-pile-tile-art { grid-row: 3; min-height: 20px; display: grid; place-items: center; margin-top: -3px; }
 .story-pile-tile-art img { width: 82%; height: 23px; object-fit: contain; }
+.story-pile-tile-art.is-forged img { width: 50%; height: 23px; }
 .story-pile-count {
   position: absolute;
   z-index: 8;

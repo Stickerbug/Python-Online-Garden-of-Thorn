@@ -431,8 +431,8 @@ STORY_STATUSES.update({
     'blockade': {
         'name': {'zh': '封锁', 'en': 'Blockade'},
         'description': {
-            'zh': '前X个奇数栏的手牌无法打出；不会自然减少层数。',
-            'en': 'The first X odd-numbered hand slots cannot be played. Its stacks do not decay naturally.',
+            'zh': '前X个偶数栏的手牌无法打出；不会自然减少层数。',
+            'en': 'The first X even-numbered hand slots cannot be played. Its stacks do not decay naturally.',
         },
     },
     'attack_blocked': {
@@ -1713,7 +1713,7 @@ STORY_CARDS = {
     'shell': _card('Shell', '贝壳', 'Shell', 2, 'root', 'ultra',
                    '回合开始时获得5层护盾。', effects=(_effect('equipment', 5, script='start_shield'),),
                    target='self', upgrade={'cost_e': 1}),
-    'lightning': _card('Lightning', '闪电', 'Lightning', 1, 'thorn', 'common',
+    'lightning': _card('Lightning', '闪电', 'Lightning', 1, 'thorn', 'rare',
                        '对所有生物造成3D×2。', tags=('wide',),
                        effects=(_effect('damage', 3, hits=2),),
                        upgrade={'description': {'zh': '对所有生物造成5D×2。', 'en': 'Deal 5 D twice to all creatures.'},
@@ -1747,11 +1747,11 @@ STORY_CARDS = {
                      effects=(_effect('damage', 10), _effect('draw', 1)),
                      upgrade={'description': {'zh': '对目标造成12D；抽2张牌。', 'en': 'Deal 12 D; draw 2.'},
                               'effects': (_effect('damage', 12), _effect('draw', 2))}),
-    'antler': _card('Antler', '角骨', 'Antler', 1, 'thorn', 'rare',
-                    '目标每有1种状态，对其造成6D一次。',
-                    effects=(_effect('damage_per_status', 6, base_hits=0),),
-                    upgrade={'description': {'zh': '对目标造成6D；目标每有1种状态，额外造成6D一次。', 'en': 'Deal 6 D, plus once per target status.'},
-                             'effects': (_effect('damage_per_status', 6, base_hits=1),)}),
+    'antler': _card('Antler', '角骨', 'Antler', 1, 'thorn', 'common',
+                    '目标每有1种状态，对其造成5D一次。',
+                    effects=(_effect('damage_per_status', 5, base_hits=0),),
+                    upgrade={'description': {'zh': '对目标造成7D；目标每有1种状态，额外造成7D一次。', 'en': 'Deal 7 D, plus once per target status.'},
+                             'effects': (_effect('damage_per_status', 7, base_hits=1),)}),
     'stinger': _card('Stinger', '刺', 'Stinger', 3, 'thorn', 'rare',
                      '对目标造成32D。', tags=('precise',), effects=(_effect('damage', 32),),
                      upgrade={'description': {'zh': '对目标造成44D。', 'en': 'Deal 44 D.'},
@@ -1810,7 +1810,7 @@ STORY_CARDS = {
                          effects=(_effect('equipment', 2, script='magic_pearl'),), target='self',
                          upgrade={'description': {'zh': '每主动丢弃1张牌，获得3层护盾。', 'en': 'Whenever you actively discard a card, gain 3 Shield.'},
                                   'effects': (_effect('equipment', 3, script='magic_pearl'),)}),
-    'magic_acid': _card('Magic Acid', '魔法酸', 'Magic Acid', 0, 'root', 'rare',
+    'magic_acid': _card('Magic Acid', '魔法酸', 'Magic Acid', 0, 'bloom', 'rare',
                         '主动丢弃自己任意张其他手牌，然后抽等量的牌。',
                         tags=('exile',),
                         effects=(_effect('active_discard', 99, exact=False), _effect('draw_selected', 0)),
@@ -2253,7 +2253,7 @@ STORY_CARDS = {
         'curse',
         'special',
         '回合结束时若仍在手牌中，受到3D；打出后放逐。',
-        tags=('exile', 'void', 'eternal'),
+        tags=('exile', 'eternal'),
         effects=(),
         script='corruption',
     ),
@@ -2554,7 +2554,7 @@ STORY_RELICS = {
     'greedy': _relic('贪婪', 'Greedy', '休息区可选择获得150G。', rarity='rare', script='rest_gold', amount=150),
     'body_reinforcement': _relic('肉体强化', 'Body Reinforcement', '获得时最大生命值+10，并回复10H。', script='gain_max_health', amount=10),
     'indomitable': _relic('愈挫愈勇', 'Indomitable', '普通战斗失去超过15H时，随机升级1张牌。', rarity='rare', script='loss_upgrade', amount=15),
-    'support': _relic('支援', 'Support', '第一回合少抽1张牌；每回合获得3层护盾。', rarity='special', script='support', amount=3),
+    'support': _relic('支援', 'Support', '第一回合少抽1张牌；每回合获得5层护盾。', rarity='special', script='support', amount=5),
     'bargaining': _relic('讨价还价', 'Bargaining', '商店价格降低50%。', rarity='rare', script='shop_discount', amount=50, stackable=False),
     'world_tree_leaf': _relic('世界树之叶', 'World Tree Leaf', '每片世界树之叶可在本次旅程中抵消1次死亡，清除效果并回复至满H。', rarity='special', script='revive'),
     'dandelion_blessing': _relic('蒲公英加护', 'Dandelion Blessing', '战斗开始时获得7层护盾。', rarity='special', script='opening_shield', amount=7),
@@ -2585,6 +2585,24 @@ STORY_RELICS = {
     'easy_tiger': _relic('猛虎下山', 'Tiger Descends', '每回合多抽2张牌。', rarity='special', script='turn_draw', amount=2),
     'easy_godhood': _relic('神格', 'Divinity', '战斗开始时获得3E；未使用的E保留至下回合。', rarity='special', script='retain_elixir', amount=3),
     'consolation': _relic('安慰', 'Consolation', '获得时H上限+1。', rarity='special', script='gain_max_health_only', amount=1, stackable=True),
+    'training': _relic('练起来', 'Training', '你可以在休息处锻炼：失去3点H上限，每场战斗开始时多抽1张牌。', rarity='special', script='training', amount=3),
+    'rigid': _relic('死板', 'Rigid', '每回合多回复2E；你永久获得5层锁定。', rarity='special', script='boss_locked', amount=2),
+    'story_pill': _relic('药丸', 'Pill', '你免疫大部分效果（当前为所有负面效果）。', rarity='special', script='boss_effect_immune', amount=1),
+    'nimble': _relic('灵巧', 'Nimble', '每回合开始时，随机2张手牌获得暂时灵巧1，回合结束时移除。', rarity='special', script='boss_temporary_swift', amount=2),
+    'blessing_rest': _relic('保佑', 'Blessing', '随机事件若是战斗，则改为休息处。', rarity='common', script='event_to_rest'),
+    'book_slots': _relic('负载', 'Loadout', '额外获得2个附魔书槽位。', rarity='common', script='extra_book_slots', amount=2),
+    'revenge': _relic('复仇', 'Revenge', '若你上一回合受到生命值伤害，本回合开始获得3层暂时力量。', rarity='common', script='revenge_power', amount=3),
+    'brutal': _relic('残暴', 'Brutal', '用攻击牌击杀一个生物后，对随机敌人再使用一次该攻击牌。', rarity='common', script='brutal_execute'),
+    'foresight': _relic('深谋远虑', 'Foresight', '获取卡牌奖励时，可选择的卡牌数+1。', rarity='common', script='reward_card_choices', amount=1),
+    'blitz': _relic('闪击', 'Blitz', '每场战斗中，你打出的第一张攻击牌伤害翻倍。', rarity='common', script='first_attack_double'),
+    'split_wide': _relic('裂解', 'Split', '获得时选择1张牌，使其永久获得广域打击。', rarity='common', script='make_wide'),
+    'favorite': _relic('钟爱', 'Favorite', '获得时选择1张牌，使其获得【钟爱】：打出时本场费用永久-1；若在手中打出别的牌则受到2D。', rarity='common', script='favorite_card'),
+    'discard_mine': _relic('地雷', 'Mine', '你每丢弃10张牌，对随机敌人造成20D。', rarity='common', script='discard_mine', amount=10),
+    'infect': _relic('传染', 'Infect', '获得时选择1张牌，使其获得【传染】：打出时，使左右两边的牌在本场战斗中变为该牌。', rarity='common', script='infect_card'),
+    'kill_flow': _relic('势如破竹', 'Kill Flow', '每击杀1名敌人，获得2E、2M。', rarity='common', script='kill_reward', amount=2),
+    'many_cards': _relic('多多益善', 'More Is More', '牌组每有15张牌，战斗开始时获得1层力量与1层耐力。', rarity='common', script='deck_count_power', amount=15),
+    'shop_refresh': _relic('挥金如土', 'Squander', '商店拥有刷新功能，初始25G，每次刷新增加25G。', rarity='common', script='shop_refresh'),
+    'innate_thought': _relic('固有思维', 'Innate Thought', '获得时选择1张牌，使其获得【固有】。', rarity='common', script='grant_innate'),
 }
 
 
@@ -2605,6 +2623,7 @@ STORY_BOSS_RELIC_IDS = tuple(
         'strive', 'gluttony', 'frugal', 'avoid_elite', 'grab_every_card',
         'cognitive_bias', 'first_strike', 'fast_learning', 'peaceful_mind',
         'phoenix', 'sword_strategy', 'perfection',
+        'rigid', 'story_pill', 'nimble',
     }
 )
 
@@ -2787,9 +2806,9 @@ STORY_ENEMIES.update({
         _move('凝聚', 'Condense', _effect('gain_shield', 12, lunatic_amount=15), _effect('self_heal', 6, lunatic_amount=9)),
     ), script='random_intent', traits=('chaos',), lunatic_health=57),
     'palm_tree': _enemy('棕榈树', 'Palm Tree', 36, (
-        _move('固守', 'Hold Fast', _effect('gain_shield', 9, lunatic_amount=11), _effect('player_status', 1, status='weak')),
+        _move('固守', 'Hold Fast', _effect('gain_shield', 7, lunatic_amount=9), _effect('player_status', 1, status='weak')),
         _move('旋转', 'Spin', _effect('damage', 2, hits=3)),
-    ), traits=('shelter',), initial={'shelter': 8}, lunatic_health=40),
+    ), traits=('shelter',), initial={'shelter': 5}, lunatic_initial={'shelter': 8}, lunatic_health=40),
     'cactus': _enemy('仙人掌', 'Cactus', 27, (
         _move('聚刺', 'Gather Spines', _effect('gain_status', 2, status='reflection')),
         _move('发射', 'Launch', _effect('damage', 14, lunatic_amount=17), _effect('clear_status', 0, status='reflection')),
@@ -2973,11 +2992,11 @@ STORY_ENEMIES.update({
         _move('养分', 'Nutrients', _effect('allies_power', 2, lunatic_amount=3), _effect('allies_heal', 20, lunatic_amount=24)),
     ), script='bush', traits=('turn_shield', 'sturdy', 'shelter'), initial={'turn_shield': 5, 'sturdy': 99, 'shelter': 15},
        lunatic_initial={'turn_shield': 7, 'shelter': 20}, lunatic_health=170),
-    'spider_cave': _enemy('蜘蛛洞', 'Spider Cave', 110, (
+    'spider_cave': _enemy('蜘蛛洞', 'Spider Cave', 94, (
         _move('散网', 'Scatter Web', _effect('add_draw_card', 2, card_id='slimed'), _effect('player_status', 1, status='weak')),
         _move('召唤', 'Summon', _effect('summon', 1, enemy_id='spider'), _effect('gain_frenzy', 1)),
     ), script='spider_cave', traits=('sturdy', 'frenzied'), initial={'shield': 40, 'sturdy': 99},
-       lunatic_initial={'shield': 50}, lunatic_health=119),
+       lunatic_initial={'shield': 50}, lunatic_health=105),
     'stickbug': _enemy('竹节虫', 'Stickbug', 164, (
         _move('发射', 'Launch', _effect('summon', 3, enemy_id='stick')),
         _move('生长', 'Growth', _effect('self_heal', 12, lunatic_amount=15), _effect('gain_power', 3, lunatic_amount=4)),
@@ -3077,7 +3096,7 @@ STORY_ENEMIES.update({
 # first action for enemies that use the ordinary sequential order.
 STORY_ENEMIES['cactus']['move_order'] = (0, 0, 1)
 STORY_ENEMIES['cactus']['lunatic_initial'] = {'reflection': 3}
-STORY_ENEMIES['palm_tree']['lunatic_initial'] = {'shelter': 10}
+STORY_ENEMIES['palm_tree']['lunatic_initial'] = {'shelter': 8}
 STORY_ENEMIES['cicada']['lunatic_initial'] = {'miracle': 5}
 STORY_ENEMIES['bandage_beetle']['move_order'] = (0, 1)
 STORY_ENEMIES['hive']['move_order'] = (0, 1, 2)
@@ -3731,6 +3750,11 @@ def validate_story_content():
         'rest_gold', 'revive', 'round_power', 'skip_shop',
         'retain_elixir', 'shop_discount', 'shop_restock', 'support',
         'turn_draw', 'turn_elixir', 'turn_heal', 'turn_magic',
+        'training', 'boss_locked', 'boss_effect_immune', 'boss_temporary_swift',
+        'event_to_rest', 'extra_book_slots', 'revenge_power', 'brutal_execute',
+        'reward_card_choices', 'first_attack_double', 'make_wide',
+        'favorite_card', 'discard_mine', 'infect_card', 'kill_reward',
+        'deck_count_power', 'shop_refresh', 'grant_innate',
     }
     enemy_effect_types = {
         'add_draw_card', 'adjacent_shield', 'allies_heal', 'allies_power',
@@ -3950,7 +3974,7 @@ STORY_CARD_BASE_DESCRIPTION_EN = {
     'mimic': 'Choose 1 other card of yours and add a copy of it to your hand',
     'light': 'Deal 3 D to the target twice; if this card has no Exile, shuffle a copy with Exile into your draw pile',
     'missile': 'Deal 10 D to the target; draw 1',
-    'antler': 'For each status on the target, deal 6 D to it once',
+    'antler': 'For each status on the target, deal 5 D to it once',
     'stinger': 'Deal 32 D to the target',
     'fries': 'Gain 14 Shield; actively discard 1 other card of yours',
     'heavy': 'Deal 26 D to the target; Power bonuses to this card are multiplied by 4',
@@ -4051,7 +4075,7 @@ STORY_CARD_UPGRADE_DESCRIPTION_EN = {
     'mimic': 'Choose 1 other card of yours and add a copy of it with Swift 1 to your hand',
     'light': 'Deal 4 D to the target twice; if this card has no Exile, shuffle a copy with Exile into your draw pile',
     'missile': 'Deal 12 D to the target; draw 2',
-    'antler': 'Deal 6 D to the target, plus 6 D once for each status on it',
+    'antler': 'Deal 7 D to the target, plus 7 D once for each status on it',
     'stinger': 'Deal 44 D to the target',
     'fries': 'Gain 18 Shield; actively discard up to 1 other card of yours, then draw 1',
     'heavy': 'Deal 30 D to the target; Power bonuses to this card are multiplied by 6',

@@ -10776,7 +10776,14 @@ class GameEngine:
                 self.log_msg("海绵被摧毁！无中毒层数")
 
         if is_pill:
-            if not (run_destroy_event and has_destroy_script):
+            other_pill_covers_target = self._has_other_pill_targeting(
+                effect_target_id,
+                exclude_eq=eq,
+            )
+            if (
+                not (run_destroy_event and has_destroy_script)
+                and not other_pill_covers_target
+            ):
                 self._clear_status_immune_aliases(effect_target_id)
                 self.log_msg("药丸被摧毁！状态免疫失效")
             # Clean up immunity that may have been applied to the equipment owner by older

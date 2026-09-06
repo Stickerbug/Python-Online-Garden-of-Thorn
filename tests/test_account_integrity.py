@@ -172,6 +172,62 @@ def test_automatic_link_needs_independent_signals_and_shares_reputation(accounts
     assert integrity.recompute_account_links(1,now=NOW+timedelta(days=3))[0]['duplicate']
 
 
+def test_rapid_same_device_alternation_confirms_automatically(accounts):
+    identify(1)
+    identify(2)
+    assert not integrity.get_reputation_profile(1)['linked']
+    assert integrity.get_reputation_profile(1)['link_state'] == 'suspected'
+    assert identify(1)
+    profile = integrity.get_reputation_profile(1)
+    assert profile['linked']
+    assert profile['link_state'] == 'confirmed'
+    with db.get_db_connection() as conn:
+        context = integrity.get_reputation_context(1)
+    assert context['members'] == [
+        {'id': 1, 'username': 'user1', 'status': 'active'},
+        {'id': 2, 'username': 'user2', 'status': 'active'},
+    ]
+
+
+def test_network_suspicion_escalates_through_signals_to_confirmed(accounts):
+    for day in range(3):
+        identify(1, day, device='phone-a', network='home')
+        # Session records keep the daily shared-network facts without creating
+        # login-sequence alternation on their own.
+        identify(2, day, device='phone-b', network='home', source='session')
+    assert not integrity.get_reputation_profile(1)['linked']
+    assert integrity.get_reputation_profile(1)['link_state'] == 'suspected'
+
+    # More A<->B alternation on the same private network across two days.
+    identify(1, 0, device='phone-a', network='home')
+    identify(2, 0, device='phone-b', network='home')
+    identify(1, 0, device='phone-a', network='home')
+    identify(2, 1, device='phone-b', network='home')
+    identify(1, 1, device='phone-a', network='home')
+    identify(2, 1, device='phone-b', network='home')
+    assert integrity.get_reputation_profile(1)['link_state'] == 'probable'
+
+    with db.get_db_connection() as conn:
+        conn.execute('UPDATE users SET total_ranked_games=1 WHERE id=1')
+        conn.execute('UPDATE users SET total_ranked_games=20 WHERE id=2')
+        conn.commit()
+    from public_feedback import create_public_issue
+    for index in range(3):
+        issue = create_public_issue(10, kind='bug', title=f'linked votes {index}', body='x')
+        with db.get_db_connection() as conn:
+            for uid in (1, 2):
+                conn.execute(
+                    '''INSERT INTO public_issue_votes(issue_id,user_id,active,created_at,updated_at)
+                       VALUES (?,?,1,?,?)''',
+                    (issue['id'], uid, integrity._iso(NOW), integrity._iso(NOW)),
+                )
+            conn.commit()
+    integrity.recompute_account_links(1, now=NOW+timedelta(days=2))
+    profile = integrity.get_reputation_profile(1)
+    assert profile['linked']
+    assert profile['link_state'] == 'confirmed'
+
+
 def test_campus_network_alone_never_confirms(accounts):
     for day in range(3):
         for uid in accounts:
@@ -190,7 +246,9 @@ def test_no_raw_identity_and_idempotent_recompute(accounts):
     identify(2)
     with db.get_db_connection() as conn:
         before=conn.execute('SELECT COUNT(*) FROM account_link_decision_audit').fetchone()[0]
-    assert not identify(2)
+    # Repeated same-day logins are now recorded so rapid alternation can count;
+    # recomputation with no new facts remains idempotent.
+    assert identify(2)
     integrity.recompute_account_links(2,now=NOW)
     with db.get_db_connection() as conn:
         assert conn.execute('SELECT COUNT(*) FROM account_link_decision_audit').fetchone()[0]==before

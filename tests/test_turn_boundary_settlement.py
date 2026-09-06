@@ -488,6 +488,78 @@ process.stdout.write(JSON.stringify({
             else:
                 CARD_DEFS['Pill'] = previous
 
+    def test_multiple_pills_keep_immunity_until_last_pill_is_removed(self):
+        package = load_mod(str(ROOT / 'mods' / 'Vanilla Cards.gtnmod'))
+        self.assertEqual([], package.errors)
+        pill_def = next(card.to_card_def() for card in package.cards if card.id == 'Pill')
+        previous = CARD_DEFS.get('Pill')
+        CARD_DEFS['Pill'] = pill_def
+        try:
+            engine = GameEngine2v2()
+            engine.phase = 'action'
+            for player in engine.players:
+                player.health = 100
+                player.deck = []
+                player.hand = []
+                player.discard = []
+                player.exile = []
+                player.equipment = []
+
+            first = EquipmentInstance(CardInstance('Pill'), 0)
+            first.effect_target = 2
+            second = EquipmentInstance(CardInstance('Pill'), 0)
+            second.effect_target = 2
+            engine.players[0].equipment.extend([first, second])
+            engine.players[2].custom_statuses['status_immune'] = 1
+
+            # 两个药丸都指向玩家2，摧毁其中一个不应清除状态免疫。
+            engine._cleanup_equipment_derived_effects(
+                0,
+                first,
+                run_destroy_event=False,
+            )
+            self.assertEqual(engine.players[2].custom_statuses.get('status_immune'), 1)
+
+            # 移除另一个后，状态免疫才被清除。
+            engine.players[0].equipment.remove(first)
+            engine._cleanup_equipment_derived_effects(
+                0,
+                second,
+                run_destroy_event=False,
+            )
+            self.assertNotIn('status_immune', engine.players[2].custom_statuses)
+        finally:
+            if previous is None:
+                CARD_DEFS.pop('Pill', None)
+            else:
+                CARD_DEFS['Pill'] = previous
+
+    def test_2v2_active_corruption_does_not_tick_unsourced_damage_at_turn_start(self):
+        engine = GameEngine2v2()
+        engine.phase = 'action'
+        engine.current_player = 0
+        for player in engine.players:
+            player.health = 100
+            player.deck = []
+            player.hand = []
+            player.discard = []
+            player.exile = []
+            player.equipment = []
+        corruption = EquipmentInstance(CardInstance('Corruption'), 0)
+        corruption.effect_target = 0
+        corruption.corruption_active = True
+        engine.players[0].equipment.append(corruption)
+        engine.log = []
+
+        engine._apply_turn_start_effects_2v2(0)
+
+        self.assertEqual(100, engine.players[0].health)
+        self.assertEqual(100, engine.players[1].health)
+        self.assertFalse(
+            any('腐化伤害' in line or '点腐化伤害' in line for line in engine.log),
+            engine.log,
+        )
+
     def test_2v2_bandage_still_saves_when_not_status_immune(self):
         engine = GameEngine2v2()
         engine.phase = 'action'

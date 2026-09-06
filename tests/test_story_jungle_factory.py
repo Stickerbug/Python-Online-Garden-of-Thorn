@@ -4,6 +4,7 @@ from story_engine import (
     _enemy_physical_damage,
     _enemy_raw_damage,
     _is_card_playable,
+    _next_enemy_move,
     _new_card,
     _resolve_enemy_death_hooks,
     _selectable_enemy_targets,
@@ -32,6 +33,39 @@ def _enemy(state, def_id):
         for enemy in state['combat']['enemies']
         if enemy['def_id'] == def_id
     )
+
+
+def test_bush_cycles_summon_moves_and_uses_nutrients_above_summon_cap():
+    state, _ = _combat('bush-cycle', 'bush')
+    combat = state['combat']
+    bush = _enemy(state, 'bush')
+    moves = STORY_ENEMIES['bush']['moves']
+
+    def chosen_index(step, live_summon_ids):
+        bush['move_step'] = step
+        bush['last_move_index'] = None
+        combat['enemies'] = [bush] + [
+            {
+                'id': f'fake-{summon_id}-{index}',
+                'def_id': summon_id,
+                'health': 1,
+                'max_health': 1,
+            }
+            for index, summon_id in enumerate(live_summon_ids)
+        ]
+        move = _next_enemy_move(state, bush)
+        return moves.index(move)
+
+    # 1→抖落（召唤1只萤火虫）
+    assert chosen_index(0, []) == 0
+    # 2→吸引会把召唤物增加到3，因此本轮改用养分
+    assert chosen_index(1, ['jungle_firefly']) == 2
+    # 3→养分
+    assert chosen_index(2, ['jungle_firefly']) == 2
+    # 回到 1→抖落（召唤物只有1个，仍可召唤）
+    assert chosen_index(3, ['jungle_firefly']) == 0
+    # 已有2个召唤物时吸引会超过上限，改用养分
+    assert chosen_index(4, ['jungle_firefly', 'jungle_fly']) == 2
 
 
 def test_strive_grants_elixir_against_elite_bush_and_legacy_elite_combat():
@@ -193,8 +227,8 @@ def test_bulb_restricts_targets_while_obstacles_block_hand_slots():
     second = _new_card(state, 'basic')
     combat['hand'] = [first, second]
     combat['elixir'] = 99
-    assert _is_card_playable(state, first) is False
-    assert _is_card_playable(state, second) is True
+    assert _is_card_playable(state, first) is True
+    assert _is_card_playable(state, second) is False
 
 
 def test_mechanical_crab_super_beam_countdown_tracks_its_four_move_cycle():

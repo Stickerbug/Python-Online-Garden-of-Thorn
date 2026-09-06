@@ -293,6 +293,7 @@ def test_create_and_join_store_only_invite_hash_and_assign_server_seats(
         'display_name',
         'membership_status',
         'party_role',
+        'reputation_profile',
     }
 
     with db.get_db_connection() as conn:
@@ -1071,3 +1072,13 @@ def test_story_coop_action_fingerprint_distinguishes_json_boolean_and_number():
     boolean = db.story_coop_action_fingerprint(0, 'room_submit', {'value': True})
 
     assert numeric != boolean
+
+
+def test_story_bank_deposit_is_an_account_level_balance(isolated_story_db):
+    user_id = _insert_user('story-bank-user', role='staff')
+
+    assert db.get_story_bank(user_id) == 0
+    assert db.set_story_bank(user_id, 260) == 260
+    assert db.get_story_bank(user_id) == 260
+    assert db.set_story_bank(user_id, 0) == 0
+    assert db.get_story_bank(user_id) == 0
