@@ -404,6 +404,16 @@ def test_admin_stats_is_split_out_of_the_management_page():
     assert 'data-tab="rooms"' in management
 
 
+def test_admin_stats_login_does_not_require_terminal_output():
+    root = Path(__file__).resolve().parents[1]
+    source = (root / 'static' / 'js' / 'admin.js').read_text(encoding='utf-8')
+    stats = (root / 'templates' / 'admin_stats.html').read_text(encoding='utf-8')
+    assert 'id="terminal-output"' not in stats
+    append_terminal = source[source.index('function appendTerminal('):]
+    assert "const outputEl = $('terminal-output');" in append_terminal
+    assert 'if (!outputEl) return;' in append_terminal
+
+
 def test_message_get_routes_never_mark_read_even_with_legacy_query_flag():
     gtn.app.config.update(TESTING=True)
     client = gtn.app.test_client()

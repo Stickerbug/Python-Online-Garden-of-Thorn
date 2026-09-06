@@ -1989,11 +1989,13 @@ function renderReplayFrame() {
 }
 
 function appendTerminal(command, output, isError = false) {
+  const outputEl = $('terminal-output');
+  if (!outputEl) return;
   const line = document.createElement('div');
   line.className = 'terminal-line';
   line.innerHTML = `<div class="cmd">&gt; ${escapeHtml(command)}</div><div class="${isError ? 'error' : ''}">${escapeHtml(output || '')}</div>`;
-  $('terminal-output').appendChild(line);
-  $('terminal-output').scrollTop = $('terminal-output').scrollHeight;
+  outputEl.appendChild(line);
+  outputEl.scrollTop = outputEl.scrollHeight;
 }
 
 async function runCommand(line) {
