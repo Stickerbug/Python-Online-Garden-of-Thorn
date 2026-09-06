@@ -272,8 +272,8 @@ def test_demo_reward_multihit_and_wide_cards_use_their_declared_effects():
             'target_enemy_id': 'intro-soldier-ant',
         },
     )
-    assert sand_state['combat']['enemies'][0]['health'] == before - 5
-    assert sum(event['type'] == 'enemy_damage' for event in sand_events) == 5
+    assert sand_state['combat']['enemies'][0]['health'] == before - 8
+    assert sum(event['type'] == 'enemy_damage' for event in sand_events) == 4
 
     _, wide_state, _ = _combat_state()
     wide_state['combat']['enemies'].append({
@@ -340,7 +340,7 @@ def test_coop_multihit_stops_immediately_after_target_is_defeated():
         if event.get('type') == 'enemy_defeated'
         and event.get('enemy_id') == target['id']
     ]
-    assert len(damage) == 2
+    assert len(damage) == 1
     assert damage[-1]['lethal'] is True
     assert damage[-1]['after'] == 0
     assert len(defeats) == 1

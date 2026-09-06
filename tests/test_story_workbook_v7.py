@@ -36,7 +36,7 @@ def _combat(seed='workbook-v7'):
 def test_workbook_v7_card_and_relic_balance_values():
     assert STORY_CARDS['antibody']['rarity'] == 'rare'
     assert STORY_CARDS['bur']['effects'] == (
-        {'type': 'damage', 'amount': 8},
+        {'type': 'damage', 'amount': 9},
         {'type': 'status', 'amount': 1, 'status': 'vulnerable'},
     )
 
@@ -50,11 +50,11 @@ def test_workbook_v7_card_and_relic_balance_values():
 
     state = build_initial_story_state('workbook-v7-mjolnir')
     mjolnir = _new_card(state, 'mjolnir')
-    assert _card_values(mjolnir)['effects'][0]['amount'] == 14
+    assert _card_values(mjolnir)['effects'][0]['amount'] == 18
     mjolnir.update({'upgraded': True, 'upgrade_level': 1})
-    assert _card_values(mjolnir)['effects'][0]['amount'] == 19
+    assert _card_values(mjolnir)['effects'][0]['amount'] == 24
     mjolnir['upgrade_level'] = 4
-    assert _card_values(mjolnir)['effects'][0]['amount'] == 34
+    assert _card_values(mjolnir)['effects'][0]['amount'] == 42
 
     assert STORY_RELICS['return_to_origin']['amount'] == 1.5
     events = []

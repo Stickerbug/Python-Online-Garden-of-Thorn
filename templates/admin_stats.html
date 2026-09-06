@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garden of Thorn 数据统计</title>
+<link rel="preload" href="/fonts/Kreadon-Regular.subset.woff2?v=3" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=3" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/css/admin.css?v=18">
+</head>
+<body class="admin-body" data-admin-view="stats">
+<div id="admin-login" class="admin-login">
+  <section class="admin-login-card">
+    <div class="admin-brand">Garden of Thorn 数据统计</div>
+    <h1>管理员登录</h1>
+    <p>请输入管理员密码以查看统计。</p>
+    <form id="admin-login-form">
+      <input id="admin-password" type="password" autocomplete="current-password" placeholder="管理员密码" autofocus>
+      <button type="submit">进入</button>
+    </form>
+    <div id="admin-login-error" class="admin-login-error" aria-live="polite"></div>
+  </section>
+</div>
+
+<main id="admin-shell" class="admin-shell hidden">
+  <header class="admin-header">
+    <div>
+      <div class="admin-brand">Garden of Thorn 数据统计</div>
+      <h1>服务器数据统计</h1>
+    </div>
+    <div class="admin-header-actions">
+      <a class="ghost-btn" href="/adminpage" target="_blank" rel="noopener">返回管理台</a>
+      <button id="admin-refresh" class="ghost-btn" type="button">刷新</button>
+      <button id="admin-logout" class="ghost-btn danger" type="button">退出</button>
+    </div>
+  </header>
+
+  <nav class="admin-tabs" aria-label="数据统计视图">
+    <button class="admin-tab active" data-tab="gui" type="button">服务器与玩家</button>
+    <button class="admin-tab" data-tab="draft-stats" type="button">卡牌统计</button>
+    <button class="admin-tab" data-tab="avg-rounds" type="button">平均回合</button>
+    <button class="admin-tab" data-tab="storage" type="button">存储统计</button>
+  </nav>
+
+  <section id="admin-gui" class="admin-panel">
+    <div class="metrics-grid">
+      <article class="metric-card">
+        <span>CPU</span>
+        <strong id="metric-cpu">-</strong>
+        <small id="metric-cpu-sub">系统占用 / 进程占用</small>
+      </article>
+      <article class="metric-card">
+        <span>内存</span>
+        <strong id="metric-memory">-</strong>
+        <small id="metric-memory-sub">系统已用 / 进程占用</small>
+      </article>
+      <article class="metric-card">
+        <span>系统盘</span>
+        <strong id="metric-disk">-</strong>
+        <small id="metric-disk-sub">40G 云盘</small>
+      </article>
+      <article class="metric-card">
+        <span>运行时间</span>
+        <strong id="metric-uptime">-</strong>
+        <small id="metric-clock">-</small>
+      </article>
+      <article class="metric-card">
+        <span>在线玩家</span>
+        <strong id="metric-online">0</strong>
+        <small id="metric-online-sub">大厅 / 观战</small>
+      </article>
+      <article class="metric-card">
+        <span>对局</span>
+        <strong id="metric-rooms">0</strong>
+        <small id="metric-history-sub">历史记录</small>
+      </article>
+    </div>
+
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>服务器资源</h2>
+        <span id="server-profile-label">Aliyun Ubuntu</span>
+      </div>
+      <div id="server-resource-grid" class="server-resource-grid"></div>
+    </section>
+
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>资源曲线</h2>
+        <span>内存环形采样，不写硬盘</span>
+      </div>
+      <div id="resource-history-grid" class="resource-history-grid"></div>
+    </section>
+
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>注册玩家</h2>
+        <span id="registered-users-count">0</span>
+      </div>
+      <div class="registered-users-toolbar">
+        <input id="registered-users-search" type="search" maxlength="32" placeholder="搜索用户名">
+        <select id="registered-users-sort" aria-label="排序字段">
+          <option value="last_login_at">上次下线</option>
+          <option value="created_at">注册时间</option>
+          <option value="games_played">有效对局数</option>
+          <option value="wins">胜场</option>
+          <option value="losses">败场</option>
+          <option value="draws">平局</option>
+          <option value="play_seconds">总对局时长</option>
+          <option value="win_rate">胜率</option>
+          <option value="username">用户名</option>
+          <option value="player_id">ID</option>
+          <option value="id">注册顺序</option>
+        </select>
+        <select id="registered-users-order" aria-label="排序方向">
+          <option value="desc">降序</option>
+          <option value="asc">升序</option>
+        </select>
+        <button id="registered-users-refresh" class="ghost-btn" type="button">刷新账号</button>
+      </div>
+      <div id="registered-users-panel" class="registered-users-panel"></div>
+    </section>
+
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>在线玩家</h2>
+        <span id="players-count">0</span>
+      </div>
+      <div id="players-table" class="admin-table"></div>
+    </section>
+
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>当前对局</h2>
+        <span id="rooms-count">0</span>
+      </div>
+      <div id="rooms-table" class="admin-table"></div>
+    </section>
+  </section>
+
+  <section id="admin-draft-stats" class="admin-panel hidden">
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>卡牌抽取率 / 胜率</h2>
+        <span id="draft-stats-count">0</span>
+      </div>
+      <div class="registered-users-toolbar">
+        <label class="admin-inline-toggle">
+          <input id="draft-stats-merge" type="checkbox" checked>
+          合并模式
+        </label>
+        <select id="draft-stats-scope" aria-label="统计范围">
+          <option value="total">总计</option>
+          <option value="week">本周</option>
+        </select>
+        <select id="draft-stats-mode" aria-label="模式筛选">
+          <option value="">全部模式</option>
+          <option value="1v1">1v1</option>
+          <option value="2v2">2v2</option>
+        </select>
+        <select id="draft-stats-sort" aria-label="排序字段">
+          <option value="pick_rate">抽取率</option>
+          <option value="card_win_rate">抽到胜率</option>
+          <option value="winner_pick_rate">胜者选择率</option>
+          <option value="win_games">胜利局数</option>
+          <option value="picked_games">抽到局数</option>
+          <option value="picked_count">抽取次数</option>
+          <option value="shown_count">刷出次数</option>
+          <option value="updated_at">最近更新</option>
+          <option value="card_id">卡牌ID</option>
+        </select>
+        <select id="draft-stats-order" aria-label="排序方向">
+          <option value="desc">降序</option>
+          <option value="asc">升序</option>
+        </select>
+        <button id="draft-stats-refresh" class="ghost-btn" type="button">刷新统计</button>
+      </div>
+      <p id="draft-stats-rebuild-result" class="empty-detail">统计口径：玩家最终选择某张牌时，当前三个候选项计入“刷出”；被选中的牌计入“抽取”。被重抽掉的候选项不计入刷出。</p>
+      <div id="draft-stats-table" class="admin-table"></div>
+      <div class="section-title compact-title">
+        <h3>配装选取率 / 胜者选取率</h3>
+        <span id="opening-event-stats-count">0</span>
+      </div>
+      <p class="empty-detail">统计口径：玩家看到的配装计入“出现”；最终选择计入“选取”。</p>
+      <div id="opening-event-stats-table" class="admin-table"></div>
+    </section>
+  </section>
+
+  <section id="admin-avg-rounds" class="admin-panel hidden">
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>平均回合数 · 总计</h2>
+        <span>有效统计对局</span>
+      </div>
+      <div class="registered-users-toolbar">
+        <button id="avg-round-refresh" class="ghost-btn" type="button">刷新平均回合</button>
+      </div>
+      <p class="empty-detail">口径：一名玩家的一种配装计 1 次观察；总计与各配装都按观察次数取平均。</p>
+      <div id="avg-round-total-table" class="admin-table"></div>
+    </section>
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>平均回合数 · 近7天</h2>
+        <span id="avg-round-recent-count">-</span>
+      </div>
+      <p class="empty-detail">按 ended_at 取最近 7 天内结束的有效统计对局。</p>
+      <div id="avg-round-recent-table" class="admin-table"></div>
+    </section>
+  </section>
+
+  <section id="admin-storage" class="admin-panel hidden">
+    <div class="storage-summary-grid" id="storage-summary-grid"></div>
+    <span id="storage-last-result" hidden>-</span>
+  </section>
+</main>
+<script src="/static/js/admin.js?v=27"></script>
+</body>
+</html>

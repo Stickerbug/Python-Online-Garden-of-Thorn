@@ -17,8 +17,8 @@ import account_integrity
 import db
 
 
-PUBLIC_ISSUE_KINDS = {'bug', 'suggestion'}
-ISSUE_KEY_PREFIXES = {'bug': 'GB', 'suggestion': 'GS'}
+PUBLIC_ISSUE_KINDS = {'bug', 'suggestion', 'internal'}
+ISSUE_KEY_PREFIXES = {'bug': 'GB', 'suggestion': 'GS', 'internal': 'GI'}
 PUBLIC_ISSUE_LINK_RELATIONS = {'related', 'duplicates', 'fix_caused'}
 PUBLIC_ISSUE_STATUSES = {
     'bug': frozenset({
@@ -28,16 +28,21 @@ PUBLIC_ISSUE_STATUSES = {
     'suggestion': frozenset({
         'new', 'under_review', 'accepted', 'planned', 'rejected', 'duplicate',
     }),
+    'internal': frozenset({
+        'new', 'needs_info', 'in_progress', 'fixed', 'duplicate', 'invalid',
+    }),
 }
 PUBLIC_ISSUE_VOTABLE_STATUSES = {
     'bug': frozenset({'new', 'needs_info', 'confirmed', 'in_progress'}),
     'suggestion': frozenset({'new', 'under_review'}),
+    'internal': frozenset(),
 }
 PUBLIC_ISSUE_CLOSED_STATUSES = {
     'bug': frozenset({
         'fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid',
     }),
     'suggestion': frozenset({'accepted', 'planned', 'rejected', 'duplicate'}),
+    'internal': frozenset({'fixed', 'duplicate', 'invalid'}),
 }
 PUBLIC_ISSUE_SORTS = {'recent', 'updated', 'votes', 'priority'}
 PUBLIC_ISSUE_PAGE_SIZE = 20
@@ -115,6 +120,22 @@ def _is_staff_conn(conn, user_id):
     if row is None or not bool(row['visible']):
         return False
     return str(row['role_type'] or '').strip().lower() in {'admin', 'staff'}
+
+
+def _issue_accessible_to_conn(conn, row, viewer_user_id=None, *, include_hidden=False):
+    """Whether ``row`` may be exposed to the viewer.
+
+    Internal issues are only meaningful to Staff/console callers.  The
+    ``include_hidden`` escape hatch is reserved for console/Staff flows, and
+    never widens what regular players can see.
+    """
+    if not bool(row['visible']) and not include_hidden:
+        return False
+    if str(row['kind'] or '').strip().lower() == 'internal':
+        if include_hidden:
+            return True
+        return _is_staff_conn(conn, viewer_user_id)
+    return True
 
 
 def _console_allowed_actor(actor):
@@ -400,6 +421,9 @@ def create_public_issue(
         if user is None or db._user_row_is_deleted(user):
             conn.rollback()
             raise PublicFeedbackError('AUTH_REQUIRED', '请先登录账号', 401)
+        if kind == 'internal' and not _is_staff_conn(conn, uid):
+            conn.rollback()
+            raise PublicFeedbackError('FORBIDDEN', '只有 Staff 可以创建不公开反馈', 403)
         cursor = conn.execute(
             '''
             INSERT INTO public_issues(
@@ -474,8 +498,6 @@ def list_public_issues(
     per_page=PUBLIC_ISSUE_PAGE_SIZE,
 ):
     kind = str(kind or 'all').strip().lower()
-    if kind not in PUBLIC_ISSUE_KINDS:
-        kind = 'all'
     try:
         page = max(1, int(page))
         per_page = max(1, min(int(per_page), PUBLIC_ISSUE_MAX_PAGE_SIZE))
@@ -483,35 +505,47 @@ def list_public_issues(
         raise PublicFeedbackError('INVALID_PAGE', '分页参数无效') from exc
     where = []
     params = []
-    if not include_hidden:
-        where.append('p.visible = 1')
-    if kind in PUBLIC_ISSUE_KINDS:
-        where.append('p.kind = ?')
-        params.append(kind)
-    status_key = str(status or '').strip().lower()
-    if status_key:
-        allowed = (
-            PUBLIC_ISSUE_STATUSES[kind]
-            if kind in PUBLIC_ISSUE_STATUSES
-            else frozenset().union(*PUBLIC_ISSUE_STATUSES.values())
-        )
-        if status_key not in allowed:
-            raise PublicFeedbackError('INVALID_STATUS', '状态无效')
-        where.append('p.status = ?')
-        params.append(status_key)
-    search_text = str(search or '').strip()
-    if search_text:
-        escaped = (
-            search_text
-            .replace('!', '!!')
-            .replace('%', '!%')
-            .replace('_', '!_')
-        )
-        where.append("(p.title LIKE ? ESCAPE '!' OR p.body LIKE ? ESCAPE '!')")
-        params.extend([f'%{escaped}%', f'%{escaped}%'])
-    where_sql = f"WHERE {' AND '.join(where)}" if where else ''
-    order_sql = _sort_sql(sort)
     with closing(db.get_db_connection()) as conn:
+        viewer_is_staff = bool(
+            viewer_user_id
+            and _is_staff_conn(conn, viewer_user_id)
+        )
+        if kind not in PUBLIC_ISSUE_KINDS:
+            kind = 'all'
+        internal_allowed = viewer_is_staff or bool(include_hidden)
+        if kind == 'internal' and not internal_allowed:
+            raise PublicFeedbackError('ISSUE_NOT_FOUND', '问题不存在', 404)
+        if not include_hidden and kind != 'internal':
+            where.append('p.visible = 1')
+        if kind == 'all':
+            if not include_hidden or not internal_allowed:
+                where.append("p.kind <> 'internal'")
+        else:
+            where.append('p.kind = ?')
+            params.append(kind)
+        status_key = str(status or '').strip().lower()
+        if status_key:
+            allowed = (
+                PUBLIC_ISSUE_STATUSES[kind]
+                if kind in PUBLIC_ISSUE_STATUSES
+                else frozenset().union(*PUBLIC_ISSUE_STATUSES.values())
+            )
+            if status_key not in allowed:
+                raise PublicFeedbackError('INVALID_STATUS', '状态无效')
+            where.append('p.status = ?')
+            params.append(status_key)
+        search_text = str(search or '').strip()
+        if search_text:
+            escaped = (
+                search_text
+                .replace('!', '!!')
+                .replace('%', '!%')
+                .replace('_', '!_')
+            )
+            where.append("(p.title LIKE ? ESCAPE '!' OR p.body LIKE ? ESCAPE '!')")
+            params.extend([f'%{escaped}%', f'%{escaped}%'])
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ''
+        order_sql = _sort_sql(sort)
         total_row = conn.execute(
             f'SELECT COUNT(*) AS count FROM public_issues p {where_sql}',
             params,
@@ -702,6 +736,13 @@ def get_public_issue(
     with closing(db.get_db_connection()) as conn:
         row = _issue_row_conn(conn, issue_id, include_hidden=include_hidden)
         is_staff = _is_staff_conn(conn, viewer_id) if viewer_id else False
+        if not _issue_accessible_to_conn(
+            conn,
+            row,
+            viewer_id,
+            include_hidden=include_hidden,
+        ):
+            raise PublicFeedbackError('ISSUE_NOT_FOUND', '问题不存在', 404)
         payload = _issue_payload_conn(
             conn,
             row,
@@ -763,6 +804,9 @@ def post_public_comment(
     with closing(db.get_db_connection()) as conn:
         conn.execute('BEGIN IMMEDIATE')
         issue = _issue_row_conn(conn, issue_id)
+        if str(issue['kind']) == 'internal' and not _is_staff_conn(conn, uid):
+            conn.rollback()
+            raise PublicFeedbackError('FORBIDDEN', '不公开反馈只有 Staff 可参与', 403)
         user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if user is None or db._user_row_is_deleted(user):
             conn.rollback()
@@ -920,6 +964,9 @@ def toggle_public_vote(actor_user_id, issue_id):
         conn.execute('BEGIN IMMEDIATE')
         issue = _issue_row_conn(conn, issue_id)
         kind = str(issue['kind'])
+        if kind == 'internal':
+            conn.rollback()
+            raise PublicFeedbackError('VOTE_CLOSED', '不公开反馈不参与投票', 409)
         status = str(issue['status'])
         author_id = int(issue['author_user_id'])
         user = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
@@ -1099,7 +1146,10 @@ def toggle_public_watch(user_id, issue_id):
     now_iso = _iso(_utc_now())
     with closing(db.get_db_connection()) as conn:
         conn.execute('BEGIN IMMEDIATE')
-        _issue_row_conn(conn, issue_id)
+        issue = _issue_row_conn(conn, issue_id)
+        if str(issue['kind']) == 'internal':
+            conn.rollback()
+            raise PublicFeedbackError('NOT_WATCHABLE', '不公开反馈不支持关注', 409)
         row = conn.execute(
             'SELECT * FROM public_issue_watchers WHERE issue_id = ? AND user_id = ?',
             (issue_id, uid),
@@ -1495,6 +1545,9 @@ def _send_private_message(
         conn.execute('BEGIN IMMEDIATE')
         issue = _issue_row_conn(conn, issue_id)
         is_staff = _is_staff_conn(conn, uid)
+        if str(issue['kind']) == 'internal' and not is_staff:
+            conn.rollback()
+            raise PublicFeedbackError('FORBIDDEN', '不公开反馈只有 Staff 可查看', 403)
         if not is_staff and int(issue['author_user_id']) != uid:
             conn.rollback()
             raise PublicFeedbackError('FORBIDDEN', '只有作者或 Staff 可查看此区', 403)
@@ -1572,6 +1625,8 @@ def list_public_issue_private(viewer_user_id, issue_id):
     with closing(db.get_db_connection()) as conn:
         issue = _issue_row_conn(conn, issue_id)
         is_staff = _is_staff_conn(conn, uid)
+        if str(issue['kind']) == 'internal' and not is_staff:
+            raise PublicFeedbackError('FORBIDDEN', '不公开反馈只有 Staff 可查看', 403)
         if not is_staff and int(issue['author_user_id']) != uid:
             raise PublicFeedbackError('FORBIDDEN', '只有作者或 Staff 可查看此区', 403)
         now_iso = _iso(_utc_now())

@@ -39,6 +39,7 @@ let registeredUsersRequestInFlight = false;
 let communityStorageActionInFlight = false;
 const ADMIN_STATUS_REFRESH_MS = 30000;
 const ADMIN_GAME_CHAT_REFRESH_MS = 15000;
+const ADMIN_STATS_VIEW = document.body.dataset.adminView === 'stats';
 const ADMIN_FETCH_TIMEOUT_MS = 5000;
 
 const STATUS_LABELS = {
@@ -401,12 +402,13 @@ function showShell(authenticated) {
     loadStatus({ manual: true });
     const usersPanel = $('registered-users-panel');
     if (usersPanel && !registeredUsersState) {
-      usersPanel.innerHTML = '<div class="log-item">账号列表不会自动刷新。需要查看时请点击“刷新账号”。</div>';
+      if (ADMIN_STATS_VIEW) loadRegisteredUsers();
+      else usersPanel.innerHTML = '<div class="log-item">账号列表不会自动刷新。需要查看时请点击“刷新账号”。</div>';
     }
     if (activeAdminTab === 'game-chat') loadGameChat();
     if (!refreshTimer) {
       refreshTimer = setInterval(() => {
-        if (['gui', 'events', 'moderation', 'terminal'].includes(activeAdminTab)) loadStatus();
+        if (['gui', 'events', 'moderation', 'rooms', 'terminal'].includes(activeAdminTab)) loadStatus();
       }, ADMIN_STATUS_REFRESH_MS);
     }
     if (activeAdminTab === 'game-chat') startGameChatPolling();
@@ -457,7 +459,9 @@ async function loadStatus(options = {}) {
   if (!adminPageVisible() || statusRequestInFlight) return;
   statusRequestInFlight = true;
   try {
-    const full = !!options.manual || ['events', 'moderation', 'terminal'].includes(activeAdminTab);
+    const full = !!options.manual
+      || ['events', 'moderation', 'rooms', 'terminal'].includes(activeAdminTab)
+      || (ADMIN_STATS_VIEW && activeAdminTab === 'gui');
     adminState = await api(`/api/admin/status${full ? '?full=1' : ''}`);
     lastStatusErrorSignature = '';
     lastStatusErrorAt = 0;
@@ -490,23 +494,25 @@ function renderStatus(data) {
   const pcpu = process.cpu_percent == null ? '-' : `${Number(process.cpu_percent).toFixed(1)}%`;
   const scpu = system.cpu_percent == null ? '-' : `${Number(system.cpu_percent).toFixed(1)}%`;
   const loadavg = Array.isArray(metrics.loadavg) ? metrics.loadavg.map(v => Number(v).toFixed(2)).join(' / ') : '-';
-  $('metric-cpu').textContent = scpu;
-  $('metric-cpu-sub').textContent = `${system.cpu_count || profile.cpu_target || 2} 核；进程 ${pcpu}；负载 ${loadavg}`;
-  $('metric-memory').textContent = system.memory_total
-    ? `${formatBytes(system.memory_used)} / ${formatBytes(system.memory_total)}`
-    : formatBytes(process.memory_rss);
-  $('metric-memory-sub').textContent = system.memory_percent == null
-    ? `进程 ${formatBytes(process.memory_rss)}`
-    : `已用 ${system.memory_percent}%；可用 ${formatBytes(system.memory_available)}；进程 ${formatBytes(process.memory_rss)}`;
-  $('metric-disk').textContent = disk.total ? `${formatBytes(disk.used)} / ${formatBytes(disk.total)}` : '-';
-  const diskSub = $('metric-disk-sub');
-  if (diskSub) diskSub.textContent = `已用 ${disk.percent ?? '-'}%；剩余 ${formatBytes(disk.free)}；${profile.disk_target || '40G'} 云盘`;
-  $('metric-uptime').textContent = formatUptime(metrics.uptime_seconds);
-  $('metric-clock').textContent = formatAdminTime(metrics.time);
-  $('metric-online').textContent = summary.online_players || 0;
-  $('metric-online-sub').textContent = `大厅 ${summary.lobby_players || 0} / 观战 ${summary.spectators || 0} / 故事 ${summary.story_players || 0}`;
-  $('metric-rooms').textContent = summary.rooms || 0;
-  $('metric-history-sub').textContent = `历史 ${summary.history_count || 0}`;
+  if ($('metric-cpu')) {
+    $('metric-cpu').textContent = scpu;
+    $('metric-cpu-sub').textContent = `${system.cpu_count || profile.cpu_target || 2} 核；进程 ${pcpu}；负载 ${loadavg}`;
+    $('metric-memory').textContent = system.memory_total
+      ? `${formatBytes(system.memory_used)} / ${formatBytes(system.memory_total)}`
+      : formatBytes(process.memory_rss);
+    $('metric-memory-sub').textContent = system.memory_percent == null
+      ? `进程 ${formatBytes(process.memory_rss)}`
+      : `已用 ${system.memory_percent}%；可用 ${formatBytes(system.memory_available)}；进程 ${formatBytes(process.memory_rss)}`;
+    $('metric-disk').textContent = disk.total ? `${formatBytes(disk.used)} / ${formatBytes(disk.total)}` : '-';
+    const diskSub = $('metric-disk-sub');
+    if (diskSub) diskSub.textContent = `已用 ${disk.percent ?? '-'}%；剩余 ${formatBytes(disk.free)}；${profile.disk_target || '40G'} 云盘`;
+    $('metric-uptime').textContent = formatUptime(metrics.uptime_seconds);
+    $('metric-clock').textContent = formatAdminTime(metrics.time);
+    $('metric-online').textContent = summary.online_players || 0;
+    $('metric-online-sub').textContent = `大厅 ${summary.lobby_players || 0} / 观战 ${summary.spectators || 0} / 故事 ${summary.story_players || 0}`;
+    $('metric-rooms').textContent = summary.rooms || 0;
+    $('metric-history-sub').textContent = `历史 ${summary.history_count || 0}`;
+  }
   renderServerResources(metrics);
   renderResourceHistory(metrics.resource_history || {});
 
@@ -605,6 +611,7 @@ function renderResourceHistory(history) {
 }
 
 function renderPlayers(players) {
+  if (!$('players-table')) return;
   $('players-count').textContent = players.length;
   if (!players.length) {
     $('players-table').innerHTML = '<div class="log-item">暂无在线玩家。</div>';
@@ -612,7 +619,7 @@ function renderPlayers(players) {
   }
   $('players-table').innerHTML = `
     <table>
-      <thead><tr><th>昵称</th><th>ID</th><th>状态</th><th>入口</th><th>模式</th><th>房间</th><th>SID</th><th>操作</th></tr></thead>
+      <thead><tr><th>昵称</th><th>ID</th><th>状态</th><th>入口</th><th>模式</th><th>房间</th><th>SID</th>${ADMIN_STATS_VIEW ? '' : '<th>操作</th>'}</tr></thead>
       <tbody>
         ${players.map((p) => `
           <tr>
@@ -623,9 +630,11 @@ function renderPlayers(players) {
             <td>${escapeHtml(p.mode || '')}</td>
             <td>${escapeHtml(p.room_id ?? p.spectating_room ?? '-')}</td>
             <td><span class="muted">${escapeHtml(p.sid)}</span></td>
-            <td>${p.kickable === false
-              ? '<span class="muted">—</span>'
-              : `<button class="row-action danger" data-kick="${escapeHtml(p.sid)}">踢出</button>`}</td>
+            ${ADMIN_STATS_VIEW
+              ? ''
+              : `<td>${p.kickable === false
+                ? '<span class="muted">—</span>'
+                : `<button class="row-action danger" data-kick="${escapeHtml(p.sid)}">踢出</button>`}</td>`}
           </tr>`).join('')}
       </tbody>
     </table>`;
@@ -792,6 +801,55 @@ function renderOpeningEventStats(data) {
     </table>`;
 }
 
+let averageRoundStatsRequestInFlight = false;
+
+async function loadAverageRoundStats() {
+  if (!adminPageVisible() || averageRoundStatsRequestInFlight) return;
+  const totalTable = $('avg-round-total-table');
+  const recentTable = $('avg-round-recent-table');
+  if (!totalTable && !recentTable) return;
+  averageRoundStatsRequestInFlight = true;
+  try {
+    const [totalData, recentData] = await Promise.all([
+      totalTable ? api('/api/admin/average-round-stats?scope=total') : Promise.resolve(null),
+      recentTable ? api('/api/admin/average-round-stats?scope=recent&recent_days=7') : Promise.resolve(null),
+    ]);
+    if (totalData) renderAverageRoundStats(totalData, totalTable);
+    if (recentData) {
+      renderAverageRoundStats(recentData, recentTable);
+      const count = $('avg-round-recent-count');
+      if (count) count.textContent = `${recentData.total.observations || 0} 次配装观察`;
+    }
+  } catch (error) {
+    const target = totalTable || recentTable;
+    if (target) target.innerHTML = `<div class="log-item error">平均回合统计加载失败：${escapeHtml(error.message)}</div>`;
+  } finally {
+    averageRoundStatsRequestInFlight = false;
+  }
+}
+
+function renderAverageRoundStats(data, table) {
+  const rows = [
+    data.total || { event_id: '__total__', observations: 0, rounds_sum: 0, avg_rounds: 0 },
+    ...(data.items || []),
+  ];
+  const safeTotal = data.total || {};
+  table.innerHTML = `
+    <table>
+      <thead><tr><th>配装</th><th>配装观察次数</th><th>回合数合计</th><th>平均回合</th><th>占总观察</th></tr></thead>
+      <tbody>
+        ${rows.map((item) => `
+          <tr>
+            <td><strong>${escapeHtml(item.name_cn || item.event_id)}</strong>${item.event_id !== '__total__' ? ` <span class="muted">${escapeHtml(item.event_id || '')}</span>` : ''}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.observations || 0))}</td>
+            <td class="admin-data">${escapeHtml(formatNumber(item.rounds_sum || 0))}</td>
+            <td class="admin-data">${escapeHtml(Number(item.avg_rounds || 0).toFixed(2))}</td>
+            <td class="admin-data">${safeTotal.observations ? `${((Number(item.observations || 0) / Number(safeTotal.observations)) * 100).toFixed(1)}%` : '—'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
 function registeredUsersQuery() {
   const params = new URLSearchParams();
   params.set('query', $('registered-users-search')?.value || '');
@@ -951,6 +1009,7 @@ async function toggleRegisteredUser(userId) {
 }
 
 function renderRooms(rooms) {
+  if (!$('rooms-table')) return;
   $('rooms-count').textContent = rooms.length;
   if (!rooms.length) {
     $('rooms-table').innerHTML = '<div class="log-item">暂无进行中的对局。</div>';
@@ -958,7 +1017,7 @@ function renderRooms(rooms) {
   }
   $('rooms-table').innerHTML = `
     <table>
-      <thead><tr><th>ID</th><th>模式</th><th>阶段</th><th>回合</th><th>玩家</th><th>观战</th><th>操作</th></tr></thead>
+      <thead><tr><th>ID</th><th>模式</th><th>阶段</th><th>回合</th><th>玩家</th><th>观战</th>${ADMIN_STATS_VIEW ? '' : '<th>操作</th>'}</tr></thead>
       <tbody>
         ${rooms.map((r) => `
           <tr>
@@ -968,12 +1027,14 @@ function renderRooms(rooms) {
             <td>${escapeHtml(r.round)}</td>
             <td>${escapeHtml((r.players || []).join(' / '))}</td>
             <td>${escapeHtml(r.spectators)}</td>
-            <td>
+            ${ADMIN_STATS_VIEW
+              ? ''
+              : `<td>
               <div class="row-actions">
                 <button class="row-action" data-skip="${r.room_id}">跳过</button>
                 <button class="row-action danger" data-end="${r.room_id}">结束</button>
               </div>
-            </td>
+            </td>`}
           </tr>`).join('')}
       </tbody>
     </table>`;
@@ -981,6 +1042,7 @@ function renderRooms(rooms) {
 
 function renderEvents(events) {
   const el = $('events-list');
+  if (!el) return;
   if (!el) return;
   el.innerHTML = events.length ? events.slice(0, 80).map((event) => `
     <div class="log-item">
@@ -992,6 +1054,7 @@ function renderEvents(events) {
 function renderSuspiciousEvents(events) {
   const el = $('suspicious-list');
   if (!el) return;
+  if (!el) return;
   el.innerHTML = events.length ? events.slice(0, 80).map((event) => `
     <div class="log-item">
       <time>${escapeHtml(formatAdminTime(event.ts))} · ${escapeHtml(event.severity || '-')} · ${escapeHtml(event.kind || '-')}</time>
@@ -1002,6 +1065,7 @@ function renderSuspiciousEvents(events) {
 
 function renderHistory(history) {
   const el = $('history-list');
+  if (!el) return;
   if (!el) return;
   el.innerHTML = history.length ? history.slice(0, 80).map((item) => `
     <div class="log-item">
@@ -1247,7 +1311,10 @@ async function resolveSelectedReport(reportId) {
 
 async function loadStorageSummary() {
   const grid = $('storage-summary-grid');
-  if (!grid) return;
+  if (!grid) {
+    loadCommunityStorage();
+    return;
+  }
   try {
     const data = await api('/api/admin/storage/summary');
     renderStorageSummary(data);
@@ -2069,6 +2136,7 @@ function bindEvents() {
   $('registered-users-sort')?.addEventListener('change', queueRegisteredUsersLoad);
   $('registered-users-order')?.addEventListener('change', queueRegisteredUsersLoad);
   $('draft-stats-refresh')?.addEventListener('click', loadDraftStats);
+  $('avg-round-refresh')?.addEventListener('click', loadAverageRoundStats);
   $('draft-stats-rebuild-wins')?.addEventListener('click', rebuildDraftWinStats);
   $('draft-stats-merge')?.addEventListener('change', loadDraftStats);
   $('draft-stats-winner-only')?.addEventListener('click', () => {
@@ -2096,11 +2164,11 @@ function bindEvents() {
       const target = tab.dataset.tab;
       activeAdminTab = target || 'gui';
       if (activeAdminTab !== 'game-chat') stopGameChatPolling();
-      ['gui', 'events', 'moderation', 'draft-stats', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
+      ['gui', 'events', 'moderation', 'rooms', 'draft-stats', 'avg-rounds', 'storage', 'replays', 'game-chat', 'terminal'].forEach((name) => {
         const panel = $(`admin-${name}`);
         if (panel) panel.classList.toggle('hidden', target !== name);
       });
-      if (['gui', 'events', 'moderation', 'terminal'].includes(target)) loadStatus({ manual: true });
+      if (['gui', 'events', 'moderation', 'rooms', 'terminal'].includes(target)) loadStatus({ manual: true });
       if (target === 'events') {
         renderEvents(adminState?.events || []);
         renderHistory(adminState?.history || []);
@@ -2110,6 +2178,7 @@ function bindEvents() {
         loadReports();
       }
       if (target === 'draft-stats') loadDraftStats();
+      if (target === 'avg-rounds') loadAverageRoundStats();
       if (target === 'storage') loadStorageSummary();
       if (target === 'replays') resetAndLoadReplays();
       if (target === 'game-chat') {
@@ -2159,12 +2228,14 @@ function bindEvents() {
     });
   });
 
-  $('broadcast-send').addEventListener('click', async () => {
-    const msg = $('broadcast-input').value.trim();
-    if (!msg) return;
-    await runCommand(`broadcast ${msg}`);
-    $('broadcast-input').value = '';
-  });
+  if (!ADMIN_STATS_VIEW) {
+    $('broadcast-send').addEventListener('click', async () => {
+      const msg = $('broadcast-input').value.trim();
+      if (!msg) return;
+      await runCommand(`broadcast ${msg}`);
+      $('broadcast-input').value = '';
+    });
+  }
 
   $('admin-game-chat-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -2239,56 +2310,58 @@ function bindEvents() {
     }
   });
 
-  $('terminal-form').addEventListener('submit', (event) => {
-    event.preventDefault();
-    const line = $('terminal-input').value;
-    $('terminal-input').value = '';
-    hideSuggestions();
-    runCommand(line);
-  });
-
-  $('terminal-input').addEventListener('input', hideSuggestions);
-  $('terminal-input').addEventListener('click', () => {
-    if (completionState) {
-      const input = $('terminal-input');
-      if (input.selectionStart !== completionState.appliedCursor || input.selectionEnd !== completionState.appliedCursor) {
-        hideSuggestions();
-      }
-    }
-  });
-  $('terminal-input').addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.isComposing) {
+  if (!ADMIN_STATS_VIEW) {
+    $('terminal-form').addEventListener('submit', (event) => {
       event.preventDefault();
       const line = $('terminal-input').value;
       $('terminal-input').value = '';
       hideSuggestions();
       runCommand(line);
-      return;
-    }
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      startOrCycleCompletion();
-      return;
-    }
-    if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) hideSuggestions();
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      historyIndex = Math.max(0, historyIndex - 1);
-      $('terminal-input').value = commandHistory[historyIndex] || '';
-    } else if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      historyIndex = Math.min(commandHistory.length, historyIndex + 1);
-      $('terminal-input').value = commandHistory[historyIndex] || '';
-    }
-  });
-  $('terminal-input').addEventListener('keyup', () => {
-    if (completionState) {
-      const input = $('terminal-input');
-      if (input.selectionStart !== completionState.appliedCursor || input.selectionEnd !== completionState.appliedCursor) {
-        hideSuggestions();
+    });
+
+    $('terminal-input').addEventListener('input', hideSuggestions);
+    $('terminal-input').addEventListener('click', () => {
+      if (completionState) {
+        const input = $('terminal-input');
+        if (input.selectionStart !== completionState.appliedCursor || input.selectionEnd !== completionState.appliedCursor) {
+          hideSuggestions();
+        }
       }
-    }
-  });
+    });
+    $('terminal-input').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        const line = $('terminal-input').value;
+        $('terminal-input').value = '';
+        hideSuggestions();
+        runCommand(line);
+        return;
+      }
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        startOrCycleCompletion();
+        return;
+      }
+      if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) hideSuggestions();
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        historyIndex = Math.max(0, historyIndex - 1);
+        $('terminal-input').value = commandHistory[historyIndex] || '';
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        historyIndex = Math.min(commandHistory.length, historyIndex + 1);
+        $('terminal-input').value = commandHistory[historyIndex] || '';
+      }
+    });
+    $('terminal-input').addEventListener('keyup', () => {
+      if (completionState) {
+        const input = $('terminal-input');
+        if (input.selectionStart !== completionState.appliedCursor || input.selectionEnd !== completionState.appliedCursor) {
+          hideSuggestions();
+        }
+      }
+    });
+  }
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {

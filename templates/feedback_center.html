@@ -23,6 +23,7 @@
       <nav class="fc-tabs" role="tablist" aria-label="反馈分类">
         <button id="fc-tab-bug" class="fc-tab is-active" type="button" data-kind="bug" role="tab">漏洞</button>
         <button id="fc-tab-suggestion" class="fc-tab" type="button" data-kind="suggestion" role="tab">建议</button>
+        <button id="fc-tab-internal" class="fc-tab" type="button" data-kind="internal" role="tab" hidden>不公开</button>
       </nav>
 
       <div class="fc-top-actions">
@@ -91,6 +92,7 @@
         <select id="fc-create-kind">
           <option value="bug">漏洞</option>
           <option value="suggestion">建议</option>
+          <option value="internal" hidden>不公开反馈</option>
         </select>
       </label>
       <label class="fc-field">

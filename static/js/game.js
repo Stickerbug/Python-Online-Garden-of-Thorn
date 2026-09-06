@@ -35737,12 +35737,22 @@ function getSettingsModSourceTab() {
 }
 
 function getModLoginPayload() {
-    return { disabled_mods: getDisabledMods(), ...getCommunityModSelection() };
+    let hasSavedPreference = true;
+    try {
+        hasSavedPreference = localStorage.getItem('gtn_disabled_mods') !== null;
+    } catch (_) {
+        hasSavedPreference = true;
+    }
+    return {
+        ...(hasSavedPreference ? { disabled_mods: getDisabledMods() } : {}),
+        ...getCommunityModSelection(),
+    };
 }
 
 function getModSettingsUpdatePayload() {
     return {
-        ...getModLoginPayload(),
+        disabled_mods: getDisabledMods(),
+        ...getCommunityModSelection(),
         client_revision: modSettingsPreferenceRevision,
     };
 }
@@ -35899,14 +35909,14 @@ async function loadSettingsMods() {
                 });
         }
         const mods = await settingsModsLoadPromise;
-        if (seq !== settingsLoadSeq || (panel && panel.classList.contains('hidden'))) return;
         settingsMods = mods || [];
         settingsModsLoadedAt = Date.now();
     } catch (e) {
-        if (seq !== settingsLoadSeq || (panel && panel.classList.contains('hidden'))) return;
         settingsMods = [];
+        settingsModsLoadedAt = Date.now();
     }
     reconcileKnownBundledMods();
+    if (seq !== settingsLoadSeq || (panel && panel.classList.contains('hidden'))) return;
     renderOfficialModList();
     if (settingsActiveModTab === 'community') loadSettingsCommunityMods();
     renderModSourceControls();
@@ -36639,12 +36649,15 @@ async function deleteCommunityMod(mod) {
 function getDisabledMods() {
     try {
         const raw = localStorage.getItem('gtn_disabled_mods');
+        const hasSavedPreference = raw !== null;
         let disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
         if (!Array.isArray(disabled)) disabled = getDefaultDisabledMods();
         if (localStorage.getItem(V11_DLC_DEFAULT_MIGRATION_KEY) !== '1') {
-            disabled = [...(Array.isArray(disabled) ? disabled : []), ...V11_DLC_MOD_FILENAMES];
             localStorage.setItem(V11_DLC_DEFAULT_MIGRATION_KEY, '1');
-            localStorage.setItem('gtn_disabled_mods', JSON.stringify(Array.from(new Set(disabled))));
+            if (hasSavedPreference) {
+                disabled = [...(Array.isArray(disabled) ? disabled : []), ...V11_DLC_MOD_FILENAMES];
+                localStorage.setItem('gtn_disabled_mods', JSON.stringify(Array.from(new Set(disabled))));
+            }
         }
         if (shouldMigrateLegacyOfficialModDefault(disabled) || shouldMigrateOfficialModDefaultV3(disabled)) {
             disabled = getDefaultDisabledMods();
@@ -36687,6 +36700,9 @@ function reconcileKnownBundledMods() {
         settingsMods.map(mod => String(mod && mod.filename || '').trim()).filter(Boolean)
     )).sort();
     if (!current.length) return;
+    const defaultDisabled = getDefaultDisabledMods();
+    const explicitPreference = localStorage.getItem('gtn_official_mod_default_v2') === '1'
+        || localStorage.getItem('gtn_official_mod_default_v3') === '1';
     let previous = null;
     try {
         const raw = localStorage.getItem('gtn_known_official_mods');
@@ -36695,12 +36711,30 @@ function reconcileKnownBundledMods() {
     } catch (_) {
         previous = null;
     }
-    if (previous) {
+    if (!previous && !explicitPreference) {
+        // A default list may have been baked before the bundled mod list was
+        // available (for example, at the first login). Bring it up to date
+        // with the server's real bundled list so newly added mods stay off.
+        let stored = null;
+        try {
+            const rawDisabled = localStorage.getItem('gtn_disabled_mods');
+            stored = rawDisabled ? JSON.parse(rawDisabled) : null;
+        } catch (_) {
+            stored = null;
+        }
+        if (Array.isArray(stored)) {
+            const storedSet = new Set(stored.map(item => String(item || '')));
+            const missingDefaults = defaultDisabled.filter(filename => !storedSet.has(filename));
+            if (missingDefaults.length) {
+                writeDisabledModsPreference([...stored, ...missingDefaults], { markExplicit: false });
+            }
+        }
+    } else if (previous) {
         const known = new Set(previous);
         const newlyAdded = current.filter(filename => (
             !known.has(filename) && !DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES.has(filename)
         ));
-        if (newlyAdded.length) {
+        if (newlyAdded.length && localStorage.getItem('gtn_disabled_mods') !== null) {
             writeDisabledModsPreference([...getDisabledMods(), ...newlyAdded]);
         }
     }

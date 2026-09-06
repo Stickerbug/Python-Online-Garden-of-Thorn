@@ -347,7 +347,7 @@ _ENCOUNTER_ROWS = {
 _CODE_ADDED_TAG_IDS = frozenset({
     'power', 'electric_power', 'swift', 'temporary_swift',
     'magic_swift', 'temporary_heavy', 'firmness', 'armor_break',
-    'rebound',
+    'rebound', 'favorite', 'infect',
 })
 _CODE_ADDED_STATUS_IDS = frozenset({
     'disc', 'sturdy', 'regeneration', 'invincible',

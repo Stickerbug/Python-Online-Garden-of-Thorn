@@ -5273,22 +5273,35 @@ class GameEngine:
         total = per_card * count
         self._deal_direct_damage(player_id, total, '电网', damage_type=DAMAGE_TYPE_MAGIC, damage_tag='factory:electric_web')
 
+    def _apply_electric_web_arm(self, player_id, eq, target_id, amount):
+        if eq is None:
+            return
+        try:
+            target_id = int(target_id)
+        except (TypeError, ValueError):
+            return
+        if not (0 <= target_id < len(self.players)):
+            return
+        amount = max(0, int(amount or 0))
+        if amount <= 0:
+            return
+        self.players[target_id].custom_vars['electric_web_draw_damage'] = (
+            int(self.players[target_id].custom_vars.get('electric_web_draw_damage', 0) or 0)
+            + amount
+        )
+        eq.custom_vars['electric_web_armed_target'] = target_id
+        eq.custom_vars['electric_web_armed_amount'] = (
+            int(eq.custom_vars.get('electric_web_armed_amount', 0) or 0) + amount
+        )
+
     def _atomic_electric_web_arm(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if not (0 <= target_id < len(self.players)):
             return
         amount = self._eval_int(player_id, params.get('amount', 2), card, 2)
         amount = max(0, amount)
-        self.players[target_id].custom_vars['electric_web_draw_damage'] = (
-            int(self.players[target_id].custom_vars.get('electric_web_draw_damage', 0) or 0)
-            + amount
-        )
         eq = self._find_equipment_for_card(player_id, card)
-        if eq is not None:
-            eq.custom_vars['electric_web_armed_target'] = target_id
-            eq.custom_vars['electric_web_armed_amount'] = (
-                int(eq.custom_vars.get('electric_web_armed_amount', 0) or 0) + amount
-            )
+        self._apply_electric_web_arm(player_id, eq, target_id, amount)
 
     def _cleanup_electric_web_draw_damage(self, eq: EquipmentInstance) -> None:
         if eq is None:
@@ -5976,6 +5989,21 @@ class GameEngine:
         ps.armor = 0
         ps.equipment_protection = 0
         ps.negate_next_skill = False
+        ps.attack_only = 0
+        ps.attack_blocked = 0
+        ps.sluggish = 0
+        ps.overload = 0
+        ps.foresight = 0
+        ps.fracture = 0
+        ps.stagnation = 0
+        ps.blind = 0
+        ps.heal_block = 0
+        ps.weakness = 0
+        ps.bleed = 0
+        ps.fragment_stacks = 0
+        ps.untargetable = 0
+        ps.sponge_active = False
+        ps.shovel_active = False
         ps.skip_turn = 0
         ps.damage_multiplier = 1.0
         ps.bandage_active = False
@@ -14768,6 +14796,11 @@ class GameEngine:
                 self._note_achievement_equipment_count(equip_owner_id)
                 self._refresh_hand_limit_bonuses()
                 self.log_msg(f"{self.pn(equip_owner_id)}装备了{card.name_cn}")
+                if self._equipment_is(eq, 'ElectricWeb', 'factory:electricweb'):
+                    arm_target = int(getattr(eq, 'effect_target', equip_owner_id))
+                    if not (0 <= arm_target < len(self.players)):
+                        arm_target = equip_owner_id
+                    self._apply_electric_web_arm(equip_owner_id, eq, arm_target, 2)
             if hasattr(card, '_placed_as_equipment'):
                 delattr(card, '_placed_as_equipment')
             if hasattr(card, '_placed_as_equipment_owner'):
@@ -14865,6 +14898,11 @@ class GameEngine:
             self._refresh_hand_limit_bonuses()
             self._refresh_equipment_derived_player_flags(owner_id)
             self.log_msg(log or f"{self.pn(owner_id)}装备了{target_card.name_cn}")
+            if self._equipment_is(eq, 'ElectricWeb', 'factory:electricweb'):
+                arm_target = int(getattr(eq, 'effect_target', owner_id))
+                if not (0 <= arm_target < len(self.players)):
+                    arm_target = owner_id
+                self._apply_electric_web_arm(owner_id, eq, arm_target, 2)
         if target_card is card:
             card._placed_as_equipment = True
             card._placed_as_equipment_owner = owner_id

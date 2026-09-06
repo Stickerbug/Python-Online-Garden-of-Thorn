@@ -192,6 +192,26 @@ def test_every_authored_mage_card_has_one_executable_source_backed_definition():
         assert card['upgrade']['description']['zh'] == authored['upgrade_text'].rstrip().rstrip('。.').rstrip()
 
 
+def test_mage_orange_returns_to_hand_after_being_played():
+    seed = 'mage-orange-rebound'
+    state = _combat_state(seed)
+    state, events = _play(state, 'mage_orange')
+    card = next(
+        item for item in events
+        if item.get('type') == 'card_played'
+        and item.get('def_id') == 'mage_orange'
+    )
+    assert card
+    assert any(
+        item.get('instance_id') == 'mage_orange-0-play'
+        for item in state['combat']['hand']
+    )
+    assert all(
+        item.get('instance_id') != 'mage_orange-0-play'
+        for item in state['combat']['discard_pile']
+    )
+
+
 def test_character_card_pools_are_isolated_and_keep_neutral_shop_cards():
     mage_rewards = set(story_reward_card_ids('mage'))
     mage_shop = set(story_shop_card_ids('mage'))

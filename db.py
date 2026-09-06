@@ -11344,6 +11344,94 @@ def list_opening_event_stats(mode='', sort='pick_rate', order='desc', limit=300,
     }
 
 
+def list_average_round_stats(scope='total', mode='', recent_days=7):
+    """Average rounds per opening-event loadout and overall.
+
+    Round counts follow the opening-event statistics unit: one match is one
+    observation for each player's loadout in that match.  Only persisted
+    matches that are valid for statistics and have a positive round count are
+    included.  ``scope='recent'`` limits to matches ended within the rolling
+    ``recent_days`` window.
+    """
+    mode_key = str(mode or '').strip()
+    scope_key = 'recent' if str(scope or '').lower() in ('recent', '7d', 'seven_days') else 'total'
+    mode_where = ''
+    params = []
+    if mode_key in ('1v1', '2v2'):
+        mode_where = 'AND mode = ?'
+        params.append(mode_key)
+    try:
+        safe_recent_days = max(1, int(recent_days or 7))
+    except (TypeError, ValueError):
+        safe_recent_days = 7
+    if scope_key == 'recent':
+        now = utc_now_dt()
+        cutoff = now - timedelta(days=safe_recent_days)
+        cutoff_text = cutoff.strftime('%Y-%m-%dT%H:%M:%SZ')
+        mode_where += ' AND ended_at >= ?'
+        params.append(cutoff_text)
+    sql = (
+        """
+        SELECT mode, rounds, summary_json
+        FROM matches
+        WHERE json_extract(summary_json, '$.valid_for_stats') = 1
+          AND rounds > 0
+          AND ended_at IS NOT NULL
+        """
+        + mode_where
+    )
+    totals = {'observations': 0, 'rounds_sum': 0}
+    events = {}
+    with get_db_connection() as conn:
+        for row in conn.execute(sql, params).fetchall():
+            try:
+                rounds = int(row['rounds'])
+            except (TypeError, ValueError):
+                continue
+            if rounds <= 0:
+                continue
+            try:
+                summary = _safe_json_loads(row['summary_json'], {})
+            except Exception:
+                summary = {}
+            event_ids = summary.get('opening_event_ids_by_player')
+            if not isinstance(event_ids, (list, tuple)):
+                continue
+            for raw_event_id in event_ids:
+                event_id = str(raw_event_id or '').strip()
+                if not event_id or event_id.lower() == 'none':
+                    continue
+                bucket = events.setdefault(event_id, {'observations': 0, 'rounds_sum': 0})
+                bucket['observations'] += 1
+                bucket['rounds_sum'] += rounds
+                totals['observations'] += 1
+                totals['rounds_sum'] += rounds
+    items = []
+    for event_id, bucket in events.items():
+        items.append({
+            'event_id': event_id,
+            'observations': bucket['observations'],
+            'rounds_sum': bucket['rounds_sum'],
+            'avg_rounds': round(bucket['rounds_sum'] / bucket['observations'], 2),
+        })
+    items.sort(key=lambda item: (-item['observations'], -item['avg_rounds'], item['event_id']))
+    total_item = {
+        'event_id': '__total__',
+        'observations': totals['observations'],
+        'rounds_sum': totals['rounds_sum'],
+        'avg_rounds': round(totals['rounds_sum'] / totals['observations'], 2)
+        if totals['observations']
+        else 0.0,
+    }
+    return {
+        'scope': scope_key,
+        'recent_days': safe_recent_days if scope_key == 'recent' else 0,
+        'mode': mode_key if mode_key in ('1v1', '2v2') else '',
+        'total': total_item,
+        'items': items,
+    }
+
+
 def list_admin_users(query='', sort='last_login_at', order='desc', limit=30, offset=0):
     sort_key = str(sort or 'last_login_at')
     sort_expr = ADMIN_USER_SORTS.get(sort_key, ADMIN_USER_SORTS['last_login_at'])

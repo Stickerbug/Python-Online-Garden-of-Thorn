@@ -6000,6 +6000,10 @@ class LocalSoloEngine {
             this.ensureNonStackEquipmentOrder(eq);
             this.refreshEquipmentDerivedFlags();
             this.logMsg(`${this.pn(ownerId)}装备了${cardName(targetCard.def_id)}`);
+            if (this.cardIs(targetCard, 'ElectricWeb', 'factory:electricweb')) {
+                const armTarget = toInt(eq.effect_target ?? ownerId, ownerId);
+                this.applyElectricWebArm(ownerId, eq, armTarget, 2);
+            }
         }
         if (targetCard === card) {
             card._placed_as_equipment = true;
@@ -6044,6 +6048,10 @@ class LocalSoloEngine {
             this._last_created_card_instance_id = newCard.instance_id;
             this._active_effect_context.last_created_card_instance_id = newCard.instance_id;
             this.logMsg(log || `${this.pn(ownerId)}获得装备${cardName(newCard.def_id)}`);
+            if (this.cardIs(newCard, 'ElectricWeb', 'factory:electricweb')) {
+                const armTarget = toInt(eq.effect_target ?? ownerId, ownerId);
+                this.applyElectricWebArm(ownerId, eq, armTarget, 2);
+            }
         });
     }
 
@@ -6329,17 +6337,8 @@ class LocalSoloEngine {
         const targetId = this.resolveTarget(playerId, params.target || 'target', choice);
         const amount = Math.max(0, this.evalInt(playerId, params.amount ?? 2, card, 2, choice));
         if (!this.players[targetId]) return;
-        this.players[targetId].custom_vars.electric_web_draw_damage = (
-            toInt(this.players[targetId].custom_vars.electric_web_draw_damage, 0) + amount
-        );
         const eq = this.findEquipmentForCard(playerId, card);
-        if (eq) {
-            eq.custom_vars = eq.custom_vars || {};
-            eq.custom_vars.electric_web_armed_target = targetId;
-            eq.custom_vars.electric_web_armed_amount = (
-                toInt(eq.custom_vars.electric_web_armed_amount, 0) + amount
-            );
-        }
+        this.applyElectricWebArm(playerId, eq, targetId, amount);
     }
 
     effect_add_status(playerId, card, params, log, choice) {
@@ -7673,6 +7672,21 @@ class LocalSoloEngine {
         return actual;
     }
 
+    applyElectricWebArm(ownerId, eq, targetId, amount) {
+        const target = this.players[targetId];
+        if (!eq || !target) return;
+        amount = Math.max(0, toInt(amount, 0));
+        if (amount <= 0) return;
+        target.custom_vars.electric_web_draw_damage = (
+            toInt(target.custom_vars.electric_web_draw_damage, 0) + amount
+        );
+        eq.custom_vars = eq.custom_vars || {};
+        eq.custom_vars.electric_web_armed_target = targetId;
+        eq.custom_vars.electric_web_armed_amount = (
+            toInt(eq.custom_vars.electric_web_armed_amount, 0) + amount
+        );
+    }
+
     applyElectricWebDrawDamage(playerId, drawnCount) {
         const ps = this.players[playerId];
         if (!ps) return;
@@ -8814,8 +8828,16 @@ class LocalSoloEngine {
         if ((card.card_type === 'root' && !scriptControlsPlay) || card._placed_as_equipment) {
             if (!this.findEquipmentForCard(equipOwnerId, card)) {
                 const eq = new LocalEquipment(card, equipOwnerId);
+                if (choice && choice.target_player_id != null) {
+                    const chosen = toInt(choice.target_player_id ?? choice.target_player ?? choice.target_id, -1);
+                    if (chosen >= 0 && chosen < this.players.length) eq.effect_target = chosen;
+                }
                 this.players[equipOwnerId].equipment.push(eq);
                 this.logMsg(`${this.pn(equipOwnerId)}装备了${cardName(card.def_id)}`);
+                if (this.cardIs(card, 'ElectricWeb', 'factory:electricweb')) {
+                    const armTarget = toInt(eq.effect_target ?? equipOwnerId, equipOwnerId);
+                    this.applyElectricWebArm(equipOwnerId, eq, armTarget, 2);
+                }
             }
         } else if (bloodKnifeReturn) {
             ps.addToHand(card);

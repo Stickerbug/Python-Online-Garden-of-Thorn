@@ -231,6 +231,7 @@ from db import (
     list_leaderboard,
     list_user_gr_snapshots,
     list_card_draft_stats,
+    list_average_round_stats,
     list_opening_event_stats,
     list_story_manual_saves,
     list_story_discoveries,
@@ -418,6 +419,29 @@ _PUBLIC_DATA_CACHE_SECONDS = 300.0
 _PUBLIC_DATA_CACHE_MAX_ENTRIES = 16
 _PUBLIC_DATA_CACHE = OrderedDict()
 _PUBLIC_DATA_CACHE_LOCK = threading.Lock()
+_PUBLIC_DATA_CACHE_LOCK_TIMEOUT = 3.0
+
+
+def _green_wait_acquire(primitive, timeout, poll_seconds=0.02):
+    """Acquire a lock or semaphore without Eventlet cross-thread timers.
+
+    Eventlet's patched ``threading`` primitives schedule timeout timers on the
+    hub.  When a waiter can be owned by another OS thread (native tpool or a
+    migrated greenlet), that timer can raise
+    ``greenlet.error: Cannot switch to a different thread`` and leave the
+    process in a poisoned state.  Polling non-blocking acquires lets every
+    greenlet keep control while the actual owner releases from any thread.
+    """
+    timeout = max(0.0, float(timeout or 0.0))
+    if eventlet is None:
+        return bool(primitive.acquire(timeout=timeout))
+    deadline = time.monotonic() + timeout
+    while True:
+        if primitive.acquire(blocking=False):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        eventlet.sleep(max(0.001, float(poll_seconds or 0.02)))
 
 
 def normalize_pvp_match_mode(value, default='casual_1v1'):
@@ -504,7 +528,13 @@ def _public_data_disable_key(rows):
 def _public_data_cache_get(namespace, key):
     full_key = (namespace, key)
     now = time.monotonic()
-    with _PUBLIC_DATA_CACHE_LOCK:
+    if not _green_wait_acquire(
+        _PUBLIC_DATA_CACHE_LOCK,
+        _PUBLIC_DATA_CACHE_LOCK_TIMEOUT,
+    ):
+        admin_event('error', 'public data cache read lock timed out')
+        return None
+    try:
         entry = _PUBLIC_DATA_CACHE.get(full_key)
         if entry is None or now - float(entry.get('at') or 0) >= _PUBLIC_DATA_CACHE_SECONDS:
             if entry is not None:
@@ -512,6 +542,8 @@ def _public_data_cache_get(namespace, key):
             return None
         _PUBLIC_DATA_CACHE.move_to_end(full_key)
         cached = dict(entry)
+    finally:
+        _PUBLIC_DATA_CACHE_LOCK.release()
     etag = str(cached.get('etag') or '')
     if etag and request.if_none_match.contains(etag):
         response = app.response_class(status=304)
@@ -528,15 +560,24 @@ def _public_data_cache_put(namespace, key, payload):
     body = app.json.dumps(payload, separators=(',', ':')).encode('utf-8')
     etag = hashlib.sha256(body).hexdigest()
     full_key = (namespace, key)
-    with _PUBLIC_DATA_CACHE_LOCK:
-        _PUBLIC_DATA_CACHE[full_key] = {
-            'at': time.monotonic(),
-            'body': body,
-            'etag': etag,
-        }
-        _PUBLIC_DATA_CACHE.move_to_end(full_key)
-        while len(_PUBLIC_DATA_CACHE) > _PUBLIC_DATA_CACHE_MAX_ENTRIES:
-            _PUBLIC_DATA_CACHE.popitem(last=False)
+    acquired = _green_wait_acquire(
+        _PUBLIC_DATA_CACHE_LOCK,
+        _PUBLIC_DATA_CACHE_LOCK_TIMEOUT,
+    )
+    if acquired:
+        try:
+            _PUBLIC_DATA_CACHE[full_key] = {
+                'at': time.monotonic(),
+                'body': body,
+                'etag': etag,
+            }
+            _PUBLIC_DATA_CACHE.move_to_end(full_key)
+            while len(_PUBLIC_DATA_CACHE) > _PUBLIC_DATA_CACHE_MAX_ENTRIES:
+                _PUBLIC_DATA_CACHE.popitem(last=False)
+        finally:
+            _PUBLIC_DATA_CACHE_LOCK.release()
+    else:
+        admin_event('error', 'public data cache write lock timed out; serving uncached response')
     if request.if_none_match.contains(etag):
         response = app.response_class(status=304)
     else:
@@ -684,6 +725,7 @@ GTN_STATIC_VERSION += '-public-feedback-mojira-css-1'
 GTN_STATIC_VERSION += '-public-feedback-split-mojira-1'
 GTN_STATIC_VERSION += '-public-feedback-skin-zh-1'
 GTN_STATIC_VERSION += '-public-feedback-kind-tabs-1'
+GTN_STATIC_VERSION += '-public-feedback-internal-kind-1'
 GTN_STATIC_VERSION += '-story-reputation-badges-1'
 GTN_STATIC_VERSION += '-feedback-center-route-full-info-1'
 GTN_STATIC_VERSION += '-feedback-admin-wording-1'
@@ -706,6 +748,7 @@ GTN_STATIC_VERSION += '-story-talent-event-option-terms-1'
 GTN_STATIC_VERSION += '-story-card-machine-offer-cards-1'
 GTN_STATIC_VERSION += '-solo-response-perspective-reset-1'
 GTN_STATIC_VERSION += '-storage-session-before-persistent-1'
+GTN_STATIC_VERSION += '-new-player-entertainment-default-fix-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -1268,7 +1311,7 @@ SOLO_ACTION_WORK_BUDGET = max(1000, _env_int('GTN_SOLO_ACTION_WORK_BUDGET', 2000
 SOLO_LOG_LIMIT = max(200, _env_int('GTN_SOLO_LOG_LIMIT', 1200))
 SOLO_ACTION_SAMPLES = deque(maxlen=500)
 _SOLO_ACTION_LOCKS = {}
-_SOLO_ACTION_CAPACITY = threading.BoundedSemaphore(SOLO_MAX_CONCURRENT_ACTIONS)
+_SOLO_ACTION_CAPACITY = _NATIVE_THREADING.BoundedSemaphore(SOLO_MAX_CONCURRENT_ACTIONS)
 _SOLO_ACTION_INFLIGHT_LOCK = threading.Lock()
 _SOLO_ACTION_INFLIGHT = {'training': 0}
 _PHELREN_ACTION_STATE_LOCK = _NATIVE_THREADING.Lock()
@@ -2914,7 +2957,7 @@ def protect_admin_api():
         path.startswith('/api/admin/')
         or path.startswith('/api/adminconsole/')
         or path.startswith('/api/feedback/handling/')
-        or path in {'/admin', '/adminpage', '/adminconsole', '/feedback/handling-pane'}
+        or path in {'/admin', '/adminpage', '/admin-stats', '/adminconsole', '/feedback/handling-pane'}
     )
     if DB_AVAILABLE and not admin_surface and not path.startswith('/static/') and not path.startswith('/fonts/') and path != '/favicon.ico':
         try:
@@ -7648,23 +7691,40 @@ _CONTENT_DISABLE_CACHE_LOCK = threading.Lock()
 
 
 def invalidate_content_disable_cache():
-    with _CONTENT_DISABLE_CACHE_LOCK:
+    if not _green_wait_acquire(
+        _CONTENT_DISABLE_CACHE_LOCK,
+        _PUBLIC_DATA_CACHE_LOCK_TIMEOUT,
+    ):
+        admin_event('error', 'content disable cache invalidate lock timed out')
+        return
+    try:
         _CONTENT_DISABLE_CACHE['ts'] = 0.0
         _CONTENT_DISABLE_CACHE['rows'] = []
+    finally:
+        _CONTENT_DISABLE_CACHE_LOCK.release()
 
 
 def active_content_disables(mode=None, force=False):
     if not DB_AVAILABLE:
         return []
     now = time.time()
-    with _CONTENT_DISABLE_CACHE_LOCK:
-        if force or now - float(_CONTENT_DISABLE_CACHE.get('ts') or 0) >= CONTENT_DISABLE_CACHE_SECONDS:
-            try:
-                _CONTENT_DISABLE_CACHE['rows'] = list_content_disables()
-                _CONTENT_DISABLE_CACHE['ts'] = now
-            except Exception as exc:
-                admin_event('error', f'content disable load failed: {exc}')
+    if not _green_wait_acquire(
+        _CONTENT_DISABLE_CACHE_LOCK,
+        _PUBLIC_DATA_CACHE_LOCK_TIMEOUT,
+    ):
+        admin_event('error', 'content disable cache read lock timed out')
         rows = [dict(row) for row in (_CONTENT_DISABLE_CACHE.get('rows') or [])]
+    else:
+        try:
+            if force or now - float(_CONTENT_DISABLE_CACHE.get('ts') or 0) >= CONTENT_DISABLE_CACHE_SECONDS:
+                try:
+                    _CONTENT_DISABLE_CACHE['rows'] = list_content_disables()
+                    _CONTENT_DISABLE_CACHE['ts'] = now
+                except Exception as exc:
+                    admin_event('error', f'content disable load failed: {exc}')
+            rows = [dict(row) for row in (_CONTENT_DISABLE_CACHE.get('rows') or [])]
+        finally:
+            _CONTENT_DISABLE_CACHE_LOCK.release()
     scope = str(mode or '').strip().lower()
     if scope == 'any':
         return rows
@@ -12564,10 +12624,10 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     )
                 return {'success': True, 'output': '\n'.join(lines)}
             if cmd == 'publicfeedback-list':
-                if len(parts) < 2 or str(parts[1]).lower() not in ('bug', 'suggestion'):
+                if len(parts) < 2 or str(parts[1]).lower() not in ('bug', 'suggestion', 'internal'):
                     return {
                         'success': False,
-                        'output': command_error(raw, len(raw), 'publicfeedback list <bug|suggestion> [状态] [数量]'),
+                        'output': command_error(raw, len(raw), 'publicfeedback list <bug|suggestion|internal> [状态] [数量]'),
                     }
                 kind = str(parts[1]).lower()
                 status = parts[2] if len(parts) >= 3 and parts[2].lower() != 'all' else ''
@@ -12608,7 +12668,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     body = body[:800] + '\n…（正文已截断）'
                 lines = [
                     f"#{detail['id']} [{status_names.get(detail.get('status'), detail.get('status'))}] "
-                    f"{'suggestion' if detail.get('kind') == 'suggestion' else 'bug'}",
+                    f"{detail.get('kind')}",
                     f"标题：{detail.get('title')}",
                     f"作者：{author} | 可见={detail.get('visible')} | 置顶={detail.get('pinned')} | "
                     f"优先级={detail.get('priority') or 0} | 票数={detail.get('vote_count')} | 评论={detail.get('comment_count')}",
@@ -17462,7 +17522,10 @@ def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
     acquired = False
     if not is_phelren:
         capacity = _SOLO_ACTION_CAPACITY
-        acquired = capacity.acquire(timeout=SOLO_ACTION_QUEUE_WAIT_SECONDS)
+        acquired = _green_wait_acquire(
+            capacity,
+            SOLO_ACTION_QUEUE_WAIT_SECONDS,
+        )
         if not acquired:
             soft_reject(
                 sid,
@@ -20817,6 +20880,11 @@ def admin_page():
     return render_template('adminpage.html')
 
 
+@app.route('/admin-stats')
+def admin_stats_page():
+    return render_template('admin_stats.html')
+
+
 @app.route('/adminconsole')
 def admin_console_page():
     return render_template('adminconsole.html')
@@ -20852,10 +20920,15 @@ def feedback_center_redirect():
 
 @app.route('/feedback-center/bug')
 @app.route('/feedback-center/suggestion')
+@app.route('/feedback-center/internal')
 def feedback_center_browse(kind=None):
     kind = kind or str(request.path).rstrip('/').split('/')[-1]
-    if kind not in ('bug', 'suggestion'):
+    if kind not in ('bug', 'suggestion', 'internal'):
         return redirect('/feedback-center/bug')
+    if kind == 'internal':
+        user = _current_account_user()
+        if not user or not feedback_is_staff(user.get('id')):
+            return redirect('/feedback-center/bug')
     return render_template(
         'feedback_center.html',
         static_version=GTN_STATIC_VERSION,
@@ -20873,8 +20946,12 @@ def feedback_center_messages():
 @app.route('/feedback-center/issues/<path:issue_key>')
 def feedback_center_issue_page(issue_key):
     key = str(issue_key or '').strip()
-    if not re.fullmatch(r'(?:GB|GS)-\d+', key):
+    if not re.fullmatch(r'(?:GB|GS|GI)-\d+', key):
         return redirect('/feedback-center/bug')
+    if key.startswith('GI-'):
+        user = _current_account_user()
+        if not user or not feedback_is_staff(user.get('id')):
+            return redirect('/feedback-center/bug')
     return render_template(
         'feedback_center.html',
         static_version=GTN_STATIC_VERSION,
@@ -22024,6 +22101,48 @@ def admin_opening_event_stats():
         rows=len(data.get('items') or []),
         total=data.get('total'),
         limit=data.get('limit'),
+    )
+    return jsonify({'success': True, **data})
+
+
+@app.route('/api/admin/average-round-stats')
+def admin_average_round_stats():
+    started = time.perf_counter()
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    try:
+        scope = request.args.get('scope', 'total')
+        data = list_average_round_stats(
+            scope=scope,
+            mode=request.args.get('mode', ''),
+            recent_days=request.args.get('recent_days', 7),
+        )
+        for item in [data.get('total'), *data.get('items', [])]:
+            if item is None:
+                continue
+            if item.get('event_id') == '__total__':
+                item['name_cn'] = '总计'
+                item['name_en'] = 'Total'
+                continue
+            event = GameEngine.OPENING_EVENTS.get(
+                int(item.get('event_id'))
+            ) if str(item.get('event_id')).isdigit() else None
+            if not event:
+                event = {'name_cn': item.get('event_id'), 'name_en': item.get('event_id')}
+            item['name_cn'] = event.get('name_cn') or event.get('name') or item.get('event_id')
+            item['name_en'] = event.get('name_en') or event.get('name') or item.get('event_id')
+    except Exception as exc:
+        admin_event('error', f'admin average round stats failed: {exc}')
+        log_admin_api_timing(
+            '/api/admin/average-round-stats',
+            (time.perf_counter() - started) * 1000,
+            error=type(exc).__name__,
+        )
+        return jsonify({'success': False, 'error': '平均回合统计数据库不可用'}), 500
+    log_admin_api_timing(
+        '/api/admin/average-round-stats',
+        (time.perf_counter() - started) * 1000,
+        rows=len(data.get('items') or []),
     )
     return jsonify({'success': True, **data})
 

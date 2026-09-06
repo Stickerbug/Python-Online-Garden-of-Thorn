@@ -2771,6 +2771,11 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
   justify-content: center;
 }
 
+#story-reward-options.story-card-choice-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  justify-content: center;
+}
+
 .story-card-choice-grid > .story-card.card {
   height: auto;
   align-self: start;

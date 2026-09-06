@@ -3,7 +3,7 @@
 
   const T = {
     zh: {
-      feedback_center: '反馈中心', bug_tab: '漏洞', suggestion_tab: '建议', project_subtitle: '漏洞与建议',
+      feedback_center: '反馈中心', bug_tab: '漏洞', suggestion_tab: '建议', internal_tab: '不公开', internal_kind: '不公开反馈', project_subtitle: '漏洞与建议',
       project_copy: '报告漏洞，或为未来的更新提出建议。登录后可投票与讨论。',
       status: '状态', all_status: '全部状态', sort: '排序',
       results: '共 {0} 条',
@@ -32,9 +32,10 @@
       report_cat_duplicate: '重复/已存在', report_cat_other: '其他',
       bug_status: { new: '待确认', needs_info: '需补充', confirmed: '已确认', in_progress: '修复中', fixed: '已修复', duplicate: '重复', unreproducible: '无法复现', by_design: '设计如此', invalid: '不予处理' },
       suggestion_status: { new: '待审核', under_review: '审核中', accepted: '已采纳', planned: '已规划', rejected: '已拒绝', duplicate: '重复' },
+      internal_status: { new: '待处理', needs_info: '需补充', in_progress: '处理中', fixed: '已完成', duplicate: '重复', invalid: '无效' },
     },
     en: {
-      feedback_center: 'Feedback Center', bug_tab: 'Bugs', suggestion_tab: 'Suggestions', project_subtitle: 'Bugs & suggestions',
+      feedback_center: 'Feedback Center', bug_tab: 'Bugs', suggestion_tab: 'Suggestions', internal_tab: 'Internal', internal_kind: 'Internal feedback', project_subtitle: 'Bugs & suggestions',
       project_copy: 'Report bugs or propose updates. Sign in to vote and discuss.',
       status: 'Status', all_status: 'All statuses', sort: 'Sort',
       results: '{0} results',
@@ -64,9 +65,10 @@
       report_cat_duplicate: 'Duplicate / already reported', report_cat_other: 'Other',
       bug_status: { new: 'New', needs_info: 'Needs info', confirmed: 'Confirmed', in_progress: 'Fixing', fixed: 'Fixed', duplicate: 'Duplicate', unreproducible: 'Cannot reproduce', by_design: 'Works as intended', invalid: 'Invalid' },
       suggestion_status: { new: 'New', under_review: 'Under review', accepted: 'Accepted', planned: 'Planned', rejected: 'Declined', duplicate: 'Duplicate' },
+      internal_status: { new: 'New', needs_info: 'Needs info', in_progress: 'In progress', fixed: 'Done', duplicate: 'Duplicate', invalid: 'Invalid' },
     },
     fr: {
-      feedback_center: 'Centre de signalements', bug_tab: 'Bugs', suggestion_tab: 'Suggestions', project_subtitle: 'Bugs et suggestions',
+      feedback_center: 'Centre de signalements', bug_tab: 'Bugs', suggestion_tab: 'Suggestions', internal_tab: 'Interne', internal_kind: 'Signalement interne', project_subtitle: 'Bugs et suggestions',
       project_copy: 'Signalez un bug ou proposez une amélioration. Connectez-vous pour voter.',
       status: 'Statut', all_status: 'Tous', sort: 'Trier', sort_priority: 'Priorité',
       results: '{0} résultats',
@@ -93,9 +95,10 @@
       report_cat_misleading: 'Trompeur', report_cat_duplicate: 'Doublon', report_cat_other: 'Autre',
       bug_status: { new: 'Nouveau', needs_info: 'Infos requises', confirmed: 'Confirmé', in_progress: 'Correction', fixed: 'Corrigé', duplicate: 'Doublon', unreproducible: 'Non reproduit', by_design: 'Prévu', invalid: 'Invalide' },
       suggestion_status: { new: 'Nouveau', under_review: 'À l’étude', accepted: 'Accepté', planned: 'Planifié', rejected: 'Refusé', duplicate: 'Doublon' },
+      internal_status: { new: 'Nouveau', needs_info: 'Infos requises', in_progress: 'En cours', fixed: 'Terminé', duplicate: 'Doublon', invalid: 'Invalide' },
     },
     ja: {
-      feedback_center: 'フィードバックセンター', bug_tab: 'バグ', suggestion_tab: '提案', project_subtitle: 'バグと提案',
+      feedback_center: 'フィードバックセンター', bug_tab: 'バグ', suggestion_tab: '提案', internal_tab: '内部', internal_kind: '内部フィードバック', project_subtitle: 'バグと提案',
       project_copy: 'バグを報告したり、今後の更新を提案できます。',
       status: '状態', all_status: 'すべて', sort: '並び替え', sort_priority: '優先度',
       results: '{0} 件',
@@ -123,6 +126,7 @@
       report_cat_duplicate: '重複', report_cat_other: 'その他',
       bug_status: { new: '未確認', needs_info: '情報不足', confirmed: '確認済み', in_progress: '修正中', fixed: '修正済み', duplicate: '重複', unreproducible: '再現不可', by_design: '仕様', invalid: '無効' },
       suggestion_status: { new: '未審査', under_review: '審査中', accepted: '採用', planned: '計画済み', rejected: '却下', duplicate: '重複' },
+      internal_status: { new: '未処理', needs_info: '情報待ち', in_progress: '処理中', fixed: '完了', duplicate: '重複', invalid: '無効' },
     },
   };
 
@@ -178,6 +182,12 @@
     const table = T[lang()] || T.zh;
     const group = table[`${kind}_status`] || T.zh[`${kind}_status`] || {};
     return group[status] || status;
+  }
+
+  function kindLabel(kind) {
+    if (kind === 'suggestion') return t('suggestion_tab');
+    if (kind === 'internal') return t('internal_kind');
+    return t('bug_tab');
   }
 
   function $(id) { return document.getElementById(id); }
@@ -414,7 +424,9 @@
   function statusOptions(kind, selected) {
     const keys = kind === 'suggestion'
       ? ['new', 'under_review', 'accepted', 'planned', 'rejected', 'duplicate']
-      : ['new', 'needs_info', 'confirmed', 'in_progress', 'fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid'];
+      : kind === 'internal'
+        ? ['new', 'needs_info', 'in_progress', 'fixed', 'duplicate', 'invalid']
+        : ['new', 'needs_info', 'confirmed', 'in_progress', 'fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid'];
     return keys.map((key) =>
       `<option value="${key}"${key === selected ? ' selected' : ''}>${esc(statusLabel(kind, key))}</option>`,
     ).join('');
@@ -424,7 +436,7 @@
     const langTable = T[lang()] || T.zh;
     document.title = `${langTable.feedback_center || '反馈中心'} · 荆棘花园`;
     $('fc-brand-sub').textContent = langTable.feedback_center;
-    $('fc-open-title').textContent = state.kind === 'suggestion' ? '建议列表' : '漏洞列表';
+    $('fc-open-title').textContent = `${kindLabel(state.kind)}列表`;
     $('fc-status-label').textContent = langTable.status;
     $('fc-sort-label').textContent = langTable.sort;
     $('fc-create').textContent = langTable.new_report;
@@ -443,12 +455,20 @@
     ].map(([value, label]) => `<option value="${value}"${value === state.sort ? ' selected' : ''}>${esc(label)}</option>`).join('');
     $('fc-tab-bug').textContent = t('bug_tab');
     $('fc-tab-suggestion').textContent = t('suggestion_tab');
+    $('fc-tab-internal').textContent = t('internal_tab');
+    const internalTab = $('fc-tab-internal');
+    if (internalTab) internalTab.hidden = !state.isStaff;
   }
 
   function updateTabs() {
     $('fc-tab-bug').classList.toggle('is-active', state.kind === 'bug');
     $('fc-tab-suggestion').classList.toggle('is-active', state.kind === 'suggestion');
-    $('fc-open-title').textContent = state.kind === 'suggestion' ? '建议列表' : '漏洞列表';
+    const internalTab = $('fc-tab-internal');
+    if (internalTab) {
+      internalTab.classList.toggle('is-active', state.kind === 'internal');
+      internalTab.hidden = !state.isStaff;
+    }
+    $('fc-open-title').textContent = `${kindLabel(state.kind)}列表`;
   }
 
   async function loadAccount() {
@@ -469,6 +489,8 @@
     const canCreate = !!state.account;
     $('fc-create').hidden = !canCreate;
     $('fc-list-create').hidden = !canCreate;
+    const internalTab = $('fc-tab-internal');
+    if (internalTab) internalTab.hidden = !state.isStaff;
   }
 
   function renderAccount() {
@@ -639,7 +661,9 @@
       const selected = state.detail && Number(state.detail.id) === Number(issue.id) ? ' is-selected' : '';
       const icon = issue.kind === 'bug'
         ? `<img class="fc-row-icon" src="/static/assets/icons/bug.svg" alt="Bug 图标">`
-        : `<span class="fc-row-icon fc-row-icon-suggestion" aria-hidden="true">✦</span>`;
+        : issue.kind === 'internal'
+          ? `<span class="fc-row-icon fc-row-icon-internal" aria-hidden="true">内</span>`
+          : `<span class="fc-row-icon fc-row-icon-suggestion" aria-hidden="true">✦</span>`;
       return `<a class="fc-issue-row${selected}" href="${esc(canonicalIssuePath(issue))}" data-open-issue="${issue.id}">` +
         `<span class="fc-issue-top">${icon}<span class="fc-issue-key"${statusAttr(issue.status)}>${esc(issue.key || `#${issue.id}`)}</span></span>` +
         `<span class="fc-issue-summary">${esc(issue.title)}</span>` +
@@ -649,7 +673,8 @@
 
   async function openIssue(issueId, { replace = false } = {}) {
     try {
-      const data = await api(`/api/public-feedback/issues/${Number(issueId)}`);
+      const hiddenQuery = state.kind === 'internal' && state.isStaff ? '?include_hidden=1' : '';
+      const data = await api(`/api/public-feedback/issues/${Number(issueId)}${hiddenQuery}`);
       state.detail = data.issue || null;
       state.kind = state.detail.kind;
       const path = canonicalIssuePath(state.detail);
@@ -699,11 +724,13 @@
   function canonicalIssuePath(issue) {
     const kind = String(issue?.kind || 'bug');
     const id = Number(issue?.id || 0);
-    return `/feedback-center/issues/${kind === 'suggestion' ? 'GS' : 'GB'}-${id}`;
+    const prefix = kind === 'suggestion' ? 'GS' : kind === 'internal' ? 'GI' : 'GB';
+    return `/feedback-center/issues/${prefix}-${id}`;
   }
 
   function canonicalListPath(kind) {
-    return `/feedback-center/${kind === 'suggestion' ? 'suggestion' : 'bug'}`;
+    const listKind = kind === 'suggestion' ? 'suggestion' : kind === 'internal' ? 'internal' : 'bug';
+    return `/feedback-center/${listKind}`;
   }
 
   function listQueryString() {
@@ -717,26 +744,26 @@
   }
 
   function issueKeyParts(key) {
-    const match = String(key || '').match(/^(GB|GS)-(\d+)$/i);
+    const match = String(key || '').match(/^(GB|GS|GI)-(\d+)$/i);
     if (!match) return null;
     return {
       prefix: match[1].toUpperCase(),
-      kind: match[1].toUpperCase() === 'GS' ? 'suggestion' : 'bug',
+      kind: match[1].toUpperCase() === 'GS' ? 'suggestion' : match[1].toUpperCase() === 'GI' ? 'internal' : 'bug',
       id: Number(match[2]),
     };
   }
 
   function parseLocationRoute() {
     const path = window.location.pathname.replace(/\/+$/, '') || '/feedback-center/bug';
-    const issueMatch = path.match(/^\/feedback-center\/issues\/(GB|GS)-(\d+)$/i);
+    const issueMatch = path.match(/^\/feedback-center\/issues\/(GB|GS|GI)-(\d+)$/i);
     if (issueMatch) {
       return {
         view: 'issue',
-        kind: String(issueMatch[1]).toUpperCase() === 'GS' ? 'suggestion' : 'bug',
+        kind: String(issueMatch[1]).toUpperCase() === 'GS' ? 'suggestion' : String(issueMatch[1]).toUpperCase() === 'GI' ? 'internal' : 'bug',
         id: Number(issueMatch[2]),
       };
     }
-    const kindMatch = path.match(/^\/feedback-center\/(bug|suggestion)$/i);
+    const kindMatch = path.match(/^\/feedback-center\/(bug|suggestion|internal)$/i);
     if (kindMatch) {
       return {
         view: 'list',
@@ -783,7 +810,7 @@
 
   function navigateKind(kind) {
     showFeedbackSplitView();
-    state.kind = kind === 'suggestion' ? 'suggestion' : 'bug';
+    state.kind = kind === 'suggestion' ? 'suggestion' : kind === 'internal' ? 'internal' : 'bug';
     state.status = '';
     state.search = '';
     state.page = 1;
@@ -896,16 +923,21 @@
 
     const replay = detail.replay_id
       ? `<p class="fc-muted">${esc(t('replay_hint', 'Replay {0}').replace('{0}', detail.replay_id))}</p>` : '';
-    const canReport = state.account && detail.author && Number(detail.author.user_id) !== Number(state.account.id);
+    const canReport = state.account
+      && detail.kind !== 'internal'
+      && detail.author
+      && Number(detail.author.user_id) !== Number(state.account.id);
     const history = (Array.isArray(detail.status_history) ? detail.status_history : []).map((entry) => {
       const actor = (entry.actor && entry.actor.username) ? entry.actor.username : t('deleted_player');
       const from = entry.from_status ? statusLabel(detail.kind, entry.from_status) : '—';
       return `<div>${esc(actor)} · ${esc(from)} → ${esc(statusLabel(detail.kind, entry.to_status))}${entry.reason ? `：${esc(entry.reason)}` : ''} · ${esc(fmt(entry.created_at))}</div>`;
     }).join('');
 
-    const watchButton = state.account
-      ? `<button type="button" class="fc-button fc-button-small ${detail.watching ? 'fc-button-secondary' : 'fc-button-primary'}" data-action="watch">${detail.watching ? '已关注' : '关注'}</button>`
-      : `<a class="fc-button fc-button-secondary fc-button-small" href="/" target="_blank" rel="noopener">登录后关注</a>`;
+    const watchButton = detail.kind === 'internal'
+      ? '<span class="fc-muted">—</span>'
+      : state.account
+        ? `<button type="button" class="fc-button fc-button-small ${detail.watching ? 'fc-button-secondary' : 'fc-button-primary'}" data-action="watch">${detail.watching ? '已关注' : '关注'}</button>`
+        : `<a class="fc-button fc-button-secondary fc-button-small" href="/" target="_blank" rel="noopener">登录后关注</a>`;
     const tagsHtml = (Array.isArray(detail.tags) ? detail.tags : []).length
       ? `<div class="fc-tag-list">${(detail.tags || []).map((tag) => `<span class="fc-tag">${esc(tag)}</span>`).join('')}</div>`
       : '<span class="fc-muted">—</span>';
@@ -945,7 +977,7 @@
     container.innerHTML = `<div class="fc-detail-nav"><button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="back">← ${esc(t('back_list'))}</button>` +
       `<a href="/" target="_blank" rel="noopener">${esc(t('back_game'))}</a></div>` +
       `<div class="fc-detail-head"><div class="fc-detail-title-wrap">` +
-      `<div class="fc-detail-key"><span class="fc-detail-key-value"${statusAttr(detail.status)}>${esc(detail.key)}</span> · ${state.kind === 'suggestion' ? '建议' : '漏洞'}</div>` +
+      `<div class="fc-detail-key"><span class="fc-detail-key-value"${statusAttr(detail.status)}>${esc(detail.key)}</span> · ${esc(kindLabel(detail.kind))}</div>` +
       `<h2>${esc(detail.title)}</h2></div>` +
       `<div class="fc-detail-side">${statusChip(detail.kind, detail.status)}` +
       `${canReport ? `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="report-issue">${esc(t('report'))}</button>` : ''}</div></div>` +
@@ -953,8 +985,8 @@
       `${replay}<div class="fc-body">${esc(detail.body)}</div>` +
       infoPanel +
       notFixedBlock +
-      `<div class="fc-vote-box"><span class="fc-vote-count">${Number(detail.vote_count || 0)}</span>` +
-      `<span class="fc-vote-label">${esc(t('votes'))}</span>${voteButton}</div>` +
+      `${detail.kind === 'internal' ? '' : `<div class="fc-vote-box"><span class="fc-vote-count">${Number(detail.vote_count || 0)}</span>` +
+      `<span class="fc-vote-label">${esc(t('votes'))}</span>${voteButton}</div>`}` +
       commentSection + privateBlock +
       `<section class="fc-section"><h3>${esc(t('history'))}</h3><div class="fc-history">${history || '<span class="fc-muted">—</span>'}</div></section>` +
       staffBlock;
@@ -1159,7 +1191,12 @@
 
   function openCreate() {
     if (!state.account) { alert(t('need_login')); return; }
-    $('fc-create-kind').value = state.kind;
+    const internalOption = Array.from($('fc-create-kind').options)
+      .find((option) => option.value === 'internal');
+    if (internalOption) internalOption.hidden = !state.isStaff;
+    $('fc-create-kind').value = state.kind === 'internal' && state.isStaff
+      ? 'internal'
+      : (state.kind === 'internal' ? 'bug' : state.kind);
     $('fc-create-title-input').value = '';
     $('fc-create-body').value = '';
     $('fc-create-replay').value = '';

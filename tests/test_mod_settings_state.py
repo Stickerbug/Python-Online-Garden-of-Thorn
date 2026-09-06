@@ -70,6 +70,57 @@ class ModSettingsStateTests(unittest.TestCase):
         self.assertIn("'Jurassic Cards Addition.gtnmod'", GAME_JS)
         self.assertIn("'Bio Cards Addition.gtnmod'", GAME_JS)
 
+    def test_login_payload_omits_disabled_mods_until_a_preference_is_saved(self):
+        login_payload = source_between(
+            GAME_JS,
+            'function getModLoginPayload()',
+            'function getModSettingsUpdatePayload()',
+        )
+        self.assertIn("localStorage.getItem('gtn_disabled_mods') !== null", login_payload)
+        self.assertIn('...(hasSavedPreference ? { disabled_mods: getDisabledMods() } : {})', login_payload)
+
+    def test_settings_update_still_sends_an_explicit_disabled_list(self):
+        settings_payload = source_between(
+            GAME_JS,
+            'function getModSettingsUpdatePayload()',
+            'function getBundledModCheckboxes()',
+        )
+        self.assertIn('disabled_mods: getDisabledMods(),', settings_payload)
+        self.assertIn('client_revision: modSettingsPreferenceRevision', settings_payload)
+
+    def test_new_player_default_is_not_baked_into_disabled_preference(self):
+        section = source_between(
+            GAME_JS,
+            'function getDisabledMods()',
+            'function writeDisabledModsPreference(',
+        )
+        self.assertIn('const hasSavedPreference = raw !== null;', section)
+        self.assertIn('if (hasSavedPreference) {', section)
+
+    def test_bundled_mod_list_is_applied_before_hidden_settings_guard(self):
+        loader = source_between(
+            GAME_JS,
+            'async function loadSettingsMods()',
+            'function settingsModDetailKey(',
+        )
+        data_index = loader.index('settingsMods = mods || [];')
+        reconcile_index = loader.index('reconcileKnownBundledMods();')
+        hidden_guard = loader.index("classList.contains('hidden'))) return")
+        self.assertLess(data_index, hidden_guard)
+        self.assertLess(reconcile_index, hidden_guard)
+
+    def test_baked_default_list_is_repaired_after_real_mod_list_arrives(self):
+        reconcile = source_between(
+            GAME_JS,
+            'function reconcileKnownBundledMods()',
+            'function getDefaultDisabledMods()',
+        )
+        self.assertIn('missingDefaults', reconcile)
+        self.assertIn('markExplicit: false', reconcile)
+        self.assertIn("localStorage.getItem('gtn_disabled_mods') !== null", reconcile)
+        self.assertIn('localStorage.getItem(\'gtn_known_official_mods\')', reconcile)
+        self.assertIn('localStorage.getItem(\'gtn_disabled_mods\')', reconcile)
+
     def test_split_dlc_mods_are_disabled_before_the_first_settings_open(self):
         section = source_between(
             GAME_JS,

@@ -646,7 +646,7 @@ def test_double_card_reward_blessing_resolves_two_complete_reward_rounds():
 
 def test_updated_story_card_balance_matches_the_latest_design():
     assert STORY_CARDS['coffee']['effects'][0]['amount'] == 3
-    assert STORY_CARDS['bur']['effects'][0]['amount'] == 8
+    assert STORY_CARDS['bur']['effects'][0]['amount'] == 9
     assert STORY_CARDS['shell']['upgrade']['cost_e'] == 1
     assert STORY_CARDS['sponge']['cost_e'] == 1
     assert STORY_CARDS['sponge']['upgrade']['cost_e'] == 0
@@ -658,6 +658,7 @@ def test_updated_story_card_balance_matches_the_latest_design():
     assert STORY_CARDS['light']['upgrade']['effects'][0]['amount'] == 4
     assert 'exile' not in STORY_CARDS['heavy']['tags']
     assert STORY_CARDS['magic_shell']['effects'][1]['amount'] == 4
+    assert STORY_CARDS['magic_shell']['upgrade']['effects'][1]['amount'] == 5
     assert STORY_CARDS['crystal_leaf']['cost_e'] == 3
     assert STORY_CARDS['crystal_leaf']['effects'][0]['amount'] == 2
     assert STORY_CARDS['magic_crystal_leaf']['type'] == 'root'
@@ -666,8 +667,8 @@ def test_updated_story_card_balance_matches_the_latest_design():
     assert STORY_CARDS['chromosome']['effects'][0]['amount'] == 7
     assert STORY_CARDS['moon_rock']['upgrade']['effects'][1]['amount'] == -1
     assert STORY_CARDS['nuke']['rarity'] == 'rare'
-    assert STORY_CARDS['rmb']['effects'][0]['amount'] == 15
-    assert STORY_CARDS['rmb']['upgrade']['effects'][0]['amount'] == 25
+    assert STORY_CARDS['rmb']['effects'][0]['amount'] == 25
+    assert STORY_CARDS['rmb']['upgrade']['effects'][0]['amount'] == 35
     assert STORY_CARDS['bubble']['rarity'] == 'ultra'
     assert STORY_CARDS['magic_bubble']['rarity'] == 'ultra'
     for card_id in ('rice', 'glass', 'dust', 'pyrite', 'feather'):
@@ -713,6 +714,7 @@ def test_story_rarity_default_colors():
         'rare': '#861FDE',
         'ultra': '#FF2B75',
         'super': '#2BFFA3',
+        'unique': '#555555',
     }
 
 
@@ -1569,13 +1571,13 @@ def test_salt_returns_the_next_actual_damage_to_its_source_immediately():
     combat = state['combat']
     enemy = combat['enemies'][0]
     enemy.update({
-        'def_id': 'soldier_ant',
+                'def_id': 'soldier_ant',
         'name': {'zh': '兵蚁', 'en': 'Soldier Ant'},
-        'health': 56,
-        'max_health': 56,
+                'health': 56,
+                'max_health': 56,
         'shield': 0,
-        'power': 0,
-        'move_index': 0,
+            'power': 4,
+                'move_index': 0,
     })
     combat['enemies'] = [enemy]
     combat['hand'] = []
@@ -1588,22 +1590,22 @@ def test_salt_returns_the_next_actual_damage_to_its_source_immediately():
         {'card_instance_id': salt['instance_id']},
         seed,
     )
-    assert state['combat']['shield'] == 3
+    assert state['combat']['shield'] == 6
     assert state['combat']['salt_multipliers'] == [1]
 
     player_health = state['player']['health']
     enemy_health = state['combat']['enemies'][0]['health']
     state, events = apply_story_action(state, 'end_turn', {}, seed)
 
-    assert state['player']['health'] == player_health - 3
-    assert state['combat']['enemies'][0]['health'] == enemy_health - 3
+    assert state['player']['health'] == player_health - 4
+    assert state['combat']['enemies'][0]['health'] == enemy_health - 4
     assert state['combat']['salt_multipliers'] == []
     returned = next(
         event
         for event in events
         if event.get('type') == 'enemy_damage' and event.get('source') == 'salt'
     )
-    assert returned['amount'] == 3
+    assert returned['amount'] == 4
 
 
 def test_fission_does_not_consume_or_repeat_on_another_fission():
@@ -1779,6 +1781,36 @@ def test_yin_yang_shuffles_the_other_hand_and_draws_one_extra_card():
         card not in state['combat']['discard_pile']
         for card in others
     )
+
+
+def test_elemental_force_upgrade_asks_for_a_repeat_choice_and_applies_it():
+    seed = 'elemental-force-repeat'
+    state, _ = _begin_combat(seed)
+    combat = state['combat']
+    combat['opening_redraw_pending'] = False
+    combat['elixir'] = 3
+    combat['magic'] = 3
+    combat['draw_pile'] = [_new_card(state, 'basic') for _ in range(3)]
+    elemental = _inject_hand_card(state, 'elemental_force', upgraded=True)
+
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': elemental['instance_id']},
+        seed,
+    )
+    pending = state['combat'].get('pending_card_choice') or {}
+    assert pending.get('kind') == 'elemental_repeat_choice'
+
+    power_before = int(state['combat'].get('power') or 0)
+    state, _ = apply_story_action(
+        state,
+        'resolve_card_choice',
+        {'selected_card_ids': ['power']},
+        f'{seed}-choose',
+    )
+    assert state['combat'].get('pending_card_choice') is None
+    assert int(state['combat'].get('power') or 0) == power_before + 1
 
 
 def test_occultist_life_choice_loses_thirty_percent_max_health():
@@ -2121,7 +2153,7 @@ def test_acid_actively_discarding_azalea_runs_azalea_effect():
         seed,
     )
 
-    assert state['combat']['shield'] == 3
+    assert state['combat']['shield'] == 4
     assert any(
         card['instance_id'] == azalea['instance_id']
         for card in state['combat']['discard_pile']
@@ -2566,6 +2598,116 @@ def test_midas_coin_can_be_touched_repeatedly_with_increasing_max_health_loss():
     assert state['player']['gold'] == starting_gold + 120
 
 
+def test_midas_coin_only_appears_when_current_health_is_above_six():
+    from story_engine import _new_event_eligible
+
+    state = _journey_state('midas-eligible')
+    state['player']['health'] = 6
+    state['player']['max_health'] = 20
+    assert _new_event_eligible(state, 'midas_coin') is False
+    state['player']['health'] = 7
+    assert _new_event_eligible(state, 'midas_coin') is True
+
+
+def test_midas_coin_smash_can_reduce_health_to_zero_and_end_the_run():
+    state = _journey_state('midas-lethal')
+    state['player']['health'] = 4
+    state['player']['max_health'] = 4
+    state['phase'] = 'room'
+    state['room'] = _new_event_room('midas_coin')
+    state, events = apply_story_action(
+        state,
+        'resolve_room',
+        {'option': 'smash'},
+        'midas-lethal-smash',
+    )
+    assert state['phase'] == 'game_over'
+    assert state['player']['health'] <= 0
+    assert any(event.get('type') == 'player_health_lost' for event in events)
+
+
+def test_crusher_machine_copies_preserve_added_tags_and_modifiers():
+    state = _journey_state('crusher-modifiers')
+    source = next(
+        card for card in state['player']['deck']
+        if card.get('def_id') == 'basic'
+    )
+    source.setdefault('modifiers', {})['favorite'] = 0
+    state['phase'] = 'room'
+    state['room'] = _new_event_room('crusher_machine')
+    state, _ = apply_story_action(
+        state,
+        'resolve_room',
+        {
+            'option': 'copy_card',
+            'card_instance_id': source['instance_id'],
+        },
+        'crusher-modifiers-copy',
+    )
+    copies = [
+        card for card in state['player']['deck']
+        if card.get('def_id') == 'basic'
+        and (card.get('modifiers') or {}).get('favorite') is not None
+        and card['instance_id'] != source['instance_id']
+    ]
+    assert len(copies) == 4
+
+
+def test_secret_passage_offers_rest_and_leave_choices():
+    import story_events_12 as events12
+
+    definition = events12.STORY_EVENTS_12['secret_passage']
+    option_ids = {option['id'] for option in definition['options']}
+    assert {'enter', 'rest', 'leave'} <= option_ids
+
+    state = _journey_state('secret-passage-rest')
+    state['phase'] = 'room'
+    state['room'] = _new_event_room('secret_passage')
+    health_before = int(state['player']['health'])
+    state, _ = apply_story_action(
+        state,
+        'resolve_room',
+        {'option': 'rest'},
+        'secret-passage-rest',
+    )
+    assert int(state['player']['health']) == min(
+        int(state['player']['max_health']),
+        health_before + 16,
+    )
+
+
+def test_card_giftpack_previews_five_cards_before_charging_gold():
+    state = _journey_state('giftpack')
+    state['player']['gold'] = 100
+    state['phase'] = 'room'
+    state['room'] = _new_event_room('card_giftpack')
+
+    state, _ = apply_story_action(
+        state,
+        'resolve_room',
+        {'option': 'buy'},
+        'giftpack-preview',
+    )
+    room = state['room']
+    assert state['phase'] == 'room'
+    assert state['player']['gold'] == 100
+    assert len(room['giftpack_offers']) == 5
+    assert 'buy_confirm' in {
+        option.get('id') for option in room['choices']
+    }
+
+    deck_count_before = len(state['player']['deck'])
+    state, _ = apply_story_action(
+        state,
+        'resolve_room',
+        {'option': 'buy_confirm'},
+        'giftpack-confirm',
+    )
+    assert state['phase'] == 'map'
+    assert state['player']['gold'] == 50
+    assert len(state['player']['deck']) == deck_count_before + 5
+
+
 def test_titan_forge_merges_two_same_type_cards_into_a_generated_card():
     seed = 'titan-forge'
     state = _journey_state(seed)
@@ -2602,12 +2744,58 @@ def test_titan_forge_merges_two_same_type_cards_into_a_generated_card():
     assert len(forged) == 1
     assert forged[0]['generated']['type'] == 'thorn'
     assert forged[0]['generated']['cost_e'] == 2
+    assert forged[0]['generated']['rarity'] == 'unique'
+    assert len(forged[0]['generated']['image_halves']) == 2
+    assert forged[0]['generated']['source_card_defs'] == [
+        {'def_id': 'basic', 'upgraded': False},
+        {'def_id': 'basic', 'upgraded': False},
+    ]
+    assert '对目标造成6D' in forged[0]['generated']['description']['zh']
     assert len(forged[0]['generated']['image_halves']) == 2
     assert sum(
         1
         for card in state['player']['deck']
         if card.get('def_id') == 'basic'
     ) == len(basics) - 2
+
+
+def test_titan_forge_rejects_a_pair_with_different_types():
+    seed = 'titan-forge-type-mismatch'
+    state = _journey_state(seed)
+    state, _ = apply_story_action(
+        state,
+        'choose_blessing',
+        {'blessing_id': 'max_health'},
+        seed,
+    )
+    state['phase'] = 'room'
+    state['room'] = _new_event_room('titan')
+    state, _ = apply_story_action(
+        state,
+        'resolve_room',
+        {'option': 'forge'},
+        seed,
+    )
+    basics = [
+        card for card in state['player']['deck']
+        if card.get('def_id') == 'basic'
+    ]
+    roses = [
+        card for card in state['player']['deck']
+        if card.get('def_id') == 'rose'
+    ]
+    with pytest.raises(StoryActionError):
+        apply_story_action(
+            state,
+            'resolve_deck_operation',
+            {
+                'selected_card_ids': [
+                    basics[0]['instance_id'],
+                    roses[0]['instance_id'],
+                ]
+            },
+            f'{seed}-resolve',
+        )
 
 
 def test_brutal_reuses_an_attack_after_it_kills_a_creature():

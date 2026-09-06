@@ -11,6 +11,7 @@ from card_i18n import CARD_I18N
 from cards import CARD_DEFS, CardInstance, YGGDRASIL_HEAL
 from game_engine import GameEngine
 from game_engine_2v2 import GameEngine2v2
+from mod_loader import load_mod
 from story_content import STORY_RELICS
 
 
@@ -62,6 +63,9 @@ def test_yggdrasil_dead_target_still_uses_the_distinct_five_health_revive():
     engine = GameEngine2v2()
     target = engine.players[2]
     target.health = 0
+    target.heal_block = 2
+    target.weakness = 3
+    target.blind = 1
     target.deck = []
 
     engine._effect_yggdrasil(
@@ -72,10 +76,18 @@ def test_yggdrasil_dead_target_still_uses_the_distinct_five_health_revive():
 
     assert target.health == 5
     assert target.invincible
+    assert target.heal_block == 0
+    assert target.weakness == 0
+    assert target.blind == 0
 
 
 def test_yggdrasil_definitions_and_package_share_the_twenty_five_heal():
-    assert '回复目标25[[icon:H]]' in CARD_DEFS['Yggdrasil'].effect_text
+    vanilla_mod = load_mod(str(ROOT / 'mods' / 'Vanilla Cards.gtnmod'))
+    vanilla_card = next(
+        card for card in vanilla_mod.cards
+        if str(card.id or '').lower().endswith('yggdrasil')
+    )
+    assert '回复目标25[[icon:H]]' in vanilla_card.to_card_def().effect_text
     for language in ('zh', 'en', 'fr', 'ja'):
         effect = CARD_I18N['Yggdrasil']['effect'][language]
         assert '25' in effect

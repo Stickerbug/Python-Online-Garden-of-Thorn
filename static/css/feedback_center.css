@@ -1299,6 +1299,18 @@ a:hover {
   font-weight: 700;
 }
 
+.fc-row-icon-internal {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e8ebf0;
+  color: #4a5568;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .fc-issue-key {
   color: #172b4d;
   font-family: inherit;

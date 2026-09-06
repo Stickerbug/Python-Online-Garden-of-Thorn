@@ -29,6 +29,7 @@
       <h1>服务器管理台</h1>
     </div>
     <div class="admin-header-actions">
+      <a class="ghost-btn" href="/admin-stats" target="_blank" rel="noopener">数据统计</a>
       <button id="admin-refresh" class="ghost-btn" type="button">刷新</button>
       <button id="admin-logout" class="ghost-btn danger" type="button">退出</button>
     </div>
@@ -38,111 +39,18 @@
     <button class="admin-tab active" data-tab="gui" type="button">概览</button>
     <button class="admin-tab" data-tab="events" type="button">事件日志</button>
     <button class="admin-tab" data-tab="moderation" type="button">风控审核</button>
-    <button class="admin-tab" data-tab="draft-stats" type="button">抽牌统计</button>
+    <button class="admin-tab" data-tab="rooms" type="button">对局管理</button>
+    <button class="admin-tab" data-tab="draft-stats" type="button">统计维护</button>
     <button class="admin-tab" data-tab="storage" type="button">存储管理</button>
     <button class="admin-tab" data-tab="replays" type="button">回放列表</button>
     <button class="admin-tab" data-tab="game-chat" type="button">游戏内聊天</button>
   </nav>
 
   <section id="admin-gui" class="admin-panel">
-    <div class="metrics-grid">
-      <article class="metric-card">
-        <span>CPU</span>
-        <strong id="metric-cpu">-</strong>
-        <small id="metric-cpu-sub">系统占用 / 进程占用</small>
-      </article>
-      <article class="metric-card">
-        <span>内存</span>
-        <strong id="metric-memory">-</strong>
-        <small id="metric-memory-sub">系统已用 / 进程占用</small>
-      </article>
-      <article class="metric-card">
-        <span>系统盘</span>
-        <strong id="metric-disk">-</strong>
-        <small id="metric-disk-sub">40G 云盘</small>
-      </article>
-      <article class="metric-card">
-        <span>运行时间</span>
-        <strong id="metric-uptime">-</strong>
-        <small id="metric-clock">-</small>
-      </article>
-      <article class="metric-card">
-        <span>在线玩家</span>
-        <strong id="metric-online">0</strong>
-        <small id="metric-online-sub">大厅 / 观战</small>
-      </article>
-      <article class="metric-card">
-        <span>对局</span>
-        <strong id="metric-rooms">0</strong>
-        <small id="metric-history-sub">历史记录</small>
-      </article>
-    </div>
-
-    <section class="admin-section">
-      <div class="section-title">
-        <h2>服务器资源</h2>
-        <span id="server-profile-label">Aliyun Ubuntu</span>
-      </div>
-      <div id="server-resource-grid" class="server-resource-grid"></div>
-    </section>
-
-    <section class="admin-section">
-      <div class="section-title">
-        <h2>资源曲线</h2>
-        <span>内存环形采样，不写硬盘</span>
-      </div>
-      <div id="resource-history-grid" class="resource-history-grid"></div>
-    </section>
-
     <div class="admin-tools-row">
       <input id="broadcast-input" type="text" maxlength="200" placeholder="服务器广播内容">
       <button id="broadcast-send" type="button">广播</button>
     </div>
-
-    <section class="admin-section">
-      <div class="section-title">
-        <h2>注册玩家</h2>
-        <span id="registered-users-count">0</span>
-      </div>
-      <div class="registered-users-toolbar">
-        <input id="registered-users-search" type="search" maxlength="32" placeholder="搜索用户名">
-        <select id="registered-users-sort" aria-label="排序字段">
-          <option value="last_login_at">上次下线</option>
-          <option value="created_at">注册时间</option>
-          <option value="games_played">有效对局数</option>
-          <option value="wins">胜场</option>
-          <option value="losses">败场</option>
-          <option value="draws">平局</option>
-          <option value="play_seconds">总对局时长</option>
-          <option value="win_rate">胜率</option>
-          <option value="username">用户名</option>
-          <option value="player_id">ID</option>
-          <option value="id">注册顺序</option>
-        </select>
-        <select id="registered-users-order" aria-label="排序方向">
-          <option value="desc">降序</option>
-          <option value="asc">升序</option>
-        </select>
-        <button id="registered-users-refresh" class="ghost-btn" type="button">刷新账号</button>
-      </div>
-      <div id="registered-users-panel" class="registered-users-panel"></div>
-    </section>
-
-    <section class="admin-section">
-      <div class="section-title">
-        <h2>在线玩家</h2>
-        <span id="players-count">0</span>
-      </div>
-      <div id="players-table" class="admin-table"></div>
-    </section>
-
-    <section class="admin-section">
-      <div class="section-title">
-        <h2>当前对局</h2>
-        <span id="rooms-count">0</span>
-      </div>
-      <div id="rooms-table" class="admin-table"></div>
-    </section>
   </section>
 
   <section id="admin-events" class="admin-panel hidden">
@@ -200,65 +108,44 @@
     </section>
   </section>
 
+  <section id="admin-rooms" class="admin-panel hidden">
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>在线玩家</h2>
+        <span id="players-count">0</span>
+      </div>
+      <div id="players-table" class="admin-table"></div>
+    </section>
+
+    <section class="admin-section">
+      <div class="section-title">
+        <h2>当前对局</h2>
+        <span id="rooms-count">0</span>
+      </div>
+      <div id="rooms-table" class="admin-table"></div>
+    </section>
+  </section>
+
   <section id="admin-draft-stats" class="admin-panel hidden">
     <section class="admin-section">
       <div class="section-title">
-        <h2>卡牌抽取率 / 胜率</h2>
-        <span id="draft-stats-count">0</span>
+        <h2>卡牌胜率维护</h2>
+        <span>统计展示已移至数据统计页</span>
       </div>
       <div class="registered-users-toolbar">
-        <label class="admin-inline-toggle">
-          <input id="draft-stats-merge" type="checkbox" checked>
-          合并模式
-        </label>
-        <button id="draft-stats-winner-only" class="ghost-btn toggle-btn" type="button" aria-pressed="false">只看胜者：关</button>
-        <select id="draft-stats-scope" aria-label="统计范围">
-          <option value="total">总计</option>
-          <option value="week">本周</option>
-        </select>
-        <select id="draft-stats-mode" aria-label="模式筛选">
-          <option value="">全部模式</option>
-          <option value="1v1">1v1</option>
-          <option value="2v2">2v2</option>
-        </select>
-        <select id="draft-stats-sort" aria-label="排序字段">
-          <option value="pick_rate">抽取率</option>
-          <option value="card_win_rate">抽到胜率</option>
-          <option value="winner_pick_rate">胜者选择率</option>
-          <option value="win_games">胜利局数</option>
-          <option value="picked_games">抽到局数</option>
-          <option value="picked_count">抽取次数</option>
-          <option value="shown_count">刷出次数</option>
-          <option value="updated_at">最近更新</option>
-          <option value="card_id">卡牌ID</option>
-        </select>
-        <select id="draft-stats-order" aria-label="排序方向">
-          <option value="desc">降序</option>
-          <option value="asc">升序</option>
-        </select>
-        <button id="draft-stats-refresh" class="ghost-btn" type="button">刷新统计</button>
         <button id="draft-stats-rebuild-wins" class="ghost-btn" type="button">按对局摘要重算胜率</button>
       </div>
-      <p id="draft-stats-rebuild-result" class="empty-detail">统计口径：玩家最终选择某张牌时，当前三个候选项计入“刷出”；被选中的牌计入“抽取”。被重抽掉的候选项不计入刷出。“只看胜者”只显示至少被胜者选过的牌；胜者历史数据可按对局摘要重算，但旧聚合数据不能恢复“胜者刷出但未选”的候选项。</p>
-      <div id="draft-stats-table" class="admin-table"></div>
-      <div class="section-title compact-title">
-        <h3>配装选取率 / 胜者选取率</h3>
-        <span id="opening-event-stats-count">0</span>
-      </div>
-      <p class="empty-detail">统计口径：玩家看到的配装计入“出现”；最终选择计入“选取”。“胜者选取率”表示胜者选择该配装的次数占全部胜者配装选择次数的比例。</p>
-      <div id="opening-event-stats-table" class="admin-table"></div>
+      <p id="draft-stats-rebuild-result" class="empty-detail">胜者历史数据可按对局摘要重算，但旧聚合数据不能恢复“胜者刷出但未选”的候选项。</p>
     </section>
   </section>
 
   <section id="admin-storage" class="admin-panel hidden">
-    <div class="storage-summary-grid" id="storage-summary-grid"></div>
     <section class="admin-section">
       <div class="section-title">
         <h2>存储操作</h2>
         <span id="storage-last-result">-</span>
       </div>
       <div class="storage-actions">
-        <button class="ghost-btn" type="button" data-storage-action="refresh">刷新统计</button>
         <button class="ghost-btn" type="button" data-storage-action="dry-clean-old">试算清理三个月外回放</button>
         <button class="ghost-btn danger" type="button" data-storage-action="clean-old">执行清理</button>
         <button class="ghost-btn" type="button" data-storage-action="dry-clean-orphans">试算孤儿快照</button>
@@ -354,6 +241,6 @@
   </section>
 </main>
 
-  <script src="/static/js/admin.js?v=25"></script>
+  <script src="/static/js/admin.js?v=27"></script>
 </body>
 </html>

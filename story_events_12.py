@@ -92,6 +92,7 @@ STORY_EVENTS_12 = {
     },
     'midas_coin': {
         'stage': None,
+        'requires_health_gt': 6,
         'title': {'zh': '迈达斯金币', 'en': 'Midas Coin'},
         'body': {
             'zh': '你遇到一块明显被诅咒的金币，看起来它会同化周围所有的物质。',
@@ -297,6 +298,11 @@ STORY_EVENTS_12 = {
                 'zh': '下次战斗奖励翻倍，但下次战斗开始时获得99层虚弱',
                 'en': 'Double the next battle reward, but start the next battle with 99 Weak',
             }),
+            ('rest', '原地休息', 'Rest Here', 'heal_16', True, '', {
+                'zh': '回复16H',
+                'en': 'Recover 16 H',
+            }),
+            ('leave', '离开', 'Leave', 'leave'),
         ),
     },
     'card_giftpack': {

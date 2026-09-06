@@ -893,7 +893,9 @@ def test_story_events_do_not_repeat_until_every_eligible_event_is_seen():
 
     assert len(set(event_ids)) == len(event_ids) > 0
     assert repeated in event_ids
-    assert len(state['encounter_history']['event']) == 1
+    # 银行每次旅程只能遇到一次，因此即使事件池轮换后它仍保留在已见列表中。
+    assert 'bank' in state['encounter_history']['event']
+    assert len(state['encounter_history']['event']) == 2
 
 
 def test_authored_garden_crossroads_uses_canonical_definition_and_effects():
@@ -968,7 +970,7 @@ def test_story_random_stream_position_is_restored_with_a_save_snapshot():
     assert restored['rng_streams'] == first['rng_streams']
 
 
-def test_events_cannot_convert_to_elites_on_the_first_nine_local_floors(monkeypatch):
+def test_events_never_convert_to_elites(monkeypatch):
     original_rng = story_engine._rng
 
     class FixedRoll:
@@ -998,8 +1000,11 @@ def test_events_cannot_convert_to_elites_on_the_first_nine_local_floors(monkeypa
     late['current_floor'] = 10
     late_events = []
     story_engine._enter_event_node(late, {'type': 'event'}, 'late-event-conversion', late_events)
-    assert late['phase'] == 'combat'
-    assert late['combat']['reward_room_type'] == 'elite'
+    assert late['phase'] != 'combat'
+    assert not any(
+        event.get('type') == 'event_converted' and event.get('room_type') == 'elite'
+        for event in late_events
+    )
 
 
 def test_shop_upgrade_and_remove_share_one_service_slot_and_separate_prices():

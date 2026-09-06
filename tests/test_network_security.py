@@ -382,6 +382,28 @@ def test_admin_orphan_upload_cleanup_ui_has_separate_preview_and_execute_control
     assert 'button.disabled = true' in source
 
 
+def test_admin_stats_is_split_out_of_the_management_page():
+    root = Path(__file__).resolve().parents[1]
+    management = (root / 'templates' / 'adminpage.html').read_text(encoding='utf-8')
+    stats = (root / 'templates' / 'admin_stats.html').read_text(encoding='utf-8')
+    assert 'data-admin-view="stats"' in stats
+    assert 'id="metric-cpu"' in stats
+    assert 'id="registered-users-panel"' in stats
+    assert 'id="draft-stats-table"' in stats
+    assert 'id="opening-event-stats-table"' in stats
+    assert 'id="avg-round-total-table"' in stats
+    assert 'id="avg-round-recent-table"' in stats
+    assert 'id="storage-summary-grid"' in stats
+    assert 'broadcast-send' not in stats
+    assert 'data-community-storage-action' not in stats
+    # 原管理台不再承载只读统计数据。
+    assert 'id="metric-cpu"' not in management
+    assert 'id="registered-users-panel"' not in management
+    assert 'id="draft-stats-table"' not in management
+    assert 'id="storage-summary-grid"' not in management
+    assert 'data-tab="rooms"' in management
+
+
 def test_message_get_routes_never_mark_read_even_with_legacy_query_flag():
     gtn.app.config.update(TESTING=True)
     client = gtn.app.test_client()

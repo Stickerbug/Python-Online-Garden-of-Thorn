@@ -297,7 +297,7 @@ healing、事件效果、下一状态、回执、事件或 seed；这些值均�
 - 运行状态：<code>GET /api/admin/status</code>、<code>GET, POST /api/admin/drain</code>、<code>GET /api/admin/security/suspicious</code>
 - 举报：<code>GET /api/admin/reports</code>、<code>GET /api/admin/reports/&lt;report_id&gt;</code>、<code>POST /api/admin/reports/&lt;report_id&gt;/resolve</code>
 - 账号：<code>GET /api/admin/users</code>、<code>GET /api/admin/users/&lt;user_id&gt;</code>
-- 统计：<code>GET /api/admin/draft-stats</code>、<code>GET /api/admin/opening-event-stats</code>、<code>POST /api/admin/draft-stats/rebuild-wins</code>
+- 统计：<code>GET /api/admin/draft-stats</code>、<code>GET /api/admin/opening-event-stats</code>、<code>GET /api/admin/average-round-stats</code>、<code>POST /api/admin/draft-stats/rebuild-wins</code>
 - 存储：<code>GET /api/admin/storage/summary</code>、<code>POST /api/admin/storage/cleanup-old</code>、<code>POST /api/admin/storage/cleanup-orphans</code>、<code>POST /api/admin/storage/vacuum</code>
 - 社区文件：<code>GET /api/admin/community-mods/storage</code>、<code>POST /api/admin/community-mods/storage/delete</code>、<code>POST /api/admin/community-mods/storage/cleanup-uploads</code>（默认试算；实际删除要求 <code>confirm=true</code>）
 - 命令：<code>POST /api/admin/command</code>、<code>GET /api/admin/complete</code>

@@ -49,6 +49,8 @@ _ENCHANTMENT_TERM_GRANTS = {
 
 _CARD_MODIFIER_TERM_GRANTS = {
     'retain': (('tag', 'retain'),),
+    'favorite': (('tag', 'favorite'),),
+    'infect': (('tag', 'infect'),),
     'force_exile': (('tag', 'exile'),),
     'force_void': (('tag', 'void'),),
     'charge': (('tag', 'charge'),),

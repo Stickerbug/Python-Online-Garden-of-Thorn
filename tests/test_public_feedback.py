@@ -116,6 +116,67 @@ def test_create_list_detail_and_initial_read_state(accounts):
     assert feedback.public_feedback_staff_unread_count() == 1
 
 
+def test_internal_issues_use_gi_keys_and_are_invisible_to_normal_players(accounts):
+    with pytest.raises(feedback.PublicFeedbackError, match='只有 Staff'):
+        feedback.create_public_issue(
+            1,
+            kind='internal',
+            title='普通玩家不应创建',
+            body='x',
+        )
+
+    internal = feedback.create_public_issue(
+        10,
+        kind='internal',
+        title='内部追踪项',
+        body='只在 Staff 看板展示',
+    )
+    assert internal['kind'] == 'internal'
+    assert internal['key'] == f'GI-{internal["id"]}'
+
+    normal_list = feedback.list_public_issues(1)
+    assert all(item['kind'] != 'internal' for item in normal_list['items'])
+    staff_list = feedback.list_public_issues(10, kind='internal')
+    assert staff_list['total'] == 1
+    assert staff_list['items'][0]['key'] == internal['key']
+
+    console_list = feedback.list_public_issues(
+        None,
+        kind='internal',
+        include_hidden=True,
+    )
+    assert console_list['total'] == 1
+
+    detail = feedback.get_public_issue(10, internal['id'])
+    assert detail['body'] == '只在 Staff 看板展示'
+    with pytest.raises(feedback.PublicFeedbackError, match='问题不存在'):
+        feedback.get_public_issue(1, internal['id'])
+    with pytest.raises(feedback.PublicFeedbackError, match='问题不存在'):
+        feedback.list_public_issues(1, kind='internal')
+
+
+def test_internal_issue_status_and_public_actions_are_staff_managed(accounts):
+    internal = feedback.create_public_issue(
+        10,
+        kind='internal',
+        title='内部任务',
+        body='内部说明',
+    )
+    with pytest.raises(feedback.PublicFeedbackError, match='只有 Staff'):
+        feedback.post_public_comment(1, internal['id'], '普通玩家评论')
+    comment = feedback.post_public_comment(10, internal['id'], 'Staff 评论')
+    assert comment['issue_kind'] == 'internal'
+
+    feedback.set_public_issue_status(10, internal['id'], 'in_progress', reason='开始')
+    updated = feedback.get_public_issue(10, internal['id'])
+    assert updated['status'] == 'in_progress'
+
+    with pytest.raises(feedback.PublicFeedbackError, match='不参与投票'):
+        feedback.toggle_public_vote(1, internal['id'])
+    with pytest.raises(feedback.PublicFeedbackError, match='不支持关注'):
+        feedback.toggle_public_watch(10, internal['id'])
+
+
 def test_comment_create_edit_delete_windows(accounts):
     issue = create_issue()
     comment = feedback.post_public_comment(2, issue['id'], '第一条评论')

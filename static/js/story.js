@@ -524,7 +524,7 @@
             rewards: 'Battle rewards', rewardCopy: 'Claim each reward before continuing.',
             claim: 'Claim', claimed: 'Claimed', cardReward: 'Card reward', talentReward: 'Talent',
             enchantmentBooks: 'Enchantment Books', enchantmentBookReward: 'Enchantment Book',
-            enchantmentBookCopy: 'Up to 3. Discard anywhere; use during your combat turn.',
+            enchantmentBookCopy: 'Discard anywhere; use during your combat turn.',
             useBook: 'Use', discardBook: 'Discard', replaceBook: 'Replace', bookSlotsFull: 'Choose a book to replace.',
             directLeave: 'Leave without taking more', claimChestGold: 'Take Gold', claimChestTalent: 'Take Talent',
             cannotRemove: 'Cannot be removed',
@@ -626,7 +626,7 @@
             skip: '跳过卡牌', rewards: '战斗奖励', rewardCopy: '逐项领取奖励后继续前进。',
             claim: '领取', claimed: '已领取', cardReward: '卡牌奖励', talentReward: '天赋',
             enchantmentBooks: '附魔书', enchantmentBookReward: '附魔书',
-            enchantmentBookCopy: '最多持有3本；可随时丢弃，战斗中的玩家回合可使用。',
+            enchantmentBookCopy: '可随时丢弃，战斗中的玩家回合可使用。',
             useBook: '使用', discardBook: '丢弃', replaceBook: '替换', bookSlotsFull: '附魔书槽已满，请选择要替换的一本。',
             directLeave: '直接离开', claimChestGold: '领取金币', claimChestTalent: '领取天赋',
             cannotRemove: '无法删除',
@@ -722,7 +722,7 @@
             rewards: 'Récompenses du combat', rewardCopy: 'Récupérez chaque récompense avant de continuer.',
             claim: 'Récupérer', claimed: 'Récupéré', cardReward: 'Carte', talentReward: 'Talent',
             enchantmentBooks: 'Livres enchantés', enchantmentBookReward: 'Livre enchanté',
-            enchantmentBookCopy: 'Maximum 3. Jetables partout, utilisables pendant votre tour de combat.',
+            enchantmentBookCopy: 'Jetables partout, utilisables pendant votre tour de combat.',
             useBook: 'Utiliser', discardBook: 'Jeter', replaceBook: 'Remplacer', bookSlotsFull: 'Choisissez un livre à remplacer.',
             directLeave: 'Partir sans rien prendre de plus', claimChestGold: 'Prendre l’or', claimChestTalent: 'Prendre le talent',
             continueJourney: 'Continuer', goldReward: (value) => `${value} G`,
@@ -840,7 +840,7 @@
             rewards: '戦闘報酬', rewardCopy: 'すべての報酬を受け取ってから先へ進みます。',
             claim: '受け取る', claimed: '受取済み', cardReward: 'カード報酬', talentReward: '天賦',
             enchantmentBooks: 'エンチャント本', enchantmentBookReward: 'エンチャント本',
-            enchantmentBookCopy: '最大3冊。いつでも破棄でき、戦闘中の自分のターンに使用できます。',
+            enchantmentBookCopy: 'いつでも破棄でき、戦闘中の自分のターンに使用できます。',
             useBook: '使用', discardBook: '破棄', replaceBook: '交換', bookSlotsFull: '交換する本を選んでください。',
             directLeave: '残りを受け取らず退出', claimChestGold: 'ゴールドを受け取る', claimChestTalent: '天賦を受け取る',
             continueJourney: '進む', goldReward: (value) => `${value} G`,
@@ -2253,9 +2253,18 @@
         return storyContent?.enchantment_books?.[bookId] || {};
     }
 
+    function storyEnchantmentBookLimit(playerLike) {
+        const base = Math.max(0, Number(storyContent?.rules?.enchantment_book_slots || 3));
+        const relics = Array.isArray(playerLike?.relics) ? playerLike.relics : [];
+        const loads = relics.filter((relicId) => String(relicId || '') === 'book_slots').length;
+        return base + 2 * loads;
+    }
+
     function chooseStoryCoopBookReplacement(session = storyCoopCombatSession) {
         const books = storyCoopViewerBooks(session);
-        if (books.length < Number(storyContent?.rules?.enchantment_book_slots || 3)) return '';
+        const viewer = storyCoopCombatViewer(session);
+        const limit = storyEnchantmentBookLimit(viewer);
+        if (books.length < limit) return '';
         const labels = books.map((book, index) => {
             const definition = storyCoopBookDefinition(book);
             return `${index + 1}. ${localize(definition.name) || book.book_id}`;
@@ -2820,7 +2829,8 @@
                 );
             }
             if (Array.isArray(player.enchantment_books)) {
-                statLabels.push(`附魔书${player.enchantment_books.length}/3`);
+                const limit = storyEnchantmentBookLimit(player);
+                statLabels.push(`附魔书${player.enchantment_books.length}/${limit}`);
             }
             statLabels.forEach((text) => {
                 const badge = document.createElement('span');
@@ -2844,7 +2854,8 @@
                 const inventory = document.createElement('details');
                 inventory.className = 'story-coop-enchantment-books';
                 const summary = document.createElement('summary');
-                summary.textContent = `你的附魔书（${player.enchantment_books.length}/3）`;
+                const limit = storyEnchantmentBookLimit(player);
+                summary.textContent = `你的附魔书（${player.enchantment_books.length}/${limit}）`;
                 const books = document.createElement('div');
                 books.className = 'story-coop-enchantment-book-list';
                 player.enchantment_books.forEach((book) => {
@@ -6443,7 +6454,7 @@
             : { ...definition };
         values.effects = (values.effects || []).map((effect) => ({ ...effect }));
         if (definition.upgrade?.infinite) {
-            const damage = 14 + 5 * upgradeLevel;
+            const damage = 18 + 6 * upgradeLevel;
             values.effects = values.effects.map((effect) => (
                 effect.type === 'damage' ? { ...effect, amount: damage } : effect
             ));
@@ -6507,6 +6518,8 @@
         if (modifiers.force_exile) tags.add('exile');
         if (modifiers.force_void) tags.add('void');
         if (modifiers.retain) tags.add('retain');
+        if (modifiers.favorite !== undefined && modifiers.favorite !== null) tags.add('favorite');
+        if (modifiers.infect) tags.add('infect');
         (modifiers.extra_tags || []).forEach((tag) => tags.add(String(tag)));
         const modifierTagAmounts = {};
         const modifierTags = [];
@@ -6546,6 +6559,34 @@
         values.tags = [...tags];
         values._modifierTagAmounts = modifierTagAmounts;
         return values;
+    }
+
+    function storyGeneratedHalfUrls(card) {
+        const generated = card?.generated && typeof card.generated === 'object'
+            ? card.generated
+            : {};
+        const stored = Array.isArray(generated.image_halves)
+            ? generated.image_halves.filter(Boolean)
+            : [];
+        if (stored.length >= 2) return stored;
+        const sourceDefs = Array.isArray(generated.source_card_defs)
+            ? generated.source_card_defs
+            : (Array.isArray(generated.source_card_ids)
+                ? generated.source_card_ids.map((id) => ({ def_id: id, upgraded: false }))
+                : []);
+        const urls = [];
+        sourceDefs.forEach((entry) => {
+            const source = typeof entry === 'string' ? { def_id: entry } : (entry || {});
+            const sourceId = String(source.def_id || source.id || '');
+            const definition = storyContent?.cards?.[sourceId];
+            if (!definition) return;
+            const upgraded = Boolean(source.upgraded);
+            const url = upgraded
+                ? (definition.upgraded_image_url || definition.image_url || '')
+                : (definition.image_url || definition.upgraded_image_url || '');
+            if (url) urls.push(String(url));
+        });
+        return urls.length >= 2 ? urls.slice(0, 2) : [];
     }
 
     function storyCardUpgradePrefix(card) {
@@ -7857,7 +7898,12 @@
             wrapper.type = 'button';
             wrapper.className = 'story-card-choice-select-item';
             wrapper.dataset.instanceId = String(choiceCard.instance_id || '');
-            wrapper.append(createStoryCard(choiceCard, { interactive: false, compact: true }));
+            if (String(pending.kind || '') === 'elemental_repeat_choice') {
+                wrapper.textContent = localize(choiceCard.label)
+                    || String(choiceCard.instance_id || '');
+            } else {
+                wrapper.append(createStoryCard(choiceCard, { interactive: false, compact: true }));
+            }
             wrapper.addEventListener('click', () => {
                 toggleStoryCardChoice(wrapper, String(choiceCard.instance_id || ''), maximum);
                 const count = cardChoiceContext?.selected.size || 0;
@@ -8040,9 +8086,7 @@
         art.className = 'story-pile-tile-art';
         const imageUrl = card.upgraded ? (values.upgraded_image_url || values.image_url) : values.image_url;
         if (imageUrl) {
-            const halves = Array.isArray(card?.generated?.image_halves)
-                ? card.generated.image_halves.filter(Boolean)
-                : [];
+            const halves = storyGeneratedHalfUrls(card);
             if (halves.length >= 2) {
                 art.classList.add('is-forged');
                 halves.forEach((halfUrl) => {
@@ -8358,7 +8402,10 @@
         const slots = $('story-hud-book-slots');
         if (!slots) return;
         const books = activeRun?.state?.player?.enchantment_books || [];
-        const limit = 3;
+        const player = activeRun?.state?.player;
+        const limit = storyEnchantmentBookLimit(player);
+        const label = $('story-hud-books-label');
+        if (label) label.textContent = `${t.enchantmentBooks} ${books.length}/${limit}`;
         const fragment = document.createDocumentFragment();
         for (let index = 0; index < limit; index += 1) {
             const book = books[index] || null;
@@ -8394,7 +8441,8 @@
 
     function chooseStoryEnchantmentBookReplacement(callback) {
         const books = activeRun?.state?.player?.enchantment_books || [];
-        if (books.length < 3) {
+        const limit = storyEnchantmentBookLimit(activeRun?.state?.player);
+        if (books.length < limit) {
             callback('');
             return;
         }
@@ -8484,9 +8532,7 @@
         if (imageUrl) {
             const art = document.createElement('div');
             art.className = 'card-art';
-            const halves = Array.isArray(card?.generated?.image_halves)
-                ? card.generated.image_halves.filter(Boolean)
-                : [];
+            const halves = storyGeneratedHalfUrls(card);
             if (halves.length >= 2) {
                 art.classList.add('is-forged');
                 halves.forEach((halfUrl) => {
@@ -9964,9 +10010,14 @@
 
     function storyCodexEnemyReferences(record) {
         if (!record?.definition) return [];
-        const references = (record.definition.traits || []).map((id) => ({
-            mode: storyTermKindMode('trait'), kind: 'trait', id,
-        }));
+        const references = [];
+        (record.definition.traits || []).forEach((id) => {
+            references.push({ mode: storyTermKindMode('trait'), kind: 'trait', id });
+            const traitDefinition = storyContent?.traits?.[String(id || '')];
+            if (traitDefinition) {
+                references.push(...storyCodexDefinitionReferences(traitDefinition));
+            }
+        });
         [...(record.intents || [])].forEach((index) => {
             const move = record.definition.moves?.[index];
             if (move) references.push(...storyCodexDefinitionReferences(move));
@@ -11365,9 +11416,7 @@
                 ? (values.upgraded_image_url || values.image_url || '')
                 : (values.image_url || '');
             if (imageUrl) {
-                const halves = Array.isArray(card?.generated?.image_halves)
-                    ? card.generated.image_halves.filter(Boolean)
-                    : [];
+                const halves = storyGeneratedHalfUrls(card);
                 if (halves.length >= 2) {
                     icon.classList.add('is-forged');
                     halves.forEach((halfUrl) => {
@@ -11494,9 +11543,7 @@
             ? (values.upgraded_image_url || values.image_url || '')
             : (values.image_url || '');
         if (imageUrl) {
-            const halves = Array.isArray(card?.generated?.image_halves)
-                ? card.generated.image_halves.filter(Boolean)
-                : [];
+            const halves = storyGeneratedHalfUrls(card);
             if (halves.length >= 2) {
                 icon.classList.add('is-forged');
                 halves.forEach((halfUrl) => {
@@ -12889,6 +12936,25 @@
                         disabled,
                     },
                 ));
+                if (
+                    optionId === 'buy_confirm'
+                    && Array.isArray(room.giftpack_offers)
+                    && room.giftpack_offers.length
+                ) {
+                    const pack = document.createElement('div');
+                    pack.className = 'story-card-choice-grid';
+                    room.giftpack_offers.forEach((cardId, index) => {
+                        pack.append(createStoryCard({
+                            instance_id: `story-giftpack-${room.event_id || 'card_giftpack'}-${index}`,
+                            def_id: String(cardId || ''),
+                            upgraded: false,
+                        }, {
+                            compact: true,
+                            interactive: false,
+                        }));
+                    });
+                    target.append(pack);
+                }
             });
             const selectionOptions = options.filter((option) => option.selection);
             if (selectionOptions.length) {
