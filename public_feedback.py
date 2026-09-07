@@ -1465,8 +1465,9 @@ def _public_version_rank(version):
     return base + (int(match.group(2) or 1),)
 
 
-def finalize_public_release_fixes(public_version):
+def finalize_public_release_fixes(public_version, git_sha=''):
     public_version = str(public_version or '').strip()
+    git_sha = str(git_sha or '').strip()
     rank = _public_version_rank(public_version)
     if not rank:
         return {'changed': 0, 'reason': 'non_public_version'}
@@ -1474,7 +1475,8 @@ def finalize_public_release_fixes(public_version):
     with closing(db.get_db_connection()) as conn:
         conn.execute('BEGIN IMMEDIATE')
         state = conn.execute(
-            'SELECT last_version FROM public_release_states WHERE id = 1'
+            'SELECT last_version, last_git_sha '
+            'FROM public_release_states WHERE id = 1'
         ).fetchone()
         last_version = state['last_version'] if state else None
         if public_version == last_version:
@@ -1515,13 +1517,16 @@ def finalize_public_release_fixes(public_version):
                 )
         conn.execute(
             '''
-            INSERT INTO public_release_states(id, last_version, last_finalized_at)
-            VALUES (1, ?, ?)
+            INSERT INTO public_release_states(
+                id, last_version, last_git_sha, last_finalized_at
+            )
+            VALUES (1, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 last_version = excluded.last_version,
+                last_git_sha = excluded.last_git_sha,
                 last_finalized_at = excluded.last_finalized_at
             ''',
-            (public_version, now_iso),
+            (public_version, git_sha, now_iso),
         )
         conn.commit()
         return {'changed': changed, 'version': public_version}

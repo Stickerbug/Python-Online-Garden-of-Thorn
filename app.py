@@ -692,19 +692,30 @@ def current_public_game_version():
     try:
         with get_db_connection() as conn:
             row = conn.execute(
-                'SELECT last_version FROM public_release_states WHERE id = 1'
+                'SELECT last_version, last_git_sha '
+                'FROM public_release_states WHERE id = 1'
             ).fetchone()
         last_version = str((row['last_version'] if row else '') or '')
+        last_git_sha = str((row['last_git_sha'] if row else '') or '')
     except Exception:
         last_version = ''
-    if last_version.startswith(beijing):
+        last_git_sha = ''
+    current_git_sha = str(GTN_GIT_SHA or '').strip()
+    if not last_version:
+        return beijing
+    if current_git_sha and (
+        last_git_sha != current_git_sha
+        or not last_version.startswith(beijing)
+    ):
         match = re.fullmatch(
             re.escape(beijing) + r'-(\d+)',
             last_version,
         )
         next_suffix = int(match.group(1)) + 1 if match else 2
         return f'{beijing}-{next_suffix}'
-    return beijing
+    if not current_git_sha and not last_version.startswith(beijing):
+        return beijing
+    return last_version
 
 
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
@@ -982,7 +993,8 @@ except Exception as exc:
 if DB_AVAILABLE:
     try:
         _release_result = public_feedback.finalize_public_release_fixes(
-            current_public_game_version()
+            current_public_game_version(),
+            git_sha=GTN_GIT_SHA,
         )
         if _release_result.get('changed'):
             print(

@@ -2238,10 +2238,22 @@ def init_db(
             CREATE TABLE IF NOT EXISTS public_release_states (
                 id INTEGER PRIMARY KEY CHECK(id = 1),
                 last_version TEXT,
+                last_git_sha TEXT,
                 last_finalized_at TEXT
             )
             '''
         )
+        release_state_columns = {
+            row['name']
+            for row in conn.execute(
+                'PRAGMA table_info(public_release_states)'
+            ).fetchall()
+        }
+        if 'last_git_sha' not in release_state_columns:
+            conn.execute(
+                'ALTER TABLE public_release_states '
+                'ADD COLUMN last_git_sha TEXT'
+            )
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS content_disables (
