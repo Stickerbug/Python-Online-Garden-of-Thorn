@@ -3961,8 +3961,8 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .story-hand-card .story-card.card { width: 100%; min-width: 0; }
 .story-hand-order-badge {
   position: absolute;
-  top: 2px;
-  left: 3px;
+  top: -22px;
+  left: 50%;
   z-index: 40;
   min-width: 17px;
   height: 17px;
@@ -3971,10 +3971,14 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  border-radius: 999px;
-  background: rgba(20, 24, 28, 0.78);
-  color: #fff;
-  font-size: 11px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(30, 32, 38, 0.72);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: #20232a;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  font-size: 10px;
   font-weight: 800;
   line-height: 1;
   pointer-events: none;
