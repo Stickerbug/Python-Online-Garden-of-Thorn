@@ -690,7 +690,7 @@ def current_public_game_version():
             return f'本地-{configured}'
         return f'本地-{beijing}'
     try:
-        with db.get_db_connection() as conn:
+        with get_db_connection() as conn:
             row = conn.execute(
                 'SELECT last_version FROM public_release_states WHERE id = 1'
             ).fetchone()
