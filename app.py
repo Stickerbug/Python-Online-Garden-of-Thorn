@@ -683,13 +683,28 @@ GTN_INSTANCE_ID = os.environ.get('GTN_INSTANCE_ID', f'{GTN_INSTANCE}-{GTN_PORT}'
 
 
 def current_public_game_version():
-    configured = os.environ.get('GTN_PUBLIC_VERSION', '').strip()
-    if configured:
-        return configured
     beijing = datetime.now(timezone(timedelta(hours=8))).date().isoformat()
-    if GTN_INSTANCE == 'release':
-        return beijing
-    return f'本地-{beijing}'
+    if GTN_INSTANCE != 'release':
+        configured = os.environ.get('GTN_PUBLIC_VERSION', '').strip()
+        if configured:
+            return f'本地-{configured}'
+        return f'本地-{beijing}'
+    try:
+        with db.get_db_connection() as conn:
+            row = conn.execute(
+                'SELECT last_version FROM public_release_states WHERE id = 1'
+            ).fetchone()
+        last_version = str((row['last_version'] if row else '') or '')
+    except Exception:
+        last_version = ''
+    if last_version.startswith(beijing):
+        match = re.fullmatch(
+            re.escape(beijing) + r'-(\d+)',
+            last_version,
+        )
+        next_suffix = int(match.group(1)) + 1 if match else 2
+        return f'{beijing}-{next_suffix}'
+    return beijing
 
 
 GTN_VERSION = os.environ.get('GTN_VERSION', GAME_VERSION).strip() or GAME_VERSION
