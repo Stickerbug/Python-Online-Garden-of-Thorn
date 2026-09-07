@@ -532,7 +532,7 @@
             goldReward: (value) => `${value} G`, room: 'Room', restTitle: 'Rest Site',
             restCopy: 'Recover H or upgrade one card.', heal: 'Recover H', upgrade: 'Upgrade',
             shopCards: 'Cards', shopTalents: 'Talents', remove: 'Remove',
-            roomActions: 'Actions', restGold: 'Gold', plantDandelion: 'Plant Dandelion',
+            roomActions: 'Actions', restGold: 'Gold', restTrain: 'Train', plantDandelion: 'Plant Dandelion',
             noShopCards: 'No cards are available', noShopTalents: 'No talents are available',
             noUpgradableCards: 'No cards can be upgraded',
             confirmUpgradeTitle: 'Confirm upgrade', confirmRemoveTitle: 'Confirm removal',
@@ -634,7 +634,7 @@
             goldReward: (value) => `${value}G`, room: '房间', restTitle: '休息区',
             restCopy: '回复生命，或升级一张牌。', heal: '回复生命', upgrade: '升级', chestTitle: '宝箱',
             shopCards: '卡牌', shopTalents: '天赋', remove: '移除',
-            roomActions: '选项', restGold: '金币', plantDandelion: '种植蒲公英',
+            roomActions: '选项', restGold: '金币', restTrain: '锻炼', plantDandelion: '种植蒲公英',
             noShopCards: '暂无可购买卡牌', noShopTalents: '暂无可购买天赋',
             noUpgradableCards: '暂无可升级卡牌',
             confirmUpgradeTitle: '确认升级', confirmRemoveTitle: '确认移除',
@@ -734,7 +734,7 @@
             previousCard: 'Carte précédente', nextCard: 'Carte suivante', cardPosition: (current, total) => `${current}/${total}`,
             beforeUpgrade: 'Avant amélioration', afterUpgrade: 'Après amélioration',
             shopCards: 'Cartes', shopTalents: 'Talents', remove: 'Retirer',
-            roomActions: 'Choix', restGold: 'Or', plantDandelion: 'Planter le pissenlit',
+            roomActions: 'Choix', restGold: 'Or', restTrain: "S'entraîner", plantDandelion: 'Planter le pissenlit',
             noShopCards: 'Aucune carte disponible', noShopTalents: 'Aucun talent disponible',
             noUpgradableCards: 'Aucune carte ne peut être améliorée',
             confirmUpgradeTitle: 'Confirmer l’amélioration', confirmRemoveTitle: 'Confirmer le retrait',
@@ -852,7 +852,7 @@
             previousCard: '前のカード', nextCard: '次のカード', cardPosition: (current, total) => `${current}/${total}`,
             beforeUpgrade: 'アップグレード前', afterUpgrade: 'アップグレード後',
             shopCards: 'カード', shopTalents: '天賦', remove: '削除',
-            roomActions: '選択肢', restGold: 'ゴールド', plantDandelion: 'タンポポを植える',
+            roomActions: '選択肢', restGold: 'ゴールド', restTrain: '鍛錬', plantDandelion: 'タンポポを植える',
             noShopCards: '購入できるカードはありません', noShopTalents: '購入できる天賦はありません',
             noUpgradableCards: 'アップグレードできるカードはありません',
             confirmUpgradeTitle: 'アップグレード確認', confirmRemoveTitle: '削除確認',
@@ -12689,6 +12689,17 @@
                     render: (target) => target.append(choiceButton(
                         t.gainedGold(150),
                         () => storyAction('resolve_room', { option: 'gold' }),
+                    )),
+                });
+            }
+            if ((room.options || []).includes('train')) {
+                restTabs.push({
+                    id: 'rest-train',
+                    label: t.restTrain,
+                    mode: 'choices',
+                    render: (target) => target.append(choiceButton(
+                        t.restTrain,
+                        () => storyAction('resolve_room', { option: 'train' }),
                     )),
                 });
             }

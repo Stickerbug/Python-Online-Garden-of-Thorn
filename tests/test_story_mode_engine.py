@@ -35,6 +35,7 @@ from story_engine import (
     _new_event_room,
     _refresh_combat_projections,
     _reward_choices,
+    _run_turn_start_equipment,
     _start_combat,
     apply_story_action,
 )
@@ -122,6 +123,56 @@ def test_story_magic_resets_between_combats_but_keeps_explicit_next_combat_bonus
     )
 
     assert state['combat']['magic'] == relic_magic
+
+
+def test_termite_mound_psionic_fountain_halves_linked_minion_max_health():
+    seed = 'story-termite-psionic-fountain-half'
+    state = build_initial_story_state(seed)
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        seed,
+        [],
+        encounter_override=[
+            {'def_id': 'termite_soldier'},
+            {'def_id': 'termite_mound'},
+        ],
+    )
+    soldier = next(
+        enemy
+        for enemy in state['combat']['enemies']
+        if enemy['def_id'] == 'termite_soldier'
+    )
+    assert soldier.get('psionic_sustain') == 1
+    assert soldier.get('psionic_connection', 0) == 0
+    assert soldier['max_health'] == max(
+        1,
+        STORY_ENEMIES['termite_soldier']['max_health'] // 2,
+    )
+    assert soldier['health'] <= soldier['max_health']
+
+
+def test_magic_assembler_random_bloom_pool_is_not_limited_to_one_card():
+    seed = 'story-magic-assembler-pool'
+    state = build_initial_story_state(seed)
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        seed,
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    equipment = _new_card(state, 'magic_assembler')
+    state['combat']['equipment'].append(equipment)
+    generated = set()
+    for index in range(200):
+        events = []
+        _run_turn_start_equipment(state, f'{seed}-{index}', events)
+        for event in events:
+            if event.get('type') == 'equipment_triggered' and event.get('generated_def_id'):
+                generated.add(event['generated_def_id'])
+        state['combat']['hand'] = []
+    assert len(generated) > 5
 
 
 def test_story_disc_halves_enemy_physical_damage_until_next_player_turn():

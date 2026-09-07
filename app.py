@@ -15571,6 +15571,7 @@ def _build_lobby_update_payloads_locked():
                 'your_mode': p.get('mode', '1v1'),
                 'your_match_type': p.get('match_type', 'casual'),
                 'your_match_mode': player_match_mode(p),
+                'season': current_gr_season(),
                 'beta_mode': bool(p.get('beta_mode', False)),
                 'chat_history': base['chat_history'],
             }))
@@ -32474,11 +32475,16 @@ def on_spectate(data):
             return
         room = rooms[room_id]
         if room_match_type(room) == 'ranked':
-            emit('server_error', {
-                'message': '天梯对局不允许观战',
-                'reason': 'ranked_no_spectators',
-            })
-            return
+            viewer_is_staff = bool(
+                player.get('is_admin_player')
+                or (player.get('user_id') and feedback_is_staff(player.get('user_id')))
+            )
+            if not viewer_is_staff:
+                emit('server_error', {
+                    'message': '天梯对局不允许观战',
+                    'reason': 'ranked_no_spectators',
+                })
+                return
         if bool(getattr(room, 'beta_mode', False)) != bool(player.get('beta_mode', False)):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return

@@ -36,6 +36,7 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_ui_style_v2_migrated',
     'gtn_hidden_features_enabled',
     'gtn_show_english_card_names',
+    'gtn_show_hand_order',
     'gtn_show_card_images',
     'gtn_play_gesture_animation',
     'gtn_landscape_mode',
@@ -91,6 +92,7 @@ const GTN_COOKIE_FALLBACK_KEYS = new Set([
     'gtn_ui_style_v2_migrated',
     'gtn_hidden_features_enabled',
     'gtn_show_english_card_names',
+    'gtn_show_hand_order',
     'gtn_show_card_images',
     'gtn_play_gesture_animation',
     'gtn_landscape_mode',
@@ -1782,10 +1784,10 @@ Object.assign(I18N.ja, {
     tag_desc_fission_layer: '通常のタグではなく特殊な仕組みです。分裂層は攻撃カードが何回に分かれて解決されるかを表し、融合層と共同で作用します。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。三角形のようにヒットごとに以後のダメージが変わるカードは、各分裂ヒットでその時点の層数を使って再計算します。カードが捨て札に入ると分裂は既定値1に戻ります。'
 });
 
-Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names', settings_show_card_images: 'Show card images', no_selectable_player: 'No selectable player' });
-Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_card_images: '显示卡牌图片', no_selectable_player: '没有可选中的玩家' });
-Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_card_images: 'Afficher les images des cartes', no_selectable_player: 'Aucun joueur ciblable' });
-Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_card_images: 'カード画像を表示', no_selectable_player: '選択可能なプレイヤーがいません' });
+Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names', settings_show_hand_order: 'Show hand card order', settings_show_card_images: 'Show card images', no_selectable_player: 'No selectable player', season_ends_in: 'Season ends in {0}', season_has_ended: 'The season has ended' });
+Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_hand_order: '显示手牌序数', settings_show_card_images: '显示卡牌图片', no_selectable_player: '没有可选中的玩家', season_ends_in: '赛季结束：{0}', season_has_ended: '赛季已结束' });
+Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_hand_order: 'Afficher l’ordre des cartes en main', settings_show_card_images: 'Afficher les images des cartes', no_selectable_player: 'Aucun joueur ciblable', season_ends_in: 'La saison se termine dans {0}', season_has_ended: 'La saison est terminée' });
+Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_hand_order: '手札の順番を表示', settings_show_card_images: 'カード画像を表示', no_selectable_player: '選択可能なプレイヤーがいません', season_ends_in: 'シーズン終了まで {0}', season_has_ended: 'シーズンは終了しました' });
 Object.assign(I18N.en, { settings_landscape_mode: 'Enable landscape mode', settings_fullscreen: 'Fullscreen', settings_enter_fullscreen: 'Enter fullscreen', settings_exit_fullscreen: 'Exit fullscreen', settings_fullscreen_unsupported: 'Fullscreen unavailable', settings_fullscreen_failed: 'Could not change fullscreen mode' });
 Object.assign(I18N.zh, { settings_landscape_mode: '开启横屏模式', settings_fullscreen: '全屏', settings_enter_fullscreen: '进入全屏', settings_exit_fullscreen: '退出全屏', settings_fullscreen_unsupported: '浏览器不支持全屏', settings_fullscreen_failed: '无法切换全屏模式' });
 Object.assign(I18N.fr, { settings_landscape_mode: 'Activer le mode paysage', settings_fullscreen: 'Plein écran', settings_enter_fullscreen: 'Passer en plein écran', settings_exit_fullscreen: 'Quitter le plein écran', settings_fullscreen_unsupported: 'Plein écran indisponible', settings_fullscreen_failed: 'Impossible de changer le mode plein écran' });
@@ -2572,6 +2574,7 @@ function normalizeLang(lang) {
 let currentLang = normalizeLang(localStorage.getItem('gtn_lang') || 'zh');
 if (localStorage.getItem('gtn_lang') !== currentLang) localStorage.setItem('gtn_lang', currentLang);
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
+let showHandOrder = localStorage.getItem('gtn_show_hand_order') === '1';
 let showCardImages = localStorage.getItem('gtn_show_card_images') !== '0';
 let landscapeModeEnabled = localStorage.getItem('gtn_landscape_mode') === '1';
 let storyCardBordersHidden = localStorage.getItem('gtn_story_hide_card_borders') === '1';
@@ -6254,6 +6257,19 @@ function applyShowEnglishCardNames(value) {
     refreshVisibleCardDisplays();
 }
 
+function updateHandOrderSettingInput() {
+    const input = $('settings-show-hand-order');
+    if (input) input.checked = showHandOrder;
+    if (document.body) document.body.classList.toggle('show-hand-order', showHandOrder);
+}
+
+function applyShowHandOrder(value) {
+    showHandOrder = !!value;
+    localStorage.setItem('gtn_show_hand_order', showHandOrder ? '1' : '0');
+    updateHandOrderSettingInput();
+    refreshVisibleCardDisplays();
+}
+
 function updateCardImageSettingInput() {
     const input = $('settings-show-card-images');
     if (input) input.checked = showCardImages;
@@ -6395,6 +6411,8 @@ function updateStaticText() {
     if (settingsLabelLang) settingsLabelLang.textContent = UI.settings_lang;
     const settingsEnglishNameLabel = $('settings-label-show-english-names');
     if (settingsEnglishNameLabel) settingsEnglishNameLabel.textContent = UI.settings_show_english_card_names;
+    const settingsHandOrderLabel = $('settings-label-show-hand-order');
+    if (settingsHandOrderLabel) settingsHandOrderLabel.textContent = UI.settings_show_hand_order || '显示手牌序数';
     const settingsCardImagesLabel = $('settings-label-show-card-images');
     if (settingsCardImagesLabel) settingsCardImagesLabel.textContent = UI.settings_show_card_images;
     const settingsPlayGestureLabel = $('settings-label-play-gesture-animation');
@@ -6407,6 +6425,7 @@ function updateStaticText() {
     if (settingsStoryCardBordersLabel) settingsStoryCardBordersLabel.textContent = UI.settings_story_hide_card_borders;
     updateEnglishNameSettingVisibility();
     updateCardImageSettingInput();
+    updateHandOrderSettingInput();
     updatePlayGestureAnimationInput();
     updateLandscapeModeInput();
     updateFullscreenSettingButton();
@@ -25612,8 +25631,67 @@ function emitSoloStart(payload = null) {
     emitSoloEvent('solo_start', finalPayload);
 }
 
+let seasonCountdownTimer = 0;
+let seasonCountdownEndAt = 0;
+
+function formatSeasonCountdown(totalSeconds) {
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const time = [hours, minutes, seconds]
+        .map(value => String(value).padStart(2, '0'))
+        .join(':');
+    const unit = currentLang === 'zh' ? '天'
+        : currentLang === 'ja' ? '日'
+            : currentLang === 'fr' ? 'j' : 'd';
+    return `${days}${unit} ${time}`;
+}
+
+function renderSeasonCountdown(season) {
+    const element = $('season-countdown');
+    if (!element) return;
+    if (!season || !season.ends_at) {
+        if (seasonCountdownTimer) {
+            window.clearInterval(seasonCountdownTimer);
+            seasonCountdownTimer = 0;
+        }
+        element.classList.add('hidden');
+        return;
+    }
+    const parsed = Date.parse(season.ends_at);
+    if (!Number.isFinite(parsed)) {
+        if (seasonCountdownTimer) {
+            window.clearInterval(seasonCountdownTimer);
+            seasonCountdownTimer = 0;
+        }
+        element.classList.add('hidden');
+        return;
+    }
+    seasonCountdownEndAt = parsed;
+    element.classList.remove('hidden');
+    if (seasonCountdownTimer) {
+        window.clearInterval(seasonCountdownTimer);
+        seasonCountdownTimer = 0;
+    }
+    const tick = () => {
+        const remaining = Math.max(0, Math.ceil((seasonCountdownEndAt - Date.now()) / 1000));
+        if (remaining <= 0) {
+            element.textContent = UI.season_has_ended || '赛季已结束';
+            element.classList.add('is-ended');
+            return;
+        }
+        element.classList.remove('is-ended');
+        element.textContent = (UI.season_ends_in || 'Season ends in {0}')
+            .replace('{0}', formatSeasonCountdown(remaining));
+    };
+    tick();
+    seasonCountdownTimer = window.setInterval(tick, 1000);
+}
+
 function renderLobby(data) {
     showView('view-lobby');
+    renderSeasonCountdown(data.season);
     const lobbyPlayers = data.players || [];
     const games = data.ongoing_games || [];
     const teamList = data.teams || [];
@@ -25854,7 +25932,13 @@ function renderLobby(data) {
                     gameLabel = `${g.player1} vs ${g.player2} (${phaseLabel})`;
                 }
                 row.innerHTML = `<span>${gameLabel}</span>`;
-                const canSpectate = g.can_spectate !== false && !['draft', 'event_select'].includes(g.phase);
+                const gameMatchKey = normalizeMatchModeKey(g.match_mode || g.mode);
+                const isRanked = ['ranked_1v1', 'ranked_2v2'].includes(gameMatchKey);
+                const viewerCanSpectateRanked = isRanked
+                    && (feedbackState.is_staff || !!(currentAccount && currentAccount.is_admin_player));
+                const eligiblePhase = !['draft', 'event_select', 'event_reveal'].includes(g.phase);
+                const canSpectate = eligiblePhase
+                    && (viewerCanSpectateRanked || g.can_spectate !== false);
                 if (canSpectate) {
                     const btn = document.createElement('button');
                     btn.textContent = UI.spectate;
@@ -28398,6 +28482,12 @@ function renderClassicHand(vm) {
         });
         cardEl.classList.add('classic-fan-card-inner');
         wrap.appendChild(cardEl);
+        if (showHandOrder) {
+            const orderBadge = document.createElement('span');
+            orderBadge.className = 'hand-order-badge';
+            orderBadge.textContent = String(index + 1);
+            wrap.append(orderBadge);
+        }
         wrap.addEventListener('mouseenter', () => {
             removeClassicHoverInfo();
             classicHoveredCardId = card.instance_id;
@@ -29295,6 +29385,12 @@ function renderPlayerHand(playerData, mode = null) {
         }
         if (!canPlay) {
             card.classList.add('card-disabled');
+        }
+        if (showHandOrder) {
+            const orderBadge = document.createElement('span');
+            orderBadge.className = 'hand-order-badge';
+            orderBadge.textContent = String(hand.indexOf(cardDict) + 1);
+            card.append(orderBadge);
         }
         container.appendChild(card);
     });
@@ -37051,6 +37147,7 @@ async function init() {
     const savedTheme = localStorage.getItem('gtn_theme') || 'light';
     applyTheme(savedTheme);
     applyUiStyle(migrateStoredUiStyle());
+    updateHandOrderSettingInput();
     const savedLang = normalizeLang(localStorage.getItem('gtn_lang') || 'zh');
     applyLang(savedLang);
     initAudioSystem();
@@ -37431,6 +37528,11 @@ async function init() {
     if (englishNameToggle) {
         englishNameToggle.checked = showEnglishCardNames;
         englishNameToggle.addEventListener('change', (e) => applyShowEnglishCardNames(e.target.checked));
+    }
+    const handOrderToggle = $('settings-show-hand-order');
+    if (handOrderToggle) {
+        handOrderToggle.checked = showHandOrder;
+        handOrderToggle.addEventListener('change', (e) => applyShowHandOrder(e.target.checked));
     }
     const cardImagesToggle = $('settings-show-card-images');
     if (cardImagesToggle) {

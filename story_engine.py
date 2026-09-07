@@ -3751,7 +3751,17 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
             item for item in combat.get('hand', [])
             if 'sublime' not in _card_tags(_card_values(item))
         ]
-        required = min(max(0, int(effect.get('discard') or 0)), len(candidates))
+        requested_discard = max(0, int(effect.get('discard') or 0))
+        required = min(requested_discard, len(candidates))
+        if required and len(candidates) <= requested_discard:
+            _actively_discard_cards(
+                state,
+                candidates,
+                seed,
+                events,
+                source=card.get('def_id') or 'card',
+            )
+            return
         if required:
             combat['pending_card_choice'] = {
                 'kind': 'active_discard',
@@ -5726,6 +5736,9 @@ def _start_combat(state, node, seed, events, encounter_override=None):
                 continue
             enemy['psionic_connection'] = 0
             enemy['psionic_sustain'] = 1
+            original_max = max(1, int(enemy.get('max_health') or 1))
+            enemy['max_health'] = max(1, original_max // 2)
+            enemy['health'] = min(int(enemy.get('health') or enemy['max_health']), enemy['max_health'])
     for enemy in enemies:
         if enemy.get('def_id') == 'reconstructor_enemy':
             enemy['move_index'] = _rng(

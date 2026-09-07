@@ -27,3 +27,9 @@ def test_story_book_references_reuse_card_term_row_style():
     references = STORY_JS[STORY_JS.index('function appendStoryInlineReferences('):]
     assert "list.className = 'story-card-terms-list';" in references
     assert 'appendStoryTermRow(list, {' in references
+
+
+def test_story_rest_train_option_is_rendered_when_room_offers_it():
+    assert "if ((room.options || []).includes('train'))" in STORY_JS
+    assert "storyAction('resolve_room', { option: 'train' })" in STORY_JS
+    assert "restTrain: '锻炼'" in STORY_JS
