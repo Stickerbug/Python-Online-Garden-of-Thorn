@@ -3959,6 +3959,26 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   transition: transform 180ms ease, opacity 180ms ease;
 }
 .story-hand-card .story-card.card { width: 100%; min-width: 0; }
+.story-hand-order-badge {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  z-index: 40;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: rgba(20, 24, 28, 0.78);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
 .story-hand-card:hover:not(.is-selected) { z-index: 999 !important; }
 .story-hand-card:hover:not(.is-selected) .story-card.card:not(:disabled) {
   transform: translateY(-42px) rotate(var(--fan-rot-inverse, 0deg)) scale(1.18);

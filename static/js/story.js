@@ -70,6 +70,7 @@
     let storyCombatEntranceAnimating = false;
     let storyMapPreviewOpen = false;
     let storyPlaybackRate = document.documentElement.classList.contains('story-speed-2x') ? 2 : 1;
+    let storyShowHandOrder = (window.GTN_STORAGE || window.localStorage)?.getItem('gtn_show_hand_order') === '1';
     let pendingStorySaveId = 0;
     let storyManualSaveInFlight = false;
     let storyDiscoveries = [];
@@ -12271,6 +12272,12 @@
                 predictionTargetId: storyPredictionTargetId(state),
                 onClick: (event) => selectCombatCard(state, card, event),
             }));
+            if (storyShowHandOrder) {
+                const orderBadge = document.createElement('span');
+                orderBadge.className = 'story-hand-order-badge';
+                orderBadge.textContent = String(index + 1);
+                wrapper.append(orderBadge);
+            }
             wrapper.addEventListener('pointerenter', () => {
                 hoveredCombatCardId = String(card.instance_id || '');
                 renderCombatResourcePreview(state);
@@ -13440,22 +13447,22 @@
             zh: {
                 title: '旅程设置', copy: '界面偏好仅影响当前设备。',
                 fullscreenEnter: '进入全屏', fullscreenExit: '退出全屏',
-                hideBorders: '隐藏界面与卡牌边框', speed: '2倍演出速度',
+                hideBorders: '隐藏界面与卡牌边框', handOrder: '显示手牌序数', speed: '2倍演出速度',
             },
             en: {
                 title: 'Journey Settings', copy: 'Display preferences only affect this device.',
                 fullscreenEnter: 'Enter Fullscreen', fullscreenExit: 'Exit Fullscreen',
-                hideBorders: 'Hide UI and Card Borders', speed: '2× Presentation Speed',
+                hideBorders: 'Hide UI and Card Borders', handOrder: 'Show Hand Card Order', speed: '2× Presentation Speed',
             },
             fr: {
                 title: 'Réglages du voyage', copy: "Les préférences d'affichage ne concernent que cet appareil.",
                 fullscreenEnter: 'Plein écran', fullscreenExit: 'Quitter le plein écran',
-                hideBorders: "Masquer les bordures de l'interface et des cartes", speed: 'Vitesse de présentation ×2',
+                hideBorders: "Masquer les bordures de l'interface et des cartes", handOrder: "Afficher l'ordre des cartes en main", speed: 'Vitesse de présentation ×2',
             },
             ja: {
                 title: '旅の設定', copy: '表示設定はこの端末にのみ適用されます。',
                 fullscreenEnter: '全画面表示', fullscreenExit: '全画面を終了',
-                hideBorders: 'UIとカードの枠を隠す', speed: '演出速度2倍',
+                hideBorders: 'UIとカードの枠を隠す', handOrder: '手札の順番を表示', speed: '演出速度2倍',
             },
         })[lang] || null;
     }
@@ -13470,6 +13477,7 @@
                 document.fullscreenElement ? copy.fullscreenExit : copy.fullscreenEnter,
             );
             setText('story-settings-hide-borders-label', copy.hideBorders);
+            setText('story-settings-hand-order-label', copy.handOrder);
             setText('story-settings-speed-label', copy.speed);
         }
     }
@@ -13479,6 +13487,8 @@
         if (hideBorders) {
             hideBorders.checked = document.documentElement.classList.contains('story-hide-card-borders');
         }
+        const handOrder = $('story-settings-hand-order');
+        if (handOrder) handOrder.checked = storyShowHandOrder;
         const speed = $('story-settings-speed');
         if (speed) speed.checked = storyPlaybackRate === 2;
     }
@@ -13516,8 +13526,15 @@
         storyStorePreference('gtn_story_speed_2x', fast ? '1' : '0');
     }
 
+    function setStoryHandOrder(enabled) {
+        storyShowHandOrder = !!enabled;
+        storyStorePreference('gtn_show_hand_order', storyShowHandOrder ? '1' : '0');
+        if (activeRun?.state?.phase === 'combat') renderCombat(activeRun.state);
+    }
+
     function commitStorySettingsDraft() {
         setStoryBordersHidden(Boolean($('story-settings-hide-borders')?.checked));
+        setStoryHandOrder(Boolean($('story-settings-hand-order')?.checked));
         setStoryPlaybackRate(Boolean($('story-settings-speed')?.checked));
     }
 

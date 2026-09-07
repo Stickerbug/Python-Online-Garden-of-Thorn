@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STORY_JS = (ROOT / 'static/js/story.js').read_text(encoding='utf-8')
 STORY_CSS = (ROOT / 'static/css/story.css').read_text(encoding='utf-8')
+STORY_HTML = (ROOT / 'templates/story.html').read_text(encoding='utf-8')
 
 
 def test_story_book_slot_ui_uses_the_relic_scaled_limit():
@@ -33,3 +34,11 @@ def test_story_rest_train_option_is_rendered_when_room_offers_it():
     assert "if ((room.options || []).includes('train'))" in STORY_JS
     assert "storyAction('resolve_room', { option: 'train' })" in STORY_JS
     assert "restTrain: '锻炼'" in STORY_JS
+
+
+def test_story_settings_offer_hand_order_and_story_hand_renders_badges():
+    assert 'id="story-settings-hand-order"' in STORY_HTML
+    assert "handOrder: '显示手牌序数'" in STORY_JS
+    assert 'storyShowHandOrder' in STORY_JS
+    assert 'story-hand-order-badge' in STORY_JS
+    assert '.story-hand-order-badge' in STORY_CSS
