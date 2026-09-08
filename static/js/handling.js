@@ -864,6 +864,22 @@ async function updateIpBan(ip, reason, duration) {
   }
 }
 
+async function accountLinkStaffAction(path, body, user) {
+  try {
+    await api(path, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      timeoutMs: 10000,
+    });
+    $('action-result').className = 'result ok';
+    setText('action-result', '账号关联操作已完成。');
+    if (user && user.id) await selectUser({ id: user.id });
+  } catch (e) {
+    $('action-result').className = 'result';
+    setText('action-result', `账号关联操作失败：${e.message}`);
+  }
+}
+
 function renderUserDetail(user) {
   selectedUserId = user.id;
   renderList();
@@ -925,6 +941,62 @@ function renderUserDetail(user) {
       detail.appendChild(row);
     });
   }
+  const linkedGroup = user.linked_group || null;
+  detail.appendChild(el('h3', '', '账号关联'));
+  if (linkedGroup && Array.isArray(linkedGroup.members) && linkedGroup.members.length) {
+    const names = linkedGroup.members
+      .map((member) => `${member.username || '未知'}#${member.id}`)
+      .join('、');
+    detail.appendChild(el(
+      'div',
+      'muted',
+      `已关联组 #${linkedGroup.group_id}（${linkedGroup.status}，风险 ${linkedGroup.risk_score || 0}）：${names}`,
+    ));
+  } else {
+    detail.appendChild(el('div', 'muted', '该账号当前没有已确认的账号关联。'));
+  }
+  const linkActions = el('div', 'inline-actions');
+  const mergeBtn = el('button', 'btn small primary', '手动合并关联账号');
+  mergeBtn.addEventListener('click', () => {
+    const raw = window.prompt(
+      '输入要合并的账号 ID（多个用逗号分隔；当前玩家会自动包含）',
+      '',
+    );
+    if (raw == null) return;
+    const ids = new Set([Number(user.id)]);
+    String(raw).split(/[,，\s]+/).forEach((part) => {
+      const id = Number(part);
+      if (Number.isInteger(id) && id > 0) ids.add(id);
+    });
+    const reason = window.prompt('合并原因（会写入管理审计）', '举报处理页手动关联');
+    if (reason == null || !reason.trim()) return;
+    if (!window.confirm(`确认合并账号：${[...ids].join('、')}？`)) return;
+    accountLinkStaffAction('/api/account-integrity/staff/merge', {
+      user_ids: [...ids],
+      reason: reason.trim(),
+    }, user);
+  });
+  linkActions.appendChild(mergeBtn);
+  const unlinkBtn = el('button', 'btn small danger', '解除此账号关联');
+  unlinkBtn.addEventListener('click', () => {
+    const reputationText = window.prompt('解除后起始信誉（0-100）', '');
+    if (reputationText == null) return;
+    const starting = Number(reputationText);
+    if (!Number.isInteger(starting) || starting < 0 || starting > 100) {
+      setText('action-result', '起始信誉必须是 0 至 100 的整数。');
+      return;
+    }
+    const reason = window.prompt('解除关联原因（会写入管理审计）', '举报处理页解除关联');
+    if (reason == null || !reason.trim()) return;
+    if (!window.confirm(`确认解除 #${user.id} 的账号关联？`)) return;
+    accountLinkStaffAction('/api/account-integrity/staff/unlink', {
+      user_id: Number(user.id),
+      starting_reputation: starting,
+      reason: reason.trim(),
+    }, user);
+  });
+  linkActions.appendChild(unlinkBtn);
+  detail.appendChild(linkActions);
   const actions = el('div', 'inline-actions');
   if (user.banned) {
     const unban = el('button', 'btn primary', '解除账号封禁');
@@ -944,7 +1016,11 @@ async function selectUser(user) {
   if (!user || !user.id) return;
   try {
     const data = await api(`/api/feedback/handling/users/${encodeURIComponent(user.id)}?match_limit=20`);
-    const merged = { ...(data.user || user), matches: data.matches || [] };
+    const merged = {
+      ...(data.user || user),
+      matches: data.matches || [],
+      linked_group: data.linked_group || null,
+    };
     const idx = users.findIndex((item) => Number(item.id) === Number(user.id));
     if (idx >= 0) users[idx] = { ...users[idx], ...merged };
     renderUserDetail(merged);

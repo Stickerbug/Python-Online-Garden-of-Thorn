@@ -11637,6 +11637,40 @@ def get_admin_user_detail(user_id, match_limit=30):
         if row is None:
             return None
         user = row_to_admin_user(row)
+        link_group = conn.execute(
+            '''
+            SELECT g.id, g.status, g.risk_score
+            FROM account_link_groups g
+            JOIN account_link_members m ON m.group_id = g.id
+            WHERE m.user_id = ? AND m.status = 'active'
+              AND g.status IN ('confirmed', 'appealed')
+            ORDER BY g.id DESC
+            LIMIT 1
+            ''',
+            (uid,),
+        ).fetchone()
+        linked_group = None
+        if link_group is not None:
+            members = conn.execute(
+                '''
+                SELECT u.id, u.username
+                FROM account_link_members m
+                JOIN users u ON u.id = m.user_id
+                WHERE m.group_id = ? AND m.status = 'active'
+                  AND m.user_id != ?
+                ORDER BY m.user_id
+                ''',
+                (link_group['id'], uid),
+            ).fetchall()
+            linked_group = {
+                'group_id': link_group['id'],
+                'status': link_group['status'],
+                'risk_score': int(link_group['risk_score'] or 0),
+                'members': [
+                    {'id': int(member['id']), 'username': str(member['username'])}
+                    for member in members
+                ],
+            }
         id_pattern = f'%{uid}%'
         name_pattern = f'%"{user["username"]}"%'
         candidate_rows = conn.execute(
@@ -11669,6 +11703,7 @@ def get_admin_user_detail(user_id, match_limit=30):
     return {
         'user': user,
         'matches': [_row_to_match_summary(match, perspective_username=user['username'], perspective_user_id=uid) for match in matches],
+        'linked_group': linked_group,
     }
 
 
@@ -11858,7 +11893,7 @@ def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
             token_params.append(f'%{int(ip_row["user_id"])}%')
         where.append('(' + ' OR '.join(clauses) + ')')
         params.extend(token_params)
-    # Moderation search should only review ranked, human, mod-free matches.
+    # Moderation search should only review ranked, human, official-mod matches.
     where.append(
         "COALESCE(json_extract(m.summary_json, '$.match_type'), 'ranked') <> 'casual'"
     )
@@ -11866,7 +11901,10 @@ def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
         "COALESCE(json_extract(m.summary_json, '$.ai_match'), 0) = 0"
         " AND COALESCE(json_extract(m.summary_json, '$.match_kind'), '') <> 'phelren'"
     )
-    where.append("(m.mod_source IS NULL OR TRIM(m.mod_source) = '')")
+    where.append(
+        "(m.mod_source IS NULL"
+        " OR LOWER(TRIM(m.mod_source)) IN ('', 'official'))"
+    )
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
     with get_db_connection() as conn:
         total_row = conn.execute(
