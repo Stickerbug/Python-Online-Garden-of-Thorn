@@ -31,7 +31,7 @@ from functools import wraps
 from contextlib import closing
 from collections import deque, OrderedDict
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 try:
     # Phelren work runs inside Eventlet's native tpool threads.  Capacity
@@ -416,7 +416,7 @@ _MODS_SIGNATURE = None
 COMMUNITY_CARD_SOURCES = {}
 
 _PUBLIC_DATA_CACHE_SECONDS = 300.0
-_PUBLIC_DATA_CACHE_MAX_ENTRIES = 16
+_PUBLIC_DATA_CACHE_MAX_ENTRIES = 20
 _PUBLIC_DATA_CACHE = OrderedDict()
 _PUBLIC_DATA_CACHE_LOCK = threading.Lock()
 _PUBLIC_DATA_CACHE_LOCK_TIMEOUT = 3.0
@@ -32703,6 +32703,48 @@ ensure_friend_request_cleanup_started()
 ensure_dm_cleanup_started()
 
 
+def _prewarm_public_cache_one(match_mode, disabled_mods):
+    engine_mode, _, _ = pvp_match_mode_parts(match_mode)
+    common_params = {
+        'disabled_mods': ','.join(list(disabled_mods or [])),
+        'match_mode': match_mode,
+        'mode': engine_mode,
+        'mod_source': 'official',
+    }
+    for path, handler in (
+        ('/api/cards', api_cards),
+        ('/api/opening-events', api_opening_events),
+    ):
+        query = urlencode(common_params)
+        with app.test_request_context(f'{path}?{query}'):
+            handler()
+
+
+def _prewarm_public_card_cache_worker():
+    if str(os.environ.get('GTN_DISABLE_PUBLIC_CACHE_PREWARM', '')).strip().lower() in {
+        '1', 'true', 'yes', 'on',
+    }:
+        return
+    try:
+        time.sleep(0.5)
+        default_disabled = default_disabled_mods()
+        warmed = []
+        for match_mode in PVP_MATCH_MODES:
+            warmed.append((match_mode, default_disabled))
+        # A large share of players use the "all bundled mods" casual setup;
+        # cover the two most common casual modes as well.
+        for match_mode in ('casual_1v1', 'casual_2v2'):
+            warmed.append((match_mode, []))
+        for match_mode, disabled_mods in warmed:
+            _prewarm_public_cache_one(match_mode, disabled_mods)
+        admin_event(
+            'info',
+            f'public data cache prewarmed: {len(warmed)} loadout combinations',
+        )
+    except Exception as exc:
+        admin_event('error', f'public data cache prewarm failed: {type(exc).__name__}: {exc}')
+
+
 def _prewarm_local_ai_worker():
     try:
         get_local_ai_worker().start()
@@ -32720,6 +32762,11 @@ if __name__ == '__main__':
         f"bind={GTN_BIND_HOST}:{GTN_PORT} draining={is_instance_draining()}",
         flush=True,
     )
+    threading.Thread(
+        target=_prewarm_public_card_cache_worker,
+        name='public-cache-prewarm',
+        daemon=True,
+    ).start()
     if GTN_AI_1V1_TEST_ENABLED:
         threading.Thread(
             target=_prewarm_local_ai_worker,

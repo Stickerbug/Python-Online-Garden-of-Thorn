@@ -11139,6 +11139,9 @@ function getCardDef(defId) {
 
 let cardDefsPayloadRefreshAt = 0;
 let cardDefsPayloadRefreshPending = false;
+let modSettingsRefreshSignature = '';
+let modSettingsRefreshPromise = null;
+const cardDataByModSignature = new Map();
 
 function collectUnknownCardDefIds(payload) {
     const unknown = new Set();
@@ -16638,27 +16641,29 @@ function connectSocket(serverUrl) {
                 writeDisabledModsPreference(preferenceDisabledMods);
                 renderOfficialModList();
             }
-            const refreshed = await refreshCardsAfterModSettingsConfirmed();
             const adjusted = Array.isArray(data.details && data.details.forced_enabled_mods)
                 ? data.details.forced_enabled_mods.filter(Boolean)
                 : [];
-            if (!refreshed) {
-                flashStatus(formatModSettingsResultMessage({
-                    code: 'MOD_SETTINGS_LOCAL_REFRESH_FAILED',
-                    stage: 'client_refresh',
-                    request_id: requestId,
-                    reason: currentLang === 'zh'
-                        ? '服务器已保存，但本地卡牌数据刷新失败；请重新进入大厅或刷新页面。'
-                        : 'Saved on the server, but local card data could not be refreshed. Re-enter the lobby or reload.',
-                }), 6000, 'error');
-            } else if (adjusted.length && !pending.silent) {
-                showActionToast(currentLang === 'zh'
-                    ? `已保存；为保证牌池可用，已自动启用：${adjusted.join('、')}`
-                    : `Saved; automatically enabled for a valid card pool: ${adjusted.join(', ')}`, 4200, 'success');
-            } else if (!pending.silent) {
-                showActionToast(UI.save_success, 1600, 'success');
-            }
+            const silent = pending.silent;
             pending.resolve(data);
+            void refreshCardsAfterModSettingsConfirmed().then((refreshed) => {
+                if (!refreshed) {
+                    flashStatus(formatModSettingsResultMessage({
+                        code: 'MOD_SETTINGS_LOCAL_REFRESH_FAILED',
+                        stage: 'client_refresh',
+                        request_id: requestId,
+                        reason: currentLang === 'zh'
+                            ? '服务器已保存，但本地卡牌数据刷新失败；请重新进入大厅或刷新页面。'
+                            : 'Saved on the server, but local card data could not be refreshed. Re-enter the lobby or reload.',
+                    }), 6000, 'error');
+                } else if (adjusted.length && !silent) {
+                    showActionToast(currentLang === 'zh'
+                        ? `已保存；为保证牌池可用，已自动启用：${adjusted.join('、')}`
+                        : `Saved; automatically enabled for a valid card pool: ${adjusted.join(', ')}`, 4200, 'success');
+                } else if (!silent) {
+                    showActionToast(UI.save_success, 1600, 'success');
+                }
+            });
             return;
         }
         const message = formatModSettingsResultMessage(data);
@@ -36598,21 +36603,69 @@ function scheduleCardsAfterCommunityChange() {
     });
 }
 
+function currentModSettingsRefreshSignature() {
+    return buildModQueryString();
+}
+
 async function refreshCardsAfterModSettingsConfirmed() {
-    try {
-        invalidateGalleryData();
-        await fetchCardDefs({ useCache: false });
-        await fetchOpeningEvents({ useCache: false });
-        if (getVisibleViewId() === 'view-card-gallery') {
-            await ensureGalleryDataLoaded({ force: true });
+    const signature = currentModSettingsRefreshSignature();
+    if (modSettingsRefreshPromise && modSettingsRefreshSignature === signature) {
+        return modSettingsRefreshPromise;
+    }
+    const previous = modSettingsRefreshPromise;
+    const cached = cardDataByModSignature.get(signature);
+    const runRefresh = async () => {
+        try {
+            if (cached && Object.keys(cached.cards || {}).length) {
+                CARD_DEFS = cached.cards;
+                openingEvents = cached.events || [];
+                openingEventMagicPool = cached.magicPool || [];
+                CUSTOM_TAG_DEFS = cached.tags || {};
+                CUSTOM_STATUS_DEFS = cached.statuses || {};
+                markActiveDataCacheKey('cards');
+                if (getVisibleViewId() === 'view-card-gallery') {
+                    await ensureGalleryDataLoaded({ force: true });
+                }
+                loadSoloDecks(false);
+                renderSoloBuilder();
+                refreshCardDataViews();
+                return true;
+            }
+            invalidateGalleryData();
+            await fetchCardDefs({ useCache: false });
+            await fetchOpeningEvents({ useCache: false });
+            cardDataByModSignature.set(signature, {
+                cards: CARD_DEFS,
+                events: openingEvents,
+                magicPool: openingEventMagicPool,
+                tags: CUSTOM_TAG_DEFS,
+                statuses: CUSTOM_STATUS_DEFS,
+            });
+            if (cardDataByModSignature.size > 8) {
+                const oldest = cardDataByModSignature.keys().next().value;
+                if (oldest != null) cardDataByModSignature.delete(oldest);
+            }
+            if (getVisibleViewId() === 'view-card-gallery') {
+                await ensureGalleryDataLoaded({ force: true });
+            }
+            loadSoloDecks(false);
+            renderSoloBuilder();
+            refreshCardDataViews();
+            return true;
+        } catch (e) {
+            console.warn('Failed to refresh card data after mod settings update:', e);
+            return false;
         }
-        loadSoloDecks(false);
-        renderSoloBuilder();
-        refreshCardDataViews();
-        return true;
-    } catch (e) {
-        console.warn('Failed to refresh card data after mod settings update:', e);
-        return false;
+    };
+    modSettingsRefreshSignature = signature;
+    const next = previous
+        ? previous.catch(() => false).then(runRefresh)
+        : runRefresh();
+    modSettingsRefreshPromise = next;
+    try {
+        return await next;
+    } finally {
+        if (modSettingsRefreshPromise === next) modSettingsRefreshPromise = null;
     }
 }
 
