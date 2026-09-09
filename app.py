@@ -32526,12 +32526,6 @@ def on_spectate(data):
         if not player.get('user_id') and not room_allows_guest_spectators(room):
             emit('server_error', {'message': '本场对局有玩家开启了禁止游客观战'})
             return
-        if _defer_phelren_spectate_state(room):
-            emit('server_error', {
-                'message': 'Phelren 正在完成上一项操作，请稍后重试观战',
-                'code': 'ACTION_BUSY',
-            })
-            return
         phase = room.engine.phase
         if phase in ('draft', 'event_select', 'event_reveal'):
             emit('server_error', {'message': '选牌或配装倾向阶段暂不能观战'})
