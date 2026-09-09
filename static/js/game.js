@@ -5334,6 +5334,7 @@ let lobbyChatHistorySignature = '';
 let lobbyChatEntries = [];
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
+let lastLobbyUpdateData = null;
 const FALLBACK_RELEASE_SERVER = 'http://121.41.93.192';
 const FALLBACK_BETA_SERVER = 'http://121.41.93.192:8081';
 const FALLBACK_PUBLIC_SERVER = GTN_BETA_MODE ? FALLBACK_BETA_SERVER : FALLBACK_RELEASE_SERVER;
@@ -15961,6 +15962,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('lobby_update', (data) => {
         debugLog('[client] lobby_update players=', (data.players || []).length);
+        lastLobbyUpdateData = data;
         lobbyPlayers = data.players || [];
         lobbyOngoingGames = data.ongoing_games || [];
         mySid = data.your_sid || mySid;
@@ -15972,6 +15974,41 @@ function connectSocket(serverUrl) {
         phase = 'lobby';
         renderLobby(data);
         if (data.chat_history) renderLobbyChatHistory(data.chat_history);
+    });
+    bindSocketEvent('lobby_mode_confirmed', (data = {}) => {
+        if (!data || !data.match_mode) return;
+        const matchMode = normalizeMatchModeKey(data.match_mode);
+        const engineMode = engineModeForMatchMode(matchMode);
+        const matchType = matchMode.startsWith('ranked_') ? 'ranked' : 'casual';
+        if (!lastLobbyUpdateData) {
+            const modeTabs = $('lobby-mode-tabs');
+            modeTabs?.querySelectorAll('.mode-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.getAttribute('data-mode') === matchMode);
+            });
+            return;
+        }
+        const nextData = {
+            ...lastLobbyUpdateData,
+            your_mode: engineMode,
+            your_match_type: matchType,
+            your_match_mode: matchMode,
+        };
+        nextData.players = (nextData.players || []).map(player => (
+            player.sid === nextData.your_sid
+                ? { ...player, mode: engineMode, match_type: matchType, match_mode: matchMode }
+                : player
+        ));
+        const counts = {
+            casual_1v1: 0, casual_2v2: 0, ranked_1v1: 0,
+            ranked_2v2: 0, casual_urf: 0, casual_random_deck: 0,
+        };
+        nextData.players.forEach(player => {
+            if (player.status === 'spectating') return;
+            const key = normalizeMatchModeKey(player.match_mode || player.mode || 'casual_1v1');
+            if (key in counts) counts[key] += 1;
+        });
+        nextData.mode_counts = counts;
+        renderLobby(nextData);
     });
     bindSocketEvent('lobby_chat_history', (data) => {
         renderLobbyChatHistory(data || {});

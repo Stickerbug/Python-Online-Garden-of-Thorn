@@ -14500,8 +14500,8 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                 return {'success': False, 'output': f"未找到玩家：{parts[1]}"}
             nickname = players[sid]['nickname']
             room_id = players[sid].get('room_id')
-            if room_id is not None and room_id in rooms:
-                admin_match_record(rooms[room_id], result='admin_kick')
+        if room_id is not None and room_id in rooms:
+            admin_match_record(rooms[room_id], result='admin_kick')
             remove_player_by_admin(sid)
         socketio.emit('kicked', {'reason': 'kicked by admin'}, room=sid)
         broadcast_lobby()
@@ -26097,6 +26097,11 @@ def on_set_mode(data):
                 if member_sid in players:
                     socketio.emit('team_disbanded', {}, room=member_sid)
         broadcast_lobby()
+        socketio.emit('lobby_mode_confirmed', {
+            'mode': players[sid].get('mode'),
+            'match_type': players[sid].get('match_type'),
+            'match_mode': players[sid].get('match_mode'),
+        }, room=sid)
 
 
 @socketio.on('update_mod_settings')
