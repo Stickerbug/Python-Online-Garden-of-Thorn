@@ -2636,6 +2636,8 @@ def init_db(
                 question TEXT NOT NULL CHECK(length(question) BETWEEN 1 AND 240),
                 state TEXT NOT NULL DEFAULT 'draft'
                     CHECK(state IN ('draft', 'published', 'closed', 'retracted')),
+                feed_visibility TEXT NOT NULL DEFAULT 'auto'
+                    CHECK(feed_visibility IN ('auto', 'show', 'hide')),
                 starts_at TEXT NOT NULL,
                 ends_at TEXT NOT NULL,
                 reminder_hours INTEGER NOT NULL DEFAULT 24
@@ -2657,6 +2659,17 @@ def init_db(
             'CREATE INDEX IF NOT EXISTS idx_community_polls_feed '
             'ON community_polls(state, starts_at DESC, ends_at DESC)'
         )
+        poll_columns = {
+            row['name']
+            for row in conn.execute(
+                'PRAGMA table_info(community_polls)'
+            ).fetchall()
+        }
+        if 'feed_visibility' not in poll_columns:
+            conn.execute(
+                'ALTER TABLE community_polls '
+                "ADD COLUMN feed_visibility TEXT NOT NULL DEFAULT 'auto'"
+            )
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS community_poll_options (

@@ -126,6 +126,42 @@ class CommunityOpsPersistenceTests(unittest.TestCase):
         with self.assertRaisesRegex(CommunityOpsError, '必须填写开始时间'):
             mutate_community_poll(self.actor, poll['id'], 'schedule')
 
+    def test_ended_poll_feed_visibility_can_be_controlled_from_backend(self):
+        recent = create_community_poll(
+            self.actor,
+            question='刚结束的投票',
+            options=['A', 'B'],
+            starts_at=self.iso_after(-100),
+            ends_at=self.iso_after(-10),
+            publish=True,
+        )
+        old = create_community_poll(
+            self.actor,
+            question='结束很久的投票',
+            options=['A', 'B'],
+            starts_at=self.iso_after(-200),
+            ends_at=self.iso_after(-100),
+            publish=True,
+        )
+        self.assertIn(recent['id'], [item['id'] for item in get_community_feed()['polls']])
+        self.assertNotIn(old['id'], [item['id'] for item in get_community_feed()['polls']])
+
+        hidden, _ = mutate_community_poll(self.actor, recent['id'], 'feed_hide')
+        self.assertEqual(hidden['feed_visibility'], 'hide')
+        self.assertNotIn(recent['id'], [item['id'] for item in get_community_feed()['polls']])
+        self.assertIn(recent['id'], [
+            item['id']
+            for item in list_community_ops_workspace()['polls']
+        ])
+
+        shown, _ = mutate_community_poll(self.actor, old['id'], 'feed_show')
+        self.assertEqual(shown['feed_visibility'], 'show')
+        self.assertIn(old['id'], [item['id'] for item in get_community_feed()['polls']])
+
+        restored, _ = mutate_community_poll(self.actor, recent['id'], 'feed_auto')
+        self.assertEqual(restored['feed_visibility'], 'auto')
+        self.assertIn(recent['id'], [item['id'] for item in get_community_feed()['polls']])
+
     def test_chain_join_is_once_per_user_and_feed_marks_own_entry(self):
         second, error = db.create_user('ChainTwo', 'Aa1!aaaa')
         self.assertIsNone(error)

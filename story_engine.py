@@ -5476,7 +5476,7 @@ def _refresh_combat_projections(state):
             enemy['intent'] = _enemy_intent(state, enemy)
 
 
-def _encounter_specs(state, room_type, seed, category_override=None):
+def _encounter_specs(state, room_type, seed, category_override=None, exclude_boss_def_ids=None):
     biome = str(state.get('biome') or 'garden')
     groups = STORY_ENCOUNTERS.get(biome) or STORY_ENCOUNTERS['garden']
     if category_override:
@@ -5492,6 +5492,16 @@ def _encounter_specs(state, room_type, seed, category_override=None):
     pool = list(groups.get(category) or ())
     if not pool:
         _fail('EMPTY_ENCOUNTER_POOL', '当前区域没有可用的战斗配置')
+    if category == 'boss' and exclude_boss_def_ids:
+        excluded = {str(item) for item in exclude_boss_def_ids}
+        available_bosses = []
+        for encounter in pool:
+            first = encounter[0] if isinstance(encounter, (tuple, list)) else encounter
+            first = first if isinstance(first, dict) else {'def_id': first}
+            if str(first.get('def_id') or '') not in excluded:
+                available_bosses.append(encounter)
+        if available_bosses:
+            pool = available_bosses
     rng = _rng(state, seed, f'encounter:{category}')
     if category == 'elite':
         history = state.setdefault('encounter_history', {}).setdefault('elite', {})
@@ -5554,18 +5564,25 @@ def _encounter_specs(state, room_type, seed, category_override=None):
 def _prepare_boss_node_encounters(state, seed):
     """Freeze every visible Boss node to the encounter it will actually run."""
     story_map = state.get('map') or {}
+    chosen_bosses = []
     for floor in story_map.get('floors') or ():
         for node in floor.get('nodes') or ():
             if str(node.get('type') or '') != 'boss':
                 continue
             specs = node.get('encounter_specs')
             if not isinstance(specs, list) or not specs:
-                specs = _encounter_specs(state, 'boss', seed)
+                specs = _encounter_specs(
+                    state,
+                    'boss',
+                    seed,
+                    exclude_boss_def_ids=chosen_bosses if _difficulty(state) == 'lunatic' else None,
+                )
                 node['encounter_specs'] = copy.deepcopy(specs)
             first = specs[0] if isinstance(specs[0], dict) else {'def_id': specs[0]}
             boss_def_id = str(first.get('def_id') or '')
             if boss_def_id in STORY_ENEMIES:
                 node['boss_def_id'] = boss_def_id
+                chosen_bosses.append(boss_def_id)
 
 
 def _initialize_mechanical_track(state, enemy, events):

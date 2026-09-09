@@ -6,12 +6,14 @@ let reports = [];
 let users = [];
 let matches = [];
 let riskMatches = [];
+let clusters = [];
 let ipBans = [];
 let moderationRecords = [];
 let selectedReportId = null;
 let selectedReport = null;
 let selectedUserId = null;
 let selectedMatchId = null;
+let selectedClusterKey = null;
 let selectedModerationKey = '';
 let selectedDuration = 0;
 let durationTarget = 'moderation';
@@ -19,6 +21,7 @@ let reportsRequestInFlight = false;
 let usersRequestInFlight = false;
 let matchesRequestInFlight = false;
 let riskRequestInFlight = false;
+let clustersRequestInFlight = false;
 let ipBansRequestInFlight = false;
 let moderationRequestInFlight = false;
 let reportsLoadedOnce = false;
@@ -128,6 +131,7 @@ function switchTab(tab) {
   $('users-tools').classList.toggle('hidden', tab !== 'users');
   $('matches-tools').classList.toggle('hidden', tab !== 'matches');
   $('risk-tools').classList.toggle('hidden', tab !== 'risk');
+  $('clusters-tools').classList.toggle('hidden', tab !== 'clusters');
   $('ip-tools').classList.toggle('hidden', tab !== 'ip');
   $('moderation-tools').classList.toggle('hidden', tab !== 'moderation');
   const hideActionPanel = tab !== 'reports';
@@ -141,7 +145,9 @@ function switchTab(tab) {
         ? `对局 ${matches.length}`
         : (tab === 'risk'
           ? `风险 ${riskMatches.length}`
-          : (tab === 'moderation' ? `处罚 ${moderationRecords.length}` : `IP封禁 ${ipBans.length}`))));
+          : (tab === 'clusters'
+            ? `关联串 ${clusters.length}`
+            : (tab === 'moderation' ? `处罚 ${moderationRecords.length}` : `IP封禁 ${ipBans.length}`)))));
   setText('summary', `${summaryText}，点击刷新读取`);
   clearDetail();
   renderList();
@@ -204,6 +210,18 @@ async function loadRiskMatches() {
   }
 }
 
+async function loadClusters() {
+  if (!handlingPageVisible() || clustersRequestInFlight) return;
+  clustersRequestInFlight = true;
+  try {
+    const data = await api('/api/account-integrity/staff', { timeoutMs: 10000 });
+    clusters = data.clusters || [];
+    setText('summary', `关联串 ${clusters.length}`);
+  } finally {
+    clustersRequestInFlight = false;
+  }
+}
+
 async function loadIpBans() {
   if (!handlingPageVisible() || ipBansRequestInFlight) return;
   ipBansRequestInFlight = true;
@@ -240,6 +258,8 @@ async function refreshCurrent() {
       await loadMatches();
     } else if (currentTab === 'risk') {
       await loadRiskMatches();
+    } else if (currentTab === 'clusters') {
+      await loadClusters();
     } else if (currentTab === 'moderation') {
       await loadModerationRecords();
     } else {
@@ -256,11 +276,15 @@ function renderList() {
   list.textContent = '';
   const items = currentTab === 'reports'
     ? reports
-    : (currentTab === 'users'
-      ? users
-      : (currentTab === 'matches'
-        ? matches
-        : (currentTab === 'risk' ? riskMatches : (currentTab === 'moderation' ? moderationRecords : ipBans))));
+      : (currentTab === 'users'
+        ? users
+        : (currentTab === 'matches'
+          ? matches
+          : (currentTab === 'risk'
+            ? riskMatches
+            : (currentTab === 'clusters'
+              ? clusters
+              : (currentTab === 'moderation' ? moderationRecords : ipBans)))));
   if (!items.length) {
     const emptyText = currentTab === 'reports'
       ? '暂无举报'
@@ -268,7 +292,11 @@ function renderList() {
         ? '暂无玩家，输入条件后点击搜索'
         : (currentTab === 'matches'
           ? '暂无对局，输入条件后点击搜索'
-          : (currentTab === 'risk' ? '暂无风险标记' : (currentTab === 'moderation' ? '暂无有效处罚' : '暂无 IP 封禁'))));
+          : (currentTab === 'risk'
+            ? '暂无风险标记'
+            : (currentTab === 'clusters'
+              ? '暂无关联串，点击读取'
+              : (currentTab === 'moderation' ? '暂无有效处罚' : '暂无 IP 封禁')))));
     list.appendChild(el('div', 'list-item muted', emptyText));
     return;
   }
@@ -306,6 +334,26 @@ function renderList() {
       const flags = matchFlagsText(item);
       if (flags) row.appendChild(el('div', 'report-list-evidence', flags));
       row.addEventListener('click', () => renderMatchDetail(item));
+    } else if (currentTab === 'clusters') {
+      const key = item.member_ids.join(',');
+      if (key === selectedClusterKey) row.classList.add('active');
+      const title = el('div', 'list-title');
+      const names = (item.members || [])
+        .map((member) => `${member.username || '未知'}#${member.id}`)
+        .join(' ↔ ');
+      title.appendChild(el('strong', '', names));
+      title.appendChild(el(
+        'span',
+        item.has_confirmed ? 'badge accepted' : 'badge pending',
+        item.has_confirmed ? '已确认' : '未确认',
+      ));
+      row.appendChild(title);
+      row.appendChild(el(
+        'div',
+        'mono muted',
+        `共 ${item.member_ids.length} 个账号 · ${item.edges.length} 条关联 · 最高风险 ${item.max_risk_score || 0}`,
+      ));
+      row.addEventListener('click', () => renderClusterDetail(item, key));
     } else if (currentTab === 'moderation') {
       if (item.key === selectedModerationKey) row.classList.add('active');
       const isWarning = item.kind === 'warning';
@@ -342,6 +390,53 @@ function addKv(parent, key, value, mono = false) {
   row.appendChild(el('div', 'muted', key));
   row.appendChild(el('div', mono ? 'mono' : '', value == null || value === '' ? '-' : value));
   parent.appendChild(row);
+}
+
+function renderClusterDetail(cluster, key = null) {
+  selectedClusterKey = key || cluster.member_ids.join(',');
+  renderList();
+  $('empty').classList.add('hidden');
+  const detail = $('detail');
+  detail.classList.remove('hidden');
+  detail.textContent = '';
+  const names = (cluster.members || [])
+    .map((member) => `${member.username || '未知'}#${member.id}`)
+    .join(' ↔ ');
+  detail.appendChild(el('h2', '', '关联串'));
+  detail.appendChild(el('div', 'mono', names));
+  addKv(detail, '账号数', cluster.member_ids.length);
+  addKv(detail, '关联条数', (cluster.edges || []).length);
+  addKv(detail, '最高风险', cluster.max_risk_score || 0);
+  addKv(detail, '是否已确认', cluster.has_confirmed ? '是' : '否');
+  detail.appendChild(el('h3', '', '组成账号'));
+  const memberActions = el('div', 'inline-actions');
+  (cluster.members || []).forEach((member) => {
+    const btn = el('button', 'btn small', `${member.username || '未知'}#${member.id}`);
+    btn.addEventListener('click', () => searchUser(member.id));
+    memberActions.appendChild(btn);
+  });
+  detail.appendChild(memberActions);
+  if ((cluster.edges || []).length) {
+    detail.appendChild(el('h3', '', '关联边'));
+    (cluster.edges || []).forEach((edge) => {
+      const row = el('div', 'match-mini-row');
+      row.appendChild(el('strong', '', `${edge.low_name || '?'}#${edge.user_id_low} ↔ ${edge.high_name || '?'}#${edge.user_id_high}`));
+      row.appendChild(el('span', `badge ${edge.state || ''}`, edge.state || '-'));
+      row.appendChild(el('span', 'muted', `风险 ${edge.risk_score || 0}`));
+      detail.appendChild(row);
+    });
+  }
+  const actions = el('div', 'inline-actions');
+  const mergeBtn = el('button', 'btn primary', '合并此关联串');
+  mergeBtn.addEventListener('click', () => {
+    if (!window.confirm(`确认将这 ${cluster.member_ids.length} 个账号合并为同一关联组？`)) return;
+    accountLinkStaffAction('/api/account-integrity/staff/merge', {
+      user_ids: cluster.member_ids,
+      reason: '举报处理页确认传递关联串',
+    }, null);
+  });
+  actions.appendChild(mergeBtn);
+  detail.appendChild(actions);
 }
 
 function matchTitle(match) {
@@ -874,6 +969,10 @@ async function accountLinkStaffAction(path, body, user) {
     $('action-result').className = 'result ok';
     setText('action-result', '账号关联操作已完成。');
     if (user && user.id) await selectUser({ id: user.id });
+    else if (currentTab === 'clusters') {
+      await loadClusters();
+      renderList();
+    }
   } catch (e) {
     $('action-result').className = 'result';
     setText('action-result', `账号关联操作失败：${e.message}`);
@@ -1209,6 +1308,7 @@ function bind() {
   $('search-users').addEventListener('click', loadUsersThenRender);
   $('search-matches').addEventListener('click', loadMatchesThenRender);
   $('search-risk').addEventListener('click', loadRiskThenRender);
+  $('search-clusters').addEventListener('click', loadClustersThenRender);
   $('user-query').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') loadUsersThenRender();
   });
@@ -1271,6 +1371,15 @@ async function loadRiskThenRender() {
     renderList();
   } catch (e) {
     setText('summary', `风险检索失败：${e.message}`);
+  }
+}
+
+async function loadClustersThenRender() {
+  try {
+    await loadClusters();
+    renderList();
+  } catch (e) {
+    setText('summary', `关联串读取失败：${e.message}`);
   }
 }
 

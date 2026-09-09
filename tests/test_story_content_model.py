@@ -27,6 +27,10 @@ def test_cn_cardinal_to_arabic_only_rewrites_numeric_contexts():
     ) == '三叉戟、三角形、下一次、一次、一半保持不变'
 
 
+def test_nitro_card_is_an_attack():
+    assert STORY_CARDS['nitro']['type'] == 'thorn'
+
+
 def test_story_damage_type_words_use_explicit_icon_markers():
     catalogs = (
         STORY_CARDS,

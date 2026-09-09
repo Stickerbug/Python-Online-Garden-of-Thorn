@@ -5255,12 +5255,27 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   pointer-events: none;
 }
 
+.story-equipment-orbiter {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: center;
+  animation: storyEquipmentRingOrbit 20s linear infinite;
+  animation-delay: var(--story-equipment-orbit-delay, 0s);
+}
+
+.story-equipment-orbiter.gtn-orbit-js {
+  animation: none !important;
+}
+
 .story-equipment {
   --story-equipment-angle: 0deg;
   --story-equipment-radius: calc(var(--story-avatar-width) * .68);
   position: absolute;
-  left: 50%;
-  top: 50%;
+  left: 0;
+  top: 0;
   width: 40px;
   height: 40px;
   padding: 0;
@@ -5270,8 +5285,15 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   cursor: help;
   pointer-events: auto;
   transform-origin: 0 0;
-  animation: storyEquipmentOrbit 20s linear infinite;
-  animation-delay: var(--story-equipment-orbit-delay, 0s);
+  transform:
+    rotate(var(--story-equipment-angle))
+    translateY(calc(-1 * var(--story-equipment-radius) * var(--story-equipment-radius-scale, 1)))
+    rotate(calc(-1 * var(--story-equipment-angle)))
+    translate(-50%, -50%);
+  transition:
+    transform 620ms cubic-bezier(.2, .84, .2, 1),
+    opacity 240ms ease;
+  will-change: transform;
 }
 
 .story-equipment-visual,
@@ -5286,6 +5308,10 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .story-equipment-visual {
   animation: storyEquipmentCounterOrbit 20s linear infinite;
   animation-delay: var(--story-equipment-orbit-delay, 0s);
+}
+
+.story-equipment-orbiter.gtn-orbit-js .story-equipment-visual {
+  animation: none !important;
 }
 
 .story-equipment-icon {
@@ -5324,7 +5350,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   font-weight: 900;
 }
 
-.story-avatar-stack:hover .story-equipment,
+.story-avatar-stack:hover .story-equipment-orbiter,
 .story-equipment:hover,
 .story-avatar-stack:hover .story-equipment-visual,
 .story-equipment:hover .story-equipment-visual,
@@ -5333,23 +5359,14 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   animation-play-state: paused;
 }
 
-@keyframes storyEquipmentOrbit {
-  from {
-    transform:
-      rotate(var(--story-equipment-angle))
-      rotate(0deg)
-      translateY(calc(-1 * var(--story-equipment-radius)))
-      rotate(calc(-1 * var(--story-equipment-angle)))
-      translate(-50%, -50%);
-  }
-  to {
-    transform:
-      rotate(var(--story-equipment-angle))
-      rotate(360deg)
-      translateY(calc(-1 * var(--story-equipment-radius)))
-      rotate(calc(-1 * var(--story-equipment-angle)))
-      translate(-50%, -50%);
-  }
+@keyframes storyEquipmentRingOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.story-equipment.is-entering,
+.story-equipment.is-leaving {
+  pointer-events: none;
 }
 
 @keyframes storyEquipmentCounterOrbit {
@@ -7661,6 +7678,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   .story-card-flight,
   .story-combat-float,
   .story-opening-lightning,
+  .story-equipment-orbiter,
   .story-equipment,
   .story-equipment-visual,
   .story-equipment-icon,
@@ -7675,5 +7693,10 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   .story-chat-panel {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
+  }
+  .story-equipment-orbiter,
+  .story-equipment-visual,
+  .story-equipment-icon {
+    animation-iteration-count: 1 !important;
   }
 }

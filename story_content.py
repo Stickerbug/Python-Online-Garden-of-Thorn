@@ -2167,7 +2167,7 @@ STORY_CARDS = {
         },
     ),
     'nitro': _card(
-        'Nitro', '氮气', 'Nitro', 3, 'bloom', 'ultra',
+        'Nitro', '氮气', 'Nitro', 3, 'thorn', 'ultra',
         '对目标造成14D；结束当前回合并立即进入1个完整的额外回合，额外回合开始时获得2层破损。',
         tags=('exile',), target='enemy',
         effects=(_effect('damage', 14), _effect('immediate_extra_turn', 2)),

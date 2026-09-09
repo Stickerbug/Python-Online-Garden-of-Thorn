@@ -114,6 +114,13 @@
       head.appendChild(element('h3', 'ops-item-title', `#${item.id} ${item.question || ''}`));
       head.appendChild(element('span', 'ops-item-state', item.effective_state || item.state));
       card.appendChild(head);
+      card.appendChild(element(
+        'p',
+        'ops-item-meta',
+        `玩家可见状态：${item.feed_visibility === 'show' ? '持续显示'
+          : item.feed_visibility === 'hide' ? '已隐藏'
+            : item.player_visible ? '默认显示（结束后2天隐藏）' : '默认已自动隐藏'}`,
+      ));
       const options = element('ol', 'ops-option-list');
       (Array.isArray(item.options) ? item.options : []).forEach((option) => {
         options.appendChild(element('li', '', `${option.label || ''} · ${Number(option.vote_count || 0)}票`));
@@ -123,6 +130,11 @@
       const actions = element('div', 'ops-item-actions');
       if (item.state === 'draft') actions.appendChild(actionButton('发布', 'poll', item.id, 'publish'));
       if (item.state === 'published' && item.effective_state !== 'closed') actions.appendChild(actionButton('立即结束', 'poll', item.id, 'close', true));
+      if (['published', 'closed'].includes(item.state)) {
+        if (item.feed_visibility !== 'show') actions.appendChild(actionButton('设为持续显示', 'poll', item.id, 'feed_show'));
+        if (item.feed_visibility !== 'hide') actions.appendChild(actionButton('对玩家隐藏', 'poll', item.id, 'feed_hide'));
+        if (item.feed_visibility !== 'auto') actions.appendChild(actionButton('恢复默认', 'poll', item.id, 'feed_auto'));
+      }
       if (!['closed', 'retracted'].includes(item.state)) actions.appendChild(actionButton('撤回', 'poll', item.id, 'retract', true));
       card.appendChild(actions);
       list.appendChild(card);

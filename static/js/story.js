@@ -152,6 +152,10 @@
     const STORY_SKIN_DAMAGE_HOLD_MS = 3000;
     const STORY_MECHANICAL_TRACK_PERIOD_MS = 22000;
     const STORY_MECHANICAL_TRACK_TRIGGER_ANGLE = -90;
+    const STORY_EQUIP_ORBIT_PERIOD_S = 20;
+    const STORY_EQUIP_SPIN_PERIOD_S = 17.333;
+    const STORY_EQUIP_MOTION_MS = 620;
+    const STORY_EQUIP_REMOVE_MS = 420;
     const STORY_COOP_PARTY_POLL_MS = 2500;
     const STORY_COOP_COMBAT_POLL_MS = 1200;
     const STORY_MANUAL_SAVE_STABLE_PHASES = new Set([
@@ -11388,46 +11392,37 @@
 
     function attachStoryEquipmentPreview(anchor, card) {
         if (!anchor || !cardValues(card)) return;
+        const currentCard = () => storyCardElementData.get(anchor) || card;
         anchor.addEventListener('pointerenter', () => {
             if (window.matchMedia?.('(hover: none), (pointer: coarse)').matches) return;
-            showStoryEquipmentPreview(anchor, card);
+            showStoryEquipmentPreview(anchor, currentCard());
         });
         anchor.addEventListener('pointermove', () => positionStoryEquipmentPreview(anchor));
         anchor.addEventListener('pointerleave', removeStoryEquipmentPreview);
-        anchor.addEventListener('focus', () => showStoryEquipmentPreview(anchor, card));
+        anchor.addEventListener('focus', () => showStoryEquipmentPreview(anchor, currentCard()));
         anchor.addEventListener('blur', removeStoryEquipmentPreview);
     }
 
-    function renderStoryEquipment(cards) {
-        const container = $('story-player-equipment');
-        if (!container) return;
-        removeStoryEquipmentPreview();
-        container.replaceChildren();
-        const equipment = Array.isArray(cards) ? cards : [];
-        container.style.setProperty('--story-equipment-count', String(Math.max(1, equipment.length)));
-        const nowSeconds = Date.now() / 1000;
-        const orbitDelay = -(nowSeconds % 20);
-        const spinDelay = -(nowSeconds % 17.333);
-        equipment.forEach((card, index) => {
-            const values = cardValues(card);
-            if (!values) return;
-            const item = document.createElement('button');
-            item.type = 'button';
-            item.className = 'story-equipment';
-            item.dataset.instanceId = String(card.instance_id || '');
-            item.style.setProperty('--story-equipment-index', String(index));
-            const angle = 360 / Math.max(1, equipment.length) * index;
-            item.style.setProperty('--story-equipment-angle', `${angle}deg`);
-            item.style.setProperty('--story-equipment-orbit-delay', `${orbitDelay.toFixed(3)}s`);
-            item.style.setProperty('--story-equipment-spin-delay', `${spinDelay.toFixed(3)}s`);
-            item.setAttribute(
-                'aria-label',
-                `${localize(values.name)}：${localize(values.description)}`,
-            );
-            const visual = document.createElement('span');
-            visual.className = 'story-equipment-visual';
-            const icon = document.createElement('span');
-            icon.className = 'story-equipment-icon';
+    function storyEquipmentOwnerKey() {
+        const account = window.__STORY_ACCOUNT__ || {};
+        return [
+            'story',
+            String(account.id != null ? account.id : (account.player_id != null ? account.player_id : (account.display_name || 'player'))),
+            String((activeRun && activeRun.id) || ''),
+        ].join(':');
+    }
+
+    function storyEquipmentInstanceId(card) {
+        return card && card.instance_id != null ? String(card.instance_id) : '';
+    }
+
+    function createStoryEquipmentVisual(card) {
+        const values = cardValues(card);
+        const visual = document.createElement('span');
+        visual.className = 'story-equipment-visual';
+        const icon = document.createElement('span');
+        icon.className = 'story-equipment-icon';
+        if (values) {
             const imageUrl = card.upgraded
                 ? (values.upgraded_image_url || values.image_url || '')
                 : (values.image_url || '');
@@ -11457,11 +11452,158 @@
                 fallback.textContent = localize(values.name).slice(0, 1);
                 icon.append(fallback);
             }
-            visual.append(icon);
-            item.append(visual);
+        }
+        visual.append(icon);
+        return visual;
+    }
+
+    function storyEquipmentContentSignature(card) {
+        const values = cardValues(card);
+        const imageUrl = card && card.upgraded
+            ? (values && (values.upgraded_image_url || values.image_url || ''))
+            : (values && values.image_url || '');
+        return [
+            card && (card.def_id || ''),
+            card && card.upgraded ? 'upgraded' : '',
+            String(imageUrl || ''),
+            storyGeneratedHalfUrls(card).join(','),
+        ].join('|');
+    }
+
+    function buildStoryEquipmentItem(card, orbiter) {
+        const values = cardValues(card);
+        if (!values) return null;
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'story-equipment';
+        item.dataset.instanceId = storyEquipmentInstanceId(card);
+        item.style.setProperty(
+            '--story-equipment-orbit-delay',
+            `${GTNEquipmentMotion.counterDelaySeconds(orbiter, STORY_EQUIP_ORBIT_PERIOD_S).toFixed(3)}s`,
+        );
+        item.setAttribute(
+            'aria-label',
+            `${localize(values.name)}：${localize(values.description)}`,
+        );
+        item.append(createStoryEquipmentVisual(card));
+        item._gtnStoryContentSignature = storyEquipmentContentSignature(card);
+        storyCardElementData.set(item, card);
+        attachStoryEquipmentPreview(item, card);
+        return item;
+    }
+
+    function syncStoryEquipmentItem(item, card, index, total, ownerKey, orbiter) {
+        if (!item || !card) return;
+        const values = cardValues(card);
+        if (!values) return;
+        item.dataset.instanceId = storyEquipmentInstanceId(card);
+        const angle = 360 / Math.max(1, total) * index;
+        item.style.setProperty('--story-equipment-index', String(index));
+        item.style.setProperty('--story-equipment-angle', `${angle}deg`);
+        if (!item.style.getPropertyValue('--story-equipment-spin-delay')) {
+            item.style.setProperty(
+                '--story-equipment-spin-delay',
+                `${GTNEquipmentMotion.spinDelaySeconds(
+                    ownerKey,
+                    storyEquipmentInstanceId(card) || card.def_id || String(index),
+                    STORY_EQUIP_SPIN_PERIOD_S,
+                )}s`,
+            );
+        }
+        if (!item.style.getPropertyValue('--story-equipment-orbit-delay')) {
+            item.style.setProperty(
+                '--story-equipment-orbit-delay',
+                `${GTNEquipmentMotion.counterDelaySeconds(orbiter, STORY_EQUIP_ORBIT_PERIOD_S).toFixed(3)}s`,
+            );
+        }
+        const label = `${localize(values.name)}：${localize(values.description)}`;
+        if (item.getAttribute('aria-label') !== label) item.setAttribute('aria-label', label);
+        const signature = storyEquipmentContentSignature(card);
+        if (item._gtnStoryContentSignature !== signature) {
+            const oldVisual = item.querySelector(':scope > .story-equipment-visual');
+            const visual = createStoryEquipmentVisual(card);
+            if (oldVisual) oldVisual.replaceWith(visual);
+            else item.append(visual);
+            item._gtnStoryContentSignature = signature;
             storyCardElementData.set(item, card);
-            attachStoryEquipmentPreview(item, card);
-            container.append(item);
+        }
+        const fallback = item.querySelector(':scope > .story-equipment-visual .story-equipment-fallback');
+        if (fallback) {
+            const fallbackText = localize(values.name).slice(0, 1);
+            if (fallback.textContent !== fallbackText) fallback.textContent = fallbackText;
+        }
+    }
+
+    function renderStoryEquipment(cards) {
+        const container = $('story-player-equipment');
+        if (!container) return;
+        removeStoryEquipmentPreview();
+        const equipment = Array.isArray(cards) ? cards : [];
+        container.style.setProperty('--story-equipment-count', String(Math.max(1, equipment.length)));
+        const isInitialPopulation = !container.querySelector(':scope > .story-equipment-orbiter');
+        let orbiter = container.querySelector(':scope > .story-equipment-orbiter');
+        if (!orbiter) {
+            orbiter = document.createElement('div');
+            orbiter.className = 'story-equipment-orbiter';
+            const legacyItems = Array.from(container.children);
+            container.appendChild(orbiter);
+            legacyItems.forEach((child) => orbiter.appendChild(child));
+            container.style.setProperty(
+                '--story-equipment-orbit-delay',
+                `${GTNEquipmentMotion.orbitDelaySeconds(STORY_EQUIP_ORBIT_PERIOD_S).toFixed(3)}s`,
+            );
+        }
+        GTNEquipmentMotion.startOrbitMotion(orbiter, {
+            periodSec: STORY_EQUIP_ORBIT_PERIOD_S,
+            chipSelector: ':scope > .story-equipment',
+            visualSelector: '.story-equipment-visual',
+            pauseRoot: container.closest('.story-avatar-stack'),
+        });
+        const ownerKey = storyEquipmentOwnerKey();
+        const total = equipment.length;
+        const liveIds = new Set();
+        equipment.forEach((card) => {
+            const id = storyEquipmentInstanceId(card);
+            if (id) liveIds.add(id);
+        });
+        const byId = new Map();
+        orbiter.querySelectorAll(':scope > .story-equipment').forEach((item) => {
+            const id = String(item.dataset.instanceId || '');
+            if (id) byId.set(id, item);
+        });
+        byId.forEach((item, id) => {
+            if (liveIds.has(id)) return;
+            GTNEquipmentMotion.startLeave(item, {
+                scaleVar: '--story-equipment-radius-scale',
+                removeMs: STORY_EQUIP_REMOVE_MS,
+                onComplete: (el) => el.remove(),
+            });
+        });
+        equipment.forEach((card, index) => {
+            const id = storyEquipmentInstanceId(card);
+            if (!id) return;
+            let item = byId.get(id);
+            if (item && item.dataset.motionLeaving === '1') {
+                GTNEquipmentMotion.cancelLeave(item, {
+                    scaleVar: '--story-equipment-radius-scale',
+                });
+            }
+            if (!item) {
+                item = buildStoryEquipmentItem(card, orbiter);
+                if (!item) return;
+                orbiter.appendChild(item);
+                syncStoryEquipmentItem(item, card, index, total, ownerKey, orbiter);
+                if (!isInitialPopulation) {
+                    item.style.setProperty('--story-equipment-radius-scale', '0');
+                    item.style.opacity = '0';
+                    GTNEquipmentMotion.beginEnter(item, {
+                        scaleVar: '--story-equipment-radius-scale',
+                        cleanupMs: STORY_EQUIP_MOTION_MS + 120,
+                    });
+                }
+            } else {
+                syncStoryEquipmentItem(item, card, index, total, ownerKey, orbiter);
+            }
         });
     }
 

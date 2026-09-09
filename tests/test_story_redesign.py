@@ -240,6 +240,26 @@ def test_lunatic_stage_three_has_two_consecutive_boss_floors():
     assert story_map['floors'][16]['width'] == 1
 
 
+def test_lunatic_stage_three_consecutive_bosses_are_distinct():
+    for index in range(12):
+        seed = f'lunatic-boss-distinct-{index}'
+        state = build_initial_story_state(seed)
+        state['stage'] = 3
+        state['biome'] = 'ocean'
+        state['difficulty'] = 'lunatic'
+        state['map'] = generate_story_map(seed, 3, 'ocean', 'lunatic')
+        story_engine._prepare_boss_node_encounters(state, seed)
+        final_bosses = [
+            node.get('boss_def_id')
+            for floor in state['map']['floors']
+            for node in floor.get('nodes') or ()
+            if node.get('type') == 'boss'
+            and node.get('floor') in (16, 17)
+        ]
+        assert len(final_bosses) == 2
+        assert final_bosses[0] != final_bosses[1]
+
+
 def test_easy_talents_apply_draw_heal_resource_retention_and_card_upgrades():
     state = _started_state('easy-talents')
     state['player']['relics'].extend([

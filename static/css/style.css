@@ -18856,6 +18856,18 @@ button.armor-meter:focus-visible {
   z-index: 5;
 }
 
+.classic-equipment-orbiter {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
+  animation: classicEquipmentRingOrbit 20s linear infinite;
+  animation-delay: var(--equip-orbit-delay, 0s);
+}
+
+.classic-equipment-orbiter.gtn-orbit-js {
+  animation: none !important;
+}
+
 .classic-equip-chip {
   --equip-radius: clamp(46px, 5.5vw, 81px);
   position: absolute;
@@ -18872,13 +18884,26 @@ button.armor-meter:focus-visible {
   box-shadow: none;
   pointer-events: auto;
   transform-origin: 0 0;
-  animation: classicEquipmentOrbit 20s linear infinite;
-  animation-delay: var(--equip-orbit-delay, 0s);
+  transform:
+    rotate(var(--equip-angle, 0deg))
+    translateY(calc(-1 * var(--equip-radius) * var(--equip-radius-scale, 1)))
+    rotate(calc(-1 * var(--equip-angle, 0deg)))
+    translate(-50%, -50%);
+  transition:
+    transform 620ms cubic-bezier(.2, .84, .2, 1),
+    opacity 240ms ease;
+  will-change: transform;
 }
 
+.classic-avatar-stack:hover .classic-equipment-orbiter,
 .classic-avatar-stack:hover .classic-equip-chip,
 .classic-equip-chip:hover {
   animation-play-state: paused;
+}
+
+.classic-equip-chip.is-entering,
+.classic-equip-chip.is-leaving {
+  pointer-events: none;
 }
 
 .classic-equip-visual {
@@ -18890,6 +18915,10 @@ button.armor-meter:focus-visible {
   transform-origin: center;
   animation: classicEquipmentCounterOrbit 20s linear infinite;
   animation-delay: var(--equip-orbit-delay, 0s);
+}
+
+.classic-equipment-orbiter.gtn-orbit-js .classic-equip-visual {
+  animation: none !important;
 }
 
 .classic-equip-visual::after {
@@ -19047,23 +19076,9 @@ button.armor-meter:focus-visible {
   text-overflow: ellipsis;
 }
 
-@keyframes classicEquipmentOrbit {
-  from {
-    transform:
-      rotate(var(--equip-angle, 0deg))
-      rotate(0deg)
-      translateY(calc(-1 * var(--equip-radius)))
-      rotate(calc(-1 * var(--equip-angle, 0deg)))
-      translate(-50%, -50%);
-  }
-  to {
-    transform:
-      rotate(var(--equip-angle, 0deg))
-      rotate(360deg)
-      translateY(calc(-1 * var(--equip-radius)))
-      rotate(calc(-1 * var(--equip-angle, 0deg)))
-      translate(-50%, -50%);
-  }
+@keyframes classicEquipmentRingOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @keyframes classicEquipmentCounterOrbit {
@@ -19074,6 +19089,16 @@ button.armor-meter:focus-visible {
 @keyframes classicEquipmentIconSpin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .classic-equipment-orbiter {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .classic-equip-chip {
+    transition-duration: 1ms !important;
+  }
 }
 
 .classic-hand-fan {

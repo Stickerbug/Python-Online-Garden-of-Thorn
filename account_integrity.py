@@ -788,7 +788,7 @@ def _pair_signals(conn, low, high, now):
     if devices:
         add(50, 'device', 'same_server_device_token')
     if stable_device_days >= 3:
-        add(25, 'device', 'same_device_three_days')
+        add(40, 'device', 'same_device_three_days')
     network_score = (40 if network_days >= 3 else 0)
     if registration_proximity:
         network_score += 10
@@ -808,7 +808,21 @@ def _pair_signals(conn, low, high, now):
         add(10, 'rating', 'new_account_similar_50_gr_band')
     if shared_votes >= SUSPICIOUS_SHARED_VOTE_ISSUES:
         add(15, 'platform', 'shared_issue_votes')
-    can_confirm = (score >= 90 and len(categories) >= 2 and (not shared or 'behavior' in categories))
+    strong_device = bool(devices) and stable_device_days >= 3
+    strong_behavior = bool(
+        network_mutual
+        or rapid_alternation
+        or behavior
+        or same_day_feed
+    )
+    multiple_categories = len(categories) >= 2
+    can_confirm = (
+        score >= 90
+        and (
+            (strong_device and not shared)
+            or (multiple_categories and (not shared or strong_behavior))
+        )
+    )
     state = 'confirmed' if can_confirm else 'probable' if score >= 70 else 'suspected' if score >= 40 else 'none'
     facts = {'shared_device': bool(devices), 'stable_device_days': stable_device_days,
              'network_days': network_days, 'shared_network': shared, 'registration_overlap': registration_overlap,
@@ -1030,7 +1044,102 @@ def list_account_link_cases(actor_id):
             cases.append({k:row[k] for k in ('user_id_low','user_id_high','low_name','high_name','state','risk_score','group_id','updated_at')} |
                          {'reasons':json.loads(row['reasons_json']),'categories':json.loads(row['categories_json'])})
         appeals=[dict(r) for r in conn.execute("SELECT * FROM account_link_appeals WHERE status='pending' ORDER BY id LIMIT 100")]
-        return {'cases':cases,'appeals':appeals}
+        clusters = _account_link_clusters_conn(conn)
+        return {'cases':cases,'appeals':appeals,'clusters':clusters}
+
+
+def _account_link_clusters_conn(conn):
+    """Group pair decisions and confirmed memberships into transitive clusters."""
+    edge_rows = conn.execute(
+        '''
+        SELECT d.user_id_low, d.user_id_high, d.state, d.risk_score,
+               a.username AS low_name, b.username AS high_name
+        FROM account_link_decisions d
+        JOIN users a ON a.id = d.user_id_low
+        JOIN users b ON b.id = d.user_id_high
+        WHERE d.state IN ('confirmed', 'appealed', 'probable', 'suspected')
+          AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+        '''
+    ).fetchall()
+    memberships = conn.execute(
+        '''
+        SELECT g.id AS group_id, g.status, g.risk_score, m.user_id
+        FROM account_link_groups g
+        JOIN account_link_members m ON m.group_id = g.id
+        WHERE m.status = 'active'
+          AND g.status IN ('confirmed', 'appealed')
+        '''
+    ).fetchall()
+    parent = {}
+
+    def find(uid):
+        uid = int(uid)
+        if uid not in parent:
+            parent[uid] = uid
+        while parent[uid] != uid:
+            parent[uid] = parent[parent[uid]]
+            uid = parent[uid]
+        return uid
+
+    def union(left, right):
+        left_root, right_root = find(left), find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    grouped = {}
+    for membership in memberships:
+        grouped.setdefault(int(membership['group_id']), []).append(int(membership['user_id']))
+    for member_ids in grouped.values():
+        for member in member_ids[1:]:
+            union(member_ids[0], member)
+    for row in edge_rows:
+        union(int(row['user_id_low']), int(row['user_id_high']))
+
+    components = {}
+    for uid in parent:
+        components.setdefault(find(uid), set()).add(uid)
+    clusters = []
+    for members in components.values():
+        if len(members) < 2:
+            continue
+        member_list = sorted(members)
+        edges = []
+        max_risk = 0
+        has_confirmed = False
+        for row in edge_rows:
+            low, high = int(row['user_id_low']), int(row['user_id_high'])
+            if low not in members or high not in members:
+                continue
+            state = str(row['state'])
+            risk = int(row['risk_score'] or 0)
+            max_risk = max(max_risk, risk)
+            has_confirmed = has_confirmed or state in ('confirmed', 'appealed')
+            edges.append({
+                'user_id_low': low,
+                'user_id_high': high,
+                'low_name': str(row['low_name']),
+                'high_name': str(row['high_name']),
+                'state': state,
+                'risk_score': risk,
+            })
+        user_rows = conn.execute(
+            f"SELECT id, username FROM users WHERE id IN ({','.join('?' for _ in member_list)})",
+            member_list,
+        ).fetchall()
+        user_by_id = {int(row['id']): str(row['username']) for row in user_rows}
+        member_payload = [
+            {'id': uid, 'username': user_by_id.get(uid, f'#{uid}')}
+            for uid in member_list
+        ]
+        clusters.append({
+            'member_ids': member_list,
+            'members': member_payload,
+            'edges': edges,
+            'max_risk_score': max_risk,
+            'has_confirmed': has_confirmed,
+        })
+    clusters.sort(key=lambda item: (-int(item['max_risk_score']), item['member_ids'][0]))
+    return clusters
 
 
 def get_account_integrity_center(user_id, *, now=None):

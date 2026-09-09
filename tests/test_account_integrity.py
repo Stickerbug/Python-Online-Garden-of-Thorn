@@ -153,12 +153,12 @@ def test_report_expiry_withdraw_and_windows(accounts):
         integrity.mutate_team_report(3,report['id'],'confirm',now=NOW)
 
 
-def test_automatic_link_needs_independent_signals_and_shares_reputation(accounts):
+def test_stable_same_device_over_three_days_confirms_and_shares_reputation(accounts):
     for day in range(3):
         identify(1,day,network='a')
         identify(2,day,network='b')
-    assert not integrity.get_reputation_profile(1)['linked']
-    assert integrity.get_reputation_profile(1)['link_state']=='probable'
+    assert integrity.get_reputation_profile(1)['linked']
+    assert integrity.get_reputation_profile(1)['link_state']=='confirmed'
     for day in range(3):
         identify(1,day,network='home')
         identify(2,day,network='home')
@@ -187,6 +187,35 @@ def test_rapid_same_device_alternation_confirms_automatically(accounts):
         {'id': 1, 'username': 'user1', 'status': 'active'},
         {'id': 2, 'username': 'user2', 'status': 'active'},
     ]
+
+
+def test_transitive_device_links_appear_as_one_cluster(accounts):
+    for day in range(3):
+        integrity.record_identity_event(
+            1, digest('phone-ab'), digest(f'net-a-{day}'), source='login',
+            now=NOW + timedelta(days=day),
+        )
+        integrity.record_identity_event(
+            2, digest('phone-ab'), digest(f'net-b-{day}'), source='login',
+            now=NOW + timedelta(days=day),
+        )
+    for day in range(3):
+        integrity.record_identity_event(
+            2, digest('phone-bc'), digest(f'net-c-{day}'), source='login',
+            now=NOW + timedelta(days=day + 5),
+        )
+        integrity.record_identity_event(
+            3, digest('phone-bc'), digest(f'net-d-{day}'), source='login',
+            now=NOW + timedelta(days=day + 5),
+        )
+    integrity.recompute_account_links(1, now=NOW + timedelta(days=3))
+    integrity.recompute_account_links(2, now=NOW + timedelta(days=8))
+    data = integrity.list_account_link_cases(10)
+    clusters = data['clusters']
+    assert any(
+        set(cluster['member_ids']) >= {1, 2, 3}
+        for cluster in clusters
+    )
 
 
 def test_network_suspicion_escalates_through_signals_to_confirmed(accounts):

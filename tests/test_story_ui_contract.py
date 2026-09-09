@@ -290,12 +290,13 @@ def test_story_equipment_matches_classic_orbit_preview_and_terms():
     assert "visual.className = 'story-equipment-visual';" in STORY_JS
     assert "icon.className = 'story-equipment-icon';" in STORY_JS
     assert "image.className = 'story-equipment-image';" in STORY_JS
-    assert "item.style.setProperty('--story-equipment-orbit-delay'" in STORY_JS
-    assert "item.style.setProperty('--story-equipment-spin-delay'" in STORY_JS
+    assert "item.style.setProperty(" in STORY_JS
+    assert "'--story-equipment-orbit-delay'" in STORY_JS
+    assert "'--story-equipment-spin-delay'" in STORY_JS
     assert 'storyCardElementData.set(item, card);' in STORY_JS
     assert 'attachStoryEquipmentPreview(item, card);' in STORY_JS
     assert "event.target?.closest?.('.story-equipment')" in STORY_JS
-    assert 'animation: storyEquipmentOrbit 20s linear infinite;' in STORY_CSS
+    assert 'animation: storyEquipmentRingOrbit 20s linear infinite;' in STORY_CSS
     assert 'animation: storyEquipmentCounterOrbit 20s linear infinite;' in STORY_CSS
     assert 'animation: storyEquipmentIconSpin 17.333s linear infinite;' in STORY_CSS
     assert '.story-equipment-preview {' in STORY_CSS
@@ -486,7 +487,7 @@ def test_story_equipment_orbits_around_player_portrait():
     assert avatar_stack in STORY_TEMPLATE
     assert '.story-avatar-stack {' in STORY_CSS
     assert 'width: var(--story-avatar-width);' in STORY_CSS
-    assert '.story-avatar-stack:hover .story-equipment,' in STORY_CSS
+    assert '.story-avatar-stack:hover .story-equipment-orbiter,' in STORY_CSS
     assert '.story-actor-player:hover .story-equipment' not in STORY_CSS
 
 

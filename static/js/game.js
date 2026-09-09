@@ -2604,6 +2604,50 @@ function migrateStoredUiStyle() {
     return stored;
 }
 let currentUiStyle = migrateStoredUiStyle();
+Object.assign(I18N.en, {
+    card_gallery: 'Card Gallery',
+    error_magic_blocked: 'Cannot use cards with Magic cost this turn',
+    loading: 'Loading...',
+    no_valid_target: 'No valid target',
+    search: 'Search',
+    select_card: 'Select Card',
+    status_charges: 'Charges',
+    status_durability: 'Durability',
+    term_equipment_armor: 'Equipment Armor',
+});
+Object.assign(I18N.zh, {
+    card_gallery: '卡牌图鉴',
+    error_magic_blocked: '本回合无法使用带有魔力消耗的卡牌',
+    loading: '加载中...',
+    no_valid_target: '没有可选择的目标',
+    search: '搜索',
+    select_card: '选择卡牌',
+    status_charges: '充能',
+    status_durability: '耐久',
+    term_equipment_armor: '装备护甲',
+});
+Object.assign(I18N.fr, {
+    card_gallery: 'Galerie de cartes',
+    error_magic_blocked: 'Impossible d’utiliser des cartes coûtant de la magie ce tour-ci',
+    loading: 'Chargement...',
+    no_valid_target: 'Aucune cible valide',
+    search: 'Rechercher',
+    select_card: 'Choisir une carte',
+    status_charges: 'Charges',
+    status_durability: 'Durabilité',
+    term_equipment_armor: 'Armure d’équipement',
+});
+Object.assign(I18N.ja, {
+    card_gallery: 'カード図鑑',
+    error_magic_blocked: 'このターンは魔力コストのカードを使用できません',
+    loading: '読み込み中...',
+    no_valid_target: '有効な対象がいません',
+    search: '検索',
+    select_card: 'カードを選択',
+    status_charges: 'チャージ',
+    status_durability: '耐久度',
+    term_equipment_armor: '装備の護甲',
+});
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || (I18N.zh[key]) || key; }
 function tf(key, ...values) { return t(key).replace(/\{(\d+)\}/g, (_, i) => values[Number(i)] ?? ''); }
 const UI = new Proxy({}, { get: (_, key) => t(key) });
@@ -27965,65 +28009,257 @@ function renderStatusTagsToElement(container, playerData) {
     }
 }
 
-function renderClassicEquipmentList(player) {
-    const equipment = (player && player.equipment) || [];
-    if (!equipment.length) return '';
+const CLASSIC_EQUIP_ORBIT_PERIOD_S = 20;
+const CLASSIC_EQUIP_SPIN_PERIOD_S = 17.333;
+const CLASSIC_EQUIP_MOTION_MS = 620;
+const CLASSIC_EQUIP_REMOVE_MS = 420;
+
+function classicEquipmentInstanceId(eq) {
+    const cardInst = eq && (eq.card_instance || eq.card || eq);
+    return cardInst && cardInst.instance_id != null ? String(cardInst.instance_id) : '';
+}
+
+function classicEquipmentMeta(player, eq, index, total) {
+    const cardInst = (eq && (eq.card_instance || eq.card)) || {};
+    const cardDef = getCardDef(cardInst.def_id || '');
+    const name = cardDef ? getCardInstanceName(cardInst, cardDef) : (cardInst.def_id || '?');
+    const ownerId = normalizeEquipmentOwnerId(eq, player);
     const ownerIdForTrigger = normalizePlayerId((player && player.id) ?? (player && player.player_id));
     const myIdForTrigger = normalizePlayerId(gameState && gameState.your_id);
     const isMyEquipment = ownerIdForTrigger != null && ownerIdForTrigger === myIdForTrigger;
-    const total = equipment.length;
-    return equipment.map((eq, index) => {
-        const cardInst = eq.card_instance || {};
-        const cardDef = getCardDef(cardInst.def_id || '');
-        const name = cardDef ? getCardInstanceName(cardInst, cardDef) : (cardInst.def_id || '?');
-        const targetId = normalizePlayerId(eq.effect_target);
-        const ownerId = normalizeEquipmentOwnerId(eq, player);
-        const targetSuffix = targetId != null && targetId !== ownerId ? `→${getPlayerNameById(targetId)}` : '';
-        const typeColor = cardDef ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary) : COLORS.text_primary;
-        const instanceId = cardInst.instance_id != null ? String(cardInst.instance_id) : '';
-        const turns = Math.max(0, Number(eq.turns_equipped || 0));
-        const equipArmor = Math.max(0, Number(eq.armor || 0));
-        const customVars = eq.custom_vars && typeof eq.custom_vars === 'object' ? eq.custom_vars : {};
-        const layerValue = Math.max(0, Number(customVars.layers || customVars.layer || 0));
-        const rootLayerValue = Math.max(0, Number(customVars.jungle_root_layers || 0));
-        const topParts = [];
-        if (layerValue > 0) {
-            const layerLabel = lt({ zh: '层数', en: 'Layers', fr: 'Couches', ja: '層数' });
-            topParts.push(`${layerLabel}:${layerValue}`);
+    const targetId = normalizePlayerId(eq && eq.effect_target);
+    const targetSuffix = targetId != null && targetId !== ownerId ? `→${getPlayerNameById(targetId)}` : '';
+    const typeColor = cardDef
+        ? (CARD_TYPE_COLORS[cardDef.card_type] || COLORS.text_primary)
+        : COLORS.text_primary;
+    const instanceId = classicEquipmentInstanceId(eq);
+    const turns = Math.max(0, Number(eq && eq.turns_equipped || 0));
+    const equipArmor = Math.max(0, Number(eq && eq.armor || 0));
+    const customVars = eq && eq.custom_vars && typeof eq.custom_vars === 'object' ? eq.custom_vars : {};
+    const layerValue = Math.max(0, Number(customVars.layers || customVars.layer || 0));
+    const rootLayerValue = Math.max(0, Number(customVars.jungle_root_layers || 0));
+    const topParts = [];
+    if (layerValue > 0) {
+        const layerLabel = lt({ zh: '层数', en: 'Layers', fr: 'Couches', ja: '層数' });
+        topParts.push(`${layerLabel}:${layerValue}`);
+    }
+    if (rootLayerValue > 0) topParts.push(`树根:${rootLayerValue}`);
+    if (targetSuffix) topParts.push(targetSuffix);
+    const canTrigger = canTriggerEquipmentNow(cardInst, cardDef, eq || {}, isMyEquipment);
+    const resourceState = canTrigger ? lacksEquipmentTriggerResource(cardDef) : null;
+    const lacksResource = !!(resourceState && (resourceState.lacksElixir || resourceState.lacksMagic));
+    const triggerSelected = canTrigger && String(instanceId) === String(classicSelectedTriggerEquipmentId);
+    const cost = canTrigger ? getEquipmentTriggerCost(cardDef) : null;
+    const costText = cost ? [
+        cost.totalE > 0 ? `${cost.totalE}E` : '',
+        cost.totalM > 0 ? `${cost.totalM}M` : '',
+    ].filter(Boolean).join(' ') || '0E' : '';
+    const triggerHint = canTrigger
+        ? `${name}${targetSuffix} 触发：${costText}${lacksResource ? '（资源不足）' : ''}`
+        : `${name}${targetSuffix}`;
+    const spinSeedOwner = ownerId != null ? `classic:${ownerId}` : (player && (player.name || player.id || '?'));
+    const itemKey = instanceId || `${cardInst.def_id || cardDef && cardDef.id || '?'}:${index}`;
+    const spinDelay = GTNEquipmentMotion.spinDelaySeconds(
+        spinSeedOwner,
+        itemKey,
+        CLASSIC_EQUIP_SPIN_PERIOD_S,
+    );
+    const topText = escapeHtml(topParts.join(' · '));
+    const topHtml = topParts.length
+        ? `<span class="classic-equip-top">${topText}</span>`
+        : '';
+    const iconHtml = getEquipmentIconHtml(cardInst, cardDef);
+    const turnsText = turns ? escapeHtml(String(turns)) : '';
+    const turnsHtml = turns
+        ? `<span class="classic-equip-turns">${turnsText}</span>`
+        : '';
+    const armorTitle = UI.term_equipment_armor || '装备护甲';
+    const armorText = equipArmor ? escapeHtml(String(equipArmor)) : '';
+    const armorHtml = equipArmor
+        ? `<span class="classic-equip-armor" title="${escapeHtml(armorTitle)}">${armorText}</span>`
+        : '';
+    return {
+        id: instanceId,
+        angle: total ? (index / total) * 360 : 0,
+        spinDelay,
+        typeColor,
+        triggerHint,
+        canTrigger,
+        lacksResource,
+        triggerSelected,
+        topText,
+        topHtml,
+        iconHtml,
+        turnsText,
+        turnsHtml,
+        armorText,
+        armorTitle,
+        armorHtml,
+    };
+}
+
+function syncClassicBadge(visual, selector, content, title = '') {
+    if (!visual) return;
+    let badge = visual.querySelector(`:scope > .${selector}`);
+    if (content) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = selector;
+            visual.appendChild(badge);
         }
-        if (rootLayerValue > 0) topParts.push(`树根:${rootLayerValue}`);
-        if (targetSuffix) topParts.push(targetSuffix);
-        const angle = total ? (index / total) * 360 : 0;
-        const orbitDelay = -((Date.now() / 1000) % 15).toFixed(2);
-        const spinDelay = -((Date.now() / 1000) % 13).toFixed(2);
-        const canTrigger = canTriggerEquipmentNow(cardInst, cardDef, eq, isMyEquipment);
-        const resourceState = canTrigger ? lacksEquipmentTriggerResource(cardDef) : null;
-        const lacksResource = !!(resourceState && (resourceState.lacksElixir || resourceState.lacksMagic));
-        const triggerSelected = canTrigger && String(instanceId) === String(classicSelectedTriggerEquipmentId);
-        const triggerClass = canTrigger ? ` is-triggerable${lacksResource ? ' is-trigger-unavailable' : ''}${triggerSelected ? ' is-trigger-selected' : ''}` : '';
-        const cost = canTrigger ? getEquipmentTriggerCost(cardDef) : null;
-        const costText = cost ? [
-            cost.totalE > 0 ? `${cost.totalE}E` : '',
-            cost.totalM > 0 ? `${cost.totalM}M` : '',
-        ].filter(Boolean).join(' ') || '0E' : '';
-        const triggerHint = canTrigger
-            ? `${name}${targetSuffix} 触发：${costText}${lacksResource ? '（资源不足）' : ''}`
-            : `${name}${targetSuffix}`;
-        return `<span class="classic-equip-chip${triggerClass}" data-instance-id="${escapeHtml(instanceId)}" title="${escapeHtml(triggerHint)}" style="--chip-color:${typeColor};--equip-angle:${angle}deg;--equip-orbit-delay:${orbitDelay}s;--equip-spin-delay:${spinDelay}s">
-            <span class="classic-equip-visual">
-                ${topParts.length ? `<span class="classic-equip-top">${escapeHtml(topParts.join(' · '))}</span>` : ''}
-                ${getEquipmentIconHtml(cardInst, cardDef)}
-                ${turns ? `<span class="classic-equip-turns">${escapeHtml(String(turns))}</span>` : ''}
-                ${equipArmor ? `<span class="classic-equip-armor" title="${escapeHtml(UI.term_equipment_armor || '装备护甲')}">${escapeHtml(String(equipArmor))}</span>` : ''}
-            </span>
-        </span>`;
-    }).join('');
+        if (badge.querySelector(`.${selector}`) || badge.textContent !== content) {
+            badge.textContent = content;
+        }
+        if (String(badge.title || '') !== title) badge.title = title;
+    } else if (badge) {
+        badge.remove();
+    }
+}
+
+function syncClassicEquipmentVisual(chip, meta) {
+    if (!chip || !meta) return;
+    let visual = chip.querySelector(':scope > .classic-equip-visual');
+    if (!visual) {
+        visual = document.createElement('span');
+        visual.className = 'classic-equip-visual';
+        chip.appendChild(visual);
+    }
+    if (chip.__gtnEquipIcon !== meta.iconHtml) {
+        const template = document.createElement('template');
+        template.innerHTML = meta.iconHtml.trim();
+        const nextIcon = template.content.firstElementChild;
+        const oldIcon = visual.querySelector(':scope > .equip-icon');
+        if (oldIcon) oldIcon.replaceWith(nextIcon);
+        else visual.insertBefore(nextIcon, visual.firstChild);
+        chip.__gtnEquipIcon = meta.iconHtml;
+    }
+    syncClassicBadge(visual, 'classic-equip-top', meta.topText);
+    syncClassicBadge(visual, 'classic-equip-turns', meta.turnsText);
+    syncClassicBadge(visual, 'classic-equip-armor', meta.armorText, meta.armorTitle);
+}
+
+function buildClassicEquipmentChipElement(player, eq, index, total, orbiter) {
+    const meta = classicEquipmentMeta(player, eq, index, total);
+    const chip = document.createElement('span');
+    chip.className = 'classic-equip-chip';
+    chip.dataset.instanceId = meta.id;
+    chip.title = meta.triggerHint;
+    chip.style.setProperty('--chip-color', meta.typeColor);
+    chip.style.setProperty('--equip-angle', `${meta.angle}deg`);
+    chip.style.setProperty('--equip-spin-delay', `${meta.spinDelay}s`);
+    chip.style.setProperty(
+        '--equip-orbit-delay',
+        `${GTNEquipmentMotion.counterDelaySeconds(orbiter, CLASSIC_EQUIP_ORBIT_PERIOD_S).toFixed(3)}s`,
+    );
+    const visual = document.createElement('span');
+    visual.className = 'classic-equip-visual';
+    visual.innerHTML = `${meta.topHtml}${meta.iconHtml}${meta.turnsHtml}${meta.armorHtml}`;
+    chip.appendChild(visual);
+    chip.__gtnEquipIcon = meta.iconHtml;
+    updateClassicEquipmentTriggerClasses(chip, meta);
+    return chip;
+}
+
+function updateClassicEquipmentTriggerClasses(chip, meta) {
+    if (!chip || !meta) return;
+    chip.classList.toggle('is-triggerable', !!meta.canTrigger);
+    chip.classList.toggle('is-trigger-unavailable', !!meta.lacksResource);
+    chip.classList.toggle('is-trigger-selected', !!meta.triggerSelected);
+}
+
+function syncClassicEquipmentChip(chip, player, eq, index, total, orbiter) {
+    if (!chip) return;
+    const meta = classicEquipmentMeta(player, eq, index, total);
+    chip.dataset.instanceId = meta.id;
+    chip.title = meta.triggerHint;
+    chip.style.setProperty('--chip-color', meta.typeColor);
+    chip.style.setProperty('--equip-angle', `${meta.angle}deg`);
+    if (!chip.style.getPropertyValue('--equip-spin-delay')) {
+        chip.style.setProperty('--equip-spin-delay', `${meta.spinDelay}s`);
+    }
+    if (!chip.style.getPropertyValue('--equip-orbit-delay')) {
+        chip.style.setProperty(
+            '--equip-orbit-delay',
+            `${GTNEquipmentMotion.counterDelaySeconds(orbiter, CLASSIC_EQUIP_ORBIT_PERIOD_S).toFixed(3)}s`,
+        );
+    }
+    updateClassicEquipmentTriggerClasses(chip, meta);
+    syncClassicEquipmentVisual(chip, meta);
+}
+
+function syncClassicEquipmentRing(ring, player) {
+    if (!ring || !player) return;
+    const equipment = Array.isArray(player.equipment) ? player.equipment : [];
+    const isInitialPopulation = !ring.querySelector(':scope > .classic-equipment-orbiter');
+    let orbiter = ring.querySelector(':scope > .classic-equipment-orbiter');
+    if (!orbiter) {
+        orbiter = document.createElement('div');
+        orbiter.className = 'classic-equipment-orbiter';
+        const legacyChips = Array.from(ring.children);
+        ring.appendChild(orbiter);
+        legacyChips.forEach((child) => orbiter.appendChild(child));
+    }
+    if (orbiter.dataset.gtnOrbitReady !== '1') {
+        orbiter.dataset.gtnOrbitReady = '1';
+        ring.style.setProperty(
+            '--equip-orbit-delay',
+            `${GTNEquipmentMotion.orbitDelaySeconds(CLASSIC_EQUIP_ORBIT_PERIOD_S).toFixed(3)}s`,
+        );
+    }
+    GTNEquipmentMotion.startOrbitMotion(orbiter, {
+        periodSec: CLASSIC_EQUIP_ORBIT_PERIOD_S,
+        chipSelector: ':scope > .classic-equip-chip',
+        visualSelector: '.classic-equip-visual',
+        pauseRoot: ring.closest('.classic-avatar-stack'),
+    });
+    const total = equipment.length;
+    const liveIds = new Set();
+    const byId = new Map();
+    equipment.forEach((eq) => {
+        const id = classicEquipmentInstanceId(eq);
+        if (id) liveIds.add(id);
+    });
+    orbiter.querySelectorAll(':scope > .classic-equip-chip').forEach((chip) => {
+        const id = String(chip.dataset.instanceId || '');
+        if (id) byId.set(id, chip);
+    });
+    byId.forEach((chip, id) => {
+        if (liveIds.has(id)) return;
+        GTNEquipmentMotion.startLeave(chip, {
+            scaleVar: '--equip-radius-scale',
+            removeMs: CLASSIC_EQUIP_REMOVE_MS,
+            onComplete: (el) => el.remove(),
+        });
+    });
+    equipment.forEach((eq, index) => {
+        const id = classicEquipmentInstanceId(eq);
+        if (!id) return;
+        let chip = byId.get(id);
+        if (chip && chip.dataset.motionLeaving === '1') {
+            GTNEquipmentMotion.cancelLeave(chip, { scaleVar: '--equip-radius-scale' });
+        }
+        if (!chip) {
+            chip = buildClassicEquipmentChipElement(player, eq, index, total, orbiter);
+            if (!chip) return;
+            orbiter.appendChild(chip);
+            if (!isInitialPopulation) {
+                GTNEquipmentMotion.beginEnter(chip, {
+                    scaleVar: '--equip-radius-scale',
+                    cleanupMs: CLASSIC_EQUIP_MOTION_MS + 120,
+                });
+            }
+        } else {
+            syncClassicEquipmentChip(chip, player, eq, index, total, orbiter);
+        }
+    });
 }
 
 function attachClassicEquipmentPreviews(container, player) {
     if (!container || !player) return;
     const equipment = (player.equipment || []);
     container.querySelectorAll('.classic-equip-chip[data-instance-id]').forEach(chip => {
+        if (chip.dataset.equipmentBound === '1') return;
+        chip.dataset.equipmentBound = '1';
         const instanceId = Number(chip.dataset.instanceId);
         const eq = equipment.find(item => {
             const cardInst = item && (item.card_instance || item.card || item);
@@ -28042,7 +28278,7 @@ function attachClassicEquipmentPreviews(container, player) {
                         event.stopPropagation();
                     }
                     if (chip.classList.contains('is-trigger-unavailable')) {
-                        flashStatus(UI.insufficient_resource || '资源不足', 1800, 'error');
+                        flashStatus(UI.insufficient_resources || '资源不足', 1800, 'error');
                         return;
                     }
                     selectClassicTriggerEquipment(cardInst, getCardDef(cardInst.def_id), event);
@@ -28402,20 +28638,70 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
     container.classList.toggle('is-play-target', isHardTarget);
     container.classList.toggle('is-soft-target', isSoftTarget);
     container.classList.toggle('is-self-only-target', isSelfOnlyTarget);
-    container.innerHTML = `
-        <div class="classic-fighter-name" title="${escapeHtml(player.name || '?')}">${escapeHtml(player.name || '?')}</div>
-        <div class="classic-card-tile-slot"></div>
-        <div class="classic-fighter-resources">
+    let nameEl = container.querySelector(':scope > .classic-fighter-name');
+    let tileSlot = container.querySelector(':scope > .classic-card-tile-slot');
+    let resourcesEl = container.querySelector(':scope > .classic-fighter-resources');
+    let stackEl = container.querySelector(':scope > .classic-avatar-stack');
+    let hpEl = container.querySelector(':scope > .classic-hp-wrap');
+    let pilesEl = container.querySelector(':scope > .classic-fighter-piles');
+    let statusEl = container.querySelector(':scope > .classic-status-ring');
+    if (!nameEl || !tileSlot || !resourcesEl || !stackEl || !hpEl || !pilesEl || !statusEl) {
+        container.innerHTML = `
+            <div class="classic-fighter-name"></div>
+            <div class="classic-card-tile-slot"></div>
+            <div class="classic-fighter-resources"></div>
+            <div class="classic-avatar-stack">
+                <div class="classic-equipment-ring"></div>
+            </div>
+            <div class="classic-hp-wrap"></div>
+            <div class="classic-fighter-piles"></div>
+            <div class="classic-status-ring"></div>
+        `;
+        nameEl = container.querySelector(':scope > .classic-fighter-name');
+        tileSlot = container.querySelector(':scope > .classic-card-tile-slot');
+        resourcesEl = container.querySelector(':scope > .classic-fighter-resources');
+        stackEl = container.querySelector(':scope > .classic-avatar-stack');
+        hpEl = container.querySelector(':scope > .classic-hp-wrap');
+        pilesEl = container.querySelector(':scope > .classic-fighter-piles');
+        statusEl = container.querySelector(':scope > .classic-status-ring');
+    }
+    if (nameEl) {
+        nameEl.title = player.name || '?';
+        nameEl.textContent = player.name || '?';
+    }
+    if (resourcesEl) {
+        resourcesEl.innerHTML = `
             ${renderClassicStatStrip('e', player.e, player.maxE, !!masks.maskResources)}
             ${renderClassicStatStrip('m', player.m, player.maxM, !!masks.maskResources)}
-        </div>
-        <div class="classic-avatar-stack">
-            ${renderPlayerAvatar(player, {
-                mirrorLookX: container.id === 'classic-fighter-enemy' || container.id === 'classic-fighter-enemy-2',
-            })}
-            <div class="classic-equipment-ring">${renderClassicEquipmentList(player)}</div>
-        </div>
-        <div class="classic-hp-wrap" data-bar-key="health" data-bar-label="H" data-bar-armor="${Number(player.armor || 0)}">
+        `;
+    }
+    if (stackEl) {
+        let ringEl = stackEl.querySelector(':scope > .classic-equipment-ring');
+        const avatarTemplate = document.createElement('template');
+        avatarTemplate.innerHTML = renderPlayerAvatar(player, {
+            mirrorLookX: container.id === 'classic-fighter-enemy' || container.id === 'classic-fighter-enemy-2',
+        }).trim();
+        const nextAvatar = avatarTemplate.content.firstElementChild;
+        const oldAvatar = stackEl.querySelector(':scope > .player-avatar');
+        if (oldAvatar) {
+            oldAvatar.replaceWith(nextAvatar);
+        } else if (ringEl) {
+            stackEl.insertBefore(nextAvatar, ringEl);
+        } else {
+            stackEl.appendChild(nextAvatar);
+        }
+        if (!ringEl) {
+            ringEl = document.createElement('div');
+            ringEl.className = 'classic-equipment-ring';
+            stackEl.appendChild(ringEl);
+        }
+        syncClassicEquipmentRing(ringEl, player);
+    }
+    if (hpEl) {
+        hpEl.dataset.barKey = 'health';
+        hpEl.dataset.barLabel = 'H';
+        hpEl.dataset.barArmor = String(Number(player.armor || 0));
+        hpEl.innerHTML = `
             <img class="classic-hp-icon" src="/static/assets/ui-icons/hit-point.svg" alt="" aria-hidden="true">
             <div class="classic-hp-body">
                 <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
@@ -28432,11 +28718,18 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
             <button class="invincible-meter classic-invincible-meter${invincibleVisible ? '' : ' hidden'}" style="left:calc(100% + ${invincibleOffset}px)" type="button" data-term-key="term:invincible" data-term-label="${escapeHtml(invincibleLabel)}" data-term-color="${escapeHtml(COLORS.elixir)}" title="${escapeHtml(invincibleLabel)}">
                 <img class="invincible-meter-icon" src="/static/assets/status-icons/invincible.svg" alt="" aria-hidden="true">
             </button>
-        </div>
-        ${renderClassicPileCounters(player, side, masks)}
-        <div class="classic-status-ring">${renderClassicStatusList(player)}</div>
-    `;
-    const tileSlot = container.querySelector('.classic-card-tile-slot');
+        `;
+    }
+    const nextPiles = (() => {
+        const template = document.createElement('template');
+        template.innerHTML = renderClassicPileCounters(player, side, masks).trim();
+        return template.content.firstElementChild;
+    })();
+    if (pilesEl) pilesEl.replaceWith(nextPiles);
+    else if (statusEl) statusEl.before(nextPiles);
+    else container.appendChild(nextPiles);
+    if (statusEl) statusEl.innerHTML = renderClassicStatusList(player);
+    if (tileSlot) tileSlot.replaceChildren();
     const tileRow = createClassicHandTilesRow(player, side);
     if (tileSlot && tileRow) tileSlot.appendChild(tileRow);
     if (tileSlot) tileSlot.classList.toggle('is-empty', !tileRow);

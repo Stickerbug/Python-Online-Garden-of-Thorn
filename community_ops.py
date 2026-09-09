@@ -10,7 +10,8 @@ from datetime import datetime, timedelta, timezone
 import db
 
 
-COMMUNITY_CLOSED_POLL_RETENTION_DAYS = 7
+COMMUNITY_ENDED_POLL_VISIBLE_DAYS = 2
+COMMUNITY_CLOSED_CHAIN_RETENTION_DAYS = 7
 
 
 class CommunityOpsError(ValueError):
@@ -126,6 +127,38 @@ def _effective_poll_state(row, now):
     return 'active'
 
 
+def _poll_effective_close_at(row, now=None):
+    """The moment the poll stops being active for visibility purposes."""
+    closed_at = row['closed_at'] if isinstance(row, sqlite3.Row) else row.get('closed_at')
+    if closed_at:
+        return _parse_timestamp(closed_at, label='结束时间')
+    return _parse_timestamp(row['ends_at'], label='结束时间')
+
+
+def _poll_player_visible(row, now=None):
+    """Return whether this poll may appear in the public feed for players."""
+    if row is None:
+        return False
+    state = str(row['state'] if isinstance(row, sqlite3.Row) else row.get('state') or '')
+    if state not in {'published', 'closed'}:
+        return False
+    visibility = str(
+        row['feed_visibility']
+        if isinstance(row, sqlite3.Row)
+        else row.get('feed_visibility', 'auto') or 'auto'
+    )
+    if visibility == 'hide':
+        return False
+    now = now or _utc_now()
+    effective = _effective_poll_state(row, now)
+    if effective == 'active':
+        return True
+    if visibility == 'show':
+        return True
+    close_at = _poll_effective_close_at(row, now)
+    return now < close_at + timedelta(days=COMMUNITY_ENDED_POLL_VISIBLE_DAYS)
+
+
 def _poll_payload(conn, row, *, viewer_user_id=None, reveal_results=False, now=None):
     if row is None:
         return None
@@ -179,6 +212,12 @@ def _poll_payload(conn, row, *, viewer_user_id=None, reveal_results=False, now=N
         'question': str(row['question']),
         'state': str(row['state']),
         'effective_state': effective_state,
+        'feed_visibility': str(
+            row['feed_visibility']
+            if 'feed_visibility' in row.keys()
+            else 'auto'
+        ),
+        'player_visible': _poll_player_visible(row, now),
         'starts_at': str(row['starts_at']),
         'ends_at': str(row['ends_at']),
         'reminder_hours': reminder_hours,
@@ -282,7 +321,8 @@ def _chain_payload(conn, row, *, viewer_user_id=None, now=None):
 def get_community_feed(viewer_user_id=None, *, can_manage=False):
     now = _utc_now()
     now_iso = _iso(now)
-    closed_cutoff = _iso(now - timedelta(days=COMMUNITY_CLOSED_POLL_RETENTION_DAYS))
+    poll_cutoff = _iso(now - timedelta(days=COMMUNITY_ENDED_POLL_VISIBLE_DAYS))
+    chain_cutoff = _iso(now - timedelta(days=COMMUNITY_CLOSED_CHAIN_RETENTION_DAYS))
     read_state = {
         'announcements': set(),
         'polls': set(),
@@ -300,19 +340,22 @@ def get_community_feed(viewer_user_id=None, *, can_manage=False):
             ''',
             (now_iso, now_iso),
         ).fetchall()
-        polls = conn.execute(
+        poll_candidates = conn.execute(
             '''
             SELECT * FROM community_polls
-            WHERE (
-                state = 'published' AND starts_at <= ? AND ends_at > ?
-            ) OR (
-                state IN ('published', 'closed') AND ends_at <= ? AND ends_at >= ?
-            )
+            WHERE state IN ('published', 'closed')
+              AND feed_visibility != 'hide'
+              AND starts_at <= ?
             ORDER BY starts_at DESC, id DESC
-            LIMIT 20
+            LIMIT 200
             ''',
-            (now_iso, now_iso, now_iso, closed_cutoff),
+            (now_iso,),
         ).fetchall()
+        polls = [
+            row
+            for row in poll_candidates
+            if _poll_player_visible(row, now)
+        ][:20]
         chains = conn.execute(
             '''
             SELECT * FROM community_chains
@@ -325,7 +368,7 @@ def get_community_feed(viewer_user_id=None, *, can_manage=False):
             ORDER BY starts_at DESC, id DESC
             LIMIT 20
             ''',
-            (now_iso, now_iso, closed_cutoff),
+            (now_iso, now_iso, chain_cutoff),
         ).fetchall()
         poll_payloads = [
             _poll_payload(conn, row, viewer_user_id=viewer_user_id, now=now)
@@ -381,7 +424,7 @@ def mark_community_feed_read(user_id):
     user_id = _positive_id(user_id, label='账号')
     now = _utc_now()
     now_iso = _iso(now)
-    closed_cutoff = _iso(now - timedelta(days=COMMUNITY_CLOSED_POLL_RETENTION_DAYS))
+    chain_cutoff = _iso(now - timedelta(days=COMMUNITY_CLOSED_CHAIN_RETENTION_DAYS))
     with closing(db.get_db_connection()) as conn:
         conn.execute('BEGIN IMMEDIATE')
         conn.execute(
@@ -397,21 +440,26 @@ def mark_community_feed_read(user_id):
             ''',
             (user_id, now_iso, now_iso, now_iso),
         )
-        conn.execute(
+        poll_candidates = conn.execute(
             '''
-            INSERT OR IGNORE INTO community_reads(
-                user_id, content_type, content_id, read_at
-            )
-            SELECT ?, 'poll', id, ?
-            FROM community_polls
-            WHERE (
-                state = 'published' AND starts_at <= ? AND ends_at > ?
-            ) OR (
-                state IN ('published', 'closed') AND ends_at <= ? AND ends_at >= ?
-            )
+            SELECT * FROM community_polls
+            WHERE state IN ('published', 'closed')
+              AND feed_visibility != 'hide'
+              AND starts_at <= ?
             ''',
-            (user_id, now_iso, now_iso, now_iso, now_iso, closed_cutoff),
-        )
+            (now_iso,),
+        ).fetchall()
+        for poll in poll_candidates:
+            if not _poll_player_visible(poll, now):
+                continue
+            conn.execute(
+                '''
+                INSERT OR IGNORE INTO community_reads(
+                    user_id, content_type, content_id, read_at
+                ) VALUES (?, 'poll', ?, ?)
+                ''',
+                (user_id, int(poll['id']), now_iso),
+            )
         conn.execute(
             '''
             INSERT OR IGNORE INTO community_chain_reads(user_id, chain_id, read_at)
@@ -424,7 +472,7 @@ def mark_community_feed_read(user_id):
                 state = 'closed' AND closed_at IS NOT NULL AND closed_at >= ?
             )
             ''',
-            (user_id, now_iso, now_iso, now_iso, closed_cutoff),
+            (user_id, now_iso, now_iso, now_iso, chain_cutoff),
         )
         conn.commit()
     return get_community_feed(user_id)
@@ -690,7 +738,8 @@ def create_community_poll(
 def mutate_community_poll(actor, poll_id, action, *, starts_at=None, ends_at=None):
     poll_id = _positive_id(poll_id, label='投票编号')
     action = str(action or '').strip().lower()
-    if action not in {'publish', 'schedule', 'close', 'retract'}:
+    if action not in {'publish', 'schedule', 'close', 'retract',
+                      'feed_show', 'feed_hide', 'feed_auto'}:
         raise CommunityOpsError('INVALID_ACTION', '投票操作无效')
     now = _utc_now()
     now_iso = _iso(now)
@@ -704,7 +753,37 @@ def mutate_community_poll(actor, poll_id, action, *, starts_at=None, ends_at=Non
         current_state = str(row['state'])
         changed = True
         detail = {'previous_state': current_state}
-        if action in {'publish', 'schedule'}:
+        if action in {'feed_show', 'feed_hide', 'feed_auto'}:
+            if current_state not in {'published', 'closed'}:
+                conn.rollback()
+                raise CommunityOpsError('INVALID_STATE', '只有已发布或已结束的投票能调整玩家显示状态', 409)
+            if _effective_poll_state(row, now) != 'closed':
+                conn.rollback()
+                raise CommunityOpsError('INVALID_STATE', '只有已结束的投票能调整玩家显示状态', 409)
+            desired_visibility = {
+                'feed_show': 'show',
+                'feed_hide': 'hide',
+                'feed_auto': 'auto',
+            }[action]
+            previous_visibility = str(
+                row['feed_visibility']
+                if 'feed_visibility' in row.keys()
+                else 'auto'
+            )
+            changed = desired_visibility != previous_visibility
+            conn.execute(
+                '''
+                UPDATE community_polls
+                SET feed_visibility = ?, updated_by = ?, updated_at = ?
+                WHERE id = ?
+                ''',
+                (desired_visibility, actor_user_id, now_iso, poll_id),
+            )
+            detail.update({
+                'previous_visibility': previous_visibility,
+                'feed_visibility': desired_visibility,
+            })
+        elif action in {'publish', 'schedule'}:
             if current_state in {'closed', 'retracted'}:
                 conn.rollback()
                 raise CommunityOpsError('INVALID_STATE', '已结束或撤回的投票不能重新发布', 409)

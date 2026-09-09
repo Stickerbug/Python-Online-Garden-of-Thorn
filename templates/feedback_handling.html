@@ -28,6 +28,7 @@
         <button class="tab" data-tab="users">玩家</button>
         <button class="tab" data-tab="matches">对局</button>
         <button class="tab" data-tab="risk">风险</button>
+        <button class="tab" data-tab="clusters">关联串</button>
         <button class="tab" data-tab="moderation">处罚</button>
         <button class="tab" data-tab="ip">IP封禁</button>
       </div>
@@ -60,6 +61,10 @@
       <div id="risk-tools" class="tools hidden">
         <button id="search-risk" class="btn primary">读取风险对局</button>
         <div class="hint">自动标记同 IP、早期投降、过短或不计分对局；仅供人工判断。</div>
+      </div>
+      <div id="clusters-tools" class="tools hidden">
+        <button id="search-clusters" class="btn primary">读取关联串</button>
+        <div class="hint">把疑似/较可能/已确认的账号按传递关系合并成串展示。</div>
       </div>
       <div id="ip-tools" class="tools hidden">
         <input id="ip-input" placeholder="IP">
