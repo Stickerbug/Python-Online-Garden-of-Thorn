@@ -4361,7 +4361,12 @@ def restore_lobby_chat_item_locked(item, beta_mode=False):
     if not isinstance(item, dict) or item.get('type') != 'chat':
         return
     cache = _lobby_chat_cache_locked(beta_mode)
-    chat_payload = refresh_chat_special_fields(item)
+    chat_payload = copy.deepcopy(item)
+    # Restored history shows the sender snapshot that was persisted when the
+    # message was sent. Only pre-snapshot legacy rows (no persisted identity
+    # payload) fall back to the current account profile so they still render.
+    if not chat_payload.get('reputation_profile'):
+        chat_payload = refresh_chat_special_fields(chat_payload)
     chat_payload['type'] = 'chat'
     chat_payload['beta_mode'] = bool(beta_mode)
     if (
@@ -9324,6 +9329,7 @@ def _event_loop_watchdog_worker():
     interval = _env_float('GTN_EVENT_LOOP_WATCHDOG_INTERVAL', 1.0)
     warn_ms = _env_float('GTN_EVENT_LOOP_LAG_WARN_MS', 3000)
     last_warn = 0.0
+    last_ai_reap = 0.0
     expected = time.monotonic() + interval
     while True:
         try:
@@ -9337,6 +9343,13 @@ def _event_loop_watchdog_worker():
             if lag_ms >= warn_ms and time.time() - last_warn >= 30:
                 last_warn = time.time()
                 admin_event('suspicious', f'event loop lag {lag_ms:.0f}ms; Socket.IO may disconnect clients')
+            if now - last_ai_reap >= 30.0:
+                last_ai_reap = now
+                try:
+                    with _lock:
+                        _reap_orphaned_ai_rooms_locked(time.time())
+                except Exception as exc:
+                    admin_event('error', f'AI orphan reaper failed: {exc}')
             expected = now + interval
         except Exception as exc:
             admin_event('error', f'event loop watchdog error: {exc}')
@@ -16846,6 +16859,55 @@ def _drop_solo_session_locked(sid):
         )
 
 
+def _drop_orphaned_ai_room_locked(room):
+    """Remove an AI room that has no connected player or spectator anymore."""
+    if room is None or not getattr(room, 'ai_match', False):
+        return False
+    if any(psid in players for psid in getattr(room, 'player_sids', []) or []):
+        return False
+    if getattr(room, 'spectators', []):
+        return False
+    room_id = getattr(room, 'room_id', None)
+    _cancel_game_over_cleanup_timer(room)
+    _cancel_room_reconnect_timers(room)
+    owner_sid = getattr(room, 'ai_owner_sid', None)
+    if owner_sid in ai_test_sessions:
+        _drop_solo_session_locked(owner_sid)
+    elif rooms.get(room_id) is room:
+        rooms.pop(room_id, None)
+    admin_event('game', f'orphaned AI room {room_id} cleaned', room_id=room_id)
+    return True
+
+
+def _reap_orphaned_ai_rooms_locked(now=None):
+    now = time.time() if now is None else float(now)
+    reaped = 0
+    for room in list(rooms.values()):
+        if not getattr(room, 'ai_match', False):
+            continue
+        if any(psid in players for psid in getattr(room, 'player_sids', []) or []):
+            continue
+        if getattr(room, 'spectators', []):
+            continue
+        reconnect_waiting = False
+        for dc_info in (getattr(room, 'disconnected_players', {}) or {}).values():
+            try:
+                disconnected_at = float(dc_info.get('disconnect_time') or now)
+            except (TypeError, ValueError):
+                disconnected_at = now
+            timeout = _disconnect_info_timeout(dc_info)
+            if timeout > 0 and now - disconnected_at < timeout:
+                reconnect_waiting = True
+                break
+        if reconnect_waiting:
+            continue
+        if _drop_orphaned_ai_room_locked(room):
+            reaped += 1
+    if reaped:
+        admin_event('game', f'AI orphan reaper cleaned {reaped} room(s)')
+    return reaped
+
+
 def _preserve_ai_test_session_for_reconnect_locked(sid):
     """Keep an active Phelren room alive while its human socket is replaced."""
     meta = ai_test_sessions.get(sid)
@@ -18901,7 +18963,7 @@ def reconnect_timeout(room_id, old_sid):
                 reconnect_arrived = bool(
                     _phelren_reconnect_accept_reservation_locked(room, old_sid)
                 )
-                if reconnect_arrived or _phelren_room_mutation_pending(room):
+                if reconnect_arrived:
                     retry = threading.Timer(
                         0.25,
                         reconnect_timeout,
@@ -18911,6 +18973,28 @@ def reconnect_timeout(room_id, old_sid):
                     room.reconnect_timers[old_sid] = retry
                     retry.start()
                     return
+                if _phelren_room_mutation_pending(room):
+                    now = time.time()
+                    deadline = getattr(room, '_ai_mutation_cleanup_at', None)
+                    if deadline is None:
+                        deadline = now + 30.0
+                        room._ai_mutation_cleanup_at = deadline
+                    if now < deadline:
+                        retry = threading.Timer(
+                            0.5,
+                            reconnect_timeout,
+                            args=[room_id, old_sid],
+                        )
+                        retry.daemon = True
+                        room.reconnect_timers[old_sid] = retry
+                        retry.start()
+                        return
+                    # The AI operation stayed busy well past the human reconnect
+                    # window with nobody left to rejoin. Remove the orphaned
+                    # room instead of retrying forever.
+                    if _drop_orphaned_ai_room_locked(room):
+                        broadcast_lobby()
+                        return
             dc_info = room.disconnected_players[old_sid]
             timed_out_timer = room.reconnect_timers.pop(old_sid, None)
             if timed_out_timer:
@@ -27755,13 +27839,15 @@ def on_story_chat_send(data=None):
 
     if DB_AVAILABLE:
         try:
+            persisted_payload = copy.deepcopy(chat_data)
+            persisted_payload['type'] = 'chat'
             record_chat_message(
                 f'lobby:{_lobby_chat_scope_key(beta_mode)}',
                 'public',
                 user_id,
                 nickname,
                 text,
-                json.dumps(chat_data, ensure_ascii=False, separators=(',', ':')),
+                json.dumps(persisted_payload, ensure_ascii=False, separators=(',', ':')),
                 risk_level,
                 hidden=False,
             )
@@ -28020,6 +28106,7 @@ def on_chat(data):
     if DB_AVAILABLE and record_room_key:
         try:
             persisted_chat_payload = refresh_chat_special_fields(chat_data)
+            persisted_chat_payload['type'] = 'chat'
             chat_message_id = record_chat_message(
                 record_room_key,
                 record_channel,

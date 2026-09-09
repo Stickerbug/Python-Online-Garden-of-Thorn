@@ -16,6 +16,7 @@ from story_content import (
 
 
 _RESOURCE_PATTERN = re.compile(r"\[\[icon:([DHEM])\]\]|(?<![A-Za-z])([DHEM])(?![A-Za-z])")
+_RESOURCE_ICON_PATTERN = re.compile(r"\[\[icon:([A-Za-z0-9_]+)\]\]")
 _TERM_MARKER_PATTERN = re.compile(
     r"\[\[(tag|status|trait|relic|talent|enchantment_book|book|event|blessing|enemy|card):([a-z0-9_.:-]+)\]\]",
     re.IGNORECASE,
@@ -26,7 +27,7 @@ _CARD_COLLECTION_KEYS = (
 
 _ENCHANTMENT_TERM_GRANTS = {
     'damage_bonus': (('tag', 'power'),),
-    'electric_damage': (('tag', 'electric_power'),),
+    'electric_damage': (('tag', 'electric_power'), ('resource', 'electric_damage')),
     'shield_bonus_once': (('tag', 'firmness'),),
     'armor_break': (('tag', 'armor_break'),),
     'swift': (('tag', 'swift'),),
@@ -55,7 +56,10 @@ _CARD_MODIFIER_TERM_GRANTS = {
     'force_void': (('tag', 'void'),),
     'charge': (('tag', 'charge'),),
     'damage_bonus': (('tag', 'power'),),
-    'enchantment_electric_damage': (('tag', 'electric_power'),),
+    'enchantment_electric_damage': (
+        ('tag', 'electric_power'),
+        ('resource', 'electric_damage'),
+    ),
     'enchantment_shield_bonus_once': (('tag', 'firmness'),),
     'enchantment_armor_break': (('tag', 'armor_break'),),
     'enchantment_rebound': (('tag', 'rebound'),),
@@ -121,7 +125,10 @@ def collect_story_discoveries(state):
             'tag': STORY_TAGS,
             'status': STORY_STATUSES,
             'trait': STORY_TRAITS,
-            'resource': {'D': None, 'H': None, 'E': None, 'M': None},
+            'resource': {
+                'D': None, 'H': None, 'E': None, 'M': None,
+                'electric_damage': None,
+            },
         }.get(kind)
         if catalog is not None and term_id in catalog:
             add('term', f'{kind}:{term_id}')
@@ -139,6 +146,8 @@ def collect_story_discoveries(state):
         if definition.get('cost_m') is not None:
             add_term('resource', 'M')
         for text in text_values:
+            for match in _RESOURCE_ICON_PATTERN.finditer(text):
+                add_term('resource', match.group(1))
             for match in _RESOURCE_PATTERN.finditer(text):
                 add_term('resource', match.group(1) or match.group(2))
             for match in _TERM_MARKER_PATTERN.finditer(text):
@@ -171,6 +180,11 @@ def collect_story_discoveries(state):
                 add_term('resource', 'E')
             elif key == 'type' and value in {'magic', 'turn_magic'}:
                 add_term('resource', 'M')
+            elif key == 'type' and value in {
+                'electric_damage', 'magic_x_electric_damage',
+                'random_electric_damage',
+            }:
+                add_term('resource', 'electric_damage')
 
     def add_card(card_or_id, upgraded=None):
         card_object = None

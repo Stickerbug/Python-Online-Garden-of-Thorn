@@ -440,6 +440,13 @@
             name: { zh: '魔力', en: 'Magic' },
             description: { zh: '部分牌打出时消耗的魔力资源', en: 'The magic resource spent by some cards' },
         },
+        electric_damage: {
+            name: { zh: '电击伤害', en: 'Electric Damage' },
+            description: {
+                zh: '[[icon:electric_damage]]通常先为目标叠加[[status:static]]；目标已有静电时则消耗静电并提高本次伤害。',
+                en: '[[icon:electric_damage]] usually applies [[status:static]] first; if the target already has Static, it is consumed to increase this hit.',
+            },
+        },
     });
 
     const STORY_CARD_TYPE_LABELS = Object.freeze({
@@ -10005,6 +10012,9 @@
             'damage', 'damage_per_status', 'damage_from_shield', 'damage_from_player_status',
             'consume_status_damage', 'consume_magic_damage', 'self_damage', 'consume_pearls_damage',
         ]);
+        const electricTypes = new Set([
+            'electric_damage', 'magic_x_electric_damage', 'random_electric_damage',
+        ]);
         const healTypes = new Set(['heal', 'self_heal', 'allies_heal', 'heal_to_full']);
         storyCodexWalkDefinition(definition.effects || [], (key, value) => {
             if (key === 'status' && typeof value === 'string') add({ mode: storyTermKindMode('status'), kind: 'status', id: value });
@@ -10012,6 +10022,9 @@
             if (key === 'enemy_id' && typeof value === 'string') add({ mode: 'enemies', id: value });
             if (key !== 'type' || typeof value !== 'string') return;
             if (damageTypes.has(value)) add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'D' });
+            if (electricTypes.has(value)) {
+                add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'electric_damage' });
+            }
             if (healTypes.has(value)) add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'H' });
             if (['elixir', 'turn_elixir'].includes(value)) add({ mode: storyTermKindMode('resource'), kind: 'resource', id: 'E' });
             if (['magic', 'turn_magic', 'gain_magic', 'consume_magic_damage'].includes(value)) {

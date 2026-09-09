@@ -188,6 +188,7 @@ def test_enchantment_effects_and_card_modifiers_unlock_tags_and_statuses():
         'tag:retain',
         'tag:power',
         'tag:electric_power',
+        'resource:electric_damage',
         'tag:firmness',
         'tag:armor_break',
         'tag:rebound',

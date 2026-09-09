@@ -7705,7 +7705,7 @@ def list_lobby_chat_entries(beta_mode=False, limit=500):
         if raw_payload.startswith('{'):
             try:
                 payload = json.loads(raw_payload)
-                if isinstance(payload, dict) and payload.get('type') == 'chat':
+                if isinstance(payload, dict):
                     payload.setdefault('id', row['id'])
                     payload.setdefault('message_id', row['id'])
                     payload.setdefault('time', created_at)
