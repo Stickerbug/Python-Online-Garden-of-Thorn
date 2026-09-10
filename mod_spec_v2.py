@@ -74,6 +74,10 @@ _CORE_LOGIC_OPS = {
     "sequence",
     "literal",
     "const",
+    # Runtime-native ops without an ``_atomic_*`` handler (executed by
+    # ``mod_runtime_v2`` itself): the suspended deck picker used by Cicada 3301.
+    "deck_catalog_pick",
+    "deck_catalog_pick_resume",
     "var",
     "ref",
     "get",
@@ -420,6 +424,18 @@ _CORE_LOGIC_OPS = {
     "hel_bugatti_draw",
     "hel_magic_clover_trigger",
     "hel_deliverance_attack", "void_dlc_action",
+
+    # 由"卡专用原子 → 通用数据步骤"重构抽出的通用能力。
+    # 它们本来就是引擎里可复用的原子，这里补登记以免被误算作长尾。
+    "card_prop_add_to_zone",
+    "toggle_tag_in_zone",
+    "remove_tag_from_zone",
+    "once_per_play",
+    "copy_card_instance",
+    "mark_original_card",
+    "auto_play_card",
+    "charge_self_damage",
+    "resolve_status_once",
 }
 
 # Every curated core op plus every atomic handler the engine implements, so new

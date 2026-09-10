@@ -10,6 +10,7 @@ from cards import CARD_DEFS, CardDef, CardInstance
 from card_i18n import CARD_I18N, OPENING_EVENT_I18N
 from game_engine import GameEngine, PlayerState
 from game_engine_2v2 import GameEngine2v2
+from mod_loader import load_mod
 
 
 def make_card_def(def_id, card_type, *, flags=None, response_trigger='', cost_e=0, cost_m=0):
@@ -378,17 +379,39 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         self.assertEqual([player.health for player in engine.players], [95, 92, 92, 92])
 
     def test_blood_knife_recovers_for_actual_damage_dealt(self):
-        engine = GameEngine()
-        player = engine.players[0]
-        player.health = 100
-        player.elixir = 0
-        card = CardInstance('test:blood_knife')
+        # The mechanic now lives in the package data, so drive it through the
+        # real play path instead of calling the retired engine atom.
+        package = Path(__file__).resolve().parents[1] / 'mods' / 'Bio Cards Addition.gtnmod'
+        mod = load_mod(str(package))
+        previous = CARD_DEFS.get('BloodKnife')
+        CARD_DEFS['BloodKnife'] = next(
+            item for item in mod.cards if item.id == 'BloodKnife'
+        ).to_card_def()
+        try:
+            engine = GameEngine()
+            engine.phase = 'action'
+            engine.current_player = 0
+            player = engine.players[0]
+            player.hand = []
+            player.deck = []
+            player.discard = []
+            player.health = 100
+            player.max_health = 100
+            player.elixir = 0
+            card = CardInstance('BloodKnife')
+            player.hand.append(card)
 
-        engine._atomic_bio_activate_blood_knife(0, card, {}, '', None, {})
+            result = engine.play_card(0, card.instance_id, {})
 
-        self.assertEqual(player.health, 93)
-        self.assertEqual(player.elixir, 2)
-        self.assertTrue(card.custom_vars.get('bio_blood_knife_return'))
+            self.assertTrue(result.get('success'), result)
+            self.assertEqual(player.health, 93)
+            self.assertEqual(player.elixir, 2)
+            self.assertIn(card, player.hand)
+        finally:
+            if previous is None:
+                CARD_DEFS.pop('BloodKnife', None)
+            else:
+                CARD_DEFS['BloodKnife'] = previous
 
     def test_blood_knife_mod_data_matches_new_rules(self):
         archive = Path(__file__).resolve().parents[1] / 'mods' / 'Bio Cards Addition.gtnmod'

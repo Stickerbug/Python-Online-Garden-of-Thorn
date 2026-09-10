@@ -24,7 +24,7 @@ def accounts(tmp_path,monkeypatch):
         conn.commit()
 
 
-def game(ids=(1,2),win=0,*,key=None,early=False,ranked=False,day=0):
+def game(ids=(1,2),win=0,*,key=None,early=False,ranked=False,day=0,**extra):
     mode='2v2' if len(ids)==4 else '1v1'
     teams=[[0,1],[2,3]] if len(ids)==4 else [[0],[1]]
     ended=NOW+timedelta(days=day)
@@ -36,6 +36,7 @@ def game(ids=(1,2),win=0,*,key=None,early=False,ranked=False,day=0):
           'started_at':integrity._iso(ended-timedelta(seconds=10 if early else 300)),
           'ended_at':integrity._iso(ended),'duration_seconds':10 if early else 300,'ended_by_surrender':early}
     if key: data['match_key']=key
+    data.update(extra)
     return db.save_match_summary(data),data
 
 
@@ -238,6 +239,24 @@ def test_legacy_match_dew_compensation_is_one_time(accounts):
     assert again['players'] == 0
     assert again['already_compensated'] == 2
     assert balances()[:2] == [40, 40]
+
+
+def test_legacy_match_dew_compensation_only_covers_valid_matches(accounts):
+    game(ids=(1, 2), day=-3)
+    game(ids=(3, 4), day=-3, valid_for_stats=False, ranking_invalid_reason='too_short')
+    game(ids=(5, 6), day=-3, ai_match=True, match_kind='phelren')
+    game(ids=(7, 8), day=-3, valid_for_ranking=False)
+
+    preview = db.compensate_legacy_match_thorn_dew(dry_run=True)
+    assert preview['matches_counted'] == 2
+    assert preview['players'] == 4
+    assert preview['total_dew'] == 160
+    assert preview['skipped'] == {'not_valid': 1, 'phelren_ai_match': 1}
+
+    confirmed = db.compensate_legacy_match_thorn_dew(dry_run=False)
+    assert confirmed['players'] == 4
+    assert confirmed['total_dew'] == 160
+    assert balances()[:8] == [40, 40, 0, 0, 0, 0, 40, 40]
 
 
 def test_guest_nickname_changes_use_one_repeat_bucket(accounts):

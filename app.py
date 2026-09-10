@@ -14358,6 +14358,11 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             f"共补荆露：{result.get('total_dew', 0)}",
             f"已补偿跳过：{result.get('already_compensated', 0)}",
         ]
+        skipped = result.get('skipped') or {}
+        if skipped:
+            lines.append(
+                '无效/AI对局跳过：' + '、'.join(f"{key} {value}" for key, value in sorted(skipped.items()))
+            )
         if result.get('errors'):
             lines.append(f"错误：{len(result['errors'])} 个")
         if result.get('dry_run'):
@@ -25836,6 +25841,65 @@ def api_community_font_subset():
     except Exception as exc:
         admin_event('error', f'community font subset failed: {exc}')
         return _json_error(str(exc), 500 if isinstance(exc, R2ConfigError) else 400)
+
+
+@app.route('/api/mod-studio/schema')
+def api_mod_studio_schema():
+    """模组编辑器的唯一契约：运行时支持的全部逻辑 op。
+
+    只读、不含敏感数据，但按 IP 限流，避免被当作免费接口刷。
+    """
+
+    ip = request.remote_addr or 'unknown'
+    if _rate_limited(ip, 'mod_studio_schema', limit=60, window=300):
+        return _json_error('请求过于频繁，请稍后再试', 429)
+    from atomic_registry import engine_atomic_ops
+    from mod_spec_v2 import VALID_LOGIC_OPS, _CORE_LOGIC_OPS
+
+    engine_ops = set(engine_atomic_ops())
+    curated = set(_CORE_LOGIC_OPS or set())
+    valid = set(VALID_LOGIC_OPS or set())
+    payload = {
+        'success': True,
+        'count': len(valid),
+        'coreOps': sorted(curated),
+        'engineAtoms': sorted(engine_ops),
+        'ops': sorted(valid),
+        # 只登记在引擎里、没进策展清单的原子：编辑器不必暴露给玩家
+        'unregisteredAtoms': sorted(engine_ops - curated),
+    }
+    response = jsonify(payload)
+    response.headers['Cache-Control'] = 'public, max-age=300'
+    return response
+
+
+@app.route('/api/mod-studio/validate', methods=['POST'])
+def api_mod_studio_validate():
+    """只校验、不执行：给编辑器做"结构 + 语义"检查。
+
+    必须复用加载器的流程，否则官方包会被误判：
+    先合并 locales，再用命名空间放行模式校验（见 mod_loader.load_v2_mod_from_data）。
+    """
+
+    ip = request.remote_addr or 'unknown'
+    if _rate_limited(ip, 'mod_studio_validate', limit=120, window=300):
+        return _json_error('请求过于频繁，请稍后再试', 429)
+    if request.content_length and request.content_length > 2 * 1024 * 1024:
+        return _json_error('模组数据过大（上限 2 MB）', 413)
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return _json_error('请求体必须是模组 JSON 对象', 400)
+    from mod_loader import apply_mod_locales
+    from mod_validator_v2 import validate_mod_v2
+
+    localized = apply_mod_locales(data)
+    validation = validate_mod_v2(localized, source='mod_studio', allow_reserved_namespaces=True)
+    return jsonify({
+        'success': not validation.errors,
+        'errors': list(validation.errors or []),
+        'warnings': list(validation.warnings or []),
+        'contentHash': getattr(validation, 'content_hash', ''),
+    })
 
 
 @app.route('/api/mods/save', methods=['POST'])

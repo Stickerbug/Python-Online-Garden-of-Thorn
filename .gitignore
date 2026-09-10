@@ -236,3 +236,6 @@ static/assets/mod-card-art/
 # Local/source audio material; ship only optimized runtime files.
 temp music folder/
 static/audio/music/source-pending/
+
+# Codex 临时调试产物
+.codex-tmp/

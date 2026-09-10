@@ -5573,13 +5573,37 @@ LEGACY_MATCH_COMPENSATION_REASON = '旧对局荆露补偿'
 LEGACY_MATCH_COMPENSATION_SOURCE_ID = 'legacy-match-dew-comp-v1'
 
 
+def _legacy_match_compensation_skip_reason(summary):
+    """Return '' when a pre-split match qualifies for compensation.
+
+    Mirrors pvp_economy.settle_conn() eligibility so the one-time compensation
+    only covers matches that the current dew economy itself would reward:
+    Phelren AI matches never qualify, and a stored valid_for_stats /
+    valid_for_ranking flag of False excludes the match. Matches written before
+    the flag existed default to valid.
+    """
+
+    if not isinstance(summary, dict):
+        return ''
+    if bool(summary.get('ai_match')) or str(summary.get('match_kind') or '').strip().lower() == 'phelren':
+        return 'phelren_ai_match'
+    for key in ('valid_for_stats', 'valid_for_ranking'):
+        if key not in summary:
+            continue
+        value = summary.get(key)
+        if isinstance(value, str):
+            return 'not_valid' if value.strip().lower() in ('', '0', 'false', 'no') else ''
+        return '' if value else 'not_valid'
+    return ''
+
+
 def compensate_legacy_match_thorn_dew(
     dry_run=True,
     *,
     cutoff_iso=LEGACY_RANKED_SPLIT_CUTOFF_ISO,
     per_match=40,
 ):
-    """One-time dew compensation for 1v1/2v2 matches before the ranked split."""
+    """One-time dew compensation for valid 1v1/2v2 matches before the ranked split."""
 
     try:
         per_match = max(1, int(per_match))
@@ -5604,6 +5628,7 @@ def compensate_legacy_match_thorn_dew(
         'matches_counted': 0,
         'total_dew': 0,
         'already_compensated': 0,
+        'skipped': {},
         'errors': [],
     }
     with get_db_connection() as conn:
@@ -5629,6 +5654,10 @@ def compensate_legacy_match_thorn_dew(
             player_ids = []
         registered = [uid for uid in player_ids if isinstance(uid, int) and uid in user_ids]
         if not registered:
+            continue
+        skip_reason = _legacy_match_compensation_skip_reason(_safe_json_loads(row['summary_json'], {}))
+        if skip_reason:
+            result['skipped'][skip_reason] = result['skipped'].get(skip_reason, 0) + 1
             continue
         result['matches_counted'] += 1
         for uid in registered:

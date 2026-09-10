@@ -567,6 +567,7 @@ class GameEngine2v2(GameEngine):
                 self.log_msg(f"{self.pn(player_id)}的霜冻效果消失")
         ps.custom_vars.pop('arctic_snowballs', None)
         ps.custom_vars.pop('arctic_ready_queue', None)
+        self._clear_turn_scoped_effects(player_id)
         # Track M gained this turn for next turn's check
         ps.m_gained_last_turn = ps.m_gained_this_turn
         ps.m_gained_this_turn = False
@@ -853,7 +854,7 @@ class GameEngine2v2(GameEngine):
                 card._sewers_was_countered_this_play = True
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}{self._card_log_marker(counter_removed)}进行反制！")
             self._note_achievement_counter_success(responder_id)
-            self._trigger_sewers_cheese_after_counter(player_id, responder_id)
+            self._dispatch_own_card_countered(player_id, responder_id, card)
             dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
             alive_before_counter = [player.health > 0 for player in self.players]
             counter_dead_ids = []
@@ -1300,7 +1301,13 @@ class GameEngine2v2(GameEngine):
         for target_id in range(len(self.players)):
             if target_id == player_id and not allow_self:
                 continue
-            if self._is_valid_effect_target(player_id, target_id):
+            # Wide strikes must obey the same "can this player be selected"
+            # gate as the 1v1 engine (health, untargetable status, and the
+            # bio:job_application lock), so both engines pick the same set.
+            if (
+                self._is_locked_card_resolution_target(player_id, target_id)
+                or self._target_can_be_selected(player_id, target_id, allow_self=allow_self)
+            ):
                 targets.append(target_id)
         return targets
 
@@ -1605,7 +1612,8 @@ class GameEngine2v2(GameEngine):
         return self.play_card(player_id, req['card_instance_id'], target_player_id=target_player_id, choice=choice)
 
     def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None,
-                            damage_type: Optional[str] = None, damage_tag: Optional[str] = None):
+                            damage_type: Optional[str] = None, damage_tag: Optional[str] = None,
+                            silent: bool = False):
         if not self._is_valid_player_id(player_id):
             return 0
         from void_dlc_runtime import blocks_special_effect_damage, maybe_defer_direct_damage, try_magic_copper_rod_absorb
@@ -1621,7 +1629,8 @@ class GameEngine2v2(GameEngine):
             return 0
         ps = self.players[player_id]
         if ps.invincible:
-            self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
+            if not silent:
+                self.log_msg(f"{self.pn(player_id)}无敌，免疫{source}伤害！")
             return 0
         actual = amount
         resolved_damage_type = infer_damage_type(source, 'direct', damage_tag or '', damage_type)
@@ -1650,7 +1659,8 @@ class GameEngine2v2(GameEngine):
         if actual <= 0:
             return 0
         if blocks_special_effect_damage(self, player_id):
-            self.log_msg(f"{self.pn(player_id)}的口罩免受{source}伤害")
+            if not silent:
+                self.log_msg(f"{self.pn(player_id)}的口罩免受{source}伤害")
             return 0
         if self._bio_indictment_converts_damage(
             player_id,
@@ -1671,7 +1681,8 @@ class GameEngine2v2(GameEngine):
         self._bio_stem_cell_after_health_loss(player_id, health_lost)
         self._note_achievement_health(player_id)
         self._record_damage(player_id, actual, source_id)
-        self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={old_health}→{ps.health}）")
+        if not silent:
+            self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={old_health}→{ps.health}）")
         if resolved_damage_type == DAMAGE_TYPE_PHYSICAL and health_lost > 0:
             self._sewers_grow_toilet_paper_power(player_id)
         if resolved_damage_tag == DAMAGE_TAG_POISON and health_lost > 0:
@@ -2396,6 +2407,8 @@ class GameEngine2v2(GameEngine):
             ):
                 self._prediction_first_attack_damage = int(dmg)
             if dmg > 0:
+                if self._consume_absorb_attack_damage(target_id, source_card, dmg, attacker_id):
+                    continue
                 from void_dlc_runtime import consume_lightning_rod_absorb, try_magic_copper_rod_absorb
                 if consume_lightning_rod_absorb(self, target_id, source_card, dmg):
                     continue
@@ -2560,6 +2573,23 @@ class GameEngine2v2(GameEngine):
 
     def _resolve_target(self, player_id, target_str):
         context = getattr(self, '_active_effect_context', {}) or {}
+        if self._is_random_selectable_selector(target_str):
+            return self._random_selectable_target(player_id, target_str if isinstance(target_str, dict) else {})
+        if self._is_lowest_health_enemy_selector(target_str):
+            return self._jurassic_lowest_selectable_enemy(player_id)
+        if self._is_equipment_target_selector(target_str):
+            return self._resolve_equipment_target_selector(player_id, target_str)
+        if self._is_equipment_owner_selector(target_str):
+            return self._resolve_equipment_owner_selector(player_id)
+        if self._is_team_members_selector(target_str):
+            members = self._resolve_team_members_selector(player_id, target_str)
+            return members[0] if members else -1
+        context_var_id = self._resolve_context_var_target(target_str)
+        if context_var_id is not None:
+            return context_var_id
+        raw_player_id = self._resolve_raw_player_selector(target_str)
+        if raw_player_id is not None:
+            return raw_player_id
         if isinstance(target_str, dict) and target_str.get('ref') == 'card_owner':
             target_card = self._resolve_card_ref(player_id, target_str.get('card'), None)
             owner_id, _, _ = self._find_card_location(target_card)
@@ -2630,6 +2660,26 @@ class GameEngine2v2(GameEngine):
         return self._effect_tree_uses_event_target(event_def)
 
     def _resolve_targets(self, player_id, target_str):
+        if self._is_random_selectable_selector(target_str):
+            tid = self._random_selectable_target(player_id, target_str if isinstance(target_str, dict) else {})
+            return [] if tid < 0 else [tid]
+        if self._is_lowest_health_enemy_selector(target_str):
+            tid = self._jurassic_lowest_selectable_enemy(player_id)
+            return [] if tid < 0 else [tid]
+        if self._is_equipment_target_selector(target_str):
+            tid = self._resolve_equipment_target_selector(player_id, target_str)
+            return [] if tid < 0 else [tid]
+        if self._is_equipment_owner_selector(target_str):
+            tid = self._resolve_equipment_owner_selector(player_id)
+            return [] if tid < 0 else [tid]
+        if self._is_team_members_selector(target_str):
+            return list(self._resolve_team_members_selector(player_id, target_str))
+        context_var_id = self._resolve_context_var_target(target_str)
+        if context_var_id is not None:
+            return [context_var_id] if self._valid_player_id(context_var_id) else []
+        raw_player_id = self._resolve_raw_player_selector(target_str)
+        if raw_player_id is not None:
+            return [raw_player_id] if self._valid_player_id(raw_player_id) else []
         if isinstance(target_str, int):
             return [target_str] if self._is_valid_effect_target(player_id, target_str) else []
         if isinstance(target_str, dict) and target_str.get('ref') == 'card_owner':

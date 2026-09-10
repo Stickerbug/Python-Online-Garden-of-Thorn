@@ -307,26 +307,24 @@ class AllCardsBalance14Tests(unittest.TestCase):
         top_cards = [CardInstance("Basic"), CardInstance("Bone"), CardInstance("Stinger")]
         caster.deck = list(top_cards) + [CardInstance("Sand")]
 
-        engine._atomic_garden_mecha_antennae(
+        result = self.play(engine, 0, CardInstance("Mecha Antennae"), self.target_choice(1))
+        self.assertTrue(result.get("needs_v2_ui"), result)
+        first = engine.handle_v2_ui_response(
             0,
-            CardInstance("Mecha Antennae"),
-            {"target": 1, "card_type": "thorn"},
-            "",
-            None,
-            {"target_id": 1},
+            engine.pending_v2_ui["request_id"],
+            {"button": "confirm", "values": {"card_type": "thorn"}},
         )
+        self.assertTrue(first.get("needs_v2_ui"), first)
         for candidate in target.hand + target.deck:
             self.assertIn("revealed", candidate.instance_flags)
         self.assertNotIn("revealed", caster.deck[0].instance_flags)
 
-        engine._atomic_garden_mecha_antennae_resolve(
+        second = engine.handle_v2_ui_response(
             0,
-            CardInstance("Mecha Antennae"),
-            {"target": "source", "card_id": top_cards[1].instance_id},
-            "",
-            None,
-            {"target_id": 0},
+            engine.pending_v2_ui["request_id"],
+            {"button": "confirm", "values": {"pick": top_cards[1].instance_id}},
         )
+        self.assertTrue(second.get("success"), second)
         hand_ids = [card.instance_id for card in caster.hand]
         discard_ids = [card.instance_id for card in caster.discard]
         self.assertIn(top_cards[1].instance_id, hand_ids)

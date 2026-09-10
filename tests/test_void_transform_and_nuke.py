@@ -1,7 +1,14 @@
 import unittest
+from pathlib import Path
 
 from cards import CARD_DEFS, CardDef, CardInstance
 from game_engine import EquipmentInstance, GameEngine
+from mod_loader import load_mod
+
+
+ROOT = Path(__file__).resolve().parents[1]
+VOID_PACKAGE = ROOT / 'mods' / 'Void Card Addition.gtnmod'
+ARCTIC_PACKAGE = ROOT / 'mods' / 'Arctic Cards Addition.gtnmod'
 
 
 def make_card_def(def_id, card_type, *, flags=None, fission_level=1, v2_events=None):
@@ -22,16 +29,41 @@ def make_card_def(def_id, card_type, *, flags=None, fission_level=1, v2_events=N
     )
 
 
+def load_package_card(package, card_id):
+    """Real card definition straight from the shipped package data."""
+    mod = load_mod(str(package))
+    if mod.errors:
+        raise AssertionError(mod.errors)
+    return next(item for item in mod.cards if item.id == card_id).to_card_def()
+
+
+def target_choice(target_id):
+    return {
+        'target_player': target_id,
+        'target_player_id': target_id,
+        'target_id': target_id,
+    }
+
+
 class VoidTransformAndNukeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.real_defs = {
+            'Scar': load_package_card(VOID_PACKAGE, 'Scar'),
+            'Nuke': load_package_card(ARCTIC_PACKAGE, 'Nuke'),
+        }
+
     def setUp(self):
         self.test_ids = {
             'test:old_attack',
             'test:new_coral',
             'test:old_equipment',
             'test:new_equipment',
-            'test:nuke',
+            'Scar',
+            'Nuke',
         }
         self.previous_defs = {key: CARD_DEFS.get(key) for key in self.test_ids}
+        CARD_DEFS.update(self.real_defs)
         CARD_DEFS['test:old_attack'] = make_card_def('test:old_attack', 'thorn')
         CARD_DEFS['test:new_coral'] = make_card_def(
             'test:new_coral',
@@ -53,7 +85,6 @@ class VoidTransformAndNukeTests(unittest.TestCase):
                 }
             },
         )
-        CARD_DEFS['test:nuke'] = make_card_def('test:nuke', 'thorn')
 
     def tearDown(self):
         for key, old_value in self.previous_defs.items():
@@ -64,7 +95,10 @@ class VoidTransformAndNukeTests(unittest.TestCase):
 
     def test_scar_transforms_every_zone_into_clean_intrinsic_cards(self):
         engine = GameEngine()
+        engine.phase = 'action'
+        engine.current_player = 0
         player = engine.players[0]
+        player.elixir = 10
         zones = (player.hand, player.deck, player.discard, player.exile)
         for zone in zones:
             old = CardInstance('test:old_attack')
@@ -81,15 +115,26 @@ class VoidTransformAndNukeTests(unittest.TestCase):
         engine._void_weighted_card_id = lambda card_type=None, exclude=None: (
             'test:new_equipment' if card_type == 'root' else 'test:new_coral'
         )
-        engine._atomic_void_transform_own_cards(0, None, {}, '', None, {})
+        # The transform now lives in the package data; play the real Scar so the
+        # shipped ``transform_cards`` steps (and its equip re-run) are exercised.
+        scar = CardInstance('Scar')
+        player.hand.append(scar)
+
+        result = engine.play_card(0, scar.instance_id, target_choice(1))
+
+        self.assertTrue(result.get('success'), result)
+        self.assertEqual(engine.players[1].health, 70)
 
         for zone in zones:
-            self.assertEqual(len(zone), 1)
             transformed = zone[0]
             self.assertEqual(transformed.def_id, 'test:new_coral')
             self.assertEqual(transformed.fission_level, 4)
             self.assertEqual(transformed.power_value, 0)
             self.assertNotIn('wide_strike', transformed.instance_flags)
+        # Every zone card was replaced in place; the played Scar itself now
+        # sits at the end of the discard pile.
+        self.assertEqual([len(zone) for zone in zones], [1, 1, 2, 1])
+        self.assertEqual([card.def_id for card in player.discard], ['test:new_coral', 'Scar'])
 
         self.assertEqual(old_equipment.def_id, 'test:new_equipment')
         self.assertEqual(old_equipment.effect_target, 1)
@@ -98,22 +143,23 @@ class VoidTransformAndNukeTests(unittest.TestCase):
 
     def test_nuke_power_only_applies_to_first_attack(self):
         engine = GameEngine()
+        engine.phase = 'action'
+        engine.current_player = 0
         engine.players[0].elixir = 2
         engine.players[1].health = 100
-        card = CardInstance('test:nuke')
+        engine.players[1].max_health = 100
+        card = CardInstance('Nuke')
         card.power_value = 6
         card.instance_flags.add('power')
+        engine.players[0].hand = [card]
 
-        engine._atomic_arctic_nuke(
-            0,
-            card,
-            {'target': 1, 'health_percent': 0.08, 'minimum': 2},
-            '',
-            None,
-            {},
-        )
+        # Data driven Nuke: the package spends every E and repeats once per E,
+        # with ``power_once`` handling the power bonus on the first attack only.
+        result = engine.play_card(0, card.instance_id, target_choice(1))
 
+        self.assertTrue(result.get('success'), result)
         self.assertEqual(engine.players[1].health, 79)
+        self.assertEqual(engine.players[0].elixir, 0)
         self.assertEqual(card.power_value, 0)
         self.assertNotIn('power', card.instance_flags)
 

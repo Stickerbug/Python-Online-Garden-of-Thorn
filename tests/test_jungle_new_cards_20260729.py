@@ -230,13 +230,20 @@ class JungleNewCards20260729Tests(unittest.TestCase):
         duel_engine.players[0].health = 80
         duel_engine.players[1].health = 70
         duel_engine.current_player = 0
-        duel_engine._atomic_jungle_monstera_heal_team(
+        duel_monstera = CardInstance("Monstera")
+        duel_engine.players[0].hand = [duel_monstera]
+        duel_result = duel_engine.play_card(
             0,
-            CardInstance("Monstera"),
-            {"target": 1, "amount": 4},
-            "",
-            None,
-            {},
+            duel_monstera.instance_id,
+            self.target_choice(1),
+        )
+        self.assertTrue(duel_result.get("success"), duel_result)
+        duel_equipment = duel_engine.players[0].equipment[0]
+        duel_engine._run_card_event(
+            0,
+            duel_equipment.card_instance,
+            "any_turn_start",
+            extra_context={"source_id": 0, "target_id": 0},
         )
         self.assertEqual([player.health for player in duel_engine.players], [80, 70])
 

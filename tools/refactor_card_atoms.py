@@ -9,12 +9,14 @@ script is idempotent and skips packages whose cards already use the new steps.
 
 from __future__ import annotations
 
+import argparse
+import copy
 import json
 import os
 import pathlib
+import sys
 import tempfile
 import zipfile
-import copy
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MODS = ROOT / "mods"
@@ -1280,6 +1282,68 @@ GENERIC_STEP_REWRITES.update({
 })
 
 
+# --- rule modules -----------------------------------------------------------
+# Extra rewrite rules may live in ``tools/refactor_rules/*.py``, one module per
+# package.  Every module exposes ``REWRITES = {op_name: builder}`` with the same
+# signature as ``GENERIC_STEP_REWRITES``, so work on different packages never has
+# to edit this file (and can therefore run in parallel).  Rules defined inline
+# above win over module rules for the same op name.
+SKIPPED_RULE_MODULES: list = []
+
+
+def _load_rule_modules() -> None:
+    directory = ROOT / "tools" / "refactor_rules"
+    if not directory.is_dir():
+        return
+    import importlib.util
+
+    for path in sorted(directory.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
+        spec = importlib.util.spec_from_file_location("gtn_refactor_rules_%s" % path.stem, path)
+        if spec is None or spec.loader is None:
+            SKIPPED_RULE_MODULES.append((path.name, "no import loader"))
+            continue
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except Exception as exc:  # pragma: no cover - authoring aid
+            SKIPPED_RULE_MODULES.append((path.name, repr(exc)))
+            continue
+        rules = getattr(module, "REWRITES", None)
+        if not isinstance(rules, dict):
+            SKIPPED_RULE_MODULES.append((path.name, "no REWRITES dict"))
+        else:
+            for op, builder in rules.items():
+                if not callable(builder):
+                    SKIPPED_RULE_MODULES.append((path.name, "non-callable rule for %s" % op))
+                    continue
+                GENERIC_STEP_REWRITES.setdefault(op, builder)
+        # ``CARD_REWRITES`` allows per-card overrides (card name -> {op: builder}),
+        # which is how a module expresses "this op behaves differently for one
+        # card" (for example a ``self_target`` wide-strike card that must hit
+        # every selectable player instead of the enemies only).
+        card_rules = getattr(module, "CARD_REWRITES", None)
+        if isinstance(card_rules, dict):
+            for card_name, entries in card_rules.items():
+                if not isinstance(entries, dict):
+                    SKIPPED_RULE_MODULES.append((path.name, "bad CARD_REWRITES for %s" % card_name))
+                    continue
+                bucket = CARD_OP_REWRITES.setdefault(str(card_name), {})
+                for op, builder in entries.items():
+                    if not callable(builder):
+                        SKIPPED_RULE_MODULES.append(
+                            (path.name, "non-callable card rule %s/%s" % (card_name, op))
+                        )
+                        continue
+                    bucket[op] = builder
+        elif card_rules is not None:
+            SKIPPED_RULE_MODULES.append((path.name, "bad CARD_REWRITES table"))
+
+
+_load_rule_modules()
+
+
 # Cards whose whole event set can be swapped for a generic op.
 CARD_STEP_OVERRIDES = {}
 
@@ -1367,8 +1431,22 @@ def write_package(path: pathlib.Path, members: dict) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Rewrite card-specific engine atoms into generic steps.")
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="only rewrite package files matching this glob (repeatable), e.g. --only 'Arctic*'",
+    )
+    args = parser.parse_args()
     total = 0
-    for path in sorted(MODS.glob("*.gtnmod")):
+    packages = [
+        path
+        for path in sorted(MODS.glob("*.gtnmod"))
+        if not args.only or any(path.match(pattern) for pattern in args.only)
+    ]
+    for path in packages:
         with zipfile.ZipFile(path, "r") as zf:
             members = {item.filename: zf.read(item.filename) for item in zf.infolist()}
         data = json.loads(members["mod.json"].decode("utf-8-sig"))
@@ -1384,7 +1462,9 @@ def main() -> int:
         write_package(path, members)
         total += len(set(changed))
         print("refactored", path.name, "->", ", ".join(sorted(set(changed))))
-    print("total cards", total)
+    print("packages scanned", len(packages), "| total cards", total)
+    for name, reason in SKIPPED_RULE_MODULES:
+        print("WARNING: skipped rule module %s (%s)" % (name, reason), file=sys.stderr)
     return 0
 
 
