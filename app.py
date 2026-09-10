@@ -18906,7 +18906,7 @@ def _response_trigger_types_for_card(engine, played_card):
         if would_destroy or played_def.id in ('Sewage', 'MagicSewage'):
             add('equipment_destroy')
         try:
-            from void_dlc_runtime import card_applies_hand_charge
+            from engine_runtime_support import card_applies_hand_charge
             if card_instance is not None and card_applies_hand_charge(card_instance):
                 add('hand_charge')
         except Exception:
@@ -25884,16 +25884,32 @@ def api_mod_studio_validate():
     ip = request.remote_addr or 'unknown'
     if _rate_limited(ip, 'mod_studio_validate', limit=120, window=300):
         return _json_error('请求过于频繁，请稍后再试', 429)
-    if request.content_length and request.content_length > 2 * 1024 * 1024:
-        return _json_error('模组数据过大（上限 2 MB）', 413)
+    # 上限 128 KB：官方包 mod.json 最大 94 KB（Void Cards DLC），20/20 都能通过；
+    # 上限越小，最坏情况下的单次 CPU 占用越低（128 KB ≈ 30 ms，512 KB ≈ 130 ms）。
+    # 如果将来社区模组普遍超过这个体积，改这一行即可。
+    if request.content_length and request.content_length > 128 * 1024:
+        return _json_error(
+            '模组数据过大（上限 128 KB）。官方最大包为 94 KB；'
+            '若你在校验完整社区模组，请先在编辑器里按卡校验，或联系管理员放宽上限。',
+            413,
+        )
     data = request.get_json(force=True, silent=True)
     if not isinstance(data, dict):
         return _json_error('请求体必须是模组 JSON 对象', 400)
     from mod_loader import apply_mod_locales
     from mod_validator_v2 import validate_mod_v2
 
-    localized = apply_mod_locales(data)
-    validation = validate_mod_v2(localized, source='mod_studio', allow_reserved_namespaces=True)
+    def run_validation():
+        localized = apply_mod_locales(data)
+        return validate_mod_v2(localized, source='mod_studio', allow_reserved_namespaces=True)
+
+    # 校验是同步 CPU 工作。eventlet 单线程下直接跑会阻塞同一 worker 上的对局消息，
+    # 所以丢进线程池（与 /api/community-mods/font-subset 的做法一致）。
+    try:
+        from eventlet import tpool
+        validation = tpool.execute(run_validation)
+    except ImportError:
+        validation = run_validation()
     return jsonify({
         'success': not validation.errors,
         'errors': list(validation.errors or []),
