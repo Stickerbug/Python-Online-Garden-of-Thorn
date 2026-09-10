@@ -135,7 +135,7 @@ class GameEngine2v2(GameEngine):
 
 
     def get_public_state(self, for_player: int) -> dict:
-        from void_dlc_runtime import effective_blind, project_effective_mask_statuses, refresh_nut_costs
+        from engine_runtime_support import effective_blind, project_effective_mask_statuses, refresh_nut_costs
         refresh_nut_costs(self)
         self._refresh_equipment_derived_player_flags()
         self._refresh_hand_limit_bonuses()
@@ -537,7 +537,7 @@ class GameEngine2v2(GameEngine):
         self._apply_energy_surge_turn_end(player_id)
         if self.game_over:
             return
-        from void_dlc_runtime import cleanup_turn_end
+        from engine_runtime_support import cleanup_turn_end
         cleanup_turn_end(self, player_id)
         self._decay_equipment_armor_end_turn(player_id)
         # Fracture: clear at end of own turn
@@ -720,7 +720,7 @@ class GameEngine2v2(GameEngine):
                 )
             )
         if counter_card.card_def.response_trigger == 'hand_charge':
-            from void_dlc_runtime import card_applies_hand_charge
+            from engine_runtime_support import card_applies_hand_charge
             return (
                 responder_id is not None
                 and target_player_id is not None
@@ -1616,7 +1616,7 @@ class GameEngine2v2(GameEngine):
                             silent: bool = False):
         if not self._is_valid_player_id(player_id):
             return 0
-        from void_dlc_runtime import blocks_special_effect_damage, maybe_defer_direct_damage, try_magic_copper_rod_absorb
+        from engine_runtime_support import blocks_special_effect_damage, maybe_defer_direct_damage, try_magic_copper_rod_absorb
         if maybe_defer_direct_damage(
             self,
             player_id,
@@ -2105,7 +2105,7 @@ class GameEngine2v2(GameEngine):
         if ps.health <= 0:
             self._advance_turn()
             return
-        from void_dlc_runtime import queue_turn_start_choices
+        from engine_runtime_support import queue_turn_start_choices
         if queue_turn_start_choices(self, player_id, '_bio_enter_player_action_phase'):
             return
         self._enter_player_action_phase(player_id)
@@ -2259,7 +2259,7 @@ class GameEngine2v2(GameEngine):
         if ps.health <= 0:
             self._advance_turn()
             return
-        from void_dlc_runtime import queue_turn_start_choices
+        from engine_runtime_support import queue_turn_start_choices
         if queue_turn_start_choices(self, player_id, '_bio_enter_player_action_phase'):
             return
         if self._bio_queue_dna_turn_start(player_id, '_bio_enter_player_action_phase'):
@@ -2278,7 +2278,7 @@ class GameEngine2v2(GameEngine):
         if not self._is_valid_player_id(target_id):
             return 0
         ps = self.players[target_id]
-        from void_dlc_runtime import maybe_defer_attack_damage
+        from engine_runtime_support import maybe_defer_attack_damage
         if maybe_defer_attack_damage(
             self,
             target_id,
@@ -2409,7 +2409,7 @@ class GameEngine2v2(GameEngine):
             if dmg > 0:
                 if self._consume_absorb_attack_damage(target_id, source_card, dmg, attacker_id):
                     continue
-                from void_dlc_runtime import consume_lightning_rod_absorb, try_magic_copper_rod_absorb
+                from engine_runtime_support import consume_lightning_rod_absorb, try_magic_copper_rod_absorb
                 if consume_lightning_rod_absorb(self, target_id, source_card, dmg):
                     continue
                 if try_magic_copper_rod_absorb(self, target_id, dmg):
@@ -2434,7 +2434,7 @@ class GameEngine2v2(GameEngine):
                     self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
                     self._consume_jungle_root_layer_from_equipment(target_id)
             if dmg > 0 and ps.toxic > 0 and not immune:
-                from void_dlc_runtime import effective_poison_coating
+                from engine_runtime_support import effective_poison_coating
                 ps.poison += effective_poison_coating(self, target_id)
             self._game_over_defer_depth += 1
             try:
@@ -2629,7 +2629,7 @@ class GameEngine2v2(GameEngine):
         if target_str == 'random':
             enemies = self.get_enemies(player_id)
             enemies = [enemy_id for enemy_id in enemies if self._is_valid_enemy_target(player_id, enemy_id)]
-            from void_dlc_runtime import forced_random_target
+            from engine_runtime_support import forced_random_target
             return forced_random_target(self, player_id, enemies)
         if target_str == 'teammate':
             teammate_id = self.get_teammate(player_id)
@@ -2708,17 +2708,17 @@ class GameEngine2v2(GameEngine):
         if target_str == 'random_friendly':
             team = self.teams[self.team_of(player_id)]
             alive = [p for p in team if self.players[p].health > 0]
-            from void_dlc_runtime import forced_random_target
+            from engine_runtime_support import forced_random_target
             target_id = forced_random_target(self, player_id, alive)
             return [target_id] if target_id >= 0 else []
         if target_str == 'random_enemy':
             enemies = [i for i in self.get_enemies(player_id) if self._is_valid_enemy_target(player_id, i)]
-            from void_dlc_runtime import forced_random_target
+            from engine_runtime_support import forced_random_target
             target_id = forced_random_target(self, player_id, enemies)
             return [target_id] if target_id >= 0 else []
         if target_str == 'random_player':
             alive = [i for i, p in enumerate(self.players) if p.health > 0]
-            from void_dlc_runtime import forced_random_target
+            from engine_runtime_support import forced_random_target
             target_id = forced_random_target(self, player_id, alive)
             return [target_id] if target_id >= 0 else []
         tid = self._resolve_target(player_id, target_str)

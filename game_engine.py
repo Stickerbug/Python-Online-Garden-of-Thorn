@@ -1889,7 +1889,7 @@ class GameEngine:
         except (TypeError, ValueError):
             stored_target = -1
         if stored_signature != signature or stored_target not in candidates:
-            from void_dlc_runtime import forced_random_target
+            from engine_runtime_support import forced_random_target
             stored_target = forced_random_target(self, player_id, candidates)
             ps.custom_vars['sewers_forced_target_signature'] = signature
             ps.custom_vars['sewers_forced_target_id'] = stored_target
@@ -1909,7 +1909,7 @@ class GameEngine:
         target_id = self._sewers_forced_target_for_card(player_id, card)
         if target_id is None:
             try:
-                from void_dlc_runtime import forced_choice_target
+                from engine_runtime_support import forced_choice_target
                 target_id = forced_choice_target(
                     self,
                     player_id,
@@ -3828,7 +3828,7 @@ class GameEngine:
                 # Remove copy tag from copies to prevent infinite loop
                 copy_card.disabled_flags.add('copy')
                 self._apply_setup_modifiers_to_card(player_id, copy_card)
-                from void_dlc_runtime import prepare_copy_card
+                from engine_runtime_support import prepare_copy_card
                 prepare_copy_card(card, copy_card)
                 self._add_forced_copy_to_hand(
                     player_id,
@@ -4005,7 +4005,7 @@ class GameEngine:
         }
 
     def get_public_state(self, for_player: int) -> dict:
-        from void_dlc_runtime import project_effective_mask_statuses, refresh_nut_costs
+        from engine_runtime_support import project_effective_mask_statuses, refresh_nut_costs
         refresh_nut_costs(self)
         self._refresh_equipment_derived_player_flags()
         self._refresh_hand_limit_bonuses()
@@ -5138,7 +5138,7 @@ class GameEngine:
             return
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
-        from void_dlc_runtime import queue_turn_start_choices
+        from engine_runtime_support import queue_turn_start_choices
         if queue_turn_start_choices(self, player_id, '_bio_continue_start_player_turn'):
             return
         if self._bio_queue_dna_turn_start(player_id, '_bio_continue_start_player_turn'):
@@ -5543,7 +5543,7 @@ class GameEngine:
                 return 0
         if not (0 <= player_id < len(self.players)):
             return 0
-        from void_dlc_runtime import blocks_special_effect_damage, maybe_defer_direct_damage, try_magic_copper_rod_absorb
+        from engine_runtime_support import blocks_special_effect_damage, maybe_defer_direct_damage, try_magic_copper_rod_absorb
         if maybe_defer_direct_damage(
             self,
             player_id,
@@ -6561,7 +6561,7 @@ class GameEngine:
     def can_play_card(self, player_id: int, card: CardInstance) -> Tuple[bool, str]:
         if not self._valid_player_id(player_id):
             return False, "无效玩家"
-        from void_dlc_runtime import can_play_extra, refresh_nut_costs
+        from engine_runtime_support import can_play_extra, refresh_nut_costs
         refresh_nut_costs(self)
         ps = self.players[player_id]
         if ps.health <= 0:
@@ -7812,7 +7812,7 @@ class GameEngine:
         target_id = self._choice_target_from_choice(getattr(self, '_active_choice', None), 1 - player_id)
         secondary_targets = self._secondary_attack_target_ids(card, getattr(self, '_active_choice', None))
         targets_opponent = target_id == 1 - player_id or 1 - player_id in secondary_targets
-        from void_dlc_runtime import card_applies_hand_charge
+        from engine_runtime_support import card_applies_hand_charge
         if targets_opponent and card_applies_hand_charge(card):
             if any(
                 self._can_pay_counter_card(1 - player_id, c)
@@ -8087,7 +8087,7 @@ class GameEngine:
             elif self._would_destroy_equipment(card) and counter_card.card_def.response_trigger == 'equipment_destroy':
                 can_respond = True
             elif counter_card.card_def.response_trigger == 'hand_charge':
-                from void_dlc_runtime import card_applies_hand_charge
+                from engine_runtime_support import card_applies_hand_charge
                 can_respond = (
                     responder_id == pending.get('target_player_id')
                     and card_applies_hand_charge(card)
@@ -11773,7 +11773,7 @@ class GameEngine:
         self._run_timed_effects_for_turn(player_id, 'turn_end')
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
-        from void_dlc_runtime import cleanup_turn_end
+        from engine_runtime_support import cleanup_turn_end
         cleanup_turn_end(self, player_id)
         self._decay_equipment_armor_end_turn(player_id)
         # Fracture: clear at end of own turn. Status immunity suppresses the effect, not decay.
@@ -12010,7 +12010,7 @@ class GameEngine:
         elif target_str == 'both':
             return -1
         elif target_str == 'random':
-            from void_dlc_runtime import forced_random_target
+            from engine_runtime_support import forced_random_target
             return forced_random_target(self, player_id, [player_id, 1 - player_id])
         elif target_str == 'wide_strike_targets':
             active_card = None
@@ -12086,7 +12086,7 @@ class GameEngine:
             enemy_id = 1 - player_id
             return [enemy_id] if self._target_can_be_selected(player_id, enemy_id, allow_self=False) else []
         if target_str == 'random_player':
-            from void_dlc_runtime import forced_random_target
+            from engine_runtime_support import forced_random_target
             target_id = forced_random_target(self, player_id, [0, 1])
             return [target_id] if target_id >= 0 else []
         rid = self._resolve_target(player_id, target_str)
@@ -12972,7 +12972,7 @@ class GameEngine:
         candidates = self._random_selectable_candidates(player_id, selector)
         if not candidates:
             return -1
-        from void_dlc_runtime import forced_random_target
+        from engine_runtime_support import forced_random_target
         return int(forced_random_target(self, player_id, candidates))
 
     @staticmethod
@@ -14398,7 +14398,7 @@ class GameEngine:
                 self._check_game_over()
                 return result if isinstance(result, dict) else {'success': True}
             if pending.get('resume_kind') == 'void_dlc':
-                from void_dlc_runtime import resume_void_dlc_actions
+                from engine_runtime_support import resume_void_dlc_actions
                 result = resume_void_dlc_actions(
                     self,
                     pending.get('resume_state') or {},
@@ -14528,7 +14528,7 @@ class GameEngine:
             ]
             if not candidates:
                 break
-            from void_dlc_runtime import forced_random_target
+            from engine_runtime_support import forced_random_target
             previous = forced_random_target(self, player_id, candidates)
             targets.append(previous)
         return targets
@@ -15225,7 +15225,7 @@ class GameEngine:
     def _apply_toxic_poison_after_poison_settlement(self, player_id: int):
         if not (0 <= player_id < len(self.players)) or self._is_status_immune(player_id):
             return
-        from void_dlc_runtime import effective_toxic_poison
+        from engine_runtime_support import effective_toxic_poison
         amount = effective_toxic_poison(self, player_id)
         if amount <= 0:
             return
@@ -15251,7 +15251,7 @@ class GameEngine:
         if not (0 <= player_id < len(self.players)):
             return
         ps = self.players[player_id]
-        from void_dlc_runtime import effective_blind
+        from engine_runtime_support import effective_blind
         blind_level = effective_blind(self, player_id)
         if blind_level <= 0:
             return
@@ -15789,7 +15789,7 @@ class GameEngine:
             if ps.health <= 0:
                 self._check_game_over()
                 return
-        from void_dlc_runtime import queue_turn_start_choices
+        from engine_runtime_support import queue_turn_start_choices
         if queue_turn_start_choices(self, player_id, '_bio_enter_player_action_phase'):
             return
         if self._bio_queue_dna_turn_start(player_id, '_bio_enter_player_action_phase'):
@@ -15816,7 +15816,7 @@ class GameEngine:
         ps = self.players[target_id]
         if ps.health <= 0 and self._game_over_defer_depth <= 0:
             return 0
-        from void_dlc_runtime import maybe_defer_attack_damage
+        from engine_runtime_support import maybe_defer_attack_damage
         if maybe_defer_attack_damage(
             self,
             target_id,
@@ -15987,7 +15987,7 @@ class GameEngine:
                 if self._consume_absorb_attack_damage(target_id, source_card, dmg, attacker_id):
                     self._record_achievement_damage_output(attacker_id, dmg)
                     continue
-                from void_dlc_runtime import consume_lightning_rod_absorb, try_magic_copper_rod_absorb
+                from engine_runtime_support import consume_lightning_rod_absorb, try_magic_copper_rod_absorb
                 if consume_lightning_rod_absorb(self, target_id, source_card, dmg):
                     self._record_achievement_damage_output(attacker_id, dmg)
                     continue
@@ -16016,7 +16016,7 @@ class GameEngine:
                     self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
                     self._consume_jungle_root_layer_from_equipment(target_id)
             if dmg > 0 and ps.toxic > 0 and not immune:
-                from void_dlc_runtime import effective_poison_coating
+                from engine_runtime_support import effective_poison_coating
                 ps.poison += effective_poison_coating(self, target_id)
             self._game_over_defer_depth += 1
             try:
@@ -18698,7 +18698,7 @@ class GameEngine:
                 tid for tid in dict.fromkeys(candidate_ids)
                 if self._target_can_be_selected(actor_id, tid, allow_self='self_target' in flags)
             ]
-            from void_dlc_runtime import forced_random_target
+            from engine_runtime_support import forced_random_target
             return forced_random_target(self, actor_id, candidates)
         needs_target = self._v2_play_requires_choice_target(top_card) or self._root_play_requires_owner_target(top_card)
         if not needs_target:
@@ -18718,7 +18718,7 @@ class GameEngine:
             tid for tid in dict.fromkeys(candidate_ids)
             if self._target_can_be_selected(actor_id, tid, allow_self=True)
         ]
-        from void_dlc_runtime import forced_random_target
+        from engine_runtime_support import forced_random_target
         return forced_random_target(self, actor_id, candidates)
 
     def _atomic_auto_play_zone_top(self, player_id, card, params, log, choice, context):
@@ -19860,7 +19860,7 @@ class GameEngine:
                 ]
                 if not candidates:
                     break
-                from void_dlc_runtime import forced_random_target
+                from engine_runtime_support import forced_random_target
                 bounced_target = forced_random_target(self, player_id, candidates)
             bounce_choice = {
                 'target_player': bounced_target,
@@ -20054,7 +20054,7 @@ class GameEngine:
         if not status:
             return
         if not params.get('bypass_mask'):
-            from void_dlc_runtime import blocks_special_effect_interference
+            from engine_runtime_support import blocks_special_effect_interference
             if blocks_special_effect_interference(self, tid):
                 return
         if self._status_application_blocked(tid, status):

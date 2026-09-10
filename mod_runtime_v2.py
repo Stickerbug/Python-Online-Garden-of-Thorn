@@ -1310,7 +1310,7 @@ def _resolve_random_selectable(engine, context: Dict[str, Any], selector: Dict[s
             candidates = [candidate for candidate in candidates if candidate not in excluded]
     if not candidates:
         return -1
-    from void_dlc_runtime import forced_random_target
+    from engine_runtime_support import forced_random_target
     return int(forced_random_target(engine, source, candidates))
 
 
@@ -1492,13 +1492,13 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
         enemies = resolve_v2_target(engine, context, "all_enemies")
         source = int(context.get("source_player", 0))
         chosen = enemies[0] if enemies else _enemy_id(engine, source)
-        from void_dlc_runtime import forced_random_target
+        from engine_runtime_support import forced_random_target
         return forced_random_target(engine, source, enemies, chosen)
     if text == "random_friendly":
         friends = resolve_v2_target(engine, context, "all_friendlies")
         source = int(context.get("source_player", 0))
         chosen = friends[0] if friends else source
-        from void_dlc_runtime import forced_random_target
+        from engine_runtime_support import forced_random_target
         return forced_random_target(engine, source, friends, chosen)
     if text == "random_player":
         players = list(range(len(getattr(engine, "players", []))))
@@ -1506,7 +1506,7 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
             return -1
         source = int(context.get("source_player", 0))
         chosen = int(context.get("_rng_index", 0)) % len(players)
-        from void_dlc_runtime import forced_random_target
+        from engine_runtime_support import forced_random_target
         return forced_random_target(engine, source, players, chosen)
     if text in ("hand", "deck", "discard", "exile", "equipment"):
         return _zone(engine, int(context.get("source_player", 0)), text)
