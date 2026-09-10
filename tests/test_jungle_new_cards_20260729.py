@@ -240,14 +240,5 @@ class JungleNewCards20260729Tests(unittest.TestCase):
         )
         self.assertEqual([player.health for player in duel_engine.players], [80, 70])
 
-    def test_local_training_worker_has_matching_operations(self):
-        worker = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
-        self.assertIn("effect_jungle_monstera_heal_team", worker)
-        self.assertIn("toInt(this.current_player, -1) !== playerId", worker)
-        self.assertIn("effect_jungle_dianthus_record_use", worker)
-        self.assertIn("effect_jungle_dianthus_restore_power", worker)
-        self.assertIn("effect_jungle_add_maple_to_hand", worker)
-
-
 if __name__ == "__main__":
     unittest.main()

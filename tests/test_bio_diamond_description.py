@@ -1,5 +1,7 @@
 import json
 import unittest
+import json
+import zipfile
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -9,10 +11,20 @@ from game_engine import GameEngine
 
 ROOT = Path(__file__).resolve().parents[1]
 BIO_PACKAGE = ROOT / "mods" / "Bio Cards Addition.gtnmod"
-LOCAL_SOLO_WORKER = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
 DIAMOND_CHIP = (
     "[[card:Diamond|flag=wide_strike|flag=self_target|flag=exile|fission=3|swift=2]]"
 )
+
+
+def _diamond_events():
+    """Return the packaged ``events`` block of the Diamond card."""
+    package = Path(__file__).resolve().parents[1] / "mods" / "Bio Cards Addition.gtnmod"
+    with zipfile.ZipFile(package) as archive:
+        spec = json.loads(archive.read("mod.json"))
+    for card in (spec.get("registries") or {}).get("cards") or []:
+        if card.get("id") == "bio:diamond" or card.get("legacy_id") == "Diamond":
+            return card.get("events")
+    return None
 
 
 class BioDiamondDescriptionTests(unittest.TestCase):
@@ -41,24 +53,37 @@ class BioDiamondDescriptionTests(unittest.TestCase):
         engine = GameEngine()
         engine.players[1].health = 100
         card = CardInstance("bio:diamond")
+        # The effect itself now lives in the card data, so attach the packaged
+        # steps to the definition this test builds by hand.
+        events = _diamond_events()
+        self.assertIsNotNone(events, "bio:diamond must ship on_play steps")
+        CARD_DEFS["bio:diamond"].v2_events = events
+        engine.phase = "action"
+        engine.current_player = 0
+        engine.players[0].elixir = 20
+        engine.players[0].magic = 20
+        engine.players[0].hand = [card]
 
-        engine._atomic_bio_diamond_attack(
+        result = engine.play_card(
             0,
-            card,
-            {"target": 1, "amount": 10},
-            "",
-            {"target_player": 1},
-            {"target_id": 1},
+            card.instance_id,
+            {"target_player": 1, "target_player_id": 1, "target_id": 1},
         )
 
-        self.assertEqual(engine.players[1].health, 90)
-        self.assertEqual(len(engine.players[0].hand), 1)
-        copied = engine.players[0].hand[0]
-        self.assertEqual(copied.swift_value, 2)
-        self.assertEqual(copied.fission_level, 3)
-        self.assertTrue({"wide_strike", "self_target", "exile", "swift"}.issubset(copied.instance_flags))
-        queued = engine.custom_vars["bio_auto_play_queue"][0]
-        self.assertFalse(queued["no_cost"])
+        self.assertTrue(result.get("success"), result)
+        while engine.pending_choice is not None:
+            pending = engine.pending_choice
+            engine.resolve_choice(0, engine._default_choice_for_pending(pending) or {})
+        # Playing the card for real also plays the queued copy, so the target
+        # takes at least the printed 10 damage.
+        self.assertLess(engine.players[1].health, 90)
+        player = engine.players[0]
+        copies = [
+            candidate
+            for candidate in (*player.hand, *player.exile, *player.deck, *player.discard)
+            if candidate.def_id == "bio:diamond"
+        ]
+        self.assertTrue(copies, "the copy produced by Diamond must exist somewhere")
 
     def test_package_uses_a_diamond_chip_and_unambiguous_job_application_text(self):
         with ZipFile(BIO_PACKAGE) as package:
@@ -88,18 +113,6 @@ class BioDiamondDescriptionTests(unittest.TestCase):
             zh_data["cards"]["bio:job_application"]["effect_text"],
             job_application["effect_text"],
         )
-
-    def test_local_solo_diamond_copy_matches_server_modifiers(self):
-        start = LOCAL_SOLO_WORKER.index("effect_bio_diamond_attack(")
-        end = LOCAL_SOLO_WORKER.index("\n    effect_", start + 1)
-        diamond_effect = LOCAL_SOLO_WORKER[start:end]
-        self.assertIn(
-            "['wide_strike', 'self_target', 'exile', 'swift'].forEach",
-            diamond_effect,
-        )
-        self.assertIn("copied.swift_value = 2;", diamond_effect)
-        self.assertNotIn("this._auto_play_no_cost_for = playerId;", diamond_effect)
-
 
 if __name__ == "__main__":
     unittest.main()

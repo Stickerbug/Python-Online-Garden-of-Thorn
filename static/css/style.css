@@ -21375,3 +21375,148 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   background: var(--classic-panel-strong, var(--bg-card));
   border-color: var(--classic-line, var(--border-color));
 }
+
+.mod-draw-container {
+  width: min(100%, 920px);
+  margin: 0 auto;
+  padding: 18px clamp(12px, 2vw, 28px) 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mod-draw-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.mod-draw-card {
+  position: relative;
+  min-height: 84px;
+  padding: 12px;
+  border: 2px solid var(--border-color, #666);
+  border-radius: 12px;
+  background: var(--bg-card, #222);
+  color: var(--text-primary, #eee);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+
+.mod-draw-card:hover {
+  transform: translateY(-1px);
+}
+
+.mod-draw-card.selected-banned {
+  border-color: #d9534f;
+  background: color-mix(in srgb, #d9534f 18%, var(--bg-card, #222));
+}
+
+.mod-draw-card.disabled-choice {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.mod-draw-card-name {
+  font-weight: 700;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.mod-draw-card-file {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #999);
+  word-break: break-all;
+}
+
+.mod-draw-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: #d9534f;
+  color: #fff;
+}
+
+.mod-draw-players {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mod-draw-player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-card, #222) 72%, transparent);
+  font-size: 13px;
+}
+
+.mod-draw-player-row.submitted {
+  border-left: 3px solid #4caf50;
+}
+
+.mod-draw-player-bans {
+  color: var(--text-muted, #999);
+  text-align: right;
+}
+
+.mod-unlock-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.mod-unlock-modal-inner {
+  width: min(100%, 640px);
+  max-height: min(82vh, 720px);
+  overflow: auto;
+  padding: 18px;
+  border-radius: 14px;
+  background: var(--bg-card, #1f1f1f);
+  color: var(--text-primary, #eee);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+.mod-unlock-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.mod-unlock-option {
+  padding: 12px;
+  border: 1px solid var(--border-color, #666);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-card, #222) 82%, transparent);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mod-unlock-option:hover {
+  border-color: var(--accent-color, #6c9);
+}
+
+.settings-mod-card.mod-locked {
+  opacity: 0.58;
+}
+
+.settings-mod-lock-note {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--text-muted, #999);
+}

@@ -34,7 +34,15 @@ MERGED_DLC = {
 }
 
 DLC_SPLITS = {
-    "Bio": ({"CyanidePill", "StemCell", "Mitochondria", "Mask", "MagicMask"}, "bio", "bio_dlc"),
+    "Bio": (
+        {
+            "CyanidePill", "StemCell", "Mitochondria", "Mask", "MagicMask",
+            # Workbook 14 moved these three from the Bio addition pack into the DLC.
+            "BloodSugar", "RNA", "MagicRNA",
+        },
+        "bio",
+        "bio_dlc",
+    ),
     "Factory": ({"Lithium", "Bomb", "FireBomb", "MagicBomb", "MagicFireBomb", "PipeBomb"}, "factory", "factory_dlc"),
     "Desert": ({"MagicCompass", "Marble", "Emerald", "Topaz", "Citron", "MagicYggdrasil"}, "desert_cards_addition", "desert_dlc"),
     "Garden": ({"MoonRock", "Avocado", "MagicPollen", "MagicAntennae", "CatEars", "Sunflower", "Beeswax", "MagicAvocado", "MagicRice", "MagicDisc", "MagicCutter", "Kale", "Daisy", "Coal", "Grass", "Candle"}, "garden", "garden_dlc"),

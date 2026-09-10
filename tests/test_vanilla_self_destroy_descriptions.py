@@ -92,7 +92,8 @@ class AllModSelfDestroyDescriptionTests(unittest.TestCase):
                     self.assertIn("触发：摧毁此装备，", card.get("effect_text", ""))
                     self.assertNotIn("trigger_effect_text", card)
 
-        self.assertEqual(len(checked), 7)
+        # Iodine's self-destroy trigger is now a data step like the others.
+        self.assertEqual(len(checked), 8)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from mod_runtime_v2 import resolve_v2_target
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = {
-    "Bio Cards DLC.gtnmod": (5, "huanxiang0273, Eric, XinYu, AArcC"),
+    "Bio Cards DLC.gtnmod": (8, "huanxiang0273, Eric, XinYu, AArcC"),
     "Factory Cards DLC.gtnmod": (6, "Eric, XinYu, AArcC"),
     "Void Cards DLC.gtnmod": (25, "Eric, AArcC"),
 }

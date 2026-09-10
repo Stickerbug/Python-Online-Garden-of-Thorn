@@ -22,7 +22,6 @@ from mod_loader import load_mod
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "mods" / "Vanilla Cards.gtnmod"
 GAME_JS = (ROOT / "static" / "js" / "game.js").read_text(encoding="utf-8")
-LOCAL_WORKER_JS = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
 CARD_STYLE_GUIDE = (ROOT / "docs" / "卡牌描述规范.md").read_text(encoding="utf-8")
 
 
@@ -206,42 +205,6 @@ process.stdout.write(JSON.stringify({ ordinary, formal }));
         self.assertEqual(result["ordinary"]["totalM"], 7)
         self.assertEqual(result["formal"]["totalE"], 4)
         self.assertEqual(result["formal"]["totalM"], 3)
-
-    def test_local_worker_uses_the_same_fusion_cost_formula(self):
-        harness = r'''
-cardDefs = {
-    Cost: { id: 'Cost', name_cn: '费用牌', card_type: 'thorn', cost_e: 3, cost_m: 5, flags: [] },
-    Error: { id: 'Error', name_cn: '错误', card_type: 'bloom', cost_e: 0, cost_m: 0, flags: [] },
-};
-const card = new LocalCard({
-    def_id: 'Cost', fusion_level: 2, mimic_discount: 1,
-    temp_heavy_value: 1, temp_magic_heavy_value: 1,
-    swift_value: 1, temp_swift_value: 1, magic_swift_value: 1,
-});
-const formal = new LocalCard({
-    def_id: 'Cost', fusion_level: 2, cost_e_override: 9, cost_m_override: 9,
-    custom_vars: {
-        formal_logic_permanent_cost_e: 8,
-        formal_logic_permanent_cost_m: 8,
-        formal_logic_temporary_cost_e: 4,
-        formal_logic_temporary_cost_m: 3,
-    },
-});
-const capped = new LocalCard({ def_id: 'Cost', fusion_level: 10000 });
-process.stdout.write(JSON.stringify({
-    ordinary: [card.cost_e, card.cost_m],
-    formal: [formal.cost_e, formal.cost_m],
-    cappedLevel: capped.fusion_level,
-}));
-'''
-        result = _run_node(
-            self,
-            "globalThis.postMessage = () => {};\n" + LOCAL_WORKER_JS + "\n" + harness,
-        )
-        self.assertEqual(result["ordinary"], [2, 7])
-        self.assertEqual(result["formal"], [5, 5])
-        self.assertEqual(result["cappedLevel"], MAX_CARD_LAYER)
-
 
 if __name__ == "__main__":
     unittest.main()

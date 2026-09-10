@@ -54,6 +54,34 @@ def clamp_card_power(value: Any) -> int:
     except Exception:
         return 0
 
+
+def card_trigger_ready_turns(card_def: Any) -> int:
+    """Return how many turns an equipment needs before its trigger is usable.
+
+    Cards whose description omits "已装备1回合时" declare ``ready_turns: 0`` in
+    their ``on_equipment_trigger`` event and can be triggered immediately.
+    """
+    events = getattr(card_def, 'v2_events', None)
+    if isinstance(events, dict):
+        event_def = events.get('on_equipment_trigger')
+        if isinstance(event_def, dict):
+            value = event_def.get('ready_turns', event_def.get('requires_equipped_turns', 1))
+            try:
+                return max(0, int(value))
+            except (TypeError, ValueError):
+                return 1
+    for effect in getattr(card_def, 'effects', []) or []:
+        if not isinstance(effect, dict) or effect.get('type') != 'on_equipment_trigger':
+            continue
+        params = effect.get('params') or {}
+        value = params.get('ready_turns', params.get('requires_equipped_turns', 1))
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 1
+    return 1
+
+
 CARD_FLAG_ALIASES = {
     'tag_troll_cards:exile': 'exile',
     'troll_cards:exile': 'exile',
@@ -99,6 +127,9 @@ CARD_FLAG_ALIASES = {
     'tag_void:temp_magic_heavy': 'temp_magic_heavy',
     'tag_void_temp_magic_heavy': 'temp_magic_heavy',
     '暂时魔力沉重': 'temp_magic_heavy',
+    'heavy': 'heavy',
+    'tag_heavy': 'heavy',
+    '沉重': 'heavy',
     '吸附': 'attract',
 }
 
@@ -109,7 +140,7 @@ _VANILLA_FLAGS = {
     'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
     'team_limited', 'team_unique', 'power', 'magic_swift',
-    'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'wide_strike', 'self_target',
+    'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'heavy', 'wide_strike', 'self_target',
     'floating', 'charge', 'ocean_blinded', 'sublime', 'amplify',
 }
 
@@ -171,6 +202,7 @@ class CardDef:
     copy_count: int = 0
     swift_value: int = 0
     magic_swift_value: int = 0
+    heavy_value: int = 0
     charge_value: int = 0
     fission_level: int = 1
     fusion_level: int = 1
@@ -222,6 +254,7 @@ class CardInstance:
     disabled_flags: Set[str] = field(default_factory=set)
     swift_value: int = 0
     magic_swift_value: int = 0
+    heavy_value: int = 0
     power_value: int = 0
     temp_swift_value: int = 0
     temp_heavy_value: int = 0
@@ -287,10 +320,11 @@ class CardInstance:
         else:
             base = self.card_def.cost_e
         swift = self.swift_value if self.swift_value > 0 else self.card_def.swift_value
+        heavy = max(0, int(self.heavy_value or 0))
         temp_swift = max(0, int(self.temp_swift_value or 0))
         temp_heavy = max(0, int(self.temp_heavy_value or 0))
         fusion_extra = fusion_cost_surcharge(self.card_def.cost_e, self.fusion_level)
-        return max(0, base + fusion_extra + temp_heavy - self.mimic_discount - swift - temp_swift)
+        return max(0, base + fusion_extra + heavy + temp_heavy - self.mimic_discount - swift - temp_swift)
 
     @property
     def cost_m(self) -> int:
@@ -336,6 +370,7 @@ class CardInstance:
             'disabled_flags': list(self.disabled_flags) if self.disabled_flags else [],
             'swift_value': self.swift_value,
             'magic_swift_value': self.magic_swift_value,
+            'heavy_value': self.heavy_value,
             'power_value': clamp_card_power(self.power_value),
             'temp_swift_value': self.temp_swift_value,
             'temp_heavy_value': self.temp_heavy_value,
@@ -367,6 +402,7 @@ class CardInstance:
             disabled_flags=normalize_card_flags(d.get('disabled_flags', [])),
             swift_value=max(0, int(d.get('swift_value', 0))),
             magic_swift_value=max(0, int(d.get('magic_swift_value', 0))),
+            heavy_value=max(0, int(d.get('heavy_value', 0))),
             power_value=clamp_card_power(d.get('power_value', 0)),
             temp_swift_value=max(0, int(d.get('temp_swift_value', 0))),
             temp_heavy_value=max(0, int(d.get('temp_heavy_value', 0))),
@@ -396,6 +432,7 @@ class CardInstance:
             disabled_flags=set(self.disabled_flags),
             swift_value=self.swift_value,
             magic_swift_value=self.magic_swift_value,
+            heavy_value=self.heavy_value,
             power_value=self.power_value,
             temp_swift_value=self.temp_swift_value,
             temp_heavy_value=self.temp_heavy_value,

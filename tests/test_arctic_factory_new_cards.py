@@ -155,10 +155,12 @@ class ArcticFactoryNewCardsTests(unittest.TestCase):
         )
 
         self.assertTrue(result.get("success"), result)
-        self.assertEqual(engine.players[0].elixir, 4)
-        self.assertEqual(engine.players[0].magic, 3)
+        # Ruby pays half of the actual cost, rounded up for both resources.
+        self.assertEqual(engine.players[0].elixir, 5)
+        self.assertEqual(engine.players[0].magic, 4)
         self.assertEqual(attack.fusion_level, 2)
         self.assertEqual(attack.fusion_multiplier, 2.0)
+        self.assertIn("revealed", attack.instance_flags)
         self.assertIn(ruby, engine.players[0].exile)
 
         unaffordable_ruby = CardInstance("Ruby")
@@ -203,7 +205,8 @@ class ArcticFactoryNewCardsTests(unittest.TestCase):
         self.assertTrue(resolved.get("success"), resolved)
         self.assertFalse(resolved.get("needs_choice"), resolved)
         self.assertIsNone(engine.pending_choice)
-        self.assertEqual(engine.players[0].elixir, 0)
+        # Ruby costs 2E from frost, then the chosen attack costs ceil(3/2)=2E.
+        self.assertEqual(engine.players[0].elixir, 1)
         self.assertEqual(attack.fusion_level, 2)
         self.assertNotIn(ruby, engine.players[0].hand)
         self.assertIn(ruby, engine.players[0].exile)
@@ -254,17 +257,6 @@ class ArcticFactoryNewCardsTests(unittest.TestCase):
         use_lines = [line for line in visible_log if line.startswith("玩家1使用了重构机")]
         self.assertEqual(use_lines, ["玩家1使用了重构机"])
         self.assertFalse(any("重构机×2" in line for line in visible_log))
-
-    def test_local_solo_worker_has_matching_handlers_and_choice_validation(self):
-        source = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
-        self.assertIn("effect_arctic_pinecone_copy(", source)
-        self.assertIn("drainArcticPineconeAutoPlayQueue(", source)
-        self.assertIn("effect_arctic_ruby_fuse(", source)
-        self.assertIn("effect_arctic_apply_frost(", source)
-        self.assertIn("Math.floor(this.arcticFrostValue(playerId) / 10)", source)
-        self.assertIn("const reservedE = liveSource", source)
-        self.assertIn("choiceType === 'choose_arctic_ruby'", source)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@ from cards import (
     DECK_SIZE, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, build_draft_pool, generate_draft_options,
     ensure_first_bloom_draft_includes_sewage,
     create_deck_from_draft, ERROR_CARD_ID, clamp_card_power, clamp_damage_hits,
+    card_trigger_ready_turns,
 )
 
 
@@ -859,7 +860,7 @@ class GameEngine2v2(GameEngine):
             self._game_over_defer_depth += 1
             try:
                 self._prepare_ocean_charge_for_play(counter_removed)
-                self._atomic_ocean_charge_self_damage(
+                self._atomic_charge_self_damage(
                     responder_id,
                     counter_removed,
                     {},
@@ -1555,7 +1556,7 @@ class GameEngine2v2(GameEngine):
         self._bio_after_card_payment(player_id, card)
         self._apply_magic_acceleration_after_play(player_id, card)
         self._prepare_ocean_charge_for_play(card)
-        self._atomic_ocean_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
+        self._atomic_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
         self._sewers_trigger_vampire_fangs(player_id, card, choice)
         if self._card_is(card, 'Broccoli', 'sewers:broccoli'):
             card._sewers_was_countered_this_play = False
@@ -2257,7 +2258,9 @@ class GameEngine2v2(GameEngine):
     def deal_attack_damage(self, target_id: int, amount: int, hits: int = 1,
                            is_battery: bool = False, is_precision: bool = False,
                            attacker_id: int = -1, source_card=None,
-                           ignore_untargetable: bool = False) -> int:
+                           ignore_untargetable: bool = False,
+                           crit_bonus_multiplier: float = 1.0,
+                           crit_bonus_damage: int = 0) -> int:
         hits = clamp_damage_hits(hits)
         if source_card is not None:
             self._clamp_card_layers(source_card)
@@ -2352,7 +2355,9 @@ class GameEngine2v2(GameEngine):
             if dmg > 0 and attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
                 reduction = min(0.6, 0.2 * attacker_state.weakness)
                 dmg = max(1, int(dmg * (1.0 - reduction)))
-            dmg, _hel_crit = self._hel_apply_lucky_crit_to_damage(attacker_id, dmg, source_card)
+            dmg, _hel_crit = self._hel_apply_lucky_crit_to_damage(
+                attacker_id, dmg, source_card, crit_bonus_damage
+            )
             dmg = self._apply_attack_damage_halving(target_id, dmg, precision_dodged)
             if immune:
                 root_armor = 0
@@ -2382,7 +2387,8 @@ class GameEngine2v2(GameEngine):
                 ps.poison += converted
                 dmg = 0
             dmg = self._apply_universal_damage_shields(target_id, dmg, attacker_id, '攻击', DAMAGE_TYPE_PHYSICAL)
-            dmg = self._hel_apply_domino_final_damage(dmg, source_card, _hel_crit)
+            if _hel_crit and crit_bonus_multiplier != 1.0:
+                dmg = max(0, int(math.ceil(int(dmg) * crit_bonus_multiplier)))
             if (
                 dmg > 0
                 and getattr(self, '_prediction_capture_target_id', None) == target_id
@@ -2500,7 +2506,7 @@ class GameEngine2v2(GameEngine):
         has_mod_trigger = self._has_card_event(eq.card_def, 'equipment_trigger')
         if eq.card_def.trigger_cost_e < 0 and not has_mod_trigger:
             return {'success': False, 'error': '该装备没有触发效果'}
-        if eq.turns_equipped < 1:
+        if eq.turns_equipped < card_trigger_ready_turns(eq.card_def):
             return {'success': False, 'error': '装备需要装备一回合后才能触发'}
         trigger_cost = max(0, int(eq.card_def.trigger_cost_e or 0))
         trigger_cost_m = max(0, int(getattr(eq.card_def, 'trigger_cost_m', 0) or eq.card_def.v2_resource.get('trigger_cost_m', 0) or 0))

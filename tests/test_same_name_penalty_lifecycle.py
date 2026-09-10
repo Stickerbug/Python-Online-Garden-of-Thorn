@@ -8,7 +8,6 @@ from game_engine_2v2 import GameEngine2v2
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GAME_JS = (ROOT / 'static' / 'js' / 'game.js').read_text(encoding='utf-8')
-LOCAL_WORKER_JS = (ROOT / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
 APP_PY = (ROOT / 'app.py').read_text(encoding='utf-8')
 
 
@@ -94,23 +93,6 @@ class SameNamePenaltyLifecycleTests(unittest.TestCase):
         self.assertIn('!gameState.game_over', section)
         self.assertIn('ownerId != null', section)
         self.assertIn('ownerId === currentPlayerId', section)
-
-    def test_local_training_clears_at_turn_and_game_end(self):
-        end_turn = source_between(
-            LOCAL_WORKER_JS,
-            '    endPlayerTurn(playerId) {',
-            '    runOwnerTurnEndEquipment(playerId) {',
-        )
-        game_over = source_between(
-            LOCAL_WORKER_JS,
-            '    checkGameOver() {',
-            '    resetOneShotAttackAttrs(card) {',
-        )
-        self.assertLess(
-            end_turn.index('this.returnCogwheelCardsNow(playerId);'),
-            end_turn.index('this.clearTurnCardTracking(playerId);'),
-        )
-        self.assertGreaterEqual(game_over.count('this.clearTurnCardTracking();'), 2)
 
     def test_forced_server_end_paths_clear_penalty(self):
         draw = source_between(

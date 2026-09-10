@@ -2817,6 +2817,15 @@ def init_db(
             valid_games INTEGER NOT NULL DEFAULT 0 CHECK(valid_games>=0),
             win_streak INTEGER NOT NULL DEFAULT 0 CHECK(win_streak>=0),
             initialized_at TEXT NOT NULL)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS user_mod_unlock_choices (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            mod_filename TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(user_id, mod_filename))''')
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_user_mod_unlock_choices_user '
+            'ON user_mod_unlock_choices(user_id, created_at, mod_filename)'
+        )
         conn.execute('''CREATE TABLE IF NOT EXISTS pvp_reward_settlements (
             settlement_key TEXT PRIMARY KEY, match_id INTEGER NOT NULL REFERENCES matches(id),
             request_fingerprint TEXT NOT NULL, result_json TEXT NOT NULL, created_at TEXT NOT NULL)''')

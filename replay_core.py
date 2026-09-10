@@ -271,6 +271,8 @@ def _qualified_replay_columns(alias='r'):
 
 
 def _card_defs_snapshot(card_defs):
+    from cards import card_trigger_ready_turns
+
     cards = []
     for card_id in sorted((card_defs or {}).keys()):
         cd = card_defs[card_id]
@@ -287,6 +289,7 @@ def _card_defs_snapshot(card_defs):
             'effect_text': getattr(cd, 'effect_text', ''),
             'flags': sorted(list(getattr(cd, 'flags', []) or [])),
             'trigger_cost_e': getattr(cd, 'trigger_cost_e', -1),
+            'trigger_ready_turns': card_trigger_ready_turns(cd),
             'trigger_effect_text': getattr(cd, 'trigger_effect_text', ''),
             'response_trigger': getattr(cd, 'response_trigger', ''),
             'effects': getattr(cd, 'effects', []) or [],

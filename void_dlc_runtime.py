@@ -622,58 +622,8 @@ def try_magic_copper_rod_absorb(engine, target_id: int, damage: int) -> bool:
 def _run_simple_action(engine, player_id: int, card: CardInstance, action: str,
                        params: dict, choice, context) -> bool:
     targets = _action_targets(engine, player_id, card, choice, context)
-    if action == "bomb_attack":
-        _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 6)),
-                             status_after=(
-                                 ("overload", 1, bool(params.get("require_hit"))),
-                                 ("weakness", 1, bool(params.get("require_hit"))),
-                             ))
-    elif action == "fire_bomb_attack":
-        status_name = "fire" if "fire" in params else "hel:blazing_fire"
-        status_amount = int(params.get("fire", params.get("blaze", 3)) or 0)
-        _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 16)),
-                             status_after=((status_name, status_amount, bool(params.get("require_hit"))),))
-    elif action == "magic_bomb_attack":
-        _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 20)),
-                             status_after=(("skip_turn", 1, False),))
-    elif action == "pipe_bomb_attack":
-        _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 16) or 16))
-        if params.get("end_turn") and not getattr(engine, "game_over", False):
-            end_turn = getattr(engine, "end_turn", None)
-            if callable(end_turn):
-                end_turn(player_id)
-            else:
-                engine._end_player_turn(player_id)
-    elif action == "dvd_attack":
-        _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 6)),
-                             status_after=(("fire", 1, bool(params.get("require_hit"))),))
-    elif action == "dvd_return":
-        owner_id, zone_name, _ = engine._find_card_location(card)
-        if owner_id == player_id and zone_name == "discard" and card in engine.players[player_id].discard:
-            engine.players[player_id].discard.remove(card)
-            engine.players[player_id].add_to_hand(card)
-            engine.log_msg(f"{engine.pn(player_id)}的{card.name_cn}回到手中")
-    elif action == "fan_play":
-        for target_id in targets:
-            _add_status(engine, target_id, "fire", 2)
-            if not engine._is_status_immune(target_id) and engine.players[target_id].fire > 0:
-                _direct_damage(engine, target_id, engine.players[target_id].fire, "灼烧", player_id, damage_tag=DAMAGE_TAG_FIRE)
-                engine._decay_fire_after_turn_start(target_id)
-            engine.players[target_id].gain_elixir(4)
-            engine.log_msg(f"{engine.pn(target_id)}因扇子获得4E")
-    elif action in ("fan_turn_start", "schizo_turn_start"):
-        pass
-    elif action == "seed_charge":
+    if action == "seed_charge":
         _add_charge(card, int(params.get("amount", 1) or 1))
-    elif action == "charge_hand":
-        cancelled = set((getattr(card, "custom_vars", {}) or {}).pop("void_dlc_charge_cancelled_targets", []) or [])
-        for target_id in targets:
-            if target_id in cancelled:
-                continue
-            for hand_card in list(engine.players[target_id].hand):
-                _add_charge(hand_card, int(params.get("amount", 1) or 1))
-            if engine.players[target_id].hand:
-                engine.log_msg(f"{engine.pn(target_id)}的所有手牌获得{int(params.get('amount', 1) or 1)}层电荷")
     elif action in ("copper_rod_response", "lightning_rod_response"):
         original = context.get("original_card") if isinstance(context, dict) else None
         if original is not None:
@@ -695,25 +645,6 @@ def _run_simple_action(engine, player_id: int, card: CardInstance, action: str,
             custom[LIGHTNING_ROD_ABSORB_KEY] = targets_map
             original.custom_vars = custom
         engine.log_msg(f"{engine.pn(player_id)}的铜棒将吸收本次攻击牌伤害")
-    elif action == "plasma_attack":
-        amount = int(params.get("amount", 4) or 4)
-        damage = int(params.get("damage", 4) or 4)
-        electric = int(params.get("electric", 4) or 4)
-        for target_id in targets:
-            _add_status(engine, target_id, "poison", amount)
-            _add_status(engine, target_id, "fire", amount)
-            selectable = [item for item in engine.players[target_id].hand if _selectable_card(engine, item)]
-            if selectable:
-                _add_charge(random.choice(selectable), amount)
-            _attack(engine, player_id, card, target_id, damage)
-            _direct_damage(engine, target_id, electric, "等离子体电伤", player_id, electric=True)
-    elif action == "apply_status":
-        for target_id in targets:
-            _add_status(engine, target_id, str(params.get("status", "")), int(params.get("amount", 1) or 1))
-    elif action == "magic_slime_ball":
-        for target_id in targets:
-            _add_status(engine, target_id, "skip_turn", 1)
-        _add_status(engine, player_id, "sluggish", 1)
     elif action == "illuminati_triangle":
         cleanup = engine.custom_vars.setdefault("void_dlc_illuminati_cleanup", [])
         if not isinstance(cleanup, list):
@@ -741,19 +672,6 @@ def _run_simple_action(engine, player_id: int, card: CardInstance, action: str,
             spawned.instance_flags.add("self_target")
             spawned.custom_vars["void_dlc_no_heated_thorn_spawn"] = True
             engine._bio_queue_auto_play(player_id, spawned, {}, no_cost=True, source="heated_thorn")
-    elif action == "comb_statuses":
-        for target_id in targets:
-            for status in ("hel:blazing_fire", "fire", "jungle:toxic_poison", "poison"):
-                _add_status(engine, target_id, status, 1)
-    elif action == "magic_nut_attack":
-        spent = max(0, int(engine.players[player_id].elixir or 0))
-        engine._spend_resource(player_id, "elixir", spent, card)
-        _play_damage_targets(engine, player_id, card, choice, context,
-                             int(params.get("base", 10) or 10) + spent * int(params.get("per_e", 5) or 5))
-    elif action == "one_ring":
-        for target_id in targets:
-            _add_status(engine, target_id, "hel:blazing_fire", int(params.get("blaze", 2) or 2))
-            _add_status(engine, target_id, "fire", int(params.get("fire", 1) or 1))
     elif action == "magic_stardust":
         for target_id in targets:
             raw_toxic = _status_value(engine, target_id, "jungle:toxic_poison")
@@ -774,35 +692,6 @@ def _run_simple_action(engine, player_id: int, card: CardInstance, action: str,
                 )
             engine._decay_poison_after_turn_start(target_id)
             engine._apply_toxic_poison_after_poison_settlement(target_id)
-    elif action == "horn_response":
-        for target_id in range(len(engine.players)):
-            if engine._opposite_timer_side(player_id, target_id) and _target_selectable(engine, player_id, target_id, allow_self=False):
-                _attack(engine, player_id, card, target_id, int(params.get("damage", 10) or 10))
-    elif action == "blood_scythe":
-        _play_damage_targets(engine, player_id, card, choice, context, int(params.get("target_damage", 40) or 40))
-        _direct_damage(engine, player_id, int(params.get("self_damage", 4) or 4), "血镰刀", player_id, physical=True)
-    elif action == "add_void_to_hand":
-        def_id = engine._void_resolve_card_def_id(VOID_CARD_ID)
-        if def_id in CARD_DEFS and engine._card_allowed(def_id):
-            engine.players[player_id].add_to_hand(CardInstance(def_id))
-    elif action == "magic_blood_scythe":
-        _add_status(engine, player_id, "fire", 3)
-        _add_status(engine, player_id, "arctic:frost", 3)
-        _add_status(engine, player_id, "poison", 3)
-        _play_damage_targets(engine, player_id, card, choice, context, int(params.get("damage", 50) or 50))
-    elif action == "magic_blood_scythe_exile":
-        selectable = [item for item in list(engine.players[player_id].hand) if _selectable_card(engine, item)]
-        if not selectable:
-            _add_status(engine, player_id, "bio:debt", 1)
-        else:
-            for selected in selectable[:2]:
-                engine.players[player_id].hand.remove(selected)
-                engine._put_card_in_exile(player_id, selected)
-    elif action == "hexagram":
-        for target_id in targets:
-            _attack(engine, player_id, card, target_id, int(params.get("target_damage", 20) or 20))
-            _add_status(engine, target_id, "fire", int(params.get("fire", 10) or 10))
-        _direct_damage(engine, player_id, int(params.get("self_damage", 5) or 5), "六芒星", player_id, physical=True)
     else:
         return False
     return True
@@ -1477,6 +1366,8 @@ def card_applies_hand_charge(card: Optional[CardInstance]) -> bool:
             return False
         op = str(value.get("op") or value.get("type") or "")
         if op == "void_dlc_action" and str(value.get("action") or "") == "charge_hand":
+            return True
+        if op == "card_prop_add_to_zone" and str(value.get("property") or "") == "charge_value":
             return True
         if op in ("ocean_add_charge_to_hand", "bio_add_charge_to_cards"):
             return True

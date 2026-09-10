@@ -5,7 +5,7 @@ from cards import CARD_DEFS, CardDef, CardInstance
 from game_engine import GameEngine
 
 
-def make_card_def(def_id, *, flags=None, cost_e=0, cost_m=0):
+def make_card_def(def_id, *, flags=None, cost_e=0, cost_m=0, v2_events=None):
     return CardDef(
         def_id,
         def_id,
@@ -18,6 +18,7 @@ def make_card_def(def_id, *, flags=None, cost_e=0, cost_m=0):
         '',
         '',
         flags=set(flags or []),
+        v2_events=v2_events or {},
     )
 
 
@@ -32,10 +33,37 @@ class OceanDynamicDamageTests(unittest.TestCase):
         CARD_DEFS['test:ocean_trident'] = make_card_def(
             'test:ocean_trident',
             flags={'precision'},
+            v2_events={'on_play': {'steps': [{
+                'op': 'deal_damage',
+                'target': 'target',
+                'amount': {
+                    'op': 'add',
+                    'values': [
+                        21,
+                        {'op': 'mul', 'values': [5, {'op': 'status_count', 'target': 'target'}]},
+                        {'op': 'mul', 'values': [5, {
+                            'op': 'count',
+                            'of': {'op': 'card_prop', 'card': 'current_card', 'prop': 'flags'},
+                        }]},
+                    ],
+                },
+            }]}},
         )
         CARD_DEFS['test:ocean_magic_trident'] = make_card_def(
             'test:ocean_magic_trident',
             flags={'precision'},
+            v2_events={'on_play': {'steps': [{
+                'op': 'deal_damage',
+                'target': 'target',
+                'amount': {
+                    'op': 'add',
+                    'values': [20, {
+                        'op': 'mul',
+                        'values': [5, {'op': 'player_var', 'target': 'source',
+                                       'name': 'ocean_active_discards'}],
+                    }],
+                },
+            }]}},
         )
         CARD_DEFS['test:ocean_auto_pearl'] = make_card_def(
             'test:ocean_auto_pearl',
@@ -64,14 +92,7 @@ class OceanDynamicDamageTests(unittest.TestCase):
 
         with patch.object(engine, 'deal_attack_damage', return_value=11) as deal_damage:
             for _ in range(3):
-                engine._atomic_ocean_status_tag_damage(
-                    0,
-                    card,
-                    {'target': 'target', 'base': 21, 'per_status': 5, 'per_tag': 5},
-                    '',
-                    engine._active_choice,
-                    {},
-                )
+                engine._apply_card_effect(0, card, engine._active_choice)
 
         self.assertEqual(deal_damage.call_count, 3)
         self.assertEqual([call.args[1] for call in deal_damage.call_args_list], [11, 11, 11])
@@ -84,14 +105,9 @@ class OceanDynamicDamageTests(unittest.TestCase):
 
         with patch.object(engine, 'deal_attack_damage', return_value=10) as deal_damage:
             for _ in range(3):
-                engine._atomic_ocean_discard_count_damage(
-                    0,
-                    card,
-                    {'target': 'target', 'base': 20, 'per': 5},
-                    '',
-                    engine._active_choice,
-                    {},
-                )
+                # Fission plays the card effect once per hit; the card data now
+                # owns the base + per-discard formula.
+                engine._apply_card_effect(0, card, engine._active_choice)
 
         self.assertEqual(deal_damage.call_count, 3)
         self.assertEqual([call.args[1] for call in deal_damage.call_args_list], [10, 10, 10])

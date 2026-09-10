@@ -3,6 +3,8 @@ import json
 import re
 from typing import Any, Dict, Tuple
 
+from atomic_registry import merge_public_ops
+
 
 FORMAT_VERSION = 2
 API_VERSION = "2.0"
@@ -68,7 +70,7 @@ VALID_UI_COMPONENT_TYPES = {
     "preview_value",
 }
 
-VALID_LOGIC_OPS = {
+_CORE_LOGIC_OPS = {
     "sequence",
     "literal",
     "const",
@@ -419,6 +421,10 @@ VALID_LOGIC_OPS = {
     "hel_magic_clover_trigger",
     "hel_deliverance_attack", "void_dlc_action",
 }
+
+# Every curated core op plus every atomic handler the engine implements, so new
+# engine atoms become available to mod v2 content as soon as they exist.
+VALID_LOGIC_OPS = merge_public_ops(_CORE_LOGIC_OPS)
 
 VALID_EVENT_HOOKS = {
     "before_play_card",

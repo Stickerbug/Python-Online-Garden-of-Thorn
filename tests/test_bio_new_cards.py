@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "mods" / "Bio Cards Addition.gtnmod"
 NEW_CARDS_PACKAGE = ROOT / "mods" / "Bio Cards DLC.gtnmod"
 JURASSIC_PACKAGE = ROOT / "mods" / "Jurassic Cards Addition.gtnmod"
-LOCAL_WORKER = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
 GAME_JS = (ROOT / "static" / "js" / "game.js").read_text(encoding="utf-8")
 NEW_CARD_IDS = {"BloodSugar", "CyanidePill", "StemCell", "Mitochondria"}
 
@@ -229,14 +228,8 @@ class BioNewCardsTests(unittest.TestCase):
                 self.assertEqual([player.health for player in engine.players], expected)
                 self.assertIsNone(engine.pending_choice)
 
-    def test_local_solo_worker_contains_matching_bio_hooks(self):
-        self.assertIn("bioStemCellAfterHealthLoss(targetId, amount)", LOCAL_WORKER)
-        self.assertIn("shield_conversion: ['bio:shield_conversion'", LOCAL_WORKER)
-        self.assertIn("effect_bio_add_shield_conversion(", LOCAL_WORKER)
-        self.assertIn("this.bioStemCellAfterHealthLoss(playerId, healthLost);", LOCAL_WORKER)
-        self.assertIn("this.bioStemCellAfterHealthLoss(targetId, healthLost);", LOCAL_WORKER)
+    def test_frontend_contains_matching_bio_hooks(self):
         self.assertIn("'shield_conversion'", GAME_JS)
-        self.assertIn("'bio_clear_poison_fire'", LOCAL_WORKER)
 
 
 if __name__ == "__main__":

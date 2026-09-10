@@ -30,11 +30,27 @@ class CardPowerRuleTests(unittest.TestCase):
             'thorn',
             v2_events={
                 'on_enter_hand': {
-                    'steps': [{'op': 'jurassic_clear_self_power'}],
+                    'steps': [{
+                        'op': 'card_prop_set',
+                        'card': {'ref': 'current_card'},
+                        'property': 'power_value',
+                        'value': 0,
+                    }],
                 },
             },
         )
-        CARD_DEFS['sewers:broccoli'] = make_card_def('sewers:broccoli', 'thorn')
+        CARD_DEFS['sewers:broccoli'] = make_card_def(
+            'sewers:broccoli',
+            'thorn',
+            v2_events={'on_play': {'steps': [
+                {'op': 'deal_damage', 'target': 'target', 'amount': 10},
+                {
+                    'op': 'if',
+                    'condition': {'op': 'play_was_countered'},
+                    'then': [{'op': 'deal_damage', 'target': 'target', 'amount': 3, 'hits': 2}],
+                },
+            ]}},
+        )
         CARD_DEFS['Tomato'] = make_card_def('Tomato', 'thorn')
 
     def tearDown(self):
@@ -89,7 +105,7 @@ class CardPowerRuleTests(unittest.TestCase):
         self.assertEqual(remaining, 8)
         self.assertEqual(card.power_value, -6)
 
-    def test_broccoli_power_only_applies_to_first_attack(self):
+    def test_broccoli_power_also_applies_to_counter_damage(self):
         engine = GameEngine()
         card = CardInstance('sewers:broccoli')
         card.power_value = 6
@@ -97,18 +113,14 @@ class CardPowerRuleTests(unittest.TestCase):
         card._sewers_was_countered_this_play = True
         engine.players[1].health = 100
 
-        engine._atomic_sewers_broccoli_attack(
-            0,
-            card,
-            {'target': 1},
-            '',
-            None,
-            {'target_id': 1},
-        )
+        # The card's own data steps own the 10D + countered 3D x2 effect.
+        engine._apply_card_effect(0, card, {'target_player': 1, 'target_id': 1})
 
-        self.assertEqual(engine.players[1].health, 78)
-        self.assertEqual(card.power_value, 0)
-        self.assertNotIn('power', card.instance_flags)
+        # 10D (+6 Power) plus the countered 3D x2 (+6 Power each).
+        self.assertEqual(engine.players[1].health, 72)
+        # Power is no longer cleared mid-play; the normal post-play cleanup owns it.
+        self.assertEqual(card.power_value, 6)
+        self.assertIn('power', card.instance_flags)
 
     def test_power_is_capped_when_card_state_is_loaded(self):
         card = CardInstance.from_dict({

@@ -68,6 +68,7 @@ from cards import (
     INITIAL_HEALTH, INITIAL_ELIXIR, INITIAL_MAGIC, FIRST_PLAYER_ELIXIR,
     SECOND_PLAYER_HEALTH, INITIAL_HAND_SIZE, FIRST_PLAYER_HAND_SIZE, ERROR_CARD_ID,
     normalize_card_flag, normalize_card_flags,
+    card_trigger_ready_turns,
 )
 from mod_loader import (
     GAME_VERSION,
@@ -326,6 +327,7 @@ from community_ops import (
     mutate_community_poll,
 )
 import account_integrity
+import mod_unlocks
 import public_feedback as public_feedback
 from moderation import (
     REPORT_CATEGORIES,
@@ -398,6 +400,10 @@ PVP_MATCH_MODES = (
     'casual_random_deck',
 )
 RANKED_MATCH_MODES = ('ranked_1v1', 'ranked_2v2')
+CASUAL_MOD_DRAW_MATCH_MODES = ('casual_1v1', 'casual_2v2')
+MOD_DRAW_CANDIDATE_LIMIT = 5
+MOD_DRAW_TIMEOUT_SECONDS = 40
+MOD_DRAW_BAN_LIMITS = {'1v1': 2, '2v2': 1}
 CHAT_CACHE_LIMIT = 1000
 LOBBY_CHAT_VISIBLE_LIMIT = 300
 ADMIN_GAME_CHAT_VISIBLE_LIMIT = 500
@@ -775,6 +781,7 @@ GTN_STATIC_VERSION += '-story-card-machine-offer-cards-1'
 GTN_STATIC_VERSION += '-solo-response-perspective-reset-1'
 GTN_STATIC_VERSION += '-storage-session-before-persistent-1'
 GTN_STATIC_VERSION += '-new-player-entertainment-default-fix-1'
+GTN_STATIC_VERSION += '-casual-mod-draw-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -1893,6 +1900,21 @@ def admin_match_record(room, result='finished'):
         ended_at = iso_now()
         duration_seconds = int(time.time() - started_ts)
         first_meta = participant_meta[0] if participant_meta else {}
+        room_match_profile = getattr(room, 'match_mod_profile', {}) or {}
+        if room_match_profile:
+            first_meta = {
+                **first_meta,
+                'disabled_mods': list(room_match_profile.get('disabled_mods', []) or []),
+                'mods_hash': room_match_profile.get('mods_hash', '') or '',
+                'loadout_hash': room_match_profile.get('loadout_hash', '') or '',
+                'mods_list': list(room_match_profile.get('mods_list', []) or []),
+                'entertainment_mods': list(room_match_profile.get('entertainment_mods', []) or []),
+                'mod_source': room_match_profile.get('mod_source', 'official') or 'official',
+                'community_mod_url': room_match_profile.get('community_mod_url', '') or '',
+                'community_mod_hash': room_match_profile.get('community_mod_hash', '') or '',
+                'community_mod_name': room_match_profile.get('community_mod_name', '') or '',
+                'community_mods': list(room_match_profile.get('community_mods', []) or []),
+            }
         mod_source = first_meta.get('mod_source', 'official')
         mod_hash = first_meta.get('loadout_hash') or first_meta.get('community_mod_hash') or first_meta.get('mods_hash') or ''
         community_mod_url = first_meta.get('community_mod_url', '')
@@ -2056,6 +2078,16 @@ def admin_match_record(room, result='finished'):
                 should_update_stats = bool(valid_for_stats and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'))
                 if should_update_stats:
                     increment_user_stats(registered_user_ids, stats_winner_user_ids, stats_result)
+                    for stats_sid in room.player_sids:
+                        if stats_sid in players:
+                            stats_state = refresh_player_mod_unlock_state(players[stats_sid], force=True)
+                            if stats_state.get('has_pending_choice'):
+                                socketio.emit('mod_unlock_required', {
+                                    'match_mode': room_match_mode(room),
+                                    **stats_state,
+                                }, room=stats_sid)
+                            else:
+                                socketio.emit('mod_unlock_updated', stats_state, room=stats_sid)
                 should_score_gr = bool(valid_for_ranking and getattr(e, 'game_over', False) and room.mode in ('1v1', '2v2'))
                 if should_score_gr:
                     try:
@@ -5196,6 +5228,7 @@ def public_player_info(sid, player=None):
                for key in ('level', 'label', 'linked_gr_band')},
             'newcomer': {'is_newcomer':bool(((p.get('reputation_profile') or {}).get('newcomer') or {}).get('is_newcomer'))},
         },
+        'mod_unlock_blocked': bool(mod_unlock_required_for_match_mode(p)),
     }
     info.update(special_public_fields(p))
     return info
@@ -6167,6 +6200,8 @@ def _room_timer_worker():
             pregame_timer_updates = set()
             pregame_updates = set()
             start_rooms = set()
+            mod_draw_updates = set()
+            mod_draw_completions = []
             with _lock:
                 for room in list(rooms.values()):
                     # Phelren rooms are driven by _run_ai_test_match_timer.
@@ -6176,6 +6211,22 @@ def _room_timer_worker():
                         continue
                     engine = getattr(room, 'engine', None)
                     if engine is None or getattr(engine, 'game_over', False):
+                        continue
+                    if getattr(room, 'mod_draw_active', False):
+                        if _room_has_blocking_disconnect(room):
+                            _pause_pregame_deadlines_locked(room, now)
+                        else:
+                            _clear_pregame_deadline_pause(room)
+                            deadline = (
+                                room.pregame_deadlines.get((-1, 'mod_draw'))
+                                if hasattr(room, 'pregame_deadlines') else None
+                            )
+                            if deadline is not None and now >= float(deadline):
+                                mod_draw_completions.append(room)
+                        last_tick = float(getattr(room, 'mod_draw_last_tick', 0.0) or 0.0)
+                        if now - last_tick >= 1.0:
+                            room.mod_draw_last_tick = now
+                            mod_draw_updates.add(room)
                         continue
                     was_action = getattr(engine, 'phase', None) == 'action'
                     if _tick_room_action_timer_locked(room, now):
@@ -6241,6 +6292,12 @@ def _room_timer_worker():
                     elif pregame_statuses and all(status == 'ready' for status in pregame_statuses):
                         if getattr(engine, 'phase', None) in ('event_select', 'event_reveal', 'draft'):
                             start_rooms.add(room)
+            for room in mod_draw_updates:
+                send_mod_draw_state(room)
+            for room in mod_draw_completions:
+                with _lock:
+                    if getattr(room, 'mod_draw_active', False):
+                        _complete_mod_draw_locked(room)
             for room, pidx in expired_turns:
                 if pidx is None:
                     continue
@@ -8161,12 +8218,22 @@ def build_mod_loadout(
     }
 
 
-def apply_mod_loadout_to_player(player, loadout, community_fields=None):
+def apply_mod_loadout_to_player(
+    player,
+    loadout,
+    community_fields=None,
+    preferred_disabled_mods=None,
+):
     community_fields = community_fields or {}
     player['disabled_mods'] = loadout['disabled_mods']
-    player['preferred_disabled_mods'] = list(
-        loadout.get('preferred_disabled_mods', loadout['disabled_mods'])
-    )
+    if preferred_disabled_mods is None:
+        player['preferred_disabled_mods'] = list(
+            loadout.get('preferred_disabled_mods', loadout['disabled_mods'])
+        )
+    else:
+        player['preferred_disabled_mods'] = list(
+            normalize_disabled_mods(preferred_disabled_mods)
+        )
     player['mods_hash'] = loadout['mods_hash']
     player['loadout_hash'] = loadout['loadout_hash']
     player['v2_loadout_hash'] = loadout.get('v2_loadout_hash', '')
@@ -8256,6 +8323,193 @@ def resolve_player_match_mode_loadout(player, match_mode):
         {},
         fallback_payload=player_mod_preference_payload(player, match_mode),
     )
+
+
+def refresh_player_mod_unlock_state(player, force=False):
+    """Refresh the cached casual-unlock state for one online player."""
+    if not player:
+        return mod_unlocks.guest_state()
+    if not force and isinstance(player.get('mod_unlock_state'), dict):
+        return player['mod_unlock_state']
+    user_id = player.get('user_id') if player.get('is_registered_user') else None
+    try:
+        state = mod_unlocks.load_state(user_id)
+    except Exception as exc:
+        admin_event('error', f"failed to load mod unlock state user={user_id or '-'}: {exc}")
+        state = player.get('mod_unlock_state') if isinstance(player.get('mod_unlock_state'), dict) else mod_unlocks.guest_state()
+    player['mod_unlock_state'] = state
+    return state
+
+
+def player_mod_unlock_state(player, refresh=False):
+    return refresh_player_mod_unlock_state(player, force=bool(refresh))
+
+
+def player_has_pending_mod_unlock(player):
+    return bool(player_mod_unlock_state(player).get('has_pending_choice'))
+
+
+def mod_unlock_required_for_match_mode(player, match_mode=None):
+    canonical = normalize_pvp_match_mode(match_mode or player_match_mode(player))
+    if canonical not in CASUAL_MOD_DRAW_MATCH_MODES:
+        return False
+    return player_has_pending_mod_unlock(player)
+
+
+def casual_shared_mod_profile(player):
+    """Return the (official-independent) entertainment/community selection."""
+    player = player or {}
+    state = player_mod_unlock_state(player)
+    entertainment = set(player.get('entertainment_mods') or [])
+    if not state.get('entertainment_unlocked'):
+        entertainment = set()
+    entertainment = sorted(entertainment.intersection(entertainment_mod_filenames()))
+    community_mods = []
+    if state.get('community_unlocked') and str(player.get('mod_source') or 'official') == 'community':
+        for entry in list(player.get('community_mods') or []):
+            if not isinstance(entry, dict):
+                continue
+            sha256 = str(entry.get('sha256') or '').strip().lower()
+            public_url = str(entry.get('public_url') or '').strip()
+            if not sha256 or not public_url:
+                continue
+            community_mods.append({
+                'public_url': public_url,
+                'sha256': sha256,
+                'name': str(entry.get('name') or '').strip(),
+                'uploaded_at': str(entry.get('uploaded_at') or '').strip(),
+            })
+        community_mods.sort(key=lambda item: item['sha256'])
+    return {
+        'entertainment_mods': entertainment,
+        'community_mods': community_mods,
+        'community_mod_hash': str(player.get('community_mod_hash') or '') if community_mods else '',
+        'community_mod_url': str(player.get('community_mod_url') or '') if community_mods else '',
+        'community_mod_name': str(player.get('community_mod_name') or '') if community_mods else '',
+        'mod_source': 'community' if community_mods else 'official',
+    }
+
+
+def casual_shared_mod_signature(profile_or_player):
+    source = profile_or_player or {}
+    if 'entertainment_mods' in source or 'community_mods' in source:
+        profile = source
+    else:
+        profile = casual_shared_mod_profile(source)
+    community_hashes = tuple(sorted(
+        str(entry.get('sha256') or '').strip().lower()
+        for entry in (profile.get('community_mods') or [])
+        if isinstance(entry, dict) and str(entry.get('sha256') or '').strip()
+    ))
+    return (
+        tuple(sorted(str(name) for name in (profile.get('entertainment_mods') or []) if name)),
+        community_hashes,
+    )
+
+
+def same_casual_shared_mod_preference(players_or_sids):
+    signatures = []
+    for item in players_or_sids or ():
+        player = players.get(item) if isinstance(item, str) else item
+        if not player:
+            return False
+        signatures.append(casual_shared_mod_signature(player))
+    return bool(signatures) and all(signature == signatures[0] for signature in signatures)
+
+
+def same_match_mod_preference(match_mode, players_or_sids):
+    canonical = normalize_pvp_match_mode(match_mode)
+    if canonical in CASUAL_MOD_DRAW_MATCH_MODES:
+        return same_casual_shared_mod_preference(players_or_sids)
+    hashes = []
+    for item in players_or_sids or ():
+        player = players.get(item) if isinstance(item, str) else item
+        if not player:
+            return False
+        hashes.append(player_loadout_hash(player))
+    return bool(hashes) and all(value == hashes[0] for value in hashes)
+
+
+def build_casual_mode_loadout(
+    player,
+    disabled_mods=None,
+    community_payload=None,
+    match_mode=None,
+):
+    """Build the lobby-side casual loadout used before the room draw."""
+    player = player or {}
+    canonical_match_mode = normalize_pvp_match_mode(match_mode or player_match_mode(player))
+    engine_mode, _, _ = pvp_match_mode_parts(canonical_match_mode)
+    requested_disabled = normalize_disabled_mods(
+        player.get('preferred_disabled_mods', player.get('disabled_mods', []))
+        if disabled_mods is None else disabled_mods
+    )
+    payload = dict(community_payload or {})
+    if not payload:
+        payload = {
+            'mod_source': player.get('mod_source', 'official') or 'official',
+            'community_mods': list(player.get('community_mods', []) or []),
+            'community_mod_url': player.get('community_mod_url', '') or '',
+            'community_mod_hash': player.get('community_mod_hash', '') or '',
+            'community_mod_name': player.get('community_mod_name', '') or '',
+        }
+    payload['_runtime_mode'] = engine_mode
+    payload['_match_mode'] = canonical_match_mode
+    state = player_mod_unlock_state(player)
+    all_filenames = [
+        str(getattr(mod, 'filename', '') or '')
+        for mod in load_all_mods()
+        if getattr(mod, 'filename', None)
+    ]
+    all_filename_set = set(all_filenames)
+    requested_enabled = {
+        name for name in all_filenames
+        if name and name not in set(requested_disabled)
+    }
+    enabled_entertainment = (
+        requested_enabled.intersection(entertainment_mod_filenames())
+        if state.get('entertainment_unlocked')
+        else set()
+    )
+    enabled_official = {
+        name for name in (state.get('unlocked_official') or [])
+        if name in all_filename_set
+    }
+    keep_enabled = enabled_official.union(enabled_entertainment)
+    disabled = sorted(name for name in all_filenames if name and name not in keep_enabled)
+    if not state.get('community_unlocked'):
+        payload.update({
+            'mod_source': 'official',
+            'community_mods': [],
+            'community_mod_url': '',
+            'community_mod_hash': '',
+            'community_mod_name': '',
+        })
+    community_fields, community_mod = resolve_community_loadout(payload)
+    loadout = build_mod_loadout(
+        disabled,
+        community_mod=community_mod,
+        community_hash=community_fields.get('community_mod_hash', ''),
+        runtime_mode=engine_mode,
+        match_mode=canonical_match_mode,
+    )
+    return community_fields, loadout, requested_disabled
+
+
+def apply_casual_mode_loadout_to_player(player, disabled_mods=None, community_payload=None, match_mode=None):
+    community_fields, loadout, requested_disabled = build_casual_mode_loadout(
+        player,
+        disabled_mods=disabled_mods,
+        community_payload=community_payload,
+        match_mode=match_mode,
+    )
+    apply_mod_loadout_to_player(
+        player,
+        loadout,
+        community_fields,
+        preferred_disabled_mods=requested_disabled,
+    )
+    return community_fields, loadout
 
 
 def validated_match_allowed_card_ids(player, runtime_mode):
@@ -8351,6 +8605,302 @@ def resolve_room_rematch_loadout(room):
         room.match_allowed_card_ids = frozenset(allowed)
 
     return apply_runtime_content_filter(set(allowed), room.mode), profile
+
+
+def casual_room_shared_profile_for_room(room):
+    profile = getattr(room, 'casual_shared_mod_profile', None)
+    if isinstance(profile, dict):
+        return copy.deepcopy(profile)
+    shared_profiles = [
+        casual_shared_mod_profile(players.get(psid, {}))
+        for psid in (getattr(room, 'player_sids', []) or [])
+    ]
+    if not shared_profiles:
+        return {}
+    reference = shared_profiles[0]
+    if any(casual_shared_mod_signature(item) != casual_shared_mod_signature(reference) for item in shared_profiles[1:]):
+        raise ValueError('娱乐模组或社区模组选择不一致')
+    return reference
+
+
+def mod_draw_ban_limit(room):
+    return int(MOD_DRAW_BAN_LIMITS.get(getattr(room, 'mode', '1v1'), 1))
+
+
+def mod_draw_mod_payload(filename):
+    name = filename
+    name_cn = filename
+    name_en = filename
+    info = None
+    for mod in load_all_mods():
+        if str(getattr(mod, 'filename', '') or '') != filename:
+            continue
+        info = getattr(mod, 'info', None)
+        break
+    if info is not None:
+        name = str(getattr(info, 'name', '') or filename)
+        name_cn = str(getattr(info, 'name_cn', '') or name)
+        name_en = str(getattr(info, 'name_en', '') or name)
+    return {
+        'filename': filename,
+        'name': name,
+        'name_cn': name_cn,
+        'name_en': name_en,
+    }
+
+
+def mod_draw_state_payload(room, pidx, *, skipped=False, only_vanilla=False, now=None):
+    now = float(now if now is not None else time.time())
+    deadline = None
+    if hasattr(room, 'pregame_deadlines'):
+        deadline = room.pregame_deadlines.get((-1, 'mod_draw'))
+    remaining = None
+    if deadline is not None:
+        remaining = int(math.ceil(max(0.0, float(deadline) - now)))
+    bans = getattr(room, 'mod_draw_bans', {}) or {}
+    submitted = getattr(room, 'mod_draw_submitted', {}) or {}
+    return {
+        'room_id': room.room_id,
+        'match_key': room_match_key(room),
+        'mode': room.mode,
+        **room_match_payload(room),
+        'your_id': pidx,
+        'player_names': list(getattr(room.engine, 'player_names', []) or []),
+        'candidates': [
+            mod_draw_mod_payload(filename)
+            for filename in (getattr(room, 'mod_draw_candidates', []) or [])
+        ],
+        'bans': {
+            str(index): list(values or [])
+            for index, values in bans.items()
+        },
+        'submitted': {
+            str(index): bool(value)
+            for index, value in submitted.items()
+        },
+        'max_bans': mod_draw_ban_limit(room),
+        'your_bans': list(bans.get(pidx, []) or []),
+        'remaining': remaining,
+        'total': MOD_DRAW_TIMEOUT_SECONDS,
+        'paused': _room_has_blocking_disconnect(room),
+        'skipped': bool(skipped),
+        'only_vanilla': bool(only_vanilla),
+        **room_mod_payload(room),
+    }
+
+
+def send_mod_draw_state(room, targets=None):
+    if not getattr(room, 'mod_draw_active', False):
+        return
+    if targets is None:
+        targets = range(len(getattr(room, 'player_sids', []) or []))
+    for pidx in targets:
+        if pidx < 0 or pidx >= len(room.player_sids):
+            continue
+        sid = room.player_sids[pidx]
+        if not room_player_session_is_current(room, sid):
+            continue
+        socketio.emit('mod_draw_state', mod_draw_state_payload(room, pidx), room=sid)
+
+
+def _casual_room_begin_event_select(room):
+    room.engine.start_event_select_first()
+    record_room_replay_keyframe(room, 'event_select_start')
+    for pidx in range(len(room.player_sids)):
+        sid = room.player_sids[pidx]
+        emit_room_game_phase(room, sid, 'event_select')
+        send_event_state(room, pidx)
+    broadcast_lobby()
+
+
+def _abort_casual_room_to_lobby_locked(room, message, reason='mod_loadout_unavailable'):
+    sids = list(getattr(room, 'player_sids', []) or [])
+    rooms.pop(getattr(room, 'room_id', None), None)
+    for psid in sids:
+        player = players.get(psid)
+        if player:
+            player['room_id'] = None
+            player['status'] = 'lobby'
+    emit_match_start_failed(sids, message, reason=reason)
+    broadcast_lobby()
+
+
+def _apply_casual_room_loadout_locked(room, shared_profile, official_enabled):
+    payload = {
+        'mod_source': shared_profile.get('mod_source', 'official') or 'official',
+        'community_mods': list(shared_profile.get('community_mods', []) or []),
+        'community_mod_url': shared_profile.get('community_mod_url', '') or '',
+        'community_mod_hash': shared_profile.get('community_mod_hash', '') or '',
+        'community_mod_name': shared_profile.get('community_mod_name', '') or '',
+        '_runtime_mode': room.mode,
+        '_match_mode': room.match_mode,
+    }
+    community_fields, community_mod = resolve_community_loadout(payload)
+    all_filenames = [
+        str(getattr(mod, 'filename', '') or '')
+        for mod in load_all_mods()
+        if getattr(mod, 'filename', None)
+    ]
+    keep_enabled = {VANILLA_MOD_FILENAME}
+    keep_enabled.update(name for name in official_enabled if name)
+    keep_enabled.update(str(name) for name in (shared_profile.get('entertainment_mods') or []) if name)
+    disabled = sorted(name for name in all_filenames if name and name not in keep_enabled)
+    loadout = build_mod_loadout(
+        disabled,
+        community_mod=community_mod,
+        community_hash=community_fields.get('community_mod_hash', ''),
+        runtime_mode=room.mode,
+        match_mode=room.match_mode,
+    )
+    allowed = set(loadout['allowed_card_ids'])
+    pool_issue = runtime_card_pool_issue(allowed, room.mode)
+    if pool_issue:
+        raise ValueError(pool_issue)
+    room.engine.allowed_card_ids = allowed
+    room.match_allowed_card_ids = frozenset(allowed)
+    profile = {
+        'disabled_mods': list(loadout['disabled_mods']),
+        'preferred_disabled_mods': list(loadout['disabled_mods']),
+        'mods_hash': loadout['mods_hash'],
+        'loadout_hash': loadout['loadout_hash'],
+        'v2_loadout_hash': loadout.get('v2_loadout_hash', ''),
+        'v2_load_order': list(loadout.get('v2_load_order', []) or []),
+        'v2_mod_hashes': dict(loadout.get('v2_mod_hashes', {}) or {}),
+        'v2_ui_components': copy.deepcopy(loadout.get('v2_ui_components', {}) or {}),
+        'v2_loadout': loadout.get('v2_loadout'),
+        'v2_tag_defs': copy.deepcopy(loadout.get('v2_tag_defs', {}) or {}),
+        'v2_status_defs': copy.deepcopy(loadout.get('v2_status_defs', {}) or {}),
+        'v2_opening_event_defs': copy.deepcopy(loadout.get('v2_opening_event_defs', {}) or {}),
+        'mods_list': list(loadout.get('mods_list', []) or []),
+        'entertainment_mods': list(loadout.get('entertainment_mods', []) or []),
+        'allowed_card_ids': set(allowed),
+        'mod_source': community_fields.get('mod_source', 'official') or 'official',
+        'community_mod_url': community_fields.get('community_mod_url', '') or '',
+        'community_mod_hash': community_fields.get('community_mod_hash', '') or '',
+        'community_mod_name': community_fields.get('community_mod_name', '') or '',
+        'community_mods': copy.deepcopy(community_fields.get('community_mods', []) or []),
+    }
+    capture_room_match_loadout(room, profile)
+    apply_v2_loadout_to_engine(room.engine, profile, room.mode)
+    room.casual_final_official_mods = list(official_enabled)
+    return loadout
+
+
+def _complete_mod_draw_locked(room):
+    if not getattr(room, 'mod_draw_active', False):
+        return False
+    candidates = list(getattr(room, 'mod_draw_candidates', []) or [])
+    banned = set()
+    for values in (getattr(room, 'mod_draw_bans', {}) or {}).values():
+        banned.update(str(name) for name in (values or []) if name)
+    official_enabled = [name for name in candidates if name not in banned]
+    shared_profile = casual_room_shared_profile_for_room(room)
+    try:
+        _apply_casual_room_loadout_locked(room, shared_profile, official_enabled)
+    except Exception as exc:
+        admin_event('error', f'mod draw loadout failed room={getattr(room, "room_id", "?")}: {exc}')
+        _abort_casual_room_to_lobby_locked(room, f'本局模组组合无法生成：{exc}')
+        return False
+    room.mod_draw_active = False
+    room.mod_draw_candidates = []
+    room.mod_draw_bans = {}
+    room.mod_draw_submitted = {}
+    room.mod_draw_last_tick = 0.0
+    if hasattr(room, 'pregame_deadlines'):
+        room.pregame_deadlines.pop((-1, 'mod_draw'), None)
+    room.mod_draw_last_result = {
+        'official_mods': list(official_enabled),
+        'banned_mods': sorted(banned),
+        'completed_at': iso_now(),
+    }
+    for pidx, sid in enumerate(room.player_sids):
+        emit_room_game_phase(room, sid, 'mod_draw_complete', **{
+            'official_mods': list(official_enabled),
+            'banned_mods': sorted(banned),
+        })
+    _casual_room_begin_event_select(room)
+    return True
+
+
+def start_casual_room_or_event_select(room, shared_profile=None, *, rematch=False):
+    """Start the official draw phase for casual 1v1/2v2 rooms."""
+    if room_match_mode(room) not in CASUAL_MOD_DRAW_MATCH_MODES:
+        _casual_room_begin_event_select(room)
+        return
+    try:
+        if rematch:
+            shared = casual_room_shared_profile_for_room(room)
+        else:
+            if shared_profile is None:
+                shared = casual_room_shared_profile_for_room(room)
+            else:
+                shared = copy.deepcopy(shared_profile)
+            room.casual_shared_mod_profile = copy.deepcopy(shared)
+    except Exception as exc:
+        _abort_casual_room_to_lobby_locked(room, str(exc), reason='mod_mismatch')
+        return
+    ordered_official = mod_unlocks.official_mod_filenames()
+    common_official = set(ordered_official)
+    pending_unlock_sids = []
+    for psid in room.player_sids:
+        player = players.get(psid, {})
+        state = refresh_player_mod_unlock_state(player, force=True)
+        if state.get('has_pending_choice'):
+            pending_unlock_sids.append((psid, state))
+        common_official.intersection_update(state.get('unlocked_official') or [])
+    if pending_unlock_sids:
+        for pending_sid, state in pending_unlock_sids:
+            socketio.emit('mod_unlock_required', {
+                'match_mode': room_match_mode(room),
+                **state,
+            }, room=pending_sid)
+        _abort_casual_room_to_lobby_locked(
+            room,
+            '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+            reason='mod_unlock_choice_required',
+        )
+        return
+    common_official.discard(mod_unlocks.VANILLA_MOD_FILENAME)
+    candidates = [name for name in ordered_official if name in common_official]
+    room.mod_draw_active = False
+    room.mod_draw_candidates = []
+    room.mod_draw_bans = {}
+    room.mod_draw_submitted = {}
+    room.mod_draw_last_tick = 0.0
+    room.mod_draw_last_result = {}
+    if not candidates:
+        for pidx, sid in enumerate(room.player_sids):
+            socketio.emit('mod_draw_skipped', {
+                'room_id': room.room_id,
+                'match_key': room_match_key(room),
+                'your_id': pidx,
+                **room_match_payload(room),
+                'only_vanilla': True,
+            }, room=sid)
+        try:
+            _apply_casual_room_loadout_locked(room, shared, [])
+        except Exception as exc:
+            _abort_casual_room_to_lobby_locked(room, f'本局模组组合无法生成：{exc}')
+            return
+        _casual_room_begin_event_select(room)
+        return
+    candidate_limit = min(MOD_DRAW_CANDIDATE_LIMIT, len(candidates))
+    drawn = random.sample(candidates, candidate_limit)
+    drawn_set = set(drawn)
+    drawn = [name for name in ordered_official if name in drawn_set]
+    now = time.time()
+    room.mod_draw_active = True
+    room.mod_draw_candidates = drawn
+    room.mod_draw_bans = {pidx: [] for pidx in range(len(room.player_sids))}
+    room.mod_draw_submitted = {pidx: False for pidx in range(len(room.player_sids))}
+    room.mod_draw_started_at = now
+    if not hasattr(room, 'pregame_deadlines'):
+        room.pregame_deadlines = {}
+    room.pregame_deadlines[(-1, 'mod_draw')] = now + float(MOD_DRAW_TIMEOUT_SECONDS)
+    for pidx, sid in enumerate(room.player_sids):
+        emit_room_game_phase(room, sid, 'mod_draw')
+    send_mod_draw_state(room)
+    broadcast_lobby()
 
 
 def emit_mod_mismatch(target_sid, other_player=None, message='模组组合不一致，无法开始对局'):
@@ -8637,8 +9187,8 @@ def get_ongoing_games(beta_mode=None):
     for rid, room in rooms.items():
         if beta_mode is not None and bool(getattr(room, 'beta_mode', False)) != bool(beta_mode):
             continue
-        phase = room.engine.phase
-        if phase in ('action', 'draw', 'response', 'choice', 'playing', 'draft', 'event_select', 'event_reveal'):
+        phase = 'mod_draw' if getattr(room, 'mod_draw_active', False) else room.engine.phase
+        if phase in ('action', 'draw', 'response', 'choice', 'playing', 'draft', 'event_select', 'event_reveal', 'mod_draw'):
             player_names = []
             for s in room.player_sids:
                 name = room_player_nickname(room, s, '?')
@@ -8656,7 +9206,11 @@ def get_ongoing_games(beta_mode=None):
                 'mode': room.mode,
                 **room_match_payload(room),
                 'beta_mode': bool(getattr(room, 'beta_mode', False)),
-                'can_spectate': phase in spectatable_phases and room_match_type(room) != 'ranked',
+                'can_spectate': (
+                    phase in spectatable_phases
+                    and phase != 'mod_draw'
+                    and room_match_type(room) != 'ranked'
+                ),
             }
             if room_match_type(room) == 'ranked':
                 game_info['spectate_disabled_reason'] = 'ranked_no_spectators'
@@ -15551,6 +16105,8 @@ def _build_lobby_update_payloads_locked():
                 continue
             mode = player.get('mode', '1v1')
             match_mode = player_match_mode(player)
+            if mod_unlock_required_for_match_mode(player, match_mode):
+                continue
             counts[match_mode] += 1
             if mode in counts:
                 counts[mode] += 1
@@ -16214,6 +16770,10 @@ def _cancel_game_over_cleanup_timer(room):
 def send_game_state_to(room, pidx, recover_pending=True):
     sid = room.player_sids[pidx]
     if not room_player_session_is_current(room, sid):
+        return
+    if getattr(room, 'mod_draw_active', False):
+        emit_room_game_phase(room, sid, 'mod_draw')
+        send_mod_draw_state(room, [pidx])
         return
     phase = room.engine.phase
     if phase in ('event_select', 'event_reveal', 'draft'):
@@ -18999,7 +19559,10 @@ def reconnect_timeout(room_id, old_sid):
             timed_out_timer = room.reconnect_timers.pop(old_sid, None)
             if timed_out_timer:
                 timed_out_timer.cancel()
-            was_pregame = getattr(room.engine, 'phase', None) in ('event_select', 'event_reveal', 'draft')
+            was_pregame = (
+                getattr(room.engine, 'phase', None) in ('event_select', 'event_reveal', 'draft')
+                or bool(getattr(room, 'mod_draw_active', False))
+            )
             ended = _mark_disconnect_timeout_loss(
                 room,
                 int(dc_info.get('player_index', -1)),
@@ -19038,11 +19601,14 @@ def reconnect_timeout(room_id, old_sid):
                             }, other_sid, room))
                 admin_event('game', f'room {room_id} disconnect timeout result: {dc_info.get("nickname", "?")}')
                 if pregame_timeout:
-                    for pidx in range(len(room.player_sids)):
-                        schedule_pregame_state(room, pidx, allow_sub_choice=True)
-                    schedule_pregame_status_update(room)
-                    if all(room.engine.player_ready[pidx] for pidx in range(len(room.player_sids))):
-                        schedule_start_game(room)
+                    if getattr(room, 'mod_draw_active', False):
+                        _complete_mod_draw_locked(room)
+                    else:
+                        for pidx in range(len(room.player_sids)):
+                            schedule_pregame_state(room, pidx, allow_sub_choice=True)
+                        schedule_pregame_status_update(room)
+                        if all(room.engine.player_ready[pidx] for pidx in range(len(room.player_sids))):
+                            schedule_start_game(room)
                 else:
                     pending_emits.append(('broadcast_game_state', room, None))
                 pending_emits.append(('broadcast_lobby', None, None))
@@ -20840,6 +21406,7 @@ def api_card_exporter_cards():
             'flags': list(card_def.flags) if card_def.flags else [],
             'trigger_cost_e': card_def.trigger_cost_e,
             'trigger_cost_m': getattr(card_def, 'trigger_cost_m', 0),
+            'trigger_ready_turns': card_trigger_ready_turns(card_def),
             'trigger_effect_text': card_def.trigger_effect_text,
             'response_trigger': card_def.response_trigger,
             'image': image_url,
@@ -24934,6 +25501,7 @@ def api_cards():
             'flags': list(card_def.flags) if card_def.flags else [],
             'trigger_cost_e': card_def.trigger_cost_e,
             'trigger_cost_m': getattr(card_def, 'trigger_cost_m', 0),
+            'trigger_ready_turns': card_trigger_ready_turns(card_def),
             'trigger_effect_text': card_def.trigger_effect_text,
             'response_trigger': card_def.response_trigger,
             'response_title': getattr(card_def, 'response_title', ''),
@@ -25852,16 +26420,59 @@ def on_login(data):
         preferred_match_mode = normalize_pvp_match_mode(f'casual_{preferred_mode}')
     disabled_mods = ensure_valid_disabled_mods(normalize_disabled_mods_with_default(data.get('disabled_mods')))
     try:
+        if is_registered_user:
+            login_mod_unlock_state = mod_unlocks.load_state(user_id)
+        else:
+            login_mod_unlock_state = mod_unlocks.guest_state()
+    except Exception:
+        # Missing bindings must fail closed to the vanilla-only state instead
+        # of blocking an otherwise valid account session.
+        app.logger.exception('Failed to load mod unlock state before socket login')
+        login_mod_unlock_state = mod_unlocks.compute_state(0, ())
+    try:
+        if (
+            preferred_match_mode in CASUAL_MOD_DRAW_MATCH_MODES
+            and not login_mod_unlock_state.get('community_unlocked')
+        ):
+            data = {
+                **dict(data or {}),
+                'mod_source': 'official',
+                'community_mods': [],
+                'community_mod_url': '',
+                'community_mod_hash': '',
+                'community_mod_name': '',
+            }
         community_fields, community_mod = resolve_community_loadout(data)
-        loadout = build_mod_loadout(
-            disabled_mods,
-            community_mod=community_mod,
-            community_hash=community_fields.get('community_mod_hash', ''),
-            runtime_mode=preferred_mode,
-            match_mode=preferred_match_mode,
-        )
+        if preferred_match_mode in CASUAL_MOD_DRAW_MATCH_MODES:
+            login_preference = {
+                'user_id': user_id,
+                'is_registered_user': bool(is_registered_user),
+                'mod_unlock_state': login_mod_unlock_state,
+                'disabled_mods': disabled_mods,
+                'preferred_disabled_mods': disabled_mods,
+                'entertainment_mods': [],
+                'mod_source': community_fields.get('mod_source', 'official') or 'official',
+                'community_mods': list(community_fields.get('community_mods', []) or []),
+                'community_mod_url': community_fields.get('community_mod_url', '') or '',
+                'community_mod_hash': community_fields.get('community_mod_hash', '') or '',
+                'community_mod_name': community_fields.get('community_mod_name', '') or '',
+            }
+            community_fields, loadout, disabled_mods = build_casual_mode_loadout(
+                login_preference,
+                disabled_mods=disabled_mods,
+                community_payload=community_fields,
+                match_mode=preferred_match_mode,
+            )
+        else:
+            loadout = build_mod_loadout(
+                disabled_mods,
+                community_mod=community_mod,
+                community_hash=community_fields.get('community_mod_hash', ''),
+                runtime_mode=preferred_mode,
+                match_mode=preferred_match_mode,
+            )
     except Exception as exc:
-        emit('login_fail', {'reason': f'社区模组加载失败: {exc}'})
+        emit('login_fail', {'reason': f'模组加载失败: {exc}'})
         return
     stale_disconnect_sessions = []
     if not _lock.acquire(timeout=0.5):
@@ -25940,7 +26551,8 @@ def on_login(data):
             'mods_list': loadout['mods_list'],
             'entertainment_mods': list(loadout.get('entertainment_mods', [])),
             'disabled_mods': loadout['disabled_mods'],
-            'preferred_disabled_mods': list(loadout.get('preferred_disabled_mods', disabled_mods)),
+            'preferred_disabled_mods': list(disabled_mods),
+            'mod_unlock_state': login_mod_unlock_state,
             'allowed_card_ids': loadout['allowed_card_ids'],
             'mode': preferred_mode,
             'match_type': preferred_match_type,
@@ -26071,6 +26683,7 @@ def on_login(data):
         'mode': players.get(sid, {}).get('mode', preferred_mode),
         'match_type': players.get(sid, {}).get('match_type', preferred_match_type),
         'match_mode': players.get(sid, {}).get('match_mode', preferred_match_mode),
+        'mod_unlock_state': players.get(sid, {}).get('mod_unlock_state') or mod_unlocks.guest_state(),
     }
     if is_registered_user:
         login_payload['user'] = auth_user_payload(account_user)
@@ -26106,6 +26719,23 @@ def on_form_team(data):
             or player_match_mode(players[sid]) != player_match_mode(players[target_sid])
         ):
             return
+        match_mode = player_match_mode(players[sid])
+        if (
+            mod_unlock_required_for_match_mode(players[sid], match_mode)
+            or mod_unlock_required_for_match_mode(players[target_sid], match_mode)
+        ):
+            for blocked_sid in (sid, target_sid):
+                blocked_player = players.get(blocked_sid, {})
+                if mod_unlock_required_for_match_mode(blocked_player, match_mode):
+                    socketio.emit('mod_unlock_required', {
+                        'match_mode': match_mode,
+                        **player_mod_unlock_state(blocked_player),
+                    }, room=blocked_sid)
+            emit('server_error', {
+                'message': '需要先选择要解锁的官方模组，才能组队进入娱乐 2v2。',
+                'reason': 'mod_unlock_choice_required',
+            })
+            return
         if not same_runtime_scope_players(sid, target_sid):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
@@ -26137,7 +26767,14 @@ def on_set_mode(data):
         if match_mode not in PVP_MATCH_MODES:
             return
         try:
-            community_fields, mode_loadout = resolve_player_match_mode_loadout(players[sid], match_mode)
+            if match_mode in CASUAL_MOD_DRAW_MATCH_MODES:
+                community_fields, mode_loadout, preferred_disabled = build_casual_mode_loadout(
+                    players[sid],
+                    match_mode=match_mode,
+                )
+            else:
+                community_fields, mode_loadout = resolve_player_match_mode_loadout(players[sid], match_mode)
+                preferred_disabled = None
         except Exception as exc:
             emit('server_error', {
                 'message': f'切换模式时无法生成有效模组配置：{exc}',
@@ -26145,7 +26782,12 @@ def on_set_mode(data):
             })
             return
         candidate_player = dict(players[sid])
-        apply_mod_loadout_to_player(candidate_player, mode_loadout, community_fields)
+        apply_mod_loadout_to_player(
+            candidate_player,
+            mode_loadout,
+            community_fields,
+            preferred_disabled_mods=preferred_disabled,
+        )
         candidate_player['mode'] = mode
         candidate_player['match_type'] = match_type
         candidate_player['match_mode'] = match_mode
@@ -26164,10 +26806,16 @@ def on_set_mode(data):
                 })
                 return
         previous_match_mode = player_match_mode(players[sid])
-        apply_mod_loadout_to_player(players[sid], mode_loadout, community_fields)
+        apply_mod_loadout_to_player(
+            players[sid],
+            mode_loadout,
+            community_fields,
+            preferred_disabled_mods=preferred_disabled,
+        )
         players[sid]['mode'] = mode
         players[sid]['match_type'] = match_type
         players[sid]['match_mode'] = match_mode
+        refresh_player_mod_unlock_state(players[sid], force=True)
         if (mode != '2v2' or previous_match_mode != match_mode) and sid in teams:
             team = teams[sid]
             leader = team['leader']
@@ -26181,11 +26829,161 @@ def on_set_mode(data):
                 if member_sid in players:
                     socketio.emit('team_disbanded', {}, room=member_sid)
         broadcast_lobby()
+        if mod_unlock_required_for_match_mode(players[sid]):
+            socketio.emit('mod_unlock_required', {
+                'match_mode': match_mode,
+                **player_mod_unlock_state(players[sid]),
+            }, room=sid)
         socketio.emit('lobby_mode_confirmed', {
             'mode': players[sid].get('mode'),
             'match_type': players[sid].get('match_type'),
             'match_mode': players[sid].get('match_mode'),
+            'mod_unlock_state': player_mod_unlock_state(players[sid]),
         }, room=sid)
+
+
+@socketio.on('choose_mod_unlock')
+def on_choose_mod_unlock(data):
+    sid = request.sid
+    data = socket_guard('choose_mod_unlock', data, require_player=True)
+    if data is None:
+        return
+    try:
+        mod_filename = validate_str(
+            data.get('mod_filename') or data.get('filename'),
+            min_len=1,
+            max_len=160,
+            name='mod_filename',
+        )
+    except ValueError as exc:
+        _security_illegal(sid, 'choose_mod_unlock', str(exc))
+        return
+    with _lock:
+        player = players.get(sid)
+        if not player:
+            return
+        user_id = player.get('user_id') if player.get('is_registered_user') else None
+        if not user_id:
+            emit('server_error', {
+                'message': '游客没有模组解锁进度，无法选择解锁。',
+                'reason': 'mod_unlock_guest',
+            })
+            return
+        player_room = rooms.get(player.get('room_id'))
+        game_over_room = bool(
+            player_room is not None
+            and getattr(getattr(player_room, 'engine', None), 'phase', '') == 'game_over'
+        )
+        if player.get('status') not in ('lobby', 'reconnecting') and not game_over_room:
+            emit('server_error', {
+                'message': '只能在大厅中选择要解锁的官方模组。',
+                'reason': 'mod_unlock_not_in_lobby',
+            })
+            return
+    try:
+        state = mod_unlocks.choose_unlock(int(user_id), mod_filename)
+    except ValueError as exc:
+        with _lock:
+            current = player_mod_unlock_state(players.get(sid, {}), refresh=True)
+        emit('server_error', {
+            'message': str(exc),
+            'reason': 'mod_unlock_invalid',
+        })
+        socketio.emit('mod_unlock_updated', current, room=sid)
+        return
+    except Exception as exc:
+        admin_event('error', f'choose_mod_unlock failed sid={sid} user_id={user_id}: {exc}')
+        emit('server_error', {
+            'message': '模组解锁保存失败，请稍后重试。',
+            'reason': 'mod_unlock_failed',
+        })
+        return
+    with _lock:
+        player = players.get(sid)
+        if not player:
+            return
+        player['mod_unlock_state'] = state
+        if player_match_mode(player) in CASUAL_MOD_DRAW_MATCH_MODES:
+            try:
+                apply_casual_mode_loadout_to_player(
+                    player,
+                    disabled_mods=player.get('preferred_disabled_mods', []),
+                    match_mode=player_match_mode(player),
+                )
+            except Exception as exc:
+                admin_event('error', f'choose_mod_unlock loadout refresh failed sid={sid}: {exc}')
+        state = player_mod_unlock_state(player)
+    socketio.emit('mod_unlock_updated', state, room=sid)
+    broadcast_lobby()
+
+
+@socketio.on('mod_draw_update_bans')
+def on_mod_draw_update_bans(data):
+    sid = request.sid
+    data = socket_guard('mod_draw_update_bans', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    raw_bans = (data or {}).get('bans')
+    if not isinstance(raw_bans, (list, tuple)):
+        emit('server_error', {'message': '禁用选择格式错误', 'reason': 'mod_draw_invalid_bans'})
+        return
+    with _lock:
+        player = players.get(sid)
+        room = rooms.get(player.get('room_id')) if player else None
+        if room is None or not getattr(room, 'mod_draw_active', False):
+            emit('server_error', {'message': '本局不在模组抽取阶段', 'reason': 'mod_draw_inactive'})
+            return
+        pidx = room.player_index(sid)
+        if pidx < 0 or not room_player_session_is_current(room, sid):
+            return
+        if (getattr(room, 'mod_draw_submitted', {}) or {}).get(pidx):
+            emit('server_error', {'message': '已提交禁用选择，无法再修改', 'reason': 'mod_draw_already_submitted'})
+            return
+        candidates = set(getattr(room, 'mod_draw_candidates', []) or [])
+        normalized = []
+        for item in raw_bans:
+            name = str(item or '').strip()
+            if not name or name not in candidates or name in normalized:
+                continue
+            normalized.append(name)
+        normalized = normalized[:mod_draw_ban_limit(room)]
+        room.mod_draw_bans[pidx] = normalized
+        send_mod_draw_state(room)
+
+
+@socketio.on('mod_draw_submit')
+def on_mod_draw_submit(data):
+    sid = request.sid
+    data = socket_guard('mod_draw_submit', data, require_player=True, allow_empty=True)
+    if data is None:
+        return
+    with _lock:
+        player = players.get(sid)
+        room = rooms.get(player.get('room_id')) if player else None
+        if room is None or not getattr(room, 'mod_draw_active', False):
+            emit('server_error', {'message': '本局不在模组抽取阶段', 'reason': 'mod_draw_inactive'})
+            return
+        pidx = room.player_index(sid)
+        if pidx < 0 or not room_player_session_is_current(room, sid):
+            return
+        if (getattr(room, 'mod_draw_submitted', {}) or {}).get(pidx):
+            emit('server_error', {'message': '已提交禁用选择，无法再修改', 'reason': 'mod_draw_already_submitted'})
+            return
+        raw_bans = (data or {}).get('bans')
+        if isinstance(raw_bans, (list, tuple)):
+            candidates = set(getattr(room, 'mod_draw_candidates', []) or [])
+            normalized = []
+            for item in raw_bans:
+                name = str(item or '').strip()
+                if not name or name not in candidates or name in normalized:
+                    continue
+                normalized.append(name)
+            room.mod_draw_bans[pidx] = normalized[:mod_draw_ban_limit(room)]
+        room.mod_draw_submitted[pidx] = True
+        send_mod_draw_state(room)
+        submitted = getattr(room, 'mod_draw_submitted', {}) or {}
+        if all(bool(submitted.get(index)) for index in range(len(room.player_sids))):
+            _complete_mod_draw_locked(room)
 
 
 @socketio.on('update_mod_settings')
@@ -26273,7 +27071,16 @@ def on_update_mod_settings(data):
     data['_runtime_mode'] = runtime_mode
     data['_match_mode'] = match_mode
     try:
-        community_fields, loadout = resolve_mod_loadout_payload(data, require_disabled_mods=True)
+        if match_mode in CASUAL_MOD_DRAW_MATCH_MODES:
+            community_fields, loadout, preferred_disabled = build_casual_mode_loadout(
+                player,
+                disabled_mods=requested_disabled_mods,
+                community_payload=data,
+                match_mode=match_mode,
+            )
+        else:
+            community_fields, loadout = resolve_mod_loadout_payload(data, require_disabled_mods=True)
+            preferred_disabled = None
     except Exception as exc:
         admin_event(
             'error',
@@ -26347,7 +27154,12 @@ def on_update_mod_settings(data):
         else:
             old_hash = player_loadout_hash(player)
             try:
-                apply_mod_loadout_to_player(player, loadout, community_fields)
+                apply_mod_loadout_to_player(
+                    player,
+                    loadout,
+                    community_fields,
+                    preferred_disabled_mods=preferred_disabled,
+                )
             except Exception as exc:
                 apply_error = exc
                 result_payload = _mod_settings_result_payload(
@@ -26394,7 +27206,11 @@ def on_update_mod_settings(data):
                     request_id=request_id,
                     disabled_mods=loadout['disabled_mods'],
                     requested_disabled_mods=requested_disabled_mods,
-                    preferred_disabled_mods=loadout.get('preferred_disabled_mods', requested_disabled_mods),
+                    preferred_disabled_mods=(
+                        requested_disabled_mods
+                        if preferred_disabled is None
+                        else preferred_disabled
+                    ),
                     client_revision=client_revision,
                     details={
                         'requested_count': len(requested_disabled_mods),
@@ -26482,7 +27298,24 @@ def on_accept_team(data):
         if not same_runtime_scope_players(sid, leader_sid):
             emit('server_error', {'message': runtime_scope_mismatch_message()})
             return
-        if player_loadout_hash(players[sid]) != player_loadout_hash(players[leader_sid]):
+        team_match_mode = player_match_mode(players[sid])
+        if (
+            mod_unlock_required_for_match_mode(players[sid], team_match_mode)
+            or mod_unlock_required_for_match_mode(players[leader_sid], team_match_mode)
+        ):
+            for blocked_sid in (sid, leader_sid):
+                blocked_player = players.get(blocked_sid, {})
+                if mod_unlock_required_for_match_mode(blocked_player, team_match_mode):
+                    socketio.emit('mod_unlock_required', {
+                        'match_mode': team_match_mode,
+                        **player_mod_unlock_state(blocked_player),
+                    }, room=blocked_sid)
+            emit('server_error', {
+                'message': '需要先选择要解锁的官方模组，才能组队进入娱乐 1v1/2v2。',
+                'reason': 'mod_unlock_choice_required',
+            })
+            return
+        if not same_match_mod_preference(team_match_mode, [players[sid], players[leader_sid]]):
             emit_mod_mismatch(sid, players[leader_sid])
             return
         if sid in teams or leader_sid in teams:
@@ -26586,7 +27419,22 @@ def on_invite_team(data):
             if not eligible:
                 emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
                 return
-        if not same_mod_loadout(all_match_sids):
+        blocked_mod_unlock_sids = [
+            msid for msid in all_match_sids
+            if mod_unlock_required_for_match_mode(players.get(msid, {}), match_mode)
+        ]
+        if blocked_mod_unlock_sids:
+            for blocked_sid in blocked_mod_unlock_sids:
+                socketio.emit('mod_unlock_required', {
+                    'match_mode': match_mode,
+                    **player_mod_unlock_state(players.get(blocked_sid, {})),
+                }, room=blocked_sid)
+            emit('server_error', {
+                'message': '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                'reason': 'mod_unlock_choice_required',
+            })
+            return
+        if not same_match_mod_preference(match_mode, all_match_sids):
             reference_sid = my_team['leader']
             reference_player = players.get(reference_sid, {})
             for msid in all_match_sids:
@@ -26673,7 +27521,23 @@ def on_accept_team_match(data):
             if not eligible:
                 emit_match_start_failed(all_sids, '当前玩家或模组配置不符合天梯资格', reason=reason)
                 return
-        if not same_mod_loadout(all_sids):
+        blocked_mod_unlock_sids = [
+            psid for psid in all_sids
+            if mod_unlock_required_for_match_mode(players.get(psid, {}), match_mode)
+        ]
+        if blocked_mod_unlock_sids:
+            for blocked_sid in blocked_mod_unlock_sids:
+                socketio.emit('mod_unlock_required', {
+                    'match_mode': match_mode,
+                    **player_mod_unlock_state(players.get(blocked_sid, {})),
+                }, room=blocked_sid)
+            emit_match_start_failed(
+                all_sids,
+                '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                reason='mod_unlock_choice_required',
+            )
+            return
+        if not same_match_mod_preference(match_mode, all_sids):
             reference_sid = all_sids[0]
             reference_player = players.get(reference_sid, {})
             for msid in all_sids:
@@ -26687,15 +27551,18 @@ def on_accept_team_match(data):
         room_id = _next_room_id
         _next_room_id += 1
         first_sid = all_sids[0]
-        try:
-            allowed = validated_match_allowed_card_ids(players.get(first_sid), '2v2')
-        except ValueError as exc:
-            emit_match_start_failed(all_sids, str(exc), reason='mod_loadout_unavailable')
-            return
-        pool_issue = runtime_card_pool_issue(allowed, '2v2')
-        if pool_issue:
-            emit_match_start_failed(all_sids, pool_issue, reason='content_temporarily_disabled')
-            return
+        casual_mod_draw = match_mode in CASUAL_MOD_DRAW_MATCH_MODES
+        allowed = None
+        if not casual_mod_draw:
+            try:
+                allowed = validated_match_allowed_card_ids(players.get(first_sid), '2v2')
+            except ValueError as exc:
+                emit_match_start_failed(all_sids, str(exc), reason='mod_loadout_unavailable')
+                return
+            pool_issue = runtime_card_pool_issue(allowed, '2v2')
+            if pool_issue:
+                emit_match_start_failed(all_sids, pool_issue, reason='content_temporarily_disabled')
+                return
         clear_pending_match_invites_for_sids_locked(all_sids)
         room = GameRoom(
             room_id,
@@ -26706,8 +27573,9 @@ def on_accept_team_match(data):
             match_type=match_type,
             match_mode=match_mode,
         )
-        capture_room_match_loadout(room, players[first_sid])
-        apply_v2_loadout_to_engine(room.engine, players.get(first_sid, {}), room.mode)
+        if not casual_mod_draw:
+            capture_room_match_loadout(room, players[first_sid])
+            apply_v2_loadout_to_engine(room.engine, players.get(first_sid, {}), room.mode)
         rooms[room_id] = room
         admin_event('game', f"room {room_id} created mode={match_mode}: {' / '.join(players[s]['nickname'] for s in all_sids)}")
         for s in all_sids:
@@ -26719,11 +27587,29 @@ def on_accept_team_match(data):
         room.engine.player_names = [players[s]['nickname'] for s in all_sids]
         for idx, psid in enumerate(all_sids):
             room.store_player_profile(psid, idx, players.get(psid))
-        room.engine.start_event_select_first()
-        record_room_replay_keyframe(room, 'event_select_start')
-        for i, s in enumerate(all_sids):
-            emit_room_game_phase(room, s, 'event_select')
-            send_event_state(room, i)
+        if casual_mod_draw:
+            shared_profile = casual_shared_mod_profile(players.get(first_sid, {}))
+            if not same_casual_shared_mod_preference(all_sids):
+                for msid in all_sids:
+                    if msid in players:
+                        emit_mod_mismatch(msid, players.get(first_sid))
+                rooms.pop(room_id, None)
+                for psid in all_sids:
+                    player = players.get(psid)
+                    if player:
+                        player['room_id'] = None
+                        player['status'] = 'lobby'
+                emit_match_start_failed(all_sids, '模组组合不一致，无法开始对局')
+                broadcast_lobby()
+                return
+            room.casual_shared_mod_profile = shared_profile
+            start_casual_room_or_event_select(room, shared_profile)
+        else:
+            room.engine.start_event_select_first()
+            record_room_replay_keyframe(room, 'event_select_start')
+            for i, s in enumerate(all_sids):
+                emit_room_game_phase(room, s, 'event_select')
+                send_event_state(room, i)
         broadcast_lobby()
 
 
@@ -26786,7 +27672,10 @@ def on_disconnect():
                         profile['reconnect_timeout'] = reconnect_timeout_seconds
                     room.disconnected_players[sid] = dict(profile)
                     current_phase = getattr(room.engine, 'phase', '')
-                    pregame_disconnect = current_phase in ('draft', 'event_select', 'event_reveal')
+                    pregame_disconnect = (
+                        current_phase in ('draft', 'event_select', 'event_reveal')
+                        or bool(getattr(room, 'mod_draw_active', False))
+                    )
                     unblocked_pending = False
                     if not dead_2v2_player and not phelren_mutation_pending:
                         unblocked_pending = _resolve_disconnect_blockers(room, pidx)
@@ -27207,6 +28096,9 @@ def on_reconnect_accept(data):
     for other_sid in other_sids:
         socketio.emit('opponent_reconnected', {}, room=other_sid)
     send_game_state_to(room, pidx, recover_pending=False)
+    if getattr(room, 'mod_draw_active', False):
+        emit_room_game_phase(room, sid, 'mod_draw')
+        send_mod_draw_state(room, [pidx])
     emit_pending_interaction_after_state_change(room, reason='player_reconnected')
     broadcast_lobby()
 
@@ -27285,6 +28177,8 @@ def on_reconnect_decline(data):
                         'game_over': ended,
                         'player_defeated': True,
                     })
+                    if not ended and getattr(room, 'mod_draw_active', False):
+                        _complete_mod_draw_locked(room)
                     if ended:
                         _cancel_room_reconnect_timers(room)
                         for other_sid in room.player_sids:
@@ -27395,12 +28289,27 @@ def on_invite(data):
         ):
             emit('server_error', {'message': '双方模式不一致，无法邀请'})
             return
+        blocked_mod_unlock_sids = [
+            psid for psid, player in ((sid, inviter), (target_sid, target))
+            if mod_unlock_required_for_match_mode(player, inviter_match_mode)
+        ]
+        if blocked_mod_unlock_sids:
+            for blocked_sid in blocked_mod_unlock_sids:
+                socketio.emit('mod_unlock_required', {
+                    'match_mode': inviter_match_mode,
+                    **player_mod_unlock_state(players.get(blocked_sid, {})),
+                }, room=blocked_sid)
+            emit('server_error', {
+                'message': '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                'reason': 'mod_unlock_choice_required',
+            })
+            return
         if inviter_match_mode in RANKED_MATCH_MODES:
             eligible, reason = ranked_match_eligibility([inviter, target])
             if not eligible:
                 emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
                 return
-        if player_loadout_hash(inviter) != player_loadout_hash(target):
+        if not same_match_mod_preference(inviter_match_mode, [inviter, target]):
             message = '模组组合不一致，无法开始对局'
             mod_mismatch_payload = {
                 'message': message,
@@ -27457,12 +28366,28 @@ def on_invite(data):
         ):
             emit('server_error', {'message': '双方模式不一致，无法邀请'})
             return
+        if (
+            mod_unlock_required_for_match_mode(inviter, inviter_match_mode)
+            or mod_unlock_required_for_match_mode(target, inviter_match_mode)
+        ):
+            for blocked_sid in (sid, target_sid):
+                blocked_player = players.get(blocked_sid, {})
+                if mod_unlock_required_for_match_mode(blocked_player, inviter_match_mode):
+                    socketio.emit('mod_unlock_required', {
+                        'match_mode': inviter_match_mode,
+                        **player_mod_unlock_state(blocked_player),
+                    }, room=blocked_sid)
+            emit('server_error', {
+                'message': '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                'reason': 'mod_unlock_choice_required',
+            })
+            return
         if inviter_match_mode in RANKED_MATCH_MODES:
             eligible, reason = ranked_match_eligibility([inviter, target])
             if not eligible:
                 emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
                 return
-        if player_loadout_hash(inviter) != player_loadout_hash(target):
+        if not same_match_mod_preference(inviter_match_mode, [inviter, target]):
             emit('server_error', {'message': '模组组合不一致，无法开始对局', 'reason': 'mod_mismatch'})
             return
         invites[sid] = target_sid
@@ -27543,21 +28468,41 @@ def on_accept_invite(data):
         if not same_runtime_scope_players(inviter, accepter):
             emit_match_start_failed([inviter_sid, sid], runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
             return
-        if player_loadout_hash(inviter) != player_loadout_hash(accepter):
+        if (
+            mod_unlock_required_for_match_mode(inviter, inviter_match_mode)
+            or mod_unlock_required_for_match_mode(accepter, inviter_match_mode)
+        ):
+            for blocked_sid in (inviter_sid, sid):
+                blocked_player = players.get(blocked_sid, {})
+                if mod_unlock_required_for_match_mode(blocked_player, inviter_match_mode):
+                    socketio.emit('mod_unlock_required', {
+                        'match_mode': inviter_match_mode,
+                        **player_mod_unlock_state(blocked_player),
+                    }, room=blocked_sid)
+            emit_match_start_failed(
+                [inviter_sid, sid],
+                '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                reason='mod_unlock_choice_required',
+            )
+            return
+        if not same_match_mod_preference(inviter_match_mode, [inviter, accepter]):
             emit_mod_mismatch(inviter_sid, accepter)
             emit_mod_mismatch(sid, inviter)
             return
         room_id = _next_room_id
         _next_room_id += 1
-        try:
-            allowed_card_ids = validated_match_allowed_card_ids(inviter, inviter.get('mode', '1v1'))
-        except ValueError as exc:
-            emit_match_start_failed([inviter_sid, sid], str(exc), reason='mod_loadout_unavailable')
-            return
-        pool_issue = runtime_card_pool_issue(allowed_card_ids, inviter.get('mode', '1v1'))
-        if pool_issue:
-            emit_match_start_failed([inviter_sid, sid], pool_issue, reason='content_temporarily_disabled')
-            return
+        casual_mod_draw = canonical_match_mode in CASUAL_MOD_DRAW_MATCH_MODES
+        allowed_card_ids = None
+        if not casual_mod_draw:
+            try:
+                allowed_card_ids = validated_match_allowed_card_ids(inviter, inviter.get('mode', '1v1'))
+            except ValueError as exc:
+                emit_match_start_failed([inviter_sid, sid], str(exc), reason='mod_loadout_unavailable')
+                return
+            pool_issue = runtime_card_pool_issue(allowed_card_ids, inviter.get('mode', '1v1'))
+            if pool_issue:
+                emit_match_start_failed([inviter_sid, sid], pool_issue, reason='content_temporarily_disabled')
+                return
         clear_pending_match_invites_for_sids_locked([inviter_sid, sid])
         room = GameRoom(
             room_id,
@@ -27568,8 +28513,9 @@ def on_accept_invite(data):
             match_type=match_type,
             match_mode=canonical_match_mode,
         )
-        capture_room_match_loadout(room, inviter)
-        apply_v2_loadout_to_engine(room.engine, inviter, room.mode)
+        if not casual_mod_draw:
+            capture_room_match_loadout(room, inviter)
+            apply_v2_loadout_to_engine(room.engine, inviter, room.mode)
         rooms[room_id] = room
         admin_event('game', f"room {room_id} created mode={room.match_mode}: {inviter['nickname']} vs {accepter['nickname']}")
         inviter['room_id'] = room_id
@@ -27579,7 +28525,17 @@ def on_accept_invite(data):
         room.engine.player_names = [inviter['nickname'], accepter['nickname']]
         room.store_player_profile(inviter_sid, 0, inviter)
         room.store_player_profile(sid, 1, accepter)
-        if room.mode == 'urf':
+        if casual_mod_draw:
+            try:
+                shared_profile = casual_shared_mod_profile(inviter)
+                if casual_shared_mod_signature(shared_profile) != casual_shared_mod_signature(casual_shared_mod_profile(accepter)):
+                    raise ValueError('娱乐模组或社区模组选择不一致')
+                room.casual_shared_mod_profile = shared_profile
+                start_casual_room_or_event_select(room, shared_profile)
+            except Exception as exc:
+                _abort_casual_room_to_lobby_locked(room, str(exc), reason='mod_mismatch')
+                return
+        elif room.mode == 'urf':
             room.engine.start_game()
             room.started_at = time.time()
             record_room_replay_keyframe(room, 'game_start')
@@ -32297,23 +33253,49 @@ def on_rematch(data=None):
                             **room_event_context(room),
                         }, room=other_sid)
             if len(room._rematch_votes) == len(room.player_sids):
-                try:
-                    next_allowed, match_mod_profile = resolve_room_rematch_loadout(room)
-                except ValueError as exc:
-                    room._rematch_votes = set()
-                    emit_match_start_failed(
-                        room.player_sids,
-                        str(exc),
-                        reason='mod_snapshot_unavailable',
-                    )
-                    emit_rematch_state(room)
-                    return
-                pool_issue = runtime_card_pool_issue(next_allowed, room.mode) if next_allowed is not None else ''
-                if pool_issue:
-                    room._rematch_votes = set()
-                    emit_match_start_failed(room.player_sids, pool_issue, reason='content_temporarily_disabled')
-                    emit_rematch_state(room)
-                    return
+                casual_rematch = room_match_mode(room) in CASUAL_MOD_DRAW_MATCH_MODES
+                next_allowed = None
+                match_mod_profile = None
+                if casual_rematch:
+                    pending_players = []
+                    for psid in room.player_sids:
+                        candidate = players.get(psid, {})
+                        state = refresh_player_mod_unlock_state(candidate, force=True)
+                        if state.get('has_pending_choice'):
+                            pending_players.append((psid, state))
+                    if pending_players:
+                        room._rematch_votes = set()
+                        for pending_sid, state in pending_players:
+                            socketio.emit('mod_unlock_required', {
+                                'match_mode': room_match_mode(room),
+                                'rematch': True,
+                                **state,
+                            }, room=pending_sid)
+                        for other_sid in room.player_sids:
+                            socketio.emit('server_error', {
+                                'message': '有玩家需要先选择要解锁的官方模组，之后才能再来一局。',
+                                'reason': 'mod_unlock_choice_required',
+                            }, room=other_sid)
+                        emit_rematch_state(room)
+                        return
+                else:
+                    try:
+                        next_allowed, match_mod_profile = resolve_room_rematch_loadout(room)
+                    except ValueError as exc:
+                        room._rematch_votes = set()
+                        emit_match_start_failed(
+                            room.player_sids,
+                            str(exc),
+                            reason='mod_snapshot_unavailable',
+                        )
+                        emit_rematch_state(room)
+                        return
+                    pool_issue = runtime_card_pool_issue(next_allowed, room.mode) if next_allowed is not None else ''
+                    if pool_issue:
+                        room._rematch_votes = set()
+                        emit_match_start_failed(room.player_sids, pool_issue, reason='content_temporarily_disabled')
+                        emit_rematch_state(room)
+                        return
                 room._rematch_votes = set()
                 room._returned_lobby_sids = set()
                 room._returned_lobby_names = {}
@@ -32337,13 +33319,20 @@ def on_rematch(data=None):
                 room.chat_history = []
                 room.chat_sequence = 0
                 reset_room_replay(room)
-                room.engine.allowed_card_ids = set(next_allowed)
-                apply_v2_loadout_to_engine(room.engine, match_mod_profile, room.mode)
+                if casual_rematch:
+                    room.engine.allowed_card_ids = None
+                    room.match_allowed_card_ids = None
+                    room.match_mod_profile = {}
+                else:
+                    room.engine.allowed_card_ids = set(next_allowed)
+                    apply_v2_loadout_to_engine(room.engine, match_mod_profile, room.mode)
                 names = []
                 for pidx, psid in enumerate(room.player_sids):
                     names.append(room_player_nickname(room, psid, f'Player {pidx + 1}'))
                 room.engine.player_names = names
-                if room.mode == 'urf':
+                if casual_rematch:
+                    start_casual_room_or_event_select(room, rematch=True)
+                elif room.mode == 'urf':
                     if hasattr(room.engine, 'log'):
                         room.engine.log = []
                     if hasattr(room.engine, '_log_compaction_floor'):

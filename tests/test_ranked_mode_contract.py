@@ -105,8 +105,14 @@ def test_ranked_silently_disables_entertainment_mods_and_restores_casual_prefere
             player['is_registered_user'] = True
             player['user_id'] = 991337
             player['reputation'] = 85
+            player['mod_unlock_state'] = gtn.mod_unlocks.compute_state(20, ())
+            gtn.apply_casual_mode_loadout_to_player(
+                player,
+                disabled_mods=preferred_disabled,
+                match_mode='casual_1v1',
+            )
             assert target_mod in player['entertainment_mods']
-            assert target_mod not in player['preferred_disabled_mods']
+        assert target_mod not in player['preferred_disabled_mods']
 
         with patch.object(gtn, 'DB_AVAILABLE', False):
             client.emit('set_mode', {'match_mode': 'ranked_1v1'})

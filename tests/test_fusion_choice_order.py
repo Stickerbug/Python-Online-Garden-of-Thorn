@@ -98,12 +98,10 @@ class FusionChoiceOrderTests(unittest.TestCase):
         self.assertTrue(result.get("needs_choice"), result)
         self.assertIn(fusion, engine.players[0].hand)
 
-    def test_client_and_training_worker_preserve_order(self):
+    def test_client_preserves_order(self):
         game_js = (ROOT / "static" / "js" / "game.js").read_text(encoding="utf-8")
-        worker_js = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
         self.assertIn("chooseOrderedFusionCards", game_js)
         self.assertIn("选择聚变后保留的牌", game_js)
-        self.assertIn("_selected_card_ids_snapshot", worker_js)
 
 
 if __name__ == "__main__":

@@ -79,10 +79,12 @@ class HelDominoPrecisionTests(unittest.TestCase):
                 domino, result = self.play_domino(engine, target_id, initial_luck=4)
 
                 self.assertTrue(result.get('success'), result)
-                self.assertEqual(90, engine.players[target_id].health)
+                # 6D crits to 12, the temporary Precision halves the dodge to
+                # 6, then Domino doubles the final damage to 12.
+                self.assertEqual(88, engine.players[target_id].health)
                 self.assertEqual(0, engine.players[target_id].dodge)
                 self.assertEqual(0, engine._hel_luck_value(0))
-                self.assertIn('precision', domino.instance_flags)
+                self.assertNotIn('precision', domino.instance_flags)
                 self.assertIn(domino, engine.players[0].discard)
 
     def test_noncritical_domino_remains_fully_dodged(self):
@@ -107,24 +109,24 @@ class HelDominoPrecisionTests(unittest.TestCase):
         pending = engine.play_card(0, domino.instance_id, self.target_choice(1))
         self.assertTrue(pending.get('needs_response'), pending)
         prediction = engine.build_response_damage_prediction(1, [bubble])
-        self.assertEqual(18, prediction['no_counter']['total'])
+        self.assertEqual(24, prediction['no_counter']['total'])
         self.assertEqual(
-            10,
+            12,
             prediction['counters'][str(bubble.instance_id)]['after']['total'],
         )
         result = engine.handle_response(1, bubble.instance_id)
 
         self.assertTrue(result.get('success'), result)
-        self.assertEqual(90, engine.players[1].health)
+        self.assertEqual(88, engine.players[1].health)
         self.assertEqual(0, engine.players[1].dodge)
         discarded_domino = next(
             card for card in engine.players[0].discard
             if card.instance_id == domino.instance_id
         )
-        self.assertIn('precision', discarded_domino.instance_flags)
+        self.assertNotIn('precision', discarded_domino.instance_flags)
         self.assertIn(bubble, engine.players[1].discard)
 
-    def test_critical_domino_keeps_precision_when_shield_absorbs_all_damage(self):
+    def test_critical_domino_uses_temporary_precision_when_shield_absorbs_all_damage(self):
         engine = self.action_engine(GameEngine)
         engine.players[1].custom_statuses['jungle:shield'] = 99
 
@@ -132,7 +134,7 @@ class HelDominoPrecisionTests(unittest.TestCase):
 
         self.assertTrue(result.get('success'), result)
         self.assertEqual(100, engine.players[1].health)
-        self.assertIn('precision', domino.instance_flags)
+        self.assertNotIn('precision', domino.instance_flags)
 
 
 if __name__ == '__main__':

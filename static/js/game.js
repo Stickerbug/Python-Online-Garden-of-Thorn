@@ -572,7 +572,7 @@ function prepareMusicAudio(src, scene) {
 
 function getTargetMusicScene() {
     const view = String(activeViewId || '');
-    if (view === 'view-game' || view === 'view-draft' || view === 'view-event-select' || view === 'view-gameover') return 'battle';
+    if (view === 'view-game' || view === 'view-draft' || view === 'view-event-select' || view === 'view-mod-draw' || view === 'view-gameover') return 'battle';
     if (view === 'view-lobby') return 'lobby';
     return 'menu';
 }
@@ -3286,6 +3286,7 @@ const CARD_FLAG_STYLES = {
     copy: { label: '', fg: '#e17055', bg: 'rgba(225,112,85,0.15)', cls: 'copy' },
     unique: { label: '', fg: '#fdcb6e', bg: 'rgba(253,203,110,0.15)', cls: 'unique' },
     swift: { label: '', fg: '#0984e3', bg: 'rgba(9,132,227,0.15)', cls: 'swift' },
+    heavy: { label: '', fg: '#8D6E63', bg: 'rgba(141,110,99,0.16)', cls: 'heavy' },
     temp_swift: { label: '', fg: '#0EA5E9', bg: 'rgba(14,165,233,0.15)', cls: 'temp-swift' },
     temp_heavy: { label: '', fg: '#795548', bg: 'rgba(121,85,72,0.15)', cls: 'temp-heavy' },
     temp_magic_heavy: { label: '', fg: '#7A5CFF', bg: 'rgba(122,92,255,0.16)', cls: 'temp-magic-heavy' },
@@ -3322,6 +3323,7 @@ const CARD_FLAG_TERM_COLORS = {
     copy: '#e17055',
     unique: '#fdcb6e',
     swift: '#0984e3',
+    heavy: '#8D6E63',
     temp_swift: '#0EA5E9',
     temp_heavy: '#795548',
     temp_magic_heavy: '#7A5CFF',
@@ -3382,6 +3384,7 @@ const CARD_FLAG_ALIASES = {
     temporary_swiftness: 'temp_swift',
     magic_swiftness: 'magic_swift',
     暂时迅捷: 'temp_swift',
+    沉重: 'heavy',
     暂时沉重: 'temp_heavy',
     暂时魔力沉重: 'temp_magic_heavy',
     漂浮: 'floating',
@@ -3458,7 +3461,7 @@ const _VANILLA_FLAGS = new Set([
     'precision', 'exile', 'non_stackable', 'indestructible', 'sprout',
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
     'infinite_exclude', 'rebound', 'copy', 'unique',
-    'swift', 'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'floating', 'stealth', 'revealed', 'sublime', 'team_limited', 'team_unique',
+    'swift', 'heavy', 'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'floating', 'stealth', 'revealed', 'sublime', 'team_limited', 'team_unique',
     'power', 'magic_swift', 'amplify',
     'charge', 'ocean_blinded', 'wide_strike', 'self_target',
 ]);
@@ -3569,6 +3572,7 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-uncancellable', re: /^(?:不可取消|Uncancellable)/i },
     { cls: 'tag-self-only', re: /^(?:不选择目标|No target)/i },
     { cls: 'tag-magic-swift', re: /^(?:魔力迅捷|Magic Swift)(?::[+-]?\d+)?/i },
+    { cls: 'tag-heavy', re: /^(?:沉重|Heavy)(?::[+-]?\d+)?/i },
     { cls: 'tag-temp-swift', re: /^(?:暂时迅捷|Temporary Swift)(?::[+-]?\d+)?/i },
     { cls: 'tag-temp-heavy', re: /^(?:暂时沉重|Temporary Heavy)(?::[+-]?\d+)?/i },
     { cls: 'tag-temp-magic-heavy', re: /^(?:暂时魔力沉重|Temporary Magic Heavy)(?::[+-]?\d+)?/i },
@@ -3644,7 +3648,7 @@ const CARD_TEXT_LOCALIZED_FLAG_SPECS = [
     ['infinite_exclude', 'tag-infinite-exclude'], ['non_stackable', 'tag-non-stackable'],
     ['indestructible', 'tag-indestructible'], ['uncancellable', 'tag-uncancellable'],
     ['self_only', 'tag-self-only'], ['magic_swift', 'tag-magic-swift'],
-    ['temp_swift', 'tag-temp-swift'], ['temp_heavy', 'tag-temp-heavy'],
+    ['temp_swift', 'tag-temp-swift'], ['heavy', 'tag-heavy'], ['temp_heavy', 'tag-temp-heavy'],
     ['temp_magic_heavy', 'tag-temp-magic-heavy'], ['precision', 'tag-precision'],
     ['exile', 'tag-exile'], ['sprout', 'tag-sprout'], ['symbiosis', 'tag-symbiosis'],
     ['attract', 'tag-attract'], ['void', 'tag-void'], ['rebound', 'tag-rebound'],
@@ -5356,6 +5360,12 @@ const LEGACY_DEFAULT_SERVER_KEYS = new Set([
     '121.41.93.192:5000',
 ]);
 let phase = 'connecting';
+let modDrawState = null;
+let modDrawLocalBans = [];
+let modDrawLocalEditAt = 0;
+let modDrawNoticeShown = false;
+let modUnlockState = null;
+let modUnlockSubmitting = false;
 let responsePending = false;
 let responseData = {};
 let choicePending = false;
@@ -5717,56 +5727,6 @@ let battleMobileInputFocus = false;
 let battleMobileFocusTimer = null;
 let actionToastTimer = null;
 let combatFloatSeq = 0;
-const localSoloRuntime = {
-    enabled: false,
-    worker: null,
-    fallbackPayload: null,
-    fallbackKind: '',
-};
-const LOCAL_SOLO_SUPPORTED_EFFECTS = new Set([
-    'damage', 'deal_damage', 'direct_damage', 'lifesteal_damage', 'triangle_damage',
-    'heal', 'draw', 'gain_e', 'gain_m', 'add_armor', 'gain_armor', 'gain_dodge',
-    'poison', 'apply_poison', 'burn', 'apply_burn', 'toxic', 'apply_toxic',
-    'if', 'if_else', 'repeat', 'for_each_selected_card',
-    'request_card', 'request_target', 'request_confirm',
-    'card_prop_set', 'card_prop_add', 'card_prop_mul', 'card_damage_multiply', 'clear_tags',
-    'equipment_prop_set', 'equipment_prop_add',
-    'player_prop_set', 'player_prop_add', 'var_set', 'var_add', 'var_sub', 'var_mul', 'var_div',
-    'copy_card', 'move_to_discard', 'move_to_hand', 'move_to_deck', 'remove_specific_card',
-    'destroy_equipment_choice_or_first', 'destroy_random_equip', 'destroy_all_equip',
-    'destroy_all_destroyable_equipment', 'destroy_self_equipment', 'destroy_current_equipment',
-    'add_equipment_armor', 'place_as_equip', 'skip_turn',
-    'reveal_enemy_hand', 'choose_from_deck', 'choose_from_discard', 'steal_enemy_card',
-    'status_remove_named', 'status_add_named', 'clear_status',
-    'on_owner_turn_start', 'on_enemy_turn_start', 'on_any_turn_start', 'on_damage_taken',
-    'on_equipment_trigger', 'on_equipment_destroy', 'on_hand_owner_turn_start',
-    'on_discard_owner_turn_start', 'on_deck_owner_turn_start',
-    'on_card_used', 'on_equipment_triggered', 'on_equipment_destroyed',
-    'on_resource_spent', 'on_player_stat_changed',
-    'on_fatal_set_health_exile',
-    'aura_enemy_elixir_recovery', 'nullify_current_card',
-]);
-const LOCAL_SOLO_SUPPORTED_V2_OPS = new Set([
-    ...LOCAL_SOLO_SUPPORTED_EFFECTS,
-    'draw_cards', 'add_status', 'remove_status', 'set_status', 'move_card',
-    'create_card', 'destroy_equipment', 'log', 'set_health',
-    'add_tag', 'remove_tag', 'tag_add_named', 'tag_remove_named',
-    'for_each', 'repeat_until', 'for_each_list', 'for_each_equipment',
-    'break', 'continue', 'timed_effect', 'countdown_var',
-    'give_card_to_hand', 'give_magic_orb_to_hand', 'give_card_to_deck', 'give_card_to_discard',
-    'move_to_exile', 'add_equipment_to_zone', 'cost_e', 'cost_m',
-    'invincible', 'mod_e_regen', 'mod_m_regen', 'mod_draw', 'equip_protection',
-    'const', 'var', 'player_stat', 'card_prop', 'status_stack', 'count',
-    'add', 'sub', 'mul', 'div', 'floor', 'ceil', 'min', 'max', 'last_damage',
-    'compare', 'and', 'or', 'not', 'has_status_named', 'has_status',
-    'zone_count', 'hand_count', 'deck_count', 'discard_count', 'exile_count', 'equipment_count',
-    'equipment_prop', 'equipment_property', 'card_property', 'player_property',
-    'damage_amount', 'current_damage', 'event_value', 'source_player', 'target_player',
-    '<', '<=', '>', '>=', '==', '!=',
-    'hand_full', 'selected_cards_count', 'selected_card_index',
-    'selected_card_at', 'selected_card', 'last_created_card',
-    'goggles_enable', 'request_reorder_deck',
-]);
 const COMBAT_FLOAT_TOTAL_LIMIT_MS = 5000;
 const COMBAT_FLOAT_BASE_DURATION_MS = 1500;
 const COMBAT_FLOAT_MIN_DURATION_MS = 620;
@@ -6331,6 +6291,7 @@ function refreshVisibleCardDisplays() {
     const viewId = getVisibleViewId();
     if (viewId === 'view-game' && gameState) renderGame(gameState);
     if (viewId === 'view-draft' && draftState) renderDraft(draftState, false);
+    if (viewId === 'view-mod-draw' && modDrawState) renderModDrawState(modDrawState);
     if (viewId === 'view-solo') renderSoloBuilder();
     if (viewId === 'view-card-gallery') renderCardGallery();
 }
@@ -6787,6 +6748,12 @@ function updateStaticText() {
     if (btnEventReroll) btnEventReroll.textContent = UI.event_reroll;
     const btnPhaseChatSend = $('btn-phase-chat-send');
     if (btnPhaseChatSend) btnPhaseChatSend.textContent = UI.send;
+    const modUnlockClose = $('btn-mod-unlock-close');
+    if (modUnlockClose) {
+        modUnlockClose.textContent = lt({
+            zh: '稍后再选', en: 'Choose later', fr: 'Choisir plus tard', ja: '後で選ぶ',
+        });
+    }
     const btnReturnLobby = $('btn-return-lobby');
     if (btnReturnLobby) btnReturnLobby.textContent = UI.return_lobby;
     const btnReportMatch = $('btn-report-match');
@@ -7263,7 +7230,7 @@ function showView(viewId) {
 
 function isNetworkMatchPhase(value = phase) {
     return !soloMode && !replayMode && [
-        'draft', 'event_select', 'event_reveal', 'event_sub_choice', 'playing', 'action', 'draw', 'response', 'choice', 'game_over', 'reconnecting',
+        'mod_draw', 'mod_draw_complete', 'draft', 'event_select', 'event_reveal', 'event_sub_choice', 'playing', 'action', 'draw', 'response', 'choice', 'game_over', 'reconnecting',
     ].includes(String(value || ''));
 }
 
@@ -7291,6 +7258,7 @@ function shouldIgnoreLobbyUpdateWhileInMatch() {
     return [
         'view-draft',
         'view-event-select',
+        'view-mod-draw',
         'view-game',
         'view-gameover',
     ].includes(activeViewId || '');
@@ -7337,6 +7305,10 @@ function clearNetworkMatchStateForLobby() {
     gameState = {};
     draftState = {};
     eventSelectData = {};
+    modDrawState = null;
+    modDrawLocalBans = [];
+    modDrawLocalEditAt = 0;
+    modDrawNoticeShown = false;
     isSpectating = false;
     pendingSpectateRoomId = null;
     activeSpectateRoomId = null;
@@ -7374,12 +7346,12 @@ function hasRecoverableNetworkMatchContext() {
     if ((soloMode && !isAiMatch) || replayMode || isSpectating || phase === 'game_over') return false;
     if (readActiveMatchRoute()) return true;
     if (isNetworkMatchPhase(phase)) return true;
-    return ['view-draft', 'view-event-select', 'view-game'].includes(activeViewId || '');
+    return ['view-draft', 'view-event-select', 'view-mod-draw', 'view-game'].includes(activeViewId || '');
 }
 
 function preserveCurrentMatchRouteForRecovery(previousPhase) {
     if (readActiveMatchRoute()) return;
-    const candidates = [gameState, draftState, eventSelectData];
+    const candidates = [gameState, draftState, eventSelectData, modDrawState];
     const source = candidates.find(item => item && item.room_id != null);
     if (!source) return;
     rememberActiveMatchRoute({ ...source, phase: source.phase || previousPhase }, 'socket_disconnect');
@@ -9034,7 +9006,7 @@ function getAllStatusDefs() {
         { key: 'foresight', label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
         { key: 'fracture', label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         { key: 'stagnation', label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
-        { key: 'blind', label: UI.status_blind, desc: '效果存在时，队友无法查看自己的手牌。1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
+        { key: 'blind', label: UI.status_blind, desc: '效果存在时，队友无法查看自己的手牌。1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。失明期间，自己的牌在选择窗口中不能取消。回合开始生效后，清空失明。', color: '#2C3E50' },
         { key: 'heal_block', label: UI.status_heal_block, desc: '生命回复效果降低50%×层数（上限降低100%）。拥有者每治疗一次，层数减少1；状态免疫存在时仍会减少层数，但不会降低治疗。', color: '#E84393' },
         { key: 'weakness', label: UI.status_weakness, desc: '自己对别人造成的物理伤害降低20%×层数（上限降低60%），自己回合结束时层数-1。', color: '#8E44AD' },
         { key: 'bleed', label: UI.status_bleed, desc: '打出攻击牌时受到层数点魔法伤害，回合结束时层数下取整减半。', color: '#922B21' },
@@ -9240,6 +9212,7 @@ function getViewStatusText(viewId = getVisibleViewId()) {
     if (viewId === 'view-solo') return UI.solo_training;
     if (viewId === 'view-draft') return UI.draft_phase;
     if (viewId === 'view-event-select') return UI.select_event;
+    if (viewId === 'view-mod-draw') return lt({ zh: '模组抽取', en: 'Mod Draw', fr: 'Tirage des mods', ja: 'Mod抽選' });
     if (viewId === 'view-card-gallery') return UI.gallery_title;
     if (viewId === 'view-mod-editor') return UI.mod_editor;
     if (viewId === 'view-game' && gameState) return formatGameBottomStatus(gameState);
@@ -9468,7 +9441,7 @@ function hasBlockingPendingState(eventName = '') {
 }
 
 function canSendGameAction(eventName, options = {}) {
-    if (!isLocalSoloRuntimeActive() && (!socket || !socket.connected)) {
+    if (!socket || !socket.connected) {
         clientRejectAction(UI.server_not_connected || UI.server_no_response);
         return false;
     }
@@ -11291,6 +11264,7 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
         : 0;
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
+    const heavyValue = Number(cardDict.heavy_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
@@ -11298,7 +11272,7 @@ function getCardDisplayCosts(cardDict, cardDef, ownerState = null) {
     const fusionExtraE = fusionCostSurcharge(cardDef.cost_e, fusionLevel);
     const effectiveBaseE = Math.max(
         0,
-        baseE + fusionExtraE + tempHeavyValue - mimicDiscount - swiftValue - tempSwiftValue,
+        baseE + fusionExtraE + heavyValue + tempHeavyValue - mimicDiscount - swiftValue - tempSwiftValue,
     );
     let extraE = flags.has('symbiosis') ? 0 : dup;
     if (cardMatchesAnyLocalId(cardDict, cardDef, ['Bamboo', 'jungle:bamboo'])) {
@@ -11729,6 +11703,7 @@ function createCardElement(cardDict, options = {}) {
     const { totalE, totalM, flags } = getCardDisplayCosts(cardDict, cardDef, cardOwnerState);
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
+    const heavyValue = Number(cardDict.heavy_value || 0);
     const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
@@ -11739,8 +11714,9 @@ function createCardElement(cardDict, options = {}) {
     el.dataset.instanceId = cardDict.instance_id;
     el.dataset.defId = defId;
     let flagsHtml = '';
-    if (!blinded) for (const flag of flags) {
+    if (!blinded) for (const flag of sortCardFlagIds(flags)) {
         if (flag === 'swift' && swiftValue > 0) continue;
+        if (flag === 'heavy' && heavyValue > 0) continue;
         if (flag === 'temp_swift' && tempSwiftValue > 0) continue;
         if (flag === 'temp_heavy' && tempHeavyValue > 0) continue;
         if (flag === 'magic_swift' && magicSwiftValue > 0) continue;
@@ -11762,35 +11738,44 @@ function createCardElement(cardDict, options = {}) {
     }
     const fusionLevel = clampClientCardLayer(cardDict.fusion_level || cardDef.fusion_level || 1);
     const fissionLevel = clampClientCardLayer(cardDict.fission_level || cardDef.fission_level || 1);
-    if (!blinded && fusionLevel > 1) {
-        flagsHtml += `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}: ${fusionLevel}</span>`;
+    // Special effects always follow the plain tags and are ordered by their raw
+    // internal id, matching the card description規範.
+    const specialEffectEntries = [];
+    if (fusionLevel > 1) {
+        specialEffectEntries.push(['fusion_layer', `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}: ${fusionLevel}</span>`]);
     }
-    if (!blinded && fissionLevel > 1) {
-        flagsHtml += `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}: ${fissionLevel}</span>`;
+    if (fissionLevel > 1) {
+        specialEffectEntries.push(['fission_layer', `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}: ${fissionLevel}</span>`]);
     }
-    if (!blinded && swiftValue > 0) {
-        flagsHtml += `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`;
+    if (swiftValue > 0) {
+        specialEffectEntries.push(['swift', `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`]);
     }
-    if (!blinded && tempSwiftValue > 0) {
-        flagsHtml += `<span class="card-flag temp-swift">${escapeHtml(UI.tag_temp_swift || '暂时迅捷')}: ${tempSwiftValue}</span>`;
+    if (heavyValue > 0) {
+        specialEffectEntries.push(['heavy', `<span class="card-flag heavy">${escapeHtml(UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' }))}: ${heavyValue}</span>`]);
     }
-    if (!blinded && tempHeavyValue > 0) {
-        flagsHtml += `<span class="card-flag temp-heavy">${escapeHtml(UI.tag_temp_heavy || '暂时沉重')}: ${tempHeavyValue}</span>`;
+    if (tempSwiftValue > 0) {
+        specialEffectEntries.push(['temp_swift', `<span class="card-flag temp-swift">${escapeHtml(UI.tag_temp_swift || '暂时迅捷')}: ${tempSwiftValue}</span>`]);
     }
-    if (!blinded && magicSwiftValue > 0) {
-        flagsHtml += `<span class="card-flag magic-swift">${escapeHtml(UI.tag_magic_swift || 'Magic Swift')}: ${magicSwiftValue}</span>`;
+    if (tempHeavyValue > 0) {
+        specialEffectEntries.push(['temp_heavy', `<span class="card-flag temp-heavy">${escapeHtml(UI.tag_temp_heavy || '暂时沉重')}: ${tempHeavyValue}</span>`]);
     }
-    if (!blinded && tempMagicHeavyValue > 0) {
-        flagsHtml += `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_temp_magic_heavy || '暂时魔力沉重')}: ${tempMagicHeavyValue}</span>`;
+    if (magicSwiftValue > 0) {
+        specialEffectEntries.push(['magic_swift', `<span class="card-flag magic-swift">${escapeHtml(UI.tag_magic_swift || 'Magic Swift')}: ${magicSwiftValue}</span>`]);
     }
-    if (!blinded && powerValue !== 0) {
-        flagsHtml += `<span class="card-flag power">${escapeHtml(UI.tag_power || 'Power')}: ${powerValue}</span>`;
+    if (tempMagicHeavyValue > 0) {
+        specialEffectEntries.push(['temp_magic_heavy', `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_temp_magic_heavy || '暂时魔力沉重')}: ${tempMagicHeavyValue}</span>`]);
     }
-    if (!blinded && copyCount > 0) {
-        flagsHtml += `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}: ${copyCount}</span>`;
+    if (powerValue !== 0) {
+        specialEffectEntries.push(['power', `<span class="card-flag power">${escapeHtml(UI.tag_power || 'Power')}: ${powerValue}</span>`]);
     }
-    if (!blinded && chargeValue > 0) {
-        flagsHtml += cardFlagHtml('charge', `${UI.tag_charge || '电荷'}: ${chargeValue}`);
+    if (copyCount > 0) {
+        specialEffectEntries.push(['copy', `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}: ${copyCount}</span>`]);
+    }
+    if (chargeValue > 0) {
+        specialEffectEntries.push(['charge', cardFlagHtml('charge', `${UI.tag_charge || '电荷'}: ${chargeValue}`)]);
+    }
+    if (!blinded) {
+        flagsHtml += sortSpecialEffectEntries(specialEffectEntries);
     }
     if (!blinded) {
         flagsHtml += equipmentCounterFlagHtml(cardDict);
@@ -11966,6 +11951,25 @@ function shouldDisplayCardFlag(flag, options = {}) {
     return true;
 }
 
+function compareCardFlagIds(left, right) {
+    const a = String(left == null ? '' : left);
+    const b = String(right == null ? '' : right);
+    if (a === b) return 0;
+    return a < b ? -1 : 1;
+}
+
+function sortCardFlagIds(values) {
+    return Array.from(values || []).map(flag => String(flag)).sort(compareCardFlagIds);
+}
+
+function sortSpecialEffectEntries(entries) {
+    return (entries || [])
+        .slice()
+        .sort((left, right) => compareCardFlagIds(left && left[0], right && right[0]))
+        .map(entry => (entry ? entry[1] : ''))
+        .join('');
+}
+
 function cardFlagHtml(flag, text = null) {
     const normalized = normalizeCardFlag(flag);
     if (!normalized) return '';
@@ -12013,6 +12017,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const copyCount = Number(cardDef.copy_count || 0);
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
+    const heavyValue = Number(cardDict.heavy_value || 0);
     const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
@@ -12020,6 +12025,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const chargeValue = Number(cardDict.charge_value ?? cardDef.charge_value ?? 0);
     effective.forEach(flag => {
         if (flag === 'swift' && swiftValue > 0) return;
+        if (flag === 'heavy' && heavyValue > 0) return;
         if (flag === 'temp_swift' && tempSwiftValue > 0) return;
         if (flag === 'temp_heavy' && tempHeavyValue > 0) return;
         if (flag === 'magic_swift' && magicSwiftValue > 0) return;
@@ -12040,6 +12046,9 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     }
     if (swiftValue > 0) {
         parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}: ${swiftValue}`));
+    }
+    if (heavyValue > 0) {
+        parts.push(cardFlagHtml('heavy', `${UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' })}: ${heavyValue}`));
     }
     if (tempSwiftValue > 0) {
         parts.push(cardFlagHtml('temp_swift', `${UI.tag_temp_swift || '暂时迅捷'}: ${tempSwiftValue}`));
@@ -12301,10 +12310,11 @@ function getMimicSpecialCostForCard(cardDict) {
     const power = Math.max(0, Math.floor(Number(cardDict.power_value || 0)));
     const swift = Math.max(0, Math.floor(Number(cardDict.swift_value || 0)));
     const magicSwift = Math.max(0, Math.floor(Number(cardDict.magic_swift_value || 0)));
+    const heavy = Math.max(0, Math.floor(Number(cardDict.heavy_value || 0)));
     const tempSwift = Math.max(0, Math.floor(Number(cardDict.temp_swift_value || 0)));
     const tempHeavy = Math.max(0, Math.floor(Number(cardDict.temp_heavy_value || 0)));
     const tempMagicHeavy = Math.max(0, Math.floor(Number(cardDict.temp_magic_heavy_value || 0)));
-    return Math.ceil((fusionExtra + fissionExtra + power + swift + magicSwift + tempSwift + tempHeavy + tempMagicHeavy) / 2);
+    return Math.ceil((fusionExtra + fissionExtra + power + swift + magicSwift + heavy + tempSwift + tempHeavy + tempMagicHeavy) / 2);
 }
 
 function getAvailableElixirForMimicChoice(sourceCard, ownerState = null) {
@@ -14366,7 +14376,7 @@ function getTermIntroLibrary() {
         D: { label: lt({ zh: 'D：物理伤害(Damage)', en: 'D: Physical Damage', fr: 'D : dégâts physiques', ja: 'D：物理ダメージ' }), desc: lt({ zh: '会受护甲、装备、闪避和反制影响。只有实际造成伤害，才会触发淬毒、尖牙回血等效果。', en: 'Affected by armor, equipment, dodges, and counters. Effects such as Toxic or Fang healing only trigger when damage is actually dealt.', fr: 'Affecté par l’armure, les équipements, l’esquive et les contres. Toxic ou le soin de Fang ne se déclenchent que si des dégâts sont réellement infligés.', ja: '護甲、装備、回避、反制の影響を受けます。実際にダメージを与えた時だけ淬毒や牙の回復などが発動します。' }), color: COLORS.damage },
         electric_damage: { label: lt({ zh: '电伤：电击伤害(Electric Damage)', en: 'Electric Damage', fr: 'Dégâts électriques', ja: '電撃ダメージ' }), desc: `${lt({ zh: '一种类似于物理伤害的魔法伤害。', en: 'A kind of magic damage that behaves similarly to physical damage. ', fr: 'Un type de dégâts magiques qui se comporte comme des dégâts physiques. ', ja: '物理ダメージに近い挙動をする魔法ダメージです。' })}${magicDamageDesc}`, color: COLORS.damage },
         magic_damage: { label: lt({ zh: '魔法伤害(Magic Damage)', en: 'Magic Damage', fr: 'Dégâts magiques', ja: '魔法ダメージ' }), desc: magicDamageDesc, color: COLORS.magic },
-        crit: { label: lt({ zh: '暴击', en: 'Critical', fr: 'Critique', ja: 'クリティカル' }), desc: lt({ zh: '使一次物理伤害乘以暴击倍率。初始暴击倍率为×1.5，部分效果可以提高倍率。', en: 'Multiplies one physical damage hit by the critical multiplier. The base multiplier is ×1.5, and some effects can raise it.', fr: 'Multiplie un coup de dégâts physiques par le multiplicateur critique. Le multiplicateur de base est ×1,5, certains effets peuvent l’augmenter.', ja: '1回の物理ダメージに暴击倍率を掛けます。基本倍率は×1.5で、一部効果で上昇します。' }), color: '#D4AC0D', iconKey: 'critical' },
+        crit: { label: lt({ zh: '暴击', en: 'Critical', fr: 'Critique', ja: 'クリティカル' }), desc: lt({ zh: '使一次物理伤害乘以暴击倍率。初始暴击倍率为×2，部分效果可以提高倍率。', en: 'Multiplies one physical damage hit by the critical multiplier. The base multiplier is ×2, and some effects can raise it.', fr: 'Multiplie un coup de dégâts physiques par le multiplicateur critique. Le multiplicateur de base est ×2, certains effets peuvent l’augmenter.', ja: '1回の物理ダメージに暴击倍率を掛けます。基本倍率は×2で、一部効果で上昇します。' }), color: '#D4AC0D', iconKey: 'critical' },
         A: { label: lt({ zh: 'A：护甲(Armor)', en: 'A: Armor', fr: 'A : armure', ja: 'A：護甲' }), desc: lt({ zh: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。护甲不是状态，不受状态免疫影响。', en: 'Reduces D. It does not reduce magic damage from Poison, Burn, or similar states. Armor is not a status and is not affected by Status Immune.', fr: 'Réduit D. Ne réduit pas les dégâts magiques du Poison, de la Brûlure ou des états similaires. L’armure n’est pas un statut et n’est pas affectée par l’immunité aux statuts.', ja: 'D を軽減します。中毒、灼烧などの魔法ダメージは軽減しません。護甲は状態ではなく、状態免疫の影響を受けません。' }), color: COLORS.armor_text },
         invincible: { label: UI.status_invincible || lt({ zh: '无敌', en: 'Invincible', fr: 'Invincible', ja: '無敵' }), desc: lt({ zh: '无敌期间免疫受到的伤害。无敌不是状态，不受状态免疫影响。', en: 'Prevents incoming damage while active. Invincible is not a state and is not affected by Status Immune.', fr: 'Empêche les dégâts reçus tant que l’effet est actif. Invincible n’est pas un statut et n’est pas affecté par l’immunité aux statuts.', ja: '有効中は受けるダメージを無効にします。無敵は状態ではなく、状態免疫の影響を受けません。' }), color: COLORS.elixir, iconKey: 'invincible' },
         P: { label: lt({ zh: 'P：中毒(Poison)', en: 'P: Poison', fr: 'P : poison', ja: 'P：毒' }), desc: lt({ zh: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', en: 'At your turn start, take magic damage equal to current P. If you survive, P halves rounded down, e.g. 10P→5P, 5P→2P.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au P actuel. Si vous survivez, P est divisé par deux arrondi à l’inférieur, ex. 10P→5P, 5P→2P.', ja: '自分のターン開始時、現在の P と同じ魔法ダメージを受けます。生存していれば P は切り捨てで半減します。例：10P→5P、5P→2P。' }), color: COLORS.poison },
@@ -14393,6 +14403,8 @@ function getTermIntroLibrary() {
         magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
         temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，打出后清除。', en: 'Reduces E cost for this play only, then clears after being played.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを減らし、使用後に消えます。' }), color: '#0EA5E9' },
         temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，打出后清除。', en: 'Increases E cost for this play only, then clears after being played.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを増やし、使用後に消えます。' }), color: '#795548' },
+        swift: { label: UI.tag_swift || 'Swift', desc: lt({ zh: '此牌 E 花费减少对应层数，最低为 0E。', en: 'Reduces this card’s E cost by its value, minimum 0E.', fr: 'Réduit le coût E de cette carte de sa valeur, minimum 0E.', ja: 'このカードの E コストを層数分減らします。最低 0E。' }), color: '#0EA5E9' },
+        heavy: { label: UI.tag_heavy || 'Heavy', desc: lt({ zh: '此牌 E 花费增加对应层数。', en: 'Increases this card’s E cost by its value.', fr: 'Augmente le coût E de cette carte de sa valeur.', ja: 'このカードの E コストを層数分増やします。' }), color: '#8D6E63' },
         temp_magic_heavy: { label: UI.tag_temp_magic_heavy || 'Temporary Magic Heavy', desc: lt({ zh: '本次打出时 M 花费增加对应层数，打出后清除。', en: 'Increases M cost for this play only, then clears after being played.', fr: 'Augmente le coût M pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ M コストを増やし、使用後に消えます。' }), color: '#7A5CFF' },
         floating: { label: UI.tag_floating || 'Floating', desc: lt({ zh: '打出后若本应进入弃牌堆，则洗入抽牌堆随机位置。', en: 'After being played, if it would enter discard, it is shuffled into the deck instead.', fr: 'Après utilisation, si elle devait aller dans la défausse, elle est mélangée dans le deck à la place.', ja: '使用後、本来捨て札に行く場合、代わりに山札へランダムに戻ります。' }), color: '#1687B8' },
         nazar: { label: UI.status_nazar || lt({ zh: '邪眼', en: 'Nazar', fr: 'Nazar', ja: 'ナザール' }), desc: lt({ zh: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', en: 'After armor resolves, 1-9 physical damage you would take becomes 1. At 10 or more, reduce it by 9 and remove 1 stack.', fr: 'Après l’armure, les dégâts physiques subis de 1 à 9 deviennent 1. À partir de 10, ils sont réduits de 9 et cet effet perd 1 charge.', ja: '護甲の計算後、受ける物理ダメージが1～9なら1になります。10以上なら9減少し、1層減ります。' }), color: COLORS.magic },
@@ -14465,6 +14477,7 @@ function getIntroFlagDescription(flag, custom = null) {
         swift: lt({ zh: 'E花费减少X，最少为0。', en: 'E cost is reduced by X, minimum 0.', fr: 'Le coût E est réduit de X, minimum 0.', ja: 'E コストをX減らします。最低0。' }),
         magic_swift: lt({ zh: 'M花费减少X，最少为0。', en: 'M cost is reduced by X, minimum 0.', fr: 'Le coût M est réduit de X, minimum 0.', ja: 'M コストをX減らします。最低0。' }),
         temp_swift: lt({ zh: '本次打出时E花费减少X，打出后清除。', en: 'For this play only, E cost is reduced by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E est réduit de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX減らし、使用後に消えます。' }),
+        heavy: lt({ zh: 'E花费增加X，最少为0。', en: 'E cost is increased by X, minimum 0.', fr: 'Le coût E est augmenté de X, minimum 0.', ja: 'E コストをX増やします。最低0。' }),
         temp_heavy: lt({ zh: '本次打出时E花费增加X，打出后清除。', en: 'For this play only, E cost is increased by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E augmente de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX増やし、使用後に消えます。' }),
         temp_magic_heavy: getTermIntroLibrary().temp_magic_heavy.desc,
         floating: getTermIntroLibrary().floating.desc,
@@ -14778,6 +14791,7 @@ function collectCardIntroTerms(cardDict) {
         [/(精准|precision|add_tag["']?\s*[:=]\s*["']?precision|tag["']?\s*[:=]\s*["']?precision)/i, 'precision'],
         [/(魔力迅捷|magic swift|magic_swift|magic_swift_value)/i, 'magic_swift'],
         [/(暂时迅捷|temporary swift|temp_swift|temp_swift_value)/i, 'temp_swift'],
+        [/(沉重|(^|\W)heavy($|\W)|heavy_value)/i, 'heavy'],
         [/(暂时沉重|temporary heavy|temp_heavy|temp_heavy_value)/i, 'temp_heavy'],
         [/(暂时魔力沉重|temporary magic heavy|temp_magic_heavy|temp_magic_heavy_value)/i, 'temp_magic_heavy'],
         [/(威力|power|power_value)/i, 'power'],
@@ -14849,7 +14863,7 @@ function getStatusIntroItem(statusInfo) {
         foresight: { label: UI.status_foresight, desc: '回合开始抽牌时，可以选择最多层数张手牌丢弃，然后抽对应张牌。', color: '#2980B9' },
         fracture: { label: UI.status_fracture, desc: '每打出一张牌减少与层数相同的H，自己回合结束清除。', color: '#7F8C8D' },
         stagnation: { label: UI.status_stagnation, desc: '回合开始时，中毒仍会造成伤害，但结算后 P 层数不会减半。自己回合结束时滞留层数-1。', color: '#9B59B6' },
-        blind: { label: UI.status_blind, desc: '效果存在时，队友无法查看自己的手牌。1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。回合开始生效后，清空失明。', color: '#2C3E50' },
+        blind: { label: UI.status_blind, desc: '效果存在时，队友无法查看自己的手牌。1层：自己手牌和反制窗口卡只显示类型，抽牌堆显示为问号；2层：战斗日志变灰，自己H/E/M显示为问号，牌连类型也隐藏，弃牌堆显示为问号，并隐藏反制伤害预测；3层及以上：其他玩家H/E/M、自己的牌堆数量和大多数可见数值显示为问号，他人手牌区不显示卡牌，只显示问号。自己回合开始和效果出现时手牌会被打乱。失明期间，自己的牌在选择窗口中不能取消。回合开始生效后，清空失明。', color: '#2C3E50' },
         'jungle:fragile': { label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A' },
         fragile: { label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A' },
         'jungle:shield': { label: '护盾', desc: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', color: '#2E7D7D' },
@@ -14897,7 +14911,7 @@ function getStatusIntroItem(statusInfo) {
         foresight: { label: UI.status_foresight, desc: lt({ zh: builtIns.foresight.desc, en: 'At turn-start draw, you may discard up to that many hand cards, then draw the same number.', fr: 'Lors de la pioche de début de tour, vous pouvez défausser jusqu’à autant de cartes en main, puis en piocher autant.', ja: 'ターン開始ドロー時、層数まで手札を捨て、その枚数を引けます。' }) },
         fracture: { label: UI.status_fracture, desc: lt({ zh: builtIns.fracture.desc, en: 'Whenever you play a card, lose H equal to its stacks. Clears at your turn end.', fr: 'Chaque fois que vous jouez une carte, perdez H égal aux charges. Disparaît à la fin de votre tour.', ja: 'カードを使うたび層数分Hを失います。自分ターン終了時に消えます。' }) },
         stagnation: { label: UI.status_stagnation, desc: lt({ zh: builtIns.stagnation.desc, en: 'Poison still deals damage at turn start, but P does not halve afterward. Loses 1 stack at your turn end.', fr: 'Le poison inflige toujours ses dégâts au début du tour, mais P n’est pas réduit de moitié ensuite. Perd 1 charge à la fin de votre tour.', ja: 'ターン開始時に毒ダメージは受けますが、その後Pは半減しません。自分ターン終了時に1層減ります。' }) },
-        blind: { label: UI.status_blind, desc: lt({ zh: builtIns.blind.desc, en: 'While Blind is active, teammates cannot see your hand. Higher stacks hide more card and combat information from you. At your turn start, your hand is shuffled, then Blind is cleared.', fr: 'Tant que Cécité est active, vos coéquipiers ne peuvent pas voir votre main. Plus les charges sont élevées, plus les informations de cartes et de combat vous sont cachées. Au début de votre tour, votre main est mélangée, puis Cécité disparaît.', ja: '失明中、味方は自分の手札を確認できません。層数が高いほどカードや戦闘情報が隠れます。自分ターン開始時、手札をシャッフルしてから失明は消えます。' }) },
+        blind: { label: UI.status_blind, desc: lt({ zh: builtIns.blind.desc, en: 'While Blind is active, teammates cannot see your hand. Higher stacks hide more card and combat information from you. While blinded, your card choices cannot be cancelled. At your turn start, your hand is shuffled, then Blind is cleared.', fr: 'Tant que Cécité est active, vos coéquipiers ne peuvent pas voir votre main. Plus les charges sont élevées, plus les informations de cartes et de combat vous sont cachées. Sous Cécité, vos choix de carte ne peuvent pas être annulés. Au début de votre tour, votre main est mélangée, puis Cécité disparaît.', ja: '失明中、味方は自分の手札を確認できません。層数が高いほどカードや戦闘情報が隠れます。失明中はカードの選択をキャンセルできません。自分ターン開始時、手札をシャッフルしてから失明は消えます。' }) },
         fragile: { label: lt({ zh: '易损', en: 'Fragile', fr: 'Fragile', ja: '脆弱' }), desc: lt({ zh: builtIns.fragile.desc, en: 'Reduces armor by its stacks. Negative armor increases physical damage taken. Clears at your turn start.', fr: 'Réduit l’armure de ses charges. Une armure négative augmente les dégâts physiques reçus. Disparaît au début de votre tour.', ja: '護甲を層数分減らします。護甲が負なら受ける物理ダメージが増えます。自分ターン開始時に消えます。' }) },
         shield: { label: lt({ zh: '护盾', en: 'Shield', fr: 'Bouclier', ja: 'シールド' }), desc: lt({ zh: builtIns.shield.desc, en: 'Consumes stacks to block that much damage, including magic damage. Halves at your turn start.', fr: 'Consomme ses charges pour bloquer autant de dégâts, y compris magiques. Est divisé par deux au début de votre tour.', ja: '層数を消費して同量のダメージを防ぎます。魔法ダメージも含みます。自分ターン開始時に半減します。' }) },
         turn_heal: { label: lt({ zh: '回合回复', en: 'Turn Heal', fr: 'Soin de tour', ja: 'ターン回復' }), desc: lt({ zh: builtIns.turn_heal.desc, en: 'Shown as Turn Heal:X;Y. When applied and at turn start, heal Y H, then X decreases by 1. Removed at X=0.', fr: 'Affiché Soin de tour:X;Y. À l’application et au début du tour, soigne Y H, puis X diminue de 1. Retiré à X=0.', ja: '回合回复:X;Y と表示。付与時とターン開始時にY H回復し、Xが1減ります。X=0で消えます。' }) },
@@ -15732,7 +15746,6 @@ function isReplacementNoticeForCurrentSocket(data = {}) {
 }
 
 function connectSocket(serverUrl) {
-    stopLocalSoloRuntime();
     let url = normalizeServerUrl(serverUrl);
     const readyState = socket && socket.io ? socket.io._readyState : '';
     const sameEndpoint = socket && socketConnectUrl === url;
@@ -15913,6 +15926,7 @@ function connectSocket(serverUrl) {
             activePvpMatchMode = normalizeMatchModeKey(data.match_mode);
             localStorage.setItem('preferred_mode', activePvpMatchMode);
         }
+        if (data.mod_unlock_state) setModUnlockState(data.mod_unlock_state, false);
         if (pendingTutorialStart) {
             pendingTutorialStart = false;
             emitTutorialStart();
@@ -15932,6 +15946,7 @@ function connectSocket(serverUrl) {
         clearNetworkMatchStateForLobby();
         phase = 'lobby';
         updateStatus(UI.lobby_status.replace('{0}', nickname));
+        renderModUnlockModal(false);
     });
     bindSocketEvent('login_fail', (data) => {
         setButtonLoading('btn-connect', false);
@@ -15977,6 +15992,7 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('lobby_mode_confirmed', (data = {}) => {
         if (!data || !data.match_mode) return;
+        if (data.mod_unlock_state) setModUnlockState(data.mod_unlock_state, false);
         const matchMode = normalizeMatchModeKey(data.match_mode);
         const engineMode = engineModeForMatchMode(matchMode);
         const matchType = matchMode.startsWith('ranked_') ? 'ranked' : 'casual';
@@ -16195,6 +16211,22 @@ function connectSocket(serverUrl) {
         if (isNetworkMatchPhase(nextPhase)) markNetworkMatchTransition(`game_phase:${nextPhase}`);
         prepareRuntimeForBattleEntry(previousPhase, nextPhase);
         phase = nextPhase;
+        if (phase === 'mod_draw_complete') {
+            const finalMods = Array.isArray(data.official_mods) ? data.official_mods : [];
+            showActionToast(
+                finalMods.length
+                    ? lt({
+                        zh: `本局官方模组：${finalMods.map(getShortModDisplayName).join('、')}`,
+                        en: `Official mods: ${finalMods.map(getShortModDisplayName).join(', ')}`,
+                        fr: `Mods officiels : ${finalMods.map(getShortModDisplayName).join(', ')}`,
+                        ja: `公式Mod：${finalMods.map(getShortModDisplayName).join('、')}`,
+                    })
+                    : lt({ zh: '本局仅使用原版。', en: 'Vanilla only this match.', fr: 'Vanille uniquement.', ja: '原版のみです。' }),
+                3600,
+                'info',
+            );
+            phase = 'mod_draw';
+        }
         rememberActiveMatchRoute(data || {}, `game_phase:${nextPhase}`);
         if (!data.spectating) {
             isSpectating = false;
@@ -16203,7 +16235,12 @@ function connectSocket(serverUrl) {
             spectateCardDataKey = '';
             spectatePerspective = 0;
         }
-        if (phase === 'draft') {
+        if (phase === 'mod_draw') {
+            resetRematchUiState();
+            modDrawNoticeShown = false;
+            showView('view-mod-draw');
+            updateStatus(lt({ zh: '模组抽取', en: 'Mod Draw', fr: 'Tirage des mods', ja: 'Mod抽選' }));
+        } else if (phase === 'draft') {
             debugLog('[client] entering draft phase, reset rematch flag');
             resetRematchUiState();
             showView('view-draft');
@@ -16291,6 +16328,30 @@ function connectSocket(serverUrl) {
         syncRoomChatHistory(data || {});
         updateDraftInfo(draftState);
         syncOpponentDisconnectModalFromState(data);
+    });
+    bindSocketEvent('mod_draw_state', (data) => {
+        if (!shouldAcceptNetworkMatchPayload(data, 'mod_draw_state')) return;
+        clearTransientMatchRecovery('mod_draw_state');
+        markNetworkMatchTransition('mod_draw_state');
+        rememberActiveMatchRoute({ ...(data || {}), phase: 'mod_draw' }, 'mod_draw_state');
+        if (data.your_id != null) playerId = Number(data.your_id);
+        syncBattleLogMatch(data || {});
+        syncPhaseChatMatch(data || {});
+        syncRoomChatHistory(data || {});
+        renderModDrawState(data);
+    });
+    bindSocketEvent('mod_draw_skipped', (data) => {
+        renderModDrawState({ ...(data || {}), skipped: true, only_vanilla: true });
+    });
+    bindSocketEvent('mod_unlock_required', (data) => {
+        if (data && data.match_mode) {
+            activePvpMatchMode = normalizeMatchModeKey(data.match_mode);
+            localStorage.setItem('preferred_mode', activePvpMatchMode);
+        }
+        setModUnlockState(data, true);
+    });
+    bindSocketEvent('mod_unlock_updated', (data) => {
+        setModUnlockState(data, false);
     });
     bindSocketEvent('pregame_timer_update', (data) => {
         if (!data) return;
@@ -23252,12 +23313,6 @@ function getServerAddress() {
     return DEFAULT_SERVER;
 }
 
-function isLocalSoloRuntimeActive() {
-    // Solo training intentionally uses the server-side 1v1 GameEngine.
-    // Keep the old worker code dormant so solo behavior represents real games.
-    return false;
-}
-
 function clearPendingSoloFallback() {
     if (pendingSoloFallbackTimer) {
         clearTimeout(pendingSoloFallbackTimer);
@@ -23278,199 +23333,9 @@ function scheduleSoloOfflineFallback(kind, payload) {
     }, 5000);
 }
 
-function effectsAreLocalSoloSupported(effects) {
-    if (!Array.isArray(effects)) return true;
-    for (const effect of effects) {
-        if (!effect || typeof effect !== 'object') continue;
-        const effectType = effect.type || '';
-        if (effectType && !LOCAL_SOLO_SUPPORTED_EFFECTS.has(effectType)) return false;
-        const params = effect.params || {};
-        for (const key of ['then', 'else', 'body', 'effects']) {
-            if (Array.isArray(params[key]) && !effectsAreLocalSoloSupported(params[key])) return false;
-        }
-    }
-    return true;
-}
-
-function v2StepsAreLocalSoloSupported(value) {
-    if (Array.isArray(value)) return value.every(v2StepsAreLocalSoloSupported);
-    if (!value || typeof value !== 'object') return true;
-    const op = value.op || value.type || '';
-    if (op && !LOCAL_SOLO_SUPPORTED_V2_OPS.has(op)) return false;
-    return Object.values(value).every(v2StepsAreLocalSoloSupported);
-}
-
-function v2EventsAreLocalSoloSupported(cardDef) {
-    const events = (cardDef.v2_events && typeof cardDef.v2_events === 'object')
-        ? cardDef.v2_events
-        : ((cardDef.v2_resource && cardDef.v2_resource.events && typeof cardDef.v2_resource.events === 'object')
-            ? cardDef.v2_resource.events
-            : {});
-    return Object.values(events).every(eventDef => {
-        const steps = Array.isArray(eventDef) ? eventDef : (eventDef && (eventDef.steps || eventDef.effects));
-        return v2StepsAreLocalSoloSupported(steps || []);
-    });
-}
-
-function cardIsLocalSoloSupported(cardDef) {
-    if (!cardDef) return false;
-    if (!effectsAreLocalSoloSupported(cardDef.effects || [])) return false;
-    if (!v2EventsAreLocalSoloSupported(cardDef)) return false;
-    const scripts = cardDef.scripts || {};
-    for (const script of Object.values(scripts)) {
-        const effects = Array.isArray(script) ? script : (script && script.effects);
-        if (!effectsAreLocalSoloSupported(effects || [])) return false;
-    }
-    return true;
-}
-
-function soloPayloadIsLocalSupported(payload) {
-    if (!window.Worker || !payload) return false;
-    const deck = [...(payload.deck0 || []), ...(payload.deck1 || [])];
-    return deck.every(entry => {
-        const defId = typeof entry === 'string' ? entry : entry && entry.def_id;
-        return cardIsLocalSoloSupported(getCardDef(defId));
-    });
-}
-
-function stopLocalSoloRuntime() {
-    if (localSoloRuntime.worker) {
-        try { localSoloRuntime.worker.terminate(); } catch (_) {}
-    }
-    localSoloRuntime.enabled = false;
-    localSoloRuntime.worker = null;
-    localSoloRuntime.fallbackPayload = null;
-    localSoloRuntime.fallbackKind = '';
-}
-
-function handleLocalGamePhase(data) {
-    const previousPhase = phase;
-    prepareRuntimeForBattleEntry(previousPhase, data.phase);
-    phase = data.phase || phase;
-    if (data.solo) soloMode = true;
-    if (data.tutorial) tutorialMode = true;
-    if (phase === 'playing' || phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
-        showView('view-game');
-        updateStatus(UI.game_loading || 'Loading...');
-    } else if (phase === 'game_over') {
-        closePileViewerModal();
-        updateStatus(UI.game_over);
-    }
-    syncBattleLogMatch(data || {});
-    syncPhaseChatMatch(data || {});
-}
-
-function handleLocalSoloState(data) {
-    applyClientSoloSkins(data);
-    const previousPhase = phase;
-    const previousGameState = gameState;
-    soloMode = true;
-    tutorialMode = !!data.tutorial || tutorialMode;
-    isSpectating = false;
-    spectateCardDataKey = '';
-    syncBattleLogMatch(data || {});
-    prepareRuntimeForBattleEntry(previousPhase, data.phase);
-    gameState = data;
-    phase = data.phase || phase;
-    playerId = data.your_id;
-    if (data.pending_response == null && !responsePending) {
-        pendingPlayCard = null;
-    }
-        if (data.pending_response === null && responsePending) {
-            responsePending = false;
-        responseData = null;
-        removeFloatingCardPreview();
-        const rp = $('response-panel');
-        if (rp) { rp.innerHTML = ''; rp.classList.add('hidden'); }
-            if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
-        }
-        if (data.pending_choice == null && choicePending) {
-        invalidateChoiceRequest();
-    }
-    schedulePendingChoiceRecoveryFromState(data);
-    discardMismatchedOptimisticState(data);
-    const keepOptimisticForState = !!optimisticResourceOverride;
-    clearPendingServerAction({ keepOptimistic: keepOptimisticForState });
-    if (phase === 'game_over') {
-        if (data.tutorial || tutorialMode) {
-            renderGameOverAfterFinalAnimation(previousGameState, data, { fullScreen: true, tutorial: true });
-        } else {
-            renderGameOverAfterFinalAnimation(previousGameState, data, { fullScreen: false, deferResultLabels: true });
-        }
-        optimisticResourceOverride = null;
-    } else {
-        clearScheduledGameOver();
-        if (!areSequentialGameStates(previousGameState, data)) {
-            pendingLocalResourceCosts = [];
-            pendingOptimisticResourceCosts = [];
-        }
-        queueVisibleHandExileAnimations(previousGameState, data);
-        renderGame(data);
-        showStateDeltas(previousGameState, data);
-        optimisticResourceOverride = null;
-    }
-    if (tutorialMode) {
-        scheduleTutorialOverlayStart();
-        updateTutorialOverlay();
-        scheduleTutorialBotAction();
-        setTimeout(updateTutorialOverlay, 80);
-    }
-}
-
-function handleLocalSoloMessage(event) {
-    const message = event.data || {};
-    const data = message.data || {};
-    if (message.type === 'game_phase') {
-        handleLocalGamePhase(data);
-    } else if (message.type === 'solo_state') {
-        handleLocalSoloState(data);
-    } else if (message.type === 'response_request') {
-        clearPendingResponseRecovery();
-        clearPendingServerAction({ keepOptimistic: true });
-        responsePending = true;
-        responseData = data;
-        showResponseUI(data);
-    } else if (message.type === 'choice_request') {
-        clearPendingServerAction({ keepOptimistic: true });
-        pendingPlayCard = null;
-        beginChoiceRequest(data);
-    } else if (message.type === 'server_error') {
-        const errorCode = data && (data.code || data.error_code || data.reason);
-        const errorMessage = data && (data.message || '');
-        if (errorCode === 'NO_PENDING_CHOICE' || errorMessage === UI.error_no_pending_choice || errorMessage === '没有待选择操作') {
-            debugLog('[client] ignored stale local no-pending-choice server_error');
-            clearPendingServerAction();
-            return;
-        }
-        clearPendingServerAction();
-        flashStatus(translateServerError(data.message), 3000, 'error');
-        if (gameState && gameState.phase) renderGame(gameState);
-    } else if (message.type === 'solo_paused') {
-        const wasTutorial = tutorialMode;
-        stopLocalSoloRuntime();
-        soloMode = false;
-        tutorialMode = false;
-        if (wasTutorial) finishTutorialReturn();
-        else showSoloTraining();
-    } else if (message.type === 'fallback_required') {
-        const payload = localSoloRuntime.fallbackPayload;
-        const kind = localSoloRuntime.fallbackKind;
-        stopLocalSoloRuntime();
-        if (kind === 'tutorial') {
-            pendingTutorialStart = true;
-        } else {
-            pendingSoloStart = true;
-            window.__pendingSoloPayload = payload;
-        }
-        connectSocket(getServerAddress());
-    }
-}
-
-function startLocalSoloRuntime(kind, payload) {
-    stopLocalSoloRuntime();
-    return false;
-}
-
+// Solo training and the tutorial run on the server-side Python GameEngine
+// through the solo_* / tutorial_* socket events. Do not add a second
+// browser-side rules engine: card and rule changes must live in Python only.
 function emitSoloEvent(eventName, payload = {}) {
     if (socket && socket.connected) {
         socket.emit(eventName, payload);
@@ -24635,7 +24500,6 @@ async function showSoloTraining() {
     } catch (err) {
         console.warn('[mods] failed to refresh card data before solo:', err);
     }
-    stopLocalSoloRuntime();
     clearActiveMatchRoute('open_solo_training');
     soloMode = false;
     phase = 'solo_edit';
@@ -24690,7 +24554,6 @@ function saveSoloDecks() {
 }
 
 function startTutorial(returnTarget = 'home') {
-    stopLocalSoloRuntime();
     tutorialReturnTarget = returnTarget;
     if (returnTarget === 'home') localStorage.setItem('gtn_seen_intro', '1');
     tutorialDeckViewed = false;
@@ -25068,7 +24931,7 @@ function skipTutorial() {
         clearTimeout(tutorialBotTimer);
         tutorialBotTimer = null;
     }
-    if ((socket && socket.connected && tutorialMode) || isLocalSoloRuntimeActive()) {
+    if (socket && socket.connected && tutorialMode) {
         emitSoloEvent('solo_pause', {});
     } else {
         finishTutorialReturn();
@@ -25101,11 +24964,11 @@ function finishTutorialReturn() {
 }
 
 function scheduleTutorialBotAction() {
-    if (!tutorialMode || (!socket && !isLocalSoloRuntimeActive()) || !gameState || gameState.phase === 'game_over') return;
+    if (!tutorialMode || !socket || !gameState || gameState.phase === 'game_over') return;
     if (tutorialBotTimer) clearTimeout(tutorialBotTimer);
     if (gameState.current_player !== 1 || gameState.pending_response || choicePending || responsePending) return;
     tutorialBotTimer = setTimeout(() => {
-        if (!tutorialMode || (!socket && !isLocalSoloRuntimeActive()) || !gameState || gameState.current_player !== 1) return;
+        if (!tutorialMode || !socket || !gameState || gameState.current_player !== 1) return;
         emitSoloEvent('tutorial_bot_action', {});
     }, 2100);
 }
@@ -25411,7 +25274,7 @@ async function editSoloCardFlags(which, idx) {
     const card = deck[idx];
     if (!card) return;
     const cd = getCardDef(card.def_id);
-    const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void', 'self_only', 'uncancellable', 'copy', 'unique', 'swift', 'stealth', 'revealed'];
+    const allFlags = ['precision', 'exile', 'non_stackable', 'indestructible', 'sprout', 'symbiosis', 'attract', 'void', 'self_only', 'uncancellable', 'copy', 'unique', 'swift', 'heavy', 'stealth', 'revealed'];
     const base = new Set([
         ...normalizeFlagList(cd && cd.flags),
         ...normalizeFlagList(cd && cd.tags),
@@ -25679,7 +25542,6 @@ async function startSoloTraining() {
     if (sub1 === false) return;
     saveSoloDecks();
     const payload = { deck0: soloDeckA, deck1: soloDeckB, event0, event1, sub0, sub1, ...getModLoginPayload() };
-    stopLocalSoloRuntime();
     if (socket && socket.connected) {
         clearPendingSoloFallback();
         emitSoloStart(payload);
@@ -25775,6 +25637,225 @@ function renderSeasonCountdown(season) {
     seasonCountdownTimer = window.setInterval(tick, 1000);
 }
 
+function modUnlockProgressText(state = modUnlockState) {
+    if (!state) return '';
+    if (state.guest) {
+        return lt({
+            zh: '游客在这两个娱乐模式中仅可使用原版官方模组，娱乐模组和社区模组不可用。',
+            en: 'Guests can only use vanilla official mods in these casual modes; entertainment and community mods are unavailable.',
+            fr: 'Les invités ne peuvent utiliser que les mods officiels vanille dans ces modes ; les mods détente et communautaires sont indisponibles.',
+            ja: 'ゲストはこの2つのエンタメモードで原版公式Modのみ使用できます。エンタメModとコミュニティModは使用できません。',
+        });
+    }
+    const valid = Number(state.valid_games || 0);
+    if (!state.fixed_unlocked) {
+        return lt({
+            zh: `有效对局 ${valid}。再完成 ${Math.max(0, Number(state.fixed_unlock_games || 10) - valid)} 场有效对局，将自动解锁 5 个官方模组。`,
+            en: `Valid matches: ${valid}. Complete ${Math.max(0, Number(state.fixed_unlock_games || 10) - valid)} more to automatically unlock 5 official mods.`,
+            fr: `Parties valides : ${valid}. Encore ${Math.max(0, Number(state.fixed_unlock_games || 10) - valid)} pour débloquer automatiquement 5 mods officiels.`,
+            ja: `有効対局 ${valid}。あと ${Math.max(0, Number(state.fixed_unlock_games || 10) - valid)} 戦で公式Modを5つ自動解放します。`,
+        });
+    }
+    if (state.all_official_unlocked) {
+        return lt({
+            zh: `有效对局 ${valid}。全部官方模组已解锁。`,
+            en: `Valid matches: ${valid}. All official mods are unlocked.`,
+            fr: `Parties valides : ${valid}. Tous les mods officiels sont débloqués.`,
+            ja: `有効対局 ${valid}。すべての公式Modが解放済みです。`,
+        });
+    }
+    const unspent = Number(state.unspent_choices || 0);
+    if (unspent > 0) {
+        return lt({
+            zh: `有效对局 ${valid}。还有 ${unspent} 次官方模组自选机会，请先选择要解锁的模组。`,
+            en: `Valid matches: ${valid}. You have ${unspent} official-mod unlock choice(s) to use.`,
+            fr: `Parties valides : ${valid}. Vous avez ${unspent} choix de mod officiel à utiliser.`,
+            ja: `有効対局 ${valid}。公式Modの解放選択が ${unspent} 回残っています。`,
+        });
+    }
+    const nextGames = Number(state.next_unlock_games || 0);
+    return lt({
+        zh: `有效对局 ${valid}。再完成 ${Math.max(0, nextGames - valid)} 场有效对局可获得下一次官方模组自选机会。`,
+        en: `Valid matches: ${valid}. Complete ${Math.max(0, nextGames - valid)} more for the next official-mod unlock choice.`,
+        fr: `Parties valides : ${valid}. Encore ${Math.max(0, nextGames - valid)} pour le prochain choix de mod officiel.`,
+        ja: `有効対局 ${valid}。あと ${Math.max(0, nextGames - valid)} 戦で次の公式Mod解放選択を獲得します。`,
+    });
+}
+
+function updateOfficialUnlockHint() {
+    const hint = $('settings-official-unlock-hint');
+    if (!hint) return;
+    const show = ['casual_1v1', 'casual_2v2'].includes(getCurrentPvpMatchMode()) && !!modUnlockState;
+    hint.classList.toggle('hidden', !show);
+    if (show) hint.textContent = modUnlockProgressText(modUnlockState);
+}
+
+function closeModUnlockModal() {
+    const modal = $('mod-unlock-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function renderModUnlockModal(forceShow = false) {
+    const modal = $('mod-unlock-modal');
+    const optionsEl = $('mod-unlock-options');
+    const progressEl = $('mod-unlock-progress');
+    if (!modal || !optionsEl) return;
+    const casualMode = ['casual_1v1', 'casual_2v2'].includes(getCurrentPvpMatchMode());
+    const allowedPhase = forceShow || phase === 'lobby' || phase === 'game_over';
+    const pending = !!modUnlockState?.has_pending_choice;
+    if (!pending || !casualMode || !allowedPhase) {
+        closeModUnlockModal();
+        return;
+    }
+    modal.classList.remove('hidden');
+    if (progressEl) progressEl.textContent = modUnlockProgressText(modUnlockState);
+    optionsEl.innerHTML = '';
+    const candidates = Array.isArray(modUnlockState.choice_candidates) ? modUnlockState.choice_candidates : [];
+    candidates.forEach(filename => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'mod-unlock-option';
+        button.disabled = modUnlockSubmitting;
+        const name = document.createElement('div');
+        name.className = 'mod-draw-card-name';
+        name.textContent = getShortModDisplayName(filename) || filename;
+        const file = document.createElement('div');
+        file.className = 'mod-draw-card-file';
+        file.textContent = filename;
+        button.appendChild(name);
+        button.appendChild(file);
+        button.onclick = () => {
+            if (modUnlockSubmitting || !socket) return;
+            modUnlockSubmitting = true;
+            renderModUnlockModal(true);
+            socket.emit('choose_mod_unlock', { mod_filename: filename });
+        };
+        optionsEl.appendChild(button);
+    });
+}
+
+function setModUnlockState(state, forceShow = false) {
+    if (!state || typeof state !== 'object') return;
+    modUnlockState = state;
+    modUnlockSubmitting = false;
+    updateOfficialUnlockHint();
+    renderModUnlockModal(forceShow);
+    renderOfficialModList();
+}
+
+function renderModDrawState(data = {}) {
+    if (!data || typeof data !== 'object') return;
+    modDrawState = data;
+    if (!modDrawNoticeShown && data.only_vanilla) {
+        modDrawNoticeShown = true;
+        showActionToast(lt({
+            zh: '本局没有可抽取的官方模组，仅使用原版。',
+            en: 'No official mods to draw this match. Vanilla only.',
+            fr: 'Aucun mod officiel à tirer pour cette partie. Vanille uniquement.',
+            ja: 'この対局で抽選できる公式Modがないため、原版のみで開始します。',
+        }), 3200, 'info');
+    }
+    if (data.skipped) return;
+    phase = 'mod_draw';
+    if (data.your_id != null) playerId = Number(data.your_id);
+    showView('view-mod-draw');
+    const title = $('mod-draw-title');
+    const info = $('mod-draw-info');
+    const timer = $('mod-draw-timer');
+    const optionsEl = $('mod-draw-options');
+    const playersEl = $('mod-draw-players');
+    const confirmBtn = $('btn-mod-draw-confirm');
+    if (title) title.textContent = lt({ zh: '模组抽取', en: 'Mod Draw', fr: 'Tirage des mods', ja: 'Mod抽選' });
+    const maxBans = Number(data.max_bans || 0);
+    if (info) {
+        info.textContent = lt({
+            zh: `从双方共同解锁的官方模组中抽取了 ${(data.candidates || []).length} 个。每人最多禁用 ${maxBans} 个；原版始终可用。`,
+            en: `${(data.candidates || []).length} official mod(s) were drawn from the shared unlocked pool. Each player may ban up to ${maxBans}; vanilla is always enabled.`,
+            fr: `${(data.candidates || []).length} mod(s) officiel(s) tirés du pool partagé. Chaque joueur peut en bannir jusqu’à ${maxBans} ; la vanille reste toujours active.`,
+            ja: `共通解放プールから公式Modを ${(data.candidates || []).length} 個抽選しました。各プレイヤーは最大 ${maxBans} 個まで禁止できます。原版は常に有効です。`,
+        });
+    }
+    if (timer) {
+        const remaining = data.remaining == null ? '—' : Math.max(0, Number(data.remaining));
+        timer.textContent = `${remaining}s${data.paused ? ` · ${lt({ zh: '等待重连', en: 'Waiting for reconnect', fr: 'En attente de reconnexion', ja: '再接続待ち' })}` : ''}`;
+    }
+    const submittedByIndex = data.submitted || {};
+    const yourSubmitted = !!submittedByIndex[String(playerId)] || !!submittedByIndex[playerId];
+    const serverBans = Array.isArray(data.your_bans) ? data.your_bans.map(String) : [];
+    const keepLocalSelection = !yourSubmitted
+        && Date.now() - Number(modDrawLocalEditAt || 0) < 1500
+        && modDrawLocalBans.every(filename => (data.candidates || []).some(candidate => candidate.filename === filename));
+    modDrawLocalBans = keepLocalSelection
+        ? modDrawLocalBans.slice(0, maxBans)
+        : serverBans.slice(0, maxBans);
+    if (optionsEl) {
+        optionsEl.innerHTML = '';
+        (data.candidates || []).forEach(candidate => {
+            const filename = String(candidate.filename || '');
+            const selected = modDrawLocalBans.includes(filename);
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'mod-draw-card' + (selected ? ' selected-banned' : '');
+            button.disabled = yourSubmitted || (modDrawLocalBans.length >= maxBans && !selected);
+            if (button.disabled && !yourSubmitted) button.classList.add('disabled-choice');
+            const name = document.createElement('div');
+            name.className = 'mod-draw-card-name';
+            name.textContent = candidate.name_cn && currentLang === 'zh'
+                ? candidate.name_cn
+                : (candidate.name_en || candidate.name || getShortModDisplayName(filename) || filename);
+            const file = document.createElement('div');
+            file.className = 'mod-draw-card-file';
+            file.textContent = filename;
+            button.appendChild(name);
+            button.appendChild(file);
+            if (selected) {
+                const badge = document.createElement('span');
+                badge.className = 'mod-draw-badge';
+                badge.textContent = lt({ zh: '已禁', en: 'Banned', fr: 'Banni', ja: '禁止' });
+                button.appendChild(badge);
+            }
+            button.onclick = () => {
+                if (yourSubmitted || !socket) return;
+                const next = modDrawLocalBans.slice();
+                const index = next.indexOf(filename);
+                if (index >= 0) next.splice(index, 1);
+                else if (next.length < maxBans) next.push(filename);
+                modDrawLocalBans = next;
+                modDrawLocalEditAt = Date.now();
+                renderModDrawState({ ...data, your_bans: next });
+                socket.emit('mod_draw_update_bans', { bans: next });
+            };
+            optionsEl.appendChild(button);
+        });
+    }
+    if (playersEl) {
+        playersEl.innerHTML = '';
+        const names = data.player_names || [];
+        names.forEach((name, index) => {
+            const row = document.createElement('div');
+            row.className = 'mod-draw-player-row' + ((submittedByIndex[String(index)] || submittedByIndex[index]) ? ' submitted' : '');
+            const left = document.createElement('span');
+            left.textContent = `${index + 1}. ${name || `Player ${index + 1}`}`;
+            const right = document.createElement('span');
+            right.className = 'mod-draw-player-bans';
+            const bans = (data.bans && (data.bans[String(index)] || data.bans[index])) || [];
+            const submitted = !!(submittedByIndex[String(index)] || submittedByIndex[index]);
+            right.textContent = bans.length
+                ? bans.map(getShortModDisplayName).join(' / ') + (submitted ? ` · ${lt({ zh: '已确认', en: 'Ready', fr: 'Prêt', ja: '確定' })}` : '')
+                : (submitted ? lt({ zh: '不禁用 · 已确认', en: 'No bans · Ready', fr: 'Aucun bannissement · Prêt', ja: '禁止なし · 確定' }) : lt({ zh: '选择中…', en: 'Choosing…', fr: 'Choix…', ja: '選択中…' }));
+            row.appendChild(left);
+            row.appendChild(right);
+            playersEl.appendChild(row);
+        });
+    }
+    if (confirmBtn) {
+        confirmBtn.disabled = yourSubmitted;
+        confirmBtn.textContent = yourSubmitted
+            ? lt({ zh: '已确认，等待其他玩家', en: 'Submitted, waiting for others', fr: 'Validé, en attente', ja: '確定済み、他プレイヤー待ち' })
+            : lt({ zh: '确认禁用', en: 'Confirm bans', fr: 'Confirmer', ja: '禁止を確定' });
+    }
+}
+
 function renderLobby(data) {
     showView('view-lobby');
     renderSeasonCountdown(data.season);
@@ -25789,6 +25870,8 @@ function renderLobby(data) {
     localStorage.setItem('preferred_mode', serverMode);
     if (previousPvpMatchMode !== serverMode) {
         renderModSourceControls();
+        updateOfficialUnlockHint();
+        renderOfficialModList();
         void refreshCardsAfterModSettingsConfirmed();
     }
     debugLog('[client] renderLobby: players=', lobbyPlayers.length, 'mySid=', mySid, 'myTeam=', myTeam, 'mode=', serverMode);
@@ -25850,6 +25933,7 @@ function renderLobby(data) {
     );
     const teamHasAdmin = (team) => teamSpecialRank(team) < 99;
     const filteredPlayers = lobbyPlayers.filter(p => {
+        if (p.mod_unlock_blocked) return false;
         const pMode = p.status === 'spectating'
             ? normalizeMatchModeKey(p.spectating_match_mode || p.spectating_mode || p.match_mode || p.mode || 'casual_1v1')
             : normalizeMatchModeKey(p.match_mode || p.mode || 'casual_1v1');
@@ -26003,6 +26087,7 @@ function renderLobby(data) {
                 row.className = 'lobby-game-row';
                 const roundNum = Number(g.round || 0);
                 const phaseLabel = (() => {
+                    if (g.phase === 'mod_draw') return lt({ zh: '模组抽取', en: 'Mod Draw', fr: 'Tirage des mods', ja: 'Mod抽選' });
                     if (g.phase === 'event_select') return UI.lobby_phase_event_select || UI.status_event_select || UI.select_event || '配装选择';
                     if (['draft', 'event_reveal', 'sub_choice', 'event_sub_choice'].includes(g.phase)) return UI.lobby_phase_draw || '抽牌';
                     return `${UI.round}${roundNum}`;
@@ -26989,6 +27074,7 @@ function updateGameChatChannelOptions(gs) {
 function currentPhaseChatContext() {
     if (phase === 'draft') return draftState || {};
     if (phase === 'event_select') return eventSelectData || {};
+    if (phase === 'mod_draw') return modDrawState || {};
     return {};
 }
 
@@ -27239,7 +27325,7 @@ function updatePhaseChatChannelOptions(ctx = currentPhaseChatContext()) {
 function updatePhaseChatPanelVisibility(viewId) {
     const panel = $('phase-chat-panel');
     if (!panel) return;
-    const show = viewId === 'view-draft' || viewId === 'view-event-select';
+    const show = viewId === 'view-draft' || viewId === 'view-event-select' || viewId === 'view-mod-draw';
     panel.classList.toggle('hidden', !show);
     if (show) {
         const title = $('phase-chat-title');
@@ -29327,7 +29413,7 @@ function getPlayerCritMultiplier(playerData = {}) {
     const raw = (playerData && playerData.raw && typeof playerData.raw === 'object') ? playerData.raw : playerData;
     const customVars = (raw && raw.custom_vars && typeof raw.custom_vars === 'object') ? raw.custom_vars : {};
     const value = Number(customVars.hel_crit_multiplier || 0);
-    if (!Number.isFinite(value) || value <= 0 || Math.abs(value - 1.5) <= 0.001) return null;
+    if (!Number.isFinite(value) || value <= 0 || Math.abs(value - 2) <= 0.001) return null;
     return value;
 }
 
@@ -31236,13 +31322,15 @@ function rootCardNeedsPlayTargetByLegacyFields(cardDef) {
 function canTriggerEquipmentNow(cardInst, cardDef, eqDict = {}, isMyEquipment = true) {
     if (!cardInst || !cardDef || cardDef.card_type !== 'root') return false;
     const turns = Number(eqDict.turns_equipped || 0);
-    const triggerReady = !(cardInst.def_id === 'Flower' && turns < 1);
+    // Cards whose text omits "已装备1回合时" ship trigger_ready_turns: 0 and can
+    // be triggered on the turn they are equipped.
+    const requiredTurns = Math.max(0, Number(cardDef.trigger_ready_turns == null ? 1 : cardDef.trigger_ready_turns));
+    const triggerReady = turns >= requiredTurns;
     const maxUses = getEquipmentTriggerMaxUses(cardDef);
     const usesThisTurn = Math.max(0, Number(eqDict.uses_this_turn || 0));
     return (
         Number(cardDef.trigger_cost_e) >= 0
         && !!isMyEquipment
-        && turns >= 1
         && triggerReady
         && !(maxUses > 0 && usesThisTurn >= maxUses)
         && isFriendlyTurn()
@@ -35474,7 +35562,7 @@ function renderGameOver(data) {
         if (isTutorialGameOver) {
             returnLobbyBtn.textContent = UI.back_to_home || UI.return_lobby;
             returnLobbyBtn.onclick = () => {
-                if (socket || isLocalSoloRuntimeActive()) {
+                if (socket) {
                     suppressSoloPausedHandler = true;
                     emitSoloEvent('solo_pause', {});
                 }
@@ -35598,7 +35686,7 @@ function onEndTurn() {
         flashStatus(UI.not_your_turn, 2000, 'error');
         return;
     }
-    if (socket || isLocalSoloRuntimeActive()) {
+    if (socket) {
         beginPendingServerAction('end_turn', { timeoutMs: SERVER_ACTION_TIMEOUT_MS });
         emitModeEvent('solo_end_turn', 'end_turn', {});
     } else {
@@ -35607,7 +35695,7 @@ function onEndTurn() {
 }
 
 async function onSoloNextDraw() {
-    if (!soloMode || (!socket && !isLocalSoloRuntimeActive())) return;
+    if (!soloMode || !socket) return;
     const deck = (gameState.you || {}).deck || [];
     if (!deck.length) {
         gameAlert(UI.notice, UI.deck_empty);
@@ -36223,8 +36311,21 @@ async function applyPeerModSettings(peerMods = {}) {
 function syncCurrentSettingsModSelectionToLocal() {
     const checkboxes = getBundledModCheckboxes();
     if (!checkboxes.length) return getDisabledMods();
+    if (['casual_1v1', 'casual_2v2'].includes(getCurrentPvpMatchMode())) {
+        let disabled = getDisabledMods().slice();
+        const disabledSet = new Set(disabled);
+        checkboxes.forEach(cb => {
+            if (cb.dataset.locked === '1') return;
+            const filename = cb.dataset.filename;
+            if (!filename) return;
+            if (cb.checked) disabledSet.delete(filename);
+            else disabledSet.add(filename);
+        });
+        return writeDisabledModsPreference(Array.from(disabledSet));
+    }
     let disabled = [];
     checkboxes.forEach(cb => {
+        if (cb.dataset.locked === '1') return;
         if (!cb.checked && cb.dataset.filename) disabled.push(cb.dataset.filename);
     });
     const coerced = coerceValidDisabledMods(disabled);
@@ -36281,6 +36382,7 @@ function openSettings(options = {}) {
         serverHint.textContent = tf('server_hint', DEFAULT_SERVER);
     }
     renderModSourceControls();
+    updateOfficialUnlockHint();
     renderSocialSettings();
     window.GTN_KEYBINDINGS?.renderSettings();
 }
@@ -36487,6 +36589,15 @@ function renderBundledModList(category) {
     }
     if (noModsEl) noModsEl.style.display = 'none';
     const disabled = getDisabledMods();
+    const casualUnlockMode = ['casual_1v1', 'casual_2v2'].includes(getCurrentPvpMatchMode());
+    const officialUnlocked = new Set(
+        (modUnlockState?.unlocked_official || []).map(item => String(item || ''))
+    );
+    const entertainmentLocked = (
+        casualUnlockMode
+        && entertainment
+        && !modUnlockState?.entertainment_unlocked
+    );
     let restoredDetail = false;
     categoryMods.forEach((mod, i) => {
         const info = mod.info || {};
@@ -36494,6 +36605,10 @@ function renderBundledModList(category) {
         const version = info.version || '';
         const filename = mod.filename || '';
         const errors = Array.isArray(mod.errors) ? mod.errors.filter(Boolean) : [];
+        const unlockedForMode = entertainment
+            ? !entertainmentLocked
+            : (filename === VANILLA_MOD_FILENAME || officialUnlocked.has(filename));
+        const locked = casualUnlockMode && !unlockedForMode;
         const detailKey = filename || name;
         const expanded = !restoredDetail && isSettingsModDetailOpen(category, detailKey);
         if (expanded) restoredDetail = true;
@@ -36503,13 +36618,15 @@ function renderBundledModList(category) {
         item.dataset.detailKind = category;
         item.dataset.detailKey = detailKey;
         if (errors.length) item.classList.add('mod-error');
+        if (locked) item.classList.add('mod-locked');
         if (expanded) item.classList.add('mod-expanded');
         item.appendChild(createSettingsModCaret(category, detailKey, expanded));
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.id = `mod-cb-${category}-${i}`;
-        cb.checked = !errors.length && !disabled.includes(filename);
-        cb.disabled = errors.length > 0;
+        cb.checked = !errors.length && (casualUnlockMode ? unlockedForMode : !disabled.includes(filename));
+        cb.disabled = errors.length > 0 || locked || (casualUnlockMode && !entertainment);
+        if (casualUnlockMode && (!entertainment || locked)) cb.dataset.locked = '1';
         cb.dataset.filename = filename;
         cb.addEventListener('change', () => {
             // Keep the in-progress selection authoritative. Any list rerender
@@ -36531,6 +36648,19 @@ function renderBundledModList(category) {
         }
         if (isBetaTestingMod(mod)) {
             main.appendChild(createModBetaWarningBadge());
+        }
+        if (locked) {
+            const lockNote = document.createElement('span');
+            lockNote.className = 'settings-mod-lock-note';
+            lockNote.textContent = modUnlockState?.guest
+                ? lt({ zh: '游客不可用', en: 'Guests unavailable', fr: 'Indisponible invité', ja: 'ゲスト不可' })
+                : lt({
+                    zh: entertainmentLocked ? '20 局后解锁' : '未解锁',
+                    en: entertainmentLocked ? 'Unlocks after 20 matches' : 'Locked',
+                    fr: entertainmentLocked ? 'Débloqué après 20 parties' : 'Verrouillé',
+                    ja: entertainmentLocked ? '20戦後に解放' : '未解放',
+                });
+            main.appendChild(lockNote);
         }
         if (mod.temporarily_disabled) {
             item.classList.add('temporarily-disabled');
@@ -37869,6 +37999,13 @@ async function init() {
         });
     });
     if ($('btn-lobby-settings')) $('btn-lobby-settings').addEventListener('click', () => openSettings({ hideServer: true }));
+    if ($('btn-mod-draw-confirm')) $('btn-mod-draw-confirm').addEventListener('click', () => {
+        if (!socket || !modDrawState || phase !== 'mod_draw') return;
+        const submitted = modDrawState.submitted || {};
+        if (submitted[String(playerId)] || submitted[playerId]) return;
+        socket.emit('mod_draw_submit', { bans: modDrawLocalBans.slice() });
+    });
+    if ($('btn-mod-unlock-close')) $('btn-mod-unlock-close').addEventListener('click', closeModUnlockModal);
     if ($('settings-tab-appearance')) $('settings-tab-appearance').addEventListener('click', () => setSettingsTab('appearance'));
     if ($('settings-tab-server')) $('settings-tab-server').addEventListener('click', () => setSettingsTab('server'));
     if ($('settings-tab-mods')) $('settings-tab-mods').addEventListener('click', () => setSettingsTab('mods'));
@@ -37991,7 +38128,7 @@ async function init() {
             setBattlePanelTab(button.dataset.battlePanelTab);
         });
     });
-    const handleSoloPauseEdit = () => { if (socket || isLocalSoloRuntimeActive()) emitSoloEvent('solo_pause', {}); else showSoloTraining(); };
+    const handleSoloPauseEdit = () => { if (socket) emitSoloEvent('solo_pause', {}); else showSoloTraining(); };
     $('btn-view-deck').addEventListener('click', onViewDeck);
     if ($('btn-view-discard')) $('btn-view-discard').addEventListener('click', onViewDiscard);
     if ($('btn-view-exile')) $('btn-view-exile').addEventListener('click', onViewExile);

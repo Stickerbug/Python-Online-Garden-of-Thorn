@@ -356,12 +356,12 @@ Socket.IO 使用默认命名空间与 <code>/socket.io/</code> 传输路径。�
 | --- | --- |
 | 连接与同步 | <code>connect</code>、<code>disconnect</code>、<code>latency_ping</code>、<code>latency_report</code>、<code>request_pregame_state</code>、<code>request_game_state</code> |
 | 登录与挂机 | <code>login</code>、<code>afk_activity</code>、<code>afk_check_response</code>、<code>skin_look</code> |
-| 大厅与模式 | <code>set_mode</code>、<code>update_mod_settings</code>、<code>draft_reroll</code> |
+| 大厅与模式 | <code>set_mode</code>、<code>update_mod_settings</code>、<code>choose_mod_unlock</code>、<code>draft_reroll</code> |
 | 1v1 邀请 | <code>invite</code>、<code>accept_invite</code>、<code>decline_invite</code> |
 | 2v2 队伍 | <code>form_team</code>、<code>accept_team</code>、<code>decline_team</code>、<code>leave_team</code>、<code>invite_team</code>、<code>accept_team_match</code>、<code>decline_team_match</code> |
 | 断线重连 | <code>reconnect_accept</code>、<code>reconnect_decline</code> |
 | 聊天 | <code>chat</code>、<code>story_chat_join</code>、<code>story_chat_send</code> |
-| 开局流程 | <code>draft_pick</code>、<code>select_opening_event</code>、<code>confirm_opening_reveal</code>、<code>reroll_opening_event</code>、<code>submit_event_sub_choice</code> |
+| 开局流程 | <code>mod_draw_update_bans</code>、<code>mod_draw_submit</code>、<code>draft_pick</code>、<code>select_opening_event</code>、<code>confirm_opening_reveal</code>、<code>reroll_opening_event</code>、<code>submit_event_sub_choice</code> |
 | 正式对局 | <code>play_card</code>、<code>response</code>、<code>ally_consent_response</code>、<code>resolve_choice</code>、<code>v2_ui_response</code>、<code>use_trigger</code>、<code>end_turn</code> |
 | 无限火力 | <code>urf_replace_card</code>、<code>urf_sell_equipment</code> |
 | 投降与结算 | <code>surrender</code>、<code>surrender_consent_response</code>、<code>rematch</code>、<code>return_lobby</code> |
@@ -376,7 +376,7 @@ Socket.IO 使用默认命名空间与 <code>/socket.io/</code> 传输路径。�
 
 服务端推送属于 UI 内部协议，字段不承诺稳定。当前事件包括：
 
-- 状态：<code>lobby_update</code>、<code>state_update</code>、<code>solo_state</code>、<code>draft_state</code>、<code>game_phase</code>、<code>pregame_status_update</code>。
+- 状态：<code>lobby_update</code>、<code>state_update</code>、<code>solo_state</code>、<code>draft_state</code>、<code>game_phase</code>、<code>pregame_status_update</code>、<code>mod_draw_state</code>、<code>mod_draw_skipped</code>、<code>mod_unlock_required</code>、<code>mod_unlock_updated</code>。
 - 选择：<code>choice_request</code>、<code>response_request</code>、<code>v2_ui_request</code>、<code>ally_consent_request</code>。
 - 邀请/队伍：<code>invite_received</code>、<code>invite_confirm_required</code>、<code>invite_gr_preview</code>、<code>team_invite</code>、<code>team_match_invite</code>、<code>team_match_confirm_required</code>、<code>team_formed</code>、<code>team_disbanded</code>。
 - 断线/计时：<code>opponent_disconnected</code>、<code>opponent_reconnected</code>、<code>reconnect_available</code>、<code>reconnect_timeout</code>、<code>turn_timer_update</code>、<code>pregame_timer_update</code>。

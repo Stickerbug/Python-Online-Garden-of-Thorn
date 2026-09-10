@@ -288,16 +288,11 @@ class DesertNewCardsTests(unittest.TestCase):
             [0, 2, 3],
         )
 
-    def test_frontend_and_local_worker_have_desert_support(self):
+    def test_frontend_has_desert_support(self):
         game_js = (ROOT / "static" / "js" / "game.js").read_text(encoding="utf-8")
-        worker_js = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
         css = (ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
         self.assertIn("choiceType === 'choose_cards_from_discard'", game_js)
         self.assertIn("distinguishCancel", game_js)
-        self.assertIn("effect_desert_magic_compass", worker_js)
-        self.assertIn("effect_desert_marble_attack", worker_js)
-        self.assertIn("effect_desert_emerald_resource", worker_js)
-        self.assertIn("effect_desert_magic_yggdrasil", worker_js)
         self.assertIn('[lang="zh"] .card.card-name-long-zh', css)
         self.assertIn("--card-name-font-scale: 8.9cqi;", css)
         self.assertIn("classic-card-tile-name-wrapped", css)

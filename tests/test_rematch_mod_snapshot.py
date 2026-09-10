@@ -93,7 +93,7 @@ class RematchModSnapshotTests(unittest.TestCase):
 
             original_allowed = {'Basic', 'Rose'}
             with gtn._lock:
-                room = gtn.GameRoom(room_id, sids, original_allowed, mode='1v1')
+                room = gtn.GameRoom(room_id, sids, original_allowed, mode='1v1', match_mode='ranked_1v1')
                 room.engine.player_names = ['RematchSnapshot0', 'RematchSnapshot1']
                 room.engine.phase = 'game_over'
                 room.engine.game_over = True

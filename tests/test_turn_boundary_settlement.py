@@ -384,60 +384,6 @@ class TurnBoundarySettlementTests(unittest.TestCase):
         self.assertNotIn('己方下一名可行动玩家回合结束后死亡', client_source)
         self.assertNotIn('己方下一名可行动玩家回合结束后死亡', description_spec)
 
-    def test_local_solo_bandage_uses_owner_turn_end(self):
-        node = shutil.which('node')
-        if not node:
-            self.skipTest('node is required for the local Bandage behavior test')
-        worker = (ROOT / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
-        harness = r'''
-const bandageEngine = Object.create(LocalSoloEngine.prototype);
-bandageEngine.players = [new LocalPlayer(0), new LocalPlayer(1)];
-bandageEngine.player_names = ['P1', 'P2'];
-bandageEngine.log = [];
-bandageEngine.logMsg = message => bandageEngine.log.push(String(message));
-bandageEngine.checkGameOver = () => {};
-bandageEngine._turn_boundary_active = false;
-bandageEngine._turn_boundary_serial = 7;
-bandageEngine.players[0].health = 1;
-bandageEngine.players[0].invincible = true;
-bandageEngine.markBandageDeathPending(0);
-const assignedOwner = bandageEngine.players[0].bandage_death_action_player_id;
-bandageEngine.expireBandagesAfterAction(1);
-const afterOtherTurn = bandageEngine.players[0].health;
-bandageEngine.expireBandagesAfterAction(0);
-process.stdout.write(JSON.stringify({
-    assignedOwner,
-    afterOtherTurn,
-    afterOwnTurn: bandageEngine.players[0].health,
-    wording: bandageEngine.log.some(line => line.includes('自己回合结束时死亡')),
-}));
-'''
-        with tempfile.TemporaryDirectory(prefix='gtn-bandage-worker-') as temp_dir:
-            script_path = Path(temp_dir) / 'bandage-worker-test.js'
-            script_path.write_text(
-                "globalThis.postMessage = () => {};\n" + worker + "\n" + harness,
-                encoding='utf-8',
-            )
-            completed = subprocess.run(
-                [node, str(script_path)],
-                cwd=ROOT,
-                check=False,
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                timeout=20,
-            )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(
-            {
-                'assignedOwner': 0,
-                'afterOtherTurn': 1,
-                'afterOwnTurn': 0,
-                'wording': True,
-            },
-            json.loads(completed.stdout),
-        )
-
     def test_2v2_pill_status_immunity_blocks_bandage_save(self):
         package = load_mod(str(ROOT / 'mods' / 'Vanilla Cards.gtnmod'))
         self.assertEqual([], package.errors)

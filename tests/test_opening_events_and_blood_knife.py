@@ -118,15 +118,10 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
     def test_light_baptism_frontends_only_offer_attack_cards(self):
         root = Path(__file__).resolve().parents[1]
         game_js = (root / 'static' / 'js' / 'game.js').read_text(encoding='utf-8')
-        local_worker_js = (root / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
 
         self.assertGreaterEqual(
             game_js.count("return def && def.card_type === 'thorn';"),
             2,
-        )
-        self.assertIn(
-            "if (!sourceCardDef || sourceCardDef.card_type !== 'thorn') return;",
-            local_worker_js,
         )
 
     def test_multi_petal_adds_three_dust_cards(self):
@@ -261,44 +256,6 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         self.assertEqual(sorted((fire[2] - 1, fire[3] - 2)), [0, 3])
         self.assertTrue(any('随机敌方+3灼烧' in line for line in engine.log))
 
-    def test_local_worker_flame_omen_matches_server(self):
-        node = shutil.which('node')
-        if not node:
-            self.skipTest('node is required for the local opening-event behavior test')
-        worker = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
-        harness = r'''
-const omenEngine = Object.create(LocalSoloEngine.prototype);
-omenEngine.players = [new LocalPlayer(0), new LocalPlayer(1)];
-omenEngine.player_names = ['P1', 'P2'];
-omenEngine.opening_event_picks = [4, null];
-omenEngine.opening_event_sub_choices = [null, null];
-omenEngine.log = [];
-omenEngine.logMsg = message => omenEngine.log.push(String(message));
-omenEngine.players[1].fire = 2;
-omenEngine.players[1].custom_statuses.status_immune = 1;
-omenEngine.applyOpeningEvent(0);
-process.stdout.write(JSON.stringify({ fire: omenEngine.players[1].fire, log: omenEngine.log }));
-'''
-        with tempfile.TemporaryDirectory(prefix='gtn-flame-omen-worker-') as temp_dir:
-            script_path = Path(temp_dir) / 'flame-omen-test.js'
-            script_path.write_text(
-                "globalThis.postMessage = () => {};\n" + worker + "\n" + harness,
-                encoding='utf-8',
-            )
-            completed = subprocess.run(
-                [node, str(script_path)],
-                cwd=Path(__file__).resolve().parents[1],
-                check=False,
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                timeout=20,
-            )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        result = json.loads(completed.stdout)
-        self.assertEqual(result['fire'], 5)
-        self.assertTrue(any('敌方+3灼烧' in line for line in result['log']))
-
     def test_energy_surge_recovers_two_extra_elixir_and_backlashes_in_one_vs_one(self):
         engine = GameEngine()
         engine.round_num = 2
@@ -363,59 +320,6 @@ process.stdout.write(JSON.stringify({ fire: omenEngine.players[1].fire, log: ome
             self.assertIn('[[icon:E]]', description, language)
             self.assertIn('[[icon:D]]', description, language)
 
-    def test_local_worker_energy_surge_matches_server_formula(self):
-        node = shutil.which('node')
-        if not node:
-            self.skipTest('node is required for the local opening-event behavior test')
-        worker = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
-        harness = r'''
-const surgeEngine = Object.create(LocalSoloEngine.prototype);
-surgeEngine.players = [new LocalPlayer(0), new LocalPlayer(1)];
-surgeEngine.player_names = ['P1', 'P2'];
-surgeEngine.opening_event_picks = ['6', null];
-surgeEngine.log = [];
-surgeEngine.logMsg = message => surgeEngine.log.push(String(message));
-surgeEngine.players[0].health = 100;
-surgeEngine.players[0].elixir = 3;
-const damageCalls = [];
-surgeEngine.dealAttackDamage = (targetId, amount) => {
-    damageCalls.push({ targetId, amount });
-    surgeEngine.players[targetId].health -= amount;
-    return amount;
-};
-const bonus = surgeEngine.openingEventElixirRecoveryBonus(0);
-surgeEngine.applyEnergySurgeTurnEnd(0);
-surgeEngine.players[0].elixir = 0;
-surgeEngine.applyEnergySurgeTurnEnd(0);
-process.stdout.write(JSON.stringify({
-    bonus,
-    health: surgeEngine.players[0].health,
-    damageCalls,
-    log: surgeEngine.log,
-}));
-'''
-        with tempfile.TemporaryDirectory(prefix='gtn-energy-surge-worker-') as temp_dir:
-            script_path = Path(temp_dir) / 'energy-surge-test.js'
-            script_path.write_text(
-                "globalThis.postMessage = () => {};\n" + worker + "\n" + harness,
-                encoding='utf-8',
-            )
-            completed = subprocess.run(
-                [node, str(script_path)],
-                cwd=Path(__file__).resolve().parents[1],
-                check=False,
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                timeout=20,
-            )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        result = json.loads(completed.stdout)
-        self.assertEqual(result['bonus'], 2)
-        self.assertEqual(result['health'], 94)
-        self.assertEqual(result['damageCalls'], [{'targetId': 0, 'amount': 6}])
-        self.assertTrue(any('剩余0E，受到0D' in line for line in result['log']))
-
     def test_equal_suffering_hits_other_players_at_turn_end(self):
         engine = GameEngine()
         engine.opening_event_picks[0] = 12
@@ -450,10 +354,6 @@ process.stdout.write(JSON.stringify({
         self.assertIn('对其造成8D', magic_leaf_text)
         self.assertIn('装备拥有者回合开始时，回复目标1H', CARD_I18N['Leaf']['effect']['zh'])
         self.assertIn('可花费3M', CARD_I18N['MagicLeaf']['effect']['zh'])
-
-        worker = (Path(__file__).resolve().parents[1] / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
-        self.assertIn('自己回合结束时，对自己造成5D，并对所有其他可选中玩家造成8D', worker)
-        self.assertNotIn('【众生平等】：自己回合开始时，对敌方造成7D', worker)
 
         vanilla_path = Path(__file__).resolve().parents[1] / 'mods' / 'Vanilla Cards.gtnmod'
         with zipfile.ZipFile(vanilla_path) as archive:
@@ -508,7 +408,8 @@ process.stdout.write(JSON.stringify({
         )
 
     def test_blood_sugar_does_not_have_self_target(self):
-        archive = Path(__file__).resolve().parents[1] / 'mods' / 'Bio Cards Addition.gtnmod'
+        # Workbook 14 moved Blood Sugar (and RNA/Magic RNA) into the Bio DLC package.
+        archive = Path(__file__).resolve().parents[1] / 'mods' / 'Bio Cards DLC.gtnmod'
         with zipfile.ZipFile(archive) as package:
             mod_data = json.loads(package.read('mod.json').decode('utf-8'))
         card = next(

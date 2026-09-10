@@ -12,7 +12,6 @@ from mod_loader import load_mod
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / 'mods' / 'Ocean Cards Addition.gtnmod'
-LOCAL_WORKER = ROOT / 'static' / 'js' / 'local_solo_worker.js'
 CARD_IDS = {'Lightning', 'MagicLightning'}
 
 
@@ -129,8 +128,11 @@ def test_charged_counter_card_applies_charge_damage_once_in_2v2():
     assert engine.players[2].health == 96
 
 
-def test_local_training_runtime_implements_every_ocean_package_atomic():
-    source = LOCAL_WORKER.read_text(encoding='utf-8')
+def test_ocean_package_atomics_are_public_engine_ops():
+    """Every Ocean atomic used by the package must be a public engine op."""
+    from game_engine import GameEngine
+    import mod_spec_v2
+
     with zipfile.ZipFile(PACKAGE) as archive:
         spec = json.loads(archive.read('mod.json'))
 
@@ -151,6 +153,7 @@ def test_local_training_runtime_implements_every_ocean_package_atomic():
     missing = sorted(
         operation
         for operation in custom_atomics
-        if f'effect_{operation}(' not in source
+        if operation not in mod_spec_v2.VALID_LOGIC_OPS
+        or not hasattr(GameEngine, f'_atomic_{operation}')
     )
-    assert not missing, f'local training runtime is missing Ocean atomics: {missing}'
+    assert not missing, f'engine is missing Ocean atomics: {missing}'

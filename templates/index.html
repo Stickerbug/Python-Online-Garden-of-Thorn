@@ -736,6 +736,28 @@
 </div>
 </div>
 
+<div id="view-mod-draw" class="view hidden">
+<div class="mod-draw-container">
+<h2 id="mod-draw-title">模组抽取</h2>
+<p id="mod-draw-timer" class="phase-timer"></p>
+<p id="mod-draw-info" class="info-text"></p>
+<div id="mod-draw-options" class="mod-draw-options"></div>
+<div id="mod-draw-players" class="mod-draw-players"></div>
+<button id="btn-mod-draw-confirm" class="btn btn-primary">确认禁用</button>
+</div>
+</div>
+
+<div id="mod-unlock-modal" class="mod-unlock-modal hidden">
+<div class="mod-unlock-modal-inner">
+<h3 id="mod-unlock-title">解锁官方模组</h3>
+<p id="mod-unlock-progress" class="info-text"></p>
+<div id="mod-unlock-options" class="mod-unlock-options"></div>
+<div class="modal-buttons">
+<button id="btn-mod-unlock-close" class="btn btn-secondary" type="button">稍后再选</button>
+</div>
+</div>
+</div>
+
 <div id="phase-chat-panel" class="phase-chat-panel hidden">
 <div class="phase-chat-title" id="phase-chat-title">聊天</div>
 <div id="phase-chat-log" class="phase-chat-log"></div>
@@ -1071,6 +1093,7 @@
 <button id="settings-mod-tab-community" class="settings-tab" type="button"><span id="settings-label-community-mods">社区模组</span></button>
 </div>
 <div id="settings-official-mods" class="settings-mod-section-body">
+<p id="settings-official-unlock-hint" class="info-text hidden"></p>
 <div id="settings-mods-list" class="settings-mods-list"></div>
 <p id="settings-no-mods" class="info-text">未找到模组文件</p>
 </div>

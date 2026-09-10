@@ -374,7 +374,8 @@ class GardenNewCardsTests(unittest.TestCase):
         engine.players[0].hand = [coal]
         result = engine.play_card(0, coal.instance_id, self.target_choice(1))
         self.assertTrue(result.get("success"), result)
-        self.assertEqual(engine.players[1].health, 85)
+        # Workbook 14: Coal deals 8 + 2 x the caster's Fire stacks on play.
+        self.assertEqual(engine.players[1].health, 88)
 
     def test_daisy_delayed_damage_uses_original_player_as_attacker(self):
         engine = self.action_engine()
@@ -450,18 +451,12 @@ class GardenNewCardsTests(unittest.TestCase):
         self.assertEqual(len(reveal.get("cards", [])), 2)
         self.assertIsNone(other_state.get("garden_initial_deck_reveal"))
 
-    def test_frontend_and_local_worker_have_garden_support(self):
+    def test_frontend_has_garden_support(self):
         game_js = (ROOT / "static" / "js" / "game.js").read_text(encoding="utf-8")
-        worker_js = (ROOT / "static" / "js" / "local_solo_worker.js").read_text(encoding="utf-8")
         self.assertIn("maybeShowGardenInitialDeckReveal(data)", game_js)
         self.assertIn("createClassicCardTile(card", game_js)
         self.assertIn("['Kale', 'garden:kale']", game_js)
         self.assertIn("['Coal', 'garden:coal']", game_js)
-        self.assertIn("effect_garden_show_initial_deck", worker_js)
-        self.assertIn("runGardenMagicPollenOwnerTurnEnd", worker_js)
-        self.assertIn("gardenReturnFirstPlayedCard", worker_js)
-        self.assertNotIn("gardenQueueGrassTrigger", worker_js)
-        self.assertIn("equipmentTriggerUsesEffectTarget", worker_js)
         self.assertIn("equipmentTriggerUsesEffectTarget", game_js)
 
 

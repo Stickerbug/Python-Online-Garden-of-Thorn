@@ -214,17 +214,72 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         ):
             amount = max(0, _to_int(engine._modified_attack_damage(amount, card)))
         card_flags = getattr(card, "flags", set()) or set()
+        if card is not None and hasattr(engine, "_effective_card_flags"):
+            try:
+                card_flags = engine._effective_card_flags(card) or card_flags
+            except Exception:
+                pass
         is_precision = bool(params.get("is_precision", params.get("precision", False))) or "precision" in card_flags
+        crit_bonus_multiplier = 1.0
+        try:
+            crit_bonus_multiplier = float(params.get("crit_bonus_multiplier", 1.0) or 1.0)
+        except (TypeError, ValueError):
+            crit_bonus_multiplier = 1.0
+        crit_bonus_damage = max(0, _to_int(eval_v2_value(engine, context, params.get("crit_bonus_damage", 0))))
+        if card is not None and params.get("precognition") and not is_precision:
+            predictor = getattr(engine, "_attack_will_crit_before_dodge", None)
+            if callable(predictor) and predictor(source, amount, hits, card):
+                # Temporary Precision for this play only; the bonus multiplier
+                # is applied after shields by deal_attack_damage.
+                is_precision = True
+        force_crit = bool(params.get("force_crit", False))
+        no_luck_crit = bool(params.get("no_luck_crit", False))
+        prev_crit_hits = getattr(engine, "_hel_current_crit_hits", 0)
+        old_force = getattr(card, "_hel_force_crit", False) if card is not None else False
+        old_no_luck = getattr(card, "_hel_no_luck_crit", False) if card is not None else False
+        if card is not None:
+            if force_crit:
+                card._hel_force_crit = True
+            if no_luck_crit:
+                card._hel_no_luck_crit = True
+        engine._hel_current_crit_hits = 0
         targets = _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target")))
         total = 0
         positive_hits = 0
         for target_id in targets:
             if not _valid_player(engine, target_id):
                 continue
+            engine._hel_current_crit_hits = 0
+            # Fission splits this card's Power bonus across its copies, exactly
+            # like the engine's own attack helper does.
+            original_power = None
+            if card is not None and hasattr(engine, "_effective_card_flags"):
+                try:
+                    original_power = clamp_card_power(getattr(card, "power_value", 0) or 0)
+                    fission_level = max(1, int(getattr(card, "fission_level", 1) or 1))
+                    if original_power and fission_level > 1:
+                        card.power_value = int(math.ceil(original_power / fission_level))
+                except Exception:
+                    original_power = None
             try:
-                dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision, attacker_id=source, source_card=card)
+                dealt = engine.deal_attack_damage(
+                    target_id,
+                    amount,
+                    hits,
+                    is_precision=is_precision,
+                    attacker_id=source,
+                    source_card=card,
+                    ignore_untargetable=bool(params.get("ignore_untargetable", False)),
+                    crit_bonus_multiplier=crit_bonus_multiplier,
+                    crit_bonus_damage=crit_bonus_damage,
+                )
             except TypeError:
                 dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
+            finally:
+                if original_power is not None:
+                    card.power_value = original_power
+            crit_hits = int(getattr(engine, "_hel_current_crit_hits", 0) or 0)
+            engine._last_attack_crit_hits = crit_hits
             if hasattr(engine, "_last_damage_value"):
                 try:
                     engine._last_damage_value[target_id] = int(dealt or 0)
@@ -241,6 +296,32 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     target_positive_hits = 1
                     positive_hits += 1
             on_hit = params.get("on_hit")
+            on_hit_once = params.get("on_hit_once")
+            if int(dealt or 0) > 0 and isinstance(on_hit_once, list):
+                child_context = dict(context)
+                child_vars = dict(context.get("vars") if isinstance(context.get("vars"), dict) else {})
+                child_context.update({
+                    "event": "on_hit",
+                    "source_player": source,
+                    "target_player": target_id,
+                    "source_id": source,
+                    "target_id": target_id,
+                    "damage": int(dealt or 0),
+                    "damage_amount": int(dealt or 0),
+                    "last_damage": int(dealt or 0),
+                    "hit_count": max(1, int(target_positive_hits or 1)),
+                    "vars": child_vars,
+                })
+                child_vars.update({
+                    "source_id": source,
+                    "target_id": target_id,
+                    "damage": int(dealt or 0),
+                    "last_damage": int(dealt or 0),
+                })
+                # The callback belongs to one damaged player: a wide-strike play
+                # must not fan the hit effect back out to the whole target set.
+                _narrow_wide_targets(child_context, child_vars, target_id)
+                run_v2_steps(engine, child_context, on_hit_once)
             if int(dealt or 0) > 0 and isinstance(on_hit, list):
                 hit_count = max(1, int(target_positive_hits or 1))
                 for hit_index in range(hit_count):
@@ -265,7 +346,35 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                         "last_damage": int(dealt or 0),
                         "hit_index": hit_index,
                     })
+                    _narrow_wide_targets(child_context, child_vars, target_id)
                     run_v2_steps(engine, child_context, on_hit)
+            on_crit = params.get("on_crit")
+            if crit_hits > 0 and isinstance(on_crit, list):
+                child_context = dict(context)
+                child_vars = dict(context.get("vars") if isinstance(context.get("vars"), dict) else {})
+                child_context.update({
+                    "event": "on_crit",
+                    "source_player": source,
+                    "target_player": target_id,
+                    "source_id": source,
+                    "target_id": target_id,
+                    "damage": int(dealt or 0),
+                    "last_damage": int(dealt or 0),
+                    "crit_hits": crit_hits,
+                    "vars": child_vars,
+                })
+                child_vars.update({
+                    "last_crit_hits": crit_hits,
+                    "target_id": target_id,
+                    "damage": int(dealt or 0),
+                })
+                run_v2_steps(engine, child_context, on_crit)
+        engine._hel_current_crit_hits = prev_crit_hits
+        if card is not None:
+            if force_crit and not old_force:
+                card.__dict__.pop("_hel_force_crit", None)
+            if no_luck_crit and not old_no_luck:
+                card.__dict__.pop("_hel_no_luck_crit", None)
         context["last_damage"] = total
         context["last_positive_hits"] = positive_hits
         context.setdefault("vars", {})["last_positive_hits"] = positive_hits
@@ -519,9 +628,14 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         return {"success": True}
 
     if op == "log":
-        message = str(params.get("message") or params.get("text") or "")
+        message = str(params.get("message") or params.get("text") or params.get("msg") or "")
         if message:
-            engine.log_msg(_format_message(message, context))
+            engine.log_msg(_format_message(
+                message,
+                context,
+                engine=engine,
+                card=context.get("card") or context.get("event_card"),
+            ))
         return {"success": True}
 
     atomic_result = _try_run_engine_atomic_op(engine, context, op, params, step)
@@ -529,6 +643,19 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         return atomic_result
 
     raise V2RuntimeError(f"unsupported v2 op: {op}")
+
+
+def _narrow_wide_targets(context: Dict[str, Any], vars_dict: Dict[str, Any], target_id: int) -> None:
+    """Restrict a hit callback to the player that was actually damaged.
+
+    ``on_hit``/``on_hit_once`` run once per damaged player, so a wide-strike
+    play must not fan the callback's effects back out to the whole target set.
+    """
+    for key in ("wide_strike_targets", "target_players"):
+        if isinstance(context.get(key), list):
+            context[key] = [target_id]
+        if isinstance(vars_dict.get(key), list):
+            vars_dict[key] = [target_id]
 
 
 def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
@@ -646,6 +773,38 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
             return False
         can_add = getattr(ps, "can_add_to_hand", None)
         return not bool(can_add()) if callable(can_add) else len(getattr(ps, "hand", [])) >= int(getattr(ps, "max_hand", 0) or 0)
+    if op in ("status_count", "visible_status_count"):
+        target = resolve_v2_target(engine, context, expr.get("target", "source"))
+        player_id = _player_id(engine, target)
+        if not _valid_player(engine, player_id):
+            return 0
+        ps = engine.players[player_id]
+        custom = getattr(ps, "custom_statuses", {}) or {}
+        count = sum(1 for value in custom.values() if _to_int(value) > 0)
+        for attribute in (
+            "poison", "fire", "toxic", "dodge", "sluggish", "overload", "foresight",
+            "fracture", "stagnation", "blind", "heal_block", "attack_blocked", "weakness",
+            "bleed", "fragment_stacks", "skip_turn",
+        ):
+            if _to_int(getattr(ps, attribute, 0)) > 0:
+                count += 1
+        return count
+    if op in ("counter_cards_in_hand", "counters_in_hand"):
+        target = resolve_v2_target(engine, context, expr.get("target", "source"))
+        player_id = _player_id(engine, target)
+        if not _valid_player(engine, player_id):
+            return 0
+        is_counter = getattr(engine, "_is_counter_card", None)
+        if not callable(is_counter):
+            return 0
+        return sum(1 for card in list(getattr(engine.players[player_id], "hand", []) or []) if is_counter(card))
+    if op in ("deck_top_ids", "zone_top_ids"):
+        target = resolve_v2_target(engine, context, expr.get("target", "source"))
+        player_id = _player_id(engine, target)
+        zone = str(expr.get("zone") or "deck")
+        count = max(0, _to_int(eval_v2_value(engine, context, expr.get("count", 3))))
+        cards = _zone(engine, player_id, zone)[:count]
+        return [getattr(card, "instance_id", None) for card in cards if getattr(card, "instance_id", None) is not None]
     if op == "count":
         value = resolve_v2_target(engine, context, expr.get("selector", expr.get("of", expr.get("value", []))))
         return len(value) if isinstance(value, list) else (1 if value is not None else 0)
@@ -680,6 +839,20 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         if hi < lo:
             lo, hi = hi, lo
         return random.randint(lo, hi)
+    if op == "random_choice":
+        raw = expr.get("values", expr.get("options", expr.get("from", [])))
+        values = eval_v2_value(engine, context, raw)
+        if isinstance(values, dict):
+            values = list(values.values())
+        if not isinstance(values, list) or not values:
+            return expr.get("default", "")
+        return random.choice(list(values))
+    if op in ("choice_value", "choice_field"):
+        choice = _active_choice(context)
+        key = str(eval_v2_value(engine, context, expr.get("key", "")) or "")
+        if isinstance(choice, dict) and key and choice.get(key) not in (None, ""):
+            return choice.get(key)
+        return expr.get("default", 0)
     if op == "floor":
         return math.floor(_to_number(eval_v2_value(engine, context, expr.get("value", 0))))
     if op == "ceil":
@@ -688,6 +861,13 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         return context.get("last_damage", 0)
     if op in ("last_positive_hits", "positive_hits"):
         return context.get("last_positive_hits", context.get("vars", {}).get("last_positive_hits", 0))
+    if op in ("last_crit_hits", "crit_hits"):
+        return context.get("last_crit_hits", context.get("vars", {}).get("last_crit_hits", 0))
+    if op in ("play_was_countered", "was_countered"):
+        card = context.get("card")
+        if card is not None:
+            return bool(getattr(card, "_sewers_was_countered_this_play", False))
+        return bool(context.get("vars", {}).get("play_was_countered", False))
     if op == "event_value":
         return context.get("event_value", context.get("vars", {}).get("event_value", 0))
     if op in ("damage_amount", "current_damage"):
@@ -791,6 +971,9 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
         return [idx for idx in friends if idx != int(context.get("source_player", 0))]
     if text == "all_players":
         return list(range(len(getattr(engine, "players", []))))
+    if text in ("all_others", "all_except_self", "everyone_else"):
+        source = int(context.get("source_player", 0))
+        return [idx for idx in range(len(getattr(engine, "players", []))) if idx != source]
     if text == "all_enemies":
         source = int(context.get("source_player", 0))
         if hasattr(engine, "get_all_enemies"):
@@ -892,6 +1075,13 @@ def check_v2_condition(engine, context: Dict[str, Any], cond: Any) -> bool:
         card = _resolve_card(engine, context, cond.get("card", "current_card"))
         tag = str(eval_v2_value(engine, context, cond.get("tag", cond.get("id", ""))) or "").strip()
         return bool(tag and tag in _card_flags(card))
+    if op in ("card_has_modifier", "card_has_setup_modifier"):
+        card = _resolve_card(engine, context, cond.get("card", "current_card"))
+        name = str(eval_v2_value(
+            engine, context, cond.get("modifier", cond.get("name", "")),
+        ) or "").strip()
+        modifiers = getattr(card, "setup_modifiers", set()) or set()
+        return bool(name and name in modifiers)
     if op in ("has_status", "has_status_named"):
         target = resolve_v2_target(engine, context, cond.get("target", "target"))
         status_id = str(eval_v2_value(engine, context, cond.get("status", cond.get("id", cond.get("name", "")))) or "")
@@ -1141,6 +1331,8 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
         target_id = _player_id(engine, resolve_v2_target(engine, context, control.get("target", "source")))
         options = _picker_options(engine, target_id, zone, picker_type)
         explicit_allowed = control.get("allowed_instance_ids")
+        if isinstance(explicit_allowed, dict):
+            explicit_allowed = eval_v2_value(engine, context, explicit_allowed)
         if isinstance(explicit_allowed, list):
             allowed = set()
             for value in explicit_allowed:
@@ -1441,6 +1633,13 @@ def _card_prop(card: Optional[CardInstance], prop: str):
     if card is None:
         return 0
     prop = str(prop or "")
+    if prop in ("paid_e", "paid_m"):
+        attribute = "_paid_e_this_play" if prop == "paid_e" else "_paid_m_this_play"
+        value = getattr(card, attribute, None)
+        if value is None:
+            card_def = getattr(card, "card_def", None)
+            value = getattr(card_def, "cost_e" if prop == "paid_e" else "cost_m", 0)
+        return max(0, int(value or 0))
     if prop in ("base_hits", "base_petals", "base_petal_count"):
         card_def = getattr(card, "card_def", None)
         return max(1, int(getattr(card_def, "hits", 1) or 1))
@@ -1874,7 +2073,11 @@ def _materialize_atomic_value(engine, context: Dict[str, Any], value: Any):
         "equipment_count", "hand_full", "count", "add", "sub", "mul", "div", "+", "-",
         "*", "/", "min", "max", "clamp", "floor", "ceil", "last_damage", "event_value",
         "damage_amount", "current_damage", "damage_source", "source_player", "target_player",
-        "status_stack", "get",
+        "status_stack", "get", "deck_top_ids", "zone_top_ids",
+        "last_crit_hits", "crit_hits", "status_count", "visible_status_count",
+        "counter_cards_in_hand", "counters_in_hand",
+        "play_was_countered", "was_countered",
+        "random_choice", "choice_value", "choice_field",
     }:
         return eval_v2_value(engine, context, value)
     return {key: _materialize_atomic_value(engine, context, item) for key, item in value.items()}
@@ -1920,8 +2123,26 @@ def _engine_target_selector(engine, context: Dict[str, Any], value: Any):
     return value
 
 
-def _format_message(message: str, context: Dict[str, Any]) -> str:
+def _format_message(message: str, context: Dict[str, Any], engine=None, card=None) -> str:
     try:
-        return message.format(**context.get("vars", {}), last_damage=context.get("last_damage", 0))
+        text = message.format(**context.get("vars", {}), last_damage=context.get("last_damage", 0))
     except Exception:
-        return message
+        text = message
+    formatter = getattr(engine, "_format_step_log", None)
+    if not callable(formatter) or "{" not in text:
+        return text
+    # Battle-log templates may address the acting player, the current card and
+    # the effect amount, the same placeholders the engine's own steps use.
+    fields = {}
+    if card is not None:
+        fields["name"] = getattr(card, "name_cn", "")
+        fields["card"] = getattr(card, "name_cn", "")
+    source_id = context.get("source_player")
+    if isinstance(source_id, int) and callable(getattr(engine, "pn", None)):
+        fields.setdefault("source", engine.pn(source_id))
+    target_id = context.get("target_player", context.get("target_id"))
+    if isinstance(target_id, int) and callable(getattr(engine, "pn", None)):
+        fields.setdefault("target", engine.pn(target_id))
+    fields.setdefault("amount", context.get("last_damage", 0))
+    fields.setdefault("count", fields["amount"])
+    return formatter(text, **fields)

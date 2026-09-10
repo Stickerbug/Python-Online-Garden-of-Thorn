@@ -7,7 +7,6 @@ from game_engine_2v2 import GameEngine2v2
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GAME_JS = (ROOT / 'static' / 'js' / 'game.js').read_text(encoding='utf-8')
-SOLO_WORKER_JS = (ROOT / 'static' / 'js' / 'local_solo_worker.js').read_text(encoding='utf-8')
 
 
 def source_between(source, start, end):
@@ -124,17 +123,6 @@ class DamageReductionOrderTests(unittest.TestCase):
         armor_index = section.index('dmg = Math.max(0, dmg - target.armor - target.rootArmor + target.fragile);')
         nazar_index = section.index('if (dmg > 0 && target.nazarStacks > 0)')
         self.assertLess(armor_index, nazar_index)
-
-    def test_local_solo_engine_applies_armor_before_nazar(self):
-        section = source_between(
-            SOLO_WORKER_JS,
-            '    dealAttackDamage(',
-            '    currentTurnMarker()',
-        )
-        armor_index = section.index('dmg = Math.max(0, dmg - ps.armor - rootArmor + fragile);')
-        nazar_index = section.index('if (dmg > 0 && nazarStacks > 0)')
-        self.assertLess(armor_index, nazar_index)
-
 
 if __name__ == '__main__':
     unittest.main()
