@@ -557,7 +557,9 @@ def _public_data_cache_get(namespace, key):
         response = app.response_class(cached.get('body') or b'{}', mimetype='application/json')
     if etag:
         response.set_etag(etag)
-    response.headers['Cache-Control'] = 'private, max-age=60, stale-while-revalidate=300'
+    # 公开数据（卡牌/开局事件…）都带 ETag：拉长 max-age 只是减少 304 往返，
+    # 数据变了 ETag 会变、客户端立刻重下。反馈：进大厅时 /api/cards 2.18MB。
+    response.headers['Cache-Control'] = 'private, max-age=300, stale-while-revalidate=600'
     response.headers['X-GTN-Data-Cache'] = 'hit'
     return response
 
@@ -589,7 +591,7 @@ def _public_data_cache_put(namespace, key, payload):
     else:
         response = app.response_class(body, mimetype='application/json')
     response.set_etag(etag)
-    response.headers['Cache-Control'] = 'private, max-age=60, stale-while-revalidate=300'
+    response.headers['Cache-Control'] = 'private, max-age=300, stale-while-revalidate=600'
     response.headers['X-GTN-Data-Cache'] = 'miss'
     return response
 

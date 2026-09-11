@@ -46,6 +46,12 @@ try:
     DB_MMAP_SIZE = max(0, min(int(os.environ.get('GTN_DB_MMAP_SIZE', str(256 * 1024 * 1024))), 1_073_741_824))
 except (TypeError, ValueError):
     DB_MMAP_SIZE = 256 * 1024 * 1024
+try:
+    # 慢查询日志阈值（毫秒）。历史上是写死的 500ms，100–400ms 的隐形卡顿看不到；
+    # 2026-09-11 起默认降到 250ms，观察一段时间后可再调（环境变量可覆盖）。
+    DB_SLOW_THRESHOLD_MS = max(50, min(int(os.environ.get('GTN_DB_SLOW_MS', '250')), 60_000))
+except (TypeError, ValueError):
+    DB_SLOW_THRESHOLD_MS = 250
 TITLE_CATALOG_BACKUP_DIR = os.environ.get(
     'GTN_TITLE_CATALOG_BACKUP_DIR',
     os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), 'title-catalog-backups'),
@@ -435,7 +441,7 @@ def db_slow_log(endpoint='', elapsed_ms=0, sql_tag=''):
         elapsed = float(elapsed_ms or 0)
     except (TypeError, ValueError):
         elapsed = 0
-    if elapsed < 500:
+    if elapsed < DB_SLOW_THRESHOLD_MS:
         return
     print(f'[db_slow] endpoint={endpoint or "-"} elapsed_ms={elapsed:.1f} sql_tag={sql_tag or "-"}', flush=True)
 
@@ -1961,6 +1967,13 @@ def init_db(
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(created_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room_id, created_at)')
+        # 「按房间取最近 N 条」（大厅聊天缓存恢复等）是 WHERE room_id=? ORDER BY id DESC，
+        # 旧索引按 created_at 排序，SQLite 只能把整个房间的消息读出来再排序
+        # （lobby:release 当时 86,858 条 → 启动恢复实测 10.3 秒）。
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_chat_messages_room_id '
+            'ON chat_messages(room_id, id DESC)'
+        )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_user_id, created_at)')
         conn.execute(
             '''
@@ -11984,6 +11997,39 @@ def _handling_match_to_dict(conn, row):
     return base
 
 
+def _handling_candidate_user_ids(token, like):
+    """把处理台搜索词解析成用户 id（精确用户名/玩家号 + IP 命中）。
+
+    命中时可以用 ``match_participants`` 索引查这名玩家的对局，避免
+    ``summary_json LIKE`` 全表扫描（冷缓存实测 3.2s）。解析不到就返回空，
+    调用方回退到原来的模糊匹配。
+    """
+    token_text = str(token or '').strip()
+    if not token_text:
+        return []
+    ids = []
+    try:
+        with get_db_connection() as conn:
+            rows = conn.execute(
+                'SELECT id FROM users WHERE username_lower = ? OR player_id = ? LIMIT 20',
+                (token_text.lower(), token_text),
+            ).fetchall()
+            ids.extend(int(row['id']) for row in rows)
+            if re.search(r'[\d:.]', token_text):
+                ip_rows = conn.execute(
+                    '''
+                    SELECT DISTINCT user_id FROM user_ip_events
+                    WHERE ip LIKE ?
+                    LIMIT 80
+                    ''',
+                    (like,),
+                ).fetchall()
+                ids.extend(int(row['user_id']) for row in ip_rows)
+    except sqlite3.OperationalError:
+        return []
+    return list(dict.fromkeys(ids))
+
+
 def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
     try:
         safe_limit = max(1, min(int(limit or 30), 50))
@@ -11997,6 +12043,8 @@ def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
     mode_token = str(mode or '').strip()
     risk_token = str(risk or 'all').strip().lower()
     params = []
+    join_params = []
+    join_sql = ''
     where = []
     if mode_token and mode_token != 'all':
         where.append('m.mode = ?')
@@ -12008,36 +12056,32 @@ def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
             numeric = int(replay_match.group(1) if replay_match else token)
         except (TypeError, ValueError):
             numeric = None
-        clauses = [
-            'm.player_names_json LIKE ?',
-            'm.player_ids_json LIKE ?',
-            'm.summary_json LIKE ?',
-            'm.mode LIKE ?',
-        ]
         like = f'%{token}%'
-        token_params = [like, like, like, like]
-        if numeric is not None:
-            clauses.extend(['m.id = ?', 'r.replay_id = ?'])
-            token_params.extend([numeric, numeric])
-        ip_rows = []
-        if re.search(r'[\d:.]', token):
-            try:
-                with get_db_connection() as ip_conn:
-                    ip_rows = ip_conn.execute(
-                        '''
-                        SELECT DISTINCT user_id FROM user_ip_events
-                        WHERE ip LIKE ?
-                        LIMIT 80
-                        ''',
-                        (like,),
-                    ).fetchall()
-            except sqlite3.OperationalError:
-                ip_rows = []
-        for ip_row in ip_rows:
-            clauses.append('m.player_ids_json LIKE ?')
-            token_params.append(f'%{int(ip_row["user_id"])}%')
-        where.append('(' + ' OR '.join(clauses) + ')')
-        params.extend(token_params)
+        candidate_ids = _handling_candidate_user_ids(token, like)
+        if candidate_ids:
+            # 命中玩家：JOIN match_participants（按 user_id 索引）只读该玩家的对局。
+            placeholders = ','.join('?' for _ in candidate_ids)
+            join_sql = (
+                'JOIN match_participants hp ON hp.match_id = m.id '
+                f'AND hp.user_id IN ({placeholders})'
+            )
+            join_params.extend(candidate_ids)
+            if numeric is not None:
+                where.append('(m.id = ? OR r.replay_id = ?)')
+                params.extend([numeric, numeric])
+        else:
+            clauses = [
+                'm.player_names_json LIKE ?',
+                'm.player_ids_json LIKE ?',
+                'm.summary_json LIKE ?',
+                'm.mode LIKE ?',
+            ]
+            token_params = [like, like, like, like]
+            if numeric is not None:
+                clauses.extend(['m.id = ?', 'r.replay_id = ?'])
+                token_params.extend([numeric, numeric])
+            where.append('(' + ' OR '.join(clauses) + ')')
+            params.extend(token_params)
     # Moderation search should only review ranked, human, official-mod matches.
     where.append(
         "COALESCE(json_extract(m.summary_json, '$.match_type'), 'ranked') <> 'casual'"
@@ -12051,6 +12095,7 @@ def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
         " OR LOWER(TRIM(m.mod_source)) IN ('', 'official'))"
     )
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    query_params = join_params + params
     with get_db_connection() as conn:
         total_row = conn.execute(
             f'''
@@ -12060,9 +12105,10 @@ def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
                 FROM match_replays
                 GROUP BY match_id
             ) r ON r.match_id = m.id
+            {join_sql}
             {where_sql}
             ''',
-            params,
+            query_params,
         ).fetchone()
         rows = conn.execute(
             f'''
@@ -12074,11 +12120,12 @@ def search_handling_matches(query='', mode='', risk='all', limit=30, offset=0):
                 GROUP BY match_id
             ) r ON r.match_id = m.id
             LEFT JOIN match_replays rr ON rr.id = r.replay_id
+            {join_sql}
             {where_sql}
             ORDER BY m.id DESC
             LIMIT ? OFFSET ?
             ''',
-            params + [safe_limit * (3 if risk_token in {'risk', 'flagged'} else 1), safe_offset],
+            query_params + [safe_limit * (3 if risk_token in {'risk', 'flagged'} else 1), safe_offset],
         ).fetchall()
         items = [_handling_match_to_dict(conn, row) for row in rows]
     if risk_token in {'risk', 'flagged'}:
