@@ -29,7 +29,7 @@ ADVANCED_ATOMIC_OPS = {
     "for_each", "for_each_selected_card", "for_each_list",
     "damage", "damage_multi", "direct_damage", "lifesteal_damage", "triangle_damage",
     "heal", "draw", "gain_e", "gain_m", "add_armor", "remove_armor", "set_armor",
-    "poison", "burn", "toxic", "vulnus", "dodge_this",
+    "poison", "burn", "toxic", "dodge_this",
     "dodge_permanent", "clear_buffs", "clear_debuffs", "clear_all_effects",
     "clear_status", "status_add_named", "status_remove_named", "set_status_named",
     "cost_e", "cost_m", "mod_e_regen", "mod_m_regen", "mod_draw",
@@ -55,7 +55,7 @@ ADVANCED_ATOMIC_OPS = {
     "exile_this", "global_damage_mult", "global_heal_mult", "global_cost_mult",
     "swap_health", "swap_hands", "broadcast_event", "modify_damage",
     "var_set", "var_add", "var_sub", "var_mul", "var_div",
-    "list_set", "list_create", "list_append", "list_insert", "list_delete",
+    "list_set", "list_append", "list_insert", "list_delete",
     "list_clear", "for_each_list", "timed_effect", "countdown_var",
     "defer_game_over", "random_zone_card_to_hand", "random_move_card_to_hand",
     "move_random_card_to_hand",
@@ -72,11 +72,6 @@ ADVANCED_ATOMIC_OPS = {
     "card_prop_mul", "card_damage_multiply", "equipment_prop_set",
     "discard_hand_by_paid_e", "restore_turn_start_stats", "restore_match_start_stats",
     "shuffle_hand",
-    "bio_activate_blood_knife", "bio_activate_blood_chromosome",
-    "bio_add_extra_healing", "bio_job_application", "bio_indictment_response",
-    "bio_ransom_money", "bio_high_yield_bond", "bio_antibody_attack",
-    "bio_electron_missile", "bio_sugar_attack", "bio_blood_sugar_attack",
-    "bio_diamond_attack", "bio_blood_diamond_attack",
     "counter_pending_attack_damage", "lose_health",
     "equipment_prop_add", "discard_choice_then_draw", "coffee_gain_e",
     "activate_corruption", "request_target", "request_card", "request_confirm",
@@ -91,34 +86,14 @@ ADVANCED_ATOMIC_OPS = {
     "request_reorder_deck",
     "apply_jungle_status", "apply_turn_regen", "magic_grapes_damage",
     "create_copies_to_deck_top", "consume_magic_for_status",
-    "jungle_root_gain", "jungle_root_remove_owned", "plank_immunity",
+    "plank_immunity",
     "magic_relic_trigger", "electric_web_arm",
     "yin_yang_effect", "flower_burst",
     "draw_to_hand_limit", "magic_salt_reflect", "third_eye_precision_or_hidden",
     "grant_temp_swift_highest_e", "delayed_blind_next_turn",
-    "delayed_reveal_hand_next_turn", "ocean_spikeball_damage",
-    "arctic_pinecone_copy",
-    "ocean_magic_coral_tick", "ocean_for_each_selectable_target",
-    "ocean_charge_self_damage",
-    "sewers_lotus_heal", "sewers_activate_light_bulb",
+    "delayed_reveal_hand_next_turn",
+    "ocean_for_each_selectable_target",
     "declare_forced_target",
-    "sewers_broccoli_attack", "sewers_blood_rose",
-    "sewers_iodine_turn_start", "sewers_iodine_trigger",
-    "sewers_chitin_turn_start",
-    "sewers_seal_target_equipment", "sewers_basil_turn_start",
-    "sewers_neurotoxin", "sewers_quartz",
-    "desert_magic_compass",
-    "desert_emerald_resource", "desert_topaz_apply",
-    "desert_magic_yggdrasil",
-    "jurassic_magic_soil_on_equip", "jurassic_random_deck_to_hand",
-    "jurassic_magic_fang", "jurassic_blood_turn_start",
-    "jurassic_add_power_to_hand", "jurassic_clear_self_power", "jurassic_oil_turn_start",
-    "jurassic_magic_rock", "jurassic_amulet", "jurassic_acid",
-    "jurassic_torch", "jurassic_magic_torch", "jurassic_pyrite_draw",
-    "jurassic_antler",
-    "garden_kale_attack",
-    "garden_daisy_attack", "garden_coal_attack",
-    "hel_deliverance_attack",
 }
 
 # 旧名 → 新名。只保留仍被卡数据、测试或工具引用的条目；已经没有任何引用
@@ -197,6 +172,21 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         raise V2RuntimeError("step must be an object")
     op = step.get("op") or step.get("type")
     params = step.get("params") if isinstance(step.get("params"), dict) else step
+
+    # Step gate: ``condition``/``run_if`` must hold, ``unless``/``skip_if`` must
+    # not.  Control-flow ops (``if``/``if_else``/``repeat_until``) keep their own
+    # ``condition`` operand and are gated by ``unless``/``run_if`` only.
+    # An unreadable gate is logged and the step runs (pre-Round-13 behaviour);
+    # a broken gate must never abort the event nor silently drop the step.
+    try:
+        gate_allows = step_gate_allows(engine, context, step, op, params)
+    except ActionWorkBudgetExceeded:
+        raise
+    except Exception as exc:
+        _report_unreadable_gate(engine, context, {"op": f"gate-error:{exc}"})
+        gate_allows = True
+    if not gate_allows:
+        return {"success": True, "skipped": True, "reason": "step_condition"}
 
     if op == "request_target":
         choice = context.get("choice")
@@ -656,11 +646,15 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         return {"success": True}
 
     if op in ("add_status", "remove_status", "set_status"):
-        status_id = str(params.get("status") or params.get("id") or "").strip()
+        raw_status = params.get("status", params.get("id", ""))
+        status_id = str(eval_v2_value(engine, context, raw_status) or "").strip()
         amount = _to_int(eval_v2_value(engine, context, params.get("amount", params.get("stack", 1))))
         for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target"))):
             if _valid_player(engine, target_id):
-                _apply_status(engine, target_id, status_id, amount, op)
+                _apply_status(
+                    engine, target_id, status_id, amount, op,
+                    log=not step_is_silent(step, params),
+                )
         return {"success": True}
 
     if op == "move_card":
@@ -752,20 +746,25 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         return {"success": True, "event_value": next_value}
 
     if op == "set_var":
-        name = str(params.get("name") or step.get("name") or "")
+        raw_name = params.get("name", params.get("var", step.get("name", step.get("var", ""))))
+        name = str(eval_v2_value(engine, context, raw_name) or "")
         if name:
             context.setdefault("vars", {})[name] = eval_v2_value(engine, context, params.get("value", step.get("value", 0)))
         return {"success": True}
 
     if op == "add_var":
-        name = str(params.get("name") or step.get("name") or "")
+        raw_name = params.get("name", params.get("var", step.get("name", step.get("var", ""))))
+        name = str(eval_v2_value(engine, context, raw_name) or "")
         if name:
             delta = eval_v2_value(engine, context, params.get("value", step.get("value", 0)))
             context.setdefault("vars", {})[name] = _to_int(context["vars"].get(name, 0)) + _to_int(delta)
         return {"success": True}
 
     if op == "log":
-        message = str(params.get("message") or params.get("text") or params.get("msg") or "")
+        raw_message = params.get("message", params.get("text", params.get("msg", "")))
+        message = str(eval_v2_value(engine, context, raw_message) or "")
+        if message and step_is_silent(step, params):
+            return {"success": True}
         if message:
             raw_amount = params.get("amount")
             amount = eval_v2_value(engine, context, raw_amount) if raw_amount is not None else None
@@ -1636,6 +1635,155 @@ def check_v2_condition(engine, context: Dict[str, Any], cond: Any) -> bool:
     return bool(eval_v2_value(engine, context, cond))
 
 
+# ---------------------------------------------------------------------------
+# Step gate + step log conventions (Round 13 / batch 1)
+# ---------------------------------------------------------------------------
+# Ops that already own ``condition``/``cond`` as *their* operand: for these the
+# key is control flow (``if`` picks ``then``/``else``, ``repeat_until`` ends the
+# loop, ``not``/``and``/``or`` negate/combine).  Every other op treats a
+# step-level ``condition`` as a *gate*: the step only runs when it is true.
+CONDITION_OWNED_OPS = {
+    "if", "if_else", "repeat_until", "repeat_until_steps",
+    "and", "or", "not", "any", "all", "count",
+}
+
+# ``condition``/``cond`` gate a step; ``run_if`` is the same gate under a second
+# name so the control-flow ops above can also be gated positively.
+GATE_CONDITION_KEYS = ("condition", "cond", "run_if")
+# ``unless``/``skip_if`` invert the gate: a *true* operand skips the step.
+GATE_UNLESS_KEYS = ("unless", "skip_if")
+
+# ``log: false``, ``silent: true`` and ``no_log``/``hide_log`` are one and the
+# same switch: the step prints no default battle-log line of its own.
+SILENT_KEYS = ("silent", "no_log", "hide_log")
+
+# Condition ops that **both** execution paths can evaluate (runtime
+# ``check_v2_condition`` and engine ``_eval_condition``).  A gate written with
+# anything else -- an engine-only op such as ``equip_turns``, a v2-only op such
+# as ``card_has_tag``, a bare value expression or a typo -- is *unreadable*: the
+# step still runs (exactly like before step gates existed) and the reason is
+# written to the mod-runtime error log.  A gate is never silently skipped.
+SHARED_CONDITION_OPS = {
+    "compare", "eq", "ne", "gt", "gte", "lt", "lte",
+    "==", "!=", ">", ">=", "<", "<=",
+    "and", "or", "not",
+    "var_compare",
+    "has_status", "has_status_named",
+    "target_selectable", "player_selectable",
+    "hand_full",
+    "turn_number",
+    "has_tag",
+    "damage_type_is", "damage_type",
+    "list_contains", "damage_source_relation",
+    "zone_contains", "event_card_type",
+}
+
+_CONDITION_OPERAND_KEYS = ("conditions", "values", "a", "b", "condition", "value")
+
+
+def condition_is_readable(condition: Any) -> bool:
+    """Can *both* execution paths evaluate this gate condition?"""
+    if not isinstance(condition, dict):
+        return True
+    op = condition.get("op") or condition.get("type")
+    if not op:
+        # ``{"ref": ...}`` value expressions work in both paths.
+        return "ref" in condition
+    if op not in SHARED_CONDITION_OPS:
+        return False
+    if op in ("and", "or", "not"):
+        for key in _CONDITION_OPERAND_KEYS:
+            nested = condition.get(key)
+            if isinstance(nested, list):
+                if not all(condition_is_readable(item) for item in nested):
+                    return False
+            elif isinstance(nested, dict) and not condition_is_readable(nested):
+                return False
+    return True
+
+
+def _step_dicts(step: Any, params: Any = None) -> List[Dict[str, Any]]:
+    """The dicts a gate/log key may live in: the step itself and its ``params``."""
+    out: List[Dict[str, Any]] = []
+    if isinstance(step, dict):
+        out.append(step)
+        nested = step.get("params")
+        if isinstance(nested, dict) and nested is not step:
+            out.append(nested)
+    if isinstance(params, dict) and not any(params is item for item in out):
+        out.append(params)
+    return out
+
+
+def step_gate_conditions(step: Any, op: Any = None, params: Any = None):
+    """``(must_hold, must_not_hold, unreadable)`` condition lists for one step.
+
+    This is the *shape* half of the step gate and is shared by both execution
+    paths; the v2 runtime evaluates the conditions with :func:`check_v2_condition`
+    and the engine evaluates them with ``GameEngine._eval_condition``.
+    ``unreadable`` holds the conditions written with an op that both evaluators
+    cannot read (see :data:`SHARED_CONDITION_OPS`); callers log them and let the
+    step run instead of guessing.
+    """
+    if not isinstance(step, dict):
+        return [], [], []
+    resolved_op = str(op or step.get("op") or step.get("type") or "")
+    condition_keys = ("run_if",) if resolved_op in CONDITION_OWNED_OPS else GATE_CONDITION_KEYS
+    must_hold: List[Any] = []
+    must_not_hold: List[Any] = []
+    unreadable: List[Any] = []
+    for source in _step_dicts(step, params):
+        for key in condition_keys:
+            if key in source and source.get(key) is not None:
+                (must_hold if condition_is_readable(source[key]) else unreadable).append(source[key])
+        for key in GATE_UNLESS_KEYS:
+            if key in source and source.get(key) is not None:
+                (must_not_hold if condition_is_readable(source[key]) else unreadable).append(source[key])
+    return must_hold, must_not_hold, unreadable
+
+
+def step_gate_allows(engine, context: Dict[str, Any], step: Any, op: Any = None,
+                     params: Any = None) -> bool:
+    """Step-level gate for the v2 runtime: ``condition`` holds, ``unless`` does not."""
+    must_hold, must_not_hold, unreadable = step_gate_conditions(step, op, params)
+    for condition in unreadable:
+        _report_unreadable_gate(engine, context, condition)
+    if not must_hold and not must_not_hold:
+        return True
+    for condition in must_hold:
+        if not check_v2_condition(engine, context, condition):
+            return False
+    for condition in must_not_hold:
+        if check_v2_condition(engine, context, condition):
+            return False
+    return True
+
+
+def _report_unreadable_gate(engine, context: Optional[Dict[str, Any]], condition: Any) -> None:
+    """Log a gate whose op neither evaluator understands (the step still runs)."""
+    op = condition.get("op") or condition.get("type") if isinstance(condition, dict) else type(condition).__name__
+    exc = V2RuntimeError(f"unsupported step condition op: {op!r}")
+    context = context if isinstance(context, dict) else {}
+    reporter = getattr(engine, "_log_mod_runtime_error", None)
+    if callable(reporter):
+        reporter(
+            "step_condition",
+            exc,
+            context.get("source_player"),
+            context.get("card"),
+        )
+
+
+def step_is_silent(step: Any, params: Any = None) -> bool:
+    """``log: false`` == ``silent: true`` == "print no default line for this step"."""
+    for source in _step_dicts(step, params):
+        if source.get("log") is False:
+            return True
+        if any(source.get(key) for key in SILENT_KEYS):
+            return True
+    return False
+
+
 def validate_v2_ui_response(engine, context: Dict[str, Any], component: Dict[str, Any], response: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(component, dict):
         raise V2RuntimeError("missing v2 ui component")
@@ -2264,7 +2412,17 @@ def _v2_status_definition(engine, status_id: str) -> Dict[str, Any]:
     return status if isinstance(status, dict) else {}
 
 
-def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) -> None:
+def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str,
+                  log: Any = True) -> None:
+    """Apply a named status for the v2 runtime ``add_status`` family.
+
+    ``log=False`` mutes the runtime's own status line (``log: false`` /
+    ``silent: true`` on the step); the state change is unaffected.
+    """
+    def _status_log(message: str) -> None:
+        if log is not False:
+            engine.log_msg(message)
+
     ps = engine.players[player_id]
     status_key = str(status_id or "").split(":")[-1]
     if status_key in ("status_immune", "immune", "状态免疫"):
@@ -2276,11 +2434,11 @@ def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) 
             ps.custom_statuses["status_immune"] = 1
         after = 1 if int(ps.custom_statuses.get("status_immune", 0) or 0) > 0 else 0
         if op == "add_status" and before <= 0 < after:
-            engine.log_msg(f"{engine.pn(player_id)}获得状态免疫")
+            _status_log(f"{engine.pn(player_id)}获得状态免疫")
         elif op == "remove_status" and before > 0 and after <= 0:
-            engine.log_msg(f"{engine.pn(player_id)}失去状态免疫")
+            _status_log(f"{engine.pn(player_id)}失去状态免疫")
         elif op == "set_status":
-            engine.log_msg(f"{engine.pn(player_id)}{'获得' if after else '失去'}状态免疫")
+            _status_log(f"{engine.pn(player_id)}{'获得' if after else '失去'}状态免疫")
         return
     if _status_application_blocked_by_immunity(engine, player_id, status_id, amount, op):
         return
@@ -2303,11 +2461,11 @@ def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) 
         delta = after - before
         label = _status_label(status_id)
         if op == "add_status" and delta:
-            engine.log_msg(f"{engine.pn(player_id)}+{abs(delta)}层{label}")
+            _status_log(f"{engine.pn(player_id)}+{abs(delta)}层{label}")
         elif op == "remove_status" and delta:
-            engine.log_msg(f"{engine.pn(player_id)}-{abs(delta)}层{label}")
+            _status_log(f"{engine.pn(player_id)}-{abs(delta)}层{label}")
         elif op == "set_status":
-            engine.log_msg(f"{engine.pn(player_id)}的{label}变为{after}层")
+            _status_log(f"{engine.pn(player_id)}的{label}变为{after}层")
         return
     attr = _builtin_status_attr(status_id)
     before = _status_stack(engine, player_id, status_id)
@@ -2349,11 +2507,11 @@ def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str) 
     delta = after - before
     label = _status_label(status_id)
     if op == "add_status" and delta:
-        engine.log_msg(f"{engine.pn(player_id)}+{abs(delta)}层{label}")
+        _status_log(f"{engine.pn(player_id)}+{abs(delta)}层{label}")
     elif op == "remove_status" and delta:
-        engine.log_msg(f"{engine.pn(player_id)}-{abs(delta)}层{label}")
+        _status_log(f"{engine.pn(player_id)}-{abs(delta)}层{label}")
     elif op == "set_status":
-        engine.log_msg(f"{engine.pn(player_id)}的{label}变为{after}层")
+        _status_log(f"{engine.pn(player_id)}的{label}变为{after}层")
 
 
 def _status_application_blocked_by_immunity(engine, player_id: int, status_id: str, amount: int, op: str) -> bool:
@@ -2704,7 +2862,12 @@ def _render_step_log(engine, step: Any, params: Any, fields: Dict[str, Any]):
     ``None``/``True`` keeps the caller's default battle-log line, ``False`` mutes
     it and a string is used as a template (``{target}``/``{source}``/``{amount}``/
     ``{count}``/``{name}``) so card data owns the exact wording.
+
+    ``silent: true`` / ``no_log`` / ``hide_log`` are the same switch as
+    ``log: false``: the step prints nothing of its own.
     """
+    if step_is_silent(step, params):
+        return False
     raw = step.get("log") if isinstance(step, dict) else None
     if raw is None and isinstance(params, dict) and params is not step:
         raw = params.get("log")

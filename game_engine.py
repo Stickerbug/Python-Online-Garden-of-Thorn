@@ -18,7 +18,12 @@ from cards import (
     card_trigger_ready_turns, YGGDRASIL_HEAL,
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
-from mod_runtime_v2 import run_v2_event, run_v2_steps, validate_v2_ui_response
+from mod_runtime_v2 import (
+    run_v2_event,
+    run_v2_steps,
+    step_gate_conditions,
+    validate_v2_ui_response,
+)
 from damage_types import (
     DAMAGE_TAG_BATTERY, DAMAGE_TAG_BLEED, DAMAGE_TAG_DIRECT, DAMAGE_TAG_FIRE, DAMAGE_TAG_FRACTURE,
     DAMAGE_TAG_PHYSICAL, DAMAGE_TAG_POISON,
@@ -8863,9 +8868,13 @@ class GameEngine:
 
 
     def _atomic_log(self, player_id, card, params, log, choice, context):
-        msg = log or params.get('msg', '')
+        if log is False or params.get('silent') or params.get('no_log'):
+            return
+        msg = log if log else params.get('msg', params.get('message', ''))
+        msg = self._step_text_value(player_id, card, msg)
         if not msg:
             return
+        msg = str(msg)
         amount = self._eval_int(player_id, params.get('amount', 0), card, 0)
         text = msg.format(p=player_id + 1, name=card.name_cn)
         # ``target`` lets converted data print the affected player instead of
@@ -10683,14 +10692,6 @@ class GameEngine:
 
 
 
-    def _atomic_batch_status_add(self, player_id, card, params, log, choice, context):
-        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
-            self._atomic_status_add_named(player_id, card, {'target': 'self' if tid == player_id else 'enemy', 'status': params.get('status', ''), 'amount': params.get('amount', 1)}, log, choice, context)
-
-    def _atomic_batch_status_remove(self, player_id, card, params, log, choice, context):
-        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
-            self._atomic_status_remove_named(player_id, card, {'target': 'self' if tid == player_id else 'enemy', 'status': params.get('status', '')}, log, choice, context)
-
     def _atomic_tag_add_named(self, player_id, card, params, log, choice, context):
         tag = normalize_card_flag(params.get('tag', ''))
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
@@ -10706,12 +10707,6 @@ class GameEngine:
             target_card.instance_flags = getattr(target_card, 'instance_flags', set())
             target_card.instance_flags.discard(tag)
             self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
-
-    def _atomic_batch_tag_add(self, player_id, card, params, log, choice, context):
-        self._atomic_tag_add_named(player_id, card, {'tag': params.get('tag', '')}, log, choice, context)
-
-    def _atomic_batch_tag_remove(self, player_id, card, params, log, choice, context):
-        self._atomic_tag_remove_named(player_id, card, {'tag': params.get('tag', '')}, log, choice, context)
 
     def _is_status_immune(self, player_id: int) -> bool:
         if self._desert_topaz_count_targeting(player_id) > 0:
@@ -13351,6 +13346,22 @@ class GameEngine:
                 pm = {} if isinstance(eff, str) else self._effect_params(eff)
                 lg = None if isinstance(eff, str) else eff.get('log')
                 rt = self._EFFECT_ALIASES.get(et, et)
+                # Round 13: the engine path honours the same step gate as the v2
+                # runtime (``condition``/``run_if`` must hold, ``unless`` must
+                # not) but evaluates it with the engine's own expression language.
+                # A gate the engine cannot read is logged and the step still
+                # runs -- the pre-Round-13 behaviour for a step-level
+                # ``condition`` -- so a data typo can never silently disable a
+                # card effect or abort the play.
+                try:
+                    gate_allows = self._step_gate_allows(rt, eff, pm, player_id, card)
+                except (ActionWorkBudgetExceeded, ModLoopBreak, ModLoopContinue):
+                    raise
+                except Exception as exc:
+                    self._log_mod_runtime_error(et, exc, player_id, card)
+                    gate_allows = True
+                if not gate_allows:
+                    continue
                 if et in self.EVENT_EFFECT_TYPES or rt in self.EVENT_EFFECT_TYPES:
                     continue
                 if (
@@ -13382,6 +13393,53 @@ class GameEngine:
         finally:
             self._active_effect_context = prev_context
             self._active_choice = prev_choice
+
+    def _step_gate_allows(self, effect_type, effect, params, player_id, card=None):
+        """Step-level gate for engine-path steps (Round 13 / batch 1).
+
+        ``condition``/``cond``/``run_if`` must evaluate true and ``unless``/
+        ``skip_if`` must evaluate false, otherwise the step is skipped without
+        touching the world.  ``if``/``if_else``/``repeat_until`` own
+        ``condition`` as their control operand and are gated by ``run_if`` /
+        ``unless`` only; the key list comes from
+        :func:`mod_runtime_v2.step_gate_conditions` so both paths agree on it.
+        A condition written with an op both paths cannot read is reported
+        through the mod-runtime error log and then **ignored** (the step runs),
+        matching the pre-gate behaviour instead of guessing.
+        """
+        must_hold, must_not_hold, unreadable = step_gate_conditions(effect, effect_type, params)
+        for condition in unreadable:
+            op = (condition.get('op') or condition.get('type')
+                  if isinstance(condition, dict) else type(condition).__name__)
+            self._log_mod_runtime_error(
+                effect_type,
+                RuntimeError(f'unsupported step condition op: {op!r}'),
+                player_id,
+                card,
+            )
+        if not must_hold and not must_not_hold:
+            return True
+        for condition in must_hold:
+            if not self._eval_condition(player_id, condition, card):
+                return False
+        for condition in must_not_hold:
+            if self._eval_condition(player_id, condition, card):
+                return False
+        return True
+
+    def _step_text_value(self, player_id, card, value):
+        """Materialize a step parameter that is consumed as text.
+
+        ``{"op": "var", ...}`` style values are evaluated through the engine's
+        expression language so data can compute a status id, a var name or a log
+        message; plain strings/numbers pass through unchanged.
+        """
+        if isinstance(value, dict):
+            try:
+                value = self._eval_expr(player_id, value, card)
+            except Exception:
+                return value
+        return value
 
     def _same_timer_side(self, player_a: int, player_b: int) -> bool:
         if not (0 <= player_a < len(self.players) and 0 <= player_b < len(self.players)):
@@ -13548,7 +13606,9 @@ class GameEngine:
         self.timed_effects = kept[-200:]
 
     def _atomic_timed_effect(self, player_id, card, params, log, choice, context):
-        trigger = str(params.get('trigger') or 'target_turn_start')
+        trigger = str(
+            self._step_text_value(player_id, card, params.get('trigger')) or 'target_turn_start'
+        )
         duration = self._eval_int(player_id, params.get('duration', params.get('turns', 1)), card, 1)
         effects = params.get('effects', params.get('body', [])) or []
         for target_id in self._timer_targets(player_id, params.get('target', 'self')):
@@ -13896,6 +13956,34 @@ class GameEngine:
         return self._base_eval_expr(player_id, expr, card)
 
     def _eval_condition(self, player_id, cond, card=None):
+        if isinstance(cond, dict) and cond.get('op') in (
+            'eq', 'ne', 'gt', 'gte', 'lt', 'lte', '>', '>=', '<', '<=', '==', '!=',
+        ):
+            # Round 13: the v2 condition language names its comparisons
+            # ``eq``/``ne``/... (and accepts the raw symbol as the op).  Both
+            # execution paths must read the same gate, so map the aliases onto
+            # the engine's own ``compare`` semantics before falling through.
+            a = self._eval_expr(player_id, cond.get('a', 0), card)
+            b = self._eval_expr(player_id, cond.get('b', 0), card)
+            operator = cond.get('operator') or {
+                'eq': '=', 'ne': '!=', 'gt': '>', 'gte': '>=', 'lt': '<', 'lte': '<=',
+                '==': '=', '!=': '!=', '>': '>', '>=': '>=', '<': '<', '<=': '<=',
+            }.get(cond.get('op'), '=')
+            return (a == b) if operator in ('=', '==') else (a != b) if operator in ('!=', '<>') \
+                else (a < b) if operator == '<' else (a > b) if operator == '>' \
+                else (a <= b) if operator == '<=' else (a >= b)
+        if isinstance(cond, dict) and cond.get('op') in ('and', 'or') and (
+            isinstance(cond.get('conditions'), list) or isinstance(cond.get('values'), list)
+        ):
+            # ``{"op": "and", "conditions": [...]}`` is the v2 spelling; the
+            # engine's own data uses the ``a``/``b`` pair handled further down.
+            parts = cond.get('conditions')
+            if not isinstance(parts, list):
+                parts = cond.get('values') or []
+            results = [bool(self._eval_condition(player_id, item, card)) for item in parts]
+            return all(results) if cond.get('op') == 'and' else any(results)
+        if isinstance(cond, dict) and cond.get('op') == 'not' and 'condition' in cond:
+            return not bool(self._eval_condition(player_id, cond.get('condition'), card))
         if isinstance(cond, dict) and cond.get('op') == 'equip_turns':
             a = self._eval_expr(player_id, {'ref': 'equip_turns'}, card)
             b = int(self._eval_expr(player_id, cond.get('value', 0), card))
@@ -17796,7 +17884,7 @@ class GameEngine:
             before = self.players[target_id].health
             self.players[target_id].heal(amount)
             healed = max(0, self.players[target_id].health - before)
-            if log is False:
+            if log is False or params.get('silent') or params.get('no_log'):
                 continue
             if log:
                 if healed <= 0:
@@ -17820,6 +17908,8 @@ class GameEngine:
             return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].draw_cards(amount)
+        if log is False or params.get('silent') or params.get('no_log'):
+            return
         self.log_msg(log or f"{self.pn(target_id)}抽{amount}张牌")
 
     def _atomic_draw_cards(self, player_id, card, params, log, choice, context):
@@ -17880,7 +17970,7 @@ class GameEngine:
         if amount <= 0:
             return
         self.players[target_id].gain_elixir(amount)
-        if log is False:
+        if log is False or params.get('silent') or params.get('no_log'):
             return
         self.log_msg(
             self._format_step_log(log, target=self.pn(target_id), amount=amount)
@@ -17893,7 +17983,7 @@ class GameEngine:
             return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         self.players[target_id].gain_magic(amount)
-        if log is False:
+        if log is False or params.get('silent') or params.get('no_log'):
             return
         self.log_msg(
             self._format_step_log(log, target=self.pn(target_id), amount=amount)
@@ -19824,9 +19914,13 @@ class GameEngine:
     def _atomic_status_add_named(self, player_id, card, params, log, choice, context):
         raw_statuses = params.get('statuses')
         if isinstance(raw_statuses, (list, tuple)):
-            status_list = [str(item).strip() for item in raw_statuses if str(item).strip()]
+            status_list = [
+                str(self._step_text_value(player_id, card, item)).strip()
+                for item in raw_statuses
+                if str(self._step_text_value(player_id, card, item)).strip()
+            ]
         else:
-            status_list = [str(params.get('status', '')).strip()]
+            status_list = [str(self._step_text_value(player_id, card, params.get('status', ''))).strip()]
         if not any(status_list):
             return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
@@ -20036,7 +20130,7 @@ class GameEngine:
     def _atomic_var_set(self, player_id, card, params, log, choice, context):
         for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
             store = self._var_store_for_target(player_id, target_ref)
-            name = str(params.get('name', 'var'))
+            name = str(self._step_text_value(player_id, card, params.get('name', params.get('var', 'var'))))
             with self._read_status_var_for_mutation(target_ref, name):
                 value = self._eval_var_assignment_value(player_id, params.get('value', 0), card)
             store[name] = value
@@ -20201,22 +20295,6 @@ class GameEngine:
         finally:
             if isinstance(context, dict) and previous_selected is not None:
                 context['selected_equipment_instance_id'] = previous_selected
-
-    def _atomic_batch_var_add(self, player_id, card, params, log, choice, context):
-        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
-            self._atomic_var_add(player_id, card, {'target': tid, 'name': params.get('name', 'var'), 'value': params.get('value', 0)}, log, choice, context)
-
-    def _atomic_batch_var_sub(self, player_id, card, params, log, choice, context):
-        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
-            self._atomic_var_sub(player_id, card, {'target': tid, 'name': params.get('name', 'var'), 'value': params.get('value', 0)}, log, choice, context)
-
-    def _atomic_batch_var_mul(self, player_id, card, params, log, choice, context):
-        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
-            self._atomic_var_mul(player_id, card, {'target': tid, 'name': params.get('name', 'var'), 'value': params.get('value', 1)}, log, choice, context)
-
-    def _atomic_batch_var_div(self, player_id, card, params, log, choice, context):
-        for tid in self._resolve_targets(player_id, params.get('targets', 'friendly')):
-            self._atomic_var_div(player_id, card, {'target': tid, 'name': params.get('name', 'var'), 'value': params.get('value', 1)}, log, choice, context)
 
     def use_trigger(self, player_id: int, equipment_instance_id: int, target_player_id: int = -1) -> dict:
         if self.current_player != player_id:
