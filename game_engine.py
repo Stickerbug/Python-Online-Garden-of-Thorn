@@ -103,6 +103,7 @@ CARD_FLAG_LABELS_ZH = {
     'copy': '副本',
     'unique': '唯一',
     'swift': '迅捷',
+    'heavy': '沉重',
     'temp_swift': '暂时迅捷',
     'temp_heavy': '暂时沉重',
     'temp_magic_heavy': '暂时魔力沉重',
@@ -1077,20 +1078,24 @@ class GameEngine:
         """旧名在**引擎路径**上的显式报错（不是旧名时返回 ``None``）。
 
         Round 22 起挡 ``RENAMED_ATOMIC_OPS``（已改名），Round 24 起把
-        ``REMOVED_ATOMIC_OPS``（已移除 + 替代写法）也接上——引擎原子自己跑的
-        ``body`` / ``on_hit`` 与 v2 运行时保持同一套文案，不退回
-        ``Unknown effect``。
+        ``REMOVED_ATOMIC_OPS``（已移除 + 替代写法）也接上，Round 25 的长尾
+        登记残留（66 个旧名）沿用同一张表——引擎原子自己跑的 ``body`` /
+        ``on_hit`` 与 v2 运行时保持同一套文案，不退回 ``Unknown effect``。
         """
 
         renamed_to = RENAMED_ATOMIC_OPS.get(effect_type)
         if renamed_to:
             return RuntimeError(
-                f'atomic op {effect_type!r} 已改名（Round 22 别名收敛）；请改用 {renamed_to!r}'
+                f'atomic op {effect_type!r} 已改名'
+                f'（Round 22 别名收敛 / Round 25 登记残留清理）；请改用 {renamed_to!r}'
             )
         if effect_type in REMOVED_ATOMIC_OPS:
             replacement = REMOVED_ATOMIC_OPS[effect_type]
             hint = f'；请改用 {replacement}' if replacement else '；该 op 没有等价替代'
-            return RuntimeError(f'atomic op {effect_type!r} 已移除（Round 20 长尾清理）{hint}')
+            return RuntimeError(
+                f'atomic op {effect_type!r} 已移除'
+                f'（Round 20 长尾清理 / Round 25 登记残留清理）{hint}'
+            )
         return None
 
 
@@ -2975,6 +2980,11 @@ class GameEngine:
             'dodge': '闪避',
             'vulnerable': '易伤',
             'nazar': '邪眼',
+            # 反馈：魔法邪眼走引擎路径时日志里原样显示 magic_nazar（运行时侧的
+            # mod_runtime_v2._status_label 早已有映射，这里补齐引擎侧同一张表）。
+            'magic_nazar': '魔法邪眼',
+            'magicNazar': '魔法邪眼',
+            '魔法邪眼': '魔法邪眼',
             'sluggish': '迟缓',
             'overload': '超载',
             'foresight': '预知',
