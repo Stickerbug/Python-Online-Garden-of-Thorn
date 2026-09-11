@@ -28293,6 +28293,15 @@ function updateClassicEquipmentTriggerClasses(chip, meta) {
     chip.classList.toggle('is-triggerable', !!meta.canTrigger);
     chip.classList.toggle('is-trigger-unavailable', !!meta.lacksResource);
     chip.classList.toggle('is-trigger-selected', !!meta.triggerSelected);
+    // 可触发性会随回合与资源变化（装备满一回合、资源变化、队友回合等），
+    // 因此无障碍属性必须每次渲染都刷新，而不是只在首次绑定点击时设置一次。
+    if (meta.canTrigger) {
+        chip.setAttribute('role', 'button');
+        chip.tabIndex = 0;
+    } else {
+        chip.removeAttribute('role');
+        chip.removeAttribute('tabindex');
+    }
 }
 
 function syncClassicEquipmentChip(chip, player, eq, index, total, orbiter) {
@@ -28397,25 +28406,26 @@ function attachClassicEquipmentPreviews(container, player) {
         if (cardInst && cardInst.def_id) {
             attachFloatingCardPreview(chip, cardInst);
             attachTermIntroToCard(chip, cardInst);
-            if (chip.classList.contains('is-triggerable')) {
-                chip.setAttribute('role', 'button');
-                chip.tabIndex = 0;
-                const activate = (event) => {
-                    if (event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                    }
-                    if (chip.classList.contains('is-trigger-unavailable')) {
-                        flashStatus(UI.insufficient_resources || '资源不足', 1800, 'error');
-                        return;
-                    }
-                    selectClassicTriggerEquipment(cardInst, getCardDef(cardInst.def_id), event);
-                };
-                chip.addEventListener('click', activate);
-                chip.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter' || event.key === ' ') activate(event);
-                });
-            }
+            // 装备 chip 在多次渲染之间会被复用，而“可触发”通常要等到装备
+            // 满一回合才成立；旧实现只在首次绑定时判断 is-triggerable，
+            // 于是经典 UI 里的装备永远点不动（反馈 #72）。这里始终绑定，
+            // 点击时再按当前状态校验。
+            const activate = (event) => {
+                if (!chip.classList.contains('is-triggerable')) return;
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                if (chip.classList.contains('is-trigger-unavailable')) {
+                    flashStatus(UI.insufficient_resources || '资源不足', 1800, 'error');
+                    return;
+                }
+                selectClassicTriggerEquipment(cardInst, getCardDef(cardInst.def_id), event);
+            };
+            chip.addEventListener('click', activate);
+            chip.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') activate(event);
+            });
         }
     });
 }
