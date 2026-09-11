@@ -820,22 +820,29 @@ STORY_TRAITS.update({
     'psionic_sustain': {
         'name': {'zh': '灵能绑定', 'en': 'Psionic Binding'},
         'description': {
-            'zh': '白蚁丘存活时，H不会低于1；降至1H时眩晕2次，随后回复至满H。',
-            'en': 'While a Termite Mound lives, H cannot fall below 1; at 1 H, become stunned twice, then heal to full.',
+            'zh': '白蚁丘存活时：最大生命值减半，H不会低于1；H降至2时眩晕1回合并失去所有力量，'
+                  '随后若白蚁丘仍存活，则回复全部生命值并获得等同于其狂暴层数的力量。',
+            'en': 'While a Termite Mound lives: max H is halved and H cannot fall below 1; at 2 H it is '
+                  'stunned for 1 round and loses all Power, then heals to full H and gains Power equal to '
+                  "the Termite Mound's Rage stacks if the mound still lives.",
         },
     },
     'psionic_fountain': {
         'name': {'zh': '灵能源泉', 'en': 'Psionic Fountain'},
         'description': {
-            'zh': '战斗开始时，使所有白蚁失去灵能链接并获得灵能绑定；死亡后令其立刻使用决意。',
-            'en': 'At combat start, replace termite Psionic Connection with Psionic Binding; on death, make them use Resolve immediately.',
+            'zh': '战斗开始时，使所有拥有灵能链接的白蚁失去灵能链接并获得灵能绑定；'
+                  '白蚁丘死亡后，所有可以行动的敌方意图改为使用决意（仍在回合结束时使用）。',
+            'en': 'At combat start, replace termite Psionic Connection with Psionic Binding; when the '
+                  'Termite Mound dies, every enemy that can act changes its intent to Resolve '
+                  '(still used at the end of the round).',
         },
     },
     'nest_instinct': {
         'name': {'zh': '巢穴本能', 'en': 'Nest Instinct'},
         'description': {
-            'zh': '被攻击时，所有生物获得1层暂时力量；生物因灵能绑定复活时，所有生物获得1层力量。',
-            'en': 'When attacked, all creatures gain 1 Temporary Power; a Psionic Binding revival gives all creatures 1 Power.',
+            'zh': '被攻击时，所有敌方获得1层暂时力量；所有敌方死亡时，白蚁丘增加1层狂暴。',
+            'en': 'When attacked, all enemies gain 1 Temporary Power; whenever an enemy dies, the '
+                  'Termite Mound gains 1 Rage.',
         },
     },
     'endurance_shell': {

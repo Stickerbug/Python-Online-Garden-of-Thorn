@@ -1,5 +1,6 @@
 from story_content import STORY_CARDS, STORY_ENCOUNTERS, STORY_ENEMIES, STORY_TRAITS
 from story_engine import (
+    apply_story_action,
     _advance_enemy_move,
     _encounter_specs,
     _enemy_physical_damage,
@@ -181,10 +182,13 @@ def test_psionic_connection_splits_damage_across_connected_termites():
     assert [event['amount'] for event in events if event['type'] == 'enemy_damage'] == [5, 4]
 
 
-def test_psionic_sustain_triggers_when_damage_lowers_health_to_exactly_one():
+def test_psionic_sustain_triggers_at_two_health_and_clears_power():
+    """开发表格14 R64：H不会低于1，被打进 ≤2 的临界区则眩晕1回合、失去所有力量。"""
     state, _ = _combat('psionic-sustain', 'termite_soldier', 'termite_mound')
     soldier = _enemy(state, 'termite_soldier')
-    soldier.update({'health': 10, 'shield': 0})
+    # 灵能源泉在开战时把白兵蚁的最大生命值减半（56 → 28）。
+    assert soldier['max_health'] == 28
+    soldier.update({'health': 11, 'shield': 0, 'power': 5, 'temporary_power': 3})
     events = []
 
     dealt = _enemy_physical_damage(
@@ -196,9 +200,12 @@ def test_psionic_sustain_triggers_when_damage_lowers_health_to_exactly_one():
         'psionic-sustain-test',
     )
 
-    assert dealt == 9
+    # 灵能绑定保底：实际生效的伤害是把H压到1，而不是整段9点。
+    assert dealt == 10
     assert soldier['health'] == 1
-    assert soldier['stun'] == 2
+    assert soldier['stun'] == 1
+    assert soldier['power'] == 0
+    assert soldier['temporary_power'] == 0
     assert soldier['psionic_sustain_revive_pending'] is True
     assert any(
         event.get('type') == 'enemy_survived'
@@ -207,7 +214,80 @@ def test_psionic_sustain_triggers_when_damage_lowers_health_to_exactly_one():
     )
 
 
-def test_termite_mound_death_forces_each_living_termite_to_resolve():
+def test_psionic_sustain_leaves_health_alone_above_the_trigger_zone():
+    state, _ = _combat('psionic-sustain-safe', 'termite_soldier', 'termite_mound')
+    soldier = _enemy(state, 'termite_soldier')
+    soldier.update({'health': 20, 'shield': 0, 'power': 2})
+    events = []
+
+    dealt = _enemy_physical_damage(
+        state,
+        soldier,
+        9,
+        1,
+        events,
+        'psionic-sustain-safe',
+    )
+
+    assert dealt == 9
+    assert soldier['health'] == 11
+    assert soldier['stun'] == 0
+    assert soldier['power'] == 2
+    assert not soldier.get('psionic_sustain_revive_pending')
+
+
+def test_psionic_sustain_revival_heals_to_full_and_gains_the_mounds_rage():
+    """白蚁丘存活时，灵能绑定复活回满H，并获得等同于白蚁丘狂暴层数的力量。"""
+    state, _ = _combat('psionic-revive', 'termite_soldier', 'termite_mound')
+    soldier = _enemy(state, 'termite_soldier')
+    mound = _enemy(state, 'termite_mound')
+    soldier.update({'health': 10, 'shield': 0, 'power': 4})
+
+    _enemy_physical_damage(state, soldier, 9, 1, [], 'psionic-revive')
+    assert soldier['psionic_sustain_revive_pending'] is True
+    assert soldier['power'] == 0
+    mound['frenzy'] = 3
+
+    state, events = apply_story_action(state, 'end_turn', {}, 'psionic-revive:end')
+    soldier = _enemy(state, 'termite_soldier')
+
+    assert soldier['health'] == soldier['max_health']
+    assert soldier['power'] == 3
+    assert soldier['psionic_sustain_revive_pending'] is False
+    assert any(
+        event.get('type') == 'enemy_gain'
+        and event.get('effect_kind') == 'power'
+        and event.get('enemy_id') == soldier['id']
+        and event.get('amount') == 3
+        for event in events
+    )
+
+
+def test_nest_instinct_gives_the_mound_rage_when_an_enemy_dies():
+    """开发表格14 R64 护巢本能：所有敌方死亡时，白蚁丘增加1层狂暴。"""
+    state, _ = _combat('nest-instinct', 'jungle_fly', 'termite_mound')
+    mound = _enemy(state, 'termite_mound')
+    fly = _enemy(state, 'jungle_fly')
+    fly['shield'] = 0
+    events = []
+
+    _enemy_raw_damage(state, fly, fly['health'], events, 'death-test')
+    _resolve_enemy_death_hooks(state, 'nest-instinct', events)
+
+    assert fly['health'] <= 0
+    assert mound['frenzy'] == 1
+    assert any(
+        event.get('type') == 'enemy_gain'
+        and event.get('effect_kind') == 'frenzy'
+        and event.get('enemy_id') == mound['id']
+        for event in events
+    )
+
+
+def test_termite_mound_death_rewrites_intents_instead_of_resolving_now():
+    """开发表格14 R64：白蚁丘死亡后，所有可以行动的敌方意图改为决意，
+    仍在回合结束时结算（旧版是死亡瞬间立刻打出）。
+    """
     state, _ = _combat(
         'psionic-fountain',
         'termite_soldier',
@@ -232,13 +312,35 @@ def test_termite_mound_death_forces_each_living_termite_to_resolve():
             'termite_overmind',
         }
     ]
-    assert all(enemy['health'] <= 0 for enemy in termites)
-    assert player_before - state['player']['health'] == 59
+    assert len(termites) == 3
+    assert state['player']['health'] == player_before
+    assert not [event for event in events if event.get('type') == 'enemy_action']
+    assert all(
+        _next_enemy_move(state, enemy)['name']['zh'] == '决意'
+        for enemy in termites
+    )
+    assert all(
+        enemy['forced_move_index'] == len(STORY_ENEMIES[enemy['def_id']]['moves']) - 1
+        for enemy in termites
+    )
     assert sum(
-        event.get('type') == 'enemy_action'
+        event.get('type') == 'enemy_intent_changed'
         and event.get('source') == 'psionic_fountain'
         for event in events
     ) == 3
+
+    state, turn_events = apply_story_action(state, 'end_turn', {}, 'psionic-fountain:end')
+
+    assert player_before - state['player']['health'] == 59
+    assert sorted(
+        (event['source_definition_id'], event['move_index'])
+        for event in turn_events
+        if event.get('type') == 'enemy_action'
+    ) == [
+        ('termite_overmind', 2),
+        ('termite_soldier', 3),
+        ('termite_worker', 3),
+    ]
 
 
 def test_bulb_restricts_targets_while_obstacles_block_hand_slots():

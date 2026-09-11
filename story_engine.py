@@ -41,6 +41,11 @@ _NEGATIVE_STATUSES = frozenset({
 _TURN_START_DECAY_STATUSES = ('weak', 'vulnerable', 'fragile')
 _TURN_END_DECAY_STATUSES = ('attack_blocked',)
 
+# 开发表格14《爬塔怪物设计》R64：灵能绑定改写为「最大生命值减半、生命值不会低于1，
+# 若是生命值=2则眩晕1回合并失去所有力量」。落地取上界语义：伤害把生命值打进
+# ≤2 的临界区就触发（这样「不会低于1」的保底才有实际触发点），且只眩晕 1 回合。
+_PSIONIC_SUSTAIN_TRIGGER_HEALTH = 2
+
 _PRESENTATION_EFFECT_KEYS = (
     'shield', 'power', 'temporary_power', 'endurance', 'weak',
     'vulnerable', 'fragile', 'evade', 'poison', 'stun', 'reflection',
@@ -2118,16 +2123,50 @@ def _player_damage(state, amount, hits, events, source, attacker=None):
     return total
 
 
+def _clear_enemy_power(enemy, events, source):
+    """Clear an enemy's Power and Temporary Power, reporting both changes."""
+    before_power = max(0, int(enemy.get('power') or 0))
+    if before_power:
+        enemy['power'] = 0
+        events.append({
+            'type': 'status_cleared',
+            'target_id': enemy['id'],
+            'status': 'power',
+            'before': before_power,
+            'after': 0,
+            'source': source,
+        })
+    before_temporary = max(0, int(enemy.get('temporary_power') or 0))
+    if before_temporary:
+        enemy['temporary_power'] = 0
+        events.append({
+            'type': 'status_cleared',
+            'target_id': enemy['id'],
+            'status': 'temporary_power',
+            'before': before_temporary,
+            'after': 0,
+            'source': source,
+        })
+
+
 def _apply_enemy_lethal_rules(state, enemy, before, dealt, events):
     """Apply one-use enemy survival mechanics and return recorded damage."""
     after = before - dealt
-    if dealt > 0 and after <= 1 and int(enemy.get('psionic_sustain') or 0) > 0 and any(
-        item.get('def_id') == 'termite_mound'
-        for item in _living_enemies(state['combat'])
+    if (
+        dealt > 0
+        and after <= _PSIONIC_SUSTAIN_TRIGGER_HEALTH
+        and int(enemy.get('psionic_sustain') or 0) > 0
+        and any(
+            item.get('def_id') == 'termite_mound'
+            for item in _living_enemies(state['combat'])
+        )
     ):
         enemy['health'] = 1
         if not enemy.get('psionic_sustain_revive_pending'):
-            enemy['stun'] = max(2, int(enemy.get('stun') or 0))
+            # 表格14 R64：眩晕1回合，并失去所有力量（复活回满H与狂暴层力量在
+            # 眩晕结束时结算，见 _enemy_turn）。
+            enemy['stun'] = max(1, int(enemy.get('stun') or 0))
+            _clear_enemy_power(enemy, events, 'psionic_sustain')
             enemy['psionic_sustain_revive_pending'] = True
             events.append({
                 'type': 'enemy_survived',
@@ -7007,17 +7046,27 @@ def _enemy_turn(state, seed, events):
                     'after': int(enemy['health']),
                     'source': 'psionic_sustain',
                 })
-                for ally in _living_enemies(combat):
-                    ally_before = int(ally.get('power') or 0)
-                    ally['power'] = ally_before + 1
+                # 表格14 R64：灵能绑定复活时，该生物获得「狂暴层力量」——
+                # 层数取自灵能源泉持有者（白蚁丘）累计的狂暴。
+                rage = max(
+                    (
+                        max(0, int(mound.get('frenzy') or 0))
+                        for mound in _living_enemies(combat)
+                        if mound.get('def_id') == 'termite_mound'
+                    ),
+                    default=0,
+                )
+                if rage:
+                    power_before = max(0, int(enemy.get('power') or 0))
+                    enemy['power'] = power_before + rage
                     events.append({
                         'type': 'enemy_gain',
-                        'enemy_id': ally['id'],
+                        'enemy_id': enemy['id'],
                         'effect_kind': 'power',
-                        'amount': 1,
-                        'before': ally_before,
-                        'after': int(ally['power']),
-                        'source': 'nest_instinct',
+                        'amount': rage,
+                        'before': power_before,
+                        'after': int(enemy['power']),
+                        'source': 'psionic_sustain',
                     })
             _finish_enemy_turn_effects(state, enemy, seed, events)
             if _check_combat_end(state, seed, events):
@@ -8131,7 +8180,15 @@ def _emit_enemy_defeat(state, enemy, events, parallel_group=None):
 
 
 def _resolve_termite_mound_death(state, mound, seed, events):
+    """表格14 R64：白蚁丘死亡后，所有可以行动的敌方「意图改为使用特殊技能」——
+    即把意图改写成决意（最后一个招式），仍在回合结束时（敌方回合）结算，
+    不再像旧版那样在死亡瞬间立刻打出。
+    """
     combat = state['combat']
+    another_mound_lives = any(
+        item.get('def_id') == 'termite_mound'
+        for item in _living_enemies(combat)
+    )
     for termite in list(_living_enemies(combat)):
         if not str(termite.get('def_id') or '').startswith('termite_'):
             continue
@@ -8143,29 +8200,38 @@ def _resolve_termite_mound_death(state, mound, seed, events):
                 'source_trigger': 'psionic_fountain',
             })
             continue
+        if not another_mound_lives:
+            termite['psionic_sustain'] = 0
+            termite['psionic_sustain_revive_pending'] = False
         definition = STORY_ENEMIES[termite['def_id']]
-        resolve_move = definition['moves'][-1]
         resolve_index = len(definition['moves']) - 1
+        termite['forced_move_index'] = resolve_index
         events.append({
-            'type': 'enemy_action',
+            'type': 'enemy_intent_changed',
             'enemy_id': termite['id'],
-            'move_index': resolve_index,
             'actor_id': termite['id'],
-            'target_ids': _enemy_move_target_ids(combat, termite, resolve_move),
+            'move_index': resolve_index,
             'source_definition_id': termite['def_id'],
             'source': 'psionic_fountain',
-            'presentation': {'motion': 'attack'},
         })
-        for effect_index, effect in enumerate(resolve_move.get('effects') or ()):
-            start = len(events)
-            _resolve_enemy_effect(state, termite, effect, resolve_move, seed, events)
-            for event in events[start:]:
-                event.setdefault('actor_id', termite['id'])
-                event.setdefault('source_definition_id', termite['def_id'])
-                event.setdefault('effect_index', effect_index)
-                event.setdefault('source_trigger', 'psionic_fountain')
-        termite['psionic_sustain'] = 0
-        termite['psionic_sustain_revive_pending'] = False
+
+
+def _gain_nest_instinct_rage(state, defeated, events):
+    """表格14 R64 护巢本能：所有敌方死亡时，存活的白蚁丘增加1层狂暴。"""
+    combat = state.get('combat') or {}
+    for mound in _living_enemies_with_trait(combat, 'nest_instinct'):
+        before = max(0, int(mound.get('frenzy') or 0))
+        mound['frenzy'] = before + 1
+        events.append({
+            'type': 'enemy_gain',
+            'enemy_id': mound['id'],
+            'effect_kind': 'frenzy',
+            'amount': 1,
+            'before': before,
+            'after': int(mound['frenzy']),
+            'source': 'nest_instinct',
+            'source_enemy_id': defeated.get('id'),
+        })
 
 
 def _resolve_enemy_death_hooks(state, seed, events):
@@ -8183,6 +8249,7 @@ def _resolve_enemy_death_hooks(state, seed, events):
         defeat_group = f'enemy-defeat:{len(events)}' if len(newly_defeated) > 1 else None
         for enemy in newly_defeated:
             _emit_enemy_defeat(state, enemy, events, defeat_group)
+            _gain_nest_instinct_rage(state, enemy, events)
             poison = max(0, int(enemy.get('poison') or 0))
             if poison:
                 for mushroom in _living_enemies_with_trait(combat, 'toxic_conversion'):
