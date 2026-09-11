@@ -25931,6 +25931,21 @@ function renderLobby(data) {
                 }
                 localStorage.setItem('preferred_mode', newMode);
                 updateAi1v1TestEntry(newMode);
+                // 建议 #82：切模式前先把"目标模式那一份"模组选择推给服务端。
+                // 服务端的 set_mode 会用会话里的 preferred_disabled_mods 重建
+                // loadout；不推的话天梯会沿用娱乐的官方模组子集。socket 事件
+                // 按连接顺序处理，所以这里不必等 ack。
+                if (socket && socket.connected && phase === 'lobby') {
+                    void requestModSettingsUpdate(
+                        {
+                            disabled_mods: getDisabledMods(newMode),
+                            ...getCommunityModSelection(),
+                        },
+                        { silent: true },
+                    ).catch((err) => {
+                        console.warn('Failed to sync mod selection before mode switch:', err);
+                    });
+                }
                 socket.emit('set_mode', { mode: engineModeForMatchMode(newMode), match_mode: newMode });
             };
         });
@@ -37310,8 +37325,8 @@ function hasSavedDisabledModsPreference() {
     }
 }
 
-function getDisabledMods() {
-    const storageKey = disabledModsStorageKey();
+function getDisabledMods(mode = getSettingsModMatchMode()) {
+    const storageKey = disabledModsStorageKey(mode);
     try {
         let raw = localStorage.getItem(storageKey);
         if (raw === null && storageKey === DISABLED_MODS_STORAGE_KEYS.ranked) {

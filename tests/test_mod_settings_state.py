@@ -34,7 +34,7 @@ class ModSettingsStateTests(unittest.TestCase):
         helper = source_between(
             GAME_JS,
             'const DISABLED_MODS_STORAGE_KEYS',
-            'function getDisabledMods()',
+            'function getDisabledMods(',
         )
         self.assertIn("casual: 'gtn_disabled_mods'", helper)
         self.assertIn("ranked: 'gtn_disabled_mods_ranked'", helper)
@@ -43,10 +43,10 @@ class ModSettingsStateTests(unittest.TestCase):
 
         getter = source_between(
             GAME_JS,
-            'function getDisabledMods()',
+            'function getDisabledMods(',
             'function writeDisabledModsPreference(',
         )
-        self.assertIn('disabledModsStorageKey()', getter)
+        self.assertIn('disabledModsStorageKey(', getter)
         # 天梯键还没写过时回退读娱乐键（一次性迁移），但不能把娱乐键当写入目标。
         self.assertIn('DISABLED_MODS_STORAGE_KEYS.casual', getter)
         self.assertNotIn("localStorage.setItem('gtn_disabled_mods'", getter)
@@ -65,6 +65,16 @@ class ModSettingsStateTests(unittest.TestCase):
             'function getModSettingsUpdatePayload()',
         )
         self.assertIn('hasSavedDisabledModsPreference()', login_payload)
+
+    def test_mode_switch_syncs_that_modes_selection_before_set_mode(self):
+        """建议 #82：切模式前先把目标模式那份模组选择推给服务端，set_mode 才会用它重建 loadout。"""
+        handler = source_between(
+            GAME_JS,
+            'tab.onclick = async () => {',
+            "socket.emit('set_mode'",
+        )
+        self.assertIn('requestModSettingsUpdate(', handler)
+        self.assertIn('getDisabledMods(newMode)', handler)
 
     def test_invite_accept_does_not_rebuild_preferences_from_hidden_checkboxes(self):
         section = source_between(
@@ -129,7 +139,7 @@ class ModSettingsStateTests(unittest.TestCase):
     def test_new_player_default_is_not_baked_into_disabled_preference(self):
         section = source_between(
             GAME_JS,
-            'function getDisabledMods()',
+            'function getDisabledMods(',
             'function writeDisabledModsPreference(',
         )
         self.assertIn('const hasSavedPreference = raw !== null;', section)
@@ -162,14 +172,14 @@ class ModSettingsStateTests(unittest.TestCase):
     def test_split_dlc_mods_are_disabled_before_the_first_settings_open(self):
         section = source_between(
             GAME_JS,
-            'function getDisabledMods()',
+            'function getDisabledMods(',
             'function writeDisabledModsPreference(',
         )
         self.assertIn('if (!Array.isArray(disabled)) disabled = getDefaultDisabledMods()', section)
         self.assertIn('V11_DLC_DEFAULT_MIGRATION_KEY', section)
         self.assertIn('...V11_DLC_MOD_FILENAMES', section)
         self.assertIn('localStorage.setItem(storageKey,', section)
-        self.assertIn('disabledModsStorageKey()', section)
+        self.assertIn('disabledModsStorageKey(', section)
 
     def test_server_rejects_out_of_order_mod_setting_revisions(self):
         self.assertIn('MOD_SETTINGS_STALE_REQUEST', APP_PY)
