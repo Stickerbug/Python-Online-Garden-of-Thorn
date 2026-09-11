@@ -1800,6 +1800,11 @@ STORY_CARDS = {
         'nether_lightning',
         effects=(_effect('random_electric_damage', 7, hits=3),),
         upgrade_effects=(_effect('random_electric_damage', 9, hits=3),),
+        # 反馈 #81：卡面与开发表格（爬塔卡牌设计 R163）都写明"随机造成…3次"，
+        # 所以不该走 thorn/guard 默认的"选目标"流程——玩家选的敌人会被
+        # random_electric_damage 无视，白白多一步。'random' 让引擎与前端都按
+        # "无需选目标"处理（非 enemy 一律如此），命中仍由效果随机决定。
+        target='random',
     ),
     'magic_nether_lightning': _character_card(
         'magic_nether_lightning',
@@ -3978,7 +3983,10 @@ def validate_story_content():
             errors.append(f'{card_id}: invalid type')
         if definition.get('rarity') not in STORY_RARITIES and definition.get('rarity') != 'special':
             errors.append(f'{card_id}: invalid rarity')
-        if definition.get('target') not in ('self', 'enemy'):
+        # 'random'：卡牌不打目标选择流程，命中由效果自行决定（如
+        # random_electric_damage）。引擎与前端都只区分 enemy / 非 enemy，
+        # 所以这里只是把"不需要选目标"的语义写清楚，见反馈 #81。
+        if definition.get('target') not in ('self', 'enemy', 'random'):
             errors.append(f'{card_id}: invalid target {definition.get("target")}')
         validate_cost(card_id, 'cost_e', definition.get('cost_e'))
         validate_cost(card_id, 'cost_m', definition.get('cost_m'))

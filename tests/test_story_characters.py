@@ -286,3 +286,53 @@ def test_mage_fries_uses_authoritative_healing_and_exile_flow():
         and event.get('source') == 'mage_fries'
         for event in events
     )
+
+
+def test_nether_lightning_never_asks_for_a_target_it_would_ignore():
+    """反馈 #81：卡面/设计表都写"随机造成…3次"，不该要求玩家选一个用不上的目标。"""
+
+    card = STORY_CARDS['nether_lightning']
+    assert card['type'] == 'thorn'
+    assert card['target'] != 'enemy'
+    assert card['effects'][0]['type'] == 'random_electric_damage'
+
+    state = build_initial_story_state('mage-nether-lightning')
+    events = []
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        'mage-nether-lightning',
+        events,
+        encounter_override=[{'def_id': 'soldier_ant'}, {'def_id': 'soldier_ant'}],
+    )
+    combat = state['combat']
+    combat['opening_redraw_pending'] = False
+    combat['elixir'] = 10
+    combat['magic'] = 10
+    lightning = {
+        'instance_id': 'mage-nether-lightning-test',
+        'def_id': 'nether_lightning',
+        'upgraded': False,
+    }
+    combat['hand'] = [lightning]
+    before = {enemy['id']: int(enemy['health']) for enemy in combat['enemies']}
+
+    # 旧实现会在这里抛 StoryActionError('请选择一个可选中的生物')。
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': lightning['instance_id']},
+        'mage-nether-lightning-play',
+    )
+
+    after = {
+        enemy['id']: int(enemy['health'])
+        for enemy in state['combat']['enemies']
+    }
+    damaged = [enemy_id for enemy_id in before if after[enemy_id] < before[enemy_id]]
+    assert damaged, (before, after)
+    electric_targets = {
+        event.get('enemy_id') for event in events
+        if event.get('type') == 'electric_damage'
+    }
+    assert set(damaged) <= electric_targets
