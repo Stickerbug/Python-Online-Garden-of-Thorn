@@ -325,6 +325,25 @@ def build_summary(report: dict, *, corpus=None) -> dict:
     }
 
 
+def logic_group_lines() -> list:
+    """Round 25：登记名按真实执行路径分五类（`mod_spec_v2.LOGIC_OP_GROUPS`）。
+
+    类别口径见 `docs/引擎原子与数据步骤清单.md` §23；这里的数字必须和
+    `tools/atom_parameter_table.py --check` 的一致。
+    """
+
+    getter = getattr(mod_spec_v2, "logic_op_groups", None)
+    if not callable(getter):
+        return []
+    counts = {label: len(names) for label, names in getter().items()}
+    lines = ["  登记名分类（Round 25，五类并集 = 上面的策展通用清单）:"]
+    for label, _names in getattr(mod_spec_v2, "LOGIC_OP_GROUPS", ()):
+        lines.append(f"    {label}: {counts.get(label, 0)}")
+    legacy = len(getattr(mod_spec_v2, "UNCLASSIFIED_LOGIC_OPS", ()) or ())
+    lines.append(f"    仅登记、无实现（应为 0）: {legacy}")
+    return lines
+
+
 def render_text(summary: dict) -> str:
     lines = []
     lines.append("== 引擎能力 ==")
@@ -332,6 +351,7 @@ def render_text(summary: dict) -> str:
     lines.append(f"  运行时白名单(VALID_LOGIC_OPS): {summary['valid_ops']}")
     lines.append(f"  _atomic_* 处理器:              {summary['engine_ops']}")
     lines.append(f"  未登记进通用清单的原子:        {summary['unregistered_atoms']}")
+    lines.extend(logic_group_lines())
     lines.append("")
     lines.append("== 卡数据 ==")
     lines.append(f"  含逻辑的资源: {summary['cards_total']}  |  步骤总数: {summary['steps_total']}"

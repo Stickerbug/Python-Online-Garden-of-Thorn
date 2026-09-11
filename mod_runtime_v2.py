@@ -994,18 +994,22 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     renamed = RENAMED_ATOMIC_OPS.get(str(op))
     if renamed:
         raise V2RuntimeError(
-            f"atomic op {op!r} 已改名（Round 22 别名收敛）；请改用 {renamed!r}"
+            f"atomic op {op!r} 已改名（Round 22 别名收敛 / Round 25 登记残留清理）；"
+            f"请改用 {renamed!r}"
         )
 
     atomic_result = _try_run_engine_atomic_op(engine, context, op, params, step)
     if atomic_result is not None:
         return atomic_result
 
-    # Round 20: 已移除的原子给"显式 unsupported + 替代写法"，不退化成静默跳过。
+    # Round 20 / Round 25: 已移除的原子给"显式 unsupported + 替代写法"，
+    # 不退化成静默跳过。
     if str(op) in REMOVED_ATOMIC_OPS:
         replacement = REMOVED_ATOMIC_OPS[str(op)]
         hint = f"；请改用 {replacement}" if replacement else "；该 op 没有等价替代"
-        raise V2RuntimeError(f"atomic op {op!r} 已移除（Round 20 长尾清理）{hint}")
+        raise V2RuntimeError(
+            f"atomic op {op!r} 已移除（Round 20 长尾清理 / Round 25 登记残留清理）{hint}"
+        )
 
     raise V2RuntimeError(f"unsupported v2 op: {op}")
 

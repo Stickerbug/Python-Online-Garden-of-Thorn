@@ -63,6 +63,25 @@ ALIAS_LABELS = {
     "cond": "条件",
     "hook": "时点",
 }
+# Round 25：登记名按"真实执行路径"分五类（``mod_spec_v2.LOGIC_OP_GROUPS``）。
+# 铺不满登记表时剩下的名字落到这个兜底类——正确值是 0 个。
+LEGACY_GROUP_LABEL = "遗留登记名（仅登记、无实现）"
+
+
+def op_group_label(op: str) -> str:
+    """op 属于五类里的哪一类；不属于任何一类时返回兜底类名。"""
+
+    return mod_spec_v2.logic_op_group(op) or LEGACY_GROUP_LABEL
+
+
+def group_labels() -> list[str]:
+    return [label for label, _names in mod_spec_v2.LOGIC_OP_GROUPS] + [LEGACY_GROUP_LABEL]
+
+
+def group_counts() -> dict[str, int]:
+    counts = {label: len(names) for label, names in mod_spec_v2.logic_op_groups().items()}
+    counts[LEGACY_GROUP_LABEL] = len(getattr(mod_spec_v2, "UNCLASSIFIED_LOGIC_OPS", ()) or ())
+    return counts
 
 
 # ---------------------------------------------------------------------------
@@ -1318,6 +1337,7 @@ def render(model: dict) -> str:
     doc = model["doc"]
 
     rows_by_category: dict[str, list[tuple[int, str]]] = collections.defaultdict(list)
+    rows_by_group: dict[str, list[tuple[tuple, int, str]]] = collections.defaultdict(list)
     param_total = 0
     unresolved: dict[str, list[str]] = {}
     doc_mismatch: list[tuple[str, list[str], list[str]]] = []
@@ -1330,6 +1350,7 @@ def render(model: dict) -> str:
         category = doc.get(op, {}).get("category") or "9 其它（清单文档散见，需人工）"
         steps = usage.get(op, {}).get("steps", 0)
         rows_by_category[category].append((-steps, op))
+        rows_by_group[op_group_label(op)].append((category_sort_key(category), -steps, op))
         reasons = unresolved_reasons(model, op, params, paths)
         if reasons:
             unresolved[op] = reasons
@@ -1367,7 +1388,26 @@ def render(model: dict) -> str:
     lines.append(f"| 步骤里出现的 op 种类 | {summary['distinct_ops_used']} | 同上 |")
     lines.append(f"| **本表覆盖的原子 / op** | **{len(universe)}** | 每个原子一行 |")
     lines.append(f"| **本表抽到的参数条目** | **{param_total}** | 源码里读到的参数键去重后求和 |")
-    lines.append(f"| 没有实现的登记名（写了会报错） | {len([op for op in universe if not op_paths(model, op)['dispatchable']])} | 见附录 A |")
+    lines.append(f"| 没有实现的登记名（写了会报错） | {len([op for op in universe if not op_paths(model, op)['dispatchable']])} | 见 §{len(group_labels())} 与附录 A |")
+    lines.append("")
+    lines.append("**Round 25：登记名按真实执行路径分五类**（`mod_spec_v2.LOGIC_OP_GROUPS`；")
+    lines.append("`_CORE_LOGIC_OPS` 仍是五类的并集，所有可用名字一个都没变）：")
+    lines.append("")
+    lines.append("| 分类 | 数量 | 口径 |")
+    lines.append("|---|---|---|")
+    counts = group_counts()
+    sources = {
+        "真原子（引擎 `_atomic_*` 实现）": "`ENGINE_ATOM_OPS` = `atomic_registry.engine_atomic_ops()`",
+        "运行时原生步骤（`run_v2_step`）": "`RUNTIME_STEP_OPS`，引擎没有同名 `_atomic_*`",
+        "表达式算子（`eval_v2_value`）": "`EXPRESSION_OPS`，只能写在取值位置",
+        "条件算子（`check_v2_condition`）": "`CONDITION_OPS`，只能写在门控位置",
+        "事件与声明键（`events` / `_EFFECT_ALIASES`）": "`EVENT_HOOK_OPS`，事件时点与声明键",
+        LEGACY_GROUP_LABEL: "`UNCLASSIFIED_LOGIC_OPS`，**应为 0**",
+    }
+    for label in group_labels():
+        lines.append(f"| {label} | {counts.get(label, 0)} | {sources.get(label, '—')} |")
+    lines.append(f"| **合计** | **{sum(counts.get(label, 0) for label in group_labels())}** | "
+                 f"= `_CORE_LOGIC_OPS` {summary['core_ops']} |")
     lines.append("")
     lines.append("重新生成（只读源码与卡数据，不碰引擎、卡数据、编辑器）：")
     lines.append("")
@@ -1378,6 +1418,10 @@ def render(model: dict) -> str:
     lines.append("")
     lines.append("### 怎么读这张表")
     lines.append("")
+    lines.append("- **分类**（§0 的表 + 正文五个小节）= 这个 op 的真实执行路径：")
+    lines.append("  真原子走 `game_engine._atomic_*`；运行时原生步骤走 `mod_runtime_v2.run_v2_step`；")
+    lines.append("  表达式 / 条件算子只出现在取值与门控位置；事件与声明键写在卡数据的 `events` 里。")
+    lines.append("  分类口径由 `python .codex-tmp\\round25\\rd25_classify_final.py` 按真实分派代码复核。")
     lines.append("- **原子**列 = op 名 + 执行路径徽标：")
     lines.append("  `运行时` = `mod_runtime_v2.run_v2_step` 直接执行；`引擎` = `game_engine._atomic_*`；")
     lines.append("  `表达式` / `条件` = 只能出现在取值表达式 / 条件位置；`时点` = 卡数据 `events` 里的声明块键；")
@@ -1396,13 +1440,19 @@ def render(model: dict) -> str:
     lines.append("- 所有**非控制流**步骤都能加步骤门控 `condition`/`unless`（§14.1）；控制流 op 用 `run_if`/`unless`。")
     lines.append("")
 
-    for category in sorted(rows_by_category, key=category_sort_key):
-        rows = sorted(rows_by_category[category])
-        lines.append(f"## {category}")
+    # Round 25：正文按"真原子 / 运行时步骤 / 表达式 / 条件 / 事件与声明键"分节，
+    # 每节内部仍按清单文档的分类顺序排（语义列里的 §x 就是清单文档的章节）。
+    for index, group in enumerate(group_labels(), 1):
+        rows = sorted(rows_by_group.get(group, []))
+        lines.append(f"## {index} {group} — {len(rows)} 个")
         lines.append("")
+        if group == LEGACY_GROUP_LABEL and not rows:
+            lines.append("（无：五类恰好铺满 `_CORE_LOGIC_OPS`，没有只登记不实现的名字）")
+            lines.append("")
+            continue
         lines.append("| 原子 | 参数（含默认值） | 语义 | 真实用例 | 使用次数 | 扩展点 |")
         lines.append("|---|---|---|---|---|---|")
-        for _weight, op in rows:
+        for _sort_key, _weight, op in rows:
             paths = op_paths(model, op)
             params = op_params(model, op)
             entry = doc.get(op, {})
@@ -1514,6 +1564,26 @@ def render(model: dict) -> str:
     lines.append("   `python tools\\op_long_tail_report.py`、`python .codex-tmp\\smoke_all_cards.py`，")
     lines.append("   并在 `.codex-tmp/roundNN/rdNN.md` 写报告（§8.3 的六步流程）。")
     lines.append("")
+
+    lines.append("## 附录 G：兼容别名（旧名 → 规范名）")
+    lines.append("")
+    lines.append("旧名照写仍然可用：运行时 `ATOMIC_OP_ALIASES` 或引擎 `_EFFECT_ALIASES` 会先改写再执行。")
+    lines.append("")
+    lines.append("| 旧名 | 规范名 | 别名表 |")
+    lines.append("|---|---|---|")
+    alias_rows = [(alias, target, "ATOMIC_OP_ALIASES")
+                  for alias, target in sorted(getattr(mod_runtime_v2, "ATOMIC_OP_ALIASES", {}).items())]
+    alias_rows += [(alias, target, "_EFFECT_ALIASES")
+                   for alias, target in sorted(model["engine_aliases"].items()) if target != alias]
+    for alias, target, source in alias_rows:
+        lines.append(f"| `{alias}` | `{target}` | `{source}` |")
+    lines.append("")
+    lines.append("已经撤销的旧名（Round 22 / Round 25 收敛，写出来报显式错误）：")
+    lines.append("")
+    lines.append("、".join(
+        f"`{alias}` → `{target}`" for alias, target in sorted(mod_spec_v2.RENAMED_ATOMIC_OPS.items())
+    ) or "（无）")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -1525,6 +1595,24 @@ def check(model: dict, text: str, out_path: pathlib.Path) -> int:
                 "distinct_ops_used", "legacy_step_count"):
         if summary[key] != recomputed[key]:
             problems.append(f"{key}: {summary[key]} != {recomputed[key]}")
+    # Round 25：五类必须恰好铺满登记表（分类口径的直接校验）。
+    core_ops = set(mod_spec_v2._CORE_LOGIC_OPS)
+    covered = set()
+    for label, names in mod_spec_v2.logic_op_groups(include_empty=False).items():
+        overlap = covered & set(names)
+        if overlap:
+            problems.append(f"分类重叠（{label}）：{sorted(overlap)[:5]}")
+        covered |= set(names)
+    unclassified = sorted(core_ops - covered)
+    if unclassified:
+        problems.append(f"分类没铺满 _CORE_LOGIC_OPS，剩 {len(unclassified)} 个：{unclassified[:5]}")
+    stray = sorted(covered - core_ops)
+    if stray:
+        problems.append(f"分类里有不在 _CORE_LOGIC_OPS 的名字：{stray[:5]}")
+    if getattr(mod_spec_v2, "UNCLASSIFIED_LOGIC_OPS", None):
+        problems.append(
+            f"UNCLASSIFIED_LOGIC_OPS 非空：{sorted(mod_spec_v2.UNCLASSIFIED_LOGIC_OPS)[:5]}"
+        )
     if len(summary["dangling"]):
         problems.append(f"悬空 op {len(summary['dangling'])} 个")
     if out_path.is_file():
