@@ -6016,7 +6016,12 @@ def _next_enemy_move(state, enemy):
             for item in _living_enemies(state['combat'])
         )
         planned_summons = {0: 1, 1: 2, 2: 0}.get(move_index, 0)
-        if move_index in (0, 1) and spawned + planned_summons >= 3:
+        # 表格14 R60：1-2-3 循环，召唤物上限 3。上限判定用"超过 3 才改招"：
+        # 用 >=3 时，吸引（一次召 2 只）只要场上有 1 只召唤物就会被顶成养分，
+        # 实战里玩家永远只能见到抖落召出的萤火虫（反馈 #68
+        # "灌木丛每回合一定刷出萤火虫"）。允许刚好凑满 3 只后，1→抖落(1 只)、
+        # 2→吸引(共 3 只)、3→养分 的循环才按设计走。
+        if move_index in (0, 1) and spawned + planned_summons > 3:
             move_index = 2
     elif definition.get('script') == 'stickbug':
         living_sticks = sum(

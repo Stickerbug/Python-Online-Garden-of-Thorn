@@ -60,12 +60,14 @@ def test_bush_cycles_summon_moves_and_uses_nutrients_above_summon_cap():
 
     # 1→抖落（召唤1只萤火虫）
     assert chosen_index(0, []) == 0
-    # 2→吸引会把召唤物增加到3，因此本轮改用养分
-    assert chosen_index(1, ['jungle_firefly']) == 2
+    # 2→吸引把召唤物凑满 3 只（上限），允许使用；反馈 #68：不能永远只召萤火虫
+    assert chosen_index(1, ['jungle_firefly']) == 1
     # 3→养分
     assert chosen_index(2, ['jungle_firefly']) == 2
     # 回到 1→抖落（召唤物只有1个，仍可召唤）
     assert chosen_index(3, ['jungle_firefly']) == 0
+    # 已有2个召唤物时抖落刚好凑满3，仍可使用；再多才会改招
+    assert chosen_index(0, ['jungle_firefly', 'jungle_fly']) == 0
     # 已有2个召唤物时吸引会超过上限，改用养分
     assert chosen_index(4, ['jungle_firefly', 'jungle_fly']) == 2
 
