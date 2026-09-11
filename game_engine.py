@@ -9482,6 +9482,11 @@ class GameEngine:
             no_cost=bool(params.get('no_cost', False)),
             source=str(params.get('source_name') or 'auto_play_card'),
         )
+        # 反馈 #78：追加打出的牌要当场逐张结算（复制→打出→再复制下一张）。
+        # 在此之前只入队、等整张牌结算完再统一打出，「松果」这类每次伤害都复
+        # 制并追加打出的牌就会把复制先全部堆进手牌，撑爆手牌上限（爆牌）。
+        # 选择/响应窗口由队列自身让路，需要等待时仍留到窗口关闭后再打出。
+        self._bio_drain_auto_play_queue()
 
     def _atomic_mark_original_card(self, player_id, card, params, log, choice, context):
         """Attach a marker attribute to the card this response is answering.
@@ -11900,7 +11905,12 @@ class GameEngine:
         if not self._valid_player_id(player_id) or card is None:
             return
         ps = self.players[player_id]
-        if ps.find_hand_card(card.instance_id) is None:
+        # 牌已经因手牌溢出被弃掉（或本就躺在别的区域）时不再塞回手牌，否则同
+        # 一张实例会被重复放进弃牌堆（反馈 #78 爆牌的副产物）。
+        if (
+            ps.find_hand_card(card.instance_id) is None
+            and self._find_card_by_instance_id(card.instance_id) is None
+        ):
             ps.add_to_hand(card)
         queue = self.custom_vars.setdefault('bio_auto_play_queue', [])
         if not isinstance(queue, list):
