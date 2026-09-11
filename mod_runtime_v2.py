@@ -1897,6 +1897,18 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
                 pass
         return list(range(len(getattr(engine, "players", []) or [])))
     if text == "owner":
+        # 装备事件的"拥有者"：运行时的上下文优先（装备触发会往里写
+        # ``selected_equipment_owner_id``），再退回引擎的装备拥有者解析。
+        for key in ("selected_equipment_owner_id", "equipment_owner_id"):
+            value = context.get(key)
+            if value is None:
+                continue
+            try:
+                owner_id = int(value)
+            except (TypeError, ValueError):
+                continue
+            if _valid_player(engine, owner_id):
+                return owner_id
         resolver = getattr(engine, "_resolve_equipment_owner_selector", None)
         if callable(resolver):
             try:
