@@ -129,10 +129,19 @@ def test_unreferenced_atoms_split_into_indirect_and_orphan():
     summary = atom_report.build_summary(atom_report.collect(ROOT / "mods"))
 
     indirect = {item["op"] for item in summary["indirect"]}
-    assert indirect & {"apply_poison", "gain_armor", "set_invincible"}
+    orphan = set(summary["orphan"])
+    # Round 20 起"未登记原子"清零：`_CORE_LOGIC_OPS` 已覆盖全部引擎 `_atomic_*`
+    # （docs/引擎原子与数据步骤清单.md §21）。因此正常状态下三者都为空；
+    # 一旦又有新的 `_atomic_*` 没顺手登记，下面的分支仍要求它被正确再分类——
+    # 这条测试是那套再分类逻辑的回归护栏，而不是"必须存在未登记原子"的断言。
+    assert indirect <= set(summary["unreferenced"])
+    assert orphan <= set(summary["unreferenced"])
     assert not (indirect & set(summary["orphan"]))
-    assert set(summary["orphan"]) | indirect == set(summary["unreferenced"])
-    assert len(summary["orphan"]) + len(indirect) == len(summary["unreferenced"])
+    assert orphan | indirect == set(summary["unreferenced"])
+    assert len(orphan) + len(indirect) == len(summary["unreferenced"])
+    assert len(summary["unreferenced"]) <= summary["unregistered_atoms"]
+    if summary["unregistered_atoms"] == 0:
+        assert indirect == set() and orphan == set()
 
 
 def test_shipped_card_data_never_calls_an_unknown_op():
