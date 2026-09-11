@@ -8452,11 +8452,13 @@ const OFFICIAL_MOD_DISPLAY_ALIASES = [
     ['bio cards dlc.gtnmod', 'bio cards dlc'],
 ];
 
+// 每个语言都要与 OFFICIAL_MOD_DISPLAY_ORDER 一一对应（19 项）。旧表漏了
+// 工厂DLC / 虚空DLC 两项，导致后面的短名整体错位（反馈 #80）。
 const OFFICIAL_MOD_SHORT_NAMES = {
-    zh: ['原版', '花园', '花园DLC', '工厂', '沙漠', '沙漠DLC', '丛林', '丛林DLC', '海洋', '虚空', '冥界', '管道', '管道DLC', '极地', '侏罗', '生化', '生化DLC'],
-    en: ['Vanilla', 'Garden', 'Garden DLC', 'Factory', 'Desert', 'Desert DLC', 'Jungle', 'Jungle DLC', 'Ocean', 'Void', 'Hel', 'Sewers', 'Sewers DLC', 'Arctic', 'Jurassic', 'Bio', 'Bio DLC'],
-    fr: ['Vanille', 'Jardin', 'DLC Jardin', 'Usine', 'Désert', 'DLC Désert', 'Jungle', 'DLC Jungle', 'Océan', 'Vide', 'Hel', 'Égouts', 'DLC Égouts', 'Arctique', 'Jurassique', 'Bio', 'DLC Bio'],
-    ja: ['原版', '庭園', '庭園DLC', '工場', '砂漠', '砂漠DLC', 'ジャングル', 'ジャングルDLC', '海洋', '虚空', '冥界', '下水道', '下水道DLC', '極地', 'ジュラ紀', '生化', '生化DLC'],
+    zh: ['原版', '花园', '花园DLC', '工厂', '工厂DLC', '沙漠', '沙漠DLC', '丛林', '丛林DLC', '海洋', '虚空', '虚空DLC', '冥界', '管道', '管道DLC', '极地', '侏罗', '生化', '生化DLC'],
+    en: ['Vanilla', 'Garden', 'Garden DLC', 'Factory', 'Factory DLC', 'Desert', 'Desert DLC', 'Jungle', 'Jungle DLC', 'Ocean', 'Void', 'Void DLC', 'Hel', 'Sewers', 'Sewers DLC', 'Arctic', 'Jurassic', 'Bio', 'Bio DLC'],
+    fr: ['Vanille', 'Jardin', 'DLC Jardin', 'Usine', 'DLC Usine', 'Désert', 'DLC Désert', 'Jungle', 'DLC Jungle', 'Océan', 'Vide', 'DLC Vide', 'Hel', 'Égouts', 'DLC Égouts', 'Arctique', 'Jurassique', 'Bio', 'DLC Bio'],
+    ja: ['原版', '庭園', '庭園DLC', '工場', '工場DLC', '砂漠', '砂漠DLC', 'ジャングル', 'ジャングルDLC', '海洋', '虚空', '虚空DLC', '冥界', '下水道', '下水道DLC', '極地', 'ジュラ紀', '生化', '生化DLC'],
 };
 
 function normalizeModDisplayIdentity(value) {
@@ -8474,11 +8476,15 @@ function getOfficialModDisplayRank(value) {
 
 function getShortModDisplayName(value) {
     const rank = getOfficialModDisplayRank(value);
+    const raw = value && typeof value === 'object'
+        ? (value.filename || value.name_en || value.name || '')
+        : value;
     if (rank < OFFICIAL_MOD_DISPLAY_ORDER.length) {
         const labels = OFFICIAL_MOD_SHORT_NAMES[currentLang] || OFFICIAL_MOD_SHORT_NAMES.en;
-        return labels[rank] || OFFICIAL_MOD_SHORT_NAMES.en[rank];
+        // 短名缺失时回退到文件名，避免显示 undefined 或串到别的模组名。
+        return labels[rank] || OFFICIAL_MOD_SHORT_NAMES.en[rank] || String(raw || '').trim();
     }
-    return String(value || '').trim();
+    return String(raw || '').trim();
 }
 
 function formatShortModList(payload = {}) {

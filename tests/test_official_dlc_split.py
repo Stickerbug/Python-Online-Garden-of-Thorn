@@ -185,3 +185,23 @@ def test_resource_namespace_alias_is_reserved_for_trusted_packages():
     community = validate_mod_v2(payload, allow_reserved_namespaces=False)
     assert trusted.ok, trusted.errors
     assert any("resource_namespace" in error for error in community.errors)
+
+
+def test_short_mod_names_stay_aligned_with_display_order():
+    """短名表必须与 OFFICIAL_MOD_DISPLAY_ORDER 一一对应（反馈 #80）。
+
+    旧表漏了“工厂DLC / 虚空DLC”两项，导致从工厂DLC起整体错位：工厂DLC
+    显示成「沙漠」、沙漠DLC 显示成「丛林」等，玩家在禁用模组/模组不一致
+    提示里分不清哪个模组是哪个。
+    """
+    order_section = GAME_JS.split("const OFFICIAL_MOD_DISPLAY_ORDER = [", 1)[1].split("];", 1)[0]
+    order_entries = [line.strip().rstrip(",") for line in order_section.splitlines() if line.strip()]
+    short_section = GAME_JS.split("const OFFICIAL_MOD_SHORT_NAMES = {", 1)[1].split("};", 1)[0]
+    assert order_entries, "client display order must list the bundled mods"
+    for language in ("zh", "en", "fr", "ja"):
+        row = short_section.split(f"{language}: [", 1)[1].split("]", 1)[0]
+        entries = [item.strip() for item in row.split(",") if item.strip()]
+        assert len(entries) == len(order_entries), (
+            f"{language} 短名 {len(entries)} 项与官方模组顺序 {len(order_entries)} 项不一致"
+        )
+        assert all(entries), f"{language} 短名不能为空"
