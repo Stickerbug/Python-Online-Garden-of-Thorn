@@ -14,6 +14,7 @@ from mod_spec_v2 import (
     VALID_PATCH_OPS,
     VALID_REGISTRY_KEYS,
     VALID_UI_COMPONENT_TYPES,
+    damage_pipeline_warnings,
     is_namespace,
     is_namespaced_id,
     normalize_resource_id,
@@ -94,6 +95,11 @@ def validate_mod_v2(data: Any, source: str = "", *, allow_reserved_namespaces: b
     normalized["locales"] = normalize_locales(normalized.get("locales"))
     warnings.extend(locale_validation_warnings(normalized))
     warnings.extend(placeholder_mismatches(normalized))
+    # Round 28（方案 A）：伤害族"参数写错管线"的友好提示。**只提示**，
+    # 不报错、不改数据：deal_damage 里的 damage_type/damage_tag、
+    # direct_damage 里的 force_crit/is_precision 等写出来会被伤害管线
+    # 忽略，过去只能靠人肉对源码，现在由词汇表统一给出。
+    warnings.extend(damage_pipeline_warnings(normalized))
 
     for key in list(normalized.keys()):
         if key not in {

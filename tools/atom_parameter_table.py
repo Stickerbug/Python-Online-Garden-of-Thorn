@@ -67,6 +67,21 @@ ALIAS_LABELS = {
 # 铺不满登记表时剩下的名字落到这个兜底类——正确值是 0 个。
 LEGACY_GROUP_LABEL = "遗留登记名（仅登记、无实现）"
 
+# Round 28：伤害族词汇表（``mod_spec_v2.DAMAGE_PARAM_PIPELINES``）里有、但
+# 本表的参数抽取器抽不到的键。两个来源，都不猜：
+#   * ``silent``/``no_log``/``hide_log``：由运行时/引擎的**共享步骤开关**
+#     （``mod_runtime_v2.step_is_silent`` / ``_render_step_log``）读，不写在
+#     某个原子体内；
+#   * ``mode``/``damage_mode``：``counter_pending_attack_damage`` 确实读它们，
+#     但抽取器只认第一层 ``params.get('k', ...)``，嵌在默认值里的键抓不到。
+DAMAGE_PARAM_MANUAL_KEYS = {
+    "silent": "共享步骤开关，由 `mod_runtime_v2.step_is_silent` / `_render_step_log` 读",
+    "no_log": "共享步骤开关，`silent` 的等价别名",
+    "hide_log": "共享步骤开关，`silent` 的等价别名",
+    "mode": "`counter_pending_attack_damage` 读它，抽取器只认第一层 `params.get`，没抓到",
+    "damage_mode": "`mode` 的等价别名，同上",
+}
+
 
 def op_group_label(op: str) -> str:
     """op 属于五类里的哪一类；不属于任何一类时返回兜底类名。"""
@@ -1140,16 +1155,22 @@ def default_text(entry: dict, doc_default: str = "") -> str:
     return "—"
 
 
-def render_params(cell: dict, doc_defaults: dict | None = None) -> str:
+def render_params(cell: dict, doc_defaults: dict | None = None, op: str = "") -> str:
     if not cell:
         return "—"
     doc_defaults = doc_defaults or {}
+    damage_family = bool(mod_spec_v2.damage_atom_pipeline(op))
     parts = []
     for name in sorted(cell):
         entry = cell[name]
         bits = [f"默认 {default_text(entry, doc_defaults.get(name, ''))}"]
         if entry.get("expr"):
             bits.append("可写表达式")
+        if damage_family:
+            # Round 28：伤害族参数标出"适用管线"（攻击 / 直伤 / 两条）。
+            label = mod_spec_v2.damage_param_label(name)
+            if label:
+                bits.append(f"适用管线：{label}")
         parts.append(f"`{name}`（{'，'.join(bits)}）")
     return "；".join(parts)
 
@@ -1241,6 +1262,10 @@ def op_badges(model: dict, op: str, paths: dict) -> str:
             badges.append("引擎")
     if not badges:
         badges.append("⚠无实现")
+    # Round 28：伤害族原子标出"这条 op 跑哪条管线"（词汇表见附录 H）。
+    pipeline = mod_spec_v2.damage_atom_pipeline(op)
+    if pipeline:
+        badges.append(mod_spec_v2.DAMAGE_PIPELINE_LABELS[pipeline])
     return "＋".join(badges)
 
 
@@ -1431,6 +1456,10 @@ def render(model: dict) -> str:
     lines.append("  `默认` 取源码里的默认值；`可写表达式` = 该参数被 `eval_v2_value` / `_eval_int` / `_step_text_value` 包着求值；")
     lines.append("  两条执行路径默认值不同时显示 `A / B ⚠`（全部清单见附录 C）；")
     lines.append("  `共享实现 _helper` = 参数是在共享助手里读的，两条路径同一份语义。")
+    lines.append("- **伤害族**（`deal_damage` / `direct_damage` / `ricochet_attack` / "
+                 "`counter_pending_attack_damage` / `deal_damage_multi` 等）的参数多一段")
+    lines.append("  `适用管线：攻击管线 / 直伤管线 / 两条管线` 标记（Round 28 方案 A）；"
+                 "原子列也会带同一个徽标，完整对照见附录 H。")
     lines.append("- **语义**列抄自清单文档；抽不到结构化语义的原子标 `未验证：…`，不猜。")
     lines.append("- **真实用例** = 卡数据里首次出现该 op 的卡 id + 该卡里最短的一步 JSON 片段；")
     lines.append("  嵌套步骤列表缩成 `[…N 步…]`、条件缩成 `{…}`，只保留能说明用法的骨架。")
@@ -1460,7 +1489,7 @@ def render(model: dict) -> str:
             if entry.get("section"):
                 semantics = f"{semantics}（{entry['section']}）"
             count, case = op_usage_cell(usage, op, entry)
-            params_cell = render_params(params, entry.get("doc_defaults"))
+            params_cell = render_params(params, entry.get("doc_defaults"), op)
             if not params:
                 params_cell = render_doc_only_params(entry)
             lines.append("| `{}`（{}） | {} | {} | {} | {} | {} |".format(
@@ -1584,6 +1613,46 @@ def render(model: dict) -> str:
         f"`{alias}` → `{target}`" for alias, target in sorted(mod_spec_v2.RENAMED_ATOMIC_OPS.items())
     ) or "（无）")
     lines.append("")
+
+    # ------------------------------------------------------------------
+    # Round 28 / 方案 A：伤害族参数 → 适用管线（词汇表在 mod_spec_v2）
+    # ------------------------------------------------------------------
+    damage_rows: dict[str, list[str]] = collections.defaultdict(list)
+    for op in sorted(model["universe"]):
+        if not mod_spec_v2.damage_atom_pipeline(op):
+            continue
+        for name in op_params(model, op):
+            damage_rows[name].append(op)
+    for name in mod_spec_v2.DAMAGE_PARAM_PIPELINES:
+        damage_rows.setdefault(name, [])
+
+    lines.append("## 附录 H：伤害族参数 → 适用管线（Round 28，方案 A）")
+    lines.append("")
+    lines.append("`deal_damage`（攻击管线：吃力量/裂变/精准/暴击，走 `deal_attack_damage`）与")
+    lines.append("`direct_damage`（直伤管线：不做数值修正，走 `_deal_direct_damage`）**仍是两个原子**；")
+    lines.append("这一节把它们共用的参数名、等价旧名、默认值差异摆在一起，"
+                 "词汇表的唯一来源是 `mod_spec_v2.DAMAGE_PARAM_PIPELINES`。")
+    lines.append("")
+    lines.append("| 参数 | 适用管线 | 等价别名 | 读它的伤害族 op | 口径 |")
+    lines.append("|---|---|---|---|---|")
+    for name in sorted(damage_rows):
+        entry = mod_spec_v2.DAMAGE_PARAM_PIPELINES.get(name) or {}
+        label = mod_spec_v2.damage_param_label(name) or "未登记"
+        aliases = "、".join(f"`{alias}`" for alias in entry.get("aliases") or ()) or "—"
+        owners = "、".join(f"`{op}`" for op in damage_rows[name])
+        if not owners:
+            manual_reason = DAMAGE_PARAM_MANUAL_KEYS.get(name)
+            owners = f"—（{manual_reason}）" if manual_reason else "—"
+        note = str(entry.get("note") or "—").replace("|", "\\|")
+        lines.append(f"| `{name}` | {label} | {aliases} | {owners} | {note} |")
+    lines.append("")
+    lines.append("写错管线的步骤不会被拒（**只提示**）：`validate_mod_v2` 会给出"
+                 "「参数 X 只适用于直伤管线；`deal_damage` 走的是攻击管线，它会被忽略」这类 warning，")
+    lines.append("20 个官方包目前 0 条（`tests/` 之外的自检脚本见 `.codex-tmp/round28/rd28_validator_check.py`）。")
+    lines.append("")
+    lines.append("默认值的差异本轮**没有改**（零行为变化）：`amount` 运行时默认 `0`、引擎默认 `6`/`1`；")
+    lines.append("`target` 运行时默认 `target`、引擎默认 `enemy`；`inherit_extra_hits` 攻击默认 `True`、直伤默认 `False`。")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -1613,6 +1682,34 @@ def check(model: dict, text: str, out_path: pathlib.Path) -> int:
         problems.append(
             f"UNCLASSIFIED_LOGIC_OPS 非空：{sorted(mod_spec_v2.UNCLASSIFIED_LOGIC_OPS)[:5]}"
         )
+    # Round 28：伤害族词汇表必须与源码抽到的参数键对得上（两个方向都查）。
+    damage_ops = [op for op in model["universe"] if mod_spec_v2.damage_atom_pipeline(op)]
+    mined: dict[str, set] = collections.defaultdict(set)
+    for op in damage_ops:
+        for name in op_params(model, op):
+            mined[name].add(op)
+    unregistered = sorted(set(mined) - set(mod_spec_v2.DAMAGE_PARAM_PIPELINES))
+    if unregistered:
+        problems.append(f"伤害族参数没登记进 DAMAGE_PARAM_PIPELINES：{unregistered[:8]}")
+    unknown_manual = sorted(
+        set(DAMAGE_PARAM_MANUAL_KEYS) - set(mod_spec_v2.DAMAGE_PARAM_PIPELINES)
+    )
+    if unknown_manual:
+        problems.append(f"DAMAGE_PARAM_MANUAL_KEYS 里列了词汇表没有的键：{unknown_manual}")
+    stray_registry = sorted(
+        name for name in mod_spec_v2.DAMAGE_PARAM_PIPELINES
+        if name not in mined and name not in DAMAGE_PARAM_MANUAL_KEYS
+    )
+    if stray_registry:
+        problems.append(
+            f"伤害族词汇表里登记了、但没有任何伤害族原子读它、也没进共享键白名单：{stray_registry}"
+        )
+    empty_pipelines = sorted(
+        name for name, entry in mod_spec_v2.DAMAGE_PARAM_PIPELINES.items()
+        if not tuple(entry.get("pipelines") or ())
+    )
+    if empty_pipelines:
+        problems.append(f"伤害族词汇表里 pipelines 为空的参数：{empty_pipelines}")
     if len(summary["dangling"]):
         problems.append(f"悬空 op {len(summary['dangling'])} 个")
     if out_path.is_file():

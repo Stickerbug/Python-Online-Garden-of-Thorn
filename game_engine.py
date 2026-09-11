@@ -45,6 +45,7 @@ from mod_runtime_v2 import (
     run_loop_driver,
     run_v2_event,
     run_v2_steps,
+    step_is_silent,
     step_gate_conditions,
     validate_v2_ui_response,
 )
@@ -9242,7 +9243,9 @@ class GameEngine:
     def _atomic_deal_damage_multi(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         amount = params.get('amount', 6)
-        times = params.get('times', 1)
+        # Round 28（伤害族词汇表）：段数统一写 ``hits``；``times`` 是本原子的
+        # 旧名，保留等价可写（两者都不写时仍是 1 次）。
+        times = params.get('times', params.get('hits', 1))
         total = 0
         for _ in range(times):
             try:
@@ -17251,7 +17254,9 @@ class GameEngine:
                     'hit_index': hit_index,
                 })
                 self._run_effect_list(player_id, card, on_hit, choice, child_context)
-        if log:
+        # Round 28：伤害族统一日志开关——``silent``/``no_log``/``hide_log`` 与
+        # ``log: false`` 等价（运行时分支走 ``_render_step_log``，这里对齐）。
+        if log is not False and not step_is_silent(None, params) and log:
             self.log_msg(self._format_step_log(log, target=self.pn(target_id), source=self.pn(player_id)))
 
     def _atomic_defer_game_over(self, player_id, card, params, log, choice, context):
@@ -17931,7 +17936,12 @@ class GameEngine:
         if not self._valid_player_id(target_id):
             return
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        source = str(params.get('source', card.name_cn if card else '效果'))
+        # Round 28（伤害族词汇表）：``source_text`` → ``source_name`` → ``label``
+        # 三级回落与运行时分支对齐；都不写才回落到 ``source``（旧行为）与卡名。
+        source = params.get('source_text') or params.get('source_name') or params.get('label')
+        if source is None:
+            source = params.get('source', card.name_cn if card else '效果')
+        source = str(source)
         damage_type = params.get('damage_type')
         damage_tag = params.get('damage_tag')
         # ``hits`` lets one data step resolve several independent damage
@@ -17943,7 +17953,7 @@ class GameEngine:
             hits = max(1, self._card_total_hits(card, hits))
         total = 0
         positive_hits = 0
-        silent_damage = log is False or bool(params.get('silent'))
+        silent_damage = log is False or step_is_silent(None, params)
         for _ in range(hits):
             dealt = max(0, int(self._deal_direct_damage(
                 target_id,
@@ -18001,7 +18011,9 @@ class GameEngine:
                     'vars': child_vars,
                 })
                 self._run_effect_list(player_id, card, on_hit, choice, child_context)
-        if log is not False and log:
+        # Round 28：与运行时分支同一个日志开关（`silent`/`no_log`/`hide_log`
+        # 与 `log: false` 等价），这一步自带的那行总结文案同样受它控制。
+        if log is not False and not silent_damage and log:
             # A data-authored summary line, same contract as ``deal_damage``.
             self.log_msg(self._format_step_log(
                 log, target=self.pn(target_id), source=self.pn(player_id),
@@ -18488,7 +18500,11 @@ class GameEngine:
         amount = max(0, int(math.ceil(incoming * ratio)))
         if amount <= 0:
             return
-        source = str(params.get('source', getattr(card, 'name_cn', '反击')))
+        # Round 28：与 direct_damage / 运行时分支同一串来源文案回落。
+        source_text = params.get('source_text') or params.get('source_name') or params.get('label')
+        if source_text is None:
+            source_text = params.get('source', getattr(card, 'name_cn', '反击'))
+        source = str(source_text)
         damage_type = params.get('damage_type', DAMAGE_TYPE_PHYSICAL)
         damage_tag = params.get('damage_tag')
         target_ref = params.get('target', 'target')
@@ -20415,7 +20431,9 @@ class GameEngine:
             card,
         )
         hits = max(1, self._eval_int(player_id, params.get('hits', 1), card, 1))
-        if bool(params.get('inherit_extra_hits', False)):
+        # Round 28：攻击族统一用 ``inherit_extra_hits``；``use_card_extra_hits``
+        # 是 deal_damage / direct_damage 认的等价旧名，这里一并接受。
+        if bool(params.get('inherit_extra_hits', params.get('use_card_extra_hits', False))):
             hits = self._card_total_hits(card, hits)
         bounce_hits = max(1, self._eval_int(player_id, params.get('bounce_hits', 1), card, 1))
         if bool(params.get('inherit_bounce_extra_hits', False)):

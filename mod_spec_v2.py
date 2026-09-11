@@ -480,6 +480,313 @@ UNCLASSIFIED_LOGIC_OPS = frozenset(
     )
 )
 
+# ---------------------------------------------------------------------------
+# Round 28 / 方案 A：伤害族词汇表（不合并原子，只统一"名字"）
+#
+# ``deal_damage``（攻击管线：吃力量/裂变/精准/暴击，走 ``deal_attack_damage``）
+# 与 ``direct_damage``（直伤管线：不吃数值修正，走 ``_deal_direct_damage``）
+# 仍是两个原子；这里只登记：
+#
+#   * 每个伤害族原子跑的是哪条管线（``DAMAGE_ATOM_PIPELINES``）；
+#   * 每个参数适用哪条管线、有没有等价旧名、默认值差异（``DAMAGE_PARAM_PIPELINES``）。
+#
+# 两份表都是**声明性的**：校验器用它给"参数写错管线"的友好提示
+# （``damage_pipeline_warnings``），``tools/atom_parameter_table.py`` 用它生成
+# 《原子参数表》的"适用管线"列。表里没有的键一律不猜：新参数要么登记，
+# 要么被参数表的 ``--check`` 显式报"伤害族参数未登记"。
+# ---------------------------------------------------------------------------
+
+DAMAGE_PIPELINE_ATTACK = "attack"
+DAMAGE_PIPELINE_DIRECT = "direct"
+
+# op → 它实际跑的伤害管线。别名与规范名同管线。
+DAMAGE_ATOM_PIPELINES = {
+    # 攻击管线
+    "deal_damage": DAMAGE_PIPELINE_ATTACK,
+    "deal_damage_multi": DAMAGE_PIPELINE_ATTACK,
+    "ricochet_attack": DAMAGE_PIPELINE_ATTACK,
+    "lifesteal_damage": DAMAGE_PIPELINE_ATTACK,
+    "triangle_damage": DAMAGE_PIPELINE_ATTACK,
+    "damage": DAMAGE_PIPELINE_ATTACK,
+    "damage_multi": DAMAGE_PIPELINE_ATTACK,
+    # 直伤管线
+    "direct_damage": DAMAGE_PIPELINE_DIRECT,
+    "lose_health": DAMAGE_PIPELINE_DIRECT,
+    # 默认走直伤，``mode`` 可切到攻击（见 docs §26 词汇表）
+    "counter_pending_attack_damage": DAMAGE_PIPELINE_DIRECT,
+}
+
+DAMAGE_PIPELINE_LABELS = {
+    DAMAGE_PIPELINE_ATTACK: "攻击管线",
+    DAMAGE_PIPELINE_DIRECT: "直伤管线",
+}
+DAMAGE_PIPELINE_BOTH_LABEL = "两条管线"
+
+# 参数名 → 适用管线 + 等价别名 + 口径说明。
+# ``pipelines`` 是 (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT) 的子集。
+DAMAGE_PARAM_PIPELINES = {
+    # ---- 两条管线共用（同一个名字、同一份语义）----
+    "target": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "note": "选择器按集合解析（all / 列表 / 广域快照）",
+    },
+    "amount": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "note": "运行时默认 0；引擎默认 6（deal_damage）/ 1（direct_damage）；本表标 ⚠，见附录 C",
+    },
+    "hits": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "note": "段数；deal_damage_multi 的旧名是 times（Round 28 起 hits 是等价别名）",
+    },
+    "inherit_extra_hits": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "aliases": ("use_card_extra_hits",),
+        "note": "子瓣继承；默认值保持各自现状——攻击 True / 直伤 False",
+    },
+    "on_hit": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "note": "每次命中的回调步骤（攻击侧每段、直伤侧每次结算）",
+    },
+    "on_hit_once": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "note": "每个目标只跑一次的回调步骤",
+    },
+    "log": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "note": "步骤自带战报：false = 不打印本步骤那一行，字符串 = 模板",
+    },
+    "silent": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "aliases": ("no_log", "hide_log"),
+        "note": "silent:true == log:false；只静默步骤自带战报，攻击管线每次命中的结算行仍由伤害管线打印",
+    },
+    "source": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "note": "攻击=攻击者选择器；直伤=选择器或来源文案（不像选择器时当文案），文案优先写 source_text",
+    },
+    # ---- 仅攻击管线 ----
+    "is_precision": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
+        "aliases": ("precision",),
+        "note": "精准（消耗闪避）；攻击管线专有",
+    },
+    "precognition": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "本次出牌临时精准"},
+    "force_crit": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "强制暴击"},
+    "no_luck_crit": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "不吃幸运的暴击"},
+    "crit_bonus_multiplier": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "暴击倍率加成"},
+    "crit_bonus_damage": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "暴击额外伤害"},
+    "ignore_untargetable": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "无视无法选定"},
+    "power_once": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "只在第一段算力量"},
+    "on_crit": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "暴击回调（攻击侧独有）"},
+    "bounce_amount": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 弹射伤害"},
+    "bounce_hits": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 弹射段数"},
+    "bounces": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
+        "aliases": ("repeats",),
+        "note": "ricochet_attack 弹射次数",
+    },
+    "bounces_from_positive_hits": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "弹射次数取主伤害的命中段数"},
+    "inherit_bounce_extra_hits": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "弹射段数是否继承子瓣"},
+    "allow_self": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 是否允许弹到自己"},
+    "exclude_previous": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 不连续打同一个目标"},
+    "precision_inherit": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 是否继承精准"},
+    "heal": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "lifesteal_damage 命中后的回复量"},
+    "heal_percent": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
+        "aliases": ("ratio",),
+        "note": "lifesteal_damage 按伤害比例回复",
+    },
+    "base": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 基础值"},
+    "per_stack": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 每层加成"},
+    "stack_name": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 层数变量名"},
+    "max_stacks": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 层数上限"},
+    "times": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
+        "note": "deal_damage_multi 的旧名；统一名是 hits（等价别名，保留可写）",
+    },
+    # ---- 仅直伤管线 ----
+    "damage_type": {
+        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
+        "note": "伤害类型（physical/magic/…）；直伤专有——攻击管线固定按物理攻击结算",
+    },
+    "damage_tag": {
+        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
+        "note": "伤害标签（gtn:battery 等）；直伤专有",
+    },
+    "source_text": {
+        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
+        "aliases": ("source_name", "label"),
+        "note": "战报来源文案，三级回落 source_text→source_name→label；Round 28 起引擎路径同样认这一串",
+    },
+    "mode": {
+        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
+        "aliases": ("damage_mode",),
+        "note": "counter_pending_attack_damage 结算方式，默认 direct，attack 走攻击管线",
+    },
+    "ratio": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "note": "同名两义：lifesteal_damage 里是 heal_percent 的等价别名（攻击）；"
+                "counter_pending_attack_damage 里是反弹比例（默认 0.5，直伤）",
+    },
+    "multiplier": {
+        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
+        "note": "counter_pending_attack_damage 比例旧名；统一名为 ratio",
+    },
+    # ---- 等价别名的登记项（与上面 canonical 项同管线；写在卡数据里照跑）----
+    "precision": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
+        "canonical": "is_precision",
+        "note": "is_precision 的等价别名",
+    },
+    "use_card_extra_hits": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "canonical": "inherit_extra_hits",
+        "note": "inherit_extra_hits 的等价别名（Round 28 起卡数据已迁到统一名）",
+    },
+    "no_log": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "canonical": "silent",
+        "note": "silent 的等价别名",
+    },
+    "hide_log": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "canonical": "silent",
+        "note": "silent 的等价别名",
+    },
+    "source_name": {
+        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
+        "canonical": "source_text",
+        "note": "source_text 的等价别名（三级回落第二级）",
+    },
+    "label": {
+        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
+        "canonical": "source_text",
+        "note": "source_text 的等价别名（三级回落第三级）",
+    },
+    "damage_mode": {
+        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
+        "canonical": "mode",
+        "note": "mode 的等价别名",
+    },
+    "repeats": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
+        "canonical": "bounces",
+        "note": "bounces 的等价别名（ricochet_attack）",
+    },
+}
+
+# 等价别名 → 统一名（只用于提示文案，运行时别名表仍在 mod_runtime_v2）。
+DAMAGE_PARAM_ALIAS_TARGET = {
+    "precision": "is_precision",
+    "use_card_extra_hits": "inherit_extra_hits",
+    "no_log": "silent",
+    "hide_log": "silent",
+    "source_name": "source_text",
+    "label": "source_text",
+    "damage_mode": "mode",
+    "repeats": "bounces",
+}
+
+
+def damage_atom_pipeline(op: str) -> str:
+    """这个 op 跑哪条伤害管线；不是伤害族返回 ""。"""
+
+    return DAMAGE_ATOM_PIPELINES.get(str(op), "")
+
+
+def damage_param_pipelines(param: str) -> tuple:
+    """这个参数适用哪条管线；未登记返回 ()。"""
+
+    entry = DAMAGE_PARAM_PIPELINES.get(str(param))
+    return tuple(entry.get("pipelines") or ()) if entry else ()
+
+
+def damage_param_label(param: str) -> str:
+    """参数的"适用管线"标签：攻击管线 / 直伤管线 / 两条管线 / ""。"""
+
+    pipelines = damage_param_pipelines(param)
+    if not pipelines:
+        return ""
+    if len(pipelines) >= 2:
+        return DAMAGE_PIPELINE_BOTH_LABEL
+    return DAMAGE_PIPELINE_LABELS[pipelines[0]]
+
+
+def damage_pipeline_hint(op: str, param: str) -> str:
+    """只提示不报错：参数与所在管线不匹配时返回一句中文说明，否则 ""。
+
+    例：``deal_damage`` 里写 ``damage_type``（直伤专有）——运行时与引擎都会
+    忽略它，所以这里给一句显式提示，帮助卡数据作者发现写错管线。
+    """
+
+    pipeline = damage_atom_pipeline(op)
+    if not pipeline:
+        return ""
+    param = str(param)
+    entry = DAMAGE_PARAM_PIPELINES.get(param)
+    if entry is None:
+        return ""
+    pipelines = tuple(entry.get("pipelines") or ())
+    if not pipelines or pipeline in pipelines or len(pipelines) >= 2:
+        return ""
+    canonical = str(entry.get("canonical") or DAMAGE_PARAM_ALIAS_TARGET.get(param, param))
+    alias_note = f"（{param} 是 {canonical} 的等价别名）" if canonical != param else ""
+    return (
+        f"参数 {param}{alias_note} 只适用于{DAMAGE_PIPELINE_LABELS[pipelines[0]]}；"
+        f"`{op}` 走的是{DAMAGE_PIPELINE_LABELS[pipeline]}，它会被忽略"
+    )
+
+
+_DAMAGE_STEP_CONTAINERS = (
+    "steps", "body", "then", "else", "on_hit", "on_hit_once", "on_crit", "on_cancel",
+)
+
+
+def iter_step_dicts(node: Any):
+    """深度优先产出 payload 里所有步骤 dict（嵌套容器口径与运行时一致）。"""
+
+    if isinstance(node, list):
+        for item in node:
+            yield from iter_step_dicts(item)
+        return
+    if not isinstance(node, dict):
+        return
+    op = node.get("op") or node.get("type")
+    if isinstance(op, str) and op:
+        yield node
+        params = node.get("params") if isinstance(node.get("params"), dict) else None
+        for container in (node, params):
+            if not isinstance(container, dict):
+                continue
+            for key in _DAMAGE_STEP_CONTAINERS:
+                child = container.get(key)
+                if isinstance(child, (list, dict)):
+                    yield from iter_step_dicts(child)
+        return
+    for key, value in node.items():
+        if key in _DAMAGE_STEP_CONTAINERS or isinstance(value, (dict, list)):
+            yield from iter_step_dicts(value)
+
+
+def damage_pipeline_warnings(payload: Any) -> list:
+    """扫一遍 v2 payload，收集"参数写错管线"的友好提示（warning 级，不是错误）。"""
+
+    out: list = []
+    seen = set()
+    for step in iter_step_dicts(payload):
+        op = str(step.get("op") or step.get("type") or "")
+        if not damage_atom_pipeline(op):
+            continue
+        params = step.get("params") if isinstance(step.get("params"), dict) else step
+        if not isinstance(params, dict):
+            continue
+        for key in params:
+            hint = damage_pipeline_hint(op, str(key))
+            if hint and (op, str(key)) not in seen:
+                seen.add((op, str(key)))
+                out.append(f"{op}.{key}: {hint}")
+    return out
+
 # Round 25：被清理的卡专用旧 op 的"家族指路"文案。替代写法是一串通用步骤
 # 组合（不是一个名字），完整对照表在 docs/引擎原子与数据步骤清单.md §8.2。
 _FAMILY_HINT = {

@@ -534,7 +534,9 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         on_hit_once = params.get("on_hit_once")
         # ``log: false`` (or ``silent: true``) mutes the per-hit "受到N点X伤害"
         # lines so a card can print its own summary line instead.
-        silent_damage = bool(params.get("silent")) or (step.get("log") is False if isinstance(step, dict) else False)
+        # Round 28: 走共享的 ``step_is_silent``，``no_log`` / ``hide_log`` 与
+        # ``silent`` / ``log: false`` 在两条伤害管线上是同一个开关。
+        silent_damage = step_is_silent(step, params)
         total = 0
         positive_hits = 0
         for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target"))):
