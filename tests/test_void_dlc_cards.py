@@ -305,6 +305,31 @@ class VoidDlcCardTests(unittest.TestCase):
         self.assertEqual(engine.players[0].health, 92)
         self.assertEqual(engine.players[1].health, 100)
 
+    def test_fan_pays_out_elixir_to_self_and_to_other_targets(self):
+        # 反馈 #71：gain_e 走 v2 runtime，``play_targets`` 曾被原样当成字符串
+        # 丢掉（status_add_named 走引擎路径，所以灼烧看起来仍然正常），
+        # 扇子因此对任何目标都不回费——对自己使用时最像"完全不回费"。
+        for target_id in (0, 1):
+            engine = self.action_engine()
+            for player in engine.players:
+                player.max_elixir = 50
+                player.elixir = 20  # 留出余量，验证真实入账而不是按上限截断
+            fan = CardInstance("Fan")
+            engine.players[0].hand = [fan]
+            before = [player.elixir for player in engine.players]
+
+            result = engine.play_card(0, fan.instance_id, self.target_choice(target_id))
+
+            self.assertTrue(result.get("success"), result)
+            expected = [-2, 0] if target_id == 0 else [-2, 4]
+            if target_id == 0:
+                expected[0] += 4
+            self.assertEqual(
+                [player.elixir - start for player, start in zip(engine.players, before)],
+                expected,
+                f"扇子应让目标回复 4E（target={target_id}，2E 费用由使用者支付）",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1877,6 +1877,33 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
                     targets.append(target_id)
             return targets
         return int(context.get("target_player", _enemy_id(engine, int(context.get("source_player", 0)))))
+    if text in ("play_targets", "action_targets", "chosen_targets", "target_players"):
+        # 反馈 #71：卡数据里的"本次打出所选的目标"集合。宽域打击会把
+        # ``wide_strike_targets`` 收窄成实际命中的玩家，普通单目标出牌退回
+        # ``target``（即本次选定的目标）。此前运行时把裸字符串原样返回，
+        # ``_as_player_list`` 会静默丢掉它——扇子的 ``gain_e target=play_targets``
+        # 因此对任何目标都不回费（status_add_named 走引擎路径才看起来正常）。
+        return resolve_v2_target(engine, context, "target")
+    if text in ("all_selectable", "all_targets", "every_selectable"):
+        source = int(context.get("source_player", 0))
+        checker = getattr(engine, "_target_can_be_selected", None)
+        if callable(checker):
+            try:
+                return [
+                    idx for idx in range(len(getattr(engine, "players", []) or []))
+                    if checker(source, idx, allow_self=True)
+                ]
+            except TypeError:
+                pass
+        return list(range(len(getattr(engine, "players", []) or [])))
+    if text == "owner":
+        resolver = getattr(engine, "_resolve_equipment_owner_selector", None)
+        if callable(resolver):
+            try:
+                return int(resolver(int(context.get("source_player", 0))))
+            except Exception:
+                pass
+        return int(context.get("source_player", 0))
     if text == "enemy":
         explicit_target = _explicit_target_id(engine, context)
         if explicit_target is not None:
