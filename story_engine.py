@@ -5586,45 +5586,60 @@ def _encounter_specs(state, room_type, seed, category_override=None, exclude_bos
         history[biome] = sorted(seen)
         encounter = pool[selected_index]
     elif category in ('simple', 'hard'):
-        # 怪池系统（爬塔玩法设计）：简单怪池和困难怪池各自独立抽取。
-        # 池子足够大时沿用“抽到过的不重复抽、抽完一轮再重开”的轮换袋；
-        # 但池子只有 ≤3 条时轮换袋会把每条都强制抽出——普通战斗前 3 场
-        # 都是简单怪，丛林简单怪池恰好只有 3 条（白兵蚁/南瓜/萤火虫），
-        # 于是每次进丛林都 100% 撞上萤火虫遭遇（反馈 #68）。这类小池子
-        # 改为按权重随机（当前各条目同权重），只禁止连续两场相同。
+        # 怪池系统（表格14《爬塔玩法设计》R29）：简单怪池 = 从该群系简单怪里
+        # 随机取 3 条；遭遇优先从简单池抽、抽过的不重复；简单池抽完转困难池；
+        # 困难池抽完重新开始。简单/困难各自独立记账（旧实现会把困难池进度一起
+        # 重置）。丛林简单怪恰好 3 条，所以前三场普通战斗必然各遇到一条
+        # （含萤火虫）——这是设计；反馈 #68 的真实问题是精英「灌木」只会召
+        # 萤火虫（见 _next_enemy_move 的 bush 分支）。
         pool_key = f'{biome}:{state.get("stage") or 1}'
-        pool_state = state.setdefault('monster_pool', {}).setdefault(pool_key, {})
-        last_key = f'{category}_last'
-        last_index = pool_state.get(last_key)
-        try:
-            last_index = int(last_index) if last_index is not None else None
-        except (TypeError, ValueError):
-            last_index = None
-        if len(pool) > 3:
-            used_key = f'{category}_used'
-            used = {
-                int(item) for item in (pool_state.get(used_key) or [])
+        pools = state.setdefault('monster_pool', {}).setdefault(pool_key, {})
+        active = str(pools.get('active') or 'simple')
+        if active == 'simple':
+            simple_group = list(groups.get('simple') or ())
+            if not simple_group:
+                pools['active'] = 'hard'
+                active = 'hard'
+            else:
+                simple_pool = pools.get('simple')
+                if not isinstance(simple_pool, list) or not simple_pool:
+                    simple_pool = [
+                        simple_group[index]
+                        for index in rng.sample(
+                            range(len(simple_group)), min(3, len(simple_group)),
+                        )
+                    ]
+                    pools['simple'] = copy.deepcopy(simple_pool)
+                    pools['simple_used'] = []
+                used = [
+                    int(item) for item in (pools.get('simple_used') or [])
+                    if str(item).isdigit()
+                ]
+                available = [
+                    index for index in range(len(simple_pool)) if index not in used
+                ]
+                if available:
+                    selected_index = rng.choice(available)
+                    pools['simple_used'] = sorted(used + [selected_index])
+                    encounter = simple_pool[selected_index]
+                else:
+                    # 简单池抽完：转入困难池，保留困难池已有进度。
+                    pools['active'] = 'hard'
+                    pools.setdefault('hard_used', [])
+                    active = 'hard'
+        if active == 'hard':
+            hard_pool = list(groups.get('hard') or pool)
+            used = [
+                int(item) for item in (pools.get('hard_used') or [])
                 if str(item).isdigit()
-            }
-            candidates = [index for index in range(len(pool)) if index not in used]
-            if not candidates:
-                used = set()
-                candidates = list(range(len(pool)))
-            if last_index is not None and len(candidates) > 1:
-                candidates = [
-                    index for index in candidates if index != last_index
-                ] or candidates
-            selected_index = rng.choice(candidates)
-            used.add(selected_index)
-            pool_state[used_key] = sorted(used)
-        else:
-            candidates = [
-                index for index in range(len(pool))
-                if last_index is None or index != last_index
-            ] or list(range(len(pool)))
-            selected_index = rng.choice(candidates)
-        pool_state[last_key] = selected_index
-        encounter = pool[selected_index]
+            ]
+            available = [index for index in range(len(hard_pool)) if index not in used]
+            if not available:
+                pools['hard_used'] = []
+                available = list(range(len(hard_pool)))
+            selected_index = rng.choice(available)
+            pools['hard_used'] = sorted(used + [selected_index])
+            encounter = hard_pool[selected_index]
     else:
         encounter = rng.choice(pool)
     return [spec if isinstance(spec, dict) else {'def_id': spec} for spec in encounter]

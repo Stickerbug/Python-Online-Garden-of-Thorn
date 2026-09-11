@@ -130,26 +130,45 @@ def _jungle_normal_draws(seed, battles):
     return drawn
 
 
-def test_jungle_simple_pool_no_longer_guarantees_the_firefly_encounter():
-    """反馈 #68：丛林简单怪池只有3条，旧实现把它们当轮换袋逐个抽空，
-    于是每次进丛林都 100% 撞上萤火虫遭遇；改为按权重随机后应当“可能不出”。
-    """
+def _encounter_ids(encounter):
+    return tuple(
+        entry.get('def_id') if isinstance(entry, dict) else entry
+        for entry in encounter
+    )
 
-    runs = [_jungle_normal_draws(f'jungle-firefly-{index}', 3) for index in range(160)]
-    firefly_runs = [
-        drawn for drawn in runs
-        if any('jungle_firefly' in enemy_ids for enemy_ids in drawn)
-    ]
 
-    assert 0 < len(firefly_runs) < len(runs)
+def test_jungle_simple_pool_is_the_designed_three_monster_bag():
+    """表格14《爬塔玩法设计》R29：简单怪池 = 该群系简单怪里随机取的 3 条，
+    遭遇抽过的不重复。丛林简单怪恰好 3 条，所以前三场普通战斗必然各遇到一条
+    （含萤火虫）——这是设计，不是 bug。"""
+
+    drawn = _jungle_normal_draws('jungle-rotation-bag', 3)
     simple_ids = {
-        tuple(
-            entry.get('def_id') if isinstance(entry, dict) else entry
-            for entry in encounter
-        )
+        _encounter_ids(encounter)
         for encounter in STORY_ENCOUNTERS['jungle']['simple']
     }
-    assert all(enemy_ids in simple_ids for drawn in runs for enemy_ids in drawn)
+
+    assert all(enemy_ids in simple_ids for enemy_ids in drawn)
+    assert len(set(drawn)) == 3
+    assert set(drawn) == simple_ids
+
+
+def test_normal_encounters_move_to_the_hard_bag_after_the_simple_bag_is_drawn_out():
+    drawn = _jungle_normal_draws('jungle-hard-after-simple', 12)
+    simple_ids = {
+        _encounter_ids(encounter)
+        for encounter in STORY_ENCOUNTERS['jungle']['simple']
+    }
+    hard_ids = {
+        _encounter_ids(encounter)
+        for encounter in STORY_ENCOUNTERS['jungle']['hard']
+    }
+
+    assert set(drawn[:3]) == simple_ids
+    assert all(enemy_ids in hard_ids for enemy_ids in drawn[3:])
+    # 困难池抽完一轮之前不重复（丛林困难池 9 条）。
+    first_cycle = drawn[3:12]
+    assert len(set(first_cycle)) == len(first_cycle)
 
 
 def test_jungle_normal_encounters_do_not_repeat_back_to_back():
