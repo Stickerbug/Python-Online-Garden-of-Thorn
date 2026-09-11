@@ -240,9 +240,14 @@ def reset_card_after_play(card: CardInstance):
         card.fission_count = max(0, card.fission_level - 1)
         card.fusion_multiplier = 1.0
         card.fission_hit = 0
-        if card.def_id == 'Tomato':
-            card.bonus_damage = 0
-            card.held_turns = 0
+        # Round 10: the properties zeroed on leaving play come from the card data
+        # (``reset_properties``); the built-in fallback in engine_runtime_support
+        # covers card definitions that never load a data resource (unit tests,
+        # legacy saves).  See docs §13.1.
+        from engine_runtime_support import card_reset_properties
+        for reset_prop in card_reset_properties(card):
+            if hasattr(card, reset_prop):
+                setattr(card, reset_prop, 0)
     if getattr(card, '_mimic_copy', False):
         try:
             delattr(card, '_mimic_copy')
@@ -6021,7 +6026,7 @@ class GameEngine:
                 self.log_msg(f"{self.pn(target_id)}的鳞甲将{before}点伤害减半为{damage}点")
         if damage > 0:
             for hand_card in list(getattr(ps, 'hand', []) or []):
-                if not self._card_has_mark(hand_card, 'jurassic:amber'):
+                if not self._card_flag_or_legacy_mark(hand_card, 'absorb_damage_with_power'):
                     continue
                 power = int(getattr(hand_card, 'power_value', 0) or 0)
                 if power <= -12:
@@ -6654,13 +6659,12 @@ class GameEngine:
         if not requirements_ok:
             return False, requirements_reason
         if not self._card_play_requirements(card):
-            # Legacy fallback for cards that predate data driven requirements.
-            if self._card_has_mark(card, 'ocean:sapphire'):
-                if not self._ocean_sapphire_selectable_attacks(player_id, card):
-                    return False, "手中没有可选择的攻击牌"
-            if self._card_has_mark(card, 'arctic:ruby'):
-                if not self._arctic_ruby_selectable_attacks(player_id, card):
-                    return False, "手中没有可支付消耗的攻击牌"
+            # Round 10: only reached by cards without a ``play_requires``
+            # declaration (shipped packs all declare it).  The built-in fallback
+            # table keeps third party packs that copied the card id working.
+            fallback_reason = self._builtin_play_requirement_failure(player_id, card)
+            if fallback_reason:
+                return False, fallback_reason
         from formal_logic_runtime import can_play_formal_card
         formal_allowed, formal_reason = can_play_formal_card(self, player_id, card)
         if not formal_allowed:
@@ -6772,6 +6776,77 @@ class GameEngine:
         if self._card_has_mark(getattr(eq, 'card_instance', None), mark):
             return True
         return self._card_has_mark(getattr(eq, 'card_def', None), mark)
+
+    # ------------------------------------------------------------------
+    # Round 10: declarative reads + engine built-in fallbacks (docs §13.1)
+    # ------------------------------------------------------------------
+    def _card_flag_or_legacy_mark(self, card_or_def, key: str) -> bool:
+        """Card declares the data flag ``key``, else it carries a legacy mark."""
+        if self._card_has_flag(card_or_def, key):
+            return True
+        from engine_runtime_support import builtin_legacy_marks
+        return any(self._card_has_mark(card_or_def, mark) for mark in builtin_legacy_marks(key))
+
+    def _equipment_flag_or_legacy_mark(self, player_id: int, key: str) -> bool:
+        """Active equipment attached to ``player_id``: data flag, else legacy marks."""
+        if self._has_flag_equipment(player_id, key):
+            return True
+        from engine_runtime_support import builtin_legacy_marks
+        return self._has_equipment(player_id, *builtin_legacy_marks(key))
+
+    def _legacy_fallback_def_id(self, key: str) -> str:
+        from engine_runtime_support import builtin_legacy_def_id
+        return builtin_legacy_def_id(key)
+
+    def _card_property_cap(self, card_or_def, prop: str):
+        """Declared ``property_caps`` value for ``prop`` (``None`` when uncapped)."""
+        from engine_runtime_support import card_property_caps
+        try:
+            cap = card_property_caps(card_or_def).get(str(prop))
+        except Exception:
+            return None
+        return None if cap is None else int(cap)
+
+    def _play_allows_dead_target(self, card: Optional[CardInstance]) -> bool:
+        """Card data declares ``request_target.alive_only: false`` for ``on_play``."""
+        if card is None:
+            return False
+        events = getattr(getattr(card, 'card_def', None), 'v2_events', None) or {}
+        if self._effect_tree_allows_dead_target(events.get('on_play')):
+            return True
+        return self._card_flag_or_legacy_mark(card, 'dead_target_play')
+
+    def _effect_tree_allows_dead_target(self, node) -> bool:
+        if isinstance(node, dict):
+            if self._effect_type(node) == 'request_target' and node.get('alive_only') is False:
+                return True
+            return any(self._effect_tree_allows_dead_target(child) for child in node.values())
+        if isinstance(node, (list, tuple)):
+            return any(self._effect_tree_allows_dead_target(item) for item in node)
+        return False
+
+    def _declared_engine_effect(self, card: Optional[CardInstance]) -> str:
+        """Engine handler named by the card data's ``engine_effect`` ritual key."""
+        if card is None:
+            return ''
+        from engine_runtime_support import engine_effect_handler
+        handler = engine_effect_handler(self, card)
+        if not handler:
+            return ''
+        return handler if callable(getattr(self, handler, None)) else ''
+
+    def _builtin_play_requirement_failure(self, player_id: int, card) -> str:
+        """Refusal message of the built-in ``play_requires`` fallback, else ``''``."""
+        from engine_runtime_support import BUILTIN_PLAY_REQUIREMENT_FALLBACKS
+        for card_id, checker_name, reason in BUILTIN_PLAY_REQUIREMENT_FALLBACKS:
+            if not self._card_has_mark(card, card_id):
+                continue
+            checker = getattr(self, checker_name, None)
+            if checker is None:
+                continue
+            if not checker(player_id, card):
+                return reason
+        return ''
 
     def _equipment_uses_non_stack_rule(self, eq: Optional[EquipmentInstance]) -> bool:
         if eq is None:
@@ -7798,7 +7873,7 @@ class GameEngine:
             choice['target_id'] = target_id
         elif 'wide_strike' not in card_flags and (self._v2_play_requires_choice_target(card) or self._root_play_requires_owner_target(card)):
             target_id = self._choice_target_from_choice(choice, -1)
-            allow_dead_target = self._card_has_mark(card, 'vanilla:yggdrasil')
+            allow_dead_target = self._play_allows_dead_target(card)
             if target_id >= 0 and not self._target_can_be_selected(
                 player_id,
                 target_id,
@@ -10737,8 +10812,9 @@ class GameEngine:
 
     def _modified_attack_damage(self, base: int, card: CardInstance) -> int:
         bonus_damage = max(0, int(getattr(card, 'bonus_damage', 0)))
-        if getattr(card, 'def_id', '') == 'Tomato':
-            bonus_damage = min(18, bonus_damage)
+        bonus_cap = self._card_property_cap(card, 'bonus_damage')
+        if bonus_cap is not None:
+            bonus_damage = min(bonus_cap, bonus_damage)
         base += bonus_damage
         fusion = max(1, int(getattr(card, 'fusion_level', 1)))
         fission = max(1, int(getattr(card, 'fission_level', 1)))
@@ -11351,7 +11427,14 @@ class GameEngine:
             return False
         ps = self.players[player_id]
         queue = []
-        for owner_id, eq in self._bio_active_equipment_targeting(player_id, 'bio:dna'):
+        dna_equipment = list(self._bio_active_equipment_targeting_flag(player_id, 'dna_turn_transform'))
+        if not dna_equipment:
+            # Round 10 built-in fallback: definitions/records that only carry the
+            # historical ``mark:bio:dna`` still transform a card each turn.
+            from engine_runtime_support import builtin_legacy_marks
+            dna_equipment = list(self._bio_active_equipment_targeting(
+                player_id, *builtin_legacy_marks('dna_turn_transform')))
+        for owner_id, eq in dna_equipment:
             if any(self._bio_dna_candidates_for_card(hand_card) for hand_card in ps.hand):
                 queue.append({
                     'owner_id': owner_id,
@@ -13989,8 +14072,9 @@ class GameEngine:
             if formal_proxy_suppresses_effect(card):
                 self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}（宏定义代理）")
                 return
-            if self._card_has_mark(card, 'vanilla:yggdrasil'):
-                self._effect_yggdrasil(player_id, card, choice)
+            engine_effect = self._declared_engine_effect(card)
+            if engine_effect:
+                getattr(self, engine_effect)(player_id, card, choice)
                 return
             # For thorn cards with damage/hits but no dedicated effect handler,
             # apply attack damage only if the card has no v2 on_play event
@@ -15810,7 +15894,7 @@ class GameEngine:
                     source_power = 0
             if amount <= 0 and source_power <= 0 and hits <= 1:
                 break
-            if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
+            if source_card is not None and self._equipment_flag_or_legacy_mark(target_id, 'blocks_cheap_attacks'):
                 try:
                     if (
                         getattr(source_card, 'card_type', '') == 'thorn'
@@ -17238,13 +17322,11 @@ class GameEngine:
             value = max(0, value)
         elif prop in ('charge_value', 'hand_blind_turns', 'blind_level'):
             value = max(0, value)
-        if getattr(target_card, 'def_id', '') == 'Tomato':
-            if prop == 'held_turns':
-                value = min(6, value)
-            elif prop == 'bonus_damage':
-                value = min(18, value)
-            elif prop == 'power_value':
-                value = min(18, value)
+        # Round 10: property caps are declared by the card data (``property_caps``);
+        # the built-in fallback covers definitions without a data resource.
+        builtin_cap = self._card_property_cap(target_card, prop)
+        if builtin_cap is not None:
+            value = min(builtin_cap, value)
         if prop in ('fusion_level', 'fission_level', 'extra_hits', 'mimic_discount', 'cost_e_override', 'cost_m_override',
                     'bonus_damage', 'return_to_hand_turns', 'held_turns', 'swift_value', 'magic_swift_value', 'heavy_value',
                     'power_value', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value',
@@ -17322,13 +17404,11 @@ class GameEngine:
         if value is None:
             return 0
         value = int(value)
-        if getattr(target_card, 'def_id', '') == 'Tomato':
-            if prop == 'held_turns':
-                return min(6, max(0, value))
-            if prop == 'bonus_damage':
-                return min(18, max(0, value))
-            if prop == 'power_value':
-                return min(18, max(0, value))
+        # Round 10: property caps are declared by the card data (``property_caps``);
+        # the built-in fallback covers definitions without a data resource.
+        builtin_cap = self._card_property_cap(target_card, prop)
+        if builtin_cap is not None:
+            return min(builtin_cap, max(0, value))
         if prop == 'power_value':
             return clamp_card_power(value)
         return value
@@ -19473,7 +19553,7 @@ class GameEngine:
     def _arctic_trigger_snowballs_after_play(self, player_id: int, played_card: Optional[CardInstance]):
         if not self._valid_player_id(player_id) or played_card is None:
             return
-        if self._card_has_mark(played_card, 'arctic:snowball'):
+        if self._card_flag_or_legacy_mark(played_card, 'skip_legacy_snowball_replay'):
             return
         if self.current_player != player_id or self.phase != 'action':
             return
@@ -19488,7 +19568,11 @@ class GameEngine:
             if not self._valid_player_id(target_id) or self.players[target_id].health <= 0:
                 continue
             card_data = entry.get('source_card') if isinstance(entry, dict) else None
-            source_card = CardInstance.from_dict(card_data) if isinstance(card_data, dict) else CardInstance('Snowball')
+            if isinstance(card_data, dict):
+                source_card = CardInstance.from_dict(card_data)
+            else:
+                # Round 10 built-in fallback: legacy records without a payload.
+                source_card = CardInstance(self._legacy_fallback_def_id('snowball'))
             dealt = self.deal_attack_damage(
                 target_id,
                 self._modified_attack_damage(2, source_card),

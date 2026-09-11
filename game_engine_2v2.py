@@ -1469,7 +1469,7 @@ class GameEngine2v2(GameEngine):
               )):
             return {'success': False, 'error': '没有可选中的玩家'}
         elif requires_target:
-            allow_dead_target = self._card_has_mark(card, 'vanilla:yggdrasil')
+            allow_dead_target = self._play_allows_dead_target(card)
             if allow_dead_target:
                 if (not self._is_valid_player_id(target_player_id)
                         or (target_player_id != player_id
@@ -2270,7 +2270,7 @@ class GameEngine2v2(GameEngine):
             if ps.invincible:
                 self.log_msg(f"{self.pn(target_id)}无敌，免疫伤害")
                 continue
-            if source_card is not None and self._has_equipment(target_id, 'Plank', 'jungle:plank'):
+            if source_card is not None and self._equipment_flag_or_legacy_mark(target_id, 'blocks_cheap_attacks'):
                 try:
                     if (
                         getattr(source_card, 'card_type', '') == 'thorn'

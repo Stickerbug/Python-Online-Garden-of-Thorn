@@ -46,6 +46,18 @@ Round 6b generalized the last four mechanism families the same way:
   ``visible``) through :func:`effective_status_value`;
 * "does this card charge the hand" is the ``applies_hand_charge`` flag instead
   of a scan for charge-adding step ops.
+
+Round 10 finished the sweep: the last card-name branches that the *engine*
+still owned are gone.  Card data is authoritative there too (``property_caps``
+resets, the ``blocks_cheap_attacks`` / ``absorb_damage_with_power`` /
+``dna_turn_transform`` / ``skip_legacy_snowball_replay`` flags, the
+``engine_effect`` ritual selector and ``request_target.alive_only``), and the
+``BUILTIN_*`` tables below keep three situations working that never load the
+shipped ``mod.json``: synthetic ``CardDef`` objects created by unit tests,
+legacy saves/replays written before the declaration existed, and third party
+packs that copied a card id without the new declaration.  Every entry is
+registered with reason / impact / revisit condition in
+``docs/引擎原子与数据步骤清单.md`` §13.1.
 """
 from __future__ import annotations
 
@@ -54,7 +66,7 @@ import contextlib
 import math
 import random
 import uuid
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple
 
 from cards import CARD_DEFS, CardInstance, normalize_card_flags
 
@@ -111,6 +123,123 @@ DAMAGE_QUEUE_RESPONSE_TRIGGERS = {
 # Option id prefix used by the damage queue's response picker.  Legacy saves
 # rendered by older builds used ``horn:``; the resume path still accepts it.
 DAMAGE_RESPONSE_KIND = "response"
+
+# ---------------------------------------------------------------------------
+# Round 10: built-in fallback table (引擎内建回落表, B 类)
+# ---------------------------------------------------------------------------
+# The tables hold *legacy identifiers only*; no branch logic lives here.  The
+# engine asks for a mechanism key (``blocks_cheap_attacks``) and this module
+# answers which historical marks/ids still stand for it when the card data
+# cannot be read.  Diagnostics: docs §13.1.
+
+# mechanism key -> marks a pre-Round-10 card definition may carry instead of
+# the declarative flag of the same name.
+BUILTIN_LEGACY_MARKS: Dict[str, Tuple[str, ...]] = {
+    "blocks_cheap_attacks": ("Plank", "jungle:plank"),
+    "absorb_damage_with_power": ("jurassic:amber",),
+    "dna_turn_transform": ("bio:dna",),
+    "skip_legacy_snowball_replay": ("arctic:snowball",),
+    "legacy_yggdrasil_ritual": ("vanilla:yggdrasil",),
+    "dead_target_play": ("Yggdrasil", "vanilla:yggdrasil"),
+}
+
+# slot -> runtime def_id used when a legacy record carries no card payload.
+BUILTIN_LEGACY_DEF_IDS: Dict[str, str] = {"snowball": "Snowball"}
+
+# runtime def_id -> property caps for definitions without a data resource.
+BUILTIN_PROPERTY_CAPS: Dict[str, Dict[str, int]] = {
+    "Tomato": {"held_turns": 6, "bonus_damage": 18, "power_value": 18},
+}
+
+# runtime def_id -> properties zeroed when the card leaves play.
+BUILTIN_RESET_PROPERTIES: Dict[str, Tuple[str, ...]] = {
+    "Tomato": ("bonus_damage", "held_turns"),
+}
+
+# ``engine_effect`` value declared by the card data -> engine handler method.
+BUILTIN_ENGINE_EFFECTS: Dict[str, str] = {"yggdrasil": "_effect_yggdrasil"}
+
+# Only consulted when the card declares no ``play_requires`` at all:
+# (mark, engine checker method, refusal message).
+BUILTIN_PLAY_REQUIREMENT_FALLBACKS: Tuple[Tuple[str, str, str], ...] = (
+    ("ocean:sapphire", "_ocean_sapphire_selectable_attacks", "手中没有可选择的攻击牌"),
+    ("arctic:ruby", "_arctic_ruby_selectable_attacks", "手中没有可支付消耗的攻击牌"),
+)
+
+
+def declared_card_value(card_or_def: Any, key: str, default: Any = None) -> Any:
+    """Raw top level key of the card's data resource (``mod.json``)."""
+    card_def = getattr(card_or_def, "card_def", card_or_def)
+    resource = getattr(card_def, "v2_resource", None)
+    if isinstance(resource, dict) and key in resource:
+        return resource.get(key)
+    value = getattr(card_def, key, None)
+    return default if value is None else value
+
+
+def card_runtime_id(card_or_def: Any) -> str:
+    """Runtime ``def_id`` of a card instance / definition (legacy id)."""
+    if card_or_def is None:
+        return ""
+    runtime_id = str(getattr(card_or_def, "def_id", "") or "")
+    if runtime_id:
+        return runtime_id
+    card_def = getattr(card_or_def, "card_def", card_or_def)
+    return str(getattr(card_def, "id", "") or "")
+
+
+def builtin_legacy_marks(key: str) -> Tuple[str, ...]:
+    """Marks that stood for the mechanism ``key`` before the data flag existed."""
+    return tuple(BUILTIN_LEGACY_MARKS.get(str(key), ()))
+
+
+def builtin_legacy_def_id(key: str, default: str = "") -> str:
+    """Fallback runtime def_id for a legacy record without a card payload."""
+    value = BUILTIN_LEGACY_DEF_IDS.get(str(key), default)
+    return str(value or default or "")
+
+
+def card_property_caps(card_or_def: Any) -> Dict[str, int]:
+    """``property_caps`` declared by the card data, else the built-in fallback."""
+    caps: Dict[str, int] = {}
+    declared = declared_card_value(card_or_def, "property_caps")
+    if isinstance(declared, dict):
+        for prop, value in declared.items():
+            try:
+                caps[str(prop)] = int(value)
+            except (TypeError, ValueError):
+                continue
+    if caps:
+        return caps
+    fallback = BUILTIN_PROPERTY_CAPS.get(card_runtime_id(card_or_def))
+    if not fallback:
+        return {}
+    return {str(prop): int(value) for prop, value in fallback.items()}
+
+
+def card_reset_properties(card_or_def: Any) -> Tuple[str, ...]:
+    """Properties zeroed when the card leaves play (data, else built-in table)."""
+    declared = declared_card_value(card_or_def, "reset_properties")
+    if isinstance(declared, (list, tuple)):
+        names = tuple(str(item) for item in declared if str(item))
+        if names:
+            return names
+    return tuple(BUILTIN_RESET_PROPERTIES.get(card_runtime_id(card_or_def), ()))
+
+
+def engine_effect_handler(engine: Any, card_or_def: Any) -> str:
+    """Handler method for the card's declared ``engine_effect`` ritual."""
+    name = str(declared_card_value(card_or_def, "engine_effect", "") or "").strip()
+    handler = BUILTIN_ENGINE_EFFECTS.get(name, "")
+    if handler:
+        return handler
+    checker = getattr(engine, "_card_has_mark", None)
+    if not callable(checker):
+        return ""
+    for mark in builtin_legacy_marks("legacy_yggdrasil_ritual"):
+        if checker(card_or_def, mark):
+            return BUILTIN_ENGINE_EFFECTS["yggdrasil"]
+    return ""
 
 
 def _valid_player(engine, player_id: Any) -> bool:
