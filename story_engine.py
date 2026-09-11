@@ -1235,8 +1235,17 @@ def _forge_story_cards(state, first, second, events, source):
         ) + '。'
     generated = {
         'name': {'zh': f'{zh_a}·{zh_b}', 'en': f'{en_a}·{en_b}'},
-        'cost_e': max(0, int(first_values.get('cost_e') or 0) + int(second_values.get('cost_e') or 0)),
-        'cost_m': max(0, int(first_values.get('cost_m') or 0) + int(second_values.get('cost_m') or 0)),
+        # 融合/生成牌时同样要容忍 'X' 费用（核弹），否则 int('X') 直接 500。
+        'cost_e': max(
+            0,
+            (_card_numeric_cost(first_values.get('cost_e')) or 0)
+            + (_card_numeric_cost(second_values.get('cost_e')) or 0),
+        ),
+        'cost_m': max(
+            0,
+            (_card_numeric_cost(first_values.get('cost_m')) or 0)
+            + (_card_numeric_cost(second_values.get('cost_m')) or 0),
+        ),
         'type': str(first_values.get('type') or ''),
         'rarity': 'unique',
         'owner': 'neutral',
@@ -1708,15 +1717,44 @@ def _record_cards_drawn(state, card_instance_ids, events):
             })
 
 
+def _card_numeric_cost(value):
+    """卡牌费用转数字；``'X'``（核弹/魔法球）与非法值返回 ``None``。
+
+    线上曾因把 ``'X'`` 直接 ``int()`` 抛 ValueError（核弹在抽牌堆里时，
+    「抽一张 0 费牌」的过滤器会崩掉整次出牌），这里统一兜住。
+    """
+    if value is None or value == '':
+        return 0
+    if isinstance(value, str) and value.strip().upper() == 'X':
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _draw_filter_matches(card, filter_name):
     if not filter_name:
         return True
     if filter_name == 'zero_e':
-        return int(_card_values(card).get('cost_e') or 0) == 0
+        # X 费用不属于「0 费」，不能参与 zero_e 抽牌。
+        return _card_numeric_cost(_card_values(card).get('cost_e')) == 0
     if filter_name == 'positive_m':
         raw_m = _card_values(card).get('cost_m')
-        return raw_m in ('X', 'x') or int(raw_m or 0) > 0
+        cost = _card_numeric_cost(raw_m)
+        if cost is None:
+            return isinstance(raw_m, str) and raw_m.strip().upper() == 'X'
+        return cost > 0
     return False
+
+
+def _card_has_positive_e_cost(card) -> bool:
+    """「正 E 费」判定：``'X'``（核弹）消耗全部 E，视为正费用；非法值按 0 计。"""
+    raw = _card_values(card).get('cost_e')
+    cost = _card_numeric_cost(raw)
+    if cost is None:
+        return isinstance(raw, str) and raw.strip().upper() == 'X'
+    return cost > 0
 
 
 def _apply_machine_learning_void(state, card, events, source):
@@ -3538,7 +3576,7 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
             and 'sublime' not in _card_tags(_card_values(item))
             and (
                 effect.get('filter') != 'positive_e'
-                or int(_card_values(item).get('cost_e') or 0) > 0
+                or _card_has_positive_e_cost(item)
             )
         ]
         discarded = _actively_discard_cards(

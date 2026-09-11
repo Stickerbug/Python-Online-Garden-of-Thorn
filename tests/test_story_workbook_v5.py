@@ -88,6 +88,64 @@ def test_wind_draws_only_cards_currently_costing_zero_elixir():
     assert state['combat']['draw_pile'] == [nonmatching]
 
 
+def test_wind_draw_filter_tolerates_x_cost_cards_in_the_draw_pile():
+    """线上 500：核弹（cost_e='X'）在抽牌堆里时，"抽 0 费牌"过滤器 int('X') 崩。"""
+    seed = 'workbook-v5-wind-x-cost'
+    state, enemy = _combat(seed, 'soldier_ant')
+    combat = state['combat']
+    combat['opening_redraw_pending'] = False
+    combat['elixir'] = 20
+    enemy['health'] = enemy['max_health'] = 999
+
+    wind = _new_card(state, 'wind')
+    fodder = _new_card(state, 'basic')
+    nuke = _new_card(state, 'nuke')
+    zero = _new_card(state, 'light')
+    # 风会先"主动丢弃所有正 E 费手牌"，再按丢弃数量抽 0 费牌——
+    # 有东西可丢才会走到带过滤器的抽牌（也就是崩溃点）。
+    combat['hand'] = [wind, fodder]
+    combat['draw_pile'] = [nuke, zero]
+    combat['discard_pile'] = []
+
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': wind['instance_id']},
+        seed,
+    )
+
+    assert {card['instance_id'] for card in state['combat']['hand']} == {zero['instance_id']}
+    assert [card['def_id'] for card in state['combat']['draw_pile']] == ['nuke']
+
+
+def test_wind_active_discard_tolerates_x_cost_cards_in_hand():
+    """同类崩溃：核弹在手时打风，"正 E 费"过滤同样会对 int('X') 崩。"""
+    seed = 'workbook-v5-wind-x-cost-hand'
+    state, enemy = _combat(seed, 'soldier_ant')
+    combat = state['combat']
+    combat['opening_redraw_pending'] = False
+    combat['elixir'] = 20
+    enemy['health'] = enemy['max_health'] = 999
+
+    wind = _new_card(state, 'wind')
+    nuke = _new_card(state, 'nuke')
+    zero = _new_card(state, 'light')
+    combat['hand'] = [wind, nuke]
+    combat['draw_pile'] = [zero]
+    combat['discard_pile'] = []
+
+    state, _ = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': wind['instance_id']},
+        seed,
+    )
+
+    # X 费用视为正费用：核弹被风主动丢弃，随后抽到 0 费牌。
+    assert nuke['instance_id'] not in {card['instance_id'] for card in state['combat']['hand']}
+    assert zero['instance_id'] in {card['instance_id'] for card in state['combat']['hand']}
+
+
 def test_reconstructor_uses_previous_turn_waste_rule_without_repeating_itself():
     state, enemy = _combat('workbook-v5-reconstructor', 'reconstructor_enemy')
     enemy.update({
