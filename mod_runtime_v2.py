@@ -815,14 +815,10 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 _move_card(engine, new_card, target_id, to_zone, already_detached=True)
         return {"success": True}
 
-    if op == "destroy_equipment":
-        for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target"))):
-            if not _valid_player(engine, target_id):
-                continue
-            eq = _resolve_equipment(engine, context, target_id, params.get("equipment"))
-            if eq is not None and hasattr(engine, "_destroy_equipment"):
-                engine._destroy_equipment(target_id, eq)
-        return {"success": True}
+    # Round 29：``destroy_equipment`` 现在也是引擎真原子（``mode`` 选 choice/random/all，
+    # ``scope`` 选 target/field），两条路径共用同一份实现。这里不再拦，让它落到
+    # 下面的 ``_try_run_engine_atomic_op``——旧写法 ``destroy_equipment(equipment=...)``
+    # 走 ``mode:"choice"`` 的默认值，语义与原来的薄封装一致（点选 → 指定 → 第一件）。
 
     if op == "if":
         branch = step.get("then", []) if check_v2_condition(engine, context, step.get("condition", step.get("cond"))) else step.get("else", [])
@@ -1009,22 +1005,26 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     renamed = RENAMED_ATOMIC_OPS.get(str(op))
     if renamed:
         raise V2RuntimeError(
-            f"atomic op {op!r} 已改名（Round 22 别名收敛 / Round 25 登记残留清理）；"
+            f"atomic op {op!r} 已改名（Round 22/25/29 词汇表收敛）；"
             f"请改用 {renamed!r}"
+        )
+
+    # Round 20 / Round 25: 已移除的原子给"显式 unsupported + 替代写法"，
+    # 不退化成静默跳过。
+    # Round 29 / 批次 X：这条检查挪到引擎原子分派**之前**——批次 X 给
+    # ``var_set`` / ``move_to_hand`` / ``player_prop_*`` / ``card_var_*`` 留了
+    # 同名兼容垫片（老测试与引擎内部直呼私有方法），若仍按老顺序分派，
+    # v2 运行时会把"已移除"的旧名照跑，与引擎路径的显式报错不一致。
+    if str(op) in REMOVED_ATOMIC_OPS:
+        replacement = REMOVED_ATOMIC_OPS[str(op)]
+        hint = f"；请改用 {replacement}" if replacement else "；该 op 没有等价替代"
+        raise V2RuntimeError(
+            f"atomic op {op!r} 已移除（Round 20/24/25/29 原子与词汇表收敛）{hint}"
         )
 
     atomic_result = _try_run_engine_atomic_op(engine, context, op, params, step)
     if atomic_result is not None:
         return atomic_result
-
-    # Round 20 / Round 25: 已移除的原子给"显式 unsupported + 替代写法"，
-    # 不退化成静默跳过。
-    if str(op) in REMOVED_ATOMIC_OPS:
-        replacement = REMOVED_ATOMIC_OPS[str(op)]
-        hint = f"；请改用 {replacement}" if replacement else "；该 op 没有等价替代"
-        raise V2RuntimeError(
-            f"atomic op {op!r} 已移除（Round 20 长尾清理 / Round 25 登记残留清理）{hint}"
-        )
 
     raise V2RuntimeError(f"unsupported v2 op: {op}")
 

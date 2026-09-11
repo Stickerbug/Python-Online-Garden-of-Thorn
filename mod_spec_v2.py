@@ -176,9 +176,9 @@ _CORE_LOGIC_OPS = {
     "status_add_named",
     "status_remove_named",
     "set_status_named",
-    "choose_from_deck",
-    "choose_from_discard",
-    "choose_from_exile",
+    # Round 29 / 批次 X：三个"从某区选一张进手牌"的同形原子合并成一条
+    # （``zone`` 选区域），旧名进 REMOVED_ATOMIC_OPS。
+    "choose_from_zone",
     "reveal_enemy_hand",
     "reveal_hand_cards",
     "reveal_deck_top",
@@ -192,13 +192,11 @@ _CORE_LOGIC_OPS = {
     "give_card_to_deck",
     "give_card_to_discard",
     "remove_specific_card",
+    # Round 29 / 批次 X：``move_to_*`` 四条"糖"原子并入通用 ``move_card(zone=...)``；
+    # ``destroy_random_equip`` / ``destroy_all_equip`` / ``destroy_all_field_equip``
+    # 并入 ``destroy_equipment(mode=..., scope=...)``。旧名进 REMOVED_ATOMIC_OPS，
+    # 其中 ``move_to_hand`` 仍留一个同名兼容垫片（tests 直呼私有方法）。
     "move_to_hand",
-    "move_to_discard",
-    "move_to_deck",
-    "move_to_exile",
-    "destroy_random_equip",
-    "destroy_all_equip",
-    "destroy_all_field_equip",
     "destroy_all_destroyable_equipment",
     "destroy_self_equipment",
     "destroy_current_equipment",
@@ -227,18 +225,17 @@ _CORE_LOGIC_OPS = {
     "increase_next_cost",
     "clear_tags",
     "transform_card",
-    "gain_durability",
-    "lose_durability",
-    "set_durability",
+    # Round 29 / 批次 X：耐久三兄弟并入卡牌属性族
+    # （``card_prop_add``/``card_prop_set`` + ``property:"durability"``）。
     "swap_health",
     "swap_hands",
     "broadcast_event",
     "modify_damage",
+    # Round 29 / 批次 X：玩家自定义变量的五个同形原子合并成
+    # ``player_var_change(mode=set|add|sub|mul|div)``；``var_set`` 留兼容垫片
+    # （tests 与引擎内部计时效果直呼私有方法），旧名进 REMOVED_ATOMIC_OPS。
     "var_set",
-    "var_add",
-    "var_sub",
-    "var_mul",
-    "var_div",
+    "player_var_change",
     "list_set",
     "list_append",
     "list_insert",
@@ -247,8 +244,19 @@ _CORE_LOGIC_OPS = {
     "for_each_list",
     "timed_effect",
     "countdown_var",
+    # Round 29 / 批次 X：``player_prop_set`` / ``player_prop_add`` 合并成
+    # ``player_prop_change(mode=set|add)``；两个旧名留兼容垫片（tests 直呼私有方法）。
     "player_prop_set",
     "player_prop_add",
+    "player_prop_change",
+    # Round 29 / 批次 X：``card_var_set`` / ``card_var_add`` 合并成
+    # ``card_var_change(mode=set|add)``（两个旧名同样留兼容垫片）。
+    "card_var_set",
+    "card_var_add",
+    "card_var_change",
+    # Round 29 / 批次 X：卡内计数器三兄弟合并成
+    # ``card_counter(mode=play|equip_turns|reset)``。
+    "card_counter",
     "card_prop_set",
     "card_prop_add",
     "card_prop_mul",
@@ -318,8 +326,8 @@ _CORE_LOGIC_OPS = {
     "absorb_attack_damage",
     "add_charge_to_hand",
     "auto_play_zone_top",
-    "card_var_add",
-    "card_var_set",
+    # Round 29 / 批次 X：``card_var_set`` / ``card_var_add`` 已合并成
+    # ``card_var_change``（登记在上面的模块族里），这里不再重复登记。
     "clear_statuses",
     "crit_multiplier_add",
     "defer_game_over",
@@ -363,9 +371,8 @@ _CORE_LOGIC_OPS = {
     "set_untargetable",
     "for_each_target",
     "on_fatal_invincible_then_die",
-    "record_play_count",
-    "record_equip_turns",
-    "reset_counter",
+    # Round 29 / 批次 X：``record_play_count`` / ``record_equip_turns`` /
+    # ``reset_counter`` 已合并成 ``card_counter``（见上面的模块族）。
     "create_counter",
     "exile_this",
     "mark_self_damage_source",
@@ -403,7 +410,6 @@ RUNTIME_STEP_OPS = frozenset({
     "create_card",             # 造一张牌进指定区（无印痕校验，运行时自带）
     "deck_catalog_pick",       # Cicada 3301 的挂起式牌堆挑选（发起）
     "deck_catalog_pick_resume",  # 同上（恢复；没有 ``_atomic_*``）
-    "destroy_equipment",       # 拆掉目标的一件装备（运行时薄封装）
     "modify_event_value",      # 改写当前事件的 ``event_value``
     "request_ui",              # 弹出 UI 组件并挂起事件
     "set_var",                 # 运行时变量赋值
@@ -983,10 +989,51 @@ REMOVED_ATOMIC_OPS = {
     "discard": (
         '[{"op":"for_each","items":{"op":"zone_top_ids","zone":"hand","order":"bottom",'
         '"count":N},"as":"pick_iid","steps":['
-        '{"op":"move_to_discard","card":{"ref":"card_instance","instance_id":'
+        '{"op":"move_card","zone":"discard","card":{"ref":"card_instance","instance_id":'
         '{"op":"var","name":"pick_iid"}},"count_as_active_discard":true,"silent":true}]},'
         '{"op":"log","message":"{source}丢弃{amount}张手牌","amount":N}]'
     ),
+
+    # ------------------------------------------------------------------
+    # Round 29 / 批次 X：同形对 + 前缀族 + 状态族复核后的合并
+    #
+    # 判"合"的每一族都满足三个条件（见 .codex-tmp/round29/rd29.md）：
+    # 语义一致、差异能被参数覆盖、逐卡 A/B 等价。替换写法按"最小改动"
+    # 写：``mode``/``scope``/``zone`` 覆盖原来的 op 名差异，其余参数照抄。
+    # ------------------------------------------------------------------
+    #   * 玩家自定义变量五兄弟 → player_var_change(mode=...)
+    "var_set": '{"op":"player_var_change","mode":"set","target":"self","name":"var","value":0}',
+    "var_add": '{"op":"player_var_change","mode":"add","target":"self","name":"var","value":1}',
+    "var_sub": '{"op":"player_var_change","mode":"sub","target":"self","name":"var","value":1}',
+    "var_mul": '{"op":"player_var_change","mode":"mul","target":"self","name":"var","value":2}',
+    "var_div": '{"op":"player_var_change","mode":"div","target":"self","name":"var","value":2}',
+    #   * 玩家属性写值两条 → player_prop_change(mode=...)
+    "player_prop_set": '{"op":"player_prop_change","mode":"set","target":"self","property":"health","value":0}',
+    "player_prop_add": '{"op":"player_prop_change","mode":"add","target":"self","property":"health","amount":1}',
+    #   * 卡牌自定义变量两条 → card_var_change(mode=...)
+    "card_var_set": '{"op":"card_var_change","mode":"set","card":{"ref":"current_card"},"name":"var","value":0}',
+    "card_var_add": '{"op":"card_var_change","mode":"add","card":{"ref":"current_card"},"name":"var","value":1}',
+    #   * 卡内计数器三兄弟 → card_counter(mode=...)
+    "record_play_count": '{"op":"card_counter","mode":"play","amount":1}',
+    "record_equip_turns": '{"op":"card_counter","mode":"equip_turns","amount":1}',
+    "reset_counter": '{"op":"card_counter","mode":"reset"}',
+    #   * 耐久三兄弟 → 卡牌属性族（property:"durability"，负 amount 即扣）
+    "gain_durability": '{"op":"card_prop_add","card":{"ref":"current_card"},"property":"durability","amount":1}',
+    "lose_durability": '{"op":"card_prop_add","card":{"ref":"current_card"},"property":"durability","amount":-1}',
+    "set_durability": '{"op":"card_prop_set","card":{"ref":"current_card"},"property":"durability","value":3}',
+    #   * 摧毁装备四条（含运行时薄封装）→ destroy_equipment(mode=..., scope=...)
+    "destroy_random_equip": '{"op":"destroy_equipment","mode":"random","scope":"target","target":"enemy"}',
+    "destroy_all_equip": '{"op":"destroy_equipment","mode":"all","scope":"target","target":"enemy"}',
+    "destroy_all_field_equip": '{"op":"destroy_equipment","mode":"all","scope":"field"}',
+    #   * 取牌三条 → choose_from_zone(zone=...)
+    "choose_from_deck": '{"op":"choose_from_zone","zone":"deck","target":"self"}',
+    "choose_from_discard": '{"op":"choose_from_zone","zone":"discard","target":"self"}',
+    "choose_from_exile": '{"op":"choose_from_zone","zone":"exile","target":"self"}',
+    #   * 区域移动四条 → move_card(zone=...)
+    "move_to_hand": '{"op":"move_card","zone":"hand","card":{"ref":"selected_card"},"target":"self"}',
+    "move_to_deck": '{"op":"move_card","zone":"deck","card":{"ref":"current_card"},"position":"top"}',
+    "move_to_discard": '{"op":"move_card","zone":"discard","card":{"ref":"current_card"}}',
+    "move_to_exile": '{"op":"move_card","zone":"exile","card":{"ref":"current_card"}}',
 }
 
 # Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），
@@ -1003,7 +1050,11 @@ RENAMED_ATOMIC_OPS = {
     "ocean_for_each_selectable_target": "for_each_target",
     "for_each_selectable_target": "for_each_target",
     "garden_show_initial_deck": "reveal_card_set",
-    "set_card_var": "card_var_set",
+    "set_card_var": "card_var_change",
+    # Round 29 / 批次 X：player_prop_set / player_prop_add 合并成
+    # player_prop_change(mode=...)，它们的"声明旧称"也一并指到规范名。
+    "player_property_set": "player_prop_change",
+    "player_property_add": "player_prop_change",
     # Round 25：登记残留里"只是换了称呼"的 5 个——规范名照常可用，旧名给
     # "已改名 + 规范名"的显式报错（其余旧名进 REMOVED_ATOMIC_OPS）。
     "arctic_ricochet_attack": "ricochet_attack",
@@ -1017,7 +1068,15 @@ RENAMED_ATOMIC_OPS = {
 # engine atoms become available to mod v2 content as soon as they exist.
 # Round 22: 别名收敛删掉的旧名即使还有 ``_atomic_*`` 实现（如 apply_toxic）
 # 也不再对外登记，写出来会拿到 RENAMED_ATOMIC_OPS 的显式报错。
-VALID_LOGIC_OPS = merge_public_ops(_CORE_LOGIC_OPS) - set(RENAMED_ATOMIC_OPS)
+# Round 29: ``REMOVED_ATOMIC_OPS`` 里的名字同样从契约里扣掉——批次 X 给
+# ``var_set`` / ``move_to_hand`` / ``player_prop_*`` / ``card_var_*`` 留了同名
+# 兼容垫片（老测试与引擎内部直呼私有方法），但它们**不再是对外 op**，
+# 卡数据写旧名一律拿到"已移除 + 替代写法"的显式报错。
+VALID_LOGIC_OPS = (
+    merge_public_ops(_CORE_LOGIC_OPS)
+    - set(RENAMED_ATOMIC_OPS)
+    - set(REMOVED_ATOMIC_OPS)
+)
 
 VALID_EVENT_HOOKS = {
     "before_play_card",
