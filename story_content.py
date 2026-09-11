@@ -1025,7 +1025,7 @@ STORY_TRAITS.update({
             'zh': '本回合无法抽牌，回合结束时失去。',
             'en': 'Cannot draw this turn; lost at the end of the turn.',
         },
-        'image_url': '/static/assets/story-trait-icons/cannot-draw.svg',
+        'image_url': '/static/assets/story-trait-icons/draw-card-disabled.svg',
     },
     'next_turn_draw': {
         'name': {'zh': '下回合抽牌', 'en': 'Next Turn Draw'},
@@ -1033,7 +1033,7 @@ STORY_TRAITS.update({
             'zh': '下个回合开始时，多抽或少抽效果层数的牌，随后失去。',
             'en': 'Draw that many more or fewer cards at the start of the next turn, then lose it.',
         },
-        'image_url': '/static/assets/story-trait-icons/next-turn-draw.svg',
+        'image_url': '/static/assets/story-trait-icons/draw-card-next-turn.svg',
     },
 })
 
