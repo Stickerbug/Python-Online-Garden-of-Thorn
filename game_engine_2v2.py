@@ -230,6 +230,9 @@ class GameEngine2v2(GameEngine):
         if for_player in goggles_targets:
             you_data['deck_ordered'] = [c.to_dict() for c in self.players[for_player].deck]
             you_data['discard_ordered'] = [c.to_dict() for c in self.players[for_player].discard]
+        # 花序编排（事件 11）：本局始终可见自己的抽牌堆顺序（复用 you.deck）。
+        if self._player_has_own_deck_order_visibility(for_player):
+            you_data['deck_order_visible'] = True
         self._ensure_garden_initial_deck_storage()
         return {
             'phase': self.phase,

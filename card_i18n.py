@@ -265,12 +265,12 @@ OPENING_EVENT_I18N = {
     6: {
         'name': _t('能量涌动', 'Energy Surge', 'Poussée d’énergie', 'Surto de Energia', 'Всплеск энергии', 'エネルギー奔流'),
         'desc': _t(
-            '每回合多回复2[[icon:E]]；自己回合结束时，受到等于剩余[[icon:E]]两倍的[[icon:D]]',
-            'Recover 2 extra [[icon:E]] each turn; at the end of your turn, take [[icon:D]] equal to twice your remaining [[icon:E]]',
-            'Récupérez 2 [[icon:E]] supplémentaires à chaque tour ; à la fin de votre tour, subissez des [[icon:D]] égaux au double de vos [[icon:E]] restants',
-            'Recupere 2 [[icon:E]] extras a cada turno; no fim do seu turno, sofra [[icon:D]] igual ao dobro do [[icon:E]] restante',
-            'Каждый ход восстанавливайте на 2 [[icon:E]] больше; в конце своего хода получите [[icon:D]] в размере удвоенного остатка [[icon:E]]',
-            '毎ターン追加で2[[icon:E]]回復する。自分のターン終了時、残り[[icon:E]]の2倍に等しい[[icon:D]]を受ける',
+            '回合结束时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]',
+            'At the end of your turn, every 2 remaining [[icon:E]] grant 1 extra [[icon:E]] at the start of your next turn',
+            'À la fin de votre tour, chaque 2 [[icon:E]] restants accordent 1 [[icon:E]] supplémentaire au début de votre prochain tour',
+            'No fim do seu turno, cada 2 [[icon:E]] restantes concede 1 [[icon:E]] extra no início do seu próximo turno',
+            'В конце своего хода каждые 2 оставшихся [[icon:E]] дают 1 дополнительную [[icon:E]] в начале вашего следующего хода',
+            '自分のターン終了時、残り2[[icon:E]]ごとに、次のターン開始時の回復が1増える',
         ),
     },
     7: {
@@ -287,7 +287,7 @@ OPENING_EVENT_I18N = {
     },
     11: {
         'name': _t('花序编排', 'Floral Arrangement', 'Arrangement floral', 'Arranjo Floral', 'Цветочная композиция', '花序編成'),
-        'desc': _t('调整自己抽牌堆的顺序', 'Rearrange your draw pile', 'Réorganisez votre pioche', 'Reorganize sua pilha de compra', 'Измените порядок своей колоды', '自分の山札の順序を変更する'),
+        'desc': _t('调整自己抽牌堆的顺序；本局始终可见该顺序', 'Rearrange your draw pile; you can always see its order for the rest of the game', 'Réorganisez votre pioche ; vous voyez toujours son ordre pendant toute la partie', 'Reorganize sua pilha de compra; você sempre vê sua ordem durante a partida', 'Измените порядок своей колоды; вы всегда видите этот порядок в течение партии', '自分の山札の順序を変更する。この対局中は常にその順序を確認できる'),
     },
     12: {
         'name': _t('众生平等', 'Equal Suffering', 'Souffrance égale', 'Sofrimento Igual', 'Равное страдание', '等しき苦痛'),

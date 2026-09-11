@@ -257,69 +257,167 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         self.assertEqual(sorted((fire[2] - 1, fire[3] - 2)), [0, 3])
         self.assertTrue(any('随机敌方+3灼烧' in line for line in engine.log))
 
-    def test_energy_surge_recovers_two_extra_elixir_and_backlashes_in_one_vs_one(self):
+    def test_energy_surge_banks_turn_end_elixir_without_backlash(self):
         engine = GameEngine()
-        engine.round_num = 2
         engine.opening_event_picks[0] = '6'
         player = engine.players[0]
-        player.elixir = 0
-
-        engine._apply_turn_start_effects(0)
-
-        self.assertEqual(player.elixir, 7)
-        player.elixir = 3
+        player.elixir = 5
         player.health = 100
-        engine._apply_energy_surge_turn_end(0)
-        self.assertEqual(player.health, 94)
-        self.assertEqual(player.elixir, 3)
 
-        player.elixir = 0
         engine._apply_energy_surge_turn_end(0)
-        self.assertEqual(player.health, 94)
-        self.assertTrue(any('剩余0E，受到0D' in line for line in engine.log))
 
-    def test_energy_surge_uses_turn_end_elixir_and_settles_each_own_turn(self):
+        self.assertEqual(player.health, 100)
+        self.assertEqual(
+            player.custom_vars.get(GameEngine.ENERGY_SURGE_PENDING_KEY), 2
+        )
+        self.assertFalse(any('反噬' in line for line in engine.log))
+        self.assertTrue(any('剩余5E，下回合额外回复2E' in line for line in engine.log))
+
+    def test_energy_surge_banks_by_actual_turn_end_elixir(self):
         engine = GameEngine()
         engine.opening_event_picks[0] = 6
         engine.first_player = 0
         engine.current_player = 0
         engine.phase = 'action'
-        engine.players[0].health = 100
-        engine.players[0].elixir = 1
+        player = engine.players[0]
+        player.health = 100
+        player.elixir = 3
         engine._start_player_turn = lambda _player_id: None
 
         engine._end_player_turn(0)
-        self.assertEqual(engine.players[0].health, 98)
 
-        engine.current_player = 0
-        engine.phase = 'action'
-        engine.players[0].elixir = 2
-        engine._end_player_turn(0)
-        self.assertEqual(engine.players[0].health, 94)
+        self.assertEqual(player.health, 100)
+        self.assertEqual(
+            player.custom_vars.get(GameEngine.ENERGY_SURGE_PENDING_KEY), 1
+        )
 
-    def test_energy_surge_matches_two_vs_two_recovery_and_turn_end_damage(self):
+    def test_energy_surge_grants_banked_elixir_at_next_turn_start(self):
+        engine = GameEngine()
+        engine.round_num = 2
+        engine.opening_event_picks[0] = 6
+        player = engine.players[0]
+        player.elixir = 5
+        engine._apply_energy_surge_turn_end(0)
+
+        # 对手回合里用反制牌把 E 花光，不会改变已经记好的账。
+        player.elixir = 0
+        engine._apply_turn_start_effects(0)
+
+        self.assertEqual(player.elixir, 7)
+        self.assertEqual(
+            player.custom_vars.get(GameEngine.ENERGY_SURGE_PENDING_KEY), 0
+        )
+
+    def test_energy_surge_recovery_still_respects_the_elixir_cap(self):
+        engine = GameEngine()
+        engine.round_num = 2
+        engine.opening_event_picks[0] = 6
+        player = engine.players[0]
+        player.max_elixir = 10
+        player.elixir = 10
+        engine._apply_energy_surge_turn_end(0)
+
+        player.elixir = 3
+        engine._apply_turn_start_effects(0)
+
+        self.assertEqual(player.elixir, player.max_elixir)
+        self.assertEqual(player.elixir, 10)
+
+    def test_energy_surge_matches_two_vs_two_banking(self):
         engine = GameEngine2v2()
         engine.round_num = 2
         engine.opening_event_picks[0] = 6
-        engine.players[0].elixir = 0
+        player = engine.players[0]
+        player.elixir = 4
+        player.health = 100
 
-        engine._apply_turn_start_effects_2v2(0)
-
-        self.assertEqual(engine.players[0].elixir, 7)
-        engine.players[0].health = 100
-        engine.players[0].elixir = 4
         engine._apply_energy_surge_turn_end(0)
-        self.assertEqual([player.health for player in engine.players], [92, 100, 100, 100])
+
+        self.assertEqual([p.health for p in engine.players], [100, 100, 100, 100])
+        self.assertEqual(
+            player.custom_vars.get(GameEngine.ENERGY_SURGE_PENDING_KEY), 2
+        )
+
+        player.elixir = 0
+        engine._apply_turn_start_effects_2v2(0)
+        self.assertEqual(player.elixir, 7)
 
     def test_energy_surge_text_matches_the_authoritative_rule(self):
-        expected = '每回合多回复2[[icon:E]]；自己回合结束时，受到等于剩余[[icon:E]]两倍的[[icon:D]]'
+        expected = '回合结束时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]'
         self.assertEqual(GameEngine.OPENING_EVENTS[6]['desc'], expected)
         self.assertEqual(OPENING_EVENT_I18N[6]['desc']['zh'], expected)
         for language in ('zh', 'en', 'fr', 'ja'):
             description = OPENING_EVENT_I18N[6]['desc'][language]
             self.assertIn('2', description, language)
+            self.assertIn('1', description, language)
             self.assertIn('[[icon:E]]', description, language)
-            self.assertIn('[[icon:D]]', description, language)
+            self.assertNotIn('[[icon:D]]', description, language)
+
+    def test_floral_arrangement_exposes_own_deck_order_only_to_the_owner(self):
+        engine = GameEngine()
+        engine.opening_event_picks[0] = 11
+        engine.players[0].deck = [
+            CardInstance('test:order_a'),
+            CardInstance('test:order_b'),
+        ]
+        engine.players[1].deck = [CardInstance('test:order_b')]
+
+        own_state = engine.get_public_state(0)
+        other_state = engine.get_public_state(1)
+
+        self.assertTrue(own_state['you'].get('deck_order_visible'))
+        self.assertEqual(
+            [card['def_id'] for card in own_state['you']['deck']],
+            ['test:order_a', 'test:order_b'],
+        )
+        self.assertNotIn('deck_order_visible', other_state['you'])
+        self.assertNotIn('deck_order_visible', own_state['opponent'])
+        self.assertNotIn('deck_order_visible', other_state['opponent'])
+
+    def test_floral_arrangement_visibility_follows_live_deck_order(self):
+        engine = GameEngine()
+        engine.opening_event_picks[0] = 11
+        engine.players[0].deck = [
+            CardInstance('test:order_a'),
+            CardInstance('test:order_b'),
+        ]
+        engine.get_public_state(0)
+
+        engine.players[0].deck.reverse()
+        state = engine.get_public_state(0)
+
+        self.assertEqual(
+            [card['def_id'] for card in state['you']['deck']],
+            ['test:order_b', 'test:order_a'],
+        )
+
+    def test_floral_arrangement_exposes_own_deck_order_in_two_vs_two(self):
+        engine = GameEngine2v2()
+        engine.opening_event_picks[0] = 11
+        engine.players[0].deck = [CardInstance('test:order_a')]
+
+        own_state = engine.get_public_state(0)
+        mate_state = engine.get_public_state(1)
+
+        self.assertTrue(own_state['you'].get('deck_order_visible'))
+        self.assertNotIn('deck_order_visible', mate_state['you'])
+
+    def test_floral_arrangement_text_mentions_persistent_visibility(self):
+        expected = '调整自己抽牌堆的顺序；本局始终可见该顺序'
+        self.assertEqual(GameEngine.OPENING_EVENTS[11]['desc'], expected)
+        self.assertEqual(OPENING_EVENT_I18N[11]['desc']['zh'], expected)
+        self.assertIn('always', OPENING_EVENT_I18N[11]['desc']['en'])
+        for language in ('zh', 'en', 'fr', 'ja'):
+            self.assertTrue(
+                OPENING_EVENT_I18N[11]['desc'][language].strip(), language
+            )
+
+    def test_floral_arrangement_frontend_uses_the_lightweight_flag(self):
+        game_js = (
+            Path(__file__).resolve().parents[1] / 'static' / 'js' / 'game.js'
+        ).read_text(encoding='utf-8')
+        self.assertIn('deck_order_visible', game_js)
+        self.assertIn('ownDeckOrderVisible', game_js)
 
     def test_equal_suffering_hits_other_players_at_turn_end(self):
         engine = GameEngine()

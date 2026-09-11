@@ -906,6 +906,8 @@ class GameEngine:
     SETUP_CARD_YGGDRASIL = 'Yggdrasil'
     # Built-in fallback card of ``add_equipment_to_zone`` when data omits it.
     SETUP_CARD_LEAF = 'Leaf'
+    # 能量涌动（事件 6）：自己回合结束时把剩余 E//2 记账，下回合开始返还。
+    ENERGY_SURGE_PENDING_KEY = 'energy_surge_pending_bonus'
     OPENING_EVENTS = {
         1: {'id': 1, 'name': '生命强化', 'desc': '最大生命值+20', 'position': 1},
         2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'position': 2},
@@ -916,13 +918,13 @@ class GameEngine:
         6: {
             'id': 6,
             'name': '能量涌动',
-            'desc': '每回合多回复2[[icon:E]]；自己回合结束时，受到等于剩余[[icon:E]]两倍的[[icon:D]]',
+            'desc': '回合结束时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]',
             'position': 3,
         },
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
-        11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序', 'position': 2},
+        11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序；本局始终可见该顺序', 'position': 2},
         12: {'id': 12, 'name': '众生平等', 'desc': '自己回合结束时，对自己造成5[[icon:D]]，并对每名其他可选中玩家造成8[[icon:D]]', 'position': 3},
     }
     OPENING_EVENT_ORDER = {
@@ -4176,6 +4178,11 @@ class GameEngine:
         if for_player in goggles_targets:
             you_data['deck_ordered'] = [c.to_dict() for c in self.players[for_player].deck]
             you_data['discard_ordered'] = [c.to_dict() for c in self.players[for_player].discard]
+        # 花序编排（事件 11）：本局始终可见自己的抽牌堆顺序。复用已经下发的
+        # ``you.deck``（本身就是按抽取顺序排列），只额外带一个轻量标记，
+        # 避免每次状态推送都把整副牌堆再复制一遍。
+        if self._player_has_own_deck_order_visibility(for_player):
+            you_data['deck_order_visible'] = True
         self._ensure_garden_initial_deck_storage()
         return {
             'phase': self.phase,
@@ -5057,9 +5064,10 @@ class GameEngine:
                 random.shuffle(ps.deck)
             self.log_msg(f"{self.pn(player_id)}【命运抽签】：少抽1张牌，{added}张牌洗入牌库")
         elif event_id == 6:
+            ps.custom_vars[self.ENERGY_SURGE_PENDING_KEY] = 0
             self.log_msg(
-                f"{self.pn(player_id)}【能量涌动】：每回合多回复2E；"
-                "自己回合结束时受到剩余E两倍的D"
+                f"{self.pn(player_id)}【能量涌动】：回合结束时每剩余2E，"
+                "下回合开始额外回复1E"
             )
         elif event_id == 7:
             self.log_msg(f"{self.pn(player_id)}【先手压制】：先手回复7E并抽5张牌")
@@ -5146,32 +5154,51 @@ class GameEngine:
             self._game_over_defer_depth = max(0, self._game_over_defer_depth - 1)
         self._check_game_over()
 
+    def _player_has_own_deck_order_visibility(self, player_id: int) -> bool:
+        """花序编排（事件 11）：本局始终可见自己的抽牌堆顺序。"""
+        if not self._valid_player_id(player_id):
+            return False
+        picks = getattr(self, 'opening_event_picks', []) or []
+        if player_id >= len(picks):
+            return False
+        return picks[player_id] is not None and str(picks[player_id]) == '11'
+
     def _opening_event_elixir_recovery_bonus(self, player_id: int) -> int:
+        """能量涌动（事件 6）：返还自己回合结束时记账的 E//2（取用后清零）。
+
+        记账时点在自己回合结束，因此对手回合里用反制牌消耗 E 不会改变它；
+        返还仍走 ``gain_elixir``，照常受 E 上限限制。
+        """
         if not self._valid_player_id(player_id):
             return 0
         picks = getattr(self, 'opening_event_picks', []) or []
-        if player_id >= len(picks):
+        if player_id >= len(picks) or str(picks[player_id]) != '6':
             return 0
-        return 2 if str(picks[player_id]) == '6' else 0
+        ps = self.players[player_id]
+        custom_vars = getattr(ps, 'custom_vars', None)
+        if not isinstance(custom_vars, dict):
+            return 0
+        pending = max(0, int(custom_vars.get(self.ENERGY_SURGE_PENDING_KEY, 0) or 0))
+        if pending > 0:
+            custom_vars[self.ENERGY_SURGE_PENDING_KEY] = 0
+        return pending
 
     def _apply_energy_surge_turn_end(self, player_id: int):
+        """能量涌动（事件 6）：按回合结束时的 E 记账，下回合开始额外回复。"""
         if not self._valid_player_id(player_id):
             return
         picks = getattr(self, 'opening_event_picks', []) or []
         if player_id >= len(picks) or str(picks[player_id]) != '6':
             return
-        remaining_elixir = max(0, int(getattr(self.players[player_id], 'elixir', 0) or 0))
-        damage = remaining_elixir * 2
+        ps = self.players[player_id]
+        remaining_elixir = max(0, int(getattr(ps, 'elixir', 0) or 0))
+        bonus = remaining_elixir // 2
+        if not isinstance(getattr(ps, 'custom_vars', None), dict):
+            ps.custom_vars = {}
+        ps.custom_vars[self.ENERGY_SURGE_PENDING_KEY] = bonus
         self.log_msg(
-            f"{self.pn(player_id)}的能量涌动反噬：剩余{remaining_elixir}E，受到{damage}D"
-        )
-        if damage <= 0:
-            return
-        self.deal_attack_damage(
-            player_id,
-            damage,
-            attacker_id=player_id,
-            source_card=None,
+            f"{self.pn(player_id)}【能量涌动】：回合结束剩余{remaining_elixir}E，"
+            f"下回合额外回复{bonus}E"
         )
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:

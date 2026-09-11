@@ -36078,7 +36078,13 @@ function onViewPile(pileType = 'deck') {
         const isSelf = pid != null && selfId != null && pid === selfId;
         const pile = getPileFromPlayer(pilePlayer, pileType);
         const orderedKey = isDeckPile ? 'deck_ordered' : (isDiscardPile ? 'discard_ordered' : 'exile_ordered');
-        const hasVisibleOrder = !!(pilePlayer && Array.isArray(pilePlayer[orderedKey]));
+        // 花序编排：本人抽牌堆顺序常驻可见。服务端只下发轻量标记，顺序直接复用 you.deck。
+        const ownDeckOrderVisible = isDeckPile && isSelf
+            && !!(pilePlayer && pilePlayer.deck_order_visible)
+            && !!(pilePlayer && Array.isArray(pilePlayer.deck));
+        const hasVisibleOrder = !!(pilePlayer && (
+            Array.isArray(pilePlayer[orderedKey]) || ownDeckOrderVisible
+        ));
         const blindPile = isDeckPile
             ? (isSelf && shouldMaskOwnDrawDeck())
             : ((isDiscardPile || isExilePile) && isSelf && shouldMaskOwnDiscardPile());
