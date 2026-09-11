@@ -35,6 +35,17 @@ try:
     DB_BUSY_TIMEOUT_MS = max(100, min(int(os.environ.get('GTN_DB_BUSY_TIMEOUT_MS', '1500')), 10_000))
 except (TypeError, ValueError):
     DB_BUSY_TIMEOUT_MS = 1500
+try:
+    # 每个连接的 SQLite 页缓存（KB）。默认只有 2MB，对 1.1GB 的库意味着几乎每次
+    # 查询都要重新读盘；生产实测冷缓存一次 COUNT 就 2.16s。
+    DB_CACHE_SIZE_KB = max(2_000, min(int(os.environ.get('GTN_DB_CACHE_SIZE_KB', '16000')), 262_144))
+except (TypeError, ValueError):
+    DB_CACHE_SIZE_KB = 16_000
+try:
+    # 内存映射读取（字节）。0 = 关闭；这里给 256MB，减少 read() 系统调用与拷贝。
+    DB_MMAP_SIZE = max(0, min(int(os.environ.get('GTN_DB_MMAP_SIZE', str(256 * 1024 * 1024))), 1_073_741_824))
+except (TypeError, ValueError):
+    DB_MMAP_SIZE = 256 * 1024 * 1024
 TITLE_CATALOG_BACKUP_DIR = os.environ.get(
     'GTN_TITLE_CATALOG_BACKUP_DIR',
     os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), 'title-catalog-backups'),
@@ -413,6 +424,9 @@ def get_db_connection():
     conn.execute(f'PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS};')
     conn.execute('PRAGMA synchronous=NORMAL;')
     conn.execute('PRAGMA temp_store=MEMORY;')
+    conn.execute(f'PRAGMA cache_size=-{DB_CACHE_SIZE_KB};')
+    if DB_MMAP_SIZE:
+        conn.execute(f'PRAGMA mmap_size={DB_MMAP_SIZE};')
     return conn
 
 
