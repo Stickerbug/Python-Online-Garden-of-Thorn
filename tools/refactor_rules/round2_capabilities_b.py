@@ -164,7 +164,21 @@ RUBY_ATTACK_FILTER = {
 
 
 def _sapphire_request_card_steps(params: dict) -> list:
-    """Sapphire: pick the target first, then a filtered attack card."""
+    """Sapphire: pick the target first, then a filtered attack card.
+
+    Idempotent: the old form had no ``filter`` on ``request_card``, so a step
+    that already carries the Sapphire filter (and the trailing
+    ``request_target`` written by the first pass) must come back untouched --
+    otherwise every extra run inserts one more ``request_target``.
+    """
+
+    already_migrated = (
+        str(params.get("choice_type") or "") == "choose_card_from_hand"
+        and params.get("filter") == SAPPHIRE_ATTACK_FILTER
+        and bool(params.get("cancellable", True))
+    )
+    if already_migrated:
+        return [{"op": "request_card", "params": dict(params)}]
 
     return [
         {"op": "request_target", "allowed": "any"},

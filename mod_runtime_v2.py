@@ -125,6 +125,95 @@ class V2UIPause(Exception):
         self.payload = payload
 
 
+# ---------------------------------------------------------------------------
+# 区域 / 位置词表与选择器参数（Round 14 / 批次 2：选择器与区域统一）
+#
+# 卡数据里的区域参数只认这一套名字：``hand`` / ``deck`` / ``discard`` /
+# ``exile`` / ``equipment``。移动、给牌这类**目的区**不能写 ``equipment``
+# （那是 ``place_as_equip`` 的活）；打标签、改属性、变换、随机取牌这类**读区**
+# 可以用 ``equipment``（= 装备上的卡实例）。
+#
+# 位置统一为 ``top`` / ``bottom`` / ``random`` / ``random_top``：
+# ``random_top`` 对多张牌是"先把这批牌洗匀再整体放顶"，对单张牌等同 ``top``。
+# 历史别名（``draw`` / ``draw_pile`` / ``exile_pile`` / ``shuffled_top`` 等）
+# 继续可写，见下两张别名表。
+#
+# 未知区域/位置一律抛 :class:`V2ZoneError`（Round 14 起不再静默回落成
+# "什么也不做"或"进弃牌堆"）：引擎路径由 `_run_effect_list` 记成 mod 运行时
+# 错误，运行时路径由 :func:`_log_runtime_error` 记成同一条错误。
+# ---------------------------------------------------------------------------
+ZONE_NAMES = ("hand", "deck", "discard", "exile", "equipment")
+PILE_ZONE_NAMES = ("hand", "deck", "discard", "exile")
+ZONE_POSITIONS = ("top", "bottom", "random", "random_top")
+ZONE_POSITION_ALIASES = {
+    "shuffled_top": "random_top",
+    "shuffle_top": "random_top",
+    "randomtop": "random_top",
+}
+ZONE_NAME_ALIASES = {
+    "draw": "deck",
+    "draw_pile": "deck",
+    "drawpile": "deck",
+    "deck_pile": "deck",
+    "discard_pile": "discard",
+    "exile_pile": "exile",
+    "equip": "equipment",
+    "equipment_zone": "equipment",
+}
+
+# 玩家选择器参数：``target`` / ``targets`` / ``owner`` 走同一条解析，
+# ``first`` / ``exclude`` / ``relation`` / ``allow_self`` / ``filter`` 是通用修饰键。
+# 逐 op 的支持表见 docs/引擎原子与数据步骤清单.md §15。
+SELECTOR_TARGET_KEYS = ("target", "targets", "owner")
+SELECTOR_FIRST_KEYS = ("first", "first_only", "single")
+SELECTOR_FILTER_KEYS = ("filter", "where")
+
+
+class V2ZoneError(V2RuntimeError):
+    """未知区域名 / 位置名（Round 14 / 批次 2 起显式报错）。"""
+
+
+def zone_vocabulary_text(allow_equipment: bool = True) -> str:
+    return "/".join(ZONE_NAMES if allow_equipment else PILE_ZONE_NAMES)
+
+
+def normalize_zone_name(value, *, allow_equipment: bool = True, op: str = "",
+                        param: str = "zone") -> str:
+    """Normalise one zone name, raising :class:`V2ZoneError` when unknown."""
+    text = str(value).strip().lower() if value not in (None, "") else ""
+    canonical = ZONE_NAME_ALIASES.get(text, text)
+    allowed = ZONE_NAMES if allow_equipment else PILE_ZONE_NAMES
+    if canonical not in allowed:
+        raise V2ZoneError(
+            f"{op or 'step'} 的 {param} 不支持区域 {value!r}；只支持 {zone_vocabulary_text(allow_equipment)}"
+        )
+    return canonical
+
+
+def normalize_zone_names(value, *, allow_equipment: bool = True, op: str = "",
+                         param: str = "zones") -> List[str]:
+    """Normalise a single zone or a zone list, de-duplicated and order-stable."""
+    raw_items = value if isinstance(value, (list, tuple, set)) else [value]
+    names: List[str] = []
+    for item in raw_items:
+        name = normalize_zone_name(item, allow_equipment=allow_equipment, op=op, param=param)
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def normalize_zone_position(value, *, op: str = "", param: str = "position",
+                            default: str = "top") -> str:
+    """Normalise a deck position, raising :class:`V2ZoneError` when unknown."""
+    text = str(default) if value in (None, "") else str(value).strip().lower()
+    canonical = ZONE_POSITION_ALIASES.get(text, text)
+    if canonical not in ZONE_POSITIONS:
+        raise V2ZoneError(
+            f"{op or 'step'} 的 {param} 不支持位置 {value!r}；只支持 {'/'.join(ZONE_POSITIONS)}"
+        )
+    return canonical
+
+
 def run_v2_event(engine, context: Dict[str, Any], event_def: Any):
     ctx = _prepare_context(context)
     try:
@@ -137,6 +226,14 @@ def run_v2_event(engine, context: Dict[str, Any], event_def: Any):
         return {"success": True, "needs_v2_ui": True, "v2_ui_pause": pause.payload}
     except ActionWorkBudgetExceeded:
         raise
+    except (LoopBreak, LoopContinue) as exc:
+        # ``break``/``continue`` outside a loop: report it exactly like the
+        # engine path does instead of aborting the whole event.
+        reporter = getattr(engine, "_log_mod_runtime_error", None)
+        if callable(reporter):
+            reporter("v2_event", RuntimeError(f"{type(exc).__name__} outside loop"),
+                     ctx.get("source_player"), ctx.get("card"))
+        return {"success": True}
     except Exception as exc:
         _log_runtime_error(engine, ctx, "v2_event", exc)
         return {"success": False, "error": str(exc)}
@@ -179,7 +276,9 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     # An unreadable gate is logged and the step runs (pre-Round-13 behaviour);
     # a broken gate must never abort the event nor silently drop the step.
     try:
-        gate_allows = step_gate_allows(engine, context, step, op, params)
+        gate_allows = step_gate_allows(
+            engine, context, step, ATOMIC_OP_ALIASES.get(str(op), str(op)), params,
+        )
     except ActionWorkBudgetExceeded:
         raise
     except Exception as exc:
@@ -381,6 +480,18 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     "damage": int(dealt or 0),
                 })
                 run_v2_steps(engine, child_context, on_crit)
+            # Round 15 / batch 3: the engine atom already honoured a step-level
+            # ``log`` template; the runtime branch used to drop it on the floor.
+            rendered = _render_step_log(engine, step, params, {
+                "target": engine.pn(target_id),
+                "source": engine.pn(source),
+                "amount": int(dealt or 0),
+                "damage": int(dealt or 0),
+                "count": int(dealt or 0),
+                "hits": hits,
+            })
+            if rendered:
+                engine.log_msg(rendered)
         engine._hel_current_crit_hits = prev_crit_hits
         if card is not None:
             if force_crit and not old_force:
@@ -487,6 +598,18 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     })
                     _narrow_wide_targets(child_context, child_vars, target_id)
                     run_v2_steps(engine, child_context, on_hit)
+            # Round 15 / batch 3: honour a data-authored summary line, the same
+            # contract the engine atom for ``direct_damage`` already had.
+            rendered = _render_step_log(engine, step, params, {
+                "target": engine.pn(target_id),
+                "source": engine.pn(source),
+                "amount": int(target_total),
+                "damage": int(target_total),
+                "count": int(target_total),
+                "hits": hits,
+            })
+            if rendered:
+                engine.log_msg(rendered)
         context["last_damage"] = total
         context["last_positive_hits"] = positive_hits
         context.setdefault("vars", {})["last_positive_hits"] = positive_hits
@@ -649,23 +772,20 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         raw_status = params.get("status", params.get("id", ""))
         status_id = str(eval_v2_value(engine, context, raw_status) or "").strip()
         amount = _to_int(eval_v2_value(engine, context, params.get("amount", params.get("stack", 1))))
+        log_spec = _status_log_spec(step, params)
         for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target"))):
             if _valid_player(engine, target_id):
-                _apply_status(
-                    engine, target_id, status_id, amount, op,
-                    log=not step_is_silent(step, params),
-                )
+                # Round 15 / batch 3: the status family lives in the engine
+                # (``_apply_status_op``) so both execution paths share one
+                # implementation (aliases / caps / achievements / hooks / log).
+                _apply_status(engine, target_id, status_id, amount, op, log=log_spec)
         return {"success": True}
 
-    if op == "move_card":
-        card = _resolve_card(engine, context, params.get("card", "current_card"))
-        if card is None:
-            return {"success": True}
-        to_zone = str(params.get("to") or params.get("zone") or "discard")
-        owner = resolve_v2_target(engine, context, params.get("owner", "source"))
-        owner_id = _player_id(engine, owner)
-        _move_card(engine, card, owner_id, to_zone)
-        return {"success": True}
+    # Round 14 / batch 2: ``move_card`` used to be implemented here with its own
+    # hand-full / unknown-zone handling, which made it drift apart from the
+    # ``move_to_*`` family.  It now falls through to the engine's
+    # ``_atomic_move_card`` so both execution paths share one implementation
+    # (zone vocabulary, position and log rules included).
 
     if op == "create_card":
         card_id = str(eval_v2_value(engine, context, params.get("card_id", params.get("id", ERROR_CARD_ID))) or ERROR_CARD_ID)
@@ -690,26 +810,112 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         return run_v2_steps(engine, context, branch or [])
 
     if op == "for_each":
-        items = resolve_v2_target(engine, context, step.get("items", step.get("targets", step.get("list", []))))
-        if not isinstance(items, list):
-            items = [items]
-        var_name = str(step.get("as") or step.get("var") or "item")
-        old_value = context.setdefault("vars", {}).get(var_name)
-        had_old = var_name in context["vars"]
-        try:
-            for item in items[:FOR_EACH_LIMIT]:
-                context["vars"][var_name] = item
-                child_result = run_v2_steps(engine, context, step.get("steps", step.get("body", [])) or [])
-                if isinstance(child_result, dict) and child_result.get("needs_v2_ui"):
-                    return child_result
-                if getattr(engine, "game_over", False):
-                    break
-        finally:
+        # Round 16 / batch 4: the runtime branch and the engine atom share the
+        # same contract (source/items/targets, as/var/name, limit, condition,
+        # break/continue, target rebinding).  Only the body runner differs: the
+        # runtime entry point keeps executing v2 steps here, so a UI request
+        # inside the body can still pause and resume.
+        body = loop_body_from_params(step)
+        if not body:
+            body = loop_body_from_params(params)
+        items, var_name, _limit = plan_loop(engine, context, params, op="for_each")
+        condition = loop_condition(params)
+        bind_mode = str(params.get("bind") or params.get("binding") or "var").strip().lower()
+        bind_target = bind_mode in ("target", "player", "target_player")
+        restore_spec = step.get("_loop_restore") if isinstance(step, dict) else None
+        vars_dict = context.setdefault("vars", {}) if isinstance(context, dict) else {}
+        if isinstance(restore_spec, dict):
+            had_old = bool(restore_spec.get("had"))
+            old_value = restore_spec.get("value")
+        else:
+            had_old = var_name in vars_dict
+            old_value = vars_dict.get(var_name)
+        child_cell: Dict[str, Any] = {}
+
+        def _bind_item(item, index, _vars=vars_dict, _name=var_name):
+            if _name:
+                _vars[_name] = item
+
+        def _unbind_item(paused, _vars=vars_dict, _name=var_name):
+            if paused or not _name:
+                return
             if had_old:
-                context["vars"][var_name] = old_value
+                _vars[_name] = old_value
             else:
-                context["vars"].pop(var_name, None)
-        return {"success": True}
+                _vars.pop(_name, None)
+
+        def _bind_target(item, index, _vars=vars_dict, _name=var_name):
+            child_cell["context"] = None
+            try:
+                target_id = int(item)
+            except (TypeError, ValueError):
+                return
+            if target_id < 0 or target_id >= len(getattr(engine, "players", []) or []):
+                return
+            # The old ``for_each_target`` preset narrowed the wide-strike list in
+            # a *copy* of the effect context, so nothing leaked back to the
+            # outer event.  The merged loop keeps that isolation for the
+            # ``bind: "target"`` preset.
+            child = dict(context)
+            child["target_id"] = target_id
+            child["target_player"] = target_id
+            child.pop("wide_strike_targets", None)
+            child.pop("target_players", None)
+            child_choice = {
+                "target_player_id": target_id,
+                "target_player": target_id,
+                "target_id": target_id,
+            }
+            child["choice"] = child_choice
+            child["current_action"] = child_choice
+            child["target_player_explicit"] = True
+            child_vars = dict(child.get("vars") or {})
+            child_vars["target_player"] = target_id
+            child_vars.pop("wide_strike_targets", None)
+            if _name:
+                child_vars[_name] = target_id
+            child["vars"] = child_vars
+            child_cell["context"] = child
+
+        def _run_body(item, index):
+            if bind_target:
+                body_context = child_cell.get("context")
+                if not isinstance(body_context, dict):
+                    return None
+            else:
+                body_context = context
+            if condition is not None and not check_v2_condition(engine, body_context, condition):
+                return None
+            return run_v2_steps(engine, body_context, body)
+
+        def _pause_tail(remaining, item, index):
+            tail = {
+                "op": "for_each",
+                "items": list(remaining),
+                "body": list(body),
+                "_loop_restore": {"had": had_old, "value": old_value},
+            }
+            if var_name:
+                tail["as"] = var_name
+            if bind_target:
+                tail["bind"] = "target"
+            return tail
+
+        return run_loop_driver(
+            engine,
+            items,
+            run_body=_run_body,
+            bind=_bind_target if bind_target else _bind_item,
+            unbind=None if bind_target else _unbind_item,
+            pause_tail=_pause_tail,
+            op="for_each",
+        )
+
+    if op in ("break", "loop_break"):
+        raise LoopBreak()
+
+    if op in ("continue", "loop_continue"):
+        raise LoopContinue()
 
     if op == "request_ui":
         raise V2UIPause(_build_ui_pause(engine, context, params))
@@ -796,6 +1002,253 @@ def _narrow_wide_targets(context: Dict[str, Any], vars_dict: Dict[str, Any], tar
             context[key] = [target_id]
         if isinstance(vars_dict.get(key), list):
             vars_dict[key] = [target_id]
+
+
+# ---------------------------------------------------------------------------
+# Round 16 / batch 4: unified loop driver
+#
+# ``for_each`` used to have two implementations with different parameter names
+# and different nested-body semantics (the runtime branch knew ``items/as``,
+# the engine atom knew ``targets`` and bound a player id).  The loop family now
+# shares one contract:
+#
+#   source/items/targets/list/collection -> the iterated values
+#   as/var/name                         -> the loop variable (default ``item``)
+#   limit                               -> iteration cap (default 200, ``all``
+#                                          disables the cap)
+#   condition/cond                      -> re-checked before every iteration;
+#                                          a false condition skips that one
+#   body/steps/effects                  -> the steps run per iteration
+#   bind                                -> ``var`` (default) or ``target``
+#                                          (rebinds ``target`` to the current
+#                                          iterated player; the old
+#                                          ``for_each_target`` preset)
+#
+# ``break`` / ``continue`` are the shared loop signals.  The engine's
+# ``ModLoopBreak`` / ``ModLoopContinue`` subclass them (see ``game_engine``), so
+# the same driver serves both execution paths.
+# ---------------------------------------------------------------------------
+
+class LoopBreak(Exception):
+    """``break`` executed inside a loop body."""
+
+
+class LoopContinue(Exception):
+    """``continue`` executed inside a loop body."""
+
+
+LOOP_LIMIT_ALL = ("all", "全部", "unlimited", "no_limit", "none", "inf", "∞")
+LOOP_SOURCE_KEYS = ("source", "items", "targets", "list", "collection", "values")
+LOOP_BODY_KEYS = ("body", "steps", "effects")
+
+
+def loop_body_from_params(params: Any) -> List[Any]:
+    """Return the loop's per-iteration step list (``body``/``steps``/``effects``)."""
+    if not isinstance(params, dict):
+        return []
+    for key in LOOP_BODY_KEYS:
+        value = params.get(key)
+        if isinstance(value, list):
+            return value
+    return []
+
+
+def loop_limit_from_params(engine, context: Dict[str, Any], raw: Any, *, op: str = "for_each"):
+    """``limit`` -> an int cap, or ``None`` when the loop is explicitly uncapped."""
+    if raw is None:
+        return FOR_EACH_LIMIT
+    if isinstance(raw, str) and raw.strip().lower() in LOOP_LIMIT_ALL:
+        return None
+    try:
+        value = _to_int(eval_v2_value(engine, context, raw))
+    except Exception:
+        return FOR_EACH_LIMIT
+    return max(0, value)
+
+
+def plan_loop(engine, context: Dict[str, Any], params: Any, *, op: str = "for_each",
+              default_source: Any = None, default_var: str = "item",
+              source_override: Any = None, items_override: Any = None,
+              resolver=None, limit_resolver=None):
+    """Resolve the unified loop contract into ``(items, var_name, limit)``."""
+    if not isinstance(params, dict):
+        params = {}
+    source = source_override
+    if source is None:
+        for key in LOOP_SOURCE_KEYS:
+            value = params.get(key)
+            if value is not None:
+                source = value
+                break
+    if source is None:
+        source = default_source
+    if items_override is not None:
+        items = items_override
+    elif source is None:
+        items = []
+    else:
+        try:
+            items = (resolver or resolve_v2_target)(engine, context, source)
+        except Exception:
+            items = []
+    if isinstance(items, tuple):
+        items = list(items)
+    elif not isinstance(items, list):
+        items = [] if items is None else [items]
+    else:
+        items = list(items)
+    raw_var = params.get("as")
+    if raw_var in (None, ""):
+        raw_var = params.get("var")
+    if raw_var in (None, ""):
+        raw_var = params.get("name")
+    if raw_var is None:
+        raw_var = default_var
+    var_name = str(raw_var or "")
+    if limit_resolver is not None:
+        limit = limit_resolver(engine, context, params.get("limit"), op)
+    else:
+        limit = loop_limit_from_params(engine, context, params.get("limit"), op=op)
+    if limit is not None:
+        items = items[:limit]
+    return items, var_name, limit
+
+
+def loop_condition(params: Any) -> Any:
+    """The per-iteration condition, if the step carries one."""
+    if not isinstance(params, dict):
+        return None
+    for key in ("condition", "cond"):
+        value = params.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def run_loop_driver(engine, items: Iterable[Any], *, run_body, check_condition=None,
+                    bind=None, unbind=None, pause_tail=None,
+                    stop_on_game_over: bool = True, op: str = "for_each"):
+    """Drive one loop.
+
+    ``bind(item, index)`` / ``unbind(paused)`` own the loop-variable and target
+    binding; ``run_body(item, index)`` executes the body once and may return a
+    v2 result dict.  ``break``/``continue`` arrive as :class:`LoopBreak` /
+    :class:`LoopContinue` (the engine's ``ModLoop*`` exceptions subclass them).
+
+    When a body pauses for UI input the remaining iterations must survive the
+    pause: ``pause_tail(remaining_items, item, index)`` builds the continuation
+    step that is appended after the body's own remaining steps, so the resumed
+    event finishes the current iteration and then walks the rest of the loop.
+    """
+    items = list(items or [])
+    paused = False
+    try:
+        for index, item in enumerate(items, start=1):
+            if stop_on_game_over and getattr(engine, "game_over", False):
+                break
+            if bind is not None:
+                bind(item, index)
+            if check_condition is not None and not check_condition(item, index):
+                continue
+            try:
+                body_result = run_body(item, index)
+            except LoopContinue:
+                continue
+            except LoopBreak:
+                break
+            if isinstance(body_result, dict) and body_result.get("needs_v2_ui"):
+                if pause_tail is None:
+                    raise V2RuntimeError(
+                        f"{op}: UI pause inside the loop body has no resume tail"
+                    )
+                pause = dict(body_result.get("v2_ui_pause") or {})
+                tail = pause_tail(items[index:], item, index)
+                if isinstance(tail, dict):
+                    pause["remaining_steps"] = list(pause.get("remaining_steps") or []) + [tail]
+                paused = True
+                return {"success": True, "needs_v2_ui": True, "v2_ui_pause": pause}
+        return {"success": True}
+    finally:
+        if unbind is not None:
+            unbind(paused)
+
+
+def listener_body_from_params(params: Any) -> List[Any]:
+    """Unified ``body``/``effects``/``steps`` lookup for the listener family."""
+    return loop_body_from_params(params)
+
+
+def listener_condition_from_params(params: Any) -> Any:
+    """Unified ``condition``/``cond`` lookup for the listener family."""
+    return loop_condition(params)
+
+
+LISTENER_TRIGGER_ALIASES = {
+    # timed_effect
+    "turn_start": "target_turn_start",
+    "turn_end": "target_turn_end",
+    "after_status_clear": "target_turn_start_after_status_clear",
+    "after_draw": "target_turn_start_after_draw",
+    "start_of_turn": "target_turn_start",
+    "end_of_turn": "target_turn_end",
+    # register_play_listener
+    "card_played": "play",
+    "owner_play": "play",
+    "on_play": "play",
+    # absorb_attack_damage
+    "attack": "attack_hit",
+    "attacked": "attack_hit",
+    "on_attack": "attack_hit",
+}
+
+# The trigger vocabulary each listener op implements, after alias normalisation.
+LISTENER_TRIGGERS = {
+    "timed_effect": {
+        "target_turn_start", "target_turn_start_after_status_clear",
+        "target_turn_start_after_draw", "target_turn_end", "owner_turn_start",
+        "owner_turn_end", "friendly_turn_start", "enemy_turn_start",
+        "any_turn_start", "any_turn_end",
+    },
+    "register_play_listener": {"play"},
+    "absorb_attack_damage": {"attack_hit"},
+    "once_per_play": {"play"},
+}
+
+
+def normalize_listener_trigger(op: str, value: Any, *, default: str) -> str:
+    """Normalise a listener ``trigger`` (aliases collapse onto the canonical name)."""
+    text = str(value or "").strip().lower()
+    if not text:
+        return default
+    return LISTENER_TRIGGER_ALIASES.get(text, text)
+
+
+def listener_trigger_is_supported(op: str, trigger: str) -> bool:
+    allowed = LISTENER_TRIGGERS.get(str(op))
+    return allowed is None or str(trigger) in allowed
+
+
+def normalize_compare_operators(condition: Any) -> Any:
+    """Rewrite v2 comparison-operator aliases for the engine evaluator.
+
+    The engine's condition language spells equality ``=`` and inequality
+    ``!=``; the v2 spelling accepts ``==``/``<>``.  Loop and listener
+    ``condition`` operands go through this before the engine evaluates them, so
+    ``operator: "=="`` means equality on both execution paths.
+    """
+    if isinstance(condition, list):
+        return [normalize_compare_operators(item) for item in condition]
+    if not isinstance(condition, dict):
+        return condition
+    out = dict(condition)
+    op = str(out.get("op") or out.get("type") or "")
+    if op == "compare":
+        operator = str(out.get("operator") or "=")
+        out["operator"] = {"==": "=", "<>": "!="}.get(operator, operator)
+    for key in ("conditions", "values", "condition"):
+        if key in out:
+            out[key] = normalize_compare_operators(out[key])
+    return out
 
 
 def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
@@ -1429,6 +1882,11 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
         if explicit_target is not None:
             return explicit_target
         return _enemy_id(engine, int(context.get("source_player", 0)))
+    if text in ("all", "all_players", "everyone"):
+        # Round 15 / batch 3: the engine selector vocabulary always had ``all``
+        # (e.g. Pyrite); the runtime used to hand the bare string to the ops
+        # below, which silently dropped it.
+        return list(range(len(getattr(engine, "players", []) or [])))
     if text == "wide_strike_targets":
         # The engine owns the "chosen by a wide-strike play" target list
         # (``_wide_strike_target_ids`` honours the card's ``self_target`` flag and
@@ -1645,6 +2103,11 @@ def check_v2_condition(engine, context: Dict[str, Any], cond: Any) -> bool:
 CONDITION_OWNED_OPS = {
     "if", "if_else", "repeat_until", "repeat_until_steps",
     "and", "or", "not", "any", "all", "count",
+    # Round 16 / batch 4: the loop family consumes ``condition`` as a
+    # per-iteration filter (the whole loop is gated with ``run_if``/``unless``),
+    # and the listener family consumes it as a fire-time check.
+    "for_each", "for_each_target", "for_each_selected_card", "for_each_list",
+    "once_per_play", "timed_effect", "register_play_listener", "absorb_attack_damage",
 }
 
 # ``condition``/``cond`` gate a step; ``run_if`` is the same gate under a second
@@ -2234,6 +2697,14 @@ def _resolve_equipment(engine, context: Dict[str, Any], owner_id: int, selector:
 def _move_card(engine, card: CardInstance, owner_id: int, zone: str, already_detached: bool = False) -> bool:
     if not _valid_player(engine, owner_id):
         return False
+    # Round 14 / batch 2: unknown destination zones used to fall through to the
+    # discard pile.  They are an explicit error now (this helper backs
+    # ``create_card``; ``move_card`` has its own engine atom).
+    try:
+        zone = normalize_zone_name(zone, allow_equipment=False, op="create_card", param="to")
+    except V2ZoneError as exc:
+        _log_runtime_error(engine, {"source_player": owner_id}, "create_card", exc)
+        return False
     if already_detached and hasattr(engine, "_can_normally_acquire_card"):
         try:
             if not engine._can_normally_acquire_card(owner_id, card):
@@ -2406,119 +2877,43 @@ def _card_flags(card: Optional[CardInstance]) -> set:
     return flags
 
 
-def _v2_status_definition(engine, status_id: str) -> Dict[str, Any]:
-    defs = getattr(engine, "v2_status_defs", {}) or {}
-    status = defs.get(str(status_id or ""))
-    return status if isinstance(status, dict) else {}
-
-
 def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str,
                   log: Any = True) -> None:
-    """Apply a named status for the v2 runtime ``add_status`` family.
+    """Thin adapter for the v2 runtime's ``add_status`` family (Round 15 / batch 3).
 
-    ``log=False`` mutes the runtime's own status line (``log: false`` /
-    ``silent: true`` on the step); the state change is unaffected.
+    The mechanics (alias groups, frost cap, ``stacking``, achievements,
+    ``on_apply`` / ``on_remove`` events and the battle-log contract) live in
+    :meth:`game_engine.GameEngine._apply_status_op`, the same code the engine
+    atoms use, so a step behaves identically on both execution paths.
+
+    ``log`` is the step's resolved log spec: ``False`` mutes, a string is a
+    template, ``True`` asks for the classic announce line, ``None`` keeps the
+    op's default.
     """
-    def _status_log(message: str) -> None:
-        if log is not False:
-            engine.log_msg(message)
 
-    ps = engine.players[player_id]
-    status_key = str(status_id or "").split(":")[-1]
-    if status_key in ("status_immune", "immune", "状态免疫"):
-        ps.custom_statuses = getattr(ps, "custom_statuses", {})
-        before = 1 if any(int(ps.custom_statuses.get(key, 0) or 0) > 0 for key in ("status_immune", "immune", "状态免疫")) else 0
-        for key in ("status_immune", "immune", "状态免疫"):
-            ps.custom_statuses.pop(key, None)
-        if op != "remove_status" and amount > 0:
-            ps.custom_statuses["status_immune"] = 1
-        after = 1 if int(ps.custom_statuses.get("status_immune", 0) or 0) > 0 else 0
-        if op == "add_status" and before <= 0 < after:
-            _status_log(f"{engine.pn(player_id)}获得状态免疫")
-        elif op == "remove_status" and before > 0 and after <= 0:
-            _status_log(f"{engine.pn(player_id)}失去状态免疫")
-        elif op == "set_status":
-            _status_log(f"{engine.pn(player_id)}{'获得' if after else '失去'}状态免疫")
+    applier = getattr(engine, "_apply_status_op", None)
+    if not callable(applier):
         return
-    if _status_application_blocked_by_immunity(engine, player_id, status_id, amount, op):
-        return
-    if status_key in ("nazar", "邪眼", "Nazar"):
-        getter = getattr(engine, "_nazar_status_value", None)
-        before = int(getter(player_id) or 0) if callable(getter) else int(getattr(ps, "custom_statuses", {}).get("nazar", 0) or 0)
-        if op == "remove_status":
-            value = max(0, before - max(1, amount))
-        elif op == "set_status":
-            value = max(0, amount)
-        else:
-            value = max(0, before + amount)
-        setter = getattr(engine, "_set_nazar_status_value", None)
-        if callable(setter):
-            setter(player_id, value)
-        else:
-            ps.custom_statuses = getattr(ps, "custom_statuses", {})
-            ps.custom_statuses["nazar"] = value
-        after = int(getter(player_id) or 0) if callable(getter) else int(getattr(ps, "custom_statuses", {}).get("nazar", 0) or 0)
-        delta = after - before
-        label = _status_label(status_id)
-        if op == "add_status" and delta:
-            _status_log(f"{engine.pn(player_id)}+{abs(delta)}层{label}")
-        elif op == "remove_status" and delta:
-            _status_log(f"{engine.pn(player_id)}-{abs(delta)}层{label}")
-        elif op == "set_status":
-            _status_log(f"{engine.pn(player_id)}的{label}变为{after}层")
-        return
-    attr = _builtin_status_attr(status_id)
-    before = _status_stack(engine, player_id, status_id)
-    if attr:
-        current = int(getattr(ps, attr, 0) or 0)
-        if op == "remove_status":
-            value = max(0, current - max(1, amount))
-        elif op == "set_status":
-            value = max(0, amount)
-        else:
-            value = max(0, current + amount)
-        setattr(ps, attr, value)
-    else:
-        status_def = _v2_status_definition(engine, status_id)
-        stacking = str(status_def.get("stacking") or "stack")
-        ps.custom_statuses = getattr(ps, "custom_statuses", {})
-        current = int(ps.custom_statuses.get(status_id, 0) or 0)
-        if op == "remove_status":
-            value = max(0, current - max(1, amount))
-        elif op == "set_status":
-            value = 1 if stacking == "unique" and amount > 0 else max(0, amount)
-        else:
-            if stacking == "unique":
-                value = 1 if amount > 0 else current
-            elif stacking == "duration":
-                value = max(current, max(0, amount))
-            else:
-                value = max(0, current + amount)
-        keep_zero = bool(status_def.get("keep_when_zero") or status_def.get("keep_zero"))
-        if value <= 0 and not keep_zero:
-            ps.custom_statuses.pop(status_id, None)
-        else:
-            ps.custom_statuses[status_id] = max(0, value)
-    after = _status_stack(engine, player_id, status_id)
-    if before <= 0 < after and hasattr(engine, "_run_v2_status_event"):
-        engine._run_v2_status_event(player_id, status_id, "on_apply", {"amount": after - before})
-    if before > 0 and after <= 0 and hasattr(engine, "_run_v2_status_event"):
-        engine._run_v2_status_event(player_id, status_id, "on_remove", {"amount": before})
-    delta = after - before
-    label = _status_label(status_id)
-    if op == "add_status" and delta:
-        _status_log(f"{engine.pn(player_id)}+{abs(delta)}层{label}")
-    elif op == "remove_status" and delta:
-        _status_log(f"{engine.pn(player_id)}-{abs(delta)}层{label}")
-    elif op == "set_status":
-        _status_log(f"{engine.pn(player_id)}的{label}变为{after}层")
+    applier(
+        player_id, None, {}, log, op, player_id, str(status_id or ""), amount,
+        clear_all=False, context=None,
+    )
 
 
-def _status_application_blocked_by_immunity(engine, player_id: int, status_id: str, amount: int, op: str) -> bool:
-    if not _valid_player(engine, player_id):
-        return True
-    # 状态免疫不阻止状态写入，只压制状态生效。
-    return False
+def _status_log_spec(step: Any, params: Any) -> Any:
+    """Resolve a status step's ``log`` value for the shared engine implementation."""
+
+    if step_is_silent(step, params):
+        return False
+    raw = step.get("log") if isinstance(step, dict) else None
+    if raw is None and isinstance(params, dict) and params is not step:
+        raw = params.get("log")
+    if raw is None or raw is True:
+        return raw
+    if raw is False:
+        return False
+    text = str(raw)
+    return text or None
 
 
 def _status_stack(engine, player_id: int, status_id: str) -> int:
@@ -2734,7 +3129,13 @@ def _engine_effect_from_step(
     if not defer_values:
         for target_key in ("target", "targets", "owner", "effect_target", "target_player"):
             if target_key in params:
-                params[target_key] = _engine_target_selector(engine, context, params[target_key])
+                # Only the damage/status *target* keys carry wide-strike
+                # semantics; an ``owner``/``effect_target`` selector must stay a
+                # single player.
+                params[target_key] = _engine_target_selector(
+                    engine, context, params[target_key],
+                    wide_ok=target_key in ("target", "targets"),
+                )
     return {
         "type": resolved_effect_type,
         "params": params,
@@ -2780,9 +3181,9 @@ def _normalize_condition_for_engine(engine, context: Dict[str, Any], condition: 
     return {"op": "compare", "a": check_v2_condition(engine, context, condition), "operator": "==", "b": True}
 
 
-def _engine_target_selector(engine, context: Dict[str, Any], value: Any):
+def _engine_target_selector(engine, context: Dict[str, Any], value: Any, *, wide_ok: bool = True):
     if isinstance(value, list):
-        return [_engine_target_selector(engine, context, item) for item in value]
+        return [_engine_target_selector(engine, context, item, wide_ok=wide_ok) for item in value]
     if isinstance(value, dict):
         return value
     if not isinstance(value, str):
@@ -2793,6 +3194,17 @@ def _engine_target_selector(engine, context: Dict[str, Any], value: Any):
     if value in ("source", "self"):
         return "self"
     if value in ("target", "event_target", "chosen_target", "choice_target"):
+        # ``resolve_v2_target`` gives a wide-strike play its whole target list;
+        # the engine conversion has to keep that list (or a batch of status /
+        # damage steps silently drops every target but one in 3-4 player games).
+        wide_targets = context.get("wide_strike_targets") if wide_ok else None
+        if isinstance(wide_targets, list):
+            if not wide_targets:
+                return []
+            # Keep the selector symbolic: ``GameEngine._resolve_targets`` reads
+            # the same ``wide_strike_targets`` snapshot from its active effect
+            # context and expands it itself.
+            return value
         explicit_target = _explicit_target_id(engine, context)
         if explicit_target is not None:
             return explicit_target

@@ -19,6 +19,28 @@ from cards import (
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import (
+    FOR_EACH_LIMIT,
+    LoopBreak,
+    LoopContinue,
+    PILE_ZONE_NAMES,
+    SELECTOR_FILTER_KEYS,
+    SELECTOR_FIRST_KEYS,
+    SELECTOR_TARGET_KEYS,
+    V2ZoneError,
+    ZONE_NAMES,
+    ZONE_POSITIONS,
+    normalize_zone_name,
+    normalize_zone_names,
+    normalize_zone_position,
+    listener_body_from_params,
+    listener_condition_from_params,
+    listener_trigger_is_supported,
+    loop_body_from_params,
+    loop_condition,
+    normalize_compare_operators,
+    normalize_listener_trigger,
+    plan_loop,
+    run_loop_driver,
     run_v2_event,
     run_v2_steps,
     step_gate_conditions,
@@ -132,12 +154,12 @@ STATUS_FIELD_ALIASES = {
 }
 
 
-class ModLoopBreak(Exception):
-    pass
+class ModLoopBreak(LoopBreak):
+    """Engine-path ``break`` (shared loop signal, see ``mod_runtime_v2``)."""
 
 
-class ModLoopContinue(Exception):
-    pass
+class ModLoopContinue(LoopContinue):
+    """Engine-path ``continue`` (shared loop signal, see ``mod_runtime_v2``)."""
 
 
 class EquipmentInstance:
@@ -1057,9 +1079,10 @@ class GameEngine:
         'swap_hands': 'swap_hands',
         'broadcast_event': 'broadcast_event',
         'modify_damage': 'modify_damage',
-        'add_status': 'status_add_named',
-        'remove_status': 'status_remove_named',
-        'set_status': 'set_status_named',
+        # Round 15 / batch 3: ``add_status`` / ``remove_status`` / ``set_status``
+        # are real atoms again (``_atomic_add_status`` etc.) so the legacy short
+        # spellings keep their own battle-log default instead of being rewritten
+        # into the silent ``*_named`` contract.
     }
 
 
@@ -1643,6 +1666,12 @@ class GameEngine:
         }
         if status in counts:
             return int(counts.get(status, 0))
+        # Round 15 / batch 3: the union attribute table also covers statuses the
+        # hardcoded table above never knew (``attack_only`` / ``vulnerable`` /
+        # ``装备保护`` ...), so data expressions read what the status family wrote.
+        attr = self._status_attr_field(status)
+        if attr and hasattr(ps, attr):
+            return max(0, int(getattr(ps, attr, 0) or 0))
         return int(getattr(ps, 'custom_statuses', {}).get(status, 0) or 0)
 
     def _status_application_blocked(self, target_id: int, status: str) -> bool:
@@ -2936,6 +2965,7 @@ class GameEngine:
             'fire': '灼烧',
             'toxic': '淬毒',
             'dodge': '闪避',
+            'vulnerable': '易伤',
             'nazar': '邪眼',
             'sluggish': '迟缓',
             'overload': '超载',
@@ -2945,10 +2975,27 @@ class GameEngine:
             'blind': '失明',
             'heal_block': '禁疗',
             'attack_blocked': '禁攻',
+            '禁攻': '禁攻',
+            'attack_only': '仅攻击',
+            '仅攻击': '仅攻击',
+            'magic_blocked': '魔力封锁',
+            '魔力封锁': '魔力封锁',
             'weakness': '虚弱',
             'bleed': '流血',
             'fragment': '碎片',
+            'fragment_stacks': '碎片',
             'stunned': '眩晕',
+            'dizzy': '眩晕',
+            'skip_turn': '眩晕',
+            'untargetable': '无法选中',
+            '无法选中': '无法选中',
+            'status_immune': '状态免疫',
+            'immune': '状态免疫',
+            '状态免疫': '状态免疫',
+            'unable_counter': '无法反制',
+            '无法反制': '无法反制',
+            'blood_debt': '血债',
+            '血债': '血债',
             'luck': '幸运',
             'blazing_fire': '烈火',
             'frost': '霜冻',
@@ -9629,30 +9676,39 @@ class GameEngine:
         ))
 
     def _atomic_give_card_to_hand(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        # Round 14 / batch 2: 目的区自洽校验 + 位置词表校验 + ``target`` 集合语义。
+        # 标量选择器（self/target/enemy）仍旧只解析出一个目标，旧数据行为不变；
+        # 多目标选择器（all_players/play_targets…）改为每个目标各给一张。
+        self._assert_step_zone(params, 'hand', op='give_card_to_hand')
+        self._step_zone_position_or_none(params, op='give_card_to_hand')
+        target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_hand')
         card_ref = self._resolve_card_id_ref(player_id, params.get('card', ''), card)
-        ts = self.players[target_id]
-        if card_ref:
-            if card_ref == ERROR_CARD_ID or str(params.get('missing') or '').strip().lower() == 'skip':
+        if not card_ref or not target_ids:
+            return
+        missing_skip = str(params.get('missing') or '').strip().lower() == 'skip'
+        overflow_discard = str(params.get('overflow') or '').strip().lower() == 'discard'
+        for target_id in target_ids:
+            if card_ref == ERROR_CARD_ID or missing_skip:
                 if card_ref not in CARD_DEFS:
-                    return
+                    continue
             card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
             if not card_def:
-                return
-            if card_def.id == ERROR_CARD_ID and str(params.get('missing') or '').strip().lower() == 'skip':
-                return
+                continue
+            if card_def.id == ERROR_CARD_ID and missing_skip:
+                continue
             if card_def.id != ERROR_CARD_ID and not self._card_allowed(card_def.id):
-                return
+                continue
+            ts = self.players[target_id]
             if card_def.id != ERROR_CARD_ID and not ts.can_add_to_hand():
                 # ``overflow: discard`` mirrors PlayerState.add_to_hand, which
                 # sends the new card to the discard pile when the hand is full.
-                if str(params.get('overflow') or '').strip().lower() != 'discard':
-                    return
+                if not overflow_discard:
+                    continue
             new_card = CardInstance(def_id=card_def.id)
             self._apply_setup_modifiers_to_card(target_id, new_card)
             if not self._can_normally_acquire_card(target_id, new_card):
                 self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
-                return
+                continue
             ts.add_to_hand(new_card)
             self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
@@ -9679,16 +9735,21 @@ class GameEngine:
             self.log_msg(log)
 
     def _atomic_give_card_to_deck(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        # Round 14 / batch 2: 目的区（deck）+ 位置词表（top/bottom/random/random_top）
+        # 走统一校验；``position`` 的未知取值以前会被静默当成 top。
+        self._assert_step_zone(params, 'deck', op='give_card_to_deck')
+        position = self._step_zone_position(params, op='give_card_to_deck')
+        target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_deck')
         card_ref = self._resolve_card_id_ref(player_id, params.get('card', ''), card)
-        position = params.get('position', 'top')
-        ts = self.players[target_id]
-        if card_ref:
+        if not card_ref or not target_ids:
+            return
+        for target_id in target_ids:
             card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
             if not card_def:
-                return
+                continue
             if card_def.id != ERROR_CARD_ID and not self._card_allowed(card_def.id):
-                return
+                continue
+            ts = self.players[target_id]
             new_card = CardInstance(def_id=card_def.id)
             self._apply_setup_modifiers_to_card(target_id, new_card)
             raw_flags = params.get('flags')
@@ -9697,32 +9758,38 @@ class GameEngine:
                 new_card.instance_flags.update(normalize_card_flags(raw_flags))
             if not self._can_normally_acquire_card(target_id, new_card):
                 self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
-                return
+                continue
             if position == 'bottom':
                 ts.deck.append(new_card)
             elif position == 'random':
                 ts.deck.insert(random.randint(0, len(ts.deck)), new_card)
             else:
+                # ``top`` / ``random_top``（单张牌洗牌后放顶 == 放顶）
                 ts.deck.insert(0, new_card)
             self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
 
     def _atomic_give_card_to_discard(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        # Round 14 / batch 2: 目的区（discard）+ 位置词表 + ``target`` 集合语义。
+        self._assert_step_zone(params, 'discard', op='give_card_to_discard')
+        self._step_zone_position_or_none(params, op='give_card_to_discard')
+        target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_discard')
         card_ref = self._resolve_card_id_ref(player_id, params.get('card', ''), card)
-        ts = self.players[target_id]
-        if card_ref:
+        if not card_ref or not target_ids:
+            return
+        for target_id in target_ids:
             card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
             if not card_def:
-                return
+                continue
             if card_def.id != ERROR_CARD_ID and not self._card_allowed(card_def.id):
-                return
+                continue
+            ts = self.players[target_id]
             new_card = CardInstance(def_id=card_def.id)
             self._apply_setup_modifiers_to_card(target_id, new_card)
             if not self._can_normally_acquire_card(target_id, new_card):
                 self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
-                return
+                continue
             self._discard_card(ts, new_card)
             self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
@@ -10031,16 +10098,17 @@ class GameEngine:
         which may also contain ``equipment`` (the attached equipment cards).
         ``summary`` collapses the per-zone reports into one combined battle-log
         line, e.g. "玩家1使玩家2的12张攻击牌获得被揭示".
+
+        Round 14 / batch 2: 区域名走统一词表（见 mod_runtime_v2.ZONE_NAMES），
+        未知区域显式报错；``target`` 与 ``add_tag_to_zone`` 的其它同族 op 共用
+        ``first``/``exclude``/``relation``/``allow_self``/``filter`` 修饰键。
         """
-        targets = self._resolve_step_targets(player_id, card, params.get('target', 'enemy'), context)
+        targets = self._step_target_ids(
+            player_id, card, params, context, op='add_tag_to_zone', default='enemy',
+        )
         if not targets:
             return
-        raw_zones = params.get('zones', params.get('zone', 'hand'))
-        if isinstance(raw_zones, (list, tuple, set)):
-            zone_names = [str(item).strip().lower() for item in raw_zones]
-        else:
-            zone_names = [str(raw_zones or 'hand').strip().lower()]
-        zone_names = [name for name in dict.fromkeys(zone_names) if name]
+        zone_names = self._step_zone_names(params, op='add_tag_to_zone', default='hand')
         tag = str(params.get('tag', '')).strip()
         card_type_filter = str(params.get('card_type', '') or '').strip().lower()
         if not tag or not zone_names:
@@ -10056,18 +10124,7 @@ class GameEngine:
             ps = self.players[target_id]
             count = 0
             for zone_name in zone_names:
-                if zone_name == 'equipment':
-                    zone_cards = [
-                        getattr(equipment, 'card_instance', None)
-                        for equipment in list(getattr(ps, 'equipment', []) or [])
-                    ]
-                else:
-                    zone_cards = {
-                        'hand': ps.hand,
-                        'deck': ps.deck,
-                        'discard': ps.discard,
-                        'exile': ps.exile,
-                    }.get(zone_name, [])
+                zone_cards = self._player_zone_cards(ps, zone_name)
                 for candidate in list(zone_cards or []):
                     if candidate is None:
                         continue
@@ -10364,6 +10421,11 @@ class GameEngine:
         self.log_msg(log or f"{target_card.name_cn}被放逐")
 
     def _atomic_move_to_discard(self, player_id, card, params, log, choice, context):
+        # Round 14 / batch 2: 目的区自洽 + 位置词表校验（hand/discard/exile 无位置
+        # 概念，取值仍需合法）；``owner`` 是新增的目的玩家参数，旧数据不写它时
+        # 仍旧按牌的当前位置归堆。
+        self._assert_step_zone(params, 'discard', op='move_to_discard')
+        self._step_zone_position_or_none(params, op='move_to_discard')
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if not target_card:
             return
@@ -10393,8 +10455,13 @@ class GameEngine:
                 note_active_discard = active_discard
         else:
             note_active_discard = bool(count_param)
+        forced_owner_ids = self._step_target_ids(
+            player_id, card, params, context, op='move_to_discard', keys=('owner',),
+        ) if params.get('owner') is not None else []
         owner_id, _ = self._remove_card_from_current_zone(target_card)
-        if owner_id is None:
+        if forced_owner_ids:
+            owner_id = forced_owner_ids[0]
+        elif owner_id is None:
             owner_id = owner_before if owner_before is not None else player_id
         self._discard_card(self.players[owner_id], target_card)
         if note_active_discard:
@@ -10405,11 +10472,18 @@ class GameEngine:
 
     def _atomic_move_to_exile(self, player_id, card, params, log, choice, context):
         """Move a card reference into the exile zone (generic counterpart of move_to_deck)."""
+        self._assert_step_zone(params, 'exile', op='move_to_exile')
+        self._step_zone_position_or_none(params, op='move_to_exile')
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if target_card is None:
             return
+        forced_owner_ids = self._step_target_ids(
+            player_id, card, params, context, op='move_to_exile', keys=('owner',),
+        ) if params.get('owner') is not None else []
         owner_id, _ = self._remove_card_from_current_zone(target_card)
-        if owner_id is None:
+        if forced_owner_ids:
+            owner_id = forced_owner_ids[0]
+        elif owner_id is None:
             owner_id = player_id
         self._put_card_in_exile(owner_id, target_card)
         if params.get('silent') or params.get('hide_log') or log is False:
@@ -10417,55 +10491,81 @@ class GameEngine:
         self.log_msg(log or f"{target_card.name_cn}被放逐")
 
     def _atomic_remove_tag_from_zone(self, player_id, card, params, log, choice, context):
-        """Remove a tag from every card of one zone (counterpart of add_tag_to_zone)."""
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
+        """Remove a tag from every card of one zone (counterpart of add_tag_to_zone).
+
+        Round 14 / batch 2: ``zone``/``zones`` 与 ``add_tag_to_zone`` 完全对齐
+        （含 equipment 读区），未知区域显式报错；``target`` 由单目标改为选择器
+        集合语义（标量选择器行为不变）。
+        """
+        targets = self._step_target_ids(
+            player_id, card, params, context, op='remove_tag_from_zone', default='enemy',
+        )
+        zone_names = self._step_zone_names(params, op='remove_tag_from_zone', default='hand')
+        if not targets or not zone_names:
             return
-        zone = str(params.get('zone', 'hand')).lower()
         tag = str(params.get('tag', '')).strip()
         if not tag:
             return
         tag = normalize_card_flag(tag)
         card_type_filter = str(params.get('card_type', '')).strip().lower()
-        ps = self.players[target_id]
-        zone_cards = {
-            'hand': ps.hand,
-            'deck': ps.deck,
-            'discard': ps.discard,
-            'exile': ps.exile,
-        }.get(zone, [])
-        count = 0
-        for candidate in zone_cards:
-            if card_type_filter and getattr(candidate, 'card_type', '') != card_type_filter:
-                continue
-            if tag in getattr(candidate, 'instance_flags', set()):
-                candidate.instance_flags.discard(tag)
-                count += 1
-            candidate.disabled_flags.discard(tag)
+        counts = {}
+        for target_id in targets:
+            ps = self.players[target_id]
+            count = 0
+            for zone_name in zone_names:
+                for candidate in self._player_zone_cards(ps, zone_name):
+                    if candidate is None:
+                        continue
+                    if card_type_filter and getattr(candidate, 'card_type', '') != card_type_filter:
+                        continue
+                    if tag in getattr(candidate, 'instance_flags', set()):
+                        candidate.instance_flags.discard(tag)
+                        count += 1
+                    candidate.disabled_flags.discard(tag)
+            counts[target_id] = count
         if params.get('silent') or params.get('no_log') or log is False:
             return
         if log:
-            self.log_msg(self._format_step_log(log, target=self.pn(target_id), count=count))
+            for target_id in targets:
+                self.log_msg(self._format_step_log(
+                    log, target=self.pn(target_id), source=self.pn(player_id),
+                    count=counts.get(target_id, 0),
+                ))
             return
-        self.log_msg(
-            f"{self.pn(player_id)}使{self.pn(target_id)}{self._zone_log_label(zone)}中的"
-            f"{count}张牌失去{self._card_flag_log_text(tag)}"
-        )
+        zone_desc = '/'.join(self._zone_log_label(zone_name) for zone_name in zone_names)
+        for target_id in targets:
+            self.log_msg(
+                f"{self.pn(player_id)}使{self.pn(target_id)}{zone_desc}中的"
+                f"{counts.get(target_id, 0)}张牌失去{self._card_flag_log_text(tag)}"
+            )
 
     def _atomic_once_per_play(self, player_id, card, params, log, choice, context):
-        """Run nested ``steps`` at most once per play of the current card.
+        """Run nested ``body`` at most once per play of the current card.
 
-        The marker lives on the card instance and is cleared with the card's
-        other per-play state, so copies of the card stay independent.
+        Round 16 / batch 4: the listener family shares one parameter contract,
+        so this op accepts ``name`` (alias ``key``), ``body`` (aliases
+        ``steps``/``effects``), an optional fire-time ``condition`` and the
+        listener ``trigger`` (``play`` for this op).  The marker lives on the
+        card instance and is cleared with the card's other per-play state, so
+        copies of the card stay independent.
         """
         if card is None:
             return
-        key = str(params.get('key') or params.get('name') or 'effect')
+        trigger = normalize_listener_trigger('once_per_play', params.get('trigger'), default='play')
+        if not listener_trigger_is_supported('once_per_play', trigger):
+            self._log_mod_runtime_error(
+                'once_per_play', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
+            )
+            return
+        key = str(params.get('name') or params.get('key') or 'effect')
         if self._once_per_play_used(card, key):
             return
+        body = listener_body_from_params(params)
+        condition = listener_condition_from_params(params)
+        if not self._loop_iteration_allows(player_id, card, condition, context):
+            return
         self._mark_once_per_play(card, key)
-        body = params.get('steps', params.get('body', []))
-        if isinstance(body, list) and body:
+        if body:
             self._run_effect_list(player_id, card, body, choice, context)
 
     @staticmethod
@@ -10492,34 +10592,77 @@ class GameEngine:
 
     def _atomic_move_to_hand(self, player_id, card, params, log, choice, context):
         is_magnet = str(getattr(card, 'def_id', '') or '').lower().endswith('magnet')
+        # Round 14 / batch 2: 目的区自洽 + 位置词表校验；``target`` 现在按集合解析，
+        # 单张牌按顺序放进第一个装得下的手牌（``first: true`` 只试第一个目标）。
+        self._assert_step_zone(params, 'hand', op='move_to_hand')
+        self._step_zone_position_or_none(params, op='move_to_hand')
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'selected_card'}), card)
         if not target_card:
             if is_magnet:
                 self._clear_hand_reveal_for_player(player_id)
             return
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not (0 <= target_id < len(self.players)):
-            if is_magnet:
-                self._clear_hand_reveal_for_player(player_id)
-            return
-        if not self.players[target_id].can_add_to_hand():
+        target_id = -1
+        for candidate in self._step_target_ids(
+            player_id, card, params, context, op='move_to_hand', default='self',
+        ):
+            if self.players[candidate].can_add_to_hand():
+                target_id = candidate
+                break
+        if target_id < 0:
+            overflow = str(params.get('overflow') or '').strip().lower()
+            if overflow == 'discard':
+                # ``overflow: discard`` 与 ``give_card_to_hand`` 同名同义：
+                # 手牌满时不再"什么也不做"，而是把这张牌放进弃牌堆。
+                self._atomic_move_to_discard(
+                    player_id,
+                    card,
+                    {
+                        'card': params.get('card', {'ref': 'selected_card'}),
+                        'count_as_active_discard': False,
+                        'silent': True,
+                        'log': False,
+                    },
+                    False,
+                    choice,
+                    context,
+                )
             if is_magnet:
                 self._clear_hand_reveal_for_player(player_id)
             return
         owner_id, zone_name = self._remove_card_from_current_zone(target_card)
         self.players[target_id].add_to_hand(target_card)
+        # Round 14 / batch 2: 写 ``log`` 模板时按 §0.3 占位符渲染（旧数据不写它，
+        # 所以战报文本不变；``move_card(zone:"hand", log:…)`` 因此也能打印）。
+        if isinstance(log, str) and log:
+            self.log_msg(self._format_step_log(
+                log,
+                target=self.pn(target_id),
+                source=self.pn(player_id),
+                card=target_card.name_cn,
+                amount=1,
+                count=1,
+            ))
+            log = None
         if is_magnet:
             if owner_id is not None and owner_id != target_id and zone_name == 'hand':
                 self.log_msg(log or f"{self.pn(player_id)}用磁铁从{self.pn(owner_id)}手牌中获得了{target_card.name_cn}")
             self._clear_hand_reveal_for_player(player_id)
 
     def _atomic_move_to_deck(self, player_id, card, params, log, choice, context):
-        position = params.get('position', 'top')
+        # Round 14 / batch 2: 目的区自洽 + 位置词表（top/bottom/random/random_top）+
+        # 新增 ``owner``（目的玩家，缺省仍旧按牌的当前位置归堆）。
+        self._assert_step_zone(params, 'deck', op='move_to_deck')
+        position = self._step_zone_position(params, op='move_to_deck')
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if not target_card:
             return
+        forced_owner_ids = self._step_target_ids(
+            player_id, card, params, context, op='move_to_deck', keys=('owner',),
+        ) if params.get('owner') is not None else []
         owner_id, _ = self._remove_card_from_current_zone(target_card)
-        if owner_id is None:
+        if forced_owner_ids:
+            owner_id = forced_owner_ids[0]
+        elif owner_id is None:
             owner_id = player_id
         if position == 'bottom':
             self.players[owner_id].deck.append(target_card)
@@ -10527,10 +10670,51 @@ class GameEngine:
             insert_at = random.randint(0, len(self.players[owner_id].deck))
             self.players[owner_id].deck.insert(insert_at, target_card)
         else:
+            # ``top`` / ``random_top``（单张牌洗牌后放顶 == 放顶）
             self.players[owner_id].deck.insert(0, target_card)
         if params.get('silent') or params.get('no_log'):
             return
         self.log_msg(log or f"{target_card.name_cn}移入牌堆{position}")
+
+    def _atomic_move_card(self, player_id, card, params, log, choice, context):
+        """把一张牌移到任意目的区（hand/deck/discard/exile）。
+
+        Round 14 / 批次 2 的通用目的地 op：``zone``/``to`` 选目的区，
+        ``position`` 选牌堆位置，``owner`` 选目的地玩家（缺省 ``source``，与
+        Round 1 的运行时实现一致）。四个区各走对应 ``move_to_*`` 原子的同一份
+        实现，因此区域词表、位置词表与战报规则完全一致；默认仍然静默（与旧的
+        运行时 ``move_card`` 相同），写 ``log`` 或 ``log_default: true`` 才打印。
+        ``equipment`` 不是有效目的区（那是 ``place_as_equip``），会显式报错。
+        """
+        raw_zone = params.get('zone')
+        if raw_zone in (None, ''):
+            raw_zone = params.get('to')
+        if raw_zone in (None, ''):
+            raw_zone = 'discard'
+        zone_name = normalize_zone_name(
+            raw_zone, allow_equipment=False, op='move_card', param='zone',
+        )
+        forwarded = dict(params)
+        forwarded.pop('to', None)
+        forwarded['zone'] = zone_name
+        if params.get('owner') is None:
+            forwarded['owner'] = 'source'
+        if zone_name == 'hand' and params.get('overflow') is None:
+            # 旧实现：手牌满时新牌进弃牌堆。默认值保持不变，``overflow: skip``
+            # 可以显式改成"不移动"。
+            forwarded['overflow'] = 'discard'
+        if log is False or (log is None and not params.get('log_default')):
+            # 旧行为：通用 move_card 不打印默认战报（``log: false`` 同样静音，
+            # 与 §14.3 的约定一致）。
+            forwarded['silent'] = True
+        forwarded['card'] = params.get('card', {'ref': 'current_card'})
+        if zone_name == 'hand':
+            return self._atomic_move_to_hand(player_id, card, forwarded, log, choice, context)
+        if zone_name == 'deck':
+            return self._atomic_move_to_deck(player_id, card, forwarded, log, choice, context)
+        if zone_name == 'exile':
+            return self._atomic_move_to_exile(player_id, card, forwarded, log, choice, context)
+        return self._atomic_move_to_discard(player_id, card, forwarded, log, choice, context)
 
     def _atomic_global_damage_mult(self, player_id, card, params, log, choice, context):
         multiplier = params.get('multiplier', 1.0)
@@ -10585,75 +10769,288 @@ class GameEngine:
         else:
             self._run_effect_list(player_id, card, params.get('else', []), choice, context)
 
-    def _atomic_repeat(self, player_id, card, params, log, choice, context):
-        times = max(0, int(self._eval_expr(player_id, params.get('times', 1), card)))
-        body = params.get('body', [])
+    # ------------------------------------------------------------------
+    # Round 16 / batch 4: the loop family shares one driver and one parameter
+    # contract with the v2 runtime (``mod_runtime_v2.plan_loop`` /
+    # ``run_loop_driver``).  The atoms below are thin forwarders: they only
+    # adapt the engine's own value vocabulary (player selectors, the player var
+    # store, the active card choice) onto that contract.
+    # ------------------------------------------------------------------
+
+    def _engine_loop_resolver(self, engine, context, source):
+        """Engine-path loop source resolution (mirrors ``_resolve_targets``)."""
+        player_id = int((context or {}).get('loop_source_player', (context or {}).get('source_player', 0)) or 0)
+        if isinstance(source, str):
+            if source.strip().lower() in ('wide_strike_targets', 'wide_strike'):
+                card = (context or {}).get('card') if isinstance(context, dict) else None
+                return list(self._wide_strike_target_ids(player_id, card))
+            return list(self._resolve_targets(player_id, source))
+        if isinstance(source, int):
+            return [source]
+        if isinstance(source, list):
+            return [self._serializable_list_item(item) for item in source]
+        if isinstance(source, dict):
+            ref = source.get('ref') or source.get('op') or source.get('type')
+            if ref in ('wide_strike_targets', 'wide_strike'):
+                card = (context or {}).get('card') if isinstance(context, dict) else None
+                return list(self._wide_strike_target_ids(player_id, card))
+            if ref in ('list', 'list_var', 'var', 'zone_list', 'list_item', 'card_def_tags'):
+                return list(self._eval_list(player_id, source, None))
+            value = self._eval_expr(player_id, source, None)
+            if isinstance(value, list):
+                return value
+            return [] if value is None else [value]
+        return [] if source is None else [source]
+
+    def _engine_loop_limit(self, engine, context, raw, op):
+        if raw is None:
+            return FOR_EACH_LIMIT
+        if isinstance(raw, str) and raw.strip().lower() in ('all', '全部', 'unlimited', 'no_limit', 'none', 'inf', '∞'):
+            return None
+        player_id = int((context or {}).get('loop_source_player', (context or {}).get('source_player', 0)) or 0)
+        return max(0, self._eval_int(player_id, raw, None, 0))
+
+    def _loop_iteration_allows(self, player_id, card, condition, child_context) -> bool:
+        """Evaluate a loop ``condition`` with the iteration context live."""
+        if condition is None:
+            return True
+        if not isinstance(child_context, dict):
+            child_context = {}
+        previous = getattr(self, '_active_effect_context', None)
+        self._active_effect_context = child_context
+        try:
+            return bool(self._eval_condition(
+                player_id, normalize_compare_operators(condition), card,
+            ))
+        finally:
+            self._active_effect_context = previous
+
+    def _engine_loop_context(self, player_id, context):
         base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
-        for index in range(times):
-            try:
-                self._run_effect_list(player_id, card, body, choice, {**base_context, 'repeat_index': index + 1})
-            except ModLoopContinue:
-                continue
-            except ModLoopBreak:
-                break
+        base_context['loop_source_player'] = player_id
+        return base_context
+
+    def _loop_target_child_context(self, base_context, target_id, var_name=''):
+        """Per-iteration context with ``target`` rebound to ``target_id``.
+
+        Used by the ``bind: "target"`` preset (and therefore by the legacy
+        ``for_each_target`` atom): the wide-strike list is narrowed inside an
+        isolated copy of the effect context, so a body step that says
+        ``target: "target"`` hits exactly the current player and never fans back
+        out to the whole target set.
+        """
+        child = dict(base_context)
+        child['target_id'] = target_id
+        child['target_player'] = target_id
+        child.pop('wide_strike_targets', None)
+        child.pop('target_players', None)
+        child_choice = {
+            'target_player_id': target_id,
+            'target_player': target_id,
+            'target_id': target_id,
+        }
+        child['choice'] = child_choice
+        child['current_action'] = child_choice
+        child['target_player_explicit'] = True
+        child_vars = dict(child.get('vars') or {})
+        child_vars['target_player'] = target_id
+        child_vars.pop('wide_strike_targets', None)
+        if var_name:
+            child_vars[var_name] = target_id
+        child['vars'] = child_vars
+        return child, child_choice
+
+    def _engine_loop_local_var(self, base_context, var_name, value):
+        """Bind ``value`` to ``var_name`` without leaking into the outer vars."""
+        child = dict(base_context)
+        if var_name:
+            child['vars'] = {**(base_context.get('vars') or {}), var_name: value}
+        return child
+
+    def _atomic_repeat(self, player_id, card, params, log, choice, context):
+        """``repeat(times, body)`` on the shared loop driver."""
+        times = max(0, int(self._eval_expr(player_id, params.get('times', 1), card)))
+        body = loop_body_from_params(params) or params.get('body', [])
+        base_context = self._engine_loop_context(player_id, context)
+        condition = loop_condition(params)
+        var_name = str(params.get('as') or params.get('var') or '')
+        items = list(range(1, times + 1))
+        limit = self._engine_loop_limit(self, base_context, params.get('limit'), 'repeat')
+        if params.get('limit') is not None and limit is not None:
+            items = items[:limit]
+
+        def run_body(item, index):
+            child = {**base_context, 'repeat_index': item}
+            if var_name:
+                child['vars'] = {**(base_context.get('vars') or {}), var_name: item}
+            if not self._loop_iteration_allows(player_id, card, condition, child):
+                return None
+            self._run_effect_list(player_id, card, body, choice, child)
+
+        return run_loop_driver(self, items, run_body=run_body, stop_on_game_over=False, op='repeat')
 
     def _atomic_repeat_until(self, player_id, card, params, log, choice, context):
-        body = params.get('body', [])
+        """``repeat_until(condition, body)`` on the shared loop driver."""
+        body = loop_body_from_params(params) or params.get('body', [])
+        base_context = self._engine_loop_context(player_id, context)
+        var_name = str(params.get('as') or params.get('var') or '')
         max_loops = 64
-        loops = 0
-        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
-        while loops < max_loops and not self._eval_condition(player_id, params.get('condition'), card):
-            try:
-                self._run_effect_list(player_id, card, body, choice, {**base_context, 'repeat_index': loops + 1})
-            except ModLoopContinue:
-                loops += 1
-                continue
-            except ModLoopBreak:
-                break
-            loops += 1
+        limit = self._engine_loop_limit(self, base_context, params.get('limit'), 'repeat_until')
+        if params.get('limit') is not None and limit is not None:
+            max_loops = limit
+        stop_condition = params.get('condition')
+        items = list(range(1, max_loops + 1))
+
+        def run_body(item, index):
+            child = {**base_context, 'repeat_index': item}
+            if var_name:
+                child['vars'] = {**(base_context.get('vars') or {}), var_name: item}
+            # ``repeat_until`` stops as soon as the condition holds, exactly like
+            # the historical ``while not condition`` loop.
+            if self._loop_iteration_allows(player_id, card, stop_condition, child):
+                raise LoopBreak()
+            self._run_effect_list(player_id, card, body, choice, child)
+
+        return run_loop_driver(self, items, run_body=run_body, stop_on_game_over=False, op='repeat_until')
 
     def _atomic_for_each(self, player_id, card, params, log, choice, context):
-        body = params.get('body', [])
-        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
-        for index, tid in enumerate(self._resolve_targets(player_id, params.get('targets', 'friendly')), start=1):
-            try:
-                self._run_effect_list(tid, card, body, choice, {**base_context, 'loop_player_id': tid, 'loop_index': index})
-            except ModLoopContinue:
-                continue
-            except ModLoopBreak:
-                break
+        """Thin forwarder to the shared loop driver (Round 16 / batch 4).
+
+        Old engine-style data (``targets: "friendly"`` + ``body``) keeps its
+        exact behaviour: the body runs once per resolved player with that player
+        as the acting player, and ``loop_player_id``/``loop_index`` are visible
+        to the nested steps.  The unified parameters (``as``/``limit``/
+        ``condition``/``break``/``continue``) come from the same implementation
+        the v2 runtime uses.
+        """
+        base_context = self._engine_loop_context(player_id, context)
+        body = loop_body_from_params(params)
+        items, var_name, _limit = plan_loop(
+            self, base_context, params, op='for_each', default_source='friendly',
+            resolver=self._engine_loop_resolver, limit_resolver=self._engine_loop_limit,
+        )
+        condition = loop_condition(params)
+        saved = {'had': var_name in (base_context.get('vars') or {}), 'value': (base_context.get('vars') or {}).get(var_name)}
+        store = self._var_store_for_target(player_id, 'self')
+        store_had_old = var_name in store
+        store_old_value = store.get(var_name)
+        bind_mode = str(params.get('bind') or params.get('binding') or 'var').strip().lower()
+        bind_target = bind_mode in ('target', 'player', 'target_player')
+
+        def bind(item, index):
+            base_context['loop_player_id'] = item
+            base_context['loop_index'] = index
+            if var_name:
+                base_context.setdefault('vars', {})[var_name] = item
+                store[var_name] = self._serializable_list_item(item)
+
+        def unbind(paused):
+            if not var_name:
+                return
+            vars_dict = base_context.setdefault('vars', {})
+            if saved['had']:
+                vars_dict[var_name] = saved['value']
+            else:
+                vars_dict.pop(var_name, None)
+            if store_had_old:
+                store[var_name] = store_old_value
+            else:
+                store.pop(var_name, None)
+
+        def run_body(item, index):
+            # Round 16: the merged loop runs every iteration as the *source*
+            # player (the runtime contract); the iterated player stays visible
+            # through ``loop_player_id`` and the ``as`` loop variable.  The old
+            # engine-only spelling ran the body as the loop player, but no
+            # official data used that form and the two paths must now agree.
+            if bind_target:
+                try:
+                    target_id = int(item)
+                except (TypeError, ValueError):
+                    return None
+                if not self._valid_player_id(target_id):
+                    return None
+                child, child_choice = self._loop_target_child_context(base_context, target_id, var_name)
+                if not self._loop_iteration_allows(player_id, card, condition, child):
+                    return None
+                self._run_effect_list(player_id, card, body, child_choice, child)
+                return
+            if not self._loop_iteration_allows(player_id, card, condition, base_context):
+                return None
+            self._run_effect_list(player_id, card, body, choice, base_context)
+
+        return run_loop_driver(
+            self, items, run_body=run_body, bind=bind, unbind=unbind,
+            stop_on_game_over=False, op='for_each',
+        )
 
     def _atomic_for_each_selected_card(self, player_id, card, params, log, choice, context):
+        """``for_each_selected_card`` on the shared loop driver.
+
+        The active choice's ``target_instance_ids`` are the source; each
+        iteration rebinds ``chosen_card``/``selected_card`` (and
+        ``selected_card_index``) exactly like before.  ``limit``, ``condition``,
+        ``break``/``continue`` and the optional ``as`` loop variable are shared
+        with the rest of the loop family.
+        """
         active_choice = choice if isinstance(choice, dict) else getattr(self, '_active_choice', None)
         if not isinstance(active_choice, dict):
             return
         ids = active_choice.get('target_instance_ids')
         if not isinstance(ids, list):
             ids = [active_choice.get('target_instance_id')] if active_choice.get('target_instance_id') is not None else []
-        ids_snapshot = list(ids)
+        base_context = self._engine_loop_context(player_id, context)
+        body = loop_body_from_params(params)
+        items, var_name, _limit = plan_loop(
+            self, base_context, params, op='for_each_selected_card', items_override=list(ids),
+            limit_resolver=self._engine_loop_limit,
+        )
+        condition = loop_condition(params)
         original_id = active_choice.get('target_instance_id')
         original_index = active_choice.get('_selected_card_index')
         original_snapshot = active_choice.get('_selected_card_ids_snapshot')
-        body = params.get('body', [])
-        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
+        child_cell = {}
+        store = self._var_store_for_target(player_id, 'self')
+        store_had_old = var_name in store
+        store_old_value = store.get(var_name)
+
+        def bind(item, index):
+            active_choice['target_instance_id'] = item
+            active_choice['_selected_card_index'] = index
+            selected_card = self._find_card_by_instance_id(item)
+            if selected_card is not None and not self._card_selectable_by_action(selected_card):
+                selected_card = None
+            if var_name:
+                store[var_name] = self._serializable_list_item(
+                    selected_card if selected_card is not None else item
+                )
+            child = self._engine_loop_local_var(base_context, var_name, selected_card if selected_card is not None else item)
+            child['selected_card_index'] = index
+            if selected_card is not None:
+                child['chosen_card'] = selected_card
+                child['selected_card'] = selected_card
+            child_cell['context'] = child
+
+        def run_body(item, index):
+            child = child_cell.get('context') or {}
+            if not self._loop_iteration_allows(player_id, card, condition, child):
+                return None
+            self._run_effect_list(player_id, card, body, active_choice, child)
+
+        def unbind(paused):
+            if not var_name:
+                return
+            if store_had_old:
+                store[var_name] = store_old_value
+            else:
+                store.pop(var_name, None)
+
         try:
-            active_choice['_selected_card_ids_snapshot'] = ids_snapshot
-            for idx, instance_id in enumerate(ids_snapshot, start=1):
-                selected_card = self._find_card_by_instance_id(instance_id)
-                if selected_card is not None and not self._card_selectable_by_action(selected_card):
-                    selected_card = None
-                active_choice['target_instance_id'] = instance_id
-                active_choice['_selected_card_index'] = idx
-                try:
-                    child_context = {**base_context, 'selected_card_index': idx}
-                    if selected_card is not None:
-                        child_context['chosen_card'] = selected_card
-                        child_context['selected_card'] = selected_card
-                    self._run_effect_list(player_id, card, body, active_choice, child_context)
-                except ModLoopContinue:
-                    continue
-                except ModLoopBreak:
-                    break
+            active_choice['_selected_card_ids_snapshot'] = list(items)
+            return run_loop_driver(
+                self, items, run_body=run_body, bind=bind, unbind=unbind,
+                stop_on_game_over=False, op='for_each_selected_card',
+            )
         finally:
             if original_id is None:
                 active_choice.pop('target_instance_id', None)
@@ -12382,7 +12779,12 @@ class GameEngine:
         if op == 'compare':
             a = self._eval_expr(player_id, cond.get('a', 0), card)
             b = self._eval_expr(player_id, cond.get('b', 0), card)
-            cmp = cond.get('operator', '=')
+            # Round 16: the v2 spelling ``operator: "=="`` (and ``"<>"``) must
+            # mean equality/inequality here too; the old chain silently treated
+            # ``==`` as ``>=``, so an engine-path condition disagreed with the
+            # same condition on the runtime path.
+            raw_cmp = str(cond.get('operator', '=') or '=')
+            cmp = {'==': '=', '<>': '!='}.get(raw_cmp, raw_cmp)
             return (a == b) if cmp == '=' else (a != b) if cmp == '!=' else (a < b) if cmp == '<' else (a > b) if cmp == '>' else (a <= b) if cmp == '<=' else (a >= b)
         if op == 'var_compare':
             tid = self._resolve_target(player_id, cond.get('target', 'self'))
@@ -13507,7 +13909,8 @@ class GameEngine:
         except Exception:
             return list(effects or [])
 
-    def _register_timed_effect(self, owner_id: int, target_id: int, trigger: str, duration: int, effects, card=None):
+    def _register_timed_effect(self, owner_id: int, target_id: int, trigger: str, duration: int,
+                               effects, card=None, condition=None):
         if duration <= 0 or not effects:
             return
         if not hasattr(self, 'timed_effects') or not isinstance(self.timed_effects, list):
@@ -13522,6 +13925,9 @@ class GameEngine:
             'remaining': max(1, min(int(duration), 999)),
             'effects': self._clone_timer_effects(effects),
         }
+        if condition is not None:
+            cloned_condition = self._clone_timer_effects([condition])
+            entry['condition'] = cloned_condition[0] if cloned_condition else condition
         if card is not None and getattr(card, 'instance_id', None) is not None:
             entry['card_instance_id'] = card.instance_id
         self.timed_effects.append(entry)
@@ -13579,19 +13985,25 @@ class GameEngine:
             timer_card = None
             if entry.get('card_instance_id') is not None:
                 timer_card = self._find_card_by_instance_id(entry.get('card_instance_id'))
-            self._run_effect_list(
-                owner_id,
-                timer_card,
-                entry.get('effects', []),
-                None,
-                {
-                    'event': 'timed_effect',
-                    'source_id': owner_id,
-                    'target_id': target_id,
-                    'timer_current_player': current_player,
-                    'timer_remaining': remaining,
-                },
-            )
+            timer_context = {
+                'event': 'timed_effect',
+                'source_id': owner_id,
+                'target_id': target_id,
+                'timer_current_player': current_player,
+                'timer_remaining': remaining,
+            }
+            condition = entry.get('condition')
+            condition_holds = True
+            if condition is not None:
+                condition_holds = self._loop_iteration_allows(owner_id, timer_card, condition, timer_context)
+            if condition_holds:
+                self._run_effect_list(
+                    owner_id,
+                    timer_card,
+                    entry.get('effects', []),
+                    None,
+                    timer_context,
+                )
             entry['remaining'] = remaining - 1
             if entry['remaining'] > 0:
                 kept.append(entry)
@@ -13606,13 +14018,31 @@ class GameEngine:
         self.timed_effects = kept[-200:]
 
     def _atomic_timed_effect(self, player_id, card, params, log, choice, context):
+        """Register a delayed listener (Round 16 unified listener contract).
+
+        ``trigger`` (aliases ``turn_start``/``turn_end``/... normalised),
+        ``duration`` (alias ``turns``), ``body`` (aliases ``effects``/``steps``)
+        and an optional fire-time ``condition`` are shared with the rest of the
+        listener family.
+        """
         trigger = str(
-            self._step_text_value(player_id, card, params.get('trigger')) or 'target_turn_start'
+            self._step_text_value(player_id, card, params.get('trigger')) or ''
         )
+        trigger = normalize_listener_trigger('timed_effect', trigger, default='target_turn_start')
+        if not listener_trigger_is_supported('timed_effect', trigger):
+            self._log_mod_runtime_error(
+                'timed_effect', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
+            )
+            return
         duration = self._eval_int(player_id, params.get('duration', params.get('turns', 1)), card, 1)
-        effects = params.get('effects', params.get('body', [])) or []
+        if params.get('once') is True:
+            duration = 1
+        effects = listener_body_from_params(params)
+        if not effects:
+            return
+        condition = listener_condition_from_params(params)
         for target_id in self._timer_targets(player_id, params.get('target', 'self')):
-            self._register_timed_effect(player_id, target_id, trigger, duration, effects, card)
+            self._register_timed_effect(player_id, target_id, trigger, duration, effects, card, condition=condition)
 
     def _atomic_delayed_blind_next_turn(self, player_id, card, params, log, choice, context):
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
@@ -16614,7 +17044,15 @@ class GameEngine:
                 self._destroy_equipment(player_id, eq, check_protection=False)
 
     def _atomic_deal_damage(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+        # Round 15 / batch 3: the runtime branch resolves the selector as a set
+        # (``target`` may be ``all`` / a list / a wide-strike snapshot), so the
+        # engine atom iterates the same way instead of forcing one player.
+        for target_id in self._resolve_targets(player_id, params.get('target', 'enemy')):
+            self._deal_damage_to_target(player_id, card, params, log, choice, context, target_id)
+
+    def _deal_damage_to_target(self, player_id, card, params, log, choice, context, target_id):
+        """One target of a ``deal_damage`` step (shared parameter surface)."""
+
         if not self._valid_player_id(target_id):
             return
         amount = self._eval_int(player_id, params.get('amount', 6), card, 6)
@@ -16627,7 +17065,8 @@ class GameEngine:
             hits = self._card_total_hits(card, base_hits)
         else:
             hits = clamp_damage_hits(base_hits)
-        is_precision = bool(params.get('is_precision', False)) or 'precision' in self._effective_card_flags(card)
+        is_precision = bool(params.get('is_precision', params.get('precision', False)))
+        is_precision = is_precision or 'precision' in self._effective_card_flags(card)
         amount = self._modified_attack_damage(amount, card)
         self._incoming_damage_hint[target_id] = int(amount)
         crit_bonus_multiplier = 1.0
@@ -16697,6 +17136,20 @@ class GameEngine:
             child_context.setdefault('vars', {})['last_crit_hits'] = crit_hits
             self._run_effect_list(player_id, card, on_crit, choice, child_context)
         on_hit = params.get('on_hit')
+        on_hit_once = params.get('on_hit_once')
+        if dealt > 0 and isinstance(on_hit_once, list):
+            # The per-target "hit once" callback the runtime branch already had;
+            # e.g. Cryo Bomb's 5 frost layers hang off it.
+            child_context = dict(context or {})
+            child_context.update({
+                'event': 'on_hit',
+                'source_id': player_id,
+                'target_id': target_id,
+                'damage': int(dealt),
+                'last_damage': int(dealt),
+            })
+            child_context.setdefault('vars', {})['target_id'] = target_id
+            self._run_effect_list(player_id, card, on_hit_once, choice, child_context)
         if dealt > 0 and isinstance(on_hit, list):
             hit_count = 1
             try:
@@ -16746,31 +17199,48 @@ class GameEngine:
     def _atomic_random_zone_card_to_hand(self, player_id, card, params, log, choice, context):
         """Move random selectable cards from a zone into the target's hand.
 
-        ``zone`` accepts hand/deck/discard/exile, ``count`` the number of cards and
-        ``tag`` an optional card flag to stamp on each moved card (Sublime cards are
-        never selectable, exactly like every other "pick a card" effect).  A full
-        hand stops the move instead of overflowing.
+        ``zone``（或 ``zones``）接受 hand/deck/discard/exile，``count`` 是张数，
+        ``tag`` 是给每张移出的牌打的 flag（升华牌永远不可选，和其它"选一张牌"
+        的效果一致）。手牌满就停下，不会溢出。
+
+        Round 14 / batch 2: 区域名走统一词表（``draw``/``draw_pile``/
+        ``exile_pile`` 仍是别名），未知区域显式报错；``equipment`` 不是合法的
+        取牌区（要拆装备请用 ``destroy_equipment``）；``target`` 按选择器集合
+        解析，多目标时按顺序取第一个可用目标。
         """
-        target_id = self._resolve_target(player_id, params.get('target', 'target'))
-        if not self._valid_player_id(target_id):
+        target_ids = self._step_target_ids(
+            player_id, card, params, context, op='random_zone_card_to_hand', default='target',
+        )
+        zone_names = self._step_zone_names(
+            params, op='random_zone_card_to_hand', allow_equipment=False, default='discard',
+        )
+        if not target_ids or not zone_names:
             return
-        zone_name = str(params.get('zone', 'discard') or 'discard').strip().lower()
-        zone_name = {'draw': 'deck', 'draw_pile': 'deck', 'exile_pile': 'exile'}.get(zone_name, zone_name)
+        target_id = target_ids[0]
         count = max(0, self._eval_int(player_id, params.get('count', 1), card, 1))
         tag = str(params.get('tag', '') or '').strip()
         tag = normalize_card_flag(tag) if tag else ''
         target = self.players[target_id]
-        zone = getattr(target, zone_name, None)
-        if count <= 0 or not isinstance(zone, list):
+        zones = [
+            (zone_name, getattr(target, zone_name, None))
+            for zone_name in zone_names
+        ]
+        zones = [(zone_name, zone) for zone_name, zone in zones if isinstance(zone, list)]
+        if count <= 0 or not zones:
             return
         moved = 0
         for _ in range(count):
             if not target.can_add_to_hand():
                 break
-            candidates = [candidate for candidate in list(zone) if self._card_selectable_by_action(candidate)]
+            candidates = [
+                (zone_name, zone, candidate)
+                for zone_name, zone in zones
+                for candidate in list(zone)
+                if self._card_selectable_by_action(candidate)
+            ]
             if not candidates:
                 break
-            picked = random.choice(candidates)
+            _zone_name, zone, picked = random.choice(candidates)
             zone.remove(picked)
             if tag:
                 picked.instance_flags.add(tag)
@@ -16795,7 +17265,7 @@ class GameEngine:
                     source=self.pn(player_id), amount=0, count=0,
                 ))
             return
-        zone_label = self._zone_log_label(zone_name)
+        zone_label = '/'.join(self._zone_log_label(zone_name) for zone_name in zone_names)
         if moved > 0:
             extra = f"并使其获得{self._card_flag_log_text(tag)}" if tag else ''
             self.log_msg(f"{self.pn(target_id)}从{zone_label}中随机获得{moved}张牌{extra}")
@@ -16850,6 +17320,138 @@ class GameEngine:
             return self._list_effect_targets(player_id, card, selector, context)
         target_id = self._resolve_target(player_id, selector)
         return [target_id] if self._valid_player_id(target_id) else []
+
+    # ------------------------------------------------------------------
+    # Round 14 / 批次 2：区域、位置与选择器的统一入口
+    #
+    # 词表（hand/deck/discard/exile/equipment、top/bottom/random/random_top）
+    # 单点定义在 mod_runtime_v2，两条执行路径共用；这里只做"从步骤参数里取
+    # 出来 + 落到引擎的解析器上"。未知区域/位置抛 V2ZoneError，由
+    # `_run_effect_list` 记成 mod 运行时错误（不再静默变成"什么也不做"或
+    # "进弃牌堆"）。
+    # ------------------------------------------------------------------
+    def _step_zone_names(self, params, *, op, allow_equipment=True, default='hand'):
+        """步骤的区域参数：``zones``（多区，优先）或 ``zone``（单区）。
+
+        参数缺失/为空时用 ``default``（与旧行为一致）；写了**不认识**的区域名则
+        显式报错。
+        """
+        raw = params.get('zones')
+        if raw is None:
+            raw = params.get('zone', default)
+        if raw in (None, ''):
+            raw = default
+        return normalize_zone_names(raw, allow_equipment=allow_equipment, op=op, param='zone/zones')
+
+    @staticmethod
+    def _player_zone_cards(ps, zone_name):
+        """One player's cards in a zone; ``equipment`` yields the attached instances."""
+        if zone_name == 'equipment':
+            return [
+                getattr(equipment, 'card_instance', None)
+                for equipment in list(getattr(ps, 'equipment', []) or [])
+            ]
+        return list(getattr(ps, zone_name, []) or [])
+
+    def _assert_step_zone(self, params, expected, *, op, allow_equipment=False):
+        """目的区由 op 名决定；数据若另写 ``zone``/``to`` 就必须自洽。
+
+        ``move_to_deck(zone:"hand")`` 这类自相矛盾的写法以前会被静默忽略
+        （按 op 名入堆），现在直接报错，避免"看着像改了目的区"的假象。
+        """
+        raw = params.get('zone')
+        if raw in (None, ''):
+            raw = params.get('to')
+        if raw in (None, ''):
+            return expected
+        canonical = normalize_zone_name(
+            raw, allow_equipment=allow_equipment, op=op, param='zone',
+        )
+        if canonical != expected:
+            raise V2ZoneError(
+                f"{op} 的目的区固定为 {expected}，数据里的 zone/to={raw!r} 与它冲突；"
+                f"要改目的区请用 move_card(zone=...)"
+            )
+        return expected
+
+    def _step_zone_position(self, params, *, op, default='top'):
+        """统一位置参数（``random_top`` 对单张牌等同 ``top``）。"""
+        return normalize_zone_position(params.get('position', default), op=op)
+
+    def _step_zone_position_or_none(self, params, *, op):
+        """给 hand/discard/exile 用的位置参数：只校验取值，不改变落点。"""
+        if params.get('position') in (None, ''):
+            return None
+        return normalize_zone_position(params.get('position'), op=op)
+
+    def _step_target_ids(self, player_id, card, params, context=None, *,
+                         op, default='self', keys=SELECTOR_TARGET_KEYS):
+        """统一的玩家选择器解析：集合语义 + ``first``/``exclude``/``relation``/
+        ``allow_self``/``filter`` 修饰键。
+
+        标量选择器（``self``/``enemy``/``target``…）仍然解析成一个目标，只有显式
+        列表、已知多目标选择器（``all_players``/``play_targets``…）或
+        ``wide_strike_targets`` 上下文才展开——旧写法因此保持原样。
+        """
+        raw = None
+        for key in keys:
+            if params.get(key) is not None:
+                raw = params.get(key)
+                break
+        if raw is None:
+            raw = default
+        targets = self._list_effect_targets(player_id, card, raw, context)
+
+        exclude_ref = params.get('exclude')
+        if exclude_ref is not None and targets:
+            excluded = set()
+            refs = exclude_ref if isinstance(exclude_ref, (list, tuple, set)) else [exclude_ref]
+            for ref in refs:
+                for target_id in self._list_effect_targets(player_id, card, ref, context):
+                    excluded.add(target_id)
+            if excluded:
+                targets = [target_id for target_id in targets if target_id not in excluded]
+
+        if params.get('allow_self') is False:
+            targets = [target_id for target_id in targets if target_id != player_id]
+
+        relation = str(params.get('relation', '') or '').strip().lower()
+        if relation and relation != 'any':
+            if relation in ('enemy', 'enemies', 'opponent', 'opponents'):
+                targets = [
+                    target_id for target_id in targets
+                    if self._opposite_timer_side(player_id, target_id)
+                ]
+            elif relation in ('friendly', 'ally', 'allies', 'team', 'same_side'):
+                targets = [
+                    target_id for target_id in targets
+                    if self._same_timer_side(player_id, target_id)
+                ]
+            else:
+                raise V2ZoneError(
+                    f"{op} 的 relation 不支持取值 {relation!r}；只支持 enemy/friendly"
+                )
+
+        filter_spec = None
+        for key in SELECTOR_FILTER_KEYS:
+            if params.get(key) is not None:
+                filter_spec = params.get(key)
+                break
+        if filter_spec is not None and targets:
+            targets = [
+                target_id for target_id in targets
+                if self._eval_condition(target_id, filter_spec, card)
+            ]
+
+        for key in SELECTOR_FIRST_KEYS:
+            value = params.get(key)
+            if value in (None, False):
+                continue
+            if isinstance(value, str) and value.strip().lower() in ('false', 'no', 'off', '0'):
+                continue
+            targets = targets[:1]
+            break
+        return targets
 
     def _resolve_step_number(self, player_id, value, card=None, default=0) -> int:
         """Evaluate a step number, preferring the effect context for ``var``.
@@ -16940,11 +17542,16 @@ class GameEngine:
         each) or ``random_top`` (shuffle the moved cards first, then put the whole
         block on top - the desert compass order).
         """
-        owner_selector = params.get('owner', params.get('target', 'self'))
-        owner_id = self._resolve_target(player_id, owner_selector)
-        if not self._valid_player_id(owner_id):
-            owner_id = player_id
-        position = str(params.get('position', 'top') or 'top').strip().lower()
+        # Round 14 / batch 2: 目的区（deck）+ 位置词表（含 random_top 及其历史别名
+        # ``shuffled_top``）走统一校验；``owner``/``target`` 按选择器解析，一批牌
+        # 只能进一个牌堆，所以取第一个有效目标。
+        self._assert_step_zone(params, 'deck', op='move_cards_to_deck')
+        position = self._step_zone_position(params, op='move_cards_to_deck')
+        owner_ids = self._step_target_ids(
+            player_id, card, params, context, op='move_cards_to_deck',
+            default='self', keys=('owner', 'target'),
+        )
+        owner_id = owner_ids[0] if owner_ids else player_id
         raw_ref = params.get('cards', 'selected_cards')
         batch = self._resolve_step_card_batch(player_id, card, raw_ref, context, choice)
         if not batch and isinstance(raw_ref, str) and raw_ref.strip().lower() in ('hand', 'deck', 'discard', 'exile'):
@@ -16973,7 +17580,7 @@ class GameEngine:
             return
         if position == 'bottom':
             ps.deck.extend(moved)
-        elif position in ('random_top', 'shuffled_top'):
+        elif position == 'random_top':
             random.shuffle(moved)
             ps.deck[0:0] = moved
         elif position == 'random':
@@ -16991,7 +17598,7 @@ class GameEngine:
             return
         if position == 'bottom':
             self.log_msg(f"{self.pn(owner_id)}将{len(moved)}张牌置于抽牌堆底")
-        elif position in ('random_top', 'shuffled_top'):
+        elif position == 'random_top':
             self.log_msg(f"{self.pn(owner_id)}将{len(moved)}张牌随机置于抽牌堆顶")
         elif position == 'random':
             self.log_msg(f"{self.pn(owner_id)}将{len(moved)}张牌随机放入抽牌堆")
@@ -17293,6 +17900,12 @@ class GameEngine:
                     'vars': child_vars,
                 })
                 self._run_effect_list(player_id, card, on_hit, choice, child_context)
+        if log is not False and log:
+            # A data-authored summary line, same contract as ``deal_damage``.
+            self.log_msg(self._format_step_log(
+                log, target=self.pn(target_id), source=self.pn(player_id),
+                amount=int(total), damage=int(total),
+            ))
 
     def _atomic_lifesteal_damage(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
@@ -17534,11 +18147,17 @@ class GameEngine:
         limits how many cards are affected (``random`` picks a random sample),
         ``card_type`` filters by card type, and ``tag`` adds the flag that makes
         the client show the layer badge next to the card.
+
+        Round 14 / batch 2: ``zones``（多区）与 ``add_tag_to_zone`` 完全对齐，
+        未知区域显式报错（以前会被静默跳过）；``silent``/``no_log``/``log:false``
+        与同族 op 一样能压掉默认战报（以前只有 ``log`` 能覆盖）；``target`` 走统一
+        选择器解析。
         """
-        target_ids = self._list_effect_targets(player_id, card, params.get('target', 'self'), context)
-        if not target_ids:
+        target_ids = self._step_target_ids(player_id, card, params, context, op='card_prop_add_to_zone')
+        zone_names = self._step_zone_names(params, op='card_prop_add_to_zone', default='hand')
+        if not target_ids or not zone_names:
             return
-        zone_name = str(params.get('zone', 'hand') or 'hand').lower()
+        silent = bool(params.get('silent') or params.get('no_log')) or log is False
         prop = str(params.get('property') or params.get('prop') or '')
         if not prop:
             return
@@ -17549,15 +18168,11 @@ class GameEngine:
         count_param = params.get('count')
         for target_id in target_ids:
             ps = self.players[target_id]
-            zone = {
-                'hand': ps.hand,
-                'deck': ps.deck,
-                'discard': ps.discard,
-                'exile': ps.exile,
-                'equipment': [getattr(eq, 'card_instance', None) for eq in ps.equipment],
-            }.get(zone_name)
-            if zone is None:
-                continue
+            zone = [
+                candidate
+                for zone_name in zone_names
+                for candidate in self._player_zone_cards(ps, zone_name)
+            ]
             candidates = [
                 candidate for candidate in list(zone or [])
                 if candidate is not None
@@ -17590,7 +18205,7 @@ class GameEngine:
                     candidate.instance_flags.add(tag)
                     candidate.disabled_flags.discard(tag)
                 changed += 1
-            if changed <= 0 or log is False:
+            if changed <= 0 or silent:
                 continue
             default_log = (
                 f"{self.pn(player_id)}使{self.pn(target_id)}的{changed}张牌获得"
@@ -17775,21 +18390,35 @@ class GameEngine:
             return
         source = str(params.get('source', getattr(card, 'name_cn', '反击')))
         damage_type = params.get('damage_type', DAMAGE_TYPE_PHYSICAL)
-        damage_tag = params.get('damage_tag', DAMAGE_TAG_DIRECT)
+        damage_tag = params.get('damage_tag')
         target_ref = params.get('target', 'target')
         if target_ref in ('all_enemies', 'enemies'):
             targets = list(self.get_all_enemies(player_id)) if hasattr(self, 'get_all_enemies') else [1 - player_id]
         else:
             targets = self._resolve_targets(player_id, target_ref)
-        mode = str(params.get('mode', params.get('damage_mode', 'attack')) or 'attack').lower()
+        # Round 15 / batch 3: the runtime branch always defaulted to ``direct``;
+        # the engine atom used to default to ``attack``, so the same step could
+        # resolve differently depending on where it was nested.
+        mode = str(params.get('mode', params.get('damage_mode', 'direct')) or 'direct').lower()
+        total = 0
         for tid in targets:
             if 0 <= tid < len(self.players):
                 if mode in ('direct', 'effect'):
-                    self._deal_direct_damage(tid, amount, source, player_id, damage_type=damage_type, damage_tag=damage_tag)
+                    total += int(self._deal_direct_damage(
+                        tid, amount, source, player_id,
+                        damage_type=damage_type, damage_tag=damage_tag,
+                    ) or 0)
                 else:
-                    self.deal_attack_damage(tid, amount, 1, is_precision=False, attacker_id=player_id)
+                    total += int(self.deal_attack_damage(
+                        tid, amount, 1, is_precision=False, attacker_id=player_id,
+                    ) or 0)
+        if isinstance(context, dict):
+            context['last_damage'] = int(total)
         if log:
-            self.log_msg(log)
+            self.log_msg(self._format_step_log(
+                log, target=self.pn(targets[0]) if targets else '',
+                source=self.pn(player_id), amount=int(total), damage=int(total),
+            ))
 
     def _atomic_lose_health(self, player_id, card, params, log, choice, context):
         amount = max(0, self._eval_int(player_id, params.get('amount', 0), card))
@@ -18346,31 +18975,50 @@ class GameEngine:
         self._destroy_equipment(player_id, eq, check_protection=False)
 
     def _atomic_for_each_target(self, player_id, card, params, log, choice, context):
-        """Run ``body`` once per selectable target, rebinding the target context.
+        """Thin forwarder for the ``for_each_target`` preset (Round 16).
 
-        Generic counterpart of the old ``ocean_for_each_selectable_target``:
-        wide-strike cards (liquid nitrogen, holy water, magma ...) use it to fan
-        a single data step out over every selectable opponent.
+        Equivalent to ``for_each(source: "wide_strike_targets", bind: "target")``:
+        the body runs once per selectable wide-strike target with ``target``
+        rebound to that player inside an isolated copy of the effect context, so
+        a card never fans back out to the whole target set.
         """
-        body = params.get('body') or params.get('steps') or []
-        if not isinstance(body, list):
+        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
+        body = loop_body_from_params(params)
+        if not body:
             return
-        for target_id in self._wide_strike_target_ids(player_id, card):
-            if self.game_over:
-                break
-            child_context = dict(context or {})
-            child_context.update({'target_id': target_id, 'target_player': target_id})
-            child_context.pop('wide_strike_targets', None)
-            child_context.pop('target_players', None)
-            child_choice = {'target_player_id': target_id, 'target_player': target_id, 'target_id': target_id}
-            child_context['choice'] = child_choice
-            child_context['current_action'] = child_choice
-            child_context['target_player_explicit'] = True
-            vars_dict = dict(child_context.get('vars') or {})
-            vars_dict['target_player'] = target_id
-            vars_dict.pop('wide_strike_targets', None)
-            child_context['vars'] = vars_dict
+        items, var_name, _limit = plan_loop(
+            self, base_context, params, op='for_each_target',
+            source_override='wide_strike_targets', default_var='item',
+            resolver=lambda engine, ctx, source: list(self._wide_strike_target_ids(player_id, card)),
+            limit_resolver=self._engine_loop_limit,
+        )
+        condition = loop_condition(params)
+        store = self._var_store_for_target(player_id, 'self')
+        store_had_old = var_name in store
+        store_old_value = store.get(var_name)
+
+        def bind(item, index):
+            if var_name:
+                store[var_name] = self._serializable_list_item(item)
+
+        def unbind(paused):
+            if not var_name:
+                return
+            if store_had_old:
+                store[var_name] = store_old_value
+            else:
+                store.pop(var_name, None)
+
+        def run_body(target_id, index):
+            child_context, child_choice = self._loop_target_child_context(base_context, target_id, var_name)
+            if not self._loop_iteration_allows(player_id, card, condition, child_context):
+                return None
             self._run_effect_list(player_id, card, body, child_choice, child_context)
+
+        return run_loop_driver(
+            self, items, run_body=run_body, bind=bind, unbind=unbind,
+            stop_on_game_over=True, op='for_each_target',
+        )
 
     def _prepare_ocean_charge_for_play(self, card: Optional[CardInstance]):
         if card is None:
@@ -18982,7 +19630,16 @@ class GameEngine:
             if not isinstance(entries, list):
                 events.pop(key, None)
                 continue
-            kept = [entry for entry in entries if int(entry.get('owner_id', -1)) != int(owner_id)]
+            # Round 16: ``duration`` joins the listener contract; a default
+            # ``turn`` absorber expires with its owner's turn exactly as before,
+            # a longer-lived one is kept.
+            kept = [
+                entry for entry in entries
+                if not (
+                    int(entry.get('owner_id', -1)) == int(owner_id)
+                    and str(entry.get('duration') or 'turn') == 'turn'
+                )
+            ]
             if kept:
                 events[key] = kept
             else:
@@ -18997,7 +19654,18 @@ class GameEngine:
         from inside ``deal_attack_damage`` -- the same hook the legacy copper rod
         used -- so the damage never lands and ``body`` runs with
         ``vars['absorbed_damage']`` set to the prevented amount.
+
+        Round 16 shares the listener contract: ``trigger`` (``attack_hit``),
+        ``duration`` (default ``turn``), ``body`` (aliases
+        ``effects``/``steps``), an optional fire-time ``condition`` and
+        ``once`` (default true, preserving the historical one-shot absorber).
         """
+        trigger = normalize_listener_trigger('absorb_attack_damage', params.get('trigger'), default='attack_hit')
+        if not listener_trigger_is_supported('absorb_attack_damage', trigger):
+            self._log_mod_runtime_error(
+                'absorb_attack_damage', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
+            )
+            return
         live_context = context if isinstance(context, dict) else {}
         scope = str(params.get('scope', 'responded_card') or 'responded_card')
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -19022,8 +19690,10 @@ class GameEngine:
             'owner_id': player_id,
             'target_id': target_id,
             'source_card': card.to_dict() if card is not None else None,
-            'effects': params.get('body') or params.get('steps') or [],
+            'effects': listener_body_from_params(params),
             'once': params.get('once', True) is not False,
+            'duration': str(params.get('duration', params.get('turns', 'turn')) or 'turn'),
+            'condition': listener_condition_from_params(params),
         })
         if log is not False and log:
             self.log_msg(self._format_step_log(log, target=self.pn(target_id), source=self.pn(player_id)))
@@ -19056,6 +19726,21 @@ class GameEngine:
                 break
         if entry is None:
             return False
+        condition = entry.get('condition')
+        if condition is not None:
+            gate_context = {
+                'source_player': int(entry.get('owner_id', target_id) or target_id),
+                'target_player': int(target_id),
+                'source_id': int(attacker_id),
+                'target_id': int(target_id),
+            }
+            if not self._loop_iteration_allows(
+                int(entry.get('owner_id', target_id) or target_id),
+                source_card,
+                condition,
+                gate_context,
+            ):
+                return False
         if entry.get('once', True) is not False:
             entries = events.get(used_key) or []
             try:
@@ -19143,7 +19828,16 @@ class GameEngine:
         The body runs through the engine effect pipeline with the *source* card
         put back into the context, so ``deal_damage`` keeps applying the card's
         own power/fusion modifiers exactly like the legacy snowball atom did.
+        Round 16 shares the listener contract: ``trigger`` (``play``),
+        ``duration`` (alias ``turns``), ``body`` (aliases ``effects``/``steps``),
+        an optional fire-time ``condition`` and an optional ``once``.
         """
+        trigger = normalize_listener_trigger('register_play_listener', params.get('trigger'), default='play')
+        if not listener_trigger_is_supported('register_play_listener', trigger):
+            self._log_mod_runtime_error(
+                'register_play_listener', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
+            )
+            return
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if not self._valid_player_id(target_id):
             return
@@ -19151,18 +19845,20 @@ class GameEngine:
         if not isinstance(entries, list):
             entries = []
             self.players[player_id].custom_vars[PLAY_LISTENERS_KEY] = entries
-        body = params.get('body') or params.get('steps') or []
+        body = listener_body_from_params(params)
         entries.append({
             'owner_id': player_id,
             'target_id': target_id,
             'source_card': card.to_dict() if card is not None else None,
-            'effects': body if isinstance(body, list) else [],
-            'duration': str(params.get('duration', 'turn') or 'turn'),
+            'effects': body,
+            'duration': str(params.get('duration', params.get('turns', 'turn')) or 'turn'),
             'scope': str(params.get('scope', 'owner_turn') or 'owner_turn'),
             'exclude_ids': [
                 str(item) for item in (params.get('exclude_card_ids') or [])
                 if str(item)
             ],
+            'condition': listener_condition_from_params(params),
+            'once': params.get('once') is True,
         })
         if log is not False and log:
             self.log_msg(self._format_step_log(log, target=self.pn(target_id), source=self.pn(player_id)))
@@ -19220,7 +19916,15 @@ class GameEngine:
                     'listener_played_card_def_id': played_id,
                 },
             }
+            condition = entry.get('condition')
+            if condition is not None and not self._loop_iteration_allows(player_id, source_card, condition, context):
+                continue
             self._run_effect_list(player_id, source_card, body, None, context)
+            if entry.get('once') is True:
+                try:
+                    entries.remove(entry)
+                except ValueError:
+                    pass
 
     def _atomic_card_var_set(self, player_id, card, params, log, choice, context):
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
@@ -19440,60 +20144,69 @@ class GameEngine:
         (each definition contributes ``count`` entries) among the allowed card
         pool, Sublime cards are never produced, and equipment keeps the armor it
         already had and re-runs its equip steps.
+
+        Round 14 / batch 2: ``owner``/``target`` 走统一选择器解析（多目标时逐人
+        变换自己区域里的牌；标量选择器仍是单目标），``zone``/``zones`` 走统一
+        区域词表，未知区域显式报错。``zones`` 里的 ``equipment`` 依旧由
+        ``equipment_card_type`` 控制。
         """
-        owner_id = self._resolve_target(player_id, params.get('owner', params.get('target', 'self')))
-        if not self._valid_player_id(owner_id):
+        owner_ids = self._step_target_ids(
+            player_id, card, params, context, op='transform_cards',
+            default='self', keys=('owner', 'target'),
+        )
+        zones = self._step_zone_names(
+            params, op='transform_cards',
+            default=('hand', 'deck', 'discard', 'exile'),
+        )
+        if not owner_ids or not zones:
             return
-        zones = params.get('zones')
-        if not isinstance(zones, (list, tuple)) or not zones:
-            zones = ['hand', 'deck', 'discard', 'exile']
-        zones = [str(zone) for zone in zones]
         same_type = str(params.get('card_type', 'same') or 'same')
         include_self = params.get('exclude_self', True) is False
-        ps = self.players[owner_id]
-        for zone in zones:
-            if zone == 'equipment':
-                continue
-            cards = list(getattr(ps, zone, []) or [])
-            for index, old_card in enumerate(cards):
-                card_type = None if same_type in ('same', '') else same_type
-                if card_type is None:
-                    card_type = getattr(old_card, 'card_type', '') or None
-                exclude = {getattr(old_card, 'def_id', '')} if not include_self else set()
-                new_id = self._void_weighted_card_id(card_type, exclude=exclude)
+        equipment_type = str(params.get('equipment_card_type', 'root') or 'root')
+        for owner_id in owner_ids:
+            ps = self.players[owner_id]
+            for zone in zones:
+                if zone == 'equipment':
+                    continue
+                cards = list(getattr(ps, zone, []) or [])
+                for index, old_card in enumerate(cards):
+                    card_type = None if same_type in ('same', '') else same_type
+                    if card_type is None:
+                        card_type = getattr(old_card, 'card_type', '') or None
+                    exclude = {getattr(old_card, 'def_id', '')} if not include_self else set()
+                    new_id = self._void_weighted_card_id(card_type, exclude=exclude)
+                    if not new_id:
+                        continue
+                    zone_list = getattr(ps, zone)
+                    if index < len(zone_list) and zone_list[index] is old_card:
+                        zone_list[index] = self._fresh_void_transformed_card(owner_id, new_id)
+            transformed_equipment = []
+            for eq in list(getattr(ps, 'equipment', []) or []):
+                exclude = {getattr(eq, 'def_id', '')} if not include_self else set()
+                new_id = self._void_weighted_card_id(equipment_type, exclude=exclude)
                 if not new_id:
                     continue
-                zone_list = getattr(ps, zone)
-                if index < len(zone_list) and zone_list[index] is old_card:
-                    zone_list[index] = self._fresh_void_transformed_card(owner_id, new_id)
-        equipment_type = str(params.get('equipment_card_type', 'root') or 'root')
-        transformed_equipment = []
-        for eq in list(getattr(ps, 'equipment', []) or []):
-            exclude = {getattr(eq, 'def_id', '')} if not include_self else set()
-            new_id = self._void_weighted_card_id(equipment_type, exclude=exclude)
-            if not new_id:
-                continue
-            armor = getattr(eq, 'armor', 0)
-            target = getattr(eq, 'effect_target', owner_id)
-            self._cleanup_equipment_derived_effects(owner_id, eq, run_destroy_event=False)
-            eq.card_instance = self._fresh_void_transformed_card(owner_id, new_id)
-            eq.armor = armor
-            eq.turns_equipped = 0
-            eq.uses_this_turn = 0
-            eq.corruption_active = False
-            eq.custom_vars = {}
-            flags = self._effective_card_flags(eq.card_instance)
-            eq.effect_target = owner_id if 'self_only' in flags else target
-            if self._equipment_uses_non_stack_rule(eq):
-                self._ensure_non_stack_equipment_order(eq)
-            transformed_equipment.append(eq)
-        if params.get('run_equip_effects', True) is not False:
-            for eq in transformed_equipment:
-                self._run_void_transformed_equipment_on_equip(owner_id, eq)
-        self._refresh_hand_limit_bonuses()
-        self._refresh_equipment_derived_player_flags(owner_id)
-        if log is not False and log:
-            self.log_msg(self._format_step_log(log, target=self.pn(owner_id), source=self.pn(player_id)))
+                armor = getattr(eq, 'armor', 0)
+                target = getattr(eq, 'effect_target', owner_id)
+                self._cleanup_equipment_derived_effects(owner_id, eq, run_destroy_event=False)
+                eq.card_instance = self._fresh_void_transformed_card(owner_id, new_id)
+                eq.armor = armor
+                eq.turns_equipped = 0
+                eq.uses_this_turn = 0
+                eq.corruption_active = False
+                eq.custom_vars = {}
+                flags = self._effective_card_flags(eq.card_instance)
+                eq.effect_target = owner_id if 'self_only' in flags else target
+                if self._equipment_uses_non_stack_rule(eq):
+                    self._ensure_non_stack_equipment_order(eq)
+                transformed_equipment.append(eq)
+            if params.get('run_equip_effects', True) is not False:
+                for eq in transformed_equipment:
+                    self._run_void_transformed_equipment_on_equip(owner_id, eq)
+            self._refresh_hand_limit_bonuses()
+            self._refresh_equipment_derived_player_flags(owner_id)
+            if log is not False and log:
+                self.log_msg(self._format_step_log(log, target=self.pn(owner_id), source=self.pn(player_id)))
 
     def _garden_refresh_coal_cards(self):
         return
@@ -19912,108 +20625,352 @@ class GameEngine:
                 break
 
     def _atomic_status_add_named(self, player_id, card, params, log, choice, context):
+        self._apply_status_add_family(player_id, card, params, log, op='status_add_named')
+
+    # 旧写法（add_status / remove_status / set_status）：步骤没有写 ``log`` 时沿用
+    # 历史默认文案（"+N层X"），规范写法 ``*_named`` 则保持安静。
+    STATUS_LEGACY_ANNOUNCING_OPS = ('add_status', 'remove_status', 'set_status')
+
+    def _atomic_add_status(self, player_id, card, params, log, choice, context):
+        """旧写法 ``add_status``：与 ``status_add_named`` 同一实现，默认播报层数。"""
+
+        self._apply_status_add_family(player_id, card, params, log, op='add_status')
+
+    def _atomic_set_status(self, player_id, card, params, log, choice, context):
+        self._apply_status_add_family(player_id, card, params, log, op='set_status')
+
+    def _atomic_set_status_named(self, player_id, card, params, log, choice, context):
+        self._apply_status_add_family(player_id, card, params, log, op='set_status_named')
+
+    def _status_family_status_list(self, player_id, card, params):
         raw_statuses = params.get('statuses')
         if isinstance(raw_statuses, (list, tuple)):
-            status_list = [
+            return [
                 str(self._step_text_value(player_id, card, item)).strip()
                 for item in raw_statuses
                 if str(self._step_text_value(player_id, card, item)).strip()
             ]
-        else:
-            status_list = [str(self._step_text_value(player_id, card, params.get('status', ''))).strip()]
+        return [str(self._step_text_value(player_id, card, params.get('status', ''))).strip()]
+
+    def _apply_status_add_family(self, player_id, card, params, log, *, op):
+        """Target / amount resolution shared by the ``add`` and ``set`` spellings."""
+
+        status_list = self._status_family_status_list(player_id, card, params)
         if not any(status_list):
             return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        default_amount = params.get('stack', 1) if op in ('set_status', 'set_status_named') else 1
+        amount = self._eval_int(player_id, params.get('amount', default_amount), card, 1)
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
             for status in status_list:
-                self._apply_named_status_step(player_id, card, params, log, tid, status, amount)
+                self._apply_status_op(
+                    player_id, card, params, log, op, tid, status, amount,
+                    clear_all=False, context=None,
+                )
 
     def _apply_named_status_step(self, player_id, card, params, log, tid, status: str, amount: int):
-        if not status:
+        """Backwards-compatible wrapper for the pre-batch-3 entry point."""
+
+        self._apply_status_op(
+            player_id, card, params, log, 'status_add_named', tid, status, amount,
+            clear_all=False, context=None,
+        )
+
+    def _status_attr_field(self, status: str) -> str:
+        """Player attribute that stores *status* (union of both historic maps)."""
+
+        return {
+            'poison': 'poison', '中毒': 'poison', 'p': 'poison',
+            'burn': 'fire', 'fire': 'fire', '灼烧': 'fire', 'f': 'fire',
+            'toxic': 'toxic', '淬毒': 'toxic',
+            'dodge': 'dodge', '闪避': 'dodge',
+            'vulnerable': 'vulnerable',
+            'armor': 'armor',
+            'equip_protection': 'equipment_protection',
+            'equipment_protection': 'equipment_protection',
+            '装备摧毁保护': 'equipment_protection', '装备保护': 'equipment_protection',
+            'sluggish': 'sluggish', '迟缓': 'sluggish',
+            'overload': 'overload', '超载': 'overload',
+            'foresight': 'foresight', '预知': 'foresight',
+            'fracture': 'fracture', '破损': 'fracture',
+            'stagnation': 'stagnation', '滞留': 'stagnation',
+            'blind': 'blind', '失明': 'blind',
+            'heal_block': 'heal_block', '禁疗': 'heal_block',
+            'attack_blocked': 'attack_blocked', '禁攻': 'attack_blocked',
+            'attack_only': 'attack_only', '仅攻击': 'attack_only',
+            'weakness': 'weakness', '虚弱': 'weakness',
+            'bleed': 'bleed', '流血': 'bleed',
+            'fragment': 'fragment_stacks', 'fragment_stacks': 'fragment_stacks', '碎片': 'fragment_stacks',
+            'stunned': 'skip_turn', 'dizzy': 'skip_turn', 'skip_turn': 'skip_turn', '眩晕': 'skip_turn',
+            'untargetable': 'untargetable', '无法选中': 'untargetable',
+        }.get(str(status or '').strip(), '')
+
+    def _status_stack_value(self, target_id: int, status_id) -> int:
+        """Layers of *status_id* as the engine reads them (immunity suppresses).
+
+        Reading through the engine helpers (frost / nazar / unable-counter alias
+        groups included) is what lets both execution paths observe the same
+        stack, including for old rooms whose alias keys are still spread out.
+        """
+
+        if not self._valid_player_id(target_id):
+            return 0
+        status_text = str(status_id or '').strip()
+        if not status_text:
+            return 0
+        immune_key = status_text.split(':')[-1] in ('status_immune', 'immune', '状态免疫')
+        if immune_key:
+            return 1 if self._is_status_immune(target_id) else 0
+        if self._is_status_immune(target_id):
+            # 状态免疫只压制生效：写入照常，读取按 0 计（两条路径一致）。
+            return 0
+        if status_text in self._arctic_frost_keys():
+            return max(0, int(self._arctic_frost_value(target_id) or 0))
+        if self._status_alias_declaration(status_text):
+            return max(0, int(self._status_alias_value_for(
+                target_id, self._status_alias_declaration(status_text)) or 0))
+        if status_text in self._unable_counter_keys():
+            return max(0, int(self._unable_counter_value(target_id) or 0))
+        attr = self._status_attr_field(status_text)
+        if attr:
+            # ``attack_blocked`` / ``vulnerable`` / ``装备保护`` 这类属性不在
+            # ``_get_status_count`` 的硬编码表里，必须按同一张属性表读。
+            return max(0, int(getattr(self.players[target_id], attr, 0) or 0))
+        return max(0, int(self._get_status_count(target_id, status_text) or 0))
+
+    def _fire_status_change_events(self, target_id: int, status_id: str, before: int, after: int) -> None:
+        """``on_apply`` / ``on_remove`` status events on the 0 <-> positive edges."""
+
+        runner = getattr(self, '_run_v2_status_event', None)
+        if not callable(runner):
             return
+        if before <= 0 < after:
+            runner(target_id, status_id, 'on_apply', {'amount': after - before})
+        elif before > 0 and after <= 0:
+            runner(target_id, status_id, 'on_remove', {'amount': before})
+
+    def _status_op_log_line(self, op, log_value, source_id, target_id, status, mode,
+                            requested, layers, before, after):
+        """Battle-log contract of the status family (Round 15 / batch 3).
+
+        ``log: false`` mutes, a string is a data-authored template
+        (``{target}`` / ``{source}`` / ``{amount}`` / ``{status}``), ``log: true``
+        asks for the classic announce line, and an absent ``log`` keeps the op's
+        historical default: ``add_status`` / ``remove_status`` / ``set_status``
+        announce, while the ``*_named`` spellings stay quiet unless the step says
+        otherwise.
+        """
+
+        applied = int(after) - int(before)
+        label = self._status_log_label(status)
+        immune_key = str(status).split(':')[-1] in ('status_immune', 'immune', '状态免疫')
+        if isinstance(log_value, str):
+            if not log_value:
+                return None
+            if mode in ('remove', 'clear'):
+                return self._format_step_log(
+                    log_value, target=self.pn(target_id), source=self.pn(source_id),
+                    amount=layers, status=label,
+                )
+            return self._format_step_log(
+                log_value, target=self.pn(target_id), amount=requested, status=label,
+            )
+        if not (log_value is True or (log_value is None and op in self.STATUS_LEGACY_ANNOUNCING_OPS)):
+            return None
+        if immune_key:
+            if mode == 'set':
+                return f"{self.pn(target_id)}{'获得' if after > 0 else '失去'}状态免疫"
+            if applied > 0:
+                return f"{self.pn(target_id)}获得状态免疫"
+            if applied < 0:
+                return f"{self.pn(target_id)}失去状态免疫"
+            return None
+        if mode == 'set':
+            return f"{self.pn(target_id)}的{label}变为{after}层"
+        if not applied:
+            return None
+        return f"{self.pn(target_id)}{'+' if applied > 0 else '-'}{abs(applied)}层{label}"
+
+    def _apply_status_op(self, player_id, card, params, log_value, op, target_id, status, amount,
+                         *, clear_all: bool = False, context=None) -> int:
+        """Apply / remove / set one named status on one target (shared by both paths).
+
+        Returns the applied delta (``after - before``) as the readers see it.
+
+        Both the engine atoms and the v2 runtime's ``add_status`` branch funnel
+        here, so every mechanism below now behaves the same on either path:
+
+        * alias groups declared by card data (``status_aliases``) + legacy fields;
+        * the arctic frost 60-layer cap and its alias group;
+        * ``ocean:unable_counter`` (custom key + current-hand sweep);
+        * ``status_immune`` (always stored, reads stay suppressed, key group cleared);
+        * achievement peaks (``_note_achievement_status_peak``);
+        * ``stacking`` (``unique`` / ``duration``) and ``keep_when_zero``;
+        * ``on_apply`` / ``on_remove`` status events on the 0 <-> positive edges;
+        * the battle-log contract documented on :meth:`_status_op_log_line`.
+        """
+
+        if not self._valid_player_id(target_id) or not status:
+            return 0
+        params = params if isinstance(params, dict) else {}
         if not params.get('bypass_mask'):
             from engine_runtime_support import blocks_special_effect_interference
-            if blocks_special_effect_interference(self, tid):
-                return
-        if self._status_application_blocked(tid, status):
-            return
-        ps = self.players[tid]
-        # Frost keeps its 60-layer cap, alias group and achievement bookkeeping.
-        if status in self._arctic_frost_keys():
-            self._arctic_add_frost(
-                tid,
-                amount,
-                self._format_step_log(log, target=self.pn(tid), amount=amount) if isinstance(log, str) and log else '',
-            )
-            return
-        if status in ('poison', '中毒'):
-            ps.poison += amount
-        elif status in ('burn', 'fire', '灼烧'):
-            ps.fire += amount
-        elif status in ('toxic', '淬毒'):
-            ps.toxic += amount
-        elif status in ('dodge', '闪避'):
-            ps.dodge += amount
-        elif status in ('equip_protection', 'equipment_protection', '装备摧毁保护', '装备保护'):
-            ps.equipment_protection += amount
-        elif status in ('sluggish', '迟缓'):
-            ps.sluggish += amount
-        elif status in ('overload', '超载'):
-            ps.overload += amount
-        elif status in ('foresight', '预知'):
-            ps.foresight += amount
-        elif status in ('fracture', '破损'):
-            ps.fracture += amount
-        elif status in ('stagnation', '滞留'):
-            ps.stagnation += amount
-        elif status in ('blind', '失明'):
-            ps.blind += amount
-        elif status in ('heal_block', '禁疗'):
-            ps.heal_block += amount
-        elif status in ('attack_blocked', '禁攻'):
-            ps.attack_blocked += amount
-        elif status in ('weakness', '虚弱'):
-            ps.weakness += amount
-        elif status in ('bleed', '流血'):
-            ps.bleed += amount
-        elif status in ('fragment', 'fragment_stacks', '碎片'):
-            ps.fragment_stacks += amount
-        elif status in ('stunned', 'dizzy', 'skip_turn', '眩晕'):
-            ps.skip_turn += amount
-        elif status in self._unable_counter_keys():
-            self._add_custom_status_value(tid, 'ocean:unable_counter', amount)
-        elif self._status_alias_declaration(status):
-            alias_declaration = self._status_alias_declaration(status)
-            self._set_status_alias_value_for(
-                tid, alias_declaration,
-                self._status_alias_value_for(tid, alias_declaration) + int(amount or 0),
-            )
-        elif status in ('status_immune', 'immune', '状态免疫'):
+            if blocks_special_effect_interference(self, target_id):
+                return 0
+        if self._status_application_blocked(target_id, status):
+            return 0
+        status_text = str(status).strip()
+        if not status_text:
+            return 0
+        try:
+            requested = int(amount or 0)
+        except (TypeError, ValueError):
+            requested = 0
+        if op in ('set_status', 'set_status_named'):
+            mode = 'set'
+        elif op in ('remove_status', 'status_remove_named'):
+            mode = 'clear' if clear_all else 'remove'
+        else:
+            mode = 'add'
+        layers = requested
+        if mode == 'remove':
+            # 旧写法 remove_status 一贯是"至少 1 层"；规范写法按 amount 精确减少。
+            layers = max(1, requested) if op == 'remove_status' else requested
+            if layers <= 0:
+                # ``status_remove_named`` 的 0 层是"清空"（见 _apply_status_remove_family）。
+                mode = 'clear'
+
+        ps = self.players[target_id]
+        status_key = status_text.split(':')[-1]
+        before = self._status_stack_value(target_id, status_text)
+
+        # 霜冻：别名组与 60 层上限由 arctic 助手掌管（默认文案也在那里）。
+        if mode == 'add' and status_text in self._arctic_frost_keys():
+            template = ''
+            if isinstance(log_value, str) and log_value:
+                template = self._format_step_log(
+                    log_value, target=self.pn(target_id), amount=requested,
+                    status=self._status_log_label(status_text),
+                )
+            self._arctic_add_frost(target_id, layers, template)
+            after = self._status_stack_value(target_id, status_text)
+            self._fire_status_change_events(target_id, status_text, before, after)
+            return after - before
+
+        attr = self._status_attr_field(status_text)
+        if attr:
+            current = int(getattr(ps, attr, 0) or 0)
+            if mode == 'set':
+                value = max(0, layers)
+            elif mode == 'clear':
+                value = 0
+            elif mode == 'remove':
+                value = max(0, current - layers)
+            else:
+                value = max(0, current + layers)
+            setattr(ps, attr, value)
+        elif status_text in self._arctic_frost_keys():
+            current = self._arctic_frost_value(target_id)
+            if mode == 'set':
+                value = max(0, layers)
+            elif mode == 'clear':
+                value = 0
+            elif mode == 'remove':
+                value = max(0, current - layers)
+            else:
+                value = max(0, current + layers)
+            self._arctic_set_frost_value(target_id, value)
+        elif status_text in self._unable_counter_keys():
+            current = self._unable_counter_value(target_id)
+            if mode == 'set':
+                value = max(0, layers)
+            elif mode == 'clear':
+                value = 0
+            elif mode == 'remove':
+                value = max(0, current - layers)
+            else:
+                value = max(0, current + layers)
+            self._set_unable_counter_value(target_id, value)
+        elif self._status_alias_declaration(status_text):
+            declaration = self._status_alias_declaration(status_text)
+            current = self._status_alias_value_for(target_id, declaration)
+            if mode == 'set':
+                value = max(0, layers)
+            elif mode == 'clear':
+                value = 0
+            elif mode == 'remove':
+                value = max(0, current - layers)
+            else:
+                value = max(0, current + layers)
+            self._set_status_alias_value_for(target_id, declaration, value)
+        elif status_key in ('status_immune', 'immune', '状态免疫'):
             ps.custom_statuses = getattr(ps, 'custom_statuses', {})
             for key in ('status_immune', 'immune', '状态免疫'):
                 ps.custom_statuses.pop(key, None)
-            if amount > 0:
+            if mode in ('add', 'set') and layers > 0:
                 ps.custom_statuses['status_immune'] = 1
-        elif status:
+            elif mode == 'remove' and before - layers > 0:
+                ps.custom_statuses['status_immune'] = 1
+        else:
+            definition = self._get_v2_status_def(status_text)
+            definition = definition if isinstance(definition, dict) else {}
+            stacking = str(definition.get('stacking') or 'stack')
             ps.custom_statuses = getattr(ps, 'custom_statuses', {})
-            ps.custom_statuses[status] = int(ps.custom_statuses.get(status, 0) or 0) + amount
-        self._normalize_status_value(ps, status)
-        self._note_achievement_status_peak(tid)
-        if status in self._unable_counter_keys():
-            self._apply_unable_counter_to_current_hand(tid)
-        if log is not False and log:
-            self.log_msg(self._format_step_log(
-                log,
-                target=self.pn(tid),
-                amount=amount,
-                status=self._status_log_label(status),
-            ))
+            current = int(ps.custom_statuses.get(status_text, 0) or 0)
+            if mode == 'set':
+                value = 1 if stacking == 'unique' and layers > 0 else max(0, layers)
+            elif mode == 'clear':
+                value = 0
+            elif mode == 'remove':
+                value = max(0, current - layers)
+            elif stacking == 'unique':
+                value = 1 if layers > 0 else max(0, current)
+            elif stacking == 'duration':
+                value = max(current, max(0, layers))
+            else:
+                value = max(0, current + layers)
+            if value <= 0:
+                keep_zero = bool(
+                    definition.get('keep_when_zero') or definition.get('keep_zero')
+                    or self._status_keep_when_zero(status_text)
+                )
+                if keep_zero:
+                    ps.custom_statuses[status_text] = 0
+                else:
+                    ps.custom_statuses.pop(status_text, None)
+            else:
+                ps.custom_statuses[status_text] = value
+
+        self._normalize_status_value(ps, status_text)
+        self._note_achievement_status_peak(target_id)
+        if status_text in self._unable_counter_keys():
+            self._apply_unable_counter_to_current_hand(target_id)
+        after = self._status_stack_value(target_id, status_text)
+        self._fire_status_change_events(target_id, status_text, before, after)
+        if mode != 'clear':
+            line = self._status_op_log_line(
+                op, log_value, player_id, target_id, status_text, mode,
+                requested, layers, before, after,
+            )
+            if line:
+                self.log_msg(line)
+        return after - before
 
     def _atomic_status_remove_named(self, player_id, card, params, log, choice, context):
+        self._apply_status_remove_family(player_id, card, params, log, op='status_remove_named')
+
+    def _atomic_remove_status(self, player_id, card, params, log, choice, context):
+        self._apply_status_remove_family(player_id, card, params, log, op='remove_status')
+
+    def _apply_status_remove_family(self, player_id, card, params, log, *, op):
+        """Target / amount resolution shared by ``remove_status`` and its named twin.
+
+        ``status_remove_named`` without an explicit ``amount`` keeps its
+        historical "clear this status" behaviour; every other spelling removes
+        that many layers (``remove_status`` also keeps its "at least one layer"
+        default, which the runtime branch always had).
+        """
+
         status = str(params.get('status', '')).strip()
-        # ``amount`` turns the atom from "clear this status" into "remove N
-        # layers" (data wording, e.g. the Fan removing one Burn layer).  Without
-        # the parameter the historical clear-everything behaviour is kept.
         raw_amount = params.get('amount', params.get('layers'))
         reduce_amount = 0
         if raw_amount is not None:
@@ -20021,63 +20978,15 @@ class GameEngine:
                 reduce_amount = max(0, int(self._eval_int(player_id, raw_amount, card, 0) or 0))
             except Exception:
                 reduce_amount = 0
+        # Historical quirk kept on purpose: ``status_remove_named`` has no
+        # "remove zero layers" mode - without an amount (or with ``0``) it clears
+        # the status, which is what the pre-batch-3 atom did.
+        clear_all = op == 'status_remove_named' and reduce_amount <= 0
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
-            ps = self.players[tid]
-            if reduce_amount:
-                self._remove_named_status_layers(tid, status, reduce_amount)
-                if log is not False and log:
-                    self.log_msg(self._format_step_log(
-                        log,
-                        target=self.pn(tid),
-                        source=self.pn(player_id),
-                        amount=reduce_amount,
-                        status=self._status_log_label(status),
-                    ))
-                continue
-            if status in ('poison', '中毒'):
-                ps.poison = 0
-            elif status in ('burn', 'fire', '灼烧'):
-                ps.fire = 0
-            elif status in ('toxic', '淬毒'):
-                ps.toxic = 0
-            elif status in ('dodge', '闪避'):
-                ps.dodge = 0
-            elif status in ('equip_protection', 'equipment_protection', '装备摧毁保护', '装备保护'):
-                ps.equipment_protection = 0
-            elif status in ('sluggish', '迟缓'):
-                ps.sluggish = 0
-            elif status in ('overload', '超载'):
-                ps.overload = 0
-            elif status in ('foresight', '预知'):
-                ps.foresight = 0
-            elif status in ('fracture', '破损'):
-                ps.fracture = 0
-            elif status in ('stagnation', '滞留'):
-                ps.stagnation = 0
-            elif status in ('blind', '失明'):
-                ps.blind = 0
-            elif status in ('heal_block', '禁疗'):
-                ps.heal_block = 0
-            elif status in ('weakness', '虚弱'):
-                ps.weakness = 0
-            elif status in ('bleed', '流血'):
-                ps.bleed = 0
-            elif status in ('fragment', 'fragment_stacks', '碎片'):
-                ps.fragment_stacks = 0
-            elif status in ('stunned', 'dizzy', 'skip_turn', '眩晕'):
-                ps.skip_turn = 0
-            elif status in self._unable_counter_keys():
-                for key in self._unable_counter_keys():
-                    self._set_custom_status_value(tid, key, 0)
-            elif self._status_alias_declaration(status):
-                self._set_status_alias_value_for(tid, self._status_alias_declaration(status), 0)
-            elif status in ('status_immune', 'immune', '状态免疫'):
-                ps.custom_statuses = getattr(ps, 'custom_statuses', {})
-                for key in ('status_immune', 'immune', '状态免疫'):
-                    ps.custom_statuses.pop(key, None)
-            elif status:
-                ps.custom_statuses = getattr(ps, 'custom_statuses', {})
-                ps.custom_statuses.pop(status, None)
+            self._apply_status_op(
+                player_id, card, params, log, op, tid, status, reduce_amount,
+                clear_all=clear_all, context=None,
+            )
 
     def _remove_named_status_layers(self, target_id: int, status: str, amount: int) -> None:
         """Reduce one named status by *amount* layers (never below zero)."""
@@ -20221,31 +21130,49 @@ class GameEngine:
             self._var_store_for_target(player_id, target_ref)[str(params.get('name', 'list'))] = []
 
     def _atomic_for_each_list(self, player_id, card, params, log, choice, context):
-        name = str(params.get('name', 'item'))
-        body = params.get('body', [])
+        """``for_each_list`` on the shared loop driver.
+
+        The list is evaluated with the engine list vocabulary (``list_var`` /
+        ``zone_list`` / literals) and the loop variable lives in the player var
+        store, exactly as before; ``limit``, ``condition``, ``break``/``continue``
+        and ``as``/``var``/``name`` are the shared loop parameters.
+        """
+        base_context = self._engine_loop_context(player_id, context)
+        body = loop_body_from_params(params)
+        source = params.get('list', params.get('items', params.get('source')))
+        raw_items = self._eval_list(player_id, source if source is not None else [], card)
+        items, var_name, _limit = plan_loop(
+            self, base_context, params, op='for_each_list', source_override=source,
+            default_var='item', items_override=raw_items,
+            limit_resolver=self._engine_loop_limit,
+        )
+        condition = loop_condition(params)
         store = self._var_store_for_target(player_id, params.get('target', 'self'))
-        had_old = name in store
-        old_value = store.get(name)
-        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
-        try:
-            items = self._eval_list(player_id, params.get('list', []), card)
-            limit = params.get('limit')
-            if limit is not None and str(limit).strip() not in ('', 'all', '全部'):
-                limit = max(0, self._eval_int(player_id, limit, card, 0))
-                items = list(items)[:limit] if limit else []
-            for index, item in enumerate(items, start=1):
-                store[name] = self._serializable_list_item(item)
-                try:
-                    self._run_effect_list(player_id, card, body, choice, {**base_context, 'list_index': index})
-                except ModLoopContinue:
-                    continue
-                except ModLoopBreak:
-                    break
-        finally:
+        had_old = var_name in store
+        old_value = store.get(var_name)
+
+        def bind(item, index):
+            if var_name:
+                store[var_name] = self._serializable_list_item(item)
+
+        def unbind(paused):
+            if not var_name:
+                return
             if had_old:
-                store[name] = old_value
+                store[var_name] = old_value
             else:
-                store.pop(name, None)
+                store.pop(var_name, None)
+
+        def run_body(item, index):
+            child = {**base_context, 'list_index': index}
+            if not self._loop_iteration_allows(player_id, card, condition, child):
+                return None
+            self._run_effect_list(player_id, card, body, choice, child)
+
+        return run_loop_driver(
+            self, items, run_body=run_body, bind=bind, unbind=unbind,
+            stop_on_game_over=False, op='for_each_list',
+        )
 
     def _equipment_matches_loop_filter(self, player_id, eq, params, card):
         loop_filter = str(params.get('filter', 'all') or 'all')

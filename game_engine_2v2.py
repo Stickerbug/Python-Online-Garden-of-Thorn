@@ -2612,6 +2612,18 @@ class GameEngine2v2(GameEngine):
         return self._effect_tree_uses_event_target(event_def)
 
     def _resolve_targets(self, player_id, target_str):
+        # Round 15 / batch 3: ``target`` keeps the wide-strike snapshot the
+        # runtime branch puts in the context (the single-player base class had
+        # this branch, the 2v2 override used to drop it, so a migrated status /
+        # damage step only touched one of the three enemies).
+        if target_str in ('choice_target', 'selected_target', 'chosen_target', 'target'):
+            context = getattr(self, '_active_effect_context', None)
+            wide_targets = context.get('wide_strike_targets') if isinstance(context, dict) else None
+            if isinstance(wide_targets, list):
+                return [
+                    int(tid) for tid in wide_targets
+                    if isinstance(tid, int) and self._is_valid_effect_target(player_id, tid)
+                ]
         if self._is_random_selectable_selector(target_str):
             tid = self._random_selectable_target(player_id, target_str if isinstance(target_str, dict) else {})
             return [] if tid < 0 else [tid]

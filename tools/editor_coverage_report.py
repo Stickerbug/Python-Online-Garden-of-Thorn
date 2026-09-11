@@ -33,8 +33,49 @@ import mod_atom_report  # noqa: E402
 TEMPLATES_JS = ROOT.parent / "模组编辑器" / "src" / "gtn-text" / "templates.js"
 DEFAULT_BASELINE = ROOT.parent / "模组编辑器" / "src" / "generated" / "editor-coverage.json"
 
-# 与 effect-editor.js 的 LEFT_FORMS 保持一致
-LEFT_FORMS = {"last_damage", "status_stack", "hand_count", "deck_count", "player_stat"}
+# 与 effect-editor.js 的 LEFT_FORMS 保持一致（Round 17 起两边都能改这些左值的字段）
+LEFT_FORMS = {
+    "last_damage", "damage_amount", "status_stack", "hand_count", "deck_count", "player_stat",
+    "discard_count",
+    "player_property", "zone_count", "counter_cards_in_hand", "selected_cards_count",
+    "selected_card_index", "last_positive_hits", "hand_full", "current_turn_player",
+    "var", "player_var", "card_var", "card_prop",
+    "choice_value", "get", "target_player", "source_player", "damage_source",
+}
+
+# 右值可以写成变量（effect-editor 的"右值来源=变量"模式能改变量名与归属）
+VAR_RIGHT_OPS = {"var", "player_var", "temp_var", "global_var"}
+# 右值可以写成"某个玩家的引用"（effect-editor 的"右值来源=玩家"下拉）
+PLAYER_RIGHT_OPS = {
+    "source_player", "target_player", "current_turn_player", "event_source",
+    "damage_source", "attacker", "owner",
+}
+
+# effect-editor.js 的 SYMBOL_OPERATORS：把运算符写在 op 上的旧写法
+SYMBOL_OPERATORS = {
+    ">=", "<=", ">", "<", "==", "=", "!=", "gt", "gte", "lt", "lte", "eq", "ne",
+}
+
+# 条件形态：这些 op 的字段都能在效果行里直接改
+SIMPLE_CONDITION_OPS = {
+    "card_has_tag", "has_tag", "card_has_modifier", "has_status_named",
+    "damage_type_is", "target_selectable", "play_was_countered",
+    "hand_full", "zone_exists", "card_exists",
+}
+
+
+def _condition_parts(node):
+    """and/or 的分支列表：values / conditions / left+right 三种写法都认。"""
+
+    if isinstance(node.get("values"), list):
+        return node["values"]
+    if isinstance(node.get("conditions"), list):
+        return node["conditions"]
+    left = node.get("value") if node.get("value") is not None else node.get("left")
+    right = node.get("right")
+    if isinstance(left, dict) and isinstance(right, dict):
+        return [left, right]
+    return []
 
 
 def supported_templates() -> set:
@@ -48,18 +89,22 @@ def condition_supported(node) -> bool:
     if not isinstance(node, dict):
         return True
     op = str(node.get("op") or node.get("ref") or "")
-    if op == "compare":
+    if op == "compare" or op in SYMBOL_OPERATORS:
         left, right = node.get("a"), node.get("b")
         left_ok = (not isinstance(left, dict)) or str(left.get("op") or left.get("ref") or "") in LEFT_FORMS
-        right_ok = not isinstance(right, dict)
+        right_op = str(right.get("op") or right.get("ref") or "") if isinstance(right, dict) else ""
+        right_ok = (not isinstance(right, dict)) or right_op in VAR_RIGHT_OPS or right_op in PLAYER_RIGHT_OPS
         return left_ok and right_ok
     if op == "not":
-        inner = node.get("value") or node.get("cond")
-        return isinstance(inner, dict) and str(inner.get("op") or inner.get("ref")) == "card_has_tag"
+        inner = node.get("value") or node.get("cond") or node.get("condition")
+        if inner is None and isinstance(node.get("conditions"), list) and node["conditions"]:
+            inner = node["conditions"][0]
+        return condition_supported(inner) if isinstance(inner, dict) else False
     if op in ("and", "or"):
-        left = node.get("left") or node.get("value") or (node.get("values") or [None])[0]
-        right = node.get("right") or (node.get("values") or [None, None])[1]
-        return condition_supported(left) and condition_supported(right)
+        parts = _condition_parts(node)
+        return len(parts) >= 2 and all(condition_supported(part) for part in parts)
+    if op in SIMPLE_CONDITION_OPS:
+        return True
     return False
 
 
