@@ -6243,12 +6243,18 @@ def _resolve_enemy_effect(state, enemy, effect, move, seed, events):
     elif effect_type == 'gain_shield':
         _gain_shield(state, amount, events, source='enemy', enemy=enemy)
     elif effect_type == 'gain_status':
-        combat.setdefault('delayed_enemy_statuses', []).append({
-            'target_id': enemy['id'],
-            'status': str(effect.get('status') or ''),
-            'amount': amount,
-            'source': enemy['def_id'],
-        })
+        status = str(effect.get('status') or '')
+        if effect.get('immediate') and status:
+            # 表格14 R49-R51：决意＝「这回合无敌 XX D 击杀自己」。无敌必须在本
+            # 动作内立刻生效——delayed 队列要等回合结束才应用，而决意随后就自毁。
+            _apply_status(state, enemy, status, amount, events, source=enemy.get('def_id') or 'enemy')
+        else:
+            combat.setdefault('delayed_enemy_statuses', []).append({
+                'target_id': enemy['id'],
+                'status': status,
+                'amount': amount,
+                'source': enemy['def_id'],
+            })
     elif effect_type == 'allies_status':
         for ally in _living_enemies(combat):
             combat.setdefault('delayed_enemy_statuses', []).append({

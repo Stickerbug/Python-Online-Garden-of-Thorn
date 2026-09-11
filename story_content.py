@@ -3122,18 +3122,23 @@ STORY_ENEMIES.update({
         _move('啃咬', 'Bite', _effect('damage', 6, lunatic_amount=8), _effect('gain_shield', 8, lunatic_amount=10)),
         _move('头锤', 'Headbutt', _effect('damage', 14, lunatic_amount=16), _effect('self_damage', 14, lunatic_amount=16)),
         _move('振翅', 'Flutter', _effect('gain_power', 3, lunatic_amount=4), _effect('gain_shield', 12)),
-        _move('决意', 'Resolve', _effect('damage', 20, lunatic_amount=23), _effect('self_kill')),
+        # 表格14 R49：决意＝「这回合无敌 20D 击杀自己」——先给自己 1 回合无敌，
+        # 再结算伤害，最后自毁（self_kill 直接置 0H，不受无敌阻挡）。
+        _move('决意', 'Resolve', _effect('gain_status', 1, status='invincible', immediate=True),
+              _effect('damage', 20, lunatic_amount=23), _effect('self_kill')),
     ), traits=('psionic_connection',), initial={'psionic_connection': 1}, lunatic_health=62),
     'termite_worker': _enemy('白工蚁', 'Worker Termite', 32, (
         _move('鼓舞', 'Inspire', _effect('damage', 4, lunatic_amount=5), _effect('allies_power', 1)),
         _move('护卫', 'Guard', _effect('damage', 6, lunatic_amount=7), _effect('lowest_ally_shield', 8, lunatic_amount=9)),
         _move('狂暴', 'Frenzy', _effect('damage', 3, hits=3, lunatic_amount=4), _effect('gain_power', 1)),
-        _move('决意', 'Resolve', _effect('damage', 16, lunatic_amount=19), _effect('self_kill')),
+        _move('决意', 'Resolve', _effect('gain_status', 1, status='invincible', immediate=True),
+              _effect('damage', 16, lunatic_amount=19), _effect('self_kill')),
     ), script='termite_worker', traits=('psionic_connection',), initial={'psionic_connection': 1}, lunatic_health=35),
     'termite_overmind': _enemy('白蚁主宰者', 'Termite Overmind', 79, (
         _move('心神震慑', 'Mind Shock', _effect('player_status', 1, status='weak'), _effect('player_status', 1, status='blockade')),
         _move('灵能爆发', 'Psionic Burst', _effect('damage', 4, hits=3, lunatic_amount=5)),
-        _move('决意', 'Resolve', _effect('damage', 23, lunatic_amount=26), _effect('self_kill')),
+        _move('决意', 'Resolve', _effect('gain_status', 1, status='invincible', immediate=True),
+              _effect('damage', 23, lunatic_amount=26), _effect('self_kill')),
     ), traits=('psionic_connection',), initial={'psionic_connection': 1}, lunatic_health=86),
     'leafbug': _enemy('叶虫', 'Leafbug', 36, (
         _move('干扰', 'Interfere', _effect('gain_shield', 8, lunatic_amount=10), _effect('player_status', 1, status='weak')),
