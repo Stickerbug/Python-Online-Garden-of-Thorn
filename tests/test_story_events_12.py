@@ -1,4 +1,23 @@
 from story_events_12 import STORY_EVENTS_12, event_12_action_hint
+from story_engine import _resolve_new_event_12
+from story_mode import build_initial_story_state
+
+
+def _scale_run(deck_size=2, health=40):
+    state = build_initial_story_state('run-scale', 'common_flower')
+    player = state['player']
+    player['health'] = health
+    player['max_health'] = 80
+    player['deck'] = [
+        {
+            'def_id': 'basic' if index % 2 == 0 else 'bone',
+            'instance_id': f'scale-{index}',
+            'upgraded': True,
+            'upgrade_level': 1,
+        }
+        for index in range(deck_size)
+    ]
+    return state
 
 
 def test_all_18_workbook_events_are_defined():
@@ -41,3 +60,44 @@ def test_option_ids_are_unique_and_leave_has_hint():
 
 def test_action_hint_unknown_is_empty():
     assert event_12_action_hint('missing', 'x') == ''
+
+
+def test_scale_judgement_offers_a_balance_option_matching_the_workbook():
+    options = STORY_EVENTS_12['scale_judgement']['options']
+    assert [option['id'] for option in options] == [
+        'scale_you', 'scale_cards', 'scale_balance',
+    ]
+    balance = options[2]
+    assert balance['label']['zh'] == '平衡'
+    assert '随机降级一张牌' in balance['description']['zh']
+    assert '20H' in balance['description']['zh']
+    assert event_12_action_hint('scale_judgement', 'scale_balance') == 'scale_balance'
+
+
+def test_scale_balance_downgrades_exactly_one_card_and_heals_twenty():
+    state = _scale_run(deck_size=3, health=40)
+    player = state['player']
+    events = []
+
+    _resolve_new_event_12(
+        state, 'scale_judgement', 'scale_balance', {}, 'scale-seed', events,
+    )
+
+    downgraded = [card for card in player['deck'] if not card.get('upgraded')]
+    assert len(downgraded) == 1
+    assert player['health'] == 60
+    assert [event['type'] for event in events].count('heal') == 1
+
+
+def test_scale_toward_player_grants_exactly_one_fatigued_card():
+    state = _scale_run(deck_size=2, health=30)
+    player = state['player']
+    events = []
+
+    _resolve_new_event_12(
+        state, 'scale_judgement', 'scale_you', {}, 'scale-seed', events,
+    )
+
+    fatigued = [card for card in player['deck'] if card.get('def_id') == 'fatigued']
+    assert len(fatigued) == 1
+    assert player['max_health'] == 160

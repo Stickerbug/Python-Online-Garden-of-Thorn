@@ -357,6 +357,10 @@ STORY_EVENTS_12 = {
                 'zh': '升级所有牌，减半最大生命值',
                 'en': 'Upgrade all cards and halve maximum H',
             }),
+            ('scale_balance', '平衡', 'Balance', 'scale_balance', True, '', {
+                'zh': '随机降级一张牌，回复20H',
+                'en': 'Downgrade a random card and recover 20 H',
+            }),
         ),
     },
     'bank': {

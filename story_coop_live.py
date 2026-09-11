@@ -590,6 +590,10 @@ def _resolve_coop_enchantment_book_action(
         modifiers = card.setdefault('modifiers', {})
         if script == 'damage_bonus':
             modifiers['damage_bonus'] = int(modifiers.get('damage_bonus') or 0) + amount
+            # 附魔书给的威力与卡牌威力同规则：打出后清除（单人模式同款记账）。
+            modifiers['enchantment_power'] = (
+                int(modifiers.get('enchantment_power') or 0) + amount
+            )
         elif script == 'shield_bonus_once':
             modifiers['enchantment_shield_bonus_once'] = int(modifiers.get('enchantment_shield_bonus_once') or 0) + amount
         elif script == 'remove_exile':
@@ -612,6 +616,9 @@ def _resolve_coop_enchantment_book_action(
             modifiers['force_void'] = True
         elif script == 'dense':
             modifiers['damage_bonus'] = int(modifiers.get('damage_bonus') or 0) + amount
+            modifiers['enchantment_power'] = (
+                int(modifiers.get('enchantment_power') or 0) + amount
+            )
             modifiers['cost_e_delta'] = int(modifiers.get('cost_e_delta') or 0) + 1
             modifiers['temporary_heavy'] = int(modifiers.get('temporary_heavy') or 0) + 1
         elif script == 'health_cost':
@@ -1525,6 +1532,13 @@ def resolve_intro_coop_action(
             else:
                 seat_state['discard_pile'].append(selected)
 
+    enchantment_power = max(0, int(modifiers.pop('enchantment_power', 0) or 0))
+    if enchantment_power:
+        remaining_power = int(modifiers.get('damage_bonus') or 0) - enchantment_power
+        if remaining_power > 0:
+            modifiers['damage_bonus'] = remaining_power
+        else:
+            modifiers.pop('damage_bonus', None)
     for key in (
         'enchantment_shield_bonus_once', 'enchantment_draw_to_full_once',
         'enchantment_disc_once', 'enchantment_immunity_once',

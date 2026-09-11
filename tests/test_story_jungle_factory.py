@@ -1,6 +1,7 @@
-from story_content import STORY_CARDS, STORY_ENEMIES, STORY_TRAITS
+from story_content import STORY_CARDS, STORY_ENCOUNTERS, STORY_ENEMIES, STORY_TRAITS
 from story_engine import (
     _advance_enemy_move,
+    _encounter_specs,
     _enemy_physical_damage,
     _enemy_raw_damage,
     _is_card_playable,
@@ -112,6 +113,47 @@ def test_new_psionic_terms_use_new_internal_keys_without_renaming_soul_splitter(
 def test_termite_resolve_moves_are_not_part_of_the_normal_cycle():
     assert STORY_ENEMIES['termite_soldier']['move_order'] == (0, 1, 2)
     assert STORY_ENEMIES['termite_overmind']['move_order'] == (0, 1)
+
+
+def _jungle_normal_draws(seed, battles):
+    state = build_initial_story_state(seed)
+    state['biome'] = 'jungle'
+    state['stage'] = 2
+    drawn = []
+    for battle in range(battles):
+        specs = _encounter_specs(state, 'combat', f'{seed}:{battle}')
+        drawn.append(tuple(spec['def_id'] for spec in specs))
+        state['stage_normal_battles'] = int(state.get('stage_normal_battles') or 0) + 1
+    return drawn
+
+
+def test_jungle_simple_pool_no_longer_guarantees_the_firefly_encounter():
+    """反馈 #68：丛林简单怪池只有3条，旧实现把它们当轮换袋逐个抽空，
+    于是每次进丛林都 100% 撞上萤火虫遭遇；改为按权重随机后应当“可能不出”。
+    """
+
+    runs = [_jungle_normal_draws(f'jungle-firefly-{index}', 3) for index in range(160)]
+    firefly_runs = [
+        drawn for drawn in runs
+        if any('jungle_firefly' in enemy_ids for enemy_ids in drawn)
+    ]
+
+    assert 0 < len(firefly_runs) < len(runs)
+    simple_ids = {
+        tuple(
+            entry.get('def_id') if isinstance(entry, dict) else entry
+            for entry in encounter
+        )
+        for encounter in STORY_ENCOUNTERS['jungle']['simple']
+    }
+    assert all(enemy_ids in simple_ids for drawn in runs for enemy_ids in drawn)
+
+
+def test_jungle_normal_encounters_do_not_repeat_back_to_back():
+    drawn = _jungle_normal_draws('jungle-no-immediate-repeat', 12)
+
+    assert drawn
+    assert all(first != second for first, second in zip(drawn, drawn[1:]))
 
 
 def test_psionic_connection_splits_damage_across_connected_termites():

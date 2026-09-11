@@ -2580,7 +2580,7 @@ def _enchantment_book(zh, en, description_zh, description_en, rarity, script,
 
 
 STORY_ENCHANTMENT_BOOKS = {
-    'sharp': _enchantment_book('锋利', 'Sharpness', '选择一张手中的攻击牌，使其在本场战斗中获得15层[[tag:power]]。', 'Choose an Attack in hand. It gains 15 [[tag:power]] for this combat.', 'common', 'damage_bonus', target='attack_card', amount=15, image='sharp.svg'),
+    'sharp': _enchantment_book('锋利', 'Sharpness', '选择一张手中的攻击牌，使其获得15层[[tag:power]]；该牌打出一次后失去这些威力。', 'Choose an Attack in hand. It gains 15 [[tag:power]], lost after that card is played once.', 'common', 'damage_bonus', target='attack_card', amount=15, image='sharp.svg'),
     'protection': _enchantment_book('保护', 'Protection', '选择一张手中的技能牌，使其在本场战斗中获得8层[[tag:firmness]]；使用后清空。', 'Choose a Skill in hand. It gains 8 [[tag:firmness]] for this combat, cleared after use.', 'common', 'shield_bonus_once', target='skill_card', amount=8, image='defend.svg'),
     'durability': _enchantment_book('耐久', 'Durability', '选择一张手中的[[tag:exile]]牌，使其在本场战斗中失去[[tag:exile]]。', 'Choose a card with [[tag:exile]] in hand. It loses [[tag:exile]] for this combat.', 'ultra', 'remove_exile', target='exile_card', image='durability.svg'),
     'efficiency': _enchantment_book('效率', 'Efficiency', '选择一张手中的牌，使其在本场战斗中获得[[tag:swift]]1。', 'Choose a card in hand. It gains [[tag:swift]] 1 for this combat.', 'rare', 'swift', target='card', amount=1, image='efficiency.svg'),
@@ -2590,7 +2590,7 @@ STORY_ENCHANTMENT_BOOKS = {
     'attract_lightning': _enchantment_book('引雷', 'Attract Lightning', '选择一张手中的攻击牌，使其在本场战斗中获得15层[[tag:electric_power]]。仅限魔法师。', 'Choose an Attack in hand. It gains 15 [[tag:electric_power]] for this combat. Mage only.', 'common', 'electric_damage', target='attack_card', amount=15, character_id='mage', image='attract lightning.svg'),
     'binding_curse': _enchantment_book('绑定诅咒', 'Binding Curse', '选择3张手中的牌，使其在本场战斗中获得[[tag:retain]]。', 'Choose 3 cards in hand. They gain [[tag:retain]] for this combat.', 'rare', 'retain', target='three_cards', image='binding curse.svg'),
     'vanishing_curse': _enchantment_book('消失诅咒', 'Vanishing Curse', '选择任意张手中的牌，使其在本场战斗中获得[[tag:exile]]与[[tag:void]]。', 'Choose any number of cards in hand. They gain [[tag:exile]] and [[tag:void]] for this combat.', 'rare', 'exile_void', target='any_cards', image='vanishing curse.svg'),
-    'dense': _enchantment_book('致密', 'Dense', '选择一张手中的攻击牌，使其在本回合获得[[tag:temporary_heavy]]1，并在本场战斗中获得30层[[tag:power]]。', 'Choose an Attack in hand. It gains [[tag:temporary_heavy]] 1 this turn and 30 [[tag:power]] for this combat.', 'rare', 'dense', target='attack_card', amount=30, image='dense.svg'),
+    'dense': _enchantment_book('致密', 'Dense', '选择一张手中的攻击牌，使其在本回合获得[[tag:temporary_heavy]]1，并获得30层[[tag:power]]；该牌打出一次后失去这些威力。', 'Choose an Attack in hand. It gains [[tag:temporary_heavy]] 1 this turn and 30 [[tag:power]], lost after that card is played once.', 'rare', 'dense', target='attack_card', amount=30, image='dense.svg'),
     'charge': _enchantment_book('突进', 'Charge', '选择一张手中的牌，使其下一次使用时抽牌至手牌满。', 'Choose a card in hand. The next time it is used, draw until the hand is full.', 'rare', 'draw_to_full_once', target='card', image='charge.svg'),
     'magic_yggdrasil': _enchantment_book('魔法世界树之叶', 'Magic Yggdrasil Leaf', '受到致命伤害时自动消耗：免疫该次伤害，获得1层[[status:invincible]]并获得8层[[status:regeneration]]。', 'Automatically consumed on lethal damage: prevent it, gain 1 [[status:invincible]] and 8 [[status:regeneration]].', 'ultra', 'lethal_guard', amount=8, image='magic yggdrasil.svg'),
     'fall_cushioning': _enchantment_book('摔落缓冲', 'Fall Cushioning', '选择一张手中的牌，使其下一次使用时获得1层[[status:disc]]。', 'Choose a card in hand. The next time it is used, gain 1 [[status:disc]].', 'common', 'disc_once', target='card', amount=1, image='fall cushioning.svg'),
@@ -3627,10 +3627,11 @@ STORY_ENCOUNTERS = {
         ),
         'elite': (
             ('mechanical_wasp',),
+            # 开发表格14《战斗列表》R78：工厂精英＝砖堆×1＋机械老鼠，
+            # 砖堆获得掩体（被击中使躲藏的机械老鼠失去隐形、血量上限×4、
+            # 不进行任何行动）。
             (
-                {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 1.5},
-                {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 1.5},
-                {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 1.5},
+                {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 4},
                 'mechanical_rat',
             ),
             ('generator',),

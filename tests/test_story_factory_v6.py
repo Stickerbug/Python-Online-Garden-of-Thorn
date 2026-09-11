@@ -124,32 +124,57 @@ def test_smoke_death_applies_toxic_pressure_to_the_player():
     )
 
 
+def test_factory_elite_uses_one_cover_brick_pile_with_quadruple_health():
+    # 开发表格14《战斗列表》R78：工厂精英＝砖堆×1＋机械老鼠，
+    # 砖堆血量上限×4，并获得掩体（被击中使躲藏的机械老鼠失去隐形）。
+    elite_encounters = STORY_ENCOUNTERS['factory']['elite']
+    rat_encounter = next(
+        encounter for encounter in elite_encounters
+        if any(
+            (entry.get('def_id') if isinstance(entry, dict) else entry) == 'mechanical_rat'
+            for entry in encounter
+        )
+    )
+    piles = [
+        entry for entry in rat_encounter
+        if isinstance(entry, dict) and entry.get('def_id') == 'brick_pile'
+    ]
+    others = [
+        entry.get('def_id') if isinstance(entry, dict) else entry
+        for entry in rat_encounter
+        if entry not in piles
+    ]
+
+    assert len(piles) == 1
+    assert piles[0].get('cover_enemy') is True
+    assert piles[0].get('health_multiplier') == 4
+    assert others == ['mechanical_rat']
+
+
 def test_brick_pile_cover_reveals_its_rat_and_does_not_block_victory():
     state, _ = _factory_combat(
         [
-            {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 1.5},
-            {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 1.5},
-            {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 1.5},
+            {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 4},
             'mechanical_rat',
         ],
         'rat-cover',
     )
     cover = _enemy(state, 'brick_pile')
     rat = _enemy(state, 'mechanical_rat')
-    assert cover['max_health'] == 104
+    assert cover['max_health'] == 276
     assert cover['cover_enemy'] is True
     rat['hidden'] = 1
     rat['hidden_cover_id'] = cover['id']
     events = []
 
     _enemy_raw_damage(state, cover, 20, events, 'test', player_caused=True)
-    assert cover['health'] == 84
+    assert cover['health'] == 256
     assert rat['hidden'] == 0
 
     _enemy_raw_damage(state, rat, 999, events, 'test', player_caused=True)
     assert _check_combat_end(state, 'rat-cover', events) is True
     assert state['phase'] == 'reward'
-    assert cover['health'] == 84
+    assert cover['health'] == 256
 
 
 def test_chimney_summons_smoke_for_each_100_health_damage():

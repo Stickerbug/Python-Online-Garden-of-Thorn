@@ -72,6 +72,50 @@ def test_coop_book_can_enchant_a_card_during_combat():
     assert any(event['type'] == 'coop_enchantment_book_used' for event in events)
 
 
+def test_coop_sharp_power_is_consumed_when_the_enchanted_card_is_played():
+    """反馈 #52：协作模式同样在打出附魔牌后清除附魔威力。"""
+    state = _current_first_combat_state()
+    seat_state = state['combat']['seat_states']['0']
+    card = next(
+        card
+        for card in seat_state['hand']
+        if story_coop_live._card_values(card)[1]['type'] == 'thorn'
+    )
+    book = _gain(state, 0, 'sharp')
+    events = []
+    story_coop_live.resolve_intro_coop_action(
+        state,
+        0,
+        'use_enchantment_book',
+        {
+            'book_instance_id': book['instance_id'],
+            'card_instance_id': card['instance_id'],
+        },
+        'coop-progression-seed',
+        events,
+    )
+    assert card['modifiers']['damage_bonus'] == 15
+
+    target = next(
+        enemy for enemy in state['combat']['enemies']
+        if int(enemy.get('health') or 0) > 0
+    )
+    story_coop_live.resolve_intro_coop_action(
+        state,
+        0,
+        'play_card',
+        {
+            'card_instance_id': card['instance_id'],
+            'target_enemy_id': target['id'],
+        },
+        'coop-progression-seed',
+        events,
+    )
+
+    assert 'damage_bonus' not in (card.get('modifiers') or {})
+    assert 'enchantment_power' not in (card.get('modifiers') or {})
+
+
 def test_coop_magic_yggdrasil_prevents_lethal_enemy_damage():
     state = _current_first_combat_state()
     state['players']['0']['health'] = 1

@@ -394,6 +394,11 @@ def _use_enchantment_book(state, payload, seed, events):
         amount = max(0, int(definition.get('amount') or 0))
         if script == 'damage_bonus':
             modifiers['damage_bonus'] = int(modifiers.get('damage_bonus') or 0) + amount
+            # 卡牌威力（[[tag:power]]）在打出后消耗，只有增幅类效果才保留。
+            # 单独记账，便于出牌结算时只清掉附魔书给的那部分威力。
+            modifiers['enchantment_power'] = (
+                int(modifiers.get('enchantment_power') or 0) + amount
+            )
         elif script == 'shield_bonus_once':
             modifiers['enchantment_shield_bonus_once'] = int(modifiers.get('enchantment_shield_bonus_once') or 0) + amount
         elif script == 'remove_exile':
@@ -418,6 +423,10 @@ def _use_enchantment_book(state, payload, seed, events):
             modifiers['force_void'] = True
         elif script == 'dense':
             modifiers['damage_bonus'] = int(modifiers.get('damage_bonus') or 0) + amount
+            # 致密给的 30 层威力同样是卡牌威力，打出后清除。
+            modifiers['enchantment_power'] = (
+                int(modifiers.get('enchantment_power') or 0) + amount
+            )
             modifiers['cost_e_delta'] = int(modifiers.get('cost_e_delta') or 0) + 1
             modifiers['temporary_heavy'] = int(modifiers.get('temporary_heavy') or 0) + 1
         elif script == 'health_cost':
@@ -3774,6 +3783,15 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
     elif effect_type == 'lose_health':
         lost = max(0, int(amount))
         before = int(state['player'].get('health') or 0)
+        # 自伤（如赎身钱「失去5H」）同样记为受到伤害，
+        # 因此致命时也要走世界树之叶的自动保护，不能绕过。
+        lost, _ = _enchantment_prevent_player_damage(
+            state,
+            lost,
+            0,
+            events,
+            card.get('def_id') or 'lose_health',
+        )
         state['player']['health'] = before - lost
         events.append({
             'type': 'player_damage',
@@ -4496,6 +4514,14 @@ def _apply_enchantment_post_card_use(
             events,
         )
 
+    # 附魔书赋予的威力与卡牌威力同规则：打出后清除（永久的竹子类加成不受影响）。
+    enchantment_power = max(0, int(modifiers.pop('enchantment_power', 0) or 0))
+    if enchantment_power:
+        remaining_power = int(modifiers.get('damage_bonus') or 0) - enchantment_power
+        if remaining_power > 0:
+            modifiers['damage_bonus'] = remaining_power
+        else:
+            modifiers.pop('damage_bonus', None)
     retrieve = bool(modifiers.get('enchantment_retrieve_once'))
     for key in (
         'enchantment_shield_bonus_once', 'enchantment_draw_to_full_once',
@@ -4510,13 +4536,15 @@ def _apply_enchantment_post_card_use(
         'shield_bonus_once', 'draw_to_full_once', 'disc_once',
         'fire_on_hit_once', 'immunity_once', 'repeat_on_kill',
         'weak_once', 'double_reward_on_kill', 'repeat_once',
-        'power_once', 'impact_once', 'retrieve_once',
+        'power_once', 'impact_once', 'retrieve_once', 'damage_bonus',
         'reflection_once', 'vulnerable_once',
     )
     labels = modifiers.get('enchantment_labels')
     if isinstance(labels, dict):
         for label_key in enchantment_label_keys:
             labels.pop(label_key, None)
+        if not labels:
+            modifiers.pop('enchantment_labels', None)
     if not modifiers:
         card.pop('modifiers', None)
     return retrieve
@@ -5518,44 +5546,45 @@ def _encounter_specs(state, room_type, seed, category_override=None, exclude_bos
         history[biome] = sorted(seen)
         encounter = pool[selected_index]
     elif category in ('simple', 'hard'):
+        # 怪池系统（爬塔玩法设计）：简单怪池和困难怪池各自独立抽取。
+        # 池子足够大时沿用“抽到过的不重复抽、抽完一轮再重开”的轮换袋；
+        # 但池子只有 ≤3 条时轮换袋会把每条都强制抽出——普通战斗前 3 场
+        # 都是简单怪，丛林简单怪池恰好只有 3 条（白兵蚁/南瓜/萤火虫），
+        # 于是每次进丛林都 100% 撞上萤火虫遭遇（反馈 #68）。这类小池子
+        # 改为按权重随机（当前各条目同权重），只禁止连续两场相同。
         pool_key = f'{biome}:{state.get("stage") or 1}'
         pool_state = state.setdefault('monster_pool', {}).setdefault(pool_key, {})
-        active = str(pool_state.get('active') or category)
-        if active != category:
-            pool_state = {
-                'active': category,
-                'simple': [],
-                'simple_used': [],
-                'hard': [],
-                'hard_used': [],
+        last_key = f'{category}_last'
+        last_index = pool_state.get(last_key)
+        try:
+            last_index = int(last_index) if last_index is not None else None
+        except (TypeError, ValueError):
+            last_index = None
+        if len(pool) > 3:
+            used_key = f'{category}_used'
+            used = {
+                int(item) for item in (pool_state.get(used_key) or [])
+                if str(item).isdigit()
             }
-            state['monster_pool'][pool_key] = pool_state
-            if category == 'simple':
-                simple_pool = pool_state.get('simple')
-                if not isinstance(simple_pool, list) or len(simple_pool) != min(3, len(pool)):
-                    simple_pool = [
-                        pool[index]
-                        for index in rng.sample(range(len(pool)), min(3, len(pool)))
-                    ]
-                    pool_state['simple'] = copy.deepcopy(simple_pool)
-                used = [int(item) for item in (pool_state.get('simple_used') or []) if str(item).isdigit()]
-                available = [index for index in range(len(simple_pool)) if index not in used]
-            if not available:
-                pool_state['active'] = 'hard'
-                pool_state.setdefault('hard_used', [])
-                return _encounter_specs(state, 'combat', seed, category_override='hard')
-            selected_index = rng.choice(available)
-            pool_state['simple_used'] = sorted(used + [selected_index])
-            encounter = simple_pool[selected_index]
+            candidates = [index for index in range(len(pool)) if index not in used]
+            if not candidates:
+                used = set()
+                candidates = list(range(len(pool)))
+            if last_index is not None and len(candidates) > 1:
+                candidates = [
+                    index for index in candidates if index != last_index
+                ] or candidates
+            selected_index = rng.choice(candidates)
+            used.add(selected_index)
+            pool_state[used_key] = sorted(used)
         else:
-            used = [int(item) for item in (pool_state.get('hard_used') or []) if str(item).isdigit()]
-            available = [index for index in range(len(pool)) if index not in used]
-            if not available:
-                pool_state['hard_used'] = []
-                available = list(range(len(pool)))
-            selected_index = rng.choice(available)
-            pool_state['hard_used'] = sorted(used + [selected_index])
-            encounter = pool[selected_index]
+            candidates = [
+                index for index in range(len(pool))
+                if last_index is None or index != last_index
+            ] or list(range(len(pool)))
+            selected_index = rng.choice(candidates)
+        pool_state[last_key] = selected_index
+        encounter = pool[selected_index]
     else:
         encounter = rng.choice(pool)
     return [spec if isinstance(spec, dict) else {'def_id': spec} for spec in encounter]
@@ -10447,13 +10476,22 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
         player['max_health'] = int(player.get('max_health') or 1) * 2
         player['health'] = int(player.get('health') or 0) + int(player.get('max_health') or 1) // 2
         _gain_deck_card(state, 'fatigued', events, source=event_id)
-        _gain_deck_card(state, 'fatigued', events, source=event_id)
     elif hint == 'scale_toward_cards':
         for card in list(player.get('deck', [])):
             if _card_is_upgradable(card):
                 _upgrade_cards(state, [card], seed, events, event_id)
         player['max_health'] = max(1, math.ceil(int(player.get('max_health') or 1) / 2))
         player['health'] = min(int(player.get('health') or 0), player['max_health'])
+    elif hint == 'scale_balance':
+        upgraded_cards = [
+            card for card in player.get('deck', [])
+            if card.get('upgraded') or int(card.get('upgrade_level') or 0) > 0
+        ]
+        if upgraded_cards:
+            target = _rng(state, seed, f'scale_balance:{event_id}').choice(upgraded_cards)
+            target['upgraded'] = False
+            target['upgrade_level'] = 0
+        _heal_player(state, 20, events, source=event_id)
     elif hint == 'bank_deposit':
         gold = int(player.get('gold') or 0)
         deposit = gold // 2

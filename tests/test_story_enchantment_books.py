@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from story_content import STORY_ENCHANTMENT_BOOKS, STORY_RULES
+from story_content import STORY_ENCHANTMENT_BOOKS, STORY_ENEMIES, STORY_RULES
 from story_engine import (
     StoryActionError,
     _card_values,
@@ -10,6 +10,7 @@ from story_engine import (
     _new_card,
     _player_physical_hit,
     _player_raw_damage,
+    _resolve_enemy_effect,
     _reward_rarity,
     _start_combat,
     _turn_boundary,
@@ -263,3 +264,199 @@ def test_lunatic_card_reward_pity_uses_half_increment():
     assert state['rare_card_pity_offset'] == pytest.approx(
         STORY_RULES['rare_card_pity_initial'] + 0.005
     )
+
+
+def _play_card_by_id(state, instance_id, seed):
+    return apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': instance_id},
+        seed,
+    )
+
+
+def _find_card(state, instance_id):
+    for pile in ('discard_pile', 'draw_pile', 'exile_pile', 'hand', 'equipment'):
+        for card in state['combat'].get(pile) or []:
+            if card.get('instance_id') == instance_id:
+                return pile, card
+    return None, None
+
+
+def test_sharp_power_is_consumed_when_the_enchanted_card_is_played():
+    """反馈 #52：锋利给的威力属于卡牌威力，打出后应清除。"""
+    state = _combat_state('book-sharp-once')
+    card = _hand_card(state, 'basic')
+    base_damage = next(
+        effect['amount']
+        for effect in _card_values(card)['effects']
+        if effect['type'] == 'damage'
+    )
+    book = _book(state, 'sharp')
+    state, _ = apply_story_action(
+        state,
+        'use_enchantment_book',
+        {
+            'book_instance_id': book['instance_id'],
+            'card_instance_id': card['instance_id'],
+        },
+        'book-sharp-once-use',
+    )
+    card = state['combat']['hand'][0]
+    assert card['modifiers']['damage_bonus'] == 15
+    assert card['modifiers']['enchantment_labels'] == {'damage_bonus': 'sharp'}
+    assert (
+        next(
+            effect['amount']
+            for effect in _card_values(card)['effects']
+            if effect['type'] == 'damage'
+        )
+        == base_damage + 15
+    )
+
+    state, _ = _play_card_by_id(
+        state, card['instance_id'], 'book-sharp-once-play'
+    )
+
+    pile, played = _find_card(state, card['instance_id'])
+    assert pile == 'discard_pile'
+    assert 'damage_bonus' not in (played.get('modifiers') or {})
+    assert 'enchantment_power' not in (played.get('modifiers') or {})
+    assert 'enchantment_labels' not in (played.get('modifiers') or {})
+
+
+def test_stacked_power_books_are_all_consumed_after_the_card_is_played():
+    """锋利 + 致密叠在同一张牌上时，两份附魔威力都要清除。"""
+    state = _combat_state('book-stacked-power')
+    card = _hand_card(state, 'basic')
+    for book_id, seed in (('sharp', 'stack-sharp'), ('dense', 'stack-dense')):
+        book = _book(state, book_id)
+        state, _ = apply_story_action(
+            state,
+            'use_enchantment_book',
+            {
+                'book_instance_id': book['instance_id'],
+                'card_instance_id': card['instance_id'],
+            },
+            seed,
+        )
+    card = state['combat']['hand'][0]
+    assert card['modifiers']['damage_bonus'] == 45
+    assert card['modifiers']['enchantment_power'] == 45
+
+    state, _ = _play_card_by_id(state, card['instance_id'], 'stack-play')
+
+    _, played = _find_card(state, card['instance_id'])
+    assert 'damage_bonus' not in (played.get('modifiers') or {})
+    assert 'enchantment_power' not in (played.get('modifiers') or {})
+
+
+def test_combat_scoped_books_survive_the_enchanted_card_play():
+    """非一次性附魔（本场战斗）不受 #52 修复影响。"""
+    state = _combat_state('book-efficiency-keeps')
+    card = _hand_card(state, 'basic')
+    book = _book(state, 'efficiency')
+    state, _ = apply_story_action(
+        state,
+        'use_enchantment_book',
+        {
+            'book_instance_id': book['instance_id'],
+            'card_instance_id': card['instance_id'],
+        },
+        'book-efficiency-keeps-use',
+    )
+    card = state['combat']['hand'][0]
+    state, _ = _play_card_by_id(
+        state, card['instance_id'], 'book-efficiency-keeps-play'
+    )
+    _, played = _find_card(state, card['instance_id'])
+    assert played['modifiers']['swift'] == 1
+    assert played['modifiers']['enchantment_labels'] == {'swift': 'efficiency'}
+
+
+def test_permanent_card_growth_survives_enchanted_power_consumption():
+    """竹子这类「永久获得伤害」不能被附魔威力清除逻辑带走。"""
+    state = _combat_state('book-sharp-bamboo')
+    card = _hand_card(state, 'bamboo')
+    book = _book(state, 'sharp')
+    state, _ = apply_story_action(
+        state,
+        'use_enchantment_book',
+        {
+            'book_instance_id': book['instance_id'],
+            'card_instance_id': card['instance_id'],
+        },
+        'book-sharp-bamboo-use',
+    )
+    card = state['combat']['hand'][0]
+    assert card['modifiers']['damage_bonus'] == 15
+
+    state, _ = _play_card_by_id(
+        state, card['instance_id'], 'book-sharp-bamboo-play'
+    )
+
+    _, played = _find_card(state, card['instance_id'])
+    assert played['modifiers']['damage_bonus'] == 3
+
+
+def test_magic_yggdrasil_guards_lethal_self_inflicted_health_loss():
+    """反馈 #74：附魔书里有 ygg 时，自伤致命也必须触发保护。"""
+    state = _combat_state('book-yggdrasil-self-loss')
+    state['player']['health'] = 3
+    _book(state, 'magic_yggdrasil')
+    exiled = _new_card(state, 'basic')
+    state['combat']['exile_pile'].append(exiled)
+    card = _hand_card(state, 'redemption_money')
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {
+            'card_instance_id': card['instance_id'],
+            'selected_exile_ids': [exiled['instance_id']],
+        },
+        'book-yggdrasil-self-loss-play',
+    )
+
+    assert state['player']['health'] == 3
+    assert state.get('phase') == 'combat'
+    assert state['player']['enchantment_books'] == []
+    assert any(
+        event['type'] == 'enchantment_book_triggered' for event in events
+    )
+
+
+def test_magic_yggdrasil_guards_the_reported_chimney_sequence():
+    """反馈 #74 原始场景：24H/51 护盾/56 伤害/60 毒/附魔书含 ygg。"""
+    state = _combat_state(
+        'book-yggdrasil-chimney',
+        enemies=[{'def_id': 'chimney'}, {'def_id': 'smoke'}],
+    )
+    _book(state, 'magic_yggdrasil')
+    state['player']['health'] = 24
+    state['combat']['shield'] = 51
+    state['combat']['poison'] = 60
+    state['combat']['toxic_poison'] = 40
+    chimney = next(
+        enemy for enemy in state['combat']['enemies']
+        if enemy['def_id'] == 'chimney'
+    )
+    combustion = STORY_ENEMIES['chimney']['moves'][1]
+    events = []
+    for effect in combustion['effects']:
+        _resolve_enemy_effect(
+            state, chimney, effect, combustion, 'book-yggdrasil-chimney', events
+        )
+
+    # 助燃 = 16 + 40 层剧毒 = 56 伤害，51 护盾挡下 51，实际掉 5H。
+    assert state['player']['health'] == 19
+    assert state['combat']['shield'] == 0
+    events = []
+    _turn_boundary(state, 'book-yggdrasil-chimney', events, extra=False)
+
+    assert any(
+        event['type'] == 'enchantment_book_triggered' for event in events
+    )
+    assert state['player']['health'] > 0
+    assert state.get('phase') == 'combat'
+    assert state['player']['enchantment_books'] == []
