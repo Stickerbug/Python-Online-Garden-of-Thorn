@@ -4,6 +4,11 @@
 Cards that moved between official packages must follow the destination
 package's art convention, so this reuses the same scaling rules as
 tools/build_void_dlc_cards.py.
+
+.. deprecated::
+    100×100 / 内容占 82% 这套目标已不符合现行规范（画布 283.46、内容占 60%，
+    见 docs/卡图尺寸规范.md）。请改用 ``tools/normalize_card_art.py``。
+    本脚本仅作历史参考，不要再对包执行。
 """
 
 from __future__ import annotations
