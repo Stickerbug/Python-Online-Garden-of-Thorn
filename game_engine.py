@@ -9593,6 +9593,23 @@ class GameEngine:
             log or f"{self.pn(player_id)}将弃牌堆洗入牌堆", source=self.pn(player_id), target=self.pn(player_id),
         ))
 
+    @staticmethod
+    def _give_card_step_ref(params) -> str:
+        """要生成的牌 id：``card`` / ``card_id`` / ``id`` 三种写法都认。
+
+        历史上原子只读 ``card``，而园丁包「土」等数据用了 ``card_id``，
+        于是整步被静默跳过（反馈 #90）；``card_id`` 也是编辑器生成的写法。
+        """
+        for key in ('card', 'card_id', 'id', 'def_id'):
+            value = params.get(key)
+            if value not in (None, ''):
+                return value
+        return ''
+
+    def _give_card_step_amount(self, player_id, card, params) -> int:
+        """一次步骤要生成几张（默认 1）；数据里的 ``amount`` 支持表达式。"""
+        return max(1, self._eval_int(player_id, params.get('amount', 1), card, 1))
+
     def _atomic_give_card_to_hand(self, player_id, card, params, log, choice, context):
         # Round 14 / batch 2: 目的区自洽校验 + 位置词表校验 + ``target`` 集合语义。
         # 标量选择器（self/target/enemy）仍旧只解析出一个目标，旧数据行为不变；
@@ -9600,9 +9617,10 @@ class GameEngine:
         self._assert_step_zone(params, 'hand', op='give_card_to_hand')
         self._step_zone_position_or_none(params, op='give_card_to_hand')
         target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_hand')
-        card_ref = self._resolve_card_id_ref(player_id, params.get('card', ''), card)
+        card_ref = self._resolve_card_id_ref(player_id, self._give_card_step_ref(params), card)
         if not card_ref or not target_ids:
             return
+        amount = self._give_card_step_amount(player_id, card, params)
         missing_skip = str(params.get('missing') or '').strip().lower() == 'skip'
         overflow_discard = str(params.get('overflow') or '').strip().lower() == 'discard'
         for target_id in target_ids:
@@ -9617,18 +9635,19 @@ class GameEngine:
             if card_def.id != ERROR_CARD_ID and not self._card_allowed(card_def.id):
                 continue
             ts = self.players[target_id]
-            if card_def.id != ERROR_CARD_ID and not ts.can_add_to_hand():
-                # ``overflow: discard`` mirrors PlayerState.add_to_hand, which
-                # sends the new card to the discard pile when the hand is full.
-                if not overflow_discard:
-                    continue
-            new_card = CardInstance(def_id=card_def.id)
-            self._apply_setup_modifiers_to_card(target_id, new_card)
-            if not self._can_normally_acquire_card(target_id, new_card):
-                self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
-                continue
-            ts.add_to_hand(new_card)
-            self._remember_created_card(new_card, context)
+            for _ in range(amount):
+                if card_def.id != ERROR_CARD_ID and not ts.can_add_to_hand():
+                    # ``overflow: discard`` mirrors PlayerState.add_to_hand, which
+                    # sends the new card to the discard pile when the hand is full.
+                    if not overflow_discard:
+                        break
+                new_card = CardInstance(def_id=card_def.id)
+                self._apply_setup_modifiers_to_card(target_id, new_card)
+                if not self._can_normally_acquire_card(target_id, new_card):
+                    self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
+                    break
+                ts.add_to_hand(new_card)
+                self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
 
@@ -9658,9 +9677,10 @@ class GameEngine:
         self._assert_step_zone(params, 'deck', op='give_card_to_deck')
         position = self._step_zone_position(params, op='give_card_to_deck')
         target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_deck')
-        card_ref = self._resolve_card_id_ref(player_id, params.get('card', ''), card)
+        card_ref = self._resolve_card_id_ref(player_id, self._give_card_step_ref(params), card)
         if not card_ref or not target_ids:
             return
+        amount = self._give_card_step_amount(player_id, card, params)
         for target_id in target_ids:
             card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
             if not card_def:
@@ -9668,23 +9688,24 @@ class GameEngine:
             if card_def.id != ERROR_CARD_ID and not self._card_allowed(card_def.id):
                 continue
             ts = self.players[target_id]
-            new_card = CardInstance(def_id=card_def.id)
-            self._apply_setup_modifiers_to_card(target_id, new_card)
-            raw_flags = params.get('flags')
-            if raw_flags:
-                new_card.instance_flags = getattr(new_card, 'instance_flags', set()) or set()
-                new_card.instance_flags.update(normalize_card_flags(raw_flags))
-            if not self._can_normally_acquire_card(target_id, new_card):
-                self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
-                continue
-            if position == 'bottom':
-                ts.deck.append(new_card)
-            elif position == 'random':
-                ts.deck.insert(random.randint(0, len(ts.deck)), new_card)
-            else:
-                # ``top`` / ``random_top``（单张牌洗牌后放顶 == 放顶）
-                ts.deck.insert(0, new_card)
-            self._remember_created_card(new_card, context)
+            for _ in range(amount):
+                new_card = CardInstance(def_id=card_def.id)
+                self._apply_setup_modifiers_to_card(target_id, new_card)
+                raw_flags = params.get('flags')
+                if raw_flags:
+                    new_card.instance_flags = getattr(new_card, 'instance_flags', set()) or set()
+                    new_card.instance_flags.update(normalize_card_flags(raw_flags))
+                if not self._can_normally_acquire_card(target_id, new_card):
+                    self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
+                    break
+                if position == 'bottom':
+                    ts.deck.append(new_card)
+                elif position == 'random':
+                    ts.deck.insert(random.randint(0, len(ts.deck)), new_card)
+                else:
+                    # ``top`` / ``random_top``（单张牌洗牌后放顶 == 放顶）
+                    ts.deck.insert(0, new_card)
+                self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
 
@@ -9693,9 +9714,10 @@ class GameEngine:
         self._assert_step_zone(params, 'discard', op='give_card_to_discard')
         self._step_zone_position_or_none(params, op='give_card_to_discard')
         target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_discard')
-        card_ref = self._resolve_card_id_ref(player_id, params.get('card', ''), card)
+        card_ref = self._resolve_card_id_ref(player_id, self._give_card_step_ref(params), card)
         if not card_ref or not target_ids:
             return
+        amount = self._give_card_step_amount(player_id, card, params)
         for target_id in target_ids:
             card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
             if not card_def:
@@ -9703,13 +9725,14 @@ class GameEngine:
             if card_def.id != ERROR_CARD_ID and not self._card_allowed(card_def.id):
                 continue
             ts = self.players[target_id]
-            new_card = CardInstance(def_id=card_def.id)
-            self._apply_setup_modifiers_to_card(target_id, new_card)
-            if not self._can_normally_acquire_card(target_id, new_card):
-                self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
-                continue
-            self._discard_card(ts, new_card)
-            self._remember_created_card(new_card, context)
+            for _ in range(amount):
+                new_card = CardInstance(def_id=card_def.id)
+                self._apply_setup_modifiers_to_card(target_id, new_card)
+                if not self._can_normally_acquire_card(target_id, new_card):
+                    self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
+                    break
+                self._discard_card(ts, new_card)
+                self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
 
@@ -18566,7 +18589,14 @@ class GameEngine:
         self.players[target_id].draw_cards(amount)
         if log is False or params.get('silent') or params.get('no_log'):
             return
-        self.log_msg(log or f"{self.pn(target_id)}抽{amount}张牌")
+        # 反馈 #84：旧的 ``draw`` 原子直接把 ``log`` 原样打印，数据里的
+        # ``{target}因血受到伤害并抽{amount}张牌`` 会连占位符一起显示在战报里。
+        self.log_msg(
+            self._format_step_log(
+                log, target=self.pn(target_id), source=self.pn(player_id),
+                amount=amount, count=amount,
+            ) or f"{self.pn(target_id)}抽{amount}张牌"
+        )
 
     def _atomic_draw_cards(self, player_id, card, params, log, choice, context):
         """Engine-path counterpart of the v2 runtime ``draw_cards`` step.

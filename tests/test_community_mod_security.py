@@ -149,7 +149,9 @@ def test_tampered_upload_receipt_and_request_binding_are_rejected(upload_context
         receipt_secret=receipt_secret,
     )
     tampered = result['upload_receipt'][:-1] + ('A' if result['upload_receipt'][-1] != 'A' else 'B')
-    with pytest.raises(ValueError, match='签名无效'):
+    # 篡改最后一个字符时，base64 解码可能先失败（"上传凭证格式无效"），
+    # 也可能解出但签名对不上（"上传凭证签名无效"）——两者都是拒绝，断言文案放宽。
+    with pytest.raises(ValueError, match='上传凭证'):
         r2_mods.verify_mod_upload_receipt(
             tampered,
             uploader_user_id=7,
