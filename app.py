@@ -25884,12 +25884,13 @@ def api_mod_studio_validate():
     ip = request.remote_addr or 'unknown'
     if _rate_limited(ip, 'mod_studio_validate', limit=120, window=300):
         return _json_error('请求过于频繁，请稍后再试', 429)
-    # 上限 128 KB：官方包 mod.json 最大 94 KB（Void Cards DLC），20/20 都能通过；
-    # 上限越小，最坏情况下的单次 CPU 占用越低（128 KB ≈ 30 ms，512 KB ≈ 130 ms）。
-    # 如果将来社区模组普遍超过这个体积，改这一行即可。
-    if request.content_length and request.content_length > 128 * 1024:
+    # 上限 256 KB：官方包 mod.json 最大 94 KB，编辑器还会把 locales/*.json 一起发过来
+    # （最大包合计约 140 KB），所以 128 KB 会误伤原版包。
+    # 耗时随体积近似线性：128 KB ≈ 30 ms、256 KB ≈ 65 ms、512 KB ≈ 130 ms；
+    # 校验跑在 tpool 线程里，不阻塞对局消息。将来社区模组更大时改这一行即可。
+    if request.content_length and request.content_length > 256 * 1024:
         return _json_error(
-            '模组数据过大（上限 128 KB）。官方最大包为 94 KB；'
+            '模组数据过大（上限 256 KB）。官方最大包约 140 KB（含四语言）；'
             '若你在校验完整社区模组，请先在编辑器里按卡校验，或联系管理员放宽上限。',
             413,
         )
