@@ -149,7 +149,19 @@ def is_canonical(root, size: float, band: float) -> bool:
     return abs(x) < 1e-6 and abs(y) < 1e-6 and abs(w - size) < 0.01 and abs(h - size) < 0.01
 
 
-def process_package(path: pathlib.Path, size: float, ratio: float, band: float, apply: bool, verify: bool):
+def canvas_is_broken(root, tolerance: float = 1e-3) -> bool:
+    """画布本身是否"不正确"：不是 1:1 正方形（宽高比失真）。
+
+    只带 width/height、或画布尺寸不同（例如 100×100）但**比例是 1:1** 的图，
+    在卡面上用 object-fit: contain 渲染，视觉上不会有问题 —— 这类不动。
+    """
+
+    _x, _y, w, h = view_box_of(root)
+    if w <= 0 or h <= 0:
+        return True
+    return abs(w - h) > tolerance * max(w, h)
+def process_package(path: pathlib.Path, size: float, ratio: float, band: float,
+                    apply: bool, verify: bool, canvas_only: bool = False):
     with zipfile.ZipFile(path, "r") as archive:
         members = {item.filename: archive.read(item.filename) for item in archive.infolist()}
     changed, issues, skipped = [], [], []
@@ -167,8 +179,17 @@ def process_package(path: pathlib.Path, size: float, ratio: float, band: float, 
             issues.append((member, "测量失败: %s" % exc))
             continue
         coverage = info["coverage"] if info else 0.0
+        if canvas_only and not canvas_is_broken(root):
+            # 画布是 1:1 的，视觉上没问题：一律不动（哪怕内容占比和标准略有出入）
+            skipped.append(member)
+            continue
+        if canvas_only:
+            # 只修画布：可见尺寸按"最小改动"落进标准带，不强行拉到中心值
+            target_ratio = min(max(coverage, ratio - band), ratio + band)
+        else:
+            target_ratio = ratio
         canonical = is_canonical(root, size, band)
-        in_band = abs(coverage - ratio) <= band
+        in_band = abs(coverage - target_ratio) <= band
         if canonical and in_band:
             skipped.append(member)
             continue
@@ -184,8 +205,8 @@ def process_package(path: pathlib.Path, size: float, ratio: float, band: float, 
             issues.append((member, "、".join(reason)))
             continue
         try:
-            members[member] = normalized_svg(content, size, ratio)
-            changed.append("%s（%s）" % (member, "、".join(reason)))
+            members[member] = normalized_svg(content, size, target_ratio)
+            changed.append("%s（%s → 新占比 %.3f）" % (member, "、".join(reason), target_ratio))
         except Exception as exc:  # noqa: BLE001
             issues.append((member, "规整失败: %s" % exc))
     if changed:
@@ -209,6 +230,8 @@ def main(argv=None) -> int:
     parser.add_argument("--all", action="store_true", help="处理 mods/ 下所有 .gtnmod")
     parser.add_argument("--apply", action="store_true", help="真的写回文件（默认只报告）")
     parser.add_argument("--verify", action="store_true", help="只校验，不改文件")
+    parser.add_argument("--canvas-only", action="store_true",
+                        help="只修画布不是 1:1 的图；画布正确的图一律不动，可见尺寸按最小改动落进标准带")
     parser.add_argument("--size", type=float, default=DEFAULT_SIZE)
     parser.add_argument("--ratio", type=float, default=DEFAULT_RATIO)
     parser.add_argument("--band", type=float, default=DEFAULT_BAND)
@@ -224,7 +247,7 @@ def main(argv=None) -> int:
         if not path.is_file():
             print("!! 找不到包:", path)
             continue
-        result = process_package(path, args.size, args.ratio, args.band, args.apply, args.verify)
+        result = process_package(path, args.size, args.ratio, args.band, args.apply, args.verify, args.canvas_only)
         if result["changed"]:
             print("[改] %s: %d 张" % (path.name, len(result["changed"])))
             for item in result["changed"]:
