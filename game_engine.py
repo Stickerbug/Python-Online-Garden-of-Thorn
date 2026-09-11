@@ -7215,6 +7215,7 @@ class GameEngine:
         copied_card: Optional[CardInstance],
         *,
         source_owned: bool = False,
+        message: Optional[str] = None,
     ) -> bool:
         if not self._forced_unique_copy_needs_penalty(
             player_id,
@@ -7228,7 +7229,7 @@ class GameEngine:
             raise RuntimeError('强制复制唯一牌时无法创建虚空惩罚牌')
         penalty = CardInstance(void_def_id)
         self._void_add_card_to_deck_random(player_id, penalty)
-        self.log_msg(f"{self.pn(player_id)}强制复制唯一牌{copied_card.name_cn}，将1张虚空加入牌组")
+        self.log_msg(message or f"{self.pn(player_id)}强制复制唯一牌{copied_card.name_cn}，将1张虚空加入牌组")
         return True
 
     def _add_forced_copy_to_hand(
@@ -10635,6 +10636,13 @@ class GameEngine:
                 self._clear_hand_reveal_for_player(player_id)
             return
         owner_id, zone_name = self._remove_card_from_current_zone(target_card)
+        # 反馈 #75：跨玩家把牌拿进手牌＝获得一张新实例。已拥有同名唯一牌时按
+        # “强制获得唯一牌”的既有规则处理：保留这张牌，并向牌组加入 1 张虚空。
+        unique_penalty = (
+            owner_id is not None
+            and int(owner_id) != int(target_id)
+            and self._forced_unique_copy_needs_penalty(target_id, target_card)
+        )
         self.players[target_id].add_to_hand(target_card)
         # Round 14 / batch 2: 写 ``log`` 模板时按 §0.3 占位符渲染（旧数据不写它，
         # 所以战报文本不变；``move_card(zone:"hand", log:…)`` 因此也能打印）。
@@ -10652,6 +10660,18 @@ class GameEngine:
             if owner_id is not None and owner_id != target_id and zone_name == 'hand':
                 self.log_msg(log or f"{self.pn(player_id)}用磁铁从{self.pn(owner_id)}手牌中获得了{target_card.name_cn}")
             self._clear_hand_reveal_for_player(player_id)
+        if unique_penalty:
+            try:
+                self._apply_forced_unique_copy_penalty(
+                    target_id,
+                    target_card,
+                    message=(
+                        f"{self.pn(target_id)}已拥有唯一牌{target_card.name_cn}，"
+                        "获得额外副本，将1张虚空加入牌组"
+                    ),
+                )
+            except Exception:
+                pass
 
     def _atomic_move_to_deck(self, player_id, card, params, log, choice, context):
         # Round 14 / batch 2: 目的区自洽 + 位置词表（top/bottom/random/random_top）+
