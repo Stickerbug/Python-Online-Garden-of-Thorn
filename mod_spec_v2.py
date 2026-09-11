@@ -118,7 +118,6 @@ _CORE_LOGIC_OPS = {
     "gain_m",
     "spend_resource",
     "draw",
-    "discard",
     "move_card",
     "create_card",
     "copy_card",
@@ -139,6 +138,9 @@ _CORE_LOGIC_OPS = {
     "equipment_property",
     "count",
     "zone_count",
+    # Round 27：区域取牌族补了"随机 N 张"（``zone_random_ids``）；顶部/底部
+    # 由同一个 ``zone_top_ids`` 的 ``order`` 参数覆盖（见 docs §3 / §25）。
+    "zone_random_ids",
     "equipment_count_targeting",
     "hand_full",
     "floor",
@@ -182,7 +184,6 @@ _CORE_LOGIC_OPS = {
     "reveal_deck_top",
     "steal_enemy_card",
     "copy_choice_with_discount",
-    "random_discard_from_hand",
     "put_card_to_deck",
     "shuffle_discard_into_deck",
     "shuffle_hand",
@@ -414,7 +415,7 @@ EXPRESSION_OPS = frozenset({
     "count", "get", "var", "const", "literal",
     "player_stat", "player_property", "card_prop", "card_property",
     "equipment_prop", "equipment_property", "equipment_count_targeting",
-    "zone_count", "hand_full", "status_stack",
+    "zone_count", "zone_random_ids", "hand_full", "status_stack",
     "last_damage", "damage_amount", "damage_source", "event_value", "target_player",
 })
 
@@ -655,6 +656,29 @@ REMOVED_ATOMIC_OPS = {
         '[{"op":"player_stat","target":"self","stat":"hand_limit"},'
         '{"op":"hand_count","target":"self"}]},"operator":">","b":0},'
         '"then":[{"op":"draw_cards","target":"self","amount":...,"log_amount":"requested"}]}'
+    ),
+
+    # Round 27（丢弃族：公式/随机 + 尾部取牌 → 取值表达式 + 通用步骤）：这两个
+    # 原子的"手牌张数钳位 + 逐张记主动弃牌"语义与 ``move_to_discard`` 完全一致，
+    # 缺的只是取值能力，已补成 ``zone_random_ids``（随机 N 张）与
+    # ``zone_top_ids`` 的 ``order:"bottom"``（尾部 N 张）；记账统一走
+    # ``GameEngine._discard_card_and_note``。N = 请求张数（表达式），
+    # 下面两条按"默认参数"写（不写 ``count_as_active_discard`` 时默认 true）。
+    "random_discard_from_hand": (
+        '[{"op":"set_var","name":"count","value":0},'
+        '{"op":"for_each","items":{"op":"zone_random_ids","target":"target","zone":"hand",'
+        '"count":N},"as":"pick_iid","steps":['
+        '{"op":"move_to_discard","card":{"ref":"card_instance","instance_id":'
+        '{"op":"var","name":"pick_iid"}},"count_as_active_discard":true,"silent":true},'
+        '{"op":"add_var","name":"count","value":1}]},'
+        '{"op":"log","target":"target","message":"{target}随机弃置{count}张手牌"}]'
+    ),
+    "discard": (
+        '[{"op":"for_each","items":{"op":"zone_top_ids","zone":"hand","order":"bottom",'
+        '"count":N},"as":"pick_iid","steps":['
+        '{"op":"move_to_discard","card":{"ref":"card_instance","instance_id":'
+        '{"op":"var","name":"pick_iid"}},"count_as_active_discard":true,"silent":true}]},'
+        '{"op":"log","message":"{source}丢弃{amount}张手牌","amount":N}]'
     ),
 }
 

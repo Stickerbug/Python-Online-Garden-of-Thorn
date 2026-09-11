@@ -36,10 +36,10 @@ ADVANCED_ATOMIC_OPS = {
     "player_stat_change",
     "clear_status", "status_add_named", "status_remove_named", "set_status_named",
     "turn_mod_add", "resource_spend", "global_mult", "equip_reduce_draw",
-    "discard", "choose_from_deck", "choose_from_discard", "choose_from_exile",
+    "choose_from_deck", "choose_from_discard", "choose_from_exile",
     "reveal_enemy_hand", "reveal_hand", "reveal_deck_top", "steal_enemy_card",
     "reveal_hand_cards",
-    "steal_card", "copy_card", "copy_choice_with_discount", "random_discard_from_hand",
+    "steal_card", "copy_card", "copy_choice_with_discount",
     "put_card_to_deck", "shuffle_discard_into_deck", "give_card_to_hand",
     "give_card_to_deck", "give_card_to_discard", "remove_specific_card",
     "move_to_hand", "move_to_discard", "move_to_deck", "move_to_exile",
@@ -99,6 +99,8 @@ ADVANCED_ATOMIC_OPS = {
     "grant_temp_swift_highest_e", "delayed_blind_next_turn",
     "delayed_reveal_hand_next_turn",
     "declare_forced_target",
+    # Round 27：`discard` / `random_discard_from_hand` 拆成"取值表达式 + 通用步骤"，
+    # 实现删除（见 REMOVED_ATOMIC_OPS 的替代写法）。
 }
 
 # 旧名 → 新名。只保留仍被卡数据、测试或工具引用的条目；已经没有任何引用
@@ -1432,8 +1434,36 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         player_id = _player_id(engine, target)
         zone = str(expr.get("zone") or "deck")
         count = max(0, _to_int(eval_v2_value(engine, context, expr.get("count", 3))))
-        cards = _zone(engine, player_id, zone)[:count]
+        cards = list(_zone(engine, player_id, zone))
+        # Round 27：``order``（默认 "top"）让同一个取值算子既能取顶部，也能取
+        # 底部。"bottom" 从尾部往前给（与逐张 ``.pop()`` 取出的顺序一致），
+        # ``discard`` 这类"从手牌尾部弃 N 张"的效果因此可以写进卡数据。
+        order = str(expr.get("order", "top") or "top").strip().lower()
+        if order in ("bottom", "tail", "end", "尾部", "底部"):
+            cards = list(reversed(cards[-count:])) if count else []
+        else:
+            cards = cards[:count]
         return [getattr(card, "instance_id", None) for card in cards if getattr(card, "instance_id", None) is not None]
+    if op == "zone_random_ids":
+        # Round 27：区域里随机 N 张（不重复）的 ``instance_id`` 列表。
+        # 抽样过程与旧 ``random_discard_from_hand`` 原子逐字相同——对"当前区域
+        # 的快照副本"反复 ``random.choice`` + 移除，所以同一个随机种子下两条
+        # 路径抽出的牌完全一致。``count`` 超过区域牌数时自动按可用张数钳位。
+        target = resolve_v2_target(engine, context, expr.get("target", "source"))
+        player_id = _player_id(engine, target)
+        zone = str(expr.get("zone") or "hand")
+        count = max(0, _to_int(eval_v2_value(engine, context, expr.get("count", 1))))
+        cards = list(_zone(engine, player_id, zone))
+        picked = []
+        for _ in range(min(count, len(cards))):
+            card = random.choice(cards)
+            cards.remove(card)
+            picked.append(card)
+        return [
+            getattr(card, "instance_id", None)
+            for card in picked
+            if getattr(card, "instance_id", None) is not None
+        ]
     if op == "count":
         value = resolve_v2_target(engine, context, expr.get("selector", expr.get("of", expr.get("value", []))))
         return len(value) if isinstance(value, list) else (1 if value is not None else 0)
@@ -3235,7 +3265,7 @@ def _materialize_atomic_value(engine, context: Dict[str, Any], value: Any):
         "damage_amount", "current_damage", "damage_source", "source_player", "target_player",
         "last_positive_hits", "positive_hits",
         "hit_count", "damage_hits",
-        "status_stack", "get", "deck_top_ids", "zone_top_ids",
+        "status_stack", "get", "deck_top_ids", "zone_top_ids", "zone_random_ids",
         "last_crit_hits", "crit_hits", "status_count", "visible_status_count",
         "counter_cards_in_hand", "counters_in_hand",
         "play_was_countered", "was_countered",

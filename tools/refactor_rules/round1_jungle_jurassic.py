@@ -70,8 +70,38 @@ def _acid(params):
                     "amount": {"op": "selected_cards_count"},
                 },
                 {
-                    "op": "random_discard_from_hand",
+                    # Round 27：``random_discard_from_hand`` 原子已拆成
+                    # "取值表达式 + 通用步骤"（§25），规则同步成新写法。
+                    "op": "set_var",
+                    "name": "count",
+                    "value": 0,
+                },
+                {
+                    "op": "for_each",
+                    "items": {
+                        "op": "zone_random_ids",
+                        "target": params.get("target", "target"),
+                        "zone": "hand",
+                        "count": 2,
+                    },
+                    "as": "acid_discard_iid",
+                    "steps": [
+                        {
+                            "op": "move_to_discard",
+                            "card": {
+                                "ref": "card_instance",
+                                "instance_id": {"op": "var", "name": "acid_discard_iid"},
+                            },
+                            "count_as_active_discard": True,
+                            "silent": True,
+                        },
+                        {"op": "add_var", "name": "count", "value": 1},
+                    ],
+                },
+                {
+                    "op": "log",
                     "target": params.get("target", "target"),
+                    "message": "{source}丢弃{amount}张并抽{amount}张牌；{target}随机丢弃{count}张牌",
                     "amount": 2,
                 },
             ],

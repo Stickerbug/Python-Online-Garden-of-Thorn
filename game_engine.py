@@ -1004,13 +1004,14 @@ class GameEngine:
         # global_*_mult 一并合并（见 mod_spec_v2.REMOVED_ATOMIC_OPS 的替代写法），
         # 这里不再登记旧名——写出来会拿到"已移除 + 请改用"的显式报错。
         'clear_status': 'clear_status',
-        'discard': 'discard',
         'choose_from_exile': 'choose_from_exile',
         'reveal_hand': 'reveal_enemy_hand',
         'reveal_deck_top': 'reveal_deck_top',
         'steal_card': 'steal_enemy_card',
         'copy_card': 'copy_card',
-        'random_discard_from_hand': 'random_discard_from_hand',
+        # Round 27: ``discard`` / ``random_discard_from_hand`` 的实现与别名一起
+        # 删除（拆成"取值表达式 + 通用步骤"，见
+        # mod_spec_v2.REMOVED_ATOMIC_OPS 的替代写法）。
         # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
         # 是 Round 1 草稿名，实现与别名一并删除（老数据会得到显式
         # "已移除 + 替代写法" 报错，见 mod_spec_v2.REMOVED_ATOMIC_OPS）。
@@ -8616,6 +8617,20 @@ class GameEngine:
     def _record_ocean_active_discard(self, player_id: int, amount: int = 1):
         self._note_active_discard(player_id, amount)
 
+    def _discard_card_and_note(self, owner_id: int, card: CardInstance,
+                               count_as_active_discard: bool = True):
+        """把一张牌放进弃牌堆，并按需记一次"主动弃牌"。
+
+        Round 27（丢弃族语义统一）：``move_to_discard`` 与
+        ``discard_hand_by_paid_e``（以及被拆掉的 ``discard`` /
+        ``random_discard_from_hand`` 的数据化替代写法）都走这一条路径——
+        "入弃牌堆"与"记账"共用同一份实现、同一个顺序（先入堆、再记账，
+        与旧 ``discard`` / ``random_discard_from_hand`` 逐字一致）。
+        """
+        self._discard_card(self.players[owner_id], card)
+        if count_as_active_discard:
+            self._note_active_discard(owner_id, 1)
+
     def _note_active_discard(self, player_id: int, amount: int = 1, enabled: bool = True):
         """Record "this player actively discarded a hand card".
 
@@ -9378,26 +9393,6 @@ class GameEngine:
             display = f"{amount:+}" if isinstance(amount, (int, float)) else str(amount)
         self.log_msg(log or f"{self.pn(target_id)}{text}{display}")
 
-    def _atomic_discard(self, player_id, card, params, log, choice, context):
-        amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
-        ps = self.players[player_id]
-        count_as_active_discard = params.get('count_as_active_discard', True) is not False
-        discarded = 0
-        for _ in range(min(amount, len(ps.hand))):
-            c = ps.hand.pop()
-            self._discard_card(ps, c)
-            discarded += 1
-            if count_as_active_discard:
-                self._note_active_discard(player_id, 1)
-        if params.get('silent') or log is False:
-            return
-        if log:
-            self.log_msg(self._format_step_log(
-                log, target=self.pn(player_id), source=self.pn(player_id), amount=discarded, count=discarded,
-            ))
-            return
-        self.log_msg(f"{self.pn(player_id)}丢弃{amount}张手牌")
-
     def _atomic_choose_from_exile(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
         target = None
@@ -9599,31 +9594,6 @@ class GameEngine:
                 self.log_msg(log)
         elif not target:
             self.log_msg(log or f"{self.pn(player_id)}未选择要复制的牌")
-
-    def _atomic_random_discard_from_hand(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
-        ts = self.players[target_id]
-        count_as_active_discard = params.get('count_as_active_discard', True) is not False
-        discarded = 0
-        for _ in range(min(amount, len(ts.hand))):
-            c = random.choice(ts.hand)
-            ts.hand.remove(c)
-            self._discard_card(ts, c)
-            discarded += 1
-            if count_as_active_discard:
-                self._note_active_discard(target_id, 1)
-        if params.get('silent') or log is False:
-            return
-        if log:
-            self.log_msg(self._format_step_log(
-                log, target=self.pn(target_id), source=self.pn(player_id),
-                amount=amount, count=discarded, discarded=discarded,
-            ))
-            return
-        self.log_msg(log or f"{self.pn(target_id)}随机弃置{discarded}张手牌")
 
     def _atomic_put_card_to_deck(self, player_id, card, params, log, choice, context):
         position = params.get('position', 'top')
@@ -10467,9 +10437,7 @@ class GameEngine:
             owner_id = forced_owner_ids[0]
         elif owner_id is None:
             owner_id = owner_before if owner_before is not None else player_id
-        self._discard_card(self.players[owner_id], target_card)
-        if note_active_discard:
-            self._record_ocean_active_discard(owner_id, 1)
+        self._discard_card_and_note(owner_id, target_card, note_active_discard)
         if params.get('silent') or params.get('hide_log') or (isinstance(context, dict) and context.get('suppress_detail_logs')):
             return
         self.log_msg(log or f"{target_card.name_cn}移入弃牌堆")
@@ -18473,9 +18441,8 @@ class GameEngine:
             for target_card in matched:
                 if target_card in ps.hand:
                     ps.hand.remove(target_card)
-                    self._discard_card(ps, target_card)
+                    self._discard_card_and_note(tid, target_card, count_as_active_discard)
                     total += 1
-                    self._note_active_discard(tid, 1, enabled=count_as_active_discard)
         if log:
             self.log_msg(log)
         elif total > 0:
@@ -18831,6 +18798,17 @@ class GameEngine:
     #                     + ``destroy_current_equipment``
     #   * 抽到手牌上限  → ``if(gap > 0)`` + ``draw_cards(amount: hand_limit - hand_count)``
     # 完整对照表与 A/B 证据见 docs/引擎原子与数据步骤清单.md §24。
+
+    # Round 27：``discard``（自弃手牌尾部 N 张）与 ``random_discard_from_hand``
+    # （随机弃目标手牌 N 张）也搬进卡数据——共性缺口只有"区域取牌"这一个取值
+    # 能力，已补在 ``mod_runtime_v2.eval_v2_value``：
+    #   * ``zone_random_ids``（新的取值表达式）= 区域里随机 N 张的 instance_id
+    #   * ``zone_top_ids`` 新增 ``order: "bottom"`` = 从尾部往前取 N 张
+    # 拆出来的写法（旧名写在 mod_spec_v2.REMOVED_ATOMIC_OPS 里带替代 JSON）：
+    #   * 随机弃牌 → ``for_each(zone_random_ids)`` + ``move_to_discard`` + ``log``
+    #   * 自弃尾部 → ``for_each(zone_top_ids(order: "bottom"))`` + ``move_to_discard``
+    # 记账走统一的 :meth:`_discard_card_and_note`（与 ``move_to_discard`` /
+    # ``discard_hand_by_paid_e`` 同一份实现）。A/B 见 docs/引擎原子与数据步骤清单.md §25。
 
     def _atomic_apply_turn_regen(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
