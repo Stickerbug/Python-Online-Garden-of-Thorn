@@ -29,6 +29,43 @@ def load_standalone_python_function(source, function_name):
 
 
 class ModSettingsStateTests(unittest.TestCase):
+    def test_ranked_and_casual_mod_selection_use_separate_storage_keys(self):
+        """建议 #82：天梯与娱乐各存一套官方模组选择，互不覆盖。"""
+        helper = source_between(
+            GAME_JS,
+            'const DISABLED_MODS_STORAGE_KEYS',
+            'function getDisabledMods()',
+        )
+        self.assertIn("casual: 'gtn_disabled_mods'", helper)
+        self.assertIn("ranked: 'gtn_disabled_mods_ranked'", helper)
+        self.assertIn('isRankedMatchMode(mode)', helper)
+        self.assertIn('function hasSavedDisabledModsPreference()', helper)
+
+        getter = source_between(
+            GAME_JS,
+            'function getDisabledMods()',
+            'function writeDisabledModsPreference(',
+        )
+        self.assertIn('disabledModsStorageKey()', getter)
+        # 天梯键还没写过时回退读娱乐键（一次性迁移），但不能把娱乐键当写入目标。
+        self.assertIn('DISABLED_MODS_STORAGE_KEYS.casual', getter)
+        self.assertNotIn("localStorage.setItem('gtn_disabled_mods'", getter)
+
+        writer = source_between(
+            GAME_JS,
+            'function writeDisabledModsPreference(',
+            'function reconcileKnownBundledMods(',
+        )
+        self.assertIn('disabledModsStorageKey()', writer)
+        self.assertNotIn("localStorage.setItem('gtn_disabled_mods'", writer)
+
+        login_payload = source_between(
+            GAME_JS,
+            'function getModLoginPayload()',
+            'function getModSettingsUpdatePayload()',
+        )
+        self.assertIn('hasSavedDisabledModsPreference()', login_payload)
+
     def test_invite_accept_does_not_rebuild_preferences_from_hidden_checkboxes(self):
         section = source_between(
             GAME_JS,
@@ -76,7 +113,8 @@ class ModSettingsStateTests(unittest.TestCase):
             'function getModLoginPayload()',
             'function getModSettingsUpdatePayload()',
         )
-        self.assertIn("localStorage.getItem('gtn_disabled_mods') !== null", login_payload)
+        # 建议 #82 起按当前模式取键（娱乐 gtn_disabled_mods / 天梯 gtn_disabled_mods_ranked）。
+        self.assertIn('hasSavedDisabledModsPreference()', login_payload)
         self.assertIn('...(hasSavedPreference ? { disabled_mods: getDisabledMods() } : {})', login_payload)
 
     def test_settings_update_still_sends_an_explicit_disabled_list(self):
@@ -117,9 +155,9 @@ class ModSettingsStateTests(unittest.TestCase):
         )
         self.assertIn('missingDefaults', reconcile)
         self.assertIn('markExplicit: false', reconcile)
-        self.assertIn("localStorage.getItem('gtn_disabled_mods') !== null", reconcile)
+        self.assertIn('hasSavedDisabledModsPreference()', reconcile)
         self.assertIn('localStorage.getItem(\'gtn_known_official_mods\')', reconcile)
-        self.assertIn('localStorage.getItem(\'gtn_disabled_mods\')', reconcile)
+        self.assertIn('localStorage.getItem(disabledModsStorageKey())', reconcile)
 
     def test_split_dlc_mods_are_disabled_before_the_first_settings_open(self):
         section = source_between(
@@ -130,7 +168,8 @@ class ModSettingsStateTests(unittest.TestCase):
         self.assertIn('if (!Array.isArray(disabled)) disabled = getDefaultDisabledMods()', section)
         self.assertIn('V11_DLC_DEFAULT_MIGRATION_KEY', section)
         self.assertIn('...V11_DLC_MOD_FILENAMES', section)
-        self.assertIn("localStorage.setItem('gtn_disabled_mods'", section)
+        self.assertIn('localStorage.setItem(storageKey,', section)
+        self.assertIn('disabledModsStorageKey()', section)
 
     def test_server_rejects_out_of_order_mod_setting_revisions(self):
         self.assertIn('MOD_SETTINGS_STALE_REQUEST', APP_PY)

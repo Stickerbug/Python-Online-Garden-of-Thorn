@@ -36290,12 +36290,7 @@ function getSettingsModSourceTab() {
 }
 
 function getModLoginPayload() {
-    let hasSavedPreference = true;
-    try {
-        hasSavedPreference = localStorage.getItem('gtn_disabled_mods') !== null;
-    } catch (_) {
-        hasSavedPreference = true;
-    }
+    const hasSavedPreference = hasSavedDisabledModsPreference();
     return {
         ...(hasSavedPreference ? { disabled_mods: getDisabledMods() } : {}),
         ...getCommunityModSelection(),
@@ -37289,9 +37284,41 @@ async function deleteCommunityMod(mod) {
     }
 }
 
-function getDisabledMods() {
+// 建议 #82（已采纳）：天梯与娱乐各存一套官方模组选择。天梯对娱乐模组有硬门禁，
+// 但官方模组的取舍长期和娱乐共用一份，导致每次进天梯都要重新叉掉一遍。
+// 模式由 getSettingsModMatchMode() 决定：大厅/对局流程内按当前对局模式，
+// 主页、单人训练场、故事等流程外回到 casual。
+const DISABLED_MODS_STORAGE_KEYS = {
+    casual: 'gtn_disabled_mods',
+    ranked: 'gtn_disabled_mods_ranked',
+};
+
+function disabledModsStorageKey(mode = getSettingsModMatchMode()) {
+    return isRankedMatchMode(mode)
+        ? DISABLED_MODS_STORAGE_KEYS.ranked
+        : DISABLED_MODS_STORAGE_KEYS.casual;
+}
+
+function hasSavedDisabledModsPreference() {
     try {
-        const raw = localStorage.getItem('gtn_disabled_mods');
+        const storageKey = disabledModsStorageKey();
+        if (localStorage.getItem(storageKey) !== null) return true;
+        return storageKey === DISABLED_MODS_STORAGE_KEYS.ranked
+            && localStorage.getItem(DISABLED_MODS_STORAGE_KEYS.casual) !== null;
+    } catch (_) {
+        return true;
+    }
+}
+
+function getDisabledMods() {
+    const storageKey = disabledModsStorageKey();
+    try {
+        let raw = localStorage.getItem(storageKey);
+        if (raw === null && storageKey === DISABLED_MODS_STORAGE_KEYS.ranked) {
+            // 建议 #82：天梯还没有自己的选择时，先沿用娱乐那一份（首次迁移），
+            // 之后在天梯里改过的结果只写天梯键，不再覆盖娱乐。
+            raw = localStorage.getItem(DISABLED_MODS_STORAGE_KEYS.casual);
+        }
         const hasSavedPreference = raw !== null;
         let disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
         if (!Array.isArray(disabled)) disabled = getDefaultDisabledMods();
@@ -37299,12 +37326,12 @@ function getDisabledMods() {
             localStorage.setItem(V11_DLC_DEFAULT_MIGRATION_KEY, '1');
             if (hasSavedPreference) {
                 disabled = [...(Array.isArray(disabled) ? disabled : []), ...V11_DLC_MOD_FILENAMES];
-                localStorage.setItem('gtn_disabled_mods', JSON.stringify(Array.from(new Set(disabled))));
+                localStorage.setItem(storageKey, JSON.stringify(Array.from(new Set(disabled))));
             }
         }
         if (shouldMigrateLegacyOfficialModDefault(disabled) || shouldMigrateOfficialModDefaultV3(disabled)) {
             disabled = getDefaultDisabledMods();
-            localStorage.setItem('gtn_disabled_mods', JSON.stringify(disabled));
+            localStorage.setItem(storageKey, JSON.stringify(disabled));
             localStorage.setItem('gtn_official_mod_default_v2', '1');
             localStorage.setItem('gtn_official_mod_default_v3', '1');
         }
@@ -37315,10 +37342,11 @@ function getDisabledMods() {
 }
 
 function writeDisabledModsPreference(disabled, { trackChange = true, markExplicit = true } = {}) {
+    const storageKey = disabledModsStorageKey();
     const next = coerceValidDisabledMods(disabled).disabled.slice().sort();
     let current = null;
     try {
-        const raw = localStorage.getItem('gtn_disabled_mods');
+        const raw = localStorage.getItem(storageKey);
         const parsed = raw ? JSON.parse(raw) : null;
         if (Array.isArray(parsed)) current = coerceValidDisabledMods(parsed).disabled.slice().sort();
     } catch (_) {
@@ -37327,7 +37355,7 @@ function writeDisabledModsPreference(disabled, { trackChange = true, markExplici
     const changed = !current
         || current.length !== next.length
         || current.some((filename, index) => filename !== next[index]);
-    localStorage.setItem('gtn_disabled_mods', JSON.stringify(next));
+    localStorage.setItem(storageKey, JSON.stringify(next));
     localStorage.setItem(V11_DLC_DEFAULT_MIGRATION_KEY, '1');
     if (markExplicit) {
         localStorage.setItem('gtn_official_mod_default_v2', '1');
@@ -37360,7 +37388,7 @@ function reconcileKnownBundledMods() {
         // with the server's real bundled list so newly added mods stay off.
         let stored = null;
         try {
-            const rawDisabled = localStorage.getItem('gtn_disabled_mods');
+            const rawDisabled = localStorage.getItem(disabledModsStorageKey());
             stored = rawDisabled ? JSON.parse(rawDisabled) : null;
         } catch (_) {
             stored = null;
@@ -37377,7 +37405,7 @@ function reconcileKnownBundledMods() {
         const newlyAdded = current.filter(filename => (
             !known.has(filename) && !DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES.has(filename)
         ));
-        if (newlyAdded.length && localStorage.getItem('gtn_disabled_mods') !== null) {
+        if (newlyAdded.length && hasSavedDisabledModsPreference()) {
             writeDisabledModsPreference([...getDisabledMods(), ...newlyAdded]);
         }
     }
@@ -37558,7 +37586,7 @@ async function saveDisabledMods() {
         showActionToast(tf('mod_selection_force_vanilla'), 2800, 'error');
     }
     disabled = writeDisabledModsPreference(disabled);
-    if (!localStorage.isPersistent('gtn_disabled_mods')) {
+    if (!localStorage.isPersistent(disabledModsStorageKey())) {
         console.info('[storage] mod selection is using session memory; server synchronization will continue normally');
     }
     const serverInput = $('settings-server-input');
