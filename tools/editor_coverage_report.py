@@ -5,8 +5,9 @@
 
 * 每个步骤的 op 都要有句型模板（`src/gtn-text/templates.js` 的键）；
 * 条件表达式要落在编辑器支持的三种形态里：
-  ``compare``（左值是支持的形式或字面量，右值是字面量）、
-  ``not + card_has_tag``、``and``/``or`` 且两侧都支持；
+  ``compare``（左右两侧都是"可编辑的值表达式"）、``not``、``and``/``or`` 且两侧都支持；
+  值表达式 = 字面量 / 取值形态（player_stat、equipment_prop…）/ 算术表达式
+  （add/sub/mul/div/min/max/floor/ceil，可递归嵌套）；
 * 管道型 op（变量、战报文案、每回合一次）不计入失败——它们不写进描述，编辑器用折叠行承载。
 
     python tools/editor_coverage_report.py
@@ -63,6 +64,11 @@ SIMPLE_CONDITION_OPS = {
     "hand_full", "zone_exists", "card_exists",
 }
 
+# effect-editor.js 的 ARITH_FORMS：算术表达式（Round 18 起递归渲染操作数）
+ARITHMETIC_OPS = {"add", "sub", "mul", "div", "min", "max", "floor", "ceil"}
+# 左右两侧共用的值编辑器额外支持的取值形态
+EXTRA_VALUE_FORMS = {"equipment_prop", "equipment_property"}
+
 
 def _condition_parts(node):
     """and/or 的分支列表：values / conditions / left+right 三种写法都认。"""
@@ -85,16 +91,31 @@ def supported_templates() -> set:
     return set(re.findall(r"^    ([a-z0-9_]+):\s*\{", text[start:end], re.MULTILINE))
 
 
+def value_supported(node) -> bool:
+    """编辑器能不能行内编辑这个值表达式（字面量 / 取值形态 / 算术递归）。"""
+
+    if not isinstance(node, dict):
+        return True
+    op = str(node.get("op") or node.get("ref") or "")
+    if op in ARITHMETIC_OPS:
+        if isinstance(node.get("values"), list):
+            parts = node["values"]
+        elif "value" in node:
+            parts = [node.get("value")]
+        else:
+            parts = [node.get("a"), node.get("b")]
+        return bool(parts) and all(value_supported(part) for part in parts)
+    if op in LEFT_FORMS or op in VAR_RIGHT_OPS or op in PLAYER_RIGHT_OPS or op in EXTRA_VALUE_FORMS:
+        return True
+    return False
+
+
 def condition_supported(node) -> bool:
     if not isinstance(node, dict):
         return True
     op = str(node.get("op") or node.get("ref") or "")
     if op == "compare" or op in SYMBOL_OPERATORS:
-        left, right = node.get("a"), node.get("b")
-        left_ok = (not isinstance(left, dict)) or str(left.get("op") or left.get("ref") or "") in LEFT_FORMS
-        right_op = str(right.get("op") or right.get("ref") or "") if isinstance(right, dict) else ""
-        right_ok = (not isinstance(right, dict)) or right_op in VAR_RIGHT_OPS or right_op in PLAYER_RIGHT_OPS
-        return left_ok and right_ok
+        return value_supported(node.get("a")) and value_supported(node.get("b"))
     if op == "not":
         inner = node.get("value") or node.get("cond") or node.get("condition")
         if inner is None and isinstance(node.get("conditions"), list) and node["conditions"]:

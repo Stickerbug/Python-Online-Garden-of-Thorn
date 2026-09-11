@@ -12714,7 +12714,13 @@ class GameEngine:
                 '装备摧毁保护': ps.equipment_protection,
                 '装备保护': ps.equipment_protection,
             }
-            return int(counts.get(status, 0))
+            if status in counts:
+                return int(counts.get(status, 0))
+            # Round 19: names outside the built-in table (``hel:luck`` and the
+            # rest of ``custom_statuses``) read through the shared, immune-aware
+            # accessor, so data conditions such as ``幸运 + 4 > 12`` are
+            # expressible without an engine-side per-card branch.
+            return int(self._get_status_count(tid, status))
         if ref == 'hand_size':
             tid = self._resolve_target(player_id, expr.get('target', 'self'))
             return len(self.players[tid].hand)
@@ -13034,44 +13040,122 @@ class GameEngine:
                 if isinstance(direct_nested, list):
                     yield from self._walk_choice_effects(direct_nested)
 
+    def _play_choice_request_declaration(self, card: Optional[CardInstance]) -> dict:
+        """The ``play_choice_request`` block declared by the card's data.
+
+        Round 19: the engine no longer hardcodes which card asks what before
+        being resolved.  Card data declares the prompt (``choice_key`` /
+        ``needs_target`` / ``zones`` / ``condition`` / ``request``) and the
+        engine only performs the structural checks below.
+        """
+        from engine_runtime_support import play_choice_request_declaration
+        return play_choice_request_declaration(card)
+
+    def _play_choice_request_payload(self, declaration: dict) -> Optional[dict]:
+        """The client payload the declaration asks the engine to forward."""
+        if not isinstance(declaration, dict):
+            return None
+        request = declaration.get('request')
+        if isinstance(request, dict) and request:
+            payload = copy.deepcopy(request)
+            payload.setdefault('type', 'request_confirm')
+            return payload
+        params = declaration.get('params')
+        if isinstance(params, dict) and params:
+            return {'type': 'request_confirm', 'params': copy.deepcopy(params)}
+        return None
+
+    def _play_choice_request_options(self, declaration: dict) -> tuple:
+        """The values that count as an answer to the declared ``choice_key``."""
+        request = declaration.get('request') if isinstance(declaration.get('request'), dict) else {}
+        params = request.get('params') if isinstance(request.get('params'), dict) else {}
+        options = params.get('options')
+        if options is None:
+            options = declaration.get('options')
+        if isinstance(options, (list, tuple, set, frozenset)):
+            return tuple(str(item) for item in options)
+        return ()
+
+    def _play_choice_request_answer(self, declaration: dict, choice) -> str:
+        """The value already picked for the declared ``choice_key`` ('' if none)."""
+        if not isinstance(choice, dict):
+            return ''
+        key = str(declaration.get('choice_key') or '').strip()
+        if not key:
+            return ''
+        return str(choice.get(key) or '')
+
+    def _play_choice_request_zone_ok(self, declaration: dict, card: Optional[CardInstance]) -> bool:
+        """``zones`` 白名单：声明了就要在那些区域里才发问。"""
+        zones = declaration.get('zones')
+        if isinstance(zones, (list, tuple, set, frozenset)):
+            allowed = {str(zone).strip().lower() for zone in zones if str(zone).strip()}
+            if allowed:
+                _owner_id, zone_name, _instance = self._find_card_location(card)
+                return str(zone_name or '').strip().lower() in allowed
+        return True
+
+    def _play_choice_request_owner(self, declaration: dict, card: Optional[CardInstance]):
+        """The owner whose condition is evaluated, honouring ``zones``."""
+        if not self._play_choice_request_zone_ok(declaration, card):
+            return None
+        owner_id, zone_name, _instance = self._find_card_location(card)
+        if owner_id is None:
+            return None
+        try:
+            owner_id = int(owner_id)
+        except Exception:
+            return None
+        if not self._valid_player_id(owner_id):
+            return None
+        return owner_id
+
+    def _play_choice_request_condition_met(self, declaration: dict, card: Optional[CardInstance],
+                                           choice: Optional[dict]) -> bool:
+        condition = declaration.get('condition')
+        if condition is None:
+            return True
+        owner_id = self._play_choice_request_owner(declaration, card)
+        if owner_id is None:
+            return False
+        prev_choice = getattr(self, '_active_choice', None)
+        if isinstance(choice, dict):
+            self._active_choice = choice
+        try:
+            return bool(self._eval_condition(owner_id, condition, card))
+        finally:
+            self._active_choice = prev_choice
+
+    def _play_choice_request_needed(self, declaration: dict, card: Optional[CardInstance],
+                                    choice: Optional[dict]) -> bool:
+        """Structural check: does the declaration still need an answer?"""
+        if not isinstance(declaration, dict) or not declaration:
+            return False
+        if not self._play_choice_request_zone_ok(declaration, card):
+            return False
+        if not self._play_choice_request_condition_met(declaration, card, choice):
+            return False
+        answer = self._play_choice_request_answer(declaration, choice)
+        options = self._play_choice_request_options(declaration)
+        if options:
+            return answer not in options
+        return not answer
+
+    def _declared_play_choice_request(self, card: CardInstance, declaration: dict,
+                                      choice: Optional[dict] = None) -> Optional[dict]:
+        if not self._play_choice_request_needed(declaration, card, choice):
+            return None
+        if declaration.get('needs_target') and self._choice_target_from_choice(choice, -1) < 0:
+            # ``needs_target``: the target picker runs before this prompt.
+            return None
+        return self._play_choice_request_payload(declaration)
+
     def _get_choice_request(self, card: CardInstance, choice: Optional[dict] = None):
-        if self._card_has_mark(card, 'bio:blood_sugar'):
-            target_id = self._choice_target_from_choice(choice, -1)
-            mode = str((choice or {}).get('bio_blood_sugar_mode') or '') if isinstance(choice, dict) else ''
-            if target_id >= 0 and mode not in ('electric_target', 'physical_target'):
-                return {
-                    'type': 'request_confirm',
-                    'params': {
-                        'choice_type': 'bio_blood_sugar_mode',
-                        'title': '血糖：选择伤害类型',
-                        'options': ['electric_target', 'physical_target'],
-                        'labels': [
-                            '对目标造成电伤，对自己造成物理伤害',
-                            '对目标造成物理伤害，对自己造成电伤',
-                        ],
-                        'cancellable': False,
-                    },
-                }
-        if self._card_has_mark(card, 'hel:poker_card'):
-            suit = str((choice or {}).get('hel_suit') or '') if isinstance(choice, dict) else ''
-            if suit not in ('heart', 'diamond', 'spade', 'club'):
-                owner_id, zone_name, _ = self._find_card_location(card)
-                if owner_id is not None and zone_name == 'hand' and self._hel_luck_value(owner_id) + 4 > 12:
-                    return {
-                        'type': 'request_confirm',
-                        'params': {
-                            'choice_type': 'hel_card_suit',
-                            'title': '选择花色',
-                            'options': ['heart', 'diamond', 'spade', 'club'],
-                            'labels': [
-                                '♥ 红桃：回复自己7H',
-                                '♦ 方片：本次最终伤害+6D',
-                                '♠ 黑桃：抽1张牌',
-                                '♣ 梅花：对目标施加3P',
-                            ],
-                            'cancellable': False,
-                        },
-                    }
+        declaration = self._play_choice_request_declaration(card)
+        if declaration:
+            declared = self._declared_play_choice_request(card, declaration, choice)
+            if declared is not None:
+                return declared
         effects = list(self._play_effects_for_card(card) or []) + list(self._v2_play_steps_for_card(card) or [])
         for effect in self._walk_choice_effects(effects):
             effect_type = self._effect_type(effect)
@@ -14496,9 +14580,11 @@ class GameEngine:
     def _card_needs_choice(self, card: CardInstance) -> bool:
         if 'wide_strike' in self._effective_card_flags(card):
             return False
-        if self._card_has_mark(card, 'bio:blood_sugar'):
-            # Blood Sugar first selects its attack target, then selects which
-            # side receives physical damage and which receives electric damage.
+        declaration = self._play_choice_request_declaration(card)
+        if declaration and self._play_choice_request_needed(declaration, card, None):
+            # Round 19: the pre-play prompt is declared by card data; a
+            # ``needs_target`` card (Blood Sugar) asks for the attack target
+            # first and for the mode right after.
             return True
         if self._card_has_flag(card, 'spikeball_boost'):
             owner_id, zone_name, _ = self._find_card_location(card)

@@ -1552,6 +1552,54 @@ def status_alias_names(declaration: dict) -> tuple:
     return canonical, tuple(names)
 
 
+PLAY_CHOICE_REQUEST_KEY = "play_choice_request"
+
+
+def play_choice_request_declaration(card) -> dict:
+    """The ``play_choice_request`` block declared by a card's data (Round 19).
+
+    The block is a card top-level key (the same place as ``status_aliases``) and
+    describes the prompt the engine has to raise *before* resolving a card:
+
+    ``choice_key``
+        the choice field the player answers (for example
+        ``bio_blood_sugar_mode``); the declaration counts as answered once the
+        field carries one of the declared options;
+    ``options``
+        optional value whitelist when the payload does not list its own
+        ``options``;
+    ``needs_target``
+        the target picker runs first; the prompt is only raised once the play
+        choice carries a target;
+    ``zones``
+        optional zone whitelist (for example ``["hand"]``); outside those zones
+        the card does not prompt;
+    ``condition``
+        optional condition tree (the engine's normal condition evaluator) that
+        gates the prompt;
+    ``request``
+        the payload the client receives, forwarded verbatim.
+
+    Accepts a ``CardDef`` or a ``CardInstance``; an undeclared card returns an
+    empty dict so the caller falls back to its previous behaviour.
+    """
+    card_def = getattr(card, "card_def", card)
+    if card_def is None:
+        return {}
+    containers = [card_def, getattr(card_def, "v2_resource", None)]
+    events = getattr(card_def, "v2_events", None)
+    if isinstance(events, dict):
+        containers.append(events)
+    for container in containers:
+        if isinstance(container, dict):
+            raw = container.get(PLAY_CHOICE_REQUEST_KEY)
+        else:
+            raw = getattr(container, PLAY_CHOICE_REQUEST_KEY, None)
+        if isinstance(raw, dict) and raw:
+            return raw
+    return {}
+
+
 # Player attributes an ``on_equipment_projection`` block may grant/revoke while
 # the equipment is active.  The declaration stores the *active* delta; suspending
 # (封印) applies it and resuming adds it back.
