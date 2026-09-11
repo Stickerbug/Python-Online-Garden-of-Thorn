@@ -118,7 +118,6 @@ _CORE_LOGIC_OPS = {
     "gain_m",
     "spend_resource",
     "draw",
-    "draw_to_hand_limit",
     "discard",
     "move_card",
     "create_card",
@@ -286,11 +285,8 @@ _CORE_LOGIC_OPS = {
     "goggles_enable",
     "assembler_effect",
     "request_reorder_deck",
-    "apply_jungle_status",
     "apply_turn_regen",
-    "magic_grapes_damage",
     "create_copies_to_deck_top",
-    "consume_magic_for_status",
     "plank_immunity",
     "magic_relic_trigger",
     "electric_web_arm",
@@ -299,8 +295,6 @@ _CORE_LOGIC_OPS = {
     "grant_temp_swift_highest_e",
     "delayed_blind_next_turn",
     "delayed_reveal_hand_next_turn",
-    "yin_yang_effect",
-    "flower_burst",
 
     # 由"卡专用原子 → 通用数据步骤"重构抽出的通用能力。
     # 它们本来就是引擎里可复用的原子，这里补登记以免被误算作长尾。
@@ -624,6 +618,44 @@ REMOVED_ATOMIC_OPS = {
     "sequence": None,
     "set": None,
     "stop": None,
+
+    # Round 26（公式型原子拆分）：下面 6 个原子把"从场上算出来的数"写死在实现
+    # 里（装备数 / 剩余 M / 牌堆数 / 手牌上限差）。公式已搬进卡数据，实现整个
+    # 删除，旧名给"已移除 + 替代写法"的显式报错。完整对照表与 A/B 证据见
+    # docs/引擎原子与数据步骤清单.md §24。
+    "apply_jungle_status": (
+        '{"op":"status_add_named","target":"target","status":"jungle:fragile","amount":1,'
+        '"log":"{target}获得{amount}层易损"}'
+    ),
+    "magic_grapes_damage": (
+        '{"op":"direct_damage","target":"target","amount":3,'
+        '"hits":{"op":"add","values":[1,{"op":"equipment_count","target":"target"}]},'
+        '"source":"电击","damage_type":"magic","damage_tag":"gtn:battery"}'
+    ),
+    "consume_magic_for_status": (
+        '[{"op":"set_var","name":"m","value":{"op":"player_stat","target":"self","stat":"magic"}},'
+        '{"op":"if","condition":{"op":"compare","a":{"op":"var","name":"m"},"operator":">","b":0},'
+        '"then":[{"op":"player_prop_set","target":"self","property":"magic","value":0},'
+        '{"op":"status_add_named","target":"target","status":"jungle:toxic_poison",'
+        '"amount":{"op":"var","name":"m"}}]}]'
+    ),
+    "yin_yang_effect": (
+        '[{"op":"set_var","name":"n","value":{"op":"deck_count","target":"target"}},'
+        '{"op":"move_cards_to_deck","target":"target","cards":"hand","position":"bottom","silent":true},'
+        '{"op":"draw_cards","target":"target","amount":{"op":"var","name":"n"}}]'
+    ),
+    "flower_burst": (
+        '{"op":"if","condition":{"op":"compare","a":{"op":"equipment_prop",'
+        '"equipment":"current_equipment","prop":"turns_equipped"},"operator":">=","b":1},'
+        '"then":[{"op":"status_add_named","target":"target","status":"poison","amount":16},'
+        '{"op":"destroy_current_equipment"}]}'
+    ),
+    "draw_to_hand_limit": (
+        '{"op":"if","condition":{"op":"compare","a":{"op":"sub","values":'
+        '[{"op":"player_stat","target":"self","stat":"hand_limit"},'
+        '{"op":"hand_count","target":"self"}]},"operator":">","b":0},'
+        '"then":[{"op":"draw_cards","target":"self","amount":...,"log_amount":"requested"}]}'
+    ),
 }
 
 # Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），

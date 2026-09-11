@@ -18711,21 +18711,10 @@ class GameEngine:
                 continue
             self.log_msg(f"{self.pn(target_id)}抽{len(drawn)}张牌")
 
-    def _atomic_draw_to_hand_limit(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        ps = self.players[target_id]
-        hand_limit = ps.hand_limit() if callable(getattr(ps, 'hand_limit', None)) else getattr(ps, 'hand_limit', HAND_LIMIT)
-        amount = max(0, int(hand_limit) - len(ps.hand))
-        if amount <= 0:
-            return
-        ps.draw_cards(amount)
-        if not (isinstance(context, dict) and context.get('suppress_detail_logs')):
-            self.log_msg(
-                self._format_step_log(log, target=self.pn(target_id), amount=amount)
-                or f"{self.pn(target_id)}抽{amount}张牌"
-            )
+    # Round 26: ``draw_to_hand_limit`` 的公式（手牌上限 - 手牌数）搬进了卡数据
+    # ——``if(gap > 0)`` + ``draw_cards(amount: player_stat hand_limit - hand_count,
+    # log_amount: "requested")``。旧名写在数据里会拿到 REMOVED_ATOMIC_OPS 的
+    # 显式报错。
 
     def _atomic_gain_e(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -18829,18 +18818,19 @@ class GameEngine:
     #   * 中毒/灼烧/淬毒 → ``{"op":"status_add_named","status":"poison"|"burn"|"toxic",...}``
     # 旧名写出来会拿到 mod_spec_v2.REMOVED_ATOMIC_OPS 的显式报错。
 
-    def _atomic_apply_jungle_status(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        status = str(params.get('status', 'jungle:shield'))
-        if self._status_application_blocked(target_id, status):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self._add_custom_status_value(target_id, status, amount)
-        label = str(params.get('label') or status.split(':')[-1])
-        if log is not False:
-            self.log_msg(log or f"{self.pn(target_id)}获得{amount}层{label}")
+    # Round 26：``apply_jungle_status`` / ``magic_grapes_damage`` /
+    # ``consume_magic_for_status`` / ``yin_yang_effect`` / ``flower_burst`` /
+    # ``draw_to_hand_limit`` 这六个"带公式的专用原子"已把公式搬进卡数据
+    # （取值表达式 + 通用原子），实现整个删除；旧名写出来会拿到
+    # ``mod_spec_v2.REMOVED_ATOMIC_OPS`` 的显式报错（含替代写法指路）：
+    #   * 施加丛林状态 → ``status_add_named(status=…, log="{target}获得{amount}层…")``
+    #   * 魔法葡萄      → ``direct_damage(hits: 1 + equipment_count(target))``
+    #   * 消耗 M 叠状态 → ``set_var`` + ``player_prop_set(magic=0)`` + ``status_add_named``
+    #   * 阴阳          → ``set_var(deck_count)`` + ``move_cards_to_deck(bottom)`` + ``draw_cards``
+    #   * 花朵绽放      → ``if(equipment_prop turns_equipped >= 1)`` + ``status_add_named``
+    #                     + ``destroy_current_equipment``
+    #   * 抽到手牌上限  → ``if(gap > 0)`` + ``draw_cards(amount: hand_limit - hand_count)``
+    # 完整对照表与 A/B 证据见 docs/引擎原子与数据步骤清单.md §24。
 
     def _atomic_apply_turn_regen(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -18870,22 +18860,6 @@ class GameEngine:
                 self._set_custom_status_alias_group(target_id, 'jungle:turn_heal_power', ('jungle:turn_heal_power', 'turn_heal_power'), 0)
             suffix = '' if suppressed else f'，+{power}H'
             self.log_msg(log or f"{self.pn(target_id)}获得回合回复：{remaining_turns};{merged_power}{suffix}")
-
-    def _atomic_magic_grapes_damage(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        base = self._eval_int(player_id, params.get('amount', 4), card, 4)
-        repeats = 1 + len(getattr(self.players[target_id], 'equipment', []) or [])
-        total = 0
-        for _ in range(repeats):
-            total += self._deal_direct_damage(
-                target_id,
-                base,
-                params.get('source', '电击'),
-                player_id,
-                damage_type=DAMAGE_TYPE_MAGIC,
-                damage_tag=DAMAGE_TAG_BATTERY,
-            )
-        self._last_damage_value[target_id] = int(total)
 
     def _atomic_create_copies_to_deck_top(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -18925,27 +18899,6 @@ class GameEngine:
             made.append(new_card)
         if log:
             self.log_msg(log)
-
-    def _atomic_consume_magic_for_status(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if self._status_application_blocked(target_id, params.get('status', 'jungle:toxic_poison')):
-            return
-        source_id = self._resolve_target(player_id, params.get('source', 'self'))
-        status = str(params.get('status', 'jungle:toxic_poison'))
-        amount = max(0, int(getattr(self.players[source_id], 'magic', 0) or 0))
-        if amount <= 0:
-            return
-        self.players[source_id].magic = 0
-        self._add_custom_status_value(target_id, status, amount)
-        if params.get('also_poison'):
-            self.players[target_id].poison += amount
-            self._normalize_status_value(self.players[target_id], 'poison')
-            self._note_achievement_status_peak(target_id)
-        label = str(params.get('label') or '剧毒')
-        if params.get('also_poison'):
-            self.log_msg(log or f"{self.pn(target_id)}+{amount}层{label}和{amount}P")
-        else:
-            self.log_msg(log or f"{self.pn(target_id)}+{amount}层{label}")
 
     def _jungle_team_members(self, target_id: int) -> List[int]:
         teams = getattr(self, 'teams', None)
@@ -19030,18 +18983,6 @@ class GameEngine:
         self.players[player_id].gain_magic(3)
         self.log_msg(log or f"{self.pn(player_id)}的魔法遗物消耗{self.pn(mate_id)}2M，自己+3M")
 
-    def _atomic_yin_yang_effect(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'target'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        ps = self.players[target_id]
-        draw_count = len(ps.deck)
-        hand_cards = list(ps.hand)
-        ps.hand.clear()
-        ps.deck.extend(hand_cards)
-        drawn = ps.draw_cards(draw_count)
-        self.log_msg(log or f"{self.pn(target_id)}将手牌置入牌堆底并抽{len(drawn)}张牌")
-
     def _atomic_shuffle_hand(self, player_id, card, params, log, choice, context):
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
             if not (0 <= tid < len(self.players)):
@@ -19050,22 +18991,6 @@ class GameEngine:
             if ps.hand and not self._is_status_immune(tid):
                 random.shuffle(ps.hand)
                 self.log_msg(log or f"{self.pn(tid)}因失明打乱手牌")
-
-    def _atomic_flower_burst(self, player_id, card, params, log, choice, context):
-        eq = self._find_equipment_for_card(player_id, card)
-        if eq is None or int(getattr(eq, 'turns_equipped', 0) or 0) < 1:
-            self.log_msg(f"{self.pn(player_id)}的花朵还未成熟")
-            return
-        target_id = self._resolve_target(player_id, params.get('target', 'target'))
-        if 0 <= target_id < len(self.players):
-            amount = self._eval_int(player_id, params.get('amount', 16), card, 16)
-            if self._status_application_blocked(target_id, 'poison'):
-                self._destroy_equipment(player_id, eq, check_protection=False)
-                return
-            self.players[target_id].poison += amount
-            self._normalize_status_value(self.players[target_id], 'poison')
-            self.log_msg(log or f"{self.pn(target_id)}+{amount}中毒")
-        self._destroy_equipment(player_id, eq, check_protection=False)
 
     def _atomic_for_each_target(self, player_id, card, params, log, choice, context):
         """Thin forwarder for the ``for_each_target`` preset (Round 16).

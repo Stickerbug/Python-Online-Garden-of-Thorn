@@ -88,12 +88,14 @@ ADVANCED_ATOMIC_OPS = {
     "reveal_tag_hand",
     "assembler_effect",
     "request_reorder_deck",
-    "apply_jungle_status", "apply_turn_regen", "magic_grapes_damage",
-    "create_copies_to_deck_top", "consume_magic_for_status",
+    # Round 26：apply_jungle_status / magic_grapes_damage /
+    # consume_magic_for_status / yin_yang_effect / flower_burst /
+    # draw_to_hand_limit 的公式已搬进卡数据，实现删除（见 REMOVED_ATOMIC_OPS）。
+    "apply_turn_regen",
+    "create_copies_to_deck_top",
     "plank_immunity",
     "magic_relic_trigger", "electric_web_arm",
-    "yin_yang_effect", "flower_burst",
-    "draw_to_hand_limit", "magic_salt_reflect", "third_eye_precision_or_hidden",
+    "magic_salt_reflect", "third_eye_precision_or_hidden",
     "grant_temp_swift_highest_e", "delayed_blind_next_turn",
     "delayed_reveal_hand_next_turn",
     "declare_forced_target",
@@ -713,6 +715,14 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
 
     if op == "draw_cards":
         amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", params.get("count", 1)))))
+        # Round 26: ``log_amount: "requested"`` prints the requested count
+        # instead of what the deck could actually supply.  "Draw up to the hand
+        # limit" needs that wording (the removed ``draw_to_hand_limit`` atom
+        # always announced the computed gap, even with an exhausted deck);
+        # the default stays "drawn" = the cards that really arrived.
+        log_requested = str(params.get("log_amount") or "").strip().lower() in (
+            "requested", "declared", "intended", "asked",
+        )
         for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "source"))):
             if _valid_player(engine, target_id):
                 if hasattr(engine, "_draw_cards_with_v2_hooks") and context.get("current_event") not in ("before_draw", "after_draw"):
@@ -720,16 +730,17 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 else:
                     drawn = engine.players[target_id].draw_cards(amount)
                 if not context.get("suppress_detail_logs"):
+                    log_count = amount if log_requested else len(drawn)
                     rendered = _render_step_log(engine, step, params, {
                         "target": engine.pn(target_id),
                         "source": engine.pn(_player_id(engine, context.get("source_player", target_id))),
-                        "amount": len(drawn),
-                        "count": len(drawn),
+                        "amount": log_count,
+                        "count": log_count,
                     })
                     if rendered:
                         engine.log_msg(rendered)
                     elif rendered is not False:
-                        engine.log_msg(f"{engine.pn(target_id)}抽{len(drawn)}张牌")
+                        engine.log_msg(f"{engine.pn(target_id)}抽{log_count}张牌")
         return {"success": True}
 
     if op in ("gain_e", "gain_m"):
