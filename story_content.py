@@ -2769,7 +2769,9 @@ STORY_RELICS = {
     'split_wide': _relic('裂解', 'Split', '获得时选择1张攻击牌，使其永久获得广域打击。', rarity='common', script='make_wide'),
     'favorite': _relic('钟爱', 'Favorite', '获得时选择1张牌，使其获得【钟爱】：打出时本场费用永久-1；若在手中打出别的牌则受到2D。', rarity='common', script='favorite_card'),
     'discard_mine': _relic('地雷', 'Mine', '你每丢弃10张牌，对随机敌人造成20D。', rarity='common', script='discard_mine', amount=10),
-    'infect': _relic('传染', 'Infect', '获得时选择1张牌，使其获得【传染】：打出时，使左右两边的牌在本场战斗中变为该牌。', rarity='common', script='infect_card'),
+    # 开发表格14《爬塔天赋设计》R59：传染的获取方式是「BOSS仅限1层」、稀有度「BOSS」，
+    # 所以它属于 BOSS 天赋池（special 稀有度 + STORY_BOSS_RELIC_IDS），不进普通天赋池。
+    'infect': _relic('传染', 'Infect', '获得时选择1张牌，使其获得【传染】：打出时，使左右两边的牌在本场战斗中变为该牌。', rarity='special', script='infect_card'),
     'kill_flow': _relic('势如破竹', 'Kill Flow', '每击杀1名敌人，获得2E、2M。', rarity='common', script='kill_reward', amount=2),
     'many_cards': _relic('多多益善', 'More Is More', '牌组每有15张牌，战斗开始时获得1层力量与1层耐力。', rarity='common', script='deck_count_power', amount=15),
     'shop_refresh': _relic('挥金如土', 'Squander', '商店拥有刷新功能，初始25G，每次刷新增加25G。', rarity='common', script='shop_refresh'),
@@ -2794,9 +2796,13 @@ STORY_BOSS_RELIC_IDS = tuple(
         'strive', 'gluttony', 'frugal', 'avoid_elite', 'grab_every_card',
         'cognitive_bias', 'first_strike', 'fast_learning', 'peaceful_mind',
         'phoenix', 'sword_strategy', 'perfection',
-        'rigid', 'story_pill', 'nimble',
+        'rigid', 'story_pill', 'nimble', 'infect',
     }
 )
+
+# 开发表格14《爬塔天赋设计》R59：传染的获取方式是「BOSS仅限1层」，
+# 即一个旅程里最多只该拥有 1 层：BOSS 天赋三选一不再出现它，重复获得也不叠层。
+STORY_SINGLE_LAYER_RELIC_IDS = ('infect',)
 
 
 def _move(zh, en, *effects):

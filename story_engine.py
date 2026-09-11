@@ -19,6 +19,7 @@ from story_content import (
     STORY_PLAYER_ATTACK_EFFECT_TYPES,
     STORY_RELICS,
     STORY_RULES,
+    STORY_SINGLE_LAYER_RELIC_IDS,
     STORY_STATUSES,
     STORY_TRAITS,
     STORY_TRAIT_VALUE_KEYS,
@@ -7728,8 +7729,15 @@ def _random_relic(state, seed):
 
 
 def _boss_relic_choices(state, seed, count=3):
+    # 表格14 R59「BOSS仅限1层」：单层 BOSS 天赋（传染）一旦拥有就彻底出池，
+    # 连「全部已持有回退全池」的兜底分支也不会重新发到它。
+    owned_single_layer = {
+        relic_id for relic_id in STORY_SINGLE_LAYER_RELIC_IDS
+        if _has_relic(state, relic_id)
+    }
     pool = [
         relic_id for relic_id in STORY_BOSS_RELIC_IDS
+        if relic_id not in owned_single_layer
         if not (
             relic_id == 'peaceful_mind'
             and _has_relic(state, 'grab_every_card')
@@ -7824,6 +7832,9 @@ def _gain_relic(state, relic_id, seed, events):
     if not relic_id or relic_id not in STORY_RELICS:
         return
     player = state['player']
+    # 表格14 R59：传染是「BOSS仅限1层」——重复获得不叠加、也不重放获得效果。
+    if relic_id in STORY_SINGLE_LAYER_RELIC_IDS and _has_relic(state, relic_id):
+        return
     relic = STORY_RELICS[relic_id]
     player['relics'].append(relic_id)
     script = relic.get('script')

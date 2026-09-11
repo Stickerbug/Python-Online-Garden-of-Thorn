@@ -230,6 +230,40 @@ def test_talent_pools_and_boss_choices_exclude_owned_relics():
     assert story_engine._random_relic(state, 'relic-dedupe') == 'consolation'
 
 
+def test_infect_is_a_single_layer_boss_relic():
+    """开发表格14《爬塔天赋设计》R59：传染的获取方式是「BOSS仅限1层」。
+
+    —— BOSS 稀有度（special，不进普通天赋池）＋ 整局最多 1 层。
+    """
+    definition = STORY_RELICS['infect']
+    assert definition['rarity'] == 'special'
+    assert definition['script'] == 'infect_card'
+    assert 'infect' in STORY_BOSS_RELIC_IDS
+
+    state = _started_state('infect-pool')
+    assert 'infect' not in story_engine._natural_relic_pool(state)
+    assert 'infect' not in story_engine._natural_relic_pool(state, for_shop=True)
+
+    events = []
+    _gain_relic(state, 'infect', 'infect-pool', events)
+    assert state['player']['relics'].count('infect') == 1
+    assert any(event.get('relic_id') == 'infect' for event in events)
+
+    # 已经拥有之后不会重新出现在 BOSS 三选一里；即使全部 BOSS 天赋都已持有，
+    # 「回退全池」的兜底分支也不会再发到它。
+    assert all('infect' not in _boss_relic_choices(state, 'infect-pool') for _ in range(5))
+    state['player']['relics'].extend(
+        relic_id for relic_id in STORY_BOSS_RELIC_IDS if relic_id != 'infect'
+    )
+    assert 'infect' not in _boss_relic_choices(state, 'infect-pool')
+
+    # 重复获得不会叠出第 2 层，也不会再排一次选牌操作。
+    operations_before = len(state.get('pending_deck_operations') or [])
+    _gain_relic(state, 'infect', 'infect-pool', events)
+    assert state['player']['relics'].count('infect') == 1
+    assert len(state.get('pending_deck_operations') or []) == operations_before
+
+
 def test_lunatic_stage_three_has_two_consecutive_boss_floors():
     story_map = generate_story_map('lunatic-stage-three', 3, 'ocean', 'lunatic')
     assert story_map['floor_count'] == 17
