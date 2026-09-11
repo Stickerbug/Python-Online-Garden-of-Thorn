@@ -287,7 +287,7 @@ OPENING_EVENT_I18N = {
     },
     11: {
         'name': _t('花序编排', 'Floral Arrangement', 'Arrangement floral', 'Arranjo Floral', 'Цветочная композиция', '花序編成'),
-        'desc': _t('调整自己抽牌堆的顺序；本局始终可见该顺序', 'Rearrange your draw pile; you can always see its order for the rest of the game', 'Réorganisez votre pioche ; vous voyez toujours son ordre pendant toute la partie', 'Reorganize sua pilha de compra; você sempre vê sua ordem durante a partida', 'Измените порядок своей колоды; вы всегда видите этот порядок в течение партии', '自分の山札の順序を変更する。この対局中は常にその順序を確認できる'),
+        'desc': _t('调整自己抽牌堆的顺序；本局始终可见抽牌堆顺序', 'Rearrange your draw pile; you can always see its current order for the rest of the game', 'Réorganisez votre pioche ; vous voyez toujours l’ordre actuel de votre pioche pendant toute la partie', 'Reorganize sua pilha de compra; você sempre vê a ordem atual da sua pilha de compra durante a partida', 'Измените порядок своей колоды; вы всегда видите текущий порядок своей колоды в течение партии', '自分の山札の順序を変更する。この対局中は山札の現在の順序を常に確認できる'),
     },
     12: {
         'name': _t('众生平等', 'Equal Suffering', 'Souffrance égale', 'Sofrimento Igual', 'Равное страдание', '等しき苦痛'),

@@ -924,7 +924,7 @@ class GameEngine:
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
-        11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序；本局始终可见该顺序', 'position': 2},
+        11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序；本局始终可见抽牌堆顺序', 'position': 2},
         12: {'id': 12, 'name': '众生平等', 'desc': '自己回合结束时，对自己造成5[[icon:D]]，并对每名其他可选中玩家造成8[[icon:D]]', 'position': 3},
     }
     OPENING_EVENT_ORDER = {

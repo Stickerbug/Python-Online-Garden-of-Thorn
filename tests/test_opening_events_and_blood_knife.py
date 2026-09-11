@@ -403,9 +403,12 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         self.assertNotIn('deck_order_visible', mate_state['you'])
 
     def test_floral_arrangement_text_mentions_persistent_visibility(self):
-        expected = '调整自己抽牌堆的顺序；本局始终可见该顺序'
+        expected = '调整自己抽牌堆的顺序；本局始终可见抽牌堆顺序'
         self.assertEqual(GameEngine.OPENING_EVENTS[11]['desc'], expected)
         self.assertEqual(OPENING_EVENT_I18N[11]['desc']['zh'], expected)
+        # “该顺序”会被误读为开局调整好的那一次顺序；描述必须指向抽牌堆本身。
+        self.assertNotIn('该顺序', expected)
+        self.assertIn('抽牌堆顺序', expected)
         self.assertIn('always', OPENING_EVENT_I18N[11]['desc']['en'])
         for language in ('zh', 'en', 'fr', 'ja'):
             self.assertTrue(
