@@ -29,12 +29,13 @@ ADVANCED_ATOMIC_OPS = {
     "for_each", "for_each_selected_card", "for_each_list",
     "damage", "damage_multi", "direct_damage", "lifesteal_damage", "triangle_damage",
     "heal", "draw", "gain_e", "gain_m", "add_armor", "remove_armor", "set_armor",
-    "poison", "burn", "toxic", "vulnus", "apply_vulnerable", "dodge_this",
+    "poison", "burn", "toxic", "vulnus", "dodge_this",
     "dodge_permanent", "clear_buffs", "clear_debuffs", "clear_all_effects",
     "clear_status", "status_add_named", "status_remove_named", "set_status_named",
     "cost_e", "cost_m", "mod_e_regen", "mod_m_regen", "mod_draw",
     "discard", "choose_from_deck", "choose_from_discard", "choose_from_exile",
     "reveal_enemy_hand", "reveal_hand", "reveal_deck_top", "steal_enemy_card",
+    "reveal_hand_cards",
     "steal_card", "copy_card", "copy_choice_with_discount", "random_discard_from_hand",
     "put_card_to_deck", "shuffle_discard_into_deck", "give_card_to_hand",
     "give_card_to_deck", "give_card_to_discard", "remove_specific_card",
@@ -44,7 +45,7 @@ ADVANCED_ATOMIC_OPS = {
     "destroy_equipment_choice_or_first", "equip_protection", "remove_equip_protection",
     "place_as_equip", "add_equipment_to_zone", "trigger_manual",
     "block_action", "block_card_type", "force_card_type", "nullify_current_card",
-    "cancel_current_card", "invincible", "untargetable", "skip_turn", "extra_turn",
+    "invincible", "untargetable", "skip_turn", "extra_turn",
     "set_health",
     "force_end_turn", "mark_self_damage_source", "fission", "fusion",
     "multiply_next_damage", "reduce_next_cost", "increase_next_cost",
@@ -53,9 +54,9 @@ ADVANCED_ATOMIC_OPS = {
     "record_play_count", "record_equip_turns", "reset_counter", "create_counter",
     "exile_this", "global_damage_mult", "global_heal_mult", "global_cost_mult",
     "swap_health", "swap_hands", "broadcast_event", "modify_damage",
-    "var_set", "var_add", "var_sub", "var_mul", "var_div", "var_remove",
+    "var_set", "var_add", "var_sub", "var_mul", "var_div",
     "list_set", "list_create", "list_append", "list_insert", "list_delete",
-    "list_extend", "list_pop", "list_clear", "for_each_list", "timed_effect", "countdown_var",
+    "list_clear", "for_each_list", "timed_effect", "countdown_var",
     "defer_game_over", "random_zone_card_to_hand", "random_move_card_to_hand",
     "move_random_card_to_hand",
     "seal_equipment", "move_cards_to_deck", "clear_statuses", "settle_status",
@@ -100,9 +101,10 @@ ADVANCED_ATOMIC_OPS = {
     "ocean_magic_coral_tick", "ocean_for_each_selectable_target",
     "ocean_charge_self_damage",
     "sewers_lotus_heal", "sewers_activate_light_bulb",
+    "declare_forced_target",
     "sewers_broccoli_attack", "sewers_blood_rose",
     "sewers_iodine_turn_start", "sewers_iodine_trigger",
-    "sewers_cheese_control", "sewers_chitin_turn_start",
+    "sewers_chitin_turn_start",
     "sewers_seal_target_equipment", "sewers_basil_turn_start",
     "sewers_neurotoxin", "sewers_quartz",
     "desert_magic_compass",
@@ -115,10 +117,13 @@ ADVANCED_ATOMIC_OPS = {
     "jurassic_torch", "jurassic_magic_torch", "jurassic_pyrite_draw",
     "jurassic_antler",
     "garden_kale_attack",
-    "garden_daisy_attack", "garden_daisy_delayed_attack", "garden_coal_attack",
+    "garden_daisy_attack", "garden_coal_attack",
     "hel_deliverance_attack",
 }
 
+# 旧名 → 新名。只保留仍被卡数据、测试或工具引用的条目；已经没有任何引用
+# 的别名（add_card_tag / set_card_prop / equip_card / show_initial_deck 等
+# 12 条）在 Round 4 移除，见 .codex-tmp/round4/rd4_deadcode.md。
 ATOMIC_OP_ALIASES = {
     "gain_armor": "add_armor",
     "apply_poison": "poison",
@@ -128,21 +133,9 @@ ATOMIC_OP_ALIASES = {
     "queue_auto_play_card": "queue_auto_play",
     "kitty_auto_play": "auto_play_zone_top",
     "bounce_attack": "ricochet_attack",
-    "add_card_tag": "add_tag",
-    "remove_card_tag": "remove_tag",
-    "set_player_prop": "player_prop_set",
-    "add_player_prop": "player_prop_add",
-    "set_card_prop": "card_prop_set",
-    "add_card_prop": "card_prop_add",
-    "set_equipment_prop": "equipment_prop_set",
-    "add_equipment_prop": "equipment_prop_add",
-    "equip_card": "place_as_equip",
-    "protect_equipment": "equip_protection",
     "ocean_for_each_selectable_target": "for_each_target",
     "for_each_selectable_target": "for_each_target",
-    "show_initial_deck": "reveal_card_set",
     "garden_show_initial_deck": "reveal_card_set",
-    "record_card_var": "card_var_add",
     "set_card_var": "card_var_set",
 }
 
@@ -1020,7 +1013,10 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
     if op in ("play_was_countered", "was_countered"):
         card = context.get("card")
         if card is not None:
-            return bool(getattr(card, "_sewers_was_countered_this_play", False))
+            state = getattr(card, "_play_was_countered_this_play", None)
+            if state is None:
+                state = getattr(card, "_sewers_was_countered_this_play", False)
+            return bool(state)
         return bool(context.get("vars", {}).get("play_was_countered", False))
     if op == "event_value":
         return context.get("event_value", context.get("vars", {}).get("event_value", 0))

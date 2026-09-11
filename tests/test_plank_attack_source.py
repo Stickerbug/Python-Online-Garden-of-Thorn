@@ -5,7 +5,7 @@ from game_engine import EquipmentInstance, GameEngine
 from game_engine_2v2 import GameEngine2v2
 
 
-def make_card_def(def_id, card_type, *, cost_e=0, damage=0, response_trigger=''):
+def make_card_def(def_id, card_type, *, cost_e=0, damage=0, response_trigger='', flags=None):
     return CardDef(
         def_id,
         def_id,
@@ -19,6 +19,7 @@ def make_card_def(def_id, card_type, *, cost_e=0, damage=0, response_trigger='')
         '',
         response_trigger=response_trigger,
         damage=damage,
+        flags=set(flags or []),
     )
 
 
@@ -32,7 +33,15 @@ class PlankAttackSourceTests(unittest.TestCase):
             'test:thorn_counter',
         }
         self.previous_defs = {key: CARD_DEFS.get(key) for key in self.test_ids}
-        CARD_DEFS['jungle:plank'] = make_card_def('jungle:plank', 'root', cost_e=3)
+        # The shipped Jungle plank package declares ``mark:jungle:plank``; the
+        # synthetic definition has to carry the same data mark or the engine
+        # can no longer recognise the card.
+        CARD_DEFS['jungle:plank'] = make_card_def(
+            'jungle:plank',
+            'root',
+            cost_e=3,
+            flags={'mark:jungle:plank'},
+        )
         CARD_DEFS['test:low_cost_attack'] = make_card_def(
             'test:low_cost_attack',
             'thorn',

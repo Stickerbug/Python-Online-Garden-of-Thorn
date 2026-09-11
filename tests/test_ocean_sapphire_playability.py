@@ -72,7 +72,10 @@ class OceanSapphirePlayabilityTests(unittest.TestCase):
             'test:ocean_sapphire',
             'bloom',
             legacy_id='Sapphire',
-            flags={'exile'},
+            # ``mark:ocean:sapphire`` mirrors the shipped card data; the legacy
+            # compatibility definition would otherwise stop being recognised
+            # as Sapphire by the data driven engine branches.
+            flags={'exile', 'mark:ocean:sapphire'},
         )
         legacy_sapphire.v2_events = {
             'on_play': {

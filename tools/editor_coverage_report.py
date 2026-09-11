@@ -182,6 +182,13 @@ def main(argv=None) -> int:
     for card_id, ops in blocked_cards[:6]:
         print(f"  {card_id}: {', '.join(ops[:4])}")
 
+    # Blockly 退场门槛：达到切换门槛后把效果行设为默认视图，达到移除门槛后再摘画布
+    share = fully / max(1, total_cards) * 100
+    print()
+    print("Blockly 退场门槛：")
+    print(f"  切换默认视图（≥85%）：{'已达标' if share >= 85 else f'未达标（还差 {85 - share:.1f} 个百分点）'}")
+    print(f"  移除画布（≥90%）：    {'已达标' if share >= 90 else f'未达标（还差 {90 - share:.1f} 个百分点）'}")
+
     baseline_path = pathlib.Path(args.baseline)
     if baseline_path.is_file():
         try:

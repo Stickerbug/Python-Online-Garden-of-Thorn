@@ -135,8 +135,8 @@ class GameEngine2v2(GameEngine):
 
 
     def get_public_state(self, for_player: int) -> dict:
-        from engine_runtime_support import effective_blind, project_effective_mask_statuses, refresh_nut_costs
-        refresh_nut_costs(self)
+        from engine_runtime_support import effective_blind, project_effective_mask_statuses, refresh_dynamic_costs
+        refresh_dynamic_costs(self)
         self._refresh_equipment_derived_player_flags()
         self._refresh_hand_limit_bonuses()
         teammate_id = self.get_teammate(for_player)
@@ -257,7 +257,7 @@ class GameEngine2v2(GameEngine):
             'antennae_reveal': self._antennae_reveal[for_player],
             'garden_initial_deck_reveal': copy.deepcopy(self._garden_initial_deck_reveal[for_player]),
             'mode': '2v2',
-            'forced_target_player_id': self._sewers_forced_target_for_player(for_player),
+            'forced_target_player_id': self._forced_target_for_player(for_player),
         }
 
     def start_event_select_first(self):
@@ -643,13 +643,6 @@ class GameEngine2v2(GameEngine):
             self.log_msg(f"队伍{self.teams[0]}获胜！")
             return
 
-    def _clear_dead_player_private_zones(self, player_id: int):
-        if not self._is_valid_player_id(player_id):
-            return
-        # Dead players can be revived, so keep their hand/deck intact.
-        return
-
-
     def _remove_equipment_targeting_dead_player(self, dead_player_id: int):
         if not self._is_valid_player_id(dead_player_id):
             return
@@ -850,12 +843,20 @@ class GameEngine2v2(GameEngine):
             if counter_removed is None:
                 self.pending_response = pending
                 return {'success': False, 'error': '反制牌已不在手牌中'}
-            if self._card_is(card, 'Broccoli', 'sewers:broccoli'):
-                card._sewers_was_countered_this_play = True
+            card._play_was_countered_this_play = True
             self.log_msg(f"{self.pn(responder_id)}使用{counter_removed.name_cn}{self._card_log_marker(counter_removed)}进行反制！")
             self._note_achievement_counter_success(responder_id)
             self._dispatch_own_card_countered(player_id, responder_id, card)
-            dodge_before_counter = int(getattr(responder, 'dodge', 0) or 0)
+            from engine_runtime_support import (response_resolution_declaration,
+                                                run_response_after_resolution)
+            resolution = response_resolution_declaration(counter_removed)
+            clamped_props = [
+                str(prop) for prop in (resolution.get('clamp_responder_props') or [])
+                if isinstance(prop, str)
+            ]
+            responder_prop_snapshot = {
+                prop: int(getattr(responder, prop, 0) or 0) for prop in clamped_props
+            }
             alive_before_counter = [player.health > 0 for player in self.players]
             counter_dead_ids = []
             self._game_over_defer_depth += 1
@@ -876,32 +877,33 @@ class GameEngine2v2(GameEngine):
                     if was_alive and self.players[candidate].health <= 0
                 ]
                 is_precision = pending.get('is_precision', False)
-                if self._card_is(counter_removed, 'Bubble', 'vanilla:bubble'):
+                if resolution.get('halve_precision'):
                     if self._is_status_immune(responder_id):
                         return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
                     if is_precision:
                         self._execute_card_effect_half_damage(
                             player_id, card, choice, dodge_target_id=responder_id
                         )
-                        if not self._is_status_immune(responder_id):
-                            responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+                        self._clamp_response_props(responder_id, responder_prop_snapshot)
                         return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
                     self._execute_card_effect(player_id, card, choice)
-                    if not self._is_status_immune(responder_id):
-                        responder.dodge = min(int(getattr(responder, 'dodge', 0) or 0), dodge_before_counter)
+                    self._clamp_response_props(responder_id, responder_prop_snapshot)
                     return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
-                if self._card_is(counter_removed, 'MagicBubble', 'vanilla:magicbubble'):
+                if resolution.get('negate_bloom'):
                     self.negated_card = True
-                if self._card_is(counter_removed, 'Cucumber', 'ocean:cucumber'):
+                if resolution.get('suppress_responder_untargetable'):
                     old_untargetable = max(0, int(getattr(responder, 'untargetable', 0) or 0))
                     responder.untargetable = 0
                     try:
                         result = self._execute_card_effect(player_id, card, choice)
                     finally:
                         responder.untargetable = old_untargetable
-                    self._apply_cucumber_counter_after_response(responder_id)
                 else:
                     result = self._execute_card_effect(player_id, card, choice)
+                run_response_after_resolution(
+                    self, responder_id, counter_removed, card,
+                    resolution.get('after_resolution'),
+                )
                 return self._after_response_result(player_id, result)
             finally:
                 self._game_over_defer_depth -= 1
@@ -924,21 +926,6 @@ class GameEngine2v2(GameEngine):
         destroyed = self._destroy_equipment(player_id, eq)
         if not destroyed:
             return
-        opp = self.players[target_id] if target_id >= 0 else None
-        if eq.def_id == 'Leaf':
-            if opp:
-                dealt = self.deal_attack_damage(target_id, 8, attacker_id=player_id)
-                self.log_msg(f"{self.pn(player_id)}触发叶子！对{self.pn(target_id)}造成{dealt}D")
-        elif eq.def_id == 'Mark':
-            if opp:
-                if self._status_application_blocked(target_id, 'skip_turn'):
-                    return
-                opp.skip_turn += 1
-                self.log_msg(f"{self.pn(player_id)}触发标记！{self.pn(target_id)}+1层眩晕")
-        elif eq.def_id == 'Mine':
-            if opp:
-                dealt = self.deal_attack_damage(target_id, 20, attacker_id=player_id)
-                self.log_msg(f"{self.pn(player_id)}触发地雷！对{self.pn(target_id)}造成{dealt}D")
 
 
     def get_counter_cards(self, player_id: int, trigger_type: str) -> List[CardInstance]:
@@ -1074,10 +1061,11 @@ class GameEngine2v2(GameEngine):
     def _card_requires_target(self, card: CardInstance) -> bool:
         if 'wide_strike' in self._effective_card_flags(card):
             return False
-        # Sapphire selects both its future target and the card to exile in one
-        # combined V2 choice. Requiring a normal target first makes it
-        # unplayable in the 2v2 engine.
-        if self._card_is(card, 'Sapphire', 'ocean:sapphire'):
+        # Data may declare that the card picks its target together with its
+        # other choice (Sapphire selects its future target and the card to
+        # exile in one combined V2 choice).  Asking for a separate target first
+        # makes those cards unplayable in the 2v2 engine.
+        if 'combined_choice_target' in self._effective_card_flags(card):
             return False
         if card.card_type == 'guard':
             return False
@@ -1099,21 +1087,6 @@ class GameEngine2v2(GameEngine):
         if self._is_valid_effect_target(player_id, target_id):
             return target_id
         return player_id
-
-    def _selected_enemy_target(self, player_id: int, choice=None) -> int:
-        target_id = -1
-        if isinstance(choice, dict):
-            for key in ('target_player', 'target_player_id', 'target_id'):
-                if key in choice:
-                    target_id = choice.get(key)
-                    break
-        if self._is_valid_enemy_target(player_id, target_id):
-            return target_id
-        enemies = self.get_enemies(player_id)
-        for enemy_id in enemies:
-            if self._is_valid_enemy_target(player_id, enemy_id):
-                return enemy_id
-        return -1
 
     def _selected_attack_target(self, player_id: int, choice=None) -> int:
         target_id = -1
@@ -1408,9 +1381,7 @@ class GameEngine2v2(GameEngine):
                 destroy_all=destroy_all,
             )
 
-        card_id = str(getattr(card, 'def_id', '') or '').lower()
-        legacy_id = str(getattr(getattr(card, 'card_def', None), 'legacy_id', '') or '').lower()
-        if card_id in ('magicsewage', 'vanilla:magicsewage') or legacy_id == 'magicsewage':
+        if self._card_has_flag(card, 'destroys_all_equipment'):
             for owner_id in range(len(self.players)):
                 if has_threatened_equipment(owner_id, destroy_all=True):
                     add_owner(owner_id)
@@ -1452,7 +1423,7 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '等待反制响应'}
         if getattr(self, 'pending_v2_ui', None) is not None:
             return {'success': False, 'error': 'Waiting for mod UI response'}
-        choice, forced_target_id = self._sewers_apply_forced_target_choice(player_id, card, choice)
+        choice, forced_target_id = self._apply_forced_target_choice(player_id, card, choice)
         if forced_target_id is not None:
             target_player_id = forced_target_id
         auto_choice_mode = getattr(self, '_auto_resolve_choices_for', None) == player_id
@@ -1498,7 +1469,7 @@ class GameEngine2v2(GameEngine):
               )):
             return {'success': False, 'error': '没有可选中的玩家'}
         elif requires_target:
-            allow_dead_target = self._card_is(card, 'Yggdrasil', 'vanilla:yggdrasil')
+            allow_dead_target = self._card_has_mark(card, 'vanilla:yggdrasil')
             if allow_dead_target:
                 if (not self._is_valid_player_id(target_player_id)
                         or (target_player_id != player_id
@@ -1564,9 +1535,8 @@ class GameEngine2v2(GameEngine):
         self._apply_magic_acceleration_after_play(player_id, card)
         self._prepare_ocean_charge_for_play(card)
         self._atomic_charge_self_damage(player_id, card, {}, '', choice, {'target_id': player_id})
-        self._sewers_trigger_vampire_fangs(player_id, card, choice)
-        if self._card_is(card, 'Broccoli', 'sewers:broccoli'):
-            card._sewers_was_countered_this_play = False
+        self._trigger_card_target_reactions(player_id, card, choice)
+        card._play_was_countered_this_play = False
         self._active_choice = choice if isinstance(choice, dict) else {}
         try:
             if self._card_needs_choice(card) and not self._choice_satisfies_request(card, choice):
@@ -1616,7 +1586,7 @@ class GameEngine2v2(GameEngine):
                             silent: bool = False):
         if not self._is_valid_player_id(player_id):
             return 0
-        from engine_runtime_support import blocks_special_effect_damage, maybe_defer_direct_damage, try_magic_copper_rod_absorb
+        from engine_runtime_support import blocks_special_effect_damage, maybe_defer_direct_damage, try_declared_damage_absorb
         if maybe_defer_direct_damage(
             self,
             player_id,
@@ -1673,7 +1643,7 @@ class GameEngine2v2(GameEngine):
         actual = self._apply_universal_damage_shields(player_id, actual, source_id, source, resolved_damage_type)
         if actual <= 0:
             return 0
-        if try_magic_copper_rod_absorb(self, player_id, actual):
+        if try_declared_damage_absorb(self, player_id, actual, "direct"):
             return 0
         old_health = ps.health
         ps.health -= actual
@@ -1903,7 +1873,7 @@ class GameEngine2v2(GameEngine):
         ps = self.players[player_id]
         self._decay_sealed_equipment_for_owner_turn(player_id)
         self._activate_pending_corruption()
-        self._sewers_clear_light_bulb_at_turn_start(player_id)
+        self._clear_forced_target_at_turn_start(player_id)
         self._antennae_reveal[player_id] = None
         if hasattr(self, '_antennae_reveal_targets'):
             self._antennae_reveal_targets[player_id] = None
@@ -1969,27 +1939,36 @@ class GameEngine2v2(GameEngine):
             if sluggish_reduction > 0:
                 self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(sluggish_reduction, DRAW_PER_TURN)}张抽牌")
             self._clear_sluggish_after_draw(player_id)
-            pincer_overload = sum(
-                1
-                for owner_id, owner_state in enumerate(self.players)
-                for eq in owner_state.equipment
-                if (
-                    self._equipment_runtime_active(eq)
-                    and not eq.card_def.effects
-                    and eq.def_id == 'Pincer'
-                    and getattr(eq, 'effect_target', owner_id) == player_id
-                )
-            )
-            if pincer_overload > 0:
-                ps.overload += pincer_overload
-                self.log_msg(f"{self.pn(player_id)}被螫针施加{pincer_overload}层超载")
-            aura_delta = 0
+            from engine_runtime_support import declared_elixir_recovery_aura
+            pincer_overload = 0
+            overload_log = None
             for owner_id, owner_state in enumerate(self.players):
                 for eq in owner_state.equipment:
                     if not self._equipment_runtime_active(eq):
                         continue
                     if getattr(eq, 'effect_target', owner_id) != player_id:
                         continue
+                    aura = declared_elixir_recovery_aura(self, eq, owner_id)
+                    if aura.overload > 0:
+                        pincer_overload += aura.overload
+                        overload_log = overload_log or aura.log
+            if pincer_overload > 0:
+                ps.overload += pincer_overload
+                self.log_msg(self._format_step_log(
+                    overload_log or "{target}获得{amount}层超载",
+                    target=self.pn(player_id),
+                    amount=pincer_overload,
+                    player=self.pn(player_id),
+                ))
+            aura_delta = 0
+            from engine_runtime_support import declared_elixir_recovery_aura as _declared_elixir_aura
+            for owner_id, owner_state in enumerate(self.players):
+                for eq in owner_state.equipment:
+                    if not self._equipment_runtime_active(eq):
+                        continue
+                    if getattr(eq, 'effect_target', owner_id) != player_id:
+                        continue
+                    aura_delta += _declared_elixir_aura(self, eq, owner_id).elixir
                     for effect in eq.card_def.effects or []:
                         if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
                             aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
@@ -2059,23 +2038,6 @@ class GameEngine2v2(GameEngine):
                                                    {'source_id': owner_id, 'target_id': player_id}) or handled
                 if handled or eq.card_def.effects:
                     continue
-                if eq.def_id == 'Leaf':
-                    ps.heal(2)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2H")
-                elif eq.def_id == 'Yucca':
-                    self._apply_yucca_turn_start_heal(player_id, eq.card_def.name_cn)
-                elif eq.def_id == 'MagicLeaf':
-                    ps.gain_magic(1)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+1M")
-                elif eq.def_id == 'MagicYucca':
-                    ps.gain_magic(2)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2M")
-                elif eq.def_id == 'Powder':
-                    ps.gain_elixir(2)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2E")
-                elif eq.def_id == 'GoldenLeaf':
-                    ps.draw_cards(1)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
         self._drain_turn_start_event_sources(player_id)
@@ -2124,27 +2086,36 @@ class GameEngine2v2(GameEngine):
             if ps.sluggish > 0 and not self._is_status_immune(player_id):
                 self.log_msg(f"{self.pn(player_id)}的迟缓减少{min(ps.sluggish, DRAW_PER_TURN)}张抽牌")
             self._clear_sluggish_after_draw(player_id)
-            pincer_overload = sum(
-                1
-                for owner_id, owner_state in enumerate(self.players)
-                for eq in owner_state.equipment
-                if (
-                    self._equipment_runtime_active(eq)
-                    and not eq.card_def.effects
-                    and eq.def_id == 'Pincer'
-                    and getattr(eq, 'effect_target', owner_id) == player_id
-                )
-            )
-            if pincer_overload > 0:
-                ps.overload += pincer_overload
-                self.log_msg(f"{self.pn(player_id)}被螫针施加{pincer_overload}层超载")
-            aura_delta = 0
+            pincer_overload = 0
+            overload_log = None
+            from engine_runtime_support import declared_elixir_recovery_aura as _declared_elixir_aura_2
             for owner_id, owner_state in enumerate(self.players):
                 for eq in owner_state.equipment:
                     if not self._equipment_runtime_active(eq):
                         continue
                     if getattr(eq, 'effect_target', owner_id) != player_id:
                         continue
+                    aura = _declared_elixir_aura_2(self, eq, owner_id)
+                    if aura.overload > 0:
+                        pincer_overload += aura.overload
+                        overload_log = overload_log or aura.log
+            if pincer_overload > 0:
+                ps.overload += pincer_overload
+                self.log_msg(self._format_step_log(
+                    overload_log or "{target}获得{amount}层超载",
+                    target=self.pn(player_id),
+                    amount=pincer_overload,
+                    player=self.pn(player_id),
+                ))
+            aura_delta = 0
+            from engine_runtime_support import declared_elixir_recovery_aura as _declared_elixir_aura
+            for owner_id, owner_state in enumerate(self.players):
+                for eq in owner_state.equipment:
+                    if not self._equipment_runtime_active(eq):
+                        continue
+                    if getattr(eq, 'effect_target', owner_id) != player_id:
+                        continue
+                    aura_delta += _declared_elixir_aura(self, eq, owner_id).elixir
                     for effect in eq.card_def.effects or []:
                         if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
                             aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
@@ -2213,23 +2184,6 @@ class GameEngine2v2(GameEngine):
                                                    {'source_id': owner_id, 'target_id': player_id}) or handled
                 if handled or eq.card_def.effects:
                     continue
-                if eq.def_id == 'Leaf':
-                    ps.heal(2)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2H")
-                elif eq.def_id == 'Yucca':
-                    self._apply_yucca_turn_start_heal(player_id, eq.card_def.name_cn)
-                elif eq.def_id == 'MagicLeaf':
-                    ps.gain_magic(1)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+1M")
-                elif eq.def_id == 'MagicYucca':
-                    ps.gain_magic(2)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2M")
-                elif eq.def_id == 'Powder':
-                    ps.gain_elixir(2)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}+2E")
-                elif eq.def_id == 'GoldenLeaf':
-                    ps.draw_cards(1)
-                    self.log_msg(f"{eq.card_def.name_cn}效果：{self.pn(player_id)}多抽1张牌")
         if not self.game_over:
             self._apply_jungle_turn_start_regen(player_id)
         self._drain_turn_start_event_sources(player_id)
@@ -2409,10 +2363,8 @@ class GameEngine2v2(GameEngine):
             if dmg > 0:
                 if self._consume_absorb_attack_damage(target_id, source_card, dmg, attacker_id):
                     continue
-                from engine_runtime_support import consume_lightning_rod_absorb, try_magic_copper_rod_absorb
-                if consume_lightning_rod_absorb(self, target_id, source_card, dmg):
-                    continue
-                if try_magic_copper_rod_absorb(self, target_id, dmg):
+                from engine_runtime_support import try_declared_damage_absorb
+                if try_declared_damage_absorb(self, target_id, dmg, "attack"):
                     continue
             old_health = ps.health
             ps.health -= dmg
@@ -2442,7 +2394,7 @@ class GameEngine2v2(GameEngine):
                 if dmg > 0 and not is_battery:
                     target_equipment = list(self._iter_equipment_targeting_player(target_id))
                     for owner_id, eq in target_equipment:
-                        if self._card_is(eq.card_instance, 'Battery', 'vanilla:battery') and attacker_id >= 0:
+                        if self._card_has_flag(eq.card_instance, 'retaliate_on_attack_hit') and attacker_id >= 0:
                             dealt = self._deal_direct_damage(
                                 attacker_id, 3, '电池电击', target_id,
                                 damage_type=DAMAGE_TYPE_MAGIC,
@@ -2452,7 +2404,7 @@ class GameEngine2v2(GameEngine):
                                 self.log_msg(f"{self.pn(target_id)}的电池效果：对{self.pn(attacker_id)}造成{dealt}电伤")
                             else:
                                 self.log_msg(f"{self.pn(target_id)}的电池触发，但{self.pn(attacker_id)}未受到电伤")
-                        elif self._card_is(eq.card_instance, 'MagicBattery', 'vanilla:magicbattery'):
+                        elif self._card_has_flag(eq.card_instance, 'mana_on_attack_hit'):
                             owner_state = self.players[owner_id]
                             if owner_state.magic_battery_m_this_turn < 3:
                                 owner_state.gain_magic(1)

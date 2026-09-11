@@ -170,6 +170,79 @@ def _slice_block(text: str, start_marker: str, end_marker: str) -> str:
     return text[start:end]
 
 
+def _function_body(text: str, name: str) -> str:
+    """取出 ``def name(...)`` 到下一个顶层 def 之间的源码。"""
+
+    start = text.find(f"def {name}(")
+    if start < 0:
+        return ""
+    end = text.find("\ndef ", start + 1)
+    return text[start:end if end > 0 else len(text)]
+
+
+def _returned_dict(body: str) -> str:
+    """取出函数体里 ``return { ... }.get(...)`` 的字典部分。"""
+
+    start = body.find("return {")
+    if start < 0:
+        return body
+    end = body.find("}", start)
+    return body[start:end] if end > start else body
+
+
+def extract_status_catalog() -> tuple:
+    """返回 ``(catalog, aliases)``。
+
+    * ``catalog``：状态 id → 中文，编辑器下拉用（**存 id、显示中文**）；
+    * ``aliases``：各种写法 → 规范 id（burn→fire、灼烧→fire…），导入老数据时归一用。
+
+    来源：运行时的 ``_status_label``（id→中文）与 ``_builtin_status_attr``（别名→属性名），
+    再加上官方包 ``registries.statuses``（``extract_status_labels``）。
+    """
+
+    catalog = {}
+    aliases = {}
+    runtime = ROOT / "mod_runtime_v2.py"
+    if runtime.is_file():
+        text = runtime.read_text(encoding="utf-8")
+        body = _returned_dict(_function_body(text, "_status_label"))
+        raw_labels = {key: value for key, value in re.findall(r'"([^"]+)":\s*"([^"]*)"', body) if value}
+        alias_body = _returned_dict(_function_body(text, "_builtin_status_attr"))
+        for source, target in re.findall(r'"([^"]+)":\s*"([^"]+)"', alias_body):
+            if source == target:
+                continue
+            if target in raw_labels:
+                aliases[source] = target
+            # 别名不单独进下拉（burn/f/p/dizzy… 都归到 fire/poison/skip_turn）
+            raw_labels.pop(source, None)
+        catalog.update(raw_labels)
+    # 官方包定义的状态不进下拉（编辑器会按当前草稿里的 registries.statuses 追加），
+    # 只留别名关系：短 id → 带命名空间的 id。
+    for key, value in extract_status_labels().items():
+        if ":" in key:
+            aliases.setdefault(key.split(":")[-1], key)
+    # 中文写法也能被认出来（老草稿里可能直接存了"灼烧"）
+    for key, value in list(catalog.items()):
+        aliases.setdefault(value, key)
+    # 去掉中文键与大小写重的条目，避免下拉里出现"邪眼=邪眼"这种重复
+    catalog = {
+        key: value for key, value in catalog.items()
+        if not re.search(r"[\u4e00-\u9fff]", key) and key == key.lower()
+    }
+    # 同一个中文名只留第一个（status_immune=状态免疫 与 immune=状态免疫 这类）
+    seen_labels = set()
+    deduped = {}
+    for key, value in catalog.items():
+        if value in seen_labels:
+            aliases.setdefault(key, next(k for k, v in catalog.items() if v == value))
+            continue
+        seen_labels.add(value)
+        deduped[key] = value
+    catalog = deduped
+    aliases = {key: value for key, value in aliases.items() if key != value}
+    return catalog, aliases
+
+
 def _parse_map(block: str) -> dict:
     """解析 ``{ 'a': 'b', c: 'd' }`` 形式的映射。"""
 
@@ -214,6 +287,7 @@ def main(argv=None) -> int:
     out_dir = pathlib.Path(args.out_dir)
     js = game_js.read_text(encoding="utf-8")
 
+    status_catalog, status_aliases = extract_status_catalog()
     payload = {
         "tokenRules": extract_token_rules(js),
         "inlineIcons": extract_inline_icons(js),
@@ -226,6 +300,8 @@ def main(argv=None) -> int:
         "cardIndex": extract_card_index(),
         "demoCards": extract_demo_cards(),
         "statusLabels": extract_status_labels(),
+        "statusCatalog": status_catalog,
+        "statusAliases": status_aliases,
         "tagLabels": extract_tag_labels(js),
     }
 
@@ -253,6 +329,8 @@ def main(argv=None) -> int:
     print("card index:", len(payload["cardIndex"]))
     print("demo cards:", len(payload["demoCards"]))
     print("status labels:", len(payload["statusLabels"]))
+    print("status catalog:", len(payload["statusCatalog"]))
+    print("status aliases:", len(payload["statusAliases"]))
     print("tag labels:", len(payload["tagLabels"]))
     print(f"written: {target} ({target.stat().st_size} bytes)")
     return 0

@@ -5,7 +5,7 @@ from game_engine import GameEngine
 from game_engine_2v2 import GameEngine2v2
 
 
-def make_card_def(def_id, card_type, *, v2_events=None):
+def make_card_def(def_id, card_type, *, v2_events=None, flags=None):
     return CardDef(
         def_id,
         def_id,
@@ -18,6 +18,7 @@ def make_card_def(def_id, card_type, *, v2_events=None):
         '',
         '',
         v2_events=dict(v2_events or {}),
+        flags=set(flags or []),
     )
 
 
@@ -28,6 +29,8 @@ class CardPowerRuleTests(unittest.TestCase):
         CARD_DEFS['jurassic:amber'] = make_card_def(
             'jurassic:amber',
             'thorn',
+            # mirror the shipped ``mark:jurassic:amber`` data flag
+            flags={'mark:jurassic:amber'},
             v2_events={
                 'on_enter_hand': {
                     'steps': [{
@@ -42,6 +45,8 @@ class CardPowerRuleTests(unittest.TestCase):
         CARD_DEFS['sewers:broccoli'] = make_card_def(
             'sewers:broccoli',
             'thorn',
+            # mirror the shipped ``mark:sewers:broccoli`` data flag
+            flags={'mark:sewers:broccoli'},
             v2_events={'on_play': {'steps': [
                 {'op': 'deal_damage', 'target': 'target', 'amount': 10},
                 {

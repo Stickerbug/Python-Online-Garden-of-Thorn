@@ -27,6 +27,12 @@ EXTRA_PUBLIC_OPS = (
     "force_end_turn",
     "desert_wind_schedule",
     "garden_mecha_antennae",
+    # Round 6a: engine implemented atoms that are also part of the curated
+    # spec list; registered here as well so the mod studio schema stays stable
+    # even if the ``_atomic_*`` source scan misses a module.
+    "declare_forced_target",
+    # Round 6b: reveal a hand to a viewer and tag the revealed cards (Schizo).
+    "reveal_hand_cards",
 )
 
 _engine_ops_cache: Set[str] | None = None
