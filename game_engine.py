@@ -19202,6 +19202,18 @@ class GameEngine:
                 pass
         ps = self.players[player_id]
         queue = self._auto_play_queue_entries(ps, create=True)
+        if bool(params.get('dedupe', False)):
+            # 表格14 R170（魔法珍珠）：效果是"每个回合开始时自动对其打出1张"，
+            # 不是"本局每打出过1次就多1张"。同一张牌的旧队列项先移除，只保留
+            # 最新一次（目标也会跟着更新到最近一次选择）。
+            source_def = str(getattr(source_card, 'def_id', '') or '')
+            queue[:] = [
+                existing for existing in queue
+                if not (
+                    isinstance(existing, dict)
+                    and str(existing.get('def_id') or '') == source_def
+                )
+            ]
         max_entries = max(
             1,
             self._eval_int(

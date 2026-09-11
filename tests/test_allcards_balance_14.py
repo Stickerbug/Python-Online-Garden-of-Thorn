@@ -295,6 +295,88 @@ class AllCardsBalance14Tests(unittest.TestCase):
         # The autoplay copy deals the base 5D instead of 7D.
         self.assertEqual(95, engine.players[1].health)
 
+    def test_magic_pearl_keeps_one_autoplay_copy_per_turn_after_repeated_plays(self):
+        # 表格14 R170：文案是"回合开始时……自动对其打出一张"，没有
+        # "本局每打出过1次就额外打出1张"的成长条款，所以重复打出也只留一个队列项。
+        engine = self.action_engine()
+        engine.players[1].health = 200
+        first = CardInstance("Magic Pearl")
+        second = CardInstance("Magic Pearl")
+        engine.players[0].hand = [first, second]
+        self.play(engine, 0, first, self.target_choice(1))
+        self.play(engine, 0, second, self.target_choice(1))
+
+        entries = engine.players[0].custom_vars.get("ocean_auto_cards") or []
+        self.assertEqual(1, len(entries), entries)
+
+        engine.players[1].health = 100
+        engine.players[1].hand = []
+        engine._run_ocean_auto_cards_turn_start(0)
+        self.assertEqual(95, engine.players[1].health)
+
+    def test_magic_pearl_text_and_queue_step_follow_workbook_14(self):
+        import json
+        import zipfile
+
+        with zipfile.ZipFile(MODS / "Ocean Cards Addition.gtnmod") as package:
+            pearl_spec = json.loads(package.read("mod.json").decode("utf-8"))
+            pearl_locales = {
+                language: json.loads(package.read(f"locales/{language}.json").decode("utf-8"))
+                for language in ("zh", "en", "fr", "ja")
+            }
+        pearl = next(
+            card for card in pearl_spec["registries"]["cards"]
+            if card["id"] == "ocean:magic_pearl"
+        )
+        self.assertIn("若目标可选中", pearl["effect_text"])
+        self.assertNotIn("每打出过", pearl["effect_text"])
+
+        queue_step = None
+
+        def walk(node):
+            nonlocal queue_step
+            if isinstance(node, dict):
+                if node.get("op") == "queue_auto_play":
+                    queue_step = node
+                for value in node.values():
+                    walk(value)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(pearl["events"])
+        self.assertIsNotNone(queue_step)
+        self.assertEqual("target", queue_step["target"])
+        self.assertTrue(queue_step.get("dedupe"), queue_step)
+
+        for language in ("zh", "en", "fr", "ja"):
+            self.assertEqual(
+                pearl["effect_text_i18n"][language],
+                pearl_locales[language]["cards"]["ocean:magic_pearl"]["effect_text"],
+            )
+
+    def test_dizzy_text_follows_workbook_14(self):
+        import json
+        import zipfile
+
+        with zipfile.ZipFile(MODS / "Desert Cards Addition.gtnmod") as package:
+            dizzy_spec = json.loads(package.read("mod.json").decode("utf-8"))
+            locales = {
+                language: json.loads(package.read(f"locales/{language}.json").decode("utf-8"))
+                for language in ("zh", "en", "fr", "ja")
+            }
+        dizzy = next(
+            card for card in dizzy_spec["registries"]["cards"]
+            if card["id"] == "desert_cards_addition:dizzy"
+        )
+        self.assertIn("所有牌不可取消", dizzy["effect_text"])
+        self.assertNotIn("此牌", dizzy["effect_text"])
+        for language in ("zh", "en", "fr", "ja"):
+            self.assertEqual(
+                dizzy["effect_text_i18n"][language],
+                locales[language]["cards"]["desert_cards_addition:dizzy"]["effect_text"],
+            )
+
     # -------------------------------------------------------- Mecha Antennae
     def test_mecha_antennae_reveals_all_zones_and_takes_top_three(self):
         engine = self.action_engine()
