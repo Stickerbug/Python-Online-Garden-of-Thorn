@@ -761,6 +761,68 @@ def _migrate_story_data_for_contract_if_needed_conn(
     }
 
 
+def _backfill_match_participants_conn(conn):
+    """Fill ``match_participants`` for matches recorded before it existed.
+
+    Idempotent and incremental: only rows newer than the highest ``match_id``
+    already indexed are scanned, so the first startup pays one pass over the
+    existing matches table and later startups scan nothing.
+    """
+
+    row = conn.execute(
+        'SELECT MAX(match_id) AS last_match FROM match_participants'
+    ).fetchone()
+    try:
+        last_match = int(row['last_match'] or 0)
+    except (TypeError, ValueError):
+        last_match = 0
+    rows = conn.execute(
+        '''
+        SELECT id, player_ids_json, player_names_json FROM matches
+        WHERE id > ?
+        ORDER BY id
+        ''',
+        (last_match,),
+    ).fetchall()
+    entries = []
+    resolved_names = {}
+    for match_row in rows:
+        match_id = int(match_row['id'])
+        user_ids = []
+        for raw_user_id in _safe_json_loads(match_row['player_ids_json'], []):
+            try:
+                user_id = int(raw_user_id)
+            except (TypeError, ValueError):
+                continue
+            if user_id > 0:
+                user_ids.append(user_id)
+        if not user_ids:
+            # 更老的对局只存了名字（player_ids_json 为空），按 username_lower
+            # 解析一次；这些行以后不会再被扫到（回填游标是 MAX(match_id)）。
+            for raw_name in _safe_json_loads(match_row['player_names_json'], []):
+                key = str(raw_name or '').strip().lower()
+                if not key:
+                    continue
+                if key not in resolved_names:
+                    found = conn.execute(
+                        'SELECT id FROM users WHERE username_lower = ?',
+                        (key,),
+                    ).fetchone()
+                    resolved_names[key] = int(found['id']) if found is not None else None
+                user_id = resolved_names[key]
+                if user_id:
+                    user_ids.append(int(user_id))
+        for user_id in dict.fromkeys(user_ids):
+            entries.append((match_id, user_id))
+    if entries:
+        conn.executemany(
+            'INSERT OR IGNORE INTO match_participants(match_id, user_id) VALUES (?, ?)',
+            entries,
+        )
+        conn.commit()
+    return len(entries)
+
+
 def init_db(
     story_content_version=None,
     coop_story_content_version=None,
@@ -1251,6 +1313,24 @@ def init_db(
             )
             '''
         )
+        # 对局↔玩家 的反查索引（社交面板"最近对局"、战绩查询等共用）。
+        # 没有它时，按玩家找对局只能全表扫描 player_ids_json / player_names_json，
+        # 52 个好友的列表要 2.8 秒（生产实测，最慢 42 秒），把单进程 eventlet
+        # 服务器整个卡住。写入点见 save_match_summary()。
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS match_participants (
+                match_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                PRIMARY KEY (match_id, user_id)
+            )
+            '''
+        )
+        conn.execute(
+            'CREATE INDEX IF NOT EXISTS idx_match_participants_user '
+            'ON match_participants(user_id, match_id DESC)'
+        )
+        _backfill_match_participants_conn(conn)
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS match_replays (
@@ -12229,25 +12309,22 @@ def _recent_matches_for_user(conn, user_id, username='', limit=5):
     safe_limit = max(1, min(int(limit or 5), 20))
     rows = []
     if uid is not None:
-        candidates = conn.execute(
+        # 走 match_participants 索引（见 init_db / save_match_summary）。
+        # 旧实现是"扫最近 40 场再逐条 JSON 解析"，好友不在最近 40 场时还会
+        # 退化成 player_names_json 的整表 LIKE —— 每个好友一次全表扫描。
+        rows = conn.execute(
             '''
-            SELECT * FROM matches
-            WHERE player_ids_json IS NOT NULL AND player_ids_json != ''
-            ORDER BY id DESC
+            SELECT m.* FROM matches m
+            JOIN match_participants p ON p.match_id = m.id
+            WHERE p.user_id = ?
+            ORDER BY m.id DESC
             LIMIT ?
             ''',
-            (safe_limit * 8,),
+            (uid, safe_limit),
         ).fetchall()
-        for row in candidates:
-            ids = _safe_json_loads(row['player_ids_json'] if 'player_ids_json' in row.keys() else '[]', [])
-            try:
-                if uid in {int(value) for value in ids if value is not None}:
-                    rows.append(row)
-            except (TypeError, ValueError):
-                continue
-            if len(rows) >= safe_limit:
-                break
-    if not rows and username:
+    if not rows and uid is None and username:
+        # 只有"按用户名查"的老路径保留整表搜索（没有用户 id 可索引）；
+        # list_friends 这类热路径一律走上面的索引查询。
         pattern = f'%"{username}"%'
         rows = conn.execute(
             '''
@@ -13487,8 +13564,22 @@ def save_match_summary(summary):
                 json.dumps(data, ensure_ascii=False),
             ),
         )
+        match_id = int(cur.lastrowid or 0)
+        participants = []
+        for raw_user_id in data.get('player_ids') or []:
+            try:
+                user_id = int(raw_user_id)
+            except (TypeError, ValueError):
+                continue
+            if user_id > 0:
+                participants.append((match_id, user_id))
+        if participants:
+            conn.executemany(
+                'INSERT OR IGNORE INTO match_participants(match_id, user_id) VALUES (?, ?)',
+                participants,
+            )
         conn.commit()
-        return cur.lastrowid
+        return match_id
 
 
 def _resolve_user_ids_for_stats(conn, values):
