@@ -4,6 +4,7 @@ import copy
 import json
 import os
 import re
+import sys
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
@@ -410,43 +411,29 @@ def parse_length(value: str | None) -> float:
 
 
 def normalized_svg(source: Path, *, palette: dict | None = None) -> bytes:
+    """生成规范画布的卡图（见 docs/卡图尺寸规范.md）。
+
+    * 画布本来就是 1:1 的源图 → **整张等比缩放**到 283.46，内容占比保持不变；
+    * 画布不是 1:1（贴边导出/横竖比例不对）→ 重排到 283.46 方形，内容占比按"最小改动"
+      落进 0.55–0.65，不做大幅缩放。
+    """
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import normalize_card_art as art_norm  # 与 normalize_card_art.py 共用同一套实现
+
     raw = source.read_text(encoding="utf-8-sig")
     for old, new in (palette or {}).items():
         raw = raw.replace(old, new)
+    data = raw.encode("utf-8")
     root = ET.fromstring(raw)
-    view_box = root.attrib.get("viewBox", "").replace(",", " ").split()
-    if len(view_box) == 4:
-        x, y, width, height = [float(value) for value in view_box]
-    else:
-        x = y = 0.0
-        width = parse_length(root.attrib.get("width"))
-        height = parse_length(root.attrib.get("height"))
-    width = max(0.001, width)
-    height = max(0.001, height)
-    scale = min(82.0 / width, 82.0 / height)
-    offset_x = (100.0 - width * scale) / 2.0 - x * scale
-    offset_y = (100.0 - height * scale) / 2.0 - y * scale
-
-    namespace = "{http://www.w3.org/2000/svg}"
-    group = ET.Element(f"{namespace}g", {"transform": f"translate({offset_x:.6f} {offset_y:.6f}) scale({scale:.6f})"})
-    preserved = []
-    graphics = []
-    for child in list(root):
-        root.remove(child)
-        if child.tag in (f"{namespace}defs", f"{namespace}title", f"{namespace}desc"):
-            preserved.append(child)
-        else:
-            graphics.append(child)
-    for child in preserved:
-        root.append(child)
-    for child in graphics:
-        group.append(child)
-    root.append(group)
-    root.attrib.pop("style", None)
-    root.set("width", "100")
-    root.set("height", "100")
-    root.set("viewBox", "0 0 100 100")
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    size = art_norm.DEFAULT_SIZE
+    if art_norm.canvas_kind(root, size) == "size":
+        return art_norm.uniform_rescale_svg(data, size)
+    info = art_norm.measure(root, data)
+    coverage = info["coverage"] if info else art_norm.DEFAULT_RATIO
+    ratio = min(max(coverage, art_norm.DEFAULT_RATIO - art_norm.DEFAULT_BAND),
+                art_norm.DEFAULT_RATIO + art_norm.DEFAULT_BAND)
+    return art_norm.normalized_svg(data, size, ratio)
 
 
 def art_payloads():

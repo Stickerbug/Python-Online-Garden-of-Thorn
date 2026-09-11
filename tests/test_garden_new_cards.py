@@ -12,6 +12,8 @@ from mod_loader import ModCard, load_mod
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "mods" / "Garden Cards DLC.gtnmod"
+# 卡图统一规范：283.46 方形画布（docs/卡图尺寸规范.md）
+CANONICAL_ART_VIEW_BOX = "0 0 283.46 283.46"
 NEW_CARD_IDS = {
     "MoonRock",
     "Avocado",
@@ -161,18 +163,24 @@ class GardenNewCardsTests(unittest.TestCase):
                 for card in new_specs:
                     self.assertIn(card["id"], card_text)
 
-    def test_new_card_art_uses_padded_square_canvases(self):
-        expected_view_boxes = {
-            "card-art/grass.svg": "-29.10302 -14.33804 100.36627 100.36627",
-            "card-art/coal.svg": "-8.03678 -9.02168 56.25749 56.25749",
-            "card-art/kale.svg": "-10.88653 -11.18671 76.20570 76.20570",
-            "card-art/daisy.svg": "-32.45311,-32.45311,113.81244,113.81244",
-        }
+    def test_new_card_art_uses_canonical_square_canvas(self):
+        """卡图规范（docs/卡图尺寸规范.md）：283.46 方形画布、不写 width/height。
+
+        画布必须 1:1 且为标准尺寸；内容在画布里的留白/占比属于美术自由，这里不断言。
+        """
+        assets = [
+            "card-art/grass.svg",
+            "card-art/coal.svg",
+            "card-art/kale.svg",
+            "card-art/daisy.svg",
+            "card-art/candle.svg",
+        ]
         with zipfile.ZipFile(PACKAGE) as archive:
-            for asset, expected_view_box in expected_view_boxes.items():
+            for asset in assets:
                 root = ET.fromstring(archive.read(asset))
-                self.assertEqual(root.get("viewBox"), expected_view_box)
-                self.assertEqual(root.get("width"), root.get("height"))
+                self.assertEqual(root.get("viewBox"), CANONICAL_ART_VIEW_BOX, asset)
+                self.assertIsNone(root.get("width"), asset)
+                self.assertIsNone(root.get("height"), asset)
 
     def test_card_tags_survive_without_duplicate_flags(self):
         card = ModCard({

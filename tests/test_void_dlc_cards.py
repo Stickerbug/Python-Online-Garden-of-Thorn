@@ -17,6 +17,9 @@ PACKAGES = {
     "Void Cards DLC.gtnmod": (25, "Eric, AArcC"),
 }
 PREEXISTING_DLC_CARD_IDS = {"CyanidePill", "StemCell", "Mitochondria", "Lithium"}
+# 卡图统一规范（docs/卡图尺寸规范.md）：283.46 方形画布、不写 width/height。
+# 画布尺寸若变化，改这一处即可；内容留白属于美术自由，不在断言范围。
+CANONICAL_ART_VIEW_BOX = "0 0 283.46 283.46"
 
 
 class VoidDlcCardTests(unittest.TestCase):
@@ -99,7 +102,9 @@ class VoidDlcCardTests(unittest.TestCase):
                     if card.get("legacy_id") in PREEXISTING_DLC_CARD_IDS:
                         continue
                     root = ET.fromstring(archive.read(image))
-                    self.assertEqual(root.attrib.get("viewBox"), "0 0 100 100")
+                    self.assertEqual(root.attrib.get("viewBox"), CANONICAL_ART_VIEW_BOX, image)
+                    self.assertIsNone(root.attrib.get("width"), image)
+                    self.assertIsNone(root.attrib.get("height"), image)
 
     def test_copper_rod_absorbs_responded_attack_damage_as_charge(self):
         engine = self.action_engine()

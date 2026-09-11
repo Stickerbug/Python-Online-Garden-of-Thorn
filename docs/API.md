@@ -41,6 +41,8 @@
 | GET | <code>/api/cards</code> | 公开 | 卡牌目录；可传 <code>disabled_mods</code>、<code>include_all_mods</code>、<code>mode</code> 及社区模组选择 |
 | GET | <code>/api/opening-events</code> | 公开 | 配装倾向/开局事件目录；模组参数与卡牌目录一致 |
 | GET | <code>/api/mods</code> | 公开 | 内置模组目录；<code>summary=1</code> 返回精简信息 |
+| GET | <code>/api/mod-studio/schema</code> | 公开 | 模组编辑器用的 op 契约（步骤白名单 + 仅运行时 op），只读 |
+| POST | <code>/api/mod-studio/validate</code> | 公开（限流） | 只校验不执行：复用加载器合并 locales 后跑 v2 校验；请求体上限 256 KB，校验在线程池中运行 |
 | GET | <code>/api/community-mods</code> | 可选账号 | 社区模组目录；登录后仅增加当前账号的管理标记 |
 | GET | <code>/api/mod-assets/&lt;asset_id&gt;</code> | 公开 | 读取已登记的模组图片资源 |
 | POST | <code>/api/font-subsets/community</code> | 公开、限流 | 为已登记社区模组准备缺字字体子集；仅接受模组选择数据 |

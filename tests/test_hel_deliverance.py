@@ -13,6 +13,8 @@ from mod_loader import load_mod
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "mods" / "Hel Cards Addition.gtnmod"
 CARD_ID = "Deliverance"
+# 卡图统一规范：283.46 方形画布（docs/卡图尺寸规范.md）
+CANONICAL_ART_VIEW_BOX = "0 0 283.46 283.46"
 
 
 class HelDeliveranceTests(unittest.TestCase):
@@ -75,10 +77,10 @@ class HelDeliveranceTests(unittest.TestCase):
         with zipfile.ZipFile(PACKAGE) as archive:
             self.assertIsNone(archive.testzip())
             root = ET.fromstring(archive.read("card-art/deliverance.svg"))
-            self.assertEqual(
-                root.attrib.get("viewBox"),
-                "-20.02392,-20.02392,100.11960,100.11960",
-            )
+            # 卡图规范：283.46 方形画布、不写 width/height（见 docs/卡图尺寸规范.md）
+            self.assertEqual(root.attrib.get("viewBox"), CANONICAL_ART_VIEW_BOX)
+            self.assertIsNone(root.attrib.get("width"))
+            self.assertIsNone(root.attrib.get("height"))
             spec = json.loads(archive.read("mod.json"))
             self.assertEqual(spec["manifest"]["author"], "Eric, AArcC")
             deliverance = next(
