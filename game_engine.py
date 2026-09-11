@@ -1018,8 +1018,9 @@ class GameEngine:
         'steal_card': 'steal_enemy_card',
         'copy_card': 'copy_card',
         'random_discard_from_hand': 'random_discard_from_hand',
-        'random_move_card_to_hand': 'random_zone_card_to_hand',
-        'move_random_card_to_hand': 'random_zone_card_to_hand',
+        # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
+        # 是 Round 1 草稿名，实现与别名一并删除（老数据会得到显式
+        # "已移除 + 替代写法" 报错，见 mod_spec_v2.REMOVED_ATOMIC_OPS）。
         'seal_equipment_layers': 'seal_equipment',
         'defer_death_checks': 'defer_game_over',
         'auto_play_queue_add': 'queue_auto_play',
@@ -9142,47 +9143,11 @@ class GameEngine:
         self._note_achievement_status_peak(target_id)
         self.log_msg(log or f"{self.pn(target_id)}获得{amount}层无法选中")
 
-    def _atomic_block_enemy_attacks(self, player_id, card, params, log, choice, context):
-        duration = params.get('duration', 1)
-        opp = self.players[1 - player_id]
-        if self._status_application_blocked(1 - player_id, 'attack_blocked'):
-            return
-        opp.attack_blocked = max(opp.attack_blocked, duration)
-        self._note_achievement_status_peak(1 - player_id)
-        self.log_msg(log or f"{self.pn(1 - player_id)}无法使用攻击牌{duration}回合")
-
-    def _atomic_force_enemy_attacks_only(self, player_id, card, params, log, choice, context):
-        duration = params.get('duration', 1)
-        opp = self.players[1 - player_id]
-        if self._status_application_blocked(1 - player_id, 'attack_only'):
-            return
-        opp.attack_only = max(opp.attack_only, duration)
-        self.log_msg(log or f"{self.pn(1 - player_id)}仅可使用攻击牌{duration}回合")
-
     def _atomic_block_own_actions(self, player_id, card, params, log, choice, context):
         if self._status_application_blocked(player_id, 'shovel_active'):
             return
         self.players[player_id].shovel_active = True
         self.log_msg(log or f"{self.pn(player_id)}无法使用卡牌")
-
-    def _atomic_counter_dodge(self, player_id, card, params, log, choice, context):
-        amount = params.get('amount', 1)
-        self.players[player_id].dodge += amount
-        self._note_achievement_status_peak(player_id)
-        self.log_msg(log or f"{self.pn(player_id)}获得{amount}闪避")
-
-    def _atomic_counter_nazar(self, player_id, card, params, log, choice, context):
-        if self._status_application_blocked(player_id, 'nazar'):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 2), card, 2)
-        self._add_nazar_status_value(player_id, amount)
-        self.log_msg(log or f"{self.pn(player_id)}获得{amount}层邪眼")
-
-    def _atomic_counter_negate_skill(self, player_id, card, params, log, choice, context):
-        if self._status_application_blocked(player_id, 'negate_next_skill'):
-            return
-        self.players[player_id].negate_next_skill = True
-        self.log_msg(log or f"{self.pn(player_id)}的下次技能牌将失效")
 
     def _atomic_counter_equip_protect(self, player_id, card, params, log, choice, context):
         if self._status_application_blocked(player_id, 'equipment_protection'):
@@ -9216,70 +9181,17 @@ class GameEngine:
                             self.log_msg(log)
                     return
 
-    def _atomic_counter_block_enemy_attacks(self, player_id, card, params, log, choice, context):
-        duration = params.get('duration', 1)
-        opp = self.players[1 - player_id]
-        if self._status_application_blocked(1 - player_id, 'attack_blocked'):
-            return
-        opp.attack_blocked = max(opp.attack_blocked, duration)
-        self._note_achievement_status_peak(1 - player_id)
-        self.log_msg(log or f"{self.pn(1 - player_id)}无法使用攻击牌")
-
-    def _atomic_counter_set_invincible_then_die(self, player_id, card, params, log, choice, context):
-        if self._status_application_blocked(player_id, 'bandage_active'):
-            return
-        self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；自己回合结束时死亡")
-
-    def _atomic_equip_sponge(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'target'))
-        if not (0 <= target_id < len(self.players)):
-            target_id = player_id
-        if self._status_application_blocked(target_id, 'sponge_active'):
-            return
-        self.players[target_id].sponge_active = True
-        self.log_msg(log or f"{self.pn(target_id)}伤害转为毒伤")
-
     def _atomic_equip_reduce_enemy_draw(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
         self.players[1 - player_id].sluggish += amount
         self._note_achievement_status_peak(1 - player_id)
         self.log_msg(log or f"敌方获得{amount}层迟缓")
 
-    def _atomic_equip_reduce_enemy_e(self, player_id, card, params, log, choice, context):
-        amount = params.get('amount', 1)
-        self.players[1 - player_id].overload += amount
-        self._note_achievement_status_peak(1 - player_id)
-        self.log_msg(log or f"敌方获得{amount}层超载")
-
     def _atomic_equip_reduce_own_draw(self, player_id, card, params, log, choice, context):
         amount = params.get('amount', 1)
         self.players[player_id].sluggish += amount
         self._note_achievement_status_peak(player_id)
         self.log_msg(log or f"{self.pn(player_id)}获得{amount}层迟缓")
-
-    def _atomic_equip_reduce_own_e(self, player_id, card, params, log, choice, context):
-        amount = params.get('amount', 1)
-        self.players[player_id].overload += amount
-        self._note_achievement_status_peak(player_id)
-        self.log_msg(log or f"{self.pn(player_id)}获得{amount}层超载")
-
-    def _atomic_equip_add_toxic(self, player_id, card, params, log, choice, context):
-        amount = params.get('amount', 1)
-        if self._status_application_blocked(1 - player_id, 'toxic'):
-            return
-        self.players[1 - player_id].toxic += amount
-        self._note_achievement_status_peak(1 - player_id)
-        self.log_msg(log or f"敌方+{amount}淬毒")
-
-    def _atomic_equip_set_health(self, player_id, card, params, log, choice, context):
-        amount = params.get('amount', 60)
-        self.players[player_id].health = amount
-        self._note_achievement_health(player_id)
-        self.log_msg(log or f"{self.pn(player_id)}血量设为{amount}")
-
-    def _atomic_equip_on_destroy_remove_poison_damage(self, player_id, card, params, log, choice, context):
-        pass
 
     def _atomic_on_fatal_invincible_then_die(self, player_id, card, params, log, choice, context):
         if self._status_application_blocked(player_id, 'bandage_active'):
@@ -9967,12 +9879,19 @@ class GameEngine:
         self.log_msg(log or f"{self.pn(player_id)}下次伤害x{multiplier}")
 
     def _atomic_reduce_next_cost(self, player_id, card, params, log, choice, context):
-        self._atomic_modify_hand_card_cost(player_id, card, params, log, -1)
+        self._change_hand_card_costs(player_id, card, params, log, -1)
 
     def _atomic_increase_next_cost(self, player_id, card, params, log, choice, context):
-        self._atomic_modify_hand_card_cost(player_id, card, params, log, 1)
+        self._change_hand_card_costs(player_id, card, params, log, 1)
 
-    def _atomic_modify_hand_card_cost(self, player_id, card, params, log, direction: int):
+    def _change_hand_card_costs(self, player_id, card, params, log, direction: int):
+        """Internal helper for ``reduce_next_cost`` / ``increase_next_cost``.
+
+        Round 20: this used to be ``_atomic_modify_hand_card_cost``. It never was
+        a valid step op (its signature has no ``choice`` / ``context``, so the
+        effect dispatcher could not call it) -- it is only reachable through the
+        two atoms above, so it no longer carries the ``_atomic_`` prefix.
+        """
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not (0 <= target_id < len(self.players)):
             return
@@ -17387,14 +17306,6 @@ class GameEngine:
             self.log_msg(f"{self.pn(target_id)}从{zone_label}中随机获得{moved}张牌{extra}")
         else:
             self.log_msg(f"{self.pn(target_id)}的{zone_label}没有可加入手牌的牌")
-
-    def _atomic_random_move_card_to_hand(self, player_id, card, params, log, choice, context):
-        """Round-1 draft name kept as an alias of :meth:`_atomic_random_zone_card_to_hand`."""
-        return self._atomic_random_zone_card_to_hand(player_id, card, params, log, choice, context)
-
-    def _atomic_move_random_card_to_hand(self, player_id, card, params, log, choice, context):
-        """Alias of :meth:`_atomic_random_zone_card_to_hand`."""
-        return self._atomic_random_zone_card_to_hand(player_id, card, params, log, choice, context)
 
     def _atomic_seal_equipment(self, player_id, card, params, log, choice, context):
         """Seal every piece of equipment on the target(s) by ``amount`` layers."""

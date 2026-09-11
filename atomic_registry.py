@@ -25,8 +25,10 @@ _HANDLER_RE = re.compile(r"^[ \t]*def _atomic_([A-Za-z0-9_]+)\(", re.MULTILINE)
 EXTRA_PUBLIC_OPS = (
     "apply_burn",
     "force_end_turn",
-    "desert_wind_schedule",
-    "garden_mecha_antennae",
+    # Round 20: ``desert_wind_schedule`` / ``garden_mecha_antennae`` were
+    # declared here without any implementation anywhere in the engine or the v2
+    # runtime, so writing them as a step always failed with "unsupported v2 op".
+    # They are gone; see ``mod_spec_v2.REMOVED_ATOMIC_OPS`` for the replacements.
     # Round 6a: engine implemented atoms that are also part of the curated
     # spec list; registered here as well so the mod studio schema stays stable
     # even if the ``_atomic_*`` source scan misses a module.

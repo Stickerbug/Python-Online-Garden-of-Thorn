@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Set
 from mod_spec_v2 import (
     API_VERSION,
     FORMAT_VERSION,
+    REMOVED_ATOMIC_OPS,
     RESERVED_NAMESPACES,
     VALID_CAPABILITIES,
     VALID_EVENT_HOOKS,
@@ -477,7 +478,12 @@ def _validate_step(step: Any, label: str, errors: List[str], *, depth: int) -> i
         return 1
     op = step.get("op") or step.get("type")
     if op not in VALID_LOGIC_OPS:
-        errors.append(f"{label}.op 不在 DSL 白名单中: {op}")
+        replacement = REMOVED_ATOMIC_OPS.get(op) if isinstance(op, str) else None
+        if isinstance(op, str) and op in REMOVED_ATOMIC_OPS:
+            hint = f"，请改用 {replacement}" if replacement else "，该 op 没有等价替代"
+            errors.append(f"{label}.op 已在 Round 20 移除: {op}{hint}")
+        else:
+            errors.append(f"{label}.op 不在 DSL 白名单中: {op}")
     count = 1
     for key in ("steps", "then", "else", "body", "on_cancel"):
         child = step.get(key)

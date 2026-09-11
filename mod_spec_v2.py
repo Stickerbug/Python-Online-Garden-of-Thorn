@@ -390,6 +390,92 @@ _CORE_LOGIC_OPS = {
     # Round 6a: data declares the "everyone must target me" window (Light
     # Bulb) so the engine no longer reads the pack's custom var directly.
     "declare_forced_target",
+
+    # Round 20: 长尾原子登记（"卡数据仍在用、但没进策展清单"的 22 个）。
+    # 它们本来就是引擎里的 _atomic_* 处理器，只是没被策展，导致
+    # tools/mod_atom_report.py 一直把它们算作"未登记原子"。
+    "absorb_attack_damage",
+    "add_charge_to_hand",
+    "apply_burn",
+    "auto_play_zone_top",
+    "card_var_add",
+    "card_var_set",
+    "clear_statuses",
+    "crit_multiplier_add",
+    "defer_game_over",
+    "move_cards_to_deck",
+    "queue_auto_play",
+    "random_zone_card_to_hand",
+    "register_play_listener",
+    "restore_card_props",
+    "reveal_card_set",
+    "ricochet_attack",
+    "seal_equipment",
+    "set_card_prop_random",
+    "set_invincible",
+    "settle_status",
+    "snapshot_card_props",
+    "transform_cards",
+
+    # Round 20: 上条的姊妹项——被代码/别名表引用（删掉会连带打断已登记
+    # 的能力），或仍是某个家族唯一实现，因此保留并补登记。
+    #   * apply_poison / apply_toxic / gain_armor / gain_dodge：分别是
+    #     ``poison`` / ``toxic`` / ``add_armor`` / ``dodge_permanent`` 的
+    #     引擎端实现（game_engine._EFFECT_ALIASES 指过来）。
+    #   * block_own_actions / counter_equip_protect / set_untargetable：
+    #     同上，分别承接 ``block_action`` / ``equip_protection`` / ``untargetable``。
+    #   * for_each_target：``for_each_selectable_target`` 与
+    #     ``ocean_for_each_selectable_target`` 的规范名（Round 16 统一驱动）。
+    #   * on_fatal_invincible_then_die：game_engine.PASSIVE_EFFECT_TYPES 成员。
+    #   * record_play_count / record_equip_turns / reset_counter / create_counter /
+    #     exile_this / mark_self_damage_source：卡内计数器与放逐自身的通用原子。
+    #   * equip_reduce_enemy_draw：与已登记的 equip_reduce_own_draw 成对，
+    #     game_engine_urf.INFINITE_EXCLUDED_EFFECTS 也按名字引用它。
+    #   * for_each_equipment：遍历装备的唯一入口（Round 17 未合并进 for_each）。
+    #   * after_all：把 body 放到当前效果之后执行的控制流 op。
+    "apply_poison",
+    "apply_toxic",
+    "gain_armor",
+    "gain_dodge",
+    "block_own_actions",
+    "counter_equip_protect",
+    "set_untargetable",
+    "for_each_target",
+    "on_fatal_invincible_then_die",
+    "record_play_count",
+    "record_equip_turns",
+    "reset_counter",
+    "create_counter",
+    "exile_this",
+    "mark_self_damage_source",
+    "equip_reduce_enemy_draw",
+    "for_each_equipment",
+    "after_all",
+}
+
+# Round 20: 清理掉的原子（实现与登记都已删除）。老包如果还写这些名字，
+# 校验层会给出"已移除 + 替代写法"，运行时 v2 路径也会抛同样的错误，
+# 不会静默变成"什么也没发生"。
+#
+# ``None`` 表示没有等价替代（原本就是空实现或未实现过的声明性名字）。
+REMOVED_ATOMIC_OPS = {
+    "block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
+    "counter_block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
+    "counter_dodge": '{"op":"dodge_permanent","target":"self","amount":1}',
+    "counter_nazar": '{"op":"status_add_named","status":"nazar","target":"self","amount":2}',
+    "counter_negate_skill": '{"op":"player_prop_set","property":"negate_next_skill","target":"self","value":1}',
+    "counter_set_invincible_then_die": '{"op":"on_fatal_invincible_then_die"}',
+    "equip_add_toxic": '{"op":"toxic","target":"enemy","amount":1}',
+    "equip_on_destroy_remove_poison_damage": None,
+    "equip_reduce_enemy_e": '{"op":"player_prop_add","property":"overload","target":"enemy","amount":1}',
+    "equip_reduce_own_e": '{"op":"player_prop_add","property":"overload","target":"self","amount":1}',
+    "equip_set_health": '{"op":"set_health","target":"self","amount":60}',
+    "equip_sponge": '{"op":"player_prop_set","property":"sponge_active","target":"target","value":1}',
+    "force_enemy_attacks_only": '{"op":"force_card_type","card_type":"thorn","target":"enemy"}',
+    "random_move_card_to_hand": '{"op":"random_zone_card_to_hand"}',
+    "move_random_card_to_hand": '{"op":"random_zone_card_to_hand"}',
+    "desert_wind_schedule": None,
+    "garden_mecha_antennae": '{"op":"reveal_enemy_hand","target":"target"}',
 }
 
 # Every curated core op plus every atomic handler the engine implements, so new

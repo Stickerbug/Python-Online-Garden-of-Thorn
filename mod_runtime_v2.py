@@ -18,6 +18,7 @@ from cards import (
 )
 from damage_types import DAMAGE_TYPE_PHYSICAL
 from runtime_budget import ActionWorkBudgetExceeded
+from mod_spec_v2 import REMOVED_ATOMIC_OPS
 
 
 STEP_BUDGET = 1000
@@ -57,8 +58,10 @@ ADVANCED_ATOMIC_OPS = {
     "var_set", "var_add", "var_sub", "var_mul", "var_div",
     "list_set", "list_append", "list_insert", "list_delete",
     "list_clear", "for_each_list", "timed_effect", "countdown_var",
-    "defer_game_over", "random_zone_card_to_hand", "random_move_card_to_hand",
-    "move_random_card_to_hand",
+    # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
+    # (Round 1 draft names, never used by shipped data) were folded into
+    # ``random_zone_card_to_hand``; see ``REMOVED_ATOMIC_OPS``.
+    "defer_game_over", "random_zone_card_to_hand",
     "seal_equipment", "move_cards_to_deck", "clear_statuses", "settle_status",
     "queue_auto_play", "auto_play_queue_add", "auto_play_zone_top", "ricochet_attack",
     "for_each_target",
@@ -987,6 +990,12 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     atomic_result = _try_run_engine_atomic_op(engine, context, op, params, step)
     if atomic_result is not None:
         return atomic_result
+
+    # Round 20: 已移除的原子给"显式 unsupported + 替代写法"，不退化成静默跳过。
+    if str(op) in REMOVED_ATOMIC_OPS:
+        replacement = REMOVED_ATOMIC_OPS[str(op)]
+        hint = f"；请改用 {replacement}" if replacement else "；该 op 没有等价替代"
+        raise V2RuntimeError(f"atomic op {op!r} 已移除（Round 20 长尾清理）{hint}")
 
     raise V2RuntimeError(f"unsupported v2 op: {op}")
 
