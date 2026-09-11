@@ -54,7 +54,8 @@ EVENT_PATCHES = {
     "Magic Antennae": {
         "events": {"on_play": {"steps": [
             {"op": "request_target", "allowed": "any"},
-            {"op": "garden_show_initial_deck", "target": "target"},
+            # Round 22：旧名 garden_show_initial_deck 已删除，规范名是 reveal_card_set。
+            {"op": "reveal_card_set", "target": "target"},
             {"op": "draw_cards", "target": "self", "amount": 1},
         ]}}
     },

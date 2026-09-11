@@ -112,9 +112,10 @@ def _for_each_selectable_steps(params: dict, target: str = "wide_strike_targets"
         if not isinstance(step, dict):
             continue
         flat = _flatten_step(step, None)
-        if flat.get("op") == "apply_burn":
-            # ``apply_burn`` resolves a single player, so it has to become the
-            # multi-target ``status_add_named`` for the selector to fan out.
+        if flat.get("op") in ("burn", "apply_burn"):
+            # ``burn``（引擎实现名 ``apply_burn``）只结算单个玩家，所以要变成
+            # 多目标的 ``status_add_named`` 才能被选择器扇出。Round 22 起规范名
+            # 是 ``burn``；旧名仍在这里认一下，方便处理还没迁过的老包。
             steps.append(
                 {
                     "op": "status_add_named",

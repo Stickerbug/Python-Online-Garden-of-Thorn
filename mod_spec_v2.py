@@ -113,7 +113,6 @@ _CORE_LOGIC_OPS = {
     # （清单与理由见 .codex-tmp/round12/rd12.md）；下面几个是同一形态、但不在本轮
     # 名单里的，保持原样待后续批次处理。
     "bio_clear_poison_fire", "bio_add_shield_conversion", "desert_marble_attack",
-    "garden_show_initial_deck",
     "jungle_monstera_heal_team", "jungle_dianthus_record_use",
     "jungle_dianthus_restore_power", "jungle_add_maple_to_hand",
     "request_ui",
@@ -330,7 +329,6 @@ _CORE_LOGIC_OPS = {
     "delayed_reveal_hand_next_turn",
     "yin_yang_effect",
     "flower_burst",
-    "ocean_for_each_selectable_target",
     "ocean_random_blind_hand",
     "ocean_add_charge_to_hand",
     "ocean_status_tag_damage",
@@ -419,13 +417,16 @@ _CORE_LOGIC_OPS = {
 
     # Round 20: 上条的姊妹项——被代码/别名表引用（删掉会连带打断已登记
     # 的能力），或仍是某个家族唯一实现，因此保留并补登记。
-    #   * apply_poison / apply_toxic / gain_armor / gain_dodge：分别是
-    #     ``poison`` / ``toxic`` / ``add_armor`` / ``dodge_permanent`` 的
-    #     引擎端实现（game_engine._EFFECT_ALIASES 指过来）。
+    #   * gain_dodge：``dodge_permanent`` 的引擎端实现
+    #     （game_engine._EFFECT_ALIASES 指过来）。
+    #     Round 22 起 ``poison`` / ``toxic`` / ``add_armor`` 的实现名
+    #     ``apply_poison`` / ``apply_toxic`` / ``gain_armor`` 都不再对外登记
+    #     （它们作为旧名进了 RENAMED_ATOMIC_OPS），这里也就不再补登记。
     #   * block_own_actions / counter_equip_protect / set_untargetable：
     #     同上，分别承接 ``block_action`` / ``equip_protection`` / ``untargetable``。
     #   * for_each_target：``for_each_selectable_target`` 与
-    #     ``ocean_for_each_selectable_target`` 的规范名（Round 16 统一驱动）。
+    #     ``ocean_for_each_selectable_target`` 的规范名（Round 16 统一驱动，
+    #     Round 22 起两个旧名一并进 RENAMED_ATOMIC_OPS）。
     #   * on_fatal_invincible_then_die：game_engine.PASSIVE_EFFECT_TYPES 成员。
     #   * record_play_count / record_equip_turns / reset_counter / create_counter /
     #     exile_this / mark_self_damage_source：卡内计数器与放逐自身的通用原子。
@@ -433,9 +434,6 @@ _CORE_LOGIC_OPS = {
     #     game_engine_urf.INFINITE_EXCLUDED_EFFECTS 也按名字引用它。
     #   * for_each_equipment：遍历装备的唯一入口（Round 17 未合并进 for_each）。
     #   * after_all：把 body 放到当前效果之后执行的控制流 op。
-    "apply_poison",
-    "apply_toxic",
-    "gain_armor",
     "gain_dodge",
     "block_own_actions",
     "counter_equip_protect",
@@ -478,9 +476,29 @@ REMOVED_ATOMIC_OPS = {
     "garden_mecha_antennae": '{"op":"reveal_enemy_hand","target":"target"}',
 }
 
+# Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），
+# 卡数据/工具再写这些名字会在校验层与运行时拿到显式报错，映射值是应该改用的
+# 规范名。与 ``REMOVED_ATOMIC_OPS`` 的区别：那些名字已经没有等价实现，这边的
+# 旧名只是改了称呼，规范名照常可用。
+RENAMED_ATOMIC_OPS = {
+    "apply_poison": "poison",
+    "apply_toxic": "toxic",
+    "gain_armor": "add_armor",
+    "auto_play_queue_add": "queue_auto_play",
+    "queue_auto_play_card": "queue_auto_play",
+    "kitty_auto_play": "auto_play_zone_top",
+    "bounce_attack": "ricochet_attack",
+    "ocean_for_each_selectable_target": "for_each_target",
+    "for_each_selectable_target": "for_each_target",
+    "garden_show_initial_deck": "reveal_card_set",
+    "set_card_var": "card_var_set",
+}
+
 # Every curated core op plus every atomic handler the engine implements, so new
 # engine atoms become available to mod v2 content as soon as they exist.
-VALID_LOGIC_OPS = merge_public_ops(_CORE_LOGIC_OPS)
+# Round 22: 别名收敛删掉的旧名即使还有 ``_atomic_*`` 实现（如 apply_toxic）
+# 也不再对外登记，写出来会拿到 RENAMED_ATOMIC_OPS 的显式报错。
+VALID_LOGIC_OPS = merge_public_ops(_CORE_LOGIC_OPS) - set(RENAMED_ATOMIC_OPS)
 
 VALID_EVENT_HOOKS = {
     "before_play_card",

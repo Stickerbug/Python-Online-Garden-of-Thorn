@@ -25,7 +25,8 @@ tools/refactor_card_atoms.py 中已经出现过的组合写法）。
 没有规则、记入报告"缺口"的 3 个原子：
 ``desert_magic_compass``（选中牌随机置于抽牌堆顶）、
 ``desert_marble_attack``（随机可选中副目标弹射）、
-``garden_show_initial_deck``（初始牌组快照与私有展示）。
+``reveal_card_set``（初始牌组快照与私有展示；Round 22 前的旧名
+``garden_show_initial_deck`` 已经删除）。
 """
 
 from __future__ import annotations

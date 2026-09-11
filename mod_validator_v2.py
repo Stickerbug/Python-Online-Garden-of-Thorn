@@ -6,6 +6,7 @@ from mod_spec_v2 import (
     API_VERSION,
     FORMAT_VERSION,
     REMOVED_ATOMIC_OPS,
+    RENAMED_ATOMIC_OPS,
     RESERVED_NAMESPACES,
     VALID_CAPABILITIES,
     VALID_EVENT_HOOKS,
@@ -482,6 +483,11 @@ def _validate_step(step: Any, label: str, errors: List[str], *, depth: int) -> i
         if isinstance(op, str) and op in REMOVED_ATOMIC_OPS:
             hint = f"，请改用 {replacement}" if replacement else "，该 op 没有等价替代"
             errors.append(f"{label}.op 已在 Round 20 移除: {op}{hint}")
+        elif isinstance(op, str) and op in RENAMED_ATOMIC_OPS:
+            errors.append(
+                f"{label}.op 已改名（Round 22 别名收敛）: {op}，"
+                f"请改用 {RENAMED_ATOMIC_OPS[op]}"
+            )
         else:
             errors.append(f"{label}.op 不在 DSL 白名单中: {op}")
     count = 1

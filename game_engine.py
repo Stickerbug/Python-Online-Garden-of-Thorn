@@ -23,6 +23,7 @@ from mod_runtime_v2 import (
     LoopBreak,
     LoopContinue,
     PILE_ZONE_NAMES,
+    RENAMED_ATOMIC_OPS,
     SELECTOR_FILTER_KEYS,
     SELECTOR_FIRST_KEYS,
     SELECTOR_TARGET_KEYS,
@@ -1023,12 +1024,10 @@ class GameEngine:
         # "已移除 + 替代写法" 报错，见 mod_spec_v2.REMOVED_ATOMIC_OPS）。
         'seal_equipment_layers': 'seal_equipment',
         'defer_death_checks': 'defer_game_over',
-        'auto_play_queue_add': 'queue_auto_play',
-        'queue_auto_play_card': 'queue_auto_play',
-        'kitty_auto_play': 'auto_play_zone_top',
-        'bounce_attack': 'ricochet_attack',
-        'ocean_for_each_selectable_target': 'for_each_target',
-        'for_each_selectable_target': 'for_each_target',
+        # Round 22（别名收敛）：auto_play_queue_add / queue_auto_play_card /
+        # kitty_auto_play / bounce_attack / ocean_for_each_selectable_target /
+        # for_each_selectable_target 这批旧名从两张别名表一起删除，改由
+        # mod_spec_v2.RENAMED_ATOMIC_OPS 显式报错。
         'put_card_to_deck': 'put_card_to_deck',
         'shuffle_discard_into_deck': 'shuffle_discard_into_deck',
         'give_card_to_hand': 'give_card_to_hand',
@@ -13803,6 +13802,20 @@ class GameEngine:
                 et = eff if isinstance(eff, str) else self._effect_type(eff)
                 pm = {} if isinstance(eff, str) else self._effect_params(eff)
                 lg = None if isinstance(eff, str) else eff.get('log')
+                # Round 22（别名收敛）: 引擎路径（含引擎原子自己跑的 body）
+                # 也把旧名挡在实现名之前，给"已改名 + 规范名"的显式报错，
+                # 而不是静默跑掉或只报一句 Unknown effect。
+                renamed_to = RENAMED_ATOMIC_OPS.get(et)
+                if renamed_to:
+                    self._log_mod_runtime_error(
+                        et,
+                        RuntimeError(
+                            f'atomic op {et!r} 已改名（Round 22 别名收敛）；请改用 {renamed_to!r}'
+                        ),
+                        player_id,
+                        card,
+                    )
+                    continue
                 rt = self._EFFECT_ALIASES.get(et, et)
                 # Round 13: the engine path honours the same step gate as the v2
                 # runtime (``condition``/``run_if`` must hold, ``unless`` must
@@ -14618,6 +14631,17 @@ class GameEngine:
                 if eff_type in self.PASSIVE_EFFECT_TYPES and context_name == 'play':
                     if log:
                         self.log_msg(log)
+                    continue
+                renamed_to = RENAMED_ATOMIC_OPS.get(eff_type)
+                if renamed_to:
+                    self._log_mod_runtime_error(
+                        eff_type,
+                        RuntimeError(
+                            f'atomic op {eff_type!r} 已改名（Round 22 别名收敛）；请改用 {renamed_to!r}'
+                        ),
+                        player_id,
+                        card,
+                    )
                     continue
                 resolved_type = self._EFFECT_ALIASES.get(eff_type, eff_type)
                 handler = getattr(self, f'_atomic_{resolved_type}', None)

@@ -18,7 +18,7 @@ from cards import (
 )
 from damage_types import DAMAGE_TYPE_PHYSICAL
 from runtime_budget import ActionWorkBudgetExceeded
-from mod_spec_v2 import REMOVED_ATOMIC_OPS
+from mod_spec_v2 import REMOVED_ATOMIC_OPS, RENAMED_ATOMIC_OPS
 
 
 STEP_BUDGET = 1000
@@ -63,7 +63,7 @@ ADVANCED_ATOMIC_OPS = {
     # ``random_zone_card_to_hand``; see ``REMOVED_ATOMIC_OPS``.
     "defer_game_over", "random_zone_card_to_hand",
     "seal_equipment", "move_cards_to_deck", "clear_statuses", "settle_status",
-    "queue_auto_play", "auto_play_queue_add", "auto_play_zone_top", "ricochet_attack",
+    "queue_auto_play", "auto_play_zone_top", "ricochet_attack",
     "for_each_target",
     "absorb_attack_damage", "add_charge_to_hand", "register_play_listener",
     "card_var_set", "card_var_add",
@@ -95,26 +95,23 @@ ADVANCED_ATOMIC_OPS = {
     "draw_to_hand_limit", "magic_salt_reflect", "third_eye_precision_or_hidden",
     "grant_temp_swift_highest_e", "delayed_blind_next_turn",
     "delayed_reveal_hand_next_turn",
-    "ocean_for_each_selectable_target",
     "declare_forced_target",
 }
 
 # 旧名 → 新名。只保留仍被卡数据、测试或工具引用的条目；已经没有任何引用
 # 的别名（add_card_tag / set_card_prop / equip_card / show_initial_deck 等
 # 12 条）在 Round 4 移除，见 .codex-tmp/round4/rd4_deadcode.md。
+#
+# Round 22（别名收敛：一个概念一个名字）：卡数据迁完后删掉 11 条——
+# apply_poison / apply_toxic / gain_armor / auto_play_queue_add /
+# queue_auto_play_card / kitty_auto_play / bounce_attack /
+# ocean_for_each_selectable_target / for_each_selectable_target /
+# garden_show_initial_deck / set_card_var。它们改用 mod_spec_v2.RENAMED_ATOMIC_OPS
+# 给"已改名 + 规范名"的显式报错（不再静默替换）；剩下 1 条 apply_burn 是
+# tests/ 锁着的（test_mod_atom_report.py 的步骤夹具写着它），保留不动。
+# 见 .codex-tmp/round22/rd22.md。
 ATOMIC_OP_ALIASES = {
-    "gain_armor": "add_armor",
-    "apply_poison": "poison",
     "apply_burn": "burn",
-    "apply_toxic": "toxic",
-    "auto_play_queue_add": "queue_auto_play",
-    "queue_auto_play_card": "queue_auto_play",
-    "kitty_auto_play": "auto_play_zone_top",
-    "bounce_attack": "ricochet_attack",
-    "ocean_for_each_selectable_target": "for_each_target",
-    "for_each_selectable_target": "for_each_target",
-    "garden_show_initial_deck": "reveal_card_set",
-    "set_card_var": "card_var_set",
 }
 
 
@@ -986,6 +983,15 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 target=params.get("target"),
             ))
         return {"success": True}
+
+    # Round 22: 别名收敛后的旧名给"已改名 + 规范名"的显式报错（不静默、
+    # 也不退化成"什么也没发生"）。检查放在引擎原子分派之前，免得实现名
+    # 仍带着 handler 时把旧名照跑。
+    renamed = RENAMED_ATOMIC_OPS.get(str(op))
+    if renamed:
+        raise V2RuntimeError(
+            f"atomic op {op!r} 已改名（Round 22 别名收敛）；请改用 {renamed!r}"
+        )
 
     atomic_result = _try_run_engine_atomic_op(engine, context, op, params, step)
     if atomic_result is not None:
