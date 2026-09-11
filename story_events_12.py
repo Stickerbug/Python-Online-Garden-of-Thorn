@@ -350,8 +350,8 @@ STORY_EVENTS_12 = {
         'speaker': {'zh': '神秘天平', 'en': 'Mysterious Scale'},
         'options': _opts(
             ('scale_you', '让天平倾向你', 'Tip the Scale to You', 'scale_toward_player', True, '', {
-                'zh': '降级所有卡牌，翻倍最大生命值，获得2张[[card:fatigued]]',
-                'en': 'Downgrade all cards, double maximum H, and gain 2 [[card:fatigued]]',
+                'zh': '降级所有卡牌，翻倍最大生命值，获得1张[[card:fatigued]]',
+                'en': 'Downgrade all cards, double maximum H, and gain 1 [[card:fatigued]]',
             }),
             ('scale_cards', '让天平倾向卡牌', 'Tip the Scale to Your Cards', 'scale_toward_cards', True, '', {
                 'zh': '升级所有牌，减半最大生命值',
