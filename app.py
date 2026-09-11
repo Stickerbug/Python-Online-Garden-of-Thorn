@@ -1430,6 +1430,25 @@ set_mod_runtime_error_logger(
 )
 
 
+def run_off_event_loop(fn, *args, **kwargs):
+    """把低频但很重的只读工作放到 eventlet 线程池，别按住整条事件循环。
+
+    这个项目是单进程 eventlet（`eventlet.monkey_patch()` + `socketio.run`），
+    同步 SQLite 查询在 C 层阻塞时不会让出绿色协程——历史上一次好友列表查询
+    2.8 秒就让所有房间一起卡。管理台搜索/统计、回放打包这类"低频重读"走这里，
+    等待期间主循环继续服务其他玩家；线程池不可用（非 eventlet 环境）时直接执行。
+    """
+    execute = None
+    try:
+        from eventlet import tpool
+        execute = tpool.execute
+    except Exception:
+        execute = None
+    if execute is None:
+        return fn(*args, **kwargs)
+    return execute(fn, *args, **kwargs)
+
+
 def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
     flags = {}
     try:
@@ -21915,7 +21934,9 @@ def handling_matches():
     if not DB_AVAILABLE:
         return db_unavailable_response()
     try:
-        data = search_handling_matches(
+        # 冷缓存下这条搜索要 3 秒+（summary_json LIKE 全表扫），丢线程池执行。
+        data = run_off_event_loop(
+            search_handling_matches,
             query=request.args.get('query', ''),
             mode=request.args.get('mode', 'all'),
             risk=request.args.get('risk', 'all'),
@@ -22798,7 +22819,9 @@ def admin_average_round_stats():
         return db_unavailable_response()
     try:
         scope = request.args.get('scope', 'total')
-        data = list_average_round_stats(
+        # 全量/近 7 天按开局事件分组统计要扫 matches，放线程池避免卡住对局。
+        data = run_off_event_loop(
+            list_average_round_stats,
             scope=scope,
             mode=request.args.get('mode', ''),
             recent_days=request.args.get('recent_days', 7),
@@ -23066,7 +23089,8 @@ def api_replay_download(replay_ref):
     if limited_response is not None:
         return limited_response
     try:
-        package = build_replay_download_package(replay_id)
+        # 回放包要读 4.6GB 级别的 blob 目录并算 SHA256，必须离开事件循环。
+        package = run_off_event_loop(build_replay_download_package, replay_id)
     except Exception as exc:
         admin_event('error', f'replay download failed replay_id={replay_id}: {exc}')
         return jsonify({'success': False, 'error': '回放下载失败'}), 500
