@@ -160,6 +160,49 @@ def canvas_is_broken(root, tolerance: float = 1e-3) -> bool:
     if w <= 0 or h <= 0:
         return True
     return abs(w - h) > tolerance * max(w, h)
+
+
+def canvas_kind(root, size: float, tolerance: float = 1e-3) -> str:
+    """画布类型：``aspect``＝不是 1:1（真错）、``size``＝1:1 但尺寸不是标准值、``ok``＝已标准。"""
+
+    _x, _y, w, h = view_box_of(root)
+    if w <= 0 or h <= 0:
+        return "aspect"
+    if abs(w - h) > tolerance * max(w, h):
+        return "aspect"
+    if abs(w - size) > 0.01 or abs(h - size) > 0.01:
+        return "size"
+    return "ok"
+
+
+def uniform_rescale_svg(raw: bytes, size: float) -> bytes:
+    """整张图等比缩放：内容与画布一起缩，只把坐标系换成标准画布，视觉完全不变。
+
+    适用于"画布已经 1:1、但尺寸不是 283.46"的图（例如 100×100）。
+    """
+
+    root = ET.fromstring(raw.decode("utf-8-sig"))
+    x, y, w, h = view_box_of(root)
+    scale = size / max(w, h)
+    group = ET.Element(f"{{{SVG_NS}}}g", {
+        "transform": "translate(%.6f %.6f) scale(%.6f)" % (-x * scale, -y * scale, scale),
+    })
+    preserved, graphics = [], []
+    for child in list(root):
+        root.remove(child)
+        if child.tag in (f"{{{SVG_NS}}}defs", f"{{{SVG_NS}}}title", f"{{{SVG_NS}}}desc", f"{{{SVG_NS}}}metadata"):
+            preserved.append(child)
+        else:
+            graphics.append(child)
+    for child in preserved:
+        root.append(child)
+    for child in graphics:
+        group.append(child)
+    root.append(group)
+    root.attrib.pop("width", None)
+    root.attrib.pop("height", None)
+    root.set("viewBox", "0 0 %s %s" % (fmt(size), fmt(size)))
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 def process_package(path: pathlib.Path, size: float, ratio: float, band: float,
                     apply: bool, verify: bool, canvas_only: bool = False):
     with zipfile.ZipFile(path, "r") as archive:
@@ -179,12 +222,29 @@ def process_package(path: pathlib.Path, size: float, ratio: float, band: float,
             issues.append((member, "测量失败: %s" % exc))
             continue
         coverage = info["coverage"] if info else 0.0
-        if canvas_only and not canvas_is_broken(root):
-            # 画布是 1:1 的，视觉上没问题：一律不动（哪怕内容占比和标准略有出入）
-            skipped.append(member)
-            continue
+        kind = canvas_kind(root, size)
         if canvas_only:
-            # 只修画布：可见尺寸按"最小改动"落进标准带，不强行拉到中心值
+            if kind == "ok":
+                # 画布已经是 1:1 且是标准尺寸：内容留白多少属于美术自由，一律不动
+                skipped.append(member)
+                continue
+            if kind == "size":
+                # 1:1 但尺寸不对：整张等比缩放，视觉完全不变
+                if verify:
+                    issues.append((member, "画布是 1:1 但尺寸 %s，应等比缩放到 %s" % (
+                        fmt(view_box_of(root)[2]), fmt(size))))
+                    continue
+                if not apply:
+                    issues.append((member, "画布尺寸非标准（%s）" % fmt(view_box_of(root)[2])))
+                    continue
+                try:
+                    members[member] = uniform_rescale_svg(content, size)
+                    changed.append("%s（1:1 画布 %s → 等比缩放，内容占比保持 %.3f）" % (
+                        member, fmt(view_box_of(root)[2]), coverage))
+                except Exception as exc:  # noqa: BLE001
+                    issues.append((member, "等比缩放失败: %s" % exc))
+                continue
+            # 画布不是 1:1：重排画布，可见尺寸按最小改动落进标准带
             target_ratio = min(max(coverage, ratio - band), ratio + band)
         else:
             target_ratio = ratio
