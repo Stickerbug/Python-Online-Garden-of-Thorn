@@ -1016,6 +1016,27 @@ STORY_TRAITS.update({
     },
 })
 
+# 卡牌上以「特殊效果」形式呈现的惩罚（反馈建议 #58 / 表格14 红标）：
+# 卡面描述只写效果名与层数，具体规则交给这里的术语弹窗解释。
+STORY_TRAITS.update({
+    'cannot_draw': {
+        'name': {'zh': '无法抽牌', 'en': 'Cannot Draw'},
+        'description': {
+            'zh': '本回合无法抽牌，回合结束时失去。',
+            'en': 'Cannot draw this turn; lost at the end of the turn.',
+        },
+        'image_url': '/static/assets/story-trait-icons/cannot-draw.svg',
+    },
+    'next_turn_draw': {
+        'name': {'zh': '下回合抽牌', 'en': 'Next Turn Draw'},
+        'description': {
+            'zh': '下个回合开始时，多抽或少抽效果层数的牌，随后失去。',
+            'en': 'Draw that many more or fewer cards at the start of the next turn, then lose it.',
+        },
+        'image_url': '/static/assets/story-trait-icons/next-turn-draw.svg',
+    },
+})
+
 STORY_TRAIT_VALUE_KEYS = {
     'sturdy': 'sturdy',
     'shelter': 'shelter',
@@ -2087,7 +2108,8 @@ STORY_CARDS = {
                      upgrade={'description': {'zh': '抽4张牌。', 'en': 'Draw 4.'},
                               'effects': (_effect('draw', 4),)}),
     'magic_feather': _card('Magic Feather', '魔法羽毛', 'Magic Feather', 2, 'bloom', 'common',
-                           '回复自己等同于当前手牌数向上取整一半的E；本回合无法再抽牌。',
+                           '回复自己等同于当前手牌数一半（向上取整）的E；获得1层无法抽牌。',
+                           description_en='Recover E equal to half your hand size (rounded up); gain 1 Cannot Draw.',
                            effects=(_effect('elixir_from_hand', 0.5), _effect('temporary_effect', script='cannot_draw')),
                            upgrade={'cost_e': 1}),
     'bubble': _card('Bubble', '泡泡', 'Bubble', 0, 'bloom', 'ultra',
@@ -2340,10 +2362,11 @@ STORY_CARDS = {
     ),
     'puppeteer': _card(
         'Puppeteer', '傀儡架台', 'Puppeteer', 0, 'bloom', 'rare',
-        '抽3张牌；下回合少抽2张牌。',
+        '抽3张牌；获得2层下回合抽牌。',
+        description_en='Draw 3; gain 2 Next Turn Draw.',
         effects=(_effect('draw', 3), _effect('next_turn_draw', -2)),
         upgrade={
-            'description': {'zh': '抽3张牌；下回合少抽1张牌。', 'en': 'Draw 3; draw 1 fewer card next turn.'},
+            'description': {'zh': '抽3张牌；获得1层下回合抽牌。', 'en': 'Draw 3; gain 1 Next Turn Draw.'},
             'effects': (_effect('draw', 3), _effect('next_turn_draw', -1)),
         },
     ),
