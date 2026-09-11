@@ -16285,6 +16285,9 @@ function connectSocket(serverUrl) {
         } else if (phase === 'game_over') {
             closePileViewerModal();
             updateStatus(UI.game_over);
+            // 反馈 #91：荆露在结算时发放，客户端账号/荆露面板缓存不会自动更新。
+            // 延迟拉一次（等发奖落库），每场只排一次。
+            scheduleThornDewRefreshAfterMatch();
         } else if (phase === 'lobby') {
             setAi1v1TestLoading(false);
             allowLobbyTransition('game_phase:lobby');
@@ -17361,6 +17364,18 @@ function thornDewDailyTasksHtml() {
     return `<div class="daily-task-grid">${lines.map(([title,desc]) => `<div class="daily-task-card"><div class="daily-task-title">${escapeHtml(title)}</div><div class="daily-task-desc">${escapeHtml(desc)}</div></div>`).join('')}</div>`;
 }
 
+let thornDewMatchRefreshTimer = null;
+
+function scheduleThornDewRefreshAfterMatch() {
+    // 反馈 #91：对局结算后延迟刷新一次荆露（等发奖落库），每场只排一次。
+    if (thornDewMatchRefreshTimer || !currentAccount) return;
+    thornDewMatchRefreshTimer = setTimeout(() => {
+        thornDewMatchRefreshTimer = null;
+        thornDewCenter = null;
+        Promise.resolve(loadThornDewCenter(true)).catch(() => {});
+    }, 2500);
+}
+
 async function loadThornDewCenter(force = false) {
     if (!currentAccount || thornDewLoading) return;
     if (!force && thornDewCenter) return;
@@ -17368,6 +17383,17 @@ async function loadThornDewCenter(force = false) {
     try {
         const data = await authRequest('/api/thorn-dew', undefined, { timeoutMs: 5000 });
         thornDewCenter = data;
+        // 反馈 #91：账号面板里的"荆露"总数取自 currentAccount，这里顺带把
+        // /api/thorn-dew 的最新余额同步进去，避免要等签到/重登才更新。
+        const balance = data && data.balance;
+        if (balance && currentAccount) {
+            const free = Math.max(0, Number(balance.free || 0) || 0);
+            const paid = Math.max(0, Number(balance.paid || 0) || 0);
+            currentAccount.thorn_dew_free = free;
+            currentAccount.thorn_dew_paid = paid;
+            currentAccount.thorn_dew_total = Math.max(0, Number(balance.total ?? (free + paid)) || 0);
+            cacheAccount(currentAccount);
+        }
     } catch (_) {
         thornDewCenter = thornDewCenter || null;
     } finally {
@@ -37586,12 +37612,34 @@ async function saveDisabledMods() {
                 : 'The mod list is not ready. Reopen Settings and try again.',
         }));
     }
+    // 反馈 #83：这里原来是"从复选框重建"整份禁用列表，任何没渲染出来的模组
+    // （例如娱乐模组列表尚未加载）都会被当成"启用"而写回偏好——表现就是
+    // 保存一次设置后所有娱乐模组全开。改成与 syncCurrentSettingsModSelectionToLocal()
+    // 相同的语义：以已存偏好为基底，只用当前渲染出来的复选框覆盖。
     let disabled = [];
-    checkboxes.forEach(cb => {
-        if (!cb.checked && cb.dataset.filename) {
-            disabled.push(cb.dataset.filename);
-        }
-    });
+    const renderedFilenames = new Set(
+        checkboxes.map(cb => String(cb.dataset.filename || '')).filter(Boolean)
+    );
+    if (['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode())) {
+        const disabledSet = new Set(getDisabledMods());
+        checkboxes.forEach(cb => {
+            if (cb.dataset.locked === '1') return;
+            const filename = cb.dataset.filename;
+            if (!filename) return;
+            if (cb.checked) disabledSet.delete(filename);
+            else disabledSet.add(filename);
+        });
+        disabled = Array.from(disabledSet);
+    } else {
+        // 天梯/其它模式：未渲染的模组保持原状态，其余按复选框收集。
+        disabled = getDisabledMods().filter(filename => !renderedFilenames.has(filename));
+        checkboxes.forEach(cb => {
+            if (cb.dataset.locked === '1') return;
+            if (!cb.checked && cb.dataset.filename) {
+                disabled.push(cb.dataset.filename);
+            }
+        });
+    }
     const coerced = coerceValidDisabledMods(disabled);
     disabled = coerced.disabled;
     if (coerced.forcedVanilla) {

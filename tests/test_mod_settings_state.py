@@ -76,6 +76,20 @@ class ModSettingsStateTests(unittest.TestCase):
         self.assertIn('requestModSettingsUpdate(', handler)
         self.assertIn('getDisabledMods(newMode)', handler)
 
+    def test_save_disabled_mods_merges_with_the_stored_preference(self):
+        """反馈 #83：保存设置不能把"没渲染出来的模组"当成启用。"""
+        save = source_between(
+            GAME_JS,
+            'async function saveDisabledMods()',
+            'function initModEditor()',
+        )
+        self.assertIn('const disabledSet = new Set(getDisabledMods());', save)
+        self.assertIn('renderedFilenames', save)
+        self.assertIn(
+            'disabled = getDisabledMods().filter(filename => !renderedFilenames.has(filename));',
+            save,
+        )
+
     def test_invite_accept_does_not_rebuild_preferences_from_hidden_checkboxes(self):
         section = source_between(
             GAME_JS,
