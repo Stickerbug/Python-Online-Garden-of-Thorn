@@ -578,6 +578,38 @@
       <div id="story-term-content" class="modal-inner story-card-terms-modal"></div>
     </dialog>
 
+    <dialog id="story-settings-dialog" class="story-dialog story-settings-dialog">
+      <form method="dialog">
+        <div class="story-pile-heading">
+          <div>
+            <h2 id="story-settings-title">旅程设置</h2>
+            <p id="story-settings-copy">界面偏好仅影响当前设备。</p>
+          </div>
+        </div>
+        <div class="story-settings-list">
+          <button id="story-settings-fullscreen" class="story-settings-row" type="button">
+            <span id="story-settings-fullscreen-label">进入全屏</span>
+          </button>
+          <label class="story-settings-row">
+            <span id="story-settings-hide-borders-label">隐藏界面与卡牌边框</span>
+            <input id="story-settings-hide-borders" type="checkbox">
+          </label>
+          <label class="story-settings-row">
+            <span id="story-settings-hand-order-label">显示手牌序数</span>
+            <input id="story-settings-hand-order" type="checkbox">
+          </label>
+          <label class="story-settings-row">
+            <span id="story-settings-speed-label">2倍演出速度</span>
+            <input id="story-settings-speed" type="checkbox">
+          </label>
+        </div>
+        <div class="story-dialog-actions">
+          <button id="story-settings-cancel" class="story-command" value="cancel">取消</button>
+          <button id="story-settings-confirm" class="story-command story-command-primary" value="confirm">确定</button>
+        </div>
+      </form>
+    </dialog>
+
     {% if story_coop_access %}
     <dialog id="story-coop-preview-dialog" class="story-dialog story-coop-preview-dialog" aria-labelledby="story-coop-dialog-title">
       <form method="dialog" id="story-coop-lobby-form">
@@ -666,38 +698,6 @@
 
         <div class="story-dialog-actions">
           <button id="story-coop-close" class="story-command" value="cancel">关闭</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="story-settings-dialog" class="story-dialog story-settings-dialog">
-      <form method="dialog">
-        <div class="story-pile-heading">
-          <div>
-            <h2 id="story-settings-title">旅程设置</h2>
-            <p id="story-settings-copy">界面偏好仅影响当前设备。</p>
-          </div>
-        </div>
-        <div class="story-settings-list">
-          <button id="story-settings-fullscreen" class="story-settings-row" type="button">
-            <span id="story-settings-fullscreen-label">进入全屏</span>
-          </button>
-          <label class="story-settings-row">
-            <span id="story-settings-hide-borders-label">隐藏界面与卡牌边框</span>
-            <input id="story-settings-hide-borders" type="checkbox">
-          </label>
-          <label class="story-settings-row">
-            <span id="story-settings-hand-order-label">显示手牌序数</span>
-            <input id="story-settings-hand-order" type="checkbox">
-          </label>
-          <label class="story-settings-row">
-            <span id="story-settings-speed-label">2倍演出速度</span>
-            <input id="story-settings-speed" type="checkbox">
-          </label>
-        </div>
-        <div class="story-dialog-actions">
-          <button id="story-settings-cancel" class="story-command" value="cancel">取消</button>
-          <button id="story-settings-confirm" class="story-command story-command-primary" value="confirm">确定</button>
         </div>
       </form>
     </dialog>

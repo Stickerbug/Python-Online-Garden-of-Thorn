@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -948,6 +949,29 @@ def test_story_settings_only_commits_display_preferences_after_confirmation():
     assert "event.target.returnValue === 'confirm'" in STORY_JS
     assert "$('story-settings-hide-borders')?.addEventListener('change'" not in STORY_JS
     assert "$('story-settings-speed')?.addEventListener('change'" not in STORY_JS
+
+
+def test_story_settings_dialog_is_not_gated_behind_coop_access():
+    """旅程设置是所有人都要用的界面，不能被 {% if story_coop_access %} 包住。
+
+    该块只对 staff/admin 渲染；曾经因为把设置对话框误放进这个权限块，
+    普通账号点 HUD 的「设置」时找不到元素而静默返回（反馈 #76）。
+    """
+    coop_blocks = re.findall(
+        r'\{% if story_coop_access %\}(.*?)\{% endif %\}',
+        STORY_TEMPLATE,
+        flags=re.DOTALL,
+    )
+    assert len(coop_blocks) >= 2
+    for coop_block in coop_blocks:
+        assert 'story-settings-dialog' not in coop_block
+        # 协作权限块里只应出现协作相关元素，避免再有普通界面被误关进权限块。
+        coop_ids = re.findall(r'id="([^"]+)"', coop_block)
+        offenders = [
+            element_id for element_id in coop_ids if not element_id.startswith('story-coop')
+        ]
+        assert offenders == []
+    assert STORY_TEMPLATE.count('<dialog id="story-settings-dialog"') == 1
 
 
 def test_story_card_play_unlocks_persistent_hud_after_action_settles():
