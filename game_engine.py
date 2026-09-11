@@ -999,7 +999,10 @@ class GameEngine:
 
     _EFFECT_ALIASES = {
         'damage': 'deal_damage',
-        'damage_multi': 'deal_damage_multi',
+        # Round 30 / 批次 Y：``damage_multi`` → ``deal_damage_multi`` 这条别名随
+        # 「多段伤害 = ``deal_damage(hits=N)``」收敛一起删除；旧名写出来会先被
+        # ``_retired_atom_runtime_error`` 拦下，拿到 mod_spec_v2.REMOVED_ATOMIC_OPS
+        # 的"已移除 + 替代写法"（替代写法里带 ``hits``）。
         # Round 24（C 类收敛）：状态三兄弟 poison/burn/toxic 与增益/属性族
         # add_armor/gain_dodge/dodge_permanent/remove_armor/set_armor/dodge_this、
         # 清状态族 clear_buffs/clear_debuffs/clear_all_effects、每回合修正族
@@ -1066,10 +1069,11 @@ class GameEngine:
         'swap_hands': 'swap_hands',
         'broadcast_event': 'broadcast_event',
         'modify_damage': 'modify_damage',
-        # Round 15 / batch 3: ``add_status`` / ``remove_status`` / ``set_status``
-        # are real atoms again (``_atomic_add_status`` etc.) so the legacy short
-        # spellings keep their own battle-log default instead of being rewritten
-        # into the silent ``*_named`` contract.
+        # Round 30 / 批次 Y：``add_status`` / ``remove_status`` / ``set_status``
+        # 三条旧写法（Round 15 起曾是"默认播报层数"的真原子）随零用量清理一起
+        # 删除——规范写法 ``status_add_named`` / ``status_remove_named`` /
+        # ``set_status_named`` 用 ``log`` 参数即可拿到同一句战报。旧名写出来会先
+        # 被 ``_retired_atom_runtime_error`` 拦下，拿到替代写法。
     }
 
     def _retired_atom_runtime_error(self, effect_type):
@@ -1079,20 +1083,22 @@ class GameEngine:
         ``REMOVED_ATOMIC_OPS``（已移除 + 替代写法）也接上，Round 25 的长尾
         登记残留（66 个旧名）沿用同一张表——引擎原子自己跑的 ``body`` /
         ``on_hit`` 与 v2 运行时保持同一套文案，不退回 ``Unknown effect``。
+        Round 30 / 批次 Y 的三条状态旧写法与两条多段伤害旧名同样落在
+        ``REMOVED_ATOMIC_OPS`` 里，走的就是这条路径。
         """
 
         renamed_to = RENAMED_ATOMIC_OPS.get(effect_type)
         if renamed_to:
             return RuntimeError(
                 f'atomic op {effect_type!r} 已改名'
-                f'（Round 22/25/29 词汇表收敛）；请改用 {renamed_to!r}'
+                f'（Round 22/25/29/30 词汇表收敛）；请改用 {renamed_to!r}'
             )
         if effect_type in REMOVED_ATOMIC_OPS:
             replacement = REMOVED_ATOMIC_OPS[effect_type]
             hint = f'；请改用 {replacement}' if replacement else '；该 op 没有等价替代'
             return RuntimeError(
                 f'atomic op {effect_type!r} 已移除'
-                f'（Round 20/24/25/29 原子与词汇表收敛）{hint}'
+                f'（Round 20/24/25/29/30 原子与词汇表收敛）{hint}'
             )
         return None
 
@@ -9268,20 +9274,10 @@ class GameEngine:
         health_amount = params.get('health', 5)
         self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}被动效果：受到致命伤害时清除所有效果，生命值设为{health_amount}，无敌直到下一个自己回合结束")
 
-    def _atomic_deal_damage_multi(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        amount = params.get('amount', 6)
-        # Round 28（伤害族词汇表）：段数统一写 ``hits``；``times`` 是本原子的
-        # 旧名，保留等价可写（两者都不写时仍是 1 次）。
-        times = params.get('times', params.get('hits', 1))
-        total = 0
-        for _ in range(times):
-            try:
-                total += self.deal_attack_damage(target_id, amount, attacker_id=player_id)
-            except TypeError:
-                total += self.deal_attack_damage(target_id, amount)
-        if log:
-            self.log_msg(self._format_step_log(log, target=self.pn(target_id), source=self.pn(player_id)))
+    # Round 30 / 批次 Y：``_atomic_deal_damage_multi``（``deal_damage_multi`` /
+    # 声明别名 ``damage_multi``）已删除——多段伤害由 ``deal_damage`` 的
+    # ``hits`` 参数覆盖（还多拿精准 / 力量 / 暴击 / 子瓣继承与集合目标）。
+    # 旧名写出来会拿到 mod_spec_v2.REMOVED_ATOMIC_OPS 的替代写法。
 
     def _atomic_player_stat_change(self, player_id, card, params, log, choice, context):
         """Round 24：护甲/闪避小原子合并成一条。
@@ -14169,10 +14165,21 @@ class GameEngine:
         name = str(params.get('name', 'timer'))
         duration = self._eval_int(player_id, params.get('duration', params.get('turns', 1)), card, 1)
         trigger = str(params.get('trigger') or 'target_turn_start')
-        self._atomic_var_set(player_id, card, {'target': target, 'name': name, 'value': duration}, log, choice, context)
+        # Round 30 / 批次 Y：这里原先直呼旧写法的私有名 ``_atomic_var_set``（垫片），
+        # 并把计时效果写成 ``{'type': 'var_sub'}``——``var_sub`` 在 Round 29 注销
+        # 之后会被 ``_retired_atom_runtime_error`` 拦下，倒计时永远减不下去。
+        # 两处都改写成规范写法 ``player_var_change(mode=...)``。
+        self._atomic_player_var_change(
+            player_id, card,
+            {'target': target, 'name': name, 'value': duration, 'mode': 'set'},
+            log, choice, context,
+        )
         for target_id in self._timer_targets(player_id, target):
             effect_target = target if target in ('global', 'team') else target_id
-            effects = [{'type': 'var_sub', 'params': {'target': effect_target, 'name': name, 'value': 1}}]
+            effects = [{
+                'type': 'player_var_change',
+                'params': {'mode': 'sub', 'target': effect_target, 'name': name, 'value': 1},
+            }]
             self._register_timed_effect(player_id, target_id, trigger, duration, effects)
 
     def _played_cards_total_this_turn(self, target_id: int, exclude_current: bool = False,
@@ -16064,7 +16071,7 @@ class GameEngine:
             status = value.get('status') or value.get('name') or value.get('id')
             if op == 'electric_web_arm':
                 return True
-            if op in ('add_status', 'status_add_named', 'set_status', 'set_status_named') and str(status) in action_statuses:
+            if op in ('status_add_named', 'set_status_named') and str(status) in action_statuses:
                 return True
             return any(self._effect_tree_contains_action_status(v, depth + 1) for v in value.values())
         if isinstance(value, list):
@@ -20792,18 +20799,11 @@ class GameEngine:
     def _atomic_status_add_named(self, player_id, card, params, log, choice, context):
         self._apply_status_add_family(player_id, card, params, log, op='status_add_named')
 
-    # 旧写法（add_status / remove_status / set_status）：步骤没有写 ``log`` 时沿用
-    # 历史默认文案（"+N层X"），规范写法 ``*_named`` 则保持安静。
-    STATUS_LEGACY_ANNOUNCING_OPS = ('add_status', 'remove_status', 'set_status')
-
-    def _atomic_add_status(self, player_id, card, params, log, choice, context):
-        """旧写法 ``add_status``：与 ``status_add_named`` 同一实现，默认播报层数。"""
-
-        self._apply_status_add_family(player_id, card, params, log, op='add_status')
-
-    def _atomic_set_status(self, player_id, card, params, log, choice, context):
-        self._apply_status_add_family(player_id, card, params, log, op='set_status')
-
+    # Round 30 / 批次 Y：旧写法 ``add_status`` / ``remove_status`` / ``set_status``
+    # （Round 15 起是"未写 ``log`` 时默播报层数"的真原子）已随零用量清理删除。
+    # 规范写法 ``status_add_named`` / ``status_remove_named`` / ``set_status_named``
+    # 现在**只**按步骤自己写的 ``log`` 决定战报（``log:true`` 就是旧默认那句），
+    # 因此 ``STATUS_LEGACY_ANNOUNCING_OPS`` 也一并消失。
     def _atomic_set_status_named(self, player_id, card, params, log, choice, context):
         self._apply_status_add_family(player_id, card, params, log, op='set_status_named')
 
@@ -20823,7 +20823,7 @@ class GameEngine:
         status_list = self._status_family_status_list(player_id, card, params)
         if not any(status_list):
             return
-        default_amount = params.get('stack', 1) if op in ('set_status', 'set_status_named') else 1
+        default_amount = params.get('stack', 1) if op == 'set_status_named' else 1
         amount = self._eval_int(player_id, params.get('amount', default_amount), card, 1)
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
             for status in status_list:
@@ -20918,11 +20918,10 @@ class GameEngine:
         """Battle-log contract of the status family (Round 15 / batch 3).
 
         ``log: false`` mutes, a string is a data-authored template
-        (``{target}`` / ``{source}`` / ``{amount}`` / ``{status}``), ``log: true``
-        asks for the classic announce line, and an absent ``log`` keeps the op's
-        historical default: ``add_status`` / ``remove_status`` / ``set_status``
-        announce, while the ``*_named`` spellings stay quiet unless the step says
-        otherwise.
+        (``{target}`` / ``{source}`` / ``{amount}`` / ``{status}``), and
+        ``log: true`` asks for the classic announce line.  Round 30 / 批次 Y
+        删掉旧写法之后，未写 ``log`` 一律安静（旧 ``add_status`` /
+        ``remove_status`` / ``set_status`` 的"默认播报"要显式写 ``log: true``）。
         """
 
         applied = int(after) - int(before)
@@ -20939,7 +20938,7 @@ class GameEngine:
             return self._format_step_log(
                 log_value, target=self.pn(target_id), amount=requested, status=label,
             )
-        if not (log_value is True or (log_value is None and op in self.STATUS_LEGACY_ANNOUNCING_OPS)):
+        if log_value is not True:
             return None
         if immune_key:
             if mode == 'set':
@@ -20961,8 +20960,9 @@ class GameEngine:
 
         Returns the applied delta (``after - before``) as the readers see it.
 
-        Both the engine atoms and the v2 runtime's ``add_status`` branch funnel
-        here, so every mechanism below now behaves the same on either path:
+        Every status step (``status_add_named`` / ``set_status_named`` /
+        ``status_remove_named`` / ``clear_statuses``) funnels here, so the
+        mechanisms below behave the same whichever name the data uses:
 
         * alias groups declared by card data (``status_aliases``) + legacy fields;
         * the arctic frost 60-layer cap and its alias group;
@@ -20990,16 +20990,16 @@ class GameEngine:
             requested = int(amount or 0)
         except (TypeError, ValueError):
             requested = 0
-        if op in ('set_status', 'set_status_named'):
+        if op == 'set_status_named':
             mode = 'set'
-        elif op in ('remove_status', 'status_remove_named'):
+        elif op == 'status_remove_named':
             mode = 'clear' if clear_all else 'remove'
         else:
             mode = 'add'
         layers = requested
         if mode == 'remove':
-            # 旧写法 remove_status 一贯是"至少 1 层"；规范写法按 amount 精确减少。
-            layers = max(1, requested) if op == 'remove_status' else requested
+            # Round 30 / 批次 Y：旧写法 ``remove_status``（一贯"至少减 1 层"）已删除，
+            # 这里统一按 ``amount`` 精确减少。
             if layers <= 0:
                 # ``status_remove_named`` 的 0 层是"清空"（见 _apply_status_remove_family）。
                 mode = 'clear'
@@ -21123,16 +21123,13 @@ class GameEngine:
     def _atomic_status_remove_named(self, player_id, card, params, log, choice, context):
         self._apply_status_remove_family(player_id, card, params, log, op='status_remove_named')
 
-    def _atomic_remove_status(self, player_id, card, params, log, choice, context):
-        self._apply_status_remove_family(player_id, card, params, log, op='remove_status')
-
     def _apply_status_remove_family(self, player_id, card, params, log, *, op):
-        """Target / amount resolution shared by ``remove_status`` and its named twin.
+        """Target / amount resolution of the ``set_status_named`` / remove family.
 
         ``status_remove_named`` without an explicit ``amount`` keeps its
         historical "clear this status" behaviour; every other spelling removes
-        that many layers (``remove_status`` also keeps its "at least one layer"
-        default, which the runtime branch always had).
+        that many layers.  Round 30 / 批次 Y 删掉了 ``remove_status``（"至少减
+        1 层"的旧默认），要那个语义就显式写 ``amount: 1``。
         """
 
         status = str(params.get('status', '')).strip()

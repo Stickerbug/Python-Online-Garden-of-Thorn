@@ -26,9 +26,16 @@ FOR_EACH_LIMIT = 200
 
 
 ADVANCED_ATOMIC_OPS = {
+    # Round 30 / 批次 Y：本名单只保留**仍在契约里**的 op（见
+    # docs/引擎原子与数据步骤清单.md §8.4 的不变量）。26 条陈旧项（Round 20-29
+    # 注销的 ``var_*`` / ``move_to_*`` / ``choose_from_*`` / ``destroy_*_equip`` /
+    # ``player_prop_*`` / ``card_var_*`` / ``record_*`` / ``reset_counter`` /
+    # ``*_durability``，加上本批注销的 ``damage_multi``）从名单里移出：它们本来
+    # 就在 ``run_v2_step`` 的"已移除/已改名"检查**之后**才会被读到，移出后行为
+    # 不变，只是不再虚报"白名单里有实现"。
     "after_all", "random", "break", "continue", "if_else", "repeat", "repeat_until",
     "for_each", "for_each_selected_card", "for_each_list",
-    "damage", "damage_multi", "direct_damage", "lifesteal_damage", "triangle_damage",
+    "damage", "direct_damage", "lifesteal_damage", "triangle_damage",
     "heal", "draw", "gain_e", "gain_m",
     # Round 24：护甲/闪避族、状态三兄弟、清状态族、每回合修正族、资源族、
     # 全局倍率族、卡内标签族、装备减抽族各自合并成一条（旧名进
@@ -36,14 +43,14 @@ ADVANCED_ATOMIC_OPS = {
     "player_stat_change",
     "clear_status", "status_add_named", "status_remove_named", "set_status_named",
     "turn_mod_add", "resource_spend", "global_mult", "equip_reduce_draw",
-    "choose_from_deck", "choose_from_discard", "choose_from_exile",
+    "choose_from_zone",
     "reveal_enemy_hand", "reveal_hand", "reveal_deck_top", "steal_enemy_card",
     "reveal_hand_cards",
     "steal_card", "copy_card", "copy_choice_with_discount",
     "put_card_to_deck", "shuffle_discard_into_deck", "give_card_to_hand",
     "give_card_to_deck", "give_card_to_discard", "remove_specific_card",
-    "move_to_hand", "move_to_discard", "move_to_deck", "move_to_exile",
-    "destroy_random_equip", "destroy_all_equip", "destroy_all_field_equip",
+    "move_card",
+    "destroy_equipment",
     "destroy_all_destroyable_equipment", "destroy_self_equipment",
     "destroy_equipment_choice_or_first", "equip_protection", "remove_equip_protection",
     "place_as_equip", "add_equipment_to_zone", "trigger_manual",
@@ -53,10 +60,8 @@ ADVANCED_ATOMIC_OPS = {
     "force_end_turn", "mark_self_damage_source", "fission", "fusion",
     "multiply_next_damage", "reduce_next_cost", "increase_next_cost",
     "add_tag", "add_tag_to_zone", "remove_tag", "clear_tags",
-    "transform_card", "gain_durability", "lose_durability", "set_durability",
-    "record_play_count", "record_equip_turns", "reset_counter", "create_counter",
+    "transform_card", "card_counter", "create_counter",
     "exile_this", "swap_health", "swap_hands", "broadcast_event", "modify_damage",
-    "var_set", "var_add", "var_sub", "var_mul", "var_div",
     "list_set", "list_append", "list_insert", "list_delete",
     "list_clear", "for_each_list", "timed_effect", "countdown_var",
     # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
@@ -67,12 +72,12 @@ ADVANCED_ATOMIC_OPS = {
     "queue_auto_play", "auto_play_zone_top", "ricochet_attack",
     "for_each_target",
     "absorb_attack_damage", "add_charge_to_hand", "register_play_listener",
-    "card_var_set", "card_var_add",
+    "card_var_change",
     "reveal_card_set",
     "snapshot_card_props", "set_card_prop_random", "restore_card_props",
     "transform_cards",
     "deck_catalog_pick", "deck_catalog_pick_resume",
-    "player_prop_set", "player_prop_add", "card_prop_set", "card_prop_add",
+    "player_prop_change", "card_prop_set", "card_prop_add",
     "card_prop_mul", "card_damage_multiply", "equipment_prop_set",
     "discard_hand_by_paid_e", "restore_turn_start_stats", "restore_match_start_stats",
     "shuffle_hand",
@@ -787,18 +792,12 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
             engine.log_msg(rendered or default_log)
         return {"success": True}
 
-    if op in ("add_status", "remove_status", "set_status"):
-        raw_status = params.get("status", params.get("id", ""))
-        status_id = str(eval_v2_value(engine, context, raw_status) or "").strip()
-        amount = _to_int(eval_v2_value(engine, context, params.get("amount", params.get("stack", 1))))
-        log_spec = _status_log_spec(step, params)
-        for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "target"))):
-            if _valid_player(engine, target_id):
-                # Round 15 / batch 3: the status family lives in the engine
-                # (``_apply_status_op``) so both execution paths share one
-                # implementation (aliases / caps / achievements / hooks / log).
-                _apply_status(engine, target_id, status_id, amount, op, log=log_spec)
-        return {"success": True}
+    # Round 30 / 批次 Y：运行时侧再没有 ``add_status`` / ``remove_status`` /
+    # ``set_status`` 分支——三条旧写法（Round 15 起是"默认播报层数"的运行时
+    # 路径）随零用量清理删除，状态族只剩引擎原子
+    # （``status_add_named`` / ``set_status_named`` / ``status_remove_named`` /
+    # ``clear_status`` / ``clear_statuses`` / ``settle_status``），两条执行路径
+    # 因此共用同一份实现（别名组 / 层数上限 / 成就 / 钩子 / 战报）。
 
     # Round 14 / batch 2: ``move_card`` used to be implemented here with its own
     # hand-full / unknown-zone handling, which made it drift apart from the
@@ -1005,7 +1004,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     renamed = RENAMED_ATOMIC_OPS.get(str(op))
     if renamed:
         raise V2RuntimeError(
-            f"atomic op {op!r} 已改名（Round 22/25/29 词汇表收敛）；"
+            f"atomic op {op!r} 已改名（Round 22/25/29/30 词汇表收敛）；"
             f"请改用 {renamed!r}"
         )
 
@@ -1019,7 +1018,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         replacement = REMOVED_ATOMIC_OPS[str(op)]
         hint = f"；请改用 {replacement}" if replacement else "；该 op 没有等价替代"
         raise V2RuntimeError(
-            f"atomic op {op!r} 已移除（Round 20/24/25/29 原子与词汇表收敛）{hint}"
+            f"atomic op {op!r} 已移除（Round 20/24/25/29/30 原子与词汇表收敛）{hint}"
         )
 
     atomic_result = _try_run_engine_atomic_op(engine, context, op, params, step)
@@ -2980,45 +2979,6 @@ def _card_flags(card: Optional[CardInstance]) -> set:
     flags.update(getattr(card, "instance_flags", set()) or set())
     flags.difference_update(getattr(card, "disabled_flags", set()) or set())
     return flags
-
-
-def _apply_status(engine, player_id: int, status_id: str, amount: int, op: str,
-                  log: Any = True) -> None:
-    """Thin adapter for the v2 runtime's ``add_status`` family (Round 15 / batch 3).
-
-    The mechanics (alias groups, frost cap, ``stacking``, achievements,
-    ``on_apply`` / ``on_remove`` events and the battle-log contract) live in
-    :meth:`game_engine.GameEngine._apply_status_op`, the same code the engine
-    atoms use, so a step behaves identically on both execution paths.
-
-    ``log`` is the step's resolved log spec: ``False`` mutes, a string is a
-    template, ``True`` asks for the classic announce line, ``None`` keeps the
-    op's default.
-    """
-
-    applier = getattr(engine, "_apply_status_op", None)
-    if not callable(applier):
-        return
-    applier(
-        player_id, None, {}, log, op, player_id, str(status_id or ""), amount,
-        clear_all=False, context=None,
-    )
-
-
-def _status_log_spec(step: Any, params: Any) -> Any:
-    """Resolve a status step's ``log`` value for the shared engine implementation."""
-
-    if step_is_silent(step, params):
-        return False
-    raw = step.get("log") if isinstance(step, dict) else None
-    if raw is None and isinstance(params, dict) and params is not step:
-        raw = params.get("log")
-    if raw is None or raw is True:
-        return raw
-    if raw is False:
-        return False
-    text = str(raw)
-    return text or None
 
 
 def _status_stack(engine, player_id: int, status_id: str) -> int:

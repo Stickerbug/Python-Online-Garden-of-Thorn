@@ -124,11 +124,7 @@ _CORE_LOGIC_OPS = {
     "transform_card",
     "add_tag",
     "remove_tag",
-    "add_status",
-    "remove_status",
     "destroy_equipment",
-    "remove_status",
-    "set_status",
     "modify_event_value",
     "player_stat",
     "player_property",
@@ -157,8 +153,6 @@ _CORE_LOGIC_OPS = {
     "has_status_named",
     "zone_exists",
     "var_compare",
-    "damage_multi",
-    "deal_damage_multi",
     "direct_damage",
     "lifesteal_damage",
     "triangle_damage",
@@ -439,7 +433,7 @@ EVENT_HOOK_OPS = frozenset({
     "on_enemy_turn_start", "on_equipment_destroy", "on_equipment_trigger",
     "on_hand_owner_turn_start", "on_hand_owner_turn_end",
     "on_owner_turn_start", "on_owner_turn_end", "on_target_turn_start",
-    "damage", "damage_multi", "block_action", "equip_protection",
+    "damage", "block_action", "equip_protection",
     "invincible", "untargetable",
 })
 
@@ -509,12 +503,10 @@ DAMAGE_PIPELINE_DIRECT = "direct"
 DAMAGE_ATOM_PIPELINES = {
     # 攻击管线
     "deal_damage": DAMAGE_PIPELINE_ATTACK,
-    "deal_damage_multi": DAMAGE_PIPELINE_ATTACK,
     "ricochet_attack": DAMAGE_PIPELINE_ATTACK,
     "lifesteal_damage": DAMAGE_PIPELINE_ATTACK,
     "triangle_damage": DAMAGE_PIPELINE_ATTACK,
     "damage": DAMAGE_PIPELINE_ATTACK,
-    "damage_multi": DAMAGE_PIPELINE_ATTACK,
     # 直伤管线
     "direct_damage": DAMAGE_PIPELINE_DIRECT,
     "lose_health": DAMAGE_PIPELINE_DIRECT,
@@ -542,7 +534,7 @@ DAMAGE_PARAM_PIPELINES = {
     },
     "hits": {
         "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
-        "note": "段数；deal_damage_multi 的旧名是 times（Round 28 起 hits 是等价别名）",
+        "note": "段数（Round 30 起也是 deal_damage_multi 的替代：多段伤害 = 一条 deal_damage + hits）",
     },
     "inherit_extra_hits": {
         "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
@@ -606,10 +598,8 @@ DAMAGE_PARAM_PIPELINES = {
     "per_stack": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 每层加成"},
     "stack_name": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 层数变量名"},
     "max_stacks": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 层数上限"},
-    "times": {
-        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
-        "note": "deal_damage_multi 的旧名；统一名是 hits（等价别名，保留可写）",
-    },
+    # Round 30 / 批次 Y：``times`` 随 ``deal_damage_multi`` 一起删除——它是那个
+    # 原子独有的旧参数名，规范写法 ``deal_damage`` 只读 ``hits``。
     # ---- 仅直伤管线 ----
     "damage_type": {
         "pipelines": (DAMAGE_PIPELINE_DIRECT,),
@@ -1034,6 +1024,22 @@ REMOVED_ATOMIC_OPS = {
     "move_to_deck": '{"op":"move_card","zone":"deck","card":{"ref":"current_card"},"position":"top"}',
     "move_to_discard": '{"op":"move_card","zone":"discard","card":{"ref":"current_card"}}',
     "move_to_exile": '{"op":"move_card","zone":"exile","card":{"ref":"current_card"}}',
+
+    # ------------------------------------------------------------------
+    # Round 30 / 批次 Y：零用量清理（状态旧写法 + 多段伤害）
+    #
+    # 这一批删的都是"同一条实现换个名字"的重复语义，官方 20 个包 0 次使用、
+    # 编辑器/校验器 0 依赖。旧名写出来仍走同一条"已移除 + 替代写法"报错路径，
+    # 替代写法按**能逐字复刻旧默认**的最小写法给（旧状态三兄弟的差别只有
+    # "未写 log 时默认播报"，补一个 ``"log":true`` 即可）。
+    # ------------------------------------------------------------------
+    #   * 状态旧写法三兄弟 → 规范写法 + log:true（旧默认那句战报）
+    "add_status": '{"op":"status_add_named","target":"self","status":"poison","amount":1,"log":true}',
+    "set_status": '{"op":"set_status_named","target":"self","status":"poison","amount":1,"log":true}',
+    "remove_status": '{"op":"status_remove_named","target":"self","status":"poison","amount":1,"log":true}',
+    #   * 多段伤害两条 → deal_damage(hits=N)（Round 28 起 hits 是段数的统一名）
+    "deal_damage_multi": '{"op":"deal_damage","target":"enemy","amount":6,"hits":3}',
+    "damage_multi": '{"op":"deal_damage","target":"enemy","amount":6,"hits":3}',
 }
 
 # Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），
