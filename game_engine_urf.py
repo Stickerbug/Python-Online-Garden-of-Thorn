@@ -41,9 +41,11 @@ INFINITE_EXCLUDED_IDS = {
 
 INFINITE_EXCLUDED_EFFECTS = {
     'draw', 'choose_from_deck', 'reveal_deck_top', 'put_card_to_deck',
-    'shuffle_discard_into_deck', 'give_card_to_deck', 'mod_draw',
-    'equip_reduce_enemy_draw', 'equip_reduce_own_draw',
-    'gain_m', 'mod_m_regen', 'trigger_on_self_magic_heal_cumulative',
+    # Round 24：mod_draw / mod_m_regen 与 equip_reduce_*_draw 各自合并成
+    # turn_mod_add / equip_reduce_draw，清单按新名字同步。
+    'shuffle_discard_into_deck', 'give_card_to_deck', 'turn_mod_add',
+    'equip_reduce_draw',
+    'gain_m', 'trigger_on_self_magic_heal_cumulative',
 }
 
 

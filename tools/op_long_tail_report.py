@@ -141,7 +141,9 @@ def alias_groups() -> list:
         seen.add((alias, target))
         groups.append({"alias": alias, "target": target, "source": "ATOMIC_OP_ALIASES"})
     engine = (ROOT / "game_engine.py").read_text(encoding="utf-8", errors="replace")
-    match = re.search(r"_EFFECT_ALIASES\s*=\s*\{(.*?)\n\}", engine, re.DOTALL)
+    # ``_EFFECT_ALIASES`` 是类属性，闭合花括号带缩进；旧正则要求 ``\n}``
+    # 顶格，结果这条分支从来没匹配上（Round 24 修正）。
+    match = re.search(r"_EFFECT_ALIASES\s*=\s*\{(.*?)\n\s{0,8}\}", engine, re.DOTALL)
     if match:
         for alias, target in re.findall(r"'([A-Za-z0-9_]+)'\s*:\s*'([A-Za-z0-9_]+)'", match.group(1)):
             if alias == target or (alias, target) in seen:

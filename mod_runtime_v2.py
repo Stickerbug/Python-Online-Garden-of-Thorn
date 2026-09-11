@@ -29,11 +29,13 @@ ADVANCED_ATOMIC_OPS = {
     "after_all", "random", "break", "continue", "if_else", "repeat", "repeat_until",
     "for_each", "for_each_selected_card", "for_each_list",
     "damage", "damage_multi", "direct_damage", "lifesteal_damage", "triangle_damage",
-    "heal", "draw", "gain_e", "gain_m", "add_armor", "remove_armor", "set_armor",
-    "poison", "burn", "toxic", "dodge_this",
-    "dodge_permanent", "clear_buffs", "clear_debuffs", "clear_all_effects",
+    "heal", "draw", "gain_e", "gain_m",
+    # Round 24：护甲/闪避族、状态三兄弟、清状态族、每回合修正族、资源族、
+    # 全局倍率族、卡内标签族、装备减抽族各自合并成一条（旧名进
+    # mod_spec_v2.REMOVED_ATOMIC_OPS，写出来是显式报错）。
+    "player_stat_change",
     "clear_status", "status_add_named", "status_remove_named", "set_status_named",
-    "cost_e", "cost_m", "mod_e_regen", "mod_m_regen", "mod_draw",
+    "turn_mod_add", "resource_spend", "global_mult", "equip_reduce_draw",
     "discard", "choose_from_deck", "choose_from_discard", "choose_from_exile",
     "reveal_enemy_hand", "reveal_hand", "reveal_deck_top", "steal_enemy_card",
     "reveal_hand_cards",
@@ -50,11 +52,10 @@ ADVANCED_ATOMIC_OPS = {
     "set_health",
     "force_end_turn", "mark_self_damage_source", "fission", "fusion",
     "multiply_next_damage", "reduce_next_cost", "increase_next_cost",
-    "add_tag", "add_tag_to_zone", "remove_tag", "tag_add_named", "tag_remove_named", "clear_tags",
+    "add_tag", "add_tag_to_zone", "remove_tag", "clear_tags",
     "transform_card", "gain_durability", "lose_durability", "set_durability",
     "record_play_count", "record_equip_turns", "reset_counter", "create_counter",
-    "exile_this", "global_damage_mult", "global_heal_mult", "global_cost_mult",
-    "swap_health", "swap_hands", "broadcast_event", "modify_damage",
+    "exile_this", "swap_health", "swap_hands", "broadcast_event", "modify_damage",
     "var_set", "var_add", "var_sub", "var_mul", "var_div",
     "list_set", "list_append", "list_insert", "list_delete",
     "list_clear", "for_each_list", "timed_effect", "countdown_var",
@@ -81,7 +82,7 @@ ADVANCED_ATOMIC_OPS = {
     "response_declare", "aura_enemy_elixir_recovery", "on_any_turn_start",
     "on_enemy_turn_start", "on_owner_turn_start", "on_owner_turn_end", "on_hand_owner_turn_start", "on_hand_owner_turn_end",
     "on_discard_owner_turn_start", "on_equipment_trigger", "on_equipment_destroy",
-    "on_damage_taken", "on_fatal_set_health_exile", "equip_reduce_own_draw",
+    "on_damage_taken", "on_fatal_set_health_exile",
     "cogwheel_mark",
     "goggles_enable",
     "reveal_tag_hand",
@@ -110,9 +111,12 @@ ADVANCED_ATOMIC_OPS = {
 # 给"已改名 + 规范名"的显式报错（不再静默替换）；剩下 1 条 apply_burn 是
 # tests/ 锁着的（test_mod_atom_report.py 的步骤夹具写着它），保留不动。
 # 见 .codex-tmp/round22/rd22.md。
-ATOMIC_OP_ALIASES = {
-    "apply_burn": "burn",
-}
+#
+# Round 24：最后一条 ``apply_burn`` 也删掉了——它的规范名 ``burn`` 本身在 C 类
+# 合并里并进 ``status_add_named(status="burn")``，两个名字一起进
+# mod_spec_v2.REMOVED_ATOMIC_OPS（带完整替代写法）。表保留为空 dict，运行时的
+# 查表代码不变。
+ATOMIC_OP_ALIASES = {}
 
 
 class V2RuntimeError(Exception):

@@ -171,26 +171,20 @@ _CORE_LOGIC_OPS = {
     "direct_damage",
     "lifesteal_damage",
     "triangle_damage",
-    "add_armor",
-    "remove_armor",
-    "set_armor",
-    "poison",
-    "burn",
-    "toxic",
-    "dodge_this",
-    "dodge_permanent",
-    "clear_buffs",
-    "clear_debuffs",
-    "clear_all_effects",
+    # Round 24（C 类同形小原子合并）：护甲/闪避族与状态三兄弟、清状态族、
+    # 每回合修正族、资源族、全局倍率族各自的旧名一并注销，改由下面的
+    # player_stat_change / status_add_named / clear_statuses(preset) /
+    # turn_mod_add / resource_spend / global_mult 承接，
+    # 旧名见 REMOVED_ATOMIC_OPS（写出来是显式报错，不静默）。
+    "player_stat_change",
+    "turn_mod_add",
+    "resource_spend",
+    "global_mult",
+    "equip_reduce_draw",
     "clear_status",
     "status_add_named",
     "status_remove_named",
     "set_status_named",
-    "cost_e",
-    "cost_m",
-    "mod_e_regen",
-    "mod_m_regen",
-    "mod_draw",
     "choose_from_deck",
     "choose_from_discard",
     "choose_from_exile",
@@ -241,16 +235,11 @@ _CORE_LOGIC_OPS = {
     "multiply_next_damage",
     "reduce_next_cost",
     "increase_next_cost",
-    "tag_add_named",
-    "tag_remove_named",
     "clear_tags",
     "transform_card",
     "gain_durability",
     "lose_durability",
     "set_durability",
-    "global_damage_mult",
-    "global_heal_mult",
-    "global_cost_mult",
     "swap_health",
     "swap_hands",
     "broadcast_event",
@@ -292,7 +281,6 @@ _CORE_LOGIC_OPS = {
     "activate_corruption",
     "response_declare",
     "aura_enemy_elixir_recovery",
-    "equip_reduce_own_draw",
     "for_each_selected_card",
     "on_any_turn_start",
     "on_damage_taken",
@@ -394,7 +382,6 @@ _CORE_LOGIC_OPS = {
     # tools/mod_atom_report.py 一直把它们算作"未登记原子"。
     "absorb_attack_damage",
     "add_charge_to_hand",
-    "apply_burn",
     "auto_play_zone_top",
     "card_var_add",
     "card_var_set",
@@ -419,9 +406,11 @@ _CORE_LOGIC_OPS = {
     # 的能力），或仍是某个家族唯一实现，因此保留并补登记。
     #   * gain_dodge：``dodge_permanent`` 的引擎端实现
     #     （game_engine._EFFECT_ALIASES 指过来）。
-    #     Round 22 起 ``poison`` / ``toxic`` / ``add_armor`` 的实现名
-    #     ``apply_poison`` / ``apply_toxic`` / ``gain_armor`` 都不再对外登记
-    #     （它们作为旧名进了 RENAMED_ATOMIC_OPS），这里也就不再补登记。
+    #     Round 24 起 ``poison`` / ``burn`` / ``toxic`` / ``add_armor`` /
+    #     ``dodge_permanent`` 连同它们的实现名（``apply_poison`` /
+    #     ``apply_toxic`` / ``gain_armor`` / ``gain_dodge``）一起并进
+    #     ``status_add_named`` / ``player_stat_change``，都进了
+    #     REMOVED_ATOMIC_OPS，这里也不再补登记。
     #   * block_own_actions / counter_equip_protect / set_untargetable：
     #     同上，分别承接 ``block_action`` / ``equip_protection`` / ``untargetable``。
     #   * for_each_target：``for_each_selectable_target`` 与
@@ -430,11 +419,10 @@ _CORE_LOGIC_OPS = {
     #   * on_fatal_invincible_then_die：game_engine.PASSIVE_EFFECT_TYPES 成员。
     #   * record_play_count / record_equip_turns / reset_counter / create_counter /
     #     exile_this / mark_self_damage_source：卡内计数器与放逐自身的通用原子。
-    #   * equip_reduce_enemy_draw：与已登记的 equip_reduce_own_draw 成对，
-    #     game_engine_urf.INFINITE_EXCLUDED_EFFECTS 也按名字引用它。
+    #   * （Round 24 已把 equip_reduce_own_draw / equip_reduce_enemy_draw
+    #     合并成 equip_reduce_draw，见下。）
     #   * for_each_equipment：遍历装备的唯一入口（Round 17 未合并进 for_each）。
     #   * after_all：把 body 放到当前效果之后执行的控制流 op。
-    "gain_dodge",
     "block_own_actions",
     "counter_equip_protect",
     "set_untargetable",
@@ -446,7 +434,6 @@ _CORE_LOGIC_OPS = {
     "create_counter",
     "exile_this",
     "mark_self_damage_source",
-    "equip_reduce_enemy_draw",
     "for_each_equipment",
     "after_all",
 }
@@ -457,6 +444,45 @@ _CORE_LOGIC_OPS = {
 #
 # ``None`` 表示没有等价替代（原本就是空实现或未实现过的声明性名字）。
 REMOVED_ATOMIC_OPS = {
+    # Round 24（C 类同形小原子合并）：下面这批名字的形状几乎相同，差异都能被
+    # 参数覆盖，已合并成右边给出的规范写法。旧数据写旧名会在校验层与运行时
+    # 拿到"已移除 + 替代写法"的显式报错（不静默）。
+    #   * 状态三兄弟 → status_add_named（log 模板复刻旧默认战报）
+    "poison": '{"op":"status_add_named","status":"poison","target":"enemy","amount":4,"log":"{target}+{amount}中毒"}',
+    "burn": '{"op":"status_add_named","status":"burn","target":"enemy","amount":4,"log":"{target}+{amount}灼烧"}',
+    "toxic": '{"op":"status_add_named","status":"toxic","target":"enemy","amount":1,"log":"{target}+{amount}淬毒"}',
+    "apply_poison": '{"op":"status_add_named","status":"poison","target":"enemy","amount":1,"log":"{target}+{amount}中毒"}',
+    "apply_burn": '{"op":"status_add_named","status":"burn","target":"enemy","amount":1,"log":"{target}+{amount}灼烧"}',
+    "apply_toxic": '{"op":"status_add_named","status":"toxic","target":"enemy","amount":1,"log":"{target}+{amount}淬毒"}',
+    #   * 护甲/闪避族 → player_stat_change（mode 选 add/remove/set，stat 选 armor/dodge）
+    "add_armor": '{"op":"player_stat_change","mode":"add","stat":"armor","target":"self","amount":2}',
+    "gain_armor": '{"op":"player_stat_change","mode":"add","stat":"armor","target":"self","amount":2}',
+    "remove_armor": '{"op":"player_stat_change","mode":"remove","stat":"armor","target":"enemy","amount":2}',
+    "set_armor": '{"op":"player_stat_change","mode":"set","stat":"armor","target":"self","amount":0}',
+    "dodge_permanent": '{"op":"player_stat_change","mode":"add","stat":"dodge","target":"self","amount":1}',
+    "gain_dodge": '{"op":"player_stat_change","mode":"add","stat":"dodge","target":"self","amount":1}',
+    "dodge_this": '{"op":"player_stat_change","mode":"add","stat":"dodge","target":"self","amount":1,"log":"{target}获得1层闪避（针对本次攻击）"}',
+    #   * 清状态族 → clear_statuses(preset=...)
+    "clear_buffs": '{"op":"clear_statuses","preset":"buffs","target":"self"}',
+    "clear_debuffs": '{"op":"clear_statuses","preset":"debuffs","target":"self"}',
+    "clear_all_effects": '{"op":"clear_statuses","preset":"all","target":"self"}',
+    #   * 每回合修正族 → turn_mod_add（kind 选 e_regen/m_regen/draw）
+    "mod_e_regen": '{"op":"turn_mod_add","kind":"e_regen","target":"self","amount":1}',
+    "mod_m_regen": '{"op":"turn_mod_add","kind":"m_regen","target":"self","amount":1}',
+    "mod_draw": '{"op":"turn_mod_add","kind":"draw","target":"self","amount":1}',
+    #   * 资源消耗族 → resource_spend（resource 选 e/m）
+    "cost_e": '{"op":"resource_spend","resource":"e","target":"self","amount":1}',
+    "cost_m": '{"op":"resource_spend","resource":"m","target":"self","amount":1}',
+    #   * 全场倍率族 → global_mult（kind 选 damage/heal/cost）
+    "global_damage_mult": '{"op":"global_mult","kind":"damage","multiplier":2}',
+    "global_heal_mult": '{"op":"global_mult","kind":"heal","multiplier":2}',
+    "global_cost_mult": '{"op":"global_mult","kind":"cost","multiplier":2}',
+    #   * 卡内标签族 → add_tag / remove_tag
+    "tag_add_named": '{"op":"add_tag","card":{"ref":"current_card"},"tag":"exile","log":false}',
+    "tag_remove_named": '{"op":"remove_tag","card":{"ref":"current_card"},"tag":"exile"}',
+    #   * 装备减抽族 → equip_reduce_draw（target 选 self/enemy）
+    "equip_reduce_own_draw": '{"op":"equip_reduce_draw","target":"self","amount":1}',
+    "equip_reduce_enemy_draw": '{"op":"equip_reduce_draw","target":"enemy","amount":1}',
     "block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
     "counter_block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
     "counter_dodge": '{"op":"dodge_permanent","target":"self","amount":1}',
@@ -481,9 +507,8 @@ REMOVED_ATOMIC_OPS = {
 # 规范名。与 ``REMOVED_ATOMIC_OPS`` 的区别：那些名字已经没有等价实现，这边的
 # 旧名只是改了称呼，规范名照常可用。
 RENAMED_ATOMIC_OPS = {
-    "apply_poison": "poison",
-    "apply_toxic": "toxic",
-    "gain_armor": "add_armor",
+    # Round 24：apply_poison / apply_toxic / gain_armor 的"规范名"本身也在
+    # C 类合并里注销了，所以它们从本表移到 REMOVED_ATOMIC_OPS（带完整替代写法）。
     "auto_play_queue_add": "queue_auto_play",
     "queue_auto_play_card": "queue_auto_play",
     "kitty_auto_play": "auto_play_zone_top",

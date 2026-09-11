@@ -23,6 +23,7 @@ from mod_runtime_v2 import (
     LoopBreak,
     LoopContinue,
     PILE_ZONE_NAMES,
+    REMOVED_ATOMIC_OPS,
     RENAMED_ATOMIC_OPS,
     SELECTOR_FILTER_KEYS,
     SELECTOR_FIRST_KEYS,
@@ -995,23 +996,13 @@ class GameEngine:
     _EFFECT_ALIASES = {
         'damage': 'deal_damage',
         'damage_multi': 'deal_damage_multi',
-        'poison': 'apply_poison',
-        'burn': 'apply_burn',
-        'toxic': 'apply_toxic',
-        'add_armor': 'gain_armor',
-        'remove_armor': 'remove_armor',
-        'set_armor': 'set_armor',
-        'dodge_this': 'dodge_this',
-        'dodge_permanent': 'gain_dodge',
-        'clear_buffs': 'clear_buffs',
-        'clear_debuffs': 'clear_debuffs',
-        'clear_all_effects': 'clear_all_effects',
+        # Round 24（C 类收敛）：状态三兄弟 poison/burn/toxic 与增益/属性族
+        # add_armor/gain_dodge/dodge_permanent/remove_armor/set_armor/dodge_this、
+        # 清状态族 clear_buffs/clear_debuffs/clear_all_effects、每回合修正族
+        # mod_e_regen/mod_m_regen/mod_draw、资源族 cost_e/cost_m、全局倍率族
+        # global_*_mult 一并合并（见 mod_spec_v2.REMOVED_ATOMIC_OPS 的替代写法），
+        # 这里不再登记旧名——写出来会拿到"已移除 + 请改用"的显式报错。
         'clear_status': 'clear_status',
-        'cost_e': 'cost_e',
-        'cost_m': 'cost_m',
-        'mod_e_regen': 'mod_e_regen',
-        'mod_m_regen': 'mod_m_regen',
-        'mod_draw': 'mod_draw',
         'discard': 'discard',
         'choose_from_exile': 'choose_from_exile',
         'reveal_hand': 'reveal_enemy_hand',
@@ -1072,9 +1063,6 @@ class GameEngine:
         'exile_this': 'exile_this',
         'move_to_discard': 'move_to_discard',
         'move_to_deck': 'move_to_deck',
-        'global_damage_mult': 'global_damage_mult',
-        'global_heal_mult': 'global_heal_mult',
-        'global_cost_mult': 'global_cost_mult',
         'swap_health': 'swap_health',
         'swap_hands': 'swap_hands',
         'broadcast_event': 'broadcast_event',
@@ -1084,6 +1072,26 @@ class GameEngine:
         # spellings keep their own battle-log default instead of being rewritten
         # into the silent ``*_named`` contract.
     }
+
+    def _retired_atom_runtime_error(self, effect_type):
+        """旧名在**引擎路径**上的显式报错（不是旧名时返回 ``None``）。
+
+        Round 22 起挡 ``RENAMED_ATOMIC_OPS``（已改名），Round 24 起把
+        ``REMOVED_ATOMIC_OPS``（已移除 + 替代写法）也接上——引擎原子自己跑的
+        ``body`` / ``on_hit`` 与 v2 运行时保持同一套文案，不退回
+        ``Unknown effect``。
+        """
+
+        renamed_to = RENAMED_ATOMIC_OPS.get(effect_type)
+        if renamed_to:
+            return RuntimeError(
+                f'atomic op {effect_type!r} 已改名（Round 22 别名收敛）；请改用 {renamed_to!r}'
+            )
+        if effect_type in REMOVED_ATOMIC_OPS:
+            replacement = REMOVED_ATOMIC_OPS[effect_type]
+            hint = f'；请改用 {replacement}' if replacement else '；该 op 没有等价替代'
+            return RuntimeError(f'atomic op {effect_type!r} 已移除（Round 20 长尾清理）{hint}')
+        return None
 
 
     def _current_turn_marker(self) -> int:
@@ -9180,17 +9188,21 @@ class GameEngine:
                             self.log_msg(log)
                     return
 
-    def _atomic_equip_reduce_enemy_draw(self, player_id, card, params, log, choice, context):
-        amount = params.get('amount', 1)
-        self.players[1 - player_id].sluggish += amount
-        self._note_achievement_status_peak(1 - player_id)
-        self.log_msg(log or f"敌方获得{amount}层迟缓")
+    def _atomic_equip_reduce_draw(self, player_id, card, params, log, choice, context):
+        """Round 24：``equip_reduce_enemy_draw`` / ``equip_reduce_own_draw`` 合并成一条。
 
-    def _atomic_equip_reduce_own_draw(self, player_id, card, params, log, choice, context):
+        ``target``（self/enemy）覆盖原来两个名字的差异；默认战报与旧实现逐字一致
+        （对敌方那条保留"敌方获得…"的说法）。
+        """
+
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not self._valid_player_id(target_id):
+            return
         amount = params.get('amount', 1)
-        self.players[player_id].sluggish += amount
-        self._note_achievement_status_peak(player_id)
-        self.log_msg(log or f"{self.pn(player_id)}获得{amount}层迟缓")
+        self.players[target_id].sluggish += amount
+        self._note_achievement_status_peak(target_id)
+        default = f"敌方获得{amount}层迟缓" if target_id != player_id else f"{self.pn(target_id)}获得{amount}层迟缓"
+        self.log_msg(log or default)
 
     def _atomic_on_fatal_invincible_then_die(self, player_id, card, params, log, choice, context):
         if self._status_application_blocked(player_id, 'bandage_active'):
@@ -9215,54 +9227,78 @@ class GameEngine:
         if log:
             self.log_msg(self._format_step_log(log, target=self.pn(target_id), source=self.pn(player_id)))
 
-    def _atomic_remove_armor(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        amount = params.get('amount', 1)
-        self.players[target_id].armor = max(0, self.players[target_id].armor - amount)
-        self.log_msg(log or f"{self.pn(target_id)}失去{amount}护甲")
+    def _atomic_player_stat_change(self, player_id, card, params, log, choice, context):
+        """Round 24：护甲/闪避小原子合并成一条。
 
-    def _atomic_set_armor(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        amount = params.get('amount', 0)
-        self.players[target_id].armor = amount
-        self.log_msg(log or f"{self.pn(target_id)}护甲设为{amount}")
+        覆盖 ``add_armor`` / ``remove_armor`` / ``set_armor`` / ``dodge_permanent``
+        （实现名 ``gain_dodge``）/ ``dodge_this``：``mode`` 选 add/remove/set，
+        ``stat`` 选 armor/dodge。四种旧实现的读取、钳位、成就峰值记账与默认战报
+        逐条搬运到这里，所以行为等价（默认目标也沿用各族原来的默认值）。
+        """
 
-    def _atomic_dodge_this(self, player_id, card, params, log, choice, context):
-        self.players[player_id].dodge += 1
-        self.log_msg(log or f"{self.pn(player_id)}获得1层闪避（针对本次攻击）")
+        mode = str(params.get('mode', 'add') or 'add').strip().lower()
+        stat = str(params.get('stat', 'armor') or 'armor').strip().lower()
+        if stat in ('attack', 'shield'):
+            stat = 'armor'
+        if stat not in ('armor', 'dodge'):
+            return
+        default_target = 'enemy' if mode == 'remove' else 'self'
+        target_id = self._resolve_target(player_id, params.get('target', default_target))
+        if not self._valid_player_id(target_id):
+            return
+        amount = self._eval_int(player_id, params.get('amount', 0 if mode == 'set' else 1), card, 0)
+        player_state = self.players[target_id]
+        current = int(getattr(player_state, stat, 0) or 0)
+        stat_label = '护甲' if stat == 'armor' else '闪避'
+        if mode == 'set':
+            # 旧 ``set_armor`` 不做钳位（原样写入），这里保持一致。
+            value = amount
+            default_message = f"{self.pn(target_id)}{stat_label}设为{amount}"
+        elif mode == 'remove':
+            value = max(0, current - amount)
+            default_message = f"{self.pn(target_id)}失去{amount}{stat_label}"
+        else:
+            value = current + amount
+            default_message = f"{self.pn(target_id)}获得{amount}{stat_label}"
+        setattr(player_state, stat, value)
+        self._note_achievement_status_peak(target_id)
+        self.log_msg(log or default_message)
 
-    def _atomic_clear_buffs(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+    # Round 24：``clear_buffs`` / ``clear_debuffs`` / ``clear_all_effects`` 合并成
+    # ``clear_statuses(preset=...)``。三张名单原封不动搬到这里，默认战报逐字一致。
+    CLEAR_STATUS_PRESETS = {
+        'buffs': ('armor', 'dodge', 'invincible', 'equipment_protection'),
+        'debuffs': ('poison', 'fire', 'toxic', 'stagnation', 'blind'),
+    }
+    CLEAR_STATUS_PRESET_LABELS = {
+        'buffs': '所有正面效果',
+        'debuffs': '所有负面效果',
+        'all': '所有效果',
+    }
+
+    def _clear_status_preset(self, target_id: int, preset: str) -> int:
+        """清掉 ``preset`` 名单里的状态/属性，返回处理过的字段数。"""
+
+        if not self._valid_player_id(target_id):
+            return 0
+        preset = str(preset or '').strip().lower()
+        if preset == 'all':
+            fields = self.CLEAR_STATUS_PRESETS['buffs'] + self.CLEAR_STATUS_PRESETS['debuffs']
+        else:
+            fields = self.CLEAR_STATUS_PRESETS.get(preset)
+        if not fields:
+            return 0
         ps = self.players[target_id]
-        ps.armor = 0
-        ps.dodge = 0
-        self._clear_invincible_state(target_id)
-        ps.equipment_protection = 0
-        self.log_msg(log or f"{self.pn(target_id)}的所有正面效果已清除")
-
-    def _atomic_clear_debuffs(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        ps = self.players[target_id]
-        ps.poison = 0
-        ps.fire = 0
-        ps.toxic = 0
-        ps.stagnation = 0
-        ps.blind = 0
-        self.log_msg(log or f"{self.pn(target_id)}的所有负面效果已清除")
-
-    def _atomic_clear_all_effects(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        ps = self.players[target_id]
-        ps.poison = 0
-        ps.fire = 0
-        ps.toxic = 0
-        ps.stagnation = 0
-        ps.blind = 0
-        ps.armor = 0
-        ps.dodge = 0
-        self._clear_invincible_state(target_id)
-        ps.equipment_protection = 0
-        self.log_msg(log or f"{self.pn(target_id)}的所有效果已清除")
+        handled = 0
+        for field in fields:
+            if field == 'invincible':
+                self._clear_invincible_state(target_id)
+                handled += 1
+                continue
+            if hasattr(ps, field):
+                setattr(ps, field, 0)
+                handled += 1
+        return handled
 
     def _atomic_clear_status(self, player_id, card, params, log, choice, context):
         status_map = {'poison': 'poison', 'burn': 'fire',
@@ -9291,35 +9327,46 @@ class GameEngine:
         for target_id in cleared:
             self.log_msg(f"{self.pn(target_id)}的{status}已清除")
 
-    def _atomic_cost_e(self, player_id, card, params, log, choice, context):
+    def _atomic_resource_spend(self, player_id, card, params, log, choice, context):
+        """Round 24：``cost_e`` / ``cost_m`` 合并成一条（``resource`` 选 e/m）。"""
+
+        resource = str(params.get('resource', params.get('kind', 'e')) or 'e').strip().lower()
+        if resource in ('m', 'magic', 'mana', '魔力'):
+            resource, label = 'magic', 'M'
+        else:
+            resource, label = 'elixir', 'E'
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self._spend_resource(target_id, 'elixir', amount, card)
-        self.log_msg(log or f"{self.pn(target_id)}消耗{amount}E")
+        self._spend_resource(target_id, resource, amount, card)
+        self.log_msg(log or f"{self.pn(target_id)}消耗{amount}{label}")
 
-    def _atomic_cost_m(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self._spend_resource(target_id, 'magic', amount, card)
-        self.log_msg(log or f"{self.pn(target_id)}消耗{amount}M")
+    def _atomic_turn_mod_add(self, player_id, card, params, log, choice, context):
+        """Round 24：``mod_e_regen`` / ``mod_m_regen`` / ``mod_draw`` 合并成一条。
 
-    def _atomic_mod_e_regen(self, player_id, card, params, log, choice, context):
+        ``kind`` 选 ``e_regen`` / ``m_regen`` / ``draw``，写入的字段与旧实现一致
+        （``e_regen_mod`` / ``m_regen_mod`` / ``draw_mod``），默认战报逐字保留。
+        """
+
+        kind = str(params.get('kind', params.get('stat', 'e_regen')) or 'e_regen').strip().lower()
+        if kind in ('e', 'e_regen', 'elixir', 'energy', 'energy_regen'):
+            attr, text = 'e_regen_mod', '每回合能量回复'
+        elif kind in ('m', 'm_regen', 'magic', 'magic_regen'):
+            attr, text = 'm_regen_mod', '每回合魔力回复'
+        elif kind in ('draw', 'draw_mod', 'cards'):
+            attr, text = 'draw_mod', '每回合抽牌数'
+        else:
+            return
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not self._valid_player_id(target_id):
+            return
         amount = params.get('amount', 1)
-        self.players[target_id].e_regen_mod = getattr(self.players[target_id], 'e_regen_mod', 0) + amount
-        self.log_msg(log or f"{self.pn(target_id)}每回合能量回复{amount:+d}")
-
-    def _atomic_mod_m_regen(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        amount = params.get('amount', 1)
-        self.players[target_id].m_regen_mod = getattr(self.players[target_id], 'm_regen_mod', 0) + amount
-        self.log_msg(log or f"{self.pn(target_id)}每回合魔力回复{amount:+d}")
-
-    def _atomic_mod_draw(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        amount = params.get('amount', 1)
-        self.players[target_id].draw_mod = getattr(self.players[target_id], 'draw_mod', 0) + amount
-        self.log_msg(log or f"{self.pn(target_id)}每回合抽牌数{amount:+d}")
+        player_state = self.players[target_id]
+        setattr(player_state, attr, getattr(player_state, attr, 0) + amount)
+        try:
+            display = f"{int(amount):+d}"
+        except (TypeError, ValueError):
+            display = f"{amount:+}" if isinstance(amount, (int, float)) else str(amount)
+        self.log_msg(log or f"{self.pn(target_id)}{text}{display}")
 
     def _atomic_discard(self, player_id, card, params, log, choice, context):
         amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
@@ -10682,20 +10729,25 @@ class GameEngine:
             return self._atomic_move_to_exile(player_id, card, forwarded, log, choice, context)
         return self._atomic_move_to_discard(player_id, card, forwarded, log, choice, context)
 
-    def _atomic_global_damage_mult(self, player_id, card, params, log, choice, context):
-        multiplier = params.get('multiplier', 1.0)
-        self.global_damage_mult = getattr(self, 'global_damage_mult', 1.0) * multiplier
-        self.log_msg(log or f"全场伤害倍率x{multiplier}")
+    def _atomic_global_mult(self, player_id, card, params, log, choice, context):
+        """Round 24：全场倍率三兄弟合并成一条（``kind`` 选 damage/heal/cost）。
 
-    def _atomic_global_heal_mult(self, player_id, card, params, log, choice, context):
-        multiplier = params.get('multiplier', 1.0)
-        self.global_heal_mult = getattr(self, 'global_heal_mult', 1.0) * multiplier
-        self.log_msg(log or f"全场治疗倍率x{multiplier}")
+        写入的实例字段（``global_damage_mult`` / ``global_heal_mult`` /
+        ``global_cost_mult``）与乘法语义、默认战报都与旧实现逐字一致。
+        """
 
-    def _atomic_global_cost_mult(self, player_id, card, params, log, choice, context):
+        kind = str(params.get('kind', params.get('stat', 'damage')) or 'damage').strip().lower()
+        if kind in ('damage', 'dmg', '伤害'):
+            attr, text = 'global_damage_mult', '全场伤害倍率'
+        elif kind in ('heal', 'healing', '治疗'):
+            attr, text = 'global_heal_mult', '全场治疗倍率'
+        elif kind in ('cost', '费用'):
+            attr, text = 'global_cost_mult', '全场费用倍率'
+        else:
+            return
         multiplier = params.get('multiplier', 1.0)
-        self.global_cost_mult = getattr(self, 'global_cost_mult', 1.0) * multiplier
-        self.log_msg(log or f"全场费用倍率x{multiplier}")
+        setattr(self, attr, getattr(self, attr, 1.0) * multiplier)
+        self.log_msg(log or f"{text}x{multiplier}")
 
     def _atomic_swap_health(self, player_id, card, params, log, choice, context):
         t1 = self._resolve_target(player_id, params.get('target1', 'self'))
@@ -11055,22 +11107,9 @@ class GameEngine:
 
 
 
-    def _atomic_tag_add_named(self, player_id, card, params, log, choice, context):
-        tag = normalize_card_flag(params.get('tag', ''))
-        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
-        if tag and target_card:
-            target_card.instance_flags = getattr(target_card, 'instance_flags', set())
-            target_card.instance_flags.add(tag)
-            self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
-
-    def _atomic_tag_remove_named(self, player_id, card, params, log, choice, context):
-        tag = normalize_card_flag(params.get('tag', ''))
-        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
-        if tag and target_card:
-            target_card.instance_flags = getattr(target_card, 'instance_flags', set())
-            target_card.instance_flags.discard(tag)
-            self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
-
+    # Round 24：``tag_add_named`` / ``tag_remove_named`` 已并入 ``add_tag`` /
+    # ``remove_tag``（后者是超集：``add_tag`` 多支持 ``return_log`` / ``silent``），
+    # 实现整体删除；旧名写出来会拿到 mod_spec_v2.REMOVED_ATOMIC_OPS 的显式报错。
     def _is_status_immune(self, player_id: int) -> bool:
         if self._desert_topaz_count_targeting(player_id) > 0:
             return True
@@ -13802,19 +13841,12 @@ class GameEngine:
                 et = eff if isinstance(eff, str) else self._effect_type(eff)
                 pm = {} if isinstance(eff, str) else self._effect_params(eff)
                 lg = None if isinstance(eff, str) else eff.get('log')
-                # Round 22（别名收敛）: 引擎路径（含引擎原子自己跑的 body）
-                # 也把旧名挡在实现名之前，给"已改名 + 规范名"的显式报错，
-                # 而不是静默跑掉或只报一句 Unknown effect。
-                renamed_to = RENAMED_ATOMIC_OPS.get(et)
-                if renamed_to:
-                    self._log_mod_runtime_error(
-                        et,
-                        RuntimeError(
-                            f'atomic op {et!r} 已改名（Round 22 别名收敛）；请改用 {renamed_to!r}'
-                        ),
-                        player_id,
-                        card,
-                    )
+                # Round 22/24（别名收敛 + C 类合并）: 引擎路径（含引擎原子
+                # 自己跑的 body）也把旧名挡在实现名之前，给"已改名 / 已移除 +
+                # 替代写法"的显式报错，而不是静默跑掉或只报一句 Unknown effect。
+                retired_error = self._retired_atom_runtime_error(et)
+                if retired_error is not None:
+                    self._log_mod_runtime_error(et, retired_error, player_id, card)
                     continue
                 rt = self._EFFECT_ALIASES.get(et, et)
                 # Round 13: the engine path honours the same step gate as the v2
@@ -13853,7 +13885,7 @@ class GameEngine:
                         self._log_mod_runtime_error(et, RuntimeError(f'Unknown effect: {et}'), player_id, card)
                     if rt not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
                                   'for_each_selected_card', 'for_each_list', 'timed_effect',
-                                  'countdown_var', 'cost_e', 'cost_m', 'defer_game_over'):
+                                  'countdown_var', 'resource_spend', 'defer_game_over'):
                         self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue):
                     raise
@@ -14632,16 +14664,9 @@ class GameEngine:
                     if log:
                         self.log_msg(log)
                     continue
-                renamed_to = RENAMED_ATOMIC_OPS.get(eff_type)
-                if renamed_to:
-                    self._log_mod_runtime_error(
-                        eff_type,
-                        RuntimeError(
-                            f'atomic op {eff_type!r} 已改名（Round 22 别名收敛）；请改用 {renamed_to!r}'
-                        ),
-                        player_id,
-                        card,
-                    )
+                retired_error = self._retired_atom_runtime_error(eff_type)
+                if retired_error is not None:
+                    self._log_mod_runtime_error(eff_type, retired_error, player_id, card)
                     continue
                 resolved_type = self._EFFECT_ALIASES.get(eff_type, eff_type)
                 handler = getattr(self, f'_atomic_{resolved_type}', None)
@@ -14655,7 +14680,7 @@ class GameEngine:
                         self._log_mod_runtime_error(eff_type, RuntimeError(f'Unknown effect: {eff_type}'), player_id, card)
                     if resolved_type not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
                                              'for_each_selected_card', 'for_each_list', 'timed_effect',
-                                             'countdown_var', 'cost_e', 'cost_m', 'defer_game_over'):
+                                             'countdown_var', 'resource_spend', 'defer_game_over'):
                         self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue) as exc:
                     self._log_mod_runtime_error(eff_type, RuntimeError(f'{type(exc).__name__} outside loop'), player_id, card)
@@ -17755,7 +17780,31 @@ class GameEngine:
 
         ``statuses`` is ``"all"`` (default) or a list of status ids/aliases;
         ``include_custom`` also drops mod-defined custom statuses.
+
+        Round 24：``preset`` (``buffs`` / ``debuffs`` / ``all``) 覆盖了原来的
+        ``clear_buffs`` / ``clear_debuffs`` / ``clear_all_effects`` 三个专用 op——
+        三张名单与默认战报都原样保留（见 ``CLEAR_STATUS_PRESETS``）。
         """
+        preset = str(params.get('preset', '') or '').strip().lower()
+        if preset:
+            if preset not in self.CLEAR_STATUS_PRESETS and preset != 'all':
+                return
+            cleared_targets = []
+            for target_id in self._list_effect_targets(player_id, card, params.get('target', 'self'), context):
+                if self._clear_status_preset(target_id, preset) > 0:
+                    cleared_targets.append(target_id)
+            if not cleared_targets or params.get('silent') or log is False:
+                return
+            if log:
+                self.log_msg(self._format_step_log(
+                    log, target=self.pn(cleared_targets[0]), source=self.pn(player_id),
+                    count=len(cleared_targets),
+                ))
+                return
+            label = self.CLEAR_STATUS_PRESET_LABELS.get(preset, '所有效果')
+            for target_id in cleared_targets:
+                self.log_msg(f"{self.pn(target_id)}的{label}已清除")
+            return
         statuses = params.get('statuses', params.get('status', 'all'))
         include_custom = params.get('include_custom', params.get('custom', True)) is not False
         cleared_targets = []
@@ -18763,59 +18812,12 @@ class GameEngine:
             'message': f'是否支付{cost_m}M，对{self.pn(attacker_id)}反弹{reflect}D？',
         }
 
-    def _atomic_gain_armor(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self.players[target_id].armor += amount
-        self._note_achievement_status_peak(target_id)
-        self.log_msg(log or f"{self.pn(target_id)}获得{amount}护甲")
-
-    def _atomic_gain_dodge(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self.players[target_id].dodge += amount
-        self._note_achievement_status_peak(target_id)
-        self.log_msg(log or f"{self.pn(target_id)}获得{amount}闪避")
-
-    def _atomic_apply_poison(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        if self._status_application_blocked(target_id, 'poison'):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self.players[target_id].poison += amount
-        self._normalize_status_value(self.players[target_id], 'poison')
-        self._note_achievement_status_peak(target_id)
-        self.log_msg(log or f"{self.pn(target_id)}+{amount}中毒")
-
-    def _atomic_apply_burn(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        if self._status_application_blocked(target_id, 'fire'):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self.players[target_id].fire += amount
-        self._normalize_status_value(self.players[target_id], 'fire')
-        self._note_achievement_status_peak(target_id)
-        self.log_msg(log or f"{self.pn(target_id)}+{amount}灼烧")
-
-    def _atomic_apply_toxic(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        if self._status_application_blocked(target_id, 'toxic'):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self.players[target_id].toxic += amount
-        self._normalize_status_value(self.players[target_id], 'toxic')
-        self._note_achievement_status_peak(target_id)
-        self.log_msg(log or f"{self.pn(target_id)}+{amount}淬毒")
+    # Round 24：``add_armor`` / ``gain_dodge``（别名 ``dodge_permanent``）/
+    # ``apply_poison`` / ``apply_burn`` / ``apply_toxic`` 这批同形小原子已并入
+    # ``player_stat_change`` 与 ``status_add_named``：
+    #   * 护甲/闪避 → ``{"op":"player_stat_change","mode":"add","stat":"armor",...}``
+    #   * 中毒/灼烧/淬毒 → ``{"op":"status_add_named","status":"poison"|"burn"|"toxic",...}``
+    # 旧名写出来会拿到 mod_spec_v2.REMOVED_ATOMIC_OPS 的显式报错。
 
     def _atomic_apply_jungle_status(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))

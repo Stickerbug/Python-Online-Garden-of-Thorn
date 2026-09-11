@@ -23,7 +23,6 @@ _HANDLER_RE = re.compile(r"^[ \t]*def _atomic_([A-Za-z0-9_]+)\(", re.MULTILINE)
 # Extra public names that are executed by dedicated engine code paths instead of
 # an ``_atomic_`` handler (kept explicit so validation stays predictable).
 EXTRA_PUBLIC_OPS = (
-    "apply_burn",
     "force_end_turn",
     # Round 20: ``desert_wind_schedule`` / ``garden_mecha_antennae`` were
     # declared here without any implementation anywhere in the engine or the v2
