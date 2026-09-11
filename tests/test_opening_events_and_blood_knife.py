@@ -424,7 +424,13 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
 
         self.assertEqual(card['cost_e'], 0)
         self.assertEqual(card['card_type'], 'bloom')
-        self.assertEqual(set(card['flags']), {'self_only', 'symbiosis'})
+        # 数据标记约定（engine_runtime_support.py 顶部说明，重构第 5 轮起）：
+        # 每张卡在 flags 里声明 mark:<card id>，通用 helper 用 _card_has_mark 查它。
+        # 它是运行时挂钩用的内部标记，不算卡面标签，所以断言时先把它摘掉。
+        flags = set(card['flags'])
+        self.assertEqual({flag for flag in flags if not flag.startswith('mark:')},
+                         {'self_only', 'symbiosis'})
+        self.assertIn('mark:bio:blood_knife', flags)
         self.assertEqual(
             card['effect_text'],
             '对自己造成7[[icon:electric_damage]]；每造成3[[icon:electric_damage]]，回复自己1[[icon:E]]；若实际回复至少1[[icon:E]]，此牌回到手中',

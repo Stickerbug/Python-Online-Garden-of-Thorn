@@ -891,24 +891,33 @@ def test_live_ai_room_can_be_spectated_and_closes_spectators_with_owner():
         owner_client.get_received()
         spectator_client.get_received()
         original_phase = engine.phase
-        engine.phase = "draft"
+        # 新契约（cf86792「allow spectating Phelren rooms while an AI action is in progress」）：
+        # AI 还在收尾时**允许观战**，只是把状态推送延后到收尾完成之后；不再回 ACTION_BUSY。
+        # 这里用允许观战的阶段，专门验证"能进来 + 状态延后"。
+        engine.phase = "action"
         meta["_phelren_native_completion"] = gtn._new_phelren_call_completion()
         with mock.patch.object(gtn, "broadcast_game_state") as deferred_broadcast:
             spectator_client.emit("spectate", {"room_id": room_id})
             guarded_received = spectator_client.get_received()
-        assert not any(event["name"] == "spectate_enter" for event in guarded_received)
-        assert any(
-            event["name"] == "server_error"
-            and event["args"][0].get("code") == "ACTION_BUSY"
+        # 进来了……
+        assert any(event["name"] == "spectate_enter" for event in guarded_received)
+        assert gtn.players[spectator_sid]["status"] == "spectating"
+        assert gtn.players[spectator_sid]["spectating_room"] == room_id
+        assert spectator_sid in room.spectators
+        # ……但状态推送被延后（不立即发 state_update），改为排一次广播，等 AI 收尾后补
+        assert not any(
+            event["name"] == "state_update" and event["args"][0].get("spectating")
             for event in guarded_received
         )
-        assert gtn.players[spectator_sid]["status"] == "lobby"
-        assert gtn.players[spectator_sid]["spectating_room"] is None
-        assert spectator_sid not in room.spectators
-        deferred_broadcast.assert_called_once_with(room)
+        # 进入观战本身会排一次广播，"状态延后"路径又排一次；都只针对这个房间
+        # （广播 worker 对同一房间会合并，多排一次不会有副作用）。
+        assert deferred_broadcast.call_count >= 1
+        assert all(call_args == mock.call(room) for call_args in deferred_broadcast.call_args_list)
+        assert meta.get("_phelren_refresh_after_completion") is True
         meta.pop("_phelren_native_completion", None)
         engine.phase = original_phase
 
+        # AI 收尾后重新进入观战：这次必须立刻拿到完整状态
         spectator_client.emit("spectate", {"room_id": room_id})
         received = spectator_client.get_received()
 
