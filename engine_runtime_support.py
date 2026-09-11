@@ -1294,7 +1294,8 @@ def prepare_copy_card(engine, owner_id: int, parent: CardInstance, copy_card: Ca
     Card data owns what an exiled copy keeps::
 
         {"events": {"on_create_copy": {"steps": [
-            {"op": "card_prop_add", "property": "magic_swift_value", "amount": 2}]}}}
+            {"op": "card_prop_change", "mode": "add",
+             "property": "magic_swift_value", "amount": 2}]}}}
 
     The steps run with ``card`` bound to the copy, so ``current_card`` refs and
     ``self`` targets address the copy rather than the original.

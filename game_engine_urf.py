@@ -41,7 +41,9 @@ INFINITE_EXCLUDED_IDS = {
 
 INFINITE_EXCLUDED_EFFECTS = {
     # Round 29 / 批次 X：取牌族合并成 choose_from_zone(zone=...)，清单同步。
-    'draw', 'choose_from_deck', 'choose_from_zone', 'reveal_deck_top', 'put_card_to_deck',
+    # Round 31 / 批次 Z：``reveal_deck_top`` / ``put_card_to_deck`` 已删除
+    # （``reveal_card_set`` / ``move_card`` 承接），名字从清单里移除。
+    'draw', 'choose_from_deck', 'choose_from_zone',
     # Round 24：mod_draw / mod_m_regen 与 equip_reduce_*_draw 各自合并成
     # turn_mod_add / equip_reduce_draw，清单按新名字同步。
     'shuffle_discard_into_deck', 'give_card_to_deck', 'turn_mod_add',

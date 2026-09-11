@@ -488,10 +488,14 @@ def _validate_step(step: Any, label: str, errors: List[str], *, depth: int) -> i
         replacement = REMOVED_ATOMIC_OPS.get(op) if isinstance(op, str) else None
         if isinstance(op, str) and op in REMOVED_ATOMIC_OPS:
             hint = f"，请改用 {replacement}" if replacement else "，该 op 没有等价替代"
-            errors.append(f"{label}.op 已移除（Round 20 长尾清理 / Round 25 登记残留清理 / Round 30 零用量清理）: {op}{hint}")
+            errors.append(
+                f"{label}.op 已移除（Round 20 长尾清理 / Round 25 登记残留清理 / "
+                f"Round 30 零用量清理 / Round 31 真删真合）: {op}{hint}"
+            )
         elif isinstance(op, str) and op in RENAMED_ATOMIC_OPS:
             errors.append(
-                f"{label}.op 已改名（Round 22 别名收敛 / Round 25 登记残留清理 / Round 30 零用量清理）: {op}，"
+                f"{label}.op 已改名（Round 22 别名收敛 / Round 25 登记残留清理 / "
+                f"Round 30 零用量清理 / Round 31 真删真合）: {op}，"
                 f"请改用 {RENAMED_ATOMIC_OPS[op]}"
             )
         else:

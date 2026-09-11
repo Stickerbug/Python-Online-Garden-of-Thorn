@@ -5,7 +5,6 @@ import math
 import random
 import re
 import uuid
-from contextlib import nullcontext
 from typing import Any, Dict, Iterable, List, Optional
 
 from cards import (
@@ -41,25 +40,29 @@ ADVANCED_ATOMIC_OPS = {
     # 全局倍率族、卡内标签族、装备减抽族各自合并成一条（旧名进
     # mod_spec_v2.REMOVED_ATOMIC_OPS，写出来是显式报错）。
     "player_stat_change",
-    "clear_status", "status_add_named", "status_remove_named", "set_status_named",
-    "turn_mod_add", "resource_spend", "global_mult", "equip_reduce_draw",
+    # Round 31 / 批次 Z：``clear_status`` / ``set_status_named`` / ``resource_spend``
+    # 与玩家的 ``set_untargetable`` / ``untargetable_layers`` / ``set_invincible``
+    # 已删除，换成本表里的规范名（``status_add_named`` 的 ``mode``、
+    # ``spend_resource``、``player_status_layers``）。
+    "status_add_named", "status_remove_named",
+    "turn_mod_add", "spend_resource", "global_mult", "equip_reduce_draw",
     "choose_from_zone",
-    "reveal_enemy_hand", "reveal_hand", "reveal_deck_top", "steal_enemy_card",
+    "reveal_enemy_hand", "reveal_hand", "steal_enemy_card",
     "reveal_hand_cards",
     "steal_card", "copy_card", "copy_choice_with_discount",
-    "put_card_to_deck", "shuffle_discard_into_deck", "give_card_to_hand",
-    "give_card_to_deck", "give_card_to_discard", "remove_specific_card",
+    "shuffle_discard_into_deck", "give_card_to_hand",
+    "give_card_to_deck", "remove_specific_card",
     "move_card",
     "destroy_equipment",
-    "destroy_all_destroyable_equipment", "destroy_self_equipment",
-    "destroy_equipment_choice_or_first", "equip_protection", "remove_equip_protection",
+    "equip_protection", "remove_equip_protection",
     "place_as_equip", "add_equipment_to_zone", "trigger_manual",
     "block_action", "block_card_type", "force_card_type", "nullify_current_card",
-    "invincible", "untargetable", "skip_turn", "extra_turn",
+    "skip_turn", "extra_turn",
+    "player_status_layers",
     "set_health",
     "force_end_turn", "mark_self_damage_source", "fission", "fusion",
     "multiply_next_damage", "reduce_next_cost", "increase_next_cost",
-    "add_tag", "add_tag_to_zone", "remove_tag", "clear_tags",
+    "add_tag", "add_tag_to_zone",
     "transform_card", "card_counter", "create_counter",
     "exile_this", "swap_health", "swap_hands", "broadcast_event", "modify_damage",
     "list_set", "list_append", "list_insert", "list_delete",
@@ -70,15 +73,14 @@ ADVANCED_ATOMIC_OPS = {
     "defer_game_over", "random_zone_card_to_hand",
     "seal_equipment", "move_cards_to_deck", "clear_statuses", "settle_status",
     "queue_auto_play", "auto_play_zone_top", "ricochet_attack",
-    "for_each_target",
     "absorb_attack_damage", "add_charge_to_hand", "register_play_listener",
     "card_var_change",
     "reveal_card_set",
     "snapshot_card_props", "set_card_prop_random", "restore_card_props",
     "transform_cards",
     "deck_catalog_pick", "deck_catalog_pick_resume",
-    "player_prop_change", "card_prop_set", "card_prop_add",
-    "card_prop_mul", "card_damage_multiply", "equipment_prop_set",
+    "player_prop_change", "card_prop_change",
+    "card_damage_multiply", "equipment_prop_set",
     "discard_hand_by_paid_e", "restore_turn_start_stats", "restore_match_start_stats",
     "shuffle_hand",
     "counter_pending_attack_damage", "lose_health",
@@ -90,7 +92,6 @@ ADVANCED_ATOMIC_OPS = {
     "on_damage_taken", "on_fatal_set_health_exile",
     "cogwheel_mark",
     "goggles_enable",
-    "reveal_tag_hand",
     "assembler_effect",
     "request_reorder_deck",
     # Round 26：apply_jungle_status / magic_grapes_damage /
@@ -795,9 +796,10 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     # Round 30 / 批次 Y：运行时侧再没有 ``add_status`` / ``remove_status`` /
     # ``set_status`` 分支——三条旧写法（Round 15 起是"默认播报层数"的运行时
     # 路径）随零用量清理删除，状态族只剩引擎原子
-    # （``status_add_named`` / ``set_status_named`` / ``status_remove_named`` /
-    # ``clear_status`` / ``clear_statuses`` / ``settle_status``），两条执行路径
-    # 因此共用同一份实现（别名组 / 层数上限 / 成就 / 钩子 / 战报）。
+    # （``status_add_named(mode=add|set)`` / ``status_remove_named`` /
+    # ``clear_statuses`` / ``settle_status``），两条执行路径因此共用同一份实现
+    # （别名组 / 层数上限 / 成就 / 钩子 / 战报）。
+    # Round 31 / 批次 Z：``set_status_named`` 与 ``clear_status`` 也并进这条族谱。
 
     # Round 14 / batch 2: ``move_card`` used to be implemented here with its own
     # hand-full / unknown-zone handling, which made it drift apart from the
@@ -866,7 +868,8 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 return
             if target_id < 0 or target_id >= len(getattr(engine, "players", []) or []):
                 return
-            # The old ``for_each_target`` preset narrowed the wide-strike list in
+            # The ``bind: "target"`` preset (the old ``for_each_target`` atom,
+            # deleted in Round 31) narrowed the wide-strike list in
             # a *copy* of the effect context, so nothing leaked back to the
             # outer event.  The merged loop keeps that isolation for the
             # ``bind: "target"`` preset.
@@ -1004,7 +1007,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     renamed = RENAMED_ATOMIC_OPS.get(str(op))
     if renamed:
         raise V2RuntimeError(
-            f"atomic op {op!r} 已改名（Round 22/25/29/30 词汇表收敛）；"
+            f"atomic op {op!r} 已改名（Round 22/25/29/30/31 词汇表收敛）；"
             f"请改用 {renamed!r}"
         )
 
@@ -1018,7 +1021,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         replacement = REMOVED_ATOMIC_OPS[str(op)]
         hint = f"；请改用 {replacement}" if replacement else "；该 op 没有等价替代"
         raise V2RuntimeError(
-            f"atomic op {op!r} 已移除（Round 20/24/25/29/30 原子与词汇表收敛）{hint}"
+            f"atomic op {op!r} 已移除（Round 20/24/25/29/30/31 原子与词汇表收敛）{hint}"
         )
 
     atomic_result = _try_run_engine_atomic_op(engine, context, op, params, step)
@@ -2210,7 +2213,7 @@ CONDITION_OWNED_OPS = {
     # Round 16 / batch 4: the loop family consumes ``condition`` as a
     # per-iteration filter (the whole loop is gated with ``run_if``/``unless``),
     # and the listener family consumes it as a fire-time check.
-    "for_each", "for_each_target", "for_each_selected_card", "for_each_list",
+    "for_each", "for_each_selected_card", "for_each_list",
     "once_per_play", "timed_effect", "register_play_listener", "absorb_attack_damage",
 }
 
@@ -3144,17 +3147,12 @@ def _try_run_engine_atomic_op(engine, context: Dict[str, Any], op: str, params: 
     action = context.get("current_action")
     if choice is None and isinstance(action, dict):
         choice = action.get("choice", action)
-    mutation_scope = nullcontext()
-    if resolved_type in {"var_set", "var_add", "var_sub", "var_mul", "var_div"}:
-        raw_params = step.get("params") if isinstance(step.get("params"), dict) else step
-        name = str(raw_params.get("name") or "var")
-        target_selector = raw_params.get("target", "source")
-        target_refs = resolve_v2_target(engine, context, target_selector)
-        mutation_reader = getattr(engine, "_read_status_var_for_mutation", None)
-        if callable(mutation_reader):
-            mutation_scope = mutation_reader(target_refs, name)
-    with mutation_scope:
-        engine_effect = _engine_effect_from_step(engine, context, step, effect_type)
+    # Round 31 / 批次 Z：``var_set`` / ``var_add`` / ``var_sub`` / ``var_mul`` /
+    # ``var_div`` 五个旧名早已进 REMOVED_ATOMIC_OPS（Round 29 合并到
+    # ``player_var_change`` 的 mode），这里曾经的"状态变量读取范围"垫片
+    # （``_read_status_var_for_mutation``）随之一并删除——它只服务那五个名字，
+    # 而 ``run_v2_step`` 在到达这里之前就会对它们抛"已移除 + 替代写法"。
+    engine_effect = _engine_effect_from_step(engine, context, step, effect_type)
     engine_context = context
     try:
         engine._run_effect_list(source_id, card, [engine_effect], choice if isinstance(choice, dict) else None, engine_context)

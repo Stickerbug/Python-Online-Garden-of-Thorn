@@ -1344,14 +1344,14 @@ SAMPLE_SPOT_CHECKS = (
     ("move_cards_to_deck", "`cards`/`zone`/`position`/`target`（共享移动助手）", "一致"),
     ("place_as_equip", "`card`/`owner`/`effect_target`，71 处使用（签名冻结）", "一致"),
     ("request_card", "整套 `filter`（zone/owner/card_type/…）同时驱动候选集、提交校验与 `play_requires`", "一致"),
-    ("var_set", "`target`/`name`/`value`（引擎版 `name` 回落 `var`）", "一致"),
+    ("player_var_change", "`mode`（set/add/sub/mul/div）+ `target`/`name`/`value`（`name` 回落 `var`）", "一致"),
     ("log", "`message` 回落 `text`/`msg`，`amount` 可写表达式", "一致"),
     ("gain_e", "`amount`/`target`/`log_positive_only`", "一致"),
     ("register_play_listener", "`scope`/`duration`/`body`/`exclude_card_ids`", "一致"),
     ("queue_auto_play", "`card`/`source`/`target`/`each_turn`/`cost`/`exile` 等 12 个键", "一致"),
     ("absorb_attack_damage", "`scope`/`body`/`once`（body 里读 `absorbed_damage`）", "一致"),
-    ("settle_status", "`status`/`decay`/`fill_from`/`body`/`silent`", "一致"),
-    ("untargetable_layers", "`target`/`amount`（唯一带成就与默认文案的层数原子）", "一致"),
+    ("settle_status", "`status`/`decay`/`fill_from`/`body`/`silent`，Round 31 起还收 `reduce`（部分层数结算）", "一致"),
+    ("player_status_layers", "`status`（untargetable/invincible）/`target`/`amount`/`shovel`（唯一带成就与默认文案的层数原子）", "一致"),
 )
 
 

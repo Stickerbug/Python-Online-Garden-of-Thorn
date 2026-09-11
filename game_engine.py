@@ -1009,13 +1009,11 @@ class GameEngine:
         # mod_e_regen/mod_m_regen/mod_draw、资源族 cost_e/cost_m、全局倍率族
         # global_*_mult 一并合并（见 mod_spec_v2.REMOVED_ATOMIC_OPS 的替代写法），
         # 这里不再登记旧名——写出来会拿到"已移除 + 请改用"的显式报错。
-        'clear_status': 'clear_status',
         # Round 29 / 批次 X：``choose_from_exile`` / ``destroy_*_equip`` /
         # ``move_to_*`` / ``player_prop_*`` / ``record_*`` / ``reset_counter``
         # 这批名字已合并进规范 op，从本表删掉（写出来拿到
         # mod_spec_v2.REMOVED_ATOMIC_OPS 的"已移除 + 替代写法"）。
         'reveal_hand': 'reveal_enemy_hand',
-        'reveal_deck_top': 'reveal_deck_top',
         'steal_card': 'steal_enemy_card',
         'copy_card': 'copy_card',
         # Round 27: ``discard`` / ``random_discard_from_hand`` 的实现与别名一起
@@ -1030,11 +1028,9 @@ class GameEngine:
         # kitty_auto_play / bounce_attack / ocean_for_each_selectable_target /
         # for_each_selectable_target 这批旧名从两张别名表一起删除，改由
         # mod_spec_v2.RENAMED_ATOMIC_OPS 显式报错。
-        'put_card_to_deck': 'put_card_to_deck',
         'shuffle_discard_into_deck': 'shuffle_discard_into_deck',
         'give_card_to_hand': 'give_card_to_hand',
         'give_card_to_deck': 'give_card_to_deck',
-        'give_card_to_discard': 'give_card_to_discard',
         'remove_specific_card': 'remove_specific_card',
         # Round 29 / 批次 X：``destroy_*_equip`` 已合并进 ``destroy_equipment``。
         'equip_protection': 'counter_equip_protect',
@@ -1044,8 +1040,6 @@ class GameEngine:
         'block_card_type': 'block_card_type',
         'force_card_type': 'force_card_type',
         'nullify_current_card': 'nullify_current_card',
-        'invincible': 'set_invincible',
-        'untargetable': 'set_untargetable',
         'skip_turn': 'skip_turn',
         'extra_turn': 'extra_turn',
         'force_end_turn': 'force_end_turn',
@@ -1056,7 +1050,6 @@ class GameEngine:
         'increase_next_cost': 'increase_next_cost',
         'fusion': 'fusion',
         'add_tag': 'add_tag',
-        'remove_tag': 'remove_tag',
         'transform_card': 'transform_card',
         # Round 29 / 批次 X：``player_prop_*`` / ``card_var_*`` / ``var_*`` /
         # ``record_*`` / ``reset_counter`` / ``move_to_*`` / ``choose_from_*``
@@ -1071,9 +1064,24 @@ class GameEngine:
         'modify_damage': 'modify_damage',
         # Round 30 / 批次 Y：``add_status`` / ``remove_status`` / ``set_status``
         # 三条旧写法（Round 15 起曾是"默认播报层数"的真原子）随零用量清理一起
-        # 删除——规范写法 ``status_add_named`` / ``status_remove_named`` /
-        # ``set_status_named`` 用 ``log`` 参数即可拿到同一句战报。旧名写出来会先
-        # 被 ``_retired_atom_runtime_error`` 拦下，拿到替代写法。
+        # 删除——规范写法 ``status_add_named`` / ``status_remove_named``
+        # 用 ``log`` 参数即可拿到同一句战报。旧名写出来会先被
+        # ``_retired_atom_runtime_error`` 拦下，拿到替代写法。
+        # Round 31 / 批次 Z：``clear_status`` / ``set_status_named`` /
+        # ``resolve_status_once`` / ``set_untargetable`` / ``untargetable_layers`` /
+        # ``set_invincible`` / ``reveal_deck_top`` / ``reveal_tag_hand`` /
+        # ``put_card_to_deck`` / ``give_card_to_discard`` / ``remove_tag`` /
+        # ``remove_tag_from_zone`` / ``clear_tags`` / ``toggle_tag_in_zone`` /
+        # ``for_each_target`` / ``resource_spend`` / ``destroy_self_equipment`` /
+        # ``destroy_current_equipment`` / ``destroy_all_destroyable_equipment`` /
+        # ``destroy_equipment_choice_or_first`` / ``card_prop_set`` /
+        # ``card_prop_add`` / ``card_prop_mul``（以及 Round 29 的六个兼容垫片名）
+        # 从本表一并删掉：它们没有等价别名，写出来拿到 REMOVED_ATOMIC_OPS 里
+        # 的"已移除 + 完整替代写法"。
+        # 注意 ``invincible`` / ``untargetable`` 两个**属性名**仍在
+        # ``player_prop_change`` 的 property 词表与剧情效果类型里使用，但作为
+        # *效果类型* 的旧写法（无 ``status`` 参数）不再有等价实现，因此也不在
+        # 本表：卡数据写它们会拿到"已移除 + player_status_layers"的报错。
     }
 
     def _retired_atom_runtime_error(self, effect_type):
@@ -1091,14 +1099,14 @@ class GameEngine:
         if renamed_to:
             return RuntimeError(
                 f'atomic op {effect_type!r} 已改名'
-                f'（Round 22/25/29/30 词汇表收敛）；请改用 {renamed_to!r}'
+                f'（Round 22/25/29/30/31 词汇表收敛）；请改用 {renamed_to!r}'
             )
         if effect_type in REMOVED_ATOMIC_OPS:
             replacement = REMOVED_ATOMIC_OPS[effect_type]
             hint = f'；请改用 {replacement}' if replacement else '；该 op 没有等价替代'
             return RuntimeError(
                 f'atomic op {effect_type!r} 已移除'
-                f'（Round 20/24/25/29/30 原子与词汇表收敛）{hint}'
+                f'（Round 20/24/25/29/30/31 原子与词汇表收敛）{hint}'
             )
         return None
 
@@ -7596,6 +7604,23 @@ class GameEngine:
             return choice.get('target_instance_id') is not None or choice.get('target_def_id') is not None
         return bool(choice)
 
+    @staticmethod
+    def _destroy_equipment_needs_choice(params) -> bool:
+        """``destroy_equipment`` 要不要弹"点选一件装备"（Round 31 / 批次 Z）。
+
+        旧 ``destroy_equipment_choice_or_first`` 是"点选 → 数据点名 → 第一件"；
+        合并后只有 ``mode:"choice"``（默认）且数据**没有**点名
+        ``equipment``/``card`` 时才需要玩家点选，其余模式（self/random/all）
+        与点名写法都不弹窗。
+        """
+
+        if not isinstance(params, dict):
+            return False
+        mode = str(params.get('mode', 'choice') or 'choice').strip().lower()
+        if mode not in ('choice', 'first', 'chosen', 'selected', 'target'):
+            return False
+        return params.get('equipment') is None and params.get('card') is None
+
     def _choice_type_for_effect(self, effect: Optional[dict], card: Optional[CardInstance] = None) -> str:
         if not isinstance(effect, dict):
             return ''
@@ -7622,7 +7647,11 @@ class GameEngine:
             return 'confirm'
         if effect_type == 'discard_choice_then_draw':
             return 'choose_card_to_discard'
-        if effect_type == 'destroy_equipment_choice_or_first':
+        if effect_type == 'destroy_equipment' and self._destroy_equipment_needs_choice(params):
+            # Round 31 / 批次 Z：旧 ``destroy_equipment_choice_or_first`` 的"点选
+            # 一件敌方装备"窗口现在挂在规范名上——只有 ``mode:"choice"``（默认）
+            # **且**没有点名 ``equipment``/``card`` 时才弹窗；数据点名的那件、
+            # ``mode:"self"/"random"/"all"`` 都不弹。
             return 'choose_enemy_equipment'
         if effect_type == 'choose_from_deck':
             return 'choose_from_deck'
@@ -7653,7 +7682,7 @@ class GameEngine:
             'choose_from_deck': 'self',
             'choose_from_discard': 'self',
             'choose_from_zone': 'self',
-            'destroy_equipment_choice_or_first': 'enemy',
+            'destroy_equipment': 'enemy',
             'steal_enemy_card': 'enemy',
         }
         if request_type not in target_defaults:
@@ -9046,6 +9075,16 @@ class GameEngine:
         if not self._valid_player_id(viewer_id):
             viewer_id = player_id
         hand = list(self.players[target_id].hand)
+        # Round 31 / 批次 Z：``tag`` 只保留带该标签的手牌（旧
+        # ``reveal_tag_hand`` 的过滤条件），并支持 ``limit`` 截断。
+        raw_tag = str(params.get('tag', '') or '').strip()
+        if raw_tag:
+            tag = normalize_card_flag(raw_tag)
+            hand = [hand_card for hand_card in hand if tag in getattr(hand_card, 'flags', set())]
+        limit_raw = params.get('amount', params.get('limit'))
+        if limit_raw is not None:
+            limit = max(0, self._eval_int(player_id, limit_raw, card, 0))
+            hand = hand[:limit] if limit else []
         if params.get('mark', True) is not False:
             for hand_card in hand:
                 if self._card_selectable_by_action(hand_card):
@@ -9174,29 +9213,40 @@ class GameEngine:
                     amount=amount,
                 ))
 
-    def _atomic_set_invincible(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not self._valid_player_id(target_id):
-            return
-        self._set_invincible_until_next_own_turn_end(target_id)
-        if log is False:
-            return
-        self.log_msg(self._format_step_log(
-            log or f"{self.pn(target_id)}获得无敌直到下一个自己回合结束",
-            target=self.pn(target_id),
-            source=self.pn(player_id),
-        ))
+    def _atomic_player_status_layers(self, player_id, card, params, log, choice, context):
+        """Round 31 / 批次 Z：玩家状态层数族三合一。
 
-    def _atomic_set_untargetable(self, player_id, card, params, log, choice, context):
-        if self._status_application_blocked(player_id, 'untargetable'):
-            return
-        self.players[player_id].untargetable = max(0, int(getattr(self.players[player_id], 'untargetable', 0) or 0)) + 1
-        self.players[player_id].shovel_active = True
-        self._note_achievement_status_peak(player_id)
-        self.log_msg(log or f"{self.pn(player_id)}无法被攻击选中")
+        覆盖 ``set_untargetable`` / ``untargetable_layers`` / ``set_invincible``：
+        ``status`` 选要叠加的玩家状态（默认 ``untargetable``），``amount`` 给层数
+        （默认 1），``shovel`` 追加"无法使用卡牌"（旧 ``set_untargetable`` 的
+        cannot-play 状态）。
 
-    def _atomic_untargetable_layers(self, player_id, card, params, log, choice, context):
-        """Add plain "untargetable" layers without the cannot-play (shovel) state."""
+        三段实现逐条搬过来，默认战报也逐字保留：
+
+        * ``untargetable``：目标玩家 ``untargetable`` 层数 +amount（先过
+          ``_status_application_blocked``），``shovel: true`` 时同时点亮
+          ``shovel_active``；``shovel`` 缺省沿用旧 ``untargetable_layers`` 的
+          "只加层"行为，默认战报也随之分叉（层数句 / 旧 ``set_untargetable``
+          那句"无法被攻击选中"）；
+        * ``invincible``：走 ``_set_invincible_until_next_own_turn_end``（带
+          回合簿记，与 ``player_prop_change(property:"invincible")`` 只写字段
+          不同），``log: false`` 静音。
+        """
+
+        status = str(params.get('status') or params.get('prop') or 'untargetable').strip().lower()
+        if status in ('invincible', '无敌', 'invulnerable'):
+            target_id = self._resolve_target(player_id, params.get('target', 'self'))
+            if not self._valid_player_id(target_id):
+                return
+            self._set_invincible_until_next_own_turn_end(target_id)
+            if log is False:
+                return
+            self.log_msg(self._format_step_log(
+                log or f"{self.pn(target_id)}获得无敌直到下一个自己回合结束",
+                target=self.pn(target_id),
+                source=self.pn(player_id),
+            ))
+            return
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not self._valid_player_id(target_id):
             return
@@ -9207,8 +9257,15 @@ class GameEngine:
             return
         players = self.players[target_id]
         players.untargetable = max(0, int(getattr(players, 'untargetable', 0) or 0)) + amount
+        shovel = params.get('shovel') is True or params.get('block_actions') is True
+        if shovel:
+            players.shovel_active = True
         self._note_achievement_status_peak(target_id)
-        self.log_msg(log or f"{self.pn(target_id)}获得{amount}层无法选中")
+        default_log = (
+            f"{self.pn(target_id)}无法被攻击选中" if shovel
+            else f"{self.pn(target_id)}获得{amount}层无法选中"
+        )
+        self.log_msg(log or default_log)
 
     def _atomic_block_own_actions(self, player_id, card, params, log, choice, context):
         if self._status_application_blocked(player_id, 'shovel_active'):
@@ -9238,15 +9295,10 @@ class GameEngine:
         if changed > 0:
             self.log_msg(log or f"{self.pn(target_id)}的所有装备获得{amount}层装备护甲")
 
-    def _atomic_destroy_current_equipment(self, player_id, card, params, log, choice, context):
-        instance_id = getattr(card, 'instance_id', None)
-        for owner_id, owner_state in enumerate(self.players):
-            for eq in list(owner_state.equipment):
-                if getattr(eq.card_instance, 'instance_id', None) == instance_id:
-                    if self._destroy_equipment(owner_id, eq, check_protection=False, source_id=player_id):
-                        if log:
-                            self.log_msg(log)
-                    return
+    # Round 31 / 批次 Z：``destroy_current_equipment`` 已并入
+    # ``destroy_equipment(mode:"self")``（见那一条的 ``_find_equipment_owner_of_card``）。
+    # 两个旧名的差异只是"全场按实例 id 找" vs "只看自己"，合并后先做前者、
+    # 再回落后者，对同一张装备牌结果一致。
 
     def _atomic_equip_reduce_draw(self, player_id, card, params, log, choice, context):
         """Round 24：``equip_reduce_enemy_draw`` / ``equip_reduce_own_draw`` 合并成一条。
@@ -9352,45 +9404,13 @@ class GameEngine:
                 handled += 1
         return handled
 
-    def _atomic_clear_status(self, player_id, card, params, log, choice, context):
-        status_map = {'poison': 'poison', 'burn': 'fire',
-                      'toxic': 'toxic', 'dodge': 'dodge',
-                      'stagnation': 'stagnation', 'blind': 'blind',
-                      'untargetable': 'untargetable', 'equip_protection': 'equipment_protection'}
-        status = params.get('status', '')
-        attr = status_map.get(status)
-        if not attr:
-            return
-        cleared = []
-        for target_id in self._list_effect_targets(player_id, card, params.get('target', 'self'), context):
-            ps = self.players[target_id]
-            if not hasattr(ps, attr):
-                continue
-            if isinstance(getattr(ps, attr), bool):
-                setattr(ps, attr, False)
-            else:
-                setattr(ps, attr, 0)
-            cleared.append(target_id)
-        if not cleared or log is False:
-            return
-        if log:
-            self.log_msg(self._format_step_log(log, target=self.pn(cleared[0]), amount=len(cleared)))
-            return
-        for target_id in cleared:
-            self.log_msg(f"{self.pn(target_id)}的{status}已清除")
-
-    def _atomic_resource_spend(self, player_id, card, params, log, choice, context):
-        """Round 24：``cost_e`` / ``cost_m`` 合并成一条（``resource`` 选 e/m）。"""
-
-        resource = str(params.get('resource', params.get('kind', 'e')) or 'e').strip().lower()
-        if resource in ('m', 'magic', 'mana', '魔力'):
-            resource, label = 'magic', 'M'
-        else:
-            resource, label = 'elixir', 'E'
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self._spend_resource(target_id, resource, amount, card)
-        self.log_msg(log or f"{self.pn(target_id)}消耗{amount}{label}")
+    # Round 31 / 批次 Z：``clear_status``（清玩家属性字段的清状态原子）与
+    # ``resource_spend``（Round 24 的 ``cost_e``/``cost_m`` 合并体）已删除——
+    # 前者由 ``status_remove_named(status=..., amount:"all")`` 承接（同一张
+    # ``_status_attr_field`` 属性表 + 命名状态族的记账/钩子/上限），后者由
+    # ``spend_resource`` 承接（``amount`` 之外还支持 ``all: true`` 与 ``spent``
+    # 上下文变量）。两个旧名在 mod_spec_v2.REMOVED_ATOMIC_OPS 里都有替代写法，
+    # 写出来拿到"已移除 + 请改用"的显式报错。
 
     def _atomic_turn_mod_add(self, player_id, card, params, log, choice, context):
         """Round 24：``mod_e_regen`` / ``mod_m_regen`` / ``mod_draw`` 合并成一条。
@@ -9420,13 +9440,10 @@ class GameEngine:
             display = f"{amount:+}" if isinstance(amount, (int, float)) else str(amount)
         self.log_msg(log or f"{self.pn(target_id)}{text}{display}")
 
-    def _atomic_reveal_deck_top(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        amount = params.get('amount', 1)
-        opp = self.players[target_id]
-        top_cards = opp.deck[:amount]
-        names = ', '.join(c.name_cn for c in top_cards)
-        self.log_msg(log or f"{self.pn(target_id)}牌堆顶{amount}张：{names}")
+    # Round 31 / 批次 Z：``reveal_deck_top``（只看牌堆顶 N 张的名字）已删除，
+    # 由 ``reveal_card_set(source="deck", amount=N)`` 承接——后者把牌面发给
+    # ``viewer``（默认自己）并可限定张数，是它的超集；不再向全桌只播报一行
+    # 名字（0 处卡数据使用，替代写法见 mod_spec_v2.REMOVED_ATOMIC_OPS）。
 
     def _atomic_auto_play_card(self, player_id, card, params, log, choice, context):
         """Queue a card so its owner plays it automatically.
@@ -9607,20 +9624,11 @@ class GameEngine:
         elif not target:
             self.log_msg(log or f"{self.pn(player_id)}未选择要复制的牌")
 
-    def _atomic_put_card_to_deck(self, player_id, card, params, log, choice, context):
-        position = params.get('position', 'top')
-        ps = self.players[player_id]
-        if choice and 'target_instance_id' in choice:
-            target = ps.find_hand_card(choice['target_instance_id'])
-            if target:
-                ps.hand.remove(target)
-                if position == 'bottom':
-                    ps.deck.append(target)
-                else:
-                    ps.deck.insert(0, target)
-                self.log_msg(log or f"{self.pn(player_id)}将{target.name_cn}放入牌堆{position}")
-        else:
-            self.log_msg(log or f"{self.pn(player_id)}未选择牌")
+    # Round 31 / 批次 Z：``put_card_to_deck``（把"已选中的那张手牌"放到牌堆顶/底）
+    # 已删除，由 ``move_card(zone:"deck", card:{"ref":"selected_card"})`` 承接——
+    # ``_resolve_card_ref`` 的 ``selected_card`` 正好读 ``choice.target_instance_id``，
+    # ``_move_card_to_deck`` 的 ``position`` 词表（top/bottom/random/random_top）
+    # 与 ``owner`` 缺省（按牌当前位置归堆）也比旧实现更完整。
 
     def _atomic_shuffle_discard_into_deck(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
@@ -9747,32 +9755,10 @@ class GameEngine:
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
 
-    def _atomic_give_card_to_discard(self, player_id, card, params, log, choice, context):
-        # Round 14 / batch 2: 目的区（discard）+ 位置词表 + ``target`` 集合语义。
-        self._assert_step_zone(params, 'discard', op='give_card_to_discard')
-        self._step_zone_position_or_none(params, op='give_card_to_discard')
-        target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_discard')
-        card_ref = self._resolve_card_id_ref(player_id, self._give_card_step_ref(params), card)
-        if not card_ref or not target_ids:
-            return
-        amount = self._give_card_step_amount(player_id, card, params)
-        for target_id in target_ids:
-            card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
-            if not card_def:
-                continue
-            if card_def.id != ERROR_CARD_ID and not self._card_allowed(card_def.id):
-                continue
-            ts = self.players[target_id]
-            for _ in range(amount):
-                new_card = CardInstance(def_id=card_def.id)
-                self._apply_setup_modifiers_to_card(target_id, new_card)
-                if not self._can_normally_acquire_card(target_id, new_card):
-                    self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
-                    break
-                self._discard_card(ts, new_card)
-                self._remember_created_card(new_card, context)
-            if log and card_def.id != ERROR_CARD_ID:
-                self.log_msg(log)
+    # Round 31 / 批次 Z：``give_card_to_discard``（凭空造 N 张牌直接进弃牌堆）
+    # 已删除，由运行时的 ``create_card(to:"discard")`` 承接——同一份
+    # ``_move_card`` 造牌/入区实现，支持 ``amount``（旧实现的 ``amount`` 是
+    # "每名目标各 N 张"）与 ``target`` 集合。
 
     def _atomic_remove_specific_card(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -9883,22 +9869,33 @@ class GameEngine:
         Used by "spend everything for a bigger hit" cards. ``all: true`` spends
         whatever is left; the amount that was actually spent is written to the
         ``spent`` context variable so following steps can scale off it.
+
+        Round 31 / 批次 Z：吸收 ``resource_spend``（Round 24 的 ``cost_e`` /
+        ``cost_m`` 合并体）——``target`` 指定替谁付（默认自己），``resource``
+        同时认 ``e``/``m`` 与 ``elixir``/``magic``。默认仍然是"不写 ``log`` 就
+        安静"，要旧 ``resource_spend`` 那句 ``{target}消耗{amount}E`` 就显式写
+        ``log``。
         """
         resource = 'magic' if str(params.get('resource', 'elixir')).strip().lower() in (
             'magic', 'm', 'mana', '魔力',
         ) else 'elixir'
+        target_id = player_id
+        if params.get('target') is not None:
+            resolved = self._resolve_target(player_id, params.get('target'))
+            if self._valid_player_id(resolved):
+                target_id = resolved
         if params.get('all'):
-            amount = int(getattr(self.players[player_id], resource, 0) or 0)
+            amount = int(getattr(self.players[target_id], resource, 0) or 0)
         else:
             amount = max(0, self._eval_int(player_id, params.get('amount', 0), card, 0))
-        spent = self._spend_resource(player_id, resource, amount, card)
+        spent = self._spend_resource(target_id, resource, amount, card)
         if isinstance(context, dict):
             context.setdefault('vars', {})['spent'] = spent
             context['spent'] = spent
         if log is False or not log:
             return
         self.log_msg(self._format_step_log(
-            log, target=self.pn(player_id), source=self.pn(player_id), amount=spent, count=spent,
+            log, target=self.pn(target_id), source=self.pn(player_id), amount=spent, count=spent,
         ))
 
     def _atomic_mark_self_damage_source(self, player_id, card, params, log, choice, context):
@@ -10024,19 +10021,48 @@ class GameEngine:
             self.log_msg(log or f"{self.pn(player_id)}没有足够的{card_type}牌聚变")
 
     def _atomic_add_tag(self, player_id, card, params, log, choice, context):
-        tag = normalize_card_flag(params.get('tag', ''))
+        """Round 31 / 批次 Z：卡内标签族的单卡一半（``mode`` 选加/减/清空）。
+
+        覆盖 ``add_tag``（默认）/ ``remove_tag``（``mode:"remove"``）/
+        ``clear_tags``（``mode:"clear"``，把所有有效标签压进 ``disabled_flags``
+        再清空 ``instance_flags``）。默认模式与默认战报逐字保留。
+        """
+
+        mode = str(params.get('mode', 'add') or 'add').strip().lower()
+        mode = {'+': 'add', 'add_tag': 'add', 'remove_tag': 'remove', 'del': 'remove',
+                'delete': 'remove', 'unset': 'remove', 'clear_tags': 'clear',
+                'reset': 'clear', 'none': 'clear'}.get(mode, mode)
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
-        if tag and target_card:
-            target_card.instance_flags = getattr(target_card, 'instance_flags', set())
-            target_card.instance_flags.add(tag)
-            return_log = params.get('return_log')
-            if isinstance(return_log, str) and return_log:
-                custom = getattr(target_card, 'custom_vars', None)
-                if isinstance(custom, dict):
-                    custom[f'{tag}_log'] = return_log
+        if target_card is None:
+            return
+        if mode == 'clear':
+            all_flags = self._effective_card_flags(target_card)
+            target_card.instance_flags = set()
+            target_card.disabled_flags = set(getattr(target_card, 'disabled_flags', set()) or set())
+            target_card.disabled_flags.update(all_flags)
+            if log:
+                self.log_msg(log)
+            return
+        tag = normalize_card_flag(params.get('tag', ''))
+        if not tag:
+            return
+        if mode == 'remove':
+            if hasattr(target_card, 'instance_flags'):
+                target_card.instance_flags.discard(tag)
             if params.get('silent') or params.get('no_log') or log is False:
                 return
-            self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
+            self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
+            return
+        target_card.instance_flags = getattr(target_card, 'instance_flags', set())
+        target_card.instance_flags.add(tag)
+        return_log = params.get('return_log')
+        if isinstance(return_log, str) and return_log:
+            custom = getattr(target_card, 'custom_vars', None)
+            if isinstance(custom, dict):
+                custom[f'{tag}_log'] = return_log
+        if params.get('silent') or params.get('no_log') or log is False:
+            return
+        self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
 
     def _atomic_third_eye_precision_or_hidden(self, player_id, card, params, log, choice, context):
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'chosen_card'}), card)
@@ -10091,6 +10117,68 @@ class GameEngine:
         if not tag or not zone_names:
             return
         tag = normalize_card_flag(tag)
+        mode = str(params.get('mode', 'add') or 'add').strip().lower()
+        mode = {'+': 'add', 'add_tag': 'add', 'add': 'add',
+                'remove_tag': 'remove', 'remove': 'remove', 'del': 'remove', 'delete': 'remove',
+                'toggle': 'toggle', 'flip': 'toggle', 'toggle_tag': 'toggle'}.get(mode, mode)
+        if mode == 'toggle':
+            # Round 31 / 批次 Z：旧 ``toggle_tag_in_zone`` 的逐张翻转。
+            log_value = log
+            for target_id in targets:
+                ps = self.players[target_id]
+                changed = 0
+                for zone_name in zone_names:
+                    for candidate in list(self._player_zone_cards(ps, zone_name) or []):
+                        if candidate is None:
+                            continue
+                        if card_type_filter and getattr(candidate, 'card_type', '') != card_type_filter:
+                            continue
+                        if tag in self._effective_card_flags(candidate):
+                            candidate.instance_flags.discard(tag)
+                            candidate.disabled_flags.add(tag)
+                        else:
+                            candidate.instance_flags.add(tag)
+                            candidate.disabled_flags.discard(tag)
+                        changed += 1
+                if changed <= 0 or not log_value:
+                    continue
+                self.log_msg(self._format_step_log(
+                    log_value, target=self.pn(target_id), count=changed, tag=tag,
+                ))
+            return
+        if mode == 'remove':
+            # Round 31 / 批次 Z：旧 ``remove_tag_from_zone`` 的"区域摘标签"。
+            counts = {}
+            for target_id in targets:
+                ps = self.players[target_id]
+                count = 0
+                for zone_name in zone_names:
+                    for candidate in self._player_zone_cards(ps, zone_name):
+                        if candidate is None:
+                            continue
+                        if card_type_filter and getattr(candidate, 'card_type', '') != card_type_filter:
+                            continue
+                        if tag in getattr(candidate, 'instance_flags', set()):
+                            candidate.instance_flags.discard(tag)
+                            count += 1
+                        candidate.disabled_flags.discard(tag)
+                counts[target_id] = count
+            if params.get('silent') or params.get('no_log') or log is False:
+                return
+            if log:
+                for target_id in targets:
+                    self.log_msg(self._format_step_log(
+                        log, target=self.pn(target_id), source=self.pn(player_id),
+                        count=counts.get(target_id, 0),
+                    ))
+                return
+            zone_desc = '/'.join(self._zone_log_label(zone_name) for zone_name in zone_names)
+            for target_id in targets:
+                self.log_msg(
+                    f"{self.pn(player_id)}使{self.pn(target_id)}{zone_desc}中的"
+                    f"{counts.get(target_id, 0)}张牌失去{self._card_flag_log_text(tag)}"
+                )
+            return
         summary = bool(
             params.get('summary')
             or params.get('summary_log')
@@ -10313,26 +10401,10 @@ class GameEngine:
                 targets.add(target_id)
         return targets
 
-    def _atomic_reveal_tag_hand(self, player_id, card, params, log, choice, context):
-        """Reveal opponent hand cards that have a specific tag. Also adds revealed_tag_cards to state."""
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        tag = str(params.get('tag', 'revealed')).strip()
-        opp = self.players[target_id]
-        revealed_cards = [c for c in opp.hand if tag in c.flags and not self._card_is_sublime(c)]
-        if revealed_cards:
-            if not hasattr(self, '_revealed_tag_cards'):
-                self._revealed_tag_cards = {}
-            self._revealed_tag_cards.setdefault(player_id, [])
-            self._revealed_tag_cards[player_id] = [c.to_dict() for c in revealed_cards]
-        if log:
-            self.log_msg(log)
-
-    def _atomic_remove_tag(self, player_id, card, params, log, choice, context):
-        tag = normalize_card_flag(params.get('tag', ''))
-        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
-        if tag and target_card and hasattr(target_card, 'instance_flags'):
-            target_card.instance_flags.discard(tag)
-            self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
+    # Round 31 / 批次 Z：``reveal_tag_hand`` 已删除——``reveal_hand_cards`` 现在
+    # 支持 ``tag`` 过滤 + ``amount`` 截断（并把被展示的牌标上 ``revealed`` 标签、
+    # 通过 ``antennae_reveal`` 通道发给 ``to`` 指定的观看者），是它的超集；
+    # 旧实现只往 ``revealed_tag_cards`` 写一份没有客户端的载荷。
 
     def _atomic_transform_card(self, player_id, card, params, log, choice, context):
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
@@ -10465,55 +10537,9 @@ class GameEngine:
             return
         self.log_msg(log or f"{target_card.name_cn}被放逐")
 
-    def _atomic_remove_tag_from_zone(self, player_id, card, params, log, choice, context):
-        """Remove a tag from every card of one zone (counterpart of add_tag_to_zone).
-
-        Round 14 / batch 2: ``zone``/``zones`` 与 ``add_tag_to_zone`` 完全对齐
-        （含 equipment 读区），未知区域显式报错；``target`` 由单目标改为选择器
-        集合语义（标量选择器行为不变）。
-        """
-        targets = self._step_target_ids(
-            player_id, card, params, context, op='remove_tag_from_zone', default='enemy',
-        )
-        zone_names = self._step_zone_names(params, op='remove_tag_from_zone', default='hand')
-        if not targets or not zone_names:
-            return
-        tag = str(params.get('tag', '')).strip()
-        if not tag:
-            return
-        tag = normalize_card_flag(tag)
-        card_type_filter = str(params.get('card_type', '')).strip().lower()
-        counts = {}
-        for target_id in targets:
-            ps = self.players[target_id]
-            count = 0
-            for zone_name in zone_names:
-                for candidate in self._player_zone_cards(ps, zone_name):
-                    if candidate is None:
-                        continue
-                    if card_type_filter and getattr(candidate, 'card_type', '') != card_type_filter:
-                        continue
-                    if tag in getattr(candidate, 'instance_flags', set()):
-                        candidate.instance_flags.discard(tag)
-                        count += 1
-                    candidate.disabled_flags.discard(tag)
-            counts[target_id] = count
-        if params.get('silent') or params.get('no_log') or log is False:
-            return
-        if log:
-            for target_id in targets:
-                self.log_msg(self._format_step_log(
-                    log, target=self.pn(target_id), source=self.pn(player_id),
-                    count=counts.get(target_id, 0),
-                ))
-            return
-        zone_desc = '/'.join(self._zone_log_label(zone_name) for zone_name in zone_names)
-        for target_id in targets:
-            self.log_msg(
-                f"{self.pn(player_id)}使{self.pn(target_id)}{zone_desc}中的"
-                f"{counts.get(target_id, 0)}张牌失去{self._card_flag_log_text(tag)}"
-            )
-
+    # Round 31 / 批次 Z：``remove_tag_from_zone`` 已并入
+    # ``add_tag_to_zone(mode:"remove")``（同一份区域遍历 + 计数 + 战报，
+    # ``mode`` 缺省仍是"加标签"）。
     def _atomic_once_per_play(self, player_id, card, params, log, choice, context):
         """Run nested ``body`` at most once per play of the current card.
 
@@ -10705,16 +10731,10 @@ class GameEngine:
             return self._move_card_to_exile(player_id, card, forwarded, log, choice, context)
         return self._move_card_to_discard(player_id, card, forwarded, log, choice, context)
 
-    def _atomic_move_to_hand(self, player_id, card, params, log, choice, context):
-        """兼容垫片：``tests/test_feedback_75_magnet_unique.py`` 直呼这个私有名。
-
-        Round 29 起不是公开 op（登记在 ``RENAMED_ATOMIC_OPS``，卡数据写旧名会拿到
-        "已改名 + 请改用 move_card" 的显式报错），只保留同名私有方法给老测试/内部
-        调用，转发到 ``move_card(zone:"hand")`` 的实现体。
-        """
-        forwarded = dict(params or {})
-        forwarded['zone'] = 'hand'
-        return self._move_card_to_hand(player_id, card, forwarded, log, choice, context)
+    # Round 31 / 批次 Z：Round 29 留的六个"同名兼容垫片"
+    # （``move_to_hand`` / ``var_set`` / ``player_prop_set`` / ``player_prop_add`` /
+    # ``card_var_set`` / ``card_var_add``）已全部删除——它们不是公开 op，且各
+    # 自只是三行转发。老测试与历史脚本要改的调用点见报告"需要改测试"一节。
 
     def _atomic_global_mult(self, player_id, card, params, log, choice, context):
         """Round 24：全场倍率三兄弟合并成一条（``kind`` 选 damage/heal/cost）。
@@ -10838,9 +10858,9 @@ class GameEngine:
     def _loop_target_child_context(self, base_context, target_id, var_name=''):
         """Per-iteration context with ``target`` rebound to ``target_id``.
 
-        Used by the ``bind: "target"`` preset (and therefore by the legacy
-        ``for_each_target`` atom): the wide-strike list is narrowed inside an
-        isolated copy of the effect context, so a body step that says
+        Used by the ``bind: "target"`` preset of ``for_each`` (the old
+        ``for_each_target`` atom, deleted in Round 31): the wide-strike list is
+        narrowed inside an isolated copy of the effect context, so a body step that says
         ``target: "target"`` hits exactly the current player and never fans back
         out to the whole target set.
         """
@@ -13165,20 +13185,19 @@ class GameEngine:
         effects = list(self._play_effects_for_card(card) or []) + list(self._v2_play_steps_for_card(card) or [])
         for effect in self._walk_choice_effects(effects):
             effect_type = self._effect_type(effect)
-            is_choice_effect = effect_type in self.CHOICE_EFFECT_TYPES or effect_type in (
-                'discard_choice_then_draw', 'destroy_equipment_choice_or_first',
+            extra_choice_effect = effect_type in (
+                'discard_choice_then_draw',
                 'choose_from_deck', 'choose_from_discard', 'choose_from_zone', 'steal_enemy_card',
             )
+            if effect_type == 'destroy_equipment':
+                # Round 31 / 批次 Z：规范名只在"真要点选"时算选择效果。
+                extra_choice_effect = self._choice_type_for_effect(effect, card) == 'choose_enemy_equipment'
+            is_choice_effect = effect_type in self.CHOICE_EFFECT_TYPES or extra_choice_effect
             if not is_choice_effect:
                 continue
             if self._choice_request_satisfied(effect, choice, card):
                 continue
-            if effect_type in self.CHOICE_EFFECT_TYPES:
-                return effect
-            if effect_type in ('discard_choice_then_draw', 'destroy_equipment_choice_or_first',
-                               'choose_from_deck', 'choose_from_discard', 'choose_from_zone',
-                               'steal_enemy_card'):
-                return effect
+            return effect
         return None
 
     def _selected_choice_target(self, default=-1):
@@ -13882,7 +13901,7 @@ class GameEngine:
                         self._log_mod_runtime_error(et, RuntimeError(f'Unknown effect: {et}'), player_id, card)
                     if rt not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
                                   'for_each_selected_card', 'for_each_list', 'timed_effect',
-                                  'countdown_var', 'resource_spend', 'defer_game_over'):
+                                  'countdown_var', 'defer_game_over'):
                         self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue):
                     raise
@@ -14688,7 +14707,7 @@ class GameEngine:
                         self._log_mod_runtime_error(eff_type, RuntimeError(f'Unknown effect: {eff_type}'), player_id, card)
                     if resolved_type not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
                                              'for_each_selected_card', 'for_each_list', 'timed_effect',
-                                             'countdown_var', 'resource_spend', 'defer_game_over'):
+                                             'countdown_var', 'defer_game_over'):
                         self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue) as exc:
                     self._log_mod_runtime_error(eff_type, RuntimeError(f'{type(exc).__name__} outside loop'), player_id, card)
@@ -17144,19 +17163,8 @@ class GameEngine:
     def _atomic_aura_enemy_elixir_recovery(self, player_id, card, params, log, choice, context):
         return None
 
-    def _atomic_destroy_self_equipment(self, player_id, card, params, log, choice, context):
-        eq = self._find_equipment_for_card(player_id, card)
-        if eq is not None:
-            source_id = None
-            if params.get('source') is not None:
-                try:
-                    source_id = int(self._resolve_target(player_id, params.get('source')))
-                except (TypeError, ValueError):
-                    source_id = None
-            if source_id is not None and self._valid_player_id(source_id):
-                self._destroy_equipment(player_id, eq, check_protection=False, source_id=source_id)
-            else:
-                self._destroy_equipment(player_id, eq, check_protection=False)
+    # Round 31 / 批次 Z：``destroy_self_equipment`` / ``destroy_current_equipment``
+    # 已并入 ``destroy_equipment(mode:"self")``（``source`` 仍是可选的摧毁者）。
 
     def _atomic_deal_damage(self, player_id, card, params, log, choice, context):
         # Round 15 / batch 3: the runtime branch resolves the selector as a set
@@ -17899,8 +17907,18 @@ class GameEngine:
         ``fill_from`` can name another status that supplies the settled status when
         it is empty (``{"status": "jungle:toxic_poison", "when_empty": true}``);
         ``after`` runs data steps once the settlement finished.
+
+        Round 31 / 批次 Z：``reduce``（别名 ``reduce_amount`` / ``decay_amount``）
+        走"结算一次 + 只减 N 层"的分支，吸收旧 ``resolve_status_once``（默认
+        ``status:"fire"``、``reduce:1``）——伤害来源标签、伤害类型与默认战报
+        逐字保留；不写 ``reduce`` 时仍是"整段清零"的 ``decay`` 口径。
         """
         status = str(params.get('status', 'poison') or 'poison')
+        reduce_raw = params.get('reduce', params.get('reduce_amount', params.get('decay_amount')))
+        if reduce_raw is not None:
+            return self._settle_status_with_reduce(
+                player_id, card, params, log, status, reduce_raw,
+            )
         decay = params.get('decay', True) is not False
         fill_from = params.get('fill_from') if isinstance(params.get('fill_from'), dict) else None
         source_label = str(params.get('source_label') or params.get('source') or '')
@@ -17929,33 +17947,64 @@ class GameEngine:
                 count=len(results),
             ))
 
-    def _atomic_resolve_status_once(self, player_id, card, params, log, choice, context):
-        """Resolve a damage-over-time status once, then reduce its stacks.
+    def _settle_status_with_reduce(self, player_id, card, params, log, status, reduce_raw):
+        """Round 31 / 批次 Z：旧 ``resolve_status_once`` 的实现体（整段搬过来）。
 
-        Shared by Gunpowder / Oil (fire) style effects so the mechanic lives in
-        one reusable atom instead of one handler per card.
+        只结算 ``stacks`` 点伤害并把层数减 ``reduce``（不是清零），默认战报是
+        ``"{target}的{status}结算{amount}点并减少{N}层"``。``log: false`` 现在
+        与其他步骤一样静音（旧实现把 ``log: false`` 当成"用默认战报"，是
+        Round 31 顺手统一的偏差，见报告）。
         """
-        status = str(params.get('status', 'fire') or 'fire')
-        reduce_amount = self._eval_int(player_id, params.get('reduce', 1), card, 1)
+
+        status = str(status or 'fire')
+        reduce_amount = self._eval_int(player_id, reduce_raw, card, 1)
         for target_id in self._resolve_targets(player_id, params.get('target', 'target')):
             if not self._valid_player_id(target_id):
                 continue
             ps = self.players[target_id]
-            stacks = max(0, int(getattr(ps, 'fire', 0) or 0))
+            attr = self._status_attr_field(status) or ''
+            if attr == 'fire' or str(status).strip().lower() in ('burn', 'fire', '灼烧'):
+                stacks = max(0, int(getattr(ps, 'fire', 0) or 0))
+            elif attr == 'poison' or str(status).strip().lower() in ('poison', '中毒', 'p'):
+                stacks = max(0, int(getattr(ps, 'poison', 0) or 0))
+            else:
+                stacks = max(0, int(self._get_status_count(target_id, status) or 0))
             dealt = 0
             if stacks > 0 and not self._is_status_immune(target_id):
-                dealt = self._deal_direct_damage(
-                    target_id,
-                    stacks,
-                    '灼烧',
-                    damage_type=DAMAGE_TYPE_MAGIC,
-                    damage_tag=DAMAGE_TAG_FIRE,
-                )
+                label = str(params.get('source_label') or params.get('source') or '')
+                if attr == 'fire' or str(status).strip().lower() in ('burn', 'fire', '灼烧'):
+                    dealt = self._deal_direct_damage(
+                        target_id,
+                        stacks,
+                        label or '灼烧',
+                        damage_type=DAMAGE_TYPE_MAGIC,
+                        damage_tag=DAMAGE_TAG_FIRE,
+                    )
+                else:
+                    dealt = self._deal_direct_damage(
+                        target_id,
+                        stacks,
+                        label or self._status_log_label(status),
+                        damage_type=DAMAGE_TYPE_MAGIC,
+                    )
             if stacks > 0:
-                ps.fire = max(0, stacks - max(0, reduce_amount))
+                remaining = max(0, stacks - max(0, reduce_amount))
+                if attr == 'fire':
+                    ps.fire = remaining
+                elif attr == 'poison':
+                    ps.poison = remaining
+                else:
+                    self._remove_named_status_layers(target_id, status, max(0, reduce_amount))
+                self._normalize_status_value(ps, status)
+            if log is False or params.get('silent'):
+                continue
             self.log_msg(
-                self._format_step_log(log, target=self.pn(target_id), amount=int(dealt or 0), stacks=stacks)
-                or f"{self.pn(target_id)}的灼烧结算{int(dealt or 0)}点并减少{max(0, reduce_amount)}层"
+                self._format_step_log(
+                    log, target=self.pn(target_id), amount=int(dealt or 0),
+                    stacks=stacks, reduce=max(0, reduce_amount), count=int(dealt or 0),
+                )
+                or f"{self.pn(target_id)}的{self._status_log_label(status)}结算"
+                   f"{int(dealt or 0)}点并减少{max(0, reduce_amount)}层"
             )
 
     def _atomic_direct_damage(self, player_id, card, params, log, choice, context):
@@ -18261,27 +18310,55 @@ class GameEngine:
             return clamp_card_power(value)
         return value
 
-    def _atomic_card_prop_set(self, player_id, card, params, log, choice, context):
-        value = self._eval_int(player_id, params.get('value', 0), card)
-        target_card = self._set_card_property_value(player_id, card, params, value)
-        if target_card is not None and log:
-            self.log_msg(log)
+    def _atomic_card_prop_change(self, player_id, card, params, log, choice, context):
+        """Round 31 / 批次 Z：卡牌属性写值族三合一。
 
-    def _atomic_card_prop_add(self, player_id, card, params, log, choice, context):
+        覆盖 ``card_prop_set``（``mode:"set"``，默认）/ ``card_prop_add``
+        （``mode:"add"``）/ ``card_prop_mul``（``mode:"mul"``）。参数与
+        ``player_prop_change`` 对齐：``mode`` + ``property``/``prop`` +
+        ``value``/``amount``（乘法也认 ``multiplier``），``card`` 缺省当前牌。
+
+        三段实现逐条搬过来（钳位、``power_value`` 上限、``fission_level`` 的
+        ``multi_petal`` 双倍特例都保留），默认值也保持原样：
+
+        * ``set`` 用 ``value``（默认 0），经 ``_set_card_property_value`` 钳位；
+        * ``add`` 用 ``amount``，缺省回落 ``value``，先读当前值再相加；
+        * ``mul`` 用 ``multiplier``，缺省回落 ``amount``/``value``（旧实现默认 1）。
+        """
+
+        mode = str(params.get('mode', 'set') or 'set').strip().lower()
+        mode = {'=': 'set', 'set_to': 'set', 'assign': 'set', 'add': 'add', '+': 'add', '+=': 'add',
+                'increase': 'add', 'mul': 'mul', 'multiply': 'mul', '*': 'mul', 'times': 'mul',
+                'x': 'mul'}.get(mode, mode)
+        if mode not in ('set', 'add', 'mul'):
+            return
+        if mode == 'set':
+            value = self._eval_int(player_id, params.get('value', 0), card)
+            target_card = self._set_card_property_value(player_id, card, params, value)
+            if target_card is not None and log:
+                self.log_msg(log)
+            return
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if target_card is None:
             return
         prop = str(params.get('property', params.get('prop', 'fusion_level')))
-        current = self._get_card_property_numeric_value(target_card, prop)
-        amount = self._eval_int(player_id, params.get('amount', params.get('value', 0)), card)
-        if (
-            prop == 'fission_level'
-            and self._card_has_flag(card, 'multi_petal_base')
-            and 'multi_petal' in getattr(card, 'setup_modifiers', set())
-            and int(amount) == 1
-        ):
-            amount = 2
-        value = current + amount
+        if mode == 'mul':
+            current = self._get_card_property_numeric_value(target_card, prop)
+            multiplier = self._eval_int(
+                player_id, params.get('multiplier', params.get('amount', params.get('value', 1))), card, 1,
+            )
+            value = current * multiplier
+        else:
+            current = self._get_card_property_numeric_value(target_card, prop)
+            amount = self._eval_int(player_id, params.get('amount', params.get('value', 0)), card)
+            if (
+                prop == 'fission_level'
+                and self._card_has_flag(card, 'multi_petal_base')
+                and 'multi_petal' in getattr(card, 'setup_modifiers', set())
+                and int(amount) == 1
+            ):
+                amount = 2
+            value = current + amount
         self._set_card_property_value(player_id, card, {'card': params.get('card', {'ref': 'current_card'}), 'property': prop}, value)
         if log:
             self.log_msg(log)
@@ -18369,50 +18446,9 @@ class GameEngine:
                 ) or default_log
             )
 
-    def _atomic_toggle_tag_in_zone(self, player_id, card, params, log, choice, context):
-        """Toggle one tag on every card of a zone (used by Yin-Yang style flips)."""
-        target_id = self._resolve_target(player_id, params.get('target', 'target'))
-        if not self._valid_player_id(target_id):
-            return
-        zone_name = str(params.get('zone', 'hand') or 'hand').lower()
-        ps = self.players[target_id]
-        zone = {
-            'hand': ps.hand,
-            'deck': ps.deck,
-            'discard': ps.discard,
-            'exile': ps.exile,
-        }.get(zone_name)
-        if zone is None:
-            return
-        raw_tag = str(params.get('tag', '') or '').strip()
-        tag = normalize_card_flag(raw_tag) if raw_tag else ''
-        if not tag:
-            return
-        changed = 0
-        for candidate in list(zone or []):
-            if candidate is None:
-                continue
-            if tag in self._effective_card_flags(candidate):
-                candidate.instance_flags.discard(tag)
-                candidate.disabled_flags.add(tag)
-            else:
-                candidate.instance_flags.add(tag)
-                candidate.disabled_flags.discard(tag)
-            changed += 1
-        if changed <= 0 or log is False or not log:
-            return
-        self.log_msg(self._format_step_log(log, target=self.pn(target_id), count=changed, tag=tag))
-
-    def _atomic_card_prop_mul(self, player_id, card, params, log, choice, context):
-        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
-        if target_card is None:
-            return
-        prop = str(params.get('property', 'fusion_level'))
-        current = self._get_card_property_numeric_value(target_card, prop)
-        multiplier = self._eval_int(player_id, params.get('multiplier', params.get('amount', 1)), card, 1)
-        self._set_card_property_value(player_id, card, {'card': params.get('card', {'ref': 'current_card'}), 'property': prop}, current * multiplier)
-        if log:
-            self.log_msg(log)
+    # Round 31 / 批次 Z：``toggle_tag_in_zone`` 已并入
+    # ``add_tag_to_zone(mode:"toggle")``（``target``/``zone``/``tag`` 参数同名同义，
+    # 显式写 ``target`` 即与旧默认 ``target`` 一致）。
 
     def _atomic_card_damage_multiply(self, player_id, card, params, log, choice, context):
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
@@ -18424,16 +18460,7 @@ class GameEngine:
         if log:
             self.log_msg(log)
 
-    def _atomic_clear_tags(self, player_id, card, params, log, choice, context):
-        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
-        if target_card is None:
-            return
-        all_flags = self._effective_card_flags(target_card)
-        target_card.instance_flags = set()
-        target_card.disabled_flags = set(getattr(target_card, 'disabled_flags', set()) or set())
-        target_card.disabled_flags.update(all_flags)
-        if log:
-            self.log_msg(log)
+    # Round 31 / 批次 Z：``clear_tags`` 已并入 ``add_tag(mode:"clear")``。
 
     def _atomic_equipment_prop_set(self, player_id, card, params, log, choice, context):
         value = self._eval_int(player_id, params.get('value', 0), card)
@@ -18483,13 +18510,8 @@ class GameEngine:
             if self._set_player_property_value(tid, prop, value) is not None and log:
                 self.log_msg(log)
 
-    def _atomic_player_prop_set(self, player_id, card, params, log, choice, context):
-        # 兼容垫片（老测试直呼私有名）：Round 29 起不是公开 op。
-        return self._atomic_player_prop_change(player_id, card, {**(params or {}), 'mode': 'set'}, log, choice, context)
-
-    def _atomic_player_prop_add(self, player_id, card, params, log, choice, context):
-        # 兼容垫片（老测试直呼私有名）：Round 29 起不是公开 op。
-        return self._atomic_player_prop_change(player_id, card, {**(params or {}), 'mode': 'add'}, log, choice, context)
+    # Round 31 / 批次 Z：``player_prop_set`` / ``player_prop_add`` 两个兼容垫片
+    # 已删除（``player_prop_change(mode=...)`` 是唯一实现）。
 
     def _atomic_discard_hand_by_paid_e(self, player_id, card, params, log, choice, context):
         threshold = params.get('threshold', params.get('amount', None))
@@ -18616,50 +18638,67 @@ class GameEngine:
             self._check_yggdrasil(tid)
         self._check_game_over()
 
-    def _atomic_destroy_equipment_choice_or_first(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if target_id < 0:
-            return
-        ts = self.players[target_id]
-        eq = None
-        if choice and 'target_instance_id' in choice:
-            eq = ts.find_equipment(choice['target_instance_id'])
-        if eq is None and ts.equipment:
-            eq = ts.equipment[0]
-        if eq is not None:
-            eq_name = eq.card_def.name_cn
-            if self._destroy_equipment(target_id, eq, source_id=player_id):
-                self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
-            elif log:
-                self.log_msg(log)
-
     def _atomic_destroy_equipment(self, player_id, card, params, log, choice, context):
-        """Round 29 / 批次 X：摧毁装备的三条同形原子合并成一条。
+        """Round 29 + Round 31：摧毁装备族的唯一实现。
 
         覆盖 ``destroy_equipment``（运行时原生薄封装）/ ``destroy_random_equip`` /
-        ``destroy_all_equip`` / ``destroy_all_field_equip``：
+        ``destroy_all_equip`` / ``destroy_all_field_equip``（Round 29）以及
+        ``destroy_equipment_choice_or_first`` / ``destroy_self_equipment`` /
+        ``destroy_current_equipment`` / ``destroy_all_destroyable_equipment``
+        （Round 31 / 批次 Z）：
 
-        * ``mode`` 选 ``choice``（默认，拆"数据点名的那件 / 玩家选中的那件 / 第一件"）、
-          ``random``（随机拆 1 件）或 ``all``（拆光）；
-        * ``scope`` 选 ``target``（默认，只动一名玩家的装备，``target`` 默认
-          ``enemy``）或 ``field``（全场每名玩家的装备，即旧
-          ``destroy_all_field_equip``）。
+        * ``mode`` 选 ``choice``（默认，拆"玩家点选的那件 / 数据点名的
+          ``equipment``·``card`` 引用 / 第一件"）、``random``（随机拆 1 件）、
+          ``all``（拆光）或 ``self``（拆"这张牌自己挂着的那件装备"，即旧
+          ``destroy_self_equipment`` 与 ``destroy_current_equipment`` 的并集：
+          先按实例 id 全场找，再回落 ``_find_equipment_for_card``）；
+        * ``scope`` 选 ``target``（默认）或 ``field``（全场每名玩家）；
+          ``mode:"all"`` 的 ``target`` 支持集合选择器（旧
+          ``destroy_all_destroyable_equipment`` 的 ``target:"both"``）；
+        * ``filter`` 写 ``destroyable`` / ``destructible`` 时跳过
+          ``indestructible``（旧 ``destroy_all_destroyable_equipment`` 的过滤，
+          在 ``field`` 域也生效）；
+        * ``record_count: true`` 把摧毁件数写进 ``context`` 的
+          ``last_destroyed_equipment_count``（含 ``vars``，旧
+          ``destroy_all_destroyable_equipment`` 的记账）；
+        * ``source`` 覆盖"摧毁者"（旧 ``destroy_self_equipment`` 的可选来源），
+          缺省与同族一致是本步的玩家。
 
         四段实现逐条搬过来：``choice`` 先看 ``choice.target_instance_id``，再看
         ``equipment`` 引用（实例 id / ``_resolve_equipment_ref`` 认的写法），最后
         回落到第一件；``random`` / ``all`` 在 ``target`` 域先按 ``indestructible``
-        过滤（旧
-        ``destroy_random_equip`` / ``destroy_all_equip`` 的写法），``field`` 域
-        不过滤、直接交给 ``_destroy_equipment`` 判定（旧 ``destroy_all_field_equip``
-        的写法——护甲/装备保护照常抵消），因此战报与"抵消"行为逐字一致。
+        过滤（旧 ``destroy_random_equip`` / ``destroy_all_equip`` 的写法），
+        ``field`` 域不过滤、直接交给 ``_destroy_equipment`` 判定（旧
+        ``destroy_all_field_equip`` 的写法——护甲/装备保护照常抵消），因此战报
+        与"抵消"行为逐字一致。
         """
         mode = str(params.get('mode', 'choice') or 'choice').strip().lower()
         mode = {
             'one': 'random', 'single': 'random', 'random_one': 'random', 'pick': 'random',
             'every': 'all', 'destroy_all': 'all',
             'first': 'choice', 'chosen': 'choice', 'selected': 'choice', 'target': 'choice',
+            'self': 'self', 'current': 'self', 'this': 'self', 'attached': 'self',
+            'self_equipment': 'self', 'current_equipment': 'self',
         }.get(mode, mode)
-        if mode not in ('choice', 'random', 'all'):
+        if mode not in ('choice', 'random', 'all', 'self'):
+            return
+        filter_value = str(params.get('filter', '') or '').strip().lower()
+        destroyable_only = filter_value in ('destroyable', 'destructible', 'not_indestructible', 'breakable')
+        record_count = params.get('record_count') is True or params.get('record') is True
+        source_id = player_id
+        if params.get('source') is not None:
+            try:
+                resolved_source = int(self._resolve_target(player_id, params.get('source')))
+            except (TypeError, ValueError):
+                resolved_source = player_id
+            if self._valid_player_id(resolved_source):
+                source_id = resolved_source
+        destroyed_count = 0
+        if mode == 'self':
+            owner_id, eq = self._find_equipment_owner_of_card(player_id, card)
+            if eq is not None and self._destroy_equipment(owner_id, eq, check_protection=False, source_id=source_id):
+                if log:
+                    self.log_msg(log)
             return
         scope = str(params.get('scope', 'target') or 'target').strip().lower()
         if scope in ('field', 'board', 'both', 'all', 'everyone', 'all_players'):
@@ -18667,22 +18706,27 @@ class GameEngine:
         if scope == 'field':
             player_ids = [index for index in range(len(self.players))]
         else:
-            target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-            if not self._valid_player_id(target_id):
+            # 标量选择器保持"只动一名玩家"的旧语义；只有显式集合选择器
+            # （``both`` / ``play_targets`` …）才展开——旧
+            # ``destroy_all_destroyable_equipment`` 的 ``target:"both"`` 正是要这个。
+            player_ids = self._resolve_step_targets(
+                player_id, card, params.get('target', 'enemy'), context,
+            )
+            if not player_ids:
                 return
-            player_ids = [target_id]
         for pid in player_ids:
             if mode == 'choice':
                 eq = self._destroy_equipment_choice_target(pid, card, params, choice)
                 if eq is None:
                     continue
                 eq_name = eq.card_def.name_cn
-                if self._destroy_equipment(pid, eq, source_id=player_id):
+                if self._destroy_equipment(pid, eq, source_id=source_id):
+                    destroyed_count += 1
                     self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(pid)}的{eq_name}")
                 elif log:
                     self.log_msg(log)
                 continue
-            if scope == 'field':
+            if scope == 'field' and not destroyable_only:
                 candidates = list(self.players[pid].equipment)
             else:
                 candidates = [
@@ -18695,10 +18739,35 @@ class GameEngine:
                 candidates = [random.choice(candidates)]
             for eq in candidates:
                 eq_name = eq.card_def.name_cn
-                if self._destroy_equipment(pid, eq, source_id=player_id):
+                if self._destroy_equipment(pid, eq, source_id=source_id):
+                    destroyed_count += 1
                     self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(pid)}的{eq_name}")
                 elif log:
                     self.log_msg(log)
+        if record_count and isinstance(context, dict):
+            context['last_destroyed_equipment_count'] = destroyed_count
+            vars_obj = context.setdefault('vars', {})
+            if isinstance(vars_obj, dict):
+                vars_obj['last_destroyed_equipment_count'] = destroyed_count
+
+    def _find_equipment_owner_of_card(self, player_id, card):
+        """``mode:"self"`` 的选件：先按实例 id 全场找，再回落当前玩家。
+
+        旧 ``destroy_current_equipment`` 全场按 ``instance_id`` 找，
+        ``destroy_self_equipment`` 用 ``_find_equipment_for_card``（只看自己）；
+        合并后先做全场精确匹配，两者对同一张装备牌给出同一件装备。
+        """
+
+        instance_id = getattr(card, 'instance_id', None)
+        if instance_id is not None:
+            for owner_id, owner_state in enumerate(self.players):
+                for eq in list(getattr(owner_state, 'equipment', []) or []):
+                    if getattr(getattr(eq, 'card_instance', None), 'instance_id', None) == instance_id:
+                        return owner_id, eq
+        eq = self._find_equipment_for_card(player_id, card)
+        if eq is not None:
+            return player_id, eq
+        return player_id, None
 
     def _destroy_equipment_choice_target(self, owner_id, card, params, choice):
         """``destroy_equipment(mode:"choice")`` 的选件口径（合并前的两套合一）。
@@ -18738,22 +18807,9 @@ class GameEngine:
             return None
         return ps.equipment[0] if ps.equipment else None
 
-    def _atomic_destroy_all_destroyable_equipment(self, player_id, card, params, log, choice, context):
-        destroyed_count = 0
-        for tid in self._resolve_targets(player_id, params.get('target', 'both')):
-            for eq in list(self.players[tid].equipment):
-                if 'indestructible' not in eq.card_instance.flags:
-                    eq_name = eq.card_def.name_cn
-                    if self._destroy_equipment(tid, eq, source_id=player_id):
-                        destroyed_count += 1
-                        self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(tid)}的{eq_name}")
-                    elif log:
-                        self.log_msg(log)
-        if isinstance(context, dict):
-            context['last_destroyed_equipment_count'] = destroyed_count
-            vars_obj = context.setdefault('vars', {})
-            if isinstance(vars_obj, dict):
-                vars_obj['last_destroyed_equipment_count'] = destroyed_count
+    # Round 31 / 批次 Z：``destroy_all_destroyable_equipment`` 已并入
+    # ``destroy_equipment(mode:"all", filter:"destroyable", record_count:true)``
+    # （``target`` 缺省要显式写 ``"both"`` 才与旧默认一致）。
 
     def _atomic_activate_corruption(self, player_id, card, params, log, choice, context):
         eq = self._find_equipment_for_card(player_id, card)
@@ -19123,51 +19179,11 @@ class GameEngine:
                 random.shuffle(ps.hand)
                 self.log_msg(log or f"{self.pn(tid)}因失明打乱手牌")
 
-    def _atomic_for_each_target(self, player_id, card, params, log, choice, context):
-        """Thin forwarder for the ``for_each_target`` preset (Round 16).
-
-        Equivalent to ``for_each(source: "wide_strike_targets", bind: "target")``:
-        the body runs once per selectable wide-strike target with ``target``
-        rebound to that player inside an isolated copy of the effect context, so
-        a card never fans back out to the whole target set.
-        """
-        base_context = context if isinstance(context, dict) else ({'context': context} if context else {})
-        body = loop_body_from_params(params)
-        if not body:
-            return
-        items, var_name, _limit = plan_loop(
-            self, base_context, params, op='for_each_target',
-            source_override='wide_strike_targets', default_var='item',
-            resolver=lambda engine, ctx, source: list(self._wide_strike_target_ids(player_id, card)),
-            limit_resolver=self._engine_loop_limit,
-        )
-        condition = loop_condition(params)
-        store = self._var_store_for_target(player_id, 'self')
-        store_had_old = var_name in store
-        store_old_value = store.get(var_name)
-
-        def bind(item, index):
-            if var_name:
-                store[var_name] = self._serializable_list_item(item)
-
-        def unbind(paused):
-            if not var_name:
-                return
-            if store_had_old:
-                store[var_name] = store_old_value
-            else:
-                store.pop(var_name, None)
-
-        def run_body(target_id, index):
-            child_context, child_choice = self._loop_target_child_context(base_context, target_id, var_name)
-            if not self._loop_iteration_allows(player_id, card, condition, child_context):
-                return None
-            self._run_effect_list(player_id, card, body, child_choice, child_context)
-
-        return run_loop_driver(
-            self, items, run_body=run_body, bind=bind, unbind=unbind,
-            stop_on_game_over=True, op='for_each_target',
-        )
+    # Round 31 / 批次 Z：``for_each_target``（Round 16 的薄转发）已删除——
+    # ``for_each(source:"wide_strike_targets", bind:"target")`` 是同一个循环驱动
+    # 预设（``_loop_target_child_context`` 就是它的实现），因此不再需要一条
+    # 独立原子。唯一的行为差是 ``for_each`` 不因 ``game_over`` 中断循环（本
+    # 就不是公开契约），0 处卡数据使用。
 
     def _prepare_ocean_charge_for_play(self, card: Optional[CardInstance]):
         if card is None:
@@ -20143,13 +20159,8 @@ class GameEngine:
         if log is not False and log:
             self.log_msg(self._format_step_log(log, target=self.pn(player_id), amount=value))
 
-    def _atomic_card_var_set(self, player_id, card, params, log, choice, context):
-        # 兼容垫片（旧私有名）：Round 29 起不是公开 op。
-        return self._atomic_card_var_change(player_id, card, {**(params or {}), 'mode': 'set'}, log, choice, context)
-
-    def _atomic_card_var_add(self, player_id, card, params, log, choice, context):
-        # 兼容垫片（旧私有名）：Round 29 起不是公开 op。
-        return self._atomic_card_var_change(player_id, card, {**(params or {}), 'mode': 'add'}, log, choice, context)
+    # Round 31 / 批次 Z：``card_var_set`` / ``card_var_add`` 两个兼容垫片已删除
+    # （``card_var_change(mode=...)`` 是唯一实现）。
 
     def _atomic_reveal_card_set(self, player_id, card, params, log, choice, context):
         """Privately reveal a card set (default: the target's starting deck).
@@ -20179,6 +20190,12 @@ class GameEngine:
                 'discard': '弃牌堆',
                 'exile': '放逐区',
             }.get(source, source)
+        # Round 31 / 批次 Z：``amount``/``top``/``limit`` 只展示前 N 张（吸收旧
+        # ``reveal_deck_top`` 的"看牌堆顶 N 张"）；缺省仍是整个区。
+        limit_raw = params.get('amount', params.get('top', params.get('limit')))
+        if limit_raw is not None:
+            limit = max(0, self._eval_int(player_id, limit_raw, card, 0))
+            cards = list(cards)[:limit] if limit else []
         self._garden_initial_deck_reveal_serial = int(
             getattr(self, '_garden_initial_deck_reveal_serial', 0) or 0
         ) + 1
@@ -20797,15 +20814,25 @@ class GameEngine:
                 break
 
     def _atomic_status_add_named(self, player_id, card, params, log, choice, context):
-        self._apply_status_add_family(player_id, card, params, log, op='status_add_named')
+        """Round 31 / 批次 Z：``status_add_named`` 现在用 ``mode`` 区分加/设。
+
+        ``mode`` 缺省 ``add``（层数叠加）；``mode:"set"`` 即旧
+        ``set_status_named``（把状态设为 N 层，``stack`` 仍是它的默认值来源）。
+        两个名字的参数面完全一致，合并后只多一个 ``mode`` 键。
+        """
+
+        mode = str(params.get('mode', 'add') or 'add').strip().lower()
+        mode = {'=': 'set', 'set_to': 'set', 'assign': 'set', 'replace': 'set',
+                'stack': 'add', '+': 'add', '+=': 'add', 'increase': 'add'}.get(mode, mode)
+        op = 'set_status_named' if mode == 'set' else 'status_add_named'
+        self._apply_status_add_family(player_id, card, params, log, op=op)
 
     # Round 30 / 批次 Y：旧写法 ``add_status`` / ``remove_status`` / ``set_status``
     # （Round 15 起是"未写 ``log`` 时默播报层数"的真原子）已随零用量清理删除。
-    # 规范写法 ``status_add_named`` / ``status_remove_named`` / ``set_status_named``
-    # 现在**只**按步骤自己写的 ``log`` 决定战报（``log:true`` 就是旧默认那句），
-    # 因此 ``STATUS_LEGACY_ANNOUNCING_OPS`` 也一并消失。
-    def _atomic_set_status_named(self, player_id, card, params, log, choice, context):
-        self._apply_status_add_family(player_id, card, params, log, op='set_status_named')
+    # 规范写法 ``status_add_named`` / ``status_remove_named`` 现在**只**按步骤
+    # 自己写的 ``log`` 决定战报（``log:true`` 就是旧默认那句），因此
+    # ``STATUS_LEGACY_ANNOUNCING_OPS`` 也一并消失。
+    # Round 31 / 批次 Z：``set_status_named`` 也并进 ``status_add_named(mode:"set")``。
 
     def _status_family_status_list(self, player_id, card, params):
         raw_statuses = params.get('statuses')
@@ -21255,9 +21282,8 @@ class GameEngine:
             if isinstance(target_ref, int):
                 self._sync_custom_var_alias(self.players[target_ref], name)
 
-    def _atomic_var_set(self, player_id, card, params, log, choice, context):
-        # 兼容垫片（老测试与计时效果时长直呼私有名）：Round 29 起不是公开 op。
-        return self._atomic_player_var_change(player_id, card, {**(params or {}), 'mode': 'set'}, log, choice, context)
+    # Round 31 / 批次 Z：``var_set`` 兼容垫片已删除（``player_var_change(mode:"set")``
+    # 是唯一实现；Round 30 已把 ``countdown_var`` 的内部调用改到规范名）。
 
     def _atomic_list_set(self, player_id, card, params, log, choice, context):
         for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
