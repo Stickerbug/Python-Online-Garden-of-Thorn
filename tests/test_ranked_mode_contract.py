@@ -287,6 +287,34 @@ def test_lobby_ui_exposes_four_core_match_modes_and_keeps_special_modes_casual()
     assert "preferred_disabled_mods" in source
 
 
+def test_entertainment_mod_gate_follows_the_match_flow_not_a_stale_ranked_mode():
+    """反馈 #79：打完天梯回到主页/单人训练场后，设置里的娱乐模组必须能选。
+
+    天梯的娱乐模组门禁只在真正的多人流程（大厅匹配、开局、对局内）里跟随当前
+    对局模式；离开流程（主页、单人训练场、故事）后按 casual 语义处理，否则
+    残留的 ranked 模式会把娱乐模组页签与卡牌数据一起锁死。
+    """
+    source = (ROOT / 'static' / 'js' / 'game.js').read_text(encoding='utf-8')
+    assert 'function isPvpMatchFlowActive()' in source
+    assert 'function getSettingsModMatchMode()' in source
+    phase_gate = source.split('const PVP_MATCH_FLOW_PHASES = new Set([', 1)[1].split(']);', 1)[0]
+    for match_phase in ('lobby', 'draft', 'playing', 'game_over'):
+        assert f"'{match_phase}'" in phase_gate
+    # 单人训练场已经不是多人流程，不能被天梯门禁覆盖
+    assert "'solo_edit'" not in phase_gate
+    assert "return isPvpMatchFlowActive() ? getCurrentPvpMatchMode() : 'casual_1v1';" in source
+    assert 'return !isRankedMatchMode(getSettingsModMatchMode());' in source
+    # 设置面板与卡牌数据链路必须走新 helper，而不是会被天梯残留污染的旧入口
+    for call_site in (
+        "if (['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode())) {",
+        'const matchMode = getSettingsModMatchMode();',
+        "const casualUnlockMode = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode());",
+        'if (!isRankedMatchMode(getSettingsModMatchMode())) return disabled;',
+        "const show = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode()) && !!modUnlockState;",
+    ):
+        assert call_site in source
+
+
 def test_ranked_mode_tabs_are_rendered_before_casual_mode_tabs():
     template = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
     ordered_modes = (

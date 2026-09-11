@@ -2696,8 +2696,26 @@ function getCurrentPvpMatchMode() {
     return normalizeMatchModeKey(activePvpMatchMode || localStorage.getItem('preferred_mode') || 'casual_1v1');
 }
 
+// 天梯的娱乐模组门禁只在真正处于多人流程（大厅匹配、开局阶段、对局内）时生效。
+// 从大厅退回主页后玩家已经离开天梯，本地模组选择必须保持可编辑，否则打完一局
+// 天梯回到主页/单人训练场时娱乐模组会被锁死（反馈 #79）。
+const PVP_MATCH_FLOW_PHASES = new Set([
+    'lobby', 'draft', 'mod_draw', 'event_select', 'event_reveal',
+    'event_sub_choice', 'playing', 'action', 'draw', 'game_over', 'reconnecting',
+]);
+
+function isPvpMatchFlowActive() {
+    return PVP_MATCH_FLOW_PHASES.has(String(phase || ''));
+}
+
+// 设置面板与卡牌数据使用的模式：多人流程内以当前对局模式为准，流程外按娱乐
+// （casual）处理，这样主页/单人训练场的模组选择与数据都不会被残留的天梯模式影响。
+function getSettingsModMatchMode() {
+    return isPvpMatchFlowActive() ? getCurrentPvpMatchMode() : 'casual_1v1';
+}
+
 function entertainmentModsAvailableInSettings() {
-    return !isRankedMatchMode(getCurrentPvpMatchMode());
+    return !isRankedMatchMode(getSettingsModMatchMode());
 }
 
 function isTwoVsTwoMatchMode(mode) {
@@ -10766,7 +10784,7 @@ function getEffectiveDisabledModsForData() {
         return gameState.disabled_mods.map(item => String(item || '')).filter(Boolean);
     }
     const disabled = shouldUseAllOfficialModsForViewing() ? [] : getDisabledMods();
-    if (!isRankedMatchMode(getCurrentPvpMatchMode())) return disabled;
+    if (!isRankedMatchMode(getSettingsModMatchMode())) return disabled;
     const entertainment = (Array.isArray(settingsMods) ? settingsMods : [])
         .filter(mod => String(mod && mod.category || '').toLowerCase() === 'entertainment')
         .map(mod => String(mod && mod.filename || ''))
@@ -10793,7 +10811,7 @@ function getDataCacheKey(kind) {
     const disabled = getEffectiveDisabledModsForData().slice().sort().join(',') || 'none';
     const community = getEffectiveCommunityModSelectionForData();
     const communityKey = community.mod_source === 'community' ? community.community_mod_hash : 'official';
-    return `gtn_${kind}_cache_${DATA_CACHE_VERSION}_${getCurrentPvpMatchMode()}_${disabled}_${communityKey}`;
+    return `gtn_${kind}_cache_${DATA_CACHE_VERSION}_${getSettingsModMatchMode()}_${disabled}_${communityKey}`;
 }
 
 function markActiveDataCacheKey(kind) {
@@ -25685,7 +25703,7 @@ function modUnlockProgressText(state = modUnlockState) {
 function updateOfficialUnlockHint() {
     const hint = $('settings-official-unlock-hint');
     if (!hint) return;
-    const show = ['casual_1v1', 'casual_2v2'].includes(getCurrentPvpMatchMode()) && !!modUnlockState;
+    const show = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode()) && !!modUnlockState;
     hint.classList.toggle('hidden', !show);
     if (show) hint.textContent = modUnlockProgressText(modUnlockState);
 }
@@ -25700,7 +25718,7 @@ function renderModUnlockModal(forceShow = false) {
     const optionsEl = $('mod-unlock-options');
     const progressEl = $('mod-unlock-progress');
     if (!modal || !optionsEl) return;
-    const casualMode = ['casual_1v1', 'casual_2v2'].includes(getCurrentPvpMatchMode());
+    const casualMode = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode());
     const allowedPhase = forceShow || phase === 'lobby' || phase === 'game_over';
     const pending = !!modUnlockState?.has_pending_choice;
     if (!pending || !casualMode || !allowedPhase) {
@@ -36321,7 +36339,7 @@ async function applyPeerModSettings(peerMods = {}) {
 function syncCurrentSettingsModSelectionToLocal() {
     const checkboxes = getBundledModCheckboxes();
     if (!checkboxes.length) return getDisabledMods();
-    if (['casual_1v1', 'casual_2v2'].includes(getCurrentPvpMatchMode())) {
+    if (['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode())) {
         let disabled = getDisabledMods().slice();
         const disabledSet = new Set(disabled);
         checkboxes.forEach(cb => {
@@ -36363,7 +36381,7 @@ async function syncModSelectionBeforeInviteAccept() {
 function buildModQueryString() {
     const params = new URLSearchParams();
     params.set('disabled_mods', getEffectiveDisabledModsForData().join(','));
-    const matchMode = getCurrentPvpMatchMode();
+    const matchMode = getSettingsModMatchMode();
     params.set('match_mode', matchMode);
     params.set('mode', engineModeForMatchMode(matchMode));
     const community = getEffectiveCommunityModSelectionForData();
@@ -36599,7 +36617,7 @@ function renderBundledModList(category) {
     }
     if (noModsEl) noModsEl.style.display = 'none';
     const disabled = getDisabledMods();
-    const casualUnlockMode = ['casual_1v1', 'casual_2v2'].includes(getCurrentPvpMatchMode());
+    const casualUnlockMode = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode());
     const officialUnlocked = new Set(
         (modUnlockState?.unlocked_official || []).map(item => String(item || ''))
     );
