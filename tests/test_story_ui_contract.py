@@ -11,6 +11,7 @@ STORY_TEMPLATE = (ROOT / 'templates' / 'story.html').read_text(encoding='utf-8')
 INDEX_TEMPLATE = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
 RESOURCE_ORBS_JS = (ROOT / 'static' / 'js' / 'resource_orbs.js').read_text(encoding='utf-8')
 KEYBINDINGS_JS = (ROOT / 'static' / 'js' / 'keybindings.js').read_text(encoding='utf-8')
+EQUIPMENT_MOTION_JS = (ROOT / 'static' / 'js' / 'equipment_motion.js').read_text(encoding='utf-8')
 
 
 def test_story_damage_floats_describe_lost_health():
@@ -1456,3 +1457,24 @@ def test_story_explicit_page_confirmation_is_keyboard_reachable():
 def test_standard_journey_terminal_copy_describes_all_stages():
     assert "journeyCompleteCopy: '你已经穿过了旅程的全部阶段。'" in STORY_JS
     assert '你已经穿过了花园路线。' not in STORY_JS
+
+
+def test_story_equipment_orbit_keeps_angle_continuity_and_repays_dropped_frames():
+    """反馈 #117：公转环重建时续用上一次角度，掉帧欠账逐帧补回而不是丢弃。"""
+    # 故事侧仍然复用同一个公转元素（元素重建时才需要续角度）。
+    assert 'let orbiter = container.querySelector(\':scope > .story-equipment-orbiter\');' in STORY_JS
+    assert 'GTNEquipmentMotion.startOrbitMotion(orbiter, {' in STORY_JS
+
+    # 角度续用：优先读元素/暂停根节点上记录的角度，而不是墙上时钟相位。
+    assert 'function rememberedOrbitAngle(orbitElement, config)' in EQUIPMENT_MOTION_JS
+    assert 'source._gtnOrbitAngle' in EQUIPMENT_MOTION_JS
+    assert 'carriedAngle = rememberedOrbitAngle(orbitElement, config);' in EQUIPMENT_MOTION_JS
+    assert 'angle: orbitInitialAngle(periodSec, carriedAngle),' in EQUIPMENT_MOTION_JS
+
+    # 掉帧欠账：有上限的 pendingMs 累计 + 单帧推进上限，旧版"直接丢弃"的写法必须消失。
+    assert 'const ORBIT_MAX_STEP_MS = 120;' in EQUIPMENT_MOTION_JS
+    assert 'const ORBIT_MAX_PENDING_MS = 240;' in EQUIPMENT_MOTION_JS
+    assert 'pendingMs: 0,' in EQUIPMENT_MOTION_JS
+    assert 'context.pendingMs = Math.min(' in EQUIPMENT_MOTION_JS
+    assert 'context.pendingMs -= stepMs;' in EQUIPMENT_MOTION_JS
+    assert 'Math.min(120, now - context.lastTime)' not in EQUIPMENT_MOTION_JS

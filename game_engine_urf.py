@@ -416,6 +416,14 @@ class GameEngineInfiniteFire(GameEngine):
         self._apply_jungle_turn_start_statuses(player_id)
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
+        # 反馈 #107：1v1（game_engine.py:16525-16529）与 2v2（game_engine_2v2.py:1904-1908）
+        # 都会在本人回合开始时衰减“不可选中”层数，无限火力此前整段覆写时漏掉了这块，
+        # 导致黄瓜（ocean:cucumber）给出的一层不可选中永久存在。这里原样补齐，日志文案保持一致。
+        untargetable_layers = max(0, int(getattr(ps, 'untargetable', 0) or 0))
+        if untargetable_layers > 0:
+            ps.untargetable = max(0, untargetable_layers - 1)
+            if ps.untargetable <= 0:
+                self.log_msg(f"{self.pn(player_id)}的不可选中效果结束")
         # Cogwheel: return cards from last turn (if marked by v2 event)
         if ps.cogwheel_pending_return:
             returned = []

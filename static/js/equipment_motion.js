@@ -5,6 +5,10 @@
     const FNV_PRIME = 0x01000193;
     const UNIT_DIVISOR = 0x100000000;
     const orbitContexts = new Map();
+    // 反馈 #117：单帧最多推进的真实时长，以及挂起/掉帧欠账的上限。
+    // 欠账逐帧补回（而不是丢弃，也不是一次跳过去），恢复时不会出现“突然多转”。
+    const ORBIT_MAX_STEP_MS = 120;
+    const ORBIT_MAX_PENDING_MS = 240;
     let orbitFrame = 0;
 
     function mix32(value) {
@@ -182,7 +186,37 @@
         return (element.getAnimations() || []).find((animation) => animation.animationName === name) || null;
     }
 
-    function orbitInitialAngle(periodSec) {
+    function normalizeOrbitAngle(value) {
+        const angle = Number(value);
+        if (!Number.isFinite(angle)) return null;
+        return ((angle % 360) + 360) % 360;
+    }
+
+    /**
+     * 反馈 #117：公转环元素被重建时，优先续用上一次画出的角度，
+     * 而不是重新按墙上时钟取相位——相位跳变看起来就是“又多转了一段”。
+     */
+    function rememberedOrbitAngle(orbitElement, config) {
+        const sources = [orbitElement, config && config.pauseRoot];
+        for (const source of sources) {
+            if (!source) continue;
+            const angle = normalizeOrbitAngle(source._gtnOrbitAngle);
+            if (angle != null) return angle;
+        }
+        return null;
+    }
+
+    function rememberOrbitAngle(orbitElement, config, angle) {
+        const normalized = normalizeOrbitAngle(angle);
+        if (normalized == null) return;
+        if (orbitElement) orbitElement._gtnOrbitAngle = normalized;
+        const root = config && config.pauseRoot;
+        if (root) root._gtnOrbitAngle = normalized;
+    }
+
+    function orbitInitialAngle(periodSec, carriedAngle) {
+        const carried = normalizeOrbitAngle(carriedAngle);
+        if (carried != null) return carried;
         const elapsed = Date.now() / 1000;
         return ((elapsed % periodSec) + periodSec) % periodSec / periodSec * 360;
     }
@@ -192,16 +226,26 @@
         const now = timestamp != null ? timestamp : nowMilliseconds();
         orbitContexts.forEach((context, orbitElement) => {
             if (!orbitElement.isConnected) {
+                rememberOrbitAngle(orbitElement, context, context.angle);
                 detachOrbitPointerHandlers(context);
                 orbitContexts.delete(orbitElement);
                 return;
             }
             const paused = reducedMotion() || Boolean(context.pointerInside);
             if (!paused && context.lastTime != null) {
-                const elapsed = Math.max(0, Math.min(120, now - context.lastTime));
-                context.angle = (context.angle + elapsed / context.periodMs * 360) % 360;
+                // 掉帧、后台挂起期间的时间记入欠账，之后逐帧补回。
+                context.pendingMs = Math.min(
+                    ORBIT_MAX_PENDING_MS,
+                    context.pendingMs + Math.max(0, now - context.lastTime),
+                );
             }
             context.lastTime = now;
+            if (!paused && context.pendingMs > 0) {
+                const stepMs = Math.min(ORBIT_MAX_STEP_MS, context.pendingMs);
+                context.pendingMs -= stepMs;
+                context.angle = (context.angle + stepMs / context.periodMs * 360) % 360;
+            }
+            rememberOrbitAngle(orbitElement, context, context.angle);
             orbitElement.style.transform = `rotate(${context.angle.toFixed(4)}deg)`;
             orbitElement.querySelectorAll(context.chipSelector).forEach((chip) => {
                 const visual = chip.querySelector(context.visualSelector);
@@ -257,9 +301,12 @@
         let context = orbitContexts.get(orbitElement);
         if (!context) {
             const periodSec = Number(config.periodSec) > 0 ? Number(config.periodSec) : 20;
+            let carriedAngle = normalizeOrbitAngle(config.initialAngle);
+            if (carriedAngle == null) carriedAngle = rememberedOrbitAngle(orbitElement, config);
             context = {
-                angle: config.initialAngle != null ? Number(config.initialAngle) : orbitInitialAngle(periodSec),
+                angle: orbitInitialAngle(periodSec, carriedAngle),
                 periodMs: periodSec * 1000,
+                pendingMs: 0,
                 chipSelector: config.chipSelector || ':scope > .classic-equip-chip',
                 visualSelector: config.visualSelector || '.classic-equip-visual',
                 pauseRoot: config.pauseRoot || null,
@@ -289,6 +336,7 @@
         if (!orbitElement) return;
         const context = orbitContexts.get(orbitElement);
         if (context) {
+            rememberOrbitAngle(orbitElement, context, context.angle);
             detachOrbitPointerHandlers(context);
             orbitContexts.delete(orbitElement);
         }
