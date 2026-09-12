@@ -29872,10 +29872,10 @@ function createTeammateHandChip(cardDict, ownerState = null) {
     return el;
 }
 
-function calculateMinimalHandLayout(handCount, mode, availableWidth, mobileHandLayout, viewportHeight, mobileCanvas) {
+function calculateMinimalHandLayout(handCount, mode, availableWidth, mobileHandLayout, availableHeight, mobileCanvas) {
     const count = Math.max(0, Math.floor(Number(handCount) || 0));
     const width = Math.max(0, Number(availableWidth) || 0);
-    const height = Math.max(1, Number(viewportHeight) || 1);
+    const height = Math.max(1, Number(availableHeight) || 1);
     const isUrf = mode === 'urf';
     const gap = isUrf ? 3 : 4;
     let columns;
@@ -29909,6 +29909,29 @@ function calculateMinimalHandLayout(handCount, mode, availableWidth, mobileHandL
     };
 }
 
+function measureMinimalHandAvailableHeight(container, fallbackHeight) {
+    // 反馈 #118：手牌尺寸不能只按 window.innerHeight 估算；平板横屏时窗口很高，
+    // 但实际分给手牌的只有“容器高 − 对手段 − 玩家 HUD − 控制栏 − 战斗日志最小高”。
+    // 用实测值参与计算，避免 8 张牌时手牌压住日志、控制栏被顶出容器。
+    const gameContainer = document.querySelector('#view-game .game-container');
+    if (!gameContainer) return fallbackHeight;
+    const containerHeight = Number(gameContainer.clientHeight) || 0;
+    if (containerHeight <= 0) return fallbackHeight;
+    const oppSection = gameContainer.querySelector('.opp-section');
+    const playerSection = container.closest('.player-section');
+    const handRow = container.closest('.hand-play-row');
+    const controlsBar = playerSection ? playerSection.querySelector('.controls-bar') : null;
+    const oppHeight = oppSection ? oppSection.getBoundingClientRect().height : 0;
+    const playerHeight = playerSection ? playerSection.getBoundingClientRect().height : 0;
+    const handHeight = handRow ? handRow.getBoundingClientRect().height : 0;
+    const controlsHeight = controlsBar ? controlsBar.getBoundingClientRect().height : 0;
+    const playerHudHeight = Math.max(0, playerHeight - handHeight - controlsHeight);
+    const minimumLogHeight = 110;
+    const measured = containerHeight - oppHeight - playerHudHeight - controlsHeight - minimumLogHeight;
+    if (!Number.isFinite(measured) || measured <= 0) return fallbackHeight;
+    return Math.max(80, Math.min(fallbackHeight, measured));
+}
+
 function updateMinimalHandLayout(container = $('you-hand'), handCount = null, mode = null) {
     if (!container) return null;
     const count = handCount == null
@@ -29924,12 +29947,13 @@ function updateMinimalHandLayout(container = $('you-hand'), handCount = null, mo
         || 0,
     );
     const viewportHeight = mobileCanvas ? 900 : Math.max(1, Number(window.innerHeight) || 1);
+    const availableHeight = measureMinimalHandAvailableHeight(container, viewportHeight);
     const layout = calculateMinimalHandLayout(
         count,
         mode || (gameState && gameState.mode) || '',
         Math.max(0, availableWidth - 4),
         mobileHandLayout,
-        viewportHeight,
+        availableHeight,
         mobileCanvas,
     );
     container.style.setProperty('--hand-card-columns', String(layout.columns));

@@ -48,6 +48,14 @@ def test_feedback_102_card_data_follows_room_snapshot_and_unknown_ids_are_visibl
     assert 'cardDef.__unknown_card_def' in js
 
 
+def test_feedback_118_minimal_hand_uses_measured_available_height():
+    js = _game_js()
+    assert 'function measureMinimalHandAvailableHeight' in js
+    assert 'const minimumLogHeight = 110;' in js
+    assert 'measureMinimalHandAvailableHeight(container, viewportHeight)' in js
+    assert '        availableHeight,\n' in js
+
+
 def test_feedback_114_flavor_text_skips_bare_terms():
     js = _game_js()
     assert 'colorizeCardText(descriptionText, { terms: false })' in js
