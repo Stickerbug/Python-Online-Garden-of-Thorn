@@ -72,6 +72,17 @@ def test_gallery_official_entertainment_tabs_show_enable_states():
     assert '.gallery-mod-state' in css
 
 
+def test_solo_training_has_mod_settings_entry():
+    js = _game_js()
+    html = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
+    assert 'id="btn-solo-mods"' in html
+    assert 'soloMods' in html
+    assert "$('btn-solo-mods')" in js
+    assert 'openSettings({ hideServer: true });' in js
+    assert "getVisibleViewId() === 'view-solo'" in js
+    assert 'renderSoloBuilder();' in js
+
+
 def test_feedback_114_flavor_text_skips_bare_terms():
     js = _game_js()
     assert 'colorizeCardText(descriptionText, { terms: false })' in js

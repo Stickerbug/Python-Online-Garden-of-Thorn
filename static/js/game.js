@@ -913,7 +913,7 @@ const I18N = {
         settings_audio_enabled: 'Enable audio', settings_volume_master: 'Master volume', settings_volume_music: 'Music', settings_volume_menu_music: 'Home/Lobby music', settings_volume_battle_music: 'Battle music', settings_volume_ui: 'Buttons', settings_volume_sfx: 'Effects', settings_audio_test: 'Test sound', settings_audio_hint: 'Music starts after your first click or key press.',
         no_games: 'No ongoing games', back_to_home: 'Back to Home', settings_btn: 'Settings', settings_server: 'Server', settings_server_addr: 'Address', not_your_turn: 'Not your turn',
         counter_insufficient: 'Tip: counter cards are not affordable', default_status: 'Garden of Thorn', game_loading: 'Loading...', server_no_response: 'Server is not responding. Check the connection or refresh.',
-        spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', chat_origin_multiplayer: 'Multiplayer', chat_origin_story: 'Story', solo_training: 'Solo Training', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck', shuffle_deck: 'Shuffle',
+        spectator_prefix: 'Spectate', lobby_title: 'Lobby', online_count: 'Online: {0}', chat_title: 'Chat', chat_origin_multiplayer: 'Multiplayer', chat_origin_story: 'Story', solo_training: 'Solo Training', solo_mods: 'Mod Settings', load_last: 'Load Last', save_decks: 'Save Decks', start_training: 'Start Training', clear_deck: 'Clear Deck', shuffle_deck: 'Shuffle',
         solo_deck_a: 'Your Deck', solo_deck_b: 'Opponent Deck', search_cards: 'Search cards', pause_edit: 'Pause & Edit', set_next_draw: 'Set Next Draw', solo_saved: 'Training decks saved',
         solo_need_15: 'Both training decks must contain 0-50 cards', solo_event_a: 'Your opening event', solo_event_b: 'Opponent opening event', no_event: 'None', edit_tags: 'Edit Tags',
         login_need_nickname: 'Please enter a nickname', login_name_too_long: 'Nickname too long (max 8 CJK or 16 Latin chars)', login_name_not_numbers: 'Nickname cannot be only numbers',
@@ -1035,7 +1035,7 @@ I18N.zh = { ...I18N.en,
     counter_insufficient: '提示：当前没有可支付的反制牌', default_status: 'Garden of Thorn', game_loading: '加载中...', server_no_response: '服务器没有响应，请检查连接或刷新页面。',
     spectator_prefix: '观战', lobby_title: '大厅', online_count: '在线：{0}', chat_title: '聊天', chat_origin_multiplayer: '多人', chat_origin_story: '故事',
     lobby_phase_event_select: '配装选择', lobby_phase_draw: '抽牌',
-    solo_training: '单人训练场', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', clear_deck: '清空牌组', shuffle_deck: '打乱顺序', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
+    solo_training: '单人训练场', solo_mods: '模组设置', load_last: '载入上次', save_decks: '保存牌组', start_training: '开始训练', clear_deck: '清空牌组', shuffle_deck: '打乱顺序', solo_deck_a: '你的牌组', solo_deck_b: '对方牌组',
     search_cards: '搜索卡牌', pause_edit: '暂停并编辑', set_next_draw: '设置下次抽牌', solo_saved: '训练牌组已保存', solo_need_15: '双方训练场牌组都必须为 0-50 张',
     solo_event_a: '你的配装倾向', solo_event_b: '对方配装倾向', no_event: '无', edit_tags: '编辑标签',
     login_need_nickname: '请输入昵称', login_name_too_long: '昵称过长（最多 8 个中文或 16 个拉丁字符）', login_name_not_numbers: '昵称不能全为数字', login_name_not_symbols: '昵称不能全为符号', login_name_no_repeat_symbols: '- 和 _ 不能连续出现',
@@ -1151,7 +1151,7 @@ I18N.fr = { ...I18N.en,
     not_your_turn: "Ce n'est pas votre tour", counter_insufficient: 'Conseil : Ressources insuffisantes pour les cartes de contre', default_status: 'Garden of Thorn',
     game_loading: 'Chargement...', server_no_response: 'Le serveur ne répond pas. Vérifiez votre connexion.',
     spectator_prefix: 'Spectateur', lobby_title: 'Salon', online_count: 'En ligne: {0}', chat_title: 'Chat', chat_origin_multiplayer: 'Multijoueur', chat_origin_story: 'Histoire',
-    solo_training: 'Entraînement solo', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer', clear_deck: 'Vider deck', shuffle_deck: 'Mélanger',
+    solo_training: 'Entraînement solo', solo_mods: 'Réglages des mods', load_last: 'Charger', save_decks: 'Sauver decks', start_training: 'Commencer', clear_deck: 'Vider deck', shuffle_deck: 'Mélanger',
     solo_deck_a: 'Votre deck', solo_deck_b: 'Deck adverse', search_cards: 'Chercher cartes', pause_edit: 'Pause édition',
     set_next_draw: 'Fixer prochaine pioche', solo_saved: 'Decks sauvegardés', solo_need_15: 'Les deux decks d’entraînement doivent contenir 0 à 50 cartes',
     solo_event_a: 'Événement de départ', solo_event_b: 'Événement adverse', no_event: 'Aucun',
@@ -1225,7 +1225,7 @@ I18N.ja = { ...I18N.en,
     not_your_turn: 'あなたのターンではありません', counter_insufficient: 'ヒント：カウンターに必要なリソースが不足しています', default_status: 'Garden of Thorn',
     game_loading: '読み込み中...', server_no_response: 'サーバーが応答しません。接続を確認してください。',
     spectator_prefix: '観戦', lobby_title: 'ロビー', online_count: 'オンライン: {0}', chat_title: 'チャット', chat_origin_multiplayer: 'マルチ', chat_origin_story: 'ストーリー',
-    solo_training: 'ソロ練習場', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始', clear_deck: 'デッキを空にする', shuffle_deck: 'シャッフル',
+    solo_training: 'ソロ練習場', solo_mods: 'Mod設定', load_last: '前回を読み込む', save_decks: 'デッキ保存', start_training: '開始', clear_deck: 'デッキを空にする', shuffle_deck: 'シャッフル',
     solo_deck_a: '自分のデッキ', solo_deck_b: '相手デッキ', search_cards: 'カード検索', pause_edit: '中断して編集',
     set_next_draw: '次のドロー設定', solo_saved: '練習デッキを保存しました', solo_need_15: '練習デッキは両方とも0〜50枚にしてください',
     solo_event_a: '自分の開局イベント', solo_event_b: '相手の開局イベント', no_event: 'なし',
@@ -6833,6 +6833,8 @@ function updateStaticText() {
     if (btnSoloStart) btnSoloStart.textContent = UI.start_training;
     const btnSoloBack = $('btn-solo-back');
     if (btnSoloBack) btnSoloBack.textContent = UI.back_to_home;
+    const btnSoloMods = $('btn-solo-mods');
+    if (btnSoloMods) btnSoloMods.textContent = UI.solo_mods || UI.mods || '模组设置';
     const btnSoloClearA = $('btn-solo-clear-a');
     if (btnSoloClearA) btnSoloClearA.textContent = UI.clear_deck || '清空牌组';
     const btnSoloClearB = $('btn-solo-clear-b');
@@ -36716,6 +36718,15 @@ function closeSettings() {
     settingsLoadSeq += 1;
     const panel = $('settings-panel');
     if (panel) panel.classList.add('hidden');
+    if (getVisibleViewId() === 'view-solo') {
+        // 单人训练场：设置里改完模组后立即刷新可用卡池与牌组编辑器。
+        refreshCardsAfterModSettingsConfirmed()
+            .then(() => {
+                loadSoloDecks(false);
+                renderSoloBuilder();
+            })
+            .catch(() => {});
+    }
 }
 
 async function loadSettingsMods() {
@@ -38542,6 +38553,12 @@ async function init() {
     $('btn-solo-save').addEventListener('click', saveSoloDecks);
     $('btn-solo-start').addEventListener('click', startSoloTraining);
     $('btn-solo-back').addEventListener('click', () => showView('view-login'));
+    const btnSoloMods = $('btn-solo-mods');
+    if (btnSoloMods) btnSoloMods.addEventListener('click', () => {
+        // 单人训练场内直接打开模组设置；关闭设置后刷新训练场卡数据/牌池。
+        openSettings({ hideServer: true });
+        setSettingsTab('mods');
+    });
     if ($('gallery-search')) $('gallery-search').addEventListener('input', () => scheduleRenderCardGallery(120));
     if ($('gallery-tab-cards')) $('gallery-tab-cards').addEventListener('click', () => { setGalleryMode('cards'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
     if ($('gallery-tab-tags')) $('gallery-tab-tags').addEventListener('click', () => { setGalleryMode('tags'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
