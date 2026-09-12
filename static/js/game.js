@@ -7458,6 +7458,7 @@ let galleryReturnToRules = false;
 let galleryShowMultiPetalPreview = false;
 let gallerySelectedModKeys = null;
 let gallerySelectedTypeKeys = null;
+let galleryModTab = 'official';
 let galleryCardRenderToken = 0;
 let galleryTermNavigation = null;
 let galleryTermWheelLockedUntil = 0;
@@ -7473,7 +7474,7 @@ function openGalleryTermIntro(cardIds, index, sourceEl = null) {
     const defs = getGalleryCardDefs();
     const cards = (Array.isArray(cardIds) ? cardIds : [])
         .map(id => defs[id])
-        .filter(isPublicCardDef)
+        .filter(isGalleryVisibleCardDef)
         .map(makeGalleryCardPreviewDict);
     if (!cards.length) return;
     const normalizedIndex = Math.min(Math.max(0, Number(index) || 0), cards.length - 1);
@@ -8229,8 +8230,8 @@ async function showCardGallery(selectedId = null, mode = 'cards') {
     }
     if (getVisibleViewId() !== 'view-card-gallery') return;
     const defs = getGalleryCardDefs();
-    if (!gallerySelectedId || !isPublicCardDef(defs[gallerySelectedId])) {
-        gallerySelectedId = Object.keys(defs).filter(id => isPublicCardDef(defs[id])).sort(compareGalleryCards)[0] || null;
+    if (!gallerySelectedId || !isGalleryVisibleCardDef(defs[gallerySelectedId])) {
+        gallerySelectedId = Object.keys(defs).filter(id => isGalleryVisibleCardDef(defs[id])).sort(compareGalleryCards)[0] || null;
     }
     requestAnimationFrame(() => {
         if (getVisibleViewId() === 'view-card-gallery') renderCardGallery();
@@ -8406,7 +8407,7 @@ function getGalleryFlagEnglishLabel(flag) {
 
 function getGalleryFlagUsers(flag) {
     const normalized = normalizeCardFlag(flag);
-    const defs = Object.values(getGalleryCardDefs()).filter(isPublicCardDef);
+    const defs = Object.values(getGalleryCardDefs()).filter(isGalleryVisibleCardDef);
     if (normalized === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
     if (normalized === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
     return defs.filter(cd => {
@@ -8521,6 +8522,21 @@ function sortModsForDisplay(mods) {
 
 function isPublicCardDef(cd) {
     return !!(cd && cd.id !== 'Error' && cd.visible_in_current_loadout !== false);
+}
+
+function isGalleryVisibleCardDef(cd) {
+    // 图鉴展示全部已安装模组的卡，不再按当前 loadout/启用状态隐藏；
+    // 启用状态只作为左侧模组列表的徽标展示，勾选本身只做筛选。
+    return !!(cd && cd.id !== 'Error');
+}
+
+function getGalleryModCategoryForFilename(filename) {
+    const target = String(filename || '');
+    if (target === VANILLA_MOD_FILENAME) return 'official';
+    const mods = Array.isArray(settingsMods) ? settingsMods : [];
+    const mod = mods.find(item => String((item && (item.filename || item.id)) || '') === target);
+    if (mod) return bundledModCategory(mod);
+    return 'entertainment';
 }
 
 function isVisibleLoadoutCardDef(cd) {
@@ -8655,10 +8671,18 @@ function getGalleryCardModMemberships(cd) {
 
 function getGalleryModOptions() {
     const map = new Map();
-    Object.values(getGalleryCardDefs()).filter(isPublicCardDef).forEach(cd => {
+    Object.values(getGalleryCardDefs()).filter(isGalleryVisibleCardDef).forEach(cd => {
         getGalleryCardModMemberships(cd).forEach(membership => {
             const key = membership.key;
-            if (!map.has(key)) map.set(key, { ...membership, count: 0 });
+            if (!map.has(key)) {
+                map.set(key, {
+                    ...membership,
+                    count: 0,
+                    category: membership.isCommunity
+                        ? 'entertainment'
+                        : getGalleryModCategoryForFilename(membership.filename || key),
+                });
+            }
             map.get(key).count += 1;
         });
     });
@@ -8670,26 +8694,13 @@ function getGalleryTypeOptions() {
         key: type,
         label: getCardTypeLabel(type) || type,
         color: CARD_TYPE_COLORS[type] || COLORS.text_primary,
-        count: Object.values(getGalleryCardDefs()).filter(cd => isPublicCardDef(cd) && cd.card_type === type).length,
+        count: Object.values(getGalleryCardDefs()).filter(cd => isGalleryVisibleCardDef(cd) && cd.card_type === type).length,
     }));
 }
 
 function getDefaultGallerySelectedModKeys(modOptions = getGalleryModOptions()) {
-    const disabled = new Set(getDisabledMods().map(item => String(item || '')));
-    const selectedCommunity = new Set((getCommunityModSelection().community_mods || []).map(mod => String(mod.sha256 || '').toLowerCase()));
-    const selected = modOptions
-        .filter(item => {
-            if (!item) return false;
-            if (item.isCommunity) {
-                const key = String(item.key || '').toLowerCase();
-                const filename = String(item.filename || '').toLowerCase();
-                return selectedCommunity.has(key) || selectedCommunity.has(filename);
-            }
-            if (item.isVanilla) return !disabled.has(VANILLA_MOD_FILENAME);
-            return !disabled.has(item.filename || item.key);
-        })
-        .map(item => item.key);
-    return new Set(selected);
+    // 图鉴中间默认展示全部模组的卡；启用状态在左侧以徽标展示。勾选只做筛选。
+    return new Set((modOptions || []).map(item => item && item.key).filter(Boolean));
 }
 
 function ensureGalleryCardFilterState() {
@@ -8711,7 +8722,7 @@ function getAllGalleryFlags() {
         const normalized = normalizeCardFlag(flag);
         if (normalized && shouldDisplayCardFlag(normalized, { showSystemFlags: false })) flags.add(normalized);
     });
-    Object.values(getGalleryCardDefs()).filter(isPublicCardDef).forEach(cd => [...(cd.flags || []), ...(cd.tags || [])].forEach(flag => {
+    Object.values(getGalleryCardDefs()).filter(isGalleryVisibleCardDef).forEach(cd => [...(cd.flags || []), ...(cd.tags || [])].forEach(flag => {
         const normalized = normalizeCardFlag(flag);
         if (normalized && shouldDisplayCardFlag(normalized, { showSystemFlags: false })) flags.add(normalized);
     }));
@@ -8750,28 +8761,68 @@ function renderCardGallery() {
     detail.className = 'gallery-detail gallery-card-grid-detail';
     const modOptions = getGalleryModOptions();
     const typeOptions = getGalleryTypeOptions();
+    const officialMods = modOptions.filter(item => item.category !== 'entertainment');
+    const entertainmentMods = modOptions.filter(item => item.category === 'entertainment');
+    const tabMods = galleryModTab === 'entertainment' ? entertainmentMods : officialMods;
+    const disabledCasualMods = new Set(getDisabledMods('casual_1v1').map(item => String(item || '')));
+    const disabledRankedMods = new Set(getDisabledMods('ranked_1v1').map(item => String(item || '')));
+    const selectedCommunityMods = new Set((getCommunityModSelection().community_mods || []).map(mod => String(mod && mod.sha256 || '').toLowerCase()));
+    const modTabLabels = {
+        official: lt({ zh: '官方', en: 'Official', fr: 'Officiel', ja: '公式' }),
+        entertainment: lt({ zh: '娱乐', en: 'Entertainment', fr: 'Divertissement', ja: 'エンタメ' }),
+    };
+    const modStateLabel = value => value
+        ? lt({ zh: '启用', en: 'On', fr: 'Actif', ja: 'オン' })
+        : lt({ zh: '停用', en: 'Off', fr: 'Inactif', ja: 'オフ' });
+    const modStateBadge = (label, value) => `<span class="gallery-mod-state ${value ? 'on' : 'off'}">${escapeHtml(label)} ${escapeHtml(modStateLabel(value))}</span>`;
+    const modStateBadges = item => {
+        if (item.isCommunity) {
+            const key = String(item.key || '').toLowerCase();
+            const filename = String(item.filename || '').toLowerCase();
+            const casualOn = selectedCommunityMods.has(key) || selectedCommunityMods.has(filename);
+            return modStateBadge(modTabLabels.entertainment, casualOn)
+                + `<span class="gallery-mod-state off">${escapeHtml(lt({ zh: '天梯不可用', en: 'Ranked N/A', fr: 'Classé indisponible', ja: 'ランク不可' }))}</span>`;
+        }
+        const filename = item.filename || item.key;
+        return modStateBadge(modTabLabels.entertainment, !disabledCasualMods.has(filename))
+            + modStateBadge(lt({ zh: '天梯', en: 'Ranked', fr: 'Classé', ja: 'ランク' }), !disabledRankedMods.has(filename));
+    };
     list.innerHTML = `
-        <div class="gallery-filter-title">${escapeHtml(currentLang === 'zh' ? '模组筛选' : 'Mods')}</div>
+        <div class="gallery-mod-tabs">
+            <button class="gallery-mod-tab${galleryModTab === 'entertainment' ? '' : ' active'}" type="button" data-gallery-mod-tab="official">${escapeHtml(modTabLabels.official)}</button>
+            <button class="gallery-mod-tab${galleryModTab === 'entertainment' ? ' active' : ''}" type="button" data-gallery-mod-tab="entertainment">${escapeHtml(modTabLabels.entertainment)}</button>
+        </div>
+        <div class="gallery-filter-title">${escapeHtml(currentLang === 'zh' ? '模组筛选（仅筛选，不改启用）' : 'Mods (filter only)')}</div>
         <div class="gallery-filter-actions">
-            <button class="btn btn-secondary gallery-filter-btn" type="button" data-gallery-mod-action="all">${escapeHtml(currentLang === 'zh' ? '全选' : 'All')}</button>
-            <button class="btn btn-secondary gallery-filter-btn" type="button" data-gallery-mod-action="none">${escapeHtml(currentLang === 'zh' ? '全部取消' : 'None')}</button>
+            <button class="btn btn-secondary gallery-filter-btn" type="button" data-gallery-mod-action="all">${escapeHtml(currentLang === 'zh' ? '全选本页' : 'All (tab)')}</button>
+            <button class="btn btn-secondary gallery-filter-btn" type="button" data-gallery-mod-action="none">${escapeHtml(currentLang === 'zh' ? '取消本页' : 'None (tab)')}</button>
         </div>
         <div class="gallery-filter-options">
-            ${modOptions.map(item => `
+            ${tabMods.map(item => `
                 <label class="gallery-filter-option${gallerySelectedModKeys.has(item.key) ? ' active' : ''}">
                     <input type="checkbox" data-gallery-mod="${escapeHtml(item.key)}" ${gallerySelectedModKeys.has(item.key) ? 'checked' : ''}>
                     <span>${escapeHtml(item.label)}</span>
                     <small>${item.count}</small>
+                    <span class="gallery-mod-state-row">${modStateBadges(item)}</span>
                 </label>
             `).join('')}
         </div>
     `;
+    list.querySelectorAll('[data-gallery-mod-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const nextTab = btn.getAttribute('data-gallery-mod-tab') === 'entertainment' ? 'entertainment' : 'official';
+            if (nextTab === galleryModTab) return;
+            galleryModTab = nextTab;
+            scheduleRenderCardGallery(20);
+        });
+    });
     list.querySelector('[data-gallery-mod-action="all"]')?.addEventListener('click', () => {
-        gallerySelectedModKeys = new Set(modOptions.map(item => item.key));
+        gallerySelectedModKeys = new Set([...(gallerySelectedModKeys || []), ...tabMods.map(item => item.key)]);
         scheduleRenderCardGallery(20);
     });
     list.querySelector('[data-gallery-mod-action="none"]')?.addEventListener('click', () => {
-        gallerySelectedModKeys = new Set();
+        const tabKeys = new Set(tabMods.map(item => item.key));
+        gallerySelectedModKeys = new Set([...(gallerySelectedModKeys || [])].filter(key => !tabKeys.has(key)));
         scheduleRenderCardGallery(20);
     });
     list.querySelectorAll('[data-gallery-mod]').forEach(input => {
@@ -8789,7 +8840,7 @@ function renderCardGallery() {
     });
     const defs = getGalleryCardDefs();
     const ids = Object.keys(defs)
-        .filter(id => isPublicCardDef(defs[id]))
+        .filter(id => isGalleryVisibleCardDef(defs[id]))
         .filter(id => {
             const cd = defs[id];
             if (!cd) return false;
@@ -11033,6 +11084,20 @@ async function fetchGalleryOpeningEvents({ force = false, queryKey = currentGall
     return Array.isArray(data.events) ? data.events : [];
 }
 
+async function ensureGalleryModCategories() {
+    if (Array.isArray(settingsMods) && settingsMods.length) return settingsMods;
+    try {
+        const mods = await fetchPublicDataJson('/api/mods?summary=1');
+        if (Array.isArray(mods) && mods.length) {
+            settingsMods = mods;
+            settingsModsLoadedAt = Date.now();
+        }
+    } catch (err) {
+        console.warn('[gallery] failed to load mod categories:', err);
+    }
+    return settingsMods;
+}
+
 async function ensureGalleryDataLoaded({ force = false } = {}) {
     const now = Date.now();
     const queryKey = currentGalleryDataKey();
@@ -11051,6 +11116,7 @@ async function ensureGalleryDataLoaded({ force = false } = {}) {
     galleryDataLoadPromise = Promise.all([
         fetchGalleryCardDefs({ force, queryKey }),
         fetchGalleryOpeningEvents({ force, queryKey }),
+        ensureGalleryModCategories(),
     ]).then(([cards, events]) => {
         if (queryKey !== currentGalleryDataKey()) return { cards, events, stale: true };
         GALLERY_CARD_DEFS = cards;

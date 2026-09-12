@@ -4765,6 +4765,57 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.gallery-mod-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.gallery-mod-tab {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gallery-mod-tab.active {
+  border-color: var(--bloom);
+  color: var(--bloom);
+  font-weight: 800;
+}
+
+.gallery-filter-option .gallery-mod-state-row {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  overflow: visible;
+  white-space: normal;
+}
+
+.gallery-mod-state {
+  padding: 1px 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.gallery-mod-state.on {
+  border-color: color-mix(in srgb, var(--health) 45%, var(--border-color));
+  color: var(--health);
+}
+
+.gallery-mod-state.off {
+  opacity: .72;
+}
+
 .gallery-filter-option.active {
   border-color: var(--magic);
   background: var(--bg-card-hover);

@@ -56,6 +56,22 @@ def test_feedback_118_minimal_hand_uses_measured_available_height():
     assert '        availableHeight,\n' in js
 
 
+def test_gallery_official_entertainment_tabs_show_enable_states():
+    js = _game_js()
+    css = (ROOT / 'static' / 'css' / 'style.css').read_text(encoding='utf-8')
+    assert 'function isGalleryVisibleCardDef' in js
+    assert 'let galleryModTab' in js
+    assert 'data-gallery-mod-tab="official"' in js
+    assert 'data-gallery-mod-tab="entertainment"' in js
+    assert 'gallery-mod-state-row' in js
+    assert 'ensureGalleryModCategories' in js
+    assert "getDisabledMods('casual_1v1')" in js
+    assert "getDisabledMods('ranked_1v1')" in js
+    assert 'filter(id => isGalleryVisibleCardDef(defs[id]))' in js
+    assert '.gallery-mod-tabs' in css
+    assert '.gallery-mod-state' in css
+
+
 def test_feedback_114_flavor_text_skips_bare_terms():
     js = _game_js()
     assert 'colorizeCardText(descriptionText, { terms: false })' in js
