@@ -2009,6 +2009,7 @@ class GameEngine2v2(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
             return
+        self._hel_apply_blazing_fire_turn_start(player_id)
         if ps.poison > 0:
             if not self._is_status_immune(player_id):
                 self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
@@ -2153,6 +2154,7 @@ class GameEngine2v2(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
             return
+        self._hel_apply_blazing_fire_turn_start(player_id)
         if ps.poison > 0:
             if not self._is_status_immune(player_id):
                 self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
