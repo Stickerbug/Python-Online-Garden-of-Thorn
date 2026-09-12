@@ -179,6 +179,35 @@ ROUND37_ACTIONS = {
 }
 
 # 退役但**保留 `_atomic_*` 处理器**的名字：公开契约里已经进
+# ---------------------------------------------------------------------------
+# Round 38 / 批次 AD-3：回合控制族三合一（`turn_control` 伞，mode 选分支）。
+ROUND38_ACTIONS = {
+    "force_end_turn": ("合", 3, '{"op":"turn_control","mode":"end"}',
+                       "立刻结束本回合并进 turn_control(mode:\"end\")：标记仍挂在出牌者身上，"
+                       "真正结束回合仍在 _play_card 把本牌整套效果结算完之后（\"本牌结算完再结束\"不变）；"
+                       "旧实现忽略 target，新分支同样不解析"),
+    "skip_turn": ("合", 1, '{"op":"turn_control","mode":"skip","target":"enemy","amount":1}',
+                  "跳过目标 N 个回合并进 turn_control(mode:\"skip\")："
+                  "层数、状态免疫判定、成就峰值记账与默认战报逐字保留"),
+    "extra_turn": ("合", 0, '{"op":"turn_control","mode":"extra","target":"self"}',
+                   "额外回合并进 turn_control(mode:\"extra\")（卡数据 0 步，登记为可用分支）"),
+    # ---- 行为过滤族 → action_filter(mode=block_own|block_type|force_type|negate) ----
+    "block_own_actions": ("合", 0, '{"op":"action_filter","mode":"block_own"}',
+                          "禁用出牌（shovel_active）并进 action_filter(mode:\"block_own\")："
+                          "只作用于出牌者，旧实现忽略 target，新分支同样不解析"),
+    "block_action": ("合", 0, '{"op":"action_filter","mode":"block_own"}',
+                     "block_own_actions 的旧别名一起退役（卡数据 0 步）"),
+    "block_card_type": ("合", 0, '{"op":"action_filter","mode":"block_type","target":"enemy","card_type":"thorn","duration":1}',
+                        "禁止某牌型并进 action_filter(mode:\"block_type\")："
+                        "thorn→attack_blocked、bloom→skill_blocked（取较大值），其余牌型只播报"),
+    "force_card_type": ("合", 0, '{"op":"action_filter","mode":"force_type","target":"enemy","card_type":"thorn","duration":1}',
+                        "强制只能出某牌型并进 action_filter(mode:\"force_type\")：thorn→attack_only，其余牌型只播报"),
+    "nullify_current_card": ("合", 0, '{"op":"action_filter","mode":"negate","target":"enemy","card_type":"thorn"}',
+                             "使目标下一张某牌型失效并进 action_filter(mode:\"negate\")："
+                             "写的 negate_next 全仓库没有读者（合并前后都是只写标记 + 播报）"),
+}
+
+# 退役但**保留 `_atomic_*` 处理器**的名字：公开契约里已经进
 # ``mod_spec_v2.REMOVED_ATOMIC_OPS``（写出来是"已移除 + 替代写法"），但引擎内部
 # 或测试会直接调这些私有方法，所以实现留着手工删不得。它们同样必须"卡数据 0 引用"。
 HANDLER_KEPT_ACTIONS = {
@@ -389,6 +418,8 @@ KEPT_EXPLICIT = {
     "delayed_effect": "Round 37 延迟族唯一公开 op（mode=timed|blind|reveal_hand；共用计时表 duration/trigger/body）",
     "on_event": "Round 37 监听族唯一公开 op（trigger=play|this_play|after_all|equipment_trigger；承接 once_per_play / register_play_listener / after_all / magic_relic_trigger）",
     "emit_event": "Round 37 广播族唯一公开 op（event + 可选 log/silent；承接 broadcast_event 与占位步骤 trigger_manual）",
+    "turn_control": "Round 38 回合控制族唯一公开 op（mode=end|skip|extra；承接 force_end_turn / skip_turn / extra_turn）",
+    "action_filter": "Round 38 行为过滤族唯一公开 op（mode=block_own|block_type|force_type|negate；承接 block_own_actions / block_action / block_card_type / force_card_type / nullify_current_card）",
     "countdown_var": "倒计时变量（player_var_change 的定时封装）",
     "queue_auto_play": "排队自动打出（card/source/each_turn/cost/exile）",
     "auto_play_card": "立刻自动打出（含 no_cost/auto_choice）",
@@ -520,7 +551,7 @@ def build() -> dict:
     actions = []
     for name, (verdict, before, replacement, reason) in (
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
-         **ROUND36_ACTIONS, **ROUND37_ACTIONS}
+         **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

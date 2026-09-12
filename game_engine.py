@@ -1045,13 +1045,15 @@ class GameEngine:
         # ``clear_statuses`` / ``settle_status`` 都并进伞原子（见
         # mod_spec_v2.REMOVED_ATOMIC_OPS），因此这些"自己指自己"的别名一并删除：
         # 写出来会先被 ``_retired_atom_runtime_error`` 拦下，拿到替代写法。
-        'block_action': 'block_own_actions',
-        'block_card_type': 'block_card_type',
-        'force_card_type': 'force_card_type',
-        'nullify_current_card': 'nullify_current_card',
-        'skip_turn': 'skip_turn',
-        'extra_turn': 'extra_turn',
-        'force_end_turn': 'force_end_turn',
+        # Round 38 / 批次 AD-3：``block_own_actions``（别名 ``block_action``）/
+        # ``block_card_type`` / ``force_card_type`` / ``nullify_current_card``
+        # 四条行为过滤原子并进 ``action_filter(mode:"block_own"|"block_type"|
+        # "force_type"|"negate")``，这些别名条目一并删除——旧名写出来会先被
+        # ``_retired_atom_runtime_error`` 拦下，拿到替代写法。
+        # Round 38 / 批次 AD-3：``skip_turn`` / ``extra_turn`` / ``force_end_turn``
+        # 三条回合控制原子并进 ``turn_control(mode:"skip"|"extra"|"end")``，
+        # 这三条"自己指自己"的别名一并删除——旧名写出来会先被
+        # ``_retired_atom_runtime_error`` 拦下，拿到替代写法。
         'mark_self_damage_source': 'mark_self_damage_source',
         'fission': 'fission',
         'multiply_next_damage': 'multiply_next_damage',
@@ -9343,12 +9345,6 @@ class GameEngine:
         )
         self.log_msg(log or default_log)
 
-    def _atomic_block_own_actions(self, player_id, card, params, log, choice, context):
-        if self._status_application_blocked(player_id, 'shovel_active'):
-            return
-        self.players[player_id].shovel_active = True
-        self.log_msg(log or f"{self.pn(player_id)}无法使用卡牌")
-
     def _atomic_counter_equip_protect(self, player_id, card, params, log, choice, context):
         if self._status_application_blocked(player_id, 'equipment_protection'):
             return
@@ -9917,71 +9913,149 @@ class GameEngine:
         self.players[target_id].equipment_protection = 0
         self.log_msg(log or f"{self.pn(target_id)}的装备保护被移除")
 
+    ACTION_FILTER_MODES = ('block_own', 'block_type', 'force_type', 'negate')
 
-    def _atomic_block_card_type(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        card_type = params.get('card_type', 'thorn')
-        duration = params.get('duration', 1)
-        ts = self.players[target_id]
-        if self._status_application_blocked(target_id, 'attack_blocked' if card_type == 'thorn' else f'{card_type}_blocked'):
-            return
-        if card_type == 'thorn':
-            ts.attack_blocked = max(ts.attack_blocked, duration)
-        elif card_type == 'bloom':
-            ts.skill_blocked = getattr(ts, 'skill_blocked', 0)
-            ts.skill_blocked = max(ts.skill_blocked, duration)
-        self.log_msg(log or f"{self.pn(target_id)}无法使用{card_type}牌{duration}回合")
+    def _action_filter_mode(self, params) -> str:
+        """``action_filter`` 的 ``mode`` 判别值（别名归一，默认 ``block_own``）。"""
 
-    def _atomic_force_card_type(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
+        mode = str(params.get('mode') or '').strip().lower()
+        return {
+            '': 'block_own',
+            'block_action': 'block_own',
+            'block_own_actions': 'block_own',
+            'block_card_type': 'block_type',
+            'force_card_type': 'force_type',
+            'nullify': 'negate',
+            'nullify_current_card': 'negate',
+        }.get(mode, mode)
+
+    def _atomic_action_filter(self, player_id, card, params, log, choice, context):
+        """Round 38 / 批次 AD-3：行为过滤族四合一（``mode`` 选类别）。
+
+        ``block_own_actions`` / ``block_card_type`` / ``force_card_type`` /
+        ``nullify_current_card`` 四条同形原子合并成这一条；四个分支的实现体
+        逐字来自旧处理器：
+
+        * ``mode:"block_own"``（旧 ``block_own_actions``，别名 ``block_action``）
+          ——只作用于**出牌者**（旧实现不解析 ``target``，这里同样不解析），
+          给 ``shovel_active`` 打标记并播报"无法使用卡牌"。
+        * ``mode:"block_type"``（旧 ``block_card_type``）——``card_type:"thorn"``
+          写 ``attack_blocked``、``"bloom"`` 写 ``skill_blocked``，取两值较大者；
+          其它牌型只播报（旧实现同样只播报）。
+        * ``mode:"force_type"``（旧 ``force_card_type``）——``"thorn"`` 写
+          ``attack_only``；其它牌型只播报。
+        * ``mode:"negate"``（旧 ``nullify_current_card``）——把目标的
+          ``negate_next`` 写成 ``card_type`` 并播报。注意 ``negate_next``
+          目前全引擎没有读者（合并前后一样是"只写标记 + 播报"）。
+        """
+
+        if not isinstance(params, dict):
+            params = {}
+        mode = self._action_filter_mode(params)
+        if mode not in self.ACTION_FILTER_MODES:
+            self._log_mod_runtime_error(
+                'action_filter', RuntimeError(f'unsupported mode: {mode}'), player_id, card,
+            )
             return
-        card_type = params.get('card_type', 'thorn')
-        duration = params.get('duration', 1)
-        ts = self.players[target_id]
-        if card_type == 'thorn':
-            if self._status_application_blocked(target_id, 'attack_only'):
+        if mode == 'block_own':
+            if self._status_application_blocked(player_id, 'shovel_active'):
                 return
-            ts.attack_only = max(ts.attack_only, duration)
-        self.log_msg(log or f"{self.pn(target_id)}仅可使用{card_type}牌{duration}回合")
-
-    def _atomic_nullify_current_card(self, player_id, card, params, log, choice, context):
+            self.players[player_id].shovel_active = True
+            self.log_msg(log or f"{self.pn(player_id)}无法使用卡牌")
+            return
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         if not self._valid_player_id(target_id):
             return
         card_type = params.get('card_type', 'thorn')
         ts = self.players[target_id]
+        if mode == 'block_type':
+            duration = params.get('duration', 1)
+            if self._status_application_blocked(target_id, 'attack_blocked' if card_type == 'thorn' else f'{card_type}_blocked'):
+                return
+            if card_type == 'thorn':
+                ts.attack_blocked = max(ts.attack_blocked, duration)
+            elif card_type == 'bloom':
+                ts.skill_blocked = getattr(ts, 'skill_blocked', 0)
+                ts.skill_blocked = max(ts.skill_blocked, duration)
+            self.log_msg(log or f"{self.pn(target_id)}无法使用{card_type}牌{duration}回合")
+            return
+        if mode == 'force_type':
+            duration = params.get('duration', 1)
+            if card_type == 'thorn':
+                if self._status_application_blocked(target_id, 'attack_only'):
+                    return
+                ts.attack_only = max(ts.attack_only, duration)
+            self.log_msg(log or f"{self.pn(target_id)}仅可使用{card_type}牌{duration}回合")
+            return
         if self._status_application_blocked(target_id, f'negate_{card_type}'):
             return
         ts.negate_next = getattr(ts, 'negate_next', None)
         ts.negate_next = card_type
         self.log_msg(log or f"{self.pn(target_id)}的{card_type}牌将失效")
 
-    def _atomic_skip_turn(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        amount = int(params.get('amount', 1))
-        if self._status_application_blocked(target_id, 'skip_turn'):
-            return
-        self.players[target_id].skip_turn += amount
-        self._note_achievement_status_peak(target_id)
-        self.log_msg(log or f"{self.pn(target_id)}+{amount}层眩晕")
+    TURN_CONTROL_MODES = ('end', 'skip', 'extra')
 
-    def _atomic_extra_turn(self, player_id, card, params, log, choice, context):
+    def _turn_control_mode(self, params) -> str:
+        """``turn_control`` 的 ``mode`` 判别值（别名归一，默认 ``end``）。"""
+
+        mode = str(params.get('mode') or '').strip().lower()
+        return {
+            '': 'end',
+            'force_end': 'end',
+            'force_end_turn': 'end',
+            'end_turn': 'end',
+            'skip_turn': 'skip',
+            'stun': 'skip',
+            'extra_turn': 'extra',
+            'additional_turn': 'extra',
+        }.get(mode, mode)
+
+    def _atomic_turn_control(self, player_id, card, params, log, choice, context):
+        """Round 38 / 批次 AD-3：回合控制族三合一（``mode`` 选类别）。
+
+        ``force_end_turn`` / ``skip_turn`` / ``extra_turn`` 三条同形原子合并成
+        这一条；三个分支的实现体逐字来自旧处理器，时点语义不变：
+
+        * ``mode:"end"``（旧 ``force_end_turn``）——只给**出牌者**挂
+          ``force_end_turn`` 标记；真正结束回合的判定在 ``_play_card`` 把本牌
+          整套效果结算完之后（见那里的注释），所以"本牌结算完再结束"不变。
+          旧实现不解析 ``target``，这里同样不解析（官方包写 ``target:"self"``
+          的老数据因此行为一致）。
+        * ``mode:"skip"``（旧 ``skip_turn``）——目标 +N 层眩晕，状态免疫判定
+          与成就峰值记录逐字保留。
+        * ``mode:"extra"``（旧 ``extra_turn``）——目标获得一个额外回合。
+        """
+
+        if not isinstance(params, dict):
+            params = {}
+        mode = self._turn_control_mode(params)
+        if mode not in self.TURN_CONTROL_MODES:
+            self._log_mod_runtime_error(
+                'turn_control', RuntimeError(f'unsupported mode: {mode}'), player_id, card,
+            )
+            return
+        if mode == 'end':
+            self.players[player_id].force_end_turn = True
+            if log is False:
+                return
+            self.log_msg(log or f"{self.pn(player_id)}强制结束当前回合")
+            return
+        if mode == 'skip':
+            target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
+            if not self._valid_player_id(target_id):
+                return
+            amount = int(params.get('amount', 1))
+            if self._status_application_blocked(target_id, 'skip_turn'):
+                return
+            self.players[target_id].skip_turn += amount
+            self._note_achievement_status_peak(target_id)
+            self.log_msg(log or f"{self.pn(target_id)}+{amount}层眩晕")
+            return
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not self._valid_player_id(target_id):
             return
         self.players[target_id].extra_turn = True
         self.log_msg(log or f"{self.pn(target_id)}获得一个额外回合")
-
-    def _atomic_force_end_turn(self, player_id, card, params, log, choice, context):
-        self.players[player_id].force_end_turn = True
-        if log is False:
-            return
-        self.log_msg(log or f"{self.pn(player_id)}强制结束当前回合")
 
     def _atomic_resource_op(self, player_id, card, params, log, choice, context):
         """Round 32 / 批次 AA：资源族五合一。
@@ -18300,8 +18374,14 @@ class GameEngine:
         chromosome / arctic nuke atoms used: the body may drop a player to 0 HP
         mid-loop, but the death (and Yggdrasil revival) is only resolved after the
         whole body finished.
+
+        Round 38 / 批次 AD-3（参数命名对齐）：body 键改走监听/循环族共用的
+        ``listener_body_from_params``（``body`` → ``steps`` → ``effects``），与
+        ``delayed_effect`` / ``on_event`` / ``for_each`` 同一口径；此前是本方法
+        自己写的 ``body`` → ``effects`` → ``steps``。官方包只用 ``body``（2 步），
+        两个键同时出现的步骤 0 处，所以顺序差异不影响任何既有数据。
         """
-        body = params.get('body', params.get('effects', params.get('steps')))
+        body = listener_body_from_params(params)
         if not isinstance(body, list):
             body = []
         alive_before = getattr(self, '_deferred_card_alive_before', None)

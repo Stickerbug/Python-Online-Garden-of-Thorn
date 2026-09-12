@@ -23,7 +23,9 @@ _HANDLER_RE = re.compile(r"^[ \t]*def _atomic_([A-Za-z0-9_]+)\(", re.MULTILINE)
 # Extra public names that are executed by dedicated engine code paths instead of
 # an ``_atomic_`` handler (kept explicit so validation stays predictable).
 EXTRA_PUBLIC_OPS = (
-    "force_end_turn",
+    # Round 38 / 批次 AD-3：``force_end_turn`` 并进 ``turn_control(mode:"end")``，
+    # 由 ``GameEngine._atomic_turn_control`` 承接（真 ``_atomic_*`` 实现），
+    # 不再需要在这里额外登记。
     # Round 20: ``desert_wind_schedule`` / ``garden_mecha_antennae`` were
     # declared here without any implementation anywhere in the engine or the v2
     # runtime, so writing them as a step always failed with "unsupported v2 op".

@@ -28,7 +28,7 @@ def _relativity_steps(params: dict) -> list:
 def _magic_relativity_steps(params: dict) -> list:
     """``void_magic_relativity_damage_end``: the same damage, then end the turn."""
 
-    return _relativity_steps(params) + [{"op": "force_end_turn"}]
+    return _relativity_steps(params) + [{"op": "turn_control", "mode": "end"}]
 
 
 def _magic_stardust_steps(params: dict) -> list:

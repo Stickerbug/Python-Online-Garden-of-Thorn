@@ -73,10 +73,18 @@ ADVANCED_ATOMIC_OPS = {
     "destroy_equipment",
     "equip_protection", "remove_equip_protection",
     "place_as_equip", "add_equipment_to_zone",
-    "block_action", "block_card_type", "force_card_type", "nullify_current_card",
-    "skip_turn", "extra_turn",
+    # Round 38 / 批次 AD-3：``block_own_actions``（别名 ``block_action``）/
+    # ``block_card_type`` / ``force_card_type`` / ``nullify_current_card``
+    # 四条行为过滤原子并进 ``action_filter``（``mode`` 选 block_own /
+    # block_type / force_type / negate）；旧名进 REMOVED_ATOMIC_OPS。
+    "action_filter",
+    # Round 38 / 批次 AD-3：``skip_turn`` / ``extra_turn`` / ``force_end_turn``
+    # 三条回合控制原子并进 ``turn_control(mode:"skip"|"extra"|"end")``；伞原子
+    # 有自己的 ``_atomic_*`` 实现，这里登记只是保持"伞原子在契约白名单里"的
+    # 既有口径。旧名进 REMOVED_ATOMIC_OPS，写出来是显式报错。
+    "turn_control",
     "player_status_layers",
-    "force_end_turn", "mark_self_damage_source", "fission", "fusion",
+    "mark_self_damage_source", "fission", "fusion",
     "multiply_next_damage",
     "add_tag", "add_tag_to_zone",
     "transform_card", "card_counter", "create_counter",

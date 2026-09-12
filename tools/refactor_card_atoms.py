@@ -1103,7 +1103,7 @@ VOID_ACTION_REWRITES = {
     "dvd_attack": lambda params: _bomb_attack_steps(params, [("fire", 1)]),
     "pipe_bomb_attack": lambda params: [
         {"op": "deal_damage", "target": "target", "amount": params.get("damage", 16)},
-    ] + ([{"op": "force_end_turn", "target": "self", "log": False}] if params.get("end_turn") else []),
+    ] + ([{"op": "turn_control", "mode": "end", "target": "self", "log": False}] if params.get("end_turn") else []),
     "dvd_return": lambda params: [
         {"op": "move_to_hand", "card": "current_card", "target": "self", "silent": True},
         {"op": "log", "msg": "{target}的{name}回到手中"},

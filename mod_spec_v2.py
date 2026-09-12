@@ -230,17 +230,19 @@ _CORE_LOGIC_OPS = {
     "equip_protection",
     # Round 37 / 批次 AD-2：占位步骤 ``trigger_manual`` 并进
     # ``emit_event(event:"manual_trigger", silent:true)``。
-    "block_action",
-    "block_card_type",
-    "force_card_type",
-    "nullify_current_card",
+    # Round 38 / 批次 AD-3：``block_own_actions``（别名 ``block_action``）/
+    # ``block_card_type`` / ``force_card_type`` / ``nullify_current_card``
+    # 四条行为过滤原子并成 ``action_filter``（``mode`` 选 block_own /
+    # block_type / force_type / negate），旧名进 REMOVED_ATOMIC_OPS。
+    "action_filter",
     # Round 31 / 批次 Z：``set_invincible`` / ``set_untargetable`` /
     # ``untargetable_layers`` 三条玩家状态层数原子并成 ``player_status_layers``
     # （``status`` 选 untargetable/invincible），旧名进 REMOVED_ATOMIC_OPS。
     "player_status_layers",
-    "skip_turn",
-    "extra_turn",
-    "force_end_turn",
+    # Round 38 / 批次 AD-3：``skip_turn`` / ``extra_turn`` / ``force_end_turn``
+    # 三条回合控制原子并成 ``turn_control``（``mode`` 选 end/skip/extra），
+    # 旧名进 REMOVED_ATOMIC_OPS（带替代 JSON）。
+    "turn_control",
     "fission",
     "fusion",
     "multiply_next_damage",
@@ -367,8 +369,10 @@ _CORE_LOGIC_OPS = {
     #     ``apply_toxic`` / ``gain_armor`` / ``gain_dodge``）一起并进
     #     ``status_add_named`` / ``player_stat_change``，都进了
     #     REMOVED_ATOMIC_OPS，这里也不再补登记。
-    #   * block_own_actions / counter_equip_protect / set_untargetable：
-    #     同上，分别承接 ``block_action`` / ``equip_protection`` / ``untargetable``。
+    #   * counter_equip_protect / set_untargetable：
+    #     同上，分别承接 ``equip_protection`` / ``untargetable``。
+    #     （``block_own_actions`` 在 Round 38 / 批次 AD-3 并进 ``action_filter``，
+    #     见上；``block_action`` 不再出现在 EVENT_HOOK_OPS 与 ``_EFFECT_ALIASES``。）
     #   * for_each_target：``for_each_selectable_target`` 与
     #     ``ocean_for_each_selectable_target`` 的规范名（Round 16 统一驱动，
     #     Round 22 起两个旧名一并进 RENAMED_ATOMIC_OPS）。
@@ -380,7 +384,6 @@ _CORE_LOGIC_OPS = {
     #   * for_each_equipment：遍历装备的唯一入口（Round 17 未合并进 for_each）。
     #     Round 35 起并进 ``equipment_op(mode:"each")``，名字进
     #     REMOVED_ATOMIC_OPS。
-    "block_own_actions",
     "counter_equip_protect",
     # Round 29 / 批次 X：``record_play_count`` / ``record_equip_turns`` /
     # ``reset_counter`` 已合并成 ``card_counter``（见上面的模块族）。
@@ -450,7 +453,7 @@ EVENT_HOOK_OPS = frozenset({
     "on_enemy_turn_start", "on_equipment_destroy", "on_equipment_trigger",
     "on_hand_owner_turn_start", "on_hand_owner_turn_end",
     "on_owner_turn_start", "on_owner_turn_end", "on_target_turn_start",
-    "damage", "block_action", "equip_protection",
+    "damage", "equip_protection",
 })
 
 # 分类的展示顺序（统计、参数表、报告都用这一份，别在别处再写一遍）。
@@ -854,8 +857,10 @@ REMOVED_ATOMIC_OPS = {
     #     本身也并进 ``draw`` 了）
     "equip_reduce_own_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"self"}]}',
     "equip_reduce_enemy_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"enemy"}]}',
-    "block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
-    "counter_block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
+    #   （Round 38 / 批次 AD-3：替代写法里的 ``block_card_type`` 本身也并进
+    #   ``action_filter(mode:"block_type")``，这里同步成伞写法。）
+    "block_enemy_attacks": '{"op":"action_filter","mode":"block_type","card_type":"thorn","target":"enemy"}',
+    "counter_block_enemy_attacks": '{"op":"action_filter","mode":"block_type","card_type":"thorn","target":"enemy"}',
     "counter_dodge": '{"op":"player_stat_change","mode":"add","stat":"dodge","target":"self","amount":1}',
     "counter_nazar": '{"op":"status_op","action":"add","status":"nazar","target":"self","amount":2}',
     "counter_negate_skill": '{"op":"player_prop_change","mode":"set","property":"negate_next_skill","target":"self","value":1}',
@@ -866,7 +871,7 @@ REMOVED_ATOMIC_OPS = {
     "equip_reduce_own_e": '{"op":"player_prop_change","mode":"add","property":"overload","target":"self","amount":1}',
     "equip_set_health": '{"op":"health_op","mode":"set","target":"self","amount":60}',
     "equip_sponge": '{"op":"player_prop_change","mode":"set","property":"sponge_active","target":"target","value":1}',
-    "force_enemy_attacks_only": '{"op":"force_card_type","card_type":"thorn","target":"enemy"}',
+    "force_enemy_attacks_only": '{"op":"action_filter","mode":"force_type","card_type":"thorn","target":"enemy"}',
     "random_move_card_to_hand": '{"op":"move_card","mode":"random","source_zone":"discard","target_zone":"hand","count":1,"target":"self"}',
     "move_random_card_to_hand": '{"op":"move_card","mode":"random","source_zone":"discard","target_zone":"hand","count":1,"target":"self"}',
     "desert_wind_schedule": None,
@@ -1222,6 +1227,26 @@ REMOVED_ATOMIC_OPS = {
     "magic_relic_trigger": '{"op":"on_event","trigger":"equipment_trigger","effect":"magic_relic"}（消耗队友 2M、自己 +3M；1v1 无队友时按旧行为直接返回）',
     "broadcast_event": '{"op":"emit_event","event":"<事件名>"}（event 名也可写成 event_name；默认播报"广播事件：<事件名>"）',
     "trigger_manual": '{"op":"emit_event","event":"manual_trigger","silent":true}（占位步骤原本没有实现体，silent 与之一致）',
+
+    # Round 38 / 批次 AD-3（回合控制族三合一）：``mode`` 选分支
+    # （end / skip / extra），三个分支的实现体逐字沿用旧原子。
+    # ``mode:"end"`` 只给**出牌者**挂标记（旧实现同样忽略 target），真正结束
+    # 回合的判定仍在 ``_play_card`` 把本牌整套效果结算完之后——"本牌结算完再
+    # 结束"的时点不变；``mode:"skip"`` 沿用 ``skip_turn`` 的层数与状态免疫
+    # 判定；``mode:"extra"`` 给目标挂额外回合（卡数据至今 0 步，登记为可用名）。
+    "force_end_turn": '{"op":"turn_control","mode":"end"}（本牌结算完之后结束出牌者的回合；旧写法里的 log:false 原样保留，target 一向被忽略）',
+    "skip_turn": '{"op":"turn_control","mode":"skip","target":"enemy","amount":1}（目标 +N 层眩晕；target 默认 enemy，走状态免疫判定）',
+    "extra_turn": '{"op":"turn_control","mode":"extra","target":"self"}（目标获得一个额外回合；target 默认 self）',
+
+    # Round 38 / 批次 AD-3（行为过滤族四合一）：``mode`` 选分支
+    # （block_own / block_type / force_type / negate），四个分支的实现体逐字
+    # 沿用旧原子。``block_own`` 只作用于出牌者（旧实现忽略 target）；
+    # ``negate`` 写的 ``negate_next`` 全仓库没有读者，合并前后行为一致。
+    "block_own_actions": '{"op":"action_filter","mode":"block_own"}（出牌者本回合无法使用卡牌；旧别名 block_action 同此写法）',
+    "block_action": '{"op":"action_filter","mode":"block_own"}（block_own_actions 的别名，一起退役）',
+    "block_card_type": '{"op":"action_filter","mode":"block_type","target":"enemy","card_type":"thorn","duration":1}（thorn 写 attack_blocked、bloom 写 skill_blocked；其它牌型只播报）',
+    "force_card_type": '{"op":"action_filter","mode":"force_type","target":"enemy","card_type":"thorn","duration":1}（thorn 写 attack_only；其它牌型只播报）',
+    "nullify_current_card": '{"op":"action_filter","mode":"negate","target":"enemy","card_type":"thorn"}（把目标的 negate_next 写成该牌型并播报）',
 }
 
 # Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），

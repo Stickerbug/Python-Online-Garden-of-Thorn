@@ -35,7 +35,7 @@ EVENT_PATCHES = {
     "Shovel": {
         "events": {"on_play": {"steps": [
             {"op": "player_prop_set", "target": "self", "property": "untargetable", "value": 1},
-            {"op": "force_end_turn"},
+            {"op": "turn_control", "mode": "end"},
         ]}}
     },
     "Missile": {
