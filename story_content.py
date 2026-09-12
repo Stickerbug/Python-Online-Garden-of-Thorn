@@ -351,10 +351,10 @@ STORY_TAGS = {
     'rebound': {
         'name': {'zh': '回转', 'en': 'Rebound', 'fr': 'Retour', 'ja': '回転'},
         'description': {
-            'zh': '打出并结算后立即回到手牌。',
-            'en': 'Returns to hand immediately after being played and resolved.',
-            'fr': 'Revient en main immédiatement après avoir été jouée et résolue.',
-            'ja': '使用・解決後、すぐに手札へ戻ります。',
+            'zh': '打出并结算后立即回到手牌。若同时带有放逐，则放逐优先。',
+            'en': 'Returns to hand immediately after being played and resolved. If it also has Exile, Exile takes priority.',
+            'fr': 'Revient en main immédiatement après avoir été jouée et résolue. Si elle a aussi Exil, l’Exil est prioritaire.',
+            'ja': '使用・解決後、すぐに手札へ戻ります。放逐も持つ場合、放逐が優先されます。',
         },
     },
     'favorite': {

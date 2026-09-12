@@ -17494,6 +17494,11 @@ class GameEngine:
                 ))
             else:
                 self.log_msg(f"{self.pn(player_id)}的{card.name_cn}立即回到手中")
+        elif 'exile' in card.flags:
+            # 反馈 #100：放逐优先于回转；两者同时存在时进入放逐区。
+            owner_id, zone_name, _ = self._find_card_location(card)
+            if owner_id is None or zone_name is None:
+                self._put_card_in_exile(ps.player_id, card)
         elif 'rebound' in card.flags:
             ps.add_to_hand(card)
             self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因回转回到手中")
@@ -17503,10 +17508,6 @@ class GameEngine:
                 insert_at = random.randint(0, len(ps.deck)) if ps.deck else 0
                 ps.deck.insert(insert_at, card)
                 self.log_msg(f"{self.pn(player_id)}的{card.name_cn}因漂浮洗入抽牌堆")
-        elif 'exile' in card.flags:
-            owner_id, zone_name, _ = self._find_card_location(card)
-            if owner_id is None or zone_name is None:
-                self._put_card_in_exile(ps.player_id, card)
         else:
             owner_id, zone_name, _ = self._find_card_location(card)
             if owner_id is None or zone_name is None:
@@ -20642,7 +20643,11 @@ class GameEngine:
                 continue
             if int(getattr(card_def, 'count', 0) or 0) <= 0:
                 continue
-            if 'sublime' in normalize_card_flags(getattr(card_def, 'flags', set()) or set()):
+            card_flags = normalize_card_flags(getattr(card_def, 'flags', set()) or set())
+            if 'sublime' in card_flags:
+                continue
+            # 反馈 #101：队伍限定牌只允许在带队伍的模式（2v2）进入疤痕随机池。
+            if 'team_limited' in card_flags and not hasattr(self, 'team_of'):
                 continue
             weighted.extend([def_id] * max(1, int(getattr(card_def, 'count', 0) or 0)))
         return random.choice(weighted) if weighted else None
