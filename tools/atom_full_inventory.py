@@ -35,7 +35,108 @@ DEFAULT_OUT = ROOT / "docs" / "原子全量清单.md"
 MODS_DIR = ROOT / "mods"
 
 # ---------------------------------------------------------------------------
-# 本批（Round 32 / 批次 AA）真删与真合并的名字。
+# 本批（Round 33 / 批次 AB+AC+AD）真删与真合并的名字。
+ROUND33_ACTIONS = {
+    # ---- 批次 AB：区域/移动 -------------------------------------------------
+    # Round 35：``give_card_to_hand`` 的处理器保留给 tests 直呼，移到下面的
+    # HANDLER_KEPT_ACTIONS（数据已 0 引用）。
+    "give_card_to_deck": ("合", 3, '{"op":"move_card","mode":"give","target_zone":"deck","card":"<牌id>","position":"top"}',
+                          "造牌入牌堆与入手共用同一个循环，position/flags 语义不变"),
+    "give_magic_orb_to_hand": ("合", 2, '{"op":"move_card","mode":"orb","target_zone":"hand","target":"self"}',
+                               "魔法宝珠走 orb 段（固定 symbiosis/exile/void 三个印痕）"),
+    "random_zone_card_to_hand": ("合", 2, '{"op":"move_card","mode":"random","source_zone":"discard","target_zone":"hand","count":1}',
+                                 "随机取牌并进 move_card：候选过滤/手牌满即停/tag 打标/逐张回调都保留"),
+    "move_cards_to_deck": ("合", 2, '{"op":"move_card","mode":"batch","target_zone":"deck","cards":"selected_cards","position":"top"}',
+                           "批量入堆并进 move_card(mode:\"batch\")：top/bottom/random/random_top 四档顺序不变"),
+    "exile_this": ("删", 0, '{"op":"move_card","zone":"exile","card":{"ref":"current_card"}}',
+                   "与 move_card(zone:\"exile\") 完全同义（实现是它的子集），直接删除不留 mode"),
+    "steal_enemy_card": ("合", 0, '{"op":"move_card","mode":"steal","target":"enemy"}',
+                         "夺取手牌并进 move_card(mode:\"steal\")：选择窗口与\"夺取失败\"战报不变"),
+    "swap_hands": ("合", 0, '{"op":"move_card","mode":"swap_hands","target1":"self","target2":"enemy"}',
+                   "交换手牌并进 move_card(mode:\"swap_hands\")"),
+    # ---- 批次 AB：复制 ------------------------------------------------------
+    # Round 35：``copy_card_instance``（copy_card 伞转交 + 测试 spy）与
+    # ``create_copies_to_deck_top``（tests 直呼）的处理器保留，见
+    # HANDLER_KEPT_ACTIONS。
+    # ---- 批次 AB：揭示 ------------------------------------------------------
+    "reveal_card_set": ("合", 1, '{"op":"reveal","mode":"card_set","source":"initial_deck","target":"target","viewer":"self"}',
+                        "私下展示某区/初始牌组并进 reveal(mode:\"card_set\")"),
+    "reveal_enemy_hand": ("合", 1, '{"op":"reveal","mode":"enemy_hand","target":"enemy"}',
+                          "查看手牌并进 reveal(mode:\"enemy_hand\")（antennae 通道不变）"),
+    "reveal_hand_cards": ("合", 1, '{"op":"reveal","mode":"hand","target":"target","viewer":"self","mark":true}',
+                          "展示手牌 + revealed 标记并进 reveal(mode:\"hand\")（to 改名 viewer）"),
+    "reveal_hand": ("合", 0, '{"op":"reveal","mode":"enemy_hand","target":"enemy"}',
+                    "旧别名表里的 reveal_hand 一并删除（替代写法同上）"),
+    # ---- 批次 AB：洗牌 ------------------------------------------------------
+    "shuffle_discard_into_deck": ("合", 1, '{"op":"shuffle","zone":"discard"}',
+                                  "弃牌堆洗入牌堆并进 shuffle(zone:\"discard\")"),
+    "shuffle_hand": ("合", 2, '{"op":"shuffle","zone":"hand","target":"self"}',
+                     "打乱手牌并进 shuffle(zone:\"hand\")（失明免疫判定保留）"),
+    # ---- 批次 AB：快照/还原 -------------------------------------------------
+    "snapshot_card_props": ("合", 1, '{"op":"snapshot","mode":"card_props","owner":"self","zone":"hand","store":"card_prop_snapshot","property":"cost_e_override"}',
+                            "属性快照并进 snapshot(mode:\"card_props\")：store/过滤/restore_on_destroy 保留"),
+    "restore_card_props": ("合", 1, '{"op":"restore","mode":"card_props","owner":"self","store":"card_prop_snapshot"}',
+                           "属性还原并进 restore(mode:\"card_props\")"),
+    "restore_match_start_stats": ("合", 1, '{"op":"restore","mode":"match_start","target":"self"}',
+                                  "回到对局开始并进 restore(mode:\"match_start\")"),
+    "restore_turn_start_stats": ("合", 0, '{"op":"restore","mode":"turn_start","target":"self"}',
+                                 "回到回合开始并进 restore(mode:\"turn_start\")"),
+}
+
+# ---------------------------------------------------------------------------
+# Round 33 / 批次 AC + Round 35 收尾：装备 / 状态 / 标签 / 自动打出四族真删。
+ROUND35_ACTIONS = {
+    # ---- 装备族 → equipment_op(mode=place|give|armor|destroy|seal|unprotect|each) ----
+    "destroy_equipment": ("合", 11, '{"op":"equipment_op","mode":"destroy","pick":"choice","target":"enemy"}',
+                          "摧毁装备族并进 equipment_op(mode:\"destroy\")：pick 选 choice/random/all/self，"
+                          "scope/filter/record_count/equipment 点选逐字保留"),
+    "add_equipment_armor": ("合", 1, '{"op":"equipment_op","mode":"armor","target":"self","amount":2}',
+                            "给装备/护甲加值并进 equipment_op(mode:\"armor\")"),
+    "add_equipment_to_zone": ("合", 1, '{"op":"equipment_op","mode":"give","card":"<牌id>","target":"target","effect_target":"target"}',
+                              "凭空造装备卡并进 equipment_op(mode:\"give\")"),
+    "remove_equip_protection": ("合", 0, '{"op":"equipment_op","mode":"unprotect","target":"target"}',
+                                "清空装备保护层数并进 equipment_op(mode:\"unprotect\")"),
+    "for_each_equipment": ("合", 0, '{"op":"equipment_op","mode":"each","target":"target","body":[...]}',
+                           "遍历装备的唯一入口并进 equipment_op(mode:\"each\")"),
+    # ---- 状态族 → status_op(action=add|set|remove|clear|settle) -------------------
+    "status_remove_named": ("合", 9, '{"op":"status_op","action":"remove","status":"<状态id>","amount":"all","target":"self"}',
+                            "减层/清空状态并进 status_op(action:\"remove\")；层数上限与免疫判定不变"),
+    "clear_statuses": ("合", 1, '{"op":"status_op","action":"clear","statuses":"all","target":"self"}',
+                       "名单式清状态并进 status_op(action:\"clear\")（preset 词表原样保留）"),
+    "settle_status": ("合", 4, '{"op":"status_op","action":"settle","status":"fire","reduce":1,"target":"target"}',
+                      "DoT 结算并进 status_op(action:\"settle\")（fill_from/after/reduce 逐字保留）"),
+    # ---- 自动打出族 → auto_play(mode=card|zone_top) ------------------------------
+    "auto_play_card": ("合", 3, '{"op":"auto_play","mode":"card","card":{"ref":"last_created_card"},"no_cost":false}',
+                       "追加打出一张牌并进 auto_play(mode:\"card\")（逐张结算的队列语义不变）"),
+    "auto_play_zone_top": ("合", 1, '{"op":"auto_play","mode":"zone_top","actor":{"ref":"equipment_target"},"zone":"deck","cost":"free"}',
+                           "逼某人打出某区顶牌并进 auto_play(mode:\"zone_top\")（失败回收与随机目标不变）"),
+}
+
+# 退役但**保留 `_atomic_*` 处理器**的名字：公开契约里已经进
+# ``mod_spec_v2.REMOVED_ATOMIC_OPS``（写出来是"已移除 + 替代写法"），但引擎内部
+# 或测试会直接调这些私有方法，所以实现留着手工删不得。它们同样必须"卡数据 0 引用"。
+HANDLER_KEPT_ACTIONS = {
+    "copy_card_instance": (5, '{"op":"copy_card","as_instance":true,"source":{"ref":"current_card"},"target":"self"}',
+                           "实例复制并进 copy_card(as_instance:true)；处理器被 copy_card 伞转交，"
+                           "且 tests/test_feedback_78_autoplay_queue.py 把 spy 挂在它上面"),
+    "create_copies_to_deck_top": (6, '{"op":"copy_card","to_zone":"deck_top","count":1,"def_id":"<牌id>"}',
+                                  "造 N 张复制放牌堆顶并进 copy_card(to_zone:\"deck_top\")；"
+                                  "tests/test_unique_card_rule.py 直呼处理器"),
+    "give_card_to_hand": (18, '{"op":"move_card","mode":"give","target_zone":"hand","card":"<牌id>","amount":1,"target":"self"}',
+                          "造牌入手并进 move_card(mode:\"give\")；tests/test_unique_card_rule.py 直呼处理器"),
+    "place_as_equip": (71, '{"op":"equipment_op","mode":"place","owner":"self","effect_target":"target"}',
+                       "置入装备栏并进 equipment_op(mode:\"place\")；formal_logic_runtime 直呼处理器"),
+    "status_add_named": (152, '{"op":"status_op","action":"add","status":"<状态id>","amount":1,"target":"self"}',
+                         "叠层状态（mode:\"set\" 即设为 N 层）并进 status_op(action:\"add\")；"
+                         "tests/test_status_immunity_application.py 直呼处理器"),
+    "add_tag": (11, '{"op":"tag_op","action":"add","card":{"ref":"current_card"},"tag":"<标签>"}',
+                "卡内标签并进 tag_op(action:\"add\"|remove|clear)；tests/test_log_key_localization.py 直呼处理器"),
+    "add_tag_to_zone": (13, '{"op":"tag_op","action":"add","target":"enemy","zone":"hand","tag":"<标签>"}',
+                        "区域打标并进 tag_op（带 zone/zones 即区域级）；tests/test_log_key_localization.py 直呼处理器"),
+}
+
+# ---------------------------------------------------------------------------
+# 上一批（Round 32 / 批次 AA）真删与真合并的名字。
 ROUND32_ACTIONS = {
     # ---- 控制流（语言内置）------------------------------------------------
     "if": ("合", 98, '{"op":"if_else","condition":...,"then":[...]}',
@@ -113,13 +214,13 @@ ROUND31_ACTIONS = {
     "resource_spend": ("合", 0, '{"op":"spend_resource","resource":"elixir|magic",...}',
                        "与 spend_resource 重复（同为 _spend_resource 的壳）；合并后 spend_resource "
                        "收 target，并保留 all / spent 记账"),
-    "set_status_named": ("合", 0, '{"op":"status_add_named","mode":"set",...}',
+    "set_status_named": ("合", 0, '{"op":"status_op","action":"set","mode":"set",...}',
                          "与 status_add_named 同调 _apply_status_add_family，只差默认层数来源；"
                          "参数一律走 mode"),
-    "clear_status": ("合", 2, '{"op":"status_remove_named","amount":"all",...}',
+    "clear_status": ("合", 2, '{"op":"status_op","action":"remove","amount":"all",...}',
                      "清的是 _status_attr_field 那 8 个玩家属性字段，与命名状态族同一张属性表；"
                      "合并后拿到别名组/上限/成就/状态钩子（默认不再自动播报，见报告差异 1）"),
-    "resolve_status_once": ("合", 3, '{"op":"settle_status","reduce":1,...}',
+    "resolve_status_once": ("合", 3, '{"op":"status_op","action":"settle","reduce":1,...}',
                             "灼烧结算一次并减 N 层 = settle_status(reduce)；伤害类型/标签/默认战报"
                             "逐字保留（log:false 现在真的静音，见报告差异 2）"),
     "set_untargetable": ("合", 0, '{"op":"player_status_layers","status":"untargetable","shovel":true}',
@@ -129,16 +230,16 @@ ROUND31_ACTIONS = {
     "set_invincible": ("合", 1, '{"op":"player_status_layers","status":"invincible"}',
                        "无敌走 _set_invincible_until_next_own_turn_end 的回合簿记，"
                        "与 player_prop_change(property:'invincible') 只写字段不同"),
-    "destroy_self_equipment": ("合", 8, '{"op":"destroy_equipment","mode":"self"}',
+    "destroy_self_equipment": ("合", 8, '{"op":"equipment_op","mode":"destroy","pick":"self"}',
                                "拆「这张牌自己挂着的那件装备」；与 destroy_current_equipment 同解"),
-    "destroy_current_equipment": ("合", 2, '{"op":"destroy_equipment","mode":"self"}',
+    "destroy_current_equipment": ("合", 2, '{"op":"equipment_op","mode":"destroy","pick":"self"}',
                                   "同上（全场按实例 id 找 = self 模式的第一段）"),
     "destroy_all_destroyable_equipment": (
         "合", 1,
-        '{"op":"destroy_equipment","mode":"all","filter":"destroyable","record_count":true,"target":"both"}',
+        '{"op":"equipment_op","mode":"destroy","pick":"all","filter":"destroyable","record_count":true,"target":"both"}',
         "拆光所有非 indestructible 装备并记账；filter/record_count 成为规范参数"),
     "destroy_equipment_choice_or_first": ("合", 0,
-                                          '{"op":"destroy_equipment","mode":"choice","target":"enemy"}',
+                                          '{"op":"equipment_op","mode":"destroy","pick":"choice","target":"enemy"}',
                                           "与「点选装备」选择窗口耦合：本轮把窗口接到 "
                                           "destroy_equipment(mode:'choice') 上（无点选时回落到第一件）"),
     "card_prop_set": ("合", 18, '{"op":"card_prop_change","mode":"set",...}',
@@ -147,19 +248,19 @@ ROUND31_ACTIONS = {
                       "同上；multi_petal 的 fission_level 双倍特例保留"),
     "card_prop_mul": ("合", 0, '{"op":"card_prop_change","mode":"mul",...}',
                       "同上；multiplier 仍是它认的键"),
-    "remove_tag": ("合", 0, '{"op":"add_tag","mode":"remove",...}',
+    "remove_tag": ("合", 0, '{"op":"tag_op","action":"remove",...}',
                    "标签族统一到 add_tag/add_tag_to_zone 的 mode（add/remove/clear/toggle）"),
-    "clear_tags": ("合", 0, '{"op":"add_tag","mode":"clear",...}',
+    "clear_tags": ("合", 0, '{"op":"tag_op","action":"clear",...}',
                    "同上；清空时把有效标签压进 disabled_flags 的行为保留"),
-    "remove_tag_from_zone": ("合", 0, '{"op":"add_tag_to_zone","mode":"remove",...}',
+    "remove_tag_from_zone": ("合", 0, '{"op":"tag_op","action":"remove",...}',
                              "与 add_tag_to_zone 共用区域遍历/计数/战报，mode 决定加减"),
-    "toggle_tag_in_zone": ("合", 1, '{"op":"add_tag_to_zone","mode":"toggle",...}',
+    "toggle_tag_in_zone": ("合", 1, '{"op":"tag_op","action":"toggle",...}',
                            "逐张翻转（Yin-Yang 在用），合并后仍是 add_tag_to_zone 的一档 mode"),
     "put_card_to_deck": ("删", 0, '{"op":"move_card","zone":"deck","card":{"ref":"selected_card"},...}',
                          "被 move_card 完全覆盖（selected_card ref 读的正是 choice.target_instance_id）"),
     "give_card_to_discard": ("删", 0, '{"op":"create_card","card_id":"...","to":"discard",...}',
                              "被运行时的 create_card(to:) 覆盖（造牌入区，支持 target/多目标）"),
-    "reveal_deck_top": ("删", 0, '{"op":"reveal_card_set","source":"deck","amount":N,...}',
+    "reveal_deck_top": ("删", 0, '{"op":"reveal","mode":"card_set","source":"deck","amount":N,...}',
                         "reveal_card_set 现在收 amount/top/limit，是「看牌堆顶 N 张」的超集"),
     "reveal_tag_hand": ("删", 0, '{"op":"reveal_hand_cards","tag":"revealed","to":"self",...}',
                         "reveal_hand_cards 现在收 tag 过滤 + amount 截断；旧实现只写一份没人读的载荷"),
@@ -200,6 +301,11 @@ KEPT_EXPLICIT = {
     "seal_equipment": "尘封装备（层数）",
     "equipment_prop_set": "装备属性写值（设为）",
     "equipment_prop_add": "装备属性写值（增加）",
+    # Round 33 / 批次 AB：四条 AB 伞原子。
+    "reveal": "Round 33 揭示伞（mode=card_set|enemy_hand|hand）",
+    "shuffle": "Round 33 洗牌伞（zone=discard|hand）",
+    "snapshot": "Round 33 快照伞（mode=card_props）",
+    "restore": "Round 33 还原伞（mode=card_props|match_start|turn_start）",
     "remove_equip_protection": "清空装备保护层数",
     "counter_equip_protect": "装备保护层数（反制族）",
     # Round 32 / 批次 AA：on_fatal_* 两条并进 health_op(mode:"fatal")。
@@ -354,14 +460,24 @@ def build() -> dict:
     kept.sort(key=lambda row: (row["family"], row["name"]))
     actions = []
     for name, (verdict, before, replacement, reason) in (
-        {**ROUND31_ACTIONS, **ROUND32_ACTIONS}
+        {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,
             "usage": usage.get(name, 0), "replacement": replacement, "reason": reason,
         })
     actions.sort(key=lambda row: row["name"])
-    return {"atoms": atoms, "usage": usage, "kept": kept, "actions": actions}
+    handler_kept = []
+    for name, (before, replacement, reason) in HANDLER_KEPT_ACTIONS.items():
+        handler_kept.append({
+            "name": name, "before": before, "usage": usage.get(name, 0),
+            "replacement": replacement, "reason": reason,
+        })
+    handler_kept.sort(key=lambda row: row["name"])
+    return {
+        "atoms": atoms, "usage": usage, "kept": kept, "actions": actions,
+        "handler_kept": handler_kept,
+    }
 
 
 def preservation_rows() -> list:
@@ -409,16 +525,16 @@ def preservation_rows() -> list:
 
 def render(model: dict) -> str:
     lines = []
-    lines.append("# 原子全量清单（Round 32 / 批次 AA · 2026-09-12）")
+    lines.append("# 原子全量清单（Round 33 / 批次 AB+AC+AD · 2026-09-12）")
     lines.append("")
-    lines.append("本表**逐行**覆盖当前全部引擎原子（`_atomic_*` 实现），并列出 Round 31 / 32 真删/真合并的每一个名字。")
+    lines.append("本表**逐行**覆盖当前全部引擎原子（`_atomic_*` 实现），并列出 Round 31 / 32 / 33 真删/真合并的每一个名字。")
     lines.append(f"表里所有判「删」或「合」的行**都已在本轮执行完毕**：`--check` 会验证这些名字已经没有")
     lines.append(f"任何 `_atomic_*` 实现、卡数据 0 引用（当前引擎原子 {len(model['atoms'])} 个）。")
     lines.append("")
     lines.append("生成：`python tools/atom_full_inventory.py`；校验：`python tools/atom_full_inventory.py --check`。")
     lines.append("用量口径与 `tools/mod_atom_report.py` 完全一致（`op`/`type` 键、嵌套步骤展开）。")
     lines.append("")
-    lines.append(f"## 一、Round 31 / 32 真删 / 真合并（{len(model['actions'])} 个名字）")
+    lines.append(f"## 一、Round 31 / 32 / 33 真删 / 真合并（{len(model['actions'])} 个名字）")
     lines.append("")
     lines.append("| 原子 | 判定 | 迁移前用量 | 本批用量 | 替代写法 | 理由 |")
     lines.append("|---|---|---|---|---|---|")
@@ -431,6 +547,21 @@ def render(model: dict) -> str:
     lines.append("带参数替代的名字进 `mod_spec_v2.REMOVED_ATOMIC_OPS`（替代写法是完整 JSON），纯改名的进")
     lines.append("`RENAMED_ATOMIC_OPS`；两条执行路径（`mod_runtime_v2.run_v2_step` 与")
     lines.append("`game_engine._run_effect_list`）都会给出「已移除/已改名 + 请改用」的显式报错，不静默。")
+    lines.append("")
+    lines.append(
+        f"## 一bis、退役但保留私有处理器（{len(model['handler_kept'])} 个名字）"
+    )
+    lines.append("")
+    lines.append("这些名字同样进了 `REMOVED_ATOMIC_OPS`（不在对外契约里，卡数据写出来是显式报错），")
+    lines.append("但 `_atomic_*` 处理器留着——引擎内部或测试直接调它（见理由列）。因此它们**不在**")
+    lines.append("上面的「真删」表里，也不算引擎原子清单的删除项；本轮只要求卡数据 0 引用。")
+    lines.append("")
+    lines.append("| 原子 | 迁移前用量 | 本批用量 | 替代写法 | 处理器为什么留着 |")
+    lines.append("|---|---|---|---|---|")
+    for row in model["handler_kept"]:
+        lines.append(
+            f"| `{row['name']}` | {row['before']} | {row['usage']} | `{row['replacement']}` | {row['reason']} |"
+        )
     lines.append("")
     lines.append(f"## 二、保留清单：当前全部引擎原子（{len(model['kept'])}）")
     lines.append("")
@@ -481,6 +612,15 @@ def check(model: dict, text: str, out_path: pathlib.Path) -> int:
         )
     if set(kept_names) & {row["name"] for row in model["actions"]}:
         problems.append("同一个名字同时出现在删除表与保留表")
+    for row in model["handler_kept"]:
+        if row["name"] not in engine_ops:
+            problems.append(
+                f"{row['name']}: 表里写「保留处理器」，但引擎里已经没有 _atomic_{row['name']}"
+            )
+        if row["usage"]:
+            problems.append(f"{row['name']}: 保留处理器的名字，卡数据仍有 {row['usage']} 处引用")
+        if row["name"] in {item["name"] for item in model["actions"]}:
+            problems.append(f"{row['name']}: 同时出现在真删表与保留处理器表")
     if out_path.is_file():
         on_disk = out_path.read_text(encoding="utf-8").replace("\r\n", "\n")
         if on_disk != text.replace("\r\n", "\n"):

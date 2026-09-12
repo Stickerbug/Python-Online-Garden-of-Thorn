@@ -33,7 +33,8 @@ EXTRA_PUBLIC_OPS = (
     # even if the ``_atomic_*`` source scan misses a module.
     "declare_forced_target",
     # Round 6b: reveal a hand to a viewer and tag the revealed cards (Schizo).
-    "reveal_hand_cards",
+    # Round 33 / 批次 AB：``reveal_hand_cards`` 已并入 ``reveal(mode:"hand")``，
+    # 由 ``GameEngine._atomic_reveal`` 承接，不再需要额外登记。
 )
 
 _engine_ops_cache: Set[str] | None = None

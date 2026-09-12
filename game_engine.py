@@ -1013,8 +1013,9 @@ class GameEngine:
         # ``move_to_*`` / ``player_prop_*`` / ``record_*`` / ``reset_counter``
         # 这批名字已合并进规范 op，从本表删掉（写出来拿到
         # mod_spec_v2.REMOVED_ATOMIC_OPS 的"已移除 + 替代写法"）。
-        'reveal_hand': 'reveal_enemy_hand',
-        'steal_card': 'steal_enemy_card',
+        # Round 33 / 批次 AB：``reveal_hand`` / ``steal_card`` 两个别名随
+        # ``reveal`` 伞与 ``move_card(mode:"steal")`` 一起删除——旧名写出来会
+        # 拿到 mod_spec_v2.REMOVED_ATOMIC_OPS 的"已移除 + 替代写法"。
         'copy_card': 'copy_card',
         # Round 27: ``discard`` / ``random_discard_from_hand`` 的实现与别名一起
         # 删除（拆成"取值表达式 + 通用步骤"，见
@@ -1022,20 +1023,28 @@ class GameEngine:
         # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
         # 是 Round 1 草稿名，实现与别名一并删除（老数据会得到显式
         # "已移除 + 替代写法" 报错，见 mod_spec_v2.REMOVED_ATOMIC_OPS）。
-        'seal_equipment_layers': 'seal_equipment',
+        # Round 35：``seal_equipment`` 并进 ``equipment_op(mode:"seal")``，这条
+        # 旧别名（``seal_equipment_layers``）随之进 mod_spec_v2.RENAMED_ATOMIC_OPS，
+        # 写出来拿到"已改名 + 伞写法"的显式报错。
         'defer_death_checks': 'defer_game_over',
         # Round 22（别名收敛）：auto_play_queue_add / queue_auto_play_card /
         # kitty_auto_play / bounce_attack / ocean_for_each_selectable_target /
         # for_each_selectable_target 这批旧名从两张别名表一起删除，改由
         # mod_spec_v2.RENAMED_ATOMIC_OPS 显式报错。
-        'shuffle_discard_into_deck': 'shuffle_discard_into_deck',
-        'give_card_to_hand': 'give_card_to_hand',
-        'give_card_to_deck': 'give_card_to_deck',
+        # Round 33 / 批次 AB：``shuffle_discard_into_deck`` / ``give_card_to_hand`` /
+        # ``give_card_to_deck`` 已分别并入 ``shuffle(zone:"discard")`` 与
+        # ``move_card(mode:"give", target_zone:...)``，从本表删除（旧名写出来拿到
+        # REMOVED_ATOMIC_OPS 的替代写法）。
         'remove_specific_card': 'remove_specific_card',
-        # Round 29 / 批次 X：``destroy_*_equip`` 已合并进 ``destroy_equipment``。
+        # Round 29 / 批次 X + Round 35：``destroy_*_equip`` / ``destroy_equipment``
+        # 已合并进 ``equipment_op(mode:"destroy", pick=...)``。
         'equip_protection': 'counter_equip_protect',
-        'remove_equip_protection': 'remove_equip_protection',
-        'place_as_equip': 'place_as_equip',
+        # Round 35：``remove_equip_protection`` / ``place_as_equip`` /
+        # ``add_tag`` / ``add_tag_to_zone`` / ``auto_play_card`` /
+        # ``auto_play_zone_top`` / ``status_add_named`` / ``status_remove_named`` /
+        # ``clear_statuses`` / ``settle_status`` 都并进伞原子（见
+        # mod_spec_v2.REMOVED_ATOMIC_OPS），因此这些"自己指自己"的别名一并删除：
+        # 写出来会先被 ``_retired_atom_runtime_error`` 拦下，拿到替代写法。
         'block_action': 'block_own_actions',
         'block_card_type': 'block_card_type',
         'force_card_type': 'force_card_type',
@@ -1049,7 +1058,6 @@ class GameEngine:
         'reduce_next_cost': 'reduce_next_cost',
         'increase_next_cost': 'increase_next_cost',
         'fusion': 'fusion',
-        'add_tag': 'add_tag',
         'transform_card': 'transform_card',
         # Round 29 / 批次 X：``player_prop_*`` / ``card_var_*`` / ``var_*`` /
         # ``record_*`` / ``reset_counter`` / ``move_to_*`` / ``choose_from_*``
@@ -1057,9 +1065,9 @@ class GameEngine:
         # ``_retired_atom_runtime_error`` 拦下，拿到 mod_spec_v2.REMOVED_ATOMIC_OPS
         # 的"已移除 + 替代写法"。
         'create_counter': 'create_counter',
-        'exile_this': 'exile_this',
         'swap_health': 'swap_health',
-        'swap_hands': 'swap_hands',
+        # Round 33 / 批次 AB：``exile_this`` / ``swap_hands`` 已并入
+        # ``move_card(zone:"exile")`` / ``move_card(mode:"swap_hands")``。
         'broadcast_event': 'broadcast_event',
         'modify_damage': 'modify_damage',
         # Round 30 / 批次 Y：``add_status`` / ``remove_status`` / ``set_status``
@@ -7654,6 +7662,18 @@ class GameEngine:
             # **且**没有点名 ``equipment``/``card`` 时才弹窗；数据点名的那件、
             # ``mode:"self"/"random"/"all"`` 都不弹。
             return 'choose_enemy_equipment'
+        if (
+            effect_type == 'equipment_op'
+            and str(params.get('mode') or '').strip().lower() in ('destroy', 'break', 'smash', '摧毁')
+        ):
+            # Round 35：同一个窗口也要认伞写法（``mode:"destroy"`` + ``pick``）。
+            pick = params.get('pick', params.get('destroy', params.get('destroy_mode', 'choice')))
+            if self._destroy_equipment_needs_choice({
+                'mode': pick,
+                'equipment': params.get('equipment'),
+                'card': params.get('card'),
+            }):
+                return 'choose_enemy_equipment'
         if effect_type == 'choose_from_deck':
             return 'choose_from_deck'
         if effect_type == 'choose_from_discard':
@@ -7684,6 +7704,7 @@ class GameEngine:
             'choose_from_discard': 'self',
             'choose_from_zone': 'self',
             'destroy_equipment': 'enemy',
+            'equipment_op': 'enemy',
             'steal_enemy_card': 'enemy',
         }
         if request_type not in target_defaults:
@@ -9054,7 +9075,33 @@ class GameEngine:
 
 
 
-    def _atomic_reveal_enemy_hand(self, player_id, card, params, log, choice, context):
+    def _atomic_reveal(self, player_id, card, params, log, choice, context):
+        """Round 33 / 批次 AB：``reveal`` 伞（``reveal_card_set`` / ``reveal_enemy_hand`` /
+        ``reveal_hand_cards`` 三合一）。
+
+        统一参数：``target``（被看的一方）、``viewer``（看的一方，旧 ``to`` 同样认）、
+        ``source``（看哪个区/哪份快照，card_set 用）、``mark``（给被看到的手牌打
+        ``revealed`` 标记，hand 用）、``amount``/``limit``/``top``（只看前 N 张）。
+        ``mode`` 选旧的实现体（``card_set`` / ``enemy_hand`` / ``hand``），缺省按
+        参数形状推断；三段的 payload 与战报文本与合并前逐字一致。
+        """
+
+        mode = str(params.get('mode') or '').strip().lower()
+        if mode in ('card_set', 'set', 'zone', 'deck'):
+            return self._reveal_card_set_payload(player_id, card, params, log, choice, context)
+        if mode in ('hand', 'hand_cards'):
+            return self._reveal_hand_cards_payload(player_id, card, params, log, choice, context)
+        if mode in ('enemy_hand', 'enemy', 'opponent_hand'):
+            return self._reveal_enemy_hand_payload(player_id, card, params, log, choice, context)
+        # 无 ``mode`` 的第三方写法：``mark``/``to`` 是 hand 段独有的键，
+        # ``source``/``limit``/``amount``/``top`` 是 card_set 段独有的键。
+        if params.get('to') is not None or params.get('mark') is not None:
+            return self._reveal_hand_cards_payload(player_id, card, params, log, choice, context)
+        if any(key in params for key in ('source', 'amount', 'limit', 'top')):
+            return self._reveal_card_set_payload(player_id, card, params, log, choice, context)
+        return self._reveal_enemy_hand_payload(player_id, card, params, log, choice, context)
+
+    def _reveal_enemy_hand_payload(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         if not self._valid_player_id(target_id):
             return
@@ -9062,11 +9109,11 @@ class GameEngine:
         self._antennae_reveal[player_id] = [c.to_dict() for c in opp.hand]
         self.log_msg(log or f"{self.pn(player_id)}查看了{self.pn(target_id)}的手牌")
 
-    def _atomic_reveal_hand_cards(self, player_id, card, params, log, choice, context):
+    def _reveal_hand_cards_payload(self, player_id, card, params, log, choice, context):
         """Reveal a hand to a viewer and tag the revealed cards.
 
-        Data wording: ``{"op": "reveal_hand_cards", "target": "target",
-        "to": "self", "mark": true, "log": false}``.  ``mark`` puts the
+        Data wording: ``{"op": "reveal", "mode": "hand", "target": "target",
+        "viewer": "self", "mark": true, "log": false}``.  ``mark`` puts the
         ``revealed`` instance flag on every selectable card (the clients show
         those cards to the table); the viewer additionally keeps the revealed
         hand through the ``antennae_reveal`` channel until it is cleared.
@@ -9074,7 +9121,9 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         if not self._valid_player_id(target_id):
             return
-        viewer_id = self._resolve_target(player_id, params.get('to', params.get('viewer', 'self')))
+        viewer_id = self._resolve_target(
+            player_id, params.get('viewer', params.get('to', 'self')),
+        )
         if not self._valid_player_id(viewer_id):
             viewer_id = player_id
         hand = list(self.players[target_id].hand)
@@ -9108,7 +9157,10 @@ class GameEngine:
             source=self.pn(viewer_id),
         ))
 
-    def _atomic_steal_enemy_card(self, player_id, card, params, log, choice, context):
+    def _move_card_steal_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AB：``move_card(mode:"steal")`` 的实现体（旧
+        # ``steal_enemy_card``）——从对手手牌里拿一张进自己手牌，选择来源
+        # （``choice.target_instance_id``）与"夺取失败"战报逐字一致。
         ps = self.players[player_id]
         target_id = self._choice_target_from_choice(choice, -1) if isinstance(choice, dict) else -1
         if target_id < 0 and isinstance(context, dict):
@@ -9272,7 +9324,9 @@ class GameEngine:
         self._note_achievement_status_peak(player_id)
         self.log_msg(log or f"{self.pn(player_id)}获得{amount}装备保护")
 
-    def _atomic_add_equipment_armor(self, player_id, card, params, log, choice, context):
+    def _equipment_op_armor_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``equipment_op(mode:"armor")`` 的实现体
+        # （旧 ``add_equipment_armor``：给装备/护甲加值）。
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not (0 <= target_id < len(self.players)):
             return
@@ -9451,7 +9505,40 @@ class GameEngine:
     # ``viewer``（默认自己）并可限定张数，是它的超集；不再向全桌只播报一行
     # 名字（0 处卡数据使用，替代写法见 mod_spec_v2.REMOVED_ATOMIC_OPS）。
 
-    def _atomic_auto_play_card(self, player_id, card, params, log, choice, context):
+    def _atomic_auto_play(self, player_id, card, params, log, choice, context):
+        """Round 33 / 批次 AC：``auto_play`` 伞（``auto_play_card`` /
+        ``auto_play_zone_top`` / ``queue_auto_play`` 三合一）。
+
+        统一参数 ``mode``：``card``（缺省，自动打出 ``card`` 指向的那张牌并替它
+        回答选择窗口）、``zone_top``（自动打出 ``zone`` 顶牌，Kitty 类）、
+        ``queue``（登记"拥有者回合开始时自动打出"的队列条目）。三段实现体与
+        合并前逐字一致。
+        """
+
+        mode = str(params.get('mode') or '').strip().lower()
+        forwarded = dict(params)
+        forwarded.pop('mode', None)
+        if not mode:
+            if any(key in forwarded for key in ('each_turn', 'dedupe', 'exile', 'marker', 'require_selectable')):
+                mode = 'queue'
+            elif any(
+                key in forwarded
+                for key in ('zone', 'random_target', 'out_of_turn', 'on_failure', 'require_turn_player', 'actor')
+            ):
+                mode = 'zone_top'
+            else:
+                mode = 'card'
+        if mode in ('card', 'play', 'now'):
+            return self._auto_play_card_payload(player_id, card, forwarded, log, choice, context)
+        if mode in ('zone_top', 'zone', 'top', 'zone_card'):
+            return self._auto_play_zone_top_payload(player_id, card, forwarded, log, choice, context)
+        if mode in ('queue', 'register', 'each_turn'):
+            return self._auto_play_queue_payload(player_id, card, forwarded, log, choice, context)
+        self._log_mod_runtime_error(
+            'auto_play', RuntimeError(f'unsupported mode: {mode}'), player_id, card,
+        )
+
+    def _auto_play_card_payload(self, player_id, card, params, log, choice, context):
         """Queue a card so its owner plays it automatically.
 
         ``card`` defaults to the copy created by the previous step. The queued
@@ -9516,91 +9603,56 @@ class GameEngine:
             log, target=self.pn(player_id), source=self.pn(player_id),
         ))
 
-    def _atomic_copy_card_instance(self, player_id, card, params, log, choice, context):
-        """Copy a card *instance* (optionally from its pre-play snapshot).
+    def _copy_card_instance_payload(self, player_id, card, params, log, choice, context):
+        """``copy_card(as_instance:true)`` 的实现入口——直接转交给旧处理器。
 
-        Unlike :meth:`_atomic_copy_card` this keeps the copied instance's own
-        upgrades, can reset it like a freshly played card, can stamp extra tags
-        and layers, and can drop the copy into hand, discard or deck. It backs
-        the "make an upgraded copy of myself" family of cards.
+        Round 33 / 批次 AB 把旧的 ``copy_card_instance`` 原子并进
+        ``copy_card(as_instance:true)``，实现体逐字搬到了
+        :meth:`_atomic_copy_card_instance` 的副本里。Round 35 收尾时改回"只有
+        一份实现"：伞原子转交旧处理器（两段代码逐字相同，参数、战报、目标
+        解析完全一致）。
+
+        之所以不把旧处理器删掉，是因为 ``tests/test_feedback_78_autoplay_queue.py``
+        把 spy 挂在 ``_atomic_copy_card_instance`` 上，用来断言"每复制一张就
+        立刻打出这张复制"的顺序——那是 pinecone 复制队列的回归护栏。
         """
-        source_ref = params.get('source', params.get('card', {'ref': 'current_card'}))
-        from_snapshot = isinstance(source_ref, str) and source_ref in ('pre_play_snapshot', 'snapshot')
-        copied = None
-        if from_snapshot:
-            if card is not None:
-                snapshot = getattr(card, '_bio_pre_play_snapshot', None)
-                copied = fresh_card_copy_from_dict(
-                    snapshot if isinstance(snapshot, dict) else card.to_dict(),
-                    getattr(card, 'def_id', ''),
-                )
-        else:
-            source_card = self._resolve_card_ref(player_id, source_ref, card)
-            if source_card is not None:
-                if params.get('base_instance') or params.get('fresh_instance'):
-                    # "play another copy of <card>" spawns a plain instance: the
-                    # played card's power/layers/tags stay on the original.
-                    copied = CardInstance(source_card.def_id)
-                else:
-                    copied = source_card.copy()
-        if copied is None:
-            return
-        if params.get('reset_after_play'):
-            reset_card_after_play(copied)
-        copied.instance_flags = getattr(copied, 'instance_flags', set())
-        copied.disabled_flags = getattr(copied, 'disabled_flags', set())
-        for flag in normalize_card_flags(params.get('flags', []) or []):
-            copied.instance_flags.add(flag)
-            copied.disabled_flags.discard(flag)
-        for modifier in params.get('setup_modifiers', []) or []:
-            copied.setup_modifiers.add(str(modifier))
-        if params.get('fission_level') is not None:
-            copied.fission_level = clamp_card_layer(self._eval_int(player_id, params['fission_level'], card, 1))
-            copied.fission_count = max(0, copied.fission_level - 1)
-            copied.fission_hit = 0
-        if params.get('swift_value') is not None:
-            copied.swift_value = max(0, self._eval_int(player_id, params['swift_value'], card, 0))
-        if params.get('unique_copy_penalty'):
-            try:
-                self._apply_forced_unique_copy_penalty(player_id, copied)
-            except Exception:
-                pass
-        zone = str(params.get('zone', 'hand') or 'hand').lower()
-        position = str(params.get('position', 'top') or 'top').lower()
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not self._valid_player_id(target_id):
-            target_id = player_id
-        target = self.players[target_id]
-        if zone == 'discard':
-            if position == 'random':
-                target.discard.insert(random.randint(0, len(target.discard)), copied)
-            else:
-                target.discard.append(copied)
-            self._note_achievement_enemy_card_total(player_id)
-        elif zone == 'deck':
-            if position == 'random':
-                target.deck.insert(random.randint(0, len(target.deck)), copied)
-            elif position == 'bottom':
-                target.deck.append(copied)
-            else:
-                target.deck.insert(0, copied)
-        elif params.get('forced') or str(params.get('hand_full') or '').strip().lower() == 'discard':
-            self._add_forced_copy_to_hand(
-                player_id, copied, source_owned=bool(params.get('source_owned', True)),
-            )
-        elif target.can_add_to_hand():
-            target.add_to_hand(copied)
-        else:
-            return
-        self._remember_created_card(copied, context)
-        self._last_created_card_instance_id = getattr(copied, 'instance_id', None)
-        if log is False or not log:
-            return
-        self.log_msg(self._format_step_log(
-            log, target=self.pn(player_id), source=self.pn(player_id), count=1,
-        ))
+
+        return self._atomic_copy_card_instance(player_id, card, params, log, choice, context)
 
     def _atomic_copy_card(self, player_id, card, params, log, choice, context):
+        """Round 33 / 批次 AB：``copy_card`` 伞（``copy_card`` / ``copy_card_instance`` /
+        ``create_copies_to_deck_top`` 三合一）。
+
+        统一参数：``card``/``source``（复制哪张）、``target``（给谁）、``to_zone``
+        （``hand`` 缺省 / ``discard`` / ``deck`` / ``deck_top``）、``count``（造几张）、
+        ``as_instance``（true = 连实例升级一起复制，即旧 ``copy_card_instance``）。
+        三段实现体（``_copy_card_plain_payload`` / ``_copy_card_instance_payload`` /
+        ``_copy_copies_to_deck_top_payload``）的参数与战报与合并前逐字一致。
+        """
+
+        raw_to = str(params.get('to_zone', params.get('to', '')) or '').strip().lower()
+        to_zone = {
+            'deck_top': 'deck_top', 'deck:top': 'deck_top', 'top': 'deck_top',
+            'deck': 'deck_top', 'draw_pile': 'deck_top', 'draw': 'deck_top',
+            'hand': 'hand', 'discard': 'discard', 'exile': 'exile',
+        }.get(raw_to, raw_to)
+        if to_zone not in ('', 'hand', 'discard', 'deck_top', 'exile'):
+            raise V2ZoneError(f"copy_card 的 to_zone 只认 hand/discard/deck(_top)/exile，收到 {raw_to!r}")
+        mode = str(params.get('mode') or '').strip().lower()
+        as_instance = bool(params.get('as_instance')) or mode in ('instance', 'copy_instance')
+        wants_copies = mode in ('copies', 'deck_top', 'top') or params.get('count') is not None
+        if wants_copies:
+            return self._copy_copies_to_deck_top_payload(player_id, card, params, log, choice, context)
+        if as_instance or any(
+            key in params for key in (
+                'base_instance', 'fission_level', 'setup_modifiers', 'unique_copy_penalty',
+                'reset_after_play', 'source_owned',
+            )
+        ):
+            return self._copy_card_instance_payload(player_id, card, params, log, choice, context)
+        return self._copy_card_plain_payload(player_id, card, params, log, choice, context)
+
+    def _copy_card_plain_payload(self, player_id, card, params, log, choice, context):
         """Copy a card (by reference) into the player's hand."""
         ps = self.players[player_id]
         target = self._resolve_card_ref(player_id, params.get('card'), card)
@@ -9636,7 +9688,29 @@ class GameEngine:
     # ``_move_card_to_deck`` 的 ``position`` 词表（top/bottom/random/random_top）
     # 与 ``owner`` 缺省（按牌当前位置归堆）也比旧实现更完整。
 
-    def _atomic_shuffle_discard_into_deck(self, player_id, card, params, log, choice, context):
+    def _atomic_shuffle(self, player_id, card, params, log, choice, context):
+        """Round 33 / 批次 AB：``shuffle`` 伞（``shuffle_discard_into_deck`` +
+        ``shuffle_hand`` 两条同族原子合并）。
+
+        统一参数 ``zone``：``discard``（缺省——把弃牌堆洗进牌堆）或 ``hand``
+        （打乱目标的手牌，``target`` 按选择器集合解析）。两段的随机顺序、
+        失明免疫（``_is_status_immune``）与战报文本与合并前逐字一致。
+        """
+
+        raw_zone = params.get('zone', params.get('to', 'discard'))
+        zone_name = normalize_zone_name(
+            raw_zone, allow_equipment=False, op='shuffle', param='zone',
+        )
+        if zone_name == 'hand':
+            return self._shuffle_hand_payload(player_id, card, params, log, choice, context)
+        if zone_name != 'discard':
+            raise V2ZoneError(
+                f"shuffle 只认 zone=discard（弃牌堆洗入牌堆）或 zone=hand"
+                f"（打乱手牌），收到 {raw_zone!r}"
+            )
+        return self._shuffle_discard_into_deck_payload(player_id, card, params, log, choice, context)
+
+    def _shuffle_discard_into_deck_payload(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
         ps.deck.extend(ps.discard)
         ps.discard.clear()
@@ -9662,19 +9736,41 @@ class GameEngine:
         """一次步骤要生成几张（默认 1）；数据里的 ``amount`` 支持表达式。"""
         return max(1, self._eval_int(player_id, params.get('amount', 1), card, 1))
 
-    def _atomic_give_card_to_hand(self, player_id, card, params, log, choice, context):
+    def _move_card_give_payload(self, player_id, card, params, log, choice, context):
+        """``move_card(mode:"give")``：凭空造牌进 hand/deck。
+
+        Round 33 / 批次 AB：旧 ``give_card_to_hand`` 与 ``give_card_to_deck``
+        合并成这一份实现——两段除"目的区"外的每一步（目标解析、``card``/
+        ``card_id``/``id``/``def_id`` 定义引用、``amount``、``flags``、
+        ``position``、手牌上限的 ``overflow``/``missing`` 策略、唯一牌提示、
+        ``log``）逐字保留。统一参数 ``target_zone``（``hand`` 缺省 / ``deck``）。
+        """
+
+        zone = normalize_zone_name(
+            params.get('target_zone', params.get('zone', 'hand')),
+            allow_equipment=False, op='move_card(mode:"give")', param='target_zone',
+        )
+        if zone not in ('hand', 'deck'):
+            raise V2ZoneError(f'move_card(mode:"give") 只能造进 hand/deck，收到 {zone!r}')
+        forwarded = dict(params)
+        forwarded.pop('to', None)
+        forwarded['zone'] = zone
         # Round 14 / batch 2: 目的区自洽校验 + 位置词表校验 + ``target`` 集合语义。
         # 标量选择器（self/target/enemy）仍旧只解析出一个目标，旧数据行为不变；
         # 多目标选择器（all_players/play_targets…）改为每个目标各给一张。
-        self._assert_step_zone(params, 'hand', op='give_card_to_hand')
-        self._step_zone_position_or_none(params, op='give_card_to_hand')
-        target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_hand')
-        card_ref = self._resolve_card_id_ref(player_id, self._give_card_step_ref(params), card)
+        self._assert_step_zone(forwarded, zone, op='move_card')
+        if zone == 'deck':
+            position = self._step_zone_position(forwarded, op='move_card')
+        else:
+            self._step_zone_position_or_none(forwarded, op='move_card')
+            position = 'top'
+        target_ids = self._step_target_ids(player_id, card, forwarded, context, op='move_card')
+        card_ref = self._resolve_card_id_ref(player_id, self._give_card_step_ref(forwarded), card)
         if not card_ref or not target_ids:
             return
-        amount = self._give_card_step_amount(player_id, card, params)
-        missing_skip = str(params.get('missing') or '').strip().lower() == 'skip'
-        overflow_discard = str(params.get('overflow') or '').strip().lower() == 'discard'
+        amount = self._give_card_step_amount(player_id, card, forwarded)
+        missing_skip = str(forwarded.get('missing') or '').strip().lower() == 'skip'
+        overflow_discard = str(forwarded.get('overflow') or '').strip().lower() == 'discard'
         for target_id in target_ids:
             if card_ref == ERROR_CARD_ID or missing_skip:
                 if card_ref not in CARD_DEFS:
@@ -9688,22 +9784,40 @@ class GameEngine:
                 continue
             ts = self.players[target_id]
             for _ in range(amount):
-                if card_def.id != ERROR_CARD_ID and not ts.can_add_to_hand():
+                if zone == 'hand' and card_def.id != ERROR_CARD_ID and not ts.can_add_to_hand() and not overflow_discard:
                     # ``overflow: discard`` mirrors PlayerState.add_to_hand, which
                     # sends the new card to the discard pile when the hand is full.
-                    if not overflow_discard:
-                        break
+                    break
                 new_card = CardInstance(def_id=card_def.id)
                 self._apply_setup_modifiers_to_card(target_id, new_card)
+                if zone == 'deck':
+                    raw_flags = forwarded.get('flags')
+                    if raw_flags:
+                        new_card.instance_flags = getattr(new_card, 'instance_flags', set()) or set()
+                        new_card.instance_flags.update(normalize_card_flags(raw_flags))
                 if not self._can_normally_acquire_card(target_id, new_card):
                     self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
                     break
-                ts.add_to_hand(new_card)
+                if zone == 'hand':
+                    ts.add_to_hand(new_card)
+                elif position == 'bottom':
+                    ts.deck.append(new_card)
+                elif position == 'random':
+                    ts.deck.insert(random.randint(0, len(ts.deck)), new_card)
+                else:
+                    # ``top`` / ``random_top``（单张牌洗牌后放顶 == 放顶）
+                    ts.deck.insert(0, new_card)
                 self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
 
-    def _atomic_give_magic_orb_to_hand(self, player_id, card, params, log, choice, context):
+    def _move_card_give_orb_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AB：``move_card(mode:"orb")`` 的实现体——旧
+        # ``give_magic_orb_to_hand``（法球带 symbiosis/exile/void 三个标记，
+        # 手牌满或唯一牌检查前直接返回，与旧实现逐字一致）。
+        raw_zone = str(params.get('target_zone', params.get('zone', 'hand')) or 'hand').strip().lower()
+        if normalize_zone_name(raw_zone, allow_equipment=False, op='move_card(mode:"orb")', param='target_zone') != 'hand':
+            raise V2ZoneError(f'move_card(mode:"orb") 只能进 hand，收到 {raw_zone!r}')
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not (0 <= target_id < len(self.players)):
             return
@@ -9723,43 +9837,8 @@ class GameEngine:
         if log and card_def.id != ERROR_CARD_ID:
             self.log_msg(log)
 
-    def _atomic_give_card_to_deck(self, player_id, card, params, log, choice, context):
-        # Round 14 / batch 2: 目的区（deck）+ 位置词表（top/bottom/random/random_top）
-        # 走统一校验；``position`` 的未知取值以前会被静默当成 top。
-        self._assert_step_zone(params, 'deck', op='give_card_to_deck')
-        position = self._step_zone_position(params, op='give_card_to_deck')
-        target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_deck')
-        card_ref = self._resolve_card_id_ref(player_id, self._give_card_step_ref(params), card)
-        if not card_ref or not target_ids:
-            return
-        amount = self._give_card_step_amount(player_id, card, params)
-        for target_id in target_ids:
-            card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
-            if not card_def:
-                continue
-            if card_def.id != ERROR_CARD_ID and not self._card_allowed(card_def.id):
-                continue
-            ts = self.players[target_id]
-            for _ in range(amount):
-                new_card = CardInstance(def_id=card_def.id)
-                self._apply_setup_modifiers_to_card(target_id, new_card)
-                raw_flags = params.get('flags')
-                if raw_flags:
-                    new_card.instance_flags = getattr(new_card, 'instance_flags', set()) or set()
-                    new_card.instance_flags.update(normalize_card_flags(raw_flags))
-                if not self._can_normally_acquire_card(target_id, new_card):
-                    self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
-                    break
-                if position == 'bottom':
-                    ts.deck.append(new_card)
-                elif position == 'random':
-                    ts.deck.insert(random.randint(0, len(ts.deck)), new_card)
-                else:
-                    # ``top`` / ``random_top``（单张牌洗牌后放顶 == 放顶）
-                    ts.deck.insert(0, new_card)
-                self._remember_created_card(new_card, context)
-            if log and card_def.id != ERROR_CARD_ID:
-                self.log_msg(log)
+    # Round 33 / 批次 AB：``give_card_to_deck`` 的实现体已并入
+    # ``_move_card_give_payload``（同一个循环，``target_zone`` 选目的区）。
 
     # Round 31 / 批次 Z：``give_card_to_discard``（凭空造 N 张牌直接进弃牌堆）
     # 已删除，由运行时的 ``create_card(to:"discard")`` 承接——同一份
@@ -9796,7 +9875,9 @@ class GameEngine:
 
 
 
-    def _atomic_remove_equip_protection(self, player_id, card, params, log, choice, context):
+    def _equipment_op_unprotect_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``equipment_op(mode:"unprotect")`` 的实现体
+        # （旧 ``remove_equip_protection``：清空装备保护层数）。
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         if not self._valid_player_id(target_id):
             return
@@ -10119,7 +10200,38 @@ class GameEngine:
         else:
             self.log_msg(log or f"{self.pn(player_id)}没有足够的{card_type}牌聚变")
 
-    def _atomic_add_tag(self, player_id, card, params, log, choice, context):
+    def _atomic_tag_op(self, player_id, card, params, log, choice, context):
+        """Round 33 / 批次 AC：``tag_op`` 伞（``add_tag`` / ``add_tag_to_zone`` 二合一）。
+
+        统一参数 ``op``（``add`` 缺省 / ``remove`` / ``toggle`` / ``clear``）与
+        ``zone``/``zones``：带区域就是区域级（旧 ``add_tag_to_zone``，支持
+        ``toggle``），不带就是单卡级（旧 ``add_tag``，支持 ``clear``）。两段实现体
+        与合并前逐字一致。
+        """
+
+        op = str(params.get('op', params.get('action', '')) or '').strip().lower()
+        forwarded = dict(params)
+        forwarded.pop('op', None)
+        forwarded.pop('action', None)
+        zone = forwarded.get('zones', forwarded.get('zone'))
+        if op in ('toggle', 'flip'):
+            forwarded['mode'] = 'toggle'
+        elif op in ('remove', 'strip', 'unset'):
+            forwarded['mode'] = 'remove'
+        elif op in ('clear', 'purge'):
+            forwarded['mode'] = 'clear'
+        elif op in ('', 'add', 'set', 'apply'):
+            forwarded['mode'] = forwarded.get('mode', 'add')
+        else:
+            self._log_mod_runtime_error(
+                'tag_op', RuntimeError(f'unsupported op: {op}'), player_id, card,
+            )
+            return
+        if zone not in (None, '', [], {}):
+            return self._tag_op_zone_payload(player_id, card, forwarded, log, choice, context)
+        return self._tag_op_card_payload(player_id, card, forwarded, log, choice, context)
+
+    def _tag_op_card_payload(self, player_id, card, params, log, choice, context):
         """Round 31 / 批次 Z：卡内标签族的单卡一半（``mode`` 选加/减/清空）。
 
         覆盖 ``add_tag``（默认）/ ``remove_tag``（``mode:"remove"``）/
@@ -10193,7 +10305,9 @@ class GameEngine:
         target_card.disabled_flags.discard('temp_swift')
         self.log_msg(f"{self.pn(target_id)}的一张手牌获得暂时迅捷:{amount}")
 
-    def _atomic_add_tag_to_zone(self, player_id, card, params, log, choice, context):
+    def _tag_op_zone_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``tag_op`` 的区域段实现体（旧 ``add_tag_to_zone``：
+        # ``mode`` 选 add/remove/toggle，区域名走统一词表）。
         """Add a tag to all cards in one or more zones, optionally filtered by card_type.
 
         ``zone`` takes a single zone (hand/deck/discard/exile) and ``zones`` a list,
@@ -10555,15 +10669,10 @@ class GameEngine:
             card.custom_counters[name] = card.custom_counters.get(name, 0) + amount
             self.log_msg(log or f"{card.name_cn}计数器{name}+{amount}")
 
-    def _atomic_exile_this(self, player_id, card, params, log, choice, context):
-        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
-        if not target_card:
-            return
-        owner_id, _ = self._remove_card_from_current_zone(target_card)
-        if owner_id is None:
-            owner_id = player_id
-        self._put_card_in_exile(owner_id, target_card)
-        self.log_msg(log or f"{target_card.name_cn}被放逐")
+    # Round 33 / 批次 AB：``exile_this`` 已删除——它的实现就是
+    # ``move_card(zone:"exile")(card:{"ref":"current_card"})``（``_move_card_to_exile``
+    # 是它的超集：同样读 ``card``/同样"被放逐"战报，额外支持 ``owner``/``silent``）。
+    # 旧名写出来拿到 mod_spec_v2.REMOVED_ATOMIC_OPS 的替代写法。
 
     def _move_card_to_discard(self, player_id, card, params, log, choice, context):
         # Round 14 / batch 2: 目的区自洽 + 位置词表校验（hand/discard/exile 无位置
@@ -10798,6 +10907,15 @@ class GameEngine:
     def _atomic_move_card(self, player_id, card, params, log, choice, context):
         """把一张牌移到任意目的区（hand/deck/discard/exile）。
 
+        Round 33 / 批次 AB：``move_card`` 升级成"区域/造牌/夺取"伞，吸收
+        ``give_card_to_hand`` / ``give_card_to_deck`` / ``give_magic_orb_to_hand`` /
+        ``random_zone_card_to_hand`` / ``move_cards_to_deck`` / ``steal_enemy_card`` /
+        ``swap_hands`` / ``exile_this``（``exile_this`` 就是 ``zone:"exile"`` 的同义
+        写法，没有独占参数）。统一参数：``cards``（一批牌）、``source_zone``（从哪取）、
+        ``target_zone``（放哪去）、``position``、``owner``、``random``、``reveal``、
+        ``overflow``、``log``；``mode`` 选实现体（``give`` / ``orb`` / ``random`` /
+        ``batch`` / ``steal`` / ``swap_hands``），缺省按参数形状推断。
+
         Round 29 / 批次 X：``move_to_hand`` / ``move_to_deck`` / ``move_to_discard`` /
         ``move_to_exile`` 四个同族"糖"原子合并到这一条——``zone``/``to`` 选目的区，
         其余参数**原样转交**对应实现，因此四个区的默认值（``card`` 默认引用、
@@ -10811,7 +10929,26 @@ class GameEngine:
 
         ``equipment`` 不是有效目的区（那是 ``place_as_equip``），会显式报错。
         """
-        raw_zone = params.get('zone')
+        mode = str(params.get('mode') or '').strip().lower()
+        if not mode:
+            if params.get('cards') is not None or params.get('cards_ref') is not None:
+                mode = 'batch'
+            elif params.get('random') and params.get('source_zone') is not None \
+                    and params.get('card') is None and params.get('card_id') is None:
+                mode = 'random'
+        if mode in ('give', 'create', 'give_card'):
+            return self._move_card_give_payload(player_id, card, params, log, choice, context)
+        if mode in ('orb', 'give_orb', 'magic_orb'):
+            return self._move_card_give_orb_payload(player_id, card, params, log, choice, context)
+        if mode in ('random', 'random_pick', 'random_card'):
+            return self._move_card_random_payload(player_id, card, params, log, choice, context)
+        if mode in ('batch', 'move_set', 'cards'):
+            return self._move_card_batch_payload(player_id, card, params, log, choice, context)
+        if mode in ('steal', 'steal_card', 'steal_hand'):
+            return self._move_card_steal_payload(player_id, card, params, log, choice, context)
+        if mode in ('swap_hands', 'swap'):
+            return self._move_card_swap_hands_payload(player_id, card, params, log, choice, context)
+        raw_zone = params.get('target_zone', params.get('zone'))
         if raw_zone in (None, ''):
             raw_zone = params.get('to')
         if raw_zone in (None, ''):
@@ -10858,7 +10995,9 @@ class GameEngine:
     # Round 32 / 批次 AA：``swap_health`` 已并入 ``health_op(mode:"swap")``
     # （``target1``/``target2`` 参数不变；旧实现交换后不做任何钳位，这里逐字保留）。
 
-    def _atomic_swap_hands(self, player_id, card, params, log, choice, context):
+    def _move_card_swap_hands_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AB：``move_card(mode:"swap_hands")`` 的实现体（旧
+        # ``swap_hands``：两名玩家的手牌互换，参数与战报不变）。
         t1 = self._resolve_target(player_id, params.get('target1', 'self'))
         t2 = self._resolve_target(player_id, params.get('target2', 'enemy'))
         self.players[t1].hand, self.players[t2].hand = self.players[t2].hand, self.players[t1].hand
@@ -14281,7 +14420,7 @@ class GameEngine:
         amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
         effects = [
             {'type': 'status_add_named', 'params': {'target': 'target', 'status': 'blind', 'amount': amount}},
-            {'type': 'shuffle_hand', 'params': {'target': 'target'}},
+            {'type': 'shuffle', 'params': {'zone': 'hand', 'target': 'target'}},
         ]
         for target_id in self._timer_targets(player_id, params.get('target', 'target')):
             self._register_timed_effect(player_id, target_id, 'target_turn_start_after_status_clear', 1, effects, card)
@@ -14289,7 +14428,7 @@ class GameEngine:
                 self.log_msg(log)
 
     def _atomic_delayed_reveal_hand_next_turn(self, player_id, card, params, log, choice, context):
-        effects = [{'type': 'reveal_enemy_hand', 'params': {'target': 'target'}}]
+        effects = [{'type': 'reveal', 'params': {'mode': 'enemy_hand', 'target': 'target'}}]
         for target_id in self._timer_targets(player_id, params.get('target', 'target')):
             self._register_timed_effect(player_id, target_id, 'target_turn_start', 1, effects, card)
             if log:
@@ -17241,7 +17380,564 @@ class GameEngine:
             card._placed_as_equipment = True
             card._placed_as_equipment_owner = owner_id
 
-    def _atomic_add_equipment_to_zone(self, player_id, card, params, log, choice, context):
+    def _atomic_status_add_named(self, player_id, card, params, log, choice, context):
+        """Round 31 / 批次 Z：``status_add_named`` 现在用 ``mode`` 区分加/设。
+
+        ``mode`` 缺省 ``add``（层数叠加）；``mode:"set"`` 即旧
+        ``set_status_named``（把状态设为 N 层，``stack`` 仍是它的默认值来源）。
+        两个名字的参数面完全一致，合并后只多一个 ``mode`` 键。
+        """
+
+        mode = str(params.get('mode', 'add') or 'add').strip().lower()
+        mode = {'=': 'set', 'set_to': 'set', 'assign': 'set', 'replace': 'set',
+                'stack': 'add', '+': 'add', '+=': 'add', 'increase': 'add'}.get(mode, mode)
+        op = 'set_status_named' if mode == 'set' else 'status_add_named'
+        self._apply_status_add_family(player_id, card, params, log, op=op)
+
+    # Round 30 / 批次 Y：旧写法 ``add_status`` / ``remove_status`` / ``set_status``
+    # （Round 15 起是"未写 ``log`` 时默播报层数"的真原子）已随零用量清理删除。
+    # 规范写法 ``status_add_named`` / ``status_remove_named`` 现在**只**按步骤
+    # 自己写的 ``log`` 决定战报（``log:true`` 就是旧默认那句），因此
+    # ``STATUS_LEGACY_ANNOUNCING_OPS`` 也一并消失。
+    # Round 31 / 批次 Z：``set_status_named`` 也并进 ``status_add_named(mode:"set")``。
+
+
+    def _atomic_add_tag(self, player_id, card, params, log, choice, context):
+        """Round 31 / 批次 Z：卡内标签族的单卡一半（``mode`` 选加/减/清空）。
+
+        覆盖 ``add_tag``（默认）/ ``remove_tag``（``mode:"remove"``）/
+        ``clear_tags``（``mode:"clear"``，把所有有效标签压进 ``disabled_flags``
+        再清空 ``instance_flags``）。默认模式与默认战报逐字保留。
+        """
+
+        mode = str(params.get('mode', 'add') or 'add').strip().lower()
+        mode = {'+': 'add', 'add_tag': 'add', 'remove_tag': 'remove', 'del': 'remove',
+                'delete': 'remove', 'unset': 'remove', 'clear_tags': 'clear',
+                'reset': 'clear', 'none': 'clear'}.get(mode, mode)
+        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
+        if target_card is None:
+            return
+        if mode == 'clear':
+            all_flags = self._effective_card_flags(target_card)
+            target_card.instance_flags = set()
+            target_card.disabled_flags = set(getattr(target_card, 'disabled_flags', set()) or set())
+            target_card.disabled_flags.update(all_flags)
+            if log:
+                self.log_msg(log)
+            return
+        tag = normalize_card_flag(params.get('tag', ''))
+        if not tag:
+            return
+        if mode == 'remove':
+            if hasattr(target_card, 'instance_flags'):
+                target_card.instance_flags.discard(tag)
+            if params.get('silent') or params.get('no_log') or log is False:
+                return
+            self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
+            return
+        target_card.instance_flags = getattr(target_card, 'instance_flags', set())
+        target_card.instance_flags.add(tag)
+        return_log = params.get('return_log')
+        if isinstance(return_log, str) and return_log:
+            custom = getattr(target_card, 'custom_vars', None)
+            if isinstance(custom, dict):
+                custom[f'{tag}_log'] = return_log
+        if params.get('silent') or params.get('no_log') or log is False:
+            return
+        self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
+
+    def _atomic_add_tag_to_zone(self, player_id, card, params, log, choice, context):
+        """Add a tag to all cards in one or more zones, optionally filtered by card_type.
+
+        ``zone`` takes a single zone (hand/deck/discard/exile) and ``zones`` a list,
+        which may also contain ``equipment`` (the attached equipment cards).
+        ``summary`` collapses the per-zone reports into one combined battle-log
+        line, e.g. "玩家1使玩家2的12张攻击牌获得被揭示".
+
+        Round 14 / batch 2: 区域名走统一词表（见 mod_runtime_v2.ZONE_NAMES），
+        未知区域显式报错；``target`` 与 ``add_tag_to_zone`` 的其它同族 op 共用
+        ``first``/``exclude``/``relation``/``allow_self``/``filter`` 修饰键。
+        """
+        targets = self._step_target_ids(
+            player_id, card, params, context, op='add_tag_to_zone', default='enemy',
+        )
+        if not targets:
+            return
+        zone_names = self._step_zone_names(params, op='add_tag_to_zone', default='hand')
+        tag = str(params.get('tag', '')).strip()
+        card_type_filter = str(params.get('card_type', '') or '').strip().lower()
+        if not tag or not zone_names:
+            return
+        tag = normalize_card_flag(tag)
+        mode = str(params.get('mode', 'add') or 'add').strip().lower()
+        mode = {'+': 'add', 'add_tag': 'add', 'add': 'add',
+                'remove_tag': 'remove', 'remove': 'remove', 'del': 'remove', 'delete': 'remove',
+                'toggle': 'toggle', 'flip': 'toggle', 'toggle_tag': 'toggle'}.get(mode, mode)
+        if mode == 'toggle':
+            # Round 31 / 批次 Z：旧 ``toggle_tag_in_zone`` 的逐张翻转。
+            log_value = log
+            for target_id in targets:
+                ps = self.players[target_id]
+                changed = 0
+                for zone_name in zone_names:
+                    for candidate in list(self._player_zone_cards(ps, zone_name) or []):
+                        if candidate is None:
+                            continue
+                        if card_type_filter and getattr(candidate, 'card_type', '') != card_type_filter:
+                            continue
+                        if tag in self._effective_card_flags(candidate):
+                            candidate.instance_flags.discard(tag)
+                            candidate.disabled_flags.add(tag)
+                        else:
+                            candidate.instance_flags.add(tag)
+                            candidate.disabled_flags.discard(tag)
+                        changed += 1
+                if changed <= 0 or not log_value:
+                    continue
+                self.log_msg(self._format_step_log(
+                    log_value, target=self.pn(target_id), count=changed, tag=tag,
+                ))
+            return
+        if mode == 'remove':
+            # Round 31 / 批次 Z：旧 ``remove_tag_from_zone`` 的"区域摘标签"。
+            counts = {}
+            for target_id in targets:
+                ps = self.players[target_id]
+                count = 0
+                for zone_name in zone_names:
+                    for candidate in self._player_zone_cards(ps, zone_name):
+                        if candidate is None:
+                            continue
+                        if card_type_filter and getattr(candidate, 'card_type', '') != card_type_filter:
+                            continue
+                        if tag in getattr(candidate, 'instance_flags', set()):
+                            candidate.instance_flags.discard(tag)
+                            count += 1
+                        candidate.disabled_flags.discard(tag)
+                counts[target_id] = count
+            if params.get('silent') or params.get('no_log') or log is False:
+                return
+            if log:
+                for target_id in targets:
+                    self.log_msg(self._format_step_log(
+                        log, target=self.pn(target_id), source=self.pn(player_id),
+                        count=counts.get(target_id, 0),
+                    ))
+                return
+            zone_desc = '/'.join(self._zone_log_label(zone_name) for zone_name in zone_names)
+            for target_id in targets:
+                self.log_msg(
+                    f"{self.pn(player_id)}使{self.pn(target_id)}{zone_desc}中的"
+                    f"{counts.get(target_id, 0)}张牌失去{self._card_flag_log_text(tag)}"
+                )
+            return
+        summary = bool(
+            params.get('summary')
+            or params.get('summary_log')
+            or str(params.get('log_mode', '') or '').strip().lower() == 'summary'
+        )
+        counts = {}
+        for target_id in targets:
+            ps = self.players[target_id]
+            count = 0
+            for zone_name in zone_names:
+                zone_cards = self._player_zone_cards(ps, zone_name)
+                for candidate in list(zone_cards or []):
+                    if candidate is None:
+                        continue
+                    if card_type_filter and getattr(candidate, 'card_type', '') != card_type_filter:
+                        continue
+                    if tag not in candidate.flags:
+                        candidate.instance_flags.add(tag)
+                        candidate.disabled_flags.discard(tag)
+                        count += 1
+            counts[target_id] = count
+        if params.get('silent') or params.get('no_log') or log is False:
+            return
+        if log:
+            for target_id in targets:
+                self.log_msg(self._format_step_log(
+                    log,
+                    target=self.pn(target_id),
+                    source=self.pn(player_id),
+                    count=counts.get(target_id, 0),
+                    amount=counts.get(target_id, 0),
+                ))
+            return
+        type_desc = self._card_type_log_label(card_type_filter)
+        for target_id in targets:
+            count = counts.get(target_id, 0)
+            if summary:
+                tag_desc = self._card_flag_log_label(tag)
+                self.log_msg(f"{self.pn(player_id)}使{self.pn(target_id)}的{count}张{type_desc}获得{tag_desc}")
+                continue
+            zone_desc = self._zone_log_label(zone_names[0])
+            flag_text = self._card_flag_log_text(tag)
+            self.log_msg(
+                f"{self.pn(player_id)}使{self.pn(target_id)}{zone_desc}中的"
+                f"{count}张{type_desc}获得{flag_text}"
+            )
+
+    def _atomic_give_card_to_hand(self, player_id, card, params, log, choice, context):
+        # Round 14 / batch 2: 目的区自洽校验 + 位置词表校验 + ``target`` 集合语义。
+        # 标量选择器（self/target/enemy）仍旧只解析出一个目标，旧数据行为不变；
+        # 多目标选择器（all_players/play_targets…）改为每个目标各给一张。
+        self._assert_step_zone(params, 'hand', op='give_card_to_hand')
+        self._step_zone_position_or_none(params, op='give_card_to_hand')
+        target_ids = self._step_target_ids(player_id, card, params, context, op='give_card_to_hand')
+        card_ref = self._resolve_card_id_ref(player_id, self._give_card_step_ref(params), card)
+        if not card_ref or not target_ids:
+            return
+        amount = self._give_card_step_amount(player_id, card, params)
+        missing_skip = str(params.get('missing') or '').strip().lower() == 'skip'
+        overflow_discard = str(params.get('overflow') or '').strip().lower() == 'discard'
+        for target_id in target_ids:
+            if card_ref == ERROR_CARD_ID or missing_skip:
+                if card_ref not in CARD_DEFS:
+                    continue
+            card_def = CARD_DEFS.get(card_ref) or CARD_DEFS.get(ERROR_CARD_ID)
+            if not card_def:
+                continue
+            if card_def.id == ERROR_CARD_ID and missing_skip:
+                continue
+            if card_def.id != ERROR_CARD_ID and not self._card_allowed(card_def.id):
+                continue
+            ts = self.players[target_id]
+            for _ in range(amount):
+                if card_def.id != ERROR_CARD_ID and not ts.can_add_to_hand():
+                    # ``overflow: discard`` mirrors PlayerState.add_to_hand, which
+                    # sends the new card to the discard pile when the hand is full.
+                    if not overflow_discard:
+                        break
+                new_card = CardInstance(def_id=card_def.id)
+                self._apply_setup_modifiers_to_card(target_id, new_card)
+                if not self._can_normally_acquire_card(target_id, new_card):
+                    self.log_msg(f"{self.pn(target_id)}已拥有唯一牌{new_card.name_cn}，未获得额外实例")
+                    break
+                ts.add_to_hand(new_card)
+                self._remember_created_card(new_card, context)
+            if log and card_def.id != ERROR_CARD_ID:
+                self.log_msg(log)
+
+
+
+    def _atomic_copy_card_instance(self, player_id, card, params, log, choice, context):
+        """Copy a card *instance* (optionally from its pre-play snapshot).
+
+        Unlike :meth:`_atomic_copy_card` this keeps the copied instance's own
+        upgrades, can reset it like a freshly played card, can stamp extra tags
+        and layers, and can drop the copy into hand, discard or deck. It backs
+        the "make an upgraded copy of myself" family of cards.
+        """
+        source_ref = params.get('source', params.get('card', {'ref': 'current_card'}))
+        from_snapshot = isinstance(source_ref, str) and source_ref in ('pre_play_snapshot', 'snapshot')
+        copied = None
+        if from_snapshot:
+            if card is not None:
+                snapshot = getattr(card, '_bio_pre_play_snapshot', None)
+                copied = fresh_card_copy_from_dict(
+                    snapshot if isinstance(snapshot, dict) else card.to_dict(),
+                    getattr(card, 'def_id', ''),
+                )
+        else:
+            source_card = self._resolve_card_ref(player_id, source_ref, card)
+            if source_card is not None:
+                if params.get('base_instance') or params.get('fresh_instance'):
+                    # "play another copy of <card>" spawns a plain instance: the
+                    # played card's power/layers/tags stay on the original.
+                    copied = CardInstance(source_card.def_id)
+                else:
+                    copied = source_card.copy()
+        if copied is None:
+            return
+        if params.get('reset_after_play'):
+            reset_card_after_play(copied)
+        copied.instance_flags = getattr(copied, 'instance_flags', set())
+        copied.disabled_flags = getattr(copied, 'disabled_flags', set())
+        for flag in normalize_card_flags(params.get('flags', []) or []):
+            copied.instance_flags.add(flag)
+            copied.disabled_flags.discard(flag)
+        for modifier in params.get('setup_modifiers', []) or []:
+            copied.setup_modifiers.add(str(modifier))
+        if params.get('fission_level') is not None:
+            copied.fission_level = clamp_card_layer(self._eval_int(player_id, params['fission_level'], card, 1))
+            copied.fission_count = max(0, copied.fission_level - 1)
+            copied.fission_hit = 0
+        if params.get('swift_value') is not None:
+            copied.swift_value = max(0, self._eval_int(player_id, params['swift_value'], card, 0))
+        if params.get('unique_copy_penalty'):
+            try:
+                self._apply_forced_unique_copy_penalty(player_id, copied)
+            except Exception:
+                pass
+        zone = str(params.get('zone', 'hand') or 'hand').lower()
+        position = str(params.get('position', 'top') or 'top').lower()
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not self._valid_player_id(target_id):
+            target_id = player_id
+        target = self.players[target_id]
+        if zone == 'discard':
+            if position == 'random':
+                target.discard.insert(random.randint(0, len(target.discard)), copied)
+            else:
+                target.discard.append(copied)
+            self._note_achievement_enemy_card_total(player_id)
+        elif zone == 'deck':
+            if position == 'random':
+                target.deck.insert(random.randint(0, len(target.deck)), copied)
+            elif position == 'bottom':
+                target.deck.append(copied)
+            else:
+                target.deck.insert(0, copied)
+        elif params.get('forced') or str(params.get('hand_full') or '').strip().lower() == 'discard':
+            self._add_forced_copy_to_hand(
+                player_id, copied, source_owned=bool(params.get('source_owned', True)),
+            )
+        elif target.can_add_to_hand():
+            target.add_to_hand(copied)
+        else:
+            return
+        self._remember_created_card(copied, context)
+        self._last_created_card_instance_id = getattr(copied, 'instance_id', None)
+        if log is False or not log:
+            return
+        self.log_msg(self._format_step_log(
+            log, target=self.pn(player_id), source=self.pn(player_id), count=1,
+        ))
+
+    def _atomic_create_copies_to_deck_top(self, player_id, card, params, log, choice, context):
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        def_id = str(params.get('def_id') or (getattr(card, 'def_id', '') if card else ''))
+        if not self._card_allowed(def_id):
+            return
+        count = min(20, max(0, self._eval_int(player_id, params.get('count', 1), card, 1)))
+        flags = normalize_card_flags(params.get('flags', []))
+        swift = self._eval_int(player_id, params.get('swift_value', 0), card, 0)
+        magic_swift = self._eval_int(player_id, params.get('magic_swift_value', 0), card, 0)
+        power = clamp_card_power(self._eval_int(player_id, params.get('power_value', 0), card, 0))
+        extra_hits = clamp_card_extra_hits(self._eval_int(player_id, params.get('extra_hits', 0), card, 0))
+        ps = self.players[target_id]
+        made = []
+        for _ in range(max(0, count)):
+            new_card = CardInstance(def_id)
+            new_card.instance_flags.update(flags)
+            if swift > 0:
+                new_card.swift_value = swift
+                new_card.instance_flags.add('swift')
+            if magic_swift > 0:
+                new_card.magic_swift_value = magic_swift
+                new_card.instance_flags.add('magic_swift')
+            if power > 0:
+                new_card.power_value = power
+                new_card.instance_flags.add('power')
+            if extra_hits > 0:
+                new_card.extra_hits = extra_hits
+                new_card.setup_modifiers.add('explicit_extra_hits')
+            self._apply_setup_modifiers_to_card(target_id, new_card)
+            self._apply_forced_unique_copy_penalty(
+                target_id,
+                new_card,
+                source_owned=(card is not None and getattr(card, 'def_id', None) == def_id),
+            )
+            ps.deck.insert(0, new_card)
+            made.append(new_card)
+        if log:
+            self.log_msg(log)
+
+
+
+    def _atomic_queue_auto_play(self, player_id, card, params, log, choice, context):
+        """Register a card so it is played automatically at the owner's turn start."""
+        if not self._valid_player_id(player_id):
+            return
+        source_card = self._resolve_card_ref(
+            player_id, params.get('card', {'ref': 'current_card'}), card
+        )
+        if source_card is None:
+            source_card = card
+        if source_card is None:
+            return
+        markers = set(getattr(source_card, 'instance_flags', set()) or set())
+        if markers & {'ocean_no_auto', self.AUTO_PLAY_QUEUE_MARKER}:
+            # A copy produced by the queue never registers itself again.
+            return
+        if bool(params.get('once_per_play', True)):
+            try:
+                if int(getattr(source_card, 'fission_hit', 0) or 0) > 0:
+                    # Fission replays the same play; only the first hit queues.
+                    return
+            except Exception:
+                pass
+        ps = self.players[player_id]
+        queue = self._auto_play_queue_entries(ps, create=True)
+        if bool(params.get('dedupe', False)):
+            # 表格14 R170（魔法珍珠）：效果是"每个回合开始时自动对其打出1张"，
+            # 不是"本局每打出过1次就多1张"。同一张牌的旧队列项先移除，只保留
+            # 最新一次（目标也会跟着更新到最近一次选择）。
+            source_def = str(getattr(source_card, 'def_id', '') or '')
+            queue[:] = [
+                existing for existing in queue
+                if not (
+                    isinstance(existing, dict)
+                    and str(existing.get('def_id') or '') == source_def
+                )
+            ]
+        max_entries = max(
+            1,
+            self._eval_int(
+                player_id,
+                params.get('max_entries', self.AUTO_PLAY_QUEUE_MAX_ENTRIES),
+                card,
+                self.AUTO_PLAY_QUEUE_MAX_ENTRIES,
+            ),
+        )
+        if len(queue) >= max_entries:
+            return
+        target_spec = params.get('target', 'target')
+        target_ref = None
+        if self._is_dynamic_auto_play_target(target_spec):
+            target_id = -1
+            target_ref = target_spec
+        else:
+            target_id = self._resolve_target(player_id, target_spec)
+        source = str(params.get('source', 'snapshot') or 'snapshot').strip().lower()
+        if source not in ('snapshot', 'instance'):
+            source = 'snapshot'
+        entry = {
+            'def_id': str(getattr(source_card, 'def_id', '') or ''),
+            'source': source,
+            'target_id': int(target_id),
+            'target_ref': target_ref,
+            'swift_value': self._eval_int(player_id, params.get('swift_value', 0), card, 0),
+            'magic_swift_value': self._eval_int(
+                player_id, params.get('magic_swift_value', 0), card, 0
+            ),
+            'exile': bool(params.get('exile', False)),
+            'each_turn': bool(params.get('each_turn', True)),
+            'cost': str(params.get('cost', 'normal') or 'normal').strip().lower(),
+            'marker': str(params.get('marker') or self.AUTO_PLAY_QUEUE_MARKER),
+            'require_selectable': bool(params.get('require_selectable', True)),
+            'allow_self': bool(params.get('allow_self', False)),
+            'log': str(params.get('log') or ''),
+            'no_auto': True,
+        }
+        if source == 'instance':
+            entry['card_instance_id'] = int(getattr(source_card, 'instance_id', -1) or -1)
+        else:
+            entry['card'] = source_card.to_dict() if hasattr(source_card, 'to_dict') else None
+        queue.append(entry)
+
+
+    _MULTI_TARGET_SELECTORS = (
+        'all', 'all_players', 'all_enemies', 'all_others', 'all_except_self', 'all_selectable',
+        'all_friendlies', 'wide_strike_targets', 'play_targets', 'target_players', 'both',
+        'random_side',
+    )
+
+
+
+
+
+
+
+    def _atomic_equipment_op(self, player_id, card, params, log, choice, context):
+        """Round 33 / 批次 AC：``equipment_op`` 伞（7 合 1）。
+
+        统一参数 ``mode``：``place``（缺省，把牌置入装备栏，旧 ``place_as_equip``）、
+        ``give``（造一张装备卡给目标，旧 ``add_equipment_to_zone``）、
+        ``armor``（旧 ``add_equipment_armor``）、``destroy``（旧
+        ``destroy_equipment``；内部再选 ``pick``=choice/random/all/self 与
+        ``filter``/``record_count``）、``seal``（旧 ``seal_equipment``）、
+        ``unprotect``（旧 ``remove_equip_protection``）、``each``（旧
+        ``for_each_equipment``，收 ``body``/``steps`` 子步骤）。七段实现体与
+        合并前逐字一致。
+        """
+
+        mode = str(params.get('mode') or params.get('action') or '').strip().lower()
+        forwarded = dict(params)
+        forwarded.pop('action', None)
+        if mode in ('destroy', 'break', 'smash', '摧毁'):
+            forwarded['mode'] = str(
+                params.get('pick',
+                          params.get('destroy',
+                                    params.get('destroy_mode',
+                                              params.get('sub_mode', 'choice'))))
+                or 'choice'
+            ).strip().lower()
+            return self._equipment_op_destroy_payload(player_id, card, forwarded, log, choice, context)
+        forwarded.pop('mode', None)
+        if mode in ('', 'place', 'equip', 'self'):
+            return self._equipment_op_place_payload(player_id, card, forwarded, log, choice, context)
+        if mode in ('give', 'create', 'to_zone', 'zone'):
+            return self._equipment_op_give_payload(player_id, card, forwarded, log, choice, context)
+        if mode in ('armor', 'add_armor', 'shield'):
+            return self._equipment_op_armor_payload(player_id, card, forwarded, log, choice, context)
+        if mode in ('seal', 'dust', 'sealed'):
+            return self._equipment_op_seal_payload(player_id, card, forwarded, log, choice, context)
+        if mode in ('unprotect', 'remove_protection', 'protection_off'):
+            return self._equipment_op_unprotect_payload(player_id, card, forwarded, log, choice, context)
+        if mode in ('each', 'for_each', 'loop'):
+            return self._equipment_op_each_payload(player_id, card, forwarded, log, choice, context)
+        self._log_mod_runtime_error(
+            'equipment_op', RuntimeError(f'unsupported mode: {mode}'), player_id, card,
+        )
+
+    def _equipment_op_place_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``equipment_op(mode:"place")`` 的实现体（旧
+        # ``place_as_equip``：把牌置入装备栏并跑装备步骤）。
+        source = self.players[player_id]
+        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
+        if target_card is None:
+            return
+        owner_expr = params.get('owner', params.get('equip_owner'))
+        owner_id = self._resolve_target(player_id, owner_expr) if owner_expr is not None else player_id
+        if owner_id < 0 or owner_id >= len(self.players):
+            owner_id = player_id
+        owner = self.players[owner_id]
+        if target_card in source.hand:
+            source.hand.remove(target_card)
+        else:
+            self._remove_card_from_current_zone(target_card)
+        if self._find_equipment_for_card(owner_id, target_card) is None:
+            target_card.durability = target_card.card_def.durability if getattr(target_card.card_def, 'durability', 0) > 0 else 3
+            eq = EquipmentInstance(target_card, owner_id)
+            if 'effect_target' in params:
+                effect_target = self._resolve_target(player_id, params.get('effect_target'))
+                if not (0 <= effect_target < len(self.players)) and isinstance(context, dict):
+                    try:
+                        effect_target = int(context.get('target_id', -1))
+                    except Exception:
+                        effect_target = -1
+                if 0 <= effect_target < len(self.players):
+                    eq.effect_target = effect_target
+            else:
+                selected_target = self._selected_choice_target(-1)
+                if not (0 <= selected_target < len(self.players)) and isinstance(context, dict):
+                    try:
+                        selected_target = int(context.get('target_id', -1))
+                    except Exception:
+                        selected_target = -1
+                if 0 <= selected_target < len(self.players):
+                    eq.effect_target = selected_target
+            owner.equipment.append(eq)
+            if self._equipment_uses_non_stack_rule(eq):
+                self._ensure_non_stack_equipment_order(eq)
+            self._note_achievement_equipment_count(owner_id)
+            self._refresh_hand_limit_bonuses()
+            self._refresh_equipment_derived_player_flags(owner_id)
+            self.log_msg(log or f"{self.pn(owner_id)}装备了{target_card.name_cn}")
+            if self._card_has_flag(target_card, 'electric_web_arm_on_place'):
+                arm_target = int(getattr(eq, 'effect_target', owner_id))
+                if not (0 <= arm_target < len(self.players)):
+                    arm_target = owner_id
+                self._apply_electric_web_arm(owner_id, eq, arm_target, 2)
+        if target_card is card:
+            card._placed_as_equipment = True
+            card._placed_as_equipment_owner = owner_id
+
+    def _equipment_op_give_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``equipment_op(mode:"give")`` 的实现体（旧
+        # ``add_equipment_to_zone``：凭空造一张装备卡并挂到目标装备区）。
         card_id = self._resolve_card_id_ref(player_id, params.get('card', self.SETUP_CARD_LEAF), card)
         card_def = CARD_DEFS.get(card_id)
         if card_def is not None and not self._card_allowed(card_def.id):
@@ -17461,8 +18157,12 @@ class GameEngine:
             self._game_over_defer_depth = max(0, self._game_over_defer_depth - 1)
         self._check_game_over()
 
-    def _atomic_random_zone_card_to_hand(self, player_id, card, params, log, choice, context):
+    def _move_card_random_payload(self, player_id, card, params, log, choice, context):
         """Move random selectable cards from a zone into the target's hand.
+
+        Round 33 / 批次 AB：``move_card(mode:"random")`` 的实现体（旧
+        ``random_zone_card_to_hand``）——统一参数里来源区写 ``source_zone``，
+        目的区固定 ``hand``；旧 ``zone``/``zones`` 写法继续认。
 
         ``zone``（或 ``zones``）接受 hand/deck/discard/exile，``count`` 是张数，
         ``tag`` 是给每张移出的牌打的 flag（升华牌永远不可选，和其它"选一张牌"
@@ -17473,11 +18173,19 @@ class GameEngine:
         取牌区（要拆装备请用 ``destroy_equipment``）；``target`` 按选择器集合
         解析，多目标时按顺序取第一个可用目标。
         """
+        forwarded = dict(params)
+        source_zone = forwarded.get('source_zone', forwarded.get('from'))
+        if source_zone not in (None, ''):
+            forwarded['zone'] = source_zone
+            forwarded.pop('zones', None)
+        raw_zone_target = str(forwarded.get('target_zone', 'hand') or 'hand').strip().lower()
+        if normalize_zone_name(raw_zone_target, allow_equipment=False, op='move_card(mode:"random")', param='target_zone') != 'hand':
+            raise V2ZoneError(f'move_card(mode:"random") 只能取进 hand，收到 {raw_zone_target!r}')
         target_ids = self._step_target_ids(
-            player_id, card, params, context, op='random_zone_card_to_hand', default='target',
+            player_id, card, forwarded, context, op='move_card', default='target',
         )
         zone_names = self._step_zone_names(
-            params, op='random_zone_card_to_hand', allow_equipment=False, default='discard',
+            forwarded, op='move_card', allow_equipment=False, default='discard',
         )
         if not target_ids or not zone_names:
             return
@@ -17537,7 +18245,9 @@ class GameEngine:
         else:
             self.log_msg(f"{self.pn(target_id)}的{zone_label}没有可加入手牌的牌")
 
-    def _atomic_seal_equipment(self, player_id, card, params, log, choice, context):
+    def _equipment_op_seal_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``equipment_op(mode:"seal")`` 的实现体（旧
+        # ``seal_equipment``：给目标所有装备叠尘封层数）。
         """Seal every piece of equipment on the target(s) by ``amount`` layers."""
         amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
         if amount <= 0:
@@ -17792,8 +18502,13 @@ class GameEngine:
             return [card] if isinstance(card, CardInstance) else []
         return []
 
-    def _atomic_move_cards_to_deck(self, player_id, card, params, log, choice, context):
+    def _move_card_batch_payload(self, player_id, card, params, log, choice, context):
         """Move a batch of cards into the owner's deck.
+
+        Round 33 / 批次 AB：``move_card(mode:"batch")`` 的实现体（旧
+        ``move_cards_to_deck``）——统一参数 ``cards``（一批牌，缺省
+        ``selected_cards``）、``target_zone``（固定 ``deck``）、``owner``/``target``、
+        ``position``、``silent``、``log``。
 
         ``position`` is ``top`` (default), ``bottom``, ``random`` (one random slot
         each) or ``random_top`` (shuffle the moved cards first, then put the whole
@@ -17802,10 +18517,13 @@ class GameEngine:
         # Round 14 / batch 2: 目的区（deck）+ 位置词表（含 random_top 及其历史别名
         # ``shuffled_top``）走统一校验；``owner``/``target`` 按选择器解析，一批牌
         # 只能进一个牌堆，所以取第一个有效目标。
-        self._assert_step_zone(params, 'deck', op='move_cards_to_deck')
-        position = self._step_zone_position(params, op='move_cards_to_deck')
+        raw_zone = params.get('target_zone', params.get('zone', 'deck'))
+        if normalize_zone_name(raw_zone, allow_equipment=False, op='move_card(mode:"batch")', param='target_zone') != 'deck':
+            raise V2ZoneError(f'move_card(mode:"batch") 只能进 deck，收到 {raw_zone!r}')
+        self._assert_step_zone(params, 'deck', op='move_card')
+        position = self._step_zone_position(params, op='move_card')
         owner_ids = self._step_target_ids(
-            player_id, card, params, context, op='move_cards_to_deck',
+            player_id, card, params, context, op='move_card',
             default='self', keys=('owner', 'target'),
         )
         owner_id = owner_ids[0] if owner_ids else player_id
@@ -17933,7 +18651,9 @@ class GameEngine:
                 continue
         return cleared
 
-    def _atomic_clear_statuses(self, player_id, card, params, log, choice, context):
+    def _status_op_clear_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：本方法从公开原子降为 ``status_op(op:"clear")`` 的
+        # 实现体（preset 名单式清状态，名单与默认战报逐字保留）。
         """Clear a status (or every status) from the target(s).
 
         ``statuses`` is ``"all"`` (default) or a list of status ids/aliases;
@@ -18041,7 +18761,9 @@ class GameEngine:
             self._clear_player_statuses(target_id, [status_key], include_custom=True)
         return 0
 
-    def _atomic_settle_status(self, player_id, card, params, log, choice, context):
+    def _status_op_settle_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：本方法从公开原子降为 ``status_op(op:"settle")`` 的
+        # 实现体（DoT 结算唯一实现）。
         """Resolve a status immediately (poison/burn damage, decay, toxic refill).
 
         ``fill_from`` can name another status that supplies the settled status when
@@ -18669,7 +19391,39 @@ class GameEngine:
         elif total > 0:
             self.log_msg(f"风吹走了{total}张牌")
 
-    def _atomic_restore_turn_start_stats(self, player_id, card, params, log, choice, context):
+    def _atomic_snapshot(self, player_id, card, params, log, choice, context):
+        """Round 33 / 批次 AB：``snapshot`` 伞。
+
+        目前只有 ``mode:"card_props"``（旧 ``snapshot_card_props``：把区域里
+        每张牌的某个属性原值记进 ``store``，供 :meth:`_atomic_restore` 还原）。
+        ``mode`` 缺省即 ``card_props``，旧数据的参数面不变。
+        """
+
+        mode = str(params.get('mode') or 'card_props').strip().lower()
+        if mode in ('card_props', 'card', 'props'):
+            return self._snapshot_card_props_payload(player_id, card, params, log, choice, context)
+        raise V2ZoneError(f"snapshot 只认 mode=card_props，收到 {mode!r}")
+
+    def _atomic_restore(self, player_id, card, params, log, choice, context):
+        """Round 33 / 批次 AB：``restore`` 伞（``restore_card_props`` /
+        ``restore_match_start_stats`` / ``restore_turn_start_stats`` 三合一）。
+
+        统一参数 ``mode``：``card_props``（缺省，还原 ``snapshot`` 记下的属性，
+        参数 ``store``/``property``/``clear``）、``match_start``（``target``/
+        ``extra_self_e_loss``/``exclude_self``）、``turn_start``（同上）。三段
+        实现体与合并前逐字一致。
+        """
+
+        mode = str(params.get('mode') or '').strip().lower()
+        if mode in ('match_start', 'match', 'match_start_stats'):
+            return self._restore_match_start_payload(player_id, card, params, log, choice, context)
+        if mode in ('turn_start', 'turn', 'turn_start_stats'):
+            return self._restore_turn_start_payload(player_id, card, params, log, choice, context)
+        if mode in ('', 'card_props', 'card', 'props'):
+            return self._restore_card_props_payload(player_id, card, params, log, choice, context)
+        raise V2ZoneError(f"restore 只认 mode=card_props/match_start/turn_start，收到 {mode!r}")
+
+    def _restore_turn_start_payload(self, player_id, card, params, log, choice, context):
         extra_self_e_loss = self._eval_int(player_id, params.get('extra_self_e_loss', 0), card)
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
             if params.get('exclude_self') and tid == player_id:
@@ -18678,7 +19432,7 @@ class GameEngine:
         if log:
             self.log_msg(log)
 
-    def _atomic_restore_match_start_stats(self, player_id, card, params, log, choice, context):
+    def _restore_match_start_payload(self, player_id, card, params, log, choice, context):
         extra_self_e_loss = self._eval_int(player_id, params.get('extra_self_e_loss', 0), card)
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
             if params.get('exclude_self') and tid == player_id:
@@ -18748,7 +19502,10 @@ class GameEngine:
     # Round 32 / 批次 AA：``lose_health`` 已并入 ``health_op(mode:"lose")``
     # （实现整段搬进 ``_atomic_health_op``，含无敌分支与 ``_check_game_over``）。
 
-    def _atomic_destroy_equipment(self, player_id, card, params, log, choice, context):
+    def _equipment_op_destroy_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``equipment_op(mode:"destroy")`` 的实现体（旧
+        # ``destroy_equipment``；内部 ``mode``=choice/random/all/self 由伞的
+        # ``pick`` 参数喂进来）。
         """Round 29 + Round 31：摧毁装备族的唯一实现。
 
         覆盖 ``destroy_equipment``（运行时原生薄封装）/ ``destroy_random_equip`` /
@@ -19279,7 +20036,10 @@ class GameEngine:
             suffix = '' if suppressed else f'，+{power}H'
             self.log_msg(log or f"{self.pn(target_id)}获得回合回复：{remaining_turns};{merged_power}{suffix}")
 
-    def _atomic_create_copies_to_deck_top(self, player_id, card, params, log, choice, context):
+    def _copy_copies_to_deck_top_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AB：``copy_card(to_zone:"deck_top", count:N)`` 的实现体
+        # （``def_id`` 造牌、``flags``/``swift_value``/``magic_swift_value`` 等
+        # 参数与旧 ``create_copies_to_deck_top`` 逐字一致）。
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         def_id = str(params.get('def_id') or (getattr(card, 'def_id', '') if card else ''))
         if not self._card_allowed(def_id):
@@ -19401,7 +20161,9 @@ class GameEngine:
         self.players[player_id].gain_magic(3)
         self.log_msg(log or f"{self.pn(player_id)}的魔法遗物消耗{self.pn(mate_id)}2M，自己+3M")
 
-    def _atomic_shuffle_hand(self, player_id, card, params, log, choice, context):
+    def _shuffle_hand_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AB：``shuffle(zone:"hand")`` 的实现体（``target`` 走
+        # 选择器集合；失明状态在这里静默跳过，战报文本保持原样）。
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
             if not (0 <= tid < len(self.players)):
                 continue
@@ -19547,7 +20309,9 @@ class GameEngine:
                 del entries[index]
                 return
 
-    def _atomic_queue_auto_play(self, player_id, card, params, log, choice, context):
+    def _auto_play_queue_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``auto_play(mode:"queue")`` 的实现体（旧
+        # ``queue_auto_play``：登记"拥有者回合开始时自动打出"的队列条目）。
         """Register a card so it is played automatically at the owner's turn start."""
         if not self._valid_player_id(player_id):
             return
@@ -19779,7 +20543,9 @@ class GameEngine:
         from engine_runtime_support import forced_random_target
         return forced_random_target(self, actor_id, candidates)
 
-    def _atomic_auto_play_zone_top(self, player_id, card, params, log, choice, context):
+    def _auto_play_zone_top_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``auto_play(mode:"zone_top")`` 的实现体（旧
+        # ``auto_play_zone_top``：把某区顶牌自动打出，Kitty 类）。
         """Make a player play the first selectable card of one of their zones.
 
         Used by equipment that forces another player to keep playing cards; the
@@ -20393,11 +21159,13 @@ class GameEngine:
     # Round 31 / 批次 Z：``card_var_set`` / ``card_var_add`` 两个兼容垫片已删除
     # （``card_var_change(mode=...)`` 是唯一实现）。
 
-    def _atomic_reveal_card_set(self, player_id, card, params, log, choice, context):
+    def _reveal_card_set_payload(self, player_id, card, params, log, choice, context):
         """Privately reveal a card set (default: the target's starting deck).
 
         The payload is stored per viewer and shipped by ``get_public_state`` so
         only the requesting player sees the cards (garden magic antennae).
+        Round 33 / 批次 AB：本方法从公开原子降为 ``reveal(mode:"card_set")``
+        的实现体（私有名去掉 ``_atomic_`` 前缀，不再单独登记为 op）。
         """
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if not self._valid_player_id(player_id) or not self._valid_player_id(target_id):
@@ -20474,13 +21242,15 @@ class GameEngine:
                 filtered.append(zone_card)
         return filtered
 
-    def _atomic_snapshot_card_props(self, player_id, card, params, log, choice, context):
+    def _snapshot_card_props_payload(self, player_id, card, params, log, choice, context):
         """Remember a card property (per instance) so it can be restored later.
 
         Generic counterpart of the Quantum equipment: the store lives in the
         owner's ``custom_vars`` under ``store`` and records the *original* value
         of ``property`` for every card of the zone that passes the optional
         ``max_base`` (card definition ``cost_e``) filter.
+        Round 33 / 批次 AB：本方法从公开原子降为 ``snapshot(mode:"card_props")``
+        的实现体。
         """
         owner_id = self._resolve_target(player_id, params.get('owner', params.get('target', 'self')))
         if not self._valid_player_id(owner_id):
@@ -20526,8 +21296,8 @@ class GameEngine:
         if log is not False and log:
             self.log_msg(self._format_step_log(log, target=self.pn(owner_id), source=self.pn(player_id)))
 
-    def _atomic_restore_card_props(self, player_id, card, params, log, choice, context):
-        """Restore the values remembered by :meth:`_atomic_snapshot_card_props`."""
+    def _restore_card_props_payload(self, player_id, card, params, log, choice, context):
+        """Restore the values remembered by :meth:`_snapshot_card_props_payload`."""
         owner_id = self._resolve_target(player_id, params.get('owner', params.get('target', 'self')))
         if not self._valid_player_id(owner_id):
             return
@@ -21044,7 +21814,36 @@ class GameEngine:
             if self.pending_response is not None or self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
                 break
 
-    def _atomic_status_add_named(self, player_id, card, params, log, choice, context):
+    def _atomic_status_op(self, player_id, card, params, log, choice, context):
+        """Round 33 / 批次 AC：``status_op`` 伞（``status_add_named`` /
+        ``status_remove_named`` / ``clear_statuses`` / ``settle_status`` 四合一）。
+
+        统一参数 ``op``：``add``（缺省，叠层；``mode:"set"`` 即旧
+        ``set_status_named``）、``remove``（减层/清空）、``clear``（preset 名单式
+        清状态）、``settle``（DoT 结算）。四段实现体与合并前逐字一致
+        （``add`` / ``remove`` 走既有的 ``_apply_status_*_family``）。
+        """
+
+        op = str(params.get('op', params.get('action', '')) or '').strip().lower()
+        forwarded = dict(params)
+        forwarded.pop('op', None)
+        forwarded.pop('action', None)
+        if op in ('', 'add', 'apply', 'stack'):
+            return self._status_add_named_payload(player_id, card, forwarded, log, choice, context)
+        if op in ('set',):
+            forwarded['mode'] = 'set'
+            return self._status_add_named_payload(player_id, card, forwarded, log, choice, context)
+        if op in ('remove', 'reduce', 'decay'):
+            return self._status_remove_named_payload(player_id, card, forwarded, log, choice, context)
+        if op in ('clear', 'purge', 'clear_all'):
+            return self._status_op_clear_payload(player_id, card, forwarded, log, choice, context)
+        if op in ('settle', 'resolve', 'tick'):
+            return self._status_op_settle_payload(player_id, card, forwarded, log, choice, context)
+        self._log_mod_runtime_error(
+            'status_op', RuntimeError(f'unsupported op: {op}'), player_id, card,
+        )
+
+    def _status_add_named_payload(self, player_id, card, params, log, choice, context):
         """Round 31 / 批次 Z：``status_add_named`` 现在用 ``mode`` 区分加/设。
 
         ``mode`` 缺省 ``add``（层数叠加）；``mode:"set"`` 即旧
@@ -21378,7 +22177,8 @@ class GameEngine:
                 self.log_msg(line)
         return after - before
 
-    def _atomic_status_remove_named(self, player_id, card, params, log, choice, context):
+    def _status_remove_named_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``status_op(op:"remove")`` 的实现体。
         self._apply_status_remove_family(player_id, card, params, log, op='status_remove_named')
 
     def _apply_status_remove_family(self, player_id, card, params, log, *, op):
@@ -21596,7 +22396,9 @@ class GameEngine:
             return getattr(eq, 'effect_target', getattr(eq, 'owner', -1)) == target_id
         return True
 
-    def _atomic_for_each_equipment(self, player_id, card, params, log, choice, context):
+    def _equipment_op_each_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AC：``equipment_op(mode:"each")`` 的实现体（旧
+        # ``for_each_equipment``：逐件装备跑 ``body`` 子步骤）。
         body = params.get('body', []) or []
         targets = self._resolve_targets(player_id, params.get('target', 'self'))
         previous_selected = (context or {}).get('selected_equipment_instance_id') if isinstance(context, dict) else None

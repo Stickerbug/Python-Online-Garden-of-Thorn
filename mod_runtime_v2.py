@@ -40,6 +40,11 @@ ADVANCED_ATOMIC_OPS = {
     "for_each",
     "damage", "direct_damage", "lifesteal_damage", "triangle_damage",
     "health_op", "resource_op", "draw", "modify_next_cost",
+    # Round 33 / 批次 AC + Round 35 收尾：装备 / 状态 / 标签 / 自动打出四族的
+    # 伞原子（``equipment_op`` / ``status_op`` / ``tag_op`` / ``auto_play``）。
+    # ``queue_auto_play`` 仍是可用名（测试断言 ocean:magic_pearl 的步骤形状），
+    # 其余旧名进 REMOVED_ATOMIC_OPS，写在下面只会拿到"已移除 + 替代写法"。
+    "equipment_op", "status_op", "tag_op", "auto_play",
     # Round 24：护甲/闪避族、状态三兄弟、清状态族、每回合修正族、资源族、
     # 全局倍率族、卡内标签族、装备减抽族各自合并成一条（旧名进
     # mod_spec_v2.REMOVED_ATOMIC_OPS，写出来是显式报错）。
@@ -52,11 +57,16 @@ ADVANCED_ATOMIC_OPS = {
     "status_add_named", "status_remove_named",
     "turn_mod_add", "global_mult",
     "choose_from_zone",
-    "reveal_enemy_hand", "reveal_hand", "steal_enemy_card",
-    "reveal_hand_cards",
-    "steal_card", "copy_card", "copy_choice_with_discount",
-    "shuffle_discard_into_deck", "give_card_to_hand",
-    "give_card_to_deck", "remove_specific_card",
+    # Round 33 / 批次 AB：``reveal_enemy_hand`` / ``reveal_hand`` / ``reveal_hand_cards``
+    # 并进 ``reveal``；``steal_enemy_card`` / ``steal_card`` / ``give_card_to_hand`` /
+    # ``give_card_to_deck`` / ``shuffle_discard_into_deck`` / ``shuffle_hand`` /
+    # ``random_zone_card_to_hand`` / ``move_cards_to_deck`` / ``exile_this`` /
+    # ``swap_hands`` / ``copy_card_instance`` / ``create_copies_to_deck_top`` /
+    # ``snapshot_card_props`` / ``restore_card_props`` / ``restore_*_stats``
+    # 并进 ``move_card`` / ``copy_card`` / ``shuffle`` / ``snapshot`` / ``restore``。
+    "reveal", "shuffle", "snapshot", "restore",
+    "copy_card", "copy_choice_with_discount",
+    "remove_specific_card",
     "move_card",
     "destroy_equipment",
     "equip_protection", "remove_equip_protection",
@@ -68,24 +78,22 @@ ADVANCED_ATOMIC_OPS = {
     "multiply_next_damage",
     "add_tag", "add_tag_to_zone",
     "transform_card", "card_counter", "create_counter",
-    "exile_this", "swap_hands", "broadcast_event", "modify_damage",
+    "broadcast_event", "modify_damage",
     "list_modify", "timed_effect", "countdown_var",
     # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
     # (Round 1 draft names, never used by shipped data) were folded into
     # ``random_zone_card_to_hand``; see ``REMOVED_ATOMIC_OPS``.
-    "defer_game_over", "random_zone_card_to_hand",
-    "seal_equipment", "move_cards_to_deck", "clear_statuses", "settle_status",
+    "defer_game_over",
+    "seal_equipment", "clear_statuses", "settle_status",
     "queue_auto_play", "auto_play_zone_top", "ricochet_attack",
     "absorb_attack_damage", "add_charge_to_hand", "register_play_listener",
     "card_var_change",
-    "reveal_card_set",
-    "snapshot_card_props", "set_card_prop_random", "restore_card_props",
+    "set_card_prop_random",
     "transform_cards",
     "deck_catalog_pick", "deck_catalog_pick_resume",
     "player_prop_change", "card_prop_change",
     "card_damage_multiply", "equipment_prop_set",
     "discard_hand_by_paid_e", "restore_turn_start_stats", "restore_match_start_stats",
-    "shuffle_hand",
     "counter_pending_attack_damage",
     "equipment_prop_add", "discard_choice_then_draw",
     "activate_corruption", "request_target", "request_card", "request_confirm",
@@ -101,7 +109,6 @@ ADVANCED_ATOMIC_OPS = {
     # consume_magic_for_status / yin_yang_effect / flower_burst /
     # draw_to_hand_limit 的公式已搬进卡数据，实现删除（见 REMOVED_ATOMIC_OPS）。
     "apply_turn_regen",
-    "create_copies_to_deck_top",
     "plank_immunity",
     "magic_relic_trigger", "electric_web_arm",
     "magic_salt_reflect", "third_eye_precision_or_hidden",

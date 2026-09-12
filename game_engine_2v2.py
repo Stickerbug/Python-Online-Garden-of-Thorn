@@ -1203,7 +1203,9 @@ class GameEngine2v2(GameEngine):
                                         choice: Optional[dict] = None) -> List[int]:
         return [pid for pid in self.get_all_enemies(player_id) if self.players[pid].health > 0]
 
-    def _atomic_reveal_enemy_hand(self, player_id, card, params, log, choice, context):
+    def _reveal_enemy_hand_payload(self, player_id, card, params, log, choice, context):
+        # Round 33 / 批次 AB：``reveal`` 伞的 ``mode:"enemy_hand"`` 实现体
+        # （2v2 的表态板列表需要同时记住被看的目标，与 1v1 略有不同）。
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         if not self._is_valid_player_id(target_id):
             return

@@ -121,9 +121,36 @@ _CORE_LOGIC_OPS = {
     "move_card",
     "create_card",
     "copy_card",
+    # Round 33 / 批次 AB：三条 AB 伞原子——``reveal``（揭示：card_set/enemy_hand/hand
+    # 三合一）、``shuffle``（洗牌：discard→deck / 打乱手牌）、``snapshot`` 与
+    # ``restore``（属性快照 / 开局与回合初还原）。旧名见 REMOVED_ATOMIC_OPS。
+    "reveal",
+    "shuffle",
+    "snapshot",
+    "restore",
     "transform_card",
+    # Round 35：批次 AC 的四族（装备/状态/标签/自动打出）迁移收尾，规范名
+    # 换成下面的伞原子；旧名进 REMOVED_ATOMIC_OPS（写出来是显式报错）。
+    # 参数面见 docs/原子参数表.md 与各 `_atomic_<伞>` 的文档字符串。
+    "equipment_op",
+    "status_op",
+    "tag_op",
+    "auto_play",
+    # Round 33 / 35：下面这几个旧名字已经退役（进 REMOVED_ATOMIC_OPS，写出来
+    # 是显式报错），但它们的 ``_atomic_*`` 处理器**保留**给直接调用者：
+    # ``place_as_equip``（formal_logic_runtime 直呼）、``status_add_named`` /
+    # ``add_tag`` / ``add_tag_to_zone``（tests 直呼）、``copy_card_instance``
+    # （``copy_card`` 伞的 as_instance 段转交 + 测试 spy）、
+    # ``give_card_to_hand`` / ``create_copies_to_deck_top``（tests 直呼）。
+    # 只有"退役 + 保留处理器"的名字才需要在这里额外登记，其余引擎原子
+    # ``_CORE_LOGIC_OPS`` 已经全覆盖。
     "add_tag",
-    "destroy_equipment",
+    "add_tag_to_zone",
+    "place_as_equip",
+    "status_add_named",
+    "copy_card_instance",
+    "create_copies_to_deck_top",
+    "give_card_to_hand",
     "modify_event_value",
     "player_stat",
     "player_property",
@@ -165,33 +192,34 @@ _CORE_LOGIC_OPS = {
     "global_mult",
     # Round 32 / 批次 AA：``equip_reduce_draw`` 并进 ``draw`` 的
     # ``modifiers:[{"type":"sluggish",...}]``。
+    # Round 33 / 批次 AC + Round 35 收尾：状态四兄弟并成 ``status_op``
+    # （``action`` 选 add/set/remove/clear/settle），标签两兄弟并成 ``tag_op``。
+    # ``status_add_named`` 的处理器保留给 tests（登记在上面），其余进
+    # REMOVED_ATOMIC_OPS。
     "status_add_named",
-    "status_remove_named",
     # Round 29 / 批次 X：三个"从某区选一张进手牌"的同形原子合并成一条
     # （``zone`` 选区域），旧名进 REMOVED_ATOMIC_OPS。
     "choose_from_zone",
-    "reveal_enemy_hand",
-    "reveal_hand_cards",
-    "steal_enemy_card",
     "copy_choice_with_discount",
-    "shuffle_discard_into_deck",
-    "shuffle_hand",
-    "give_card_to_hand",
-    "give_magic_orb_to_hand",
-    "give_card_to_deck",
+    # Round 33 / 批次 AB：``reveal_enemy_hand`` / ``reveal_hand_cards`` /
+    # ``steal_enemy_card`` / ``shuffle_discard_into_deck`` / ``shuffle_hand`` /
+    # ``give_card_to_hand`` / ``give_magic_orb_to_hand`` / ``give_card_to_deck``
+    # 已并入 ``reveal`` 与 ``move_card`` / ``shuffle``（旧名进 REMOVED_ATOMIC_OPS）。
     "remove_specific_card",
     # Round 29 / 批次 X：``move_to_*`` 四条"糖"原子并入通用 ``move_card(zone=...)``；
     # ``destroy_random_equip`` / ``destroy_all_equip`` / ``destroy_all_field_equip``
-    # 并入 ``destroy_equipment(mode=..., scope=...)``。旧名进 REMOVED_ATOMIC_OPS。
+    # 并入 ``equipment_op(mode:"destroy", pick=..., scope=...)``。旧名进
+    # REMOVED_ATOMIC_OPS。
     # Round 31 / 批次 Z：Round 29 的兼容垫片（``move_to_hand`` 等六个）与
     # ``destroy_equipment_choice_or_first`` / ``destroy_self_equipment`` /
     # ``destroy_current_equipment`` / ``destroy_all_destroyable_equipment`` 也已
-    # 真正删除（destroy 族并进 ``destroy_equipment`` 的 mode/filter）。
-    "add_equipment_armor",
+    # 真正删除（destroy 族并进 ``equipment_op`` 的 pick/filter）。
+    # Round 35：装备族剩下的五个旧名（``add_equipment_armor`` /
+    # ``remove_equip_protection`` / ``add_equipment_to_zone`` / ``for_each_equipment``
+    # / ``destroy_equipment``）一并迁进 ``equipment_op`` 的 mode，名字进
+    # REMOVED_ATOMIC_OPS；只有 ``place_as_equip`` 的处理器因为
+    # formal_logic_runtime 直呼而保留（登记在上面）。
     "equip_protection",
-    "remove_equip_protection",
-    "place_as_equip",
-    "add_equipment_to_zone",
     "trigger_manual",
     "block_action",
     "block_card_type",
@@ -214,7 +242,7 @@ _CORE_LOGIC_OPS = {
     # Round 29 / 批次 X：耐久三兄弟并入卡牌属性族
     # （``card_prop_add``/``card_prop_set`` + ``property:"durability"``）。
     # Round 32 / 批次 AA：``swap_health`` 并进 ``health_op(mode:"swap")``。
-    "swap_hands",
+    # Round 33 / 批次 AB：``swap_hands`` 已并入 ``move_card(mode:"swap_hands")``。
     "broadcast_event",
     "modify_damage",
     # Round 29 / 批次 X：玩家自定义变量的五个同形原子合并成
@@ -242,8 +270,8 @@ _CORE_LOGIC_OPS = {
     "equipment_prop_set",
     "equipment_prop_add",
     "discard_hand_by_paid_e",
-    "restore_turn_start_stats",
-    "restore_match_start_stats",
+    # Round 33 / 批次 AB：两条 ``restore_*_stats`` 已并入
+    # ``restore(mode:"turn_start"/"match_start")``。
     "counter_pending_attack_damage",
     "discard_choice_then_draw",
     "activate_corruption",
@@ -259,14 +287,17 @@ _CORE_LOGIC_OPS = {
     "on_owner_turn_start",
     "on_target_turn_start",
     "on_owner_turn_end",
-    "add_tag_to_zone",
+    # Round 33 / 批次 AC + Round 35：``add_tag`` / ``add_tag_to_zone`` 并成
+    # ``tag_op``（``action`` 选 add/remove/toggle/clear，带 zone 即区域级）；
+    # 两个旧名的处理器保留给 tests 直呼（登记在上面），公开契约里已退役。
     "cogwheel_mark",
     "honey_control",
     "goggles_enable",
     "assembler_effect",
     "request_reorder_deck",
     "apply_turn_regen",
-    "create_copies_to_deck_top",
+    # Round 33 / 批次 AB：``create_copies_to_deck_top`` 已并入
+    # ``copy_card(to_zone:"deck_top", count:N)``。
     "plank_immunity",
     "magic_relic_trigger",
     "electric_web_arm",
@@ -280,9 +311,12 @@ _CORE_LOGIC_OPS = {
     # 它们本来就是引擎里可复用的原子，这里补登记以免被误算作长尾。
     "card_prop_add_to_zone",
     "once_per_play",
-    "copy_card_instance",
+    # Round 33 / 批次 AB：``copy_card_instance`` 已并入
+    # ``copy_card(as_instance:true)`。
     "mark_original_card",
-    "auto_play_card",
+    # Round 33 / 批次 AC + Round 35：``auto_play_card`` / ``auto_play_zone_top``
+    # 并成 ``auto_play``（``mode`` 选 card/zone_top）；``queue_auto_play``
+    # 保持可用（官方包 ``ocean:magic_pearl`` 的步骤形状被测试断言）。
     "charge_self_damage",
     # Round 6a: data declares the "everyone must target me" window (Light
     # Bulb) so the engine no longer reads the pack's custom var directly.
@@ -293,23 +327,22 @@ _CORE_LOGIC_OPS = {
     # tools/mod_atom_report.py 一直把它们算作"未登记原子"。
     "absorb_attack_damage",
     "add_charge_to_hand",
-    "auto_play_zone_top",
     # Round 29 / 批次 X：``card_var_set`` / ``card_var_add`` 已合并成
     # ``card_var_change``（登记在上面的模块族里），这里不再重复登记。
-    "clear_statuses",
     "crit_multiplier_add",
     "defer_game_over",
-    "move_cards_to_deck",
+    # Round 33 / 批次 AB：``move_cards_to_deck`` 已并入
+    # ``move_card(mode:"batch", target_zone:"deck", cards:…)``。
     "queue_auto_play",
-    "random_zone_card_to_hand",
+    # Round 33 / 批次 AB：``random_zone_card_to_hand`` 已并入
+    # ``move_card(mode:"random", source_zone:…, target_zone:"hand")``。
     "register_play_listener",
-    "restore_card_props",
-    "reveal_card_set",
+    # Round 33 / 批次 AB：``restore_card_props`` / ``reveal_card_set`` 已并入
+    # ``restore(mode:"card_props")`` / ``reveal(mode:"card_set")``。
     "ricochet_attack",
-    "seal_equipment",
     "set_card_prop_random",
-    "settle_status",
-    "snapshot_card_props",
+    # Round 33 / 批次 AB：``snapshot_card_props`` 已并入
+    # ``snapshot(mode:"card_props")``。
     "transform_cards",
 
     # Round 20: 上条的姊妹项——被代码/别名表引用（删掉会连带打断已登记
@@ -332,15 +365,17 @@ _CORE_LOGIC_OPS = {
     #   * （Round 24 已把 equip_reduce_own_draw / equip_reduce_enemy_draw
     #     合并成 equip_reduce_draw，见下。）
     #   * for_each_equipment：遍历装备的唯一入口（Round 17 未合并进 for_each）。
+    #     Round 35 起并进 ``equipment_op(mode:"each")``，名字进
+    #     REMOVED_ATOMIC_OPS。
     #   * after_all：把 body 放到当前效果之后执行的控制流 op。
     "block_own_actions",
     "counter_equip_protect",
     # Round 29 / 批次 X：``record_play_count`` / ``record_equip_turns`` /
     # ``reset_counter`` 已合并成 ``card_counter``（见上面的模块族）。
     "create_counter",
-    "exile_this",
+    # Round 33 / 批次 AB：``exile_this`` 已删除——等价写法
+    # ``move_card(zone:"exile", card:{"ref":"current_card"})``。
     "mark_self_damage_source",
-    "for_each_equipment",
     "after_all",
 }
 
@@ -770,12 +805,12 @@ REMOVED_ATOMIC_OPS = {
     # 参数覆盖，已合并成右边给出的规范写法。旧数据写旧名会在校验层与运行时
     # 拿到"已移除 + 替代写法"的显式报错（不静默）。
     #   * 状态三兄弟 → status_add_named（log 模板复刻旧默认战报）
-    "poison": '{"op":"status_add_named","status":"poison","target":"enemy","amount":4,"log":"{target}+{amount}中毒"}',
-    "burn": '{"op":"status_add_named","status":"burn","target":"enemy","amount":4,"log":"{target}+{amount}灼烧"}',
-    "toxic": '{"op":"status_add_named","status":"toxic","target":"enemy","amount":1,"log":"{target}+{amount}淬毒"}',
-    "apply_poison": '{"op":"status_add_named","status":"poison","target":"enemy","amount":1,"log":"{target}+{amount}中毒"}',
-    "apply_burn": '{"op":"status_add_named","status":"burn","target":"enemy","amount":1,"log":"{target}+{amount}灼烧"}',
-    "apply_toxic": '{"op":"status_add_named","status":"toxic","target":"enemy","amount":1,"log":"{target}+{amount}淬毒"}',
+    "poison": '{"op":"status_op","action":"add","status":"poison","target":"enemy","amount":4,"log":"{target}+{amount}中毒"}',
+    "burn": '{"op":"status_op","action":"add","status":"burn","target":"enemy","amount":4,"log":"{target}+{amount}灼烧"}',
+    "toxic": '{"op":"status_op","action":"add","status":"toxic","target":"enemy","amount":1,"log":"{target}+{amount}淬毒"}',
+    "apply_poison": '{"op":"status_op","action":"add","status":"poison","target":"enemy","amount":1,"log":"{target}+{amount}中毒"}',
+    "apply_burn": '{"op":"status_op","action":"add","status":"burn","target":"enemy","amount":1,"log":"{target}+{amount}灼烧"}',
+    "apply_toxic": '{"op":"status_op","action":"add","status":"toxic","target":"enemy","amount":1,"log":"{target}+{amount}淬毒"}',
     #   * 护甲/闪避族 → player_stat_change（mode 选 add/remove/set，stat 选 armor/dodge）
     "add_armor": '{"op":"player_stat_change","mode":"add","stat":"armor","target":"self","amount":2}',
     "gain_armor": '{"op":"player_stat_change","mode":"add","stat":"armor","target":"self","amount":2}',
@@ -785,9 +820,9 @@ REMOVED_ATOMIC_OPS = {
     "gain_dodge": '{"op":"player_stat_change","mode":"add","stat":"dodge","target":"self","amount":1}',
     "dodge_this": '{"op":"player_stat_change","mode":"add","stat":"dodge","target":"self","amount":1,"log":"{target}获得1层闪避（针对本次攻击）"}',
     #   * 清状态族 → clear_statuses(preset=...)
-    "clear_buffs": '{"op":"clear_statuses","preset":"buffs","target":"self"}',
-    "clear_debuffs": '{"op":"clear_statuses","preset":"debuffs","target":"self"}',
-    "clear_all_effects": '{"op":"clear_statuses","preset":"all","target":"self"}',
+    "clear_buffs": '{"op":"status_op","action":"clear","preset":"buffs","target":"self"}',
+    "clear_debuffs": '{"op":"status_op","action":"clear","preset":"debuffs","target":"self"}',
+    "clear_all_effects": '{"op":"status_op","action":"clear","preset":"all","target":"self"}',
     #   * 每回合修正族 → turn_mod_add（kind 选 e_regen/m_regen/draw）
     "mod_e_regen": '{"op":"turn_mod_add","kind":"e_regen","target":"self","amount":1}',
     "mod_m_regen": '{"op":"turn_mod_add","kind":"m_regen","target":"self","amount":1}',
@@ -801,8 +836,8 @@ REMOVED_ATOMIC_OPS = {
     "global_heal_mult": '{"op":"global_mult","kind":"heal","multiplier":2}',
     "global_cost_mult": '{"op":"global_mult","kind":"cost","multiplier":2}',
     #   * 卡内标签族 → add_tag(mode=...)
-    "tag_add_named": '{"op":"add_tag","card":{"ref":"current_card"},"tag":"exile","log":false}',
-    "tag_remove_named": '{"op":"add_tag","mode":"remove","card":{"ref":"current_card"},"tag":"exile"}',
+    "tag_add_named": '{"op":"tag_op","action":"add","card":{"ref":"current_card"},"tag":"exile","log":false}',
+    "tag_remove_named": '{"op":"tag_op","action":"remove","card":{"ref":"current_card"},"tag":"exile"}',
     #   * 装备减抽族 → draw 的 modifiers（Round 32 / 批次 AA：``equip_reduce_draw``
     #     本身也并进 ``draw`` 了）
     "equip_reduce_own_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"self"}]}',
@@ -810,20 +845,20 @@ REMOVED_ATOMIC_OPS = {
     "block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
     "counter_block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
     "counter_dodge": '{"op":"player_stat_change","mode":"add","stat":"dodge","target":"self","amount":1}',
-    "counter_nazar": '{"op":"status_add_named","status":"nazar","target":"self","amount":2}',
+    "counter_nazar": '{"op":"status_op","action":"add","status":"nazar","target":"self","amount":2}',
     "counter_negate_skill": '{"op":"player_prop_change","mode":"set","property":"negate_next_skill","target":"self","value":1}',
     "counter_set_invincible_then_die": '{"op":"health_op","mode":"fatal","kind":"invincible_die"}',
-    "equip_add_toxic": '{"op":"status_add_named","status":"toxic","target":"enemy","amount":1,"log":"{target}+{amount}淬毒"}',
+    "equip_add_toxic": '{"op":"status_op","action":"add","status":"toxic","target":"enemy","amount":1,"log":"{target}+{amount}淬毒"}',
     "equip_on_destroy_remove_poison_damage": None,
     "equip_reduce_enemy_e": '{"op":"player_prop_change","mode":"add","property":"overload","target":"enemy","amount":1}',
     "equip_reduce_own_e": '{"op":"player_prop_change","mode":"add","property":"overload","target":"self","amount":1}',
     "equip_set_health": '{"op":"health_op","mode":"set","target":"self","amount":60}',
     "equip_sponge": '{"op":"player_prop_change","mode":"set","property":"sponge_active","target":"target","value":1}',
     "force_enemy_attacks_only": '{"op":"force_card_type","card_type":"thorn","target":"enemy"}',
-    "random_move_card_to_hand": '{"op":"random_zone_card_to_hand"}',
-    "move_random_card_to_hand": '{"op":"random_zone_card_to_hand"}',
+    "random_move_card_to_hand": '{"op":"move_card","mode":"random","source_zone":"discard","target_zone":"hand","count":1,"target":"self"}',
+    "move_random_card_to_hand": '{"op":"move_card","mode":"random","source_zone":"discard","target_zone":"hand","count":1,"target":"self"}',
     "desert_wind_schedule": None,
-    "garden_mecha_antennae": '{"op":"reveal_enemy_hand","target":"target"}',
+    "garden_mecha_antennae": '{"op":"reveal","mode":"enemy_hand","target":"target"}',
 
     # Round 25（登记残留清理）：下面这批卡专用旧 op 在 Round 1/2 就被改写成
     # 通用步骤，卡数据 0 引用，但登记一直没删。它们在 ``_CORE_LOGIC_OPS`` 里的
@@ -899,7 +934,7 @@ REMOVED_ATOMIC_OPS = {
     # 删除，旧名给"已移除 + 替代写法"的显式报错。完整对照表与 A/B 证据见
     # docs/引擎原子与数据步骤清单.md §24。
     "apply_jungle_status": (
-        '{"op":"status_add_named","target":"target","status":"jungle:fragile","amount":1,'
+        '{"op":"status_op","action":"add","target":"target","status":"jungle:fragile","amount":1,'
         '"log":"{target}获得{amount}层易损"}'
     ),
     "magic_grapes_damage": (
@@ -911,7 +946,7 @@ REMOVED_ATOMIC_OPS = {
         '[{"op":"set_var","name":"m","value":{"op":"player_stat","target":"self","stat":"magic"}},'
         '{"op":"if_else","condition":{"op":"compare","a":{"op":"var","name":"m"},"operator":">","b":0},'
         '"then":[{"op":"player_prop_set","target":"self","property":"magic","value":0},'
-        '{"op":"status_add_named","target":"target","status":"jungle:toxic_poison",'
+        '{"op":"status_op","action":"add","target":"target","status":"jungle:toxic_poison",'
         '"amount":{"op":"var","name":"m"}}]}]'
     ),
     "yin_yang_effect": (
@@ -922,7 +957,7 @@ REMOVED_ATOMIC_OPS = {
     "flower_burst": (
         '{"op":"if_else","condition":{"op":"compare","a":{"op":"equipment_prop",'
         '"equipment":"current_equipment","prop":"turns_equipped"},"operator":">=","b":1},'
-        '"then":[{"op":"status_add_named","target":"target","status":"poison","amount":16},'
+        '"then":[{"op":"status_op","action":"add","target":"target","status":"poison","amount":16},'
         '{"op":"destroy_current_equipment"}]}'
     ),
     "draw_to_hand_limit": (
@@ -983,9 +1018,9 @@ REMOVED_ATOMIC_OPS = {
     "lose_durability": '{"op":"card_prop_add","card":{"ref":"current_card"},"property":"durability","amount":-1}',
     "set_durability": '{"op":"card_prop_set","card":{"ref":"current_card"},"property":"durability","value":3}',
     #   * 摧毁装备四条（含运行时薄封装）→ destroy_equipment(mode=..., scope=...)
-    "destroy_random_equip": '{"op":"destroy_equipment","mode":"random","scope":"target","target":"enemy"}',
-    "destroy_all_equip": '{"op":"destroy_equipment","mode":"all","scope":"target","target":"enemy"}',
-    "destroy_all_field_equip": '{"op":"destroy_equipment","mode":"all","scope":"field"}',
+    "destroy_random_equip": '{"op":"equipment_op","mode":"destroy","pick":"random","scope":"target","target":"enemy"}',
+    "destroy_all_equip": '{"op":"equipment_op","mode":"destroy","pick":"all","scope":"target","target":"enemy"}',
+    "destroy_all_field_equip": '{"op":"equipment_op","mode":"destroy","pick":"all","scope":"field"}',
     #   * 取牌三条 → choose_from_zone(zone=...)
     "choose_from_deck": '{"op":"choose_from_zone","zone":"deck","target":"self"}',
     "choose_from_discard": '{"op":"choose_from_zone","zone":"discard","target":"self"}',
@@ -1007,9 +1042,9 @@ REMOVED_ATOMIC_OPS = {
     #   * 状态旧写法三兄弟 → 规范写法 + log:true（旧默认那句战报）
     #     Round 31：``set_status`` 的替代也跟着 ``set_status_named`` 一起并进
     #     ``status_add_named(mode:"set")``。
-    "add_status": '{"op":"status_add_named","target":"self","status":"poison","amount":1,"log":true}',
-    "set_status": '{"op":"status_add_named","mode":"set","target":"self","status":"poison","amount":1,"log":true}',
-    "remove_status": '{"op":"status_remove_named","target":"self","status":"poison","amount":1,"log":true}',
+    "add_status": '{"op":"status_op","action":"add","target":"self","status":"poison","amount":1,"log":true}',
+    "set_status": '{"op":"status_op","action":"set","mode":"set","target":"self","status":"poison","amount":1,"log":true}',
+    "remove_status": '{"op":"status_op","action":"remove","target":"self","status":"poison","amount":1,"log":true}',
     #   * 多段伤害两条 → deal_damage(hits=N)（Round 28 起 hits 是段数的统一名）
     "deal_damage_multi": '{"op":"deal_damage","target":"enemy","amount":6,"hits":3}',
     "damage_multi": '{"op":"deal_damage","target":"enemy","amount":6,"hits":3}',
@@ -1032,30 +1067,30 @@ REMOVED_ATOMIC_OPS = {
     #   * 状态族：clear_status → status_remove_named(amount:"all")；
     #     set_status_named → status_add_named(mode:"set")；
     #     resolve_status_once → settle_status(reduce:N)（默认战报要显式写 log）
-    "clear_status": '{"op":"status_remove_named","target":"self","status":"poison","amount":"all","log":"{target}的{status}已清除"}',
-    "set_status_named": '{"op":"status_add_named","mode":"set","target":"self","status":"poison","amount":1,"stack":1}',
-    "resolve_status_once": '{"op":"settle_status","target":"target","status":"fire","reduce":1,"log":"{target}的灼烧结算{amount}点并减少1层"}',
+    "clear_status": '{"op":"status_op","action":"remove","target":"self","status":"poison","amount":"all","log":"{target}的{status}已清除"}',
+    "set_status_named": '{"op":"status_op","action":"set","mode":"set","target":"self","status":"poison","amount":1,"stack":1}',
+    "resolve_status_once": '{"op":"status_op","action":"settle","target":"target","status":"fire","reduce":1,"log":"{target}的灼烧结算{amount}点并减少1层"}',
     #   * 玩家状态层数族 → player_status_layers(status=untargetable|invincible)
     "set_untargetable": '{"op":"player_status_layers","status":"untargetable","target":"self","amount":1,"shovel":true}',
     "untargetable_layers": '{"op":"player_status_layers","status":"untargetable","target":"self","amount":1}',
     "set_invincible": '{"op":"player_status_layers","status":"invincible","target":"self"}',
     #   * 摧毁装备族 → destroy_equipment(mode=..., filter=..., record_count=...)
-    "destroy_self_equipment": '{"op":"destroy_equipment","mode":"self"}',
-    "destroy_current_equipment": '{"op":"destroy_equipment","mode":"self"}',
-    "destroy_all_destroyable_equipment": '{"op":"destroy_equipment","mode":"all","target":"both","filter":"destroyable","record_count":true}',
-    "destroy_equipment_choice_or_first": '{"op":"destroy_equipment","mode":"choice","target":"enemy"}',
+    "destroy_self_equipment": '{"op":"equipment_op","mode":"destroy","pick":"self"}',
+    "destroy_current_equipment": '{"op":"equipment_op","mode":"destroy","pick":"self"}',
+    "destroy_all_destroyable_equipment": '{"op":"equipment_op","mode":"destroy","pick":"all","target":"both","filter":"destroyable","record_count":true}',
+    "destroy_equipment_choice_or_first": '{"op":"equipment_op","mode":"destroy","pick":"choice","target":"enemy"}',
     #   * 卡牌属性写值族 → card_prop_change(mode=set|add|mul)
     "card_prop_set": '{"op":"card_prop_change","mode":"set","card":{"ref":"current_card"},"property":"fusion_level","value":0}',
     "card_prop_add": '{"op":"card_prop_change","mode":"add","card":{"ref":"current_card"},"property":"fusion_level","amount":1}',
     "card_prop_mul": '{"op":"card_prop_change","mode":"mul","card":{"ref":"current_card"},"property":"fusion_level","value":2}',
     #   * 标签族 → add_tag / add_tag_to_zone 的 mode（remove/clear/toggle）
-    "remove_tag": '{"op":"add_tag","mode":"remove","card":{"ref":"current_card"},"tag":"exile"}',
-    "clear_tags": '{"op":"add_tag","mode":"clear","card":{"ref":"current_card"}}',
-    "remove_tag_from_zone": '{"op":"add_tag_to_zone","mode":"remove","target":"enemy","zone":"hand","tag":"revealed"}',
-    "toggle_tag_in_zone": '{"op":"add_tag_to_zone","mode":"toggle","target":"target","zone":"hand","tag":"revealed","log":"{count}张牌切换了{tag}"}',
+    "remove_tag": '{"op":"tag_op","action":"remove","card":{"ref":"current_card"},"tag":"exile"}',
+    "clear_tags": '{"op":"tag_op","action":"clear","card":{"ref":"current_card"}}',
+    "remove_tag_from_zone": '{"op":"tag_op","action":"remove","target":"enemy","zone":"hand","tag":"revealed"}',
+    "toggle_tag_in_zone": '{"op":"tag_op","action":"toggle","target":"target","zone":"hand","tag":"revealed","log":"{count}张牌切换了{tag}"}',
     #   * 其它：提示 / 造牌 / 消耗 / 区域查看
-    "reveal_deck_top": '{"op":"reveal_card_set","source":"deck","amount":1,"target":"enemy","viewer":"self"}',
-    "reveal_tag_hand": '{"op":"reveal_hand_cards","target":"enemy","to":"self","tag":"revealed","mark":true}',
+    "reveal_deck_top": '{"op":"reveal","mode":"card_set","source":"deck","amount":1,"target":"enemy","viewer":"self"}',
+    "reveal_tag_hand": '{"op":"reveal","mode":"hand","target":"enemy","viewer":"self","tag":"revealed","mark":true}',
     "put_card_to_deck": '{"op":"move_card","zone":"deck","card":{"ref":"selected_card"},"position":"top"}',
     "give_card_to_discard": '{"op":"create_card","card_id":"card_id","to":"discard","target":"self"}',
     "resource_spend": '{"op":"resource_op","resource":"e","mode":"spend","target":"self","amount":1,"log":"{target}消耗{amount}E"}',
@@ -1087,6 +1122,60 @@ REMOVED_ATOMIC_OPS = {
     "list_insert": '{"op":"list_modify","list":"<变量名>","mode":"insert","index":1,"value":<元素>}',
     "list_delete": '{"op":"list_modify","list":"<变量名>","mode":"delete","index":1}',
     "list_clear": '{"op":"list_modify","list":"<变量名>","mode":"clear"}',
+
+    # Round 33 / 批次 AB（区域/复制/揭示/洗牌/快照族）：旧名一律带完整替代
+    # 写法，写出来是"已移除 + 请改用"的显式报错，不静默。
+    #   * 造牌族 → move_card(mode:"give"|"orb")
+    "give_card_to_hand": '{"op":"move_card","mode":"give","target_zone":"hand","card":"<牌id>","amount":1,"target":"self"}',
+    "give_card_to_deck": '{"op":"move_card","mode":"give","target_zone":"deck","card":"<牌id>","amount":1,"target":"self","position":"top"}',
+    "give_magic_orb_to_hand": '{"op":"move_card","mode":"orb","target_zone":"hand","target":"self"}',
+    #   * 区域移动族
+    "random_zone_card_to_hand": '{"op":"move_card","mode":"random","source_zone":"discard","target_zone":"hand","count":1,"target":"self"}',
+    "move_cards_to_deck": '{"op":"move_card","mode":"batch","target_zone":"deck","cards":"selected_cards","position":"top"}',
+    "exile_this": '{"op":"move_card","zone":"exile","card":{"ref":"current_card"}}',
+    "steal_enemy_card": '{"op":"move_card","mode":"steal","target":"enemy"}',
+    "swap_hands": '{"op":"move_card","mode":"swap_hands","target1":"self","target2":"enemy"}',
+    #   * 复制族 → copy_card 的 as_instance / to_zone / count
+    "copy_card_instance": '{"op":"copy_card","as_instance":true,"source":{"ref":"current_card"},"target":"self","zone":"hand"}',
+    "create_copies_to_deck_top": '{"op":"copy_card","to_zone":"deck_top","count":1,"def_id":"<牌id>","target":"self"}',
+    #   * 揭示族 → reveal(mode=card_set|enemy_hand|hand)
+    "reveal_card_set": '{"op":"reveal","mode":"card_set","source":"initial_deck","target":"target","viewer":"self"}',
+    "reveal_enemy_hand": '{"op":"reveal","mode":"enemy_hand","target":"enemy"}',
+    "reveal_hand_cards": '{"op":"reveal","mode":"hand","target":"target","viewer":"self","mark":true}',
+    "reveal_hand": '{"op":"reveal","mode":"enemy_hand","target":"enemy"}',
+    "garden_show_initial_deck": '{"op":"reveal","mode":"card_set","source":"initial_deck","target":"target","viewer":"self"}',
+    #   * 洗牌族 → shuffle(zone=discard|hand)
+    "shuffle_discard_into_deck": '{"op":"shuffle","zone":"discard"}',
+    "shuffle_hand": '{"op":"shuffle","zone":"hand","target":"self"}',
+    #   * 快照族 → snapshot / restore 的 mode
+    "snapshot_card_props": '{"op":"snapshot","mode":"card_props","owner":"self","zone":"hand","store":"card_prop_snapshot","property":"cost_e_override"}',
+    "restore_card_props": '{"op":"restore","mode":"card_props","owner":"self","store":"card_prop_snapshot"}',
+    "restore_match_start_stats": '{"op":"restore","mode":"match_start","target":"self"}',
+    "restore_turn_start_stats": '{"op":"restore","mode":"turn_start","target":"self"}',
+
+    # Round 33 / 批次 AC + Round 35 收尾（装备/状态/标签/自动打出四族）：rd33 的
+    # 迁移脚本死在半路（旧实现被删、数据只迁了一部分，还有 59 步被写成
+    # ``{"op":"add"}`` 的坏形状），Round 35 把数据补齐到伞原子并在这里登记旧名。
+    # 同样带完整替代写法，写出来是"已移除 + 请改用"的显式报错。
+    #   * 装备族 → equipment_op(mode=place|give|armor|destroy|seal|unprotect|each)
+    "place_as_equip": '{"op":"equipment_op","mode":"place","owner":"self","effect_target":"target"}',
+    "add_equipment_to_zone": '{"op":"equipment_op","mode":"give","card":"<牌id>","target":"target","effect_target":"target"}',
+    "add_equipment_armor": '{"op":"equipment_op","mode":"armor","target":"self","amount":2}',
+    "destroy_equipment": '{"op":"equipment_op","mode":"destroy","pick":"choice","target":"enemy"}（pick 选 choice/random/all/self；名字点选用 equipment/card，整场用 scope:"field"，可加 filter:"destroyable" 与 record_count:true）',
+    "seal_equipment": '{"op":"equipment_op","mode":"seal","target":"target","amount":1}',
+    "remove_equip_protection": '{"op":"equipment_op","mode":"unprotect","target":"target"}',
+    "for_each_equipment": '{"op":"equipment_op","mode":"each","target":"target","body":[...]}',
+    #   * 状态族 → status_op(action=add|set|remove|clear|settle)
+    "status_add_named": '{"op":"status_op","action":"add","status":"<状态id>","amount":1,"target":"self"}（设为 N 层写 mode:"set"）',
+    "status_remove_named": '{"op":"status_op","action":"remove","status":"<状态id>","amount":"all","target":"self"}',
+    "clear_statuses": '{"op":"status_op","action":"clear","statuses":"all","target":"self"}（名单式清状态写 statuses:[...] 或 preset:buffs/debuffs）',
+    "settle_status": '{"op":"status_op","action":"settle","status":"fire","reduce":1,"target":"target"}',
+    #   * 标签族 → tag_op(action=add|remove|toggle|clear；带 zone/zones 即区域级)
+    "add_tag": '{"op":"tag_op","action":"add","card":{"ref":"current_card"},"tag":"<标签>"}（减/清写 action:remove|clear）',
+    "add_tag_to_zone": '{"op":"tag_op","action":"add","target":"enemy","zone":"hand","tag":"<标签>"}（切换写 action:"toggle"）',
+    #   * 自动打出族 → auto_play(mode=card|zone_top)；``queue_auto_play`` 保持可用
+    "auto_play_card": '{"op":"auto_play","mode":"card","card":{"ref":"last_created_card"},"no_cost":false}',
+    "auto_play_zone_top": '{"op":"auto_play","mode":"zone_top","actor":{"ref":"equipment_target"},"zone":"deck","cost":"free"}',
 }
 
 # Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），
@@ -1098,7 +1187,9 @@ RENAMED_ATOMIC_OPS = {
     # C 类合并里注销了，所以它们从本表移到 REMOVED_ATOMIC_OPS（带完整替代写法）。
     "auto_play_queue_add": "queue_auto_play",
     "queue_auto_play_card": "queue_auto_play",
-    "kitty_auto_play": "auto_play_zone_top",
+    # Round 35：``auto_play_card`` / ``auto_play_zone_top`` 并进 ``auto_play``
+    # （mode 选 card/zone_top），所以它们的"声明旧称"也指到伞原子。
+    "kitty_auto_play": "auto_play",
     "bounce_attack": "ricochet_attack",
     # Round 31 / 批次 Z：``for_each_target`` 这条薄转发已删除，两个旧名直接
     # 指到循环族规范名 ``for_each``（``source:"wide_strike_targets"`` +
@@ -1106,7 +1197,8 @@ RENAMED_ATOMIC_OPS = {
     "ocean_for_each_selectable_target": "for_each",
     "for_each_selectable_target": "for_each",
     "for_each_target": "for_each",
-    "garden_show_initial_deck": "reveal_card_set",
+    # Round 33 / 批次 AB：``garden_show_initial_deck`` 从本表移到
+    # REMOVED_ATOMIC_OPS（``reveal_card_set`` 本身并进 ``reveal`` 伞了）。
     "set_card_var": "card_var_change",
     # Round 29 / 批次 X：player_prop_set / player_prop_add 合并成
     # player_prop_change(mode=...)，它们的"声明旧称"也一并指到规范名。
@@ -1118,7 +1210,7 @@ RENAMED_ATOMIC_OPS = {
     "desert_marble_attack": "ricochet_attack",
     "ocean_add_charge_to_hand": "add_charge_to_hand",
     "ocean_mark_auto_play": "queue_auto_play",
-    "void_kitty_auto_play": "auto_play_zone_top",
+    "void_kitty_auto_play": "auto_play",
     # Round 32 / 批次 AA：纯改名（参数面不变）——``if`` 就是"不写 else 的
     # ``if_else``"，``for_each_list`` 的 ``list``/``name`` 参数本来就在
     # ``for_each`` 的统一来源词表里，``draw_cards`` 的默认值与 ``draw`` 相同
@@ -1141,6 +1233,21 @@ VALID_LOGIC_OPS = (
     - set(RENAMED_ATOMIC_OPS)
     - set(REMOVED_ATOMIC_OPS)
 )
+
+# --- Round 33 recovery（Round 35 收尾后已删除）------------------------------
+# 批次 AB/AC 的代理死在半路时，这里临时把 30 个旧名重新登记回契约，好让
+# "实现已被删、数据还在用"的中间态不炸。Round 35 已经把卡数据全部迁到伞原子
+# （.codex-tmp/round35/rd35_migrate.py），因此这张临时表删除：
+#   * 真删的 15 个名字在 REMOVED_ATOMIC_OPS 里给出"已移除 + 替代写法"；
+#   * 处理器保留给 tests / formal_logic_runtime 直呼的 13 个名字同样进
+#     REMOVED_ATOMIC_OPS——``VALID_LOGIC_OPS`` 会把它们减掉，所以**不再是对外
+#     op**；``_atomic_*`` 处理器只是私有实现（这是 Round 29 起"私有处理器 ≠
+#     公开 op"的既有约定，见上面 ``VALID_LOGIC_OPS`` 之前的注释）。
+#     代价是 ``tools/mod_atom_report.py`` 的"未登记原子"会数到这些名字——
+#     报告里已经按"退役但保留处理器"单列。
+#   * ``queue_auto_play`` 保持可用（官方包 ocean:magic_pearl 的步骤形状被
+#     tests/test_allcards_balance_14.py 断言），既是 ``_atomic_*`` 又在
+#     ``_CORE_LOGIC_OPS`` 里。
 
 VALID_EVENT_HOOKS = {
     "before_play_card",
