@@ -282,7 +282,9 @@ _CORE_LOGIC_OPS = {
     "card_damage_multiply",
     "equipment_prop_set",
     "equipment_prop_add",
-    "discard_hand_by_paid_e",
+    # Round 40 / 批次 AE-4：``discard_hand_by_paid_e``（按本牌实际花费 E 批量
+    # 弃手牌）下沉成 ``move_card(mode:"batch", source_zone:…, filter:…)``，
+    # 旧名进 REMOVED_ATOMIC_OPS。
     # Round 33 / 批次 AB：两条 ``restore_*_stats`` 已并入
     # ``restore(mode:"turn_start"/"match_start")``。
     "counter_pending_attack_damage",
@@ -306,7 +308,10 @@ _CORE_LOGIC_OPS = {
     "cogwheel_mark",
     "honey_control",
     "goggles_enable",
-    "assembler_effect",
+    # Round 40 / 批次 AE-2：``assembler_effect``（重构机）下沉成卡数据里的
+    # 通用步骤组合（request 选牌 → move_card 放逐 → random_choice 奖励表 →
+    # move_card(mode:"give") 造牌 → card_prop_change 迅捷 → status_op 碎片 →
+    # log），旧名进 REMOVED_ATOMIC_OPS。
     "apply_turn_regen",
     # Round 33 / 批次 AB：``create_copies_to_deck_top`` 已并入
     # ``copy_card(to_zone:"deck_top", count:N)``。
@@ -323,10 +328,12 @@ _CORE_LOGIC_OPS = {
     # 由"卡专用原子 → 通用数据步骤"重构抽出的通用能力。
     # 它们本来就是引擎里可复用的原子，这里补登记以免被误算作长尾。
     "card_prop_add_to_zone",
+    # Round 40 / 批次 AE-3：``mark_original_card``（给被响应卡打标记）下沉成
+    # ``card_var_change(card:{"ref":"original_card"}, …)``，旧名进
+    # REMOVED_ATOMIC_OPS。
     # Round 37 / 批次 AD-2：``once_per_play`` 并进 ``on_event(trigger:"this_play")``。
     # Round 33 / 批次 AB：``copy_card_instance`` 已并入
     # ``copy_card(as_instance:true)`。
-    "mark_original_card",
     # Round 33 / 批次 AC + Round 35：``auto_play_card`` / ``auto_play_zone_top``
     # 并成 ``auto_play``（``mode`` 选 card/zone_top）；``queue_auto_play``
     # 保持可用（官方包 ``ocean:magic_pearl`` 的步骤形状被测试断言）。
@@ -1249,6 +1256,50 @@ REMOVED_ATOMIC_OPS = {
     "block_card_type": '{"op":"action_filter","mode":"block_type","target":"enemy","card_type":"thorn","duration":1}（thorn 写 attack_blocked、bloom 写 skill_blocked；其它牌型只播报）',
     "force_card_type": '{"op":"action_filter","mode":"force_type","target":"enemy","card_type":"thorn","duration":1}（thorn 写 attack_only；其它牌型只播报）',
     "nullify_current_card": '{"op":"action_filter","mode":"negate","target":"enemy","card_type":"thorn"}（把目标的 negate_next 写成该牌型并播报）',
+
+    # Round 40 / 批次 AE-2~4（三个卡专用原子下沉成通用能力/数据）：
+    #   * AE-2：``assembler_effect``（重构机）—— 选牌窗口、放逐、随机奖励表
+    #     全部改成通用步骤；奖励表本身留在卡数据里（``random_choice`` 的
+    #     ``values``），一次掷骰的结果存进上下文变量 ``assembler_reward`` 后
+    #     被造牌 / 迅捷 / 碎片 / 战报复用。
+    "assembler_effect": (
+        '[{"op":"request","type":"card","target":"choice_target","cancellable":false,'
+        '"continue_on_cancel":true,"title":"重构机：选择一张手牌放逐",'
+        '"filter":{"zone":"hand","exclude_self":true,"require_selectable":true}},'
+        '{"op":"move_card","card":{"ref":"selected_card"},"target_zone":"exile","silent":true},'
+        '{"op":"log","message":"{source}用重构机放逐了{target}的1张手牌"},'
+        '{"op":"if_else","condition":{"op":"compare","a":{"op":"selected_cards_count"},"operator":">","b":0},'
+        '"then":[{"op":"set_var","name":"assembler_reward","value":{"op":"random_choice","values":['
+        '{"card":"Laser","swift":2,"log":"{source}的重构机：{target}获得激光器"},'
+        '{"card":"Sawblade","swift":2,"log":"{source}的重构机：{target}获得锯片"},'
+        '{"card":"Fragment","fragment_stacks":2,"log":"{source}的重构机：{target}获得2层碎片和1张碎片"}]}},'
+        '{"op":"if_else","condition":{"op":"compare","a":{"op":"get","from":{"op":"var","name":"assembler_reward"},"key":"fragment_stacks"},'
+        '"operator":">","b":0},"then":[{"op":"status_op","action":"add","status":"fragment_stacks",'
+        '"target":"choice_target","amount":{"op":"get","from":{"op":"var","name":"assembler_reward"},"key":"fragment_stacks"}}]},'
+        '{"op":"move_card","mode":"give","card_id":{"op":"get","from":{"op":"var","name":"assembler_reward"},"key":"card"},'
+        '"target":"choice_target","target_zone":"hand"},'
+        '{"op":"if_else","condition":{"op":"compare","a":{"op":"get","from":{"op":"var","name":"assembler_reward"},"key":"swift"},'
+        '"operator":">","b":0},"then":[{"op":"card_prop_change","card":{"ref":"last_created_card"},'
+        '"property":"swift_value","mode":"set","value":{"op":"get","from":{"op":"var","name":"assembler_reward"},"key":"swift"}}]},'
+        '{"op":"log","message":{"op":"get","from":{"op":"var","name":"assembler_reward"},"key":"log"}}]}]'
+    ),
+    #   * AE-3：``mark_original_card``（起诉书给"被响应的那张牌"打标记）——
+    #     标记改写成被响应牌的 ``custom_vars``（读取方
+    #     ``_bio_indictment_converts_damage`` 同步改读 ``custom_vars``）。
+    "mark_original_card": (
+        '{"op":"card_var_change","card":{"ref":"original_card"},'
+        '"name":"_bio_indictment_target_id","mode":"set","value":{"op":"source_player"}}'
+        '{"op":"log","message":"{source}的起诉书将所响应攻击牌的伤害转化为护盾"}'
+    ),
+    #   * AE-4：``discard_hand_by_paid_e``（风）—— 通用能力先在引擎落地
+    #     （``move_card(mode:"batch")`` 支持 ``source_zone`` + ``filter`` +
+    #     ``owner`` 集合 + ``count_as_active_discard``），原子随之删除。
+    "discard_hand_by_paid_e": (
+        '{"op":"move_card","mode":"batch","owner":"all_players","source_zone":"hand",'
+        '"target_zone":"discard","count_as_active_discard":true,"log":"风吹走了{count}张牌",'
+        '"filter":{"require_selectable":false,"exclude_error":true,'
+        '"max_cost_e":{"op":"add","values":[{"op":"card_prop","card":"current_card","prop":"paid_e"},1]}}}'
+    ),
 }
 
 # Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），

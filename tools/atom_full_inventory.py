@@ -207,6 +207,35 @@ ROUND38_ACTIONS = {
                              "写的 negate_next 全仓库没有读者（合并前后都是只写标记 + 播报）"),
 }
 
+# ---------------------------------------------------------------------------
+# Round 40 / 批次 AE-2~4：三个卡专用原子下沉成通用能力 / 数据步骤。
+ROUND40_ACTIONS = {
+    # ---- AE-2：重构机 ----
+    "assembler_effect": ("删", 1, '{"op":"request","type":"card","target":"choice_target",…} + '
+                                 '{"op":"move_card","card":{"ref":"selected_card"},"target_zone":"exile"} + '
+                                 '{"op":"set_var","name":"assembler_reward","value":{"op":"random_choice","values":[…奖励表…]}} + '
+                                 '{"op":"status_op","action":"add","status":"fragment_stacks",…} + '
+                                 '{"op":"move_card","mode":"give","card_id":{"op":"get","from":{"op":"var","name":"assembler_reward"},"key":"card"},…} + '
+                                 '{"op":"card_prop_change","card":{"ref":"last_created_card"},"property":"swift_value",…} + '
+                                 '{"op":"log","message":{"op":"get","from":{"op":"var","name":"assembler_reward"},"key":"log"}}',
+                         "重构机的\"选目标手牌→放逐→随机奖励\"整条链路搬进卡数据：一次掷骰"
+                         "（random_choice 取奖励表项）存进上下文变量后，造牌/迅捷/碎片/战报都从它取值；"
+                         "奖励表本身也留在卡数据（引擎兜底表 DEFAULT_ASSEMBLER_REWARDS 一起删除）"),
+    # ---- AE-3：起诉书标记 ----
+    "mark_original_card": ("合", 1, '{"op":"card_var_change","card":{"ref":"original_card"},"name":"<标记名>","mode":"set","value":{"op":"source_player"}}',
+                           "给\"被响应的那张牌\"打标记并进 card_var_change（写进该牌的 custom_vars）："
+                           "标记名/值仍由卡数据给，读取方 _bio_indictment_converts_damage 同步改读 custom_vars，"
+                           "\"伤害转护盾\"的结算与战报逐字不变"),
+    # ---- AE-4：风 ----
+    "discard_hand_by_paid_e": ("合", 1, '{"op":"move_card","mode":"batch","owner":"all_players","source_zone":"hand",'
+                                       '"target_zone":"discard","filter":{"max_cost_e":…,"exclude_error":true,'
+                                       '"require_selectable":false},"count_as_active_discard":true,"log":"风吹走了{count}张牌"}',
+                               "按条件批量弃手牌并进 move_card(mode:\"batch\") 的 source_zone 形态："
+                               "filter 复用选牌窗口那张规格表（新增 max_cost_e/min_cost_e/exclude_error），"
+                               "owner 支持集合选择器（每人各搬自己的区域），弃牌仍走 _discard_card_and_note "
+                               "记账（count_as_active_discard），战报只在真的搬走牌时打印"),
+}
+
 # 退役但**保留 `_atomic_*` 处理器**的名字：公开契约里已经进
 # ``mod_spec_v2.REMOVED_ATOMIC_OPS``（写出来是"已移除 + 替代写法"），但引擎内部
 # 或测试会直接调这些私有方法，所以实现留着手工删不得。它们同样必须"卡数据 0 引用"。
@@ -437,7 +466,6 @@ KEPT_EXPLICIT = {
     "copy_choice_with_discount": "复制并打折（走选择窗口）",
     "create_copies_to_deck_top": "造 N 张复制放牌堆顶",
     "create_counter": "生成/记录 counter 类型标记",
-    "mark_original_card": "标记原牌（回手/回收用）",
     "exile_this": "放逐自身（印记）",
     "transform_card": "变换牌（标记）",
     "transform_cards": "批量变换牌",
@@ -453,7 +481,6 @@ KEPT_EXPLICIT = {
     "move_cards_to_deck": "批量把牌放回牌堆",
     "draw": "Round 32 抽牌族唯一实现（count + hooks + log_amount + modifiers）",
     "discard_choice_then_draw": "先弃后抽（弃牌选择窗口）",
-    "discard_hand_by_paid_e": "按本回合已付 E 弃手牌（Desert）",
     "modify_next_cost": "Round 32 新合并体：下次出牌费用修正（delta 正负定方向）",
     "snapshot_card_props": "牌属性快照（按实例存）",
     "restore_card_props": "恢复牌属性快照",
@@ -473,7 +500,6 @@ KEPT_EXPLICIT = {
     "declare_forced_target": "声明强制目标窗口（Light Bulb）",
     "add_charge_to_hand": "手牌充能（Arctic）",
     "apply_turn_regen": "回合回复（Jungle）",
-    "assembler_effect": "装配机（Factory）",
     "cogwheel_mark": "齿轮标记（Factory）",
     "crit_multiplier_add": "暴击倍率（+，Hel）",
     "delayed_blind_next_turn": "下回合延迟失明（Ocean）",
@@ -551,7 +577,7 @@ def build() -> dict:
     actions = []
     for name, (verdict, before, replacement, reason) in (
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
-         **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS}
+         **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

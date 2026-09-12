@@ -366,17 +366,29 @@ GENERIC_STEP_REWRITES = {
     ],
     "desert_wind_schedule": lambda params: [
         {
-            "op": "timed_effect",
+            # Round 40 / 批次 AE-4：``timed_effect`` → ``delayed_effect(mode:"timed")``、
+            # ``discard_hand_by_paid_e`` → ``move_card(mode:"batch", source_zone:…)``。
+            "op": "delayed_effect",
+            "mode": "timed",
             "trigger": "target_turn_start_after_draw",
             "duration": 1,
             "target": params.get("target", "target"),
             "body": [
                 {
-                    "op": "discard_hand_by_paid_e",
-                    "target": "all_players",
-                    "threshold": {
-                        "op": "add",
-                        "values": [{"op": "card_prop", "card": "current_card", "prop": "paid_e"}, 1],
+                    "op": "move_card",
+                    "mode": "batch",
+                    "owner": "all_players",
+                    "source_zone": "hand",
+                    "target_zone": "discard",
+                    "count_as_active_discard": True,
+                    "log": "风吹走了{count}张牌",
+                    "filter": {
+                        "require_selectable": False,
+                        "exclude_error": True,
+                        "max_cost_e": {
+                            "op": "add",
+                            "values": [{"op": "card_prop", "card": "current_card", "prop": "paid_e"}, 1],
+                        },
                     },
                 },
             ],
@@ -786,10 +798,16 @@ GENERIC_STEP_REWRITES.update({
         {"op": "shuffle_hand", "target": params.get("target", "target"), "log": False},
     ],
     "bio_indictment_response": lambda params: [{
-        "op": "mark_original_card",
-        "marker": "_bio_indictment_target_id",
-        "value": "self",
-        "log": "{source}的起诉书将所响应攻击牌的伤害转化为护盾",
+        # Round 40 / 批次 AE-3：``mark_original_card`` → ``card_var_change``
+        # （写被响应牌的 custom_vars）+ ``log``。
+        "op": "card_var_change",
+        "card": {"ref": "original_card"},
+        "name": "_bio_indictment_target_id",
+        "mode": "set",
+        "value": {"op": "source_player"},
+    }, {
+        "op": "log",
+        "message": "{source}的起诉书将所响应攻击牌的伤害转化为护盾",
     }],
     "bio_diamond_attack": lambda params: [{
         "op": "deal_damage",

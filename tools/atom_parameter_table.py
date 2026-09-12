@@ -1331,6 +1331,17 @@ OUT_OF_ATOM_PARAMS = (
     ("request",
      "`filter` 全套：`zone`/`owner`/`card_type`/`require_selectable`/`exclude_self`/`affordable`/`pay_ratio`/`min_count`…",
      "`game_engine._choice_request_satisfied` 与选牌 UI 组装（`game_engine.py` 第 7396 行起）"),
+    # Round 40 / 批次 AE-2：``continue_on_cancel``（没有可选牌就跳过窗口）由
+    # ``_choice_request_satisfied`` 读；窗口标题 ``title`` 由前端读
+    # （``choiceTitle = fallback => choiceParams.title || fallback``）。
+    ("request",
+     "`continue_on_cancel`（缺省不写 = 必须选；true = 没有可选牌时窗口算「已满足」）、`title`（窗口标题）",
+     "`game_engine._choice_request_satisfied`（`game_engine.py` 第 7504 行起）/ 前端 `static/js/game.js` 的 `choiceTitle`"),
+    # Round 40 / 批次 AE-4：批量搬区域牌的花费/占位过滤键由
+    # ``_card_matches_filter`` 读（不是 ``params.get``，故不在上面的自动抽取里）。
+    ("move_card",
+     "`filter.max_cost_e` / `filter.min_cost_e`（按 ``CardInstance.cost_e`` 实际花费比对，可写表达式）、`filter.exclude_error`（跳过 Error 占位牌）",
+     "`game_engine._card_matches_filter`（`game_engine.py` 第 6563 行起）"),
 )
 SAMPLE_SPOT_CHECKS = (
     ("request", "`type`（target/card/confirm/zone/forced_target/discount_copy/reorder_deck）"

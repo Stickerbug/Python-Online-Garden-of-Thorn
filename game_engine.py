@@ -888,14 +888,10 @@ class PlayerState:
 
 
 class GameEngine:
-    # Fallback reward table for the assembler op when a card declares none
-    # (shipped Factory data declares the same three entries).
-    DEFAULT_ASSEMBLER_REWARDS = (
-        {"card": "Laser", "swift": 2, "log": "{player}的重构机：{target}获得激光器"},
-        {"card": "Sawblade", "swift": 2, "log": "{player}的重构机：{target}获得锯片"},
-        {"card": "Fragment", "fragment_stacks": 2,
-         "log": "{player}的重构机：{target}获得2层碎片和1张碎片"},
-    )
+    # Round 40 / 批次 AE-2：``assembler_effect`` 与其兜底奖励表
+    # （``DEFAULT_ASSEMBLER_REWARDS``）已删除——重构机改成卡数据里的通用步骤
+    # （请求选牌 → 放逐 → 随机奖励表 → 造牌 / 迅捷 / 碎片），奖励表本身留在
+    # 卡数据（`factory:assembler` 的 ``set_var(random_choice:[…])``）里。
     # These cards are internal products of built-in setup effects. They must be
     # constructible even when Vanilla Cards is disabled, without entering the
     # normal draft pool for that loadout.
@@ -6567,6 +6563,23 @@ class GameEngine:
                 limit = None
             if limit is not None and int(getattr(card.card_def, 'cost_e', 0) or 0) > limit:
                 return False
+        # Round 40 / 批次 AE-4：``max_cost_e``/``min_cost_e`` 比的是**实际花费口径**
+        # （``CardInstance.cost_e``：含迅捷/沉重/融合/折价），与旧
+        # ``discard_hand_by_paid_e`` 的 ``cost_e <= threshold`` 逐字一致；
+        # ``max_base_cost_e``（上面那条）仍旧只比牌面基础费用。
+        # 花费上限既可以写常量，也可以写取值表达式（引擎路径的定时器体不会
+        # 预求值嵌套表达式，所以这里统一用 ``_eval_int`` 求）。
+        if spec.get('max_cost_e', spec.get('max_e')) is not None:
+            limit = self._eval_int(player_id, spec.get('max_cost_e', spec.get('max_e')), source_card, 0)
+            if int(getattr(card, 'cost_e', 0) or 0) > limit:
+                return False
+        if spec.get('min_cost_e', spec.get('min_e')) is not None:
+            floor = self._eval_int(player_id, spec.get('min_cost_e', spec.get('min_e')), source_card, 0)
+            if int(getattr(card, 'cost_e', 0) or 0) < floor:
+                return False
+        if spec.get('exclude_error', spec.get('exclude_error_cards')):
+            if str(getattr(card, 'def_id', '') or '') == ERROR_CARD_ID:
+                return False
         if spec.get('affordable'):
             try:
                 ratio = float(spec.get('pay_ratio', 1.0) or 1.0)
@@ -7483,6 +7496,18 @@ class GameEngine:
         if choice_type in ('choose_card_from_hand', 'choose_cards_from_hand', 'choose_card_to_discard'):
             current_iid = getattr(card, 'instance_id', None)
             owner_id, _, _ = self._find_card_location(card)
+            # Round 40 / 批次 AE-2：``continue_on_cancel`` 的"没有可选牌就跳过窗口"
+            # 判定要看**这个取牌窗口的区域拥有者**（本次出牌已选的目标 / ``request``
+            # 的 target 选择器），不是出牌者。重构机这类"从目标手牌里选一张"的步骤，
+            # 出牌者手牌为空时目标手牌仍可能有牌，窗口不能因此被静默跳过；
+            # 目标手牌为空时（旧原子也是）不弹窗、不结算。
+            request_owner = self._choice_target_from_choice(choice, -1)
+            if not self._valid_player_id(request_owner):
+                request_owner = self._choice_target_id_for_request(
+                    owner_id if owner_id is not None else 0, effect,
+                )
+            if self._valid_player_id(request_owner):
+                owner_id = request_owner
             owner = self.players[owner_id] if owner_id is not None and 0 <= owner_id < len(self.players) else None
             eligible = [
                 hand_card for hand_card in getattr(owner, 'hand', [])
@@ -7733,7 +7758,15 @@ class GameEngine:
             # ``request_target`` / ``request_confirm`` 不在默认表里（返回 None）。
             if request_kind not in ('card', 'zone'):
                 return None
-            return self._resolve_target(player_id, params.get('target', 'self'))
+            target_id = self._resolve_target(player_id, params.get('target', 'self'))
+            if not self._valid_player_id(target_id):
+                # Round 40 / 批次 AE-2：取牌窗口必须有具体的"区域拥有者"。
+                # ``choice_target`` 这类选择器在出牌前还没有已选目标（客户端
+                # 才要弹这个窗口），此前会算出 -1 → 窗口里一张候选牌都没有。
+                # 退回出牌者自己，与旧重构机原子"无显式目标时看的是出牌者
+                # 手牌"的行为一致（有显式目标的真实出牌不受影响）。
+                target_id = player_id
+            return target_id
         target_defaults = {
             'destroy_equipment': 'enemy',
             'equipment_op': 'enemy',
@@ -9603,34 +9636,11 @@ class GameEngine:
         # 选择/响应窗口由队列自身让路，需要等待时仍留到窗口关闭后再打出。
         self._bio_drain_auto_play_queue()
 
-    def _atomic_mark_original_card(self, player_id, card, params, log, choice, context):
-        """Attach a marker attribute to the card this response is answering.
-
-        Response cards such as the indictment need to change how the *responded*
-        card resolves (e.g. turn its damage into shields); the marker name is
-        data-driven so the mechanic stays reusable.
-        """
-        original = context.get('original_card') if isinstance(context, dict) else None
-        if not isinstance(original, CardInstance):
-            original = self._resolve_card_ref(player_id, {'ref': 'original_card'}, card)
-        if original is None:
-            return
-        marker = str(params.get('marker') or params.get('name') or '').strip()
-        if not marker:
-            return
-        raw_value = params.get('value', player_id)
-        if isinstance(raw_value, str) and raw_value.strip().lower() in ('self', 'source'):
-            value = player_id
-        elif isinstance(raw_value, str) and raw_value.strip().lower() in ('target', 'enemy'):
-            value = self._resolve_target(player_id, 'target')
-        else:
-            value = self._eval_int(player_id, raw_value, card, player_id)
-        setattr(original, marker, value)
-        if log is False or not log:
-            return
-        self.log_msg(self._format_step_log(
-            log, target=self.pn(player_id), source=self.pn(player_id),
-        ))
+    # Round 40 / 批次 AE-3：``mark_original_card``（给"被响应的那张牌"打标记）
+    # 已下沉为卡牌自定义变量 —— 数据写
+    # ``card_var_change(card:{"ref":"original_card"}, name:…, value:{"op":"source_player"})``，
+    # 读取方 :meth:`_bio_indictment_converts_damage` 改读 ``custom_vars``。
+    # 旧名见 ``mod_spec_v2.REMOVED_ATOMIC_OPS``。
 
     def _copy_card_instance_payload(self, player_id, card, params, log, choice, context):
         """``copy_card(as_instance:true)`` 的实现入口——直接转交给旧处理器。
@@ -10590,68 +10600,10 @@ class GameEngine:
             target=self.pn(target_id),
         ))
 
-    def _atomic_assembler_effect(self, player_id, card, params, log, choice, context):
-        """Assembler: choose a hand card to exile, then random effect."""
-        target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
-        if not self._valid_player_id(target_id):
-            return
-        target_ps = self.players[target_id]
-        if choice and isinstance(choice, dict) and 'target_instance_id' in choice:
-            # Phase 2: choice resolved, apply effect
-            target_id = self._resolve_target(player_id, choice.get('target_player_id', choice.get('target_id', target_id)))
-            if not self._valid_player_id(target_id):
-                return
-            target_ps = self.players[target_id]
-            target = target_ps.find_hand_card(choice['target_instance_id'])
-            if target is None or not self._card_selectable_by_action(target):
-                return
-            target_ps.hand.remove(target)
-            self._put_card_in_exile(target_id, target)
-            self.log_msg(f"{self.pn(player_id)}用重构机放逐了{self.pn(target_id)}的1张手牌")
-            # Random effect: the reward table is card data (``rewards`` on the op)
-            import random as _random
-            rewards = [item for item in (params.get('rewards') or []) if isinstance(item, dict)]
-            if not rewards:
-                rewards = DEFAULT_ASSEMBLER_REWARDS
-            roll = _random.randint(1, len(rewards))
-            reward = rewards[roll - 1]
-            stacks = max(0, int(reward.get('fragment_stacks', 0) or 0))
-            if stacks:
-                target_ps.fragment_stacks += stacks
-            new_card = CardInstance(def_id=str(reward.get('card')))
-            swift = max(0, int(reward.get('swift', 0) or 0))
-            if swift:
-                new_card.swift_value = swift
-                new_card.instance_flags.add('swift')
-            self._apply_setup_modifiers_to_card(target_id, new_card)
-            target_ps.add_to_hand(new_card)
-            self.log_msg(self._format_step_log(
-                reward.get('log') or "{player}的重构机：{target}获得{card_name}",
-                player=self.pn(player_id),
-                target=self.pn(target_id),
-                card_name=new_card.name_cn,
-            ))
-        else:
-            # Phase 1: show choice
-            hand_cards = self._visible_card_dicts(
-                [c for c in target_ps.hand if c.instance_id != card.instance_id],
-                player_id,
-                target_id,
-                choice_list=True,
-            )
-            if hand_cards:
-                self.pending_choice = {
-                    'player_id': player_id,
-                    'choice_type': 'choose_card_from_hand',
-                    'choice_params': {'cancellable': False},
-                    'card': card.to_dict(),
-                    'hand_cards': hand_cards,
-                    'message': f'重构机：选择{self.pn(target_id)}的一张手牌放逐',
-                    'target_player_id': target_id,
-                    'original_choice': {'target_player_id': target_id},
-                    'already_paid': True,
-                    'keep_paid': True,
-                }
+    # Round 40 / 批次 AE-2：``assembler_effect``（重构机的"放逐一张手牌 + 随机
+    # 奖励"专用原子）已删除，改成卡数据里的通用步骤组合 —— 见
+    # ``mod_spec_v2.REMOVED_ATOMIC_OPS["assembler_effect"]`` 与
+    # 《引擎原子与数据步骤清单》的替代写法说明。
 
     def _request_reorder_deck_payload(self, player_id, card, params, log, choice, context):
         """``request(type:"reorder_deck")`` 的实现体（旧 ``request_reorder_deck``）：
@@ -12373,7 +12325,12 @@ class GameEngine:
         if amount <= 0 or not self._valid_player_id(target_id):
             return False
         source_card = source_card or getattr(self, '_active_v2_card', None)
-        if source_card is None or int(getattr(source_card, '_bio_indictment_target_id', -1) or -1) != target_id:
+        if source_card is None:
+            return False
+        # Round 40 / 批次 AE-3：标记从实例属性搬进 ``custom_vars``（起诉书的数据
+        # 现在写 ``card_var_change``），读取方跟着换 ``custom_vars``。
+        marker = (getattr(source_card, 'custom_vars', None) or {}).get('_bio_indictment_target_id', -1)
+        if int(marker or -1) != target_id:
             return False
         is_physical = damage_type == DAMAGE_TYPE_PHYSICAL
         is_electric = str(damage_tag or '') in (DAMAGE_TAG_BATTERY, 'electric', '电伤')
@@ -18757,10 +18714,32 @@ class GameEngine:
         # ``shuffled_top``）走统一校验；``owner``/``target`` 按选择器解析，一批牌
         # 只能进一个牌堆，所以取第一个有效目标。
         raw_zone = params.get('target_zone', params.get('zone', 'deck'))
-        if normalize_zone_name(raw_zone, allow_equipment=False, op='move_card(mode:"batch")', param='target_zone') != 'deck':
-            raise V2ZoneError(f'move_card(mode:"batch") 只能进 deck，收到 {raw_zone!r}')
-        self._assert_step_zone(params, 'deck', op='move_card')
-        position = self._step_zone_position(params, op='move_card')
+        zone_name = normalize_zone_name(
+            raw_zone, allow_equipment=False, op='move_card(mode:"batch")', param='target_zone',
+        )
+        if zone_name not in ('deck', 'discard', 'exile'):
+            raise V2ZoneError(
+                f'move_card(mode:"batch") 只能进 deck/discard/exile，收到 {raw_zone!r}'
+            )
+        self._assert_step_zone(params, zone_name, op='move_card')
+        if zone_name == 'deck':
+            position = self._step_zone_position(params, op='move_card')
+        else:
+            # 弃牌堆 / 放逐区没有位置概念；仍走词表校验（写了非法值会显式报错）。
+            self._step_zone_position_or_none(params, op='move_card')
+            position = 'top'
+        # Round 40 / 批次 AE-4：``source_zone`` 存在时改走"按 filter 批量搬区域牌"的
+        # 形态（每人各搬自己的区域），``cards`` 选择器那条老路径逐字保持不变。
+        source_zone = str(params.get('source_zone') or '').strip().lower()
+        if source_zone:
+            return self._move_card_batch_zone_payload(
+                player_id, card, params, log, choice, context,
+                source_zone=normalize_zone_name(
+                    source_zone, allow_equipment=False,
+                    op='move_card(mode:"batch")', param='source_zone',
+                ),
+                target_zone=zone_name,
+            )
         owner_ids = self._step_target_ids(
             player_id, card, params, context, op='move_card',
             default='self', keys=('owner', 'target'),
@@ -18818,6 +18797,92 @@ class GameEngine:
             self.log_msg(f"{self.pn(owner_id)}将{len(moved)}张牌随机放入抽牌堆")
         else:
             self.log_msg(f"{self.pn(owner_id)}将{len(moved)}张牌置于抽牌堆顶")
+
+    def _move_card_batch_zone_payload(self, player_id, card, params, log, choice, context,
+                                      *, source_zone: str, target_zone: str):
+        """``move_card(mode:"batch", source_zone:…)``：按 ``filter`` 批量搬区域里的牌。
+
+        Round 40 / 批次 AE-4：通用能力先行 —— 旧 ``discard_hand_by_paid_e``
+        （"风吹走全场 E 消耗不超过 X 的手牌"）需要的"按条件批量弃手牌"在这里
+        下沉成数据：``owner``/``target`` 按**集合**语义解析（``all_players``
+        这类选择器每人各搬一次），``source_zone`` 选来源区，``filter`` 复用
+        选牌窗口那张规格表（``card_type``/``exclude_flags``/``max_cost_e``/
+        ``exclude_error``…），``amount``/``count`` 限定每人最多搬几张（默认全部）。
+
+        ``target_zone`` 只认 ``discard`` / ``exile``（进 ``hand``/``deck`` 的
+        批量搬牌仍走 ``cards`` 选择器那条老路径，顺序语义更明确）。弃牌走
+        :meth:`_discard_card_and_note`（``count_as_active_discard`` 默认 true，
+        与旧原子一致），放逐走 :meth:`_put_card_in_exile`；战报只在真的搬走了
+        牌时打印（``{source}``/``{target}``/``{count}``/``{amount}`` 由数据提供模板）。
+        """
+
+        if target_zone not in ('discard', 'exile'):
+            raise V2ZoneError(
+                f'move_card(mode:"batch") 的 source_zone 形态只支持 target_zone=discard/exile，'
+                f'收到 {target_zone!r}；进 hand/deck 请改用 cards 选择器'
+            )
+        # ``filter`` 在这里是**卡牌**筛选规格（与取牌窗口同一张表）。玩家集合
+        # 走 ``owner``/``target`` 选择器本身，不能交给 ``_step_target_ids``——
+        # 那条路会把 ``filter`` 当成"筛选玩家"的条件用。
+        owner_ids = self._list_effect_targets(
+            player_id, card, params.get('owner', params.get('target', 'self')), context,
+        )
+        exclude_ids = set()
+        if params.get('exclude') is not None:
+            for target_id in self._list_effect_targets(player_id, card, params.get('exclude'), context):
+                exclude_ids.add(target_id)
+        if exclude_ids:
+            owner_ids = [target_id for target_id in owner_ids if target_id not in exclude_ids]
+        if not owner_ids:
+            owner_ids = [player_id]
+        spec = params.get('filter')
+        spec = dict(spec) if isinstance(spec, dict) else {}
+        spec['zone'] = source_zone
+        limit_raw = params.get('amount', params.get('count'))
+        if limit_raw in (None, '', 'all', '全部'):
+            limit = None
+        else:
+            limit = max(0, self._eval_int(player_id, limit_raw, card, 0))
+        count_as_active_discard = params.get('count_as_active_discard', True) is not False
+        moved = 0
+        for owner_id in (owner_ids or [player_id]):
+            if not self._valid_player_id(owner_id):
+                continue
+            zone = getattr(self.players[owner_id], source_zone, None)
+            if not isinstance(zone, list) or not zone:
+                continue
+            candidates = self._filter_candidates(
+                {**spec, 'owner': owner_id}, player_id,
+                source_card=card, default_owner_id=owner_id,
+            )
+            if limit is not None:
+                candidates = candidates[:limit]
+            for target_card in candidates:
+                if target_card not in zone:
+                    continue
+                zone.remove(target_card)
+                if target_zone == 'discard':
+                    self._discard_card_and_note(owner_id, target_card, count_as_active_discard)
+                else:
+                    self._put_card_in_exile(owner_id, target_card)
+                moved += 1
+        if moved <= 0:
+            if log and params.get('empty_log'):
+                self.log_msg(self._format_step_log(
+                    params.get('empty_log'), target=self.pn(player_id), source=self.pn(player_id),
+                    amount=0, count=0,
+                ))
+            return
+        if params.get('silent') or params.get('no_log') or params.get('hide_log') or log is False:
+            return
+        if log:
+            self.log_msg(self._format_step_log(
+                log, target=self.pn(player_id), source=self.pn(player_id),
+                amount=moved, count=moved,
+            ))
+            return
+        label = '弃牌堆' if target_zone == 'discard' else '放逐区'
+        self.log_msg(f"{self.pn(player_id)}将{moved}张牌移入{label}")
 
     def _status_field_for(self, status: str) -> str:
         key = str(status or '').strip()
@@ -19606,32 +19671,12 @@ class GameEngine:
     # Round 31 / 批次 Z：``player_prop_set`` / ``player_prop_add`` 两个兼容垫片
     # 已删除（``player_prop_change(mode=...)`` 是唯一实现）。
 
-    def _atomic_discard_hand_by_paid_e(self, player_id, card, params, log, choice, context):
-        threshold = params.get('threshold', params.get('amount', None))
-        if threshold is None:
-            threshold = getattr(card, '_paid_e_this_play', getattr(card, 'cost_e', 0))
-        threshold = self._eval_int(player_id, threshold, card)
-        target_ref = params.get('target', params.get('targets', 'all_players'))
-        if target_ref in ('all_players', 'all', 'both'):
-            targets = list(range(len(self.players)))
-        else:
-            targets = self._resolve_targets(player_id, target_ref)
-        total = 0
-        for tid in targets:
-            if not (0 <= tid < len(self.players)):
-                continue
-            ps = self.players[tid]
-            matched = [c for c in list(ps.hand) if getattr(c, 'def_id', '') != ERROR_CARD_ID and int(getattr(c, 'cost_e', 0) or 0) <= threshold]
-            count_as_active_discard = params.get('count_as_active_discard', True) is not False
-            for target_card in matched:
-                if target_card in ps.hand:
-                    ps.hand.remove(target_card)
-                    self._discard_card_and_note(tid, target_card, count_as_active_discard)
-                    total += 1
-        if log:
-            self.log_msg(log)
-        elif total > 0:
-            self.log_msg(f"风吹走了{total}张牌")
+    # Round 40 / 批次 AE-4：``discard_hand_by_paid_e``（风的"按本牌实际花费 E
+    # 批量弃手牌"专用原子）已删除，能力下沉成通用批量移动 —— 数据写
+    # ``move_card(mode:"batch", source_zone:"hand", target_zone:"discard",
+    # filter:{max_cost_e:…, exclude_error:true}, count_as_active_discard:true)``
+    # （见 :meth:`_move_card_batch_zone_payload` 与
+    # ``mod_spec_v2.REMOVED_ATOMIC_OPS["discard_hand_by_paid_e"]``）。
 
     def _atomic_snapshot(self, player_id, card, params, log, choice, context):
         """Round 33 / 批次 AB：``snapshot`` 伞。

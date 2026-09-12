@@ -104,7 +104,7 @@ ADVANCED_ATOMIC_OPS = {
     "deck_catalog_pick", "deck_catalog_pick_resume",
     "player_prop_change", "card_prop_change",
     "card_damage_multiply", "equipment_prop_set",
-    "discard_hand_by_paid_e", "restore_turn_start_stats", "restore_match_start_stats",
+    "restore_turn_start_stats", "restore_match_start_stats",
     "counter_pending_attack_damage",
     "equipment_prop_add", "discard_choice_then_draw",
     "activate_corruption",
@@ -114,7 +114,8 @@ ADVANCED_ATOMIC_OPS = {
     "on_damage_taken",
     "cogwheel_mark",
     "goggles_enable",
-    "assembler_effect",
+    # Round 40 / 批次 AE-2：``assembler_effect`` 已下沉成卡数据里的通用步骤
+    # （旧名进 REMOVED_ATOMIC_OPS）。
     # Round 36 / 批次 AD-1：请求族四合一 —— 旧 ``request_target`` /
     # ``request_card`` / ``request_confirm`` / ``choose_from_zone`` /
     # ``declare_forced_target`` / ``copy_choice_with_discount`` /
