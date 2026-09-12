@@ -7,6 +7,7 @@ from story_engine import (
     StoryActionError,
     _check_combat_end,
     _draw_cards,
+    _enemy_physical_damage,
     _enemy_raw_damage,
     _finish_combat,
     _gain_shield,
@@ -351,3 +352,89 @@ def test_boss_rush_starting_card_rewards_cannot_be_skipped_or_left():
         with pytest.raises(StoryActionError) as error:
             apply_story_action(state, 'choose_reward', payload, seed)
         assert error.value.code == 'CARD_REWARD_REQUIRED'
+
+
+def _cover_and_hidden_rat(seed):
+    state, _ = _factory_combat(
+        [
+            {'def_id': 'brick_pile', 'cover_enemy': True, 'health_multiplier': 4},
+            'mechanical_rat',
+        ],
+        seed,
+    )
+    cover = _enemy(state, 'brick_pile')
+    rat = _enemy(state, 'mechanical_rat')
+    rat['hidden'] = 1
+    rat['hidden_cover_id'] = cover['id']
+    return state, cover, rat
+
+
+def _hidden_cleared_events(events, rat):
+    return [
+        event for event in events
+        if event.get('type') == 'status_cleared'
+        and event.get('target_id') == rat['id']
+        and event.get('status') == 'hidden'
+    ]
+
+
+def test_one_shot_killing_the_cover_reveals_the_rat():
+    """反馈 #111：一击秒杀砖堆后机械鼠必须显形，随后要能正常吃满伤害。"""
+    state, cover, rat = _cover_and_hidden_rat('rat-cover-oneshot')
+    events = []
+
+    _enemy_raw_damage(state, cover, 999, events, 'test', player_caused=True)
+
+    assert int(cover['health']) <= 0
+    assert rat['hidden'] == 0
+    assert len(_hidden_cleared_events(events, rat)) == 1
+
+    health_before = int(rat['health'])
+    events = []
+    _enemy_raw_damage(state, rat, 30, events, 'test', player_caused=True)
+
+    assert int(rat['health']) == health_before - 30
+    assert sum(
+        int(event.get('amount') or 0)
+        for event in events
+        if event.get('type') == 'enemy_damage'
+    ) == 30
+
+
+def test_multi_hit_attack_that_kills_the_cover_reveals_the_rat():
+    """反馈 #111：多段攻击第一段就把掩体打死时，机械鼠同样要显形。"""
+    state, cover, rat = _cover_and_hidden_rat('rat-cover-multihit')
+    events = []
+
+    _enemy_physical_damage(
+        state,
+        cover,
+        999,
+        3,
+        events,
+        'test',
+        values={'tags': ()},
+        seed='rat-cover-multihit',
+    )
+
+    assert int(cover['health']) <= 0
+    assert rat['hidden'] == 0
+    assert len(_hidden_cleared_events(events, rat)) == 1
+
+
+def test_rat_behind_a_dead_cover_is_revealed_once_by_combat_end_check():
+    """反馈 #111 兜底：掩体走非伤害路径倒下时也会显形，且不会重复播报。"""
+    state, cover, rat = _cover_and_hidden_rat('rat-cover-fallback')
+    cover['health'] = 0
+    events = []
+
+    assert _check_combat_end(state, 'rat-cover-fallback', events) is False
+
+    assert rat['hidden'] == 0
+    cleared = _hidden_cleared_events(events, rat)
+    assert len(cleared) == 1
+    assert cleared[0]['source'] == cover['id']
+
+    events = []
+    _check_combat_end(state, 'rat-cover-fallback', events)
+    assert _hidden_cleared_events(events, rat) == []

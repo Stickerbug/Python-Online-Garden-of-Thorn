@@ -41,6 +41,12 @@ _NEGATIVE_STATUSES = frozenset({
 _TURN_START_DECAY_STATUSES = ('weak', 'vulnerable', 'fragile')
 _TURN_END_DECAY_STATUSES = ('attack_blocked',)
 
+# 反馈 #116：保护附魔书给的「坚毅」要覆盖所有护盾类效果——蜂蜡
+# （shield_with_power）与冰（decaying_shield）都是护盾效果，之前只有 shield 吃加成。
+_STORY_SHIELD_EFFECT_TYPES = frozenset({
+    'shield', 'decaying_shield', 'shield_with_power',
+})
+
 # 开发表格14《爬塔怪物设计》R64：灵能绑定改写为「最大生命值减半、生命值不会低于1，
 # 若是生命值=2则眩晕1回合并失去所有力量」。落地取上界语义：伤害把生命值打进
 # ≤2 的临界区就触发（这样「不会低于1」的保底才有实际触发点），且只眩晕 1 回合。
@@ -746,6 +752,28 @@ def _is_story_primary_card(card):
     )
 
 
+def _enchantment_damage_effect(effect, damage_bonus):
+    """把附魔书给的「伤害+D」并进一条攻击效果（反馈 #103）。
+
+    ``damage`` / ``damage_per_status`` / ``damage_per_active_discard`` /
+    ``damage_per_elixir`` 的 ``amount`` 就是每段基础伤害，直接相加即可；
+    ``damage_from_shield`` 的 ``amount`` 是护盾层数的倍数，加在这里会被乘上护盾
+    层数，它的平添伤害在 ``bonus`` 字段，所以加在那里。
+    """
+    effect_type = str(effect.get('type') or '')
+    if effect_type == 'damage_from_shield':
+        return {
+            **effect,
+            'bonus': max(0, int(effect.get('bonus') or 0) + damage_bonus),
+        }
+    if effect_type in STORY_PLAYER_ATTACK_EFFECT_TYPES:
+        return {
+            **effect,
+            'amount': max(0, int(effect.get('amount') or 0) + damage_bonus),
+        }
+    return effect
+
+
 def _card_values(card):
     definition = _card_def(card)
     values = copy.deepcopy(definition)
@@ -817,12 +845,7 @@ def _card_values(card):
         damage_bonus = int(modifiers.get('damage_bonus') or 0)
         if damage_bonus:
             values['effects'] = tuple(
-                {
-                    **effect,
-                    'amount': max(0, int(effect.get('amount') or 0) + damage_bonus),
-                }
-                if effect.get('type') == 'damage'
-                else effect
+                _enchantment_damage_effect(effect, damage_bonus)
                 for effect in values.get('effects') or ()
             )
         shield_bonus = int(modifiers.get('enchantment_shield_bonus_once') or 0)
@@ -832,7 +855,7 @@ def _card_values(card):
                     **effect,
                     'amount': max(0, int(effect.get('amount') or 0) + shield_bonus),
                 }
-                if effect.get('type') == 'shield'
+                if effect.get('type') in _STORY_SHIELD_EFFECT_TYPES
                 else effect
                 for effect in values.get('effects') or ()
             )
@@ -2284,6 +2307,23 @@ def _record_enemy_health_damage(enemy, dealt):
         enemy['fossil_awaken_pending'] = True
 
 
+def _clear_rat_hidden(rat, source, events):
+    """清掉机械鼠的隐藏层数；只在确实清掉时播报一次（反馈 #111）。"""
+    before = int(rat.get('hidden') or 0)
+    if before <= 0:
+        return False
+    rat['hidden'] = 0
+    rat.pop('hidden_fresh', None)
+    events.append({
+        'type': 'status_cleared',
+        'target_id': rat.get('id'),
+        'status': 'hidden',
+        'before': before,
+        'source': source,
+    })
+    return True
+
+
 def _reveal_rat_from_cover(state, cover, events):
     for rat in _living_enemies(state['combat']):
         if (
@@ -2293,16 +2333,31 @@ def _reveal_rat_from_cover(state, cover, events):
             or int(rat.get('hidden') or 0) <= 0
         ):
             continue
-        before = int(rat['hidden'])
-        rat['hidden'] = 0
-        rat.pop('hidden_fresh', None)
-        events.append({
-            'type': 'status_cleared',
-            'target_id': rat['id'],
-            'status': 'hidden',
-            'before': before,
-            'source': cover['id'],
-        })
+        _clear_rat_hidden(rat, cover.get('id'), events)
+
+
+def _reveal_rats_without_living_cover(state, events):
+    """兜底：记录里的掩体已经不在场上时，机械鼠不该继续隐藏（反馈 #111）。
+
+    掩体被毒伤等非「被打」路径带走时不会经过 _enemy_raw_damage 的显形判定，
+    这里按鼠身上记录的 hidden_cover_id 复核，且只在隐藏层数真的还在时才播报。
+    """
+    combat = state.get('combat') or {}
+    living_cover_ids = {
+        enemy.get('id')
+        for enemy in _living_enemies(combat)
+        if STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script') == 'brick_pile'
+        and bool(enemy.get('cover_enemy'))
+    }
+    for rat in _living_enemies(combat):
+        if (
+            STORY_ENEMIES.get(rat.get('def_id'), {}).get('script') != 'mechanical_rat'
+            or int(rat.get('hidden') or 0) <= 0
+        ):
+            continue
+        cover_id = rat.get('hidden_cover_id')
+        if cover_id and cover_id not in living_cover_ids:
+            _clear_rat_hidden(rat, cover_id, events)
 
 
 def _after_enemy_health_damage(state, enemy, dealt, events):
@@ -2420,19 +2475,21 @@ def _enemy_raw_damage(
     if before > 0 and int(enemy.get('health') or 0) <= 0:
         damage_event['lethal'] = True
     events.append(damage_event)
-    if int(enemy.get('health') or 0) <= 0:
-        if not propagate:
-            _propagate_centipede_linked(state, enemy, dealt, events)
-        if player_caused and not propagate:
-            _trigger_blade(state, enemy, dealt, events)
-        return dealt
     if (
         incoming_health_damage > 0
         and STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
         == 'brick_pile'
         and bool(enemy.get('cover_enemy'))
     ):
+        # 反馈 #111：掩体挨打就该暴露躲藏的机械鼠，一击致死也要生效，
+        # 所以这条判定必须排在下面的致死分支之前。
         _reveal_rat_from_cover(state, enemy, events)
+    if int(enemy.get('health') or 0) <= 0:
+        if not propagate:
+            _propagate_centipede_linked(state, enemy, dealt, events)
+        if player_caused and not propagate:
+            _trigger_blade(state, enemy, dealt, events)
+        return dealt
     _after_enemy_health_damage(state, enemy, dealt, events)
     if dealt and STORY_ENEMIES[enemy['def_id']].get('script') == 'swell':
         enemy['temporary_power'] = int(enemy.get('temporary_power') or 0) + 1
@@ -2852,16 +2909,17 @@ def _enemy_physical_damage(
         if before > 0 and after <= 0:
             damage_event['lethal'] = True
         events.append(damage_event)
-        if after <= 0:
-            _propagate_centipede_linked(state, enemy, dealt, events)
-            break
         if (
             incoming_health_damage > 0
             and STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script')
             == 'brick_pile'
             and bool(enemy.get('cover_enemy'))
         ):
+            # 反馈 #111：多段攻击里第一段就把掩体打死时，机械鼠同样要显形。
             _reveal_rat_from_cover(state, enemy, events)
+        if after <= 0:
+            _propagate_centipede_linked(state, enemy, dealt, events)
+            break
         _after_enemy_health_damage(state, enemy, dealt, events)
         reflection = int(enemy.get('reflection') or 0)
         if reflection > 0 and amount > 0:
@@ -8467,6 +8525,8 @@ def _check_combat_end(state, seed, events):
     if not combat:
         return False
     _resolve_enemy_death_hooks(state, seed, events)
+    # 反馈 #111：掩体已经倒下（例如被毒伤带走）时，兜底清掉机械鼠的隐藏。
+    _reveal_rats_without_living_cover(state, events)
     if _resolve_player_death(state, events):
         return True
     threats = [
