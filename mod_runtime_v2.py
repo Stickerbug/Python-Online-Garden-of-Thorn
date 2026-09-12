@@ -36,7 +36,10 @@ ADVANCED_ATOMIC_OPS = {
     # ``for_each_selected_card`` 并进 ``if_else`` / ``repeat`` / ``for_each``；
     # 生命族并进 ``health_op``、资源族并进 ``resource_op``、费用族并进
     # ``modify_next_cost``、抽牌族并进 ``draw``、列表族并进 ``list_modify``。
-    "after_all", "random", "break", "continue", "if_else", "repeat",
+    # Round 37 / 批次 AD-2：``after_all`` 并进 ``on_event(trigger:"after_all")``，
+    # 规范名 ``on_event`` 有自己的 ``_atomic_*`` 实现，登记在这里只是保持
+    # "伞原子在白名单里"的既有口径。
+    "on_event", "random", "break", "continue", "if_else", "repeat",
     "for_each",
     "damage", "direct_damage", "lifesteal_damage", "triangle_damage",
     "health_op", "resource_op", "draw", "modify_next_cost",
@@ -69,7 +72,7 @@ ADVANCED_ATOMIC_OPS = {
     "move_card",
     "destroy_equipment",
     "equip_protection", "remove_equip_protection",
-    "place_as_equip", "add_equipment_to_zone", "trigger_manual",
+    "place_as_equip", "add_equipment_to_zone",
     "block_action", "block_card_type", "force_card_type", "nullify_current_card",
     "skip_turn", "extra_turn",
     "player_status_layers",
@@ -77,15 +80,16 @@ ADVANCED_ATOMIC_OPS = {
     "multiply_next_damage",
     "add_tag", "add_tag_to_zone",
     "transform_card", "card_counter", "create_counter",
-    "broadcast_event", "modify_damage",
-    "list_modify", "timed_effect", "countdown_var",
+    # Round 37 / 批次 AD-2：``broadcast_event`` 并进 ``emit_event``。
+    "emit_event", "modify_damage",
+    "list_modify", "delayed_effect", "countdown_var",
     # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
     # (Round 1 draft names, never used by shipped data) were folded into
     # ``random_zone_card_to_hand``; see ``REMOVED_ATOMIC_OPS``.
     "defer_game_over",
     "seal_equipment", "clear_statuses", "settle_status",
     "queue_auto_play", "auto_play_zone_top", "ricochet_attack",
-    "absorb_attack_damage", "add_charge_to_hand", "register_play_listener",
+    "absorb_attack_damage", "add_charge_to_hand",
     "card_var_change",
     "set_card_prop_random",
     "transform_cards",
@@ -114,10 +118,12 @@ ADVANCED_ATOMIC_OPS = {
     # draw_to_hand_limit 的公式已搬进卡数据，实现删除（见 REMOVED_ATOMIC_OPS）。
     "apply_turn_regen",
     "plank_immunity",
-    "magic_relic_trigger", "electric_web_arm",
+    "electric_web_arm",
     "magic_salt_reflect", "third_eye_precision_or_hidden",
-    "grant_temp_swift_highest_e", "delayed_blind_next_turn",
-    "delayed_reveal_hand_next_turn",
+    "grant_temp_swift_highest_e",
+    # Round 37 / 批次 AD-2：``timed_effect`` 与两条 ``delayed_*`` 并进
+    # ``delayed_effect(mode:"timed"|"blind"|"reveal_hand")``（登记名见上一行），
+    # 旧名进 REMOVED_ATOMIC_OPS，写出来是显式报错。
     # Round 27：`discard` / `random_discard_from_hand` 拆成"取值表达式 + 通用步骤"，
     # 实现删除（见 REMOVED_ATOMIC_OPS 的替代写法）。
 }
@@ -1176,17 +1182,19 @@ def listener_condition_from_params(params: Any) -> Any:
 
 
 LISTENER_TRIGGER_ALIASES = {
-    # timed_effect
+    # delayed_effect（旧 timed_effect）
     "turn_start": "target_turn_start",
     "turn_end": "target_turn_end",
     "after_status_clear": "target_turn_start_after_status_clear",
     "after_draw": "target_turn_start_after_draw",
     "start_of_turn": "target_turn_start",
     "end_of_turn": "target_turn_end",
-    # register_play_listener
+    # on_event（旧 register_play_listener / once_per_play）
     "card_played": "play",
     "owner_play": "play",
     "on_play": "play",
+    "current_play": "this_play",
+    "on_equipment_trigger": "equipment_trigger",
     # absorb_attack_damage
     "attack": "attack_hit",
     "attacked": "attack_hit",
@@ -1194,16 +1202,18 @@ LISTENER_TRIGGER_ALIASES = {
 }
 
 # The trigger vocabulary each listener op implements, after alias normalisation.
+# Round 37 / 批次 AD-2：延迟族（``delayed_effect``）与监听族（``on_event``）各
+# 一张词表；旧名 ``timed_effect`` / ``once_per_play`` / ``register_play_listener``
+# 的条目随实现一起退役（写出来先在 ``_retired_atom_runtime_error`` 被拦下）。
 LISTENER_TRIGGERS = {
-    "timed_effect": {
+    "delayed_effect": {
         "target_turn_start", "target_turn_start_after_status_clear",
         "target_turn_start_after_draw", "target_turn_end", "owner_turn_start",
         "owner_turn_end", "friendly_turn_start", "enemy_turn_start",
         "any_turn_start", "any_turn_end",
     },
-    "register_play_listener": {"play"},
+    "on_event": {"play", "this_play", "after_all", "equipment_trigger"},
     "absorb_attack_damage": {"attack_hit"},
-    "once_per_play": {"play"},
 }
 
 
@@ -2166,7 +2176,7 @@ CONDITION_OWNED_OPS = {
     # per-iteration filter (the whole loop is gated with ``run_if``/``unless``),
     # and the listener family consumes it as a fire-time check.
     "for_each", "for_each_selected_card", "for_each_list",
-    "once_per_play", "timed_effect", "register_play_listener", "absorb_attack_damage",
+    "on_event", "delayed_effect", "absorb_attack_damage",
 }
 
 # ``condition``/``cond`` gate a step; ``run_if`` is the same gate under a second

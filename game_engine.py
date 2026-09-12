@@ -1068,7 +1068,6 @@ class GameEngine:
         'swap_health': 'swap_health',
         # Round 33 / 批次 AB：``exile_this`` / ``swap_hands`` 已并入
         # ``move_card(zone:"exile")`` / ``move_card(mode:"swap_hands")``。
-        'broadcast_event': 'broadcast_event',
         'modify_damage': 'modify_damage',
         # Round 30 / 批次 Y：``add_status`` / ``remove_status`` / ``set_status``
         # 三条旧写法（Round 15 起曾是"默认播报层数"的真原子）随零用量清理一起
@@ -10783,35 +10782,6 @@ class GameEngine:
     # Round 31 / 批次 Z：``remove_tag_from_zone`` 已并入
     # ``add_tag_to_zone(mode:"remove")``（同一份区域遍历 + 计数 + 战报，
     # ``mode`` 缺省仍是"加标签"）。
-    def _atomic_once_per_play(self, player_id, card, params, log, choice, context):
-        """Run nested ``body`` at most once per play of the current card.
-
-        Round 16 / batch 4: the listener family shares one parameter contract,
-        so this op accepts ``name`` (alias ``key``), ``body`` (aliases
-        ``steps``/``effects``), an optional fire-time ``condition`` and the
-        listener ``trigger`` (``play`` for this op).  The marker lives on the
-        card instance and is cleared with the card's other per-play state, so
-        copies of the card stay independent.
-        """
-        if card is None:
-            return
-        trigger = normalize_listener_trigger('once_per_play', params.get('trigger'), default='play')
-        if not listener_trigger_is_supported('once_per_play', trigger):
-            self._log_mod_runtime_error(
-                'once_per_play', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
-            )
-            return
-        key = str(params.get('name') or params.get('key') or 'effect')
-        if self._once_per_play_used(card, key):
-            return
-        body = listener_body_from_params(params)
-        condition = listener_condition_from_params(params)
-        if not self._loop_iteration_allows(player_id, card, condition, context):
-            return
-        self._mark_once_per_play(card, key)
-        if body:
-            self._run_effect_list(player_id, card, body, choice, context)
-
     @staticmethod
     def _once_per_play_markers(card) -> dict:
         custom = getattr(card, 'custom_vars', None)
@@ -11038,8 +11008,23 @@ class GameEngine:
         self.players[t1].hand, self.players[t2].hand = self.players[t2].hand, self.players[t1].hand
         self.log_msg(log or f"{self.pn(t1)}与{self.pn(t2)}交换手牌")
 
-    def _atomic_broadcast_event(self, player_id, card, params, log, choice, context):
-        event_name = params.get('event_name', '')
+    # Round 37 / 批次 AD-2：广播 / 手动触发族二合一 —— ``emit_event``
+    # （旧 ``broadcast_event`` 与占位步骤 ``trigger_manual``，两个旧名进
+    # REMOVED_ATOMIC_OPS）。
+    #
+    # 事件总线目前还没有订阅方：这一步的作用是把"这里发生了一次具名事件"
+    # 写进数据与战报，语义与合并前的 ``broadcast_event`` 逐字相同
+    # （默认播报 ``广播事件：<event>``），另外统一认 ``silent`` / ``no_log`` /
+    # ``hide_log`` / ``log:false`` 这一族静默开关（占位步骤 ``trigger_manual``
+    # 就是"什么也不做"，迁移写法是 ``event:"manual_trigger"`` + ``silent:true``）。
+    def _atomic_emit_event(self, player_id, card, params, log, choice, context):
+        event_name = self._step_text_value(
+            player_id, card,
+            params.get('event', params.get('event_name', params.get('name', ''))),
+        )
+        event_name = str(event_name or '')
+        if log is False or step_is_silent(params, params):
+            return
         self.log_msg(log or f"广播事件：{event_name}")
 
     def _atomic_modify_damage(self, player_id, card, params, log, choice, context):
@@ -11361,9 +11346,6 @@ class GameEngine:
 
     def _atomic_continue(self, player_id, card, params, log, choice, context):
         raise ModLoopContinue()
-
-    def _atomic_after_all(self, player_id, card, params, log, choice, context):
-        self._run_effect_list(player_id, card, params.get('body', []), choice, context)
 
     def _atomic_random(self, player_id, card, params, log, choice, context):
         branch = params.get('a', []) if random.random() < 0.5 else params.get('b', [])
@@ -14270,7 +14252,7 @@ class GameEngine:
                     else:
                         self._log_mod_runtime_error(et, RuntimeError(f'Unknown effect: {et}'), player_id, card)
                     if rt not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
-                                  'for_each_selected_card', 'for_each_list', 'timed_effect',
+                                  'for_each_selected_card', 'for_each_list', 'delayed_effect',
                                   'countdown_var', 'defer_game_over'):
                         self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue):
@@ -14504,48 +14486,89 @@ class GameEngine:
             kept.extend(self.timed_effects)
         self.timed_effects = kept[-200:]
 
-    def _atomic_timed_effect(self, player_id, card, params, log, choice, context):
-        """Register a delayed listener (Round 16 unified listener contract).
+    # ------------------------------------------------------------------
+    # Round 37 / 批次 AD-2：延迟效果族三合一 —— ``delayed_effect``
+    # （旧 ``timed_effect`` / ``delayed_blind_next_turn`` /
+    # ``delayed_reveal_hand_next_turn``，三个旧名进 REMOVED_ATOMIC_OPS）。
+    #
+    # 三条分支都还是同一个 ``_register_timed_effect`` 计时表，所以**时点语义**
+    # 与合并前逐条相同：
+    #
+    #   * ``mode:"timed"``（默认，旧 ``timed_effect``）—— ``trigger`` 透传
+    #     （别名照旧归一），``duration``/``turns`` 定持续回合数，``once:true``
+    #     等价于 ``duration:1``，``body``/``effects``/``steps`` 到点时按原顺序
+    #     结算，可选的火时 ``condition`` 走同一条 ``_loop_iteration_allows``。
+    #   * ``mode:"blind"``（旧 ``delayed_blind_next_turn``）—— 目标下回合开始、
+    #     **状态清算之后**（``target_turn_start_after_status_clear``）失明
+    #     ``amount`` 层 + 洗牌，固定 ``duration:1``。
+    #   * ``mode:"reveal_hand"``（旧 ``delayed_reveal_hand_next_turn``）—— 目标
+    #     下回合开始时（``target_turn_start``）展示其手牌，固定 ``duration:1``。
+    #
+    # ``target`` 三个分支共用同一个选择器集合（``_timer_targets``：「每个目标各
+    # 登记一份」的口径不变）。
+    # ------------------------------------------------------------------
+    DELAYED_EFFECT_MODES = ('timed', 'blind', 'reveal_hand')
 
-        ``trigger`` (aliases ``turn_start``/``turn_end``/... normalised),
-        ``duration`` (alias ``turns``), ``body`` (aliases ``effects``/``steps``)
-        and an optional fire-time ``condition`` are shared with the rest of the
-        listener family.
-        """
-        trigger = str(
-            self._step_text_value(player_id, card, params.get('trigger')) or ''
-        )
-        trigger = normalize_listener_trigger('timed_effect', trigger, default='target_turn_start')
-        if not listener_trigger_is_supported('timed_effect', trigger):
+    def _delayed_effect_mode(self, params) -> str:
+        """``delayed_effect`` 的 ``mode`` 判别值（别名归一，默认 ``timed``）。"""
+
+        mode = str(params.get('mode') or '').strip().lower()
+        return {
+            '': 'timed',
+            'timed_effect': 'timed',
+            'timer': 'timed',
+            'custom': 'timed',
+            'blind_next_turn': 'blind',
+            'delayed_blind_next_turn': 'blind',
+            'reveal_hand_next_turn': 'reveal_hand',
+            'delayed_reveal_hand_next_turn': 'reveal_hand',
+        }.get(mode, mode)
+
+    def _atomic_delayed_effect(self, player_id, card, params, log, choice, context):
+        mode = self._delayed_effect_mode(params if isinstance(params, dict) else {})
+        if mode not in self.DELAYED_EFFECT_MODES:
             self._log_mod_runtime_error(
-                'timed_effect', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
+                'delayed_effect', RuntimeError(f'unsupported mode: {mode}'), player_id, card,
             )
             return
-        duration = self._eval_int(player_id, params.get('duration', params.get('turns', 1)), card, 1)
-        if params.get('once') is True:
-            duration = 1
-        effects = listener_body_from_params(params)
-        if not effects:
+        if mode == 'timed':
+            # Round 16 unified listener contract: ``trigger`` (aliases
+            # ``turn_start``/``turn_end``/... normalised), ``duration`` (alias
+            # ``turns``), ``body`` (aliases ``effects``/``steps``) and an
+            # optional fire-time ``condition`` are shared with the rest of the
+            # listener family.
+            trigger = str(
+                self._step_text_value(player_id, card, params.get('trigger')) or ''
+            )
+            trigger = normalize_listener_trigger('delayed_effect', trigger, default='target_turn_start')
+            if not listener_trigger_is_supported('delayed_effect', trigger):
+                self._log_mod_runtime_error(
+                    'delayed_effect', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
+                )
+                return
+            duration = self._eval_int(player_id, params.get('duration', params.get('turns', 1)), card, 1)
+            if params.get('once') is True:
+                duration = 1
+            effects = listener_body_from_params(params)
+            if not effects:
+                return
+            condition = listener_condition_from_params(params)
+            for target_id in self._timer_targets(player_id, params.get('target', 'self')):
+                self._register_timed_effect(player_id, target_id, trigger, duration, effects, card, condition=condition)
             return
-        condition = listener_condition_from_params(params)
-        for target_id in self._timer_targets(player_id, params.get('target', 'self')):
-            self._register_timed_effect(player_id, target_id, trigger, duration, effects, card, condition=condition)
-
-    def _atomic_delayed_blind_next_turn(self, player_id, card, params, log, choice, context):
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        effects = [
-            {'type': 'status_add_named', 'params': {'target': 'target', 'status': 'blind', 'amount': amount}},
-            {'type': 'shuffle', 'params': {'zone': 'hand', 'target': 'target'}},
-        ]
+        if mode == 'blind':
+            amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+            effects = [
+                {'type': 'status_add_named', 'params': {'target': 'target', 'status': 'blind', 'amount': amount}},
+                {'type': 'shuffle', 'params': {'zone': 'hand', 'target': 'target'}},
+            ]
+            trigger = 'target_turn_start_after_status_clear'
+        else:
+            # ``mode:"reveal_hand"``：固定「下回合开始时展示其手牌」。
+            effects = [{'type': 'reveal', 'params': {'mode': 'enemy_hand', 'target': 'target'}}]
+            trigger = 'target_turn_start'
         for target_id in self._timer_targets(player_id, params.get('target', 'target')):
-            self._register_timed_effect(player_id, target_id, 'target_turn_start_after_status_clear', 1, effects, card)
-            if log:
-                self.log_msg(log)
-
-    def _atomic_delayed_reveal_hand_next_turn(self, player_id, card, params, log, choice, context):
-        effects = [{'type': 'reveal', 'params': {'mode': 'enemy_hand', 'target': 'target'}}]
-        for target_id in self._timer_targets(player_id, params.get('target', 'target')):
-            self._register_timed_effect(player_id, target_id, 'target_turn_start', 1, effects, card)
+            self._register_timed_effect(player_id, target_id, trigger, 1, effects, card)
             if log:
                 self.log_msg(log)
 
@@ -15076,7 +15099,7 @@ class GameEngine:
                     else:
                         self._log_mod_runtime_error(eff_type, RuntimeError(f'Unknown effect: {eff_type}'), player_id, card)
                     if resolved_type not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
-                                             'for_each_selected_card', 'for_each_list', 'timed_effect',
+                                             'for_each_selected_card', 'for_each_list', 'delayed_effect',
                                              'countdown_var', 'defer_game_over'):
                         self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue) as exc:
@@ -18135,9 +18158,6 @@ class GameEngine:
     def _atomic_response_declare(self, player_id, card, params, log, choice, context):
         return None
 
-    def _atomic_trigger_manual(self, player_id, card, params, log, choice, context):
-        return None
-
     # Round 32 / 批次 AA：``aura_enemy_elixir_recovery`` 已并入
     # ``resource_op(mode:"aura_recovery")``（声明本身是空操作，数值由
     # ``_declared_aura_elixir_bonus`` 在回合开始的 E 回复里读）。
@@ -20291,22 +20311,6 @@ class GameEngine:
         # Implemented through damage modifier hook; kept as an atomic no-op for readable mod data.
         return None
 
-    def _atomic_magic_relic_trigger(self, player_id, card, params, log, choice, context):
-        if not hasattr(self, 'get_teammate'):
-            return
-        try:
-            mate_id = self.get_teammate(player_id)
-        except Exception:
-            return
-        if not (0 <= mate_id < len(self.players)):
-            return
-        mate = self.players[mate_id]
-        if int(getattr(mate, 'magic', 0) or 0) < 2:
-            return
-        mate.magic -= 2
-        self.players[player_id].gain_magic(3)
-        self.log_msg(log or f"{self.pn(player_id)}的魔法遗物消耗{self.pn(mate_id)}2M，自己+3M")
-
     def _shuffle_hand_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AB：``shuffle(zone:"hand")`` 的实现体（``target`` 走
         # 选择器集合；失明状态在这里静默跳过，战报文本保持原样）。
@@ -21143,8 +21147,63 @@ class GameEngine:
                     total=total,
                 ))
 
-    def _atomic_register_play_listener(self, player_id, card, params, log, choice, context):
-        """Register a "whenever the owner plays a card this turn" listener.
+    # ------------------------------------------------------------------
+    # Round 37 / 批次 AD-2：监听 / 收尾 / 触发四合一 —— ``on_event``
+    # （旧 ``once_per_play`` / ``register_play_listener`` / ``after_all`` /
+    # ``magic_relic_trigger``，四个旧名进 REMOVED_ATOMIC_OPS）。
+    #
+    # ``trigger`` 选**监听的是哪个时点**；四条分支的实现体逐字沿用旧原子，
+    # 所以时点语义与合并前一致：
+    #
+    #   * ``play``（默认，旧 ``register_play_listener``）—— 登记一条"拥有者
+    #     本回合每次出牌后"的监听（``PLAY_LISTENERS_KEY`` / ``_run_play_listeners``）；
+    #     ``scope`` / ``duration`` / ``target`` / ``exclude_card_ids`` / ``once`` /
+    #     ``condition`` 与原写法逐字对齐。
+    #   * ``this_play``（旧 ``once_per_play``）—— 本次出牌内**立即**结算 body，
+    #     每张牌实例每个 ``name`` 最多一次（标记存在卡实例上，随每次出牌清理）。
+    #     ``once`` 键在这个分支照旧被忽略（旧 ``once_per_play`` 就是"每次出牌
+    #     一次"本身），只在 ``play`` 分支里有意义。
+    #   * ``after_all``（旧 ``after_all``，也可写成 ``after: true``）—— 把 body
+    #     放到当前效果之后执行（与旧实现一样是"就地跑 body"，等价于 ``sequence``）。
+    #   * ``equipment_trigger`` + ``effect:"magic_relic"``（旧
+    #     ``magic_relic_trigger``）—— 魔法遗物：消耗队友 2M、自己 +3M；1v1
+    #     没有队友，按旧实现直接返回。
+    # ------------------------------------------------------------------
+    ON_EVENT_TRIGGERS = ('play', 'this_play', 'after_all', 'equipment_trigger')
+    ON_EVENT_EFFECTS = ('magic_relic',)
+
+    def _atomic_on_event(self, player_id, card, params, log, choice, context):
+        raw_trigger = str(self._step_text_value(player_id, card, params.get('trigger')) or '')
+        if not raw_trigger.strip() and params.get('after') is True:
+            # ``after: true`` 是 ``trigger:"after_all"`` 的简写（§33 的参数表）。
+            raw_trigger = 'after_all'
+        trigger = normalize_listener_trigger('on_event', raw_trigger, default='play')
+        if not listener_trigger_is_supported('on_event', trigger):
+            self._log_mod_runtime_error(
+                'on_event', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
+            )
+            return
+        if trigger == 'play':
+            self._register_play_listener_effect(player_id, card, params, log)
+            return
+        if trigger == 'this_play':
+            self._this_play_once_effect(player_id, card, params, log, choice, context)
+            return
+        if trigger == 'after_all':
+            body = listener_body_from_params(params)
+            if body:
+                self._run_effect_list(player_id, card, body, choice, context)
+            return
+        effect = str(params.get('effect') or params.get('preset') or '').strip().lower()
+        if not effect or effect in self.ON_EVENT_EFFECTS:
+            self._magic_relic_effect(player_id, card, params, log)
+            return
+        self._log_mod_runtime_error(
+            'on_event', RuntimeError(f'unsupported effect: {effect}'), player_id, card,
+        )
+
+    def _register_play_listener_effect(self, player_id, card, params, log):
+        """``on_event(trigger:"play")``：旧 ``register_play_listener`` 的实现体。
 
         The body runs through the engine effect pipeline with the *source* card
         put back into the context, so ``deal_damage`` keeps applying the card's
@@ -21153,12 +21212,6 @@ class GameEngine:
         ``duration`` (alias ``turns``), ``body`` (aliases ``effects``/``steps``),
         an optional fire-time ``condition`` and an optional ``once``.
         """
-        trigger = normalize_listener_trigger('register_play_listener', params.get('trigger'), default='play')
-        if not listener_trigger_is_supported('register_play_listener', trigger):
-            self._log_mod_runtime_error(
-                'register_play_listener', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
-            )
-            return
         target_id = self._resolve_target(player_id, params.get('target', 'target'))
         if not self._valid_player_id(target_id):
             return
@@ -21183,6 +21236,49 @@ class GameEngine:
         })
         if log is not False and log:
             self.log_msg(self._format_step_log(log, target=self.pn(target_id), source=self.pn(player_id)))
+
+    def _this_play_once_effect(self, player_id, card, params, log, choice, context):
+        """``on_event(trigger:"this_play")``：旧 ``once_per_play`` 的实现体。
+
+        The marker lives on the card instance and is cleared with the card's
+        other per-play state, so copies of the card stay independent.  A false
+        fire-time ``condition`` does **not** consume the marker (same as before).
+
+        ``once`` 在这个分支里**照旧被忽略**：旧 ``once_per_play`` 就是
+        "每次出牌一次"本身，0 处卡数据写过 ``once:false``，本批不为它引入新的
+        行为（``once`` 只在 ``trigger:"play"`` 分支里有意义，那个分支沿用旧
+        ``register_play_listener`` 的 ``once`` 语义）。
+        """
+        if card is None:
+            return
+        key = str(params.get('name') or params.get('key') or 'effect')
+        if self._once_per_play_used(card, key):
+            return
+        body = listener_body_from_params(params)
+        condition = listener_condition_from_params(params)
+        if not self._loop_iteration_allows(player_id, card, condition, context):
+            return
+        self._mark_once_per_play(card, key)
+        if body:
+            self._run_effect_list(player_id, card, body, choice, context)
+
+    def _magic_relic_effect(self, player_id, card, params, log):
+        """``on_event(trigger:"equipment_trigger", effect:"magic_relic")``。"""
+
+        if not hasattr(self, 'get_teammate'):
+            return
+        try:
+            mate_id = self.get_teammate(player_id)
+        except Exception:
+            return
+        if not (0 <= mate_id < len(self.players)):
+            return
+        mate = self.players[mate_id]
+        if int(getattr(mate, 'magic', 0) or 0) < 2:
+            return
+        mate.magic -= 2
+        self.players[player_id].gain_magic(3)
+        self.log_msg(log or f"{self.pn(player_id)}的魔法遗物消耗{self.pn(mate_id)}2M，自己+3M")
 
     def _run_play_listeners(self, player_id: int, played_card: Optional[CardInstance]):
         """Fire every play listener registered by ``player_id`` for a played card."""

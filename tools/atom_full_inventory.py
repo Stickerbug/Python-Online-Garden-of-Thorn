@@ -136,6 +136,48 @@ ROUND36_ACTIONS = {
                              "pending_choice 的 choice_type/字段逐字保留"),
 }
 
+# ---------------------------------------------------------------------------
+# Round 37 / 批次 AD-2：事件族三合一（`delayed_effect` / `on_event` / `emit_event`）。
+ROUND37_ACTIONS = {
+    # ---- 延迟族 → delayed_effect(mode=timed|blind|reveal_hand) ----------------
+    "timed_effect": ("合", 6,
+                     '{"op":"delayed_effect","mode":"timed","trigger":"target_turn_start","duration":1,"target":"target","body":[…]}',
+                     "延迟监听并进 delayed_effect(mode:\"timed\")：三条分支共用同一张计时表，"
+                     "trigger 词表、触发相位与 duration/once 口径逐字保留"),
+    "delayed_blind_next_turn": ("合", 1,
+                                '{"op":"delayed_effect","mode":"blind","target":"target","amount":1}',
+                                "下回合延迟失明 + 洗牌并进 delayed_effect(mode:\"blind\")"
+                                "（相位仍是 target_turn_start_after_status_clear，duration 固定 1）"),
+    "delayed_reveal_hand_next_turn": ("合", 0,
+                                      '{"op":"delayed_effect","mode":"reveal_hand","target":"target"}',
+                                      "下回合延迟展示手牌并进 delayed_effect(mode:\"reveal_hand\")"
+                                      "（相位仍是 target_turn_start；卡数据 0 步）"),
+    # ---- 监听 / 收尾 / 触发族 → on_event(trigger=play|this_play|after_all|equipment_trigger) ----
+    "once_per_play": ("合", 9,
+                      '{"op":"on_event","trigger":"this_play","name":"<标识>","body":[…]}',
+                      "每次出牌一次并进 on_event(trigger:\"this_play\")：标记仍存在卡实例上，"
+                      "随每次出牌清理；为假的 condition 依旧不消耗标记"),
+    "register_play_listener": ("合", 1,
+                               '{"op":"on_event","trigger":"play","target":"target","duration":"turn","scope":"owner_turn","body":[…]}',
+                               "出牌监听注册并进 on_event(trigger:\"play\")：同一张 play_listeners 表，"
+                               "scope/duration/exclude_card_ids/once 逐字保留"),
+    "after_all": ("合", 0,
+                  '{"op":"on_event","trigger":"after_all","body":[…]}（或 {"op":"on_event","after":true,…}）',
+                  "收尾控制流并进 on_event(trigger:\"after_all\")：与旧实现一样就地跑 body（卡数据 0 步）"),
+    "magic_relic_trigger": ("合", 1,
+                            '{"op":"on_event","trigger":"equipment_trigger","effect":"magic_relic"}',
+                            "魔法遗物触发并进 on_event(trigger:\"equipment_trigger\")："
+                            "消耗队友 2M、自己 +3M；1v1 无队友时按旧行为直接返回"),
+    # ---- 广播 / 占位族 → emit_event ----
+    "broadcast_event": ("合", 0,
+                        '{"op":"emit_event","event":"<事件名>"}',
+                        "广播事件并进 emit_event：默认播报\"广播事件：<事件名>\"（卡数据 0 步）"),
+    "trigger_manual": ("合", 0,
+                       '{"op":"emit_event","event":"manual_trigger","silent":true}',
+                       "占位步骤（原本没有实现体）并进 emit_event(silent:true)：同样是\"什么都不做\"，"
+                       "但换成可读的事件名（卡数据 0 步）"),
+}
+
 # 退役但**保留 `_atomic_*` 处理器**的名字：公开契约里已经进
 # ``mod_spec_v2.REMOVED_ATOMIC_OPS``（写出来是"已移除 + 替代写法"），但引擎内部
 # 或测试会直接调这些私有方法，所以实现留着手工删不得。它们同样必须"卡数据 0 引用"。
@@ -344,14 +386,13 @@ KEPT_EXPLICIT = {
     "fission": "裂变层数（+）",
     "fusion": "聚变层数（+）",
     "for_each_equipment": "装备循环（Round 17 未并入 for_each）",
-    "timed_effect": "计时效果（duration/trigger/body）",
+    "delayed_effect": "Round 37 延迟族唯一公开 op（mode=timed|blind|reveal_hand；共用计时表 duration/trigger/body）",
+    "on_event": "Round 37 监听族唯一公开 op（trigger=play|this_play|after_all|equipment_trigger；承接 once_per_play / register_play_listener / after_all / magic_relic_trigger）",
+    "emit_event": "Round 37 广播族唯一公开 op（event + 可选 log/silent；承接 broadcast_event 与占位步骤 trigger_manual）",
     "countdown_var": "倒计时变量（player_var_change 的定时封装）",
-    "register_play_listener": "出牌监听注册（scope/duration/body）",
     "queue_auto_play": "排队自动打出（card/source/each_turn/cost/exile）",
     "auto_play_card": "立刻自动打出（含 no_cost/auto_choice）",
     "auto_play_zone_top": "自动打出某区顶牌（Kitty 类）",
-    "once_per_play": "每次打出至多一次（监听去重）",
-    "after_all": "把 body 放到当前效果之后执行",
     "if_else": "控制流原语（Round 32 收编 if：不写 else 就是旧 if）",
     "repeat": "控制流原语（Round 32 收编 repeat_until 的 until=停止条件）",
     "break": "**语言原语**（跳出循环，不算可参数化的原子，Round 32 明确保留）",
@@ -397,9 +438,7 @@ KEPT_EXPLICIT = {
     "triangle_damage": "三角伤害（层数 x 基数）",
     "card_damage_multiply": "聚变倍率（fusion_level x N）",
     "activate_corruption": "激活装备腐化",
-    "broadcast_event": "对外广播事件",
     "response_declare": "声明响应（占位步骤，无实现体）",
-    "trigger_manual": "手动触发（占位步骤，无实现体）",
     "declare_forced_target": "声明强制目标窗口（Light Bulb）",
     "add_charge_to_hand": "手牌充能（Arctic）",
     "apply_turn_regen": "回合回复（Jungle）",
@@ -412,7 +451,6 @@ KEPT_EXPLICIT = {
     "goggles_enable": "护目镜启用（Factory）",
     "grant_temp_swift_highest_e": "费用最高的手牌暂时迅捷（Jungle）",
     "honey_control": "蜂蜜控制（Bee 类）",
-    "magic_relic_trigger": "魔法遗物触发",
     "magic_salt_reflect": "魔法盐反射",
     "plank_immunity": "木板免疫（Jungle）",
     "third_eye_precision_or_hidden": "第三眼：精准或隐匿（Garden）",
@@ -481,7 +519,8 @@ def build() -> dict:
     kept.sort(key=lambda row: (row["family"], row["name"]))
     actions = []
     for name, (verdict, before, replacement, reason) in (
-        {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS, **ROUND36_ACTIONS}
+        {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
+         **ROUND36_ACTIONS, **ROUND37_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

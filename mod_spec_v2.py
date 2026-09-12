@@ -115,6 +115,10 @@ _CORE_LOGIC_OPS = {
     # （target / card / confirm / zone / forced_target / discount_copy /
     # reorder_deck）。旧名见 REMOVED_ATOMIC_OPS（写出来是显式报错）。
     "request",
+    # Round 37 / 批次 AD-2：监听/收尾/触发四合一 —— ``once_per_play`` /
+    # ``register_play_listener`` / ``after_all`` / ``magic_relic_trigger`` 并进
+    # ``on_event``（``trigger`` 选 play/this_play/after_all/equipment_trigger）。
+    "on_event",
     "deal_damage",
     "damage",
     # Round 32 / 批次 AA：生命族并进 ``health_op``、资源族并进 ``resource_op``、
@@ -224,7 +228,8 @@ _CORE_LOGIC_OPS = {
     # REMOVED_ATOMIC_OPS；只有 ``place_as_equip`` 的处理器因为
     # formal_logic_runtime 直呼而保留（登记在上面）。
     "equip_protection",
-    "trigger_manual",
+    # Round 37 / 批次 AD-2：占位步骤 ``trigger_manual`` 并进
+    # ``emit_event(event:"manual_trigger", silent:true)``。
     "block_action",
     "block_card_type",
     "force_card_type",
@@ -247,7 +252,8 @@ _CORE_LOGIC_OPS = {
     # （``card_prop_add``/``card_prop_set`` + ``property:"durability"``）。
     # Round 32 / 批次 AA：``swap_health`` 并进 ``health_op(mode:"swap")``。
     # Round 33 / 批次 AB：``swap_hands`` 已并入 ``move_card(mode:"swap_hands")``。
-    "broadcast_event",
+    # Round 37 / 批次 AD-2：``broadcast_event`` 并进 ``emit_event``。
+    "emit_event",
     "modify_damage",
     # Round 29 / 批次 X：玩家自定义变量的五个同形原子合并成
     # ``player_var_change(mode=set|add|sub|mul|div)``；Round 31 起 ``var_set``
@@ -256,7 +262,8 @@ _CORE_LOGIC_OPS = {
     # Round 32 / 批次 AA：列表五兄弟并进
     # ``list_modify(list=..., mode=set|append|insert|delete|clear, index=..., value=...)``。
     "list_modify",
-    "timed_effect",
+    # Round 37 / 批次 AD-2：``timed_effect`` 并进 ``delayed_effect(mode:"timed")``。
+    "delayed_effect",
     "countdown_var",
     # Round 29 / 批次 X：``player_prop_set`` / ``player_prop_add`` 合并成
     # ``player_prop_change(mode=set|add)``；Round 31 起两个垫片已删除。
@@ -302,18 +309,20 @@ _CORE_LOGIC_OPS = {
     # Round 33 / 批次 AB：``create_copies_to_deck_top`` 已并入
     # ``copy_card(to_zone:"deck_top", count:N)``。
     "plank_immunity",
-    "magic_relic_trigger",
+    # Round 37 / 批次 AD-2：``magic_relic_trigger`` 并进
+    # ``on_event(trigger:"equipment_trigger", effect:"magic_relic")``。
     "electric_web_arm",
     "magic_salt_reflect",
     "third_eye_precision_or_hidden",
     "grant_temp_swift_highest_e",
-    "delayed_blind_next_turn",
-    "delayed_reveal_hand_next_turn",
+    # Round 37 / 批次 AD-2：``delayed_blind_next_turn`` /
+    # ``delayed_reveal_hand_next_turn`` 并进
+    # ``delayed_effect(mode:"blind"|"reveal_hand")``。
 
     # 由"卡专用原子 → 通用数据步骤"重构抽出的通用能力。
     # 它们本来就是引擎里可复用的原子，这里补登记以免被误算作长尾。
     "card_prop_add_to_zone",
-    "once_per_play",
+    # Round 37 / 批次 AD-2：``once_per_play`` 并进 ``on_event(trigger:"this_play")``。
     # Round 33 / 批次 AB：``copy_card_instance`` 已并入
     # ``copy_card(as_instance:true)`。
     "mark_original_card",
@@ -339,7 +348,8 @@ _CORE_LOGIC_OPS = {
     "queue_auto_play",
     # Round 33 / 批次 AB：``random_zone_card_to_hand`` 已并入
     # ``move_card(mode:"random", source_zone:…, target_zone:"hand")``。
-    "register_play_listener",
+    # Round 37 / 批次 AD-2：``register_play_listener`` 并进
+    # ``on_event(trigger:"play")``。
     # Round 33 / 批次 AB：``restore_card_props`` / ``reveal_card_set`` 已并入
     # ``restore(mode:"card_props")`` / ``reveal(mode:"card_set")``。
     "ricochet_attack",
@@ -370,7 +380,6 @@ _CORE_LOGIC_OPS = {
     #   * for_each_equipment：遍历装备的唯一入口（Round 17 未合并进 for_each）。
     #     Round 35 起并进 ``equipment_op(mode:"each")``，名字进
     #     REMOVED_ATOMIC_OPS。
-    #   * after_all：把 body 放到当前效果之后执行的控制流 op。
     "block_own_actions",
     "counter_equip_protect",
     # Round 29 / 批次 X：``record_play_count`` / ``record_equip_turns`` /
@@ -379,7 +388,7 @@ _CORE_LOGIC_OPS = {
     # Round 33 / 批次 AB：``exile_this`` 已删除——等价写法
     # ``move_card(zone:"exile", card:{"ref":"current_card"})``。
     "mark_self_damage_source",
-    "after_all",
+    # Round 37 / 批次 AD-2：``after_all`` 并进 ``on_event(trigger:"after_all")``。
 }
 
 # ---------------------------------------------------------------------------
@@ -1194,6 +1203,25 @@ REMOVED_ATOMIC_OPS = {
     "declare_forced_target": '{"op":"request","type":"forced_target","target":"self"}',
     "copy_choice_with_discount": '{"op":"request","type":"discount_copy","discount_e":1}（拟态：复制选中的手牌并打折）',
     "request_reorder_deck": '{"op":"request","type":"reorder_deck","target":"enemy","message":"调整对手牌堆顺序"}',
+
+    # Round 37 / 批次 AD-2（延迟族三合一）：``timed_effect`` 与两条
+    # ``delayed_*_next_turn`` 并进 ``delayed_effect``，``mode`` 选分支
+    # （timed / blind / reveal_hand）。三条分支共用同一张计时表
+    # （``_register_timed_effect``），所以 trigger 与触发相位逐字保留。
+    "timed_effect": '{"op":"delayed_effect","mode":"timed","trigger":"target_turn_start","duration":1,"target":"target","body":[…]}（trigger 见运行时词表：target_turn_start / target_turn_start_after_status_clear / target_turn_start_after_draw / target_turn_end / owner_turn_start / owner_turn_end / any_turn_start / any_turn_end / friendly_turn_start / enemy_turn_start；once:true 等价 duration:1）',
+    "delayed_blind_next_turn": '{"op":"delayed_effect","mode":"blind","target":"target","amount":1}（目标下回合开始、状态清算之后失明并洗牌）',
+    "delayed_reveal_hand_next_turn": '{"op":"delayed_effect","mode":"reveal_hand","target":"target"}（目标下回合开始时展示其手牌）',
+
+    # Round 37 / 批次 AD-2（监听族四合一 + 广播族二合一）：``on_event`` 的
+    # ``trigger`` 选监听时点，``emit_event`` 承接广播与占位步骤。四条 on_event
+    # 分支的实现体逐字沿用旧原子（同一张 ``PLAY_LISTENERS_KEY`` 监听表、同一套
+    # ``_once_per_play`` 卡内标记），时点语义不变。
+    "once_per_play": '{"op":"on_event","trigger":"this_play","name":"<标识>","body":[…]}（本次出牌内结算一次；同名的 on_event(trigger:"this_play") 共享同一个标记）',
+    "register_play_listener": '{"op":"on_event","trigger":"play","target":"target","duration":"turn","scope":"owner_turn","exclude_card_ids":[…],"body":[…]}（拥有者本回合每次出牌后触发；body 里可读 listener_target_id）',
+    "after_all": '{"op":"on_event","trigger":"after_all","body":[…]}（也可写成 {"op":"on_event","after":true,"body":[…]}）',
+    "magic_relic_trigger": '{"op":"on_event","trigger":"equipment_trigger","effect":"magic_relic"}（消耗队友 2M、自己 +3M；1v1 无队友时按旧行为直接返回）',
+    "broadcast_event": '{"op":"emit_event","event":"<事件名>"}（event 名也可写成 event_name；默认播报"广播事件：<事件名>"）',
+    "trigger_manual": '{"op":"emit_event","event":"manual_trigger","silent":true}（占位步骤原本没有实现体，silent 与之一致）',
 }
 
 # Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），

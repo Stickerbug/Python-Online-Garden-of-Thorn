@@ -1343,18 +1343,22 @@ SAMPLE_SPOT_CHECKS = (
     ("draw", "`count` 回落 `amount`（默认 1）、`hooks`（默认 true）、`log_amount`（drawn/requested）、"
              "`modifiers`（sluggish 修正）、`target`", "一致"),
     ("for_each", "`source/items/targets/list/collection/values`、`as/var/name`、`limit` 默认 200", "一致"),
-    ("timed_effect", "`trigger`/`duration`/`effects`/`body`（运行时 `effects`→`body` 双向兼容）", "一致"),
+    ("delayed_effect", "`mode`（timed/blind/reveal_hand）；timed 分支 `trigger`/`duration`/`effects`/`body`"
+                       "（运行时 `effects`→`body` 双向兼容），blind 分支 `amount`/`target`", "一致"),
     ("auto_play", "`mode`（card/zone_top）；`card`/`actor`/`target`/`auto_choice`/`no_cost`/`source_name`", "一致"),
     ("move_card", "`mode`/`card`/`cards`/`zone`/`target_zone`/`position`/`target`（共享移动助手）", "一致"),
     ("place_as_equip", "`card`/`owner`/`effect_target`，71 处使用（签名冻结）", "一致"),
-    ("request_card", "整套 `filter`（zone/owner/card_type/…）同时驱动候选集、提交校验与 `play_requires`", "一致"),
+    ("on_event", "`trigger`（play/this_play/after_all/equipment_trigger）+ `once`/`after`/`condition`/"
+                 "`name`/`scope`/`duration`/`target`/`exclude_card_ids`/`effect`", "一致"),
+    ("emit_event", "`event`（回落 `event_name`/`name`）、`log`、`silent`", "一致"),
     ("player_var_change", "`mode`（set/add/sub/mul/div）+ `target`/`name`/`value`（`name` 回落 `var`）", "一致"),
     ("log", "`message` 回落 `text`/`msg`，`amount` 可写表达式", "一致"),
     ("resource_op", "`resource`（e/m）+ `delta` 回落 `amount`（正获得/负消耗）+ `mode`（spend/aura_recovery）"
                     "+ `all`/`target`/`log_positive_only`/`reset_coffee`/`card_heavy`", "一致"),
     ("modify_next_cost", "`delta` 回落 `amount`（正加费/负减费）+ `mode`（increase/reduce 显式方向）+ `target`/`card_type`", "一致"),
     ("list_modify", "`list`（变量名，回落 `name`）+ `mode`（set/append/insert/delete/clear）+ `index`/`value`（回落 `item`）", "一致"),
-    ("register_play_listener", "`scope`/`duration`/`body`/`exclude_card_ids`", "一致"),
+    ("on_event(trigger:\"play\")", "`scope`/`duration`/`body`/`exclude_card_ids`"
+                                   "（Round 37 前写作 register_play_listener）", "一致"),
     ("queue_auto_play", "`card`/`source`/`target`/`each_turn`/`cost`/`exile` 等 12 个键", "一致"),
     ("absorb_attack_damage", "`scope`/`body`/`once`（body 里读 `absorbed_damage`）", "一致"),
     ("settle_status", "`status`/`decay`/`fill_from`/`body`/`silent`，Round 31 起还收 `reduce`（部分层数结算）", "一致"),
@@ -1589,7 +1593,7 @@ def render(model: dict) -> str:
     lines.append("2. **两条路径同步实现**：`mod_runtime_v2.run_v2_step`（顶层步骤）与 `game_engine._atomic_<op>`")
     lines.append("   （嵌套 body / 定时器 / 旧写法走这条）；同名参数默认值必须一致，否则按 §5.4 改名或统一。")
     lines.append("3. **能挂现成挂点就别造新词**：`on_play` / `on_owner_turn_start` / `on_equipment_trigger` /")
-    lines.append("   `on_damage_taken` / `on_response` / `timed_effect` / `register_play_listener`（§12.1 第 3 步）。")
+    lines.append("   `on_damage_taken` / `on_response` / `delayed_effect` / `on_event`（§12.1 第 3 步）。")
     lines.append("4. **参数按通用约定写**：数值/文本参数直接吃取值表达式（§14.2 列出了已覆盖的 op 与参数键）；")
     lines.append("   步骤门控用 `condition`/`unless`（控制流 op 用 `run_if`/`unless`，§14.1）；")
     lines.append("   默认文案用 `log`，关掉用 `log: false` / `silent: true`（§14.3）。")
