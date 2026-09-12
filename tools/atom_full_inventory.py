@@ -35,6 +35,65 @@ DEFAULT_OUT = ROOT / "docs" / "原子全量清单.md"
 MODS_DIR = ROOT / "mods"
 
 # ---------------------------------------------------------------------------
+# 本批（Round 32 / 批次 AA）真删与真合并的名字。
+ROUND32_ACTIONS = {
+    # ---- 控制流（语言内置）------------------------------------------------
+    "if": ("合", 98, '{"op":"if_else","condition":...,"then":[...]}',
+           "if 就是「不写 else 的 if_else」；控制流保留原生驱动，condition/then/else 契约不变"),
+    "repeat_until": ("合", 0, '{"op":"repeat","until":<停止条件>,"body":[...]}',
+                     "repeat_until 的 condition 改名成 until（每轮开头判停、默认 64 轮上限）"),
+    "for_each_list": ("合", 2, '{"op":"for_each","list":<列表表达式>,"name":"item",...}',
+                      "list/name 本来就在 for_each 的统一来源词表里；列表来源仍走引擎驱动"),
+    "for_each_selected_card": ("合", 5, '{"op":"for_each","bind":"selected_card","body":[...]}',
+                               "逐张遍历选中牌成为 for_each 的 bind 预设（chosen_card/selected_card_index 不变）"),
+    "list_set": ("合", 0, '{"op":"list_modify","list":"<变量名>","mode":"set","value":[...]}',
+                 "列表五兄弟并成 list_modify：list=变量名、mode=动作、index/value=参数"),
+    "list_append": ("合", 1, '{"op":"list_modify","list":"<变量名>","mode":"append","value":<元素>}',
+                    "同上；非列表旧值包成单元素的旧行为保留"),
+    "list_insert": ("合", 0, '{"op":"list_modify","list":"<变量名>","mode":"insert","index":1,"value":<元素>}',
+                    "同上；insert 下标仍夹在 [0, len]"),
+    "list_delete": ("合", 0, '{"op":"list_modify","list":"<变量名>","mode":"delete","index":1}',
+                    "同上；越界删除仍是空操作"),
+    "list_clear": ("合", 0, '{"op":"list_modify","list":"<变量名>","mode":"clear"}',
+                   "同上；清空直接写空列表"),
+    # ---- 生命族 -----------------------------------------------------------
+    "heal": ("合", 45, '{"op":"health_op","mode":"heal","target":...,"amount":N}',
+             "生命族并成 health_op；heal_block 判定/上限/实际回复量战报逐字保留，"
+             "log_positive_only 这种运行时参数收进同一个原子"),
+    "lose_health": ("合", 1, '{"op":"health_op","mode":"lose","target":...,"amount":N}',
+                    "无视护甲的失去生命（无敌免疫分支/成就/世界树检查/游戏结束判定全保留）"),
+    "set_health": ("合", 1, '{"op":"health_op","mode":"set","target":...,"amount":N}',
+                   "上限截断 max(0, min(amount, max_health)) + 成就记账保留"),
+    "swap_health": ("合", 0, '{"op":"health_op","mode":"swap","target1":...,"target2":...}',
+                    "交换生命（旧实现交换后不钳位，逐字保留）"),
+    "on_fatal_set_health_exile": ("合", 0, '{"op":"health_op","mode":"fatal","kind":"exile","health":5}',
+                                  "被动声明：触发时点仍在 _check_yggdrasil，识别改走 _fatal_declaration_kind"),
+    "on_fatal_invincible_then_die": ("合", 0, '{"op":"health_op","mode":"fatal","kind":"invincible_die"}',
+                                     "绷带被动声明（PASSIVE_EFFECT_TYPES 的成员判定已改成按 mode 识别）"),
+    # ---- 资源族 -----------------------------------------------------------
+    "gain_e": ("合", 9, '{"op":"resource_op","resource":"e","delta":N,"target":...}',
+               "资源族并成 resource_op：正数获得、负数消耗（旧运行时语义），上限/记账不变"),
+    "gain_m": ("合", 16, '{"op":"resource_op","resource":"m","delta":N,"target":...}',
+               "同上；默认战报仍播报请求值，log_positive_only 仍可静音"),
+    "spend_resource": ("合", 5, '{"op":"resource_op","resource":"e|m","mode":"spend","amount":N}',
+                       "消耗走 _spend_resource（派发 resource_spent），实际花掉的数写进 spent 上下文"),
+    "coffee_gain_e": ("合", 0, '{"op":"resource_op","resource":"e","delta":2,"reset_coffee":true,"card_heavy":1}',
+                      "咖啡副作用（重置首次使用标记 + 本牌叠沉重）成为显式参数，默认战报逐字保留"),
+    "aura_enemy_elixir_recovery": ("合", 0, '{"op":"resource_op","mode":"aura_recovery","resource":"e","amount":N}',
+                                   "光环声明（原子本身空操作），数值由 _declared_aura_elixir_bonus 统一读取"),
+    # ---- 费用族 -----------------------------------------------------------
+    "increase_next_cost": ("合", 1, '{"op":"modify_next_cost","delta":N,"target":...}',
+                           "费用族并成 modify_next_cost：delta 正负定方向（正=加费/加重）"),
+    "reduce_next_cost": ("合", 0, '{"op":"modify_next_cost","delta":-N,"target":...}',
+                         "同上；负 delta 走旧 reduce 的 temp_swift 分支"),
+    # ---- 抽牌族 -----------------------------------------------------------
+    "draw_cards": ("合", 9, '{"op":"draw","count":N,"target":...}',
+                   "抽牌族并成 draw（count + modifiers）；默认值就是旧 draw_cards（触发抽牌钩子、播报实际张数）"),
+    "equip_reduce_draw": ("合", 0, '{"op":"draw","count":0,"modifiers":[{"type":"sluggish","amount":N,"target":...}]}',
+                          "装备减抽成为 draw 的 sluggish 修正（默认战报「敌方获得N层迟缓」保留）"),
+}
+
+# ---------------------------------------------------------------------------
 # 本批（Round 31 / 批次 Z）真删与真合并的名字。
 # 表是**结果**：这些名字在当前源码里都已经没有 ``_atomic_*`` 实现。
 # 每行 = (判定, 迁移前用量, 替代写法, 理由)
@@ -123,21 +182,18 @@ KEPT_EXPLICIT = {
     "card_prop_add_to_zone": "区域批量改卡牌属性（count/随机/标签徽章），与单卡版互补",
     "player_stat_change": "护甲/闪避族唯一实现（mode=add|remove|set）",
     "destroy_equipment": "摧毁装备族唯一实现（mode=choice|random|all|self，filter/record_count/scope）",
-    "spend_resource": "资源消耗唯一实现（resource/target/amount/all + spent 记账）",
+    "resource_op": "Round 32 新合并体：资源族唯一实现（resource + delta 正负 + all/spent/coffee/aura）",
     "add_tag": "卡内标签族唯一实现（mode=add|remove|clear）",
     "add_tag_to_zone": "区域标签族唯一实现（mode=add|remove|toggle）",
-    "for_each": "循环族唯一驱动（source/bind/condition/limit + 断点续跑）",
+    "for_each": "循环族唯一驱动（source/bind/condition/limit + 断点续跑；Round 32 收编 for_each_list / for_each_selected_card）",
     "move_card": "区域移动族唯一实现（zone=hand|deck|discard|exile）",
     "choose_from_zone": "区域取牌族唯一实现（zone=deck|discard|exile + 选择窗口联动）",
     "card_counter": "卡内计数器（mode=play|equip_turns|reset）",
     "deal_damage": "攻击管线唯一入口（力量/精准/暴击/子瓣继承 + hits）",
     "direct_damage": "直伤管线唯一入口（source_text/damage_type/damage_tag/hits）",
-    "heal": "回复唯一入口（heal_block/上限/战报）",
-    "gain_e": "获得 E（含上限与记账）",
-    "gain_m": "获得 M（含上限与记账）",
+    "health_op": "Round 32 新合并体：生命族唯一实现（mode=heal|lose|set|swap|fatal）",
     "turn_mod_add": "每回合修正（kind=e_regen|m_regen|draw）",
     "global_mult": "全场倍率（kind=damage|heal|cost）",
-    "equip_reduce_draw": "装备减抽（target=self|enemy）",
     "place_as_equip": "把牌作为装备加入（71 处使用，签名冻结）",
     "add_equipment_to_zone": "从卡 id 造装备进装备区",
     "add_equipment_armor": "所有装备获得护甲（层数）",
@@ -146,8 +202,7 @@ KEPT_EXPLICIT = {
     "equipment_prop_add": "装备属性写值（增加）",
     "remove_equip_protection": "清空装备保护层数",
     "counter_equip_protect": "装备保护层数（反制族）",
-    "on_fatal_invincible_then_die": "致命伤保护（H=1 + 无敌 + 回合末死亡）",
-    "on_fatal_set_health_exile": "致命伤改为放逐",
+    # Round 32 / 批次 AA：on_fatal_* 两条并进 health_op(mode:"fatal")。
     "defer_game_over": "延迟胜负判定（结算中途不判负）",
     "block_own_actions": "禁用出牌（shovel）",
     "block_card_type": "禁止某类牌",
@@ -159,8 +214,6 @@ KEPT_EXPLICIT = {
     "fission": "裂变层数（+）",
     "fusion": "聚变层数（+）",
     "for_each_equipment": "装备循环（Round 17 未并入 for_each）",
-    "for_each_selected_card": "选中的每张牌循环",
-    "for_each_list": "列表循环（绑定 list item 而不是玩家）",
     "timed_effect": "计时效果（duration/trigger/body）",
     "countdown_var": "倒计时变量（player_var_change 的定时封装）",
     "register_play_listener": "出牌监听注册（scope/duration/body）",
@@ -169,10 +222,10 @@ KEPT_EXPLICIT = {
     "auto_play_zone_top": "自动打出某区顶牌（Kitty 类）",
     "once_per_play": "每次打出至多一次（监听去重）",
     "after_all": "把 body 放到当前效果之后执行",
-    "if_else": "控制流原语（if 的 else 分支）",
-    "repeat_until": "控制流原语（重复到条件成立）",
-    "break": "控制流原语（跳出循环）",
-    "continue": "控制流原语（跳过本次迭代）",
+    "if_else": "控制流原语（Round 32 收编 if：不写 else 就是旧 if）",
+    "repeat": "控制流原语（Round 32 收编 repeat_until 的 until=停止条件）",
+    "break": "**语言原语**（跳出循环，不算可参数化的原子，Round 32 明确保留）",
+    "continue": "**语言原语**（跳过本次迭代，Round 32 明确保留）",
     "request_card": "请求选牌（UI 挂起，164 处使用）",
     "request_target": "请求选目标（UI 挂起，164 处使用）",
     "request_confirm": "请求确认（UI 挂起）",
@@ -193,30 +246,22 @@ KEPT_EXPLICIT = {
     "random_zone_card_to_hand": "随机取一张区域牌进手",
     "steal_enemy_card": "偷取敌方手牌/装备（选择窗口）",
     "swap_hands": "交换双方手牌",
-    "swap_health": "交换双方生命",
     "shuffle_hand": "打乱手牌（失明）",
     "shuffle_discard_into_deck": "弃牌堆洗回牌堆",
     "give_card_to_hand": "造牌入手（overflow/missing 处理）",
     "give_card_to_deck": "造牌入牌堆（position/flags）",
     "give_magic_orb_to_hand": "造魔法宝珠入手（固定印痕）",
     "move_cards_to_deck": "批量把牌放回牌堆",
-    "draw_cards": "抽牌（含钩子/上限/唯一牌）",
+    "draw": "Round 32 抽牌族唯一实现（count + hooks + log_amount + modifiers）",
     "discard_choice_then_draw": "先弃后抽（弃牌选择窗口）",
     "discard_hand_by_paid_e": "按本回合已付 E 弃手牌（Desert）",
-    "lose_health": "直接失去生命（可击杀）",
-    "set_health": "直接设置生命",
-    "increase_next_cost": "下次出牌费用修正（+）",
-    "reduce_next_cost": "下次出牌费用修正（-）",
+    "modify_next_cost": "Round 32 新合并体：下次出牌费用修正（delta 正负定方向）",
     "snapshot_card_props": "牌属性快照（按实例存）",
     "restore_card_props": "恢复牌属性快照",
     "restore_match_start_stats": "恢复开局属性",
     "restore_turn_start_stats": "恢复回合开始属性",
     "set_card_prop_random": "区域内随机设定属性",
-    "list_set": "列表原语（set）",
-    "list_append": "列表原语（append）",
-    "list_insert": "列表原语（insert）",
-    "list_delete": "列表原语（delete）",
-    "list_clear": "列表原语（clear）",
+    "list_modify": "Round 32 新合并体：列表写值（mode=set|append|insert|delete|clear）",
     "charge_self_damage": "充能自身伤害",
     "counter_pending_attack_damage": "反击待结算攻击伤害（Desert）",
     "absorb_attack_damage": "吸收攻击伤害（body + once）",
@@ -225,7 +270,6 @@ KEPT_EXPLICIT = {
     "triangle_damage": "三角伤害（层数 x 基数）",
     "card_damage_multiply": "聚变倍率（fusion_level x N）",
     "activate_corruption": "激活装备腐化",
-    "aura_enemy_elixir_recovery": "敌方 E 回复光环修正",
     "broadcast_event": "对外广播事件",
     "response_declare": "声明响应（占位步骤，无实现体）",
     "trigger_manual": "手动触发（占位步骤，无实现体）",
@@ -234,7 +278,6 @@ KEPT_EXPLICIT = {
     "apply_turn_regen": "回合回复（Jungle）",
     "assembler_effect": "装配机（Factory）",
     "cogwheel_mark": "齿轮标记（Factory）",
-    "coffee_gain_e": "咖啡获得 E（Hel）",
     "crit_multiplier_add": "暴击倍率（+，Hel）",
     "delayed_blind_next_turn": "下回合延迟失明（Ocean）",
     "delayed_reveal_hand_next_turn": "下回合延迟展示手牌",
@@ -310,7 +353,9 @@ def build() -> dict:
         kept.append({"name": name, "family": family, "usage": usage.get(name, 0), "reason": reason})
     kept.sort(key=lambda row: (row["family"], row["name"]))
     actions = []
-    for name, (verdict, before, replacement, reason) in ROUND31_ACTIONS.items():
+    for name, (verdict, before, replacement, reason) in (
+        {**ROUND31_ACTIONS, **ROUND32_ACTIONS}
+    ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,
             "usage": usage.get(name, 0), "replacement": replacement, "reason": reason,
@@ -364,16 +409,16 @@ def preservation_rows() -> list:
 
 def render(model: dict) -> str:
     lines = []
-    lines.append("# 原子全量清单（Round 31 / 批次 Z · 2026-09-12）")
+    lines.append("# 原子全量清单（Round 32 / 批次 AA · 2026-09-12）")
     lines.append("")
-    lines.append("本表**逐行**覆盖当前全部引擎原子（`_atomic_*` 实现），并列出本批真删/真合并的每一个名字。")
+    lines.append("本表**逐行**覆盖当前全部引擎原子（`_atomic_*` 实现），并列出 Round 31 / 32 真删/真合并的每一个名字。")
     lines.append(f"表里所有判「删」或「合」的行**都已在本轮执行完毕**：`--check` 会验证这些名字已经没有")
     lines.append(f"任何 `_atomic_*` 实现、卡数据 0 引用（当前引擎原子 {len(model['atoms'])} 个）。")
     lines.append("")
     lines.append("生成：`python tools/atom_full_inventory.py`；校验：`python tools/atom_full_inventory.py --check`。")
     lines.append("用量口径与 `tools/mod_atom_report.py` 完全一致（`op`/`type` 键、嵌套步骤展开）。")
     lines.append("")
-    lines.append(f"## 一、本批真删 / 真合并（{len(model['actions'])} 个名字）")
+    lines.append(f"## 一、Round 31 / 32 真删 / 真合并（{len(model['actions'])} 个名字）")
     lines.append("")
     lines.append("| 原子 | 判定 | 迁移前用量 | 本批用量 | 替代写法 | 理由 |")
     lines.append("|---|---|---|---|---|---|")

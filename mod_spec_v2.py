@@ -92,10 +92,11 @@ _CORE_LOGIC_OPS = {
     "and",
     "or",
     "not",
-    "if",
+    # Round 32 / 批次 AA：``if`` 并进 ``if_else``、``repeat_until`` 并进
+    # ``repeat(until=...)``、``for_each_list``/``for_each_selected_card``
+    # 并进 ``for_each``；旧名见 REMOVED_ATOMIC_OPS / RENAMED_ATOMIC_OPS。
     "if_else",
     "repeat",
-    "repeat_until",
     "for_each",
     "break",
     "continue",
@@ -112,11 +113,10 @@ _CORE_LOGIC_OPS = {
     "request_confirm",
     "deal_damage",
     "damage",
-    "heal",
-    "draw_cards",
-    "gain_e",
-    "gain_m",
-    "spend_resource",
+    # Round 32 / 批次 AA：生命族并进 ``health_op``、资源族并进 ``resource_op``、
+    # 抽牌族并进 ``draw``（``count`` + ``modifiers``）。旧名见两个旧名表。
+    "health_op",
+    "resource_op",
     "draw",
     "move_card",
     "create_card",
@@ -163,7 +163,8 @@ _CORE_LOGIC_OPS = {
     "player_stat_change",
     "turn_mod_add",
     "global_mult",
-    "equip_reduce_draw",
+    # Round 32 / 批次 AA：``equip_reduce_draw`` 并进 ``draw`` 的
+    # ``modifiers:[{"type":"sluggish",...}]``。
     "status_add_named",
     "status_remove_named",
     # Round 29 / 批次 X：三个"从某区选一张进手牌"的同形原子合并成一条
@@ -206,12 +207,13 @@ _CORE_LOGIC_OPS = {
     "fission",
     "fusion",
     "multiply_next_damage",
-    "reduce_next_cost",
-    "increase_next_cost",
+    # Round 32 / 批次 AA：``reduce_next_cost`` / ``increase_next_cost`` 并进
+    # ``modify_next_cost(delta=...)``（正负号定方向）。
+    "modify_next_cost",
     "transform_card",
     # Round 29 / 批次 X：耐久三兄弟并入卡牌属性族
     # （``card_prop_add``/``card_prop_set`` + ``property:"durability"``）。
-    "swap_health",
+    # Round 32 / 批次 AA：``swap_health`` 并进 ``health_op(mode:"swap")``。
     "swap_hands",
     "broadcast_event",
     "modify_damage",
@@ -219,12 +221,9 @@ _CORE_LOGIC_OPS = {
     # ``player_var_change(mode=set|add|sub|mul|div)``；Round 31 起 ``var_set``
     # 兼容垫片也已删除（旧名进 REMOVED_ATOMIC_OPS）。
     "player_var_change",
-    "list_set",
-    "list_append",
-    "list_insert",
-    "list_delete",
-    "list_clear",
-    "for_each_list",
+    # Round 32 / 批次 AA：列表五兄弟并进
+    # ``list_modify(list=..., mode=set|append|insert|delete|clear, index=..., value=...)``。
+    "list_modify",
     "timed_effect",
     "countdown_var",
     # Round 29 / 批次 X：``player_prop_set`` / ``player_prop_add`` 合并成
@@ -246,26 +245,20 @@ _CORE_LOGIC_OPS = {
     "restore_turn_start_stats",
     "restore_match_start_stats",
     "counter_pending_attack_damage",
-    "lose_health",
     "discard_choice_then_draw",
-    "coffee_gain_e",
     "activate_corruption",
     "response_declare",
-    "aura_enemy_elixir_recovery",
-    "for_each_selected_card",
     "on_any_turn_start",
     "on_damage_taken",
     "on_discard_owner_turn_start",
     "on_enemy_turn_start",
     "on_equipment_destroy",
     "on_equipment_trigger",
-    "on_fatal_set_health_exile",
     "on_hand_owner_turn_start",
     "on_hand_owner_turn_end",
     "on_owner_turn_start",
     "on_target_turn_start",
     "on_owner_turn_end",
-    "set_health",
     "add_tag_to_zone",
     "cogwheel_mark",
     "honey_control",
@@ -342,7 +335,6 @@ _CORE_LOGIC_OPS = {
     #   * after_all：把 body 放到当前效果之后执行的控制流 op。
     "block_own_actions",
     "counter_equip_protect",
-    "on_fatal_invincible_then_die",
     # Round 29 / 批次 X：``record_play_count`` / ``record_equip_turns`` /
     # ``reset_counter`` 已合并成 ``card_counter``（见上面的模块族）。
     "create_counter",
@@ -802,8 +794,8 @@ REMOVED_ATOMIC_OPS = {
     "mod_draw": '{"op":"turn_mod_add","kind":"draw","target":"self","amount":1}',
     #   * 资源消耗族 → spend_resource（Round 31：resource_spend 也已删除，
     #     ``spend_resource`` 收 ``target``，要旧默认战报就显式写 log）
-    "cost_e": '{"op":"spend_resource","resource":"elixir","amount":1,"target":"self","log":"{target}消耗{amount}E"}',
-    "cost_m": '{"op":"spend_resource","resource":"magic","amount":1,"target":"self","log":"{target}消耗{amount}M"}',
+    "cost_e": '{"op":"resource_op","resource":"e","mode":"spend","amount":1,"target":"self","log":"{target}消耗{amount}E"}',
+    "cost_m": '{"op":"resource_op","resource":"m","mode":"spend","amount":1,"target":"self","log":"{target}消耗{amount}M"}',
     #   * 全场倍率族 → global_mult（kind 选 damage/heal/cost）
     "global_damage_mult": '{"op":"global_mult","kind":"damage","multiplier":2}',
     "global_heal_mult": '{"op":"global_mult","kind":"heal","multiplier":2}',
@@ -811,20 +803,21 @@ REMOVED_ATOMIC_OPS = {
     #   * 卡内标签族 → add_tag(mode=...)
     "tag_add_named": '{"op":"add_tag","card":{"ref":"current_card"},"tag":"exile","log":false}',
     "tag_remove_named": '{"op":"add_tag","mode":"remove","card":{"ref":"current_card"},"tag":"exile"}',
-    #   * 装备减抽族 → equip_reduce_draw（target 选 self/enemy）
-    "equip_reduce_own_draw": '{"op":"equip_reduce_draw","target":"self","amount":1}',
-    "equip_reduce_enemy_draw": '{"op":"equip_reduce_draw","target":"enemy","amount":1}',
+    #   * 装备减抽族 → draw 的 modifiers（Round 32 / 批次 AA：``equip_reduce_draw``
+    #     本身也并进 ``draw`` 了）
+    "equip_reduce_own_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"self"}]}',
+    "equip_reduce_enemy_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"enemy"}]}',
     "block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
     "counter_block_enemy_attacks": '{"op":"block_card_type","card_type":"thorn","target":"enemy"}',
     "counter_dodge": '{"op":"player_stat_change","mode":"add","stat":"dodge","target":"self","amount":1}',
     "counter_nazar": '{"op":"status_add_named","status":"nazar","target":"self","amount":2}',
     "counter_negate_skill": '{"op":"player_prop_change","mode":"set","property":"negate_next_skill","target":"self","value":1}',
-    "counter_set_invincible_then_die": '{"op":"on_fatal_invincible_then_die"}',
+    "counter_set_invincible_then_die": '{"op":"health_op","mode":"fatal","kind":"invincible_die"}',
     "equip_add_toxic": '{"op":"status_add_named","status":"toxic","target":"enemy","amount":1,"log":"{target}+{amount}淬毒"}',
     "equip_on_destroy_remove_poison_damage": None,
     "equip_reduce_enemy_e": '{"op":"player_prop_change","mode":"add","property":"overload","target":"enemy","amount":1}',
     "equip_reduce_own_e": '{"op":"player_prop_change","mode":"add","property":"overload","target":"self","amount":1}',
-    "equip_set_health": '{"op":"set_health","target":"self","amount":60}',
+    "equip_set_health": '{"op":"health_op","mode":"set","target":"self","amount":60}',
     "equip_sponge": '{"op":"player_prop_change","mode":"set","property":"sponge_active","target":"target","value":1}',
     "force_enemy_attacks_only": '{"op":"force_card_type","card_type":"thorn","target":"enemy"}',
     "random_move_card_to_hand": '{"op":"random_zone_card_to_hand"}',
@@ -916,7 +909,7 @@ REMOVED_ATOMIC_OPS = {
     ),
     "consume_magic_for_status": (
         '[{"op":"set_var","name":"m","value":{"op":"player_stat","target":"self","stat":"magic"}},'
-        '{"op":"if","condition":{"op":"compare","a":{"op":"var","name":"m"},"operator":">","b":0},'
+        '{"op":"if_else","condition":{"op":"compare","a":{"op":"var","name":"m"},"operator":">","b":0},'
         '"then":[{"op":"player_prop_set","target":"self","property":"magic","value":0},'
         '{"op":"status_add_named","target":"target","status":"jungle:toxic_poison",'
         '"amount":{"op":"var","name":"m"}}]}]'
@@ -924,19 +917,19 @@ REMOVED_ATOMIC_OPS = {
     "yin_yang_effect": (
         '[{"op":"set_var","name":"n","value":{"op":"deck_count","target":"target"}},'
         '{"op":"move_cards_to_deck","target":"target","cards":"hand","position":"bottom","silent":true},'
-        '{"op":"draw_cards","target":"target","amount":{"op":"var","name":"n"}}]'
+        '{"op":"draw","target":"target","count":{"op":"var","name":"n"}}]'
     ),
     "flower_burst": (
-        '{"op":"if","condition":{"op":"compare","a":{"op":"equipment_prop",'
+        '{"op":"if_else","condition":{"op":"compare","a":{"op":"equipment_prop",'
         '"equipment":"current_equipment","prop":"turns_equipped"},"operator":">=","b":1},'
         '"then":[{"op":"status_add_named","target":"target","status":"poison","amount":16},'
         '{"op":"destroy_current_equipment"}]}'
     ),
     "draw_to_hand_limit": (
-        '{"op":"if","condition":{"op":"compare","a":{"op":"sub","values":'
+        '{"op":"if_else","condition":{"op":"compare","a":{"op":"sub","values":'
         '[{"op":"player_stat","target":"self","stat":"hand_limit"},'
         '{"op":"hand_count","target":"self"}]},"operator":">","b":0},'
-        '"then":[{"op":"draw_cards","target":"self","amount":...,"log_amount":"requested"}]}'
+        '"then":[{"op":"draw","target":"self","count":...,"log_amount":"requested"}]}'
     ),
 
     # Round 27（丢弃族：公式/随机 + 尾部取牌 → 取值表达式 + 通用步骤）：这两个
@@ -1065,7 +1058,35 @@ REMOVED_ATOMIC_OPS = {
     "reveal_tag_hand": '{"op":"reveal_hand_cards","target":"enemy","to":"self","tag":"revealed","mark":true}',
     "put_card_to_deck": '{"op":"move_card","zone":"deck","card":{"ref":"selected_card"},"position":"top"}',
     "give_card_to_discard": '{"op":"create_card","card_id":"card_id","to":"discard","target":"self"}',
-    "resource_spend": '{"op":"spend_resource","resource":"elixir","target":"self","amount":1,"log":"{target}消耗{amount}E"}',
+    "resource_spend": '{"op":"resource_op","resource":"e","mode":"spend","target":"self","amount":1,"log":"{target}消耗{amount}E"}',
+    # Round 32 / 批次 AA（本批五族）：旧名一律带完整替代写法，写出来是
+    # "已移除 + 请改用"的显式报错，不静默。
+    #   * 生命族 → health_op(mode=heal|lose|set|swap|fatal)
+    "heal": '{"op":"health_op","mode":"heal","target":"self","amount":5}',
+    "lose_health": '{"op":"health_op","mode":"lose","target":"self","amount":3}',
+    "set_health": '{"op":"health_op","mode":"set","target":"self","amount":60}',
+    "swap_health": '{"op":"health_op","mode":"swap","target1":"self","target2":"enemy"}',
+    "on_fatal_set_health_exile": '{"op":"health_op","mode":"fatal","kind":"exile","health":5}',
+    "on_fatal_invincible_then_die": '{"op":"health_op","mode":"fatal","kind":"invincible_die"}',
+    #   * 资源族 → resource_op(resource=e|m, delta 正数获得 / 负数消耗)
+    "gain_e": '{"op":"resource_op","resource":"e","delta":2,"target":"self"}',
+    "gain_m": '{"op":"resource_op","resource":"m","delta":2,"target":"self"}',
+    "spend_resource": '{"op":"resource_op","resource":"e","mode":"spend","amount":1,"target":"self","log":"{target}消耗{amount}E"}',
+    "coffee_gain_e": '{"op":"resource_op","resource":"e","delta":2,"target":"self","reset_coffee":true,"card_heavy":1,"log":"{target}获得{amount}E；本牌获得1层沉重"}',
+    "aura_enemy_elixir_recovery": '{"op":"resource_op","mode":"aura_recovery","resource":"e","amount":1}',
+    #   * 费用族 → modify_next_cost(delta 正数加费 / 负数减费)
+    "increase_next_cost": '{"op":"modify_next_cost","delta":1,"target":"self"}',
+    "reduce_next_cost": '{"op":"modify_next_cost","delta":-1,"target":"self"}',
+    #   * 抽牌修正 → draw 的 modifiers
+    "equip_reduce_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"enemy"}]}',
+    #   * 控制流 → repeat(until=...) / for_each(bind:"selected_card") / list_modify
+    "repeat_until": '{"op":"repeat","until":<停止条件>,"body":[...],"limit":64}',
+    "for_each_selected_card": '{"op":"for_each","bind":"selected_card","body":[...]}',
+    "list_set": '{"op":"list_modify","list":"<变量名>","mode":"set","value":[...]}',
+    "list_append": '{"op":"list_modify","list":"<变量名>","mode":"append","value":<元素>}',
+    "list_insert": '{"op":"list_modify","list":"<变量名>","mode":"insert","index":1,"value":<元素>}',
+    "list_delete": '{"op":"list_modify","list":"<变量名>","mode":"delete","index":1}',
+    "list_clear": '{"op":"list_modify","list":"<变量名>","mode":"clear"}',
 }
 
 # Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），
@@ -1098,6 +1119,13 @@ RENAMED_ATOMIC_OPS = {
     "ocean_add_charge_to_hand": "add_charge_to_hand",
     "ocean_mark_auto_play": "queue_auto_play",
     "void_kitty_auto_play": "auto_play_zone_top",
+    # Round 32 / 批次 AA：纯改名（参数面不变）——``if`` 就是"不写 else 的
+    # ``if_else``"，``for_each_list`` 的 ``list``/``name`` 参数本来就在
+    # ``for_each`` 的统一来源词表里，``draw_cards`` 的默认值与 ``draw`` 相同
+    # （要"播报请求值"就显式写 ``log_amount:"requested"``）。
+    "if": "if_else",
+    "for_each_list": "for_each",
+    "draw_cards": "draw",
 }
 
 # Every curated core op plus every atomic handler the engine implements, so new

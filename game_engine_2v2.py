@@ -1972,9 +1972,7 @@ class GameEngine2v2(GameEngine):
                     if getattr(eq, 'effect_target', owner_id) != player_id:
                         continue
                     aura_delta += _declared_elixir_aura(self, eq, owner_id).elixir
-                    for effect in eq.card_def.effects or []:
-                        if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
-                            aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+                    aura_delta += self._declared_aura_elixir_bonus(eq, owner_id)
             elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction + aura_delta)
             elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
@@ -2119,9 +2117,7 @@ class GameEngine2v2(GameEngine):
                     if getattr(eq, 'effect_target', owner_id) != player_id:
                         continue
                     aura_delta += _declared_elixir_aura(self, eq, owner_id).elixir
-                    for effect in eq.card_def.effects or []:
-                        if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
-                            aura_delta += self._eval_int(owner_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+                    aura_delta += self._declared_aura_elixir_bonus(eq, owner_id)
             elixir_recovery = max(0, ELIXIR_RECOVERY - ps.enemy_e_reduction + aura_delta)
             elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)

@@ -6414,8 +6414,9 @@ class GameEngine:
                 if card.card_def and card.card_def.effects:
                     for effect in card.card_def.effects:
                         eff_type = effect if isinstance(effect, str) else effect.get('type', '')
-                        if eff_type == 'on_fatal_set_health_exile':
-                            params = effect.get('params', {}) if isinstance(effect, dict) else {}
+                        effect_params = effect.get('params', {}) if isinstance(effect, dict) else {}
+                        if self._fatal_declaration_kind(eff_type, effect_params) == self.FATAL_EXILE:
+                            params = effect_params
                             log = effect.get('log', '') if isinstance(effect, dict) else ''
                             health_amount = params.get('health', 5)
                             self._trigger_yggdrasil_effect(player_id, card, exile_from_hand=True)
@@ -9016,6 +9017,8 @@ class GameEngine:
         return result
 
 
+    # Round 32 / 批次 AA：被动声明族的旧名保留在这里只为兼容外部读取（引擎内部
+    # 一律走 ``_fatal_declaration_kind``，它同时认 ``health_op(mode:"fatal")``）。
     PASSIVE_EFFECT_TYPES = {'on_fatal_set_health_exile', 'on_fatal_invincible_then_die'}
 
 
@@ -9198,20 +9201,8 @@ class GameEngine:
         else:
             self.log_msg(log or f"{self.pn(player_id)}未选择牌")
 
-    def _atomic_set_health(self, player_id, card, params, log, choice, context):
-        amount = self._eval_int(player_id, params.get('amount', params.get('value', 60)), card, 60)
-        for target_id in self._resolve_targets(player_id, params.get('target', 'self')):
-            if 0 <= target_id < len(self.players):
-                self.players[target_id].health = max(0, min(amount, self.players[target_id].max_health))
-                self._note_achievement_health(target_id)
-                if log is False:
-                    continue
-                self.log_msg(self._format_step_log(
-                    log or f"{self.pn(target_id)}血量设为{amount}",
-                    target=self.pn(target_id),
-                    source=self.pn(player_id),
-                    amount=amount,
-                ))
+    # Round 32 / 批次 AA：``set_health`` 已并入 ``health_op(mode:"set")``
+    # （见 ``_atomic_health_op`` 的 ``set`` 分支，上限截断逐字保留）。
 
     def _atomic_player_status_layers(self, player_id, card, params, log, choice, context):
         """Round 31 / 批次 Z：玩家状态层数族三合一。
@@ -9300,31 +9291,46 @@ class GameEngine:
     # 两个旧名的差异只是"全场按实例 id 找" vs "只看自己"，合并后先做前者、
     # 再回落后者，对同一张装备牌结果一致。
 
-    def _atomic_equip_reduce_draw(self, player_id, card, params, log, choice, context):
-        """Round 24：``equip_reduce_enemy_draw`` / ``equip_reduce_own_draw`` 合并成一条。
+    # Round 32 / 批次 AA：``equip_reduce_draw`` 已并入 ``draw`` 的
+    # ``modifiers:[{"type":"sluggish","amount":N,"target":...}]``（旧的
+    # ``equip_reduce_own_draw`` / ``equip_reduce_enemy_draw`` 两个名字
+    # Round 24 就已经指向它）。
 
-        ``target``（self/enemy）覆盖原来两个名字的差异；默认战报与旧实现逐字一致
-        （对敌方那条保留"敌方获得…"的说法）。
+    # Round 32 / 批次 AA：``on_fatal_invincible_then_die`` /
+    # ``on_fatal_set_health_exile`` 已并入 ``health_op(mode:"fatal", kind:...)``
+    # （见 ``_atomic_health_op`` 的 ``fatal`` 分支）。它们是**被动声明**：声明本身
+    # 只点灯/播报，真正的触发时点仍在 ``_check_yggdrasil`` / ``_has_fatal_prevention``
+    # 里，所以那两处按 ``_fatal_declaration_kind`` 识别新写法。
+    FATAL_EXILE = 'exile'
+    FATAL_INVINCIBLE_DIE = 'invincible_die'
+
+    @classmethod
+    def _fatal_declaration_kind(cls, effect_type, params=None) -> str:
+        """把"致命伤被动声明"的任意写法归一成 ``exile`` / ``invincible_die``。
+
+        Round 32 / 批次 AA 之后规范写法是
+        ``{"op":"health_op","mode":"fatal","kind":"exile"}``；两个旧名（以及
+        ``counter_set_invincible_then_die`` 这类历史声明）继续被认出来，免得
+        历史效果表/第三方包在被动识别处被当成普通步骤。
         """
 
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not self._valid_player_id(target_id):
-            return
-        amount = params.get('amount', 1)
-        self.players[target_id].sluggish += amount
-        self._note_achievement_status_peak(target_id)
-        default = f"敌方获得{amount}层迟缓" if target_id != player_id else f"{self.pn(target_id)}获得{amount}层迟缓"
-        self.log_msg(log or default)
-
-    def _atomic_on_fatal_invincible_then_die(self, player_id, card, params, log, choice, context):
-        if self._status_application_blocked(player_id, 'bandage_active'):
-            return
-        self.players[player_id].bandage_active = True
-        self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；自己回合结束时死亡")
-
-    def _atomic_on_fatal_set_health_exile(self, player_id, card, params, log, choice, context):
-        health_amount = params.get('health', 5)
-        self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}被动效果：受到致命伤害时清除所有效果，生命值设为{health_amount}，无敌直到下一个自己回合结束")
+        name = str(effect_type or '')
+        if name == 'on_fatal_set_health_exile':
+            return cls.FATAL_EXILE
+        if name == 'on_fatal_invincible_then_die':
+            return cls.FATAL_INVINCIBLE_DIE
+        if name != 'health_op':
+            return ''
+        params = params if isinstance(params, dict) else {}
+        mode = str(params.get('mode') or '').strip().lower()
+        kind = str(params.get('kind') or '').strip().lower()
+        if mode not in ('fatal', 'on_fatal', 'death', '濒死') and kind not in (
+            'exile', 'invincible_die', 'bandage', 'die', 'invincible',
+        ):
+            return ''
+        if kind in ('invincible_die', 'bandage', 'die', 'invincible'):
+            return cls.FATAL_INVINCIBLE_DIE
+        return cls.FATAL_EXILE
 
     # Round 30 / 批次 Y：``_atomic_deal_damage_multi``（``deal_damage_multi`` /
     # 声明别名 ``damage_multi``）已删除——多段伤害由 ``deal_damage`` 的
@@ -9863,40 +9869,114 @@ class GameEngine:
             return
         self.log_msg(log or f"{self.pn(player_id)}强制结束当前回合")
 
-    def _atomic_spend_resource(self, player_id, card, params, log, choice, context):
-        """Spend E/M as an explicit effect step.
+    def _atomic_resource_op(self, player_id, card, params, log, choice, context):
+        """Round 32 / 批次 AA：资源族五合一。
 
-        Used by "spend everything for a bigger hit" cards. ``all: true`` spends
-        whatever is left; the amount that was actually spent is written to the
-        ``spent`` context variable so following steps can scale off it.
+        覆盖 ``gain_e`` / ``gain_m``（引擎原子 + 运行时原生分支）/ ``spend_resource``
+        （Round 31 的 ``resource_spend`` 合并体）/ ``coffee_gain_e`` /
+        ``aura_enemy_elixir_recovery``。
 
-        Round 31 / 批次 Z：吸收 ``resource_spend``（Round 24 的 ``cost_e`` /
-        ``cost_m`` 合并体）——``target`` 指定替谁付（默认自己），``resource``
-        同时认 ``e``/``m`` 与 ``elixir``/``magic``。默认仍然是"不写 ``log`` 就
-        安静"，要旧 ``resource_spend`` 那句 ``{target}消耗{amount}E`` 就显式写
-        ``log``。
+        参数：``resource`` 选 ``e``/``m``（也认 ``elixir``/``magic``），
+        ``delta``（旧 ``amount``）**可正可负**——正数是获得、负数是消耗；
+        也可以写 ``mode:"spend"`` + ``amount``，或用 ``all:true`` 花光当前值。
+
+        逐条保留的旧行为：
+
+        * 获得走 ``PlayerState.gain_elixir`` / ``gain_magic``（各自的上限截断与
+          成就/回调都在那里），默认战报仍播报**请求值** ``{target}获得{n}E``；
+          ``log_positive_only`` 在实际上限顶满（gained<=0）时静音。
+        * 负数（旧运行时分支的语义）在 ``0`` 处截断，不经过
+          ``_spend_resource`` 的事件派发——与旧运行时逐字一致。
+        * 消耗走 ``_spend_resource``（派发 ``resource_spent`` 与属性变化事件），
+          实际花掉的数值写进上下文变量 ``spent``（``context['spent']`` 与
+          ``context['vars']['spent']`` 都写，旧 ``spend_resource`` 的行为）；
+          不写 ``log`` 时保持安静。
+        * ``reset_coffee:true`` + ``card_heavy:N`` 是旧 ``coffee_gain_e`` 的两条
+          副作用（重置"咖啡首次使用"标记、给当前牌叠 ``heavy`` 层），默认战报
+          仍是"获得{n}E；本牌获得1层沉重"。
+        * ``mode:"aura_recovery"`` 是旧 ``aura_enemy_elixir_recovery`` 的声明写法：
+          原子本身什么都不做，数值由回合开始的 ``_declared_aura_elixir_bonus`` 读。
         """
+
+        mode = str(params.get('mode') or '').strip().lower()
+        if mode in ('aura', 'aura_recovery', 'aura_enemy_elixir_recovery'):
+            return
         resource = 'magic' if str(params.get('resource', 'elixir')).strip().lower() in (
             'magic', 'm', 'mana', '魔力',
         ) else 'elixir'
-        target_id = player_id
-        if params.get('target') is not None:
-            resolved = self._resolve_target(player_id, params.get('target'))
-            if self._valid_player_id(resolved):
-                target_id = resolved
-        if params.get('all'):
-            amount = int(getattr(self.players[target_id], resource, 0) or 0)
+        label = 'M' if resource == 'magic' else 'E'
+        raw_delta = params.get('delta', params.get('amount', 1))
+        if isinstance(raw_delta, dict) and raw_delta.get('ref') in ('context_var', 'temp_var') and resource == 'elixir':
+            # 旧 ``_atomic_gain_e`` 的上下文变量读取（``context_var`` 优先于表达式）。
+            delta = int((context or {}).get(str(raw_delta.get('name', '')), 0) or 0)
         else:
-            amount = max(0, self._eval_int(player_id, params.get('amount', 0), card, 0))
-        spent = self._spend_resource(target_id, resource, amount, card)
-        if isinstance(context, dict):
-            context.setdefault('vars', {})['spent'] = spent
-            context['spent'] = spent
-        if log is False or not log:
-            return
-        self.log_msg(self._format_step_log(
-            log, target=self.pn(target_id), source=self.pn(player_id), amount=spent, count=spent,
-        ))
+            delta = self._eval_int(player_id, raw_delta, card, 1)
+        targets = self._data_step_targets(player_id, card, params.get('target', 'self'), context)
+        spend_mode = mode in ('spend', 'consume', 'pay', 'cost')
+        wants_all = bool(params.get('all'))
+        coffee = bool(params.get('reset_coffee'))
+        heavy = max(0, self._eval_int(player_id, params.get('card_heavy', 0), card, 0))
+        positive_only = bool(params.get('log_positive_only'))
+        silent = log is False or params.get('silent') or params.get('no_log')
+
+        for target_id in targets:
+            if not self._valid_player_id(target_id):
+                continue
+            ps = self.players[target_id]
+            if spend_mode or wants_all:
+                # 旧 ``spend_resource``：实际花掉的数值进 ``spent``，不写 log 就安静。
+                amount = int(getattr(ps, resource, 0) or 0) if wants_all else abs(int(delta))
+                spent = self._spend_resource(target_id, resource, amount, card)
+                if isinstance(context, dict):
+                    context.setdefault('vars', {})['spent'] = spent
+                    context['spent'] = spent
+                if log:
+                    self.log_msg(self._format_step_log(
+                        log, target=self.pn(target_id), source=self.pn(player_id),
+                        amount=spent, count=spent,
+                    ))
+                continue
+            if delta < 0:
+                # 旧运行时 ``gain_e``/``gain_m`` 分支的负数语义：直接扣、在 0 处截断，
+                # 不派发 ``resource_spent``（与旧实现逐字一致）。
+                before = int(getattr(ps, resource, 0) or 0)
+                setattr(ps, resource, max(0, before + int(delta)))
+                spent = before - int(getattr(ps, resource, 0) or 0)
+                if silent or (positive_only and spent <= 0):
+                    continue
+                self.log_msg(
+                    self._format_step_log(
+                        log, target=self.pn(target_id), source=self.pn(player_id),
+                        amount=int(delta), count=int(delta), gained=-spent,
+                    ) or f"{self.pn(target_id)}获得{int(delta)}{label}"
+                )
+                continue
+            before = int(getattr(ps, resource, 0) or 0)
+            if resource == 'magic':
+                ps.gain_magic(int(delta))
+            else:
+                ps.gain_elixir(int(delta))
+            gained = int(getattr(ps, resource, 0) or 0) - before
+            if coffee:
+                ps.coffee_first_use = False
+                ps.custom_vars['咖啡首次使用'] = 0
+                if card is not None:
+                    card.heavy_value = max(0, int(getattr(card, 'heavy_value', 0) or 0)) + max(1, heavy)
+                    card.instance_flags.add('heavy')
+                    card.disabled_flags.discard('heavy')
+            elif card is not None and heavy:
+                card.heavy_value = max(0, int(getattr(card, 'heavy_value', 0) or 0)) + heavy
+                card.instance_flags.add('heavy')
+                card.disabled_flags.discard('heavy')
+            if silent or (positive_only and gained <= 0):
+                continue
+            default_log = f"{self.pn(target_id)}获得{abs(int(delta))}{label}"
+            if coffee:
+                default_log = f"{self.pn(target_id)}获得{abs(int(delta))}{label}；本牌获得{max(1, heavy)}层沉重"
+            self.log_msg(self._format_step_log(
+                log, target=self.pn(target_id), source=self.pn(player_id),
+                amount=abs(int(delta)), count=abs(int(delta)), gained=gained,
+            ) or default_log)
 
     def _atomic_mark_self_damage_source(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
@@ -9927,11 +10007,30 @@ class GameEngine:
         ps.damage_multiplier = getattr(ps, 'damage_multiplier', 1.0) * multiplier
         self.log_msg(log or f"{self.pn(player_id)}下次伤害x{multiplier}")
 
-    def _atomic_reduce_next_cost(self, player_id, card, params, log, choice, context):
-        self._change_hand_card_costs(player_id, card, params, log, -1)
+    def _atomic_modify_next_cost(self, player_id, card, params, log, choice, context):
+        """Round 32 / 批次 AA：``increase_next_cost`` / ``reduce_next_cost`` 二合一。
 
-    def _atomic_increase_next_cost(self, player_id, card, params, log, choice, context):
-        self._change_hand_card_costs(player_id, card, params, log, 1)
+        方向由 ``delta`` 的**正负**决定（正数 = 加重 / 加费，负数 = 减费），
+        也接受 ``mode:"reduce"/"increase"`` 显式写法；``amount`` 仍是旧参数名
+        （旧实现取绝对值，所以 ``amount:-2`` 与 ``amount:2`` 在旧名里同义，
+        新写法请用 ``delta``）。目标、``card_type`` 过滤与"改了才播报"的规则
+        全部沿用 ``_change_hand_card_costs``。
+        """
+
+        if 'delta' in params:
+            delta = self._eval_int(player_id, params.get('delta'), card, 1)
+        else:
+            delta = abs(self._eval_int(player_id, params.get('amount', 1), card, 1))
+        mode = str(params.get('mode') or '').strip().lower()
+        if mode in ('reduce', 'decrease', 'minus', '减'):
+            delta = -abs(delta)
+        elif mode in ('increase', 'add', 'plus', '加'):
+            delta = abs(delta)
+        # ``_change_hand_card_costs`` 从 ``params['amount']`` 取面额，这里把
+        # ``delta`` 的绝对值喂进去（旧实现取的就是绝对值）。
+        cost_params = dict(params)
+        cost_params['amount'] = abs(delta)
+        self._change_hand_card_costs(player_id, card, cost_params, log, -1 if delta < 0 else 1)
 
     def _change_hand_card_costs(self, player_id, card, params, log, direction: int):
         """Internal helper for ``reduce_next_cost`` / ``increase_next_cost``.
@@ -10756,16 +10855,8 @@ class GameEngine:
         setattr(self, attr, getattr(self, attr, 1.0) * multiplier)
         self.log_msg(log or f"{text}x{multiplier}")
 
-    def _atomic_swap_health(self, player_id, card, params, log, choice, context):
-        t1 = self._resolve_target(player_id, params.get('target1', 'self'))
-        t2 = self._resolve_target(player_id, params.get('target2', 'enemy'))
-        h1 = self.players[t1].health
-        h2 = self.players[t2].health
-        self.players[t1].health = h2
-        self.players[t2].health = h1
-        self._note_achievement_health(t1)
-        self._note_achievement_health(t2)
-        self.log_msg(log or f"{self.pn(t1)}与{self.pn(t2)}交换生命值")
+    # Round 32 / 批次 AA：``swap_health`` 已并入 ``health_op(mode:"swap")``
+    # （``target1``/``target2`` 参数不变；旧实现交换后不做任何钳位，这里逐字保留）。
 
     def _atomic_swap_hands(self, player_id, card, params, log, choice, context):
         t1 = self._resolve_target(player_id, params.get('target1', 'self'))
@@ -10784,11 +10875,13 @@ class GameEngine:
 
 
 
-    def _atomic_if(self, player_id, card, params, log, choice, context):
-        if self._eval_condition(player_id, params.get('condition'), card):
-            self._run_effect_list(player_id, card, params.get('then', []), choice, context)
-
     def _atomic_if_else(self, player_id, card, params, log, choice, context):
+        """Round 32 / 批次 AA：``if`` / ``if_else`` 合并后的唯一分支实现。
+
+        ``else`` 缺省（即旧的 ``if``）时，条件不成立就什么都不做
+        —— ``_run_effect_list`` 收到空列表本来也是空操作。
+        """
+
         if self._eval_condition(player_id, params.get('condition'), card):
             self._run_effect_list(player_id, card, params.get('then', []), choice, context)
         else:
@@ -10893,8 +10986,19 @@ class GameEngine:
         return child
 
     def _atomic_repeat(self, player_id, card, params, log, choice, context):
-        """``repeat(times, body)`` on the shared loop driver."""
-        times = max(0, int(self._eval_expr(player_id, params.get('times', 1), card)))
+        """Round 32 / 批次 AA：``repeat`` / ``repeat_until`` 合并后的唯一重复实现。
+
+        ``times`` 给定次数；``until`` 给定**停止条件**（旧 ``repeat_until`` 的
+        ``condition``）：每一轮开头先判停，成立就 ``LoopBreak``，默认上限仍是
+        旧实现的 64 轮（写了 ``limit`` 就按 ``limit``）。``condition`` 保持
+        ``repeat`` 原来的"本轮跑不跑"的门控语义，两者互不干扰。
+        """
+
+        until = params.get('until', params.get('stop_when'))
+        if until is not None and params.get('times') is None and params.get('limit') is None:
+            times = 64
+        else:
+            times = max(0, int(self._eval_expr(player_id, params.get('times', 1), card)))
         body = loop_body_from_params(params) or params.get('body', [])
         base_context = self._engine_loop_context(player_id, context)
         condition = loop_condition(params)
@@ -10908,48 +11012,36 @@ class GameEngine:
             child = {**base_context, 'repeat_index': item}
             if var_name:
                 child['vars'] = {**(base_context.get('vars') or {}), var_name: item}
+            if until is not None and self._loop_iteration_allows(player_id, card, until, child):
+                raise LoopBreak()
             if not self._loop_iteration_allows(player_id, card, condition, child):
                 return None
             self._run_effect_list(player_id, card, body, choice, child)
 
         return run_loop_driver(self, items, run_body=run_body, stop_on_game_over=False, op='repeat')
 
-    def _atomic_repeat_until(self, player_id, card, params, log, choice, context):
-        """``repeat_until(condition, body)`` on the shared loop driver."""
-        body = loop_body_from_params(params) or params.get('body', [])
-        base_context = self._engine_loop_context(player_id, context)
-        var_name = str(params.get('as') or params.get('var') or '')
-        max_loops = 64
-        limit = self._engine_loop_limit(self, base_context, params.get('limit'), 'repeat_until')
-        if params.get('limit') is not None and limit is not None:
-            max_loops = limit
-        stop_condition = params.get('condition')
-        items = list(range(1, max_loops + 1))
-
-        def run_body(item, index):
-            child = {**base_context, 'repeat_index': item}
-            if var_name:
-                child['vars'] = {**(base_context.get('vars') or {}), var_name: item}
-            # ``repeat_until`` stops as soon as the condition holds, exactly like
-            # the historical ``while not condition`` loop.
-            if self._loop_iteration_allows(player_id, card, stop_condition, child):
-                raise LoopBreak()
-            self._run_effect_list(player_id, card, body, choice, child)
-
-        return run_loop_driver(self, items, run_body=run_body, stop_on_game_over=False, op='repeat_until')
+    # Round 32 / 批次 AA：``repeat_until`` 已并入 ``repeat`` 的 ``until`` 参数
+    # （默认 64 轮上限、每轮开头判停、停时 ``LoopBreak``——与旧实现逐字一致）。
 
     def _atomic_for_each(self, player_id, card, params, log, choice, context):
-        """Thin forwarder to the shared loop driver (Round 16 / batch 4).
+        """Round 16 / 批次 4 起是循环族唯一实现；Round 32 / 批次 AA 收编两条兄弟。
 
-        Old engine-style data (``targets: "friendly"`` + ``body``) keeps its
-        exact behaviour: the body runs once per resolved player with that player
-        as the acting player, and ``loop_player_id``/``loop_index`` are visible
-        to the nested steps.  The unified parameters (``as``/``limit``/
-        ``condition``/``break``/``continue``) come from the same implementation
-        the v2 runtime uses.
+        * ``source``/``items``/``targets``/``list``/``values`` 给迭代集合，
+          ``as``/``var``/``name`` 给循环变量；``bind:"target"`` 是旧的
+          ``for_each_target`` 预设。
+        * ``bind:"selected_card"`` 是旧 ``for_each_selected_card`` 的预设：
+          迭代当前选择窗口里的每张已选牌，逐张重绑 ``chosen_card``/
+          ``selected_card``/``selected_card_index``。
+        * 列表来源（旧的 ``for_each_list``）直接用 ``source: <列表表达式>``
+          表达——``_engine_loop_resolver`` 认 ``list_var``/``zone_list`` 等
+          引擎列表词表，默认变量名同样是 ``item``。
         """
+
         base_context = self._engine_loop_context(player_id, context)
         body = loop_body_from_params(params)
+        bind_mode = str(params.get('bind') or params.get('binding') or 'var').strip().lower()
+        if bind_mode in ('selected_card', 'selected_cards', 'chosen_card', 'card'):
+            return self._for_each_selected_cards(player_id, card, params, choice, context)
         items, var_name, _limit = plan_loop(
             self, base_context, params, op='for_each', default_source='friendly',
             resolver=self._engine_loop_resolver, limit_resolver=self._engine_loop_limit,
@@ -10959,7 +11051,6 @@ class GameEngine:
         store = self._var_store_for_target(player_id, 'self')
         store_had_old = var_name in store
         store_old_value = store.get(var_name)
-        bind_mode = str(params.get('bind') or params.get('binding') or 'var').strip().lower()
         bind_target = bind_mode in ('target', 'player', 'target_player')
 
         def bind(item, index):
@@ -11009,15 +11100,16 @@ class GameEngine:
             stop_on_game_over=False, op='for_each',
         )
 
-    def _atomic_for_each_selected_card(self, player_id, card, params, log, choice, context):
-        """``for_each_selected_card`` on the shared loop driver.
+    def _for_each_selected_cards(self, player_id, card, params, choice, context):
+        """``for_each(bind:"selected_card")`` 的迭代主体（Round 32 / 批次 AA）。
 
-        The active choice's ``target_instance_ids`` are the source; each
-        iteration rebinds ``chosen_card``/``selected_card`` (and
-        ``selected_card_index``) exactly like before.  ``limit``, ``condition``,
-        ``break``/``continue`` and the optional ``as`` loop variable are shared
-        with the rest of the loop family.
+        整段实现来自旧的 ``for_each_selected_card`` 原子：来源是当前选择窗口的
+        ``target_instance_ids``，每次迭代重绑 ``target_instance_id`` /
+        ``_selected_card_index`` 与 ``chosen_card``/``selected_card`` 上下文，
+        结束后把选择窗口恢复原状。``limit``/``condition``/``break``/``continue``
+        与可选 ``as`` 循环变量和其它循环成员共用同一套参数。
         """
+
         active_choice = choice if isinstance(choice, dict) else getattr(self, '_active_choice', None)
         if not isinstance(active_choice, dict):
             return
@@ -11027,7 +11119,7 @@ class GameEngine:
         base_context = self._engine_loop_context(player_id, context)
         body = loop_body_from_params(params)
         items, var_name, _limit = plan_loop(
-            self, base_context, params, op='for_each_selected_card', items_override=list(ids),
+            self, base_context, params, op='for_each', items_override=list(ids),
             limit_resolver=self._engine_loop_limit,
         )
         condition = loop_condition(params)
@@ -11074,7 +11166,7 @@ class GameEngine:
             active_choice['_selected_card_ids_snapshot'] = list(items)
             return run_loop_driver(
                 self, items, run_body=run_body, bind=bind, unbind=unbind,
-                stop_on_game_over=False, op='for_each_selected_card',
+                stop_on_game_over=False, op='for_each',
             )
         finally:
             if original_id is None:
@@ -12497,6 +12589,30 @@ class GameEngine:
 
     def get_enemy_equipment(self, player_id: int) -> List[EquipmentInstance]:
         return self.players[1 - player_id].equipment
+
+    def _data_step_targets(self, player_id, card, selector, context=None):
+        """Round 32 / 批次 AA：按 v2 运行时的词表解析一步的目标玩家集合。
+
+        生命 / 资源 / 抽牌三族原先由运行时用 ``resolve_v2_target`` +
+        ``_as_player_list`` 解析目标，里面有一组只有运行时认得的"上下文集合"
+        选择器（``all_selectable`` / ``play_targets`` / ``target_players`` …）；
+        合并进引擎原子后必须沿用同一套解析，否则 4 人局的
+        ``target:"all_selectable"`` 会从"全队"退化成"自己"。
+        运行时解析为空时回落引擎自己的选择器词表（老效果表的写法国）。
+        """
+
+        resolved = []
+        try:
+            from mod_runtime_v2 import _as_player_list as _rt_player_list
+            from mod_runtime_v2 import resolve_v2_target as _rt_resolve_target
+            runtime_context = dict(context) if isinstance(context, dict) else {}
+            runtime_context.setdefault('source_player', player_id)
+            resolved = list(_rt_player_list(self, _rt_resolve_target(self, runtime_context, selector)))
+        except Exception:
+            resolved = []
+        if not resolved:
+            resolved = self._list_effect_targets(player_id, card, selector, context)
+        return [target_id for target_id in resolved if self._valid_player_id(target_id)]
 
     def _list_effect_targets(self, player_id, card, selector, context=None):
         """Resolve a data-step target selector into a de-duplicated player list.
@@ -14687,7 +14803,7 @@ class GameEngine:
                     log = effect.get('log', '')
                 if context_name == 'play' and eff_type in self.EVENT_EFFECT_TYPES:
                     continue
-                if eff_type in self.PASSIVE_EFFECT_TYPES and context_name == 'play':
+                if self._fatal_declaration_kind(eff_type, params) and context_name == 'play':
                     if log:
                         self.log_msg(log)
                     continue
@@ -15588,7 +15704,10 @@ class GameEngine:
             return True
         for card in list(ps.hand):
             for effect in getattr(card.card_def, 'effects', []) or []:
-                if isinstance(effect, dict) and effect.get('type') == 'on_fatal_set_health_exile':
+                if not isinstance(effect, dict):
+                    continue
+                effect_params = effect.get('params', {}) or {}
+                if self._fatal_declaration_kind(effect.get('type'), effect_params) == self.FATAL_EXILE:
                     return True
         return False
 
@@ -15633,6 +15752,32 @@ class GameEngine:
                     )
         finally:
             self._stat_change_event_depth = depth
+
+    def _declared_aura_elixir_bonus(self, equipment, owner_id: int) -> int:
+        """Round 32 / 批次 AA：``aura_enemy_elixir_recovery`` 声明的合计数值。
+
+        旧声明写法是 ``{"type":"aura_enemy_elixir_recovery","params":{"amount":N}}``；
+        新写法是 ``{"op":"resource_op","mode":"aura_recovery","amount":N}``。
+        两种都读、逐条累加（旧实现就是累加），未声明时是 ``0``。
+        """
+
+        card_def = getattr(equipment, 'card_def', None)
+        card_instance = getattr(equipment, 'card_instance', None)
+        total = 0
+        for effect in getattr(card_def, 'effects', None) or []:
+            if not isinstance(effect, dict):
+                continue
+            params = effect.get('params') if isinstance(effect.get('params'), dict) else {}
+            eff_type = effect.get('type')
+            if eff_type == 'aura_enemy_elixir_recovery':
+                total += self._eval_int(owner_id, params.get('amount', 0), card_instance)
+            elif eff_type == 'resource_op' and str(params.get('mode') or '').strip().lower() in (
+                'aura', 'aura_recovery', 'aura_enemy_elixir_recovery',
+            ):
+                total += self._eval_int(
+                    owner_id, params.get('amount', params.get('delta', 0)), card_instance,
+                )
+        return total
 
     def _spend_resource(self, player_id: int, resource: str, amount: int, source_card: Optional[CardInstance] = None) -> int:
         if not (0 <= player_id < len(self.players)):
@@ -16253,10 +16398,7 @@ class GameEngine:
             elixir_recovery = ELIXIR_RECOVERY
             from engine_runtime_support import declared_elixir_recovery_aura
             for eq in list(opp.equipment):
-                if eq.card_def.effects:
-                    for effect in eq.card_def.effects:
-                        if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
-                            elixir_recovery += self._eval_int(opp_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+                elixir_recovery += self._declared_aura_elixir_bonus(eq, opp_id)
                 aura = declared_elixir_recovery_aura(self, eq, opp_id)
                 elixir_recovery += aura.elixir
                 if aura.overload > 0:
@@ -16384,10 +16526,7 @@ class GameEngine:
             elixir_recovery = ELIXIR_RECOVERY
             from engine_runtime_support import declared_elixir_recovery_aura
             for eq in list(opp.equipment):
-                if eq.card_def.effects:
-                    for effect in eq.card_def.effects:
-                        if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
-                            elixir_recovery += self._eval_int(opp_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+                elixir_recovery += self._declared_aura_elixir_bonus(eq, opp_id)
                 aura = declared_elixir_recovery_aura(self, eq, opp_id)
                 elixir_recovery += aura.elixir
                 if aura.overload > 0:
@@ -17160,8 +17299,9 @@ class GameEngine:
     def _atomic_trigger_manual(self, player_id, card, params, log, choice, context):
         return None
 
-    def _atomic_aura_enemy_elixir_recovery(self, player_id, card, params, log, choice, context):
-        return None
+    # Round 32 / 批次 AA：``aura_enemy_elixir_recovery`` 已并入
+    # ``resource_op(mode:"aura_recovery")``（声明本身是空操作，数值由
+    # ``_declared_aura_elixir_bonus`` 在回合开始的 E 回复里读）。
 
     # Round 31 / 批次 Z：``destroy_self_equipment`` / ``destroy_current_equipment``
     # 已并入 ``destroy_equipment(mode:"self")``（``source`` 仍是可选的摧毁者）。
@@ -18159,20 +18299,9 @@ class GameEngine:
             return
         self.log_msg(log or f"{self.pn(player_id)}抽1张牌")
 
-    def _atomic_coffee_gain_e(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not (0 <= target_id < len(self.players)):
-            target_id = player_id
-        target = self.players[target_id]
-        amount = self._eval_int(player_id, params.get('amount', 2), card, 2)
-        target.gain_elixir(amount)
-        target.coffee_first_use = False
-        target.custom_vars['咖啡首次使用'] = 0
-        if card is not None:
-            card.heavy_value = max(0, int(getattr(card, 'heavy_value', 0) or 0)) + 1
-            card.instance_flags.add('heavy')
-            card.disabled_flags.discard('heavy')
-        self.log_msg(log or f"{self.pn(target_id)}获得{amount}E；本牌获得1层沉重")
+    # Round 32 / 批次 AA：``coffee_gain_e`` 已并入
+    # ``resource_op(resource:"e", delta:N, reset_coffee:true, card_heavy:1)``
+    # （默认战报仍是"获得{n}E；本牌获得1层沉重"）。
 
     def _atomic_copy_choice_with_discount(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
@@ -18616,27 +18745,8 @@ class GameEngine:
                 source=self.pn(player_id), amount=int(total), damage=int(total),
             ))
 
-    def _atomic_lose_health(self, player_id, card, params, log, choice, context):
-        amount = max(0, self._eval_int(player_id, params.get('amount', 0), card))
-        source_id = self._resolve_target(player_id, params.get('source', 'self'))
-        source = str(params.get('source_text', getattr(card, 'name_cn', '效果')))
-        for tid in self._resolve_targets(player_id, params.get('target', 'self')):
-            if not (0 <= tid < len(self.players)) or amount <= 0:
-                continue
-            ps = self.players[tid]
-            if ps.invincible:
-                self._record_achievement_damage_output(source_id, amount)
-                self.log_msg(f"{self.pn(tid)}无敌，免疫{source}伤害")
-                continue
-            old_health = ps.health
-            ps.health -= amount
-            health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
-            self._bio_stem_cell_after_health_loss(tid, health_lost)
-            self._note_achievement_health(tid)
-            self._record_damage(tid, amount, source_id)
-            self.log_msg(log or f"{self.pn(tid)}受到{amount}点{source}伤害（H={ps.health}）")
-            self._check_yggdrasil(tid)
-        self._check_game_over()
+    # Round 32 / 批次 AA：``lose_health`` 已并入 ``health_op(mode:"lose")``
+    # （实现整段搬进 ``_atomic_health_op``，含无敌分支与 ``_check_game_over``）。
 
     def _atomic_destroy_equipment(self, player_id, card, params, log, choice, context):
         """Round 29 + Round 31：摧毁装备族的唯一实现。
@@ -18816,113 +18926,234 @@ class GameEngine:
         if eq is not None:
             eq.corruption_active = True
 
-    def _atomic_heal(self, player_id, card, params, log, choice, context):
+    def _atomic_health_op(self, player_id, card, params, log, choice, context):
+        """Round 32 / 批次 AA：生命族六合一。
+
+        覆盖 ``heal`` / ``lose_health`` / ``set_health`` / ``swap_health`` /
+        ``on_fatal_set_health_exile`` / ``on_fatal_invincible_then_die``：
+        ``mode`` 选 ``heal``（默认）/ ``lose`` / ``set`` / ``swap`` / ``fatal``，
+        ``fatal`` 再用 ``kind`` 选 ``exile`` / ``invincible_die``。
+
+        六段旧实现逐条搬进来，默认值、钳位与默认战报逐字保留：
+
+        * ``heal``：目标走 ``_list_effect_targets``（集合 / 广域选择器照常展开），
+          数值走 ``PlayerState.heal`` —— ``heal_block`` 减半并消耗一层、
+          ``_heal_callback``、上限 ``base_max_health`` 都在那里，原子本身不重复
+          实现；战报按**实际回复量**，``log_positive_only`` 与
+          ``silent``/``no_log``/``log:false`` 静音，未回复时默认播报"未回复生命"。
+        * ``lose``：无视护甲的失去生命，保留无敌免疫分支、成就记账、
+          ``_bio_stem_cell_after_health_loss``、``_record_damage``、世界树检查与
+          ``_check_game_over``（触发时点与旧实现一致）。
+        * ``set``：``max(0, min(amount, max_health))`` 上限截断 + 成就记账。
+        * ``swap``：两名玩家互换生命值，不钳位（旧实现就是直接赋值）。
+        * ``fatal``：**被动声明**，只点灯 / 播报；真正的触发在
+          ``_check_yggdrasil``（``exile``）与 ``_check_yggdrasil`` 的绷带分支
+          （``invincible_die``），与旧 ``on_fatal_*`` 原子完全一致。
+        """
+
+        raw_mode = str(params.get('mode') or '').strip().lower()
+        kind = str(params.get('kind') or '').strip().lower()
+        if not raw_mode and kind in ('exile', 'invincible_die', 'bandage', 'die', 'invincible'):
+            raw_mode = 'fatal'
+        mode = raw_mode or 'heal'
+
+        if mode in ('lose', 'lose_health', 'losehealth'):
+            amount = max(0, self._eval_int(player_id, params.get('amount', 0), card))
+            source_id = self._resolve_target(player_id, params.get('source', 'self'))
+            source = str(params.get('source_text', getattr(card, 'name_cn', '效果')))
+            for tid in self._resolve_targets(player_id, params.get('target', 'self')):
+                if not (0 <= tid < len(self.players)) or amount <= 0:
+                    continue
+                ps = self.players[tid]
+                if ps.invincible:
+                    self._record_achievement_damage_output(source_id, amount)
+                    self.log_msg(f"{self.pn(tid)}无敌，免疫{source}伤害")
+                    continue
+                old_health = ps.health
+                ps.health -= amount
+                health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
+                self._bio_stem_cell_after_health_loss(tid, health_lost)
+                self._note_achievement_health(tid)
+                self._record_damage(tid, amount, source_id)
+                self.log_msg(log or f"{self.pn(tid)}受到{amount}点{source}伤害（H={ps.health}）")
+                self._check_yggdrasil(tid)
+            self._check_game_over()
+            return
+
+        if mode in ('set', 'set_health', 'sethealth'):
+            amount = self._eval_int(player_id, params.get('amount', params.get('value', 60)), card, 60)
+            for target_id in self._resolve_targets(player_id, params.get('target', 'self')):
+                if 0 <= target_id < len(self.players):
+                    self.players[target_id].health = max(0, min(amount, self.players[target_id].max_health))
+                    self._note_achievement_health(target_id)
+                    if log is False:
+                        continue
+                    self.log_msg(self._format_step_log(
+                        log or f"{self.pn(target_id)}血量设为{amount}",
+                        target=self.pn(target_id),
+                        source=self.pn(player_id),
+                        amount=amount,
+                    ))
+            return
+
+        if mode in ('swap', 'swap_health', 'swaphealth'):
+            t1 = self._resolve_target(player_id, params.get('target1', 'self'))
+            t2 = self._resolve_target(player_id, params.get('target2', 'enemy'))
+            if not (self._valid_player_id(t1) and self._valid_player_id(t2)):
+                return
+            h1 = self.players[t1].health
+            h2 = self.players[t2].health
+            self.players[t1].health = h2
+            self.players[t2].health = h1
+            self._note_achievement_health(t1)
+            self._note_achievement_health(t2)
+            self.log_msg(log or f"{self.pn(t1)}与{self.pn(t2)}交换生命值")
+            return
+
+        if mode in ('fatal', 'on_fatal', 'death'):
+            if kind in ('invincible_die', 'bandage', 'die', 'invincible'):
+                if self._status_application_blocked(player_id, 'bandage_active'):
+                    return
+                self.players[player_id].bandage_active = True
+                self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；自己回合结束时死亡")
+                return
+            health_amount = params.get('health', 5)
+            self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}被动效果：受到致命伤害时清除所有效果，生命值设为{health_amount}，无敌直到下一个自己回合结束")
+            return
+
+        # ``mode`` 缺省 = 旧的 ``heal``。
         amount = self._eval_int(player_id, params.get('amount', 0), card)
-        for target_id in self._list_effect_targets(player_id, card, params.get('target', 'self'), context):
+        positive_only = bool(params.get('log_positive_only'))
+        silent = log is False or params.get('silent') or params.get('no_log')
+        for target_id in self._data_step_targets(player_id, card, params.get('target', 'self'), context):
             before = self.players[target_id].health
             self.players[target_id].heal(amount)
             healed = max(0, self.players[target_id].health - before)
-            if log is False or params.get('silent') or params.get('no_log'):
+            if silent or (positive_only and healed <= 0):
                 continue
-            if log:
-                if healed <= 0:
-                    continue
-                self.log_msg(self._format_step_log(
-                    log,
-                    target=self.pn(target_id),
-                    amount=healed,
-                    source=self.pn(player_id),
-                ))
-                continue
-            self.log_msg(
+            # 自定义模板照旧用**实际回复量**渲染；模板在满血时也照播（旧运行时
+            # 分支的行为，卡数据里的"毒回复"句因此逐字保留），要静音就写
+            # ``log_positive_only``。
+            default_line = (
                 f"{self.pn(target_id)}回复{healed}H"
                 if healed
                 else f"{self.pn(target_id)}未回复生命"
             )
+            if log:
+                self.log_msg(self._format_step_log(
+                    log,
+                    target=self.pn(target_id),
+                    amount=healed,
+                    count=healed,
+                    source=self.pn(player_id),
+                ) or default_line)
+                continue
+            self.log_msg(default_line)
 
     def _atomic_draw(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self.players[target_id].draw_cards(amount)
-        if log is False or params.get('silent') or params.get('no_log'):
-            return
-        # 反馈 #84：旧的 ``draw`` 原子直接把 ``log`` 原样打印，数据里的
-        # ``{target}因血受到伤害并抽{amount}张牌`` 会连占位符一起显示在战报里。
-        self.log_msg(
-            self._format_step_log(
-                log, target=self.pn(target_id), source=self.pn(player_id),
-                amount=amount, count=amount,
-            ) or f"{self.pn(target_id)}抽{amount}张牌"
-        )
+        """Round 32 / 批次 AA：抽牌族四合一。
 
-    def _atomic_draw_cards(self, player_id, card, params, log, choice, context):
-        """Engine-path counterpart of the v2 runtime ``draw_cards`` step.
+        覆盖 ``draw``（引擎原子）/ ``draw_cards``（引擎原子 + 运行时原生分支）/
+        ``equip_reduce_draw``（抽牌修正），参数是 ``count``（旧 ``amount``，
+        默认 1）+ ``modifiers``。
 
-        Nested bodies that run through :meth:`_run_effect_list` (timer bodies,
-        ``once_per_play`` blocks, old-style effect steps) cannot reach the v2
-        runtime, so the same step name needs an atomic here.  The v2 runtime
-        still owns top-level data steps; this one only serves nested bodies.
+        * 抽牌本身：``hooks:false`` 时直接 ``PlayerState.draw_cards``（旧 ``draw``
+          的路径，不触发 ``before_draw``/``after_draw`` 事件）；默认
+          ``hooks:true`` 走 ``_draw_cards_with_v2_hooks``（旧 ``draw_cards``
+          的路径），两条路径的默认值都与各自旧实现一致。
+        * 战报数量：``log_amount`` 选 ``requested``（旧 ``draw``：播报请求值）
+          或 ``drawn``（默认，旧 ``draw_cards``：播报真正到手的张数）。
+          ``suppress_detail_logs``（卡面 ``on_play_summary`` 声明）在这一层
+          统一生效。
+        * ``modifiers`` 是抽牌修正列表（也接受单个 dict 或字符串）：目前支持
+          ``{"type":"sluggish"|"reduce_draw","amount":N,"target":sel,"log":...}``，
+          即旧 ``equip_reduce_draw`` 的"给目标叠迟缓"（默认战报"敌方获得N层迟缓"
+          逐字保留）。``count`` 为 0 时只结算修正、不抽牌也不播报抽牌。
         """
-        targets = self._resolve_step_targets(player_id, card, params.get('target', 'self'), context)
+
+        targets = self._data_step_targets(player_id, card, params.get('target', 'self'), context)
         if not targets:
             targets = [player_id]
-        amount_expr = params.get('amount', params.get('count', 1))
+        amount_expr = params.get('count', params.get('amount', 1))
         amount = max(0, self._eval_int(player_id, amount_expr, card, 1))
+        use_hooks = params.get('hooks', params.get('use_hooks', True)) is not False
+        log_requested = str(params.get('log_amount') or '').strip().lower() in (
+            'requested', 'declared', 'intended', 'asked',
+        )
+        silent = log is False or params.get('silent') or params.get('no_log')
+        suppress = isinstance(context, dict) and bool(context.get('suppress_detail_logs'))
+        for modifier in self._draw_modifier_specs(params):
+            self._apply_draw_modifier(player_id, card, modifier, context)
+        if amount <= 0:
+            return
         for target_id in targets:
             if not self._valid_player_id(target_id):
                 continue
-            if hasattr(self, '_draw_cards_with_v2_hooks'):
-                drawn = self._draw_cards_with_v2_hooks(target_id, amount, 'mod_draw_cards')
+            if use_hooks and hasattr(self, '_draw_cards_with_v2_hooks') and not (
+                isinstance(context, dict) and context.get('current_event') in ('before_draw', 'after_draw')
+            ):
+                drawn = self._draw_cards_with_v2_hooks(target_id, amount, 'draw')
             else:
                 drawn = self.players[target_id].draw_cards(amount)
-            if log is False or params.get('silent') or params.get('no_log'):
+            if silent or suppress:
                 continue
-            if log:
-                self.log_msg(self._format_step_log(
+            log_count = amount if log_requested else len(drawn)
+            # 反馈 #84：``log`` 里的占位符要在这里格式化，不能原样打印。
+            self.log_msg(
+                self._format_step_log(
                     log, target=self.pn(target_id), source=self.pn(player_id),
-                    amount=len(drawn), count=len(drawn),
-                ))
+                    amount=log_count, count=log_count,
+                ) or f"{self.pn(target_id)}抽{log_count}张牌"
+            )
+
+    @staticmethod
+    def _draw_modifier_specs(params) -> list:
+        raw = params.get('modifiers', params.get('modifier'))
+        if raw is None:
+            return []
+        if isinstance(raw, (str, dict)):
+            return [raw]
+        if isinstance(raw, (list, tuple)):
+            return list(raw)
+        return []
+
+    def _apply_draw_modifier(self, player_id, card, modifier, context) -> None:
+        """结算一条 ``draw`` 修正（目前只有旧 ``equip_reduce_draw`` 的迟缓）。"""
+
+        if isinstance(modifier, str):
+            spec = {'type': modifier}
+        elif isinstance(modifier, dict):
+            spec = modifier
+        else:
+            return
+        kind = str(spec.get('type') or spec.get('kind') or spec.get('op') or '').strip().lower()
+        if kind not in ('sluggish', 'reduce_draw', 'draw_reduce', '迟缓'):
+            return
+        amount = self._eval_int(player_id, spec.get('amount', 1), card, 1)
+        target_ids = self._resolve_step_targets(
+            player_id, card, spec.get('target', 'enemy'), context,
+        )
+        for target_id in target_ids:
+            if not self._valid_player_id(target_id):
                 continue
-            self.log_msg(f"{self.pn(target_id)}抽{len(drawn)}张牌")
+            self.players[target_id].sluggish += amount
+            self._note_achievement_status_peak(target_id)
+            if spec.get('log') is False:
+                continue
+            default = (
+                f"敌方获得{amount}层迟缓" if target_id != player_id
+                else f"{self.pn(target_id)}获得{amount}层迟缓"
+            )
+            self.log_msg(self._format_step_log(spec.get('log') or '', target=self.pn(target_id), amount=amount) or default)
 
     # Round 26: ``draw_to_hand_limit`` 的公式（手牌上限 - 手牌数）搬进了卡数据
     # ——``if(gap > 0)`` + ``draw_cards(amount: player_stat hand_limit - hand_count,
     # log_amount: "requested")``。旧名写在数据里会拿到 REMOVED_ATOMIC_OPS 的
     # 显式报错。
 
-    def _atomic_gain_e(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        amount_expr = params.get('amount', 1)
-        if isinstance(amount_expr, dict) and amount_expr.get('ref') in ('context_var', 'temp_var'):
-            amount = int((context or {}).get(str(amount_expr.get('name', '')), 0) or 0)
-        else:
-            amount = self._eval_int(player_id, amount_expr, card, 1)
-        if amount <= 0:
-            return
-        self.players[target_id].gain_elixir(amount)
-        if log is False or params.get('silent') or params.get('no_log'):
-            return
-        self.log_msg(
-            self._format_step_log(log, target=self.pn(target_id), amount=amount)
-            or f"{self.pn(target_id)}获得{amount}E"
-        )
-
-    def _atomic_gain_m(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        self.players[target_id].gain_magic(amount)
-        if log is False or params.get('silent') or params.get('no_log'):
-            return
-        self.log_msg(
-            self._format_step_log(log, target=self.pn(target_id), amount=amount)
-            or f"{self.pn(target_id)}获得{amount}M"
-        )
+    # Round 32 / 批次 AA：``gain_e`` / ``gain_m`` 已并入
+    # ``resource_op(resource:"e"/"m", delta:...)``（正数获得、负数消耗，
+    # 上限截断与默认战报逐字保留；见 ``_atomic_resource_op``）。
 
     def _atomic_magic_salt_reflect(self, player_id, card, params, log, choice, context):
         if not isinstance(context, dict):
@@ -21285,92 +21516,65 @@ class GameEngine:
     # Round 31 / 批次 Z：``var_set`` 兼容垫片已删除（``player_var_change(mode:"set")``
     # 是唯一实现；Round 30 已把 ``countdown_var`` 的内部调用改到规范名）。
 
-    def _atomic_list_set(self, player_id, card, params, log, choice, context):
-        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
-            store = self._var_store_for_target(player_id, target_ref)
-            store[str(params.get('name', 'list'))] = [self._serializable_list_item(v) for v in self._eval_list(player_id, params.get('list', []), card)]
+    def _atomic_list_modify(self, player_id, card, params, log, choice, context):
+        """Round 32 / 批次 AA：``list_set`` / ``list_append`` / ``list_insert`` /
+        ``list_delete`` / ``list_clear`` 五合一。
 
-    def _atomic_list_append(self, player_id, card, params, log, choice, context):
-        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
-            store = self._var_store_for_target(player_id, target_ref)
-            name = str(params.get('name', 'list'))
-            current = store.get(name, [])
-            if not isinstance(current, list):
-                current = [] if current is None else [current]
-            current.append(self._serializable_list_item(self._eval_raw_item(player_id, params.get('item', 0), card)))
-            store[name] = current
+        参数：``list`` 是**列表变量名**（旧的 ``name``，默认 ``"list"``），
+        ``mode`` 选 ``set`` / ``append`` / ``insert`` / ``delete`` / ``clear``
+        （也接受 ``action`` / ``list_op``，老式 ``{"type":...,"params":{...}}``
+        编码里还能直接写 ``op``），``index`` 是 insert/delete 的 1 基下标，
+        ``value`` 是写入值（append/insert 的单元素，set 的整张列表）。
 
-    def _atomic_list_insert(self, player_id, card, params, log, choice, context):
-        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
-            store = self._var_store_for_target(player_id, target_ref)
-            name = str(params.get('name', 'list'))
-            current = store.get(name, [])
-            if not isinstance(current, list):
-                current = [] if current is None else [current]
-            index = max(0, min(len(current), self._eval_int(player_id, params.get('index', 1), card, 1) - 1))
-            current.insert(index, self._serializable_list_item(self._eval_raw_item(player_id, params.get('item', 0), card)))
-            store[name] = current
-
-    def _atomic_list_delete(self, player_id, card, params, log, choice, context):
-        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
-            store = self._var_store_for_target(player_id, target_ref)
-            name = str(params.get('name', 'list'))
-            current = store.get(name, [])
-            if not isinstance(current, list):
-                current = [] if current is None else [current]
-            index = self._eval_int(player_id, params.get('index', 1), card, 1) - 1
-            if 0 <= index < len(current):
-                current.pop(index)
-            store[name] = current
-
-    def _atomic_list_clear(self, player_id, card, params, log, choice, context):
-        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
-            self._var_store_for_target(player_id, target_ref)[str(params.get('name', 'list'))] = []
-
-    def _atomic_for_each_list(self, player_id, card, params, log, choice, context):
-        """``for_each_list`` on the shared loop driver.
-
-        The list is evaluated with the engine list vocabulary (``list_var`` /
-        ``zone_list`` / literals) and the loop variable lives in the player var
-        store, exactly as before; ``limit``, ``condition``, ``break``/``continue``
-        and ``as``/``var``/``name`` are the shared loop parameters.
+        五段旧实现逐条保留：非列表的旧值先包成单元素列表（``None`` 视作空），
+        insert 的下标夹在 ``[0, len]``，delete 越界是空操作，set 逐项
+        ``_serializable_list_item`` 归一。
         """
-        base_context = self._engine_loop_context(player_id, context)
-        body = loop_body_from_params(params)
-        source = params.get('list', params.get('items', params.get('source')))
-        raw_items = self._eval_list(player_id, source if source is not None else [], card)
-        items, var_name, _limit = plan_loop(
-            self, base_context, params, op='for_each_list', source_override=source,
-            default_var='item', items_override=raw_items,
-            limit_resolver=self._engine_loop_limit,
-        )
-        condition = loop_condition(params)
-        store = self._var_store_for_target(player_id, params.get('target', 'self'))
-        had_old = var_name in store
-        old_value = store.get(var_name)
 
-        def bind(item, index):
-            if var_name:
-                store[var_name] = self._serializable_list_item(item)
+        action = str(
+            params.get('mode') or params.get('list_op') or params.get('action')
+            or params.get('op') or 'append'
+        ).strip().lower()
+        raw_name = params.get('list')
+        if isinstance(raw_name, str):
+            name = raw_name
+            value_expr = params.get('value', params.get('item'))
+        else:
+            name = str(params.get('name', 'list'))
+            value_expr = params.get('value', params.get('item', raw_name))
+        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
+            store = self._var_store_for_target(player_id, target_ref)
+            if action in ('set', 'list_set'):
+                store[name] = [
+                    self._serializable_list_item(v)
+                    for v in self._eval_list(player_id, value_expr if value_expr is not None else [], card)
+                ]
+                continue
+            if action in ('clear', 'list_clear'):
+                store[name] = []
+                continue
+            current = store.get(name, [])
+            if not isinstance(current, list):
+                current = [] if current is None else [current]
+            if action in ('append', 'list_append', 'push'):
+                current.append(self._serializable_list_item(
+                    self._eval_raw_item(player_id, value_expr if value_expr is not None else 0, card)
+                ))
+            elif action in ('insert', 'list_insert'):
+                index = max(0, min(len(current), self._eval_int(player_id, params.get('index', 1), card, 1) - 1))
+                current.insert(index, self._serializable_list_item(
+                    self._eval_raw_item(player_id, value_expr if value_expr is not None else 0, card)
+                ))
+            elif action in ('delete', 'remove', 'list_delete'):
+                index = self._eval_int(player_id, params.get('index', 1), card, 1) - 1
+                if 0 <= index < len(current):
+                    current.pop(index)
+            store[name] = current
 
-        def unbind(paused):
-            if not var_name:
-                return
-            if had_old:
-                store[var_name] = old_value
-            else:
-                store.pop(var_name, None)
-
-        def run_body(item, index):
-            child = {**base_context, 'list_index': index}
-            if not self._loop_iteration_allows(player_id, card, condition, child):
-                return None
-            self._run_effect_list(player_id, card, body, choice, child)
-
-        return run_loop_driver(
-            self, items, run_body=run_body, bind=bind, unbind=unbind,
-            stop_on_game_over=False, op='for_each_list',
-        )
+    # Round 32 / 批次 AA：``for_each_list`` 已并入
+    # ``for_each(source: <列表表达式>)``（``_engine_loop_resolver`` 认得
+    # ``list_var``/``zone_list`` 这些引擎列表词表，默认变量名同样是 ``item``），
+    # ``for_each_selected_card`` 并入 ``for_each(bind:"selected_card")``。
 
     def _equipment_matches_loop_filter(self, player_id, eq, params, card):
         loop_filter = str(params.get('filter', 'all') or 'all')

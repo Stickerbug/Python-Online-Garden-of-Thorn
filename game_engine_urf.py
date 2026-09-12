@@ -470,9 +470,7 @@ class GameEngineInfiniteFire(GameEngine):
                 elixir_recovery = ELIXIR_RECOVERY
                 for eq in list(opp.equipment):
                     if eq.card_def.effects:
-                        for effect in eq.card_def.effects:
-                            if isinstance(effect, dict) and effect.get('type') == 'aura_enemy_elixir_recovery':
-                                elixir_recovery += self._eval_int(opp_id, effect.get('params', {}).get('amount', 0), eq.card_instance)
+                        elixir_recovery += self._declared_aura_elixir_bonus(eq, opp_id)
                         continue
                     if eq.def_id == 'Pincer':
                         ps.overload += 1

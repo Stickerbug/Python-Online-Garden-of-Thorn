@@ -1336,8 +1336,10 @@ SAMPLE_SPOT_CHECKS = (
     ("deal_damage", "运行时 `amount` 默认 0 / 引擎默认 6，`target` 默认 `target` / `enemy`", "本表标 ⚠，见附录 C"),
     ("direct_damage", "`source_text` 三级回落（`source_text`→`source_name`→`label`）", "一致"),
     ("status_add_named", "`status`/`statuses`/`amount`/`stack`/`target`（共享 `_apply_status_add_family`）", "一致"),
-    ("heal", "`amount` 默认 0、`target` 默认 `self`（引擎）/`source`（运行时）、`log`/`log_positive_only`", "一致"),
-    ("draw_cards", "`amount` 回落 `count`（默认 1）、`target` 默认 `self`/`source`", "一致"),
+    ("health_op", "`mode`（heal/lose/set/swap/fatal）+ `amount`/`target`/`log`/`log_positive_only`/`kind`/`health`"
+                  "（Round 32 起生命族唯一实现）", "一致"),
+    ("draw", "`count` 回落 `amount`（默认 1）、`hooks`（默认 true）、`log_amount`（drawn/requested）、"
+             "`modifiers`（sluggish 修正）、`target`", "一致"),
     ("for_each", "`source/items/targets/list/collection/values`、`as/var/name`、`limit` 默认 200", "一致"),
     ("timed_effect", "`trigger`/`duration`/`effects`/`body`（运行时 `effects`→`body` 双向兼容）", "一致"),
     ("auto_play_card", "`card`/`target`/`auto_choice`/`no_cost`/`source_name`", "一致"),
@@ -1346,7 +1348,10 @@ SAMPLE_SPOT_CHECKS = (
     ("request_card", "整套 `filter`（zone/owner/card_type/…）同时驱动候选集、提交校验与 `play_requires`", "一致"),
     ("player_var_change", "`mode`（set/add/sub/mul/div）+ `target`/`name`/`value`（`name` 回落 `var`）", "一致"),
     ("log", "`message` 回落 `text`/`msg`，`amount` 可写表达式", "一致"),
-    ("gain_e", "`amount`/`target`/`log_positive_only`", "一致"),
+    ("resource_op", "`resource`（e/m）+ `delta` 回落 `amount`（正获得/负消耗）+ `mode`（spend/aura_recovery）"
+                    "+ `all`/`target`/`log_positive_only`/`reset_coffee`/`card_heavy`", "一致"),
+    ("modify_next_cost", "`delta` 回落 `amount`（正加费/负减费）+ `mode`（increase/reduce 显式方向）+ `target`/`card_type`", "一致"),
+    ("list_modify", "`list`（变量名，回落 `name`）+ `mode`（set/append/insert/delete/clear）+ `index`/`value`（回落 `item`）", "一致"),
     ("register_play_listener", "`scope`/`duration`/`body`/`exclude_card_ids`", "一致"),
     ("queue_auto_play", "`card`/`source`/`target`/`each_turn`/`cost`/`exile` 等 12 个键", "一致"),
     ("absorb_attack_damage", "`scope`/`body`/`once`（body 里读 `absorbed_damage`）", "一致"),

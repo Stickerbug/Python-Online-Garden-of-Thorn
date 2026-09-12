@@ -32,10 +32,14 @@ ADVANCED_ATOMIC_OPS = {
     # ``*_durability``，加上本批注销的 ``damage_multi``）从名单里移出：它们本来
     # 就在 ``run_v2_step`` 的"已移除/已改名"检查**之后**才会被读到，移出后行为
     # 不变，只是不再虚报"白名单里有实现"。
-    "after_all", "random", "break", "continue", "if_else", "repeat", "repeat_until",
-    "for_each", "for_each_selected_card", "for_each_list",
+    # Round 32 / 批次 AA：``if``/``repeat_until``/``for_each_list``/
+    # ``for_each_selected_card`` 并进 ``if_else`` / ``repeat`` / ``for_each``；
+    # 生命族并进 ``health_op``、资源族并进 ``resource_op``、费用族并进
+    # ``modify_next_cost``、抽牌族并进 ``draw``、列表族并进 ``list_modify``。
+    "after_all", "random", "break", "continue", "if_else", "repeat",
+    "for_each",
     "damage", "direct_damage", "lifesteal_damage", "triangle_damage",
-    "heal", "draw", "gain_e", "gain_m",
+    "health_op", "resource_op", "draw", "modify_next_cost",
     # Round 24：护甲/闪避族、状态三兄弟、清状态族、每回合修正族、资源族、
     # 全局倍率族、卡内标签族、装备减抽族各自合并成一条（旧名进
     # mod_spec_v2.REMOVED_ATOMIC_OPS，写出来是显式报错）。
@@ -43,9 +47,10 @@ ADVANCED_ATOMIC_OPS = {
     # Round 31 / 批次 Z：``clear_status`` / ``set_status_named`` / ``resource_spend``
     # 与玩家的 ``set_untargetable`` / ``untargetable_layers`` / ``set_invincible``
     # 已删除，换成本表里的规范名（``status_add_named`` 的 ``mode``、
-    # ``spend_resource``、``player_status_layers``）。
+    # ``player_status_layers``；``spend_resource`` 本身在 Round 32 又并进
+    # ``resource_op(mode:"spend")``）。
     "status_add_named", "status_remove_named",
-    "turn_mod_add", "spend_resource", "global_mult", "equip_reduce_draw",
+    "turn_mod_add", "global_mult",
     "choose_from_zone",
     "reveal_enemy_hand", "reveal_hand", "steal_enemy_card",
     "reveal_hand_cards",
@@ -59,14 +64,12 @@ ADVANCED_ATOMIC_OPS = {
     "block_action", "block_card_type", "force_card_type", "nullify_current_card",
     "skip_turn", "extra_turn",
     "player_status_layers",
-    "set_health",
     "force_end_turn", "mark_self_damage_source", "fission", "fusion",
-    "multiply_next_damage", "reduce_next_cost", "increase_next_cost",
+    "multiply_next_damage",
     "add_tag", "add_tag_to_zone",
     "transform_card", "card_counter", "create_counter",
-    "exile_this", "swap_health", "swap_hands", "broadcast_event", "modify_damage",
-    "list_set", "list_append", "list_insert", "list_delete",
-    "list_clear", "for_each_list", "timed_effect", "countdown_var",
+    "exile_this", "swap_hands", "broadcast_event", "modify_damage",
+    "list_modify", "timed_effect", "countdown_var",
     # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
     # (Round 1 draft names, never used by shipped data) were folded into
     # ``random_zone_card_to_hand``; see ``REMOVED_ATOMIC_OPS``.
@@ -83,13 +86,13 @@ ADVANCED_ATOMIC_OPS = {
     "card_damage_multiply", "equipment_prop_set",
     "discard_hand_by_paid_e", "restore_turn_start_stats", "restore_match_start_stats",
     "shuffle_hand",
-    "counter_pending_attack_damage", "lose_health",
-    "equipment_prop_add", "discard_choice_then_draw", "coffee_gain_e",
+    "counter_pending_attack_damage",
+    "equipment_prop_add", "discard_choice_then_draw",
     "activate_corruption", "request_target", "request_card", "request_confirm",
-    "response_declare", "aura_enemy_elixir_recovery", "on_any_turn_start",
+    "response_declare", "on_any_turn_start",
     "on_enemy_turn_start", "on_owner_turn_start", "on_owner_turn_end", "on_hand_owner_turn_start", "on_hand_owner_turn_end",
     "on_discard_owner_turn_start", "on_equipment_trigger", "on_equipment_destroy",
-    "on_damage_taken", "on_fatal_set_health_exile",
+    "on_damage_taken",
     "cogwheel_mark",
     "goggles_enable",
     "assembler_effect",
@@ -696,102 +699,10 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         context["last_damage"] = total
         return {"success": True, "last_damage": total}
 
-    if op == "heal":
-        amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", 0))))
-        for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "source"))):
-            if _valid_player(engine, target_id):
-                before = engine.players[target_id].health
-                engine.players[target_id].heal(amount)
-                healed = max(0, engine.players[target_id].health - before)
-                # ``log_positive_only`` keeps the old "回复N H" wording while
-                # staying silent when nothing was healed (no "未回复生命" line).
-                if params.get("log_positive_only") and healed <= 0:
-                    continue
-                rendered = _render_step_log(engine, step, params, {
-                    "target": engine.pn(target_id),
-                    "source": engine.pn(_player_id(engine, context.get("source_player", target_id))),
-                    "amount": healed,
-                    "count": healed,
-                })
-                if rendered is False:
-                    continue
-                if rendered:
-                    engine.log_msg(rendered)
-                elif healed:
-                    engine.log_msg(f"{engine.pn(target_id)}回复{healed}H")
-                else:
-                    engine.log_msg(f"{engine.pn(target_id)}未回复生命")
-        return {"success": True}
-
-    if op == "draw_cards":
-        amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", params.get("count", 1)))))
-        # Round 26: ``log_amount: "requested"`` prints the requested count
-        # instead of what the deck could actually supply.  "Draw up to the hand
-        # limit" needs that wording (the removed ``draw_to_hand_limit`` atom
-        # always announced the computed gap, even with an exhausted deck);
-        # the default stays "drawn" = the cards that really arrived.
-        log_requested = str(params.get("log_amount") or "").strip().lower() in (
-            "requested", "declared", "intended", "asked",
-        )
-        for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "source"))):
-            if _valid_player(engine, target_id):
-                if hasattr(engine, "_draw_cards_with_v2_hooks") and context.get("current_event") not in ("before_draw", "after_draw"):
-                    drawn = engine._draw_cards_with_v2_hooks(target_id, amount, "v2_runtime")
-                else:
-                    drawn = engine.players[target_id].draw_cards(amount)
-                if not context.get("suppress_detail_logs"):
-                    log_count = amount if log_requested else len(drawn)
-                    rendered = _render_step_log(engine, step, params, {
-                        "target": engine.pn(target_id),
-                        "source": engine.pn(_player_id(engine, context.get("source_player", target_id))),
-                        "amount": log_count,
-                        "count": log_count,
-                    })
-                    if rendered:
-                        engine.log_msg(rendered)
-                    elif rendered is not False:
-                        engine.log_msg(f"{engine.pn(target_id)}抽{log_count}张牌")
-        return {"success": True}
-
-    if op in ("gain_e", "gain_m"):
-        amount = _to_int(eval_v2_value(engine, context, params.get("amount", 0)))
-        for target_id in _as_player_list(engine, resolve_v2_target(engine, context, params.get("target", "source"))):
-            if not _valid_player(engine, target_id):
-                continue
-            player_state = engine.players[target_id]
-            if op == "gain_e":
-                before_value = int(getattr(player_state, "elixir", 0) or 0)
-            else:
-                before_value = int(getattr(player_state, "magic", 0) or 0)
-            if op == "gain_e":
-                if amount < 0:
-                    engine.players[target_id].elixir = max(0, int(engine.players[target_id].elixir) + amount)
-                else:
-                    engine.players[target_id].gain_elixir(amount)
-                default_log = f"{engine.pn(target_id)}获得{amount}E"
-            else:
-                if amount < 0:
-                    engine.players[target_id].magic = max(0, int(engine.players[target_id].magic) + amount)
-                else:
-                    engine.players[target_id].gain_magic(amount)
-                default_log = f"{engine.pn(target_id)}获得{amount}M"
-            after_value = int(getattr(player_state, "elixir" if op == "gain_e" else "magic", 0) or 0)
-            gained = after_value - before_value
-            # ``log_positive_only`` mirrors engines atoms that stayed silent
-            # when the resource was already at its cap.
-            if params.get("log_positive_only") and gained <= 0:
-                continue
-            rendered = _render_step_log(engine, step, params, {
-                "target": engine.pn(target_id),
-                "source": engine.pn(_player_id(engine, context.get("source_player", target_id))),
-                "amount": amount,
-                "count": amount,
-                "gained": gained,
-            })
-            if rendered is False:
-                continue
-            engine.log_msg(rendered or default_log)
-        return {"success": True}
+    # Round 32 / 批次 AA：``heal`` / ``draw_cards`` / ``gain_e`` / ``gain_m``
+    # 的运行时原生分支已经删除——它们各自并进引擎原子 ``health_op`` / ``draw`` /
+    # ``resource_op``，两条执行路径因此共用同一份实现（默认值、钳位与战报都
+    # 只在原子那一处）。旧名字写出来会先撞上下面的 RENAMED_ATOMIC_OPS 显式报错。
 
     # Round 30 / 批次 Y：运行时侧再没有 ``add_status`` / ``remove_status`` /
     # ``set_status`` 分支——三条旧写法（Round 15 起是"默认播报层数"的运行时
@@ -821,7 +732,12 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     # 下面的 ``_try_run_engine_atomic_op``——旧写法 ``destroy_equipment(equipment=...)``
     # 走 ``mode:"choice"`` 的默认值，语义与原来的薄封装一致（点选 → 指定 → 第一件）。
 
-    if op == "if":
+    # Round 32 / 批次 AA：``if`` 并入 ``if_else``。控制流是"语言内置"，这里
+    # 和循环族一样保留原生驱动：``then``/``else`` 的嵌套步骤继续由 v2 运行时
+    # 逐条执行（取值表达式词表、UI 暂停/恢复与批前逐字一致），引擎效果表与
+    # 引擎侧嵌套体走 ``_atomic_if_else``，两边共用 condition/then/else 契约。
+    # 旧名 ``if`` 不再有分支，会落到下面的 RENAMED_ATOMIC_OPS 显式报错。
+    if op == "if_else":
         branch = step.get("then", []) if check_v2_condition(engine, context, step.get("condition", step.get("cond"))) else step.get("else", [])
         return run_v2_steps(engine, context, branch or [])
 
@@ -831,6 +747,28 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         # break/continue, target rebinding).  Only the body runner differs: the
         # runtime entry point keeps executing v2 steps here, so a UI request
         # inside the body can still pause and resume.
+        #
+        # Round 32 / 批次 AA：两个"引擎专属"预设在这里直接转交给引擎原子——
+        # ``bind:"selected_card"``（旧 ``for_each_selected_card``）与列表来源
+        # （``zone_list``/``list_var`` 这类旧 ``for_each_list`` 的来源，运行时
+        # 的 ``resolve_v2_target`` 不认识它们）。两个预设原本就走引擎路径，
+        # 转交后执行路径与批前逐字一致。
+        source_expr = None
+        for _key in LOOP_SOURCE_KEYS:
+            if isinstance(params, dict) and params.get(_key) is not None:
+                source_expr = params.get(_key)
+                break
+        source_ref = ""
+        if isinstance(source_expr, dict):
+            source_ref = str(source_expr.get("ref") or source_expr.get("op") or source_expr.get("type") or "")
+        _bind_mode = str(params.get("bind") or params.get("binding") or "var").strip().lower()
+        if _bind_mode in ("selected_card", "selected_cards", "chosen_card", "card") or source_ref in (
+            "zone_list", "list_var", "list_item", "card_def_tags",
+        ):
+            delegated = _try_run_engine_atomic_op(engine, context, op, params, step)
+            if delegated is not None:
+                return delegated
+            raise V2RuntimeError(f"unsupported v2 op: {op}")
         body = loop_body_from_params(step)
         if not body:
             body = loop_body_from_params(params)
