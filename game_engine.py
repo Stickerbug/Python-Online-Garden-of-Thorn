@@ -10353,6 +10353,14 @@ class GameEngine:
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if target_card is None:
             return
+        # Round 39 / 批次 AE: data-driven guards, so "apply tag X only when the
+        # card has/lacks tag Y" no longer needs its own atom.
+        when_tag = normalize_card_flag(params.get('when_tag', ''))
+        if when_tag and when_tag not in self._effective_card_flags(target_card):
+            return
+        unless_tag = normalize_card_flag(params.get('unless_tag', ''))
+        if unless_tag and unless_tag in self._effective_card_flags(target_card):
+            return
         if mode == 'clear':
             all_flags = self._effective_card_flags(target_card)
             target_card.instance_flags = set()
@@ -10381,19 +10389,6 @@ class GameEngine:
         if params.get('silent') or params.get('no_log') or log is False:
             return
         self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
-
-    def _atomic_third_eye_precision_or_hidden(self, player_id, card, params, log, choice, context):
-        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'chosen_card'}), card)
-        if target_card is None and isinstance(context, dict):
-            value = context.get('chosen_card')
-            if isinstance(value, CardInstance):
-                target_card = value
-        if target_card is None:
-            return
-        if 'precision' in self._effective_card_flags(target_card):
-            target_card.instance_flags.add('stealth')
-        else:
-            target_card.instance_flags.add('precision')
 
     def _atomic_grant_temp_swift_highest_e(self, player_id, card, params, log, choice, context):
         target_id = self._resolve_target(player_id, params.get('target', 'self'))

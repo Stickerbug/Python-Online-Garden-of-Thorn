@@ -315,7 +315,6 @@ _CORE_LOGIC_OPS = {
     # ``on_event(trigger:"equipment_trigger", effect:"magic_relic")``。
     "electric_web_arm",
     "magic_salt_reflect",
-    "third_eye_precision_or_hidden",
     "grant_temp_swift_highest_e",
     # Round 37 / 批次 AD-2：``delayed_blind_next_turn`` /
     # ``delayed_reveal_hand_next_turn`` 并进
@@ -816,6 +815,9 @@ _FAMILY_HINT = {
 #
 # ``None`` 表示没有等价替代（原本就是空实现或未实现过的声明性名字）。
 REMOVED_ATOMIC_OPS = {
+    # Round 39 / 批次 AE：第三只眼下沉为 tag_op(when_tag/unless_tag)。
+    "third_eye_precision_or_hidden": "{\"op\": \"tag_op\", \"action\": \"add\", \"card\": \"selected_card\", \"tag\": \"stealth\", \"when_tag\": \"precision\", \"log\": false}",
+
     # Round 24（C 类同形小原子合并）：下面这批名字的形状几乎相同，差异都能被
     # 参数覆盖，已合并成右边给出的规范写法。旧数据写旧名会在校验层与运行时
     # 拿到"已移除 + 替代写法"的显式报错（不静默）。

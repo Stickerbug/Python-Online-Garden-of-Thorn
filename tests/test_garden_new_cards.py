@@ -201,18 +201,21 @@ class GardenNewCardsTests(unittest.TestCase):
     def test_third_eye_grants_precision_then_stealth_without_extra_log(self):
         engine = self.action_engine()
         target = CardInstance("Basic")
-        params = {"card": {"ref": "current_card"}}
+        steps = [
+            {"op": "tag_op", "action": "add", "card": "selected_card", "tag": "stealth",
+             "when_tag": "precision", "log": False},
+            {"op": "tag_op", "action": "add", "card": "selected_card", "tag": "precision",
+             "unless_tag": "precision", "log": False},
+        ]
+        context = {"selected_card": target}
         original_log = list(engine.log)
 
-        engine._atomic_third_eye_precision_or_hidden(
-            0, target, params, "不应显示的精准日志", None, {}
-        )
+        engine._run_effect_list(0, target, steps, None, context)
         self.assertIn("precision", target.instance_flags)
+        self.assertNotIn("stealth", target.instance_flags)
         self.assertEqual(engine.log, original_log)
 
-        engine._atomic_third_eye_precision_or_hidden(
-            0, target, params, "不应显示的隐匿日志", None, {}
-        )
+        engine._run_effect_list(0, target, steps, None, context)
         self.assertIn("stealth", target.instance_flags)
         self.assertEqual(engine.log, original_log)
 
