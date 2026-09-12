@@ -3440,6 +3440,11 @@ const CARD_FLAG_ALIASES = {
     tag_multi_petal_fission: '',
     'gtn:multi_petal_fission': '',
     'tag_gtn:multi_petal_fission': '',
+    // 反馈 #105：自动打出队列的内部标记；归一化后由 shouldDisplayCardFlag
+    // 默认隐藏，调试开关仍可显示。
+    auto_play_no_queue: 'auto_play_no_queue',
+    flag_auto_play_no_queue: 'auto_play_no_queue',
+    tag_auto_play_no_queue: 'auto_play_no_queue',
     ocean_no_auto: 'ocean_no_auto',
     flag_ocean_no_auto: 'ocean_no_auto',
     tag_ocean_no_auto: 'ocean_no_auto',
@@ -4283,7 +4288,7 @@ function renderComputedCardTextTokenHtml(token) {
     return `<span class="${className}"${termAttr}>${renderComputedCardTextTokenContent(token && token.raw)}</span>`;
 }
 
-function colorizeCardText(value) {
+function colorizeCardText(value, options = {}) {
     const text = String(value || '')
         .replace(/\bSwiftness\b/gi, 'Swift')
         .replace(/(?:魔法球|Mana\s*Orb)（萌芽、共生）|(?:魔法球|Mana\s*Orb)\(\s*萌芽\s*[+＋、,，]\s*共生\s*\)|\[(?:魔法球|Mana\s*Orb)\]\s*\[\s*萌芽\s*[+＋、,，]\s*共生\s*\]/gi, '[[card:ManaOrb|flag=sprout|flag=symbiosis]]')
@@ -4346,25 +4351,29 @@ function colorizeCardText(value) {
             continue;
         }
         let matched = null;
-        for (const rule of CARD_TEXT_TOKEN_RULES) {
-            const m = rest.match(rule.re);
-            if (m && m[0]) {
-                matched = { cls: rule.cls, text: m[0] };
-                break;
-            }
-        }
-        if (!matched) {
-            for (const rule of getLocalizedCardTextTokenRules()) {
+        // 反馈 #114：风味描述只处理显式标记（[[icon:]]/[[status:]]/[[card:]] 等），
+        // 不再跑裸词关键词匹配，避免“赎回虚无”里的“虚无”被当作术语加粗。
+        if (options.terms !== false) {
+            for (const rule of CARD_TEXT_TOKEN_RULES) {
                 const m = rest.match(rule.re);
                 if (m && m[0]) {
-                    matched = {
-                        cls: rule.cls,
-                        text: m[0],
-                        termKey: rule.termKey,
-                        color: rule.color,
-                        iconKey: rule.iconKey,
-                    };
+                    matched = { cls: rule.cls, text: m[0] };
                     break;
+                }
+            }
+            if (!matched) {
+                for (const rule of getLocalizedCardTextTokenRules()) {
+                    const m = rest.match(rule.re);
+                    if (m && m[0]) {
+                        matched = {
+                            cls: rule.cls,
+                            text: m[0],
+                            termKey: rule.termKey,
+                            color: rule.color,
+                            iconKey: rule.iconKey,
+                        };
+                        break;
+                    }
                 }
             }
         }
@@ -8695,7 +8704,9 @@ function ensureGalleryCardFilterState() {
 }
 
 function getAllGalleryFlags() {
-    const flags = new Set(Object.keys(CARD_FLAG_STYLES));
+    const flags = new Set(
+        Object.keys(CARD_FLAG_STYLES).filter(flag => shouldDisplayCardFlag(flag, { showSystemFlags: false }))
+    );
     Object.keys(CUSTOM_TAG_DEFS || {}).forEach(flag => {
         const normalized = normalizeCardFlag(flag);
         if (normalized && shouldDisplayCardFlag(normalized, { showSystemFlags: false })) flags.add(normalized);
@@ -9937,7 +9948,7 @@ function classicFighterElementIdToPlayerId(elementId) {
 }
 
 function getEquipmentTriggerTargetOptions(cardDef, cardInst = null) {
-    if (cardHasSelfOnlyFlag(cardInst || {}, cardDef)) {
+    if (equipmentTriggerUsesEffectTarget(cardDef)) {
         return { includeSelf: true, candidates: 'self', aliveOnly: true };
     }
     if (equipmentTriggerForbidsSelfTarget(cardDef)) {
@@ -10206,7 +10217,7 @@ async function selectClassicTriggerEquipment(cardInst, cardDef, event = null) {
     if (!equipmentChoosesTargetOnTrigger(cardDef)) {
         return triggerEquipmentInstance(cardInst, cardDef);
     }
-    if (cardHasSelfOnlyFlag(cardInst, cardDef)) {
+    if (equipmentTriggerUsesEffectTarget(cardDef)) {
         return triggerEquipmentInstance(cardInst, cardDef, { targetPlayerId: normalizePlayerId(gameState && gameState.your_id) });
     }
     if (event && typeof event.clientX === 'number') classicAimPointer = { x: event.clientX, y: event.clientY };
@@ -11961,17 +11972,49 @@ function cardHasWideStrikeFlag(cardDict, cardDef = null) {
     return effective.has('wide_strike') || effective.has('tag_wide_strike') || effective.has('ocean:wide_strike') || effective.has('tag_ocean:wide_strike');
 }
 
+const INTERNAL_CARD_FLAG_SET = new Set([
+    'auto_play_no_queue',
+    'owner_target',
+    'attack_hits_only',
+    'retaliate_on_attack_hit',
+    'applies_hand_charge',
+    'blocks_special_effect_damage',
+    'blocks_special_effect_interference',
+    'preserve_fission',
+    'destroys_equipment',
+    'skip_legacy_snowball_replay',
+    'dna_turn_transform',
+]);
+
+const INTERNAL_CARD_FLAG_PREFIXES = [
+    'mark:',
+    'electric_web_',
+    'sponge_',
+    'shield_on_',
+    'absorb_damage_with_',
+    'ocean_spikeball_',
+];
+
+function isInternalCardFlag(normalized) {
+    if (INTERNAL_CARD_FLAG_SET.has(normalized)) return true;
+    if (INTERNAL_CARD_FLAG_PREFIXES.some(prefix => normalized.startsWith(prefix))) return true;
+    if (getCustomTagDef(normalized)) return false;
+    // t(key) 在缺翻译时会原样返回 key，因此用这个差值判断是否存在 UI 文案。
+    const hasLabel = t(`tag_${normalized}`) !== `tag_${normalized}`
+        || t(`flag_${normalized}`) !== `flag_${normalized}`;
+    if (hasLabel) return false;
+    if (CARD_FLAG_STYLES[normalized]) return false;
+    return true;
+}
+
 function shouldDisplayCardFlag(flag, options = {}) {
     const normalized = normalizeCardFlag(flag);
     if (!normalized) return false;
-    if (normalized === 'ocean_no_auto') return !!options.showSystemFlags;
-    if (normalized === 'infinite_exclude') return !!options.showSystemFlags;
-    if ([
-        'ocean_spikeball_boosted',
-        'ocean_spikeball_added_precision',
-        'ocean_spikeball_added_wide_strike',
-    ].includes(normalized)) return !!options.showSystemFlags;
-    if (normalized === 'multi_petal_fission') return !!options.showSystemFlags;
+    if (options.showSystemFlags) return true;
+    if (normalized === 'ocean_no_auto') return false;
+    if (normalized === 'infinite_exclude') return false;
+    if (normalized === 'multi_petal_fission') return false;
+    if (isInternalCardFlag(normalized)) return false;
     return true;
 }
 
@@ -14542,7 +14585,7 @@ function buildCardIntroSummaryHtml(cardDef) {
     if (!triggerText && !descriptionText) return '';
     return `
         <section class="term-intro-summary">
-            ${descriptionText ? `<div class="term-intro-flavor">${colorizeCardText(descriptionText)}</div>` : ''}
+            ${descriptionText ? `<div class="term-intro-flavor">${colorizeCardText(descriptionText, { terms: false })}</div>` : ''}
             ${triggerText ? `<div class="term-intro-summary-block">
                 <div class="term-intro-summary-label">触发</div>
                 <div class="term-intro-summary-text">${colorizeCardText(triggerText)}</div>
@@ -17267,8 +17310,21 @@ function thornDewTransactionReason(tx = {}) {
         const result = raw.includes('平局')
             ? lt({ zh: '平局', en: 'Draw', fr: 'Nul', ja: '引分' })
             : (raw.includes('胜利') ? lt({ zh: '胜利', en: 'Win', fr: 'Victoire', ja: '勝利' }) : '');
-        const multiplier = (raw.match(/×[\d.]+/) || [])[0] || '';
-        return [lt({ zh: '有效对局奖励', en: 'Valid match reward', fr: 'Récompense de partie valide', ja: '有効対戦報酬' }), mode, result, multiplier].filter(Boolean).join(' ');
+        // 反馈 #112：reason 里可能同时有“娱乐×0.75 / 新人×N / 衰减×N”，
+        // 旧实现只取第一个系数，导致每日衰减完全不显示。
+        const factorLabels = {
+            '娱乐': lt({ zh: '娱乐', en: 'Casual', fr: 'Détente', ja: 'カジュアル' }),
+            '新人': lt({ zh: '新人', en: 'Newcomer', fr: 'Nouveau', ja: '新人' }),
+            '衰减': lt({ zh: '衰减', en: 'Decay', fr: 'Décroissance', ja: '減衰' }),
+        };
+        const multipliers = [];
+        const factorRe = /([^\s×]+)×([\d.]+)/g;
+        let factorMatch;
+        while ((factorMatch = factorRe.exec(raw)) !== null) {
+            const name = factorMatch[1];
+            multipliers.push(`${factorLabels[name] || name}×${factorMatch[2]}`);
+        }
+        return [lt({ zh: '有效对局奖励', en: 'Valid match reward', fr: 'Récompense de partie valide', ja: '有効対戦報酬' }), mode, result, ...multipliers].filter(Boolean).join(' ');
     }
     return raw;
 }
@@ -31462,7 +31518,7 @@ async function triggerEquipmentInstance(cardInst, cardDef, options = {}) {
     if (equipmentChoosesTargetOnTrigger(cardDef)) {
         let targetId = normalizePlayerId(options.targetPlayerId ?? options.target_player_id);
         if (targetId == null) {
-            targetId = cardHasSelfOnlyFlag(cardInst, cardDef)
+            targetId = equipmentTriggerUsesEffectTarget(cardDef)
                 ? normalizePlayerId(gameState && gameState.your_id)
                 : await choosePlayerTarget(
                 UI.choose_target || UI.select_target || 'Choose target',
@@ -36739,7 +36795,12 @@ function renderBundledModList(category) {
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.id = `mod-cb-${category}-${i}`;
-        cb.checked = !errors.length && (casualUnlockMode ? unlockedForMode : !disabled.includes(filename));
+        // 反馈 #99：娱乐模组在娱乐模式下必须遵守已保存的启用偏好，不能只看
+        // “是否已解锁”；否则重开设置会把取消掉的模组显示成勾选，后续保存
+        // 又会把它们静默重新启用。
+        cb.checked = !errors.length && (
+            casualUnlockMode && !entertainment ? unlockedForMode : !disabled.includes(filename)
+        );
         cb.disabled = errors.length > 0 || locked || (casualUnlockMode && !entertainment);
         if (casualUnlockMode && (!entertainment || locked)) cb.dataset.locked = '1';
         cb.dataset.filename = filename;
