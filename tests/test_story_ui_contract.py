@@ -227,7 +227,7 @@ def test_story_event_card_references_render_as_interactive_chips():
 def test_story_tiles_and_inline_chips_cover_every_story_card_type_color():
     for card_type in ('thorn', 'bloom', 'root', 'guard', 'curse', 'infect'):
         assert f"{card_type}: 'var(--{card_type})'" in STORY_JS
-    assert "tile.style.setProperty('--tile-color', storyCardTypeColor(values.type));" in STORY_JS
+    assert "tile.style.setProperty('--tile-color', blinded ? '#7F8C8D' : storyCardTypeColor(values.type));" in STORY_JS
     assert "chip.style.setProperty('--story-chip-color', storyCardTypeColor(values.type));" in STORY_JS
     assert '--curse: #704b87;' in STORY_CSS
     assert '--infect: #7e9638;' in STORY_CSS
@@ -1478,3 +1478,16 @@ def test_story_equipment_orbit_keeps_angle_continuity_and_repays_dropped_frames(
     assert 'context.pendingMs = Math.min(' in EQUIPMENT_MOTION_JS
     assert 'context.pendingMs -= stepMs;' in EQUIPMENT_MOTION_JS
     assert 'Math.min(120, now - context.lastTime)' not in EQUIPMENT_MOTION_JS
+
+
+def test_story_blind_masks_piles_and_removes_damage_predictions():
+    """反馈 #120：失明时牌堆类窗口显示为失明，且引擎不再下发伤害预测。"""
+    assert 'function createStoryPileTile(card, count = 1, options = {})' in STORY_JS
+    assert 'const blinded = options.blinded === true;' in STORY_JS
+    assert 'createStoryPileTile(card, 1, { blinded: true })' in STORY_JS
+    assert 'const blindActive = Boolean(combat && combat.blind_active);' in STORY_JS
+    # 失明卡不挂真实卡数据，长按/详情面板不能绕过遮罩。
+    assert 'if (!blinded) storyCardElementData.set(element, card);' in STORY_JS
+    # 引擎侧：失明时不计算/不下发手牌伤害预测。
+    assert "if not bool(combat.get('blind_active')):" in STORY_ENGINE
+    assert "combat['damage_predictions'] = predictions" in STORY_ENGINE

@@ -5618,17 +5618,20 @@ def _refresh_combat_projections(state):
         return
     living = _living_enemies(combat)
     predictions = {}
-    for card in combat.get('hand', []):
-        by_target = {}
-        values = _card_values(card)
-        targets = _selectable_enemy_targets(combat, values) if values.get('target') == 'enemy' else living
-        for enemy in targets:
-            prediction = _card_damage_prediction(state, card, enemy)
-            if prediction:
-                by_target[enemy['id']] = prediction
-        if by_target:
-            first = next(iter(by_target.values()))
-            predictions[card['instance_id']] = {**first, 'by_target': by_target}
+    # 反馈 #120：失明期间不向客户端下发手牌伤害预测。只把卡面 prediction 关掉的话，
+    # activeRun.state / F12 仍能直接读到这些数值，所以必须在引擎侧跳过。
+    if not bool(combat.get('blind_active')):
+        for card in combat.get('hand', []):
+            by_target = {}
+            values = _card_values(card)
+            targets = _selectable_enemy_targets(combat, values) if values.get('target') == 'enemy' else living
+            for enemy in targets:
+                prediction = _card_damage_prediction(state, card, enemy)
+                if prediction:
+                    by_target[enemy['id']] = prediction
+            if by_target:
+                first = next(iter(by_target.values()))
+                predictions[card['instance_id']] = {**first, 'by_target': by_target}
     combat['damage_predictions'] = predictions
     combat['playable_card_ids'] = [
         card['instance_id']

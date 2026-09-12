@@ -1996,6 +1996,19 @@ def test_nuke_damage_and_prediction_receive_fusion_multiplier():
     assert state['combat']['next_attack_multiplier'] == 1
 
 
+def test_blind_hides_damage_predictions_from_state():
+    state, _ = _begin_combat('blind-prediction')
+    state['combat']['elixir'] = 3
+    card = _inject_hand_card(state, 'nuke')
+    state['combat']['enemies'][0]['shield'] = 0
+    _refresh_combat_projections(state)
+    assert card['instance_id'] in state['combat']['damage_predictions']
+
+    state['combat']['blind_active'] = True
+    _refresh_combat_projections(state)
+    assert state['combat']['damage_predictions'] == {}
+
+
 def test_multihit_stops_at_lethal_hit_without_dead_target_reactions():
     seed = 'story-multihit-lethal-stop'
     state, _ = _begin_combat(seed)

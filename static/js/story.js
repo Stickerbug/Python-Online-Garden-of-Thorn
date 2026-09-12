@@ -8078,25 +8078,31 @@
         });
     }
 
-    function createStoryPileTile(card, count = 1) {
+    function createStoryPileTile(card, count = 1, options = {}) {
         const values = cardValues(card);
         if (!values) return document.createTextNode('');
+        const blinded = options.blinded === true;
         const entry = document.createElement('div');
         entry.className = 'story-pile-entry';
         const tile = document.createElement('span');
         tile.className = 'story-pile-tile';
-        tile.style.setProperty('--tile-color', storyCardTypeColor(values.type));
+        if (blinded) tile.classList.add('card-blinded', 'card-blinded-deep');
+        tile.style.setProperty('--tile-color', blinded ? '#7F8C8D' : storyCardTypeColor(values.type));
         const inner = document.createElement('span');
         inner.className = 'story-pile-tile-inner';
         const costs = document.createElement('div');
         costs.className = 'story-pile-tile-costs';
-        costs.innerHTML = `<span class="story-pile-tile-cost cost-e">${Number(values.cost_e || 0)}</span><span class="story-pile-tile-cost cost-m">${Number(values.cost_m || 0)}</span>`;
+        costs.innerHTML = blinded
+            ? '<span class="story-pile-tile-cost cost-e">?</span><span class="story-pile-tile-cost cost-m">?</span>'
+            : `<span class="story-pile-tile-cost cost-e">${Number(values.cost_e || 0)}</span><span class="story-pile-tile-cost cost-m">${Number(values.cost_m || 0)}</span>`;
         const name = document.createElement('div');
         name.className = 'story-pile-tile-name';
-        name.textContent = `${storyCardUpgradePrefix(card)}${localize(values.name)}`;
+        name.textContent = blinded ? '?' : `${storyCardUpgradePrefix(card)}${localize(values.name)}`;
         const art = document.createElement('div');
         art.className = 'story-pile-tile-art';
-        const imageUrl = card.upgraded ? (values.upgraded_image_url || values.image_url) : values.image_url;
+        const imageUrl = blinded
+            ? ''
+            : (card.upgraded ? (values.upgraded_image_url || values.image_url) : values.image_url);
         if (imageUrl) {
             const halves = storyGeneratedHalfUrls(card);
             if (halves.length >= 2) {
@@ -8116,13 +8122,16 @@
                 art.append(image);
             }
         }
-        const countLabel = document.createElement('span');
-        countLabel.className = 'story-pile-count';
-        countLabel.textContent = `×${count}`;
         inner.append(costs, name, art);
         tile.append(inner);
-        entry.append(tile, countLabel);
-        storyCardElementData.set(tile, card);
+        entry.append(tile);
+        if (!blinded) {
+            const countLabel = document.createElement('span');
+            countLabel.className = 'story-pile-count';
+            countLabel.textContent = `×${count}`;
+            entry.append(countLabel);
+            storyCardElementData.set(tile, card);
+        }
         return entry;
     }
 
@@ -8201,6 +8210,7 @@
         if (kind !== 'deck' && !combat) return;
         const source = Array.isArray(config.source) ? config.source : [];
         const cards = config.reverse ? [...source].reverse() : [...source];
+        const blindActive = Boolean(combat && combat.blind_active);
         setText('story-pile-title', config.title);
         setText('story-pile-total', t.pileTotal(config.title, cards.length));
         const grid = $('story-pile-grid');
@@ -8211,6 +8221,9 @@
             empty.className = 'story-pile-empty';
             empty.textContent = t.pileEmpty;
             grid?.append(empty);
+        } else if (blindActive) {
+            // 反馈 #120：失明时逐个实例显示，不按身份分组/排序，也不挂真实卡数据。
+            cards.forEach((card) => grid?.append(createStoryPileTile(card, 1, { blinded: true })));
         } else {
             storyPileCardGroups(cards).forEach(({ card, count }) => {
                 grid?.append(createStoryPileTile(card, count));
@@ -8519,7 +8532,8 @@
         element.classList.add(imageUrl ? 'card-has-art' : 'card-no-art');
         element.dataset.instanceId = String(card.instance_id || '');
         element.dataset.defId = String(card.def_id || '');
-        storyCardElementData.set(element, card);
+        // 反馈 #120：失明卡不挂真实卡数据，避免长按/详情面板绕过遮罩。
+        if (!blinded) storyCardElementData.set(element, card);
 
         const costs = document.createElement('div');
         costs.className = 'card-costs';
