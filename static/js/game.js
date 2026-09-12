@@ -10797,8 +10797,13 @@ function shouldUseAllOfficialModsForViewing() {
 }
 
 function getEffectiveDisabledModsForData() {
-    if (isSpectating && gameState && Array.isArray(gameState.disabled_mods)) {
-        return gameState.disabled_mods.map(item => String(item || '')).filter(Boolean);
+    // 反馈 #102：对局中的卡数据必须跟随房间的模组快照。只按本地设置取卡时，
+    // 与房主选择不一致的客户端会把未知卡渲染成占位卡（“错误”）。
+    const stateMods = (gameState && Array.isArray(gameState.disabled_mods))
+        ? gameState.disabled_mods.map(item => String(item || '')).filter(Boolean)
+        : null;
+    if (stateMods && (isSpectating || isPvpMatchFlowActive())) {
+        return stateMods;
     }
     const disabled = shouldUseAllOfficialModsForViewing() ? [] : getDisabledMods();
     if (!isRankedMatchMode(getSettingsModMatchMode())) return disabled;
@@ -12216,11 +12221,37 @@ function createCardChoiceChip(cardDict, options = {}) {
     return chip;
 }
 
+function getUnknownCardDisplayDef(cardDict, defId) {
+    const raw = String(defId || '').trim();
+    if (!raw) return null;
+    // 反馈 #102：客户端没有这张卡的定义时，显示真实 def_id，而不是退回
+    // “错误”占位或纯卡背，方便定位是哪个模组/版本没加载。
+    return {
+        id: raw,
+        legacy_id: raw,
+        name_cn: `未知卡：${raw}`,
+        name_en: `Unknown card: ${raw}`,
+        name_i18n: { zh: `未知卡：${raw}`, en: `Unknown card: ${raw}`, fr: `Carte inconnue : ${raw}`, ja: `未知カード：${raw}` },
+        card_type: String((cardDict && cardDict.card_type) || 'bloom'),
+        cost_e: Number((cardDict && cardDict.cost_e) || 0) || 0,
+        cost_m: Number((cardDict && cardDict.cost_m) || 0) || 0,
+        rarity: 'Common',
+        hits: 1,
+        durability: 0,
+        description: '',
+        effect_text: '',
+        flags: [],
+        tags: [],
+        effects: [],
+        __unknown_card_def: true,
+    };
+}
+
 function createClassicCardTile(cardDict, options = {}) {
     const tile = document.createElement('span');
     tile.className = 'classic-card-tile';
     const defId = (cardDict && cardDict.def_id) || '';
-    const cardDef = getCardDef(defId);
+    const cardDef = getCardDef(defId) || getUnknownCardDisplayDef(cardDict, defId);
     if (cardDict && cardDict.__blind_for_teammate) {
         const blindLevel = Math.max(1, Math.floor(Number(cardDict.__blind_level || 1)));
         const hideType = blindLevel >= 2;
@@ -12251,6 +12282,7 @@ function createClassicCardTile(cardDict, options = {}) {
         tile.innerHTML = `<span class="classic-card-tile-inner"><span class="classic-card-tile-back-face"></span></span>`;
         return tile;
     }
+    if (cardDef.__unknown_card_def) tile.classList.add('classic-card-tile-unknown');
     const ownerState = options.ownerState || null;
     const blindLevel = getCardBlindLevelForSelf(cardDict, options);
     const blinded = blindLevel > 0;
