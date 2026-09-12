@@ -56,7 +56,6 @@ ADVANCED_ATOMIC_OPS = {
     # ``resource_op(mode:"spend")``）。
     "status_add_named", "status_remove_named",
     "turn_mod_add", "global_mult",
-    "choose_from_zone",
     # Round 33 / 批次 AB：``reveal_enemy_hand`` / ``reveal_hand`` / ``reveal_hand_cards``
     # 并进 ``reveal``；``steal_enemy_card`` / ``steal_card`` / ``give_card_to_hand`` /
     # ``give_card_to_deck`` / ``shuffle_discard_into_deck`` / ``shuffle_hand`` /
@@ -65,7 +64,7 @@ ADVANCED_ATOMIC_OPS = {
     # ``snapshot_card_props`` / ``restore_card_props`` / ``restore_*_stats``
     # 并进 ``move_card`` / ``copy_card`` / ``shuffle`` / ``snapshot`` / ``restore``。
     "reveal", "shuffle", "snapshot", "restore",
-    "copy_card", "copy_choice_with_discount",
+    "copy_card",
     "remove_specific_card",
     "move_card",
     "destroy_equipment",
@@ -96,7 +95,7 @@ ADVANCED_ATOMIC_OPS = {
     "discard_hand_by_paid_e", "restore_turn_start_stats", "restore_match_start_stats",
     "counter_pending_attack_damage",
     "equipment_prop_add", "discard_choice_then_draw",
-    "activate_corruption", "request_target", "request_card", "request_confirm",
+    "activate_corruption",
     "response_declare", "on_any_turn_start",
     "on_enemy_turn_start", "on_owner_turn_start", "on_owner_turn_end", "on_hand_owner_turn_start", "on_hand_owner_turn_end",
     "on_discard_owner_turn_start", "on_equipment_trigger", "on_equipment_destroy",
@@ -104,7 +103,12 @@ ADVANCED_ATOMIC_OPS = {
     "cogwheel_mark",
     "goggles_enable",
     "assembler_effect",
-    "request_reorder_deck",
+    # Round 36 / 批次 AD-1：请求族四合一 —— 旧 ``request_target`` /
+    # ``request_card`` / ``request_confirm`` / ``choose_from_zone`` /
+    # ``declare_forced_target`` / ``copy_choice_with_discount`` /
+    # ``request_reorder_deck`` 并进 ``request``（``type`` 选类别）；
+    # 旧名进 REMOVED_ATOMIC_OPS，写出来是显式报错。
+    "request",
     # Round 26：apply_jungle_status / magic_grapes_damage /
     # consume_magic_for_status / yin_yang_effect / flower_burst /
     # draw_to_hand_limit 的公式已搬进卡数据，实现删除（见 REMOVED_ATOMIC_OPS）。
@@ -114,7 +118,6 @@ ADVANCED_ATOMIC_OPS = {
     "magic_salt_reflect", "third_eye_precision_or_hidden",
     "grant_temp_swift_highest_e", "delayed_blind_next_turn",
     "delayed_reveal_hand_next_turn",
-    "declare_forced_target",
     # Round 27：`discard` / `random_discard_from_hand` 拆成"取值表达式 + 通用步骤"，
     # 实现删除（见 REMOVED_ATOMIC_OPS 的替代写法）。
 }
@@ -311,7 +314,11 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
     if not gate_allows:
         return {"success": True, "skipped": True, "reason": "step_condition"}
 
-    if op == "request_target":
+    # Round 36 / 批次 AD-1：请求族四合一 —— ``request(type:"target")`` 是旧的
+    # 运行时原生分支（选目标窗口的结果写进 ``context['target_player']``）；
+    # 其余类别（card / confirm / zone / forced_target / discount_copy /
+    # reorder_deck）落到下面的引擎原子分派，由 ``_atomic_request`` 承接。
+    if op == "request" and str(step.get("type") or "").strip().lower() == "target":
         choice = context.get("choice")
         action = context.get("current_action")
         if choice is None and isinstance(action, dict):
@@ -3119,14 +3126,28 @@ def _engine_effect_from_step(
         str(step.get("op") or step.get("type") or ""),
         str(step.get("op") or step.get("type") or ""),
     )
+    # 键 ``type`` 有两种身份：旧写法 ``{"type": <op 名>}`` 里它是 op 名（要剔除），
+    # 而伞原子 ``{"op":"request","type":"target"}`` 里它是判别参数（要保留）。
+    reserved_keys = {"op", "log", "then", "else", "steps", "body", "condition", "cond"}
+    if not isinstance(step.get("op"), str):
+        reserved_keys.add("type")
     raw_params = step.get("params") if isinstance(step.get("params"), dict) else {
         key: value
         for key, value in step.items()
-        if key not in {"op", "type", "log", "then", "else", "steps", "body", "condition", "cond"}
+        if key not in reserved_keys
     }
     params = copy.deepcopy(raw_params) if defer_values else _materialize_atomic_value(engine, context, raw_params)
     if not isinstance(params, dict):
         params = {}
+    if (
+        "type" not in params
+        and isinstance(step.get("op"), str)
+        and isinstance(step.get("type"), str)
+        and step.get("type") != step.get("op")
+    ):
+        # Round 36：``{"op":"request","type":"card","params":{…}}`` —— 判别参数在
+        # 顶层 ``type`` 上、参数体在 ``params`` 里，这里补进引擎效果的参数。
+        params["type"] = step["type"]
     if "condition" in step or "cond" in step:
         params["condition"] = _normalize_condition_for_engine(engine, context, step.get("condition", step.get("cond")))
     if isinstance(step.get("then"), list):

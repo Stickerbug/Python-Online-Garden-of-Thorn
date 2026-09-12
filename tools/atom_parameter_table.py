@@ -1324,15 +1324,17 @@ def category_sort_key(category: str) -> tuple:
 # Round 21 抽样校对：逐条对过源码，结论写进报告 ``.codex-tmp/round21/rd21.md``。
 # 参数不在 ``_atomic_*`` / 运行时分支里读的 op（人工核对过，附录 F）。
 OUT_OF_ATOM_PARAMS = (
-    ("request_target",
+    ("request",
      "`allowed`（`any`/`self`/`enemy`/`friendly`…，默认 `any`）、`alive_only`",
-     "`game_engine._pick_auto_target` 读 `_get_choice_request` 返回的这一步（`game_engine.py` 第 19385 行附近）"),
-    ("request_card",
+     "`request(type:\"target\")` 的窗口参数由 `game_engine._choice_type_for_effect` / "
+     "`_queue_card_choice` 读（`game_engine.py` 第 7900 行附近）"),
+    ("request",
      "`filter` 全套：`zone`/`owner`/`card_type`/`require_selectable`/`exclude_self`/`affordable`/`pay_ratio`/`min_count`…",
      "`game_engine._choice_request_satisfied` 与选牌 UI 组装（`game_engine.py` 第 7396 行起）"),
 )
 SAMPLE_SPOT_CHECKS = (
-    ("request_target", "无参数；只写 `context['target_player']`", "一致"),
+    ("request", "`type`（target/card/confirm/zone/forced_target/discount_copy/reorder_deck）"
+                "选类别；`target` 类只写 `context['target_player']`", "一致"),
     ("deal_damage", "运行时 `amount` 默认 0 / 引擎默认 6，`target` 默认 `target` / `enemy`", "本表标 ⚠，见附录 C"),
     ("direct_damage", "`source_text` 三级回落（`source_text`→`source_name`→`label`）", "一致"),
     ("status_add_named", "`status`/`statuses`/`amount`/`stack`/`target`（共享 `_apply_status_add_family`）", "一致"),
@@ -1342,8 +1344,8 @@ SAMPLE_SPOT_CHECKS = (
              "`modifiers`（sluggish 修正）、`target`", "一致"),
     ("for_each", "`source/items/targets/list/collection/values`、`as/var/name`、`limit` 默认 200", "一致"),
     ("timed_effect", "`trigger`/`duration`/`effects`/`body`（运行时 `effects`→`body` 双向兼容）", "一致"),
-    ("auto_play_card", "`card`/`target`/`auto_choice`/`no_cost`/`source_name`", "一致"),
-    ("move_cards_to_deck", "`cards`/`zone`/`position`/`target`（共享移动助手）", "一致"),
+    ("auto_play", "`mode`（card/zone_top）；`card`/`actor`/`target`/`auto_choice`/`no_cost`/`source_name`", "一致"),
+    ("move_card", "`mode`/`card`/`cards`/`zone`/`target_zone`/`position`/`target`（共享移动助手）", "一致"),
     ("place_as_equip", "`card`/`owner`/`effect_target`，71 处使用（签名冻结）", "一致"),
     ("request_card", "整套 `filter`（zone/owner/card_type/…）同时驱动候选集、提交校验与 `play_requires`", "一致"),
     ("player_var_change", "`mode`（set/add/sub/mul/div）+ `target`/`name`/`value`（`name` 回落 `var`）", "一致"),

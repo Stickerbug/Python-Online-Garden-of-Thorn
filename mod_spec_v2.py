@@ -108,9 +108,13 @@ _CORE_LOGIC_OPS = {
     # `hel_*` 与 `call` / `emit` / `choose` / `mod` / `set` / `ref` / `sequence` /
     # `stop` / `gain_resource`）一并注销，见 .codex-tmp/round25/rd25.md。
     "request_ui",
-    "request_target",
-    "request_card",
-    "request_confirm",
+    # Round 36 / 批次 AD-1：请求族四合一 —— 旧的 ``request_target`` /
+    # ``request_card`` / ``request_confirm`` / ``choose_from_zone`` /
+    # ``declare_forced_target`` / ``copy_choice_with_discount`` /
+    # ``request_reorder_deck`` 并进 ``request``，``type`` 选类别
+    # （target / card / confirm / zone / forced_target / discount_copy /
+    # reorder_deck）。旧名见 REMOVED_ATOMIC_OPS（写出来是显式报错）。
+    "request",
     "deal_damage",
     "damage",
     # Round 32 / 批次 AA：生命族并进 ``health_op``、资源族并进 ``resource_op``、
@@ -198,9 +202,9 @@ _CORE_LOGIC_OPS = {
     # REMOVED_ATOMIC_OPS。
     "status_add_named",
     # Round 29 / 批次 X：三个"从某区选一张进手牌"的同形原子合并成一条
-    # （``zone`` 选区域），旧名进 REMOVED_ATOMIC_OPS。
-    "choose_from_zone",
-    "copy_choice_with_discount",
+    # （``zone`` 选区域）；Round 36 / 批次 AD-1 连同 ``copy_choice_with_discount``
+    # 一起并进 ``request`` 伞（``type:"zone"`` / ``type:"discount_copy"``），
+    # 旧名进 REMOVED_ATOMIC_OPS。
     # Round 33 / 批次 AB：``reveal_enemy_hand`` / ``reveal_hand_cards`` /
     # ``steal_enemy_card`` / ``shuffle_discard_into_deck`` / ``shuffle_hand`` /
     # ``give_card_to_hand`` / ``give_magic_orb_to_hand`` / ``give_card_to_deck``
@@ -294,7 +298,6 @@ _CORE_LOGIC_OPS = {
     "honey_control",
     "goggles_enable",
     "assembler_effect",
-    "request_reorder_deck",
     "apply_turn_regen",
     # Round 33 / 批次 AB：``create_copies_to_deck_top`` 已并入
     # ``copy_card(to_zone:"deck_top", count:N)``。
@@ -320,7 +323,7 @@ _CORE_LOGIC_OPS = {
     "charge_self_damage",
     # Round 6a: data declares the "everyone must target me" window (Light
     # Bulb) so the engine no longer reads the pack's custom var directly.
-    "declare_forced_target",
+    # Round 36 / 批次 AD-1：并进 ``request(type:"forced_target")``。
 
     # Round 20: 长尾原子登记（"卡数据仍在用、但没进策展清单"的 22 个）。
     # 它们本来就是引擎里的 _atomic_* 处理器，只是没被策展，导致
@@ -1021,10 +1024,11 @@ REMOVED_ATOMIC_OPS = {
     "destroy_random_equip": '{"op":"equipment_op","mode":"destroy","pick":"random","scope":"target","target":"enemy"}',
     "destroy_all_equip": '{"op":"equipment_op","mode":"destroy","pick":"all","scope":"target","target":"enemy"}',
     "destroy_all_field_equip": '{"op":"equipment_op","mode":"destroy","pick":"all","scope":"field"}',
-    #   * 取牌三条 → choose_from_zone(zone=...)
-    "choose_from_deck": '{"op":"choose_from_zone","zone":"deck","target":"self"}',
-    "choose_from_discard": '{"op":"choose_from_zone","zone":"discard","target":"self"}',
-    "choose_from_exile": '{"op":"choose_from_zone","zone":"exile","target":"self"}',
+    #   * 取牌三条 → request(type:"zone")
+    #     （Round 29 合并成 choose_from_zone，Round 36 / 批次 AD-1 再并进 request 伞）
+    "choose_from_deck": '{"op":"request","type":"zone","zone":"deck","target":"self"}',
+    "choose_from_discard": '{"op":"request","type":"zone","zone":"discard","target":"self"}',
+    "choose_from_exile": '{"op":"request","type":"zone","zone":"exile","target":"self"}',
     #   * 区域移动四条 → move_card(zone=...)
     "move_to_hand": '{"op":"move_card","zone":"hand","card":{"ref":"selected_card"},"target":"self"}',
     "move_to_deck": '{"op":"move_card","zone":"deck","card":{"ref":"current_card"},"position":"top"}',
@@ -1176,6 +1180,20 @@ REMOVED_ATOMIC_OPS = {
     #   * 自动打出族 → auto_play(mode=card|zone_top)；``queue_auto_play`` 保持可用
     "auto_play_card": '{"op":"auto_play","mode":"card","card":{"ref":"last_created_card"},"no_cost":false}',
     "auto_play_zone_top": '{"op":"auto_play","mode":"zone_top","actor":{"ref":"equipment_target"},"zone":"deck","cost":"free"}',
+
+    # Round 36 / 批次 AD-1（请求族四合一）：七个请求类 op 全部并进 ``request``，
+    # ``type`` 选类别（target / card / confirm / zone / forced_target /
+    # discount_copy / reorder_deck）。扁平写法的 ``type`` 是判别参数
+    # （``_effect_params`` 会把它排除在客户端 payload 之外，所以选择窗口的
+    # payload 与合并前逐字节一致）；原本就带 ``params`` 的步骤把 ``type`` 写在
+    # 顶层、参数体留在 ``params`` 里。
+    "request_target": '{"op":"request","type":"target","allowed":"any"}（allowed 选 any/not_self/self/enemy/friendly…；可加 alive_only:false）',
+    "request_card": '{"op":"request","type":"card","params":{"choice_type":"choose_card_from_hand","target":"self","zone":"hand"}}（filter/zone/choice_type/multi/min_count… 原样放进 params；也可扁平写在同一层）',
+    "request_confirm": '{"op":"request","type":"confirm","params":{"choice_type":"<自定义 key>","options":[…],"cancellable":false}}',
+    "choose_from_zone": '{"op":"request","type":"zone","zone":"deck","target":"self"}（zone 选 deck/discard/exile）',
+    "declare_forced_target": '{"op":"request","type":"forced_target","target":"self"}',
+    "copy_choice_with_discount": '{"op":"request","type":"discount_copy","discount_e":1}（拟态：复制选中的手牌并打折）',
+    "request_reorder_deck": '{"op":"request","type":"reorder_deck","target":"enemy","message":"调整对手牌堆顺序"}',
 }
 
 # Round 22：别名收敛——同一概念的旧名已删除（不再登记、也没有运行时别名），

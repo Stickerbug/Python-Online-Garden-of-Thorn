@@ -65,7 +65,7 @@ SPIKEBALL_ADDED_WIDE_STRIKE_FLAG = 'ocean_spikeball_added_wide_strike'
 # Round 2 / Batch C generic registries (``custom_vars`` keys on the engine).
 ABSORB_ATTACK_DAMAGE_KEY = 'absorb_attack_damage_events'
 PLAY_LISTENERS_KEY = 'play_listeners'
-# Round 6a: per-player flag written by the ``declare_forced_target`` data step
+# Round 6a: per-player flag written by the ``request(type:"forced_target")`` data step
 # (the Light Bulb "everyone must target me" declaration).  Cleared at the
 # declaring player's next turn start.
 FORCED_TARGET_KEY = 'forced_target'
@@ -1966,7 +1966,7 @@ class GameEngine:
     def _forced_target_candidates(self) -> List[int]:
         """Players whose declared "everyone must target me" is still live.
 
-        The declaration is written by the ``declare_forced_target`` data step
+        The declaration is written by the ``request(type:"forced_target")`` data step
         (the Light Bulb wording: "吸引全体仇恨") and cleared at the declaring
         player's next turn start.
         """
@@ -2013,8 +2013,10 @@ class GameEngine:
             return
         self.players[player_id].custom_vars.pop(FORCED_TARGET_KEY, None)
 
-    def _atomic_declare_forced_target(self, player_id, card, params, log, choice, context):
-        """Data step: make player-target cards aim at the declared player.
+    def _request_forced_target_payload(self, player_id, card, params, log, choice, context):
+        """``request(type:"forced_target")`` 的实现体（旧 ``declare_forced_target``）。
+
+        Data step: make player-target cards aim at the declared player.
 
         The declaration lasts until the target player's next turn start; it is
         the Light Bulb mechanism ("直到自己下个回合开始，所有需要选择玩家目标的
@@ -4558,11 +4560,12 @@ class GameEngine:
                 on_apply = events.get('on_apply', [])
                 if isinstance(on_apply, list):
                     for step in on_apply:
-                        # Round 29：取牌族合并成 choose_from_zone(zone=...)，这里按
-                        # op 名（不是 choice_type）判断，所以要跟着加新名字。
-                        if isinstance(step, dict) and step.get('type') in (
-                            'choose_from_deck', 'choose_card_from_hand', 'choose_from_discard',
-                            'choose_from_zone',
+                        # Round 29：取牌族合并成 choose_from_zone(zone=...)；
+                        # Round 36：再并进 request 伞，这里按 op 名（不是 choice_type）
+                        # 判断，所以跟着改读伞的 type。
+                        if isinstance(step, dict) and (
+                            (step.get('op') or step.get('type')) == 'request'
+                            and self._request_kind_of(step) in ('zone', 'card')
                         ):
                             return True
         return False
@@ -6488,7 +6491,7 @@ class GameEngine:
         )
 
     # ------------------------------------------------------------------
-    # Generic card filters (``request_card`` / ``play_requires``)
+    # Generic card filters (``request(type:"card")`` / ``play_requires``)
     #
     # A filter is plain data:
     #   {"zone": "hand", "owner": "self", "card_type": "thorn",
@@ -6929,7 +6932,7 @@ class GameEngine:
         return None if cap is None else int(cap)
 
     def _play_allows_dead_target(self, card: Optional[CardInstance]) -> bool:
-        """Card data declares ``request_target.alive_only: false`` for ``on_play``."""
+        """Card data declares ``request(type:"target", alive_only:false)`` for ``on_play``."""
         if card is None:
             return False
         events = getattr(getattr(card, 'card_def', None), 'v2_events', None) or {}
@@ -6937,9 +6940,18 @@ class GameEngine:
             return True
         return self._card_flag_or_legacy_mark(card, 'dead_target_play')
 
+    def _is_target_request_step(self, node) -> bool:
+        """``request(type:"target")``（旧 ``request_target``）的节点判定。"""
+
+        if not isinstance(node, dict):
+            return False
+        if self._effect_type(node) == 'request':
+            return self._request_kind_of(node) == 'target'
+        return False
+
     def _effect_tree_allows_dead_target(self, node) -> bool:
         if isinstance(node, dict):
-            if self._effect_type(node) == 'request_target' and node.get('alive_only') is False:
+            if self._is_target_request_step(node) and node.get('alive_only') is False:
                 return True
             return any(self._effect_tree_allows_dead_target(child) for child in node.values())
         if isinstance(node, (list, tuple)):
@@ -7482,9 +7494,10 @@ class GameEngine:
             return False
         if choice.get('cancelled') and params.get('continue_on_cancel'):
             return True
-        if effect_type == 'request_target' or choice_type == 'choose_target':
+        request_kind = self._request_kind_any(effect)
+        if request_kind == 'target' or choice_type == 'choose_target':
             return self._choice_target_from_choice(choice) >= 0
-        if effect_type == 'request_confirm' or choice_type == 'confirm':
+        if request_kind == 'confirm' or choice_type == 'confirm':
             return any(key in choice for key in ('confirmed', 'accepted'))
         current_iid = getattr(card, 'instance_id', None)
         if current_iid is not None:
@@ -7503,7 +7516,7 @@ class GameEngine:
             if selected_card is None or not self._card_selectable_by_action(selected_card):
                 return False
         filter_spec = params.get('filter') if isinstance(params, dict) else None
-        if isinstance(filter_spec, dict) and filter_spec and effect_type == 'request_card':
+        if isinstance(filter_spec, dict) and filter_spec and request_kind == 'card':
             owner_id, _, _ = self._find_card_location(card)
             if owner_id is None:
                 owner_id = int(getattr(self, 'current_player', 0) or 0)
@@ -7637,23 +7650,8 @@ class GameEngine:
         params = self._effect_params(effect)
         if params.get('choice_type'):
             return str(params.get('choice_type'))
-        if effect_type == 'request_target':
-            return 'choose_target'
-        if effect_type == 'request_card':
-            if params.get('multi') or params.get('choice_type') == 'choose_cards_from_hand':
-                return 'choose_cards_from_hand'
-            zone = str(params.get('zone') or '').strip()
-            if zone == 'deck':
-                return 'choose_from_deck'
-            if zone == 'discard':
-                return 'choose_from_discard'
-            if zone == 'exile':
-                return 'choose_from_exile'
-            if zone == 'equipment':
-                return 'choose_equipment'
-            return 'choose_card_from_hand'
-        if effect_type == 'request_confirm':
-            return 'confirm'
+        if effect_type == 'request':
+            return self._choice_type_for_request(effect, params)
         if effect_type == 'discard_choice_then_draw':
             return 'choose_card_to_discard'
         if effect_type == 'destroy_equipment' and self._destroy_equipment_needs_choice(params):
@@ -7678,16 +7676,46 @@ class GameEngine:
             return 'choose_from_deck'
         if effect_type == 'choose_from_discard':
             return 'choose_from_discard'
-        if effect_type == 'choose_from_zone':
-            # Round 29 / 批次 X：三条取牌原子合并成 ``choose_from_zone(zone=...)``，
-            # 选择类型仍旧按区域映射回三兄弟（AI 自动选牌、对手可见性、
-            # 2v2 观战都按这三个 choice_type 分流）。
+        if effect_type == 'steal_enemy_card':
+            return 'choose_from_enemy_hand'
+        return ''
+
+    def _choice_type_for_request(self, effect: Optional[dict], params) -> str:
+        """``request`` 伞的 ``type`` → 选择窗口类型（与合并前的三条分支逐字一致）。
+
+        Round 36 / 批次 AD-1：``request_target`` / ``request_card`` /
+        ``request_confirm`` / ``choose_from_zone`` 四个旧 op 的 choice_type
+        映射合成这一处；窗口类型（AI 自动选牌、对手可见性、2v2 观战都按它
+        分流）与合并前保持逐字节一致。
+        """
+
+        if not isinstance(params, dict):
+            params = {}
+        kind = self._request_kind_of(effect)
+        if kind == 'target':
+            return 'choose_target'
+        if kind == 'card':
+            if params.get('multi') or params.get('choice_type') == 'choose_cards_from_hand':
+                return 'choose_cards_from_hand'
+            zone = str(params.get('zone') or '').strip()
+            if zone == 'deck':
+                return 'choose_from_deck'
+            if zone == 'discard':
+                return 'choose_from_discard'
+            if zone == 'exile':
+                return 'choose_from_exile'
+            if zone == 'equipment':
+                return 'choose_equipment'
+            return 'choose_card_from_hand'
+        if kind == 'confirm':
+            return 'confirm'
+        if kind == 'zone':
+            # Round 29 / 批次 X：三条取牌原子合并成一条按区域取牌；
+            # 选择类型仍旧按区域映射回三兄弟。
             zone = str(params.get('zone') or params.get('from') or 'deck').strip().lower()
             if zone in ('deck', 'discard', 'exile'):
                 return f'choose_from_{zone}'
             return 'choose_from_deck'
-        if effect_type == 'steal_enemy_card':
-            return 'choose_from_enemy_hand'
         return ''
 
     def _choice_target_id_for_request(self, player_id: int, effect: Optional[dict]) -> Optional[int]:
@@ -7698,11 +7726,14 @@ class GameEngine:
         selected_target = self._selected_choice_target(-1)
         if request_type == 'steal_enemy_card' and selected_target >= 0:
             return selected_target
+        request_kind = self._request_kind_any(effect)
+        if request_kind:
+            # 合并前：``request_card`` / ``choose_from_zone`` 默认取自己区域的牌，
+            # ``request_target`` / ``request_confirm`` 不在默认表里（返回 None）。
+            if request_kind not in ('card', 'zone'):
+                return None
+            return self._resolve_target(player_id, params.get('target', 'self'))
         target_defaults = {
-            'request_card': 'self',
-            'choose_from_deck': 'self',
-            'choose_from_discard': 'self',
-            'choose_from_zone': 'self',
             'destroy_equipment': 'enemy',
             'equipment_op': 'enemy',
             'steal_enemy_card': 'enemy',
@@ -7714,7 +7745,7 @@ class GameEngine:
     def _choice_request_candidate_cards(self, choice_type: str, params, player_id: int,
                                         card: Optional[CardInstance],
                                         target_id: Optional[int]) -> List[CardInstance]:
-        """Cards offered by a ``request_card`` step (``filter`` aware)."""
+        """Cards offered by a ``request(type:"card")`` step (``filter`` aware)."""
         filter_spec = params.get('filter') if isinstance(params, dict) else None
         default_owner_id = target_id if self._valid_player_id(target_id) else None
         if isinstance(filter_spec, dict) and filter_spec:
@@ -9190,8 +9221,11 @@ class GameEngine:
 
         self._clear_hand_reveal_for_player(player_id)
 
-    def _atomic_choose_from_zone(self, player_id, card, params, log, choice, context):
-        """Round 29 / 批次 X：从牌堆 / 弃牌堆 / 放逐区"选一张进手牌"的三条原子合并成一条。
+    def _request_zone_payload(self, player_id, card, params, log, choice, context):
+        """``request(type:"zone")`` 的实现体（旧 ``choose_from_zone``）。
+
+        Round 29 / 批次 X：从牌堆 / 弃牌堆 / 放逐区"选一张进手牌"的三条原子合并成一条。
+        Round 36 / 批次 AD-1：改名进请求伞的私有实现体，参数面与实现逐字未动。
 
         覆盖 ``choose_from_deck`` / ``choose_from_discard`` / ``choose_from_exile``：
         ``zone`` 选区域（默认 ``deck``）。三段实现逐条搬过来，区别原样保留：
@@ -10551,8 +10585,9 @@ class GameEngine:
                     'keep_paid': True,
                 }
 
-    def _atomic_request_reorder_deck(self, player_id, card, params, log, choice, context):
-        """Request reorder of opponent's deck (Magic Goggles)."""
+    def _request_reorder_deck_payload(self, player_id, card, params, log, choice, context):
+        """``request(type:"reorder_deck")`` 的实现体（旧 ``request_reorder_deck``）：
+        请求重排对手牌堆（Magic Goggles）。"""
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         target_ps = self.players[target_id]
         deck_cards = [c.to_dict() for c in target_ps.deck]
@@ -12911,14 +12946,12 @@ class GameEngine:
         return [rid]
     def _card_needs_choice(self, card: CardInstance) -> bool:
         # Round 7：原先按 def_id 硬编码的 8 张卡（裂变/融合/拟态/染色体/污水/辣椒/罗盘/磁铁）
-        # 已由卡数据的 ``request_card`` / ``choose_from_zone``（Round 29 前的
+        # 已由卡数据的 ``request(type:"card")`` / ``request(type:"zone")``（Round 29 前的
         # ``choose_from_discard``）步骤覆盖；
         # 这里只保留 legacy ``effects`` 通道（第三方包兼容）。
         if card.card_def.effects:
             for e in card.card_def.effects:
-                if isinstance(e, dict) and e.get('type', '') in (
-                    'choose_from_deck', 'choose_from_discard', 'choose_from_zone', 'steal_enemy_card',
-                ):
+                if isinstance(e, dict) and self._request_kind_of(e) in ('card', 'zone'):
                     return True
         return False
     def _get_choice_type(self, card: CardInstance) -> str:
@@ -12928,18 +12961,10 @@ class GameEngine:
             for e in card.card_def.effects:
                 if isinstance(e, dict):
                     t = e.get('type', '')
-                    if t == 'choose_from_deck':
-                        return 'choose_from_deck'
-                    elif t == 'choose_from_discard':
-                        return 'choose_from_discard'
-                    elif t == 'choose_from_zone':
-                        # Round 29：合并后的取牌原子按 zone 参数映射回三种选择类型。
-                        zone = str(e.get('zone') or e.get('from') or 'discard').strip().lower()
-                        if zone in ('deck', 'discard', 'exile'):
-                            return f'choose_from_{zone}'
-                        return 'choose_from_discard'
-                    elif t == 'steal_enemy_card':
+                    if t == 'steal_enemy_card':
                         return 'choose_from_enemy_hand'
+                    if self._request_kind_of(e):
+                        return self._choice_type_for_effect(e, card)
         return ''
     def _eval_expr(self, player_id, expr, card=None):
         if isinstance(expr, (int, float, bool)):
@@ -13236,7 +13261,10 @@ class GameEngine:
         'response': ('onResponse', 'response', 'on_response'),
     }
 
-    CHOICE_EFFECT_TYPES = {'request_target', 'request_card', 'request_confirm'}
+    # Round 36 / 批次 AD-1：旧的三个请求 op 并成 ``request`` 伞，判定由
+    # :meth:`_is_choice_gate_effect`（看伞的 ``type``）负责；这张表保留给
+    # 仍在读它的调用点/测试，内容是唯一公开的请求 op。
+    CHOICE_EFFECT_TYPES = {'request'}
 
     def _script_effects_from(self, script):
         if isinstance(script, dict):
@@ -13288,9 +13316,17 @@ class GameEngine:
         return event_def if isinstance(event_def, list) else []
 
     def _effect_type(self, effect) -> str:
+        """步骤的执行 op 名。
+
+        Round 36 / 批次 AD-1：请求族伞原子写成
+        ``{"op":"request","type":"target",…}`` —— 这里与
+        ``mod_runtime_v2.run_v2_step``（``step.get("op") or step.get("type")``）
+        统一口径：**显式 ``op`` 优先**，``type`` 只在旧写法 ``{"type": …}``
+        里当 op 名。请求伞的 ``type`` 判别参数由 :meth:`_request_kind_of` 读。
+        """
         if not isinstance(effect, dict):
             return ''
-        return str(effect.get('type') or effect.get('op') or '')
+        return str(effect.get('op') or effect.get('type') or '')
 
     def _effect_params(self, effect) -> dict:
         if not isinstance(effect, dict):
@@ -13303,6 +13339,65 @@ class GameEngine:
             for key, value in effect.items()
             if key not in {'type', 'op', 'log', 'then', 'else', 'steps', 'body', 'condition', 'cond'}
         }
+
+    # Round 36 / 批次 AD-1：请求族伞原子 ``request`` 的判别参数（``type``）。
+    #   target        —— 旧 ``request_target``（弹选目标窗口）
+    #   card          —— 旧 ``request_card``（弹选牌窗口）
+    #   confirm       —— 旧 ``request_confirm``（弹二次确认）
+    #   zone          —— 旧 ``choose_from_zone``（从区域选一张进手牌）
+    #   forced_target —— 旧 ``declare_forced_target``（声明强制目标）
+    #   discount_copy —— 旧 ``copy_choice_with_discount``（复制并打折）
+    #   reorder_deck  —— 旧 ``request_reorder_deck``（请求重排牌堆）
+    REQUEST_TYPES = (
+        'target', 'card', 'confirm', 'zone',
+        'forced_target', 'discount_copy', 'reorder_deck',
+    )
+    # 会先弹窗再结算、且"取消即中断后续步骤"的三类（旧 CHOICE_EFFECT_TYPES）。
+    REQUEST_CHOICE_TYPES = ('target', 'card', 'confirm')
+
+    def _request_kind_of(self, effect) -> str:
+        """``request`` 节点的 ``type`` 判别参数；不是请求伞时返回 ``''``。
+
+        同时认三种形态：
+
+        * 卡数据扁平写法 ``{"op":"request","type":"target","allowed":"any"}``；
+        * 卡数据带 ``params`` 的写法 ``{"op":"request","type":"card","params":{…}}``；
+        * 引擎效果 / 旧嵌套写法 ``{"type":"request","params":{"type":"zone",…}}``。
+        """
+
+        if not isinstance(effect, dict):
+            return ''
+        op = effect.get('op')
+        kind = effect.get('type')
+        if isinstance(op, str) and op == 'request':
+            if isinstance(kind, str) and kind and kind != 'request':
+                return kind.strip().lower()
+            kind = None
+        elif not (isinstance(kind, str) and kind == 'request'):
+            return ''
+        params = effect.get('params')
+        if isinstance(params, dict):
+            return str(params.get('type') or '').strip().lower()
+        return ''
+
+    def _request_kind_any(self, effect) -> str:
+        """请求伞 ``type``（``_request_kind_of`` 的调用别名）。
+
+        Round 36 / 批次 AD-1 收尾后旧 op 名已全部退役，这里只是保留一个
+        语义化入口，方便调用点读起来仍是"请求族的 kind"。
+        """
+
+        return self._request_kind_of(effect)
+
+    def _is_choice_gate_effect(self, effect) -> bool:
+        """这一步会不会先弹窗、且"取消"要中断后续效果（旧 ``request_*`` 三兄弟）。"""
+
+        if not isinstance(effect, dict):
+            return False
+        return (
+            self._effect_type(effect) == 'request'
+            and self._request_kind_any(effect) in self.REQUEST_CHOICE_TYPES
+        )
 
     def _walk_choice_effects(self, effects):
         for effect in effects or []:
@@ -13442,12 +13537,16 @@ class GameEngine:
             effect_type = self._effect_type(effect)
             extra_choice_effect = effect_type in (
                 'discard_choice_then_draw',
-                'choose_from_deck', 'choose_from_discard', 'choose_from_zone', 'steal_enemy_card',
+                'steal_enemy_card',
+            ) or (
+                # Round 36 / 批次 AD-1：``request(type:"zone")`` 承接旧
+                # ``choose_from_zone``，仍然算"要弹取牌窗口"的效果。
+                self._request_kind_any(effect) == 'zone'
             )
             if effect_type == 'destroy_equipment':
                 # Round 31 / 批次 Z：规范名只在"真要点选"时算选择效果。
                 extra_choice_effect = self._choice_type_for_effect(effect, card) == 'choose_enemy_equipment'
-            is_choice_effect = effect_type in self.CHOICE_EFFECT_TYPES or extra_choice_effect
+            is_choice_effect = self._is_choice_gate_effect(effect) or extra_choice_effect
             if not is_choice_effect:
                 continue
             if self._choice_request_satisfied(effect, choice, card):
@@ -13777,12 +13876,20 @@ class GameEngine:
         return a == b
 
     def _effect_tree_uses_event_target(self, value):
-        if value in ('event_target', 'target', 'choice_target', 'selected_target', 'chosen_target'):
+        if isinstance(value, str) and value in (
+            'event_target', 'target', 'choice_target', 'selected_target', 'chosen_target'
+        ):
             return True
         if isinstance(value, list):
             return any(self._effect_tree_uses_event_target(item) for item in value)
         if isinstance(value, dict):
-            return any(self._effect_tree_uses_event_target(item) for item in value.values())
+            # Round 36 / 批次 AD-1：``op`` 是步骤名、``type`` 是请求伞的判别值
+            # （``{"op":"request","type":"target"}``），不能当成目标选择器。
+            return any(
+                self._effect_tree_uses_event_target(item)
+                for key, item in value.items()
+                if key not in ('op', 'type')
+            )
         return False
 
     @staticmethod
@@ -14111,6 +14218,14 @@ class GameEngine:
                 self._consume_action_work(2)
                 et = eff if isinstance(eff, str) else self._effect_type(eff)
                 pm = {} if isinstance(eff, str) else self._effect_params(eff)
+                if isinstance(eff, dict) and 'type' not in pm:
+                    # Round 36 / 批次 AD-1：扁平写法
+                    # ``{"op":"request","type":"zone",…}`` 的判别参数不在
+                    # ``_effect_params`` 的返回值里（``type`` 是保留键，客户端
+                    # payload 才不会多出一个 "type" 字段），执行前在这里补齐。
+                    request_kind = self._request_kind_of(eff)
+                    if request_kind:
+                        pm = {**pm, 'type': request_kind}
                 lg = None if isinstance(eff, str) else eff.get('log')
                 # Round 22/24（别名收敛 + C 类合并）: 引擎路径（含引擎原子
                 # 自己跑的 body）也把旧名挡在实现名之前，给"已改名 / 已移除 +
@@ -14141,7 +14256,7 @@ class GameEngine:
                 if (
                     isinstance(choice, dict)
                     and choice.get('cancelled')
-                    and rt in self.CHOICE_EFFECT_TYPES
+                    and self._is_choice_gate_effect(eff)
                     and not pm.get('continue_on_cancel')
                 ):
                     break
@@ -15069,6 +15184,11 @@ class GameEngine:
             return value in ('target', 'event_target')
         if isinstance(value, dict):
             for key, item in value.items():
+                if key in ('op', 'type'):
+                    # Round 36 / 批次 AD-1：步骤的 op 名与请求伞的判别值
+                    # （``{"op":"request","type":"target"}``）不是目标选择器，
+                    # 别把它们当"这个事件树用了 target"。
+                    continue
                 if key in ('target', 'targets', 'target_player', 'effect_target') and self._effect_tree_uses_target_selector(item, depth + 1):
                     return True
                 if self._effect_tree_uses_target_selector(item, depth + 1):
@@ -17166,7 +17286,8 @@ class GameEngine:
                     card.fission_hit = 0
                 else:
                     self._apply_card_effect(player_id, card, choice)
-        # Check if an effect (e.g. request_reorder_deck/assembler_effect) set pending_choice during execution
+        # Check if an effect (e.g. request(type:"reorder_deck") / assembler_effect) set
+        # pending_choice during execution
         # Must check BEFORE card disposition (discard/equip) to allow the choice to complete first
         if self.pending_choice is not None:
             if getattr(self, '_auto_resolve_choices_for', None) == player_id:
@@ -17980,14 +18101,36 @@ class GameEngine:
                 continue
             self.log_msg(log or f"{self.pn(owner_id)}获得装备{card_def.name_cn}")
 
-    def _atomic_request_target(self, player_id, card, params, log, choice, context):
-        return None
+    def _atomic_request(self, player_id, card, params, log, choice, context):
+        """Round 36 / 批次 AD-1：请求族伞原子（旧 op 全部并进这里）。
 
-    def _atomic_request_card(self, player_id, card, params, log, choice, context):
-        return None
+        ``params["type"]``（扁平写法里是步骤的 ``type``，由 ``_run_effect_list``
+        在执行前补进 ``params``）选类别：
 
-    def _atomic_request_confirm(self, player_id, card, params, log, choice, context):
-        return None
+        * ``target`` / ``card`` / ``confirm`` —— 占位返回 ``None``：真正的人机
+          交互由引擎的 pending_choice 流程在出牌前处理（合并前这三个
+          ``_atomic_*`` 就是空操作）。
+        * ``zone`` / ``forced_target`` / ``discount_copy`` / ``reorder_deck`` ——
+          交给各自的私有实现体（``_request_*_payload``，逐字搬运合并前的实现）。
+
+        未知类别显式报错，不静默。
+        """
+
+        request_type = str(params.get('type') or '').strip().lower()
+        if request_type in ('target', 'card', 'confirm', ''):
+            return None
+        if request_type == 'zone':
+            return self._request_zone_payload(player_id, card, params, log, choice, context)
+        if request_type == 'forced_target':
+            return self._request_forced_target_payload(player_id, card, params, log, choice, context)
+        if request_type == 'discount_copy':
+            return self._request_discount_copy_payload(player_id, card, params, log, choice, context)
+        if request_type == 'reorder_deck':
+            return self._request_reorder_deck_payload(player_id, card, params, log, choice, context)
+        raise V2ZoneError(
+            f"request 只认 type=target/card/confirm/zone/forced_target/discount_copy/reorder_deck，"
+            f"收到 {request_type!r}"
+        )
 
     def _atomic_response_declare(self, player_id, card, params, log, choice, context):
         return None
@@ -19025,7 +19168,10 @@ class GameEngine:
     # ``resource_op(resource:"e", delta:N, reset_coffee:true, card_heavy:1)``
     # （默认战报仍是"获得{n}E；本牌获得1层沉重"）。
 
-    def _atomic_copy_choice_with_discount(self, player_id, card, params, log, choice, context):
+    def _request_discount_copy_payload(self, player_id, card, params, log, choice, context):
+        """``request(type:"discount_copy")`` 的实现体（旧 ``copy_choice_with_discount``）：
+        复制选中的手牌并按 ``discount_e`` 打折（拟态）。"""
+
         ps = self.players[player_id]
         if not (choice and 'target_instance_id' in choice):
             return
@@ -20698,7 +20844,8 @@ class GameEngine:
             return
         steps = [
             step for step in raw_steps
-            if self._effect_type(step) not in ('request_target', 'place_as_equip')
+            if not self._is_target_request_step(step)
+            and self._effect_type(step) != 'place_as_equip'
         ]
         if not steps:
             return

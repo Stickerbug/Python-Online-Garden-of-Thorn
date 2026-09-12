@@ -41,6 +41,8 @@ INFINITE_EXCLUDED_IDS = {
 
 INFINITE_EXCLUDED_EFFECTS = {
     # Round 29 / 批次 X：取牌族合并成 choose_from_zone(zone=...)，清单同步。
+    # Round 36 / 批次 AD-1：取牌族再并进 ``request`` 伞，伞写法由下面的
+    # ``type:"zone"`` / ``type:"card"`` 判别（见 ``_is_infinite_excluded``）。
     # Round 31 / 批次 Z：``reveal_deck_top`` / ``put_card_to_deck`` 已删除
     # （``reveal_card_set`` / ``move_card`` 承接），名字从清单里移除。
     'draw', 'choose_from_deck', 'choose_from_zone',
@@ -87,7 +89,16 @@ def is_infinite_excluded(card_def) -> bool:
     effects = list(getattr(card_def, 'effects', []) or [])
     effects.extend(getattr(card_def, 'trigger_effects', []) or [])
     for effect in effects:
-        effect_type = effect.get('type') if isinstance(effect, dict) else effect
+        if not isinstance(effect, dict):
+            effect_type = effect
+        else:
+            effect_type = effect.get('op') or effect.get('type')
+            params = effect.get('params') if isinstance(effect.get('params'), dict) else effect
+            request_kind = str(params.get('type') or '').strip().lower()
+            if effect_type == 'request' and request_kind in ('zone', 'card'):
+                # 请求伞里的"从区域取牌 / 弹选牌"两类别与旧 choose_from_zone /
+                # choose_card_from_hand 同义，仍算无限火力排除项。
+                return True
         if effect_type in INFINITE_EXCLUDED_EFFECTS:
             return True
     return False

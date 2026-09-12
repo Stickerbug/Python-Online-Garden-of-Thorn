@@ -31,7 +31,8 @@ EXTRA_PUBLIC_OPS = (
     # Round 6a: engine implemented atoms that are also part of the curated
     # spec list; registered here as well so the mod studio schema stays stable
     # even if the ``_atomic_*`` source scan misses a module.
-    "declare_forced_target",
+    # Round 36 / 批次 AD-1：``declare_forced_target`` 已并进 ``request`` 伞
+    # （``type:"forced_target"``，由 ``_atomic_request`` 承接），不再单独登记。
     # Round 6b: reveal a hand to a viewer and tag the revealed cards (Schizo).
     # Round 33 / 批次 AB：``reveal_hand_cards`` 已并入 ``reveal(mode:"hand")``，
     # 由 ``GameEngine._atomic_reveal`` 承接，不再需要额外登记。

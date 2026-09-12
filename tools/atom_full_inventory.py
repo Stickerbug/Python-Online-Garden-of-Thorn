@@ -112,6 +112,30 @@ ROUND35_ACTIONS = {
                            "逼某人打出某区顶牌并进 auto_play(mode:\"zone_top\")（失败回收与随机目标不变）"),
 }
 
+# ---------------------------------------------------------------------------
+# Round 36 / 批次 AD-1：请求族七合一（`request` 伞，type 选类别）。
+ROUND36_ACTIONS = {
+    "request_target": ("合", 164, '{"op":"request","type":"target","allowed":"any"}',
+                       "弹选目标窗口并进 request(type:\"target\")：choice_type 仍是 choose_target，"
+                       "allowed/alive_only/candidates/include_self 原样透传"),
+    "request_card": ("合", 20, '{"op":"request","type":"card","params":{…}}',
+                     "弹选牌窗口并进 request(type:\"card\")：filter/zone/choice_type/multi/min_count "
+                     "同时驱动候选集、提交校验与卡级 play_requires（评测口径不变）"),
+    "request_confirm": ("合", 0, '{"op":"request","type":"confirm","params":{…}}',
+                        "弹二次确认并进 request(type:\"confirm\")（choice_type=confirm；卡数据 0 步，"
+                        "play_choice_request 下发的客户端 payload type 保持原样）"),
+    "choose_from_zone": ("合", 1, '{"op":"request","type":"zone","zone":"deck","target":"self"}',
+                         "从牌堆/弃牌堆/放逐区选一张进手牌并进 request(type:\"zone\")："
+                         "choice_type 仍按区域映射回 choose_from_deck|discard|exile"),
+    "declare_forced_target": ("合", 1, '{"op":"request","type":"forced_target","target":"self"}',
+                              "声明强制目标窗口并进 request(type:\"forced_target\")（Light Bulb 机制不变）"),
+    "copy_choice_with_discount": ("合", 0, '{"op":"request","type":"discount_copy","discount_e":1}',
+                                  "拟态式「复制所选手牌并打折」并进 request(type:\"discount_copy\")"),
+    "request_reorder_deck": ("合", 1, '{"op":"request","type":"reorder_deck","target":"enemy","message":"…"}',
+                             "请求重排对手牌堆（魔法护目镜）并进 request(type:\"reorder_deck\")，"
+                             "pending_choice 的 choice_type/字段逐字保留"),
+}
+
 # 退役但**保留 `_atomic_*` 处理器**的名字：公开契约里已经进
 # ``mod_spec_v2.REMOVED_ATOMIC_OPS``（写出来是"已移除 + 替代写法"），但引擎内部
 # 或测试会直接调这些私有方法，所以实现留着手工删不得。它们同样必须"卡数据 0 引用"。
@@ -332,10 +356,7 @@ KEPT_EXPLICIT = {
     "repeat": "控制流原语（Round 32 收编 repeat_until 的 until=停止条件）",
     "break": "**语言原语**（跳出循环，不算可参数化的原子，Round 32 明确保留）",
     "continue": "**语言原语**（跳过本次迭代，Round 32 明确保留）",
-    "request_card": "请求选牌（UI 挂起，164 处使用）",
-    "request_target": "请求选目标（UI 挂起，164 处使用）",
-    "request_confirm": "请求确认（UI 挂起）",
-    "request_reorder_deck": "请求重排牌堆（UI 挂起）",
+    "request": "Round 36 请求族唯一公开 op（type=target|card|confirm|zone|forced_target|discount_copy|reorder_deck；旧 request_target 等七个名字已退役）",
     "reveal_enemy_hand": "查看手牌（antennae 通道）",
     "reveal_hand_cards": "展示手牌 + revealed 标记（tag/amount 过滤）",
     "reveal_card_set": "私下展示某区/初始牌组（viewer + amount）",
@@ -460,7 +481,7 @@ def build() -> dict:
     kept.sort(key=lambda row: (row["family"], row["name"]))
     actions = []
     for name, (verdict, before, replacement, reason) in (
-        {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS}
+        {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS, **ROUND36_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

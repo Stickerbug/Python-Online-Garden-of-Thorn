@@ -2590,12 +2590,20 @@ class GameEngine2v2(GameEngine):
         return player_id if self._is_valid_effect_target(player_id, player_id) else -1
 
     def _effect_tree_uses_event_target(self, value):
-        if value in ('event_target', 'target', 'choice_target', 'selected_target', 'chosen_target'):
+        if isinstance(value, str) and value in (
+            'event_target', 'target', 'choice_target', 'selected_target', 'chosen_target'
+        ):
             return True
         if isinstance(value, list):
             return any(self._effect_tree_uses_event_target(item) for item in value)
         if isinstance(value, dict):
-            return any(self._effect_tree_uses_event_target(item) for item in value.values())
+            # Round 36 / 批次 AD-1：``op`` 是步骤名、``type`` 是请求伞的判别值
+            # （``{"op":"request","type":"target"}``），不能当成目标选择器。
+            return any(
+                self._effect_tree_uses_event_target(item)
+                for key, item in value.items()
+                if key not in ('op', 'type')
+            )
         return False
 
     def _equipment_trigger_forbids_self_target(self, card_def):
