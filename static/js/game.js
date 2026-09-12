@@ -35520,6 +35520,44 @@ function renderGameOverGr(gs = {}) {
     box.classList.toggle('hidden', rows.length === 0);
 }
 
+function renderGameOverDew(gs = {}) {
+    const box = $('gameover-dew');
+    if (!box) return;
+    box.innerHTML = '';
+    box.classList.add('hidden');
+    if (!currentAccount || currentAccount.id == null) return;
+    if (gs.solo || gs.tutorial || gs.ai_test || gs.spectating || isSpectating || gs.your_id === -1) return;
+    if (!['1v1', '2v2'].includes(String(gs.mode || ''))) return;
+    const summary = gs.match_summary || gs.summary || {};
+    const result = summary.thorn_dew_result;
+    if (!result || typeof result !== 'object') return;
+    const myId = String(currentAccount.id);
+    const awards = Array.isArray(result.awarded) ? result.awarded : [];
+    const mine = awards.find(item => item && String(item.user_id) === myId) || null;
+    const title = UI.thorn_dew || '荆露';
+    if (!mine) {
+        if (result.skipped === 'early_surrender') {
+            box.innerHTML = `<div class="gameover-gr-title">${escapeHtml(title)}</div>`
+                + `<div class="gameover-gr-muted">${escapeHtml(lt({
+                    zh: '开局 60 秒内投降，本局无荆露奖励',
+                    en: 'Surrendered within 60s: no Thorn Dew this match',
+                    fr: 'Abandon dans les 60 s : aucune Rosée d’épines',
+                    ja: '開始60秒以内の降参：ソーンデューなし',
+                }))}</div>`;
+            box.classList.remove('hidden');
+        }
+        return;
+    }
+    const amount = Math.max(0, Number(mine.amount) || 0);
+    const amountText = amount > 0 ? `+${amount}` : '0';
+    box.innerHTML = `<div class="gameover-gr-title">${escapeHtml(title)}</div>`
+        + '<div class="gameover-dew-row">'
+        + `<span>${escapeHtml(lt({ zh: '本局获得', en: 'Earned this match', fr: 'Gagné cette partie', ja: '今回の獲得' }))}</span>`
+        + `<b class="${amount > 0 ? 'positive' : ''}">${escapeHtml(amountText)}</b>`
+        + '</div>';
+    box.classList.remove('hidden');
+}
+
 function renderGameOver(data) {
     const gs = preserveGameOverLogState(data || gameState, gameState) || {};
     const finalLog = Array.isArray(gs.log) ? gs.log.slice() : [];
@@ -35561,6 +35599,7 @@ function renderGameOver(data) {
         message.classList.toggle('hidden', !tutorialMessage);
     }
     renderGameOverGr(gs);
+    renderGameOverDew(gs);
     const replayBox = $('gameover-replay');
     const replayCopy = $('btn-copy-gameover-replay');
     const replayId = Number((gs.match_summary || gs.summary || {}).replay_id || gs.replay_id || 0);

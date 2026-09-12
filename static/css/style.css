@@ -11397,7 +11397,8 @@ html.blind-level-4 .card-prediction-part.magic {
   display: none;
 }
 
-.gameover-gr {
+.gameover-gr,
+.gameover-dew {
   width: min(520px, 88vw);
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--bloom) 35%, var(--border-color));
@@ -11406,7 +11407,8 @@ html.blind-level-4 .card-prediction-part.magic {
   color: var(--text-primary);
 }
 
-.gameover-gr.hidden {
+.gameover-gr.hidden,
+.gameover-dew.hidden {
   display: none;
 }
 
@@ -11487,6 +11489,23 @@ html.blind-level-4 .card-prediction-part.magic {
   color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
+}
+
+.gameover-dew-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 24px;
+  font-size: 13px;
+}
+
+.gameover-dew-row b {
+  font-weight: 700;
+}
+
+.gameover-dew-row b.positive {
+  color: var(--health);
 }
 
 .gameover-log {
