@@ -35,6 +35,12 @@ def test_feedback_108_trigger_target_follows_equipment_effect_target():
     assert js.count('equipmentTriggerUsesEffectTarget(cardDef)') >= 5
 
 
+def test_feedback_106_sapphire_asks_target_outside_2v2():
+    js = _game_js()
+    assert "if (['sapphire', 'ocean:sapphire'].includes(cardId)) {" in js
+    assert "return gs.mode === '2v2';" in js
+
+
 def test_feedback_114_flavor_text_skips_bare_terms():
     js = _game_js()
     assert 'colorizeCardText(descriptionText, { terms: false })' in js

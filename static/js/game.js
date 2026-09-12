@@ -31569,7 +31569,12 @@ function cardNeedsPlayerTarget(cardDef, cardDict = null) {
     if (cardHasWideStrikeFlag(cardDict || {}, cardDef)) return false;
     if (cardHasSelfOnlyFlag(cardDict || {}, cardDef) && cardDef.card_type !== 'thorn') return false;
     const cardId = String(cardDef.id || cardDef.def_id || cardDef.legacy_id || '').toLowerCase();
-    if (['sapphire', 'ocean:sapphire'].includes(cardId)) return false;
+    if (['sapphire', 'ocean:sapphire'].includes(cardId)) {
+        // 反馈 #106：1v1/无限火力走“选目标 → 选攻击牌”两步，前端必须先问目标；
+        // 2v2 引擎用 combined_choice_target 在后续选择里一次处理（见
+        // game_engine_2v2._card_requires_target），不能提前预选目标。
+        return gs.mode === '2v2';
+    }
     if (cardDef.card_type === 'guard') return false;
     if (cardDef.card_type === 'thorn') {
         const allowsSelf = getEffectiveCardFlagSets(cardDict || {}, cardDef || {}).effective.has('self_target');
