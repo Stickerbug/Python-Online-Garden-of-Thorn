@@ -275,6 +275,42 @@ ROUND41_ACTIONS = {
                          "与引擎响应系统承载（bio:indictment 在 Round 40 起也已改用 card_var_change）"),
 }
 
+# ---------------------------------------------------------------------------
+# Round 43 / 批次 AG（"能组合就删"续扫）：3 个原子逐个验证后删除。
+# 判据、迁移与"迁移前 / 迁移后"对拍见 `.codex-tmp/round43/rd43.md`：
+#   * 一条空步骤（实现就是 ``return None``，机制由装备标签承载）；
+#   * 一条"写的字段本来就在属性白名单里"的费用修正；
+#   * 一条"反弹输入量在响应上下文里，数据侧读得到"的反击。
+ROUND43_ACTIONS = {
+    "plank_immunity": ("删", 1, '（无等价步骤：直接删掉这一步）',
+                       "Round 43 / 批次 AG：实现是 ``return None`` 的空步骤；木板机制由装备标签 "
+                       "``blocks_cheap_attacks`` 承载——``_deal_attack_damage`` 每段伤害前读 "
+                       "``_equipment_flag_or_legacy_mark(target, \"blocks_cheap_attacks\")``，"
+                       "再看攻击牌是不是\"荆棘牌且实际 E 消耗 ≤ 1\"。卡数据里该步已删，"
+                       "装备在场即生效（与卡面\"装备在场时\"一致），A/B 与定向探针都逐字节相同"),
+    "modify_next_cost": ("删", 1, '{"op":"card_prop_add_to_zone","target":"target","zone":"hand",'
+                                  '"property":"temp_heavy_value","amount":1,"require_selectable":false,'
+                                  '"silent":true}',
+                         "Round 43 / 批次 AG：加费/减费写的 ``temp_heavy_value`` / "
+                         "``temp_swift_value`` 本来就在 ``_set_card_property_value`` 的属性白名单里"
+                         "（连带 ``temp_heavy`` / ``temp_swift`` 实例标签同步）；批量写区域属性用 "
+                         "``card_prop_add_to_zone``，减费换 ``property:\"temp_swift_value\"``，"
+                         "旧名 increase_next_cost / reduce_next_cost 的替代写法一起改指这条"),
+    "counter_pending_attack_damage": ("删", 1, '{"op":"if_else","condition":{"op":"compare",'
+                                               '"a":{"op":"var","name":"first_hit_damage"},"operator":">","b":0},'
+                                               '"then":[{"op":"direct_damage","target":"target",'
+                                               '"amount":{"op":"ceil","value":{"op":"mul","a":0.6,'
+                                               '"b":{"op":"var","name":"first_hit_damage"}}},'
+                                               '"damage_type":"physical","source_text":"盐"}]}',
+                                      "Round 43 / 批次 AG：反弹的输入量就在响应上下文里——"
+                                      "``_run_v2_card_event`` 把 ``extra_context`` 原样并进 "
+                                      "``context['vars']``（first_hit_damage / first_damage / "
+                                      "incoming_damage_parts 都在里面），所以 ceil(first_hit × ratio) "
+                                      "与来源文案都能用取值表达式 + ``direct_damage`` 写出来；"
+                                      "唯一差异是反射伤害现在会写引擎级 ``_last_damage_value``"
+                                      "（与 deal_damage / direct_damage 全族一致，见报告§差异）"),
+}
+
 # Round 42 / 批次 AF（极端收敛，"能组合就删"）：15 个名字删除/退役。
 # 判据与 A/B 证据见 `.codex-tmp/round42/rd42.md`：六条只播报（写的字段零读取方）、
 # 五条写的字段已有既有写入口（官方包已有同写法）、三条两步通用组合
@@ -421,10 +457,14 @@ UNUSED_OP_VERDICTS = {
                      "取值与 ``equip_turns`` 条件算子），把它们补进 ``card_prop_change`` 的属性白名单后就是普通"
                      "属性写入；reset = 两条 ``mode:\"set\" value:0``"),
     "charge_self_damage": ("留·机制钩子", "`{\"op\":\"charge_self_damage\"}`",
-                           "Round 42 复核：**不是卡数据步骤，而是引擎在出牌结算内部自己调的钩子**——"
+                           "Round 42 复核、Round 43 再核（含反证）：**不是卡数据步骤，而是引擎在出牌结算"
+                           "内部自己调的钩子**——"
                            "``_play_card``（game_engine.py:8154/9096）、响应牌结算（:8486）与 2v2 "
                            "（game_engine_2v2.py:868/1542）都直接调用它，读卡属性 charge_value 并用 "
-                           "_once_per_play 的 ocean_charge 标记记账；数据层没有插进这段时机的入口，按管线型保留"),
+                           "_once_per_play 的 ocean_charge 标记记账。Round 43 的反证：这四处调用点在**反制判定之前**"
+                           "（``_check_card_response_after_choice`` 会提前 return），而数据步骤只能写在 "
+                           "``events.on_play`` 的 ``_execute_card_effect`` 里——被反制时数据写法不触发、"
+                           "引擎钩子照样触发，时机不可等价，按管线型保留"),
     "counter_equip_protect": ("删·可下沉", "`{\"op\":\"player_prop_change\",\"mode\":\"add\","
                                           "\"property\":\"equipment_protection\",\"target\":\"self\",\"amount\":1}`",
                               "Round 42 / 批次 AF：写的字段 equipment_protection 本来就在 "
@@ -461,10 +501,12 @@ UNUSED_OP_VERDICTS = {
                       "Round 42 / 批次 AF：``formula`` 全仓库零读取方（伤害公式来自步骤本身），"
                       "这一步只有播报；注意 events.modify_damage 是另一条 v2 事件钩子键，不受影响"),
     "multiply_next_damage": ("留·机制钩子", "`{\"op\":\"multiply_next_damage\",\"multiplier\":2}`",
-                             "Round 42 复核后保留：写的 ``players[i].damage_multiplier`` 被攻击管线读取"
-                             "（game_engine.py:2329 / game_engine_2v2.py:2293）并在结算后复位，"
-                             "而 ``player_prop_change`` 的属性白名单不含这个浮点字段（读/写两侧都缺），"
-                             "数据层没有等价写入口"),
+                             "Round 43 复核后保留（含“现有原子组合不出等价”的实测）：写的 "
+                             "``players[i].damage_multiplier`` 是**乘算**累加（``current * multiplier``），"
+                             "被攻击管线读取（game_engine.py:2329 / game_engine_2v2.py:2293）并在结算后复位"
+                             "（:16833 / 2v2:2296）。``player_prop_change`` 只支持 set/add 且属性白名单里"
+                             "没有这个浮点字段（实测写入被忽略、返回 None），``player_var_change`` 写的是"
+                             "custom_vars 不是玩家字段——即“两次 ×2 叠加 = ×4”这种语义用现有原子表达不出来"),
     "transform_card": ("删·可下沉", "`{\"op\":\"log\",\"message\":\"变换<牌名>效果触发\"}`",
                        "Round 42 / 批次 AF：实现只按 card 引用查一张牌再播报，不写任何状态；"
                        "真正的变换是 ``transform_cards``（1 处卡数据在用）"),
@@ -562,10 +604,16 @@ ROUND32_ACTIONS = {
     "aura_enemy_elixir_recovery": ("合", 0, '{"op":"resource_op","mode":"aura_recovery","resource":"e","amount":N}',
                                    "光环声明（原子本身空操作），数值由 _declared_aura_elixir_bonus 统一读取"),
     # ---- 费用族 -----------------------------------------------------------
-    "increase_next_cost": ("合", 1, '{"op":"modify_next_cost","delta":N,"target":...}',
-                           "费用族并成 modify_next_cost：delta 正负定方向（正=加费/加重）"),
-    "reduce_next_cost": ("合", 0, '{"op":"modify_next_cost","delta":-N,"target":...}',
-                         "同上；负 delta 走旧 reduce 的 temp_swift 分支"),
+    "increase_next_cost": ("合", 1, '{"op":"card_prop_add_to_zone","target":...,"zone":"hand",'
+                                    '"property":"temp_heavy_value","amount":N,'
+                                    '"require_selectable":false,"silent":true}',
+                           "费用族先并成 modify_next_cost（delta 正负定方向），Round 43 又把它"
+                           "下沉成区域属性写入——temp_heavy_value / temp_swift_value 本来就在"
+                           "属性白名单里（含实例标签同步）"),
+    "reduce_next_cost": ("合", 0, '{"op":"card_prop_add_to_zone","target":...,"zone":"hand",'
+                                  '"property":"temp_swift_value","amount":N,'
+                                  '"require_selectable":false,"silent":true}',
+                         "同上；减费 = temp_swift_value（Round 43 把 modify_next_cost 也删了）"),
     # ---- 抽牌族 -----------------------------------------------------------
     "draw_cards": ("合", 9, '{"op":"draw","count":N,"target":...}',
                    "抽牌族并成 draw（count + modifiers）；默认值就是旧 draw_cards（触发抽牌钩子、播报实际张数）"),
@@ -736,7 +784,6 @@ KEPT_EXPLICIT = {
     "move_cards_to_deck": "批量把牌放回牌堆",
     "draw": "Round 32 抽牌族唯一实现（count + hooks + log_amount + modifiers）",
     "discard_choice_then_draw": "先弃后抽（弃牌选择窗口）",
-    "modify_next_cost": "Round 32 新合并体：下次出牌费用修正（delta 正负定方向）",
     "snapshot_card_props": "牌属性快照（按实例存）",
     "restore_card_props": "恢复牌属性快照",
     "restore_match_start_stats": "恢复开局属性",
@@ -744,8 +791,10 @@ KEPT_EXPLICIT = {
     "set_card_prop_random": "区域内随机设定属性",
     "list_modify": "Round 32 新合并体：列表写值（mode=set|append|insert|delete|clear）",
     "charge_self_damage": "充能自身伤害",
-    "counter_pending_attack_damage": "反击待结算攻击伤害（Desert）",
-    "absorb_attack_damage": "吸收攻击伤害（body + once）",
+    "absorb_attack_damage": "Round 43 复核留：注册式“吸收一次攻击命中”（body + once + duration），"
+                            "登记项由 deal_attack_damage 内部的 _consume_absorb_attack_damage 在"
+                            "**伤害落地前**消费并把 absorbed_damage 交给 body；数据层的步骤列表和 "
+                            "card.to_dict() 都塞不进这个引擎级登记表，按管线钩子保留",
     "ricochet_attack": "弹射（攻击管线变体）",
     "lifesteal_damage": "吸血伤害",
     "triangle_damage": "三角伤害（层数 x 基数）",
@@ -756,15 +805,26 @@ KEPT_EXPLICIT = {
     "add_charge_to_hand": "手牌充能（Arctic）",
     "apply_turn_regen": "回合回复（Jungle）",
     "cogwheel_mark": "齿轮标记（Factory）",
-    "crit_multiplier_add": "暴击倍率（+，Hel）",
+    "crit_multiplier_add": "Round 43 复核留：写 custom_vars 的 hel_crit_multiplier_turn_bonus 后还要调 "
+                           "_hel_sync_crit_multiplier_display 刷新显示变量（值 == 2.0 时删除该键），"
+                           "数据侧写不出“舍入到 2 位 + 条件删除”这段同步",
     "delayed_blind_next_turn": "下回合延迟失明（Ocean）",
     "delayed_reveal_hand_next_turn": "下回合延迟展示手牌",
-    "electric_web_arm": "电网护臂（Factory）",
+    "electric_web_arm": "Round 43 复核留：一次写两处引擎状态——玩家 custom_vars 的 electric_web_draw_damage "
+                        "与**装备** custom_vars 的 electric_web_armed_target/_amount（用 _find_equipment_for_card "
+                        "找当前牌挂着的装备）；数据层没有写装备 custom_vars 的入口",
     "goggles_enable": "护目镜启用（Factory）",
-    "grant_temp_swift_highest_e": "费用最高的手牌暂时迅捷（Jungle）",
-    "honey_control": "蜂蜜控制（Bee 类）",
-    "magic_salt_reflect": "魔法盐反射",
-    "plank_immunity": "木板免疫（Jungle）",
+    "grant_temp_swift_highest_e": "Round 43 复核留：先在手牌里按 _card_selectable_by_action 过滤、再挑 "
+                                  "cost_e 最大的那一张写 temp_swift（含标签同步）。card_prop_add_to_zone "
+                                  "只能按 card_type/tag 过滤、写全部/随机 N/前 N 张，没有“按费用最大挑选”的选择器，"
+                                  "for_each 也拿不到“当前手牌里 E 最大”这个归约",
+    "honey_control": "Round 43 复核留：写的是引擎级回合字段 honey_control_turns（不在 player_prop_change 白名单），"
+                     "外加 honey_control_any_card / honey_control_keep_turn / sewers_cheese_forced_target / "
+                     "void_puppeteer_damage_multiplier 四个 custom_vars，其中 forced_target 还要把目标引用解析成"
+                     "玩家 id 再存（数据侧写不出“解析后的 id”）；sewers:cheese / garden:honey / garden:beeswax 在用",
+    "magic_salt_reflect": "Round 43 复核留：这是被伤害管线在 on_damage_taken 时点调的**响应窗口**——要判物理攻击牌伤害、"
+                          "查魔力是否够 cost_m、扣费并弹 choice_type=magic_salt_reflect 的选择窗口交给客户端预测；"
+                          "数据步骤开不出这种窗口，按管线钩子保留",
     "third_eye_precision_or_hidden": "第三眼：精准或隐匿（Garden）",
 }
 
@@ -848,7 +908,7 @@ def build() -> dict:
     for name, (verdict, before, replacement, reason) in (
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
          **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
-         **ROUND41_ACTIONS, **ROUND42_ACTIONS}
+         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

@@ -34,15 +34,19 @@ ADVANCED_ATOMIC_OPS = {
     # 不变，只是不再虚报"白名单里有实现"。
     # Round 32 / 批次 AA：``if``/``repeat_until``/``for_each_list``/
     # ``for_each_selected_card`` 并进 ``if_else`` / ``repeat`` / ``for_each``；
-    # 生命族并进 ``health_op``、资源族并进 ``resource_op``、费用族并进
-    # ``modify_next_cost``、抽牌族并进 ``draw``、列表族并进 ``list_modify``。
+    # 生命族并进 ``health_op``、资源族并进 ``resource_op``、抽牌族并进 ``draw``、
+    # 列表族并进 ``list_modify``；费用族先并进 ``modify_next_cost``，Round 43 /
+    # 批次 AG 又把它下沉成 ``card_prop_add_to_zone(property:"temp_heavy_value"/
+    # "temp_swift_value")``。
     # Round 37 / 批次 AD-2：``after_all`` 并进 ``on_event(trigger:"after_all")``，
     # 规范名 ``on_event`` 有自己的 ``_atomic_*`` 实现，登记在这里只是保持
     # "伞原子在白名单里"的既有口径。
     "on_event", "random", "break", "continue", "if_else", "repeat",
     "for_each",
     "damage", "direct_damage",
-    "health_op", "resource_op", "draw", "modify_next_cost",
+    # Round 43 / 批次 AG：``modify_next_cost`` 已删除（替代写法 =
+    # ``card_prop_add_to_zone(property:"temp_heavy_value"/"temp_swift_value")``）。
+    "health_op", "resource_op", "draw",
     # Round 33 / 批次 AC + Round 35 收尾：装备 / 状态 / 标签 / 自动打出四族的
     # 伞原子（``equipment_op`` / ``status_op`` / ``tag_op`` / ``auto_play``）。
     # ``queue_auto_play`` 仍是可用名（测试断言 ocean:magic_pearl 的步骤形状），
@@ -106,7 +110,8 @@ ADVANCED_ATOMIC_OPS = {
     "player_prop_change", "card_prop_change",
     "equipment_prop_set",
     "restore_turn_start_stats", "restore_match_start_stats",
-    "counter_pending_attack_damage",
+    # Round 43 / 批次 AG：``counter_pending_attack_damage`` 已删除（响应上下文里
+    # 的 first_hit_damage + direct_damage 组合）。
     "equipment_prop_add", "discard_choice_then_draw",
     # Round 42 / 批次 AF：``activate_corruption`` 已删除——同一个 setter 由
     # ``equipment_prop_set(property:"corruption_active")`` 覆盖。
@@ -127,7 +132,8 @@ ADVANCED_ATOMIC_OPS = {
     # consume_magic_for_status / yin_yang_effect / flower_burst /
     # draw_to_hand_limit 的公式已搬进卡数据，实现删除（见 REMOVED_ATOMIC_OPS）。
     "apply_turn_regen",
-    "plank_immunity",
+    # Round 43 / 批次 AG：``plank_immunity``（空步骤）已删除，机制由装备标签
+    # ``blocks_cheap_attacks`` 承载。
     "electric_web_arm",
     "magic_salt_reflect", "third_eye_precision_or_hidden",
     "grant_temp_swift_highest_e",
@@ -664,70 +670,9 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         context.setdefault("vars", {})["last_positive_hits"] = positive_hits
         return {"success": True, "last_damage": total}
 
-    if op == "counter_pending_attack_damage":
-        ratio = float(params.get("ratio", params.get("multiplier", 0.5)) or 0)
-        vars_dict = context.get("vars", {}) if isinstance(context.get("vars"), dict) else {}
-        action_dict = context.get("current_action", {}) if isinstance(context.get("current_action"), dict) else {}
-        incoming = _to_int(
-            context.get(
-                "first_hit_damage",
-                context.get(
-                    "first_damage",
-                    vars_dict.get(
-                        "first_hit_damage",
-                        vars_dict.get(
-                            "first_damage",
-                            action_dict.get("first_hit_damage", action_dict.get("first_damage", 0)),
-                        ),
-                    ),
-                ),
-            )
-        )
-        if incoming <= 0:
-            parts = context.get("incoming_damage_parts") or vars_dict.get("incoming_damage_parts") or action_dict.get("incoming_damage_parts")
-            if isinstance(parts, (list, tuple)) and parts:
-                incoming = _to_int(parts[0])
-        amount = max(0, int(math.ceil(incoming * ratio)))
-        if amount <= 0:
-            return {"success": True, "last_damage": 0}
-        raw_source = params.get("source", "source")
-        source_selector = raw_source if _looks_like_target_selector(raw_source) else "source"
-        source = _player_id(engine, resolve_v2_target(engine, context, source_selector))
-        source_text = params.get("source_text") or params.get("source_name") or params.get("label")
-        if source_text is None and not _looks_like_target_selector(raw_source):
-            source_text = raw_source
-        source_text = str(source_text or "反击")
-        damage_type = str(params.get("damage_type") or DAMAGE_TYPE_PHYSICAL)
-        damage_tag = params.get("damage_tag")
-        mode = str(params.get("mode", params.get("damage_mode", "direct")) or "direct").lower()
-        total = 0
-        target_ref = params.get("target", "target")
-        if target_ref in ("all_enemies", "enemies"):
-            targets = list(engine.get_all_enemies(source)) if hasattr(engine, "get_all_enemies") else [_enemy_id(engine, source)]
-        else:
-            targets = _as_player_list(engine, resolve_v2_target(engine, context, target_ref))
-        for target_id in targets:
-            if not _valid_player(engine, target_id):
-                continue
-            if mode in ("attack", "physical_attack") and hasattr(engine, "deal_attack_damage"):
-                dealt = engine.deal_attack_damage(target_id, amount, 1, is_precision=False, attacker_id=source)
-            elif hasattr(engine, "_deal_direct_damage"):
-                try:
-                    dealt = engine._deal_direct_damage(
-                        target_id,
-                        amount,
-                        source_text,
-                        source,
-                        damage_type=damage_type,
-                        damage_tag=damage_tag,
-                    )
-                except TypeError:
-                    dealt = engine._deal_direct_damage(target_id, amount, source_text, source)
-            else:
-                dealt = 0
-            total += int(dealt or 0)
-        context["last_damage"] = total
-        return {"success": True, "last_damage": total}
+    # Round 43 / 批次 AG：``counter_pending_attack_damage`` 的运行时原生分支已删除
+    # ——整个 op 退役（引擎原子与这里的分支一起走），旧名写出来先撞
+    # ``REMOVED_ATOMIC_OPS`` 的"已移除 + 替代写法"显式报错，不再有第二条实现。
 
     # Round 32 / 批次 AA：``heal`` / ``draw_cards`` / ``gain_e`` / ``gain_m``
     # 的运行时原生分支已经删除——它们各自并进引擎原子 ``health_op`` / ``draw`` /

@@ -251,9 +251,12 @@ _CORE_LOGIC_OPS = {
     # ``vanilla:fusion`` 的卡数据（request + for_each + card_prop_change +
     # move_card）。
     "multiply_next_damage",
-    # Round 32 / 批次 AA：``reduce_next_cost`` / ``increase_next_cost`` 并进
-    # ``modify_next_cost(delta=...)``（正负号定方向）。
-    "modify_next_cost",
+    # Round 43 / 批次 AG：``modify_next_cost``（Round 32 由 reduce_next_cost /
+    # increase_next_cost 合并而来）已删除——它写的 ``temp_swift_value`` /
+    # ``temp_heavy_value`` 本来就在 ``_set_card_property_value`` 的白名单里
+    # （带 ``temp_swift`` / ``temp_heavy`` 标签同步），替代写法是
+    # ``card_prop_add_to_zone(zone:"hand", property:"temp_heavy_value", amount:N,
+    # require_selectable:false, silent:true)``（减费换 ``temp_swift_value``）。
     # Round 42 / 批次 AF：``transform_card``（只播报的占位步骤）已删除。
     # Round 29 / 批次 X：耐久三兄弟并入卡牌属性族
     # （``card_prop_add``/``card_prop_set`` + ``property:"durability"``）。
@@ -294,7 +297,10 @@ _CORE_LOGIC_OPS = {
     # 旧名进 REMOVED_ATOMIC_OPS。
     # Round 33 / 批次 AB：两条 ``restore_*_stats`` 已并入
     # ``restore(mode:"turn_start"/"match_start")``。
-    "counter_pending_attack_damage",
+    # Round 43 / 批次 AG：``counter_pending_attack_damage``（盐式"按待结算攻击的
+    # 第一段伤害反弹"）已删除——响应上下文里就能读到 ``first_hit_damage``
+    # （``_run_v2_card_event`` 把 extra_context 并进 ``context['vars']``），
+    # 替代写法见 REMOVED_ATOMIC_OPS 的完整 JSON。
     "discard_choice_then_draw",
     # Round 42 / 批次 AF：``activate_corruption`` 已删除——同一个 setter 已由
     # ``equipment_prop_set(property:"corruption_active")`` 覆盖，官方包
@@ -327,7 +333,8 @@ _CORE_LOGIC_OPS = {
     "apply_turn_regen",
     # Round 33 / 批次 AB：``create_copies_to_deck_top`` 已并入
     # ``copy_card(to_zone:"deck_top", count:N)``。
-    "plank_immunity",
+    # Round 43 / 批次 AG：``plank_immunity``（实现是 ``return None`` 的空步骤）已删除
+    # ——木板的机制由装备标签 ``blocks_cheap_attacks`` 承载，卡数据里那一步直接删掉。
     # Round 37 / 批次 AD-2：``magic_relic_trigger`` 并进
     # ``on_event(trigger:"equipment_trigger", effect:"magic_relic")``。
     "electric_web_arm",
@@ -552,8 +559,9 @@ DAMAGE_ATOM_PIPELINES = {
     # 直伤管线
     "direct_damage": DAMAGE_PIPELINE_DIRECT,
     "lose_health": DAMAGE_PIPELINE_DIRECT,
-    # 默认走直伤，``mode`` 可切到攻击（见 docs §26 词汇表）
-    "counter_pending_attack_damage": DAMAGE_PIPELINE_DIRECT,
+    # Round 43 / 批次 AG：``counter_pending_attack_damage`` 已删除（响应上下文里的
+    # first_hit_damage + direct_damage 组合替代），所以这里不再登记它的管线；
+    # 它的两个专用参数 ``ratio`` / ``multiplier`` 也从参数词汇表里撤下。
 }
 
 DAMAGE_PIPELINE_LABELS = {
@@ -654,16 +662,8 @@ DAMAGE_PARAM_PIPELINES = {
     "mode": {
         "pipelines": (DAMAGE_PIPELINE_DIRECT,),
         "aliases": ("damage_mode",),
-        "note": "counter_pending_attack_damage 结算方式，默认 direct，attack 走攻击管线",
-    },
-    "ratio": {
-        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
-        "note": "counter_pending_attack_damage 的反弹比例（默认 0.5，直伤）；"
-                "Round 42 / 批次 AF 删除 lifesteal_damage 后不再有「攻击管线」那一义",
-    },
-    "multiplier": {
-        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
-        "note": "counter_pending_attack_damage 比例旧名；统一名为 ratio",
+        "note": "伤害步骤的共享键（Round 43 删除 counter_pending_attack_damage 后，由其它"
+                "直接写 mode 的伤害步骤继续读；旧写法里的 attack 值请改用 deal_damage）",
     },
     # ---- 等价别名的登记项（与上面 canonical 项同管线；写在卡数据里照跑）----
     "precision": {
@@ -834,6 +834,29 @@ _FAMILY_HINT = {
 #
 # ``None`` 表示没有等价替代（原本就是空实现或未实现过的声明性名字）。
 REMOVED_ATOMIC_OPS = {
+    # Round 43 / 批次 AG（"能组合就删"续扫）：3 个原子逐个验证后删除，
+    # 替代写法如下。判定证据与"迁移前 / 迁移后"对拍见 `.codex-tmp/round43/rd43.md`。
+    #   * 空步骤：实现就是 ``return None``，机制由装备标签承载。
+    "plank_immunity": '（无等价步骤：直接删掉这一步）木板机制由装备标签 '
+                      'blocks_cheap_attacks 承载——_deal_attack_damage 每段伤害前读 '
+                      '_equipment_flag_or_legacy_mark(target, "blocks_cheap_attacks")，'
+                      '再看攻击牌是"荆棘牌且实际 E 消耗 ≤ 1"',
+    #   * 费用修正：写的字段本来就在 card_prop_change 的白名单属性里。
+    "modify_next_cost": '{"op":"card_prop_add_to_zone","target":"target","zone":"hand",'
+                        '"property":"temp_heavy_value","amount":1,"require_selectable":false,'
+                        '"silent":true}（加费；减费换 property:"temp_swift_value"；'
+                        'temp_swift/temp_heavy 标签同步在 _set_card_property_value 里）'
+                        '（旧名 increase_next_cost / reduce_next_cost 也改指这条）',
+    #   * 反击：反弹输入量在响应上下文里，数据用取值表达式读。
+    "counter_pending_attack_damage": '{"op":"if_else","condition":{"op":"compare",'
+                                     '"a":{"op":"var","name":"first_hit_damage"},"operator":">","b":0},'
+                                     '"then":[{"op":"direct_damage","target":"target",'
+                                     '"amount":{"op":"ceil","value":{"op":"mul","a":0.6,'
+                                     '"b":{"op":"var","name":"first_hit_damage"}}},'
+                                     '"damage_type":"physical","source_text":"盐"}]}'
+                                     '（``_run_v2_card_event`` 把 extra_context 并进 '
+                                     'context["vars"]，first_hit_damage / first_damage / '
+                                     'incoming_damage_parts 都在里面）',
     # Round 42 / 批次 AF（极端收敛："能组合就删"）：14 个原子逐个定论后删除，
     # 替代写法如下。判定依据与 A/B 见 `.codex-tmp/round42/rd42.md`。
     #
@@ -1246,8 +1269,12 @@ REMOVED_ATOMIC_OPS = {
     "coffee_gain_e": '{"op":"resource_op","resource":"e","delta":2,"target":"self","reset_coffee":true,"card_heavy":1,"log":"{target}获得{amount}E；本牌获得1层沉重"}',
     "aura_enemy_elixir_recovery": '{"op":"resource_op","mode":"aura_recovery","resource":"e","amount":1}',
     #   * 费用族 → modify_next_cost(delta 正数加费 / 负数减费)
-    "increase_next_cost": '{"op":"modify_next_cost","delta":1,"target":"self"}',
-    "reduce_next_cost": '{"op":"modify_next_cost","delta":-1,"target":"self"}',
+    "increase_next_cost": '{"op":"card_prop_add_to_zone","target":"self","zone":"hand",'
+                          '"property":"temp_heavy_value","amount":N,"require_selectable":false,'
+                          '"silent":true}（modify_next_cost 也在 Round 43 删除）',
+    "reduce_next_cost": '{"op":"card_prop_add_to_zone","target":"self","zone":"hand",'
+                        '"property":"temp_swift_value","amount":N,"require_selectable":false,'
+                        '"silent":true}（modify_next_cost 也在 Round 43 删除）',
     #   * 抽牌修正 → draw 的 modifiers
     "equip_reduce_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"enemy"}]}',
     #   * 控制流 → repeat(until=...) / for_each(bind:"selected_card") / list_modify

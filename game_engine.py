@@ -10105,59 +10105,14 @@ class GameEngine:
         ps.damage_multiplier = getattr(ps, 'damage_multiplier', 1.0) * multiplier
         self.log_msg(log or f"{self.pn(player_id)}下次伤害x{multiplier}")
 
-    def _atomic_modify_next_cost(self, player_id, card, params, log, choice, context):
-        """Round 32 / 批次 AA：``increase_next_cost`` / ``reduce_next_cost`` 二合一。
-
-        方向由 ``delta`` 的**正负**决定（正数 = 加重 / 加费，负数 = 减费），
-        也接受 ``mode:"reduce"/"increase"`` 显式写法；``amount`` 仍是旧参数名
-        （旧实现取绝对值，所以 ``amount:-2`` 与 ``amount:2`` 在旧名里同义，
-        新写法请用 ``delta``）。目标、``card_type`` 过滤与"改了才播报"的规则
-        全部沿用 ``_change_hand_card_costs``。
-        """
-
-        if 'delta' in params:
-            delta = self._eval_int(player_id, params.get('delta'), card, 1)
-        else:
-            delta = abs(self._eval_int(player_id, params.get('amount', 1), card, 1))
-        mode = str(params.get('mode') or '').strip().lower()
-        if mode in ('reduce', 'decrease', 'minus', '减'):
-            delta = -abs(delta)
-        elif mode in ('increase', 'add', 'plus', '加'):
-            delta = abs(delta)
-        # ``_change_hand_card_costs`` 从 ``params['amount']`` 取面额，这里把
-        # ``delta`` 的绝对值喂进去（旧实现取的就是绝对值）。
-        cost_params = dict(params)
-        cost_params['amount'] = abs(delta)
-        self._change_hand_card_costs(player_id, card, cost_params, log, -1 if delta < 0 else 1)
-
-    def _change_hand_card_costs(self, player_id, card, params, log, direction: int):
-        """Internal helper for ``reduce_next_cost`` / ``increase_next_cost``.
-
-        Round 20: this used to be ``_atomic_modify_hand_card_cost``. It never was
-        a valid step op (its signature has no ``choice`` / ``context``, so the
-        effect dispatcher could not call it) -- it is only reachable through the
-        two atoms above, so it no longer carries the ``_atomic_`` prefix.
-        """
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        amount = abs(self._eval_int(player_id, params.get('amount', 1), card, 1))
-        if amount <= 0:
-            return
-        card_type = str(params.get('card_type', '') or '').strip()
-        changed = 0
-        for hand_card in list(getattr(self.players[target_id], 'hand', []) or []):
-            if card_type and getattr(hand_card.card_def, 'card_type', '') != card_type:
-                continue
-            if direction < 0:
-                hand_card.temp_swift_value = max(0, int(getattr(hand_card, 'temp_swift_value', 0) or 0)) + amount
-                hand_card.instance_flags.add('temp_swift')
-            else:
-                hand_card.temp_heavy_value = max(0, int(getattr(hand_card, 'temp_heavy_value', 0) or 0)) + amount
-                hand_card.instance_flags.add('temp_heavy')
-            changed += 1
-        if changed > 0 and log:
-            self.log_msg(log)
+    # Round 43 / 批次 AG：``modify_next_cost``（Round 32 由 increase_next_cost /
+    # reduce_next_cost 合并而来）已删除——它写的两个字段
+    # ``temp_swift_value`` / ``temp_heavy_value`` 本来就在 ``_set_card_property_value``
+    # 的属性白名单里（连带 ``temp_swift`` / ``temp_heavy`` 实例标签的同步），
+    # 所以"使目标手牌全部加费 1"就是
+    # ``card_prop_add_to_zone(target:…, zone:"hand", property:"temp_heavy_value",
+    # amount:1, require_selectable:false, silent:true)``（减费同理换
+    # ``temp_swift_value``）。旧名与私有助手 ``_change_hand_card_costs`` 一起删除。
 
     def _merge_fusion_card_layers(self, keep: CardInstance, cards: List[CardInstance]):
         if not keep or not cards:
@@ -19525,61 +19480,20 @@ class GameEngine:
         if log:
             self.log_msg(log)
 
-    def _atomic_counter_pending_attack_damage(self, player_id, card, params, log, choice, context):
-        ratio = float(params.get('ratio', params.get('multiplier', 0.5)) or 0)
-        incoming = 0
-        if isinstance(context, dict):
-            try:
-                incoming = int(context.get('first_hit_damage', context.get('first_damage', 0)) or 0)
-            except Exception:
-                incoming = 0
-            parts = context.get('incoming_damage_parts')
-            if isinstance(parts, (list, tuple)) and parts:
-                try:
-                    incoming = int(context.get('first_hit_damage') or context.get('first_damage') or parts[0] or 0)
-                except Exception:
-                    incoming = 0
-            # Do not fall back to total incoming damage here. Salt-style
-            # counters reflect only the first hit of a multi-hit card; old
-            # prediction fallbacks may store the total as one synthetic part.
-        amount = max(0, int(math.ceil(incoming * ratio)))
-        if amount <= 0:
-            return
-        # Round 28：与 direct_damage / 运行时分支同一串来源文案回落。
-        source_text = params.get('source_text') or params.get('source_name') or params.get('label')
-        if source_text is None:
-            source_text = params.get('source', getattr(card, 'name_cn', '反击'))
-        source = str(source_text)
-        damage_type = params.get('damage_type', DAMAGE_TYPE_PHYSICAL)
-        damage_tag = params.get('damage_tag')
-        target_ref = params.get('target', 'target')
-        if target_ref in ('all_enemies', 'enemies'):
-            targets = list(self.get_all_enemies(player_id)) if hasattr(self, 'get_all_enemies') else [1 - player_id]
-        else:
-            targets = self._resolve_targets(player_id, target_ref)
-        # Round 15 / batch 3: the runtime branch always defaulted to ``direct``;
-        # the engine atom used to default to ``attack``, so the same step could
-        # resolve differently depending on where it was nested.
-        mode = str(params.get('mode', params.get('damage_mode', 'direct')) or 'direct').lower()
-        total = 0
-        for tid in targets:
-            if 0 <= tid < len(self.players):
-                if mode in ('direct', 'effect'):
-                    total += int(self._deal_direct_damage(
-                        tid, amount, source, player_id,
-                        damage_type=damage_type, damage_tag=damage_tag,
-                    ) or 0)
-                else:
-                    total += int(self.deal_attack_damage(
-                        tid, amount, 1, is_precision=False, attacker_id=player_id,
-                    ) or 0)
-        if isinstance(context, dict):
-            context['last_damage'] = int(total)
-        if log:
-            self.log_msg(self._format_step_log(
-                log, target=self.pn(targets[0]) if targets else '',
-                source=self.pn(player_id), amount=int(total), damage=int(total),
-            ))
+    # Round 43 / 批次 AG：``counter_pending_attack_damage``（盐式"按待结算攻击的
+    # 第一段伤害反弹"）已删除。反弹的输入量就在响应上下文里——``_run_v2_card_event``
+    # 把 ``extra_context`` 原样并进 ``context['vars']``（含 ``first_hit_damage`` /
+    # ``first_damage`` / ``incoming_damage_parts``），所以数据侧能直接读：
+    #   {"op":"if_else",
+    #    "condition":{"op":"compare","a":{"op":"var","name":"first_hit_damage"},
+    #                 "operator":">","b":0},
+    #    "then":[{"op":"direct_damage","target":"target",
+    #             "amount":{"op":"ceil","value":{"op":"mul","a":0.6,
+    #                       "b":{"op":"var","name":"first_hit_damage"}}},
+    #             "damage_type":"physical","source_text":"盐"}]}
+    # 直伤管线的落点 ``_last_damage_value`` 与 ``context['last_damage']`` 由
+    # ``direct_damage`` 自己写，与旧实现逐字一致（desert_cards_addition:salt 的
+    # 卡数据已按此改写）。
 
     # Round 32 / 批次 AA：``lose_health`` 已并入 ``health_op(mode:"lose")``
     # （实现整段搬进 ``_atomic_health_op``，含无敌分支与 ``_check_game_over``）。
@@ -20225,9 +20139,13 @@ class GameEngine:
                 return True
         return False
 
-    def _atomic_plank_immunity(self, player_id, card, params, log, choice, context):
-        # Implemented through damage modifier hook; kept as an atomic no-op for readable mod data.
-        return None
+    # Round 43 / 批次 AG：``plank_immunity`` 已删除——它的实现就是 ``return None``
+    # （空步骤），木板真正的机制是装备标签 ``blocks_cheap_attacks``：
+    # ``_deal_attack_damage`` 在每段伤害前调
+    # ``_equipment_flag_or_legacy_mark(target_id, 'blocks_cheap_attacks')``，再看攻击牌
+    # 是不是"荆棘牌且实际 E 消耗 ≤ 1"（game_engine.py 的 16810 段）。
+    # jungle:plank 的卡数据里该步已删（``on_owner_turn_start.steps`` 清空），
+    # 装备在场即生效，与卡面"装备在场时"一致。
 
     def _shuffle_hand_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AB：``shuffle(zone:"hand")`` 的实现体（``target`` 走
