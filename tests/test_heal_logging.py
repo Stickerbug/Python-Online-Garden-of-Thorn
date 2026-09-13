@@ -30,7 +30,7 @@ class HealLoggingTests(unittest.TestCase):
                 "choice": {"target_player": 2},
                 "current_action": {"choice": {"target_player": 2}},
             },
-            {"steps": [{"op": "heal", "target": "target", "amount": 7}]},
+            {"steps": [{"op": "health_op", "mode": "heal", "target": "target", "amount": 7}]},
         )
 
         self.assertTrue(result.get("success"))
@@ -53,7 +53,7 @@ class HealLoggingTests(unittest.TestCase):
                 "choice": {"target_player": 2},
                 "current_action": {"choice": {"target_player": 2}},
             },
-            {"steps": [{"op": "heal", "target": "target", "amount": 7}]},
+            {"steps": [{"op": "health_op", "mode": "heal", "target": "target", "amount": 7}]},
         )
 
         self.assertEqual(engine.players[2].health, 100)
@@ -64,7 +64,13 @@ class HealLoggingTests(unittest.TestCase):
         card = CardInstance("Rose")
         engine.log_msg(f"{engine.pn(0)}使用了{card.name_cn}")
 
-        engine._atomic_heal(0, card, {"target": "self", "amount": 7}, "", None, {})
+        # Round 50 / 批次 AN：``_atomic_heal`` 已并进 ``health_op(mode:"heal")``
+        # （Round 32），老测试改走真实数据步骤。
+        engine._run_effect_list(
+            0, card,
+            [{"op": "health_op", "mode": "heal", "target": "self", "amount": 7}],
+            None, {},
+        )
 
         self.assertEqual(engine.log, ["玩家1使用玫瑰，但玩家1未回复生命"])
 

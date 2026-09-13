@@ -535,6 +535,23 @@ ROUND49_ACTIONS = {
         "高价牌过滤）0 差异"),
 }
 
+# Round 50 / 批次 AN：Round 33 的 ``auto_play`` 伞缺的最后一块——
+# ``queue_auto_play`` 当时因为"官方包步骤形状被测试断言"而留了实现体，
+# 这一批把三处卡数据（pearl / magic_pearl / sapphire）迁到
+# ``auto_play(mode:"queue")`` 并同步那两处测试断言，实现体删除。
+ROUND50_ACTIONS = {
+    "queue_auto_play": (
+        "合", 3,
+        '{"op":"auto_play","mode":"queue","card":{"ref":"current_card"},"source":"snapshot",'
+        '"target":"target","each_turn":true,"cost":"normal","exile":true}',
+        "Round 50 / 批次 AN：队列自动打出就是 ``auto_play(mode:\"queue\")`` "
+        "（``_atomic_auto_play`` 的 queue 分支本来就是旧实现体），参数一个不动；"
+        "旧名进 RENAMED_ATOMIC_OPS，三条声明旧称（auto_play_queue_add / "
+        "queue_auto_play_card / ocean_mark_auto_play）一并改指伞写法。"
+        "顺手修好了两处因它而烂掉的测试数据（tests/test_allcards_balance_14.py 的"
+        "步骤断言、tests/test_ocean_sapphire_playability.py 的镜像步骤）"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -939,7 +956,7 @@ KEPT_EXPLICIT = {
                     "Round 45 / 批次 AI 起再收 honey_control（mode=forced_action，蜜糖控制：目标下回合被自动控制）",
     "action_filter": "Round 38 行为过滤族唯一公开 op（mode=block_own|block_type|force_type|negate；承接 block_own_actions / block_action / block_card_type / force_card_type / nullify_current_card）",
     "countdown_var": "倒计时变量（player_var_change 的定时封装）",
-    "queue_auto_play": "排队自动打出（card/source/each_turn/cost/exile）",
+    # Round 50 / 批次 AN：queue_auto_play 已并进 auto_play(mode:"queue")。
     "auto_play_card": "立刻自动打出（含 no_cost/auto_choice）",
     "auto_play_zone_top": "自动打出某区顶牌（Kitty 类）",
     "if_else": "控制流原语（Round 32 收编 if：不写 else 就是旧 if）",
@@ -1083,7 +1100,8 @@ def build() -> dict:
          **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS,
-         **ROUND47_ACTIONS, **ROUND48_ACTIONS, **ROUND49_ACTIONS}
+         **ROUND47_ACTIONS, **ROUND48_ACTIONS, **ROUND49_ACTIONS,
+         **ROUND50_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

@@ -83,14 +83,12 @@ def test_pvp_yin_yang_draws_trigger_electric_web(
     engine._active_choice = choice
     health_before = engine.players[target_id].health
 
-    engine._atomic_yin_yang_effect(
-        0,
-        yin,
-        {'target': 'target'},
-        '',
-        choice,
-        {'target_id': target_id},
-    )
+    # Round 50 / 批次 AN：``yin_yang_effect`` 早在 Round 26 就把公式搬进了
+    # 卡数据，老测试改成真实出牌路径。
+    if engine_class is GameEngine2v2:
+        engine.play_card(0, yin.instance_id, target_id, choice)
+    else:
+        engine.play_card(0, yin.instance_id, choice)
 
     target = engine.players[target_id]
     assert target.health < health_before

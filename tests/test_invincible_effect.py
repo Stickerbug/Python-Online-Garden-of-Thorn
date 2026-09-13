@@ -30,13 +30,13 @@ class InvincibleEffectTests(unittest.TestCase):
         self._grant_status_immunity(engine, 0)
         engine._set_invincible_until_next_own_turn_end(0)
 
-        engine._atomic_clear_status(
-            0,
-            None,
-            {'target': 'self', 'status': 'invincible'},
-            '',
-            None,
-            {},
+        # Round 50 / 批次 AN：``clear_status`` 已并进
+        # ``status_op(action:"remove")``（Round 31/35）。
+        engine._run_effect_list(
+            0, None,
+            [{"op": "status_op", "action": "remove", "target": "self",
+              "status": "invincible"}],
+            None, {},
         )
 
         self.assertTrue(engine.players[0].invincible)

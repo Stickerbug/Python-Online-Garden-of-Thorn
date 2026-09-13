@@ -336,7 +336,9 @@ class AllCardsBalance14Tests(unittest.TestCase):
         def walk(node):
             nonlocal queue_step
             if isinstance(node, dict):
-                if node.get("op") == "queue_auto_play":
+                # Round 50 / 批次 AN：队列自动打出并进 auto_play 伞
+                # （``auto_play(mode:"queue")``），旧名 queue_auto_play 已退役。
+                if node.get("op") == "auto_play" and str(node.get("mode") or "") == "queue":
                     queue_step = node
                 for value in node.values():
                     walk(value)

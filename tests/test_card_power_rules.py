@@ -34,7 +34,10 @@ class CardPowerRuleTests(unittest.TestCase):
             v2_events={
                 'on_enter_hand': {
                     'steps': [{
-                        'op': 'card_prop_set',
+                        # Round 50 / 批次 AN：``card_prop_set`` 早已并进
+                        # ``card_prop_change(mode:"set")``。
+                        'op': 'card_prop_change',
+                        'mode': 'set',
                         'card': {'ref': 'current_card'},
                         'property': 'power_value',
                         'value': 0,
@@ -50,7 +53,8 @@ class CardPowerRuleTests(unittest.TestCase):
             v2_events={'on_play': {'steps': [
                 {'op': 'deal_damage', 'target': 'target', 'amount': 10},
                 {
-                    'op': 'if',
+                    # Round 50 / 批次 AN：``if`` 早已并进 ``if_else``。
+                    'op': 'if_else',
                     'condition': {'op': 'play_was_countered'},
                     'then': [{'op': 'deal_damage', 'target': 'target', 'amount': 3, 'hits': 2}],
                 },
@@ -141,13 +145,13 @@ class CardPowerRuleTests(unittest.TestCase):
         card = CardInstance('sewers:broccoli')
         card.power_value = MAX_CARD_POWER - 1
 
-        engine._atomic_card_prop_add(
-            0,
-            card,
-            {'card': {'ref': 'current_card'}, 'property': 'power_value', 'amount': 10},
-            '',
-            None,
-            {},
+        # Round 50 / 批次 AN：``card_prop_add`` 已并进
+        # ``card_prop_change(mode:"add")``（Round 29/31），老测试改走真实步骤。
+        engine._run_effect_list(
+            0, card,
+            [{'op': 'card_prop_change', 'mode': 'add', 'property': 'power_value',
+              'amount': 10, 'card': {'ref': 'current_card'}}],
+            None, {},
         )
 
         self.assertEqual(card.power_value, MAX_CARD_POWER)
@@ -158,13 +162,11 @@ class CardPowerRuleTests(unittest.TestCase):
         card = CardInstance('Tomato')
         card.power_value = 17
 
-        engine._atomic_card_prop_add(
-            0,
-            card,
-            {'card': {'ref': 'current_card'}, 'property': 'power_value', 'amount': 10},
-            '',
-            None,
-            {},
+        engine._run_effect_list(
+            0, card,
+            [{'op': 'card_prop_change', 'mode': 'add', 'property': 'power_value',
+              'amount': 10, 'card': {'ref': 'current_card'}}],
+            None, {},
         )
 
         self.assertEqual(card.power_value, 18)

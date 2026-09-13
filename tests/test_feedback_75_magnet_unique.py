@@ -155,13 +155,11 @@ class MagnetUniqueStealTests(unittest.TestCase):
         engine.players[0].discard = [unique_owned]
         engine.players[0].hand = [unique_extra]
 
-        engine._atomic_move_to_hand(
-            0,
-            None,
-            {"card": unique_owned, "target": "self"},
-            "",
-            None,
-            {},
+        # Round 50 / 批次 AN：``move_to_hand`` 已并进 ``move_card(zone:"hand")``。
+        engine._run_effect_list(
+            0, None,
+            [{"op": "move_card", "zone": "hand", "card": unique_owned, "target": "self"}],
+            None, {},
         )
 
         self.assertIn(unique_owned, engine.players[0].hand)

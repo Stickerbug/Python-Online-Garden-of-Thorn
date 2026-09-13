@@ -16,7 +16,9 @@ PACKAGE = ROOT / 'mods' / 'Ocean Cards Addition.gtnmod'
 # instead of the retired ``ocean_sapphire_mark`` engine atom.
 SAPPHIRE_MARK_STEPS = [
     {
-        'op': 'queue_auto_play',
+        # Round 50 / 批次 AN：队列自动打出并进 auto_play 伞。
+        'op': 'auto_play',
+        'mode': 'queue',
         'card': {'ref': 'selected_card'},
         'source': 'instance',
         'target': 'target',
@@ -24,7 +26,8 @@ SAPPHIRE_MARK_STEPS = [
         'cost': 'normal',
         'exile': True,
     },
-    {'op': 'move_to_exile', 'card': {'ref': 'selected_card'}, 'silent': True},
+    # Round 50 / 批次 AN：``move_to_exile`` 早已并进 ``move_card(zone:"exile")``。
+    {'op': 'move_card', 'zone': 'exile', 'card': {'ref': 'selected_card'}, 'silent': True},
     {'op': 'log', 'message': '{source}的蓝宝石放逐1张攻击牌'},
 ]
 
@@ -81,7 +84,10 @@ class OceanSapphirePlayabilityTests(unittest.TestCase):
             'on_play': {
                 'steps': [
                     {
-                        'op': 'request_card',
+                        # Round 50 / 批次 AN：``request_card`` 早已并进 ``request``
+                        # （``type`` 选类别），这条测试数据同步改成伞写法。
+                        'op': 'request',
+                        'type': 'card',
                         'params': {
                             'choice_type': 'choose_ocean_sapphire',
                             'cancellable': True,

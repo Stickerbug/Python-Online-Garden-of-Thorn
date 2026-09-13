@@ -14,6 +14,22 @@ class StatusImmunityApplicationTests(unittest.TestCase):
     def grant_status_immunity(engine, player_id=0):
         engine.players[player_id].custom_statuses["status_immune"] = 1
 
+    @staticmethod
+    def run_step(engine, kind, card, params, log="", choice=None, context=None):
+        """Round 50 / 批次 AN：老测试直接调私有原子，现在改走真实数据步骤。
+
+        ``kind`` 取 ``add`` / ``set``（``player_prop_change``）与 ``var_set``
+        （``player_var_change``）——三者都是当年被合并掉的旧写法。
+        """
+
+        if kind in ("add", "set"):
+            step = {"op": "player_prop_change", "mode": kind}
+            step.update(params)
+        else:
+            step = {"op": "player_var_change", "mode": "set"}
+            step.update(params)
+        engine._run_effect_list(0, card, [step], None, {})
+
     def test_player_property_statuses_accumulate_while_suppressed(self):
         for engine_type in ENGINE_TYPES:
             with self.subTest(engine=engine_type.__name__):
@@ -23,17 +39,15 @@ class StatusImmunityApplicationTests(unittest.TestCase):
                 player.poison = 3
                 self.grant_status_immunity(engine)
 
-                engine._atomic_player_prop_add(
-                    0,
-                    card,
+                self.run_step(
+                    engine, "add", card,
                     {"target": "self", "property": "poison", "amount": 2},
                     "",
                     None,
                     "play",
                 )
-                engine._atomic_player_prop_add(
-                    0,
-                    card,
+                self.run_step(
+                    engine, "add", card,
                     {"target": "self", "property": "dodge", "amount": 1},
                     "",
                     None,
@@ -61,9 +75,8 @@ class StatusImmunityApplicationTests(unittest.TestCase):
                 card = CardInstance("Basic")
                 self.grant_status_immunity(engine)
 
-                engine._atomic_player_prop_set(
-                    0,
-                    card,
+                self.run_step(
+                    engine, "set", card,
                     {"target": "self", "property": "untargetable", "value": 1},
                     "",
                     None,
@@ -85,9 +98,8 @@ class StatusImmunityApplicationTests(unittest.TestCase):
                 player.triangle_stacks = 2
                 self.grant_status_immunity(engine)
 
-                engine._atomic_var_set(
-                    0,
-                    card,
+                self.run_step(
+                    engine, "var_set", card,
                     {
                         "target": "self",
                         "name": "三角形层数",

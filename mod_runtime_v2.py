@@ -49,7 +49,8 @@ ADVANCED_ATOMIC_OPS = {
     "health_op", "resource_op", "draw",
     # Round 33 / 批次 AC + Round 35 收尾：装备 / 状态 / 标签 / 自动打出四族的
     # 伞原子（``equipment_op`` / ``status_op`` / ``tag_op`` / ``auto_play``）。
-    # ``queue_auto_play`` 仍是可用名（测试断言 ocean:magic_pearl 的步骤形状），
+    # Round 50 / 批次 AN：``queue_auto_play`` 已并进 ``auto_play(mode:"queue")``，
+    # 三处卡数据与两处测试断言同步迁移，实现体删除（旧名进 RENAMED_ATOMIC_OPS）。
     # 其余旧名进 REMOVED_ATOMIC_OPS，写在下面只会拿到"已移除 + 替代写法"。
     "equipment_op", "status_op", "tag_op", "auto_play",
     # Round 24：护甲/闪避族、状态三兄弟、清状态族、每回合修正族、资源族、
@@ -104,7 +105,9 @@ ADVANCED_ATOMIC_OPS = {
     # Round 44 / batch AH: ``ricochet_attack`` is gone -- the bounce chain is a
     # ``deal_damage`` step whose ``target`` is ``{"selector": "bounce", ...}``
     # (see ``mod_spec_v2.REMOVED_ATOMIC_OPS``).
-    "queue_auto_play", "auto_play_zone_top",
+    # Round 50 / 批次 AN：``queue_auto_play`` 并进 ``auto_play(mode:"queue")``，
+    # 从这里一并注销（``auto_play_zone_top`` 是更早批次的历史名）。
+    "auto_play_zone_top",
     "card_var_change",
     "transform_cards",
     "deck_catalog_pick", "deck_catalog_pick_resume",

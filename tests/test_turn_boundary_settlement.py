@@ -702,7 +702,9 @@ class TurnBoundarySettlementTests(unittest.TestCase):
             v2_events={
                 'on_owner_turn_end': {
                     'steps': [{
-                        'op': 'add_status',
+                        # Round 50 / 批次 AN：``add_status`` 早已并进 ``status_op``。
+                        'op': 'status_op',
+                        'action': 'add',
                         'target': 'target',
                         'status': 'sluggish',
                         'amount': 1,
@@ -759,14 +761,21 @@ class TurnBoundarySettlementTests(unittest.TestCase):
             'target_turn_start',
             1,
             [{
-                'type': 'timed_effect',
+                # Round 50 / 批次 AN：``timed_effect`` / ``var_add`` 早已并进
+                # ``delayed_effect(mode:"timed")`` / ``player_var_change(mode:"add")``。
+                # 引擎原生路径（``_register_timed_effect`` 的 effects 列表）走
+                # ``_effect_params``：扁平写法会丢掉 ``body``，所以这里用
+                # ``params`` 形状（``_effect_params`` 原样返回）。
+                'op': 'delayed_effect',
                 'params': {
+                    'mode': 'timed',
                     'target': 'event_target',
                     'trigger': 'target_turn_start',
                     'duration': 1,
-                    'effects': [{
-                        'type': 'var_add',
-                        'params': {'target': 'event_target', 'name': 'boundary_probe', 'value': 1},
+                    'body': [{
+                        'op': 'player_var_change',
+                        'params': {'mode': 'add', 'target': 'event_target',
+                                   'name': 'boundary_probe', 'value': 1},
                     }],
                 },
             }],
@@ -787,8 +796,8 @@ class TurnBoundarySettlementTests(unittest.TestCase):
             'target_turn_start',
             2,
             [{
-                'type': 'var_add',
-                'params': {'target': 'event_target', 'name': 'boundary_probe', 'value': 1},
+                'op': 'player_var_change', 'mode': 'add',
+                'target': 'event_target', 'name': 'boundary_probe', 'value': 1,
             }],
         )
 

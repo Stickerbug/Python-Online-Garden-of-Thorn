@@ -385,8 +385,8 @@ _CORE_LOGIC_OPS = {
     # Round 33 / 批次 AB：``copy_card_instance`` 已并入
     # ``copy_card(as_instance:true)`。
     # Round 33 / 批次 AC + Round 35：``auto_play_card`` / ``auto_play_zone_top``
-    # 并成 ``auto_play``（``mode`` 选 card/zone_top）；``queue_auto_play``
-    # 保持可用（官方包 ``ocean:magic_pearl`` 的步骤形状被测试断言）。
+    # 并成 ``auto_play``（``mode`` 选 card/zone_top）；Round 50 / 批次 AN
+    # 把最后一条 ``queue_auto_play`` 也迁到 ``mode:"queue"``，它的实现体删除。
     "charge_self_damage",
     # Round 6a: data declares the "everyone must target me" window (Light
     # Bulb) so the engine no longer reads the pack's custom var directly.
@@ -406,7 +406,6 @@ _CORE_LOGIC_OPS = {
     "defer_game_over",
     # Round 33 / 批次 AB：``move_cards_to_deck`` 已并入
     # ``move_card(mode:"batch", target_zone:"deck", cards:…)``。
-    "queue_auto_play",
     # Round 33 / 批次 AB：``random_zone_card_to_hand`` 已并入
     # ``move_card(mode:"random", source_zone:…, target_zone:"hand")``。
     # Round 37 / 批次 AD-2：``register_play_listener`` 并进
@@ -1398,9 +1397,13 @@ REMOVED_ATOMIC_OPS = {
     #   * 标签族 → tag_op(action=add|remove|toggle|clear；带 zone/zones 即区域级)
     "add_tag": '{"op":"tag_op","action":"add","card":{"ref":"current_card"},"tag":"<标签>"}（减/清写 action:remove|clear）',
     "add_tag_to_zone": '{"op":"tag_op","action":"add","target":"enemy","zone":"hand","tag":"<标签>"}（切换写 action:"toggle"）',
-    #   * 自动打出族 → auto_play(mode=card|zone_top)；``queue_auto_play`` 保持可用
+    #   * 自动打出族 → auto_play(mode=card|zone_top|queue)
+    #     （Round 50 / 批次 AN 起 ``queue_auto_play`` 也走 ``mode:"queue"``）
     "auto_play_card": '{"op":"auto_play","mode":"card","card":{"ref":"last_created_card"},"no_cost":false}',
     "auto_play_zone_top": '{"op":"auto_play","mode":"zone_top","actor":{"ref":"equipment_target"},"zone":"deck","cost":"free"}',
+    "queue_auto_play": '{"op":"auto_play","mode":"queue","card":{"ref":"current_card"},"source":"snapshot",'
+                       '"target":"target","each_turn":true,"cost":"normal","exile":true}'
+                       '（Round 50 / 批次 AN：队列自动打出并进伞原子，参数一个不动）',
 
     # Round 36 / 批次 AD-1（请求族四合一）：七个请求类 op 全部并进 ``request``，
     # ``type`` 选类别（target / card / confirm / zone / forced_target /
@@ -1623,8 +1626,10 @@ RENAMED_ATOMIC_OPS = {
     "cogwheel_mark": "cogwheel_return",
     # Round 24：apply_poison / apply_toxic / gain_armor 的"规范名"本身也在
     # C 类合并里注销了，所以它们从本表移到 REMOVED_ATOMIC_OPS（带完整替代写法）。
-    "auto_play_queue_add": "queue_auto_play",
-    "queue_auto_play_card": "queue_auto_play",
+    # Round 50 / 批次 AN：``queue_auto_play`` 自己并进 ``auto_play(mode:"queue")``，
+    # 所以三条"声明旧称"改指伞写法。
+    "auto_play_queue_add": '{"op":"auto_play","mode":"queue",…}',
+    "queue_auto_play_card": '{"op":"auto_play","mode":"queue",…}',
     # Round 35：``auto_play_card`` / ``auto_play_zone_top`` 并进 ``auto_play``
     # （mode 选 card/zone_top），所以它们的"声明旧称"也指到伞原子。
     "kitty_auto_play": "auto_play",
@@ -1645,7 +1650,7 @@ RENAMED_ATOMIC_OPS = {
     # "已改名 + 规范名"的显式报错（其余旧名进 REMOVED_ATOMIC_OPS）。
     "ocean_add_charge_to_hand": '见 ``REMOVED_ATOMIC_OPS["add_charge_to_hand"]``'
                                '（Round 49 / 批次 AM 起该原子也删除了）',
-    "ocean_mark_auto_play": "queue_auto_play",
+    "ocean_mark_auto_play": '{"op":"auto_play","mode":"queue",…}',
     "void_kitty_auto_play": "auto_play",
     # Round 32 / 批次 AA：纯改名（参数面不变）——``if`` 就是"不写 else 的
     # ``if_else``"，``for_each_list`` 的 ``list``/``name`` 参数本来就在
@@ -1752,9 +1757,10 @@ def atom_layer_counts() -> Dict[str, int]:
 #     公开 op"的既有约定，见上面 ``VALID_LOGIC_OPS`` 之前的注释）。
 #     代价是 ``tools/mod_atom_report.py`` 的"未登记原子"会数到这些名字——
 #     报告里已经按"退役但保留处理器"单列。
-#   * ``queue_auto_play`` 保持可用（官方包 ocean:magic_pearl 的步骤形状被
-#     tests/test_allcards_balance_14.py 断言），既是 ``_atomic_*`` 又在
-#     ``_CORE_LOGIC_OPS`` 里。
+#   * ``queue_auto_play`` 曾因"官方包 ocean:magic_pearl 的步骤形状被
+#     tests/test_allcards_balance_14.py 断言"而保持可用；Round 50 / 批次 AN
+#     把三处卡数据（pearl / magic_pearl / sapphire）迁到 ``auto_play(mode:"queue")``
+#     并同步改了那两处测试断言，实现体因此删除（旧名进 RENAMED_ATOMIC_OPS）。
 
 VALID_EVENT_HOOKS = {
     "before_play_card",

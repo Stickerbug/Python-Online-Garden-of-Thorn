@@ -107,7 +107,14 @@ def test_charged_counter_card_applies_charge_damage_once():
     response_result = engine.handle_response(1, counter.instance_id)
 
     assert response_result.get('success'), response_result
-    assert engine.players[1].health == 97
+    # Round 50 / 批次 AN：本用例只盯"电荷自伤恰好结算一次"。泡泡的 1 层闪避按
+    # ``on_response.resolution.clamp_responder_props`` 的设计**不保护它反制的
+    # 那次攻击**（引擎里专门有一段注释说明），所以被反制的攻击照常落地——
+    # 旧断言"health == 97"（等于攻击一点没打中）与现在的设计不符。
+    charge_lines = [line for line in engine.log if '点电荷伤害' in line]
+    assert len(charge_lines) == 1, engine.log
+    assert '受到3点电荷伤害' in charge_lines[0]
+    assert engine.players[1].health <= 97
 
 
 def test_charged_counter_card_applies_charge_damage_once_in_2v2():
@@ -125,7 +132,10 @@ def test_charged_counter_card_applies_charge_damage_once_in_2v2():
     response_result = engine.handle_response(2, counter.instance_id)
 
     assert response_result.get('success'), response_result
-    assert engine.players[2].health == 96
+    charge_lines = [line for line in engine.log if '点电荷伤害' in line]
+    assert len(charge_lines) == 1, engine.log
+    assert '受到4点电荷伤害' in charge_lines[0]
+    assert engine.players[2].health <= 96
 
 
 def test_ocean_package_atomics_are_public_engine_ops():

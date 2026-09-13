@@ -78,9 +78,12 @@ class VoidTransformAndNukeTests(unittest.TestCase):
             v2_events={
                 'on_play': {
                     'steps': [
-                        {'op': 'request_target', 'allowed': 'any'},
-                        {'op': 'place_as_equip', 'effect_target': 'target'},
-                        {'op': 'add_armor', 'target': 'target', 'amount': 2},
+                        # Round 50 / 批次 AN：三条老写法都并进伞原子
+                        # （``request`` / ``equipment_op`` / ``player_stat_change``）。
+                        {'op': 'request', 'type': 'target', 'allowed': 'any'},
+                        {'op': 'equipment_op', 'mode': 'place', 'effect_target': 'target'},
+                        {'op': 'player_stat_change', 'mode': 'add', 'stat': 'armor',
+                         'target': 'target', 'amount': 2},
                     ]
                 }
             },
