@@ -2454,7 +2454,24 @@ class GameEngine:
             self._trigger_v2_status_events_for_player(source_id, 'on_damage_dealt', extra)
 
     def _v2_hooks_for(self, hook_name: str) -> List[dict]:
-        hooks = [hook for hook in (getattr(self, 'v2_event_hooks', []) or []) if isinstance(hook, dict) and hook.get('hook') == hook_name]
+        # 同义钩子名分组（Round 57 / 批次 AU）：组内任意名字注册，组内任意名字触发。
+        groups = (
+            ("after_play_card", "on_card_play"),
+            ("after_damage", "on_damage"),
+            ("on_status_added", "status_added"),
+        )
+        # Round 57 / 批次 AU：同义钩子名共用同一批监听器——``on_card_play`` 就是
+        # ``after_play_card``、``on_damage`` 就是 ``after_damage``、
+        # ``status_added`` 就是 ``on_status_added``。写哪个名字都能被触发，
+        # 不再需要各写一套触发点。
+        wanted = {hook_name}
+        for group in groups:
+            if hook_name in group:
+                wanted.update(group)
+        hooks = [
+            hook for hook in (getattr(self, 'v2_event_hooks', []) or [])
+            if isinstance(hook, dict) and hook.get('hook') in wanted
+        ]
         return sorted(hooks, key=lambda hook: (
             int(hook.get('priority', 0) if isinstance(hook.get('priority', 0), int) else 0),
             str(hook.get('_mod_id', '')),

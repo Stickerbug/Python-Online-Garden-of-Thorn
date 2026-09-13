@@ -1868,6 +1868,10 @@ VALID_EVENT_HOOKS = {
     # ---- Round 56 / 批次 AT 新接线的两个 ----
     "on_status_added",
     "on_status_removed",
+    # ---- Round 57 / 批次 AU：同义钩子名（与上面某个钩子共用同一批监听器）----
+    "on_card_play",      # = after_play_card
+    "on_damage",         # = after_damage
+    "status_added",      # = on_status_added
 }
 
 VALID_PATCH_OPS = {
