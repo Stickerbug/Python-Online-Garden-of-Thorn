@@ -22725,6 +22725,28 @@ class GameEngine:
     def _fire_status_change_events(self, target_id: int, status_id: str, before: int, after: int) -> None:
         """``on_apply`` / ``on_remove`` status events on the 0 <-> positive edges."""
 
+        delta = int(after) - int(before)
+        if delta and getattr(self, 'v2_event_hooks', None):
+            # Round 56 / 批次 AT：状态层数变化也走**模组级事件钩子**——
+            # ``on_status_added`` / ``on_status_removed`` 以前只在 VALID_EVENT_HOOKS
+            # 里登记、引擎从不触发，写出来是静默无效果。现在每次真实变化都触发一次
+            # （``vars`` 里带 ``status``/``amount``，``event_value`` = 变化量绝对值）。
+            active = getattr(self, '_active_effect_context', None)
+            source_id = target_id
+            if isinstance(active, dict):
+                candidate = active.get('source_player')
+                if isinstance(candidate, int) and 0 <= candidate < len(self.players):
+                    source_id = candidate
+            self._run_v2_event_hooks(
+                'on_status_added' if delta > 0 else 'on_status_removed',
+                {
+                    'source_player': source_id,
+                    'target_player': target_id,
+                    'vars': {'status': status_id, 'amount': abs(delta)},
+                    'current_action': {'status': status_id, 'amount': abs(delta)},
+                },
+                abs(delta),
+            )
         runner = getattr(self, '_run_v2_status_event', None)
         if not callable(runner):
             return

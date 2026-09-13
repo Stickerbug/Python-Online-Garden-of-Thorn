@@ -275,6 +275,28 @@ def _quoted_names(block: str) -> set:
     return set(re.findall(r"[\"']([a-z0-9_]+)[\"']", block or ""))
 
 
+def event_hook_consistency() -> dict:
+    """Round 56 / 批次 AT：``VALID_EVENT_HOOKS``（包级 event_hooks 白名单）
+    里的每个名字，必须真的在引擎源码里被触发——否则写出来是静默无效果。
+
+    判定：名字在引擎/运行时源码里出现过（含 ``_run_v2_event_hooks('X')``、
+    ``_run_v2_play_hook('X')``、伤害管线里的名字元组等所有写法）。
+    """
+
+    hooks = sorted(getattr(mod_spec_v2, "VALID_EVENT_HOOKS", set()) or set())
+    sources = ("game_engine.py", "game_engine_2v2.py", "game_engine_urf.py", "mod_runtime_v2.py")
+    text = "\n".join(
+        (ROOT / name).read_text(encoding="utf-8", errors="replace")
+        for name in sources
+        if (ROOT / name).is_file()
+    )
+    missing = [name for name in hooks if name not in text]
+    problems = []
+    if missing:
+        problems.append(f"登记了但引擎从不触发的事件钩子（写出来静默无效）：{missing}")
+    return {"declared": len(hooks), "missing": missing, "problems": problems}
+
+
 def ui_type_consistency() -> dict:
     """Round 55：`request_ui` 的三层类型表一致性。
 
@@ -405,6 +427,7 @@ def build_summary(report: dict, *, corpus=None) -> dict:
         "macro_map": dict(sorted(macros.items())),
         "layer_problems": layer_problems,
         "ui_types": ui_type_consistency(),
+        "event_hooks": event_hook_consistency(),
         "secret_ops_used": [
             {"op": op, "cards": usage[op]["cards"], "packages": sorted(usage[op]["packages"])}
             for op in secret_used
@@ -507,6 +530,15 @@ def render_text(summary: dict) -> str:
         lines.append("")
 
     ui = summary.get("ui_types") or {}
+    hooks = summary.get("event_hooks") or {}
+    if hooks:
+        lines.append(
+            f"== 包级事件钩子（event_hooks 白名单）: 登记 {hooks['declared']} 个，"
+            f"引擎从不触发的 {len(hooks['missing'])} 个 =="
+        )
+        for problem in hooks.get("problems") or []:
+            lines.append(f"  [失败] {problem}")
+        lines.append("")
     if ui:
         lines.append(
             "== request_ui 类型表（声明 / 运行时 / 客户端）: "
@@ -588,6 +620,8 @@ def main(argv=None) -> int:
         or summary["secret_ops_used"]
         # Round 55 / 批次 AS：UI 三层类型表必须一致。
         or (summary.get("ui_types") or {}).get("problems")
+        # Round 56 / 批次 AT：包级事件钩子白名单里的名字必须真的会被触发。
+        or (summary.get("event_hooks") or {}).get("problems")
     ):
         return 1
     return 0

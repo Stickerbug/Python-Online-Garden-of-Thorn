@@ -1830,7 +1830,24 @@ def atom_layer_counts() -> Dict[str, int]:
 #     把三处卡数据（pearl / magic_pearl / sapphire）迁到 ``auto_play(mode:"queue")``
 #     并同步改了那两处测试断言，实现体因此删除（旧名进 RENAMED_ATOMIC_OPS）。
 
+# ---------------------------------------------------------------------------
+# Round 56 / 批次 AT：**模组级事件钩子（``event_hooks`` 注册表）**的诚实白名单
+# ---------------------------------------------------------------------------
+# 这张表只给包级 ``event_hooks``（``{hook, priority, steps}``）当白名单用；
+# 卡数据的 ``events`` 键是另一套（``on_play`` / ``on_damage_taken`` / … 由
+# ``_run_card_event`` / ``_trigger_v2_status_events_for_player`` 派发，名字自由）。
+#
+# 以前这里列了 38 个名字，其中 19 个**引擎从来没触发过**（写出来静默无效果）：
+#   on_match_start / on_game_start / on_draft_start / on_opening_event /
+#   on_card_enter_hand / on_card_play / on_card_resolve / on_card_discarded /
+#   on_card_exiled / on_equipment_equipped / on_damage / on_heal /
+#   on_resource_changed / on_tag_added / on_tag_removed /
+#   on_response_window / on_choice_window / status_added / equipment_destroyed
+# 它们已从白名单移除；`tools/mod_atom_report.py --check` 现在会**核对每一个
+# 登记名在引擎源码里真的被触发**，防止再漂移。要加回来：先在触发点调
+# ``_run_v2_event_hooks('<名字>', …)``，再登记到这张表。
 VALID_EVENT_HOOKS = {
+    # ---- 已在引擎里触发（`_run_v2_event_hooks` / `_run_v2_play_hook` / 伤害管线）----
     "before_play_card",
     "after_play_card",
     "before_damage",
@@ -1840,35 +1857,17 @@ VALID_EVENT_HOOKS = {
     "turn_end",
     "before_draw",
     "after_draw",
-    "status_added",
-    "equipment_destroyed",
-    "on_match_start",
-    "on_game_start",
-    "on_draft_start",
-    "on_opening_event",
     "on_turn_start",
     "on_turn_end",
-    "on_card_enter_hand",
-    "on_card_play",
-    "on_card_resolve",
-    "on_card_discarded",
-    "on_card_exiled",
-    "on_equipment_equipped",
-    "on_equipment_trigger",
-    "on_equipment_destroy",
-    "on_damage",
     "on_damage_dealt",
     "on_damage_taken",
-    "on_heal",
     "on_resource_spent",
-    "on_resource_changed",
     "on_player_stat_changed",
+    "on_equipment_trigger",
+    "on_equipment_destroy",
+    # ---- Round 56 / 批次 AT 新接线的两个 ----
     "on_status_added",
     "on_status_removed",
-    "on_tag_added",
-    "on_tag_removed",
-    "on_response_window",
-    "on_choice_window",
 }
 
 VALID_PATCH_OPS = {
