@@ -348,7 +348,10 @@ _CORE_LOGIC_OPS = {
     # ``equipment_prop_set`` / ``equipment_prop_add`` 的写入口里（未知属性名
     # 直接落 ``custom_vars``），卡数据已迁到这三条通用步骤。
     "magic_salt_reflect",
-    "grant_temp_swift_highest_e",
+    # Round 46 / batch AJ：``grant_temp_swift_highest_e`` 已删除——它卡在
+    # "缺少按属性取极值的区域选牌选择器"上，这一批把这个通用能力补成
+    # ``zone_card``（见 :data:`REMOVED_ATOMIC_OPS` 的替代写法与
+    # ``docs/引擎原子与数据步骤清单.md`` §46）。
     # Round 37 / 批次 AD-2：``delayed_blind_next_turn`` /
     # ``delayed_reveal_hand_next_turn`` 并进
     # ``delayed_effect(mode:"blind"|"reveal_hand")``。
@@ -1422,6 +1425,26 @@ REMOVED_ATOMIC_OPS = {
                      'attack_only:false 放开牌型、end_turn_when_stuck:false 卡住不自动结束回合、'
                      'damage_multiplier 叠加自动行动期间的伤害倍率；'
                      '旧的 log:false 与旧实现一样回落到默认文案）',
+
+    # Round 46 / batch AJ（"缺啥补啥"）：通用选择器 ``zone_card`` 落地后，
+    # "按属性取极值的区域选牌"不再需要卡专用原子。
+    "grant_temp_swift_highest_e": (
+        '[{"op":"card_prop_change","mode":"add","property":"temp_swift_value","amount":3,'
+        '"card":{"selector":"zone_card","zone":"hand","owner":"self",'
+        '"filter":{"require_selectable":true},'
+        '"pick":{"by":"cost_e","mode":"max","tie":"first"},'
+        '"as":"temp_swift_card"},'
+        '"log":"{target}的一张手牌获得暂时迅捷:{amount}"},'
+        '{"op":"tag_op","mode":"add","tag":"temp_swift",'
+        '"card":{"ref":"temp_swift_card"},"silent":true}]'
+        '（原 ``target``/``amount`` 原样填进 ``owner``/``amount``；'
+        '``require_selectable`` 就是旧实现的 ``_card_selectable_by_action`` 池，'
+        '``pick.by cost_e`` + ``mode max`` + ``tie first`` 就是"取 E 最大、平手取第一张"，'
+        '``temp_swift_value`` 的写入口自带 instance_flags.add(临时迅捷) + '
+        'disabled_flags.discard(临时迅捷)（``tag_op`` 那一步是把同一件事写明），'
+        '``log`` 由 ``card_prop_change`` 渲染 ``{target}``/``{amount}``；'
+        '挑不到牌时两条写法都不播报）'
+    ),
 
     # Round 38 / 批次 AD-3（行为过滤族四合一）→ Round 42 / 批次 AF：``action_filter``
     # 本身也删除，四个 mode 改写成既有原子（玩家属性 + 取值表达式 + log）：

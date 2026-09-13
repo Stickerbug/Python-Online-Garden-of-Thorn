@@ -6616,6 +6616,282 @@ class GameEngine:
                 candidates.append(candidate)
         return candidates
 
+    # ------------------------------------------------------------------
+    # Round 46 / batch AJ: the generic ``zone_card`` selector
+    #
+    #     {"selector": "zone_card", "zone": "hand", "owner": "target",
+    #      "filter": {"require_selectable": true, "card_type": "thorn",
+    #                 "max_cost_e": 99, "exclude_flags": ["unique"]},
+    #      "pick": {"by": "cost_e", "mode": "max", "tie": "first"},
+    #      "as": "picked"}
+    #
+    # It picks *one card* out of a zone: the ``filter`` half is the shared
+    # picker spec table (the same one ``request(type:"card")``, the card level
+    # ``play_requires`` gate and ``move_card(mode:"batch", source_zone:…)``
+    # use), and the ``pick`` half reduces the matching pool to a single card by
+    # one of its properties.
+    #
+    # ``as`` binds the picked card into the effect context (``context['vars']``)
+    # so later steps can reuse it with ``{"ref": "<name>"}``; a second lookup of
+    # the same selector returns the *same* card instead of drawing again.
+    # ------------------------------------------------------------------
+    ZONE_CARD_SELECTOR_REFS = ('zone_card', 'zone_card_pick')
+    # Keys that belong to the shared filter table when they appear next to
+    # ``selector`` instead of inside ``filter``.
+    ZONE_CARD_FILTER_KEYS = (
+        'card_type', 'card_types', 'require_selectable', 'selectable',
+        'exclude_flags', 'exclude_tags', 'require_flags', 'include_flags',
+        'require_tags', 'exclude_self', 'source_card', 'max_base_cost_e',
+        'max_cost_e', 'max_e', 'min_cost_e', 'min_e', 'exclude_error',
+        'exclude_error_cards', 'affordable', 'pay_ratio', 'reserve_source_cost',
+    )
+    ZONE_CARD_PICK_ALIASES = {
+        'e': 'cost_e', 'cost': 'cost_e', 'actual_cost': 'cost_e', 'actual_cost_e': 'cost_e',
+        'm': 'cost_m', 'magic_cost': 'cost_m',
+        'power': 'power_value', 'damage': 'power_value',
+        'base_cost': 'base_cost_e', 'base_e': 'base_cost_e',
+        'fission': 'fission_level', 'fusion': 'fusion_level',
+        'swift': 'swift_value', 'temp_swift': 'temp_swift_value',
+        'heavy': 'heavy_value', 'temp_heavy': 'temp_heavy_value',
+        'magic_swift': 'magic_swift_value',
+        'temp_magic_heavy': 'temp_magic_heavy_value',
+        'charge': 'charge_value', 'dur': 'durability',
+        'bonus_damage': 'bonus_damage', 'extra_hit': 'extra_hits',
+        'blinds': 'blind_level',
+    }
+
+    @classmethod
+    def _is_zone_card_selector(cls, value) -> bool:
+        return cls._selector_ref(value) in cls.ZONE_CARD_SELECTOR_REFS
+
+    @classmethod
+    def _is_zone_card_pick_spec(cls, value) -> bool:
+        """Is this dict the *filter* form of ``zone_card`` (not the positional one)?
+
+        ``{"ref": "zone_card", "zone": "deck", "index": 2}`` predates this batch
+        and keeps its "Nth card of the zone" meaning, so that spelling is only
+        read as the new selector when it carries one of the pick/filter keys.
+        The ``{"selector": "zone_card", …}`` spelling is always the new one.
+        """
+        if not cls._is_zone_card_selector(value):
+            return False
+        if 'selector' in value:
+            return True
+        return any(
+            key in value
+            for key in ('filter', 'pick', 'as', 'save_as', 'pick_by', 'pick_mode', 'pick_tie')
+        )
+
+    @classmethod
+    def _zone_card_filter_spec(cls, selector: dict) -> dict:
+        """Fold a ``zone_card`` selector into the shared picker spec table."""
+        spec: dict = {}
+        raw_filter = selector.get('filter')
+        if isinstance(raw_filter, dict):
+            spec.update({key: value for key, value in raw_filter.items() if value is not None})
+        for key in cls.ZONE_CARD_FILTER_KEYS:
+            if key in selector and key not in spec and selector.get(key) is not None:
+                spec[key] = selector[key]
+        # The short spellings the selector documents map onto the long names the
+        # shared table already reads.
+        if 'selectable' in spec and 'require_selectable' not in spec:
+            spec['require_selectable'] = spec.pop('selectable')
+        elif 'selectable' in spec:
+            spec.pop('selectable')
+        if 'exclude_tags' in spec and 'exclude_flags' not in spec:
+            spec['exclude_flags'] = spec.pop('exclude_tags')
+        elif 'exclude_tags' in spec:
+            spec.pop('exclude_tags')
+        for alias in ('require_tags',):
+            if alias in spec and 'require_flags' not in spec:
+                spec['require_flags'] = spec.pop(alias)
+            elif alias in spec:
+                spec.pop(alias)
+        return spec
+
+    def _zone_card_pick_value(self, target_card: CardInstance, prop: str):
+        """Numeric (or textual) sort key for one card, for ``pick.by``."""
+        prop = str(prop or 'cost_e').strip()
+        prop = self.ZONE_CARD_PICK_ALIASES.get(prop.lower(), prop)
+        if prop in ('name', 'name_cn', 'name_en', 'def_id', 'id', 'card_type', 'quality'):
+            if prop in ('name', 'id'):
+                prop = 'name_cn' if prop == 'name' else 'def_id'
+            return str(getattr(target_card, prop, '') or '')
+        if prop.startswith('base_'):
+            # ``base_cost_e`` / ``base_power_value``: the printed card face,
+            # ignoring per-instance overrides.
+            card_def = getattr(target_card, 'card_def', None)
+            value = getattr(card_def, prop[len('base_'):], None)
+            try:
+                return int(value or 0)
+            except (TypeError, ValueError):
+                return 0
+        if prop in ('cost_e', 'cost_m'):
+            # 与共享规格表的 ``max_cost_e``/``min_cost_e`` 同一个口径：
+            # ``CardInstance.cost_e`` 是**实际花费**（含迅捷 / 沉重 / 融合加价 /
+            # 折价 / 暂时修饰），旧 ``grant_temp_swift_highest_e`` 也是按这个
+            # 属性取的最大值。要看牌面基础费用写 ``base_cost_e``。
+            value = getattr(target_card, prop, None)
+            if value is None:
+                return self._get_card_property_numeric_value(target_card, prop)
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return self._get_card_property_numeric_value(target_card, prop)
+        value = getattr(target_card, prop, None)
+        if value is None:
+            card_def = getattr(target_card, 'card_def', None)
+            value = getattr(card_def, prop, None)
+        if value is None:
+            return 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def _zone_card_owner_id(self, player_id: int, selector: dict, context=None,
+                            prefer_runtime: bool = False) -> int:
+        """Resolve the ``owner`` of the picked zone (a player selector).
+
+        ``prefer_runtime`` is set by the v2 runtime path, where the *runtime*
+        context (``target_player`` / ``wide_strike_targets``) is the authority
+        and the engine's active play choice may not be set up yet.
+        """
+        raw = selector.get('owner', selector.get('target', 'self'))
+        if isinstance(raw, bool):
+            raw = 'self'
+        if isinstance(raw, int):
+            return raw if self._valid_player_id(raw) else -1
+        if isinstance(raw, (list, tuple)):
+            raw = raw[0] if raw else 'self'
+            return self._zone_card_owner_id(player_id, {'owner': raw}, context)
+        if prefer_runtime and isinstance(context, dict):
+            resolved = self._zone_card_runtime_owner(raw, context)
+            if resolved is not None:
+                return resolved
+        try:
+            resolved = self._resolve_target(player_id, raw)
+        except Exception:
+            resolved = -1
+        if self._valid_player_id(resolved):
+            return int(resolved)
+        if isinstance(context, dict):
+            resolved = self._zone_card_runtime_owner(raw, context)
+            if resolved is not None:
+                return resolved
+        return -1
+
+    def _zone_card_runtime_owner(self, raw, context) -> Optional[int]:
+        """Player id for ``owner`` using the **runtime** selector vocabulary."""
+        try:
+            from mod_runtime_v2 import resolve_v2_target
+            resolved = resolve_v2_target(self, context, raw)
+        except Exception:
+            return None
+        if isinstance(resolved, (list, tuple, set)):
+            resolved = next(iter(resolved), -1)
+        try:
+            resolved = int(resolved)
+        except (TypeError, ValueError):
+            return None
+        return resolved if self._valid_player_id(resolved) else None
+
+    def _zone_card_candidates(self, player_id: int, selector: dict,
+                              current_card: Optional[CardInstance] = None,
+                              context=None, prefer_runtime: bool = False) -> List[CardInstance]:
+        """Every card of the selector's zone(s) that passes the shared filter."""
+        owner_id = self._zone_card_owner_id(player_id, selector, context, prefer_runtime)
+        if not self._valid_player_id(owner_id):
+            return []
+        spec = self._zone_card_filter_spec(selector)
+        raw_zones = selector.get('zones', selector.get('zone', 'hand'))
+        if not isinstance(raw_zones, (list, tuple, set)):
+            raw_zones = [raw_zones]
+        candidates: List[CardInstance] = []
+        for raw_zone in raw_zones:
+            zone_name = normalize_zone_name(
+                raw_zone or 'hand', allow_equipment=True, op='zone_card', param='zone',
+            )
+            for candidate in self._filter_candidates(
+                {**spec, 'zone': zone_name, 'owner': owner_id},
+                player_id, source_card=current_card, default_owner_id=owner_id,
+            ):
+                if candidate not in candidates:
+                    candidates.append(candidate)
+        return candidates
+
+    def _zone_card_pick(self, candidates: List[CardInstance], selector: dict):
+        """Reduce the candidate pool to one card (``pick.by`` / ``mode`` / ``tie``)."""
+        if not candidates:
+            return None
+        raw_pick = selector.get('pick')
+        by = selector.get('pick_by', 'cost_e')
+        mode = selector.get('pick_mode', 'max')
+        tie = selector.get('pick_tie', 'first')
+        if isinstance(raw_pick, str):
+            text = raw_pick.strip()
+            lowered = text.lower()
+            for prefix in ('max_', 'min_'):
+                if lowered.startswith(prefix):
+                    mode, by = prefix[:-1], text[len(prefix):]
+                    break
+            else:
+                by = text or by
+        elif isinstance(raw_pick, dict):
+            by = raw_pick.get('by', raw_pick.get('property', raw_pick.get('prop',
+                 raw_pick.get('key', raw_pick.get('order_by', by)))))
+            mode = raw_pick.get('mode', raw_pick.get('order', raw_pick.get('direction',
+                   raw_pick.get('dir', mode))))
+            tie = raw_pick.get('tie', raw_pick.get('tiebreak', raw_pick.get('tie_break', tie)))
+        mode = str(mode or 'max').strip().lower()
+        tie = str(tie or ('random' if mode in ('random', 'any') else 'first')).strip().lower()
+        if mode in ('random', 'any', 'shuffle'):
+            return random.choice(candidates)
+        keys = [self._zone_card_pick_value(candidate, by) for candidate in candidates]
+        try:
+            best = min(keys) if mode in ('min', 'lowest', 'least', 'smallest', 'asc') else max(keys)
+        except TypeError:
+            # Mixed value types (a text property next to a numeric one) cannot be
+            # ordered; every card counts as tied and ``tie`` decides.
+            best = keys[0]
+        tied = [candidate for candidate, value in zip(candidates, keys) if value == best]
+        if not tied:
+            tied = list(candidates)
+        if tie in ('last', 'latest', 'newest', 'end'):
+            return tied[-1]
+        if tie in ('random', 'rand', 'any', 'shuffle'):
+            return random.choice(tied)
+        return tied[0]
+
+    def _resolve_zone_card_selector(self, player_id: int, selector: dict,
+                                    current_card: Optional[CardInstance] = None,
+                                    context=None, runtime: bool = False) -> Optional[CardInstance]:
+        """Pick one card for a ``zone_card`` selector and bind it to ``as``."""
+        if not isinstance(selector, dict) or not self._is_zone_card_selector(selector):
+            return None
+        explicit_context = isinstance(context, dict)
+        prefer_runtime = bool(runtime or explicit_context)
+        if not isinstance(context, dict):
+            context = getattr(self, '_active_effect_context', None) or {}
+        name = str(selector.get('as') or selector.get('save_as') or '').strip()
+        store = context.get('vars') if isinstance(context, dict) else None
+        if not isinstance(store, dict):
+            store = {}
+            if isinstance(context, dict):
+                context['vars'] = store
+        if name:
+            bound = store.get(name)
+            if isinstance(bound, CardInstance):
+                # 不重复抽取：同名选择器第二次解析拿到的是同一张牌。
+                return bound
+        chosen = self._zone_card_pick(
+            self._zone_card_candidates(player_id, selector, current_card, context, prefer_runtime),
+            selector,
+        )
+        if chosen is not None and name:
+            store[name] = chosen
+        return chosen
+
     def _card_play_requirements(self, card: Optional[CardInstance]) -> List[dict]:
         """Card level ``play_requires`` gates declared by the card data."""
         if card is None:
@@ -10289,23 +10565,6 @@ class GameEngine:
             return
         self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
 
-    def _atomic_grant_temp_swift_highest_e(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not self._valid_player_id(target_id):
-            return
-        amount = max(0, self._eval_int(player_id, params.get('amount', 3), card, 3))
-        if amount <= 0:
-            return
-        candidates = [c for c in self.players[target_id].hand if self._card_selectable_by_action(c)]
-        if not candidates:
-            return
-        max_cost = max(int(getattr(c, 'cost_e', 0) or 0) for c in candidates)
-        target_card = next(c for c in candidates if int(getattr(c, 'cost_e', 0) or 0) == max_cost)
-        target_card.temp_swift_value = max(0, int(getattr(target_card, 'temp_swift_value', 0) or 0)) + amount
-        target_card.instance_flags.add('temp_swift')
-        target_card.disabled_flags.discard('temp_swift')
-        self.log_msg(f"{self.pn(target_id)}的一张手牌获得暂时迅捷:{amount}")
-
     def _tag_op_zone_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AC：``tag_op`` 的区域段实现体（旧 ``add_tag_to_zone``：
         # ``mode`` 选 add/remove/toggle，区域名走统一词表）。
@@ -13477,7 +13736,7 @@ class GameEngine:
             index = self._eval_int(player_id, card_ref.get('index', 1), current_card, 1) - 1
             found = self._find_card_by_instance_id(ids[index]) if 0 <= index < len(ids) else None
             return found if found is not None and not self._card_is_sublime(found) else None
-        if ref == 'zone_card':
+        if ref == 'zone_card' and not self._is_zone_card_pick_spec(card_ref):
             tid = self._resolve_target(player_id, card_ref.get('target', 'self'))
             if not (0 <= tid < len(self.players)):
                 return None
@@ -13489,6 +13748,19 @@ class GameEngine:
                 zone = getattr(ps, zone_name, [])
             index = self._eval_int(player_id, card_ref.get('index', 1), current_card, 1) - 1
             return zone[index] if 0 <= index < len(zone) else None
+        if self._is_zone_card_pick_spec(card_ref):
+            # Round 46 / batch AJ: ``{"selector": "zone_card", "filter": …,
+            # "pick": …}`` -- the card-picking half of the generic selector.
+            return self._resolve_zone_card_selector(player_id, card_ref, current_card)
+        if ref:
+            # Round 46 / batch AJ: ``{"ref": "<name>"}`` reads a card an earlier
+            # ``zone_card`` selector bound with ``"as": "<name>"``.
+            context = getattr(self, '_active_effect_context', {}) or {}
+            bound = context.get('vars', {}) if isinstance(context, dict) else None
+            if isinstance(bound, dict):
+                candidate = bound.get(str(ref))
+                if isinstance(candidate, CardInstance):
+                    return candidate
         return None
 
     def _resolve_card_id_ref(self, player_id, card_ref, current_card=None):
@@ -18701,6 +18973,11 @@ class GameEngine:
 
         if isinstance(selector, dict):
             ref = str(selector.get('ref') or selector.get('op') or selector.get('type') or '').strip().lower()
+            if self._is_zone_card_pick_spec(selector):
+                # Round 46 / batch AJ: ``move_card`` 的 ``cards`` 也认通用选牌
+                # 选择器（``{"selector": "zone_card", …}``）。
+                picked = self._resolve_zone_card_selector(player_id, selector, card)
+                return [picked] if isinstance(picked, CardInstance) else []
             if ref in ('selected_cards', 'chosen_cards', 'selected_card_list'):
                 return _named_cards('chosen_cards', 'selected_cards') or _from_choice()
             if ref in ('selected_card', 'chosen_card', 'choice_card'):
@@ -18710,6 +18987,12 @@ class GameEngine:
             if ref == 'card':
                 found = self._resolve_card_ref(player_id, selector.get('card'), card)
                 return [found] if isinstance(found, CardInstance) else []
+            context_vars = context.get('vars') if isinstance(context, dict) else None
+            if ref and isinstance(context_vars, dict):
+                # ``{"ref": "<name>"}``：复用 ``zone_card`` 早先绑好的那张牌。
+                bound = context_vars.get(ref)
+                if isinstance(bound, CardInstance):
+                    return [bound]
             return []
         text = str(selector).strip().lower()
         if text in ('selected_cards', 'chosen_cards', 'selected_card_list'):
@@ -19492,7 +19775,7 @@ class GameEngine:
             value = self._eval_int(player_id, params.get('value', 0), card)
             target_card = self._set_card_property_value(player_id, card, params, value)
             if target_card is not None and log:
-                self.log_msg(log)
+                self.log_msg(self._card_prop_change_log(log, player_id, target_card, params, value))
             return
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if target_card is None:
@@ -19517,7 +19800,32 @@ class GameEngine:
             value = current + amount
         self._set_card_property_value(player_id, card, {'card': params.get('card', {'ref': 'current_card'}), 'property': prop}, value)
         if log:
-            self.log_msg(log)
+            self.log_msg(self._card_prop_change_log(
+                log, player_id, target_card, params, multiplier if mode == 'mul' else amount, prop,
+            ))
+
+    def _card_prop_change_log(self, log, player_id, target_card, params, amount, prop=''):
+        """Round 46 / batch AJ：``card_prop_change`` 的 ``log`` 也走模板渲染。
+
+        模板里可以写 ``{target}``（被写那张牌的持有者）/``{source}``/``{name}``/
+        ``{amount}``/``{count}``/``{property}``；**没有花括号的字符串原样返回**，
+        所以历史数据的战报逐字不变（引擎两个写值分支共用这一处）。
+        """
+        if not isinstance(log, str) or '{' not in log:
+            return log
+        owner_id, _zone_name, _card_obj = self._find_card_location(target_card)
+        if not self._valid_player_id(owner_id):
+            owner_id = player_id
+        return self._format_step_log(
+            log,
+            target=self.pn(owner_id),
+            source=self.pn(player_id),
+            name=getattr(target_card, 'name_cn', '') or '',
+            card=getattr(target_card, 'name_cn', '') or '',
+            amount=amount,
+            count=amount,
+            property=str(prop or params.get('property', params.get('prop', '')) or ''),
+        )
 
     def _atomic_card_prop_add_to_zone(self, player_id, card, params, log, choice, context):
         """Add a numeric card property to every matching card of one zone.

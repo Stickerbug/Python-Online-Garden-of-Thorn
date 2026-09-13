@@ -429,6 +429,29 @@ ROUND45_ACTIONS = {
                       "27 例定向对拍（1v1+2v2）与 704 条全卡 A/B 都是 0 差异"),
 }
 
+# Round 46 / 批次 AJ：通用选择器 ``zone_card`` 落地——"按属性取极值的区域选牌"
+# 不再是能力缺口，卡专用原子 ``grant_temp_swift_highest_e`` 随之删除。它的三步
+# 判定（可选中池 / E 最大且平手取第一张 / 写值同时同步 temp_swift 标签）全部由
+# 现有通用步骤 + 新选择器逐字表达；判定与对拍见 `.codex-tmp/round46/rd46.md`。
+ROUND46_ACTIONS = {
+    "grant_temp_swift_highest_e": (
+        "删", 1,
+        '[{"op":"card_prop_change","mode":"add","property":"temp_swift_value","amount":3,'
+        '"card":{"selector":"zone_card","zone":"hand","owner":"self",'
+        '"filter":{"require_selectable":true},'
+        '"pick":{"by":"cost_e","mode":"max","tie":"first"},"as":"temp_swift_card"},'
+        '"log":"{target}的一张手牌获得暂时迅捷:{amount}"},'
+        '{"op":"tag_op","mode":"add","tag":"temp_swift",'
+        '"card":{"ref":"temp_swift_card"},"silent":true}]',
+        "Round 46 / 批次 AJ：选择器 ``zone_card`` 把 43 轮记下的能力缺口补上——"
+        "``filter`` 复用取牌窗口那张规格表（``require_selectable`` 就是旧实现的 "
+        "``_card_selectable_by_action`` 池），``pick.by cost_e`` + ``mode max`` + "
+        "``tie first`` 就是「取 E 最大、平手取第一张」，``temp_swift_value`` 的写入口"
+        "自带 instance_flags.add + disabled_flags.discard（``tag_op`` 那一步把同一件事写明），"
+        "``log`` 由 ``card_prop_change`` 渲染 ``{target}``/``{amount}``，挑不到牌时两条写法都不播报；"
+        "唯一的在用卡 jungle:magic_rubber 已迁移，定向对拍与 704 条全卡 A/B 都是 0 差异"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -872,10 +895,6 @@ KEPT_EXPLICIT = {
     "delayed_blind_next_turn": "下回合延迟失明（Ocean）",
     "delayed_reveal_hand_next_turn": "下回合延迟展示手牌",
     "goggles_enable": "护目镜启用（Factory）",
-    "grant_temp_swift_highest_e": "Round 43 复核留：先在手牌里按 _card_selectable_by_action 过滤、再挑 "
-                                  "cost_e 最大的那一张写 temp_swift（含标签同步）。card_prop_add_to_zone "
-                                  "只能按 card_type/tag 过滤、写全部/随机 N/前 N 张，没有“按费用最大挑选”的选择器，"
-                                  "for_each 也拿不到“当前手牌里 E 最大”这个归约",
     "magic_salt_reflect": "Round 43 复核留：这是被伤害管线在 on_damage_taken 时点调的**响应窗口**——要判物理攻击牌伤害、"
                           "查魔力是否够 cost_m、扣费并弹 choice_type=magic_salt_reflect 的选择窗口交给客户端预测；"
                           "数据步骤开不出这种窗口，按管线钩子保留",
@@ -963,7 +982,7 @@ def build() -> dict:
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
          **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
          **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
-         **ROUND44_ACTIONS, **ROUND45_ACTIONS}
+         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

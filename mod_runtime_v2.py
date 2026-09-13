@@ -141,7 +141,11 @@ ADVANCED_ATOMIC_OPS = {
     # （``player_var_change`` + ``equipment_prop_set`` / ``equipment_prop_add``），
     # 见 ``mod_spec_v2.REMOVED_ATOMIC_OPS["electric_web_arm"]``。
     "magic_salt_reflect", "third_eye_precision_or_hidden",
-    "grant_temp_swift_highest_e",
+    # Round 46 / batch AJ: ``grant_temp_swift_highest_e`` 已删除——"按属性取
+    # 极值的区域选牌"补成通用选择器 ``zone_card``（``card_prop_change`` /
+    # ``tag_op`` / ``move_card`` 的卡片位都认），卡数据已迁到
+    # ``card_prop_change`` + ``tag_op`` 两步；见
+    # ``mod_spec_v2.REMOVED_ATOMIC_OPS["grant_temp_swift_highest_e"]``。
     # Round 37 / 批次 AD-2：``timed_effect`` 与两条 ``delayed_*`` 并进
     # ``delayed_effect(mode:"timed"|"blind"|"reveal_hand")``（登记名见上一行），
     # 旧名进 REMOVED_ATOMIC_OPS，写出来是显式报错。
@@ -1760,6 +1764,23 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
     if isinstance(selector, list):
         return selector
     if isinstance(selector, dict):
+        if _is_zone_card_selector(selector):
+            # Round 46 / batch AJ: ``{"selector": "zone_card", …}`` 挑一张区域牌。
+            # 实现体只有一份（``GameEngine._resolve_zone_card_selector``），这里
+            # 把**运行时的上下文**交过去——``as`` 绑定要写进同一个 ``context``，
+            # 后续步骤 ``{"ref": "<name>"}`` 才拿得到（且不重复抽取）。
+            resolver = getattr(engine, "_resolve_zone_card_selector", None)
+            if not callable(resolver):
+                return None
+            try:
+                return resolver(
+                    _player_id(engine, context.get("source_player", 0)),
+                    selector,
+                    current_card=context.get("card"),
+                    context=context,
+                )
+            except Exception:
+                return None
         if "selector" in selector:
             return resolve_v2_target(engine, context, selector.get("selector"))
         ref = selector.get("ref") or selector.get("type") or selector.get("op")
@@ -1818,6 +1839,13 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
                 return -1
         if ref == "var":
             return context.get("vars", {}).get(selector.get("name"))
+        context_vars = context.get("vars")
+        if ref and isinstance(context_vars, dict):
+            # Round 46 / batch AJ: ``{"ref": "<name>"}`` 复用 ``zone_card`` 的
+            # ``as`` 绑定（只在名字真的绑着一张牌时生效，其余写法行为不变）。
+            bound = context_vars.get(str(ref))
+            if isinstance(bound, CardInstance):
+                return bound
         return eval_v2_value(engine, context, selector)
     if isinstance(selector, int):
         return selector
@@ -2593,6 +2621,38 @@ def _is_bounce_target_selector(value: Any) -> bool:
             or value.get("selector")
         )
         return str(ref or "").strip().lower() in BOUNCE_TARGET_REFS
+    return False
+
+
+# Round 46 / batch AJ: the generic card picker.  ``{"selector": "zone_card", …}``
+# filters one zone with the shared picker spec table and reduces the pool to a
+# single card by a property extreme; the engine owns the implementation
+# (``GameEngine._resolve_zone_card_selector``), so this runtime path only has to
+# recognise the spelling and hand over its live context (the ``as`` binding has
+# to land in the context the following steps read).
+#
+# ``{"ref": "zone_card", "zone": …, "index": N}`` predates this batch and keeps
+# its "Nth card of the zone" meaning, so that spelling is only read as the picker
+# when it carries one of the filter/pick keys.
+ZONE_CARD_SELECTOR_REFS = ("zone_card", "zone_card_pick")
+_ZONE_CARD_PICK_KEYS = ("filter", "pick", "as", "save_as", "pick_by", "pick_mode", "pick_tie")
+
+
+def _is_zone_card_selector(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in ZONE_CARD_SELECTOR_REFS
+    if isinstance(value, dict):
+        ref = (
+            value.get("ref")
+            or value.get("op")
+            or value.get("type")
+            or value.get("selector")
+        )
+        if str(ref or "").strip().lower() not in ZONE_CARD_SELECTOR_REFS:
+            return False
+        if "selector" in value:
+            return True
+        return any(key in value for key in _ZONE_CARD_PICK_KEYS)
     return False
 
 
