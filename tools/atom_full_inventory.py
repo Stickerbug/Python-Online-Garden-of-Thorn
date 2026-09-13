@@ -501,14 +501,49 @@ ROUND48_ACTIONS = {
         "bio:job_application 的 6 例定向对拍 0 差异"),
 }
 
+# Round 49 / 批次 AM：两条"逐张处理整片区域"的原子下沉 —— 集合来源
+# （``for_each`` 的 ``zone_cards``）与两个取值表达式补完后，公式完全落在数据侧。
+# 判定与对拍（铜棒 8 例 / 量子 4 例）见 `.codex-tmp/round49/rd49.md`。
+ROUND49_ACTIONS = {
+    "add_charge_to_hand": (
+        "删", 1,
+        '{"op":"for_each","as":"charge_hand_card",'
+        '"source":{"selector":"zone_cards","zone":"hand","owner":"self",'
+        '"filter":{"require_selectable":false}},'
+        '"body":[{"op":"card_prop_change","mode":"add","property":"charge_value",'
+        '"amount":{"op":"div","values":[<absorbed_damage>,<手牌数>],"round":"ceil"},'
+        '"card":{"ref":"charge_hand_card"},"log":false,"run_if":<amount>0>}]} + '
+        '{"op":"log","target":"self","total":<absorbed_damage>,"amount":<同一个 amount>,'
+        '"message":"{target}的铜棒吸收了{total}点伤害，使每张手牌获得{amount}层电荷"}',
+        "Round 49 / 批次 AM：``for_each`` 认集合来源后，\"总量摊到每张手牌\"不再需要"
+        "专用原子——``div`` 的新参数 ``round:\"ceil\"`` 给出向上取整的摊分，"
+        "``card_prop_change(property:\"charge_value\")`` 的写入口自带 charge 标签同步，"
+        "``run_if`` 挡住 amount=0（旧实现在 0 层时什么都不写，写 0 会把标签标成禁用），"
+        "战报用一条 ``log`` 补上（``log`` 新增 ``total`` 字段与运行时同一套占位符渲染）。"
+        "唯一在用卡 void:copper_rod 的 8 例定向对拍（手牌 0/1/2/3/5、预置电荷、sublime、1v1+2v2）0 差异"),
+    "set_card_prop_random": (
+        "删", 1,
+        '{"op":"for_each","as":"quantum_card",'
+        '"source":{"selector":"zone_cards","zone":"hand","owner":{"op":"equipment_target"},'
+        '"filter":{"require_selectable":false,"max_base_cost_e":3}},'
+        '"body":[{"op":"card_prop_change","mode":"set","property":"cost_e_override",'
+        '"value":{"op":"random","min":1,"max":3},"card":{"ref":"quantum_card"},"log":false}]}',
+        "Round 49 / 批次 AM：区域过滤走共享规格表的 ``max_base_cost_e``（与旧 ``max_base`` "
+        "同一段实现），逐张写随机值改由 ``random`` 取值表达式承担（每次迭代求值，"
+        "随机数消耗顺序与旧 ``random.randint`` 相同）；``require_selectable:false`` 对齐"
+        "旧实现\"不筛可选中性\"。唯一在用卡 void:quantum 的 4 例定向对拍（含 2v2、空手牌、"
+        "高价牌过滤）0 差异"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
               "循环跳出原语，Round 32 起明确保留（for_each/repeat 的唯一出口）"),
     "continue": ("留·语言原语", "`{\"op\":\"continue\"}`（循环体内）",
                  "跳过本次迭代的原语，与 break 成对；引擎按 ModLoopContinue 处理"),
-    "random": ("留·语言原语", "`{\"op\":\"random\",\"values\":[…]}` / 随机目标选择器",
-               "随机取值的原语（目标/数值/随机取牌共用），不是某一族的特例"),
+    # Round 49 / 批次 AM：``random`` 现在有真实用例（void:quantum 的逐张随机
+    # 写值走取值表达式分支），所以不再属于"0 引用"定论表；它同时还是
+    # ``_atomic_random``（50/50 分支步骤）与随机目标选择器的底层原语。
     "clamp": ("留·语言原语", "`{\"op\":\"clamp\",\"value\":…,\"min\":…,\"max\":…}`",
               "取值表达式算子（eval_v2_value 分支），写卡时的通用钳位"),
     "const": ("留·语言原语", "`{\"op\":\"const\",\"value\":…}`",
@@ -939,7 +974,8 @@ KEPT_EXPLICIT = {
     "restore_card_props": "恢复牌属性快照",
     "restore_match_start_stats": "恢复开局属性",
     "restore_turn_start_stats": "恢复回合开始属性",
-    "set_card_prop_random": "区域内随机设定属性",
+    # Round 49 / 批次 AM：set_card_prop_random 已删除（for_each(zone_cards) +
+    # card_prop_change(mode:"set", value:random)）。
     # Round 48 / 批次 AL：list_modify 已删除（列表写值 = player_var_change(set) + collection_op）。
     "charge_self_damage": "充能自身伤害",
     # Round 47 / 批次 AK：absorb_attack_damage / magic_salt_reflect 已删除——
@@ -951,7 +987,8 @@ KEPT_EXPLICIT = {
     "activate_corruption": "激活装备腐化",
     "response_declare": "声明响应（占位步骤，无实现体）",
     "declare_forced_target": "声明强制目标窗口（Light Bulb）",
-    "add_charge_to_hand": "手牌充能（Arctic）",
+    # Round 49 / 批次 AM：add_charge_to_hand 已删除（for_each(zone_cards) +
+    # ceil(div(total, 手牌数)) + card_prop_change(charge_value) + log）。
     "apply_turn_regen": "回合回复（Jungle）",
     "cogwheel_mark": "齿轮标记（Factory）",
     "crit_multiplier_add": "Round 43 复核留：写 custom_vars 的 hel_crit_multiplier_turn_bonus 后还要调 "
@@ -1046,7 +1083,7 @@ def build() -> dict:
          **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS,
-         **ROUND47_ACTIONS, **ROUND48_ACTIONS}
+         **ROUND47_ACTIONS, **ROUND48_ACTIONS, **ROUND49_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

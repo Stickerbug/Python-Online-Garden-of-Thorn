@@ -105,9 +105,7 @@ ADVANCED_ATOMIC_OPS = {
     # ``deal_damage`` step whose ``target`` is ``{"selector": "bounce", ...}``
     # (see ``mod_spec_v2.REMOVED_ATOMIC_OPS``).
     "queue_auto_play", "auto_play_zone_top",
-    "add_charge_to_hand",
     "card_var_change",
-    "set_card_prop_random",
     "transform_cards",
     "deck_catalog_pick", "deck_catalog_pick_resume",
     "player_prop_change", "card_prop_change",
@@ -1784,6 +1782,15 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         if math_op == "div":
             if len(nums) < 2 or nums[1] == 0:
                 return 0
+            # Round 49 / 批次 AM：除法可以点名舍入方式（``round:"ceil"|"floor"|"round"``）。
+            # 不写就还是原来的浮点真除：老数据一个字都不用改。
+            rounding = str(expr.get("round", expr.get("rounding", "")) or "").strip().lower()
+            if rounding in ("ceil", "up", "ceiling", "向上"):
+                return math.ceil(nums[0] / nums[1])
+            if rounding in ("floor", "down", "trunc", "int", "向下"):
+                return math.floor(nums[0] / nums[1])
+            if rounding in ("round", "nearest", "half_up", "四舍五入"):
+                return int(round(nums[0] / nums[1]))
             return nums[0] / nums[1]
         return min(nums) if math_op == "min" and nums else (max(nums) if nums else 0)
     if op == "clamp":
@@ -3618,7 +3625,7 @@ def _materialize_atomic_value(engine, context: Dict[str, Any], value: Any):
         "last_crit_hits", "crit_hits", "status_count", "visible_status_count",
         "counter_cards_in_hand", "counters_in_hand",
         "play_was_countered", "was_countered",
-        "random_choice", "choice_value", "choice_field",
+        "random", "random_choice", "choice_value", "choice_field",
         "cards_played_this_turn", "played_cards_this_turn", "cards_played",
         "damage_type", "current_damage_type", "card_cost", "actual_card_cost",
         "current_turn_player", "turn_player", "active_player", "card_var", "card_custom_var",

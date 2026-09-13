@@ -9411,7 +9411,6 @@ class GameEngine:
             return
         msg = str(msg)
         amount = self._eval_int(player_id, params.get('amount', 0), card, 0)
-        text = msg.format(p=player_id + 1, name=card.name_cn)
         # ``target`` lets converted data print the affected player instead of
         # the caster (e.g. "玩家2获得4层流血").
         log_target_id = player_id
@@ -9419,8 +9418,35 @@ class GameEngine:
             resolved_target = self._resolve_target(player_id, params.get('target'))
             if self._valid_player_id(resolved_target):
                 log_target_id = resolved_target
+        # Round 49 / 批次 AM：``total`` 是独立的可选字段（默认等于 ``amount``），
+        # 供"总量摊到每张牌"这类文案同时打印 {total} 与 {amount}。
+        total = self._eval_int(player_id, params.get('total', amount), card, amount)
+        # Round 49 / 批次 AM：文案渲染与 v2 运行时**同一份实现**
+        # （``mod_runtime_v2._format_message``）——以前这里用
+        # ``msg.format(p=…, name=…)``，任何 ``{target}``/``{amount}`` 占位符都会
+        # 抛 KeyError（引擎原生路径里的嵌套体因此拿不到战报，只能留一行
+        # "模组执行出现了一个意外错误"）。已知字段集合不变，认不出的占位符
+        # 原样保留（与运行时路径一致）。
+        from mod_runtime_v2 import _format_message
+        live_context = context if isinstance(context, dict) else {}
+        if not live_context:
+            active = getattr(self, '_active_effect_context', None)
+            live_context = active if isinstance(active, dict) else {}
+        log_context = dict(live_context)
+        binding = dict(log_context.get('vars') or {})
+        binding.setdefault('p', player_id + 1)
+        binding.setdefault('total', total)
+        binding.setdefault('amount', amount)
+        if card is not None:
+            binding.setdefault('name', getattr(card, 'name_cn', ''))
+        log_context['vars'] = binding
+        text = _format_message(
+            msg, log_context, engine=self, card=card, amount=amount,
+            target=params.get('target'),
+        )
         self.log_msg(self._format_step_log(
-            text, target=self.pn(log_target_id), source=self.pn(player_id), amount=amount, count=amount,
+            text, target=self.pn(log_target_id), source=self.pn(player_id),
+            amount=amount, count=amount, total=total,
         ))
 
 
@@ -14841,7 +14867,17 @@ class GameEngine:
                         out *= num
                     return out
                 if op == 'div':
-                    return 0 if len(nums) < 2 or nums[1] == 0 else nums[0] // nums[1]
+                    if len(nums) < 2 or nums[1] == 0:
+                        return 0
+                    rounding = str(expr.get('round', expr.get('rounding', '')) or '').strip().lower()
+                    if rounding in ('ceil', 'up', 'ceiling', '向上'):
+                        return int(math.ceil(nums[0] / nums[1]))
+                    if rounding in ('floor', 'trunc', 'down', 'int', '向下'):
+                        return int(math.floor(nums[0] / nums[1]))
+                    if rounding in ('round', 'nearest', 'half_up', '四舍五入'):
+                        return int(round(nums[0] / nums[1]))
+                    # 不写 ``round`` 时保持老口径：引擎路径是整除（截断）。
+                    return nums[0] // nums[1]
                 if op == 'min':
                     return min(nums) if nums else 0
                 if op == 'max':
@@ -14859,6 +14895,14 @@ class GameEngine:
                 except (TypeError, ValueError):
                     number = 0.0
                 return int(math.ceil(number)) if ref == 'ceil' else int(math.floor(number))
+            if ref in ('random', 'random_int', 'rand'):
+                # Round 49 / 批次 AM：取值范围表达式（与 v2 运行时的
+                # ``eval_v2_value`` random 分支同口径：闭区间整数）。
+                lo = self._eval_int(player_id, expr.get('min', expr.get('a', 1)), card, 1)
+                hi = self._eval_int(player_id, expr.get('max', expr.get('b', lo)), card, lo)
+                if hi < lo:
+                    lo, hi = hi, lo
+                return random.randint(int(lo), int(hi))
             if ref in ('health_percent', 'percent_health'):
                 # ``ceil`` of a percentage of the target's *current* health, used
                 # by cards such as the Arctic Nuke.  Kept in float math on
@@ -21459,68 +21503,6 @@ class GameEngine:
             self._run_effect_list(owner_id, body_card, body, None, ctx)
         return True
 
-    def _atomic_add_charge_to_hand(self, player_id, card, params, log, choice, context):
-        """Add charge layers to every hand card of the target.
-
-        ``total`` is the amount to spread, ``mode`` how to spread it:
-        ``ceil_even`` (default, matches the copper rod: every card gains
-        ``ceil(total / hand size)``), ``exact`` (``total // hand size``) and
-        ``fixed`` (``amount`` per card).
-        """
-        total = self._resolve_step_number(player_id, params.get('total', 0), card, 0)
-        mode = str(params.get('mode', 'ceil_even') or 'ceil_even')
-        for tid in self._resolve_step_targets(player_id, params.get('target', 'self'), context):
-            if not self._valid_player_id(tid):
-                continue
-            hand = list(getattr(self.players[tid], 'hand', []) or [])
-            amount = 0
-            if mode == 'fixed':
-                amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
-            elif hand and total > 0:
-                if mode == 'exact':
-                    amount = total // len(hand)
-                else:
-                    amount = int(math.ceil(total / float(len(hand))))
-            if amount > 0:
-                for hand_card in hand:
-                    hand_card.charge_value = max(0, int(getattr(hand_card, 'charge_value', 0) or 0)) + amount
-                    hand_card.instance_flags.add('charge')
-                    hand_card.disabled_flags.discard('charge')
-            if log is not False and log:
-                self.log_msg(self._format_step_log(
-                    log,
-                    target=self.pn(tid),
-                    source=self.pn(player_id),
-                    amount=amount,
-                    count=len(hand),
-                    total=total,
-                ))
-
-    # ------------------------------------------------------------------
-    # Round 37 / 批次 AD-2：监听 / 收尾 / 触发四合一 —— ``on_event``
-    # （旧 ``once_per_play`` / ``register_play_listener`` / ``after_all`` /
-    # ``magic_relic_trigger``，四个旧名进 REMOVED_ATOMIC_OPS）。
-    #
-    # ``trigger`` 选**监听的是哪个时点**；四条分支的实现体逐字沿用旧原子，
-    # 所以时点语义与合并前一致：
-    #
-    #   * ``play``（默认，旧 ``register_play_listener``）—— 登记一条"拥有者
-    #     本回合每次出牌后"的监听（``PLAY_LISTENERS_KEY`` / ``_run_play_listeners``）；
-    #     ``scope`` / ``duration`` / ``target`` / ``exclude_card_ids`` / ``once`` /
-    #     ``condition`` 与原写法逐字对齐。
-    #   * ``this_play``（旧 ``once_per_play``）—— 本次出牌内**立即**结算 body，
-    #     每张牌实例每个 ``name`` 最多一次（标记存在卡实例上，随每次出牌清理）。
-    #     ``once`` 键在这个分支照旧被忽略（旧 ``once_per_play`` 就是"每次出牌
-    #     一次"本身），只在 ``play`` 分支里有意义。
-    #   * ``after_all``（旧 ``after_all``，也可写成 ``after: true``）—— 把 body
-    #     放到当前效果之后执行（与旧实现一样是"就地跑 body"，等价于 ``sequence``）。
-    #   * ``equipment_trigger`` + ``effect:"magic_relic"``（旧
-    #     ``magic_relic_trigger``）—— 魔法遗物：消耗队友 2M、自己 +3M；1v1
-    #     没有队友，按旧实现直接返回。
-    # ------------------------------------------------------------------
-    ON_EVENT_TRIGGERS = ('play', 'this_play', 'after_all', 'equipment_trigger')
-    ON_EVENT_EFFECTS = ('magic_relic',)
-
     def _atomic_on_event(self, player_id, card, params, log, choice, context):
         # Round 47 / 批次 AK：``response`` 分支——数据声明的伤害响应窗口。
         # 承接两条"管线钩子"原子（旧名见 `REMOVED_ATOMIC_OPS`）：
@@ -22096,22 +22078,6 @@ class GameEngine:
                 'store': store_name,
                 'owner': owner_id,
             }
-        if log is not False and log:
-            self.log_msg(self._format_step_log(log, target=self.pn(owner_id), source=self.pn(player_id)))
-
-    def _atomic_set_card_prop_random(self, player_id, card, params, log, choice, context):
-        """Set ``property`` of every matching card to a random value in a range."""
-        owner_id = self._resolve_target(player_id, params.get('owner', params.get('target', 'self')))
-        if not self._valid_player_id(owner_id):
-            return
-        zone = str(params.get('zone', 'hand') or 'hand')
-        prop = str(params.get('property', params.get('prop', 'cost_e_override')) or 'cost_e_override')
-        low = self._eval_int(player_id, params.get('min', params.get('minimum', 1)), card, 1)
-        high = self._eval_int(player_id, params.get('max', params.get('maximum', low)), card, low)
-        if high < low:
-            low, high = high, low
-        for zone_card in self._snapshot_filtered_cards(owner_id, zone, params, player_id, card):
-            setattr(zone_card, prop, random.randint(int(low), int(high)))
         if log is not False and log:
             self.log_msg(self._format_step_log(log, target=self.pn(owner_id), source=self.pn(player_id)))
 

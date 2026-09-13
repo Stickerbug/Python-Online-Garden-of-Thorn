@@ -395,9 +395,13 @@ _CORE_LOGIC_OPS = {
     # Round 20: 长尾原子登记（"卡数据仍在用、但没进策展清单"的 22 个）。
     # 它们本来就是引擎里的 _atomic_* 处理器，只是没被策展，导致
     # tools/mod_atom_report.py 一直把它们算作"未登记原子"。
-    "add_charge_to_hand",
     # Round 29 / 批次 X：``card_var_set`` / ``card_var_add`` 已合并成
     # ``card_var_change``（登记在上面的模块族里），这里不再重复登记。
+    # Round 49 / 批次 AM：``add_charge_to_hand`` / ``set_card_prop_random``
+    # 已删除——"总量摊到每张手牌"与"区域内逐张随机写属性"现在是
+    # ``for_each``（``zone_cards`` 集合来源）+ ``collection_op`` / ``random``
+    # 取值表达式 + ``card_prop_change`` 的组合（替代写法见
+    # :data:`REMOVED_ATOMIC_OPS`）。
     "crit_multiplier_add",
     "defer_game_over",
     # Round 33 / 批次 AB：``move_cards_to_deck`` 已并入
@@ -409,7 +413,6 @@ _CORE_LOGIC_OPS = {
     # ``on_event(trigger:"play")``。
     # Round 33 / 批次 AB：``restore_card_props`` / ``reveal_card_set`` 已并入
     # ``restore(mode:"card_props")`` / ``reveal(mode:"card_set")``。
-    "set_card_prop_random",
     # Round 33 / 批次 AB：``snapshot_card_props`` 已并入
     # ``snapshot(mode:"card_props")``。
     "transform_cards",
@@ -1502,6 +1505,38 @@ REMOVED_ATOMIC_OPS = {
         '``resolve_choice`` 里跑同一条直伤管线）'
     ),
 
+    # Round 49 / 批次 AM（集合来源 + 取值表达式补完）：两条"逐张处理整片区域"
+    # 的原子下沉成 ``for_each(zone_cards)`` + 通用取值表达式的组合。
+    "add_charge_to_hand": (
+        '{"op":"for_each","as":"charge_hand_card",'
+        '"source":{"selector":"zone_cards","zone":"hand","owner":"self",'
+        '"filter":{"require_selectable":false}},'
+        '"body":[{"op":"card_prop_change","mode":"add","property":"charge_value",'
+        '"amount":{"op":"div","values":[{"op":"var","name":"absorbed_damage"},'
+        '{"op":"collection_op","mode":"count","source":<同一只手牌>}],"round":"ceil"},'
+        '"card":{"ref":"charge_hand_card"},"log":false,'
+        '"run_if":{"op":"compare","a":<同一个 amount>,"operator":">","b":0}}]},'
+        '{"op":"log","target":"self","total":{"op":"var","name":"absorbed_damage"},'
+        '"amount":<同一个 amount>,'
+        '"message":"{target}的铜棒吸收了{total}点伤害，使每张手牌获得{amount}层电荷"}'
+        '（``require_selectable:false`` 对齐旧实现"整只手牌都算"；'
+        '``div`` 的 ``round:"ceil"`` 是 Round 49 补的向上取整；'
+        '``run_if`` 挡住 amount=0 —— 旧实现在 0 层时什么都不写，'
+        '而 ``card_prop_change`` 写 0 会把 charge 标签标成禁用；'
+        '``exact``/``fixed`` 两个历史 mode 分别换成 ``round:"floor"`` 与直接写 ``amount``。'
+        '替代旧名 ``ocean_add_charge_to_hand`` 同此写法）'
+    ),
+    "set_card_prop_random": (
+        '{"op":"for_each","as":"quantum_card",'
+        '"source":{"selector":"zone_cards","zone":"hand","owner":{"op":"equipment_target"},'
+        '"filter":{"require_selectable":false,"max_base_cost_e":3}},'
+        '"body":[{"op":"card_prop_change","mode":"set","property":"cost_e_override",'
+        '"value":{"op":"random","min":1,"max":3},"card":{"ref":"quantum_card"},"log":false}]}'
+        '（区域范围用 ``filter.max_base_cost_e`` —— 与旧 ``max_base`` 是同一段实现；'
+        '``require_selectable:false`` 对齐旧实现"不筛可选中性"；'
+        '每张牌各掷一次：``random`` 取值表达式在每次迭代求值，随机数消耗顺序不变）'
+    ),
+
     # Round 48 / 批次 AL（列表）：``list_modify`` 删除——列表写值 =
     # ``player_var_change(mode:"set")``（Round 48 起也写列表，逐项
     # ``_serializable_list_item``）+ ``collection_op`` 的五个等价写法。
@@ -1608,7 +1643,8 @@ RENAMED_ATOMIC_OPS = {
     "player_property_add": "player_prop_change",
     # Round 25：登记残留里"只是换了称呼"的 5 个——规范名照常可用，旧名给
     # "已改名 + 规范名"的显式报错（其余旧名进 REMOVED_ATOMIC_OPS）。
-    "ocean_add_charge_to_hand": "add_charge_to_hand",
+    "ocean_add_charge_to_hand": '见 ``REMOVED_ATOMIC_OPS["add_charge_to_hand"]``'
+                               '（Round 49 / 批次 AM 起该原子也删除了）',
     "ocean_mark_auto_play": "queue_auto_play",
     "void_kitty_auto_play": "auto_play",
     # Round 32 / 批次 AA：纯改名（参数面不变）——``if`` 就是"不写 else 的
