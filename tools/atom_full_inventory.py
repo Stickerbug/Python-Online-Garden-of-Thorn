@@ -593,6 +593,26 @@ ROUND52_ACTIONS = {
         "真实路径对拍 0/3 都是 0 差异"),
 }
 
+# Round 53 / 批次 AQ：``remove_specific_card`` 拆成两半下沉——装备分支并进
+# ``equipment_op(mode:"destroy", pick:"choice")``，"真删除"分支由
+# ``move_card(mode:"remove")``（新增 mode）承接；同时把引擎原生路径的
+# ``_effect_params`` 与运行时路径对齐（扁平写法不再丢 body/then/condition）。
+# 判定与对拍见 `.codex-tmp/round53/rd53.md`。
+ROUND53_ACTIONS = {
+    "remove_specific_card": (
+        "合", 1,
+        '装备区 → {"op":"equipment_op","mode":"destroy","pick":"choice","target":"target",'
+        '"require_selection":true}；手牌/牌堆/弃牌堆/放逐 → {"op":"move_card","mode":"remove",'
+        '"target":"target","zone":"hand|deck|discard|exile","card":<引用或选择器>}',
+        "Round 53 / 批次 AQ：旧原子两半本来就是两种机制——装备分支走 "
+        "``_destroy_equipment``（有护甲/装备保护判定与\"摧毁\"战报），真删除分支是把牌"
+        "从区域里直接摘掉（不进弃牌堆）。前者并进 ``equipment_op(mode:\"destroy\", "
+        "pick:\"choice\")``（``require_selection:true`` 关掉\"没选就拆第一件\"的回落，"
+        "与旧写法一致），后者补成 ``move_card(mode:\"remove\")`` 这个新 mode（加能力、"
+        "不新增原子）。唯一在用卡 vanilla:sewage 的 3 例真实出牌对拍 0 差异、"
+        "真删除分支 6 例对拍 0 差异"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -1015,7 +1035,8 @@ KEPT_EXPLICIT = {
     "exile_this": "放逐自身（印记）",
     "transform_card": "变换牌（标记）",
     "transform_cards": "批量变换牌",
-    "remove_specific_card": "移除指定牌（手牌/装备区）",
+    # Round 53 / 批次 AQ：remove_specific_card 已删除（装备分支 → equipment_op
+    # destroy；真删除 → move_card(mode:"remove")）。
     "random_zone_card_to_hand": "随机取一张区域牌进手",
     "steal_enemy_card": "偷取敌方手牌/装备（选择窗口）",
     "swap_hands": "交换双方手牌",
@@ -1141,7 +1162,8 @@ def build() -> dict:
         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS,
          **ROUND47_ACTIONS, **ROUND48_ACTIONS, **ROUND49_ACTIONS,
-         **ROUND50_ACTIONS, **ROUND51_ACTIONS, **ROUND52_ACTIONS}
+         **ROUND50_ACTIONS, **ROUND51_ACTIONS, **ROUND52_ACTIONS,
+         **ROUND53_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

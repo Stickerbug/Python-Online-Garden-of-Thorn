@@ -75,7 +75,6 @@ ADVANCED_ATOMIC_OPS = {
     # Round 52 / 批次 AP：``restore`` 并进 ``snapshot(action:"load")``。
     "reveal", "shuffle", "snapshot",
     "copy_card",
-    "remove_specific_card",
     "move_card",
     "destroy_equipment",
     "remove_equip_protection",

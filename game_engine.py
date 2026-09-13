@@ -10139,6 +10139,47 @@ class GameEngine:
             if log and card_def.id != ERROR_CARD_ID:
                 self.log_msg(log)
 
+    def _move_card_remove_payload(self, player_id, card, params, log, choice, context):
+        """``move_card(mode:"remove")``：把区域里的一张牌**直接移除**。
+
+        Round 53 / 批次 AQ：旧 ``remove_specific_card`` 的"真删除"分支（手牌 /
+        抽牌堆 / 弃牌堆 / 放逐区）并进 ``move_card``——逐行搬过来：
+        目标玩家走 ``target``、区域走 ``zone``（缺省手牌）、牌引用走 ``card``
+        （实例 / ``{"ref": …}`` / ``by_id`` 选择器都照旧，引用不在该区域时用
+        选择器回落取第一张匹配），删除后默认播报"X的Y从Z中被消除"。
+
+        装备区不在这里：那是 ``equipment_op(mode:"destroy")`` 的活（走
+        ``_destroy_equipment``，有护甲/装备保护判定与"摧毁"战报）。
+        """
+
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not self._valid_player_id(target_id):
+            return
+        zone = str(params.get('zone', params.get('from', 'hand')) or 'hand')
+        card_ref = params.get('card', params.get('card_id', ''))
+        ts = self.players[target_id]
+        if zone == 'equipment':
+            raise V2ZoneError(
+                'move_card(mode:"remove") 不处理装备区；装备请用 '
+                'equipment_op(mode:"destroy", …)'
+            )
+        zone_map = {'hand': ts.hand, 'deck': ts.deck, 'discard': ts.discard, 'exile': ts.exile}
+        if zone not in zone_map:
+            raise V2ZoneError(
+                f'move_card(mode:"remove") 不支持区域 {zone!r}；只支持 '
+                f'{"/".join(sorted(zone_map))}（装备区走 equipment_op）'
+            )
+        target_zone = zone_map[zone]
+        target_card = self._resolve_card_ref(player_id, card_ref, card)
+        matched = [target_card] if target_card in target_zone else []
+        if not matched:
+            sel = card_ref if isinstance(card_ref, dict) and card_ref.get('selector') else {'selector': 'by_id', 'id': card_ref}
+            matched = self._match_card_selector(player_id, target_zone, sel, card)
+        if matched:
+            removed_card = matched[0]
+            target_zone.remove(removed_card)
+            self.log_msg(log or f"{self.pn(target_id)}的{removed_card.name_cn}从{zone}中被消除")
+
     def _move_card_give_orb_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AB：``move_card(mode:"orb")`` 的实现体——旧
         # ``give_magic_orb_to_hand``（法球带 symbiosis/exile/void 三个标记，
@@ -10172,36 +10213,6 @@ class GameEngine:
     # 已删除，由运行时的 ``create_card(to:"discard")`` 承接——同一份
     # ``_move_card`` 造牌/入区实现，支持 ``amount``（旧实现的 ``amount`` 是
     # "每名目标各 N 张"）与 ``target`` 集合。
-
-    def _atomic_remove_specific_card(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        zone = params.get('zone', 'hand')
-        card_ref = params.get('card', '')
-        ts = self.players[target_id]
-        if zone == 'equipment':
-            target_card = self._resolve_card_ref(player_id, card_ref, card)
-            eq = ts.find_equipment(getattr(target_card, 'instance_id', None)) if target_card is not None else None
-            if eq is not None:
-                eq_name = eq.card_def.name_cn
-                destroyed = self._destroy_equipment(target_id, eq, source_id=player_id)
-                if destroyed:
-                    self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(target_id)}的{eq_name}")
-                elif log:
-                    self.log_msg(log)
-            return
-        zone_map = {'hand': ts.hand, 'deck': ts.deck, 'discard': ts.discard, 'exile': ts.exile}
-        target_zone = zone_map.get(zone, ts.hand)
-        target_card = self._resolve_card_ref(player_id, card_ref, card)
-        matched = [target_card] if target_card in target_zone else []
-        if not matched:
-            sel = card_ref if isinstance(card_ref, dict) and card_ref.get('selector') else {'selector': 'by_id', 'id': card_ref}
-            matched = self._match_card_selector(player_id, target_zone, sel, card)
-        if matched:
-            c = matched[0]
-            target_zone.remove(c)
-            self.log_msg(log or f"{self.pn(target_id)}的{c.name_cn}从{zone}中被消除")
-
-
 
     def _equipment_op_unprotect_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AC：``equipment_op(mode:"unprotect")`` 的实现体
@@ -11081,6 +11092,11 @@ class GameEngine:
                 mode = 'random'
         if mode in ('give', 'create', 'give_card'):
             return self._move_card_give_payload(player_id, card, params, log, choice, context)
+        if mode in ('remove', 'delete', 'erase', 'destroy_card'):
+            # Round 53 / 批次 AQ：``remove_specific_card`` 的"真删除"半边并进来——
+            # 把区域里的某张牌**直接移除**（不进弃牌堆、不触发弃牌钩子），
+            # 装备区那是 ``equipment_op(mode:"destroy")`` 的活。
+            return self._move_card_remove_payload(player_id, card, params, log, choice, context)
         if mode in ('orb', 'give_orb', 'magic_orb'):
             return self._move_card_give_orb_payload(player_id, card, params, log, choice, context)
         if mode in ('random', 'random_pick', 'random_card'):
@@ -13434,10 +13450,21 @@ class GameEngine:
         params = effect.get('params')
         if isinstance(params, dict):
             return params
+        # Round 53 / 批次 AQ：扁平写法（``{"op":…, "body":[…]}`）里的容器键
+        # （``body``/``steps``/``then``/``else``/``condition``）**也要**传给原子。
+        # 以前它们在这里被丢掉，于是引擎原生路径（``_register_timed_effect`` 的
+        # effects、``defer_game_over`` 的 body、测试里手写的步骤列表）中的
+        # ``for_each`` / ``delayed_effect`` / ``if_else`` 会**静默不执行**；
+        # v2 运行时路径由 ``_engine_effect_from_step`` 把这些键补回来，两条路径
+        # 因此一直不一致。现在这里与那条路径对齐，只保留 ``type``/``op``/``log``
+        # 三个"不是参数"的键在参数之外。
+        # 说明：``condition`` 交给 ``step_gate_conditions`` 判定归属——像
+        # ``if_else`` / ``repeat`` / ``delayed_effect`` 这类**自己拥有** condition
+        # 的 op，门控只认 ``run_if``，所以这里照传不会变成"双重门控"。
         return {
             key: value
             for key, value in effect.items()
-            if key not in {'type', 'op', 'log', 'then', 'else', 'steps', 'body', 'condition', 'cond'}
+            if key not in {'type', 'op', 'log'}
         }
 
     # Round 36 / 批次 AD-1：请求族伞原子 ``request`` 的判别参数（``type``）。

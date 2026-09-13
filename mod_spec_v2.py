@@ -230,7 +230,9 @@ _CORE_LOGIC_OPS = {
     # ``steal_enemy_card`` / ``shuffle_discard_into_deck`` / ``shuffle_hand`` /
     # ``give_card_to_hand`` / ``give_magic_orb_to_hand`` / ``give_card_to_deck``
     # 已并入 ``reveal`` 与 ``move_card`` / ``shuffle``（旧名进 REMOVED_ATOMIC_OPS）。
-    "remove_specific_card",
+    # Round 53 / 批次 AQ：``remove_specific_card`` 已删除——装备分支并进
+    # ``equipment_op(mode:"destroy", pick:"choice")``，"真删除"分支并进
+    # ``move_card(mode:"remove")``（新 mode，不新增原子）。
     # Round 29 / 批次 X：``move_to_*`` 四条"糖"原子并入通用 ``move_card(zone=...)``；
     # ``destroy_random_equip`` / ``destroy_all_equip`` / ``destroy_all_field_equip``
     # 并入 ``equipment_op(mode:"destroy", pick=..., scope=...)``。旧名进
@@ -1524,6 +1526,17 @@ REMOVED_ATOMIC_OPS = {
         '与旧实现一致；窗口的 ``choice_type`` 仍是 ``magic_salt_reflect``——那是客户端 '
         '``showMagicSaltReflectResponseUI`` 的既有契约；确认后的扣费与反弹伤害仍在 '
         '``resolve_choice`` 里跑同一条直伤管线）'
+    ),
+    # Round 53 / 批次 AQ（拆装族）：``remove_specific_card`` 的两半各有归属——
+    # 装备分支本来就是"摧毁点选的那件装备"，直接走 ``equipment_op``；
+    # 手牌/牌堆/弃牌堆/放逐的"真删除"补成 ``move_card(mode:"remove")``。
+    "remove_specific_card": (
+        '装备区 → {"op":"equipment_op","mode":"destroy","pick":"choice","target":"target",'
+        '"require_selection":true}（唯一在用卡 vanilla:sewage 的写法；'
+        '``require_selection:true`` 关掉"没选就拆第一件"的回落，与旧写法解析不到就什么都不做一致）；'
+        '手牌/牌堆/弃牌堆/放逐 → {"op":"move_card","mode":"remove","target":"target",'
+        '"zone":"hand|deck|discard|exile","card":<引用或 by_id 选择器>}'
+        '（Round 53 新加的 mode：真删除、不进弃牌堆，默认战报"X的Y从<zone>中被消除"与旧实现逐字相同）'
     ),
 
     # Round 49 / 批次 AM（集合来源 + 取值表达式补完）：两条"逐张处理整片区域"
