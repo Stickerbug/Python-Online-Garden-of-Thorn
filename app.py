@@ -14181,7 +14181,8 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         except (TypeError, ValueError):
             return {'success': False, 'output': '数量必须是1-1000的整数。'}
         try:
-            data = list_repository_objects(prefix=prefix, max_keys=limit)
+            # R2 是网络调用，慢时能挂 20 秒；别按住单进程事件循环。
+            data = run_off_event_loop(list_repository_objects, prefix=prefix, max_keys=limit)
         except Exception as exc:
             admin_event('error', f'community storage list failed from console: {exc}')
             return {'success': False, 'output': f'社区模组存储暂时不可用：{exc}'}
@@ -14215,7 +14216,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             }
         key = str(parts[1] or '').strip()
         try:
-            result = permanently_delete_repository_object(key)
+            result = run_off_event_loop(permanently_delete_repository_object, key)
         except Exception as exc:
             admin_event('error', f'community storage delete failed key={key}: {exc}')
             return {'success': False, 'output': f'删除失败：{exc}'}
@@ -22955,7 +22956,10 @@ def admin_storage_vacuum():
 @app.route('/api/admin/community-mods/storage')
 def admin_community_mod_storage():
     try:
-        data = list_repository_objects(
+        # 实测 R2 卡顿时这个接口会阻塞事件循环 20+ 秒（今天 20:51 两次），
+        # 管理端低频调用，丢线程池里等，别冻住所有对局。
+        data = run_off_event_loop(
+            list_repository_objects,
             prefix=request.args.get('prefix', 'community/'),
             max_keys=request.args.get('limit', 300),
         )
@@ -22972,7 +22976,7 @@ def admin_community_mod_storage_delete():
     if not key:
         return jsonify({'success': False, 'error': '缺少 key'}), 400
     try:
-        result = permanently_delete_repository_object(key)
+        result = run_off_event_loop(permanently_delete_repository_object, key)
         status = 200 if result.get('success') else 400
         if result.get('success'):
             admin_event('admin', f'彻底删除 R2 对象: {key}')
@@ -22998,7 +23002,8 @@ def admin_community_mod_cleanup_uploads():
             maximum=30 * 24 * 60 * 60,
             name='min_age_seconds',
         )
-        result = cleanup_orphaned_community_uploads(
+        result = run_off_event_loop(
+            cleanup_orphaned_community_uploads,
             min_age_seconds=min_age_seconds,
             dry_run=dry_run,
         )
@@ -25688,7 +25693,8 @@ def api_mods():
 @app.route('/api/community-mods')
 def api_community_mods():
     try:
-        index = get_community_index()
+        # 索引带 30s 缓存，但冷缓存时是一次 R2 网络读，不能堵事件循环。
+        index = run_off_event_loop(get_community_index)
         mods = index.get('mods', []) if isinstance(index, dict) else []
         user_id, username = _current_account_identity()
         visible_mods = []
@@ -25766,7 +25772,8 @@ def api_community_mod_register():
     if not public_url or not key or not upload_receipt:
         return _json_error('缺少 key、public_url 或 upload_receipt')
     try:
-        result = register_community_mod(
+        result = run_off_event_loop(
+            register_community_mod,
             public_url,
             key,
             uploader_name,
@@ -25794,7 +25801,8 @@ def api_community_mod_delete(sha256):
     if _rate_limited(ip, 'community_delete'):
         return _json_error('操作过于频繁，请稍后再试', 429)
     try:
-        result = delete_community_mod(
+        result = run_off_event_loop(
+            delete_community_mod,
             sha256,
             uploader_user_id=user_id,
             uploader_name=username,
@@ -25823,7 +25831,8 @@ def api_community_mod_validate_url():
     if not public_url:
         return _json_error('缺少 public_url')
     try:
-        result = validate_community_mod_url(public_url)
+        # 会去下载并校验整个 .gtnmod 包，属于网络 + CPU 重活，丢线程池。
+        result = run_off_event_loop(validate_community_mod_url, public_url)
         return jsonify({'success': result.get('ok', False), **result})
     except Exception as exc:
         admin_event('error', f'validate community mod url failed: {exc}')
