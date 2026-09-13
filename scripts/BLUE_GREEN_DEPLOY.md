@@ -1,5 +1,17 @@
 # GTN 蓝绿 / 静默更新操作流程
 
+> **2026-09-13 起：不再使用蓝绿流程（用户明确要求以后都不要）。**
+> 发布改为在 `/opt/gtn-release` 原地更新 + 重启 `gtn-release.service`：
+>
+> 1. 先确认 `/api/health/full` 的 `room_count=0`（有对局就等结束）；
+> 2. `cd /opt/gtn-release && git fetch gitee && git merge --ff-only gitee/main`；
+> 3. 备份并更新 `/etc/gtn/release.env` 的 `GTN_VERSION`（短 sha）、`GTN_GIT_SHA`
+>    和 `GTN_STATIC_VERSION`（完整 sha，用于静态资源与公开数据缓存失效）；
+> 4. `systemctl restart gtn-release`，随后校验 `/api/health/full` 的 `git_sha`、
+>    `db_ok`、`socket_ok` 以及启动日志有没有报错。
+>
+> 下面的蓝绿流程（5002 next 实例 + nginx 切换）仅作历史参考，不要再执行。
+
 目标：旧对局留在旧进程完成，新玩家和新对局进入新进程。
 
 ## 前提
