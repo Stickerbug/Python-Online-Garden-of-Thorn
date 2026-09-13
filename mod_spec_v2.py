@@ -266,7 +266,8 @@ _CORE_LOGIC_OPS = {
     "list_modify",
     # Round 37 / 批次 AD-2：``timed_effect`` 并进 ``delayed_effect(mode:"timed")``。
     "delayed_effect",
-    "countdown_var",
+    # Round 41 / 批次 AE-5：``countdown_var`` 已删除（"写初值 + 每次触发减 1" =
+    # ``player_var_change(mode:"set")`` + ``delayed_effect(mode:"timed")``）。
     # Round 29 / 批次 X：``player_prop_set`` / ``player_prop_add`` 合并成
     # ``player_prop_change(mode=set|add)``；Round 31 起两个垫片已删除。
     "player_prop_change",
@@ -279,7 +280,8 @@ _CORE_LOGIC_OPS = {
     # Round 31 / 批次 Z：卡牌属性写值族三合一
     # （``card_prop_change(mode=set|add|mul)``，参数与 ``player_prop_change`` 对齐）。
     "card_prop_change",
-    "card_damage_multiply",
+    # Round 41 / 批次 AE-5：``card_damage_multiply`` 已删除（=
+    # ``card_prop_change(mode:"mul", property:"fusion_level", multiplier:N)``）。
     "equipment_prop_set",
     "equipment_prop_add",
     # Round 40 / 批次 AE-4：``discard_hand_by_paid_e``（按本牌实际花费 E 批量
@@ -290,7 +292,7 @@ _CORE_LOGIC_OPS = {
     "counter_pending_attack_damage",
     "discard_choice_then_draw",
     "activate_corruption",
-    "response_declare",
+    # Round 41 / 批次 AE-5：``response_declare``（返回 None 的空占位步骤）已删除。
     "on_any_turn_start",
     "on_damage_taken",
     "on_discard_owner_turn_start",
@@ -305,9 +307,12 @@ _CORE_LOGIC_OPS = {
     # Round 33 / 批次 AC + Round 35：``add_tag`` / ``add_tag_to_zone`` 并成
     # ``tag_op``（``action`` 选 add/remove/toggle/clear，带 zone 即区域级）；
     # 两个旧名的处理器保留给 tests 直呼（登记在上面），公开契约里已退役。
-    "cogwheel_mark",
+    # Round 41 / 批次 AE-5：``cogwheel_mark`` 半拆成"数据写标志位（``player_var_change``）
+    # + 最小收牌例程"，例程原子改名 ``cogwheel_return``（旧名进 RENAMED_ATOMIC_OPS）；
+    # ``goggles_enable`` 整个删除，视图权限改由装备标签 ``continuous_deck_reveal``
+    # 声明（见 REMOVED_ATOMIC_OPS）。
+    "cogwheel_return",
     "honey_control",
-    "goggles_enable",
     # Round 40 / 批次 AE-2：``assembler_effect``（重构机）下沉成卡数据里的
     # 通用步骤组合（request 选牌 → move_card 放逐 → random_choice 奖励表 →
     # move_card(mode:"give") 造牌 → card_prop_change 迅捷 → status_op 碎片 →
@@ -393,7 +398,10 @@ _CORE_LOGIC_OPS = {
     "counter_equip_protect",
     # Round 29 / 批次 X：``record_play_count`` / ``record_equip_turns`` /
     # ``reset_counter`` 已合并成 ``card_counter``（见上面的模块族）。
-    "create_counter",
+    # Round 41 / 批次 AE-5：``create_counter`` 已删除——它写的
+    # ``card.custom_counters`` 没有任何读取方；卡内任意计数改用
+    # ``card_var_change(mode:"add"|"set", name:…, card:…)``（写 ``card.custom_vars``，
+    # 会进 ``to_dict``，取值表达式也能读）。
     # Round 33 / 批次 AB：``exile_this`` 已删除——等价写法
     # ``move_card(zone:"exile", card:{"ref":"current_card"})``。
     "mark_self_damage_source",
@@ -824,6 +832,35 @@ _FAMILY_HINT = {
 REMOVED_ATOMIC_OPS = {
     # Round 39 / 批次 AE：第三只眼下沉为 tag_op(when_tag/unless_tag)。
     "third_eye_precision_or_hidden": "{\"op\": \"tag_op\", \"action\": \"add\", \"card\": \"selected_card\", \"tag\": \"stealth\", \"when_tag\": \"precision\", \"log\": false}",
+
+    # Round 41 / 批次 AE-5（收尾）：5 个长尾原子逐个定论后删除，替代写法如下。
+    #   * 护目镜：视图权限下沉成装备标签 ``continuous_deck_reveal``，
+    #     引擎按 ``_goggles_view_targets_for`` 读装备的 ``effect_target``。
+    "goggles_enable": (
+        '{"flags":["continuous_deck_reveal"]} + '
+        '{"op":"equipment_op","mode":"place","effect_target":"choice_target"}'
+        '（装备在场即生效，与 garden:antennae 的 continuous_hand_reveal 同一套口径）'
+    ),
+    #   * 卡牌聚变倍率 → card_prop_change(mode:"mul")
+    "card_damage_multiply": (
+        '{"op":"card_prop_change","mode":"mul","property":"fusion_level",'
+        '"multiplier":2,"card":{"ref":"current_card"}}'
+    ),
+    #   * 倒计时 → "写初值 + 定时减一"两条通用步骤
+    "countdown_var": (
+        '{"op":"player_var_change","mode":"set","name":"timer","value":3,"target":"self"} + '
+        '{"op":"delayed_effect","mode":"timed","trigger":"target_turn_start","duration":3,'
+        '"target":"self","body":[{"op":"player_var_change","mode":"sub","name":"timer",'
+        '"value":1,"target":"self"}]}'
+    ),
+    #   * 卡内计数 → card_var_change（写 card.custom_vars，可被取值表达式与 to_dict 读到）
+    "create_counter": (
+        '{"op":"card_var_change","mode":"add","name":"counter1","value":1,'
+        '"card":{"ref":"current_card"}}'
+    ),
+    #   * 声明响应是返回 None 的空占位步骤，没有等价写法（反制窗口由卡数据
+    #     ``response_trigger`` 与引擎响应系统承载）。
+    "response_declare": "",
 
     # Round 24（C 类同形小原子合并）：下面这批名字的形状几乎相同，差异都能被
     # 参数覆盖，已合并成右边给出的规范写法。旧数据写旧名会在校验层与运行时
@@ -1307,6 +1344,10 @@ REMOVED_ATOMIC_OPS = {
 # 规范名。与 ``REMOVED_ATOMIC_OPS`` 的区别：那些名字已经没有等价实现，这边的
 # 旧名只是改了称呼，规范名照常可用。
 RENAMED_ATOMIC_OPS = {
+    # Round 41 / 批次 AE-5：齿轮的"标记"半边下沉成数据（``player_var_change`` 写
+    # ``cogwheel_active`` / ``cogwheel_exclude_instance_id``），留在引擎里的收牌
+    # 例程改名 ``cogwheel_return``——旧名写出来拿到"已改名 + 规范名"。
+    "cogwheel_mark": "cogwheel_return",
     # Round 24：apply_poison / apply_toxic / gain_armor 的"规范名"本身也在
     # C 类合并里注销了，所以它们从本表移到 REMOVED_ATOMIC_OPS（带完整替代写法）。
     "auto_play_queue_add": "queue_auto_play",

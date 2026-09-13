@@ -1062,7 +1062,6 @@ class GameEngine:
         # 这批名字已合并进规范 op，从本表删掉——写出来会先被
         # ``_retired_atom_runtime_error`` 拦下，拿到 mod_spec_v2.REMOVED_ATOMIC_OPS
         # 的"已移除 + 替代写法"。
-        'create_counter': 'create_counter',
         'swap_health': 'swap_health',
         # Round 33 / 批次 AB：``exile_this`` / ``swap_hands`` 已并入
         # ``move_card(zone:"exile")`` / ``move_card(mode:"swap_hands")``。
@@ -10551,17 +10550,20 @@ class GameEngine:
                 f"{count}张{type_desc}获得{flag_text}"
             )
 
-    def _atomic_cogwheel_mark(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        if not hasattr(self, '_cogwheel_active'):
-            self._cogwheel_active = {}
-        if not hasattr(self, '_cogwheel_exclude_instance_ids'):
-            self._cogwheel_exclude_instance_ids = {}
-        self._cogwheel_active[target_id] = True
-        self._cogwheel_exclude_instance_ids[target_id] = int(getattr(card, 'instance_id', -1) or -1)
-        self._return_cogwheel_cards_now(target_id)
+    def _atomic_cogwheel_return(self, player_id, card, params, log, choice, context):
+        """Round 41 / 批次 AE-5：齿轮「收牌例程」保留成的最小原子。
+
+        旧 ``cogwheel_mark`` 的两半：**标志位**（本回合是否启用 + 排除哪张实例）
+        已经下沉成卡数据里的 ``player_var_change``（玩家变量
+        ``cogwheel_active`` / ``cogwheel_exclude_instance_id``），引擎读的是
+        ``players[id].custom_vars``；**例程**留在这里，因为它要读
+        ``cards_played_this_turn_instance_ids``，逐张过「可被效果选中 /
+        ``excluded_from_cogwheel_return`` 标签 / 同名 def 排除 / 手牌上限」四道闸门，
+        再写 ``symbiosis`` 实例标签并播报实际回收张数——现有的通用步骤组合
+        （``move_card`` 的 batch 分支只支持 discard/exile，``tag_op`` 不认实例标签）
+        表达不了，所以只留这一条最小原子。
+        """
+        self._return_cogwheel_cards_now(player_id)
         if log:
             self.log_msg(log)
 
@@ -10626,34 +10628,22 @@ class GameEngine:
             else:
                 self.log_msg(f"{self.pn(player_id)}查看并重排{self.pn(target_id)}的牌堆")
 
-    def _atomic_goggles_enable(self, player_id, card, params, log, choice, context):
-        """Enable deck+discard ordered viewing for player (Goggles)."""
-        target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
-        if not hasattr(self, '_goggles_views') or not isinstance(getattr(self, '_goggles_views', None), dict):
-            self._goggles_views = {}
-        self._goggles_views.setdefault(player_id, set()).add(target_id)
-        if log:
-            self.log_msg(log)
-        else:
-            self.log_msg(f"{self.pn(player_id)}给{self.pn(target_id)}启用了牌堆查看")
-
     def _goggles_view_targets_for(self, viewer_id: int) -> Set[int]:
+        """牌堆/弃牌堆「有序查看」的目标（Round 41 / 批次 AE-5 起由数据声明）。
+
+        与 ``_antennae_view_targets_for`` 同一套口径：卡数据在 root/装备卡上声明
+        ``continuous_deck_reveal`` 标签（护目镜），装备的 ``effect_target`` 就是
+        拥有者能查看牌堆顺序的那名玩家。旧 ``goggles_enable`` 原子与引擎级
+        ``_goggles_views`` 映射因此删掉——视图权限跟着装备在场与否走，装备离场
+        权限即结束（与卡面「装备在场时」一致）。
+        """
         targets: Set[int] = set()
-        views = getattr(self, '_goggles_views', None)
-        if isinstance(views, dict):
-            raw_targets = views.get(viewer_id, set())
-            if isinstance(raw_targets, (set, list, tuple)):
-                for tid in raw_targets:
-                    try:
-                        tid_int = int(tid)
-                    except (TypeError, ValueError):
-                        continue
-                    if 0 <= tid_int < len(self.players):
-                        targets.add(tid_int)
-        # Backward compatibility for older in-memory games before the mapping fix.
-        legacy = getattr(self, '_goggles_players', None)
-        if isinstance(legacy, set) and viewer_id in legacy:
-            targets.add(viewer_id)
+        if not self._valid_player_id(viewer_id):
+            return targets
+        for eq in getattr(self.players[viewer_id], 'equipment', []) or []:
+            if not self._card_has_flag(getattr(eq, 'card_instance', None), 'continuous_deck_reveal'):
+                continue
+            targets.add(self._equipment_effect_target_id(eq, viewer_id))
         return targets
 
     def _antennae_view_targets_for(self, viewer_id: int) -> Set[int]:
@@ -10715,14 +10705,11 @@ class GameEngine:
         card.equip_turns = getattr(card, 'equip_turns', 0) + amount
         self.log_msg(log or f"{card.name_cn}装备回合数：{card.equip_turns}")
 
-    def _atomic_create_counter(self, player_id, card, params, log, choice, context):
-        amount = params.get('amount', 1)
-        name = params.get('name', 'counter1')
-        if card:
-            if not hasattr(card, 'custom_counters'):
-                card.custom_counters = {}
-            card.custom_counters[name] = card.custom_counters.get(name, 0) + amount
-            self.log_msg(log or f"{card.name_cn}计数器{name}+{amount}")
+    # Round 41 / 批次 AE-5：``create_counter`` 已删除——它往 ``card.custom_counters``
+    # 写一个"没人读"的字典（引擎、卡数据、序列化、客户端都没有读取方），
+    # 任意卡内计数改名用 ``card_var_change(mode:"add"|"set", name:…, card:…)``
+    # 写 ``card.custom_vars``（会被 ``to_dict`` 序列化、取值表达式也能读）。
+    # 旧名进 ``mod_spec_v2.REMOVED_ATOMIC_OPS``，写出来是显式报错。
 
     # Round 33 / 批次 AB：``exile_this`` 已删除——它的实现就是
     # ``move_card(zone:"exile")(card:{"ref":"current_card"})``（``_move_card_to_exile``
@@ -14279,7 +14266,7 @@ class GameEngine:
                         self._log_mod_runtime_error(et, RuntimeError(f'Unknown effect: {et}'), player_id, card)
                     if rt not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
                                   'for_each_selected_card', 'for_each_list', 'delayed_effect',
-                                  'countdown_var', 'defer_game_over'):
+                                  'defer_game_over'):
                         self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue):
                     raise
@@ -14598,27 +14585,12 @@ class GameEngine:
             if log:
                 self.log_msg(log)
 
-    def _atomic_countdown_var(self, player_id, card, params, log, choice, context):
-        target = params.get('target', 'self')
-        name = str(params.get('name', 'timer'))
-        duration = self._eval_int(player_id, params.get('duration', params.get('turns', 1)), card, 1)
-        trigger = str(params.get('trigger') or 'target_turn_start')
-        # Round 30 / 批次 Y：这里原先直呼旧写法的私有名 ``_atomic_var_set``（垫片），
-        # 并把计时效果写成 ``{'type': 'var_sub'}``——``var_sub`` 在 Round 29 注销
-        # 之后会被 ``_retired_atom_runtime_error`` 拦下，倒计时永远减不下去。
-        # 两处都改写成规范写法 ``player_var_change(mode=...)``。
-        self._atomic_player_var_change(
-            player_id, card,
-            {'target': target, 'name': name, 'value': duration, 'mode': 'set'},
-            log, choice, context,
-        )
-        for target_id in self._timer_targets(player_id, target):
-            effect_target = target if target in ('global', 'team') else target_id
-            effects = [{
-                'type': 'player_var_change',
-                'params': {'mode': 'sub', 'target': effect_target, 'name': name, 'value': 1},
-            }]
-            self._register_timed_effect(player_id, target_id, trigger, duration, effects)
+    # Round 41 / 批次 AE-5：``countdown_var`` 已删除——"写一个初值 + 每次触发减 1"
+    # 就是两条通用步骤：``{"op":"player_var_change","mode":"set",...}`` 加
+    # ``{"op":"delayed_effect","mode":"timed","trigger":…,"duration":…,
+    # "body":[{"op":"player_var_change","mode":"sub",…}]}``（Round 37 / 批次 AD-2
+    # 起 ``_register_timed_effect`` 的定时器已由 ``delayed_effect(mode:"timed")`` 承接）。
+    # 旧名进 ``mod_spec_v2.REMOVED_ATOMIC_OPS``，写出来是显式报错。
 
     def _played_cards_total_this_turn(self, target_id: int, exclude_current: bool = False,
                                       actor_id: Optional[int] = None) -> int:
@@ -15126,7 +15098,7 @@ class GameEngine:
                         self._log_mod_runtime_error(eff_type, RuntimeError(f'Unknown effect: {eff_type}'), player_id, card)
                     if resolved_type not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
                                              'for_each_selected_card', 'for_each_list', 'delayed_effect',
-                                             'countdown_var', 'defer_game_over'):
+                                             'defer_game_over'):
                         self._dispatch_player_stat_changes(before_stats, player_id, card)
                 except (ModLoopBreak, ModLoopContinue) as exc:
                     self._log_mod_runtime_error(eff_type, RuntimeError(f'{type(exc).__name__} outside loop'), player_id, card)
@@ -16473,12 +16445,26 @@ class GameEngine:
         self.log_msg(f"{self.pn(player_id)}的迟缓效果清除")
 
     def _return_cogwheel_cards_now(self, player_id: int):
+        """齿轮收牌例程（Round 41 / 批次 AE-5：开关与排除实例改读玩家变量）。
+
+        开关/排除实例全部来自卡数据写下的 ``custom_vars``：
+        ``cogwheel_active``（真值 = 本回合启用这一条例程）与
+        ``cogwheel_exclude_instance_id``（本次不回收的实例 id，通常是齿轮自己）。
+        收完即把两个变量清空，行为与旧的引擎级 ``_cogwheel_active``
+        （一次性开关）逐条一致。
+        """
         if not (0 <= player_id < len(self.players)):
             return
-        if not getattr(self, '_cogwheel_active', {}).get(player_id):
-            return
         ps = self.players[player_id]
-        exclude_id = int(getattr(self, '_cogwheel_exclude_instance_ids', {}).get(player_id, -1) or -1)
+        custom_vars = getattr(ps, 'custom_vars', None)
+        if not isinstance(custom_vars, dict):
+            return
+        if not custom_vars.get('cogwheel_active'):
+            return
+        try:
+            exclude_id = int(custom_vars.get('cogwheel_exclude_instance_id', -1) or -1)
+        except (TypeError, ValueError):
+            exclude_id = -1
         exclude_def_id = ''
         for zone in (getattr(ps, 'hand', []), getattr(ps, 'discard', []), getattr(ps, 'exile', [])):
             for c in list(zone or []):
@@ -16524,9 +16510,10 @@ class GameEngine:
             found.instance_flags.add('symbiosis')
             ps.add_to_hand(found)
             returned.append(found.name_cn)
-        self._cogwheel_active[player_id] = False
-        if hasattr(self, '_cogwheel_exclude_instance_ids'):
-            self._cogwheel_exclude_instance_ids.pop(player_id, None)
+        # 一次性开关：收完就清空玩家变量（与旧 ``_cogwheel_active[id] = False`` 等价，
+        # 但不会在 ``custom_vars`` 里留下长期残留，A/B 状态摘要因此保持一致）。
+        custom_vars.pop('cogwheel_active', None)
+        custom_vars.pop('cogwheel_exclude_instance_id', None)
         if returned:
             self.log_msg(f"{self.pn(player_id)}的齿轮效果：{len(returned)}张牌回到手中并获得共生")
 
@@ -17409,6 +17396,14 @@ class GameEngine:
                 equip_owner.equipment.append(eq)
                 self._note_achievement_equipment_count(equip_owner_id)
                 self._refresh_hand_limit_bonuses()
+                # Round 41 / 批次 AE-5：``continuous_deck_reveal``（护目镜）是数据
+                # 声明的视图权限，装备落场时按装备的目标补一条与旧原子逐字一致的战报。
+                if self._card_has_flag(card, 'continuous_deck_reveal'):
+                    self.log_msg(
+                        f"{self.pn(equip_owner_id)}给"
+                        f"{self.pn(self._equipment_effect_target_id(eq, equip_owner_id))}"
+                        f"启用了牌堆查看"
+                    )
                 self.log_msg(f"{self.pn(equip_owner_id)}装备了{card.name_cn}")
                 if self._card_has_flag(card, 'electric_web_arm_on_place'):
                     arm_target = int(getattr(eq, 'effect_target', equip_owner_id))
@@ -18182,8 +18177,10 @@ class GameEngine:
             f"收到 {request_type!r}"
         )
 
-    def _atomic_response_declare(self, player_id, card, params, log, choice, context):
-        return None
+    # Round 41 / 批次 AE-5：``response_declare`` 已删除——它是一条返回 ``None`` 的
+    # 空占位步骤，从来没有行为；反制窗口由卡数据的 ``response_trigger`` 与引擎的
+    # 响应/选择系统承载（``bio:indictment`` 在 Round 40 起也改用 ``card_var_change``）。
+    # 旧名进 ``mod_spec_v2.REMOVED_ATOMIC_OPS``（替代写法为空 = 该 op 没有等价写法）。
 
     # Round 32 / 批次 AA：``aura_enemy_elixir_recovery`` 已并入
     # ``resource_op(mode:"aura_recovery")``（声明本身是空操作，数值由
@@ -19608,15 +19605,10 @@ class GameEngine:
     # ``add_tag_to_zone(mode:"toggle")``（``target``/``zone``/``tag`` 参数同名同义，
     # 显式写 ``target`` 即与旧默认 ``target`` 一致）。
 
-    def _atomic_card_damage_multiply(self, player_id, card, params, log, choice, context):
-        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
-        if target_card is None:
-            return
-        multiplier = self._eval_int(player_id, params.get('multiplier', 2), card, 2)
-        current = max(1, int(getattr(target_card, 'fusion_level', 1)))
-        self._set_card_property_value(player_id, card, {'card': params.get('card', {'ref': 'current_card'}), 'property': 'fusion_level'}, current * multiplier)
-        if log:
-            self.log_msg(log)
+    # Round 41 / 批次 AE-5：``card_damage_multiply`` 已删除——它就是
+    # ``card_prop_change(mode:"mul", property:"fusion_level", multiplier:N)``
+    # （同一张 ``_set_card_property_value`` 钳位路径），旧名进
+    # ``mod_spec_v2.REMOVED_ATOMIC_OPS``，写出来是显式报错。
 
     # Round 31 / 批次 Z：``clear_tags`` 已并入 ``add_tag(mode:"clear")``。
 

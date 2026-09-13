@@ -87,10 +87,10 @@ ADVANCED_ATOMIC_OPS = {
     "mark_self_damage_source", "fission", "fusion",
     "multiply_next_damage",
     "add_tag", "add_tag_to_zone",
-    "transform_card", "card_counter", "create_counter",
+    "transform_card", "card_counter",
     # Round 37 / 批次 AD-2：``broadcast_event`` 并进 ``emit_event``。
     "emit_event", "modify_damage",
-    "list_modify", "delayed_effect", "countdown_var",
+    "list_modify", "delayed_effect",
     # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
     # (Round 1 draft names, never used by shipped data) were folded into
     # ``random_zone_card_to_hand``; see ``REMOVED_ATOMIC_OPS``.
@@ -103,17 +103,16 @@ ADVANCED_ATOMIC_OPS = {
     "transform_cards",
     "deck_catalog_pick", "deck_catalog_pick_resume",
     "player_prop_change", "card_prop_change",
-    "card_damage_multiply", "equipment_prop_set",
+    "equipment_prop_set",
     "restore_turn_start_stats", "restore_match_start_stats",
     "counter_pending_attack_damage",
     "equipment_prop_add", "discard_choice_then_draw",
     "activate_corruption",
-    "response_declare", "on_any_turn_start",
+    "on_any_turn_start",
     "on_enemy_turn_start", "on_owner_turn_start", "on_owner_turn_end", "on_hand_owner_turn_start", "on_hand_owner_turn_end",
     "on_discard_owner_turn_start", "on_equipment_trigger", "on_equipment_destroy",
     "on_damage_taken",
-    "cogwheel_mark",
-    "goggles_enable",
+    "cogwheel_return",
     # Round 40 / 批次 AE-2：``assembler_effect`` 已下沉成卡数据里的通用步骤
     # （旧名进 REMOVED_ATOMIC_OPS）。
     # Round 36 / 批次 AD-1：请求族四合一 —— 旧 ``request_target`` /

@@ -236,6 +236,164 @@ ROUND40_ACTIONS = {
                                "记账（count_as_active_discard），战报只在真的搬走牌时打印"),
 }
 
+# ---------------------------------------------------------------------------
+# Round 41 / 批次 AE-5（收尾）：两个"半拆"单点原子 + 长尾未使用 op 的逐个定论。
+# ---------------------------------------------------------------------------
+ROUND41_ACTIONS = {
+    # ---- 一、两个"半拆"原子 ----
+    "cogwheel_mark": ("合", 1, '{"op":"player_var_change","mode":"set","name":"cogwheel_active","value":true} + '
+                              '{"op":"player_var_change","mode":"set","name":"cogwheel_exclude_instance_id",'
+                              '"value":{"op":"card_prop","card":{"ref":"current_card"},"property":"instance_id"}} + '
+                              '{"op":"cogwheel_return"}',
+                      "齿轮的\"标记\"半边下沉成卡数据写玩家变量（开关 + 要排除的实例 id），"
+                      "收牌例程（按 cards_played_this_turn_instance_ids 逐张回收、写 symbiosis 实例标签、"
+                      "受手牌上限与 excluded_from_cogwheel_return 标签约束）留成最小原子并改名 "
+                      "cogwheel_return——旧名进 RENAMED_ATOMIC_OPS，写出来是\"已改名 + 规范名\""),
+    "goggles_enable": ("删", 1, '{"flags":["continuous_deck_reveal"]} + '
+                                '{"op":"equipment_op","mode":"place","effect_target":"choice_target"}',
+                       "护目镜的\"谁能查看牌堆/弃牌堆顺序\"改由装备标签 continuous_deck_reveal 声明，"
+                       "引擎 _goggles_view_targets_for 扫装备 + 读 effect_target（与 garden:antennae 的 "
+                       "continuous_hand_reveal 同一套口径）；引擎级 _goggles_views 映射一起删除，"
+                       "视图权限跟着装备在场与否走（与卡面\"装备在场时\"一致）"),
+    # ---- 二、长尾未使用 op 里判定"删"的四条 ----
+    "card_damage_multiply": ("删", 0, '{"op":"card_prop_change","mode":"mul","property":"fusion_level",'
+                                      '"multiplier":2,"card":{"ref":"current_card"}}',
+                             "聚变倍率就是卡牌属性乘法，走同一张 _set_card_property_value 钳位路径"
+                             "（fusion_level 上限、fusion_multiplier 同步字段都在里面）"),
+    "countdown_var": ("删", 0, '{"op":"player_var_change","mode":"set","name":"timer","value":3,"target":"self"} + '
+                               '{"op":"delayed_effect","mode":"timed","trigger":"target_turn_start","duration":3,'
+                               '"target":"self","body":[{"op":"player_var_change","mode":"sub","name":"timer",'
+                               '"value":1,"target":"self"}]}',
+                      "倒计时 = \"写初值\" + \"每次触发减 1\"两条通用步骤；_register_timed_effect 的定时器"
+                      "自 Round 37 起已由 delayed_effect(mode:\"timed\") 承接，原子内部本来就是这两步的封装"),
+    "create_counter": ("删", 0, '{"op":"card_var_change","mode":"add","name":"counter1","value":1,'
+                                '"card":{"ref":"current_card"}}',
+                       "它写的 card.custom_counters 在引擎、卡数据、to_dict 与客户端里都没有读取方"
+                       "（写进去没人读）；卡内任意计数改用 card_var_change 写 card.custom_vars"),
+    "response_declare": ("删", 0, "",
+                         "返回 None 的空占位步骤，没有任何行为；反制窗口由卡数据的 response_trigger "
+                         "与引擎响应系统承载（bio:indictment 在 Round 40 起也已改用 card_var_change）"),
+}
+
+# Round 41 / 批次 AE-5：长尾"未使用 op"逐个定论（判定 + 理由 + 替代写法）。
+# 判定取值：留·语言原语 / 留·机制钩子 / 留·伞原子 / 留·事件钩子 / 留·能力扩展点 /
+# 删·可下沉 / 删·能力扩展点。凡判"删"的行都必须已经真删（无 `_atomic_*` 实现、
+# 名字进 REMOVED/RENAMED 表）——``--check`` 会验证。
+UNUSED_OP_VERDICTS = {
+    # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
+    "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
+              "循环跳出原语，Round 32 起明确保留（for_each/repeat 的唯一出口）"),
+    "continue": ("留·语言原语", "`{\"op\":\"continue\"}`（循环体内）",
+                 "跳过本次迭代的原语，与 break 成对；引擎按 ModLoopContinue 处理"),
+    "random": ("留·语言原语", "`{\"op\":\"random\",\"values\":[…]}` / 随机目标选择器",
+               "随机取值的原语（目标/数值/随机取牌共用），不是某一族的特例"),
+    "clamp": ("留·语言原语", "`{\"op\":\"clamp\",\"value\":…,\"min\":…,\"max\":…}`",
+              "取值表达式算子（eval_v2_value 分支），写卡时的通用钳位"),
+    "const": ("留·语言原语", "`{\"op\":\"const\",\"value\":…}`",
+              "取值表达式算子：常量包装，编辑器生成的表达式节点"),
+    "literal": ("留·语言原语", "`{\"op\":\"literal\",\"value\":…}`",
+                "const 的同义算子（同一个分支），旧数据兼容名"),
+    "has_status": ("留·语言原语", "`{\"op\":\"has_status\",\"target\":…,\"status\":…}`（condition 位）",
+                   "条件算子：判断某状态层数，只能出现在 condition/run_if/unless"),
+    "var_compare": ("留·语言原语", "`{\"op\":\"var_compare\",\"left\":…,\"op\":\">\",\"right\":…}`",
+                    "条件算子：变量比较，与 compare 同族"),
+    "zone_exists": ("留·语言原语", "`{\"op\":\"zone_exists\",\"target\":…,\"zone\":\"deck\"}`",
+                    "条件算子：区域非空判断"),
+    "equipment_property": ("留·语言原语", "`{\"op\":\"equipment_property\",\"property\":…}`",
+                           "取值表达式算子：读装备属性（装备属性族唯一读法）"),
+    "equipment_count_targeting": ("留·语言原语", "`{\"op\":\"equipment_count_targeting\",\"equipment_id\":…}`",
+                                  "取值表达式算子：统计指向某玩家的装备数"),
+    # ---- 运行时步骤与事件钩子 ----
+    "modify_event_value": ("留·伞原子", "`{\"op\":\"modify_event_value\",\"value\":…}`",
+                           "run_v2_step 原生步骤：改写当前事件的 event_value（事件响应族唯一写入口）"),
+    "deck_catalog_pick_resume": ("留·机制钩子", "`{\"op\":\"deck_catalog_pick_resume\"}`",
+                                 "Cicada 3301 图鉴选牌的续跑步骤（run_v2_step 原生，与 deck_catalog_pick 成对）"),
+    "damage": ("留·事件钩子", "`{\"op\":\"deal_damage\",…}`（旧写法 `damage` 走 _EFFECT_ALIASES）",
+               "伤害管线的旧写法入口，_EFFECT_ALIASES 直接指到 deal_damage，不是独立实现"),
+    "equip_protection": ("留·事件钩子", "`{\"op\":\"counter_equip_protect\",\"amount\":N}`",
+                         "装备保护层数的旧写法入口，_EFFECT_ALIASES 指到 counter_equip_protect"),
+    "on_any_turn_start": ("留·事件钩子", "`events.{\"on_any_turn_start\":{…}}`",
+                          "事件时点声明键：任意玩家回合开始（被动钩子表成员）"),
+    "on_damage_taken": ("留·事件钩子", "`events.{\"on_damage_taken\":{…}}`",
+                        "事件时点声明键：受到伤害时（血债等监听器的唯一入口）"),
+    "on_discard_owner_turn_start": ("留·事件钩子", "`events.{\"on_discard_owner_turn_start\":{…}}`",
+                                    "事件时点声明键：在弃牌堆且拥有者回合开始"),
+    "on_enemy_turn_start": ("留·事件钩子", "`events.{\"on_enemy_turn_start\":{…}}`",
+                            "事件时点声明键：敌方回合开始"),
+    "on_equipment_destroy": ("留·事件钩子", "`events.{\"on_equipment_destroy\":{…}}`",
+                             "事件时点声明键：装备被摧毁"),
+    "on_equipment_trigger": ("留·事件钩子", "`events.{\"on_equipment_trigger\":{…}}` / on_event(trigger:\"equipment_trigger\")",
+                             "事件时点声明键：装备触发（引擎 _equipment_trigger_* 系列直读）"),
+    "on_hand_owner_turn_end": ("留·事件钩子", "`events.{\"on_hand_owner_turn_end\":{…}}`",
+                               "事件时点声明键：在手牌且拥有者回合结束"),
+    "on_hand_owner_turn_start": ("留·事件钩子", "`events.{\"on_hand_owner_turn_start\":{…}}`",
+                                 "事件时点声明键：在手牌且拥有者回合开始"),
+    "on_owner_turn_end": ("留·事件钩子", "`events.{\"on_owner_turn_end\":{…}}`",
+                          "事件时点声明键：拥有者回合结束"),
+    "on_owner_turn_start": ("留·事件钩子", "`events.{\"on_owner_turn_start\":{…}}`",
+                            "事件时点声明键：拥有者回合开始（挂起类卡牌的主入口）"),
+    "on_target_turn_start": ("留·事件钩子", "`events.{\"on_target_turn_start\":{…}}`",
+                             "事件时点声明键：被指向目标的回合开始（计时器默认相位）"),
+    # ---- 伞原子与机制钩子：卡面机制的唯一实现，删掉要重写实现才能加回来 ----
+    "action_filter": ("留·伞原子", "`{\"op\":\"action_filter\",\"mode\":\"block_type\",\"target\":\"enemy\",\"card_type\":\"thorn\",\"duration\":1}`",
+                      "Round 38 行为过滤族唯一公开 op（block_own/block_type/force_type/negate 四合一），"
+                      "承接 block_own_actions / block_card_type / nullify_current_card"),
+    "emit_event": ("留·伞原子", "`{\"op\":\"emit_event\",\"event\":\"<事件名>\"}`",
+                   "Round 37 广播族唯一公开 op，承接 broadcast_event 与占位步骤 trigger_manual"),
+    "activate_corruption": ("留·机制钩子", "`{\"op\":\"activate_corruption\"}`",
+                            "腐化装备的激活开关（写 eq.corruption_active），Void 腐化机制唯一入口，"
+                            "被 _activate_pending_corruption / _get_corruption_count 读取"),
+    "card_counter": ("留·机制钩子", "`{\"op\":\"card_counter\",\"mode\":\"play\"|\"equip_turns\"|\"reset\",\"amount\":1}`",
+                     "卡内计数器唯一实现（play_count / equip_turns），承接 record_play_count / "
+                     "record_equip_turns / reset_counter"),
+    "charge_self_damage": ("留·机制钩子", "`{\"op\":\"charge_self_damage\"}`",
+                           "Ocean 充能关键字：按 card.charge_value 每次打出自我伤害一次，"
+                           "带 _once_per_play 记账，卡面机制直接依赖"),
+    "counter_equip_protect": ("留·机制钩子", "`{\"op\":\"counter_equip_protect\",\"amount\":1}`",
+                              "装备保护层数唯一写入口（equipment_protection），equip_protection "
+                              "别名指向它，status_immune_equipment 与护甲结算都读这个字段"),
+    "discard_choice_then_draw": ("留·机制钩子", "`{\"op\":\"discard_choice_then_draw\",\"log\":…}`",
+                                 "_choice_type_for_effect 直读它的 choice_type 映射"
+                                 "（choose_card_to_discard），选择窗口语义绑在实现里"),
+    "fission": ("留·机制钩子", "`{\"op\":\"fission\",\"amount\":1}`",
+                "裂变层数（fission_count 同步字段）唯一写入口，与 fusion 成对"),
+    "fusion": ("留·机制钩子", "`{\"op\":\"fusion\",\"amount\":1}`",
+               "聚变层数（fusion_multiplier 同步字段）唯一写入口，攻击管线按它放大子瓣"),
+    "global_mult": ("留·机制钩子", "`{\"op\":\"global_mult\",\"kind\":\"damage\"|\"heal\"|\"cost\",\"multiplier\":2}`",
+                    "全场倍率唯一写入口（global_damage_mult / global_heal_mult / global_cost_mult），"
+                    "承接 global_*_mult 三兄弟"),
+    "lifesteal_damage": ("留·机制钩子", "`{\"op\":\"lifesteal_damage\",…}`",
+                         "_card_has_heal_effect 把带该效果的牌算作\"治疗牌\""
+                         "（反治疗/治疗阻断规则依赖），删了会改变规则判定"),
+    "mark_self_damage_source": ("留·机制钩子", "`{\"op\":\"mark_self_damage_source\"}`",
+                                "把本牌标成下一次自身伤害的来源（卡内计数器族），暂无卡使用但属机制钩子"),
+    "modify_damage": ("留·机制钩子", "`{\"op\":\"modify_damage\",\"formula\":…}`",
+                      "伤害公式改写钩子（数据侧唯一入口），与 deal_damage 的公式读取成对"),
+    "multiply_next_damage": ("留·机制钩子", "`{\"op\":\"multiply_next_damage\",\"multiplier\":2}`",
+                             "下一次伤害倍率（一次性 buff），伤害管线在结算后消费"),
+    "transform_card": ("留·机制钩子", "`{\"op\":\"transform_card\",\"card\":{\"ref\":\"current_card\"}}`",
+                       "变换当前牌（transform 族标记），与 transform_cards 批量版同族，暂无卡使用"),
+    "triangle_damage": ("留·机制钩子", "`{\"op\":\"triangle_damage\",\"base\":6,\"per_stack\":3,\"max_stacks\":4}`",
+                        "三角机制一条例程：伤害 = 基数 + 每层×层数，且\"造成伤害 > 0 才有上限地叠层\"、"
+                        "精准标记继承自卡面、层数写回 custom_vars 与 triangle_stacks；"
+                        "拆成数据要 4 步且要读 last_damage 做条件门，无法保证与伤害管线一致"),
+    "turn_mod_add": ("留·机制钩子", "`{\"op\":\"turn_mod_add\",\"kind\":\"e_regen\"|\"m_regen\"|\"draw\",\"amount\":1}`",
+                     "每回合修正唯一写入口（e_regen_mod / m_regen_mod / draw_mod），承接 mod_* 三兄弟"),
+    # ---- 本批真删的 6 个名字（判定 + 替代写法见上表，这里逐条留档） ----
+    "cogwheel_mark": ("删·可下沉", "见上表：两条 `player_var_change` + 最小原子 `cogwheel_return`",
+                      "半拆：标志位下沉成数据，收牌例程留成最小原子并改名（旧名进 RENAMED_ATOMIC_OPS）"),
+    "goggles_enable": ("删·可下沉", "装备标签 `continuous_deck_reveal`（引擎扫装备读 effect_target）",
+                       "视图权限改由数据声明，引擎级 _goggles_views 映射删除"),
+    "card_damage_multiply": ("删·可下沉", "`{\"op\":\"card_prop_change\",\"mode\":\"mul\",\"property\":\"fusion_level\",…}`",
+                             "同形卡牌属性乘法，走同一张钳位/同步字段路径"),
+    "countdown_var": ("删·可下沉", "`player_var_change(mode:\"set\")` + `delayed_effect(mode:\"timed\")`",
+                      "原子内部本来就是这两步的封装"),
+    "create_counter": ("删·能力扩展点", "`{\"op\":\"card_var_change\",\"mode\":\"add\",\"name\":…,\"card\":…}`",
+                       "card.custom_counters 全仓库没有任何读取方（写进去没人读），改用 card.custom_vars"),
+    "response_declare": ("删·能力扩展点", "（无等价写法：反制窗口由卡数据 response_trigger 声明）",
+                         "返回 None 的空占位步骤，删除不影响任何现有卡"),
+}
+
 # 退役但**保留 `_atomic_*` 处理器**的名字：公开契约里已经进
 # ``mod_spec_v2.REMOVED_ATOMIC_OPS``（写出来是"已移除 + 替代写法"），但引擎内部
 # 或测试会直接调这些私有方法，所以实现留着手工删不得。它们同样必须"卡数据 0 引用"。
@@ -556,6 +714,21 @@ def usage_map() -> dict:
     return usage
 
 
+def any_position_usage() -> dict:
+    """与 ``tools/op_long_tail_report.py`` 同口径：``op`` / ``type`` / ``ref`` 三键全位置计数。"""
+
+    counter: collections.Counter = collections.Counter()
+    for package in sorted(MODS_DIR.glob("*.gtnmod")):
+        with zipfile.ZipFile(package) as archive:
+            payload = json.loads(archive.read("mod.json"))
+        text = json.dumps(payload, ensure_ascii=False)
+        for name in set(mod_spec_v2.VALID_LOGIC_OPS):
+            counter[name] += len(
+                re.findall(r'"(?:op|type|ref)"\s*:\s*"%s"' % re.escape(name), text)
+            )
+    return counter
+
+
 def kept_reason(name: str) -> tuple:
     explicit = KEPT_EXPLICIT.get(name)
     for label, keys, fallback in KEPT_GROUPS:
@@ -577,7 +750,8 @@ def build() -> dict:
     actions = []
     for name, (verdict, before, replacement, reason) in (
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
-         **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS}
+         **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
+         **ROUND41_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,
@@ -591,9 +765,21 @@ def build() -> dict:
             "replacement": replacement, "reason": reason,
         })
     handler_kept.sort(key=lambda row: row["name"])
+    any_usage = any_position_usage()
+    unused_ops = []
+    for name, (verdict, replacement, reason) in sorted(UNUSED_OP_VERDICTS.items()):
+        unused_ops.append({
+            "name": name,
+            "verdict": verdict,
+            "usage": any_usage.get(name, 0),
+            "has_impl": name in set(atoms),
+            "replacement": replacement,
+            "reason": reason,
+        })
     return {
         "atoms": atoms, "usage": usage, "kept": kept, "actions": actions,
-        "handler_kept": handler_kept,
+        "handler_kept": handler_kept, "unused_ops": unused_ops,
+        "any_usage": dict(any_usage),
     }
 
 
@@ -642,7 +828,7 @@ def preservation_rows() -> list:
 
 def render(model: dict) -> str:
     lines = []
-    lines.append("# 原子全量清单（Round 33 / 批次 AB+AC+AD · 2026-09-12）")
+    lines.append("# 原子全量清单（Round 33 → 41 / 批次 AB+AC+AD+AE · 2026-09-13）")
     lines.append("")
     lines.append("本表**逐行**覆盖当前全部引擎原子（`_atomic_*` 实现），并列出 Round 31 / 32 / 33 真删/真合并的每一个名字。")
     lines.append(f"表里所有判「删」或「合」的行**都已在本轮执行完毕**：`--check` 会验证这些名字已经没有")
@@ -651,14 +837,15 @@ def render(model: dict) -> str:
     lines.append("生成：`python tools/atom_full_inventory.py`；校验：`python tools/atom_full_inventory.py --check`。")
     lines.append("用量口径与 `tools/mod_atom_report.py` 完全一致（`op`/`type` 键、嵌套步骤展开）。")
     lines.append("")
-    lines.append(f"## 一、Round 31 / 32 / 33 真删 / 真合并（{len(model['actions'])} 个名字）")
+    lines.append(f"## 一、Round 31–41 真删 / 真合并 / 半拆（{len(model['actions'])} 个名字）")
     lines.append("")
     lines.append("| 原子 | 判定 | 迁移前用量 | 本批用量 | 替代写法 | 理由 |")
     lines.append("|---|---|---|---|---|---|")
     for row in model["actions"]:
+        replacement = row["replacement"] or "（无等价写法）"
         lines.append(
             f"| `{row['name']}` | {row['verdict']} | {row['before']} | {row['usage']} | "
-            f"`{row['replacement']}` | {row['reason']} |"
+            f"{replacement} | {row['reason']} |"
         )
     lines.append("")
     lines.append("带参数替代的名字进 `mod_spec_v2.REMOVED_ATOMIC_OPS`（替代写法是完整 JSON），纯改名的进")
@@ -680,14 +867,30 @@ def render(model: dict) -> str:
             f"| `{row['name']}` | {row['before']} | {row['usage']} | `{row['replacement']}` | {row['reason']} |"
         )
     lines.append("")
-    lines.append(f"## 二、保留清单：当前全部引擎原子（{len(model['kept'])}）")
+    lines.append(f"## 二、未使用 op 逐个定论（{len(model['unused_ops'])} 个名字）")
+    lines.append("")
+    lines.append("Round 41 / 批次 AE-5 给 `tools/op_long_tail_report.py` 报出的每个\"卡数据 0 引用\"名字")
+    lines.append("逐个定论：**语言原语**（DSL 骨架）/ **机制钩子**（卡面机制的唯一实现）/ **伞原子** /")
+    lines.append("**事件钩子** / **能力扩展点** / **可下沉**（拆成伞原子 + 数据）。判「删·」的行已经在本轮")
+    lines.append("真删：既没有 `_atomic_*` 实现，卡数据也 0 引用，名字进 `REMOVED_ATOMIC_OPS` 或")
+    lines.append("`RENAMED_ATOMIC_OPS`（写出来是显式报错，不静默）。")
+    lines.append("")
+    lines.append("| 原子 | 用量 | 判定 | 替代写法 | 理由 |")
+    lines.append("|---|---|---|---|---|")
+    for row in model["unused_ops"]:
+        replacement = row["replacement"] or "（无等价写法）"
+        lines.append(
+            f"| `{row['name']}` | {row['usage']} | {row['verdict']} | {replacement} | {row['reason']} |"
+        )
+    lines.append("")
+    lines.append(f"## 三、保留清单：当前全部引擎原子（{len(model['kept'])}）")
     lines.append("")
     lines.append("| 原子 | 家族 | 用量 | 判定 | 理由 |")
     lines.append("|---|---|---|---|---|")
     for row in model["kept"]:
         lines.append(f"| `{row['name']}` | {row['family']} | {row['usage']} | 留 | {row['reason']} |")
     lines.append("")
-    lines.append("## 三、必须保留清单（语言原语 / 扩展点 / 机制钩子）")
+    lines.append("## 四、必须保留清单（语言原语 / 扩展点 / 机制钩子）")
     lines.append("")
     lines.append("这些名字不在 `_atomic_*` 实现表里，但属于 DSL 契约，**不属于删除候选**：")
     lines.append("")
@@ -695,7 +898,7 @@ def render(model: dict) -> str:
     lines.append("|---|---|---|---|")
     lines.extend(preservation_rows())
     lines.append("")
-    lines.append("## 四、统计")
+    lines.append("## 五、统计")
     lines.append("")
     lines.append("| 项 | 值 |")
     lines.append("|---|---|")
@@ -705,6 +908,13 @@ def render(model: dict) -> str:
     lines.append(f"| 其中判定「删」 | {sum(1 for row in model['actions'] if row['verdict'] == '删')} |")
     lines.append(f"| 用量 0 的引擎原子 | {sum(1 for row in model['kept'] if row['usage'] == 0)} |")
     lines.append(f"| 用量 > 0 的引擎原子 | {sum(1 for row in model['kept'] if row['usage'] > 0)} |")
+    lines.append(f"| 未使用 op 定论条数 | {len(model['unused_ops'])} |")
+    lines.append(
+        f"| 其中判定「删·」 | {sum(1 for row in model['unused_ops'] if row['verdict'].startswith('删'))} |"
+    )
+    lines.append(
+        f"| 其中判定「留·」 | {sum(1 for row in model['unused_ops'] if row['verdict'].startswith('留'))} |"
+    )
     lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -738,6 +948,31 @@ def check(model: dict, text: str, out_path: pathlib.Path) -> int:
             problems.append(f"{row['name']}: 保留处理器的名字，卡数据仍有 {row['usage']} 处引用")
         if row["name"] in {item["name"] for item in model["actions"]}:
             problems.append(f"{row['name']}: 同时出现在真删表与保留处理器表")
+    # Round 41 / 批次 AE-5：未使用 op 的定论表必须覆盖"当前 0 引用"的每一个登记名，
+    # 且判「删·」的行必须真的删干净（没有实现、卡数据 0 引用、名字进退役表）。
+    verdict_rows = {row["name"]: row for row in model["unused_ops"]}
+    if len(verdict_rows) != len(model["unused_ops"]):
+        problems.append("未使用 op 定论表里有重复行")
+    zero_usage = sorted(
+        name
+        for name in set(mod_spec_v2.VALID_LOGIC_OPS)
+        if not model["any_usage"].get(name, 0)
+    )
+    missing = [name for name in zero_usage if name not in verdict_rows]
+    if missing:
+        problems.append(f"未使用 op 定论表缺行：{missing[:8]}（共 {len(missing)} 个）")
+    retired = set(mod_spec_v2.REMOVED_ATOMIC_OPS) | set(mod_spec_v2.RENAMED_ATOMIC_OPS)
+    for row in model["unused_ops"]:
+        name = row["name"]
+        if row["usage"]:
+            problems.append(f"{name}: 定论表写 0 引用，但卡数据有 {row['usage']} 处引用")
+        if not row["verdict"].startswith(("留·", "删·")):
+            problems.append(f"{name}: 判定必须以 留·/删· 开头")
+        if row["verdict"].startswith("删·"):
+            if row["has_impl"]:
+                problems.append(f"{name}: 判定删除，但引擎里还有 _atomic_{name} 实现")
+            if name not in retired:
+                problems.append(f"{name}: 判定删除，但名字没进 REMOVED/RENAMED 表")
     if out_path.is_file():
         on_disk = out_path.read_text(encoding="utf-8").replace("\r\n", "\n")
         if on_disk != text.replace("\r\n", "\n"):

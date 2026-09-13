@@ -45,8 +45,9 @@ class SameNamePenaltyLifecycleTests(unittest.TestCase):
         played_card = CardInstance('Basic')
         player.discard.append(played_card)
         self._set_turn_cards(engine, 0, 1, [played_card.instance_id])
-        engine._cogwheel_active = {0: True}
-        engine._cogwheel_exclude_instance_ids = {}
+        # Round 41 / 批次 AE-5：齿轮的开关与排除实例改成卡数据写的玩家变量
+        # （``player_var_change`` → ``custom_vars``），直调测试同步走真实数据路径。
+        player.custom_vars['cogwheel_active'] = True
 
         engine._end_player_turn(0)
 
