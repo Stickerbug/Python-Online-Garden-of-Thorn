@@ -244,6 +244,10 @@ _CORE_LOGIC_OPS = {
     # Round 38 / 批次 AD-3：``skip_turn`` / ``extra_turn`` / ``force_end_turn``
     # 三条回合控制原子并成 ``turn_control``（``mode`` 选 end/skip/extra），
     # 旧名进 REMOVED_ATOMIC_OPS（带替代 JSON）。
+    # Round 45 / 批次 AI：``honey_control``（蜜糖控制）并成第四个 mode
+    # ``forced_action``——它改的是同一族"下回合的回合帧"
+    # （``honey_control_turns`` + 自动行动期间的行为开关），与 end/skip/extra
+    # 共用一条 ``_atomic_turn_control`` 实现；旧名进 REMOVED_ATOMIC_OPS。
     "turn_control",
     # Round 42 / 批次 AF：``fission`` / ``fusion`` 已删除——裂变层数是
     # ``card_prop_change(property:"fission_level")``（钳位与 ``fission_count``
@@ -325,7 +329,8 @@ _CORE_LOGIC_OPS = {
     # ``goggles_enable`` 整个删除，视图权限改由装备标签 ``continuous_deck_reveal``
     # 声明（见 REMOVED_ATOMIC_OPS）。
     "cogwheel_return",
-    "honey_control",
+    # Round 45 / 批次 AI：``honey_control`` 已并进
+    # ``turn_control(mode:"forced_action", …)``（旧名进 REMOVED_ATOMIC_OPS）。
     # Round 40 / 批次 AE-2：``assembler_effect``（重构机）下沉成卡数据里的
     # 通用步骤组合（request 选牌 → move_card 放逐 → random_choice 奖励表 →
     # move_card(mode:"give") 造牌 → card_prop_change 迅捷 → status_op 碎片 →
@@ -1402,6 +1407,21 @@ REMOVED_ATOMIC_OPS = {
     "force_end_turn": '{"op":"turn_control","mode":"end"}（本牌结算完之后结束出牌者的回合；旧写法里的 log:false 原样保留，target 一向被忽略）',
     "skip_turn": '{"op":"turn_control","mode":"skip","target":"enemy","amount":1}（目标 +N 层眩晕；target 默认 enemy，走状态免疫判定）',
     "extra_turn": '{"op":"turn_control","mode":"extra","target":"self"}（目标获得一个额外回合；target 默认 self）',
+
+    # Round 45 / 批次 AI（回合控制族第四个分支）：``honey_control`` 并进
+    # ``turn_control(mode:"forced_action")``——目标下回合被自动控制。参数面
+    # 逐个逐字保留：``target``（默认 choice_target）/ ``duration``（至少 1）、
+    # ``forced_target``、``attack_only`` / ``attacks_only``、
+    # ``end_turn_when_stuck``、``damage_multiplier``、``log``。
+    # 官方包三处（garden:honey / garden:beeswax / sewers:cheese）的迁移见
+    # 卡数据；sewers:cheese 的写法示例：
+    "honey_control": '{"op":"turn_control","mode":"forced_action","target":"target","duration":1,'
+                     '"forced_target":"source","attack_only":true,"end_turn_when_stuck":true,'
+                     '"log":"{source}…使{target}下回合自动攻击{source}"}'
+                     '（原 hive/honey 语义一行不改：目标引用默认 choice_target、'
+                     'attack_only:false 放开牌型、end_turn_when_stuck:false 卡住不自动结束回合、'
+                     'damage_multiplier 叠加自动行动期间的伤害倍率；'
+                     '旧的 log:false 与旧实现一样回落到默认文案）',
 
     # Round 38 / 批次 AD-3（行为过滤族四合一）→ Round 42 / 批次 AF：``action_filter``
     # 本身也删除，四个 mode 改写成既有原子（玩家属性 + 取值表达式 + log）：

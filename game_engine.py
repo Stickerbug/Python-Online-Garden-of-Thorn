@@ -9906,7 +9906,7 @@ class GameEngine:
     # ``max`` 就能逐字复刻。旧名与四个 mode 的旧原子名都进
     # ``mod_spec_v2.REMOVED_ATOMIC_OPS``（带完整替代 JSON）。
 
-    TURN_CONTROL_MODES = ('end', 'skip', 'extra')
+    TURN_CONTROL_MODES = ('end', 'skip', 'extra', 'forced_action')
 
     def _turn_control_mode(self, params) -> str:
         """``turn_control`` 的 ``mode`` 判别值（别名归一，默认 ``end``）。"""
@@ -9921,6 +9921,11 @@ class GameEngine:
             'stun': 'skip',
             'extra_turn': 'extra',
             'additional_turn': 'extra',
+            # Round 45 / 批次 AI：``honey_control``（蜜糖控制）并进本伞的第四
+            # 个 mode。旧 op 名、``honey`` 与 ``forced`` 都归一到这里。
+            'honey_control': 'forced_action',
+            'honey': 'forced_action',
+            'forced': 'forced_action',
         }.get(mode, mode)
 
     def _atomic_turn_control(self, player_id, card, params, log, choice, context):
@@ -9937,6 +9942,15 @@ class GameEngine:
         * ``mode:"skip"``（旧 ``skip_turn``）——目标 +N 层眩晕，状态免疫判定
           与成就峰值记录逐字保留。
         * ``mode:"extra"``（旧 ``extra_turn``）——目标获得一个额外回合。
+
+        Round 45 / 批次 AI 追加第四个分支：
+
+        * ``mode:"forced_action"``（旧 ``honey_control``）——目标下回合被
+          自动控制（默认只自动打荆棘牌；``attack_only:false`` 放开牌型、
+          ``end_turn_when_stuck:false`` 卡住时不自动结束回合、
+          ``forced_target`` 指定强制攻击对象、``damage_multiplier`` 叠加
+          自动行动期间的伤害倍率）。实现体逐字来自旧 ``_atomic_honey_control``
+          （见 :meth:`_turn_control_forced_action`）。
         """
 
         if not isinstance(params, dict):
@@ -9964,11 +9978,60 @@ class GameEngine:
             self._note_achievement_status_peak(target_id)
             self.log_msg(log or f"{self.pn(target_id)}+{amount}层眩晕")
             return
+        if mode == 'forced_action':
+            self._turn_control_forced_action(player_id, card, params, log)
+            return
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not self._valid_player_id(target_id):
             return
         self.players[target_id].extra_turn = True
         self.log_msg(log or f"{self.pn(target_id)}获得一个额外回合")
+
+    def _turn_control_forced_action(self, player_id, card, params, log):
+        """``turn_control(mode:"forced_action")``：旧 ``honey_control`` 的逐字实现。
+
+        Round 45 / 批次 AI 从 ``_atomic_honey_control``（:10397-10431）原样搬来，
+        一行都没有改：目标引用默认 ``choice_target``、``duration`` 至少 1 层、
+        ``forced_target`` 解析成玩家 id 后写 ``sewers_cheese_forced_target`` 并
+        清掉 ``honey_lowest_enemy``、``attack_only:false`` 写
+        ``honey_control_any_card``、``end_turn_when_stuck:false`` 写
+        ``honey_control_keep_turn``、``attacks_only:true`` 再删掉 any_card 键、
+        ``damage_multiplier != 1.0`` 时写 ``void_puppeteer_damage_multiplier``，
+        最后按 ``log or 默认文案`` 播报（``log:false`` 与旧实现一样回落到默认文案）。
+        """
+        target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
+        if not (0 <= target_id < len(self.players)):
+            return
+        duration = max(1, self._eval_int(player_id, params.get('duration', 1), card))
+        target_ps = self.players[target_id]
+        target_ps.honey_control_turns = max(
+            int(getattr(target_ps, 'honey_control_turns', 0) or 0),
+            duration,
+        )
+        if params.get('forced_target') is not None:
+            forced_id = self._resolve_target(player_id, params.get('forced_target'))
+            if self._valid_player_id(forced_id):
+                target_ps.custom_vars['sewers_cheese_forced_target'] = int(forced_id)
+                target_ps.custom_vars.pop('honey_lowest_enemy', None)
+        if params.get('attack_only') is False:
+            target_ps.custom_vars['honey_control_any_card'] = True
+        if params.get('end_turn_when_stuck') is False:
+            target_ps.custom_vars['honey_control_keep_turn'] = True
+        if params.get('attacks_only') is True:
+            target_ps.custom_vars.pop('honey_control_any_card', None)
+        multiplier = params.get('damage_multiplier')
+        if multiplier is not None:
+            try:
+                value = float(multiplier)
+            except (TypeError, ValueError):
+                value = 1.0
+            if value != 1.0:
+                target_ps.custom_vars['void_puppeteer_damage_multiplier'] = value
+        self.log_msg(self._format_step_log(
+            log or f"{self.pn(player_id)}使{self.pn(target_id)}下回合进入自动控制",
+            source=self.pn(player_id),
+            target=self.pn(target_id),
+        ))
 
     def _atomic_resource_op(self, player_id, card, params, log, choice, context):
         """Round 32 / 批次 AA：资源族五合一。
@@ -10393,41 +10456,6 @@ class GameEngine:
         self._return_cogwheel_cards_now(player_id)
         if log:
             self.log_msg(log)
-
-    def _atomic_honey_control(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'choice_target'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        duration = max(1, self._eval_int(player_id, params.get('duration', 1), card))
-        target_ps = self.players[target_id]
-        target_ps.honey_control_turns = max(
-            int(getattr(target_ps, 'honey_control_turns', 0) or 0),
-            duration,
-        )
-        if params.get('forced_target') is not None:
-            forced_id = self._resolve_target(player_id, params.get('forced_target'))
-            if self._valid_player_id(forced_id):
-                target_ps.custom_vars['sewers_cheese_forced_target'] = int(forced_id)
-                target_ps.custom_vars.pop('honey_lowest_enemy', None)
-        if params.get('attack_only') is False:
-            target_ps.custom_vars['honey_control_any_card'] = True
-        if params.get('end_turn_when_stuck') is False:
-            target_ps.custom_vars['honey_control_keep_turn'] = True
-        if params.get('attacks_only') is True:
-            target_ps.custom_vars.pop('honey_control_any_card', None)
-        multiplier = params.get('damage_multiplier')
-        if multiplier is not None:
-            try:
-                value = float(multiplier)
-            except (TypeError, ValueError):
-                value = 1.0
-            if value != 1.0:
-                target_ps.custom_vars['void_puppeteer_damage_multiplier'] = value
-        self.log_msg(self._format_step_log(
-            log or f"{self.pn(player_id)}使{self.pn(target_id)}下回合进入自动控制",
-            source=self.pn(player_id),
-            target=self.pn(target_id),
-        ))
 
     # Round 40 / 批次 AE-2：``assembler_effect``（重构机的"放逐一张手牌 + 随机
     # 奖励"专用原子）已删除，改成卡数据里的通用步骤组合 —— 见

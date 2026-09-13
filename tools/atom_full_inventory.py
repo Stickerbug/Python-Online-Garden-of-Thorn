@@ -412,6 +412,23 @@ ROUND44_ACTIONS = {
                          "布网仍在回合初抽牌之前。对拍 25 例 0 差异"),
 }
 
+# Round 45 / 批次 AI：``honey_control``（蜜糖控制）并进 ``turn_control`` 的第四个
+# mode ``forced_action``——它改的是同一族"下回合的回合帧"（honey_control_turns +
+# 自动行动期间的行为开关），与 end/skip/extra 共用一条 ``_atomic_turn_control``；
+# 实现体由 ``_turn_control_forced_action`` 逐字承接旧 ``_atomic_honey_control``。
+ROUND45_ACTIONS = {
+    "honey_control": ("合", 3,
+                      '{"op":"turn_control","mode":"forced_action","target":"target","duration":1}',
+                      "Round 45 / 批次 AI：``honey_control`` 并进 ``turn_control(mode:\"forced_action\")``。"
+                      "参数面逐字保留：``target``（默认 choice_target）/``duration``（至少 1）/"
+                      "``forced_target``（解析成玩家 id 存 sewers_cheese_forced_target）/"
+                      "``attack_only``（false 写 honey_control_any_card）/``attacks_only``/"
+                      "``end_turn_when_stuck``（false 写 honey_control_keep_turn）/``damage_multiplier``/"
+                      "``log``；默认文案、``log:false`` 回落与 ``_format_step_log`` 口径不变。"
+                      "三张在用卡（garden:honey / garden:beeswax / sewers:cheese）已迁移，"
+                      "27 例定向对拍（1v1+2v2）与 704 条全卡 A/B 都是 0 差异"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -497,10 +514,14 @@ UNUSED_OP_VERDICTS = {
                            "内部自己调的钩子**——"
                            "``_play_card``（game_engine.py:8154/9096）、响应牌结算（:8486）与 2v2 "
                            "（game_engine_2v2.py:868/1542）都直接调用它，读卡属性 charge_value 并用 "
-                           "_once_per_play 的 ocean_charge 标记记账。Round 43 的反证：这四处调用点在**反制判定之前**"
-                           "（``_check_card_response_after_choice`` 会提前 return），而数据步骤只能写在 "
-                           "``events.on_play`` 的 ``_execute_card_effect`` 里——被反制时数据写法不触发、"
-                           "引擎钩子照样触发，时机不可等价，按管线型保留"),
+                           "_once_per_play 的 ocean_charge 标记记账。Round 45 / 批次 AI 的实测反证（"
+                           "`.codex-tmp/round45/rd45_probe.py`，1v1+2v2）：带电荷的荆棘牌被**真反制**"
+                           "（``on_response.resolution.negate_responded``，所响应牌整段不结算）时，"
+                           "被响应卡伤害 0、但引擎钩子仍先扣了 3 点电荷自伤；把同样效果写成数据步骤"
+                           "（``on_play`` 里的 ``direct_damage(target:self, amount:3)``）被同一张反制牌"
+                           "结算时自伤是 **0**。另外给一张自身没有电荷数据步骤的牌（Honey）实例写 "
+                           "``charge_value=3``，打出时照样自伤——机制跟的是**卡实例属性**（任何牌都可能被"
+                           "打火机/电容类效果充能），per-card 的数据步骤覆盖不到。按管线型保留"),
     "counter_equip_protect": ("删·可下沉", "`{\"op\":\"player_prop_change\",\"mode\":\"add\","
                                           "\"property\":\"equipment_protection\",\"target\":\"self\",\"amount\":1}`",
                               "Round 42 / 批次 AF：写的字段 equipment_protection 本来就在 "
@@ -537,12 +558,16 @@ UNUSED_OP_VERDICTS = {
                       "Round 42 / 批次 AF：``formula`` 全仓库零读取方（伤害公式来自步骤本身），"
                       "这一步只有播报；注意 events.modify_damage 是另一条 v2 事件钩子键，不受影响"),
     "multiply_next_damage": ("留·机制钩子", "`{\"op\":\"multiply_next_damage\",\"multiplier\":2}`",
-                             "Round 43 复核后保留（含“现有原子组合不出等价”的实测）：写的 "
+                             "Round 43 复核、Round 45 / 批次 AI 再核（含“现有原子组合不出等价”的实测）：写的 "
                              "``players[i].damage_multiplier`` 是**乘算**累加（``current * multiplier``），"
                              "被攻击管线读取（game_engine.py:2329 / game_engine_2v2.py:2293）并在结算后复位"
-                             "（:16833 / 2v2:2296）。``player_prop_change`` 只支持 set/add 且属性白名单里"
-                             "没有这个浮点字段（实测写入被忽略、返回 None），``player_var_change`` 写的是"
-                             "custom_vars 不是玩家字段——即“两次 ×2 叠加 = ×4”这种语义用现有原子表达不出来"),
+                             "（:16833 / 2v2:2296）。Round 45 实测（`.codex-tmp/round45/rd45_probe.py`）："
+                             "旧原子 ×2 后基本攻击 8 → **16**，两次 ×2 → **32**（1.0 → 2.0 → 4.0 → 结算后回 1.0）；"
+                             "``player_prop_change(mode:\"set\"/\"add\", property:\"damage_multiplier\")` 写不进"
+                             "（白名单外，返回 None，字段仍是 1.0，伤害仍是 8）；"
+                             "``player_var_change(mode:\"set\", name:\"damage_multiplier\")` 只写 custom_vars，"
+                             "伤害管线不读它（伤害仍是 8），``mode:\"mul\"`` 更会按“缺键从 0 起算”写成 0——"
+                             "即“两次 ×2 叠加 = ×4”这种浮点乘算语义用现有原子表达不出来"),
     "transform_card": ("删·可下沉", "`{\"op\":\"log\",\"message\":\"变换<牌名>效果触发\"}`",
                        "Round 42 / 批次 AF：实现只按 card 引用查一张牌再播报，不写任何状态；"
                        "真正的变换是 ``transform_cards``（1 处卡数据在用）"),
@@ -786,7 +811,8 @@ KEPT_EXPLICIT = {
     "delayed_effect": "Round 37 延迟族唯一公开 op（mode=timed|blind|reveal_hand；共用计时表 duration/trigger/body）",
     "on_event": "Round 37 监听族唯一公开 op（trigger=play|this_play|after_all|equipment_trigger；承接 once_per_play / register_play_listener / after_all / magic_relic_trigger）",
     "emit_event": "Round 37 广播族唯一公开 op（event + 可选 log/silent；承接 broadcast_event 与占位步骤 trigger_manual）",
-    "turn_control": "Round 38 回合控制族唯一公开 op（mode=end|skip|extra；承接 force_end_turn / skip_turn / extra_turn）",
+    "turn_control": "Round 38 回合控制族唯一公开 op（mode=end|skip|extra；承接 force_end_turn / skip_turn / extra_turn）；"
+                    "Round 45 / 批次 AI 起再收 honey_control（mode=forced_action，蜜糖控制：目标下回合被自动控制）",
     "action_filter": "Round 38 行为过滤族唯一公开 op（mode=block_own|block_type|force_type|negate；承接 block_own_actions / block_action / block_card_type / force_card_type / nullify_current_card）",
     "countdown_var": "倒计时变量（player_var_change 的定时封装）",
     "queue_auto_play": "排队自动打出（card/source/each_turn/cost/exile）",
@@ -850,10 +876,6 @@ KEPT_EXPLICIT = {
                                   "cost_e 最大的那一张写 temp_swift（含标签同步）。card_prop_add_to_zone "
                                   "只能按 card_type/tag 过滤、写全部/随机 N/前 N 张，没有“按费用最大挑选”的选择器，"
                                   "for_each 也拿不到“当前手牌里 E 最大”这个归约",
-    "honey_control": "Round 43 复核留：写的是引擎级回合字段 honey_control_turns（不在 player_prop_change 白名单），"
-                     "外加 honey_control_any_card / honey_control_keep_turn / sewers_cheese_forced_target / "
-                     "void_puppeteer_damage_multiplier 四个 custom_vars，其中 forced_target 还要把目标引用解析成"
-                     "玩家 id 再存（数据侧写不出“解析后的 id”）；sewers:cheese / garden:honey / garden:beeswax 在用",
     "magic_salt_reflect": "Round 43 复核留：这是被伤害管线在 on_damage_taken 时点调的**响应窗口**——要判物理攻击牌伤害、"
                           "查魔力是否够 cost_m、扣费并弹 choice_type=magic_salt_reflect 的选择窗口交给客户端预测；"
                           "数据步骤开不出这种窗口，按管线钩子保留",
@@ -941,7 +963,7 @@ def build() -> dict:
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
          **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
          **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
-         **ROUND44_ACTIONS}
+         **ROUND44_ACTIONS, **ROUND45_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,
