@@ -1034,7 +1034,11 @@ class GameEngine:
         'remove_specific_card': 'remove_specific_card',
         # Round 29 / 批次 X + Round 35：``destroy_*_equip`` / ``destroy_equipment``
         # 已合并进 ``equipment_op(mode:"destroy", pick=...)``。
-        'equip_protection': 'counter_equip_protect',
+        # Round 42 / 批次 AF：``counter_equip_protect`` 整个删除（装备保护层数
+        # 由 ``player_prop_change(mode:"add", property:"equipment_protection")``
+        # 写），所以 ``equip_protection`` 这条别名也一并注销——写出来会先被
+        # ``_retired_atom_runtime_error`` 拦下，拿到 ``REMOVED_ATOMIC_OPS`` 的
+        # 替代写法。
         # Round 35：``remove_equip_protection`` / ``place_as_equip`` /
         # ``add_tag`` / ``add_tag_to_zone`` / ``auto_play_card`` /
         # ``auto_play_zone_top`` / ``status_add_named`` / ``status_remove_named`` /
@@ -1050,22 +1054,19 @@ class GameEngine:
         # 三条回合控制原子并进 ``turn_control(mode:"skip"|"extra"|"end")``，
         # 这三条"自己指自己"的别名一并删除——旧名写出来会先被
         # ``_retired_atom_runtime_error`` 拦下，拿到替代写法。
-        'mark_self_damage_source': 'mark_self_damage_source',
-        'fission': 'fission',
         'multiply_next_damage': 'multiply_next_damage',
-        'reduce_next_cost': 'reduce_next_cost',
-        'increase_next_cost': 'increase_next_cost',
-        'fusion': 'fusion',
-        'transform_card': 'transform_card',
+        # Round 42 / 批次 AF：``mark_self_damage_source`` / ``fission`` / ``fusion`` /
+        # ``transform_card`` / ``modify_damage`` 已删除（见 mod_spec_v2.REMOVED_ATOMIC_OPS），
+        # 顺带把历史上留下的三条同类残项（``reduce_next_cost`` / ``increase_next_cost`` /
+        # ``swap_health``，都是更早批次已删的 op）一并清掉——它们"自己指自己"、
+        # 目标早就没有实现，写出来会先被 ``_retired_atom_runtime_error`` 拦下。
         # Round 29 / 批次 X：``player_prop_*`` / ``card_var_*`` / ``var_*`` /
         # ``record_*`` / ``reset_counter`` / ``move_to_*`` / ``choose_from_*``
         # 这批名字已合并进规范 op，从本表删掉——写出来会先被
         # ``_retired_atom_runtime_error`` 拦下，拿到 mod_spec_v2.REMOVED_ATOMIC_OPS
         # 的"已移除 + 替代写法"。
-        'swap_health': 'swap_health',
         # Round 33 / 批次 AB：``exile_this`` / ``swap_hands`` 已并入
         # ``move_card(zone:"exile")`` / ``move_card(mode:"swap_hands")``。
-        'modify_damage': 'modify_damage',
         # Round 30 / 批次 Y：``add_status`` / ``remove_status`` / ``set_status``
         # 三条旧写法（Round 15 起曾是"默认播报层数"的真原子）随零用量清理一起
         # 删除——规范写法 ``status_add_named`` / ``status_remove_named``
@@ -8381,6 +8382,14 @@ class GameEngine:
             effect_type = self._effect_type(effect)
             if effect_type in ('heal', 'lifesteal_damage'):
                 return True
+            # Round 42 / 批次 AF：``lifesteal_damage`` 已经下沉成
+            # ``deal_damage`` + ``health_op(mode:"heal")`` 两步，所以伞原子写法
+            # 也要认——否则"这张牌会回血"的判定（反治疗响应窗口）会在迁移后
+            # 悄悄失效。``health_op`` 的其它 mode（lose/set/swap/fatal）不算治疗。
+            if effect_type in ('health_op', 'heal_op'):
+                mode = str(effect.get('mode') or effect.get('action') or 'heal').strip().lower()
+                if mode in ('heal', '治疗', '回复', ''):
+                    return True
         return False
 
     def handle_response(self, responder_id: int, card_instance_id: Optional[int]) -> dict:
@@ -9377,14 +9386,6 @@ class GameEngine:
         )
         self.log_msg(log or default_log)
 
-    def _atomic_counter_equip_protect(self, player_id, card, params, log, choice, context):
-        if self._status_application_blocked(player_id, 'equipment_protection'):
-            return
-        amount = params.get('amount', 1)
-        self.players[player_id].equipment_protection += amount
-        self._note_achievement_status_peak(player_id)
-        self.log_msg(log or f"{self.pn(player_id)}获得{amount}装备保护")
-
     def _equipment_op_armor_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AC：``equipment_op(mode:"armor")`` 的实现体
         # （旧 ``add_equipment_armor``：给装备/护甲加值）。
@@ -9533,33 +9534,10 @@ class GameEngine:
     # 上下文变量）。两个旧名在 mod_spec_v2.REMOVED_ATOMIC_OPS 里都有替代写法，
     # 写出来拿到"已移除 + 请改用"的显式报错。
 
-    def _atomic_turn_mod_add(self, player_id, card, params, log, choice, context):
-        """Round 24：``mod_e_regen`` / ``mod_m_regen`` / ``mod_draw`` 合并成一条。
-
-        ``kind`` 选 ``e_regen`` / ``m_regen`` / ``draw``，写入的字段与旧实现一致
-        （``e_regen_mod`` / ``m_regen_mod`` / ``draw_mod``），默认战报逐字保留。
-        """
-
-        kind = str(params.get('kind', params.get('stat', 'e_regen')) or 'e_regen').strip().lower()
-        if kind in ('e', 'e_regen', 'elixir', 'energy', 'energy_regen'):
-            attr, text = 'e_regen_mod', '每回合能量回复'
-        elif kind in ('m', 'm_regen', 'magic', 'magic_regen'):
-            attr, text = 'm_regen_mod', '每回合魔力回复'
-        elif kind in ('draw', 'draw_mod', 'cards'):
-            attr, text = 'draw_mod', '每回合抽牌数'
-        else:
-            return
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not self._valid_player_id(target_id):
-            return
-        amount = params.get('amount', 1)
-        player_state = self.players[target_id]
-        setattr(player_state, attr, getattr(player_state, attr, 0) + amount)
-        try:
-            display = f"{int(amount):+d}"
-        except (TypeError, ValueError):
-            display = f"{amount:+}" if isinstance(amount, (int, float)) else str(amount)
-        self.log_msg(log or f"{self.pn(target_id)}{text}{display}")
+    # Round 42 / 批次 AF：``turn_mod_add`` 已删除——它写的 ``e_regen_mod`` /
+    # ``m_regen_mod`` / ``draw_mod`` 三个玩家字段全仓库（引擎、卡数据、to_dict、
+    # 客户端）**零读取方**，所以这一步的实际行为只有那一行播报。旧名进
+    # ``mod_spec_v2.REMOVED_ATOMIC_OPS``（替代写法 = ``log``）。
 
     # Round 31 / 批次 Z：``reveal_deck_top``（只看牌堆顶 N 张的名字）已删除，
     # 由 ``reveal_card_set(source="deck", amount=N)`` 承接——后者把牌面发给
@@ -9922,85 +9900,20 @@ class GameEngine:
         self.players[target_id].equipment_protection = 0
         self.log_msg(log or f"{self.pn(target_id)}的装备保护被移除")
 
-    ACTION_FILTER_MODES = ('block_own', 'block_type', 'force_type', 'negate')
-
-    def _action_filter_mode(self, params) -> str:
-        """``action_filter`` 的 ``mode`` 判别值（别名归一，默认 ``block_own``）。"""
-
-        mode = str(params.get('mode') or '').strip().lower()
-        return {
-            '': 'block_own',
-            'block_action': 'block_own',
-            'block_own_actions': 'block_own',
-            'block_card_type': 'block_type',
-            'force_card_type': 'force_type',
-            'nullify': 'negate',
-            'nullify_current_card': 'negate',
-        }.get(mode, mode)
-
-    def _atomic_action_filter(self, player_id, card, params, log, choice, context):
-        """Round 38 / 批次 AD-3：行为过滤族四合一（``mode`` 选类别）。
-
-        ``block_own_actions`` / ``block_card_type`` / ``force_card_type`` /
-        ``nullify_current_card`` 四条同形原子合并成这一条；四个分支的实现体
-        逐字来自旧处理器：
-
-        * ``mode:"block_own"``（旧 ``block_own_actions``，别名 ``block_action``）
-          ——只作用于**出牌者**（旧实现不解析 ``target``，这里同样不解析），
-          给 ``shovel_active`` 打标记并播报"无法使用卡牌"。
-        * ``mode:"block_type"``（旧 ``block_card_type``）——``card_type:"thorn"``
-          写 ``attack_blocked``、``"bloom"`` 写 ``skill_blocked``，取两值较大者；
-          其它牌型只播报（旧实现同样只播报）。
-        * ``mode:"force_type"``（旧 ``force_card_type``）——``"thorn"`` 写
-          ``attack_only``；其它牌型只播报。
-        * ``mode:"negate"``（旧 ``nullify_current_card``）——把目标的
-          ``negate_next`` 写成 ``card_type`` 并播报。注意 ``negate_next``
-          目前全引擎没有读者（合并前后一样是"只写标记 + 播报"）。
-        """
-
-        if not isinstance(params, dict):
-            params = {}
-        mode = self._action_filter_mode(params)
-        if mode not in self.ACTION_FILTER_MODES:
-            self._log_mod_runtime_error(
-                'action_filter', RuntimeError(f'unsupported mode: {mode}'), player_id, card,
-            )
-            return
-        if mode == 'block_own':
-            if self._status_application_blocked(player_id, 'shovel_active'):
-                return
-            self.players[player_id].shovel_active = True
-            self.log_msg(log or f"{self.pn(player_id)}无法使用卡牌")
-            return
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        card_type = params.get('card_type', 'thorn')
-        ts = self.players[target_id]
-        if mode == 'block_type':
-            duration = params.get('duration', 1)
-            if self._status_application_blocked(target_id, 'attack_blocked' if card_type == 'thorn' else f'{card_type}_blocked'):
-                return
-            if card_type == 'thorn':
-                ts.attack_blocked = max(ts.attack_blocked, duration)
-            elif card_type == 'bloom':
-                ts.skill_blocked = getattr(ts, 'skill_blocked', 0)
-                ts.skill_blocked = max(ts.skill_blocked, duration)
-            self.log_msg(log or f"{self.pn(target_id)}无法使用{card_type}牌{duration}回合")
-            return
-        if mode == 'force_type':
-            duration = params.get('duration', 1)
-            if card_type == 'thorn':
-                if self._status_application_blocked(target_id, 'attack_only'):
-                    return
-                ts.attack_only = max(ts.attack_only, duration)
-            self.log_msg(log or f"{self.pn(target_id)}仅可使用{card_type}牌{duration}回合")
-            return
-        if self._status_application_blocked(target_id, f'negate_{card_type}'):
-            return
-        ts.negate_next = getattr(ts, 'negate_next', None)
-        ts.negate_next = card_type
-        self.log_msg(log or f"{self.pn(target_id)}的{card_type}牌将失效")
+    # Round 42 / 批次 AF：``action_filter``（Round 38 的行为过滤伞）已删除。
+    # 四个 mode 都是"写一个玩家标记 + 播报"，而它写的字段全部由既有原子覆盖：
+    #
+    #   * ``block_own``  → ``player_prop_change(mode:"set", property:"shovel_active", …)``
+    #   * ``block_type`` → ``player_prop_change(mode:"set", property:"attack_blocked",
+    #     value: max(player_property(attack_blocked), duration), …)``
+    #   * ``force_type`` → ``player_prop_change(mode:"set", property:"attack_only", …)``
+    #   * ``negate``     → 写的 ``negate_next`` 全仓库无读取方（合并前后都只有播报），
+    #                      替代写法是一行 ``log``
+    #
+    # ``_status_application_blocked`` 是恒 False 的占位判定、``skill_blocked``
+    # 既无读取方也不进 ``to_dict``，所以"两个分支的 max() 语义"用取值表达式
+    # ``max`` 就能逐字复刻。旧名与四个 mode 的旧原子名都进
+    # ``mod_spec_v2.REMOVED_ATOMIC_OPS``（带完整替代 JSON）。
 
     TURN_CONTROL_MODES = ('end', 'skip', 'extra')
 
@@ -10175,28 +10088,16 @@ class GameEngine:
                 amount=abs(int(delta)), count=abs(int(delta)), gained=gained,
             ) or default_log)
 
-    def _atomic_mark_self_damage_source(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not self._valid_player_id(target_id):
-            return
-        self.players[target_id].self_damage_next = True
-        self.log_msg(log or f"{self.pn(target_id)}下次伤害来源标记为自身")
-
-    def _atomic_fission(self, player_id, card, params, log, choice, context):
-        card_type = params.get('card_type', 'thorn')
-        times = self._eval_int(player_id, params.get('times', 1), card, 1)
-        ps = self.players[player_id]
-        target = ps.find_hand_card(choice.get('target_instance_id')) if isinstance(choice, dict) and 'target_instance_id' in choice else None
-        targets = [target] if target is not None else [c for c in ps.hand if c.card_def.card_type == card_type and c is not card]
-        targets = [c for c in targets if c and self._card_selectable_by_action(c) and c.card_def.card_type == card_type]
-        if targets:
-            t = targets[0]
-            t.fission_level = clamp_card_layer(max(1, int(getattr(t, 'fission_level', 1))) + times)
-            t.fission_count = t.fission_level - 1
-            if log:
-                self.log_msg(log)
-        else:
-            self.log_msg(log or f"{self.pn(player_id)}没有可裂变的{card_type}牌")
+    # Round 42 / 批次 AF：``mark_self_damage_source`` 已删除——它写的
+    # ``players[i].self_damage_next`` 全仓库只有一个写入点（就是它自己），
+    # 没有读取方也不进 ``to_dict``；这一步的实际行为只有那行播报，替代写法
+    # 是一行 ``log``。
+    #
+    # ``fission`` 已删除——裂变层数就是卡牌属性：``_set_card_property_value``
+    # 对 ``fission_level`` 有钳位（``clamp_card_layer``）并同步 ``fission_count``，
+    # 与旧实现逐字一致，所以替代写法是 ``card_prop_change(mode:"add",
+    # property:"fission_level", …)``（选牌窗口用 ``request(type:"card", …)``，
+    # 旧的"没给选择就自动取首张同型手牌"回落在数据侧由窗口承担）。
 
     def _atomic_multiply_next_damage(self, player_id, card, params, log, choice, context):
         multiplier = self._eval_int(player_id, params.get('multiplier', 1), card, 1)
@@ -10288,33 +10189,13 @@ class GameEngine:
             elif flag in keep.instance_flags:
                 keep.instance_flags.discard(flag)
 
-    def _atomic_fusion(self, player_id, card, params, log, choice, context):
-        count = self._eval_int(player_id, params.get('count', params.get('min_count', 2)), card, 2)
-        max_count = self._eval_int(player_id, params.get('max_count', count), card, count)
-        if self._card_has_flag(card, 'fusion_uses_two_cards'):
-            count = 2
-            max_count = 2
-        card_type = params.get('card_type', 'thorn')
-        ps = self.players[player_id]
-        if isinstance(choice, dict) and 'target_instance_ids' in choice:
-            selected = [ps.find_hand_card(i) for i in choice.get('target_instance_ids', [])]
-            selected = [c for c in selected if c is not None and self._card_selectable_by_action(c)]
-        else:
-            selected = [c for c in ps.hand if c.card_def.card_type == card_type and c is not card and self._card_selectable_by_action(c)][:max_count]
-        if len(selected) >= count:
-            selected = selected[:max_count]
-            if any(c.card_def.card_type != card_type for c in selected) or len({c.def_id for c in selected}) != 1:
-                self.log_msg(log or f"{self.pn(player_id)}聚变目标无效")
-                return
-            keep = selected[0]
-            self._merge_fusion_card_layers(keep, selected)
-            for c in selected[1:]:
-                ps.hand.remove(c)
-                self._discard_card(ps, c)
-            if log:
-                self.log_msg(log)
-        else:
-            self.log_msg(log or f"{self.pn(player_id)}没有足够的{card_type}牌聚变")
+    # Round 42 / 批次 AF：``fusion`` 已删除——官方包 ``vanilla:fusion`` 的卡数据
+    # 早就把整套聚变写成通用步骤（``request`` 选同名手牌 → 一组
+    # ``player_var_change`` 初始化累计变量 → ``for_each`` 逐张读 ``card_prop`` 取
+    # 合计/最大值 → ``card_prop_change`` 写回被保留的那张 → ``move_card`` 把其余
+    # 弃掉），所以"跨卡聚合"在数据层已经能做到，不再是本原子的独占能力。
+    # 私有助手 ``_merge_fusion_card_layers`` 保留——引擎的硬编码 ``_effect_*``
+    # 路径（game_engine.py:11429）仍在用它。
 
     def _atomic_tag_op(self, player_id, card, params, log, choice, context):
         """Round 33 / 批次 AC：``tag_op`` 伞（``add_tag`` / ``add_tag_to_zone`` 二合一）。
@@ -10664,46 +10545,17 @@ class GameEngine:
     # 通过 ``antennae_reveal`` 通道发给 ``to`` 指定的观看者），是它的超集；
     # 旧实现只往 ``revealed_tag_cards`` 写一份没有客户端的载荷。
 
-    def _atomic_transform_card(self, player_id, card, params, log, choice, context):
-        target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
-        if target_card:
-            self.log_msg(log or f"{self.pn(player_id)}变换{target_card.name_cn}效果触发")
-        else:
-            self.log_msg(log or f"{self.pn(player_id)}变换卡牌效果触发")
-
-    def _atomic_card_counter(self, player_id, card, params, log, choice, context):
-        """Round 29 / 批次 X：卡内计数器三条同形原子合并成一条。
-
-        覆盖 ``record_play_count`` / ``record_equip_turns`` / ``reset_counter``：
-        ``mode`` 选 ``play``（打出次数 +amount）、``equip_turns``（装备回合数
-        +amount）或 ``reset``（两个计数器一起归零）。``amount`` 默认 1，只对前两种
-        模式生效（旧实现每次固定 +1，这里默认值保持不变）。
-
-        写入的字段（``card.play_count`` / ``card.equip_turns``）与默认战报逐字保留。
-        ``card`` 缺省是当前结算的牌（旧实现直接用 ``card``）。
-        """
-        mode = str(params.get('mode', 'play') or 'play').strip().lower()
-        mode = {
-            'played': 'play', 'play_count': 'play', 'record_play': 'play',
-            'equip': 'equip_turns', 'turns': 'equip_turns', 'equip_turn': 'equip_turns',
-            'clear': 'reset', 'reset_counter': 'reset',
-        }.get(mode, mode)
-        if mode not in ('play', 'equip_turns', 'reset'):
-            return
-        if not card:
-            return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
-        if mode == 'reset':
-            card.play_count = 0
-            card.equip_turns = 0
-            self.log_msg(log or f"{card.name_cn}计数已重置")
-            return
-        if mode == 'play':
-            card.play_count = getattr(card, 'play_count', 0) + amount
-            self.log_msg(log or f"{card.name_cn}打出次数：{card.play_count}")
-            return
-        card.equip_turns = getattr(card, 'equip_turns', 0) + amount
-        self.log_msg(log or f"{card.name_cn}装备回合数：{card.equip_turns}")
+    # Round 42 / 批次 AF：``transform_card`` 已删除——它只按 ``card`` 引用查一张
+    # 牌然后播报"变换…效果触发"，不写任何状态（真正的变换是 ``transform_cards``，
+    # 1 处卡数据在用）。替代写法是一行 ``log``。
+    #
+    # ``card_counter`` 已删除——它写的 ``card.play_count`` / ``card.equip_turns``
+    # 都是**可读**的卡牌字段（``{"ref":"play_count"}`` / ``{"ref":"equip_turns"}``
+    # 取值形态与 ``equip_turns`` 条件算子），所以只要把这两个字段补进
+    # ``card_prop_change`` 的属性白名单（``_set_card_property_value`` /
+    # ``_get_card_property_numeric_value``，非负钳位），三个 mode 就都是普通属性
+    # 写入：``play`` → ``add play_count``、``equip_turns`` → ``add equip_turns``、
+    # ``reset`` → 两条 ``set 0``。
 
     # Round 41 / 批次 AE-5：``create_counter`` 已删除——它往 ``card.custom_counters``
     # 写一个"没人读"的字典（引擎、卡数据、序列化、客户端都没有读取方），
@@ -10985,25 +10837,12 @@ class GameEngine:
     # ``card_var_set`` / ``card_var_add``）已全部删除——它们不是公开 op，且各
     # 自只是三行转发。老测试与历史脚本要改的调用点见报告"需要改测试"一节。
 
-    def _atomic_global_mult(self, player_id, card, params, log, choice, context):
-        """Round 24：全场倍率三兄弟合并成一条（``kind`` 选 damage/heal/cost）。
-
-        写入的实例字段（``global_damage_mult`` / ``global_heal_mult`` /
-        ``global_cost_mult``）与乘法语义、默认战报都与旧实现逐字一致。
-        """
-
-        kind = str(params.get('kind', params.get('stat', 'damage')) or 'damage').strip().lower()
-        if kind in ('damage', 'dmg', '伤害'):
-            attr, text = 'global_damage_mult', '全场伤害倍率'
-        elif kind in ('heal', 'healing', '治疗'):
-            attr, text = 'global_heal_mult', '全场治疗倍率'
-        elif kind in ('cost', '费用'):
-            attr, text = 'global_cost_mult', '全场费用倍率'
-        else:
-            return
-        multiplier = params.get('multiplier', 1.0)
-        setattr(self, attr, getattr(self, attr, 1.0) * multiplier)
-        self.log_msg(log or f"{text}x{multiplier}")
+    # Round 42 / 批次 AF：``global_mult`` 已删除——它写的三个引擎字段
+    # （``global_damage_mult`` / ``global_heal_mult`` / ``global_cost_mult``）在
+    # 引擎、卡数据、序列化与客户端里**都没有读取方**（只有它自己写），所以
+    # 实际行为只有那行"全场X倍率xN"播报；替代写法是一行 ``log``。三个旧名
+    # （``global_damage_mult`` / ``global_heal_mult`` / ``global_cost_mult``）在
+    # ``REMOVED_ATOMIC_OPS`` 里同步改指 ``log``。
 
     # Round 32 / 批次 AA：``swap_health`` 已并入 ``health_op(mode:"swap")``
     # （``target1``/``target2`` 参数不变；旧实现交换后不做任何钳位，这里逐字保留）。
@@ -11016,28 +10855,16 @@ class GameEngine:
         self.players[t1].hand, self.players[t2].hand = self.players[t2].hand, self.players[t1].hand
         self.log_msg(log or f"{self.pn(t1)}与{self.pn(t2)}交换手牌")
 
-    # Round 37 / 批次 AD-2：广播 / 手动触发族二合一 —— ``emit_event``
-    # （旧 ``broadcast_event`` 与占位步骤 ``trigger_manual``，两个旧名进
-    # REMOVED_ATOMIC_OPS）。
+    # Round 42 / 批次 AF：``emit_event`` 已删除——事件总线没有任何订阅方
+    # （``_run_v2_event_hooks`` 走的是另一套 v2 钩子表，不认这一步广播的名字），
+    # 所以它的行为就是"按 ``silent``/``log:false`` 播报或不播报
+    # ``广播事件：<event>``"。替代写法是一行 ``log``（要静默就写 ``log:false``）；
+    # 旧名 ``broadcast_event`` / ``trigger_manual`` 在 ``REMOVED_ATOMIC_OPS``
+    # 里同步改指 ``log``。
     #
-    # 事件总线目前还没有订阅方：这一步的作用是把"这里发生了一次具名事件"
-    # 写进数据与战报，语义与合并前的 ``broadcast_event`` 逐字相同
-    # （默认播报 ``广播事件：<event>``），另外统一认 ``silent`` / ``no_log`` /
-    # ``hide_log`` / ``log:false`` 这一族静默开关（占位步骤 ``trigger_manual``
-    # 就是"什么也不做"，迁移写法是 ``event:"manual_trigger"`` + ``silent:true``）。
-    def _atomic_emit_event(self, player_id, card, params, log, choice, context):
-        event_name = self._step_text_value(
-            player_id, card,
-            params.get('event', params.get('event_name', params.get('name', ''))),
-        )
-        event_name = str(event_name or '')
-        if log is False or step_is_silent(params, params):
-            return
-        self.log_msg(log or f"广播事件：{event_name}")
-
-    def _atomic_modify_damage(self, player_id, card, params, log, choice, context):
-        formula = params.get('formula', 'value')
-        self.log_msg(log or f"修改伤害公式：{formula}")
+    # ``modify_damage`` 已删除——``formula`` 只在自身那一行播报里出现，
+    # 引擎没有"伤害公式"读取方（伤害公式来自卡数据步骤本身），因此它的行为
+    # 同样只是一行 ``修改伤害公式：<formula>`` 播报，替代写法是一行 ``log``。
 
 
 
@@ -19259,51 +19086,20 @@ class GameEngine:
                 amount=int(total), damage=int(total),
             ))
 
-    def _atomic_lifesteal_damage(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 8), card, 8)
-        amount = self._modified_attack_damage(amount, card)
-        heal = self._eval_int(player_id, params.get('heal', 4), card, 4)
-        heal_ratio = params.get('heal_percent', params.get('ratio', None))
-        try:
-            is_precision = 'precision' in self._effective_card_flags(card)
-            dealt = self.deal_attack_damage(target_id, amount, is_precision=is_precision, attacker_id=player_id, source_card=card)
-        except TypeError:
-            dealt = self.deal_attack_damage(target_id, amount)
-        self._last_damage_value[target_id] = int(dealt)
-        if dealt > 0:
-            if heal_ratio is not None:
-                try:
-                    heal = max(0, int(math.floor(int(dealt or 0) * float(heal_ratio or 0))))
-                except Exception:
-                    heal = 0
-            self.players[player_id].heal(heal)
-            self.log_msg(log or f"{self.pn(player_id)}回复{heal}H")
-
-    def _atomic_triangle_damage(self, player_id, card, params, log, choice, context):
-        base = self._eval_int(player_id, params.get('base', 6), card, 6)
-        per_stack = self._eval_int(player_id, params.get('per_stack', 3), card, 3)
-        stack_name = str(params.get('stack_name', '三角形层数'))
-        immune = self._is_suppressed_status_var(player_id, stack_name)
-        current_stack = 0 if immune else int(self.players[player_id].custom_vars.get(stack_name, getattr(self.players[player_id], 'triangle_stacks', 0)))
-        amount = base + per_stack * current_stack
-        target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
-        if not self._valid_player_id(target_id):
-            return
-        try:
-            is_precision = 'precision' in self._effective_card_flags(card)
-            dealt = self.deal_attack_damage(target_id, amount, is_precision=is_precision, attacker_id=player_id, source_card=card)
-        except TypeError:
-            dealt = self.deal_attack_damage(target_id, amount)
-        self._last_damage_value[target_id] = int(dealt)
-        if dealt > 0 and not immune:
-            max_stacks = self._eval_int(player_id, params.get('max_stacks', 4), card, 4)
-            new_stack = min(max_stacks, current_stack + 1)
-            self.players[player_id].custom_vars[stack_name] = new_stack
-            if stack_name == '三角形层数':
-                self.players[player_id].triangle_stacks = new_stack
+    # Round 42 / 批次 AF：``lifesteal_damage`` 与 ``triangle_damage`` 已删除。
+    #
+    # 两者与 ``deal_damage`` 共用同一条攻击管线（``_modified_attack_damage`` +
+    # ``deal_attack_damage`` + 精准旗标继承 + ``_last_damage_value``），差别只在
+    # 结算后的附加动作，而这些都能用既有原子表达：
+    #
+    #   * 吸血 = ``deal_damage`` + ``health_op(mode:"heal", amount:floor(last_damage*ratio))``
+    #     （``last_damage`` 取值形态读的正是上一步写进 ``_last_damage_value`` 的值）。
+    #     为保证"反治疗"判定不退化，``_would_heal`` 同步认 ``health_op`` 的
+    #     ``mode:"heal"``（见下面的实现）。
+    #   * 三角 = ``deal_damage(amount: add(base, mul(per_stack, player_var(层数名))))``
+    #     + 门控在 ``last_damage > 0``、上限用 ``compare`` 的 ``if_else`` +
+    #     ``player_var_change(add, name:"三角形层数")``（``custom_vars`` 与
+    #     ``triangle_stacks`` 的别名同步由 ``_sync_custom_var_alias`` 负责）。
 
     def _atomic_discard_choice_then_draw(self, player_id, card, params, log, choice, context):
         ps = self.players[player_id]
@@ -19367,6 +19163,12 @@ class GameEngine:
             value = max(0, value)
         elif prop in ('charge_value', 'hand_blind_turns', 'blind_level'):
             value = max(0, value)
+        # Round 42 / 批次 AF：``play_count`` / ``equip_turns`` 是卡内计数器
+        # （``card_counter`` 已删除），二者既被卡数据读取（``{"ref":"play_count"}``
+        # / ``{"ref":"equip_turns"}`` 与 ``equip_turns`` 条件算子），又在
+        # ``to_dict`` 里，所以补进属性白名单后就能用 ``card_prop_change`` 写。
+        elif prop in ('play_count', 'equip_turns'):
+            value = max(0, value)
         # Round 29：耐久（装备的 ``durability``）并入卡牌属性族——旧
         # ``gain_durability`` / ``lose_durability`` / ``set_durability`` 三个
         # 同形原子由此改为 ``card_prop_add`` / ``card_prop_set``（见
@@ -19382,7 +19184,8 @@ class GameEngine:
         if prop in ('fusion_level', 'fission_level', 'extra_hits', 'mimic_discount', 'cost_e_override', 'cost_m_override',
                     'bonus_damage', 'return_to_hand_turns', 'held_turns', 'swift_value', 'magic_swift_value', 'heavy_value',
                     'power_value', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value',
-                    'charge_value', 'hand_blind_turns', 'blind_level', 'durability'):
+                    'charge_value', 'hand_blind_turns', 'blind_level', 'durability',
+                    'play_count', 'equip_turns'):
             setattr(target_card, prop, value)
             if prop == 'fusion_level':
                 target_card.fusion_multiplier = float(value)
@@ -19957,10 +19760,12 @@ class GameEngine:
     # ``destroy_equipment(mode:"all", filter:"destroyable", record_count:true)``
     # （``target`` 缺省要显式写 ``"both"`` 才与旧默认一致）。
 
-    def _atomic_activate_corruption(self, player_id, card, params, log, choice, context):
-        eq = self._find_equipment_for_card(player_id, card)
-        if eq is not None:
-            eq.corruption_active = True
+    # Round 42 / 批次 AF：``activate_corruption`` 已删除——它做的就是
+    # "把当前牌对应的装备的 ``corruption_active`` 置真"，而同一个 setter
+    # （``_set_equipment_property_value`` 的 ``corruption_active`` 分支）已经由
+    # ``equipment_prop_set`` 这条既有 op 覆盖（默认 ``equipment`` 引用
+    # ``current_equipment`` 与旧实现的 ``_find_equipment_for_card`` 同解）。
+    # 旧名进 ``REMOVED_ATOMIC_OPS``，替代写法带完整 JSON。
 
     def _atomic_health_op(self, player_id, card, params, log, choice, context):
         """Round 32 / 批次 AA：生命族六合一。
@@ -20453,6 +20258,15 @@ class GameEngine:
         if isinstance(used, dict):
             used.pop('ocean_charge', None)
 
+    # Round 42 / 批次 AF 复核：``charge_self_damage`` **保留**。它与其它候选不同
+    # ——**不是卡数据步骤，而是引擎在出牌结算内部自己调用的钩子**：
+    # ``_play_card``（game_engine.py:8154/9096）、响应牌结算（:8486）与
+    # 2v2 的对应位置（game_engine_2v2.py:868/1542）都在"扣费→进弃牌堆→
+    # ``_prepare_ocean_charge_for_play``"之后直接调用它，读的是卡属性
+    # ``charge_value`` 并用 ``_once_per_play`` 的 ``ocean_charge`` 标记记账。
+    # 数据层没有插进这段时机的入口（写``on_event(this_play)`` 的替代写法会让
+    # 引擎的自动调用消失、时序也变），因此按"管线型"保留。
+    # （Round 41 判定里写的"卡面机制直接依赖"就是这四个调用点。）
     def _atomic_charge_self_damage(self, player_id, card, params, log, choice, context):
         """Resolve the "charge" keyword: the charged player damages itself once per play."""
         if card is None:

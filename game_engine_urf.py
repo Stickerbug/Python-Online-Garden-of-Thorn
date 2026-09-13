@@ -48,7 +48,9 @@ INFINITE_EXCLUDED_EFFECTS = {
     'draw', 'choose_from_deck', 'choose_from_zone',
     # Round 24：mod_draw / mod_m_regen 与 equip_reduce_*_draw 各自合并成
     # turn_mod_add / equip_reduce_draw，清单按新名字同步。
-    'shuffle_discard_into_deck', 'give_card_to_deck', 'turn_mod_add',
+    # Round 42 / 批次 AF：``turn_mod_add`` 已删除（它写的字段零读取方），
+    # 从清单里移除。
+    'shuffle_discard_into_deck', 'give_card_to_deck',
     'equip_reduce_draw',
     'gain_m', 'trigger_on_self_magic_heal_cumulative',
 }

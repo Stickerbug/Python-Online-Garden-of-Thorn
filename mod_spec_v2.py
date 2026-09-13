@@ -136,7 +136,8 @@ _CORE_LOGIC_OPS = {
     "shuffle",
     "snapshot",
     "restore",
-    "transform_card",
+    # Round 42 / 批次 AF：``transform_card`` 已删除（只播报的占位步骤，
+    # 真变换是下面的 ``transform_cards``）。
     # Round 35：批次 AC 的四族（装备/状态/标签/自动打出）迁移收尾，规范名
     # 换成下面的伞原子；旧名进 REMOVED_ATOMIC_OPS（写出来是显式报错）。
     # 参数面见 docs/原子参数表.md 与各 `_atomic_<伞>` 的文档字符串。
@@ -188,16 +189,17 @@ _CORE_LOGIC_OPS = {
     "zone_exists",
     "var_compare",
     "direct_damage",
-    "lifesteal_damage",
-    "triangle_damage",
+    # Round 42 / 批次 AF：``lifesteal_damage`` / ``triangle_damage`` 已删除——
+    # 官方包 ``vanilla:fang`` / ``vanilla:triangle`` 的卡数据早就把这两条机制
+    # 写成 ``deal_damage`` + ``health_op`` / ``if_else`` + ``player_var_change``
+    # 的通用组合（见 REMOVED_ATOMIC_OPS 的替代 JSON）。
     # Round 24（C 类同形小原子合并）：护甲/闪避族与状态三兄弟、清状态族、
     # 每回合修正族、资源族、全局倍率族各自的旧名一并注销，改由下面的
     # player_stat_change / status_add_named / clear_statuses(preset) /
-    # turn_mod_add / resource_spend / global_mult 承接，
+    # resource_spend 承接；Round 42 / 批次 AF 又把 ``turn_mod_add`` /
+    # ``global_mult`` 本身也删了（它们写的字段全仓库零读取方，替代写法 = ``log``）。
     # 旧名见 REMOVED_ATOMIC_OPS（写出来是显式报错，不静默）。
     "player_stat_change",
-    "turn_mod_add",
-    "global_mult",
     # Round 32 / 批次 AA：``equip_reduce_draw`` 并进 ``draw`` 的
     # ``modifiers:[{"type":"sluggish",...}]``。
     # Round 33 / 批次 AC + Round 35 收尾：状态四兄弟并成 ``status_op``
@@ -227,14 +229,14 @@ _CORE_LOGIC_OPS = {
     # / ``destroy_equipment``）一并迁进 ``equipment_op`` 的 mode，名字进
     # REMOVED_ATOMIC_OPS；只有 ``place_as_equip`` 的处理器因为
     # formal_logic_runtime 直呼而保留（登记在上面）。
-    "equip_protection",
-    # Round 37 / 批次 AD-2：占位步骤 ``trigger_manual`` 并进
-    # ``emit_event(event:"manual_trigger", silent:true)``。
-    # Round 38 / 批次 AD-3：``block_own_actions``（别名 ``block_action``）/
-    # ``block_card_type`` / ``force_card_type`` / ``nullify_current_card``
-    # 四条行为过滤原子并成 ``action_filter``（``mode`` 选 block_own /
-    # block_type / force_type / negate），旧名进 REMOVED_ATOMIC_OPS。
-    "action_filter",
+    # Round 42 / 批次 AF：``equip_protection``（counter_equip_protect 的旧别名）
+    # 与 ``counter_equip_protect`` 一起退役——装备保护层数由
+    # ``player_prop_change(mode:"add", property:"equipment_protection")`` 写。
+    # Round 42 / 批次 AF：``emit_event``（含 Round 37 并进来的
+    # ``broadcast_event`` / ``trigger_manual``）与 ``action_filter``（含 Round 38
+    # 并进来的四条行为过滤原子）都已删除——前者写的"事件"没有任何订阅方，
+    # 后者写的四个玩家字段全部由 ``player_prop_change`` / ``status_op`` 覆盖。
+    # 旧名与两个伞名都在 REMOVED_ATOMIC_OPS 里给了替代写法。
     # Round 31 / 批次 Z：``set_invincible`` / ``set_untargetable`` /
     # ``untargetable_layers`` 三条玩家状态层数原子并成 ``player_status_layers``
     # （``status`` 选 untargetable/invincible），旧名进 REMOVED_ATOMIC_OPS。
@@ -243,20 +245,23 @@ _CORE_LOGIC_OPS = {
     # 三条回合控制原子并成 ``turn_control``（``mode`` 选 end/skip/extra），
     # 旧名进 REMOVED_ATOMIC_OPS（带替代 JSON）。
     "turn_control",
-    "fission",
-    "fusion",
+    # Round 42 / 批次 AF：``fission`` / ``fusion`` 已删除——裂变层数是
+    # ``card_prop_change(property:"fission_level")``（钳位与 ``fission_count``
+    # 同步都在 ``_set_card_property_value`` 里），聚变的整套多卡合并已经是
+    # ``vanilla:fusion`` 的卡数据（request + for_each + card_prop_change +
+    # move_card）。
     "multiply_next_damage",
     # Round 32 / 批次 AA：``reduce_next_cost`` / ``increase_next_cost`` 并进
     # ``modify_next_cost(delta=...)``（正负号定方向）。
     "modify_next_cost",
-    "transform_card",
+    # Round 42 / 批次 AF：``transform_card``（只播报的占位步骤）已删除。
     # Round 29 / 批次 X：耐久三兄弟并入卡牌属性族
     # （``card_prop_add``/``card_prop_set`` + ``property:"durability"``）。
     # Round 32 / 批次 AA：``swap_health`` 并进 ``health_op(mode:"swap")``。
     # Round 33 / 批次 AB：``swap_hands`` 已并入 ``move_card(mode:"swap_hands")``。
-    # Round 37 / 批次 AD-2：``broadcast_event`` 并进 ``emit_event``。
-    "emit_event",
-    "modify_damage",
+    # Round 42 / 批次 AF：``emit_event`` / ``modify_damage`` 已删除——两者都是
+    # "只写一行播报"的步骤（事件总线无订阅方；``formula`` 无读取方），
+    # 替代写法是一行 ``log``。
     # Round 29 / 批次 X：玩家自定义变量的五个同形原子合并成
     # ``player_var_change(mode=set|add|sub|mul|div)``；Round 31 起 ``var_set``
     # 兼容垫片也已删除（旧名进 REMOVED_ATOMIC_OPS）。
@@ -274,9 +279,9 @@ _CORE_LOGIC_OPS = {
     # Round 29 / 批次 X：``card_var_set`` / ``card_var_add`` 合并成
     # ``card_var_change(mode=set|add)``；Round 31 起两个垫片已删除。
     "card_var_change",
-    # Round 29 / 批次 X：卡内计数器三兄弟合并成
-    # ``card_counter(mode=play|equip_turns|reset)``。
-    "card_counter",
+    # Round 42 / 批次 AF：``card_counter`` 已删除——它写的
+    # ``card.play_count`` / ``card.equip_turns`` 补进 ``card_prop_change`` 的属性
+    # 白名单后就是普通属性写入（``mode:"play"`` → ``add play_count`` …）。
     # Round 31 / 批次 Z：卡牌属性写值族三合一
     # （``card_prop_change(mode=set|add|mul)``，参数与 ``player_prop_change`` 对齐）。
     "card_prop_change",
@@ -291,7 +296,9 @@ _CORE_LOGIC_OPS = {
     # ``restore(mode:"turn_start"/"match_start")``。
     "counter_pending_attack_damage",
     "discard_choice_then_draw",
-    "activate_corruption",
+    # Round 42 / 批次 AF：``activate_corruption`` 已删除——同一个 setter 已由
+    # ``equipment_prop_set(property:"corruption_active")`` 覆盖，官方包
+    # ``vanilla:corruption`` 的卡数据就是这么写的。
     # Round 41 / 批次 AE-5：``response_declare``（返回 None 的空占位步骤）已删除。
     "on_any_turn_start",
     "on_damage_taken",
@@ -380,10 +387,12 @@ _CORE_LOGIC_OPS = {
     #     ``apply_toxic`` / ``gain_armor`` / ``gain_dodge``）一起并进
     #     ``status_add_named`` / ``player_stat_change``，都进了
     #     REMOVED_ATOMIC_OPS，这里也不再补登记。
-    #   * counter_equip_protect / set_untargetable：
-    #     同上，分别承接 ``equip_protection`` / ``untargetable``。
-    #     （``block_own_actions`` 在 Round 38 / 批次 AD-3 并进 ``action_filter``，
-    #     见上；``block_action`` 不再出现在 EVENT_HOOK_OPS 与 ``_EFFECT_ALIASES``。）
+    #   * set_untargetable：承接 ``untargetable``。
+    #     （Round 42 / 批次 AF：``counter_equip_protect`` 与它的别名
+    #     ``equip_protection`` 一起删除——装备保护层数由
+    #     ``player_prop_change(mode:"add", property:"equipment_protection")`` 写；
+    #     ``block_own_actions`` / ``block_action`` 所在的 ``action_filter`` 也已
+    #     删除，替代写法见 REMOVED_ATOMIC_OPS。）
     #   * for_each_target：``for_each_selectable_target`` 与
     #     ``ocean_for_each_selectable_target`` 的规范名（Round 16 统一驱动，
     #     Round 22 起两个旧名一并进 RENAMED_ATOMIC_OPS）。
@@ -395,16 +404,18 @@ _CORE_LOGIC_OPS = {
     #   * for_each_equipment：遍历装备的唯一入口（Round 17 未合并进 for_each）。
     #     Round 35 起并进 ``equipment_op(mode:"each")``，名字进
     #     REMOVED_ATOMIC_OPS。
-    "counter_equip_protect",
     # Round 29 / 批次 X：``record_play_count`` / ``record_equip_turns`` /
-    # ``reset_counter`` 已合并成 ``card_counter``（见上面的模块族）。
+    # ``reset_counter`` 曾合并成 ``card_counter``；Round 42 / 批次 AF 又把
+    # ``card_counter`` 删掉，三个旧名在 REMOVED_ATOMIC_OPS 里改指
+    # ``card_prop_change``。
     # Round 41 / 批次 AE-5：``create_counter`` 已删除——它写的
     # ``card.custom_counters`` 没有任何读取方；卡内任意计数改用
     # ``card_var_change(mode:"add"|"set", name:…, card:…)``（写 ``card.custom_vars``，
     # 会进 ``to_dict``，取值表达式也能读）。
     # Round 33 / 批次 AB：``exile_this`` 已删除——等价写法
     # ``move_card(zone:"exile", card:{"ref":"current_card"})``。
-    "mark_self_damage_source",
+    # Round 42 / 批次 AF：``mark_self_damage_source`` 已删除——它写的
+    # ``self_damage_next`` 全仓库零读取方，替代写法是一行 ``log``。
     # Round 37 / 批次 AD-2：``after_all`` 并进 ``on_event(trigger:"after_all")``。
 }
 
@@ -467,7 +478,7 @@ EVENT_HOOK_OPS = frozenset({
     "on_enemy_turn_start", "on_equipment_destroy", "on_equipment_trigger",
     "on_hand_owner_turn_start", "on_hand_owner_turn_end",
     "on_owner_turn_start", "on_owner_turn_end", "on_target_turn_start",
-    "damage", "equip_protection",
+    "damage",
 })
 
 # 分类的展示顺序（统计、参数表、报告都用这一份，别在别处再写一遍）。
@@ -537,8 +548,6 @@ DAMAGE_ATOM_PIPELINES = {
     # 攻击管线
     "deal_damage": DAMAGE_PIPELINE_ATTACK,
     "ricochet_attack": DAMAGE_PIPELINE_ATTACK,
-    "lifesteal_damage": DAMAGE_PIPELINE_ATTACK,
-    "triangle_damage": DAMAGE_PIPELINE_ATTACK,
     "damage": DAMAGE_PIPELINE_ATTACK,
     # 直伤管线
     "direct_damage": DAMAGE_PIPELINE_DIRECT,
@@ -621,16 +630,11 @@ DAMAGE_PARAM_PIPELINES = {
     "allow_self": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 是否允许弹到自己"},
     "exclude_previous": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 不连续打同一个目标"},
     "precision_inherit": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 是否继承精准"},
-    "heal": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "lifesteal_damage 命中后的回复量"},
-    "heal_percent": {
-        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
-        "aliases": ("ratio",),
-        "note": "lifesteal_damage 按伤害比例回复",
-    },
-    "base": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 基础值"},
-    "per_stack": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 每层加成"},
-    "stack_name": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 层数变量名"},
-    "max_stacks": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "triangle_damage 层数上限"},
+    # Round 42 / 批次 AF：``heal`` / ``heal_percent``（别名 ``ratio``）是
+    # ``lifesteal_damage`` 的专有参数，``base`` / ``per_stack`` / ``stack_name`` /
+    # ``max_stacks`` 是 ``triangle_damage`` 的专有参数——四个 op 一起删除后这六条
+    # 参数登记也一并撤销（回复量改用 ``health_op`` 的 ``amount`` 表达式，
+    # 层数改用 ``player_var_change`` 的 ``name`` / ``value``）。
     # Round 30 / 批次 Y：``times`` 随 ``deal_damage_multi`` 一起删除——它是那个
     # 原子独有的旧参数名，规范写法 ``deal_damage`` 只读 ``hits``。
     # ---- 仅直伤管线 ----
@@ -653,9 +657,9 @@ DAMAGE_PARAM_PIPELINES = {
         "note": "counter_pending_attack_damage 结算方式，默认 direct，attack 走攻击管线",
     },
     "ratio": {
-        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
-        "note": "同名两义：lifesteal_damage 里是 heal_percent 的等价别名（攻击）；"
-                "counter_pending_attack_damage 里是反弹比例（默认 0.5，直伤）",
+        "pipelines": (DAMAGE_PIPELINE_DIRECT,),
+        "note": "counter_pending_attack_damage 的反弹比例（默认 0.5，直伤）；"
+                "Round 42 / 批次 AF 删除 lifesteal_damage 后不再有「攻击管线」那一义",
     },
     "multiplier": {
         "pipelines": (DAMAGE_PIPELINE_DIRECT,),
@@ -830,6 +834,56 @@ _FAMILY_HINT = {
 #
 # ``None`` 表示没有等价替代（原本就是空实现或未实现过的声明性名字）。
 REMOVED_ATOMIC_OPS = {
+    # Round 42 / 批次 AF（极端收敛："能组合就删"）：14 个原子逐个定论后删除，
+    # 替代写法如下。判定依据与 A/B 见 `.codex-tmp/round42/rd42.md`。
+    #
+    #   * 六条"只播报"的步骤：它们写的字段在引擎、卡数据、序列化与客户端里
+    #     **零读取方**，实际行为就是那一行默认战报，所以替代写法是一行 ``log``。
+    "transform_card": '{"op":"log","message":"变换<牌名>效果触发"}（原实现只播报；真正的变换是 transform_cards）',
+    "modify_damage": '{"op":"log","message":"修改伤害公式：<formula>"}（formula 全仓库无读取方）',
+    "emit_event": '{"op":"log","message":"广播事件：<事件名>"}（事件总线无订阅方；要静默写 log:false）',
+    "global_mult": '{"op":"log","message":"全场伤害倍率x2"}（global_damage_mult/global_heal_mult/global_cost_mult 零读取方）',
+    "turn_mod_add": '{"op":"log","message":"每回合能量回复+1"}（e_regen_mod/m_regen_mod/draw_mod 零读取方）',
+    "mark_self_damage_source": '{"op":"log","message":"<目标>下次伤害来源标记为自身"}（self_damage_next 零读取方）',
+    #
+    #   * 五条"写的字段已有既有写入口"的步骤（官方包里已有同样的数据写法）：
+    "activate_corruption": '{"op":"equipment_prop_set","equipment":{"ref":"current_equipment"},"property":"corruption_active","value":1}'
+                           '（vanilla:corruption 的卡数据就是这么写的）',
+    "counter_equip_protect": '{"op":"player_prop_change","mode":"add","property":"equipment_protection","target":"self","amount":1}',
+    "equip_protection": '{"op":"player_prop_change","mode":"add","property":"equipment_protection","target":"self","amount":1}'
+                        '（counter_equip_protect 的旧别名，与规范名一起退役）',
+    "card_counter": '{"op":"card_prop_change","mode":"add","property":"play_count","amount":1,"card":{"ref":"current_card"}}'
+                    '（equip_turns 同理换成 property:"equip_turns"；reset = 两条 mode:"set" value:0）',
+    "fission": '{"op":"card_prop_change","mode":"add","property":"fission_level","amount":1,"card":{"ref":"selected_card"}}'
+               '（clamp_card_layer 钳位与 fission_count 同步都在 _set_card_property_value 里；'
+               '选牌窗口写 request(type:"card")）',
+    #
+    #   * 三条"两步通用组合"（官方包 vanilla:triangle / vanilla:fang / vanilla:fusion
+    #     的卡数据就是这些写法）：
+    "lifesteal_damage": '{"op":"deal_damage","target":"enemy","amount":8} + '
+                        '{"op":"if_else","condition":{"op":"compare","a":{"op":"last_damage"},"operator":">","b":0},'
+                        '"then":[{"op":"health_op","mode":"heal","target":"self","amount":'
+                        '{"op":"div","a":{"op":"mul","a":{"op":"last_damage"},"b":8},"b":10}}]}'
+                        '（vanilla:fang 的写法：先 deal_damage，再按 last_damage 的比例回复；'
+                        '固定回复量就把 amount 换成常量）',
+    "triangle_damage": '{"op":"deal_damage","target":"target","amount":{"op":"add","a":6,"b":'
+                       '{"op":"mul","a":3,"b":{"op":"var","name":"三角形层数","target":"self"}}}} + '
+                       '{"op":"if_else","condition":{"op":"compare","a":{"op":"last_damage"},"operator":">","b":0},'
+                       '"then":[{"op":"player_var_change","mode":"set","target":"self","name":"三角形层数",'
+                       '"value":{"op":"min","a":4,"b":{"op":"add","a":{"op":"var","name":"三角形层数","target":"self"},"b":1}}}]}'
+                       '（vanilla:triangle 的写法：层数读 var、上限用 min、写完由 '
+                       '_sync_custom_var_alias 同步 triangle_stacks；状态免疫期间 var 读取自动返回 0）',
+    #   * 两条"伞原子"的续接（它们自己也是 Round 37/38 的合并产物，这里一起删）：
+    "action_filter": '（按 mode 拆成既有原子）block_own → '
+                     '{"op":"player_prop_change","mode":"set","property":"shovel_active","value":1,"target":"self"}；'
+                     'block_type → {"op":"player_prop_change","mode":"set","property":"attack_blocked","target":"enemy",'
+                     '"value":{"op":"max","a":{"op":"player_property","property":"attack_blocked","target":"enemy"},"b":1}}；'
+                     'force_type → 同上 property:"attack_only"；'
+                     'negate → {"op":"log","message":"<目标>的<牌型>牌将失效"}（negate_next 零读取方）',
+    "fusion": '见官方包 vanilla:fusion 的卡数据（request(type:"card", multi:true, same_name:true) 选 2 张同名攻击牌 → '
+              '一组 player_var_change 初始化 __聚变层数合计 / __裂变层数最大值 … → for_each 逐张读 card_prop 求合计与最大值 → '
+              'card_prop_change 写回保留的那张 → move_card 把其余张弃掉）；'
+              '旧原子里的 count/max_count/fusion_uses_two_cards 就是这几步的参数',
     # Round 39 / 批次 AE：第三只眼下沉为 tag_op(when_tag/unless_tag)。
     "third_eye_precision_or_hidden": "{\"op\": \"tag_op\", \"action\": \"add\", \"card\": \"selected_card\", \"tag\": \"stealth\", \"when_tag\": \"precision\", \"log\": false}",
 
@@ -884,18 +938,21 @@ REMOVED_ATOMIC_OPS = {
     "clear_buffs": '{"op":"status_op","action":"clear","preset":"buffs","target":"self"}',
     "clear_debuffs": '{"op":"status_op","action":"clear","preset":"debuffs","target":"self"}',
     "clear_all_effects": '{"op":"status_op","action":"clear","preset":"all","target":"self"}',
-    #   * 每回合修正族 → turn_mod_add（kind 选 e_regen/m_regen/draw）
-    "mod_e_regen": '{"op":"turn_mod_add","kind":"e_regen","target":"self","amount":1}',
-    "mod_m_regen": '{"op":"turn_mod_add","kind":"m_regen","target":"self","amount":1}',
-    "mod_draw": '{"op":"turn_mod_add","kind":"draw","target":"self","amount":1}',
+    #   * 每回合修正族 → turn_mod_add（Round 42 / 批次 AF 起 turn_mod_add 本身也
+    #     删除了：它写的 e_regen_mod/m_regen_mod/draw_mod 零读取方，替代写法是
+    #     ``{"op":"log",…}``）
+    "mod_e_regen": '{"op":"log","message":"每回合能量回复+1"}（turn_mod_add 已删除：字段零读取方）',
+    "mod_m_regen": '{"op":"log","message":"每回合魔力回复+1"}（turn_mod_add 已删除：字段零读取方）',
+    "mod_draw": '{"op":"log","message":"每回合抽牌数+1"}（turn_mod_add 已删除：字段零读取方）',
     #   * 资源消耗族 → spend_resource（Round 31：resource_spend 也已删除，
     #     ``spend_resource`` 收 ``target``，要旧默认战报就显式写 log）
     "cost_e": '{"op":"resource_op","resource":"e","mode":"spend","amount":1,"target":"self","log":"{target}消耗{amount}E"}',
     "cost_m": '{"op":"resource_op","resource":"m","mode":"spend","amount":1,"target":"self","log":"{target}消耗{amount}M"}',
-    #   * 全场倍率族 → global_mult（kind 选 damage/heal/cost）
-    "global_damage_mult": '{"op":"global_mult","kind":"damage","multiplier":2}',
-    "global_heal_mult": '{"op":"global_mult","kind":"heal","multiplier":2}',
-    "global_cost_mult": '{"op":"global_mult","kind":"cost","multiplier":2}',
+    #   * 全场倍率族 → global_mult（Round 42 / 批次 AF 起 global_mult 本身也删除了：
+    #     三个 global_*_mult 字段零读取方，替代写法是一行 ``log``）
+    "global_damage_mult": '{"op":"log","message":"全场伤害倍率x2"}（global_mult 已删除：字段零读取方）',
+    "global_heal_mult": '{"op":"log","message":"全场治疗倍率x2"}（global_mult 已删除：字段零读取方）',
+    "global_cost_mult": '{"op":"log","message":"全场费用倍率x2"}（global_mult 已删除：字段零读取方）',
     #   * 卡内标签族 → add_tag(mode=...)
     "tag_add_named": '{"op":"tag_op","action":"add","card":{"ref":"current_card"},"tag":"exile","log":false}',
     "tag_remove_named": '{"op":"tag_op","action":"remove","card":{"ref":"current_card"},"tag":"exile"}',
@@ -903,10 +960,18 @@ REMOVED_ATOMIC_OPS = {
     #     本身也并进 ``draw`` 了）
     "equip_reduce_own_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"self"}]}',
     "equip_reduce_enemy_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"enemy"}]}',
-    #   （Round 38 / 批次 AD-3：替代写法里的 ``block_card_type`` 本身也并进
-    #   ``action_filter(mode:"block_type")``，这里同步成伞写法。）
-    "block_enemy_attacks": '{"op":"action_filter","mode":"block_type","card_type":"thorn","target":"enemy"}',
-    "counter_block_enemy_attacks": '{"op":"action_filter","mode":"block_type","card_type":"thorn","target":"enemy"}',
+    #   （Round 38 / 批次 AD-3 曾把它们并进 ``action_filter(mode:"block_type")``；
+    #   Round 42 / 批次 AF 又把 ``action_filter`` 删了，这里同步成"玩家属性 +
+    #   max 表达式"的最终写法——``attack_blocked`` 也是官方包 ``sewers:poo`` /
+    #   ``ocean:jelly`` 在用的数据写法。）
+    "block_enemy_attacks": (
+        '{"op":"player_prop_change","mode":"set","property":"attack_blocked","target":"enemy",'
+        '"value":{"op":"max","a":{"op":"player_property","property":"attack_blocked","target":"enemy"},"b":1}}'
+    ),
+    "counter_block_enemy_attacks": (
+        '{"op":"player_prop_change","mode":"set","property":"attack_blocked","target":"enemy",'
+        '"value":{"op":"max","a":{"op":"player_property","property":"attack_blocked","target":"enemy"},"b":1}}'
+    ),
     "counter_dodge": '{"op":"player_stat_change","mode":"add","stat":"dodge","target":"self","amount":1}',
     "counter_nazar": '{"op":"status_op","action":"add","status":"nazar","target":"self","amount":2}',
     "counter_negate_skill": '{"op":"player_prop_change","mode":"set","property":"negate_next_skill","target":"self","value":1}',
@@ -917,7 +982,11 @@ REMOVED_ATOMIC_OPS = {
     "equip_reduce_own_e": '{"op":"player_prop_change","mode":"add","property":"overload","target":"self","amount":1}',
     "equip_set_health": '{"op":"health_op","mode":"set","target":"self","amount":60}',
     "equip_sponge": '{"op":"player_prop_change","mode":"set","property":"sponge_active","target":"target","value":1}',
-    "force_enemy_attacks_only": '{"op":"action_filter","mode":"force_type","card_type":"thorn","target":"enemy"}',
+    # Round 42 / 批次 AF：``action_filter`` 已删除，改成"玩家属性 + max 表达式"。
+    "force_enemy_attacks_only": (
+        '{"op":"player_prop_change","mode":"set","property":"attack_only","target":"enemy",'
+        '"value":{"op":"max","a":{"op":"player_property","property":"attack_only","target":"enemy"},"b":1}}'
+    ),
     "random_move_card_to_hand": '{"op":"move_card","mode":"random","source_zone":"discard","target_zone":"hand","count":1,"target":"self"}',
     "move_random_card_to_hand": '{"op":"move_card","mode":"random","source_zone":"discard","target_zone":"hand","count":1,"target":"self"}',
     "desert_wind_schedule": None,
@@ -1072,10 +1141,13 @@ REMOVED_ATOMIC_OPS = {
     #   * 卡牌自定义变量两条 → card_var_change(mode=...)
     "card_var_set": '{"op":"card_var_change","mode":"set","card":{"ref":"current_card"},"name":"var","value":0}',
     "card_var_add": '{"op":"card_var_change","mode":"add","card":{"ref":"current_card"},"name":"var","value":1}',
-    #   * 卡内计数器三兄弟 → card_counter(mode=...)
-    "record_play_count": '{"op":"card_counter","mode":"play","amount":1}',
-    "record_equip_turns": '{"op":"card_counter","mode":"equip_turns","amount":1}',
-    "reset_counter": '{"op":"card_counter","mode":"reset"}',
+    #   * 卡内计数器三兄弟 → card_counter(mode=...)（Round 42 / 批次 AF 起
+    #     ``card_counter`` 本身也删除，改由卡牌属性族写 ``play_count`` /
+    #     ``equip_turns``；这两个字段随后补进了 card_prop_change 的属性白名单）
+    "record_play_count": '{"op":"card_prop_change","mode":"add","property":"play_count","amount":1,"card":{"ref":"current_card"}}',
+    "record_equip_turns": '{"op":"card_prop_change","mode":"add","property":"equip_turns","amount":1,"card":{"ref":"current_card"}}',
+    "reset_counter": '{"op":"card_prop_change","mode":"set","property":"play_count","value":0,"card":{"ref":"current_card"}} + '
+                     '{"op":"card_prop_change","mode":"set","property":"equip_turns","value":0,"card":{"ref":"current_card"}}',
     #   * 耐久三兄弟 → 卡牌属性族（property:"durability"，负 amount 即扣）
     "gain_durability": '{"op":"card_prop_add","card":{"ref":"current_card"},"property":"durability","amount":1}',
     "lose_durability": '{"op":"card_prop_add","card":{"ref":"current_card"},"property":"durability","amount":-1}',
@@ -1264,15 +1336,18 @@ REMOVED_ATOMIC_OPS = {
     "delayed_reveal_hand_next_turn": '{"op":"delayed_effect","mode":"reveal_hand","target":"target"}（目标下回合开始时展示其手牌）',
 
     # Round 37 / 批次 AD-2（监听族四合一 + 广播族二合一）：``on_event`` 的
-    # ``trigger`` 选监听时点，``emit_event`` 承接广播与占位步骤。四条 on_event
+    # ``trigger`` 选监听时点（Round 42 / 批次 AF 起底下的 ``emit_event`` 也删除了，
+    # 广播写法统一成 ``log``；见上面的 REMOVED 条目）。四条 on_event
     # 分支的实现体逐字沿用旧原子（同一张 ``PLAY_LISTENERS_KEY`` 监听表、同一套
     # ``_once_per_play`` 卡内标记），时点语义不变。
     "once_per_play": '{"op":"on_event","trigger":"this_play","name":"<标识>","body":[…]}（本次出牌内结算一次；同名的 on_event(trigger:"this_play") 共享同一个标记）',
     "register_play_listener": '{"op":"on_event","trigger":"play","target":"target","duration":"turn","scope":"owner_turn","exclude_card_ids":[…],"body":[…]}（拥有者本回合每次出牌后触发；body 里可读 listener_target_id）',
     "after_all": '{"op":"on_event","trigger":"after_all","body":[…]}（也可写成 {"op":"on_event","after":true,"body":[…]}）',
     "magic_relic_trigger": '{"op":"on_event","trigger":"equipment_trigger","effect":"magic_relic"}（消耗队友 2M、自己 +3M；1v1 无队友时按旧行为直接返回）',
-    "broadcast_event": '{"op":"emit_event","event":"<事件名>"}（event 名也可写成 event_name；默认播报"广播事件：<事件名>"）',
-    "trigger_manual": '{"op":"emit_event","event":"manual_trigger","silent":true}（占位步骤原本没有实现体，silent 与之一致）',
+    "broadcast_event": '{"op":"log","message":"广播事件：<事件名>"}（emit_event 已删除：事件总线没有订阅方，'
+                       '这一步本来就只是播报；要静默写 log:false）',
+    "trigger_manual": '（占位步骤原本就没有实现体 = 什么都不做；Round 42 起 emit_event 删除，'
+                      '如需保留"什么都不做"的一步，写 {"op":"log","message":"","silent":true} 或不写这一步）',
 
     # Round 38 / 批次 AD-3（回合控制族三合一）：``mode`` 选分支
     # （end / skip / extra），三个分支的实现体逐字沿用旧原子。
@@ -1284,15 +1359,21 @@ REMOVED_ATOMIC_OPS = {
     "skip_turn": '{"op":"turn_control","mode":"skip","target":"enemy","amount":1}（目标 +N 层眩晕；target 默认 enemy，走状态免疫判定）',
     "extra_turn": '{"op":"turn_control","mode":"extra","target":"self"}（目标获得一个额外回合；target 默认 self）',
 
-    # Round 38 / 批次 AD-3（行为过滤族四合一）：``mode`` 选分支
-    # （block_own / block_type / force_type / negate），四个分支的实现体逐字
-    # 沿用旧原子。``block_own`` 只作用于出牌者（旧实现忽略 target）；
-    # ``negate`` 写的 ``negate_next`` 全仓库没有读者，合并前后行为一致。
-    "block_own_actions": '{"op":"action_filter","mode":"block_own"}（出牌者本回合无法使用卡牌；旧别名 block_action 同此写法）',
-    "block_action": '{"op":"action_filter","mode":"block_own"}（block_own_actions 的别名，一起退役）',
-    "block_card_type": '{"op":"action_filter","mode":"block_type","target":"enemy","card_type":"thorn","duration":1}（thorn 写 attack_blocked、bloom 写 skill_blocked；其它牌型只播报）',
-    "force_card_type": '{"op":"action_filter","mode":"force_type","target":"enemy","card_type":"thorn","duration":1}（thorn 写 attack_only；其它牌型只播报）',
-    "nullify_current_card": '{"op":"action_filter","mode":"negate","target":"enemy","card_type":"thorn"}（把目标的 negate_next 写成该牌型并播报）',
+    # Round 38 / 批次 AD-3（行为过滤族四合一）→ Round 42 / 批次 AF：``action_filter``
+    # 本身也删除，四个 mode 改写成既有原子（玩家属性 + 取值表达式 + log）：
+    "block_own_actions": '{"op":"player_prop_change","mode":"set","property":"shovel_active","value":1,"target":"self"}'
+                         '（出牌者本回合无法使用卡牌；官方包 ocean:bubble_bomb 就是这么写的；旧别名 block_action 同此写法）',
+    "block_action": '{"op":"player_prop_change","mode":"set","property":"shovel_active","value":1,"target":"self"}'
+                    '（block_own_actions 的别名，一起退役）',
+    "block_card_type": '{"op":"player_prop_change","mode":"set","property":"attack_blocked","target":"enemy",'
+                       '"value":{"op":"max","a":{"op":"player_property","property":"attack_blocked","target":"enemy"},"b":1}}'
+                       '（thorn = attack_blocked、bloom = skill_blocked 但该字段零读取方；'
+                       '官方包 sewers:poo / ocean:jelly 用 status_op(action:"add") 写同一字段）',
+    "force_card_type": '{"op":"player_prop_change","mode":"set","property":"attack_only","target":"enemy",'
+                       '"value":{"op":"max","a":{"op":"player_property","property":"attack_only","target":"enemy"},"b":1}}'
+                       '（thorn = attack_only；其它牌型旧实现只播报）',
+    "nullify_current_card": '{"op":"log","message":"<目标>的<牌型>牌将失效"}（negate_next 全仓库零读取方，'
+                            '旧实现也只有"写标记 + 播报"）',
 
     # Round 40 / 批次 AE-2~4（三个卡专用原子下沉成通用能力/数据）：
     #   * AE-2：``assembler_effect``（重构机）—— 选牌窗口、放逐、随机奖励表

@@ -275,7 +275,68 @@ ROUND41_ACTIONS = {
                          "与引擎响应系统承载（bio:indictment 在 Round 40 起也已改用 card_var_change）"),
 }
 
+# Round 42 / 批次 AF（极端收敛，"能组合就删"）：15 个名字删除/退役。
+# 判据与 A/B 证据见 `.codex-tmp/round42/rd42.md`：六条只播报（写的字段零读取方）、
+# 五条写的字段已有既有写入口（官方包已有同写法）、三条两步通用组合
+# （vanilla:triangle / vanilla:fang / vanilla:fusion 的卡数据就是这些写法）、
+# 一条伞原子按 mode 拆成既有原子。
+ROUND42_ACTIONS = {
+    # ---- 一、只播报型：写的字段全仓库零读取方，实际行为 = 一行默认战报 ----
+    "transform_card": ("删", 0, '{"op":"log","message":"变换<牌名>效果触发"}',
+                       "实现只按 card 引用查牌再播报，不写状态；真变换是 transform_cards"),
+    "modify_damage": ("删", 0, '{"op":"log","message":"修改伤害公式：<formula>"}',
+                      "formula 零读取方（伤害公式来自步骤本身）；events.modify_damage 是另一条 v2 事件钩子键"),
+    "emit_event": ("删", 0, '{"op":"log","message":"广播事件：<事件名>"}',
+                   "事件总线无订阅方；silent/log:false 的静默语义由 log 步的 log:false 承接"),
+    "global_mult": ("删", 0, '{"op":"log","message":"全场伤害倍率x2"}',
+                    "global_damage_mult/global_heal_mult/global_cost_mult 零读取方（含客户端）"),
+    "turn_mod_add": ("删", 0, '{"op":"log","message":"每回合能量回复+1"}',
+                     "e_regen_mod/m_regen_mod/draw_mod 零读取方（回合结算路径不读这三个字段）"),
+    "mark_self_damage_source": ("删", 0, '{"op":"log","message":"<目标>下次伤害来源标记为自身"}',
+                                "self_damage_next 只被自己写，没有读取方也不进 to_dict"),
+    # ---- 二、写的字段已有既有写入口（官方包已有同写法）----
+    "activate_corruption": ("删", 0, '{"op":"equipment_prop_set","equipment":{"ref":"current_equipment"},'
+                                     '"property":"corruption_active","value":1}',
+                            "同一个 setter 已由 equipment_prop_set 覆盖；vanilla:corruption 的卡数据就这么写"),
+    "counter_equip_protect": ("删", 0, '{"op":"player_prop_change","mode":"add","property":"equipment_protection",'
+                                      '"target":"self","amount":1}',
+                              "equipment_protection 本来就在 player_prop_change 白名单里；"
+                              "_status_application_blocked 恒 False、成就峰值不统计该字段"),
+    "equip_protection": ("删", 0, '{"op":"player_prop_change","mode":"add","property":"equipment_protection",'
+                                  '"target":"self","amount":1}',
+                         "counter_equip_protect 的旧别名，与规范名一起退役（_EFFECT_ALIASES 条目同步删除）"),
+    "card_counter": ("删", 0, '{"op":"card_prop_change","mode":"add","property":"play_count","amount":1,'
+                             '"card":{"ref":"current_card"}}',
+                     "play_count/equip_turns 是可读卡牌字段（取值形态 + equip_turns 条件算子），"
+                     "补进 card_prop_change 白名单后即普通属性写入；reset = 两条 set 0"),
+    "fission": ("删", 0, '{"op":"card_prop_change","mode":"add","property":"fission_level","amount":1,'
+                         '"card":{"ref":"selected_card"}}',
+                "_set_card_property_value 对 fission_level 有钳位并同步 fission_count；"
+                "官方包 arctic:nuke / arctic:ruby 已在用同一写法"),
+    # ---- 三、两步通用组合（官方包卡数据就是这些写法）----
+    "lifesteal_damage": ("删", 0, '{"op":"deal_damage",…} + 门控 last_damage>0 的 '
+                                  '{"op":"health_op","mode":"heal","amount":floor(last_damage×比例)}',
+                         "vanilla:fang 的卡数据；_would_heal 同步认 health_op(mode:\"heal\")，"
+                         "反治疗响应窗口不退化"),
+    "triangle_damage": ("删", 0, '{"op":"deal_damage","amount":add(base, mul(per_stack, var("三角形层数")))} + '
+                                 '{"op":"if_else",…,"then":[{"op":"player_var_change","mode":"set",'
+                                 '"value":min(上限, 层数+1)}]}',
+                        "vanilla:triangle 的卡数据；同一条攻击管线、层数走 custom_vars 并由 "
+                        "_sync_custom_var_alias 同步 triangle_stacks"),
+    "fusion": ("删", 0, '见 vanilla:fusion 的卡数据（request 选同名手牌 → for_each 累计 max/合计 → '
+                        'card_prop_change 写回 → move_card 弃牌）',
+               "整套多卡聚变已是卡数据；_merge_fusion_card_layers 保留给引擎硬编码 _effect_* 路径"),
+    # ---- 四、伞原子按 mode 拆成既有原子 ----
+    "action_filter": ("删", 0, 'block_own → player_prop_change(set shovel_active 1)；'
+                               'block_type → player_prop_change(set attack_blocked, value:max(现值, duration))；'
+                               'force_type → 同上 attack_only；negate → log',
+                      "四个 mode 写的字段都在 player_prop_change 白名单里（官方包 ocean:bubble_bomb / "
+                      "sewers:poo / ocean:jelly 已在用）；skill_blocked 与 negate_next 零读取方"),
+}
+
 # Round 41 / 批次 AE-5：长尾"未使用 op"逐个定论（判定 + 理由 + 替代写法）。
+# Round 42 / 批次 AF：其中 15 个名字改判"删"（能组合/字段零读取方），
+# 3 个名字维持"留"并补上"为什么数据做不到"的读取方证据。
 # 判定取值：留·语言原语 / 留·机制钩子 / 留·伞原子 / 留·事件钩子 / 留·能力扩展点 /
 # 删·可下沉 / 删·能力扩展点。凡判"删"的行都必须已经真删（无 `_atomic_*` 实现、
 # 名字进 REMOVED/RENAMED 表）——``--check`` 会验证。
@@ -310,8 +371,10 @@ UNUSED_OP_VERDICTS = {
                                  "Cicada 3301 图鉴选牌的续跑步骤（run_v2_step 原生，与 deck_catalog_pick 成对）"),
     "damage": ("留·事件钩子", "`{\"op\":\"deal_damage\",…}`（旧写法 `damage` 走 _EFFECT_ALIASES）",
                "伤害管线的旧写法入口，_EFFECT_ALIASES 直接指到 deal_damage，不是独立实现"),
-    "equip_protection": ("留·事件钩子", "`{\"op\":\"counter_equip_protect\",\"amount\":N}`",
-                         "装备保护层数的旧写法入口，_EFFECT_ALIASES 指到 counter_equip_protect"),
+    "equip_protection": ("删·可下沉", "`{\"op\":\"player_prop_change\",\"mode\":\"add\",\"property\":\"equipment_protection\",\"amount\":N}`",
+                         "Round 42 / 批次 AF：别名与 ``counter_equip_protect`` 一起退役——"
+                         "装备保护层数就是玩家属性 ``equipment_protection``，"
+                         "``player_prop_change`` 的属性白名单里本来就有它（写出来是显式报错）"),
     "on_any_turn_start": ("留·事件钩子", "`events.{\"on_any_turn_start\":{…}}`",
                           "事件时点声明键：任意玩家回合开始（被动钩子表成员）"),
     "on_damage_taken": ("留·事件钩子", "`events.{\"on_damage_taken\":{…}}`",
@@ -335,50 +398,84 @@ UNUSED_OP_VERDICTS = {
     "on_target_turn_start": ("留·事件钩子", "`events.{\"on_target_turn_start\":{…}}`",
                              "事件时点声明键：被指向目标的回合开始（计时器默认相位）"),
     # ---- 伞原子与机制钩子：卡面机制的唯一实现，删掉要重写实现才能加回来 ----
-    "action_filter": ("留·伞原子", "`{\"op\":\"action_filter\",\"mode\":\"block_type\",\"target\":\"enemy\",\"card_type\":\"thorn\",\"duration\":1}`",
-                      "Round 38 行为过滤族唯一公开 op（block_own/block_type/force_type/negate 四合一），"
-                      "承接 block_own_actions / block_card_type / nullify_current_card"),
-    "emit_event": ("留·伞原子", "`{\"op\":\"emit_event\",\"event\":\"<事件名>\"}`",
-                   "Round 37 广播族唯一公开 op，承接 broadcast_event 与占位步骤 trigger_manual"),
-    "activate_corruption": ("留·机制钩子", "`{\"op\":\"activate_corruption\"}`",
-                            "腐化装备的激活开关（写 eq.corruption_active），Void 腐化机制唯一入口，"
-                            "被 _activate_pending_corruption / _get_corruption_count 读取"),
-    "card_counter": ("留·机制钩子", "`{\"op\":\"card_counter\",\"mode\":\"play\"|\"equip_turns\"|\"reset\",\"amount\":1}`",
-                     "卡内计数器唯一实现（play_count / equip_turns），承接 record_play_count / "
-                     "record_equip_turns / reset_counter"),
+    "action_filter": ("删·可下沉", "`{\"op\":\"player_prop_change\",\"mode\":\"set\",\"property\":\"attack_blocked\","
+                                   "\"target\":\"enemy\",\"value\":{\"op\":\"max\",\"a\":{\"op\":\"player_property\","
+                                   "\"property\":\"attack_blocked\",\"target\":\"enemy\"},\"b\":1}}`",
+                      "Round 42 / 批次 AF：四个 mode 写的都是玩家属性/AI 守卫字段——"
+                      "block_own → shovel_active、block_type → attack_blocked、force_type → attack_only "
+                      "全在 ``player_prop_change`` 白名单里（官方包 ocean:bubble_bomb / sewers:poo / "
+                      "ocean:jelly 已在用同样的写法）；``negate`` 写的 negate_next 零读取方，替代写法为 log；"
+                      "``skill_blocked`` 既无读取方也不进 to_dict"),
+    "emit_event": ("删·可下沉", "`{\"op\":\"log\",\"message\":\"广播事件：<事件名>\"}`",
+                   "Round 42 / 批次 AF：事件总线没有订阅方（``_run_v2_event_hooks`` 是另一套 v2 钩子表），"
+                   "这一步的实际行为就是按 silent/log:false 播报一行；旧名 broadcast_event / "
+                   "trigger_manual 在 REMOVED_ATOMIC_OPS 里同步改指 log"),
+    "activate_corruption": ("删·可下沉", "`{\"op\":\"equipment_prop_set\",\"equipment\":{\"ref\":\"current_equipment\"},"
+                                        "\"property\":\"corruption_active\",\"value\":1}`",
+                            "Round 42 / 批次 AF：它只是调用同一个 setter（``_set_equipment_property_value`` 的 "
+                            "corruption_active 分支），而这条 op 就是 ``equipment_prop_set``；"
+                            "官方包 vanilla:corruption 的卡数据已在用同一写法"),
+    "card_counter": ("删·可下沉", "`{\"op\":\"card_prop_change\",\"mode\":\"add\",\"property\":\"play_count\","
+                                 "\"amount\":1,\"card\":{\"ref\":\"current_card\"}}`",
+                     "Round 42 / 批次 AF：play_count / equip_turns 是可读的卡牌字段（``{\"ref\":\"equip_turns\"}`` "
+                     "取值与 ``equip_turns`` 条件算子），把它们补进 ``card_prop_change`` 的属性白名单后就是普通"
+                     "属性写入；reset = 两条 ``mode:\"set\" value:0``"),
     "charge_self_damage": ("留·机制钩子", "`{\"op\":\"charge_self_damage\"}`",
-                           "Ocean 充能关键字：按 card.charge_value 每次打出自我伤害一次，"
-                           "带 _once_per_play 记账，卡面机制直接依赖"),
-    "counter_equip_protect": ("留·机制钩子", "`{\"op\":\"counter_equip_protect\",\"amount\":1}`",
-                              "装备保护层数唯一写入口（equipment_protection），equip_protection "
-                              "别名指向它，status_immune_equipment 与护甲结算都读这个字段"),
+                           "Round 42 复核：**不是卡数据步骤，而是引擎在出牌结算内部自己调的钩子**——"
+                           "``_play_card``（game_engine.py:8154/9096）、响应牌结算（:8486）与 2v2 "
+                           "（game_engine_2v2.py:868/1542）都直接调用它，读卡属性 charge_value 并用 "
+                           "_once_per_play 的 ocean_charge 标记记账；数据层没有插进这段时机的入口，按管线型保留"),
+    "counter_equip_protect": ("删·可下沉", "`{\"op\":\"player_prop_change\",\"mode\":\"add\","
+                                          "\"property\":\"equipment_protection\",\"target\":\"self\",\"amount\":1}`",
+                              "Round 42 / 批次 AF：写的字段 equipment_protection 本来就在 "
+                              "``player_prop_change`` 的属性白名单里；实现里的 "
+                              "``_status_application_blocked`` 恒返回 False、``_note_achievement_status_peak`` "
+                              "也不统计该字段，所以合并前后行为一致"),
     "discard_choice_then_draw": ("留·机制钩子", "`{\"op\":\"discard_choice_then_draw\",\"log\":…}`",
-                                 "_choice_type_for_effect 直读它的 choice_type 映射"
-                                 "（choose_card_to_discard），选择窗口语义绑在实现里"),
-    "fission": ("留·机制钩子", "`{\"op\":\"fission\",\"amount\":1}`",
-                "裂变层数（fission_count 同步字段）唯一写入口，与 fusion 成对"),
-    "fusion": ("留·机制钩子", "`{\"op\":\"fusion\",\"amount\":1}`",
-               "聚变层数（fusion_multiplier 同步字段）唯一写入口，攻击管线按它放大子瓣"),
-    "global_mult": ("留·机制钩子", "`{\"op\":\"global_mult\",\"kind\":\"damage\"|\"heal\"|\"cost\",\"multiplier\":2}`",
-                    "全场倍率唯一写入口（global_damage_mult / global_heal_mult / global_cost_mult），"
-                    "承接 global_*_mult 三兄弟"),
-    "lifesteal_damage": ("留·机制钩子", "`{\"op\":\"lifesteal_damage\",…}`",
-                         "_card_has_heal_effect 把带该效果的牌算作\"治疗牌\""
-                         "（反治疗/治疗阻断规则依赖），删了会改变规则判定"),
-    "mark_self_damage_source": ("留·机制钩子", "`{\"op\":\"mark_self_damage_source\"}`",
-                                "把本牌标成下一次自身伤害的来源（卡内计数器族），暂无卡使用但属机制钩子"),
-    "modify_damage": ("留·机制钩子", "`{\"op\":\"modify_damage\",\"formula\":…}`",
-                      "伤害公式改写钩子（数据侧唯一入口），与 deal_damage 的公式读取成对"),
+                                 "Round 42 复核后保留：默认播报是卡面 ``events.on_play_summary`` 生成的整句"
+                                 "（数据步骤读不到该声明）、抽牌走 ``ps.draw_cards`` 而不触发 ``draw`` 的钩子与"
+                                 "播报、窗口类型由 ``_choice_type_for_effect`` 按 op 名映射——数据层要等价得先"
+                                 "把这些口径都搬出来（本批未做）"),
+    "fission": ("删·可下沉", "`{\"op\":\"card_prop_change\",\"mode\":\"add\",\"property\":\"fission_level\","
+                            "\"amount\":1,\"card\":{\"ref\":\"selected_card\"}}`",
+                "Round 42 / 批次 AF：裂变层数是卡牌属性——``_set_card_property_value`` 对 fission_level 有 "
+                "clamp_card_layer 钳位并同步 fission_count，与旧实现逐字一致；官方包 arctic:nuke / "
+                "arctic:ruby 已在用 ``card_prop_change(property:\"fission_level\")``"),
+    "fusion": ("删·可下沉", "见官方包 ``vanilla:fusion`` 的卡数据（request 选同名手牌 → for_each 累计 "
+                            "__聚变层数合计 / __裂变层数最大值 → card_prop_change 写回 → move_card 弃牌）",
+               "Round 42 / 批次 AF：整套多卡聚变已经是 ``vanilla:fusion`` 的卡数据步骤（跨卡聚合用 "
+               "``for_each`` + 玩家变量累计实现），旧原子的 count/max_count/fusion_uses_two_cards "
+               "就是这些步骤的参数；私有助手 _merge_fusion_card_layers 保留给引擎的硬编码 _effect_* 路径"),
+    "global_mult": ("删·可下沉", "`{\"op\":\"log\",\"message\":\"全场伤害倍率x2\"}`",
+                    "Round 42 / 批次 AF：它写的 global_damage_mult / global_heal_mult / global_cost_mult "
+                    "在引擎、卡数据、序列化与客户端里零读取方，实际行为只有那行播报"),
+    "lifesteal_damage": ("删·可下沉", "`{\"op\":\"deal_damage\",…}` + 门控在 last_damage>0 的 "
+                                     "`{\"op\":\"health_op\",\"mode\":\"heal\",\"amount\":floor(last_damage×比例)}`",
+                         "Round 42 / 批次 AF：与 deal_damage 共用同一条攻击管线（_modified_attack_damage + "
+                         "deal_attack_damage + 精准继承 + _last_damage_value），官方包 vanilla:fang 的卡数据"
+                         "就是这么写的；_would_heal 同步认 health_op(mode:\"heal\")，反治疗判定不退化"),
+    "mark_self_damage_source": ("删·可下沉", "`{\"op\":\"log\",\"message\":\"<目标>下次伤害来源标记为自身\"}`",
+                                "Round 42 / 批次 AF：它写的 players[i].self_damage_next 全仓库只有一个写入点"
+                                "（就是它自己），没有读取方也不进 to_dict"),
+    "modify_damage": ("删·可下沉", "`{\"op\":\"log\",\"message\":\"修改伤害公式：<formula>\"}`",
+                      "Round 42 / 批次 AF：``formula`` 全仓库零读取方（伤害公式来自步骤本身），"
+                      "这一步只有播报；注意 events.modify_damage 是另一条 v2 事件钩子键，不受影响"),
     "multiply_next_damage": ("留·机制钩子", "`{\"op\":\"multiply_next_damage\",\"multiplier\":2}`",
-                             "下一次伤害倍率（一次性 buff），伤害管线在结算后消费"),
-    "transform_card": ("留·机制钩子", "`{\"op\":\"transform_card\",\"card\":{\"ref\":\"current_card\"}}`",
-                       "变换当前牌（transform 族标记），与 transform_cards 批量版同族，暂无卡使用"),
-    "triangle_damage": ("留·机制钩子", "`{\"op\":\"triangle_damage\",\"base\":6,\"per_stack\":3,\"max_stacks\":4}`",
-                        "三角机制一条例程：伤害 = 基数 + 每层×层数，且\"造成伤害 > 0 才有上限地叠层\"、"
-                        "精准标记继承自卡面、层数写回 custom_vars 与 triangle_stacks；"
-                        "拆成数据要 4 步且要读 last_damage 做条件门，无法保证与伤害管线一致"),
-    "turn_mod_add": ("留·机制钩子", "`{\"op\":\"turn_mod_add\",\"kind\":\"e_regen\"|\"m_regen\"|\"draw\",\"amount\":1}`",
-                     "每回合修正唯一写入口（e_regen_mod / m_regen_mod / draw_mod），承接 mod_* 三兄弟"),
+                             "Round 42 复核后保留：写的 ``players[i].damage_multiplier`` 被攻击管线读取"
+                             "（game_engine.py:2329 / game_engine_2v2.py:2293）并在结算后复位，"
+                             "而 ``player_prop_change`` 的属性白名单不含这个浮点字段（读/写两侧都缺），"
+                             "数据层没有等价写入口"),
+    "transform_card": ("删·可下沉", "`{\"op\":\"log\",\"message\":\"变换<牌名>效果触发\"}`",
+                       "Round 42 / 批次 AF：实现只按 card 引用查一张牌再播报，不写任何状态；"
+                       "真正的变换是 ``transform_cards``（1 处卡数据在用）"),
+    "triangle_damage": ("删·可下沉", "`{\"op\":\"deal_damage\",\"amount\":add(base, mul(per_stack, var(\"三角形层数\")))}` + "
+                                    "门控 ``last_damage>0`` 的 ``player_var_change(mode:\"set\", value:min(上限, 层数+1))``",
+                        "Round 42 / 批次 AF：官方包 vanilla:triangle 的卡数据就是这两步（伤害与 deal_damage "
+                        "同管线；层数读 var 写 custom_vars 并由 _sync_custom_var_alias 同步 triangle_stacks；"
+                        "状态免疫期间 var 读取自动返回 0）"),
+    "turn_mod_add": ("删·可下沉", "`{\"op\":\"log\",\"message\":\"每回合能量回复+1\"}`",
+                     "Round 42 / 批次 AF：它写的 e_regen_mod / m_regen_mod / draw_mod 全仓库零读取方"
+                     "（引擎里没有读取这三个字段的回合结算路径），实际行为只有那行播报"),
     # ---- 本批真删的 6 个名字（判定 + 替代写法见上表，这里逐条留档） ----
     "cogwheel_mark": ("删·可下沉", "见上表：两条 `player_var_change` + 最小原子 `cogwheel_return`",
                       "半拆：标志位下沉成数据，收牌例程留成最小原子并改名（旧名进 RENAMED_ATOMIC_OPS）"),
@@ -751,7 +848,7 @@ def build() -> dict:
     for name, (verdict, before, replacement, reason) in (
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
          **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
-         **ROUND41_ACTIONS}
+         **ROUND41_ACTIONS, **ROUND42_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

@@ -41,7 +41,7 @@ ADVANCED_ATOMIC_OPS = {
     # "伞原子在白名单里"的既有口径。
     "on_event", "random", "break", "continue", "if_else", "repeat",
     "for_each",
-    "damage", "direct_damage", "lifesteal_damage", "triangle_damage",
+    "damage", "direct_damage",
     "health_op", "resource_op", "draw", "modify_next_cost",
     # Round 33 / 批次 AC + Round 35 收尾：装备 / 状态 / 标签 / 自动打出四族的
     # 伞原子（``equipment_op`` / ``status_op`` / ``tag_op`` / ``auto_play``）。
@@ -58,7 +58,8 @@ ADVANCED_ATOMIC_OPS = {
     # ``player_status_layers``；``spend_resource`` 本身在 Round 32 又并进
     # ``resource_op(mode:"spend")``）。
     "status_add_named", "status_remove_named",
-    "turn_mod_add", "global_mult",
+    # Round 42 / 批次 AF：``turn_mod_add`` / ``global_mult`` 已删除（它们写的字段
+    # 全仓库零读取方，替代写法是一行 ``log``；见 mod_spec_v2.REMOVED_ATOMIC_OPS）。
     # Round 33 / 批次 AB：``reveal_enemy_hand`` / ``reveal_hand`` / ``reveal_hand_cards``
     # 并进 ``reveal``；``steal_enemy_card`` / ``steal_card`` / ``give_card_to_hand`` /
     # ``give_card_to_deck`` / ``shuffle_discard_into_deck`` / ``shuffle_hand`` /
@@ -71,25 +72,25 @@ ADVANCED_ATOMIC_OPS = {
     "remove_specific_card",
     "move_card",
     "destroy_equipment",
-    "equip_protection", "remove_equip_protection",
+    "remove_equip_protection",
     "place_as_equip", "add_equipment_to_zone",
-    # Round 38 / 批次 AD-3：``block_own_actions``（别名 ``block_action``）/
-    # ``block_card_type`` / ``force_card_type`` / ``nullify_current_card``
-    # 四条行为过滤原子并进 ``action_filter``（``mode`` 选 block_own /
-    # block_type / force_type / negate）；旧名进 REMOVED_ATOMIC_OPS。
-    "action_filter",
+    # Round 38 / 批次 AD-3 的四条行为过滤原子先并进 ``action_filter``；
+    # Round 42 / 批次 AF 又把 ``action_filter`` 本身删除（四个 mode 分别由
+    # ``player_prop_change`` / ``status_op`` / ``log`` 组合表达），全部旧名进
+    # REMOVED_ATOMIC_OPS。
     # Round 38 / 批次 AD-3：``skip_turn`` / ``extra_turn`` / ``force_end_turn``
     # 三条回合控制原子并进 ``turn_control(mode:"skip"|"extra"|"end")``；伞原子
     # 有自己的 ``_atomic_*`` 实现，这里登记只是保持"伞原子在契约白名单里"的
     # 既有口径。旧名进 REMOVED_ATOMIC_OPS，写出来是显式报错。
     "turn_control",
     "player_status_layers",
-    "mark_self_damage_source", "fission", "fusion",
+    # Round 42 / 批次 AF：``mark_self_damage_source`` / ``fission`` / ``fusion``
+    # 已删除（前者的字段零读取方；裂变 = card_prop_change(fission_level)；
+    # 聚变 = vanilla:fusion 的卡数据组合）。
     "multiply_next_damage",
     "add_tag", "add_tag_to_zone",
-    "transform_card", "card_counter",
-    # Round 37 / 批次 AD-2：``broadcast_event`` 并进 ``emit_event``。
-    "emit_event", "modify_damage",
+    # Round 42 / 批次 AF：``transform_card`` / ``card_counter`` / ``emit_event`` /
+    # ``modify_damage`` 已删除（见 ``REMOVED_ATOMIC_OPS`` 的替代写法）。
     "list_modify", "delayed_effect",
     # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
     # (Round 1 draft names, never used by shipped data) were folded into
@@ -107,7 +108,8 @@ ADVANCED_ATOMIC_OPS = {
     "restore_turn_start_stats", "restore_match_start_stats",
     "counter_pending_attack_damage",
     "equipment_prop_add", "discard_choice_then_draw",
-    "activate_corruption",
+    # Round 42 / 批次 AF：``activate_corruption`` 已删除——同一个 setter 由
+    # ``equipment_prop_set(property:"corruption_active")`` 覆盖。
     "on_any_turn_start",
     "on_enemy_turn_start", "on_owner_turn_start", "on_owner_turn_end", "on_hand_owner_turn_start", "on_hand_owner_turn_end",
     "on_discard_owner_turn_start", "on_equipment_trigger", "on_equipment_destroy",

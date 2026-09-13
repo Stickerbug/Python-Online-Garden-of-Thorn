@@ -1361,7 +1361,8 @@ SAMPLE_SPOT_CHECKS = (
     ("place_as_equip", "`card`/`owner`/`effect_target`，71 处使用（签名冻结）", "一致"),
     ("on_event", "`trigger`（play/this_play/after_all/equipment_trigger）+ `once`/`after`/`condition`/"
                  "`name`/`scope`/`duration`/`target`/`exclude_card_ids`/`effect`", "一致"),
-    ("emit_event", "`event`（回落 `event_name`/`name`）、`log`、`silent`", "一致"),
+    # Round 42 / 批次 AF：``emit_event`` 已删除（事件总线无订阅方，替代写法是一行
+    # ``log``），本表不再登记它的参数。
     ("player_var_change", "`mode`（set/add/sub/mul/div）+ `target`/`name`/`value`（`name` 回落 `var`）", "一致"),
     ("log", "`message` 回落 `text`/`msg`，`amount` 可写表达式", "一致"),
     ("resource_op", "`resource`（e/m）+ `delta` 回落 `amount`（正获得/负消耗）+ `mode`（spend/aura_recovery）"
