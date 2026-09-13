@@ -112,11 +112,13 @@ ADVANCED_ATOMIC_OPS = {
     "transform_cards",
     "deck_catalog_pick", "deck_catalog_pick_resume",
     "player_prop_change", "card_prop_change",
-    "equipment_prop_set",
+    # Round 51 / 批次 AO：``equipment_prop_set`` / ``equipment_prop_add``
+    # 合并成 ``equipment_prop_change(mode:"set"|"add")``。
+    "equipment_prop_change",
     "restore_turn_start_stats", "restore_match_start_stats",
     # Round 43 / 批次 AG：``counter_pending_attack_damage`` 已删除（响应上下文里
     # 的 first_hit_damage + direct_damage 组合）。
-    "equipment_prop_add", "discard_choice_then_draw",
+    "discard_choice_then_draw",
     # Round 42 / 批次 AF：``activate_corruption`` 已删除——同一个 setter 由
     # ``equipment_prop_set(property:"corruption_active")`` 覆盖。
     "on_any_turn_start",

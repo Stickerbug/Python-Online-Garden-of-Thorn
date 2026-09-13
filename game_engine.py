@@ -19921,21 +19921,46 @@ class GameEngine:
 
     # Round 31 / 批次 Z：``clear_tags`` 已并入 ``add_tag(mode:"clear")``。
 
-    def _atomic_equipment_prop_set(self, player_id, card, params, log, choice, context):
-        value = self._eval_int(player_id, params.get('value', 0), card)
+    def _atomic_equipment_prop_change(self, player_id, card, params, log, choice, context):
+        """Round 51 / 批次 AO：``equipment_prop_set`` / ``equipment_prop_add`` 合并。
+
+        ``mode`` 选 ``set``（默认，旧 ``equipment_prop_set``）或 ``add``
+        （旧 ``equipment_prop_add``），与 ``card_prop_change`` /
+        ``player_prop_change`` / ``player_stat_change`` 同形。两段实现逐条搬进来，
+        默认值、装备引用解析与战报口径**一个字没改**：
+
+        * ``set``：``value``（默认 0）走 ``_eval_int``，写入口
+          ``_set_equipment_property_value``；返回的装备不是 None 才播报；
+        * ``add``：先 ``_resolve_equipment_ref``（拿不到就整体不生效），
+          读当前属性值再加 ``amount``（默认 0），写回后播报。
+
+        ``equipment`` 默认 ``{"ref": "current_equipment"}``，``property`` 默认
+        ``turns_equipped``——都与旧实现一致。
+        """
+
+        mode = str(params.get('mode', params.get('op_mode', 'set')) or 'set').strip().lower()
+        mode = {
+            '=': 'set', 'assign': 'set', 'set_to': 'set', 'write': 'set',
+            '+': 'add', '+=': 'add', 'increase': 'add',
+        }.get(mode, mode)
+        if mode == 'add':
+            eq = self._resolve_equipment_ref(
+                player_id, params.get('equipment', {'ref': 'current_equipment'}), card
+            )
+            if eq is None:
+                return
+            prop = str(params.get('property', 'turns_equipped'))
+            current = self._get_equipment_property_value(eq, prop)
+            value = current + self._eval_int(player_id, params.get('amount', 0), card)
+            self._set_equipment_property_value(player_id, card, params, value)
+            if log:
+                self.log_msg(log)
+            return
+        if mode != 'set':
+            return
+        value = self._eval_int(player_id, params.get('value', params.get('amount', 0)), card)
         eq = self._set_equipment_property_value(player_id, card, params, value)
         if eq is not None and log:
-            self.log_msg(log)
-
-    def _atomic_equipment_prop_add(self, player_id, card, params, log, choice, context):
-        eq = self._resolve_equipment_ref(player_id, params.get('equipment', {'ref': 'current_equipment'}), card)
-        if eq is None:
-            return
-        prop = str(params.get('property', 'turns_equipped'))
-        current = self._get_equipment_property_value(eq, prop)
-        value = current + self._eval_int(player_id, params.get('amount', 0), card)
-        self._set_equipment_property_value(player_id, card, params, value)
-        if log:
             self.log_msg(log)
 
     def _atomic_player_prop_change(self, player_id, card, params, log, choice, context):

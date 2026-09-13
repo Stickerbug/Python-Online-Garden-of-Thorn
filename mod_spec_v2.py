@@ -310,8 +310,10 @@ _CORE_LOGIC_OPS = {
     "card_prop_change",
     # Round 41 / 批次 AE-5：``card_damage_multiply`` 已删除（=
     # ``card_prop_change(mode:"mul", property:"fusion_level", multiplier:N)``）。
-    "equipment_prop_set",
-    "equipment_prop_add",
+    # Round 51 / 批次 AO：装备属性写值族也收成一条
+    # ``equipment_prop_change(mode="set"|"add")``，与 ``card_prop_change`` /
+    # ``player_prop_change`` / ``player_stat_change`` 同形。
+    "equipment_prop_change",
     # Round 40 / 批次 AE-4：``discard_hand_by_paid_e``（按本牌实际花费 E 批量
     # 弃手牌）下沉成 ``move_card(mode:"batch", source_zone:…, filter:…)``，
     # 旧名进 REMOVED_ATOMIC_OPS。
@@ -1404,6 +1406,11 @@ REMOVED_ATOMIC_OPS = {
     "queue_auto_play": '{"op":"auto_play","mode":"queue","card":{"ref":"current_card"},"source":"snapshot",'
                        '"target":"target","each_turn":true,"cost":"normal","exile":true}'
                        '（Round 50 / 批次 AN：队列自动打出并进伞原子，参数一个不动）',
+    #   * 装备属性写值族 → equipment_prop_change(mode=set|add)（Round 51 / 批次 AO）
+    "equipment_prop_set": '{"op":"equipment_prop_change","mode":"set","property":"<属性>",'
+                          '"equipment":{"ref":"current_equipment"},"value":<表达式>}',
+    "equipment_prop_add": '{"op":"equipment_prop_change","mode":"add","property":"<属性>",'
+                          '"equipment":{"ref":"current_equipment"},"amount":<表达式>}',
 
     # Round 36 / 批次 AD-1（请求族四合一）：七个请求类 op 全部并进 ``request``，
     # ``type`` 选类别（target / card / confirm / zone / forced_target /

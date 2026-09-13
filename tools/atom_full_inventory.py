@@ -552,6 +552,27 @@ ROUND50_ACTIONS = {
         "步骤断言、tests/test_ocean_sapphire_playability.py 的镜像步骤）"),
 }
 
+# Round 51 / 批次 AO：装备属性写值族两合一 —— ``equipment_prop_set`` /
+# ``equipment_prop_add`` → ``equipment_prop_change(mode:"set"|"add")``，
+# 与 ``card_prop_change`` / ``player_prop_change`` / ``player_stat_change`` 同形。
+# 判定与 9 例定向对拍见 `.codex-tmp/round51/rd51.md`。
+ROUND51_ACTIONS = {
+    "equipment_prop_set": (
+        "合", 5,
+        '{"op":"equipment_prop_change","mode":"set","property":"<属性>",'
+        '"equipment":{"ref":"current_equipment"},"value":<表达式>}',
+        "Round 51 / 批次 AO：两条本来就是同一个 setter（``_set_equipment_property_value``）"
+        "的两副壳，合并后与卡牌/玩家属性族同形；``set`` 分支逐字搬过来"
+        "（``value`` 求值 → 写入口 → 拿到装备才播报），卡数据 9 处逐条迁移、参数一个不动，"
+        "9 例定向对拍（含装备引用解析不到、表达式取值、log 开关）0 差异"),
+    "equipment_prop_add": (
+        "合", 4,
+        '{"op":"equipment_prop_change","mode":"add","property":"<属性>",'
+        '"equipment":{"ref":"current_equipment"},"amount":<表达式>}',
+        "Round 51 / 批次 AO：同上；``add`` 分支逐字搬过来（先解析装备引用、拿不到就整体不生效，"
+        "读当前属性值再加 ``amount``），旧名进 REMOVED_ATOMIC_OPS 并给出完整替代写法"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -928,8 +949,7 @@ KEPT_EXPLICIT = {
     "add_equipment_to_zone": "从卡 id 造装备进装备区",
     "add_equipment_armor": "所有装备获得护甲（层数）",
     "seal_equipment": "尘封装备（层数）",
-    "equipment_prop_set": "装备属性写值（设为）",
-    "equipment_prop_add": "装备属性写值（增加）",
+    # Round 51 / 批次 AO：两条并成 equipment_prop_change(mode:"set"|"add")。
     # Round 33 / 批次 AB：四条 AB 伞原子。
     "reveal": "Round 33 揭示伞（mode=card_set|enemy_hand|hand）",
     "shuffle": "Round 33 洗牌伞（zone=discard|hand）",
@@ -1101,7 +1121,7 @@ def build() -> dict:
         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS,
          **ROUND47_ACTIONS, **ROUND48_ACTIONS, **ROUND49_ACTIONS,
-         **ROUND50_ACTIONS}
+         **ROUND50_ACTIONS, **ROUND51_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,
