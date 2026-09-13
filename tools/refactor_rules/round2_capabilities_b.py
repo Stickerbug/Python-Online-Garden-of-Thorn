@@ -88,46 +88,60 @@ def _kitty_steps(params: dict) -> list:
 
 
 def _carrot_steps(params: dict) -> list:
-    """``arctic_ricochet_attack``: 1 hit, then 4 non-repeating bounces."""
+    """``arctic_ricochet_attack``: 1 hit, then 4 non-repeating bounces.
+
+    Round 44 / batch AH: the bounce chain is a ``deal_damage`` step whose
+    ``target`` is the ``bounce`` selector -- ``ricochet_attack`` is retired.
+    """
 
     amount = params.get("amount", 6)
     return [
         {
-            "op": "ricochet_attack",
-            "target": params.get("target", "target"),
+            "op": "deal_damage",
+            "target": {
+                "selector": "bounce",
+                "source": params.get("target", "target"),
+                "count": params.get("repeats", 4),
+                "exclude_previous": True,
+                "allow_self": True,
+                "prepare_at_play": True,
+                "scale_bounces_by_fission": True,
+            },
             "amount": amount,
             "hits": 1,
-            "bounce_amount": params.get("bounce_amount", amount),
-            "bounce_hits": 1,
-            "bounces": params.get("repeats", 4),
-            "bounces_from_positive_hits": False,
-            "scale_bounces_by_fission": True,
-            "allow_self": True,
-            "exclude_previous": True,
+            "inherit_extra_hits": False,
+            "per_target_amount": params.get("bounce_amount", amount),
             "precision_inherit": True,
-            "register_secondary_targets": True,
         }
     ]
 
 
 def _marble_steps(params: dict) -> list:
-    """``desert_marble_attack``: one bounce per main-damage segment that landed."""
+    """``desert_marble_attack``: one bounce per main-damage segment that landed.
+
+    Round 44 / batch AH: same ``bounce`` selector, but the segment count comes
+    from the main damage (``count_from:"positive_hits"``).
+    """
 
     return [
         {
-            "op": "ricochet_attack",
-            "target": params.get("target", "target"),
+            "op": "deal_damage",
+            "target": {
+                "selector": "bounce",
+                "source": params.get("target", "target"),
+                "count_from": "positive_hits",
+                "exclude_previous": True,
+                "allow_self": True,
+                "prepare_at_play": True,
+                "scale_bounces_by_fission": True,
+                "secondary_target_key": "_desert_marble_targets",
+            },
             "amount": params.get("amount", 9),
             "hits": 1,
             "inherit_extra_hits": True,
-            "bounce_amount": params.get("extra_amount", 23),
-            "bounce_hits": 1,
-            "bounces_from_positive_hits": True,
-            "scale_bounces_by_fission": True,
-            "allow_self": True,
-            "exclude_previous": True,
+            "per_target_amount": params.get("extra_amount", 23),
+            "per_target_hits": 1,
             "precision_inherit": True,
-            "register_secondary_targets": True,
         }
     ]
 

@@ -376,6 +376,42 @@ ROUND42_ACTIONS = {
 # 判定取值：留·语言原语 / 留·机制钩子 / 留·伞原子 / 留·事件钩子 / 留·能力扩展点 /
 # 删·可下沉 / 删·能力扩展点。凡判"删"的行都必须已经真删（无 `_atomic_*` 实现、
 # 名字进 REMOVED/RENAMED 表）——``--check`` 会验证。
+# ---------------------------------------------------------------------------
+# Round 44 / 批次 AH：弹射从专用原子改成"目标选择器 + 逐段参数"。
+#   * 预抽时机、响应/预知可见的目标集合、每一段的伤害/段数、last_damage
+#     全部由引擎的弹射链接管；判定与对拍见 `.codex-tmp/round44/rd44.md`。
+#   * 三个历史旧名（bounce_attack / arctic_ricochet_attack / desert_marble_attack）
+#     一起从 RENAMED_ATOMIC_OPS 挪进 REMOVED_ATOMIC_OPS：替代写法是一个选择器，
+#     不再是一个"规范名"，所以不能只写"已改名 + 规范名"。
+ROUND44_ACTIONS = {
+    "ricochet_attack": ("删", 2, '{"op":"deal_damage","target":{"selector":"bounce","source":"target",'
+                                 '"count":4,"exclude_previous":true,"allow_self":true,'
+                                 '"prepare_at_play":true},"amount":6,"hits":1,'
+                                 '"inherit_extra_hits":false,"per_target_amount":6,'
+                                 '"per_target_hits":1,"precision_inherit":true}',
+                        "Round 44 / 批次 AH：弹射链 = ``deal_damage`` 的 ``target`` 写成 ``bounce`` "
+                        "选择器（``count`` / ``count_from:\"positive_hits\"`` / ``exclude_previous`` / "
+                        "``allow_self`` / ``prepare_at_play``），逐段差异用 ``per_target_amount`` / "
+                        "``per_target_hits``；``_prepare_bounce_targets`` 的预抽调用点没动，"
+                        "所以响应与预知看到的目标集合、战报与 last_damage 与旧原子逐字节相同"),
+    "electric_web_arm": ("删", 2,
+                         '[{"op":"player_var_change","mode":"add","target":"target",'
+                         '"name":"electric_web_draw_damage","value":2},'
+                         '{"op":"equipment_prop_set","property":"electric_web_armed_target",'
+                         '"value":{"op":"target_player","target":"target"}},'
+                         '{"op":"equipment_prop_add","property":"electric_web_armed_amount",'
+                         '"amount":2}]',
+                         "Round 44 / 批次 AH（目标二）：三条写入都能用已有通用步骤逐字表达"
+                         "（玩家 var 走 player_var_change；装备 custom_vars 是 "
+                         "equipment_prop_set / equipment_prop_add 的兜底分支，见 "
+                         "game_engine.py _set_equipment_property_value 的 else 与 "
+                         "_get_equipment_property_value 的末行）。旗标驱动的 "
+                         "electric_web_arm_on_place 仍直接调 _apply_electric_web_arm；"
+                         "回合驱动的提前执行判据 _effect_tree_contains_action_status "
+                         "改认这条通用步骤（写 electric_web_draw_damage 的那一步），"
+                         "布网仍在回合初抽牌之前。对拍 25 例 0 差异"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -795,7 +831,6 @@ KEPT_EXPLICIT = {
                             "登记项由 deal_attack_damage 内部的 _consume_absorb_attack_damage 在"
                             "**伤害落地前**消费并把 absorbed_damage 交给 body；数据层的步骤列表和 "
                             "card.to_dict() 都塞不进这个引擎级登记表，按管线钩子保留",
-    "ricochet_attack": "弹射（攻击管线变体）",
     "lifesteal_damage": "吸血伤害",
     "triangle_damage": "三角伤害（层数 x 基数）",
     "card_damage_multiply": "聚变倍率（fusion_level x N）",
@@ -810,9 +845,6 @@ KEPT_EXPLICIT = {
                            "数据侧写不出“舍入到 2 位 + 条件删除”这段同步",
     "delayed_blind_next_turn": "下回合延迟失明（Ocean）",
     "delayed_reveal_hand_next_turn": "下回合延迟展示手牌",
-    "electric_web_arm": "Round 43 复核留：一次写两处引擎状态——玩家 custom_vars 的 electric_web_draw_damage "
-                        "与**装备** custom_vars 的 electric_web_armed_target/_amount（用 _find_equipment_for_card "
-                        "找当前牌挂着的装备）；数据层没有写装备 custom_vars 的入口",
     "goggles_enable": "护目镜启用（Factory）",
     "grant_temp_swift_highest_e": "Round 43 复核留：先在手牌里按 _card_selectable_by_action 过滤、再挑 "
                                   "cost_e 最大的那一张写 temp_swift（含标签同步）。card_prop_add_to_zone "
@@ -908,7 +940,8 @@ def build() -> dict:
     for name, (verdict, before, replacement, reason) in (
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
          **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
-         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS}
+         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
+         **ROUND44_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

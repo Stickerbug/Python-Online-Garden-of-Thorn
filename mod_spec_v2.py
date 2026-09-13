@@ -337,7 +337,11 @@ _CORE_LOGIC_OPS = {
     # ——木板的机制由装备标签 ``blocks_cheap_attacks`` 承载，卡数据里那一步直接删掉。
     # Round 37 / 批次 AD-2：``magic_relic_trigger`` 并进
     # ``on_event(trigger:"equipment_trigger", effect:"magic_relic")``。
-    "electric_web_arm",
+    # Round 44 / 批次 AH：``electric_web_arm`` 已删除——它写的三处状态
+    # （玩家 ``electric_web_draw_damage``、装备 ``electric_web_armed_target`` /
+    # ``electric_web_armed_amount``）本来就在 ``player_var_change`` 与
+    # ``equipment_prop_set`` / ``equipment_prop_add`` 的写入口里（未知属性名
+    # 直接落 ``custom_vars``），卡数据已迁到这三条通用步骤。
     "magic_salt_reflect",
     "grant_temp_swift_highest_e",
     # Round 37 / 批次 AD-2：``delayed_blind_next_turn`` /
@@ -379,7 +383,6 @@ _CORE_LOGIC_OPS = {
     # ``on_event(trigger:"play")``。
     # Round 33 / 批次 AB：``restore_card_props`` / ``reveal_card_set`` 已并入
     # ``restore(mode:"card_props")`` / ``reveal(mode:"card_set")``。
-    "ricochet_attack",
     "set_card_prop_random",
     # Round 33 / 批次 AB：``snapshot_card_props`` 已并入
     # ``snapshot(mode:"card_props")``。
@@ -554,7 +557,6 @@ DAMAGE_PIPELINE_DIRECT = "direct"
 DAMAGE_ATOM_PIPELINES = {
     # 攻击管线
     "deal_damage": DAMAGE_PIPELINE_ATTACK,
-    "ricochet_attack": DAMAGE_PIPELINE_ATTACK,
     "damage": DAMAGE_PIPELINE_ATTACK,
     # 直伤管线
     "direct_damage": DAMAGE_PIPELINE_DIRECT,
@@ -626,18 +628,10 @@ DAMAGE_PARAM_PIPELINES = {
     "ignore_untargetable": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "无视无法选定"},
     "power_once": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "只在第一段算力量"},
     "on_crit": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "暴击回调（攻击侧独有）"},
-    "bounce_amount": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 弹射伤害"},
-    "bounce_hits": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 弹射段数"},
-    "bounces": {
-        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
-        "aliases": ("repeats",),
-        "note": "ricochet_attack 弹射次数",
-    },
-    "bounces_from_positive_hits": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "弹射次数取主伤害的命中段数"},
-    "inherit_bounce_extra_hits": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "弹射段数是否继承子瓣"},
-    "allow_self": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 是否允许弹到自己"},
-    "exclude_previous": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 不连续打同一个目标"},
-    "precision_inherit": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "ricochet_attack 是否继承精准"},
+    "inherit_bounce_extra_hits": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "弹射链（``bounce`` 选择器）每段是否继承子瓣"},
+    "precision_inherit": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "弹射链是否继承精准（旧的 ricochet_attack 口径）"},
+    "per_target_amount": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "弹射链后续每段伤害（省略 = 沿用主段的 ``amount``）"},
+    "per_target_hits": {"pipelines": (DAMAGE_PIPELINE_ATTACK,), "note": "弹射链后续每段段数（省略 = 沿用主段的 ``hits``）"},
     # Round 42 / 批次 AF：``heal`` / ``heal_percent``（别名 ``ratio``）是
     # ``lifesteal_damage`` 的专有参数，``base`` / ``per_stack`` / ``stack_name`` /
     # ``max_stacks`` 是 ``triangle_damage`` 的专有参数——四个 op 一起删除后这六条
@@ -700,11 +694,6 @@ DAMAGE_PARAM_PIPELINES = {
         "pipelines": (DAMAGE_PIPELINE_DIRECT,),
         "canonical": "mode",
         "note": "mode 的等价别名",
-    },
-    "repeats": {
-        "pipelines": (DAMAGE_PIPELINE_ATTACK,),
-        "canonical": "bounces",
-        "note": "bounces 的等价别名（ricochet_attack）",
     },
 }
 
@@ -834,6 +823,34 @@ _FAMILY_HINT = {
 #
 # ``None`` 表示没有等价替代（原本就是空实现或未实现过的声明性名字）。
 REMOVED_ATOMIC_OPS = {
+    # Round 44 / 批次 AH：弹射从专用原子改成"目标选择器 + 逐段参数"。
+    # 替代写法是 ``deal_damage`` 的 ``target`` 写成 ``{"selector":"bounce",...}``：
+    # 预抽时机、响应/预知可见的目标集合、每段的伤害与段数、``last_damage``
+    # 全部由引擎的弹射链接管。迁移前 / 迁移后对拍见 ``.codex-tmp/round44/rd44.md``。
+    "ricochet_attack": '{"op":"deal_damage","target":{"selector":"bounce",'
+                       '"source":"target","count":4,"exclude_previous":true,'
+                       '"allow_self":true,"prepare_at_play":true},'
+                       '"amount":6,"hits":1,"inherit_extra_hits":false,'
+                       '"per_target_amount":6,"per_target_hits":1,"precision_inherit":true}'
+                       '（``per_target_*`` 省略时沿用主段的 ``amount`` / ``hits``；'
+                       '``count_from:"positive_hits"`` = 旧 ``bounces_from_positive_hits``；'
+                       '``scale_bounces_by_fission`` 决定预抽数量是否乘子瓣层数）',
+    "bounce_attack": '见 ``ricochet_attack``：Round 22 的旧名，Round 44 随原子一起退役',
+    "arctic_ricochet_attack": '见 ``ricochet_attack``：Round 25 的旧名，Round 44 随原子一起退役',
+    "desert_marble_attack": '见 ``ricochet_attack``：Round 25 的旧名，Round 44 随原子一起退役',
+    # Round 44 / 批次 AH（目标二）：``electric_web_arm`` 的三条写入都能用已有
+    # 通用步骤逐字表达（玩家 var 走 ``player_var_change``，装备 var 走
+    # ``equipment_prop_set`` / ``equipment_prop_add``——未知属性名直接落
+    # ``custom_vars``）。唯一需要引擎配合的是回合驱动的"提前执行"判据：
+    # ``_effect_tree_contains_action_status`` 现在认这个通用步骤（写
+    # ``electric_web_draw_damage`` 的那一步），保证布网仍在回合初抽牌之前。
+    "electric_web_arm": '[{"op":"player_var_change","mode":"add","target":"target",'
+                        '"name":"electric_web_draw_damage","value":2},'
+                        '{"op":"equipment_prop_set","property":"electric_web_armed_target",'
+                        '"value":{"op":"target_player","target":"target"}},'
+                        '{"op":"equipment_prop_add","property":"electric_web_armed_amount",'
+                        '"amount":2}]（``target``/``amount`` 按卡数据填；'
+                        '``amount`` 同时出现在玩家与装备两处）',
     # Round 43 / 批次 AG（"能组合就删"续扫）：3 个原子逐个验证后删除，
     # 替代写法如下。判定证据与"迁移前 / 迁移后"对拍见 `.codex-tmp/round43/rd43.md`。
     #   * 空步骤：实现就是 ``return None``，机制由装备标签承载。
@@ -1463,7 +1480,6 @@ RENAMED_ATOMIC_OPS = {
     # Round 35：``auto_play_card`` / ``auto_play_zone_top`` 并进 ``auto_play``
     # （mode 选 card/zone_top），所以它们的"声明旧称"也指到伞原子。
     "kitty_auto_play": "auto_play",
-    "bounce_attack": "ricochet_attack",
     # Round 31 / 批次 Z：``for_each_target`` 这条薄转发已删除，两个旧名直接
     # 指到循环族规范名 ``for_each``（``source:"wide_strike_targets"`` +
     # ``bind:"target"`` 就是原来的预设）。
@@ -1479,8 +1495,6 @@ RENAMED_ATOMIC_OPS = {
     "player_property_add": "player_prop_change",
     # Round 25：登记残留里"只是换了称呼"的 5 个——规范名照常可用，旧名给
     # "已改名 + 规范名"的显式报错（其余旧名进 REMOVED_ATOMIC_OPS）。
-    "arctic_ricochet_attack": "ricochet_attack",
-    "desert_marble_attack": "ricochet_attack",
     "ocean_add_charge_to_hand": "add_charge_to_hand",
     "ocean_mark_auto_play": "queue_auto_play",
     "void_kitty_auto_play": "auto_play",

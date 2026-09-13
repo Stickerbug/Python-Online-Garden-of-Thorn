@@ -5603,15 +5603,6 @@ class GameEngine:
             int(eq.custom_vars.get('electric_web_armed_amount', 0) or 0) + amount
         )
 
-    def _atomic_electric_web_arm(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'target'))
-        if not (0 <= target_id < len(self.players)):
-            return
-        amount = self._eval_int(player_id, params.get('amount', 2), card, 2)
-        amount = max(0, amount)
-        eq = self._find_equipment_for_card(player_id, card)
-        self._apply_electric_web_arm(player_id, eq, target_id, amount)
-
     def _cleanup_electric_web_draw_damage(self, eq: EquipmentInstance) -> None:
         if eq is None:
             return
@@ -13741,14 +13732,26 @@ class GameEngine:
     EQUIPMENT_TARGET_SELECTORS = ('equipment_target', 'equip_target', 'equipment_effect_target')
     EQUIPMENT_OWNER_SELECTORS = ('equipment_owner', 'equip_owner')
     TEAM_MEMBERS_SELECTORS = ('team_members', 'team_member', 'target_team_members')
+    # Round 44 / batch AH: the ordered bounce sequence of this play.
+    BOUNCE_SELECTOR_REFS = ('bounce', 'bounce_targets')
 
     @staticmethod
     def _selector_ref(target_str) -> str:
-        """Normalise a selector (string or ``{"ref": ...}``) into its bare name."""
+        """Normalise a selector (string or ``{"ref"/"op"/"type"/"selector": ...}``).
+
+        Round 44 / batch AH: the v2 runtime already reads a dict's ``selector``
+        key as a nested selector (``mod_runtime_v2.resolve_v2_target``), so the
+        engine accepts the same spelling -- ``{"selector": "bounce", ...}``.
+        """
         if isinstance(target_str, str):
             return target_str.strip().lower()
         if isinstance(target_str, dict):
-            ref = target_str.get('ref') or target_str.get('op') or target_str.get('type')
+            ref = (
+                target_str.get('ref')
+                or target_str.get('op')
+                or target_str.get('type')
+                or target_str.get('selector')
+            )
             return str(ref or '').strip().lower()
         return ''
 
@@ -13767,6 +13770,11 @@ class GameEngine:
     @classmethod
     def _is_team_members_selector(cls, target_str) -> bool:
         return cls._selector_ref(target_str) in cls.TEAM_MEMBERS_SELECTORS
+
+    @classmethod
+    def _is_bounce_selector(cls, target_str) -> bool:
+        """``{"selector": "bounce", ...}``: the pre-drawn bounce sequence."""
+        return cls._selector_ref(target_str) in cls.BOUNCE_SELECTOR_REFS
 
     def _resolve_team_members_selector(self, player_id, selector, context=None) -> List[int]:
         """Every living member of the team the selected player belongs to.
@@ -13878,6 +13886,11 @@ class GameEngine:
 
     def _resolve_target(self, player_id, target_str):
         context = getattr(self, '_active_effect_context', {}) or {}
+        if self._is_bounce_selector(target_str):
+            # Single-target callers act on the primary target; the whole
+            # sequence is ``_resolve_bounce_sequence`` / ``_deal_bounce_chain``.
+            sequence = self._resolve_bounce_sequence(player_id, target_str)
+            return sequence[0] if sequence else -1
         if self._is_random_selectable_selector(target_str):
             return self._random_selectable_target(player_id, target_str if isinstance(target_str, dict) else {})
         if self._is_lowest_health_enemy_selector(target_str):
@@ -13928,6 +13941,8 @@ class GameEngine:
         return self._base_resolve_target(player_id, target_str)
 
     def _resolve_targets(self, player_id, target_str):
+        if self._is_bounce_selector(target_str):
+            return self._resolve_bounce_sequence(player_id, target_str)
         if self._is_random_selectable_selector(target_str):
             tid = self._random_selectable_target(player_id, target_str if isinstance(target_str, dict) else {})
             return [] if tid < 0 else [tid]
@@ -15408,7 +15423,15 @@ class GameEngine:
             self,
             player_id: int,
             count: int,
-            previous_target: Optional[int] = None) -> List[int]:
+            previous_target: Optional[int] = None,
+            allow_self: bool = True,
+            exclude_previous: bool = True) -> List[int]:
+        """Pre-draw a bounce sequence (Round 44: the ``bounce`` selector pool).
+
+        ``allow_self`` / ``exclude_previous`` come from the selector declaration;
+        the defaults keep the historical pool (every selectable player, never the
+        one hit by the previous segment) for the declared-secondary-key path.
+        """
         targets: List[int] = []
         try:
             previous = int(previous_target) if previous_target is not None else -1
@@ -15417,8 +15440,8 @@ class GameEngine:
         for _ in range(max(0, int(count or 0))):
             candidates = [
                 target_id for target_id in range(len(self.players))
-                if target_id != previous
-                and self._target_can_be_selected(player_id, target_id, allow_self=True)
+                if (not exclude_previous or target_id != previous)
+                and self._target_can_be_selected(player_id, target_id, allow_self=allow_self)
             ]
             if not candidates:
                 break
@@ -15427,36 +15450,49 @@ class GameEngine:
             targets.append(previous)
         return targets
 
-    def _prepare_desert_marble_targets(self, player_id: int, card: Optional[CardInstance],
-                                       choice: Optional[dict]) -> Optional[dict]:
-        if self._declared_secondary_target_key(card) != '_desert_marble_targets':
+    # Round 44 / batch AH: the choice keys a card may declare (``secondary_target_key``)
+    # so responses and precognition see the pre-drawn bounce sequence.
+    DECLARED_SECONDARY_KEYS = ('_desert_marble_targets', '_arctic_ricochet_targets')
+
+    def _prepare_declared_secondary_targets(self, player_id: int, card: Optional[CardInstance],
+                                            choice: Optional[dict]) -> Optional[dict]:
+        """Pre-draw the sequence of the card's declared secondary target key.
+
+        The count and the pool come from the card's ``bounce`` selector
+        declaration; the choice keys keep their historical shape, so responses
+        and precognition see the identical target set.
+        """
+        declared_key = self._declared_secondary_target_key(card)
+        if declared_key not in self.DECLARED_SECONDARY_KEYS:
             return choice
+        params = self._bounce_params_for_card(card)
         updated = dict(choice or {})
-        if not isinstance(updated.get('_desert_marble_targets'), list):
-            count = (
-                clamp_card_layer(getattr(card, 'fission_level', 1))
-                * self._card_total_hits(card, 1)
-            )
+        if not isinstance(updated.get(declared_key), list):
             primary_target = self._choice_target_from_choice(updated, -1)
-            updated['_desert_marble_targets'] = self._random_nonrepeating_attack_targets(
+            updated[declared_key] = self._random_nonrepeating_attack_targets(
                 player_id,
-                count,
+                self._bounce_prepare_count(player_id, card, params),
                 primary_target,
             )
         card._desert_marble_bounce_cursor = 0
         card._desert_marble_previous_target = self._choice_target_from_choice(updated, -1)
         updated = self._prepare_bounce_targets(player_id, card, updated)
-        if not isinstance(updated.get('_desert_marble_targets'), list):
-            updated['_desert_marble_targets'] = list(updated.get('_bounce_targets') or [])
+        if not isinstance(updated.get(declared_key), list):
+            updated[declared_key] = list(updated.get('_bounce_targets') or [])
         return updated
+
+    # Historical name (``desert_cards_addition:marble`` was the first card to
+    # declare a secondary target key); kept because callers patch it by name.
+    _prepare_desert_marble_targets = _prepare_declared_secondary_targets
 
     def _arctic_ricochet_repeat_count(self, player_id: int, card: Optional[CardInstance]) -> int:
         params = self._bounce_params_for_card(card)
         if not params:
             return 0
-        if params.get('bounces_from_positive_hits'):
+        spec = self._bounce_selector_spec(params)
+        if spec['count_from'] == 'positive_hits':
             return 1
-        return max(0, self._eval_int(player_id, params.get('bounces', params.get('repeats', 0)), card, 0))
+        return max(0, self._eval_int(player_id, spec['count'], card, 0))
 
     def _prepare_arctic_ricochet_targets(
             self,
@@ -15472,29 +15508,67 @@ class GameEngine:
         return updated
 
     def _bounce_params_for_card(self, card: Optional[CardInstance]) -> Optional[dict]:
-        """Return the parameters of this card's bounce/ricochet effect, if any."""
+        """The ``bounce`` target selector this card's play declares, if any.
+
+        Round 44 / batch AH: the bounce chain stopped being a dedicated atom
+        (``ricochet_attack``).  The declaration now lives in the ``target`` of the
+        step that deals the damage -- ``{"selector": "bounce", ...}`` -- while the
+        pre-draw still happens at play time (:meth:`_prepare_bounce_targets`), so
+        the target set responses and precognition see is byte-identical.
+        """
         if card is None:
             return None
         for effect in self._v2_play_steps_for_card(card):
-            effect_type = self._effect_type(effect)
-            resolved = self._EFFECT_ALIASES.get(effect_type, effect_type)
-            if resolved not in ('ricochet_attack', 'arctic_ricochet_attack', 'desert_marble_attack'):
+            params = self._effect_params(effect)
+            if not isinstance(params, dict):
                 continue
-            params = dict(self._effect_params(effect) or {})
-            params['_op'] = resolved
-            return params
+            selector = params.get('target')
+            if not self._is_bounce_selector(selector):
+                continue
+            if selector.get('prepare_at_play', True) is False:
+                # Declared, but this play must not pre-draw the sequence.
+                continue
+            declared = dict(selector)
+            if declared.get('hits') is None and params.get('hits') is not None:
+                # ``count_from:"positive_hits"`` sizes the pre-draw off the main
+                # hit count of the very same step.
+                declared['hits'] = params.get('hits')
+            return declared
         return None
+
+    def _bounce_selector_spec(self, selector) -> dict:
+        """Normalise a ``bounce`` selector declaration (defaults live here)."""
+        selector = selector if isinstance(selector, dict) else {}
+        count_from = str(selector.get('count_from') or '').strip().lower()
+        if not count_from and selector.get('bounces_from_positive_hits'):
+            count_from = 'positive_hits'
+        return {
+            'source': selector.get('source', selector.get('target', 'target')),
+            # ``count`` is the number of bounce segments; ``bounces`` / ``repeats``
+            # are the names the ricochet atom used for the same value.
+            'count': selector.get('count', selector.get('bounces', selector.get('repeats', 0))),
+            'count_from': count_from,
+            'allow_self': bool(selector.get('allow_self', False)),
+            'exclude_previous': bool(selector.get('exclude_previous', True)),
+            'scale_bounces_by_fission': bool(selector.get('scale_bounces_by_fission', True)),
+            'hits': selector.get('hits'),
+        }
 
     def _bounce_prepare_count(self, player_id: int, card: Optional[CardInstance], params: dict) -> int:
         """How many bounce targets to draw in advance for this play."""
         if card is None or not isinstance(params, dict):
             return 0
+        spec = self._bounce_selector_spec(params)
         layers = clamp_card_layer(getattr(card, 'fission_level', 1))
-        if params.get('bounces_from_positive_hits'):
-            count = layers * self._card_total_hits(card, max(1, self._eval_int(player_id, params.get('hits', 1), card, 1)))
+        if spec['count_from'] == 'positive_hits':
+            base_hits = 1 if spec['hits'] is None else spec['hits']
+            count = layers * self._card_total_hits(
+                card,
+                max(1, self._eval_int(player_id, base_hits, card, 1)),
+            )
         else:
-            bounces = max(0, self._eval_int(player_id, params.get('bounces', params.get('repeats', 0)), card, 0))
-            count = bounces * (layers if params.get('scale_bounces_by_fission', True) else 1)
+            bounces = max(0, self._eval_int(player_id, spec['count'], card, 0))
+            count = bounces * (layers if spec['scale_bounces_by_fission'] else 1)
         return max(0, int(count))
 
     def _prepare_bounce_targets(self, player_id: int, card: Optional[CardInstance],
@@ -15503,6 +15577,7 @@ class GameEngine:
         params = self._bounce_params_for_card(card)
         if not params:
             return choice
+        spec = self._bounce_selector_spec(params)
         updated = dict(choice or {})
         if not isinstance(updated.get('_bounce_targets'), list):
             prepared = None
@@ -15518,11 +15593,39 @@ class GameEngine:
                     player_id,
                     self._bounce_prepare_count(player_id, card, params),
                     primary_target,
+                    allow_self=spec['allow_self'],
+                    exclude_previous=spec['exclude_previous'],
                 )
             updated['_bounce_targets'] = prepared
         card._bounce_cursor = 0
         card._bounce_previous_target = self._choice_target_from_choice(updated, -1)
         return updated
+
+    def _resolve_bounce_sequence(self, player_id: int, selector) -> List[int]:
+        """``[primary] + pre-drawn bounce sequence`` for per-target atoms.
+
+        ``deal_damage`` has its own per-segment path (:meth:`_deal_bounce_chain`);
+        heal / status_op / ... reuse the same selector and apply to every player
+        the play bounces onto.  ``count_from:"positive_hits"`` uses the landed
+        segments of the primary damage, falling back to the whole pre-drawn
+        sequence when no damage information is available yet.
+        """
+        spec = self._bounce_selector_spec(selector)
+        source = 'target' if self._is_bounce_selector(spec['source']) else spec['source']
+        primary = self._resolve_target(player_id, source)
+        if not self._valid_player_id(primary):
+            return []
+        context = getattr(self, '_active_effect_context', None)
+        card = context.get('card') if isinstance(context, dict) else None
+        prepared = self._bounce_target_ids(card, getattr(self, '_active_choice', None))
+        if spec['count_from'] == 'positive_hits':
+            try:
+                count = int((getattr(self, '_last_positive_damage_hits', []) or [])[primary] or 0)
+            except (IndexError, TypeError, ValueError):
+                count = len(prepared)
+        else:
+            count = max(0, self._eval_int(player_id, spec['count'], card, 0))
+        return [primary] + list(prepared[:max(0, count)])
 
     def _prepare_desert_play_state(self, player_id: int, card: Optional[CardInstance],
                                    choice: Optional[dict]) -> Optional[dict]:
@@ -15585,7 +15688,11 @@ class GameEngine:
 
     def _bounce_target_ids(self, card: Optional[CardInstance],
                            choice: Optional[dict]) -> List[int]:
-        """Prepared bounce targets of a ``ricochet_attack`` play."""
+        """Prepared bounce targets of this play's ``bounce`` selector.
+
+        The keys are read in the historical order, so a picker (or an older
+        client) that filled the declared secondary key still works.
+        """
         if not self._bounce_params_for_card(card) or not isinstance(choice, dict):
             return []
         raw_targets = None
@@ -16310,7 +16417,12 @@ class GameEngine:
         if isinstance(value, dict):
             op = str(value.get('op') or value.get('type') or '')
             status = value.get('status') or value.get('name') or value.get('id')
-            if op == 'electric_web_arm':
+            # Round 44 / batch AH: the web's "arm" step is data now
+            # (``player_var_change`` writing ``electric_web_draw_damage`` plus the
+            # equipment custom vars), so the driver keys on the mechanic's field
+            # instead of the retired op name -- the arming still has to run in the
+            # early pass, before the turn-start draw applies the web damage.
+            if op == 'player_var_change' and str(value.get('name') or '') == 'electric_web_draw_damage':
                 return True
             if op in ('status_add_named', 'set_status_named') and str(status) in action_statuses:
                 return True
@@ -17975,6 +18087,13 @@ class GameEngine:
         # Round 15 / batch 3: the runtime branch resolves the selector as a set
         # (``target`` may be ``all`` / a list / a wide-strike snapshot), so the
         # engine atom iterates the same way instead of forcing one player.
+        # Round 44 / batch AH: with a ``bounce`` selector the single step *is* the
+        # whole bounce chain (main segment + one segment per bounced target), so
+        # it takes the per-segment path instead of the per-target loop.
+        bounce_selector = params.get('target')
+        if self._is_bounce_selector(bounce_selector):
+            self._deal_bounce_chain(player_id, card, params, log, choice, context, bounce_selector)
+            return
         for target_id in self._resolve_targets(player_id, params.get('target', 'enemy')):
             self._deal_damage_to_target(player_id, card, params, log, choice, context, target_id)
 
@@ -18098,6 +18217,102 @@ class GameEngine:
         # ``log: false`` 等价（运行时分支走 ``_render_step_log``，这里对齐）。
         if log is not False and not step_is_silent(None, params) and log:
             self.log_msg(self._format_step_log(log, target=self.pn(target_id), source=self.pn(player_id)))
+
+    def _deal_bounce_chain(self, player_id, card, params, log, choice, context, selector):
+        """One ``deal_damage`` step whose ``target`` is a ``bounce`` selector.
+
+        Round 44 / batch AH: the data-driven form of the retired
+        ``ricochet_attack`` atom.  The first segment uses ``amount`` / ``hits``;
+        every following segment uses ``per_target_amount`` / ``per_target_hits``
+        (defaulting to the same values, so "first 6, each bounce 6" needs nothing
+        extra), and the number of segments comes from the selector's ``count`` or
+        -- with ``count_from:"positive_hits"`` -- from the main damage's landed
+        segments.  ``exclude_previous`` / ``allow_self`` drive both the pre-drawn
+        sequence and the per-segment fallback re-pick; ``precision_inherit`` and
+        ``inherit_bounce_extra_hits`` keep the old atom's flag handling.
+        """
+        spec = self._bounce_selector_spec(selector)
+        target_id = self._resolve_target(player_id, spec['source'])
+        if not self._valid_player_id(target_id):
+            return
+        bounce_amount = self._modified_attack_damage(
+            max(0, self._eval_int(player_id, params.get('per_target_amount', params.get('amount', 6)), card, 6)),
+            card,
+        )
+        amount = self._modified_attack_damage(
+            max(0, self._eval_int(player_id, params.get('amount', 6), card, 6)),
+            card,
+        )
+        hits = max(1, self._eval_int(player_id, params.get('hits', 1), card, 1))
+        # ``deal_damage`` inherits the card's layered extra hits unless told not
+        # to; bounce segments inherit them only with ``inherit_bounce_extra_hits``.
+        if bool(params.get('inherit_extra_hits', params.get('use_card_extra_hits', True))):
+            hits = self._card_total_hits(card, hits)
+        bounce_hits = max(1, self._eval_int(
+            player_id, params.get('per_target_hits', params.get('hits', 1)), card, 1
+        ))
+        if bool(params.get('inherit_bounce_extra_hits', False)):
+            bounce_hits = self._card_total_hits(card, bounce_hits)
+        allow_self = spec['allow_self']
+        exclude_previous = spec['exclude_previous']
+        is_precision = bool(params.get('precision_inherit', True)) and (
+            'precision' in self._effective_card_flags(card)
+        )
+        self.deal_attack_damage(
+            target_id,
+            amount,
+            hits,
+            is_precision=is_precision,
+            attacker_id=player_id,
+            source_card=card,
+        )
+        if spec['count_from'] == 'positive_hits':
+            try:
+                bounces = max(0, int((getattr(self, '_last_positive_damage_hits', []) or [])[target_id] or 0))
+            except (IndexError, TypeError, ValueError):
+                bounces = 0
+        else:
+            bounces = max(0, self._eval_int(player_id, spec['count'], card, 0))
+        prepared_targets = self._bounce_target_ids(card, choice)
+        cursor = max(0, int(getattr(card, '_bounce_cursor', 0) or 0))
+        previous_target = int(getattr(card, '_bounce_previous_target', target_id) or 0)
+        for _ in range(bounces):
+            prepared_target = prepared_targets[cursor] if cursor < len(prepared_targets) else -1
+            cursor += 1
+            try:
+                bounced_target = int(prepared_target)
+            except (TypeError, ValueError):
+                bounced_target = -1
+            if (
+                (exclude_previous and bounced_target == previous_target)
+                or not self._target_can_be_selected(player_id, bounced_target, allow_self=allow_self)
+            ):
+                candidates = [
+                    tid for tid in range(len(self.players))
+                    if (not exclude_previous or tid != previous_target)
+                    and self._target_can_be_selected(player_id, tid, allow_self=allow_self)
+                ]
+                if not candidates:
+                    break
+                from engine_runtime_support import forced_random_target
+                bounced_target = forced_random_target(self, player_id, candidates)
+            bounce_choice = {
+                'target_player': bounced_target,
+                'target_player_id': bounced_target,
+                'target_id': bounced_target,
+            }
+            self._trigger_card_target_reactions(player_id, card, bounce_choice)
+            self.deal_attack_damage(
+                bounced_target,
+                bounce_amount,
+                bounce_hits,
+                is_precision=is_precision,
+                attacker_id=player_id,
+                source_card=card,
+            )
+            previous_target = bounced_target
+        card._bounce_cursor = cursor
+        card._bounce_previous_target = previous_target
 
     def _atomic_defer_game_over(self, player_id, card, params, log, choice, context):
         """Run a body of steps with death checks deferred, then settle deaths once.
@@ -21665,100 +21880,6 @@ class GameEngine:
             )
             if dealt > 0:
                 self._arctic_add_frost(target_id, 1)
-
-    def _atomic_ricochet_attack(self, player_id, card, params, log, choice, context):
-        """Attack one target, then bounce onto further random selectable players.
-
-        ``bounces`` (or, with ``bounces_from_positive_hits``, the number of main
-        damage segments that actually landed) extra hits are dealt, each one to
-        a different player than the previous hit.  The sequence is pre-drawn at
-        play time (``_prepare_bounce_targets``) so responses and precognition
-        can see every player the play will touch.
-        """
-        target_id = self._resolve_target(player_id, params.get('target', 'target'))
-        if not self._valid_player_id(target_id):
-            return
-        bounce_amount = self._modified_attack_damage(
-            max(0, self._eval_int(player_id, params.get('bounce_amount', params.get('amount', 6)), card, 6)),
-            card,
-        )
-        amount = self._modified_attack_damage(
-            max(0, self._eval_int(player_id, params.get('amount', 6), card, 6)),
-            card,
-        )
-        hits = max(1, self._eval_int(player_id, params.get('hits', 1), card, 1))
-        # Round 28：攻击族统一用 ``inherit_extra_hits``；``use_card_extra_hits``
-        # 是 deal_damage / direct_damage 认的等价旧名，这里一并接受。
-        if bool(params.get('inherit_extra_hits', params.get('use_card_extra_hits', False))):
-            hits = self._card_total_hits(card, hits)
-        bounce_hits = max(1, self._eval_int(player_id, params.get('bounce_hits', 1), card, 1))
-        if bool(params.get('inherit_bounce_extra_hits', False)):
-            bounce_hits = self._card_total_hits(card, bounce_hits)
-        allow_self = bool(params.get('allow_self', False))
-        exclude_previous = bool(params.get('exclude_previous', True))
-        is_precision = bool(params.get('precision_inherit', True)) and (
-            'precision' in self._effective_card_flags(card)
-        )
-        self.deal_attack_damage(
-            target_id,
-            amount,
-            hits,
-            is_precision=is_precision,
-            attacker_id=player_id,
-            source_card=card,
-        )
-        if params.get('bounces_from_positive_hits'):
-            try:
-                bounces = max(0, int((getattr(self, '_last_positive_damage_hits', []) or [])[target_id] or 0))
-            except (IndexError, TypeError, ValueError):
-                bounces = 0
-        else:
-            bounces = max(0, self._eval_int(
-                player_id,
-                params.get('bounces', params.get('repeats', 0)),
-                card,
-                0,
-            ))
-        prepared_targets = self._bounce_target_ids(card, choice)
-        cursor = max(0, int(getattr(card, '_bounce_cursor', 0) or 0))
-        previous_target = int(getattr(card, '_bounce_previous_target', target_id) or 0)
-        for _ in range(bounces):
-            prepared_target = prepared_targets[cursor] if cursor < len(prepared_targets) else -1
-            cursor += 1
-            try:
-                bounced_target = int(prepared_target)
-            except (TypeError, ValueError):
-                bounced_target = -1
-            if (
-                (exclude_previous and bounced_target == previous_target)
-                or not self._target_can_be_selected(player_id, bounced_target, allow_self=allow_self)
-            ):
-                candidates = [
-                    tid for tid in range(len(self.players))
-                    if (not exclude_previous or tid != previous_target)
-                    and self._target_can_be_selected(player_id, tid, allow_self=allow_self)
-                ]
-                if not candidates:
-                    break
-                from engine_runtime_support import forced_random_target
-                bounced_target = forced_random_target(self, player_id, candidates)
-            bounce_choice = {
-                'target_player': bounced_target,
-                'target_player_id': bounced_target,
-                'target_id': bounced_target,
-            }
-            self._trigger_card_target_reactions(player_id, card, bounce_choice)
-            self.deal_attack_damage(
-                bounced_target,
-                bounce_amount,
-                bounce_hits,
-                is_precision=is_precision,
-                attacker_id=player_id,
-                source_card=card,
-            )
-            previous_target = bounced_target
-        card._bounce_cursor = cursor
-        card._bounce_previous_target = previous_target
 
     def _atomic_crit_multiplier_add(self, player_id, card, params, log, choice, context):
         amount = float(params.get('amount', 0.5) or 0.5)

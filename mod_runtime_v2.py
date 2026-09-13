@@ -101,7 +101,10 @@ ADVANCED_ATOMIC_OPS = {
     # ``random_zone_card_to_hand``; see ``REMOVED_ATOMIC_OPS``.
     "defer_game_over",
     "seal_equipment", "clear_statuses", "settle_status",
-    "queue_auto_play", "auto_play_zone_top", "ricochet_attack",
+    # Round 44 / batch AH: ``ricochet_attack`` is gone -- the bounce chain is a
+    # ``deal_damage`` step whose ``target`` is ``{"selector": "bounce", ...}``
+    # (see ``mod_spec_v2.REMOVED_ATOMIC_OPS``).
+    "queue_auto_play", "auto_play_zone_top",
     "absorb_attack_damage", "add_charge_to_hand",
     "card_var_change",
     "set_card_prop_random",
@@ -134,7 +137,9 @@ ADVANCED_ATOMIC_OPS = {
     "apply_turn_regen",
     # Round 43 / 批次 AG：``plank_immunity``（空步骤）已删除，机制由装备标签
     # ``blocks_cheap_attacks`` 承载。
-    "electric_web_arm",
+    # Round 44 / 批次 AH: ``electric_web_arm`` 已删除——三条写入都改用通用步骤
+    # （``player_var_change`` + ``equipment_prop_set`` / ``equipment_prop_add``），
+    # 见 ``mod_spec_v2.REMOVED_ATOMIC_OPS["electric_web_arm"]``。
     "magic_salt_reflect", "third_eye_precision_or_hidden",
     "grant_temp_swift_highest_e",
     # Round 37 / 批次 AD-2：``timed_effect`` 与两条 ``delayed_*`` 并进
@@ -356,7 +361,11 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
             action["target_player_id"] = target_id
         return {"success": True, "target_player": target_id}
 
-    if op == "deal_damage":
+    # Round 44 / 批次 AH：``target`` 是 ``bounce`` 选择器时，这一步就是整条弹射链
+    # （主段 + 逐段弹射），**不进**这个运行时分支——链子的唯一实现在引擎原子里
+    # （预抽序列、每段伤害/段数、``last_damage``、响应与预知可见的目标集合都在
+    # 那边），让它落到本函数末尾的 ``_try_run_engine_atomic_op`` 转交即可。
+    if op == "deal_damage" and not _is_bounce_target_selector(params.get("target")):
         source = _player_id(engine, resolve_v2_target(engine, context, params.get("source", "source")))
         amount = max(0, _to_int(eval_v2_value(engine, context, params.get("amount", 0))))
         hits = clamp_damage_hits(_to_int(eval_v2_value(engine, context, params.get("hits", 1))))
@@ -2564,6 +2573,27 @@ def _looks_like_target_selector(value: Any) -> bool:
         "allies", "all_friends", "friends", "friend", "ally", "teammate",
         "random_player", "random_enemy", "random_ally",
     }
+
+
+# Round 44 / batch AH: the pre-drawn bounce sequence of a play.  The chain
+# itself (pre-draw timing, per-segment damage, response-visible target set)
+# lives in the engine atom, so this runtime branch hands the whole step over
+# instead of growing a second implementation.
+BOUNCE_TARGET_REFS = ("bounce", "bounce_targets")
+
+
+def _is_bounce_target_selector(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in BOUNCE_TARGET_REFS
+    if isinstance(value, dict):
+        ref = (
+            value.get("ref")
+            or value.get("op")
+            or value.get("type")
+            or value.get("selector")
+        )
+        return str(ref or "").strip().lower() in BOUNCE_TARGET_REFS
+    return False
 
 
 def _player_id(engine, value: Any) -> int:
