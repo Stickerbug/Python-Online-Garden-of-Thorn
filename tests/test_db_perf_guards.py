@@ -5,10 +5,15 @@ import gc
 import io
 import json
 import os
+import pathlib
+import shutil
 import tempfile
 import unittest
 
 import db
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class ChatHistoryIndexTests(unittest.TestCase):
@@ -58,6 +63,51 @@ class ChatHistoryIndexTests(unittest.TestCase):
         output = stream.getvalue()
         self.assertNotIn('endpoint=x', output)
         self.assertIn('endpoint=y', output)
+
+
+class WalKeeperConnectionTests(unittest.TestCase):
+    """保持一条空闲连接，避免每请求关连接时触发 WAL checkpoint。"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.old_db_path = db.DB_PATH
+        db.DB_PATH = os.path.join(self.temp_dir.name, 'wal.sqlite3')
+        db.init_db()
+
+    def tearDown(self):
+        db.release_wal_keeper()
+        db.DB_PATH = self.old_db_path
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def test_keeper_is_reused_and_released(self):
+        first = db.hold_wal_open()
+        self.assertIsNotNone(first)
+        self.assertIs(first, db.hold_wal_open())
+        db.release_wal_keeper()
+        self.assertIsNone(db._WAL_KEEPER_CONN)
+        second = db.hold_wal_open()
+        self.assertIsNot(first, second)
+
+    def test_keeper_reopens_when_the_database_path_changes(self):
+        first = db.hold_wal_open()
+        other_dir = tempfile.mkdtemp()
+        try:
+            db.DB_PATH = os.path.join(other_dir, 'other.sqlite3')
+            db.init_db()
+            second = db.hold_wal_open()
+            self.assertIsNot(first, second)
+            # 先关掉 keeper，否则 Windows 上临时目录删不掉。
+            db.release_wal_keeper()
+        finally:
+            # init_db 内部的 with-connection 依赖 GC 关闭，Windows 上先 gc 再删。
+            gc.collect()
+            shutil.rmtree(other_dir, ignore_errors=True)
+
+    def test_app_startup_holds_the_wal_open(self):
+        source = (ROOT / 'app.py').read_text(encoding='utf-8')
+        self.assertIn('hold_wal_open()', source)
+        self.assertIn('WAL keeper connection failed', source)
 
 
 class HandlingSearchIndexTests(unittest.TestCase):

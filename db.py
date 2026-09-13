@@ -419,6 +419,49 @@ def format_duration_zh(seconds):
 _FRIEND_CLEANUP_LAST_TS = 0.0
 _FRIEND_CLEANUP_INTERVAL_SECONDS = 600
 
+_WAL_KEEPER_CONN = None
+_WAL_KEEPER_PATH = ''
+
+
+def hold_wal_open():
+    """Keep one idle connection open so per-request closes stop checkpointing.
+
+    单进程 eventlet 里每个请求都自己开一个连接；SQLite 在“最后一个连接关闭”时会
+    做 WAL checkpoint 并删掉 -wal/-shm。生产库副本实测：story 动作提交
+    19.2ms（无 keeper）→ 9.9ms（有 keeper）。keeper 只负责占住最后一条连接，
+    不参与业务查询。
+    """
+    global _WAL_KEEPER_CONN, _WAL_KEEPER_PATH
+    path = str(DB_PATH or '')
+    if _WAL_KEEPER_CONN is not None and _WAL_KEEPER_PATH == path:
+        return _WAL_KEEPER_CONN
+    release_wal_keeper()
+    conn = get_db_connection()
+    try:
+        conn.execute('SELECT 1').fetchone()
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        raise
+    _WAL_KEEPER_CONN = conn
+    _WAL_KEEPER_PATH = path
+    return conn
+
+
+def release_wal_keeper():
+    """Close the idle keeper connection (tests / DB path switches)."""
+    global _WAL_KEEPER_CONN, _WAL_KEEPER_PATH
+    conn = _WAL_KEEPER_CONN
+    _WAL_KEEPER_CONN = None
+    _WAL_KEEPER_PATH = ''
+    if conn is not None:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH, timeout=DB_BUSY_TIMEOUT_MS / 1000.0)
