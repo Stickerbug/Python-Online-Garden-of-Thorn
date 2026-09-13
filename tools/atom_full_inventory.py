@@ -613,6 +613,24 @@ ROUND53_ACTIONS = {
         "真删除分支 6 例对拍 0 差异"),
 }
 
+# Round 55 / 批次 AS：``transform_cards`` 下沉——"按权重抽卡定义"补成取值表达式
+# ``random_card``，"原地换牌"补成 ``move_card(mode:"transform")`` 与
+# ``equipment_op(mode:"transform")``。判定与对拍见 `.codex-tmp/round55/rd55.md`。
+ROUND55_ACTIONS = {
+    "transform_cards": (
+        "合", 1,
+        '{"op":"for_each","source":{"selector":"zone_cards","zones":[…],"owner":"self",'
+        '"filter":{"require_selectable":false}},"as":"c","body":[{"op":"move_card",'
+        '"mode":"transform","card":{"ref":"c"},"into":{"op":"random_card",'
+        '"card_type":{…逐张读它自己的类型…},"exclude":[{…它自己的 def_id…}]}}]} + '
+        '{"op":"for_each","source":{…装备区…},"body":[{"op":"equipment_op",'
+        '"mode":"transform","equipment":{"ref":"c"},"into":{"op":"random_card",'
+        '"card_type":"root",…}}]}',
+        "Round 55 / 批次 AS：唯一在用卡 void:scar 的 5 例真实出牌对拍（1v1/2v2、"
+        "无装备、带护甲装备、空牌堆）0 差异——抽卡权重、随机数消耗顺序、位置保持、"
+        "护甲/效果目标保留、装备步骤重跑全部逐字一致"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -1034,7 +1052,8 @@ KEPT_EXPLICIT = {
     "create_counter": "生成/记录 counter 类型标记",
     "exile_this": "放逐自身（印记）",
     "transform_card": "变换牌（标记）",
-    "transform_cards": "批量变换牌",
+    # Round 55 / 批次 AS：transform_cards 已删除（for_each + move_card/equipment_op
+    # 的 mode:"transform" + 取值表达式 random_card）。
     # Round 53 / 批次 AQ：remove_specific_card 已删除（装备分支 → equipment_op
     # destroy；真删除 → move_card(mode:"remove")）。
     "random_zone_card_to_hand": "随机取一张区域牌进手",
@@ -1163,7 +1182,7 @@ def build() -> dict:
         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS,
          **ROUND47_ACTIONS, **ROUND48_ACTIONS, **ROUND49_ACTIONS,
          **ROUND50_ACTIONS, **ROUND51_ACTIONS, **ROUND52_ACTIONS,
-         **ROUND53_ACTIONS}
+         **ROUND53_ACTIONS, **ROUND55_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

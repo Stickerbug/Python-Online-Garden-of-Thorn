@@ -20,6 +20,7 @@ from cards import (
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import (
     ATOMIC_OP_MACROS,
+    apply_param_synonyms,
     FOR_EACH_LIMIT,
     LoopBreak,
     LoopContinue,
@@ -1594,6 +1595,11 @@ class GameEngine:
     def _resolve_equipment_ref(self, player_id, equipment_ref, current_card=None):
         if isinstance(equipment_ref, EquipmentInstance):
             return equipment_ref
+        # Round 55 / 批次 AS：``for_each`` 遍历装备区时绑定的是一张牌实例，
+        # ``{"ref": "<循环变量>"}`` 也复用同一套写法——这里按实例 id 找到那件装备。
+        if isinstance(equipment_ref, CardInstance):
+            _, eq = self._find_equipment_by_card_instance_id(getattr(equipment_ref, 'instance_id', None))
+            return eq
         if equipment_ref is None:
             equipment_ref = {'ref': 'current_equipment'}
         if isinstance(equipment_ref, str):
@@ -1626,6 +1632,15 @@ class GameEngine:
             target_card = self._resolve_card_ref(player_id, equipment_ref.get('card'), current_card)
             _, eq = self._find_equipment_by_card_instance_id(getattr(target_card, 'instance_id', None))
             return eq
+        if ref:
+            context_vars = (getattr(self, '_active_effect_context', {}) or {}).get('vars')
+            if isinstance(context_vars, dict):
+                bound = context_vars.get(str(ref))
+                if isinstance(bound, EquipmentInstance):
+                    return bound
+                if isinstance(bound, CardInstance):
+                    _, eq = self._find_equipment_by_card_instance_id(getattr(bound, 'instance_id', None))
+                    return eq
         return None
 
     def _get_equipment_property_value(self, eq, prop):
@@ -6606,6 +6621,40 @@ class GameEngine:
                 return False
             if math.ceil(cost_m * ratio) > available_m:
                 return False
+        # Round 55 / 批次 AS：按"定义 id / 中文名 / 逐卡条件"筛选。
+        # ``def_id``/``id``（单个或列表）与 ``def_ids``/``ids`` 等价；
+        # ``name``/``name_contains`` 按中文名子串匹配；``condition`` 走条件
+        # 语言求值一次（``card`` 绑定当前这张牌，可用 ``card_prop`` 读它的属性）。
+        wanted_ids = spec.get('def_ids', spec.get('ids'))
+        if wanted_ids is None:
+            wanted_ids = spec.get('def_id', spec.get('id'))
+        if wanted_ids is not None:
+            if isinstance(wanted_ids, (list, tuple, set)):
+                allowed_ids = {str(item) for item in wanted_ids if str(item or '')}
+            else:
+                allowed_ids = {str(wanted_ids)}
+            if allowed_ids and str(getattr(card, 'def_id', '') or '') not in allowed_ids:
+                return False
+        name_filter = spec.get('name_contains', spec.get('name'))
+        if name_filter:
+            if str(name_filter) not in str(getattr(card, 'name_cn', '') or ''):
+                return False
+        card_condition = spec.get('condition')
+        if isinstance(card_condition, dict) and card_condition:
+            live_context = getattr(self, '_active_effect_context', None)
+            child = dict(live_context) if isinstance(live_context, dict) else {}
+            child['card'] = card
+            binding = dict(child.get('vars') or {})
+            binding['card'] = card
+            binding['item'] = card
+            child['vars'] = binding
+            previous = getattr(self, '_active_effect_context', None)
+            self._active_effect_context = child
+            try:
+                if not self._eval_condition(player_id, card_condition, card):
+                    return False
+            finally:
+                self._active_effect_context = previous
         return True
 
     def _filter_candidates(self, filter_spec, player_id: int,
@@ -6649,6 +6698,10 @@ class GameEngine:
         'require_tags', 'exclude_self', 'source_card', 'max_base_cost_e',
         'max_cost_e', 'max_e', 'min_cost_e', 'min_e', 'exclude_error',
         'exclude_error_cards', 'affordable', 'pay_ratio', 'reserve_source_cost',
+        # Round 55 / 批次 AS：选牌规格表补三样写卡最常缺的——
+        # ``def_id``/``def_ids``（按牌名/定义 id 选）、``name``（中文名，可写子串）、
+        # ``condition``（逐卡条件表达式，例如"裂变≥2 的牌"）。
+        'def_id', 'def_ids', 'id', 'ids', 'name', 'name_contains', 'condition',
     )
     ZONE_CARD_PICK_ALIASES = {
         'e': 'cost_e', 'cost': 'cost_e', 'actual_cost': 'cost_e', 'actual_cost_e': 'cost_e',
@@ -9700,6 +9753,7 @@ class GameEngine:
 
     def _equipment_op_armor_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AC：``equipment_op(mode:"armor")`` 的实现体
+        # Round 33 / 批次 AC：``equipment_op(mode:"armor")`` 的实现体
         # （旧 ``add_equipment_armor``：给装备/护甲加值）。
         target_id = self._resolve_target(player_id, params.get('target', 'self'))
         if not (0 <= target_id < len(self.players)):
@@ -10179,6 +10233,43 @@ class GameEngine:
             removed_card = matched[0]
             target_zone.remove(removed_card)
             self.log_msg(log or f"{self.pn(target_id)}的{removed_card.name_cn}从{zone}中被消除")
+
+    def _move_card_transform_payload(self, player_id, card, params, log, choice, context):
+        """``move_card(mode:"transform")``：把区域里的一张牌**原地换成另一张牌**。
+
+        Round 55 / 批次 AS：旧 ``transform_cards`` 的"牌堆/手牌/弃牌堆/放逐区"
+        那一半并进 ``move_card``——找到 ``card`` 引用指向的那张牌所在的区与位置，
+        用一个**全新实例**替换它（``into`` 可以是卡定义 id，也可以是
+        ``{"op":"random_card", …}`` 这类取值表达式），位置保持不变；
+        新实例只带目标卡定义自己的规则（``_fresh_void_transformed_card``
+        会同步裂变/聚变层与开局修正），
+        装备区请用 ``equipment_op(mode:"transform")``。
+        """
+
+        target_card = self._resolve_card_ref(
+            player_id, params.get('card', params.get('card_ref')), card
+        )
+        if target_card is None:
+            return
+        owner_id, zone_name, _ = self._find_card_location(target_card)
+        if owner_id is None or zone_name == 'equipment':
+            return
+        zone_list = None
+        for key in ('hand', 'deck', 'discard', 'exile'):
+            if key == zone_name:
+                zone_list = getattr(self.players[owner_id], key)
+                break
+        if not isinstance(zone_list, list) or target_card not in zone_list:
+            return
+        into = params.get('into', params.get('new_card', params.get('to_card', params.get('card_id'))))
+        new_def_id = str(self._step_text_value(player_id, card, into) or '').strip()
+        if not new_def_id or new_def_id not in CARD_DEFS:
+            return
+        index = zone_list.index(target_card)
+        zone_list[index] = self._fresh_void_transformed_card(owner_id, new_def_id)
+        self._refresh_hand_limit_bonuses()
+        if log:
+            self.log_msg(log)
 
     def _move_card_give_orb_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AB：``move_card(mode:"orb")`` 的实现体——旧
@@ -11097,6 +11188,10 @@ class GameEngine:
             # 把区域里的某张牌**直接移除**（不进弃牌堆、不触发弃牌钩子），
             # 装备区那是 ``equipment_op(mode:"destroy")`` 的活。
             return self._move_card_remove_payload(player_id, card, params, log, choice, context)
+        if mode in ('transform', 'replace', 'transmute'):
+            # Round 55 / 批次 AS：``transform_cards`` 的牌堆那一半并进来——
+            # 区域里某张牌原地换成一个新定义（位置不变）。
+            return self._move_card_transform_payload(player_id, card, params, log, choice, context)
         if mode in ('orb', 'give_orb', 'magic_orb'):
             return self._move_card_give_orb_payload(player_id, card, params, log, choice, context)
         if mode in ('random', 'random_pick', 'random_card'):
@@ -14418,6 +14513,9 @@ class GameEngine:
                     self._log_mod_runtime_error(et, retired_error, player_id, card)
                     continue
                 rt = self._EFFECT_ALIASES.get(et, et)
+                # Round 55 / 批次 AS：写值族的参数同义词（value/amount/delta/count、
+                # stat/property/…）在这里补齐，两条路径共用同一张表。
+                pm = apply_param_synonyms(rt, pm)
                 # Round 13: the engine path honours the same step gate as the v2
                 # runtime (``condition``/``run_if`` must hold, ``unless`` must
                 # not) but evaluates it with the engine's own expression language.
@@ -15104,6 +15202,15 @@ class GameEngine:
                 live_context.setdefault('card', card)
                 live_context.setdefault('vars', {})
                 return eval_collection_op(self, live_context, expr)
+            if ref in ('random_card', 'weighted_card', 'random_card_id'):
+                # Round 55 / 批次 AS：按权重抽一张卡定义 id（与 v2 运行时同一份实现）。
+                from mod_runtime_v2 import eval_v2_value as _eval_v2_value
+                live_context = getattr(self, '_active_effect_context', None)
+                live_context = dict(live_context) if isinstance(live_context, dict) else {}
+                live_context.setdefault('source_player', player_id)
+                live_context.setdefault('card', card)
+                live_context.setdefault('vars', {})
+                return _eval_v2_value(self, live_context, expr)
             if ref in ('last_positive_hits', 'positive_hits'):
                 active_context = getattr(self, '_active_effect_context', {}) or {}
                 nested_vars = active_context.get('vars') if isinstance(active_context.get('vars'), dict) else {}
@@ -18261,6 +18368,10 @@ class GameEngine:
             return self._equipment_op_armor_payload(player_id, card, forwarded, log, choice, context)
         if mode in ('seal', 'dust', 'sealed'):
             return self._equipment_op_seal_payload(player_id, card, forwarded, log, choice, context)
+        if mode in ('transform', 'replace', 'transmute'):
+            # Round 55 / 批次 AS：``transform_cards`` 的装备那一半并进来——
+            # 原地换成另一张牌定义，保留护甲/效果目标、重置回合簿记并重跑装备步骤。
+            return self._equipment_op_transform_payload(player_id, card, forwarded, log, choice, context)
         if mode in ('unprotect', 'remove_protection', 'protection_off'):
             return self._equipment_op_unprotect_payload(player_id, card, forwarded, log, choice, context)
         if mode in ('each', 'for_each', 'loop'):
@@ -18511,6 +18622,23 @@ class GameEngine:
             self._run_effect_list(player_id, card, on_crit, choice, child_context)
         on_hit = params.get('on_hit')
         on_hit_once = params.get('on_hit_once')
+        # Round 55 / 批次 AS：``on_kill`` 回调——这段伤害把目标打死时执行一次
+        # （``target_id`` 就是被击杀的那名玩家；多目标打击时逐个目标各跑一次）。
+        on_kill = params.get('on_kill')
+        if dealt > 0 and isinstance(on_kill, list):
+            victim = self.players[target_id]
+            if int(getattr(victim, 'health', 0) or 0) <= 0:
+                child_context = dict(context or {})
+                child_context.update({
+                    'event': 'on_kill',
+                    'source_id': player_id,
+                    'target_id': target_id,
+                    'damage': int(dealt),
+                    'last_damage': int(dealt),
+                })
+                child_context.setdefault('vars', {})['target_id'] = target_id
+                child_context.setdefault('vars', {})['killed_target'] = target_id
+                self._run_effect_list(player_id, card, on_kill, choice, child_context)
         if dealt > 0 and isinstance(on_hit_once, list):
             # The per-target "hit once" callback the runtime branch already had;
             # e.g. Cryo Bomb's 5 frost layers hang off it.
@@ -19509,7 +19637,9 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         if not self._valid_player_id(target_id):
             return
-        amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+        # Round 55 / 批次 AS：默认值与 v2 运行时对齐（引擎路径以前是 1、运行时是 0，
+        # 参数表一直标着 ⚠）。卡数据 166 处伤害步骤全都显式写 amount，改动无影响。
+        amount = self._eval_int(player_id, params.get('amount', 0), card, 0)
         # Round 28（伤害族词汇表）：``source_text`` → ``source_name`` → ``label``
         # 三级回落与运行时分支对齐；都不写才回落到 ``source``（旧行为）与卡名。
         source = params.get('source_text') or params.get('source_name') or params.get('label')
@@ -20284,6 +20414,49 @@ class GameEngine:
         if params.get('require_selection'):
             return None
         return ps.equipment[0] if ps.equipment else None
+
+    def _equipment_op_transform_payload(self, player_id, card, params, log, choice, context):
+        """``equipment_op(mode:"transform")``：把一件装备**原地变成另一张牌**。
+
+        Round 55 / 批次 AS：旧 ``transform_cards`` 的装备那一半并进来——逐行搬：
+        解析 ``equipment`` 引用（缺省 ``current_equipment``，也认
+        ``{"ref": "<for_each 绑定>"}``）→ 保留护甲与效果目标 → 清掉衍生的效果
+        记账（不触发摧毁事件）→ 换成新定义的全新实例 → 回合簿记归零
+        （``turns_equipped`` / ``uses_this_turn`` / ``corruption_active`` /
+        ``custom_vars``）→ 按新卡的 ``self_only`` 重算效果目标 → 非叠加装备
+        重新排序 → 默认重跑新卡的装备步骤（``run_equip_effects:false`` 可关）。
+        """
+
+        eq = self._resolve_equipment_ref(
+            player_id, params.get('equipment', {'ref': 'current_equipment'}), card
+        )
+        if eq is None:
+            return
+        owner_id = int(getattr(eq, 'owner', player_id))
+        if not self._valid_player_id(owner_id):
+            owner_id = player_id
+        into = params.get('into', params.get('new_card', params.get('to_card', params.get('card_id'))))
+        new_def_id = str(self._step_text_value(player_id, card, into) or '').strip()
+        if not new_def_id or new_def_id not in CARD_DEFS:
+            return
+        armor = getattr(eq, 'armor', 0)
+        target = getattr(eq, 'effect_target', owner_id)
+        self._cleanup_equipment_derived_effects(owner_id, eq, run_destroy_event=False)
+        eq.card_instance = self._fresh_void_transformed_card(owner_id, new_def_id)
+        eq.armor = armor
+        eq.turns_equipped = 0
+        eq.uses_this_turn = 0
+        eq.corruption_active = False
+        eq.custom_vars = {}
+        flags = self._effective_card_flags(eq.card_instance)
+        eq.effect_target = owner_id if 'self_only' in flags else target
+        if self._equipment_uses_non_stack_rule(eq):
+            self._ensure_non_stack_equipment_order(eq)
+        if params.get('run_equip_effects', True) is not False:
+            self._run_void_transformed_equipment_on_equip(owner_id, eq)
+        self._refresh_hand_limit_bonuses()
+        if log:
+            self.log_msg(log)
 
     # Round 31 / 批次 Z：``destroy_all_destroyable_equipment`` 已并入
     # ``destroy_equipment(mode:"all", filter:"destroyable", record_count:true)``
@@ -22079,77 +22252,6 @@ class GameEngine:
             ps.custom_vars.pop(str(marker), None)
         if log is not False and log:
             self.log_msg(self._format_step_log(log, target=self.pn(owner_id), source=self.pn(player_id)))
-
-    def _atomic_transform_cards(self, player_id, card, params, log, choice, context):
-        """Turn every card of the given zones into a random card of its category.
-
-        Generic counterpart of the Void Scar: cards are looked up by weight
-        (each definition contributes ``count`` entries) among the allowed card
-        pool, Sublime cards are never produced, and equipment keeps the armor it
-        already had and re-runs its equip steps.
-
-        Round 14 / batch 2: ``owner``/``target`` 走统一选择器解析（多目标时逐人
-        变换自己区域里的牌；标量选择器仍是单目标），``zone``/``zones`` 走统一
-        区域词表，未知区域显式报错。``zones`` 里的 ``equipment`` 依旧由
-        ``equipment_card_type`` 控制。
-        """
-        owner_ids = self._step_target_ids(
-            player_id, card, params, context, op='transform_cards',
-            default='self', keys=('owner', 'target'),
-        )
-        zones = self._step_zone_names(
-            params, op='transform_cards',
-            default=('hand', 'deck', 'discard', 'exile'),
-        )
-        if not owner_ids or not zones:
-            return
-        same_type = str(params.get('card_type', 'same') or 'same')
-        include_self = params.get('exclude_self', True) is False
-        equipment_type = str(params.get('equipment_card_type', 'root') or 'root')
-        for owner_id in owner_ids:
-            ps = self.players[owner_id]
-            for zone in zones:
-                if zone == 'equipment':
-                    continue
-                cards = list(getattr(ps, zone, []) or [])
-                for index, old_card in enumerate(cards):
-                    card_type = None if same_type in ('same', '') else same_type
-                    if card_type is None:
-                        card_type = getattr(old_card, 'card_type', '') or None
-                    exclude = {getattr(old_card, 'def_id', '')} if not include_self else set()
-                    new_id = self._void_weighted_card_id(card_type, exclude=exclude)
-                    if not new_id:
-                        continue
-                    zone_list = getattr(ps, zone)
-                    if index < len(zone_list) and zone_list[index] is old_card:
-                        zone_list[index] = self._fresh_void_transformed_card(owner_id, new_id)
-            transformed_equipment = []
-            for eq in list(getattr(ps, 'equipment', []) or []):
-                exclude = {getattr(eq, 'def_id', '')} if not include_self else set()
-                new_id = self._void_weighted_card_id(equipment_type, exclude=exclude)
-                if not new_id:
-                    continue
-                armor = getattr(eq, 'armor', 0)
-                target = getattr(eq, 'effect_target', owner_id)
-                self._cleanup_equipment_derived_effects(owner_id, eq, run_destroy_event=False)
-                eq.card_instance = self._fresh_void_transformed_card(owner_id, new_id)
-                eq.armor = armor
-                eq.turns_equipped = 0
-                eq.uses_this_turn = 0
-                eq.corruption_active = False
-                eq.custom_vars = {}
-                flags = self._effective_card_flags(eq.card_instance)
-                eq.effect_target = owner_id if 'self_only' in flags else target
-                if self._equipment_uses_non_stack_rule(eq):
-                    self._ensure_non_stack_equipment_order(eq)
-                transformed_equipment.append(eq)
-            if params.get('run_equip_effects', True) is not False:
-                for eq in transformed_equipment:
-                    self._run_void_transformed_equipment_on_equip(owner_id, eq)
-            self._refresh_hand_limit_bonuses()
-            self._refresh_equipment_derived_player_flags(owner_id)
-            if log is not False and log:
-                self.log_msg(self._format_step_log(log, target=self.pn(owner_id), source=self.pn(player_id)))
 
     def _garden_refresh_coal_cards(self):
         return

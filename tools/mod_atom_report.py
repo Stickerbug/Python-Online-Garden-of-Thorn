@@ -271,6 +271,77 @@ def find_indirect_references(name: str, corpus) -> list:
     return hits
 
 
+def _quoted_names(block: str) -> set:
+    return set(re.findall(r"[\"']([a-z0-9_]+)[\"']", block or ""))
+
+
+def ui_type_consistency() -> dict:
+    """Round 55：`request_ui` 的三层类型表一致性。
+
+    * 声明：``mod_spec_v2.VALID_UI_COMPONENT_TYPES`` / ``VALID_UI_CONTROL_TYPES``
+    * 运行时白名单：``mod_runtime_v2._sanitize_ui_component`` /
+      ``_sanitize_ui_control`` 里的 ``if ctype not in {…}``
+    * 客户端渲染：``static/js/game.js`` 的 ``showV2UiRequest`` 里
+      ``type === '…'`` 分支
+
+    三层对不上时返回 ``problems``（``--check`` 会当失败项）。以前这三张表是
+    各写各的——声明 29 种、运行时认 14 种，按清单写会运行时报错。
+    """
+
+    runtime_text = (ROOT / "mod_runtime_v2.py").read_text(encoding="utf-8", errors="replace")
+    declared_components = set(getattr(mod_spec_v2, "VALID_UI_COMPONENT_TYPES", set()) or set())
+    declared_controls = set(getattr(mod_spec_v2, "VALID_UI_CONTROL_TYPES", set()) or set())
+    problems = []
+
+    def runtime_set(function_name: str) -> set:
+        match = re.search(
+            r"def " + re.escape(function_name) + r"\(.*?if ctype not in \{([^}]*)\}",
+            runtime_text,
+            re.S,
+        )
+        return _quoted_names(match.group(1)) if match else set()
+
+    runtime_components = runtime_set("_sanitize_ui_component")
+    runtime_controls = runtime_set("_sanitize_ui_control")
+    if not runtime_components or not runtime_controls:
+        problems.append("没能从 mod_runtime_v2 里解析出 UI 白名单（正则或实现结构变了？）")
+    client_controls = set()
+    client_path = ROOT / "static" / "js" / "game.js"
+    if client_path.is_file():
+        client_text = client_path.read_text(encoding="utf-8", errors="replace")
+        start = client_text.find("function showV2UiRequest")
+        if start >= 0:
+            end = client_text.find("\nfunction ", start + 10)
+            body = client_text[start:end if end > start else start + 20000]
+            client_controls = set(re.findall(r"type === '([a-z0-9_]+)'", body))
+            client_controls |= set(re.findall(r'type === "([a-z0-9_]+)"', body))
+    else:
+        problems.append("找不到 static/js/game.js（客户端渲染分支没法核对）")
+    if declared_components != runtime_components:
+        problems.append(
+            "窗口类型：声明与运行时白名单不一致；只多 "
+            f"{sorted(declared_components - runtime_components)}；只少 "
+            f"{sorted(runtime_components - declared_components)}"
+        )
+    if declared_controls != runtime_controls:
+        problems.append(
+            "控件类型：声明与运行时白名单不一致；只多 "
+            f"{sorted(declared_controls - runtime_controls)}；只少 "
+            f"{sorted(runtime_controls - declared_controls)}"
+        )
+    missing_client = sorted(runtime_controls - client_controls)
+    if missing_client:
+        problems.append(f"运行时认、客户端没有渲染分支的控件：{missing_client}")
+    return {
+        "declared_components": len(declared_components),
+        "declared_controls": len(declared_controls),
+        "runtime_components": len(runtime_components),
+        "runtime_controls": len(runtime_controls),
+        "client_controls": len(client_controls),
+        "problems": problems,
+    }
+
+
 def build_summary(report: dict, *, corpus=None) -> dict:
     core_ops = set(getattr(mod_spec_v2, "_CORE_LOGIC_OPS", set()) or set())
     valid_ops = set(getattr(mod_spec_v2, "VALID_LOGIC_OPS", set()) or set())
@@ -333,6 +404,7 @@ def build_summary(report: dict, *, corpus=None) -> dict:
         "macros": len(macros),
         "macro_map": dict(sorted(macros.items())),
         "layer_problems": layer_problems,
+        "ui_types": ui_type_consistency(),
         "secret_ops_used": [
             {"op": op, "cards": usage[op]["cards"], "packages": sorted(usage[op]["packages"])}
             for op in secret_used
@@ -434,6 +506,17 @@ def render_text(summary: dict) -> str:
             lines.append(f"  {problem}")
         lines.append("")
 
+    ui = summary.get("ui_types") or {}
+    if ui:
+        lines.append(
+            "== request_ui 类型表（声明 / 运行时 / 客户端）: "
+            f"{ui['declared_components']} / {ui['runtime_components']} / 控件 "
+            f"{ui['declared_controls']} / {ui['runtime_controls']} / {ui['client_controls']} =="
+        )
+        for problem in ui.get("problems") or []:
+            lines.append(f"  [失败] {problem}")
+        lines.append("")
+
     lines.append(f"== 仍在使用的未登记原子（长尾阻塞项）: {len(summary['still_used'])} ==")
     for item in summary["still_used"]:
         packages = "、".join(item["packages"])
@@ -503,6 +586,8 @@ def main(argv=None) -> int:
         # Round 47 / 批次 AK：口径分层的不变量与"数据写了内部处理器"都算失败。
         or summary["layer_problems"]
         or summary["secret_ops_used"]
+        # Round 55 / 批次 AS：UI 三层类型表必须一致。
+        or (summary.get("ui_types") or {}).get("problems")
     ):
         return 1
     return 0

@@ -23,6 +23,84 @@ from mod_spec_v2 import ATOMIC_OP_MACROS, REMOVED_ATOMIC_OPS, RENAMED_ATOMIC_OPS
 STEP_BUDGET = 1000
 FOR_EACH_LIMIT = 200
 
+# ---------------------------------------------------------------------------
+# Round 55 / 批次 AS：写值族的参数同义词（"记不住键名"的规范化）
+# ---------------------------------------------------------------------------
+# 同一件"写一个数"的事，各伞原子历史上用了不同键名：``health_op.amount``、
+# ``resource_op.delta``、``draw.count``、``card_prop_change`` 的 add 用
+# ``amount`` / set 用 ``value`` …… 写卡时要逐个查表。这里给**写值族**定一张
+# 同义词表：规范键缺失时用同义键补上（原键保留、行为不变），两条执行路径
+# 在分派前都会走 :func:`apply_param_synonyms`。
+#
+# 只对白名单里的 op 生效——像 ``card_prop_add_to_zone``（``count`` 是"几张牌"、
+# ``amount`` 是"属性增量"）和 ``move_card``（``count`` 是牌数）这类
+# 一个键两个含义的原子**不能**套用，避免把牌数当成数值。
+PARAM_SYNONYM_OPS = frozenset({
+    "health_op", "resource_op", "draw", "card_prop_change", "player_prop_change",
+    "player_stat_change", "equipment_prop_change", "card_var_change",
+    "player_var_change", "status_op",
+})
+
+# 规范键 → 可接受的同义键（按优先级；只在规范键缺失且同义键存在时补写）
+PARAM_SYNONYMS = {
+    "value": ("amount", "delta", "count", "health", "num"),
+    "amount": ("value", "delta", "count", "health", "num"),
+    "delta": ("amount", "value"),
+    "count": ("amount", "value"),
+}
+
+# 少数"属性名"键：只在指名的 op 上互认（``player_stat_change`` 只认 ``stat``，
+# 装备/卡牌属性族只认 ``property``/``prop``）。
+PARAM_PROPERTY_SYNONYM_OPS = frozenset({
+    "player_stat_change", "equipment_prop_change", "card_prop_change",
+    "player_prop_change",
+})
+
+
+def apply_param_synonyms(op: Any, params: Any) -> Any:
+    """按同义词表补齐写值族的参数键（不改原键、不改变已有语义）。
+
+    ``snapshot`` 单独处理：它借的只有 ``max_base`` ↔ ``max_base_cost_e``
+    这一对（快照范围在快照本体与选牌规格表里各写了一个名字）。
+    """
+
+    if not isinstance(params, dict):
+        return params
+    name = str(op or "")
+    if name == "snapshot":
+        if params.get("max_base") is None and params.get("max_base_cost_e") is not None:
+            out = dict(params)
+            out["max_base"] = params.get("max_base_cost_e")
+            return out
+        return params
+    if name not in PARAM_SYNONYM_OPS and name not in PARAM_PROPERTY_SYNONYM_OPS:
+        return params
+    out = None
+    for canonical, aliases in PARAM_SYNONYMS.items():
+        if params.get(canonical) is not None:
+            continue
+        for alias in aliases:
+            if params.get(alias) is not None:
+                out = dict(params) if out is None else out
+                out.setdefault(canonical, params.get(alias))
+                break
+    if name in PARAM_PROPERTY_SYNONYM_OPS:
+        # ``stat`` 只给 ``player_stat_change`` 认（卡牌 / 装备属性写 `stat:`
+        # 不是同义写法，照旧走各自的默认属性，不在这里被"纠正"）。
+        if name == "player_stat_change" and params.get("stat") is None:
+            for alias in ("property", "prop", "field"):
+                if params.get(alias) is not None:
+                    out = dict(params) if out is None else out
+                    out.setdefault("stat", params.get(alias))
+                    break
+        if params.get("property") is None:
+            for alias in ("prop", "field"):
+                if params.get(alias) is not None:
+                    out = dict(params) if out is None else out
+                    out.setdefault("property", params.get(alias))
+                    break
+    return out if out is not None else params
+
 
 ADVANCED_ATOMIC_OPS = {
     # Round 30 / 批次 Y：本名单只保留**仍在契约里**的 op（见
@@ -109,7 +187,6 @@ ADVANCED_ATOMIC_OPS = {
     # 从这里一并注销（``auto_play_zone_top`` 是更早批次的历史名）。
     "auto_play_zone_top",
     "card_var_change",
-    "transform_cards",
     "deck_catalog_pick", "deck_catalog_pick_resume",
     "player_prop_change", "card_prop_change",
     # Round 51 / 批次 AO：``equipment_prop_set`` / ``equipment_prop_add``
@@ -596,6 +673,8 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     pass
         on_hit = params.get("on_hit")
         on_hit_once = params.get("on_hit_once")
+        # Round 55 / 批次 AS：``on_kill``——直接伤害把目标打死时执行一次。
+        on_kill = params.get("on_kill")
         # ``log: false`` (or ``silent: true``) mutes the per-hit "受到N点X伤害"
         # lines so a card can print its own summary line instead.
         # Round 28: 走共享的 ``step_is_silent``，``no_log`` / ``hide_log`` 与
@@ -672,6 +751,27 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     })
                     _narrow_wide_targets(child_context, child_vars, target_id)
                     run_v2_steps(engine, child_context, on_hit)
+            if target_total > 0 and isinstance(on_kill, list):
+                victim = engine.players[target_id] if 0 <= target_id < len(engine.players) else None
+                if victim is not None and int(getattr(victim, "health", 0) or 0) <= 0:
+                    child_context = dict(context)
+                    child_vars = dict(context.get("vars") if isinstance(context.get("vars"), dict) else {})
+                    child_context.update({
+                        "event": "on_kill",
+                        "source_id": source,
+                        "target_id": target_id,
+                        "damage": int(target_total),
+                        "last_damage": int(target_total),
+                        "vars": child_vars,
+                    })
+                    child_vars.update({
+                        "target_id": target_id,
+                        "damage": int(target_total),
+                        "last_damage": int(target_total),
+                        "killed_target": target_id,
+                    })
+                    _narrow_wide_targets(child_context, child_vars, target_id)
+                    run_v2_steps(engine, child_context, on_kill)
             # Round 15 / batch 3: honour a data-authored summary line, the same
             # contract the engine atom for ``direct_damage`` already had.
             rendered = _render_step_log(engine, step, params, {
@@ -1508,6 +1608,41 @@ def eval_collection_op(engine, context: Dict[str, Any], expr: Dict[str, Any]) ->
         if amount is None:
             return list(items[offset:])
         return list(items[offset:offset + max(0, _collection_int(eval_v2_value(engine, context, amount), 0))])
+    # Round 55 / 批次 AS：列表原地改写的三个 mode（0 基下标，与 slice 的 offset 同口径）。
+    # 以前"插一个/删一个/改一个"要用 concat + 两段 slice 拼，写卡时很容易写错。
+    if mode in ("insert", "prepend", "append_at", "remove_at", "delete_at", "set_at"):
+        seq = list(items)
+        index = _collection_int(eval_v2_value(engine, context, expr.get("index", expr.get("offset", 0))), 0)
+        if mode in ("append_at",):
+            index = len(seq)
+        elif mode == "prepend":
+            index = 0
+        if index < 0:
+            index = max(0, len(seq) + index)
+        if mode in ("insert", "prepend", "append_at"):
+            value = eval_v2_value(engine, context, expr.get("value", expr.get("item")))
+            seq.insert(max(0, min(len(seq), index)), value)
+            return seq
+        if mode in ("remove_at", "delete_at"):
+            if 0 <= index < len(seq):
+                seq.pop(index)
+            return seq
+        value = eval_v2_value(engine, context, expr.get("value", expr.get("item")))
+        if 0 <= index < len(seq):
+            seq[index] = value
+        return seq
+    if mode == "reduce":
+        acc = eval_v2_value(engine, context, expr.get("initial", expr.get("start", 0)))
+        as_name = str(expr.get("as") or expr.get("bind") or "item")
+        acc_name = str(expr.get("accumulate") or expr.get("accumulator") or "acc")
+        body_expr = expr.get("value", expr.get("body"))
+        for item in items:
+            child = _collection_item_context(engine, context, item, as_name)
+            binding = dict(child.get("vars") or {})
+            binding[acc_name] = acc
+            child["vars"] = binding
+            acc = eval_v2_value(engine, child, body_expr)
+        return acc
     # 未知 mode：按"原样列表"返回，不静默变成 0（调用方通常马上能看出问题）。
     return list(items)
 
@@ -1809,6 +1944,27 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         if hi < lo:
             lo, hi = hi, lo
         return random.randint(lo, hi)
+    if op in ("random_card", "weighted_card", "random_card_id"):
+        # Round 55 / 批次 AS：按权重抽一张"卡定义 id"（权重 = 卡定义的 ``count``，
+        # 与 ``transform_cards`` 用的一模一样：跳过 sublime / 不合法的队伍限定牌、
+        # 只抽允许卡池）。``card_type`` 留空 / ``"same"`` / ``"any"`` = 不限类型。
+        raw_type = eval_v2_value(engine, context, expr.get("card_type", expr.get("type_filter")))
+        card_type = None if raw_type is None else str(raw_type).strip()
+        if card_type and card_type.lower() in ("same", "any", "*", ""):
+            card_type = None
+        raw_exclude = eval_v2_value(engine, context, expr.get("exclude", expr.get("exclude_ids")))
+        if isinstance(raw_exclude, (list, tuple, set)):
+            exclude = {str(item) for item in raw_exclude if str(item or "")}
+        elif raw_exclude:
+            exclude = {str(raw_exclude)}
+        else:
+            exclude = set()
+        picker = getattr(engine, "_void_weighted_card_id", None)
+        if callable(picker):
+            picked = picker(card_type, exclude)
+            if picked:
+                return picked
+        return ""
     if op == "random_choice":
         raw = expr.get("values", expr.get("options", expr.get("from", [])))
         values = eval_v2_value(engine, context, raw)
@@ -3602,6 +3758,8 @@ def _engine_effect_from_step(
                     engine, context, params[target_key],
                     wide_ok=target_key in ("target", "targets"),
                 )
+    # Round 55 / 批次 AS：写值族的参数同义词（与引擎路径同一张表）。
+    params = apply_param_synonyms(resolved_effect_type, params)
     return {
         "type": resolved_effect_type,
         "params": params,
@@ -3626,7 +3784,7 @@ def _materialize_atomic_value(engine, context: Dict[str, Any], value: Any):
         "last_positive_hits", "positive_hits",
         "hit_count", "damage_hits",
         "status_stack", "get", "deck_top_ids", "zone_top_ids", "zone_random_ids",
-        "collection_op",
+        "collection_op", "random_card", "weighted_card", "random_card_id",
         "last_crit_hits", "crit_hits", "status_count", "visible_status_count",
         "counter_cards_in_hand", "counters_in_hand",
         "play_was_countered", "was_countered",

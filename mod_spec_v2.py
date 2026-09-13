@@ -37,37 +37,46 @@ VALID_REGISTRY_KEYS = {
     "lists",
 }
 
+# Round 55 / 批次 AS：`request_ui` 的窗口类型**以运行时白名单为准**。
+# 以前这里列了 29 个名字（panel/prompt/choice/button_group/tabs/list/checkbox/
+# radio_group/multi_select/rich_text/dynamic_text/divider/input/zone_picker/
+# card_preview/stat_display/warning_text/preview_value 等），但
+# `mod_runtime_v2._sanitize_ui_component` 只认 14 个——按清单写会**运行时直接报错**。
+# 现在两张表对齐（组件 14 / 控件 12），`tools/mod_atom_report.py --check` 会同时核对
+# "声明 vs 运行时白名单 vs 客户端渲染分支"三层，防止再次漂移。
+# 想加回上面那些名字：先在 `_sanitize_ui_component` / `_sanitize_ui_control` 里实现，
+# 再在 `static/js/game.js` 的 `showV2UiRequest` 里加渲染分支，三处一起加。
 VALID_UI_COMPONENT_TYPES = {
     "modal",
-    "panel",
-    "prompt",
-    "choice",
     "confirm",
-    "player_picker",
-    "target_picker",
-    "card_picker",
-    "equipment_picker",
-    "zone_picker",
-    "text",
-    "dynamic_text",
-    "divider",
-    "rich_text",
-    "button",
-    "button_group",
-    "input",
+    "select",
+    "card_catalog_picker",
+    "slider",
     "number",
     "number_input",
+    "card_picker",
+    "equipment_picker",
+    "multi_card_picker",
+    "multi_equipment_picker",
+    "player_picker",
+    "target_picker",
+    "text",
+}
+
+# 窗口里的控件类型（`component.controls[].type`）：与运行时同一份白名单。
+VALID_UI_CONTROL_TYPES = {
+    "text",
     "select",
-    "radio_group",
-    "checkbox",
+    "card_catalog_picker",
     "slider",
-    "multi_select",
-    "tabs",
-    "list",
-    "card_preview",
-    "stat_display",
-    "warning_text",
-    "preview_value",
+    "number",
+    "number_input",
+    "card_picker",
+    "equipment_picker",
+    "multi_card_picker",
+    "multi_equipment_picker",
+    "player_picker",
+    "target_picker",
 }
 
 # Round 47 / 批次 AK：这张表是"所有名字"的历史并集（步骤 op + 取值表达式 +
@@ -418,7 +427,9 @@ _CORE_LOGIC_OPS = {
     # ``restore(mode:"card_props")`` / ``reveal(mode:"card_set")``。
     # Round 33 / 批次 AB：``snapshot_card_props`` 已并入
     # ``snapshot(mode:"card_props")``。
-    "transform_cards",
+    # Round 55 / 批次 AS：``transform_cards`` 已删除——"按权重变身"拆成了
+    # ``for_each`` + ``move_card(mode:"transform")`` / ``equipment_op(mode:"transform")``
+    # + 取值表达式 ``random_card`` 的组合（见 REMOVED_ATOMIC_OPS 的替代写法）。
 
     # Round 20: 上条的姊妹项——被代码/别名表引用（删掉会连带打断已登记
     # 的能力），或仍是某个家族唯一实现，因此保留并补登记。
@@ -634,6 +645,12 @@ DAMAGE_PARAM_PIPELINES = {
     "on_hit_once": {
         "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
         "note": "每个目标只跑一次的回调步骤",
+    },
+    # Round 55 / 批次 AS：击杀回调（这段伤害把目标打死时跑一次，
+    # ``target_id`` / ``vars.killed_target`` 指向被击杀的那名玩家）。
+    "on_kill": {
+        "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
+        "note": "击杀回调：这段伤害把目标打死时，对被击杀的每个目标各跑一次",
     },
     "log": {
         "pipelines": (DAMAGE_PIPELINE_ATTACK, DAMAGE_PIPELINE_DIRECT),
@@ -914,6 +931,26 @@ REMOVED_ATOMIC_OPS = {
     #   * 六条"只播报"的步骤：它们写的字段在引擎、卡数据、序列化与客户端里
     #     **零读取方**，实际行为就是那一行默认战报，所以替代写法是一行 ``log``。
     "transform_card": '{"op":"log","message":"变换<牌名>效果触发"}（原实现只播报；真正的变换是 transform_cards）',
+    # Round 55 / 批次 AS（变身族）：``transform_cards`` 拆成"遍历 + 原地换牌"两步，
+    # 抽卡定义改由取值表达式 ``random_card`` 负责（权重 = 卡定义 ``count``，
+    # 与旧实现同一张池：跳过 sublime / 非法的队伍限定牌、只抽允许卡池）。
+    "transform_cards": (
+        '[{"op":"for_each",'
+        '"source":{"selector":"zone_cards","zones":["hand","deck","discard","exile"],'
+        '"owner":"self","filter":{"require_selectable":false}},'
+        '"as":"void_scar_card","body":[{"op":"move_card","mode":"transform",'
+        '"card":{"ref":"void_scar_card"},"into":{"op":"random_card",'
+        '"card_type":{"op":"card_prop","card":{"ref":"void_scar_card"},"property":"card_type"},'
+        '"exclude":[{"op":"card_prop","card":{"ref":"void_scar_card"},"property":"def_id"}]}}]},'
+        '{"op":"for_each","source":{"selector":"zone_cards","zone":"equipment","owner":"self",'
+        '"filter":{"require_selectable":false}},"as":"void_scar_equipment",'
+        '"body":[{"op":"equipment_op","mode":"transform","equipment":{"ref":"void_scar_equipment"},'
+        '"into":{"op":"random_card","card_type":"root",'
+        '"exclude":[{"op":"card_prop","card":{"ref":"void_scar_equipment"},"property":"def_id"}]}}]}]'
+        '（``card_type:"same"`` = 按每张牌自己的类型抽（表达式逐张求值）；'
+        '``exclude_self:true`` = 排除它自己的定义；``run_equip_effects:true`` 是新 mode 的默认值；'
+        '``equipment_op(mode:"transform")`` 保留护甲与效果目标、回合簿记归零并重跑装备步骤）'
+    ),
     "modify_damage": '{"op":"log","message":"修改伤害公式：<formula>"}（formula 全仓库无读取方）',
     "emit_event": '{"op":"log","message":"广播事件：<事件名>"}（事件总线无订阅方；要静默写 log:false）',
     "global_mult": '{"op":"log","message":"全场伤害倍率x2"}（global_damage_mult/global_heal_mult/global_cost_mult 零读取方）',

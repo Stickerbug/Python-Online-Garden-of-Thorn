@@ -13,6 +13,7 @@ from mod_spec_v2 import (
     VALID_LOGIC_OPS,
     VALID_PATCH_OPS,
     VALID_REGISTRY_KEYS,
+    VALID_UI_CONTROL_TYPES,
     VALID_UI_COMPONENT_TYPES,
     damage_pipeline_warnings,
     is_namespace,
@@ -341,8 +342,8 @@ def _validate_resource_shape(registry: str, resource: Dict[str, Any], label: str
                     errors.append(f"{label}.controls[{i}] 必须是对象")
                     continue
                 ctrl_type = ctrl.get("type")
-                if ctrl_type not in VALID_UI_COMPONENT_TYPES:
-                    errors.append(f"{label}.controls[{i}].type 必须是受控 UI 类型")
+                if ctrl_type not in VALID_UI_CONTROL_TYPES:
+                    errors.append(f"{label}.controls[{i}].type 必须是受控 UI 控件类型")
     if registry in ("cards", "statuses", "opening_events"):
         events = resource.get("events", {})
         if events is not None and not isinstance(events, dict):

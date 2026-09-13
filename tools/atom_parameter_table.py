@@ -1437,6 +1437,27 @@ def render(model: dict) -> str:
     lines.append(f"| **本表抽到的参数条目** | **{param_total}** | 源码里读到的参数键去重后求和 |")
     lines.append(f"| 没有实现的登记名（写了会报错） | {len([op for op in universe if not op_paths(model, op)['dispatchable']])} | 见 §{len(group_labels())} 与附录 A |")
     lines.append("")
+    # Round 55 / 批次 AS：写值族的参数同义词（写卡时不用再逐个查"这个 op 认
+    # 哪个键"）。表本身在 mod_runtime_v2，两条路径分派前都会补齐。
+    lines.append("**Round 55：写值族的参数同义词**（`mod_runtime_v2.PARAM_SYNONYMS`；")
+    lines.append("规范键缺失时按表补齐，两条执行路径分派前都会走 `apply_param_synonyms`）：")
+    lines.append("")
+    lines.append("| 规范键 | 可接受的同义键 | 适用 op |")
+    lines.append("|---|---|---|")
+    synonym_ops = "、".join(f"`{op}`" for op in sorted(mod_runtime_v2.PARAM_SYNONYM_OPS))
+    for canonical, aliases in mod_runtime_v2.PARAM_SYNONYMS.items():
+        shown = "、".join(f"`{alias}`" for alias in aliases)
+        lines.append(f"| `{canonical}` | {shown} | {synonym_ops} |")
+    lines.append(f"| `stat` | `property`、`prop`、`field` | 只 `player_stat_change` |")
+    lines.append(f"| `property` | `prop`、`field` | "
+                 + "、".join(f"`{op}`" for op in sorted(mod_runtime_v2.PARAM_PROPERTY_SYNONYM_OPS) if op != "player_stat_change")
+                 + " |")
+    lines.append(f"| `max_base` | `max_base_cost_e` | 只 `snapshot`（选牌规格表里两队名字同一个含义） |")
+    lines.append("")
+    lines.append("**不统一的键（有意为之）**：`owner` 是「牌的来源方」、`target` 是「接收方/作用对象」"
+                 "（`move_card` 的偷取/交换模式两者不同）；`actor` 是「自动打出的执行者」；"
+                 "`to` 是「目的区/观看者」。这些**不做别名**，写错了会走各自的默认值，别混用。")
+    lines.append("")
     lines.append("**Round 47：原子口径三层**（`mod_spec_v2`；\"原子有多少个\"看这里，")
     lines.append("而不是 `_CORE_LOGIC_OPS` 那个 116 的历史并集）：")
     lines.append("")
