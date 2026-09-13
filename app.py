@@ -24295,7 +24295,9 @@ def api_social_friends():
     mark_read = str(request.args.get('mark_read') or '').lower() in ('1', 'true', 'yes')
     try:
         started = time.perf_counter()
-        data, error = list_friends(user_id, mark_read=False)
+        # 好友列表要按好友逐条拼最近对局（JSON 解析），实测 300-850ms。放进线程池，
+        # 避免 SQLite/序列化把单进程事件循环按住（历史上好友列表 2.8s 卡全服）。
+        data, error = run_off_event_loop(list_friends, user_id, False)
         db_slow_log('/api/social/friends', (time.perf_counter() - started) * 1000, 'friend_list')
         if error:
             return jsonify({'success': False, 'error': error}), 400
@@ -33930,6 +33932,8 @@ def _prewarm_public_card_cache_worker():
             warmed.append((match_mode, []))
         for match_mode, disabled_mods in warmed:
             _prewarm_public_cache_one(match_mode, disabled_mods)
+            # 每套组合之间让出一次，避免纯 Python 构包长期占着 GIL 把事件循环按死。
+            time.sleep(0.05)
         admin_event(
             'info',
             f'public data cache prewarmed: {len(warmed)} loadout combinations',

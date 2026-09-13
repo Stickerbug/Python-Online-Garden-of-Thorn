@@ -471,16 +471,18 @@ class ModCard:
             quality=self.quality,
             description=self.description,
             effect_text=self.effect_text,
-            flags=self.flags,
+            # The mod cache is shared between requests now, so hand CARD_DEFS
+            # its own copies of every mutable container.
+            flags=set(self.flags or ()),
             trigger_cost_e=self.trigger_cost_e,
             trigger_effect_text=self.trigger_effect_text,
             response_trigger=self.response_trigger,
-            effects=self.effects,
-            scripts=self.scripts,
+            effects=copy.deepcopy(self.effects or []),
+            scripts=copy.deepcopy(self.scripts or {}),
             response_title=self.response_title,
             response_content=self.response_content,
-            v2_events=self.v2_events,
-            v2_resource=self.v2_resource,
+            v2_events=copy.deepcopy(self.v2_events or {}),
+            v2_resource=copy.deepcopy(self.v2_resource or {}),
             v2_mod_id=self.v2_mod_id,
             image=self.image,
             image_url=self.image_url,
@@ -497,12 +499,12 @@ class ModCard:
             hits=self.hits,
             trigger_cost_m=self.trigger_cost_m,
             ui_effect_size=self.ui_effect_size,
-            name_i18n=self.name_i18n,
-            description_i18n=self.description_i18n,
-            effect_text_i18n=self.effect_text_i18n,
-            trigger_effect_text_i18n=self.trigger_effect_text_i18n,
-            response_title_i18n=self.response_title_i18n,
-            response_content_i18n=self.response_content_i18n,
+            name_i18n=dict(self.name_i18n or {}),
+            description_i18n=dict(self.description_i18n or {}),
+            effect_text_i18n=dict(self.effect_text_i18n or {}),
+            trigger_effect_text_i18n=dict(self.trigger_effect_text_i18n or {}),
+            response_title_i18n=dict(self.response_title_i18n or {}),
+            response_content_i18n=dict(self.response_content_i18n or {}),
         )
 
 
@@ -844,6 +846,11 @@ def _mods_signature():
     return tuple(sorted(items))
 
 
+def mods_signature():
+    """Public, cheap signature of the mods directory (changes on any edit)."""
+    return _mods_signature()
+
+
 def invalidate_mod_cache():
     global _MODS_CACHE_SIGNATURE, _MODS_CACHE
     _MODS_CACHE_SIGNATURE = None
@@ -851,20 +858,28 @@ def invalidate_mod_cache():
 
 
 def load_all_mods(force: bool = False) -> List[Mod]:
+    """Return every installed mod.
+
+    The returned objects are **shared with the process-wide cache**: callers
+    must treat them as read-only. Rebuilding the whole list (parse + deepcopy
+    of 350+ cards) on every call used to cost ~35-400ms and showed up as
+    multi-second stalls on the single eventlet loop, because login / mod
+    settings / draft all called it several times per action. Callers that need
+    to flip ``enabled`` (``get_enabled_mods``) shallow-copy first.
+    """
     global _MODS_CACHE_SIGNATURE, _MODS_CACHE
     signature = _mods_signature()
     if not force and _MODS_CACHE_SIGNATURE == signature:
-        return copy.deepcopy(_MODS_CACHE)
+        return _MODS_CACHE
     mods = []
-    if not os.path.isdir(MODS_DIR):
-        return mods
-    for fname in os.listdir(MODS_DIR):
-        if fname.endswith(('.json', '.gtnmod')):
-            mod = load_mod(os.path.join(MODS_DIR, fname))
-            mods.append(mod)
-    mods = sort_mods_for_display(mods)
+    if os.path.isdir(MODS_DIR):
+        for fname in os.listdir(MODS_DIR):
+            if fname.endswith(('.json', '.gtnmod')):
+                mod = load_mod(os.path.join(MODS_DIR, fname))
+                mods.append(mod)
+        mods = sort_mods_for_display(mods)
     _MODS_CACHE_SIGNATURE = signature
-    _MODS_CACHE = copy.deepcopy(mods)
+    _MODS_CACHE = mods
     return mods
 
 
@@ -904,7 +919,9 @@ def check_conflicts(mods: List[Mod]) -> List[str]:
 
 
 def get_enabled_mods() -> List[Mod]:
-    mods = load_all_mods()
+    # load_all_mods() hands out the shared cache, so copy the thin Mod wrappers
+    # before flipping ``enabled`` (cards/registries stay shared and read-only).
+    mods = [copy.copy(mod) for mod in load_all_mods()]
     try:
         import winreg
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\GardenOfThorn', 0, winreg.KEY_READ)

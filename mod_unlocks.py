@@ -11,7 +11,7 @@ from typing import Iterable
 
 import db
 import pvp_economy
-from mod_loader import load_all_mods, mod_category, sort_mods_for_display
+from mod_loader import load_all_mods, mod_category, mods_signature, sort_mods_for_display
 
 
 VANILLA_MOD_FILENAME = 'Vanilla Cards.gtnmod'
@@ -20,9 +20,21 @@ ENTERTAINMENT_UNLOCK_GAMES = 20
 CHOICE_INTERVAL_GAMES = 10
 FIXED_UNLOCK_COUNT = 5
 
+_OFFICIAL_NAMES_CACHE: tuple[tuple, tuple[str, ...]] | None = None
+_OFFICIAL_LAYOUT_CACHE: tuple[tuple, tuple[tuple[str, ...], tuple[str, ...]]] | None = None
+
 
 def official_mod_filenames() -> list[str]:
-    """Return healthy official mods in canonical display order."""
+    """Return healthy official mods in canonical display order.
+
+    Cached by the mods-directory signature: this is called twice per login and
+    rebuilding the list walks every package.
+    """
+    global _OFFICIAL_NAMES_CACHE
+    signature = mods_signature()
+    cached = _OFFICIAL_NAMES_CACHE
+    if cached is not None and cached[0] == signature:
+        return list(cached[1])
     names: list[str] = []
     for mod in sort_mods_for_display(load_all_mods()):
         if getattr(mod, 'errors', None):
@@ -35,14 +47,24 @@ def official_mod_filenames() -> list[str]:
     if VANILLA_MOD_FILENAME in names:
         names.remove(VANILLA_MOD_FILENAME)
         names.insert(0, VANILLA_MOD_FILENAME)
+    _OFFICIAL_NAMES_CACHE = (signature, tuple(names))
     return names
 
 
 def official_layout() -> tuple[list[str], list[str]]:
     """Return ``(fixed_unlock_mods, remaining_official_mods)``."""
+    global _OFFICIAL_LAYOUT_CACHE
+    signature = mods_signature()
+    cached = _OFFICIAL_LAYOUT_CACHE
+    if cached is not None and cached[0] == signature:
+        fixed, remaining = cached[1]
+        return list(fixed), list(remaining)
     names = official_mod_filenames()
     additions = [name for name in names if name != VANILLA_MOD_FILENAME]
-    return additions[:FIXED_UNLOCK_COUNT], additions[FIXED_UNLOCK_COUNT:]
+    fixed = additions[:FIXED_UNLOCK_COUNT]
+    remaining = additions[FIXED_UNLOCK_COUNT:]
+    _OFFICIAL_LAYOUT_CACHE = (signature, (tuple(fixed), tuple(remaining)))
+    return list(fixed), list(remaining)
 
 
 def compute_state(valid_games: int, chosen_mods: Iterable[str]) -> dict:
