@@ -67,6 +67,12 @@ def test_feedback_126_spectate_controls_stay_clickable_when_pushed_out():
     assert '  position: fixed;' in css
 
 
+def test_gallery_query_busts_stale_public_card_cache():
+    js = _game_js()
+    assert "params.set('v', version)" in js
+    assert 'window.__GTN_STATIC_VERSION__ || window.__GTN_APP_VERSION__' in js
+
+
 def test_gallery_official_entertainment_tabs_show_enable_states():
     js = _game_js()
     css = (ROOT / 'static' / 'css' / 'style.css').read_text(encoding='utf-8')

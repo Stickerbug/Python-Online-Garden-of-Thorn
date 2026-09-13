@@ -90,7 +90,10 @@ class CardSourceProbabilityUiContractTests(unittest.TestCase):
         self.assertIn('def hidden_disabled_entertainment_card_ids', app_source)
         self.assertIn('disabled_entertainment_mod_filenames(disabled_mods)', app_source)
         self.assertIn('def get_all_mod_shared_card_memberships(excluded_mod_filenames=None)', app_source)
-        self.assertIn('entertainment_disabled if include_all_mods else None', app_source)
+        # 图鉴（include_all_mods）展示全部模组的卡，来源信息不能把停用的娱乐模组剔掉，
+        # 否则前端只能把模组名显示成 unknown。
+        self.assertIn('card_mod_sources = get_card_mod_sources()', app_source)
+        self.assertIn('shared_card_memberships = get_all_mod_shared_card_memberships()', app_source)
         self.assertIn("params.set('disabled_mods', getDisabledMods().join(','))", game_source)
         self.assertIn('const previousListScrollTop = list.scrollTop || 0;', game_source)
         self.assertIn('list.scrollTop = previousListScrollTop;', game_source)

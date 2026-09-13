@@ -25468,10 +25468,10 @@ def api_cards():
     )
     hidden_entertainment_cards = hidden_disabled_entertainment_card_ids(disabled_mods) if include_all_mods else set()
     allowed_card_ids = (set(CARD_DEFS.keys()) - hidden_entertainment_cards) if include_all_mods else loadout['allowed_card_ids']
-    card_mod_sources = get_card_mod_sources(sorted(entertainment_disabled) if include_all_mods else [])
-    shared_card_memberships = get_all_mod_shared_card_memberships(
-        entertainment_disabled if include_all_mods else None
-    )
+    # 图鉴（include_all_mods）会展示全部已安装模组的卡，即使该娱乐模组在当前模式被停用。
+    # 这里必须保留所有模组的来源信息，否则停用的娱乐模组卡会被前端归到 "unknown"。
+    card_mod_sources = get_card_mod_sources()
+    shared_card_memberships = get_all_mod_shared_card_memberships()
     if community_mod:
         selected_hashes = {
             str(entry.get('sha256') or '').strip().lower()

@@ -11019,6 +11019,9 @@ function buildGalleryModQueryString() {
     if (community.mod_source === 'community') {
         params.set('community_mods', JSON.stringify(community.community_mods));
     }
+    // 公开数据响应带 max-age=300：带上版本号，部署后图鉴不会继续用旧卡牌/模组数据。
+    const version = String(window.__GTN_STATIC_VERSION__ || window.__GTN_APP_VERSION__ || '').trim();
+    if (version) params.set('v', version);
     return params.toString();
 }
 
