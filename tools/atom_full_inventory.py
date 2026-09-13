@@ -75,12 +75,16 @@ ROUND33_ACTIONS = {
     # ---- 批次 AB：快照/还原 -------------------------------------------------
     "snapshot_card_props": ("合", 1, '{"op":"snapshot","mode":"card_props","owner":"self","zone":"hand","store":"card_prop_snapshot","property":"cost_e_override"}',
                             "属性快照并进 snapshot(mode:\"card_props\")：store/过滤/restore_on_destroy 保留"),
-    "restore_card_props": ("合", 1, '{"op":"restore","mode":"card_props","owner":"self","store":"card_prop_snapshot"}',
-                           "属性还原并进 restore(mode:\"card_props\")"),
-    "restore_match_start_stats": ("合", 1, '{"op":"restore","mode":"match_start","target":"self"}',
-                                  "回到对局开始并进 restore(mode:\"match_start\")"),
-    "restore_turn_start_stats": ("合", 0, '{"op":"restore","mode":"turn_start","target":"self"}',
-                                 "回到回合开始并进 restore(mode:\"turn_start\")"),
+    "restore_card_props": ("合", 1, '{"op":"snapshot","action":"load","mode":"card_props","owner":"self",'
+                                    '"store":"card_prop_snapshot"}',
+                           "属性还原并进 restore(mode:\"card_props\")；Round 52 / 批次 AP 起 "
+                           "restore 本身也并进 snapshot(action:\"load\")"),
+    "restore_match_start_stats": ("合", 1, '{"op":"snapshot","action":"load","mode":"match_start","target":"self"}',
+                                  "回到对局开始并进 restore(mode:\"match_start\")，再并进 "
+                                  "snapshot(action:\"load\")"),
+    "restore_turn_start_stats": ("合", 0, '{"op":"snapshot","action":"load","mode":"turn_start","target":"self"}',
+                                 "回到回合开始并进 restore(mode:\"turn_start\")，再并进 "
+                                 "snapshot(action:\"load\")"),
 }
 
 # ---------------------------------------------------------------------------
@@ -573,6 +577,22 @@ ROUND51_ACTIONS = {
         "读当前属性值再加 ``amount``），旧名进 REMOVED_ATOMIC_OPS 并给出完整替代写法"),
 }
 
+# Round 52 / 批次 AP：``restore`` 并进 ``snapshot(action:"save"|"load")`` ——
+# 同一张表里 action 分存/取，三段 load 实现（card_props / match_start /
+# turn_start）逐字保留；判定与对拍见 `.codex-tmp/round52/rd52.md`。
+ROUND52_ACTIONS = {
+    "restore": (
+        "合", 2,
+        '{"op":"snapshot","action":"load","mode":"card_props"|"match_start"|"turn_start",…}',
+        "Round 52 / 批次 AP：快照族原本是「存一条、取一条」两个原子（snapshot / restore），"
+        "合并后由 ``action`` 分存/取、``mode`` 选档位（card_props / match_start / turn_start）；"
+        "``action`` 缺省时按 ``mode`` 推断（match_start/turn_start 只有取这一档），"
+        "所以老数据的参数面一个字没变。卡数据 2 处 restore（ankh / quantum）已迁移、"
+        "quantum 那步 snapshot 补了显式 ``action:\"save\"``；"
+        "定向对拍 0/5（card_props 存取 + match_start 1v1/2v2 + turn_start）与两张卡的"
+        "真实路径对拍 0/3 都是 0 差异"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -954,7 +974,7 @@ KEPT_EXPLICIT = {
     "reveal": "Round 33 揭示伞（mode=card_set|enemy_hand|hand）",
     "shuffle": "Round 33 洗牌伞（zone=discard|hand）",
     "snapshot": "Round 33 快照伞（mode=card_props）",
-    "restore": "Round 33 还原伞（mode=card_props|match_start|turn_start）",
+    # Round 52 / 批次 AP：restore 已并进 snapshot(action:"load")（三条 mode 不变）。
     "remove_equip_protection": "清空装备保护层数",
     "counter_equip_protect": "装备保护层数（反制族）",
     # Round 32 / 批次 AA：on_fatal_* 两条并进 health_op(mode:"fatal")。
@@ -1121,7 +1141,7 @@ def build() -> dict:
         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS,
          **ROUND47_ACTIONS, **ROUND48_ACTIONS, **ROUND49_ACTIONS,
-         **ROUND50_ACTIONS, **ROUND51_ACTIONS}
+         **ROUND50_ACTIONS, **ROUND51_ACTIONS, **ROUND52_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

@@ -20005,36 +20005,48 @@ class GameEngine:
     # ``mod_spec_v2.REMOVED_ATOMIC_OPS["discard_hand_by_paid_e"]``）。
 
     def _atomic_snapshot(self, player_id, card, params, log, choice, context):
-        """Round 33 / 批次 AB：``snapshot`` 伞。
+        """Round 33 / 批次 AB 的 ``snapshot`` 伞；**Round 52 / 批次 AP 把
+        ``restore`` 也并了进来**——现在同一张表里用 ``action`` 分存 / 取：
 
-        目前只有 ``mode:"card_props"``（旧 ``snapshot_card_props``：把区域里
-        每张牌的某个属性原值记进 ``store``，供 :meth:`_atomic_restore` 还原）。
-        ``mode`` 缺省即 ``card_props``，旧数据的参数面不变。
-        """
+        * ``action:"save"``（缺省，旧 ``snapshot``）：``card_props`` 一档，
+          把区域里每张牌的某个属性原值记进 ``store``
+          （``_snapshot_card_props_payload``）；
+        * ``action:"load"``（旧 ``restore``，三段实现逐字保留）：
+          ``card_props``（还原 ``save`` 记下的属性，参数 ``store``/``property``/
+          ``clear``）、``match_start``（``target``/``extra_self_e_loss``/
+          ``exclude_self``）、``turn_start``（同上）。
 
-        mode = str(params.get('mode') or 'card_props').strip().lower()
-        if mode in ('card_props', 'card', 'props'):
-            return self._snapshot_card_props_payload(player_id, card, params, log, choice, context)
-        raise V2ZoneError(f"snapshot 只认 mode=card_props，收到 {mode!r}")
-
-    def _atomic_restore(self, player_id, card, params, log, choice, context):
-        """Round 33 / 批次 AB：``restore`` 伞（``restore_card_props`` /
-        ``restore_match_start_stats`` / ``restore_turn_start_stats`` 三合一）。
-
-        统一参数 ``mode``：``card_props``（缺省，还原 ``snapshot`` 记下的属性，
-        参数 ``store``/``property``/``clear``）、``match_start``（``target``/
-        ``extra_self_e_loss``/``exclude_self``）、``turn_start``（同上）。三段
-        实现体与合并前逐字一致。
+        ``action`` 缺省时按 ``mode`` 推断：``match_start``/``turn_start`` 只有"取"
+        这一档（老 ``restore`` 数据不带 ``action``），其余按 ``save`` 处理——
+        老数据的参数面因此一个字没变。
         """
 
         mode = str(params.get('mode') or '').strip().lower()
-        if mode in ('match_start', 'match', 'match_start_stats'):
-            return self._restore_match_start_payload(player_id, card, params, log, choice, context)
-        if mode in ('turn_start', 'turn', 'turn_start_stats'):
-            return self._restore_turn_start_payload(player_id, card, params, log, choice, context)
-        if mode in ('', 'card_props', 'card', 'props'):
-            return self._restore_card_props_payload(player_id, card, params, log, choice, context)
-        raise V2ZoneError(f"restore 只认 mode=card_props/match_start/turn_start，收到 {mode!r}")
+        action = str(params.get('action') or '').strip().lower()
+        if not action:
+            action = 'load' if mode in (
+                'match_start', 'match', 'match_start_stats',
+                'turn_start', 'turn', 'turn_start_stats',
+            ) else 'save'
+        action = {
+            'store': 'save', 'write': 'save', 'record': 'save', 'capture': 'save',
+            'read': 'load', 'apply': 'load', 'restore': 'load', 'recover': 'load',
+        }.get(action, action)
+        if action == 'save':
+            if mode in ('', 'card_props', 'card', 'props'):
+                return self._snapshot_card_props_payload(player_id, card, params, log, choice, context)
+            raise V2ZoneError(f"snapshot(action:'save') 只认 mode=card_props，收到 {mode!r}")
+        if action == 'load':
+            if mode in ('match_start', 'match', 'match_start_stats'):
+                return self._restore_match_start_payload(player_id, card, params, log, choice, context)
+            if mode in ('turn_start', 'turn', 'turn_start_stats'):
+                return self._restore_turn_start_payload(player_id, card, params, log, choice, context)
+            if mode in ('', 'card_props', 'card', 'props'):
+                return self._restore_card_props_payload(player_id, card, params, log, choice, context)
+            raise V2ZoneError(
+                f"snapshot(action:'load') 只认 mode=card_props/match_start/turn_start，收到 {mode!r}"
+            )
+        raise V2ZoneError(f"snapshot 只认 action=save/load，收到 {action!r}")
 
     def _restore_turn_start_payload(self, player_id, card, params, log, choice, context):
         extra_self_e_loss = self._eval_int(player_id, params.get('extra_self_e_loss', 0), card)

@@ -72,7 +72,8 @@ ADVANCED_ATOMIC_OPS = {
     # ``swap_hands`` / ``copy_card_instance`` / ``create_copies_to_deck_top`` /
     # ``snapshot_card_props`` / ``restore_card_props`` / ``restore_*_stats``
     # 并进 ``move_card`` / ``copy_card`` / ``shuffle`` / ``snapshot`` / ``restore``。
-    "reveal", "shuffle", "snapshot", "restore",
+    # Round 52 / 批次 AP：``restore`` 并进 ``snapshot(action:"load")``。
+    "reveal", "shuffle", "snapshot",
     "copy_card",
     "remove_specific_card",
     "move_card",

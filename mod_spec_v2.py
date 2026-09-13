@@ -134,12 +134,12 @@ _CORE_LOGIC_OPS = {
     "create_card",
     "copy_card",
     # Round 33 / 批次 AB：三条 AB 伞原子——``reveal``（揭示：card_set/enemy_hand/hand
-    # 三合一）、``shuffle``（洗牌：discard→deck / 打乱手牌）、``snapshot`` 与
-    # ``restore``（属性快照 / 开局与回合初还原）。旧名见 REMOVED_ATOMIC_OPS。
+    # 三合一）、``shuffle``（洗牌：discard→deck / 打乱手牌）、``snapshot``
+    # （属性快照：Round 52 / 批次 AP 起 ``action:"save"|"load"`` 分存/取，
+    # 旧 ``restore`` 并了进来）。旧名见 REMOVED_ATOMIC_OPS。
     "reveal",
     "shuffle",
     "snapshot",
-    "restore",
     # Round 42 / 批次 AF：``transform_card`` 已删除（只播报的占位步骤，
     # 真变换是下面的 ``transform_cards``）。
     # Round 35：批次 AC 的四族（装备/状态/标签/自动打出）迁移收尾，规范名
@@ -1375,9 +1375,10 @@ REMOVED_ATOMIC_OPS = {
     "shuffle_hand": '{"op":"shuffle","zone":"hand","target":"self"}',
     #   * 快照族 → snapshot / restore 的 mode
     "snapshot_card_props": '{"op":"snapshot","mode":"card_props","owner":"self","zone":"hand","store":"card_prop_snapshot","property":"cost_e_override"}',
-    "restore_card_props": '{"op":"restore","mode":"card_props","owner":"self","store":"card_prop_snapshot"}',
-    "restore_match_start_stats": '{"op":"restore","mode":"match_start","target":"self"}',
-    "restore_turn_start_stats": '{"op":"restore","mode":"turn_start","target":"self"}',
+    "restore_card_props": '{"op":"snapshot","action":"load","mode":"card_props","owner":"self",'
+                          '"store":"card_prop_snapshot"}（Round 52 / 批次 AP：restore 并进 snapshot）',
+    "restore_match_start_stats": '{"op":"snapshot","action":"load","mode":"match_start","target":"self"}',
+    "restore_turn_start_stats": '{"op":"snapshot","action":"load","mode":"turn_start","target":"self"}',
 
     # Round 33 / 批次 AC + Round 35 收尾（装备/状态/标签/自动打出四族）：rd33 的
     # 迁移脚本死在半路（旧实现被删、数据只迁了一部分，还有 59 步被写成
@@ -1495,6 +1496,16 @@ REMOVED_ATOMIC_OPS = {
 
     # Round 47 / 批次 AK（响应窗口）：伤害管线里的两条"管线钩子"原子变成
     # ``on_event`` 的 ``response`` 分支（数据声明吸收 / 反弹，引擎管线不变）。
+    # Round 52 / 批次 AP（快照族）：``restore`` 并进 ``snapshot(action:"load")``
+    # ——同一张表里 action 分存/取，三段 load 实现（card_props / match_start /
+    # turn_start）逐字保留；卡数据 3 处已迁移（ankh / quantum ×2）。
+    "restore": (
+        '{"op":"snapshot","action":"load","mode":"card_props"|"match_start"|"turn_start",…}'
+        '（旧 ``restore`` 的 mode 与参数原样搬过去；``action`` 缺省时按 mode 推断，'
+        '所以老数据的参数面一个字没变。旧名 restore_card_props / '
+        'restore_match_start_stats / restore_turn_start_stats 的替代写法在 '
+        'RENAMED_ATOMIC_OPS 里同步改指这条）'
+    ),
     "absorb_attack_damage": (
         '{"op":"on_event","response":"absorb","scope":"responded_card","target":"self",'
         '"once":true,"log":"{source}的铜棒将吸收本次攻击牌伤害","body":[…原 body 步骤原样抄进…]}'
