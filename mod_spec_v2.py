@@ -289,8 +289,9 @@ _CORE_LOGIC_OPS = {
     # 兼容垫片也已删除（旧名进 REMOVED_ATOMIC_OPS）。
     "player_var_change",
     # Round 32 / 批次 AA：列表五兄弟并进
-    # ``list_modify(list=..., mode=set|append|insert|delete|clear, index=..., value=...)``。
-    "list_modify",
+    # ``list_modify(list=..., mode=set|append|insert|delete|clear, index=..., value=...)``；
+    # Round 48 / 批次 AL：``list_modify`` 本身删除——列表写值 =
+    # ``player_var_change(mode:"set")``（现在也写列表）+ ``collection_op``。
     # Round 37 / 批次 AD-2：``timed_effect`` 并进 ``delayed_effect(mode:"timed")``。
     "delayed_effect",
     # Round 41 / 批次 AE-5：``countdown_var`` 已删除（"写初值 + 每次触发减 1" =
@@ -1321,14 +1322,28 @@ REMOVED_ATOMIC_OPS = {
                         '"silent":true}（modify_next_cost 也在 Round 43 删除）',
     #   * 抽牌修正 → draw 的 modifiers
     "equip_reduce_draw": '{"op":"draw","count":0,"hooks":false,"target":"self","modifiers":[{"type":"sluggish","amount":1,"target":"enemy"}]}',
-    #   * 控制流 → repeat(until=...) / for_each(bind:"selected_card") / list_modify
+    #   * 控制流 → repeat(until=...) / for_each(bind:"selected_card") / 列表写值
+    #     （Round 48 起 ``list_modify`` 也已删除，写法见下面对应的五条）
     "repeat_until": '{"op":"repeat","until":<停止条件>,"body":[...],"limit":64}',
     "for_each_selected_card": '{"op":"for_each","bind":"selected_card","body":[...]}',
-    "list_set": '{"op":"list_modify","list":"<变量名>","mode":"set","value":[...]}',
-    "list_append": '{"op":"list_modify","list":"<变量名>","mode":"append","value":<元素>}',
-    "list_insert": '{"op":"list_modify","list":"<变量名>","mode":"insert","index":1,"value":<元素>}',
-    "list_delete": '{"op":"list_modify","list":"<变量名>","mode":"delete","index":1}',
-    "list_clear": '{"op":"list_modify","list":"<变量名>","mode":"clear"}',
+    "list_set": '{"op":"player_var_change","mode":"set","name":"<变量名>","value":[...]}'
+                '（Round 48 / 批次 AL：``player_var_change(mode:"set")`` 现在也写列表）',
+    "list_append": '{"op":"player_var_change","mode":"set","name":"L","value":'
+                   '{"op":"collection_op","mode":"concat",'
+                   '"source":{"op":"player_var","name":"L","default":[]},"values":[<元素>]}}',
+    "list_insert": '{"op":"player_var_change","mode":"set","name":"L","value":'
+                   '{"op":"collection_op","mode":"concat","values":['
+                   '{"op":"collection_op","mode":"slice","source":{"op":"player_var","name":"L","default":[]},'
+                   '"offset":0,"count":<下标-1>},[<元素>],'
+                   '{"op":"collection_op","mode":"slice","source":{"op":"player_var","name":"L","default":[]},'
+                   '"offset":<下标-1>}]}}',
+    "list_delete": '{"op":"player_var_change","mode":"set","name":"L","value":'
+                   '{"op":"collection_op","mode":"concat","values":['
+                   '{"op":"collection_op","mode":"slice","source":{"op":"player_var","name":"L","default":[]},'
+                   '"offset":0,"count":<下标-1>},'
+                   '{"op":"collection_op","mode":"slice","source":{"op":"player_var","name":"L","default":[]},'
+                   '"offset":<下标>}]}}',
+    "list_clear": '{"op":"player_var_change","mode":"set","name":"L","value":[]}',
 
     # Round 33 / 批次 AB（区域/复制/揭示/洗牌/快照族）：旧名一律带完整替代
     # 写法，写出来是"已移除 + 请改用"的显式报错，不静默。
@@ -1485,6 +1500,20 @@ REMOVED_ATOMIC_OPS = {
         '与旧实现一致；窗口的 ``choice_type`` 仍是 ``magic_salt_reflect``——那是客户端 '
         '``showMagicSaltReflectResponseUI`` 的既有契约；确认后的扣费与反弹伤害仍在 '
         '``resolve_choice`` 里跑同一条直伤管线）'
+    ),
+
+    # Round 48 / 批次 AL（列表）：``list_modify`` 删除——列表写值 =
+    # ``player_var_change(mode:"set")``（Round 48 起也写列表，逐项
+    # ``_serializable_list_item``）+ ``collection_op`` 的五个等价写法。
+    "list_modify": (
+        'append → {"op":"player_var_change","mode":"set","name":"L","value":'
+        '{"op":"collection_op","mode":"concat","source":{"op":"player_var","name":"L","default":[]},'
+        '"values":[<元素>]}}；set → 同上，value 直接写整张列表；'
+        'clear → value:[]；insert/delete → 用 collection_op 的 slice 前后两段包住新元素/跳过一项'
+        '（完整 JSON 见 ``RENAMED_ATOMIC_OPS`` 的 list_insert / list_delete 两条）'
+        '（非列表旧值按单元素处理、逐项 ``_serializable_list_item`` 归一都与旧实现一致；'
+        '唯一差别是旧实现就地 append 同一个列表对象、新写法替换成新列表——'
+        '映射表里没有第二处别名引用，``bio:job_application`` 的 6 例定向对拍 0 差异）'
     ),
 
     # Round 38 / 批次 AD-3（行为过滤族四合一）→ Round 42 / 批次 AF：``action_filter``

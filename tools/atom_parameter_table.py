@@ -1368,7 +1368,6 @@ SAMPLE_SPOT_CHECKS = (
     ("resource_op", "`resource`（e/m）+ `delta` 回落 `amount`（正获得/负消耗）+ `mode`（spend/aura_recovery）"
                     "+ `all`/`target`/`log_positive_only`/`reset_coffee`/`card_heavy`", "一致"),
     ("modify_next_cost", "`delta` 回落 `amount`（正加费/负减费）+ `mode`（increase/reduce 显式方向）+ `target`/`card_type`", "一致"),
-    ("list_modify", "`list`（变量名，回落 `name`）+ `mode`（set/append/insert/delete/clear）+ `index`/`value`（回落 `item`）", "一致"),
     ("on_event(trigger:\"play\")", "`scope`/`duration`/`body`/`exclude_card_ids`"
                                    "（Round 37 前写作 register_play_listener）", "一致"),
     ("queue_auto_play", "`card`/`source`/`target`/`each_turn`/`cost`/`exile` 等 12 个键", "一致"),

@@ -482,6 +482,25 @@ ROUND47_ACTIONS = {
         "唯一在用卡 desert_cards_addition:magic_salt 已迁移，10 例定向对拍与 704 条全卡 A/B 都是 0 差异"),
 }
 
+# Round 48 / 批次 AL：``list_modify`` 并进 ``player_var_change(mode:"set")`` +
+# ``collection_op``——``mode:"set"`` 现在也写列表（逐项 ``_serializable_list_item``），
+# 五个历史 mode 的替代写法见 ``mod_spec_v2.RENAMED_ATOMIC_OPS``。
+# 判定与对拍（bio:job_application，6 例 1v1+2v2）见 `.codex-tmp/round48/rd48.md`。
+ROUND48_ACTIONS = {
+    "list_modify": (
+        "删", 1,
+        '{"op":"player_var_change","mode":"set","name":"L","value":'
+        '{"op":"collection_op","mode":"concat",'
+        '"source":{"op":"player_var","target":"target","name":"L","default":[]},'
+        '"values":[<新元素>]}}',
+        "Round 48 / 批次 AL：列表写值不再需要专用原子——``player_var_change(mode:\"set\")`` "
+        "现在也写列表（列表值逐项走 ``_serializable_list_item``，与 ``list_modify(mode:\"set\")`` "
+        "同一口径），拼接/截取由 ``collection_op`` 的 concat 与 slice 组合；"
+        "``set`` 直接写整张列表、``clear`` 写 ``[]``、``insert``/``delete`` 用前后两段 slice 包住。"
+        "卡数据里 0 处旧写法传列表给 ``player_var_change``（纯加法），唯一在用卡 "
+        "bio:job_application 的 6 例定向对拍 0 差异"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -539,14 +558,9 @@ UNUSED_OP_VERDICTS = {
                             "事件时点声明键：拥有者回合开始（挂起类卡牌的主入口）"),
     "on_target_turn_start": ("留·事件钩子", "`events.{\"on_target_turn_start\":{…}}`",
                              "事件时点声明键：被指向目标的回合开始（计时器默认相位）"),
-    # ---- Round 47 / 批次 AK：新的通用能力（暂无卡在用，属于"扩展点"）----
-    "collection_op": ("留·能力扩展点",
-                      "`{\"op\":\"collection_op\",\"mode\":\"count|sum|min|max|any|all|none|"
-                      "first|last|join|filter|map|concat|unique|sort|slice|contains\",\"source\":…}`",
-                      "Round 47 / 批次 AK：集合聚合与列表变换的取值表达式（区域里的牌 / "
-                      "玩家列表 / 变量里的列表都是来源）；把「数一数 / 求和 / 有没有一张」这类"
-                      "逐卡公式从卡专用原子手里拿回来。实现在 ``mod_runtime_v2.eval_collection_op``，"
-                      "两条执行路径共用（引擎原生路径经 ``_eval_expr`` 转交）"),
+    # ---- Round 47 / 批次 AK：新的通用能力 ----
+    # （``collection_op`` 已经在用——bio:job_application 的列表追加——所以不在这张
+    #  "0 引用"定论表里；``pick`` 还没有卡在用，按"能力扩展点"登记。）
     "pick": ("留·能力扩展点",
              "`{\"op\":\"pick\",\"source\":…,\"as\":\"chosen\",\"count\":1,\"pick\":{…}}`",
              "Round 47 / 批次 AK：自动挑条目并绑定进 ``vars[as]``（不弹窗）——来源/过滤与 "
@@ -696,15 +710,23 @@ ROUND32_ACTIONS = {
                       "list/name 本来就在 for_each 的统一来源词表里；列表来源仍走引擎驱动"),
     "for_each_selected_card": ("合", 5, '{"op":"for_each","bind":"selected_card","body":[...]}',
                                "逐张遍历选中牌成为 for_each 的 bind 预设（chosen_card/selected_card_index 不变）"),
-    "list_set": ("合", 0, '{"op":"list_modify","list":"<变量名>","mode":"set","value":[...]}',
-                 "列表五兄弟并成 list_modify：list=变量名、mode=动作、index/value=参数"),
-    "list_append": ("合", 1, '{"op":"list_modify","list":"<变量名>","mode":"append","value":<元素>}',
-                    "同上；非列表旧值包成单元素的旧行为保留"),
-    "list_insert": ("合", 0, '{"op":"list_modify","list":"<变量名>","mode":"insert","index":1,"value":<元素>}',
-                    "同上；insert 下标仍夹在 [0, len]"),
-    "list_delete": ("合", 0, '{"op":"list_modify","list":"<变量名>","mode":"delete","index":1}',
+    # Round 48 / 批次 AL：list_modify 本身也已删除，这五条替代写法同步改指
+    # player_var_change + collection_op（见 mod_spec_v2.RENAMED_ATOMIC_OPS）。
+    "list_set": ("合", 0, '{"op":"player_var_change","mode":"set","name":"<变量名>","value":[...]}'
+                          '（Round 48 起 mode:"set" 也写列表）',
+                 "列表五兄弟并成 list_modify（Round 32）；Round 48 list_modify 再并进 "
+                 "player_var_change + collection_op"),
+    "list_append": ("合", 1, '{"op":"player_var_change","mode":"set","name":"L","value":'
+                             '{"op":"collection_op","mode":"concat",'
+                             '"source":{"op":"player_var","name":"L","default":[]},"values":[<元素>]}}',
+                    "同上；非列表旧值按单元素处理的旧行为保留（collection_op 的 concat 认单值）"),
+    "list_insert": ("合", 0, '{"op":"player_var_change","mode":"set","name":"L","value":'
+                             '{"op":"collection_op","mode":"concat","values":[slice(0,下标-1),[元素],slice(下标-1)]}}',
+                    "同上；insert 下标仍夹在 [0, len]（slice 越界天然截断）"),
+    "list_delete": ("合", 0, '{"op":"player_var_change","mode":"set","name":"L","value":'
+                             '{"op":"collection_op","mode":"concat","values":[slice(0,下标-1),slice(下标)]}}',
                     "同上；越界删除仍是空操作"),
-    "list_clear": ("合", 0, '{"op":"list_modify","list":"<变量名>","mode":"clear"}',
+    "list_clear": ("合", 0, '{"op":"player_var_change","mode":"set","name":"L","value":[]}',
                    "同上；清空直接写空列表"),
     # ---- 生命族 -----------------------------------------------------------
     "heal": ("合", 45, '{"op":"health_op","mode":"heal","target":...,"amount":N}',
@@ -918,7 +940,7 @@ KEPT_EXPLICIT = {
     "restore_match_start_stats": "恢复开局属性",
     "restore_turn_start_stats": "恢复回合开始属性",
     "set_card_prop_random": "区域内随机设定属性",
-    "list_modify": "Round 32 新合并体：列表写值（mode=set|append|insert|delete|clear）",
+    # Round 48 / 批次 AL：list_modify 已删除（列表写值 = player_var_change(set) + collection_op）。
     "charge_self_damage": "充能自身伤害",
     # Round 47 / 批次 AK：absorb_attack_damage / magic_salt_reflect 已删除——
     # 两条响应窗口现在是 ``on_event(response:"absorb"|"reflect", …)`` 的数据参数
@@ -1023,8 +1045,8 @@ def build() -> dict:
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
          **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
-         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS,
-         **ROUND47_ACTIONS}
+        **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS,
+         **ROUND47_ACTIONS, **ROUND48_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,

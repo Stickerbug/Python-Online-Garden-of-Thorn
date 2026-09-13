@@ -13944,11 +13944,30 @@ class GameEngine:
         return self._eval_expr(player_id, expr, card)
 
     def _eval_var_assignment_value(self, player_id, expr, card=None):
+        # Round 48 / 批次 AL：``player_var_change(mode:"set")`` 现在也写**列表**——
+        # 传进来的值本身就是列表（``collection_op`` 的结果、或字面量列表）时整段存进去，
+        # 逐项走 ``_serializable_list_item``（与 ``list_modify(mode:"set")`` 同一口径）。
+        # 卡数据里 0 处旧用法传列表（``.codex-tmp/round48/scan_var_set.py``），
+        # 所以这是纯加法：老写法仍然拿"首元素"的数值口径。
         if isinstance(expr, list):
-            return self._serializable_list_item(expr[0]) if expr else 0
+            return [self._serializable_list_item(value) for value in expr]
+        if isinstance(expr, dict) and str(expr.get('op') or expr.get('type') or '') == 'collection_op':
+            # 引擎原生路径：``collection_op`` 由 ``_eval_expr`` 转交同一份实现，
+            # 结果按列表口径归一后整段写进玩家变量。
+            from mod_runtime_v2 import eval_collection_op
+            live_context = getattr(self, '_active_effect_context', None)
+            live_context = dict(live_context) if isinstance(live_context, dict) else {}
+            live_context.setdefault('source_player', player_id)
+            live_context.setdefault('target_player', player_id)
+            live_context.setdefault('card', card)
+            live_context.setdefault('vars', {})
+            values = eval_collection_op(self, live_context, expr)
+            if isinstance(values, (list, tuple, set)):
+                return [self._serializable_list_item(value) for value in values]
+            return self._serializable_list_item(values)
         if isinstance(expr, dict) and expr.get('ref') in ('list', 'list_create', 'list_var', 'zone_list', 'card_def_tags'):
             values = self._eval_list(player_id, expr, card)
-            return self._serializable_list_item(values[0]) if values else 0
+            return [self._serializable_list_item(value) for value in values]
         return self._serializable_list_item(self._eval_raw_item(player_id, expr, card))
 
     def _same_list_item(self, a, b):
@@ -23022,60 +23041,11 @@ class GameEngine:
     # Round 31 / 批次 Z：``var_set`` 兼容垫片已删除（``player_var_change(mode:"set")``
     # 是唯一实现；Round 30 已把 ``countdown_var`` 的内部调用改到规范名）。
 
-    def _atomic_list_modify(self, player_id, card, params, log, choice, context):
-        """Round 32 / 批次 AA：``list_set`` / ``list_append`` / ``list_insert`` /
-        ``list_delete`` / ``list_clear`` 五合一。
-
-        参数：``list`` 是**列表变量名**（旧的 ``name``，默认 ``"list"``），
-        ``mode`` 选 ``set`` / ``append`` / ``insert`` / ``delete`` / ``clear``
-        （也接受 ``action`` / ``list_op``，老式 ``{"type":...,"params":{...}}``
-        编码里还能直接写 ``op``），``index`` 是 insert/delete 的 1 基下标，
-        ``value`` 是写入值（append/insert 的单元素，set 的整张列表）。
-
-        五段旧实现逐条保留：非列表的旧值先包成单元素列表（``None`` 视作空），
-        insert 的下标夹在 ``[0, len]``，delete 越界是空操作，set 逐项
-        ``_serializable_list_item`` 归一。
-        """
-
-        action = str(
-            params.get('mode') or params.get('list_op') or params.get('action')
-            or params.get('op') or 'append'
-        ).strip().lower()
-        raw_name = params.get('list')
-        if isinstance(raw_name, str):
-            name = raw_name
-            value_expr = params.get('value', params.get('item'))
-        else:
-            name = str(params.get('name', 'list'))
-            value_expr = params.get('value', params.get('item', raw_name))
-        for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
-            store = self._var_store_for_target(player_id, target_ref)
-            if action in ('set', 'list_set'):
-                store[name] = [
-                    self._serializable_list_item(v)
-                    for v in self._eval_list(player_id, value_expr if value_expr is not None else [], card)
-                ]
-                continue
-            if action in ('clear', 'list_clear'):
-                store[name] = []
-                continue
-            current = store.get(name, [])
-            if not isinstance(current, list):
-                current = [] if current is None else [current]
-            if action in ('append', 'list_append', 'push'):
-                current.append(self._serializable_list_item(
-                    self._eval_raw_item(player_id, value_expr if value_expr is not None else 0, card)
-                ))
-            elif action in ('insert', 'list_insert'):
-                index = max(0, min(len(current), self._eval_int(player_id, params.get('index', 1), card, 1) - 1))
-                current.insert(index, self._serializable_list_item(
-                    self._eval_raw_item(player_id, value_expr if value_expr is not None else 0, card)
-                ))
-            elif action in ('delete', 'remove', 'list_delete'):
-                index = self._eval_int(player_id, params.get('index', 1), card, 1) - 1
-                if 0 <= index < len(current):
-                    current.pop(index)
-            store[name] = current
+    # Round 48 / 批次 AL：``list_modify`` 已删除——列表写值现在是
+    # ``player_var_change(mode:"set")`` + ``collection_op`` 的组合
+    # （``mode:"set"`` 现在也写列表，逐项走 ``_serializable_list_item``）。
+    # 五个 mode 的替代写法见 ``mod_spec_v2.REMOVED_ATOMIC_OPS["list_modify"]``；
+    # 唯一在用卡 bio:job_application 的判定与对拍见 `.codex-tmp/round48/rd48.md`。
 
     # Round 32 / 批次 AA：``for_each_list`` 已并入
     # ``for_each(source: <列表表达式>)``（``_engine_loop_resolver`` 认得

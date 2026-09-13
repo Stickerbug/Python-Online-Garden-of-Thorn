@@ -95,7 +95,7 @@ ADVANCED_ATOMIC_OPS = {
     "add_tag", "add_tag_to_zone",
     # Round 42 / 批次 AF：``transform_card`` / ``card_counter`` / ``emit_event`` /
     # ``modify_damage`` 已删除（见 ``REMOVED_ATOMIC_OPS`` 的替代写法）。
-    "list_modify", "delayed_effect",
+    "delayed_effect",
     # Round 20: ``random_move_card_to_hand`` / ``move_random_card_to_hand``
     # (Round 1 draft names, never used by shipped data) were folded into
     # ``random_zone_card_to_hand``; see ``REMOVED_ATOMIC_OPS``.
@@ -1010,6 +1010,26 @@ LOOP_LIMIT_ALL = ("all", "全部", "unlimited", "no_limit", "none", "inf", "∞"
 LOOP_SOURCE_KEYS = ("source", "items", "targets", "list", "collection", "values")
 LOOP_BODY_KEYS = ("body", "steps", "effects")
 
+# Round 48 / 批次 AL：``for_each`` 认的**集合选择器**（复数写法）。
+# 单数 ``zone_card`` 仍然是"按规格挑一张"，不在这个名单里——老数据的行为不变。
+COLLECTION_LOOP_SELECTORS = (
+    "zone_cards", "cards", "card_list", "card_cards",
+    "player_list", "players", "player_ids",
+)
+
+
+def _is_collection_loop_source(source: Any) -> bool:
+    """这个循环来源是不是"整批条目"的集合选择器（复数写法 / 显式 ``all``）。"""
+
+    if not isinstance(source, dict):
+        return False
+    kind = str(source.get("selector") or source.get("ref") or "").strip().lower()
+    if kind in COLLECTION_LOOP_SELECTORS:
+        return True
+    if kind == "zone_card" and source.get("all") is True:
+        return True
+    return False
+
 
 def loop_body_from_params(params: Any) -> List[Any]:
     """Return the loop's per-iteration step list (``body``/``steps``/``effects``)."""
@@ -1055,6 +1075,12 @@ def plan_loop(engine, context: Dict[str, Any], params: Any, *, op: str = "for_ea
         items = items_override
     elif source is None:
         items = []
+    elif _is_collection_loop_source(source):
+        # Round 48 / 批次 AL：``for_each`` 的来源也认**集合选择器**——
+        # ``{"selector":"zone_cards","zone":"hand","owner":"self",…}``（复数写法）
+        # 一次拿到整批牌/玩家，复用 ``collection_op`` 的来源读法。
+        # 单数写法（``zone_card``）原义不变：那里仍然是"挑一张"。
+        items = collection_source_items(engine, context, source)
     else:
         try:
             items = (resolver or resolve_v2_target)(engine, context, source)
@@ -1263,11 +1289,11 @@ def collection_source_items(engine, context: Dict[str, Any], source: Any) -> lis
         kind = str(source.get("selector") or source.get("ref") or source.get("op")
                    or source.get("type") or "").strip()
         lowered = kind.lower()
-        if lowered in ("zone_card", "card", "cards", "zone_cards") or (
+        if lowered in ("zone_card", "card", "cards", "zone_cards", "card_list", "card_cards") or (
             "zone" in source and "filter" in source
         ):
             return _collection_zone_cards(engine, context, source)
-        if lowered in ("player", "players", "player_list"):
+        if lowered in ("player", "players", "player_list", "player_ids"):
             owner_ref = source.get("scope", source.get("target", source.get("owner", "source")))
             return _as_player_list(engine, resolve_v2_target(engine, context, owner_ref))
         if lowered in ("var", "ref") or (len(source) == 1 and "ref" in source):
