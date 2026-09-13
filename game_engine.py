@@ -19,6 +19,7 @@ from cards import (
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
 from mod_runtime_v2 import (
+    ATOMIC_OP_MACROS,
     FOR_EACH_LIMIT,
     LoopBreak,
     LoopContinue,
@@ -43,6 +44,7 @@ from mod_runtime_v2 import (
     normalize_listener_trigger,
     plan_loop,
     run_loop_driver,
+    run_pick_step,
     run_v2_event,
     run_v2_steps,
     step_is_silent,
@@ -993,8 +995,16 @@ class GameEngine:
         if remaining < 0:
             raise ActionWorkBudgetExceeded('isolated action work budget exceeded')
 
-    _EFFECT_ALIASES = {
-        'damage': 'deal_damage',
+    # Round 47 / 批次 AK：这张表只剩"宏"（写出来即改写成规范 op 的别名），
+    # 唯一来源是 ``mod_spec_v2.ATOMIC_OP_MACROS``（``damage`` → ``deal_damage``、
+    # ``defer_death_checks`` → ``defer_game_over``）。历史沿革留在上面的注释里：
+    # 每批收敛删掉的旧名都进了 ``mod_spec_v2.REMOVED_ATOMIC_OPS`` /
+    # ``RENAMED_ATOMIC_OPS``，写出来拿到"已移除/已改名 + 替代写法"的显式报错，
+    # 而**自己指自己的空别名不算宏**，Round 47 一并清掉
+    # （``copy_card`` / ``remove_specific_card`` / ``multiply_next_damage``；
+    # ``self._EFFECT_ALIASES.get(x, x)`` 对它们是恒等，删除不改变行为）。
+    _EFFECT_ALIASES = dict(ATOMIC_OP_MACROS)
+    # 历史沿革逐条留档（下面这些名字都已经不是本表条目）：
         # Round 30 / 批次 Y：``damage_multi`` → ``deal_damage_multi`` 这条别名随
         # 「多段伤害 = ``deal_damage(hits=N)``」收敛一起删除；旧名写出来会先被
         # ``_retired_atom_runtime_error`` 拦下，拿到 mod_spec_v2.REMOVED_ATOMIC_OPS
@@ -1012,7 +1022,6 @@ class GameEngine:
         # Round 33 / 批次 AB：``reveal_hand`` / ``steal_card`` 两个别名随
         # ``reveal`` 伞与 ``move_card(mode:"steal")`` 一起删除——旧名写出来会
         # 拿到 mod_spec_v2.REMOVED_ATOMIC_OPS 的"已移除 + 替代写法"。
-        'copy_card': 'copy_card',
         # Round 27: ``discard`` / ``random_discard_from_hand`` 的实现与别名一起
         # 删除（拆成"取值表达式 + 通用步骤"，见
         # mod_spec_v2.REMOVED_ATOMIC_OPS 的替代写法）。
@@ -1022,7 +1031,6 @@ class GameEngine:
         # Round 35：``seal_equipment`` 并进 ``equipment_op(mode:"seal")``，这条
         # 旧别名（``seal_equipment_layers``）随之进 mod_spec_v2.RENAMED_ATOMIC_OPS，
         # 写出来拿到"已改名 + 伞写法"的显式报错。
-        'defer_death_checks': 'defer_game_over',
         # Round 22（别名收敛）：auto_play_queue_add / queue_auto_play_card /
         # kitty_auto_play / bounce_attack / ocean_for_each_selectable_target /
         # for_each_selectable_target 这批旧名从两张别名表一起删除，改由
@@ -1031,7 +1039,6 @@ class GameEngine:
         # ``give_card_to_deck`` 已分别并入 ``shuffle(zone:"discard")`` 与
         # ``move_card(mode:"give", target_zone:...)``，从本表删除（旧名写出来拿到
         # REMOVED_ATOMIC_OPS 的替代写法）。
-        'remove_specific_card': 'remove_specific_card',
         # Round 29 / 批次 X + Round 35：``destroy_*_equip`` / ``destroy_equipment``
         # 已合并进 ``equipment_op(mode:"destroy", pick=...)``。
         # Round 42 / 批次 AF：``counter_equip_protect`` 整个删除（装备保护层数
@@ -1054,7 +1061,6 @@ class GameEngine:
         # 三条回合控制原子并进 ``turn_control(mode:"skip"|"extra"|"end")``，
         # 这三条"自己指自己"的别名一并删除——旧名写出来会先被
         # ``_retired_atom_runtime_error`` 拦下，拿到替代写法。
-        'multiply_next_damage': 'multiply_next_damage',
         # Round 42 / 批次 AF：``mark_self_damage_source`` / ``fission`` / ``fusion`` /
         # ``transform_card`` / ``modify_damage`` 已删除（见 mod_spec_v2.REMOVED_ATOMIC_OPS），
         # 顺带把历史上留下的三条同类残项（``reduce_next_cost`` / ``increase_next_cost`` /
@@ -1087,7 +1093,6 @@ class GameEngine:
         # ``player_prop_change`` 的 property 词表与剧情效果类型里使用，但作为
         # *效果类型* 的旧写法（无 ``status`` 参数）不再有等价实现，因此也不在
         # 本表：卡数据写它们会拿到"已移除 + player_status_layers"的报错。
-    }
 
     def _retired_atom_runtime_error(self, effect_type):
         """旧名在**引擎路径**上的显式报错（不是旧名时返回 ``None``）。
@@ -9260,6 +9265,11 @@ class GameEngine:
             if choice_cancelled or not (isinstance(choice, dict) and (choice.get('confirmed') or choice.get('accepted'))):
                 return {'success': True, 'cancelled': True}
             params = pending.get('choice_params') or {}
+            # Round 47 / 批次 AK：窗口由 ``on_event(response:"reflect")`` 声明，
+            # 确认时的参数（来源名 / 伤害类型 / 战报模板）存在 ``response_spec``
+            # （``choice_params`` 之外的私有键，不进客户端载荷）；
+            # 老窗口（没有该键）走同一份默认值，行为逐字不变。
+            response_spec = pending.get('response_spec') if isinstance(pending.get('response_spec'), dict) else {}
             try:
                 owner_id = int(params.get('owner_id', player_id))
                 attacker_id = int(params.get('attacker_id', -1))
@@ -9272,7 +9282,7 @@ class GameEngine:
             cost_m = max(0, int(params.get('cost_m', 1) or 0))
             owner = self.players[owner_id]
             if owner.magic < cost_m:
-                self.log_msg(f"{self.pn(owner_id)}的魔法盐魔力不足")
+                self.log_msg(f"{self.pn(owner_id)}的{params.get('title') or '魔法盐'}魔力不足")
                 return {'success': True, 'not_enough_magic': True}
             if cost_m > 0:
                 owner.magic -= cost_m
@@ -9283,13 +9293,22 @@ class GameEngine:
             dealt = self._deal_direct_damage(
                 attacker_id,
                 reflect,
-                '魔法盐反伤',
+                str(response_spec.get('source_text') or '魔法盐反伤'),
                 target_id,
-                damage_type=DAMAGE_TYPE_PHYSICAL,
-                damage_tag=DAMAGE_TAG_PHYSICAL,
+                damage_type=str(response_spec.get('damage_type') or DAMAGE_TYPE_PHYSICAL),
+                damage_tag=str(response_spec.get('damage_tag') or DAMAGE_TAG_PHYSICAL),
             )
             if dealt > 0:
-                self.log_msg(f"{self.pn(owner_id)}消耗{cost_m}M，魔法盐对{self.pn(attacker_id)}反弹{dealt}D")
+                self.log_msg(self._format_step_log(
+                    response_spec.get('log'),
+                    owner=self.pn(owner_id),
+                    attacker=self.pn(attacker_id),
+                    target=self.pn(attacker_id),
+                    cost_m=cost_m,
+                    amount=dealt,
+                    damage=damage,
+                    reflect=reflect,
+                ) or f"{self.pn(owner_id)}消耗{cost_m}M，魔法盐对{self.pn(attacker_id)}反弹{dealt}D")
             self._enforce_unique_cards_for_all()
             return {'success': True, 'reflected': dealt}
         if choice_cancelled:
@@ -14983,6 +15002,18 @@ class GameEngine:
                 return self._current_damage_type()
             if ref in ('card_cost', 'actual_card_cost'):
                 return self._card_cost_value(player_id, expr, card)
+            if ref == 'collection_op':
+                # Round 47 / 批次 AK：集合表达式与 v2 运行时共用一份实现；
+                # 引擎原生路径（``_run_effect_list`` 里的嵌套体）也能读到
+                # 当前效果上下文里的循环变量 / ``as`` 绑定。
+                from mod_runtime_v2 import eval_collection_op
+                live_context = getattr(self, '_active_effect_context', None)
+                live_context = dict(live_context) if isinstance(live_context, dict) else {}
+                live_context.setdefault('source_player', player_id)
+                live_context.setdefault('target_player', player_id)
+                live_context.setdefault('card', card)
+                live_context.setdefault('vars', {})
+                return eval_collection_op(self, live_context, expr)
             if ref in ('last_positive_hits', 'positive_hits'):
                 active_context = getattr(self, '_active_effect_context', {}) or {}
                 nested_vars = active_context.get('vars') if isinstance(active_context.get('vars'), dict) else {}
@@ -20461,68 +20492,11 @@ class GameEngine:
     # ``resource_op(resource:"e"/"m", delta:...)``（正数获得、负数消耗，
     # 上限截断与默认战报逐字保留；见 ``_atomic_resource_op``）。
 
-    def _atomic_magic_salt_reflect(self, player_id, card, params, log, choice, context):
-        if not isinstance(context, dict):
-            return
-        # Magic Salt responds to physical attack-card damage, not status or
-        # other direct damage that also uses the generic damage-taken event.
-        action = context.get('current_action') if isinstance(context.get('current_action'), dict) else {}
-        vars_dict = context.get('vars') if isinstance(context.get('vars'), dict) else {}
-        damage_kind = context.get('damage_kind') or action.get('damage_kind') or vars_dict.get('damage_kind')
-        damage_type = context.get('damage_type') or action.get('damage_type') or vars_dict.get('damage_type')
-        if str(damage_kind or '') not in ('', 'attack'):
-            return
-        if str(damage_type or '') not in ('', DAMAGE_TYPE_PHYSICAL):
-            return
-        if self.pending_choice is not None or getattr(self, 'pending_response', None) is not None or getattr(self, 'pending_v2_ui', None) is not None:
-            return
-        try:
-            damage = int(context.get('damage', 0) or 0)
-            attacker_id = int(context.get('source_id', -1))
-            target_id = int(context.get('target_id', player_id))
-        except Exception:
-            return
-        if damage <= 0 or not self._valid_player_id(attacker_id) or not self._valid_player_id(target_id):
-            return
-        owner_id = player_id
-        try:
-            owner_id = int((context or {}).get('selected_equipment_owner_id', owner_id))
-        except Exception:
-            pass
-        eq = self._find_equipment_for_card(owner_id, card)
-        if eq is not None:
-            owner_id = int(getattr(eq, 'owner', player_id))
-        if not self._valid_player_id(owner_id):
-            owner_id = player_id
-        cost_m = max(0, self._eval_int(player_id, params.get('cost_m', 1), card, 1))
-        owner = self.players[owner_id]
-        if owner.magic < cost_m:
-            return
-        ratio = float(params.get('ratio', 0.5) or 0.5)
-        reflect = int(math.ceil(damage * ratio))
-        if reflect <= 0:
-            return
-        self.pending_choice = {
-            'card': card.to_dict(),
-            'player_id': owner_id,
-            'choice_type': 'magic_salt_reflect',
-            'choice_params': {
-                'owner_id': owner_id,
-                'attacker_id': attacker_id,
-                'target_id': target_id,
-                'damage': damage,
-                'reflect': reflect,
-                'ratio': ratio,
-                'cost_m': cost_m,
-                'cancellable': True,
-                'title': '魔法盐',
-                'message': f'是否支付{cost_m}M，对{self.pn(attacker_id)}反弹{reflect}D？',
-                'ok_text': '支付并反伤',
-                'cancel_text': '不触发',
-            },
-            'already_paid': True,
-            'message': f'是否支付{cost_m}M，对{self.pn(attacker_id)}反弹{reflect}D？',
-        }
+    # Round 47 / 批次 AK：``magic_salt_reflect`` 已删除——「受伤时弹一个付费
+    # 反弹窗口」现在是 ``on_event(response:"reflect", ratio, cost_m, …)`` 的
+    # 数据参数（实现见 :meth:`_offer_v2_reflect_response`，确认后的结算见
+    # :meth:`resolve_choice` 的 ``magic_salt_reflect`` 分支）。旧名写在卡数据里
+    # 会拿到 ``mod_spec_v2.REMOVED_ATOMIC_OPS`` 的"已移除 + 替代写法"。
 
     # Round 24：``add_armor`` / ``gain_dodge``（别名 ``dodge_permanent``）/
     # ``apply_poison`` / ``apply_burn`` / ``apply_toxic`` 这批同形小原子已并入
@@ -21372,56 +21346,12 @@ class GameEngine:
         if not events:
             self.custom_vars.pop(ABSORB_ATTACK_DAMAGE_KEY, None)
 
-    def _atomic_absorb_attack_damage(self, player_id, card, params, log, choice, context):
-        """Register a one-shot absorber for the next attack hit.
-
-        The registration is consumed by :meth:`_consume_absorb_attack_damage`
-        from inside ``deal_attack_damage`` -- the same hook the legacy copper rod
-        used -- so the damage never lands and ``body`` runs with
-        ``vars['absorbed_damage']`` set to the prevented amount.
-
-        Round 16 shares the listener contract: ``trigger`` (``attack_hit``),
-        ``duration`` (default ``turn``), ``body`` (aliases
-        ``effects``/``steps``), an optional fire-time ``condition`` and
-        ``once`` (default true, preserving the historical one-shot absorber).
-        """
-        trigger = normalize_listener_trigger('absorb_attack_damage', params.get('trigger'), default='attack_hit')
-        if not listener_trigger_is_supported('absorb_attack_damage', trigger):
-            self._log_mod_runtime_error(
-                'absorb_attack_damage', RuntimeError(f'unsupported trigger: {trigger}'), player_id, card,
-            )
-            return
-        live_context = context if isinstance(context, dict) else {}
-        scope = str(params.get('scope', 'responded_card') or 'responded_card')
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not self._valid_player_id(target_id):
-            return
-        original = live_context.get('original_card')
-        if scope in ('any', 'any_attack', 'all_attacks'):
-            key = '_any'
-        else:
-            key = str(getattr(original, 'instance_id', '') or '')
-            if not key:
-                key = '_any'
-        events = self.custom_vars.get(ABSORB_ATTACK_DAMAGE_KEY)
-        if not isinstance(events, dict):
-            events = {}
-            self.custom_vars[ABSORB_ATTACK_DAMAGE_KEY] = events
-        entries = events.get(key)
-        if not isinstance(entries, list):
-            entries = []
-            events[key] = entries
-        entries.append({
-            'owner_id': player_id,
-            'target_id': target_id,
-            'source_card': card.to_dict() if card is not None else None,
-            'effects': listener_body_from_params(params),
-            'once': params.get('once', True) is not False,
-            'duration': str(params.get('duration', params.get('turns', 'turn')) or 'turn'),
-            'condition': listener_condition_from_params(params),
-        })
-        if log is not False and log:
-            self.log_msg(self._format_step_log(log, target=self.pn(target_id), source=self.pn(player_id)))
+    # Round 47 / 批次 AK：``absorb_attack_damage`` 已删除——「出牌应答时登记
+    # 一次攻击吸收，伤害落地前消费并把总量交给 body」现在是
+    # ``on_event(response:"absorb", scope, target, once, condition, body)`` 的
+    # 数据参数（实现见 :meth:`_register_v2_absorb_response`，消费点仍是
+    # :meth:`_consume_absorb_attack_damage`）。旧名写在卡数据里会拿到
+    # ``mod_spec_v2.REMOVED_ATOMIC_OPS`` 的"已移除 + 替代写法"。
 
     def _consume_absorb_attack_damage(self, target_id: int, source_card, damage: int,
                                       attacker_id: int = -1) -> bool:
@@ -21573,6 +21503,13 @@ class GameEngine:
     ON_EVENT_EFFECTS = ('magic_relic',)
 
     def _atomic_on_event(self, player_id, card, params, log, choice, context):
+        # Round 47 / 批次 AK：``response`` 分支——数据声明的伤害响应窗口。
+        # 承接两条"管线钩子"原子（旧名见 `REMOVED_ATOMIC_OPS`）：
+        #   * ``response:"absorb"``  = 旧 ``absorb_attack_damage``；
+        #   * ``response:"reflect"`` = 旧 ``magic_salt_reflect``。
+        if params.get('response') not in (None, '', False):
+            self._register_v2_response(player_id, card, params, log, choice, context)
+            return
         raw_trigger = str(self._step_text_value(player_id, card, params.get('trigger')) or '')
         if not raw_trigger.strip() and params.get('after') is True:
             # ``after: true`` 是 ``trigger:"after_all"`` 的简写（§33 的参数表）。
@@ -21601,6 +21538,226 @@ class GameEngine:
         self._log_mod_runtime_error(
             'on_event', RuntimeError(f'unsupported effect: {effect}'), player_id, card,
         )
+
+    # ------------------------------------------------------------------
+    # Round 47 / 批次 AK：数据驱动的伤害响应窗口（``on_event`` 的 ``response`` 分支）
+    # ------------------------------------------------------------------
+    # 两条"管线钩子"原子在这里变成数据参数（旧名 ``absorb_attack_damage`` /
+    # ``magic_salt_reflect`` 进 ``REMOVED_ATOMIC_OPS``，写出来是显式报错）：
+    #
+    #   ``response:"absorb"``  —— 登记式吸收。登记项由 ``deal_attack_damage``
+    #   内部的 :meth:`_consume_absorb_attack_damage` 在**伤害落地前**消费，
+    #   ``body`` 拿到 ``absorbed_damage``。参数：``scope``（``responded_card`` /
+    #   ``any``）、``target``、``once``（默认 true）、``duration``、``condition``、
+    #   ``body``（别名 ``effects``/``steps``）与 ``log``。
+    #
+    #   ``response:"reflect"`` —— 受伤时的付费反弹窗口（魔法盐）。参数：
+    #   ``ratio``（反弹比例）、``cost_m``（确认时扣的魔力）、``damage_kind`` /
+    #   ``damage_type``（门控，留空 = 不限）、``title`` / ``message`` /
+    #   ``ok_text`` / ``cancel_text``（窗口文案，支持 ``{cost_m}``/``{attacker}``/
+    #   ``{reflect}`` 占位符）、``source_text``（反弹伤害的来源名）与 ``log``
+    #   （确认后的战报模板，支持 ``{amount}``/``{cost_m}``/``{attacker}``）。
+    #
+    # 参数写在**顶层**（``{"op":"on_event","response":"reflect","ratio":0.5,…}``），
+    # 与其它伞原子一致，编辑器的槽位模型直接读得到。
+    V2_RESPONSE_KINDS = ('absorb', 'reflect')
+    V2_RESPONSE_CHOICE_TYPE = 'magic_salt_reflect'
+
+    def _register_v2_response(self, player_id, card, params, log, choice, context):
+        kind = str(params.get('response') or '').strip().lower()
+        if kind == 'absorb':
+            self._register_v2_absorb_response(player_id, card, params, log, context)
+            return
+        if kind == 'reflect':
+            self._offer_v2_reflect_response(player_id, card, params, log, context)
+            return
+        self._log_mod_runtime_error(
+            'on_event', RuntimeError(f'unsupported response: {params.get("response")!r}'),
+            player_id, card,
+        )
+
+    def _register_v2_absorb_response(self, player_id, card, params, log, context):
+        """``on_event(response:"absorb")``：旧 ``absorb_attack_damage`` 的实现体。
+
+        Registration is consumed by :meth:`_consume_absorb_attack_damage` from
+        inside ``deal_attack_damage`` -- the same hook the legacy copper rod
+        used -- so the damage never lands and ``body`` runs with
+        ``vars['absorbed_damage']`` set to the prevented amount.
+
+        The listener contract is unchanged: ``scope`` (``responded_card`` keys
+        the registration to the answered card, anything else = ``_any``),
+        ``target`` (default ``self``), ``body`` (aliases ``effects``/``steps``),
+        an optional fire-time ``condition``, ``once`` (default true) and
+        ``duration`` (default ``turn``).
+        """
+
+        live_context = context if isinstance(context, dict) else {}
+        scope = str(params.get('scope', 'responded_card') or 'responded_card')
+        target_id = self._resolve_target(player_id, params.get('target', 'self'))
+        if not self._valid_player_id(target_id):
+            return
+        original = live_context.get('original_card')
+        if scope in ('any', 'any_attack', 'all_attacks'):
+            key = '_any'
+        else:
+            key = str(getattr(original, 'instance_id', '') or '')
+            if not key:
+                key = '_any'
+        events = self.custom_vars.get(ABSORB_ATTACK_DAMAGE_KEY)
+        if not isinstance(events, dict):
+            events = {}
+            self.custom_vars[ABSORB_ATTACK_DAMAGE_KEY] = events
+        entries = events.get(key)
+        if not isinstance(entries, list):
+            entries = []
+            events[key] = entries
+        entries.append({
+            'owner_id': player_id,
+            'target_id': target_id,
+            'source_card': card.to_dict() if card is not None else None,
+            'effects': listener_body_from_params(params),
+            'once': params.get('once', True) is not False,
+            'duration': str(params.get('duration', params.get('turns', 'turn')) or 'turn'),
+            'condition': listener_condition_from_params(params),
+        })
+        if log is not False and log:
+            self.log_msg(self._format_step_log(log, target=self.pn(target_id), source=self.pn(player_id)))
+
+    def _offer_v2_reflect_response(self, player_id, card, params, log, context):
+        """``on_event(response:"reflect")``：旧 ``magic_salt_reflect`` 的实现体。
+
+        Offers the paid reflect window when the owner takes the declared kind of
+        damage.  The confirm-side payoff lives in :meth:`resolve_choice`
+        (``choice_type`` 仍是 ``magic_salt_reflect``：那是客户端
+        ``showMagicSaltReflectResponseUI`` 的既有契约，本批不动 ``static/``）。
+        """
+
+        if not isinstance(context, dict):
+            return
+        # Magic Salt responds to physical attack-card damage, not status or
+        # other direct damage that also uses the generic damage-taken event.
+        # 门控参数化：留空 = 不限制；写了就按"空值或等于该值"放行（与旧实现一致）。
+        action = context.get('current_action') if isinstance(context.get('current_action'), dict) else {}
+        vars_dict = context.get('vars') if isinstance(context.get('vars'), dict) else {}
+        damage_kind = context.get('damage_kind') or action.get('damage_kind') or vars_dict.get('damage_kind')
+        damage_type = context.get('damage_type') or action.get('damage_type') or vars_dict.get('damage_type')
+        want_kind = str(self._step_text_value(player_id, card, params.get('damage_kind')) or '')
+        want_type = str(self._step_text_value(player_id, card, params.get('damage_type')) or '')
+        if want_kind and str(damage_kind or '') not in ('', want_kind):
+            return
+        if want_type and str(damage_type or '') not in ('', want_type):
+            return
+        if self.pending_choice is not None or getattr(self, 'pending_response', None) is not None or getattr(self, 'pending_v2_ui', None) is not None:
+            return
+        try:
+            damage = int(context.get('damage', 0) or 0)
+            attacker_id = int(context.get('source_id', -1))
+            target_id = int(context.get('target_id', player_id))
+        except Exception:
+            return
+        if damage <= 0 or not self._valid_player_id(attacker_id) or not self._valid_player_id(target_id):
+            return
+        owner_id = player_id
+        try:
+            owner_id = int((context or {}).get('selected_equipment_owner_id', owner_id))
+        except Exception:
+            pass
+        eq = self._find_equipment_for_card(owner_id, card)
+        if eq is not None:
+            owner_id = int(getattr(eq, 'owner', player_id))
+        if not self._valid_player_id(owner_id):
+            owner_id = player_id
+        cost_m = self._v2_response_cost_m(player_id, card, params)
+        owner = self.players[owner_id]
+        if owner.magic < cost_m:
+            return
+        ratio = float(self._step_number_value(player_id, card, params.get('ratio', 0.5)) or 0.5)
+        reflect = int(math.ceil(damage * ratio))
+        if reflect <= 0:
+            return
+        attacker_name = self.pn(attacker_id)
+        title = str(self._step_text_value(player_id, card, params.get('title')) or '魔法盐')
+        default_message = f'是否支付{cost_m}M，对{attacker_name}反弹{reflect}D？'
+        message = self._format_step_log(
+            params.get('message'), cost_m=cost_m, attacker=attacker_name,
+            reflect=reflect, damage=damage,
+        )
+        message = str(message) if isinstance(message, str) and message else default_message
+        self.pending_choice = {
+            'card': card.to_dict(),
+            'player_id': owner_id,
+            'choice_type': self.V2_RESPONSE_CHOICE_TYPE,
+            'choice_params': {
+                'owner_id': owner_id,
+                'attacker_id': attacker_id,
+                'target_id': target_id,
+                'damage': damage,
+                'reflect': reflect,
+                'ratio': ratio,
+                'cost_m': cost_m,
+                'cancellable': True,
+                'title': title,
+                'message': message,
+                'ok_text': str(self._step_text_value(player_id, card, params.get('ok_text')) or '支付并反伤'),
+                'cancel_text': str(self._step_text_value(player_id, card, params.get('cancel_text')) or '不触发'),
+            },
+            # 确认时的参数（Round 47：窗口由数据声明，payoff 仍走同一条引擎
+            # 管线）。放在 ``choice_params`` **外面**：那是发给客户端的载荷，
+            # 加字段会让 choice_params 与迁移前不逐字节相同。
+            'response_spec': {
+                'source_text': str(self._step_text_value(player_id, card, params.get('source_text')) or '魔法盐反伤'),
+                'log': params.get('log'),
+                'damage_type': str(self._step_text_value(player_id, card, params.get('reflect_damage_type')) or DAMAGE_TYPE_PHYSICAL),
+                'damage_tag': str(self._step_text_value(player_id, card, params.get('reflect_damage_tag')) or DAMAGE_TAG_PHYSICAL),
+            },
+            'already_paid': True,
+            'message': message,
+        }
+
+    def _v2_response_cost_m(self, player_id, card, params):
+        """反射窗口的魔力花费：``cost_m`` 直接写数字，``cost`` 支持 ``{resource,amount}``。"""
+
+        raw_cost = params.get('cost')
+        if isinstance(raw_cost, dict):
+            resource = str(raw_cost.get('resource', raw_cost.get('currency', 'm')) or 'm').strip().lower()
+            amount = self._step_number_value(player_id, card, raw_cost.get('amount', 0))
+            try:
+                amount = int(amount or 0)
+            except (TypeError, ValueError):
+                amount = 0
+            if resource in ('m', 'magic', 'mana'):
+                return max(0, amount)
+            self._log_mod_runtime_error(
+                'on_event', RuntimeError(f'unsupported response cost: {resource!r}'),
+                player_id, card,
+            )
+            return 0
+        return max(0, self._eval_int(player_id, params.get('cost_m', 1), card, 1))
+
+    def _step_number_value(self, player_id, card, value):
+        """步骤里的数字（可写取值表达式）：``_resolve_step_number`` 的容错包装。"""
+
+        try:
+            return self._resolve_step_number(player_id, value, card, 0)
+        except Exception:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return 0
+
+    def _atomic_pick(self, player_id, card, params, log, choice, context):
+        """Round 47 / 批次 AK：``select`` —— 自动挑条目并绑定，不弹窗。
+
+        来源与 ``collection_op`` 共用一套读法（区域选牌走 ``zone_card`` 的
+        候选池、玩家选择器走 ``resolve_v2_target``、变量直接读 ``vars``）；
+        挑出来的条目写进 ``context['vars'][as]``（默认 ``chosen``），
+        后面的步骤用 ``{"op":"var","name":"chosen"}`` 或卡片位
+        ``{"ref":"chosen"}`` 复用。实现体在 ``mod_runtime_v2.run_select_step``，
+        两条执行路径共用。
+        """
+
+        live_context = context if isinstance(context, dict) else {}
+        return run_pick_step(self, live_context, params if isinstance(params, dict) else {})
 
     def _register_play_listener_effect(self, player_id, card, params, log):
         """``on_event(trigger:"play")``：旧 ``register_play_listener`` 的实现体。

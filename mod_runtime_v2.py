@@ -17,7 +17,7 @@ from cards import (
 )
 from damage_types import DAMAGE_TYPE_PHYSICAL
 from runtime_budget import ActionWorkBudgetExceeded
-from mod_spec_v2 import REMOVED_ATOMIC_OPS, RENAMED_ATOMIC_OPS
+from mod_spec_v2 import ATOMIC_OP_MACROS, REMOVED_ATOMIC_OPS, RENAMED_ATOMIC_OPS
 
 
 STEP_BUDGET = 1000
@@ -105,7 +105,7 @@ ADVANCED_ATOMIC_OPS = {
     # ``deal_damage`` step whose ``target`` is ``{"selector": "bounce", ...}``
     # (see ``mod_spec_v2.REMOVED_ATOMIC_OPS``).
     "queue_auto_play", "auto_play_zone_top",
-    "absorb_attack_damage", "add_charge_to_hand",
+    "add_charge_to_hand",
     "card_var_change",
     "set_card_prop_random",
     "transform_cards",
@@ -140,7 +140,10 @@ ADVANCED_ATOMIC_OPS = {
     # Round 44 / 批次 AH: ``electric_web_arm`` 已删除——三条写入都改用通用步骤
     # （``player_var_change`` + ``equipment_prop_set`` / ``equipment_prop_add``），
     # 见 ``mod_spec_v2.REMOVED_ATOMIC_OPS["electric_web_arm"]``。
-    "magic_salt_reflect", "third_eye_precision_or_hidden",
+    # Round 47 / 批次 AK：``magic_salt_reflect`` 已删除——受伤时的付费反弹
+    # 窗口是 ``on_event(response:"reflect", ratio, cost_m, …)`` 的数据参数
+    # （实现见 ``GameEngine._offer_v2_reflect_response``）。
+    "third_eye_precision_or_hidden",
     # Round 46 / batch AJ: ``grant_temp_swift_highest_e`` 已删除——"按属性取
     # 极值的区域选牌"补成通用选择器 ``zone_card``（``card_prop_change`` /
     # ``tag_op`` / ``move_card`` 的卡片位都认），卡数据已迁到
@@ -1163,6 +1166,10 @@ LISTENER_TRIGGER_ALIASES = {
     "on_play": "play",
     "current_play": "this_play",
     "on_equipment_trigger": "equipment_trigger",
+    # Round 47 / 批次 AK：伤害响应窗口（``response`` 分支）认这两个时点名，
+    # 也就是卡数据 ``events`` 里 ``on_damage_taken`` / ``on_response`` 的写法。
+    "on_damage_taken": "damage_taken",
+    "on_response": "response",
     # absorb_attack_damage
     "attack": "attack_hit",
     "attacked": "attack_hit",
@@ -1180,8 +1187,9 @@ LISTENER_TRIGGERS = {
         "owner_turn_end", "friendly_turn_start", "enemy_turn_start",
         "any_turn_start", "any_turn_end",
     },
-    "on_event": {"play", "this_play", "after_all", "equipment_trigger"},
-    "absorb_attack_damage": {"attack_hit"},
+    # Round 47 / 批次 AK：``damage_taken`` / ``response`` 是 ``on_event`` 的
+    # ``response`` 分支（数据驱动的吸收 / 反弹窗口）认的时点。
+    "on_event": {"play", "this_play", "after_all", "equipment_trigger", "damage_taken", "response"},
 }
 
 
@@ -1221,6 +1229,335 @@ def normalize_compare_operators(condition: Any) -> Any:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Round 47 / 批次 AK：集合表达式 ``collection_op`` 与步骤 op ``select``
+# ---------------------------------------------------------------------------
+# 两者共用同一套"来源 → 条目列表"的读法（``collection_source_items``）：
+#
+#   * ``{"selector":"zone_card", "zone":"hand", "owner":"self", "filter":{…}}``
+#     —— 区域里的牌，复用 ``zone_card`` 那张选牌规格表（引擎侧实现）；
+#   * ``{"selector":"player", "scope":"enemy"|"all"|"ally"|"self"}`` / 玩家选择器
+#     字符串（``"all_enemies"`` 等）—— 玩家 id 列表，复用 ``resolve_v2_target``；
+#   * ``{"ref":"<变量名>"}`` / ``{"op":"var","name":…}`` —— 前面绑定的列表/单值；
+#   * 字面量列表。
+#
+# ``collection_op`` 是**取值表达式**（返回数字/字符串/列表），可以嵌在任何写值
+# 位置；``select`` 是**步骤**（把挑出来的条目绑定进 ``vars[as]``，后面的步骤用
+# ``{"op":"var","name":"<as>"}`` 或卡片位 ``{"ref":"<as>"}`` 复用）。
+
+COLLECTION_MODES = (
+    "count", "sum", "min", "max", "any", "all", "none",
+    "first", "last", "join", "filter", "map", "concat",
+    "unique", "sort", "slice", "contains",
+)
+
+
+def collection_source_items(engine, context: Dict[str, Any], source: Any) -> list:
+    """把 ``collection_op`` / ``select`` 的 ``source`` 读成条目列表。"""
+
+    if source is None:
+        return []
+    if isinstance(source, (list, tuple, set)):
+        return list(source)
+    if isinstance(source, dict):
+        kind = str(source.get("selector") or source.get("ref") or source.get("op")
+                   or source.get("type") or "").strip()
+        lowered = kind.lower()
+        if lowered in ("zone_card", "card", "cards", "zone_cards") or (
+            "zone" in source and "filter" in source
+        ):
+            return _collection_zone_cards(engine, context, source)
+        if lowered in ("player", "players", "player_list"):
+            owner_ref = source.get("scope", source.get("target", source.get("owner", "source")))
+            return _as_player_list(engine, resolve_v2_target(engine, context, owner_ref))
+        if lowered in ("var", "ref") or (len(source) == 1 and "ref" in source):
+            return _collection_as_list(context.get("vars", {}).get(
+                str(source.get("name") or source.get("ref") or ""),
+            ))
+        value = eval_v2_value(engine, context, source)
+        return _collection_as_list(value)
+    if isinstance(source, str):
+        text = source.strip()
+        binding = context.get("vars", {})
+        if text in binding:
+            return _collection_as_list(binding.get(text))
+        value = resolve_v2_target(engine, context, text)
+        if isinstance(value, list):
+            players = _as_player_list(engine, value)
+            return players if players else _collection_as_list(value)
+        return _collection_as_list(value)
+    return _collection_as_list(source)
+
+
+def _collection_as_list(value: Any) -> list:
+    """单值/列表归一：``None`` → 空列表，字典按单条处理（不拆键）。"""
+
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return [value]
+
+
+def _collection_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(math.floor(float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _collection_zone_cards(engine, context: Dict[str, Any], source: Dict[str, Any]) -> list:
+    """区域里的牌（复用引擎 ``zone_card`` 的候选池与过滤规格表）。"""
+
+    candidates = getattr(engine, "_zone_card_candidates", None)
+    if not callable(candidates):
+        return []
+    source_player = _to_int(context.get("source_player", 0))
+    current_card = context.get("card")
+    try:
+        return list(candidates(source_player, source, current_card, context, True))
+    except Exception:
+        return []
+
+
+def _collection_item_value(engine, item: Any, prop: Any):
+    """条目 → 属性值：卡/装备/玩家/普通对象各走既有读法。"""
+
+    if prop in (None, ""):
+        return item
+    name = str(eval_v2_value(engine, {}, prop) if isinstance(prop, dict) else prop)
+    if isinstance(item, CardInstance):
+        # 卡牌的属性口径与 ``zone_card`` 的 ``pick.by`` 完全一致（``base_cost_e``
+        # 看牌面、``cost_e`` 看实际花费、``name`` 走中文名…），认不出来再退回
+        # 通用 ``_card_prop``。
+        pick_value = getattr(engine, "_zone_card_pick_value", None)
+        if callable(pick_value):
+            try:
+                return pick_value(item, name)
+            except Exception:
+                pass
+        return _card_prop(item, name)
+    if item is not None and not isinstance(item, (int, float, str, bool, dict, list, tuple, set)):
+        if hasattr(item, "card_instance"):
+            return _equipment_prop(item, name)
+    if isinstance(item, int) and _valid_player(engine, item):
+        return _player_stat(engine, item, name)
+    if isinstance(item, dict):
+        return item.get(name, 0)
+    return getattr(item, name, 0) if item is not None else 0
+
+
+def _collection_item_context(engine, context: Dict[str, Any], item: Any, as_name: str) -> Dict[str, Any]:
+    """把条目绑进一个**子上下文**（不改外层），``condition``/``value`` 里可读。"""
+
+    child = dict(context)
+    binding = dict(context.get("vars") or {})
+    binding[str(as_name or "item")] = item
+    binding["item"] = item
+    child["vars"] = binding
+    child["item"] = item
+    if isinstance(item, int) and _valid_player(engine, item):
+        child["item_player"] = item
+        binding["item_player"] = item
+    return child
+
+
+def _collection_predicate_ok(engine, context: Dict[str, Any], item: Any, cond: Any, as_name: str) -> bool:
+    if cond in (None, "", {}):
+        return bool(item) if not isinstance(item, (int, float)) else True
+    child = _collection_item_context(engine, context, item, as_name)
+    return bool(check_v2_condition(engine, child, cond))
+
+
+def _collection_matches(engine, context: Dict[str, Any], item: Any, expr: Dict[str, Any], as_name: str) -> bool:
+    """条目过滤：``where``/``condition``（逐条求值）+ ``filter``（选牌规格表）。"""
+
+    raw_filter = expr.get("filter")
+    if isinstance(raw_filter, dict) and raw_filter and isinstance(item, CardInstance):
+        matcher = getattr(engine, "_card_matches_filter", None)
+        if callable(matcher):
+            source_player = _to_int(context.get("source_player", 0))
+            try:
+                if not matcher(item, raw_filter, source_player, source_card=context.get("card")):
+                    return False
+            except Exception:
+                pass
+    cond = expr.get("where", expr.get("condition"))
+    if cond is not None:
+        return _collection_predicate_ok(engine, context, item, cond, as_name)
+    return True
+
+
+def eval_collection_op(engine, context: Dict[str, Any], expr: Dict[str, Any]) -> Any:
+    """``collection_op``：集合聚合与列表变换（取值表达式）。"""
+
+    mode = str(expr.get("mode") or expr.get("action") or "count").strip().lower()
+    as_name = str(expr.get("as") or expr.get("bind") or "item")
+    items = collection_source_items(engine, context, expr.get("source", expr.get("items")))
+    if mode in ("concat", "append", "prepend"):
+        items = list(items) if mode != "prepend" else list(items)
+    if mode not in ("count", "concat"):
+        items = [item for item in items if _collection_matches(engine, context, item, expr, as_name)]
+    if mode == "count":
+        return len(items)
+    if mode == "any":
+        return any(_collection_predicate_ok(engine, context, item, expr.get("where", expr.get("condition")), as_name)
+                   for item in items)
+    if mode == "all":
+        return all(_collection_predicate_ok(engine, context, item, expr.get("where", expr.get("condition")), as_name)
+                   for item in items)
+    if mode == "none":
+        return not any(_collection_predicate_ok(engine, context, item, expr.get("where", expr.get("condition")), as_name)
+                       for item in items)
+    prop = expr.get("property", expr.get("prop"))
+    if mode in ("sum", "min", "max"):
+        numbers = []
+        for item in items:
+            try:
+                numbers.append(float(_collection_item_value(engine, item, prop)))
+            except (TypeError, ValueError):
+                continue
+        if not numbers:
+            return 0
+        if mode == "sum":
+            total = sum(numbers)
+            return int(total) if float(total).is_integer() else total
+        value = min(numbers) if mode == "min" else max(numbers)
+        return int(value) if float(value).is_integer() else value
+    if mode in ("first", "last"):
+        amount = _collection_int(eval_v2_value(engine, context, expr.get("count", expr.get("amount", 1))), 1)
+        if amount <= 0:
+            return []
+        chosen = items[:amount] if mode == "first" else (items[-amount:] if items else [])
+        return chosen[0] if amount == 1 and chosen else chosen
+    if mode == "join":
+        separator = str(expr.get("separator", expr.get("sep", "、")) or "")
+        return separator.join(
+            str(_collection_item_value(engine, item, prop)) for item in items
+        )
+    if mode == "contains":
+        wanted = eval_v2_value(engine, context, expr.get("value", expr.get("item")))
+        return any(_collection_item_value(engine, item, prop) == wanted for item in items)
+    if mode == "filter":
+        return list(items)
+    if mode == "map":
+        if prop not in (None, ""):
+            return [_collection_item_value(engine, item, prop) for item in items]
+        value_expr = expr.get("value")
+        if value_expr is None:
+            return list(items)
+        out = []
+        for item in items:
+            child = _collection_item_context(engine, context, item, as_name)
+            out.append(eval_v2_value(engine, child, value_expr))
+        return out
+    if mode == "concat":
+        out = list(items)
+        for extra in (expr.get("values") or []):
+            out.extend(_collection_as_list(eval_v2_value(engine, context, extra)))
+        return out
+    if mode == "unique":
+        seen = []
+        for item in items:
+            key = _collection_item_value(engine, item, prop) if prop not in (None, "") else item
+            if any(key == existing for existing in seen):
+                continue
+            seen.append(key)
+        return seen
+    if mode == "sort":
+        order = str(expr.get("order", expr.get("direction", "asc")) or "asc").strip().lower()
+        reverse = order in ("desc", "descending", "降序", "high")
+        try:
+            return sorted(items, key=lambda item: _collection_item_value(engine, item, prop), reverse=reverse)
+        except TypeError:
+            return list(items)
+    if mode == "slice":
+        offset = _collection_int(eval_v2_value(engine, context, expr.get("offset", expr.get("index", 0))), 0)
+        amount = expr.get("count", expr.get("amount"))
+        if offset < 0:
+            offset = max(0, len(items) + offset)
+        if amount is None:
+            return list(items[offset:])
+        return list(items[offset:offset + max(0, _collection_int(eval_v2_value(engine, context, amount), 0))])
+    # 未知 mode：按"原样列表"返回，不静默变成 0（调用方通常马上能看出问题）。
+    return list(items)
+
+
+def run_pick_step(engine, context: Dict[str, Any], params: Dict[str, Any]):
+    """``select`` 步骤：自动挑条目并绑定（``as`` 默认 ``chosen``）。
+
+    两条执行路径共用这一份实现：v2 运行时经引擎原子 ``_atomic_select``
+    转交，引擎原生路径直接调用同一个原子。
+
+    * ``count``（默认 1）：挑几个；1 → 绑单值，>1 → 绑列表；
+    * ``filter``/``where``/``condition``：与 ``collection_op`` 同一套过滤；
+    * ``pick``：``by``/``mode``/``tie``（``max``/``min``/``first``/``last``/
+      ``random``），卡牌走 ``_zone_card_pick_value``，其它条目按属性比较；
+    * ``exclude``/``exclude_ids``：先排除已选过的实例 id / 玩家 id；
+    * ``allow_empty``：挑不到时是否算成功（默认 true——绑定空列表）。
+    """
+
+    as_name = str(params.get("as") or params.get("bind") or "chosen")
+    items = collection_source_items(engine, context, params.get("source", params.get("items")))
+    items = [item for item in items if _collection_matches(engine, context, item, params, as_name)]
+    excluded = set()
+    for raw in _collection_as_list(params.get("exclude", params.get("exclude_ids"))):
+        excluded.add(str(raw))
+    if excluded:
+        def _item_key(item):
+            return str(getattr(item, "instance_id", item))
+        items = [item for item in items if _item_key(item) not in excluded]
+    amount = max(1, _collection_int(eval_v2_value(engine, context, params.get("count", params.get("amount", 1))), 1))
+    raw_pick = params.get("pick")
+    if isinstance(raw_pick, dict) and items:
+        by = raw_pick.get("by", raw_pick.get("property", raw_pick.get("prop", "cost_e")))
+        mode = str(raw_pick.get("mode", raw_pick.get("order", "max")) or "max").strip().lower()
+        tie = str(raw_pick.get("tie", "first") or "first").strip().lower()
+        if mode in ("random", "any", "shuffle"):
+            items = list(items)
+            random.shuffle(items)
+        else:
+            def _sort_key(item):
+                if isinstance(item, CardInstance):
+                    return engine._zone_card_pick_value(item, by)
+                return _collection_item_value(engine, item, by)
+            try:
+                items = sorted(items, key=_sort_key, reverse=mode not in ("min", "lowest", "least", "asc"))
+            except TypeError:
+                items = list(items)
+        if tie in ("last", "latest", "newest", "end") and len(items) > 1:
+            items = [items[-1]] + items[:-1]
+    elif isinstance(raw_pick, str) and raw_pick.strip() and items:
+        text = raw_pick.strip()
+        lowered = text.lower()
+        for prefix in ("max_", "min_"):
+            if lowered.startswith(prefix):
+                picked = -1 if prefix == "min_" else 1
+                prop = text[len(prefix):]
+                try:
+                    items = sorted(
+                        items,
+                        key=lambda item: (_collection_item_value(engine, item, prop)
+                                          if not isinstance(item, CardInstance)
+                                          else engine._zone_card_pick_value(item, prop)),
+                        reverse=picked > 0,
+                    )
+                except TypeError:
+                    pass
+                break
+    chosen = items[:amount]
+    binding = dict(context.get("vars") or {})
+    binding[as_name] = chosen[0] if (amount == 1 and chosen) else list(chosen)
+    binding[f"{as_name}_count"] = len(chosen)
+    context["vars"] = binding
+    if chosen and not isinstance(chosen[0], (int, float, str)):
+        # 卡片/装备类条目也绑进上下文，方便卡片位直接写 ``{"ref":"<as>"}``。
+        context[as_name] = chosen[0]
+    if not chosen and params.get("allow_empty") is False:
+        return {"success": False, "error": f"select({as_name}) 没有可选条目"}
+    return {"success": True, "selected": len(chosen)}
+
+
 def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
     if isinstance(expr, (int, float, bool)) or expr is None:
         return expr
@@ -1230,6 +1567,8 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         return [eval_v2_value(engine, context, item) for item in expr]
     if not isinstance(expr, dict):
         return expr
+    if str(expr.get("op") or expr.get("type") or "") == "collection_op":
+        return eval_collection_op(engine, context, expr)
 
     if len(expr) == 1 and "player_stat" in expr and isinstance(expr.get("player_stat"), list):
         parts = expr.get("player_stat") or []
@@ -3137,7 +3476,9 @@ def _try_run_engine_atomic_op(engine, context: Dict[str, Any], op: str, params: 
     if not op or not hasattr(engine, "_run_effect_list"):
         return None
     effect_type = ATOMIC_OP_ALIASES.get(str(op), str(op))
-    engine_aliases = getattr(engine, "_EFFECT_ALIASES", {}) or {}
+    # Round 47 / 批次 AK：别名宏的唯一来源是 ``mod_spec_v2.ATOMIC_OP_MACROS``，
+    # 引擎实例上的 ``_EFFECT_ALIASES`` 就是它；实例缺表时用同一份兜底。
+    engine_aliases = getattr(engine, "_EFFECT_ALIASES", {}) or ATOMIC_OP_MACROS
     resolved_type = engine_aliases.get(effect_type, effect_type)
     if (
         effect_type not in ADVANCED_ATOMIC_OPS
@@ -3247,6 +3588,7 @@ def _materialize_atomic_value(engine, context: Dict[str, Any], value: Any):
         "last_positive_hits", "positive_hits",
         "hit_count", "damage_hits",
         "status_stack", "get", "deck_top_ids", "zone_top_ids", "zone_random_ids",
+        "collection_op",
         "last_crit_hits", "crit_hits", "status_count", "visible_status_count",
         "counter_cards_in_hand", "counters_in_hand",
         "play_was_countered", "was_countered",

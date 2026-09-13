@@ -280,6 +280,31 @@ def build_summary(report: dict, *, corpus=None) -> dict:
     usage = report["op_usage"]
     used_ops = set(usage)
     dangling = sorted(op for op in used_ops if op not in valid_ops)
+    # Round 47 / 批次 AK：口径分层——公开原子 / 内部处理器 / 宏。
+    public_atoms = set(getattr(mod_spec_v2, "PUBLIC_ATOMS", set()) or set())
+    internal_handlers = set(getattr(mod_spec_v2, "INTERNAL_HANDLERS", set()) or set())
+    macros = dict(getattr(mod_spec_v2, "ATOMIC_OP_MACROS", {}) or {})
+    runtime_steps = set(getattr(mod_spec_v2, "RUNTIME_STEP_OPS", set()) or set())
+    secret_used = sorted(op for op in used_ops if op in internal_handlers)
+    macro_used = sorted(op for op in used_ops if op in macros)
+    step_ops = engine_ops | runtime_steps
+    layer_missing = sorted(
+        op for op in step_ops
+        if op not in public_atoms and op not in internal_handlers and op not in macros
+    )
+    layer_overlap = sorted(
+        (public_atoms & internal_handlers)
+        | (public_atoms & set(macros))
+        | (internal_handlers & set(macros))
+    )
+    retired_public = sorted(public_atoms & (set(mod_spec_v2.REMOVED_ATOMIC_OPS) | set(mod_spec_v2.RENAMED_ATOMIC_OPS)))
+    layer_problems = []
+    if layer_missing:
+        layer_problems.append(f"三层口径没铺满步骤 op（漏 {len(layer_missing)} 个）：{layer_missing[:6]}")
+    if layer_overlap:
+        layer_problems.append(f"三层口径有重叠：{layer_overlap[:6]}")
+    if retired_public:
+        layer_problems.append(f"公开原子里混进了已退役名字：{retired_public[:6]}")
     still_used = sorted(
         (op for op in unregistered if op in used_ops),
         key=lambda op: (-usage[op]["cards"], op),
@@ -301,6 +326,22 @@ def build_summary(report: dict, *, corpus=None) -> dict:
         "core_ops": len(core_ops),
         "valid_ops": len(valid_ops),
         "engine_ops": len(engine_ops),
+        "public_atoms": len(public_atoms),
+        "public_atom_names": sorted(public_atoms),
+        "internal_handlers": len(internal_handlers),
+        "internal_handler_names": sorted(internal_handlers),
+        "macros": len(macros),
+        "macro_map": dict(sorted(macros.items())),
+        "layer_problems": layer_problems,
+        "secret_ops_used": [
+            {"op": op, "cards": usage[op]["cards"], "packages": sorted(usage[op]["packages"])}
+            for op in secret_used
+        ],
+        "macro_ops_used": [
+            {"op": op, "cards": usage[op]["cards"], "replacement": macros[op],
+             "packages": sorted(usage[op]["packages"])}
+            for op in macro_used
+        ],
         "unregistered_atoms": len(unregistered),
         "cards_total": report["resources_with_logic"],
         "steps_total": report["steps_total"],
@@ -344,6 +385,16 @@ def logic_group_lines() -> list:
     return lines
 
 
+def atom_layer_lines(summary: dict) -> list:
+    """Round 47：三层口径——"原子到底有多少个"看这里，不看 `_CORE_LOGIC_OPS`。"""
+
+    lines = ["  原子口径分层（Round 47，卡数据只该写第一层 + 宏）:"]
+    lines.append(f"    公开原子（可写进卡数据的步骤 op）: {summary['public_atoms']}")
+    lines.append(f"    内部处理器（保留实现，数据写不出来）: {summary['internal_handlers']}")
+    lines.append(f"    宏（写出来即改写为规范 op）: {summary['macros']}")
+    return lines
+
+
 def render_text(summary: dict) -> str:
     lines = []
     lines.append("== 引擎能力 ==")
@@ -351,6 +402,7 @@ def render_text(summary: dict) -> str:
     lines.append(f"  运行时白名单(VALID_LOGIC_OPS): {summary['valid_ops']}")
     lines.append(f"  _atomic_* 处理器:              {summary['engine_ops']}")
     lines.append(f"  未登记进通用清单的原子:        {summary['unregistered_atoms']}")
+    lines.extend(atom_layer_lines(summary))
     lines.extend(logic_group_lines())
     lines.append("")
     lines.append("== 卡数据 ==")
@@ -362,6 +414,25 @@ def render_text(summary: dict) -> str:
     for op in summary["dangling"]:
         lines.append(f"  {op}")
     lines.append("")
+
+    lines.append(f"== 卡数据里的内部处理器（写出来会显式报错）: {len(summary['secret_ops_used'])} ==")
+    for item in summary["secret_ops_used"]:
+        lines.append(f"  {item['cards']:3d} 张卡  {item['op']:34s} {'、'.join(item['packages'])}")
+    lines.append("")
+
+    lines.append(f"== 卡数据里的宏（建议改成规范 op）: {len(summary['macro_ops_used'])} ==")
+    for item in summary["macro_ops_used"]:
+        lines.append(
+            f"  {item['cards']:3d} 张卡  {item['op']:34s} → {item['replacement']}"
+            f"  {'、'.join(item['packages'])}"
+        )
+    lines.append("")
+
+    if summary["layer_problems"]:
+        lines.append("== 三层口径不变量（Round 47）: 失败 ==")
+        for problem in summary["layer_problems"]:
+            lines.append(f"  {problem}")
+        lines.append("")
 
     lines.append(f"== 仍在使用的未登记原子（长尾阻塞项）: {len(summary['still_used'])} ==")
     for item in summary["still_used"]:
@@ -426,7 +497,13 @@ def main(argv=None) -> int:
     else:
         print(render_text(summary))
 
-    if args.check and (summary["dangling"] or (args.strict and summary["legacy_step_count"])):
+    if args.check and (
+        summary["dangling"]
+        or (args.strict and summary["legacy_step_count"])
+        # Round 47 / 批次 AK：口径分层的不变量与"数据写了内部处理器"都算失败。
+        or summary["layer_problems"]
+        or summary["secret_ops_used"]
+    ):
         return 1
     return 0
 

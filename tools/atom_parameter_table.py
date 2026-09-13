@@ -1438,6 +1438,23 @@ def render(model: dict) -> str:
     lines.append(f"| **本表抽到的参数条目** | **{param_total}** | 源码里读到的参数键去重后求和 |")
     lines.append(f"| 没有实现的登记名（写了会报错） | {len([op for op in universe if not op_paths(model, op)['dispatchable']])} | 见 §{len(group_labels())} 与附录 A |")
     lines.append("")
+    lines.append("**Round 47：原子口径三层**（`mod_spec_v2`；\"原子有多少个\"看这里，")
+    lines.append("而不是 `_CORE_LOGIC_OPS` 那个 116 的历史并集）：")
+    lines.append("")
+    lines.append("| 层 | 数量 | 口径 |")
+    lines.append("|---|---|---|")
+    lines.append(f"| 公开原子 `PUBLIC_ATOMS` | {summary['public_atoms']} | "
+                 f"卡数据可写的步骤 op = 引擎 `_atomic_*` {summary['engine_ops']} + 运行时原生步骤 "
+                 f"{len(mod_spec_v2.RUNTIME_STEP_OPS)} − 内部处理器 − 宏 |")
+    lines.append(f"| 内部处理器 `INTERNAL_HANDLERS` | {summary['internal_handlers']} | "
+                 f"名字已退役、卡数据写出来是显式报错，实现留给引擎内部与老测试直呼 |")
+    lines.append(f"| 宏 `ATOMIC_OP_MACROS` | {summary['macros']} | "
+                 f"写出来即改写成规范 op：" +
+                 "、".join(f"`{k}` → `{v}`" for k, v in sorted(mod_spec_v2.ATOMIC_OP_MACROS.items())) + " |")
+    lines.append("")
+    lines.append("表达式算子 / 条件算子 / 事件时点写在**参数位**而不是步骤位，不是原子——"
+                 "它们按下面的五类口径单独统计。")
+    lines.append("")
     lines.append("**Round 25：登记名按真实执行路径分五类**（`mod_spec_v2.LOGIC_OP_GROUPS`；")
     lines.append("`_CORE_LOGIC_OPS` 仍是五类的并集，所有可用名字一个都没变）：")
     lines.append("")
@@ -1684,9 +1701,16 @@ def check(model: dict, text: str, out_path: pathlib.Path) -> int:
     problems = []
     recomputed = mod_atom_report.build_summary(mod_atom_report.collect(MODS_DIR))
     for key in ("core_ops", "valid_ops", "engine_ops", "unregistered_atoms", "cards_total", "steps_total",
-                "distinct_ops_used", "legacy_step_count"):
+                "distinct_ops_used", "legacy_step_count",
+                "public_atoms", "internal_handlers", "macros"):
         if summary[key] != recomputed[key]:
             problems.append(f"{key}: {summary[key]} != {recomputed[key]}")
+    # Round 47 / 批次 AK：三层口径（公开原子 / 内部处理器 / 宏）的不变量。
+    problems.extend(recomputed.get("layer_problems") or ())
+    if recomputed.get("secret_ops_used"):
+        problems.append(
+            f"卡数据写了内部处理器：{sorted(item['op'] for item in recomputed['secret_ops_used'])}"
+        )
     # Round 25：五类必须恰好铺满登记表（分类口径的直接校验）。
     core_ops = set(mod_spec_v2._CORE_LOGIC_OPS)
     covered = set()

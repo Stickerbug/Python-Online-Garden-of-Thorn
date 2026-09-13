@@ -25880,7 +25880,13 @@ def api_mod_studio_schema():
     if _rate_limited(ip, 'mod_studio_schema', limit=60, window=300):
         return _json_error('请求过于频繁，请稍后再试', 429)
     from atomic_registry import engine_atomic_ops
-    from mod_spec_v2 import VALID_LOGIC_OPS, _CORE_LOGIC_OPS
+    from mod_spec_v2 import (
+        ATOMIC_OP_MACROS,
+        INTERNAL_HANDLERS,
+        PUBLIC_ATOMS,
+        VALID_LOGIC_OPS,
+        _CORE_LOGIC_OPS,
+    )
 
     engine_ops = set(engine_atomic_ops())
     curated = set(_CORE_LOGIC_OPS or set())
@@ -25891,6 +25897,11 @@ def api_mod_studio_schema():
         'coreOps': sorted(curated),
         'engineAtoms': sorted(engine_ops),
         'ops': sorted(valid),
+        # Round 47 / 批次 AK：原子口径分层。公开原子 = 卡数据该写的步骤 op；
+        # 内部处理器写出来是显式报错；宏写出来会被改写成规范 op。
+        'publicAtoms': sorted(PUBLIC_ATOMS or ()),
+        'internalHandlers': sorted(INTERNAL_HANDLERS or ()),
+        'macros': dict(sorted((ATOMIC_OP_MACROS or {}).items())),
         # 只登记在引擎里、没进策展清单的原子：编辑器不必暴露给玩家
         'unregisteredAtoms': sorted(engine_ops - curated),
     }

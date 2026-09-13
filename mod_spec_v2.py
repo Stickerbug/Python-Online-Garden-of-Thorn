@@ -70,6 +70,10 @@ VALID_UI_COMPONENT_TYPES = {
     "preview_value",
 }
 
+# Round 47 / 批次 AK：这张表是"所有名字"的历史并集（步骤 op + 取值表达式 +
+# 条件算子 + 事件时点 + 内部处理器 + 宏），保留给校验器与编辑器当契约白名单。
+# 想知道**原子到底有多少个**请看下面 Round 47 的三层口径：
+# ``PUBLIC_ATOMS`` / ``INTERNAL_HANDLERS`` / ``ATOMIC_OP_MACROS``。
 _CORE_LOGIC_OPS = {
     "literal",
     "const",
@@ -172,6 +176,17 @@ _CORE_LOGIC_OPS = {
     # Round 27：区域取牌族补了"随机 N 张"（``zone_random_ids``）；顶部/底部
     # 由同一个 ``zone_top_ids`` 的 ``order`` 参数覆盖（见 docs §3 / §25）。
     "zone_random_ids",
+    # Round 47 / 批次 AK：集合表达式——对"区域里的牌 / 玩家列表 / 变量里的列表"
+    # 做聚合与变换（count / sum / min / max / any / all / none / first / last /
+    # join / filter / map / concat / unique / sort / slice / contains）。
+    # 只出现在取值位置，实现在 ``mod_runtime_v2.eval_collection_op``。
+    "collection_op",
+    # 同批：``pick`` —— 自动挑一个/一串条目并绑定进 ``vars[as]``（不弹窗）。
+    # 来源与 ``collection_op`` 共用一套读法，实现在
+    # ``GameEngine._atomic_pick`` → ``mod_runtime_v2.run_pick_step``。
+    # 不叫 ``select``：那个词是卡数据 UI 组件的 ``type``（``{"type":"select"}``），
+    # 同名会让"任意位置计数"的报告把它算成三万次用量。
+    "pick",
     "equipment_count_targeting",
     "hand_full",
     "floor",
@@ -347,7 +362,10 @@ _CORE_LOGIC_OPS = {
     # ``electric_web_armed_amount``）本来就在 ``player_var_change`` 与
     # ``equipment_prop_set`` / ``equipment_prop_add`` 的写入口里（未知属性名
     # 直接落 ``custom_vars``），卡数据已迁到这三条通用步骤。
-    "magic_salt_reflect",
+    # Round 47 / 批次 AK：``absorb_attack_damage`` / ``magic_salt_reflect``
+    # 已删除——两条伤害响应窗口并进 ``on_event(response:"absorb"|"reflect",
+    # …)`` 的数据参数（见 :data:`REMOVED_ATOMIC_OPS` 的替代写法与
+    # ``docs/引擎原子与数据步骤清单.md`` §47）。
     # Round 46 / batch AJ：``grant_temp_swift_highest_e`` 已删除——它卡在
     # "缺少按属性取极值的区域选牌选择器"上，这一批把这个通用能力补成
     # ``zone_card``（见 :data:`REMOVED_ATOMIC_OPS` 的替代写法与
@@ -376,7 +394,6 @@ _CORE_LOGIC_OPS = {
     # Round 20: 长尾原子登记（"卡数据仍在用、但没进策展清单"的 22 个）。
     # 它们本来就是引擎里的 _atomic_* 处理器，只是没被策展，导致
     # tools/mod_atom_report.py 一直把它们算作"未登记原子"。
-    "absorb_attack_damage",
     "add_charge_to_hand",
     # Round 29 / 批次 X：``card_var_set`` / ``card_var_add`` 已合并成
     # ``card_var_change``（登记在上面的模块族里），这里不再重复登记。
@@ -476,6 +493,8 @@ RUNTIME_STEP_OPS = frozenset({
 EXPRESSION_OPS = frozenset({
     "add", "sub", "mul", "div", "min", "max", "clamp", "floor", "ceil",
     "count", "get", "var", "const", "literal",
+    # Round 47 / 批次 AK：集合聚合/变换（实现在 ``eval_collection_op``）。
+    "collection_op",
     "player_stat", "player_property", "card_prop", "card_property",
     "equipment_prop", "equipment_property", "equipment_count_targeting",
     "zone_count", "zone_random_ids", "hand_full", "status_stack",
@@ -1446,6 +1465,28 @@ REMOVED_ATOMIC_OPS = {
         '挑不到牌时两条写法都不播报）'
     ),
 
+    # Round 47 / 批次 AK（响应窗口）：伤害管线里的两条"管线钩子"原子变成
+    # ``on_event`` 的 ``response`` 分支（数据声明吸收 / 反弹，引擎管线不变）。
+    "absorb_attack_damage": (
+        '{"op":"on_event","response":"absorb","scope":"responded_card","target":"self",'
+        '"once":true,"log":"{source}的铜棒将吸收本次攻击牌伤害","body":[…原 body 步骤原样抄进…]}'
+        '（登记项仍由 ``deal_attack_damage`` 里的 ``_consume_absorb_attack_damage`` '
+        '在**伤害落地前**消费，``body`` 里的 ``{"op":"var","name":"absorbed_damage"}`` / '
+        '``absorb_attacker`` 取值不变；``scope`` 的 ``any``/``any_attack``/``all_attacks`` '
+        '与 ``duration``/``condition`` 参数照旧）'
+    ),
+    "magic_salt_reflect": (
+        '{"op":"on_event","response":"reflect","damage_kind":"attack","damage_type":"physical",'
+        '"ratio":0.5,"cost_m":1,"title":"魔法盐",'
+        '"message":"是否支付{cost_m}M，对{attacker}反弹{reflect}D？","ok_text":"支付并反伤",'
+        '"cancel_text":"不触发","source_text":"魔法盐反伤",'
+        '"log":"{owner}消耗{cost_m}M，魔法盐对{attacker}反弹{amount}D"}'
+        '（``damage_kind``/``damage_type`` 留空 = 不限制，写了就按"空值或等于该值"放行，'
+        '与旧实现一致；窗口的 ``choice_type`` 仍是 ``magic_salt_reflect``——那是客户端 '
+        '``showMagicSaltReflectResponseUI`` 的既有契约；确认后的扣费与反弹伤害仍在 '
+        '``resolve_choice`` 里跑同一条直伤管线）'
+    ),
+
     # Round 38 / 批次 AD-3（行为过滤族四合一）→ Round 42 / 批次 AF：``action_filter``
     # 本身也删除，四个 mode 改写成既有原子（玩家属性 + 取值表达式 + log）：
     "block_own_actions": '{"op":"player_prop_change","mode":"set","property":"shovel_active","value":1,"target":"self"}'
@@ -1563,6 +1604,77 @@ VALID_LOGIC_OPS = (
     - set(RENAMED_ATOMIC_OPS)
     - set(REMOVED_ATOMIC_OPS)
 )
+
+# ---------------------------------------------------------------------------
+# Round 47 / 批次 AK：对外口径分层——公开原子 / 内部处理器 / 宏
+# ---------------------------------------------------------------------------
+# Round 25 把登记名按"真实执行路径"分成五类之后，"这个游戏有多少个原子"这个
+# 问题仍然被 ``_CORE_LOGIC_OPS`` 的 116 糊住了：里面既有步骤、取值表达式、
+# 条件与事件时点（**名字**，不是原子），也有卡数据根本写不出来的内部处理器和
+# 别名宏。Round 47 起对内对外都用这三张表说话：
+#
+#   PUBLIC_ATOMS       公开原子：卡数据可以写、有真实实现的**步骤** op
+#                      （引擎 ``_atomic_*`` + 运行时原生步骤）。
+#   INTERNAL_HANDLERS  内部处理器：引擎/运行时自己调用的名字。名字已退役，
+#                      卡数据写出来拿到"已移除/已改名 + 替代写法"的显式报错，
+#                      但 ``_atomic_*`` 实现保留给引擎内部与老测试直呼；
+#                      再加一个只有运行时自己会发的恢复步骤。
+#   ATOMIC_OP_MACROS   宏：写出来会被改写成另一条规范 op 的别名。自己指自己
+#                      的空别名不算宏——那只是历史残留，Round 47 已清掉。
+#
+# 表达式算子 / 条件算子 / 事件时点仍然按 Round 25 的五类口径统计
+# （``EXPRESSION_OPS`` / ``CONDITION_OPS`` / ``EVENT_HOOK_OPS``）：它们写在
+# **参数位**（条件、取值）而不是步骤位，不是原子。
+#
+# ``_CORE_LOGIC_OPS`` 保持原样（契约白名单的历史并集），三张表与它的关系由
+# ``tools/mod_atom_report.py --check`` 的不变量守住。
+
+# 别名宏：唯一一份真相（引擎与 v2 运行时都读它，见 ``GameEngine._EFFECT_ALIASES``）。
+ATOMIC_OP_MACROS = {
+    "damage": "deal_damage",
+    "defer_death_checks": "defer_game_over",
+}
+
+# 内部处理器：退役名字里仍留着 ``_atomic_*`` 实现的（判据是真实分派代码，
+# 不写死名单——新增/删除实现会自动改变这张表），加上运行时自己发起的
+# ``deck_catalog_pick_resume``（``mod_runtime_v2`` 的挂起式牌堆挑选在恢复时
+# 自己发出这一步，手写它没有意义）。
+INTERNAL_HANDLERS = frozenset(
+    (
+        set(ENGINE_ATOM_OPS)
+        & (set(REMOVED_ATOMIC_OPS) | set(RENAMED_ATOMIC_OPS))
+    )
+    | {"deck_catalog_pick_resume"}
+)
+
+# 公开原子 = 全部步骤 op（引擎真原子 + 运行时原生步骤）− 内部处理器 − 宏。
+PUBLIC_ATOMS = frozenset(
+    (set(ENGINE_ATOM_OPS) | set(RUNTIME_STEP_OPS))
+    - set(INTERNAL_HANDLERS)
+    - set(ATOMIC_OP_MACROS)
+)
+
+A_B_C_LAYERS = (
+    ("公开原子（卡数据可写的步骤 op）", PUBLIC_ATOMS),
+    ("内部处理器（保留实现，数据写不出来）", INTERNAL_HANDLERS),
+    ("宏（写出来即改写为规范 op）", frozenset(ATOMIC_OP_MACROS)),
+)
+
+
+def atom_layer(op: str) -> str:
+    """返回 op 属于哪一层（``A_B_C_LAYERS`` 的标签）；不在三层里返回 ``""``。"""
+
+    for label, names in A_B_C_LAYERS:
+        if op in names:
+            return label
+    return ""
+
+
+def atom_layer_counts() -> Dict[str, int]:
+    """``{层名: 数量}``，报告与文档都读这一份，避免每处各数一遍。"""
+
+    return {label: len(names) for label, names in A_B_C_LAYERS}
+
 
 # --- Round 33 recovery（Round 35 收尾后已删除）------------------------------
 # 批次 AB/AC 的代理死在半路时，这里临时把 30 个旧名重新登记回契约，好让

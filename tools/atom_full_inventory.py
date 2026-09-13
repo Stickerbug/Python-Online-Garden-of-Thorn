@@ -452,6 +452,36 @@ ROUND46_ACTIONS = {
         "唯一的在用卡 jungle:magic_rubber 已迁移，定向对拍与 704 条全卡 A/B 都是 0 差异"),
 }
 
+# Round 47 / 批次 AK：伤害管线里的两条"响应窗口"原子变数据参数——``on_event``
+# 的 ``response`` 分支（``absorb`` / ``reflect``）。窗口该有的引擎语义（伤害落地前
+# 消费登记项、付费确认窗口、按实际伤害比例反弹）留在管线里，比例/花费/门控/文案
+# 全下沉到步骤参数；判定与对拍见 `.codex-tmp/round47/rd47.md`。
+ROUND47_ACTIONS = {
+    "absorb_attack_damage": (
+        "删", 1,
+        '{"op":"on_event","response":"absorb","scope":"responded_card","target":"self",'
+        '"once":true,"log":"{source}的铜棒将吸收本次攻击牌伤害","body":[…原 body 步骤原样抄进…]}',
+        "Round 47 / 批次 AK：登记式吸收改由 ``on_event(response:\"absorb\")`` 声明——"
+        "同一张 ``custom_vars['absorb_attack_damage_events']`` 登记表、同一个 "
+        "``_consume_absorb_attack_damage``（在 ``deal_attack_damage`` 里、**伤害落地前**）"
+        "消费，``body`` 仍拿 ``absorbed_damage`` / ``absorb_attacker``；"
+        "``scope`` / ``once`` / ``duration`` / ``condition`` / ``log`` 参数一个不少。"
+        "唯一在用卡 void:copper_rod（避雷针）已迁移，10 例定向对拍与 704 条全卡 A/B 都是 0 差异"),
+    "magic_salt_reflect": (
+        "删", 1,
+        '{"op":"on_event","response":"reflect","damage_kind":"attack","damage_type":"physical",'
+        '"ratio":0.5,"cost_m":1,"title":"魔法盐",'
+        '"message":"是否支付{cost_m}M，对{attacker}反弹{reflect}D？","ok_text":"支付并反伤",'
+        '"cancel_text":"不触发","source_text":"魔法盐反伤",'
+        '"log":"{owner}消耗{cost_m}M，魔法盐对{attacker}反弹{amount}D"}',
+        "Round 47 / 批次 AK：受伤时的付费反弹窗口改由 ``on_event(response:\"reflect\")`` 声明——"
+        "原来写死在这条原子里的比例、魔力花费、物理攻击门控与四段文案，现在是步骤参数"
+        "（``damage_kind``/``damage_type`` 留空 = 不限）；窗口仍用 ``choice_type`` "
+        "``magic_salt_reflect``（客户端 ``showMagicSaltReflectResponseUI`` 的既有契约，未改 "
+        "``static/``），确认后的扣费与直伤管线结算仍在 ``resolve_choice`` 里。"
+        "唯一在用卡 desert_cards_addition:magic_salt 已迁移，10 例定向对拍与 704 条全卡 A/B 都是 0 差异"),
+}
+
 UNUSED_OP_VERDICTS = {
     # ---- 语言原语：数据 DSL 的骨架，删了写不了卡 ----
     "break": ("留·语言原语", "`{\"op\":\"break\"}`（循环体内）",
@@ -509,6 +539,20 @@ UNUSED_OP_VERDICTS = {
                             "事件时点声明键：拥有者回合开始（挂起类卡牌的主入口）"),
     "on_target_turn_start": ("留·事件钩子", "`events.{\"on_target_turn_start\":{…}}`",
                              "事件时点声明键：被指向目标的回合开始（计时器默认相位）"),
+    # ---- Round 47 / 批次 AK：新的通用能力（暂无卡在用，属于"扩展点"）----
+    "collection_op": ("留·能力扩展点",
+                      "`{\"op\":\"collection_op\",\"mode\":\"count|sum|min|max|any|all|none|"
+                      "first|last|join|filter|map|concat|unique|sort|slice|contains\",\"source\":…}`",
+                      "Round 47 / 批次 AK：集合聚合与列表变换的取值表达式（区域里的牌 / "
+                      "玩家列表 / 变量里的列表都是来源）；把「数一数 / 求和 / 有没有一张」这类"
+                      "逐卡公式从卡专用原子手里拿回来。实现在 ``mod_runtime_v2.eval_collection_op``，"
+                      "两条执行路径共用（引擎原生路径经 ``_eval_expr`` 转交）"),
+    "pick": ("留·能力扩展点",
+             "`{\"op\":\"pick\",\"source\":…,\"as\":\"chosen\",\"count\":1,\"pick\":{…}}`",
+             "Round 47 / 批次 AK：自动挑条目并绑定进 ``vars[as]``（不弹窗）——来源/过滤与 "
+             "``collection_op`` 共用一套读法，``pick`` 的属性极值口径与 ``zone_card`` 一致。"
+             "实现在 ``GameEngine._atomic_pick`` → ``mod_runtime_v2.run_pick_step``。"
+             "不叫 ``select``：那是卡数据 UI 组件的 ``type``，同名会被任意位置计数误算"),
     # ---- 伞原子与机制钩子：卡面机制的唯一实现，删掉要重写实现才能加回来 ----
     "action_filter": ("删·可下沉", "`{\"op\":\"player_prop_change\",\"mode\":\"set\",\"property\":\"attack_blocked\","
                                    "\"target\":\"enemy\",\"value\":{\"op\":\"max\",\"a\":{\"op\":\"player_property\","
@@ -876,10 +920,9 @@ KEPT_EXPLICIT = {
     "set_card_prop_random": "区域内随机设定属性",
     "list_modify": "Round 32 新合并体：列表写值（mode=set|append|insert|delete|clear）",
     "charge_self_damage": "充能自身伤害",
-    "absorb_attack_damage": "Round 43 复核留：注册式“吸收一次攻击命中”（body + once + duration），"
-                            "登记项由 deal_attack_damage 内部的 _consume_absorb_attack_damage 在"
-                            "**伤害落地前**消费并把 absorbed_damage 交给 body；数据层的步骤列表和 "
-                            "card.to_dict() 都塞不进这个引擎级登记表，按管线钩子保留",
+    # Round 47 / 批次 AK：absorb_attack_damage / magic_salt_reflect 已删除——
+    # 两条响应窗口现在是 ``on_event(response:"absorb"|"reflect", …)`` 的数据参数
+    # （判定与对拍见 ROUND47_ACTIONS 与 .codex-tmp/round47/rd47.md）。
     "lifesteal_damage": "吸血伤害",
     "triangle_damage": "三角伤害（层数 x 基数）",
     "card_damage_multiply": "聚变倍率（fusion_level x N）",
@@ -895,9 +938,7 @@ KEPT_EXPLICIT = {
     "delayed_blind_next_turn": "下回合延迟失明（Ocean）",
     "delayed_reveal_hand_next_turn": "下回合延迟展示手牌",
     "goggles_enable": "护目镜启用（Factory）",
-    "magic_salt_reflect": "Round 43 复核留：这是被伤害管线在 on_damage_taken 时点调的**响应窗口**——要判物理攻击牌伤害、"
-                          "查魔力是否够 cost_m、扣费并弹 choice_type=magic_salt_reflect 的选择窗口交给客户端预测；"
-                          "数据步骤开不出这种窗口，按管线钩子保留",
+    # Round 47 / 批次 AK：见上面 absorb_attack_damage 的说明。
     "third_eye_precision_or_hidden": "第三眼：精准或隐匿（Garden）",
 }
 
@@ -981,8 +1022,9 @@ def build() -> dict:
     for name, (verdict, before, replacement, reason) in (
         {**ROUND31_ACTIONS, **ROUND32_ACTIONS, **ROUND33_ACTIONS, **ROUND35_ACTIONS,
          **ROUND36_ACTIONS, **ROUND37_ACTIONS, **ROUND38_ACTIONS, **ROUND40_ACTIONS,
-         **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
-         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS}
+        **ROUND41_ACTIONS, **ROUND42_ACTIONS, **ROUND43_ACTIONS,
+         **ROUND44_ACTIONS, **ROUND45_ACTIONS, **ROUND46_ACTIONS,
+         **ROUND47_ACTIONS}
     ).items():
         actions.append({
             "name": name, "verdict": verdict, "before": before,
@@ -1147,6 +1189,40 @@ def render(model: dict) -> str:
         f"| 其中判定「留·」 | {sum(1 for row in model['unused_ops'] if row['verdict'].startswith('留'))} |"
     )
     lines.append("")
+    # Round 47 / 批次 AK：三层口径（"原子到底有多少个"的唯一权威回答）。
+    public_atoms = sorted(getattr(mod_spec_v2, "PUBLIC_ATOMS", ()) or ())
+    internal = sorted(getattr(mod_spec_v2, "INTERNAL_HANDLERS", ()) or ())
+    macros = dict(getattr(mod_spec_v2, "ATOMIC_OP_MACROS", {}) or {})
+    lines.append("## 六、Round 47 三层口径（公开原子 / 内部处理器 / 宏）")
+    lines.append("")
+    lines.append("`_CORE_LOGIC_OPS` 是「所有名字」的历史并集（116），想知道原子数量看这三层：")
+    lines.append("")
+    lines.append("| 层 | 数量 | 说明 |")
+    lines.append("|---|---|---|")
+    lines.append(f"| 公开原子 `PUBLIC_ATOMS` | {len(public_atoms)} | 卡数据可以写、有真实实现的步骤 op（引擎 "
+                 f"{len(model['atoms'])} 个 `_atomic_*` − {len(set(internal) & set(model['atoms']))} 个内部处理器 + "
+                 f"{len(mod_spec_v2.RUNTIME_STEP_OPS)} 个运行时原生步骤 − 内部运行步骤） |")
+    lines.append(f"| 内部处理器 `INTERNAL_HANDLERS` | {len(internal)} | 名字已退役（写出来显式报错），"
+                 f"实现留给引擎内部与老测试直呼 |")
+    lines.append(f"| 宏 `ATOMIC_OP_MACROS` | {len(macros)} | " +
+                 "、".join(f"`{k}` → `{v}`" for k, v in sorted(macros.items())) + " |")
+    lines.append("")
+    lines.append("### 6.1 内部处理器逐条（数据写不出来，`--check` 卡住数据引用）")
+    lines.append("")
+    lines.append("| 名字 | 在引擎里有 `_atomic_*` 实现 | 为什么留 |")
+    lines.append("|---|---|---|")
+    for name in internal:
+        has_handler = "是" if name in set(model["atoms"]) else "否（运行时原生）"
+        lines.append(f"| `{name}` | {has_handler} | "
+                     f"{'名字已退役（`REMOVED_ATOMIC_OPS` / `RENAMED_ATOMIC_OPS`），实现只服务直呼方' if name in set(model['atoms']) else '运行时自己发出的挂起式牌堆挑选恢复步骤'} |")
+    lines.append("")
+    lines.append("### 6.2 公开原子全表")
+    lines.append("")
+    width = 30
+    for index in range(0, len(public_atoms), 4):
+        chunk = public_atoms[index:index + 4]
+        lines.append("  " + "".join(f"`{name}`".ljust(width) for name in chunk).rstrip())
+    lines.append("")
     return "\n".join(lines) + "\n"
 
 
@@ -1179,6 +1255,31 @@ def check(model: dict, text: str, out_path: pathlib.Path) -> int:
             problems.append(f"{row['name']}: 保留处理器的名字，卡数据仍有 {row['usage']} 处引用")
         if row["name"] in {item["name"] for item in model["actions"]}:
             problems.append(f"{row['name']}: 同时出现在真删表与保留处理器表")
+    # Round 47 / 批次 AK：三层口径必须铺满引擎原子与运行时原生步骤。
+    public_atoms = set(getattr(mod_spec_v2, "PUBLIC_ATOMS", ()) or ())
+    internal_handlers = set(getattr(mod_spec_v2, "INTERNAL_HANDLERS", ()) or ())
+    macros = set(getattr(mod_spec_v2, "ATOMIC_OP_MACROS", {}) or {})
+    layers = (("公开", public_atoms), ("内部", internal_handlers), ("宏", macros))
+    covered = set()
+    for label, names in layers:
+        overlap = covered & names
+        if overlap:
+            problems.append(f"Round 47 三层口径重叠（{label}）：{sorted(overlap)[:5]}")
+        covered |= names
+    uncovered = sorted((engine_ops | set(mod_spec_v2.RUNTIME_STEP_OPS)) - covered)
+    if uncovered:
+        problems.append(f"Round 47 三层口径没铺满步骤 op：{uncovered[:6]}")
+    retired_names = set(mod_spec_v2.REMOVED_ATOMIC_OPS) | set(mod_spec_v2.RENAMED_ATOMIC_OPS)
+    stray_public = sorted(public_atoms & retired_names)
+    if stray_public:
+        problems.append(f"公开原子里混进了退役名字：{stray_public[:5]}")
+    # 内部处理器只该有两类：退役但有实现的（== handler_kept 表），加上运行时自用步骤。
+    expected_internal = {row["name"] for row in model["handler_kept"]} | {"deck_catalog_pick_resume"}
+    if internal_handlers != expected_internal:
+        problems.append(
+            f"内部处理器与预期不一致：缺 {sorted(expected_internal - internal_handlers)[:5]}，"
+            f"多 {sorted(internal_handlers - expected_internal)[:5]}"
+        )
     # Round 41 / 批次 AE-5：未使用 op 的定论表必须覆盖"当前 0 引用"的每一个登记名，
     # 且判「删·」的行必须真的删干净（没有实现、卡数据 0 引用、名字进退役表）。
     verdict_rows = {row["name"]: row for row in model["unused_ops"]}
