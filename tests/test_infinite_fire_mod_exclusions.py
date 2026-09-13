@@ -63,3 +63,21 @@ def test_team_limited_cards_are_excluded_from_every_infinite_fire_pool():
             CARD_DEFS.pop("Monstera", None)
         else:
             CARD_DEFS["Monstera"] = old_monstera
+
+
+def test_feedback_109_cicada_is_removed_from_infinite_fire():
+    """反馈 #109：蝉3301 会在无限火力里放逐双方全部牌，整卡移出该模式。"""
+    mod = load_mod(str(ROOT / "mods" / "Void Cards DLC.gtnmod"))
+    assert not mod.errors, mod.errors
+    cicada = next(card for card in mod.cards if card.id == "Cicada3301")
+    assert "infinite_exclude" in cicada.flags
+    assert is_infinite_excluded(cicada)
+
+
+def test_feedback_124_eyeball_is_team_limited():
+    """反馈 #124：眼球只在每队至少 2 人的模式出现（1v1 里等同 3 费滚木）。"""
+    mod = load_mod(str(ROOT / "mods" / "Void Cards DLC.gtnmod"))
+    assert not mod.errors, mod.errors
+    eyeball = next(card for card in mod.cards if card.id == "Eyeball")
+    assert "team_limited" in eyeball.flags
+    assert is_infinite_excluded(eyeball)

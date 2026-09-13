@@ -1227,6 +1227,14 @@ def _forge_story_cards(state, first, second, events, source):
     first_tags = tuple(str(tag) for tag in first_values.get('tags') or ())
     second_tags = tuple(str(tag) for tag in second_values.get('tags') or ())
     effects = list(first_values.get('effects') or ()) + list(second_values.get('effects') or ())
+    merged_type = str(first_values.get('type') or '')
+    # 反馈 #127：锻造牌必须保留指向（thorn/guard 打敌人，其余指向自己），
+    # 否则 _card_targets 会退回 [combat]，伤害类效果不结算。
+    merged_target = str(
+        first_values.get('target')
+        or second_values.get('target')
+        or ('enemy' if merged_type in ('thorn', 'guard') else 'self')
+    )
     first_image = str(
         first_values.get('upgraded_image_url')
         or first_values.get('image_url')
@@ -1269,7 +1277,8 @@ def _forge_story_cards(state, first, second, events, source):
             (_card_numeric_cost(first_values.get('cost_m')) or 0)
             + (_card_numeric_cost(second_values.get('cost_m')) or 0),
         ),
-        'type': str(first_values.get('type') or ''),
+        'type': merged_type,
+        'target': merged_target,
         'rarity': 'unique',
         'owner': 'neutral',
         'tags': tuple(dict.fromkeys(first_tags + second_tags)),

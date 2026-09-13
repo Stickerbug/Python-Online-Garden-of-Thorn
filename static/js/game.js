@@ -11671,6 +11671,7 @@ let cardEffectFitResizeTimer = 0;
 window.addEventListener('resize', () => {
     clearTimeout(cardEffectFitResizeTimer);
     cardEffectFitResizeTimer = window.setTimeout(scheduleVisibleCardEffectFits, 80);
+    window.setTimeout(refreshSpectateControlsPlacement, 80);
 }, { passive: true });
 
 function createCardElement(cardDict, options = {}) {
@@ -27831,6 +27832,22 @@ function openPredictionTargetPicker() {
     if (cancelBtn) cancelBtn.addEventListener('click', hideModal);
 }
 
+function refreshSpectateControlsPlacement() {
+    // 反馈 #126：2v2 观战时手牌会把控制栏顶出容器（容器 overflow:hidden 且不能滚动），
+    // 退出观战按钮因此点不到，只能刷新页面。检测到控制栏越界时改为浮动显示。
+    const spectateControls = $('spectate-controls');
+    if (!spectateControls || spectateControls.classList.contains('hidden')) return;
+    const gameContainer = document.querySelector('#view-game .game-container');
+    const controlsBar = document.querySelector('#view-game .player-section .controls-bar');
+    if (!gameContainer || !controlsBar) return;
+    spectateControls.classList.remove('spectate-controls-floating');
+    const containerRect = gameContainer.getBoundingClientRect();
+    const barRect = controlsBar.getBoundingClientRect();
+    const viewportBottom = Number(window.innerHeight) || containerRect.bottom;
+    const visibleBottom = Math.min(containerRect.bottom, viewportBottom);
+    spectateControls.classList.toggle('spectate-controls-floating', barRect.bottom > visibleBottom + 1);
+}
+
 function updateModeSpecificControls(gs) {
     const inSoloGame = !!gs?.solo;
     const inAiTest = !!gs?.ai_test;
@@ -27926,6 +27943,14 @@ function updateModeSpecificControls(gs) {
     if (spectateControls) {
         spectateControls.classList.toggle('hidden', !showSpectateControls);
         spectateControls.style.display = showSpectateControls ? '' : 'none';
+        if (showSpectateControls) {
+            refreshSpectateControlsPlacement();
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(refreshSpectateControlsPlacement);
+            }
+        } else {
+            spectateControls.classList.remove('spectate-controls-floating');
+        }
     }
     const switchBtn = $('btn-switch-perspective');
     if (switchBtn) {

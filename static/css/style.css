@@ -13003,6 +13003,21 @@ html.blind-level-4 .card-prediction-part.magic {
   display: none;
 }
 
+/* 反馈 #126：2v2 观战手牌顶高时控制栏会被挤出容器，浮动显示保证退出观战始终可点。 */
+.game-container.mode-spectate #spectate-controls.spectate-controls-floating {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 2055;
+  display: flex !important;
+  pointer-events: auto;
+  padding: 6px;
+  border: 1px solid var(--border-color, #dcdcdc);
+  border-radius: 10px;
+  background: var(--bg-card, #ffffff);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
 .btn-switch-perspective {
   padding: 6px 12px;
   font-size: 11px;

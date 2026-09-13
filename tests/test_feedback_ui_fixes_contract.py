@@ -56,6 +56,17 @@ def test_feedback_118_minimal_hand_uses_measured_available_height():
     assert '        availableHeight,\n' in js
 
 
+def test_feedback_126_spectate_controls_stay_clickable_when_pushed_out():
+    js = _game_js()
+    css = (ROOT / 'static' / 'css' / 'style.css').read_text(encoding='utf-8')
+    assert 'function refreshSpectateControlsPlacement' in js
+    assert 'spectate-controls-floating' in js
+    assert 'refreshSpectateControlsPlacement();' in js
+    assert 'window.setTimeout(refreshSpectateControlsPlacement, 80);' in js
+    assert '.game-container.mode-spectate #spectate-controls.spectate-controls-floating' in css
+    assert '  position: fixed;' in css
+
+
 def test_gallery_official_entertainment_tabs_show_enable_states():
     js = _game_js()
     css = (ROOT / 'static' / 'css' / 'style.css').read_text(encoding='utf-8')

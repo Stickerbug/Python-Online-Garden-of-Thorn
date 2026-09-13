@@ -24,9 +24,11 @@ from story_content import (
 )
 from story_engine import (
     StoryActionError,
+    _card_values,
     _draw_cards,
     _enemy_intent,
     _enemy_physical_damage,
+    _forge_story_cards,
     _gain_enchantment_book,
     _gain_elixir,
     _gain_magic,
@@ -2860,6 +2862,49 @@ def test_titan_forge_rejects_a_pair_with_different_types():
             },
             f'{seed}-resolve',
         )
+
+
+def test_titan_forged_attack_keeps_enemy_targeting_with_wide_strike():
+    """反馈 #127：锻造牌丢失 target 后，广域打击只结算护盾、不结算伤害。"""
+    seed = 'titan-forge-targeting'
+    state = build_initial_story_state(seed)
+    _start_combat(
+        state,
+        {'type': 'combat'},
+        seed,
+        [],
+        encounter_override=[{'def_id': 'soldier_ant'}],
+    )
+    combat = state['combat']
+    combat['hand'] = []
+    combat['elixir'] = 50
+    combat['magic'] = 9
+    first = _new_card(state, 'dust')
+    second = _new_card(state, 'mage_orange')
+    state['player']['deck'].extend([first, second])
+
+    forged = _forge_story_cards(state, first, second, [], 'titan-forge-test')
+    forged.setdefault('modifiers', {})['extra_tags'] = ['wide']
+    combat['hand'] = [forged]
+
+    assert _card_values(forged).get('target') == 'enemy'
+    enemy = combat['enemies'][0]
+    enemy_health_before = int(enemy['health'])
+    shield_before = int(combat.get('shield') or 0)
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': forged['instance_id']},
+        seed,
+    )
+
+    assert int(state['combat']['enemies'][0]['health']) < enemy_health_before
+    assert any(
+        event.get('type') == 'shield' and int(event.get('amount') or 0) > 0
+        for event in events
+    )
+    assert int(state['combat'].get('shield') or 0) > shield_before
 
 
 def test_brutal_reuses_an_attack_after_it_kills_a_creature():
