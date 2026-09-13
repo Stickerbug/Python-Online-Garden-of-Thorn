@@ -20589,6 +20589,19 @@ class GameEngine:
             before = self.players[target_id].health
             self.players[target_id].heal(amount)
             healed = max(0, self.players[target_id].health - before)
+            if healed and getattr(self, 'v2_event_hooks', None):
+                # Round 58 / 批次 AV：``on_heal``——真实回复量 > 0 时触发一次
+                # （``vars`` 带 ``amount``/``healed``，``event_value`` = 实际回复量）。
+                self._run_v2_event_hooks(
+                    'on_heal',
+                    {
+                        'source_player': player_id,
+                        'target_player': target_id,
+                        'vars': {'amount': healed, 'healed': healed},
+                        'current_action': {'amount': healed, 'healed': healed},
+                    },
+                    healed,
+                )
             if silent or (positive_only and healed <= 0):
                 continue
             # 自定义模板照旧用**实际回复量**渲染；模板在满血时也照播（旧运行时

@@ -1872,6 +1872,8 @@ VALID_EVENT_HOOKS = {
     "on_card_play",      # = after_play_card
     "on_damage",         # = after_damage
     "status_added",      # = on_status_added
+    # ---- Round 58 / 批次 AV 新接线的 ----
+    "on_heal",           # health_op(mode:"heal") 实际回复量 > 0 时
 }
 
 VALID_PATCH_OPS = {
