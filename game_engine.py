@@ -9131,6 +9131,21 @@ class GameEngine:
             ps.exile.append(card)
         if trigger and not already_exiled:
             self._handle_card_exiled(owner_id, card)
+        if not already_exiled and getattr(self, 'v2_event_hooks', None):
+            # Round 62 / 批次 AZ：``on_card_exiled``——牌真正进入放逐区时触发一次
+            # （``_put_card_in_exile`` 是所有放逐的汇聚点；重复放逐同一张不重复触发）。
+            # ``vars`` 带 ``card``/``def_id``/``owner``，``event_value`` = 卡定义 id。
+            self._run_v2_event_hooks(
+                'on_card_exiled',
+                {
+                    'source_player': owner_id,
+                    'target_player': owner_id,
+                    'vars': {'card': card, 'def_id': getattr(card, 'def_id', ''),
+                             'owner': owner_id},
+                    'current_action': {'def_id': getattr(card, 'def_id', '')},
+                },
+                getattr(card, 'def_id', ''),
+            )
 
     def _handle_card_exiled(self, owner_id: int, card: CardInstance):
         if self._is_void_antimatter(card):
