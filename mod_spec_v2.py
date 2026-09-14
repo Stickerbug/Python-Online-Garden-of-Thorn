@@ -1877,6 +1877,8 @@ VALID_EVENT_HOOKS = {
     # ---- Round 59 / 批次 AW 新接线的 ----
     "on_tag_added",      # tag_op 真正加上新标签时
     "on_tag_removed",    # tag_op 真正移除已有标签时
+    # ---- Round 61 / 批次 AY 新接线的 ----
+    "on_card_discarded",  # _discard_card（所有弃牌的汇聚点）
 }
 
 VALID_PATCH_OPS = {

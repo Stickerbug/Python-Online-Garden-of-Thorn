@@ -9091,6 +9091,21 @@ class GameEngine:
     def _discard_card(self, ps, card: CardInstance):
         reset_card_for_discard(card)
         ps.discard.append(card)
+        if getattr(self, 'v2_event_hooks', None):
+            # Round 61 / 批次 AY：``on_card_discarded``——牌真正进入弃牌堆时触发一次
+            # （``_discard_card`` 是所有弃牌的汇聚点：出牌结算、弃手牌、洗牌等都在这里）。
+            # ``vars`` 带 ``card``/``def_id``/``owner``，``event_value`` = 卡定义 id。
+            self._run_v2_event_hooks(
+                'on_card_discarded',
+                {
+                    'source_player': ps.player_id,
+                    'target_player': ps.player_id,
+                    'vars': {'card': card, 'def_id': getattr(card, 'def_id', ''),
+                             'owner': ps.player_id},
+                    'current_action': {'def_id': getattr(card, 'def_id', '')},
+                },
+                getattr(card, 'def_id', ''),
+            )
         from formal_logic_runtime import on_card_discarded as formal_logic_card_discarded
         formal_logic_card_discarded(
             self,
