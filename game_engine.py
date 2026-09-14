@@ -10220,6 +10220,13 @@ class GameEngine:
         if to_zone not in ('', 'hand', 'discard', 'deck_top', 'exile'):
             raise V2ZoneError(f"copy_card 的 to_zone 只认 hand/discard/deck(_top)/exile，收到 {raw_to!r}")
         mode = str(params.get('mode') or '').strip().lower()
+        if self._reject_unknown_enum(
+            'copy_card', 'mode', mode,
+            {'', 'plain', 'copy', 'copy_card', 'instance', 'copy_instance',
+             'copies', 'deck_top', 'top'},
+            player_id, card,
+        ):
+            return
         as_instance = bool(params.get('as_instance')) or mode in ('instance', 'copy_instance')
         wants_copies = mode in ('copies', 'deck_top', 'top') or params.get('count') is not None
         if wants_copies:
@@ -10701,6 +10708,16 @@ class GameEngine:
         """
 
         mode = str(params.get('mode') or '').strip().lower()
+        # Round 70 / 批次 BI：枚举参数写错**显式报错**。以前 ``mode`` 拼错会静默
+        # 走"获得"分支（把 ``"speat"`` 写成消耗，实际发钱），卡作者看不到提示。
+        if self._reject_unknown_enum(
+            'resource_op', 'mode', mode,
+            {'', 'gain', 'gain_e', 'gain_m', 'gain_elixir', 'gain_magic', 'add',
+             'spend', 'consume', 'pay', 'cost',
+             'aura', 'aura_recovery', 'aura_enemy_elixir_recovery'},
+            player_id, card,
+        ):
+            return
         if mode in ('aura', 'aura_recovery', 'aura_enemy_elixir_recovery'):
             return
         resource = 'magic' if str(params.get('resource', 'elixir')).strip().lower() in (
@@ -11424,6 +11441,16 @@ class GameEngine:
             elif params.get('random') and params.get('source_zone') is not None \
                     and params.get('card') is None and params.get('card_id') is None:
                 mode = 'random'
+        elif self._reject_unknown_enum(
+            'move_card', 'mode', mode,
+            {'give', 'create', 'give_card', 'remove', 'delete', 'erase', 'destroy_card',
+             'transform', 'replace', 'transmute', 'orb', 'give_orb', 'magic_orb',
+             'random', 'random_pick', 'random_card', 'batch', 'move_set', 'cards',
+             'steal', 'steal_card', 'steal_hand', 'swap_hands', 'swap',
+             'to_zone', 'zone', 'move'},
+            player_id, card,
+        ):
+            return
         if mode in ('give', 'create', 'give_card'):
             return self._move_card_give_payload(player_id, card, params, log, choice, context)
         if mode in ('remove', 'delete', 'erase', 'destroy_card'):
@@ -14730,6 +14757,31 @@ class GameEngine:
             card_id=getattr(card, 'def_id', None),
             room_phase=getattr(self, 'phase', ''),
         )
+
+    def _reject_unknown_enum(self, op: str, param: str, value, allowed, player_id=None,
+                            card=None) -> bool:
+        """Round 70 / 批次 BI：伞形 op 的枚举参数写错时**显式报错**。
+
+        伞形原子（``resource_op`` / ``move_card`` / ``*_prop_change`` …）用
+        ``mode``（或 ``action``/``type``）选实现体；以前写错会静默走默认分支或
+        什么也不做，卡作者完全看不到问题——和"幽灵钩子"同一类毛病。现在统一
+        走这里报一条模组运行错误，并让调用方 ``return``。
+
+        返回 True = 值非法（调用方应直接返回）；False = 合法或缺省。
+        """
+
+        text = str(value or '').strip().lower()
+        if not text or text in allowed:
+            return False
+        self._log_mod_runtime_error(
+            op,
+            RuntimeError(
+                f"unsupported {param}: {value!r}；只认 {' / '.join(sorted(allowed))}"
+            ),
+            player_id,
+            card,
+        )
+        return True
 
     def _run_effect_list(self, player_id, card, effects, choice, context):
         prev_context = getattr(self, '_active_effect_context', None)
@@ -20249,6 +20301,9 @@ class GameEngine:
                 'increase': 'add', 'mul': 'mul', 'multiply': 'mul', '*': 'mul', 'times': 'mul',
                 'x': 'mul'}.get(mode, mode)
         if mode not in ('set', 'add', 'mul'):
+            # Round 70 / 批次 BI：写错 mode 以前静默什么都不做。
+            self._reject_unknown_enum('card_prop_change', 'mode', mode,
+                                      {'set', 'add', 'mul'}, player_id, card)
             return
         if mode == 'set':
             value = self._eval_int(player_id, params.get('value', 0), card)
@@ -20327,6 +20382,14 @@ class GameEngine:
         silent = bool(params.get('silent') or params.get('no_log')) or log is False
         prop = str(params.get('property') or params.get('prop') or '')
         if not prop:
+            return
+        # Round 70 / 批次 BI：``mode`` 写错以前静默当 "add"。
+        if self._reject_unknown_enum(
+            'card_prop_add_to_zone', 'mode',
+            str(params.get('mode') or params.get('write') or 'add'),
+            {'add', 'add_to', 'set', 'set_to', 'max', 'at_least'},
+            player_id, card,
+        ):
             return
         amount = self._eval_int(player_id, params.get('amount', params.get('value', 0)), card, 0)
         card_type = str(params.get('card_type', '') or '').strip().lower()
@@ -20422,6 +20485,9 @@ class GameEngine:
             '=': 'set', 'assign': 'set', 'set_to': 'set', 'write': 'set',
             '+': 'add', '+=': 'add', 'increase': 'add',
         }.get(mode, mode)
+        if self._reject_unknown_enum('equipment_prop_change', 'mode', mode,
+                                     {'set', 'add'}, player_id, card):
+            return
         if mode == 'add':
             eq = self._resolve_equipment_ref(
                 player_id, params.get('equipment', {'ref': 'current_equipment'}), card
@@ -20459,6 +20525,9 @@ class GameEngine:
         mode = {'=': 'set', 'set_to': 'set', 'assign': 'set',
                 '+': 'add', '+=': 'add', 'increase': 'add'}.get(mode, mode)
         if mode not in ('set', 'add'):
+            # Round 70 / 批次 BI：写错 mode 以前静默什么都不做。
+            self._reject_unknown_enum('player_prop_change', 'mode', mode,
+                                      {'set', 'add'}, player_id, card)
             return
         prop = str(params.get('property') or params.get('prop', 'health'))
         if mode == 'add':
@@ -20821,6 +20890,17 @@ class GameEngine:
         if not raw_mode and kind in ('exile', 'invincible_die', 'bandage', 'die', 'invincible'):
             raw_mode = 'fatal'
         mode = raw_mode or 'heal'
+        # Round 70 / 批次 BI：``mode`` 写错以前静默什么都不做。
+        if self._reject_unknown_enum(
+            'health_op', 'mode', mode,
+            {'heal', 'heal_health', 'gain_health', 'recover',
+             'lose', 'lose_health', 'losehealth',
+             'set', 'set_health', 'sethealth',
+             'swap', 'swap_health', 'swaphealth',
+             'fatal', 'on_fatal', 'death'},
+            player_id, card,
+        ):
+            return
 
         if mode in ('lose', 'lose_health', 'losehealth'):
             amount = max(0, self._eval_int(player_id, params.get('amount', 0), card))
@@ -22399,6 +22479,9 @@ class GameEngine:
         mode = {'=': 'set', 'set_to': 'set', 'assign': 'set',
                 '+': 'add', '+=': 'add', 'increase': 'add'}.get(mode, mode)
         if mode not in ('set', 'add'):
+            # Round 70 / 批次 BI：写错 mode 以前静默什么都不做。
+            self._reject_unknown_enum('card_var_change', 'mode', mode,
+                                      {'set', 'add'}, player_id, card)
             return
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if target_card is None:
@@ -23407,6 +23490,9 @@ class GameEngine:
             '/': 'div', '/=': 'div',
         }.get(mode, mode)
         if mode not in ('set', 'add', 'sub', 'mul', 'div'):
+            # Round 70 / 批次 BI：写错 mode 以前静默什么都不做。
+            self._reject_unknown_enum('player_var_change', 'mode', mode,
+                                      {'set', 'add', 'sub', 'mul', 'div'}, player_id, card)
             return
         for target_ref in self._var_target_refs(player_id, params.get('target', 'self')):
             store = self._var_store_for_target(player_id, target_ref)
