@@ -10519,6 +10519,22 @@ class GameEngine:
         ))
 
     def _atomic_resource_op(self, player_id, card, params, log, choice, context):
+        def _fire_resource_changed(resource_name, target_id, actual_delta):
+            # Round 64 / 批次 BB：``on_resource_changed``——E/M 真的变了才触发
+            # （``vars`` 带 resource/delta/target，``event_value`` = 带符号变化量）。
+            if not actual_delta or not getattr(self, 'v2_event_hooks', None):
+                return
+            self._run_v2_event_hooks(
+                'on_resource_changed',
+                {
+                    'source_player': player_id,
+                    'target_player': target_id,
+                    'vars': {'resource': resource_name, 'delta': int(actual_delta),
+                             'amount': abs(int(actual_delta)), 'target': target_id},
+                    'current_action': {'resource': resource_name, 'delta': int(actual_delta)},
+                },
+                abs(int(actual_delta)),
+            )
         """Round 32 / 批次 AA：资源族五合一。
 
         覆盖 ``gain_e`` / ``gain_m``（引擎原子 + 运行时原生分支）/ ``spend_resource``
@@ -10576,6 +10592,7 @@ class GameEngine:
                 # 旧 ``spend_resource``：实际花掉的数值进 ``spent``，不写 log 就安静。
                 amount = int(getattr(ps, resource, 0) or 0) if wants_all else abs(int(delta))
                 spent = self._spend_resource(target_id, resource, amount, card)
+                _fire_resource_changed(resource, target_id, -int(spent))
                 if isinstance(context, dict):
                     context.setdefault('vars', {})['spent'] = spent
                     context['spent'] = spent
@@ -10591,6 +10608,7 @@ class GameEngine:
                 before = int(getattr(ps, resource, 0) or 0)
                 setattr(ps, resource, max(0, before + int(delta)))
                 spent = before - int(getattr(ps, resource, 0) or 0)
+                _fire_resource_changed(resource, target_id, -int(spent))
                 if silent or (positive_only and spent <= 0):
                     continue
                 self.log_msg(
@@ -10606,6 +10624,7 @@ class GameEngine:
             else:
                 ps.gain_elixir(int(delta))
             gained = int(getattr(ps, resource, 0) or 0) - before
+            _fire_resource_changed(resource, target_id, int(gained))
             if coffee:
                 ps.coffee_first_use = False
                 ps.custom_vars['咖啡首次使用'] = 0
