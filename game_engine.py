@@ -10713,13 +10713,33 @@ class GameEngine:
             return
         if mode == 'remove':
             if hasattr(target_card, 'instance_flags'):
+                had_tag = tag in (getattr(target_card, 'instance_flags', set()) or set())
                 target_card.instance_flags.discard(tag)
+                if had_tag and getattr(self, 'v2_event_hooks', None):
+                    # Round 59 / 批次 AW：``on_tag_removed``（真实移除时触发一次）。
+                    self._run_v2_event_hooks(
+                        'on_tag_removed',
+                        {'source_player': player_id, 'target_player': None,
+                         'vars': {'tag': tag, 'card': target_card},
+                         'current_action': {'tag': tag}},
+                        tag,
+                    )
             if params.get('silent') or params.get('no_log') or log is False:
                 return
             self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
             return
         target_card.instance_flags = getattr(target_card, 'instance_flags', set())
+        had_tag = tag in (target_card.instance_flags or set())
         target_card.instance_flags.add(tag)
+        if not had_tag and getattr(self, 'v2_event_hooks', None):
+            # Round 59 / 批次 AW：``on_tag_added``（真正加上新标签时触发一次）。
+            self._run_v2_event_hooks(
+                'on_tag_added',
+                {'source_player': player_id, 'target_player': None,
+                 'vars': {'tag': tag, 'card': target_card},
+                 'current_action': {'tag': tag}},
+                tag,
+            )
         return_log = params.get('return_log')
         if isinstance(return_log, str) and return_log:
             custom = getattr(target_card, 'custom_vars', None)

@@ -1874,6 +1874,9 @@ VALID_EVENT_HOOKS = {
     "status_added",      # = on_status_added
     # ---- Round 58 / 批次 AV 新接线的 ----
     "on_heal",           # health_op(mode:"heal") 实际回复量 > 0 时
+    # ---- Round 59 / 批次 AW 新接线的 ----
+    "on_tag_added",      # tag_op 真正加上新标签时
+    "on_tag_removed",    # tag_op 真正移除已有标签时
 }
 
 VALID_PATCH_OPS = {
