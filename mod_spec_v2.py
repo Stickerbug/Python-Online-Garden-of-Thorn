@@ -1881,6 +1881,8 @@ VALID_EVENT_HOOKS = {
     "on_card_discarded",  # _discard_card（所有弃牌的汇聚点）
     # ---- Round 62 / 批次 AZ 新接线的 ----
     "on_card_exiled",     # _put_card_in_exile（所有放逐的汇聚点）
+    # ---- Round 63 / 批次 BA 新接线的 ----
+    "on_card_enter_hand",  # _handle_card_enter_hand（所有进手牌的汇聚点）
 }
 
 VALID_PATCH_OPS = {

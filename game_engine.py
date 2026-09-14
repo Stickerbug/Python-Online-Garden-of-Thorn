@@ -3986,6 +3986,21 @@ class GameEngine:
         if not card or card.def_id == ERROR_CARD_ID:
             return
         ps = self.players[player_id]
+        if getattr(self, 'v2_event_hooks', None):
+            # Round 63 / 批次 BA：``on_card_enter_hand``——牌真正进入某人的手牌时触发一次
+            # （``_handle_card_enter_hand`` 是所有"进手牌"的汇聚点：抽牌、造牌入手、
+            # 偷牌、回手都走它）。``vars`` 带 card/def_id/owner，event_value = 卡定义 id。
+            self._run_v2_event_hooks(
+                'on_card_enter_hand',
+                {
+                    'source_player': player_id,
+                    'target_player': player_id,
+                    'vars': {'card': card, 'def_id': getattr(card, 'def_id', ''),
+                             'owner': player_id},
+                    'current_action': {'def_id': getattr(card, 'def_id', '')},
+                },
+                getattr(card, 'def_id', ''),
+            )
         if self._card_has_flag(card, 'enter_hand_power_2'):
             card.power_value = clamp_card_power(max(0, int(getattr(card, 'power_value', 0) or 0)) + 2)
             card.instance_flags.add('power')
