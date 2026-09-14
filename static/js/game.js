@@ -29983,9 +29983,12 @@ function calculateMinimalHandLayout(handCount, mode, availableWidth, mobileHandL
         columns = splitIntoFive ? 5 : 10;
         sizingSlots = columns;
     } else {
-        columns = count > 21 ? Math.ceil(count / 3) : 7;
-        const desktopShrinkSlots = Math.max(7, Math.min(10, count || 0));
-        sizingSlots = Math.max(columns, mobileHandLayout ? 7 : desktopShrinkSlots);
+        // 反馈 #142：桌面端列数原来固定 7，而卡片宽度按「张数」扇出，
+        // 8~10 张时每行只放 7 张、最后一行只剩 1~3 张，看着像没铺满。
+        // 列数与实际槽位对齐（最多 10），触屏/窄屏仍保持 7 列。
+        const desktopSlots = Math.max(1, Math.min(10, count || 0));
+        columns = count > 21 ? Math.ceil(count / 3) : (mobileHandLayout ? 7 : desktopSlots);
+        sizingSlots = Math.max(columns, mobileHandLayout ? 7 : desktopSlots);
     }
 
     const rows = Math.max(1, Math.ceil(count / Math.max(1, columns)));
@@ -37627,7 +37630,8 @@ function getDisabledMods(mode = getSettingsModMatchMode()) {
     const storageKey = disabledModsStorageKey(mode);
     try {
         let raw = localStorage.getItem(storageKey);
-        if (raw === null && storageKey === DISABLED_MODS_STORAGE_KEYS.ranked) {
+        const rankedFallback = raw === null && storageKey === DISABLED_MODS_STORAGE_KEYS.ranked;
+        if (rankedFallback) {
             // 建议 #82：天梯还没有自己的选择时，先沿用娱乐那一份（首次迁移），
             // 之后在天梯里改过的结果只写天梯键，不再覆盖娱乐。
             raw = localStorage.getItem(DISABLED_MODS_STORAGE_KEYS.casual);
@@ -37635,14 +37639,19 @@ function getDisabledMods(mode = getSettingsModMatchMode()) {
         const hasSavedPreference = raw !== null;
         let disabled = raw ? JSON.parse(raw) : getDefaultDisabledMods();
         if (!Array.isArray(disabled)) disabled = getDefaultDisabledMods();
-        if (localStorage.getItem(V11_DLC_DEFAULT_MIGRATION_KEY) !== '1') {
+        // 反馈 #136：天梯沿用娱乐那份时不能跑一次性迁移并写回天梯键，
+        // 否则玩家在天梯的「只开原版」会被重置成「默认官方包全开」。
+        if (!rankedFallback && localStorage.getItem(V11_DLC_DEFAULT_MIGRATION_KEY) !== '1') {
             localStorage.setItem(V11_DLC_DEFAULT_MIGRATION_KEY, '1');
             if (hasSavedPreference) {
                 disabled = [...(Array.isArray(disabled) ? disabled : []), ...V11_DLC_MOD_FILENAMES];
                 localStorage.setItem(storageKey, JSON.stringify(Array.from(new Set(disabled))));
             }
         }
-        if (shouldMigrateLegacyOfficialModDefault(disabled) || shouldMigrateOfficialModDefaultV3(disabled)) {
+        if (
+            !rankedFallback
+            && (shouldMigrateLegacyOfficialModDefault(disabled) || shouldMigrateOfficialModDefaultV3(disabled))
+        ) {
             disabled = getDefaultDisabledMods();
             localStorage.setItem(storageKey, JSON.stringify(disabled));
             localStorage.setItem('gtn_official_mod_default_v2', '1');

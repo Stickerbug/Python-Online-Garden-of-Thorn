@@ -73,6 +73,21 @@ def test_gallery_query_busts_stale_public_card_cache():
     assert 'window.__GTN_STATIC_VERSION__ || window.__GTN_APP_VERSION__' in js
 
 
+def test_feedback_136_ranked_fallback_skips_one_time_migration():
+    js = _game_js()
+    assert 'const rankedFallback = raw === null && storageKey === DISABLED_MODS_STORAGE_KEYS.ranked;' in js
+    assert "if (!rankedFallback && localStorage.getItem(V11_DLC_DEFAULT_MIGRATION_KEY) !== '1') {" in js
+    assert '!rankedFallback' in js
+    assert 'shouldMigrateLegacyOfficialModDefault(disabled) || shouldMigrateOfficialModDefaultV3(disabled)' in js
+
+
+def test_feedback_142_desktop_hand_columns_follow_card_count():
+    js = _game_js()
+    assert 'const desktopSlots = Math.max(1, Math.min(10, count || 0));' in js
+    assert "columns = count > 21 ? Math.ceil(count / 3) : (mobileHandLayout ? 7 : desktopSlots);" in js
+    assert '(mobileHandLayout ? 7 : desktopSlots)' in js
+
+
 def test_gallery_official_entertainment_tabs_show_enable_states():
     js = _game_js()
     css = (ROOT / 'static' / 'css' / 'style.css').read_text(encoding='utf-8')
