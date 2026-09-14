@@ -529,8 +529,8 @@
       "name": {
         "zh": "五五开 I",
         "en": "Evenly Matched I",
-        "fr": "50/50 je",
-        "ja": "50/50 私"
+        "fr": "50/50 I",
+        "ja": "50/50 I"
       },
       "description": {
         "zh": "达成1场平局。",
@@ -539,12 +539,26 @@
         "ja": "1引き分けを達成した。"
       }
     },
-    "draws_5": {
+    "draws_2": {
       "name": {
         "zh": "五五开 II",
         "en": "Evenly Matched II",
         "fr": "50/50 II",
         "ja": "50/50 II"
+      },
+      "description": {
+        "zh": "累计达成2场平局。",
+        "en": "Accumulate 2 draws.",
+        "fr": "Au total, 2 nuls ont été réalisés.",
+        "ja": "合計2回の引き分けが達成されました。"
+      }
+    },
+    "draws_5": {
+      "name": {
+        "zh": "五五开 III",
+        "en": "Evenly Matched III",
+        "fr": "50/50 III",
+        "ja": "50/50 III"
       },
       "description": {
         "zh": "累计达成5场平局。",
@@ -555,10 +569,10 @@
     },
     "draws_10": {
       "name": {
-        "zh": "五五开 III",
-        "en": "Evenly Matched III",
-        "fr": "50/50 III",
-        "ja": "50/50 Ⅲ"
+        "zh": "五五开 IV",
+        "en": "Evenly Matched IV",
+        "fr": "50/50 IV",
+        "ja": "50/50 IV"
       },
       "description": {
         "zh": "累计达成10场平局。",
@@ -569,10 +583,10 @@
     },
     "draws_20": {
       "name": {
-        "zh": "五五开 IV",
-        "en": "Evenly Matched IV",
-        "fr": "50/50 IV",
-        "ja": "50/50 IV"
+        "zh": "五五开 V",
+        "en": "Evenly Matched V",
+        "fr": "50/50 V",
+        "ja": "50/50 V"
       },
       "description": {
         "zh": "累计达成20场平局。",
@@ -581,32 +595,32 @@
         "ja": "合計20回の引き分けが達成されました。"
       }
     },
+    "draws_30": {
+      "name": {
+        "zh": "五五开 VI",
+        "en": "Evenly Matched VI",
+        "fr": "50/50 VI",
+        "ja": "50/50 VI"
+      },
+      "description": {
+        "zh": "累计达成30场平局。",
+        "en": "Accumulate 30 draws.",
+        "fr": "Au total, 30 tirages ont été réalisés.",
+        "ja": "合計30回の引き分けが達成されました。"
+      }
+    },
     "draws_50": {
       "name": {
-        "zh": "五五开 V",
-        "en": "Evenly Matched V",
-        "fr": "50-50 V",
-        "ja": "50-50V"
+        "zh": "五五开 VII",
+        "en": "Evenly Matched VII",
+        "fr": "50/50 VII",
+        "ja": "50/50 VII"
       },
       "description": {
         "zh": "累计达成50场平局。",
         "en": "Accumulate 50 draws.",
         "fr": "Au total, 50 tirages ont été réalisés.",
         "ja": "合計50回の引き分けが達成されました。"
-      }
-    },
-    "draws_100": {
-      "name": {
-        "zh": "五五开 VI",
-        "en": "Evenly Matched VI",
-        "fr": "50/50VI",
-        "ja": "50/50 VI"
-      },
-      "description": {
-        "zh": "累计达成100场平局。",
-        "en": "Accumulate 100 draws.",
-        "fr": "Au total, 100 tirages ont été réalisés.",
-        "ja": "合計100回の引き分けを達成しました。"
       }
     },
     "first_win": {
