@@ -1647,6 +1647,32 @@ def eval_collection_op(engine, context: Dict[str, Any], expr: Dict[str, Any]) ->
     return list(items)
 
 
+# Round 75 / 批次 BT：``pick.mode`` / ``pick.tie`` 的枚举词表。
+# 拼错 ``mode`` 以前**静默按"最大"排序**（``"mxa"`` 和 ``"max"`` 一样），
+# ``tie`` 拼错则静默按"第一张"取——都是看不出来的错。
+PICK_ORDER_MODES = frozenset({
+    "max", "highest", "most", "desc", "descending",
+    "min", "lowest", "least", "asc", "ascending",
+    "random", "any", "shuffle",
+})
+PICK_TIE_MODES = frozenset({"first", "earliest", "start", "last", "latest", "newest", "end"})
+
+
+def _report_unsupported_pick_param(engine, context, param: str, value, allowed) -> None:
+    reporter = getattr(engine, "_log_mod_runtime_error", None)
+    if not callable(reporter):
+        return
+    context = context if isinstance(context, dict) else {}
+    reporter(
+        "pick",
+        V2RuntimeError(
+            f"unsupported pick.{param}: {value!r}；只认 {' / '.join(sorted(allowed))}"
+        ),
+        context.get("source_player"),
+        context.get("card"),
+    )
+
+
 def run_pick_step(engine, context: Dict[str, Any], params: Dict[str, Any]):
     """``select`` 步骤：自动挑条目并绑定（``as`` 默认 ``chosen``）。
 
@@ -1677,6 +1703,12 @@ def run_pick_step(engine, context: Dict[str, Any], params: Dict[str, Any]):
         by = raw_pick.get("by", raw_pick.get("property", raw_pick.get("prop", "cost_e")))
         mode = str(raw_pick.get("mode", raw_pick.get("order", "max")) or "max").strip().lower()
         tie = str(raw_pick.get("tie", "first") or "first").strip().lower()
+        if mode not in PICK_ORDER_MODES:
+            _report_unsupported_pick_param(engine, context, "mode", mode, PICK_ORDER_MODES)
+            return {"success": False, "error": f"unsupported pick.mode: {mode!r}"}
+        if tie not in PICK_TIE_MODES:
+            _report_unsupported_pick_param(engine, context, "tie", tie, PICK_TIE_MODES)
+            return {"success": False, "error": f"unsupported pick.tie: {tie!r}"}
         if mode in ("random", "any", "shuffle"):
             items = list(items)
             random.shuffle(items)
