@@ -34,6 +34,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import collections
 import fnmatch
 import json
@@ -275,26 +276,116 @@ def _quoted_names(block: str) -> set:
     return set(re.findall(r"[\"']([a-z0-9_]+)[\"']", block or ""))
 
 
-def event_hook_consistency() -> dict:
-    """Round 56 / 批次 AT：``VALID_EVENT_HOOKS``（包级 event_hooks 白名单）
-    里的每个名字，必须真的在引擎源码里被触发——否则写出来是静默无效果。
+HOOK_DISPATCH_CALLS = ("_run_v2_event_hooks", "_run_v2_play_hook", "_run_card_event_package_hook")
+HOOK_SOURCE_FILES = ("game_engine.py", "game_engine_2v2.py", "game_engine_urf.py", "mod_runtime_v2.py")
 
-    判定：名字在引擎/运行时源码里出现过（含 ``_run_v2_event_hooks('X')``、
-    ``_run_v2_play_hook('X')``、伤害管线里的名字元组等所有写法）。
+
+def _dispatched_event_hook_names() -> set:
+    """真正被当作**包级钩子**派发的名字（Round 67 / 批次 BE 改成 AST 判定）。
+
+    以前只做子串搜索，于是卡级事件名（``on_equipment_trigger`` /
+    ``on_resource_spent`` / ``on_player_stat_changed`` / ``on_damage_taken`` …）
+    因为出现在 ``EVENT_EFFECT_TYPES``、``SCRIPT_ENTRY_ALIASES`` 这些**别的表**里
+    就被误判成"已触发"，写进 ``event_hooks`` 其实静默无效。
+
+    现在只认两种真派发：
+      * ``_run_v2_event_hooks('X', …)`` / ``_run_v2_play_hook('X', …)`` 的实参
+        （含 ``'on_status_added' if delta > 0 else 'on_status_removed'`` 这种
+        条件表达式里的两个常量）；
+      * ``for hook_name in ('before_damage', 'modify_damage')`` 这类循环元组里
+        的名字，且循环体里真的有派发调用。
+    """
+
+    found = set()
+    for filename in HOOK_SOURCE_FILES:
+        path = ROOT / filename
+        if not path.is_file():
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            func = node.func
+            name = getattr(func, "attr", None) or getattr(func, "id", None)
+            if name not in HOOK_DISPATCH_CALLS:
+                continue
+            argument = node.args[0]
+            if isinstance(argument, ast.Name):
+                # 循环变量：把所在 for 的常量元组全算进来（循环体里就是派发）。
+                for loop in ast.walk(tree):
+                    if not isinstance(loop, ast.For):
+                        continue
+                    target = loop.target
+                    if not (isinstance(target, ast.Name) and target.id == argument.id):
+                        continue
+                    for item in ast.walk(loop.iter):
+                        if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                            found.add(item.value)
+                continue
+            for item in ast.walk(argument):
+                if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                    found.add(item.value)
+    return found
+
+
+def _event_hook_synonym_groups() -> list:
+    """``game_engine._v2_hooks_for`` 里的同义钩子组（组内任意名字注册都生效）。"""
+
+    path = ROOT / "game_engine.py"
+    if not path.is_file():
+        return []
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError:
+        return []
+    groups = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef) or node.name != "_v2_hooks_for":
+            continue
+        for statement in node.body:
+            if not isinstance(statement, ast.Assign):
+                continue
+            targets = [getattr(target, "id", None) for target in statement.targets]
+            if "groups" not in targets or not isinstance(statement.value, (ast.Tuple, ast.List)):
+                continue
+            for element in statement.value.elts:
+                if not isinstance(element, (ast.Tuple, ast.List)):
+                    continue
+                group = tuple(
+                    item.value for item in element.elts
+                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                )
+                if group:
+                    groups.append(group)
+    return groups
+
+
+def event_hook_consistency() -> dict:
+    """``VALID_EVENT_HOOKS``（包级 event_hooks 白名单）里的每个名字，必须真的在
+    引擎源码里按**包级钩子**被派发——否则写出来是静默无效果（Round 56 / 批次 AT
+    立规矩，Round 67 / 批次 BE 把判定升级成 AST 真派发）。
     """
 
     hooks = sorted(getattr(mod_spec_v2, "VALID_EVENT_HOOKS", set()) or set())
-    sources = ("game_engine.py", "game_engine_2v2.py", "game_engine_urf.py", "mod_runtime_v2.py")
-    text = "\n".join(
-        (ROOT / name).read_text(encoding="utf-8", errors="replace")
-        for name in sources
-        if (ROOT / name).is_file()
-    )
-    missing = [name for name in hooks if name not in text]
+    dispatched = _dispatched_event_hook_names()
+    triggerable = set(dispatched)
+    for group in _event_hook_synonym_groups():
+        if any(name in dispatched for name in group):
+            triggerable.update(group)
+    missing = [name for name in hooks if name not in triggerable]
     problems = []
     if missing:
         problems.append(f"登记了但引擎从不触发的事件钩子（写出来静默无效）：{missing}")
-    return {"declared": len(hooks), "missing": missing, "problems": problems}
+    return {
+        "declared": len(hooks),
+        "dispatched": len(dispatched),
+        "synonym_groups": [list(group) for group in _event_hook_synonym_groups()],
+        "missing": missing,
+        "problems": problems,
+    }
 
 
 def ui_type_consistency() -> dict:
@@ -534,7 +625,9 @@ def render_text(summary: dict) -> str:
     if hooks:
         lines.append(
             f"== 包级事件钩子（event_hooks 白名单）: 登记 {hooks['declared']} 个，"
-            f"引擎从不触发的 {len(hooks['missing'])} 个 =="
+            f"真派发 {hooks.get('dispatched', '?')} 个 + 同义组 "
+            f"{len(hooks.get('synonym_groups') or [])} 组，引擎从不触发的 "
+            f"{len(hooks['missing'])} 个 =="
         )
         for problem in hooks.get("problems") or []:
             lines.append(f"  [失败] {problem}")

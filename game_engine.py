@@ -2457,8 +2457,10 @@ class GameEngine:
         # 同义钩子名分组（Round 57 / 批次 AU）：组内任意名字注册，组内任意名字触发。
         groups = (
             ("after_play_card", "on_card_play"),
-            ("after_damage", "on_damage"),
+            ("after_damage", "on_damage", "on_damage_taken", "on_damage_dealt"),
             ("on_status_added", "status_added"),
+            ("turn_start", "on_turn_start"),
+            ("turn_end", "on_turn_end"),
             ("on_game_start", "on_match_start"),
         )
         # Round 57 / 批次 AU：同义钩子名共用同一批监听器——``on_card_play`` 就是
@@ -16513,6 +16515,37 @@ class GameEngine:
                     seen.add(iid)
                     yield owner_id, card_obj, None
 
+    # Round 67 / 批次 BE：卡级事件 → 包级事件钩子镜像（四个调用点见
+    # ``_dispatch_card_event`` 收尾）。卡数据的 ``events`` 与包级 ``event_hooks``
+    # 是两套名字空间：这 4 个名字以前只登记进 ``VALID_EVENT_HOOKS``、引擎从不按
+    # 包级钩子派发（写出来静默无效），现在在**所有卡级事件的唯一派发口**镜像一次。
+    def _run_card_event_package_hook(self, hook_name: str, event_card, source_id: int,
+                                     target_id, extra_context: Optional[dict] = None) -> None:
+        """把有汇聚点的卡级事件镜像成同名包级事件钩子（Round 67 / 批次 BE）。
+
+        钩子步骤自己再引发同类事件时用深度上限兜住，避免无限递归。"""
+        if not getattr(self, 'v2_event_hooks', None):
+            return
+        depth = int(getattr(self, '_card_event_hook_depth', 0))
+        if depth >= 3:
+            return
+        self._card_event_hook_depth = depth + 1
+        try:
+            payload = dict(extra_context or {})
+            self._run_v2_event_hooks(
+                hook_name,
+                {
+                    'source_player': source_id,
+                    'target_player': source_id if target_id is None else target_id,
+                    'card': event_card,
+                    'vars': payload,
+                    'current_action': payload,
+                },
+                None,
+            )
+        finally:
+            self._card_event_hook_depth = depth
+
     def _dispatch_card_event(self, event_name: str, source_id: int, event_card: Optional[CardInstance] = None,
                              target_id: Optional[int] = None, equipment: Optional[EquipmentInstance] = None,
                              equipment_owner_id: Optional[int] = None, choice: Optional[dict] = None,
@@ -16568,6 +16601,19 @@ class GameEngine:
         elif event_name == 'equipment_triggered' and event_card is not None:
             from formal_logic_runtime import on_equipment_triggered as formal_logic_equipment_triggered
             formal_logic_equipment_triggered(self, card_user_id, event_card)
+        # Round 67 / 批次 BE：四个有真实汇聚点的卡级事件镜像成包级钩子。
+        if event_name == 'resource_spent':
+            self._run_card_event_package_hook('on_resource_spent', event_card, source_id,
+                                              target_id, extra_context)
+        elif event_name == 'player_stat_changed':
+            self._run_card_event_package_hook('on_player_stat_changed', event_card, source_id,
+                                              target_id, extra_context)
+        elif event_name == 'equipment_triggered':
+            self._run_card_event_package_hook('on_equipment_trigger', event_card, source_id,
+                                              target_id, extra_context)
+        elif event_name == 'equipment_destroyed':
+            self._run_card_event_package_hook('on_equipment_destroy', event_card, source_id,
+                                              target_id, extra_context)
 
     def _has_fatal_prevention(self, player_id: int) -> bool:
         if not (0 <= player_id < len(self.players)):

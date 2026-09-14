@@ -1846,6 +1846,16 @@ def atom_layer_counts() -> Dict[str, int]:
 # 它们已从白名单移除；`tools/mod_atom_report.py --check` 现在会**核对每一个
 # 登记名在引擎源码里真的被触发**，防止再漂移。要加回来：先在触发点调
 # ``_run_v2_event_hooks('<名字>', …)``，再登记到这张表。
+#
+# Round 67 / 批次 BE 补的两件事：
+#   * 判定升级成 **AST 真派发**：以前只在源码里"出现"就算触发，于是
+#     ``on_equipment_trigger`` 之类**卡级**事件名被误判成可用（写进 event_hooks
+#     其实静默无效）。现在只认 ``_run_v2_event_hooks('X')`` /
+#     ``_run_v2_play_hook('X')`` 的实参、循环里的名字元组、以及同义组。
+#   * 卡数据的 ``events`` 与包级 ``event_hooks`` 是**两套名字空间**：卡级
+#     ``events`` 支持 ``equipment_trigger`` / ``resource_spent`` /
+#     ``player_stat_changed`` / ``equipment_destroyed`` 等（一直有效）；
+#     包级钩子请只写这张表里的名字。
 VALID_EVENT_HOOKS = {
     # ---- 已在引擎里触发（`_run_v2_event_hooks` / `_run_v2_play_hook` / 伤害管线）----
     "before_play_card",
@@ -1857,14 +1867,6 @@ VALID_EVENT_HOOKS = {
     "turn_end",
     "before_draw",
     "after_draw",
-    "on_turn_start",
-    "on_turn_end",
-    "on_damage_dealt",
-    "on_damage_taken",
-    "on_resource_spent",
-    "on_player_stat_changed",
-    "on_equipment_trigger",
-    "on_equipment_destroy",
     # ---- Round 56 / 批次 AT 新接线的两个 ----
     "on_status_added",
     "on_status_removed",
@@ -1892,6 +1894,15 @@ VALID_EVENT_HOOKS = {
     "on_opening_event",     # _apply_opening_event：内置与 v2 开局事件的唯一汇聚点
     "on_game_start",        # 三个引擎的 start_game 收尾（开局流程全部就位后）
     "on_match_start",       # = on_game_start（同义组，见 game_engine._v2_hooks_for）
+    # ---- Round 67 / 批次 BE：卡级事件镜像 + 同义组补齐 ----
+    "on_resource_spent",       # = 卡级 resource_spent（_spend_resource 实际花掉 > 0）
+    "on_player_stat_changed",  # = 卡级 player_stat_changed（属性真实变化时）
+    "on_equipment_trigger",    # = 卡级 equipment_triggered（装备真正触发时）
+    "on_equipment_destroy",    # = 卡级 equipment_destroyed（装备真正被摧毁时）
+    "on_damage_taken",         # = after_damage（同义组）
+    "on_damage_dealt",         # = after_damage（同义组）
+    "on_turn_start",           # = turn_start（同义组）
+    "on_turn_end",             # = turn_end（同义组）
 }
 
 VALID_PATCH_OPS = {
