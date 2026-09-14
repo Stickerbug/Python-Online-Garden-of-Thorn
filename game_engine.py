@@ -2459,6 +2459,7 @@ class GameEngine:
             ("after_play_card", "on_card_play"),
             ("after_damage", "on_damage"),
             ("on_status_added", "status_added"),
+            ("on_game_start", "on_match_start"),
         )
         # Round 57 / 批次 AU：同义钩子名共用同一批监听器——``on_card_play`` 就是
         # ``after_play_card``、``on_damage`` 就是 ``after_damage``、
@@ -4310,6 +4311,23 @@ class GameEngine:
         self.phase = 'draft'
         # Generate draft options for this player
         self._generate_draft_options_for_player(player_id)
+        if getattr(self, 'v2_event_hooks', None):
+            # Round 66 / 批次 BD：``on_draft_start``——某位玩家的抽选（draft）
+            # 真正开始（事件已选好、牌池与选项已生成）后触发，每人一次。
+            self._run_v2_event_hooks(
+                'on_draft_start',
+                {
+                    'source_player': player_id,
+                    'target_player': player_id,
+                    'vars': {
+                        'opening_event_id': str(self.opening_event_picks[player_id]),
+                        'draft_target': self.draft_target_count(player_id),
+                    },
+                    'current_event': 'draft_start',
+                    'current_action': {'phase': 'draft'},
+                },
+                None,
+            )
         return True
 
     def _generate_draft_options_for_player(self, player_id: int):
@@ -4748,6 +4766,23 @@ class GameEngine:
         self.log_msg(f"游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         self._apply_late_round_fire_pressure()
+        if getattr(self, 'v2_event_hooks', None):
+            # Round 66 / 批次 BD：``on_game_start`` / ``on_match_start``（同义组）
+            # ——开局流程全部就位（牌堆、初始手牌、开局事件、快照）后触发一次。
+            self._run_v2_event_hooks(
+                'on_game_start',
+                {
+                    'source_player': self.first_player,
+                    'target_player': self.first_player,
+                    'vars': {'first_player': self.first_player, 'round': self.round_num},
+                    'current_event': 'game_start',
+                    'current_action': {
+                        'first_player': self.first_player,
+                        'round': self.round_num,
+                    },
+                },
+                None,
+            )
         # Turn-start effects may pause for a choice before
         # _enter_player_action_phase() is reached.  The active player and their
         # timer must already be authoritative while that choice is open.
@@ -5067,6 +5102,22 @@ class GameEngine:
         return [c.to_dict() for c in cards]
 
     def _apply_opening_event(self, player_id: int):
+        if getattr(self, 'v2_event_hooks', None):
+            # Round 66 / 批次 BD：``on_opening_event``——开局事件真正生效的唯一
+            # 汇聚点（内置事件与 v2 事件都从这里进），每人一次。
+            self._run_v2_event_hooks(
+                'on_opening_event',
+                {
+                    'source_player': player_id,
+                    'target_player': player_id,
+                    'vars': {'opening_event_id': str(self.opening_event_picks[player_id])},
+                    'current_event': 'opening_event',
+                    'current_action': {
+                        'opening_event': str(self.opening_event_picks[player_id]),
+                    },
+                },
+                None,
+            )
         ps = self.players[player_id]
         event_id = self.opening_event_picks[player_id]
         sub = self.opening_event_sub_choices[player_id]

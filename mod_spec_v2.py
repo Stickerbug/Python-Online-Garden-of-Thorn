@@ -1887,6 +1887,11 @@ VALID_EVENT_HOOKS = {
     "on_resource_changed",  # resource_op 的 E/M 实际变化（获得/消耗/花光）
     # ---- Round 65 / 批次 BC 新接线的 ----
     "on_equipment_equipped",  # 4 处 equipment.append 汇聚点（出牌装备 / equipment_op place / 造装备）
+    # ---- Round 66 / 批次 BD（开局流程）新接线的 ----
+    "on_draft_start",       # start_draft_for_player：某位玩家抽选真正开始
+    "on_opening_event",     # _apply_opening_event：内置与 v2 开局事件的唯一汇聚点
+    "on_game_start",        # 三个引擎的 start_game 收尾（开局流程全部就位后）
+    "on_match_start",       # = on_game_start（同义组，见 game_engine._v2_hooks_for）
 }
 
 VALID_PATCH_OPS = {

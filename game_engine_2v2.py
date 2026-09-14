@@ -412,6 +412,23 @@ class GameEngine2v2(GameEngine):
         self.log_msg(f"2v2游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"回合顺序：{' → '.join(self.pn(p) for p in self.turn_order)}")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        if getattr(self, 'v2_event_hooks', None):
+            # Round 66 / 批次 BD：``on_game_start`` / ``on_match_start``（同义组）
+            # ——2v2 开局流程全部就位后触发一次。
+            self._run_v2_event_hooks(
+                'on_game_start',
+                {
+                    'source_player': self.first_player,
+                    'target_player': self.first_player,
+                    'vars': {'first_player': self.first_player, 'round': self.round_num},
+                    'current_event': 'game_start',
+                    'current_action': {
+                        'first_player': self.first_player,
+                        'round': self.round_num,
+                    },
+                },
+                None,
+            )
         # A turn-start choice can suspend _start_player_turn().  Expose the
         # selected action player before that suspension so nobody sees a
         # timerless, unowned opening turn.

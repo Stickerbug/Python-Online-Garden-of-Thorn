@@ -382,6 +382,24 @@ class GameEngineInfiniteFire(GameEngine):
         self._apply_late_round_fire_pressure()
         if self.game_over:
             return
+        if getattr(self, 'v2_event_hooks', None):
+            # Round 66 / 批次 BD：``on_game_start`` / ``on_match_start``（同义组）
+            # ——无限火力没有抽选与开局事件，开局流程就位后同样触发一次。
+            self._run_v2_event_hooks(
+                'on_game_start',
+                {
+                    'source_player': self.first_player,
+                    'target_player': self.first_player,
+                    'vars': {'first_player': self.first_player, 'round': self.round_num,
+                             'mode': 'urf'},
+                    'current_event': 'game_start',
+                    'current_action': {
+                        'first_player': self.first_player,
+                        'round': self.round_num,
+                    },
+                },
+                None,
+            )
         # Keep the opening action owner visible even when a turn-start effect
         # opens a choice before the ordinary action entry continuation.
         self.phase = 'action'
