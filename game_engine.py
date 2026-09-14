@@ -2878,6 +2878,15 @@ class GameEngine:
         if prop in ('turn_damage_taken', 'turn_damage_dealt', 'last_turn_damage_taken',
                     'last_turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'):
             return int(getattr(ps, prop, 0))
+        # Round 69 / 批次 BH：**声明式自定义属性** —— 引擎不认识的属性名读玩家
+        # ``custom_vars``（模组可自己定义计数器），写侧同一口径（见
+        # ``_set_player_property_value``）。以前未知名字两边都静默无效。
+        custom_vars = getattr(ps, 'custom_vars', None)
+        if isinstance(custom_vars, dict) and prop:
+            try:
+                return int(self._scalar_value(custom_vars.get(prop, 0), 0) or 0)
+            except (TypeError, ValueError):
+                return 0
         return 0
 
     def _set_player_property_value(self, target_id, prop, value):
@@ -2927,7 +2936,11 @@ class GameEngine:
         elif prop in bool_props:
             setattr(ps, prop, bool(value))
         else:
-            return None
+            # Round 69 / 批次 BH：未知属性名写进 ``custom_vars``（与装备属性族
+            # 同一口径），配合 ``_get_player_property_value`` 的读侧回落，
+            # 模组就能用 ``player_prop_change`` 维护自己的计数器。
+            ps.custom_vars = getattr(ps, 'custom_vars', {}) or {}
+            ps.custom_vars[str(prop)] = int(value)
         return ps
 
     def _match_card_selector(self, player_id, cards, selector, card=None):
@@ -15368,6 +15381,15 @@ class GameEngine:
                     return int(target_card.cost_e_override if target_card.cost_e_override is not None else target_card.card_def.cost_e)
                 if prop == 'cost_m_override':
                     return int(target_card.cost_m_override if target_card.cost_m_override is not None else target_card.card_def.cost_m)
+                if not hasattr(target_card, prop):
+                    # Round 69 / 批次 BH：模组自定义卡属性（写侧落 ``custom_vars``）。
+                    custom_vars = getattr(target_card, 'custom_vars', None)
+                    if isinstance(custom_vars, dict):
+                        try:
+                            return int(self._scalar_value(custom_vars.get(prop, 0), 0) or 0)
+                        except (TypeError, ValueError):
+                            return 0
+                    return 0
                 return int(getattr(target_card, prop, 0))
             if ref == 'card_tag_count':
                 target_card = self._resolve_card_ref(player_id, expr.get('card', {'ref': 'current_card'}), card)
@@ -20171,6 +20193,12 @@ class GameEngine:
                 else:
                     target_card.instance_flags.discard('temp_magic_heavy')
                     target_card.disabled_flags.add('temp_magic_heavy')
+        else:
+            # Round 69 / 批次 BH：未知属性名落 ``custom_vars``（模组自定义属性），
+            # 与 ``_get_card_property_numeric_value`` / 取值表达式
+            # ``{"ref":"card_property"}`` 的读侧回落配套；以前写出来是静默无效。
+            target_card.custom_vars = getattr(target_card, 'custom_vars', {}) or {}
+            target_card.custom_vars[prop] = int(value)
         return target_card
 
     def _get_card_property_numeric_value(self, target_card, prop):
@@ -20179,10 +20207,18 @@ class GameEngine:
         elif prop in ('cost_m', 'cost_m_override'):
             value = target_card.cost_m_override if target_card.cost_m_override is not None else target_card.card_def.cost_m
         else:
-            value = getattr(target_card, prop, 0)
+            value = getattr(target_card, prop, None)
+            if value is None:
+                # Round 69 / 批次 BH：引擎没有这个属性时读 ``custom_vars``
+                # （模组自定义属性的唯一存放处）。
+                custom_vars = getattr(target_card, 'custom_vars', None)
+                value = custom_vars.get(prop) if isinstance(custom_vars, dict) else 0
         if value is None:
             return 0
-        value = int(value)
+        try:
+            value = int(self._scalar_value(value, 0) or 0)
+        except (TypeError, ValueError):
+            value = 0
         # Round 10: property caps are declared by the card data (``property_caps``);
         # the built-in fallback covers definitions without a data resource.
         builtin_cap = self._card_property_cap(target_card, prop)
