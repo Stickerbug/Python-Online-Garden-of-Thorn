@@ -2092,6 +2092,19 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         if override is not None:
             return max(0, _to_int(override))
         return max(0, _to_int(getattr(card_def, "cost_e", 0)))
+    # Round 74 / 批次 BR：表达式算子写错（``{"op":"mu",…}``）以前**原样返回整个字典**，
+    # 数字位上的 ``_to_int`` 把它变成 0——静默算错、没人提示。这里报一条模组运行
+    # 错误（返回值保持不变，避免动到"把整块字典当引用传下去"的老写法）。
+    if isinstance(expr, dict) and str(expr.get("op") or "").strip():
+        reporter = getattr(engine, "_log_mod_runtime_error", None)
+        if callable(reporter):
+            context = context if isinstance(context, dict) else {}
+            reporter(
+                "expression",
+                V2RuntimeError(f'unsupported expression op: {expr.get("op")!r}'),
+                context.get("source_player"),
+                context.get("card"),
+            )
     return expr
 
 
