@@ -1885,6 +1885,8 @@ VALID_EVENT_HOOKS = {
     "on_card_enter_hand",  # _handle_card_enter_hand（所有进手牌的汇聚点）
     # ---- Round 64 / 批次 BB 新接线的 ----
     "on_resource_changed",  # resource_op 的 E/M 实际变化（获得/消耗/花光）
+    # ---- Round 65 / 批次 BC 新接线的 ----
+    "on_equipment_equipped",  # 4 处 equipment.append 汇聚点（出牌装备 / equipment_op place / 造装备）
 }
 
 VALID_PATCH_OPS = {

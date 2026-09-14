@@ -9137,6 +9137,30 @@ class GameEngine:
     def _is_void_antimatter(self, card: Optional[CardInstance]) -> bool:
         return self._card_has_flag(card, 'void_antimatter')
 
+    def _note_equipment_equipped(self, owner_id: int, eq) -> None:
+        """Round 65 / 批次 BC：``on_equipment_equipped`` 的唯一派发点。
+
+        装备进场在引擎里有四条路径（出牌装备、``equipment_op(mode:"place")``、
+        造装备进区、2v2 队友装备），但它们最后都落到 ``equipment.append(eq)``
+        这四个点上——助手在这里统一触发一次模组级钩子，避免"有的卡触发、
+        有的卡不触发"。``vars`` 带 equipment/def_id/owner，``event_value`` = 卡定义 id。
+        """
+
+        if eq is None or not getattr(self, 'v2_event_hooks', None):
+            return
+        card = getattr(eq, 'card_instance', None)
+        self._run_v2_event_hooks(
+            'on_equipment_equipped',
+            {
+                'source_player': owner_id,
+                'target_player': owner_id,
+                'vars': {'equipment': eq, 'def_id': getattr(card, 'def_id', ''),
+                         'owner': owner_id},
+                'current_action': {'def_id': getattr(card, 'def_id', '')},
+            },
+            getattr(card, 'def_id', ''),
+        )
+
     def _put_card_in_exile(self, owner_id: int, card: Optional[CardInstance], trigger: bool = True):
         if card is None or not self._valid_player_id(owner_id):
             return
@@ -17917,6 +17941,7 @@ class GameEngine:
                                 eq.effect_target = selected_effect_target
                                 break
                 equip_owner.equipment.append(eq)
+                self._note_equipment_equipped(getattr(eq, 'owner', 0), eq)
                 self._note_achievement_equipment_count(equip_owner_id)
                 self._refresh_hand_limit_bonuses()
                 # Round 41 / 批次 AE-5：``continuous_deck_reveal``（护目镜）是数据
@@ -18054,6 +18079,7 @@ class GameEngine:
                 if 0 <= selected_target < len(self.players):
                     eq.effect_target = selected_target
             owner.equipment.append(eq)
+            self._note_equipment_equipped(getattr(eq, 'owner', owner_id), eq)
             if self._equipment_uses_non_stack_rule(eq):
                 self._ensure_non_stack_equipment_order(eq)
             self._note_achievement_equipment_count(owner_id)
@@ -18519,6 +18545,7 @@ class GameEngine:
                 if 0 <= selected_target < len(self.players):
                     eq.effect_target = selected_target
             owner.equipment.append(eq)
+            self._note_equipment_equipped(getattr(eq, 'owner', owner_id), eq)
             if self._equipment_uses_non_stack_rule(eq):
                 self._ensure_non_stack_equipment_order(eq)
             self._note_achievement_equipment_count(owner_id)
@@ -18569,6 +18596,7 @@ class GameEngine:
             else:
                 eq.effect_target = owner_id
             self.players[owner_id].equipment.append(eq)
+            self._note_equipment_equipped(owner_id, eq)
             if self._equipment_uses_non_stack_rule(eq):
                 self._ensure_non_stack_equipment_order(eq)
             self._note_achievement_equipment_count(owner_id)
