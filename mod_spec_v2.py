@@ -1903,6 +1903,9 @@ VALID_EVENT_HOOKS = {
     "on_damage_dealt",         # = after_damage（同义组）
     "on_turn_start",           # = turn_start（同义组）
     "on_turn_end",             # = turn_end（同义组）
+    # ---- Round 68 / 批次 BF：两个"窗口建立前"的钩子（原 19 个名字的最后两个）----
+    "on_choice_window",        # 选择窗口建立前（出牌选目标 / 重排牌堆 / 预知 / v2 响应…）
+    "on_response_window",      # 响应窗口建立前（_check_card_response_after_choice）
 }
 
 VALID_PATCH_OPS = {

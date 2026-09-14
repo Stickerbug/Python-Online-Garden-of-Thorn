@@ -276,7 +276,12 @@ def _quoted_names(block: str) -> set:
     return set(re.findall(r"[\"']([a-z0-9_]+)[\"']", block or ""))
 
 
-HOOK_DISPATCH_CALLS = ("_run_v2_event_hooks", "_run_v2_play_hook", "_run_card_event_package_hook")
+HOOK_DISPATCH_CALLS = (
+    "_run_v2_event_hooks",
+    "_run_v2_play_hook",
+    "_run_card_event_package_hook",   # 卡级事件镜像（批次 BE）
+    "_fire_window_open_hook",         # 选择/响应窗口建立前（批次 BF）
+)
 HOOK_SOURCE_FILES = ("game_engine.py", "game_engine_2v2.py", "game_engine_urf.py", "mod_runtime_v2.py")
 
 

@@ -2726,6 +2726,45 @@ class GameEngine:
                 break
         return ctx.get('event_value', event_value)
 
+    def _fire_window_open_hook(self, hook_name: str, player_id, target_id=None, card=None,
+                               **window_vars) -> None:
+        """Round 68 / 批次 BF：``on_choice_window`` / ``on_response_window``。
+
+        在**选择/响应窗口建立之前**派发，模组能观察"要给谁开窗口、开哪种窗口"。
+        事件钩子不允许自己开窗口（会把外层窗口挤掉）：发现钩子新建了
+        ``pending_choice`` / ``pending_response`` / ``pending_v2_ui`` 就按模组运行
+        错误上报并还原成调用前的状态。
+        """
+        if not getattr(self, 'v2_event_hooks', None):
+            return
+        depth = int(getattr(self, '_window_open_hook_depth', 0))
+        if depth >= 2:
+            return
+        guarded = ('pending_choice', 'pending_response', 'pending_v2_ui')
+        before = {attr: getattr(self, attr, None) for attr in guarded}
+        context = {
+            'source_player': player_id,
+            'target_player': player_id if target_id is None else target_id,
+            'card': card,
+            'vars': dict(window_vars),
+            'current_action': dict(window_vars),
+        }
+        self._window_open_hook_depth = depth + 1
+        try:
+            self._run_v2_event_hooks(hook_name, context, None)
+        finally:
+            self._window_open_hook_depth = depth
+        for attr in guarded:
+            current = getattr(self, attr, None)
+            if current and current is not before[attr]:
+                self._log_mod_runtime_error(
+                    'v2_event_hook',
+                    RuntimeError(f'{hook_name} 不能自己开选择/响应窗口'),
+                    player_id,
+                    card,
+                )
+                setattr(self, attr, before[attr])
+
     def _draw_cards_with_v2_hooks(self, player_id: int, count: int, reason: str = ''):
         if not (0 <= player_id < len(self.players)):
             return []
@@ -8367,6 +8406,10 @@ class GameEngine:
             # Blinded players must finish every card choice: their cards cannot be
             # cancelled, so hidden information cannot be checked for free.
             choice_params = {**choice_params, 'cancellable': False}
+        self._fire_window_open_hook(
+            'on_choice_window', player_id, player_id, card,
+            window='choice', choice_type=choice_type, def_id=getattr(card, 'def_id', ''),
+        )
         self.pending_choice = {
             'card': card.to_dict(),
             'player_id': player_id,
@@ -8446,6 +8489,10 @@ class GameEngine:
             self._pending_response_preview = prev_preview
         if not needs_response:
             return None
+        self._fire_window_open_hook(
+            'on_response_window', player_id, response_target_id, card,
+            window='response', def_id=getattr(card, 'def_id', ''),
+        )
         self.pending_response = {
             'card': card.to_dict(),
             'player_id': player_id,
@@ -11053,6 +11100,11 @@ class GameEngine:
         target_ps = self.players[target_id]
         deck_cards = [c.to_dict() for c in target_ps.deck]
         if deck_cards:
+            self._fire_window_open_hook(
+                'on_choice_window', player_id, player_id, card,
+                window='choice', choice_type='reorder_deck',
+                def_id=getattr(card, 'def_id', ''),
+            )
             self.pending_choice = {
                 'player_id': player_id,
                 'choice_type': 'reorder_deck',
@@ -12511,6 +12563,10 @@ class GameEngine:
             eligible = [card for card in ps.hand if self._bio_dna_candidates_for_card(card)]
             if not eligible:
                 continue
+            self._fire_window_open_hook(
+                'on_choice_window', player_id, player_id, None,
+                window='choice', choice_type='choose_card_from_hand', def_id='',
+            )
             self.pending_choice = {
                 'player_id': player_id,
                 'choice_type': 'choose_card_from_hand',
@@ -17408,6 +17464,10 @@ class GameEngine:
             'select_limit': select_limit,
             'resume_handler': resume_handler,
         }
+        self._fire_window_open_hook(
+            'on_choice_window', player_id, player_id, None,
+            window='choice', choice_type='foresight_replace', def_id='',
+        )
         self.pending_choice = {
             'player_id': player_id,
             'choice_type': 'foresight_replace',
@@ -22066,6 +22126,11 @@ class GameEngine:
             reflect=reflect, damage=damage,
         )
         message = str(message) if isinstance(message, str) and message else default_message
+        self._fire_window_open_hook(
+            'on_choice_window', owner_id, owner_id, card,
+            window='choice', choice_type=self.V2_RESPONSE_CHOICE_TYPE,
+            def_id=getattr(card, 'def_id', ''),
+        )
         self.pending_choice = {
             'card': card.to_dict(),
             'player_id': owner_id,
