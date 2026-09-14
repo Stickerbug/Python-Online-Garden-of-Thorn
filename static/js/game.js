@@ -10692,6 +10692,63 @@ function showV2UiRequest(data = {}) {
             select.addEventListener('change', sync);
             sync();
             row.appendChild(select);
+        } else if (type === 'checkbox') {
+            // Round 71 / 批次 BK：单个开关（回应值是 true/false）。
+            row.appendChild(makeV2UiLabel(labelText));
+            const wrap = document.createElement('label');
+            wrap.className = 'v2-ui-checkbox-row';
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.className = 'v2-ui-checkbox';
+            box.checked = Boolean(control.default);
+            const sync = () => { controlState[control.id] = box.checked; };
+            box.addEventListener('change', sync);
+            sync();
+            wrap.appendChild(box);
+            const hint = getV2Text(control, 'text', '');
+            if (hint) {
+                const span = document.createElement('span');
+                span.className = 'v2-ui-checkbox-text';
+                span.textContent = hint;
+                wrap.appendChild(span);
+            }
+            row.appendChild(wrap);
+        } else if (type === 'multi_select') {
+            // Round 71 / 批次 BK：从 options 里选多个（回应值是字符串列表）。
+            row.appendChild(makeV2UiLabel(labelText));
+            const list = document.createElement('div');
+            list.className = 'v2-ui-picker-list';
+            const minSelect = Math.max(0, Number(control.min_select || 0));
+            const maxSelect = Math.max(minSelect, Number(control.max_select || (control.options || []).length));
+            const preset = Array.isArray(control.default) ? control.default.map(String) : [];
+            const selectedValues = [];
+            (control.options || []).forEach((option, index) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'v2-ui-picker-option';
+                btn.dataset.value = String(option.value);
+                btn.textContent = getV2Text(option, 'label', String(option.label || option.value));
+                btn.addEventListener('click', () => {
+                    const value = String(option.value);
+                    const currentIndex = selectedValues.indexOf(value);
+                    if (currentIndex >= 0) {
+                        selectedValues.splice(currentIndex, 1);
+                        btn.classList.remove('selected');
+                    } else {
+                        if (selectedValues.length >= maxSelect) return;
+                        selectedValues.push(value);
+                        btn.classList.add('selected');
+                    }
+                    controlState[control.id] = [...selectedValues];
+                });
+                if (preset.length ? preset.includes(String(option.value)) : index < minSelect) {
+                    btn.classList.add('selected');
+                    selectedValues.push(String(option.value));
+                }
+                list.appendChild(btn);
+            });
+            controlState[control.id] = [...selectedValues];
+            row.appendChild(list);
         } else if (type === 'card_picker' || type === 'equipment_picker' || type === 'multi_card_picker' || type === 'multi_equipment_picker' || type === 'card_catalog_picker' || type === 'player_picker' || type === 'target_picker') {
             row.appendChild(makeV2UiLabel(labelText));
             const list = document.createElement('div');

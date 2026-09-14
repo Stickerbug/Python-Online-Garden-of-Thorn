@@ -2887,6 +2887,35 @@ def validate_v2_ui_response(engine, context: Dict[str, Any], component: Dict[str
             if allowed and value not in allowed:
                 raise V2RuntimeError(f"invalid v2 ui select value: {cid}")
             values_out[cid] = value
+        elif ctype == "checkbox":
+            # Round 71 / 批次 BK：开关回应值统一成 bool。
+            if isinstance(raw_value, str):
+                values_out[cid] = raw_value.strip().lower() not in (
+                    "", "0", "false", "no", "off", "否", "关闭",
+                )
+            else:
+                values_out[cid] = bool(raw_value)
+        elif ctype == "multi_select":
+            # Round 71 / 批次 BK：多选回应值统一成字符串列表，并按 min/max_select 校验。
+            options = _control_options(control)
+            allowed = [str(opt.get("value")) for opt in options]
+            raw_values = raw_value if isinstance(raw_value, list) else (
+                [] if raw_value in (None, "") else [raw_value]
+            )
+            picked = []
+            for value in raw_values:
+                text = str(value)
+                if allowed and text not in allowed:
+                    raise V2RuntimeError(f"invalid v2 ui multi_select value: {cid}")
+                if text not in picked:
+                    picked.append(text)
+            min_select = max(0, _to_int(control.get("min_select", 0)))
+            max_select = max(min_select, _to_int(control.get("max_select", len(picked))))
+            if len(picked) < min_select:
+                raise V2RuntimeError(f"v2 ui multi_select needs at least {min_select}: {cid}")
+            if len(picked) > max_select:
+                raise V2RuntimeError(f"v2 ui multi_select allows at most {max_select}: {cid}")
+            values_out[cid] = picked
         elif ctype in ("card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker"):
             multi = ctype.startswith("multi_")
             zone = str(control.get("zone") or ("equipment" if "equipment" in ctype else "hand"))
@@ -2992,7 +3021,7 @@ def _sanitize_ui_component(engine, context: Dict[str, Any], component: Dict[str,
     }
     out = {key: copy.deepcopy(component[key]) for key in allowed_component_keys if key in component}
     ctype = str(out.get("type") or "modal")
-    if ctype not in {"modal", "confirm", "select", "card_catalog_picker", "slider", "number", "number_input", "card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker", "player_picker", "target_picker", "text"}:
+    if ctype not in {"modal", "confirm", "select", "card_catalog_picker", "slider", "number", "number_input", "card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker", "player_picker", "target_picker", "text", "checkbox", "multi_select"}:
         raise V2RuntimeError(f"unsupported v2 ui component type: {ctype}")
     out["type"] = ctype
     controls = out.get("controls") if isinstance(out.get("controls"), list) else []
@@ -3032,7 +3061,7 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
     ctype = str(control.get("type") or "text")
     if not cid:
         raise V2RuntimeError("ui control id is required")
-    if ctype not in {"text", "select", "card_catalog_picker", "slider", "number", "number_input", "card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker", "player_picker", "target_picker"}:
+    if ctype not in {"text", "select", "card_catalog_picker", "slider", "number", "number_input", "card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker", "player_picker", "target_picker", "checkbox", "multi_select"}:
         raise V2RuntimeError(f"unsupported v2 ui control type: {ctype}")
     out: Dict[str, Any] = {
         "id": cid,
@@ -3055,6 +3084,26 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
         out.update({"min": min_value, "max": max_value, "step": step, "default": default})
     elif ctype in ("select", "card_catalog_picker"):
         out["options"] = _control_options(control)
+    elif ctype == "checkbox":
+        # Round 71 / 批次 BK：单个开关。``default`` 走取值表达式，回应值 true/false。
+        default = control.get("default", control.get("value", False))
+        out["default"] = bool(eval_v2_value(engine, context, default))
+    elif ctype == "multi_select":
+        # Round 71 / 批次 BK：从 ``options`` 里选多个（``min_select``/``max_select`` 限个）。
+        options = _control_options(control)
+        out["options"] = options
+        min_select = max(0, _to_int(control.get("min_select", 0)))
+        max_select = max(min_select, _to_int(control.get("max_select", len(options))))
+        out["min_select"] = min(min_select, len(options))
+        out["max_select"] = min(max_select, len(options))
+        default = control.get("default")
+        if isinstance(default, dict):
+            default = eval_v2_value(engine, context, default)
+        if isinstance(default, (list, tuple)):
+            allowed = {str(option.get("value")) for option in options}
+            out["default"] = [str(value) for value in default if str(value) in allowed]
+        else:
+            out["default"] = []
     elif ctype in ("card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker"):
         picker_type = "equipment_picker" if "equipment" in ctype else "card_picker"
         zone = str(control.get("zone") or ("equipment" if picker_type == "equipment_picker" else "hand"))

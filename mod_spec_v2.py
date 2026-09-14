@@ -61,6 +61,9 @@ VALID_UI_COMPONENT_TYPES = {
     "player_picker",
     "target_picker",
     "text",
+    # ---- Round 71 / 批次 BK：客户端能力表补两个常用控件 ----
+    "checkbox",      # 单个开关（回应值是 true/false）
+    "multi_select",  # 从 options 里选多个（回应值是字符串列表）
 }
 
 # 窗口里的控件类型（`component.controls[].type`）：与运行时同一份白名单。
@@ -77,6 +80,9 @@ VALID_UI_CONTROL_TYPES = {
     "multi_equipment_picker",
     "player_picker",
     "target_picker",
+    # ---- Round 71 / 批次 BK 新控件（与运行时/客户端同一份白名单）----
+    "checkbox",      # `default` 可以写 true/false
+    "multi_select",  # 认 `options` / `min_select` / `max_select` / `default`
 }
 
 # Round 47 / 批次 AK：这张表是"所有名字"的历史并集（步骤 op + 取值表达式 +

@@ -11928,6 +11928,26 @@ html.blind-level-4 .card-prediction-part.magic {
   transform: scale(0.96);
 }
 
+/* Round 71 / 批次 BK：新控件 checkbox / multi_select 的样式 */
+.v2-ui-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.v2-ui-checkbox {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--magic);
+  cursor: pointer;
+}
+
+.v2-ui-checkbox-text {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
 .v2-ui-buttons {
   flex-wrap: wrap;
 }
