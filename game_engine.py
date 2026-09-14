@@ -10032,6 +10032,15 @@ class GameEngine:
         if stat in ('attack', 'shield'):
             stat = 'armor'
         if stat not in ('armor', 'dodge'):
+            # Round 73 / 批次 BP：``stat``/``mode`` 写错以前静默什么都不做或静默变 add。
+            self._reject_unknown_enum('player_stat_change', 'stat', stat,
+                                      {'armor', 'dodge'}, player_id, card)
+            return
+        if self._reject_unknown_enum(
+            'player_stat_change', 'mode', mode,
+            {'', 'add', 'gain', 'increase', 'remove', 'lose', 'set', 'set_to', 'assign', '='},
+            player_id, card,
+        ):
             return
         default_target = 'enemy' if mode == 'remove' else 'self'
         target_id = self._resolve_target(player_id, params.get('target', default_target))
@@ -10723,6 +10732,13 @@ class GameEngine:
         resource = 'magic' if str(params.get('resource', 'elixir')).strip().lower() in (
             'magic', 'm', 'mana', '魔力',
         ) else 'elixir'
+        # Round 73 / 批次 BP：``resource`` 写错（例如 "mgaic"）以前静默当 E 用。
+        if self._reject_unknown_enum(
+            'resource_op', 'resource', str(params.get('resource', 'elixir')),
+            {'', 'elixir', 'e', 'energy', 'magic', 'm', 'mana', '魔力'},
+            player_id, card,
+        ):
+            return
         label = 'M' if resource == 'magic' else 'E'
         raw_delta = params.get('delta', params.get('amount', 1))
         if isinstance(raw_delta, dict) and raw_delta.get('ref') in ('context_var', 'temp_var') and resource == 'elixir':
@@ -10907,6 +10923,9 @@ class GameEngine:
         mode = {'+': 'add', 'add_tag': 'add', 'remove_tag': 'remove', 'del': 'remove',
                 'delete': 'remove', 'unset': 'remove', 'clear_tags': 'clear',
                 'reset': 'clear', 'none': 'clear'}.get(mode, mode)
+        if self._reject_unknown_enum('tag_op', 'mode', mode,
+                                     {'add', 'remove', 'clear'}, player_id, card):
+            return
         target_card = self._resolve_card_ref(player_id, params.get('card', {'ref': 'current_card'}), card)
         if target_card is None:
             return
@@ -10996,6 +11015,9 @@ class GameEngine:
         mode = {'+': 'add', 'add_tag': 'add', 'add': 'add',
                 'remove_tag': 'remove', 'remove': 'remove', 'del': 'remove', 'delete': 'remove',
                 'toggle': 'toggle', 'flip': 'toggle', 'toggle_tag': 'toggle'}.get(mode, mode)
+        if self._reject_unknown_enum('tag_op', 'mode', mode,
+                                     {'add', 'remove', 'toggle'}, player_id, card):
+            return
         if mode == 'toggle':
             # Round 31 / 批次 Z：旧 ``toggle_tag_in_zone`` 的逐张翻转。
             log_value = log
