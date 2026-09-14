@@ -4962,6 +4962,12 @@ def _resume_repeated_card_play(state, continuation, payload, seed, events):
     )
 
 
+def _card_has_favorite(card) -> bool:
+    """钟爱（Favorite）标记：按“键是否存在”判断，兼容旧存档里的 0（反馈 #131/#132）。"""
+    modifiers = card.get('modifiers') if isinstance(card, dict) else None
+    return isinstance(modifiers, dict) and 'favorite' in modifiers
+
+
 def _play_card(state, payload, seed, events, autoplay_depth=0):
     if state.get('phase') != 'combat':
         _fail('NOT_IN_COMBAT', '当前不在战斗中')
@@ -5056,11 +5062,14 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
                     'to_def_id': card.get('def_id') or '',
                     'source': 'infect',
                 })
-    if not (card.get('modifiers') or {}).get('favorite'):
+    # 反馈 #131/#132：钟爱原来写的是 ``modifiers['favorite'] = 0``，而这里是真值判断，
+    # 0 恒为假 → 费用 -1 和「手中有钟爱时打出别的牌受 2D」两条都不触发。改成按
+    # “键是否存在”判断，顺带兼容旧存档里的 0。
+    if not _card_has_favorite(card):
         favorite_count = sum(
             1
             for hand_card in combat.get('hand', [])
-            if bool((hand_card.get('modifiers') or {}).get('favorite'))
+            if _card_has_favorite(hand_card)
         )
         if favorite_count:
             _player_raw_damage(
@@ -5070,7 +5079,7 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
                 'favorite',
             )
     combat['hand'].remove(card)
-    if (card.get('modifiers') or {}).get('favorite'):
+    if _card_has_favorite(card):
         card.setdefault('modifiers', {})
         card['modifiers']['cost_e_delta'] = int(
             card['modifiers'].get('cost_e_delta') or 0
@@ -10003,7 +10012,8 @@ def _resolve_deck_operation(state, payload, seed, events):
                     extra_tags.append('innate')
                 modifiers['extra_tags'] = extra_tags
             elif kind == 'favorite_card':
-                modifiers['favorite'] = 0
+                # 反馈 #131/#132：这里原来是 0，而判定是真值判断，导致钟爱完全没效果。
+                modifiers['favorite'] = True
             elif kind == 'infect_card':
                 modifiers['infect'] = True
             events.append({

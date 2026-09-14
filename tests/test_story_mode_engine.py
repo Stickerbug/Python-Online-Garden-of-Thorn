@@ -3667,3 +3667,42 @@ def test_clear_status_intent_is_structured_instead_of_leaking_internal_effect_na
 
     assert clear['status'] == 'reflection'
     assert 'clear_status' not in intent['summary']
+
+
+def test_story_favorite_applies_cost_reduction_and_hand_penalty():
+    """反馈 #131/#132：钟爱标记曾写成 0，导致费用 -1 和手中惩罚都不触发。"""
+    seed = 'story-favorite'
+    state, _ = _begin_combat(seed)
+    combat = state['combat']
+    combat['hand'] = []
+    combat['elixir'] = 10
+    # 用旧存档的写法（0）验证兼容：按“键是否存在”判断。
+    favorite = _new_card(state, 'basic', modifiers={'favorite': 0})
+    other = _new_card(state, 'basic')
+    combat['hand'] = [favorite, other]
+    enemy = combat['enemies'][0]
+    health_before = int(state['player']['health'])
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': other['instance_id'], 'target_id': enemy['id']},
+        f'{seed}-other',
+    )
+    penalty = [
+        event for event in events
+        if event.get('type') == 'player_damage' and event.get('source') == 'favorite'
+    ]
+    assert penalty and int(penalty[0]['amount']) == 2
+    assert int(state['player']['health']) == health_before - 2
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': favorite['instance_id'], 'target_id': enemy['id']},
+        f'{seed}-favorite',
+    )
+    assert any(
+        event.get('type') == 'card_cost_reduced' and event.get('source') == 'favorite'
+        for event in events
+    )
