@@ -460,7 +460,67 @@ def ui_type_consistency() -> dict:
     }
 
 
-def build_summary(report: dict, *, corpus=None) -> dict:
+def target_selector_consistency(mods_dir: pathlib.Path) -> dict:
+    """Round 72 / 批次 BM：卡数据里 ``target``/``viewer``/``owner`` 的**字符串**值
+    必须落在两层选择器词表 ``mod_runtime_v2.PLAYER_SELECTOR_STRINGS`` 里。
+
+    写错名字的后果是**静默命中错误目标**——最糟的时候静默变成"自己"
+    （``health_op(mode:"lose", target:"enmey")`` 是自伤）。这条按**信息项**常驻
+    报告：词表外的名字连同用它的包一起列出来；只有真的写了错名字才在
+    ``problems`` 里出现（``--check`` 会失败）。
+    """
+
+    try:
+        import mod_runtime_v2  # noqa: PLC0415
+
+        vocabulary = set(getattr(mod_runtime_v2, "PLAYER_SELECTOR_STRINGS", set()) or set())
+    except Exception as exc:  # noqa: BLE001
+        return {"checked": 0, "vocabulary": 0, "unknown": [], "problems": [f"读不到选择器词表：{exc}"]}
+    if not vocabulary:
+        return {"checked": 0, "vocabulary": 0, "unknown": [], "problems": ["选择器词表是空的（PLAYER_SELECTOR_STRINGS 丢了？）"]}
+
+    keys = ("target", "viewer", "owner")
+    values = collections.defaultdict(set)
+    checked = 0
+    for path in sorted(mods_dir.glob("*.gtnmod")):
+        try:
+            with zipfile.ZipFile(path) as archive:
+                payload = json.loads(archive.read("mod.json"))
+        except Exception:
+            continue
+        for registry, resource in iter_registry_resources(payload):
+            lists = []
+            root_step_lists(resource, lists)
+            if not lists:
+                continue
+            resource_id = f"{path.name}:{registry}:{resource.get('id')}"
+
+            def visit(step, _op, _rid=resource_id):
+                nonlocal checked
+                for key in keys:
+                    value = step.get(key)
+                    if isinstance(value, str) and value.strip():
+                        checked += 1
+                        values[value.strip()].add(_rid)
+
+            for steps in lists:
+                walk_steps(steps, visit)
+    unknown = [
+        {"value": value, "resources": sorted(values[value])[:4]}
+        for value in sorted(values)
+        if value.lower() not in vocabulary
+    ]
+    problems = []
+    if unknown:
+        problems.append(
+            "卡数据里用了选择器词表外的 target/viewer/owner 名字"
+            "（写错会静默命中错误目标）："
+            + ", ".join(f"{item['value']!r} @ {item['resources'][:1]}" for item in unknown[:6])
+        )
+    return {"checked": checked, "vocabulary": len(vocabulary), "unknown": unknown, "problems": problems}
+
+
+def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = None) -> dict:
     core_ops = set(getattr(mod_spec_v2, "_CORE_LOGIC_OPS", set()) or set())
     valid_ops = set(getattr(mod_spec_v2, "VALID_LOGIC_OPS", set()) or set())
     engine_ops = set(atomic_registry.engine_atomic_ops())
@@ -524,6 +584,10 @@ def build_summary(report: dict, *, corpus=None) -> dict:
         "layer_problems": layer_problems,
         "ui_types": ui_type_consistency(),
         "event_hooks": event_hook_consistency(),
+        # Round 72 / 批次 BM：卡数据的 target/viewer/owner 名字必须落在选择器词表里。
+        "target_selectors": target_selector_consistency(
+            mods_dir if mods_dir is not None else ROOT / "mods"
+        ),
         "secret_ops_used": [
             {"op": op, "cards": usage[op]["cards"], "packages": sorted(usage[op]["packages"])}
             for op in secret_used
@@ -627,6 +691,16 @@ def render_text(summary: dict) -> str:
 
     ui = summary.get("ui_types") or {}
     hooks = summary.get("event_hooks") or {}
+    selectors = summary.get("target_selectors") or {}
+    if selectors:
+        lines.append(
+            f"== 目标选择器词表对拍（target/viewer/owner）: 看到 "
+            f"{selectors.get('checked', 0)} 处，词表 {selectors.get('vocabulary', 0)} 个名字，"
+            f"词表外的 {len(selectors.get('unknown') or [])} 个 =="
+        )
+        for item in selectors.get("unknown") or []:
+            lines.append(f"  [失败] {item['value']!r} @ {item['resources'][:2]}")
+        lines.append("")
     if hooks:
         lines.append(
             f"== 包级事件钩子（event_hooks 白名单）: 登记 {hooks['declared']} 个，"
@@ -704,7 +778,7 @@ def main(argv=None) -> int:
         print(f"模组目录不存在: {mods_dir}", file=sys.stderr)
         return 2
 
-    summary = build_summary(collect(mods_dir, only=args.only))
+    summary = build_summary(collect(mods_dir, only=args.only), mods_dir=mods_dir)
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
@@ -720,6 +794,8 @@ def main(argv=None) -> int:
         or (summary.get("ui_types") or {}).get("problems")
         # Round 56 / 批次 AT：包级事件钩子白名单里的名字必须真的会被触发。
         or (summary.get("event_hooks") or {}).get("problems")
+        # Round 72 / 批次 BM：卡数据的选择器名字必须在两层词表里。
+        or (summary.get("target_selectors") or {}).get("problems")
     ):
         return 1
     return 0
