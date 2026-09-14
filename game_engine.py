@@ -13359,6 +13359,9 @@ class GameEngine:
                 if self._valid_player_id(target_id):
                     return target_id
             return player_id
+        # Round 72 / 批次 BM：不认识的选择器照旧返回自己（单目标调用方遍地都是，
+        # 返回 -1 会引出越界访问），但会报一条模组运行错误提示写法有问题。
+        self._is_unknown_target_selector(target_str)
         return player_id
     def _resolve_targets(self, player_id, target_str):
         if isinstance(target_str, int):
@@ -13425,6 +13428,9 @@ class GameEngine:
             from engine_runtime_support import forced_random_target
             target_id = forced_random_target(self, player_id, [0, 1])
             return [target_id] if target_id >= 0 else []
+        # Round 72 / 批次 BM：不认识的选择器 -> 谁都不命中（以前静默变成"自己"）。
+        if self._is_unknown_target_selector(target_str):
+            return []
         rid = self._resolve_target(player_id, target_str)
         if rid == -1:
             return []
@@ -14757,6 +14763,54 @@ class GameEngine:
             card_id=getattr(card, 'def_id', None),
             room_phase=getattr(self, 'phase', ''),
         )
+
+    def _report_unknown_selector(self, kind: str, selector, context=None) -> None:
+        """Round 72 / 批次 BM：未知选择器只报一次（避免一局里刷屏）。"""
+
+        text = str(selector or '')
+        seen = getattr(self, '_reported_unknown_selectors', None)
+        if not isinstance(seen, set):
+            seen = set()
+            self._reported_unknown_selectors = seen
+        key = (str(kind), text)
+        if key in seen:
+            return
+        seen.add(key)
+        source_player = None
+        card = None
+        if isinstance(context, dict):
+            source_player = context.get('source_player')
+            card = context.get('card')
+        if card is None:
+            card = self._v2_active_damage_card()
+        self._log_mod_runtime_error(
+            str(kind),
+            RuntimeError(f"unknown {kind} selector: {text!r}"),
+            source_player,
+            card,
+        )
+
+    def _is_unknown_target_selector(self, selector) -> bool:
+        """Round 72 / 批次 BM：数据里的目标选择器名字不在两层词表里就当**写错**。
+
+        以前 ``target:"enmey"`` 会一路落到 ``_resolve_target`` 的默认分支，
+        **静默变成"自己"**（``health_op(mode:"lose", target:"enmey")`` 是自伤），
+        而且没有任何提示。现在报一条模组运行错误，多目标路径直接谁都不命中。
+        """
+
+        if not isinstance(selector, str):
+            return False
+        text = selector.strip().lower()
+        if not text:
+            return False
+        try:
+            from mod_runtime_v2 import PLAYER_SELECTOR_STRINGS
+        except Exception:
+            return False
+        if text in PLAYER_SELECTOR_STRINGS:
+            return False
+        self._report_unknown_selector('target', text)
+        return True
 
     def _reject_unknown_enum(self, op: str, param: str, value, allowed, player_id=None,
                             card=None) -> bool:

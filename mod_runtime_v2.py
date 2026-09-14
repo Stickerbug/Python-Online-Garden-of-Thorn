@@ -2293,6 +2293,56 @@ def _resolve_random_selectable(engine, context: Dict[str, Any], selector: Dict[s
     return int(forced_random_target(engine, source, candidates))
 
 
+# Round 72 / 批次 BM：**目标选择器词表**（两层合一的契约）。
+#
+# ``resolve_v2_target`` 与引擎的 ``_resolve_target`` / ``_resolve_targets`` /
+# ``_list_effect_targets`` 认得的字符串名字都列在这里：运行时认得的前 14 组直接
+# 解析，只有引擎认得的几个（``both`` 等）原样返回、由 ``_data_step_targets``
+# 回落到引擎词表。数据里写了表外的名字（拼错、旧名）以前是"静默无效果"甚至
+# "静默打到自己"（``health_op target:"enmey"`` 会对自己结算），现在两层都会报一条
+# 模组运行错误且不命中任何目标。**加新选择器时同步更新这张表。**
+PLAYER_SELECTOR_STRINGS = frozenset({
+    # 单目标/上下文
+    "source", "self", "target", "target_player", "target_id", "choice_target",
+    "selected_target", "chosen_target", "event_target", "chosen_targets",
+    "play_targets", "action_targets", "wide_strike_targets",
+    "event_source", "source_id", "last_actor", "damage_source",
+    # 集合
+    "all", "all_players", "everyone", "everyone_else", "all_others",
+    "all_except_self", "all_selectable", "all_targets", "every_selectable",
+    "all_enemies", "all_friendlies", "friendly", "self_team", "teammate",
+    "team_member", "team_members", "target_team_members",
+    "both", "random_side",
+    # 随机
+    "random_enemy", "random_friendly", "random_player",
+    "random_selectable", "random_selectable_player",
+    # 装备相关
+    "owner", "equipment_owner", "equip_owner", "equipment_target", "equip_target",
+    "equipment_effect_target", "current_equipment",
+    # 特殊
+    "lowest_health_enemy", "lowest_health_enemy_player",
+    "player_id", "player_at", "raw_player",
+    # 区域 / 卡（同一条字符串分支里也认这些）
+    "hand", "deck", "discard", "exile", "equipment",
+    "current_card", "chosen_card", "selected_card", "choice_card",
+    "last_created_card", "created_card", "last_copied_card",
+})
+
+
+def _report_unknown_target_selector(engine, context, selector) -> None:
+    """把"数据里的选择器名字不认识"报成模组运行错误（引擎侧同一条只报一次）。"""
+
+    reporter = getattr(engine, "_report_unknown_selector", None)
+    if callable(reporter):
+        reporter("target", selector, context)
+        return
+    logger = getattr(engine, "_log_mod_runtime_error", None)
+    if callable(logger):
+        context = context if isinstance(context, dict) else {}
+        logger("target", RuntimeError(f"unknown target selector: {selector!r}"),
+               context.get("source_player"), context.get("card"))
+
+
 def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
     if isinstance(selector, list):
         return selector
@@ -2598,7 +2648,13 @@ def resolve_v2_target(engine, context: Dict[str, Any], selector: Any):
         return None
     if text in context.get("vars", {}):
         return context["vars"][text]
-    return text
+    if text.lower() in PLAYER_SELECTOR_STRINGS:
+        # 只有引擎认得的写法（例如 ``both``）：原样返回，由引擎回落路径解析。
+        return text
+    if text:
+        # Round 72 / 批次 BM：不认识的选择器不再静默返回原字符串。
+        _report_unknown_target_selector(engine, context, text)
+    return None
 
 
 def check_v2_condition(engine, context: Dict[str, Any], cond: Any) -> bool:
