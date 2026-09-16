@@ -10,6 +10,8 @@ DEFAULT_RULES_PATH = os.path.join(BASE_DIR, 'static', 'data', 'moderation_rules.
 # 手工维护的高频违禁词（辱骂/色情/政治/广告/非法交易/隐私）。改这个文件即热加载，
 # 不需要重新生成 moderation_rules.json，也不需要重启服务。
 DEFAULT_MANUAL_PATH = os.path.join(BASE_DIR, 'static', 'data', 'moderation_manual.json')
+# 繁体→简体字符映射（只覆盖词库里出现过的字，离线生成，运行期零依赖）。
+DEFAULT_T2S_PATH = os.path.join(BASE_DIR, 'static', 'data', 'moderation_t2s.json')
 
 REPORT_CATEGORIES = {
     'chat_message': {'abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment', 'other'},
@@ -27,6 +29,8 @@ VALID_MODERATION_ACTIONS = {'none', 'warn', 'mute', 'ban', 'invalidate_match'}
 
 _RULE_CACHE = None
 _RULE_CACHE_MTIME = None
+_T2S_TRANSLATION = None
+_T2S_CACHE_MTIME = None
 
 ACTION_BY_LEVEL = {
     0: 'allow',
@@ -87,6 +91,20 @@ _NICKNAME_CHAR_EQUIVALENTS = {
     'ԁ': {'d'},
     'ο': {'o'},
     'о': {'o'},
+    'а': {'a'},
+    'у': {'y'},
+    'х': {'x'},
+    'ј': {'j'},
+    'ν': {'v'},
+    'α': {'a'},
+    'ɡ': {'g'},
+    'ѐ': {'e'},
+    'ё': {'e'},
+}
+_HOMOGLYPH_TRANSLATION = {
+    ord(source): sorted(targets)[0]
+    for source, targets in _NICKNAME_CHAR_EQUIVALENTS.items()
+    if targets
 }
 _ERIC_DECORATION_TOKENS = (
     'administrator', 'developer', 'official', 'oficial', 'admin', 'player', 'real',
@@ -200,6 +218,11 @@ def normalize_message(text):
     value = str(text or '')
     value = unicodedata.normalize('NFKC', value).casefold()
     value = _CONTROL_RE.sub('', value)
+    t2s_table = _t2s_translation()
+    if t2s_table:
+        value = value.translate(t2s_table)
+    if _HOMOGLYPH_TRANSLATION:
+        value = value.translate(_HOMOGLYPH_TRANSLATION)
     kept = []
     for ch in value:
         category = unicodedata.category(ch)
@@ -209,6 +232,35 @@ def normalize_message(text):
     value = ''.join(kept)
     value = _REPEAT_RE.sub(r'\1\1', value)
     return value.strip()
+
+
+def _t2s_translation():
+    """繁体→简体字符表（按 mtime 热加载，文件缺失时退化为不做转换）。"""
+    global _T2S_TRANSLATION, _T2S_CACHE_MTIME
+    path = os.environ.get('GTN_MODERATION_T2S_PATH', DEFAULT_T2S_PATH)
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = None
+    if _T2S_TRANSLATION is not None and _T2S_CACHE_MTIME == mtime:
+        return _T2S_TRANSLATION
+    mapping = {}
+    if mtime is not None:
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                doc = json.load(handle)
+            raw = doc.get('map') if isinstance(doc, dict) else None
+            if isinstance(raw, dict):
+                mapping = {
+                    ord(str(source)): str(target)
+                    for source, target in raw.items()
+                    if source and target and str(source) != str(target)
+                }
+        except Exception:
+            mapping = {}
+    _T2S_TRANSLATION = mapping
+    _T2S_CACHE_MTIME = mtime
+    return mapping
 
 
 def _default_rules():
@@ -446,6 +498,10 @@ def check_message_risk(text):
         })
         if level >= 3 or rule.get('mask'):
             sanitized = _mask_by_rule(sanitized, rule, matched_terms)
+    if risk_level >= 3 and sanitized == raw_text:
+        # 繁体/同形字/拼音变体命中的词在原文里找不到对应字形（例如「賤人」对「贱人」），
+        # 直接整条打码，避免"标记了却照样发出去"。
+        sanitized = '***'
     return {
         'risk_level': risk_level,
         'action': action,

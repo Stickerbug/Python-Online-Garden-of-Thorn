@@ -91,6 +91,39 @@ def test_matching_terms_are_masked_in_output():
     assert '傻逼' not in str(result.get('sanitized_text') or '')
 
 
+def test_traditional_characters_are_normalized():
+    for text in ('賤人', '傻屄', '強姦', '賣淫', '代練'):
+        assert _level(text) >= 3, text
+    result = moderation.check_message_risk('賤人')
+    assert result.get('sanitized_text') == '***'
+
+
+def test_pinyin_and_abbreviation_variants_are_caught():
+    assert _level('shabi') >= 3
+    assert _level('nmsl') == 4
+    assert _level('cnm') == 4
+    assert _level('mdzz') >= 3
+    assert _level('2b') >= 3
+    assert _level('yuepao') == 4
+    assert _level('luoliao') == 4
+
+
+def test_homoglyph_evasion_is_folded_before_matching():
+    assert _level('sh\u0430bi') >= 3   # 西里尔字母 а
+    assert _level('sh\u03b1bi') >= 3   # 希腊字母 α
+    assert _level('f\u03c5ck') >= 3    # 希腊字母 υ
+
+
+def test_traditional_to_simplified_table_is_generated():
+    doc = json.loads(
+        (ROOT / 'static' / 'data' / 'moderation_t2s.json').read_text(encoding='utf-8')
+    )
+    mapping = doc.get('map') or {}
+    assert mapping.get('賤') == '贱'
+    assert mapping.get('強') == '强'
+    assert len(mapping) > 100
+
+
 def test_nickname_blocks_abusive_terms():
     assert moderation.check_nickname_risk('傻逼玩家').get('blocked') is True
     assert moderation.check_nickname_risk('法轮功学员').get('blocked') is True
