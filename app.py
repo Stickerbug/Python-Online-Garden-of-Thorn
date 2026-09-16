@@ -4123,6 +4123,64 @@ def _validate_chat_text_for_sender(raw_text, *, exempt=False):
     }
 
 
+CHAT_VIOLATION_WINDOW_SECONDS = 600
+CHAT_VIOLATION_WARN_LIMIT = 3
+CHAT_VIOLATION_MUTE_LIMIT = 5
+CHAT_VIOLATION_MUTE_SECONDS = 300
+_CHAT_VIOLATION_LOCK = threading.Lock()
+_CHAT_VIOLATION_EVENTS = {}
+_CHAT_VIOLATION_MAX_KEYS = 5000
+
+
+def record_chat_violation(actor_key, risk_level, *, user_id=None, username='', source='chat'):
+    """同一账号/连接 10 分钟内多次命中违禁词 → 3 次警告、5 次短禁言。
+
+    词表本身只负责打码/拒发；这里补一层升级处置，并把命中写进 admin 日志，
+    方便处理台复盘。返回 None / 'warn' / 'mute'。
+    """
+    try:
+        level = int(risk_level or 0)
+    except (TypeError, ValueError):
+        level = 0
+    key = str(actor_key or '').strip()
+    if not key or level < 2:
+        return None
+    now = time.time()
+    with _CHAT_VIOLATION_LOCK:
+        events = [
+            ts for ts in _CHAT_VIOLATION_EVENTS.get(key, [])
+            if now - ts <= CHAT_VIOLATION_WINDOW_SECONDS
+        ]
+        events.append(now)
+        _CHAT_VIOLATION_EVENTS[key] = events
+        if len(_CHAT_VIOLATION_EVENTS) > _CHAT_VIOLATION_MAX_KEYS:
+            stale_keys = [
+                item_key for item_key, item_events in _CHAT_VIOLATION_EVENTS.items()
+                if not item_events or now - item_events[-1] > CHAT_VIOLATION_WINDOW_SECONDS
+            ]
+            for item_key in stale_keys:
+                _CHAT_VIOLATION_EVENTS.pop(item_key, None)
+        count = len(events)
+    if count >= CHAT_VIOLATION_MUTE_LIMIT:
+        if user_id:
+            try:
+                set_user_mute(
+                    int(user_id),
+                    username or '',
+                    CHAT_VIOLATION_MUTE_SECONDS,
+                    f'{source}: repeated banned words',
+                    'system',
+                )
+            except Exception as exc:
+                admin_event('error', f'chat violation mute failed: {exc}')
+        admin_event('moderation', f'chat violation mute user={user_id or "-"} key={key} count={count} source={source}')
+        return 'mute'
+    if count >= CHAT_VIOLATION_WARN_LIMIT:
+        admin_event('moderation', f'chat violation warn user={user_id or "-"} key={key} count={count} source={source}')
+        return 'warn'
+    return None
+
+
 def _public_feedback_mute_error(user_id, message=''):
     muted, mute_info = is_user_muted_db(user_id)
     if not muted:
@@ -24597,6 +24655,14 @@ def api_feedback_send():
     if not text:
         return jsonify({'success': False, 'error': '消息不能为空'}), 400
     risk_level = int(chat_risk.get('risk_level') or 0)
+    escalation = record_chat_violation(
+        f'user:{user_id}', risk_level, user_id=user_id, username=user, source='feedback_message',
+    )
+    if escalation == 'mute':
+        return jsonify({
+            'success': False,
+            **muted_error_payload(CHAT_VIOLATION_MUTE_SECONDS, message='多次发送违禁内容，已被临时禁言'),
+        }), 403
     if str(chat_risk.get('risk_action') or '') == 'reject_mute' or risk_level >= 4:
         try:
             set_user_mute(user_id, user or '', 300, 'severe feedback risk', 'system')
@@ -25411,6 +25477,14 @@ def api_social_dm_send():
     risk_level = int(chat_risk.get('risk_level') or 0)
     risk_action = str(chat_risk.get('risk_action') or '')
     normalized_message = chat_risk.get('normalized_message') or normalize_message(text)
+    escalation = record_chat_violation(
+        f'user:{user_id}', risk_level, user_id=user_id, username=user, source='dm',
+    )
+    if escalation == 'mute':
+        return jsonify({
+            'success': False,
+            **muted_error_payload(CHAT_VIOLATION_MUTE_SECONDS, message='多次发送违禁内容，已被临时禁言'),
+        }), 403
     if risk_action == 'reject_mute' or risk_level >= 4:
         try:
             set_user_mute(user_id, user or '', 300, 'severe private message risk', 'system')
@@ -28831,6 +28905,20 @@ def on_story_chat_send(data=None):
     matched_rules = list(chat_risk.get('matched_rules') or [])
     normalized_message = chat_risk.get('normalized_message') or normalize_message(text)
     beta_mode = bool(profile.get('beta_mode', False))
+    escalation = record_chat_violation(
+        f'user:{user_id}' if user_id else f'sid:{sid}',
+        risk_level,
+        user_id=user_id,
+        username=nickname,
+        source='story_chat',
+    )
+    if escalation == 'mute':
+        emit('server_error', muted_error_payload(
+            CHAT_VIOLATION_MUTE_SECONDS, message='多次发送违禁内容，已被临时禁言',
+        ))
+        return
+    if escalation == 'warn':
+        emit('server_broadcast', {'message': '你短时间内多次发送违禁内容，已被记录'})
     chat_data = {
         'nickname': nickname,
         'text': text,
@@ -29014,6 +29102,20 @@ def on_chat(data):
     risk_action = str(chat_risk.get('risk_action') or '')
     matched_rules = list(chat_risk.get('matched_rules') or [])
     normalized_message = chat_risk.get('normalized_message') or normalize_message(text)
+    escalation = record_chat_violation(
+        f'user:{player_snapshot.get("user_id")}' if player_snapshot.get('user_id') else f'sid:{sid}',
+        risk_level,
+        user_id=player_snapshot.get('user_id'),
+        username=player_snapshot.get('nickname', ''),
+        source='chat',
+    )
+    if escalation == 'mute':
+        emit('server_error', muted_error_payload(
+            CHAT_VIOLATION_MUTE_SECONDS, message='多次发送违禁内容，已被临时禁言',
+        ))
+        return
+    if escalation == 'warn':
+        emit('server_broadcast', {'message': '你短时间内多次发送违禁内容，已被记录'})
     if risk_action == 'reject_mute' or risk_level >= 4:
         if DB_AVAILABLE:
             try:

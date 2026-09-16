@@ -156,3 +156,23 @@ def test_manual_terms_hot_reload(tmp_path, monkeypatch):
 
     assert _level('探针违禁词二') >= 3
     assert _level('探针违禁词一') == 0
+
+
+def test_chat_violation_escalation_warns_then_mutes(monkeypatch):
+    import app
+
+    monkeypatch.setattr(app, '_CHAT_VIOLATION_EVENTS', {})
+    key = 'user:test-escalation'
+    results = [
+        app.record_chat_violation(key, 3, user_id=None, source='test')
+        for _ in range(5)
+    ]
+    assert results == [None, None, 'warn', 'warn', 'mute']
+
+
+def test_chat_violation_escalation_ignores_low_risk(monkeypatch):
+    import app
+
+    monkeypatch.setattr(app, '_CHAT_VIOLATION_EVENTS', {})
+    assert app.record_chat_violation('user:test-low', 1, user_id=None) is None
+    assert app._CHAT_VIOLATION_EVENTS == {}
