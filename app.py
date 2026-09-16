@@ -256,6 +256,7 @@ from db import (
     process_match_achievements,
     record_chat_message,
     recall_chat_message,
+    recall_chat_messages_from_sender,
     record_user_ip_event,
     record_card_draft_counts,
     record_card_draft_win_result,
@@ -14498,6 +14499,29 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         except Exception as exc:
             admin_event('error', f'cards played backfill failed user={"all" if all_users else user.get("id")}: {exc}')
             return {'success': False, 'output': f'花牌流转校正失败：{exc}'}
+    if cmd in ('chat', '聊天'):
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        sub = parts[1].lower() if len(parts) > 1 else ''
+        if sub in ('recall', '撤回') and len(parts) >= 3 and parts[2].lstrip('#').isdigit():
+            recalled = recall_chat_messages_for_admin('adminconsole', [int(parts[2].lstrip('#'))])
+            return {
+                'success': True,
+                'output': f'已撤回 {recalled} 条消息。' if recalled else '未找到该消息（或已经被撤回）。',
+            }
+        if sub in ('recall-user', 'recalluser', '撤回用户') and len(parts) >= 3:
+            name = str(parts[2])
+            limit = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 20
+            ids = recall_chat_messages_from_sender(name, limit)
+            recalled = recall_chat_messages_for_admin('adminconsole', ids)
+            return {
+                'success': True,
+                'output': f'已撤回 {name} 的 {recalled} 条最近消息（最多 {limit} 条）。',
+            }
+        return {
+            'success': False,
+            'output': '用法：/chat recall <消息id>；/chat recall-user <昵称> [数量]',
+        }
     if cmd in ('achievementbackfill', 'backfillachievements', 'achievementsbackfill', '补发成就'):
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
