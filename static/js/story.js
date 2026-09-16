@@ -75,6 +75,7 @@
     let storyPlaybackRate = document.documentElement.classList.contains('story-speed-2x') ? 2 : 1;
     let storyShowHandOrder = (window.GTN_STORAGE || window.localStorage)?.getItem('gtn_show_hand_order') === '1';
     let pendingStorySaveId = 0;
+    let pendingStoryDiscardBook = null;
     let storyManualSaveInFlight = false;
     let storyDiscoveries = [];
     let storyCodexMode = 'cards';
@@ -546,6 +547,7 @@
             enchantmentBooks: 'Enchantment Books', enchantmentBookReward: 'Enchantment Book',
             enchantmentBookCopy: 'Discard anywhere; use during your combat turn.',
             useBook: 'Use', discardBook: 'Discard', replaceBook: 'Replace', bookSlotsFull: 'Choose a book to replace.',
+            discardBookTitle: 'Discard this enchantment book?', discardBookCopy: 'Discard “{0}”? It cannot be recovered.',
             directLeave: 'Leave without taking more', claimChestGold: 'Take Gold', claimChestTalent: 'Take Talent',
             cannotRemove: 'Cannot be removed',
             continueJourney: 'Continue', gainedGold: (value) => `Gained ${value} G.`,
@@ -653,6 +655,7 @@
             enchantmentBooks: '附魔书', enchantmentBookReward: '附魔书',
             enchantmentBookCopy: '可随时丢弃，战斗中的玩家回合可使用。',
             useBook: '使用', discardBook: '丢弃', replaceBook: '替换', bookSlotsFull: '附魔书槽已满，请选择要替换的一本。',
+            discardBookTitle: '确认丢弃附魔书？', discardBookCopy: '丢弃“{0}”后无法找回。',
             directLeave: '直接离开', claimChestGold: '领取金币', claimChestTalent: '领取天赋',
             cannotRemove: '无法删除',
             continueJourney: '继续前进', gainedGold: (value) => `获得 ${value}G。`,
@@ -754,6 +757,7 @@
             enchantmentBooks: 'Livres enchantés', enchantmentBookReward: 'Livre enchanté',
             enchantmentBookCopy: 'Jetables partout, utilisables pendant votre tour de combat.',
             useBook: 'Utiliser', discardBook: 'Jeter', replaceBook: 'Remplacer', bookSlotsFull: 'Choisissez un livre à remplacer.',
+            discardBookTitle: 'Jeter ce livre enchanté ?', discardBookCopy: 'Jeter « {0} » ? Il ne pourra pas être récupéré.',
             directLeave: 'Partir sans rien prendre de plus', claimChestGold: 'Prendre l’or', claimChestTalent: 'Prendre le talent',
             continueJourney: 'Continuer', goldReward: (value) => `${value} G`,
             summon: 'Invocation', allies: 'Toutes les créatures', playerSide: 'Camp joueur', self: 'Soi', addCard: 'Ajouter une carte', consume: 'Absorber',
@@ -877,6 +881,7 @@
             enchantmentBooks: 'エンチャント本', enchantmentBookReward: 'エンチャント本',
             enchantmentBookCopy: 'いつでも破棄でき、戦闘中の自分のターンに使用できます。',
             useBook: '使用', discardBook: '破棄', replaceBook: '交換', bookSlotsFull: '交換する本を選んでください。',
+            discardBookTitle: 'エンチャント本を破棄しますか？', discardBookCopy: '「{0}」を破棄すると元に戻せません。',
             directLeave: '残りを受け取らず退出', claimChestGold: 'ゴールドを受け取る', claimChestTalent: '天賦を受け取る',
             continueJourney: '進む', goldReward: (value) => `${value} G`,
             summon: '召喚', allies: '全生物', playerSide: 'プレイヤー側', self: '自身', addCard: 'カード追加', consume: '吸収',
@@ -1184,6 +1189,9 @@
             'story-codex-tab-resources': t.codexResources,
             'story-enchantment-books-title': t.enchantmentBooks,
             'story-enchantment-books-copy': t.enchantmentBookCopy,
+            'story-discard-book-title': t.discardBookTitle,
+            'story-discard-book-cancel': t.cancel,
+            'story-discard-book-confirm': t.discardBook,
             'story-reset-map': t.resetMap,
             'story-reset-title': t.resetTitle, 'story-reset-message': t.resetMessage,
             'story-reset-cancel': t.cancel, 'story-reset-confirm': t.confirm,
@@ -8515,12 +8523,7 @@
             discard.className = 'is-danger';
             discard.textContent = t.discardBook;
             discard.disabled = actionInFlight;
-            discard.addEventListener('click', async () => {
-                await storyAction('discard_enchantment_book', {
-                    book_instance_id: book.instance_id,
-                });
-                renderStoryEnchantmentBooks();
-            });
+            discard.addEventListener('click', () => requestStoryEnchantmentBookDiscard(book));
             actions.append(discard);
             article.append(actions);
         }
@@ -8540,6 +8543,32 @@
             return;
         }
         books.forEach((book) => grid.append(createStoryEnchantmentBookTile(book)));
+    }
+
+    function requestStoryEnchantmentBookDiscard(book) {
+        if (!book || actionInFlight) return;
+        const definition = storyEnchantmentBookDefinition(book);
+        const bookName = localize(definition?.name) || String(book.book_id || '');
+        const message = String(t.discardBookCopy || '').replace('{0}', bookName);
+        const dialog = $('story-discard-book-dialog');
+        if (dialog && typeof dialog.showModal === 'function') {
+            pendingStoryDiscardBook = book;
+            setText('story-discard-book-copy', message);
+            dialog.returnValue = 'cancel';
+            dialog.showModal();
+            return;
+        }
+        if (window.confirm([t.discardBookTitle, message].filter(Boolean).join('\n\n'))) {
+            discardStoryEnchantmentBook(book);
+        }
+    }
+
+    async function discardStoryEnchantmentBook(book) {
+        if (!book) return;
+        await storyAction('discard_enchantment_book', {
+            book_instance_id: book.instance_id,
+        });
+        renderStoryEnchantmentBooks();
     }
 
     function renderStoryBookSlots() {
@@ -14824,6 +14853,12 @@
                 if (dialog?.open) dialog.close('cancel');
             });
             storyAction('surrender');
+        });
+        $('story-discard-book-dialog')?.addEventListener('close', (event) => {
+            const book = pendingStoryDiscardBook;
+            pendingStoryDiscardBook = null;
+            if (event.target.returnValue !== 'confirm') return;
+            discardStoryEnchantmentBook(book);
         });
         $('story-dev-toggle')?.addEventListener('click', () => setDeveloperMode(!developerModeOpen));
         $('story-dev-close')?.addEventListener('click', () => setDeveloperMode(false));

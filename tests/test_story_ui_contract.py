@@ -288,6 +288,19 @@ def test_story_surrender_button_requires_confirmation_and_uses_action():
     assert "dialog.returnValue = 'cancel';" in STORY_JS
 
 
+def test_story_enchantment_book_discard_requires_confirmation():
+    assert 'id="story-discard-book-dialog"' in STORY_TEMPLATE
+    assert 'id="story-discard-book-confirm"' in STORY_TEMPLATE
+    assert "'story-discard-book-title': t.discardBookTitle" in STORY_JS
+    assert "'story-discard-book-confirm': t.discardBook" in STORY_JS
+    assert "discard.addEventListener('click', () => requestStoryEnchantmentBookDiscard(book));" in STORY_JS
+    assert 'function requestStoryEnchantmentBookDiscard(book) {' in STORY_JS
+    assert "if (dialog && typeof dialog.showModal === 'function') {" in STORY_JS
+    assert "$('story-discard-book-dialog')?.addEventListener('close'" in STORY_JS
+    assert "await storyAction('discard_enchantment_book'" in STORY_JS
+    assert "discardBookCopy: '丢弃“{0}”后无法找回。'" in STORY_JS
+
+
 def test_story_equipment_matches_classic_orbit_preview_and_terms():
     assert "visual.className = 'story-equipment-visual';" in STORY_JS
     assert "icon.className = 'story-equipment-icon';" in STORY_JS
