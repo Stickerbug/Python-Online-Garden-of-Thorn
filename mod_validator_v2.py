@@ -327,6 +327,40 @@ def _validate_registries(value: Any, resource_namespace: str, errors: List[str],
     return registries
 
 
+def _ui_text_warnings(component: Dict[str, Any], label: str, warnings: Optional[List[str]]) -> List[str]:
+    """Round 80 / 批次 BZ：``request_ui`` 窗口的**中文文案**检查（中文优先）。
+
+    缺中文只记 **warning**：英文窗口不算写错，但按项目口径（卡面中文是第一语言）
+    应该补上。检查面与 ``tools/mod_atom_report.ui_text_consistency`` 一致——
+    标题 / 控件标签或文本 / 选项标签 / 按钮文案。
+    """
+
+    bucket = warnings if isinstance(warnings, list) else []
+    if not isinstance(component, dict):
+        return bucket
+    if not (component.get("title_cn") or component.get("title")):
+        bucket.append(f"{label} 的窗口没有中文标题（title_cn）")
+    for index, control in enumerate(component.get("controls") or []):
+        if not isinstance(control, dict):
+            continue
+        cid = str(control.get("id") or f"#{index}")
+        ctype = str(control.get("type") or "text")
+        has_cn = bool(control.get("label_cn") or control.get("text_cn")
+                      or control.get("label") or control.get("text"))
+        if not has_cn:
+            bucket.append(f"{label}.controls[{index}]（{cid}/{ctype}）没有中文文案")
+        for option_index, option in enumerate(control.get("options") or []):
+            if isinstance(option, dict) and not (option.get("label_cn") or option.get("label")):
+                bucket.append(f"{label}.controls[{index}].options[{option_index}] 没有中文标签")
+    for index, button in enumerate(component.get("buttons") or []):
+        if not isinstance(button, dict):
+            continue
+        if not (button.get("text_cn") or button.get("label_cn")
+                or button.get("text") or button.get("label")):
+            bucket.append(f"{label}.buttons[{index}]（{button.get('id')}）没有中文文案")
+    return bucket
+
+
 def _validate_resource_shape(registry: str, resource: Dict[str, Any], label: str,
                              errors: List[str], warnings: List[str]) -> None:
     if registry == "ui_components":
@@ -344,6 +378,7 @@ def _validate_resource_shape(registry: str, resource: Dict[str, Any], label: str
                 ctrl_type = ctrl.get("type")
                 if ctrl_type not in VALID_UI_CONTROL_TYPES:
                     errors.append(f"{label}.controls[{i}].type 必须是受控 UI 控件类型")
+        _ui_text_warnings(resource, label, warnings)
     if registry in ("cards", "statuses", "opening_events"):
         events = resource.get("events", {})
         if events is not None and not isinstance(events, dict):
@@ -351,7 +386,7 @@ def _validate_resource_shape(registry: str, resource: Dict[str, Any], label: str
         elif isinstance(events, dict):
             for event_name, event_def in events.items():
                 steps = event_def.get("steps", []) if isinstance(event_def, dict) else event_def
-                total = _validate_steps(steps, f"{label}.events.{event_name}", errors, depth=0)
+                total = _validate_steps(steps, f"{label}.events.{event_name}", errors, warnings, depth=0)
                 if total > MAX_EVENT_STEPS:
                     errors.append(f"{label}.events.{event_name} 递归步骤总数超过上限 {MAX_EVENT_STEPS}")
     if registry == "cards":
@@ -456,14 +491,15 @@ def _validate_event_hooks(value: Any, errors: List[str], warnings: List[str]) ->
         if not isinstance(priority, int):
             errors.append(f"event_hooks[{i}].priority 必须是整数")
             row["priority"] = 0
-        total = _validate_steps(row.get("steps", []), f"event_hooks[{i}].steps", errors, depth=0)
+        total = _validate_steps(row.get("steps", []), f"event_hooks[{i}].steps", errors, warnings, depth=0)
         if total > MAX_EVENT_STEPS:
             errors.append(f"event_hooks[{i}].steps 递归步骤总数超过上限 {MAX_EVENT_STEPS}")
         normalized.append(row)
     return normalized
 
 
-def _validate_steps(value: Any, label: str, errors: List[str], *, depth: int) -> int:
+def _validate_steps(value: Any, label: str, errors: List[str], warnings: Optional[List[str]] = None,
+                    *, depth: int) -> int:
     if value is None:
         return 0
     if not isinstance(value, list):
@@ -473,11 +509,12 @@ def _validate_steps(value: Any, label: str, errors: List[str], *, depth: int) ->
         errors.append(f"{label} 步骤数量超过上限 {MAX_EVENT_STEPS}")
     count = 0
     for i, step in enumerate(value):
-        count += _validate_step(step, f"{label}[{i}]", errors, depth=depth + 1)
+        count += _validate_step(step, f"{label}[{i}]", errors, warnings, depth=depth + 1)
     return count
 
 
-def _validate_step(step: Any, label: str, errors: List[str], *, depth: int) -> int:
+def _validate_step(step: Any, label: str, errors: List[str], warnings: Optional[List[str]] = None,
+                   *, depth: int) -> int:
     if depth > MAX_LOGIC_DEPTH:
         errors.append(f"{label} 嵌套深度超过上限 {MAX_LOGIC_DEPTH}")
         return 1
@@ -502,10 +539,14 @@ def _validate_step(step: Any, label: str, errors: List[str], *, depth: int) -> i
         else:
             errors.append(f"{label}.op 不在 DSL 白名单中: {op}")
     count = 1
+    # Round 80 / 批次 BZ：``request_ui`` 的内联窗口文案检查（中文优先，见用户规则）。
+    # 只是**警告**：英文窗口不算写错，但按项目口径应该补中文。
+    if op == "request_ui" and isinstance(step.get("component"), dict):
+        _ui_text_warnings(step["component"], f"{label}.component", warnings)
     for key in ("steps", "then", "else", "body", "on_cancel"):
         child = step.get(key)
         if isinstance(child, list):
-            count += _validate_steps(child, f"{label}.{key}", errors, depth=depth)
+            count += _validate_steps(child, f"{label}.{key}", errors, warnings, depth=depth)
         elif child is not None and key in ("steps", "then", "else", "body", "on_cancel"):
             errors.append(f"{label}.{key} 必须是数组")
     return count
