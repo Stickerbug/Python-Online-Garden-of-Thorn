@@ -3162,9 +3162,54 @@ def _sanitize_ui_component(engine, context: Dict[str, Any], component: Dict[str,
     return out
 
 
+# Round 77 / 批次 BV：编辑器下拉 -> 引擎已有控件的**别名表**（见
+# ``_sanitize_ui_control`` 里的说明）。表外的名字仍然按原样走白名单，写错就报错。
+UI_CONTROL_TYPE_ALIASES = {
+    "radio_group": "select",
+    "zone_picker": "select",
+    "divider": "text",
+    "warning_text": "text",
+    "dynamic_text": "text",
+    "preview_value": "text",
+}
+
+ZONE_PICKER_CHOICES = (
+    ("hand", "手牌", "Hand"),
+    ("deck", "抽牌堆", "Deck"),
+    ("discard", "弃牌堆", "Discard"),
+    ("exile", "放逐区", "Exile"),
+    ("equipment", "装备区", "Equipment"),
+)
+
+
+def _zone_picker_options(control: Dict[str, Any]) -> list:
+    """``zone_picker`` 的选项：五个区域（可用 ``zones`` 限子集）。"""
+
+    allowed = control.get("zones")
+    if isinstance(allowed, list) and allowed:
+        allowed = {str(value).strip().lower() for value in allowed}
+    else:
+        allowed = None
+    return [
+        {"value": value, "label": label_cn, "label_cn": label_cn, "label_en": label_en}
+        for value, label_cn, label_en in ZONE_PICKER_CHOICES
+        if allowed is None or value in allowed
+    ]
+
+
 def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any]) -> Dict[str, Any]:
     cid = str(control.get("id") or "").strip()
     ctype = str(control.get("type") or "text")
+    declared_type = ctype
+    # Round 77 / 批次 BV：**编辑器别名**归一。编辑器下拉里的这几种在协议上都落回
+    # 已有控件（选择器 / 文本），归一之后运行时白名单与客户端渲染分支都不用加新类型：
+    #   radio_group  -> select       （单选，选项同 select）
+    #   zone_picker  -> select       （选项是五个区域名）
+    #   divider / warning_text / dynamic_text / preview_value -> text
+    #     （dynamic_text / preview_value 的 ``value`` 表达式在服务端求值成文本）
+    #   button / button_group 不支持：一个响应只有一个 ``button`` + ``values``，
+    #     控件级按钮要改响应协议；按钮请写在 component.buttons 上。
+    ctype = UI_CONTROL_TYPE_ALIASES.get(ctype, ctype)
     if not cid:
         raise V2RuntimeError("ui control id is required")
     if ctype not in {"text", "select", "card_catalog_picker", "slider", "number", "number_input", "card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker", "player_picker", "target_picker", "checkbox", "multi_select"}:
@@ -3194,7 +3239,10 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
             default = min(max(min_value + offset * step, min_value), max_value)
         out.update({"min": min_value, "max": max_value, "step": step, "default": default})
     elif ctype in ("select", "card_catalog_picker"):
-        out["options"] = _control_options(control)
+        if declared_type == "zone_picker":
+            out["options"] = _zone_picker_options(control)
+        else:
+            out["options"] = _control_options(control)
     elif ctype == "checkbox":
         # Round 71 / 批次 BK：单个开关。``default`` 走取值表达式，回应值 true/false。
         default = control.get("default", control.get("value", False))
@@ -3256,9 +3304,29 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
         ]
         out["allowed_player_ids"] = [int(option["value"]) for option in out["options"]]
     else:
-        out["text"] = str(control.get("text") or control.get("text_cn") or control.get("label_cn") or "")
-        out["text_cn"] = str(control.get("text_cn") or control.get("text") or "")
-        out["text_en"] = str(control.get("text_en") or control.get("text") or "")
+        text_cn = str(control.get("text_cn") or control.get("text") or control.get("label_cn") or "")
+        text_en = str(control.get("text_en") or control.get("text") or text_cn)
+        if declared_type in ("dynamic_text", "preview_value"):
+            # ``value`` 是取值表达式：服务端算好写进文本，客户端照常显示。
+            raw_value = control.get("value", control.get("expr"))
+            if raw_value is not None:
+                resolved = eval_v2_value(engine, context, raw_value)
+                if isinstance(resolved, float) and resolved.is_integer():
+                    resolved = int(resolved)
+                rendered = str(resolved)
+                template_cn = str(control.get("format") or control.get("text_cn")
+                                  or control.get("text") or "")
+                template_en = str(control.get("text_en") or template_cn)
+                if "{value}" in template_cn:
+                    text_cn = template_cn.replace("{value}", rendered)
+                else:
+                    text_cn = f"{template_cn} {rendered}".strip()
+                text_en = (template_en.replace("{value}", rendered)
+                           if "{value}" in template_en else f"{template_en} {rendered}".strip())
+                out["value"] = resolved
+        out["text"] = text_cn
+        out["text_cn"] = text_cn
+        out["text_en"] = text_en
     return out
 
 

@@ -83,6 +83,14 @@ VALID_UI_CONTROL_TYPES = {
     # ---- Round 71 / 批次 BK 新控件（与运行时/客户端同一份白名单）----
     "checkbox",      # `default` 可以写 true/false
     "multi_select",  # 认 `options` / `min_select` / `max_select` / `default`
+    # ---- Round 77 / 批次 BV：编辑器别名（运行时归一到已有控件，见
+    # mod_runtime_v2.UI_CONTROL_TYPE_ALIASES）----
+    "radio_group",   # -> select（单选）
+    "zone_picker",   # -> select（选项=五个区域）
+    "divider",       # -> text（分隔线/说明文字）
+    "warning_text",  # -> text（警示文字）
+    "dynamic_text",  # -> text（`value` 表达式在服务端求值）
+    "preview_value", # -> text（同 dynamic_text）
 }
 
 # Round 47 / 批次 AK：这张表是"所有名字"的历史并集（步骤 op + 取值表达式 +

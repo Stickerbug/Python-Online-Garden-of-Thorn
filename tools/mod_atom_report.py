@@ -423,6 +423,12 @@ def ui_type_consistency() -> dict:
     runtime_controls = runtime_set("_sanitize_ui_control")
     if not runtime_components or not runtime_controls:
         problems.append("没能从 mod_runtime_v2 里解析出 UI 白名单（正则或实现结构变了？）")
+    # Round 77 / 批次 BV：编辑器别名（radio_group / zone_picker / divider …）在运行时
+    # 归一到已有控件，声明表把它们算进来、运行时白名单不算——对拍时先减掉别名。
+    alias_match = re.search(r"UI_CONTROL_TYPE_ALIASES\s*=\s*\{(.*?)\n\}", runtime_text, re.S)
+    aliases = set(re.findall(r'"([a-z0-9_]+)"\s*:', alias_match.group(1))) if alias_match else set()
+    declared_controls = declared_controls - aliases
+    declared_components = declared_components - aliases
     client_controls = set()
     client_path = ROOT / "static" / "js" / "game.js"
     if client_path.is_file():
