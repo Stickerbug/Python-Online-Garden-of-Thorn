@@ -253,3 +253,40 @@
     font-size: 16px;
   }
 }
+
+/* 管理员撤回聊天：占位提示比普通消息略小，撤回按钮沿用举报按钮的轻量样式。 */
+.gtn-lobby-chat-log .chat-msg.chat-recall-entry,
+.gtn-lobby-chat-log .story-chat-message.chat-recall-entry {
+  color: var(--text-secondary);
+  font-size: .92em;
+  font-style: italic;
+  opacity: .9;
+}
+
+.gtn-lobby-chat-log .chat-recall-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 28%, transparent);
+  border-radius: var(--radius-sm, 5px);
+  color: var(--text-muted);
+  background: transparent;
+  font-family: var(--font-main);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  vertical-align: baseline;
+  opacity: .56;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease, opacity 150ms ease;
+}
+
+.gtn-lobby-chat-log .chat-recall-btn:hover,
+.gtn-lobby-chat-log .chat-recall-btn:focus-visible {
+  color: var(--damage, #c0392b);
+  border-color: color-mix(in srgb, var(--damage, #c0392b) 48%, transparent);
+  background: color-mix(in srgb, var(--damage-bg, rgba(192, 57, 43, .12)) 70%, transparent);
+  opacity: 1;
+  outline: none;
+}

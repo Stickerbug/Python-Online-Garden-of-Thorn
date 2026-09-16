@@ -867,6 +867,10 @@ const I18N = {
         draft_waiting: 'Waiting for opponent to finish drafting', draft_cost: 'Cost', select_this_event: 'Select This Event',
         event_selected: 'Event selected: {0}', event_waiting: 'Waiting for opponent to select an event', event_reroll: 'Refresh', status_event_select: 'Selecting Event', status_drafting: 'Drafting', status_sub_choice: 'Event Setup', status_ready: 'Ready', drag_to_play: 'Drag to Play',
         chat_recall_entry: 'Admin {0} recalled a message from {1}',
+        chat_recall: 'Recall',
+        chat_recall_confirm: 'Recall this message from {0}? Everyone will stop seeing it.',
+        chat_recall_done: 'Recalled {0} message(s)',
+        chat_recall_failed: 'Recall failed: the message may already be recalled, or you lack permission.',
         drag_to_play_full: 'Drag here to play', tap_play_hint: 'Tap a card, then confirm to play', confirm_play: 'Play {0}', cancel_play: 'Cancel',
         classic_select_card: 'Choose a card',
         prediction_target: 'Target',
@@ -993,6 +997,10 @@ I18N.zh = { ...I18N.en,
     ongoing_games: '进行中的对局', spectate: '观战', draft_info: '选牌', draft_complete: '选牌完成', draft_waiting: '等待对方完成选牌',
     draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对方选择事件', event_reroll: '刷新', status_event_select: '选择配装', status_drafting: '选牌中', status_sub_choice: '配装处理', status_ready: '已完成',
     chat_recall_entry: '管理员{0}撤回了玩家{1}的一条消息',
+    chat_recall: '撤回',
+    chat_recall_confirm: '撤回 {0} 的这条消息？撤回后所有玩家都看不到它。',
+    chat_recall_done: '已撤回 {0} 条消息',
+    chat_recall_failed: '撤回失败：消息可能已被撤回，或你没有权限',
     drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '攻击牌', enemy_skill: '技能牌', enemy_destroy_equip: '，摧毁装备',
     drag_to_play_full: '拖动到此处以出牌', tap_play_hint: '点击手牌后确认出牌', confirm_play: '打出 {0}', cancel_play: '取消出牌',
     classic_select_card: '选择一张手牌',
@@ -1118,6 +1126,10 @@ I18N.fr = { ...I18N.en,
     ongoing_games: 'Parties en cours', spectate: 'Observer', draft_info: 'Draft', draft_complete: 'Draft terminé', draft_waiting: "En attente de l'adversaire",
     draft_cost: 'Coût', select_this_event: 'Choisir cet événement', event_selected: 'Événement choisi', event_waiting: "En attente du choix de l'adversaire",
     chat_recall_entry: "L'admin {0} a retiré un message de {1}",
+    chat_recall: 'Retirer',
+    chat_recall_confirm: 'Retirer ce message de {0} ? Il disparaitra pour tout le monde.',
+    chat_recall_done: '{0} message(s) retire(s)',
+    chat_recall_failed: 'Echec du retrait : message deja retire ou permission manquante.',
     drag_to_play: 'Glisser pour jouer', cannot_play: 'Impossible de jouer',
     enemy_attack: 'Carte Épine', enemy_skill: 'Carte Floraison', enemy_destroy_equip: "Destruction d'équipement",
     use_card: 'Utiliser', insufficient_resources: 'Ressources insuffisantes', choose_attack_for: 'Choisir une attaque pour', choose_equip_for: 'Choisir un équipement',
@@ -1193,6 +1205,10 @@ I18N.ja = { ...I18N.en,
     ongoing_games: '進行中の対戦', spectate: '観戦', draft_info: 'ドラフト', draft_complete: 'ドラフト完了', draft_waiting: '相手のドラフト完了を待っています',
     draft_cost: 'コスト', select_this_event: 'このイベントを選択', event_selected: 'イベント選択済み', event_waiting: '相手のイベント選択を待っています',
     chat_recall_entry: '管理者{0}が{1}のメッセージを取り消しました',
+    chat_recall: '取り消し',
+    chat_recall_confirm: '{0} のこのメッセージを取り消しますか？全員に見えなくなります。',
+    chat_recall_done: '{0} 件のメッセージを取り消しました',
+    chat_recall_failed: '取り消しに失敗しました。すでに取り消し済みか、権限がありません。',
     drag_to_play: 'ドラッグしてプレイ', cannot_play: 'プレイ不可',
     enemy_attack: '攻撃カード', enemy_skill: 'スキルカード', enemy_destroy_equip: '、装備を破壊',
     use_card: '使用', insufficient_resources: 'リソース不足', choose_attack_for: '攻撃カードを選択', choose_equip_for: '装備を選択',
@@ -3165,6 +3181,30 @@ function createReportButton(config = {}, options = {}) {
         event.preventDefault();
         event.stopPropagation();
         openReportDialog(config);
+    };
+    return btn;
+}
+
+function canRecallChatMessages() {
+    return !!(currentAccount && (currentAccount.is_admin_player || (feedbackState && feedbackState.is_staff)));
+}
+
+function createRecallChatButton(entry = {}) {
+    const messageId = Number(entry.message_id || entry.messageId || 0);
+    if (!Number.isFinite(messageId) || messageId <= 0) return null;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chat-recall-btn';
+    btn.textContent = UI.chat_recall || '撤回';
+    btn.title = btn.textContent;
+    btn.setAttribute('aria-label', btn.title);
+    btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const target = String(entry.nickname || entry.sender_name || entry.senderName || entry.nick || '?');
+        const ok = await gameConfirm(UI.chat_recall || '撤回', tf('chat_recall_confirm', target));
+        if (!ok || !socket) return;
+        socket.emit('admin_chat_recall', { message_ids: [messageId] });
     };
     return btn;
 }
@@ -16335,6 +16375,13 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('chat_recall', (data = {}) => {
         applyChatRecall(data || {});
+    });
+    bindSocketEvent('admin_chat_recall_result', (data = {}) => {
+        if (data && data.success) {
+            flashStatus(tf('chat_recall_done', Number(data.recalled || 0) || 1), 2200);
+        } else {
+            flashStatus(UI.chat_recall_failed || 'Recall failed', 2600, 'error');
+        }
     });
     bindSocketEvent('dm_update', (data = {}) => {
         const previousFriendUnread = Number(socialData.unread_count || 0);
@@ -33570,6 +33617,10 @@ function appendLobbyChatEntry(entry = {}, options = {}) {
             text: UI.report,
             title: UI.report_chat,
         }));
+    }
+    if (canRecallChatMessages()) {
+        const recallBtn = createRecallChatButton(entry);
+        if (recallBtn) el.appendChild(recallBtn);
     }
     container.appendChild(el);
     if (shouldAutoScroll) container.scrollTop = container.scrollHeight;

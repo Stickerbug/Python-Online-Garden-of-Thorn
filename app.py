@@ -4536,6 +4536,11 @@ def lobby_chat_would_fold_locked(payload, now=None, beta_mode=False):
 
 
 def append_lobby_chat_locked(payload, now=None, beta_mode=False):
+    """把一条大厅聊天写入内存缓存，返回它（或折叠目标）的本地 id。
+
+    落库拿到的 message_id 需要回填到缓存条目上（举报、撤回都依赖它），
+    所以折叠连续重复消息时返回被折叠那一条的本地 id。
+    """
     now = time.time() if now is None else float(now)
     cache = _lobby_chat_cache_locked(beta_mode)
     chat_payload = copy.deepcopy(payload or {})
@@ -4561,7 +4566,7 @@ def append_lobby_chat_locked(payload, now=None, beta_mode=False):
         last_chat['repeat_count'] = int(last_chat.get('repeat_count') or 1) + 1
         last_chat['time'] = chat_payload['time']
         last_chat['ts'] = now
-        return False
+        return last_chat.get('id')
     if last_chat is not None and idle >= CHAT_IDLE_SEPARATOR_SECONDS:
         cache.append({
             'type': 'time',
@@ -4573,7 +4578,28 @@ def append_lobby_chat_locked(payload, now=None, beta_mode=False):
     chat_payload['id'] = _lobby_chat_next_id_locked(beta_mode)
     chat_payload['ts'] = now
     cache.append(chat_payload)
-    return True
+    return chat_payload.get('id')
+
+
+def update_lobby_chat_message_id_locked(beta_mode, local_chat_id, message_id):
+    """把落库后的消息 id 补进大厅聊天缓存（举报与撤回都依赖它）。"""
+    if local_chat_id is None or not message_id:
+        return False
+    cache = _lobby_chat_cache_locked(beta_mode)
+    for entry in reversed(list(cache)):
+        if not isinstance(entry, dict) or entry.get('type') != 'chat':
+            continue
+        if entry.get('id') != local_chat_id:
+            continue
+        entry['message_id'] = message_id
+        entry['messageId'] = message_id
+        message_ids = entry.get('message_ids')
+        message_ids = list(message_ids) if isinstance(message_ids, list) else []
+        if message_id not in message_ids:
+            message_ids.append(message_id)
+        entry['message_ids'] = message_ids[-20:]
+        return True
+    return False
 
 
 def lobby_chat_history_payloads_locked(limit=LOBBY_CHAT_VISIBLE_LIMIT, beta_mode=None):
@@ -28994,6 +29020,7 @@ def on_story_chat_send(data=None):
     error_payload = None
     security_note = None
     lobby_payloads = None
+    lobby_local_id = None
     if not _lock.acquire(timeout=0.2):
         emit('server_error', {'message': '服务器正在处理上一项操作，请稍后重试'})
         return
@@ -29027,7 +29054,7 @@ def on_story_chat_send(data=None):
                 mute_user(mute_key, 60, 'chat rate limit')
             else:
                 now = time.time()
-                append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
+                lobby_local_id = append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
                 append_admin_game_chat_locked(chat_data, now, scope='lobby')
                 lobby_payloads = lobby_chat_history_payloads_locked(
                     LOBBY_CHAT_VISIBLE_LIMIT,
@@ -29042,11 +29069,12 @@ def on_story_chat_send(data=None):
         emit('server_error', error_payload)
         return
 
+    chat_message_id = None
     if DB_AVAILABLE:
         try:
             persisted_payload = copy.deepcopy(chat_data)
             persisted_payload['type'] = 'chat'
-            record_chat_message(
+            chat_message_id = record_chat_message(
                 f'lobby:{_lobby_chat_scope_key(beta_mode)}',
                 'public',
                 user_id,
@@ -29058,6 +29086,19 @@ def on_story_chat_send(data=None):
             )
         except Exception as exc:
             admin_event('error', f'failed to persist story lobby chat: {exc}')
+    if chat_message_id:
+        chat_data['message_id'] = chat_message_id
+        if _lock.acquire(timeout=0.2):
+            try:
+                update_lobby_chat_message_id_locked(beta_mode, lobby_local_id, chat_message_id)
+                lobby_payloads = lobby_chat_history_payloads_locked(
+                    LOBBY_CHAT_VISIBLE_LIMIT,
+                    beta_mode=beta_mode,
+                )
+            finally:
+                _lock.release()
+        else:
+            admin_event('warning', 'story chat message id cache update skipped: lock busy')
     emit_lobby_chat_history_payloads(lobby_payloads)
     client_id = str(data.get('client_id') or '').strip()
     if re.fullmatch(r'[A-Za-z0-9._:-]{8,96}', client_id):
@@ -29073,7 +29114,16 @@ def _chat_recall_actor_allowed(sid):
     if player.get('is_admin_player'):
         return True
     user = _current_account_user()
-    return bool(user and feedback_is_staff(user.get('id')))
+    if not user:
+        return False
+    if feedback_is_staff(user.get('id')):
+        return True
+    # 故事模式聊天用的是独立 socket（不在 players 里），这里按账号身份兜底。
+    try:
+        profile = get_special_account_profile(user.get('username'))
+    except Exception:
+        profile = None
+    return bool(profile and profile.get('is_admin_player'))
 
 
 def _room_from_chat_scope(room_id):
@@ -29097,6 +29147,45 @@ def _prune_room_chat_history(room, message_ids):
         kept = [item for item in list(history) if str((item or {}).get('message_id') or '') not in ids]
         history.clear()
         history.extend(kept)
+
+
+def _prune_lobby_chat_history_locked(beta_mode, message_ids):
+    """撤回后清掉大厅内存缓存里的对应条目（含折叠在一起的重复消息）。"""
+    ids = {str(item) for item in (message_ids or [])}
+    ids.discard('')
+    if not ids:
+        return 0
+    cache = _lobby_chat_cache_locked(beta_mode)
+    kept = []
+    removed = 0
+    for entry in list(cache):
+        if not isinstance(entry, dict) or entry.get('type') != 'chat':
+            kept.append(entry)
+            continue
+        entry_ids = []
+        for raw in (entry.get('message_id'), entry.get('messageId')):
+            if raw is not None:
+                entry_ids.append(raw)
+        for raw in list(entry.get('message_ids') or []):
+            entry_ids.append(raw)
+        entry_ids = list(dict.fromkeys(entry_ids))
+        matched = [item for item in entry_ids if str(item) in ids]
+        if not matched:
+            kept.append(entry)
+            continue
+        removed += len(matched)
+        remaining = [item for item in entry_ids if str(item) not in ids]
+        if not remaining:
+            continue
+        entry['message_id'] = remaining[-1]
+        entry['messageId'] = remaining[-1]
+        entry['message_ids'] = remaining[-20:]
+        entry['repeat_count'] = max(1, min(int(entry.get('repeat_count') or 1), len(remaining)))
+        kept.append(entry)
+    if removed:
+        cache.clear()
+        cache.extend(kept)
+    return removed
 
 
 def broadcast_chat_recall(actor_name, groups):
@@ -29131,10 +29220,14 @@ def broadcast_chat_recall(actor_name, groups):
                 socketio.emit('chat_recall', notice, room=target_sid)
         else:
             beta_only = 'beta' in room_id
+            with _lock:
+                _prune_lobby_chat_history_locked(beta_only, message_ids)
             for target_sid, player in list(players.items()):
                 if bool(player.get('beta_mode', False)) != beta_only:
                     continue
                 socketio.emit('chat_recall', notice, room=target_sid)
+            # 故事模式聊天是独立 socket，也要收到撤回通知。
+            socketio.emit('chat_recall', notice, room=_story_lobby_chat_room(beta_only))
         admin_event(
             'moderation',
             f'chat recall actor={actor_name} room={room_id or "-"} '
@@ -29162,7 +29255,7 @@ def recall_chat_messages_for_admin(actor_name, message_ids, actor_user_id=0):
 @measure_socket_action('admin_chat_recall')
 def on_admin_chat_recall(data=None):
     sid = request.sid
-    data = socket_guard('admin_chat_recall', data, require_player=True)
+    data = socket_guard('admin_chat_recall', data, require_player=False)
     if data is None:
         return
     if not _chat_recall_actor_allowed(sid):
@@ -29332,6 +29425,8 @@ def on_chat(data):
     room_scope = None
     room_scope_id = None
     room_chat_local_id = None
+    lobby_scope_beta = None
+    lobby_local_id = None
 
     if not _lock.acquire(timeout=0.2):
         admin_event('warning', 'chat route skipped: global lock busy')
@@ -29441,7 +29536,8 @@ def on_chat(data):
                 else:
                     record_room_key = f'lobby:{_lobby_chat_scope_key(beta_mode)}'
                     record_channel = 'public'
-                    append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
+                    lobby_scope_beta = beta_mode
+                    lobby_local_id = append_lobby_chat_locked(chat_data, now, beta_mode=beta_mode)
                     append_admin_game_chat_locked(chat_data, now, scope='lobby')
                     lobby_payloads = lobby_chat_history_payloads_locked(LOBBY_CHAT_VISIBLE_LIMIT, beta_mode=beta_mode)
     finally:
@@ -29481,6 +29577,18 @@ def on_chat(data):
                     _lock.release()
             else:
                 admin_event('warning', f'chat message id cache update skipped: lock busy room={room_scope_id}')
+        elif lobby_scope_beta is not None:
+            if _lock.acquire(timeout=0.2):
+                try:
+                    update_lobby_chat_message_id_locked(lobby_scope_beta, lobby_local_id, chat_message_id)
+                    lobby_payloads = lobby_chat_history_payloads_locked(
+                        LOBBY_CHAT_VISIBLE_LIMIT,
+                        beta_mode=lobby_scope_beta,
+                    )
+                finally:
+                    _lock.release()
+            else:
+                admin_event('warning', 'lobby chat message id cache update skipped: lock busy')
 
     if lobby_payloads is not None:
         emit_lobby_chat_history_payloads(lobby_payloads)

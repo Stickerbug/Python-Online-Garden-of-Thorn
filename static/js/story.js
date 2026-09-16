@@ -57,6 +57,9 @@
     let storyChatEntries = [];
     let storyChatHistorySignature = '';
     let storyChatUnreadCount = 0;
+    // 管理员撤回：被撤回的消息 id（渲染时过滤）与占位提示（会话内保留）。
+    const storyRecalledChatIds = new Set();
+    const storyChatRecallNotices = [];
     let storyMentionDirectory = [];
     let storyMentionCandidates = [];
     let storyMentionMenu = null;
@@ -494,6 +497,11 @@
             chatSpectator: 'Spectating', chatYesterday: 'Yesterday', chatBeforeYesterday: 'The day before yesterday',
             chatConsole: 'Console',
             chatUnread: (count) => `${count} unread message(s)`,
+            chatRecall: 'Recall',
+            chatRecallEntry: 'Admin {0} recalled a message from {1}',
+            chatRecallConfirm: (name) => `Recall this message from ${name}? Everyone will stop seeing it.`,
+            chatRecallDone: (count) => `Recalled ${count} message(s)`,
+            chatRecallFailed: 'Recall failed: the message may already be recalled, or you lack permission.',
             emptyTitle: 'A new journey', start: 'Start', stage: 'Stage', biome: 'Region', gold: 'Gold',
             route: 'Route', abandon: 'End Journey', abandonTitle: 'End this journey?',
             abandonMessage: 'This run will be marked as ended.', resetMap: 'Reset Map',
@@ -597,6 +605,11 @@
             chatOriginMultiplayer: '多人', chatOriginStory: '故事',
             chatSpectator: '观战', chatYesterday: '昨天', chatBeforeYesterday: '前天', chatConsole: '控制台',
             chatUnread: (count) => `${count} 条未读消息`,
+            chatRecall: '撤回',
+            chatRecallEntry: '管理员{0}撤回了玩家{1}的一条消息',
+            chatRecallConfirm: (name) => `撤回 ${name} 的这条消息？撤回后所有玩家都看不到它。`,
+            chatRecallDone: (count) => `已撤回 ${count} 条消息`,
+            chatRecallFailed: '撤回失败：消息可能已被撤回，或你没有权限',
             start: '开始', stage: '阶段', biome: '区域', gold: '金币', route: '路线', abandon: '结束旅程',
             abandonTitle: '结束旅程？', abandonMessage: '当前进度将被记录为已结束。', resetMap: '重置地图',
             surrender: '投降', surrenderTitle: '确认投降？', surrenderCopy: '本次旅程会立即失败。',
@@ -699,6 +712,11 @@
             chatSpectator: 'Spectateur', chatYesterday: 'Hier', chatBeforeYesterday: 'Avant-hier',
             chatConsole: 'Console',
             chatUnread: (count) => `${count} message(s) non lu(s)`,
+            chatRecall: 'Retirer',
+            chatRecallEntry: "L'admin {0} a retiré un message de {1}",
+            chatRecallConfirm: (name) => `Retirer ce message de ${name} ? Il disparaitra pour tout le monde.`,
+            chatRecallDone: (count) => `${count} message(s) retire(s)`,
+            chatRecallFailed: 'Echec du retrait : message deja retire ou permission manquante.',
             emptyTitle: 'Un nouveau voyage', start: 'Commencer', stage: 'Étape', biome: 'Région', gold: 'Or',
             route: 'Route', abandon: 'Terminer le voyage', blessingTitle: 'Choisir une bénédiction',
             surrender: 'Abandonner', surrenderTitle: 'Abandonner ?', surrenderCopy: 'Ce voyage se soldera immédiatement par un échec.',
@@ -819,6 +837,11 @@
             chatOriginMultiplayer: 'マルチ', chatOriginStory: 'ストーリー',
             chatSpectator: '観戦', chatYesterday: '昨日', chatBeforeYesterday: '一昨日', chatConsole: 'コンソール',
             chatUnread: (count) => `未読メッセージ ${count}件`,
+            chatRecall: '取り消し',
+            chatRecallEntry: '管理者{0}が{1}のメッセージを取り消しました',
+            chatRecallConfirm: (name) => `${name} のこのメッセージを取り消しますか？全員に見えなくなります。`,
+            chatRecallDone: (count) => `${count} 件のメッセージを取り消しました`,
+            chatRecallFailed: '取り消しに失敗しました。すでに取り消し済みか、権限がありません。',
             emptyTitle: '新しい旅', start: '開始', stage: 'ステージ', biome: '地域', gold: 'ゴールド',
             route: 'ルート', abandon: '旅を終了', blessingTitle: '祝福を選択', blessingCopy: '今回の旅で一つ選択します。',
             surrender: '降参', surrenderTitle: '降参しますか？', surrenderCopy: 'この旅はすぐに敗北として終了します。',
@@ -4820,6 +4843,74 @@
             <= STORY_CHAT_AUTO_SCROLL_THRESHOLD;
     }
 
+    function isStoryRecalledChatEntry(entry) {
+        if (!entry || typeof entry !== 'object') return false;
+        const id = String(entry.message_id || entry.messageId || entry.id || '');
+        return !!id && storyRecalledChatIds.has(id);
+    }
+
+    function storyChatRecallNoticeText(notice = {}) {
+        const template = t.chatRecallEntry || '管理员{0}撤回了玩家{1}的一条消息';
+        const text = String(template)
+            .replace('{0}', String(notice.actor_name || '?'))
+            .replace('{1}', String(notice.target_name || '?'));
+        const count = Math.max(1, Number(notice.count) || 1);
+        return count > 1 ? `${text} ×${count}` : text;
+    }
+
+    function canRecallStoryChat() {
+        const account = window.__STORY_ACCOUNT__ || {};
+        return !!(account.is_admin_player || account.isAdminPlayer);
+    }
+
+    function createStoryChatRecallButton(entry = {}) {
+        const messageId = Math.trunc(Number(entry.message_id || entry.messageId || 0));
+        if (!messageId) return null;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'chat-recall-btn';
+        btn.textContent = t.chatRecall || '撤回';
+        btn.title = btn.textContent;
+        btn.setAttribute('aria-label', btn.title);
+        btn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const name = String(entry.nickname || entry.sender_name || '?');
+            const confirmText = typeof t.chatRecallConfirm === 'function'
+                ? t.chatRecallConfirm(name)
+                : `${name}?`;
+            if (!window.confirm(confirmText)) return;
+            if (!storyChatSocket) return;
+            storyChatSocket.emit('admin_chat_recall', { message_ids: [messageId] });
+        });
+        return btn;
+    }
+
+    function applyStoryChatRecall(data = {}) {
+        const ids = Array.isArray(data.message_ids) ? data.message_ids : [];
+        ids.forEach((id) => {
+            const text = String(id || '');
+            if (text) storyRecalledChatIds.add(text);
+        });
+        storyChatRecallNotices.push({
+            type: 'chat_recall',
+            scope: String(data.scope || 'lobby'),
+            room_id: String(data.room_id || ''),
+            actor_name: String(data.actor_name || ''),
+            target_name: String(data.target_name || ''),
+            count: Math.max(1, Number(data.count) || ids.length || 1),
+            ts: Date.now() / 1000,
+            system: true,
+        });
+        while (storyChatRecallNotices.length > 50) storyChatRecallNotices.shift();
+        storyChatEntries = storyChatEntries.filter((entry) => !isStoryRecalledChatEntry(entry));
+        storyChatHistorySignature = '';
+        renderStoryChatHistory({
+            items: storyChatEntries,
+            mention_candidates: storyMentionDirectory,
+        }, { skipUnread: true });
+    }
+
     function appendStoryChatEntry(container, entry = {}) {
         if (!container) return;
         if (entry.type === 'time') {
@@ -4827,6 +4918,13 @@
             separator.className = 'story-chat-time chat-time-separator';
             separator.textContent = formatStoryChatTime(entry);
             container.appendChild(separator);
+            return;
+        }
+        if (entry.type === 'chat_recall') {
+            const recallRow = document.createElement('div');
+            recallRow.className = 'story-chat-message chat-msg chat-recall-entry';
+            recallRow.textContent = storyChatRecallNoticeText(entry);
+            container.appendChild(recallRow);
             return;
         }
         if (entry.type !== 'chat') return;
@@ -4860,6 +4958,10 @@
             repeat.className = 'story-chat-repeat chat-repeat-count';
             repeat.textContent = ` ×${repeatCount}`;
             row.appendChild(repeat);
+        }
+        if (canRecallStoryChat()) {
+            const recallBtn = createStoryChatRecallButton(entry);
+            if (recallBtn) row.appendChild(recallBtn);
         }
         container.appendChild(row);
     }
@@ -5031,15 +5133,16 @@
         }
     }
 
-    function renderStoryChatHistory(data = {}) {
+    function renderStoryChatHistory(data = {}, options = {}) {
         const log = $('story-chat-log');
         if (!log) return;
         storyMentionDirectory = Array.isArray(data.mention_candidates)
             ? data.mention_candidates.map((item) => ({ ...item }))
             : [];
         const incoming = Array.isArray(data.items) ? data.items : [];
-        const entries = mergeStoryChatEntries(incoming, storyChatEntries);
-        if (storyChatInitialized && !storyChatOpen) {
+        const entries = mergeStoryChatEntries(incoming, storyChatEntries)
+            .filter((entry) => !isStoryRecalledChatEntry(entry));
+        if (storyChatInitialized && !storyChatOpen && !options.skipUnread) {
             storyChatUnreadCount += countNewStoryChatMessages(entries, storyChatEntries);
             updateStoryChatUnreadBadge();
         }
@@ -5071,6 +5174,9 @@
         storyChatEntries = entries;
         log.replaceChildren();
         entries.forEach((entry) => appendStoryChatEntry(log, entry));
+        storyChatRecallNotices
+            .filter((notice) => notice.scope !== 'room')
+            .forEach((notice) => appendStoryChatEntry(log, notice));
         if (storyChatOpen && stayAtBottom) {
             log.scrollTop = log.scrollHeight;
         } else {
@@ -5108,6 +5214,19 @@
             updateStoryChatConnectionUi();
         });
         storyChatSocket.on('lobby_chat_history', renderStoryChatHistory);
+        storyChatSocket.on('chat_recall', (data = {}) => {
+            applyStoryChatRecall(data || {});
+        });
+        storyChatSocket.on('admin_chat_recall_result', (data = {}) => {
+            if (data && data.success) {
+                const count = Math.max(1, Number(data.recalled) || 1);
+                showToast(typeof t.chatRecallDone === 'function'
+                    ? t.chatRecallDone(count)
+                    : (t.chatRecall || 'Recall'));
+            } else {
+                showToast(t.chatRecallFailed || t.requestFailed);
+            }
+        });
         storyChatSocket.on('server_error', (data = {}) => {
             showToast(data.message || t.requestFailed);
         });
