@@ -1028,6 +1028,21 @@ def build(model: dict | None = None) -> dict:
     runtime_expr = runtime_branch_index(runtime_path, "eval_v2_value", {"expr"},
                                         path_label="expr", constants=constants,
                                         functions=runtime_functions, constant_values=constant_values)
+    # Round 79 / 批次 BY：``collection_op`` 的实现体在 ``eval_collection_op``（按 ``mode``
+    # 选子算子，不是 ``if op in (…)`` 分支），老抽取器读不到它 —— 参数表因此把它列成
+    # 附录 A 的"白名单里有、引擎/运行时都没有实现"，参数也是空的。这里把实现体按
+    # ``expr`` 对象补抽一遍（它确实是**取值表达式**层的算子，写在取值位而不是步骤位）。
+    expr_tree = ast.parse(read_text(runtime_path))
+    for collection_fn in function_defs(expr_tree, "eval_collection_op"):
+        hits = collect_param_hits(collection_fn, {"expr"}, path="expr", constants=constants,
+                                  constant_values=constant_values)
+        body_source = "\n".join(read_text(runtime_path).splitlines()[
+            collection_fn.lineno - 1: collection_fn.end_lineno
+        ])
+        slot = runtime_expr.setdefault("collection_op", {"hits": {}, "source": "", "line": collection_fn.lineno})
+        merge_hits(slot["hits"], hits)
+        slot["source"] = (slot["source"] + "\n" + body_source).strip()
+        slot["line"] = min(slot["line"], collection_fn.lineno)
     runtime_cond = runtime_branch_index(runtime_path, "check_v2_condition", {"cond"},
                                         path_label="cond", constants=constants,
                                         functions=runtime_functions, constant_values=constant_values)
@@ -1228,7 +1243,13 @@ def op_usage_cell(usage: dict, op: str, doc_entry: dict) -> tuple[str, str]:
     entry = usage.get(op)
     if not entry:
         stale = (doc_entry.get("doc_usage") or "").strip()
-        case = "—（未在现卡数据中使用）"
+        # Round 79 / 批次 BY：**表达式 / 条件算子**只出现在取值位与门控位，步骤级扫描
+        # 天然数不到——别把它们写成"未在现卡数据中使用"（collection_op 就被卡数据
+        # 用在 `value` 里）。它们改成"步骤里不用（表达式里有用到）"。
+        in_expr = op in mod_spec_v2.EXPRESSION_OPS
+        in_cond = op in mod_spec_v2.CONDITION_OPS
+        case = ("—（步骤位不用；表达式/条件位可用）" if (in_expr or in_cond)
+                else "—（未在现卡数据中使用）")
         if stale and not any(token in stale for token in
                              ("未在现卡数据中使用", "未使用", "未在当期卡数据", "未用")):
             case += f"；清单文档记为 {stale.rstrip('。')}"
