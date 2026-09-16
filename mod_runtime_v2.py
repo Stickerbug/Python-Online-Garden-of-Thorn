@@ -2350,12 +2350,12 @@ PLAYER_SELECTOR_STRINGS = frozenset({
     # 单目标/上下文
     "source", "self", "target", "target_player", "target_id", "choice_target",
     "selected_target", "chosen_target", "event_target", "chosen_targets",
-    "play_targets", "action_targets", "wide_strike_targets",
+    "target_players", "play_targets", "action_targets", "wide_strike_targets",
     "event_source", "source_id", "last_actor", "damage_source",
     # 集合
     "all", "all_players", "everyone", "everyone_else", "all_others",
     "all_except_self", "all_selectable", "all_targets", "every_selectable",
-    "all_enemies", "all_friendlies", "friendly", "self_team", "teammate",
+    "enemy", "all_enemies", "all_friendlies", "friendly", "self_team", "teammate",
     "team_member", "team_members", "target_team_members",
     "both", "random_side",
     # 随机

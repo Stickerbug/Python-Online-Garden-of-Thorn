@@ -556,6 +556,122 @@ def _ui_component_text_issues(component: dict) -> list:
     return issues
 
 
+# Round 81 / 批次 CA：引擎里"不是通过 ``_status_attr_field`` 映射"的状态名（人工核对过
+# 都有读取方）：``all`` 是 clear 的预设关键字，其余是引擎自己的布尔/计数状态。
+EXTRA_ENGINE_STATUS_NAMES = frozenset({
+    "all", "invincible", "status_immune", "immune", "nazar", "nazar_active",
+    "magic_nazar", "magic_blocked", "toxic_poison", "bandage_active", "untargetable",
+})
+
+STATUS_STEP_KEYS = ("status", "statuses")
+STATUS_OPS = ("status_op", "status_add_named", "status_remove_named", "status_set_named",
+              "has_status", "has_status_named", "player_status_layers")
+
+
+def _engine_status_words() -> set:
+    """``_status_attr_field`` 的字符串常量（引擎内建状态 + 中文别名）。"""
+
+    path = ROOT / "game_engine.py"
+    if not path.is_file():
+        return set()
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError:
+        return set()
+    words = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_status_attr_field":
+            for item in ast.walk(node):
+                if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                    words.add(item.value.strip().lower())
+    return words | {name.lower() for name in EXTRA_ENGINE_STATUS_NAMES}
+
+
+def status_id_consistency(mods_dir: pathlib.Path) -> dict:
+    """Round 81 / 批次 CA：卡数据里的状态 id 必须**认得**。
+
+    引擎把不认识的状态名当**自定义状态**处理：包声明过就有效，拼错的话就静默无效
+    （和"幽灵钩子"同一类毛病）。词表 = 引擎内建/别名 ∪ **官方包声明过的** id/别名
+    （跨包引用在本地图里是合法的，比如 Garden 的卡用 `jungle:shield`——所以只把
+    "哪儿都没声明"的名字当失败，跨包引用单列成提示）。
+    """
+
+    engine_words = _engine_status_words()
+    checked = 0
+    unknown = []
+    cross_package = []
+    packages_scanned = 0
+    payloads = []
+    for path in sorted(mods_dir.glob("*.gtnmod")):
+        try:
+            with zipfile.ZipFile(path) as archive:
+                payload = json.loads(archive.read("mod.json"))
+        except Exception:
+            continue
+        packages_scanned += 1
+        payloads.append((path, payload))
+    declared_all = set()
+    declared_by_package: dict = {}
+    for path, payload in payloads:
+        names = set()
+        for item in (payload.get("registries") or {}).get("statuses") or []:
+            if isinstance(item, dict) and item.get("id"):
+                names.add(str(item["id"]).strip().lower())
+                for alias in item.get("aliases") or []:
+                    names.add(str(alias).strip().lower())
+        declared_by_package[path.name] = names
+        declared_all |= names
+    for path, payload in payloads:
+        declared = set()
+        for item in (payload.get("registries") or {}).get("statuses") or []:
+            if isinstance(item, dict) and item.get("id"):
+                declared.add(str(item["id"]).strip().lower())
+                for alias in item.get("aliases") or []:
+                    declared.add(str(alias).strip().lower())
+        for registry, resource in iter_registry_resources(payload):
+            lists = []
+            root_step_lists(resource, lists)
+            if not lists:
+                continue
+            source = f"{path.name}:{registry}:{resource.get('id')}"
+
+            def visit(step, op, _source=source, _declared=declared):
+                nonlocal checked
+                if op not in STATUS_OPS and not any(key in step for key in STATUS_STEP_KEYS):
+                    return
+                for key in STATUS_STEP_KEYS:
+                    raw = step.get(key)
+                    values = raw if isinstance(raw, list) else [raw]
+                    for value in values:
+                        name = value
+                        if isinstance(value, dict):
+                            name = value.get("id") or value.get("status")
+                        if not isinstance(name, str) or not name.strip():
+                            continue
+                        checked += 1
+                        text = name.strip().lower()
+                        if text in engine_words or text in declared_all:
+                            if text not in declared and text not in engine_words:
+                                cross_package.append({"value": name.strip(), "resource": _source})
+                            continue
+                        unknown.append({"value": name.strip(), "resource": _source})
+
+            for steps in lists:
+                walk_steps(steps, visit)
+    problems = []
+    if unknown:
+        seen = {(item["value"], item["resource"]) for item in unknown}
+        problems.append(
+            "卡数据里用了**没有任何包声明**的状态名（引擎会当自定义状态；拼错就静默无效）："
+            + ", ".join(f"{value!r} @ {resource}" for value, resource in sorted(seen)[:6])
+        )
+    return {"checked": checked, "packages": packages_scanned,
+            "vocabulary": len(engine_words) + len(declared_all),
+            "declared": len(declared_all),
+            "unknown": unknown[:20], "cross_package": len(cross_package),
+            "problems": problems}
+
+
 def ui_text_consistency(mods_dir: pathlib.Path) -> dict:
     """Round 76 / 批次 BU：官方包里每个 ``request_ui`` 组件都必须有**中文文案**。
 
@@ -663,6 +779,8 @@ def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = 
         ),
         # Round 76 / 批次 BU：request_ui 组件的文案必须有中文（不能显示英文/控件 id）。
         "ui_text": ui_text_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
+        # Round 81 / 批次 CA：卡数据的 status id 必须有声明（引擎内建或包 statuses）。
+        "status_ids": status_id_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
         "secret_ops_used": [
             {"op": op, "cards": usage[op]["cards"], "packages": sorted(usage[op]["packages"])}
             for op in secret_used
@@ -785,6 +903,17 @@ def render_text(summary: dict) -> str:
         for problem in (ui_text.get("problems") or [])[:8]:
             lines.append(f"  [失败] {problem}")
         lines.append("")
+    status_ids = summary.get("status_ids") or {}
+    if status_ids:
+        lines.append(
+            f"== 状态 id 对拍: 看到 {status_ids.get('checked', 0)} 处，词表 "
+            f"{status_ids.get('vocabulary', 0)} 个名字，没声明的 "
+            f"{len(status_ids.get('unknown') or [])} 个（跨包引用 "
+            f"{status_ids.get('cross_package', 0)} 处，合法）=="
+        )
+        for problem in (status_ids.get("problems") or [])[:6]:
+            lines.append(f"  [失败] {problem}")
+        lines.append("")
     if hooks:
         lines.append(
             f"== 包级事件钩子（event_hooks 白名单）: 登记 {hooks['declared']} 个，"
@@ -882,6 +1011,8 @@ def main(argv=None) -> int:
         or (summary.get("target_selectors") or {}).get("problems")
         # Round 76 / 批次 BU：request_ui 组件的文案必须有中文。
         or (summary.get("ui_text") or {}).get("problems")
+        # Round 81 / 批次 CA：卡数据的 status id 必须有声明（没人声明的按拼错处理）。
+        or (summary.get("status_ids") or {}).get("problems")
     ):
         return 1
     return 0
