@@ -10744,6 +10744,33 @@ function showV2UiRequest(data = {}) {
         content.appendChild(cardLine);
     }
 
+    // Round 85 / 批次 CG：服务端超时（``timeout_ms``，到点按"取消"处理）现在有倒计时可见。
+    const timeoutMs = Number(data.timeout_ms || 0);
+    let timeoutLine = null;
+    if (timeoutMs > 0) {
+        timeoutLine = document.createElement('p');
+        timeoutLine.className = 'v2-ui-timeout';
+        content.appendChild(timeoutLine);
+        const deadline = Date.now() + timeoutMs;
+        const renderLeft = () => {
+            const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+            timeoutLine.textContent = (currentLang === 'zh'
+                ? `剩余 ${left} 秒，超时视为取消`
+                : `${left}s left, times out as cancel`);
+            return left;
+        };
+        renderLeft();
+        const tick = () => {
+            // 窗口刚建立时还没标 active（标志在函数末尾才加），所以第一次延迟启动；
+            // 之后 modal 不再是 active（已提交/被替换）就停。
+            if (!timeoutLine.isConnected) return;
+            if (!modal.classList.contains('active')) { setTimeout(tick, 200); return; }
+            const left = renderLeft();
+            if (left > 0) setTimeout(tick, 500);
+        };
+        setTimeout(tick, 120);
+    }
+
     const bodyText = getV2Text(component, 'text', '');
     if (bodyText) {
         const p = document.createElement('p');
@@ -10753,9 +10780,36 @@ function showV2UiRequest(data = {}) {
     }
 
     const controls = Array.isArray(component.controls) ? component.controls : [];
+    const controlRows = [];
+    // Round 85 / 批次 CG：``visible_when`` / ``disabled_when``（兄弟控件联动）——
+    // 每次任一控件值变化后重算一次显隐与禁用。
+    const applyControlConditions = () => {
+        controlRows.forEach(({ control, row }) => {
+            const rule = control.visible_when;
+            if (rule && rule.control) {
+                const current = controlState[rule.control];
+                let visible = true;
+                if ('equals' in rule) visible = String(current) === String(rule.equals);
+                else if ('not_equals' in rule) visible = String(current) !== String(rule.not_equals);
+                else if (Array.isArray(rule.in)) visible = rule.in.map(String).includes(String(current));
+                row.style.display = visible ? '' : 'none';
+            }
+            const offRule = control.disabled_when;
+            let disabled = control.disabled === true;
+            if (offRule && offRule.control) {
+                const current = controlState[offRule.control];
+                if ('equals' in offRule) disabled = String(current) === String(offRule.equals);
+                else if ('not_equals' in offRule) disabled = String(current) !== String(offRule.not_equals);
+                else if (Array.isArray(offRule.in)) disabled = offRule.in.map(String).includes(String(current));
+            }
+            row.querySelectorAll('input, select, button').forEach(el => { el.disabled = disabled; });
+            row.classList.toggle('v2-ui-control-disabled', disabled);
+        });
+    };
     controls.forEach(control => {
         const row = document.createElement('div');
         row.className = `v2-ui-control v2-ui-control-${escapeClassToken(control.type || 'text')}`;
+        controlRows.push({ control, row });
         const labelText = getV2Text(control, 'label', control.id || '');
         const type = control.type || 'text';
         if (type === 'text') {
@@ -10790,7 +10844,24 @@ function showV2UiRequest(data = {}) {
             input.step = Number(control.step ?? 1);
             input.value = Number(control.default ?? input.min);
             input.className = 'v2-ui-number';
+            const numberPlaceholder = getV2Text(control, 'placeholder', '');
+            if (numberPlaceholder) input.placeholder = numberPlaceholder;
             const sync = () => { controlState[control.id] = Number(input.value); };
+            input.addEventListener('input', sync);
+            sync();
+            row.appendChild(input);
+        } else if (type === 'text_input') {
+            // Round 85 / 批次 CG：自由文本输入。长度/正则由**服务端**硬校验
+            // （客户端只挂 maxlength / placeholder 做体验层）。
+            appendV2UiLabel(row, labelText);
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'v2-ui-text-input';
+            if (Number(control.max_length) > 0) input.maxLength = Number(control.max_length);
+            const placeholder = getV2Text(control, 'placeholder', '');
+            if (placeholder) input.placeholder = placeholder;
+            input.value = String(control.default ?? '');
+            const sync = () => { controlState[control.id] = input.value; };
             input.addEventListener('input', sync);
             sync();
             row.appendChild(input);
@@ -10917,8 +10988,20 @@ function showV2UiRequest(data = {}) {
             }
             row.appendChild(list);
         }
+        // Round 85 / 批次 CG：``help_text``（编辑器能写、以前被引擎丢掉的字段）现在渲染出来。
+        const helpText = getV2Text(control, 'help_text', '');
+        if (helpText) {
+            const hint = document.createElement('p');
+            hint.className = 'v2-ui-help';
+            hint.textContent = helpText;
+            row.appendChild(hint);
+        }
         content.appendChild(row);
     });
+    // 任一控件交互后重算一次联动显隐/禁用；再算一次初始状态。
+    ['input', 'change', 'click'].forEach(evt =>
+        content.addEventListener(evt, () => applyControlConditions()));
+    applyControlConditions();
 
     const buttons = Array.isArray(component.buttons) && component.buttons.length
         ? component.buttons

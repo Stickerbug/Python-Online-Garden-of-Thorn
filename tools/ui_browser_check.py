@@ -39,6 +39,7 @@ from cards import CardInstance  # noqa: E402
 from game_engine import EquipmentInstance, GameEngine  # noqa: E402
 
 TEMP_NAME = "_codex_ui_harness.json"
+TEMP_NAME_2 = "_codex_ui_harness_conditional.json"
 TEXT_TYPES = ("text", "dynamic_text", "divider", "warning_text", "preview_value")
 NUMBER_TYPES = ("slider", "number", "number_input")
 CHOICE_TYPES = ("select", "radio_group", "multi_select", "card_catalog_picker")
@@ -67,9 +68,25 @@ EVAL_SCRIPT = (
     " if (buttons[0]) buttons[0].click();"
     " window.emitModeEvent = originalEmit;"
     " window.canSendGameAction = originalGuard;"
+    # 第二阶段：联动显隐 + 超时倒计时（带 timeout_ms 再开一次窗口）。
+    " const conditional = await (await fetch('/static/" + TEMP_NAME_2 + "?ts=' + Date.now())).json();"
+    " window.emitModeEvent = () => {};"
+    " window.canSendGameAction = () => true;"
+    " window.showV2UiRequest({ request_id: 'harness-2', component: conditional, timeout_ms: 5000 });"
+    " const rows2 = [...document.querySelectorAll('#modal-content .v2-ui-control')];"
+    " const extraRow = rows2[1];"
+    " const lockedRow = rows2[2];"
+    " const hiddenInitially = extraRow.style.display === 'none';"
+    " const lockedDisabled = !!lockedRow.querySelector('input:disabled');"
+    " const select = rows2[0].querySelector('select');"
+    " if (select) { select.value = 'b'; select.dispatchEvent(new Event('change', { bubbles: true })); }"
+    " const shownAfter = extraRow.style.display !== 'none';"
+    " const timeoutText = (document.querySelector('#modal-content .v2-ui-timeout') || {}).textContent || '';"
+    " for (const btn of [...document.querySelectorAll('#modal-content .v2-ui-buttons button')]) btn.click();"
     " return JSON.stringify({ rowCount: rows.length, rows,"
     "  buttonTexts: buttons.map(b => b.textContent),"
-    "  payloads: captured.map(args => ({ event: args[0], kind: args[1], data: args[2] })) });"
+    "  payloads: captured.map(args => ({ event: args[0], kind: args[1], data: args[2] })),"
+    "  conditional: { hiddenInitially, shownAfter, lockedDisabled, timeoutText } });"
     " }"
 )
 
@@ -118,10 +135,37 @@ def sanitized_component() -> dict:
     return RT._sanitize_ui_component(engine, context, component)
 
 
+def conditional_component() -> dict:
+    """第二阶段：联动显隐（``visible_when`` / ``disabled_when``）与超时倒计时。"""
+
+    engine = GameEngine()
+    engine.phase = "action"
+    engine.current_player = 0
+    engine.player_names = ["P1", "P2"]
+    context = {"source_player": 0, "target_player": 1, "vars": {}, "card": None}
+    component = {
+        "type": "modal",
+        "title_cn": "联动与超时测试",
+        "controls": [
+            {"id": "kind", "type": "select", "label_cn": "类型",
+             "options": [{"value": "a", "label_cn": "甲"}, {"value": "b", "label_cn": "乙"}]},
+            {"id": "extra", "type": "number_input", "label_cn": "只有乙才出现",
+             "visible_if": {"control": "kind", "equals": "b"}},
+            {"id": "locked", "type": "checkbox", "label_cn": "被禁用",
+             "disabled_if": {"op": "compare", "a": {"op": "const", "value": 1},
+                             "b": 1, "operator": "=="}},
+        ],
+        "buttons": [{"id": "confirm", "role": "confirm", "text_cn": "确定"}],
+    }
+    return RT._sanitize_ui_component(engine, context, component)
+
+
 def run_browser(url: str, timeout: int) -> dict:
     static_dir = ROOT / "static"
     temp = static_dir / TEMP_NAME
+    temp2 = static_dir / TEMP_NAME_2
     temp.write_text(json.dumps(sanitized_component(), ensure_ascii=False), encoding="utf-8")
+    temp2.write_text(json.dumps(conditional_component(), ensure_ascii=False), encoding="utf-8")
     try:
         # Windows 上 npx 是 .cmd，必须经 cmd.exe 起（直接 CreateProcess 找不到）。
         npx = shutil.which("npx") or shutil.which("npx.cmd")
@@ -137,6 +181,7 @@ def run_browser(url: str, timeout: int) -> dict:
                        encoding="utf-8", errors="replace", timeout=timeout, cwd=str(ROOT))
     finally:
         temp.unlink(missing_ok=True)
+        temp2.unlink(missing_ok=True)
     payload = result.stdout.strip()
     if payload.startswith('"') and payload.endswith('"'):
         payload = json.loads(payload)
@@ -176,6 +221,17 @@ def main(argv=None) -> int:
     if payloads:
         print("提交载荷：", json.dumps(values, ensure_ascii=False))
     print(f"渲染控件行数：{len(rows)}（声明 {len(declared)}）｜按钮：{chinese_buttons}")
+    conditional = data.get("conditional") or {}
+    if conditional:
+        print("联动/超时：", json.dumps(conditional, ensure_ascii=False))
+        if not conditional.get("hiddenInitially"):
+            problems.append("visible_when 联动：初始状态没有隐藏被控控件")
+        if not conditional.get("shownAfter"):
+            problems.append("visible_when 联动：把依赖控件切成命中值后仍然隐藏")
+        if not conditional.get("lockedDisabled"):
+            problems.append("disabled_if：被禁用的控件没有 disabled")
+        if not str(conditional.get("timeoutText") or "").strip():
+            problems.append("timeout_ms：没有渲染倒计时提示")
     for problem in problems:
         print("  [失败]", problem)
     print("UI 浏览器实测：", "OK" if not problems else f"{len(problems)} 个问题")

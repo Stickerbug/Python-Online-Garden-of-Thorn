@@ -11938,6 +11938,36 @@ html.blind-level-4 .card-prediction-part.magic {
 }
 
 /* Round 71 / 批次 BK：新控件 checkbox / multi_select 的样式 */
+.v2-ui-text-input {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 14px;
+}
+
+.v2-ui-help {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, var(--text-primary));
+  opacity: 0.75;
+}
+
+.v2-ui-timeout {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--magic);
+}
+
+.v2-ui-control-disabled {
+  opacity: 0.55;
+}
+
 .v2-ui-checkbox-row {
   display: flex;
   align-items: center;

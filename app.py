@@ -32507,6 +32507,10 @@ def on_solo_v2_ui_response(data):
             )
         else:
             emit('server_error', {'message': result.get('error', 'Operation failed')})
+            # Round 85 / 批次 CG：回应**校验**失败（越界/必填/文本格式）时窗口不关，
+            # 把同一个窗口重新推给玩家改（顺带重新排超时）。
+            if result.get('keep_window') and getattr(engine, 'pending_v2_ui', None):
+                emit_v2_ui_request_to_sid(sid, engine, ('solo', sid))
             send_solo_state(sid)
     finally:
         action_lock.release()
@@ -33255,6 +33259,17 @@ def on_v2_ui_response(data):
     else:
         code = normalize_soft_reject_code(result.get('error')) or 'PENDING_V2_UI'
         soft_reject(sid, 'v2_ui_response', code, result.get('error', 'Operation failed'), room=room, pidx=pidx, send_state=True)
+        # Round 85 / 批次 CG：校验失败的窗口不关，重新推给玩家改（超时也重新排）。
+        if result.get('keep_window'):
+            with _lock:
+                if getattr(engine, 'pending_v2_ui', None):
+                    emit_room_v2_ui_request(room)
+                    _schedule_v2_ui_timeout(
+                        ('room', room.room_id), engine,
+                        engine.pending_v2_ui.get('player_id'),
+                        engine.pending_v2_ui.get('request_id'),
+                        engine.pending_v2_ui.get('timeout_ms', 0),
+                    )
 
 
 @socketio.on('use_trigger')

@@ -2969,6 +2969,34 @@ def validate_v2_ui_response(engine, context: Dict[str, Any], component: Dict[str
         if ctype in ("text", "rich_text", "stat_display", "card_preview"):
             continue
         raw_value = values_in.get(cid, control.get("default"))
+        # Round 85 / 批次 CG：隐藏控件（visible:false，或带客户端联动规则）不参与必填——
+        # 服务端不知道兄弟控件的当前值，硬卡必填会把"选了 A 才出现 B"的窗口锁死。
+        hidden_by_rule = control.get("visible") is False or "visible_when" in control
+        if ctype == "text_input":
+            # 自由文本：先归一（trim/lower），再查长度与正则，最后交给卡数据当字符串用。
+            value = raw_value if raw_value is not None else control.get("default")
+            value = "" if value is None else str(value)
+            normalize = str(control.get("normalize") or TEXT_INPUT_DEFAULT_NORMALIZE)
+            if normalize in ("trim", "trim_lower"):
+                value = value.strip()
+            if normalize in ("lower", "trim_lower"):
+                value = value.lower()
+            max_length = min(
+                max(0, _to_int(control.get("max_length", TEXT_INPUT_DEFAULT_MAX_LENGTH))),
+                TEXT_INPUT_HARD_MAX_LENGTH,
+            ) or TEXT_INPUT_DEFAULT_MAX_LENGTH
+            min_length = max(0, min(_to_int(control.get("min_length", 0)), max_length))
+            if len(value) > max_length:
+                raise V2RuntimeError(f"v2 ui text too long (max {max_length}): {cid}")
+            if len(value) < min_length:
+                raise V2RuntimeError(f"v2 ui text too short (min {min_length}): {cid}")
+            pattern = str(control.get("pattern") or "")
+            if pattern and not re.fullmatch(pattern, value):
+                raise V2RuntimeError(f"v2 ui text does not match pattern: {cid}")
+            values_out[cid] = value
+            if control.get("required") and not hidden_by_rule and not value:
+                raise V2RuntimeError(f"v2 ui control is required: {cid}")
+            continue
         if ctype in ("slider", "number", "number_input"):
             min_value = _to_number(eval_v2_value(engine, context, control.get("min", 0)))
             max_value = _to_number(eval_v2_value(engine, context, control.get("max", min_value)))
@@ -3068,6 +3096,12 @@ def validate_v2_ui_response(engine, context: Dict[str, Any], component: Dict[str
             values_out[cid] = player_id
         else:
             values_out[cid] = raw_value
+        # Round 85 / 批次 CG：``required`` 对**其余控件类型**的通用校验
+        # （空字符串 / None / 空列表算没填；checkbox 的 false、数字 0 都算填了）。
+        if control.get("required") and not hidden_by_rule:
+            filled = values_out.get(cid)
+            if filled is None or filled == "" or filled == []:
+                raise V2RuntimeError(f"v2 ui control is required: {cid}")
     return {"button": button, "values": values_out}
 
 
@@ -3090,9 +3124,29 @@ def _build_ui_pause(engine, context: Dict[str, Any], params: Dict[str, Any]) -> 
         "target_player": target_player,
         "save_as": str(params.get("save_as") or "ui_result"),
         "timeout_ms": max(0, _to_int(eval_v2_value(engine, context, params.get("timeout_ms", 0)))),
+        # Round 85 / 批次 CG：非法回应（越界/必填/文本格式）怎么处理——
+        #   ``close``（默认，旧行为）：关掉窗口、按流程继续；
+        #   ``keep``：保持窗口开着让玩家改（上层会把同一个窗口重新推给他）。
+        # 做成卡级参数而不是硬策略：老卡一行不用改，新卡想要"输错重填"就写 keep。
+        "on_invalid": _request_ui_on_invalid(params.get("on_invalid")),
         "on_cancel": params.get("on_cancel", []) if isinstance(params.get("on_cancel", []), list) else [],
         "context": context,
     }
+
+
+REQUEST_UI_ON_INVALID_VALUES = ("close", "keep")
+
+
+def _request_ui_on_invalid(value: Any) -> str:
+    """``request_ui`` 的 ``on_invalid`` 词表（写错显式报错）。"""
+
+    text = str(value or "close").strip().lower()
+    if text not in REQUEST_UI_ON_INVALID_VALUES:
+        raise V2RuntimeError(
+            f"unsupported request_ui on_invalid: {value!r}；只认 "
+            f"{' / '.join(REQUEST_UI_ON_INVALID_VALUES)}"
+        )
+    return text
 
 
 def _resolve_ui_component(engine, context: Dict[str, Any], component_ref: Any) -> Dict[str, Any]:
@@ -3173,6 +3227,70 @@ UI_CONTROL_TYPE_ALIASES = {
     "preview_value": "text",
 }
 
+# Round 85 / 批次 CG：``text_input``（自由文本输入）的长度上限。
+# 卡数据可以声明 ``max_length``，但**硬上限**由引擎兜住（防止有人写 10 万让客户端卡死）。
+TEXT_INPUT_DEFAULT_MAX_LENGTH = 64
+TEXT_INPUT_HARD_MAX_LENGTH = 200
+TEXT_INPUT_NORMALIZES = ("none", "trim", "lower", "trim_lower")
+TEXT_INPUT_DEFAULT_NORMALIZE = "trim"
+
+
+def _copy_localized_text(source: Dict[str, Any], base: str, out: Dict[str, Any]) -> str:
+    """``base`` / ``base_cn`` / ``base_en`` 三键容错（与 ``label`` 同一套规则）。
+
+    Round 85 / 批次 CG：``placeholder``（输入框灰字）与 ``help_text``（控件下方说明）
+    这两个字段以前**编辑器能写、引擎直接丢**，现在统一在这里取值。
+    """
+
+    plain = str(source.get(base) or "")
+    cn = str(source.get(f"{base}_cn") or plain or "")
+    en = str(source.get(f"{base}_en") or plain or cn)
+    if plain or cn:
+        out[base] = plain or cn
+    if cn:
+        out[f"{base}_cn"] = cn
+    if en:
+        out[f"{base}_en"] = en
+    return cn
+
+
+def _apply_control_condition(engine, context: Dict[str, Any], control: Dict[str, Any],
+                             out: Dict[str, Any], key: str, flag_name: str,
+                             client_rule_name: str) -> None:
+    """``visible_if`` / ``disabled_if``（Round 85 / 批次 CG）。
+
+    两种写法：
+
+    * **条件算子**（``{"op": "compare", …}`` 那一套）→ 服务端建窗口时求值，
+      结果写 ``visible`` / ``disabled`` 布尔；
+    * **兄弟控件规则**（``{"control": "<id>", "equals"/"in"/"not_equals": …}``）→
+      服务端不知道其它控件的当前值，原样下发给客户端做联动
+      （客户端据此显示/隐藏、启用/禁用）。
+    """
+
+    rule = control.get(key)
+    if not isinstance(rule, dict) or not rule:
+        return
+    if "control" in rule:
+        sibling = str(rule.get("control") or "").strip()
+        if not sibling:
+            return
+        payload: Dict[str, Any] = {"control": sibling}
+        if "equals" in rule:
+            payload["equals"] = rule.get("equals")
+        if "not_equals" in rule:
+            payload["not_equals"] = rule.get("not_equals")
+        if isinstance(rule.get("in"), list):
+            payload["in"] = list(rule["in"])
+        out[client_rule_name] = payload
+        return
+    try:
+        matched = bool(check_v2_condition(engine, context, rule))
+    except Exception:  # noqa: BLE001 — 写坏的条件按"不隐藏/不禁用"处理，不炸窗口
+        matched = False
+    out[flag_name] = matched
+
+
 ZONE_PICKER_CHOICES = (
     ("hand", "手牌", "Hand"),
     ("deck", "抽牌堆", "Deck"),
@@ -3212,7 +3330,7 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
     ctype = UI_CONTROL_TYPE_ALIASES.get(ctype, ctype)
     if not cid:
         raise V2RuntimeError("ui control id is required")
-    if ctype not in {"text", "select", "card_catalog_picker", "slider", "number", "number_input", "card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker", "player_picker", "target_picker", "checkbox", "multi_select"}:
+    if ctype not in {"text", "text_input", "select", "card_catalog_picker", "slider", "number", "number_input", "card_picker", "equipment_picker", "multi_card_picker", "multi_equipment_picker", "player_picker", "target_picker", "checkbox", "multi_select"}:
         raise V2RuntimeError(f"unsupported v2 ui control type: {ctype}")
     out: Dict[str, Any] = {
         "id": cid,
@@ -3247,6 +3365,29 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
         # Round 71 / 批次 BK：单个开关。``default`` 走取值表达式，回应值 true/false。
         default = control.get("default", control.get("value", False))
         out["default"] = bool(eval_v2_value(engine, context, default))
+    elif ctype == "text_input":
+        # Round 85 / 批次 CG：**自由文本输入**。长度与格式由服务端硬校验
+        # （``validate_v2_ui_response`` 同一套规则），客户端只做体验层（maxlength/pattern 提示）。
+        max_length = max(0, _to_int(control.get("max_length", TEXT_INPUT_DEFAULT_MAX_LENGTH)))
+        max_length = min(max_length, TEXT_INPUT_HARD_MAX_LENGTH) or TEXT_INPUT_DEFAULT_MAX_LENGTH
+        min_length = max(0, min(_to_int(control.get("min_length", 0)), max_length))
+        pattern = str(control.get("pattern") or "").strip()
+        if pattern:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise V2RuntimeError(f"text_input 的 pattern 不是合法正则：{exc}")
+        normalize = str(control.get("normalize", TEXT_INPUT_DEFAULT_NORMALIZE)
+                        or TEXT_INPUT_DEFAULT_NORMALIZE).strip().lower()
+        if normalize not in TEXT_INPUT_NORMALIZES:
+            raise V2RuntimeError(
+                f"unsupported text_input normalize: {normalize}；只认 "
+                f"{' / '.join(TEXT_INPUT_NORMALIZES)}"
+            )
+        default = eval_v2_value(engine, context, control.get("default", ""))
+        default = str(default if default is not None else "")[:max_length]
+        out.update({"max_length": max_length, "min_length": min_length, "pattern": pattern,
+                    "normalize": normalize, "default": default})
     elif ctype == "multi_select":
         # Round 71 / 批次 BK：从 ``options`` 里选多个（``min_select``/``max_select`` 限个）。
         options = _control_options(control)
@@ -3327,6 +3468,15 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
         out["text"] = text_cn
         out["text_cn"] = text_cn
         out["text_en"] = text_en
+    # Round 85 / 批次 CG：三个"编辑器能写、引擎以前直接丢掉"的字段接上：
+    # ``placeholder``（输入框灰字）、``help_text``（控件下方说明）、``required``（必填）。
+    _copy_localized_text(control, "placeholder", out)
+    _copy_localized_text(control, "help_text", out)
+    if control.get("required"):
+        out["required"] = True
+    # 条件显示/禁用：服务端可算的写 visible/disabled，兄弟控件规则下发客户端联动。
+    _apply_control_condition(engine, context, control, out, "visible_if", "visible", "visible_when")
+    _apply_control_condition(engine, context, control, out, "disabled_if", "disabled", "disabled_when")
     return out
 
 

@@ -83,6 +83,8 @@ VALID_UI_CONTROL_TYPES = {
     # ---- Round 71 / 批次 BK 新控件（与运行时/客户端同一份白名单）----
     "checkbox",      # `default` 可以写 true/false
     "multi_select",  # 认 `options` / `min_select` / `max_select` / `default`
+    # ---- Round 85 / 批次 CG 新控件：自由文本输入 ----
+    "text_input",    # 认 `max_length` / `min_length` / `pattern` / `normalize` / `placeholder` / `default`
     # ---- Round 77 / 批次 BV：编辑器别名（运行时归一到已有控件，见
     # mod_runtime_v2.UI_CONTROL_TYPE_ALIASES）----
     "radio_group",   # -> select（单选）

@@ -16217,6 +16217,8 @@ class GameEngine:
             'component': component,
             'save_as': str(pause.get('save_as') or 'ui_result'),
             'timeout_ms': int(pause.get('timeout_ms') or 0),
+            # Round 85 / 批次 CG：非法回应的处理策略（``close`` 默认 / ``keep`` 保持窗口）。
+            'on_invalid': str(pause.get('on_invalid') or 'close'),
             'on_cancel': pause.get('on_cancel', []) if isinstance(pause.get('on_cancel', []), list) else [],
             'remaining_steps': pause.get('remaining_steps', []) if isinstance(pause.get('remaining_steps', []), list) else [],
             'context': context,
@@ -16248,6 +16250,18 @@ class GameEngine:
         component = pending.get('component') if isinstance(pending.get('component'), dict) else {}
         try:
             clean = validate_v2_ui_response(self, context, component, response or {})
+        except Exception as exc:
+            # Round 85 / 批次 CG：**回应校验**失败（越界 / 必填 / 文本格式）。
+            # 默认沿用旧行为（关窗口、记一条模组错误、按流程继续）；
+            # 卡级 ``on_invalid:"keep"`` 时保持窗口开着让玩家改——上层看到
+            # ``keep_window`` 会把同一个窗口重新推给客户端（并重排超时）。
+            # 只有"校验通过、但后续步骤执行炸了"才永远清 pending（那才是真流程错误）。
+            if str(pending.get('on_invalid') or 'close') == 'keep':
+                return {'success': False, 'error': str(exc), 'keep_window': True}
+            self.pending_v2_ui = None
+            self._log_mod_runtime_error('request_ui', exc, player_id, None)
+            return {'success': False, 'error': str(exc)}
+        try:
             self.pending_v2_ui = None
             button = clean.get('button')
             button_role = self._v2_button_role(component, button)
