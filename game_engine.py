@@ -9655,7 +9655,7 @@ class GameEngine:
 
 
     def _atomic_log(self, player_id, card, params, log, choice, context):
-        if log is False or params.get('silent') or params.get('no_log'):
+        if self._step_silent(params, log):
             return
         msg = log if log else params.get('msg', params.get('message', ''))
         msg = self._step_text_value(player_id, card, msg)
@@ -10752,7 +10752,7 @@ class GameEngine:
         coffee = bool(params.get('reset_coffee'))
         heavy = max(0, self._eval_int(player_id, params.get('card_heavy', 0), card, 0))
         positive_only = bool(params.get('log_positive_only'))
-        silent = log is False or params.get('silent') or params.get('no_log')
+        silent = self._step_silent(params, log)
 
         for target_id in targets:
             if not self._valid_player_id(target_id):
@@ -10961,7 +10961,7 @@ class GameEngine:
                          'current_action': {'tag': tag}},
                         tag,
                     )
-            if params.get('silent') or params.get('no_log') or log is False:
+            if self._step_silent(params, log):
                 return
             self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
             return
@@ -10982,7 +10982,7 @@ class GameEngine:
             custom = getattr(target_card, 'custom_vars', None)
             if isinstance(custom, dict):
                 custom[f'{tag}_log'] = return_log
-        if params.get('silent') or params.get('no_log') or log is False:
+        if self._step_silent(params, log):
             return
         self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
 
@@ -11060,7 +11060,7 @@ class GameEngine:
                             count += 1
                         candidate.disabled_flags.discard(tag)
                 counts[target_id] = count
-            if params.get('silent') or params.get('no_log') or log is False:
+            if self._step_silent(params, log):
                 return
             if log:
                 for target_id in targets:
@@ -11097,7 +11097,7 @@ class GameEngine:
                         candidate.disabled_flags.discard(tag)
                         count += 1
             counts[target_id] = count
-        if params.get('silent') or params.get('no_log') or log is False:
+        if self._step_silent(params, log):
             return
         if log:
             for target_id in targets:
@@ -14834,6 +14834,21 @@ class GameEngine:
         self._report_unknown_selector('target', text)
         return True
 
+    @staticmethod
+    def _step_silent(params, log) -> bool:
+        """这一步要不要压掉**默认战报**。
+
+        ``log: false`` / ``silent: true`` / ``no_log: true`` 三个写法等价——同一个判断
+        在引擎里重复了十来处（Round 83 / 批次 CE 收敛成这一个助手，行为逐字不变）。
+        ``hide_log``（``move_card`` 独有的第四个写法）由调用方自己 ``or`` 进来；
+        运行时侧还有一份同名的 :func:`mod_runtime_v2.step_is_silent` 处理 ``step`` 形态。
+
+        注意 ``_move_card_to_deck`` 那处**故意不用**这个助手：它在 ``log is False`` 时
+        照旧播报默认文案（历史行为，改动会变成行为变更）。
+        """
+
+        return log is False or bool(params.get('silent') or params.get('no_log'))
+
     def _reject_unknown_enum(self, op: str, param: str, value, allowed, player_id=None,
                             card=None) -> bool:
         """Round 70 / 批次 BI：伞形 op 的枚举参数写错时**显式报错**。
@@ -18453,7 +18468,7 @@ class GameEngine:
         if mode == 'remove':
             if hasattr(target_card, 'instance_flags'):
                 target_card.instance_flags.discard(tag)
-            if params.get('silent') or params.get('no_log') or log is False:
+            if self._step_silent(params, log):
                 return
             self.log_msg(log or f"{target_card.name_cn}移除{self._card_flag_log_text(tag)}")
             return
@@ -18464,7 +18479,7 @@ class GameEngine:
             custom = getattr(target_card, 'custom_vars', None)
             if isinstance(custom, dict):
                 custom[f'{tag}_log'] = return_log
-        if params.get('silent') or params.get('no_log') or log is False:
+        if self._step_silent(params, log):
             return
         self.log_msg(log or f"{target_card.name_cn}获得{self._card_flag_log_text(tag)}")
 
@@ -18537,7 +18552,7 @@ class GameEngine:
                             count += 1
                         candidate.disabled_flags.discard(tag)
                 counts[target_id] = count
-            if params.get('silent') or params.get('no_log') or log is False:
+            if self._step_silent(params, log):
                 return
             if log:
                 for target_id in targets:
@@ -18574,7 +18589,7 @@ class GameEngine:
                         candidate.disabled_flags.discard(tag)
                         count += 1
             counts[target_id] = count
-        if params.get('silent') or params.get('no_log') or log is False:
+        if self._step_silent(params, log):
             return
         if log:
             for target_id in targets:
@@ -18910,7 +18925,7 @@ class GameEngine:
             self._refresh_hand_limit_bonuses()
             self._refresh_equipment_derived_player_flags(owner_id)
             self._remember_created_card(new_card, context if isinstance(context, dict) else None)
-            if log is False or params.get('silent') or params.get('no_log'):
+            if self._step_silent(params, log):
                 continue
             self.log_msg(log or f"{self.pn(owner_id)}获得装备{card_def.name_cn}")
 
@@ -19769,7 +19784,7 @@ class GameEngine:
                     amount=0, count=0,
                 ))
             return
-        if params.get('silent') or params.get('no_log') or params.get('hide_log') or log is False:
+        if self._step_silent(params, log) or params.get('hide_log'):
             return
         if log:
             self.log_msg(self._format_step_log(
@@ -20455,7 +20470,7 @@ class GameEngine:
         zone_names = self._step_zone_names(params, op='card_prop_add_to_zone', default='hand')
         if not target_ids or not zone_names:
             return
-        silent = bool(params.get('silent') or params.get('no_log')) or log is False
+        silent = self._step_silent(params, log)
         prop = str(params.get('property') or params.get('prop') or '')
         if not prop:
             return
@@ -21045,7 +21060,7 @@ class GameEngine:
         # ``mode`` 缺省 = 旧的 ``heal``。
         amount = self._eval_int(player_id, params.get('amount', 0), card)
         positive_only = bool(params.get('log_positive_only'))
-        silent = log is False or params.get('silent') or params.get('no_log')
+        silent = self._step_silent(params, log)
         for target_id in self._data_step_targets(player_id, card, params.get('target', 'self'), context):
             before = self.players[target_id].health
             self.players[target_id].heal(amount)
@@ -21114,7 +21129,7 @@ class GameEngine:
         log_requested = str(params.get('log_amount') or '').strip().lower() in (
             'requested', 'declared', 'intended', 'asked',
         )
-        silent = log is False or params.get('silent') or params.get('no_log')
+        silent = self._step_silent(params, log)
         suppress = isinstance(context, dict) and bool(context.get('suppress_detail_logs'))
         for modifier in self._draw_modifier_specs(params):
             self._apply_draw_modifier(player_id, card, modifier, context)

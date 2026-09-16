@@ -329,19 +329,24 @@ def describe_default(node: ast.AST, objects, bindings: dict, locals_map: dict, d
 
 def collect_param_hits(scope: ast.AST, objects, *, via: str = "", path: str = "",
                        constants: dict | None = None, bindings: dict | None = None,
-                       constant_values: dict | None = None) -> dict:
+                       constant_values: dict | None = None, simple: bool = False) -> dict:
     """收集一段 AST 里读到的参数键。
 
     每条记录：``defaults``（形态 → 显示文本）、``expr``（是否被表达式求值包装）、
     ``bare``（有没有 ``params.get('k')`` 无默认值 / ``params['k']``）、``via``、``path``。
+
+    ``simple=True``（Round 83 / 批次 CE 加的）：**只按名字匹配** ``<对象>.get('键')``，
+    不看函数签名绑定、不递归助手。引擎侧的"搭桥"读取点（``choice_params`` / ``spec``
+    这类局部变量）走这一档——它们本来就是 ``filter_spec`` / ``_effect_params(effect)``
+    的别名，按签名反推反而抽不到。
     """
 
     hits: dict[str, dict] = {}
     constants = constants or {}
-    base_bindings = dict(bindings or {})
-    if isinstance(scope, ast.FunctionDef):
+    base_bindings = {} if simple else dict(bindings or {})
+    if isinstance(scope, ast.FunctionDef) and not simple:
         base_bindings.update(signature_bindings(scope, constants))
-    locals_map = local_default_nodes(scope)
+    locals_map = {} if simple else local_default_nodes(scope)
 
     def record(keys, default_node, expr: bool, bare: bool) -> None:
         for key in keys:
@@ -407,6 +412,11 @@ def collect_param_hits(scope: ast.AST, objects, *, via: str = "", path: str = ""
                         hits[key].setdefault("fallback", set()).update(fallback)
                 else:
                     record(keys, default_node, expr_depth > 0, bare=default_node is None)
+            # Round 83 / 批次 CE：**接收者本身是调用**的写法（``str(x.get('k','')).strip()``、
+            # ``json.dumps(...).lower()``）以前只走 args/keywords，内部那棵子树整段漏掉——
+            # ``request`` 的 ``allowed`` 就是这么漏的。这里补上 ``node.func`` 的遍历
+            # （``param_get_key`` 只认 ``<名字>.get(...)``，多走的枝不会误报）。
+            walk(node.func, expr_depth, local_bindings)
             for arg in node.args:
                 walk(arg, expr_depth, local_bindings)
             for keyword in node.keywords:
@@ -426,37 +436,6 @@ def collect_param_hits(scope: ast.AST, objects, *, via: str = "", path: str = ""
             if other:
                 for text in other["defaults"]:
                     entry["defaults"].setdefault(text, True)
-    return hits
-
-
-def bridge_param_hits(node: ast.AST, objects, *, via: str) -> dict:
-    """搭桥用的小抽取器：把 ``node`` 里所有 ``<对象>.get('键')`` 收成参数命中。
-
-    Round 82 / 批次 CC：引擎侧的读取点常常是"局部变量 → ``.get``"的形态
-    （``choice_params`` / ``spec``），复用完整抽取器反而抽不到（它会按签名绑定过滤），
-    所以这里只做与 :func:`param_get_key` 同一套名字匹配，产出的条目形状与
-    ``hits`` 一致，直接交给 :func:`merge_hits`。
-    """
-
-    hits: dict[str, dict] = {}
-    for sub in ast.walk(node):
-        keys = param_get_key(sub, objects)
-        if not keys:
-            continue
-        default_node = sub.args[1] if len(sub.args) > 1 else None
-        for key in keys:
-            entry = hits.setdefault(
-                key,
-                {"defaults": {}, "expr": False, "bare": False, "via": set(), "paths": set(),
-                 "by_path": {}},
-            )
-            entry["via"].add(via)
-            entry["paths"].add("engine")
-            entry["bare"] = default_node is None
-            if default_node is not None:
-                text, _kind = default_node_text(default_node)
-                if text:
-                    entry["defaults"][text] = True
     return hits
 
 
@@ -1067,9 +1046,15 @@ def scan_usage(mods_dir: pathlib.Path) -> dict:
             for steps in lists:
                 mod_atom_report.walk_steps(steps, visit)
             for op, steps in local.items():
-                entry = usage.setdefault(op, {"steps": 0, "cards": set(), "first": None})
+                entry = usage.setdefault(op, {"steps": 0, "cards": set(), "first": None, "keys": {}})
                 entry["steps"] += len(steps)
                 entry["cards"].add((path.name, card_id))
+                # Round 83 / 批次 CE：顺带统计"这个 op 的步骤里显式写了哪些参数键"，
+                # 附录 C 用它算出"省略率"（写了 = 默认值不生效）。
+                key_counts = entry.setdefault("keys", {})
+                for step in steps:
+                    for key in step:
+                        key_counts[key] = key_counts.get(key, 0) + 1
                 if entry["first"] is None:
                     best = min(steps, key=step_weight)
                     entry["first"] = (path.name, card_id, compact_step(best))
@@ -1136,7 +1121,8 @@ def build(model: dict | None = None) -> dict:
             objects, alias_bindings = ENGINE_PARAM_BRIDGE_OBJECTS.get(
                 helper, DEFAULT_BRIDGE_OBJECTS
             )
-            hits = bridge_param_hits(info["node"], objects, via=helper)
+            hits = collect_param_hits(info["node"], objects, via=helper, path="engine",
+                                      simple=True)
             prefix = ENGINE_PARAM_BRIDGE_PREFIXES.get(helper)
             if prefix:
                 hits = {f"{prefix}{key}": value for key, value in hits.items()}
@@ -1716,10 +1702,21 @@ def render(model: dict) -> str:
     )
     lines.append("")
     if conflicts:
-        lines.append("| 原子 | 参数与默认值 |")
-        lines.append("|---|---|")
+        lines.append("| 原子 | 参数与默认值 | 官方数据（显式写 / 省略） |")
+        lines.append("|---|---|---|")
+        usage = model.get("usage") or {}
         for op, items in conflicts:
-            lines.append("| `{}` | {} |".format(op, "；".join(items)))
+            used = usage.get(op) or {}
+            total = int(used.get("steps") or 0)
+            key_counts = used.get("keys") or {}
+            detail = []
+            for item in items:
+                key = item.split("：")[0].strip("`")
+                explicit = int(key_counts.get(key, 0))
+                detail.append(f"`{key}` {explicit} / {max(0, total - explicit)}")
+            lines.append("| `{}` | {} | {} |".format(
+                op, "；".join(items), "；".join(detail) or "—",
+            ))
     else:
         lines.append("（无）")
     lines.append("")
