@@ -35460,6 +35460,8 @@ async function showChoiceUI(data) {
         }
     } else if (choiceType === 'choose_cards_from_discard') {
         const discard = ((gameState.you || {}).discard || []).filter(c => !cardHasSublimeFlag(c));
+        // 取牌窗口"最少选几张"的缺省**按窗口类型分流**（引擎侧同名常量
+        // MIN_COUNT_DEFAULT_OPTIONAL/MUST_PICK）：弃牌堆多选可以一张都不选 → 0。
         const minCount = Math.max(0, Number(choiceParams.min_count ?? 0));
         const maxCount = Math.max(minCount, Math.min(
             discard.length,
@@ -35505,6 +35507,7 @@ async function showChoiceUI(data) {
             !cardHasSublimeFlag(c) && c.instance_id !== cardDict.instance_id
         ));
         const wantedType = choiceParams.card_type || 'any';
+        // 手牌多选是"必须选"窗口 → 缺省 1（与引擎 MIN_COUNT_DEFAULT_MUST_PICK 一致）。
         const minCount = Number(choiceParams.min_count ?? 1);
         const maxCount = Math.max(minCount, Number(choiceParams.max_count || minCount));
         const cards = allCards.filter(c => {

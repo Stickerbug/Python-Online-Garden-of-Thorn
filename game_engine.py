@@ -8046,8 +8046,14 @@ class GameEngine:
                     if selected_cards[0].def_id != selected_cards[1].def_id:
                         return False
                 return True
-            min_count = self._eval_int(0, params.get('min_count', 1), card, 1) if params else 1
-            max_count = self._eval_int(0, params.get('max_count', min_count), card, min_count) if params else 1
+            # Round 84 / 批次 CF：``min_count`` 的缺省**按窗口类型分流**（不是两条路径冲突）：
+            # "手牌多选"= 必须选，缺省 1；"牌堆/弃牌堆多选"= 可以一张都不选，缺省 0。
+            # 两个默认值都具名了，免得以后再被当成"不一致"来"统一"。
+            min_count = self._eval_int(
+                0, params.get('min_count', self.MIN_COUNT_DEFAULT_MUST_PICK), card,
+                self.MIN_COUNT_DEFAULT_MUST_PICK,
+            ) if params else self.MIN_COUNT_DEFAULT_MUST_PICK
+            max_count = self._eval_int(0, params.get('max_count', min_count), card, min_count) if params else self.MIN_COUNT_DEFAULT_MUST_PICK
             if min_count <= 0 and isinstance(ids, list):
                 return True
             if min_count <= 1 and max_count <= 1 and choice.get('target_instance_id') is not None:
@@ -8063,7 +8069,10 @@ class GameEngine:
                     ids.append(int(raw_id))
                 except Exception:
                     return False
-            min_count = max(0, self._eval_int(0, params.get('min_count', 0), card, 0))
+            min_count = max(0, self._eval_int(
+                0, params.get('min_count', self.MIN_COUNT_DEFAULT_OPTIONAL), card,
+                self.MIN_COUNT_DEFAULT_OPTIONAL,
+            ))
             max_count = max(min_count, self._eval_int(0, params.get('max_count', len(ids)), card, len(ids)))
             if not (min_count <= len(ids) <= max_count) or len(ids) != len(set(ids)):
                 return False
@@ -11498,7 +11507,21 @@ class GameEngine:
         if raw_zone in (None, ''):
             raw_zone = params.get('to')
         if raw_zone in (None, ''):
-            raw_zone = 'discard'
+            # Round 84 / 批次 CF：目的区**一个都没写**时，以前静默丢进弃牌堆
+            # （"忘写 zone"的卡会莫名其妙弃牌）。现在显式报错并中止这一步。
+            # 核查过：官方 58 个 move_card 步骤全部写了 mode 家族或 zone/to，
+            # 没有一步靠这个兜底，所以这条改动对现网行为是零变化。
+            self._log_mod_runtime_error(
+                'move_card',
+                RuntimeError(
+                    'move_card 需要目的区：写 zone/target_zone/to，'
+                    '或用 mode:"give"/"orb"/"random"/"batch"/"steal"/"swap_hands"/'
+                    '"remove"/"transform"'
+                ),
+                player_id,
+                card,
+            )
+            return
         zone_name = normalize_zone_name(
             raw_zone, allow_equipment=False, op='move_card', param='zone',
         )
@@ -14833,6 +14856,11 @@ class GameEngine:
             return False
         self._report_unknown_selector('target', text)
         return True
+
+    # Round 84 / 批次 CF：取牌窗口"最少选几张"的**两个缺省值**（按窗口类型分流）。
+    # 见 `_choice_request_satisfied`：手牌多选必须选（1）、牌堆/弃牌堆多选可以空选（0）。
+    MIN_COUNT_DEFAULT_MUST_PICK = 1
+    MIN_COUNT_DEFAULT_OPTIONAL = 0
 
     @staticmethod
     def _step_silent(params, log) -> bool:

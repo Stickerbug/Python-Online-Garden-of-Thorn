@@ -158,7 +158,7 @@ def literal_text(value) -> str | None:
     return None
 
 
-def default_node_text(node: ast.AST | None) -> tuple[str, str]:
+def default_node_text(node: ast.AST | None, constant_values: dict | None = None) -> tuple[str, str]:
     """返回 ``(显示文本, 形态)``；形态 ∈ literal / same-param / const-name / expr / 空。"""
 
     if node is None:
@@ -174,10 +174,16 @@ def default_node_text(node: ast.AST | None) -> tuple[str, str]:
                 return text, "literal"
     if isinstance(node, ast.Name):
         if re.fullmatch(r"[A-Z][A-Z0-9_]*", node.id):
-            return f"常量 `{node.id}`", "const-name"
+            # Round 84 / 批次 CF：常量表里有值就显示**实际值**（``1`` 比
+            # ``常量 MIN_COUNT_DEFAULT_MUST_PICK`` 好读），没值才留名字。
+            resolved = (constant_values or {}).get(node.id)
+            return (f"{resolved}（常量 `{node.id}`）" if resolved else f"常量 `{node.id}`"), "const-name"
         return "", "expr"
     if isinstance(node, ast.Attribute):
-        return f"常量 `{ast.unparse(node)}`", "const-name"
+        # ``self.MIN_COUNT_DEFAULT_MUST_PICK`` 这类类属性常量同样按名字查表。
+        resolved = (constant_values or {}).get(node.attr)
+        return (f"{resolved}（常量 `{ast.unparse(node)}`）" if resolved
+                else f"常量 `{ast.unparse(node)}`"), "const-name"
     if isinstance(node, ast.Dict):
         return "`{…}`", "literal"
     if isinstance(node, (ast.List, ast.Tuple)):
@@ -321,7 +327,7 @@ def describe_default(node: ast.AST, objects, bindings: dict, locals_map: dict, d
         if texts:
             return " / ".join(sorted(set(texts))), []
         return "", []
-    text, kind = default_node_text(node)
+    text, kind = default_node_text(node, constant_values)
     if kind == "same-param":
         return "", []
     return text, []
@@ -1122,6 +1128,7 @@ def build(model: dict | None = None) -> dict:
                 helper, DEFAULT_BRIDGE_OBJECTS
             )
             hits = collect_param_hits(info["node"], objects, via=helper, path="engine",
+                                      constants=constants, constant_values=constant_values,
                                       simple=True)
             prefix = ENGINE_PARAM_BRIDGE_PREFIXES.get(helper)
             if prefix:
