@@ -255,6 +255,7 @@ from db import (
     process_live_achievement_flags,
     process_match_achievements,
     record_chat_message,
+    recall_chat_message,
     record_user_ip_event,
     record_card_draft_counts,
     record_card_draft_win_result,
@@ -29037,6 +29038,138 @@ def on_story_chat_send(data=None):
     client_id = str(data.get('client_id') or '').strip()
     if re.fullmatch(r'[A-Za-z0-9._:-]{8,96}', client_id):
         _mark_story_afk_activity(user_id, client_id)
+
+
+CHAT_RECALL_MAX_IDS = 50
+
+
+def _chat_recall_actor_allowed(sid):
+    """撤回聊天权限：管理员玩家或 Staff 账号。"""
+    player = players.get(sid) or {}
+    if player.get('is_admin_player'):
+        return True
+    user = _current_account_user()
+    return bool(user and feedback_is_staff(user.get('id')))
+
+
+def _room_from_chat_scope(room_id):
+    text = str(room_id or '')
+    if not text.startswith('room:'):
+        return None
+    try:
+        return rooms.get(int(text.split(':', 1)[1]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _prune_room_chat_history(room, message_ids):
+    if room is None or not message_ids:
+        return
+    ids = {str(item) for item in message_ids}
+    history = getattr(room, 'chat_history', None)
+    if history is None:
+        return
+    with _lock:
+        kept = [item for item in list(history) if str((item or {}).get('message_id') or '') not in ids]
+        history.clear()
+        history.extend(kept)
+
+
+def broadcast_chat_recall(actor_name, groups):
+    """把撤回结果广播给对应受众，并清掉房间内存里的副本。"""
+    total = 0
+    for group in groups:
+        message_ids = [int(item) for item in (group.get('message_ids') or []) if str(item).isdigit()]
+        if not message_ids:
+            continue
+        total += len(message_ids)
+        room_id = str(group.get('room_id') or '')
+        scope = 'room' if room_id.startswith('room:') else 'lobby'
+        notice = {
+            'type': 'chat_recall',
+            'scope': scope,
+            'room_id': room_id,
+            'message_ids': message_ids,
+            'actor_name': actor_name,
+            'target_name': str(group.get('sender_name') or ''),
+            'count': len(message_ids),
+        }
+        if scope == 'room':
+            room = _room_from_chat_scope(room_id)
+            _prune_room_chat_history(room, message_ids)
+            recipients = []
+            if room is not None:
+                recipients = (
+                    list(getattr(room, 'player_sids', []) or [])
+                    + list(getattr(room, 'spectators', []) or [])
+                )
+            for target_sid in dict.fromkeys(recipients):
+                socketio.emit('chat_recall', notice, room=target_sid)
+        else:
+            beta_only = 'beta' in room_id
+            for target_sid, player in list(players.items()):
+                if bool(player.get('beta_mode', False)) != beta_only:
+                    continue
+                socketio.emit('chat_recall', notice, room=target_sid)
+        admin_event(
+            'moderation',
+            f'chat recall actor={actor_name} room={room_id or "-"} '
+            f'target={notice["target_name"] or "-"} count={notice["count"]}',
+        )
+    return total
+
+
+def recall_chat_messages_for_admin(actor_name, message_ids, actor_user_id=0):
+    """撤回若干条消息，按（房间, 发送者）分组后广播。返回实际撤回条数。"""
+    groups = {}
+    for message_id in message_ids:
+        info = recall_chat_message(message_id, actor_user_id=actor_user_id, actor_name=actor_name)
+        if not info:
+            continue
+        key = (str(info.get('room_id') or ''), str(info.get('sender_name') or ''))
+        entry = groups.setdefault(key, {'room_id': key[0], 'sender_name': key[1], 'message_ids': []})
+        entry['message_ids'].append(int(info['message_id']))
+    if not groups:
+        return 0
+    return broadcast_chat_recall(actor_name, list(groups.values()))
+
+
+@socketio.on('admin_chat_recall')
+@measure_socket_action('admin_chat_recall')
+def on_admin_chat_recall(data=None):
+    sid = request.sid
+    data = socket_guard('admin_chat_recall', data, require_player=True)
+    if data is None:
+        return
+    if not _chat_recall_actor_allowed(sid):
+        emit('server_error', {'message': '没有撤回聊天的权限'})
+        return
+    raw_ids = data.get('message_ids')
+    if raw_ids is None:
+        raw_ids = [data.get('message_id')]
+    message_ids = []
+    for item in list(raw_ids or [])[:CHAT_RECALL_MAX_IDS]:
+        try:
+            value = int(item)
+        except (TypeError, ValueError):
+            continue
+        if value not in message_ids:
+            message_ids.append(value)
+    if not message_ids:
+        emit('server_error', {'message': '缺少消息 id'})
+        return
+    user = _current_account_user()
+    actor_name = str(
+        (players.get(sid) or {}).get('nickname')
+        or (user.get('username') if user else '')
+        or '管理员'
+    )
+    recalled = recall_chat_messages_for_admin(
+        actor_name,
+        message_ids,
+        actor_user_id=(user.get('id') if user else 0),
+    )
+    emit('admin_chat_recall_result', {'success': bool(recalled), 'recalled': recalled})
 
 
 @socketio.on('chat')

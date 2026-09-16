@@ -2019,6 +2019,13 @@ def init_db(
             'ON chat_messages(room_id, id DESC)'
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(sender_user_id, created_at)')
+        chat_message_columns = {
+            row['name'] for row in conn.execute('PRAGMA table_info(chat_messages)').fetchall()
+        }
+        if 'recalled_at' not in chat_message_columns:
+            conn.execute('ALTER TABLE chat_messages ADD COLUMN recalled_at TEXT')
+        if 'recalled_by' not in chat_message_columns:
+            conn.execute('ALTER TABLE chat_messages ADD COLUMN recalled_by TEXT')
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS muted_users (
@@ -7851,6 +7858,62 @@ def record_chat_message(room_id, channel, sender_user_id, sender_name, message, 
         )
         conn.commit()
         return cur.lastrowid
+
+
+def recall_chat_message(message_id, *, actor_user_id=0, actor_name=''):
+    """管理员撤回一条聊天消息（软删除：只置 hidden，原文保留便于追责）。
+
+    返回被撤回消息的定位信息（room_id/channel/发送者），供广播与占位提示使用。
+    """
+    try:
+        mid = int(message_id)
+    except (TypeError, ValueError):
+        return None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM chat_messages WHERE id = ?', (mid,)).fetchone()
+        if row is None:
+            return None
+        if not int(row['hidden'] or 0):
+            conn.execute(
+                '''
+                UPDATE chat_messages
+                SET hidden = 1, recalled_at = ?, recalled_by = ?
+                WHERE id = ?
+                ''',
+                (
+                    utc_now(),
+                    str(actor_name or actor_user_id or '')[:80],
+                    mid,
+                ),
+            )
+            conn.commit()
+        return {
+            'message_id': mid,
+            'room_id': row['room_id'],
+            'channel': row['channel'],
+            'sender_user_id': row['sender_user_id'],
+            'sender_name': row['sender_name'],
+            'hidden': int(row['hidden'] or 0),
+        }
+
+
+def recall_chat_messages_from_sender(sender_name, limit=20):
+    """按昵称（或玩家号）取最近的消息 id，供控制台批量撤回。"""
+    name = str(sender_name or '').strip()
+    if not name:
+        return []
+    safe_limit = max(1, min(int(limit or 20), 100))
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            '''
+            SELECT id FROM chat_messages
+            WHERE sender_name = ? AND hidden = 0
+            ORDER BY id DESC
+            LIMIT ?
+            ''',
+            (name, safe_limit),
+        ).fetchall()
+    return [int(row['id']) for row in rows]
 
 
 def list_lobby_chat_entries(beta_mode=False, limit=500):

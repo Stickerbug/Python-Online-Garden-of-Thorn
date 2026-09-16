@@ -6727,6 +6727,15 @@ body {
     font-weight: 800;
 }
 
+/* 反馈：管理员撤回聊天的占位提示要比普通消息略小一点。 */
+.chat-msg.chat-recall-entry,
+.battle-log .chat-recall-entry {
+    font-size: 0.92em;
+    font-style: italic;
+    color: var(--text-secondary);
+    opacity: 0.9;
+}
+
 .report-modal {
   display: grid;
   gap: 12px;

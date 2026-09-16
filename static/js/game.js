@@ -866,6 +866,7 @@ const I18N = {
         invite_declined: 'Invite declined', ongoing_games: 'Ongoing Games', spectate: 'Spectate', draft_info: 'Draft', draft_complete: 'Draft Complete',
         draft_waiting: 'Waiting for opponent to finish drafting', draft_cost: 'Cost', select_this_event: 'Select This Event',
         event_selected: 'Event selected: {0}', event_waiting: 'Waiting for opponent to select an event', event_reroll: 'Refresh', status_event_select: 'Selecting Event', status_drafting: 'Drafting', status_sub_choice: 'Event Setup', status_ready: 'Ready', drag_to_play: 'Drag to Play',
+        chat_recall_entry: 'Admin {0} recalled a message from {1}',
         drag_to_play_full: 'Drag here to play', tap_play_hint: 'Tap a card, then confirm to play', confirm_play: 'Play {0}', cancel_play: 'Cancel',
         classic_select_card: 'Choose a card',
         prediction_target: 'Target',
@@ -991,6 +992,7 @@ I18N.zh = { ...I18N.en,
     invite_sent: '邀请已发送', invite_received: '收到邀请', invite_message: '邀请你进行对战', invite_declined: '邀请被拒绝',
     ongoing_games: '进行中的对局', spectate: '观战', draft_info: '选牌', draft_complete: '选牌完成', draft_waiting: '等待对方完成选牌',
     draft_cost: '费用', select_this_event: '选择此事件', event_selected: '已选择事件：{0}', event_waiting: '等待对方选择事件', event_reroll: '刷新', status_event_select: '选择配装', status_drafting: '选牌中', status_sub_choice: '配装处理', status_ready: '已完成',
+    chat_recall_entry: '管理员{0}撤回了玩家{1}的一条消息',
     drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '攻击牌', enemy_skill: '技能牌', enemy_destroy_equip: '，摧毁装备',
     drag_to_play_full: '拖动到此处以出牌', tap_play_hint: '点击手牌后确认出牌', confirm_play: '打出 {0}', cancel_play: '取消出牌',
     classic_select_card: '选择一张手牌',
@@ -1115,6 +1117,7 @@ I18N.fr = { ...I18N.en,
     invite_sent: 'Invitation envoyée', invite_received: 'Invitation reçue', invite_message: 'vous invite à jouer', invite_declined: 'Invitation refusée',
     ongoing_games: 'Parties en cours', spectate: 'Observer', draft_info: 'Draft', draft_complete: 'Draft terminé', draft_waiting: "En attente de l'adversaire",
     draft_cost: 'Coût', select_this_event: 'Choisir cet événement', event_selected: 'Événement choisi', event_waiting: "En attente du choix de l'adversaire",
+    chat_recall_entry: "L'admin {0} a retiré un message de {1}",
     drag_to_play: 'Glisser pour jouer', cannot_play: 'Impossible de jouer',
     enemy_attack: 'Carte Épine', enemy_skill: 'Carte Floraison', enemy_destroy_equip: "Destruction d'équipement",
     use_card: 'Utiliser', insufficient_resources: 'Ressources insuffisantes', choose_attack_for: 'Choisir une attaque pour', choose_equip_for: 'Choisir un équipement',
@@ -1189,6 +1192,7 @@ I18N.ja = { ...I18N.en,
     invite_sent: '招待を送信しました', invite_received: '招待を受信しました', invite_message: 'が対戦に招待しています', invite_declined: '招待が拒否されました',
     ongoing_games: '進行中の対戦', spectate: '観戦', draft_info: 'ドラフト', draft_complete: 'ドラフト完了', draft_waiting: '相手のドラフト完了を待っています',
     draft_cost: 'コスト', select_this_event: 'このイベントを選択', event_selected: 'イベント選択済み', event_waiting: '相手のイベント選択を待っています',
+    chat_recall_entry: '管理者{0}が{1}のメッセージを取り消しました',
     drag_to_play: 'ドラッグしてプレイ', cannot_play: 'プレイ不可',
     enemy_attack: '攻撃カード', enemy_skill: 'スキルカード', enemy_destroy_equip: '、装備を破壊',
     use_card: '使用', insufficient_resources: 'リソース不足', choose_attack_for: '攻撃カードを選択', choose_equip_for: '装備を選択',
@@ -5363,6 +5367,61 @@ let pregameChatEntries = [];
 let pregameChatMatchKey = '';
 let lobbyChatHistorySignature = '';
 let lobbyChatEntries = [];
+// 管理员撤回：被撤回的消息 id（渲染时过滤掉）与占位提示（会话内保留）。
+const recalledChatMessageIds = new Set();
+const chatRecallNotices = [];
+
+function isRecalledChatEntry(entry) {
+    if (!entry || typeof entry !== 'object') return false;
+    const id = String(entry.message_id || entry.messageId || entry.id || '');
+    return !!id && recalledChatMessageIds.has(id);
+}
+
+function chatRecallNoticeText(notice) {
+    const template = UI.chat_recall_entry || '管理员{0}撤回了玩家{1}的一条消息';
+    const text = String(template)
+        .replace('{0}', String((notice && notice.actor_name) || '?'))
+        .replace('{1}', String((notice && notice.target_name) || '?'));
+    const count = Math.max(1, Number((notice && notice.count) || 1));
+    return count > 1 ? `${text} ×${count}` : text;
+}
+
+function applyChatRecall(data = {}) {
+    const ids = Array.isArray(data.message_ids) ? data.message_ids : [];
+    ids.forEach((id) => {
+        const text = String(id || '');
+        if (text) recalledChatMessageIds.add(text);
+    });
+    chatRecallNotices.push({
+        type: 'chat_recall',
+        scope: String(data.scope || 'lobby'),
+        room_id: String(data.room_id || ''),
+        actor_name: String(data.actor_name || ''),
+        target_name: String(data.target_name || ''),
+        count: Math.max(1, Number(data.count) || ids.length || 1),
+        ts: Date.now() / 1000,
+        system: true,
+    });
+    while (chatRecallNotices.length > 50) chatRecallNotices.shift();
+    const pruneRecalled = (list) => (Array.isArray(list) ? list.filter(entry => !isRecalledChatEntry(entry)) : list);
+    battleChatEntries = pruneRecalled(battleChatEntries);
+    pregameChatEntries = pruneRecalled(pregameChatEntries);
+    phaseChatEntries = pruneRecalled(phaseChatEntries);
+    lobbyChatEntries = pruneRecalled(lobbyChatEntries);
+    if (String(data.scope || '') === 'room') {
+        const notice = chatRecallNotices[chatRecallNotices.length - 1];
+        const noticeEntry = makeChatTimelineEntry('', chatRecallNoticeText(notice), { system: true, recall: true }, {});
+        noticeEntry.recall = true;
+        noticeEntry.matchKey = phaseContextMatchKey(gameState);
+        battleChatEntries = [...battleChatEntries, noticeEntry].slice(-500);
+    }
+    lobbyChatHistorySignature = '';
+    roomChatHistorySignature = '';
+    refreshBattleLogViews();
+    if (activeViewId === 'view-lobby') {
+        renderLobbyChatHistory({ items: lobbyChatEntries, mention_candidates: lobbyMentionDirectory });
+    }
+}
 let lobbyPlayers = [];
 let lobbyOngoingGames = [];
 let lastLobbyUpdateData = null;
@@ -16273,6 +16332,9 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('lobby_chat_history', (data) => {
         renderLobbyChatHistory(data || {});
+    });
+    bindSocketEvent('chat_recall', (data = {}) => {
+        applyChatRecall(data || {});
     });
     bindSocketEvent('dm_update', (data = {}) => {
         const previousFriendUnread = Number(socialData.unread_count || 0);
@@ -33469,6 +33531,14 @@ function appendLobbyChatEntry(entry = {}, options = {}) {
         if (shouldAutoScroll) container.scrollTop = container.scrollHeight;
         return;
     }
+    if (entry.type === 'chat_recall') {
+        const recallEl = document.createElement('div');
+        recallEl.className = 'chat-msg chat-recall-entry';
+        recallEl.textContent = chatRecallNoticeText(entry);
+        container.appendChild(recallEl);
+        if (shouldAutoScroll) container.scrollTop = container.scrollHeight;
+        return;
+    }
     const el = document.createElement('div');
     el.className = 'chat-msg';
     const nameSpan = document.createElement('span');
@@ -33515,7 +33585,7 @@ function renderLobbyChatHistory(data = {}) {
         Array.isArray(data.items) ? data.items : [],
         lobbyChatEntries,
         lobbyChatRepeatKey,
-    );
+    ).filter(entry => !isRecalledChatEntry(entry));
     const signature = JSON.stringify([currentLang, items.map(entry => [
         entry && entry.type,
         entry && entry.id,
@@ -33536,6 +33606,9 @@ function renderLobbyChatHistory(data = {}) {
     const previousScrollTop = container.scrollTop;
     container.innerHTML = '';
     items.forEach(entry => appendLobbyChatEntry(entry, { autoScroll: false }));
+    chatRecallNotices
+        .filter(notice => notice.scope !== 'room')
+        .forEach(notice => appendLobbyChatEntry(notice, { autoScroll: false }));
     if (shouldAutoScroll) {
         container.scrollTop = container.scrollHeight;
     } else {
