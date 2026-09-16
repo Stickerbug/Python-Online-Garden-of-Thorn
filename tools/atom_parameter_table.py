@@ -45,6 +45,43 @@ DEFAULT_OUT = ROOT / "docs" / "原子参数表.md"
 ENGINE_FILES = ("game_engine.py", "game_engine_2v2.py", "game_engine_urf.py")
 MODS_DIR = ROOT / "mods"
 
+# Round 82 / 批次 CC：**引擎侧的参数读取点搭桥表**——``op -> [game_engine 方法名]``。
+# 这些方法读的是同一步骤的参数对象，但不在该原子自己的调用链里（出牌主流程调用），
+# 所以参数抽取器默认跟不到，以前只能在《原子参数表》附录 E 里手工登记。
+ENGINE_PARAM_BRIDGES = {
+    # ``request``：窗口类型 / 是否可取消 / 取牌过滤条件。
+    "request": (
+        "_choice_type_for_effect",
+        "_choice_type_for_request",
+        "_choice_request_satisfied",
+        "_queue_card_choice",
+        "_effect_tree_allows_dead_target",
+        "_card_matches_filter",
+    ),
+    # ``move_card``：与 request 共用同一份取牌过滤（``filter.max_cost_e`` 等）。
+    "move_card": ("_card_matches_filter",),
+}
+
+# 搭桥时"这个助手读的是哪个对象 + 局部别名怎么映射"：
+#   ``_card_matches_filter(card, filter_spec, …)`` 里先把 ``filter_spec`` 收进
+#   ``spec`` 再读，所以要把 ``spec`` 绑到 ``filter_spec``；它读的是 ``filter``
+#   子对象，键统一加 ``filter.`` 前缀，免得和顶层同名键混淆。
+ENGINE_PARAM_BRIDGE_OBJECTS = {
+    # ``_card_matches_filter(card, filter_spec, …)`` 先把入参收进局部 ``spec`` 再读，
+    # 所以按局部名 ``spec`` 匹配（:func:`bridge_param_hits` 是纯名字匹配）。
+    "_card_matches_filter": ({"spec"}, {"spec": "filter_spec"}),
+    "_effect_tree_allows_dead_target": ({"node"}, {}),
+}
+ENGINE_PARAM_BRIDGE_PREFIXES = {"_card_matches_filter": "filter."}
+DEFAULT_BRIDGE_OBJECTS = ({"params", "filter_spec", "choice_params", "request_params"}, {})
+
+# Round 82 / 批次 CC：**前端读取的参数键**（引擎与运行时里读不到，但写卡有效）。
+FRONTEND_PARAM_KEYS = {
+    "request": {
+        "title": "static/js/game.js 的 choiceTitle 读 choice_params.title（窗口标题）",
+    },
+}
+
 # 表达式求值包装：被这些函数包住的 ``params.get(...)`` 参数支持"取值表达式"。
 EVAL_WRAPPERS = {
     "eval_v2_value",
@@ -389,6 +426,37 @@ def collect_param_hits(scope: ast.AST, objects, *, via: str = "", path: str = ""
             if other:
                 for text in other["defaults"]:
                     entry["defaults"].setdefault(text, True)
+    return hits
+
+
+def bridge_param_hits(node: ast.AST, objects, *, via: str) -> dict:
+    """搭桥用的小抽取器：把 ``node`` 里所有 ``<对象>.get('键')`` 收成参数命中。
+
+    Round 82 / 批次 CC：引擎侧的读取点常常是"局部变量 → ``.get``"的形态
+    （``choice_params`` / ``spec``），复用完整抽取器反而抽不到（它会按签名绑定过滤），
+    所以这里只做与 :func:`param_get_key` 同一套名字匹配，产出的条目形状与
+    ``hits`` 一致，直接交给 :func:`merge_hits`。
+    """
+
+    hits: dict[str, dict] = {}
+    for sub in ast.walk(node):
+        keys = param_get_key(sub, objects)
+        if not keys:
+            continue
+        default_node = sub.args[1] if len(sub.args) > 1 else None
+        for key in keys:
+            entry = hits.setdefault(
+                key,
+                {"defaults": {}, "expr": False, "bare": False, "via": set(), "paths": set(),
+                 "by_path": {}},
+            )
+            entry["via"].add(via)
+            entry["paths"].add("engine")
+            entry["bare"] = default_node is None
+            if default_node is not None:
+                text, _kind = default_node_text(default_node)
+                if text:
+                    entry["defaults"][text] = True
     return hits
 
 
@@ -1050,6 +1118,36 @@ def build(model: dict | None = None) -> dict:
     engine_atoms = engine_atom_index(methods, constants=constants,
                                      runtime_functions=runtime_functions,
                                      constant_values=constant_values)
+    # Round 82 / 批次 CC：``request`` 的窗口/过滤参数由**引擎侧**这几个函数读，而它们
+    # 不在 ``_atomic_request`` 的调用链里（是出牌主流程调的），抽取器跟不到 —— 以前只能
+    # 在附录 E 里手工登记。这里显式搭桥把它们抽进表；``_card_matches_filter`` 读的是
+    # ``filter`` 子对象，键名统一加 ``filter.`` 前缀，避免和顶层同名键混淆。
+    for op, helpers in ENGINE_PARAM_BRIDGES.items():
+        slot = engine_atoms.get(op)
+        if slot is None:
+            continue
+        for helper in helpers:
+            info = methods.get(helper)
+            # 注意：这些助手不一定有 ``params`` 形参（有的从 ``self._effect_params(effect)``
+            # 取，有的直接收 ``filter_spec``）——所以不按 ``has_params`` 过滤，只按
+            # "函数体里读到了哪个参数对象"来收。
+            if not info:
+                continue
+            objects, alias_bindings = ENGINE_PARAM_BRIDGE_OBJECTS.get(
+                helper, DEFAULT_BRIDGE_OBJECTS
+            )
+            hits = bridge_param_hits(info["node"], objects, via=helper)
+            prefix = ENGINE_PARAM_BRIDGE_PREFIXES.get(helper)
+            if prefix:
+                hits = {f"{prefix}{key}": value for key, value in hits.items()}
+            merge_hits(slot["hits"], hits)
+            if helper not in slot["helpers"]:
+                slot["helpers"].append(helper)
+        # 前端读的键（Python 侧读不到）也登记进来，写卡查表时才不会漏。
+        for key, note in (FRONTEND_PARAM_KEYS.get(op) or {}).items():
+            slot["hits"].setdefault(key, {"defaults": {}, "expr": False, "bare": True,
+                                          "via": set(), "paths": set(), "by_path": {}})
+            slot["hits"][key]["via"].add(note)
     doc = parse_doc_index(DOC_LIST)
     usage = scan_usage(MODS_DIR)
 
@@ -1344,26 +1442,10 @@ def category_sort_key(category: str) -> tuple:
 
 # Round 21 抽样校对：逐条对过源码，结论写进报告 ``.codex-tmp/round21/rd21.md``。
 # 参数不在 ``_atomic_*`` / 运行时分支里读的 op（人工核对过，附录 F）。
-OUT_OF_ATOM_PARAMS = (
-    ("request",
-     "`allowed`（`any`/`self`/`enemy`/`friendly`…，默认 `any`）、`alive_only`",
-     "`request(type:\"target\")` 的窗口参数由 `game_engine._choice_type_for_effect` / "
-     "`_queue_card_choice` 读（`game_engine.py` 第 7900 行附近）"),
-    ("request",
-     "`filter` 全套：`zone`/`owner`/`card_type`/`require_selectable`/`exclude_self`/`affordable`/`pay_ratio`/`min_count`…",
-     "`game_engine._choice_request_satisfied` 与选牌 UI 组装（`game_engine.py` 第 7396 行起）"),
-    # Round 40 / 批次 AE-2：``continue_on_cancel``（没有可选牌就跳过窗口）由
-    # ``_choice_request_satisfied`` 读；窗口标题 ``title`` 由前端读
-    # （``choiceTitle = fallback => choiceParams.title || fallback``）。
-    ("request",
-     "`continue_on_cancel`（缺省不写 = 必须选；true = 没有可选牌时窗口算「已满足」）、`title`（窗口标题）",
-     "`game_engine._choice_request_satisfied`（`game_engine.py` 第 7504 行起）/ 前端 `static/js/game.js` 的 `choiceTitle`"),
-    # Round 40 / 批次 AE-4：批量搬区域牌的花费/占位过滤键由
-    # ``_card_matches_filter`` 读（不是 ``params.get``，故不在上面的自动抽取里）。
-    ("move_card",
-     "`filter.max_cost_e` / `filter.min_cost_e`（按 ``CardInstance.cost_e`` 实际花费比对，可写表达式）、`filter.exclude_error`（跳过 Error 占位牌）",
-     "`game_engine._card_matches_filter`（`game_engine.py` 第 6563 行起）"),
-)
+# Round 82 / 批次 CC：``request`` / ``move_card`` 的窗口与 ``filter`` 参数已经从
+# "手工登记"变成**自动抽取**（见 ``ENGINE_PARAM_BRIDGES`` / ``FRONTEND_PARAM_KEYS``），
+# 所以这里不再重复列它们；这张表只留**真的读不到**的（目前为空，保留结构给以后）。
+OUT_OF_ATOM_PARAMS = ()
 SAMPLE_SPOT_CHECKS = (
     ("request", "`type`（target/card/confirm/zone/forced_target/discount_copy/reorder_deck）"
                 "选类别；`target` 类只写 `context['target_player']`", "一致"),
@@ -1646,7 +1728,11 @@ def render(model: dict) -> str:
     lines.append("")
     lines.append("## 附录 E：参数不在原子实现里读的 op（人工核对）")
     lines.append("")
-    lines.append("这些 op 的参数由引擎的其它管线消费，生成本表时抽不到，单独登记：")
+    lines.append(
+        "这些 op 的参数由引擎的其它管线消费，生成本表时抽不到，单独登记。"
+        "**目前为空**：``request`` / ``move_card`` 的窗口参数与 ``filter`` 子键已改成"
+        "自动抽取（见生成器里的 ``ENGINE_PARAM_BRIDGES`` 与 ``FRONTEND_PARAM_KEYS``）。"
+    )
     lines.append("")
     lines.append("| op | 参数 | 读取位置 |")
     lines.append("|---|---|---|")
