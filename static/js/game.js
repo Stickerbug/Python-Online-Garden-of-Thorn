@@ -10601,6 +10601,23 @@ function makeV2UiLabel(text) {
     return label;
 }
 
+// Round 76 / 批次 BU：控件没写文案时不要显示控件 id（那是英文名）。
+function appendV2UiLabel(row, text) {
+    const value = String(text ?? '').trim();
+    if (!row || !value) return;
+    row.appendChild(makeV2UiLabel(value));
+}
+
+// 按钮没写文案时按角色兜底成当前语言的"确定/取消"，而不是显示 id。
+function defaultV2ButtonText(button) {
+    const id = String(button?.id || '');
+    const role = String(button?.role || (id === 'cancel' ? 'cancel' : 'confirm'));
+    const zh = currentLang === 'zh';
+    if (role === 'cancel') return zh ? '取消' : 'Cancel';
+    if (role === 'close') return zh ? '关闭' : 'Close';
+    return zh ? '确定' : 'Confirm';
+}
+
 function showV2UiRequest(data = {}) {
     if (isSpectating) return;
     removeFloatingCardPreview();
@@ -10648,7 +10665,7 @@ function showV2UiRequest(data = {}) {
             p.textContent = getV2Text(control, 'text', labelText);
             row.appendChild(p);
         } else if (type === 'slider') {
-            row.appendChild(makeV2UiLabel(labelText));
+            appendV2UiLabel(row, labelText);
             const wrap = document.createElement('div');
             wrap.className = 'v2-ui-slider-row';
             const input = document.createElement('input');
@@ -10666,7 +10683,7 @@ function showV2UiRequest(data = {}) {
             wrap.appendChild(value);
             row.appendChild(wrap);
         } else if (type === 'number' || type === 'number_input') {
-            row.appendChild(makeV2UiLabel(labelText));
+            appendV2UiLabel(row, labelText);
             const input = document.createElement('input');
             input.type = 'number';
             input.min = Number(control.min ?? 0);
@@ -10679,7 +10696,7 @@ function showV2UiRequest(data = {}) {
             sync();
             row.appendChild(input);
         } else if (type === 'select') {
-            row.appendChild(makeV2UiLabel(labelText));
+            appendV2UiLabel(row, labelText);
             const select = document.createElement('select');
             select.className = 'v2-ui-select';
             (control.options || []).forEach(option => {
@@ -10694,7 +10711,7 @@ function showV2UiRequest(data = {}) {
             row.appendChild(select);
         } else if (type === 'checkbox') {
             // Round 71 / 批次 BK：单个开关（回应值是 true/false）。
-            row.appendChild(makeV2UiLabel(labelText));
+            appendV2UiLabel(row, labelText);
             const wrap = document.createElement('label');
             wrap.className = 'v2-ui-checkbox-row';
             const box = document.createElement('input');
@@ -10715,7 +10732,7 @@ function showV2UiRequest(data = {}) {
             row.appendChild(wrap);
         } else if (type === 'multi_select') {
             // Round 71 / 批次 BK：从 options 里选多个（回应值是字符串列表）。
-            row.appendChild(makeV2UiLabel(labelText));
+            appendV2UiLabel(row, labelText);
             const list = document.createElement('div');
             list.className = 'v2-ui-picker-list';
             const minSelect = Math.max(0, Number(control.min_select || 0));
@@ -10750,7 +10767,7 @@ function showV2UiRequest(data = {}) {
             controlState[control.id] = [...selectedValues];
             row.appendChild(list);
         } else if (type === 'card_picker' || type === 'equipment_picker' || type === 'multi_card_picker' || type === 'multi_equipment_picker' || type === 'card_catalog_picker' || type === 'player_picker' || type === 'target_picker') {
-            row.appendChild(makeV2UiLabel(labelText));
+            appendV2UiLabel(row, labelText);
             const list = document.createElement('div');
             list.className = 'v2-ui-picker-list';
             const multi = type === 'multi_card_picker' || type === 'multi_equipment_picker';
@@ -10813,7 +10830,7 @@ function showV2UiRequest(data = {}) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `btn ${button.role === 'cancel' || button.id === 'cancel' ? 'secondary' : 'primary'}`;
-        btn.textContent = getV2Text(button, 'text', button.id || 'OK');
+        btn.textContent = getV2Text(button, 'text', '') || defaultV2ButtonText(button);
         btn.addEventListener('click', () => {
             if (!canSendGameAction('v2_ui_response', { includeAnimation: false })) return;
             hideModal();

@@ -520,6 +520,73 @@ def target_selector_consistency(mods_dir: pathlib.Path) -> dict:
     return {"checked": checked, "vocabulary": len(vocabulary), "unknown": unknown, "problems": problems}
 
 
+def _ui_component_text_issues(component: dict) -> list:
+    """某个 ``request_ui`` 组件里"显示不出中文"的地方（Round 76 / 批次 BU）。"""
+
+    issues = []
+    if not (component.get("title_cn") or component.get("title")):
+        issues.append("组件没有标题（title_cn）")
+    for index, control in enumerate(component.get("controls") or []):
+        if not isinstance(control, dict):
+            continue
+        cid = str(control.get("id") or f"#{index}")
+        ctype = str(control.get("type") or "text")
+        if ctype == "text":
+            if not (control.get("text_cn") or control.get("text")):
+                issues.append(f"控件 {cid}（text）没有 text_cn")
+        elif not (control.get("label_cn") or control.get("label")
+                   or control.get("text_cn") or control.get("text")):
+            issues.append(f"控件 {cid}（{ctype}）没有 label_cn（界面会没有标题）")
+        for option_index, option in enumerate(control.get("options") or []):
+            if isinstance(option, dict) and not (option.get("label_cn") or option.get("label")):
+                issues.append(f"控件 {cid} 的选项[{option_index}]没有 label_cn")
+    for index, button in enumerate(component.get("buttons") or []):
+        if not isinstance(button, dict):
+            continue
+        bid = str(button.get("id") or f"#{index}")
+        if not (button.get("text_cn") or button.get("label_cn")
+                or button.get("text") or button.get("label")):
+            issues.append(f"按钮 {bid} 没有 text_cn（会按角色兜底成“确定”）")
+    return issues
+
+
+def ui_text_consistency(mods_dir: pathlib.Path) -> dict:
+    """Round 76 / 批次 BU：官方包里每个 ``request_ui`` 组件都必须有**中文文案**。
+
+    以前按钮只认 ``text*``、控件没文案时回落**控件 id**，于是机械触角窗口里出现了
+    ``confirm`` / ``pick``。现在引擎两套键都认、控件不再回落 id，这条检查负责盯住
+    "卡数据到底写没写中文"（中文是卡面第一语言，见用户规则）。
+    """
+
+    components = 0
+    problems = []
+    for path in sorted(mods_dir.glob("*.gtnmod")):
+        try:
+            with zipfile.ZipFile(path) as archive:
+                payload = json.loads(archive.read("mod.json"))
+        except Exception:
+            continue
+        for registry, resource in iter_registry_resources(payload):
+            lists = []
+            root_step_lists(resource, lists)
+            if not lists:
+                continue
+            resource_id = str(resource.get("id") or "")
+            found = []
+
+            def visit(step, op, _found=found, _registry=registry):
+                if op == "request_ui" and isinstance(step.get("component"), dict):
+                    _found.append(step["component"])
+
+            for steps in lists:
+                walk_steps(steps, visit)
+            for component in found:
+                components += 1
+                for issue in _ui_component_text_issues(component):
+                    problems.append(f"{path.name}:{registry}:{resource_id} —— {issue}")
+    return {"components": components, "problems": problems}
+
+
 def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = None) -> dict:
     core_ops = set(getattr(mod_spec_v2, "_CORE_LOGIC_OPS", set()) or set())
     valid_ops = set(getattr(mod_spec_v2, "VALID_LOGIC_OPS", set()) or set())
@@ -588,6 +655,8 @@ def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = 
         "target_selectors": target_selector_consistency(
             mods_dir if mods_dir is not None else ROOT / "mods"
         ),
+        # Round 76 / 批次 BU：request_ui 组件的文案必须有中文（不能显示英文/控件 id）。
+        "ui_text": ui_text_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
         "secret_ops_used": [
             {"op": op, "cards": usage[op]["cards"], "packages": sorted(usage[op]["packages"])}
             for op in secret_used
@@ -701,6 +770,15 @@ def render_text(summary: dict) -> str:
         for item in selectors.get("unknown") or []:
             lines.append(f"  [失败] {item['value']!r} @ {item['resources'][:2]}")
         lines.append("")
+    ui_text = summary.get("ui_text") or {}
+    if ui_text:
+        lines.append(
+            f"== request_ui 文案（中文优先）: 组件 {ui_text.get('components', 0)} 个，"
+            f"缺中文文案的 {len(ui_text.get('problems') or [])} 处 =="
+        )
+        for problem in (ui_text.get("problems") or [])[:8]:
+            lines.append(f"  [失败] {problem}")
+        lines.append("")
     if hooks:
         lines.append(
             f"== 包级事件钩子（event_hooks 白名单）: 登记 {hooks['declared']} 个，"
@@ -796,6 +874,8 @@ def main(argv=None) -> int:
         or (summary.get("event_hooks") or {}).get("problems")
         # Round 72 / 批次 BM：卡数据的选择器名字必须在两层词表里。
         or (summary.get("target_selectors") or {}).get("problems")
+        # Round 76 / 批次 BU：request_ui 组件的文案必须有中文。
+        or (summary.get("ui_text") or {}).get("problems")
     ):
         return 1
     return 0

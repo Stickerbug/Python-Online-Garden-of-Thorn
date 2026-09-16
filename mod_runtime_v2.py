@@ -3137,9 +3137,14 @@ def _sanitize_ui_component(engine, context: Dict[str, Any], component: Dict[str,
             continue
         safe_buttons.append({
             "id": bid,
-            "text": str(button.get("text") or ""),
-            "text_cn": str(button.get("text_cn") or button.get("text") or bid),
-            "text_en": str(button.get("text_en") or button.get("text") or bid),
+            # Round 76 / 批次 BU：按钮文案以前**只认** ``text``/``text_cn``/``text_en``，
+            # 卡数据写 ``label_cn``/``label_en`` 会被静默丢掉、按钮显示成 id
+            # （机械触角窗口里的 "confirm" 就是这个原因）。现在两套键都认。
+            "text": str(button.get("text") or button.get("label") or ""),
+            "text_cn": str(button.get("text_cn") or button.get("label_cn")
+                            or button.get("text") or button.get("label") or ""),
+            "text_en": str(button.get("text_en") or button.get("label_en")
+                            or button.get("text") or button.get("label") or ""),
             "role": str(button.get("role") or ("cancel" if bid == "cancel" else "confirm")),
         })
     if not safe_buttons:
@@ -3168,8 +3173,13 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
         "id": cid,
         "type": ctype,
         "label": str(control.get("label") or ""),
-        "label_cn": str(control.get("label_cn") or control.get("label") or cid),
-        "label_en": str(control.get("label_en") or control.get("label") or cid),
+        # Round 76 / 批次 BU：控件文案同样两套键都认（``label*`` / ``text*``）；
+        # 什么都没写时**不再回落控件 id**——id 是英文名（"pick"），显示出来就是
+        # 英文泄漏。空值交给客户端按控件类型兜底或不显示标题。
+        "label_cn": str(control.get("label_cn") or control.get("label")
+                        or control.get("text_cn") or control.get("text") or ""),
+        "label_en": str(control.get("label_en") or control.get("label")
+                        or control.get("text_en") or control.get("text") or ""),
     }
     if ctype in ("slider", "number", "number_input"):
         min_value = _to_number(eval_v2_value(engine, context, control.get("min", 0)))
