@@ -573,8 +573,9 @@
     "level_3": "mask_flag",
     "level_4": "reject_mute",
     "notes": [
-      "广告、色情、网址默认只标记或打码，不全量拦截。",
-      "政治类默认 level 1，仅后台记录。",
+      "色情、政治、黑名单网址默认 level 3：打码后仍然发出，不整条拦截。",
+      "广告第三方词表保持 level 2（含 网络/客服/招聘 等常见词，只标记不误伤）；精确的广告/交易词条见 static/data/moderation_manual.json。",
+      "辱骂、色情、政治、广告、非法交易、隐私的手工高频词表见 static/data/moderation_manual.json，改文件即热加载。",
       "stopword.dic 不作为敏感词导入。"
     ]
   },
@@ -782,10 +783,10 @@
       "type": "term_list"
     },
     {
-      "action": "allow_flag",
+      "action": "mask_flag",
       "category": "sexual",
       "id": "third_party.sexual",
-      "level": 2,
+      "level": 3,
       "source": "fwwdn/sensitive-stop-words:色情类.txt",
       "target": "normalized",
       "terms": [
@@ -1561,10 +1562,10 @@
       "type": "term_list"
     },
     {
-      "action": "allow_flag",
+      "action": "mask_flag",
       "category": "url",
       "id": "third_party.url_blacklist",
-      "level": 2,
+      "level": 3,
       "source": "fwwdn/sensitive-stop-words:网址.txt",
       "target": "raw",
       "terms": [
@@ -16140,10 +16141,10 @@
       "type": "domain_list"
     },
     {
-      "action": "allow_log",
+      "action": "mask_flag",
       "category": "political",
-      "id": "third_party.political_log_only",
-      "level": 1,
+      "id": "third_party.political",
+      "level": 3,
       "source": "fwwdn/sensitive-stop-words:政治类.txt",
       "target": "normalized",
       "terms": [

@@ -7,6 +7,9 @@ import unicodedata
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_RULES_PATH = os.path.join(BASE_DIR, 'static', 'data', 'moderation_rules.json')
+# 手工维护的高频违禁词（辱骂/色情/政治/广告/非法交易/隐私）。改这个文件即热加载，
+# 不需要重新生成 moderation_rules.json，也不需要重启服务。
+DEFAULT_MANUAL_PATH = os.path.join(BASE_DIR, 'static', 'data', 'moderation_manual.json')
 
 REPORT_CATEGORIES = {
     'chat_message': {'abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment', 'other'},
@@ -35,7 +38,7 @@ ACTION_BY_LEVEL = {
 
 NICKNAME_BLOCK_LEVEL = 3
 GUEST_NICKNAME_BLOCK_LEVEL = 2
-NICKNAME_ALWAYS_BLOCK_CATEGORIES = {'sexual', 'political'}
+NICKNAME_ALWAYS_BLOCK_CATEGORIES = {'sexual', 'political', 'abusive'}
 
 _RESERVED_LONG_NICKNAMES = ('phelren', 'stickerbug', 'netherdog')
 _RESERVED_NICKNAME_DISPLAY = {
@@ -232,11 +235,17 @@ def _default_rules():
 def _load_rules():
     global _RULE_CACHE, _RULE_CACHE_MTIME
     path = os.environ.get('GTN_MODERATION_RULES_PATH', DEFAULT_RULES_PATH)
+    manual_path = os.environ.get('GTN_MODERATION_MANUAL_PATH', DEFAULT_MANUAL_PATH)
     try:
         mtime = os.path.getmtime(path)
     except OSError:
         mtime = None
-    if _RULE_CACHE is not None and _RULE_CACHE_MTIME == mtime:
+    try:
+        manual_mtime = os.path.getmtime(manual_path)
+    except OSError:
+        manual_mtime = None
+    cache_key = (mtime, manual_mtime)
+    if _RULE_CACHE is not None and _RULE_CACHE_MTIME == cache_key:
         return _RULE_CACHE
     data = _default_rules()
     if mtime is not None:
@@ -251,6 +260,9 @@ def _load_rules():
                 data['reject_rules'] = list(loaded.get('reject_rules') or data.get('reject_rules') or [])
         except Exception:
             pass
+    manual_rules = _load_manual_rules(manual_path)
+    if manual_rules:
+        data['rules'] = list(data.get('rules') or []) + manual_rules
     data['_allowlist_normalized'] = {
         normalize_message(term)
         for term in data.get('allowlist') or []
@@ -267,8 +279,68 @@ def _load_rules():
                 if isinstance(term, str) and normalize_message(term)
             ]
     _RULE_CACHE = data
-    _RULE_CACHE_MTIME = mtime
+    _RULE_CACHE_MTIME = cache_key
     return data
+
+
+def _load_manual_rules(path):
+    """把手工词表转换成规则（支持 terms 与 regex patterns），文件改了立即生效。"""
+    if not path or not os.path.exists(path):
+        return []
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            doc = json.load(handle)
+    except Exception:
+        return []
+    categories = doc.get('categories') if isinstance(doc, dict) else None
+    if not isinstance(categories, dict):
+        return []
+    rules = []
+    for key, spec in categories.items():
+        if not isinstance(spec, dict):
+            continue
+        category = str(spec.get('category') or 'manual').strip().lower()[:80]
+        try:
+            level = max(0, min(int(spec.get('level', 3) or 3), 4))
+        except (TypeError, ValueError):
+            level = 3
+        terms = [
+            term for term in (spec.get('terms') or [])
+            if isinstance(term, str) and term.strip()
+        ]
+        if terms:
+            rules.append({
+                'id': f'manual.{key}',
+                'category': category,
+                'type': 'term_list',
+                'target': 'normalized',
+                'level': level,
+                'action': ACTION_BY_LEVEL.get(level, 'mask_flag'),
+                'terms': terms,
+                'source': 'GTN manual terms',
+            })
+        for index, pattern_spec in enumerate(list(spec.get('patterns') or [])):
+            if not isinstance(pattern_spec, dict):
+                continue
+            pattern = str(pattern_spec.get('pattern') or '').strip()
+            if not pattern:
+                continue
+            try:
+                pattern_level = max(0, min(int(pattern_spec.get('level', level) or level), 4))
+            except (TypeError, ValueError):
+                pattern_level = level
+            suffix = str(pattern_spec.get('id_suffix') or index).strip()[:40] or str(index)
+            rules.append({
+                'id': f'manual.{key}.{suffix}',
+                'category': category,
+                'type': 'regex',
+                'target': str(pattern_spec.get('target') or 'raw'),
+                'level': pattern_level,
+                'action': ACTION_BY_LEVEL.get(pattern_level, 'mask_flag'),
+                'pattern': pattern,
+                'source': 'GTN manual patterns',
+            })
+    return rules
 
 
 def _rule_level(rule):

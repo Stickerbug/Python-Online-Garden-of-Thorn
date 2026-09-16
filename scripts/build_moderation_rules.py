@@ -231,15 +231,15 @@ def build_rules() -> dict:
              pattern=r"(外挂|代练|交易|收号|卖号|群|加群|联系方式).{0,16}(qq|vx|微信|q群|群号|手机号|http|www)"),
         rule("third_party.advertising", category="advertising", level=2, terms=ad_terms,
              source="fwwdn/sensitive-stop-words:广告.txt"),
-        rule("third_party.sexual", category="sexual", level=2, terms=sexual_terms,
+        rule("third_party.sexual", category="sexual", level=3, terms=sexual_terms,
              source="fwwdn/sensitive-stop-words:色情类.txt"),
         rule("manual.sexual_severe", category="sexual", level=4, terms=severe_sexual_terms,
              source="GTN manually maintained severe subset"),
         rule("third_party.weapon_explosive_illegal", category="illegal_goods", level=4,
              terms=illegal_weapon_terms, source="fwwdn/sensitive-stop-words:涉枪涉爆违法信息关键词.txt"),
-        rule("third_party.url_blacklist", category="url", rtype="domain_list", target="raw", level=2,
+        rule("third_party.url_blacklist", category="url", rtype="domain_list", target="raw", level=3,
              terms=url_terms, source="fwwdn/sensitive-stop-words:网址.txt"),
-        rule("third_party.political_log_only", category="political", level=1, terms=political_terms,
+        rule("third_party.political", category="political", level=3, terms=political_terms,
              source="fwwdn/sensitive-stop-words:政治类.txt"),
     ]
 
@@ -261,8 +261,11 @@ def build_rules() -> dict:
             "level_3": "mask_flag",
             "level_4": "reject_mute",
             "notes": [
-                "广告、色情、网址默认只标记或打码，不全量拦截。",
-                "政治类默认 level 1，仅后台记录。",
+                "色情、政治、黑名单网址默认 level 3：打码后仍然发出，不整条拦截。",
+                "广告第三方词表保持 level 2（含 网络/客服/招聘 等常见词，只标记不误伤）；"
+                "精确的广告/交易词条见 static/data/moderation_manual.json。",
+                "辱骂、色情、政治、广告、非法交易、隐私的手工高频词表见 "
+                "static/data/moderation_manual.json，改文件即热加载。",
                 "stopword.dic 不作为敏感词导入。",
             ],
         },
