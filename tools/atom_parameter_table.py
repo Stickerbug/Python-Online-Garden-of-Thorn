@@ -1710,6 +1710,11 @@ def render(model: dict) -> str:
     lines.append("")
     lines.append("写卡时按「两条路径取交集」最安全；这一节列的是运行时分支与引擎原子对同一个键给了不同默认值的地方。")
     lines.append("")
+    lines.append(
+        "> 每条差异的**官方数据显式写出率**与「省略后果」逐条判定见"
+        "[《默认值差异判定清单》](默认值差异判定清单.md)（Round 82 / 批次 CD）。"
+    )
+    lines.append("")
     if conflicts:
         lines.append("| 原子 | 参数与默认值 |")
         lines.append("|---|---|")
