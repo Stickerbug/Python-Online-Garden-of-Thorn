@@ -103,6 +103,27 @@ class RealStatusStackDamageTests(unittest.TestCase):
         blob = json.dumps(berry, ensure_ascii=False)
         self.assertIn('"ignore_immunity": true', blob)
 
+    def test_every_official_status_stack_reads_real_stacks(self):
+        """按用户的决定：官方牌里所有 `status_stack` 都按真实层数结算。"""
+        missing = []
+
+        def walk(node, card_id):
+            if isinstance(node, dict):
+                if node.get('op') == 'status_stack' and node.get('ignore_immunity') is not True:
+                    missing.append(card_id)
+                for value in node.values():
+                    walk(value, card_id)
+            elif isinstance(node, list):
+                for value in node:
+                    walk(value, card_id)
+
+        for package in sorted((ROOT / 'mods').glob('*.gtnmod')):
+            with zipfile.ZipFile(package) as archive:
+                data = json.loads(archive.read('mod.json').decode('utf-8'))
+            for card in (data.get('registries') or {}).get('cards') or []:
+                walk(card, f"{package.name}:{card.get('legacy_id') or card.get('id')}")
+        self.assertEqual(missing, [])
+
 
 if __name__ == '__main__':
     unittest.main()
