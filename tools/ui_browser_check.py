@@ -41,6 +41,10 @@ from game_engine import EquipmentInstance, GameEngine  # noqa: E402
 TEMP_NAME = "_codex_ui_harness.json"
 TEMP_NAME_2 = "_codex_ui_harness_conditional.json"
 TEMP_NAME_3 = "_codex_ui_harness_tabs.json"
+TEMP_NAME_4 = "_codex_ui_harness_fields.json"
+# 违禁词过滤实测用的样例（moderation.check_message_risk → 等级 3）：
+# moderation="reject" 必须拒、="off" 必须放行、默认 "mask" 打码后放行。
+RISKY_TEXT = "你这个傻逼"
 TEXT_TYPES = ("text", "dynamic_text", "divider", "warning_text", "preview_value")
 NUMBER_TYPES = ("slider", "number", "number_input")
 CHOICE_TYPES = ("select", "radio_group", "multi_select", "card_catalog_picker")
@@ -96,11 +100,37 @@ EVAL_SCRIPT = (
     " if (tabButtons[1]) tabButtons[1].click();"
     " const afterSwitch = [paneVisible(panes[0]), paneVisible(panes[1])];"
     " for (const btn of [...document.querySelectorAll('#modal-content .v2-ui-buttons button')]) btn.click();"
+    # 第四阶段：字段实测（输入记忆 / 文本输入属性 / 开关 / 多选默认值 / 违禁词载荷）。
+    " const fields = await (await fetch('/static/" + TEMP_NAME_4 + "?ts=' + Date.now())).json();"
+    " const captured4 = [];"
+    " window.emitModeEvent = (...args) => { captured4.push(args); };"
+    " window.canSendGameAction = () => true;"
+    " window.showV2UiRequest({ request_id: 'harness-4', component: fields });"
+    " const rows4 = [...document.querySelectorAll('#modal-content .v2-ui-control')];"
+    " const memoSelect = rows4[0] ? rows4[0].querySelector('select') : null;"
+    " const guardInput = rows4[1] ? rows4[1].querySelector('input') : null;"
+    " const flagBox = rows4[2] ? rows4[2].querySelector('input') : null;"
+    " const pickButtons = rows4[3] ? [...rows4[3].querySelectorAll('.v2-ui-picker-option')] : [];"
+    " const numInput = rows4[4] ? rows4[4].querySelector('input') : null;"
+    " const helpText = rows4[1] ? ((rows4[1].querySelector('.v2-ui-help') || {}).textContent || '') : '';"
+    " const picksSelected = pickButtons.filter(b => b.classList.contains('selected')).map(b => b.dataset.value);"
+    " if (guardInput) { guardInput.value = '" + RISKY_TEXT + "';"
+    "  guardInput.dispatchEvent(new Event('input', { bubbles: true })); }"
+    " const guardTyped = guardInput ? guardInput.value : '';"
+    " for (const btn of [...document.querySelectorAll('#modal-content .v2-ui-buttons button')]) btn.click();"
+    " const fieldPayloads = captured4.map(args => ({ event: args[0], kind: args[1], data: args[2] }));"
     " return JSON.stringify({ rowCount: rows.length, rows,"
     "  buttonTexts: buttons.map(b => b.textContent),"
     "  payloads: captured.map(args => ({ event: args[0], kind: args[1], data: args[2] })),"
     "  conditional: { hiddenInitially, shownAfter, lockedDisabled, timeoutText },"
-    "  tabs: { buttons: tabButtons.map(b => b.textContent), beforeSwitch, afterSwitch } });"
+    "  tabs: { buttons: tabButtons.map(b => b.textContent), beforeSwitch, afterSwitch },"
+    "  fields: { memo: memoSelect ? memoSelect.value : null,"
+    "   guardMaxLength: guardInput ? guardInput.maxLength : null,"
+    "   guardPlaceholder: guardInput ? guardInput.placeholder : '',"
+    "   guardValue: guardInput ? guardInput.value : '',"
+    "   guardTyped, helpText, flagChecked: flagBox ? flagBox.checked : null,"
+    "   picksSelected, numValue: numInput ? Number(numInput.value) : null,"
+    "   payload: fieldPayloads.length ? fieldPayloads[0].data : null } });"
     " }"
 )
 
@@ -201,14 +231,70 @@ def tabbed_component() -> dict:
     return RT._sanitize_ui_component(engine, context, component)
 
 
+def fields_component(moderation: str = "reject") -> tuple:
+    """第四阶段：**字段实测**（返回 ``(净化后的组件, 引擎, 上下文)``）。
+
+    覆盖四件事：
+
+    * ``default_from``（输入记忆）：玩家 ``custom_vars`` 里的值要变成控件的默认值；
+    * ``text_input`` 的属性：``max_length`` → maxlength、``placeholder_cn``、``default``、``help_text``；
+    * ``checkbox`` / ``multi_select`` / ``number_input`` 的默认值；
+    * 违禁词载荷：客户端把玩家输入的原文发出去，服务端按 ``moderation`` 策略收/拒。
+    """
+
+    engine = GameEngine()
+    engine.phase = "action"
+    engine.current_player = 0
+    engine.player_names = ["P1", "P2"]
+    engine.players[0].custom_vars = {"memo_value": "b"}
+    context = {"source_player": 0, "target_player": 1, "vars": {}, "card": None}
+    component = {
+        "type": "modal",
+        "title_cn": "字段实测",
+        "controls": [
+            {"id": "memo", "type": "select", "label_cn": "记忆选项",
+             "options": [{"value": "a", "label_cn": "甲"}, {"value": "b", "label_cn": "乙"}],
+             "default_from": {"player_var": "memo_value"}},
+            {"id": "guard", "type": "text_input", "label_cn": "口令", "max_length": 8,
+             "placeholder_cn": "输入口令", "default": "abc", "required": True,
+             "help_text": "最多 8 个字", "moderation": moderation},
+            {"id": "flag", "type": "checkbox", "label_cn": "开关", "default": True},
+            {"id": "picks", "type": "multi_select", "label_cn": "多选",
+             "options": [{"value": "a", "label_cn": "甲"}, {"value": "b", "label_cn": "乙"}],
+             "min_select": 1, "max_select": 2, "default": ["a"]},
+            {"id": "num", "type": "number_input", "label_cn": "数字",
+             "min": 0, "max": 9, "step": 1, "default": 3},
+        ],
+        "buttons": [{"id": "confirm", "role": "confirm", "text_cn": "确定"}],
+    }
+    return RT._sanitize_ui_component(engine, context, component), engine, context
+
+
+def moderation_check(values: dict, moderation: str) -> tuple:
+    """把浏览器抓到的载荷丢回服务端响应校验（真链路的最后一环）。
+
+    返回 ``(是否放行, 校验后的值)``：被拒时第二个元素是 ``None``。
+    """
+
+    component, engine, context = fields_component(moderation=moderation)
+    try:
+        normalized = RT.validate_v2_ui_response(
+            engine, context, component, {"button": "confirm", "values": values})
+    except RT.V2RuntimeError:
+        return False, None
+    return True, normalized
+
+
 def run_browser(url: str, timeout: int) -> dict:
     static_dir = ROOT / "static"
     temp = static_dir / TEMP_NAME
     temp2 = static_dir / TEMP_NAME_2
     temp3 = static_dir / TEMP_NAME_3
+    temp4 = static_dir / TEMP_NAME_4
     temp.write_text(json.dumps(sanitized_component(), ensure_ascii=False), encoding="utf-8")
     temp2.write_text(json.dumps(conditional_component(), ensure_ascii=False), encoding="utf-8")
     temp3.write_text(json.dumps(tabbed_component(), ensure_ascii=False), encoding="utf-8")
+    temp4.write_text(json.dumps(fields_component()[0], ensure_ascii=False), encoding="utf-8")
     try:
         # Windows 上 npx 是 .cmd，必须经 cmd.exe 起（直接 CreateProcess 找不到）。
         npx = shutil.which("npx") or shutil.which("npx.cmd")
@@ -226,6 +312,7 @@ def run_browser(url: str, timeout: int) -> dict:
         temp.unlink(missing_ok=True)
         temp2.unlink(missing_ok=True)
         temp3.unlink(missing_ok=True)
+        temp4.unlink(missing_ok=True)
     payload = result.stdout.strip()
     if payload.startswith('"') and payload.endswith('"'):
         payload = json.loads(payload)
@@ -285,6 +372,54 @@ def main(argv=None) -> int:
             problems.append(f"tab 分页：默认页不对（{tabs.get('beforeSwitch')}）")
         if tabs.get("afterSwitch") != [False, True]:
             problems.append(f"tab 分页：切换后页状态不对（{tabs.get('afterSwitch')}）")
+    # 第四阶段：字段实测 + 违禁词链路（浏览器抓载荷 → 服务端响应校验）。
+    fields = data.get("fields") or {}
+    if not fields:
+        problems.append("字段实测阶段没有拿到数据（第四阶段脚本没跑？）")
+    else:
+        printed = dict(fields)
+        printed["payload"] = (fields.get("payload") or {}).get("values")
+        print("字段实测：", json.dumps(printed, ensure_ascii=False))
+        if fields.get("memo") != "b":
+            problems.append(f"default_from（输入记忆）没生效：select 默认值 {fields.get('memo')!r} != 'b'")
+        if fields.get("guardMaxLength") != 8:
+            problems.append(f"text_input 的 maxlength 没挂上：{fields.get('guardMaxLength')!r} != 8")
+        if fields.get("guardPlaceholder") != "输入口令":
+            problems.append(f"text_input 的 placeholder 没渲染：{fields.get('guardPlaceholder')!r}")
+        if fields.get("guardValue") != RISKY_TEXT:
+            problems.append(f"text_input 没有接受输入：{fields.get('guardValue')!r}")
+        if fields.get("helpText") != "最多 8 个字":
+            problems.append(f"help_text 没渲染：{fields.get('helpText')!r}")
+        if fields.get("flagChecked") is not True:
+            problems.append(f"checkbox 的默认值没勾上：{fields.get('flagChecked')!r}")
+        if fields.get("picksSelected") != ["a"]:
+            problems.append(f"multi_select 的默认选项没选上：{fields.get('picksSelected')!r}")
+        if fields.get("numValue") != 3:
+            problems.append(f"number_input 的默认值不对：{fields.get('numValue')!r}")
+        values = ((fields.get("payload") or {}).get("values")) or {}
+        if values.get("guard") != RISKY_TEXT:
+            problems.append(f"提交载荷里的文本不是玩家输入的原文：{values.get('guard')!r}")
+        if values.get("flag") is not True:
+            problems.append(f"checkbox 载荷应是布尔 true，实际 {values.get('flag')!r}")
+        if values.get("picks") != ["a"]:
+            problems.append(f"multi_select 载荷应是 ['a']，实际 {values.get('picks')!r}")
+        if values.get("num") != 3:
+            problems.append(f"number_input 载荷应是 3，实际 {values.get('num')!r}")
+        if values:
+            rejected_ok, _ = moderation_check(values, "reject")
+            off_ok, _ = moderation_check(values, "off")
+            mask_ok, masked = moderation_check(values, "mask")
+            if rejected_ok:
+                problems.append("moderation=reject 没有拦住等级 3 的违禁词（服务端放行了）")
+            if not off_ok:
+                problems.append("moderation=off 误拦了文本（应当不过滤）")
+            if not mask_ok:
+                problems.append("moderation=mask 误拦了等级 3 的文本（应当打码放行）")
+            elif masked and (masked.get("values") or {}).get("guard") == RISKY_TEXT:
+                problems.append("moderation=mask 放行了原文，没有打码")
+            print(f"违禁词链路：reject={'拦下' if not rejected_ok else '放行'} / "
+                  f"off={'放行' if off_ok else '拦下'} / mask={'打码放行' if mask_ok else '拦下'}"
+                  f"（掩码后 {((masked or {}).get('values') or {}).get('guard')!r}）")
     for problem in problems:
         print("  [失败]", problem)
     print("UI 浏览器实测：", "OK" if not problems else f"{len(problems)} 个问题")

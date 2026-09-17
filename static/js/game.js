@@ -10952,6 +10952,13 @@ function showV2UiRequest(data = {}) {
                 opt.textContent = getV2Text(option, 'label', String(option.label || option.value));
                 select.appendChild(opt);
             });
+            // Round 95 / 批次 CR：``select`` 的 ``default``（含 ``default_from`` 输入记忆
+            // 在服务端解析出来的值，批次 CL）以前只有服务端算、客户端没接——永远显示第一项。
+            const preset = control.default === undefined || control.default === null
+                ? '' : String(control.default);
+            if (preset && Array.from(select.options).some(option => option.value === preset)) {
+                select.value = preset;
+            }
             const sync = () => { controlState[control.id] = select.value; };
             select.addEventListener('change', sync);
             sync();
@@ -11059,9 +11066,14 @@ function showV2UiRequest(data = {}) {
                     selectedValues.push(String(option.dataset.value));
                 });
                 controlState[control.id] = [...selectedValues];
-            } else if (pickerOptions[0]) {
-                pickerOptions[0].classList.add('selected');
-                controlState[control.id] = pickerOptions[0].dataset.value;
+            } else if (pickerOptions.length) {
+                // Round 95 / 批次 CR：``card_catalog_picker`` 与 ``select`` 共用服务端的
+                // ``default`` 解析（批次 CL），客户端以前只认第一项。
+                const preset = control.default === undefined || control.default === null
+                    ? '' : String(control.default);
+                const chosen = pickerOptions.find(option => option.dataset.value === preset) || pickerOptions[0];
+                chosen.classList.add('selected');
+                controlState[control.id] = chosen.dataset.value;
             }
             row.appendChild(list);
         }
