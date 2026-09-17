@@ -40,6 +40,7 @@ from game_engine import EquipmentInstance, GameEngine  # noqa: E402
 
 TEMP_NAME = "_codex_ui_harness.json"
 TEMP_NAME_2 = "_codex_ui_harness_conditional.json"
+TEMP_NAME_3 = "_codex_ui_harness_tabs.json"
 TEXT_TYPES = ("text", "dynamic_text", "divider", "warning_text", "preview_value")
 NUMBER_TYPES = ("slider", "number", "number_input")
 CHOICE_TYPES = ("select", "radio_group", "multi_select", "card_catalog_picker")
@@ -83,10 +84,23 @@ EVAL_SCRIPT = (
     " const shownAfter = extraRow.style.display !== 'none';"
     " const timeoutText = (document.querySelector('#modal-content .v2-ui-timeout') || {}).textContent || '';"
     " for (const btn of [...document.querySelectorAll('#modal-content .v2-ui-buttons button')]) btn.click();"
+    # 第三阶段：``tab`` 分页（切换条 + 默认页 + 点击切换）。
+    " const tabbed = await (await fetch('/static/" + TEMP_NAME_3 + "?ts=' + Date.now())).json();"
+    " window.emitModeEvent = () => {};"
+    " window.canSendGameAction = () => true;"
+    " window.showV2UiRequest({ request_id: 'harness-3', component: tabbed });"
+    " const tabButtons = [...document.querySelectorAll('#modal-content .v2-ui-tabs .v2-ui-tab')];"
+    " const panes = [...document.querySelectorAll('#modal-content .v2-ui-tab-pane')];"
+    " const paneVisible = pane => !!(pane && pane.style.display !== 'none');"
+    " const beforeSwitch = [paneVisible(panes[0]), paneVisible(panes[1])];"
+    " if (tabButtons[1]) tabButtons[1].click();"
+    " const afterSwitch = [paneVisible(panes[0]), paneVisible(panes[1])];"
+    " for (const btn of [...document.querySelectorAll('#modal-content .v2-ui-buttons button')]) btn.click();"
     " return JSON.stringify({ rowCount: rows.length, rows,"
     "  buttonTexts: buttons.map(b => b.textContent),"
     "  payloads: captured.map(args => ({ event: args[0], kind: args[1], data: args[2] })),"
-    "  conditional: { hiddenInitially, shownAfter, lockedDisabled, timeoutText } });"
+    "  conditional: { hiddenInitially, shownAfter, lockedDisabled, timeoutText },"
+    "  tabs: { buttons: tabButtons.map(b => b.textContent), beforeSwitch, afterSwitch } });"
     " }"
 )
 
@@ -160,12 +174,41 @@ def conditional_component() -> dict:
     return RT._sanitize_ui_component(engine, context, component)
 
 
+def tabbed_component() -> dict:
+    """第三阶段：`tab` 参数驱动的控件分页。"""
+
+    engine = GameEngine()
+    engine.phase = "action"
+    engine.current_player = 0
+    engine.player_names = ["P1", "P2"]
+    context = {"source_player": 0, "target_player": 1, "vars": {}, "card": None}
+    component = {
+        "type": "modal",
+        "title_cn": "分页测试",
+        "controls": [
+            {"id": "a", "type": "number_input", "label_cn": "基础项",
+             "tab": "basic", "tab_cn": "基础"},
+            {"id": "b", "type": "select", "label_cn": "基础选项",
+             "options": [{"value": "x", "label_cn": "X"}],
+             "tab": "basic", "tab_cn": "基础"},
+            {"id": "c", "type": "text_input", "label_cn": "高级项", "max_length": 8,
+             "tab": "advanced", "tab_cn": "高级"},
+            {"id": "d", "type": "checkbox", "label_cn": "高级开关",
+             "tab": "advanced", "tab_cn": "高级"},
+        ],
+        "buttons": [{"id": "confirm", "role": "confirm", "text_cn": "确定"}],
+    }
+    return RT._sanitize_ui_component(engine, context, component)
+
+
 def run_browser(url: str, timeout: int) -> dict:
     static_dir = ROOT / "static"
     temp = static_dir / TEMP_NAME
     temp2 = static_dir / TEMP_NAME_2
+    temp3 = static_dir / TEMP_NAME_3
     temp.write_text(json.dumps(sanitized_component(), ensure_ascii=False), encoding="utf-8")
     temp2.write_text(json.dumps(conditional_component(), ensure_ascii=False), encoding="utf-8")
+    temp3.write_text(json.dumps(tabbed_component(), ensure_ascii=False), encoding="utf-8")
     try:
         # Windows 上 npx 是 .cmd，必须经 cmd.exe 起（直接 CreateProcess 找不到）。
         npx = shutil.which("npx") or shutil.which("npx.cmd")
@@ -182,6 +225,7 @@ def run_browser(url: str, timeout: int) -> dict:
     finally:
         temp.unlink(missing_ok=True)
         temp2.unlink(missing_ok=True)
+        temp3.unlink(missing_ok=True)
     payload = result.stdout.strip()
     if payload.startswith('"') and payload.endswith('"'):
         payload = json.loads(payload)
@@ -232,6 +276,15 @@ def main(argv=None) -> int:
             problems.append("disabled_if：被禁用的控件没有 disabled")
         if not str(conditional.get("timeoutText") or "").strip():
             problems.append("timeout_ms：没有渲染倒计时提示")
+    tabs = data.get("tabs") or {}
+    if tabs:
+        print("分页：", json.dumps(tabs, ensure_ascii=False))
+        if len(tabs.get("buttons") or []) != 2:
+            problems.append(f"tab 分页：切换条按钮数应为 2，实际 {tabs.get('buttons')}")
+        if tabs.get("beforeSwitch") != [True, False]:
+            problems.append(f"tab 分页：默认页不对（{tabs.get('beforeSwitch')}）")
+        if tabs.get("afterSwitch") != [False, True]:
+            problems.append(f"tab 分页：切换后页状态不对（{tabs.get('afterSwitch')}）")
     for problem in problems:
         print("  [失败]", problem)
     print("UI 浏览器实测：", "OK" if not problems else f"{len(problems)} 个问题")

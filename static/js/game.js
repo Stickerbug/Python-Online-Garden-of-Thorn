@@ -11003,6 +11003,47 @@ function showV2UiRequest(data = {}) {
         content.addEventListener(evt, () => applyControlConditions()));
     applyControlConditions();
 
+    // Round 86 / 批次 CH：``tab`` 分页——扁平 schema 不动，按控件上的 ``tab`` 分组渲染。
+    // 没有 ``tab`` 的控件留在选项卡之上（当作"公共区"）；只有 ≥2 个页才画切换条。
+    const tabOrder = [];
+    controlRows.forEach(({ control }) => {
+        const tab = String(control.tab || '').trim();
+        if (tab && !tabOrder.includes(tab)) tabOrder.push(tab);
+    });
+    if (tabOrder.length >= 2) {
+        const bar = document.createElement('div');
+        bar.className = 'v2-ui-tabs';
+        const panes = {};
+        tabOrder.forEach(tab => {
+            const pane = document.createElement('div');
+            pane.className = 'v2-ui-tab-pane';
+            panes[tab] = pane;
+        });
+        controlRows.forEach(({ control, row }) => {
+            const tab = String(control.tab || '').trim();
+            if (tab && panes[tab] && row.parentNode) panes[tab].appendChild(row);
+        });
+        const activate = tab => {
+            tabOrder.forEach(name => { panes[name].style.display = name === tab ? '' : 'none'; });
+            [...bar.querySelectorAll('button')].forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tab);
+            });
+        };
+        tabOrder.forEach((tab, index) => {
+            const control = controlRows.find(cr => String(cr.control.tab || '').trim() === tab).control;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'v2-ui-tab';
+            btn.dataset.tab = tab;
+            btn.textContent = getV2Text(control, 'tab_label', tab);
+            btn.addEventListener('click', () => activate(tab));
+            bar.appendChild(btn);
+        });
+        activate(tabOrder[0]);
+        content.appendChild(bar);
+        tabOrder.forEach(tab => content.appendChild(panes[tab]));
+    }
+
     const buttons = Array.isArray(component.buttons) && component.buttons.length
         ? component.buttons
         : [{ id: 'confirm', text_cn: '确认', text_en: 'Confirm' }, { id: 'cancel', text_cn: '取消', text_en: 'Cancel', role: 'cancel' }];

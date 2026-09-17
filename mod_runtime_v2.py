@@ -2993,6 +2993,12 @@ def validate_v2_ui_response(engine, context: Dict[str, Any], component: Dict[str
             pattern = str(control.get("pattern") or "")
             if pattern and not re.fullmatch(pattern, value):
                 raise V2RuntimeError(f"v2 ui text does not match pattern: {cid}")
+            # Round 86 / 批次 CH：过一遍违禁词表（默认 mask：等级≥3 打码、等级≥4 拒）。
+            policy = str(control.get("moderation") or TEXT_INPUT_DEFAULT_MODERATION)
+            allowed, moderated = _moderate_ui_text(value, policy)
+            if not allowed:
+                raise V2RuntimeError(f"v2 ui text rejected by moderation: {cid}")
+            value = moderated
             values_out[cid] = value
             if control.get("required") and not hidden_by_rule and not value:
                 raise V2RuntimeError(f"v2 ui control is required: {cid}")
@@ -3225,7 +3231,13 @@ UI_CONTROL_TYPE_ALIASES = {
     "warning_text": "text",
     "dynamic_text": "text",
     "preview_value": "text",
+    # Round 86 / 批次 CH：``input`` 是**参数化的输入伞**——真正落哪个控件看
+    # ``value_type``（``text`` 默认 / ``number``），见下面的 `INPUT_VALUE_TYPES`。
+    "input": "text_input",
 }
+
+# ``input`` 伞的 ``value_type`` 词表（写错显式报错）。
+INPUT_VALUE_TYPES = ("text", "string", "number", "int", "float")
 
 # Round 85 / 批次 CG：``text_input``（自由文本输入）的长度上限。
 # 卡数据可以声明 ``max_length``，但**硬上限**由引擎兜住（防止有人写 10 万让客户端卡死）。
@@ -3233,6 +3245,32 @@ TEXT_INPUT_DEFAULT_MAX_LENGTH = 64
 TEXT_INPUT_HARD_MAX_LENGTH = 200
 TEXT_INPUT_NORMALIZES = ("none", "trim", "lower", "trim_lower")
 TEXT_INPUT_DEFAULT_NORMALIZE = "trim"
+# Round 86 / 批次 CH：文本输入的**违禁词过滤**策略（接 ``moderation.py`` 的规则表）。
+#   ``mask``（默认）：等级 ≥3 打码后放行；等级 ≥4 直接拒；
+#   ``reject``：等级 ≥3 就拒；
+#   ``off``：不过滤（例如纯口令比对卡）。
+TEXT_INPUT_MODERATIONS = ("mask", "reject", "off")
+TEXT_INPUT_DEFAULT_MODERATION = "mask"
+
+
+def _moderate_ui_text(value: str, policy: str):
+    """按 ``policy`` 过滤玩家输入的文本，返回 ``(是否放行, 文本或错误码)``。"""
+
+    if policy == "off" or not value:
+        return True, value
+    try:
+        from moderation import check_message_risk  # 懒加载：避免运行时与 app 的导入环
+    except Exception:  # noqa: BLE001 — 过滤模块不可用时放行，不因基础设施问题卡玩家
+        return True, value
+    risk = check_message_risk(value)
+    level = int(risk.get("risk_level") or 0)
+    if level >= 4:
+        return False, "rejected"
+    if level >= 3:
+        if policy == "reject":
+            return False, "rejected"
+        return True, str(risk.get("sanitized_text") or value)
+    return True, value
 
 
 def _copy_localized_text(source: Dict[str, Any], base: str, out: Dict[str, Any]) -> str:
@@ -3327,6 +3365,14 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
     #     （dynamic_text / preview_value 的 ``value`` 表达式在服务端求值成文本）
     #   button / button_group 不支持：一个响应只有一个 ``button`` + ``values``，
     #     控件级按钮要改响应协议；按钮请写在 component.buttons 上。
+    if ctype == "input":
+        value_type = str(control.get("value_type") or "text").strip().lower()
+        if value_type not in INPUT_VALUE_TYPES:
+            raise V2RuntimeError(
+                f"unsupported input value_type: {value_type!r}；只认 "
+                f"{' / '.join(INPUT_VALUE_TYPES)}"
+            )
+        ctype = "number_input" if value_type in ("number", "int", "float") else "text_input"
     ctype = UI_CONTROL_TYPE_ALIASES.get(ctype, ctype)
     if not cid:
         raise V2RuntimeError("ui control id is required")
@@ -3384,10 +3430,17 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
                 f"unsupported text_input normalize: {normalize}；只认 "
                 f"{' / '.join(TEXT_INPUT_NORMALIZES)}"
             )
+        moderation = str(control.get("moderation", TEXT_INPUT_DEFAULT_MODERATION)
+                         or TEXT_INPUT_DEFAULT_MODERATION).strip().lower()
+        if moderation not in TEXT_INPUT_MODERATIONS:
+            raise V2RuntimeError(
+                f"unsupported text_input moderation: {moderation}；只认 "
+                f"{' / '.join(TEXT_INPUT_MODERATIONS)}"
+            )
         default = eval_v2_value(engine, context, control.get("default", ""))
         default = str(default if default is not None else "")[:max_length]
         out.update({"max_length": max_length, "min_length": min_length, "pattern": pattern,
-                    "normalize": normalize, "default": default})
+                    "normalize": normalize, "moderation": moderation, "default": default})
     elif ctype == "multi_select":
         # Round 71 / 批次 BK：从 ``options`` 里选多个（``min_select``/``max_select`` 限个）。
         options = _control_options(control)
@@ -3472,6 +3525,16 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
     # ``placeholder``（输入框灰字）、``help_text``（控件下方说明）、``required``（必填）。
     _copy_localized_text(control, "placeholder", out)
     _copy_localized_text(control, "help_text", out)
+    # Round 86 / 批次 CH：``tab``——控件归属的分页（扁平 schema 不动，客户端按它分组渲染）。
+    tab_id = str(control.get("tab") or "").strip()
+    if tab_id:
+        out["tab"] = tab_id
+        _copy_localized_text(control, "tab_label", out)
+        # 也认 ``tab_cn`` / ``tab_en`` 直写（编辑器表单用这两个键）。
+        if not out.get("tab_label_cn") and control.get("tab_cn"):
+            out["tab_label_cn"] = str(control.get("tab_cn"))
+        if not out.get("tab_label_en") and control.get("tab_en"):
+            out["tab_label_en"] = str(control.get("tab_en"))
     if control.get("required"):
         out["required"] = True
     # 条件显示/禁用：服务端可算的写 visible/disabled，兄弟控件规则下发客户端联动。

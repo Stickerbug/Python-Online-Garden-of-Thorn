@@ -11968,6 +11968,37 @@ html.blind-level-4 .card-prediction-part.magic {
   opacity: 0.55;
 }
 
+/* Round 86 / 批次 CH：控件分页（``tab`` 参数） */
+.v2-ui-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 6px;
+}
+
+.v2-ui-tab {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: var(--font-main);
+  font-size: 13px;
+}
+
+.v2-ui-tab.active {
+  border-color: var(--magic);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--magic) 18%, transparent);
+  font-weight: 700;
+}
+
+.v2-ui-tab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .v2-ui-checkbox-row {
   display: flex;
   align-items: center;

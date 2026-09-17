@@ -85,6 +85,8 @@ VALID_UI_CONTROL_TYPES = {
     "multi_select",  # 认 `options` / `min_select` / `max_select` / `default`
     # ---- Round 85 / 批次 CG 新控件：自由文本输入 ----
     "text_input",    # 认 `max_length` / `min_length` / `pattern` / `normalize` / `placeholder` / `default`
+    # ---- Round 86 / 批次 CH：参数化输入伞（`value_type` 选文本/数字）----
+    "input",         # -> text_input（value_type=text，默认）/ number_input（value_type=number）
     # ---- Round 77 / 批次 BV：编辑器别名（运行时归一到已有控件，见
     # mod_runtime_v2.UI_CONTROL_TYPE_ALIASES）----
     "radio_group",   # -> select（单选）
