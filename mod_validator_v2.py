@@ -478,6 +478,32 @@ def _request_ui_param_checks(step: Dict[str, Any], label: str,
         warnings.append(f"{label}.on_cancel 必须是数组（运行时忽略非数组）：{step.get('on_cancel')!r}")
 
 
+def _ui_button_checks(component: Dict[str, Any], label: str, warnings: List[str]) -> None:
+    """Round 96 / 批次 CS：窗口按钮的发布期检查（都是 warning——运行时是"丢弃/回落"）。
+
+    ``_sanitize_ui_component`` 对按钮的处理是：只取**前 6 个**、没有 ``id`` 的直接丢、
+    一个都不剩就补「确认 / 取消」。也就是说这些写法不会炸，只会让作者的按钮**悄悄消失**，
+    所以发布期用 warning 提醒，不拦投稿（编辑器里已经能改按钮，见批次 CR）。
+    """
+
+    buttons = component.get("buttons")
+    if buttons is None:
+        return
+    if not isinstance(buttons, list):
+        warnings.append(f"{label}.buttons 必须是数组（运行时会补默认按钮）：{buttons!r}")
+        return
+    if len(buttons) > 6:
+        warnings.append(f"{label}.buttons 有 {len(buttons)} 个，运行时只认前 6 个")
+    for index, button in enumerate(buttons):
+        if not isinstance(button, dict):
+            warnings.append(f"{label}.buttons[{index}] 必须是对象（运行时丢弃）")
+            continue
+        if not str(button.get("id") or "").strip():
+            warnings.append(f"{label}.buttons[{index}] 没有 id（运行时丢弃，不会被渲染）")
+        if "role" in button and not isinstance(button.get("role"), str):
+            warnings.append(f"{label}.buttons[{index}].role 必须是字符串（运行时按 confirm 处理）")
+
+
 def _validate_resource_shape(registry: str, resource: Dict[str, Any], label: str,
                              errors: List[str], warnings: List[str]) -> None:
     if registry == "ui_components":
@@ -496,6 +522,7 @@ def _validate_resource_shape(registry: str, resource: Dict[str, Any], label: str
                 if ctrl_type not in VALID_UI_CONTROL_TYPES:
                     errors.append(f"{label}.controls[{i}].type 必须是受控 UI 控件类型")
                 _ui_control_param_checks(ctrl, f"{label}.controls[{i}]", errors, warnings)
+        _ui_button_checks(resource, label, warnings)
         _ui_text_warnings(resource, label, warnings)
     if registry in ("cards", "statuses", "opening_events"):
         events = resource.get("events", {})
