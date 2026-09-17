@@ -608,6 +608,10 @@ _CORE_LOGIC_OPS |= set(EXPRESSION_OPS) | set(CONDITION_OPS)
 # （``play`` / ``owner_turn_start`` / ``response`` …）与 ``on_*`` 名
 # （``on_play`` 同族的 ``on_card_used`` / ``on_response`` …）。现在两套都登记，
 # 并由 ``tools/atom_parameter_table.py --check`` 守住"表 ⊇ 引擎抽出来的时点名"。
+#
+# 记账口径：这张表是**完整词表**（43 个写法）；`_CORE_LOGIC_OPS` 里只并进其中
+# 12 个规范时点（``on_*`` 那批 + ``damage`` 声明键），所以五类计数里的
+# "事件与声明键 = 12"指的是**规范时点数**，不是这张表的长度。
 EVENT_HOOK_OPS = frozenset({
     # 出牌 / 响应
     "play", "on_play", "card_used", "response",
