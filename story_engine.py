@@ -1264,6 +1264,28 @@ def _forge_story_cards(state, first, second, events, source):
         merged_description[key] = '；'.join(
             part for part in (first_text, second_text) if part
         ) + '。'
+    # 反馈 #151：泰坦锻造是把两张牌变成一张，源牌的实例修正（钟爱/传染/广域
+    # 打击等 extra_tags、附魔数值）必须带过去，否则「钟爱」在合并时会丢。
+    merged_modifiers = {}
+    for source_card in (first, second):
+        modifiers = source_card.get('modifiers') if isinstance(source_card.get('modifiers'), dict) else {}
+        for key, value in modifiers.items():
+            if key == 'extra_tags':
+                merged_modifiers['extra_tags'] = list(dict.fromkeys(
+                    [str(tag) for tag in (merged_modifiers.get('extra_tags') or [])]
+                    + [str(tag) for tag in (value or [])]
+                ))
+            elif isinstance(value, bool) or value is None:
+                merged_modifiers[key] = bool(value) or bool(merged_modifiers.get(key))
+            elif isinstance(value, (int, float)):
+                merged_modifiers[key] = max(
+                    float(merged_modifiers.get(key) or 0),
+                    float(value),
+                )
+                if float(merged_modifiers[key]).is_integer():
+                    merged_modifiers[key] = int(merged_modifiers[key])
+            elif key not in merged_modifiers or not merged_modifiers.get(key):
+                merged_modifiers[key] = copy.deepcopy(value)
     generated = {
         'name': {'zh': f'{zh_a}·{zh_b}', 'en': f'{en_a}·{en_b}'},
         # 融合/生成牌时同样要容忍 'X' 费用（核弹），否则 int('X') 直接 500。
@@ -1301,7 +1323,11 @@ def _forge_story_cards(state, first, second, events, source):
             'def_id': card.get('def_id') or '',
             'source': source,
         })
-    return _gain_generated_deck_card(state, generated, events, source)
+    card = _gain_generated_deck_card(state, generated, events, source)
+    if merged_modifiers:
+        modifiers = card.setdefault('modifiers', {})
+        modifiers.update(copy.deepcopy(merged_modifiers))
+    return card
 
 
 def _gain_elixir(state, amount, events):

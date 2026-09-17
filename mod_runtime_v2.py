@@ -2080,7 +2080,15 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         return None
     if op == "status_stack":
         target = resolve_v2_target(engine, context, expr.get("target", "target"))
-        return _status_stack(engine, _player_id(engine, target), str(expr.get("status") or ""))
+        # 反馈 #145：默认沿用「状态免疫时按 0 层读取」，但按真实层数结算的牌
+        # （女贞子这类「造成等同中毒层数的伤害」）可以写 ignore_immunity: true。
+        ignore_immunity = bool(expr.get("ignore_immunity") or expr.get("raw_status"))
+        return _status_stack(
+            engine,
+            _player_id(engine, target),
+            str(expr.get("status") or ""),
+            ignore_immunity=ignore_immunity,
+        )
     if op in ("cards_played_this_turn", "played_cards_this_turn", "cards_played"):
         player_id = _player_id(engine, resolve_v2_target(engine, context, expr.get("target", "source")))
         if not _valid_player(engine, player_id):
@@ -4017,12 +4025,17 @@ def _card_flags(card: Optional[CardInstance]) -> set:
     return flags
 
 
-def _status_stack(engine, player_id: int, status_id: str) -> int:
+def _status_stack(engine, player_id: int, status_id: str, *, ignore_immunity: bool = False) -> int:
     if not _valid_player(engine, player_id):
         return 0
     immune = getattr(engine, "_is_status_immune", None)
     status_key = str(status_id or "").split(":")[-1]
-    if callable(immune) and immune(player_id) and status_key not in ("status_immune", "immune", "状态免疫"):
+    if (
+        callable(immune)
+        and not ignore_immunity
+        and immune(player_id)
+        and status_key not in ("status_immune", "immune", "状态免疫")
+    ):
         return 0
     ps = engine.players[player_id]
     if status_key in ("status_immune", "immune", "状态免疫"):
