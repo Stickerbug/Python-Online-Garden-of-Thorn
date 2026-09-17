@@ -1,4 +1,5 @@
 import copy
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
@@ -30,6 +31,16 @@ from mod_spec_v2 import (
     split_resource_id,
 )
 from mod_i18n import locale_validation_warnings, normalize_locales, placeholder_mismatches
+# Round 94 / 批次 CQ：**发布期**校验直接复用运行时的词表，避免再抄一份。
+# ``mod_runtime_v2`` 只依赖 cards / damage_types / runtime_budget / mod_spec_v2，
+# 不反向依赖本模块，静态导入不会成环（见 tools/mod_atom_report 的 ui 参数对拍）。
+from mod_runtime_v2 import (
+    INPUT_VALUE_TYPES,
+    REQUEST_UI_ON_INVALID_VALUES,
+    TEXT_INPUT_HARD_MAX_LENGTH,
+    TEXT_INPUT_MODERATIONS,
+    TEXT_INPUT_NORMALIZES,
+)
 
 
 MAX_CARDS = 300
@@ -368,6 +379,105 @@ def _ui_text_warnings(component: Dict[str, Any], label: str, warnings: Optional[
     return bucket
 
 
+def _ui_control_param_checks(control: Dict[str, Any], label: str,
+                             errors: List[str], warnings: List[str]) -> None:
+    """Round 94 / 批次 CQ：新 UI 控件的**发布期**参数校验。
+
+    以前发布期只看控件类型，``input.value_type`` / ``text_input.normalize`` /
+    ``text_input.moderation`` / ``pattern`` 这些是**运行时**才炸
+    （``mod_runtime_v2._sanitize_ui_control`` 显式 raise）——写错的包能正常导入，
+    要等玩家真的打开那个窗口才报错。这里把同一套词表提前到导入/投稿时。
+
+    口径与运行时一致：
+
+    * 运行时**会拒绝**的（词表写错、正则编不过）→ 发布期 error；
+    * 运行时**静默忽略/截断**的（``default_from`` 形状、``visible_if`` 不是对象、
+      ``min_select > max_select``、越界长度）→ 发布期 warning，不拦投稿。
+    """
+
+    ctype = control.get("type")
+    if ctype == "input":
+        value_type = str(control.get("value_type") or "text").strip().lower()
+        if value_type not in INPUT_VALUE_TYPES:
+            errors.append(
+                f"{label}.value_type 不在受控词表：{control.get('value_type')!r}"
+                f"（只认 {' / '.join(INPUT_VALUE_TYPES)}）"
+            )
+    if ctype == "text_input":
+        normalize = str(control.get("normalize") or "trim").strip().lower()
+        if normalize not in TEXT_INPUT_NORMALIZES:
+            errors.append(
+                f"{label}.normalize 不在受控词表：{control.get('normalize')!r}"
+                f"（只认 {' / '.join(TEXT_INPUT_NORMALIZES)}）"
+            )
+        moderation = str(control.get("moderation") or "mask").strip().lower()
+        if moderation not in TEXT_INPUT_MODERATIONS:
+            errors.append(
+                f"{label}.moderation 不在受控词表：{control.get('moderation')!r}"
+                f"（只认 {' / '.join(TEXT_INPUT_MODERATIONS)}）"
+            )
+        pattern = str(control.get("pattern") or "").strip()
+        if pattern:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                errors.append(f"{label}.pattern 不是合法正则：{exc}")
+        max_length = control.get("max_length")
+        if max_length is not None:
+            if isinstance(max_length, bool) or not isinstance(max_length, (int, float)):
+                warnings.append(f"{label}.max_length 不是数字（运行时按默认 64 处理）：{max_length!r}")
+            elif max_length <= 0 or max_length > TEXT_INPUT_HARD_MAX_LENGTH:
+                warnings.append(
+                    f"{label}.max_length 超出 1..{TEXT_INPUT_HARD_MAX_LENGTH}"
+                    f"（运行时按硬上限/默认值处理）：{max_length!r}"
+                )
+    default_from = control.get("default_from")
+    if default_from not in (None, {}):
+        known_keys = ("player_var", "card_var", "var")
+        if not isinstance(default_from, dict) or not any(key in default_from for key in known_keys):
+            warnings.append(
+                f"{label}.default_from 认不出来（只认 {' / '.join(known_keys)}），"
+                f"运行时会忽略并回落到 default：{default_from!r}"
+            )
+    for key in ("visible_if", "disabled_if"):
+        rule = control.get(key)
+        if rule is not None and not isinstance(rule, dict):
+            warnings.append(f"{label}.{key} 必须是对象（条件算子或兄弟控件规则），当前会被忽略：{rule!r}")
+    min_select = control.get("min_select")
+    max_select = control.get("max_select")
+    if isinstance(min_select, (int, float)) and isinstance(max_select, (int, float)):
+        if min_select > max_select:
+            warnings.append(
+                f"{label}.min_select({min_select}) 大于 max_select({max_select})，"
+                "运行时会把上限抬到下限"
+            )
+
+
+def _request_ui_param_checks(step: Dict[str, Any], label: str,
+                             errors: List[str], warnings: List[str]) -> None:
+    """Round 94 / 批次 CQ：``request_ui`` **步骤参数**的发布期校验。
+
+    ``on_invalid`` 写错时运行时会显式报错（``_request_ui_on_invalid``），
+    ``timeout_ms`` / ``on_cancel`` 是静默兜底（0 / 忽略），所以前者 error、后者 warning。
+    """
+
+    if "on_invalid" in step:
+        on_invalid = str(step.get("on_invalid") or "close").strip().lower()
+        if on_invalid not in REQUEST_UI_ON_INVALID_VALUES:
+            errors.append(
+                f"{label}.on_invalid 不在受控词表：{step.get('on_invalid')!r}"
+                f"（只认 {' / '.join(REQUEST_UI_ON_INVALID_VALUES)}）"
+            )
+    timeout = step.get("timeout_ms")
+    if timeout is not None:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float, dict, list)):
+            warnings.append(f"{label}.timeout_ms 不是数字也不是取值表达式（运行时按 0 = 不限时）：{timeout!r}")
+        elif isinstance(timeout, (int, float)) and timeout < 0:
+            warnings.append(f"{label}.timeout_ms 是负数（运行时按 0 = 不限时）：{timeout!r}")
+    if "on_cancel" in step and not isinstance(step.get("on_cancel"), list):
+        warnings.append(f"{label}.on_cancel 必须是数组（运行时忽略非数组）：{step.get('on_cancel')!r}")
+
+
 def _validate_resource_shape(registry: str, resource: Dict[str, Any], label: str,
                              errors: List[str], warnings: List[str]) -> None:
     if registry == "ui_components":
@@ -385,6 +495,7 @@ def _validate_resource_shape(registry: str, resource: Dict[str, Any], label: str
                 ctrl_type = ctrl.get("type")
                 if ctrl_type not in VALID_UI_CONTROL_TYPES:
                     errors.append(f"{label}.controls[{i}].type 必须是受控 UI 控件类型")
+                _ui_control_param_checks(ctrl, f"{label}.controls[{i}]", errors, warnings)
         _ui_text_warnings(resource, label, warnings)
     if registry in ("cards", "statuses", "opening_events"):
         events = resource.get("events", {})
@@ -559,6 +670,10 @@ def _validate_step(step: Any, label: str, errors: List[str], warnings: Optional[
     # 只是**警告**：英文窗口不算写错，但按项目口径应该补中文。
     if op == "request_ui" and isinstance(step.get("component"), dict):
         _ui_text_warnings(step["component"], f"{label}.component", warnings)
+    # Round 94 / 批次 CQ：``request_ui`` 步骤参数（on_invalid / timeout_ms / on_cancel）
+    # 的发布期校验——以前是运行时才炸 / 静默兜底。
+    if op == "request_ui":
+        _request_ui_param_checks(step, label, errors, warnings if isinstance(warnings, list) else [])
     for key in ("steps", "then", "else", "body", "on_cancel"):
         child = step.get(key)
         if isinstance(child, list):

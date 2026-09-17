@@ -49,6 +49,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import atomic_registry  # noqa: E402
+import mod_runtime_v2  # noqa: E402
 import mod_spec_v2  # noqa: E402
 
 # 运行时执行 / 校验器检查的嵌套步骤容器。
@@ -389,6 +390,136 @@ def event_hook_consistency() -> dict:
         "dispatched": len(dispatched),
         "synonym_groups": [list(group) for group in _event_hook_synonym_groups()],
         "missing": missing,
+        "problems": problems,
+    }
+
+
+def _minimal_ui_package(controls: list, step: dict | None = None) -> dict:
+    """给发布期校验造一个最小可投稿包（社区命名空间，不与官方撞）。"""
+
+    card_events = {"on_play": {"steps": [step or {"op": "log", "message": "x"}]}}
+    return {
+        "format_version": 2,
+        "manifest": {
+            "id": "codexui",
+            "resource_namespace": "codexui",
+            "name": "Codex UI probe",
+            "version": "0.1.0",
+            "api_version": mod_spec_v2.API_VERSION,
+            "capabilities": ["ui_components", "logic.advanced"],
+        },
+        "registries": {
+            "cards": [{
+                "id": "codexui:probe",
+                "name_cn": "探针",
+                "card_type": "thorn",
+                "cost_e": 1,
+                "description_cn": "探针。",
+                "events": card_events,
+            }],
+            "ui_components": [{
+                "id": "codexui:window",
+                "type": "modal",
+                "title_cn": "探针窗口",
+                "controls": controls,
+                "buttons": [{"id": "confirm", "text_cn": "确认", "role": "confirm"}],
+            }],
+        },
+    }
+
+
+def ui_param_validation_consistency() -> dict:
+    """Round 94 / 批次 CQ：**运行时词表**必须都在**发布期**校验里。
+
+    背景：``input.value_type`` / ``text_input.normalize`` / ``text_input.moderation`` /
+    ``text_input.pattern`` / ``request_ui.on_invalid`` 这几项以前只有运行时校验
+    （``mod_runtime_v2`` 里显式 raise）——包能正常导入，要等玩家打开窗口才炸。
+    批次 CQ 把同一套词表提到 ``mod_validator_v2``。
+
+    这条守门用**反例**验证：每个"运行时认不出就会拒绝"的写法，发布期必须拦下；
+    同时合法写法必须放行（防止校验过严把好包也拒了）。
+    """
+
+    import mod_validator_v2 as validator
+
+    def bad_control(**extra) -> dict:
+        control = {"id": "c1", "type": "text", "label_cn": "标签"}
+        control.update(extra)
+        return control
+
+    cases = [
+        ("input.value_type", bad_control(type="input", value_type="intt")),
+        ("text_input.normalize", bad_control(type="text_input", normalize="trim_up")),
+        ("text_input.moderation", bad_control(type="text_input", moderation="block")),
+        ("text_input.pattern", bad_control(type="text_input", pattern="([")),
+    ]
+    problems = []
+    caught = 0
+    for name, control in cases:
+        package = _minimal_ui_package([control])
+        result = validator.validate_mod_v2(package, source="<probe>", allow_reserved_namespaces=True)
+        if result.errors:
+            caught += 1
+        else:
+            problems.append(f"发布期没拦下 {name} 的错写法（运行时会 raise）")
+    step_case = {"op": "request_ui", "component": "codexui:window",
+                 "save_as": "choice", "on_invalid": "retry"}
+    step_result = validator.validate_mod_v2(
+        _minimal_ui_package([], step=step_case), source="<probe>", allow_reserved_namespaces=True)
+    if step_result.errors:
+        caught += 1
+    else:
+        problems.append("发布期没拦下 request_ui.on_invalid 的错写法（运行时会 raise）")
+
+    good_package = _minimal_ui_package([
+        bad_control(type="input", value_type="number"),
+        {"id": "c2", "type": "text_input", "label_cn": "输入", "normalize": "trim",
+         "moderation": "mask", "max_length": 32, "pattern": "^[a-z]+$"},
+        {"id": "c3", "type": "multi_select", "label_cn": "多选", "min_select": 1, "max_select": 3,
+         "options": [{"value": "a", "label_cn": "A"}]},
+    ], step={"op": "request_ui", "component": "codexui:window", "save_as": "choice",
+             "on_invalid": "keep", "timeout_ms": 5000, "on_cancel": []})
+    good_result = validator.validate_mod_v2(good_package, source="<probe>", allow_reserved_namespaces=True)
+    if good_result.errors:
+        problems.append(f"合法写法被发布期误拒：{good_result.errors[:3]}")
+
+    # 编辑器面板手抄的四张词表也要与引擎同一份（否则作者在编辑器里选得到、
+    # 运行时却拒绝，或者反过来）。编辑器是兄弟仓：整个仓不在时跳过（CI 里只有引擎仓）。
+    editor_note = ""
+    editor_root = ROOT.parent / "模组编辑器"
+    editor_file = editor_root / "src" / "v2Studio.js"
+    if not editor_root.is_dir():
+        editor_note = "（编辑器仓不在，跳过）"
+    elif not editor_file.is_file():
+        problems.append(f"找不到编辑器源码 {editor_file}（词表没法对拍）")
+    else:
+        editor_text = editor_file.read_text(encoding="utf-8", errors="replace")
+        engine_lists = {
+            "UI_INPUT_VALUE_TYPES": mod_runtime_v2.INPUT_VALUE_TYPES,
+            "UI_TEXT_NORMALIZES": mod_runtime_v2.TEXT_INPUT_NORMALIZES,
+            "UI_TEXT_MODERATIONS": mod_runtime_v2.TEXT_INPUT_MODERATIONS,
+            "UI_REQUEST_ON_INVALID": mod_runtime_v2.REQUEST_UI_ON_INVALID_VALUES,
+        }
+        for const_name, engine_values in engine_lists.items():
+            match = re.search(
+                r"const " + re.escape(const_name) + r"\s*=\s*\[(.*?)\]",
+                editor_text,
+                re.S,
+            )
+            if not match:
+                problems.append(f"编辑器里找不到 {const_name}（对拍失效，常量被改名了？）")
+                continue
+            editor_values = tuple(re.findall(r"'([^']*)'", match.group(1)))
+            if editor_values != tuple(engine_values):
+                problems.append(
+                    f"{const_name} 与引擎词表不一致：编辑器 {list(editor_values)}，"
+                    f"引擎 {list(engine_values)}"
+                )
+    return {
+        "cases": len(cases) + 1,
+        "caught": caught,
+        "false_positive": len(good_result.errors),
+        "editor_note": editor_note,
         "problems": problems,
     }
 
@@ -940,6 +1071,8 @@ def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = 
         ),
         # Round 76 / 批次 BU：request_ui 组件的文案必须有中文（不能显示英文/控件 id）。
         "ui_text": ui_text_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
+        # Round 94 / 批次 CQ：运行时词表必须都在发布期校验里（用反例对拍）。
+        "ui_param_validation": ui_param_validation_consistency(),
         # Round 81 / 批次 CA：卡数据的 status id 必须有声明（引擎内建或包 statuses）。
         "status_ids": status_id_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
         # Round 87 / 批次 CI：卡面文案里的 [[card:ID]] / [[icon:KEY]] 必须真实存在。
@@ -1136,6 +1269,16 @@ def render_text(summary: dict) -> str:
         for problem in ui.get("problems") or []:
             lines.append(f"  [失败] {problem}")
         lines.append("")
+    param_check = summary.get("ui_param_validation") or {}
+    if param_check:
+        lines.append(
+            "== request_ui 参数发布期校验（反例对拍）: "
+            f"反例 {param_check['caught']} / {param_check['cases']} 拦下，"
+            f"合法写法误拒 {param_check['false_positive']} =="
+        )
+        for problem in param_check.get("problems") or []:
+            lines.append(f"  [失败] {problem}")
+        lines.append("")
 
     lines.append(f"== 仍在使用的未登记原子（长尾阻塞项）: {len(summary['still_used'])} ==")
     for item in summary["still_used"]:
@@ -1214,6 +1357,8 @@ def main(argv=None) -> int:
         or (summary.get("target_selectors") or {}).get("problems")
         # Round 76 / 批次 BU：request_ui 组件的文案必须有中文。
         or (summary.get("ui_text") or {}).get("problems")
+        # Round 94 / 批次 CQ：运行时词表必须都在发布期校验里（反例对拍）。
+        or (summary.get("ui_param_validation") or {}).get("problems")
         # Round 81 / 批次 CA：卡数据的 status id 必须有声明（没人声明的按拼错处理）。
         or (summary.get("status_ids") or {}).get("problems")
         # Round 87 / 批次 CI：卡面文案引用的卡/图标必须存在。
