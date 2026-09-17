@@ -602,11 +602,39 @@ _CORE_LOGIC_OPS |= set(EXPRESSION_OPS) | set(CONDITION_OPS)
 
 # 事件时点与声明键：卡数据 ``events`` 里的钩子名，以及引擎 ``_EFFECT_ALIASES``
 # 直接改写成实现名的声明写法（``damage`` → ``deal_damage`` 等）。
+#
+# Round 90 / 批次 CL：这张表以前只登记了 ``on_*`` 那 11 个写法，而引擎的
+# ``SCRIPT_ENTRY_ALIASES`` / ``EVENT_EFFECT_TYPES`` 认 **两种写法**——短名
+# （``play`` / ``owner_turn_start`` / ``response`` …）与 ``on_*`` 名
+# （``on_play`` 同族的 ``on_card_used`` / ``on_response`` …）。现在两套都登记，
+# 并由 ``tools/atom_parameter_table.py --check`` 守住"表 ⊇ 引擎抽出来的时点名"。
 EVENT_HOOK_OPS = frozenset({
-    "on_any_turn_start", "on_damage_taken", "on_discard_owner_turn_start",
-    "on_enemy_turn_start", "on_equipment_destroy", "on_equipment_trigger",
+    # 出牌 / 响应
+    "play", "on_play", "card_used", "response",
+    "on_card_used", "on_response",
+    # 回合时点
+    "owner_turn_start", "target_turn_start", "owner_turn_end", "enemy_turn_start",
+    "any_turn_start",
+    "on_owner_turn_start", "on_target_turn_start", "on_owner_turn_end",
+    "on_enemy_turn_start", "on_any_turn_start",
+    # 手牌 / 弃牌堆 / 牌堆拥有者时点
+    "hand_owner_turn_start", "hand_owner_turn_end",
+    "discard_owner_turn_start", "deck_owner_turn_start",
     "on_hand_owner_turn_start", "on_hand_owner_turn_end",
-    "on_owner_turn_start", "on_owner_turn_end", "on_target_turn_start",
+    "on_discard_owner_turn_start", "on_deck_owner_turn_start",
+    # 区域流动
+    "enter_hand", "on_enter_hand",
+    # 受击 / 装备
+    "damage_taken", "on_damage_taken",
+    "equipment_trigger", "on_equipment_trigger",
+    "equipment_triggered", "on_equipment_triggered",
+    "equipment_destroy", "on_equipment_destroy",
+    "equipment_destroyed", "on_equipment_destroyed",
+    # 资源 / 属性 / 被反制
+    "resource_spent", "on_resource_spent",
+    "player_stat_changed", "on_player_stat_changed",
+    "own_card_countered", "on_own_card_countered",
+    # 声明键（``_EFFECT_ALIASES`` 直接改写成实现名）
     "damage",
 })
 

@@ -595,6 +595,38 @@ def runtime_branch_index(path: pathlib.Path, function: str, objects, *, path_lab
 # 2. 引擎原子（``_atomic_*`` + 它们调用的共享助手）
 
 
+def engine_event_hook_names() -> set:
+    """Round 90 / 批次 CL：引擎认的**卡级事件时点**写法全集。
+
+    取两处：``SCRIPT_ENTRY_ALIASES`` 的**规范名**（短名，另补 ``on_<短名>`` 写法——
+    引擎两套都认）与 ``EVENT_EFFECT_TYPES``（``events``/``effects`` 里能写的时点集合）。
+    驼峰写法（``onPlay``）是同一批的第三套拼法，文档表不逐个登记。
+    """
+
+    path = ROOT / "game_engine.py"
+    if not path.is_file():
+        return set()
+    try:
+        tree = ast.parse(read_text(path))
+    except SyntaxError:
+        return set()
+    names: set = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [getattr(target, "id", None) for target in node.targets]
+        if "SCRIPT_ENTRY_ALIASES" in targets and isinstance(node.value, ast.Dict):
+            for key in node.value.keys:
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    names.add(key.value)
+                    names.add(f"on_{key.value}")
+        elif "EVENT_EFFECT_TYPES" in targets and isinstance(node.value, (ast.Set, ast.Tuple, ast.List)):
+            for item in node.value.elts:
+                if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                    names.add(item.value)
+    return names
+
+
 def engine_method_index() -> dict:
     """``方法名 → {file, node, text, params_signature}``（只看带 ``params`` 形参的方法）。"""
 
@@ -1866,6 +1898,13 @@ def check(model: dict, text: str, out_path: pathlib.Path) -> int:
     if missing_cond:
         problems.append(
             f"CONDITION_OPS 没登记求值器认的算子（{len(missing_cond)} 个）：{missing_cond[:8]}"
+        )
+    # Round 90 / 批次 CL：卡级**事件时点**同样要"表 ⊇ 引擎认的写法"。
+    event_ops = engine_event_hook_names()
+    missing_events = sorted(event_ops - set(mod_spec_v2.EVENT_HOOK_OPS))
+    if missing_events:
+        problems.append(
+            f"EVENT_HOOK_OPS 没登记引擎认的卡级事件时点（{len(missing_events)} 个）：{missing_events[:8]}"
         )
     covered = set()
     for label, names in mod_spec_v2.logic_op_groups(include_empty=False).items():

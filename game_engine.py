@@ -7085,16 +7085,10 @@ class GameEngine:
         # Round 88 / 批次 CJ：按**序号**取牌（``index`` 1 基 / ``offset`` 0 基，都可写表达式）
         # ——配合 ``request_ui`` 的输入值就能做"输入数字选第 N 张"。写了 ``index``/``offset``
         # 时优先于 ``pick``（挑最大/最小那套）。
-        index_raw = selector.get('index')
-        if index_raw is None:
-            offset_raw = selector.get('offset')
-            if offset_raw is not None:
-                index_raw = self._offset_index_expression(offset_raw)
-        if index_raw is not None:
-            position = self._selector_index_value(player_id, current_card, index_raw, context)
-            if position < 0:
-                position = len(candidates) + position + 1
-            chosen = candidates[position - 1] if 1 <= position <= len(candidates) else None
+        if selector.get('index') is not None or selector.get('offset') is not None:
+            chosen = self._zone_card_by_index(
+                player_id, current_card, candidates, selector, context,
+            )
         else:
             chosen = self._zone_card_pick(candidates, selector)
         if chosen is not None and name:
@@ -7121,13 +7115,39 @@ class GameEngine:
         """
 
         if isinstance(expr, dict):
+            if not isinstance(context, dict):
+                active = getattr(self, '_active_effect_context', None)
+                context = active if isinstance(active, dict) else {}
             try:
                 from mod_runtime_v2 import eval_v2_value
-                value = eval_v2_value(self, context if isinstance(context, dict) else {}, expr)
+                value = eval_v2_value(self, context, expr)
                 return int(self._scalar_value(value, 0) or 0)
             except Exception:  # noqa: BLE001 — 求值失败回落引擎口径
                 pass
         return self._resolve_step_number(player_id, expr, card, 1)
+
+    def _zone_card_by_index(self, player_id, card, zone, selector, context=None):
+        """按序号从 ``zone``（一个牌列表）里取一张：``index`` 1 基 / ``offset`` 0 基。
+
+        Round 90 / 批次 CL：``{"ref":"zone_card",…,"index":2}``（位置形态）与
+        ``{"selector":"zone_card",…,"index":2}``（挑牌形态）**共用这一份实现**——
+        两种写法都认 ``index``/``offset``、都能写取值表达式、负索引都从尾部数、
+        越界都返回 ``None``。以前位置形态只支持 ``_eval_int(index) - 1``。
+        """
+
+        if not isinstance(selector, dict) or not zone:
+            return None
+        index_raw = selector.get('index')
+        if index_raw is None:
+            offset_raw = selector.get('offset')
+            if offset_raw is None:
+                # 两种序号都没写：位置形态的旧默认是"第一张"。
+                return zone[0]
+            index_raw = self._offset_index_expression(offset_raw)
+        position = self._selector_index_value(player_id, card, index_raw, context)
+        if position < 0:
+            position = len(zone) + position + 1
+        return zone[position - 1] if 1 <= position <= len(zone) else None
 
     def _card_play_requirements(self, card: Optional[CardInstance]) -> List[dict]:
         """Card level ``play_requires`` gates declared by the card data."""
@@ -14280,8 +14300,10 @@ class GameEngine:
                 zone = [eq.card_instance for eq in ps.equipment]
             else:
                 zone = getattr(ps, zone_name, [])
-            index = self._eval_int(player_id, card_ref.get('index', 1), current_card, 1) - 1
-            return zone[index] if 0 <= index < len(zone) else None
+            # Round 90 / 批次 CL：按序号取牌**两种写法共用一份实现**（见
+            # ``_zone_card_by_index``）——`index` 1 基 / `offset` 0 基、可写表达式、
+            # 负索引从尾部数。以前这里只有 `_eval_int(index) - 1`（表达式只认引擎口径）。
+            return self._zone_card_by_index(player_id, current_card, zone, card_ref)
         if self._is_zone_card_pick_spec(card_ref):
             # Round 46 / batch AJ: ``{"selector": "zone_card", "filter": …,
             # "pick": …}`` -- the card-picking half of the generic selector.

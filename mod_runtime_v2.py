@@ -3292,6 +3292,42 @@ def _copy_localized_text(source: Dict[str, Any], base: str, out: Dict[str, Any])
     return cn
 
 
+def _control_default_from(engine, context: Dict[str, Any], control: Dict[str, Any]):
+    """Round 90 / 批次 CL：``default_from`` —— **输入记忆**（控件默认值来自已存的值）。
+
+    写法：
+
+    * ``{"player_var": "名字"}`` —— 读玩家 ``custom_vars``（可由 ``player_var_change`` 写）；
+      可带 ``"target": "source"/"enemy"/…``（默认 source）；
+    * ``{"card_var": "名字"}`` —— 读某张牌的 ``custom_vars``（``card`` 缺省当前牌）；
+    * ``{"var": "名字"}`` —— 读事件上下文变量。
+
+    取不到就返回 ``None``，调用方回落到控件的 ``default``（所以"第一次没有记忆"也有兜底）。
+    """
+
+    raw = control.get("default_from")
+    if not isinstance(raw, dict) or not raw:
+        return None
+    context = context if isinstance(context, dict) else {}
+    if "player_var" in raw:
+        name = str(raw.get("player_var") or "")
+        player_id = _player_id(engine, resolve_v2_target(engine, context, raw.get("target", "source")))
+        if not _valid_player(engine, player_id):
+            return None
+        store = getattr(engine.players[player_id], "custom_vars", None)
+        return store.get(name) if isinstance(store, dict) else None
+    if "card_var" in raw:
+        name = str(raw.get("card_var") or "")
+        card = _resolve_card(engine, context, raw.get("card", "current_card"))
+        store = getattr(card, "custom_vars", None)
+        return store.get(name) if isinstance(store, dict) else None
+    if "var" in raw:
+        name = str(raw.get("var") or "")
+        store = context.get("vars") if isinstance(context.get("vars"), dict) else {}
+        return store.get(name)
+    return None
+
+
 def _apply_control_condition(engine, context: Dict[str, Any], control: Dict[str, Any],
                              out: Dict[str, Any], key: str, flag_name: str,
                              client_rule_name: str) -> None:
@@ -3394,7 +3430,10 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
         min_value = _to_number(eval_v2_value(engine, context, control.get("min", 0)))
         max_value = _to_number(eval_v2_value(engine, context, control.get("max", min_value)))
         step = max(0.000001, _to_number(eval_v2_value(engine, context, control.get("step", 1))))
-        default = _to_number(eval_v2_value(engine, context, control.get("default", min_value)))
+        # Round 90 / 批次 CL：``default_from``（输入记忆）优先于 ``default``。
+        remembered = _control_default_from(engine, context, control)
+        default_source = control.get("default", min_value) if remembered is None else remembered
+        default = _to_number(eval_v2_value(engine, context, default_source))
         if max_value < min_value:
             max_value = min_value
         default = min(max(default, min_value), max_value)
@@ -3407,9 +3446,19 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
             out["options"] = _zone_picker_options(control)
         else:
             out["options"] = _control_options(control)
+        # Round 90 / 批次 CL：``select`` 以前不认 ``default``（客户端永远选第一项）；
+        # 现在 ``default`` / ``default_from`` 都认——匹配到选项就带给客户端。
+        remembered = _control_default_from(engine, context, control)
+        default_source = control.get("default") if remembered is None else remembered
+        if default_source is not None:
+            wanted = str(eval_v2_value(engine, context, default_source))
+            option_values = [str(option.get("value")) for option in out["options"]]
+            if wanted in option_values:
+                out["default"] = wanted
     elif ctype == "checkbox":
         # Round 71 / 批次 BK：单个开关。``default`` 走取值表达式，回应值 true/false。
-        default = control.get("default", control.get("value", False))
+        remembered = _control_default_from(engine, context, control)
+        default = control.get("default", control.get("value", False)) if remembered is None else remembered
         out["default"] = bool(eval_v2_value(engine, context, default))
     elif ctype == "text_input":
         # Round 85 / 批次 CG：**自由文本输入**。长度与格式由服务端硬校验
@@ -3437,7 +3486,9 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
                 f"unsupported text_input moderation: {moderation}；只认 "
                 f"{' / '.join(TEXT_INPUT_MODERATIONS)}"
             )
-        default = eval_v2_value(engine, context, control.get("default", ""))
+        remembered = _control_default_from(engine, context, control)
+        default_source = control.get("default", "") if remembered is None else remembered
+        default = eval_v2_value(engine, context, default_source)
         default = str(default if default is not None else "")[:max_length]
         out.update({"max_length": max_length, "min_length": min_length, "pattern": pattern,
                     "normalize": normalize, "moderation": moderation, "default": default})
@@ -3449,7 +3500,8 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
         max_select = max(min_select, _to_int(control.get("max_select", len(options))))
         out["min_select"] = min(min_select, len(options))
         out["max_select"] = min(max_select, len(options))
-        default = control.get("default")
+        remembered = _control_default_from(engine, context, control)
+        default = control.get("default") if remembered is None else remembered
         if isinstance(default, dict):
             default = eval_v2_value(engine, context, default)
         if isinstance(default, (list, tuple)):
