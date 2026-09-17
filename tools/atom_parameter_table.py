@@ -1849,9 +1849,28 @@ def check(model: dict, text: str, out_path: pathlib.Path) -> int:
         )
     # Round 25：五类必须恰好铺满登记表（分类口径的直接校验）。
     core_ops = set(mod_spec_v2._CORE_LOGIC_OPS)
+    # Round 89 / 批次 CK：**登记表必须覆盖求值器真正认的算子**——以前
+    # EXPRESSION_OPS 只登记 31 / 实际 86、CONDITION_OPS 登记 10 / 实际 30，
+    # 表格在撒谎。这里守住"表 ≥ 求值器源码抽出来的全集"。
+    dual_ops = set(getattr(mod_spec_v2, "DUAL_STEP_AND_EXPRESSION_OPS", set()) or set())
+    multi_class_ops = set(
+        getattr(mod_spec_v2, "MULTI_CLASS_EXPRESSION_AND_CONDITION_OPS", set()) or set()
+    )
+    shared_class_ops = dual_ops | multi_class_ops
+    missing_expr = sorted(set(model["runtime_expr"]) - set(mod_spec_v2.EXPRESSION_OPS) - dual_ops)
+    if missing_expr:
+        problems.append(
+            f"EXPRESSION_OPS 没登记求值器认的算子（{len(missing_expr)} 个）：{missing_expr[:8]}"
+        )
+    missing_cond = sorted(set(model["runtime_cond"]) - set(mod_spec_v2.CONDITION_OPS))
+    if missing_cond:
+        problems.append(
+            f"CONDITION_OPS 没登记求值器认的算子（{len(missing_cond)} 个）：{missing_cond[:8]}"
+        )
     covered = set()
     for label, names in mod_spec_v2.logic_op_groups(include_empty=False).items():
-        overlap = covered & set(names)
+        # ``random`` 这类"既是步骤又是表达式"的名字两边都登记，分类重叠检查放行。
+        overlap = (covered & set(names)) - shared_class_ops
         if overlap:
             problems.append(f"分类重叠（{label}）：{sorted(overlap)[:5]}")
         covered |= set(names)

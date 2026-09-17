@@ -806,6 +806,7 @@ UNUSED_OP_VERDICTS = {
                          "返回 None 的空占位步骤，删除不影响任何现有卡"),
 }
 
+
 # 退役但**保留 `_atomic_*` 处理器**的名字：公开契约里已经进
 # ``mod_spec_v2.REMOVED_ATOMIC_OPS``（写出来是"已移除 + 替代写法"），但引擎内部
 # 或测试会直接调这些私有方法，所以实现留着手工删不得。它们同样必须"卡数据 0 引用"。
@@ -1198,7 +1199,20 @@ def build() -> dict:
     handler_kept.sort(key=lambda row: row["name"])
     any_usage = any_position_usage()
     unused_ops = []
-    for name, (verdict, replacement, reason) in sorted(UNUSED_OP_VERDICTS.items()):
+    # Round 89 / 批次 CK：取值表达式 / 条件算子里**当前 0 引用**的名字，定论由分类表
+    # 自动补（"留·语言原语"）——登记表补全后不用再逐个手写；有引用的名字不进这张表。
+    verdicts = dict(UNUSED_OP_VERDICTS)
+    for name in sorted(set(mod_spec_v2.EXPRESSION_OPS) | set(mod_spec_v2.CONDITION_OPS)):
+        if any_usage.get(name, 0):
+            continue
+        where = "condition 位" if name in mod_spec_v2.CONDITION_OPS else "取值位"
+        verdicts.setdefault(name, (
+            "留·语言原语",
+            f'`{{"op":"{name}",…}}`（{where}）',
+            "表达式/条件算子：写在数值·文本参数位或门控位，不是步骤"
+            "（分类表 EXPRESSION_OPS / CONDITION_OPS，Round 89 / 批次 CK 自动登记）",
+        ))
+    for name, (verdict, replacement, reason) in sorted(verdicts.items()):
         unused_ops.append({
             "name": name,
             "verdict": verdict,

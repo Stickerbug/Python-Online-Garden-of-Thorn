@@ -4,10 +4,17 @@ from typing import Any, Dict, List, Optional, Set
 
 from mod_spec_v2 import (
     API_VERSION,
+    ATOMIC_OP_MACROS,
+    CONDITION_OPS,
+    DUAL_STEP_AND_EXPRESSION_OPS,
+    EXPRESSION_OPS,
     FORMAT_VERSION,
+    INTERNAL_HANDLERS,
+    PUBLIC_ATOMS,
     REMOVED_ATOMIC_OPS,
     RENAMED_ATOMIC_OPS,
     RESERVED_NAMESPACES,
+    RUNTIME_STEP_OPS,
     VALID_CAPABILITIES,
     VALID_EVENT_HOOKS,
     VALID_LOGIC_OPS,
@@ -539,6 +546,15 @@ def _validate_step(step: Any, label: str, errors: List[str], warnings: Optional[
         else:
             errors.append(f"{label}.op 不在 DSL 白名单中: {op}")
     count = 1
+    # Round 89 / 批次 CK：**位置校验**——补全登记表后，取值表达式 / 条件算子的名字也在
+    # 契约白名单里；把它们当步骤写要拿到明确报错，而不是"通过了校验、运行时才炸"。
+    step_ops = (set(PUBLIC_ATOMS) | set(INTERNAL_HANDLERS) | set(ATOMIC_OP_MACROS)
+                | set(RUNTIME_STEP_OPS) | set(DUAL_STEP_AND_EXPRESSION_OPS))
+    if isinstance(op, str) and op and op not in step_ops:
+        if op in EXPRESSION_OPS:
+            errors.append(f"{label}.op 是取值表达式算子，不能当步骤写: {op}（写在数值/文本参数位）")
+        elif op in CONDITION_OPS:
+            errors.append(f"{label}.op 是条件算子，不能当步骤写: {op}（写在 condition/run_if/unless 位置）")
     # Round 80 / 批次 BZ：``request_ui`` 的内联窗口文案检查（中文优先，见用户规则）。
     # 只是**警告**：英文窗口不算写错，但按项目口径应该补中文。
     if op == "request_ui" and isinstance(step.get("component"), dict):

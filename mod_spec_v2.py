@@ -526,23 +526,79 @@ RUNTIME_STEP_OPS = frozenset({
 })
 
 # 取值表达式算子（``eval_v2_value``；写在"数值/文本"参数位置，不是步骤）。
+#
+# Round 89 / 批次 CK：这张表以前只登记了 31 个"常用词"，而 ``eval_v2_value`` 真正认
+# **86** 个——表格在撒谎（例如 ``hand_count`` / ``deck_count`` / ``random_card`` /
+# ``selected_card_at`` / ``card_var`` 都没登记）。现在按"从求值器源码抽出来的全集"
+# 补全，并由 ``tools/atom_parameter_table.py --check`` 守住"表 ≥ 求值器认识的算子"。
 EXPRESSION_OPS = frozenset({
+    # 算术与常量（符号写法与函数写法都认）
     "add", "sub", "mul", "div", "min", "max", "clamp", "floor", "ceil",
-    "count", "get", "var", "const", "literal",
-    # Round 47 / 批次 AK：集合聚合/变换（实现在 ``eval_collection_op``）。
+    "+", "-", "*", "/",
+    "const", "literal", "var", "temp_var", "get", "count",
+    # 集合聚合/变换（实现在 ``eval_collection_op``）
     "collection_op",
-    "player_stat", "player_property", "card_prop", "card_property",
-    "equipment_prop", "equipment_property", "equipment_count_targeting",
-    "zone_count", "zone_random_ids", "hand_full", "status_stack",
-    "last_damage", "damage_amount", "damage_source", "event_value", "target_player",
+    # 随机
+    "random", "random_card", "random_card_id", "random_choice", "weighted_card",
+    # 区域计数 / 区域内容
+    "zone_count", "zone_top_ids", "zone_random_ids",
+    "hand_count", "deck_count", "deck_top_ids", "discard_count", "exile_count",
+    "equipment_count", "equipment_count_targeting", "hand_full",
+    # 卡与卡属性
+    "current_card", "this_card", "card_prop", "card_property", "card_cost",
+    "actual_card_cost", "card_var", "card_custom_var",
+    "cards_played", "cards_played_this_turn", "played_cards_this_turn",
+    # 选择/已选
+    "selected_card", "selected_card_at", "selected_card_index", "selected_cards_count",
+    "choice_card", "chosen_card", "choice_field", "choice_value",
+    # 玩家与属性
+    "player_stat", "player_property", "player_var", "global_var",
+    "source_player", "target_player", "active_player", "current_turn_player",
+    "turn_player",
+    # 状态
+    "status_count", "status_stack", "visible_status_count",
+    # 装备
+    "equipment_prop", "equipment_property",
+    # 伤害 / 结算上下文
+    "last_damage", "damage_amount", "damage_source", "damage_type",
+    "current_damage", "current_damage_type", "damage_hits", "hit_count",
+    "crit_hits", "last_crit_hits", "positive_hits", "last_positive_hits",
+    "event_value", "was_countered", "play_was_countered",
+    "counter_cards_in_hand", "counters_in_hand",
 })
 
 # 条件算子（``check_v2_condition``；只能出现在 ``condition`` / ``run_if`` /
 # ``unless`` 这些门控位置）。
+#
+# Round 89 / 批次 CK：同样按求值器源码补全（以前只登记 10 个，实际认 30 个）。
 CONDITION_OPS = frozenset({
-    "and", "or", "not", "compare", "var_compare",
-    "has_status", "has_status_named", "has_tag", "card_has_tag", "zone_exists",
+    # 逻辑与比较（符号写法都认）
+    "and", "or", "not",
+    "compare", "eq", "ne", "gt", "gte", "lt", "lte",
+    "==", "!=", ">", ">=", "<", "<=",
+    "var_compare",
+    # 状态 / 标签 / 卡
+    "has_status", "has_status_named", "has_tag", "card_has_tag", "card_has_flag",
+    "card_has_modifier", "card_has_setup_modifier",
+    # 区域与目标
+    "zone_exists", "card_exists", "target_selectable", "player_selectable",
+    # 伤害上下文
+    "damage_type", "damage_type_is",
 })
+
+# Round 89 / 批次 CK：**同名既是步骤、又是取值表达式**的名字。五类分类要求互不重叠，
+# 但 ``random`` 两种位置都认（``{"op":"random","a":…,"b":…}`` 当值写、
+# ``{"op":"random", ...}`` 当步骤写），所以它同时出现在步骤层与表达式层，
+# 分类重叠检查对它放行（``tools/atom_parameter_table.py``）。
+DUAL_STEP_AND_EXPRESSION_OPS = frozenset({"random"})
+
+# 同理：``damage_type`` 两种**非步骤**位置都认（取值位读当前伤害类型、门控位判类型），
+# 所以它同时在 EXPRESSION_OPS 与 CONDITION_OPS 里；分类重叠检查对它放行。
+MULTI_CLASS_EXPRESSION_AND_CONDITION_OPS = frozenset({"damage_type"})
+
+# Round 89 / 批次 CK：补全后的表达式/条件算子**并进策展清单**，让"五类并集 = 这张表"
+# 这条不变量继续成立（以前表里只登记了常用词，另外 74 个名字只在求值器分支里）。
+_CORE_LOGIC_OPS |= set(EXPRESSION_OPS) | set(CONDITION_OPS)
 
 # 事件时点与声明键：卡数据 ``events`` 里的钩子名，以及引擎 ``_EFFECT_ALIASES``
 # 直接改写成实现名的声明写法（``damage`` → ``deal_damage`` 等）。
