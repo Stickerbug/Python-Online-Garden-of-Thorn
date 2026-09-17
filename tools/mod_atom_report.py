@@ -51,6 +51,7 @@ if str(ROOT) not in sys.path:
 import atomic_registry  # noqa: E402
 import mod_runtime_v2  # noqa: E402
 import mod_spec_v2  # noqa: E402
+import step_op_catalog  # noqa: E402
 
 # 运行时执行 / 校验器检查的嵌套步骤容器。
 STEP_LIST_KEYS = (
@@ -520,6 +521,33 @@ def ui_param_validation_consistency() -> dict:
         "caught": caught,
         "false_positive": len(good_result.errors),
         "editor_note": editor_note,
+        "problems": problems,
+    }
+
+
+def step_catalog_consistency() -> dict:
+    """Round 101 / 批次 CW：「添加效果」选择器的 op 目录必须**覆盖全部可写 op** 且不过期。
+
+    背景：编辑器原来的「＋ 添加效果」写死插入 ``deal_damage``、模板库只有 17 个 op，
+    47 个公开原子里有 33 个在界面上**根本加不出来**（用户实际反馈）。
+    现在目录由 ``tools/step_op_catalog.py`` 生成，这条守门盯两件事：
+
+    * 覆盖：每个可写 op（公开原子 + 宏）都要有中文名 / 分组 / 最小可运行默认参数；
+    * 新鲜：编辑器里的 ``op-catalog.json`` 与重新生成的内容**逐字节一致**。
+    """
+
+    problems = list(step_op_catalog.coverage_problems())
+    out_path = step_op_catalog.DEFAULT_OUT
+    if not out_path.is_file():
+        problems.append(f"编辑器 op 目录不存在：{out_path}（跑 python tools/step_op_catalog.py）")
+    elif out_path.read_text(encoding="utf-8") != step_op_catalog.render():
+        problems.append(f"编辑器 op 目录不是最新的：{out_path}（跑 python tools/step_op_catalog.py）")
+    visible = [op for op in step_op_catalog.writable_ops()
+               if op not in step_op_catalog.HIDDEN_OPS]
+    return {
+        "writable": len(step_op_catalog.writable_ops()),
+        "visible": len(visible),
+        "groups": len(step_op_catalog.GROUPS),
         "problems": problems,
     }
 
@@ -1073,6 +1101,8 @@ def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = 
         "ui_text": ui_text_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
         # Round 94 / 批次 CQ：运行时词表必须都在发布期校验里（用反例对拍）。
         "ui_param_validation": ui_param_validation_consistency(),
+        # Round 101 / 批次 CW：「添加效果」选择器的 op 目录要覆盖全部可写 op 且不过期。
+        "step_catalog": step_catalog_consistency(),
         # Round 81 / 批次 CA：卡数据的 status id 必须有声明（引擎内建或包 statuses）。
         "status_ids": status_id_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
         # Round 87 / 批次 CI：卡面文案里的 [[card:ID]] / [[icon:KEY]] 必须真实存在。
@@ -1279,6 +1309,15 @@ def render_text(summary: dict) -> str:
         for problem in param_check.get("problems") or []:
             lines.append(f"  [失败] {problem}")
         lines.append("")
+    catalog = summary.get("step_catalog") or {}
+    if catalog:
+        lines.append(
+            "== 「添加效果」op 目录（可写 / 选择器显示 / 分组）: "
+            f"{catalog['writable']} / {catalog['visible']} / {catalog['groups']} =="
+        )
+        for problem in catalog.get("problems") or []:
+            lines.append(f"  [失败] {problem}")
+        lines.append("")
 
     lines.append(f"== 仍在使用的未登记原子（长尾阻塞项）: {len(summary['still_used'])} ==")
     for item in summary["still_used"]:
@@ -1359,6 +1398,8 @@ def main(argv=None) -> int:
         or (summary.get("ui_text") or {}).get("problems")
         # Round 94 / 批次 CQ：运行时词表必须都在发布期校验里（反例对拍）。
         or (summary.get("ui_param_validation") or {}).get("problems")
+        # Round 101 / 批次 CW：「添加效果」选择器的 op 目录必须覆盖全部可写 op 且不过期。
+        or (summary.get("step_catalog") or {}).get("problems")
         # Round 81 / 批次 CA：卡数据的 status id 必须有声明（没人声明的按拼错处理）。
         or (summary.get("status_ids") or {}).get("problems")
         # Round 87 / 批次 CI：卡面文案引用的卡/图标必须存在。
