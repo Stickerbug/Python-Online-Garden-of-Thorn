@@ -1262,6 +1262,10 @@ RANKING_MIN_DURATION_SECONDS = _env_float('GTN_RANKING_MIN_DURATION_SECONDS', 20
 RANKING_MIN_ACTIONS_PER_SIDE = _env_int('GTN_RANKING_MIN_ACTIONS_PER_SIDE', 1)
 ACTION_TURN_SECONDS = _env_float('GTN_ACTION_TURN_SECONDS', 60)
 ACTION_TURN_CARD_BONUS_SECONDS = _env_float('GTN_ACTION_TURN_CARD_BONUS_SECONDS', 5)
+# 响应窗口的服务端时限：客户端「不反制」倒计时是 5 秒（买不起牌时 2 秒），
+# 但客户端挂起/掉线时那次倒计时不会跑，所以服务端必须自己兜底，
+# 否则出牌方会一直停在「等待响应」，直到 120 秒的挂起看门狗。
+RESPONSE_WINDOW_SECONDS = _env_float('GTN_RESPONSE_WINDOW_SECONDS', 12)
 DRAFT_INITIAL_TIMEOUT_SECONDS = _env_float('GTN_DRAFT_INITIAL_TIMEOUT_SECONDS', 90)
 DRAFT_PICK_BONUS_SECONDS = _env_float('GTN_DRAFT_PICK_BONUS_SECONDS', 10)
 DRAFT_TIMEOUT_SECONDS = _env_float('GTN_DRAFT_TIMEOUT_SECONDS', 240)
@@ -6319,6 +6323,7 @@ def _room_timer_worker():
             start_rooms = set()
             mod_draw_updates = set()
             mod_draw_completions = []
+            response_expired_rooms = set()
             with _lock:
                 for room in list(rooms.values()):
                     # Phelren rooms are driven by _run_ai_test_match_timer.
@@ -6344,6 +6349,11 @@ def _room_timer_worker():
                         if now - last_tick >= 1.0:
                             room.mod_draw_last_tick = now
                             mod_draw_updates.add(room)
+                        continue
+                    # 响应窗口有服务端时限：客户端挂起/掉线时也能自动「不反制」，
+                    # 否则出牌方会一直停在「等待响应」。
+                    if _expire_pending_response_locked(room, now):
+                        response_expired_rooms.add(room)
                         continue
                     was_action = getattr(engine, 'phase', None) == 'action'
                     if _tick_room_action_timer_locked(room, now):
@@ -6478,6 +6488,10 @@ def _room_timer_worker():
                 finally:
                     if action_lock is not None:
                         action_lock.release()
+            for room in response_expired_rooms:
+                emit_turn_timer_update(room)
+                broadcast_game_state(room)
+                emit_pending_interaction_after_state_change(room, reason='response_expired')
             for room in timer_broadcast_rooms:
                 if room not in {item[0] for item in expired_turns}:
                     emit_turn_timer_update(room)
@@ -19267,6 +19281,72 @@ def _room_player_index_online(room, player_index):
     return psid in players and psid not in getattr(room, 'disconnected_players', {})
 
 
+def _room_player_index_responder_reachable(room, player_index):
+    """响应者是否真的能收到响应请求：还在线，且 session 仍指向这个房间。"""
+    try:
+        player_index = int(player_index)
+    except Exception:
+        return False
+    sids = getattr(room, 'player_sids', []) or []
+    if not (0 <= player_index < len(sids)):
+        return False
+    sid = sids[player_index]
+    if sid not in players or sid in getattr(room, 'disconnected_players', {}):
+        return False
+    return room_player_session_is_current(room, sid)
+
+
+def _expire_pending_response_locked(room, now=None):
+    """响应窗口超时（服务端时限）就自动替他「不反制」，不依赖客户端倒计时。"""
+    now = now or time.time()
+    engine = getattr(room, 'engine', None)
+    pending = getattr(engine, 'pending_response', None) if engine is not None else None
+    created = _pending_created_at(pending)
+    if not pending or not created:
+        return False
+    age = now - created
+    if age < RESPONSE_WINDOW_SECONDS:
+        return False
+    try:
+        while getattr(engine, 'pending_response', None) is pending:
+            responders = _pending_response_responder_ids(room, pending)
+            if not responders:
+                admin_event(
+                    'warning',
+                    f'auto_expire_pending_response room={getattr(room, "room_id", "?")} age={age:.1f} no-responder',
+                    room_id=getattr(room, 'room_id', None),
+                )
+                engine.pending_response = None
+                return True
+            before_count = len(pending.get('counter_cards') or [])
+            result = engine.handle_response(int(responders[0]), None)
+            if getattr(room, 'mode', '') != '2v2':
+                break
+            if (
+                getattr(engine, 'pending_response', None) is pending
+                and (
+                    not isinstance(result, dict)
+                    or not result.get('success')
+                    or len(pending.get('counter_cards') or []) >= before_count
+                )
+            ):
+                raise RuntimeError('2v2 response timeout pass made no progress')
+        admin_event(
+            'warning',
+            f'auto_expire_pending_response room={getattr(room, "room_id", "?")} age={age:.1f}',
+            room_id=getattr(room, 'room_id', None),
+        )
+        return True
+    except Exception as exc:
+        admin_event(
+            'error',
+            f'auto_expire_pending_response failed room={getattr(room, "room_id", "?")}: {exc}',
+            room_id=getattr(room, 'room_id', None),
+        )
+        engine.pending_response = None
+        return True
+
+
 def _auto_resolve_unreachable_pending_response(room, reason='unreachable'):
     engine = getattr(room, 'engine', None)
     pending = getattr(engine, 'pending_response', None) if engine is not None else None
@@ -19275,7 +19355,7 @@ def _auto_resolve_unreachable_pending_response(room, reason='unreachable'):
     try:
         while getattr(engine, 'pending_response', None) is pending:
             responders = _pending_response_responder_ids(room, pending)
-            if any(_room_player_index_online(room, ridx) for ridx in responders):
+            if any(_room_player_index_responder_reachable(room, ridx) for ridx in responders):
                 return False
             if not responders:
                 try:
@@ -19305,6 +19385,7 @@ def _auto_resolve_unreachable_pending_response(room, reason='unreachable'):
 
 
 def emit_or_resolve_pending_response(room, reason='emit'):
+    _stamp_pending_interactions(room)
     sent = emit_pending_response_requests(room)
     if sent > 0 or not getattr(getattr(room, 'engine', None), 'pending_response', None):
         return sent
