@@ -48,6 +48,21 @@ GROUPS = [
     ("tag", "标签"),
 ]
 
+# 没有句型的 op 用 fields 给一张小表单（键 / 中文名 / 控件种类），省得只能改 JSON。
+# kind: number | text | select（select 要带 options）
+FIELDS: dict[str, list] = {
+    "multiply_next_damage": [{"key": "multiplier", "label_cn": "倍率", "kind": "number", "step": 0.5, "min": 0}],
+    "modify_event_value": [
+        {"key": "mode", "label_cn": "怎么改", "kind": "select",
+         "options": [["add", "加"], ["sub", "减"], ["mul", "乘"], ["div", "除"], ["set", "设为"]]},
+        {"key": "value", "label_cn": "数值", "kind": "number"},
+    ],
+    "random": [
+        {"key": "min", "label_cn": "最小", "kind": "number"},
+        {"key": "max", "label_cn": "最大", "kind": "number"},
+    ],
+}
+
 # op -> (中文名, 分组, 最小可运行默认参数, 适用说明)
 CATALOG: dict[str, tuple[str, str, dict, str]] = {
     # ---- 伤害 ----
@@ -176,6 +191,7 @@ def build_catalog() -> dict:
             "defaults": defaults,
             "note": note,
             "hidden": op in HIDDEN_OPS,
+            "fields": FIELDS.get(op, []),
         })
     return {
         "note": "步骤 op 目录（添加效果选择器用）：中文名 + 分组 + 最小可运行默认参数。"
@@ -193,6 +209,8 @@ def coverage_problems() -> list:
     empty_label = [op for op in ops if not (CATALOG.get(op) or ("",))[0]]
     bad_group = [op for op in ops
                  if (CATALOG.get(op) or ("", "", {}))[1] not in {gid for gid, _ in GROUPS}]
+    bad_fields = [op for op in FIELDS
+                  if op not in ops or not isinstance(FIELDS[op], list) or not FIELDS[op]]
     problems = []
     if missing:
         problems.append(f"这些可写 op 还没有中文名/默认参数：{missing}")
@@ -202,6 +220,8 @@ def coverage_problems() -> list:
         problems.append(f"这些 op 缺中文名：{empty_label}")
     if bad_group:
         problems.append(f"这些 op 的分组不在 GROUPS 里：{bad_group}")
+    if bad_fields:
+        problems.append(f"这些 op 的 fields 不合法或已不是可写 op：{bad_fields}")
     return problems
 
 
