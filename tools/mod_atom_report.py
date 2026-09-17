@@ -700,6 +700,35 @@ def _client_inline_icon_keys() -> set:
     return keys
 
 
+def patch_op_consistency() -> dict:
+    """Round 92 / 批次 CO：``VALID_PATCH_OPS`` 里的每个 patch op 必须**真的被应用**。
+
+    patch 由 ``mod_loadout_v2._apply_patch`` 执行；如果某个 op 只登记在白名单里、
+    那边没有分支，包写了这条 patch 会被静默跳过（只留一条 warnings 文案）——
+    和"幽灵钩子"同一类毛病。这里按源码里的 ``if op == "X"`` / ``if op in ("X", …)``
+    分支对拍。
+    """
+
+    path = ROOT / "mod_loadout_v2.py"
+    declared = sorted(getattr(mod_spec_v2, "VALID_PATCH_OPS", set()) or set())
+    if not path.is_file():
+        return {"declared": len(declared), "handled": [], "missing": declared,
+                "problems": ["找不到 mod_loadout_v2.py，无法核对 patch op"]}
+    text = path.read_text(encoding="utf-8", errors="replace")
+    start = text.find("def _apply_patch(")
+    end = text.find("\ndef ", start + 10) if start >= 0 else -1
+    body = text[start:end if end > start else len(text)] if start >= 0 else ""
+    handled = set(re.findall(r"if op == ['\"]([a-z_]+)['\"]", body))
+    for group in re.findall(r"if op in \(([^)]*)\)", body):
+        handled.update(re.findall(r"['\"]([a-z_]+)['\"]", group))
+    missing = sorted(set(declared) - handled)
+    problems = []
+    if missing:
+        problems.append(f"登记了但 _apply_patch 没有分支的 patch op（写了会被静默跳过）：{missing}")
+    return {"declared": len(declared), "handled": sorted(handled), "missing": missing,
+            "problems": problems}
+
+
 def capability_consistency(mods_dir: pathlib.Path) -> dict:
     """Round 91 / 批次 CN：`manifest.capabilities` 的白名单 vs 官方包实际声明。
 
@@ -921,6 +950,8 @@ def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = 
         "capabilities": capability_consistency(
             mods_dir if mods_dir is not None else ROOT / "mods"
         ),
+        # Round 92 / 批次 CO：注册的 patch op 必须真的被 mod_loadout_v2 应用。
+        "patch_ops": patch_op_consistency(),
         "secret_ops_used": [
             {"op": op, "cards": usage[op]["cards"], "packages": sorted(usage[op]["packages"])}
             for op in secret_used
@@ -1075,6 +1106,17 @@ def render_text(summary: dict) -> str:
         for problem in (caps.get("problems") or [])[:4]:
             lines.append(f"  [失败] {problem}")
         lines.append("")
+    patch_ops = summary.get("patch_ops") or {}
+    if patch_ops:
+        lines.append(
+            f"== patch op 对拍（VALID_PATCH_OPS vs mod_loadout_v2）: 登记 "
+            f"{patch_ops.get('declared', 0)} 个，有分支 "
+            f"{len(patch_ops.get('handled') or [])} 个，没分支 "
+            f"{len(patch_ops.get('missing') or [])} 个 =="
+        )
+        for problem in (patch_ops.get("problems") or [])[:4]:
+            lines.append(f"  [失败] {problem}")
+        lines.append("")
     if hooks:
         lines.append(
             f"== 包级事件钩子（event_hooks 白名单）: 登记 {hooks['declared']} 个，"
@@ -1178,6 +1220,8 @@ def main(argv=None) -> int:
         or (summary.get("card_text_refs") or {}).get("problems")
         # Round 91 / 批次 CN：官方包声明的 capability 必须在白名单里。
         or (summary.get("capabilities") or {}).get("problems")
+        # Round 92 / 批次 CO：注册的 patch op 必须真的被应用。
+        or (summary.get("patch_ops") or {}).get("problems")
     ):
         return 1
     return 0

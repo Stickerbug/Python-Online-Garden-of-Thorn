@@ -120,6 +120,16 @@ def _arg_kind(entry: str) -> dict:
 
 
 def parse_blocks(path: pathlib.Path) -> dict:
+    # Round 92 / 批次 CO：``v2BlockRegistry.js`` 虽然**不被编辑器运行时/构建引用**
+    # （画布已移除，`main.js` → `v2Studio.js` 只走句型），但它是**op → 块标签的唯一来源**：
+    # 这个生成器靠它给 schema 里的每个 op 填 ``block``/``label``/``params``。
+    # 删掉它会让编辑器 op 列表掉回原始 op 名，所以文件保留；路径缺失时给出明确报错。
+    if not path.is_file():
+        raise SystemExit(
+            f"找不到块定义文件：{path}\n"
+            "它是 op → 中文标签的唯一来源（编辑器画布已移除、文件不参与构建，但生成器要用）；"
+            "用 --blocks 指定别的路径，或从编辑器仓库把它恢复回来。"
+        )
     text = path.read_text(encoding="utf-8")
     ops = {}
     for match in re.finditer(r"\bblock\('([A-Za-z0-9_]+)',\s*'([A-Za-z0-9_]+)'", text):
