@@ -499,7 +499,10 @@
             chatConsole: 'Console',
             chatUnread: (count) => `${count} unread message(s)`,
             chatRecall: 'Recall',
-            chatRecallEntry: 'Admin {0} recalled a message from {1}',
+            chatRecallEntry: (actor, target) => `${actor} recalled a message from ${target}`,
+            chatRecallSelf: (actor) => `${actor} recalled a message`,
+            chatRoleAdmin: 'Admin ',
+            chatRolePlayer: 'Player ',
             chatRecallConfirm: (name) => `Recall this message from ${name}? Everyone will stop seeing it.`,
             chatRecallDone: (count) => `Recalled ${count} message(s)`,
             chatRecallFailed: 'Recall failed: the message may already be recalled, or you lack permission.',
@@ -608,7 +611,10 @@
             chatSpectator: '观战', chatYesterday: '昨天', chatBeforeYesterday: '前天', chatConsole: '控制台',
             chatUnread: (count) => `${count} 条未读消息`,
             chatRecall: '撤回',
-            chatRecallEntry: '管理员{0}撤回了玩家{1}的一条消息',
+            chatRecallEntry: (actor, target) => `${actor}撤回了${target}的一条消息`,
+            chatRecallSelf: (actor) => `${actor}撤回了一条消息`,
+            chatRoleAdmin: '管理员',
+            chatRolePlayer: '玩家',
             chatRecallConfirm: (name) => `撤回 ${name} 的这条消息？撤回后所有玩家都看不到它。`,
             chatRecallDone: (count) => `已撤回 ${count} 条消息`,
             chatRecallFailed: '撤回失败：消息可能已被撤回，或你没有权限',
@@ -716,7 +722,10 @@
             chatConsole: 'Console',
             chatUnread: (count) => `${count} message(s) non lu(s)`,
             chatRecall: 'Retirer',
-            chatRecallEntry: "L'admin {0} a retiré un message de {1}",
+            chatRecallEntry: (actor, target) => `${actor} a retiré un message de ${target}`,
+            chatRecallSelf: (actor) => `${actor} a retiré un message`,
+            chatRoleAdmin: 'Admin ',
+            chatRolePlayer: 'Joueur ',
             chatRecallConfirm: (name) => `Retirer ce message de ${name} ? Il disparaitra pour tout le monde.`,
             chatRecallDone: (count) => `${count} message(s) retire(s)`,
             chatRecallFailed: 'Echec du retrait : message deja retire ou permission manquante.',
@@ -842,7 +851,10 @@
             chatSpectator: '観戦', chatYesterday: '昨日', chatBeforeYesterday: '一昨日', chatConsole: 'コンソール',
             chatUnread: (count) => `未読メッセージ ${count}件`,
             chatRecall: '取り消し',
-            chatRecallEntry: '管理者{0}が{1}のメッセージを取り消しました',
+            chatRecallEntry: (actor, target) => `${actor}が${target}のメッセージを取り消しました`,
+            chatRecallSelf: (actor) => `${actor}がメッセージを取り消しました`,
+            chatRoleAdmin: '管理者',
+            chatRolePlayer: 'プレイヤー',
             chatRecallConfirm: (name) => `${name} のこのメッセージを取り消しますか？全員に見えなくなります。`,
             chatRecallDone: (count) => `${count} 件のメッセージを取り消しました`,
             chatRecallFailed: '取り消しに失敗しました。すでに取り消し済みか、権限がありません。',
@@ -4858,17 +4870,83 @@
     }
 
     function storyChatRecallNoticeText(notice = {}) {
-        const template = t.chatRecallEntry || '管理员{0}撤回了玩家{1}的一条消息';
-        const text = String(template)
-            .replace('{0}', String(notice.actor_name || '?'))
-            .replace('{1}', String(notice.target_name || '?'));
+        const actor = `${storyChatRecallRoleLabel(notice.actor_role)}${String(notice.actor_name || '?')}`;
+        const target = `${storyChatRecallRoleLabel(notice.target_role)}${String(notice.target_name || '?')}`;
+        const text = notice.self_recall
+            ? (typeof t.chatRecallSelf === 'function' ? t.chatRecallSelf(actor) : actor)
+            : (typeof t.chatRecallEntry === 'function'
+                ? t.chatRecallEntry(actor, target)
+                : `${actor} ${target}`);
         const count = Math.max(1, Number(notice.count) || 1);
         return count > 1 ? `${text} ×${count}` : text;
     }
 
-    function canRecallStoryChat() {
+    function storyChatRecallRoleLabel(role) {
+        const key = String(role || '').toLowerCase();
+        if (key === 'admin' || key === 'staff') return t.chatRoleAdmin || '管理员';
+        if (key === 'player') return t.chatRolePlayer || '玩家';
+        return '';
+    }
+
+    function currentStoryChatRole() {
         const account = window.__STORY_ACCOUNT__ || {};
-        return !!(account.is_admin_player || account.isAdminPlayer);
+        const role = String(account.role_type || '').toLowerCase();
+        if (role === 'admin' || role === 'staff') return role;
+        if (account.is_admin_player || account.isAdminPlayer) return 'admin';
+        return 'player';
+    }
+
+    function currentStoryAccountId() {
+        const account = window.__STORY_ACCOUNT__ || {};
+        return account.id != null ? String(account.id) : '';
+    }
+
+    function isOwnStoryChatEntry(entry = {}) {
+        const owner = entry.sender_user_id ?? entry.user_id ?? entry.senderUserId ?? '';
+        const self = currentStoryAccountId();
+        if (!self || owner === '' || owner == null) return false;
+        return String(owner) === self;
+    }
+
+    function storyChatEntrySenderRole(entry = {}) {
+        const role = String(entry.sender_role || entry.senderRole || '').toLowerCase();
+        if (role === 'admin' || role === 'staff' || role === 'player') return role;
+        if (entry.console_player || entry.is_admin_player || entry.special_role) return 'admin';
+        return 'player';
+    }
+
+    function canRecallStoryChat(entry = {}) {
+        if (!(entry.message_id || entry.messageId)) return false;
+        if (isOwnStoryChatEntry(entry)) return true;
+        const role = currentStoryChatRole();
+        if (role === 'admin') return true;
+        if (role === 'staff') return storyChatEntrySenderRole(entry) === 'player';
+        return false;
+    }
+
+    function mergeStoryChatRecallNotices(entries, notices) {
+        if (!Array.isArray(notices) || !notices.length) return entries;
+        const ordered = notices
+            .slice()
+            .sort((left, right) => Number(left.ts || 0) - Number(right.ts || 0));
+        const merged = [];
+        let index = 0;
+        ordered.forEach((notice) => {
+            const noticeTs = Number(notice.ts || 0);
+            while (index < entries.length) {
+                const entry = entries[index];
+                const entryTs = Number((entry && entry.ts) || 0);
+                if (entryTs && noticeTs && entryTs > noticeTs) break;
+                merged.push(entry);
+                index += 1;
+            }
+            merged.push(notice);
+        });
+        while (index < entries.length) {
+            merged.push(entries[index]);
+            index += 1;
+        }
+        return merged;
     }
 
     function createStoryChatRecallButton(entry = {}) {
@@ -4905,9 +4983,12 @@
             scope: String(data.scope || 'lobby'),
             room_id: String(data.room_id || ''),
             actor_name: String(data.actor_name || ''),
+            actor_role: String(data.actor_role || 'admin'),
             target_name: String(data.target_name || ''),
+            target_role: String(data.target_role || 'player'),
+            self_recall: Boolean(data.self_recall),
             count: Math.max(1, Number(data.count) || ids.length || 1),
-            ts: Date.now() / 1000,
+            ts: Number(data.ts) || Date.now() / 1000,
             system: true,
         });
         while (storyChatRecallNotices.length > 50) storyChatRecallNotices.shift();
@@ -4967,7 +5048,7 @@
             repeat.textContent = ` ×${repeatCount}`;
             row.appendChild(repeat);
         }
-        if (canRecallStoryChat()) {
+        if (canRecallStoryChat(entry)) {
             const recallBtn = createStoryChatRecallButton(entry);
             if (recallBtn) row.appendChild(recallBtn);
         }
@@ -5181,10 +5262,10 @@
         const previousScrollTop = log.scrollTop;
         storyChatEntries = entries;
         log.replaceChildren();
-        entries.forEach((entry) => appendStoryChatEntry(log, entry));
-        storyChatRecallNotices
-            .filter((notice) => notice.scope !== 'room')
-            .forEach((notice) => appendStoryChatEntry(log, notice));
+        mergeStoryChatRecallNotices(
+            entries,
+            storyChatRecallNotices.filter((notice) => notice.scope !== 'room'),
+        ).forEach((entry) => appendStoryChatEntry(log, entry));
         if (storyChatOpen && stayAtBottom) {
             log.scrollTop = log.scrollHeight;
         } else {

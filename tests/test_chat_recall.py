@@ -167,6 +167,7 @@ class ChatRecallTests(unittest.TestCase):
                 mock.patch.object(gtn, 'rate_limiter', return_value=True),
                 mock.patch.object(gtn, 'check_chat_rate_locked', return_value=True),
                 mock.patch.object(gtn, '_extract_lobby_mentions', return_value=[]),
+                mock.patch.object(gtn, 'user_role_type', return_value='admin'),
                 mock.patch.object(gtn, 'append_admin_game_chat_locked'),
                 mock.patch.object(gtn, 'record_socket_action'),
                 mock.patch.object(gtn, 'ensure_event_loop_watchdog_started'),
@@ -209,6 +210,11 @@ class ChatRecallTests(unittest.TestCase):
             ][-1]
             self.assertEqual(recalled['message_ids'], [message_id])
             self.assertEqual(recalled['target_name'], 'LobbyAdmin')
+            self.assertEqual(recalled['actor_name'], 'LobbyAdmin')
+            self.assertEqual(recalled['actor_role'], 'admin')
+            self.assertEqual(recalled['target_role'], 'admin')
+            self.assertTrue(recalled['self_recall'])
+            self.assertIn('ts', recalled)
             entries = db.list_lobby_chat_entries(beta_mode=False, limit=20)
             self.assertFalse(any(int(entry['id']) == message_id for entry in entries))
             with gtn._lock:
@@ -238,6 +244,7 @@ class ChatRecallTests(unittest.TestCase):
             mock.patch.object(gtn, '_current_account_user', return_value=user),
             mock.patch.object(gtn, 'get_special_account_profile', return_value={'is_admin_player': True}),
             mock.patch.object(gtn, 'feedback_is_staff', return_value=False),
+            mock.patch.object(gtn, 'user_role_type', return_value='admin'),
             mock.patch.object(gtn, 'is_beta_instance', return_value=False),
             mock.patch.object(gtn, 'rate_limiter', return_value=True),
             mock.patch.object(gtn, 'record_socket_action'),
@@ -308,13 +315,49 @@ class ChatRecallTests(unittest.TestCase):
                 app.LOBBY_CHAT_SEQUENCE.update(original_sequence)
 
 
+class ChatRecallPermissionTests(unittest.TestCase):
+    def test_recall_permissions_follow_actor_and_target_roles(self):
+        """Staff 只能撤回玩家和自己的消息；Admin 谁都行；玩家只能撤回自己的。"""
+        import app as gtn
+
+        roles = {1: 'admin', 2: 'staff', 3: 'staff', 4: 'player', 5: 'player'}
+        with mock.patch.object(gtn, 'user_role_type', side_effect=lambda uid: roles.get(int(uid), 'none')):
+            admin = {'user_id': 1, 'name': 'Admin1', 'role': 'admin'}
+            staff = {'user_id': 2, 'name': 'Staff1', 'role': 'staff'}
+            player = {'user_id': 4, 'name': 'Player1', 'role': 'player'}
+            player_message = {'sender_user_id': 5, 'sender_name': 'Player2'}
+            own_message = {'sender_user_id': 4, 'sender_name': 'Player1'}
+            other_staff_message = {'sender_user_id': 3, 'sender_name': 'Staff2'}
+            admin_message = {'sender_user_id': 1, 'sender_name': 'Admin1'}
+
+            self.assertTrue(gtn._chat_recall_message_allowed(admin, other_staff_message))
+            self.assertTrue(gtn._chat_recall_message_allowed(admin, player_message))
+            self.assertTrue(gtn._chat_recall_message_allowed(staff, player_message))
+            self.assertTrue(gtn._chat_recall_message_allowed(staff, own_message))
+            self.assertFalse(gtn._chat_recall_message_allowed(staff, other_staff_message))
+            self.assertFalse(gtn._chat_recall_message_allowed(staff, admin_message))
+            self.assertTrue(gtn._chat_recall_message_allowed(player, own_message))
+            self.assertFalse(gtn._chat_recall_message_allowed(player, player_message))
+            self.assertFalse(gtn._chat_recall_message_allowed(player, admin_message))
+
+    def test_chat_role_labels_default_to_player_for_plain_accounts(self):
+        import app as gtn
+
+        with mock.patch.object(gtn, 'user_role_type', side_effect=lambda uid: {7: 'staff'}.get(int(uid), 'none')):
+            self.assertEqual(gtn._chat_role_for_account(7), 'staff')
+            self.assertEqual(gtn._chat_role_for_account(8), 'player')
+            self.assertEqual(gtn._chat_role_for_account(None, {'is_admin_player': True}), 'admin')
+
+
 class ChatRecallUiTests(unittest.TestCase):
     def test_lobby_chat_has_admin_recall_button(self):
-        self.assertIn('function canRecallChatMessages()', GAME_JS)
+        self.assertIn('function canRecallChatEntry(entry = {})', GAME_JS)
         self.assertIn('function createRecallChatButton(entry = {})', GAME_JS)
         self.assertEqual(GAME_JS.count('createRecallChatButton(entry)'), 1)
         self.assertIn("socket.emit('admin_chat_recall', { message_ids: [messageId] });", GAME_JS)
         self.assertIn("bindSocketEvent('admin_chat_recall_result'", GAME_JS)
+        self.assertIn('function mergeChatRecallNotices(', GAME_JS)
+        self.assertIn('chatRecallRoleLabel', GAME_JS)
 
     def test_story_chat_has_admin_recall_button_and_notice(self):
         self.assertIn("storyChatSocket.on('chat_recall'", STORY_JS)
@@ -323,6 +366,8 @@ class ChatRecallUiTests(unittest.TestCase):
         self.assertIn('function createStoryChatRecallButton(entry = {})', STORY_JS)
         self.assertIn('function applyStoryChatRecall(data = {})', STORY_JS)
         self.assertIn("recallRow.className = 'story-chat-message chat-msg chat-recall-entry';", STORY_JS)
+        self.assertIn('function canRecallStoryChat(entry = {})', STORY_JS)
+        self.assertIn('function mergeStoryChatRecallNotices(', STORY_JS)
         self.assertIn('.chat-recall-btn', SHARED_CHAT_CSS)
         self.assertIn('.chat-recall-entry', SHARED_CHAT_CSS)
 

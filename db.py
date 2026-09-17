@@ -7897,6 +7897,26 @@ def recall_chat_message(message_id, *, actor_user_id=0, actor_name=''):
         }
 
 
+def get_chat_message_info(message_id):
+    """只读查询一条聊天消息的定位信息（撤回前的权限判定用）。"""
+    try:
+        mid = int(message_id)
+    except (TypeError, ValueError):
+        return None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM chat_messages WHERE id = ?', (mid,)).fetchone()
+    if row is None:
+        return None
+    return {
+        'message_id': mid,
+        'room_id': row['room_id'],
+        'channel': row['channel'],
+        'sender_user_id': row['sender_user_id'],
+        'sender_name': row['sender_name'],
+        'hidden': int(row['hidden'] or 0),
+    }
+
+
 def recall_chat_messages_from_sender(sender_name, limit=20):
     """按昵称（或玩家号）取最近的消息 id，供控制台批量撤回。"""
     name = str(sender_name or '').strip()
@@ -13246,6 +13266,15 @@ def _role_type_for_user_conn(conn, user_id):
 def feedback_is_staff(user_id):
     with get_db_connection() as conn:
         return _role_type_for_user_conn(conn, user_id) in {'admin', 'staff'}
+
+
+def user_role_type(user_id):
+    """用户角色类型（admin/staff/contributor/sponsor/none），撤回权限判定用。"""
+    try:
+        with get_db_connection() as conn:
+            return _role_type_for_user_conn(conn, user_id)
+    except Exception:
+        return 'none'
 
 
 def _feedback_user(conn, user_id):
