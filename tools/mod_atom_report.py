@@ -700,6 +700,40 @@ def _client_inline_icon_keys() -> set:
     return keys
 
 
+def capability_consistency(mods_dir: pathlib.Path) -> dict:
+    """Round 91 / 批次 CN：`manifest.capabilities` 的白名单 vs 官方包实际声明。
+
+    背景：capability 目前是**纯声明元数据**（`mod_validator_v2` 只做白名单校验，
+    引擎/应用没有任何门控读取方）。所以这里只守一条：**官方包声明的能力名必须在白名单里**
+    （否则它们会被校验器拒收）；反过来"白名单里有、没人声明"的名字只作提示
+    （它们是给第三方包预留的名字，删掉会让已经写了这些名字的包直接导入失败）。
+    """
+
+    declared = set(getattr(mod_spec_v2, "VALID_CAPABILITIES", set()) or set())
+    used = set()
+    packages = 0
+    for path in sorted(mods_dir.glob("*.gtnmod")):
+        try:
+            with zipfile.ZipFile(path) as archive:
+                payload = json.loads(archive.read("mod.json"))
+        except Exception:
+            continue
+        packages += 1
+        for cap in ((payload.get("manifest") or {}).get("capabilities") or []):
+            used.add(str(cap))
+    unknown = sorted(used - declared)
+    problems = []
+    if unknown:
+        problems.append(f"官方包声明了白名单外的 capability：{unknown}")
+    return {
+        "declared": len(declared),
+        "used": sorted(used),
+        "unused": sorted(declared - used),
+        "packages": packages,
+        "problems": problems,
+    }
+
+
 def card_text_reference_consistency(mods_dir: pathlib.Path) -> dict:
     """Round 87 / 批次 CI：卡面文案引用的卡与图标必须真实存在。
 
@@ -883,6 +917,10 @@ def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = 
         "card_text_refs": card_text_reference_consistency(
             mods_dir if mods_dir is not None else ROOT / "mods"
         ),
+        # Round 91 / 批次 CN：官方包声明的 capability 必须在白名单里。
+        "capabilities": capability_consistency(
+            mods_dir if mods_dir is not None else ROOT / "mods"
+        ),
         "secret_ops_used": [
             {"op": op, "cards": usage[op]["cards"], "packages": sorted(usage[op]["packages"])}
             for op in secret_used
@@ -1027,6 +1065,16 @@ def render_text(summary: dict) -> str:
         for problem in (card_refs.get("problems") or [])[:6]:
             lines.append(f"  [失败] {problem}")
         lines.append("")
+    caps = summary.get("capabilities") or {}
+    if caps:
+        lines.append(
+            f"== manifest.capabilities 对拍: 白名单 {caps.get('declared', 0)} 个，"
+            f"官方包声明了 {len(caps.get('used') or [])} 个，"
+            f"白名单里没人声明的 {len(caps.get('unused') or [])} 个（预留名，只提示）=="
+        )
+        for problem in (caps.get("problems") or [])[:4]:
+            lines.append(f"  [失败] {problem}")
+        lines.append("")
     if hooks:
         lines.append(
             f"== 包级事件钩子（event_hooks 白名单）: 登记 {hooks['declared']} 个，"
@@ -1128,6 +1176,8 @@ def main(argv=None) -> int:
         or (summary.get("status_ids") or {}).get("problems")
         # Round 87 / 批次 CI：卡面文案引用的卡/图标必须存在。
         or (summary.get("card_text_refs") or {}).get("problems")
+        # Round 91 / 批次 CN：官方包声明的 capability 必须在白名单里。
+        or (summary.get("capabilities") or {}).get("problems")
     ):
         return 1
     return 0

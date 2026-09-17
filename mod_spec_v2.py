@@ -9,6 +9,19 @@ from atomic_registry import engine_atomic_ops, merge_public_ops
 FORMAT_VERSION = 2
 API_VERSION = "2.0"
 
+# ``manifest.capabilities`` 的**名字白名单**。
+#
+# Round 91 / 批次 CN 核查结论：capability 目前是**纯声明元数据**——
+# ``mod_validator_v2`` 只做"名字在白名单里"的校验（不在就报错），
+# **引擎与应用没有任何门控读取方**（没有任何 `if 'logic.advanced' in capabilities` 之类的分支）。
+# 所以它现在的作用是"给编辑器/社区列表看的能力标签"，不是开关。
+#
+# 官方 20 个包声明过的 10 个（`cards` / `tags` / `statuses` / `logic.basic` /
+# `logic.advanced` / `event_hooks` / `opening_events` / `ui_components` / `ui.modal` /
+# `ui.choice`）被 `tools/mod_atom_report.py` 的"capabilities 对拍"守着；
+# 另外 5 个（`patches` / `compatibility` / `logic_dsl` / `localization` /
+# `ui.visual_limited`）是**预留名**：没人声明也没人读，但删掉会让已经写了它们的
+# 第三方包在导入时直接报"未知 capability"，所以保留。
 VALID_CAPABILITIES = {
     "cards",
     "tags",
