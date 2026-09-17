@@ -7079,13 +7079,55 @@ class GameEngine:
             if isinstance(bound, CardInstance):
                 # 不重复抽取：同名选择器第二次解析拿到的是同一张牌。
                 return bound
-        chosen = self._zone_card_pick(
-            self._zone_card_candidates(player_id, selector, current_card, context, prefer_runtime),
-            selector,
+        candidates = self._zone_card_candidates(
+            player_id, selector, current_card, context, prefer_runtime,
         )
+        # Round 88 / 批次 CJ：按**序号**取牌（``index`` 1 基 / ``offset`` 0 基，都可写表达式）
+        # ——配合 ``request_ui`` 的输入值就能做"输入数字选第 N 张"。写了 ``index``/``offset``
+        # 时优先于 ``pick``（挑最大/最小那套）。
+        index_raw = selector.get('index')
+        if index_raw is None:
+            offset_raw = selector.get('offset')
+            if offset_raw is not None:
+                index_raw = self._offset_index_expression(offset_raw)
+        if index_raw is not None:
+            position = self._selector_index_value(player_id, current_card, index_raw, context)
+            if position < 0:
+                position = len(candidates) + position + 1
+            chosen = candidates[position - 1] if 1 <= position <= len(candidates) else None
+        else:
+            chosen = self._zone_card_pick(candidates, selector)
         if chosen is not None and name:
             store[name] = chosen
         return chosen
+
+    @staticmethod
+    def _offset_index_expression(offset):
+        """``offset``（0 基）→ ``index``（1 基）：能写表达式时按表达式 +1。"""
+
+        if isinstance(offset, dict):
+            return {"op": "add", "a": offset, "b": 1}
+        try:
+            return int(offset) + 1
+        except (TypeError, ValueError):
+            return 1
+
+    def _selector_index_value(self, player_id, card, expr, context=None) -> int:
+        """``index`` 的取值：先走**运行时求值器**，再回落引擎口径。
+
+        批次 CJ：``get`` / ``collection_op`` 这类表达式算子只有运行时求值器认识
+        （引擎的 ``_eval_expr`` 不认），而"输入数字选第 N 张"正是要读
+        ``{"op":"get","object":{"op":"var","name":"ui_result"},"key":"n"}``。
+        """
+
+        if isinstance(expr, dict):
+            try:
+                from mod_runtime_v2 import eval_v2_value
+                value = eval_v2_value(self, context if isinstance(context, dict) else {}, expr)
+                return int(self._scalar_value(value, 0) or 0)
+            except Exception:  # noqa: BLE001 — 求值失败回落引擎口径
+                pass
+        return self._resolve_step_number(player_id, expr, card, 1)
 
     def _card_play_requirements(self, card: Optional[CardInstance]) -> List[dict]:
         """Card level ``play_requires`` gates declared by the card data."""

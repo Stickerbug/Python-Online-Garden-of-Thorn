@@ -672,6 +672,104 @@ def status_id_consistency(mods_dir: pathlib.Path) -> dict:
             "problems": problems}
 
 
+# Round 87 / 批次 CI：卡面文案里的**内联标记**（``[[card:ID]]`` / ``[[icon:KEY]]``）。
+CARD_TEXT_MARKUP_RE = re.compile(r"\[\[([a-z_]+):([^\]|]+)((?:\|[^\]]*)?)\]\]")
+
+
+def _client_inline_icon_keys() -> set:
+    """从 ``static/js/game.js`` 抽 ``[[icon:…]]`` 的词表（``INLINE_ICON_DATA_URLS`` + ``uiIcons``）。"""
+
+    path = ROOT / "static" / "js" / "game.js"
+    if not path.is_file():
+        return set()
+    text = path.read_text(encoding="utf-8", errors="replace")
+    keys = set()
+    for block_name in ("INLINE_ICON_DATA_URLS", "uiIcons"):
+        start = text.find(f"const {block_name} = {{")
+        if start < 0:
+            start = text.find(f"const {block_name}={{" if False else f"{block_name} = {{")
+        if start < 0:
+            continue
+        end = text.find("\n    };", start)
+        if end < 0:
+            end = text.find("\n};", start)
+        if end < 0:
+            end = start + 6000
+        for match in re.finditer(r"^\s*'?([A-Za-z0-9_\-]+)'?:\s*'", text[start:end], re.M):
+            keys.add(match.group(1))
+    return keys
+
+
+def card_text_reference_consistency(mods_dir: pathlib.Path) -> dict:
+    """Round 87 / 批次 CI：卡面文案引用的卡与图标必须真实存在。
+
+    中文卡面文案是第一权威（见用户规则），里面的 ``[[card:ID]]`` 写错就会渲染成
+    普通文字、``[[icon:KEY]]`` 写错会退化成裸字母——都是"看着像对、其实不对"的毛病。
+    这里把 20 个官方包的 ``mod.json`` 与 ``locales/*.json`` 里所有字符串扫一遍对拍。
+    """
+
+    known_cards = set()
+    known_icons = _client_inline_icon_keys()
+    payloads = []
+    for path in sorted(mods_dir.glob("*.gtnmod")):
+        try:
+            with zipfile.ZipFile(path) as archive:
+                payload = json.loads(archive.read("mod.json"))
+                locales = [
+                    archive.read(name).decode("utf-8", "replace")
+                    for name in archive.namelist()
+                    if name.startswith("locales/") and name.endswith(".json")
+                ]
+        except Exception:
+            continue
+        payloads.append((path.name, payload, locales))
+        for card in (payload.get("registries") or {}).get("cards") or []:
+            if not isinstance(card, dict):
+                continue
+            for key in ("id", "legacy_id"):
+                value = str(card.get(key) or "").strip()
+                if value:
+                    known_cards.add(value)
+    checked_cards = 0
+    checked_icons = 0
+    unknown_cards = []
+    unknown_icons = []
+    for name, payload, locales in payloads:
+        blobs = [json.dumps(payload, ensure_ascii=False)] + locales
+        for blob in blobs:
+            for kind, value, modifiers in CARD_TEXT_MARKUP_RE.findall(blob):
+                if kind == "card":
+                    checked_cards += 1
+                    if value.strip() not in known_cards:
+                        unknown_cards.append({"package": name, "value": value.strip()})
+                elif kind == "icon":
+                    checked_icons += 1
+                    if known_icons and value.strip() not in known_icons:
+                        unknown_icons.append({"package": name, "value": value.strip()})
+    problems = []
+    if unknown_cards:
+        seen = sorted({(item["value"], item["package"]) for item in unknown_cards})
+        problems.append(
+            "卡面文案里 [[card:ID]] 指向不存在的卡："
+            + ", ".join(f"{value!r} @ {package}" for value, package in seen[:6])
+        )
+    if unknown_icons:
+        seen = sorted({(item["value"], item["package"]) for item in unknown_icons})
+        problems.append(
+            "卡面文案里 [[icon:KEY]] 不是客户端认识的图标："
+            + ", ".join(f"{value!r} @ {package}" for value, package in seen[:6])
+        )
+    return {
+        "cards": checked_cards,
+        "icons": checked_icons,
+        "known_cards": len(known_cards),
+        "known_icons": len(known_icons),
+        "unknown_cards": unknown_cards[:20],
+        "unknown_icons": unknown_icons[:20],
+        "problems": problems,
+    }
+
+
 def ui_text_consistency(mods_dir: pathlib.Path) -> dict:
     """Round 76 / 批次 BU：官方包里每个 ``request_ui`` 组件都必须有**中文文案**。
 
@@ -781,6 +879,10 @@ def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = 
         "ui_text": ui_text_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
         # Round 81 / 批次 CA：卡数据的 status id 必须有声明（引擎内建或包 statuses）。
         "status_ids": status_id_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
+        # Round 87 / 批次 CI：卡面文案里的 [[card:ID]] / [[icon:KEY]] 必须真实存在。
+        "card_text_refs": card_text_reference_consistency(
+            mods_dir if mods_dir is not None else ROOT / "mods"
+        ),
         "secret_ops_used": [
             {"op": op, "cards": usage[op]["cards"], "packages": sorted(usage[op]["packages"])}
             for op in secret_used
@@ -914,6 +1016,17 @@ def render_text(summary: dict) -> str:
         for problem in (status_ids.get("problems") or [])[:6]:
             lines.append(f"  [失败] {problem}")
         lines.append("")
+    card_refs = summary.get("card_text_refs") or {}
+    if card_refs:
+        lines.append(
+            f"== 卡面文案引用对拍: [[card:…]] {card_refs.get('cards', 0)} 处、"
+            f"[[icon:…]] {card_refs.get('icons', 0)} 处；"
+            f"词表 {card_refs.get('known_cards', 0)} 张卡 / {card_refs.get('known_icons', 0)} 个图标，"
+            f"对不上的 {len(card_refs.get('problems') or [])} 类 =="
+        )
+        for problem in (card_refs.get("problems") or [])[:6]:
+            lines.append(f"  [失败] {problem}")
+        lines.append("")
     if hooks:
         lines.append(
             f"== 包级事件钩子（event_hooks 白名单）: 登记 {hooks['declared']} 个，"
@@ -1013,6 +1126,8 @@ def main(argv=None) -> int:
         or (summary.get("ui_text") or {}).get("problems")
         # Round 81 / 批次 CA：卡数据的 status id 必须有声明（没人声明的按拼错处理）。
         or (summary.get("status_ids") or {}).get("problems")
+        # Round 87 / 批次 CI：卡面文案引用的卡/图标必须存在。
+        or (summary.get("card_text_refs") or {}).get("problems")
     ):
         return 1
     return 0
