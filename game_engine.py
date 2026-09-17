@@ -3162,6 +3162,9 @@ class GameEngine:
         text = self._normalize_log_text(str(msg))
         if not text:
             return
+        text = self._guard_unresolved_log_placeholders(text)
+        if not text:
+            return
         if self._merge_log_text(text):
             return
         if self._move_use_log_before_response_detail(text):
@@ -3171,6 +3174,28 @@ class GameEngine:
             self._mark_log_visible()
             return
         self._compact_recent_repeated_action_block()
+
+    _UNRESOLVED_LOG_PLACEHOLDER_RE = re.compile(r'\{[A-Za-z_][A-Za-z0-9_]*\}')
+
+    def _guard_unresolved_log_placeholders(self, text: str) -> str:
+        """反馈 #150：模板占位符没被替换时，别把 ``{target}`` 原样播给玩家。
+
+        记录一条模组运行时错误（管理员可见），并把未替换的占位符从战报里去掉，
+        免得玩家看到「{target}将1张虚空加入手中」这种半截文案。
+        """
+        if not isinstance(text, str) or '{' not in text:
+            return text
+        if not self._UNRESOLVED_LOG_PLACEHOLDER_RE.search(text):
+            return text
+        try:
+            record_mod_runtime_error(
+                f'unresolved log placeholder: {text}',
+                effect_type='log',
+                room_phase=getattr(self, 'phase', ''),
+            )
+        except Exception:
+            pass
+        return self._UNRESOLVED_LOG_PLACEHOLDER_RE.sub('', text).strip()
 
     def _is_log_compaction_boundary(self, text: str) -> bool:
         if not text:
@@ -10477,7 +10502,15 @@ class GameEngine:
                     ts.deck.insert(0, new_card)
                 self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
-                self.log_msg(log)
+                # 反馈 #150：这里曾经直接打印模板原文，`{target}` 会原样出现在战报里。
+                self.log_msg(self._format_step_log(
+                    log,
+                    target=self.pn(target_id),
+                    source=self.pn(player_id),
+                    name=card_def.name_cn,
+                    amount=amount,
+                    count=amount,
+                ))
 
     def _move_card_remove_payload(self, player_id, card, params, log, choice, context):
         """``move_card(mode:"remove")``：把区域里的一张牌**直接移除**。
@@ -18760,7 +18793,14 @@ class GameEngine:
                 ts.add_to_hand(new_card)
                 self._remember_created_card(new_card, context)
             if log and card_def.id != ERROR_CARD_ID:
-                self.log_msg(log)
+                self.log_msg(self._format_step_log(
+                    log,
+                    target=self.pn(target_id),
+                    source=self.pn(player_id),
+                    name=card_def.name_cn,
+                    amount=amount,
+                    count=amount,
+                ))
 
 
 
