@@ -414,6 +414,38 @@ def _rule_target_text(rule, raw_text, normalized_text):
     return normalized_text
 
 
+_ASCII_TERM_RE_CACHE = {}
+
+
+def _is_ascii_term(term):
+    """ASCII 词条（英文单词、拼音缩写）要整词匹配，否则会命中更长的英文单词。"""
+    text = str(term or '')
+    if not text or not text.isascii():
+        return False
+    return any(ch.isalpha() for ch in text)
+
+
+def _ascii_term_pattern(term):
+    text = str(term or '')
+    cached = _ASCII_TERM_RE_CACHE.get(text)
+    if cached is not None:
+        return cached
+    # 容忍常见复数后缀（-s/-es），其余位置不允许紧贴英文字母：
+    # 「Stickerbug / superb」不会再命中 "rb"，「Scunthorpe」不会再命中 "cunt"。
+    compiled = re.compile(
+        r'(?<![A-Za-z])' + re.escape(text) + r'(?:e?s)?(?![A-Za-z])',
+        re.IGNORECASE,
+    )
+    _ASCII_TERM_RE_CACHE[text] = compiled
+    return compiled
+
+
+def _term_in_text(term, text):
+    if _is_ascii_term(term):
+        return _ascii_term_pattern(term).search(text) is not None
+    return bool(term) and term in text
+
+
 def _rule_matches(rule, raw_text, normalized_text, allowlist):
     pattern = str(rule.get('pattern') or '')
     rtype = str(rule.get('type') or 'contains').lower()
@@ -423,10 +455,11 @@ def _rule_matches(rule, raw_text, normalized_text, allowlist):
         for term in rule.get('_normalized_terms') or []:
             if term in allowlist:
                 continue
-            if term and term in normalized_text:
-                matched.append(term)
-                if len(matched) >= 8:
-                    break
+            if not _term_in_text(term, normalized_text):
+                continue
+            matched.append(term)
+            if len(matched) >= 8:
+                break
         return matched
     if rtype == 'domain_list':
         raw_lower = raw_text.casefold()
@@ -448,7 +481,7 @@ def _rule_matches(rule, raw_text, normalized_text, allowlist):
     normalized_pattern = normalize_message(pattern)
     if normalized_pattern in allowlist:
         return []
-    return [pattern] if normalized_pattern and normalized_pattern in target_text else []
+    return [pattern] if _term_in_text(normalized_pattern, target_text) else []
 
 
 def _mask_by_rule(text, rule, matched_terms=None):
@@ -462,9 +495,13 @@ def _mask_by_rule(text, rule, matched_terms=None):
             return text
     masked = text
     for term in list(matched_terms or []):
-        if len(str(term)) < 2:
+        term_text = str(term)
+        if len(term_text) < 2:
             continue
-        masked = re.sub(re.escape(str(term)), '***', masked, flags=re.IGNORECASE)
+        if _is_ascii_term(term_text):
+            masked = _ascii_term_pattern(term_text).sub('***', masked)
+            continue
+        masked = re.sub(re.escape(term_text), '***', masked, flags=re.IGNORECASE)
     if pattern:
         masked = re.sub(re.escape(pattern), '***', masked, flags=re.IGNORECASE)
     return masked

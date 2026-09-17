@@ -108,6 +108,33 @@ def test_pinyin_and_abbreviation_variants_are_caught():
     assert _level('luoliao') == 4
 
 
+def test_ascii_terms_only_match_whole_words():
+    """拉丁词条必须整词匹配：Stickerbug/superb 不该命中 "rb"，Scunthorpe 不该命中 "cunt"。"""
+    for text in (
+        'Stickerbug', 'stickerbug', 'superb', 'absorb', 'herb', 'curb', 'verb',
+        'prickly', 'oxymoron', 'Scunthorpe', 'Sussex', 'Essex', 'analysis',
+    ):
+        assert _level(text) < 3, text
+    assert _level('2b') >= 3
+    assert _level('你2b') >= 3
+    assert _level('cunt') == 4
+    assert _level('cunts') == 4
+    assert _level('moron') >= 3
+    assert _level('prick') >= 3
+
+
+def test_ascii_term_masking_keeps_the_whole_token():
+    result = moderation.check_message_risk('assholes')
+    assert result.get('risk_level') >= 3
+    assert result.get('sanitized_text') == '***'
+
+
+def test_reserved_owner_name_is_not_reported_as_abusive():
+    result = moderation.check_nickname_risk('Stickerbug')
+    assert 'abusive' not in set(result.get('matched_categories') or [])
+    assert result.get('reserved_name') == 'Stickerbug'
+
+
 def test_homoglyph_evasion_is_folded_before_matching():
     assert _level('sh\u0430bi') >= 3   # 西里尔字母 а
     assert _level('sh\u03b1bi') >= 3   # 希腊字母 α
