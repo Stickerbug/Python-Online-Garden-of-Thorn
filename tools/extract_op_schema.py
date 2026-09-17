@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """生成编辑器与游戏之间的唯一契约：op schema。
 
-编辑器侧有旧的 Blockly 块定义（``模组编辑器/src/v2BlockRegistry.js``），
-运行时侧有 ``mod_spec_v2.VALID_LOGIC_OPS``（策展清单 ∪ 引擎 ``_atomic_*``）。
+编辑器侧有一份 **op → 标签表**（``模组编辑器/src/generated/op-labels.json``：
+块 id / 分类 / 中文标签 / 参数名与种类 / 文档），运行时侧有
+``mod_spec_v2.VALID_LOGIC_OPS``（策展清单 ∪ 引擎 ``_atomic_*``）。
 两边各有一份 op 知识，长期必然漂移。本脚本把两边取并集，产出
 ``模组编辑器/src/generated/op-schema.json``：
 
@@ -12,6 +13,10 @@
 * ``blocksOnly``  —— 编辑器有块、运行时却不认识的 op（陈旧块，会造成"编辑通过、线上报错"）。
 
     python tools/extract_op_schema.py
+
+Round 93 / 批次 CP：标签来源从"退役的 Blockly 画布文件 `v2BlockRegistry.js`"迁到
+``op-labels.json``（纯数据）。迁移用 ``--blocks-from-js <path>`` 还能从旧文件解析，
+但默认只读 JSON——编辑器仓库不再背着 2327 行、不进构建的伪代码。
 """
 
 from __future__ import annotations
@@ -22,7 +27,9 @@ import pathlib
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-BLOCKS_JS = ROOT.parent / "模组编辑器" / "src" / "v2BlockRegistry.js"
+EDITOR_SRC = ROOT.parent / "模组编辑器" / "src"
+BLOCKS_JS = EDITOR_SRC / "v2BlockRegistry.js"      # 迁移用的旧画布文件（批次 CP 后已删除）
+LABELS_JSON = EDITOR_SRC / "generated" / "op-labels.json"
 DEFAULT_OUT = ROOT.parent / "模组编辑器" / "src" / "generated" / "op-schema.json"
 
 
@@ -120,15 +127,13 @@ def _arg_kind(entry: str) -> dict:
 
 
 def parse_blocks(path: pathlib.Path) -> dict:
-    # Round 92 / 批次 CO：``v2BlockRegistry.js`` 虽然**不被编辑器运行时/构建引用**
-    # （画布已移除，`main.js` → `v2Studio.js` 只走句型），但它是**op → 块标签的唯一来源**：
-    # 这个生成器靠它给 schema 里的每个 op 填 ``block``/``label``/``params``。
-    # 删掉它会让编辑器 op 列表掉回原始 op 名，所以文件保留；路径缺失时给出明确报错。
+    """**迁移用**：从退役的 ``v2BlockRegistry.js`` 里解析 op → 标签（现已改读 JSON）。"""
+
     if not path.is_file():
         raise SystemExit(
             f"找不到块定义文件：{path}\n"
-            "它是 op → 中文标签的唯一来源（编辑器画布已移除、文件不参与构建，但生成器要用）；"
-            "用 --blocks 指定别的路径，或从编辑器仓库把它恢复回来。"
+            "默认标签来源已经是模组编辑器/src/generated/op-labels.json；"
+            "只有做迁移/对比时才需要用 --blocks-from-js 指向旧的画布文件。"
         )
     text = path.read_text(encoding="utf-8")
     ops = {}
@@ -162,9 +167,31 @@ def parse_blocks(path: pathlib.Path) -> dict:
     return ops
 
 
+def load_labels(path: pathlib.Path) -> dict:
+    """读标签表：``*.json`` 读数据文件，其它后缀按旧画布 JS 解析（迁移用）。"""
+
+    if not path.is_file():
+        raise SystemExit(
+            f"找不到 op 标签表：{path}\n"
+            "它给 schema 里的每个 op 提供块 id / 分类 / 中文标签 / 参数名与种类；"
+            "用 --labels 指定别的路径，或从编辑器仓库把它恢复回来。"
+        )
+    if path.suffix.lower() != ".json":
+        return parse_blocks(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    ops = payload.get("ops") if isinstance(payload, dict) else None
+    if not isinstance(ops, dict):
+        raise SystemExit(f"标签表格式不对（应该是 {{\"ops\": {{op: …}}}}）：{path}")
+    return {str(name): dict(entry) for name, entry in ops.items() if isinstance(entry, dict)}
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="生成 op schema（编辑器 ∩ 运行时）。")
-    parser.add_argument("--blocks", default=str(BLOCKS_JS))
+    parser.add_argument("--labels", default=str(LABELS_JSON),
+                        help="op → 标签表（JSON；默认读编辑器仓库的 generated/op-labels.json）")
+    parser.add_argument("--blocks-from-js", default="",
+                        help="迁移用：从旧画布文件 v2BlockRegistry.js 解析标签（覆盖 --labels）")
+    parser.add_argument("--blocks", default="", help="--blocks-from-js 的旧名字（兼容）")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args(argv)
 
@@ -179,7 +206,9 @@ def main(argv=None) -> int:
     curated_ops = set(getattr(mod_spec_v2, "_CORE_LOGIC_OPS", set()) or set())
     engine_ops = set(atomic_registry.engine_atomic_ops())
 
-    blocks = parse_blocks(pathlib.Path(args.blocks))
+    source = args.blocks_from_js or args.blocks
+    blocks = (load_labels(pathlib.Path(source)) if source
+              else load_labels(pathlib.Path(args.labels)))
     for op, entry in blocks.items():
         entry["inRuntime"] = op in runtime_ops
         entry["curated"] = op in curated_ops
