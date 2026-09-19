@@ -325,6 +325,23 @@ a:hover {
   text-align: center;
 }
 
+/* 反馈 #156：消息面板里的「全部已读」按钮，沿用链接行样式。 */
+button.fc-account-popover-link {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid #ebecf0;
+  background: transparent;
+  color: var(--fc-accent, #2563eb);
+  font: inherit;
+  cursor: pointer;
+}
+
+button.fc-account-popover-link:hover,
+button.fc-account-popover-link:focus-visible {
+  background: rgba(37, 99, 235, .06);
+  outline: none;
+}
+
 .fc-badge {
   display: inline-block;
   min-width: 16px;
@@ -1147,6 +1164,12 @@ a:hover {
 .fc-messages-head h2 {
   margin: 0;
   font-size: 22px;
+}
+
+.fc-messages-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .fc-messages-list {

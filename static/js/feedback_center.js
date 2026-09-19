@@ -21,6 +21,7 @@
       author: '发布者', updated: '更新于 {0}', login: '去登录', account_label: '账号',
       messages_title: '消息', messages_empty: '暂无新消息',
       messages_login: '请先登录账号后查看消息。', messages_back: '返回反馈列表',
+      messages_mark_all_read: '全部已读',
       notification_staff: '待处理请求', notification_watched: '关注更新', notification_author: '你的反馈更新',
       report: '举报', report_comment: '举报评论', report_title: '举报', submit_report: '提交举报',
       replay_hint: '回放 ID：{0}（登录游戏后可查看）', need_login: '请先登录账号。',
@@ -54,6 +55,7 @@
       author: 'Reported by', updated: 'Updated {0}', login: 'Sign in', account_label: 'Account',
       messages_title: 'Messages', messages_empty: 'No new messages',
       messages_login: 'Sign in to view your messages.', messages_back: 'Back to reports',
+      messages_mark_all_read: 'Mark all read',
       notification_staff: 'Pending request', notification_watched: 'Watched update', notification_author: 'Your report update',
       report: 'Report', report_comment: 'Report comment', report_title: 'Report', submit_report: 'Submit report',
       replay_hint: 'Replay ID: {0} (viewable in game)', need_login: 'Sign in to continue.',
@@ -515,6 +517,21 @@
     await loadNotifications({ force: true });
   }
 
+  async function markAllNotificationsRead() {
+    const ids = [...new Set((state.notifications || [])
+      .map((item) => Number(item?.issue?.id || 0))
+      .filter((id) => id > 0))];
+    for (const issueId of ids) {
+      try {
+        await api(`/api/public-feedback/issues/${issueId}/read`, { method: 'POST', body: {} });
+      } catch (_) {}
+    }
+    await refreshFeedbackUnread();
+    if (window.location.pathname.startsWith('/feedback-center/messages')) {
+      await renderMessagesView();
+    }
+  }
+
   async function loadNotifications({ force = false } = {}) {
     if (!state.account) return;
     if (!force && state.notificationsLoaded) return;
@@ -555,6 +572,7 @@
         `<small>${esc(typeText)} · ${esc(reason || '')}</small></button>`;
     }).join('');
     panel.innerHTML = `<div class="fc-account-popover-head">消息</div><div class="fc-account-popover-list">${items}</div>` +
+      `<button type="button" class="fc-account-popover-link fc-mark-all-read" data-mark-all-read>${esc(t('messages_mark_all_read'))}</button>` +
       `<a class="fc-account-popover-link" href="/" target="_blank" rel="noopener">返回游戏主页</a>`;
   }
 
@@ -587,7 +605,10 @@
       return;
     }
     messages.innerHTML = `<div class="fc-messages-head"><h2>${esc(t('messages_title'))}</h2>` +
-      `<a class="fc-button fc-button-secondary fc-button-small" href="${esc(canonicalListPath(state.kind))}">${esc(t('messages_back'))}</a></div>` +
+      `<span class="fc-messages-actions">` +
+      `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-mark-all-read>${esc(t('messages_mark_all_read'))}</button>` +
+      `<a class="fc-button fc-button-secondary fc-button-small" href="${esc(canonicalListPath(state.kind))}">${esc(t('messages_back'))}</a>` +
+      `</span></div>` +
       `<div class="fc-messages-list fc-muted">${esc(t('loading'))}</div>`;
     try {
       const data = await api('/api/public-feedback/notifications?limit=100');
@@ -684,12 +705,13 @@
       }
       renderDetail();
       renderIssues();
-      if (state.detail && (state.detail.can_private || state.detail.is_staff || state.detail.watching)) {
-        try {
-          await api(`/api/public-feedback/issues/${Number(issueId)}/read`, { method: 'POST', body: {} });
-        } catch (_) {}
-        await refreshFeedbackUnread();
-      }
+      // 反馈 #156：以前只有 Staff / 关注者 / 有私密补充的条目才标记已读，作者
+      // 自己打开反馈时红点永远不减。这里改成打开就尝试标记（服务端会校验权限，
+      // 无权限时静默忽略），标完立刻刷新红点。
+      try {
+        await api(`/api/public-feedback/issues/${Number(issueId)}/read`, { method: 'POST', body: {} });
+      } catch (_) {}
+      await refreshFeedbackUnread();
     } catch (err) {
       const detail = $('fc-detail');
       detail.innerHTML = `<div class="fc-empty">${esc(err.message || 'error')}</div>`;
@@ -1312,6 +1334,11 @@
     document.querySelectorAll('[data-close-report]').forEach((button) => button.addEventListener('click', () => closeDialog('fc-report-dialog')));
 
     document.addEventListener('click', (event) => {
+      if (event.target.closest('[data-mark-all-read]')) {
+        event.preventDefault();
+        void markAllNotificationsRead();
+        return;
+      }
       const issueId = Number(event.target.closest('[data-open-issue]')?.dataset.openIssue || 0);
       if (issueId > 0) {
         event.preventDefault();
