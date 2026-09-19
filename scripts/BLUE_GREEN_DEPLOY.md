@@ -12,6 +12,18 @@
 >
 > 下面的蓝绿流程（5002 next 实例 + nginx 切换）仅作历史参考，不要再执行。
 
+### 生产 nginx 上的常识性加固（2026-09-19）
+
+`/etc/nginx/sites-available/gtn` 的每个 server 块里都 include 了一份反扫描片段：
+
+```nginx
+include /etc/nginx/snippets/gtn_deny_scanners.conf;
+```
+
+片段内容在仓库里留档：`scripts/nginx/gtn_deny_scanners.conf`（探测路径直接 444 断开、
+`/.well-known/` 放行给 certbot）。改完必须 `nginx -t` 通过再 `systemctl reload nginx`，
+并按片段头部的 curl 清单验一遍正常路径没被误伤。
+
 目标：旧对局留在旧进程完成，新玩家和新对局进入新进程。
 
 ## 前提

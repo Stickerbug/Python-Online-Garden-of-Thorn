@@ -327,6 +327,18 @@ healing、事件效果、下一状态、回执、事件或 seed；这些值均�
 
 公网监控只应使用 <code>/api/healthz</code>。详细诊断含数据库、锁和待处理流程信息，不应公开。
 
+排查「服务器没有响应」这类客户端超时时，健康诊断里还会给出两组卡顿信息：
+
+- <code>loop_lag</code>：最近 5 分钟事件循环延迟的 <code>samples</code>、<code>last_ms</code>、
+  <code>max_ms</code>、<code>avg_ms</code>、<code>p95_ms</code>、阈值 <code>warn_ms</code>，以及最后一次
+  卡顿告警 <code>last_warning</code>（含 <code>ts</code>/<code>lag_ms</code>/<code>activity</code>）。
+- <code>current_activity</code>：此刻在跑什么（<code>socket:play_card</code>、
+  <code>http:POST /api/story/run/action</code> 之类）、已跑多久 <code>running_ms</code>，以及最近几条慢活动
+  <code>recent_slow</code>。
+
+同一份告警也会写进 journal（<code>admin_event</code> 的 <code>suspicious</code> 类型，带
+<code>activity</code> 与 <code>lag_ms</code>），所以卡顿可以事后按时间检索归因。
+
 ## 社区公告、投票与运营后台
 
 公开读取使用 <code>Cache-Control: private, no-store</code>，不会返回运营审计、创建人账号、投票指纹或尚未结束投票的选项票数。
