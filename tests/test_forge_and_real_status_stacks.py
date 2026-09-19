@@ -109,8 +109,12 @@ class RealStatusStackDamageTests(unittest.TestCase):
 
         def walk(node, card_id):
             if isinstance(node, dict):
-                if node.get('op') == 'status_stack' and node.get('ignore_immunity') is not True:
-                    missing.append(card_id)
+                if node.get('op') == 'status_stack':
+                    status_key = str(node.get('status') or '').split(':')[-1]
+                    # 读「状态免疫」本身不受免疫影响，不需要开关。
+                    if status_key not in ('status_immune', 'immune', '状态免疫'):
+                        if node.get('ignore_immunity') is not True:
+                            missing.append(f'{card_id}:{node.get("status")}')
                 for value in node.values():
                     walk(value, card_id)
             elif isinstance(node, list):

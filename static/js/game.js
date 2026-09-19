@@ -5500,6 +5500,21 @@ function mergeChatRecallNotices(entries, notices) {
     return merged;
 }
 
+function dropDanglingChatTimeSeparators(entries) {
+    // 反馈 #175：撤回把消息删掉后，它前面的时间分隔符会留在原地，刷新后
+    // 撤回提示也消失，就只剩一个"空气时间"。渲染时丢掉后面没有内容的孤立分隔符。
+    const list = Array.isArray(entries) ? entries : [];
+    const out = [];
+    list.forEach((entry, index) => {
+        if (entry && entry.type === 'time') {
+            const next = list[index + 1];
+            if (!next || (next && next.type === 'time')) return;
+        }
+        out.push(entry);
+    });
+    return out;
+}
+
 function applyChatRecall(data = {}) {
     const ids = Array.isArray(data.message_ids) ? data.message_ids : [];
     ids.forEach((id) => {
@@ -33869,10 +33884,10 @@ function renderLobbyChatHistory(data = {}) {
     const shouldAutoScroll = isLobbyChatNearBottom(container);
     const previousScrollTop = container.scrollTop;
     container.innerHTML = '';
-    mergeChatRecallNotices(
+    dropDanglingChatTimeSeparators(mergeChatRecallNotices(
         items,
         chatRecallNotices.filter(notice => notice.scope !== 'room'),
-    ).forEach(entry => appendLobbyChatEntry(entry, { autoScroll: false }));
+    )).forEach(entry => appendLobbyChatEntry(entry, { autoScroll: false }));
     if (shouldAutoScroll) {
         container.scrollTop = container.scrollHeight;
     } else {

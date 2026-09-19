@@ -214,7 +214,6 @@ ADVANCED_ATOMIC_OPS = {
     # Round 26：apply_jungle_status / magic_grapes_damage /
     # consume_magic_for_status / yin_yang_effect / flower_burst /
     # draw_to_hand_limit 的公式已搬进卡数据，实现删除（见 REMOVED_ATOMIC_OPS）。
-    "apply_turn_regen",
     # Round 43 / 批次 AG：``plank_immunity``（空步骤）已删除，机制由装备标签
     # ``blocks_cheap_attacks`` 承载。
     # Round 44 / 批次 AH: ``electric_web_arm`` 已删除——三条写入都改用通用步骤
@@ -1787,8 +1786,12 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
             target = resolve_v2_target(engine, context, expr.get("target", "source"))
             player_id = _player_id(engine, target)
             if _valid_player(engine, player_id):
+                # 反馈 #161：免疫期间「三角形层数」这类状态别名变量默认读 0，
+                # 但“层数+1”这种写入前的读取必须拿真实层数，否则会把 4 层
+                # 覆盖成 1 层。需要真实值的表达式写 ignore_immunity: true。
+                ignore_immunity = bool(expr.get("ignore_immunity") or expr.get("raw_var"))
                 suppressed = getattr(engine, "_is_suppressed_status_var", None)
-                if callable(suppressed) and suppressed(player_id, name):
+                if not ignore_immunity and callable(suppressed) and suppressed(player_id, name):
                     return 0
                 return getattr(engine.players[player_id], "custom_vars", {}).get(name, expr.get("default", 0))
             return expr.get("default", 0)
@@ -1800,8 +1803,9 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         if op == "global_var":
             return getattr(engine, "global_vars", {}).get(name, expr.get("default", 0))
         if _valid_player(engine, player_id):
+            ignore_immunity = bool(expr.get("ignore_immunity") or expr.get("raw_var"))
             suppressed = getattr(engine, "_is_suppressed_status_var", None)
-            if callable(suppressed) and suppressed(player_id, name):
+            if not ignore_immunity and callable(suppressed) and suppressed(player_id, name):
                 return 0
             return getattr(engine.players[player_id], "custom_vars", {}).get(name, expr.get("default", 0))
         return expr.get("default", 0)

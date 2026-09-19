@@ -357,6 +357,7 @@ class ChatRecallUiTests(unittest.TestCase):
         self.assertIn("socket.emit('admin_chat_recall', { message_ids: [messageId] });", GAME_JS)
         self.assertIn("bindSocketEvent('admin_chat_recall_result'", GAME_JS)
         self.assertIn('function mergeChatRecallNotices(', GAME_JS)
+        self.assertIn('function dropDanglingChatTimeSeparators(', GAME_JS)
         self.assertIn('chatRecallRoleLabel', GAME_JS)
 
     def test_story_chat_has_admin_recall_button_and_notice(self):
@@ -368,6 +369,7 @@ class ChatRecallUiTests(unittest.TestCase):
         self.assertIn("recallRow.className = 'story-chat-message chat-msg chat-recall-entry';", STORY_JS)
         self.assertIn('function canRecallStoryChat(entry = {})', STORY_JS)
         self.assertIn('function mergeStoryChatRecallNotices(', STORY_JS)
+        self.assertIn('function dropDanglingStoryChatTimeSeparators(', STORY_JS)
         self.assertIn('.chat-recall-btn', SHARED_CHAT_CSS)
         self.assertIn('.chat-recall-entry', SHARED_CHAT_CSS)
 

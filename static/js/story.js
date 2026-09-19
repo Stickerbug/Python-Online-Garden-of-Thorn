@@ -4949,6 +4949,20 @@
         return merged;
     }
 
+    function dropDanglingStoryChatTimeSeparators(entries) {
+        // 反馈 #175：撤回删掉消息后，它前面的时间分隔符会孤立地留在聊天里。
+        const list = Array.isArray(entries) ? entries : [];
+        const out = [];
+        list.forEach((entry, index) => {
+            if (entry && entry.type === 'time') {
+                const next = list[index + 1];
+                if (!next || (next && next.type === 'time')) return;
+            }
+            out.push(entry);
+        });
+        return out;
+    }
+
     function createStoryChatRecallButton(entry = {}) {
         const messageId = Math.trunc(Number(entry.message_id || entry.messageId || 0));
         if (!messageId) return null;
@@ -5262,10 +5276,10 @@
         const previousScrollTop = log.scrollTop;
         storyChatEntries = entries;
         log.replaceChildren();
-        mergeStoryChatRecallNotices(
+        dropDanglingStoryChatTimeSeparators(mergeStoryChatRecallNotices(
             entries,
             storyChatRecallNotices.filter((notice) => notice.scope !== 'room'),
-        ).forEach((entry) => appendStoryChatEntry(log, entry));
+        )).forEach((entry) => appendStoryChatEntry(log, entry));
         if (storyChatOpen && stayAtBottom) {
             log.scrollTop = log.scrollHeight;
         } else {
