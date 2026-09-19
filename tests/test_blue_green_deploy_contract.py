@@ -171,7 +171,13 @@ def test_manual_prepare_writes_same_override_and_does_not_suggest_bare_python():
 
 def test_deployment_guide_documents_environment_precedence_and_validation():
     guide = _read("BLUE_GREEN_DEPLOY.md")
-    _assert_in_order(guide, (*BASE_ENV_FILES, "/etc/gtn/gtn-release-next.env"))
+    # 文档顶部的「不再使用蓝绿流程」横幅会先提到 release.env，所以这里按
+    # 环境文件的加载顺序块来校验（与 service 模板同一条契约）。
+    env_files = re.findall(r"^EnvironmentFile=(\S+)$", guide, flags=re.MULTILINE)
+    # 第一块是 next 实例（含独立覆盖文件），后面还给出正式实例的三份基础文件。
+    assert env_files[:4] == [*BASE_ENV_FILES, "/etc/gtn/gtn-release-next.env"]
+    assert env_files[4:7] == list(BASE_ENV_FILES)
+    assert "不再使用蓝绿流程" in guide
     assert "不要用裸 `python app.py`" in guide
     assert "`db_ok=true`、`socket_ok=true`" in guide
     assert "`enabled=true`" in guide

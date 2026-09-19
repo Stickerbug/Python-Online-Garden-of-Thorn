@@ -547,7 +547,7 @@ _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Sup
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
              '基础的装备之一，可以回复生命亦可造成伤害。',
-             '装备拥有者回合开始时，回复目标1H；若已装备一回合，可花费1E，触发：摧毁此装备，选择一个目标，对其造成8D',
+             '装备拥有者回合开始时，回复目标1H；若已装备一回合，可花费1E，触发：摧毁本装备；选择一个目标，对其造成8D',
              trigger_cost_e=1))
 
 _reg(CardDef('Yucca', 'Yucca', '丝兰', 4, 0, 'root', 5, 'Common',
@@ -561,7 +561,7 @@ _reg(CardDef('Battery', 'Battery', '电池', 3, 0, 'root', 5, 'Common',
 
 _reg(CardDef('MagicLeaf', 'Magic Leaf', '魔法叶', 1, 0, 'root', 5, 'Common',
              '不再能造成伤害了，但它可以回复魔力。',
-             '装备拥有者回合开始时，回复目标1M；可花费3M，触发：摧毁此装备，选择一个目标，对其造成8D',
+             '装备拥有者回合开始时，回复目标1M；可花费3M，触发：摧毁本装备；选择一个目标，对其造成8D',
              trigger_cost_e=0, trigger_cost_m=3))
 
 _reg(CardDef('MagicYucca', 'Magic Yucca', '魔法丝兰', 4, 0, 'root', 5, 'Common',
@@ -589,12 +589,12 @@ _reg(CardDef('Corruption', 'Corruption', '腐化', 0, 0, 'root', 2, 'Common',
              '伤敌一千，自损八百。', '自下个回合开始，全场所有伤害变为1.5倍（向上取整）', flags={'indestructible', 'self_only'}))
 
 _reg(CardDef('Mark', 'Mark', '标记', 4, 0, 'root', 3, 'Common',
-             '你被标记了！', '若已装备一回合，可花费0E，触发：摧毁此装备，对目标施加1层眩晕',
+             '你被标记了！', '若已装备一回合，可花费0E，触发：摧毁本装备；对目标施加1层眩晕',
              trigger_cost_e=0))
 
 _reg(CardDef('Mine', 'Mine', '地雷', 3, 0, 'root', 3, 'Common',
              '它很危险，但需要一回合准备。',
-             '若已装备一回合，可花费0E，触发：摧毁此装备，选择一个目标，对其造成20D',
+             '若已装备一回合，可花费0E，触发：摧毁本装备；选择一个目标，对其造成20D',
              trigger_cost_e=0))
 
 _reg(CardDef('Bubble', 'Bubble', '泡泡', 2, 0, 'guard', 10, 'Common',

@@ -101,9 +101,16 @@ def test_yggdrasil_definitions_and_package_share_the_twenty_five_heal():
             entry for entry in mod_data['registries']['cards']
             if entry.get('id') == 'vanilla:yggdrasil'
         )
+        # 卡片原子合并后，回复走统一的 ``health_op``（``mode:"heal"``），旧写法是 ``heal``。
+        def _is_heal_step(step):
+            op = str(step.get('op') or '')
+            if op == 'heal':
+                return True
+            return op == 'health_op' and str(step.get('mode') or '').lower() in ('heal', '回复', '恢复')
+
         heal_step = next(
             step for step in card['events']['on_play']['steps']
-            if step.get('op') == 'heal'
+            if _is_heal_step(step)
         )
         assert heal_step['amount'] == 25
         assert '25[[icon:H]]' in card['effect_text']
@@ -119,4 +126,3 @@ def test_story_world_tree_leaf_remains_a_separate_full_health_relic():
     assert relic['script'] == 'revive'
     assert '满H' in relic['description']['zh']
     assert '25' not in relic['description']['zh']
-

@@ -208,15 +208,21 @@ class AllCardsBalance14Tests(unittest.TestCase):
         self.assertTrue(result.get("success"), result)
         self.assertEqual(58, engine.players[1].health)  # 50 - 12 + 20
 
-    def test_blood_diamond_applies_bleed_for_every_actual_hit(self):
+    def test_blood_diamond_applies_one_bleed_per_petal(self):
+        """平衡改动（反馈 #152/#155）：血钻石改成珊瑚式 —— 单次命中 + 永久裂变 4。
+
+        4 个子瓣各结算 1 层流血（广域打击所以双方各 4 层），不再叠出 16 层。
+        详细契约见 tests/test_blood_diamond_redesign.py。
+        """
         engine = self.action_engine()
         diamond = CardInstance("Blood Diamond")
 
         result = self.play(engine, 0, diamond, self.target_choice(1))
 
         self.assertTrue(result.get("success"), result)
-        # 4 fission petals of ceil(3 / 4) = 1 damage, twice (self-target + target).
-        self.assertEqual(16, engine.players[1].bleed)
+        self.assertEqual(4, engine.players[1].bleed)
+        self.assertEqual(4, engine.players[0].bleed)
+        self.assertEqual(4, diamond.fission_level)
 
     # --------------------------------------------------------------- Chitin
     def test_chitin_destruction_clears_equipment_target_nazar(self):
