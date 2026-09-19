@@ -17390,45 +17390,6 @@ def create_solo_engine(deck0, deck1, event0=None, event1=None, sub0=None, sub1=N
     return engine
 
 
-def _reusable_player_loadout_for_solo(sid, disabled_mods, request_data):
-    requested_community = _community_request_fields(request_data or {})
-    with _lock:
-        player = players.get(sid)
-        if not player:
-            return None
-        current = {
-            'disabled_mods': list(player.get('disabled_mods') or []),
-            'mod_source': str(player.get('mod_source') or 'official'),
-            'community_mod_hash': str(player.get('community_mod_hash') or ''),
-            'allowed_card_ids': player.get('allowed_card_ids'),
-            'v2_loadout': player.get('v2_loadout'),
-            'v2_ui_components': player.get('v2_ui_components'),
-            'v2_tag_defs': player.get('v2_tag_defs'),
-            'v2_status_defs': player.get('v2_status_defs'),
-            'v2_opening_event_defs': player.get('v2_opening_event_defs'),
-        }
-    if set(current['disabled_mods']) != set(disabled_mods or []):
-        return None
-    if current['mod_source'] != requested_community.get('mod_source', 'official'):
-        return None
-    if current['mod_source'] == 'community' and (
-        current['community_mod_hash'] != requested_community.get('community_mod_hash', '')
-    ):
-        return None
-    allowed_card_ids = set(current.get('allowed_card_ids') or [])
-    if not allowed_card_ids:
-        return None
-    return {
-        'disabled_mods': list(disabled_mods or []),
-        'allowed_card_ids': apply_runtime_content_filter(allowed_card_ids, 'solo'),
-        'v2_loadout': current.get('v2_loadout'),
-        'v2_ui_components': current.get('v2_ui_components') or {},
-        'v2_tag_defs': current.get('v2_tag_defs') or {},
-        'v2_status_defs': current.get('v2_status_defs') or {},
-        'v2_opening_event_defs': current.get('v2_opening_event_defs') or {},
-    }
-
-
 def _cached_official_solo_loadout(disabled_mods):
     cache_key = (
         tuple(sorted(set(disabled_mods or []))),
@@ -32197,28 +32158,28 @@ def on_solo_start(data):
         emit('server_error', {'message': '训练场牌组必须各为0-50张'})
         return
     disabled_mods = ensure_valid_disabled_mods(normalize_disabled_mods_with_default(data.get('disabled_mods') if data else None))
-    reusable_loadout = _reusable_player_loadout_for_solo(sid, disabled_mods, data)
     action_lock = _try_acquire_solo_action(sid, 'solo_start')
     if action_lock is None:
         return
     try:
         def _prepare_solo_start():
-            loadout = reusable_loadout
-            if loadout is None:
-                try:
-                    requested_community = _community_request_fields(data or {})
-                    if requested_community.get('mod_source') == 'community':
-                        community_fields, community_mod = resolve_community_loadout(data or {})
-                        loadout = build_mod_loadout(
-                            disabled_mods,
-                            community_mod=community_mod,
-                            community_hash=community_fields.get('community_mod_hash', ''),
-                            runtime_mode='solo',
-                        )
-                    else:
-                        loadout = _cached_official_solo_loadout(disabled_mods)
-                except Exception as exc:
-                    return {'error': f'训练场模组加载失败: {exc}'}
+            # 训练场是按模组折叠的沙盒：全部已安装的官方模组都可用于配牌，
+            # 不再看当前模式（天梯/娱乐）里哪些模组是启用的，因此这里不传
+            # 玩家侧的 disabled_mods。运行时禁卡表仍在下面的内容过滤里生效。
+            try:
+                requested_community = _community_request_fields(data or {})
+                if requested_community.get('mod_source') == 'community':
+                    community_fields, community_mod = resolve_community_loadout(data or {})
+                    loadout = build_mod_loadout(
+                        [],
+                        community_mod=community_mod,
+                        community_hash=community_fields.get('community_mod_hash', ''),
+                        runtime_mode='solo',
+                    )
+                else:
+                    loadout = _cached_official_solo_loadout([])
+            except Exception as exc:
+                return {'error': f'训练场模组加载失败: {exc}'}
             allowed_card_ids = set(loadout.get('allowed_card_ids') or [])
 
             def _valid_entry(entry):
@@ -32226,7 +32187,7 @@ def on_solo_start(data):
                 return def_id in CARD_DEFS and def_id in allowed_card_ids
 
             if any(not _valid_entry(entry) for entry in deck0 + deck1):
-                return {'error': '训练场牌组中包含当前未启用的卡牌'}
+                return {'error': '训练场牌组中包含当前不可用的卡牌'}
             engine = create_solo_engine(
                 deck0,
                 deck1,

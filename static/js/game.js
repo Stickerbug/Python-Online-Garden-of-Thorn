@@ -7024,8 +7024,6 @@ function updateStaticText() {
     if (btnSoloStart) btnSoloStart.textContent = UI.start_training;
     const btnSoloBack = $('btn-solo-back');
     if (btnSoloBack) btnSoloBack.textContent = UI.back_to_home;
-    const btnSoloMods = $('btn-solo-mods');
-    if (btnSoloMods) btnSoloMods.textContent = UI.solo_mods || UI.mods || '模组设置';
     const btnSoloClearA = $('btn-solo-clear-a');
     if (btnSoloClearA) btnSoloClearA.textContent = UI.clear_deck || '清空牌组';
     const btnSoloClearB = $('btn-solo-clear-b');
@@ -11596,7 +11594,13 @@ function setCustomRegistries(tags, statuses) {
 }
 
 function getCardDefSource() {
-    if (phase === 'gallery' && GALLERY_CARD_DEFS && Object.keys(GALLERY_CARD_DEFS).length) {
+    // 图鉴与单人训练场使用「全部已安装模组」的定义：训练场是可折叠的模组目录，
+    // 不再按当前是否启用模组来决定能不能选/能不能显示。
+    if (
+        (phase === 'gallery' || phase === 'solo_edit' || soloMode)
+        && GALLERY_CARD_DEFS
+        && Object.keys(GALLERY_CARD_DEFS).length
+    ) {
         return GALLERY_CARD_DEFS;
     }
     return CARD_DEFS;
@@ -25772,24 +25776,133 @@ function updateSoloEventIcon(side, eventId) {
     else icon.removeAttribute('src');
 }
 
+let soloModExpandedKeys = new Set();
+let soloModExpandedSeeded = false;
+let soloBrowserDataPromise = null;
+
+function soloBrowserCardDefs() {
+    // 训练场是可折叠的模组目录：展示全部已安装模组的卡，不看当前启用状态。
+    return getGalleryCardDefs();
+}
+
+function ensureSoloBrowserData() {
+    if (GALLERY_CARD_DEFS && Object.keys(GALLERY_CARD_DEFS).length) return null;
+    if (soloBrowserDataPromise) return soloBrowserDataPromise;
+    soloBrowserDataPromise = ensureGalleryDataLoaded()
+        .then(() => {
+            soloModExpandedSeeded = false;
+            if (phase === 'solo_edit') renderSoloBuilder();
+        })
+        .catch(err => {
+            console.warn('[solo] failed to load all-mod card data:', err);
+        })
+        .then(() => {
+            soloBrowserDataPromise = null;
+        });
+    return soloBrowserDataPromise;
+}
+
+function groupedSoloBrowserSections(query) {
+    const defs = soloBrowserCardDefs();
+    const sections = new Map();
+    Object.keys(defs || {}).forEach(defId => {
+        const cd = defs[defId];
+        if (!isGalleryVisibleCardDef(cd)) return;
+        if (query && !cardSearchText(defId, defs).includes(query)) return;
+        const membership = (getGalleryCardModMemberships(cd) || [])[0] || null;
+        const key = String(
+            (membership && membership.key)
+            || cd.source_mod_filename
+            || cd.v2_mod_id
+            || 'unknown'
+        );
+        let section = sections.get(key);
+        if (!section) {
+            section = {
+                key,
+                filename: String((membership && membership.filename) || cd.source_mod_filename || key),
+                label: (membership && membership.label) || getGalleryCardModLabel(cd) || key,
+                isVanilla: !!(membership ? membership.isVanilla : cd.source_mod_is_vanilla),
+                isCommunity: !!(membership ? membership.isCommunity : cd.source_mod_is_community),
+                cards: [],
+            };
+            sections.set(key, section);
+        }
+        section.cards.push(defId);
+    });
+    return sortModsForDisplay([...sections.values()]);
+}
+
+function appendSoloModSection(list, section, expanded, query) {
+    const group = document.createElement('div');
+    group.className = 'solo-mod-group';
+    group.dataset.modKey = section.key;
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'solo-mod-header';
+    header.dataset.modToggle = section.key;
+    header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    header.innerHTML = `
+        <span class="solo-mod-caret" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
+        <span class="solo-mod-name">${escapeHtml(section.label || section.key)}</span>
+        <small class="solo-mod-count">${section.cards.length}</small>`;
+    header.title = expanded
+        ? lt({ zh: '收起该模组', en: 'Collapse this mod', fr: 'Replier ce mod', ja: 'このModを折りたたむ' })
+        : lt({ zh: '展开该模组', en: 'Expand this mod', fr: 'Déplier ce mod', ja: 'このModを展開' });
+    header.addEventListener('click', () => {
+        if (soloModExpandedKeys.has(section.key)) soloModExpandedKeys.delete(section.key);
+        else soloModExpandedKeys.add(section.key);
+        renderSoloBuilder();
+    });
+    group.appendChild(header);
+    if (expanded) {
+        const grid = document.createElement('div');
+        grid.className = 'solo-mod-cards';
+        section.cards.slice().sort(compareGalleryCards).forEach(defId => {
+            const cd = soloBrowserCardDefs()[defId];
+            if (!cd) return;
+            const row = document.createElement('div');
+            row.className = 'solo-card-row';
+            row.dataset.defId = defId;
+            const displayCostE = getCardDisplayCostELabel({ def_id: defId }, cd, cd.cost_e);
+            row.innerHTML = `<span>${escapeHtml(getCardName(cd))}</span><small>${escapeHtml(getCardTypeLabel(cd.card_type))} ${escapeHtml(displayCostE)}E/${escapeHtml(cd.cost_m)}M</small>`;
+            row.title = lt({
+                zh: '左键加入牌组；右键或长按查看术语说明',
+                en: 'Click to add to the deck; right-click or long-press for the term guide',
+                fr: 'Clic : ajouter au deck ; clic droit ou appui long : guide des termes',
+                ja: 'クリックでデッキに追加／右クリックか長押しで用語説明',
+            });
+            row.onclick = () => addSoloCard(defId);
+            attachTermIntroToCard(row, { def_id: defId });
+            grid.appendChild(row);
+        });
+        group.appendChild(grid);
+    }
+    if (query) group.dataset.modMatched = '1';
+    list.appendChild(group);
+}
+
 function renderSoloBuilder() {
     const q = (($('solo-card-search') || {}).value || '').trim().toLowerCase();
     const list = $('solo-card-list');
     if (list) {
         list.innerHTML = '';
-        Object.keys(CARD_DEFS)
-            .filter(defId => isVisibleLoadoutCardDef(CARD_DEFS[defId]))
-            .filter(defId => !q || cardSearchText(defId).includes(q))
-            .sort(compareGalleryCards)
-            .forEach(defId => {
-                const row = document.createElement('div');
-                row.className = 'solo-card-row';
-                const cd = CARD_DEFS[defId];
-                const displayCostE = getCardDisplayCostELabel({ def_id: defId }, cd, cd.cost_e);
-                row.innerHTML = `<span>${escapeHtml(getCardName(cd))}</span><small>${escapeHtml(getCardTypeLabel(cd.card_type))} ${escapeHtml(displayCostE)}E/${escapeHtml(cd.cost_m)}M</small>`;
-                row.onclick = () => addSoloCard(defId);
-                list.appendChild(row);
-            });
+        const sections = groupedSoloBrowserSections(q);
+        if (!soloModExpandedSeeded && sections.length) {
+            const first = sections.find(section => section.isVanilla) || sections[0];
+            if (first) soloModExpandedKeys.add(first.key);
+            soloModExpandedSeeded = true;
+        }
+        if (!sections.length) {
+            const empty = document.createElement('div');
+            empty.className = 'solo-card-empty';
+            empty.textContent = UI.no_matching_cards || '没有符合条件的牌';
+            list.appendChild(empty);
+        }
+        sections.forEach(section => {
+            appendSoloModSection(list, section, q ? true : soloModExpandedKeys.has(section.key), q);
+        });
+        ensureSoloBrowserData();
     }
     renderSoloDeck('a', soloDeckA);
     renderSoloDeck('b', soloDeckB);
@@ -25854,6 +25967,8 @@ function renderSoloDeck(which, deck) {
             deck.splice(idx, 1);
             renderSoloBuilder();
         };
+        // 牌组里的牌同样可以右键/长按查看术语说明。
+        attachTermIntroToCard(row, { def_id: card.def_id });
         el.appendChild(row);
     });
 }
@@ -37584,6 +37699,8 @@ async function refreshCardsAfterModSettingsConfirmed() {
                 CUSTOM_TAG_DEFS = cached.tags || {};
                 CUSTOM_STATUS_DEFS = cached.statuses || {};
                 markActiveDataCacheKey('cards');
+                // 模组选择变了：训练场的「全部模组」目录也要重新取一份。
+                invalidateGalleryData();
                 if (getVisibleViewId() === 'view-card-gallery') {
                     await ensureGalleryDataLoaded({ force: true });
                 }
@@ -39039,12 +39156,6 @@ async function init() {
     $('btn-solo-save').addEventListener('click', saveSoloDecks);
     $('btn-solo-start').addEventListener('click', startSoloTraining);
     $('btn-solo-back').addEventListener('click', () => showView('view-login'));
-    const btnSoloMods = $('btn-solo-mods');
-    if (btnSoloMods) btnSoloMods.addEventListener('click', () => {
-        // 单人训练场内直接打开模组设置；关闭设置后刷新训练场卡数据/牌池。
-        openSettings({ hideServer: true });
-        setSettingsTab('mods');
-    });
     if ($('gallery-search')) $('gallery-search').addEventListener('input', () => scheduleRenderCardGallery(120));
     if ($('gallery-tab-cards')) $('gallery-tab-cards').addEventListener('click', () => { setGalleryMode('cards'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
     if ($('gallery-tab-tags')) $('gallery-tab-tags').addEventListener('click', () => { setGalleryMode('tags'); gallerySelectedId = null; scheduleRenderCardGallery(20); });

@@ -104,13 +104,14 @@ def test_gallery_official_entertainment_tabs_show_enable_states():
     assert '.gallery-mod-state' in css
 
 
-def test_solo_training_has_mod_settings_entry():
+def test_solo_training_mods_are_an_accordion_catalog():
+    """训练场不再有「模组设置」入口：改成可折叠的模组目录（含全部已安装模组）。"""
     js = _game_js()
     html = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
-    assert 'id="btn-solo-mods"' in html
-    assert 'soloMods' in html
-    assert "$('btn-solo-mods')" in js
-    assert 'openSettings({ hideServer: true });' in js
+    assert 'btn-solo-mods' not in html
+    assert 'btn-solo-mods' not in js
+    assert 'openSettings({ hideServer: true });' not in js
+    # 目录仍然会在（设置）改动后刷新，只是入口不在训练场里
     assert "getVisibleViewId() === 'view-solo'" in js
     assert 'renderSoloBuilder();' in js
 

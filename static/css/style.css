@@ -6343,6 +6343,72 @@ body {
   white-space: nowrap;
 }
 
+/* 单人训练场：按模组折叠的卡牌目录（反馈：训练场不再需要模组设置） */
+.solo-mod-group {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.solo-mod-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.solo-mod-header:hover {
+  background: var(--bg-card-hover);
+}
+
+.solo-mod-caret {
+  width: 12px;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.solo-mod-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.solo-mod-count {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.solo-mod-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+
+.solo-mod-cards .solo-card-row {
+  background: var(--bg-card);
+}
+
+.solo-card-empty {
+  padding: 12px 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 .solo-deck-panel {
   display: flex;
   flex-direction: column;

@@ -10,7 +10,8 @@ def _function_source(source: str, name: str, next_name: str) -> str:
 
 def test_mod_card_names_tags_and_labels_are_html_escaped():
     source = GAME_JS.read_text(encoding='utf-8')
-    builder = _function_source(source, 'renderSoloBuilder', 'renderSoloDeck')
+    # 训练场改成按模组折叠后，卡牌行由 appendSoloModSection 渲染
+    builder = _function_source(source, 'appendSoloModSection', 'renderSoloBuilder')
     deck = _function_source(source, 'renderSoloDeck', 'clearSoloDeck')
     tags = _function_source(source, 'renderTagGallery', 'renderOpeningEventGallery')
 
